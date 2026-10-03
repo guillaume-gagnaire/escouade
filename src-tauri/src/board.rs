@@ -553,7 +553,7 @@ fn one_line(s: &str, max: usize) -> String {
 
 /// What the protocol may weigh as a command-line argument, once escaped (see `escaped_len`).
 /// cmd.exe takes 8191 characters for the whole command line; the rest goes to the other arguments.
-const PROTOCOL_BUDGET: usize = 6000;
+pub(crate) const PROTOCOL_BUDGET: usize = 6000;
 /// Ends the criteria when some did not fit.
 const MORE: &str = " ; …";
 
@@ -561,7 +561,7 @@ const MORE: &str = " ; …";
 /// longer sequence (8 characters) and `"` is doubled, as are the backslashes just before it (and
 /// those ending the argument). Every backslash counts 2, the safe bound of those runs. Other
 /// characters count their UTF-8 bytes, which is never less than their UTF-16 units.
-fn escaped_len(s: &str) -> usize {
+pub(crate) fn escaped_len(s: &str) -> usize {
     s.chars()
         .map(|c| match c {
             '%' => 8,

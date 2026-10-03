@@ -11,6 +11,7 @@ use crate::paths::{self, DataDir};
 use crate::pty::PtyManager;
 use crate::resources;
 use crate::stats::Stats;
+use crate::testlaunch;
 use crate::usage;
 use anyhow::{anyhow, bail, Context, Result};
 use parking_lot::{Mutex, RwLock};
@@ -147,6 +148,25 @@ fn attachment_block(a: &Attachment) -> Result<(Value, usize)> {
     Ok((block, size))
 }
 
+/// How a new agent differs from the default one (`create_agent_with`).
+#[derive(Debug, Clone, Default)]
+pub struct AgentOptions {
+    pub model: Option<String>,
+    pub effort: Option<String>,
+    pub mode: Option<String>,
+    /// Already named: kept (suffixed when taken), never renamed by Haiku.
+    pub name: Option<String>,
+    /// A worktree on this new branch from this base, whatever the project's setting; the agent
+    /// is not created without it.
+    pub worktree: Option<(String, String)>,
+    /// Appended to Claude Code's system prompt at each start.
+    pub append_prompt: Option<String>,
+    pub ticket_id: Option<String>,
+    pub port_base: Option<u16>,
+    /// Selected in the sidebar (the user created it).
+    pub select: bool,
+}
+
 pub struct Core<R: Runtime = Wry> {
     pub app: AppHandle<R>,
     pub data: DataDir,
@@ -223,6 +243,11 @@ pub(crate) fn claude_args(m: &AgentMeta) -> Vec<String> {
         a.extend(["--effort".into(), m.effort.clone()]);
     }
     a.extend(["--permission-mode".into(), m.mode.clone()]);
+    if let Some(p) = m.append_prompt.as_deref().filter(|p| !p.trim().is_empty()) {
+        // On one line: a `.cmd` launcher (npm's claude.cmd) takes no argument with line breaks.
+        let one_line = p.split_whitespace().collect::<Vec<_>>().join(" ");
+        a.extend(["--append-system-prompt".into(), one_line]);
+    }
     if let Some(s) = &m.session_id {
         a.push(format!("--resume={s}"));
     }
@@ -1339,6 +1364,23 @@ impl<R: Runtime> Core<R> {
         project_id: &str,
         model: Option<String>,
     ) -> Result<AgentView> {
+        self.create_agent_with(
+            project_id,
+            AgentOptions {
+                model,
+                select: true,
+                ..Default::default()
+            },
+        )
+        .await
+    }
+
+    /// A new agent of the project, as `o` says (see `AgentOptions`).
+    pub async fn create_agent_with(
+        self: &Arc<Self>,
+        project_id: &str,
+        o: AgentOptions,
+    ) -> Result<AgentView> {
         let _creating = self.create_lock.lock().await;
         let project = self.project(project_id)?;
         let settings = self.settings.read().clone();
@@ -1347,40 +1389,77 @@ impl<R: Runtime> Core<R> {
             .iter()
             .map(|h| h.lock().meta.name.clone())
             .collect();
-        let mut n = existing.len() + 1;
-        while existing.iter().any(|e| *e == format!("agent-{n}")) {
-            n += 1;
-        }
-        let name = format!("agent-{n}");
+        let name = match &o.name {
+            Some(base) => {
+                let mut name = base.clone();
+                let mut n = 2;
+                while existing.contains(&name) {
+                    name = format!("{base}-{n}");
+                    n += 1;
+                }
+                name
+            }
+            None => {
+                let mut n = existing.len() + 1;
+                while existing.iter().any(|e| *e == format!("agent-{n}")) {
+                    n += 1;
+                }
+                format!("agent-{n}")
+            }
+        };
         let mut meta = AgentMeta {
             id: new_id(),
             project_id: project_id.to_string(),
             name: name.clone(),
-            model: model.unwrap_or(settings.default_model.clone()),
-            effort: settings.default_effort.clone(),
-            mode: settings.default_mode.clone(),
+            named: o.name.is_some(),
+            model: o.model.unwrap_or(settings.default_model.clone()),
+            effort: o.effort.unwrap_or(settings.default_effort.clone()),
+            mode: o.mode.unwrap_or(settings.default_mode.clone()),
             cwd: project.path.clone(),
             created_at: now_ms(),
             last_activity: now_ms(),
+            ticket_id: o.ticket_id,
+            append_prompt: o.append_prompt,
+            port_base: o.port_base,
             ..Default::default()
         };
-        let mut warning = None;
-        if project.worktree_per_agent {
-            match git::worktree_add(&project.path, &name).await {
-                Ok((path, branch, base)) => {
-                    meta.cwd = path.clone();
-                    meta.worktree = Some(Worktree {
-                        path,
-                        branch,
-                        base_branch: base,
-                    });
-                }
-                Err(e) => {
-                    warning = Some(format!(
-                        "Worktree non créé, l'agent travaille dans le dossier du projet : {e}"
-                    ))
-                }
+        let made = match &o.worktree {
+            Some((branch, base)) => Some(
+                git::worktree_add_on(&project.path, branch, base)
+                    .await
+                    .map(|(path, branch)| (path, branch, base.clone())),
+            ),
+            None if project.worktree_per_agent => {
+                Some(git::worktree_add(&project.path, &name).await)
             }
+            None => None,
+        };
+        let mut warning = None;
+        match made {
+            Some(Ok((path, branch, base))) => {
+                if let Err(e) =
+                    testlaunch::copy_worktree_files(&project.path, &path, &project.worktree_copy)
+                        .await
+                {
+                    warning = Some(format!("Fichiers non copiés dans le worktree : {e:#}"));
+                }
+                meta.cwd = path.clone();
+                meta.worktree = Some(Worktree {
+                    path,
+                    branch,
+                    base_branch: base,
+                });
+            }
+            // A ticket's agent works in its own worktree or not at all.
+            Some(Err(e)) if o.worktree.is_some() => {
+                return Err(e.context("worktree du ticket non créé"))
+            }
+            Some(Err(e)) => {
+                warning = Some(format!(
+                    "Worktree non créé, l'agent travaille dans le dossier du projet : {e}"
+                ))
+            }
+            None => {}
         }
         let id = meta.id.clone();
         let h = Arc::new(Mutex::new(AgentRt::new(meta, &self.data.conversations())));
@@ -1389,10 +1468,12 @@ impl<R: Runtime> Core<R> {
             h.lock().notice("warn", w, &mut fx);
         }
         self.agents.write().insert(id.clone(), h.clone());
-        self.ui
-            .write()
-            .selected_agent
-            .insert(project_id.to_string(), id.clone());
+        if o.select {
+            self.ui
+                .write()
+                .selected_agent
+                .insert(project_id.to_string(), id.clone());
+        }
         self.request_save();
         self.emit_agent(&h);
         self.git.refresh(project_id);
@@ -2249,6 +2330,101 @@ mod tests {
         };
         let a = claude_args(&m);
         assert!(a.windows(2).any(|w| w == ["--effort", "max"]));
+    }
+
+    #[test]
+    fn the_protocol_is_appended_to_the_system_prompt_on_one_line() {
+        let m = AgentMeta {
+            model: "sonnet".into(),
+            effort: "high".into(),
+            mode: "auto".into(),
+            append_prompt: Some("Ligne 1\nLigne 2 « % & \" »".into()),
+            ..Default::default()
+        };
+        let a = claude_args(&m);
+        let i = a
+            .iter()
+            .position(|x| x == "--append-system-prompt")
+            .unwrap();
+        assert_eq!(a[i + 1], "Ligne 1 Ligne 2 « % & \" »");
+        assert!(!claude_args(&AgentMeta::default()).contains(&"--append-system-prompt".to_string()));
+        // Blank: nothing to append.
+        let blank = AgentMeta {
+            append_prompt: Some(" \n ".into()),
+            ..Default::default()
+        };
+        assert!(!claude_args(&blank).contains(&"--append-system-prompt".to_string()));
+    }
+
+    /// The command line of a `.cmd` launcher (npm's claude.cmd) is cmd.exe's, which takes 8191
+    /// characters in all: every argument counts as Rust escapes it (`board::escaped_len`) between
+    /// its quotes, with a space before it, behind the launcher's path and cmd.exe's own prefix.
+    fn command_line_weight(program: &str, args: &[String]) -> usize {
+        const CMD_PREFIX: &str = "C:\\Windows\\System32\\cmd.exe /e:ON /v:OFF /d /c \"";
+        CMD_PREFIX.len()
+            + program.len()
+            + 2
+            + args
+                .iter()
+                .map(|a| 1 + 2 + crate::board::escaped_len(a))
+                .sum::<usize>()
+    }
+
+    #[test]
+    fn a_ticket_agents_whole_command_line_fits_cmds_limit_in_the_worst_case() {
+        // Criteria and a title made of what a `.cmd` argument escapes the most (`%`, `"`, `\`),
+        // accents, and every kind of line break; far more of them than fit.
+        let nasty = "%\"\\é\r\n%\"\\\\\"à\n".repeat(40);
+        let t = Ticket {
+            id: "t1".into(),
+            project_id: "p1".into(),
+            key: "ATL-42".into(),
+            title: nasty.clone(),
+            criteria: (0..60)
+                .map(|_| Criterion {
+                    text: nasty.clone(),
+                    ..Default::default()
+                })
+                .collect(),
+            max_loops: 5,
+            ..Default::default()
+        };
+        // A long launcher path, as npm puts it under a user profile with a long name.
+        let program = "C:\\Users\\guillaume.gagnaire-lefebvre\\AppData\\Roaming\\npm\\claude.cmd";
+        for ports in [None, Some(4100)] {
+            let m = AgentMeta {
+                model: "claude-opus-4-5-20251101[1m]".into(),
+                effort: "max".into(),
+                mode: "bypassPermissions".into(),
+                session_id: Some("0f8fad5b-d9cb-469f-a165-70867728950e".into()),
+                append_prompt: Some(crate::board::protocol_prompt(&t, ports)),
+                ..Default::default()
+            };
+            let args = claude_args(&m);
+            assert!(
+                args.contains(&"--append-system-prompt".to_string()),
+                "{ports:?}"
+            );
+            assert!(
+                args.iter().all(|a| !a.contains('\n') && !a.contains('\r')),
+                "{ports:?}: a line break in an argument"
+            );
+            let weight = command_line_weight(program, &args);
+            assert!(weight < 8191, "{ports:?}: {weight} of 8191");
+            // The criteria are cut where they stop fitting, which leaves some of the protocol's
+            // budget unused: with all of it used, the line must still fit.
+            let protocol = m.append_prompt.as_deref().unwrap();
+            let unused = crate::board::PROTOCOL_BUDGET - crate::board::escaped_len(protocol);
+            println!(
+                "worst-case command line, ports {ports:?}: {weight} of 8191, {} with the whole protocol budget used",
+                weight + unused
+            );
+            assert!(
+                weight + unused < 8191,
+                "{ports:?}: {} of 8191 with the whole protocol budget used",
+                weight + unused
+            );
+        }
     }
 
     #[test]

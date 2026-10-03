@@ -2,7 +2,7 @@
 //! (tests/fixtures/fake-claude.cmd, or the `fake-claude` shell script outside Windows) and Tauri's
 //! mock runtime.
 
-use crate::core::{Attachment, Core, SyncOp};
+use crate::core::{AgentOptions, Attachment, Core, SyncOp};
 use crate::model::*;
 use crate::paths::{test_dir, DataDir};
 use serde_json::{json, Value};
@@ -1309,4 +1309,105 @@ async fn a_reloaded_window_holds_no_unsaved_file_any_more() {
     h.core.unsaved.store(2, Ordering::Release);
     h.core.reset_unsaved();
     assert!(!h.core.ask_before_quit());
+}
+
+#[tokio::test]
+async fn an_agent_made_for_a_ticket_has_its_branch_from_a_base_and_the_projects_env_files() {
+    let h = harness("tk-agent-options");
+    let (p, r) = h.project(false).await;
+    git(&r, &["checkout", "-qb", "release"]);
+    commit_change(&r, "const a = 9;\n", "release");
+    git(&r, &["checkout", "-q", "main"]);
+    std::fs::write(r.join(".env"), "SECRET=1\n").unwrap();
+    std::fs::write(r.join(".env.local"), "X=2\n").unwrap();
+    std::fs::write(r.join("notes.txt"), "n\n").unwrap();
+    let options = || AgentOptions {
+        name: Some("dem-1-ajouter".into()),
+        worktree: Some(("ticket/dem-1".into(), "release".into())),
+        model: Some("opus".into()),
+        effort: Some("max".into()),
+        mode: Some("plan".into()),
+        append_prompt: Some("Protocole".into()),
+        ticket_id: Some("t1".into()),
+        port_base: Some(4100),
+        ..Default::default()
+    };
+    let a = h.core.create_agent_with(&p.id, options()).await.unwrap();
+    let wt = a.meta.worktree.clone().unwrap();
+    assert_eq!(
+        (wt.branch.as_str(), wt.base_branch.as_str()),
+        ("ticket/dem-1", "release")
+    );
+    let dir = PathBuf::from(&wt.path);
+    assert_eq!(
+        std::fs::read_to_string(dir.join("src").join("app.ts")).unwrap(),
+        "const a = 9;\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(dir.join(".env")).unwrap(),
+        "SECRET=1\n"
+    );
+    assert!(dir.join(".env.local").exists() && !dir.join("notes.txt").exists());
+    assert_eq!(
+        (a.meta.name.as_str(), a.meta.named),
+        ("dem-1-ajouter", true)
+    );
+    assert_eq!(
+        (
+            a.meta.model.as_str(),
+            a.meta.effort.as_str(),
+            a.meta.mode.as_str()
+        ),
+        ("opus", "max", "plan")
+    );
+    assert_eq!(
+        (
+            a.meta.ticket_id.as_deref(),
+            a.meta.port_base,
+            a.meta.append_prompt.as_deref()
+        ),
+        (Some("t1"), Some(4100), Some("Protocole"))
+    );
+    // Made by the board, not by the user: the sidebar keeps its selection.
+    assert_ne!(h.core.ui.read().selected_agent.get(&p.id), Some(&a.meta.id));
+    // The same branch asked again: a suffix, for the name too.
+    let b = h.core.create_agent_with(&p.id, options()).await.unwrap();
+    assert_eq!(b.meta.worktree.unwrap().branch, "ticket/dem-1-2");
+    assert_eq!(b.meta.name, "dem-1-ajouter-2");
+    // A base that does not exist: no agent at all.
+    let before = h.core.agents.read().len();
+    let bad = AgentOptions {
+        worktree: Some(("ticket/dem-9".into(), "nowhere".into())),
+        ..options()
+    };
+    assert!(h.core.create_agent_with(&p.id, bad).await.is_err());
+    assert_eq!(h.core.agents.read().len(), before);
+    // The protocol rides along at its start.
+    h.core.ensure_process(&a.meta.id).await.unwrap();
+    let argv = h.launches(&dir).pop().unwrap();
+    let i = argv
+        .iter()
+        .position(|x| x == "--append-system-prompt")
+        .unwrap();
+    assert_eq!(argv[i + 1], "Protocole");
+}
+
+#[tokio::test]
+async fn a_worktree_agent_gets_the_projects_untracked_env_files() {
+    let h = harness("tk-agent-env");
+    let (p, r) = h.project(true).await;
+    std::fs::write(r.join(".env"), "SECRET=1\n").unwrap();
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    assert!(Path::new(&a.meta.worktree.unwrap().path)
+        .join(".env")
+        .exists());
+}
+
+#[tokio::test]
+async fn an_agent_created_by_the_user_is_selected_and_left_for_haiku_to_name() {
+    let h = harness("tk-agent-default");
+    let (p, _r) = h.project(false).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    assert_eq!((a.meta.name.as_str(), a.meta.named), ("agent-1", false));
+    assert_eq!(h.core.ui.read().selected_agent.get(&p.id), Some(&a.meta.id));
 }

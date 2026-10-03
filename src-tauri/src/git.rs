@@ -609,6 +609,27 @@ pub async fn worktree_add(repo: &str, name: &str) -> Result<(String, String, Str
     Ok((path_s, branch, base))
 }
 
+/// Creates `<repo>/.claude/worktrees/<last part of branch>` on a new branch `branch` (`branch-2`…
+/// when it, or its folder, is taken) starting from `base`. Returns (path, branch).
+pub async fn worktree_add_on(repo: &str, branch: &str, base: &str) -> Result<(String, String)> {
+    ensure_excluded(repo, ".claude/worktrees/").await?;
+    let dir_of = |b: &str| {
+        Path::new(repo)
+            .join(".claude")
+            .join("worktrees")
+            .join(b.rsplit('/').next().unwrap_or(b))
+    };
+    let mut name = branch.to_string();
+    let mut n = 2;
+    while branch_exists(repo, &name).await || dir_of(&name).exists() {
+        name = format!("{branch}-{n}");
+        n += 1;
+    }
+    let path = dir_of(&name).to_string_lossy().to_string();
+    run(repo, &["worktree", "add", "-b", &name, &path, base]).await?;
+    Ok((path, name))
+}
+
 /// Removes a worktree and its branch, tolerating a worktree folder that is already gone.
 pub async fn worktree_remove(repo: &str, path: &str, branch: &str) -> Result<()> {
     if run(repo, &["worktree", "remove", "--force", path])
@@ -1163,6 +1184,41 @@ mod repo_tests {
             .status()
             .unwrap()
             .success())
+    }
+
+    #[tokio::test]
+    async fn a_worktree_is_added_on_a_branch_of_its_own_from_a_base() {
+        let r = repo("git-worktree-on");
+        git(&r, &["checkout", "-qb", "release"]);
+        std::fs::write(Path::new(&r).join("release.txt"), "r\n").unwrap();
+        git(&r, &["add", "-A"]);
+        git(&r, &["commit", "-qm", "release"]);
+        git(&r, &["checkout", "-q", "main"]);
+        let (path, branch) = worktree_add_on(&r, "ticket/dem-1", "release")
+            .await
+            .unwrap();
+        assert_eq!(branch, "ticket/dem-1");
+        assert!(Path::new(&path).ends_with(".claude/worktrees/dem-1"));
+        assert!(Path::new(&path).join("release.txt").exists());
+        // The branch taken, then the folder taken, then the same last part under another prefix.
+        let (second, branch) = worktree_add_on(&r, "ticket/dem-1", "main").await.unwrap();
+        assert_eq!(branch, "ticket/dem-1-2");
+        assert!(Path::new(&second).ends_with("dem-1-2"));
+        assert!(!Path::new(&second).join("release.txt").exists());
+        std::fs::create_dir_all(Path::new(&r).join(".claude/worktrees/dem-2")).unwrap();
+        let (third, branch) = worktree_add_on(&r, "ticket/dem-2", "main").await.unwrap();
+        assert_eq!(branch, "ticket/dem-2-2");
+        assert!(Path::new(&third).ends_with("dem-2-2"));
+        let (fourth, branch) = worktree_add_on(&r, "autre/dem-1", "main").await.unwrap();
+        assert_eq!(branch, "autre/dem-1-3");
+        assert!(Path::new(&fourth).ends_with("dem-1-3"));
+        // The folder is kept out of the repository's own status.
+        assert!(dirty(&r).await.is_empty());
+        // A base that does not exist: an error, nothing left behind.
+        assert!(worktree_add_on(&r, "ticket/dem-9", "nowhere")
+            .await
+            .is_err());
+        assert!(!branch_exists(&r, "ticket/dem-9").await);
     }
 
     #[tokio::test]
