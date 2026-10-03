@@ -1,4 +1,5 @@
 mod agent;
+mod board;
 mod claude;
 mod commands;
 mod conv;
