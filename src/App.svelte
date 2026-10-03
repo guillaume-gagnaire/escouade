@@ -11,6 +11,7 @@
   import DiffModal from './components/DiffModal.svelte';
   import EditorView from './components/editor/EditorView.svelte';
   import SidePanel from './components/SidePanel.svelte';
+  import BoardSettingsModal from './components/modals/BoardSettingsModal.svelte';
   import ConfirmModal from './components/modals/ConfirmModal.svelte';
   import NewProjectModal from './components/modals/NewProjectModal.svelte';
   import RenameModal from './components/modals/RenameModal.svelte';
@@ -123,6 +124,8 @@
   <RenameModal title={app.modal.title} value={app.modal.value} onSubmit={app.modal.onSubmit} />
 {:else if app.modal?.kind === 'runConfig'}
   <RunConfigModal projectId={app.modal.projectId} />
+{:else if app.modal?.kind === 'boardSettings'}
+  <BoardSettingsModal projectId={app.modal.projectId} />
 {/if}
 
 <ContextMenu />

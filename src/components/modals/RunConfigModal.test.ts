@@ -70,6 +70,16 @@ describe('RunConfigModal', () => {
     expect(app.launches.c1).toBeUndefined();
   });
 
+  it('saves the files copied into new worktrees', async () => {
+    const backend = fakeBackend();
+    render(RunConfigModal, { projectId: 'p1' });
+    const field = screen.getByRole('textbox', { name: /Fichiers copiés dans les worktrees/ });
+    expect(field).toHaveValue('.env*');
+    await userEvent.type(field, '{Enter}**/.env.local');
+    await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    expect(backend.called('update_project')[0].args.project.worktreeCopy).toEqual(['.env*', '**/.env.local']);
+  });
+
   it('changes nothing when cancelled', async () => {
     const backend = fakeBackend();
     render(RunConfigModal, { projectId: 'p1' });

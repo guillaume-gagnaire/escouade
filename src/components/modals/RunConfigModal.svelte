@@ -10,6 +10,7 @@
 
   const project = $derived(app.projects.find((p) => p.id === projectId));
   let cmds = $state<RunCommand[]>(untrack(() => $state.snapshot(project?.runCommands ?? [])));
+  let copy = $state(untrack(() => (project?.worktreeCopy ?? ['.env*']).join('\n')));
   let busy = $state(false);
 
   const valid = $derived(cmds.every((c) => c.name.trim() && c.command.trim()));
@@ -24,7 +25,11 @@
     if (!project || !valid) return;
     busy = true;
     const runCommands = cmds.map((c) => ({ ...c, name: c.name.trim(), command: c.command.trim(), cwd: c.cwd.trim() }));
-    const p = { ...$state.snapshot(project), runCommands };
+    const worktreeCopy = copy
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+    const p = { ...$state.snapshot(project), runCommands, worktreeCopy };
     const saved = await app.run(api.updateProject(p).then(() => true));
     busy = false;
     if (!saved) return;
@@ -66,6 +71,10 @@
     <div class="empty">Aucune commande pour l'instant.</div>
   {/each}
   <button class="btn add" onclick={add}>+ Ajouter une commande</button>
+  <label class="f">
+    <span>Fichiers copiés dans les worktrees <em>(non suivis par git ; un motif par ligne : .env* à la racine, **/.env* partout)</em></span>
+    <textarea class="field mono" rows="3" placeholder=".env*" bind:value={copy}></textarea>
+  </label>
 
   {#snippet footer()}
     <button class="btn ghost" onclick={close}>Annuler</button>
@@ -121,6 +130,11 @@
   }
   select.field {
     min-width: 170px;
+  }
+  textarea.field {
+    height: auto;
+    resize: vertical;
+    padding: 8px 10px;
   }
   .del {
     width: 36px;

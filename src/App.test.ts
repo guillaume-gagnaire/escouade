@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/svelte';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import App from './App.svelte';
 import { app } from './lib/state.svelte';
@@ -33,6 +34,7 @@ function start(layout: '' | 'split') {
     get_conversation: () => [],
     git_files: () => [{ path: 'src/auth.ts', status: 'M', add: 1, del: 1, agentId: 'a1' }],
     git_diff: () => DIFF,
+    git_branches: () => ['main'],
   });
   // Nothing rendered from a previous test's state until the snapshot is in.
   resetApp();
@@ -62,6 +64,15 @@ describe('App layout', () => {
     expect(screen.getAllByRole('main')).toHaveLength(1);
     app.closeBoard('p1');
     await expect.poll(() => screen.queryByRole('region', { name: 'À faire' })).toBeNull();
+  });
+
+  it('opens the board settings from the board header', async () => {
+    start('');
+    expect(await screen.findByRole('main')).toBeInTheDocument();
+    app.openBoard('p1');
+    await userEvent.click(await screen.findByRole('button', { name: /Après validation/ }));
+    expect(await screen.findByRole('dialog', { name: 'Réglages du tableau' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /Merger dans une branche/ })).toBeInTheDocument();
   });
 
   it('counts an agent as seen once the board that hid it is closed', async () => {
