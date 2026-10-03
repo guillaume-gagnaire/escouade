@@ -33,8 +33,9 @@
   const terms = $derived(app.terminals.filter((t) => t.projectId === project.id));
   const selectedAgentId = $derived(app.agent?.id);
   const termSelected = $derived(app.selectedTerm[project.id] ?? null);
-  /** Another view (terminal, launch log) fills the main area: no agent is highlighted. */
-  const otherView = $derived(!!termSelected || !!app.runCommand);
+  /** Another view (terminal, launch log, board) fills the main area: no agent is highlighted. */
+  const otherView = $derived(!!termSelected || !!app.runCommand || app.boardOn);
+  const review = $derived(app.reviewCount(project.id));
 
   function duration(a: Agent) {
     return fDur(a.activeMs + (a.activeSince ? app.now - a.activeSince : 0));
@@ -131,6 +132,15 @@
 {/snippet}
 
 <aside class="side">
+  <div class="views">
+    <div class="switcher" role="group" aria-label="Vue du projet">
+      <button class:on={!app.boardOn} aria-pressed={!app.boardOn} onclick={() => app.closeBoard(project.id)}>Agents</button>
+      <button class:on={app.boardOn} aria-pressed={app.boardOn} onclick={() => app.openBoard(project.id)}
+        >Tableau{#if review}<span class="badge" title={`${review} à tester`}>{review}</span>{/if}</button
+      >
+    </div>
+  </div>
+
   <div class="head">
     <span class="section-label">Agents</span>
     <span class="count">{app.projectAgents.length}</span>
@@ -314,6 +324,51 @@
     background: var(--panel);
     border-right: 1px solid var(--line);
     min-height: 0;
+  }
+  .views {
+    padding: 12px 10px 0;
+  }
+  .switcher {
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    border-radius: var(--r);
+    background: var(--bg);
+    border: 1px solid var(--line);
+  }
+  .switcher button {
+    flex: 1;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    border: none;
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .switcher button.on {
+    background: var(--elev2);
+    color: var(--text);
+  }
+  .badge {
+    min-width: 17px;
+    height: 17px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: var(--wait);
+    color: #2a1f05;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
   .head {
     display: flex;

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { buffers } from '../lib/editor/buffers.svelte';
 import { menu } from '../lib/menu.svelte';
 import { app } from '../lib/state.svelte';
-import { agent, fakeBackend, gitInfo, project, resetApp } from '../test/ipc';
+import { agent, fakeBackend, gitInfo, project, resetApp, ticket } from '../test/ipc';
 import Sidebar from './Sidebar.svelte';
 
 describe('Sidebar', () => {
@@ -217,5 +217,38 @@ describe('Sidebar editor entries', () => {
     await userEvent.click(screen.getByText(/Archivés/));
     await fireEvent.contextMenu(screen.getByRole('button', { name: /vieux/ }));
     expect(menu.open!.items.map((i) => i.label)).not.toContain('Ouvrir dans l’éditeur');
+  });
+
+  it('no longer highlights the agent while the board fills the main area', () => {
+    resetApp({ agents: [agent()] });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    const card = screen.getByRole('button', { name: /refacto-auth/ });
+    expect(card).toHaveClass('sel');
+    app.openBoard('p1');
+    return expect.poll(() => card.classList.contains('sel')).toBe(false);
+  });
+
+  it('switches to the board, with the count of tickets to test, and back to the agents', async () => {
+    resetApp({
+      agents: [agent()],
+      tickets: [
+        ticket({ column: 'review', agentId: 'a1' }),
+        ticket({ id: 't2', column: 'review' }),
+        ticket({ id: 't3', projectId: 'p2', column: 'review' }),
+      ],
+    });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    const tab = screen.getByRole('button', { name: /^Tableau/ });
+    expect(within(tab).getByText('2')).toBeInTheDocument();
+    await userEvent.click(tab);
+    expect(app.boardOn).toBe(true);
+    expect(tab).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(screen.getByRole('button', { name: 'Agents' }));
+    expect(app.boardOn).toBe(false);
+    app.openBoard('p1');
+    await userEvent.click(screen.getByRole('button', { name: /refacto-auth/ }));
+    expect(app.boardOn).toBe(false);
   });
 });

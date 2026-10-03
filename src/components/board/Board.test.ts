@@ -1,0 +1,109 @@
+import { fireEvent, render, screen, within } from '@testing-library/svelte';
+import userEvent from '@testing-library/user-event';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { menu } from '../../lib/menu.svelte';
+import { app } from '../../lib/state.svelte';
+import { agent, fakeBackend, project, resetApp, ticket } from '../../test/ipc';
+import Board from './Board.svelte';
+
+const col = (name: string) => screen.getByRole('region', { name });
+
+describe('Board', () => {
+  beforeEach(() =>
+    resetApp({
+      tickets: [
+        ticket(),
+        ticket({ id: 't2', key: 'DEM-2', title: 'Deuxième', rank: 2 }),
+        ticket({ id: 't3', key: 'DEM-3', title: 'En route', column: 'doing', agentId: 'a1', iteration: 1, startedAt: 1 }),
+      ],
+    }),
+  );
+
+  it('shows the four columns with their counts and the board header', () => {
+    fakeBackend();
+    render(Board, { project: app.projects[0] });
+    expect(within(col('À faire')).getByText('2', { selector: '.count' })).toBeInTheDocument();
+    expect(within(col('En cours')).getByText('DEM-3')).toBeInTheDocument();
+    expect(within(col('À tester')).getByText('Rien à tester')).toBeInTheDocument();
+    expect(within(col('Terminé')).getByText('Aucun ticket terminé')).toBeInTheDocument();
+    expect(screen.getByText('demo-api · 3 tickets · 1 en boucle')).toBeInTheDocument();
+    expect(screen.getByText('1 place libre')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Après validation : merge squash → main/ })).toBeInTheDocument();
+  });
+
+  it('adds a ticket from the form at the top of "À faire"', async () => {
+    const backend = fakeBackend({ ticket_create: (a: any) => ticket({ id: 't9', key: 'DEM-9', title: a.draft.title }) });
+    render(Board, { project: app.projects[0] });
+    await userEvent.click(screen.getByRole('button', { name: 'Nouveau ticket' }));
+    const add = screen.getByRole('button', { name: 'Ajouter' });
+    expect(add).toBeDisabled();
+    await userEvent.type(screen.getByRole('textbox', { name: 'Titre du ticket' }), 'Limiter les tentatives');
+    await userEvent.type(screen.getByRole('textbox', { name: "Critères d'acceptation" }), '5 essais{Enter}Réponse 429');
+    await userEvent.click(screen.getByRole('button', { name: '8' }));
+    await userEvent.click(add);
+    expect(backend.called('ticket_create')[0].args).toEqual({
+      projectId: 'p1',
+      draft: { title: 'Limiter les tentatives', description: '', criteria: ['5 essais', 'Réponse 429'], maxLoops: 8 },
+    });
+    expect(await within(col('À faire')).findByText('DEM-9')).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Titre du ticket' })).not.toBeInTheDocument();
+  });
+
+  it('tells each ticket to do when it will start', () => {
+    fakeBackend();
+    render(Board, { project: app.projects[0] });
+    const todo = col('À faire');
+    expect(within(todo).getAllByText('2 critères · max 5 boucles')).toHaveLength(2);
+    expect(within(todo).getByText("Pris dès qu'une place se libère")).toBeInTheDocument();
+    expect(within(todo).getByText("En attente d'une place (1/2)")).toBeInTheDocument();
+    expect(within(todo).queryByRole('button', { name: 'Lancer' })).not.toBeInTheDocument();
+  });
+
+  it('turns the autopilot off and lets a ticket be launched by hand', async () => {
+    const backend = fakeBackend({ board_set: (a: any) => project({ board: a.settings }) });
+    render(Board, { project: app.projects[0] });
+    await userEvent.click(screen.getByRole('switch', { name: 'Pilote auto' }));
+    expect(backend.called('board_set')[0].args.settings.autopilot).toBe(false);
+    expect(await screen.findByText('Pilote auto · off')).toBeInTheDocument();
+    expect(within(col('À faire')).getAllByText('Pilote auto désactivé')).toHaveLength(2);
+    await userEvent.click(within(col('À faire')).getAllByRole('button', { name: 'Lancer' })[0]);
+    expect(backend.called('ticket_start')).toEqual([{ cmd: 'ticket_start', args: { id: 't1' } }]);
+  });
+
+  it('opens the board settings from the header', async () => {
+    fakeBackend();
+    render(Board, { project: app.projects[0] });
+    await userEvent.click(screen.getByRole('button', { name: /Après validation/ }));
+    expect(app.modal).toEqual({ kind: 'boardSettings', projectId: 'p1' });
+  });
+
+  it('edits a ticket to do from a click, and moves or deletes it from its menu', async () => {
+    const backend = fakeBackend({ ticket_update: (a: any) => ticket({ title: a.draft.title }) });
+    render(Board, { project: app.projects[0] });
+    await userEvent.click(screen.getByRole('button', { name: /DEM-1/ }));
+    const title = screen.getByRole('textbox', { name: 'Titre du ticket' });
+    expect(title).toHaveValue('Ajouter le fichier');
+    await userEvent.clear(title);
+    await userEvent.type(title, 'Ajouter le fichier du ticket');
+    await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    expect(backend.called('ticket_update')[0].args.draft.title).toBe('Ajouter le fichier du ticket');
+    expect(await screen.findByText('Ajouter le fichier du ticket')).toBeInTheDocument();
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /DEM-2/ }));
+    expect(menu.open!.items.map((i) => i.label)).toEqual(['Modifier', 'Passer en tête', '', 'Supprimer']);
+    menu.open!.items.find((i) => i.label === 'Passer en tête')!.onClick!();
+    expect(backend.called('ticket_prioritize')).toEqual([{ cmd: 'ticket_prioritize', args: { id: 't2' } }]);
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /DEM-2/ }));
+    menu.open!.items.find((i) => i.label === 'Supprimer')!.onClick!();
+    await expect.poll(() => app.tickets.t2).toBeUndefined();
+  });
+
+  it('opens the agent of a ticket under way', async () => {
+    resetApp({ agents: [agent()], tickets: [ticket({ column: 'doing', agentId: 'a1', iteration: 1 })] });
+    fakeBackend();
+    render(Board, { project: app.projects[0] });
+    app.openBoard('p1');
+    await userEvent.click(screen.getByRole('button', { name: /DEM-1/ }));
+    expect(app.ui.selectedAgent.p1).toBe('a1');
+    expect(app.boardOn).toBe(false);
+  });
+});

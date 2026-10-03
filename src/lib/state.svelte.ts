@@ -42,7 +42,8 @@ export type Modal =
       onConfirm: (option: boolean) => void | Promise<void>;
     }
   | { kind: 'rename'; title: string; value: string; onSubmit: (v: string) => void | Promise<void> }
-  | { kind: 'runConfig'; projectId: string };
+  | { kind: 'runConfig'; projectId: string }
+  | { kind: 'boardSettings'; projectId: string };
 
 export interface Toast {
   id: number;

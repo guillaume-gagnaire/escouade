@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/svelte';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import App from './App.svelte';
 import { app } from './lib/state.svelte';
 import type { InitialState } from './lib/types';
@@ -51,5 +51,28 @@ describe('App layout', () => {
     start('');
     expect(await screen.findByRole('main')).toBeInTheDocument();
     expect(screen.queryByText('Non commités')).not.toBeInTheDocument();
+  });
+
+  it('shows the board of the project in place of its agent, and the agent again when asked for', async () => {
+    start('');
+    expect(await screen.findByRole('main')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'À faire' })).not.toBeInTheDocument();
+    app.openBoard('p1');
+    expect(await screen.findByRole('region', { name: 'À faire' })).toBeInTheDocument();
+    expect(screen.getAllByRole('main')).toHaveLength(1);
+    app.closeBoard('p1');
+    await expect.poll(() => screen.queryByRole('region', { name: 'À faire' })).toBeNull();
+  });
+
+  it('counts an agent as seen once the board that hid it is closed', async () => {
+    const focus = vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    start('');
+    expect(await screen.findByRole('main')).toBeInTheDocument();
+    app.openBoard('p1');
+    await screen.findByRole('region', { name: 'À faire' });
+    app.attention.a1 = true;
+    app.closeBoard('p1');
+    await expect.poll(() => app.attention.a1).toBeUndefined();
+    focus.mockRestore();
   });
 });

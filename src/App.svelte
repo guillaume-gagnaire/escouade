@@ -5,6 +5,7 @@
   import { handleShortcut } from './lib/shortcuts';
   import { checkForUpdate } from './lib/updater';
   import { createWarmer } from './lib/warm';
+  import Board from './components/board/Board.svelte';
   import ContextMenu from './components/ContextMenu.svelte';
   import Conversation from './components/Conversation.svelte';
   import DiffModal from './components/DiffModal.svelte';
@@ -46,6 +47,7 @@
     void app.term;
     void app.runCommand;
     void app.editorOn;
+    void app.boardOn;
     void app.ui.view;
     app.markSeen();
   });
@@ -69,7 +71,11 @@
     {:else if app.project}
       {@const project = app.project}
       <Sidebar {project} />
-      {#if app.editorOn}
+      {#if app.boardOn}
+        {#key project.id}
+          <Board {project} />
+        {/key}
+      {:else if app.editorOn}
         {#key project.id}
           <EditorView {project} />
         {/key}
