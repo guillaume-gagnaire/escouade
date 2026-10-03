@@ -1,5 +1,6 @@
 // Global application state (Svelte 5 runes) fed by the backend event channel.
 
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { api } from './ipc';
 import { applyConvOps, dropConversation } from './conversations.svelte';
 import { buffers } from './editor/buffers.svelte';
@@ -226,6 +227,14 @@ class AppState {
       case 'project':
         this.replaceProject(e.project);
         break;
+      case 'openUrl':
+        // The page a pull request needs (a compare page to finish it): a failure is told, not lost.
+        this.run(openUrl(e.url));
+        break;
+      case 'focusBoard':
+        // The click of a ticket's notification.
+        this.openBoard(e.projectId);
+        break;
       case 'conv':
         applyConvOps(e.agentId, e.ops);
         break;
@@ -277,7 +286,12 @@ class AppState {
   private noteAttention(prev: Agent | undefined, next: Agent) {
     if (!ALERT.has(next.status) || next.archived) {
       delete this.attention[next.id];
-    } else if (prev && prev.status !== next.status && !this.onScreen(next.id)) {
+    } else if (
+      prev &&
+      prev.status !== next.status &&
+      !this.onScreen(next.id) &&
+      (next.status === 'waiting' || !this.ticketDoing(next.id))
+    ) {
       this.attention[next.id] = true;
     }
   }
@@ -391,6 +405,11 @@ class AppState {
   ticketOf(agentId: string): Ticket | undefined {
     const mine = Object.values(this.tickets).filter((t) => t.agentId === agentId);
     return mine.find((t) => t.column === 'doing' || t.column === 'review') ?? mine.at(-1);
+  }
+
+  /** The agent's ticket is "En cours": the board tells about its turns. */
+  ticketDoing(agentId: string): boolean {
+    return Object.values(this.tickets).some((t) => t.agentId === agentId && t.column === 'doing');
   }
 
   /** Tickets "À tester" of a project (the badge of "Tableau"). */

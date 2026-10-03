@@ -461,7 +461,9 @@ export type UiEvent =
   | { type: 'quitRequested'; unsaved: number }
   | { type: 'ticket'; ticket: Ticket }
   | { type: 'ticketRemoved'; id: string; projectId: string }
-  | { type: 'project'; project: Project };
+  | { type: 'project'; project: Project }
+  | { type: 'openUrl'; url: string }
+  | { type: 'focusBoard'; projectId: string };
 
 export interface InitialState {
   projects: Project[];

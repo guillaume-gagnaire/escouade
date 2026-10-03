@@ -1,10 +1,10 @@
-import { render, screen, waitFor } from '@testing-library/svelte';
+import { render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { conversationOf } from '../lib/conversations.svelte';
 import { app } from '../lib/state.svelte';
 import type { Agent } from '../lib/types';
-import { agent, fakeBackend, project, resetApp } from '../test/ipc';
+import { agent, fakeBackend, project, resetApp, ticket } from '../test/ipc';
 import Conversation from './Conversation.svelte';
 
 // jsdom has no layout: give scrollable elements a fixed geometry.
@@ -222,6 +222,66 @@ describe('Conversation', () => {
     const recap = await screen.findByRole('list', { name: 'Fichiers modifiés' });
     expect(recap).toHaveTextContent('src/auth.ts+5−1');
     expect(recap).not.toHaveTextContent('old.ts');
+  });
+
+  it('shows an agent’s report of its criteria as a card, with its launch recipe', async () => {
+    const text =
+      'Fait.\n\n```escouade\n{"criteres": [{"n": 1, "ok": true, "note": "vérifié"}, {"n": 2, "ok": false, "note": "reste"}], "lancement": {"processus": [{"nom": "web", "commande": "npm run dev", "url": "http://localhost:4101"}]}}\n```';
+    const { a } = setup({ status: 'done' }, [{ kind: 'text', id: 'm1', text, streaming: false }]);
+    app.tickets.t1 = ticket({ agentId: a.id, column: 'doing' });
+    const list = await screen.findByRole('list', { name: 'Bilan des critères' });
+    const items = within(list).getAllByRole('listitem');
+    expect(items[0]).toHaveTextContent('✓Le fichier existevérifié');
+    expect(items[1]).toHaveTextContent('○Tests vertsreste');
+    expect(screen.getByText('Lancement de test')).toBeInTheDocument();
+    expect(screen.getByText('http://localhost:4101')).toBeInTheDocument();
+    expect(screen.getByText('Fait.')).toBeInTheDocument();
+    expect(screen.queryByText(/"criteres"/)).not.toBeInTheDocument();
+    // No progress given: nothing about it.
+    expect(screen.queryByRole('list', { name: 'Avancement' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Ce qui a été fait')).not.toBeInTheDocument();
+  });
+
+  it('lists what the agent has done after its criteria, and names a criterion by its number without a ticket', async () => {
+    const text =
+      '```escouade\n{"criteres": [{"n": 1, "ok": true}, {"n": 3, "ok": false, "note": "reste"}], "avancement": ["Tokens signés", "Middleware réécrit"]}\n```';
+    setup({ status: 'done' }, [{ kind: 'text', id: 'm1', text, streaming: false }]);
+    const criteria = await screen.findByRole('list', { name: 'Bilan des critères' });
+    expect(
+      within(criteria)
+        .getAllByRole('listitem')
+        .map((li) => li.textContent),
+    ).toEqual(['✓Critère 1', '○Critère 3reste']);
+    expect(screen.getByText('1/2')).toBeInTheDocument();
+    expect(screen.getByText('Ce qui a été fait')).toBeInTheDocument();
+    const done = screen.getByRole('list', { name: 'Avancement' });
+    expect(
+      within(done)
+        .getAllByRole('listitem')
+        .map((li) => li.textContent),
+    ).toEqual(['Tokens signés', 'Middleware réécrit']);
+    // After the criteria, in the card.
+    expect(criteria.compareDocumentPosition(done) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('shows a report that is only progress, or only a recipe, without a list of criteria', async () => {
+    const progress = '```escouade\n{"avancement": ["Adaptateur écrit"]}\n```';
+    const recipe = '```escouade\n{"lancement": {"processus": [{"commande": "npm start"}]}}\n```';
+    setup({ status: 'done' }, [
+      { kind: 'text', id: 'm1', text: progress, streaming: false },
+      { kind: 'text', id: 'm2', text: recipe, streaming: false },
+    ]);
+    expect(await screen.findByText('Adaptateur écrit')).toBeInTheDocument();
+    expect(screen.getByText('npm start')).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Bilan des critères' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Bilan des critères')).not.toBeInTheDocument();
+  });
+
+  it('leaves a block it cannot read as code, in its message', async () => {
+    const text = 'Voici :\n\n```escouade\n{"criteres": oups}\n```';
+    setup({ status: 'done' }, [{ kind: 'text', id: 'm1', text, streaming: false }]);
+    expect(await screen.findByText(/oups/)).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Bilan des critères' })).not.toBeInTheDocument();
   });
 });
 

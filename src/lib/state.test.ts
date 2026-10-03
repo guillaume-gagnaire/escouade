@@ -740,6 +740,82 @@ describe('board', () => {
     expect(app.ui.activeProject).toBe('p1');
     expect(app.boardOn).toBe(false);
   });
+
+  it('opens the board a ticket notification was clicked for, and the page a pull request needs', async () => {
+    const { emit, backend } = await start();
+    emit({ type: 'focusBoard', projectId: 'p2' });
+    expect(app.ui.activeProject).toBe('p2');
+    expect(app.boardOn).toBe(true);
+    emit({ type: 'openUrl', url: 'https://github.com/acme/demo/compare/main...ticket/dem-1' });
+    await vi.waitFor(() => expect(backend.called('plugin:opener|open_url')).toHaveLength(1));
+    expect(backend.called('plugin:opener|open_url')[0].args.url).toBe('https://github.com/acme/demo/compare/main...ticket/dem-1');
+    expect(app.toasts).toEqual([]);
+  });
+
+  it('shows the board of the project of a notification even when another view is up', async () => {
+    const { emit } = await start();
+    app.selectAgent('a2');
+    emit({ type: 'focusBoard', projectId: 'p1' });
+    expect(app.boardOn).toBe(true);
+    expect(app.agent?.id).toBe('a2');
+  });
+
+  it('says so when the page of a pull request does not open', async () => {
+    const { emit, backend } = await start(
+      {},
+      {
+        'plugin:opener|open_url': () => {
+          throw 'Aucun navigateur';
+        },
+      },
+    );
+    emit({ type: 'openUrl', url: 'https://github.com/acme/demo/compare/main...ticket/dem-1' });
+    await expect.poll(() => app.toasts.at(-1)).toMatchObject({ kind: 'error', text: expect.stringContaining('Aucun navigateur') });
+    expect(backend.called('plugin:opener|open_url')).toHaveLength(1);
+  });
+
+  it('tells whether the ticket of an agent is under way', async () => {
+    await start({
+      tickets: [
+        ticket({ id: 't1', agentId: 'a1', column: 'doing' }),
+        ticket({ id: 't2', agentId: 'a2', column: 'review' }),
+        ticket({ id: 't3', agentId: 'b1', column: 'doing', blocked: 'Interrompu' }),
+        ticket({ id: 't4', agentId: null, column: 'doing' }),
+      ],
+    });
+    expect(app.ticketDoing('a1')).toBe(true);
+    expect(app.ticketDoing('a2')).toBe(false);
+    // A blocked ticket is still under way: the board tells about it.
+    expect(app.ticketDoing('b1')).toBe(true);
+    expect(app.ticketDoing('nobody')).toBe(false);
+  });
+
+  it('does not flag the agent of a ticket under way at each end of turn, but does for its questions', async () => {
+    const { emit } = await start({ tickets: [ticket({ column: 'doing', agentId: 'a2' })] });
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    emit({ type: 'agent', agent: agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, status: 'running' }) });
+    emit({ type: 'agent', agent: agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, status: 'done' }) });
+    expect(app.attention.a2).toBeUndefined();
+    emit({ type: 'agent', agent: agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, status: 'running' }) });
+    emit({ type: 'agent', agent: agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, status: 'error' }) });
+    expect(app.attention.a2).toBeUndefined();
+    emit({ type: 'agent', agent: agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, status: 'waiting' }) });
+    expect(app.attention.a2).toBe(true);
+    vi.restoreAllMocks();
+  });
+
+  it('still flags the end of a turn of an agent whose ticket is not under way', async () => {
+    const { emit } = await start({ tickets: [ticket({ column: 'review', agentId: 'a2' })] });
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    emit({ type: 'agent', agent: agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, status: 'running' }) });
+    emit({ type: 'agent', agent: agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, status: 'done' }) });
+    expect(app.attention.a2).toBe(true);
+    // Neither does an agent without a ticket escape it.
+    emit({ type: 'agent', agent: agent({ status: 'running' }) });
+    emit({ type: 'agent', agent: agent({ status: 'done' }) });
+    expect(app.attention.a1).toBe(true);
+    vi.restoreAllMocks();
+  });
 });
 
 describe('quitting with unsaved files', () => {

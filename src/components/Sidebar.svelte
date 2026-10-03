@@ -3,6 +3,7 @@
   import { api } from '../lib/ipc';
   import { fDur, fTok, fUsd, fWhen, tildify } from '../lib/format';
   import { copyRemoteLink, openRemote, toggleRemote } from '../lib/agent-actions';
+  import { ticketTag } from '../lib/board';
   import { shortBranch } from '../lib/branches';
   import { buffers, lossNotice } from '../lib/editor/buffers.svelte';
   import { menu, type MenuItem } from '../lib/menu.svelte';
@@ -154,6 +155,7 @@
     {#each app.projectAgents as a (a.id)}
       {@const sel = a.id === selectedAgentId && !otherView}
       {@const s = spent(a)}
+      {@const tag = ticketTag(app.ticketOf(a.id))}
       <div
         class="card"
         class:sel
@@ -220,6 +222,9 @@
         <div class="meta dim" title={s.estimated ? ESTIMATE_HINT : undefined}>
           <span>{fTok(s.tokens)} tok</span><span>{fSpentUsd(s)}</span><span>{git?.agents[a.id] ?? 0} fich.</span>
         </div>
+        {#if tag}
+          <div class="ticket-tag mono">▸ {tag}</div>
+        {/if}
       </div>
     {:else}
       <div class="empty">
@@ -512,6 +517,15 @@
   }
   .meta.dim {
     color: var(--dim);
+  }
+  .ticket-tag {
+    margin-left: 17px;
+    align-self: flex-start;
+    font-size: 10.5px;
+    padding: 2px 7px;
+    border-radius: 3px;
+    background: var(--elev2);
+    color: var(--accent);
   }
   .sep {
     color: var(--dim);

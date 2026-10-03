@@ -229,6 +229,30 @@ describe('Sidebar editor entries', () => {
     return expect.poll(() => card.classList.contains('sel')).toBe(false);
   });
 
+  it('tags the agent of a ticket with its loop', () => {
+    resetApp({ agents: [agent()], tickets: [ticket({ column: 'doing', agentId: 'a1', iteration: 2 })] });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    const card = screen.getByRole('button', { name: /refacto-auth/ });
+    expect(within(card).getByText('▸ DEM-1 · boucle 2/5')).toBeInTheDocument();
+  });
+
+  it('tags the agent of a ticket to test, follows the ticket, and leaves the others untagged', async () => {
+    resetApp({
+      agents: [agent(), agent({ id: 'a2', name: 'tests-e2e', createdAt: 2 }), agent({ id: 'a3', name: 'vieux', createdAt: 3 })],
+      tickets: [ticket({ column: 'review', agentId: 'a1' }), ticket({ id: 't2', key: 'DEM-2', column: 'done', agentId: 'a3' })],
+    });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    const card = (name: RegExp) => screen.getByRole('button', { name });
+    expect(within(card(/refacto-auth/)).getByText('▸ DEM-1 · à tester')).toBeInTheDocument();
+    // No ticket, or one that is done: nothing to tag.
+    expect(card(/tests-e2e/).querySelector('.ticket-tag')).toBeNull();
+    expect(card(/vieux/).querySelector('.ticket-tag')).toBeNull();
+    app.tickets.t1 = ticket({ column: 'doing', agentId: 'a1', iteration: 3, maxLoops: 8 });
+    expect(await within(card(/refacto-auth/)).findByText('▸ DEM-1 · boucle 3/8')).toBeInTheDocument();
+  });
+
   it('switches to the board, with the count of tickets to test, and back to the agents', async () => {
     resetApp({
       agents: [agent()],

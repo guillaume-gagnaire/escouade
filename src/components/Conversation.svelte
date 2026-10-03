@@ -3,6 +3,7 @@
   import { onMount } from 'svelte';
   import { api } from '../lib/ipc';
   import { conversationOf } from '../lib/conversations.svelte';
+  import { splitEscouade } from '../lib/escouade';
   import { fDur, fInt, fTok } from '../lib/format';
   import { modelLabel } from '../lib/models';
   import { ESTIMATE_HINT, fSpentUsd, spent } from '../lib/spend';
@@ -11,6 +12,7 @@
   import { app } from '../lib/state.svelte';
   import type { Agent, ConvItem, Project } from '../lib/types';
   import Composer from './Composer.svelte';
+  import CriteriaReport from './conv/CriteriaReport.svelte';
   import EventMessage from './conv/EventMessage.svelte';
   import Markdown from './conv/Markdown.svelte';
   import Notice from './conv/Notice.svelte';
@@ -34,6 +36,8 @@
   };
 
   const conv = $derived(conversationOf(agent.id));
+  // The ticket the agent works on, whose criteria the reports of its turns name.
+  const ticket = $derived(app.ticketOf(agent.id));
   const top = $derived(conv.items.filter((i) => !i.parent));
   const children = $derived.by(() => {
     const m = new Map<string, ConvItem[]>();
@@ -269,7 +273,15 @@
           {#if item.text.trim() || item.streaming}
             <div class="assistant">
               {#if !prevIsText(i)}<span class="avatar">C</span>{:else}<span class="avatar ghost"></span>{/if}
-              <Markdown text={item.text} streaming={item.streaming} />
+              <div class="blocks">
+                {#each splitEscouade(item.text) as seg, si (si)}
+                  {#if seg.kind === 'report'}
+                    <CriteriaReport report={seg.report} criteria={ticket?.criteria ?? []} {agent} />
+                  {:else}
+                    <Markdown text={seg.text} streaming={item.streaming} />
+                  {/if}
+                {/each}
+              </div>
             </div>
           {/if}
         {:else if item.kind === 'thinking'}
@@ -503,6 +515,13 @@
     display: flex;
     gap: 12px;
     min-width: 0;
+  }
+  .blocks {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
   }
   .avatar {
     width: 22px;
