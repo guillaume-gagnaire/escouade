@@ -651,6 +651,9 @@ impl<R: Runtime> Core<R> {
         if let Some(kind) = fx.notify {
             self.notify_agent(kind, project_id, id, name);
         }
+        if let Some(end) = fx.turn_end {
+            log::debug!("agent {id}: end of turn: {end:?}");
+        }
     }
 
     fn on_frame(self: &Arc<Self>, h: &AgentHandle, gen: u64, frame: Value) {

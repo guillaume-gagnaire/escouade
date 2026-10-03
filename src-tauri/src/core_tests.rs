@@ -363,6 +363,53 @@ async fn archiving_is_silent_and_a_restored_agent_resumes() {
 }
 
 #[tokio::test]
+async fn archiving_a_running_agent_ends_what_it_was_doing() {
+    let h = harness("archive-live");
+    let (p, _) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.wait("warm-up", |h| h.alive(&id)).await;
+    let agent = h.core.agent(&id).unwrap();
+    // A turn in flight whose end will never be heard: nothing more comes from a detached process.
+    if let Some(p) = agent.lock().detach() {
+        p.kill();
+    }
+    {
+        let mut rt = agent.lock();
+        let mut fx = crate::agent::Effects::default();
+        for frame in [
+            json!({"type":"stream_event","event":{"type":"message_start","message":{"id":"m1","usage":{}}},"parent_tool_use_id":null}),
+            json!({"type":"assistant","message":{"id":"m2","content":[{"type":"text","text":"Début."},{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"src/app.ts"}}]},"parent_tool_use_id":null}),
+        ] {
+            rt.handle_frame(&frame, &mut fx);
+        }
+        assert_eq!(rt.view().activity.as_deref(), Some("Lit src/app.ts"));
+    }
+
+    h.core.archive_agent(&id, true).await.unwrap();
+
+    let mut rt = agent.lock();
+    assert_eq!(rt.view().activity, None);
+    // The text of the abandoned turn does not leak into a later one's.
+    let mut fx = crate::agent::Effects::default();
+    rt.handle_frame(
+        &json!({"type":"result","subtype":"success","is_error":false,"duration_ms":1,"result":"Résumé"}),
+        &mut fx,
+    );
+    assert_eq!(
+        fx.turn_end,
+        Some(crate::board::TurnEnd::Finished("Résumé".into()))
+    );
+    // What the interface shows follows.
+    let events = h.events.lock();
+    let shown = events
+        .iter()
+        .rev()
+        .find(|e| e["type"] == "agent" && e["agent"]["id"] == id.as_str())
+        .expect("the agent was sent to the interface");
+    assert_eq!(shown["agent"]["activity"], Value::Null);
+}
+
+#[tokio::test]
 async fn a_message_after_a_crash_restarts_claude() {
     let h = harness("crash");
     let (p, _) = h.project(false).await;

@@ -1,6 +1,7 @@
 //! Runtime state of one agent: turns raw Claude Code frames into conversation items,
 //! tracks status, pending questions/permissions and per-turn usage.
 
+use crate::board::TurnEnd;
 use crate::claude::{truncate, ClaudeProcess};
 use crate::conv::Conv;
 use crate::model::*;
@@ -41,6 +42,8 @@ pub struct Effects {
     /// The turn was stopped by the usage limit, which resets then (if Claude Code told).
     pub limited: Option<Option<i64>>,
     pub files_changed: bool,
+    /// A turn ended (or the process died during one): how, with the assistant's text.
+    pub turn_end: Option<TurnEnd>,
 }
 
 struct Block {
@@ -89,6 +92,10 @@ pub struct AgentRt {
     pub remote_state: Option<String>,
     /// The live process was linked to claude.ai (Remote Control).
     pub remote_linked: bool,
+    /// What the agent does now, from its latest tool, thinking or text (main thread only).
+    pub activity: Option<String>,
+    /// The assistant's text of the running turn (main thread), for the board's report.
+    turn_text: String,
     blocks: HashMap<String, Vec<Block>>,
     current_msg: HashMap<String, String>,
     pending: HashMap<String, PendingReq>,
@@ -127,6 +134,8 @@ impl AgentRt {
             saw_init: false,
             remote_state: None,
             remote_linked: false,
+            activity: None,
+            turn_text: String::new(),
             blocks: HashMap::new(),
             current_msg: HashMap::new(),
             pending: HashMap::new(),
@@ -158,6 +167,7 @@ impl AgentRt {
             live_tokens,
             live_cost,
             remote_state: self.remote_state.clone(),
+            activity: self.activity.clone(),
         }
     }
 
@@ -173,6 +183,7 @@ impl AgentRt {
         self.live.clear();
         self.remote_state = None;
         self.remote_linked = false;
+        self.forget_turn();
         self.saw_init = false;
         self.queued = 0;
         self.foreground_tasks.clear();
@@ -201,6 +212,20 @@ impl AgentRt {
     pub fn notice(&mut self, level: &str, text: impl Into<String>, fx: &mut Effects) {
         let item = json!({ "kind": "notice", "id": new_id(), "ts": now_ms(), "level": level, "text": text.into() });
         self.append(item, fx);
+    }
+
+    /// Drops what the running turn showed (its activity, its text): the turn is over, or lost.
+    fn forget_turn(&mut self) {
+        self.activity = None;
+        self.turn_text.clear();
+    }
+
+    /// What the agent does now, shown live; unchanged by a tool it has no words for.
+    fn set_activity(&mut self, activity: Option<String>, fx: &mut Effects) {
+        if activity.is_some() && activity != self.activity {
+            self.activity = activity;
+            fx.agent_changed = true;
+        }
     }
 
     pub fn set_status(&mut self, status: AgentStatus, fx: &mut Effects) {
@@ -260,6 +285,7 @@ impl AgentRt {
         if queued {
             self.queued += 1;
         } else {
+            self.turn_text.clear();
             self.interrupted = false;
             self.set_status(AgentStatus::Running, fx);
         }
@@ -273,6 +299,8 @@ impl AgentRt {
     /// Deliberate stop (idle, archive): detaches the process so that its exit is ignored and
     /// the next action spawns a fresh one resuming the same session.
     pub fn detach(&mut self) -> Option<Arc<ClaudeProcess>> {
+        // Nothing more is heard from the process, so a turn it was running never ends here.
+        self.forget_turn();
         let p = self.proc.take()?;
         self.gen += 1;
         Some(p)
@@ -387,6 +415,7 @@ impl AgentRt {
         self.live.clear();
         self.remote_state = None;
         self.remote_linked = false;
+        self.forget_turn();
         self.clear_pending(fx);
         self.close_open_items(fx);
         if !self.saw_init && stderr.contains("No conversation found") {
@@ -394,6 +423,7 @@ impl AgentRt {
             self.notice("warn", "Session Claude introuvable : une nouvelle session sera démarrée au prochain message.", fx);
             self.set_status(AgentStatus::Done, fx);
         } else if self.meta.status.is_active() || !self.saw_init {
+            let was_running = self.meta.status.is_active();
             let detail = if stderr.trim().is_empty() {
                 String::new()
             } else {
@@ -406,6 +436,11 @@ impl AgentRt {
                 fx,
             );
             self.set_status(AgentStatus::Error, fx);
+            if was_running {
+                fx.turn_end = Some(TurnEnd::Error(format!(
+                    "Claude Code s'est arrêté (code {code})"
+                )));
+            }
             fx.notify = Some(NotifyKind::Error);
         }
         fx.agent_changed = true;
@@ -566,6 +601,18 @@ impl AgentRt {
                     ),
                     _ => return,
                 };
+                if parent.is_none() {
+                    let activity = match kind {
+                        "text" => Some("Rédige".to_string()),
+                        "thinking" => Some("Réfléchit".to_string()),
+                        _ => tool_activity(
+                            cb["name"].as_str().unwrap_or_default(),
+                            &Value::Null,
+                            &self.meta.cwd,
+                        ),
+                    };
+                    self.set_activity(activity, fx);
+                }
                 let item_id = item["id"].as_str().unwrap_or_default().to_string();
                 self.append(item, fx);
                 self.blocks.entry(mid).or_default().push(Block {
@@ -644,6 +691,28 @@ impl AgentRt {
                 "tool_use" | "server_tool_use" => "tool",
                 _ => continue,
             };
+            if parent.is_none() {
+                match kind {
+                    "text" => {
+                        let text = block["text"].as_str().unwrap_or_default();
+                        if !text.trim().is_empty() {
+                            if !self.turn_text.is_empty() {
+                                self.turn_text.push_str("\n\n");
+                            }
+                            self.turn_text.push_str(text);
+                        }
+                    }
+                    "tool" => {
+                        let activity = tool_activity(
+                            block["name"].as_str().unwrap_or_default(),
+                            &block["input"],
+                            &self.meta.cwd,
+                        );
+                        self.set_activity(activity, fx);
+                    }
+                    _ => {}
+                }
+            }
             let streamed = self
                 .blocks
                 .get_mut(&mid)
@@ -917,6 +986,21 @@ impl AgentRt {
         } else {
             None
         };
+        let end = if interrupted {
+            TurnEnd::Interrupted
+        } else if limited && is_error {
+            TurnEnd::Limited
+        } else if is_error {
+            TurnEnd::Error(error.clone().unwrap_or_default())
+        } else {
+            let text = std::mem::take(&mut self.turn_text);
+            TurnEnd::Finished(if text.trim().is_empty() {
+                f["result"].as_str().unwrap_or_default().to_string()
+            } else {
+                text
+            })
+        };
+        self.forget_turn();
         self.close_open_items(fx);
         let item = json!({
             "kind": "turn", "id": f["uuid"].as_str().map(str::to_string).unwrap_or_else(new_id), "ts": now_ms(),
@@ -955,6 +1039,7 @@ impl AgentRt {
         }
         fx.agent_changed = true;
         fx.save = true;
+        fx.turn_end = Some(end);
     }
 
     fn on_control_request(&mut self, f: &Value, fx: &mut Effects) {
@@ -1136,6 +1221,45 @@ pub fn strip_ansi(s: &str) -> String {
         }
     }
     out
+}
+
+/// What the agent does, from the tool it runs: "Lit src/db.ts", "Lance npm test"… None for a tool
+/// without words of its own.
+pub fn tool_activity(name: &str, input: &Value, cwd: &str) -> Option<String> {
+    let file = || {
+        input["file_path"]
+            .as_str()
+            .or(input["notebook_path"].as_str())
+            .map(|p| relative_slash(cwd, p))
+            .unwrap_or_default()
+    };
+    let with = |verb: &str, what: String| {
+        if what.is_empty() {
+            verb.to_string()
+        } else {
+            format!("{verb} {what}")
+        }
+    };
+    Some(match name {
+        "Read" => with("Lit", file()),
+        "Grep" | "Glob" => with(
+            "Cherche",
+            input["pattern"].as_str().unwrap_or_default().to_string(),
+        ),
+        "Edit" | "MultiEdit" | "NotebookEdit" => with("Modifie", file()),
+        "Write" => with("Écrit", file()),
+        "Bash" => {
+            let first = input["command"]
+                .as_str()
+                .unwrap_or_default()
+                .lines()
+                .next()
+                .unwrap_or_default();
+            with("Lance", truncate(first.trim(), 60))
+        }
+        "Task" | "Agent" => "Délègue".to_string(),
+        _ => return None,
+    })
 }
 
 #[cfg(test)]
@@ -1732,5 +1856,109 @@ mod tests {
             strip_tags("<local-command-stdout>ok</local-command-stdout>"),
             "ok"
         );
+    }
+
+    #[test]
+    fn the_activity_follows_the_main_threads_tools_and_clears_at_the_end_of_the_turn() {
+        let mut a = rt();
+        let mut fx = Effects::default();
+        a.handle_frame(&json!({"type":"stream_event","event":{"type":"message_start","message":{"id":"m1","usage":{}}},"parent_tool_use_id":null}), &mut fx);
+        a.handle_frame(&json!({"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}},"parent_tool_use_id":null}), &mut fx);
+        assert_eq!(a.view().activity.as_deref(), Some("Réfléchit"));
+        a.handle_frame(&json!({"type":"assistant","message":{"id":"m2","content":[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"C:/p/src/db.ts"}}]},"parent_tool_use_id":null}), &mut fx);
+        assert_eq!(a.view().activity.as_deref(), Some("Lit src/db.ts"));
+        a.handle_frame(&json!({"type":"assistant","message":{"id":"m3","content":[{"type":"tool_use","id":"t2","name":"Bash","input":{"command":"npm test -- --run\nnpm run lint"}}]},"parent_tool_use_id":null}), &mut fx);
+        assert_eq!(
+            a.view().activity.as_deref(),
+            Some("Lance npm test -- --run")
+        );
+        // A subagent's tools are its own business.
+        a.handle_frame(&json!({"type":"assistant","message":{"id":"m4","content":[{"type":"tool_use","id":"t3","name":"Write","input":{"file_path":"C:/p/x.ts"}}]},"parent_tool_use_id":"t9"}), &mut fx);
+        assert_eq!(
+            a.view().activity.as_deref(),
+            Some("Lance npm test -- --run")
+        );
+        a.handle_frame(
+            &json!({"type":"result","subtype":"success","is_error":false,"duration_ms":1}),
+            &mut fx,
+        );
+        assert_eq!(a.view().activity, None);
+    }
+
+    #[test]
+    fn tool_activities_name_what_the_agent_does() {
+        let cwd = "C:/p";
+        let act = |name: &str, input: Value| tool_activity(name, &input, cwd);
+        assert_eq!(
+            act("Grep", json!({"pattern":"TODO"})).as_deref(),
+            Some("Cherche TODO")
+        );
+        assert_eq!(
+            act("Glob", json!({"pattern":"**/*.ts"})).as_deref(),
+            Some("Cherche **/*.ts")
+        );
+        assert_eq!(
+            act("Edit", json!({"file_path":"C:/p/src/a.ts"})).as_deref(),
+            Some("Modifie src/a.ts")
+        );
+        assert_eq!(
+            act("MultiEdit", json!({"file_path":"C:/p/src/a.ts"})).as_deref(),
+            Some("Modifie src/a.ts")
+        );
+        assert_eq!(
+            act("Write", json!({"file_path":"C:/p/b.ts"})).as_deref(),
+            Some("Écrit b.ts")
+        );
+        assert_eq!(act("Task", json!({})).as_deref(), Some("Délègue"));
+        assert_eq!(act("Read", Value::Null).as_deref(), Some("Lit"));
+        assert_eq!(act("WebSearch", json!({})), None);
+    }
+
+    #[test]
+    fn the_end_of_a_turn_tells_how_it_ended_with_the_assistants_text() {
+        let mut a = rt();
+        let mut fx = Effects::default();
+        a.push_user("u1", "Go", 0, &[], &mut fx);
+        a.handle_frame(&json!({"type":"assistant","message":{"id":"m1","content":[{"type":"text","text":"Fait."}]},"parent_tool_use_id":null}), &mut fx);
+        a.handle_frame(&json!({"type":"assistant","message":{"id":"m2","content":[{"type":"text","text":"```escouade\n{}\n```"}]},"parent_tool_use_id":null}), &mut fx);
+        a.handle_frame(&json!({"type":"assistant","message":{"id":"m3","content":[{"type":"text","text":"sous-agent"}]},"parent_tool_use_id":"t1"}), &mut fx);
+        let mut fx = Effects::default();
+        a.handle_frame(&json!({"type":"result","subtype":"success","is_error":false,"duration_ms":1,"result":"ignoré"}), &mut fx);
+        assert_eq!(
+            fx.turn_end,
+            Some(TurnEnd::Finished("Fait.\n\n```escouade\n{}\n```".into()))
+        );
+        // Without text of its own, the result's.
+        let mut fx = Effects::default();
+        a.handle_frame(&json!({"type":"result","subtype":"success","is_error":false,"duration_ms":1,"result":"Résumé"}), &mut fx);
+        assert_eq!(fx.turn_end, Some(TurnEnd::Finished("Résumé".into())));
+        let mut fx = Effects::default();
+        a.handle_frame(&json!({"type":"result","subtype":"error_during_execution","is_error":true,"duration_ms":1,"result":"Boom"}), &mut fx);
+        assert_eq!(fx.turn_end, Some(TurnEnd::Error("Boom".into())));
+        a.interrupted = true;
+        let mut fx = Effects::default();
+        a.handle_frame(&json!({"type":"result","subtype":"error_during_execution","is_error":true,"duration_ms":1}), &mut fx);
+        assert_eq!(fx.turn_end, Some(TurnEnd::Interrupted));
+        a.handle_frame(&json!({"type":"assistant","error":"rate_limit","message":{"id":"m9","content":[{"type":"text","text":"limit"}]},"parent_tool_use_id":null}), &mut Effects::default());
+        let mut fx = Effects::default();
+        a.handle_frame(&json!({"type":"result","subtype":"success","is_error":true,"duration_ms":1,"result":"limit"}), &mut fx);
+        assert_eq!(fx.turn_end, Some(TurnEnd::Limited));
+    }
+
+    #[test]
+    fn a_process_dying_during_a_turn_ends_it_in_error() {
+        let mut a = rt();
+        a.saw_init = true;
+        a.push_user("u1", "Bonjour", 0, &[], &mut Effects::default());
+        let mut fx = Effects::default();
+        a.on_exit(a.gen, Some(3), "", &mut fx);
+        assert_eq!(
+            fx.turn_end,
+            Some(TurnEnd::Error("Claude Code s'est arrêté (code 3)".into()))
+        );
+        // Idle, its exit ends no turn.
+        let mut fx = Effects::default();
+        a.on_exit(a.gen, Some(0), "", &mut fx);
+        assert_eq!(fx.turn_end, None);
     }
 }

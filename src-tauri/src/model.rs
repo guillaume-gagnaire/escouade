@@ -383,6 +383,8 @@ pub struct AgentView {
     pub live_cost: f64,
     /// Remote Control link state reported by Claude Code ("ready", "connected"…).
     pub remote_state: Option<String>,
+    /// What it does right now ("Lit src/db.ts", "Lance npm test"…), during a turn.
+    pub activity: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

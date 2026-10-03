@@ -2,6 +2,7 @@
 //! (tests/fixtures/fake-claude.mjs, run with node).
 
 use crate::agent::{AgentHandle, AgentRt, Effects};
+use crate::board::TurnEnd;
 use crate::claude::{ClaudeProcess, SpawnOpts};
 use crate::core::claude_args;
 use crate::model::{AgentMeta, AgentStatus};
@@ -318,6 +319,39 @@ async fn interrupt_ends_the_turn_without_error() {
     let turn = items(&h).into_iter().find(|i| i["kind"] == "turn").unwrap();
     assert_eq!(turn["interrupted"], true);
     assert_eq!(turn["isError"], false);
+}
+
+#[tokio::test]
+async fn a_new_process_starts_without_the_activity_or_text_of_a_turn_that_never_ended() {
+    let dir = temp_dir("fresh-turn");
+    let log = dir.join("log.jsonl");
+    let h = new_agent(&dir);
+    let proc = spawn(&h, &log);
+    send(&h, &proc, "slow");
+    wait_for(&h, "the text of the turn", |rt| {
+        rt.view().activity.as_deref() == Some("Rédige")
+            && rt
+                .conv
+                .items()
+                .iter()
+                .any(|i| i["kind"] == "text" && i["streaming"] == false)
+    })
+    .await;
+
+    // A new process takes over before the turn ever ended (no result, no exit seen); what the
+    // old one still says is ignored.
+    let old = proc;
+    let proc = spawn(&h, &log);
+    old.kill();
+    assert_eq!(h.lock().view().activity, None);
+    // The text of the lost turn does not leak into the next one's.
+    let mut fx = Effects::default();
+    h.lock().handle_frame(
+        &json!({"type":"result","subtype":"success","is_error":false,"duration_ms":1,"result":"Résumé"}),
+        &mut fx,
+    );
+    assert_eq!(fx.turn_end, Some(TurnEnd::Finished("Résumé".into())));
+    proc.close_input();
 }
 
 #[tokio::test]
