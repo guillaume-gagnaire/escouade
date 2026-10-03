@@ -2,8 +2,8 @@ import { render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { app } from '../lib/state.svelte';
-import type { LaunchState, RunCommand } from '../lib/types';
-import { fakeBackend, project, resetApp } from '../test/ipc';
+import type { LaunchState, RunCommand, TestRecipe } from '../lib/types';
+import { agent, fakeBackend, project, resetApp } from '../test/ipc';
 import RunsSection from './RunsSection.svelte';
 
 vi.mock('../lib/terminals', () => ({
@@ -85,5 +85,65 @@ describe('RunsSection', () => {
     render(RunsSection, { project: P });
     await userEvent.click(screen.getByRole('button', { name: 'Commandes de lancement…' }));
     expect(app.modal).toEqual({ kind: 'runConfig', projectId: 'p1' });
+  });
+
+  const recipe = (over: Partial<TestRecipe> = {}): TestRecipe => ({
+    prepare: [],
+    processes: [{ name: 'web', command: 'node serveur.js', dir: '', env: {}, url: 'http://localhost:4101' }],
+    open: '',
+    ...over,
+  });
+
+  it('lists the test launches of each agent under its name', async () => {
+    const a = agent({ id: 'a7', name: 'dem-1-ajouter', recipe: recipe() });
+    resetApp({ projects: [P], agents: [a] });
+    app.launches['test:a7:run:0'] = state({ name: 'web' });
+    fakeBackend();
+    render(RunsSection, { project: P });
+    expect(screen.getByText('dem-1-ajouter')).toBeInTheDocument();
+    await userEvent.click(row('web'));
+    expect(app.selectedLaunch.p1).toBe('test:a7:run:0');
+    expect(app.runCommand?.command).toBe('node serveur.js');
+  });
+
+  it('shows an agent’s steps once one of them ran, the preparation first, and no group before', () => {
+    const a = agent({
+      id: 'a7',
+      name: 'dem-1-ajouter',
+      recipe: recipe({ prepare: [{ command: 'npm i', dir: 'web' }] }),
+    });
+    const idle = agent({ id: 'a8', name: 'dem-2-sans-lancement', recipe: recipe() });
+    const elsewhere = agent({ id: 'a9', projectId: 'p2', name: 'dem-3-ailleurs', recipe: recipe() });
+    resetApp({ projects: [P, project({ id: 'p2', name: 'autre' })], agents: [a, idle, elsewhere] });
+    app.launches['test:a7:run:0'] = state({ name: 'web' });
+    app.launches['test:a7:prep:0'] = state({ status: 'done', ptyId: null, code: 0, name: 'Préparation 1' });
+    app.launches['test:a9:run:0'] = state({ name: 'web' });
+    fakeBackend();
+    render(RunsSection, { project: P });
+    expect(screen.getByText('dem-1-ajouter')).toBeInTheDocument();
+    expect(screen.queryByText('dem-2-sans-lancement')).not.toBeInTheDocument();
+    expect(screen.queryByText('dem-3-ailleurs')).not.toBeInTheDocument();
+    const names = screen
+      .getAllByRole('button', { name: /^(Front|API|Préparation 1|web)/ })
+      .map((b) => b.querySelector('.name')?.textContent);
+    expect(names).toEqual(['Front', 'API', 'Préparation 1', 'web']);
+    expect(within(row('Préparation 1')).getByText('terminé')).toBeInTheDocument();
+    expect(within(row('web')).getByText('en cours')).toBeInTheDocument();
+    // The header counts the project's commands only.
+    expect(screen.getByText('0/2')).toBeInTheDocument();
+  });
+
+  it('starts, restarts and stops a step from its row, through the test launch', async () => {
+    const a = agent({ id: 'a7', name: 'dem-1-ajouter', recipe: recipe() });
+    resetApp({ projects: [P], agents: [a] });
+    app.launches['test:a7:run:0'] = state({ status: 'stopped', ptyId: null, name: 'web' });
+    const backend = fakeBackend({ test_run_start: () => ({ id: 't7', projectId: 'p1', name: 'web', shell: 'pwsh' }) });
+    render(RunsSection, { project: P });
+    await userEvent.click(within(row('web')).getByRole('button', { name: 'Lancer' }));
+    expect(backend.called('test_run_start')[0].args).toMatchObject({ agentId: 'a7', kind: 'run', index: 0 });
+    expect(backend.called('run_start')).toHaveLength(0);
+    expect(await within(row('web')).findByText('en cours')).toBeInTheDocument();
+    await userEvent.click(within(row('web')).getByRole('button', { name: 'Stopper' }));
+    expect(backend.called('term_kill')[0].args).toEqual({ id: 't7' });
   });
 });

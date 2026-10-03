@@ -1,5 +1,6 @@
 <script lang="ts">
   import { launchStatus, restartLaunch, startAll, startLaunch, stopAll, stopLaunch } from '../lib/launch-actions';
+  import { recipeCommands } from '../lib/recipe';
   import { app } from '../lib/state.svelte';
   import type { Project, RunCommand } from '../lib/types';
 
@@ -8,6 +9,16 @@
   const cmds = $derived(project.runCommands);
   const running = $derived(cmds.filter((c) => app.launches[c.id]?.status === 'running').length);
   const selected = $derived(app.runCommand?.id ?? null);
+  // Each agent's test launches, under its name, once one of them ran.
+  const groups = $derived(
+    Object.values(app.agents)
+      .filter((a) => a.projectId === project.id && a.recipe)
+      .map((a) => {
+        const c = recipeCommands(a, app.shells[0]?.id ?? '');
+        return { agent: a, cmds: [...c.prepare, ...c.processes].filter((x) => app.launches[x.id]) };
+      })
+      .filter((g) => g.cmds.length > 0),
+  );
 
   function act(e: Event, f: () => unknown) {
     // The row itself opens the log: its buttons only act.
@@ -20,6 +31,29 @@
   }
   const isRunning = (c: RunCommand) => app.launches[c.id]?.status === 'running';
 </script>
+
+{#snippet runRow(c: RunCommand)}
+  {@const st = launchStatus(app.launches[c.id])}
+  <div
+    class="run"
+    class:sel={selected === c.id}
+    role="button"
+    tabindex="0"
+    title={c.command}
+    onclick={() => app.selectLaunch(c.id)}
+    onkeydown={(e) => e.key === 'Enter' && e.target === e.currentTarget && app.selectLaunch(c.id)}
+  >
+    <span class="dot" class:live={isRunning(c)} style:background={st.color}></span>
+    <span class="name">{c.name}</span>
+    <span class="status" style:color={st.color}>{st.label}</span>
+    {#if isRunning(c)}
+      <button class="ctl" title="Relancer" aria-label="Relancer" onclick={(e) => act(e, () => restartLaunch(project, c))}>⟳</button>
+      <button class="ctl" title="Stopper" aria-label="Stopper" onclick={(e) => act(e, () => stopLaunch(c.id))}>■</button>
+    {:else}
+      <button class="ctl go" title="Lancer" aria-label="Lancer" onclick={(e) => act(e, () => startLaunch(project, c))}>▶</button>
+    {/if}
+  </div>
+{/snippet}
 
 <div class="runs">
   <div class="head">
@@ -43,30 +77,17 @@
   </div>
   <div class="list">
     {#each cmds as c (c.id)}
-      {@const st = launchStatus(app.launches[c.id])}
-      <div
-        class="run"
-        class:sel={selected === c.id}
-        role="button"
-        tabindex="0"
-        title={c.command}
-        onclick={() => app.selectLaunch(c.id)}
-        onkeydown={(e) => e.key === 'Enter' && e.target === e.currentTarget && app.selectLaunch(c.id)}
-      >
-        <span class="dot" class:live={isRunning(c)} style:background={st.color}></span>
-        <span class="name">{c.name}</span>
-        <span class="status" style:color={st.color}>{st.label}</span>
-        {#if isRunning(c)}
-          <button class="ctl" title="Relancer" aria-label="Relancer" onclick={(e) => act(e, () => restartLaunch(project, c))}>⟳</button>
-          <button class="ctl" title="Stopper" aria-label="Stopper" onclick={(e) => act(e, () => stopLaunch(c.id))}>■</button>
-        {:else}
-          <button class="ctl go" title="Lancer" aria-label="Lancer" onclick={(e) => act(e, () => startLaunch(project, c))}>▶</button>
-        {/if}
-      </div>
+      {@render runRow(c)}
     {:else}
       <div class="none">
         Aucune commande. <button class="link" onclick={configure}>Configurer</button>
       </div>
+    {/each}
+    {#each groups as g (g.agent.id)}
+      <div class="group mono">{g.agent.name}</div>
+      {#each g.cmds as c (c.id)}
+        {@render runRow(c)}
+      {/each}
     {/each}
   </div>
 </div>
@@ -183,6 +204,11 @@
   .ctl:hover {
     background: var(--elev2);
     color: var(--text);
+  }
+  .group {
+    padding: 8px 8px 2px;
+    font-size: 10.5px;
+    color: var(--dim);
   }
   .none {
     padding: 2px 8px 4px;

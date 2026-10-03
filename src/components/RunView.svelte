@@ -1,6 +1,7 @@
 <script lang="ts">
   import { keyLabel, primaryKey } from '../lib/platform';
   import { launchStatus, log, restartLaunch, startLaunch, stopLaunch } from '../lib/launch-actions';
+  import { parseTestId } from '../lib/recipe';
   import { app } from '../lib/state.svelte';
   import { SHELL_GLYPH } from '../lib/term-actions';
   import { getXTerm, logKey, mountTerminal } from '../lib/terminals';
@@ -16,7 +17,13 @@
   const st = $derived(launchStatus(run));
   const running = $derived(run?.status === 'running');
   const shell = $derived(app.shells.find((s) => s.id === cmd.shell)?.label ?? cmd.shell);
-  const where = $derived(tildify(cmd.cwd ? `${project.path}\\${cmd.cwd.replace(/\//g, '\\')}` : project.path));
+  // A step of a recipe runs in its agent's worktree.
+  const root = $derived.by(() => {
+    const t = parseTestId(cmd.id);
+    const a = t ? app.agents[t.agentId] : undefined;
+    return a ? (a.worktree?.path ?? a.cwd) : project.path;
+  });
+  const where = $derived(tildify(cmd.cwd ? `${root}\\${cmd.cwd.replace(/\//g, '\\')}` : root));
   const since = $derived(
     running && run ? new Date(run.startedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : null,
   );

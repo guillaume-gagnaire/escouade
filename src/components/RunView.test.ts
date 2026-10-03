@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { app } from '../lib/state.svelte';
 import type { RunCommand } from '../lib/types';
-import { fakeBackend, project, resetApp } from '../test/ipc';
+import { agent, fakeBackend, project, resetApp } from '../test/ipc';
 import RunView from './RunView.svelte';
 
 const mounted = vi.hoisted(() => [] as (string | null)[]);
@@ -64,5 +64,41 @@ describe('RunView', () => {
     render(RunView, { cmd: FRONT, project: P });
     expect(screen.getByText('planté (code 1)')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Relancer/ })).toBeInTheDocument();
+  });
+
+  describe('a step of an agent’s recipe', () => {
+    const STEP: RunCommand = { id: 'test:a7:run:0', name: 'web', command: 'node serveur.js', shell: 'pwsh', cwd: 'web' };
+    const wt = { path: 'C:\\code\\wt\\dem-1', branch: 'ticket/dem-1', baseBranch: 'main' };
+
+    it('runs in its agent’s worktree', () => {
+      resetApp({ projects: [P], agents: [agent({ id: 'a7', worktree: wt })] });
+      fakeBackend();
+      render(RunView, { cmd: STEP, project: P });
+      expect(screen.getByText(/C:\\code\\wt\\dem-1\\web/)).toBeInTheDocument();
+      expect(screen.queryByText(/demo-api/)).not.toBeInTheDocument();
+    });
+
+    it('runs in the root of the worktree when it has no folder', () => {
+      resetApp({ projects: [P], agents: [agent({ id: 'a7', worktree: wt })] });
+      fakeBackend();
+      render(RunView, { cmd: { ...STEP, cwd: '' }, project: P });
+      expect(screen.getByText(/· C:\\code\\wt\\dem-1$/)).toBeInTheDocument();
+    });
+
+    it('runs in the folder of an agent without a worktree', () => {
+      resetApp({ projects: [P], agents: [agent({ id: 'a7', cwd: 'C:\\code\\autre' })] });
+      fakeBackend();
+      render(RunView, { cmd: { ...STEP, cwd: '' }, project: P });
+      expect(screen.getByText(/· C:\\code\\autre$/)).toBeInTheDocument();
+    });
+
+    it('starts through the test launch', async () => {
+      resetApp({ projects: [P], agents: [agent({ id: 'a7', worktree: wt })] });
+      const backend = fakeBackend({ test_run_start: () => ({ id: 't7', projectId: 'p1', name: 'web', shell: 'pwsh' }) });
+      render(RunView, { cmd: STEP, project: P });
+      await userEvent.click(screen.getAllByRole('button', { name: /Lancer/ })[0]);
+      expect(backend.called('test_run_start')[0].args).toMatchObject({ agentId: 'a7', kind: 'run', index: 0 });
+      expect(backend.called('run_start')).toHaveLength(0);
+    });
   });
 });

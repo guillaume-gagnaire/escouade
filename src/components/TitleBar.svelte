@@ -5,7 +5,7 @@
   import { api } from '../lib/ipc';
   import { menu } from '../lib/menu.svelte';
   import { app } from '../lib/state.svelte';
-  import { expectStops, forgetLaunches } from '../lib/launch-actions';
+  import { expectStops, forgetLaunches, testLaunchIds } from '../lib/launch-actions';
   import { closeTerminal } from '../lib/term-actions';
   import { IS_MAC } from '../lib/platform';
   import { PROJECT_COLORS } from '../lib/theme';
@@ -88,8 +88,8 @@
             confirm: 'Fermer le projet',
             danger: true,
             onConfirm: async () => {
-              // The backend kills its launch commands: not crashes.
-              const runs = p.runCommands.map((c) => c.id);
+              // The backend kills its launch commands and its agents' test launches: not crashes.
+              const runs = [...p.runCommands.map((c) => c.id), ...testLaunchIds(p.id)];
               const undo = expectStops(runs);
               // Only forget the project once the backend removed it.
               const removed = await app.run(api.removeProject(p.id).then(() => true));

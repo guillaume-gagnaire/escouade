@@ -1,6 +1,7 @@
 // Launch commands: each runs in its own read-only terminal, whose log outlives its runs.
 
 import { api } from './ipc';
+import { parseTestId } from './recipe';
 import { app } from './state.svelte';
 import { disposeLog, launchLog } from './terminals';
 import type { LaunchState, Project, RunCommand } from './types';
@@ -25,14 +26,30 @@ export async function startLaunch(project: Project, cmd: RunCommand) {
   // Once written, the header's end is where the command starts. The process gets the log's size
   // as it is: displayed, it is already fitted.
   await new Promise<void>((done) => x.term.write(`${again}\x1b[2m$ ${cmd.command}\x1b[0m\r\n`, done));
+  // A step of an agent's recipe starts through its agent, in its worktree; any other command, through its project.
+  const test = parseTestId(cmd.id);
   try {
     const size = { cols: x.term.cols, rows: x.term.rows, cursorRow: x.term.buffer.active.cursorY + 1 };
-    const info = await api.runStart({ projectId: project.id, commandId: cmd.id, ...size }, (b) => x.term.write(new Uint8Array(b)));
+    const onData = (b: ArrayBuffer) => x.term.write(new Uint8Array(b));
+    const info = test
+      ? await api.testRunStart({ agentId: test.agentId, kind: test.kind, index: test.index, ...size }, onData)
+      : await api.runStart({ projectId: project.id, commandId: cmd.id, ...size }, onData);
     app.launchStarted(cmd.id, info.id);
   } catch (e) {
     x.term.write(`\x1b[31m${String(e)}\x1b[0m\r\n`);
     const l = app.launches[cmd.id];
     if (!l) return;
+    if (test) {
+      // Refused (its ticket is being validated, its agent was archived…): no run took place, so none shows.
+      // The run it was to follow, if any, stays as it was.
+      if (previous) app.launches[cmd.id] = previous;
+      else {
+        delete app.launches[cmd.id];
+        disposeLog(cmd.id);
+      }
+      if (!l.stopping) app.toast(`« ${cmd.name} » n'a pas pu démarrer : ${e}`, 'error');
+      return;
+    }
     Object.assign(l, { status: l.stopping ? 'stopped' : 'crashed', code: null, stopping: false });
     if (l.status === 'crashed') app.toast(`« ${cmd.name} » n'a pas pu démarrer : ${e}`, 'error');
   }
@@ -66,6 +83,29 @@ export function stopAll(project: Project) {
   for (const c of project.runCommands) stopLaunch(c.id);
 }
 
+/** The ids of an agent's test launches. */
+function testLaunchesOf(agentId: string): string[] {
+  return Object.keys(app.launches).filter((id) => parseTestId(id)?.agentId === agentId);
+}
+
+/** The test launches of an agent stop (validation, archive, deletion): not crashes. */
+export function stopAgentTests(agentId: string) {
+  for (const id of testLaunchesOf(agentId)) stopLaunch(id);
+}
+
+/** An agent that is gone takes its test launches with it: stopped silently, their logs dropped. */
+export function forgetAgentTests(agentId: string) {
+  forgetLaunches(testLaunchesOf(agentId));
+}
+
+/** The test launches of the agents of a project. */
+export function testLaunchIds(projectId: string): string[] {
+  return Object.keys(app.launches).filter((id) => {
+    const t = parseTestId(id);
+    return !!t && app.agents[t.agentId]?.projectId === projectId;
+  });
+}
+
 /** Commands about to be killed along with their project: their exits are not crashes. Returns the undo. */
 export function expectStops(commandIds: string[]) {
   const marked = commandIds.map((id) => app.launches[id]).filter((l): l is LaunchState => l?.status === 'running' && !l.stopping);
@@ -84,6 +124,10 @@ export function forgetLaunches(commandIds: string[]) {
     disposeLog(id);
   }
 }
+
+// The backend stopped the test launches of an agent it removes: they are not crashes, and nothing is left
+// to look for when their project closes. (Registered here: the state does not know the logs.)
+app.onAgentRemoved(forgetAgentTests);
 
 export function launchStatus(l: LaunchState | undefined): { label: string; color: string } {
   if (!l) return { label: 'prêt', color: 'var(--dim)' };

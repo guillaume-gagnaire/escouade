@@ -72,6 +72,42 @@ describe('AppState', () => {
     expect(app.agents.a2).toBeUndefined();
   });
 
+  it('lets other modules forget what they hold of a removed agent, while it is still known', async () => {
+    const { emit } = await start();
+    const seen: [string, boolean][] = [];
+    const off = app.onAgentRemoved((id) => seen.push([id, !!app.agents[id]]));
+    emit({ type: 'agentRemoved', id: 'a2', projectId: 'p1' });
+    expect(seen).toEqual([['a2', true]]);
+    expect(app.agents.a2).toBeUndefined();
+    off();
+    emit({ type: 'agentRemoved', id: 'b1', projectId: 'p2' });
+    expect(seen).toHaveLength(1);
+  });
+
+  it('finds the launch on screen among the project’s commands, then among the steps of its agents’ recipes', async () => {
+    const run = { id: 'c1', name: 'Front', command: 'npm run dev', shell: 'pwsh', cwd: '' };
+    const recipe = {
+      prepare: [],
+      processes: [{ name: 'web', command: 'node serveur.js', dir: '', env: {}, url: '' }],
+      open: '',
+    };
+    await start({
+      projects: [project({ runCommands: [run] })],
+      agents: [agent({ recipe })],
+      shells: [{ id: 'pwsh', label: 'PowerShell 7', path: 'pwsh.exe' }],
+    });
+    expect(app.runCommand).toBeNull();
+    app.selectLaunch('c1');
+    expect(app.runCommand?.command).toBe('npm run dev');
+    app.selectLaunch('test:a1:run:0');
+    expect(app.runCommand).toEqual({ id: 'test:a1:run:0', name: 'web', command: 'node serveur.js', shell: 'pwsh', cwd: '' });
+    // A step its recipe no longer has opens nothing.
+    app.selectLaunch('test:a1:run:3');
+    expect(app.runCommand).toBeNull();
+    app.selectLaunch(null);
+    expect(app.runCommand).toBeNull();
+  });
+
   it('routes conversation ops to the loaded conversation', async () => {
     const { emit } = await start();
     const c = conversationOf('a1');

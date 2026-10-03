@@ -8,6 +8,7 @@ import { ancestors } from './editor/tree';
 import { trees } from './editor/trees.svelte';
 import { basename, isAbsPath, plural, relPath } from './format';
 import { readPref, writePref } from './prefs';
+import { testCommand } from './recipe';
 import { applyTheme } from './theme';
 import type {
   Agent,
@@ -163,13 +164,23 @@ class AppState {
     return this.terminals.find((t) => t.id === id) ?? null;
   });
 
-  /** The launch command whose log fills the main area, if any. */
+  /** The launch command whose log fills the main area, if any: one of the project's, or a step of an agent's recipe. */
   runCommand = $derived.by(() => {
     const p = this.project;
     if (!p) return null;
     const id = this.selectedLaunch[p.id];
-    return p.runCommands.find((c) => c.id === id) ?? null;
+    if (!id) return null;
+    return p.runCommands.find((c) => c.id === id) ?? testCommand(id, this.agents, this.shells[0]?.id ?? '');
   });
+
+  /** What else goes when the backend removes an agent: what other modules (the launches' logs) hold of it. */
+  private removalHooks: ((agentId: string) => void)[] = [];
+
+  /** `f` runs when the backend removes an agent, before the state forgets it. Returns what unregisters it. */
+  onAgentRemoved(f: (agentId: string) => void) {
+    this.removalHooks.push(f);
+    return () => (this.removalHooks = this.removalHooks.filter((h) => h !== f));
+  }
 
   private uiTimer: ReturnType<typeof setTimeout> | undefined;
   /** Events received while the initial snapshot is in flight (newer than the snapshot). */
@@ -210,6 +221,7 @@ class AppState {
         break;
       }
       case 'agentRemoved':
+        for (const f of this.removalHooks) f(e.id);
         delete this.agents[e.id];
         delete this.attention[e.id];
         dropConversation(e.id);

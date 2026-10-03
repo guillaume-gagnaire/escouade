@@ -108,6 +108,30 @@ describe('TitleBar', () => {
     expect(app.launches.c9).toBeUndefined();
   });
 
+  it('stops the test launches of the agents of a closed project too, and forgets them', async () => {
+    const run = { id: 'c9', name: 'Front', command: 'npm run dev', shell: 'pwsh', cwd: '' };
+    resetApp({
+      projects: [project(), project({ id: 'p2', name: 'studio-web', runCommands: [run] })],
+      agents: [agent(), agent({ id: 'b1', projectId: 'p2' })],
+    });
+    const running = (ptyId: string) => ({ status: 'running' as const, ptyId, name: 'web', stopping: false, code: null, startedAt: 1 });
+    app.launches.c9 = running('t9');
+    app.launches['test:b1:run:0'] = running('t8');
+    app.launches['test:a1:run:0'] = running('t7');
+    const seen: Record<string, boolean> = {};
+    const backend = fakeBackend({
+      remove_project: () => {
+        for (const id of ['c9', 'test:b1:run:0', 'test:a1:run:0']) seen[id] = app.launches[id].stopping;
+      },
+    });
+    render(TitleBar);
+    await closeProjectFromMenu('studio-web');
+    // The backend kills them with the project: their exits are expected, and the other project's stay.
+    expect(seen).toEqual({ c9: true, 'test:b1:run:0': true, 'test:a1:run:0': false });
+    expect(backend.called('term_kill').map((c) => c.args.id)).toEqual(['t9', 't8']);
+    expect(Object.keys(app.launches)).toEqual(['test:a1:run:0']);
+  });
+
   it('leaves the launch commands alone when the project could not be closed', async () => {
     const run = { id: 'c9', name: 'Front', command: 'npm run dev', shell: 'pwsh', cwd: '' };
     resetApp({ projects: [project(), project({ id: 'p2', name: 'studio-web', runCommands: [run] })] });

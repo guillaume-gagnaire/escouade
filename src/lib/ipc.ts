@@ -107,6 +107,18 @@ export const api = {
     output.onmessage = onData;
     return invoke<TermInfo>('run_start', { ...a, output });
   },
+  /** "Préparer le lancement": reserves the agent's ports and asks it for its recipe. */
+  agentPrepareLaunch: (id: string) => invoke<void>('agent_prepare_launch', { id }),
+  testRunStart: (
+    a: { agentId: string; kind: 'prep' | 'run'; index: number; cols: number; rows: number; cursorRow: number },
+    onData: (d: ArrayBuffer) => void,
+  ) => {
+    const output = new Channel<ArrayBuffer>();
+    output.onmessage = onData;
+    return invoke<TermInfo>('test_run_start', { ...a, output });
+  },
+  /** One HTTP request without proxy (2 s): true for any answer. */
+  httpReady: (url: string) => invoke<boolean>('http_ready', { url }),
   termWrite: (id: string, data: string) => invoke<void>('term_write', { id, data }),
   termResize: (id: string, cols: number, rows: number) => invoke<void>('term_resize', { id, cols, rows }),
   termKill: (id: string) => invoke<void>('term_kill', { id }),

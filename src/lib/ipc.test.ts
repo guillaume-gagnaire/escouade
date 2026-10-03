@@ -48,3 +48,22 @@ describe('board commands', () => {
     ]);
   });
 });
+
+describe('test launch commands', () => {
+  it('asks the backend to prepare a launch, start a step of a recipe and probe an address', async () => {
+    const info = { id: 't1', projectId: 'p1', name: 'web', shell: 'pwsh' };
+    const backend = fakeBackend({ test_run_start: () => info, http_ready: () => true });
+    await api.agentPrepareLaunch('a1');
+    const out: ArrayBuffer[] = [];
+    expect(await api.testRunStart({ agentId: 'a1', kind: 'run', index: 1, cols: 100, rows: 30, cursorRow: 4 }, (d) => out.push(d))).toEqual(
+      info,
+    );
+    expect(await api.httpReady('http://localhost:4101')).toBe(true);
+    expect(backend.calls.map((c) => c.cmd)).toEqual(['agent_prepare_launch', 'test_run_start', 'http_ready']);
+    expect(backend.calls[0].args).toEqual({ id: 'a1' });
+    expect(backend.calls[1].args).toMatchObject({ agentId: 'a1', kind: 'run', index: 1, cols: 100, rows: 30, cursorRow: 4 });
+    // The output comes back through a channel the backend writes to.
+    expect(backend.calls[1].args.output).toBeDefined();
+    expect(backend.calls[2].args).toEqual({ url: 'http://localhost:4101' });
+  });
+});

@@ -25,7 +25,17 @@ vi.mock('./terminals', () => ({
   disposeLog: (id: string) => delete logs[id],
 }));
 
-import { forgetLaunches, launchStatus, restartLaunch, startAll, startLaunch, stopAll, stopLaunch } from './launch-actions';
+import {
+  forgetLaunches,
+  launchStatus,
+  restartLaunch,
+  startAll,
+  startLaunch,
+  stopAgentTests,
+  stopAll,
+  stopLaunch,
+  testLaunchIds,
+} from './launch-actions';
 
 const FRONT: RunCommand = { id: 'c1', name: 'Front', command: 'npm run dev', shell: 'pwsh', cwd: 'web' };
 const API: RunCommand = { id: 'c2', name: 'API', command: 'cargo run', shell: 'bash', cwd: '' };
@@ -242,5 +252,161 @@ describe('launch commands', () => {
     expect(launchStatus({ ...l, status: 'done', code: 0 }).label).toBe('terminé');
     expect(launchStatus({ ...l, status: 'crashed', code: 2 }).label).toBe('planté (code 2)');
     expect(launchStatus({ ...l, status: 'crashed' }).label).toBe('planté');
+  });
+});
+
+describe('test launches', () => {
+  const WEB: RunCommand = { id: 'test:a1:run:0', name: 'web', command: 'node serveur.js', shell: 'pwsh', cwd: '' };
+  const PREP: RunCommand = { id: 'test:a1:prep:0', name: 'Préparation 1', command: 'npm i', shell: 'pwsh', cwd: 'web' };
+
+  it('start a step of an agent’s recipe through its own command, and stop with their agent', async () => {
+    const { backend } = await boot({ test_run_start: () => info('t9', 'web') });
+    await startLaunch(P, WEB);
+    expect(backend.called('test_run_start')[0].args).toMatchObject({
+      agentId: 'a1',
+      kind: 'run',
+      index: 0,
+      cols: 100,
+      rows: 30,
+      cursorRow: 4,
+    });
+    expect(backend.called('run_start')).toHaveLength(0);
+    expect(app.launches['test:a1:run:0']).toMatchObject({ status: 'running', ptyId: 't9' });
+    expect(testLaunchIds('p1')).toEqual(['test:a1:run:0']);
+    expect(testLaunchIds('p2')).toEqual([]);
+    stopAgentTests('a1');
+    expect(backend.called('term_kill')[0].args).toEqual({ id: 't9' });
+  });
+
+  it('start a preparation step through the same command, and a launch command through its own', async () => {
+    const { backend } = await boot({ test_run_start: () => info('t9', 'Préparation 1') });
+    await startLaunch(P, PREP);
+    await startLaunch(P, FRONT);
+    expect(backend.called('test_run_start').map((c) => c.args)).toMatchObject([{ agentId: 'a1', kind: 'prep', index: 0 }]);
+    expect(backend.called('run_start').map((c) => c.args.commandId)).toEqual(['c1']);
+  });
+
+  it('stops the test launches of one agent only, without calling it a crash', async () => {
+    let n = 8;
+    const { backend, emit } = await boot({ test_run_start: () => info(`t${++n}`, 'web') });
+    app.agents.a2 = agent({ id: 'a2', projectId: 'p2' });
+    await startLaunch(P, WEB);
+    await startLaunch(P, { ...WEB, id: 'test:a2:run:0' });
+    await startLaunch(P, FRONT);
+    stopAgentTests('a1');
+    expect(backend.called('term_kill').map((c) => c.args.id)).toEqual(['t9']);
+    emit({ type: 'terminalExit', id: 't9', code: 1 });
+    expect(app.launches['test:a1:run:0'].status).toBe('stopped');
+    expect(app.launches['test:a2:run:0'].status).toBe('running');
+    expect(app.launches.c1.status).toBe('running');
+    expect(app.toasts).toHaveLength(0);
+  });
+
+  it('lists the test launches of the agents of a project, not the launch commands or those of others', async () => {
+    let n = 8;
+    await boot({ test_run_start: () => info(`t${++n}`, 'web'), run_start: () => info('t1') });
+    app.agents.a2 = agent({ id: 'a2', projectId: 'p2' });
+    await startLaunch(P, PREP);
+    await startLaunch(P, FRONT);
+    await startLaunch(P, { ...WEB, id: 'test:a2:run:0' });
+    // The launch of an agent the window does not know belongs to no project.
+    await startLaunch(P, { ...WEB, id: 'test:a3:run:0' });
+    expect(testLaunchIds('p1')).toEqual(['test:a1:prep:0']);
+    expect(testLaunchIds('p2')).toEqual(['test:a2:run:0']);
+  });
+
+  it('shows why a step was refused and leaves nothing of it behind', async () => {
+    const { backend } = await boot({
+      test_run_start: () => {
+        throw 'Validation en cours : DEM-1 passe en revue';
+      },
+    });
+    await startLaunch(P, WEB);
+    expect(backend.called('test_run_start')).toHaveLength(1);
+    // Not a run that crashed: no entry in the section, no log to open, nothing running.
+    expect(app.launches['test:a1:run:0']).toBeUndefined();
+    expect(logs['test:a1:run:0']).toBeUndefined();
+    expect(testLaunchIds('p1')).toEqual([]);
+    expect(app.toasts).toHaveLength(1);
+    expect(app.toasts[0]).toMatchObject({ kind: 'error' });
+    expect(app.toasts[0].text).toContain('Validation en cours : DEM-1 passe en revue');
+    expect(backend.called('term_kill')).toHaveLength(0);
+  });
+
+  it('starts a step again once it is no longer refused', async () => {
+    let refused = true;
+    const { backend } = await boot({
+      test_run_start: () => {
+        if (refused) throw 'Validation en cours : DEM-1 passe en revue';
+        return info('t9', 'web');
+      },
+    });
+    await startLaunch(P, WEB);
+    refused = false;
+    await startLaunch(P, WEB);
+    expect(backend.called('test_run_start')).toHaveLength(2);
+    expect(app.launches['test:a1:run:0']).toMatchObject({ status: 'running', ptyId: 't9' });
+  });
+
+  it('keeps the last run of a step whose new start is refused', async () => {
+    let refused = false;
+    const { emit } = await boot({
+      test_run_start: () => {
+        if (refused) throw 'Validation en cours : DEM-1 passe en revue';
+        return info('t9', 'web');
+      },
+    });
+    await startLaunch(P, WEB);
+    emit({ type: 'terminalExit', id: 't9', code: 0 });
+    const before = { ...app.launches['test:a1:run:0'] };
+    refused = true;
+    await startLaunch(P, WEB);
+    expect(app.launches['test:a1:run:0']).toEqual(before);
+    expect(app.launches['test:a1:run:0'].status).toBe('done');
+    expect(logs['test:a1:run:0']).toBeDefined();
+    expect(app.toasts.at(-1)).toMatchObject({ kind: 'error' });
+  });
+
+  it('says nothing of a refusal to a step stopped while it was starting', async () => {
+    await boot({
+      test_run_start: () => {
+        stopLaunch('test:a1:run:0');
+        throw 'Validation en cours : DEM-1 passe en revue';
+      },
+    });
+    await startLaunch(P, WEB);
+    expect(app.launches['test:a1:run:0']).toBeUndefined();
+    expect(app.toasts).toHaveLength(0);
+  });
+
+  it('forgets the test launches of an agent that is removed, and closing the project no longer finds them', async () => {
+    let n = 8;
+    const { backend, emit } = await boot({ test_run_start: () => info(`t${++n}`, 'web'), run_start: () => info('t1') });
+    app.agents.a2 = agent({ id: 'a2' });
+    await startLaunch(P, PREP);
+    await startLaunch(P, WEB);
+    await startLaunch(P, { ...WEB, id: 'test:a2:run:0' });
+    await startLaunch(P, FRONT);
+    emit({ type: 'agentRemoved', id: 'a1', projectId: 'p1' });
+    // Stopped silently, their logs dropped; the others stay.
+    expect(backend.called('term_kill').map((c) => c.args.id)).toEqual(['t9', 't10']);
+    expect(Object.keys(app.launches)).toEqual(['test:a2:run:0', 'c1']);
+    expect(logs['test:a1:prep:0']).toBeUndefined();
+    expect(logs['test:a1:run:0']).toBeUndefined();
+    expect(logs['test:a2:run:0']).toBeDefined();
+    expect(testLaunchIds('p1')).toEqual(['test:a2:run:0']);
+    // Their exits come after: neither a crash nor an error.
+    emit({ type: 'terminalExit', id: 't9', code: 1 });
+    emit({ type: 'terminalExit', id: 't10', code: 1 });
+    expect(app.toasts).toHaveLength(0);
+    expect(app.launches.c1.status).toBe('running');
+  });
+
+  it('ignores the end of a terminal it never knew', async () => {
+    const { emit } = await boot({ test_run_start: () => info('t9', 'web') });
+    await startLaunch(P, WEB);
+    expect(() => emit({ type: 'terminalExit', id: 't404', code: 1 })).not.toThrow();
+    expect(app.toasts).toHaveLength(0);
+    expect(app.launches['test:a1:run:0']).toMatchObject({ status: 'running', ptyId: 't9' });
   });
 });
