@@ -87,6 +87,11 @@ export const api = {
   ticketPrioritize: (id: string) => invoke<void>('ticket_prioritize', { id }),
   /** "Lancer": starts even with the autopilot off. */
   ticketStart: (id: string) => invoke<void>('ticket_start', { id }),
+  ticketResume: (id: string) => invoke<void>('ticket_resume', { id }),
+  ticketApprove: (id: string) => invoke<void>('ticket_approve', { id }),
+  ticketReject: (id: string, comment: string) => invoke<void>('ticket_reject', { id, comment }),
+  ticketResolveConflict: (id: string) => invoke<void>('ticket_resolve_conflict', { id }),
+  ticketDismiss: (id: string) => invoke<void>('ticket_dismiss', { id }),
   boardSet: (projectId: string, settings: BoardSettings) => invoke<Project>('board_set', { projectId, settings }),
   gitBranches: (projectId: string) => invoke<string[]>('git_branches', { projectId }),
   termSpawn: (a: { projectId: string; shell: string; name: string; cols: number; rows: number }, onData: (d: ArrayBuffer) => void) => {

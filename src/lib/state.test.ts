@@ -498,6 +498,47 @@ describe('editor of a removed agent or project', () => {
     expect(app.editor.p1.places.a2.active).toBe('x.ts');
   });
 
+  /** An editor on the worktree of `a2`, ticket `t1`'s agent, with a file edited there and one in the project. */
+  async function ticketEditor(b: ReturnType<typeof board>) {
+    const started = await start(
+      {
+        projects: [project({ board: b }), project({ id: 'p2', name: 'studio-web' })],
+        agents: [agent(), agent({ id: 'a2', name: 'wt', createdAt: 2, worktree: wt })],
+        tickets: [ticket({ column: 'review', agentId: 'a2' })],
+      },
+      files,
+    );
+    await app.openEditor({ source: 'a2', path: 'x.ts' });
+    await trees.load('p1', 'a2');
+    const mine = (await buffers.open('p1', 'a2', 'x.ts')).key;
+    buffers.edit(mine, 'mine\n');
+    return { ...started, mine };
+  }
+
+  it('forgets the worktree files of a ticket that goes "Terminé" by a merge removing its worktree', async () => {
+    const { emit, mine } = await ticketEditor(board({ action: 'merge', cleanup: true }));
+    emit({ type: 'ticket', ticket: ticket({ column: 'review', agentId: 'a2', step: 'Merge…' }) });
+    expect(buffers.all[mine]).toBeDefined();
+    emit({ type: 'ticket', ticket: ticket({ column: 'done', agentId: 'a2' }) });
+    expect(buffers.all[mine]).toBeUndefined();
+    expect(trees.get('p1', 'a2')).toBeUndefined();
+    expect(app.editor.p1).toMatchObject({ source: 'project' });
+    expect(app.editor.p1.places.a2).toBeUndefined();
+  });
+
+  it.each([
+    ['a pull request', board({ action: 'pr', cleanup: true })],
+    ['a push', board({ action: 'push', cleanup: true })],
+    ['no cleanup', board({ action: 'merge', cleanup: false })],
+    ['the ticket left as it is', board({ action: 'keep', cleanup: true })],
+  ])('keeps the worktree files of a ticket that goes "Terminé" by %s', async (_, b) => {
+    const { emit, mine } = await ticketEditor(b);
+    emit({ type: 'ticket', ticket: ticket({ column: 'done', agentId: 'a2' }) });
+    expect(buffers.all[mine]?.text).toBe('mine\n');
+    expect(trees.get('p1', 'a2')).toBeDefined();
+    expect(app.editor.p1).toMatchObject({ source: 'a2' });
+  });
+
   it('forgets the editor of a closed project, its unsaved files included', async () => {
     const { backend } = await start({}, files);
     app.selectProject('p2');

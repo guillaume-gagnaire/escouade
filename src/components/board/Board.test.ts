@@ -9,15 +9,16 @@ import Board from './Board.svelte';
 const col = (name: string) => screen.getByRole('region', { name });
 
 describe('Board', () => {
-  beforeEach(() =>
+  beforeEach(() => {
     resetApp({
       tickets: [
         ticket(),
         ticket({ id: 't2', key: 'DEM-2', title: 'Deuxième', rank: 2 }),
         ticket({ id: 't3', key: 'DEM-3', title: 'En route', column: 'doing', agentId: 'a1', iteration: 1, startedAt: 1 }),
       ],
-    }),
-  );
+    });
+    app.claudeFound = true;
+  });
 
   it('shows the four columns with their counts and the board header', () => {
     fakeBackend();
@@ -29,6 +30,14 @@ describe('Board', () => {
     expect(screen.getByText('demo-api · 3 tickets · 1 en boucle')).toBeInTheDocument();
     expect(screen.getByText('1 place libre')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Après validation : merge squash → main/ })).toBeInTheDocument();
+  });
+
+  it('says that no ticket starts while Claude Code is not found', () => {
+    fakeBackend();
+    app.claudeFound = false;
+    render(Board, { project: app.projects[0] });
+    expect(screen.getByText('Claude Code introuvable — aucun ticket ne démarre')).toBeInTheDocument();
+    expect(screen.queryByText('1 place libre')).not.toBeInTheDocument();
   });
 
   it('adds a ticket from the form at the top of "À faire"', async () => {

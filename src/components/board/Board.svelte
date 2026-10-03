@@ -30,7 +30,12 @@
       <span class="sub mono">{project.name} · {plural(tickets.length, 'ticket', 'tickets')} · {looping} en boucle</span>
     </div>
     <div style="flex:1"></div>
-    <span class="places">{placesLabel(busyCount, s.maxParallel, quota)}</span>
+    {#if app.claudeFound}
+      <span class="places">{placesLabel(busyCount, s.maxParallel, quota)}</span>
+    {:else}
+      <!-- No place is worth showing: nothing starts without Claude Code. -->
+      <span class="places missing">Claude Code introuvable — aucun ticket ne démarre</span>
+    {/if}
     <button class="cfg" title="Réglages du tableau" onclick={() => (app.modal = { kind: 'boardSettings', projectId: project.id })}>
       <span class="gear">⚙</span><span class="k">Après validation :</span><span class="v mono">{settingsSummary(s, target)}</span>
     </button>
@@ -86,6 +91,10 @@
   .places {
     font-size: 12px;
     color: var(--muted);
+  }
+  .places.missing {
+    font-weight: 600;
+    color: var(--del);
   }
   .cfg {
     height: 34px;

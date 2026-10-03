@@ -21,6 +21,22 @@ describe('board commands', () => {
     ]);
   });
 
+  it('asks the backend to resume, validate, send back, resolve or dismiss a ticket', async () => {
+    const backend = fakeBackend();
+    await api.ticketResume('t1');
+    await api.ticketApprove('t1');
+    await api.ticketReject('t1', 'le bouton est mal placé');
+    await api.ticketResolveConflict('t1');
+    await api.ticketDismiss('t1');
+    expect(backend.calls).toEqual([
+      { cmd: 'ticket_resume', args: { id: 't1' } },
+      { cmd: 'ticket_approve', args: { id: 't1' } },
+      { cmd: 'ticket_reject', args: { id: 't1', comment: 'le bouton est mal placé' } },
+      { cmd: 'ticket_resolve_conflict', args: { id: 't1' } },
+      { cmd: 'ticket_dismiss', args: { id: 't1' } },
+    ]);
+  });
+
   it('saves the board settings and lists the branches of a project', async () => {
     const settings = board({ action: 'pr', target: 'main' });
     const backend = fakeBackend({ board_set: () => project({ board: settings }), git_branches: () => ['main', 'dev'] });

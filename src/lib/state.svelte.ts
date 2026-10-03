@@ -214,9 +214,12 @@ class AppState {
         dropConversation(e.id);
         this.forgetEditorSource(e.projectId, e.id);
         break;
-      case 'ticket':
+      case 'ticket': {
+        const prev = this.tickets[e.ticket.id];
         this.tickets[e.ticket.id] = e.ticket;
+        this.noteTicketDone(prev, e.ticket);
         break;
+      }
       case 'ticketRemoved':
         delete this.tickets[e.id];
         break;
@@ -467,6 +470,13 @@ class AppState {
   toggleEditorDir(projectId: string, source: string, dir: string) {
     const place = this.editor[projectId]?.places[source];
     if (place) place.expanded[dir] = !place.expanded[dir];
+  }
+
+  /** A ticket that goes "Terminé" by a merge removing its worktree takes its agent's editor source with it. */
+  private noteTicketDone(prev: Ticket | undefined, next: Ticket) {
+    if (next.column !== 'done' || prev?.column === 'done' || !next.agentId) return;
+    const b = this.projects.find((p) => p.id === next.projectId)?.board;
+    if (b?.action === 'merge' && b.cleanup) this.forgetEditorSource(next.projectId, next.agentId);
   }
 
   /** A deleted agent's worktree is no source any more: its files and tabs go, the editor shows the project instead. */
