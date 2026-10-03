@@ -34,7 +34,8 @@ impl<R: Runtime> Core<R> {
             .ok_or_else(|| anyhow!("ticket introuvable"))
     }
 
-    /// Changes a ticket under the lock, then tells the window and saves.
+    /// Changes a ticket under the lock, then tells the window and saves. `f` runs with the tickets
+    /// locked: it must not take the projects' lock (projects come before tickets).
     pub(crate) fn edit_ticket<T>(
         &self,
         id: &str,
@@ -101,12 +102,14 @@ impl<R: Runtime> Core<R> {
             ..Default::default()
         };
         {
-            // The rank and the push under one lock; the project is checked again under it, since
-            // `remove_project` takes its tickets after taking the project out.
-            let mut tickets = self.tickets.write();
-            if !self.projects.read().iter().any(|p| p.id == project_id) {
+            // Lock order: projects, then tickets. The project is checked again while both are
+            // held (the rank and the push in one go): `remove_project`'s write of the projects
+            // waits for this, and it takes the project's tickets once it is out.
+            let projects = self.projects.read();
+            if !projects.iter().any(|p| p.id == project_id) {
                 bail!("projet introuvable");
             }
+            let mut tickets = self.tickets.write();
             ticket.rank = tickets
                 .iter()
                 .filter(|t| t.project_id == project_id)

@@ -153,7 +153,9 @@ pub struct Core<R: Runtime = Wry> {
     pub hub: Hub,
     pub settings: RwLock<Settings>,
     pub projects: RwLock<Vec<Project>>,
-    /// Every project's tickets.
+    /// Every project's tickets. Lock order: projects before tickets; never hold tickets while
+    /// taking projects. Guards that end with their statement do not nest; mind the temporaries of
+    /// a struct literal or a tail expression, which live until its end.
     pub tickets: RwLock<Vec<Ticket>>,
     pub ui: RwLock<UiState>,
     pub agents: RwLock<HashMap<String, AgentHandle>>,

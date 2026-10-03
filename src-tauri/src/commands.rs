@@ -41,20 +41,30 @@ pub struct InitialState {
 pub fn subscribe(core: CoreState, channel: Channel<UiEvent>) -> InitialState {
     core.hub.set_channel(channel);
     core.reset_unsaved();
+    // One lock at a time, each guard ending with its statement: in a struct literal the guards
+    // would live together (the lock order is projects before tickets, see `Core`).
     let settings = core.settings.read().clone();
+    let projects = core.projects.read().clone();
+    let tickets = core.tickets.read().clone();
+    let agents = core.agent_views();
+    let ui = core.ui.read().clone();
+    let usage = core.usage.lock().clone();
+    let git = core.git_cache.read().clone();
+    let terminals = core.pty.list();
+    let models = core.models.read().clone();
     InitialState {
-        projects: core.projects.read().clone(),
-        tickets: core.tickets.read().clone(),
-        agents: core.agent_views(),
-        ui: core.ui.read().clone(),
+        projects,
+        tickets,
+        agents,
+        ui,
         shells: pty::detect_shells(&settings),
         claude_found: crate::claude::resolve_binary(&settings.claude_path).is_some(),
         settings,
-        usage: core.usage.lock().clone(),
-        git: core.git_cache.read().clone(),
-        terminals: core.pty.list(),
+        usage,
+        git,
+        terminals,
         version: core.app.package_info().version.to_string(),
-        models: core.models.read().clone(),
+        models,
     }
 }
 
