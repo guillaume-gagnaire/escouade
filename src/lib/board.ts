@@ -73,7 +73,7 @@ export function canStart(t: Ticket, s: BoardSettings, busyCount: number, quota: 
 export function keyPrefix(name: string): string {
   const letters = name
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/\p{M}/gu, '')
     .replace(/[^a-z]/gi, '')
     .slice(0, 3)
     .toUpperCase();

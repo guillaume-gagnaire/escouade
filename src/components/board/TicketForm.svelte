@@ -28,7 +28,8 @@
   }
 </script>
 
-<div class="form">
+<!-- Escape leaves the form from any of its fields; Enter only submits from the title (the textareas take it as a new line). -->
+<div class="form" role="presentation" onkeydown={(e) => e.key === 'Escape' && oncancel()}>
   <!-- svelte-ignore a11y_autofocus -->
   <input
     class="title"
@@ -36,10 +37,7 @@
     aria-label="Titre du ticket"
     bind:value={title}
     autofocus
-    onkeydown={(e) => {
-      if (e.key === 'Enter') submit();
-      if (e.key === 'Escape') oncancel();
-    }}
+    onkeydown={(e) => e.key === 'Enter' && submit()}
   />
   <textarea rows="2" placeholder="Description (facultative)" aria-label="Description" bind:value={description}></textarea>
   <textarea rows="4" placeholder="Critères d'acceptation, un par ligne" aria-label="Critères d'acceptation" bind:value={criteria}

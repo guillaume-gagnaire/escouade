@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { agent, board, ticket } from '../test/ipc';
+import source from './board.ts?raw';
 import {
   APPROVE_LABEL,
   canStart,
@@ -61,6 +62,7 @@ describe('board labels', () => {
   it('previews the commit message with the project key', () => {
     expect(keyPrefix('Écoute-api')).toBe('ECO');
     expect(keyPrefix('42')).toBe('TIC');
+    expect(keyPrefix('Éléphant')).toBe('ELE');
     expect(commitPreview(board(), 'atlas')).toBe('feat: limiter les tentatives de connexion [ATL-42]');
     expect(commitPreview(board({ conventional: false, prefix: 'ZZZ' }), 'atlas')).toBe('ZZZ-42 Limiter les tentatives de connexion');
   });
@@ -71,5 +73,9 @@ describe('board labels', () => {
     expect(ticketTag(ticket())).toBeNull();
     expect(ticketTag(undefined)).toBeNull();
     expect(doneMeta(ticket({ iteration: 3, cost: 0.42 }))).toBe('3 boucles · 0,42 $');
+  });
+
+  it('writes the accent-stripping pattern without any literal combining mark (they get lost when copied)', () => {
+    expect(source).not.toMatch(/\p{M}/u);
   });
 });
