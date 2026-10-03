@@ -216,7 +216,7 @@ pub fn detect_shells_in(r: &ShellRoots, s: &Settings) -> Vec<ShellInfo> {
 
 /// PowerShell script running `command` then ending with its exit code: on its own, PowerShell
 /// ends with 1 for any failure, whatever the failing program's code.
-fn with_exit_code(command: &str) -> String {
+pub(crate) fn with_exit_code(command: &str) -> String {
     format!("{command}\nif (-not $?) {{ if ($LASTEXITCODE) {{ exit $LASTEXITCODE }} exit 1 }}")
 }
 

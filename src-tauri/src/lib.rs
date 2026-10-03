@@ -21,10 +21,12 @@ mod resources;
 #[cfg(unix)]
 mod shellenv;
 mod stats;
+mod testlaunch;
 mod tickets;
 #[cfg(test)]
 mod tickets_tests;
 mod usage;
+mod which;
 
 use crate::core::Core;
 use std::io::Write;
