@@ -879,12 +879,7 @@ impl<R: Runtime> Core<R> {
                     if !validating(x, &agent_id) {
                         bail!(CHANGED);
                     }
-                    x.step = None;
-                    x.column = Column::Doing;
-                    x.iteration = 1;
-                    x.partial = false;
-                    x.review_at = None;
-                    x.reminded = false;
+                    board::back_to_work(x);
                     Ok(())
                 })?;
                 // Not a failure of the validation: the ticket is back with its agent.
@@ -934,6 +929,13 @@ impl<R: Runtime> Core<R> {
             let in_history = git::touched_by(&wt.path, &target, &wt.branch, &copied).await?;
             if let Some(refusal) = board::copied_refusal(&in_tree, &in_history) {
                 bail!(refusal);
+            }
+            // Nothing to merge, to propose or to push.
+            if git::ahead_of(&wt.path, &target, &wt.branch).await == 0 {
+                bail!(
+                    "Rien à merger : {} n'a pas de commit de plus que {target}.",
+                    wt.branch
+                );
             }
             self.still_validating(&t.id, &agent_id)?;
         }
@@ -1039,12 +1041,6 @@ impl<R: Runtime> Core<R> {
             .toplevel(&project.path)
             .await
             .ok_or_else(|| anyhow!("pas un dépôt git"))?;
-        if git::ahead_of(&repo, target, &wt.branch).await == 0 {
-            bail!(
-                "Rien à merger : {} n'a pas de commit de plus que {target}.",
-                wt.branch
-            );
-        }
         let message = match message {
             Some(m) => m,
             None => self.commit_message(t, s, &wt.path, target).await,
@@ -1183,7 +1179,15 @@ impl<R: Runtime> Core<R> {
             return Ok((board::pushed_elsewhere_outcome(&wt.branch), None));
         };
         if let Some(gh) = self.gh_cli() {
-            match gh_pr_create(&gh, &wt.path, target, &wt.branch, &title, &body, s.draft).await {
+            let pr = PullRequest {
+                repo: &format!("{owner}/{repo}"),
+                base: target,
+                head: &wt.branch,
+                title: &title,
+                body: &body,
+                draft: s.draft,
+            };
+            match gh_pr_create(&gh, &wt.path, &pr).await {
                 Ok(out) => {
                     if let Some((n, url)) = board::pr_number(&out) {
                         return Ok((board::pr_outcome(n, target), Some(url)));
@@ -1253,7 +1257,8 @@ impl<R: Runtime> Core<R> {
         let target = self.target_of(&project).await;
         // Nothing goes into the worktree of an agent archived meanwhile, or at work.
         self.still_validating(id, &agent_id)?;
-        let text = if project.board.strategy == "rebase" {
+        let rebase = project.board.strategy == "rebase";
+        let text = if rebase {
             board::rebase_message(&target)
         } else {
             match git::run(&wt.path, &["merge", "--no-edit", &target]).await {
@@ -1269,20 +1274,20 @@ impl<R: Runtime> Core<R> {
                 }
             }
         };
-        self.edit_ticket(id, |x| {
+        let handed = self.edit_ticket(id, |x| {
             if !validating(x, &agent_id) {
                 bail!(CHANGED);
             }
-            x.step = None;
-            x.blocked = None;
-            x.conflict = false;
-            x.column = Column::Doing;
-            x.iteration = 1;
-            x.partial = false;
-            x.review_at = None;
-            x.reminded = false;
+            board::back_to_work(x);
             Ok(())
-        })?;
+        });
+        if let Err(e) = handed {
+            // It left meanwhile (its agent archived): its worktree is not left mid-merge.
+            if !rebase {
+                let _ = git::run(&wt.path, &["merge", "--abort"]).await;
+            }
+            return Err(e);
+        }
         self.send_or_block(id, &agent_id, text).await
     }
 
@@ -1326,10 +1331,20 @@ impl<R: Runtime> Core<R> {
     }
 
     /// "Renvoyer": back "En cours" with the same agent and worktree, loop 1, with what is wrong.
+    /// Refused while its agent works: the end of that turn would be read as the end of the
+    /// rework.
     pub async fn ticket_reject(self: &Arc<Self>, id: &str, comment: &str) -> Result<()> {
         let comment = comment.trim();
         if comment.is_empty() {
             bail!("Dis ce qui ne va pas.");
+        }
+        let busy = self
+            .ticket(id)?
+            .agent_id
+            .and_then(|a| self.live_agent(&a))
+            .is_some_and(|m| m.status.is_active());
+        if busy {
+            bail!(AGENT_BUSY);
         }
         let (key, agent_id) = self.edit_ticket(id, |t| {
             if t.column != Column::Review {
@@ -1342,13 +1357,7 @@ impl<R: Runtime> Core<R> {
                 .agent_id
                 .clone()
                 .ok_or_else(|| anyhow!("Ce ticket n'a pas d'agent."))?;
-            t.column = Column::Doing;
-            t.iteration = 1;
-            t.partial = false;
-            t.blocked = None;
-            t.conflict = false;
-            t.review_at = None;
-            t.reminded = false;
+            board::back_to_work(t);
             Ok((t.key.clone(), agent_id))
         })?;
         self.send_or_block(id, &agent_id, board::reject_message(&key, comment))
@@ -1359,32 +1368,38 @@ impl<R: Runtime> Core<R> {
 /// How long `gh pr create` may take.
 const GH_LIMIT: Duration = Duration::from_secs(120);
 
-/// `gh pr create`, its description through the standard input (an argument with line breaks
-/// cannot go through a `.cmd`): what it printed.
-async fn gh_pr_create(
-    gh: &Path,
-    cwd: &str,
-    base: &str,
-    head: &str,
-    title: &str,
-    body: &str,
+/// A pull request to open on GitHub.
+struct PullRequest<'a> {
+    /// `owner/repo`, the repository the branch was pushed to.
+    repo: &'a str,
+    base: &'a str,
+    head: &'a str,
+    title: &'a str,
+    body: &'a str,
     draft: bool,
-) -> Result<String> {
+}
+
+/// `gh pr create` in `cwd`, on the repository the branch was pushed to (whatever `gh repo
+/// set-default` says), its description through the standard input (an argument with line breaks
+/// cannot go through a `.cmd`): what it printed.
+async fn gh_pr_create(gh: &Path, cwd: &str, pr: &PullRequest<'_>) -> Result<String> {
     use tokio::io::AsyncWriteExt;
     let mut cmd = tokio::process::Command::new(gh);
     cmd.args([
         "pr",
         "create",
+        "--repo",
+        pr.repo,
         "--base",
-        base,
+        pr.base,
         "--head",
-        head,
+        pr.head,
         "--title",
-        title,
+        pr.title,
         "--body-file",
         "-",
     ]);
-    if draft {
+    if pr.draft {
         cmd.arg("--draft");
     }
     cmd.current_dir(cwd)
@@ -1401,7 +1416,7 @@ async fn gh_pr_create(
     let _job = crate::job::Job::for_child(&child);
     let created = async move {
         if let Some(mut stdin) = child.stdin.take() {
-            stdin.write_all(body.as_bytes()).await?;
+            stdin.write_all(pr.body.as_bytes()).await?;
             // Dropped here: the description ends.
         }
         anyhow::Ok(child.wait_with_output().await?)

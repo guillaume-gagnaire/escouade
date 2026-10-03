@@ -1032,22 +1032,24 @@ pub async fn pull(repo: &str) -> Result<String> {
     ))
 }
 
+/// A push the remote refused because it has commits the branch lacks, told as such.
+fn rejected(e: anyhow::Error) -> anyhow::Error {
+    let msg = e.to_string();
+    if msg.contains("[rejected]") || msg.contains("fetch first") {
+        anyhow::anyhow!(
+            "Le dépôt distant a des commits que tu n'as pas : récupère-les d'abord \
+             (pull, ou rebase si les branches ont divergé)."
+        )
+    } else {
+        e
+    }
+}
+
 /// Pushes the current branch. A branch without upstream, or whose upstream was deleted, is
 /// published on the remote (the upstream's, else origin, else the only one) and tracks it.
 pub async fn push(repo: &str) -> Result<String> {
     let st = status(repo).await?;
     let branch = sync_branch(&st)?;
-    let rejected = |e: anyhow::Error| {
-        let msg = e.to_string();
-        if msg.contains("[rejected]") || msg.contains("fetch first") {
-            anyhow::anyhow!(
-                "Le dépôt distant a des commits que tu n'as pas : récupère-les d'abord \
-                 (pull, ou rebase si les branches ont divergé)."
-            )
-        } else {
-            e
-        }
-    };
     if st.upstream.is_some() && !st.upstream_gone {
         run_net(repo, &["push"], false).await.map_err(rejected)?;
         return Ok(match st.ahead {
@@ -1080,7 +1082,9 @@ pub async fn push_branch(cwd: &str, branch: &str) -> Result<String> {
             "Plusieurs dépôts distants et aucun ne s'appelle origin : pousse {branch} à la main."
         );
     };
-    run_net(cwd, &["push", "-u", &remote, branch], false).await?;
+    run_net(cwd, &["push", "-u", &remote, branch], false)
+        .await
+        .map_err(rejected)?;
     Ok(remote)
 }
 
@@ -2032,6 +2036,40 @@ mod repo_tests {
         assert_eq!(
             git_in(&bare, &["rev-parse", "feat/x"]),
             git_in(&local, &["rev-parse", "HEAD"])
+        );
+    }
+
+    #[tokio::test]
+    async fn a_branch_published_again_over_one_the_remote_moved_on_says_to_get_its_commits() {
+        let (local, other, bare) = with_remote("git-push-branch-diverged");
+        // A branch of the same name already on the remote, with commits of someone else's.
+        git_in(&other, &["checkout", "-qb", "ticket/dem-1"]);
+        commit_file(&other, "theirs.txt", "theirs\n");
+        git_in(&other, &["push", "-qu", "origin", "ticket/dem-1"]);
+        git_in(&local, &["checkout", "-qb", "ticket/dem-1"]);
+        commit_file(&local, "mine.txt", "mine\n");
+        let err = push_branch(&s(&local), "ticket/dem-1")
+            .await
+            .unwrap_err()
+            .to_string();
+        assert_eq!(
+            err,
+            "Le dépôt distant a des commits que tu n'as pas : récupère-les d'abord \
+             (pull, ou rebase si les branches ont divergé)."
+        );
+        assert_eq!(
+            git_in(&bare, &["rev-parse", "ticket/dem-1"]),
+            git_in(&other, &["rev-parse", "HEAD"])
+        );
+        // A new one is published on origin, and tracks it.
+        git_in(&local, &["checkout", "-qb", "ticket/dem-2"]);
+        assert_eq!(
+            push_branch(&s(&local), "ticket/dem-2").await.unwrap(),
+            "origin"
+        );
+        assert_eq!(
+            status(&s(&local)).await.unwrap().upstream.as_deref(),
+            Some("origin/ticket/dem-2")
         );
     }
 

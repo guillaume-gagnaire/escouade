@@ -321,6 +321,19 @@ pub fn back_to_todo(t: &mut Ticket) {
     }
 }
 
+/// Back "En cours" with the same agent and worktree, from loop 1: its tests failed, a conflict
+/// was handed to it, or it was sent back ("Renvoyer"). What it did and its last report stay.
+pub fn back_to_work(t: &mut Ticket) {
+    t.column = Column::Doing;
+    t.iteration = 1;
+    t.partial = false;
+    t.blocked = None;
+    t.conflict = false;
+    t.step = None;
+    t.review_at = None;
+    t.reminded = false;
+}
+
 /// What the app's start does to a ticket "En cours" and not blocked.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Recovery {
@@ -1093,6 +1106,42 @@ mod tests {
             (Column::Todo, None, 0, false, None, None)
         );
         assert!(t.criteria.iter().all(|c| !c.ok && c.note.is_empty()));
+    }
+
+    #[test]
+    fn a_ticket_sent_back_to_work_keeps_its_agent_and_loops_again_from_one() {
+        let mut t = ticket(2, 5);
+        t.column = Column::Review;
+        t.agent_id = Some("a1".into());
+        t.iteration = 3;
+        t.partial = true;
+        t.blocked = Some("Conflit avec main".into());
+        t.conflict = true;
+        t.step = Some("Merge…".into());
+        t.review_at = Some(1);
+        t.reminded = true;
+        t.started_at = Some(7);
+        t.criteria[0].ok = true;
+        t.criteria[0].note = "vu".into();
+        t.progress = vec!["Middleware réécrit".into()];
+        back_to_work(&mut t);
+        assert_eq!(
+            (
+                t.column,
+                t.iteration,
+                t.partial,
+                t.blocked.clone(),
+                t.conflict,
+                t.step.clone(),
+                t.review_at,
+                t.reminded
+            ),
+            (Column::Doing, 1, false, None, false, None, None, false)
+        );
+        // Same agent, same worktree: what it did and its last report stay until its next one.
+        assert_eq!((t.agent_id.as_deref(), t.started_at), (Some("a1"), Some(7)));
+        assert_eq!(t.progress, ["Middleware réécrit"]);
+        assert!(t.criteria[0].ok && t.criteria[0].note == "vu");
     }
 
     #[test]
