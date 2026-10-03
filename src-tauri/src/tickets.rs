@@ -3,17 +3,25 @@
 //! request, push) and the test launches of the worktrees.
 
 use crate::board::{self, TurnEnd};
+use crate::claude;
 use crate::core::{AgentOptions, Core};
 use crate::git;
 use crate::model::*;
 use anyhow::{anyhow, bail, Result};
 use serde::Deserialize;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use tauri::Runtime;
 
 /// Why a ticket "En cours" stops when its agent's automatic resume after the usage limit is gone
 /// (turned off, cancelled, never planned): it would otherwise hold its place forever.
 const QUOTA_LOST: &str = "limite d'usage atteinte";
+
+/// The reason a ticket is blocked by an error: its first line (a git error may run over many),
+/// as `board::turn_end` does with an agent's; the whole error goes to the log.
+pub(crate) fn error_reason(e: &anyhow::Error) -> String {
+    format!("Erreur : {}", board::first_line(&format!("{e:#}")))
+}
 
 /// A ticket as its form gives it.
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -287,8 +295,14 @@ impl<R: Runtime> Core<R> {
 
     /// Starts what may start, in the background.
     pub fn schedule(self: &Arc<Self>) {
+        #[cfg(test)]
+        self.passes_queued.fetch_add(1, Ordering::SeqCst);
         let c = self.clone();
-        tauri::async_runtime::spawn(async move { c.schedule_now().await });
+        tauri::async_runtime::spawn(async move {
+            c.schedule_now().await;
+            #[cfg(test)]
+            c.passes_queued.fetch_sub(1, Ordering::SeqCst);
+        });
     }
 
     /// An agent of the app waits for its quota (usage limit): no ticket starts meanwhile.
@@ -302,6 +316,16 @@ impl<R: Runtime> Core<R> {
     /// One pass at a time: the tickets "À faire" that fit start, project by project.
     pub async fn schedule_now(self: &Arc<Self>) {
         let _pass = self.board_lock.lock().await;
+        // Without Claude Code no agent can work: rather than make every ticket's worktree and
+        // agent only to block it, none starts until it is found (saving the settings looks again).
+        let claude_path = self.settings.read().claude_path.clone();
+        if claude::resolve_binary(&claude_path).is_none() {
+            if !self.claude_missing.swap(true, Ordering::AcqRel) {
+                log::info!("board: Claude Code not found, no ticket starts until it is");
+            }
+            return;
+        }
+        self.claude_missing.store(false, Ordering::Release);
         let paused = self.quota_paused();
         let projects = self.projects.read().clone();
         for p in projects {
@@ -349,7 +373,7 @@ impl<R: Runtime> Core<R> {
         if let Err(e) = self.launch_ticket_agent(project, &t).await {
             log::warn!("ticket {}: start failed: {e:#}", t.key);
             let _ = self.edit_ticket(id, |t| {
-                t.blocked = Some(format!("Erreur : {e:#}"));
+                t.blocked = Some(error_reason(&e));
                 Ok(())
             });
             self.notify_ticket(id, false);
@@ -421,6 +445,7 @@ impl<R: Runtime> Core<R> {
             (rt.meta.ticket_id.clone(), rt.meta.resume_at.is_some())
         };
         let Some(ticket_id) = ticket_id else { return };
+        let limited = end == TurnEnd::Limited;
         // A usage limit with no resume planned (turned off) would leave the ticket waiting forever.
         let end = match end {
             TurnEnd::Limited if !resumes => TurnEnd::Error(QUOTA_LOST.into()),
@@ -429,6 +454,12 @@ impl<R: Runtime> Core<R> {
         let Ok(next) = self.edit_ticket(&ticket_id, |t| {
             // A ticket started again has another agent: the old one's turns never move it.
             if t.agent_id.as_deref() != Some(agent_id) {
+                return Ok(board::Next::default());
+            }
+            // Stopped by the usage limit, a blocked ticket stays as it is: its block already
+            // tells why it does not move (its resume lost, cancelled or failed, whether that
+            // came before this reading or after), and its agent's next finished turn is read.
+            if limited && t.blocked.is_some() {
                 return Ok(board::Next::default());
             }
             Ok(board::turn_end(t, &end, report.as_ref(), now_ms()))
@@ -455,8 +486,9 @@ impl<R: Runtime> Core<R> {
         text: String,
     ) -> Result<()> {
         if let Err(e) = self.send_message(agent_id, text, vec![]).await {
+            log::warn!("agent {agent_id}: message to its ticket's agent not sent: {e:#}");
             let _ = self.edit_ticket(ticket_id, |t| {
-                t.blocked = Some(format!("Erreur : {e:#}"));
+                t.blocked = Some(error_reason(&e));
                 Ok(())
             });
             self.notify_ticket(ticket_id, false);

@@ -199,7 +199,8 @@ pub struct Next {
     pub blocked: bool,
 }
 
-fn first_line(e: &str) -> String {
+/// The first non-empty line of an error, cut to 200 characters: what a card and a notification show.
+pub(crate) fn first_line(e: &str) -> String {
     let line = e
         .lines()
         .map(str::trim)

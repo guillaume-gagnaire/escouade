@@ -10,7 +10,8 @@
 // <key>.txt ("Boucle n") in its folder and ends each turn with an ```escouade report (criteria and
 // "avancement"). The ticket's title, in the protocol, steers it: [ok] every criterion met at once,
 // [jamais] none ever, [sans-bilan] no report, [lent] a turn that lasts 30 s, [recette] a launch
-// recipe; by default criterion n is met from loop n on.
+// recipe, [question] a question first (the turn goes on once it is answered); by default
+// criterion n is met from loop n on.
 
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -47,6 +48,7 @@ function startSession() {
   let msg = 0;
   let pendingAnswer = null;
   let slowTimer = null;
+  let asked = false;
   const replay = argv.includes('--replay-user-messages');
   const sys = argv.includes('--append-system-prompt') ? (argv[argv.indexOf('--append-system-prompt') + 1] ?? '') : '';
   let remoteSent = false;
@@ -96,11 +98,40 @@ function startSession() {
     });
   }
 
+  // AskUserQuestion; once answered, `then` goes on with the turn (else a plain reply ends it).
+  function askQuestion(then = null) {
+    const tuid = `toolu_q${msg}`;
+    assistant({ type: 'tool_use', id: tuid, name: 'AskUserQuestion', input: {} });
+    const input = {
+      questions: [
+        {
+          question: 'Quelle base de données ?',
+          header: 'Base',
+          multiSelect: false,
+          options: [
+            { label: 'PostgreSQL', description: 'Relationnelle' },
+            { label: 'SQLite', description: 'Embarquée' },
+          ],
+        },
+      ],
+    };
+    pendingAnswer = { id: 'req_question', tuid, kind: 'question', then };
+    out({
+      type: 'control_request',
+      request_id: 'req_question',
+      request: { subtype: 'can_use_tool', tool_name: 'AskUserQuestion', input, tool_use_id: tuid, requires_user_interaction: true },
+    });
+  }
+
   function ticketTurn(text) {
     const key = sys.match(/le ticket ([A-Z]+-\d+)/)?.[1] ?? 'TIC-0';
     const count = Number(sys.match(/Critères d'acceptation \((\d+)\)/)?.[1] ?? 1);
     const loop = Number(text.match(/Boucle (\d+)\//)?.[1] ?? 1);
     const all = `${sys}\n${text}`;
+    if (all.includes('[question]') && !asked) {
+      asked = true;
+      return askQuestion(() => ticketTurn(text));
+    }
     if (all.includes('[lent]')) {
       streamText('Je commence…');
       slowTimer = setTimeout(() => result(), 30_000);
@@ -241,30 +272,7 @@ function startSession() {
       result();
       return;
     }
-    if (text.includes('question')) {
-      const tuid = `toolu_q${msg}`;
-      assistant({ type: 'tool_use', id: tuid, name: 'AskUserQuestion', input: {} });
-      const input = {
-        questions: [
-          {
-            question: 'Quelle base de données ?',
-            header: 'Base',
-            multiSelect: false,
-            options: [
-              { label: 'PostgreSQL', description: 'Relationnelle' },
-              { label: 'SQLite', description: 'Embarquée' },
-            ],
-          },
-        ],
-      };
-      pendingAnswer = { id: 'req_question', tuid, kind: 'question' };
-      out({
-        type: 'control_request',
-        request_id: 'req_question',
-        request: { subtype: 'can_use_tool', tool_name: 'AskUserQuestion', input, tool_use_id: tuid, requires_user_interaction: true },
-      });
-      return;
-    }
+    if (text.includes('question')) return askQuestion();
     if (text.includes('permission')) {
       const tuid = `toolu_p${msg}`;
       const input = { command: 'rm -rf build', description: 'Supprime le dossier build' };
@@ -324,6 +332,7 @@ function startSession() {
     if (p.kind === 'question') {
       const answers = r.updatedInput?.answers ?? {};
       toolResult(p.tuid, `Réponses : ${JSON.stringify(answers)}`, { tool_use_result: { answers } });
+      if (p.then) return p.then();
       streamText(`Choix retenu : ${Object.values(answers).join(', ')}`);
     } else if (r.behavior === 'allow') {
       toolResult(p.tuid, 'build supprimé', { tool_use_result: { stdout: 'build supprimé', stderr: '', interrupted: false } });

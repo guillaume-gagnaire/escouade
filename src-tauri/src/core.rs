@@ -205,11 +205,16 @@ pub struct Core<R: Runtime = Wry> {
     pub unsaved: AtomicUsize,
     /// One scheduling pass of the board at a time.
     pub(crate) board_lock: tokio::sync::Mutex<()>,
+    /// The last pass found no Claude Code (logged once until it is found again).
+    pub(crate) claude_missing: AtomicBool,
     /// Blocks of ports reserved for agents being made: taken until the agent holds its own.
     ports_reserved: Mutex<Vec<u16>>,
     /// Notifications sent, as "<title> | <text>" (tests only).
     #[cfg(test)]
     pub alerts: Mutex<Vec<String>>,
+    /// Scheduling passes asked for (`schedule`) and not over yet (tests only).
+    #[cfg(test)]
+    pub(crate) passes_queued: AtomicUsize,
 }
 
 fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Option<T> {
@@ -405,9 +410,12 @@ impl<R: Runtime> Core<R> {
             quitting: AtomicBool::new(false),
             unsaved: AtomicUsize::new(0),
             board_lock: tokio::sync::Mutex::new(()),
+            claude_missing: AtomicBool::new(false),
             ports_reserved: Mutex::default(),
             #[cfg(test)]
             alerts: Mutex::default(),
+            #[cfg(test)]
+            passes_queued: AtomicUsize::new(0),
         });
         core.usage.lock().today_cost = core.stats.today_cost();
         (core, rx)
@@ -550,10 +558,10 @@ impl<R: Runtime> Core<R> {
                     self.resume_lost(&id);
                 }
                 self.request_save();
-                // No agent waits for its quota any more: the board goes on.
-                self.schedule();
             }
         }
+        // Claude Code may be found now, or no agent waits for its quota any more: the board goes on.
+        self.schedule();
         Ok(())
     }
 

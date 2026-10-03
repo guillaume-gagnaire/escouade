@@ -1,15 +1,16 @@
 //! Integration tests of the board: real git repositories and the fake `claude` CLI, which plays a
 //! ticket's agent as its title says: [ok] (every criterion met at once), [jamais] (none ever),
-//! [sans-bilan] (no report), [lent] (a turn that lasts), [recette] (a launch recipe); by default
-//! criterion n is met from loop n on.
+//! [sans-bilan] (no report), [lent] (a turn that lasts), [recette] (a launch recipe), [question]
+//! (a question first); by default criterion n is met from loop n on.
 
 use crate::board::TurnEnd;
 use crate::core::AgentOptions;
 use crate::core_tests::{git, harness, Harness};
 use crate::model::*;
-use crate::tickets::TicketDraft;
+use crate::tickets::{error_reason, TicketDraft};
+use serde_json::json;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::sync::atomic::Ordering;
 
 fn draft(title: &str, criteria: &[&str], max_loops: u32) -> TicketDraft {
     TicketDraft {
@@ -54,21 +55,22 @@ impl Harness {
             .to_string()
     }
 
-    /// The ticket's agent has hit the usage limit and waits for its automatic resume, and the board
-    /// has read that turn (the ticket's 4th event: created, started, given its agent, that turn),
-    /// as it has long before the user does anything about it.
+    /// The ticket's agent has hit the usage limit and waits for its automatic resume. Whenever the
+    /// board reads that turn, before or after what the test does next, the outcome is the same
+    /// (see `a_turn_stopped_by_the_usage_limit_leaves_a_blocked_ticket_as_it_is`).
     async fn wait_resume_planned(&self, ticket_id: &str) {
-        self.wait("resume planned and its turn read", |h| {
-            let events = h
-                .events
-                .lock()
-                .iter()
-                .filter(|e| e["type"] == "ticket" && e["ticket"]["id"] == ticket_id)
-                .count();
-            events >= 4
-                && h.ticket(ticket_id)
-                    .agent_id
-                    .is_some_and(|id| h.agent(&id).resume_at.is_some())
+        self.wait("resume planned", |h| {
+            h.ticket(ticket_id)
+                .agent_id
+                .is_some_and(|id| h.agent(&id).resume_at.is_some())
+        })
+        .await
+    }
+
+    /// No scheduling pass is queued or running.
+    async fn wait_board_idle(&self) {
+        self.wait("no scheduling pass queued", |h| {
+            h.core.passes_queued.load(Ordering::SeqCst) == 0
         })
         .await
     }
@@ -77,6 +79,21 @@ impl Harness {
     fn lose_claude(&self) {
         self.core.settings.write().claude_path =
             self.dir.join("absent.cmd").to_string_lossy().to_string();
+    }
+}
+
+/// A hook of `repo` that fails every checkout, a new worktree's included, on several lines.
+fn fail_checkouts(repo: &Path) {
+    let hook = repo.join(".git").join("hooks").join("post-checkout");
+    std::fs::write(
+        &hook,
+        "#!/bin/sh\necho 'ligne un' >&2\necho 'ligne deux' >&2\nexit 1\n",
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
     }
 }
 
@@ -623,7 +640,7 @@ async fn a_ticket_whose_agent_dies_is_blocked_and_frees_its_place() {
 #[tokio::test]
 async fn a_ticket_whose_agent_cannot_start_is_blocked_and_the_next_one_gets_its_place() {
     let h = harness("tk-start-fail");
-    let (p, _) = h.project(false).await;
+    let (p, r) = h.project(false).await;
     h.set_board(&p.id, |s| {
         s.autopilot = false;
         s.max_parallel = 1;
@@ -638,9 +655,10 @@ async fn a_ticket_whose_agent_cannot_start_is_blocked_and_the_next_one_gets_its_
         .ticket_create(&p.id, draft("Deux [ok]", &[], 5))
         .await
         .unwrap();
-    h.lose_claude();
+    // No worktree can be made: git says why on several lines.
+    fail_checkouts(&r);
     // The passes asked for so far had nothing to start; from here, a single pass.
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    h.wait_board_idle().await;
     for id in [&a.id, &b.id] {
         h.core
             .edit_ticket(id, |t| {
@@ -650,11 +668,15 @@ async fn a_ticket_whose_agent_cannot_start_is_blocked_and_the_next_one_gets_its_
             .unwrap();
     }
     h.core.schedule_now().await;
-    // That pass had one place, for A, which could not start.
+    // That pass had one place, for A, which could not start: blocked with the first line only.
     let ta = h.ticket(&a.id);
-    assert_eq!(
-        (ta.column, ta.blocked.as_deref()),
-        (Column::Doing, Some(NO_CLAUDE))
+    let reason = ta.blocked.clone().unwrap();
+    assert_eq!(ta.column, Column::Doing);
+    assert!(
+        reason.starts_with("Erreur : worktree du ticket non créé: ")
+            && !reason.contains('\n')
+            && !reason.contains("ligne"),
+        "{reason:?}"
     );
     // Blocked, it holds no place: the next one is tried at once.
     h.wait_ticket(&b.id, "the next one tried", |t| t.blocked.is_some())
@@ -662,9 +684,159 @@ async fn a_ticket_whose_agent_cannot_start_is_blocked_and_the_next_one_gets_its_
     h.wait("notified", |h| {
         h.alerts()
             .iter()
-            .any(|x| x.ends_with(&format!("DEM-1 bloqué : {NO_CLAUDE}")))
+            .any(|x| x.ends_with(&format!("DEM-1 bloqué : {reason}")))
     })
     .await;
+}
+
+#[test]
+fn a_block_reason_is_the_first_line_of_the_error() {
+    let e = anyhow::anyhow!("Preparing worktree (new branch 'ticket/dem-1')\nfatal: refusé")
+        .context("worktree du ticket non créé");
+    assert_eq!(
+        error_reason(&e),
+        "Erreur : worktree du ticket non créé: Preparing worktree (new branch 'ticket/dem-1')"
+    );
+    assert_eq!(
+        error_reason(&anyhow::anyhow!("\n  \nfatal: seul")),
+        "Erreur : fatal: seul"
+    );
+}
+
+#[tokio::test]
+async fn no_ticket_starts_while_claude_code_cannot_be_found() {
+    let h = harness("tk-no-claude");
+    let (p, r) = h.project(false).await;
+    let claude = h.core.settings.read().claude_path.clone();
+    h.lose_claude();
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Patienter [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.core.schedule_now().await;
+    h.wait_board_idle().await;
+    // Nothing made, nothing blocked: the ticket waits for Claude Code.
+    let waiting = h.ticket(&t.id);
+    assert_eq!(
+        (waiting.column, waiting.agent_id, waiting.blocked),
+        (Column::Todo, None, None)
+    );
+    assert_eq!(git(&r, &["branch", "--list", "ticket/*"]), "");
+    assert!(!r.join(".claude").join("worktrees").exists());
+    assert!(h.alerts().is_empty(), "{:?}", h.alerts());
+    // Its path set right in the settings: the ticket starts.
+    let fixed = Settings {
+        claude_path: claude,
+        ..h.core.settings.read().clone()
+    };
+    h.core.save_settings(fixed).unwrap();
+    h.wait_ticket(&t.id, "started once found", |t| t.column == Column::Review)
+        .await;
+}
+
+#[tokio::test]
+async fn a_ticket_agents_question_still_calls_for_the_user() {
+    let h = harness("tk-question");
+    let (p, _) = h.project(false).await;
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Choisir [question] [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.wait("question notified", |h| {
+        h.alerts()
+            .iter()
+            .any(|x| x.ends_with(" | Claude attend ta réponse"))
+    })
+    .await;
+    let id = h.ticket(&t.id).agent_id.unwrap();
+    h.core
+        .answer_question(
+            &id,
+            "req_question",
+            json!({ "Quelle base de données ?": "SQLite" }),
+        )
+        .unwrap();
+    h.wait_ticket(&t.id, "to test", |t| t.column == Column::Review)
+        .await;
+    h.wait("ready notified", |h| {
+        h.alerts()
+            .iter()
+            .any(|x| x.ends_with("DEM-1 prêt à tester"))
+    })
+    .await;
+    // The question was for the user; the end of the turn is the board's to tell.
+    let alerts = h.alerts();
+    assert!(
+        alerts
+            .iter()
+            .any(|x| x.starts_with("demo · dem-1-") && x.ends_with("| Claude attend ta réponse")),
+        "{alerts:?}"
+    );
+    assert!(
+        !alerts.iter().any(|x| x.contains("Tâche terminée")),
+        "{alerts:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_turn_stopped_by_the_usage_limit_leaves_a_blocked_ticket_as_it_is() {
+    let h = harness("tk-limit-blocked");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Bloqué", &["Un"], 5))
+        .await
+        .unwrap();
+    let a = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                ticket_id: Some(t.id.clone()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta
+        .id;
+    // Its resume was lost (cancelled, turned off, failed) and that blocked it, before the board
+    // read the turn the limit stopped: that late reading changes nothing.
+    h.core
+        .edit_ticket(&t.id, |t| {
+            t.column = Column::Doing;
+            t.iteration = 1;
+            t.agent_id = Some(a.clone());
+            t.blocked = Some(NO_CLAUDE.into());
+            Ok(())
+        })
+        .unwrap();
+    h.core.agent(&a).unwrap().lock().meta.resume_at = Some(now_ms() + 3_600_000);
+    h.core.turn_ended(&a, TurnEnd::Limited).await;
+    assert_eq!(h.ticket(&t.id).blocked.as_deref(), Some(NO_CLAUDE));
+    h.core.agent(&a).unwrap().lock().meta.resume_at = None;
+    h.core.turn_ended(&a, TurnEnd::Limited).await;
+    assert_eq!(h.ticket(&t.id).blocked.as_deref(), Some(NO_CLAUDE));
+    assert!(h.alerts().is_empty(), "{:?}", h.alerts());
+    // Not blocked, with no resume to wait for, it is.
+    h.core
+        .edit_ticket(&t.id, |t| {
+            t.blocked = None;
+            Ok(())
+        })
+        .unwrap();
+    h.core.turn_ended(&a, TurnEnd::Limited).await;
+    assert_eq!(
+        h.ticket(&t.id).blocked.as_deref(),
+        Some("Erreur : limite d'usage atteinte")
+    );
+    assert_eq!(
+        h.alerts(),
+        ["demo | DEM-1 bloqué : Erreur : limite d'usage atteinte"]
+    );
 }
 
 #[tokio::test]
