@@ -235,9 +235,9 @@ impl Default for BoardSettings {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct RecipeStep {
-    #[serde(alias = "commande")]
+    #[serde(alias = "commande", deserialize_with = "null_default")]
     pub command: String,
-    #[serde(alias = "dossier")]
+    #[serde(alias = "dossier", deserialize_with = "null_default")]
     pub dir: String,
 }
 
@@ -245,14 +245,15 @@ pub struct RecipeStep {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct RecipeProcess {
-    #[serde(alias = "nom")]
+    #[serde(alias = "nom", deserialize_with = "null_default")]
     pub name: String,
-    #[serde(alias = "commande")]
+    #[serde(alias = "commande", deserialize_with = "null_default")]
     pub command: String,
-    #[serde(alias = "dossier")]
+    #[serde(alias = "dossier", deserialize_with = "null_default")]
     pub dir: String,
     #[serde(deserialize_with = "env_strings")]
     pub env: BTreeMap<String, String>,
+    #[serde(deserialize_with = "null_default")]
     pub url: String,
 }
 
@@ -260,13 +261,23 @@ pub struct RecipeProcess {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct TestRecipe {
-    #[serde(alias = "preparation")]
+    #[serde(alias = "preparation", deserialize_with = "null_default")]
     pub prepare: Vec<RecipeStep>,
-    #[serde(alias = "processus")]
+    #[serde(alias = "processus", deserialize_with = "null_default")]
     pub processes: Vec<RecipeProcess>,
     /// The address that shows the feature itself; else the first process's url.
-    #[serde(alias = "ouvrir")]
+    #[serde(alias = "ouvrir", deserialize_with = "null_default")]
     pub open: String,
+}
+
+/// A `null` where the agent had nothing to say is the field's default (empty), not an unreadable
+/// recipe.
+fn null_default<'de, D, T>(d: D) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de> + Default,
+{
+    Ok(Option::<T>::deserialize(d)?.unwrap_or_default())
 }
 
 /// Environment values as strings, whatever the agent wrote (`"PORT": 4110`); a null `env` is an
@@ -739,6 +750,47 @@ mod tests {
             (env.len(), env["PORT"].as_str(), env["NAME"].as_str()),
             (2, "4110", "x")
         );
+    }
+
+    #[test]
+    fn a_null_text_or_list_in_the_recipe_is_an_absent_one() {
+        let r: TestRecipe = serde_json::from_value(json!({
+            "preparation": [{ "commande": "npm install", "dossier": null },
+                            { "commande": null, "dossier": "web" }],
+            "processus": [{ "nom": null, "commande": "npm run dev", "dossier": null,
+                            "env": null, "url": null }],
+            "ouvrir": null
+        }))
+        .unwrap();
+        assert_eq!(
+            r.prepare,
+            [
+                RecipeStep {
+                    command: "npm install".into(),
+                    dir: String::new()
+                },
+                RecipeStep {
+                    command: String::new(),
+                    dir: "web".into()
+                }
+            ]
+        );
+        let p = &r.processes[0];
+        assert_eq!(p.command, "npm run dev");
+        assert!(p.name.is_empty() && p.dir.is_empty() && p.url.is_empty() && p.env.is_empty());
+        assert!(r.open.is_empty());
+        // The lists themselves may be null.
+        let r: TestRecipe = serde_json::from_value(json!({
+            "preparation": null, "processus": null, "ouvrir": null
+        }))
+        .unwrap();
+        assert_eq!(r, TestRecipe::default());
+        // The English names the window sends back are as tolerant.
+        let r: TestRecipe = serde_json::from_value(json!({
+            "prepare": null, "processes": [{ "name": null, "url": null }], "open": null
+        }))
+        .unwrap();
+        assert_eq!(r.processes, [RecipeProcess::default()]);
     }
 }
 

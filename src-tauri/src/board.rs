@@ -114,9 +114,19 @@ fn recipe_is_safe(r: &TestRecipe) -> bool {
         && (!r.prepare.is_empty() || !r.processes.is_empty())
 }
 
+/// A criterion's number (from 1): a JSON number, or a string of digits.
+fn criterion_number(n: &Value) -> Option<usize> {
+    let n = match n {
+        Value::String(s) => s.trim().parse::<u64>().ok()?,
+        n => n.as_u64()?,
+    };
+    usize::try_from(n).ok().filter(|n| *n >= 1)
+}
+
 /// The report of the last ```escouade block of a turn's text: None when it is missing or is not
-/// a JSON object. `criteres` (or `criteria`) items without a valid `n` are skipped; a recipe whose
-/// folder could leave the worktree is dropped.
+/// a JSON object. `criteres` (or `criteria`) items without a valid `n` are skipped, and a list
+/// none of whose items has one counts as no list of criteria; a recipe whose folder could leave
+/// the worktree is dropped.
 pub fn parse_report(text: &str) -> Option<Report> {
     let v: Value = serde_json::from_str(last_block(text)?).ok()?;
     if !v.is_object() {
@@ -126,15 +136,19 @@ pub fn parse_report(text: &str) -> Option<Report> {
         .get("criteres")
         .or_else(|| v.get("criteria"))
         .and_then(Value::as_array)
-        .map(|list| {
-            list.iter()
+        .and_then(|list| {
+            let reported: Vec<_> = list
+                .iter()
                 .filter_map(|c| {
-                    let n = c["n"].as_u64().filter(|n| *n >= 1)? as usize;
+                    let n = criterion_number(&c["n"])?;
                     let ok = c["ok"].as_bool().unwrap_or(false);
                     let note = c["note"].as_str().unwrap_or_default().trim().to_string();
                     Some((n, ok, note))
                 })
-                .collect()
+                .collect();
+            // Nothing usable in a list that was not empty: it must not read as "no criterion
+            // reached", which would spend a loop.
+            (!reported.is_empty() || list.is_empty()).then_some(reported)
         });
     let recipe = v
         .get("lancement")
@@ -172,12 +186,16 @@ pub fn turn_end(t: &mut Ticket, end: &TurnEnd, report: Option<&Report>, now: i64
     t.blocked = None;
     t.conflict = false;
     match end {
+        // A stop or an error ends the exchange: once the user resumes, a missing report is
+        // reminded again instead of blocking at once.
         TurnEnd::Interrupted => {
+            t.reminded = false;
             t.blocked = Some("Interrompu".into());
             next.blocked = true;
         }
         TurnEnd::Limited => {}
         TurnEnd::Error(e) => {
+            t.reminded = false;
             t.blocked = Some(format!("Erreur : {}", first_line(e)));
             next.blocked = true;
         }
@@ -520,9 +538,17 @@ pub fn allocate_ports(taken: &[u16], bindable: impl Fn(u16) -> bool) -> Option<u
     None
 }
 
-/// Text on one line (a command-line argument), cut to `max` characters.
+/// Text on one line (a command-line argument), cut to `max` characters: whitespace collapsed to
+/// a space, other control characters (NUL, which makes the launch fail, bell, escape…) dropped.
 fn one_line(s: &str, max: usize) -> String {
-    truncate(&s.split_whitespace().collect::<Vec<_>>().join(" "), max)
+    let printable: String = s
+        .chars()
+        .filter(|c| c.is_whitespace() || !c.is_control())
+        .collect();
+    truncate(
+        &printable.split_whitespace().collect::<Vec<_>>().join(" "),
+        max,
+    )
 }
 
 /// What the protocol may weigh as a command-line argument, once escaped (see `escaped_len`).
@@ -532,13 +558,14 @@ const PROTOCOL_BUDGET: usize = 6000;
 const MORE: &str = " ; …";
 
 /// What `s` weighs as an argument of a `.cmd`: Rust escapes it for cmd.exe, where `%` becomes a
-/// longer sequence (8 characters) and `"` is doubled. Other characters count their UTF-8 bytes,
-/// which is never less than their UTF-16 units.
+/// longer sequence (8 characters) and `"` is doubled, as are the backslashes just before it (and
+/// those ending the argument). Every backslash counts 2, the safe bound of those runs. Other
+/// characters count their UTF-8 bytes, which is never less than their UTF-16 units.
 fn escaped_len(s: &str) -> usize {
     s.chars()
         .map(|c| match c {
             '%' => 8,
-            '"' => 2,
+            '"' | '\\' => 2,
             c => c.len_utf8(),
         })
         .sum()
@@ -978,17 +1005,29 @@ mod tests {
         assert!(protocol_prompt(&t, Some(4100)).len() < 7000);
     }
 
-    /// What a `.cmd` argument weighs once Rust has escaped it for cmd.exe: `%` becomes a longer
-    /// sequence (8 characters) and `"` is doubled; anything else counts its UTF-8 bytes (at least
-    /// its UTF-16 units).
+    /// What a `.cmd` argument weighs once Rust has escaped it for cmd.exe, as std's
+    /// `append_bat_arg` does (the surrounding quotes left aside): `%` becomes a longer sequence
+    /// (8 characters), `"` is doubled and the backslashes just before it are doubled too;
+    /// anything else counts its UTF-8 bytes (at least its UTF-16 units). Deliberately not
+    /// `escaped_len`: this is the oracle that one is checked against.
     fn escaped_weight(s: &str) -> usize {
-        s.chars()
-            .map(|c| match c {
-                '%' => 8,
-                '"' => 2,
-                c => c.len_utf8(),
-            })
-            .sum()
+        let (mut weight, mut backslashes) = (0, 0);
+        for c in s.chars() {
+            if c == '\\' {
+                backslashes += 1;
+            } else {
+                if c == '"' {
+                    // The backslashes again, then the quote that escapes this one.
+                    weight += backslashes + 1;
+                } else if c == '%' || c == '\r' {
+                    weight += 7;
+                }
+                backslashes = 0;
+            }
+            weight += c.len_utf8();
+        }
+        // Trailing backslashes are doubled before the closing quote.
+        weight + backslashes
     }
 
     #[test]
@@ -1029,6 +1068,110 @@ mod tests {
         t.title = "Court".into();
         let p = protocol_prompt(&t, Some(4100));
         assert!(p.contains("30) critère 30."), "{p}");
+    }
+
+    #[test]
+    fn backslashes_before_a_quote_count_double_in_the_protocols_budget() {
+        // std doubles the backslashes before a quote on top of the quote itself: `\"` weighs 4.
+        let nasty = "\\\"".repeat(100);
+        let mut t = ticket(0, 5);
+        t.title = nasty.clone();
+        t.criteria = (0..50)
+            .map(|_| Criterion {
+                text: nasty.clone(),
+                ..Default::default()
+            })
+            .collect();
+        for ports in [None, Some(4100)] {
+            let p = protocol_prompt(&t, ports);
+            let weight = escaped_weight(&p);
+            assert!(weight <= 6000, "{ports:?}: {weight}");
+            assert!(p.contains("Critères d'acceptation (50) : 1) "), "{ports:?}");
+            assert!(p.contains(" ; …"), "{ports:?}");
+        }
+        // Backslashes alone are never doubled by std unless a quote follows; the bound is safe.
+        t.criteria = (0..50)
+            .map(|_| Criterion {
+                text: "\\".repeat(200),
+                ..Default::default()
+            })
+            .collect();
+        assert!(escaped_weight(&protocol_prompt(&t, Some(4100))) <= 6000);
+    }
+
+    #[test]
+    fn a_control_character_never_reaches_the_command_line() {
+        let mut t = ticket(1, 5);
+        t.title = "Gé\0rer\u{7} les\ttests\u{1b}[0m".into();
+        t.criteria[0].text = "cri\0tère\u{7}\u{8}\n1".into();
+        let p = protocol_prompt(&t, Some(4100));
+        assert!(p.contains("le ticket ATL-42 « Gérer les tests[0m »"), "{p}");
+        assert!(p.contains("1) critère 1."), "{p}");
+        assert!(p.chars().all(|c| !c.is_control()), "{p:?}");
+    }
+
+    #[test]
+    fn a_reminder_is_owed_again_once_the_user_resumes_after_a_stop_or_an_error() {
+        for stop in [TurnEnd::Interrupted, TurnEnd::Error("boom".into())] {
+            let mut t = ticket(1, 5);
+            let end = TurnEnd::Finished("Fini.".into());
+            let next = turn_end(&mut t, &end, None, 1);
+            assert_eq!(next.send.as_deref(), Some(REMINDER));
+            // The reminder's own turn is stopped…
+            assert!(turn_end(&mut t, &stop, None, 2).blocked);
+            // …then the user resumes: the next turn without a report is asked again, not blocked.
+            let next = turn_end(&mut t, &end, None, 3);
+            assert_eq!(next.send.as_deref(), Some(REMINDER), "{stop:?}");
+            assert_eq!((t.blocked.clone(), next.blocked), (None, false), "{stop:?}");
+        }
+    }
+
+    #[test]
+    fn a_criterion_number_may_be_a_string_but_never_zero() {
+        let r = parse_report(&block(
+            r#"{"criteres": [{"n": "2", "ok": true, "note": "vu"}, {"n": 0, "ok": true}, {"n": "0", "ok": true}, {"n": " 3 ", "ok": false}, {"n": "x"}, {"n": -1}, {"ok": true}, "4"]}"#,
+        ))
+        .unwrap();
+        assert_eq!(
+            r.criteria,
+            Some(vec![(2, true, "vu".to_string()), (3, false, String::new())])
+        );
+    }
+
+    #[test]
+    fn a_list_of_criteria_without_any_valid_number_is_no_report_so_it_is_asked_for_again() {
+        for json in [
+            r#"{"criteres": [{"n": 0, "ok": true}]}"#,
+            r#"{"criteres": [{"ok": true}, {"n": "x", "ok": true}]}"#,
+            r#"{"criteres": ["un", 2]}"#,
+        ] {
+            assert_eq!(parse_report(&block(json)).unwrap().criteria, None, "{json}");
+            let mut t = ticket(1, 5);
+            let (end, r) = finished(json);
+            let next = turn_end(&mut t, &end, r.as_ref(), 1);
+            // The reminder, not a loop spent.
+            assert_eq!(next.send.as_deref(), Some(REMINDER), "{json}");
+            assert_eq!((t.iteration, t.reminded), (1, true), "{json}");
+        }
+        // An empty list is still a (empty) list.
+        assert_eq!(
+            parse_report(&block(r#"{"criteres": []}"#))
+                .unwrap()
+                .criteria,
+            Some(vec![])
+        );
+    }
+
+    #[test]
+    fn a_null_in_the_recipe_is_an_absent_value_not_an_unreadable_report() {
+        let r = parse_report(&block(
+            r#"{"criteres": [{"n": 1, "ok": true}], "lancement": {"preparation": null, "processus": [{"nom": null, "commande": "npm run dev", "dossier": null, "url": null}], "ouvrir": null}}"#,
+        ))
+        .unwrap();
+        assert_eq!(r.criteria, Some(vec![(1, true, String::new())]));
+        let recipe = r.recipe.unwrap();
+        assert_eq!(recipe.processes[0].command, "npm run dev");
+        assert!(recipe.processes[0].url.is_empty() && recipe.open.is_empty());
     }
 
     #[test]
