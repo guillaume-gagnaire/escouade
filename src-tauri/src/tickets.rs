@@ -771,15 +771,30 @@ impl<R: Runtime> Core<R> {
         });
     }
 
-    /// The ticket is still being validated with this agent: archiving or deleting the agent
-    /// meanwhile sent it back to do, and nothing of its validation goes on.
+    /// The ticket is still being validated with this agent (archiving or deleting the agent
+    /// meanwhile sent it back to do: nothing of its validation goes on), and the agent is not at
+    /// work (a message sent during the tests: its files may be half written).
     fn still_validating(&self, id: &str, agent_id: &str) -> Result<()> {
-        let t = self.ticket(id)?;
-        if t.column != Column::Review || t.step.is_none() || t.agent_id.as_deref() != Some(agent_id)
+        if !validating(&self.ticket(id)?, agent_id) {
+            bail!(CHANGED);
+        }
+        if self
+            .live_agent(agent_id)
+            .is_some_and(|m| m.status.is_active())
         {
-            bail!("Ce ticket a changé pendant sa validation.");
+            bail!(AGENT_BUSY);
         }
         Ok(())
+    }
+
+    /// The lock held while merging into the repository at `repo`: two validations never merge
+    /// into the same folder at once.
+    pub(crate) fn merge_lock(&self, repo: &str) -> Arc<tokio::sync::Mutex<()>> {
+        self.merge_locks
+            .lock()
+            .entry(repo.to_string())
+            .or_default()
+            .clone()
     }
 
     /// "Valider…" on a ticket "À tester" (even partial): tests, commit, then what the board's
@@ -797,9 +812,7 @@ impl<R: Runtime> Core<R> {
             .and_then(|a| self.live_agent(a))
             .is_some_and(|m| m.status.is_active());
         if busy {
-            bail!(
-                "L'agent de ce ticket travaille encore : attends la fin de son tour pour valider."
-            );
+            bail!(AGENT_BUSY);
         }
         let t = self.edit_ticket(id, |t| {
             if t.column != Column::Review {
@@ -816,12 +829,13 @@ impl<R: Runtime> Core<R> {
         if let Err(e) = self.validate(&t).await {
             log::warn!("ticket {}: validation failed: {e:#}", t.key);
             let reason = error_line(&e);
-            // One that left "À tester" meanwhile (back with its agent, or to do) stays as it is.
-            let blocked = self.edit_ticket(id, |t| {
-                let here = t.column == Column::Review;
+            // One that left "À tester" meanwhile (back with its agent, or to do, maybe started
+            // again with another agent since) stays as it is.
+            let blocked = self.edit_ticket(id, |x| {
+                let here = x.column == Column::Review && x.agent_id == t.agent_id;
                 if here {
-                    t.step = None;
-                    t.blocked = Some(reason);
+                    x.step = None;
+                    x.blocked = Some(reason);
                 }
                 Ok(here)
             });
@@ -858,7 +872,12 @@ impl<R: Runtime> Core<R> {
             let env = testlaunch::port_env(meta.port_base);
             let run = testlaunch::run_tests(&shell, &wt.path, command, &env, TEST_LIMIT).await?;
             if !run.passed {
+                // Its agent archived or deleted during the tests: the ticket went back to do (and
+                // maybe on with another agent); the old agent is told nothing (it would start again).
                 self.edit_ticket(&t.id, |x| {
+                    if !validating(x, &agent_id) {
+                        bail!(CHANGED);
+                    }
                     x.step = None;
                     x.column = Column::Doing;
                     x.iteration = 1;
@@ -896,18 +915,20 @@ impl<R: Runtime> Core<R> {
                     unmerged.join(", ")
                 );
             }
+            // A commit elsewhere (another branch, a detached HEAD) would never reach the target.
+            if git::current_branch(&wt.path).await != wt.branch {
+                bail!("Le worktree n'est plus sur la branche {}", wt.branch);
+            }
+            self.still_validating(&t.id, &agent_id)?;
             let keep_out = not_committed(&wt.path, &copied).await;
             if git::stage_all(&wt.path, &keep_out).await? {
                 let m = self.commit_message(t, &s, &wt.path, &target).await;
                 git::commit_staged(&wt.path, &m).await?;
                 message = Some(m);
             }
-            // One the agent committed itself goes no further than its branch.
-            let committed: Vec<String> = git::branch_files(&wt.path, &target, &wt.branch)
-                .await?
-                .into_iter()
-                .filter(|f| copied.contains(f))
-                .collect();
+            // One the agent committed itself goes no further than its branch, even taken out
+            // again since: a merge commit or a rebase would bring that commit along.
+            let committed = git::touched_by(&wt.path, &target, &wt.branch, &copied).await?;
             match committed.as_slice() {
                 [] => {}
                 [one] => bail!("{one} copié du projet est commité dans la branche"),
@@ -944,8 +965,8 @@ impl<R: Runtime> Core<R> {
             .and_then(|h| h.lock().proc.clone());
         self.edit_ticket(&t.id, |x| {
             // Its agent archived or deleted meanwhile: it went back to do, and stays there.
-            if x.column != Column::Review || x.agent_id.as_deref() != Some(agent_id.as_str()) {
-                bail!("Ce ticket a changé pendant sa validation.");
+            if !validating(x, &agent_id) {
+                bail!(CHANGED);
             }
             x.column = Column::Done;
             x.step = None;
@@ -1022,6 +1043,9 @@ impl<R: Runtime> Core<R> {
             Some(m) => m,
             None => self.commit_message(t, s, &wt.path, target).await,
         };
+        // Two validations never merge into the same folder at once: the second one waits.
+        let lock = self.merge_lock(&repo);
+        let _merging = lock.lock().await;
         let tmp = Path::new(&repo)
             .join(".claude")
             .join("worktrees")
@@ -1030,7 +1054,13 @@ impl<R: Runtime> Core<R> {
         // One left by a validation the app's stop cut: registered, it would still hold the target
         // and every merge into it would be refused.
         drop_worktree(&repo, &tmp).await;
-        let (dir, temporary) = match git::checkout_of(&repo, target).await? {
+        let mut checkout = git::checkout_of(&repo, target).await?;
+        // Another ticket's, left the same way (no other merge into this repository runs now).
+        if let Some(p) = checkout.clone().filter(|p| merge_leftover(&repo, p)) {
+            drop_worktree(&repo, Path::new(&p)).await;
+            checkout = git::checkout_of(&repo, target).await?;
+        }
+        let (dir, temporary) = match checkout {
             Some(p) if same_dir(&p, &repo) => {
                 if git::has_tracked_changes(&repo).await? {
                     bail!("Le dossier du projet a des modifications non commitées sur {target}");
@@ -1114,6 +1144,28 @@ async fn not_committed(cwd: &str, copied: &[String]) -> Vec<String> {
         }
     }
     out
+}
+
+/// The block when the ticket left its validation (its agent archived or deleted meanwhile).
+const CHANGED: &str = "Ce ticket a changé pendant sa validation.";
+
+/// The refusal while the ticket's agent works: its files may be half written.
+const AGENT_BUSY: &str =
+    "L'agent de ce ticket travaille encore : attends la fin de son tour pour valider.";
+
+/// `t` is still "À tester" with this agent, its validation under way.
+fn validating(t: &Ticket, agent_id: &str) -> bool {
+    t.column == Column::Review && t.step.is_some() && t.agent_id.as_deref() == Some(agent_id)
+}
+
+/// `path` is a temporary worktree of a validation (`.claude/worktrees/.merge-<clé>`) of `repo`.
+fn merge_leftover(repo: &str, path: &str) -> bool {
+    let p = Path::new(path);
+    let worktrees = Path::new(repo).join(".claude").join("worktrees");
+    p.file_name()
+        .is_some_and(|n| n.to_string_lossy().starts_with(".merge-"))
+        && p.parent()
+            .is_some_and(|d| same_dir(&d.to_string_lossy(), &worktrees.to_string_lossy()))
 }
 
 /// Removes the worktree at `path`, registered or not, its folder there or not.

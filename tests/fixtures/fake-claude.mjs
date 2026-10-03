@@ -12,10 +12,12 @@
 // [jamais] none ever, [sans-bilan] no report, [lent] a turn that lasts 30 s, [recette] a launch
 // recipe, [question] a question first (the turn goes on once it is answered), [fin-d-abord] an
 // interrupted turn's end sent before the answer to the interrupt, [commite] its work committed by
-// itself (every file of its folder, a copied .env included), [tenace] a process that lasts 5 s
+// itself (every file of its folder, a copied .env included), [retire-env] then .env taken out of
+// git again in a second commit (still in the branch's history), [tenace] a process that lasts 5 s
 // once its input is closed; by default criterion n is met from loop n on.
 // In one-shot mode, asked for a ticket's commit message, it answers `feat: travail du faux claude
-// [<KEY>]`, or a sentence out of form when the ticket's title says [message-libre].
+// [<KEY>]`, or a sentence out of form when the ticket's title says [message-libre]; with [sourd]
+// in its system prompt it never reads its input and answers nothing for 20 s.
 
 import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -28,7 +30,9 @@ const logFile = process.env.FAKE_CLAUDE_LOG || path.join(os.tmpdir(), `fake-clau
 fs.appendFileSync(logFile, JSON.stringify({ argv, cwd: process.cwd(), proxy: process.env.HTTPS_PROXY ?? null }) + '\n');
 
 // One-shot mode (`-p --output-format json`), used by the app to name agents.
-if (argv.includes('-p')) {
+if (argv.includes('-p') && argv.some((a) => a.includes('[sourd]'))) {
+  setTimeout(() => {}, 20_000);
+} else if (argv.includes('-p')) {
   let input = '';
   process.stdin.on('data', (d) => (input += d));
   process.stdin.on('end', () => {
@@ -153,6 +157,10 @@ function startSession() {
     if (all.includes('[commite]')) {
       execFileSync('git', ['add', '-A']);
       execFileSync('git', ['commit', '-qm', `Travail sur ${key}`]);
+    }
+    if (all.includes('[retire-env]')) {
+      execFileSync('git', ['rm', '--cached', '-q', '.env']);
+      execFileSync('git', ['commit', '-qm', `Retire .env de ${key}`]);
     }
     if (all.includes('[sans-bilan]')) {
       streamText('Travail fait, sans bilan.');

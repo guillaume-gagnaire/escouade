@@ -684,18 +684,40 @@ pub async fn checkout_of(repo: &str, branch: &str) -> Result<Option<String>> {
     Ok(None)
 }
 
-/// The files `branch` changed since it left `base` (`base...branch`), whatever `base` did since.
-pub async fn branch_files(repo: &str, base: &str, branch: &str) -> Result<Vec<String>> {
-    let out = text(
-        repo,
-        &["diff", "--name-only", &format!("{base}...{branch}"), "--"],
-    )
-    .await?;
-    Ok(out
-        .lines()
-        .filter(|l| !l.is_empty())
-        .map(str::to_string)
-        .collect())
+/// Of `paths`, those that a commit of `branch` not in `base` added, changed or removed, side
+/// branches merged into it included: what merging `branch` would bring into `base`'s history,
+/// even when a later commit took it out of the tree again.
+pub async fn touched_by(
+    repo: &str,
+    base: &str,
+    branch: &str,
+    paths: &[String],
+) -> Result<Vec<String>> {
+    if paths.is_empty() {
+        return Ok(Vec::new());
+    }
+    let range = format!("{base}..{branch}");
+    let mut args = vec![
+        "--literal-pathspecs",
+        "log",
+        "--format=",
+        "--name-only",
+        "--no-renames",
+        // Every commit that touched them: by default, a merge that ends up as one of its parents
+        // hides the other side's commits.
+        "--full-history",
+        &range,
+        "--",
+    ];
+    args.extend(paths.iter().map(String::as_str));
+    let out = text(repo, &args).await?;
+    let mut files: Vec<String> = Vec::new();
+    for f in out.lines().filter(|l| !l.is_empty()) {
+        if !files.iter().any(|x| x == f) {
+            files.push(f.to_string());
+        }
+    }
+    Ok(files)
 }
 
 /// Stages every change of `cwd` but the files `keep_out` (copied `.env` files…), even staged
@@ -1470,12 +1492,56 @@ mod repo_tests {
     }
 
     #[tokio::test]
-    async fn the_files_a_branch_changed_since_it_left_its_base_are_listed() {
-        let r = diverged("git-branch-files", false);
-        // Only what `feat` did: `main`'s own change since is not counted.
-        assert_eq!(branch_files(&r, "main", "feat").await.unwrap(), ["b.txt"]);
-        assert!(branch_files(&r, "main", "main").await.unwrap().is_empty());
-        assert!(branch_files(&r, "main", "nowhere").await.is_err());
+    async fn the_files_a_branchs_own_commits_touched_are_found_even_when_removed_since() {
+        let r = diverged("git-touched-by", false);
+        let paths = |l: &[&str]| l.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let asked = paths(&["b.txt", "résumé.md", ".env"]);
+        // Only what `feat` did: `main`'s own change of résumé.md is not counted.
+        assert_eq!(
+            touched_by(&r, "main", "feat", &asked).await.unwrap(),
+            ["b.txt"]
+        );
+        // Committed, then taken out again: gone from the tree, still in the history.
+        git(&r, &["checkout", "-q", "feat"]);
+        std::fs::write(Path::new(&r).join(".env"), "SECRET=1\n").unwrap();
+        git(&r, &["add", ".env"]);
+        git(&r, &["commit", "-qm", "env"]);
+        git(&r, &["rm", "--cached", "-q", ".env"]);
+        git(&r, &["commit", "-qm", "sans env"]);
+        // On a side branch merged in too.
+        git(&r, &["checkout", "-q", "main"]);
+        assert_eq!(
+            text(&r, &["diff", "--name-only", "main...feat"])
+                .await
+                .unwrap(),
+            "b.txt"
+        );
+        let mut touched = touched_by(&r, "main", "feat", &asked).await.unwrap();
+        touched.sort();
+        assert_eq!(touched, [".env", "b.txt"]);
+        git(&r, &["checkout", "-qb", "side"]);
+        std::fs::write(Path::new(&r).join("c.env"), "X=1\n").unwrap();
+        git(&r, &["add", "c.env"]);
+        git(&r, &["commit", "-qm", "c"]);
+        git(&r, &["rm", "-q", "c.env"]);
+        git(&r, &["commit", "-qm", "sans c"]);
+        git(&r, &["checkout", "-q", "feat"]);
+        git(&r, &["merge", "-q", "--no-edit", "side"]);
+        assert_eq!(
+            touched_by(&r, "main", "feat", &paths(&["c.env"]))
+                .await
+                .unwrap(),
+            ["c.env"]
+        );
+        assert!(touched_by(&r, "main", "main", &asked)
+            .await
+            .unwrap()
+            .is_empty());
+        assert!(touched_by(&r, "main", "feat", &[])
+            .await
+            .unwrap()
+            .is_empty());
+        assert!(touched_by(&r, "main", "nowhere", &asked).await.is_err());
     }
 
     #[tokio::test]

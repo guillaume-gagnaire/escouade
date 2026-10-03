@@ -214,6 +214,8 @@ pub struct Core<R: Runtime = Wry> {
     pub(crate) targets_missing: Mutex<std::collections::HashSet<String>>,
     /// Blocks of ports reserved for agents being made: taken until the agent holds its own.
     ports_reserved: Mutex<Vec<u16>>,
+    /// One validation's merge at a time per repository (`merge_lock`).
+    pub(crate) merge_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
     /// Notifications sent, as "<title> | <text>" (tests only).
     #[cfg(test)]
     pub alerts: Mutex<Vec<String>>,
@@ -434,6 +436,7 @@ impl<R: Runtime> Core<R> {
             claude_missing: AtomicBool::new(false),
             targets_missing: Mutex::default(),
             ports_reserved: Mutex::default(),
+            merge_locks: Mutex::default(),
             #[cfg(test)]
             alerts: Mutex::default(),
             #[cfg(test)]
@@ -1612,8 +1615,20 @@ impl<R: Runtime> Core<R> {
         }
     }
 
-    /// One question to Haiku (`claude -p`, no tools, no session, no MCP): its answer.
+    /// One question to Haiku (`claude -p`, no tools, no session, no MCP): its answer, within 90 s.
     pub(crate) async fn one_shot(&self, system: &str, prompt: &str) -> Result<String> {
+        self.one_shot_within(system, prompt, Duration::from_secs(90))
+            .await
+    }
+
+    /// `one_shot` within `limit`, the question's writing included (a `claude` that never reads
+    /// it would hold it forever); past it, the process is killed with all it started.
+    pub(crate) async fn one_shot_within(
+        &self,
+        system: &str,
+        prompt: &str,
+        limit: Duration,
+    ) -> Result<String> {
         use tokio::io::AsyncWriteExt;
         let settings = self.settings.read().clone();
         let program =
@@ -1643,11 +1658,20 @@ impl<R: Runtime> Core<R> {
         .kill_on_drop(true);
         #[cfg(windows)]
         cmd.creation_flags(claude::CREATE_NO_WINDOW);
+        crate::job::isolate(&mut cmd);
         let mut child = cmd.spawn()?;
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin.write_all(prompt.as_bytes()).await?;
-        }
-        let out = tokio::time::timeout(Duration::from_secs(90), child.wait_with_output()).await??;
+        // Dropped when this returns: whatever the process left running ends with it.
+        let _job = crate::job::Job::for_child(&child);
+        let asked = async move {
+            if let Some(mut stdin) = child.stdin.take() {
+                stdin.write_all(prompt.as_bytes()).await?;
+                // Dropped here: the input ends, and the CLI answers.
+            }
+            anyhow::Ok(child.wait_with_output().await?)
+        };
+        let out = tokio::time::timeout(limit, asked)
+            .await
+            .map_err(|_| anyhow!("pas de réponse de Haiku en {} s", limit.as_secs()))??;
         let v: Value = serde_json::from_slice(&out.stdout)?;
         Ok(v["result"].as_str().unwrap_or("").to_string())
     }
