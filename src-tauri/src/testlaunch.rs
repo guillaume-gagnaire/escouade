@@ -97,31 +97,50 @@ pub async fn matching_untracked(dir: &str, patterns: &[String]) -> Vec<String> {
         .collect()
 }
 
-/// Copies into `worktree` the untracked files of `project` that match `patterns` (`.env*`…).
+/// Copies into `worktree` the untracked files of `project` that match `patterns` (`.env*`…), and
+/// returns them. A file that cannot be copied does not stop the others: once all were tried, the
+/// error names each failing file and why.
 pub async fn copy_worktree_files(
     project: &str,
     worktree: &str,
     patterns: &[String],
 ) -> Result<Vec<String>> {
     let files = matching_untracked(project, patterns).await;
-    for f in &files {
-        let to = Path::new(worktree).join(f);
-        if let Some(parent) = to.parent() {
-            std::fs::create_dir_all(parent)?;
+    let mut copied = Vec::new();
+    let mut failed = Vec::new();
+    for f in files {
+        match copy_one(project, worktree, &f) {
+            Ok(()) => copied.push(f),
+            Err(e) => failed.push(format!("{f} ({e})")),
         }
-        std::fs::copy(Path::new(project).join(f), &to)?;
     }
-    Ok(files)
+    if failed.is_empty() {
+        Ok(copied)
+    } else {
+        bail!("{}", failed.join(", "))
+    }
+}
+
+fn copy_one(project: &str, worktree: &str, file: &str) -> std::io::Result<()> {
+    let to = Path::new(worktree).join(file);
+    if let Some(parent) = to.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::copy(Path::new(project).join(file), &to).map(|_| ())
 }
 
 // ---------- readiness ----------
 
 /// One HTTP request to `url`, without any proxy, 2 s at most: true for any answer, whatever its
-/// status (a 404 still means the server is up).
+/// status (a 404 still means the server is up). A redirect is an answer, not followed (it may
+/// lead to a host that is down), and a certificate is not checked (a dev server's own).
 pub async fn http_ready(url: &str) -> bool {
     let Ok(client) = reqwest::Client::builder()
         // A local server must never be reached through the user's proxy.
         .no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
+        // Only a readiness probe of the machine's own servers: nothing it reads is trusted.
+        .danger_accept_invalid_certs(true)
         .timeout(Duration::from_secs(2))
         .build()
     else {
@@ -248,7 +267,7 @@ pub fn run_spec(meta: &AgentMeta, kind: &str, index: usize) -> Result<RunSpec> {
                 Vec::new(),
             )
         }
-        _ => {
+        "run" => {
             let p = recipe
                 .processes
                 .get(index)
@@ -261,6 +280,7 @@ pub fn run_spec(meta: &AgentMeta, kind: &str, index: usize) -> Result<RunSpec> {
             let env = p.env.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
             (name, p.command.clone(), p.dir.clone(), env)
         }
+        other => bail!("Type d'étape inconnu : « {other} »"),
     };
     let dir = dir.trim();
     let cwd = if dir.is_empty() || dir == "." {
@@ -358,6 +378,33 @@ mod tests {
             .is_empty());
     }
 
+    #[tokio::test]
+    async fn a_file_that_cannot_be_copied_is_reported_and_the_others_are_still_copied() {
+        let p = test_dir("launch-copy-fail");
+        git(&p, &["init", "-q", "-b", "main"]);
+        std::fs::write(p.join(".env.a"), "A=1").unwrap();
+        std::fs::write(p.join(".env.b"), "B=2").unwrap();
+        let wt = test_dir("launch-copy-fail-wt");
+        // A folder where the first file should go: it cannot be written.
+        std::fs::create_dir_all(wt.join(".env.a")).unwrap();
+        let patterns = vec![".env*".to_string()];
+        let (from, to) = (
+            p.to_string_lossy().to_string(),
+            wt.to_string_lossy().to_string(),
+        );
+        let err = copy_worktree_files(&from, &to, &patterns)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains(".env.a"), "{err}");
+        assert!(!err.contains(".env.b"), "{err}");
+        assert_eq!(
+            std::fs::read_to_string(wt.join(".env.b")).unwrap(),
+            "B=2",
+            "the file after the failing one is still copied"
+        );
+    }
+
     #[test]
     fn a_port_is_free_only_when_it_binds() {
         let busy = TcpListener::bind(("127.0.0.1", 0)).unwrap();
@@ -378,20 +425,43 @@ mod tests {
         assert_eq!(port_env(Some(u16::MAX))[1].1, "65535");
     }
 
-    /// A server answering every request with a 404, on a port of its own.
-    fn not_found_server() -> u16 {
+    /// A server answering every request with `status` (and `Location: location` when given), on a
+    /// port of its own.
+    fn server_answering(status: &'static str, location: Option<String>) -> u16 {
         let l = TcpListener::bind(("127.0.0.1", 0)).unwrap();
         let port = l.local_addr().unwrap().port();
         std::thread::spawn(move || {
             for mut s in l.incoming().flatten() {
                 let mut buf = [0u8; 2048];
                 let _ = s.read(&mut buf);
+                let location = location
+                    .as_ref()
+                    .map(|l| format!("Location: {l}\r\n"))
+                    .unwrap_or_default();
                 let _ = s.write_all(
-                    b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                    format!(
+                        "HTTP/1.1 {status}\r\n{location}Content-Length: 0\r\nConnection: close\r\n\r\n"
+                    )
+                    .as_bytes(),
                 );
             }
         });
         port
+    }
+
+    /// A server answering every request with a 404, on a port of its own.
+    fn not_found_server() -> u16 {
+        server_answering("404 Not Found", None)
+    }
+
+    #[tokio::test]
+    async fn a_server_that_redirects_is_ready_without_following_the_redirect() {
+        // To an address nothing listens on: following the redirect would fail.
+        let away = server_answering("302 Found", Some("http://127.0.0.1:1/".into()));
+        assert!(http_ready(&format!("http://127.0.0.1:{away}/")).await);
+        // To itself: following the redirect would loop until the client gives up.
+        let looping = server_answering("302 Found", Some("/encore".into()));
+        assert!(http_ready(&format!("http://127.0.0.1:{looping}/")).await);
     }
 
     #[tokio::test]
@@ -440,21 +510,63 @@ mod tests {
         assert!(ko.tail.trim_end().ends_with("ligne 100"), "{}", ko.tail);
     }
 
+    /// Whether the process `pid` is running.
+    fn alive(pid: u32) -> bool {
+        #[cfg(windows)]
+        {
+            let out = std::process::Command::new("tasklist")
+                .args(["/FI", &format!("PID eq {pid}"), "/NH", "/FO", "CSV"])
+                .output()
+                .unwrap();
+            // The rows are CSV: "node.exe","1234","Console",…
+            String::from_utf8_lossy(&out.stdout).contains(&format!("\"{pid}\""))
+        }
+        #[cfg(unix)]
+        {
+            // SAFETY: signal 0 only checks that the process exists.
+            unsafe { libc::kill(pid as i32, 0) == 0 }
+        }
+    }
+
     #[tokio::test]
-    async fn tests_running_past_their_limit_are_stopped() {
+    async fn tests_running_past_their_limit_are_stopped_with_everything_they_started() {
         let Some(shell) = default_shell() else { return };
-        let dir = test_dir("launch-tests-slow").to_string_lossy().to_string();
+        let dir = test_dir("launch-tests-slow");
+        // The tests start a process of their own, which records its pid and waits: the shell, the
+        // tests and that process are three levels of the tree to stop.
+        std::fs::write(
+            dir.join("grandchild.cjs"),
+            "require('fs').writeFileSync('pid.txt', String(process.pid)); setTimeout(() => {}, 60000);",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("tests.cjs"),
+            "require('child_process').spawn(process.execPath, ['grandchild.cjs'], { stdio: 'ignore' }); setTimeout(() => {}, 60000);",
+        )
+        .unwrap();
         let r = run_tests(
             &shell,
-            &dir,
-            "node -e \"setTimeout(() => {}, 60000)\"",
+            &dir.to_string_lossy(),
+            "node tests.cjs",
             &[],
-            Duration::from_secs(4),
+            Duration::from_secs(8),
         )
         .await
         .unwrap();
         assert!(!r.passed);
         assert!(r.tail.contains("n'ont pas fini"), "{}", r.tail);
+        let pid: u32 = std::fs::read_to_string(dir.join("pid.txt"))
+            .expect("the process started by the tests did not start within the limit")
+            .trim()
+            .parse()
+            .unwrap();
+        for _ in 0..100 {
+            if !alive(pid) {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        panic!("process {pid}, started by the tests, survived them");
     }
 
     #[test]
@@ -477,7 +589,7 @@ mod tests {
                 RecipeProcess {
                     name: "x".into(),
                     command: "y".into(),
-                    dir: "../dehors".into(),
+                    dir: "web/absent".into(),
                     ..Default::default()
                 },
             ],
@@ -514,8 +626,53 @@ mod tests {
                 ("PORT".to_string(), "4101".to_string()),
             ]
         );
+        // A folder that does not exist in the worktree.
         assert!(run_spec(&meta, "run", 1).is_err());
         assert!(run_spec(&meta, "run", 5).is_err());
         assert!(run_spec(&AgentMeta::default(), "run", 0).is_err());
+        // Only "prep" and "run" are steps.
+        assert!(run_spec(&meta, "autre", 0).is_err());
+        assert!(run_spec(&meta, "", 0).is_err());
+    }
+
+    #[test]
+    fn a_recipe_step_cannot_leave_the_worktree() {
+        let wt = test_dir("launch-escape");
+        let outside = test_dir("launch-escape-out");
+        std::fs::create_dir_all(wt.join("web")).unwrap();
+        // Folders that exist, so that only the containment check can refuse them.
+        let sibling = format!("../{}", outside.file_name().unwrap().to_string_lossy());
+        let mut dirs = vec![
+            "..".to_string(),
+            "web/../..".to_string(),
+            sibling,
+            outside.to_string_lossy().into_owned(),
+        ];
+        if crate::paths::make_dir_link(&outside, &wt.join("linked")) {
+            dirs.push("linked".into());
+        } else {
+            eprintln!("Could not create link/junction (skipping the link case)");
+        }
+        let root = wt.to_string_lossy().to_string();
+        let meta = AgentMeta {
+            cwd: root.clone(),
+            recipe: Some(TestRecipe {
+                prepare: dirs
+                    .iter()
+                    .map(|dir| RecipeStep {
+                        command: "x".into(),
+                        dir: dir.clone(),
+                    })
+                    .collect(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        for (i, dir) in dirs.iter().enumerate() {
+            assert!(
+                run_spec(&meta, "prep", i).is_err(),
+                "« {dir} » leaves the worktree"
+            );
+        }
     }
 }
