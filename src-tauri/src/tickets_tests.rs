@@ -3160,7 +3160,7 @@ async fn a_ticket_is_not_sent_back_while_its_agent_works() {
         .unwrap_err();
     assert_eq!(
         format!("{e:#}"),
-        "L'agent de ce ticket travaille encore : attends la fin de son tour pour valider."
+        "L'agent de ce ticket travaille encore : attends la fin de son tour pour le renvoyer."
     );
     let still = h.ticket(&t.id);
     assert_eq!(
@@ -3215,7 +3215,16 @@ async fn a_ticket_that_leaves_while_its_target_is_merged_into_its_worktree_leave
 
 #[tokio::test]
 async fn a_ticket_with_nothing_beyond_its_target_is_neither_pushed_nor_proposed() {
-    for action in ["push", "pr"] {
+    for (action, why) in [
+        (
+            "push",
+            "Rien à pousser : ticket/dem-1 n'a pas de commit de plus que main.",
+        ),
+        (
+            "pr",
+            "Rien à proposer : ticket/dem-1 n'a pas de commit de plus que main.",
+        ),
+    ] {
         let h = harness(&format!("tk-nothing-{action}"));
         let (p, r) = h.project(false).await;
         let bare = github_remote(&h, &r);
@@ -3227,10 +3236,7 @@ async fn a_ticket_with_nothing_beyond_its_target_is_neither_pushed_nor_proposed(
         let t = h.ticket(&t.id);
         assert_eq!(
             (t.column, t.blocked.as_deref()),
-            (
-                Column::Review,
-                Some("Rien à merger : ticket/dem-1 n'a pas de commit de plus que main.")
-            ),
+            (Column::Review, Some(why)),
             "{action}"
         );
         assert_eq!(branches_of(&bare), "main", "{action}");

@@ -932,8 +932,13 @@ impl<R: Runtime> Core<R> {
             }
             // Nothing to merge, to propose or to push.
             if git::ahead_of(&wt.path, &target, &wt.branch).await == 0 {
+                let what = match s.action.as_str() {
+                    "pr" => "proposer",
+                    "push" => "pousser",
+                    _ => "merger",
+                };
                 bail!(
-                    "Rien à merger : {} n'a pas de commit de plus que {target}.",
+                    "Rien à {what} : {} n'a pas de commit de plus que {target}.",
                     wt.branch
                 );
             }
@@ -1344,7 +1349,7 @@ impl<R: Runtime> Core<R> {
             .and_then(|a| self.live_agent(&a))
             .is_some_and(|m| m.status.is_active());
         if busy {
-            bail!(AGENT_BUSY);
+            bail!(AGENT_BUSY_REJECT);
         }
         let (key, agent_id) = self.edit_ticket(id, |t| {
             if t.column != Column::Review {
@@ -1466,6 +1471,11 @@ const CHANGED: &str = "Ce ticket a changé pendant sa validation.";
 /// The refusal while the ticket's agent works: its files may be half written.
 const AGENT_BUSY: &str =
     "L'agent de ce ticket travaille encore : attends la fin de son tour pour valider.";
+
+/// "Renvoyer" refused while the ticket's agent works: the end of that turn would be read as the
+/// end of the rework.
+const AGENT_BUSY_REJECT: &str =
+    "L'agent de ce ticket travaille encore : attends la fin de son tour pour le renvoyer.";
 
 /// `t` is still "À tester" with this agent, its validation under way.
 fn validating(t: &Ticket, agent_id: &str) -> bool {
