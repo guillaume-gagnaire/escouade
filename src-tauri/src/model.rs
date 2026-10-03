@@ -269,16 +269,19 @@ pub struct TestRecipe {
     pub open: String,
 }
 
-/// Environment values as strings, whatever the agent wrote (`"PORT": 4110`).
+/// Environment values as strings, whatever the agent wrote (`"PORT": 4110`); a null `env` is an
+/// empty one and a null value is skipped.
 fn env_strings<'de, D: serde::Deserializer<'de>>(
     d: D,
 ) -> Result<BTreeMap<String, String>, D::Error> {
-    let raw: BTreeMap<String, Value> = BTreeMap::deserialize(d)?;
+    let raw: Option<BTreeMap<String, Value>> = Option::deserialize(d)?;
     Ok(raw
+        .unwrap_or_default()
         .into_iter()
-        .map(|(k, v)| match v {
-            Value::String(s) => (k, s),
-            other => (k, other.to_string()),
+        .filter_map(|(k, v)| match v {
+            Value::Null => None,
+            Value::String(s) => Some((k, s)),
+            other => Some((k, other.to_string())),
         })
         .collect())
 }
@@ -718,6 +721,24 @@ mod tests {
         let sent = serde_json::to_value(&r).unwrap();
         assert_eq!(sent["processes"][0]["name"], "api");
         assert_eq!(sent["prepare"][0]["command"], "npm install");
+    }
+
+    #[test]
+    fn a_null_env_or_a_null_value_in_it_does_not_spoil_the_recipe() {
+        let r: TestRecipe = serde_json::from_value(json!({
+            "processus": [
+                { "nom": "web", "commande": "npm run dev", "env": null },
+                { "nom": "api", "commande": "npm start",
+                  "env": { "PORT": 4110, "DEBUG": null, "NAME": "x" } }
+            ]
+        }))
+        .unwrap();
+        assert!(r.processes[0].env.is_empty());
+        let env = &r.processes[1].env;
+        assert_eq!(
+            (env.len(), env["PORT"].as_str(), env["NAME"].as_str()),
+            (2, "4110", "x")
+        );
     }
 }
 
