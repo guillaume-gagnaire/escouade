@@ -45,6 +45,15 @@ fn new_agent(dir: &std::path::Path) -> AgentHandle {
 
 /// Spawns the fake CLI for `h`, wiring frames and exit into the runtime like Core does.
 fn spawn(h: &AgentHandle, log: &std::path::Path) -> Arc<ClaudeProcess> {
+    spawn_recording(h, log, Arc::default())
+}
+
+/// Like `spawn`, noting how each turn ends in `ends` (what Core hands to the board).
+fn spawn_recording(
+    h: &AgentHandle,
+    log: &std::path::Path,
+    ends: Arc<parking_lot::Mutex<Vec<TurnEnd>>>,
+) -> Arc<ClaudeProcess> {
     let (opts, gen) = {
         let mut rt = h.lock();
         rt.gen += 1;
@@ -59,17 +68,21 @@ fn spawn(h: &AgentHandle, log: &std::path::Path) -> Arc<ClaudeProcess> {
         (opts, rt.gen)
     };
     let (h1, h2) = (h.clone(), h.clone());
+    let (ends1, ends2) = (ends.clone(), ends);
     let proc = ClaudeProcess::spawn(
         opts,
         move |frame| {
             let mut rt = h1.lock();
             if rt.gen == gen {
-                rt.handle_frame(&frame, &mut Effects::default());
+                let mut fx = Effects::default();
+                rt.handle_frame(&frame, &mut fx);
+                ends1.lock().extend(fx.turn_end);
             }
         },
         move |code, stderr| {
-            h2.lock()
-                .on_exit(gen, code, &stderr, &mut Effects::default())
+            let mut fx = Effects::default();
+            h2.lock().on_exit(gen, code, &stderr, &mut fx);
+            ends2.lock().extend(fx.turn_end);
         },
     )
     .expect("node must be installed to run the process tests");
@@ -352,6 +365,36 @@ async fn a_new_process_starts_without_the_activity_or_text_of_a_turn_that_never_
     );
     assert_eq!(fx.turn_end, Some(TurnEnd::Finished("Résumé".into())));
     proc.close_input();
+}
+
+#[tokio::test]
+async fn a_session_claude_code_does_not_know_still_ends_the_turn_sent_to_it() {
+    let dir = temp_dir("lost-session");
+    let h = new_agent(&dir);
+    {
+        // The agent resumes a session that is gone, and a message is waiting for it.
+        let mut rt = h.lock();
+        rt.meta.session_id = Some("missing-1".into());
+        rt.push_user("u1", "Bonjour", 0, &[], &mut Effects::default());
+    }
+    let ends = Arc::<parking_lot::Mutex<Vec<TurnEnd>>>::default();
+    spawn_recording(&h, &dir.join("log.jsonl"), ends.clone());
+    for _ in 0..500 {
+        if !ends.lock().is_empty() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert_eq!(
+        *ends.lock(),
+        vec![TurnEnd::Error(
+            "Session Claude introuvable : une nouvelle session sera démarrée au prochain message."
+                .into()
+        )]
+    );
+    let rt = h.lock();
+    assert_eq!(rt.meta.status, AgentStatus::Done);
+    assert_eq!(rt.meta.session_id, None);
 }
 
 #[tokio::test]

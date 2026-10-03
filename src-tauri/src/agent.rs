@@ -220,12 +220,23 @@ impl AgentRt {
         self.turn_text.clear();
     }
 
-    /// What the agent does now, shown live; unchanged by a tool it has no words for.
+    /// What the agent does now, shown live; unchanged by a tool it has no words for, and never
+    /// blurred: a bare verb ("Lit", a tool that only began) does not replace what the same verb
+    /// already told ("Lit src/a.ts").
     fn set_activity(&mut self, activity: Option<String>, fx: &mut Effects) {
-        if activity.is_some() && activity != self.activity {
-            self.activity = activity;
-            fx.agent_changed = true;
+        let Some(activity) = activity else {
+            return;
+        };
+        let blurs = !activity.contains(' ')
+            && self
+                .activity
+                .as_deref()
+                .is_some_and(|current| current.starts_with(&format!("{activity} ")));
+        if blurs || self.activity.as_ref() == Some(&activity) {
+            return;
         }
+        self.activity = Some(activity);
+        fx.agent_changed = true;
     }
 
     pub fn set_status(&mut self, status: AgentStatus, fx: &mut Effects) {
@@ -418,12 +429,18 @@ impl AgentRt {
         self.forget_turn();
         self.clear_pending(fx);
         self.close_open_items(fx);
+        let was_running = self.meta.status.is_active();
         if !self.saw_init && stderr.contains("No conversation found") {
+            let lost = "Session Claude introuvable : une nouvelle session sera démarrée au prochain message.";
             self.meta.session_id = None;
-            self.notice("warn", "Session Claude introuvable : une nouvelle session sera démarrée au prochain message.", fx);
+            self.notice("warn", lost, fx);
             self.set_status(AgentStatus::Done, fx);
-        } else if self.meta.status.is_active() || !self.saw_init {
-            let was_running = self.meta.status.is_active();
+            // The message it was to carry never ran: that turn ends here, though not as a failure
+            // of the agent.
+            if was_running {
+                fx.turn_end = Some(TurnEnd::Error(lost.into()));
+            }
+        } else if was_running || !self.saw_init {
             let detail = if stderr.trim().is_empty() {
                 String::new()
             } else {
@@ -991,7 +1008,19 @@ impl AgentRt {
         } else if limited && is_error {
             TurnEnd::Limited
         } else if is_error {
-            TurnEnd::Error(error.clone().unwrap_or_default())
+            // Always with words: the frame's, else the kind of result it is, else a generic one.
+            TurnEnd::Error(
+                error
+                    .clone()
+                    .filter(|e| !e.trim().is_empty())
+                    .or_else(|| {
+                        f["subtype"]
+                            .as_str()
+                            .filter(|s| !s.is_empty() && *s != "success")
+                            .map(str::to_string)
+                    })
+                    .unwrap_or_else(|| "Claude Code a signalé une erreur".to_string()),
+            )
         } else {
             let text = std::mem::take(&mut self.turn_text);
             TurnEnd::Finished(if text.trim().is_empty() {
@@ -1240,23 +1269,23 @@ pub fn tool_activity(name: &str, input: &Value, cwd: &str) -> Option<String> {
             format!("{verb} {what}")
         }
     };
+    // The first line that says something, cut short.
+    let gist = |text: &Value| {
+        let first = text
+            .as_str()
+            .unwrap_or_default()
+            .lines()
+            .map(str::trim)
+            .find(|l| !l.is_empty())
+            .unwrap_or_default();
+        truncate(first, 60)
+    };
     Some(match name {
         "Read" => with("Lit", file()),
-        "Grep" | "Glob" => with(
-            "Cherche",
-            input["pattern"].as_str().unwrap_or_default().to_string(),
-        ),
+        "Grep" | "Glob" => with("Cherche", gist(&input["pattern"])),
         "Edit" | "MultiEdit" | "NotebookEdit" => with("Modifie", file()),
         "Write" => with("Écrit", file()),
-        "Bash" => {
-            let first = input["command"]
-                .as_str()
-                .unwrap_or_default()
-                .lines()
-                .next()
-                .unwrap_or_default();
-            with("Lance", truncate(first.trim(), 60))
-        }
+        "Bash" => with("Lance", gist(&input["command"])),
         "Task" | "Agent" => "Délègue".to_string(),
         _ => return None,
     })
@@ -1960,5 +1989,161 @@ mod tests {
         let mut fx = Effects::default();
         a.on_exit(a.gen, Some(0), "", &mut fx);
         assert_eq!(fx.turn_end, None);
+    }
+
+    #[test]
+    fn a_session_that_cannot_be_resumed_still_ends_the_turn_it_was_to_carry() {
+        let lost =
+            "Session Claude introuvable : une nouvelle session sera démarrée au prochain message.";
+        let mut a = rt();
+        a.meta.session_id = Some("missing-1".into());
+        a.push_user("u1", "Bonjour", 0, &[], &mut Effects::default());
+        let mut fx = Effects::default();
+        a.on_exit(
+            a.gen,
+            Some(1),
+            "No conversation found with session ID: missing-1",
+            &mut fx,
+        );
+        assert_eq!(a.meta.status, AgentStatus::Done);
+        assert_eq!(a.meta.session_id, None);
+        assert_eq!(fx.notify, None);
+        assert_eq!(fx.turn_end, Some(TurnEnd::Error(lost.into())));
+        // Idle, it had no turn to end.
+        let mut fx = Effects::default();
+        a.on_exit(
+            a.gen,
+            Some(1),
+            "No conversation found with session ID: missing-1",
+            &mut fx,
+        );
+        assert_eq!(a.meta.status, AgentStatus::Done);
+        assert_eq!(fx.turn_end, None);
+    }
+
+    #[test]
+    fn a_failed_turn_always_says_what_went_wrong() {
+        let mut a = rt();
+        let mut end = |frame: Value| {
+            let mut fx = Effects::default();
+            a.handle_frame(&frame, &mut fx);
+            fx.turn_end
+        };
+        let said = |text: &str| Some(TurnEnd::Error(text.into()));
+        // The frame's own words first.
+        assert_eq!(
+            end(
+                json!({"type":"result","subtype":"error_during_execution","is_error":true,"result":"Boom"})
+            ),
+            said("Boom")
+        );
+        assert_eq!(
+            end(
+                json!({"type":"result","subtype":"error_max_turns","is_error":true,"errors":["a","b"]})
+            ),
+            said("a\nb")
+        );
+        // Without any, the kind of result it is.
+        assert_eq!(
+            end(json!({"type":"result","subtype":"error_during_execution","is_error":true})),
+            said("error_during_execution")
+        );
+        assert_eq!(
+            end(
+                json!({"type":"result","subtype":"error_max_turns","is_error":true,"result":"  ","errors":[]})
+            ),
+            said("error_max_turns")
+        );
+        // A "success" that is an error says nothing by its kind: the generic words.
+        assert_eq!(
+            end(json!({"type":"result","subtype":"success","is_error":true})),
+            said("Claude Code a signalé une erreur")
+        );
+        assert_eq!(
+            end(json!({"type":"result","is_error":true})),
+            said("Claude Code a signalé une erreur")
+        );
+    }
+
+    #[test]
+    fn an_activity_gist_is_its_first_real_line_cut_short() {
+        let cwd = "C:/p";
+        let act = |name: &str, input: Value| tool_activity(name, &input, cwd);
+        // A leading blank line does not leave a bare verb.
+        assert_eq!(
+            act("Bash", json!({"command":"\n\n  npm test\nnpm run lint"})).as_deref(),
+            Some("Lance npm test")
+        );
+        assert_eq!(
+            act("Bash", json!({"command":" \n "})).as_deref(),
+            Some("Lance")
+        );
+        assert_eq!(
+            act("Grep", json!({"pattern":"\nTODO\nFIXME"})).as_deref(),
+            Some("Cherche TODO")
+        );
+        // Long ones are cut at 60 bytes, on a character boundary.
+        let long = "é".repeat(100);
+        let cut = format!("{}…", "é".repeat(30));
+        assert_eq!(
+            act("Grep", json!({"pattern":long})).as_deref(),
+            Some(format!("Cherche {cut}").as_str())
+        );
+        assert_eq!(
+            act("Glob", json!({"pattern":long})).as_deref(),
+            Some(format!("Cherche {cut}").as_str())
+        );
+        assert_eq!(
+            act("Bash", json!({"command":long})).as_deref(),
+            Some(format!("Lance {cut}").as_str())
+        );
+    }
+
+    #[test]
+    fn a_tool_starting_to_stream_does_not_blur_the_activity_of_the_same_tool() {
+        let mut a = rt();
+        let mut fx = Effects::default();
+        let frame = |a: &mut AgentRt, f: Value| a.handle_frame(&f, &mut Effects::default());
+        frame(
+            &mut a,
+            json!({"type":"stream_event","event":{"type":"message_start","message":{"id":"m1","usage":{}}},"parent_tool_use_id":null}),
+        );
+        frame(
+            &mut a,
+            json!({"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"t1","name":"Read"}},"parent_tool_use_id":null}),
+        );
+        // Nothing more precise is known yet.
+        assert_eq!(a.view().activity.as_deref(), Some("Lit"));
+        frame(
+            &mut a,
+            json!({"type":"assistant","message":{"id":"m1","content":[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"C:/p/src/a.ts"}}]},"parent_tool_use_id":null}),
+        );
+        assert_eq!(a.view().activity.as_deref(), Some("Lit src/a.ts"));
+        // Another Read starts: the bare verb does not replace the precise one...
+        frame(
+            &mut a,
+            json!({"type":"stream_event","event":{"type":"message_start","message":{"id":"m2","usage":{}}},"parent_tool_use_id":null}),
+        );
+        frame(
+            &mut a,
+            json!({"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"t2","name":"Read"}},"parent_tool_use_id":null}),
+        );
+        assert_eq!(a.view().activity.as_deref(), Some("Lit src/a.ts"));
+        // ...but another verb does, and so does the next precise one.
+        frame(
+            &mut a,
+            json!({"type":"stream_event","event":{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"t3","name":"Grep"}},"parent_tool_use_id":null}),
+        );
+        assert_eq!(a.view().activity.as_deref(), Some("Cherche"));
+        frame(
+            &mut a,
+            json!({"type":"assistant","message":{"id":"m2","content":[{"type":"tool_use","id":"t3","name":"Grep","input":{"pattern":"TODO"}}]},"parent_tool_use_id":null}),
+        );
+        assert_eq!(a.view().activity.as_deref(), Some("Cherche TODO"));
+        a.handle_frame(
+            &json!({"type":"result","subtype":"success","is_error":false}),
+            &mut fx,
+        );
+        assert_eq!(a.view().activity, None);
     }
 }
