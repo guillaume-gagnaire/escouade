@@ -153,6 +153,8 @@ pub struct Core<R: Runtime = Wry> {
     pub hub: Hub,
     pub settings: RwLock<Settings>,
     pub projects: RwLock<Vec<Project>>,
+    /// Every project's tickets.
+    pub tickets: RwLock<Vec<Ticket>>,
     pub ui: RwLock<UiState>,
     pub agents: RwLock<HashMap<String, AgentHandle>>,
     pub stats: Stats,
@@ -330,6 +332,7 @@ impl<R: Runtime> Core<R> {
             hub: Hub::default(),
             settings: RwLock::new(settings),
             projects: RwLock::new(state.projects),
+            tickets: RwLock::new(state.tickets),
             ui: RwLock::new(state.ui),
             agents: RwLock::new(agents),
             usage: Mutex::new(UsageSnapshot::default()),
@@ -440,11 +443,13 @@ impl<R: Runtime> Core<R> {
         let projects = self.projects.read().clone();
         let ui = self.ui.read().clone();
         let models = self.models.read().clone();
+        let tickets = self.tickets.read().clone();
         PersistedState {
             projects,
             agents,
             ui,
             models,
+            tickets,
         }
     }
 
@@ -1690,6 +1695,8 @@ impl<R: Runtime> Core<R> {
             worktree_per_agent,
             created_at: now_ms(),
             run_commands: Vec::new(),
+            board: BoardSettings::default(),
+            worktree_copy: default_worktree_copy(),
         };
         self.projects.write().push(project.clone());
         {
@@ -1715,6 +1722,7 @@ impl<R: Runtime> Core<R> {
         cur.color = p.color;
         cur.worktree_per_agent = p.worktree_per_agent;
         cur.run_commands = p.run_commands;
+        cur.worktree_copy = p.worktree_copy;
         drop(projects);
         self.request_save();
         Ok(())

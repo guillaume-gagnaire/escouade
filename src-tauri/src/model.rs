@@ -3,7 +3,7 @@
 use crate::resources::Resources;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -85,6 +85,12 @@ pub struct Project {
     /// Commands that launch the project (dev servers, watchers…), each in its own read-only terminal.
     #[serde(default)]
     pub run_commands: Vec<RunCommand>,
+    /// The board: what validating a ticket does, its agents, its tickets' key.
+    #[serde(default)]
+    pub board: BoardSettings,
+    /// Untracked files of the project copied into every new worktree (glob patterns).
+    #[serde(default = "default_worktree_copy")]
+    pub worktree_copy: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -97,6 +103,184 @@ pub struct RunCommand {
     pub shell: String,
     /// Folder relative to the project's, empty for the project itself.
     pub cwd: String,
+}
+
+/// What a new worktree gets from the project when nothing was set: its `.env` files.
+pub fn default_worktree_copy() -> Vec<String> {
+    vec![".env*".into()]
+}
+
+/// Where a ticket stands on the board.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Column {
+    /// « À faire »
+    #[default]
+    Todo,
+    /// « En cours »
+    Doing,
+    /// « À tester »
+    Review,
+    /// « Terminé »
+    Done,
+}
+
+/// An acceptance criterion, with what the agent last said of it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Criterion {
+    pub text: String,
+    pub ok: bool,
+    pub note: String,
+}
+
+/// A ticket of a project's board.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Ticket {
+    pub id: String,
+    pub project_id: String,
+    /// `<PRÉFIXE>-<n>`, e.g. ATL-42.
+    pub key: String,
+    pub title: String,
+    pub description: String,
+    pub criteria: Vec<Criterion>,
+    /// 3, 5 or 8.
+    pub max_loops: u32,
+    pub column: Column,
+    /// Order in "À faire": the lowest first.
+    pub rank: i64,
+    pub agent_id: Option<String>,
+    /// n of "Boucle n/max" (0 before the start).
+    pub iteration: u32,
+    /// Sent to "À tester" without all its criteria (loop limit).
+    pub partial: bool,
+    /// Why it no longer moves on by itself.
+    pub blocked: Option<String>,
+    /// The block is a merge conflict: the card offers "L'agent résout" and "Annuler".
+    pub conflict: bool,
+    /// The validation step running ("Tests…", "Commit…", "Merge…", "Push…").
+    pub step: Option<String>,
+    /// What its validation did ("⤵ Mergé dans main · squash"…), and its link.
+    pub outcome: Option<String>,
+    pub outcome_url: Option<String>,
+    /// "Lancer" was clicked while the autopilot is off.
+    pub forced: bool,
+    /// Its agent was reminded once to end with its report.
+    pub reminded: bool,
+    /// What its agent cost, once done.
+    pub cost: f64,
+    pub created_at: i64,
+    pub started_at: Option<i64>,
+    pub review_at: Option<i64>,
+    pub done_at: Option<i64>,
+}
+
+/// A project's board: what validating a ticket does, and its agents.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct BoardSettings {
+    /// "merge", "pr", "push" or "keep".
+    pub action: String,
+    /// Where tickets merge, the base of their PR and of their branch. Empty until the first
+    /// ticket, which sets the project's current branch.
+    pub target: String,
+    /// "merge" (merge commit), "squash" or "rebase".
+    pub strategy: String,
+    pub draft: bool,
+    pub tests_first: bool,
+    pub test_command: String,
+    pub cleanup: bool,
+    /// Commit messages written by Haiku in the Conventional Commits form.
+    pub conventional: bool,
+    /// "ask", "agent" or "abort".
+    pub conflict: String,
+    /// Tickets "En cours" at once, 1 to 6.
+    pub max_parallel: u32,
+    /// The ticket agents' model, effort and mode; empty: the app's defaults.
+    pub model: String,
+    pub effort: String,
+    pub mode: String,
+    pub autopilot: bool,
+    /// The tickets' key prefix, fixed by the first ticket.
+    pub prefix: String,
+    /// The next ticket's number (never reused).
+    pub next_number: u32,
+}
+
+impl Default for BoardSettings {
+    fn default() -> Self {
+        Self {
+            action: "merge".into(),
+            target: String::new(),
+            strategy: "squash".into(),
+            draft: false,
+            tests_first: false,
+            test_command: String::new(),
+            cleanup: true,
+            conventional: true,
+            conflict: "ask".into(),
+            max_parallel: 2,
+            model: String::new(),
+            effort: String::new(),
+            mode: String::new(),
+            autopilot: true,
+            prefix: String::new(),
+            next_number: 1,
+        }
+    }
+}
+
+/// A step of a test launch's preparation (`npm install`…), in a folder of the worktree.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct RecipeStep {
+    #[serde(alias = "commande")]
+    pub command: String,
+    #[serde(alias = "dossier")]
+    pub dir: String,
+}
+
+/// A process of a test launch (a dev server…) and the address that answers once it is ready.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct RecipeProcess {
+    #[serde(alias = "nom")]
+    pub name: String,
+    #[serde(alias = "commande")]
+    pub command: String,
+    #[serde(alias = "dossier")]
+    pub dir: String,
+    #[serde(deserialize_with = "env_strings")]
+    pub env: BTreeMap<String, String>,
+    pub url: String,
+}
+
+/// How to launch a worktree for a test, as its agent wrote it (key `lancement` of its report).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TestRecipe {
+    #[serde(alias = "preparation")]
+    pub prepare: Vec<RecipeStep>,
+    #[serde(alias = "processus")]
+    pub processes: Vec<RecipeProcess>,
+    /// The address that shows the feature itself; else the first process's url.
+    #[serde(alias = "ouvrir")]
+    pub open: String,
+}
+
+/// Environment values as strings, whatever the agent wrote (`"PORT": 4110`).
+fn env_strings<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> Result<BTreeMap<String, String>, D::Error> {
+    let raw: BTreeMap<String, Value> = BTreeMap::deserialize(d)?;
+    Ok(raw
+        .into_iter()
+        .map(|(k, v)| match v {
+            Value::String(s) => (k, s),
+            other => (k, other.to_string()),
+        })
+        .collect())
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -156,6 +340,14 @@ pub struct AgentMeta {
     pub remote_url: Option<String>,
     /// Stopped by the usage limit: when the agent is sent "continue" by itself (quota reset).
     pub resume_at: Option<i64>,
+    /// The board's ticket this agent works on.
+    pub ticket_id: Option<String>,
+    /// Appended to Claude Code's system prompt at every start (the ticket's protocol), on one line.
+    pub append_prompt: Option<String>,
+    /// First of the 10 ports reserved for its test launches.
+    pub port_base: Option<u16>,
+    /// How to launch its worktree for a test, as it last wrote it.
+    pub recipe: Option<TestRecipe>,
 }
 
 /// Agent as shown by the UI: persisted metadata plus live runtime fields.
@@ -219,6 +411,8 @@ pub struct PersistedState {
     pub ui: UiState,
     /// Claude Code's models as it last reported them, to label the aliases from the start.
     pub models: Vec<ModelInfo>,
+    /// Every project's tickets.
+    pub tickets: Vec<Ticket>,
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
@@ -463,6 +657,67 @@ mod tests {
         assert_eq!(serde_json::to_value(&ui).unwrap()["layout"], "split");
         let old: UiState = serde_json::from_value(json!({ "view": "project" })).unwrap();
         assert_eq!(serde_json::to_value(&old).unwrap()["layout"], "");
+    }
+
+    #[test]
+    fn projects_agents_and_states_saved_before_the_board_still_load() {
+        let p: Project = serde_json::from_value(
+            json!({ "id": "p1", "name": "demo", "path": "C:/demo", "color": "red" }),
+        )
+        .unwrap();
+        assert_eq!(p.worktree_copy, vec![".env*".to_string()]);
+        assert_eq!(p.board, BoardSettings::default());
+        assert_eq!(
+            (
+                p.board.action.as_str(),
+                p.board.strategy.as_str(),
+                p.board.conflict.as_str()
+            ),
+            ("merge", "squash", "ask")
+        );
+        assert_eq!((p.board.max_parallel, p.board.next_number), (2, 1));
+        assert!(p.board.autopilot && p.board.cleanup && p.board.conventional);
+        assert!(!p.board.tests_first && !p.board.draft);
+        let a: AgentMeta = serde_json::from_value(json!({ "id": "a1", "name": "x" })).unwrap();
+        assert_eq!((a.ticket_id, a.port_base, a.recipe), (None, None, None));
+        let s: PersistedState = serde_json::from_value(json!({ "projects": [] })).unwrap();
+        assert!(s.tickets.is_empty());
+    }
+
+    #[test]
+    fn a_ticket_and_a_recipe_travel_in_camel_case() {
+        let t = Ticket {
+            id: "t1".into(),
+            key: "ATL-42".into(),
+            max_loops: 5,
+            column: Column::Review,
+            agent_id: Some("a1".into()),
+            ..Default::default()
+        };
+        let v = serde_json::to_value(&t).unwrap();
+        assert_eq!(
+            (
+                v["maxLoops"].clone(),
+                v["column"].clone(),
+                v["agentId"].clone()
+            ),
+            (json!(5), json!("review"), json!("a1"))
+        );
+        // As the agent writes it, in French (a port may come as a number)…
+        let r: TestRecipe = serde_json::from_value(json!({
+            "preparation": [{ "commande": "npm install", "dossier": "web" }],
+            "processus": [{ "nom": "api", "commande": "npm run dev", "env": { "PORT": 4110 },
+                            "url": "http://localhost:4110" }],
+            "ouvrir": "http://localhost:4111/connexion"
+        }))
+        .unwrap();
+        assert_eq!(r.prepare[0].dir, "web");
+        assert_eq!(r.processes[0].env["PORT"], "4110");
+        assert_eq!(r.open, "http://localhost:4111/connexion");
+        // …sent to the window in English.
+        let sent = serde_json::to_value(&r).unwrap();
+        assert_eq!(sent["processes"][0]["name"], "api");
+        assert_eq!(sent["prepare"][0]["command"], "npm install");
     }
 }
 

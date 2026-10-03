@@ -23,6 +23,7 @@ fn err(e: anyhow::Error) -> String {
 #[serde(rename_all = "camelCase")]
 pub struct InitialState {
     projects: Vec<Project>,
+    tickets: Vec<Ticket>,
     agents: Vec<AgentView>,
     ui: UiState,
     settings: Settings,
@@ -42,6 +43,7 @@ pub fn subscribe(core: CoreState, channel: Channel<UiEvent>) -> InitialState {
     let settings = core.settings.read().clone();
     InitialState {
         projects: core.projects.read().clone(),
+        tickets: core.tickets.read().clone(),
         agents: core.agent_views(),
         ui: core.ui.read().clone(),
         shells: pty::detect_shells(&settings),

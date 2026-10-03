@@ -977,6 +977,33 @@ async fn state_is_saved_and_reloaded_with_the_session() {
 }
 
 #[tokio::test]
+async fn tickets_are_saved_with_the_app_and_projects_keep_their_board() {
+    let h = harness("tk-persist");
+    let (p, _) = h.project(false).await;
+    h.core.tickets.write().push(Ticket {
+        id: "t1".into(),
+        project_id: p.id.clone(),
+        key: "DEM-1".into(),
+        title: "Un ticket".into(),
+        ..Default::default()
+    });
+    let copy = vec![".env*".to_string(), "**/.env.local".to_string()];
+    h.core
+        .update_project(Project {
+            worktree_copy: copy.clone(),
+            ..p.clone()
+        })
+        .unwrap();
+    h.core.save_now();
+    let app = mock_app();
+    let (reloaded, _rx) = Core::load(app.handle().clone(), h.core.data.clone());
+    assert_eq!(reloaded.tickets.read()[0].key, "DEM-1");
+    let project = reloaded.project(&p.id).unwrap();
+    assert_eq!(project.worktree_copy, copy);
+    assert_eq!(project.board.max_parallel, 2);
+}
+
+#[tokio::test]
 async fn the_models_claude_code_runs_reach_the_ui_and_are_kept_for_the_next_launch() {
     let h = harness("models-catalog");
     let (p, _) = h.project(false).await;
