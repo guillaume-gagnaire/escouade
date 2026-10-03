@@ -735,9 +735,12 @@ pub async fn touched_by(
         // Every commit that touched them: by default, a merge that ends up as one of its parents
         // hides the other side's commits.
         "--full-history",
-        // A merge commit's own files, against each of its parents: by default a merge shows none,
-        // and one that brought a file (`git add -A` while resolving) would go unseen.
-        "--diff-merges=separate",
+        // A merge commit's own files, those it differs from all of its parents on: by default a
+        // merge shows none, and one that brought a file (`git add -A` while resolving) would go
+        // unseen. Against each parent instead, merging `base` would count every file `base`
+        // changed as the branch's; what a merged side brought through its own commits is listed
+        // with those commits.
+        "--diff-merges=combined",
         &range,
         "--",
     ];
@@ -1612,6 +1615,30 @@ mod repo_tests {
             .unwrap()
             .is_empty());
         assert!(touched_by(&r, "main", "nowhere", &asked).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn a_merge_of_the_base_does_not_count_the_bases_own_files_as_the_branchs() {
+        let r = diverged("git-touched-merge-base", false);
+        let local = vec![".env.local".to_string()];
+        // The target tracks .env.local, a file also copied into the worktrees...
+        std::fs::write(Path::new(&r).join(".env.local"), "A=1\n").unwrap();
+        git(&r, &["add", ".env.local"]);
+        git(&r, &["commit", "-qm", "main tracks .env.local"]);
+        // ...and the branch merges the target: the merge brings it from the target, not the branch.
+        git(&r, &["checkout", "-q", "feat"]);
+        git(&r, &["merge", "-q", "--no-edit", "main"]);
+        git(&r, &["checkout", "-q", "main"]);
+        assert!(touched_by(&r, "main", "feat", &local)
+            .await
+            .unwrap()
+            .is_empty());
+        // Changed by the branch after that: its own.
+        git(&r, &["checkout", "-q", "feat"]);
+        std::fs::write(Path::new(&r).join(".env.local"), "A=2\n").unwrap();
+        git(&r, &["commit", "-qam", "feat changes .env.local"]);
+        git(&r, &["checkout", "-q", "main"]);
+        assert_eq!(touched_by(&r, "main", "feat", &local).await.unwrap(), local);
     }
 
     #[tokio::test]
