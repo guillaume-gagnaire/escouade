@@ -176,6 +176,8 @@ async fn the_board_settings_stay_within_bounds_and_keep_the_tickets_key() {
             &p.id,
             BoardSettings {
                 action: "pr".into(),
+                strategy: "rebase".into(),
+                conflict: "agent".into(),
                 max_parallel: 9,
                 autopilot: false,
                 ..Default::default()
@@ -186,10 +188,55 @@ async fn the_board_settings_stay_within_bounds_and_keep_the_tickets_key() {
         (saved.board.action.as_str(), saved.board.max_parallel),
         ("pr", 6)
     );
+    // Valid choices are kept as they are.
+    assert_eq!(
+        (saved.board.strategy.as_str(), saved.board.conflict.as_str()),
+        ("rebase", "agent")
+    );
     assert_eq!(
         (saved.board.prefix.as_str(), saved.board.next_number),
         ("DEM", 2)
     );
+    // That copy had no target either: the one the first ticket fixed stays.
+    assert_eq!(saved.board.target, "main");
+    // Anything else than the known choices falls back to the defaults.
+    let saved = h
+        .core
+        .board_set(
+            &p.id,
+            BoardSettings {
+                action: "x".into(),
+                strategy: "y".into(),
+                conflict: "z".into(),
+                target: "  ".into(),
+                autopilot: false,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        (
+            saved.board.target.as_str(),
+            saved.board.action.as_str(),
+            saved.board.strategy.as_str(),
+            saved.board.conflict.as_str()
+        ),
+        ("main", "merge", "squash", "ask")
+    );
+    assert_eq!(h.core.project(&p.id).unwrap().board, saved.board);
+    // A target the window picked is kept, trimmed.
+    let saved = h
+        .core
+        .board_set(
+            &p.id,
+            BoardSettings {
+                target: " develop ".into(),
+                autopilot: false,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(saved.board.target, "develop");
     git(&r, &["branch", "aaa"]);
     assert_eq!(h.core.git_branches(&p.id).await.unwrap(), ["main", "aaa"]);
 }
@@ -211,4 +258,88 @@ async fn closing_a_project_drops_its_tickets() {
         .lock()
         .iter()
         .any(|e| e["type"] == "ticketRemoved" && e["id"] == t.id.as_str()));
+}
+
+#[tokio::test]
+async fn deleting_a_ticket_in_progress_archives_its_agent_and_keeps_its_worktree() {
+    let h = harness("tk-delete-doing");
+    let (p, _) = h.project(true).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let worktree = a.meta.worktree.clone().expect("worktree created").path;
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Un", &[], 5))
+        .await
+        .unwrap();
+    h.core
+        .edit_ticket(&t.id, |t| {
+            t.column = Column::Doing;
+            t.agent_id = Some(a.meta.id.clone());
+            Ok(())
+        })
+        .unwrap();
+    assert!(!h.agent(&a.meta.id).archived);
+    h.core.ticket_delete(&t.id).await.unwrap();
+    assert!(h.core.ticket(&t.id).is_err());
+    assert!(h.agent(&a.meta.id).archived);
+    assert!(std::path::Path::new(&worktree).is_dir());
+    assert!(h
+        .events
+        .lock()
+        .iter()
+        .any(|e| e["type"] == "ticketRemoved" && e["id"] == t.id.as_str()));
+    // A ticket whose agent is already gone is deleted all the same.
+    let u = h
+        .core
+        .ticket_create(&p.id, draft("Deux", &[], 5))
+        .await
+        .unwrap();
+    h.core
+        .edit_ticket(&u.id, |t| {
+            t.column = Column::Review;
+            t.agent_id = Some("disparu".into());
+            Ok(())
+        })
+        .unwrap();
+    h.core.ticket_delete(&u.id).await.unwrap();
+    assert!(h.core.ticket(&u.id).is_err());
+    assert!(h.core.ticket_delete(&u.id).await.is_err());
+}
+
+#[tokio::test]
+async fn only_a_ticket_to_do_is_started_or_moved_to_the_top() {
+    let h = harness("tk-start");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let a = h
+        .core
+        .ticket_create(&p.id, draft("Un", &[], 5))
+        .await
+        .unwrap();
+    let b = h
+        .core
+        .ticket_create(&p.id, draft("Deux", &[], 5))
+        .await
+        .unwrap();
+    assert!(!a.forced);
+    h.core.ticket_start(&a.id).unwrap();
+    assert!(h.ticket(&a.id).forced);
+    assert!(h.events.lock().iter().any(|e| e["type"] == "ticket"
+        && e["ticket"]["id"] == a.id.as_str()
+        && e["ticket"]["forced"] == true));
+    // A ticket that left "À faire" is neither started again nor moved to the top.
+    let rank = h.ticket(&b.id).rank;
+    h.core
+        .edit_ticket(&b.id, |t| {
+            t.column = Column::Doing;
+            Ok(())
+        })
+        .unwrap();
+    assert!(h.core.ticket_start(&b.id).is_err());
+    assert!(!h.ticket(&b.id).forced);
+    assert!(h.core.ticket_prioritize(&b.id).is_err());
+    assert_eq!(h.ticket(&b.id).rank, rank);
+    assert!(h.core.ticket_start("inconnu").is_err());
+    assert!(h.core.ticket_prioritize("inconnu").is_err());
 }

@@ -1757,10 +1757,12 @@ impl<R: Runtime> Core<R> {
                 project_id: id.to_string(),
             });
         }
-        self.drop_project_tickets(id);
         self.pty.kill_project(id);
         self.git.unwatch(id);
         self.projects.write().retain(|p| p.id != id);
+        // After the project is out: `ticket_create` checks the project under the tickets' lock, so
+        // a ticket it adds before this is dropped here, and none is added after.
+        self.drop_project_tickets(id);
         // Read before taking the ui lock: never hold ui while waiting on projects.
         let fallback = self.projects.read().first().map(|p| p.id.clone());
         {

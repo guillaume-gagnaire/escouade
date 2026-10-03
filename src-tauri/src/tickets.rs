@@ -89,16 +89,7 @@ impl<R: Runtime> Core<R> {
             p.board.next_number = n + 1;
             format!("{}-{n}", p.board.prefix)
         };
-        let rank = self
-            .tickets
-            .read()
-            .iter()
-            .filter(|t| t.project_id == project_id)
-            .map(|t| t.rank)
-            .max()
-            .unwrap_or(0)
-            + 1;
-        let ticket = Ticket {
+        let mut ticket = Ticket {
             id: new_id(),
             project_id: project_id.to_string(),
             key,
@@ -106,11 +97,25 @@ impl<R: Runtime> Core<R> {
             description: d.description.trim().to_string(),
             criteria: board::criteria_from(&d.criteria),
             max_loops: board::max_loops(d.max_loops),
-            rank,
             created_at: now_ms(),
             ..Default::default()
         };
-        self.tickets.write().push(ticket.clone());
+        {
+            // The rank and the push under one lock; the project is checked again under it, since
+            // `remove_project` takes its tickets after taking the project out.
+            let mut tickets = self.tickets.write();
+            if !self.projects.read().iter().any(|p| p.id == project_id) {
+                bail!("projet introuvable");
+            }
+            ticket.rank = tickets
+                .iter()
+                .filter(|t| t.project_id == project_id)
+                .map(|t| t.rank)
+                .max()
+                .unwrap_or(0)
+                + 1;
+            tickets.push(ticket.clone());
+        }
         self.emit_project(project_id);
         self.hub.emit(UiEvent::Ticket {
             ticket: ticket.clone(),
@@ -137,7 +142,7 @@ impl<R: Runtime> Core<R> {
         })
     }
 
-    /// "Passer en tête".
+    /// "Passer en tête": only a ticket "À faire" has a rank to change.
     pub fn ticket_prioritize(self: &Arc<Self>, id: &str) -> Result<()> {
         let t = self.ticket(id)?;
         let first = self
@@ -149,6 +154,9 @@ impl<R: Runtime> Core<R> {
             .min()
             .unwrap_or(0);
         self.edit_ticket(id, |t| {
+            if t.column != Column::Todo {
+                bail!("Seul un ticket « À faire » passe en tête.");
+            }
             t.rank = first - 1;
             Ok(())
         })
@@ -165,10 +173,17 @@ impl<R: Runtime> Core<R> {
         })
     }
 
-    /// The ticket goes; one "En cours" or "À tester" has its agent archived (worktree kept).
+    /// The ticket goes; one "En cours" or "À tester" has its agent archived (worktree kept). The
+    /// card is gone for good: an agent that cannot be archived is logged, not reported.
     pub async fn ticket_delete(self: &Arc<Self>, id: &str) -> Result<()> {
-        let t = self.ticket(id)?;
-        self.tickets.write().retain(|x| x.id != id);
+        let t = {
+            let mut tickets = self.tickets.write();
+            let i = tickets
+                .iter()
+                .position(|x| x.id == id)
+                .ok_or_else(|| anyhow!("ticket introuvable"))?;
+            tickets.remove(i)
+        };
         self.hub.emit(UiEvent::TicketRemoved {
             id: id.to_string(),
             project_id: t.project_id.clone(),
@@ -176,24 +191,45 @@ impl<R: Runtime> Core<R> {
         self.request_save();
         if matches!(t.column, Column::Doing | Column::Review) {
             if let Some(a) = t.agent_id.as_deref().filter(|a| self.agent(a).is_ok()) {
-                self.archive_agent(a, true).await?;
+                if let Err(e) = self.archive_agent(a, true).await {
+                    log::warn!("{}: its agent could not be archived: {e:#}", t.key);
+                }
             }
         }
         Ok(())
     }
 
     /// The board's settings as the window sends them: the key's prefix and number stay the
-    /// backend's, the agents in parallel stay between 1 and 6.
+    /// backend's, so does the target when the window has none (its copy is older than the first
+    /// ticket), a choice it does not know falls back to the default, and the agents in parallel
+    /// stay between 1 and 6.
     pub fn board_set(self: &Arc<Self>, project_id: &str, s: BoardSettings) -> Result<Project> {
+        let default = BoardSettings::default();
+        let one_of = |v: String, known: &[&str], fallback: String| {
+            if known.contains(&v.as_str()) {
+                v
+            } else {
+                fallback
+            }
+        };
         let project = {
             let mut projects = self.projects.write();
             let p = projects
                 .iter_mut()
                 .find(|p| p.id == project_id)
                 .ok_or_else(|| anyhow!("projet introuvable"))?;
+            let target = s.target.trim();
             p.board = BoardSettings {
                 prefix: p.board.prefix.clone(),
                 next_number: p.board.next_number,
+                target: if target.is_empty() {
+                    p.board.target.clone()
+                } else {
+                    target.to_string()
+                },
+                action: one_of(s.action, &["merge", "pr", "push", "keep"], default.action),
+                strategy: one_of(s.strategy, &["merge", "squash", "rebase"], default.strategy),
+                conflict: one_of(s.conflict, &["ask", "agent", "abort"], default.conflict),
                 max_parallel: s.max_parallel.clamp(1, 6),
                 ..s
             };
