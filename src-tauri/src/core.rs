@@ -19,7 +19,7 @@ use parking_lot::{Mutex, RwLock};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -207,6 +207,8 @@ pub struct Core<R: Runtime = Wry> {
     pub(crate) board_lock: tokio::sync::Mutex<()>,
     /// Agents whose turn the app's previous stop cut (active when saved): their tickets go on.
     pub(crate) cut_turns: Mutex<Vec<String>>,
+    /// The GitHub CLI, when installed (pull requests).
+    pub gh: RwLock<Option<PathBuf>>,
     /// The last pass found no Claude Code (logged once until it is found again).
     pub(crate) claude_missing: AtomicBool,
     /// The projects whose board's target branch the last pass did not find (logged once until it
@@ -219,9 +221,22 @@ pub struct Core<R: Runtime = Wry> {
     /// Notifications sent, as "<title> | <text>" (tests only).
     #[cfg(test)]
     pub alerts: Mutex<Vec<String>>,
+    /// What a look for `gh` on the PATH finds (tests only: never the machine's own).
+    #[cfg(test)]
+    pub gh_on_path: RwLock<Option<PathBuf>>,
     /// Scheduling passes asked for (`schedule`) and not over yet (tests only).
     #[cfg(test)]
     pub(crate) passes_queued: AtomicUsize,
+}
+
+/// The GitHub CLI on the PATH. Tests never see the machine's own: there it is absent, unless a
+/// test puts one in `Core::gh_on_path`.
+pub(crate) fn locate_gh() -> Option<PathBuf> {
+    if cfg!(test) {
+        None
+    } else {
+        crate::which::find("gh")
+    }
 }
 
 fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Option<T> {
@@ -433,12 +448,15 @@ impl<R: Runtime> Core<R> {
             unsaved: AtomicUsize::new(0),
             board_lock: tokio::sync::Mutex::new(()),
             cut_turns: Mutex::new(cut_turns),
+            gh: RwLock::new(locate_gh()),
             claude_missing: AtomicBool::new(false),
             targets_missing: Mutex::default(),
             ports_reserved: Mutex::default(),
             merge_locks: Mutex::default(),
             #[cfg(test)]
             alerts: Mutex::default(),
+            #[cfg(test)]
+            gh_on_path: RwLock::default(),
             #[cfg(test)]
             passes_queued: AtomicUsize::new(0),
         });

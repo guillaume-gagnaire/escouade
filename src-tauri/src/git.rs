@@ -1068,6 +1068,30 @@ pub async fn push(repo: &str) -> Result<String> {
     Ok(format!("Branche {branch} publiée sur {remote}"))
 }
 
+/// Publishes `branch` from `cwd` on the repository's remote (`-u`): origin, else the only one.
+/// Returns the remote's name.
+pub async fn push_branch(cwd: &str, branch: &str) -> Result<String> {
+    let remotes = remotes(cwd).await;
+    let Some(remote) = sync_remote(&remotes, None).map(str::to_string) else {
+        if remotes.is_empty() {
+            bail!(NO_REMOTE);
+        }
+        bail!(
+            "Plusieurs dépôts distants et aucun ne s'appelle origin : pousse {branch} à la main."
+        );
+    };
+    run_net(cwd, &["push", "-u", &remote, branch], false).await?;
+    Ok(remote)
+}
+
+/// The address of `remote` as configured (before any `insteadOf` rewriting).
+pub async fn remote_url(repo: &str, remote: &str) -> Option<String> {
+    text(repo, &["config", "--get", &format!("remote.{remote}.url")])
+        .await
+        .ok()
+        .filter(|s| !s.is_empty())
+}
+
 /// File list of a folder and when it was read.
 type CachedFiles = (Instant, Arc<Vec<String>>);
 

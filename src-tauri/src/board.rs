@@ -609,7 +609,14 @@ fn encode(s: &str, keep_slash: bool) -> String {
     out
 }
 
-/// GitHub's page that opens a pull request of `branch` into `target`, filled in.
+/// What the compare page's address keeps of the title and of the description, in bytes before
+/// encoding (each may triple): the address stays a few KB, which browsers and the system's opener
+/// take (a longer one meets "414 URI Too Long").
+const COMPARE_TITLE_MAX: usize = 200;
+const COMPARE_BODY_MAX: usize = 1500;
+
+/// GitHub's page that opens a pull request of `branch` into `target`, filled in (the title and
+/// the description cut, with a "…", when long).
 pub fn compare_url(
     owner: &str,
     repo: &str,
@@ -622,8 +629,8 @@ pub fn compare_url(
         "https://github.com/{owner}/{repo}/compare/{}...{}?expand=1&title={}&body={}",
         encode(target, true),
         encode(branch, true),
-        encode(title, false),
-        encode(body, false)
+        encode(&truncate(title, COMPARE_TITLE_MAX), false),
+        encode(&truncate(body, COMPARE_BODY_MAX), false)
     )
 }
 
@@ -635,19 +642,30 @@ pub fn pr_number(gh_output: &str) -> Option<(u32, String)> {
     })
 }
 
-/// A PR's description: the ticket's, then its criteria as a checklist.
+/// A PR's description: the ticket's, what its agent says it did (when it said), then its
+/// criteria as a checklist.
 pub fn pr_body(t: &Ticket) -> String {
+    let mut parts = Vec::new();
+    if !t.description.trim().is_empty() {
+        parts.push(t.description.trim().to_string());
+    }
+    let done: Vec<String> = t
+        .progress
+        .iter()
+        .map(|p| p.trim())
+        .filter(|p| !p.is_empty())
+        .map(|p| format!("- {p}"))
+        .collect();
+    if !done.is_empty() {
+        parts.push(format!("Ce qui a été fait :\n{}", done.join("\n")));
+    }
     let list: Vec<String> = t
         .criteria
         .iter()
         .map(|c| format!("- [{}] {}", if c.ok { "x" } else { " " }, c.text))
         .collect();
-    let criteria = format!("Critères :\n{}", list.join("\n"));
-    if t.description.trim().is_empty() {
-        criteria
-    } else {
-        format!("{}\n\n{criteria}", t.description.trim())
-    }
+    parts.push(format!("Critères :\n{}", list.join("\n")));
+    parts.join("\n\n")
 }
 
 // ---------- ports ----------
@@ -1717,6 +1735,44 @@ mod tests {
         );
         t.description.clear();
         assert!(pr_body(&t).starts_with("Critères :"));
+    }
+
+    #[test]
+    fn a_pull_requests_description_tells_what_was_done_before_the_criteria() {
+        let mut t = ticket(2, 5);
+        t.description = "Contexte".into();
+        t.criteria[0].ok = true;
+        t.progress = vec!["Tokens signés".into(), " Middleware réécrit ".into()];
+        assert_eq!(
+            pr_body(&t),
+            "Contexte\n\nCe qui a été fait :\n- Tokens signés\n- Middleware réécrit\n\nCritères :\n- [x] critère 1\n- [ ] critère 2"
+        );
+        t.description.clear();
+        assert!(pr_body(&t).starts_with("Ce qui a été fait :\n- Tokens signés\n"));
+    }
+
+    #[test]
+    fn the_compare_address_stays_short_whatever_the_ticket_says() {
+        let long = "é".repeat(20_000);
+        let url = compare_url("acme", "demo", "main", "ticket/atl-42", &long, &long);
+        assert!(url.len() < 6 * 1024, "{}", url.len());
+        let (head, body) = url.split_once("&body=").unwrap();
+        // Cut on a character, and said so.
+        assert!(
+            body.ends_with("%C3%A9%E2%80%A6"),
+            "{}",
+            &body[body.len() - 30..]
+        );
+        assert!(
+            head.ends_with("%C3%A9%E2%80%A6"),
+            "{}",
+            &head[head.len() - 30..]
+        );
+        assert!(
+            body.len() > 3 * 1024,
+            "the body keeps a fair part: {}",
+            body.len()
+        );
     }
 
     #[test]

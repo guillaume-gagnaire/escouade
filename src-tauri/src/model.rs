@@ -591,6 +591,10 @@ pub enum UiEvent {
     FocusBoard {
         project_id: String,
     },
+    /// An address to open in the default browser (a pull request to finish on GitHub).
+    OpenUrl {
+        url: String,
+    },
 }
 
 pub fn now_ms() -> i64 {

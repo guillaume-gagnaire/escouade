@@ -10,7 +10,8 @@ use crate::model::*;
 use crate::testlaunch;
 use anyhow::{anyhow, bail, Result};
 use serde::Deserialize;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::process::Stdio;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
@@ -948,8 +949,16 @@ impl<R: Runtime> Core<R> {
                     None => return Ok(()),
                 }
             }
-            "keep" => (board::KEPT_OUTCOME.to_string(), None),
-            other => bail!("« {other} » n'est pas encore pris en charge à la validation."),
+            "pr" => {
+                self.set_step(&t.id, "Push…");
+                self.open_pr(t, &s, &wt, &target, message).await?
+            }
+            "push" => {
+                self.set_step(&t.id, "Push…");
+                git::push_branch(&wt.path, &wt.branch).await?;
+                (board::pushed_outcome(&wt.branch), None)
+            }
+            _ => (board::KEPT_OUTCOME.to_string(), None),
         };
         let cost = self
             .agent(&agent_id)
@@ -1042,7 +1051,7 @@ impl<R: Runtime> Core<R> {
         };
         // Two validations never merge into the same folder at once: the second one waits.
         let lock = self.merge_lock(&repo);
-        let _merging = lock.lock().await;
+        let merging = lock.lock().await;
         // Its agent may have been archived or set to work during Haiku's answer and that wait.
         self.still_validating(&t.id, t.agent_id.as_deref().unwrap_or_default())?;
         let tmp = Path::new(&repo)
@@ -1088,10 +1097,13 @@ impl<R: Runtime> Core<R> {
             drop_worktree(&repo, &tmp).await;
         }
         self.git.refresh(&project.id);
+        // The target is as it was: the next merge into this repository may go.
+        drop(merging);
         match result? {
             git::Integrated::Done => Ok(Some((board::merged_outcome(target, &s.strategy), None))),
             git::Integrated::Conflict(files) => {
-                bail!("Conflit avec {target} sur : {}", files.join(", "))
+                self.on_conflict(t, s, target, files).await?;
+                Ok(None)
             }
         }
     }
@@ -1127,6 +1139,285 @@ impl<R: Runtime> Core<R> {
         }
         self.git.refresh(&project.id);
     }
+
+    // ---------- pull requests, conflicts, rejection ----------
+
+    /// The GitHub CLI: the one known, else looked for again on the PATH (installed since the app
+    /// started), and kept once found.
+    fn gh_cli(&self) -> Option<PathBuf> {
+        let known = self.gh.read().clone();
+        if known.is_some() {
+            return known;
+        }
+        #[cfg(test)]
+        let found = self.gh_on_path.read().clone();
+        #[cfg(not(test))]
+        let found = crate::core::locate_gh();
+        if let Some(gh) = &found {
+            *self.gh.write() = Some(gh.clone());
+        }
+        found
+    }
+
+    /// Pushes the ticket's branch, then opens its PR with `gh` on GitHub; without `gh` (or when it
+    /// fails), GitHub's page to finish it opens in the browser; another host: pushed only.
+    async fn open_pr(
+        self: &Arc<Self>,
+        t: &Ticket,
+        s: &BoardSettings,
+        wt: &Worktree,
+        target: &str,
+        message: Option<String>,
+    ) -> Result<(String, Option<String>)> {
+        let remote = git::push_branch(&wt.path, &wt.branch).await?;
+        let title = match message {
+            Some(m) => m,
+            None => self.commit_message(t, s, &wt.path, target).await,
+        };
+        let body = board::pr_body(t);
+        let github = git::remote_url(&wt.path, &remote)
+            .await
+            .as_deref()
+            .and_then(board::github_repo);
+        let Some((owner, repo)) = github else {
+            return Ok((board::pushed_elsewhere_outcome(&wt.branch), None));
+        };
+        if let Some(gh) = self.gh_cli() {
+            match gh_pr_create(&gh, &wt.path, target, &wt.branch, &title, &body, s.draft).await {
+                Ok(out) => {
+                    if let Some((n, url)) = board::pr_number(&out) {
+                        return Ok((board::pr_outcome(n, target), Some(url)));
+                    }
+                    log::warn!("ticket {}: no pull request in gh's answer: {out}", t.key);
+                }
+                Err(e) => log::warn!("ticket {}: gh pr create failed: {e:#}", t.key),
+            }
+        }
+        let url = board::compare_url(&owner, &repo, target, &wt.branch, &title, &body);
+        self.hub.emit(UiEvent::OpenUrl { url: url.clone() });
+        Ok((board::pushed_for_pr_outcome(&wt.branch), Some(url)))
+    }
+
+    /// A merge stopped on conflicts (undone): blocked with "L'agent résout" / "Annuler" ("ask"),
+    /// handed to the agent ("agent"), or blocked with the files ("abort").
+    async fn on_conflict(
+        self: &Arc<Self>,
+        t: &Ticket,
+        s: &BoardSettings,
+        target: &str,
+        files: Vec<String>,
+    ) -> Result<()> {
+        if s.conflict == "agent" {
+            return self.agent_resolves(&t.id).await;
+        }
+        let ask = s.conflict != "abort";
+        let reason = if ask {
+            format!("Conflit avec {target}")
+        } else {
+            board::first_line(&format!("Conflit avec {target} sur : {}", files.join(", ")))
+        };
+        let agent_id = t.agent_id.clone().unwrap_or_default();
+        self.edit_ticket(&t.id, |x| {
+            // Its agent archived or deleted meanwhile: it went back to do, and stays there.
+            if !validating(x, &agent_id) {
+                bail!(CHANGED);
+            }
+            x.step = None;
+            x.conflict = ask;
+            x.blocked = Some(reason);
+            Ok(())
+        })?;
+        self.notify_ticket(&t.id, false);
+        Ok(())
+    }
+
+    /// "L'agent résout": the target is merged into the ticket's branch, its conflicts left in the
+    /// worktree for the agent, or the agent is asked to rebase; the ticket goes back "En cours",
+    /// loop 1. A merge git refuses to start (changes in the way…) is the error: the agent is told
+    /// nothing. Runs while the ticket is held, its step set (its validation, or
+    /// `ticket_resolve_conflict`).
+    async fn agent_resolves(self: &Arc<Self>, id: &str) -> Result<()> {
+        let t = self.ticket(id)?;
+        let project = self.project(&t.project_id)?;
+        let agent_id = t
+            .agent_id
+            .clone()
+            .ok_or_else(|| anyhow!("Ce ticket n'a pas d'agent."))?;
+        let wt = self
+            .agent(&agent_id)?
+            .lock()
+            .meta
+            .worktree
+            .clone()
+            .ok_or_else(|| anyhow!("L'agent de ce ticket n'a pas de worktree."))?;
+        let target = self.target_of(&project).await;
+        // Nothing goes into the worktree of an agent archived meanwhile, or at work.
+        self.still_validating(id, &agent_id)?;
+        let text = if project.board.strategy == "rebase" {
+            board::rebase_message(&target)
+        } else {
+            match git::run(&wt.path, &["merge", "--no-edit", &target]).await {
+                Ok(_) => board::conflict_message(&target, &[]),
+                Err(e) => {
+                    let files = git::unmerged(&wt.path).await;
+                    if files.is_empty() {
+                        return Err(
+                            e.context(format!("Merge de {target} dans {} impossible", wt.branch))
+                        );
+                    }
+                    board::conflict_message(&target, &files)
+                }
+            }
+        };
+        self.edit_ticket(id, |x| {
+            if !validating(x, &agent_id) {
+                bail!(CHANGED);
+            }
+            x.step = None;
+            x.blocked = None;
+            x.conflict = false;
+            x.column = Column::Doing;
+            x.iteration = 1;
+            x.partial = false;
+            x.review_at = None;
+            x.reminded = false;
+            Ok(())
+        })?;
+        self.send_or_block(id, &agent_id, text).await
+    }
+
+    /// "L'agent résout" on the card of a ticket "À tester": refused while a validation of it runs
+    /// (its merge may be under way), and held as one meanwhile (a second click, "Réessayer").
+    pub async fn ticket_resolve_conflict(self: &Arc<Self>, id: &str) -> Result<()> {
+        let agent_id = self.edit_ticket(id, |t| {
+            if t.column != Column::Review {
+                bail!("Ce ticket n'est pas à tester.");
+            }
+            if t.step.is_some() {
+                bail!("La validation de ce ticket est déjà en cours.");
+            }
+            t.step = Some("Merge…".into());
+            Ok(t.agent_id.clone())
+        })?;
+        let resolved = self.agent_resolves(id).await;
+        if resolved.is_err() {
+            // Not handed over: the ticket is as it was, its block still shown.
+            let _ = self.edit_ticket(id, |x| {
+                if x.column == Column::Review && x.agent_id == agent_id {
+                    x.step = None;
+                }
+                Ok(())
+            });
+        }
+        resolved
+    }
+
+    /// "Annuler" on a ticket "À tester" (a conflict, a failed step): the block goes, the ticket
+    /// stays to test.
+    pub fn ticket_dismiss(&self, id: &str) -> Result<()> {
+        self.edit_ticket(id, |t| {
+            if t.column != Column::Review {
+                bail!("Ce ticket n'est pas à tester.");
+            }
+            t.blocked = None;
+            t.conflict = false;
+            Ok(())
+        })
+    }
+
+    /// "Renvoyer": back "En cours" with the same agent and worktree, loop 1, with what is wrong.
+    pub async fn ticket_reject(self: &Arc<Self>, id: &str, comment: &str) -> Result<()> {
+        let comment = comment.trim();
+        if comment.is_empty() {
+            bail!("Dis ce qui ne va pas.");
+        }
+        let (key, agent_id) = self.edit_ticket(id, |t| {
+            if t.column != Column::Review {
+                bail!("Ce ticket n'est pas à tester.");
+            }
+            if t.step.is_some() {
+                bail!("La validation de ce ticket est déjà en cours.");
+            }
+            let agent_id = t
+                .agent_id
+                .clone()
+                .ok_or_else(|| anyhow!("Ce ticket n'a pas d'agent."))?;
+            t.column = Column::Doing;
+            t.iteration = 1;
+            t.partial = false;
+            t.blocked = None;
+            t.conflict = false;
+            t.review_at = None;
+            t.reminded = false;
+            Ok((t.key.clone(), agent_id))
+        })?;
+        self.send_or_block(id, &agent_id, board::reject_message(&key, comment))
+            .await
+    }
+}
+
+/// How long `gh pr create` may take.
+const GH_LIMIT: Duration = Duration::from_secs(120);
+
+/// `gh pr create`, its description through the standard input (an argument with line breaks
+/// cannot go through a `.cmd`): what it printed.
+async fn gh_pr_create(
+    gh: &Path,
+    cwd: &str,
+    base: &str,
+    head: &str,
+    title: &str,
+    body: &str,
+    draft: bool,
+) -> Result<String> {
+    use tokio::io::AsyncWriteExt;
+    let mut cmd = tokio::process::Command::new(gh);
+    cmd.args([
+        "pr",
+        "create",
+        "--base",
+        base,
+        "--head",
+        head,
+        "--title",
+        title,
+        "--body-file",
+        "-",
+    ]);
+    if draft {
+        cmd.arg("--draft");
+    }
+    cmd.current_dir(cwd)
+        .env("GH_PROMPT_DISABLED", "1")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    #[cfg(windows)]
+    cmd.creation_flags(crate::claude::CREATE_NO_WINDOW);
+    crate::job::isolate(&mut cmd);
+    let mut child = cmd.spawn()?;
+    // Dropped when this returns: whatever it left running (a `.cmd`'s node…) ends with it.
+    let _job = crate::job::Job::for_child(&child);
+    let created = async move {
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin.write_all(body.as_bytes()).await?;
+            // Dropped here: the description ends.
+        }
+        anyhow::Ok(child.wait_with_output().await?)
+    };
+    let out = tokio::time::timeout(GH_LIMIT, created)
+        .await
+        .map_err(|_| {
+            anyhow!(
+                "gh pr create toujours pas terminé après {} s",
+                GH_LIMIT.as_secs()
+            )
+        })??;
+    if !out.status.success() {
+        bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
 /// Of the files copied from the project, those the branch checked out in `cwd` has not

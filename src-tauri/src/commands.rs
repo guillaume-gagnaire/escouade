@@ -604,6 +604,21 @@ pub async fn ticket_approve(core: CoreState<'_>, id: String) -> Res<()> {
     core.ticket_approve(&id).await.map_err(err)
 }
 
+#[tauri::command]
+pub async fn ticket_reject(core: CoreState<'_>, id: String, comment: String) -> Res<()> {
+    core.ticket_reject(&id, &comment).await.map_err(err)
+}
+
+#[tauri::command]
+pub async fn ticket_resolve_conflict(core: CoreState<'_>, id: String) -> Res<()> {
+    core.ticket_resolve_conflict(&id).await.map_err(err)
+}
+
+#[tauri::command(async)]
+pub fn ticket_dismiss(core: CoreState, id: String) -> Res<()> {
+    core.ticket_dismiss(&id).map_err(err)
+}
+
 #[tauri::command(async)]
 pub fn board_set(core: CoreState, project_id: String, settings: BoardSettings) -> Res<Project> {
     core.board_set(&project_id, settings).map_err(err)
