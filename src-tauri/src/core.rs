@@ -254,6 +254,22 @@ pub(crate) fn claude_args(m: &AgentMeta) -> Vec<String> {
     a
 }
 
+/// The arguments as the log shows them: the protocol appended to the system prompt (up to several
+/// KB of ticket text) is only counted, not copied.
+fn args_for_log(args: &[String]) -> String {
+    let mut shown: Vec<String> = Vec::with_capacity(args.len());
+    let mut elide = false;
+    for a in args {
+        if std::mem::take(&mut elide) {
+            shown.push(format!("<{} chars>", a.chars().count()));
+            continue;
+        }
+        elide = a == "--append-system-prompt";
+        shown.push(a.clone());
+    }
+    shown.join(" ")
+}
+
 /// Kebab-case ASCII slug from free text (accents folded).
 pub fn slugify(s: &str) -> String {
     let folded: String = s
@@ -842,7 +858,7 @@ impl<R: Runtime> Core<R> {
         log::info!(
             "agent {id}: starting {} {} in {}",
             opts.program.display(),
-            opts.args.join(" "),
+            args_for_log(&opts.args),
             opts.cwd
         );
         let started = std::time::Instant::now();
@@ -2354,6 +2370,37 @@ mod tests {
             ..Default::default()
         };
         assert!(!claude_args(&blank).contains(&"--append-system-prompt".to_string()));
+    }
+
+    #[test]
+    fn the_log_line_of_a_start_does_not_copy_the_protocol() {
+        let m = AgentMeta {
+            model: "opus".into(),
+            effort: "max".into(),
+            mode: "plan".into(),
+            session_id: Some("s1".into()),
+            append_prompt: Some("Protocole « secret » du ticket ATL-42".into()),
+            ..Default::default()
+        };
+        let line = args_for_log(&claude_args(&m));
+        assert!(
+            !line.contains("secret") && !line.contains("ATL-42"),
+            "{line}"
+        );
+        // The flag stays, its value is only counted; the arguments around it are untouched.
+        assert!(
+            line.contains("--append-system-prompt <37 chars> --resume=s1"),
+            "{line}"
+        );
+        assert!(line.contains("--model opus --effort max --permission-mode plan"));
+        // Without a protocol, the line is the arguments as they are.
+        let plain = claude_args(&AgentMeta::default());
+        assert_eq!(args_for_log(&plain), plain.join(" "));
+        // A flag ending the list has no value to elide.
+        assert_eq!(
+            args_for_log(&["--append-system-prompt".to_string()]),
+            "--append-system-prompt"
+        );
     }
 
     /// The command line of a `.cmd` launcher (npm's claude.cmd) is cmd.exe's, which takes 8191

@@ -612,6 +612,10 @@ pub async fn worktree_add(repo: &str, name: &str) -> Result<(String, String, Str
 /// Creates `<repo>/.claude/worktrees/<last part of branch>` on a new branch `branch` (`branch-2`…
 /// when it, or its folder, is taken) starting from `base`. Returns (path, branch).
 pub async fn worktree_add_on(repo: &str, branch: &str, base: &str) -> Result<(String, String)> {
+    // A branch name never starts with `-`: this is an option (`--lock`…) that git would obey.
+    if base.starts_with('-') {
+        bail!("la branche de départ « {base} » n'est pas un nom de branche valide");
+    }
     ensure_excluded(repo, ".claude/worktrees/").await?;
     let dir_of = |b: &str| {
         Path::new(repo)
@@ -626,7 +630,8 @@ pub async fn worktree_add_on(repo: &str, branch: &str, base: &str) -> Result<(St
         n += 1;
     }
     let path = dir_of(&name).to_string_lossy().to_string();
-    run(repo, &["worktree", "add", "-b", &name, &path, base]).await?;
+    // `--`: whatever `base` is, git reads it as the commit-ish to start from.
+    run(repo, &["worktree", "add", "-b", &name, &path, "--", base]).await?;
     Ok((path, name))
 }
 
@@ -1219,6 +1224,35 @@ mod repo_tests {
             .await
             .is_err());
         assert!(!branch_exists(&r, "ticket/dem-9").await);
+    }
+
+    #[tokio::test]
+    async fn a_base_that_looks_like_a_git_option_is_refused_and_nothing_is_created() {
+        let r = repo("git-worktree-on-option");
+        for base in ["-x", "--lock", "--detach", "-b"] {
+            let e = worktree_add_on(&r, "ticket/dem-5", base)
+                .await
+                .expect_err(base);
+            assert!(format!("{e:#}").contains(base), "{base}: {e:#}");
+            assert!(!branch_exists(&r, "ticket/dem-5").await, "{base}");
+            assert!(
+                !Path::new(&r).join(".claude/worktrees/dem-5").exists(),
+                "{base}"
+            );
+            // Only the repository's own worktree is left (none locked, none added).
+            let listed = text(&r, &["worktree", "list", "--porcelain"])
+                .await
+                .unwrap();
+            let worktrees = listed
+                .lines()
+                .filter(|l| l.starts_with("worktree "))
+                .count();
+            assert_eq!(worktrees, 1, "{base}: {listed}");
+            assert!(!listed.contains("locked"), "{base}: {listed}");
+        }
+        // A real base still works with the `--` before it.
+        let (path, _) = worktree_add_on(&r, "ticket/dem-5", "main").await.unwrap();
+        assert!(Path::new(&path).join("résumé.md").exists());
     }
 
     #[tokio::test]
