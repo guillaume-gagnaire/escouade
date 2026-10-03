@@ -79,6 +79,63 @@ describe('TicketCard', () => {
     expect(screen.queryByRole('textbox', { name: 'Ce qui ne va pas' })).not.toBeInTheDocument();
   });
 
+  it('keeps the send-back form and its comment when the backend refuses it', async () => {
+    const backend = fakeBackend({
+      ticket_reject: () => {
+        throw 'Le ticket est en cours';
+      },
+    });
+    show(doing({ column: 'review' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Renvoyer' }));
+    await userEvent.type(screen.getByRole('textbox', { name: 'Ce qui ne va pas' }), 'le bouton est mal placé');
+    await userEvent.click(screen.getByRole('button', { name: 'Renvoyer' }));
+    expect(backend.called('ticket_reject')).toHaveLength(1);
+    expect(app.toasts.at(-1)).toMatchObject({ kind: 'error', text: expect.stringContaining('Le ticket est en cours') });
+    expect(screen.getByRole('textbox', { name: 'Ce qui ne va pas' })).toHaveValue('le bouton est mal placé');
+    // It can be sent again.
+    expect(screen.getByRole('button', { name: 'Renvoyer' })).toBeEnabled();
+  });
+
+  it('keeps the native menu of the send-back field, and shows the ticket menu elsewhere on the card', async () => {
+    fakeBackend();
+    show(doing({ column: 'review' }));
+    menu.close();
+    await userEvent.click(screen.getByRole('button', { name: 'Renvoyer' }));
+    // A right-click in the field is the browser's (copy, paste): the card does not take it.
+    const field = screen.getByRole('textbox', { name: 'Ce qui ne va pas' });
+    // `fireEvent` says whether the event was left alone: nobody cancelled it.
+    expect(await fireEvent.contextMenu(field)).toBe(true);
+    expect(menu.open).toBeNull();
+    await fireEvent.contextMenu(screen.getByText('Ajouter le fichier'));
+    expect(menu.open?.items.map((i) => i.label)).toContain("Ouvrir l'agent");
+  });
+
+  it('does not open the agent when a button of the card is used', async () => {
+    const backend = fakeBackend();
+    show(doing({ column: 'review' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Valider et merger' }));
+    expect(backend.called('ticket_approve')).toHaveLength(1);
+    expect(app.ui.selectedAgent.p1).toBeUndefined();
+  });
+
+  it('opens its agent from the keyboard, with Enter or Space, but not from the buttons inside it', async () => {
+    fakeBackend();
+    show(doing({ column: 'review' }));
+    const card = screen.getByRole('button', { name: /DEM-1/ });
+    card.focus();
+    await userEvent.keyboard(' ');
+    expect(app.ui.selectedAgent.p1).toBe('a1');
+    delete app.ui.selectedAgent.p1;
+    await userEvent.keyboard('{Enter}');
+    expect(app.ui.selectedAgent.p1).toBe('a1');
+    delete app.ui.selectedAgent.p1;
+    // Space on a button of the card presses that button, nothing more.
+    screen.getByRole('button', { name: 'Renvoyer' }).focus();
+    await userEvent.keyboard(' ');
+    expect(screen.getByRole('textbox', { name: 'Ce qui ne va pas' })).toBeInTheDocument();
+    expect(app.ui.selectedAgent.p1).toBeUndefined();
+  });
+
   it('shows a validation step, then a conflict with its two ways out', async () => {
     const backend = fakeBackend();
     const { rerender } = show(doing({ column: 'review', step: 'Merge…' }));
@@ -109,6 +166,19 @@ describe('TicketCard', () => {
     expect(screen.getByRole('button', { name: /DEM-1/ })).toHaveClass('done');
     await userEvent.click(screen.getByRole('button', { name: '⇡ PR #12 → main' }));
     expect(backend.called('plugin:opener|open_url')[0].args.url).toBe('https://github.com/acme/demo/pull/12');
+  });
+
+  it('says so when the link of a finished ticket does not open', async () => {
+    const backend = fakeBackend({
+      'plugin:opener|open_url': () => {
+        throw 'Aucun navigateur';
+      },
+    });
+    show(doing({ column: 'done', outcome: '⇡ PR #12 → main', outcomeUrl: 'https://github.com/acme/demo/pull/12' }));
+    await userEvent.click(screen.getByRole('button', { name: '⇡ PR #12 → main' }));
+    expect(backend.called('plugin:opener|open_url')).toHaveLength(1);
+    await expect.poll(() => app.toasts.at(-1)).toMatchObject({ kind: 'error', text: expect.stringContaining('Aucun navigateur') });
+    expect(app.ui.selectedAgent.p1).toBeUndefined();
   });
 
   it('opens its agent, or deletes it after a confirmation while under way', async () => {
@@ -227,6 +297,7 @@ describe('TicketCard', () => {
       ['a pull request', board({ action: 'pr' }), 'Valider + PR'],
       ['a push', board({ action: 'push' }), 'Valider et pousser'],
       ['a worktree kept after the merge', board({ cleanup: false }), 'Valider et merger'],
+      ['a ticket left as it is', board({ action: 'keep' }), 'Valider'],
     ])('does not ask for %s', async (_, b, label) => {
       const backend = fakeBackend(files);
       await dirty();

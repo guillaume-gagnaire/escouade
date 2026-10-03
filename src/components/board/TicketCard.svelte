@@ -43,6 +43,8 @@
   }
 
   function contextMenu(e: MouseEvent) {
+    // A text field keeps the browser's menu (copy, paste), as in main.ts.
+    if ((e.target as Element).closest('input, textarea')) return;
     const items: MenuItem[] =
       t.column === 'todo'
         ? [
@@ -71,6 +73,14 @@
             },
           ];
     menu.show(e, items);
+  }
+
+  /** The card opens its agent from the keyboard when it has the focus itself: its buttons keep their keys. */
+  function key(e: KeyboardEvent) {
+    if (e.target !== e.currentTarget || (e.key !== 'Enter' && e.key !== ' ')) return;
+    // Space would scroll the column.
+    e.preventDefault();
+    open();
   }
 
   /** The card opens its agent on a click: its buttons only act. */
@@ -111,7 +121,7 @@
   tabindex="0"
   aria-label={`${t.key} ${t.title}`}
   onclick={open}
-  onkeydown={(e) => e.key === 'Enter' && e.target === e.currentTarget && open()}
+  onkeydown={key}
   oncontextmenu={contextMenu}
 >
   <div class="top">
@@ -124,18 +134,22 @@
 
   {#if t.column === 'done' && t.outcome}
     {#if t.outcomeUrl}
-      <button class="outcome mono link" onclick={(e) => act(e, () => openUrl(t.outcomeUrl!).catch(() => {}))}>{t.outcome}</button>
+      <button class="outcome mono link" onclick={(e) => act(e, () => app.run(openUrl(t.outcomeUrl!)))}>{t.outcome}</button>
     {:else}
       <span class="outcome mono">{t.outcome}</span>
     {/if}
   {/if}
 
+  {#snippet stepList()}
+    <ul class="steps" aria-label="Avancement">
+      {#each steps as p, i (i)}<li>{p}</li>{/each}
+    </ul>
+  {/snippet}
+
   {#if t.column === 'review' && steps.length}
     <div class="prog">
       <span class="h">Ce qui a été fait</span>
-      <ul class="steps" aria-label="Avancement">
-        {#each steps as p, i (i)}<li>{p}</li>{/each}
-      </ul>
+      {@render stepList()}
     </div>
   {/if}
 
@@ -153,9 +167,7 @@
     </div>
     {#if steps.length}
       <div class="prog">
-        <ul class="steps" aria-label="Avancement">
-          {#each steps as p, i (i)}<li>{p}</li>{/each}
-        </ul>
+        {@render stepList()}
         {#if hidden > 0}<span class="more mono" title={plural(hidden, 'autre élément', 'autres éléments')}>+{hidden}</span>{/if}
       </div>
     {/if}
