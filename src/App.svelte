@@ -3,7 +3,7 @@
   import { api } from './lib/ipc';
   import { app } from './lib/state.svelte';
   import { handleShortcut } from './lib/shortcuts';
-  import { checkForUpdate } from './lib/updater';
+  import { watchForUpdates } from './lib/updater';
   import { createWarmer } from './lib/warm';
   import Board from './components/board/Board.svelte';
   import ContextMenu from './components/ContextMenu.svelte';
@@ -30,7 +30,7 @@
 
   onMount(() => {
     app.init().catch((e) => (initError = String(e)));
-    if (import.meta.env.PROD) setTimeout(() => checkForUpdate(), 8000);
+    if (import.meta.env.PROD) return watchForUpdates();
   });
 
   $effect(() => {

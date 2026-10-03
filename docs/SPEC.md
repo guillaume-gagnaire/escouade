@@ -116,7 +116,7 @@ Chemin de `claude`, modèle / effort / mode par défaut, son, notifications Wind
 ## Livraison
 
 - UI en français.
-- Installeur Windows (NSIS) + auto-update via GitHub Releases (`guillaume-gagnaire/escouade`).
+- Installeur Windows (NSIS) + auto-update via GitHub Releases (`guillaume-gagnaire/escouade`). L'app cherche une nouvelle version 8 s après son lancement puis toutes les 5 minutes, sans rien dire en cas d'échec ; « Rechercher une mise à jour » dans les réglages vérifie à la demande.
 - CI/CD GitHub Actions :
   - `ci.yml` (push / PR) : lint + typecheck + tests frontend, `cargo fmt --check`, `clippy`, `cargo test`, build de vérification.
   - `release.yml` (tag `v*`) : `tauri-action` → build Windows, signature des artefacts de mise à jour (secret `TAURI_SIGNING_PRIVATE_KEY`), publication de la release GitHub avec l'installeur et `latest.json` consommé par l'updater.
