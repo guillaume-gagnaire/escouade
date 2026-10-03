@@ -13,10 +13,10 @@ use std::time::Duration;
 use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::test::{mock_app, MockRuntime};
 
-struct Harness {
-    core: Arc<Core<MockRuntime>>,
-    events: Arc<parking_lot::Mutex<Vec<Value>>>,
-    dir: PathBuf,
+pub(crate) struct Harness {
+    pub(crate) core: Arc<Core<MockRuntime>>,
+    pub(crate) events: Arc<parking_lot::Mutex<Vec<Value>>>,
+    pub(crate) dir: PathBuf,
     _app: tauri::App<MockRuntime>,
 }
 
@@ -34,7 +34,7 @@ fn fake_cli() -> String {
         .to_string()
 }
 
-fn git(dir: &Path, args: &[&str]) -> String {
+pub(crate) fn git(dir: &Path, args: &[&str]) -> String {
     let out = Command::new("git")
         .arg("-C")
         .arg(dir)
@@ -63,7 +63,7 @@ fn repo(dir: &Path) -> PathBuf {
     r
 }
 
-fn harness(name: &str) -> Harness {
+pub(crate) fn harness(name: &str) -> Harness {
     let dir = test_dir(name);
     let data = DataDir::new(dir.join("data"));
     data.ensure().unwrap();
@@ -94,7 +94,7 @@ fn harness(name: &str) -> Harness {
 }
 
 impl Harness {
-    async fn project(&self, worktrees: bool) -> (Project, PathBuf) {
+    pub(crate) async fn project(&self, worktrees: bool) -> (Project, PathBuf) {
         let r = repo(&self.dir);
         let p = self
             .core
@@ -110,11 +110,11 @@ impl Harness {
         (p, r)
     }
 
-    fn agent(&self, id: &str) -> AgentMeta {
+    pub(crate) fn agent(&self, id: &str) -> AgentMeta {
         self.core.agent(id).unwrap().lock().meta.clone()
     }
 
-    fn items(&self, id: &str) -> Vec<Value> {
+    pub(crate) fn items(&self, id: &str) -> Vec<Value> {
         self.core.agent(id).unwrap().lock().conv.items()
     }
 
@@ -122,7 +122,7 @@ impl Harness {
         self.core.agent(id).unwrap().lock().proc.is_some()
     }
 
-    async fn wait(&self, what: &str, pred: impl Fn(&Self) -> bool) {
+    pub(crate) async fn wait(&self, what: &str, pred: impl Fn(&Self) -> bool) {
         for _ in 0..750 {
             if pred(self) {
                 return;
@@ -157,7 +157,7 @@ impl Harness {
             .collect()
     }
 
-    fn launches(&self, cwd: &Path) -> Vec<Vec<String>> {
+    pub(crate) fn launches(&self, cwd: &Path) -> Vec<Vec<String>> {
         let key: String = cwd
             .to_string_lossy()
             .chars()
@@ -179,7 +179,7 @@ impl Harness {
     }
 
     /// The `<log>.<kind>.jsonl` side log of the fake CLI started in `cwd`.
-    fn fake_log(&self, cwd: &Path, kind: &str) -> Vec<Value> {
+    pub(crate) fn fake_log(&self, cwd: &Path, kind: &str) -> Vec<Value> {
         let key: String = cwd
             .to_string_lossy()
             .chars()
@@ -199,7 +199,7 @@ impl Harness {
     }
 
     /// User messages written to the stdin of the fake CLI started in `cwd`.
-    fn stdin_messages(&self, cwd: &Path) -> Vec<Value> {
+    pub(crate) fn stdin_messages(&self, cwd: &Path) -> Vec<Value> {
         self.fake_log(cwd, "stdin")
     }
 
@@ -642,7 +642,7 @@ async fn deleting_an_agent_whose_worktree_vanished_still_removes_it() {
 }
 
 /// Commits `content` into src/app.ts of `dir`.
-fn commit_change(dir: &Path, content: &str, msg: &str) {
+pub(crate) fn commit_change(dir: &Path, content: &str, msg: &str) {
     std::fs::write(dir.join("src").join("app.ts"), content).unwrap();
     git(
         dir,

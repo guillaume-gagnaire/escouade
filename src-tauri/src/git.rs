@@ -567,6 +567,23 @@ pub async fn branch_exists(repo: &str, branch: &str) -> bool {
     .is_ok()
 }
 
+/// The local branches, the checked-out one first.
+pub async fn branches(repo: &str) -> Result<Vec<String>> {
+    let out = text(
+        repo,
+        &["for-each-ref", "--format=%(refname:short)", "refs/heads"],
+    )
+    .await?;
+    let current = current_branch(repo).await;
+    let mut list: Vec<String> = out
+        .lines()
+        .map(str::to_string)
+        .filter(|b| !b.is_empty())
+        .collect();
+    list.sort_by_key(|b| *b != current);
+    Ok(list)
+}
+
 /// Creates `<repo>/.claude/worktrees/<name>` on a new branch. Returns (path, branch, base branch).
 pub async fn worktree_add(repo: &str, name: &str) -> Result<(String, String, String)> {
     let base = current_branch(repo).await;
@@ -1146,6 +1163,14 @@ mod repo_tests {
             .status()
             .unwrap()
             .success())
+    }
+
+    #[tokio::test]
+    async fn branches_are_listed_the_current_one_first() {
+        let r = repo("git-branches");
+        git(&r, &["branch", "aaa"]);
+        git(&r, &["branch", "zzz"]);
+        assert_eq!(branches(&r).await.unwrap(), ["main", "aaa", "zzz"]);
     }
 
     async fn dirty(r: &str) -> Vec<(String, char)> {

@@ -21,6 +21,9 @@ mod resources;
 #[cfg(unix)]
 mod shellenv;
 mod stats;
+mod tickets;
+#[cfg(test)]
+mod tickets_tests;
 mod usage;
 
 use crate::core::Core;
@@ -218,6 +221,13 @@ pub fn run() {
             commands::play_chime,
             commands::quit_app,
             commands::set_unsaved,
+            commands::ticket_create,
+            commands::ticket_update,
+            commands::ticket_delete,
+            commands::ticket_prioritize,
+            commands::ticket_start,
+            commands::board_set,
+            commands::git_branches,
         ])
         .build(tauri::generate_context!())
         .expect("error while building the application")

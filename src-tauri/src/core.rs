@@ -1757,6 +1757,7 @@ impl<R: Runtime> Core<R> {
                 project_id: id.to_string(),
             });
         }
+        self.drop_project_tickets(id);
         self.pty.kill_project(id);
         self.git.unwatch(id);
         self.projects.write().retain(|p| p.id != id);

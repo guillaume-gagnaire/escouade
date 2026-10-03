@@ -5,6 +5,7 @@ use crate::fsedit;
 use crate::model::*;
 use crate::pty::{self, ShellInfo, TermInfo};
 use crate::stats::StatsView;
+use crate::tickets::TicketDraft;
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -550,4 +551,45 @@ pub fn set_unsaved(core: CoreState, count: usize) {
 #[tauri::command]
 pub async fn set_remote_control(core: CoreState<'_>, id: String, enabled: bool) -> Res<()> {
     core.set_remote_control(&id, enabled).await.map_err(err)
+}
+
+// ---------- board ----------
+
+#[tauri::command]
+pub async fn ticket_create(
+    core: CoreState<'_>,
+    project_id: String,
+    draft: TicketDraft,
+) -> Res<Ticket> {
+    core.ticket_create(&project_id, draft).await.map_err(err)
+}
+
+#[tauri::command(async)]
+pub fn ticket_update(core: CoreState, id: String, draft: TicketDraft) -> Res<Ticket> {
+    core.ticket_update(&id, draft).map_err(err)
+}
+
+#[tauri::command]
+pub async fn ticket_delete(core: CoreState<'_>, id: String) -> Res<()> {
+    core.ticket_delete(&id).await.map_err(err)
+}
+
+#[tauri::command(async)]
+pub fn ticket_prioritize(core: CoreState, id: String) -> Res<()> {
+    core.ticket_prioritize(&id).map_err(err)
+}
+
+#[tauri::command(async)]
+pub fn ticket_start(core: CoreState, id: String) -> Res<()> {
+    core.ticket_start(&id).map_err(err)
+}
+
+#[tauri::command(async)]
+pub fn board_set(core: CoreState, project_id: String, settings: BoardSettings) -> Res<Project> {
+    core.board_set(&project_id, settings).map_err(err)
+}
+
+#[tauri::command]
+pub async fn git_branches(core: CoreState<'_>, project_id: String) -> Res<Vec<String>> {
+    core.git_branches(&project_id).await.map_err(err)
 }

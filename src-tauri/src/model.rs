@@ -568,6 +568,18 @@ pub enum UiEvent {
     Models {
         models: Vec<ModelInfo>,
     },
+    Ticket {
+        ticket: Ticket,
+    },
+    #[serde(rename_all = "camelCase")]
+    TicketRemoved {
+        id: String,
+        project_id: String,
+    },
+    /// A project changed on the backend's side (its board's prefix, target or settings).
+    Project {
+        project: Project,
+    },
 }
 
 pub fn now_ms() -> i64 {
