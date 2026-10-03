@@ -3433,45 +3433,9 @@ async fn a_launch_preparation_never_takes_a_block_reserved_for_an_agent_being_ma
     assert_eq!(*h.core.ports_reserved.lock(), Vec::<u16>::new());
 }
 
-#[tokio::test]
-async fn an_agents_test_launches_stop_when_it_is_archived() {
-    let h = harness("tk-launch-stop");
-    let (p, _) = h.project(true).await;
-    let a = h.core.create_agent(&p.id, None).await.unwrap().meta;
-    let settings = h.core.settings.read().clone();
-    let Some(shell) = crate::pty::detect_shells(&settings).into_iter().next() else {
-        return;
-    };
-    let info = crate::pty::TermInfo {
-        id: "tk-run-1".into(),
-        project_id: p.id.clone(),
-        name: "web".into(),
-        shell: shell.id.clone(),
-    };
-    h.core
-        .pty
-        .spawn_command(
-            info,
-            &shell,
-            "",
-            &a.cwd,
-            (80, 24),
-            vec![],
-            1,
-            "node -e \"setTimeout(() => {}, 60000)\"",
-            |_| {},
-            |_| {},
-        )
-        .unwrap();
-    h.core.track_test_run(&a.id, "tk-run-1");
-    assert!(h.core.pty.list().iter().any(|t| t.id == "tk-run-1"));
-    h.core.archive_agent(&a.id, true).await.unwrap();
-    assert!(!h.core.pty.list().iter().any(|t| t.id == "tk-run-1"));
-}
-
-/// A test launch of `agent` that lasts (a terminal running node for a minute), tracked as its
-/// own; false when no shell can run it.
-fn test_run(h: &Harness, agent: &AgentMeta, term_id: &str) -> bool {
+/// A terminal of `agent` that lasts (node waiting for a minute), as a test launch starts one;
+/// false when no shell can run it.
+fn test_terminal(h: &Harness, agent: &AgentMeta, term_id: &str) -> bool {
     let settings = h.core.settings.read().clone();
     let Some(shell) = crate::pty::detect_shells(&settings).into_iter().next() else {
         return false;
@@ -3497,8 +3461,105 @@ fn test_run(h: &Harness, agent: &AgentMeta, term_id: &str) -> bool {
             |_| {},
         )
         .unwrap();
-    h.core.track_test_run(&agent.id, term_id);
     true
+}
+
+/// A test launch of `agent` that lasts, tracked as its own; false when no shell can run it.
+fn test_run(h: &Harness, agent: &AgentMeta, term_id: &str) -> bool {
+    if !test_terminal(h, agent, term_id) {
+        return false;
+    }
+    h.core.track_test_run(&agent.id, term_id).unwrap();
+    true
+}
+
+#[tokio::test]
+async fn an_agents_test_launches_stop_when_it_is_archived() {
+    let h = harness("tk-launch-stop");
+    let (p, _) = h.project(true).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    if !test_run(&h, &a, "tk-run-1") {
+        return;
+    }
+    assert!(term_running(&h, "tk-run-1"));
+    h.core.archive_agent(&a.id, true).await.unwrap();
+    assert!(!term_running(&h, "tk-run-1"));
+}
+
+#[tokio::test]
+async fn no_test_launch_starts_while_its_ticket_is_being_validated() {
+    let h = harness("tk-launch-validating");
+    let (p, _) = h.project(false).await;
+    let go = h.dir.join("go");
+    // Left as it is, its tests held until `go`: its agent stays, and the validation waits.
+    h.set_board(&p.id, |s| {
+        s.action = "keep".into();
+        s.tests_first = true;
+        s.test_command = gated_tests(&go, 0);
+    });
+    let (t, _) = reviewed(&h, &p.id, "Page [ok] [recette]").await;
+    let agent = h.agent_of(&t.id);
+    h.wait("recipe", |h| h.agent(&agent.id).recipe.is_some())
+        .await;
+    assert!(h.core.test_run_spec(&agent.id, "run", 0).is_ok());
+    let meanwhile = async {
+        h.wait_ticket(&t.id, "tests running", |t| {
+            t.step.as_deref() == Some("Tests…")
+        })
+        .await;
+        // Its servers would take the ports its tests use.
+        let e = h
+            .core
+            .test_run_spec(&agent.id, "run", 0)
+            .unwrap_err()
+            .to_string();
+        assert_eq!(
+            e,
+            "Validation en cours : le lancement de test attendra sa fin."
+        );
+        // One whose step was read just before is stopped as soon as it is tracked.
+        if test_terminal(&h, &agent, "tk-run-during") {
+            let e = h
+                .core
+                .track_test_run(&agent.id, "tk-run-during")
+                .unwrap_err()
+                .to_string();
+            assert_eq!(
+                e,
+                "Validation en cours : le lancement de test attendra sa fin."
+            );
+            assert!(!term_running(&h, "tk-run-during"));
+            assert!(!tracks_runs_of(&h, &agent.id));
+        }
+        std::fs::write(&go, "").unwrap();
+    };
+    let (approved, ()) = tokio::join!(h.core.ticket_approve(&t.id), meanwhile);
+    approved.unwrap();
+    assert_eq!(h.ticket(&t.id).column, Column::Done);
+    // Validated and left as it is: its agent runs its steps again.
+    assert!(h.core.test_run_spec(&agent.id, "run", 0).is_ok());
+}
+
+#[tokio::test]
+async fn an_agent_without_a_worktree_runs_no_step_of_a_recipe() {
+    let h = harness("tk-launch-no-worktree");
+    let (p, _) = h.project(false).await;
+    let plain = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    // A recipe it gave all the same, in a block of its answer.
+    h.core.agent(&plain.id).unwrap().lock().meta.recipe = Some(TestRecipe {
+        processes: vec![RecipeProcess {
+            name: "web".into(),
+            command: "node serveur.js".into(),
+            ..Default::default()
+        }],
+        ..Default::default()
+    });
+    let e = h
+        .core
+        .test_run_spec(&plain.id, "run", 0)
+        .unwrap_err()
+        .to_string();
+    assert_eq!(e, "Seul un agent à worktree a un lancement de test.");
 }
 
 fn term_running(h: &Harness, term_id: &str) -> bool {
@@ -3569,11 +3630,11 @@ async fn an_archived_or_deleted_agent_has_no_test_launch() {
     assert_eq!(h.agent(&a.id).port_base, None);
     assert!(h.core.test_run_spec(&a.id, "run", 0).is_err());
     // A launch started as it was archived is stopped as soon as it is tracked.
-    h.core.track_test_run(&a.id, "tk-late-1");
+    assert!(h.core.track_test_run(&a.id, "tk-late-1").is_err());
     assert!(!tracks_runs_of(&h, &a.id));
     // Likewise once it is deleted.
     let b = h.core.create_agent(&p.id, None).await.unwrap().meta;
     h.core.delete_agent(&b.id, false).await.unwrap();
-    h.core.track_test_run(&b.id, "tk-late-2");
+    assert!(h.core.track_test_run(&b.id, "tk-late-2").is_err());
     assert!(!tracks_runs_of(&h, &b.id));
 }

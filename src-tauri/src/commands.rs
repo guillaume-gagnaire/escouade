@@ -495,23 +495,62 @@ pub fn run_start(
         name: run.name.clone(),
         shell: sh.id.clone(),
     };
-    let env = if settings.proxy_terminals {
+    let launch = Launch {
+        info,
+        shell: sh,
+        cwd: &cwd,
+        env: Vec::new(),
+        command: &run.command,
+    };
+    spawn_launch(
+        core.inner(),
+        &settings,
+        launch,
+        (cols, rows),
+        cursor_row,
+        output,
+    )
+}
+
+/// What a launch terminal runs: one of the project's launch commands, or a step of an agent's
+/// recipe.
+struct Launch<'a> {
+    info: TermInfo,
+    shell: &'a ShellInfo,
+    cwd: &'a str,
+    /// Its own variables, after the proxy's when terminals go through it.
+    env: Vec<(String, String)>,
+    command: &'a str,
+}
+
+/// Starts `launch` in a read-only terminal of its own, which ends with its command
+/// (TerminalExit carries its exit code). `cursor_row` is the row of its log where it starts.
+fn spawn_launch(
+    core: &Arc<Core>,
+    settings: &Settings,
+    launch: Launch,
+    size: (u16, u16),
+    cursor_row: Option<u16>,
+    output: Channel<InvokeResponseBody>,
+) -> Res<TermInfo> {
+    let mut env = if settings.proxy_terminals {
         settings.proxy_env()
     } else {
         Vec::new()
     };
-    let hub_core = Arc::downgrade(core.inner());
-    let id = info.id.clone();
+    env.extend(launch.env);
+    let hub_core = Arc::downgrade(core);
+    let id = launch.info.id.clone();
     core.pty
         .spawn_command(
-            info.clone(),
-            sh,
+            launch.info.clone(),
+            launch.shell,
             &settings.wsl_distro,
-            &cwd,
-            (cols, rows),
+            launch.cwd,
+            size,
             env,
             cursor_row.unwrap_or(1),
-            &run.command,
+            launch.command,
             move |bytes| {
                 let _ = output.send(InvokeResponseBody::Raw(bytes));
             },
@@ -522,7 +561,7 @@ pub fn run_start(
             },
         )
         .map_err(err)?;
-    Ok(info)
+    Ok(launch.info)
 }
 
 #[tauri::command]
@@ -635,7 +674,9 @@ pub async fn agent_prepare_launch(core: CoreState<'_>, id: String) -> Res<()> {
 }
 
 /// Runs a step of an agent's recipe ("prep" or "run", its index) in its own read-only terminal,
-/// like a launch command, with the system's default shell and the reserved ports exported.
+/// like a launch command, with the system's default shell and the reserved ports exported. One
+/// whose agent was archived, deleted or put to validation meanwhile is stopped at once, and the
+/// error tells why.
 #[tauri::command(async)]
 #[allow(clippy::too_many_arguments)]
 pub fn test_run_start(
@@ -662,38 +703,25 @@ pub fn test_run_start(
     let info = TermInfo {
         id: new_id(),
         project_id,
-        name: spec.name.clone(),
+        name: spec.name,
         shell: sh.id.clone(),
     };
-    let mut env = if settings.proxy_terminals {
-        settings.proxy_env()
-    } else {
-        Vec::new()
+    let launch = Launch {
+        info,
+        shell: sh,
+        cwd: &spec.cwd,
+        env: spec.env,
+        command: &spec.command,
     };
-    env.extend(spec.env);
-    let hub_core = Arc::downgrade(core.inner());
-    let id = info.id.clone();
-    core.pty
-        .spawn_command(
-            info.clone(),
-            sh,
-            &settings.wsl_distro,
-            &spec.cwd,
-            (cols, rows),
-            env,
-            cursor_row.unwrap_or(1),
-            &spec.command,
-            move |bytes| {
-                let _ = output.send(InvokeResponseBody::Raw(bytes));
-            },
-            move |code| {
-                if let Some(c) = hub_core.upgrade() {
-                    c.hub.emit(UiEvent::TerminalExit { id, code });
-                }
-            },
-        )
-        .map_err(err)?;
-    core.track_test_run(&agent_id, &info.id);
+    let info = spawn_launch(
+        core.inner(),
+        &settings,
+        launch,
+        (cols, rows),
+        cursor_row,
+        output,
+    )?;
+    core.track_test_run(&agent_id, &info.id).map_err(err)?;
     Ok(info)
 }
 

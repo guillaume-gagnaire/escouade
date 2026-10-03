@@ -1387,7 +1387,7 @@ impl<R: Runtime> Core<R> {
             )
         };
         if !has_worktree {
-            bail!("Seul un agent à worktree a un lancement de test.");
+            bail!(NO_WORKTREE);
         }
         if archived {
             bail!(ARCHIVED);
@@ -1414,12 +1414,31 @@ impl<R: Runtime> Core<R> {
                 base
             }
         };
+        // Archived meanwhile, whichever way it got its block: it is not woken up for nothing.
+        if h.lock().meta.archived {
+            bail!(ARCHIVED);
+        }
         self.send_message(id, board::prepare_message(base), vec![])
             .await
     }
 
-    /// What step `index` of `kind` ("prep" or "run") of the agent's recipe runs; nothing of an
-    /// archived agent's (its launches stopped with it).
+    /// Why the agent may run no test launch now: archived (its launches stopped with it), without
+    /// a worktree, or its ticket being validated (or its conflict handed to it), whose tests
+    /// would find its ports taken.
+    fn launch_refusal(&self, meta: &AgentMeta) -> Option<&'static str> {
+        if meta.archived {
+            Some(ARCHIVED)
+        } else if meta.worktree.is_none() {
+            Some(NO_WORKTREE)
+        } else if self.tickets.read().iter().any(|t| validating(t, &meta.id)) {
+            Some(VALIDATING)
+        } else {
+            None
+        }
+    }
+
+    /// What step `index` of `kind` ("prep" or "run") of the agent's recipe runs, when it may run
+    /// one (`launch_refusal`).
     pub fn test_run_spec(
         &self,
         agent_id: &str,
@@ -1427,25 +1446,35 @@ impl<R: Runtime> Core<R> {
         index: usize,
     ) -> Result<testlaunch::RunSpec> {
         let meta = self.agent(agent_id)?.lock().meta.clone();
-        if meta.archived {
-            bail!(ARCHIVED);
+        if let Some(why) = self.launch_refusal(&meta) {
+            bail!(why);
         }
         testlaunch::run_spec(&meta, kind, index)
     }
 
-    /// The terminal `term_id` is one of the agent's test launches. One started as the agent was
-    /// archived or deleted, after its launches were stopped, is stopped at once.
-    pub fn track_test_run(&self, agent_id: &str, term_id: &str) {
+    /// The terminal `term_id` is one of the agent's test launches, kept to be stopped with them.
+    /// One started as the agent was archived or deleted, or as its ticket's validation began
+    /// (after its launches were stopped), is stopped at once: the error tells why.
+    pub fn track_test_run(&self, agent_id: &str, term_id: &str) -> Result<()> {
         self.test_runs
             .lock()
             .entry(agent_id.to_string())
             .or_default()
             .push(term_id.to_string());
-        // Read after it is kept: an archive or a deletion that this does not see stops it then.
-        let live = self.agent(agent_id).is_ok_and(|h| !h.lock().meta.archived);
-        if !live {
+        // Read after it is kept: an archive, a deletion or a validation that this does not see
+        // stops it when it comes.
+        let refused = match self.agent(agent_id) {
+            Ok(h) => {
+                let meta = h.lock().meta.clone();
+                self.launch_refusal(&meta).map(|why| anyhow!(why))
+            }
+            Err(e) => Some(e),
+        };
+        if let Some(e) = refused {
             self.stop_test_runs(agent_id);
+            return Err(e);
         }
+        Ok(())
     }
 
     /// The agent's test launches stop (its validation, archive or deletion, its project closed).
@@ -1566,6 +1595,12 @@ const AGENT_BUSY_REJECT: &str =
 
 /// An archived agent holds no ports and runs no test launch.
 const ARCHIVED: &str = "Cet agent est archivé : il n'a pas de lancement de test.";
+
+/// Only an agent with a worktree has ports and a test launch.
+const NO_WORKTREE: &str = "Seul un agent à worktree a un lancement de test.";
+
+/// No test launch while its ticket is validated: its servers would take the ports its tests use.
+const VALIDATING: &str = "Validation en cours : le lancement de test attendra sa fin.";
 
 /// `t` is still "À tester" with this agent, its validation under way.
 fn validating(t: &Ticket, agent_id: &str) -> bool {
