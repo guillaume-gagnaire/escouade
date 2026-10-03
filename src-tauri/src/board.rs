@@ -86,8 +86,9 @@ pub struct Report {
     /// (n from 1, reached, note); None when the block had no list of criteria.
     pub criteria: Option<Vec<(usize, bool, String)>>,
     pub recipe: Option<TestRecipe>,
-    /// The features in place, from `avancement` (or `progress`); None when the block had no
-    /// such list, which leaves the ticket's previous one as it is.
+    /// The features in place, from `avancement` (or `progress`); never empty. None when the
+    /// block had no such list (an empty one, or one with nothing usable, is none), which leaves
+    /// the ticket's previous one as it is.
     pub progress: Option<Vec<String>>,
 }
 
@@ -123,20 +124,21 @@ fn recipe_is_safe(r: &TestRecipe) -> bool {
 
 /// The progress list of a report: the first 8 usable items of the `avancement` (or `progress`)
 /// array, each on one line and cut at 120 bytes. Items that are not text, or empty once cleaned,
-/// are skipped; a value that is not an array is no list.
+/// are skipped; a value that is not an array, an empty array, or one with no usable item is no
+/// list either (the ticket keeps the one it has).
 fn progress_from(v: &Value) -> Option<Vec<String>> {
     let list = v
         .get("avancement")
         .or_else(|| v.get("progress"))?
         .as_array()?;
-    Some(
-        list.iter()
-            .filter_map(Value::as_str)
-            .map(|item| one_line(item, PROGRESS_ITEM_BYTES))
-            .filter(|item| !item.is_empty())
-            .take(PROGRESS_ITEMS)
-            .collect(),
-    )
+    let items: Vec<String> = list
+        .iter()
+        .filter_map(Value::as_str)
+        .map(|item| one_line(item, PROGRESS_ITEM_BYTES))
+        .filter(|item| !item.is_empty())
+        .take(PROGRESS_ITEMS)
+        .collect();
+    (!items.is_empty()).then_some(items)
 }
 
 /// A criterion's number (from 1): a JSON number, or a string of digits.
@@ -616,7 +618,8 @@ fn protocol(t: &Ticket, criteria: &str, ports: Option<u16>) -> String {
          À la fin de CHAQUE réponse, termine par un bloc de code ouvert par ```escouade et fermé par ``` \
          qui contient un JSON {{\"criteres\": [{{\"n\": 1, \"ok\": true, \"note\": \"vérifié par …\"}}, \
          {{\"n\": 2, \"ok\": false, \"note\": \"ce qui manque\"}}], \
-         \"avancement\": [\"Tokens d'accès signés\", \"Middleware réécrit\"]}} avec un élément par critère (n à partir de 1). \
+         \"avancement\": [\"Tokens d'accès signés\", \"Middleware réécrit\", \"Adaptateur des sessions\"]}} \
+         avec un élément par critère dans \"criteres\" (n à partir de 1). \
          Ajoute au bilan « avancement » : la liste succincte (3 à 8 éléments courts) des fonctionnalités en place jusque-là.",
         key = t.key,
         title = one_line(&t.title, 200),
@@ -1227,10 +1230,19 @@ mod tests {
             progress_of(r#"{"progress": ["A", "  B  ", "", 3, "C\nsuite"]}"#),
             want
         );
-        // No key: nothing said, which is not an empty list.
+        // No key, an empty list, or one without a usable item: nothing said, so no list.
         assert_eq!(progress_of(r#"{"criteres": [{"n": 1, "ok": true}]}"#), None);
         assert_eq!(progress_of("{}"), None);
-        assert_eq!(progress_of(r#"{"avancement": []}"#), Some(vec![]));
+        assert_eq!(progress_of(r#"{"avancement": []}"#), None);
+        assert_eq!(progress_of(r#"{"progress": []}"#), None);
+        for junk in [
+            r#"["", 1, null, " \t "]"#,
+            r#"[3, true, {"a": "b"}, ["x"]]"#,
+            r#"["\u0000\u001b", "\n"]"#,
+        ] {
+            let json = format!(r#"{{"avancement": {junk}}}"#);
+            assert_eq!(progress_of(&json), None, "{junk}");
+        }
         // Whatever the whitespace or the control characters, an item is one clean line; one
         // with nothing left is dropped.
         assert_eq!(
@@ -1292,7 +1304,8 @@ mod tests {
 
     #[test]
     fn the_last_progress_replaces_the_previous_and_a_report_without_one_keeps_it() {
-        let mut t = ticket(1, 5);
+        // 8 loops: enough for the turns below to keep looping until the one that completes.
+        let mut t = ticket(1, 8);
         t.progress = vec!["ancien".into()];
         let (end, r) =
             finished(r#"{"criteres": [{"n": 1, "ok": false}], "avancement": ["x", "y"]}"#);
@@ -1303,10 +1316,13 @@ mod tests {
         let next = turn_end(&mut t, &end, r.as_ref(), 2);
         assert!(next.send.is_some());
         assert_eq!(t.progress, ["x", "y"]);
-        // So does one whose `avancement` is not a list.
-        let (end, r) = finished(r#"{"criteres": [{"n": 1, "ok": false}], "avancement": "fait"}"#);
-        turn_end(&mut t, &end, r.as_ref(), 3);
-        assert_eq!(t.progress, ["x", "y"]);
+        // So does one whose `avancement` is not a list, is empty, or has nothing usable in it.
+        for bad in [r#""fait""#, "[]", r#"["", 1, null]"#] {
+            let json = format!(r#"{{"criteres": [{{"n": 1, "ok": false}}], "avancement": {bad}}}"#);
+            let (end, r) = finished(&json);
+            turn_end(&mut t, &end, r.as_ref(), 3);
+            assert_eq!(t.progress, ["x", "y"], "{bad}");
+        }
         // The last one wins, on the turn that sends the ticket to review too.
         let (end, r) = finished(r#"{"criteres": [{"n": 1, "ok": true}], "avancement": ["z"]}"#);
         turn_end(&mut t, &end, r.as_ref(), 4);
@@ -1353,13 +1369,21 @@ mod tests {
                 ),
                 "{ports:?}: {p}"
             );
-            // The key is in the example of the block, next to the criteria.
+            // The key is in the example of the block, next to the criteria, with three items…
             let example = p.find("{\"criteres\": [").expect("the example");
             let key = p[example..]
                 .find("\"avancement\": [\"")
                 .expect("the key in the example");
             assert!(
                 p[example..][..key].contains("\"ok\": false"),
+                "{ports:?}: {p}"
+            );
+            let items = &p[example + key..];
+            let items = &items[..items.find("]}").expect("the end of the example")];
+            assert_eq!(items.matches("\", \"").count(), 2, "{ports:?}: {items}");
+            // …and "one element per criterion" is said of the criteria, not of the whole block.
+            assert!(
+                p.contains("un élément par critère dans \"criteres\" (n à partir de 1)"),
                 "{ports:?}: {p}"
             );
             assert!(escaped_len(&p) <= PROTOCOL_BUDGET, "{ports:?}");
