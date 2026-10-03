@@ -6,6 +6,11 @@
 // Every launch appends {argv, cwd} to $FAKE_CLAUDE_LOG, by default
 // <tmp>/fake-claude-<cwd with non-alphanumerics replaced by _>.jsonl, and every user message
 // read on stdin to <log>.stdin.jsonl.
+// Started with --append-system-prompt (a ticket's protocol), it plays the ticket's agent: it writes
+// <key>.txt ("Boucle n") in its folder and ends each turn with an ```escouade report (criteria and
+// "avancement"). The ticket's title, in the protocol, steers it: [ok] every criterion met at once,
+// [jamais] none ever, [sans-bilan] no report, [lent] a turn that lasts 30 s, [recette] a launch
+// recipe; by default criterion n is met from loop n on.
 
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -43,6 +48,7 @@ function startSession() {
   let pendingAnswer = null;
   let slowTimer = null;
   const replay = argv.includes('--replay-user-messages');
+  const sys = argv.includes('--append-system-prompt') ? (argv[argv.indexOf('--append-system-prompt') + 1] ?? '') : '';
   let remoteSent = false;
 
   const out = (o) => process.stdout.write(JSON.stringify(o) + '\n');
@@ -88,6 +94,38 @@ function startSession() {
         unifiedWindows: { five_hour: { utilization: 0.12, resetsAt: 1790558400 }, seven_day: { utilization: 0.34, resetsAt: 1790805600 } },
       },
     });
+  }
+
+  function ticketTurn(text) {
+    const key = sys.match(/le ticket ([A-Z]+-\d+)/)?.[1] ?? 'TIC-0';
+    const count = Number(sys.match(/Critères d'acceptation \((\d+)\)/)?.[1] ?? 1);
+    const loop = Number(text.match(/Boucle (\d+)\//)?.[1] ?? 1);
+    const all = `${sys}\n${text}`;
+    if (all.includes('[lent]')) {
+      streamText('Je commence…');
+      slowTimer = setTimeout(() => result(), 30_000);
+      return;
+    }
+    const file = `${key.toLowerCase()}.txt`;
+    fs.writeFileSync(path.join(process.cwd(), file), `Boucle ${loop}\n`);
+    if (all.includes('[sans-bilan]')) {
+      streamText('Travail fait, sans bilan.');
+      result();
+      return;
+    }
+    const met = (n) => all.includes('[ok]') || (!all.includes('[jamais]') && n <= loop);
+    const report = {
+      criteres: Array.from({ length: count }, (_, i) => ({ n: i + 1, ok: met(i + 1), note: met(i + 1) ? 'vérifié' : `reste le critère ${i + 1}` })),
+      avancement: [`Fichier ${file} écrit`, `Boucle ${loop} faite`],
+    };
+    if (all.includes('[recette]')) {
+      report.lancement = {
+        processus: [{ nom: 'web', commande: 'node serveur.js', url: 'http://localhost:4100' }],
+        ouvrir: 'http://localhost:4100/fonction',
+      };
+    }
+    streamText(`Boucle ${loop} faite.\n\n\`\`\`escouade\n${JSON.stringify(report)}\n\`\`\``);
+    result();
   }
 
   function toolResult(toolUseId, content, extra = {}) {
@@ -140,6 +178,7 @@ function startSession() {
       });
       return;
     }
+    if (sys) return ticketTurn(text);
     if (text.includes('tâche de fond')) {
       // A command left running in the background: it ends once the turn is over, and Claude Code
       // only tells it with a system frame before starting a turn by itself.

@@ -2,14 +2,18 @@
 //! of their own, what each end of turn does to them, their validation (tests, commit, merge, pull
 //! request, push) and the test launches of the worktrees.
 
-use crate::board;
-use crate::core::Core;
+use crate::board::{self, TurnEnd};
+use crate::core::{AgentOptions, Core};
 use crate::git;
 use crate::model::*;
 use anyhow::{anyhow, bail, Result};
 use serde::Deserialize;
 use std::sync::Arc;
 use tauri::Runtime;
+
+/// Why a ticket "En cours" stops when its agent's automatic resume after the usage limit is gone
+/// (turned off, cancelled, never planned): it would otherwise hold its place forever.
+const QUOTA_LOST: &str = "limite d'usage atteinte";
 
 /// A ticket as its form gives it.
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -124,16 +128,17 @@ impl<R: Runtime> Core<R> {
             ticket: ticket.clone(),
         });
         self.request_save();
+        self.schedule();
         Ok(ticket)
     }
 
     /// Only a ticket "À faire" changes.
-    pub fn ticket_update(&self, id: &str, d: TicketDraft) -> Result<Ticket> {
+    pub fn ticket_update(self: &Arc<Self>, id: &str, d: TicketDraft) -> Result<Ticket> {
         let title = d.title.trim().to_string();
         if title.is_empty() {
             bail!("Un ticket a besoin d'un titre.");
         }
-        self.edit_ticket(id, |t| {
+        let ticket = self.edit_ticket(id, |t| {
             if t.column != Column::Todo {
                 bail!("Seul un ticket « À faire » se modifie.");
             }
@@ -142,7 +147,9 @@ impl<R: Runtime> Core<R> {
             t.criteria = board::criteria_from(&d.criteria);
             t.max_loops = board::max_loops(d.max_loops);
             Ok(t.clone())
-        })
+        })?;
+        self.schedule();
+        Ok(ticket)
     }
 
     /// "Passer en tête": only a ticket "À faire" has a rank to change.
@@ -162,7 +169,9 @@ impl<R: Runtime> Core<R> {
             }
             t.rank = first - 1;
             Ok(())
-        })
+        })?;
+        self.schedule();
+        Ok(())
     }
 
     /// "Lancer": a ticket that starts even with the autopilot off.
@@ -173,7 +182,9 @@ impl<R: Runtime> Core<R> {
             }
             t.forced = true;
             Ok(())
-        })
+        })?;
+        self.schedule();
+        Ok(())
     }
 
     /// The ticket goes; one "En cours" or "À tester" has its agent archived (worktree kept). The
@@ -199,6 +210,7 @@ impl<R: Runtime> Core<R> {
                 }
             }
         }
+        self.schedule();
         Ok(())
     }
 
@@ -242,6 +254,7 @@ impl<R: Runtime> Core<R> {
             project: project.clone(),
         });
         self.request_save();
+        self.schedule();
         Ok(project)
     }
 
@@ -268,5 +281,249 @@ impl<R: Runtime> Core<R> {
                 project_id: project_id.to_string(),
             });
         }
+    }
+
+    // ---------- scheduler ----------
+
+    /// Starts what may start, in the background.
+    pub fn schedule(self: &Arc<Self>) {
+        let c = self.clone();
+        tauri::async_runtime::spawn(async move { c.schedule_now().await });
+    }
+
+    /// An agent of the app waits for its quota (usage limit): no ticket starts meanwhile.
+    pub(crate) fn quota_paused(&self) -> bool {
+        self.agents.read().values().any(|h| {
+            let rt = h.lock();
+            rt.meta.resume_at.is_some() && !rt.meta.archived
+        })
+    }
+
+    /// One pass at a time: the tickets "À faire" that fit start, project by project.
+    pub async fn schedule_now(self: &Arc<Self>) {
+        let _pass = self.board_lock.lock().await;
+        let paused = self.quota_paused();
+        let projects = self.projects.read().clone();
+        for p in projects {
+            let ids = board::to_start(&self.tickets.read(), &p.id, &p.board, paused);
+            for id in ids {
+                self.start_ticket(&p, &id).await;
+            }
+        }
+    }
+
+    /// The board's target branch, else the project's current one.
+    pub(crate) async fn target_of(&self, project: &Project) -> String {
+        if project.board.target.is_empty() {
+            git::current_branch(&project.path).await
+        } else {
+            project.board.target.clone()
+        }
+    }
+
+    /// "En cours" at once (no other pass takes it), then its agent and its first message. A start
+    /// that fails blocks the ticket, which then holds no place: the next one is tried.
+    async fn start_ticket(self: &Arc<Self>, project: &Project, id: &str) {
+        let started = self.edit_ticket(id, |t| {
+            if t.column != Column::Todo {
+                bail!("ce ticket est déjà parti");
+            }
+            t.column = Column::Doing;
+            t.agent_id = None;
+            t.iteration = 1;
+            t.forced = false;
+            t.partial = false;
+            t.blocked = None;
+            t.conflict = false;
+            t.reminded = false;
+            t.started_at = Some(now_ms());
+            // A new agent from the target branch: nothing of an earlier attempt is in place.
+            t.progress.clear();
+            for c in &mut t.criteria {
+                c.ok = false;
+                c.note.clear();
+            }
+            Ok(t.clone())
+        });
+        let Ok(t) = started else { return };
+        if let Err(e) = self.launch_ticket_agent(project, &t).await {
+            log::warn!("ticket {}: start failed: {e:#}", t.key);
+            let _ = self.edit_ticket(id, |t| {
+                t.blocked = Some(format!("Erreur : {e:#}"));
+                Ok(())
+            });
+            self.notify_ticket(id, false);
+            self.schedule();
+        }
+    }
+
+    /// The ticket's agent: its worktree on `ticket/<key>` from the target branch, its block of
+    /// ports, the protocol appended to its system prompt; then its first message.
+    async fn launch_ticket_agent(self: &Arc<Self>, project: &Project, t: &Ticket) -> Result<()> {
+        let s = &project.board;
+        let target = self.target_of(project).await;
+        let settings = self.settings.read().clone();
+        let or = |v: &str, default: &str| Some(if v.is_empty() { default } else { v }.to_string());
+        // Reserved at once: no other start or launch preparation gets this block meanwhile.
+        let ports = self.reserve_ports();
+        let made = self
+            .create_agent_with(
+                &project.id,
+                AgentOptions {
+                    model: or(&s.model, &settings.default_model),
+                    effort: or(&s.effort, &settings.default_effort),
+                    mode: or(&s.mode, &settings.default_mode),
+                    name: Some(board::agent_name(&t.key, &t.title)),
+                    worktree: Some((board::branch_of(&t.key), target)),
+                    append_prompt: Some(board::protocol_prompt(t, ports)),
+                    ticket_id: Some(t.id.clone()),
+                    port_base: ports,
+                    select: false,
+                },
+            )
+            .await;
+        // The agent holds the block from now on (or it is free again).
+        self.unreserve_ports(ports);
+        let agent_id = made?.meta.id;
+        if let Err(e) = self.edit_ticket(&t.id, |x| {
+            x.agent_id = Some(agent_id.clone());
+            Ok(())
+        }) {
+            // The ticket went meanwhile (deleted): its agent goes with it.
+            let _ = self.archive_agent(&agent_id, true).await;
+            return Err(e);
+        }
+        self.send_message(&agent_id, board::first_message(t), vec![])
+            .await
+    }
+
+    // ---------- ends of turns ----------
+
+    /// Called by `apply` when an agent's turn ended: its recipe is kept, its ticket moves on.
+    pub(crate) fn on_turn_end(self: &Arc<Self>, agent_id: &str, end: TurnEnd) {
+        let (c, id) = (self.clone(), agent_id.to_string());
+        tauri::async_runtime::spawn(async move { c.turn_ended(&id, end).await });
+    }
+
+    pub(crate) async fn turn_ended(self: &Arc<Self>, agent_id: &str, end: TurnEnd) {
+        let report = match &end {
+            TurnEnd::Finished(text) => board::parse_report(text),
+            _ => None,
+        };
+        let Ok(h) = self.agent(agent_id) else { return };
+        if let Some(recipe) = report.as_ref().and_then(|r| r.recipe.clone()) {
+            h.lock().meta.recipe = Some(recipe);
+            self.emit_agent(&h);
+            self.request_save();
+        }
+        let (ticket_id, resumes) = {
+            let rt = h.lock();
+            (rt.meta.ticket_id.clone(), rt.meta.resume_at.is_some())
+        };
+        let Some(ticket_id) = ticket_id else { return };
+        // A usage limit with no resume planned (turned off) would leave the ticket waiting forever.
+        let end = match end {
+            TurnEnd::Limited if !resumes => TurnEnd::Error(QUOTA_LOST.into()),
+            end => end,
+        };
+        let Ok(next) = self.edit_ticket(&ticket_id, |t| {
+            // A ticket started again has another agent: the old one's turns never move it.
+            if t.agent_id.as_deref() != Some(agent_id) {
+                return Ok(board::Next::default());
+            }
+            Ok(board::turn_end(t, &end, report.as_ref(), now_ms()))
+        }) else {
+            return;
+        };
+        if let Some(text) = next.send {
+            let _ = self.send_or_block(&ticket_id, agent_id, text).await;
+        }
+        if next.ready {
+            self.notify_ticket(&ticket_id, true);
+        }
+        if next.blocked {
+            self.notify_ticket(&ticket_id, false);
+        }
+        self.schedule();
+    }
+
+    /// Sends the ticket's agent a message; when it cannot, the ticket is blocked with the reason.
+    pub(crate) async fn send_or_block(
+        self: &Arc<Self>,
+        ticket_id: &str,
+        agent_id: &str,
+        text: String,
+    ) -> Result<()> {
+        if let Err(e) = self.send_message(agent_id, text, vec![]).await {
+            let _ = self.edit_ticket(ticket_id, |t| {
+                t.blocked = Some(format!("Erreur : {e:#}"));
+                Ok(())
+            });
+            self.notify_ticket(ticket_id, false);
+            return Err(e);
+        }
+        Ok(())
+    }
+
+    /// The automatic resume its agent waited for after the usage limit is gone (cancelled, turned
+    /// off): its ticket "En cours" is blocked rather than hold its place forever.
+    pub(crate) fn resume_lost(self: &Arc<Self>, agent_id: &str) {
+        let Some(id) = self.doing_ticket_of(agent_id) else {
+            return;
+        };
+        let blocked = self.edit_ticket(&id, |t| {
+            let waiting = t.column == Column::Doing
+                && t.blocked.is_none()
+                && t.agent_id.as_deref() == Some(agent_id);
+            if waiting {
+                t.blocked = Some(format!("Erreur : {QUOTA_LOST}"));
+            }
+            Ok(waiting)
+        });
+        if blocked.unwrap_or(false) {
+            self.notify_ticket(&id, false);
+            self.schedule();
+        }
+    }
+
+    /// "ATL-42 prêt à tester" or "ATL-42 bloqué : <raison>"; a click shows the project's board.
+    pub(crate) fn notify_ticket(self: &Arc<Self>, ticket_id: &str, ready: bool) {
+        let Ok(t) = self.ticket(ticket_id) else {
+            return;
+        };
+        let project = self
+            .project(&t.project_id)
+            .map(|p| p.name)
+            .unwrap_or_default();
+        let body = if ready {
+            format!("{} prêt à tester", t.key)
+        } else {
+            format!(
+                "{} bloqué : {}",
+                t.key,
+                t.blocked.clone().unwrap_or_default()
+            )
+        };
+        self.alert(
+            project,
+            body,
+            UiEvent::FocusBoard {
+                project_id: t.project_id,
+            },
+        );
+    }
+
+    /// The ticket "En cours" the agent works on.
+    pub(crate) fn doing_ticket_of(&self, agent_id: &str) -> Option<String> {
+        self.tickets
+            .read()
+            .iter()
+            .find(|t| t.agent_id.as_deref() == Some(agent_id) && t.column == Column::Doing)
+            .map(|t| t.id.clone())
+    }
+
+    /// The agent's ticket is "En cours": its turns are the board's to tell about.
+    pub(crate) fn ticket_doing(&self, agent_id: &str) -> bool {
+        self.doing_ticket_of(agent_id).is_some()
     }
 }

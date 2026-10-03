@@ -1,6 +1,7 @@
 //! Application core: projects, agents and their Claude processes, git, usage, persistence.
 
 use crate::agent::{AgentHandle, AgentRt, Effects, NotifyKind};
+use crate::board;
 use crate::claude::{self, ClaudeProcess, SpawnOpts};
 use crate::git::{self, GitService};
 use crate::hub::Hub;
@@ -202,6 +203,13 @@ pub struct Core<R: Runtime = Wry> {
     pub quitting: AtomicBool,
     /// Files left unsaved in the editor, as the window last said.
     pub unsaved: AtomicUsize,
+    /// One scheduling pass of the board at a time.
+    pub(crate) board_lock: tokio::sync::Mutex<()>,
+    /// Blocks of ports reserved for agents being made: taken until the agent holds its own.
+    ports_reserved: Mutex<Vec<u16>>,
+    /// Notifications sent, as "<title> | <text>" (tests only).
+    #[cfg(test)]
+    pub alerts: Mutex<Vec<String>>,
 }
 
 fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Option<T> {
@@ -396,6 +404,10 @@ impl<R: Runtime> Core<R> {
             waiting: AtomicUsize::new(usize::MAX),
             quitting: AtomicBool::new(false),
             unsaved: AtomicUsize::new(0),
+            board_lock: tokio::sync::Mutex::new(()),
+            ports_reserved: Mutex::default(),
+            #[cfg(test)]
+            alerts: Mutex::default(),
         });
         core.usage.lock().today_cost = core.stats.today_cost();
         (core, rx)
@@ -469,6 +481,7 @@ impl<R: Runtime> Core<R> {
             }
         });
         self.start_remote_agents();
+        self.schedule();
         self.update_tray();
     }
 
@@ -512,7 +525,7 @@ impl<R: Runtime> Core<R> {
         self.dirty.store(true, Ordering::Release);
     }
 
-    pub fn save_settings(&self, s: Settings) -> Result<()> {
+    pub fn save_settings(self: &Arc<Self>, s: Settings) -> Result<()> {
         let bytes = serde_json::to_vec_pretty(&s)?;
         paths::write_atomic(&self.data.settings_file(), &bytes)?;
         let auto_resume = s.auto_resume;
@@ -531,9 +544,14 @@ impl<R: Runtime> Core<R> {
                 .collect();
             if !dropped.is_empty() {
                 for agent in dropped {
+                    let id = agent.meta.id.clone();
                     self.hub.emit(UiEvent::Agent { agent });
+                    // Its ticket would wait for a resume that no longer comes.
+                    self.resume_lost(&id);
                 }
                 self.request_save();
+                // No agent waits for its quota any more: the board goes on.
+                self.schedule();
             }
         }
         Ok(())
@@ -583,7 +601,7 @@ impl<R: Runtime> Core<R> {
         self.agents.read().contains_key(id)
     }
 
-    fn emit_agent(&self, h: &AgentHandle) {
+    pub(crate) fn emit_agent(&self, h: &AgentHandle) {
         let view = h.lock().view();
         if !self.is_registered(&view.meta.id) {
             return;
@@ -690,10 +708,14 @@ impl<R: Runtime> Core<R> {
             self.update_tray();
         }
         if let Some(kind) = fx.notify {
-            self.notify_agent(kind, project_id, id, name);
+            // A ticket's agent at work: its board tells when the ticket is ready or blocked; its
+            // questions still call for the user.
+            if kind == NotifyKind::Question || !self.ticket_doing(id) {
+                self.notify_agent(kind, project_id, id, name);
+            }
         }
         if let Some(end) = fx.turn_end {
-            log::debug!("agent {id}: end of turn: {end:?}");
+            self.on_turn_end(id, end);
         }
     }
 
@@ -743,13 +765,11 @@ impl<R: Runtime> Core<R> {
         self.apply(&id, &pid, &name, fx, Some(view));
     }
 
-    fn notify_agent(
-        self: &Arc<Self>,
-        kind: NotifyKind,
-        project_id: &str,
-        agent_id: &str,
-        agent_name: &str,
-    ) {
+    /// Chime, then, out of sight, the taskbar flashes and a system notification shows; a click on
+    /// it brings the window back and sends it `focus`.
+    pub(crate) fn alert(self: &Arc<Self>, title: String, body: String, focus: UiEvent) {
+        #[cfg(test)]
+        self.alerts.lock().push(format!("{title} | {body}"));
         let settings = self.settings.read().clone();
         if settings.sound {
             notify::play_chime();
@@ -759,33 +779,37 @@ impl<R: Runtime> Core<R> {
         }
         notify::flash(&self.app);
         if settings.os_notifications {
-            let project = self.project(project_id).map(|p| p.name).unwrap_or_default();
-            let body = match kind {
-                NotifyKind::Question => "Claude attend ta réponse",
-                NotifyKind::Done => "Tâche terminée",
-                NotifyKind::Error => "Erreur : l'agent s'est arrêté",
-            };
-            let (app, pid, aid) = (
-                self.app.clone(),
-                project_id.to_string(),
-                agent_id.to_string(),
-            );
-            let hub_core = Arc::downgrade(self);
-            notify::toast(
-                &self.app,
-                &format!("{project} · {agent_name}"),
-                body,
-                move || {
-                    notify::show_main(&app);
-                    if let Some(c) = hub_core.upgrade() {
-                        c.hub.emit(UiEvent::Focus {
-                            project_id: pid.clone(),
-                            agent_id: Some(aid.clone()),
-                        });
-                    }
-                },
-            );
+            let (app, weak) = (self.app.clone(), Arc::downgrade(self));
+            notify::toast(&self.app, &title, &body, move || {
+                notify::show_main(&app);
+                if let Some(c) = weak.upgrade() {
+                    c.hub.emit(focus.clone());
+                }
+            });
         }
+    }
+
+    fn notify_agent(
+        self: &Arc<Self>,
+        kind: NotifyKind,
+        project_id: &str,
+        agent_id: &str,
+        agent_name: &str,
+    ) {
+        let project = self.project(project_id).map(|p| p.name).unwrap_or_default();
+        let body = match kind {
+            NotifyKind::Question => "Claude attend ta réponse",
+            NotifyKind::Done => "Tâche terminée",
+            NotifyKind::Error => "Erreur : l'agent s'est arrêté",
+        };
+        self.alert(
+            format!("{project} · {agent_name}"),
+            body.to_string(),
+            UiEvent::Focus {
+                project_id: project_id.to_string(),
+                agent_id: Some(agent_id.to_string()),
+            },
+        );
     }
 
     pub fn update_tray(&self) {
@@ -1072,21 +1096,25 @@ impl<R: Runtime> Core<R> {
 
     pub fn cancel_resume(self: &Arc<Self>, id: &str) -> Result<()> {
         self.agent(id)?;
-        self.set_resume(id, None);
+        if self.set_resume(id, None).is_some() {
+            // Its ticket would wait for a resume that no longer comes.
+            self.resume_lost(id);
+        }
+        self.schedule();
         Ok(())
     }
 
-    fn set_resume(self: &Arc<Self>, id: &str, at: Option<i64>) {
-        let Ok(h) = self.agent(id) else {
-            return;
-        };
-        let view = {
+    /// Plans (or drops) the agent's resume; returns the one planned before.
+    fn set_resume(self: &Arc<Self>, id: &str, at: Option<i64>) -> Option<i64> {
+        let h = self.agent(id).ok()?;
+        let (before, view) = {
             let mut rt = h.lock();
-            rt.meta.resume_at = at;
-            rt.view()
+            let before = std::mem::replace(&mut rt.meta.resume_at, at);
+            (before, rt.view())
         };
         self.hub.emit(UiEvent::Agent { agent: view });
         self.request_save();
+        before
     }
 
     /// Sends "continue" to the agents whose planned resume is due.
@@ -1112,10 +1140,17 @@ impl<R: Runtime> Core<R> {
                 Some((rt.meta.id.clone(), rt.view()))
             })
             .collect();
+        let resumed = !due.is_empty();
         for (id, view) in due {
             self.hub.emit(UiEvent::Agent { agent: view });
             self.request_save();
-            if let Err(e) = self.send_message(&id, "continue".into(), vec![]).await {
+            let text = "continue".to_string();
+            // A ticket's agent that cannot go on blocks its ticket, which would wait forever.
+            let sent = match self.doing_ticket_of(&id) {
+                Some(ticket_id) => self.send_or_block(&ticket_id, &id, text).await,
+                None => self.send_message(&id, text, vec![]).await,
+            };
+            if let Err(e) = sent {
                 log::warn!("agent {id}: resume after the usage limit failed: {e:#}");
                 let _ = self.with_agent(&id, |rt, fx| {
                     rt.notice(
@@ -1126,6 +1161,10 @@ impl<R: Runtime> Core<R> {
                     Ok(())
                 });
             }
+        }
+        // The quota pause is over.
+        if resumed {
+            self.schedule();
         }
     }
 
@@ -1371,6 +1410,32 @@ impl<R: Runtime> Core<R> {
             }
         }
         Ok(())
+    }
+
+    // ---------- ports ----------
+
+    /// Reserves a block of 10 ports (`board::allocate_ports`): the first that no agent holds, nor
+    /// another reservation in flight, and whose ports all bind. Chosen and recorded under one lock,
+    /// so two reservations never get the same block. `unreserve_ports` once the agent made for it
+    /// holds it (or was not made).
+    pub(crate) fn reserve_ports(&self) -> Option<u16> {
+        let mut reserved = self.ports_reserved.lock();
+        let mut taken: Vec<u16> = self
+            .agents
+            .read()
+            .values()
+            .filter_map(|h| h.lock().meta.port_base)
+            .collect();
+        taken.extend(reserved.iter().copied());
+        let base = board::allocate_ports(&taken, testlaunch::port_free)?;
+        reserved.push(base);
+        Some(base)
+    }
+
+    pub(crate) fn unreserve_ports(&self, base: Option<u16>) {
+        if let Some(base) = base {
+            self.ports_reserved.lock().retain(|b| *b != base);
+        }
     }
 
     // ---------- agents lifecycle ----------
@@ -1862,8 +1927,9 @@ impl<R: Runtime> Core<R> {
         self.pty.kill_project(id);
         self.git.unwatch(id);
         self.projects.write().retain(|p| p.id != id);
-        // After the project is out: `ticket_create` checks the project under the tickets' lock, so
-        // a ticket it adds before this is dropped here, and none is added after.
+        // After the project is out: `ticket_create` checks the project under the projects' read
+        // lock, which it holds while it adds the ticket, so a ticket it adds before this is dropped
+        // here, and none is added after.
         self.drop_project_tickets(id);
         // Read before taking the ui lock: never hold ui while waiting on projects.
         let fallback = self.projects.read().first().map(|p| p.id.clone());
@@ -1876,6 +1942,8 @@ impl<R: Runtime> Core<R> {
         }
         self.request_save();
         self.update_tray();
+        // Its agents are gone: one of them may have held the board waiting for its quota.
+        self.schedule();
         Ok(())
     }
 

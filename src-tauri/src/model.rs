@@ -586,6 +586,11 @@ pub enum UiEvent {
     Project {
         project: Project,
     },
+    /// A ticket's notification was clicked: the project's board is shown.
+    #[serde(rename_all = "camelCase")]
+    FocusBoard {
+        project_id: String,
+    },
 }
 
 pub fn now_ms() -> i64 {
@@ -662,6 +667,17 @@ mod tests {
                 { "op": "patch", "id": "a", "patch": { "streaming": false } },
                 { "op": "delta", "id": "a", "text": "?" },
             ])
+        );
+    }
+
+    #[test]
+    fn a_click_on_a_tickets_notification_asks_for_the_projects_board() {
+        let e = UiEvent::FocusBoard {
+            project_id: "p1".into(),
+        };
+        assert_eq!(
+            serde_json::to_value(&e).unwrap(),
+            json!({ "type": "focusBoard", "projectId": "p1" })
         );
     }
 
