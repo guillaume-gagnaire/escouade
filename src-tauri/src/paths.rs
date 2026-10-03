@@ -265,16 +265,67 @@ fn strip_base(base: &str, path: &str) -> Option<String> {
         .then(|| p[b.len() + 1..].to_string())
 }
 
+/// When this run made its first test folder: a fake CLI's log written before is an earlier run's.
+#[cfg(test)]
+static TESTS_START: std::sync::OnceLock<std::time::SystemTime> = std::sync::OnceLock::new();
+
 #[cfg(test)]
 pub fn test_dir(name: &str) -> PathBuf {
+    let start = *TESTS_START.get_or_init(std::time::SystemTime::now);
     let dir = std::env::temp_dir().join(format!("ccm-test-{}-{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     // The real path (macOS: /private/var, not /var), as the processes started in it report it.
-    if cfg!(windows) {
+    let dir = if cfg!(windows) {
         dir
     } else {
         dir.canonicalize().unwrap()
+    };
+    forget_fake_logs(&dir, start);
+    dir
+}
+
+/// The fake `claude` and `gh` keep their logs in the temporary folder, named after the folder they
+/// ran in (every character but ASCII letters and digits replaced by `_`). Those of `dir` and its
+/// subfolders that an earlier run left go: its process had the same id (Windows reuses them), and
+/// a test would count their lines with its own. Those of this run stay: another test's folder may
+/// read the same once encoded (`tk-env` is the start of `tk-env-push`).
+#[cfg(test)]
+fn forget_fake_logs(dir: &Path, start: std::time::SystemTime) {
+    let key = |p: &Path| -> String {
+        p.to_string_lossy()
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+            .collect()
+    };
+    let mut keys = vec![key(dir)];
+    // Its long name too (a temporary folder given by an 8.3 name), as a process may report it.
+    if let Ok(real) = std::fs::canonicalize(dir) {
+        let real = real.to_string_lossy().into_owned();
+        let k = key(Path::new(real.trim_start_matches(r"\\?\")));
+        if !keys.contains(&k) {
+            keys.push(k);
+        }
+    }
+    let prefixes: Vec<String> = keys
+        .iter()
+        .flat_map(|k| [format!("fake-claude-{k}"), format!("fake-gh-{k}")])
+        .collect();
+    let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) else {
+        return;
+    };
+    for e in entries.flatten() {
+        let name = e.file_name().to_string_lossy().into_owned();
+        if !prefixes.iter().any(|p| name.starts_with(p.as_str())) {
+            continue;
+        }
+        let earlier = e
+            .metadata()
+            .and_then(|m| m.modified())
+            .is_ok_and(|t| t < start);
+        if earlier {
+            let _ = std::fs::remove_file(e.path());
+        }
     }
 }
 
@@ -562,5 +613,65 @@ mod tests {
             return;
         }
         assert!(contained(&root, "dangling/file.txt").is_err());
+    }
+
+    #[test]
+    fn a_test_folder_starts_without_the_fake_clis_logs_an_earlier_run_left() {
+        use std::time::{Duration, SystemTime};
+        let dir = test_dir("paths-fake-logs");
+        // As the fakes name their logs after the folder they run in.
+        let key: String = dir
+            .to_string_lossy()
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+            .collect();
+        /// The files planted, gone with the test whatever its outcome.
+        struct Planted(Vec<PathBuf>);
+        impl Drop for Planted {
+            fn drop(&mut self) {
+                for p in &self.0 {
+                    let _ = std::fs::remove_file(p);
+                }
+            }
+        }
+        let mut planted = Planted(Vec::new());
+        let tmp = std::env::temp_dir();
+        let mut plant = |name: String, written: SystemTime| {
+            let p = tmp.join(name);
+            planted.0.push(p.clone());
+            std::fs::write(&p, "{}\n").unwrap();
+            std::fs::File::options()
+                .write(true)
+                .open(&p)
+                .unwrap()
+                .set_modified(written)
+                .unwrap();
+            p
+        };
+        let earlier = SystemTime::now() - Duration::from_secs(3600);
+        // Left by an earlier run whose process had the same id: the folder's and its subfolders'.
+        let stale = [
+            plant(format!("fake-claude-{key}.stdin.jsonl"), earlier),
+            plant(format!("fake-claude-{key}_sub.jsonl"), earlier),
+            plant(
+                format!("fake-gh-{key}_repo__claude_worktrees_dem_1.jsonl"),
+                earlier,
+            ),
+        ];
+        // Written by this run for another test, whose folder's name starts the same.
+        let current = plant(format!("fake-claude-{key}_2_repo.jsonl"), SystemTime::now());
+        // Not a log of this folder.
+        let other = plant(
+            format!(
+                "fake-claude-elsewhere_{}_paths_fake_logs.jsonl",
+                std::process::id()
+            ),
+            earlier,
+        );
+        assert_eq!(test_dir("paths-fake-logs"), dir);
+        for p in &stale {
+            assert!(!p.exists(), "{}", p.display());
+        }
+        assert!(current.exists() && other.exists());
     }
 }

@@ -2608,28 +2608,19 @@ fn fake_gh() -> PathBuf {
         })
 }
 
-/// The calls of the fake `gh` run in `cwd`.
+/// The calls of the fake `gh` run in `cwd` (an earlier run's log of the same folder is gone with
+/// `test_dir`).
 fn gh_calls(cwd: &Path) -> Vec<Value> {
-    std::fs::read_to_string(gh_log(cwd))
-        .unwrap_or_default()
-        .lines()
-        .map(|l| serde_json::from_str(l).unwrap())
-        .collect()
-}
-
-fn gh_log(cwd: &Path) -> PathBuf {
     let key: String = cwd
         .to_string_lossy()
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
         .collect();
-    std::env::temp_dir().join(format!("fake-gh-{key}.jsonl"))
-}
-
-/// Forgets the calls of the fake `gh` in `cwd` before the test makes its own: a log of an earlier
-/// run whose process had the same id (Windows reuses them) would count otherwise.
-fn forget_gh_calls(cwd: &Path) {
-    let _ = std::fs::remove_file(gh_log(cwd));
+    std::fs::read_to_string(std::env::temp_dir().join(format!("fake-gh-{key}.jsonl")))
+        .unwrap_or_default()
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect()
 }
 
 /// The branches of a (bare) repository.
@@ -2714,7 +2705,6 @@ async fn with_gh_a_pull_request_is_opened_with_the_criteria() {
         s.draft = true;
     });
     let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
-    forget_gh_calls(&wt);
     h.core.ticket_approve(&t.id).await.unwrap();
     let t = h.ticket(&t.id);
     assert_eq!(
@@ -2801,7 +2791,6 @@ async fn a_pull_request_to_another_host_than_github_is_left_to_open_there() {
     *h.core.gh.write() = Some(fake_gh());
     h.set_board(&p.id, |s| s.action = "pr".into());
     let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
-    forget_gh_calls(&wt);
     h.core.ticket_approve(&t.id).await.unwrap();
     let t = h.ticket(&t.id);
     assert_eq!(
@@ -2844,7 +2833,6 @@ async fn a_copied_file_the_agent_committed_is_neither_pushed_nor_proposed() {
         *h.core.gh.write() = Some(fake_gh());
         h.set_board(&p.id, |s| s.action = action.into());
         let (t, wt) = reviewed(&h, &p.id, "Fichier [ok] [commite]").await;
-        forget_gh_calls(&wt);
         h.core.ticket_approve(&t.id).await.unwrap();
         let t = h.ticket(&t.id);
         assert_eq!(
@@ -3234,7 +3222,6 @@ async fn a_ticket_with_nothing_beyond_its_target_is_neither_pushed_nor_proposed(
         *h.core.gh.write() = Some(fake_gh());
         h.set_board(&p.id, |s| s.action = action.into());
         let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
-        forget_gh_calls(&wt);
         std::fs::remove_file(wt.join("dem-1.txt")).unwrap();
         h.core.ticket_approve(&t.id).await.unwrap();
         let t = h.ticket(&t.id);
