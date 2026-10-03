@@ -145,6 +145,10 @@ pub struct Ticket {
     pub title: String,
     pub description: String,
     pub criteria: Vec<Criterion>,
+    /// The features in place so far, as its agent last listed them (3 to 8 short lines); the
+    /// agent writes it `avancement`.
+    #[serde(alias = "avancement")]
+    pub progress: Vec<String>,
     /// 3, 5 or 8.
     pub max_loops: u32,
     pub column: Column,
@@ -746,6 +750,27 @@ mod tests {
         let sent = serde_json::to_value(&r).unwrap();
         assert_eq!(sent["processes"][0]["name"], "api");
         assert_eq!(sent["prepare"][0]["command"], "npm install");
+    }
+
+    #[test]
+    fn a_ticket_saved_before_the_progress_still_loads_and_keeps_it_in_english() {
+        let t: Ticket = serde_json::from_value(json!({ "id": "t1", "key": "ATL-42" })).unwrap();
+        assert!(t.progress.is_empty());
+        // As the agent names it, in French…
+        let t: Ticket =
+            serde_json::from_value(json!({ "id": "t1", "avancement": ["a", "b"] })).unwrap();
+        assert_eq!(t.progress, ["a", "b"]);
+        // …and as it is saved and sent to the window.
+        let v = serde_json::to_value(&t).unwrap();
+        assert_eq!(v["progress"], json!(["a", "b"]));
+        assert!(v.get("avancement").is_none());
+        let back: Ticket = serde_json::from_value(v).unwrap();
+        assert_eq!(back, t);
+        // A new ticket has none to show.
+        assert_eq!(
+            serde_json::to_value(Ticket::default()).unwrap()["progress"],
+            json!([])
+        );
     }
 
     #[test]

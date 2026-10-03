@@ -135,6 +135,7 @@ export function ticket(over: Partial<Ticket> = {}): Ticket {
       { text: 'Le fichier existe', ok: false, note: '' },
       { text: 'Tests verts', ok: false, note: '' },
     ],
+    progress: [],
     maxLoops: 5,
     column: 'todo',
     rank: 1,

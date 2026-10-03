@@ -60,6 +60,8 @@ export interface Ticket {
   title: string;
   description: string;
   criteria: Criterion[];
+  /** The features in place so far, as its agent last listed them (3 to 8 short lines). */
+  progress: string[];
   maxLoops: number;
   column: Column;
   /** Order in "À faire": the lowest first. */

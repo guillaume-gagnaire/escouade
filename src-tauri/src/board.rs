@@ -86,7 +86,14 @@ pub struct Report {
     /// (n from 1, reached, note); None when the block had no list of criteria.
     pub criteria: Option<Vec<(usize, bool, String)>>,
     pub recipe: Option<TestRecipe>,
+    /// The features in place, from `avancement` (or `progress`); None when the block had no
+    /// such list, which leaves the ticket's previous one as it is.
+    pub progress: Option<Vec<String>>,
 }
+
+/// The most items of a progress list that are kept, and the most bytes of each.
+const PROGRESS_ITEMS: usize = 8;
+const PROGRESS_ITEM_BYTES: usize = 120;
 
 /// The content of the last ```escouade block of `text`, if it is closed.
 fn last_block(text: &str) -> Option<&str> {
@@ -112,6 +119,24 @@ fn recipe_is_safe(r: &TestRecipe) -> bool {
             .iter()
             .all(|p| safe_dir(&p.dir) && !p.command.trim().is_empty())
         && (!r.prepare.is_empty() || !r.processes.is_empty())
+}
+
+/// The progress list of a report: the first 8 usable items of the `avancement` (or `progress`)
+/// array, each on one line and cut at 120 bytes. Items that are not text, or empty once cleaned,
+/// are skipped; a value that is not an array is no list.
+fn progress_from(v: &Value) -> Option<Vec<String>> {
+    let list = v
+        .get("avancement")
+        .or_else(|| v.get("progress"))?
+        .as_array()?;
+    Some(
+        list.iter()
+            .filter_map(Value::as_str)
+            .map(|item| one_line(item, PROGRESS_ITEM_BYTES))
+            .filter(|item| !item.is_empty())
+            .take(PROGRESS_ITEMS)
+            .collect(),
+    )
 }
 
 /// A criterion's number (from 1): a JSON number, or a string of digits.
@@ -154,7 +179,11 @@ pub fn parse_report(text: &str) -> Option<Report> {
         .get("lancement")
         .and_then(|l| serde_json::from_value::<TestRecipe>(l.clone()).ok())
         .filter(recipe_is_safe);
-    Some(Report { criteria, recipe })
+    Some(Report {
+        criteria,
+        recipe,
+        progress: progress_from(&v),
+    })
 }
 
 /// What the end of a turn asks of the orchestrator.
@@ -185,6 +214,12 @@ pub fn turn_end(t: &mut Ticket, end: &TurnEnd, report: Option<&Report>, now: i64
     }
     t.blocked = None;
     t.conflict = false;
+    // The progress is the agent's own account, whatever became of its criteria: the last list
+    // given replaces the previous, and none leaves it.
+    if let (TurnEnd::Finished(_), Some(progress)) = (end, report.and_then(|r| r.progress.as_ref()))
+    {
+        t.progress = progress.clone();
+    }
     match end {
         // A stop or an error ends the exchange: once the user resumes, a missing report is
         // reminded again instead of blocking at once.
@@ -580,7 +615,9 @@ fn protocol(t: &Ticket, criteria: &str, ports: Option<u16>) -> String {
          S'il te faut une décision, pose la question avec l'outil de question. \
          À la fin de CHAQUE réponse, termine par un bloc de code ouvert par ```escouade et fermé par ``` \
          qui contient un JSON {{\"criteres\": [{{\"n\": 1, \"ok\": true, \"note\": \"vérifié par …\"}}, \
-         {{\"n\": 2, \"ok\": false, \"note\": \"ce qui manque\"}}]}} avec un élément par critère (n à partir de 1).",
+         {{\"n\": 2, \"ok\": false, \"note\": \"ce qui manque\"}}], \
+         \"avancement\": [\"Tokens d'accès signés\", \"Middleware réécrit\"]}} avec un élément par critère (n à partir de 1). \
+         Ajoute au bilan « avancement » : la liste succincte (3 à 8 éléments courts) des fonctionnalités en place jusque-là.",
         key = t.key,
         title = one_line(&t.title, 200),
         n = t.criteria.len(),
@@ -1172,6 +1209,161 @@ mod tests {
         let recipe = r.recipe.unwrap();
         assert_eq!(recipe.processes[0].command, "npm run dev");
         assert!(recipe.processes[0].url.is_empty() && recipe.open.is_empty());
+    }
+
+    fn progress_of(json: &str) -> Option<Vec<String>> {
+        parse_report(&block(json)).unwrap().progress
+    }
+
+    #[test]
+    fn the_progress_is_a_list_of_short_lines_read_from_avancement_or_progress() {
+        let want = Some(vec!["A".to_string(), "B".into(), "C suite".into()]);
+        assert_eq!(
+            progress_of(r#"{"criteres": [], "avancement": ["A", "  B  ", "", 3, "C\nsuite"]}"#),
+            want
+        );
+        // The English key is understood too.
+        assert_eq!(
+            progress_of(r#"{"progress": ["A", "  B  ", "", 3, "C\nsuite"]}"#),
+            want
+        );
+        // No key: nothing said, which is not an empty list.
+        assert_eq!(progress_of(r#"{"criteres": [{"n": 1, "ok": true}]}"#), None);
+        assert_eq!(progress_of("{}"), None);
+        assert_eq!(progress_of(r#"{"avancement": []}"#), Some(vec![]));
+        // Whatever the whitespace or the control characters, an item is one clean line; one
+        // with nothing left is dropped.
+        assert_eq!(
+            progress_of(
+                r#"{"avancement": ["a\u0000b\u0007", "\u0000\u001b", " \t ", "x\r\n  y\tz"]}"#
+            ),
+            Some(vec!["ab".to_string(), "x y z".into()])
+        );
+    }
+
+    #[test]
+    fn at_most_eight_items_of_at_most_120_bytes_are_kept() {
+        let items: Vec<String> = (1..=10).map(|i| format!("fonction {i}")).collect();
+        let json = serde_json::json!({ "avancement": items }).to_string();
+        assert_eq!(progress_of(&json).unwrap(), items[..8]);
+        // The unusable ones do not take a place.
+        let json = r#"{"avancement": ["", 1, null, "a", "b", "c", "d", "e", "f", "g", "h", "i"]}"#;
+        assert_eq!(
+            progress_of(json).unwrap(),
+            ["a", "b", "c", "d", "e", "f", "g", "h"]
+        );
+        // A long item is cut like elsewhere: at 120 bytes, with the ellipsis.
+        let json = serde_json::json!({ "avancement": ["x".repeat(300)] }).to_string();
+        let long = &progress_of(&json).unwrap()[0];
+        assert_eq!(*long, format!("{}…", "x".repeat(120)));
+        // On a character boundary: "é" is two bytes, 60 of them fill the 120.
+        let json = serde_json::json!({ "avancement": ["é".repeat(300), "ab".to_string() + &"é".repeat(100)] })
+            .to_string();
+        let items = progress_of(&json).unwrap();
+        assert_eq!(items[0], format!("{}…", "é".repeat(60)));
+        assert_eq!(items[1], format!("ab{}…", "é".repeat(59)));
+        // An item of exactly 120 bytes is whole.
+        let json = serde_json::json!({ "avancement": ["y".repeat(120)] }).to_string();
+        assert_eq!(progress_of(&json).unwrap()[0], "y".repeat(120));
+    }
+
+    #[test]
+    fn a_progress_that_is_not_a_list_is_none_and_costs_nothing_else() {
+        for bad in [r#""texte""#, "null", "42", r#"{"a": "b"}"#, "true"] {
+            let json = format!(
+                r#"{{"criteres": [{{"n": 1, "ok": true, "note": "vu"}}], "avancement": {bad}, "lancement": {{"processus": [{{"nom": "web", "commande": "npm run dev"}}]}}}}"#
+            );
+            let r = parse_report(&block(&json)).unwrap();
+            assert_eq!(r.progress, None, "{bad}");
+            assert_eq!(r.criteria, Some(vec![(1, true, "vu".to_string())]), "{bad}");
+            assert_eq!(
+                r.recipe.unwrap().processes[0].command,
+                "npm run dev",
+                "{bad}"
+            );
+        }
+        // And the other way: a list does not need the criteria or the recipe.
+        let r = parse_report(&block(r#"{"avancement": ["a"]}"#)).unwrap();
+        assert_eq!(
+            (r.progress, r.criteria, r.recipe),
+            (Some(vec!["a".to_string()]), None, None)
+        );
+    }
+
+    #[test]
+    fn the_last_progress_replaces_the_previous_and_a_report_without_one_keeps_it() {
+        let mut t = ticket(1, 5);
+        t.progress = vec!["ancien".into()];
+        let (end, r) =
+            finished(r#"{"criteres": [{"n": 1, "ok": false}], "avancement": ["x", "y"]}"#);
+        turn_end(&mut t, &end, r.as_ref(), 1);
+        assert_eq!(t.progress, ["x", "y"]);
+        // A report without `avancement` leaves it as it was (a loop, here).
+        let (end, r) = finished(r#"{"criteres": [{"n": 1, "ok": false}]}"#);
+        let next = turn_end(&mut t, &end, r.as_ref(), 2);
+        assert!(next.send.is_some());
+        assert_eq!(t.progress, ["x", "y"]);
+        // So does one whose `avancement` is not a list.
+        let (end, r) = finished(r#"{"criteres": [{"n": 1, "ok": false}], "avancement": "fait"}"#);
+        turn_end(&mut t, &end, r.as_ref(), 3);
+        assert_eq!(t.progress, ["x", "y"]);
+        // The last one wins, on the turn that sends the ticket to review too.
+        let (end, r) = finished(r#"{"criteres": [{"n": 1, "ok": true}], "avancement": ["z"]}"#);
+        turn_end(&mut t, &end, r.as_ref(), 4);
+        assert_eq!(
+            (t.column, t.progress.clone()),
+            (Column::Review, vec!["z".to_string()])
+        );
+        // Neither a ticket no longer "En cours" nor an end without a report touches it.
+        let (end, r) = finished(r#"{"criteres": [{"n": 1, "ok": true}], "avancement": ["autre"]}"#);
+        turn_end(&mut t, &end, r.as_ref(), 5);
+        assert_eq!(t.progress, ["z"]);
+        let mut t = ticket(1, 5);
+        t.progress = vec!["a".into()];
+        for end in [
+            TurnEnd::Interrupted,
+            TurnEnd::Limited,
+            TurnEnd::Error("boom".into()),
+            TurnEnd::Finished("Fini.".into()),
+        ] {
+            turn_end(&mut t, &end, None, 6);
+            assert_eq!(t.progress, ["a"], "{end:?}");
+        }
+    }
+
+    #[test]
+    fn a_report_with_a_progress_but_no_criteria_still_gives_it_and_is_asked_for_again() {
+        let mut t = ticket(1, 5);
+        let (end, r) = finished(r#"{"avancement": ["a", "b"]}"#);
+        let next = turn_end(&mut t, &end, r.as_ref(), 1);
+        assert_eq!(next.send.as_deref(), Some(REMINDER));
+        assert_eq!((t.iteration, t.reminded), (1, true));
+        assert_eq!(t.progress, ["a", "b"]);
+    }
+
+    #[test]
+    fn the_protocol_asks_for_a_short_progress_list_with_the_report() {
+        for ports in [None, Some(4100)] {
+            let p = protocol_prompt(&ticket(2, 5), ports);
+            assert!(!p.contains('\n') && !p.contains('\r'), "{p}");
+            assert!(
+                p.contains(
+                    "Ajoute au bilan « avancement » : la liste succincte (3 à 8 éléments courts) \
+                     des fonctionnalités en place jusque-là."
+                ),
+                "{ports:?}: {p}"
+            );
+            // The key is in the example of the block, next to the criteria.
+            let example = p.find("{\"criteres\": [").expect("the example");
+            let key = p[example..]
+                .find("\"avancement\": [\"")
+                .expect("the key in the example");
+            assert!(
+                p[example..][..key].contains("\"ok\": false"),
+                "{ports:?}: {p}"
+            );
+            assert!(escaped_len(&p) <= PROTOCOL_BUDGET, "{ports:?}");
+        }
     }
 
     #[test]
