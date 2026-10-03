@@ -22,6 +22,7 @@ Décisions validées le 2026-10-03 :
 | clé | `<PRÉFIXE>-<n>` : préfixe = 3 premières lettres du nom du projet en majuscules (`TIC` à défaut), fixé au premier ticket ; numéro croissant par projet, jamais réutilisé |
 | titre, description | texte ; description facultative (contexte, contraintes, fichiers) |
 | critères | liste ordonnée ; chacun avec son dernier état (`ok`) et la note de l'agent |
+| avancement | liste succincte des fonctionnalités en place, donnée par l'agent à chaque bilan (3 à 8 éléments courts ; le dernier bilan reçu remplace le précédent) |
 | boucles max | 3, 5 ou 8 (5 par défaut) |
 | colonne | À faire · En cours · À tester · Terminé |
 | rang | ordre dans « À faire » (priorité) |
@@ -72,11 +73,12 @@ L'agent travaille sur le ticket ; il vérifie lui-même chaque critère (tests, 
 ````
 ```escouade
 {"criteres": [{"n": 1, "ok": true, "note": "vérifié par tests/auth.test.ts"}, {"n": 2, "ok": false, "note": "reste la rotation"}],
+ "avancement": ["Tokens d'accès signés et vérifiés", "Middleware requireSession réécrit", "Adaptateur des sessions legacy"],
  "lancement": { … facultatif, voir Lancement de test … }}
 ```
 ````
 
-Le prompt rappelle la liste des critères numérotés, les ports réservés au worktree, et qu'il ne faut pas changer les ports dans des fichiers versionnés (arguments ou variables d'environnement).
+`avancement` : l'état d'avancement, liste succincte des fonctionnalités mises en place jusque-là (3 à 8 éléments, une ligne chacun) ; un bilan sans `avancement` garde le précédent. Le prompt rappelle la liste des critères numérotés, les ports réservés au worktree, et qu'il ne faut pas changer les ports dans des fichiers versionnés (arguments ou variables d'environnement).
 
 ### Fin de tour
 
@@ -100,10 +102,10 @@ Démarrage de l'app : un ticket « En cours » dont le tour a été coupé par l
 
 1. **arrêt** des lancements de test de l'agent ;
 2. **tests** (si activés) : la commande tourne dans le worktree (shell par défaut, 20 min max, `ESCOUADE_PORT_BASE` défini). Échec → le ticket repasse « En cours » sur le même agent, boucle 1, message « Les tests (`<commande>`) échouent : » + les 80 dernières lignes ;
-3. **commit** des modifications restantes du worktree (sauf « Laisser en l'état ») : message généré par Haiku (appel ponctuel comme le renommage : titre, description, `git diff --stat`) au format Conventional Commits suivi de ` [<clé>]`, vérifié par expression régulière, `feat: <titre> [<clé>]` à défaut ; sans « Message de commit généré » : `<clé> <titre>` ;
+3. **commit** des modifications restantes du worktree (sauf « Laisser en l'état ») : message généré par Haiku (appel ponctuel comme le renommage : titre, description, avancement, `git diff --stat`) au format Conventional Commits suivi de ` [<clé>]`, vérifié par expression régulière, `feat: <titre> [<clé>]` à défaut ; sans « Message de commit généré » : `<clé> <titre>` ;
 4. **action** :
    - **merger** — la branche cible est-elle extraite dans le dossier du projet ? Oui : le merge s'y fait, refusé si ce dossier a des modifications suivies non commitées (« Le dossier du projet a des modifications non commitées sur main »). Extraite dans le worktree d'un agent : refus (« main est extraite dans le worktree de X »). Sinon : worktree temporaire `.claude/worktrees/.merge-<clé>` sur la cible, retiré ensuite. Stratégies : *merge commit* `merge --no-ff` (message par défaut de git) ; *squash* `merge --squash` + commit avec le message généré ; *rebase* `rebase <cible>` dans le worktree du ticket puis `merge --ff-only` côté cible ;
-   - **PR** — push de `ticket/<clé>` (`-u`), puis `gh pr create --base <cible> --head <branche> --title <message> --body <description + critères> [--draft]` si `gh` est dans le PATH (issue « ⇡ PR #N → main » + lien) ; sinon, dépôt GitHub : ouverture de `https://github.com/<owner>/<repo>/compare/<cible>...<branche>?expand=1&title=…&body=…` (issue « ⇡ ticket/atl-42 poussée · PR à finaliser ») ; autre hébergeur : push seul et message ;
+   - **PR** — push de `ticket/<clé>` (`-u`), puis `gh pr create --base <cible> --head <branche> --title <message> --body <description + avancement + critères> [--draft]` si `gh` est dans le PATH (issue « ⇡ PR #N → main » + lien) ; sinon, dépôt GitHub : ouverture de `https://github.com/<owner>/<repo>/compare/<cible>...<branche>?expand=1&title=…&body=…` (issue « ⇡ ticket/atl-42 poussée · PR à finaliser ») ; autre hébergeur : push seul et message ;
    - **pousser** — push de `ticket/<clé>` (`-u`) ;
    - **laisser** — rien ;
 5. **fin** : merge, PR, push → l'agent est archivé (process arrêté) ; après un merge, si « Supprimer le worktree » : worktree et branche supprimés (`branch -D`, nécessaire après un squash) ; PR et push gardent la branche et le worktree. « Laisser » garde l'agent actif. Le ticket passe « Terminé » avec son issue.
@@ -162,11 +164,11 @@ Pour tout agent à worktree, ticket ou non.
 - **Cartes** (comme le design) :
   - commun : clé, titre ;
   - « À faire » : « N critères · max M boucles », état d'attente (« Pris dès qu'une place se libère », « En attente d'une place (2/2) », « Pilote auto désactivé ») et « Lancer » si une place est libre et le pilote désactivé ;
-  - « En cours » : « Boucle n/max », critères ✓ / ○, barre de progression (critères atteints / total), activité en direct de l'agent avec les points animés (« Lit src/db.ts », « Modifie src/middleware/auth.ts », « Lance npm test », « Réfléchit »…) ou « Question en attente de ta réponse » (bordure jaune), pied avec l'agent ; bloqué : bandeau avec la raison et « Reprendre » ;
-  - « À tester » : critères, « Objectif partiel », « n/N critères », liens et bouton « ▶ Tester » / « ■ Arrêter » si recette, boutons de validation et « Renvoyer » ; étape de validation en cours ; bandeau de blocage ou de conflit avec ses boutons ;
+  - « En cours » : « Boucle n/max », critères ✓ / ○, barre de progression (critères atteints / total), les derniers éléments de l'avancement (3 au plus, « +n » s'il y en a d'autres), activité en direct de l'agent avec les points animés (« Lit src/db.ts », « Modifie src/middleware/auth.ts », « Lance npm test », « Réfléchit »…) ou « Question en attente de ta réponse » (bordure jaune), pied avec l'agent ; bloqué : bandeau avec la raison et « Reprendre » ;
+  - « À tester » : avancement complet (« Ce qui a été fait »), critères, « Objectif partiel », « n/N critères », liens et bouton « ▶ Tester » / « ■ Arrêter » si recette, boutons de validation et « Renvoyer » ; étape de validation en cours ; bandeau de blocage ou de conflit avec ses boutons ;
   - « Terminé » : issue (lien s'il y en a un), « n boucles · coût », carte atténuée ; les plus récents en haut.
 - **Activité de l'agent** : nouveau champ de la vue d'un agent, tenu par le cœur à partir des outils lancés (Read → « Lit », Grep / Glob → « Cherche », Edit / MultiEdit → « Modifie », Write → « Écrit », Bash → « Lance » + commande tronquée, Task → « Délègue », réflexion → « Réfléchit », texte → « Rédige »), vidé en fin de tour.
-- **Conversation** : un bloc `escouade` s'affiche comme une carte « Bilan des critères » (✓ / ○, texte du critère, note) suivie, s'il y a une recette, de « Lancement de test » (processus, URL, bouton « ▶ Tester »).
+- **Conversation** : un bloc `escouade` s'affiche comme une carte « Bilan des critères » (✓ / ○, texte du critère, note ; puis l'avancement en liste) suivie, s'il y a une recette, de « Lancement de test » (processus, URL, bouton « ▶ Tester »).
 - **Notifications** : passage « À tester » → « ATL-42 prêt à tester » (carillon ; toast système en arrière-plan, clic → tableau du projet) ; ticket bloqué → « ATL-42 bloqué : <raison> ». Les notifications de fin de tour d'un agent de ticket « En cours » sont supprimées ; ses questions notifient comme d'habitude.
 
 ## Backend (Rust)
