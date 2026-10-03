@@ -684,9 +684,38 @@ pub async fn checkout_of(repo: &str, branch: &str) -> Result<Option<String>> {
     Ok(None)
 }
 
-/// Of `paths`, those that a commit of `branch` not in `base` added, changed or removed, side
-/// branches merged into it included: what merging `branch` would bring into `base`'s history,
-/// even when a later commit took it out of the tree again.
+/// Of `paths`, those that `branch` changed since it left `base` (`base...branch`), whatever
+/// `base` did since: what its tree brings.
+pub async fn changed_in(
+    repo: &str,
+    base: &str,
+    branch: &str,
+    paths: &[String],
+) -> Result<Vec<String>> {
+    if paths.is_empty() {
+        return Ok(Vec::new());
+    }
+    let range = format!("{base}...{branch}");
+    let mut args = vec![
+        "--literal-pathspecs",
+        "diff",
+        "--name-only",
+        "--no-renames",
+        &range,
+        "--",
+    ];
+    args.extend(paths.iter().map(String::as_str));
+    Ok(text(repo, &args)
+        .await?
+        .lines()
+        .filter(|l| !l.is_empty())
+        .map(str::to_string)
+        .collect())
+}
+
+/// Of `paths`, those that a commit of `branch` not in `base` added, changed or removed, merge
+/// commits and the side branches they brought included: what merging `branch` would bring into
+/// `base`'s history, even when a later commit took it out of the tree again.
 pub async fn touched_by(
     repo: &str,
     base: &str,
@@ -706,6 +735,9 @@ pub async fn touched_by(
         // Every commit that touched them: by default, a merge that ends up as one of its parents
         // hides the other side's commits.
         "--full-history",
+        // A merge commit's own files, against each of its parents: by default a merge shows none,
+        // and one that brought a file (`git add -A` while resolving) would go unseen.
+        "--diff-merges=separate",
         &range,
         "--",
     ];
@@ -1489,6 +1521,44 @@ mod repo_tests {
         std::fs::write(Path::new(&r).join("résumé.md"), "main\n").unwrap();
         git(&r, &["commit", "-qam", "main"]);
         r
+    }
+
+    #[tokio::test]
+    async fn a_file_a_merge_commit_brought_is_found_in_the_branch_and_its_history() {
+        let r = diverged("git-merge-brings", false);
+        let env = vec![".env".to_string()];
+        // The agent merges its target and stages everything to commit the merge: the untracked
+        // .env goes in with it.
+        git(&r, &["checkout", "-q", "feat"]);
+        git(&r, &["merge", "-q", "--no-ff", "--no-commit", "main"]);
+        std::fs::write(Path::new(&r).join(".env"), "SECRET=1\n").unwrap();
+        git(&r, &["add", "-A"]);
+        git(&r, &["commit", "-qm", "merge main"]);
+        git(&r, &["checkout", "-q", "main"]);
+        assert_eq!(changed_in(&r, "main", "feat", &env).await.unwrap(), env);
+        assert_eq!(touched_by(&r, "main", "feat", &env).await.unwrap(), env);
+        // Taken out again by a later commit: only the history has it.
+        git(&r, &["checkout", "-q", "feat"]);
+        git(&r, &["rm", "--cached", "-q", ".env"]);
+        git(&r, &["commit", "-qm", "sans env"]);
+        git(&r, &["checkout", "-q", "main"]);
+        assert!(changed_in(&r, "main", "feat", &env)
+            .await
+            .unwrap()
+            .is_empty());
+        assert_eq!(touched_by(&r, "main", "feat", &env).await.unwrap(), env);
+        // Only what is asked; the branch's own other files are not.
+        assert_eq!(
+            changed_in(&r, "main", "feat", &["b.txt".to_string(), ".env".into()])
+                .await
+                .unwrap(),
+            ["b.txt"]
+        );
+        assert!(changed_in(&r, "main", "feat", &[])
+            .await
+            .unwrap()
+            .is_empty());
+        assert!(changed_in(&r, "main", "nowhere", &env).await.is_err());
     }
 
     #[tokio::test]

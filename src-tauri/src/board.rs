@@ -508,6 +508,30 @@ pub fn commit_from_answer(raw: &str, key: &str) -> Option<String> {
         .then(|| line.to_string())
 }
 
+/// Why a validation stops on files copied from the project that the ticket's branch carries:
+/// those in its tree (`in_tree`) first, else those only in its history, so that the user knows
+/// what to fix. None when there are none.
+pub fn copied_refusal(in_tree: &[String], in_history: &[String]) -> Option<String> {
+    let (files, singular, plural) = if !in_tree.is_empty() {
+        (
+            in_tree,
+            "est commité dans la branche",
+            "sont commités dans la branche",
+        )
+    } else {
+        (
+            in_history,
+            "est dans l'historique de la branche",
+            "sont dans l'historique de la branche",
+        )
+    };
+    match files {
+        [] => None,
+        [one] => Some(format!("{one} copié du projet {singular}")),
+        many => Some(format!("{} copiés du projet {plural}", many.join(", "))),
+    }
+}
+
 /// When Haiku gave nothing usable.
 pub fn fallback_commit(t: &Ticket) -> String {
     format!("feat: {} [{}]", t.title.trim(), t.key)
@@ -1573,6 +1597,28 @@ mod tests {
             );
             assert!(!p.contains('\n') && escaped_len(&p) <= PROTOCOL_BUDGET);
         }
+    }
+
+    #[test]
+    fn a_copied_file_in_the_branch_is_told_apart_from_one_only_in_its_history() {
+        let s = |l: &[&str]| l.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        assert_eq!(copied_refusal(&s(&[]), &s(&[])), None);
+        assert_eq!(
+            copied_refusal(&s(&[".env"]), &s(&[".env"])).as_deref(),
+            Some(".env copié du projet est commité dans la branche")
+        );
+        assert_eq!(
+            copied_refusal(&s(&[".env", "web/.env"]), &s(&[".env.local"])).as_deref(),
+            Some(".env, web/.env copiés du projet sont commités dans la branche")
+        );
+        assert_eq!(
+            copied_refusal(&s(&[]), &s(&[".env"])).as_deref(),
+            Some(".env copié du projet est dans l'historique de la branche")
+        );
+        assert_eq!(
+            copied_refusal(&s(&[]), &s(&[".env", ".env.local"])).as_deref(),
+            Some(".env, .env.local copiés du projet sont dans l'historique de la branche")
+        );
     }
 
     #[test]

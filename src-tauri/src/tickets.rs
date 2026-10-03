@@ -792,7 +792,7 @@ impl<R: Runtime> Core<R> {
     pub(crate) fn merge_lock(&self, repo: &str) -> Arc<tokio::sync::Mutex<()>> {
         self.merge_locks
             .lock()
-            .entry(repo.to_string())
+            .entry(merge_lock_key(repo))
             .or_default()
             .clone()
     }
@@ -926,16 +926,13 @@ impl<R: Runtime> Core<R> {
                 git::commit_staged(&wt.path, &m).await?;
                 message = Some(m);
             }
-            // One the agent committed itself goes no further than its branch, even taken out
-            // again since: a merge commit or a rebase would bring that commit along.
-            let committed = git::touched_by(&wt.path, &target, &wt.branch, &copied).await?;
-            match committed.as_slice() {
-                [] => {}
-                [one] => bail!("{one} copié du projet est commité dans la branche"),
-                many => bail!(
-                    "{} copiés du projet sont commités dans la branche",
-                    many.join(", ")
-                ),
+            // One the agent committed itself goes no further than its branch: in its tree, or
+            // only in its history (taken out again since, which a merge commit or a rebase would
+            // bring along all the same).
+            let in_tree = git::changed_in(&wt.path, &target, &wt.branch, &copied).await?;
+            let in_history = git::touched_by(&wt.path, &target, &wt.branch, &copied).await?;
+            if let Some(refusal) = board::copied_refusal(&in_tree, &in_history) {
+                bail!(refusal);
             }
             self.still_validating(&t.id, &agent_id)?;
         }
@@ -1046,6 +1043,8 @@ impl<R: Runtime> Core<R> {
         // Two validations never merge into the same folder at once: the second one waits.
         let lock = self.merge_lock(&repo);
         let _merging = lock.lock().await;
+        // Its agent may have been archived or set to work during Haiku's answer and that wait.
+        self.still_validating(&t.id, t.agent_id.as_deref().unwrap_or_default())?;
         let tmp = Path::new(&repo)
             .join(".claude")
             .join("worktrees")
@@ -1144,6 +1143,15 @@ async fn not_committed(cwd: &str, copied: &[String]) -> Vec<String> {
         }
     }
     out
+}
+
+/// The key of a repository's merge lock: its folder however it is spelled, as `same_dir` sees it
+/// (the real path, else the path written with `/` and in lower case).
+pub(crate) fn merge_lock_key(repo: &str) -> String {
+    match std::fs::canonicalize(repo) {
+        Ok(p) => p.to_string_lossy().into_owned(),
+        Err(_) => repo.replace('\\', "/").trim_end_matches('/').to_lowercase(),
+    }
 }
 
 /// The block when the ticket left its validation (its agent archived or deleted meanwhile).

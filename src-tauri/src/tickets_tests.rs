@@ -2233,12 +2233,100 @@ async fn a_copied_file_committed_then_removed_still_stops_the_merge() {
     );
     h.core.ticket_approve(&t.id).await.unwrap();
     let t = h.ticket(&t.id);
+    // Told apart from one still in the branch: what is to fix is its history.
+    assert_eq!(
+        (t.column, t.blocked.as_deref()),
+        (
+            Column::Review,
+            Some(".env copié du projet est dans l'historique de la branche")
+        )
+    );
+    assert_eq!(git(&r, &["rev-list", "--count", "main"]), "1");
+}
+
+#[tokio::test]
+async fn a_copied_file_a_merge_commit_of_the_agent_brought_stops_the_merge() {
+    let h = harness("tk-env-merge");
+    let (p, r) = h.project(false).await;
+    std::fs::write(r.join(".env"), "SECRET=1\n").unwrap();
+    git(&r, &["branch", "release"]);
+    h.set_board(&p.id, |s| s.target = "release".into());
+    let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    // The target moved on; the agent merged it into its branch and, resolving with
+    // `git add -A`, committed the copied .env with the merge.
+    commit_change(&r, "const a = 3;\n", "main change");
+    git(&r, &["branch", "-f", "release", "main"]);
+    git(&wt, &["merge", "-q", "--no-ff", "--no-commit", "release"]);
+    git(&wt, &["add", "-A"]);
+    git(&wt, &["commit", "-qm", "merge release"]);
+    assert!(git(&wt, &["ls-tree", "-r", "--name-only", "HEAD"]).contains(".env"));
+    h.core.ticket_approve(&t.id).await.unwrap();
+    let t = h.ticket(&t.id);
     assert_eq!(
         (t.column, t.blocked.as_deref()),
         (
             Column::Review,
             Some(".env copié du projet est commité dans la branche")
         )
+    );
+    assert_eq!(
+        git(&r, &["ls-tree", "-r", "--name-only", "release"]),
+        "src/app.ts"
+    );
+}
+
+#[tokio::test]
+async fn the_merge_lock_of_a_repository_is_one_however_its_path_is_spelled() {
+    use crate::tickets::merge_lock_key;
+    let h = harness("tk-lock-key");
+    let (_, r) = h.project(false).await;
+    let a = r.to_string_lossy().to_string();
+    let b = if cfg!(windows) {
+        a.replace('\\', "/").to_uppercase()
+    } else {
+        format!("{a}/")
+    };
+    assert_eq!(merge_lock_key(&a), merge_lock_key(&b));
+    assert!(std::sync::Arc::ptr_eq(
+        &h.core.merge_lock(&a),
+        &h.core.merge_lock(&b)
+    ));
+    assert_ne!(
+        merge_lock_key(&a),
+        merge_lock_key(&h.dir.join("data").to_string_lossy())
+    );
+    // A folder that is not there: compared as it is written, case and separators aside.
+    assert_eq!(
+        merge_lock_key("C:\\Nulle\\Part\\"),
+        merge_lock_key("c:/nulle/part")
+    );
+}
+
+#[tokio::test]
+async fn archiving_its_agent_while_its_merge_waits_merges_nothing() {
+    let h = harness("tk-lock-archive");
+    let (p, r) = h.project(false).await;
+    let (t, _) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let aid = t.agent_id.clone().unwrap();
+    // Another validation merges into this repository: this one waits for it.
+    let repo = h.core.toplevel(&p.path).await.unwrap();
+    let lock = h.core.merge_lock(&repo);
+    let held = lock.lock().await;
+    let meanwhile = async {
+        h.wait_ticket(&t.id, "at the merge", |t| {
+            t.step.as_deref() == Some("Merge…")
+        })
+        .await;
+        h.core.archive_agent(&aid, true).await.unwrap();
+        drop(held);
+    };
+    let (approved, ()) = tokio::join!(h.core.ticket_approve(&t.id), meanwhile);
+    approved.unwrap();
+    let t = h.ticket(&t.id);
+    assert_eq!(
+        (t.column, t.step.as_deref(), t.blocked.as_deref()),
+        (Column::Todo, None, None)
     );
     assert_eq!(git(&r, &["rev-list", "--count", "main"]), "1");
 }
