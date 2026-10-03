@@ -10,8 +10,9 @@
 // <key>.txt ("Boucle n") in its folder and ends each turn with an ```escouade report (criteria and
 // "avancement"). The ticket's title, in the protocol, steers it: [ok] every criterion met at once,
 // [jamais] none ever, [sans-bilan] no report, [lent] a turn that lasts 30 s, [recette] a launch
-// recipe, [question] a question first (the turn goes on once it is answered); by default
-// criterion n is met from loop n on.
+// recipe, [question] a question first (the turn goes on once it is answered), [fin-d-abord] an
+// interrupted turn's end sent before the answer to the interrupt; by default criterion n is met
+// from loop n on.
 
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -146,7 +147,11 @@ function startSession() {
     }
     const met = (n) => all.includes('[ok]') || (!all.includes('[jamais]') && n <= loop);
     const report = {
-      criteres: Array.from({ length: count }, (_, i) => ({ n: i + 1, ok: met(i + 1), note: met(i + 1) ? 'vérifié' : `reste le critère ${i + 1}` })),
+      criteres: Array.from({ length: count }, (_, i) => ({
+        n: i + 1,
+        ok: met(i + 1),
+        note: met(i + 1) ? 'vérifié' : `reste le critère ${i + 1}`,
+      })),
       avancement: [`Fichier ${file} écrit`, `Boucle ${loop} faite`],
     };
     if (all.includes('[recette]')) {
@@ -382,6 +387,11 @@ function startSession() {
           });
         case 'interrupt':
           clearTimeout(slowTimer);
+          if (sys.includes('[fin-d-abord]')) {
+            // The app reads the turn's end before the interrupt's answer reaches its caller.
+            result({ isError: true, subtype: 'error_during_execution' });
+            return ok(m.request_id, { still_queued: [] });
+          }
           ok(m.request_id, { still_queued: [] });
           return result({ isError: true, subtype: 'error_during_execution' });
         case 'remote_control':

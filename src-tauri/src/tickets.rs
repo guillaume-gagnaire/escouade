@@ -17,9 +17,24 @@ use tauri::Runtime;
 /// (turned off, cancelled, never planned): it would otherwise hold its place forever.
 const QUOTA_LOST: &str = "limite d'usage atteinte";
 
-/// The reason a ticket is blocked by an error: its first line (a git error may run over many),
-/// as `board::turn_end` does with an agent's; the whole error goes to the log.
+/// The reason a ticket is blocked by an error, on one line (a git error may run over many; the
+/// whole error goes to the log): the contexts the app gave, then git's `fatal:` or `error:` line,
+/// the one that tells why, when there is one; else the first line, as `board::turn_end` does with
+/// an agent's.
 pub(crate) fn error_reason(e: &anyhow::Error) -> String {
+    let layers: Vec<String> = e
+        .chain()
+        .map(|c| c.to_string())
+        .filter(|l| !l.trim().is_empty())
+        .collect();
+    let says_why = |l: &&str| l.contains("fatal:") || l.contains("error:");
+    for (i, layer) in layers.iter().enumerate() {
+        if let Some(why) = layer.lines().map(str::trim).find(says_why) {
+            let mut parts: Vec<String> = layers[..i].iter().map(|l| board::first_line(l)).collect();
+            parts.push(why.to_string());
+            return format!("Erreur : {}", board::first_line(&parts.join(": ")));
+        }
+    }
     format!("Erreur : {}", board::first_line(&format!("{e:#}")))
 }
 
@@ -330,6 +345,23 @@ impl<R: Runtime> Core<R> {
         let projects = self.projects.read().clone();
         for p in projects {
             let ids = board::to_start(&self.tickets.read(), &p.id, &p.board, paused);
+            if ids.is_empty() {
+                continue;
+            }
+            // Every ticket's branch starts from the target: while it is gone (deleted, renamed),
+            // none starts, rather than each make an agent only to block (choosing another target
+            // in the settings, or any change of the board, looks again).
+            let target = self.target_of(&p).await;
+            if !git::branch_exists(&p.path, &target).await {
+                if self.targets_missing.lock().insert(p.id.clone()) {
+                    log::info!(
+                        "board of {}: target branch {target:?} not found, no ticket starts until it is",
+                        p.name
+                    );
+                }
+                continue;
+            }
+            self.targets_missing.lock().remove(&p.id);
             for id in ids {
                 self.start_ticket(&p, &id).await;
             }
@@ -557,5 +589,148 @@ impl<R: Runtime> Core<R> {
     /// The agent's ticket is "En cours": its turns are the board's to tell about.
     pub(crate) fn ticket_doing(&self, agent_id: &str) -> bool {
         self.doing_ticket_of(agent_id).is_some()
+    }
+
+    // ---------- recovery and manual management ----------
+
+    /// The agent, unless it is gone or archived.
+    fn live_agent(&self, id: &str) -> Option<AgentMeta> {
+        let meta = self.agent(id).ok()?.lock().meta.clone();
+        (!meta.archived).then_some(meta)
+    }
+
+    /// At startup, for each ticket "En cours" and not blocked (`board::recovery`): its agent is
+    /// asked to go on (its turn cut by the app's stop, or ended but not read), or waits for its
+    /// quota; a ticket whose start the stop cut goes back to "À faire", and the agent made for it,
+    /// if any, is archived. Then what may start starts.
+    pub fn recover_tickets(self: &Arc<Self>) {
+        let cut = std::mem::take(&mut *self.cut_turns.lock());
+        let doing: Vec<(String, String, Option<String>)> = self
+            .tickets
+            .read()
+            .iter()
+            .filter(|t| t.column == Column::Doing && t.blocked.is_none())
+            .map(|t| (t.id.clone(), t.key.clone(), t.agent_id.clone()))
+            .collect();
+        for (ticket_id, key, agent_id) in doing {
+            let agent = agent_id.as_deref().and_then(|a| self.live_agent(a));
+            let cut_off = agent_id.as_ref().is_some_and(|a| cut.contains(a));
+            match (board::recovery(agent.as_ref(), cut_off), agent) {
+                (board::Recovery::GoOn, Some(agent)) => {
+                    let c = self.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let _ = c
+                            .send_or_block(&ticket_id, &agent.id, board::restart_message(&key))
+                            .await;
+                    });
+                }
+                (board::Recovery::Again, _) => self.start_over(&ticket_id, agent_id.as_deref()),
+                _ => {}
+            }
+        }
+        self.schedule();
+    }
+
+    /// The app stopped while starting the ticket: back to "À faire", and the agent made for it
+    /// (never sent its first message), if any, is archived.
+    fn start_over(self: &Arc<Self>, ticket_id: &str, agent_id: Option<&str>) {
+        let _ = self.edit_ticket(ticket_id, |t| {
+            if t.column == Column::Doing && t.blocked.is_none() && t.agent_id.as_deref() == agent_id
+            {
+                board::back_to_todo(t);
+            }
+            Ok(())
+        });
+        let made: Vec<String> = self
+            .agents
+            .read()
+            .values()
+            .filter_map(|h| {
+                let rt = h.lock();
+                let m = &rt.meta;
+                (m.ticket_id.as_deref() == Some(ticket_id) && !m.archived && m.prompts == 0)
+                    .then(|| m.id.clone())
+            })
+            .collect();
+        for a in made {
+            let c = self.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = c.archive_agent(&a, true).await {
+                    log::warn!(
+                        "agent {a}: made for a ticket that never started, not archived: {e:#}"
+                    );
+                }
+            });
+        }
+    }
+
+    /// "Reprendre" on a blocked ticket "En cours": its agent goes on (an agent that never got its
+    /// first message gets it, with the ticket's description and criteria), or, when it has none
+    /// left, the ticket starts again. The block goes as the message is sent.
+    pub async fn ticket_resume(self: &Arc<Self>, id: &str) -> Result<()> {
+        let t = self.edit_ticket(id, |t| {
+            if t.column != Column::Doing {
+                bail!("Ce ticket n'est pas en cours.");
+            }
+            // Taken up already (a second click): its agent is not asked twice.
+            if t.blocked.is_none() {
+                bail!("Ce ticket n'est pas bloqué.");
+            }
+            t.blocked = None;
+            t.reminded = false;
+            Ok(t.clone())
+        })?;
+        match t.agent_id.as_deref().and_then(|a| self.live_agent(a)) {
+            Some(agent) => {
+                // Its start failed once it was made: the ticket was never given to it.
+                let text = if agent.prompts == 0 {
+                    board::first_message(&t)
+                } else {
+                    board::resume_message(&t.key)
+                };
+                self.send_or_block(id, &agent.id, text).await
+            }
+            None => {
+                self.edit_ticket(id, |t| {
+                    board::back_to_todo(t);
+                    t.forced = true;
+                    Ok(())
+                })?;
+                self.schedule();
+                Ok(())
+            }
+        }
+    }
+
+    /// An agent was archived or deleted: its ticket "En cours" or "À tester" goes back to
+    /// "À faire", from scratch; and what may start starts (its quota wait went with it too).
+    pub(crate) fn release_ticket(self: &Arc<Self>, agent_id: &str) {
+        self.unlink_ticket(agent_id);
+        self.schedule();
+    }
+
+    /// The agent's ticket "En cours" or "À tester" goes back to "À faire", from scratch: from
+    /// then on, none of the agent's turns moves it.
+    pub(crate) fn unlink_ticket(&self, agent_id: &str) {
+        let id = self
+            .tickets
+            .read()
+            .iter()
+            .find(|t| {
+                t.agent_id.as_deref() == Some(agent_id)
+                    && matches!(t.column, Column::Doing | Column::Review)
+            })
+            .map(|t| t.id.clone());
+        if let Some(id) = id {
+            let _ = self.edit_ticket(&id, |t| {
+                // Checked again under the lock: it may have moved since.
+                if t.agent_id.as_deref() == Some(agent_id)
+                    && matches!(t.column, Column::Doing | Column::Review)
+                {
+                    board::back_to_todo(t);
+                }
+                Ok(())
+            });
+        }
     }
 }

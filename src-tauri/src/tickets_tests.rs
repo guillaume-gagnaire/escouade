@@ -1,16 +1,19 @@
 //! Integration tests of the board: real git repositories and the fake `claude` CLI, which plays a
 //! ticket's agent as its title says: [ok] (every criterion met at once), [jamais] (none ever),
 //! [sans-bilan] (no report), [lent] (a turn that lasts), [recette] (a launch recipe), [question]
-//! (a question first); by default criterion n is met from loop n on.
+//! (a question first), [fin-d-abord] (an interrupted turn's end read before the interrupt's
+//! answer); by default criterion n is met from loop n on.
 
 use crate::board::TurnEnd;
-use crate::core::AgentOptions;
+use crate::core::{AgentOptions, Core};
 use crate::core_tests::{git, harness, Harness};
 use crate::model::*;
 use crate::tickets::{error_reason, TicketDraft};
 use serde_json::json;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
+use std::time::Duration;
+use tauri::test::mock_app;
 
 fn draft(title: &str, criteria: &[&str], max_loops: u32) -> TicketDraft {
     TicketDraft {
@@ -80,6 +83,76 @@ impl Harness {
         self.core.settings.write().claude_path =
             self.dir.join("absent.cmd").to_string_lossy().to_string();
     }
+
+    /// Waits until the fake CLI in `dir` read a message starting with `start` (it logs what it
+    /// reads: right after a send, it may not have yet).
+    async fn wait_sent(&self, dir: &Path, start: &str) {
+        self.wait("message read by the agent", |h| {
+            h.stdin_messages(dir).iter().any(|m| {
+                m["message"]["content"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .starts_with(start)
+            })
+        })
+        .await
+    }
+
+    /// For a while (what it takes a late turn end to be read), no alert is raised.
+    async fn stays_quiet(&self) {
+        for _ in 0..50 {
+            assert!(self.alerts().is_empty(), "{:?}", self.alerts());
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        self.wait_board_idle().await;
+        assert!(self.alerts().is_empty(), "{:?}", self.alerts());
+    }
+
+    /// A plain agent of the project (no worktree, no protocol: the fake CLI only echoes) that
+    /// already took a message.
+    async fn agent_that_worked(&self, project_id: &str) -> String {
+        let a = self
+            .core
+            .create_agent_with(project_id, AgentOptions::default())
+            .await
+            .unwrap()
+            .meta
+            .id;
+        self.core
+            .send_message(&a, "Bonjour".into(), vec![])
+            .await
+            .unwrap();
+        self.wait("its turn over", |h| {
+            let m = h.agent(&a);
+            m.prompts == 1 && m.status == AgentStatus::Done
+        })
+        .await;
+        a
+    }
+}
+
+/// Waits until the ticket's agent is running a turn.
+async fn wait_running(h: &Harness, ticket_id: &str) -> String {
+    h.wait("turn running", |h| {
+        h.ticket(ticket_id)
+            .agent_id
+            .is_some_and(|id| h.agent(&id).status == AgentStatus::Running)
+    })
+    .await;
+    h.ticket(ticket_id).agent_id.unwrap()
+}
+
+/// The texts of the user messages in the agent's conversation.
+fn user_texts(core: &Core<tauri::test::MockRuntime>, agent_id: &str) -> Vec<String> {
+    core.agent(agent_id)
+        .unwrap()
+        .lock()
+        .conv
+        .items()
+        .iter()
+        .filter(|i| i["kind"] == "user")
+        .map(|i| i["text"].as_str().unwrap_or_default().to_string())
+        .collect()
 }
 
 /// A hook of `repo` that fails every checkout, a new worktree's included, on several lines.
@@ -690,17 +763,31 @@ async fn a_ticket_whose_agent_cannot_start_is_blocked_and_the_next_one_gets_its_
 }
 
 #[test]
-fn a_block_reason_is_the_first_line_of_the_error() {
+fn a_block_reason_is_one_line_the_one_where_git_says_why_when_there_is_one() {
+    // git's `fatal:` line, after the context the app gave.
     let e = anyhow::anyhow!("Preparing worktree (new branch 'ticket/dem-1')\nfatal: refusé")
         .context("worktree du ticket non créé");
     assert_eq!(
         error_reason(&e),
-        "Erreur : worktree du ticket non créé: Preparing worktree (new branch 'ticket/dem-1')"
+        "Erreur : worktree du ticket non créé: fatal: refusé"
     );
     assert_eq!(
         error_reason(&anyhow::anyhow!("\n  \nfatal: seul")),
         "Erreur : fatal: seul"
     );
+    // Or its `error:` line, under every context.
+    let e = anyhow::anyhow!(
+        "Switched to a new branch\nerror: pathspec 'x' did not match\nhint: try again"
+    )
+    .context("checkout")
+    .context("préparation");
+    assert_eq!(
+        error_reason(&e),
+        "Erreur : préparation: checkout: error: pathspec 'x' did not match"
+    );
+    // Else its first line.
+    let e = anyhow::anyhow!("ligne un\nligne deux").context("étape");
+    assert_eq!(error_reason(&e), "Erreur : étape: ligne un");
 }
 
 #[tokio::test]
@@ -1067,4 +1154,439 @@ async fn a_ticket_agent_gives_its_launch_recipe_in_its_report() {
         (recipe.processes[0].name.as_str(), recipe.open.as_str()),
         ("web", "http://localhost:4100/fonction")
     );
+}
+
+// ---------- recovery at startup and manual management ----------
+
+#[tokio::test]
+async fn a_ticket_whose_turn_the_app_cut_asks_its_agent_to_go_on_at_the_next_start() {
+    let h = harness("tk-restart");
+    let (p, _) = h.project(false).await;
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Long travail [lent]", &[], 5))
+        .await
+        .unwrap();
+    let aid = wait_running(&h, &t.id).await;
+    // Another ticket was being validated when the app stopped.
+    h.core.tickets.write().push(Ticket {
+        id: "t2".into(),
+        project_id: p.id.clone(),
+        key: "DEM-9".into(),
+        column: Column::Review,
+        step: Some("Merge…".into()),
+        conflict: true,
+        ..Default::default()
+    });
+    h.core.shutdown();
+    let app = mock_app();
+    let (re, _rx) = Core::load(app.handle().clone(), h.core.data.clone());
+    let v = re.ticket("t2").unwrap();
+    assert_eq!(
+        (v.column, v.step.clone(), v.blocked.as_deref(), v.conflict),
+        (Column::Review, None, Some("Validation interrompue"), false)
+    );
+    assert_eq!(*re.cut_turns.lock(), std::slice::from_ref(&aid));
+    re.recover_tickets();
+    let asked = |re: &Core<tauri::test::MockRuntime>| {
+        user_texts(re, &aid).iter().any(|text| {
+            text.starts_with("L'app a redémarré pendant ton travail sur DEM-1 : reprends")
+        })
+    };
+    for _ in 0..750 {
+        if asked(&re) {
+            // Taken once: a second call finds nothing cut.
+            assert!(re.cut_turns.lock().is_empty());
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    panic!("the agent was not asked to go on");
+}
+
+#[tokio::test]
+async fn a_turn_the_apps_stop_cuts_is_no_error_of_the_agent_and_is_saved_running() {
+    let h = harness("tk-quit-cut");
+    let (p, _) = h.project(false).await;
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Long travail [lent]", &[], 5))
+        .await
+        .unwrap();
+    let aid = wait_running(&h, &t.id).await;
+    let proc = h.core.agent(&aid).unwrap().lock().proc.clone().unwrap();
+    h.core.shutdown();
+    h.wait("its process gone", |_| !proc.is_alive()).await;
+    // Its exit is handled right after: given the time, it does not turn the cut turn into an error.
+    for _ in 0..25 {
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        assert_eq!(h.agent(&aid).status, AgentStatus::Running);
+    }
+    assert!(
+        !h.items(&aid).iter().any(|i| i["kind"] == "notice"),
+        "{:?}",
+        h.items(&aid)
+    );
+    // Saved again after that exit, it is still a cut turn.
+    h.core.save_now();
+    let app = mock_app();
+    let (re, _rx) = Core::load(app.handle().clone(), h.core.data.clone());
+    assert_eq!(*re.cut_turns.lock(), [aid]);
+}
+
+#[tokio::test]
+async fn an_interrupted_ticket_is_blocked_until_taken_up_again() {
+    let h = harness("tk-interrupt");
+    let (p, _) = h.project(false).await;
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Long travail [lent]", &[], 5))
+        .await
+        .unwrap();
+    let aid = wait_running(&h, &t.id).await;
+    h.core.interrupt(&aid).await.unwrap();
+    h.wait_ticket(&t.id, "blocked", |t| t.blocked.is_some())
+        .await;
+    assert_eq!(h.ticket(&t.id).blocked.as_deref(), Some("Interrompu"));
+    h.core.ticket_resume(&t.id).await.unwrap();
+    assert_eq!(h.ticket(&t.id).blocked, None);
+    h.wait_sent(
+        &h.worktree_of(&t.id),
+        "Reprends le ticket DEM-1 là où tu en étais, puis termine par le bilan.",
+    )
+    .await;
+    // Taken up, it is no longer blocked: a second click is refused, as for a ticket not under way.
+    assert!(h.core.ticket_resume(&t.id).await.is_err());
+    h.core
+        .edit_ticket(&t.id, |t| {
+            t.column = Column::Review;
+            t.blocked = Some("Validation interrompue".into());
+            Ok(())
+        })
+        .unwrap();
+    assert!(h.core.ticket_resume(&t.id).await.is_err());
+    assert!(h.core.ticket_resume("inconnu").await.is_err());
+}
+
+#[tokio::test]
+async fn resuming_a_ticket_whose_agent_never_got_its_first_message_sends_it() {
+    let h = harness("tk-resume-first");
+    let (p, r) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let t = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                description: "Contexte : l'API publique.".into(),
+                ..draft("Limiter", &["5 essais par IP"], 5)
+            },
+        )
+        .await
+        .unwrap();
+    // Its start failed once the agent was made, before its first message.
+    let a = h
+        .core
+        .create_agent_with(&p.id, AgentOptions::default())
+        .await
+        .unwrap()
+        .meta
+        .id;
+    h.core
+        .edit_ticket(&t.id, |t| {
+            t.column = Column::Doing;
+            t.iteration = 1;
+            t.agent_id = Some(a.clone());
+            t.blocked = Some(NO_CLAUDE.into());
+            Ok(())
+        })
+        .unwrap();
+    h.core.ticket_resume(&t.id).await.unwrap();
+    h.wait_sent(&r, "Ticket DEM-1 : Limiter").await;
+    let first = h.last_sent(&r);
+    assert!(
+        first.contains("Contexte : l'API publique.")
+            && first.contains("1. 5 essais par IP")
+            && first.contains("Boucle 1/5"),
+        "{first}"
+    );
+}
+
+#[tokio::test]
+async fn resuming_a_ticket_whose_agent_is_gone_starts_it_again() {
+    let h = harness("tk-resume-gone");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Repartir [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.core
+        .edit_ticket(&t.id, |t| {
+            t.column = Column::Doing;
+            t.iteration = 2;
+            t.agent_id = Some("disparu".into());
+            t.blocked = Some("Interrompu".into());
+            Ok(())
+        })
+        .unwrap();
+    h.core.ticket_resume(&t.id).await.unwrap();
+    // Even with the autopilot off: "Reprendre" asked for it.
+    h.wait_ticket(&t.id, "started again to test", |t| {
+        t.column == Column::Review
+    })
+    .await;
+    assert_ne!(h.ticket(&t.id).agent_id.as_deref(), Some("disparu"));
+}
+
+#[tokio::test]
+async fn archiving_or_deleting_the_agent_of_a_ticket_sends_it_back_to_do() {
+    let h = harness("tk-archive");
+    let (p, _) = h.project(false).await;
+    let a = h
+        .core
+        .ticket_create(&p.id, draft("Premier [lent]", &[], 5))
+        .await
+        .unwrap();
+    let aid = wait_running(&h, &a.id).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    h.core.archive_agent(&aid, true).await.unwrap();
+    let t = h.ticket(&a.id);
+    assert_eq!(
+        (t.column, t.agent_id.clone(), t.iteration),
+        (Column::Todo, None, 0)
+    );
+    assert_eq!(h.agent(&aid).port_base, None);
+    // The same from "À tester", for a deleted agent.
+    let b = h
+        .core
+        .ticket_create(&p.id, draft("Second [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.core.ticket_start(&b.id).unwrap();
+    h.wait_ticket(&b.id, "to test", |t| t.column == Column::Review)
+        .await;
+    let bid = h.ticket(&b.id).agent_id.unwrap();
+    h.core.delete_agent(&bid, true).await.unwrap();
+    let t = h.ticket(&b.id);
+    assert_eq!(
+        (t.column, t.agent_id.clone(), t.review_at),
+        (Column::Todo, None, None)
+    );
+    assert!(t.criteria.iter().all(|c| !c.ok));
+}
+
+#[tokio::test]
+async fn archiving_a_ticket_agent_mid_turn_neither_blocks_its_ticket_nor_alerts() {
+    let h = harness("tk-archive-quiet");
+    let (p, _) = h.project(false).await;
+    // The stopped turn's end is read before the archive goes on.
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Long [lent] [fin-d-abord]", &[], 5))
+        .await
+        .unwrap();
+    let aid = wait_running(&h, &t.id).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    h.core.archive_agent(&aid, true).await.unwrap();
+    // Its turn ended as a stop, not as an error of the agent.
+    let turns: Vec<_> = h
+        .items(&aid)
+        .into_iter()
+        .filter(|i| i["kind"] == "turn")
+        .collect();
+    assert!(
+        turns.len() == 1 && turns[0]["interrupted"] == true && turns[0]["isError"] == false,
+        "{turns:?}"
+    );
+    h.stays_quiet().await;
+    let t = h.ticket(&t.id);
+    assert_eq!((t.column, t.blocked), (Column::Todo, None));
+}
+
+#[tokio::test]
+async fn deleting_a_ticket_under_way_archives_its_agent_and_keeps_its_worktree() {
+    let h = harness("tk-delete-running");
+    let (p, _) = h.project(false).await;
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Long [lent]", &[], 5))
+        .await
+        .unwrap();
+    let aid = wait_running(&h, &t.id).await;
+    let wt = h.worktree_of(&t.id);
+    h.core.ticket_delete(&t.id).await.unwrap();
+    assert!(h.agent(&aid).archived);
+    assert!(wt.is_dir());
+}
+
+#[tokio::test]
+async fn a_ticket_stopped_mid_start_goes_back_to_do_at_the_next_start() {
+    let h = harness("tk-recover-start");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let mut ids = Vec::new();
+    for title in ["Sans agent", "Jamais lancé", "Agent disparu", "Bloqué"] {
+        let t = h
+            .core
+            .ticket_create(&p.id, draft(title, &["Un"], 5))
+            .await
+            .unwrap();
+        ids.push(t.id);
+    }
+    let mut made = Vec::new();
+    for ticket in &ids[..2] {
+        let a = h
+            .core
+            .create_agent_with(
+                &p.id,
+                AgentOptions {
+                    ticket_id: Some(ticket.clone()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        made.push(a.meta.id);
+    }
+    // The first one made, but the app stopped before its ticket knew it; the second known to its
+    // ticket, but stopped before its first message.
+    let (orphan, never) = (made[0].clone(), made[1].clone());
+    let agents = [None, Some(never.clone()), Some("disparu".to_string()), None];
+    for (id, agent) in ids.iter().zip(agents) {
+        h.core
+            .edit_ticket(id, |t| {
+                t.column = Column::Doing;
+                t.iteration = 1;
+                t.started_at = Some(1);
+                t.criteria[0].ok = true;
+                t.agent_id = agent;
+                Ok(())
+            })
+            .unwrap();
+    }
+    // A blocked one shows why, and waits for "Reprendre".
+    h.core
+        .edit_ticket(&ids[3], |t| {
+            t.blocked = Some(NO_CLAUDE.into());
+            Ok(())
+        })
+        .unwrap();
+    h.core.recover_tickets();
+    for id in &ids[..3] {
+        let t = h.ticket(id);
+        assert_eq!(
+            (
+                t.column,
+                t.agent_id.clone(),
+                t.iteration,
+                t.started_at,
+                t.criteria[0].ok
+            ),
+            (Column::Todo, None, 0, None, false),
+            "{}",
+            t.title
+        );
+    }
+    let blocked = h.ticket(&ids[3]);
+    assert_eq!(
+        (blocked.column, blocked.blocked.as_deref()),
+        (Column::Doing, Some(NO_CLAUDE))
+    );
+    h.wait("the agents made for them archived", |h| {
+        h.agent(&orphan).archived && h.agent(&never).archived
+    })
+    .await;
+    h.wait_board_idle().await;
+    assert_eq!(h.ticket(&ids[0]).column, Column::Todo);
+}
+
+#[tokio::test]
+async fn a_ticket_under_way_whose_agent_sits_idle_is_asked_to_go_on_at_the_next_start() {
+    let h = harness("tk-recover-idle");
+    let (p, r) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Coincé", &["Un"], 5))
+        .await
+        .unwrap();
+    // Its turn ended, but the app stopped before reading it: nothing would move it again.
+    let a = h.agent_that_worked(&p.id).await;
+    h.core
+        .edit_ticket(&t.id, |t| {
+            t.column = Column::Doing;
+            t.iteration = 1;
+            t.agent_id = Some(a.clone());
+            Ok(())
+        })
+        .unwrap();
+    assert!(h.core.cut_turns.lock().is_empty());
+    h.core.recover_tickets();
+    h.wait_sent(
+        &r,
+        "L'app a redémarré pendant ton travail sur DEM-1 : reprends là où tu en étais",
+    )
+    .await;
+    // One waiting for its quota is left to its automatic resume.
+    let u = h
+        .core
+        .ticket_create(&p.id, draft("Quota", &["Un"], 5))
+        .await
+        .unwrap();
+    let b = h.agent_that_worked(&p.id).await;
+    h.core.agent(&b).unwrap().lock().meta.resume_at = Some(now_ms() + 3_600_000);
+    h.core
+        .edit_ticket(&u.id, |t| {
+            t.column = Column::Doing;
+            t.iteration = 1;
+            t.agent_id = Some(b.clone());
+            Ok(())
+        })
+        .unwrap();
+    let restarts = |h: &Harness| {
+        user_texts(&h.core, &a)
+            .iter()
+            .filter(|x| x.starts_with("L'app a redémarré"))
+            .count()
+    };
+    let before = restarts(&h);
+    h.core.recover_tickets();
+    // Asked along with the other one, it would have been by now.
+    h.wait("the idle one asked again", |h| restarts(h) > before)
+        .await;
+    h.wait_board_idle().await;
+    assert_eq!(user_texts(&h.core, &b), ["Bonjour"]);
+    assert!(h.agent(&b).resume_at.is_some());
+}
+
+#[tokio::test]
+async fn no_ticket_starts_while_the_target_branch_is_missing() {
+    let h = harness("tk-no-target");
+    let (p, r) = h.project(false).await;
+    h.set_board(&p.id, |s| s.target = "disparue".into());
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Patienter [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.core.schedule_now().await;
+    h.wait_board_idle().await;
+    // Nothing made, nothing blocked: the ticket waits for its target.
+    let waiting = h.ticket(&t.id);
+    assert_eq!(
+        (waiting.column, waiting.agent_id, waiting.blocked),
+        (Column::Todo, None, None)
+    );
+    assert_eq!(git(&r, &["branch", "--list", "ticket/*"]), "");
+    assert!(h.alerts().is_empty(), "{:?}", h.alerts());
+    assert!(h.core.targets_missing.lock().contains(&p.id));
+    // Another target chosen in the settings: the ticket starts.
+    h.set_board(&p.id, |s| s.target = "main".into());
+    h.wait_ticket(&t.id, "started once its target exists", |t| {
+        t.column == Column::Review
+    })
+    .await;
+    assert!(!h.core.targets_missing.lock().contains(&p.id));
 }

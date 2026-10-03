@@ -320,6 +320,30 @@ pub fn back_to_todo(t: &mut Ticket) {
     }
 }
 
+/// What the app's start does to a ticket "En cours" and not blocked.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Recovery {
+    /// Its agent is asked to go on (`restart_message`).
+    GoOn,
+    /// Nothing: its agent waits for its quota, and its automatic resume takes it up.
+    Wait,
+    /// Back to "À faire": the app stopped while starting it.
+    Again,
+}
+
+/// From its agent (None when gone or archived) and whether the app's stop cut that agent's turn:
+/// one that never got its first message, or none, means the start never finished; any other
+/// goes on, its turn cut or not (a stop between a turn's end and its reading leaves it idle with
+/// nothing to move it), unless it waits for its quota.
+pub fn recovery(agent: Option<&AgentMeta>, cut: bool) -> Recovery {
+    match agent {
+        None => Recovery::Again,
+        Some(m) if m.prompts == 0 => Recovery::Again,
+        Some(m) if m.resume_at.is_some() && !cut => Recovery::Wait,
+        Some(_) => Recovery::GoOn,
+    }
+}
+
 fn numbered(t: &Ticket) -> String {
     t.criteria
         .iter()
@@ -979,6 +1003,29 @@ mod tests {
             (Column::Todo, None, 0, false, None, None)
         );
         assert!(t.criteria.iter().all(|c| !c.ok && c.note.is_empty()));
+    }
+
+    #[test]
+    fn at_startup_a_ticket_under_way_goes_on_waits_for_its_quota_or_starts_again() {
+        let worked = AgentMeta {
+            prompts: 2,
+            ..Default::default()
+        };
+        // Its turn cut by the app's stop, or stuck between a turn's end and its reading.
+        assert_eq!(recovery(Some(&worked), true), Recovery::GoOn);
+        assert_eq!(recovery(Some(&worked), false), Recovery::GoOn);
+        // Waiting for its quota: its automatic resume takes it up, unless its turn was cut.
+        let waits = AgentMeta {
+            resume_at: Some(1),
+            ..worked.clone()
+        };
+        assert_eq!(recovery(Some(&waits), false), Recovery::Wait);
+        assert_eq!(recovery(Some(&waits), true), Recovery::GoOn);
+        // Stopped mid-start: no agent left, or one that never got its first message.
+        assert_eq!(recovery(None, false), Recovery::Again);
+        let never = AgentMeta::default();
+        assert_eq!(recovery(Some(&never), true), Recovery::Again);
+        assert_eq!(recovery(Some(&never), false), Recovery::Again);
     }
 
     #[test]

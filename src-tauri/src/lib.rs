@@ -228,6 +228,7 @@ pub fn run() {
             commands::ticket_delete,
             commands::ticket_prioritize,
             commands::ticket_start,
+            commands::ticket_resume,
             commands::board_set,
             commands::git_branches,
         ])

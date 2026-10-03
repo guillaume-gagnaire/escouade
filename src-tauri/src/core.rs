@@ -205,8 +205,13 @@ pub struct Core<R: Runtime = Wry> {
     pub unsaved: AtomicUsize,
     /// One scheduling pass of the board at a time.
     pub(crate) board_lock: tokio::sync::Mutex<()>,
+    /// Agents whose turn the app's previous stop cut (active when saved): their tickets go on.
+    pub(crate) cut_turns: Mutex<Vec<String>>,
     /// The last pass found no Claude Code (logged once until it is found again).
     pub(crate) claude_missing: AtomicBool,
+    /// The projects whose board's target branch the last pass did not find (logged once until it
+    /// is back): none of their tickets starts meanwhile.
+    pub(crate) targets_missing: Mutex<std::collections::HashSet<String>>,
     /// Blocks of ports reserved for agents being made: taken until the agent holds its own.
     ports_reserved: Mutex<Vec<u16>>,
     /// Notifications sent, as "<title> | <text>" (tests only).
@@ -369,6 +374,21 @@ impl<R: Runtime> Core<R> {
         }
         let settings: Settings = read_json(&data.settings_file()).unwrap_or_default();
         let state: PersistedState = read_json(&data.state_file()).unwrap_or_default();
+        // Read before the agents are made: a turn does not survive a restart (they come back done).
+        let cut_turns: Vec<String> = state
+            .agents
+            .iter()
+            .filter(|m| m.status.is_active() && !m.archived)
+            .map(|m| m.id.clone())
+            .collect();
+        let mut tickets = state.tickets;
+        for t in &mut tickets {
+            // A validation the app's stop cut: to run again by hand.
+            if t.step.take().is_some() {
+                t.blocked = Some("Validation interrompue".into());
+                t.conflict = false;
+            }
+        }
         let conv_dir = data.conversations();
         let agents = state
             .agents
@@ -388,7 +408,7 @@ impl<R: Runtime> Core<R> {
             hub: Hub::default(),
             settings: RwLock::new(settings),
             projects: RwLock::new(state.projects),
-            tickets: RwLock::new(state.tickets),
+            tickets: RwLock::new(tickets),
             ui: RwLock::new(state.ui),
             agents: RwLock::new(agents),
             usage: Mutex::new(UsageSnapshot::default()),
@@ -410,7 +430,9 @@ impl<R: Runtime> Core<R> {
             quitting: AtomicBool::new(false),
             unsaved: AtomicUsize::new(0),
             board_lock: tokio::sync::Mutex::new(()),
+            cut_turns: Mutex::new(cut_turns),
             claude_missing: AtomicBool::new(false),
+            targets_missing: Mutex::default(),
             ports_reserved: Mutex::default(),
             #[cfg(test)]
             alerts: Mutex::default(),
@@ -489,7 +511,7 @@ impl<R: Runtime> Core<R> {
             }
         });
         self.start_remote_agents();
-        self.schedule();
+        self.recover_tickets();
         self.update_tray();
     }
 
@@ -757,6 +779,11 @@ impl<R: Runtime> Core<R> {
             );
             if !current {
                 // A replaced, stopped or deleted agent's process: nothing to report.
+                return;
+            }
+            // Killed by the app's stop: the turn it cut is no failure of the agent, and is to be
+            // saved as running, so that the next start has its ticket go on (`cut_turns`).
+            if self.quitting.load(Ordering::Acquire) {
                 return;
             }
             rt.on_exit(gen, code, &stderr, &mut fx);
@@ -1705,11 +1732,19 @@ impl<R: Runtime> Core<R> {
             if self.agent(id)?.lock().meta.remote_control {
                 let _ = self.set_remote_control(id, false).await;
             }
-            // Stop the current turn first: closing stdin alone lets it run to completion.
+            // Its ticket lets go of it before its turn is stopped: that turn's end, whenever it is
+            // read, no longer moves the ticket (no « bloqué » for it).
+            self.unlink_ticket(id);
+            // Stop the current turn first: closing stdin alone lets it run to completion. Its end
+            // is then a stop, as with `interrupt`, never an error of the agent.
             let running = {
                 let h = self.agent(id)?;
-                let rt = h.lock();
-                rt.proc.clone().filter(|_| rt.meta.status.is_active())
+                let mut rt = h.lock();
+                let running = rt.proc.clone().filter(|_| rt.meta.status.is_active());
+                if running.is_some() {
+                    rt.interrupted = true;
+                }
+                running
             };
             if let Some(p) = running {
                 let _ = p
@@ -1726,6 +1761,8 @@ impl<R: Runtime> Core<R> {
             rt.meta.archived = archived;
             if archived {
                 rt.meta.resume_at = None;
+                // Its test ports are free for others.
+                rt.meta.port_base = None;
                 if let Some(p) = rt.detach() {
                     p.close_input();
                 }
@@ -1739,6 +1776,11 @@ impl<R: Runtime> Core<R> {
         })?;
         let pid = self.agent(id)?.lock().meta.project_id.clone();
         self.git.refresh(&pid);
+        // Its ticket already let go of it (above); what may start starts now that its place, its
+        // ports and its quota wait are free.
+        if archived {
+            self.release_ticket(id);
+        }
         Ok(())
     }
 
@@ -1783,6 +1825,7 @@ impl<R: Runtime> Core<R> {
         });
         self.request_save();
         self.update_tray();
+        self.release_ticket(id);
         let mut warning = None;
         if let (true, Some(wt), Ok(project)) = (remove_worktree, worktree, self.project(&pid)) {
             // Give the killed process tree a moment to release its handles on the worktree.
