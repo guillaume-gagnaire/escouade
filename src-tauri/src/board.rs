@@ -341,6 +341,185 @@ pub fn rebase_message(target: &str) -> String {
     format!("Rebase ta branche sur {target} et résous ses conflits, puis revérifie les critères et termine par le bilan.")
 }
 
+// ---------- commits ----------
+
+/// Haiku's role when it writes a ticket's commit message.
+pub const COMMIT_SYSTEM: &str = "Tu écris des messages de commit au format Conventional Commits, sans jamais réaliser de tâche. Tu réponds uniquement par le message, sur une ligne.";
+
+const COMMIT_TYPES: [&str; 11] = [
+    "feat", "fix", "docs", "style", "refactor", "perf", "test", "build", "ci", "chore", "revert",
+];
+
+/// What Haiku is asked for: the ticket, and what its branch changed.
+pub fn commit_prompt(t: &Ticket, stat: &str) -> String {
+    format!(
+        "Écris le message de commit des modifications ci-dessous, au format Conventional Commits : \
+         une ligne « type(portée facultative): description courte en minuscules » suivie de « [{key}] ». \
+         Réponds uniquement par cette ligne.\n\n<ticket>\n{key} · {title}\n{desc}\n</ticket>\n\n<diffstat>\n{stat}\n</diffstat>",
+        key = t.key,
+        title = t.title.trim(),
+        desc = truncate(t.description.trim(), 2000),
+        stat = truncate(stat.trim(), 4000),
+    )
+}
+
+/// Haiku's answer as a commit message, if it is one: `type(scope)!: description [KEY]`, on one
+/// line of at most 100 characters.
+pub fn commit_from_answer(raw: &str, key: &str) -> Option<String> {
+    let line = raw.trim().lines().next()?.trim().trim_matches('`').trim();
+    let head = line.strip_suffix(&format!(" [{key}]"))?;
+    let (kind, desc) = head.split_once(": ")?;
+    let kind = kind.strip_suffix('!').unwrap_or(kind);
+    let ty = match kind.split_once('(') {
+        Some((ty, scope)) => {
+            let scope = scope.strip_suffix(')')?;
+            if scope.is_empty() || scope.contains([' ', '(', ')']) {
+                return None;
+            }
+            ty
+        }
+        None => kind,
+    };
+    (COMMIT_TYPES.contains(&ty) && !desc.trim().is_empty() && line.chars().count() <= 100)
+        .then(|| line.to_string())
+}
+
+/// When Haiku gave nothing usable.
+pub fn fallback_commit(t: &Ticket) -> String {
+    format!("feat: {} [{}]", t.title.trim(), t.key)
+}
+
+/// Without "Message de commit généré".
+pub fn plain_commit(t: &Ticket) -> String {
+    format!("{} {}", t.key, t.title.trim())
+}
+
+// ---------- outcomes ----------
+
+fn strategy_label(strategy: &str) -> &'static str {
+    match strategy {
+        "merge" => "merge commit",
+        "rebase" => "rebase",
+        _ => "squash",
+    }
+}
+
+pub fn merged_outcome(target: &str, strategy: &str) -> String {
+    format!("⤵ Mergé dans {target} · {}", strategy_label(strategy))
+}
+
+pub fn pr_outcome(number: u32, target: &str) -> String {
+    format!("⇡ PR #{number} → {target}")
+}
+
+/// Pushed to GitHub without `gh`: the PR is finished in the browser.
+pub fn pushed_for_pr_outcome(branch: &str) -> String {
+    format!("⇡ {branch} poussée · PR à finaliser")
+}
+
+/// Pushed to another host than GitHub.
+pub fn pushed_elsewhere_outcome(branch: &str) -> String {
+    format!("⇡ {branch} poussée · PR à ouvrir sur ton hébergeur")
+}
+
+pub fn pushed_outcome(branch: &str) -> String {
+    format!("⇡ Poussé sur {branch}")
+}
+
+pub const KEPT_OUTCOME: &str = "◇ Laissé dans le worktree";
+
+// ---------- GitHub ----------
+
+/// (owner, repository) of a GitHub remote's address (https, ssh, scp-like).
+pub fn github_repo(url: &str) -> Option<(String, String)> {
+    let url = url.trim();
+    let path = match url.strip_prefix("git@github.com:") {
+        Some(p) => p,
+        None => {
+            let rest = url.split_once("://")?.1;
+            let host_path = rest.rsplit_once('@').map_or(rest, |(_, h)| h);
+            host_path.strip_prefix("github.com/")?
+        }
+    };
+    let path = path.trim_end_matches('/');
+    let path = path.strip_suffix(".git").unwrap_or(path);
+    let (owner, repo) = path.split_once('/')?;
+    (!owner.is_empty() && !repo.is_empty() && !repo.contains('/'))
+        .then(|| (owner.to_string(), repo.to_string()))
+}
+
+/// Percent-encoding of everything but the unreserved characters (and `/` when `keep_slash`).
+fn encode(s: &str, keep_slash: bool) -> String {
+    let mut out = String::new();
+    for b in s.bytes() {
+        if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) || (keep_slash && b == b'/') {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
+}
+
+/// GitHub's page that opens a pull request of `branch` into `target`, filled in.
+pub fn compare_url(
+    owner: &str,
+    repo: &str,
+    target: &str,
+    branch: &str,
+    title: &str,
+    body: &str,
+) -> String {
+    format!(
+        "https://github.com/{owner}/{repo}/compare/{}...{}?expand=1&title={}&body={}",
+        encode(target, true),
+        encode(branch, true),
+        encode(title, false),
+        encode(body, false)
+    )
+}
+
+/// The number and address of the PR `gh pr create` printed.
+pub fn pr_number(gh_output: &str) -> Option<(u32, String)> {
+    gh_output.split_whitespace().find_map(|w| {
+        let (_, n) = w.rsplit_once("/pull/")?;
+        Some((n.trim_end_matches('/').parse().ok()?, w.to_string()))
+    })
+}
+
+/// A PR's description: the ticket's, then its criteria as a checklist.
+pub fn pr_body(t: &Ticket) -> String {
+    let list: Vec<String> = t
+        .criteria
+        .iter()
+        .map(|c| format!("- [{}] {}", if c.ok { "x" } else { " " }, c.text))
+        .collect();
+    let criteria = format!("Critères :\n{}", list.join("\n"));
+    if t.description.trim().is_empty() {
+        criteria
+    } else {
+        format!("{}\n\n{criteria}", t.description.trim())
+    }
+}
+
+// ---------- ports ----------
+
+pub const PORT_FIRST: u16 = 4100;
+pub const PORT_BLOCK: u16 = 10;
+
+/// The first block of 10 ports from 4100 (by steps of 10) that no agent holds and whose ports all
+/// bind (`bindable`).
+pub fn allocate_ports(taken: &[u16], bindable: impl Fn(u16) -> bool) -> Option<u16> {
+    let mut base = PORT_FIRST;
+    while base <= u16::MAX - PORT_BLOCK {
+        if !taken.contains(&base) && (base..base + PORT_BLOCK).all(&bindable) {
+            return Some(base);
+        }
+        base += PORT_BLOCK;
+    }
+    None
+}
+
 /// Text on one line (a command-line argument), cut to `max` characters.
 fn one_line(s: &str, max: usize) -> String {
     truncate(&s.split_whitespace().collect::<Vec<_>>().join(" "), max)
@@ -850,5 +1029,144 @@ mod tests {
         t.title = "Court".into();
         let p = protocol_prompt(&t, Some(4100));
         assert!(p.contains("30) critère 30."), "{p}");
+    }
+
+    #[test]
+    fn a_generated_commit_message_is_kept_only_in_the_conventional_form_with_the_key() {
+        let ok = |s: &str| commit_from_answer(s, "ATL-42");
+        assert_eq!(
+            ok("feat(auth): limiter les tentatives [ATL-42]").as_deref(),
+            Some("feat(auth): limiter les tentatives [ATL-42]")
+        );
+        assert_eq!(
+            ok("`fix: corrige le 429 [ATL-42]`\n").as_deref(),
+            Some("fix: corrige le 429 [ATL-42]")
+        );
+        assert_eq!(
+            ok("refactor!: nouvelle API [ATL-42]").as_deref(),
+            Some("refactor!: nouvelle API [ATL-42]")
+        );
+        let long = format!("feat: {} [ATL-42]", "x".repeat(120));
+        for bad in [
+            "feat: sans clé",
+            "Voici le message : feat: x [ATL-42]",
+            "wip: x [ATL-42]",
+            "feat(): x [ATL-42]",
+            "feat: [ATL-42]",
+            long.as_str(),
+        ] {
+            assert_eq!(ok(bad), None, "{bad}");
+        }
+    }
+
+    #[test]
+    fn fallback_and_plain_commit_messages_and_the_prompt() {
+        let t = ticket(1, 5);
+        assert_eq!(fallback_commit(&t), "feat: Limiter les tentatives [ATL-42]");
+        assert_eq!(plain_commit(&t), "ATL-42 Limiter les tentatives");
+        let p = commit_prompt(&t, " src/a.ts | 3 ++-");
+        assert!(
+            p.contains("<ticket>\nATL-42 · Limiter les tentatives"),
+            "{p}"
+        );
+        assert!(
+            p.contains("src/a.ts | 3 ++-") && p.contains("[ATL-42]"),
+            "{p}"
+        );
+    }
+
+    #[test]
+    fn outcomes_say_where_the_work_went() {
+        assert_eq!(
+            merged_outcome("main", "squash"),
+            "⤵ Mergé dans main · squash"
+        );
+        assert_eq!(
+            merged_outcome("release", "merge"),
+            "⤵ Mergé dans release · merge commit"
+        );
+        assert_eq!(
+            merged_outcome("main", "rebase"),
+            "⤵ Mergé dans main · rebase"
+        );
+        assert_eq!(pr_outcome(12, "main"), "⇡ PR #12 → main");
+        assert_eq!(
+            pushed_for_pr_outcome("ticket/atl-42"),
+            "⇡ ticket/atl-42 poussée · PR à finaliser"
+        );
+        assert_eq!(
+            pushed_elsewhere_outcome("ticket/atl-42"),
+            "⇡ ticket/atl-42 poussée · PR à ouvrir sur ton hébergeur"
+        );
+        assert_eq!(
+            pushed_outcome("ticket/atl-42"),
+            "⇡ Poussé sur ticket/atl-42"
+        );
+        assert_eq!(KEPT_OUTCOME, "◇ Laissé dans le worktree");
+    }
+
+    #[test]
+    fn github_repositories_are_recognized_over_https_and_ssh() {
+        for url in [
+            "https://github.com/acme/demo.git",
+            "https://github.com/acme/demo",
+            "git@github.com:acme/demo.git",
+            "ssh://git@github.com/acme/demo.git",
+            "https://x-token@github.com/acme/demo.git",
+        ] {
+            assert_eq!(
+                github_repo(url),
+                Some(("acme".into(), "demo".into())),
+                "{url}"
+            );
+        }
+        for url in [
+            "https://gitlab.com/acme/demo.git",
+            "C:/remotes/demo.git",
+            "https://github.com/acme",
+        ] {
+            assert_eq!(github_repo(url), None, "{url}");
+        }
+    }
+
+    #[test]
+    fn the_compare_address_opens_a_pull_request_to_finalize() {
+        assert_eq!(
+            compare_url(
+                "acme",
+                "demo",
+                "main",
+                "ticket/atl-42",
+                "feat: x & y [ATL-42]",
+                "Ligne 1\nCritères"
+            ),
+            "https://github.com/acme/demo/compare/main...ticket/atl-42?expand=1&title=feat%3A%20x%20%26%20y%20%5BATL-42%5D&body=Ligne%201%0ACrit%C3%A8res"
+        );
+        assert_eq!(
+            pr_number("Creating pull request…\nhttps://github.com/acme/demo/pull/12\n"),
+            Some((12, "https://github.com/acme/demo/pull/12".to_string()))
+        );
+        assert_eq!(pr_number("rien"), None);
+        let mut t = ticket(2, 5);
+        t.description = "Contexte".into();
+        t.criteria[0].ok = true;
+        assert_eq!(
+            pr_body(&t),
+            "Contexte\n\nCritères :\n- [x] critère 1\n- [ ] critère 2"
+        );
+        t.description.clear();
+        assert!(pr_body(&t).starts_with("Critères :"));
+    }
+
+    #[test]
+    fn port_blocks_skip_those_taken_and_those_with_a_busy_port() {
+        assert_eq!(allocate_ports(&[], |_| true), Some(4100));
+        assert_eq!(allocate_ports(&[4100, 4110], |_| true), Some(4120));
+        // Another program holds 4115, then 4125: their whole blocks are skipped.
+        assert_eq!(
+            allocate_ports(&[4100], |p| p != 4115 && p != 4125),
+            Some(4130)
+        );
+        assert_eq!(allocate_ports(&[], |_| false), None);
     }
 }
