@@ -15,6 +15,8 @@
 // itself (every file of its folder, a copied .env included), [retire-env] then .env taken out of
 // git again in a second commit (still in the branch's history), [tenace] a process that lasts 5 s
 // once its input is closed; by default criterion n is met from loop n on.
+// Asked to prepare a test launch (« Prépare le lancement… Ports réservés : <base> »), any agent
+// answers with a recipe whose process listens on <base + 1>.
 // In one-shot mode, asked for a ticket's commit message, it answers `feat: travail du faux claude
 // [<KEY>]`, or a sentence out of form when the ticket's title says [message-libre]; with [sourd]
 // in its system prompt it never reads its input and answers nothing for 20 s.
@@ -234,6 +236,16 @@ function startSession() {
         session_id: sessionId,
         result: "You've hit your limit · resets 3pm",
       });
+      return;
+    }
+    if (text.includes('Prépare le lancement')) {
+      const port = Number(text.match(/Ports réservés : (\d+)/)?.[1] ?? 4100) + 1;
+      const lancement = {
+        processus: [{ nom: 'web', commande: 'node serveur.js', url: `http://localhost:${port}` }],
+        ouvrir: `http://localhost:${port}/fonction`,
+      };
+      streamText(`Voici la recette.\n\n\`\`\`escouade\n${JSON.stringify({ lancement })}\n\`\`\``);
+      result();
       return;
     }
     if (sys) return ticketTurn(text);

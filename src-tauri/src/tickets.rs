@@ -861,6 +861,8 @@ impl<R: Runtime> Core<R> {
             .clone()
             .ok_or_else(|| anyhow!("L'agent de ce ticket n'a pas de worktree."))?;
         let target = self.target_of(&project).await;
+        // Its test launches stop first: their servers would hold the worktree's files and ports.
+        self.stop_test_runs(&agent_id);
         // Tests.
         if s.tests_first && !s.test_command.trim().is_empty() {
             self.set_step(&t.id, "Tests…");
@@ -1368,6 +1370,91 @@ impl<R: Runtime> Core<R> {
         self.send_or_block(id, &agent_id, board::reject_message(&key, comment))
             .await
     }
+
+    // ---------- test launches ----------
+
+    /// "Préparer le lancement": reserves the agent's block of ports if it has none, then asks it
+    /// for its recipe, as any message (during a turn, Claude Code takes it once the turn is over).
+    /// Only for an agent with a worktree, and not archived (it would hold a block for nothing).
+    pub async fn agent_prepare_launch(self: &Arc<Self>, id: &str) -> Result<()> {
+        let h = self.agent(id)?;
+        let (has_worktree, archived, base) = {
+            let rt = h.lock();
+            (
+                rt.meta.worktree.is_some(),
+                rt.meta.archived,
+                rt.meta.port_base,
+            )
+        };
+        if !has_worktree {
+            bail!("Seul un agent à worktree a un lancement de test.");
+        }
+        if archived {
+            bail!(ARCHIVED);
+        }
+        let base = match base {
+            Some(b) => b,
+            None => {
+                // Reserved, then written on the agent with no wait in between: no other start
+                // or preparation gets this block meanwhile.
+                let reserved = self
+                    .reserve_ports()
+                    .ok_or_else(|| anyhow!("Aucun bloc de ports libre à partir de 4100."))?;
+                let held = {
+                    let mut rt = h.lock();
+                    // Archived meanwhile, it holds no block; given one meanwhile (another
+                    // preparation at once), it keeps that one.
+                    (!rt.meta.archived).then(|| *rt.meta.port_base.get_or_insert(reserved))
+                };
+                // The agent holds its block from now on (or the one reserved is free again).
+                self.unreserve_ports(Some(reserved));
+                let base = held.ok_or_else(|| anyhow!(ARCHIVED))?;
+                self.emit_agent(&h);
+                self.request_save();
+                base
+            }
+        };
+        self.send_message(id, board::prepare_message(base), vec![])
+            .await
+    }
+
+    /// What step `index` of `kind` ("prep" or "run") of the agent's recipe runs; nothing of an
+    /// archived agent's (its launches stopped with it).
+    pub fn test_run_spec(
+        &self,
+        agent_id: &str,
+        kind: &str,
+        index: usize,
+    ) -> Result<testlaunch::RunSpec> {
+        let meta = self.agent(agent_id)?.lock().meta.clone();
+        if meta.archived {
+            bail!(ARCHIVED);
+        }
+        testlaunch::run_spec(&meta, kind, index)
+    }
+
+    /// The terminal `term_id` is one of the agent's test launches. One started as the agent was
+    /// archived or deleted, after its launches were stopped, is stopped at once.
+    pub fn track_test_run(&self, agent_id: &str, term_id: &str) {
+        self.test_runs
+            .lock()
+            .entry(agent_id.to_string())
+            .or_default()
+            .push(term_id.to_string());
+        // Read after it is kept: an archive or a deletion that this does not see stops it then.
+        let live = self.agent(agent_id).is_ok_and(|h| !h.lock().meta.archived);
+        if !live {
+            self.stop_test_runs(agent_id);
+        }
+    }
+
+    /// The agent's test launches stop (its validation, archive or deletion, its project closed).
+    pub fn stop_test_runs(&self, agent_id: &str) {
+        let ids = self.test_runs.lock().remove(agent_id).unwrap_or_default();
+        for id in ids {
+            self.pty.kill(&id);
+        }
+    }
 }
 
 /// How long `gh pr create` may take.
@@ -1476,6 +1563,9 @@ const AGENT_BUSY: &str =
 /// end of the rework.
 const AGENT_BUSY_REJECT: &str =
     "L'agent de ce ticket travaille encore : attends la fin de son tour pour le renvoyer.";
+
+/// An archived agent holds no ports and runs no test launch.
+const ARCHIVED: &str = "Cet agent est archivé : il n'a pas de lancement de test.";
 
 /// `t` is still "À tester" with this agent, its validation under way.
 fn validating(t: &Ticket, agent_id: &str) -> bool {

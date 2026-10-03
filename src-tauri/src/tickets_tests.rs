@@ -15,6 +15,7 @@ use crate::tickets::{error_reason, TicketDraft};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use std::time::Duration;
 use tauri::test::mock_app;
 
@@ -3312,4 +3313,267 @@ async fn a_target_that_no_longer_conflicts_is_merged_into_the_branch_and_the_age
             && e["ticket"]["blocked"].is_null()
     });
     assert!(doing);
+}
+
+// ---------- test launches ----------
+
+#[tokio::test]
+async fn preparing_a_launch_reserves_ports_and_keeps_the_recipe_the_agent_answers() {
+    let h = harness("tk-prepare");
+    let (p, _) = h.project(true).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    let b = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    h.core.agent_prepare_launch(&a.id).await.unwrap();
+    h.core.agent_prepare_launch(&b.id).await.unwrap();
+    let (pa, pb) = (
+        h.agent(&a.id).port_base.unwrap(),
+        h.agent(&b.id).port_base.unwrap(),
+    );
+    assert!(pa >= 4100 && pa % 10 == 0 && pb != pa);
+    let dir = PathBuf::from(&a.cwd);
+    h.wait_sent(
+        &dir,
+        &format!(
+            "Prépare le lancement de test de ce worktree. Ports réservés : {pa} à {}",
+            pa + 9
+        ),
+    )
+    .await;
+    // Its answer is kept as its recipe; a step runs in the worktree with the ports.
+    h.wait("recipe", |h| h.agent(&a.id).recipe.is_some()).await;
+    let spec = h.core.test_run_spec(&a.id, "run", 0).unwrap();
+    assert_eq!(spec.command, "node serveur.js");
+    assert_eq!(
+        Path::new(&spec.cwd).canonicalize().unwrap(),
+        dir.canonicalize().unwrap()
+    );
+    assert!(spec
+        .env
+        .contains(&("ESCOUADE_PORT_BASE".to_string(), pa.to_string())));
+    assert!(spec
+        .env
+        .contains(&("ESCOUADE_PORT_END".to_string(), (pa + 9).to_string())));
+    // Asked again, it keeps its block.
+    h.core.agent_prepare_launch(&a.id).await.unwrap();
+    assert_eq!(h.agent(&a.id).port_base, Some(pa));
+    // An agent without a worktree has no test launch.
+    h.core
+        .update_project(Project {
+            worktree_per_agent: false,
+            ..h.core.project(&p.id).unwrap()
+        })
+        .unwrap();
+    let plain = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    assert!(h.core.agent_prepare_launch(&plain.id).await.is_err());
+    assert_eq!(h.agent(&plain.id).port_base, None);
+}
+
+#[tokio::test]
+async fn a_block_reserved_for_a_launch_stays_with_the_agent_when_the_request_cannot_go() {
+    let h = harness("tk-prepare-unsent");
+    let (p, _) = h.project(true).await;
+    // No Claude Code: the agent's process never starts, its message never goes.
+    h.lose_claude();
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    assert!(h.core.agent_prepare_launch(&a.id).await.is_err());
+    let base = h.agent(&a.id).port_base.unwrap();
+    // The window knows it all the same, and asking again gives the same block.
+    assert!(h.events.lock().iter().any(|e| {
+        e["type"] == "agent" && e["agent"]["id"] == a.id.as_str() && e["agent"]["portBase"] == base
+    }));
+    assert!(h.core.agent_prepare_launch(&a.id).await.is_err());
+    assert_eq!(h.agent(&a.id).port_base, Some(base));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn launch_preparations_at_once_get_blocks_of_their_own() {
+    let h = harness("tk-prepare-race");
+    let (p, _) = h.project(true).await;
+    let mut ids = Vec::new();
+    for _ in 0..4 {
+        ids.push(h.core.create_agent(&p.id, None).await.unwrap().meta.id);
+    }
+    // All set off at the same instant, each on a thread of its own.
+    let start = Arc::new(tokio::sync::Barrier::new(ids.len()));
+    let runs: Vec<_> = ids
+        .iter()
+        .map(|id| {
+            let (core, id, start) = (h.core.clone(), id.clone(), start.clone());
+            tokio::spawn(async move {
+                start.wait().await;
+                core.agent_prepare_launch(&id).await
+            })
+        })
+        .collect();
+    for r in runs {
+        r.await.unwrap().unwrap();
+    }
+    let mut bases: Vec<u16> = ids
+        .iter()
+        .map(|id| h.agent(id).port_base.unwrap())
+        .collect();
+    bases.sort();
+    bases.dedup();
+    assert_eq!(bases.len(), ids.len(), "{bases:?}");
+}
+
+#[tokio::test]
+async fn a_launch_preparation_never_takes_a_block_reserved_for_an_agent_being_made() {
+    let h = harness("tk-prepare-reserved");
+    let (p, _) = h.project(true).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    // A ticket's start holds this block while its agent is made.
+    let held = h.core.reserve_ports().unwrap();
+    h.core.agent_prepare_launch(&a.id).await.unwrap();
+    let base = h.agent(&a.id).port_base.unwrap();
+    assert_ne!(base, held);
+    h.core.unreserve_ports(Some(held));
+    // The agent holds its block: no reservation of it is left behind (it would stay taken once
+    // the agent lets it go).
+    assert_eq!(*h.core.ports_reserved.lock(), Vec::<u16>::new());
+}
+
+#[tokio::test]
+async fn an_agents_test_launches_stop_when_it_is_archived() {
+    let h = harness("tk-launch-stop");
+    let (p, _) = h.project(true).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    let settings = h.core.settings.read().clone();
+    let Some(shell) = crate::pty::detect_shells(&settings).into_iter().next() else {
+        return;
+    };
+    let info = crate::pty::TermInfo {
+        id: "tk-run-1".into(),
+        project_id: p.id.clone(),
+        name: "web".into(),
+        shell: shell.id.clone(),
+    };
+    h.core
+        .pty
+        .spawn_command(
+            info,
+            &shell,
+            "",
+            &a.cwd,
+            (80, 24),
+            vec![],
+            1,
+            "node -e \"setTimeout(() => {}, 60000)\"",
+            |_| {},
+            |_| {},
+        )
+        .unwrap();
+    h.core.track_test_run(&a.id, "tk-run-1");
+    assert!(h.core.pty.list().iter().any(|t| t.id == "tk-run-1"));
+    h.core.archive_agent(&a.id, true).await.unwrap();
+    assert!(!h.core.pty.list().iter().any(|t| t.id == "tk-run-1"));
+}
+
+/// A test launch of `agent` that lasts (a terminal running node for a minute), tracked as its
+/// own; false when no shell can run it.
+fn test_run(h: &Harness, agent: &AgentMeta, term_id: &str) -> bool {
+    let settings = h.core.settings.read().clone();
+    let Some(shell) = crate::pty::detect_shells(&settings).into_iter().next() else {
+        return false;
+    };
+    let info = crate::pty::TermInfo {
+        id: term_id.into(),
+        project_id: agent.project_id.clone(),
+        name: "web".into(),
+        shell: shell.id.clone(),
+    };
+    h.core
+        .pty
+        .spawn_command(
+            info,
+            &shell,
+            "",
+            &agent.cwd,
+            (80, 24),
+            vec![],
+            1,
+            "node -e \"setTimeout(() => {}, 60000)\"",
+            |_| {},
+            |_| {},
+        )
+        .unwrap();
+    h.core.track_test_run(&agent.id, term_id);
+    true
+}
+
+fn term_running(h: &Harness, term_id: &str) -> bool {
+    h.core.pty.list().iter().any(|t| t.id == term_id)
+}
+
+fn tracks_runs_of(h: &Harness, agent_id: &str) -> bool {
+    h.core.test_runs.lock().contains_key(agent_id)
+}
+
+#[tokio::test]
+async fn an_agents_test_launches_stop_when_it_is_deleted() {
+    let h = harness("tk-launch-delete");
+    let (p, _) = h.project(true).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    if !test_run(&h, &a, "tk-run-del") {
+        return;
+    }
+    assert!(term_running(&h, "tk-run-del"));
+    h.core.delete_agent(&a.id, false).await.unwrap();
+    assert!(!term_running(&h, "tk-run-del"));
+    assert!(!tracks_runs_of(&h, &a.id));
+}
+
+#[tokio::test]
+async fn a_tickets_test_launches_stop_when_it_is_validated() {
+    let h = harness("tk-launch-validate");
+    let (p, _) = h.project(false).await;
+    // Left as it is: its agent stays, so only the validation can stop its launches.
+    h.set_board(&p.id, |s| s.action = "keep".into());
+    let (t, _) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    let agent = h.agent_of(&t.id);
+    if !test_run(&h, &agent, "tk-run-val") {
+        return;
+    }
+    h.core.ticket_approve(&t.id).await.unwrap();
+    assert_eq!(h.ticket(&t.id).column, Column::Done);
+    assert!(!h.agent(&agent.id).archived);
+    assert!(!term_running(&h, "tk-run-val"));
+    assert!(!tracks_runs_of(&h, &agent.id));
+}
+
+#[tokio::test]
+async fn closing_a_project_forgets_its_agents_test_launches() {
+    let h = harness("tk-launch-close");
+    let (p, _) = h.project(true).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    if !test_run(&h, &a, "tk-run-close") {
+        return;
+    }
+    h.core.remove_project(&p.id).unwrap();
+    assert!(!term_running(&h, "tk-run-close"));
+    assert!(!tracks_runs_of(&h, &a.id));
+}
+
+#[tokio::test]
+async fn an_archived_or_deleted_agent_has_no_test_launch() {
+    let h = harness("tk-launch-archived");
+    let (p, _) = h.project(true).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    h.core.agent_prepare_launch(&a.id).await.unwrap();
+    h.wait("recipe", |h| h.agent(&a.id).recipe.is_some()).await;
+    h.wait("turn over", |h| !h.agent(&a.id).status.is_active())
+        .await;
+    h.core.archive_agent(&a.id, true).await.unwrap();
+    // Its block went with the archive; it gets none back, and none of its steps runs.
+    assert!(h.core.agent_prepare_launch(&a.id).await.is_err());
+    assert_eq!(h.agent(&a.id).port_base, None);
+    assert!(h.core.test_run_spec(&a.id, "run", 0).is_err());
+    // A launch started as it was archived is stopped as soon as it is tracked.
+    h.core.track_test_run(&a.id, "tk-late-1");
+    assert!(!tracks_runs_of(&h, &a.id));
+    // Likewise once it is deleted.
+    let b = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    h.core.delete_agent(&b.id, false).await.unwrap();
+    h.core.track_test_run(&b.id, "tk-late-2");
+    assert!(!tracks_runs_of(&h, &b.id));
 }

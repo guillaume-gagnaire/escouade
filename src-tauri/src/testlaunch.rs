@@ -2,9 +2,6 @@
 //! the project into a new worktree, the tests run before a validation, the readiness of a server,
 //! and what a step of its recipe runs.
 
-// Used by the orchestrator (tickets.rs) as the tasks go; this allowance goes in task 17.
-#![allow(dead_code)]
-
 use crate::board::PORT_BLOCK;
 use crate::model::AgentMeta;
 use crate::paths;
@@ -133,8 +130,15 @@ fn copy_one(project: &str, worktree: &str, file: &str) -> std::io::Result<()> {
 
 /// One HTTP request to `url`, without any proxy, 2 s at most: true for any answer, whatever its
 /// status (a 404 still means the server is up). A redirect is an answer, not followed (it may
-/// lead to a host that is down), and a certificate is not checked (a dev server's own).
+/// lead to a host that is down), and a certificate is not checked (a dev server's own). Only an
+/// http or https address is probed: anything else is not ready.
 pub async fn http_ready(url: &str) -> bool {
+    let Ok(url) = reqwest::Url::parse(url) else {
+        return false;
+    };
+    if !matches!(url.scheme(), "http" | "https") {
+        return false;
+    }
     let Ok(client) = reqwest::Client::builder()
         // A local server must never be reached through the user's proxy.
         .no_proxy()
@@ -475,6 +479,20 @@ mod tests {
             .port();
         assert!(!http_ready(&format!("http://127.0.0.1:{closed}/")).await);
         assert!(!http_ready("pas une adresse").await);
+    }
+
+    #[tokio::test]
+    async fn only_an_http_or_https_address_is_probed() {
+        let port = not_found_server();
+        // The scheme is read as an address reads it, whatever its case.
+        assert!(http_ready(&format!("HTTP://127.0.0.1:{port}/")).await);
+        for other in ["ftp", "ws", "file", "gopher"] {
+            assert!(
+                !http_ready(&format!("{other}://127.0.0.1:{port}/")).await,
+                "{other}"
+            );
+        }
+        assert!(!http_ready("file:///C:/Windows/win.ini").await);
     }
 
     fn default_shell() -> Option<ShellInfo> {

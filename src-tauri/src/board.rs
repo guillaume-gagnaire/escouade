@@ -2,9 +2,6 @@
 //! (```escouade block), what a turn's end does to its ticket, which tickets start, the messages
 //! sent to the agents.
 
-// Used by the orchestrator (tickets.rs) as the tasks go; this allowance goes in task 17.
-#![allow(dead_code)]
-
 use crate::claude::truncate;
 use crate::core::slugify;
 use crate::model::*;
@@ -443,6 +440,20 @@ pub fn conflict_message(target: &str, files: &[String]) -> String {
 
 pub fn rebase_message(target: &str) -> String {
     format!("Rebase ta branche sur {target} et résous ses conflits, puis revérifie les critères et termine par le bilan.")
+}
+
+/// "Préparer le lancement": the agent is asked how to launch its worktree, with its ports.
+pub fn prepare_message(base: u16) -> String {
+    let (end, web) = (base.saturating_add(PORT_BLOCK - 1), base.saturating_add(1));
+    format!(
+        "Prépare le lancement de test de ce worktree. Ports réservés : {base} à {end} (ESCOUADE_PORT_BASE et ESCOUADE_PORT_END dans le lancement) : \
+         utilise-les, sans les écrire dans des fichiers versionnés (passe-les en arguments ou en variables d'environnement). \
+         Termine ta réponse par un bloc :\n\n```escouade\n{{\"lancement\": {{\"preparation\": [{{\"commande\": \"npm install\", \"dossier\": \"web\"}}], \
+         \"processus\": [{{\"nom\": \"web\", \"commande\": \"npm run dev -- --port {web}\", \"dossier\": \"web\", \"env\": {{\"PORT\": \"{web}\"}}, \
+         \"url\": \"http://localhost:{web}\"}}], \"ouvrir\": \"http://localhost:{web}/page-a-tester\"}}}}\n```\n\n\
+         « dossier » est relatif au worktree, « url » répond quand le processus est prêt, « ouvrir » est l'adresse qui montre directement \
+         ce que tu as développé (la page, l'écran, l'état précis à tester)."
+    )
 }
 
 // ---------- commits ----------
@@ -1203,6 +1214,33 @@ mod tests {
             rebase_message("main"),
             "Rebase ta branche sur main et résous ses conflits, puis revérifie les critères et termine par le bilan."
         );
+    }
+
+    #[test]
+    fn the_launch_request_gives_the_ports_and_the_form_of_the_recipe() {
+        let m = prepare_message(4120);
+        assert!(
+            m.starts_with(
+                "Prépare le lancement de test de ce worktree. Ports réservés : 4120 à 4129"
+            ),
+            "{m}"
+        );
+        assert!(
+            m.contains("```escouade\n{\"lancement\"") && m.contains("http://localhost:4121"),
+            "{m}"
+        );
+        assert!(
+            m.contains("« ouvrir » est l'adresse qui montre directement"),
+            "{m}"
+        );
+        // The example is a recipe the app would keep, were the agent to give it as it is.
+        let recipe = parse_report(&m).and_then(|r| r.recipe).expect("{m}");
+        assert_eq!(
+            (recipe.processes[0].url.as_str(), recipe.prepare.len()),
+            ("http://localhost:4121", 1)
+        );
+        // A block read back from a damaged file must not panic on its last port.
+        assert!(prepare_message(u16::MAX).contains("65535 à 65535"));
     }
 
     #[test]

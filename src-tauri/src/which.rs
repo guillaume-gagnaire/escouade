@@ -1,8 +1,5 @@
 //! Finds a program on the PATH as Windows does (PATHEXT): the GitHub CLI for pull requests.
 
-// Used by the validation (tickets.rs) from task 14; this allowance goes in task 17.
-#![allow(dead_code)]
-
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 

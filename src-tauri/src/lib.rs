@@ -235,6 +235,9 @@ pub fn run() {
             commands::ticket_dismiss,
             commands::board_set,
             commands::git_branches,
+            commands::agent_prepare_launch,
+            commands::test_run_start,
+            commands::http_ready,
         ])
         .build(tauri::generate_context!())
         .expect("error while building the application")

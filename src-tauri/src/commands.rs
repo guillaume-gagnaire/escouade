@@ -628,3 +628,78 @@ pub fn board_set(core: CoreState, project_id: String, settings: BoardSettings) -
 pub async fn git_branches(core: CoreState<'_>, project_id: String) -> Res<Vec<String>> {
     core.git_branches(&project_id).await.map_err(err)
 }
+
+#[tauri::command]
+pub async fn agent_prepare_launch(core: CoreState<'_>, id: String) -> Res<()> {
+    core.agent_prepare_launch(&id).await.map_err(err)
+}
+
+/// Runs a step of an agent's recipe ("prep" or "run", its index) in its own read-only terminal,
+/// like a launch command, with the system's default shell and the reserved ports exported.
+#[tauri::command(async)]
+#[allow(clippy::too_many_arguments)]
+pub fn test_run_start(
+    core: CoreState,
+    agent_id: String,
+    kind: String,
+    index: usize,
+    cols: u16,
+    rows: u16,
+    cursor_row: Option<u16>,
+    output: Channel<InvokeResponseBody>,
+) -> Res<TermInfo> {
+    let spec = core.test_run_spec(&agent_id, &kind, index).map_err(err)?;
+    let project_id = core
+        .agent(&agent_id)
+        .map_err(err)?
+        .lock()
+        .meta
+        .project_id
+        .clone();
+    let settings = core.settings.read().clone();
+    let shells = pty::detect_shells(&settings);
+    let sh = shells.first().ok_or("aucun shell détecté")?;
+    let info = TermInfo {
+        id: new_id(),
+        project_id,
+        name: spec.name.clone(),
+        shell: sh.id.clone(),
+    };
+    let mut env = if settings.proxy_terminals {
+        settings.proxy_env()
+    } else {
+        Vec::new()
+    };
+    env.extend(spec.env);
+    let hub_core = Arc::downgrade(core.inner());
+    let id = info.id.clone();
+    core.pty
+        .spawn_command(
+            info.clone(),
+            sh,
+            &settings.wsl_distro,
+            &spec.cwd,
+            (cols, rows),
+            env,
+            cursor_row.unwrap_or(1),
+            &spec.command,
+            move |bytes| {
+                let _ = output.send(InvokeResponseBody::Raw(bytes));
+            },
+            move |code| {
+                if let Some(c) = hub_core.upgrade() {
+                    c.hub.emit(UiEvent::TerminalExit { id, code });
+                }
+            },
+        )
+        .map_err(err)?;
+    core.track_test_run(&agent_id, &info.id);
+    Ok(info)
+}
+
+/// One HTTP request to `url` (http or https only) without proxy, 2 s at most: true for any
+/// answer.
+#[tauri::command]
+pub async fn http_ready(url: String) -> bool {
+    crate::testlaunch::http_ready(&url).await
+}

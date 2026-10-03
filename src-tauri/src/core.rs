@@ -209,13 +209,16 @@ pub struct Core<R: Runtime = Wry> {
     pub(crate) cut_turns: Mutex<Vec<String>>,
     /// The GitHub CLI, when installed (pull requests).
     pub gh: RwLock<Option<PathBuf>>,
+    /// The terminals of each agent's test launches.
+    pub(crate) test_runs: Mutex<HashMap<String, Vec<String>>>,
     /// The last pass found no Claude Code (logged once until it is found again).
     pub(crate) claude_missing: AtomicBool,
     /// The projects whose board's target branch the last pass did not find (logged once until it
     /// is back): none of their tickets starts meanwhile.
     pub(crate) targets_missing: Mutex<std::collections::HashSet<String>>,
-    /// Blocks of ports reserved for agents being made: taken until the agent holds its own.
-    ports_reserved: Mutex<Vec<u16>>,
+    /// Blocks of ports reserved for agents being made, or being given one: taken until the agent
+    /// holds its own.
+    pub(crate) ports_reserved: Mutex<Vec<u16>>,
     /// One validation's merge at a time per repository (`merge_lock`).
     pub(crate) merge_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
     /// Notifications sent, as "<title> | <text>" (tests only).
@@ -449,6 +452,7 @@ impl<R: Runtime> Core<R> {
             board_lock: tokio::sync::Mutex::new(()),
             cut_turns: Mutex::new(cut_turns),
             gh: RwLock::new(locate_gh()),
+            test_runs: Mutex::default(),
             claude_missing: AtomicBool::new(false),
             targets_missing: Mutex::default(),
             ports_reserved: Mutex::default(),
@@ -1829,9 +1833,10 @@ impl<R: Runtime> Core<R> {
         })?;
         let pid = self.agent(id)?.lock().meta.project_id.clone();
         self.git.refresh(&pid);
-        // Its ticket already let go of it (above); what may start starts now that its place, its
-        // ports and its quota wait are free.
+        // Its test launches stop with it. Its ticket already let go of it (above); what may start
+        // starts now that its place, its ports and its quota wait are free.
         if archived {
+            self.stop_test_runs(id);
             self.release_ticket(id);
         }
         Ok(())
@@ -1878,6 +1883,7 @@ impl<R: Runtime> Core<R> {
         });
         self.request_save();
         self.update_tray();
+        self.stop_test_runs(id);
         self.release_ticket(id);
         let mut warning = None;
         if let (true, Some(wt), Ok(project)) = (remove_worktree, worktree, self.project(&pid)) {
@@ -2023,6 +2029,9 @@ impl<R: Runtime> Core<R> {
                 }
                 rt.conv.delete_file();
             }
+            // Its test launches are the project's terminals too (killed below all the same):
+            // none is kept for it.
+            self.stop_test_runs(&aid);
             self.hub.emit(UiEvent::AgentRemoved {
                 id: aid,
                 project_id: id.to_string(),
