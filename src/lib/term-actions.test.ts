@@ -28,4 +28,21 @@ describe('terminals', () => {
     expect(app.editorOn).toBe(false);
     expect(app.term?.id).toBe('t1');
   });
+
+  it('shows a new terminal in place of the board of the project', async () => {
+    fakeBackend();
+    app.openBoard('p1');
+    expect(app.boardOn).toBe(true);
+    await newTerminal('p1', 'pwsh');
+    expect(app.boardOn).toBe(false);
+    expect(app.term?.id).toBe('t1');
+  });
+
+  it('leaves the board of another project alone', async () => {
+    resetApp({ projects: [project(), project({ id: 'p2', name: 'studio-web' })] });
+    fakeBackend();
+    app.openBoard('p2');
+    await newTerminal('p1', 'pwsh');
+    expect(app.board.p2).toBe(true);
+  });
 });

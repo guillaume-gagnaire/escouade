@@ -29,6 +29,10 @@ export interface Project {
   createdAt: number;
   /** Commands that launch the project, each in its own read-only terminal. */
   runCommands: RunCommand[];
+  /** The board: what validating a ticket does, its agents, its tickets' key. */
+  board: BoardSettings;
+  /** Untracked files of the project copied into every new worktree (glob patterns). */
+  worktreeCopy: string[];
 }
 
 export interface RunCommand {
@@ -39,6 +43,95 @@ export interface RunCommand {
   shell: string;
   /** Folder relative to the project's, empty for the project itself. */
   cwd: string;
+}
+
+export type Column = 'todo' | 'doing' | 'review' | 'done';
+
+export interface Criterion {
+  text: string;
+  ok: boolean;
+  note: string;
+}
+
+export interface Ticket {
+  id: string;
+  projectId: string;
+  key: string;
+  title: string;
+  description: string;
+  criteria: Criterion[];
+  maxLoops: number;
+  column: Column;
+  /** Order in "À faire": the lowest first. */
+  rank: number;
+  agentId: string | null;
+  /** n of "Boucle n/max". */
+  iteration: number;
+  partial: boolean;
+  blocked: string | null;
+  /** The block is a merge conflict: "L'agent résout" and "Annuler". */
+  conflict: boolean;
+  /** The validation step running ("Tests…"…). */
+  step: string | null;
+  outcome: string | null;
+  outcomeUrl: string | null;
+  forced: boolean;
+  reminded: boolean;
+  cost: number;
+  createdAt: number;
+  startedAt: number | null;
+  reviewAt: number | null;
+  doneAt: number | null;
+}
+
+export type BoardAction = 'merge' | 'pr' | 'push' | 'keep';
+
+export interface BoardSettings {
+  action: BoardAction;
+  target: string;
+  strategy: 'merge' | 'squash' | 'rebase';
+  draft: boolean;
+  testsFirst: boolean;
+  testCommand: string;
+  cleanup: boolean;
+  conventional: boolean;
+  conflict: 'ask' | 'agent' | 'abort';
+  maxParallel: number;
+  model: string;
+  effort: string;
+  mode: string;
+  autopilot: boolean;
+  prefix: string;
+  nextNumber: number;
+}
+
+export interface TicketDraft {
+  title: string;
+  description: string;
+  criteria: string[];
+  maxLoops: number;
+}
+
+export interface RecipeStep {
+  command: string;
+  /** Relative to the worktree. */
+  dir: string;
+}
+
+export interface RecipeProcess {
+  name: string;
+  command: string;
+  dir: string;
+  env: Record<string, string>;
+  /** Answers over HTTP once the process is ready (not waited for when empty). */
+  url: string;
+}
+
+export interface TestRecipe {
+  prepare: RecipeStep[];
+  processes: RecipeProcess[];
+  /** The address that shows the feature itself; else the first process's url. */
+  open: string;
 }
 
 export type LaunchStatus = 'running' | 'stopped' | 'done' | 'crashed';
@@ -100,6 +193,16 @@ export interface Agent {
   remoteState: string | null;
   /** Stopped by the usage limit: when it is sent "continue" by itself (epoch ms). */
   resumeAt: number | null;
+  /** The board's ticket it works on. */
+  ticketId: string | null;
+  /** The ticket's protocol, appended to Claude Code's system prompt. */
+  appendPrompt: string | null;
+  /** First of the 10 ports reserved for its test launches. */
+  portBase: number | null;
+  /** How to launch its worktree for a test, as it last wrote it. */
+  recipe: TestRecipe | null;
+  /** What it is doing right now ("Lit src/db.ts", "Lance npm test"…), during a turn. */
+  activity: string | null;
 }
 
 /** A choice of Claude Code's model picker: an alias or a full id, and the model it stands for. */
@@ -353,10 +456,14 @@ export type UiEvent =
   | { type: 'terminalExit'; id: string; code: number | null }
   | { type: 'resources'; resources: Resources }
   | { type: 'models'; models: ModelInfo[] }
-  | { type: 'quitRequested'; unsaved: number };
+  | { type: 'quitRequested'; unsaved: number }
+  | { type: 'ticket'; ticket: Ticket }
+  | { type: 'ticketRemoved'; id: string; projectId: string }
+  | { type: 'project'; project: Project };
 
 export interface InitialState {
   projects: Project[];
+  tickets: Ticket[];
   agents: Agent[];
   ui: UiState;
   settings: Settings;

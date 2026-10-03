@@ -20,6 +20,7 @@ import type {
   Settings,
   ShellInfo,
   TermInfo,
+  Ticket,
   UiEvent,
   UiState,
   Usage,
@@ -113,9 +114,15 @@ class AppState {
    * has not looked at since: their project tab and their card blink.
    */
   attention = $state<Record<string, true>>({});
+  /** Every project's tickets, by id. */
+  tickets = $state<Record<string, Ticket>>({});
+  /** Projects whose board fills the main area (not saved). */
+  board = $state<Record<string, boolean>>({});
   editor = $state<Record<string, EditorState>>({});
 
   project = $derived(this.projects.find((p) => p.id === this.ui.activeProject) ?? null);
+  /** The board of the project on screen is shown. */
+  boardOn = $derived(this.ui.view === 'project' && !!this.project && !!this.board[this.project.id]);
   /** The editor of the project on screen is open, and on screen: the statistics hide it. */
   editorOn = $derived(this.ui.view === 'project' && !!(this.project && this.editor[this.project.id]?.on));
   split = $derived(this.ui.layout === 'split');
@@ -172,6 +179,7 @@ class AppState {
     const s = await api.subscribe((e) => (this.early ? this.early.push(e) : this.onEvent(e)));
     this.projects = s.projects;
     this.agents = Object.fromEntries(s.agents.map((a) => [a.id, a]));
+    this.tickets = Object.fromEntries((s.tickets ?? []).map((t) => [t.id, t]));
     this.attention = {};
     this.ui = { ...s.ui, view: s.ui.view || 'project', selectedAgent: s.ui.selectedAgent ?? {} };
     if (!this.ui.activeProject || !this.projects.some((p) => p.id === this.ui.activeProject)) {
@@ -204,6 +212,15 @@ class AppState {
         delete this.attention[e.id];
         dropConversation(e.id);
         this.forgetEditorSource(e.projectId, e.id);
+        break;
+      case 'ticket':
+        this.tickets[e.ticket.id] = e.ticket;
+        break;
+      case 'ticketRemoved':
+        delete this.tickets[e.id];
+        break;
+      case 'project':
+        this.replaceProject(e.project);
         break;
       case 'conv':
         applyConvOps(e.agentId, e.ops);
@@ -248,7 +265,7 @@ class AppState {
 
   /** True when the user can see `id`'s conversation: selected, shown, window in front. */
   private onScreen(id: string): boolean {
-    const shown = this.ui.view === 'project' && this.agent?.id === id && !this.term && !this.runCommand && !this.editorOn;
+    const shown = this.ui.view === 'project' && this.agent?.id === id && !this.term && !this.runCommand && !this.editorOn && !this.boardOn;
     return shown && (typeof document === 'undefined' || document.hasFocus());
   }
 
@@ -312,6 +329,7 @@ class AppState {
     this.ui.selectedAgent[a.projectId] = id;
     this.selectedTerm[a.projectId] = null;
     this.selectedLaunch[a.projectId] = null;
+    this.board[a.projectId] = false;
     const ed = this.editor[a.projectId];
     if (ed?.on) {
       ed.source = a.worktree ? a.id : 'project';
@@ -327,6 +345,7 @@ class AppState {
     this.selectedTerm[p.id] = id;
     if (id) {
       this.selectedLaunch[p.id] = null;
+      this.board[p.id] = false;
       this.closeEditor(p.id);
     }
   }
@@ -337,8 +356,42 @@ class AppState {
     this.selectedLaunch[p.id] = commandId;
     if (commandId) {
       this.selectedTerm[p.id] = null;
+      this.board[p.id] = false;
       this.closeEditor(p.id);
     }
+  }
+
+  /** Shows the board of a project in the main area, in place of the agents, a terminal, a launch log and the editor. */
+  openBoard(projectId = this.ui.activeProject) {
+    if (!projectId) return;
+    this.ui.activeProject = projectId;
+    this.ui.view = 'project';
+    this.board[projectId] = true;
+    this.selectedTerm[projectId] = null;
+    this.selectedLaunch[projectId] = null;
+    this.closeEditor(projectId);
+    this.persistUi();
+  }
+
+  closeBoard(projectId = this.ui.activeProject) {
+    if (projectId) this.board[projectId] = false;
+  }
+
+  /** A project as the backend now has it (its board settings, mostly). */
+  replaceProject(p: Project) {
+    const i = this.projects.findIndex((x) => x.id === p.id);
+    if (i >= 0) this.projects[i] = p;
+  }
+
+  /** The ticket of an agent: the one it works on ("En cours", "À tester"), else its last one. */
+  ticketOf(agentId: string): Ticket | undefined {
+    const mine = Object.values(this.tickets).filter((t) => t.agentId === agentId);
+    return mine.find((t) => t.column === 'doing' || t.column === 'review') ?? mine.at(-1);
+  }
+
+  /** Tickets "À tester" of a project (the badge of "Tableau"). */
+  reviewCount(projectId: string): number {
+    return Object.values(this.tickets).filter((t) => t.projectId === projectId && t.column === 'review').length;
   }
 
   /** Opens the editor of a project on `source`; with a file (`path` from the source's root, or an absolute `abs`), shows it. */
@@ -360,6 +413,7 @@ class AppState {
     }
     this.ui.activeProject = projectId;
     this.ui.view = 'project';
+    this.board[projectId] = false;
     this.selectedTerm[projectId] = null;
     this.selectedLaunch[projectId] = null;
     // Always work through the stored `$state` proxies, not the raw objects the `??=` expressions return:
@@ -433,6 +487,7 @@ class AppState {
     this.projects = this.projects.filter((x) => x.id !== id);
     if (this.ui.activeProject === id) this.ui.activeProject = this.projects[0]?.id ?? null;
     delete this.editor[id];
+    delete this.board[id];
     buffers.closeProject(id);
     trees.closeProject(id);
     this.persistUi();

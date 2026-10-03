@@ -49,6 +49,7 @@ async function boot(handlers: Record<string, (args: any) => unknown> = {}) {
     git: {},
     shells: [],
     terminals: [],
+    tickets: [],
     claudeFound: true,
     version: '0.1.0',
     models: [],

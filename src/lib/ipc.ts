@@ -2,6 +2,7 @@ import { Channel, invoke } from '@tauri-apps/api/core';
 import type {
   Agent,
   Attachment,
+  BoardSettings,
   ConvItem,
   FileBase,
   FileChange,
@@ -16,6 +17,8 @@ import type {
   SlashCommand,
   StatsView,
   TermInfo,
+  Ticket,
+  TicketDraft,
   UiEvent,
   UiState,
 } from './types';
@@ -78,6 +81,14 @@ export const api = {
   fsBase: (projectId: string, agentId: string | null, path: string) => invoke<FileBase | null>('fs_base', { projectId, agentId, path }),
   setUnsaved: (count: number) => invoke<void>('set_unsaved', { count }),
   cancelResume: (id: string) => invoke<void>('cancel_resume', { id }),
+  ticketCreate: (projectId: string, draft: TicketDraft) => invoke<Ticket>('ticket_create', { projectId, draft }),
+  ticketUpdate: (id: string, draft: TicketDraft) => invoke<Ticket>('ticket_update', { id, draft }),
+  ticketDelete: (id: string) => invoke<void>('ticket_delete', { id }),
+  ticketPrioritize: (id: string) => invoke<void>('ticket_prioritize', { id }),
+  /** "Lancer": starts even with the autopilot off. */
+  ticketStart: (id: string) => invoke<void>('ticket_start', { id }),
+  boardSet: (projectId: string, settings: BoardSettings) => invoke<Project>('board_set', { projectId, settings }),
+  gitBranches: (projectId: string) => invoke<string[]>('git_branches', { projectId }),
   termSpawn: (a: { projectId: string; shell: string; name: string; cols: number; rows: number }, onData: (d: ArrayBuffer) => void) => {
     const output = new Channel<ArrayBuffer>();
     output.onmessage = onData;

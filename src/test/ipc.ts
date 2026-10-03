@@ -4,7 +4,7 @@ import { mockIPC, mockWindows } from '@tauri-apps/api/mocks';
 import { buffers } from '../lib/editor/buffers.svelte';
 import { trees } from '../lib/editor/trees.svelte';
 import { app } from '../lib/state.svelte';
-import type { Agent, GitInfo, Project, Settings } from '../lib/types';
+import type { Agent, BoardSettings, GitInfo, Project, Settings, Ticket } from '../lib/types';
 
 export interface Call {
   cmd: string;
@@ -54,6 +54,8 @@ export function project(over: Partial<Project> = {}): Project {
     worktreePerAgent: false,
     createdAt: 1,
     runCommands: [],
+    board: board(),
+    worktreeCopy: ['.env*'],
     ...over,
   };
 }
@@ -91,6 +93,66 @@ export function agent(over: Partial<Agent> = {}): Agent {
     remoteUrl: null,
     remoteState: null,
     resumeAt: null,
+    ticketId: null,
+    appendPrompt: null,
+    portBase: null,
+    recipe: null,
+    activity: null,
+    ...over,
+  };
+}
+
+export function board(over: Partial<BoardSettings> = {}): BoardSettings {
+  return {
+    action: 'merge',
+    target: '',
+    strategy: 'squash',
+    draft: false,
+    testsFirst: false,
+    testCommand: '',
+    cleanup: true,
+    conventional: true,
+    conflict: 'ask',
+    maxParallel: 2,
+    model: '',
+    effort: '',
+    mode: '',
+    autopilot: true,
+    prefix: '',
+    nextNumber: 1,
+    ...over,
+  };
+}
+
+export function ticket(over: Partial<Ticket> = {}): Ticket {
+  return {
+    id: 't1',
+    projectId: 'p1',
+    key: 'DEM-1',
+    title: 'Ajouter le fichier',
+    description: '',
+    criteria: [
+      { text: 'Le fichier existe', ok: false, note: '' },
+      { text: 'Tests verts', ok: false, note: '' },
+    ],
+    maxLoops: 5,
+    column: 'todo',
+    rank: 1,
+    agentId: null,
+    iteration: 0,
+    partial: false,
+    blocked: null,
+    conflict: false,
+    step: null,
+    outcome: null,
+    outcomeUrl: null,
+    forced: false,
+    reminded: false,
+    cost: 0,
+    createdAt: 1,
+    startedAt: null,
+    reviewAt: null,
+    doneAt: null,
     ...over,
   };
 }
@@ -115,11 +177,13 @@ export function gitInfo(over: Partial<GitInfo> = {}): GitInfo {
 }
 
 /** Puts the app singleton back into a known state. */
-export function resetApp(over: { projects?: Project[]; agents?: Agent[] } = {}) {
+export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets?: Ticket[] } = {}) {
   const projects = over.projects ?? [project()];
   app.projects = projects;
   app.agents = Object.fromEntries((over.agents ?? []).map((a) => [a.id, a]));
   app.attention = {};
+  app.tickets = Object.fromEntries((over.tickets ?? []).map((t) => [t.id, t]));
+  app.board = {};
   app.editor = {};
   app.ui = { activeProject: projects[0]?.id ?? null, view: 'project', selectedAgent: {} };
   app.settings = { ...SETTINGS };

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { agent, fakeBackend, gitInfo, project, resetApp, SETTINGS } from '../test/ipc';
+import { agent, board, fakeBackend, gitInfo, project, resetApp, SETTINGS, ticket } from '../test/ipc';
 import { conversationOf } from './conversations.svelte';
 import { buffers } from './editor/buffers.svelte';
 import { trees } from './editor/trees.svelte';
@@ -18,6 +18,7 @@ async function start(over: Partial<InitialState> = {}, handlers: Record<string, 
     git: {},
     shells: [],
     terminals: [],
+    tickets: [],
     claudeFound: true,
     version: '0.1.0',
     models: [],
@@ -212,6 +213,7 @@ describe('AppState start-up', () => {
       git: {},
       shells: [],
       terminals: [],
+      tickets: [],
       claudeFound: true,
       version: '0.1.0',
       models: [],
@@ -513,6 +515,189 @@ describe('editor of a removed agent or project', () => {
     expect(buffers.all[kept]?.text).toBe('kept\n');
     expect(trees.get('p2', 'project')).toBeUndefined();
     expect(backend.called('set_unsaved').at(-1)?.args).toEqual({ count: 1 });
+  });
+});
+
+describe('board', () => {
+  beforeEach(() => resetApp());
+
+  it('keeps the tickets of every project and follows their events', async () => {
+    const { emit } = await start({ tickets: [ticket()] });
+    expect(app.tickets.t1.key).toBe('DEM-1');
+    emit({ type: 'ticket', ticket: ticket({ id: 't2', key: 'DEM-2' }) });
+    expect(Object.keys(app.tickets)).toEqual(['t1', 't2']);
+    emit({ type: 'ticketRemoved', id: 't1', projectId: 'p1' });
+    expect(Object.keys(app.tickets)).toEqual(['t2']);
+    emit({ type: 'project', project: project({ board: board({ prefix: 'DEM' }) }) });
+    expect(app.projects[0].board.prefix).toBe('DEM');
+    expect(app.reviewCount('p1')).toBe(0);
+    emit({ type: 'ticket', ticket: ticket({ id: 't2', column: 'review' }) });
+    expect(app.reviewCount('p1')).toBe(1);
+  });
+
+  it('starts without tickets when the snapshot has none', async () => {
+    resetApp({ tickets: [ticket()] });
+    await start({ tickets: undefined });
+    expect(app.tickets).toEqual({});
+  });
+
+  it('counts only the tickets "À tester" of the project asked for', async () => {
+    await start({
+      tickets: [
+        ticket({ id: 't1', column: 'review' }),
+        ticket({ id: 't2', column: 'review' }),
+        ticket({ id: 't3', column: 'doing' }),
+        ticket({ id: 't4', projectId: 'p2', column: 'review' }),
+      ],
+    });
+    expect(app.reviewCount('p1')).toBe(2);
+    expect(app.reviewCount('p2')).toBe(1);
+    expect(app.reviewCount('p3')).toBe(0);
+  });
+
+  it('keeps the board settings of a project it knows, and ignores those of one it does not', async () => {
+    const { emit } = await start();
+    emit({ type: 'project', project: project({ id: 'p2', name: 'studio-web', board: board({ action: 'pr' }) }) });
+    expect(app.projects.map((p) => [p.id, p.board.action])).toEqual([
+      ['p1', 'merge'],
+      ['p2', 'pr'],
+    ]);
+    emit({ type: 'project', project: project({ id: 'p9', name: 'gone' }) });
+    expect(app.projects.map((p) => p.id)).toEqual(['p1', 'p2']);
+  });
+
+  it('shows the board in place of the agents until an agent, a terminal, a launch or the editor is picked', async () => {
+    await start();
+    app.openBoard('p1');
+    expect(app.boardOn).toBe(true);
+    app.selectAgent('a2');
+    expect(app.boardOn).toBe(false);
+    app.openBoard('p1');
+    app.selectTerm('t1');
+    expect(app.boardOn).toBe(false);
+    app.openBoard('p1');
+    app.selectLaunch('c1');
+    expect(app.boardOn).toBe(false);
+    app.openBoard('p1');
+    await app.openEditor({ source: 'project' });
+    expect(app.boardOn).toBe(false);
+    app.openBoard('p1');
+    app.closeBoard();
+    expect(app.boardOn).toBe(false);
+    // Each project keeps its own.
+    app.openBoard('p2');
+    expect(app.ui.activeProject).toBe('p2');
+    app.selectProject('p1');
+    expect(app.boardOn).toBe(false);
+    app.selectProject('p2');
+    expect(app.boardOn).toBe(true);
+  });
+
+  it('keeps the board when no terminal or launch is picked, and hides it behind the statistics', async () => {
+    await start();
+    app.openBoard('p1');
+    app.selectTerm(null);
+    app.selectLaunch(null);
+    expect(app.boardOn).toBe(true);
+    app.openStats();
+    expect(app.boardOn).toBe(false);
+    app.selectProject('p1');
+    expect(app.boardOn).toBe(true);
+  });
+
+  it('takes the place of the editor, a terminal and a launch log of the project', async () => {
+    await start();
+    app.selectedTerm.p1 = 't1';
+    app.selectedLaunch.p1 = 'c1';
+    await app.openEditor({ source: 'project', path: 'a.ts' });
+    app.openBoard('p1');
+    expect(app.boardOn).toBe(true);
+    expect(app.editorOn).toBe(false);
+    expect(app.selectedTerm.p1).toBeNull();
+    expect(app.selectedLaunch.p1).toBeNull();
+    // The editor keeps its tabs for when it comes back.
+    expect(app.editor.p1.places.project.open).toEqual(['a.ts']);
+    expect(app.agent?.id).toBe('a1');
+  });
+
+  it('does not open a board without a project', async () => {
+    await start({ projects: [], agents: [] });
+    app.openBoard();
+    expect(app.board).toEqual({});
+  });
+
+  it('does not count a conversation hidden by the board as seen', async () => {
+    await start();
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    app.ui.selectedAgent.p1 = 'a1';
+    app.openBoard('p1');
+    app.attention = { a1: true };
+    app.markSeen();
+    expect(app.attention).toEqual({ a1: true });
+    app.closeBoard();
+    app.markSeen();
+    expect(app.attention).toEqual({});
+    vi.restoreAllMocks();
+  });
+
+  it('flags an agent that finishes while the board hides its conversation', async () => {
+    const { emit } = await start();
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    app.openBoard('p1');
+    emit({ type: 'agent', agent: agent({ status: 'running' }) });
+    emit({ type: 'agent', agent: agent({ status: 'done' }) });
+    expect(app.attention).toEqual({ a1: true });
+    vi.restoreAllMocks();
+  });
+
+  it('tells the ticket of an agent, the one it works on first', async () => {
+    await start({
+      tickets: [ticket({ id: 'old', agentId: 'a1', column: 'done' }), ticket({ id: 'now', agentId: 'a1', column: 'review' })],
+    });
+    expect(app.ticketOf('a1')?.id).toBe('now');
+    expect(app.ticketOf('a2')).toBeUndefined();
+  });
+
+  it('tells the last ticket of an agent that works on none', async () => {
+    await start({
+      tickets: [ticket({ id: 'first', agentId: 'a1', column: 'done' }), ticket({ id: 'last', agentId: 'a1', column: 'todo' })],
+    });
+    expect(app.ticketOf('a1')?.id).toBe('last');
+  });
+
+  it('gives way to the agent a notification or Ctrl+J brings up, and to a new agent', async () => {
+    const { emit } = await start({}, { create_agent: () => agent({ id: 'a9', name: 'agent-3', createdAt: 9 }) });
+    app.openBoard('p1');
+    emit({ type: 'focus', projectId: 'p1', agentId: 'a2' });
+    expect(app.boardOn).toBe(false);
+    expect(app.agent?.id).toBe('a2');
+    app.openBoard('p1');
+    emit({ type: 'agent', agent: agent({ id: 'a1', status: 'waiting', lastActivity: 5 }) });
+    app.nextWaiting();
+    expect(app.boardOn).toBe(false);
+    expect(app.agent?.id).toBe('a1');
+    app.openBoard('p1');
+    await app.newAgent('p1');
+    expect(app.boardOn).toBe(false);
+    expect(app.agent?.id).toBe('a9');
+  });
+
+  it('keeps the board when a notification is clicked for a project without naming an agent', async () => {
+    const { emit } = await start();
+    app.openBoard('p2');
+    app.selectProject('p1');
+    emit({ type: 'focus', projectId: 'p2', agentId: null });
+    expect(app.project?.id).toBe('p2');
+    expect(app.boardOn).toBe(true);
+  });
+
+  it('forgets the board of a closed project', async () => {
+    await start();
+    app.openBoard('p2');
+    app.forgetProject('p2');
+    expect(app.board.p2).toBeUndefined();
+    expect(app.ui.activeProject).toBe('p1');
+    expect(app.boardOn).toBe(false);
   });
 });
 
