@@ -3,14 +3,17 @@
 //! request, push) and the test launches of the worktrees.
 
 use crate::board::{self, TurnEnd};
-use crate::claude;
+use crate::claude::{self, ClaudeProcess};
 use crate::core::{AgentOptions, Core};
 use crate::git;
 use crate::model::*;
+use crate::testlaunch;
 use anyhow::{anyhow, bail, Result};
 use serde::Deserialize;
+use std::path::Path;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::time::Duration;
 use tauri::Runtime;
 
 /// Why a ticket "En cours" stops when its agent's automatic resume after the usage limit is gone
@@ -22,6 +25,12 @@ const QUOTA_LOST: &str = "limite d'usage atteinte";
 /// the one that tells why, when there is one; else the first line, as `board::turn_end` does with
 /// an agent's.
 pub(crate) fn error_reason(e: &anyhow::Error) -> String {
+    format!("Erreur : {}", error_line(e))
+}
+
+/// An error on one line, as `error_reason` tells it: a failed validation step is blocked with it
+/// as it is (the app's own refusals read as they are written).
+pub(crate) fn error_line(e: &anyhow::Error) -> String {
     let layers: Vec<String> = e
         .chain()
         .map(|c| c.to_string())
@@ -32,11 +41,14 @@ pub(crate) fn error_reason(e: &anyhow::Error) -> String {
         if let Some(why) = layer.lines().map(str::trim).find(says_why) {
             let mut parts: Vec<String> = layers[..i].iter().map(|l| board::first_line(l)).collect();
             parts.push(why.to_string());
-            return format!("Erreur : {}", board::first_line(&parts.join(": ")));
+            return board::first_line(&parts.join(": "));
         }
     }
-    format!("Erreur : {}", board::first_line(&format!("{e:#}")))
+    board::first_line(&format!("{e:#}"))
 }
+
+/// The tests run before a validation stop after this.
+const TEST_LIMIT: Duration = Duration::from_secs(20 * 60);
 
 /// A ticket as its form gives it.
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -632,12 +644,14 @@ impl<R: Runtime> Core<R> {
     }
 
     /// The app stopped while starting the ticket: back to "À faire", and the agent made for it
-    /// (never sent its first message), if any, is archived.
+    /// (never sent its first message), if any, is archived. It was under way: it starts again
+    /// even with the autopilot off (one started by "Lancer" would wait otherwise).
     fn start_over(self: &Arc<Self>, ticket_id: &str, agent_id: Option<&str>) {
         let _ = self.edit_ticket(ticket_id, |t| {
             if t.column == Column::Doing && t.blocked.is_none() && t.agent_id.as_deref() == agent_id
             {
                 board::back_to_todo(t);
+                t.forced = true;
             }
             Ok(())
         });
@@ -668,6 +682,18 @@ impl<R: Runtime> Core<R> {
     /// first message gets it, with the ticket's description and criteria), or, when it has none
     /// left, the ticket starts again. The block goes as the message is sent.
     pub async fn ticket_resume(self: &Arc<Self>, id: &str) -> Result<()> {
+        // Its agent waits for its quota: a message now would meet the limit again (and drop the
+        // automatic resume, which takes it up).
+        let waiting = self
+            .ticket(id)
+            .ok()
+            .filter(|t| t.column == Column::Doing && t.blocked.is_some())
+            .and_then(|t| t.agent_id)
+            .and_then(|a| self.live_agent(&a))
+            .and_then(|m| m.resume_at);
+        if let Some(at) = waiting {
+            bail!("En attente du quota — reprise à {}", board::clock(at));
+        }
         let t = self.edit_ticket(id, |t| {
             if t.column != Column::Doing {
                 bail!("Ce ticket n'est pas en cours.");
@@ -731,6 +757,382 @@ impl<R: Runtime> Core<R> {
                 }
                 Ok(())
             });
+        }
+    }
+
+    // ---------- validation ----------
+
+    fn set_step(&self, id: &str, step: &str) {
+        let _ = self.edit_ticket(id, |t| {
+            if t.column == Column::Review {
+                t.step = Some(step.to_string());
+            }
+            Ok(())
+        });
+    }
+
+    /// The ticket is still being validated with this agent: archiving or deleting the agent
+    /// meanwhile sent it back to do, and nothing of its validation goes on.
+    fn still_validating(&self, id: &str, agent_id: &str) -> Result<()> {
+        let t = self.ticket(id)?;
+        if t.column != Column::Review || t.step.is_none() || t.agent_id.as_deref() != Some(agent_id)
+        {
+            bail!("Ce ticket a changé pendant sa validation.");
+        }
+        Ok(())
+    }
+
+    /// "Valider…" on a ticket "À tester" (even partial): tests, commit, then what the board's
+    /// settings say, each step shown on the card. A failed step leaves it "À tester", blocked
+    /// with the reason ("Réessayer" runs it again). Refused while its agent works (its files would
+    /// be committed mid-write) and while a validation of it runs (a second click).
+    pub async fn ticket_approve(self: &Arc<Self>, id: &str) -> Result<()> {
+        let t = self.ticket(id)?;
+        if t.column != Column::Review {
+            bail!("Ce ticket n'est pas à tester.");
+        }
+        let busy = t
+            .agent_id
+            .as_deref()
+            .and_then(|a| self.live_agent(a))
+            .is_some_and(|m| m.status.is_active());
+        if busy {
+            bail!(
+                "L'agent de ce ticket travaille encore : attends la fin de son tour pour valider."
+            );
+        }
+        let t = self.edit_ticket(id, |t| {
+            if t.column != Column::Review {
+                bail!("Ce ticket n'est pas à tester.");
+            }
+            if t.step.is_some() {
+                bail!("La validation de ce ticket est déjà en cours.");
+            }
+            t.blocked = None;
+            t.conflict = false;
+            t.step = Some("Validation…".into());
+            Ok(t.clone())
+        })?;
+        if let Err(e) = self.validate(&t).await {
+            log::warn!("ticket {}: validation failed: {e:#}", t.key);
+            let reason = error_line(&e);
+            // One that left "À tester" meanwhile (back with its agent, or to do) stays as it is.
+            let blocked = self.edit_ticket(id, |t| {
+                let here = t.column == Column::Review;
+                if here {
+                    t.step = None;
+                    t.blocked = Some(reason);
+                }
+                Ok(here)
+            });
+            if blocked.unwrap_or(false) {
+                self.notify_ticket(id, false);
+            }
+        }
+        self.schedule();
+        Ok(())
+    }
+
+    async fn validate(self: &Arc<Self>, t: &Ticket) -> Result<()> {
+        let project = self.project(&t.project_id)?;
+        let s = project.board.clone();
+        let agent_id = t
+            .agent_id
+            .clone()
+            .ok_or_else(|| anyhow!("Ce ticket n'a pas d'agent."))?;
+        let meta = self.agent(&agent_id)?.lock().meta.clone();
+        let wt = meta
+            .worktree
+            .clone()
+            .ok_or_else(|| anyhow!("L'agent de ce ticket n'a pas de worktree."))?;
+        let target = self.target_of(&project).await;
+        // Tests.
+        if s.tests_first && !s.test_command.trim().is_empty() {
+            self.set_step(&t.id, "Tests…");
+            let settings = self.settings.read().clone();
+            let shell = crate::pty::detect_shells(&settings)
+                .into_iter()
+                .next()
+                .ok_or_else(|| anyhow!("Aucun shell pour lancer les tests."))?;
+            let command = s.test_command.trim();
+            let env = testlaunch::port_env(meta.port_base);
+            let run = testlaunch::run_tests(&shell, &wt.path, command, &env, TEST_LIMIT).await?;
+            if !run.passed {
+                self.edit_ticket(&t.id, |x| {
+                    x.step = None;
+                    x.column = Column::Doing;
+                    x.iteration = 1;
+                    x.partial = false;
+                    x.review_at = None;
+                    x.reminded = false;
+                    Ok(())
+                })?;
+                // Not a failure of the validation: the ticket is back with its agent.
+                let _ = self
+                    .send_or_block(
+                        &t.id,
+                        &agent_id,
+                        board::tests_failed_message(command, &run.tail),
+                    )
+                    .await;
+                return Ok(());
+            }
+        }
+        // The files copied from the project into the worktree (`.env`…): never committed, merged
+        // or pushed.
+        let copied = testlaunch::matching_untracked(&project.path, &project.worktree_copy).await;
+        self.still_validating(&t.id, &agent_id)?;
+        let mut message = None;
+        if s.action != "keep" {
+            if !git::branch_exists(&wt.path, &target).await {
+                bail!("La branche cible {target} n'existe pas.");
+            }
+            // Commit what is left in the worktree.
+            self.set_step(&t.id, "Commit…");
+            let unmerged = git::unmerged(&wt.path).await;
+            if !unmerged.is_empty() {
+                bail!(
+                    "Conflits non résolus dans le worktree sur : {}",
+                    unmerged.join(", ")
+                );
+            }
+            let keep_out = not_committed(&wt.path, &copied).await;
+            if git::stage_all(&wt.path, &keep_out).await? {
+                let m = self.commit_message(t, &s, &wt.path, &target).await;
+                git::commit_staged(&wt.path, &m).await?;
+                message = Some(m);
+            }
+            // One the agent committed itself goes no further than its branch.
+            let committed: Vec<String> = git::branch_files(&wt.path, &target, &wt.branch)
+                .await?
+                .into_iter()
+                .filter(|f| copied.contains(f))
+                .collect();
+            match committed.as_slice() {
+                [] => {}
+                [one] => bail!("{one} copié du projet est commité dans la branche"),
+                many => bail!(
+                    "{} copiés du projet sont commités dans la branche",
+                    many.join(", ")
+                ),
+            }
+            self.still_validating(&t.id, &agent_id)?;
+        }
+        let (outcome, url): (String, Option<String>) = match s.action.as_str() {
+            "merge" => {
+                self.set_step(&t.id, "Merge…");
+                match self
+                    .merge_ticket(t, &s, &project, &wt, &target, message)
+                    .await?
+                {
+                    Some(done) => done,
+                    // Stopped on a conflict, handled as the settings say.
+                    None => return Ok(()),
+                }
+            }
+            "keep" => (board::KEPT_OUTCOME.to_string(), None),
+            other => bail!("« {other} » n'est pas encore pris en charge à la validation."),
+        };
+        let cost = self
+            .agent(&agent_id)
+            .map(|h| h.lock().meta.cost)
+            .unwrap_or(meta.cost);
+        // Its process, killed for good before its worktree goes (see `remove_worktree_of`).
+        let proc = self
+            .agent(&agent_id)
+            .ok()
+            .and_then(|h| h.lock().proc.clone());
+        self.edit_ticket(&t.id, |x| {
+            // Its agent archived or deleted meanwhile: it went back to do, and stays there.
+            if x.column != Column::Review || x.agent_id.as_deref() != Some(agent_id.as_str()) {
+                bail!("Ce ticket a changé pendant sa validation.");
+            }
+            x.column = Column::Done;
+            x.step = None;
+            x.blocked = None;
+            x.conflict = false;
+            x.outcome = Some(outcome);
+            x.outcome_url = url;
+            x.done_at = Some(now_ms());
+            x.cost = cost;
+            Ok(())
+        })?;
+        if s.action != "keep" {
+            // Done whatever becomes of its agent: its work went where it was sent, and "Réessayer"
+            // on it would have nothing left to do.
+            if let Err(e) = self.archive_agent(&agent_id, true).await {
+                log::warn!("ticket {}: its agent was not archived: {e:#}", t.key);
+            }
+            if s.action == "merge" && s.cleanup {
+                self.remove_worktree_of(t, &project, &wt, proc).await;
+            }
+        }
+        Ok(())
+    }
+
+    /// Haiku's commit message in the Conventional Commits form, checked, else
+    /// `feat: <title> [<key>]`; without "Message de commit généré", `<key> <title>`.
+    async fn commit_message(
+        self: &Arc<Self>,
+        t: &Ticket,
+        s: &BoardSettings,
+        cwd: &str,
+        target: &str,
+    ) -> String {
+        if !s.conventional {
+            return board::plain_commit(t);
+        }
+        let stat = git::staged_stat(cwd, target).await;
+        match self
+            .one_shot(board::COMMIT_SYSTEM, &board::commit_prompt(t, &stat))
+            .await
+        {
+            Ok(answer) => board::commit_from_answer(&answer, &t.key)
+                .unwrap_or_else(|| board::fallback_commit(t)),
+            Err(e) => {
+                log::info!("ticket {}: no commit message from Haiku: {e:#}", t.key);
+                board::fallback_commit(t)
+            }
+        }
+    }
+
+    /// The merge step: in the project's folder when the target is checked out there (refused with
+    /// uncommitted changes), refused when an agent's worktree has it, else in a temporary
+    /// worktree. None when it stopped on a conflict.
+    async fn merge_ticket(
+        self: &Arc<Self>,
+        t: &Ticket,
+        s: &BoardSettings,
+        project: &Project,
+        wt: &Worktree,
+        target: &str,
+        message: Option<String>,
+    ) -> Result<Option<(String, Option<String>)>> {
+        let repo = self
+            .toplevel(&project.path)
+            .await
+            .ok_or_else(|| anyhow!("pas un dépôt git"))?;
+        if git::ahead_of(&repo, target, &wt.branch).await == 0 {
+            bail!(
+                "Rien à merger : {} n'a pas de commit de plus que {target}.",
+                wt.branch
+            );
+        }
+        let message = match message {
+            Some(m) => m,
+            None => self.commit_message(t, s, &wt.path, target).await,
+        };
+        let tmp = Path::new(&repo)
+            .join(".claude")
+            .join("worktrees")
+            .join(format!(".merge-{}", t.key.to_lowercase()));
+        let tmp_s = tmp.to_string_lossy().to_string();
+        // One left by a validation the app's stop cut: registered, it would still hold the target
+        // and every merge into it would be refused.
+        drop_worktree(&repo, &tmp).await;
+        let (dir, temporary) = match git::checkout_of(&repo, target).await? {
+            Some(p) if same_dir(&p, &repo) => {
+                if git::has_tracked_changes(&repo).await? {
+                    bail!("Le dossier du projet a des modifications non commitées sur {target}");
+                }
+                (repo.clone(), false)
+            }
+            Some(p) => {
+                let who = self
+                    .project_agents(&project.id)
+                    .iter()
+                    .map(|h| h.lock().meta.clone())
+                    .find(|m| m.worktree.as_ref().is_some_and(|w| same_dir(&w.path, &p)))
+                    .map(|m| m.name)
+                    .unwrap_or(p);
+                bail!("{target} est extraite dans le worktree de {who}");
+            }
+            None => {
+                git::ensure_excluded(&repo, ".claude/worktrees/").await?;
+                git::run(&repo, &["worktree", "add", &tmp_s, target]).await?;
+                (tmp_s.clone(), true)
+            }
+        };
+        let result =
+            git::integrate(&dir, &wt.branch, &s.strategy, &message, &wt.path, target).await;
+        if temporary {
+            drop_worktree(&repo, &tmp).await;
+        }
+        self.git.refresh(&project.id);
+        match result? {
+            git::Integrated::Done => Ok(Some((board::merged_outcome(target, &s.strategy), None))),
+            git::Integrated::Conflict(files) => {
+                bail!("Conflit avec {target} sur : {}", files.join(", "))
+            }
+        }
+    }
+
+    /// After a merge, with "Supprimer le worktree": the ticket's worktree and branch go. Its
+    /// agent's process is killed first with all it started: the archive closed its input, but it
+    /// may take its time to end (or something still holds it), and on Windows a live process
+    /// keeps the folder. The removal is tried again for a few seconds.
+    async fn remove_worktree_of(
+        &self,
+        t: &Ticket,
+        project: &Project,
+        wt: &Worktree,
+        proc: Option<Arc<ClaudeProcess>>,
+    ) {
+        if let Some(p) = proc {
+            p.kill();
+            for _ in 0..30 {
+                if !p.is_alive() {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+        }
+        for attempt in 1..=10 {
+            match git::worktree_remove(&project.path, &wt.path, &wt.branch).await {
+                Ok(()) => break,
+                Err(e) if attempt == 10 => {
+                    log::warn!("ticket {}: worktree not removed: {e:#}", t.key)
+                }
+                Err(_) => tokio::time::sleep(Duration::from_millis(300)).await,
+            }
+        }
+        self.git.refresh(&project.id);
+    }
+}
+
+/// Of the files copied from the project, those the branch checked out in `cwd` has not
+/// committed: left out of the validation's commit, staged or not (unstaging one it has would
+/// commit its deletion; the branch's check refuses those).
+async fn not_committed(cwd: &str, copied: &[String]) -> Vec<String> {
+    let mut out = Vec::new();
+    for f in copied {
+        if git::run(cwd, &["cat-file", "-e", &format!("HEAD:{f}")])
+            .await
+            .is_err()
+        {
+            out.push(f.clone());
+        }
+    }
+    out
+}
+
+/// Removes the worktree at `path`, registered or not, its folder there or not.
+async fn drop_worktree(repo: &str, path: &Path) {
+    let p = path.to_string_lossy();
+    let _ = git::run(repo, &["worktree", "remove", "--force", &p]).await;
+    if path.exists() {
+        let _ = std::fs::remove_dir_all(path);
+    }
+    let _ = git::run(repo, &["worktree", "prune"]).await;
+}
+
+/// The same folder, however git and Windows spell it (short 8.3 names, slashes, case).
+fn same_dir(a: &str, b: &str) -> bool {
+    match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
+        (Ok(x), Ok(y)) => x == y,
+        _ => {
+            let norm = |s: &str| s.replace('\\', "/").trim_end_matches('/').to_lowercase();
+            norm(a) == norm(b)
         }
     }
 }

@@ -314,6 +314,7 @@ pub fn back_to_todo(t: &mut Ticket) {
     t.forced = false;
     t.started_at = None;
     t.review_at = None;
+    t.progress.clear();
     for c in &mut t.criteria {
         c.ok = false;
         c.note.clear();
@@ -390,6 +391,16 @@ pub fn loop_message(t: &Ticket) -> String {
     )
 }
 
+/// The local hour and minute of a time in milliseconds ("15:07"), as the window shows a resume.
+pub fn clock(ms: i64) -> String {
+    use chrono::TimeZone;
+    chrono::Local
+        .timestamp_millis_opt(ms)
+        .single()
+        .map(|d| d.format("%H:%M").to_string())
+        .unwrap_or_default()
+}
+
 pub fn resume_message(key: &str) -> String {
     format!("Reprends le ticket {key} là où tu en étais, puis termine par le bilan.")
 }
@@ -430,12 +441,23 @@ const COMMIT_TYPES: [&str; 11] = [
     "feat", "fix", "docs", "style", "refactor", "perf", "test", "build", "ci", "chore", "revert",
 ];
 
-/// What Haiku is asked for: the ticket, and what its branch changed.
+/// What Haiku is asked for: the ticket with what its agent says is in place, and what its branch
+/// changed.
 pub fn commit_prompt(t: &Ticket, stat: &str) -> String {
+    let progress: String = t
+        .progress
+        .iter()
+        .map(|p| format!("- {}\n", p.trim()))
+        .collect();
+    let progress = if progress.is_empty() {
+        progress
+    } else {
+        format!("Avancement :\n{progress}")
+    };
     format!(
         "Écris le message de commit des modifications ci-dessous, au format Conventional Commits : \
          une ligne « type(portée facultative): description courte en minuscules » suivie de « [{key}] ». \
-         Réponds uniquement par cette ligne.\n\n<ticket>\n{key} · {title}\n{desc}\n</ticket>\n\n<diffstat>\n{stat}\n</diffstat>",
+         Réponds uniquement par cette ligne.\n\n<ticket>\n{key} · {title}\n{desc}\n{progress}</ticket>\n\n<diffstat>\n{stat}\n</diffstat>",
         key = t.key,
         title = t.title.trim(),
         desc = truncate(t.description.trim(), 2000),
@@ -443,10 +465,32 @@ pub fn commit_prompt(t: &Ticket, stat: &str) -> String {
     )
 }
 
+/// The line itself: backticks and surrounding quotes (`"`, `'`, « ») taken off, as many as wrap it.
+fn unquoted(line: &str) -> &str {
+    let mut s = line.trim();
+    loop {
+        let inner = s.trim_matches('`').trim();
+        let inner = [('"', '"'), ('\'', '\''), ('«', '»')]
+            .iter()
+            .find_map(|&(open, close)| inner.strip_prefix(open).and_then(|x| x.strip_suffix(close)))
+            .map_or(inner, str::trim);
+        if inner == s {
+            return s;
+        }
+        s = inner;
+    }
+}
+
 /// Haiku's answer as a commit message, if it is one: `type(scope)!: description [KEY]`, on one
-/// line of at most 100 characters.
+/// line of at most 100 characters. Its first line counts, fences (```, ```text) left aside, and
+/// quotes around it do not.
 pub fn commit_from_answer(raw: &str, key: &str) -> Option<String> {
-    let line = raw.trim().lines().next()?.trim().trim_matches('`').trim();
+    let fence = |l: &str| l.starts_with("```") && !l.trim_start_matches('`').contains([' ', ':']);
+    let line = raw
+        .lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty() && !fence(l))?;
+    let line = unquoted(line);
     let head = line.strip_suffix(&format!(" [{key}]"))?;
     let (kind, desc) = head.split_once(": ")?;
     let kind = kind.strip_suffix('!').unwrap_or(kind);
@@ -639,6 +683,7 @@ fn protocol(t: &Ticket, criteria: &str, ports: Option<u16>) -> String {
         "Tu travailles en autonomie sur le ticket {key} « {title} » d'Escouade. \
          Critères d'acceptation ({n}) : {criteria}. \
          Vérifie toi-même chaque critère (tests, exécution) avant de le déclarer atteint. \
+         Ne commite pas les fichiers copiés du projet (.env…). \
          S'il te faut une décision, pose la question avec l'outil de question. \
          À la fin de CHAQUE réponse, termine par un bloc de code ouvert par ```escouade et fermé par ``` \
          qui contient un JSON {{\"criteres\": [{{\"n\": 1, \"ok\": true, \"note\": \"vérifié par …\"}}, \
@@ -990,7 +1035,10 @@ mod tests {
         t.step = Some("Tests…".into());
         t.criteria[0].ok = true;
         t.criteria[0].note = "vu".into();
+        t.progress = vec!["Middleware réécrit".into()];
         back_to_todo(&mut t);
+        // A new agent starts from the target branch: nothing of this attempt is in place.
+        assert!(t.progress.is_empty());
         assert_eq!(
             (
                 t.column,
@@ -1453,8 +1501,25 @@ mod tests {
             ok("refactor!: nouvelle API [ATL-42]").as_deref(),
             Some("refactor!: nouvelle API [ATL-42]")
         );
+        // Quoted, or in a fenced block: the message inside is still used.
+        for quoted in [
+            "\"feat: limiter les tentatives [ATL-42]\"",
+            "'feat: limiter les tentatives [ATL-42]'",
+            "« feat: limiter les tentatives [ATL-42] »",
+            "```\nfeat: limiter les tentatives [ATL-42]\n```",
+            "```text\n\"feat: limiter les tentatives [ATL-42]\"\n```\n",
+            "\n  `« feat: limiter les tentatives [ATL-42] »`  \n",
+        ] {
+            assert_eq!(
+                ok(quoted).as_deref(),
+                Some("feat: limiter les tentatives [ATL-42]"),
+                "{quoted}"
+            );
+        }
         let long = format!("feat: {} [ATL-42]", "x".repeat(120));
         for bad in [
+            "```\n```",
+            "\"feat: guillemet ouvert [ATL-42]",
             "feat: sans clé",
             "Voici le message : feat: x [ATL-42]",
             "wip: x [ATL-42]",
@@ -1480,6 +1545,49 @@ mod tests {
             p.contains("src/a.ts | 3 ++-") && p.contains("[ATL-42]"),
             "{p}"
         );
+        // What the agent says is in place goes with the ticket.
+        let mut t = t;
+        t.progress = vec!["Tokens signés".into(), "Middleware réécrit".into()];
+        let p = commit_prompt(&t, "");
+        let ticket = &p[p.find("<ticket>").unwrap()..p.find("</ticket>").unwrap()];
+        assert!(
+            ticket.contains("Avancement :\n- Tokens signés\n- Middleware réécrit\n"),
+            "{p}"
+        );
+        assert!(!commit_prompt(&ticket_of_progress(&[]), "").contains("Avancement"));
+    }
+
+    fn ticket_of_progress(items: &[&str]) -> Ticket {
+        let mut t = ticket(1, 5);
+        t.progress = items.iter().map(|s| s.to_string()).collect();
+        t
+    }
+
+    #[test]
+    fn the_protocol_tells_not_to_commit_the_files_copied_from_the_project() {
+        for ports in [None, Some(4100)] {
+            let p = protocol_prompt(&ticket(2, 5), ports);
+            assert!(
+                p.contains("Ne commite pas les fichiers copiés du projet (.env…)."),
+                "{p}"
+            );
+            assert!(!p.contains('\n') && escaped_len(&p) <= PROTOCOL_BUDGET);
+        }
+    }
+
+    #[test]
+    fn a_resume_time_reads_as_the_local_hour_and_minute() {
+        use chrono::TimeZone;
+        let at = chrono::Local
+            .with_ymd_and_hms(2026, 10, 3, 15, 7, 0)
+            .unwrap()
+            .timestamp_millis();
+        assert_eq!(clock(at), "15:07");
+        let at = chrono::Local
+            .with_ymd_and_hms(2026, 10, 3, 9, 0, 59)
+            .unwrap()
+            .timestamp_millis();
+        assert_eq!(clock(at), "09:00");
     }
 
     #[test]

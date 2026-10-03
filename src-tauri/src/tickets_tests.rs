@@ -2,11 +2,13 @@
 //! ticket's agent as its title says: [ok] (every criterion met at once), [jamais] (none ever),
 //! [sans-bilan] (no report), [lent] (a turn that lasts), [recette] (a launch recipe), [question]
 //! (a question first), [fin-d-abord] (an interrupted turn's end read before the interrupt's
-//! answer); by default criterion n is met from loop n on.
+//! answer), [commite] (its work committed, every file of its folder included), [tenace] (a process
+//! that lasts 5 s once its input is closed), [message-libre] (Haiku's commit message out of form);
+//! by default criterion n is met from loop n on.
 
 use crate::board::TurnEnd;
 use crate::core::{AgentOptions, Core};
-use crate::core_tests::{git, harness, Harness};
+use crate::core_tests::{commit_change, git, harness, Harness};
 use crate::model::*;
 use crate::tickets::{error_reason, TicketDraft};
 use serde_json::json;
@@ -1473,33 +1475,46 @@ async fn a_ticket_stopped_mid_start_goes_back_to_do_at_the_next_start() {
             Ok(())
         })
         .unwrap();
-    h.core.recover_tickets();
-    for id in &ids[..3] {
-        let t = h.ticket(id);
+    {
+        // No scheduling pass runs meanwhile: what recovery left is seen before anything starts.
+        let _pass = h.core.board_lock.lock().await;
+        h.core.recover_tickets();
+        for id in &ids[..3] {
+            let t = h.ticket(id);
+            assert_eq!(
+                (
+                    t.column,
+                    t.agent_id.clone(),
+                    t.iteration,
+                    t.started_at,
+                    t.criteria[0].ok,
+                    t.forced
+                ),
+                (Column::Todo, None, 0, None, false, true),
+                "{}",
+                t.title
+            );
+        }
+        let blocked = h.ticket(&ids[3]);
         assert_eq!(
-            (
-                t.column,
-                t.agent_id.clone(),
-                t.iteration,
-                t.started_at,
-                t.criteria[0].ok
-            ),
-            (Column::Todo, None, 0, None, false),
-            "{}",
-            t.title
+            (blocked.column, blocked.blocked.as_deref()),
+            (Column::Doing, Some(NO_CLAUDE))
         );
     }
-    let blocked = h.ticket(&ids[3]);
-    assert_eq!(
-        (blocked.column, blocked.blocked.as_deref()),
-        (Column::Doing, Some(NO_CLAUDE))
-    );
     h.wait("the agents made for them archived", |h| {
         h.agent(&orphan).archived && h.agent(&never).archived
     })
     .await;
-    h.wait_board_idle().await;
-    assert_eq!(h.ticket(&ids[0]).column, Column::Todo);
+    // They were under way: they start again, even with the autopilot off.
+    for id in &ids[..3] {
+        h.wait_ticket(id, "started again to test", |t| t.column == Column::Review)
+            .await;
+        let agent = h.ticket(id).agent_id;
+        assert!(
+            ![Some(orphan.clone()), Some(never.clone())].contains(&agent),
+            "{agent:?}"
+        );
+    }
 }
 
 #[tokio::test]
@@ -1589,4 +1604,559 @@ async fn no_ticket_starts_while_the_target_branch_is_missing() {
     })
     .await;
     assert!(!h.core.targets_missing.lock().contains(&p.id));
+}
+
+#[tokio::test]
+async fn resuming_a_ticket_whose_agent_waits_for_its_quota_is_refused() {
+    use chrono::TimeZone;
+    let h = harness("tk-resume-quota");
+    let (p, r) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Quota", &["Un"], 5))
+        .await
+        .unwrap();
+    let a = h.agent_that_worked(&p.id).await;
+    let at = chrono::Local
+        .with_ymd_and_hms(2026, 10, 3, 15, 7, 0)
+        .unwrap()
+        .timestamp_millis();
+    h.core.agent(&a).unwrap().lock().meta.resume_at = Some(at);
+    h.core
+        .edit_ticket(&t.id, |t| {
+            t.column = Column::Doing;
+            t.iteration = 1;
+            t.agent_id = Some(a.clone());
+            t.blocked = Some("Interrompu".into());
+            Ok(())
+        })
+        .unwrap();
+    // A message now would meet the limit again: its automatic resume takes it up.
+    let e = h.core.ticket_resume(&t.id).await.unwrap_err();
+    assert_eq!(format!("{e:#}"), "En attente du quota — reprise à 15:07");
+    assert_eq!(h.ticket(&t.id).blocked.as_deref(), Some("Interrompu"));
+    assert_eq!(user_texts(&h.core, &a), ["Bonjour"]);
+    assert_eq!(h.agent(&a).resume_at, Some(at));
+    assert_eq!(h.stdin_messages(&r).len(), 1);
+}
+
+// ---------- validation ----------
+
+/// A ticket of `title` that reached "À tester", and its worktree ([ok]: in one loop).
+async fn reviewed(h: &Harness, project_id: &str, title: &str) -> (Ticket, PathBuf) {
+    let t = h
+        .core
+        .ticket_create(project_id, draft(title, &[], 5))
+        .await
+        .unwrap();
+    h.wait_ticket(&t.id, "to test", |t| t.column == Column::Review)
+        .await;
+    (h.ticket(&t.id), h.worktree_of(&t.id))
+}
+
+/// The ticket's branch still exists in `repo`.
+fn has_branch(repo: &Path, branch: &str) -> bool {
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args([
+            "rev-parse",
+            "--verify",
+            "-q",
+            &format!("refs/heads/{branch}"),
+        ])
+        .status()
+        .unwrap()
+        .success()
+}
+
+#[tokio::test]
+async fn validating_squashes_the_ticket_into_the_projects_branch_with_a_generated_message() {
+    let h = harness("tk-squash");
+    let (p, r) = h.project(false).await;
+    let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    h.core.ticket_approve(&t.id).await.unwrap();
+    let t = h.ticket(&t.id);
+    assert_eq!(t.column, Column::Done, "{:?}", t.blocked);
+    assert_eq!(t.outcome.as_deref(), Some("⤵ Mergé dans main · squash"));
+    assert!(t.done_at.is_some() && t.cost > 0.0);
+    assert_eq!(t.step, None);
+    assert_eq!(
+        std::fs::read_to_string(r.join("dem-1.txt")).unwrap(),
+        "Boucle 1\n"
+    );
+    assert_eq!(
+        git(&r, &["log", "-1", "--format=%s"]),
+        "feat: travail du faux claude [DEM-1]"
+    );
+    assert_eq!(git(&r, &["rev-list", "--count", "HEAD"]), "2");
+    // Cleaned up: its agent archived, its worktree and its branch gone.
+    assert!(h.agent(t.agent_id.as_deref().unwrap()).archived);
+    assert!(!wt.exists());
+    assert!(!has_branch(&r, "ticket/dem-1"));
+    assert!(
+        h.alerts().iter().all(|a| !a.contains("bloqué")),
+        "{:?}",
+        h.alerts()
+    );
+}
+
+#[tokio::test]
+async fn a_merged_tickets_worktree_goes_even_while_its_agent_takes_its_time_to_stop() {
+    let h = harness("tk-cleanup-linger");
+    let (p, r) = h.project(false).await;
+    // Its process lasts a while once its input is closed, and something still holds it (a
+    // request in flight): the archive alone leaves it running, and on Windows holding the folder.
+    let (t, wt) = reviewed(&h, &p.id, "Fichier [ok] [tenace]").await;
+    let aid = t.agent_id.clone().unwrap();
+    let held = h.core.agent(&aid).unwrap().lock().proc.clone().unwrap();
+    h.core.ticket_approve(&t.id).await.unwrap();
+    let t = h.ticket(&t.id);
+    assert_eq!(t.column, Column::Done, "{:?}", t.blocked);
+    assert!(!wt.exists(), "{}", wt.display());
+    assert!(!has_branch(&r, "ticket/dem-1"));
+    // Stopped for good, with all it started.
+    assert!(!held.is_alive());
+}
+
+#[tokio::test]
+async fn validating_merges_into_a_branch_checked_out_nowhere_through_a_temporary_worktree() {
+    let h = harness("tk-merge-temp");
+    let (p, r) = h.project(false).await;
+    git(&r, &["branch", "release"]);
+    h.set_board(&p.id, |s| {
+        s.target = "release".into();
+        s.strategy = "merge".into();
+        s.cleanup = false;
+    });
+    let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    // Left behind, registered, by a validation the app's stop cut: it holds the target.
+    let stale = r.join(".claude").join("worktrees").join(".merge-dem-1");
+    git(
+        &r,
+        &["worktree", "add", "-q", &stale.to_string_lossy(), "release"],
+    );
+    h.core.ticket_approve(&t.id).await.unwrap();
+    let t = h.ticket(&t.id);
+    assert_eq!(
+        t.outcome.as_deref(),
+        Some("⤵ Mergé dans release · merge commit"),
+        "{:?}",
+        t.blocked
+    );
+    assert_eq!(git(&r, &["show", "release:dem-1.txt"]), "Boucle 1");
+    assert_eq!(
+        git(&r, &["rev-list", "--count", "--merges", "release"]),
+        "1"
+    );
+    assert!(!r.join("dem-1.txt").exists() && !stale.exists());
+    assert!(!git(&r, &["worktree", "list"]).contains(".merge-dem-1"));
+    // "Supprimer le worktree" off: the worktree and the branch stay.
+    assert!(wt.is_dir() && has_branch(&r, "ticket/dem-1"));
+}
+
+#[tokio::test]
+async fn validating_by_rebase_keeps_the_history_straight() {
+    let h = harness("tk-rebase");
+    let (p, r) = h.project(false).await;
+    h.set_board(&p.id, |s| s.strategy = "rebase".into());
+    let (t, _) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    std::fs::write(r.join("autre.txt"), "main avance\n").unwrap();
+    git(&r, &["add", "autre.txt"]);
+    git(&r, &["commit", "-qm", "main avance"]);
+    h.core.ticket_approve(&t.id).await.unwrap();
+    assert_eq!(
+        h.ticket(&t.id).outcome.as_deref(),
+        Some("⤵ Mergé dans main · rebase"),
+        "{:?}",
+        h.ticket(&t.id).blocked
+    );
+    assert_eq!(git(&r, &["rev-list", "--count", "--merges", "main"]), "0");
+    assert_eq!(git(&r, &["rev-list", "--count", "main"]), "3");
+    assert!(r.join("dem-1.txt").exists() && r.join("autre.txt").exists());
+}
+
+#[tokio::test]
+async fn a_merge_is_refused_on_a_project_folder_with_uncommitted_changes() {
+    let h = harness("tk-dirty");
+    let (p, r) = h.project(false).await;
+    let (t, _) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    std::fs::write(r.join("src").join("app.ts"), "const a = 99; // en cours\n").unwrap();
+    h.core.ticket_approve(&t.id).await.unwrap();
+    let t = h.ticket(&t.id);
+    assert_eq!((t.column, t.step.clone()), (Column::Review, None));
+    assert_eq!(
+        t.blocked.as_deref(),
+        Some("Le dossier du projet a des modifications non commitées sur main")
+    );
+    assert!(h.alerts().iter().any(|x| x.ends_with(
+        "DEM-1 bloqué : Le dossier du projet a des modifications non commitées sur main"
+    )));
+    assert_eq!(
+        std::fs::read_to_string(r.join("src").join("app.ts")).unwrap(),
+        "const a = 99; // en cours\n"
+    );
+    // "Réessayer" once the folder is clean: the validation goes through.
+    git(&r, &["checkout", "--", "src/app.ts"]);
+    h.core.ticket_approve(&t.id).await.unwrap();
+    let t = h.ticket(&t.id);
+    assert_eq!((t.column, t.blocked.as_deref()), (Column::Done, None));
+    assert_eq!(
+        git(&r, &["log", "-1", "--format=%s"]),
+        "feat: travail du faux claude [DEM-1]"
+    );
+}
+
+#[tokio::test]
+async fn a_merge_is_refused_into_a_branch_an_agent_works_on() {
+    let h = harness("tk-target-busy");
+    let (p, _) = h.project(true).await;
+    let other = h.core.create_agent(&p.id, None).await.unwrap();
+    let branch = other.meta.worktree.clone().unwrap().branch;
+    h.set_board(&p.id, |s| s.target = branch.clone());
+    let (t, _) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    h.core.ticket_approve(&t.id).await.unwrap();
+    assert_eq!(
+        h.ticket(&t.id).blocked,
+        Some(format!(
+            "{branch} est extraite dans le worktree de {}",
+            other.meta.name
+        ))
+    );
+}
+
+#[tokio::test]
+async fn failing_tests_send_the_ticket_back_to_its_agent_with_their_last_lines() {
+    let h = harness("tk-tests-fail");
+    let (p, _) = h.project(false).await;
+    let cmd = "node -e \"console.log('1 test en échec'); process.exit(3)\"";
+    h.set_board(&p.id, |s| {
+        s.tests_first = true;
+        s.test_command = cmd.into();
+    });
+    let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    h.core.ticket_approve(&t.id).await.unwrap();
+    h.wait_sent(&wt, &format!("Les tests (`{cmd}`) échouent :"))
+        .await;
+    assert!(h.last_sent(&wt).contains("1 test en échec"));
+    assert_ne!(h.ticket(&t.id).column, Column::Done);
+    // Its agent answers with its report: back to test, from loop 1.
+    h.wait_ticket(&t.id, "to test again", |t| {
+        t.column == Column::Review && t.iteration == 1
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn passing_tests_let_the_validation_go_on_with_the_ports_exported() {
+    let h = harness("tk-tests-pass");
+    let (p, r) = h.project(false).await;
+    h.set_board(&p.id, |s| {
+        s.tests_first = true;
+        s.test_command = "node -e \"process.exit(process.env.ESCOUADE_PORT_BASE ? 0 : 4)\"".into();
+        s.conventional = false;
+    });
+    let (t, _) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    h.core.ticket_approve(&t.id).await.unwrap();
+    assert_eq!(
+        h.ticket(&t.id).column,
+        Column::Done,
+        "{:?}",
+        h.ticket(&t.id).blocked
+    );
+    // Without "Message de commit généré": the key and the title.
+    assert_eq!(git(&r, &["log", "-1", "--format=%s"]), "DEM-1 Fichier [ok]");
+}
+
+#[tokio::test]
+async fn a_haiku_answer_out_of_form_gives_the_titles_message() {
+    let h = harness("tk-commit-fallback");
+    let (p, r) = h.project(false).await;
+    let (t, _) = reviewed(&h, &p.id, "Fichier [ok] [message-libre]").await;
+    h.core.ticket_approve(&t.id).await.unwrap();
+    assert_eq!(
+        git(&r, &["log", "-1", "--format=%s"]),
+        "feat: Fichier [ok] [message-libre] [DEM-1]",
+        "{:?}",
+        h.ticket(&t.id).blocked
+    );
+}
+
+#[tokio::test]
+async fn the_env_files_copied_into_the_worktree_never_reach_a_commit() {
+    let h = harness("tk-env");
+    let (p, r) = h.project(false).await;
+    std::fs::write(r.join(".env"), "SECRET=1\n").unwrap();
+    let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    assert!(wt.join(".env").exists());
+    h.core.ticket_approve(&t.id).await.unwrap();
+    assert_eq!(
+        h.ticket(&t.id).column,
+        Column::Done,
+        "{:?}",
+        h.ticket(&t.id).blocked
+    );
+    assert_eq!(
+        git(&r, &["ls-tree", "-r", "--name-only", "HEAD"]),
+        "dem-1.txt\nsrc/app.ts"
+    );
+}
+
+#[tokio::test]
+async fn an_env_file_the_agent_made_is_committed_but_a_copied_one_it_staged_is_not() {
+    let h = harness("tk-env-own");
+    let (p, r) = h.project(false).await;
+    std::fs::write(r.join(".env"), "SECRET=1\n").unwrap();
+    let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    // The agent's own example file, and the copied one it staged (not committed).
+    std::fs::write(wt.join(".env.example"), "SECRET=\n").unwrap();
+    git(&wt, &["add", ".env"]);
+    h.core.ticket_approve(&t.id).await.unwrap();
+    assert_eq!(
+        h.ticket(&t.id).column,
+        Column::Done,
+        "{:?}",
+        h.ticket(&t.id).blocked
+    );
+    assert_eq!(
+        git(&r, &["ls-tree", "-r", "--name-only", "HEAD"]),
+        ".env.example\ndem-1.txt\nsrc/app.ts"
+    );
+    assert_eq!(
+        std::fs::read_to_string(r.join(".env")).unwrap(),
+        "SECRET=1\n"
+    );
+}
+
+#[tokio::test]
+async fn a_copied_file_the_agent_committed_stops_the_merge() {
+    let h = harness("tk-env-committed");
+    let (p, r) = h.project(false).await;
+    std::fs::write(r.join(".env"), "SECRET=1\n").unwrap();
+    // Merged through a temporary worktree, where nothing else would stop the file.
+    git(&r, &["branch", "release"]);
+    h.set_board(&p.id, |s| s.target = "release".into());
+    let (t, wt) = reviewed(&h, &p.id, "Fichier [ok] [commite]").await;
+    // The agent committed its work, the copied .env with it.
+    assert!(git(&wt, &["ls-tree", "-r", "--name-only", "HEAD"]).contains(".env"));
+    h.core.ticket_approve(&t.id).await.unwrap();
+    let t = h.ticket(&t.id);
+    assert_eq!((t.column, t.step.clone()), (Column::Review, None));
+    assert_eq!(
+        t.blocked.as_deref(),
+        Some(".env copié du projet est commité dans la branche")
+    );
+    assert!(h
+        .alerts()
+        .iter()
+        .any(|x| x.ends_with("DEM-1 bloqué : .env copié du projet est commité dans la branche")));
+    // Nothing reached the target.
+    assert_eq!(git(&r, &["rev-list", "--count", "release"]), "1");
+    assert_eq!(
+        git(&r, &["ls-tree", "-r", "--name-only", "release"]),
+        "src/app.ts"
+    );
+}
+
+#[tokio::test]
+async fn a_worktree_left_with_unresolved_conflicts_is_not_committed() {
+    let h = harness("tk-unmerged");
+    let (p, r) = h.project(false).await;
+    let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    // A merge of main the agent left half done.
+    std::fs::write(wt.join("src").join("app.ts"), "const a = 2;\n").unwrap();
+    git(&wt, &["commit", "-qam", "agent"]);
+    commit_change(&r, "const a = 3;\n", "main change");
+    let merge = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&wt)
+        .args(["merge", "main"])
+        .output()
+        .unwrap();
+    assert!(!merge.status.success());
+    h.core.ticket_approve(&t.id).await.unwrap();
+    let t = h.ticket(&t.id);
+    assert_eq!((t.column, t.step.clone()), (Column::Review, None));
+    assert_eq!(
+        t.blocked.as_deref(),
+        Some("Conflits non résolus dans le worktree sur : src/app.ts")
+    );
+    // Nothing committed with the markers, nothing merged.
+    assert_eq!(git(&wt, &["log", "-1", "--format=%s"]), "agent");
+    assert_eq!(
+        git(&wt, &["diff", "--name-only", "--diff-filter=U"]),
+        "src/app.ts"
+    );
+    assert_eq!(git(&r, &["rev-list", "--count", "main"]), "2");
+}
+
+#[tokio::test]
+async fn a_ticket_with_nothing_to_merge_is_blocked_with_why() {
+    let h = harness("tk-nothing");
+    let (p, r) = h.project(false).await;
+    let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    std::fs::remove_file(wt.join("dem-1.txt")).unwrap();
+    h.core.ticket_approve(&t.id).await.unwrap();
+    let t = h.ticket(&t.id);
+    assert_eq!(
+        (t.column, t.blocked.as_deref()),
+        (
+            Column::Review,
+            Some("Rien à merger : ticket/dem-1 n'a pas de commit de plus que main.")
+        )
+    );
+    assert_eq!(git(&r, &["rev-list", "--count", "main"]), "1");
+}
+
+#[tokio::test]
+async fn a_second_validation_while_one_runs_is_refused() {
+    let h = harness("tk-double");
+    let (p, r) = h.project(false).await;
+    let (t, _) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    let (a, b) = tokio::join!(h.core.ticket_approve(&t.id), h.core.ticket_approve(&t.id));
+    assert!(a.is_ok() != b.is_ok(), "{a:?} {b:?}");
+    assert_eq!(h.ticket(&t.id).column, Column::Done);
+    assert_eq!(git(&r, &["rev-list", "--count", "HEAD"]), "2");
+    // Done: no third one either.
+    assert!(h.core.ticket_approve(&t.id).await.is_err());
+}
+
+#[tokio::test]
+async fn a_ticket_is_not_validated_while_its_agent_works() {
+    let h = harness("tk-approve-busy");
+    let (p, r) = h.project(false).await;
+    let (t, _) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    let aid = t.agent_id.clone().unwrap();
+    h.core
+        .send_message(&aid, "Encore un détail [lent]".into(), vec![])
+        .await
+        .unwrap();
+    h.wait("its turn running", |h| {
+        h.agent(&aid).status == AgentStatus::Running
+    })
+    .await;
+    let e = h.core.ticket_approve(&t.id).await.unwrap_err();
+    assert_eq!(
+        format!("{e:#}"),
+        "L'agent de ce ticket travaille encore : attends la fin de son tour pour valider."
+    );
+    let still = h.ticket(&t.id);
+    assert_eq!(
+        (still.column, still.step, still.blocked),
+        (Column::Review, None, None)
+    );
+    assert_eq!(git(&r, &["rev-list", "--count", "HEAD"]), "1");
+    // Its turn over, the validation goes.
+    h.core.interrupt(&aid).await.unwrap();
+    h.wait("its turn over", |h| !h.agent(&aid).status.is_active())
+        .await;
+    h.core.ticket_approve(&t.id).await.unwrap();
+    assert_eq!(
+        h.ticket(&t.id).column,
+        Column::Done,
+        "{:?}",
+        h.ticket(&t.id).blocked
+    );
+}
+
+#[tokio::test]
+async fn an_agent_that_cannot_be_archived_leaves_its_ticket_done() {
+    let h = harness("tk-archive-fails");
+    let (p, r) = h.project(false).await;
+    // The tests wait for the go of this test; meanwhile the agent goes from under the validation.
+    let go = h.dir.join("go");
+    let cmd = format!(
+        "node -e \"const t = setInterval(() => {{ if (require('fs').existsSync('{}')) clearInterval(t); }}, 20)\"",
+        go.to_string_lossy().replace('\\', "/")
+    );
+    h.set_board(&p.id, |s| {
+        s.tests_first = true;
+        s.test_command = cmd;
+    });
+    let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    let aid = t.agent_id.clone().unwrap();
+    let meanwhile = async {
+        h.wait_ticket(&t.id, "tests running", |t| {
+            t.step.as_deref() == Some("Tests…")
+        })
+        .await;
+        // Deleted (its process killed) without its ticket knowing: archiving it fails.
+        let gone = h.core.agents.write().remove(&aid).unwrap();
+        if let Some(p) = gone.lock().proc.take() {
+            p.kill();
+        }
+        std::fs::write(&go, "").unwrap();
+    };
+    let (approved, ()) = tokio::join!(h.core.ticket_approve(&t.id), meanwhile);
+    approved.unwrap();
+    // Merged: the ticket is done all the same, not blocked by what came after.
+    let t = h.ticket(&t.id);
+    assert_eq!(
+        (t.column, t.step.as_deref(), t.blocked.as_deref()),
+        (Column::Done, None, None)
+    );
+    assert_eq!(t.outcome.as_deref(), Some("⤵ Mergé dans main · squash"));
+    assert_eq!(git(&r, &["rev-list", "--count", "HEAD"]), "2");
+    assert_eq!(h.alerts(), ["demo | DEM-1 prêt à tester"]);
+    // Nor does it keep the merged worktree and branch.
+    assert!(!wt.exists() && !has_branch(&r, "ticket/dem-1"));
+}
+
+#[tokio::test]
+async fn archiving_its_agent_during_the_validation_stops_it_before_anything_is_merged() {
+    let h = harness("tk-approve-archived");
+    let (p, r) = h.project(false).await;
+    let go = h.dir.join("go");
+    let cmd = format!(
+        "node -e \"const t = setInterval(() => {{ if (require('fs').existsSync('{}')) clearInterval(t); }}, 20)\"",
+        go.to_string_lossy().replace('\\', "/")
+    );
+    h.set_board(&p.id, |s| {
+        s.tests_first = true;
+        s.test_command = cmd;
+    });
+    let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let aid = t.agent_id.clone().unwrap();
+    let meanwhile = async {
+        h.wait_ticket(&t.id, "tests running", |t| {
+            t.step.as_deref() == Some("Tests…")
+        })
+        .await;
+        h.core.archive_agent(&aid, true).await.unwrap();
+        std::fs::write(&go, "").unwrap();
+    };
+    let (approved, ()) = tokio::join!(h.core.ticket_approve(&t.id), meanwhile);
+    approved.unwrap();
+    // Back to do with its agent gone, as an archive does; nothing went on after it.
+    let t = h.ticket(&t.id);
+    assert_eq!(
+        (
+            t.column,
+            t.step.as_deref(),
+            t.blocked.as_deref(),
+            t.agent_id
+        ),
+        (Column::Todo, None, None, None)
+    );
+    assert_eq!(git(&r, &["rev-list", "--count", "main"]), "1");
+    assert_eq!(git(&wt, &["status", "--porcelain"]), "?? dem-1.txt");
+    assert_eq!(h.alerts(), ["demo | DEM-1 prêt à tester"]);
+}
+
+#[tokio::test]
+async fn validating_left_as_is_keeps_the_agent_and_its_changes() {
+    let h = harness("tk-keep");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.action = "keep".into());
+    let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    h.core.ticket_approve(&t.id).await.unwrap();
+    let t = h.ticket(&t.id);
+    assert_eq!(
+        (t.column, t.outcome.as_deref()),
+        (Column::Done, Some("◇ Laissé dans le worktree"))
+    );
+    assert!(!h.agent(t.agent_id.as_deref().unwrap()).archived);
+    assert_eq!(git(&wt, &["status", "--porcelain"]), "?? dem-1.txt");
 }

@@ -660,6 +660,156 @@ pub async fn ahead_count(repo: &str, branch: &str) -> u32 {
         .unwrap_or(0)
 }
 
+/// Commits of `branch` that `base` does not have.
+pub async fn ahead_of(repo: &str, base: &str, branch: &str) -> u32 {
+    text(repo, &["rev-list", "--count", &format!("{base}..{branch}")])
+        .await
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0)
+}
+
+/// Where `branch` is checked out: the folder of the worktree that has it (the main one included).
+pub async fn checkout_of(repo: &str, branch: &str) -> Result<Option<String>> {
+    let out = text(repo, &["worktree", "list", "--porcelain"]).await?;
+    let want = format!("branch refs/heads/{branch}");
+    let mut path = None;
+    for line in out.lines() {
+        if let Some(p) = line.strip_prefix("worktree ") {
+            path = Some(p.to_string());
+        } else if line == want {
+            return Ok(path);
+        }
+    }
+    Ok(None)
+}
+
+/// The files `branch` changed since it left `base` (`base...branch`), whatever `base` did since.
+pub async fn branch_files(repo: &str, base: &str, branch: &str) -> Result<Vec<String>> {
+    let out = text(
+        repo,
+        &["diff", "--name-only", &format!("{base}...{branch}"), "--"],
+    )
+    .await?;
+    Ok(out
+        .lines()
+        .filter(|l| !l.is_empty())
+        .map(str::to_string)
+        .collect())
+}
+
+/// Stages every change of `cwd` but the files `keep_out` (copied `.env` files…), even staged
+/// already. True when something is staged.
+pub async fn stage_all(cwd: &str, keep_out: &[String]) -> Result<bool> {
+    run(cwd, &["add", "-A"]).await?;
+    for p in keep_out {
+        run(
+            cwd,
+            &[
+                "--literal-pathspecs",
+                "rm",
+                "--cached",
+                "-q",
+                "--ignore-unmatch",
+                "--",
+                p,
+            ],
+        )
+        .await?;
+    }
+    // `diff --quiet` fails when there is a difference.
+    Ok(run(cwd, &["diff", "--cached", "--quiet"]).await.is_err())
+}
+
+pub async fn commit_staged(cwd: &str, message: &str) -> Result<()> {
+    run(cwd, &["commit", "-q", "-m", message]).await.map(|_| ())
+}
+
+/// What the branch checked out in `cwd` changed since it left `target`, staged changes included.
+pub async fn staged_stat(cwd: &str, target: &str) -> String {
+    let Ok(base) = text(cwd, &["merge-base", target, "HEAD"]).await else {
+        return String::new();
+    };
+    text(cwd, &["diff", "--cached", "--stat", &base])
+        .await
+        .unwrap_or_default()
+}
+
+/// How a branch went into its target.
+#[derive(Debug, PartialEq)]
+pub enum Integrated {
+    Done,
+    /// Stopped on conflicts (undone): the files.
+    Conflict(Vec<String>),
+}
+
+/// Files left unmerged in `cwd` by a merge or a rebase that stopped.
+pub async fn unmerged(cwd: &str) -> Vec<String> {
+    text(cwd, &["diff", "--name-only", "--diff-filter=U"])
+        .await
+        .map(|s| {
+            s.lines()
+                .filter(|l| !l.is_empty())
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Brings `branch` into the branch checked out in `dir`: a merge commit (git's own message), a
+/// squash committed with `message`, or a rebase of `branch` on `target` (in `branch_dir`, where it
+/// is checked out) followed by a fast-forward. A conflict is undone and its files returned.
+pub async fn integrate(
+    dir: &str,
+    branch: &str,
+    strategy: &str,
+    message: &str,
+    branch_dir: &str,
+    target: &str,
+) -> Result<Integrated> {
+    match strategy {
+        "merge" => {
+            if let Err(e) = run(dir, &["merge", "--no-ff", "--no-edit", branch]).await {
+                let files = unmerged(dir).await;
+                let _ = run(dir, &["merge", "--abort"]).await;
+                return if files.is_empty() {
+                    Err(e)
+                } else {
+                    Ok(Integrated::Conflict(files))
+                };
+            }
+        }
+        "rebase" => {
+            if let Err(e) = run(branch_dir, &["rebase", target]).await {
+                let files = unmerged(branch_dir).await;
+                let _ = run(branch_dir, &["rebase", "--abort"]).await;
+                return if files.is_empty() {
+                    Err(e)
+                } else {
+                    Ok(Integrated::Conflict(files))
+                };
+            }
+            run(dir, &["merge", "--ff-only", branch]).await?;
+        }
+        _ => {
+            if let Err(e) = run(dir, &["merge", "--squash", branch]).await {
+                let files = unmerged(dir).await;
+                let _ = run(dir, &["reset", "--merge"]).await;
+                return if files.is_empty() {
+                    Err(e)
+                } else {
+                    Ok(Integrated::Conflict(files))
+                };
+            }
+            if let Err(e) = run(dir, &["commit", "-q", "-m", message]).await {
+                let _ = run(dir, &["reset", "--merge"]).await;
+                return Err(e);
+            }
+        }
+    }
+    Ok(Integrated::Done)
+}
+
 /// True when tracked files have uncommitted changes (staged or not).
 pub async fn has_tracked_changes(repo: &str) -> Result<bool> {
     Ok(
@@ -1261,6 +1411,149 @@ mod repo_tests {
         git(&r, &["branch", "aaa"]);
         git(&r, &["branch", "zzz"]);
         assert_eq!(branches(&r).await.unwrap(), ["main", "aaa", "zzz"]);
+    }
+
+    #[tokio::test]
+    async fn the_checkout_of_a_branch_is_found_among_the_worktrees() {
+        let r = repo("git-checkout-of");
+        git(&r, &["branch", "free"]);
+        let wt = crate::paths::test_dir("git-checkout-of-wt")
+            .join("side")
+            .to_string_lossy()
+            .to_string();
+        git(&r, &["worktree", "add", "-q", "-b", "side", &wt]);
+        let same = |a: &str, b: &str| {
+            Path::new(a).canonicalize().unwrap() == Path::new(b).canonicalize().unwrap()
+        };
+        assert!(same(&checkout_of(&r, "main").await.unwrap().unwrap(), &r));
+        assert!(same(&checkout_of(&r, "side").await.unwrap().unwrap(), &wt));
+        assert_eq!(checkout_of(&r, "free").await.unwrap(), None);
+        assert_eq!(ahead_of(&r, "main", "side").await, 0);
+    }
+
+    #[tokio::test]
+    async fn staging_leaves_out_the_files_asked_and_tells_when_nothing_is_left() {
+        let r = repo("git-stage");
+        let root = Path::new(&r);
+        std::fs::write(root.join(".env"), "SECRET=1\n").unwrap();
+        assert!(!stage_all(&r, &[".env".into()]).await.unwrap());
+        std::fs::write(root.join("a.txt"), "a\n").unwrap();
+        assert!(stage_all(&r, &[".env".into()]).await.unwrap());
+        assert!(staged_stat(&r, "main").await.contains("a.txt"));
+        commit_staged(&r, "feat: a [DEM-1]").await.unwrap();
+        assert_eq!(text(&r, &["ls-files"]).await.unwrap(), "a.txt\nrésumé.md");
+        assert_eq!(
+            text(&r, &["log", "-1", "--format=%s"]).await.unwrap(),
+            "feat: a [DEM-1]"
+        );
+        // A file is left out even once staged (an agent's `git add`).
+        git(&r, &["add", ".env"]);
+        assert!(!stage_all(&r, &[".env".into()]).await.unwrap());
+        assert_eq!(
+            text(&r, &["status", "--porcelain"]).await.unwrap(),
+            "?? .env"
+        );
+    }
+
+    /// `main` and a branch `feat` that changed the same file (`conflict`) or another one.
+    fn diverged(name: &str, conflict: bool) -> String {
+        let r = repo(name);
+        git(&r, &["checkout", "-qb", "feat"]);
+        let file = if conflict { "résumé.md" } else { "b.txt" };
+        std::fs::write(Path::new(&r).join(file), "feat\n").unwrap();
+        git(&r, &["add", "-A"]);
+        git(&r, &["commit", "-qm", "feat"]);
+        git(&r, &["checkout", "-q", "main"]);
+        std::fs::write(Path::new(&r).join("résumé.md"), "main\n").unwrap();
+        git(&r, &["commit", "-qam", "main"]);
+        r
+    }
+
+    #[tokio::test]
+    async fn the_files_a_branch_changed_since_it_left_its_base_are_listed() {
+        let r = diverged("git-branch-files", false);
+        // Only what `feat` did: `main`'s own change since is not counted.
+        assert_eq!(branch_files(&r, "main", "feat").await.unwrap(), ["b.txt"]);
+        assert!(branch_files(&r, "main", "main").await.unwrap().is_empty());
+        assert!(branch_files(&r, "main", "nowhere").await.is_err());
+    }
+
+    #[tokio::test]
+    async fn a_branch_goes_in_by_squash_merge_commit_or_rebase() {
+        let r = diverged("git-integrate-squash", false);
+        assert_eq!(
+            integrate(&r, "feat", "squash", "feat: b [DEM-1]", &r, "main")
+                .await
+                .unwrap(),
+            Integrated::Done
+        );
+        assert_eq!(
+            text(&r, &["log", "-1", "--format=%s"]).await.unwrap(),
+            "feat: b [DEM-1]"
+        );
+        let r = diverged("git-integrate-merge", false);
+        assert_eq!(
+            integrate(&r, "feat", "merge", "", &r, "main")
+                .await
+                .unwrap(),
+            Integrated::Done
+        );
+        assert_eq!(
+            text(&r, &["rev-list", "--count", "--merges", "HEAD"])
+                .await
+                .unwrap(),
+            "1"
+        );
+        let r = diverged("git-integrate-rebase", false);
+        let wt = crate::paths::test_dir("git-integrate-rebase-wt")
+            .join("feat")
+            .to_string_lossy()
+            .to_string();
+        git(&r, &["worktree", "add", "-q", &wt, "feat"]);
+        assert_eq!(
+            integrate(&r, "feat", "rebase", "", &wt, "main")
+                .await
+                .unwrap(),
+            Integrated::Done
+        );
+        assert_eq!(
+            text(&r, &["rev-list", "--count", "--merges", "HEAD"])
+                .await
+                .unwrap(),
+            "0"
+        );
+        assert!(Path::new(&r).join("b.txt").exists());
+    }
+
+    #[tokio::test]
+    async fn a_conflict_is_undone_and_its_files_named() {
+        for strategy in ["merge", "squash"] {
+            let r = diverged(&format!("git-conflict-{strategy}"), true);
+            assert_eq!(
+                integrate(&r, "feat", strategy, "m", &r, "main")
+                    .await
+                    .unwrap(),
+                Integrated::Conflict(vec!["résumé.md".into()])
+            );
+            assert_eq!(text(&r, &["status", "--porcelain"]).await.unwrap(), "");
+        }
+        let r = diverged("git-conflict-rebase", true);
+        let wt = crate::paths::test_dir("git-conflict-rebase-wt")
+            .join("feat")
+            .to_string_lossy()
+            .to_string();
+        git(&r, &["worktree", "add", "-q", &wt, "feat"]);
+        assert_eq!(
+            integrate(&r, "feat", "rebase", "", &wt, "main")
+                .await
+                .unwrap(),
+            Integrated::Conflict(vec!["résumé.md".into()])
+        );
+        assert_eq!(text(&wt, &["status", "--porcelain"]).await.unwrap(), "");
+        // A merge stopped on its conflicts names them until they are resolved.
+        let r = diverged("git-unmerged", true);
+        assert!(run(&r, &["merge", "feat"]).await.is_err());
+        assert_eq!(unmerged(&r).await, ["résumé.md"]);
     }
 
     async fn dirty(r: &str) -> Vec<(String, char)> {

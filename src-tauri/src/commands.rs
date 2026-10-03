@@ -599,6 +599,11 @@ pub async fn ticket_resume(core: CoreState<'_>, id: String) -> Res<()> {
     core.ticket_resume(&id).await.map_err(err)
 }
 
+#[tauri::command]
+pub async fn ticket_approve(core: CoreState<'_>, id: String) -> Res<()> {
+    core.ticket_approve(&id).await.map_err(err)
+}
+
 #[tauri::command(async)]
 pub fn board_set(core: CoreState, project_id: String, settings: BoardSettings) -> Res<Project> {
     core.board_set(&project_id, settings).map_err(err)

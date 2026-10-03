@@ -617,7 +617,7 @@ impl<R: Runtime> Core<R> {
         v
     }
 
-    fn project_agents(&self, project_id: &str) -> Vec<AgentHandle> {
+    pub(crate) fn project_agents(&self, project_id: &str) -> Vec<AgentHandle> {
         self.agents
             .read()
             .values()
@@ -648,7 +648,7 @@ impl<R: Runtime> Core<R> {
             .clone()
     }
 
-    async fn toplevel(&self, path: &str) -> Option<String> {
+    pub(crate) async fn toplevel(&self, path: &str) -> Option<String> {
         if let Some(t) = self.toplevels.lock().get(path) {
             return t.clone();
         }
@@ -1612,8 +1612,8 @@ impl<R: Runtime> Core<R> {
         }
     }
 
-    /// A short name for the task, or None when the model did not answer with one.
-    async fn generate_name(&self, prompt: &str) -> Result<Option<String>> {
+    /// One question to Haiku (`claude -p`, no tools, no session, no MCP): its answer.
+    pub(crate) async fn one_shot(&self, system: &str, prompt: &str) -> Result<String> {
         use tokio::io::AsyncWriteExt;
         let settings = self.settings.read().clone();
         let program =
@@ -1633,7 +1633,7 @@ impl<R: Runtime> Core<R> {
             // No MCP servers (account connectors included): nothing that invites the model to act.
             "--strict-mcp-config",
             "--system-prompt",
-            "Tu nommes des tâches de développement sans jamais les réaliser. Tu réponds uniquement par un slug.",
+            system,
         ])
         .current_dir(std::env::temp_dir())
         .envs(settings.proxy_env())
@@ -1645,11 +1645,22 @@ impl<R: Runtime> Core<R> {
         cmd.creation_flags(claude::CREATE_NO_WINDOW);
         let mut child = cmd.spawn()?;
         if let Some(mut stdin) = child.stdin.take() {
-            stdin.write_all(naming_prompt(prompt).as_bytes()).await?;
+            stdin.write_all(prompt.as_bytes()).await?;
         }
         let out = tokio::time::timeout(Duration::from_secs(90), child.wait_with_output()).await??;
         let v: Value = serde_json::from_slice(&out.stdout)?;
-        Ok(name_from_answer(v["result"].as_str().unwrap_or("")))
+        Ok(v["result"].as_str().unwrap_or("").to_string())
+    }
+
+    /// A short name for the task, or None when the model did not answer with one.
+    async fn generate_name(&self, prompt: &str) -> Result<Option<String>> {
+        let answer = self
+            .one_shot(
+                "Tu nommes des tâches de développement sans jamais les réaliser. Tu réponds uniquement par un slug.",
+                &naming_prompt(prompt),
+            )
+            .await?;
+        Ok(name_from_answer(&answer))
     }
 
     async fn apply_generated_name(self: &Arc<Self>, id: &str, slug: &str) -> Result<()> {

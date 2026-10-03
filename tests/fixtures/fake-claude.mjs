@@ -11,10 +11,13 @@
 // "avancement"). The ticket's title, in the protocol, steers it: [ok] every criterion met at once,
 // [jamais] none ever, [sans-bilan] no report, [lent] a turn that lasts 30 s, [recette] a launch
 // recipe, [question] a question first (the turn goes on once it is answered), [fin-d-abord] an
-// interrupted turn's end sent before the answer to the interrupt; by default criterion n is met
-// from loop n on.
+// interrupted turn's end sent before the answer to the interrupt, [commite] its work committed by
+// itself (every file of its folder, a copied .env included), [tenace] a process that lasts 5 s
+// once its input is closed; by default criterion n is met from loop n on.
+// In one-shot mode, asked for a ticket's commit message, it answers `feat: travail du faux claude
+// [<KEY>]`, or a sentence out of form when the ticket's title says [message-libre].
 
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -29,6 +32,13 @@ if (argv.includes('-p')) {
   let input = '';
   process.stdin.on('data', (d) => (input += d));
   process.stdin.on('end', () => {
+    // A ticket's commit message.
+    const ticket = input.match(/<ticket>\s*([A-Z]+-\d+)/)?.[1];
+    if (ticket) {
+      const result = input.includes('[message-libre]') ? 'Voici le message : travail fait' : `feat: travail du faux claude [${ticket}]`;
+      process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result }));
+      return;
+    }
     const task = input.match(/<tache>\s*([\s\S]*?)\s*<\/tache>/)?.[1] ?? '';
     const words = task.toLowerCase().match(/[a-z]+/g) ?? ['tache'];
     process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result: `${words.slice(0, 2).join('-')}-fake` }));
@@ -140,6 +150,10 @@ function startSession() {
     }
     const file = `${key.toLowerCase()}.txt`;
     fs.writeFileSync(path.join(process.cwd(), file), `Boucle ${loop}\n`);
+    if (all.includes('[commite]')) {
+      execFileSync('git', ['add', '-A']);
+      execFileSync('git', ['commit', '-qm', `Travail sur ${key}`]);
+    }
     if (all.includes('[sans-bilan]')) {
       streamText('Travail fait, sans bilan.');
       result();
@@ -437,5 +451,6 @@ function startSession() {
       }, 300);
     }
   }
-  rl.on('close', () => process.exit(0));
+  // [tenace]: like a CLI that takes its time to finish once its input is closed.
+  rl.on('close', () => (sys.includes('[tenace]') ? setTimeout(() => process.exit(0), 5000) : process.exit(0)));
 }
