@@ -84,6 +84,50 @@ describe('AppState', () => {
     expect(seen).toHaveLength(1);
   });
 
+  it('forgets a removed agent even when a module fails to, and runs a hook once however often it is registered', async () => {
+    const { emit } = await start();
+    const seen: string[] = [];
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const boom = () => {
+      throw new Error('boom');
+    };
+    const note = (id: string) => seen.push(id);
+    const offs = [app.onAgentRemoved(boom), app.onAgentRemoved(note), app.onAgentRemoved(note)];
+    try {
+      emit({ type: 'agentRemoved', id: 'a2', projectId: 'p1' });
+      expect(app.agents.a2).toBeUndefined();
+      expect(app.projectAgents.map((a) => a.id)).toEqual(['a1']);
+      expect(seen).toEqual(['a2']);
+      expect(error).toHaveBeenCalled();
+    } finally {
+      for (const off of offs) off();
+    }
+    emit({ type: 'agentRemoved', id: 'b1', projectId: 'p2' });
+    expect(seen).toEqual(['a2']);
+  });
+
+  it('tells other modules when an agent’s launch recipe changes, and not on its other updates', async () => {
+    const { emit } = await start();
+    const seen: string[] = [];
+    const off = app.onRecipeChanged((id) => seen.push(id));
+    const recipe = { prepare: [], processes: [{ name: 'web', command: 'node web.js', dir: '', env: {}, url: '' }], open: '' };
+    emit({ type: 'agent', agent: agent({ tokens: 5 }) });
+    expect(seen).toEqual([]);
+    emit({ type: 'agent', agent: agent({ recipe }) });
+    expect(seen).toEqual(['a1']);
+    // The same recipe again, in a new object.
+    emit({ type: 'agent', agent: agent({ recipe: structuredClone(recipe), tokens: 9 }) });
+    expect(seen).toEqual(['a1']);
+    emit({ type: 'agent', agent: agent({ recipe: { ...recipe, open: 'http://localhost:4100' } }) });
+    expect(seen).toEqual(['a1', 'a1']);
+    // A new agent has no launches yet.
+    emit({ type: 'agent', agent: agent({ id: 'a9', recipe }) });
+    expect(seen).toEqual(['a1', 'a1']);
+    off();
+    emit({ type: 'agent', agent: agent() });
+    expect(seen).toEqual(['a1', 'a1']);
+  });
+
   it('finds the launch on screen among the project’s commands, then among the steps of its agents’ recipes', async () => {
     const run = { id: 'c1', name: 'Front', command: 'npm run dev', shell: 'pwsh', cwd: '' };
     const recipe = {

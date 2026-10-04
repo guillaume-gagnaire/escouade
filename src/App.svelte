@@ -17,6 +17,7 @@
   import RenameModal from './components/modals/RenameModal.svelte';
   import RunConfigModal from './components/modals/RunConfigModal.svelte';
   import SettingsModal from './components/modals/SettingsModal.svelte';
+  import TestLaunchModal from './components/modals/TestLaunchModal.svelte';
   import RunView from './components/RunView.svelte';
   import Sidebar from './components/Sidebar.svelte';
   import Stats from './components/Stats.svelte';
@@ -126,6 +127,8 @@
   <RunConfigModal projectId={app.modal.projectId} />
 {:else if app.modal?.kind === 'boardSettings'}
   <BoardSettingsModal projectId={app.modal.projectId} />
+{:else if app.modal?.kind === 'testLaunch'}
+  <TestLaunchModal agentId={app.modal.agentId} />
 {/if}
 
 <ContextMenu />

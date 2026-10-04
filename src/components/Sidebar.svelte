@@ -11,6 +11,7 @@
   import { ESTIMATE_HINT, fSpentUsd, spent } from '../lib/spend';
   import { app } from '../lib/state.svelte';
   import { closeTerminal, newTerminal, SHELL_GLYPH } from '../lib/term-actions';
+  import { canPrepare, prepareLaunch, stopTests } from '../lib/test-launch.svelte';
   import type { Agent, Project } from '../lib/types';
   import RunsSection from './RunsSection.svelte';
   import StatusDot from './StatusDot.svelte';
@@ -60,7 +61,16 @@
       { label: 'Renommer', onClick: () => startRename(a) },
       a.archived
         ? { label: 'Restaurer', onClick: () => app.run(api.archiveAgent(a.id, false)) }
-        : { label: 'Archiver', hint: 'garde la conversation', onClick: () => app.run(api.archiveAgent(a.id, true)) },
+        : {
+            label: 'Archiver',
+            hint: 'garde la conversation',
+            onClick: () => {
+              // Archiving stops its test launches: stopped first, their ends are no crashes.
+              stopTests(a.id);
+              app.run(api.archiveAgent(a.id, true));
+            },
+          },
+      ...(canPrepare(a) ? [{ label: 'Préparer le lancement', onClick: () => prepareLaunch(a) }] : []),
       ...(a.archived
         ? []
         : [
@@ -109,6 +119,7 @@
       danger: true,
       option: a.worktree ? { label: `Supprimer aussi le worktree et la branche ${a.worktree.branch}`, value: true } : undefined,
       onConfirm: async (removeWorktree) => {
+        stopTests(a.id);
         const warning = await app.run(api.deleteAgent(a.id, removeWorktree));
         if (warning) app.toast(warning, 'error');
       },

@@ -16,9 +16,10 @@ export function log(commandId: string) {
 
 const time = () => new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
-export async function startLaunch(project: Project, cmd: RunCommand) {
+/** Starts a command not running yet. Returns why it could not start, if it could not. */
+export async function startLaunch(project: Project, cmd: RunCommand): Promise<string | null> {
   const previous = app.launches[cmd.id];
-  if (previous?.status === 'running') return;
+  if (previous?.status === 'running') return null;
   const x = log(cmd.id);
   app.launches[cmd.id] = { status: 'running', ptyId: null, name: cmd.name, stopping: false, code: null, startedAt: Date.now() };
   // A run killed in a full-screen program, or with its cursor hidden, must not leave the log so.
@@ -35,10 +36,12 @@ export async function startLaunch(project: Project, cmd: RunCommand) {
       ? await api.testRunStart({ agentId: test.agentId, kind: test.kind, index: test.index, ...size }, onData)
       : await api.runStart({ projectId: project.id, commandId: cmd.id, ...size }, onData);
     app.launchStarted(cmd.id, info.id);
+    return null;
   } catch (e) {
-    x.term.write(`\x1b[31m${String(e)}\x1b[0m\r\n`);
+    const why = String(e);
+    x.term.write(`\x1b[31m${why}\x1b[0m\r\n`);
     const l = app.launches[cmd.id];
-    if (!l) return;
+    if (!l) return why;
     if (test) {
       // Refused (its ticket is being validated, its agent was archived…): no run took place, so none shows.
       // The run it was to follow, if any, stays as it was.
@@ -47,11 +50,12 @@ export async function startLaunch(project: Project, cmd: RunCommand) {
         delete app.launches[cmd.id];
         disposeLog(cmd.id);
       }
-      if (!l.stopping) app.toast(`« ${cmd.name} » n'a pas pu démarrer : ${e}`, 'error');
-      return;
+      if (!l.stopping) app.toast(`« ${cmd.name} » n'a pas pu démarrer : ${why}`, 'error');
+      return why;
     }
     Object.assign(l, { status: l.stopping ? 'stopped' : 'crashed', code: null, stopping: false });
-    if (l.status === 'crashed') app.toast(`« ${cmd.name} » n'a pas pu démarrer : ${e}`, 'error');
+    if (l.status === 'crashed') app.toast(`« ${cmd.name} » n'a pas pu démarrer : ${why}`, 'error');
+    return why;
   }
 }
 
@@ -128,6 +132,9 @@ export function forgetLaunches(commandIds: string[]) {
 // The backend stopped the test launches of an agent it removes: they are not crashes, and nothing is left
 // to look for when their project closes. (Registered here: the state does not know the logs.)
 app.onAgentRemoved(forgetAgentTests);
+// Test launches are kept by the index of their step: under a new recipe, step n is another command,
+// which must not be taken for the process still running under that id.
+app.onRecipeChanged(forgetAgentTests);
 
 export function launchStatus(l: LaunchState | undefined): { label: string; color: string } {
   if (!l) return { label: 'prêt', color: 'var(--dim)' };

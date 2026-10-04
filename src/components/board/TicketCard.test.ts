@@ -1,10 +1,19 @@
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('../../lib/terminals', () => ({
+  launchLog: () => ({
+    term: { cols: 80, rows: 24, buffer: { active: { cursorY: 0 } }, write: (_: unknown, done?: () => void) => done?.() },
+    fit: { fit() {} },
+  }),
+  disposeLog() {},
+}));
+
 import { buffers, lossNotice } from '../../lib/editor/buffers.svelte';
 import { menu } from '../../lib/menu.svelte';
 import { app } from '../../lib/state.svelte';
-import type { Project, Ticket } from '../../lib/types';
+import type { LaunchState, Project, TestRecipe, Ticket } from '../../lib/types';
 import { agent, board, fakeBackend, project, resetApp, ticket } from '../../test/ipc';
 import TicketCard from './TicketCard.svelte';
 
@@ -201,6 +210,65 @@ describe('TicketCard', () => {
     menu.open!.items.find((i) => i.label === 'Supprimer')!.onClick!();
     expect(app.modal).toBeNull();
     await expect.poll(() => backend.called('ticket_delete')).toHaveLength(1);
+  });
+
+  describe('test launch', () => {
+    const recipe: TestRecipe = {
+      prepare: [],
+      processes: [{ name: 'web', command: 'node web.js', dir: '', env: {}, url: 'http://localhost:4111' }],
+      open: '',
+    };
+    const running = (): LaunchState => ({ status: 'running', ptyId: 't1', name: 'web', stopping: false, code: null, startedAt: 1 });
+    /** The order in which the window stopped the launches and acted on the ticket. */
+    const order = (backend: ReturnType<typeof fakeBackend>, cmd: string) =>
+      backend.calls.map((c) => c.cmd).filter((c) => c === 'term_kill' || c === cmd);
+
+    it('tests a ticket that has a recipe, and stops or opens what runs', async () => {
+      resetApp({ agents: [agent({ recipe })] });
+      const backend = fakeBackend({ test_run_start: () => ({ id: 't1', projectId: 'p1', name: 'web', shell: 'pwsh' }) });
+      const { rerender } = show(doing({ column: 'review' }));
+      await userEvent.click(screen.getByRole('button', { name: '▶ Tester' }));
+      expect(app.modal).toEqual({ kind: 'testLaunch', agentId: 'a1' });
+      app.launches['test:a1:run:0'] = running();
+      await rerender({ ticket: doing({ column: 'review' }) });
+      await userEvent.click(screen.getByRole('button', { name: 'Ouvrir' }));
+      expect(backend.called('plugin:opener|open_url').at(-1)!.args.url).toBe('http://localhost:4111');
+      await userEvent.click(screen.getByRole('button', { name: '■ Arrêter' }));
+      expect(backend.called('term_kill')[0].args).toEqual({ id: 't1' });
+      // Testing did not open the agent.
+      expect(app.ui.selectedAgent.p1).toBeUndefined();
+    });
+
+    it('offers no test while the ticket is being validated, nor without a recipe', () => {
+      resetApp({ agents: [agent({ recipe })] });
+      fakeBackend();
+      const { unmount } = show(doing({ column: 'review', step: 'Tests…' }));
+      expect(screen.queryByRole('button', { name: '▶ Tester' })).not.toBeInTheDocument();
+      unmount();
+      resetApp({ agents: [agent()] });
+      show(doing({ column: 'review' }));
+      expect(screen.queryByRole('button', { name: '▶ Tester' })).not.toBeInTheDocument();
+    });
+
+    it('stops its test launches before validating it', async () => {
+      resetApp({ agents: [agent({ recipe })] });
+      const backend = fakeBackend();
+      app.launches['test:a1:run:0'] = running();
+      show(doing({ column: 'review' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Valider et merger' }));
+      expect(order(backend, 'ticket_approve')).toEqual(['term_kill', 'ticket_approve']);
+    });
+
+    it('stops its test launches before deleting it, which archives its agent', async () => {
+      resetApp({ agents: [agent({ recipe })] });
+      const backend = fakeBackend();
+      app.launches['test:a1:run:0'] = running();
+      show(doing({ column: 'review' }));
+      await fireEvent.contextMenu(screen.getByRole('button', { name: /DEM-1/ }));
+      menu.open!.items.find((i) => i.label === 'Supprimer')!.onClick!();
+      await (app.modal as any).onConfirm(false);
+      expect(order(backend, 'ticket_delete')).toEqual(['term_kill', 'ticket_delete']);
+    });
   });
 
   describe('progress', () => {

@@ -1,13 +1,16 @@
 <script lang="ts">
   import type { Report } from '../../lib/escouade';
+  import { app } from '../../lib/state.svelte';
+  import { canTest, testAgent } from '../../lib/test-launch.svelte';
   import type { Agent, Criterion } from '../../lib/types';
 
   let { report, criteria = [], agent }: { report: Report; criteria?: Criterion[]; agent: Agent } = $props();
 
   const met = $derived(report.criteria?.filter((c) => c.ok).length ?? 0);
+  const project = $derived(app.projects.find((p) => p.id === agent.projectId));
 </script>
 
-<div class="report" data-agent={agent.id}>
+<div class="report">
   {#if report.criteria}
     <div class="head">
       <span class="t">Bilan des critères</span>
@@ -32,7 +35,11 @@
   {/if}
   {#if report.recipe}
     <div class="head"><span class="t">Lancement de test</span></div>
+    <!-- A recipe has a step at least: a preparation alone shows as such. -->
     <ul aria-label="Lancement de test">
+      {#each report.recipe.prepare as s, i (i)}
+        <li><span class="mono name">Préparation</span><span class="mono cmd">{s.command}</span></li>
+      {/each}
       {#each report.recipe.processes as p, i (i)}
         <li>
           <span class="mono name">{p.name || `processus ${i + 1}`}</span><span class="mono cmd">{p.command}</span>{#if p.url}<span
@@ -41,6 +48,9 @@
         </li>
       {/each}
     </ul>
+    {#if project && canTest(agent)}
+      <button class="btn test" onclick={() => testAgent(agent, project)}>▶ Tester</button>
+    {/if}
   {/if}
 </div>
 
@@ -81,6 +91,8 @@
     gap: 7px;
     font-size: 12.5px;
     line-height: 1.45;
+    /* Long commands, addresses and notes wrap rather than widen the card. */
+    overflow-wrap: anywhere;
   }
   .mark {
     width: 12px;
@@ -115,5 +127,10 @@
   .url {
     color: var(--muted);
     font-size: 11.5px;
+  }
+  .test {
+    align-self: flex-start;
+    height: 28px;
+    font-size: 12px;
   }
 </style>

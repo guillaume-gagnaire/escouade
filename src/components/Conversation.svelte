@@ -10,6 +10,7 @@
   import { injectedSource, parseAgentMessage, subagentLabels } from '../lib/events';
   import { editsByTurn } from '../lib/tools';
   import { app } from '../lib/state.svelte';
+  import { canPrepare, canTest, prepareLaunch, testAgent } from '../lib/test-launch.svelte';
   import type { Agent, ConvItem, Project } from '../lib/types';
   import Composer from './Composer.svelte';
   import CriteriaReport from './conv/CriteriaReport.svelte';
@@ -172,6 +173,27 @@
     >
       <span class="mono glyph">&lt;/&gt;</span><span class="lbl">Éditeur</span>
     </button>
+    {#if agent.recipe}
+      {#if canTest(agent)}
+        <button
+          class="btn test"
+          aria-label="▶ Tester"
+          title="Lance le worktree de cet agent et ouvre la fonctionnalité dans le navigateur"
+          onclick={() => testAgent(agent, project)}
+        >
+          <span class="glyph">▶</span><span class="lbl">Tester</span>
+        </button>
+      {/if}
+    {:else if canPrepare(agent)}
+      <button
+        class="btn test"
+        aria-label="Préparer le lancement"
+        title="Demande à l'agent comment lancer son worktree, sur ses propres ports"
+        onclick={() => prepareLaunch(agent)}
+      >
+        <span class="glyph">▷</span><span class="lbl">Préparer le lancement</span>
+      </button>
+    {/if}
     <div class="metrics">
       <span class="model mono">{modelLabel(agent.model, app.models)}</span>
       <div class="m" title={context.title}>
@@ -379,7 +401,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .edit {
+  .edit,
+  .test {
     height: 28px;
     display: flex;
     align-items: center;
@@ -389,7 +412,8 @@
     font-weight: 600;
     flex: none;
   }
-  .edit .glyph {
+  .edit .glyph,
+  .test .glyph {
     font-size: 11px;
     color: var(--accent);
   }
@@ -446,7 +470,8 @@
     .opt {
       display: none;
     }
-    .edit .lbl {
+    .edit .lbl,
+    .test .lbl {
       display: none;
     }
   }

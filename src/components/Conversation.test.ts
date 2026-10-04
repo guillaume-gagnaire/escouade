@@ -35,6 +35,8 @@ function setup(over: Partial<Agent> = {}, items: unknown[] = []) {
 
 const frame = () => new Promise((r) => requestAnimationFrame(() => r(null)));
 
+const WT = { path: 'C:\\code\\demo-api\\.claude\\worktrees\\w1', branch: 'escouade/w1', baseBranch: 'main' };
+
 describe('Conversation', () => {
   it('opens scrolled to the latest message', async () => {
     const { scroller } = setup({}, [{ kind: 'user', id: 'u1', text: 'Salut', images: 0, ts: 1, queued: false }]);
@@ -277,6 +279,42 @@ describe('Conversation', () => {
     expect(screen.queryByText('Bilan des critères')).not.toBeInTheDocument();
   });
 
+  it('tests the agent from the launch recipe of its report', async () => {
+    const text =
+      '```escouade\n{"lancement": {"processus": [{"nom": "web", "commande": "npm run dev", "url": "http://localhost:4101"}]}}\n```';
+    const { a } = setup({ status: 'done', worktree: WT, recipe: { prepare: [], processes: [], open: '' } }, [
+      { kind: 'text', id: 'm1', text, streaming: false },
+    ]);
+    const list = await screen.findByRole('list', { name: 'Lancement de test' });
+    await userEvent.click(within(list.closest('.report') as HTMLElement).getByRole('button', { name: '▶ Tester' }));
+    expect(app.modal).toEqual({ kind: 'testLaunch', agentId: a.id });
+  });
+
+  it('offers no test from a report while the ticket is being validated, nor for an archived agent', async () => {
+    const text = '```escouade\n{"lancement": {"processus": [{"nom": "web", "commande": "npm run dev"}]}}\n```';
+    const recipe = { prepare: [], processes: [], open: '' };
+    const { a, unmount } = setup({ status: 'done', worktree: WT, recipe }, [{ kind: 'text', id: 'm1', text, streaming: false }]);
+    app.tickets.t1 = ticket({ agentId: a.id, column: 'review', step: 'Merge…' });
+    const list = await screen.findByRole('list', { name: 'Lancement de test' });
+    expect(within(list.closest('.report') as HTMLElement).queryByRole('button', { name: '▶ Tester' })).not.toBeInTheDocument();
+    unmount();
+    setup({ status: 'done', worktree: WT, recipe, archived: true }, [{ kind: 'text', id: 'm1', text, streaming: false }]);
+    await screen.findByRole('list', { name: 'Lancement de test' });
+    expect(screen.queryByRole('button', { name: '▶ Tester' })).not.toBeInTheDocument();
+  });
+
+  it('lists the preparation of a recipe that only prepares', async () => {
+    const text =
+      '```escouade\n{"lancement": {"preparation": [{"commande": "npm install", "dossier": "web"}, {"commande": "npm run build"}]}}\n```';
+    setup({ status: 'done' }, [{ kind: 'text', id: 'm1', text, streaming: false }]);
+    const list = await screen.findByRole('list', { name: 'Lancement de test' });
+    expect(
+      within(list)
+        .getAllByRole('listitem')
+        .map((li) => li.textContent),
+    ).toEqual(['Préparationnpm install', 'Préparationnpm run build']);
+  });
+
   it('leaves a block it cannot read as code, in its message', async () => {
     const text = 'Voici :\n\n```escouade\n{"criteres": oups}\n```';
     setup({ status: 'done' }, [{ kind: 'text', id: 'm1', text, streaming: false }]);
@@ -306,6 +344,44 @@ describe('Conversation header', () => {
     await frame();
     expect(screen.queryByRole('button', { name: /Fichiers/ })).not.toBeInTheDocument();
     expect(screen.getByText('Fichiers')).toBeInTheDocument();
+  });
+});
+
+describe('Conversation header test launch', () => {
+  const recipe = { prepare: [], processes: [], open: '' };
+
+  it('names its buttons without their text, which a narrow header hides', async () => {
+    const { a, rerender } = setup({ worktree: WT });
+    const prepare = screen.getByRole('button', { name: 'Préparer le lancement' });
+    expect(prepare.querySelector('.lbl')).toHaveTextContent('Préparer le lancement');
+    await rerender({ agent: { ...a, recipe }, project: project() });
+    expect(screen.getByRole('button', { name: '▶ Tester' }).querySelector('.lbl')).toHaveTextContent('Tester');
+    expect(screen.queryByRole('button', { name: 'Préparer le lancement' })).not.toBeInTheDocument();
+  });
+
+  it('does not ask a ticket agent under way for its recipe, which its ticket already asks for', async () => {
+    const { a } = setup({ worktree: WT });
+    expect(screen.getByRole('button', { name: 'Préparer le lancement' })).toBeInTheDocument();
+    app.tickets.t1 = ticket({ agentId: a.id, column: 'doing' });
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Préparer le lancement' })).not.toBeInTheDocument());
+    app.tickets.t1 = ticket({ agentId: a.id, column: 'review' });
+    expect(await screen.findByRole('button', { name: 'Préparer le lancement' })).toBeInTheDocument();
+  });
+
+  it('offers no test while the agent’s ticket is being validated', async () => {
+    const { a } = setup({ worktree: WT, recipe });
+    expect(screen.getByRole('button', { name: '▶ Tester' })).toBeInTheDocument();
+    app.tickets.t1 = ticket({ agentId: a.id, column: 'review', step: 'Tests…' });
+    await waitFor(() => expect(screen.queryByRole('button', { name: '▶ Tester' })).not.toBeInTheDocument());
+  });
+
+  it('offers neither to an agent without a worktree, nor to an archived one', () => {
+    const { unmount } = setup({ recipe });
+    expect(screen.queryByRole('button', { name: '▶ Tester' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Préparer le lancement' })).not.toBeInTheDocument();
+    unmount();
+    setup({ worktree: WT, archived: true });
+    expect(screen.queryByRole('button', { name: 'Préparer le lancement' })).not.toBeInTheDocument();
   });
 });
 
@@ -359,6 +435,20 @@ describe('Conversation editor entry', () => {
     render(Conversation, { agent: app.agents.a1, project: project() });
     await userEvent.click(screen.getByRole('button', { name: /Éditeur/ }));
     expect(app.editor.p1).toMatchObject({ on: true, source: 'project' });
+  });
+
+  it('asks a worktree agent for its launch recipe from its header, then tests it', async () => {
+    const wt = { path: 'C:\\code\\demo-api\\.claude\\worktrees\\w1', branch: 'escouade/w1', baseBranch: 'main' };
+    const a = agent({ id: 'w1', worktree: wt });
+    resetApp({ projects: [project()], agents: [a] });
+    const backend = fakeBackend({ get_conversation: () => [] });
+    const { rerender } = render(Conversation, { agent: a, project: project() });
+    await userEvent.click(screen.getByRole('button', { name: 'Préparer le lancement' }));
+    expect(backend.called('agent_prepare_launch')).toEqual([{ cmd: 'agent_prepare_launch', args: { id: 'w1' } }]);
+    // A recipe without processes: the modal opens, nothing starts.
+    await rerender({ agent: { ...a, recipe: { prepare: [], processes: [], open: '' } }, project: project() });
+    await userEvent.click(screen.getByRole('button', { name: '▶ Tester' }));
+    expect(app.modal).toEqual({ kind: 'testLaunch', agentId: 'w1' });
   });
 
   it('opens a file edited in the conversation at its first changed line', async () => {

@@ -45,7 +45,8 @@ export type Modal =
     }
   | { kind: 'rename'; title: string; value: string; onSubmit: (v: string) => void | Promise<void> }
   | { kind: 'runConfig'; projectId: string }
-  | { kind: 'boardSettings'; projectId: string };
+  | { kind: 'boardSettings'; projectId: string }
+  | { kind: 'testLaunch'; agentId: string };
 
 export interface Toast {
   id: number;
@@ -174,12 +175,31 @@ class AppState {
   });
 
   /** What else goes when the backend removes an agent: what other modules (the launches' logs) hold of it. */
-  private removalHooks: ((agentId: string) => void)[] = [];
+  private removalHooks = new Set<(agentId: string) => void>();
+  /** What goes stale when an agent's launch recipe changes: its test launches, kept by the index of their step. */
+  private recipeHooks = new Set<(agentId: string) => void>();
 
   /** `f` runs when the backend removes an agent, before the state forgets it. Returns what unregisters it. */
   onAgentRemoved(f: (agentId: string) => void) {
-    this.removalHooks.push(f);
-    return () => (this.removalHooks = this.removalHooks.filter((h) => h !== f));
+    this.removalHooks.add(f);
+    return () => void this.removalHooks.delete(f);
+  }
+
+  /** `f` runs when an agent the window knows gets another launch recipe. Returns what unregisters it. */
+  onRecipeChanged(f: (agentId: string) => void) {
+    this.recipeHooks.add(f);
+    return () => void this.recipeHooks.delete(f);
+  }
+
+  /** Each hook on its own: one that throws neither stops the others nor what the state does next. */
+  private runHooks(hooks: Set<(agentId: string) => void>, agentId: string) {
+    for (const f of hooks) {
+      try {
+        f(agentId);
+      } catch (e) {
+        console.error(e);
+      }
+    }
   }
 
   private uiTimer: ReturnType<typeof setTimeout> | undefined;
@@ -216,12 +236,14 @@ class AppState {
     switch (e.type) {
       case 'agent': {
         const prev = this.agents[e.agent.id];
+        const newRecipe = prev && JSON.stringify(prev.recipe ?? null) !== JSON.stringify(e.agent.recipe ?? null);
         this.agents[e.agent.id] = e.agent;
         this.noteAttention(prev, e.agent);
+        if (newRecipe) this.runHooks(this.recipeHooks, e.agent.id);
         break;
       }
       case 'agentRemoved':
-        for (const f of this.removalHooks) f(e.id);
+        this.runHooks(this.removalHooks, e.id);
         delete this.agents[e.id];
         delete this.attention[e.id];
         dropConversation(e.id);

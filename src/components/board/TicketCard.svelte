@@ -5,7 +5,9 @@
   import { fWhen, plural } from '../../lib/format';
   import { api } from '../../lib/ipc';
   import { menu, type MenuItem } from '../../lib/menu.svelte';
+  import { openAddress } from '../../lib/recipe';
   import { app } from '../../lib/state.svelte';
+  import { anyRunning, stopTests, testAgent } from '../../lib/test-launch.svelte';
   import type { Project, Ticket } from '../../lib/types';
   import StatusDot from '../StatusDot.svelte';
   import RejectForm from './RejectForm.svelte';
@@ -38,6 +40,8 @@
   }
 
   async function remove() {
+    // Its agent is archived with it, which stops its test launches: stopped first, their ends are no crashes.
+    if (t.column !== 'todo' && t.agentId) stopTests(t.agentId);
     const gone = await app.run(api.ticketDelete(t.id).then(() => true));
     if (gone) delete app.tickets[t.id];
   }
@@ -90,7 +94,11 @@
   }
 
   function approve() {
-    const send = () => app.run(api.ticketApprove(t.id));
+    const send = () => {
+      // The test launches stop first (the backend does it too): their ends are no crashes.
+      if (t.agentId) stopTests(t.agentId);
+      return app.run(api.ticketApprove(t.id));
+    };
     // A merge that removes the worktree takes the files of the agent open in the editor with it.
     const lost = s.action === 'merge' && s.cleanup && t.agentId ? buffers.unsavedIn(project.id, t.agentId) : 0;
     if (!lost) {
@@ -191,6 +199,19 @@
         <button class="small" onclick={(e) => act(e, () => app.run(api.ticketStart(t.id)))}>Lancer</button>
       {/if}
     </div>
+  {/if}
+
+  {#if agent?.recipe && (t.column === 'doing' || t.column === 'review')}
+    {@const a = agent}
+    {@const address = openAddress(a)}
+    {#if anyRunning(a.id)}
+      <div class="row">
+        <button class="small" onclick={(e) => act(e, () => stopTests(a.id))}>■ Arrêter</button>
+        {#if address}<button class="small" onclick={(e) => act(e, () => app.run(openUrl(address)))}>Ouvrir</button>{/if}
+      </div>
+    {:else if t.column === 'review' && !t.step}
+      <div class="row"><button class="small" onclick={(e) => act(e, () => testAgent(a, project))}>▶ Tester</button></div>
+    {/if}
   {/if}
 
   {#if t.step}

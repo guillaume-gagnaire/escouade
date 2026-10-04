@@ -145,6 +145,60 @@ describe('Sidebar remote control', () => {
     expect(backend.called('set_remote_control')[0].args).toEqual({ id: 'a1', enabled: false });
   });
 
+  it('asks a worktree agent for its launch recipe from its menu', async () => {
+    const wt = { path: 'C:\\code\\demo-api\\.claude\\worktrees\\a1', branch: 'escouade/a1', baseBranch: 'main' };
+    resetApp({ agents: [agent({ worktree: wt })] });
+    const backend = fakeBackend();
+    render(Sidebar, { project: project() });
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
+    menu.open!.items.find((i) => i.label === 'Préparer le lancement')!.onClick!();
+    expect(backend.called('agent_prepare_launch')).toEqual([{ cmd: 'agent_prepare_launch', args: { id: 'a1' } }]);
+  });
+
+  it('does not ask for a recipe an agent without a worktree, or a ticket agent under way whose ticket already asks', async () => {
+    const wt = { path: 'C:\\code\\demo-api\\.claude\\worktrees\\a1', branch: 'escouade/a1', baseBranch: 'main' };
+    resetApp({
+      agents: [agent({ worktree: wt }), agent({ id: 'a2', name: 'tests-e2e', createdAt: 2 })],
+      tickets: [ticket({ agentId: 'a1', column: 'doing' })],
+    });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
+    expect(items()).not.toContain('Préparer le lancement');
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /tests-e2e/ }));
+    expect(items()).not.toContain('Préparer le lancement');
+  });
+
+  describe('test launches', () => {
+    const wt = { path: 'C:\\code\\demo-api\\.claude\\worktrees\\a1', branch: 'escouade/a1', baseBranch: 'main' };
+    /** The order in which the window stopped the launches and acted on the agent. */
+    const order = (backend: ReturnType<typeof fakeBackend>, cmd: string) =>
+      backend.calls.map((c) => c.cmd).filter((c) => c === 'term_kill' || c === cmd);
+
+    beforeEach(() => {
+      resetApp({ agents: [agent({ worktree: wt })] });
+      app.launches['test:a1:run:0'] = { status: 'running', ptyId: 't1', name: 'web', stopping: false, code: null, startedAt: 1 };
+    });
+
+    it('stops them before archiving their agent', async () => {
+      const backend = fakeBackend();
+      render(Sidebar, { project: project() });
+      await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
+      click('Archiver');
+      await new Promise((r) => setTimeout(r));
+      expect(order(backend, 'archive_agent')).toEqual(['term_kill', 'archive_agent']);
+    });
+
+    it('stops them before deleting their agent', async () => {
+      const backend = fakeBackend();
+      render(Sidebar, { project: project() });
+      await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
+      click('Supprimer…');
+      await (app.modal as any).onConfirm(true);
+      expect(order(backend, 'delete_agent')).toEqual(['term_kill', 'delete_agent']);
+    });
+  });
+
   it('says when a remote agent is not reachable yet', () => {
     resetApp({ projects: [project()], agents: [agent({ remoteControl: true, remoteState: null })] });
     fakeBackend();
