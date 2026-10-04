@@ -2,6 +2,31 @@
 
 Les changements visibles d'Escouade, version par version. Les notes de chaque release GitHub (et de la mise à jour intégrée) reprennent la section de sa version.
 
+## [1.4.0] — 2026-10-04
+
+### Ajouts
+
+#### Intégrations : Jira, Trello et GitHub Issues
+
+- Onglet « Intégrations » des réglages : connecte un compte Jira Cloud (site, e-mail, jeton d'API), Trello (clé d'API et jeton ; « Obtenir un jeton » ouvre la page d'autorisation de Trello) ou GitHub (un jeton, ou à défaut celui de `gh`). La connexion est vérifiée tout de suite, et un refus s'affiche sous le formulaire. Les jetons restent dans `~/.escouade/integrations.json`, à part des réglages, et la fenêtre de l'app ne les voit jamais.
+- Par projet, une source par service : un projet Jira, un tableau Trello ou un dépôt GitHub (celui du projet en tête de liste).
+- « ⤓ Importer », dans l'en-tête du Kanban :
+  - une pastille par source liée, une recherche et les filtres du service (Jira : Assignés à moi, Sprint actif, À faire ; Trello : Mes cartes et une par liste ; GitHub : Assignées à moi et une par étiquette) ;
+  - les tickets à cocher, avec leur type, leur priorité, leur assigné, leur statut et le nombre de critères détectés ; ceux déjà importés sont grisés, « Déjà dans le Kanban » ;
+  - le nombre de boucles max, puis « Importer » : les tickets arrivent à la fin de « À faire ».
+- Un ticket importé reprend le titre et la description d'origine (le texte Jira converti en markdown), avec le lien vers le ticket. Ses critères d'acceptation viennent de la liste sous « Critères d'acceptation », « Acceptance criteria » ou « Definition of done », sinon de ses cases à cocher (Trello : de la checklist de ce nom, sinon de toutes) ; à défaut, ce sont les critères par défaut. Sa carte porte la pastille du service et la clé d'origine (`ATL-1287`, `#42`), qui ouvre le ticket dans le navigateur.
+- Synchro des statuts : quand un ticket importé change de colonne, son pendant suit (transition Jira, liste Trello, issue GitHub ouverte, fermée ou étiquetée). Choisir une source pré-remplit la correspondance : « En cours » et « À tester » vers l'état qui ressemble à « en cours », « Terminé » vers celui qui ressemble à « à tester ». Elle se règle par colonne et par source.
+- Commentaires sur le ticket d'origine, à l'arrivée dans les colonnes cochées (« À tester » et « Terminé » par défaut) : pris par un agent, prêt à tester (critères et ce qui a été fait), terminé (issue de la validation), revenu « À faire ». En option, un résumé à chaque boucle.
+- Une synchro ratée ne bloque jamais le ticket : sa carte montre ⚠ et la raison, jusqu'à la suivante qui réussit.
+- Import automatique (désactivé par défaut) : toutes les 5, 15 ou 60 minutes, les tickets ouverts des sources liées qui portent l'étiquette choisie (`claude-ready` par défaut) arrivent dans « À faire ». Un ticket supprimé du Kanban n'est jamais ramené.
+
+### Modifications
+
+- Une seule fenêtre de réglages pour toute l'app, en onglets : Claude Code, Notifications, Projets, Kanban, Intégrations, Terminaux, Réseau, À propos. Elle remplace « Réglages du tableau » et « Commandes de lancement ».
+  - « Enregistrer » enregistre d'un coup ce qui a changé, dans tous les onglets et pour tous les projets ; un point marque les onglets modifiés. « Annuler », Échap ou × jettent tout.
+  - « ⚙ Après validation » ouvre l'onglet Kanban du projet, le ⚙ de la section Lancement son onglet Projets. Au clic droit sur un onglet de projet, « Réglages du projet… » remplace « Commandes de lancement… ».
+- Le tableau s'appelle désormais « Kanban » (sélecteur « Agents | Kanban »).
+
 ## [1.3.1] — 2026-10-04
 
 ### Corrections
