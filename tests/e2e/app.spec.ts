@@ -330,15 +330,17 @@ test('launch commands run in their own terminals, with their status live', async
   fs.mkdirSync(path.dirname(marker));
   await addProject(page, app.repo);
 
+  // The project's settings, on its tab.
   await page.getByRole('button', { name: 'Configurer', exact: true }).click();
-  const dialog = page.getByRole('dialog');
+  const dialog = page.getByRole('dialog', { name: 'Réglages' });
+  await expect(dialog.getByRole('tab', { name: 'Projets' })).toHaveAttribute('aria-selected', 'true');
   await dialog.getByRole('button', { name: '+ Ajouter une commande' }).click();
-  const serveurCfg = dialog.getByRole('group').nth(0);
+  const serveurCfg = dialog.getByRole('group', { name: 'Commande 1' });
   await serveurCfg.getByLabel('Nom').fill('Serveur');
   await serveurCfg.getByLabel('Commande').fill('Set-Content serveur.txt ok; Start-Sleep 600');
   await serveurCfg.getByLabel(/Sous-dossier/).fill('web');
   await dialog.getByRole('button', { name: '+ Ajouter une commande' }).click();
-  const buildCfg = dialog.getByRole('group').nth(1);
+  const buildCfg = dialog.getByRole('group', { name: 'Commande 2' });
   await buildCfg.getByLabel('Nom').fill('Build');
   await buildCfg.getByLabel('Commande').fill('exit 2');
   await dialog.getByRole('button', { name: 'Enregistrer' }).click();
@@ -390,6 +392,7 @@ test('the proxy configured in the settings reaches Claude', async ({ app }) => {
   const { page } = app;
   await page.getByTitle('Réglages (Ctrl+,)').click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
+  await dialog.getByRole('tab', { name: 'Réseau' }).click();
   await dialog.getByPlaceholder('aucun').fill('http://proxy.local:3128');
   await dialog.getByRole('button', { name: 'Enregistrer' }).click();
   await addProject(page, app.repo);
@@ -479,7 +482,7 @@ test('a ticket is taken by an agent that loops until its criteria are met, then 
   await page.setViewportSize({ width: 1028, height: 779 });
   // A long name (19 characters, its key still DEM): the header's left side is at its widest.
   await addProject(page, app.repo, { firstAgent: false, name: 'demonstration-d-api' });
-  await page.getByRole('button', { name: /^Tableau/ }).click();
+  await page.getByRole('button', { name: /^Kanban/ }).click();
   await expect(page.getByRole('button', { name: 'Nouveau ticket' })).toBeVisible();
   // What of the board sticks out of its box: its header, and the cards of its columns.
   const sticksOut = () =>
@@ -537,6 +540,23 @@ test('a ticket is taken by an agent that loops until its criteria are met, then 
   expect(await headerOverlaps()).toEqual([]);
   await summary.evaluate((e, t) => (e.firstChild!.nodeValue = t), usualSummary);
   await page.setViewportSize({ width: 1028, height: 779 });
+  // Its settings button opens the app's settings on the Kanban of this project, whole in the narrowest window.
+  await page.locator('main.board .cfg').click();
+  const settings = page.getByRole('dialog', { name: 'Réglages' });
+  await expect(settings.getByRole('tab', { name: 'Kanban' })).toHaveAttribute('aria-selected', 'true');
+  await expect(settings.getByRole('group', { name: 'Projet' }).getByRole('button', { name: 'demonstration-d-api' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  expect(
+    await settings.evaluate((e) => {
+      const r = e.getBoundingClientRect();
+      return r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight;
+    }),
+  ).toBe(true);
+  // Its footer's « Annuler » is not its conflict policy's: Escape closes it too, changing nothing.
+  await page.keyboard.press('Escape');
+  await expect(settings).toHaveCount(0);
   await page.getByRole('button', { name: 'Nouveau ticket' }).click();
   await page.getByRole('textbox', { name: 'Titre du ticket' }).fill('Ajouter le fichier du ticket');
   await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
@@ -585,7 +605,7 @@ test('a ticket’s test launches leave the launch section, their processes stopp
     }
   };
   await addProject(page, app.repo, { firstAgent: false });
-  await page.getByRole('button', { name: /^Tableau/ }).click();
+  await page.getByRole('button', { name: /^Kanban/ }).click();
   await page.getByRole('button', { name: 'Nouveau ticket' }).click();
   await page.getByRole('textbox', { name: 'Titre du ticket' }).fill('Page [ok] [recette]');
   await page.getByRole('button', { name: 'Ajouter', exact: true }).click();

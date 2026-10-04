@@ -302,7 +302,7 @@ pub fn to_start(
 /// The refusal of a first ticket on a detached HEAD: there is no branch to start the tickets from
 /// (nor to merge them into) until one is chosen.
 pub const NO_BRANCH: &str =
-    "Le projet n'est sur aucune branche : choisis la branche cible dans les réglages du tableau.";
+    "Le projet n'est sur aucune branche : choisis la branche cible dans les réglages du Kanban.";
 
 /// Why no ticket starts from `target`, if none can: no branch at all (a board saved without one,
 /// on a detached HEAD), a branch without any commit yet (a new repository: its first commit makes

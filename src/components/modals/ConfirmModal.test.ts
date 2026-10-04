@@ -25,4 +25,25 @@ describe('ConfirmModal', () => {
     expect(onConfirm).not.toHaveBeenCalled();
     expect(app.modal).toBeNull();
   });
+
+  it('goes back where it came from when cancelled', async () => {
+    const onCancel = vi.fn(() => {
+      app.modal = { kind: 'settings', resume: true };
+    });
+    app.modal = { kind: 'confirm', title: 'Fermer ?', body: 'b', confirm: 'Fermer', onConfirm: vi.fn(), onCancel };
+    render(ConfirmModal, { ...(app.modal as any) });
+    await userEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+    expect(onCancel).toHaveBeenCalled();
+    expect(app.modal).toEqual({ kind: 'settings', resume: true });
+  });
+
+  it('leaves the modal its confirmation opened', async () => {
+    const onConfirm = vi.fn(() => {
+      app.modal = { kind: 'settings', resume: true };
+    });
+    app.modal = { kind: 'confirm', title: 'Fermer ?', body: 'b', confirm: 'Fermer le projet', onConfirm };
+    render(ConfirmModal, { ...(app.modal as any) });
+    await userEvent.click(screen.getByRole('button', { name: 'Fermer le projet' }));
+    expect(app.modal).toEqual({ kind: 'settings', resume: true });
+  });
 });

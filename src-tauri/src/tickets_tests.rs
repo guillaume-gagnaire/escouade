@@ -1744,7 +1744,7 @@ async fn a_first_ticket_on_a_detached_head_asks_for_a_target() {
         .unwrap_err();
     assert_eq!(
         format!("{e:#}"),
-        "Le projet n'est sur aucune branche : choisis la branche cible dans les réglages du tableau."
+        "Le projet n'est sur aucune branche : choisis la branche cible dans les réglages du Kanban."
     );
     // Nothing made, no number taken.
     assert!(h.core.tickets.read().is_empty());

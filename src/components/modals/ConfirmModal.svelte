@@ -11,6 +11,7 @@
     option,
     alt,
     onConfirm,
+    onCancel,
   }: {
     title: string;
     body: string;
@@ -19,20 +20,30 @@
     option?: { label: string; value: boolean };
     alt?: { label: string; onClick: () => void | Promise<void> };
     onConfirm: (option: boolean) => void | Promise<void>;
+    onCancel?: () => void;
   } = $props();
 
   let checked = $state(untrack(() => option?.value ?? false));
   let busy = $state(false);
 
   async function go() {
+    const self = app.modal;
     busy = true;
     await onConfirm(checked);
     busy = false;
+    // Unless the confirmation opened another one.
+    if (app.modal === self) app.modal = null;
+  }
+
+  function cancel() {
+    // Read before closing: the props are the modal's, gone once it is closed.
+    const back = onCancel;
     app.modal = null;
+    back?.();
   }
 </script>
 
-<Modal {title} width={480} onclose={() => (app.modal = null)}>
+<Modal {title} width={480} onclose={cancel}>
   <p class="p">{body}</p>
   {#if option}
     <label class="opt">
@@ -41,7 +52,7 @@
     </label>
   {/if}
   {#snippet footer()}
-    <button class="btn ghost" onclick={() => (app.modal = null)}>Annuler</button>
+    <button class="btn ghost" onclick={cancel}>Annuler</button>
     {#if alt}
       <button
         class="btn"

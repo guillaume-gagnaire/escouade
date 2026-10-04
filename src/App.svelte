@@ -11,11 +11,9 @@
   import DiffModal from './components/DiffModal.svelte';
   import EditorView from './components/editor/EditorView.svelte';
   import SidePanel from './components/SidePanel.svelte';
-  import BoardSettingsModal from './components/modals/BoardSettingsModal.svelte';
   import ConfirmModal from './components/modals/ConfirmModal.svelte';
   import NewProjectModal from './components/modals/NewProjectModal.svelte';
   import RenameModal from './components/modals/RenameModal.svelte';
-  import RunConfigModal from './components/modals/RunConfigModal.svelte';
   import SettingsModal from './components/modals/SettingsModal.svelte';
   import TestLaunchModal from './components/modals/TestLaunchModal.svelte';
   import RunView from './components/RunView.svelte';
@@ -110,7 +108,7 @@
 {#if app.modal?.kind === 'newProject'}
   <NewProjectModal />
 {:else if app.modal?.kind === 'settings'}
-  <SettingsModal />
+  <SettingsModal tab={app.modal.tab} projectId={app.modal.projectId} section={app.modal.section} resume={app.modal.resume} />
 {:else if app.modal?.kind === 'diff'}
   <DiffModal
     projectId={app.modal.projectId}
@@ -123,10 +121,6 @@
   <ConfirmModal {...app.modal} />
 {:else if app.modal?.kind === 'rename'}
   <RenameModal title={app.modal.title} value={app.modal.value} onSubmit={app.modal.onSubmit} />
-{:else if app.modal?.kind === 'runConfig'}
-  <RunConfigModal projectId={app.modal.projectId} />
-{:else if app.modal?.kind === 'boardSettings'}
-  <BoardSettingsModal projectId={app.modal.projectId} />
 {:else if app.modal?.kind === 'testLaunch'}
   <TestLaunchModal agentId={app.modal.agentId} />
 {/if}

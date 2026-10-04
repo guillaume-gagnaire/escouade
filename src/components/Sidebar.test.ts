@@ -355,7 +355,7 @@ describe('Sidebar editor entries', () => {
     });
     fakeBackend();
     render(Sidebar, { project: project() });
-    const tab = screen.getByRole('button', { name: /^Tableau/ });
+    const tab = screen.getByRole('button', { name: /^Kanban/ });
     expect(within(tab).getByText('2')).toBeInTheDocument();
     await userEvent.click(tab);
     expect(app.boardOn).toBe(true);

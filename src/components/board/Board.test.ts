@@ -131,9 +131,17 @@ describe('Board', () => {
     fakeBackend();
     render(Board, { project: app.projects[0] });
     const button = screen.getByRole('button', { name: /Après validation/ });
-    expect(button).toHaveAttribute('title', 'Réglages du tableau — merge squash → main');
+    expect(button).toHaveAttribute('title', 'Réglages du Kanban — merge squash → main');
     // The summary has no tooltip of its own, which would hide the button's.
     expect(within(button).getByText('merge squash → main')).not.toHaveAttribute('title');
+  });
+
+  it('is the Kanban, whose settings button opens the settings on its tab and project', async () => {
+    fakeBackend();
+    render(Board, { project: app.projects[0] });
+    expect(screen.getByText('Kanban', { selector: '.t' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Après validation/ }));
+    expect(app.modal).toEqual({ kind: 'settings', tab: 'board', projectId: 'p1' });
   });
 
   it('turns the autopilot off and lets a ticket be launched by hand', async () => {
@@ -151,13 +159,6 @@ describe('Board', () => {
     expect(within(col('À faire')).getAllByText('Pilote auto désactivé')).toHaveLength(2);
     await userEvent.click(within(col('À faire')).getAllByRole('button', { name: 'Lancer' })[0]);
     expect(backend.called('ticket_start')).toEqual([{ cmd: 'ticket_start', args: { id: 't1' } }]);
-  });
-
-  it('opens the board settings from the header', async () => {
-    fakeBackend();
-    render(Board, { project: app.projects[0] });
-    await userEvent.click(screen.getByRole('button', { name: /Après validation/ }));
-    expect(app.modal).toEqual({ kind: 'boardSettings', projectId: 'p1' });
   });
 
   it('edits a ticket to do from a click, and moves or deletes it from its menu', async () => {

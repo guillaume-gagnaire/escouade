@@ -27,7 +27,7 @@
   }
 
   function configure() {
-    app.modal = { kind: 'runConfig', projectId: project.id };
+    app.modal = { kind: 'settings', tab: 'projects', projectId: project.id, section: 'launch' };
   }
   const isRunning = (c: RunCommand) => app.launches[c.id]?.status === 'running';
 </script>

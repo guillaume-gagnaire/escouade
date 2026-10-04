@@ -161,7 +161,7 @@
     <div class="switcher" role="group" aria-label="Vue du projet">
       <button class:on={!app.boardOn} aria-pressed={!app.boardOn} onclick={() => app.closeBoard(project.id)}>Agents</button>
       <button class:on={app.boardOn} aria-pressed={app.boardOn} onclick={() => app.openBoard(project.id)}
-        >Tableau{#if review}<span class="badge" title={`${review} à tester`}>{review}</span>{/if}</button
+        >Kanban{#if review}<span class="badge" title={`${review} à tester`}>{review}</span>{/if}</button
       >
     </div>
   </div>

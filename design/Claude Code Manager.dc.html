@@ -131,12 +131,7 @@ textarea::placeholder{color:var(--dim);}
             <span style="color:var(--add)">+{{ gitA }} ajoutés</span>
             <span style="color:var(--del)">−{{ gitD }} supprimés</span>
           </div>
-          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding-top:4px">
-            <span style="font-size:11px;color:var(--dim);margin-right:2px;width:100%">Couleur</span>
-            <sc-for list="{{ projColorOpts }}" as="o" hint-placeholder-count="6">
-              <button onClick="{{ o.onClick }}" style="width:16px;height:16px;border-radius:5px;border:none;padding:0;cursor:pointer;background:{{ o.c }};box-shadow:{{ o.ring }}"></button>
-            </sc-for>
-          </div>
+          <button onClick="{{ openProjSettings }}" style="align-self:flex-start;height:24px;display:flex;align-items:center;gap:6px;padding:0 9px;margin-top:2px;border:1px solid var(--line2);border-radius:var(--r-sm);background:transparent;color:var(--muted);font:inherit;font-size:11.5px;font-weight:600;cursor:pointer" style-hover="color:var(--text);border-color:var(--accent)">⚙ Réglages du projet</button>
         </div>
       </aside>
 
@@ -274,15 +269,15 @@ textarea::placeholder{color:var(--dim);}
         </main>
       </sc-if>
       <sc-if value="{{ kbOn }}">
-        <main data-screen-label="Tableau" style="flex:1;min-width:0;display:flex;flex-direction:column">
+        <main data-screen-label="Kanban" style="flex:1;min-width:0;display:flex;flex-direction:column">
           <div style="height:60px;flex:none;display:flex;align-items:center;gap:16px;padding:0 20px 0 24px;border-bottom:1px solid var(--line);white-space:nowrap">
             <div style="display:flex;flex-direction:column;gap:3px">
-              <span style="font-size:15px;font-weight:700">Tableau</span>
+              <span style="font-size:15px;font-weight:700">Kanban</span>
               <span style="font-family:var(--mono);font-size:11px;color:var(--dim)">{{ projName }} · {{ kbSummary }}</span>
             </div>
             <div style="flex:1"></div>
             <span style="font-size:12px;color:var(--muted)">{{ kbFree }}</span>
-            <button onClick="{{ openSettings }}" title="Réglages du tableau" style="height:34px;display:flex;align-items:center;gap:8px;padding:0 12px;border:1px solid var(--line2);border-radius:var(--r-sm);background:var(--elev);color:var(--text);font:inherit;font-size:12px;cursor:pointer" style-hover="border-color:var(--accent)"><span style="font-size:14px;color:var(--muted)">⚙</span><span style="color:var(--muted)">Après validation :</span><span style="font-family:var(--mono);font-size:11.5px;font-weight:600">{{ cfgSummary }}</span></button>
+            <button onClick="{{ openBoardSettings }}" title="Réglages du Kanban" style="height:34px;display:flex;align-items:center;gap:8px;padding:0 12px;border:1px solid var(--line2);border-radius:var(--r-sm);background:var(--elev);color:var(--text);font:inherit;font-size:12px;cursor:pointer" style-hover="border-color:var(--accent)"><span style="font-size:14px;color:var(--muted)">⚙</span><span style="color:var(--muted)">Après validation :</span><span style="font-family:var(--mono);font-size:11.5px;font-weight:600">{{ cfgSummary }}</span></button>
             <div style="display:flex;align-items:center;gap:10px;height:34px;padding:0 6px 0 12px;border-radius:var(--r-sm);border:1px solid var(--line2);background:var(--elev)" title="Les agents libres prennent le prochain ticket et bouclent jusqu'à valider tous ses critères">
               <span style="font-size:12.5px;font-weight:600">{{ autoLabel }}</span>
               <button onClick="{{ toggleAuto }}" style="width:36px;height:20px;border:none;border-radius:10px;padding:2px;display:flex;justify-content:{{ autoJ }};background:{{ autoBg }};cursor:pointer"><span style="width:16px;height:16px;border-radius:50%;background:#fff"></span></button>
@@ -652,70 +647,115 @@ textarea::placeholder{color:var(--dim);}
 
   <sc-if value="{{ setOpen }}">
     <div onClick="{{ closeSettings }}" style="position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(12,10,8,.6);backdrop-filter:blur(3px)">
-      <div data-screen-label="Réglages du tableau" onClick="{{ stop }}" style="width:600px;max-width:calc(100vw - 40px);max-height:calc(100vh - 60px);display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line2);border-radius:14px;box-shadow:0 30px 80px rgba(0,0,0,.55)">
-        <div style="display:flex;align-items:center;gap:10px;padding:18px 18px 0 24px">
-          <div style="display:flex;flex-direction:column;gap:3px">
-            <span style="font-size:17px;font-weight:700">Réglages du tableau</span>
-            <span style="font-family:var(--mono);font-size:11px;color:var(--dim)">{{ projName }}</span>
-          </div>
+      <div data-screen-label="Réglages" onClick="{{ stop }}" style="width:900px;max-width:calc(100vw - 40px);height:640px;max-height:calc(100vh - 60px);display:flex;background:var(--panel);border:1px solid var(--line2);border-radius:14px;box-shadow:0 30px 80px rgba(0,0,0,.55);overflow:hidden">
+        <nav style="width:210px;flex:none;display:flex;flex-direction:column;gap:2px;padding:20px 10px 16px;background:var(--bg);border-right:1px solid var(--line)">
+          <span style="padding:0 10px 14px;font-size:17px;font-weight:700">Réglages</span>
+          <sc-for list="{{ setTabs }}" as="t" hint-placeholder-count="7">
+            <button onClick="{{ t.onClick }}" style="height:34px;flex:none;display:flex;align-items:center;gap:10px;padding:0 10px;border:none;border-radius:var(--r-sm);background:{{ t.bg }};color:{{ t.color }};font:inherit;font-size:13px;font-weight:600;text-align:left;cursor:pointer" style-hover="background:var(--elev)"><span style="width:18px;text-align:center;font-family:var(--mono);font-size:12px;color:{{ t.ic }}">{{ t.icon }}</span>{{ t.label }}</button>
+          </sc-for>
           <div style="flex:1"></div>
-          <button onClick="{{ closeSettings }}" style="width:28px;height:28px;border:none;border-radius:var(--r-sm);background:transparent;color:var(--muted);font-size:16px;cursor:pointer" style-hover="background:var(--elev2);color:var(--text)">×</button>
-        </div>
-        <div style="flex:1;overflow:auto;display:flex;flex-direction:column;gap:22px;padding:20px 24px 22px">
-          <div style="display:flex;flex-direction:column;gap:10px">
-            <span style="font-size:12px;font-weight:600;color:var(--muted)">Quand je valide un ticket « À tester »</span>
-            <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">
-              <sc-for list="{{ actionOpts }}" as="o" hint-placeholder-count="4">
-                <button onClick="{{ o.onClick }}" style="display:flex;gap:10px;align-items:flex-start;padding:12px;border-radius:var(--r);border:1px solid {{ o.bc }};background:{{ o.bg }};color:var(--text);font:inherit;text-align:left;cursor:pointer">
-                  <span style="width:14px;height:14px;flex:none;margin-top:2px;border-radius:50%;border:1.5px solid {{ o.bc }};display:flex;align-items:center;justify-content:center"><span style="width:6px;height:6px;border-radius:50%;background:{{ o.dot }}"></span></span>
-                  <span style="display:flex;flex-direction:column;gap:4px">
-                    <span style="font-size:13px;font-weight:600">{{ o.label }}</span>
-                    <span style="font-size:11.5px;line-height:1.45;color:var(--muted);text-wrap:pretty">{{ o.desc }}</span>
-                  </span>
-                </button>
-              </sc-for>
+          <span style="padding:0 10px;font-family:var(--mono);font-size:10.5px;color:var(--dim)">Escouade 1.3.0</span>
+        </nav>
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+          <div style="display:flex;align-items:flex-start;gap:10px;padding:20px 18px 14px 28px;border-bottom:1px solid var(--line)">
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <span style="font-size:18px;font-weight:700">{{ setTitle }}</span>
+              <span style="font-size:12.5px;color:var(--muted)">{{ setDesc }}</span>
             </div>
+            <div style="flex:1"></div>
+            <button onClick="{{ closeSettings }}" style="width:28px;height:28px;border:none;border-radius:var(--r-sm);background:transparent;color:var(--muted);font-size:16px;cursor:pointer" style-hover="background:var(--elev2);color:var(--text)">×</button>
           </div>
-          <sc-if value="{{ showTarget }}">
-            <div style="display:flex;flex-direction:column;gap:12px;padding:14px 16px;border-radius:var(--r);background:var(--bg);border:1px solid var(--line)">
-              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                <span style="width:110px;font-size:12px;color:var(--muted)">Branche cible</span>
-                <sc-for list="{{ branchOpts }}" as="o"><button onClick="{{ o.onClick }}" style="height:28px;padding:0 11px;border:1px solid {{ o.bc }};border-radius:var(--r-sm);background:{{ o.bg }};color:{{ o.color }};font-family:var(--mono);font-size:11.5px;font-weight:600;cursor:pointer">⎇ {{ o.label }}</button></sc-for>
-              </div>
-              <sc-if value="{{ showStrategy }}">
-                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                  <span style="width:110px;font-size:12px;color:var(--muted)">Stratégie</span>
-                  <sc-for list="{{ strategyOpts }}" as="o"><button onClick="{{ o.onClick }}" style="height:28px;padding:0 11px;border:1px solid {{ o.bc }};border-radius:var(--r-sm);background:{{ o.bg }};color:{{ o.color }};font:inherit;font-size:12px;font-weight:600;cursor:pointer">{{ o.label }}</button></sc-for>
-                </div>
-              </sc-if>
-              <sc-if value="{{ showDraft }}">
-                <div style="display:flex;align-items:center;gap:8px">
-                  <span style="width:110px;font-size:12px;color:var(--muted)">{{ draftToggle.label }}</span>
-                  <button onClick="{{ draftToggle.onClick }}" style="width:36px;height:20px;border:none;border-radius:10px;padding:2px;display:flex;justify-content:{{ draftToggle.j }};background:{{ draftToggle.bg }};cursor:pointer"><span style="width:16px;height:16px;border-radius:50%;background:#fff"></span></button>
-                </div>
-              </sc-if>
+          <sc-if value="{{ setScoped }}">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:12px 28px;border-bottom:1px solid var(--line)">
+              <span style="font-size:12px;color:var(--dim);margin-right:4px">Projet</span>
+              <sc-for list="{{ setProjOpts }}" as="o"><button onClick="{{ o.onClick }}" style="height:28px;display:flex;align-items:center;gap:7px;padding:0 11px;border:1px solid {{ o.bc }};border-radius:var(--r-sm);background:{{ o.bg }};color:{{ o.color }};font:inherit;font-size:12px;font-weight:600;cursor:pointer"><span style="width:9px;height:9px;border-radius:3px;background:{{ o.c }}"></span>{{ o.name }}</button></sc-for>
             </div>
           </sc-if>
-          <div style="height:1px;background:var(--line)"></div>
-          <div style="display:flex;flex-direction:column;gap:14px">
-            <sc-for list="{{ cfgToggles }}" as="t" hint-placeholder-count="3">
-              <div style="display:flex;align-items:center;gap:14px">
-                <div style="flex:1;display:flex;flex-direction:column;gap:3px">
-                  <span style="font-size:13px;font-weight:600">{{ t.label }}</span>
-                  <span style="font-size:11.5px;color:var(--muted);text-wrap:pretty">{{ t.desc }}</span>
+          <div style="flex:1;overflow:auto;display:flex;flex-direction:column;gap:26px;padding:22px 28px 28px">
+            <sc-if value="{{ isProjTab }}">
+              <div style="display:flex;flex-direction:column;gap:12px">
+                <span style="font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)">Identité</span>
+                <div style="display:flex;flex-direction:column;border-radius:var(--r);border:1px solid var(--line);background:var(--bg)">
+                  <div style="display:flex;align-items:center;gap:14px;padding:12px 16px">
+                    <span style="width:110px;flex:none;font-size:13px;font-weight:600">Nom</span>
+                    <input value="{{ spName }}" onChange="{{ onSpName }}" style="flex:1;min-width:0;height:32px;padding:0 10px;border-radius:var(--r-sm);border:1px solid var(--line2);background:var(--panel);color:var(--text);font:inherit;font-size:13px;font-weight:600;outline:none"></input>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:14px;padding:12px 16px;border-top:1px solid var(--line)">
+                    <span style="width:110px;flex:none;font-size:13px;font-weight:600">Dossier</span>
+                    <span style="flex:1;min-width:0;font-family:var(--mono);font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ spPath }}</span>
+                    <button style="height:28px;padding:0 12px;border:1px solid var(--line2);border-radius:var(--r-sm);background:var(--elev);color:var(--text);font:inherit;font-size:12px;font-weight:600;cursor:pointer">Changer…</button>
+                  </div>
+                  <div style="display:flex;align-items:flex-start;gap:14px;padding:12px 16px 14px;border-top:1px solid var(--line)">
+                    <span style="width:110px;flex:none;padding-top:3px;font-size:13px;font-weight:600">Couleur</span>
+                    <div style="flex:1;display:flex;flex-wrap:wrap;gap:9px">
+                      <sc-for list="{{ spColorOpts }}" as="o" hint-placeholder-count="14"><button onClick="{{ o.onClick }}" style="width:24px;height:24px;border-radius:7px;border:none;padding:0;cursor:pointer;background:{{ o.c }};box-shadow:{{ o.ring }}"></button></sc-for>
+                    </div>
+                  </div>
                 </div>
-                <button onClick="{{ t.onClick }}" style="width:36px;height:20px;flex:none;border:none;border-radius:10px;padding:2px;display:flex;justify-content:{{ t.j }};background:{{ t.bg }};cursor:pointer"><span style="width:16px;height:16px;border-radius:50%;background:#fff"></span></button>
+              </div>
+            </sc-if>
+            <sc-if value="{{ isBoardTab }}">
+              <div style="display:flex;flex-direction:column;gap:12px">
+                <span style="font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)">Quand je valide un ticket « À tester »</span>
+                <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">
+                  <sc-for list="{{ actionOpts }}" as="o" hint-placeholder-count="4">
+                    <button onClick="{{ o.onClick }}" style="display:flex;gap:10px;align-items:flex-start;padding:12px;border-radius:var(--r);border:1px solid {{ o.bc }};background:{{ o.bg }};color:var(--text);font:inherit;text-align:left;cursor:pointer">
+                      <span style="width:14px;height:14px;flex:none;margin-top:2px;border-radius:50%;border:1.5px solid {{ o.bc }};display:flex;align-items:center;justify-content:center"><span style="width:6px;height:6px;border-radius:50%;background:{{ o.dot }}"></span></span>
+                      <span style="display:flex;flex-direction:column;gap:4px"><span style="font-size:13px;font-weight:600">{{ o.label }}</span><span style="font-size:11.5px;line-height:1.45;color:var(--muted);text-wrap:pretty">{{ o.desc }}</span></span>
+                    </button>
+                  </sc-for>
+                </div>
+                <sc-if value="{{ showTarget }}">
+                  <div style="display:flex;flex-direction:column;gap:12px;padding:14px 16px;border-radius:var(--r);background:var(--bg);border:1px solid var(--line)">
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                      <span style="width:110px;font-size:12px;color:var(--muted)">Branche cible</span>
+                      <sc-for list="{{ branchOpts }}" as="o"><button onClick="{{ o.onClick }}" style="height:28px;padding:0 11px;border:1px solid {{ o.bc }};border-radius:var(--r-sm);background:{{ o.bg }};color:{{ o.color }};font-family:var(--mono);font-size:11.5px;font-weight:600;cursor:pointer">⎇ {{ o.label }}</button></sc-for>
+                    </div>
+                    <sc-if value="{{ showStrategy }}">
+                      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                        <span style="width:110px;font-size:12px;color:var(--muted)">Stratégie</span>
+                        <sc-for list="{{ strategyOpts }}" as="o"><button onClick="{{ o.onClick }}" style="height:28px;padding:0 11px;border:1px solid {{ o.bc }};border-radius:var(--r-sm);background:{{ o.bg }};color:{{ o.color }};font:inherit;font-size:12px;font-weight:600;cursor:pointer">{{ o.label }}</button></sc-for>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ showDraft }}">
+                      <div style="display:flex;align-items:center;gap:8px">
+                        <span style="width:110px;font-size:12px;color:var(--muted)">{{ draftToggle.label }}</span>
+                        <button onClick="{{ draftToggle.onClick }}" style="width:36px;height:20px;flex:none;border:none;border-radius:10px;padding:2px;display:flex;justify-content:{{ draftToggle.j }};background:{{ draftToggle.bg }};cursor:pointer"><span style="width:16px;height:16px;border-radius:50%;background:#fff"></span></button>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-if>
+            <sc-for list="{{ setSections }}" as="sec" hint-placeholder-count="2">
+              <div style="display:flex;flex-direction:column;gap:12px">
+                <span style="font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)">{{ sec.title }}</span>
+                <div style="display:flex;flex-direction:column;border-radius:var(--r);border:1px solid var(--line);background:var(--bg)">
+                  <sc-for list="{{ sec.items }}" as="it" hint-placeholder-count="2">
+                    <div style="display:flex;align-items:center;gap:16px;padding:12px 16px;border-top:1px solid {{ it.sep }}">
+                      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+                        <span style="font-size:13px;font-weight:600">{{ it.label }} <span style="font-weight:400;color:var(--dim)">{{ it.hint }}</span></span>
+                        <sc-if value="{{ it.hasDesc }}"><span style="font-size:11.5px;line-height:1.45;color:var(--muted);text-wrap:pretty">{{ it.desc }}</span></sc-if>
+                      </div>
+                      <sc-if value="{{ it.isInput }}"><input value="{{ it.value }}" onChange="{{ it.onChange }}" placeholder="{{ it.ph }}" spellCheck="false" style="width:{{ it.iw }};max-width:50%;flex:none;height:32px;padding:0 10px;border-radius:var(--r-sm);border:1px solid var(--line2);background:var(--panel);color:var(--text);font-family:var(--mono);font-size:12px;outline:none" style-focus="border-color:var(--accent)"></input></sc-if>
+                      <sc-if value="{{ it.isToggle }}"><button onClick="{{ it.onClick }}" style="width:36px;height:20px;flex:none;border:none;border-radius:10px;padding:2px;display:flex;justify-content:{{ it.j }};background:{{ it.bg }};cursor:pointer"><span style="width:16px;height:16px;border-radius:50%;background:#fff"></span></button></sc-if>
+                      <sc-if value="{{ it.isChoice }}">
+                        <div style="display:flex;flex-wrap:wrap;justify-content:flex-end;gap:4px;max-width:60%">
+                          <sc-for list="{{ it.opts }}" as="o"><button onClick="{{ o.onClick }}" style="height:28px;padding:0 11px;border:1px solid {{ o.bc }};border-radius:var(--r-sm);background:{{ o.bg }};color:{{ o.color }};font:inherit;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">{{ o.label }}</button></sc-for>
+                        </div>
+                      </sc-if>
+                      <sc-if value="{{ it.isButton }}"><button onClick="{{ it.onClick }}" style="height:30px;padding:0 14px;border:1px solid var(--line2);border-radius:var(--r-sm);background:var(--elev);color:{{ it.btnColor }};font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap" style-hover="border-color:var(--accent)">{{ it.btn }}</button></sc-if>
+                    </div>
+                  </sc-for>
+                </div>
+                <sc-if value="{{ sec.hasNote }}"><span style="font-size:11.5px;line-height:1.5;color:var(--dim);text-wrap:pretty">{{ sec.note }}</span></sc-if>
               </div>
             </sc-for>
-            <div style="font-family:var(--mono);font-size:11px;padding:8px 10px;border-radius:var(--r-sm);background:var(--bg);border:1px solid var(--line);color:var(--muted)">{{ commitPreview }}</div>
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-              <span style="flex:1;min-width:140px;font-size:13px;font-weight:600">En cas de conflit</span>
-              <sc-for list="{{ conflictOpts }}" as="o"><button onClick="{{ o.onClick }}" style="height:28px;padding:0 11px;border:1px solid {{ o.bc }};border-radius:var(--r-sm);background:{{ o.bg }};color:{{ o.color }};font:inherit;font-size:12px;font-weight:600;cursor:pointer">{{ o.label }}</button></sc-for>
-            </div>
           </div>
-        </div>
-        <div style="display:flex;justify-content:flex-end;gap:8px;padding:14px 18px 18px;border-top:1px solid var(--line)">
-          <button onClick="{{ closeSettings }}" style="height:34px;padding:0 18px;border:none;border-radius:var(--r-sm);background:var(--accent);color:var(--accent-ink);font:inherit;font-size:13px;font-weight:700;cursor:pointer">Terminé</button>
+          <div style="display:flex;justify-content:flex-end;gap:8px;padding:14px 18px 16px;border-top:1px solid var(--line)">
+            <button onClick="{{ closeSettings }}" style="height:34px;padding:0 16px;border:1px solid var(--line2);border-radius:var(--r-sm);background:transparent;color:var(--text);font:inherit;font-size:13px;font-weight:600;cursor:pointer">Annuler</button>
+            <button onClick="{{ closeSettings }}" style="height:34px;padding:0 18px;border:none;border-radius:var(--r-sm);background:var(--accent);color:var(--accent-ink);font:inherit;font-size:13px;font-weight:700;cursor:pointer">Enregistrer</button>
+          </div>
         </div>
       </div>
     </div>
@@ -737,6 +777,7 @@ textarea::placeholder{color:var(--dim);}
     <span style="width:1px;height:14px;background:var(--line2)"></span>
     <span>Aujourd'hui <span style="color:var(--text);font-weight:600">{{ todayCost }}</span></span>
     <div style="flex:1"></div>
+    <button onClick="{{ openSettings }}" style="height:22px;padding:0 8px;border:none;border-radius:var(--r-sm);background:transparent;color:var(--muted);font:inherit;cursor:pointer" style-hover="background:var(--elev2);color:var(--text)">⚙ Réglages</button>
     <button onClick="{{ toggleSound }}" style="height:22px;padding:0 8px;border:none;border-radius:var(--r-sm);background:transparent;color:var(--muted);font:inherit;cursor:pointer" style-hover="background:var(--elev2);color:var(--text)">{{ soundLabel }}</button>
   </div>
 </div>
@@ -850,21 +891,21 @@ class Component extends DCLogic {
     st.setProperty('--term', mix(5, '#121110'));
   }
   soundOn() { return this.state.soundOn ?? (this.props.sound ?? true); }
-  chime() {
-    if (!this.soundOn()) return;
+  chime(force) {
+    if (!force && !this.soundOn()) return;
     try {
       const C = this.ac || (this.ac = new (window.AudioContext || window.webkitAudioContext)());
       const t = C.currentTime;
-      [880, 1318.5].forEach((f, i) => {
+      ({ chime: [880, 1318.5], bell: [660, 990], drop: [1200, 800] }[this.prefs().sound] || [880, 1318.5]).forEach((f, i) => {
         const o = C.createOscillator(), g = C.createGain(), st = t + i * 0.13;
         o.type = 'sine'; o.frequency.value = f;
-        g.gain.setValueAtTime(0, st); g.gain.linearRampToValueAtTime(0.07, st + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, st + 0.6);
+        g.gain.setValueAtTime(0, st); g.gain.linearRampToValueAtTime({ low: 0.035, mid: 0.07, high: 0.13 }[this.prefs().volume] || 0.07, st + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, st + 0.6);
         o.connect(g); g.connect(C.destination); o.start(st); o.stop(st + 0.65);
       });
     } catch (e) {}
   }
   maybeAsk() {
-    if (this.props.autoQuestions === false) return;
+    if (this.props.autoQuestions === false || !this.prefs().autoQuestions) return;
     const running = this.state.agents.filter(a => a.status === 'running');
     if (!running.length) return;
     const ag = running[Math.floor(Math.random() * running.length)];
@@ -897,7 +938,7 @@ class Component extends DCLogic {
   newAgent() {
     const s = this.state; const id = 'n' + s.nextId;
     const n = s.agents.filter(a => a.pid === s.activeProject).length + 1;
-    this.setState({ nextId: s.nextId + 1, agents: [...s.agents, { id, pid: s.activeProject, name: 'agent-' + n, model: 'Sonnet', status: 'idle', tokens: 0, files: 0, secs: 0, msgs: [] }], selected: { ...s.selected, [s.activeProject]: id } });
+    this.setState({ nextId: s.nextId + 1, agents: [...s.agents, { id, pid: s.activeProject, name: 'agent-' + n, model: this.prefs().model, effort: this.prefs().effort, status: 'idle', tokens: 0, files: 0, secs: 0, msgs: [] }], selected: { ...s.selected, [s.activeProject]: id } });
   }
   fTok(n) { return n >= 1e6 ? (n / 1e6).toFixed(2).replace('.', ',') + ' M' : n >= 1e3 ? (n / 1e3).toFixed(1).replace('.', ',') + ' k' : String(n); }
   fUsd(x) { return x.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' $'; }
@@ -1550,8 +1591,9 @@ resource "aws_iam_role_policy" "ci" {
     const t = { id: 'tk' + Date.now(), pid: pr.id, key: pre + '-' + num, title, criteria: (crit.length ? crit : ['Implémentation conforme au ticket', 'Tests verts']).map(c => ({ t: c, ok: false })), col: 'todo', aid: null, iter: 0, max: f.max || 5, progress: 0, tokens: 0, file: 'src/' + pre.toLowerCase() + '-' + num + '.ts' };
     this.setState({ tickets: [...s.tickets, t], kbForm: null });
   }
-  kbCfg(pid) { return { action: 'merge', target: 'main', strategy: 'squash', draft: false, testsFirst: true, cleanup: true, conv: true, conflict: 'ask', ...((this.state.kbCfg || {})[pid] || {}) }; }
-  setCfg(p) { this.setState(st => ({ kbCfg: { ...(st.kbCfg || {}), [st.activeProject]: { ...this.kbCfg(st.activeProject), ...p } } })); }
+  prefs(st) { st = st || this.state; return { exePath: '', autoResume: true, idleMin: '240', proxy: '', noProxy: 'localhost,127.0.0.1', proxyTerm: false, pwsh: '', gitbash: '', wsl: '', autoQuestions: true, badge: true, dock: true, notifOs: true, onQuestion: true, onDone: true, onQuota: true, sound: 'chime', volume: 'mid', model: 'Opus', effort: 'xhigh', perm: 'auto', maxAgents: 4, shell: 'bash', termCwd: 'worktree', termFont: 13, plan: 'max5', dayAlert: 20, quotaAlert: 80, ...(st.prefs || {}) }; }
+  kbCfg(pid) { return { action: 'merge', target: 'main', strategy: 'squash', draft: false, testsFirst: true, cleanup: true, conv: true, conflict: 'ask', maxLoops: 5, ...((this.state.kbCfg || {})[pid] || {}) }; }
+  setCfg(pid, p) { this.setState(st => ({ kbCfg: { ...(st.kbCfg || {}), [pid]: { ...this.kbCfg(pid), ...p } } })); }
   outcome(t, c) {
     const SL = { merge: 'merge commit', squash: 'squash', rebase: 'rebase' };
     if (c.action === 'merge') return '⤵ Mergé dans ' + c.target + ' · ' + SL[c.strategy] + (c.cleanup ? ' · worktree supprimé' : '');
@@ -1559,34 +1601,81 @@ resource "aws_iam_role_policy" "ci" {
     if (c.action === 'push') return '⇡ Poussé sur ticket/' + t.key.toLowerCase();
     return '◇ Laissé dans le worktree';
   }
-  settingsVals(pr) {
-    const s = this.state, c = this.kbCfg(s.activeProject), open = !!s.kbSettings;
-    const tg = (key, label, desc) => ({ label, desc, onClick: () => this.setCfg({ [key]: !c[key] }), bg: c[key] ? 'var(--ok)' : 'var(--elev2)', j: c[key] ? 'flex-end' : 'flex-start' });
-    const ring = on => on ? 'var(--accent)' : 'var(--line2)';
-    const chip = (on) => ({ bg: on ? 'var(--elev2)' : 'transparent', color: on ? 'var(--text)' : 'var(--muted)', bc: on ? 'var(--accent)' : 'var(--line2)' });
-    const branches = [...new Set(['main', 'develop', pr.branch])];
-    const SUM = { merge: 'merge ' + c.strategy + ' → ' + c.target, pr: 'PR → ' + c.target, push: 'push ticket/*', keep: 'laisser en l\'état' };
+  TABS = [['claude', 'Claude Code', '✳', 'Exécutable, modèle et permissions par défaut'], ['notif', 'Notifications', '♪', 'Alertes visuelles et sonores'], ['projects', 'Projets', '▤', 'Réglages propres à chaque projet'], ['board', 'Kanban', '▦', 'Pilote auto et tickets validés'], ['terminal', 'Terminaux', '$_', 'Shells disponibles dans les terminaux intégrés'], ['network', 'Réseau', '⇄', 'Proxy HTTP(S) pour Claude Code et les mises à jour'], ['quotas', 'Quotas & coûts', '◔', 'Plan, seuils et alertes'], ['about', 'À propos', 'ⓘ', 'Version et données locales']];
+  settingsVals() {
+    const s = this.state, P = this.prefs(), tab = this.TABS.some(t => t[0] === s.setTab) ? s.setTab : 'claude';
+    const spr = s.projects.find(x => x.id === (s.setPid || s.activeProject)) || s.projects[0], pid = spr.id, c = this.kbCfg(pid), ca = this.kbCfg(s.activeProject);
+    const chip = on => ({ bg: on ? 'var(--elev2)' : 'transparent', color: on ? 'var(--text)' : 'var(--muted)', bc: on ? 'var(--accent)' : 'var(--line2)' });
+    const setP = p => this.setState(st => ({ prefs: { ...this.prefs(st), ...p } }));
+    const upd = p => this.setState(st => ({ projects: st.projects.map(x => x.id === pid ? { ...x, ...p } : x) }));
+    const T = (label, desc, on, fn) => ({ isToggle: true, label, desc, on, fn });
+    const C = (label, desc, list, cur, fn) => ({ isChoice: true, label, desc, opts: list.map(([k, l]) => ({ label: l, onClick: () => fn(k), ...chip(cur === k) })) });
+    const I = (label, hint, k, ph, short, desc) => ({ isInput: true, label, hint, desc, value: P[k], ph, short, onChange: e => setP({ [k]: e.target.value }) });
+    const B = (label, desc, btn, fn, color) => ({ isButton: true, label, desc, btn, fn, btnColor: color || 'var(--text)' });
+    const tp = k => [P[k], () => setP({ [k]: !P[k] })], cp = k => [P[k], v => setP({ [k]: v })];
+    const tc = k => [c[k], () => this.setCfg(pid, { [k]: !c[k] })], cc = k => [c[k], v => this.setCfg(pid, { [k]: v })];
+    const auto = this.autoOn(pid), branches = [...new Set(['main', 'develop', spr.branch])];
+    const remove = () => { if (s.projects.length < 2) return; const rest = s.projects.filter(x => x.id !== pid); this.setState({ projects: rest, agents: s.agents.filter(a => a.pid !== pid), activeProject: s.activeProject === pid ? rest[0].id : s.activeProject, setPid: null }); };
+    const S = {
+      claude: [
+        { title: 'Exécutable', items: [I("Chemin de l'exécutable", 'vide = détection automatique', 'exePath', 'claude (trouvé dans le PATH)')] },
+        { title: 'Nouveaux agents', items: [C('Modèle par défaut', '', [['Fable', 'Fable 5.1'], ['Opus', 'Opus 5.5'], ['Sonnet', 'Sonnet 5.5'], ['Haiku', 'Haiku 4.5']], ...cp('model')), C('Effort par défaut', '', [['low', 'Bas'], ['med', 'Moyen'], ['high', 'Élevé'], ['xhigh', 'Très élevé'], ['max', 'Max']], ...cp('effort')), C('Mode de permission par défaut', '', [['auto', 'Auto'], ['ask', 'Demander'], ['plan', 'Plan'], ['edits', 'Édits auto'], ['bypass', 'Bypass']], ...cp('perm'))] },
+        { title: 'Processus', items: [T("Reprise automatique après la limite d'usage", '« continue » envoyé une fois le quota réinitialisé', ...tp('autoResume')), I('Arrêter les processus Claude inactifs après', 'minutes, 0 = jamais', 'idleMin', '0', true), C('Agents simultanés par projet', 'Au-delà, les tickets Kanban attendent un agent libre', [[2, '2'], [4, '4'], [8, '8']], ...cp('maxAgents'))] },
+        { title: 'Démo', items: [T('Simuler des questions des agents', 'Un agent en cours pose une question environ toutes les 30 s', ...tp('autoQuestions'))] }
+      ],
+      notif: [
+        { title: 'Me notifier quand', items: [T('Claude pose une question', "Badge pulsant sur l'onglet du projet et sur l'agent", ...tp('onQuestion')), T('Claude termine son tour', '', ...tp('onDone')), T("Un quota dépasse le seuil d'alerte", 'Seuils réglables dans Quotas & coûts', ...tp('onQuota'))] },
+        { title: 'Canaux', items: [T("Badges pulsants dans l'app", '', ...tp('badge')), T("Pastille sur l'icône de la barre des tâches", "Nombre d'agents en attente", ...tp('dock')), T("Notifications Windows quand l'app n'est pas au premier plan", '', ...tp('notifOs'))] },
+        { title: 'Son', items: [T('Son activé', 'Question de Claude, fin de tour', this.soundOn(), () => this.setState({ soundOn: !this.soundOn() })), C('Son', '', [['chime', 'Carillon'], ['bell', 'Cloche'], ['drop', 'Goutte']], ...cp('sound')), C('Volume', '', [['low', 'Bas'], ['mid', 'Moyen'], ['high', 'Fort']], ...cp('volume')), B('Tester le son', '', '▶ Tester', () => this.chime(true))] }
+      ],
+      projects: [
+        { title: 'Git', items: [C('Branche par défaut', 'Point de départ des worktrees des agents', branches.map(b => [b, b]), spr.base || spr.branch, v => upd({ base: v })), T('Un worktree par agent', 'Isole les modifications de chaque agent', spr.wt !== false, () => upd({ wt: spr.wt === false }))] },
+        { title: 'Zone sensible', items: [B('Retirer le projet', "Ferme l'onglet et arrête ses agents. Les fichiers ne sont pas supprimés.", 'Retirer', remove, 'var(--del)')] }
+      ],
+      board: [
+        { title: 'Avant et après', items: [T('Relancer les tests avant', "Bloque l'action si un test échoue et renvoie le ticket à l'agent", ...tc('testsFirst')), T('Supprimer le worktree après merge', "Libère l'espace disque", ...tc('cleanup')), T('Message de commit généré', c.conv ? 'feat(auth): limiter les tentatives de connexion [ATL-42]' : 'ATL-42 Limiter les tentatives de connexion', ...tc('conv')), C('En cas de conflit', '', [['ask', 'Me demander'], ['agent', "L'agent résout"], ['abort', 'Annuler']], ...cc('conflict'))] },
+        { title: 'Pilote auto', items: [T('Attribuer les tickets automatiquement', 'Un agent libre prend le prochain ticket « À faire »', auto, () => this.setState(st => ({ auto: { ...(st.auto || {}), [pid]: !auto } }))), C('Boucles max par défaut', 'Au-delà, le ticket passe « À tester » avec un objectif partiel', [[3, '3'], [5, '5'], [8, '8']], ...cc('maxLoops'))] }
+      ],
+      terminal: [
+        { title: 'Chemins', note: 'Détectés : PowerShell, Git Bash, WSL', items: [I('PowerShell 7', 'vide = auto', 'pwsh', ''), I('Git Bash', 'vide = auto', 'gitbash', ''), I('Distribution WSL', 'vide = distribution par défaut', 'wsl', 'Ubuntu')] },
+        { title: 'Nouveaux terminaux', items: [C('Shell par défaut', '', [['bash', 'Git Bash'], ['PowerShell', 'PowerShell'], ['wsl', 'WSL']], ...cp('shell')), C('Dossier de départ', '', [['root', 'Racine du projet'], ['worktree', "Worktree de l'agent"]], ...cp('termCwd')), C('Taille de police', '', [[12, '12'], [13, '13'], [14, '14']], ...cp('termFont'))] }
+      ],
+      network: [
+        { title: 'Proxy', note: "Le proxy est transmis aux processus Claude Code, à la lecture des quotas et aux mises à jour. Il s'applique aux agents au prochain (re)démarrage de leur processus.", items: [I('Proxy HTTP(S)', 'ex. http://utilisateur:motdepasse@proxy:3128', 'proxy', 'aucun'), I('Exclusions', 'NO_PROXY, séparées par des virgules', 'noProxy', ''), T('Appliquer aussi le proxy aux terminaux intégrés', '', ...tp('proxyTerm'))] }
+      ],
+      quotas: [
+        { title: 'Abonnement', items: [C('Plan Claude', 'Détermine les quotas affichés dans la barre de statut', [['pro', 'Pro'], ['max5', 'Max 5×'], ['max20', 'Max 20×']], ...cp('plan'))] },
+        { title: 'Alertes', items: [C('Coût journalier', 'Alerte quand le coût du jour dépasse', [[10, '10 $'], [20, '20 $'], [50, '50 $']], ...cp('dayAlert')), C('Quota de session', 'Alerte au-delà de', [[70, '70 %'], [80, '80 %'], [90, '90 %']], ...cp('quotaAlert'))] }
+      ],
+      about: [
+        { title: 'Escouade', items: [B('Escouade 1.3.0', 'Claude Code 2.1 détecté', 'Rechercher une mise à jour', () => {}), { label: 'Données locales', desc: '~/.escouade/' }] }
+      ]
+    };
+    const meta = this.TABS.find(t => t[0] === tab) || this.TABS[0];
+    const SUM = { merge: 'merge ' + ca.strategy + ' → ' + ca.target, pr: 'PR → ' + ca.target, push: 'push ticket/*', keep: "laisser en l'état" };
     return {
-      setOpen: open, openSettings: () => this.setState({ kbSettings: true }), closeSettings: () => this.setState({ kbSettings: false }),
-      cfgSummary: SUM[c.action],
-      approveLabel: { merge: 'Valider et merger', pr: 'Valider + PR', push: 'Valider et pousser', keep: 'Valider' }[c.action],
+      setOpen: !!s.kbSettings, closeSettings: () => this.setState({ kbSettings: false }),
+      openSettings: () => this.setState({ kbSettings: true, setTab: 'claude', setPid: null }),
+      openBoardSettings: () => this.setState({ kbSettings: true, setTab: 'board', setPid: s.activeProject }),
+      openProjSettings: () => this.setState({ kbSettings: true, setTab: 'projects', setPid: s.activeProject }),
+      setTabs: this.TABS.map(([k, l, ic]) => ({ label: l, icon: ic, onClick: () => this.setState({ setTab: k }), bg: tab === k ? 'var(--elev2)' : 'transparent', color: tab === k ? 'var(--text)' : 'var(--muted)', ic: tab === k ? 'var(--accent)' : 'var(--dim)' })),
+      setTitle: meta[1], setDesc: meta[3], setScoped: tab === 'projects' || tab === 'board', isProjTab: tab === 'projects', isBoardTab: tab === 'board',
+      setProjOpts: s.projects.map(p => ({ name: p.name, c: p.color, onClick: () => this.setState({ setPid: p.id }), ...chip(p.id === pid) })),
+      setSections: S[tab].map(sec => ({ title: sec.title, note: sec.note || '', hasNote: !!sec.note, items: sec.items.map((it, i) => ({ isInput: !!it.isInput, value: it.value, onChange: it.onChange, ph: it.ph, iw: it.short ? '110px' : '340px', hint: it.hint || '', isToggle: !!it.isToggle, isChoice: !!it.isChoice, isButton: !!it.isButton, label: it.label, desc: it.desc, hasDesc: !!it.desc, opts: it.opts || [], btn: it.btn, btnColor: it.btnColor, onClick: it.fn, sep: i ? 'var(--line)' : 'transparent', bg: it.on ? 'var(--ok)' : 'var(--elev2)', j: it.on ? 'flex-end' : 'flex-start' })) })),
+      spName: spr.name, onSpName: e => upd({ name: e.target.value }), spPath: spr.path,
+      spColorOpts: this.PCOLORS.map(col => ({ c: col, onClick: () => upd({ color: col }), ring: spr.color === col ? '0 0 0 2px var(--bg), 0 0 0 4px var(--text)' : 'none' })),
+      cfgSummary: SUM[ca.action],
+      approveLabel: { merge: 'Valider et merger', pr: 'Valider + PR', push: 'Valider et pousser', keep: 'Valider' }[ca.action],
       actionOpts: [
         ['merge', 'Merger dans une branche', "Fusionne le worktree de l'agent dans la branche cible, puis libère l'agent."],
         ['pr', 'Ouvrir une pull request', 'Pousse ticket/<clé> et ouvre une PR vers la branche cible pour relecture.'],
         ['push', 'Pousser la branche du ticket', 'Commit et push sur ticket/<clé>, sans merge ni PR.'],
         ['keep', "Laisser en l'état", 'Les modifications restent non commitées dans le worktree.']
-      ].map(([k, l, d]) => ({ label: l, desc: d, onClick: () => this.setCfg({ action: k }), bc: ring(c.action === k), bg: c.action === k ? 'var(--elev)' : 'transparent', dot: c.action === k ? 'var(--accent)' : 'transparent' })),
+      ].map(([k, l, d]) => ({ label: l, desc: d, onClick: () => this.setCfg(pid, { action: k }), bc: c.action === k ? 'var(--accent)' : 'var(--line2)', bg: c.action === k ? 'var(--elev)' : 'transparent', dot: c.action === k ? 'var(--accent)' : 'transparent' })),
       showTarget: c.action === 'merge' || c.action === 'pr', showStrategy: c.action === 'merge', showDraft: c.action === 'pr',
-      branchOpts: branches.map(b => ({ label: b, onClick: () => this.setCfg({ target: b }), ...chip(c.target === b) })),
-      strategyOpts: [['merge', 'Merge commit'], ['squash', 'Squash'], ['rebase', 'Rebase']].map(([k, l]) => ({ label: l, onClick: () => this.setCfg({ strategy: k }), ...chip(c.strategy === k) })),
-      draftToggle: tg('draft', 'Ouvrir en brouillon', ''),
-      cfgToggles: [
-        tg('testsFirst', 'Relancer les tests avant', "Bloque l'action si un test échoue et renvoie le ticket à l'agent."),
-        tg('cleanup', 'Supprimer le worktree après merge', "Libère l'espace disque et repart d'une branche propre."),
-        tg('conv', 'Message de commit généré', 'Format Conventional Commits, avec la clé du ticket.')
-      ],
-      conflictOpts: [['ask', 'Me demander'], ['agent', "L'agent résout"], ['abort', 'Annuler']].map(([k, l]) => ({ label: l, onClick: () => this.setCfg({ conflict: k }), ...chip(c.conflict === k) })),
-      commitPreview: c.conv ? 'feat(auth): limiter les tentatives de connexion [ATL-42]' : 'ATL-42 Limiter les tentatives de connexion'
+      branchOpts: branches.map(b => ({ label: b, onClick: () => this.setCfg(pid, { target: b }), ...chip(c.target === b) })),
+      strategyOpts: [['merge', 'Merge commit'], ['squash', 'Squash'], ['rebase', 'Rebase']].map(([k, l]) => ({ label: l, onClick: () => this.setCfg(pid, { strategy: k }), ...chip(c.strategy === k) })),
+      draftToggle: { label: 'PR en brouillon', onClick: () => this.setCfg(pid, { draft: !c.draft }), bg: c.draft ? 'var(--ok)' : 'var(--elev2)', j: c.draft ? 'flex-end' : 'flex-start' }
     };
   }
   kanbanVals(pr) {
@@ -1595,7 +1684,7 @@ resource "aws_iam_role_policy" "ci" {
     const reviewN = tk.filter(t => t.col === 'review').length;
     const doingFor = aid => tk.find(t => t.col === 'doing' && t.aid === aid);
     const out = {
-      viewOpts: [['agents', 'Agents'], ['kanban', 'Tableau']].map(([k, l]) => { const act = (k === 'kanban') === on; return { label: l, badge: reviewN, hasBadge: k === 'kanban' && reviewN > 0, bg: act ? 'var(--elev2)' : 'transparent', color: act ? 'var(--text)' : 'var(--muted)', onClick: () => this.setState({ kb: { ...(s.kb || {}), [pid]: k === 'kanban' }, srcMenu: false }) }; }),
+      viewOpts: [['agents', 'Agents'], ['kanban', 'Kanban']].map(([k, l]) => { const act = (k === 'kanban') === on; return { label: l, badge: reviewN, hasBadge: k === 'kanban' && reviewN > 0, bg: act ? 'var(--elev2)' : 'transparent', color: act ? 'var(--text)' : 'var(--muted)', onClick: () => this.setState({ kb: { ...(s.kb || {}), [pid]: k === 'kanban' }, srcMenu: false }) }; }),
       agentTickets: {}, kbOn: on
     };
     s.agents.filter(a => a.pid === pid).forEach(a => { const t = doingFor(a.id); if (t) out.agentTickets[a.id] = t.key + ' · boucle ' + t.iter + '/' + t.max; });
@@ -1638,7 +1727,7 @@ resource "aws_iam_role_policy" "ci" {
         const cards = tk.filter(t => t.col === k).map(t => card(t, k));
         return { label: l, color: c, count: cards.length, cards, isTodo: k === 'todo', empty: !cards.length && !(k === 'todo' && f),
           emptyText: { todo: 'Ajoute un ticket : un agent libre le prendra.', doing: 'Aucun agent en boucle', review: 'Rien à tester', done: 'Aucun ticket terminé' }[k],
-          openForm: () => this.setState({ kbForm: { title: '', crit: '', max: 5 } }),
+          openForm: () => this.setState({ kbForm: { title: '', crit: '', max: this.kbCfg(pid).maxLoops } }),
           showForm: k === 'todo' && !!f,
           form: { title: f ? f.title : '', crit: f ? f.crit : '', onTitle: e => setF({ title: e.target.value }), onCrit: e => setF({ crit: e.target.value }),
             maxOpts: [3, 5, 8].map(n => ({ label: String(n), onClick: () => setF({ max: n }), bg: f && f.max === n ? 'var(--elev2)' : 'transparent', color: f && f.max === n ? 'var(--text)' : 'var(--muted)' })),
@@ -1703,10 +1792,10 @@ resource "aws_iam_role_policy" "ci" {
       placeholder: pending ? 'Réponds à la question ou écris une réponse libre…' : (ag && ag.msgs.length ? 'Envoyer un message à ' + ag.name + '…' : 'Décris la tâche à confier à Claude…'),
       modelOpts: ['Opus', 'Sonnet', 'Haiku'].map(m => ({ label: m, onClick: () => ag && this.setState(st => ({ agents: st.agents.map(a => a.id === ag.id ? { ...a, model: m } : a) })), bg: ag && ag.model === m ? 'var(--elev2)' : 'transparent', color: ag && ag.model === m ? 'var(--text)' : 'var(--muted)' })),
       effortOpts: [['low', 'Bas', 'Réponses rapides, peu de réflexion'], ['med', 'Moyen', 'Équilibré'], ['high', 'Élevé', 'Réflexion approfondie'], ['max', 'Max', 'Réflexion maximale, plus de tokens']].map(([k, l, t]) => { const cur = (ag && ag.effort) || 'med'; return { label: l, title: t, onClick: () => ag && this.setState(st => ({ agents: st.agents.map(a => a.id === ag.id ? { ...a, effort: k } : a) })), bg: cur === k ? 'var(--accent)' : 'transparent', color: cur === k ? 'var(--accent-ink)' : 'var(--muted)' }; }),
-      ...this.filesVals(ag, list), ...this.modalVals(), ...this.termVals(pr), ...this.editorVals(pr), ...this.kanbanVals(pr), ...this.settingsVals(pr),
+      ...this.filesVals(ag, list), ...this.modalVals(), ...this.termVals(pr), ...this.editorVals(pr), ...this.kanbanVals(pr), ...this.settingsVals(),
       composerBorder: pending ? 'var(--wait)' : 'var(--line2)',
       runCount: all.filter(a => a.status === 'running').length, doneCount: all.filter(a => a.status === 'done').length, waitCount: waitN, waitColor: waitN ? 'var(--wait)' : 'var(--muted)', waitDot: waitN ? this.pulse(7) : this.dot('var(--dim)', 7),
-      sessW: sess + '%', sessPct: Math.round(sess) + ' %', sessColor: sess > 80 ? 'var(--wait)' : 'var(--accent)', sessReset: Math.floor(rs / 3600) + 'h' + String(Math.floor(rs % 3600 / 60)).padStart(2, '0'),
+      sessW: sess + '%', sessPct: Math.round(sess) + ' %', sessColor: sess > this.prefs().quotaAlert ? 'var(--wait)' : 'var(--accent)', sessReset: Math.floor(rs / 3600) + 'h' + String(Math.floor(rs % 3600 / 60)).padStart(2, '0'),
       weekW: week + '%', weekPct: Math.round(week) + ' %',
       todayCost: this.fUsd(4.12 + all.reduce((x, a) => x + this.cost(a), 0)),
       soundLabel: this.soundOn() ? '♪ On' : '♪ Off',

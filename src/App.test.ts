@@ -71,8 +71,31 @@ describe('App layout', () => {
     expect(await screen.findByRole('main')).toBeInTheDocument();
     app.openBoard('p1');
     await userEvent.click(await screen.findByRole('button', { name: /Après validation/ }));
-    expect(await screen.findByRole('dialog', { name: 'Réglages du tableau' })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: 'Réglages' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Kanban' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('radio', { name: /Merger dans une branche/ })).toBeInTheDocument();
+  });
+
+  it('comes back to the settings, unsaved changes kept, from closing a project there', async () => {
+    start('');
+    expect(await screen.findByRole('main')).toBeInTheDocument();
+    app.modal = { kind: 'settings' };
+    await userEvent.click(await screen.findByRole('tab', { name: 'Réseau' }));
+    await userEvent.type(screen.getByPlaceholderText('aucun'), 'http://proxy:3128');
+    await userEvent.click(screen.getByRole('tab', { name: 'Projets' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Fermer le projet…' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Annuler' }));
+    expect(await screen.findByRole('tab', { name: 'Projets' })).toHaveAttribute('aria-selected', 'true');
+    await userEvent.click(screen.getByRole('tab', { name: 'Réseau' }));
+    expect(screen.getByPlaceholderText('aucun')).toHaveValue('http://proxy:3128');
+    // Closed for good: still the settings, still the draft.
+    await userEvent.click(screen.getByRole('tab', { name: 'Projets' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Fermer le projet…' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Fermer le projet' }));
+    expect(await screen.findByText('Aucun projet ouvert.')).toBeInTheDocument();
+    expect(app.projects).toEqual([]);
+    await userEvent.click(screen.getByRole('tab', { name: 'Réseau' }));
+    expect(screen.getByPlaceholderText('aucun')).toHaveValue('http://proxy:3128');
   });
 
   it('counts an agent as seen once the board that hid it is closed', async () => {

@@ -33,7 +33,7 @@
 <main class="board">
   <header class="head">
     <div class="who">
-      <span class="t">Tableau</span>
+      <span class="t">Kanban</span>
       <span class="sub mono" title={sub}>{sub}</span>
     </div>
     <div style="flex:1"></div>
@@ -49,8 +49,8 @@
     <!-- Its tooltip holds the summary in full: the summary is cut in a narrow window. -->
     <button
       class="cfg"
-      title={`Réglages du tableau — ${summary}`}
-      onclick={() => (app.modal = { kind: 'boardSettings', projectId: project.id })}
+      title={`Réglages du Kanban — ${summary}`}
+      onclick={() => (app.modal = { kind: 'settings', tab: 'board', projectId: project.id })}
     >
       <span class="gear">⚙</span><span class="k">Après validation :</span><span class="v mono">{summary}</span>
     </button>

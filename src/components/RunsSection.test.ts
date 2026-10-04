@@ -77,14 +77,14 @@ describe('RunsSection', () => {
     render(RunsSection, { project: project() });
     expect(screen.queryByRole('button', { name: 'Tout lancer' })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Configurer' }));
-    expect(app.modal).toEqual({ kind: 'runConfig', projectId: 'p1' });
+    expect(app.modal).toEqual({ kind: 'settings', tab: 'projects', projectId: 'p1', section: 'launch' });
   });
 
   it('edits the commands from the section header', async () => {
     fakeBackend();
     render(RunsSection, { project: P });
     await userEvent.click(screen.getByRole('button', { name: 'Commandes de lancement…' }));
-    expect(app.modal).toEqual({ kind: 'runConfig', projectId: 'p1' });
+    expect(app.modal).toEqual({ kind: 'settings', tab: 'projects', projectId: 'p1', section: 'launch' });
   });
 
   const recipe = (over: Partial<TestRecipe> = {}): TestRecipe => ({

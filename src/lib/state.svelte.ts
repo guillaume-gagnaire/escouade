@@ -9,6 +9,7 @@ import { trees } from './editor/trees.svelte';
 import { basename, isAbsPath, plural, relPath } from './format';
 import { readPref, writePref } from './prefs';
 import { testCommand } from './recipe';
+import type { SettingsTab } from './settings.svelte';
 import { applyTheme } from './theme';
 import type {
   Agent,
@@ -30,7 +31,11 @@ import type {
 
 export type Modal =
   | { kind: 'newProject' }
-  | { kind: 'settings' }
+  /**
+   * On a tab (Claude Code by default) and, for a project's tabs, a project (the one on screen by default),
+   * scrolled to a section of it; `resume`: with the draft it had, back from a modal it opened.
+   */
+  | { kind: 'settings'; tab?: SettingsTab; projectId?: string; section?: 'launch'; resume?: boolean }
   | { kind: 'diff'; projectId: string; agentId: string | null; paths: string[]; title: string; commit?: string }
   | {
       kind: 'confirm';
@@ -42,10 +47,10 @@ export type Modal =
       /** A third choice, between cancelling and confirming. */
       alt?: { label: string; onClick: () => void | Promise<void> };
       onConfirm: (option: boolean) => void | Promise<void>;
+      /** Where cancelling goes back to (no modal by default). */
+      onCancel?: () => void;
     }
   | { kind: 'rename'; title: string; value: string; onSubmit: (v: string) => void | Promise<void> }
-  | { kind: 'runConfig'; projectId: string }
-  | { kind: 'boardSettings'; projectId: string }
   | { kind: 'testLaunch'; agentId: string };
 
 export interface Toast {
@@ -461,7 +466,7 @@ class AppState {
     return Object.values(this.tickets).some((t) => t.agentId === agentId && t.column === 'doing');
   }
 
-  /** Tickets "À tester" of a project (the badge of "Tableau"). */
+  /** Tickets "À tester" of a project (the badge of "Kanban"). */
   reviewCount(projectId: string): number {
     return Object.values(this.tickets).filter((t) => t.projectId === projectId && t.column === 'review').length;
   }

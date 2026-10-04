@@ -20,7 +20,7 @@ Escouade est le poste de pilotage de ces agents : toutes les sessions Claude Cod
 
 ## Positioning
 
-Une fenêtre qui pilote une escouade d'agents Claude Code : un onglet par projet, autant d'agents que nécessaire, un worktree git par agent, un vrai chat au lieu d'un terminal, un signal dès qu'un agent attend, quotas et coût en direct, et un tableau de tickets que des agents prennent seuls et sur lesquels ils bouclent jusqu'à atteindre leurs critères d'acceptation. Gratuit, local et open source (MIT), par-dessus le Claude Code de l'utilisateur.
+Une fenêtre qui pilote une escouade d'agents Claude Code : un onglet par projet, autant d'agents que nécessaire, un worktree git par agent, un vrai chat au lieu d'un terminal, un signal dès qu'un agent attend, quotas et coût en direct, et un Kanban de tickets que des agents prennent seuls et sur lesquels ils bouclent jusqu'à atteindre leurs critères d'acceptation. Gratuit, local et open source (MIT), par-dessus le Claude Code de l'utilisateur.
 
 ## Operating Context
 
@@ -38,7 +38,7 @@ Une fenêtre qui pilote une escouade d'agents Claude Code : un onglet par projet
 - Éditeur intégré et vrais terminaux (PowerShell, Git Bash, WSL ; zsh, bash, fish).
 - Commandes de lancement du projet, et lancements de test sur des ports réservés pour les agents de ticket.
 - Barre de statut et statistiques : tokens et coût en direct, quotas de session de 5 h et hebdomadaire.
-- Tableau (1.3) : des tickets avec critères d'acceptation, pris par des agents dans leur propre worktree, qui bouclent jusqu'à les atteindre puis passent « À tester » ; validation par merge, pull request ou push.
+- Kanban (1.3) : des tickets avec critères d'acceptation, pris par des agents dans leur propre worktree, qui bouclent jusqu'à les atteindre puis passent « À tester » ; validation par merge, pull request ou push.
 - Remote control depuis claude.ai et l'app Claude sur mobile.
 - Pas encore de Linux. Pas encore signé avec un certificat Apple Developer ID (le premier lancement sous macOS passe par « Ouvrir »).
 

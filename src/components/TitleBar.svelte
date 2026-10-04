@@ -1,12 +1,10 @@
 <script lang="ts">
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { openPath } from '@tauri-apps/plugin-opener';
-  import { buffers, lossNotice } from '../lib/editor/buffers.svelte';
   import { api } from '../lib/ipc';
   import { menu } from '../lib/menu.svelte';
+  import { askCloseProject } from '../lib/project-actions';
   import { app } from '../lib/state.svelte';
-  import { expectStops, forgetLaunches, testLaunchIds } from '../lib/launch-actions';
-  import { closeTerminal } from '../lib/term-actions';
   import { IS_MAC } from '../lib/platform';
   import { PROJECT_COLORS } from '../lib/theme';
   import type { Project } from '../lib/types';
@@ -68,39 +66,14 @@
         onClick: () => save({ ...p, worktreePerAgent: !p.worktreePerAgent }),
       },
       {
-        label: 'Commandes de lancement…',
+        label: 'Réglages du projet…',
         onClick: () => {
-          app.modal = { kind: 'runConfig', projectId: p.id };
+          app.modal = { kind: 'settings', tab: 'projects', projectId: p.id };
         },
       },
       { label: 'Ouvrir le dossier', onClick: () => openPath(p.path).catch((err) => app.toast(String(err), 'error')) },
       { label: '', separator: true },
-      {
-        label: 'Fermer le projet…',
-        danger: true,
-        onClick: () => {
-          app.modal = {
-            kind: 'confirm',
-            title: `Fermer « ${p.name} » ?`,
-            body:
-              "Le projet et ses agents sont retirés de l'application (conversations comprises). Les fichiers et les worktrees sur le disque ne sont pas touchés." +
-              lossNotice(buffers.unsavedIn(p.id)),
-            confirm: 'Fermer le projet',
-            danger: true,
-            onConfirm: async () => {
-              // The backend kills its launch commands and its agents' test launches: not crashes.
-              const runs = [...p.runCommands.map((c) => c.id), ...testLaunchIds(p.id)];
-              const undo = expectStops(runs);
-              // Only forget the project once the backend removed it.
-              const removed = await app.run(api.removeProject(p.id).then(() => true));
-              if (!removed) return undo();
-              forgetLaunches(runs);
-              for (const t of app.terminals.filter((x) => x.projectId === p.id)) closeTerminal(t.id);
-              app.forgetProject(p.id);
-            },
-          };
-        },
-      },
+      { label: 'Fermer le projet…', danger: true, onClick: () => askCloseProject(p) },
     ]);
   }
 

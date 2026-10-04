@@ -159,12 +159,12 @@ describe('TitleBar', () => {
     expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p2', color: PROJECT_COLORS[3] });
   });
 
-  it('opens the launch commands of a project from its tab menu', async () => {
+  it('opens the settings of a project, its launch commands with them, from its tab menu', async () => {
     fakeBackend();
     render(TitleBar);
     await fireEvent.contextMenu(screen.getByRole('button', { name: /studio-web/ }));
-    menu.open!.items.find((i) => i.label === 'Commandes de lancement…')!.onClick!();
-    expect(app.modal).toEqual({ kind: 'runConfig', projectId: 'p2' });
+    menu.open!.items.find((i) => i.label === 'Réglages du projet…')!.onClick!();
+    expect(app.modal).toEqual({ kind: 'settings', tab: 'projects', projectId: 'p2' });
   });
 
   it('keeps the project when the backend could not remove it', async () => {
