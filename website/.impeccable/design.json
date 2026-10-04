@@ -1,0 +1,481 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-04T08:17:36Z",
+  "title": "Design System: Escouade, site de présentation",
+  "extensions": {
+    "colorMeta": {
+      "brand": {
+        "role": "primary",
+        "displayName": "Teal Escouade",
+        "canonical": "#35c1bd",
+        "tonalRamp": [
+          "oklch(15% 0.115 192)",
+          "oklch(26% 0.115 192)",
+          "oklch(38% 0.115 192)",
+          "oklch(50% 0.115 192)",
+          "oklch(62% 0.115 192)",
+          "oklch(74% 0.115 192)",
+          "oklch(85% 0.115 192)",
+          "oklch(95% 0.115 192)"
+        ]
+      },
+      "bg": {
+        "role": "neutral",
+        "displayName": "Brun nuit",
+        "canonical": "#1b1917",
+        "tonalRamp": [
+          "oklch(15% 0.005 68)",
+          "oklch(26% 0.005 68)",
+          "oklch(38% 0.005 68)",
+          "oklch(50% 0.005 68)",
+          "oklch(62% 0.005 68)",
+          "oklch(74% 0.005 68)",
+          "oklch(85% 0.005 68)",
+          "oklch(95% 0.005 68)"
+        ]
+      },
+      "panel": {
+        "role": "neutral",
+        "displayName": "Panneau",
+        "canonical": "#211f1c",
+        "tonalRamp": [
+          "oklch(15% 0.006 78)",
+          "oklch(26% 0.006 78)",
+          "oklch(38% 0.006 78)",
+          "oklch(50% 0.006 78)",
+          "oklch(62% 0.006 78)",
+          "oklch(74% 0.006 78)",
+          "oklch(85% 0.006 78)",
+          "oklch(95% 0.006 78)"
+        ]
+      },
+      "elev": {
+        "role": "neutral",
+        "displayName": "Relief",
+        "canonical": "#2a2724",
+        "tonalRamp": [
+          "oklch(15% 0.007 68)",
+          "oklch(26% 0.007 68)",
+          "oklch(38% 0.007 68)",
+          "oklch(50% 0.007 68)",
+          "oklch(62% 0.007 68)",
+          "oklch(74% 0.007 68)",
+          "oklch(85% 0.007 68)",
+          "oklch(95% 0.007 68)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Filet crème",
+        "canonical": "rgba(255, 236, 214, 0.08)",
+        "tonalRamp": [
+          "oklch(15% 0.036 71)",
+          "oklch(26% 0.036 71)",
+          "oklch(38% 0.036 71)",
+          "oklch(50% 0.036 71)",
+          "oklch(62% 0.036 71)",
+          "oklch(74% 0.036 71)",
+          "oklch(85% 0.036 71)",
+          "oklch(95% 0.036 71)"
+        ]
+      },
+      "line2": {
+        "role": "neutral",
+        "displayName": "Filet crème appuyé",
+        "canonical": "rgba(255, 236, 214, 0.15)",
+        "tonalRamp": [
+          "oklch(15% 0.036 71)",
+          "oklch(26% 0.036 71)",
+          "oklch(38% 0.036 71)",
+          "oklch(50% 0.036 71)",
+          "oklch(62% 0.036 71)",
+          "oklch(74% 0.036 71)",
+          "oklch(85% 0.036 71)",
+          "oklch(95% 0.036 71)"
+        ]
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Crème",
+        "canonical": "#ede7df",
+        "tonalRamp": [
+          "oklch(15% 0.013 75)",
+          "oklch(26% 0.013 75)",
+          "oklch(38% 0.013 75)",
+          "oklch(50% 0.013 75)",
+          "oklch(62% 0.013 75)",
+          "oklch(74% 0.013 75)",
+          "oklch(85% 0.013 75)",
+          "oklch(95% 0.013 75)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Sable",
+        "canonical": "#a8a095",
+        "tonalRamp": [
+          "oklch(15% 0.018 76)",
+          "oklch(26% 0.018 76)",
+          "oklch(38% 0.018 76)",
+          "oklch(50% 0.018 76)",
+          "oklch(62% 0.018 76)",
+          "oklch(74% 0.018 76)",
+          "oklch(85% 0.018 76)",
+          "oklch(95% 0.018 76)"
+        ]
+      },
+      "dim": {
+        "role": "neutral",
+        "displayName": "Taupe",
+        "canonical": "#8a8276",
+        "tonalRamp": [
+          "oklch(15% 0.02 78)",
+          "oklch(26% 0.02 78)",
+          "oklch(38% 0.02 78)",
+          "oklch(50% 0.02 78)",
+          "oklch(62% 0.02 78)",
+          "oklch(74% 0.02 78)",
+          "oklch(85% 0.02 78)",
+          "oklch(95% 0.02 78)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Encre",
+        "canonical": "#1b1512",
+        "tonalRamp": [
+          "oklch(15% 0.011 48)",
+          "oklch(26% 0.011 48)",
+          "oklch(38% 0.011 48)",
+          "oklch(50% 0.011 48)",
+          "oklch(62% 0.011 48)",
+          "oklch(74% 0.011 48)",
+          "oklch(85% 0.011 48)",
+          "oklch(95% 0.011 48)"
+        ]
+      },
+      "ok": {
+        "role": "secondary",
+        "displayName": "Vert de marche",
+        "canonical": "oklch(0.76 0.12 150)",
+        "tonalRamp": [
+          "oklch(15% 0.12 150)",
+          "oklch(26% 0.12 150)",
+          "oklch(38% 0.12 150)",
+          "oklch(50% 0.12 150)",
+          "oklch(62% 0.12 150)",
+          "oklch(74% 0.12 150)",
+          "oklch(85% 0.12 150)",
+          "oklch(95% 0.12 150)"
+        ]
+      },
+      "wait": {
+        "role": "secondary",
+        "displayName": "Ambre d'attente",
+        "canonical": "oklch(0.82 0.13 80)",
+        "tonalRamp": [
+          "oklch(15% 0.13 80)",
+          "oklch(26% 0.13 80)",
+          "oklch(38% 0.13 80)",
+          "oklch(50% 0.13 80)",
+          "oklch(62% 0.13 80)",
+          "oklch(74% 0.13 80)",
+          "oklch(85% 0.13 80)",
+          "oklch(95% 0.13 80)"
+        ]
+      },
+      "wait-soft": {
+        "role": "secondary",
+        "displayName": "Voile ambre",
+        "canonical": "oklch(0.82 0.13 80 / 0.08)",
+        "tonalRamp": [
+          "oklch(15% 0.13 80)",
+          "oklch(26% 0.13 80)",
+          "oklch(38% 0.13 80)",
+          "oklch(50% 0.13 80)",
+          "oklch(62% 0.13 80)",
+          "oklch(74% 0.13 80)",
+          "oklch(85% 0.13 80)",
+          "oklch(95% 0.13 80)"
+        ]
+      },
+      "wait-ring": {
+        "role": "secondary",
+        "displayName": "Anneau ambre",
+        "canonical": "oklch(0.82 0.13 80 / 0.6)",
+        "tonalRamp": [
+          "oklch(15% 0.13 80)",
+          "oklch(26% 0.13 80)",
+          "oklch(38% 0.13 80)",
+          "oklch(50% 0.13 80)",
+          "oklch(62% 0.13 80)",
+          "oklch(74% 0.13 80)",
+          "oklch(85% 0.13 80)",
+          "oklch(95% 0.13 80)"
+        ]
+      },
+      "add": {
+        "role": "secondary",
+        "displayName": "Vert de diff",
+        "canonical": "oklch(0.76 0.12 150)",
+        "tonalRamp": [
+          "oklch(15% 0.12 150)",
+          "oklch(26% 0.12 150)",
+          "oklch(38% 0.12 150)",
+          "oklch(50% 0.12 150)",
+          "oklch(62% 0.12 150)",
+          "oklch(74% 0.12 150)",
+          "oklch(85% 0.12 150)",
+          "oklch(95% 0.12 150)"
+        ]
+      },
+      "del": {
+        "role": "secondary",
+        "displayName": "Rouge de diff",
+        "canonical": "oklch(0.72 0.14 25)",
+        "tonalRamp": [
+          "oklch(15% 0.14 25)",
+          "oklch(26% 0.14 25)",
+          "oklch(38% 0.14 25)",
+          "oklch(50% 0.14 25)",
+          "oklch(62% 0.14 25)",
+          "oklch(74% 0.14 25)",
+          "oklch(85% 0.14 25)",
+          "oklch(95% 0.14 25)"
+        ]
+      },
+      "accent": {
+        "role": "tertiary",
+        "displayName": "Orange chaud de l'app",
+        "canonical": "oklch(0.72 0.12 48)",
+        "tonalRamp": [
+          "oklch(15% 0.12 48)",
+          "oklch(26% 0.12 48)",
+          "oklch(38% 0.12 48)",
+          "oklch(50% 0.12 48)",
+          "oklch(62% 0.12 48)",
+          "oklch(74% 0.12 48)",
+          "oklch(85% 0.12 48)",
+          "oklch(95% 0.12 48)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Le titre du hero seul, en deux phrases, la seconde en teal." },
+      "headline": { "displayName": "Headline", "purpose": "Titres de section." },
+      "title": { "displayName": "Title", "purpose": "Titre d'une rangée de fonctionnalité." },
+      "title-sm": { "displayName": "Title small", "purpose": "Titres de carte et d'étape (20px), questions de FAQ." },
+      "lead": {
+        "displayName": "Lead",
+        "purpose": "Paragraphe sous un titre de section, en sable, 680px au plus ; clamp(17px, 1.35vw, 19px) dans le hero."
+      },
+      "body": { "displayName": "Body", "purpose": "Texte courant." },
+      "body-sm": { "displayName": "Body small", "purpose": "Textes de carte et d'étape, listes à puces." },
+      "label": { "displayName": "Label", "purpose": "Navigation, lien GitHub de l'en-tête, liens d'étape." },
+      "button": { "displayName": "Button", "purpose": "Libellés des boutons." },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Données seulement : ligne de version ; dans la démo, modèle, durée, tokens, coût, chemins, branche, clés de ticket à 0,86em."
+      },
+      "caption": { "displayName": "Caption", "purpose": "Légende de la démo ; 14px pour la mention du pied." }
+    },
+    "shadows": [
+      { "name": "capture", "value": "0 24px 70px rgba(0, 0, 0, 0.5)", "purpose": "Captures d'écran des rangées de fonctionnalités." },
+      { "name": "video", "value": "0 40px 120px rgba(0, 0, 0, 0.55)", "purpose": "Le lecteur vidéo, le plus grand objet de la page." },
+      {
+        "name": "window",
+        "value": "inset 0 0 0 1.5px var(--edge), 0 2.4cqw 7cqw -2cqw rgb(0 0 0 / 0.6)",
+        "purpose": "Chaque fenêtre de l'objet-logo : contour intérieur teal (35, 60 ou 100 %) et ombre qui suit la taille du conteneur."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out-expo",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Tout mouvement d'entrée : déploiement du logo, montée des cartes, coche d'un critère, barre de progression, changement d'activité."
+      },
+      {
+        "name": "hover",
+        "value": "0.15s",
+        "purpose": "Survol : bordure, couleur, montée de 1px du bouton principal, fond des boutons de réponse."
+      },
+      {
+        "name": "status-change",
+        "value": "0.3s",
+        "purpose": "Couleurs d'un agent qui change de statut (point, état, fond et contour de la carte)."
+      },
+      {
+        "name": "logo-unfold",
+        "value": "1.3s cubic-bezier(0.16, 1, 0.3, 1) 0.45s both",
+        "purpose": "Une fois, au chargement : la pile grandit de 0,15 à 1, coins et traits passent de ceux du logo à ceux d'une fenêtre, l'étincelle file dans son coin."
+      },
+      {
+        "name": "window-content-appear",
+        "value": "0.5s ease-out 1.2s both",
+        "purpose": "Le contenu des fenêtres et la légende apparaissent à la fin du déploiement."
+      },
+      {
+        "name": "agent-rise",
+        "value": "0.6s cubic-bezier(0.16, 1, 0.3, 1) calc(1.25s + var(--i) * 70ms) both",
+        "purpose": "Les cartes d'agents montent de 1,2em l'une après l'autre."
+      },
+      {
+        "name": "activity-swap",
+        "value": "0.18s",
+        "purpose": "Une activité d'agent remplace l'autre en fondu, l'entrante montant de 0,35em."
+      },
+      {
+        "name": "criterion-check",
+        "value": "0.45s cubic-bezier(0.16, 1, 0.3, 1) 0.1s",
+        "purpose": "La coche d'un critère atteint se trace."
+      },
+      {
+        "name": "progress-fill",
+        "value": "0.6s cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Le rail de progression d'un ticket se remplit."
+      },
+      {
+        "name": "wait-blink",
+        "value": "1.4s ease-in-out infinite",
+        "purpose": "L'ambre d'attente clignote (pastilles, points) et le point de la carte pulse ; arrêté en pause."
+      },
+      {
+        "name": "simulation-beat",
+        "value": "1200ms",
+        "purpose": "Un battement de la simulation des agents, avancée tous les 250ms, arrêtée hors écran, onglet caché, en pause ou focus sur une réponse à la question."
+      }
+    ],
+    "breakpoints": [
+      { "name": "hero-stack", "value": "960px" },
+      { "name": "columns", "value": "900px" },
+      { "name": "nav", "value": "720px" },
+      { "name": "window-narrow (conteneur)", "value": "570px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Bouton principal",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "L'action principale, une seule par vue : télécharger l'app.",
+      "html": "<a class='ds-btn-primary' href='#'>Télécharger pour Windows et macOS</a>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; height: 48px; padding: 0 22px; border-radius: 10px; border: 1px solid var(--brand); background: var(--brand); color: var(--ink); font-family: var(--ui); font-size: 16px; font-weight: 700; text-decoration: none; transition: border-color 0.15s, transform 0.15s; } .ds-btn-primary:hover { transform: translateY(-1px); } .ds-btn-primary:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }"
+    },
+    {
+      "name": "Bouton secondaire",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "L'action d'à côté, en relief ; sa bordure passe au teal au survol.",
+      "html": "<a class='ds-btn-secondary' href='#'>Voir sur GitHub</a>",
+      "css": ".ds-btn-secondary { display: inline-flex; align-items: center; height: 48px; padding: 0 22px; border-radius: 10px; border: 1px solid var(--line2); background: var(--elev); color: var(--text); font-family: var(--ui); font-size: 16px; font-weight: 700; text-decoration: none; transition: border-color 0.15s, transform 0.15s; } .ds-btn-secondary:hover { border-color: var(--brand); } .ds-btn-secondary:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }"
+    },
+    {
+      "name": "En-tête",
+      "kind": "nav",
+      "refersTo": "nav-link",
+      "description": "En-tête collant translucide : la marque, les sections, GitHub en bouton fantôme.",
+      "html": "<header class='ds-header'><a class='ds-brand' href='#'><svg width='28' height='28' viewBox='0 0 100 100' aria-hidden='true'><rect x='26' y='8' width='66' height='66' rx='14' fill='none' stroke='#35C1BD' stroke-opacity='0.35' stroke-width='5'/><rect x='17' y='17' width='66' height='66' rx='14' fill='none' stroke='#35C1BD' stroke-opacity='0.6' stroke-width='5'/><rect x='8' y='26' width='66' height='66' rx='14' fill='#1b1512' stroke='#35C1BD' stroke-width='5'/><g transform='translate(41 59)' stroke='#35C1BD' stroke-linecap='round'><path d='M0 -20V20M-20 0H20' stroke-width='6.2'/><path d='M-11.8 -11.8L11.8 11.8M-11.8 11.8L11.8 -11.8' stroke-width='5'/></g></svg><span>Escouade</span></a><nav class='ds-nav' aria-label='Sections'><a href='#'>Vidéo</a><a href='#'>Fonctionnalités</a><a href='#'>Installer</a><a href='#'>FAQ</a></nav><a class='ds-gh' href='#'>GitHub</a></header>",
+      "css": ".ds-header { display: flex; align-items: center; gap: 28px; height: 64px; padding: 0 16px; background: rgba(27, 25, 23, 0.82); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); color: var(--text); font-family: var(--ui); } .ds-brand { display: flex; align-items: center; gap: 10px; color: inherit; font-size: 20px; font-weight: 800; text-decoration: none; } .ds-nav { display: flex; gap: 24px; margin-left: auto; } .ds-nav a, .ds-gh { color: var(--muted); font-size: 15px; font-weight: 600; text-decoration: none; } .ds-nav a:hover, .ds-gh:hover { color: var(--text); } .ds-gh { padding: 7px 14px; border: 1px solid var(--line2); border-radius: 8px; } .ds-header a:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }"
+    },
+    {
+      "name": "Carte de fonctionnalité",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Carte plate sur panneau, sans ombre, pour une capacité secondaire.",
+      "html": "<div class='ds-card'><h3>Un worktree par agent</h3><p>Chaque agent sur sa branche, sans marcher sur les autres ; merge ou squash quand c’est prêt.</p></div>",
+      "css": ".ds-card { padding: 24px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font-family: var(--ui); } .ds-card h3 { margin: 0 0 8px; font-size: 19px; } .ds-card p { margin: 0; color: var(--muted); font-size: 16px; line-height: 1.6; }"
+    },
+    {
+      "name": "Étape d'installation",
+      "kind": "card",
+      "refersTo": "install-step",
+      "description": "Étape numérotée posée sur la bande panneau : carré teal à chiffre mono, lien d'action teal.",
+      "html": "<div class='ds-steps'><div class='ds-step'><span class='ds-step-n'>1</span><h3>Installe Claude Code</h3><p>Escouade pilote le Claude Code installé sur ta machine : installe-le et connecte-toi une fois.</p><a href='#'>Documentation de Claude Code →</a></div></div>",
+      "css": ".ds-steps { padding: 24px; background: var(--panel); } .ds-step { padding: 26px; border-radius: 12px; border: 1px solid var(--line2); background: var(--bg); color: var(--text); font-family: var(--ui); } .ds-step-n { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 10px; background: var(--brand); color: var(--ink); font-family: var(--mono); font-weight: 600; } .ds-step h3 { margin: 16px 0 8px; font-size: 20px; } .ds-step p { margin: 0 0 12px; color: var(--muted); font-size: 16px; line-height: 1.6; } .ds-step a { color: var(--brand); font-size: 15px; font-weight: 600; text-decoration: none; } .ds-step a:hover { text-decoration: underline; } .ds-step a:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }"
+    },
+    {
+      "name": "Question de FAQ",
+      "kind": "custom",
+      "description": "Question dépliable, séparée par un filet appuyé, avec un « + » ou un « − » mono teal.",
+      "html": "<details class='ds-faq' open><summary>C’est gratuit ?</summary><p>Oui, et open source, sous licence MIT. Escouade utilise ton propre Claude Code : ton abonnement Claude ou ta clé API, sans intermédiaire.</p></details><details class='ds-faq'><summary>Ça marche sur Mac ou Linux ?</summary><p>Sur Mac, oui : macOS 11 ou plus récent, Apple Silicon comme Intel. Linux n’est pas encore pris en charge.</p></details>",
+      "css": ".ds-faq { border-bottom: 1px solid var(--line2); color: var(--text); font-family: var(--ui); } .ds-faq summary { display: flex; justify-content: space-between; gap: 16px; padding: 20px 0; font-size: 19px; font-weight: 700; cursor: pointer; list-style: none; } .ds-faq summary::-webkit-details-marker { display: none; } .ds-faq summary::after { content: '+'; color: var(--brand); font-family: var(--mono); } .ds-faq[open] summary::after { content: '−'; } .ds-faq summary:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; } .ds-faq p { margin: 0 0 20px; color: var(--muted); line-height: 1.6; }"
+    },
+    {
+      "name": "L'objet-logo",
+      "kind": "custom",
+      "refersTo": "squad-window-front",
+      "description": "Signature : les trois fenêtres du logo à l'échelle d'une vraie fenêtre, deux projets derrière, les agents au travail devant (état fixe).",
+      "html": "<figure class='ds-squad'><div class='ds-stack'><div class='ds-win ds-back'><span class='ds-tabline'><i class='ds-swatch' style='background: oklch(0.75 0.11 215)'></i><b>mobile-app</b><span class='ds-delta'>Δ 12</span></span></div><div class='ds-win ds-mid'><span class='ds-tabline'><i class='ds-swatch' style='background: oklch(0.7 0.12 300)'></i><b>studio-web</b><span class='ds-delta'>Δ 3</span></span></div><div class='ds-win ds-front'><div class='ds-titlebar'><svg class='ds-spark' viewBox='-23.5 -23.5 47 47' aria-hidden='true'><path d='M0 -20V20M-20 0H20' stroke-width='6.2'/><path d='M-11.8 -11.8L11.8 11.8M-11.8 11.8L11.8 -11.8' stroke-width='5'/></svg><i class='ds-swatch'></i><b>demo-api</b><span class='ds-badge'>1</span><span class='ds-delta'>Δ 8</span><span class='ds-branch'>main</span></div><div class='ds-head'>Agents <span>5</span></div><div class='ds-row'><i class='ds-dot'></i><b>refacto-auth</b><span class='ds-model'>Opus · 12m 44s</span><span class='ds-state'>En cours</span></div><div class='ds-row ds-q'><i class='ds-dot'></i><b>tests-e2e</b><span class='ds-model'>Sonnet · 8m 04s</span><span class='ds-state'>Question</span></div><div class='ds-status'><span><i class='ds-dot'></i>3 en cours</span><span><i class='ds-dot ds-w'></i>1 en attente</span><span class='ds-today'>Aujourd’hui ≈ 5,19 $</span></div></div></div><figcaption>Démonstration animée · données fictives</figcaption></figure>",
+      "css": ".ds-squad { width: 460px; max-width: 100%; margin: 0; color: var(--text); font-family: var(--ui); } .ds-stack { --off: calc(100cqw * 9 / 84); --w: calc(100cqw - 2 * var(--off)); position: relative; aspect-ratio: 1; container-type: inline-size; } .ds-win { --edge: var(--brand); position: absolute; width: var(--w); height: var(--w); border-radius: 3.4cqw; box-shadow: inset 0 0 0 1.5px var(--edge), 0 2.4cqw 7cqw -2cqw rgb(0 0 0 / 0.6); } .ds-back { --edge: color-mix(in oklch, var(--brand) 35%, transparent); top: 0; left: calc(2 * var(--off)); background: color-mix(in oklch, var(--panel) 55%, var(--bg)); } .ds-mid { --edge: color-mix(in oklch, var(--brand) 60%, transparent); top: var(--off); left: var(--off); background: var(--panel); } .ds-front { top: calc(2 * var(--off)); left: 0; display: flex; flex-direction: column; overflow: hidden; background: #1d1a17; font-size: clamp(11.5px, 2.05cqw, 14.5px); line-height: 1.45; } .ds-tabline { position: absolute; top: calc(var(--off) / 2); left: 2.6cqw; display: flex; align-items: center; gap: 0.6em; translate: 0 -50%; color: var(--muted); font-size: clamp(10px, 1.75cqw, 13.5px); white-space: nowrap; } .ds-tabline b, .ds-titlebar b, .ds-row b { color: var(--text); font-weight: 700; } .ds-swatch { flex: none; width: 0.62em; height: 0.62em; border-radius: 0.18em; background: var(--accent); } .ds-delta { padding: 0.05em 0.45em; border-radius: 0.35em; background: var(--line); color: var(--muted); font-family: var(--mono); font-size: max(10px, 0.86em); } .ds-badge { min-width: 1.45em; padding: 0 0.4em; border-radius: 1em; background: var(--wait); color: var(--ink); font-size: max(10px, 0.82em); font-weight: 800; text-align: center; } .ds-titlebar { display: flex; align-items: center; gap: 0.5em; height: 6.7cqw; padding: 0 2.4cqw; border-bottom: 1px solid var(--line); } .ds-spark { flex: none; width: 3.2cqw; height: 3.2cqw; margin-right: 0.4em; fill: none; stroke: var(--brand); stroke-linecap: round; } .ds-branch { margin-left: auto; color: var(--dim); font-family: var(--mono); font-size: max(10px, 0.86em); } .ds-head { padding: 0.9em 1.45em 0.35em; color: var(--dim); font-size: max(10px, 0.8em); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; } .ds-head span { font-family: var(--mono); font-weight: 400; } .ds-row { display: flex; align-items: center; gap: 0.55em; margin: 0 0.6em 0.2em; padding: 0.62em 0.85em; border: 1px solid transparent; border-radius: 0.7em; } .ds-dot { flex: none; width: 0.56em; height: 0.56em; border-radius: 50%; background: var(--ok); } .ds-model { color: var(--dim); font-family: var(--mono); font-size: max(10px, 0.86em); white-space: nowrap; } .ds-state { margin-left: auto; color: var(--ok); font-size: 0.9em; font-weight: 600; } .ds-q { background: var(--wait-soft); border-color: var(--wait-ring); } .ds-q .ds-dot, .ds-w { background: var(--wait); } .ds-q .ds-state { color: var(--wait); } .ds-status { display: flex; align-items: center; gap: 1.1em; margin-top: auto; padding: 0.5em 0.7em 0.5em 1.45em; border-top: 1px solid var(--line); color: var(--muted); font-family: var(--mono); font-size: max(10px, 0.82em); font-variant-numeric: tabular-nums; white-space: nowrap; } .ds-status span { display: inline-flex; align-items: center; gap: 0.5em; } .ds-status .ds-dot { width: 0.6em; height: 0.6em; } .ds-today { margin-left: auto; color: var(--text); } .ds-squad figcaption { margin-top: 14px; color: var(--dim); font-size: 13px; }"
+    },
+    {
+      "name": "Carte d'agent qui pose une question",
+      "kind": "card",
+      "refersTo": "agent-card-question",
+      "description": "Un agent en attente : voile et anneau ambre, point qui pulse, boutons de réponse cliquables.",
+      "html": "<article class='ds-agent'><div class='ds-agent-top'><i class='ds-agent-dot'></i><span class='ds-agent-name'>tests-e2e</span><span class='ds-agent-model'>Sonnet · 8m 04s</span><span class='ds-agent-state'>Question</span></div><div class='ds-agent-ask'><p>Lancer toute la suite e2e (38 tests) ?</p><div class='ds-agent-options'><button type='button' class='ds-agent-option'>Oui</button><button type='button' class='ds-agent-option'>Seulement auth</button></div></div></article>",
+      "css": ".ds-agent { display: grid; gap: 0.32em; width: 360px; padding: 0.62em 0.85em 0.66em; border: 1px solid var(--wait-ring); border-radius: 0.7em; background: var(--wait-soft); color: var(--text); font-family: var(--ui); font-size: 14px; line-height: 1.45; } .ds-agent-top { display: flex; align-items: center; gap: 0.55em; } .ds-agent-dot { flex: none; width: 0.56em; height: 0.56em; border-radius: 50%; background: var(--wait); animation: ds-pulse 1.4s ease-in-out infinite; } .ds-agent-name { font-weight: 700; } .ds-agent-model { color: var(--dim); font-family: var(--mono); font-size: 0.86em; font-variant-numeric: tabular-nums; } .ds-agent-state { margin-left: auto; color: var(--wait); font-size: 0.9em; font-weight: 600; } .ds-agent-ask { display: grid; gap: 0.45em; padding-left: 1.1em; } .ds-agent-ask p { margin: 0; font-size: 0.95em; line-height: 1.35; } .ds-agent-options { display: flex; flex-wrap: wrap; gap: 0.4em; } .ds-agent-option { padding: 0.28em 0.8em; border: 1px solid var(--wait-ring); border-radius: 0.5em; background: transparent; color: var(--text); font: inherit; font-size: 0.9em; font-weight: 600; cursor: pointer; transition: background-color 0.15s, color 0.15s; } .ds-agent-option:hover { background: var(--wait); color: var(--ink); } .ds-agent-option:focus-visible { outline: 2px solid var(--wait); outline-offset: 2px; } @keyframes ds-pulse { 0%, 100% { box-shadow: 0 0 0 0 var(--wait-ring); } 50% { box-shadow: 0 0 0 0.4em oklch(0.82 0.13 80 / 0); scale: 1.25; } } @media (prefers-reduced-motion: reduce) { .ds-agent-dot { animation: none; } }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Le poste de pilotage de nuit",
+    "overview": "Le site est une pièce sombre et chaude : un brun nuit, des panneaux à peine plus clairs, des filets crème translucides. Une seule couleur, le teal du logo, désigne ce qui appartient à Escouade et ce sur quoi on agit. Les autres couleurs sont des voyants : le vert, l'ambre, l'orange et le rouge de l'app n'apparaissent que là où l'app elle-même est montrée, et y gardent le sens qu'ils ont dans l'app.\n\nLa preuve, c'est la vraie chose. Le hero déplie le logo, trois fenêtres arrondies empilées, à l'échelle d'une vraie fenêtre : les deux de derrière sont des projets, celle de devant montre cinq agents qui travaillent, dont l'un pose une question à laquelle on peut répondre et l'autre boucle sur un ticket. Plus bas, les captures et la vidéo de l'app tiennent le même rôle. Le décor reste plat ; seuls ces objets-là portent une ombre.\n\nDensité moyenne, une colonne de 1160px, des sections de 96px. Hanken Grotesk porte la voix, en 800 et resserrée pour le titre ; JetBrains Mono ne sert qu'aux données. Le mouvement a une seule grammaire : décélération exponentielle à l'entrée, 0,15s au survol, 0,3s aux changements de statut, et rien ne bouge sous `prefers-reduced-motion`. Refusés par la direction : la capture inclinée sous un titre centré, le mockup générique entouré de badges.",
+    "keyCharacteristics": [
+      "Fond brun chaud ; toutes les neutres tirent vers la même teinte chaude, jamais vers le gris froid.",
+      "Un seul teal, celui du logo, pour l'identité, l'action et le focus.",
+      "Les couleurs de statut de l'app réservées aux représentations de l'app.",
+      "L'app montrée de face, au travail, avec des données dites fictives.",
+      "La profondeur par les tons ; les ombres réservées aux fenêtres, captures et vidéo.",
+      "La mono pour les données, la grotesque pour tout le reste."
+    ],
+    "rules": [
+      {
+        "name": "La règle du teal unique",
+        "body": "Le teal est Escouade : identité, action, focus. Aucune autre teinte ne tient ces rôles. En aplat, il ne couvre que le bouton principal et de petits marqueurs (numéros, puces) ; ses seules nappes sont les deux halos du hero.",
+        "section": "colors"
+      },
+      {
+        "name": "La règle des voyants",
+        "body": "ok, wait, accent, add et del ne vivent que dans une représentation de l'app, et y gardent le sens qu'ils ont dans l'app : vert en cours ou terminé, ambre en attente ou à tester. Jamais sur un bouton, un lien ou un titre du site.",
+        "section": "colors"
+      },
+      {
+        "name": "La règle du filet crème",
+        "body": "Bordures et séparateurs sont du crème translucide, à 8 % ou à 15 %, jamais un gris opaque : ils prennent la chaleur de la surface qu'ils traversent.",
+        "section": "colors"
+      },
+      {
+        "name": "La règle de la donnée en mono",
+        "body": "JetBrains Mono est réservée aux données et aux compteurs : version, modèle, durée, tokens, coût, chemins, branche, clé et boucle de ticket, numéros d'étape, « Δ », « + / − » de la FAQ. Avec `tabular-nums` dès qu'un nombre change. Titres, phrases et boutons restent en Hanken Grotesk.",
+        "section": "typography"
+      },
+      {
+        "name": "La règle du titre serré",
+        "body": "Plus un titre est grand, plus il se resserre : -0,035em à 84px, -0,02em à 44px, -0,01em à 28px. Le texte courant garde l'interlettrage normal.",
+        "section": "typography"
+      },
+      {
+        "name": "La règle de l'objet réel",
+        "body": "Seul ce qui montre l'app (fenêtre, capture, vidéo) porte une ombre. Le décor du site reste plat et se superpose par tons.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do réserver le teal à l'identité, à l'action principale, aux liens d'action et au focus (contour de 2px décalé de 3px).",
+      "Do écrire le texte sur le fond en text, muted ou dim : tous trois passent 4,5:1 sur bg, et `tests/tokens.test.ts` le vérifie.",
+      "Do composer les données (version, modèle, durée, tokens, coût, chemins, clés) en JetBrains Mono, avec `tabular-nums` quand elles changent.",
+      "Do montrer l'app de face et au travail, avec ses propres couleurs de statut, en disant ses données fictives.",
+      "Do tirer tout nouvel objet-fenêtre de la géométrie du logo : fenêtres de 66 décalées de 9 sur 84, contours teal à 35, 60 et 100 %.",
+      "Do faire entrer le mouvement sur cubic-bezier(0.16, 1, 0.3, 1) ; 0,15s pour un survol, 0,3s pour un changement de statut.",
+      "Do donner à chaque animation un état fixe sous `prefers-reduced-motion` et sans JavaScript, et une pause à tout ce qui boucle (WCAG 2.2.2), arrêtée hors écran."
+    ],
+    "donts": [
+      "Don't utiliser ok, wait, accent, add ou del hors d'une représentation de l'app : ni sur un bouton, ni sur un lien, ni sur un titre du site.",
+      "Don't mettre d'ombre sur une carte, un bouton, une bande ou l'en-tête : l'ombre est réservée aux fenêtres, aux captures et à la vidéo.",
+      "Don't tracer une bordure en gris opaque ou en blanc : les filets sont en crème translucide (line, line2).",
+      "Don't utiliser de blanc pur ni de gris froid : texte et surfaces du site sont des neutres chauds (le noir ne sert qu'au fond du lecteur vidéo).",
+      "Don't incliner une capture sous un titre centré, ni entourer un mockup générique de badges.",
+      "Don't poser un second bouton teal à côté du principal : l'action secondaire est toujours le bouton relief."
+    ]
+  }
+}

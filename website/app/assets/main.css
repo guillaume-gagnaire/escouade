@@ -19,6 +19,14 @@
   /* Escouade's colour (its logo); the app itself keeps its warm accent. */
   --brand: #35c1bd;
   --ink: #1b1512;
+  /* The app's status colours (src/app.css), for the hero's agents. */
+  --accent: oklch(0.72 0.12 48);
+  --ok: oklch(0.76 0.12 150);
+  --wait: oklch(0.82 0.13 80);
+  --wait-soft: oklch(0.82 0.13 80 / 0.08);
+  --wait-ring: oklch(0.82 0.13 80 / 0.6);
+  --add: oklch(0.76 0.12 150);
+  --del: oklch(0.72 0.14 25);
   --ui: 'Hanken Grotesk', system-ui, sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, monospace;
   color-scheme: dark;
@@ -119,4 +127,19 @@ video {
 :focus-visible {
   outline: 2px solid var(--brand);
   outline-offset: 3px;
+}
+
+::selection {
+  background: color-mix(in oklch, var(--brand) 38%, transparent);
+  color: var(--text);
+}
+
+/* Read by screen readers only. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
