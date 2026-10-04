@@ -180,6 +180,46 @@ describe('▶ Tester', () => {
       await vi.advanceTimersByTimeAsync(200);
       await run;
       expect(flows.all.a7).toMatchObject({ phase: 'failed', error: 'Arrêté' });
+      expect(flows.all.a7.lines[0]).toMatchObject({ state: 'stopped', detail: 'arrêtée' });
+    });
+
+    it('leaves every line stopped when everything is stopped while the processes start', async () => {
+      let n = 0;
+      backend(() => true, {
+        test_run_start: (a: any) => {
+          if (a.kind === 'run' && a.index === 0) stopTests('a7');
+          return { id: `t${++n}`, projectId: 'p1', name: a.kind, shell: 'pwsh' };
+        },
+      });
+      flows.prepared.a7 = JSON.stringify(RECIPE.prepare);
+      const run = testAgent(A, project());
+      await vi.advanceTimersByTimeAsync(1000);
+      await run;
+      expect(flows.all.a7).toMatchObject({ phase: 'failed', error: 'Arrêté' });
+      expect(flows.all.a7.lines.map((l) => [l.state, l.detail])).toEqual([
+        ['stopped', 'arrêté'],
+        ['stopped', 'arrêté'],
+      ]);
+    });
+
+    it('starts its processes anew when tested again while they are still stopping, not taking the dying ones', async () => {
+      const b = backend(() => true);
+      flows.prepared.a7 = JSON.stringify(RECIPE.prepare);
+      const first = testAgent(A, project());
+      await vi.advanceTimersByTimeAsync(1000);
+      await first;
+      stopTests('a7');
+      const again = testAgent(A, project());
+      await vi.advanceTimersByTimeAsync(10);
+      // Their ends come first.
+      expect(b.called('test_run_start')).toHaveLength(2);
+      stopped('test:a7:run:0');
+      stopped('test:a7:run:1');
+      await vi.advanceTimersByTimeAsync(1000);
+      await again;
+      expect(b.called('test_run_start')).toHaveLength(4);
+      expect(app.launches['test:a7:run:0']).toMatchObject({ status: 'running', ptyId: 't3' });
+      expect(flows.all.a7.phase).toBe('ready');
     });
 
     it('ends as stopped when its preparation alone is stopped', async () => {
@@ -259,6 +299,69 @@ describe('▶ Tester', () => {
         detail: 'Seul un agent à worktree a des lancements de test.',
       });
       expect(b.called('http_ready').map((c) => c.args.url)).not.toContain('http://localhost:4111');
+    });
+  });
+
+  describe('over', () => {
+    const lines = () => flows.all.a7.lines.map((l) => [l.label, l.state, l.detail]);
+
+    it('leaves no line waiting once a process crashed: the others are no longer waited for', async () => {
+      backend(() => false);
+      flows.prepared.a7 = JSON.stringify(RECIPE.prepare);
+      const run = testAgent(A, project());
+      await vi.advanceTimersByTimeAsync(10);
+      expect(flows.all.a7.lines[0]).toMatchObject({ state: 'waiting' });
+      exit('test:a7:run:1', 1);
+      await vi.advanceTimersByTimeAsync(1000);
+      await run;
+      expect(lines()).toEqual([
+        ['api', 'skipped', 'non attendu'],
+        ['web', 'failed', 'planté (code 1)'],
+      ]);
+    });
+
+    it('leaves no line waiting once a process was refused', async () => {
+      backend(() => false, {
+        test_run_start: (a: any) => {
+          if (a.index === 1) throw 'Seul un agent à worktree a des lancements de test.';
+          return { id: 't1', projectId: 'p1', name: 'api', shell: 'pwsh' };
+        },
+      });
+      flows.prepared.a7 = JSON.stringify(RECIPE.prepare);
+      const run = testAgent(A, project());
+      await vi.advanceTimersByTimeAsync(1000);
+      await run;
+      expect(lines()).toEqual([
+        ['api', 'skipped', 'non attendu'],
+        ['web', 'failed', 'Seul un agent à worktree a des lancements de test.'],
+      ]);
+    });
+
+    it('says when a process crashes after it was ready', async () => {
+      backend(() => true);
+      flows.prepared.a7 = JSON.stringify(RECIPE.prepare);
+      const run = testAgent(A, project());
+      await vi.advanceTimersByTimeAsync(1000);
+      await run;
+      expect(flows.all.a7.phase).toBe('ready');
+      exit('test:a7:run:1', 1);
+      await vi.advanceTimersByTimeAsync(600);
+      expect(flows.all.a7).toMatchObject({ phase: 'failed', error: "web s'est arrêté", opened: null });
+      expect(flows.all.a7.lines[0]).toMatchObject({ state: 'ready' });
+      expect(flows.all.a7.lines[1]).toMatchObject({ state: 'failed', detail: 'planté (code 1)' });
+    });
+
+    it('says when a process is stopped on its own after it was ready', async () => {
+      backend(() => true);
+      flows.prepared.a7 = JSON.stringify(RECIPE.prepare);
+      const run = testAgent(A, project());
+      await vi.advanceTimersByTimeAsync(1000);
+      await run;
+      stopped('test:a7:run:0');
+      await vi.advanceTimersByTimeAsync(600);
+      expect(flows.all.a7).toMatchObject({ phase: 'failed', error: 'Arrêté', opened: null });
+      expect(flows.all.a7.lines[0]).toMatchObject({ state: 'stopped', detail: 'arrêté' });
+      expect(flows.all.a7.lines[1]).toMatchObject({ state: 'ready' });
     });
   });
 

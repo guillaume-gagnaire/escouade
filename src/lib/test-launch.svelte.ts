@@ -15,8 +15,11 @@ export const READY_LIMIT_MS = 3 * 60_000;
 export interface FlowLine {
   id: string;
   label: string;
-  /** `stopped`: stopped on purpose ("Tout arrêter", its own ■), not a failure. */
-  state: 'running' | 'waiting' | 'ready' | 'failed' | 'stopped';
+  /**
+   * `stopped`: stopped on purpose ("Tout arrêter", its own ■), not a failure. `skipped`: no longer waited
+   * for, the test having failed elsewhere.
+   */
+  state: 'running' | 'waiting' | 'ready' | 'failed' | 'stopped' | 'skipped';
   detail: string;
   /** Its log among the launches (a step that could not start has none). */
   launchId: string;
@@ -145,17 +148,36 @@ export async function testAgent(agent: Agent, project: Project) {
     flow.lines.push({ id: cmd.id, label, state: 'running', detail, launchId: cmd.id });
     return flow.lines[flow.lines.length - 1];
   };
+  /** The test is over, for `error` (under way, or once ready: a process that ended). */
   const fail = (error: string) => {
     // "Tout arrêter", or an earlier failure, already said why.
-    if (flow.phase !== 'running') return;
+    if (flow.phase === 'failed') return;
     flow.phase = 'failed';
     flow.error = error;
+    flow.opened = null;
+    // What was still under way is no longer waited for: no line claims to be.
+    for (const l of flow.lines) {
+      if (l.state !== 'running' && l.state !== 'waiting') continue;
+      l.state = 'skipped';
+      l.detail = 'non attendu';
+    }
   };
   /** A step the backend refused to start: why, on its line, which has no log. */
   const refused = (line: FlowLine, cmd: RunCommand, why: string) => {
     line.state = 'failed';
     line.detail = why;
     fail(`« ${cmd.name} » n'a pas pu démarrer`);
+  };
+  /** A process that ended under the test: its line says how, and the test is over. */
+  const exited = (line: FlowLine, cmd: RunCommand, run: LaunchState | undefined) => {
+    if (!run || run.status === 'stopped') {
+      line.state = 'stopped';
+      line.detail = 'arrêté';
+      return fail('Arrêté');
+    }
+    line.state = 'failed';
+    line.detail = run.status === 'done' ? 'terminé' : run.code == null ? 'planté' : `planté (code ${run.code})`;
+    fail(`${cmd.name} s'est arrêté`);
   };
 
   // 1. The preparation, once per recipe, one step after the other.
@@ -166,7 +188,8 @@ export async function testAgent(agent: Agent, project: Project) {
       const line = addLine(cmd, `Préparation : ${cmd.command}`, 'en cours…');
       const why = await startLaunch(project, cmd);
       if (!live()) return;
-      if (why !== null) return refused(line, cmd, why);
+      // Stopped while it was starting: its line already says so.
+      if (why !== null) return over() ? undefined : refused(line, cmd, why);
       const end = await ended(cmd.id, live);
       if (!live()) return;
       if (!end) {
@@ -190,17 +213,17 @@ export async function testAgent(agent: Agent, project: Project) {
   const started = Date.now();
   const lines = cmds.processes.map((cmd) => addLine(cmd, cmd.name, 'démarrage…'));
   const refusals = await Promise.all(cmds.processes.map((cmd) => startLaunch(project, cmd)));
-  if (!live()) return;
+  // Stopped while they were starting: their lines already say so.
+  if (over()) return;
+  // Those the backend refused say why: they did not start, and the test is over.
+  for (const [i, why] of refusals.entries()) if (why !== null) refused(lines[i], cmds.processes[i], why);
 
   // 3. Each process with an address, until it answers.
   const ready = await Promise.all(
     cmds.processes.map(async (cmd, i) => {
+      // Refused, or the test is over otherwise: its line already says so.
+      if (over()) return false;
       const line = lines[i];
-      const why = refusals[i];
-      if (why !== null) {
-        refused(line, cmd, why);
-        return false;
-      }
       const url = recipe.processes[i].url.trim();
       if (!url) {
         line.state = 'ready';
@@ -212,16 +235,8 @@ export async function testAgent(agent: Agent, project: Project) {
       for (;;) {
         if (over()) return false;
         const run = app.launches[cmd.id];
-        if (!run || run.status === 'stopped') {
-          line.state = 'stopped';
-          line.detail = 'arrêté';
-          fail('Arrêté');
-          return false;
-        }
-        if (run.status !== 'running') {
-          line.state = 'failed';
-          line.detail = run.code == null ? 'planté' : `planté (code ${run.code})`;
-          fail(`${cmd.name} s'est arrêté`);
+        if (run?.status !== 'running') {
+          exited(line, cmd, run);
           return false;
         }
         const up = await api.httpReady(url).catch(() => false);
@@ -248,4 +263,14 @@ export async function testAgent(agent: Agent, project: Project) {
   flow.phase = 'ready';
   flow.opened = address;
   if (address) app.run(openUrl(address));
+
+  // 5. While it is up, a process that ends says so: the test is over.
+  const watch = async () => {
+    while (live() && flow.phase === 'ready') {
+      const i = cmds.processes.findIndex((cmd) => app.launches[cmd.id]?.status !== 'running');
+      if (i >= 0) return exited(lines[i], cmds.processes[i], app.launches[cmds.processes[i].id]);
+      await sleep(POLL_MS);
+    }
+  };
+  if (cmds.processes.length) void watch();
 }

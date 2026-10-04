@@ -1,6 +1,16 @@
 import { render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Test launches have logs (xterm.js): none in jsdom.
+vi.mock('../../lib/terminals', () => ({
+  launchLog: () => ({
+    term: { cols: 80, rows: 24, buffer: { active: { cursorY: 0 } }, write: (_: unknown, done?: () => void) => done?.() },
+    fit: { fit() {} },
+  }),
+  disposeLog() {},
+}));
+
 import { app } from '../../lib/state.svelte';
 import { flows } from '../../lib/test-launch.svelte';
 import { agent, fakeBackend, resetApp, ticket } from '../../test/ipc';
@@ -78,6 +88,18 @@ describe('TestLaunchModal', () => {
     await userEvent.click(within(lines[0]).getByRole('button', { name: 'Voir le log' }));
     expect(app.selectedLaunch.p1).toBe('test:a7:prep:0');
     expect(app.modal).toBeNull();
+  });
+
+  it('says the recipe changed when the test it showed was dropped for a new one', async () => {
+    const recipe = { prepare: [], processes: [{ name: 'web', command: 'node web.js', dir: '', env: {}, url: '' }], open: '' };
+    app.agents.a7 = { ...app.agents.a7, recipe };
+    fakeBackend();
+    render(TestLaunchModal, { agentId: 'a7' });
+    expect(screen.queryByText('La recette a changé : relance ▶ Tester.')).not.toBeInTheDocument();
+    // What the window does when the agent sends another recipe.
+    delete flows.all.a7;
+    expect(await screen.findByText('La recette a changé : relance ▶ Tester.')).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Étapes du lancement' })).not.toBeInTheDocument();
   });
 
   it('has no logs to show before any step ran', () => {

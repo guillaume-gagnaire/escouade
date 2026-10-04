@@ -1,6 +1,16 @@
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+// The cards' test launches have logs (xterm.js): none in jsdom.
+vi.mock('../../lib/terminals', () => ({
+  launchLog: () => ({
+    term: { cols: 80, rows: 24, buffer: { active: { cursorY: 0 } }, write: (_: unknown, done?: () => void) => done?.() },
+    fit: { fit() {} },
+  }),
+  disposeLog() {},
+}));
+
 import { menu } from '../../lib/menu.svelte';
 import { app } from '../../lib/state.svelte';
 import { agent, fakeBackend, project, resetApp, ticket } from '../../test/ipc';

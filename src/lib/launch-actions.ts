@@ -15,10 +15,22 @@ export function log(commandId: string) {
 }
 
 const time = () => new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** How long a start waits for a run of the same command being stopped to end. */
+const STOP_WAIT_MS = 10_000;
 
 /** Starts a command not running yet. Returns why it could not start, if it could not. */
 export async function startLaunch(project: Project, cmd: RunCommand): Promise<string | null> {
-  const previous = app.launches[cmd.id];
+  let previous = app.launches[cmd.id];
+  // Being stopped ("Tout arrêter" just before): its end first, then a run of its own, not the dying one.
+  if (previous?.status === 'running' && previous.stopping) {
+    const dying = previous;
+    const until = Date.now() + STOP_WAIT_MS;
+    while (app.launches[cmd.id] === dying && dying.status === 'running' && Date.now() < until) await sleep(50);
+    previous = app.launches[cmd.id];
+    if (previous === dying && dying.status === 'running') return `« ${cmd.name} » ne s'arrête pas`;
+  }
   if (previous?.status === 'running') return null;
   const x = log(cmd.id);
   app.launches[cmd.id] = { status: 'running', ptyId: null, name: cmd.name, stopping: false, code: null, startedAt: Date.now() };
@@ -70,12 +82,11 @@ export function stopLaunch(commandId: string) {
 export async function restartLaunch(project: Project, cmd: RunCommand) {
   const run = app.launches[cmd.id];
   stopLaunch(cmd.id);
-  const until = Date.now() + 10_000;
-  while (app.launches[cmd.id] === run && run?.status === 'running' && Date.now() < until) {
-    await new Promise((r) => setTimeout(r, 50));
-  }
-  // Started again (by another restart) or removed in the meantime: nothing left to restart.
-  if (app.launches[cmd.id] !== run) return;
+  const until = Date.now() + STOP_WAIT_MS;
+  while (app.launches[cmd.id] === run && run?.status === 'running' && Date.now() < until) await sleep(50);
+  // Started again (by another restart) or removed in the meantime: nothing left to restart. Still not
+  // stopped: it stays as it is.
+  if (app.launches[cmd.id] !== run || run?.status === 'running') return;
   await startLaunch(project, cmd);
 }
 

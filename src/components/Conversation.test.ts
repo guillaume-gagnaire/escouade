@@ -1,6 +1,16 @@
 import { render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// "▶ Tester" starts test launches, which have logs (xterm.js): none in jsdom.
+vi.mock('../lib/terminals', () => ({
+  launchLog: () => ({
+    term: { cols: 80, rows: 24, buffer: { active: { cursorY: 0 } }, write: (_: unknown, done?: () => void) => done?.() },
+    fit: { fit() {} },
+  }),
+  disposeLog() {},
+}));
+
 import { conversationOf } from '../lib/conversations.svelte';
 import { app } from '../lib/state.svelte';
 import type { Agent } from '../lib/types';

@@ -223,6 +223,35 @@ describe('launch commands', () => {
     expect(logs.c1).toBeUndefined();
   });
 
+  it('waits for a run being stopped to end, then starts a run of its own rather than taking the dying one', async () => {
+    const { backend, emit } = await boot();
+    await startLaunch(P, FRONT);
+    stopLaunch('c1');
+    const again = startLaunch(P, FRONT);
+    await new Promise((r) => setTimeout(r, 120));
+    expect(backend.called('run_start')).toHaveLength(1);
+    emit({ type: 'terminalExit', id: 't1', code: 1 });
+    expect(await again).toBeNull();
+    expect(backend.called('run_start')).toHaveLength(2);
+    expect(app.launches.c1).toMatchObject({ status: 'running', ptyId: 't2', stopping: false });
+  });
+
+  it('gives up on a run that does not stop, and says why', async () => {
+    const { backend } = await boot();
+    await startLaunch(P, FRONT);
+    stopLaunch('c1');
+    vi.useFakeTimers();
+    try {
+      const again = startLaunch(P, FRONT);
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(await again).toBe("« Front » ne s'arrête pas");
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(backend.called('run_start')).toHaveLength(1);
+    expect(app.launches.c1).toMatchObject({ status: 'running', ptyId: 't1', stopping: true });
+  });
+
   it('starts every command not running, and stops every running one', async () => {
     const { backend } = await boot();
     await startLaunch(P, FRONT);

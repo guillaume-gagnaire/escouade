@@ -17,7 +17,7 @@
     return (withLog.find((l) => !l.id.includes(':prep:')) ?? withLog[0])?.launchId ?? null;
   });
   const close = () => (app.modal = null);
-  const MARK = { running: '…', waiting: '…', ready: '✓', failed: '✕', stopped: '■' } as const;
+  const MARK = { running: '…', waiting: '…', ready: '✓', failed: '✕', stopped: '■', skipped: '–' } as const;
 
   /** The log of a step, in the main area. */
   function viewLog(id: string | null) {
@@ -44,6 +44,9 @@
     </ul>
     {#if flow.error}<p class="error">{flow.error}</p>{/if}
     {#if flow.opened}<p class="opened">Ouvert dans le navigateur : <span class="mono">{flow.opened}</span></p>{/if}
+  {:else if agent?.recipe}
+    <!-- A recipe and no test: the agent sent another recipe, which dropped the test shown. -->
+    <p class="opened">La recette a changé : relance ▶ Tester.</p>
   {/if}
   {#snippet footer()}
     {#if flow?.opened}
