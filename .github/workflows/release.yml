@@ -35,8 +35,10 @@ jobs:
           gh release view "$TAG" > /dev/null 2>&1 && exit 0
           flags=()
           [[ "$TAG" == *-* ]] && flags+=(--prerelease)
+          # The version's section of CHANGELOG.md (a sentence pointing at the commits without one).
+          node scripts/changelog.mjs "$TAG" > "$RUNNER_TEMP/notes.md"
           gh release create "$TAG" --verify-tag --title "Escouade $TAG" \
-            --notes "Voir les commits depuis la version précédente." "${flags[@]}"
+            --notes-file "$RUNNER_TEMP/notes.md" "${flags[@]}"
 
   build:
     name: Build and publish (${{ matrix.name }})
@@ -113,6 +115,19 @@ jobs:
             fi
           done
 
+      # The same notes go into latest.json, which the in-app updater reads.
+      - name: Release notes
+        id: notes
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          {
+            echo 'body<<ESCOUADE_NOTES_END'
+            node scripts/changelog.mjs "$TAG"
+            echo 'ESCOUADE_NOTES_END'
+          } >> "$GITHUB_OUTPUT"
+
       - name: Build, sign and publish
         uses: tauri-apps/tauri-action@v0
         env:
@@ -122,7 +137,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Escouade ${{ github.ref_name }}
-          releaseBody: Voir les commits depuis la version précédente.
+          releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
           includeUpdaterJson: true
