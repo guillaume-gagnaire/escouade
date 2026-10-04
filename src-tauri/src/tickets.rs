@@ -947,9 +947,10 @@ impl<R: Runtime> Core<R> {
                 return Ok(());
             }
         }
-        // The files copied from the project into the worktree (`.env`…): never committed, merged
-        // or pushed.
-        let copied = testlaunch::matching_untracked(&project.path, &project.worktree_copy).await;
+        // The files copied from the project into the worktree (`.env`…), the list the copy took:
+        // never committed, merged or pushed. Git ignores them, so only an agent that forced one in
+        // could; checked all the same.
+        let copied = testlaunch::matching_ignored(&project.path, &project.worktree_copy).await;
         self.still_validating(&t.id, &agent_id)?;
         let mut message = None;
         if s.action != "keep" {

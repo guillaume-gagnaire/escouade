@@ -12,7 +12,7 @@
 // [jamais] none ever, [sans-bilan] no report, [lent] a turn that lasts 30 s, [recette] a launch
 // recipe, [question] a question first (the turn goes on once it is answered), [fin-d-abord] an
 // interrupted turn's end sent before the answer to the interrupt, [commite] its work committed by
-// itself (every file of its folder, a copied .env included), [retire-env] then .env taken out of
+// itself (every file of its folder, a copied .env forced in), [retire-env] then .env taken out of
 // git again in a second commit (still in the branch's history), [tenace] a process that lasts 5 s
 // once its input is closed; by default criterion n is met from loop n on.
 // Asked to prepare a test launch (« Prépare le lancement… Ports réservés : <base> »), any agent
@@ -158,6 +158,8 @@ function startSession() {
     fs.writeFileSync(path.join(process.cwd(), file), `Boucle ${loop}\n`);
     if (all.includes('[commite]')) {
       execFileSync('git', ['add', '-A']);
+      // The copied .env, which git ignores, forced in.
+      if (fs.existsSync('.env')) execFileSync('git', ['add', '-f', '.env']);
       execFileSync('git', ['commit', '-qm', `Travail sur ${key}`]);
     }
     if (all.includes('[retire-env]')) {

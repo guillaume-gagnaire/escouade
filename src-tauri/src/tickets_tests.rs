@@ -9,7 +9,7 @@
 
 use crate::board::TurnEnd;
 use crate::core::{AgentOptions, Core};
-use crate::core_tests::{commit_change, git, harness, Harness};
+use crate::core_tests::{commit_change, git, harness, ignore, Harness};
 use crate::model::*;
 use crate::tickets::{error_reason, TicketDraft};
 use serde_json::{json, Value};
@@ -509,6 +509,7 @@ async fn a_ticket_gets_an_agent_on_its_own_branch_and_loops_until_its_criteria_a
     let h = harness("tk-loop");
     // Tickets get a worktree even when the project's agents do not.
     let (p, r) = h.project(false).await;
+    ignore(&r, ".env");
     std::fs::write(r.join(".env"), "SECRET=1\n").unwrap();
     let t = h
         .core
@@ -2065,6 +2066,7 @@ async fn a_haiku_answer_out_of_form_gives_the_titles_message() {
 async fn the_env_files_copied_into_the_worktree_never_reach_a_commit() {
     let h = harness("tk-env");
     let (p, r) = h.project(false).await;
+    ignore(&r, ".env");
     std::fs::write(r.join(".env"), "SECRET=1\n").unwrap();
     let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
     assert!(wt.join(".env").exists());
@@ -2085,11 +2087,12 @@ async fn the_env_files_copied_into_the_worktree_never_reach_a_commit() {
 async fn an_env_file_the_agent_made_is_committed_but_a_copied_one_it_staged_is_not() {
     let h = harness("tk-env-own");
     let (p, r) = h.project(false).await;
+    ignore(&r, ".env");
     std::fs::write(r.join(".env"), "SECRET=1\n").unwrap();
     let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
-    // The agent's own example file, and the copied one it staged (not committed).
+    // The agent's own example file, and the copied one it forced into the index (not committed).
     std::fs::write(wt.join(".env.example"), "SECRET=\n").unwrap();
-    git(&wt, &["add", ".env"]);
+    git(&wt, &["add", "-f", ".env"]);
     h.core.ticket_approve(&t.id).await.unwrap();
     assert_eq!(
         h.ticket(&t.id).column,
@@ -2111,6 +2114,7 @@ async fn an_env_file_the_agent_made_is_committed_but_a_copied_one_it_staged_is_n
 async fn a_copied_file_the_agent_committed_stops_the_merge() {
     let h = harness("tk-env-committed");
     let (p, r) = h.project(false).await;
+    ignore(&r, ".env");
     std::fs::write(r.join(".env"), "SECRET=1\n").unwrap();
     // Merged through a temporary worktree, where nothing else would stop the file.
     git(&r, &["branch", "release"]);
@@ -2401,6 +2405,7 @@ async fn failing_tests_of_a_ticket_whose_agent_was_archived_meanwhile_leave_it_a
 async fn a_copied_file_committed_then_removed_still_stops_the_merge() {
     let h = harness("tk-env-history");
     let (p, r) = h.project(false).await;
+    ignore(&r, ".env");
     std::fs::write(r.join(".env"), "SECRET=1\n").unwrap();
     h.set_board(&p.id, |s| s.strategy = "merge".into());
     let (t, wt) = reviewed(&h, &p.id, "Fichier [ok] [commite] [retire-env]").await;
@@ -2426,16 +2431,18 @@ async fn a_copied_file_committed_then_removed_still_stops_the_merge() {
 async fn a_copied_file_a_merge_commit_of_the_agent_brought_stops_the_merge() {
     let h = harness("tk-env-merge");
     let (p, r) = h.project(false).await;
+    ignore(&r, ".env");
     std::fs::write(r.join(".env"), "SECRET=1\n").unwrap();
     git(&r, &["branch", "release"]);
     h.set_board(&p.id, |s| s.target = "release".into());
     let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
     // The target moved on; the agent merged it into its branch and, resolving with
-    // `git add -A`, committed the copied .env with the merge.
+    // `git add -A` and forcing what git ignores, committed the copied .env with the merge.
     commit_change(&r, "const a = 3;\n", "main change");
     git(&r, &["branch", "-f", "release", "main"]);
     git(&wt, &["merge", "-q", "--no-ff", "--no-commit", "release"]);
     git(&wt, &["add", "-A"]);
+    git(&wt, &["add", "-f", ".env"]);
     git(&wt, &["commit", "-qm", "merge release"]);
     assert!(git(&wt, &["ls-tree", "-r", "--name-only", "HEAD"]).contains(".env"));
     h.core.ticket_approve(&t.id).await.unwrap();
@@ -3005,6 +3012,7 @@ async fn a_copied_file_the_agent_committed_is_neither_pushed_nor_proposed() {
     for action in ["push", "pr"] {
         let h = harness(&format!("tk-env-{action}"));
         let (p, r) = h.project(false).await;
+        ignore(&r, ".env");
         std::fs::write(r.join(".env"), "SECRET=1\n").unwrap();
         let bare = github_remote(&h, &r);
         *h.core.gh.write() = Some(fake_gh());

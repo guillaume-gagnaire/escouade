@@ -75,6 +75,9 @@ describe('RunConfigModal', () => {
     render(RunConfigModal, { projectId: 'p1' });
     const field = screen.getByRole('textbox', { name: /Fichiers copiés dans les worktrees/ });
     expect(field).toHaveValue('.env*');
+    // Only what git ignores is copied: a copy never shows as a change to commit.
+    expect(field).toHaveAccessibleName(/seuls ceux que git ignore/);
+    expect(field).not.toHaveAccessibleName(/non suivis/);
     await userEvent.type(field, '{Enter}**/.env.local');
     await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
     expect(backend.called('update_project')[0].args.project.worktreeCopy).toEqual(['.env*', '**/.env.local']);

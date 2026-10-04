@@ -49,6 +49,20 @@ pub(crate) fn git(dir: &Path, args: &[&str]) -> String {
     String::from_utf8_lossy(&out.stdout).trim().to_string()
 }
 
+/// `pattern` ignored by git in the repository at `dir` and its worktrees, as a `.gitignore` would
+/// (its own exclude file: nothing to commit).
+pub(crate) fn ignore(dir: &Path, pattern: &str) {
+    let file = dir.join(".git").join("info").join("exclude");
+    let mut patterns = std::fs::read_to_string(&file).unwrap_or_default();
+    if !patterns.is_empty() && !patterns.ends_with('\n') {
+        patterns.push('\n');
+    }
+    patterns.push_str(pattern);
+    patterns.push('\n');
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(&file, patterns).unwrap();
+}
+
 /// A git repository with one commit.
 fn repo(dir: &Path) -> PathBuf {
     let r = dir.join("repo");
@@ -1318,6 +1332,7 @@ async fn an_agent_made_for_a_ticket_has_its_branch_from_a_base_and_the_projects_
     git(&r, &["checkout", "-qb", "release"]);
     commit_change(&r, "const a = 9;\n", "release");
     git(&r, &["checkout", "-q", "main"]);
+    ignore(&r, ".env*");
     std::fs::write(r.join(".env"), "SECRET=1\n").unwrap();
     std::fs::write(r.join(".env.local"), "X=2\n").unwrap();
     std::fs::write(r.join("notes.txt"), "n\n").unwrap();
@@ -1393,14 +1408,22 @@ async fn an_agent_made_for_a_ticket_has_its_branch_from_a_base_and_the_projects_
 }
 
 #[tokio::test]
-async fn a_worktree_agent_gets_the_projects_untracked_env_files() {
+async fn a_worktree_agent_gets_only_the_env_files_git_ignores() {
     let h = harness("tk-agent-env");
     let (p, r) = h.project(true).await;
+    ignore(&r, ".env");
     std::fs::write(r.join(".env"), "SECRET=1\n").unwrap();
+    // Untracked but not ignored: copied, it would be the agent's change, offered for commit.
+    std::fs::write(r.join(".env.local"), "X=2\n").unwrap();
     let a = h.core.create_agent(&p.id, None).await.unwrap();
-    assert!(Path::new(&a.meta.worktree.unwrap().path)
-        .join(".env")
-        .exists());
+    let wt = PathBuf::from(a.meta.worktree.unwrap().path);
+    assert_eq!(
+        std::fs::read_to_string(wt.join(".env")).unwrap(),
+        "SECRET=1\n"
+    );
+    assert!(!wt.join(".env.local").exists());
+    // Nothing of what was copied shows as a change of the agent.
+    assert_eq!(git(&wt, &["status", "--porcelain"]), "");
 }
 
 #[tokio::test]

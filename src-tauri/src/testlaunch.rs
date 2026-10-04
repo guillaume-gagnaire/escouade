@@ -68,9 +68,11 @@ fn match_one(pattern: &str, name: &str) -> bool {
     go(&p, &s)
 }
 
-/// Files of `dir` that git does not track (ignored ones included, folders wholly untracked left
-/// out) matching one of `patterns`, relative with forward slashes.
-pub async fn matching_untracked(dir: &str, patterns: &[String]) -> Vec<String> {
+/// Files of `dir` that git ignores (`.gitignore`, the repository's exclude file…; folders wholly
+/// ignored or untracked left out) matching one of `patterns`, relative with forward slashes. Only
+/// those: a copy git does not ignore would show as the agent's change, and any commit (`git add
+/// -A`) would take it.
+pub async fn matching_ignored(dir: &str, patterns: &[String]) -> Vec<String> {
     if patterns.iter().all(|p| p.trim().is_empty()) {
         return Vec::new();
     }
@@ -80,6 +82,8 @@ pub async fn matching_untracked(dir: &str, patterns: &[String]) -> Vec<String> {
             "ls-files",
             "-z",
             "--others",
+            "--ignored",
+            "--exclude-standard",
             "--directory",
             "--no-empty-directory",
         ],
@@ -94,15 +98,15 @@ pub async fn matching_untracked(dir: &str, patterns: &[String]) -> Vec<String> {
         .collect()
 }
 
-/// Copies into `worktree` the untracked files of `project` that match `patterns` (`.env*`…), and
-/// returns them. A file that cannot be copied does not stop the others: once all were tried, the
+/// Copies into `worktree` the files of `project` that git ignores and that match `patterns`
+/// (`.env*`…), and returns them. A file that cannot be copied does not stop the others: once all were tried, the
 /// error names each failing file and why.
 pub async fn copy_worktree_files(
     project: &str,
     worktree: &str,
     patterns: &[String],
 ) -> Result<Vec<String>> {
-    let files = matching_untracked(project, patterns).await;
+    let files = matching_ignored(project, patterns).await;
     let mut copied = Vec::new();
     let mut failed = Vec::new();
     for f in files {
@@ -338,12 +342,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn untracked_files_matching_the_patterns_are_copied_into_a_worktree() {
+    async fn only_ignored_files_matching_the_patterns_are_copied_into_a_worktree() {
         let p = test_dir("launch-copy");
         git(&p, &["init", "-q", "-b", "main"]);
         std::fs::create_dir_all(p.join("web")).unwrap();
         std::fs::write(p.join("web").join("index.ts"), "x").unwrap();
-        std::fs::write(p.join(".gitignore"), ".env*\nnode_modules/\n").unwrap();
+        std::fs::write(p.join(".gitignore"), ".env\n.env.local\nnode_modules/\n").unwrap();
         git(&p, &["add", "-A"]);
         git(
             &p,
@@ -362,8 +366,15 @@ mod tests {
         std::fs::create_dir_all(p.join("node_modules").join("x")).unwrap();
         std::fs::write(p.join("node_modules").join("x").join(".env"), "no").unwrap();
         std::fs::write(p.join("notes.txt"), "n").unwrap();
+        // Matching, but neither ignored: copied, they would show as changes and be committed.
+        std::fs::write(p.join(".env.example"), "A=").unwrap();
+        std::fs::write(p.join("web").join(".env.test"), "B=").unwrap();
         let wt = test_dir("launch-copy-wt");
-        let patterns = vec![".env*".to_string(), "**/.env*".to_string()];
+        let patterns = vec![
+            ".env*".to_string(),
+            "**/.env*".to_string(),
+            "notes.txt".to_string(),
+        ];
         let (from, to) = (
             p.to_string_lossy().to_string(),
             wt.to_string_lossy().to_string(),
@@ -376,6 +387,11 @@ mod tests {
             "B=2"
         );
         assert!(!wt.join("notes.txt").exists() && !wt.join("node_modules").exists());
+        assert!(!wt.join(".env.example").exists() && !wt.join("web").join(".env.test").exists());
+        // The board's guard checks the same list.
+        let mut listed = matching_ignored(&from, &patterns).await;
+        listed.sort();
+        assert_eq!(listed, copied);
         assert!(copy_worktree_files(&from, &to, &[])
             .await
             .unwrap()
@@ -386,6 +402,7 @@ mod tests {
     async fn a_file_that_cannot_be_copied_is_reported_and_the_others_are_still_copied() {
         let p = test_dir("launch-copy-fail");
         git(&p, &["init", "-q", "-b", "main"]);
+        std::fs::write(p.join(".gitignore"), ".env*\n").unwrap();
         std::fs::write(p.join(".env.a"), "A=1").unwrap();
         std::fs::write(p.join(".env.b"), "B=2").unwrap();
         let wt = test_dir("launch-copy-fail-wt");

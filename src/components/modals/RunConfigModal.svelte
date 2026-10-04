@@ -72,7 +72,11 @@
   {/each}
   <button class="btn add" onclick={add}>+ Ajouter une commande</button>
   <label class="f">
-    <span>Fichiers copiés dans les worktrees <em>(non suivis par git ; un motif par ligne : .env* à la racine, **/.env* partout)</em></span>
+    <span
+      >Fichiers copiés dans les worktrees <em
+        >(seuls ceux que git ignore, jamais commités ; un motif par ligne : .env* à la racine, **/.env* partout)</em
+      ></span
+    >
     <textarea class="field mono" rows="3" placeholder=".env*" bind:value={copy}></textarea>
   </label>
 
