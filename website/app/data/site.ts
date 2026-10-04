@@ -19,7 +19,7 @@ export const FEATURES: Feature[] = [
   {
     id: 'agents',
     title: 'Projets en onglets, agents en parallèle',
-    text: 'Chaque projet a son onglet et sa couleur. Dans chacun, autant d’agents Claude Code que tu veux, chacun avec sa conversation, son modèle et son effort.',
+    text: 'Chaque projet a son onglet et sa couleur, qui teinte toute l’interface. Dans chacun, autant d’agents Claude Code que tu veux, chacun avec sa conversation, son modèle et son effort ; Haiku leur trouve un nom dès ta première demande.',
     points: [
       'Statut en direct : en cours, question, terminé',
       'Tokens, coût et fichiers touchés par agent',
@@ -31,34 +31,70 @@ export const FEATURES: Feature[] = [
   {
     id: 'chat',
     title: 'Un vrai chat, pas un terminal',
-    text: 'Markdown, coloration syntaxique, appels d’outils compacts et dépliables, images, @fichiers et /commandes. Écris pendant que Claude travaille : il en tient compte à l’étape suivante.',
+    text: 'Markdown, code coloré, appels d’outils compacts que tu déplies pour voir un diff ou la sortie d’une commande. Joins une image, un PDF ou un fichier, cite un @fichier, lance une /commande, et écris pendant que Claude travaille : il en tient compte à l’étape suivante.',
     points: [
-      'Les questions de Claude en cartes cliquables',
-      'Autorisations en un clic, ou refus expliqué',
-      'Modèle, effort et mode modifiables à tout moment',
+      'Les questions et autorisations de Claude en cartes cliquables',
+      'Modèle (avec sa version), effort et mode modifiables à tout moment',
+      'Une carte résume chaque tâche : durée, coût, fichiers, commit',
     ],
     image: 'images/chat.jpg',
-    alt: 'Une conversation : réponse de Claude, appels d’outils et question à choix multiple',
+    alt: 'Une conversation : réponse de Claude en markdown, appel d’outil déplié sur son diff',
   },
   {
     id: 'notifications',
     title: 'Tu sais quand on t’attend',
-    text: 'Quand un agent pose une question ou termine, Escouade le signale : pastille sur l’onglet, carillon, notification système, barre des tâches qui clignote (ou icône du Dock qui rebondit).',
+    text: 'Quand un agent pose une question ou termine, Escouade le signale : onglet et carte qui clignotent, carillon, notification système, barre des tâches qui clignote (ou icône du Dock qui rebondit). Fermer la fenêtre ne coupe rien : chaque agent reprend sa session au redémarrage.',
     points: ['Ctrl+J saute au prochain agent qui attend', 'Badge dans la zone de notification', 'Rien à surveiller : tu es prévenu'],
     image: 'images/notifications.jpg',
-    alt: 'Un agent en attente de réponse et la notification Windows correspondante',
+    alt: 'Un agent en attente de réponse, sa question et sa carte dans la barre latérale',
   },
   {
     id: 'git',
     title: 'Git sous les yeux',
-    text: 'Fichiers non commités par agent ou pour tout le projet, diff unifié ou côte à côte, git graph du dépôt avec la branche de l’agent en avant. La disposition moitié / moitié montre la conversation et les fichiers ensemble.',
+    text: 'Fichiers non commités par agent ou pour tout le projet, diff unifié ou côte à côte, git graph du dépôt avec la branche de l’agent en avant. La disposition moitié / moitié montre la conversation et les fichiers ensemble, mis à jour pendant que l’agent écrit.',
     points: [
       'Commit rédigé par l’agent lui-même',
       'Merge ou squash d’un worktree, puis nettoyage',
-      'Clic sur un commit pour voir son diff',
+      'Pull, push et fetch depuis la barre de statut',
     ],
     image: 'images/git.jpg',
-    alt: 'Le git graph du dépôt, avec la branche d’un agent mergée dans main',
+    alt: 'La disposition moitié / moitié : la conversation, les fichiers non commités et leur diff côte à côte',
+  },
+  {
+    id: 'editeur',
+    title: 'Un éditeur, sans quitter l’app',
+    text: 'Retouche un fichier du projet ou du worktree d’un agent sans changer de fenêtre : arborescence, onglets, coloration, recherche, et les lignes modifiées depuis le dernier commit marquées dans la marge. Il s’ouvre depuis l’agent, ses fichiers non commités ou les fichiers cités dans la conversation.',
+    points: [
+      'Ctrl+S pour enregistrer, fins de ligne conservées',
+      'Lignes modifiées par rapport à main',
+      'Prévient quand l’agent change le fichier ouvert',
+    ],
+    image: 'images/editor.jpg',
+    alt: 'L’éditeur intégré : l’arborescence du worktree, des onglets et le code avec ses lignes modifiées',
+  },
+  {
+    id: 'tableau',
+    title: 'Des tickets, que des agents prennent seuls',
+    text: 'Le tableau de chaque projet : à faire, en cours, à tester, terminé. Écris un ticket avec ses critères d’acceptation ; en pilote auto, des agents le prennent, chacun dans son worktree avec ses propres ports, et bouclent jusqu’à ce que chaque critère soit atteint.',
+    points: [
+      'Pilote auto, de 1 à 6 agents en parallèle',
+      'Boucle, critères et avancement en direct sur chaque carte',
+      'Valider : tests, commit généré, merge, pull request ou push ; ou renvoyer à l’agent',
+    ],
+    image: 'images/board.jpg',
+    alt: 'Le tableau d’un projet : deux tickets en cours avec leur boucle et leurs critères, et les tickets terminés',
+  },
+  {
+    id: 'test',
+    title: 'Teste chaque ticket en un clic',
+    text: 'Quand un ticket passe « À tester », « ▶ Tester » prépare son worktree, lance ses serveurs sur ses ports réservés, attend qu’ils répondent et ouvre ton navigateur directement sur la fonctionnalité développée.',
+    points: [
+      'La recette de lancement vient de l’agent lui-même',
+      'Les logs restent dans la section Lancement, sous son nom',
+      '« Préparer le lancement » pour tout agent à worktree',
+    ],
+    image: 'images/test.jpg',
+    alt: 'La fenêtre « Tester DEM-6 » : préparation, serveurs prêts et adresse ouverte dans le navigateur',
   },
   {
     id: 'lancement',
@@ -75,10 +111,14 @@ export const FEATURES: Feature[] = [
   {
     id: 'stats',
     title: 'Tokens, coût, quotas : en direct',
-    text: 'La barre de statut suit ton quota de session de 5 h, ton quota hebdomadaire et le coût du jour, qui monte pendant que Claude travaille. Les statistiques détaillent tokens et coût par jour, par projet et par modèle.',
-    points: ['Estimation en direct, chiffre exact en fin de tour', 'Coût moyen par demande', 'Réparti entre Fable, Opus, Sonnet et Haiku'],
+    text: 'La barre de statut suit ton quota de session de 5 h, ton quota hebdomadaire, leur réinitialisation et le coût du jour, qui monte pendant que Claude travaille. Un agent arrêté par sa limite d’usage reprend tout seul quand le quota revient.',
+    points: [
+      'Tokens d’entrée, de cache et de sortie, par jour, semaine ou mois',
+      'Coût par projet et par modèle',
+      'Mémoire et processeur pris par Claude',
+    ],
     image: 'images/stats.jpg',
-    alt: 'La page des statistiques : tokens par jour et par modèle, coût et quotas',
+    alt: 'La page des statistiques : tokens par jour, coût par projet et par modèle',
   },
   {
     id: 'remote',
@@ -101,7 +141,10 @@ export interface Card {
 
 export const CARDS: Card[] = [
   { title: 'De vrais terminaux', text: 'PowerShell, Git Bash et WSL intégrés, avec l’autocomplétion de ton shell.' },
-  { title: 'Un worktree par agent', text: 'Chaque agent sur sa branche, sans marcher sur les autres ; merge ou squash quand c’est prêt.' },
+  {
+    title: 'Limite d’usage ? Il reprend',
+    text: 'Un agent arrêté par sa limite d’usage reprend tout seul dès que ton quota revient, et le tableau attend avant de lancer un nouveau ticket.',
+  },
   {
     title: 'Toujours là',
     text: 'Fermer la fenêtre ne coupe pas les agents : Escouade reste dans la zone de notification et reprend chaque session au redémarrage.',
@@ -152,7 +195,18 @@ export const FAQ: Question[] = [
     q: 'Ça marche sur Mac ou Linux ?',
     a: 'Sur Mac, oui : macOS 11 ou plus récent, Apple Silicon comme Intel. Linux n’est pas encore pris en charge.',
   },
-  { q: 'Comment se font les mises à jour ?', a: 'L’app te propose chaque nouvelle version ; un clic, et elle s’installe.' },
+  {
+    q: 'Le pilote auto peut-il épuiser mon quota ?',
+    a: 'Tu choisis combien d’agents travaillent en parallèle (de 1 à 6) et combien de boucles chaque ticket a au plus. Rien ne démarre tant qu’un agent attend la fin de sa limite d’usage, et un ticket arrivé à sa dernière boucle passe « À tester » avec « Objectif partiel ».',
+  },
+  {
+    q: 'Mes fichiers .env partent-ils dans les commits ?',
+    a: 'Non. Les fichiers du projet que git ignore (.env* par défaut) sont copiés dans le worktree de chaque agent pour que l’app s’y lance ; à la validation d’un ticket, Escouade refuse de les commiter, de les pousser ou de les merger.',
+  },
+  {
+    q: 'Comment se font les mises à jour ?',
+    a: 'L’app cherche une nouvelle version toutes les cinq minutes et te la propose ; un clic, et elle s’installe.',
+  },
   {
     q: 'C’est un produit Anthropic ?',
     a: 'Non. Escouade est un projet indépendant, non affilié à Anthropic. Claude et Claude Code sont des marques d’Anthropic.',

@@ -127,13 +127,20 @@ Tague toujours la tête de `main`, et attends que la release soit créée (premi
 
 ### Vidéo de présentation
 
-Le dossier `video/` contient la vidéo de présentation (Remotion) et sa musique, générée par code :
+Le dossier `video/` contient la vidéo de présentation (Remotion). Sa voix off mène tout : chaque scène dure le temps de ses phrases (`src/script.ts`), et l'animation se cale sur les mots prononcés. La voix et la musique viennent d'ElevenLabs (clé dans `ELEVENLABS_API_KEY`, jamais dans un fichier) ; elles sont versionnées, et seules les phrases modifiées sont redemandées :
 
 ```powershell
 cd video
 npm install
-npm run studio   # aperçu
-npm run render   # musique + out/presentation.mp4
+$env:ELEVENLABS_API_KEY = "…"
+npm run voice               # public/voice/*.mp3 et src/voice.json
+npm run voice -- --check    # retranscrit chaque phrase pour vérifier qu'elle est bien prononcée
+npm run music               # public/music.mp3, recomposée quand la durée des scènes change
+npm run studio              # aperçu
+npm run stills -- board     # images de contrôle d'une scène dans out/stills
+npm run render              # bruitages + out/presentation.mp4
+npm run web-video           # out/escouade-web.mp4 : son à -16 LUFS, plus léger
+npm test                    # chaque fonctionnalité montrée, cues, mixage, sous-titres
 ```
 
 ### Site
@@ -148,7 +155,7 @@ npm run generate   # site statique dans .output/public
 npm test           # vérifie le site généré
 ```
 
-Ses images et sa vidéo viennent de `video/` : `npm run render`, puis `npm run site-images`.
+Ses images, sa vidéo et ses sous-titres viennent de `video/` : `npm run render`, `npm run web-video`, puis `npm run site-images`.
 
 ## Architecture
 

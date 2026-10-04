@@ -122,6 +122,23 @@ describe('generated site', () => {
     expect(html).toMatch(/<video[^>]*preload="none"/);
   });
 
+  it('subtitles the voice over in French, turned on from the player', () => {
+    const track = html.match(/<track[^>]*>/)?.[0] ?? '';
+    expect(track).toContain('kind="captions"');
+    expect(track).toContain('srclang="fr"');
+    expect(track).toContain(`src="${BASE}escouade.vtt"`);
+    expect(track).not.toMatch(/\sdefault[\s>=/]/);
+    const vtt = readFileSync(new URL('escouade.vtt', OUT), 'utf8');
+    expect(vtt.startsWith('WEBVTT')).toBe(true);
+    expect(vtt).toContain('Voici Escouade : le poste de pilotage de tous tes agents Claude Code.');
+  });
+
+  it('presents the board, the test launch and the editor among the features', () => {
+    const ids = FEATURES.map((f) => f.id);
+    expect(ids).toEqual(expect.arrayContaining(['tableau', 'test', 'editeur']));
+    expect(html).toContain('Pilote auto');
+  });
+
   it('tells GitHub Pages not to run Jekyll on it', () => {
     expect(existsSync(new URL('.nojekyll', OUT))).toBe(true);
   });

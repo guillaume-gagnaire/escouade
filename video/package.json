@@ -4,16 +4,21 @@
   "type": "module",
   "scripts": {
     "studio": "remotion studio src/index.ts",
-    "music": "tsx music/generate.ts",
+    "voice": "tsx scripts/voice.ts",
+    "music": "tsx scripts/music.ts",
+    "sfx": "tsx sfx/generate.ts",
     "stills": "tsx scripts/stills.ts",
+    "render": "npm run sfx && remotion render src/index.ts Presentation out/presentation.mp4 --codec=h264 --crf=18",
+    "web-video": "tsx scripts/web-video.ts",
     "site-images": "tsx scripts/site-images.ts",
-    "render": "npm run music && remotion render src/index.ts Presentation out/presentation.mp4 --codec=h264 --crf=18",
     "test": "vitest run",
     "check": "tsc --noEmit"
   },
   "dependencies": {
+    "@remotion/bundler": "4.0.529",
     "@remotion/cli": "4.0.529",
     "@remotion/google-fonts": "4.0.529",
+    "@remotion/renderer": "4.0.529",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "remotion": "4.0.529"
@@ -21,6 +26,7 @@
   "devDependencies": {
     "@types/node": "^20.19.0",
     "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.3.0",
     "tsx": "^4.23.0",
     "typescript": "~6.0.3",
     "vitest": "^3.2.7"

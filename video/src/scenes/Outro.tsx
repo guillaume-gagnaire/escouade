@@ -1,8 +1,8 @@
 import type { FC } from 'react';
 import { useCurrentFrame, useVideoConfig } from 'remotion';
 import { pop, ramp } from '../anim';
+import { useCues, useScene } from '../cues';
 import { C, MONO } from '../theme';
-import { captionOf } from '../timeline';
 import { Logo } from '../ui/Logo';
 import { Caption, Stage } from '../ui/Stage';
 
@@ -10,12 +10,13 @@ import { Caption, Stage } from '../ui/Stage';
 export const Outro: FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
+  const c = useCues();
   const e = pop(frame, fps, 0, 12);
   const name = pop(frame, fps, 12, 16);
-  const link = pop(frame, fps, 70, 18);
+  const link = pop(frame, fps, c.word('bye', 'télécharge-le') - 6, 18);
   return (
     <Stage>
-      <div style={{ position: 'absolute', inset: 0, opacity: 1 - ramp(frame, 196, 40) }}>
+      <div style={{ position: 'absolute', inset: 0, opacity: 1 - ramp(frame, c.length - 50, 46) }}>
         <div
           style={{
             position: 'absolute',
@@ -34,7 +35,7 @@ export const Outro: FC = () => {
             Le poste de pilotage de tes agents Claude Code
           </div>
         </div>
-        <Caption text={captionOf('outro')} delay={36} top={760} />
+        <Caption text={useScene().title} delay={c.word('bye', 'gratuit') - 4} top={760} />
         <div
           style={{
             position: 'absolute',

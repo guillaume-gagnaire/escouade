@@ -7,6 +7,9 @@ const asset = useAsset();
     <div class="wrap">
       <video class="player" controls preload="none" playsinline width="1920" height="1080" :poster="asset('images/poster.jpg')">
         <source :src="asset('escouade.mp4')" type="video/mp4" />
+        <!-- The voice over, as text, for anyone watching without sound: turned on from the player, shown by
+             default it would hide the app's status bar the video talks about. -->
+        <track kind="captions" srclang="fr" label="Français" :src="asset('escouade.vtt')" />
       </video>
     </div>
   </section>

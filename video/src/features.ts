@@ -1,0 +1,128 @@
+// What Escouade does (docs/SPEC.md, CHANGELOG.md), each with what the voice says about it.
+// A test checks that every one is shown by a scene whose lines say it.
+
+export interface Feature {
+  id: string;
+  label: string;
+  /** Said by a line of a scene that shows it. */
+  said: string;
+}
+
+export const FEATURES = [
+  // Projects
+  { id: 'tabs', label: 'Un onglet et une couleur par projet, qui teinte l’interface', said: 'un onglet, une couleur' },
+  { id: 'tab-indicators', label: 'Point vert et compteur Δ de fichiers modifiés sur l’onglet', said: 'nombre de fichiers modifiés' },
+  { id: 'tab-menu', label: 'Onglets réordonnables, clic droit : renommer, couleur, fermer', said: 'Clic droit : renomme' },
+  { id: 'new-project', label: 'Modale « Nouveau projet » : dossier, nom, couleur, premier agent', said: 'choisis son dossier' },
+  { id: 'git-detect', label: 'Détection du dépôt git, ou git init', said: 'détecte le dépôt git' },
+  { id: 'worktree-option', label: 'Un worktree git par agent', said: 'un worktree git par agent' },
+  // Agents
+  { id: 'parallel-agents', label: 'Autant d’agents que voulu, une conversation chacun', said: 'Autant que tu veux' },
+  { id: 'agent-card', label: 'Carte d’agent : statut, modèle, durée, tokens, coût, fichiers', said: 'statut, modèle' },
+  { id: 'auto-name', label: 'Nom donné par Haiku après la première demande', said: 'Haiku lui trouve un nom' },
+  { id: 'archive', label: 'Archiver un agent, sa conversation gardée', said: 'archive-le' },
+  { id: 'agent-manage', label: 'Renommer (double-clic), supprimer un agent et son worktree', said: 'Supprimer arrête son processus' },
+  // Chat
+  { id: 'markdown', label: 'Markdown et code coloré', said: 'markdown' },
+  { id: 'thinking', label: 'Réflexion de Claude repliée', said: 'réflexion' },
+  { id: 'tools', label: 'Appels d’outils compacts', said: "appels d'outils" },
+  { id: 'diff-in-chat', label: 'Outils dépliables : diff, sortie de commande', said: "le diff d'une modification" },
+  { id: 'live-activity', label: 'Activité de l’agent en direct', said: "ce que fait l'agent" },
+  { id: 'live-cost', label: 'Tokens et coût en direct pendant le tour (≈)', said: 'montent en direct' },
+  { id: 'questions', label: 'Questions de Claude en cartes cliquables', said: 'tu réponds en un clic' },
+  { id: 'permissions', label: 'Demandes d’autorisation en cartes', said: 'autorisation' },
+  { id: 'mid-turn', label: 'Messages envoyés pendant le tour', said: "pendant qu'il travaille" },
+  { id: 'interrupt', label: 'Interrompre (Échap, Stop)', said: 'Échap' },
+  // Composer
+  { id: 'model-effort-mode', label: 'Modèle, effort et mode changeables à tout moment', said: 'Modèle, effort, mode' },
+  { id: 'model-version', label: 'Version du modèle qu’utilise Claude Code', said: "la version qu'utilise Claude Code" },
+  { id: 'attachments', label: 'Images, PDF et fichiers joints', said: 'une image, un PDF' },
+  { id: 'mentions', label: 'Autocomplétion @fichier', said: 'arobase' },
+  { id: 'slash', label: 'Commandes /slash', said: 'slash' },
+  { id: 'turn-card', label: 'Carte « Tâche terminée » : durée, coût, fichiers', said: 'une carte résume la tâche' },
+  { id: 'agent-commit', label: '« Commit… » rédigé par l’agent', said: 'demander le commit' },
+  // Notifications
+  { id: 'blink', label: 'Onglet et carte qui clignotent, pastilles', said: 'clignotent' },
+  { id: 'chime', label: 'Carillon', said: 'carillon' },
+  { id: 'turn-end-notif', label: 'Notification aussi à la fin d’un tour', said: 'ou a fini' },
+  { id: 'sound-toggle', label: 'Son coupable (♪ On/Off)', said: 'que tu peux couper' },
+  { id: 'system-notif', label: 'Notification système et barre des tâches', said: 'une notification arrive' },
+  { id: 'ctrl-j', label: 'Ctrl+J : prochain agent en attente', said: 'Contrôle J' },
+  { id: 'tray', label: 'Fermer la fenêtre garde les agents (zone de notification)', said: 'zone de notification' },
+  { id: 'resume-sessions', label: 'Sessions reprises au redémarrage', said: 'reprend sa session' },
+  // Git
+  { id: 'split-layout', label: 'Disposition moitié / moitié', said: 'moitié-moitié' },
+  { id: 'uncommitted', label: 'Fichiers non commités et leur diff, en direct', said: 'fichiers modifiés et leur diff' },
+  { id: 'diff-views', label: 'Cet agent / tout le projet, diff côte à côte ou unifié', said: 'côte à côte ou unifié' },
+  { id: 'full-diff', label: 'Vue diff plein écran', said: 'plein écran' },
+  { id: 'git-graph', label: 'Historique : git graph, branche de l’agent en avant', said: 'le graphe du dépôt' },
+  { id: 'commit-diff', label: 'Clic sur un commit : son diff', said: 'un clic sur un commit' },
+  { id: 'worktree-merge', label: 'Worktree par agent et « Merger dans main »', said: 'fusionner sa branche' },
+  { id: 'merge-strategy', label: 'Merge ou squash', said: 'en merge ou en squash' },
+  { id: 'remote-sync', label: 'Synchro avec le dépôt distant : pull, push, fetch', said: 'pull, push et fetch' },
+  // Editor
+  { id: 'editor', label: 'Éditeur intégré, sur le projet ou le worktree d’un agent', said: "l'éditeur intégré" },
+  { id: 'editor-marks', label: 'Arborescence, onglets, coloration, lignes modifiées', said: 'lignes modifiées' },
+  { id: 'editor-save', label: 'Ctrl+S', said: 'Contrôle S' },
+  { id: 'editor-disk', label: 'Avertissement quand le fichier change sur le disque', said: "l'éditeur te prévient" },
+  // Board
+  { id: 'board', label: 'Tableau : à faire, en cours, à tester, terminé', said: 'le tableau' },
+  { id: 'tickets', label: 'Tickets : titre, description, critères d’acceptation', said: "critères d'acceptation" },
+  { id: 'max-loops', label: 'Nombre maximum de boucles', said: 'nombre maximum de boucles' },
+  { id: 'ticket-menu', label: 'Ticket à faire : modifier, passer en tête, supprimer', said: 'passe en tête' },
+  { id: 'manual-start', label: '« Lancer » un ticket à la main', said: 'à la main' },
+  { id: 'autopilot', label: 'Pilote auto', said: 'pilote auto' },
+  { id: 'parallel', label: 'Nombre d’agents en parallèle, places libres', said: 'agents en parallèle' },
+  { id: 'ticket-worktree', label: 'Worktree ticket/<clé> et ports réservés', said: 'ses propres ports' },
+  { id: 'env-copy', label: 'Fichiers .env copiés dans le worktree', said: 'fichiers .env' },
+  { id: 'loop', label: 'Boucle jusqu’aux critères, bilan à chaque tour', said: "boucle jusqu'au but" },
+  { id: 'ticket-card', label: 'Carte « En cours » : boucle, critères, barre, activité', said: 'les critères atteints' },
+  { id: 'progress', label: 'Avancement : ce qui est en place', said: 'ce qui est déjà en place' },
+  { id: 'blocked', label: 'Ticket bloqué, « Reprendre »', said: 'ticket bloqué' },
+  { id: 'blocked-notif', label: 'Notification « DEM-x bloqué : … »', said: 'te prévient' },
+  { id: 'criteria-report', label: 'Carte « Bilan des critères » dans la conversation', said: 'son bilan s’affiche en carte' },
+  { id: 'sidebar-tag', label: '« ▸ DEM-4 · boucle 2/5 » sur la carte de l’agent', said: 'sa carte porte le ticket' },
+  { id: 'review', label: 'Ticket « À tester »', said: 'passe à tester' },
+  { id: 'partial', label: '« Objectif partiel » à la limite de boucles', said: 'Objectif partiel' },
+  { id: 'ticket-notif', label: 'Notification « prêt à tester »', said: 'tu es prévenu' },
+  { id: 'test-launch', label: '« ▶ Tester » : préparation, serveurs, attente HTTP', said: 'lance ses serveurs' },
+  { id: 'open-feature', label: 'Navigateur ouvert sur la fonctionnalité', said: 'directement sur la fonctionnalité' },
+  { id: 'test-logs', label: 'Logs du test dans « Lancement »', said: 'section Lancement' },
+  { id: 'prepare-launch', label: '« Préparer le lancement » pour tout agent à worktree', said: 'Préparer le lancement' },
+  { id: 'validate-merge', label: 'Valider et merger', said: 'fusionne dans ta branche' },
+  { id: 'validate-tests', label: 'Tests relancés avant la validation', said: 'relance les tests' },
+  { id: 'commit-message', label: 'Message de commit généré (Conventional Commits)', said: 'message généré' },
+  { id: 'cleanup', label: 'Worktree retiré après le merge', said: 'retire le worktree' },
+  { id: 'pr-push', label: 'Pull request ou push de la branche', said: 'pull request' },
+  { id: 'pr-gh', label: 'Pull request ouverte avec gh', said: 'ouverte avec gh' },
+  { id: 'board-settings', label: 'Réglages du tableau par projet', said: 'se règle par projet' },
+  { id: 'conflicts', label: 'Gestion des conflits', said: 'conflits' },
+  { id: 'reject', label: '« Renvoyer » avec ce qui ne va pas', said: 'renvoie le ticket' },
+  { id: 'tests-fail-back', label: 'Tests en échec à la validation : retour à l’agent', said: 'repart tout seul' },
+  { id: 'done', label: 'Tickets terminés : issue, boucles, coût', said: 'tickets terminés' },
+  // Launch, terminals
+  { id: 'launch-commands', label: 'Commandes de lancement : shell, dossier', said: 'configure ses commandes' },
+  { id: 'launch-all', label: 'Tout lancer, statut et log en direct', said: 'Tout lancer' },
+  { id: 'launch-crash', label: 'Plantage signalé avec son code', said: 'code de sortie' },
+  { id: 'terminals', label: 'Terminaux PowerShell, Git Bash, WSL', said: 'PowerShell, Git Bash ou WSL' },
+  { id: 'mac-shells', label: 'zsh, bash et fish sur Mac', said: 'zsh, bash et fish' },
+  // Status bar, stats
+  { id: 'quotas', label: 'Quotas session 5 h et hebdo, avec leur reset', said: 'la session de cinq heures' },
+  { id: 'status-counts', label: 'Agents actifs, en attente, terminés', said: 'actifs, en attente et terminés' },
+  { id: 'today-cost', label: 'Coût du jour en direct', said: 'coût du jour' },
+  { id: 'processes', label: 'Processus Claude : mémoire et CPU', said: 'la mémoire et le processeur' },
+  { id: 'usage-resume', label: 'Reprise automatique après la limite d’usage', said: "limite d'usage" },
+  { id: 'stats', label: 'Statistiques : entrée, cache, sortie, par projet et par modèle', said: 'les statistiques' },
+  { id: 'stats-ranges', label: 'Plages jour, semaine, mois', said: 'par jour, semaine ou mois' },
+  // Remote, the rest
+  { id: 'remote-control', label: 'Remote control : claude.ai et mobile', said: 'remote control' },
+  { id: 'settings', label: 'Réglages', said: 'des réglages' },
+  { id: 'idle-stop', label: 'Arrêt des agents inactifs', said: 'arrêt des agents inactifs' },
+  { id: 'proxy', label: 'Proxy réseau', said: 'proxy' },
+  { id: 'shortcuts', label: 'Raccourcis clavier', said: 'raccourcis clavier' },
+  { id: 'updates', label: 'Mises à jour automatiques', said: 'mises à jour automatiques' },
+  { id: 'platforms', label: 'Windows et macOS', said: 'Windows et sur macOS' },
+  { id: 'open-source', label: 'Gratuit et open source', said: 'open source' },
+] as const satisfies readonly Feature[];
+
+export type FeatureId = (typeof FEATURES)[number]['id'];

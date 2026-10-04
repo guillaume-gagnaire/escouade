@@ -2,7 +2,7 @@
 import { FEATURES, SITE } from '~/data/site';
 
 const description =
-  'Escouade, le poste de pilotage de tes agents Claude Code : une app Windows et macOS gratuite et open source pour piloter plusieurs agents en parallèle, dans une seule fenêtre.';
+  'Escouade, le poste de pilotage de tes agents Claude Code : une app Windows et macOS gratuite et open source pour piloter plusieurs agents en parallèle, dans une seule fenêtre, et leur confier des tickets qu’ils mènent jusqu’au but.';
 
 useSeoMeta({
   title: 'Escouade — le poste de pilotage de tes agents Claude Code',

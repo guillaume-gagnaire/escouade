@@ -1,0 +1,6163 @@
+{
+  "intro.hello": {
+    "text": "Voici Escouade : le poste de pilotage de tous tes agents Claude Code.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 200,
+    "file": "voice/intro.hello.mp3",
+    "duration": 4.45,
+    "words": [
+      {
+        "word": "Voici",
+        "start": 0,
+        "end": 0.4
+      },
+      {
+        "word": "Escouade",
+        "start": 0.56,
+        "end": 1.12
+      },
+      {
+        "word": ":",
+        "start": 1.44,
+        "end": 1.493
+      },
+      {
+        "word": "le",
+        "start": 1.547,
+        "end": 1.6
+      },
+      {
+        "word": "poste",
+        "start": 1.72,
+        "end": 1.88
+      },
+      {
+        "word": "de",
+        "start": 1.92,
+        "end": 1.96
+      },
+      {
+        "word": "pilotage",
+        "start": 2,
+        "end": 2.56
+      },
+      {
+        "word": "de",
+        "start": 2.6,
+        "end": 2.64
+      },
+      {
+        "word": "tous",
+        "start": 2.8,
+        "end": 2.96
+      },
+      {
+        "word": "tes",
+        "start": 3.04,
+        "end": 3.12
+      },
+      {
+        "word": "agents",
+        "start": 3.2,
+        "end": 3.44
+      },
+      {
+        "word": "Claude",
+        "start": 3.52,
+        "end": 3.76
+      },
+      {
+        "word": "Code.",
+        "start": 3.92,
+        "end": 4.4
+      }
+    ],
+    "heard": "Voici Esquad, le poste de pilotage de tous tes agents Claude Code",
+    "match": 0.92
+  },
+  "chaos.mess": {
+    "text": "Cinq projets. Douze agents. Trente terminaux ouverts… Sérieusement ?",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/chaos.mess.mp3",
+    "duration": 4.93,
+    "words": [
+      {
+        "word": "Cinq",
+        "start": 0,
+        "end": 0.32
+      },
+      {
+        "word": "projets.",
+        "start": 0.4,
+        "end": 1.2
+      },
+      {
+        "word": "Douze",
+        "start": 1.28,
+        "end": 1.44
+      },
+      {
+        "word": "agents.",
+        "start": 1.64,
+        "end": 2.16
+      },
+      {
+        "word": "Trente",
+        "start": 2.2,
+        "end": 2.4
+      },
+      {
+        "word": "terminaux",
+        "start": 2.56,
+        "end": 2.96
+      },
+      {
+        "word": "ouverts…",
+        "start": 3,
+        "end": 3.76
+      },
+      {
+        "word": "Sérieusement",
+        "start": 3.8,
+        "end": 4.4
+      },
+      {
+        "word": "?",
+        "start": 4.8,
+        "end": 4.88
+      }
+    ],
+    "heard": "Cinq projets, douze agents, trente terminaux ouverts. Sérieusement ?",
+    "match": 1
+  },
+  "chaos.one": {
+    "text": "Escouade réunit tout ça dans une seule fenêtre.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/chaos.one.mp3",
+    "duration": 2.77,
+    "words": [
+      {
+        "word": "Escouade",
+        "start": 0,
+        "end": 0.48
+      },
+      {
+        "word": "réunit",
+        "start": 0.56,
+        "end": 0.88
+      },
+      {
+        "word": "tout",
+        "start": 0.96,
+        "end": 1.04
+      },
+      {
+        "word": "ça",
+        "start": 1.12,
+        "end": 1.28
+      },
+      {
+        "word": "dans",
+        "start": 1.32,
+        "end": 1.52
+      },
+      {
+        "word": "une",
+        "start": 1.6,
+        "end": 1.76
+      },
+      {
+        "word": "seule",
+        "start": 1.8,
+        "end": 1.92
+      },
+      {
+        "word": "fenêtre.",
+        "start": 2,
+        "end": 2.72
+      }
+    ],
+    "heard": "Esquad réunit tout ça dans une seule fenêtre",
+    "match": 0.88
+  },
+  "projects.tabs": {
+    "text": "Un projet, un onglet, une couleur : toute l'interface suit. Un point vert ? Un agent bosse. Et le chiffre ? Le nombre de fichiers modifiés.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/projects.tabs.mp3",
+    "duration": 7.993469387755143,
+    "words": [
+      {
+        "word": "Un",
+        "start": 0,
+        "end": 0.16
+      },
+      {
+        "word": "projet,",
+        "start": 0.28,
+        "end": 0.8
+      },
+      {
+        "word": "un",
+        "start": 0.88,
+        "end": 0.96
+      },
+      {
+        "word": "onglet,",
+        "start": 1.04,
+        "end": 1.52
+      },
+      {
+        "word": "une",
+        "start": 1.6,
+        "end": 1.68
+      },
+      {
+        "word": "couleur",
+        "start": 1.72,
+        "end": 2.08
+      },
+      {
+        "word": ":",
+        "start": 2.32,
+        "end": 2.36
+      },
+      {
+        "word": "toute",
+        "start": 2.4,
+        "end": 2.48
+      },
+      {
+        "word": "l'interface",
+        "start": 2.507,
+        "end": 2.96
+      },
+      {
+        "word": "suit.",
+        "start": 3.04,
+        "end": 3.6
+      },
+      {
+        "word": "Un",
+        "start": 3.64,
+        "end": 3.68
+      },
+      {
+        "word": "point",
+        "start": 3.76,
+        "end": 3.92
+      },
+      {
+        "word": "vert",
+        "start": 4.04,
+        "end": 4.16
+      },
+      {
+        "word": "?",
+        "start": 4.48,
+        "end": 4.533
+      },
+      {
+        "word": "Un",
+        "start": 4.587,
+        "end": 4.64
+      },
+      {
+        "word": "agent",
+        "start": 4.76,
+        "end": 4.88
+      },
+      {
+        "word": "bosse.",
+        "start": 4.96,
+        "end": 5.52
+      },
+      {
+        "word": "Et",
+        "start": 5.56,
+        "end": 5.6
+      },
+      {
+        "word": "le",
+        "start": 5.64,
+        "end": 5.68
+      },
+      {
+        "word": "chiffre",
+        "start": 5.76,
+        "end": 6.08
+      },
+      {
+        "word": "?",
+        "start": 6.4,
+        "end": 6.427
+      },
+      {
+        "word": "Le",
+        "start": 6.453,
+        "end": 6.48
+      },
+      {
+        "word": "nombre",
+        "start": 6.56,
+        "end": 6.8
+      },
+      {
+        "word": "de",
+        "start": 6.84,
+        "end": 6.88
+      },
+      {
+        "word": "fichiers",
+        "start": 6.96,
+        "end": 7.2
+      },
+      {
+        "word": "modifiés.",
+        "start": 7.28,
+        "end": 7.92
+      }
+    ],
+    "heard": "Un projet, un onglet, une couleur. Toute l'interface suit. Un point vert, un agent boss et le chiffre, le nombre de fichiers modifiés",
+    "match": 0.96
+  },
+  "projects.menu": {
+    "text": "Glisse les onglets pour les ranger. Clic droit : renomme, recolore, ferme.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/projects.menu.mp3",
+    "duration": 4.858775510204085,
+    "words": [
+      {
+        "word": "Glisse",
+        "start": 0,
+        "end": 0.32
+      },
+      {
+        "word": "les",
+        "start": 0.4,
+        "end": 0.48
+      },
+      {
+        "word": "onglets",
+        "start": 0.56,
+        "end": 0.8
+      },
+      {
+        "word": "pour",
+        "start": 0.88,
+        "end": 0.96
+      },
+      {
+        "word": "les",
+        "start": 1,
+        "end": 1.04
+      },
+      {
+        "word": "ranger.",
+        "start": 1.08,
+        "end": 1.76
+      },
+      {
+        "word": "Clic",
+        "start": 1.8,
+        "end": 2
+      },
+      {
+        "word": "droit",
+        "start": 2.08,
+        "end": 2.32
+      },
+      {
+        "word": ":",
+        "start": 2.56,
+        "end": 2.6
+      },
+      {
+        "word": "renomme,",
+        "start": 2.64,
+        "end": 3.28
+      },
+      {
+        "word": "recolore,",
+        "start": 3.36,
+        "end": 4.08
+      },
+      {
+        "word": "ferme.",
+        "start": 4.16,
+        "end": 4.8
+      }
+    ],
+    "heard": "Glisse les onglets pour les ranger. Clic droit, renomme, recolore, ferme",
+    "match": 1
+  },
+  "projects.add": {
+    "text": "Nouveau projet ? Choisis son dossier : Escouade détecte le dépôt guite… ou le crée.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/projects.add.mp3",
+    "duration": 4.858775510204085,
+    "words": [
+      {
+        "word": "Nouveau",
+        "start": 0,
+        "end": 0.24
+      },
+      {
+        "word": "projet",
+        "start": 0.32,
+        "end": 0.64
+      },
+      {
+        "word": "?",
+        "start": 0.88,
+        "end": 0.92
+      },
+      {
+        "word": "Choisis",
+        "start": 0.96,
+        "end": 1.2
+      },
+      {
+        "word": "son",
+        "start": 1.28,
+        "end": 1.36
+      },
+      {
+        "word": "dossier",
+        "start": 1.4,
+        "end": 1.76
+      },
+      {
+        "word": ":",
+        "start": 2,
+        "end": 2.08
+      },
+      {
+        "word": "Escouade",
+        "start": 2.16,
+        "end": 2.48
+      },
+      {
+        "word": "détecte",
+        "start": 2.52,
+        "end": 2.88
+      },
+      {
+        "word": "le",
+        "start": 2.96,
+        "end": 3.04
+      },
+      {
+        "word": "dépôt",
+        "start": 3.12,
+        "end": 3.28
+      },
+      {
+        "word": "guite…",
+        "start": 3.36,
+        "end": 4
+      },
+      {
+        "word": "ou",
+        "start": 4.04,
+        "end": 4.08
+      },
+      {
+        "word": "le",
+        "start": 4.12,
+        "end": 4.16
+      },
+      {
+        "word": "crée.",
+        "start": 4.24,
+        "end": 4.8
+      }
+    ],
+    "heard": "Nouveau projet ? Choisis son dossier. Esquad détecte le dépôt Git ou le crée",
+    "match": 0.85
+  },
+  "projects.options": {
+    "text": "Une couleur, un premier agent, et si tu veux, un worktree guite par agent.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/projects.options.mp3",
+    "duration": 4.37,
+    "words": [
+      {
+        "word": "Une",
+        "start": 0,
+        "end": 0.16
+      },
+      {
+        "word": "couleur,",
+        "start": 0.24,
+        "end": 0.8
+      },
+      {
+        "word": "un",
+        "start": 0.88,
+        "end": 0.96
+      },
+      {
+        "word": "premier",
+        "start": 1.04,
+        "end": 1.28
+      },
+      {
+        "word": "agent,",
+        "start": 1.44,
+        "end": 1.76
+      },
+      {
+        "word": "et",
+        "start": 1.84,
+        "end": 1.92
+      },
+      {
+        "word": "si",
+        "start": 2,
+        "end": 2.08
+      },
+      {
+        "word": "tu",
+        "start": 2.16,
+        "end": 2.24
+      },
+      {
+        "word": "veux,",
+        "start": 2.32,
+        "end": 2.64
+      },
+      {
+        "word": "un",
+        "start": 2.68,
+        "end": 2.72
+      },
+      {
+        "word": "worktree",
+        "start": 2.8,
+        "end": 3.28
+      },
+      {
+        "word": "guite",
+        "start": 3.36,
+        "end": 3.52
+      },
+      {
+        "word": "par",
+        "start": 3.6,
+        "end": 3.76
+      },
+      {
+        "word": "agent.",
+        "start": 3.92,
+        "end": 4.32
+      }
+    ],
+    "heard": "Une couleur, un premier agent et si tu veux, un worktree Git par agent",
+    "match": 0.93
+  },
+  "agents.many": {
+    "text": "Des agents ? Autant que tu veux, chacun avec sa conversation.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/agents.many.mp3",
+    "duration": 3.3436734693877512,
+    "words": [
+      {
+        "word": "Des",
+        "start": 0,
+        "end": 0.16
+      },
+      {
+        "word": "agents",
+        "start": 0.24,
+        "end": 0.48
+      },
+      {
+        "word": "?",
+        "start": 0.8,
+        "end": 0.88
+      },
+      {
+        "word": "Autant",
+        "start": 0.96,
+        "end": 1.12
+      },
+      {
+        "word": "que",
+        "start": 1.16,
+        "end": 1.2
+      },
+      {
+        "word": "tu",
+        "start": 1.28,
+        "end": 1.36
+      },
+      {
+        "word": "veux,",
+        "start": 1.4,
+        "end": 1.76
+      },
+      {
+        "word": "chacun",
+        "start": 1.84,
+        "end": 2.16
+      },
+      {
+        "word": "avec",
+        "start": 2.24,
+        "end": 2.32
+      },
+      {
+        "word": "sa",
+        "start": 2.4,
+        "end": 2.48
+      },
+      {
+        "word": "conversation.",
+        "start": 2.76,
+        "end": 3.28
+      }
+    ],
+    "heard": "Des agents ? Autant que tu veux, chacun avec sa conversation",
+    "match": 1
+  },
+  "agents.card": {
+    "text": "Sa carte dit tout : statut, modèle, temps de travail, tokens, coût, fichiers modifiés.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/agents.card.mp3",
+    "duration": 6.217142857142877,
+    "words": [
+      {
+        "word": "Sa",
+        "start": 0,
+        "end": 0.16
+      },
+      {
+        "word": "carte",
+        "start": 0.24,
+        "end": 0.56
+      },
+      {
+        "word": "dit",
+        "start": 0.64,
+        "end": 0.72
+      },
+      {
+        "word": "tout",
+        "start": 0.8,
+        "end": 0.96
+      },
+      {
+        "word": ":",
+        "start": 1.28,
+        "end": 1.32
+      },
+      {
+        "word": "statut,",
+        "start": 1.36,
+        "end": 2.08
+      },
+      {
+        "word": "modèle,",
+        "start": 2.2,
+        "end": 2.8
+      },
+      {
+        "word": "temps",
+        "start": 2.88,
+        "end": 2.96
+      },
+      {
+        "word": "de",
+        "start": 3,
+        "end": 3.04
+      },
+      {
+        "word": "travail,",
+        "start": 3.08,
+        "end": 3.68
+      },
+      {
+        "word": "tokens,",
+        "start": 3.76,
+        "end": 4.56
+      },
+      {
+        "word": "coût,",
+        "start": 4.64,
+        "end": 5.04
+      },
+      {
+        "word": "fichiers",
+        "start": 5.12,
+        "end": 5.36
+      },
+      {
+        "word": "modifiés.",
+        "start": 5.44,
+        "end": 6.16
+      }
+    ],
+    "heard": "Sa carte dit tout : statut, modèle, temps de travail, tokens, coût, fichier modifié",
+    "match": 1
+  },
+  "agents.name": {
+    "text": "Ta première demande ? Haiku lui trouve un nom.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/agents.name.mp3",
+    "duration": 2.5338775510204083,
+    "words": [
+      {
+        "word": "Ta",
+        "start": 0,
+        "end": 0.16
+      },
+      {
+        "word": "première",
+        "start": 0.2,
+        "end": 0.4
+      },
+      {
+        "word": "demande",
+        "start": 0.48,
+        "end": 0.96
+      },
+      {
+        "word": "?",
+        "start": 1.12,
+        "end": 1.147
+      },
+      {
+        "word": "Haiku",
+        "start": 1.173,
+        "end": 1.44
+      },
+      {
+        "word": "lui",
+        "start": 1.48,
+        "end": 1.6
+      },
+      {
+        "word": "trouve",
+        "start": 1.64,
+        "end": 1.76
+      },
+      {
+        "word": "un",
+        "start": 1.84,
+        "end": 1.92
+      },
+      {
+        "word": "nom.",
+        "start": 2,
+        "end": 2.48
+      }
+    ],
+    "heard": "Ta première demande ? Haiku lui trouve un nom",
+    "match": 1
+  },
+  "agents.archive": {
+    "text": "Il a fini ? Archive-le : sa conversation reste à un clic.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/agents.archive.mp3",
+    "duration": 3.996734693877544,
+    "words": [
+      {
+        "word": "Il",
+        "start": 0,
+        "end": 0.08
+      },
+      {
+        "word": "a",
+        "start": 0.16,
+        "end": 0.24
+      },
+      {
+        "word": "fini",
+        "start": 0.32,
+        "end": 0.48
+      },
+      {
+        "word": "?",
+        "start": 0.88,
+        "end": 1.013
+      },
+      {
+        "word": "Archive-le",
+        "start": 1.147,
+        "end": 1.44
+      },
+      {
+        "word": ":",
+        "start": 1.76,
+        "end": 1.787
+      },
+      {
+        "word": "sa",
+        "start": 1.813,
+        "end": 1.84
+      },
+      {
+        "word": "conversation",
+        "start": 1.92,
+        "end": 2.48
+      },
+      {
+        "word": "reste",
+        "start": 2.56,
+        "end": 2.8
+      },
+      {
+        "word": "à",
+        "start": 2.88,
+        "end": 2.96
+      },
+      {
+        "word": "un",
+        "start": 3.04,
+        "end": 3.12
+      },
+      {
+        "word": "clic.",
+        "start": 3.16,
+        "end": 3.92
+      }
+    ],
+    "heard": "Il a fini ? Archive-le. Sa conversation reste à un clic",
+    "match": 1
+  },
+  "agents.manage": {
+    "text": "Double-clic pour le renommer. Et Supprimer arrête son processus et retire son worktree.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/agents.manage.mp3",
+    "duration": 5.17,
+    "words": [
+      {
+        "word": "Double-clic",
+        "start": 0,
+        "end": 0.64
+      },
+      {
+        "word": "pour",
+        "start": 0.72,
+        "end": 0.8
+      },
+      {
+        "word": "le",
+        "start": 0.88,
+        "end": 0.96
+      },
+      {
+        "word": "renommer.",
+        "start": 1.08,
+        "end": 1.76
+      },
+      {
+        "word": "Et",
+        "start": 1.84,
+        "end": 1.92
+      },
+      {
+        "word": "Supprimer",
+        "start": 2,
+        "end": 2.56
+      },
+      {
+        "word": "arrête",
+        "start": 2.68,
+        "end": 2.88
+      },
+      {
+        "word": "son",
+        "start": 2.96,
+        "end": 3.04
+      },
+      {
+        "word": "processus",
+        "start": 3.24,
+        "end": 3.68
+      },
+      {
+        "word": "et",
+        "start": 3.76,
+        "end": 3.84
+      },
+      {
+        "word": "retire",
+        "start": 3.96,
+        "end": 4.24
+      },
+      {
+        "word": "son",
+        "start": 4.32,
+        "end": 4.4
+      },
+      {
+        "word": "worktree.",
+        "start": 4.52,
+        "end": 5.12
+      }
+    ],
+    "heard": "Double-clic pour le renommer et supprimer arrête son processus et retire son work tree",
+    "match": 0.93
+  },
+  "chat.md": {
+    "text": "Ici, c'est un vrai tchatte : markdown, code coloré, réflexion de Claude repliée, appels d'outils compacts.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/chat.md.mp3",
+    "duration": 6.556734693877575,
+    "words": [
+      {
+        "word": "Ici,",
+        "start": 0,
+        "end": 0.56
+      },
+      {
+        "word": "c'est",
+        "start": 0.613,
+        "end": 0.72
+      },
+      {
+        "word": "un",
+        "start": 0.8,
+        "end": 0.88
+      },
+      {
+        "word": "vrai",
+        "start": 0.92,
+        "end": 1.12
+      },
+      {
+        "word": "tchatte",
+        "start": 1.16,
+        "end": 1.52
+      },
+      {
+        "word": ":",
+        "start": 1.84,
+        "end": 2.053
+      },
+      {
+        "word": "markdown,",
+        "start": 2.267,
+        "end": 2.64
+      },
+      {
+        "word": "code",
+        "start": 2.72,
+        "end": 2.8
+      },
+      {
+        "word": "coloré,",
+        "start": 2.88,
+        "end": 3.44
+      },
+      {
+        "word": "réflexion",
+        "start": 3.52,
+        "end": 3.92
+      },
+      {
+        "word": "de",
+        "start": 3.96,
+        "end": 4
+      },
+      {
+        "word": "Claude",
+        "start": 4.08,
+        "end": 4.32
+      },
+      {
+        "word": "repliée,",
+        "start": 4.4,
+        "end": 5.04
+      },
+      {
+        "word": "appels",
+        "start": 5.16,
+        "end": 5.36
+      },
+      {
+        "word": "d'outils",
+        "start": 5.4,
+        "end": 5.68
+      },
+      {
+        "word": "compacts.",
+        "start": 5.76,
+        "end": 6.48
+      }
+    ],
+    "heard": "Ici, c'est un vrai chat. Markdown, code coloré, réflexion de Claude repliée, appel d'outils compact",
+    "match": 0.93
+  },
+  "chat.diff": {
+    "text": "Déplie-les : le diff d'une modification, la sortie d'une commande.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/chat.diff.mp3",
+    "duration": 3.892244897959177,
+    "words": [
+      {
+        "word": "Déplie-les",
+        "start": 0,
+        "end": 0.56
+      },
+      {
+        "word": ":",
+        "start": 0.88,
+        "end": 0.933
+      },
+      {
+        "word": "le",
+        "start": 0.987,
+        "end": 1.04
+      },
+      {
+        "word": "diff",
+        "start": 1.12,
+        "end": 1.28
+      },
+      {
+        "word": "d'une",
+        "start": 1.333,
+        "end": 1.44
+      },
+      {
+        "word": "modification,",
+        "start": 1.84,
+        "end": 2.4
+      },
+      {
+        "word": "la",
+        "start": 2.48,
+        "end": 2.56
+      },
+      {
+        "word": "sortie",
+        "start": 2.64,
+        "end": 2.88
+      },
+      {
+        "word": "d'une",
+        "start": 2.92,
+        "end": 3.12
+      },
+      {
+        "word": "commande.",
+        "start": 3.28,
+        "end": 3.84
+      }
+    ],
+    "heard": "Dépliez le div d'une modification, la sortie d'une commande",
+    "match": 0.7
+  },
+  "chat.live": {
+    "text": "Pendant le tour, tu vois ce que fait l'agent. Ses tokens et son coût montent en direct.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/chat.live.mp3",
+    "duration": 5.01,
+    "words": [
+      {
+        "word": "Pendant",
+        "start": 0,
+        "end": 0.24
+      },
+      {
+        "word": "le",
+        "start": 0.32,
+        "end": 0.4
+      },
+      {
+        "word": "tour,",
+        "start": 0.6,
+        "end": 0.88
+      },
+      {
+        "word": "tu",
+        "start": 0.96,
+        "end": 1.04
+      },
+      {
+        "word": "vois",
+        "start": 1.08,
+        "end": 1.28
+      },
+      {
+        "word": "ce",
+        "start": 1.32,
+        "end": 1.36
+      },
+      {
+        "word": "que",
+        "start": 1.44,
+        "end": 1.52
+      },
+      {
+        "word": "fait",
+        "start": 1.6,
+        "end": 1.68
+      },
+      {
+        "word": "l'agent.",
+        "start": 1.707,
+        "end": 2.44
+      },
+      {
+        "word": "Ses",
+        "start": 2.48,
+        "end": 2.56
+      },
+      {
+        "word": "tokens",
+        "start": 2.76,
+        "end": 2.96
+      },
+      {
+        "word": "et",
+        "start": 3.04,
+        "end": 3.12
+      },
+      {
+        "word": "son",
+        "start": 3.2,
+        "end": 3.28
+      },
+      {
+        "word": "coût",
+        "start": 3.36,
+        "end": 3.6
+      },
+      {
+        "word": "montent",
+        "start": 3.68,
+        "end": 3.92
+      },
+      {
+        "word": "en",
+        "start": 4,
+        "end": 4.08
+      },
+      {
+        "word": "direct.",
+        "start": 4.16,
+        "end": 4.96
+      }
+    ],
+    "heard": "Pendant le tour, tu vois ce que fait l'agent. Ses tokens et son coût montent en direct",
+    "match": 1
+  },
+  "chat.ask": {
+    "text": "Une question ? Une autorisation ? Tu réponds en un clic.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/chat.ask.mp3",
+    "duration": 3.5787755102040766,
+    "words": [
+      {
+        "word": "Une",
+        "start": 0,
+        "end": 0.16
+      },
+      {
+        "word": "question",
+        "start": 0.36,
+        "end": 0.56
+      },
+      {
+        "word": "?",
+        "start": 0.8,
+        "end": 0.827
+      },
+      {
+        "word": "Une",
+        "start": 0.853,
+        "end": 0.88
+      },
+      {
+        "word": "autorisation",
+        "start": 0.96,
+        "end": 1.52
+      },
+      {
+        "word": "?",
+        "start": 1.84,
+        "end": 1.893
+      },
+      {
+        "word": "Tu",
+        "start": 1.947,
+        "end": 2
+      },
+      {
+        "word": "réponds",
+        "start": 2.08,
+        "end": 2.4
+      },
+      {
+        "word": "en",
+        "start": 2.48,
+        "end": 2.56
+      },
+      {
+        "word": "un",
+        "start": 2.64,
+        "end": 2.72
+      },
+      {
+        "word": "clic.",
+        "start": 2.8,
+        "end": 3.52
+      }
+    ],
+    "heard": "Une question ? Une autorisation ? Tu réponds en un clic",
+    "match": 1
+  },
+  "chat.during": {
+    "text": "Écris-lui pendant qu'il travaille : il en tient compte à l'étape suivante. Et Échap l'arrête net.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/chat.during.mp3",
+    "duration": 5.41,
+    "words": [
+      {
+        "word": "Écris-lui",
+        "start": 0,
+        "end": 0.48
+      },
+      {
+        "word": "pendant",
+        "start": 0.56,
+        "end": 0.72
+      },
+      {
+        "word": "qu'il",
+        "start": 0.773,
+        "end": 0.88
+      },
+      {
+        "word": "travaille",
+        "start": 0.96,
+        "end": 1.36
+      },
+      {
+        "word": ":",
+        "start": 1.68,
+        "end": 1.707
+      },
+      {
+        "word": "il",
+        "start": 1.733,
+        "end": 1.76
+      },
+      {
+        "word": "en",
+        "start": 1.84,
+        "end": 1.92
+      },
+      {
+        "word": "tient",
+        "start": 1.973,
+        "end": 2.08
+      },
+      {
+        "word": "compte",
+        "start": 2.16,
+        "end": 2.32
+      },
+      {
+        "word": "à",
+        "start": 2.4,
+        "end": 2.44
+      },
+      {
+        "word": "l'étape",
+        "start": 2.48,
+        "end": 2.72
+      },
+      {
+        "word": "suivante.",
+        "start": 2.76,
+        "end": 3.573
+      },
+      {
+        "word": "Et",
+        "start": 3.627,
+        "end": 3.68
+      },
+      {
+        "word": "Échap",
+        "start": 3.76,
+        "end": 4.16
+      },
+      {
+        "word": "l'arrête",
+        "start": 4.24,
+        "end": 4.64
+      },
+      {
+        "word": "net.",
+        "start": 4.96,
+        "end": 5.36
+      }
+    ],
+    "heard": "Écris-lui pendant qu'il travaille. Il en tient compte à l'étape suivante et échappe l'arête nette",
+    "match": 0.81
+  },
+  "composer.menus": {
+    "text": "Modèle, effort, mode : change quand tu veux. Fable, Opus, Sonnet ou Haiku, dans la version qu'utilise Claude Code.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/composer.menus.mp3",
+    "duration": 7.575510204081668,
+    "words": [
+      {
+        "word": "Modèle,",
+        "start": 0,
+        "end": 0.6
+      },
+      {
+        "word": "effort,",
+        "start": 0.72,
+        "end": 1.44
+      },
+      {
+        "word": "mode",
+        "start": 1.52,
+        "end": 1.76
+      },
+      {
+        "word": ":",
+        "start": 2.08,
+        "end": 2.16
+      },
+      {
+        "word": "change",
+        "start": 2.24,
+        "end": 2.32
+      },
+      {
+        "word": "quand",
+        "start": 2.4,
+        "end": 2.48
+      },
+      {
+        "word": "tu",
+        "start": 2.56,
+        "end": 2.64
+      },
+      {
+        "word": "veux.",
+        "start": 2.68,
+        "end": 2.88
+      },
+      {
+        "word": "Fable,",
+        "start": 3.28,
+        "end": 3.8
+      },
+      {
+        "word": "Opus,",
+        "start": 3.92,
+        "end": 4.56
+      },
+      {
+        "word": "Sonnet",
+        "start": 4.64,
+        "end": 5.04
+      },
+      {
+        "word": "ou",
+        "start": 5.12,
+        "end": 5.2
+      },
+      {
+        "word": "Haiku,",
+        "start": 5.28,
+        "end": 5.84
+      },
+      {
+        "word": "dans",
+        "start": 5.88,
+        "end": 5.96
+      },
+      {
+        "word": "la",
+        "start": 6,
+        "end": 6.08
+      },
+      {
+        "word": "version",
+        "start": 6.2,
+        "end": 6.32
+      },
+      {
+        "word": "qu'utilise",
+        "start": 6.4,
+        "end": 6.8
+      },
+      {
+        "word": "Claude",
+        "start": 6.88,
+        "end": 7.04
+      },
+      {
+        "word": "Code.",
+        "start": 7.12,
+        "end": 7.52
+      }
+    ],
+    "heard": "Modèle, effort, mode, change quand tu veux. Fable, Opus, Sonnet ou Haiku dans la version qu'utilise Claude Code",
+    "match": 1
+  },
+  "composer.attach": {
+    "text": "Glisse une image, un PDF, un fichier. Cite un fichier avec arobase, lance une commande avec slash.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/composer.attach.mp3",
+    "duration": 6.791836734693904,
+    "words": [
+      {
+        "word": "Glisse",
+        "start": 0,
+        "end": 0.24
+      },
+      {
+        "word": "une",
+        "start": 0.32,
+        "end": 0.4
+      },
+      {
+        "word": "image,",
+        "start": 0.64,
+        "end": 1.04
+      },
+      {
+        "word": "un",
+        "start": 1.12,
+        "end": 1.2
+      },
+      {
+        "word": "PDF,",
+        "start": 1.24,
+        "end": 1.92
+      },
+      {
+        "word": "un",
+        "start": 1.96,
+        "end": 2
+      },
+      {
+        "word": "fichier.",
+        "start": 2.08,
+        "end": 2.88
+      },
+      {
+        "word": "Cite",
+        "start": 2.92,
+        "end": 3.12
+      },
+      {
+        "word": "un",
+        "start": 3.16,
+        "end": 3.2
+      },
+      {
+        "word": "fichier",
+        "start": 3.24,
+        "end": 3.6
+      },
+      {
+        "word": "avec",
+        "start": 3.72,
+        "end": 3.84
+      },
+      {
+        "word": "arobase,",
+        "start": 3.92,
+        "end": 4.72
+      },
+      {
+        "word": "lance",
+        "start": 4.8,
+        "end": 5.04
+      },
+      {
+        "word": "une",
+        "start": 5.08,
+        "end": 5.12
+      },
+      {
+        "word": "commande",
+        "start": 5.2,
+        "end": 5.6
+      },
+      {
+        "word": "avec",
+        "start": 5.72,
+        "end": 5.84
+      },
+      {
+        "word": "slash.",
+        "start": 5.92,
+        "end": 6.72
+      }
+    ],
+    "heard": "Glisse une image, un PDF, un fichier. Cite un fichier avec arobase. Lance une commande avec slash",
+    "match": 1
+  },
+  "composer.done": {
+    "text": "Fini ? Une carte résume la tâche : durée, coût, fichiers. Un clic pour les revoir, un autre pour demander le commit.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/composer.done.mp3",
+    "duration": 7.49,
+    "words": [
+      {
+        "word": "Fini",
+        "start": 0,
+        "end": 0.32
+      },
+      {
+        "word": "?",
+        "start": 0.72,
+        "end": 0.773
+      },
+      {
+        "word": "Une",
+        "start": 0.827,
+        "end": 0.88
+      },
+      {
+        "word": "carte",
+        "start": 0.96,
+        "end": 1.2
+      },
+      {
+        "word": "résume",
+        "start": 1.28,
+        "end": 1.52
+      },
+      {
+        "word": "la",
+        "start": 1.6,
+        "end": 1.68
+      },
+      {
+        "word": "tâche",
+        "start": 1.72,
+        "end": 2
+      },
+      {
+        "word": ":",
+        "start": 2.32,
+        "end": 2.4
+      },
+      {
+        "word": "durée,",
+        "start": 2.48,
+        "end": 2.96
+      },
+      {
+        "word": "coût,",
+        "start": 3.04,
+        "end": 3.52
+      },
+      {
+        "word": "fichiers.",
+        "start": 3.56,
+        "end": 4.32
+      },
+      {
+        "word": "Un",
+        "start": 4.36,
+        "end": 4.4
+      },
+      {
+        "word": "clic",
+        "start": 4.48,
+        "end": 4.72
+      },
+      {
+        "word": "pour",
+        "start": 4.8,
+        "end": 4.88
+      },
+      {
+        "word": "les",
+        "start": 4.92,
+        "end": 4.96
+      },
+      {
+        "word": "revoir,",
+        "start": 5.04,
+        "end": 5.68
+      },
+      {
+        "word": "un",
+        "start": 5.76,
+        "end": 5.84
+      },
+      {
+        "word": "autre",
+        "start": 5.92,
+        "end": 6.16
+      },
+      {
+        "word": "pour",
+        "start": 6.24,
+        "end": 6.32
+      },
+      {
+        "word": "demander",
+        "start": 6.4,
+        "end": 6.64
+      },
+      {
+        "word": "le",
+        "start": 6.72,
+        "end": 6.8
+      },
+      {
+        "word": "commit.",
+        "start": 7,
+        "end": 7.44
+      }
+    ],
+    "heard": "Fini. Une carte résume la tâche. Durée, coût, fichier. Un clic pour les revoir, un autre pour demander le commit",
+    "match": 1
+  },
+  "notify.ask": {
+    "text": "Un agent t'attend, ou a fini ? Son onglet et sa carte clignotent, et un carillon sonne, que tu peux couper.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/notify.ask.mp3",
+    "duration": 6.060408163265324,
+    "words": [
+      {
+        "word": "Un",
+        "start": 0,
+        "end": 0.16
+      },
+      {
+        "word": "agent",
+        "start": 0.28,
+        "end": 0.4
+      },
+      {
+        "word": "t'attend,",
+        "start": 0.44,
+        "end": 1.04
+      },
+      {
+        "word": "ou",
+        "start": 1.16,
+        "end": 1.28
+      },
+      {
+        "word": "a",
+        "start": 1.36,
+        "end": 1.44
+      },
+      {
+        "word": "fini",
+        "start": 1.52,
+        "end": 1.76
+      },
+      {
+        "word": "?",
+        "start": 2.16,
+        "end": 2.213
+      },
+      {
+        "word": "Son",
+        "start": 2.267,
+        "end": 2.32
+      },
+      {
+        "word": "onglet",
+        "start": 2.4,
+        "end": 2.72
+      },
+      {
+        "word": "et",
+        "start": 2.76,
+        "end": 2.8
+      },
+      {
+        "word": "sa",
+        "start": 2.88,
+        "end": 2.96
+      },
+      {
+        "word": "carte",
+        "start": 3.08,
+        "end": 3.28
+      },
+      {
+        "word": "clignotent,",
+        "start": 3.32,
+        "end": 3.92
+      },
+      {
+        "word": "et",
+        "start": 3.96,
+        "end": 4
+      },
+      {
+        "word": "un",
+        "start": 4.08,
+        "end": 4.16
+      },
+      {
+        "word": "carillon",
+        "start": 4.24,
+        "end": 4.56
+      },
+      {
+        "word": "sonne,",
+        "start": 4.64,
+        "end": 5.04
+      },
+      {
+        "word": "que",
+        "start": 5.08,
+        "end": 5.12
+      },
+      {
+        "word": "tu",
+        "start": 5.2,
+        "end": 5.28
+      },
+      {
+        "word": "peux",
+        "start": 5.32,
+        "end": 5.44
+      },
+      {
+        "word": "couper.",
+        "start": 5.48,
+        "end": 6
+      }
+    ],
+    "heard": "Un agent t'attend ou a fini ? Son onglet et sa carte clignotent et un carillon sonne que tu peux couper",
+    "match": 1
+  },
+  "notify.toast": {
+    "text": "Escouade est en arrière-plan ? Une notification arrive, la barre des tâches clignote.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/notify.toast.mp3",
+    "duration": 4.780408163265308,
+    "words": [
+      {
+        "word": "Escouade",
+        "start": 0,
+        "end": 0.4
+      },
+      {
+        "word": "est",
+        "start": 0.48,
+        "end": 0.56
+      },
+      {
+        "word": "en",
+        "start": 0.6,
+        "end": 0.64
+      },
+      {
+        "word": "arrière-plan",
+        "start": 0.76,
+        "end": 1.12
+      },
+      {
+        "word": "?",
+        "start": 1.52,
+        "end": 1.547
+      },
+      {
+        "word": "Une",
+        "start": 1.573,
+        "end": 1.6
+      },
+      {
+        "word": "notification",
+        "start": 1.68,
+        "end": 2.32
+      },
+      {
+        "word": "arrive,",
+        "start": 2.4,
+        "end": 2.96
+      },
+      {
+        "word": "la",
+        "start": 3.04,
+        "end": 3.12
+      },
+      {
+        "word": "barre",
+        "start": 3.2,
+        "end": 3.36
+      },
+      {
+        "word": "des",
+        "start": 3.44,
+        "end": 3.52
+      },
+      {
+        "word": "tâches",
+        "start": 3.547,
+        "end": 3.76
+      },
+      {
+        "word": "clignote.",
+        "start": 3.8,
+        "end": 4.72
+      }
+    ],
+    "heard": "Et Squad est en arrière-plan. Une notification arrive, la barre des tâches clignote",
+    "match": 0.92
+  },
+  "notify.jump": {
+    "text": "Contrôle J : direct au prochain agent qui t'attend.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/notify.jump.mp3",
+    "duration": 2.9518367346938756,
+    "words": [
+      {
+        "word": "Contrôle",
+        "start": 0,
+        "end": 0.32
+      },
+      {
+        "word": "J",
+        "start": 0.4,
+        "end": 0.64
+      },
+      {
+        "word": ":",
+        "start": 1.04,
+        "end": 1.147
+      },
+      {
+        "word": "direct",
+        "start": 1.253,
+        "end": 1.36
+      },
+      {
+        "word": "au",
+        "start": 1.44,
+        "end": 1.52
+      },
+      {
+        "word": "prochain",
+        "start": 1.6,
+        "end": 1.84
+      },
+      {
+        "word": "agent",
+        "start": 1.96,
+        "end": 2.08
+      },
+      {
+        "word": "qui",
+        "start": 2.12,
+        "end": 2.16
+      },
+      {
+        "word": "t'attend.",
+        "start": 2.24,
+        "end": 2.88
+      }
+    ],
+    "heard": "Contrôle J. Direct au prochain agent qui t'attend",
+    "match": 1
+  },
+  "notify.tray": {
+    "text": "Tu fermes la fenêtre ? Rien ne s'arrête : Escouade file dans la zone de notification. Et au redémarrage, chaque agent reprend sa session.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/notify.tray.mp3",
+    "duration": 7.41,
+    "words": [
+      {
+        "word": "Tu",
+        "start": 0,
+        "end": 0.08
+      },
+      {
+        "word": "fermes",
+        "start": 0.16,
+        "end": 0.32
+      },
+      {
+        "word": "la",
+        "start": 0.36,
+        "end": 0.4
+      },
+      {
+        "word": "fenêtre",
+        "start": 0.48,
+        "end": 0.8
+      },
+      {
+        "word": "?",
+        "start": 1.2,
+        "end": 1.24
+      },
+      {
+        "word": "Rien",
+        "start": 1.28,
+        "end": 1.44
+      },
+      {
+        "word": "ne",
+        "start": 1.48,
+        "end": 1.52
+      },
+      {
+        "word": "s'arrête",
+        "start": 1.6,
+        "end": 1.92
+      },
+      {
+        "word": ":",
+        "start": 2.16,
+        "end": 2.24
+      },
+      {
+        "word": "Escouade",
+        "start": 2.32,
+        "end": 2.64
+      },
+      {
+        "word": "file",
+        "start": 2.72,
+        "end": 2.88
+      },
+      {
+        "word": "dans",
+        "start": 2.907,
+        "end": 2.96
+      },
+      {
+        "word": "la",
+        "start": 3.04,
+        "end": 3.12
+      },
+      {
+        "word": "zone",
+        "start": 3.2,
+        "end": 3.28
+      },
+      {
+        "word": "de",
+        "start": 3.32,
+        "end": 3.36
+      },
+      {
+        "word": "notification.",
+        "start": 3.44,
+        "end": 4.507
+      },
+      {
+        "word": "Et",
+        "start": 4.533,
+        "end": 4.56
+      },
+      {
+        "word": "au",
+        "start": 4.64,
+        "end": 4.72
+      },
+      {
+        "word": "redémarrage,",
+        "start": 4.8,
+        "end": 5.6
+      },
+      {
+        "word": "chaque",
+        "start": 5.68,
+        "end": 5.84
+      },
+      {
+        "word": "agent",
+        "start": 5.92,
+        "end": 6.16
+      },
+      {
+        "word": "reprend",
+        "start": 6.24,
+        "end": 6.48
+      },
+      {
+        "word": "sa",
+        "start": 6.52,
+        "end": 6.56
+      },
+      {
+        "word": "session.",
+        "start": 6.64,
+        "end": 7.36
+      }
+    ],
+    "heard": "Tu fermes la fenêtre ? Rien ne s'arrête. Esquad file dans la zone de notification. Et au redémarrage, chaque agent reprend sa session",
+    "match": 0.95
+  },
+  "git.split": {
+    "text": "En moitié-moitié : la conversation à gauche, à droite les fichiers modifiés et leur diff, en direct pendant que l'agent écrit.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/git.split.mp3",
+    "duration": 6.791836734693904,
+    "words": [
+      {
+        "word": "En",
+        "start": 0,
+        "end": 0.16
+      },
+      {
+        "word": "moitié-moitié",
+        "start": 0.2,
+        "end": 0.8
+      },
+      {
+        "word": ":",
+        "start": 1.2,
+        "end": 1.253
+      },
+      {
+        "word": "la",
+        "start": 1.307,
+        "end": 1.36
+      },
+      {
+        "word": "conversation",
+        "start": 1.64,
+        "end": 1.92
+      },
+      {
+        "word": "à",
+        "start": 1.96,
+        "end": 2
+      },
+      {
+        "word": "gauche,",
+        "start": 2.08,
+        "end": 2.64
+      },
+      {
+        "word": "à",
+        "start": 2.68,
+        "end": 2.72
+      },
+      {
+        "word": "droite",
+        "start": 2.8,
+        "end": 3.04
+      },
+      {
+        "word": "les",
+        "start": 3.12,
+        "end": 3.28
+      },
+      {
+        "word": "fichiers",
+        "start": 3.333,
+        "end": 3.52
+      },
+      {
+        "word": "modifiés",
+        "start": 3.6,
+        "end": 4.08
+      },
+      {
+        "word": "et",
+        "start": 4.12,
+        "end": 4.16
+      },
+      {
+        "word": "leur",
+        "start": 4.24,
+        "end": 4.32
+      },
+      {
+        "word": "diff,",
+        "start": 4.4,
+        "end": 4.96
+      },
+      {
+        "word": "en",
+        "start": 5.04,
+        "end": 5.12
+      },
+      {
+        "word": "direct",
+        "start": 5.32,
+        "end": 5.52
+      },
+      {
+        "word": "pendant",
+        "start": 5.6,
+        "end": 5.84
+      },
+      {
+        "word": "que",
+        "start": 5.88,
+        "end": 5.92
+      },
+      {
+        "word": "l'agent",
+        "start": 5.947,
+        "end": 6.16
+      },
+      {
+        "word": "écrit.",
+        "start": 6.24,
+        "end": 6.72
+      }
+    ],
+    "heard": "En moitié-moitié. La conversation à gauche, à droite, les fichiers modifiés et leur diff en direct pendant que l'agent écrit",
+    "match": 1
+  },
+  "git.scope": {
+    "text": "Cet agent ou tout le projet. Côte à côte ou unifié. Et même en plein écran.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/git.scope.mp3",
+    "duration": 5.33,
+    "words": [
+      {
+        "word": "Cet",
+        "start": 0,
+        "end": 0.24
+      },
+      {
+        "word": "agent",
+        "start": 0.48,
+        "end": 0.72
+      },
+      {
+        "word": "ou",
+        "start": 0.84,
+        "end": 0.96
+      },
+      {
+        "word": "tout",
+        "start": 1,
+        "end": 1.04
+      },
+      {
+        "word": "le",
+        "start": 1.08,
+        "end": 1.12
+      },
+      {
+        "word": "projet.",
+        "start": 1.2,
+        "end": 2.027
+      },
+      {
+        "word": "Côte",
+        "start": 2.053,
+        "end": 2.16
+      },
+      {
+        "word": "à",
+        "start": 2.24,
+        "end": 2.32
+      },
+      {
+        "word": "côte",
+        "start": 2.36,
+        "end": 2.8
+      },
+      {
+        "word": "ou",
+        "start": 2.88,
+        "end": 2.96
+      },
+      {
+        "word": "unifié.",
+        "start": 3.04,
+        "end": 3.893
+      },
+      {
+        "word": "Et",
+        "start": 3.947,
+        "end": 4
+      },
+      {
+        "word": "même",
+        "start": 4.08,
+        "end": 4.24
+      },
+      {
+        "word": "en",
+        "start": 4.28,
+        "end": 4.32
+      },
+      {
+        "word": "plein",
+        "start": 4.36,
+        "end": 4.48
+      },
+      {
+        "word": "écran.",
+        "start": 4.56,
+        "end": 5.28
+      }
+    ],
+    "heard": "Cet agent ou tout le projet, côte à côte ou unifié et même en plein écran",
+    "match": 1
+  },
+  "git.history": {
+    "text": "L'historique ? Le graphe du dépôt, avec la branche de l'agent mise en avant. Un clic sur un commit, et voilà son diff.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/git.history.mp3",
+    "duration": 6.1387755102041,
+    "words": [
+      {
+        "word": "L'historique",
+        "start": 0,
+        "end": 0.56
+      },
+      {
+        "word": "?",
+        "start": 0.88,
+        "end": 0.933
+      },
+      {
+        "word": "Le",
+        "start": 0.987,
+        "end": 1.04
+      },
+      {
+        "word": "graphe",
+        "start": 1.08,
+        "end": 1.28
+      },
+      {
+        "word": "du",
+        "start": 1.32,
+        "end": 1.36
+      },
+      {
+        "word": "dépôt,",
+        "start": 1.44,
+        "end": 1.92
+      },
+      {
+        "word": "avec",
+        "start": 2.04,
+        "end": 2.16
+      },
+      {
+        "word": "la",
+        "start": 2.2,
+        "end": 2.24
+      },
+      {
+        "word": "branche",
+        "start": 2.32,
+        "end": 2.56
+      },
+      {
+        "word": "de",
+        "start": 2.6,
+        "end": 2.64
+      },
+      {
+        "word": "l'agent",
+        "start": 2.667,
+        "end": 2.96
+      },
+      {
+        "word": "mise",
+        "start": 3.04,
+        "end": 3.2
+      },
+      {
+        "word": "en",
+        "start": 3.24,
+        "end": 3.28
+      },
+      {
+        "word": "avant.",
+        "start": 3.36,
+        "end": 3.92
+      },
+      {
+        "word": "Un",
+        "start": 3.96,
+        "end": 4
+      },
+      {
+        "word": "clic",
+        "start": 4.08,
+        "end": 4.24
+      },
+      {
+        "word": "sur",
+        "start": 4.32,
+        "end": 4.4
+      },
+      {
+        "word": "un",
+        "start": 4.44,
+        "end": 4.48
+      },
+      {
+        "word": "commit,",
+        "start": 4.56,
+        "end": 5.04
+      },
+      {
+        "word": "et",
+        "start": 5.12,
+        "end": 5.2
+      },
+      {
+        "word": "voilà",
+        "start": 5.24,
+        "end": 5.44
+      },
+      {
+        "word": "son",
+        "start": 5.52,
+        "end": 5.6
+      },
+      {
+        "word": "diff.",
+        "start": 5.76,
+        "end": 6.08
+      }
+    ],
+    "heard": "L'historique, le graphe du dépôt avec la branche de l'agent mise en avant. Un clic sur un commit et voilà son diff",
+    "match": 1
+  },
+  "git.merge": {
+    "text": "Un worktree par agent ? Quand c'est prêt, un clic pour fusionner sa branche dans main, en merge ou en squash.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/git.merge.mp3",
+    "duration": 5.97,
+    "words": [
+      {
+        "word": "Un",
+        "start": 0,
+        "end": 0.08
+      },
+      {
+        "word": "worktree",
+        "start": 0.16,
+        "end": 0.56
+      },
+      {
+        "word": "par",
+        "start": 0.64,
+        "end": 0.72
+      },
+      {
+        "word": "agent",
+        "start": 0.8,
+        "end": 1.04
+      },
+      {
+        "word": "?",
+        "start": 1.44,
+        "end": 1.48
+      },
+      {
+        "word": "Quand",
+        "start": 1.52,
+        "end": 1.6
+      },
+      {
+        "word": "c'est",
+        "start": 1.653,
+        "end": 1.76
+      },
+      {
+        "word": "prêt,",
+        "start": 1.84,
+        "end": 2.2
+      },
+      {
+        "word": "un",
+        "start": 2.24,
+        "end": 2.32
+      },
+      {
+        "word": "clic",
+        "start": 2.4,
+        "end": 2.56
+      },
+      {
+        "word": "pour",
+        "start": 2.64,
+        "end": 2.8
+      },
+      {
+        "word": "fusionner",
+        "start": 2.92,
+        "end": 3.2
+      },
+      {
+        "word": "sa",
+        "start": 3.24,
+        "end": 3.28
+      },
+      {
+        "word": "branche",
+        "start": 3.36,
+        "end": 3.6
+      },
+      {
+        "word": "dans",
+        "start": 3.64,
+        "end": 3.84
+      },
+      {
+        "word": "main,",
+        "start": 4.04,
+        "end": 4.28
+      },
+      {
+        "word": "en",
+        "start": 4.32,
+        "end": 4.48
+      },
+      {
+        "word": "merge",
+        "start": 4.68,
+        "end": 4.88
+      },
+      {
+        "word": "ou",
+        "start": 4.92,
+        "end": 4.96
+      },
+      {
+        "word": "en",
+        "start": 5,
+        "end": 5.04
+      },
+      {
+        "word": "squash.",
+        "start": 5.12,
+        "end": 5.92
+      }
+    ],
+    "heard": "Un work tree par agent ? Quand c'est prêt, un clic pour fusionner sa branche dans Main, en merge ou en squash",
+    "match": 0.95
+  },
+  "git.sync": {
+    "text": "Et la barre de statut suit ta branche : pull, push et fetch, en un clic.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/git.sync.mp3",
+    "duration": 4.609999999999999,
+    "words": [
+      {
+        "word": "Et",
+        "start": 0,
+        "end": 0.04
+      },
+      {
+        "word": "la",
+        "start": 0.08,
+        "end": 0.16
+      },
+      {
+        "word": "barre",
+        "start": 0.24,
+        "end": 0.36
+      },
+      {
+        "word": "de",
+        "start": 0.4,
+        "end": 0.44
+      },
+      {
+        "word": "statut",
+        "start": 0.48,
+        "end": 0.88
+      },
+      {
+        "word": "suit",
+        "start": 1,
+        "end": 1.12
+      },
+      {
+        "word": "ta",
+        "start": 1.16,
+        "end": 1.2
+      },
+      {
+        "word": "branche",
+        "start": 1.28,
+        "end": 1.68
+      },
+      {
+        "word": ":",
+        "start": 1.92,
+        "end": 2.027
+      },
+      {
+        "word": "pull,",
+        "start": 2.133,
+        "end": 2.48
+      },
+      {
+        "word": "push",
+        "start": 2.72,
+        "end": 2.96
+      },
+      {
+        "word": "et",
+        "start": 3.04,
+        "end": 3.12
+      },
+      {
+        "word": "fetch,",
+        "start": 3.32,
+        "end": 3.68
+      },
+      {
+        "word": "en",
+        "start": 3.76,
+        "end": 3.84
+      },
+      {
+        "word": "un",
+        "start": 3.88,
+        "end": 3.92
+      },
+      {
+        "word": "clic.",
+        "start": 4,
+        "end": 4.56
+      }
+    ],
+    "heard": "Et la barre de status suit ta branche. Pull, push et fetch en un clic",
+    "match": 0.93
+  },
+  "editor.open": {
+    "text": "Un fichier à retoucher ? L'éditeur intégré s'ouvre sur le projet, ou sur le worktree d'un agent.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/editor.open.mp3",
+    "duration": 5.093877551020414,
+    "words": [
+      {
+        "word": "Un",
+        "start": 0,
+        "end": 0.16
+      },
+      {
+        "word": "fichier",
+        "start": 0.24,
+        "end": 0.4
+      },
+      {
+        "word": "à",
+        "start": 0.44,
+        "end": 0.48
+      },
+      {
+        "word": "retoucher",
+        "start": 0.56,
+        "end": 0.96
+      },
+      {
+        "word": "?",
+        "start": 1.28,
+        "end": 1.307
+      },
+      {
+        "word": "L'éditeur",
+        "start": 1.333,
+        "end": 1.76
+      },
+      {
+        "word": "intégré",
+        "start": 1.88,
+        "end": 2.24
+      },
+      {
+        "word": "s'ouvre",
+        "start": 2.28,
+        "end": 2.56
+      },
+      {
+        "word": "sur",
+        "start": 2.64,
+        "end": 2.72
+      },
+      {
+        "word": "le",
+        "start": 2.76,
+        "end": 2.8
+      },
+      {
+        "word": "projet,",
+        "start": 2.88,
+        "end": 3.44
+      },
+      {
+        "word": "ou",
+        "start": 3.52,
+        "end": 3.6
+      },
+      {
+        "word": "sur",
+        "start": 3.68,
+        "end": 3.76
+      },
+      {
+        "word": "le",
+        "start": 3.8,
+        "end": 3.84
+      },
+      {
+        "word": "worktree",
+        "start": 3.92,
+        "end": 4.32
+      },
+      {
+        "word": "d'un",
+        "start": 4.347,
+        "end": 4.4
+      },
+      {
+        "word": "agent.",
+        "start": 4.48,
+        "end": 5.04
+      }
+    ],
+    "heard": "Un fichier à retoucher ? L'éditeur intégré s'ouvre sur le projet ou sur le worktree d'un agent",
+    "match": 1
+  },
+  "editor.look": {
+    "text": "Arborescence, onglets, coloration, recherche, et les lignes modifiées, marquées dans la marge.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/editor.look.mp3",
+    "duration": 5.903673469387771,
+    "words": [
+      {
+        "word": "Arborescence,",
+        "start": 0,
+        "end": 1.04
+      },
+      {
+        "word": "onglets,",
+        "start": 1.16,
+        "end": 1.68
+      },
+      {
+        "word": "coloration,",
+        "start": 1.84,
+        "end": 2.64
+      },
+      {
+        "word": "recherche,",
+        "start": 2.72,
+        "end": 3.44
+      },
+      {
+        "word": "et",
+        "start": 3.48,
+        "end": 3.52
+      },
+      {
+        "word": "les",
+        "start": 3.6,
+        "end": 3.68
+      },
+      {
+        "word": "lignes",
+        "start": 3.733,
+        "end": 3.92
+      },
+      {
+        "word": "modifiées,",
+        "start": 4.04,
+        "end": 4.72
+      },
+      {
+        "word": "marquées",
+        "start": 4.8,
+        "end": 5.04
+      },
+      {
+        "word": "dans",
+        "start": 5.067,
+        "end": 5.12
+      },
+      {
+        "word": "la",
+        "start": 5.16,
+        "end": 5.2
+      },
+      {
+        "word": "marge.",
+        "start": 5.28,
+        "end": 5.84
+      }
+    ],
+    "heard": "Arborescence, onglets, coloration, recherche et les lignes modifiées marquées dans la marge",
+    "match": 1
+  },
+  "editor.save": {
+    "text": "Contrôle S, c'est enregistré. Et si l'agent modifie ton fichier ouvert, l'éditeur te prévient.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/editor.save.mp3",
+    "duration": 5.569999999999999,
+    "words": [
+      {
+        "word": "Contrôle",
+        "start": 0,
+        "end": 0.4
+      },
+      {
+        "word": "S,",
+        "start": 0.64,
+        "end": 1.04
+      },
+      {
+        "word": "c'est",
+        "start": 1.093,
+        "end": 1.2
+      },
+      {
+        "word": "enregistré.",
+        "start": 1.24,
+        "end": 2.08
+      },
+      {
+        "word": "Et",
+        "start": 2.16,
+        "end": 2.24
+      },
+      {
+        "word": "si",
+        "start": 2.28,
+        "end": 2.32
+      },
+      {
+        "word": "l'agent",
+        "start": 2.4,
+        "end": 2.64
+      },
+      {
+        "word": "modifie",
+        "start": 2.72,
+        "end": 3.12
+      },
+      {
+        "word": "ton",
+        "start": 3.2,
+        "end": 3.28
+      },
+      {
+        "word": "fichier",
+        "start": 3.387,
+        "end": 3.6
+      },
+      {
+        "word": "ouvert,",
+        "start": 3.68,
+        "end": 4.24
+      },
+      {
+        "word": "l'éditeur",
+        "start": 4.267,
+        "end": 4.72
+      },
+      {
+        "word": "te",
+        "start": 4.76,
+        "end": 4.8
+      },
+      {
+        "word": "prévient.",
+        "start": 4.88,
+        "end": 5.52
+      }
+    ],
+    "heard": "Ctrl S, c'est enregistré. Et si l'agent modifie ton fichier ouvert, l'éditeur te prévient",
+    "match": 0.93
+  },
+  "board.switch": {
+    "text": "Et maintenant, le tableau ! À faire, en cours, à tester, terminé.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/board.switch.mp3",
+    "duration": 4.702040816326532,
+    "words": [
+      {
+        "word": "Et",
+        "start": 0,
+        "end": 0.16
+      },
+      {
+        "word": "maintenant,",
+        "start": 0.24,
+        "end": 0.72
+      },
+      {
+        "word": "le",
+        "start": 0.8,
+        "end": 0.88
+      },
+      {
+        "word": "tableau",
+        "start": 0.96,
+        "end": 1.28
+      },
+      {
+        "word": "!",
+        "start": 1.6,
+        "end": 1.627
+      },
+      {
+        "word": "À",
+        "start": 1.653,
+        "end": 1.68
+      },
+      {
+        "word": "faire,",
+        "start": 1.76,
+        "end": 2.32
+      },
+      {
+        "word": "en",
+        "start": 2.4,
+        "end": 2.48
+      },
+      {
+        "word": "cours,",
+        "start": 2.56,
+        "end": 3.12
+      },
+      {
+        "word": "à",
+        "start": 3.16,
+        "end": 3.2
+      },
+      {
+        "word": "tester,",
+        "start": 3.44,
+        "end": 4
+      },
+      {
+        "word": "terminé.",
+        "start": 4.16,
+        "end": 4.64
+      }
+    ],
+    "heard": "Et maintenant, le tableau. À faire, en cours, à tester, terminé",
+    "match": 1
+  },
+  "board.ticket": {
+    "text": "Un ticket : un titre, une description, des critères d'acceptation… et un nombre maximum de boucles.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/board.ticket.mp3",
+    "duration": 6.13,
+    "words": [
+      {
+        "word": "Un",
+        "start": 0,
+        "end": 0.08
+      },
+      {
+        "word": "ticket",
+        "start": 0.16,
+        "end": 0.56
+      },
+      {
+        "word": ":",
+        "start": 0.88,
+        "end": 0.92
+      },
+      {
+        "word": "un",
+        "start": 0.96,
+        "end": 1.04
+      },
+      {
+        "word": "titre,",
+        "start": 1.12,
+        "end": 1.6
+      },
+      {
+        "word": "une",
+        "start": 1.68,
+        "end": 1.76
+      },
+      {
+        "word": "description,",
+        "start": 2.08,
+        "end": 2.64
+      },
+      {
+        "word": "des",
+        "start": 2.68,
+        "end": 2.72
+      },
+      {
+        "word": "critères",
+        "start": 2.8,
+        "end": 3.04
+      },
+      {
+        "word": "d'acceptation…",
+        "start": 3.12,
+        "end": 4.107
+      },
+      {
+        "word": "et",
+        "start": 4.133,
+        "end": 4.16
+      },
+      {
+        "word": "un",
+        "start": 4.24,
+        "end": 4.32
+      },
+      {
+        "word": "nombre",
+        "start": 4.48,
+        "end": 4.64
+      },
+      {
+        "word": "maximum",
+        "start": 4.72,
+        "end": 5.2
+      },
+      {
+        "word": "de",
+        "start": 5.24,
+        "end": 5.28
+      },
+      {
+        "word": "boucles.",
+        "start": 5.36,
+        "end": 6.08
+      }
+    ],
+    "heard": "Un ticket, un titre, une description, des critères d'acceptation et un nombre maximum de boucles",
+    "match": 1
+  },
+  "board.manage": {
+    "text": "Clic droit : modifie, passe en tête, supprime.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/board.manage.mp3",
+    "duration": 3.3436734693877512,
+    "words": [
+      {
+        "word": "Clic",
+        "start": 0,
+        "end": 0.24
+      },
+      {
+        "word": "droit",
+        "start": 0.32,
+        "end": 0.56
+      },
+      {
+        "word": ":",
+        "start": 0.88,
+        "end": 0.96
+      },
+      {
+        "word": "modifie,",
+        "start": 1.04,
+        "end": 1.68
+      },
+      {
+        "word": "passe",
+        "start": 1.72,
+        "end": 1.92
+      },
+      {
+        "word": "en",
+        "start": 2,
+        "end": 2.08
+      },
+      {
+        "word": "tête,",
+        "start": 2.12,
+        "end": 2.56
+      },
+      {
+        "word": "supprime.",
+        "start": 2.64,
+        "end": 3.28
+      }
+    ],
+    "heard": "Clic droit, modifie, passe en tête, supprime",
+    "match": 1
+  },
+  "board.auto": {
+    "text": "Lance un ticket à la main… ou passe en pilote auto : les agents prennent les tickets seuls, dans l'ordre, jusqu'au nombre d'agents en parallèle que tu as choisi.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/board.auto.mp3",
+    "duration": 8.13,
+    "words": [
+      {
+        "word": "Lance",
+        "start": 0,
+        "end": 0.32
+      },
+      {
+        "word": "un",
+        "start": 0.36,
+        "end": 0.4
+      },
+      {
+        "word": "ticket",
+        "start": 0.48,
+        "end": 0.72
+      },
+      {
+        "word": "à",
+        "start": 0.76,
+        "end": 0.8
+      },
+      {
+        "word": "la",
+        "start": 0.84,
+        "end": 0.88
+      },
+      {
+        "word": "main…",
+        "start": 0.96,
+        "end": 1.52
+      },
+      {
+        "word": "ou",
+        "start": 1.64,
+        "end": 1.76
+      },
+      {
+        "word": "passe",
+        "start": 1.92,
+        "end": 2.08
+      },
+      {
+        "word": "en",
+        "start": 2.16,
+        "end": 2.24
+      },
+      {
+        "word": "pilote",
+        "start": 2.293,
+        "end": 2.48
+      },
+      {
+        "word": "auto",
+        "start": 2.64,
+        "end": 2.8
+      },
+      {
+        "word": ":",
+        "start": 3.12,
+        "end": 3.173
+      },
+      {
+        "word": "les",
+        "start": 3.227,
+        "end": 3.28
+      },
+      {
+        "word": "agents",
+        "start": 3.36,
+        "end": 3.6
+      },
+      {
+        "word": "prennent",
+        "start": 3.64,
+        "end": 3.813
+      },
+      {
+        "word": "les",
+        "start": 3.84,
+        "end": 3.92
+      },
+      {
+        "word": "tickets",
+        "start": 4.12,
+        "end": 4.32
+      },
+      {
+        "word": "seuls,",
+        "start": 4.4,
+        "end": 4.88
+      },
+      {
+        "word": "dans",
+        "start": 4.907,
+        "end": 4.96
+      },
+      {
+        "word": "l'ordre,",
+        "start": 5.04,
+        "end": 5.52
+      },
+      {
+        "word": "jusqu'au",
+        "start": 5.6,
+        "end": 5.92
+      },
+      {
+        "word": "nombre",
+        "start": 6.08,
+        "end": 6.24
+      },
+      {
+        "word": "d'agents",
+        "start": 6.267,
+        "end": 6.56
+      },
+      {
+        "word": "en",
+        "start": 6.6,
+        "end": 6.64
+      },
+      {
+        "word": "parallèle",
+        "start": 6.72,
+        "end": 7.12
+      },
+      {
+        "word": "que",
+        "start": 7.16,
+        "end": 7.2
+      },
+      {
+        "word": "tu",
+        "start": 7.28,
+        "end": 7.36
+      },
+      {
+        "word": "as",
+        "start": 7.4,
+        "end": 7.44
+      },
+      {
+        "word": "choisi.",
+        "start": 7.52,
+        "end": 8.08
+      }
+    ],
+    "heard": "Lance un ticket à la main ou passe en pilote auto. Les agents prennent les tickets seuls dans l'ordre jusqu'au nombre d'agents en parallèle que tu as choisi",
+    "match": 1
+  },
+  "loop.setup": {
+    "text": "Chaque ticket a son agent, sa branche, son worktree avec tes fichiers point E N V, et ses propres ports pour les tests.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/loop.setup.mp3",
+    "duration": 6.635102040816351,
+    "words": [
+      {
+        "word": "Chaque",
+        "start": 0,
+        "end": 0.24
+      },
+      {
+        "word": "ticket",
+        "start": 0.4,
+        "end": 0.56
+      },
+      {
+        "word": "a",
+        "start": 0.6,
+        "end": 0.64
+      },
+      {
+        "word": "son",
+        "start": 0.72,
+        "end": 0.88
+      },
+      {
+        "word": "agent,",
+        "start": 1.08,
+        "end": 1.44
+      },
+      {
+        "word": "sa",
+        "start": 1.52,
+        "end": 1.6
+      },
+      {
+        "word": "branche,",
+        "start": 1.68,
+        "end": 2.24
+      },
+      {
+        "word": "son",
+        "start": 2.32,
+        "end": 2.4
+      },
+      {
+        "word": "worktree",
+        "start": 2.48,
+        "end": 2.96
+      },
+      {
+        "word": "avec",
+        "start": 3.04,
+        "end": 3.2
+      },
+      {
+        "word": "tes",
+        "start": 3.28,
+        "end": 3.36
+      },
+      {
+        "word": "fichiers",
+        "start": 3.4,
+        "end": 3.68
+      },
+      {
+        "word": "point",
+        "start": 3.76,
+        "end": 3.84
+      },
+      {
+        "word": "E",
+        "start": 4,
+        "end": 4.08
+      },
+      {
+        "word": "N",
+        "start": 4.16,
+        "end": 4.24
+      },
+      {
+        "word": "V,",
+        "start": 4.32,
+        "end": 4.56
+      },
+      {
+        "word": "et",
+        "start": 4.72,
+        "end": 4.8
+      },
+      {
+        "word": "ses",
+        "start": 4.88,
+        "end": 4.96
+      },
+      {
+        "word": "propres",
+        "start": 5.04,
+        "end": 5.36
+      },
+      {
+        "word": "ports",
+        "start": 5.44,
+        "end": 5.68
+      },
+      {
+        "word": "pour",
+        "start": 5.76,
+        "end": 5.84
+      },
+      {
+        "word": "les",
+        "start": 5.92,
+        "end": 6
+      },
+      {
+        "word": "tests.",
+        "start": 6.2,
+        "end": 6.56
+      }
+    ],
+    "heard": "Chaque ticket a son agent, sa branche, son worktree avec tes fichiers .env et ses propres ports pour les tests",
+    "match": 0.83
+  },
+  "loop.loop": {
+    "text": "Et l'agent boucle jusqu'au but : à chaque tour, il fait le bilan de ses critères. Il en manque ? Il repart.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/loop.loop.mp3",
+    "duration": 6.21,
+    "words": [
+      {
+        "word": "Et",
+        "start": 0,
+        "end": 0.08
+      },
+      {
+        "word": "l'agent",
+        "start": 0.12,
+        "end": 0.48
+      },
+      {
+        "word": "boucle",
+        "start": 0.56,
+        "end": 0.88
+      },
+      {
+        "word": "jusqu'au",
+        "start": 0.92,
+        "end": 1.2
+      },
+      {
+        "word": "but",
+        "start": 1.28,
+        "end": 1.52
+      },
+      {
+        "word": ":",
+        "start": 1.84,
+        "end": 1.88
+      },
+      {
+        "word": "à",
+        "start": 1.92,
+        "end": 2
+      },
+      {
+        "word": "chaque",
+        "start": 2.04,
+        "end": 2.24
+      },
+      {
+        "word": "tour,",
+        "start": 2.44,
+        "end": 2.68
+      },
+      {
+        "word": "il",
+        "start": 2.72,
+        "end": 2.8
+      },
+      {
+        "word": "fait",
+        "start": 2.88,
+        "end": 2.96
+      },
+      {
+        "word": "le",
+        "start": 3.04,
+        "end": 3.12
+      },
+      {
+        "word": "bilan",
+        "start": 3.2,
+        "end": 3.36
+      },
+      {
+        "word": "de",
+        "start": 3.44,
+        "end": 3.52
+      },
+      {
+        "word": "ses",
+        "start": 3.56,
+        "end": 3.6
+      },
+      {
+        "word": "critères.",
+        "start": 3.68,
+        "end": 4.427
+      },
+      {
+        "word": "Il",
+        "start": 4.453,
+        "end": 4.48
+      },
+      {
+        "word": "en",
+        "start": 4.52,
+        "end": 4.56
+      },
+      {
+        "word": "manque",
+        "start": 4.64,
+        "end": 5.12
+      },
+      {
+        "word": "?",
+        "start": 5.147,
+        "end": 5.173
+      },
+      {
+        "word": "Il",
+        "start": 5.2,
+        "end": 5.28
+      },
+      {
+        "word": "repart.",
+        "start": 5.36,
+        "end": 6.16
+      }
+    ],
+    "heard": "Et l'agent boucle jusqu'au but. À chaque tour, il fait le bilan de ses critères. Il en manque ? Il repart",
+    "match": 1
+  },
+  "loop.card": {
+    "text": "Sur la carte : la boucle en cours, les critères atteints, ce qui est déjà en place, et ce que fait l'agent en ce moment.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/loop.card.mp3",
+    "duration": 6.452244897959206,
+    "words": [
+      {
+        "word": "Sur",
+        "start": 0,
+        "end": 0.16
+      },
+      {
+        "word": "la",
+        "start": 0.24,
+        "end": 0.32
+      },
+      {
+        "word": "carte",
+        "start": 0.4,
+        "end": 0.88
+      },
+      {
+        "word": ":",
+        "start": 1.04,
+        "end": 1.067
+      },
+      {
+        "word": "la",
+        "start": 1.093,
+        "end": 1.12
+      },
+      {
+        "word": "boucle",
+        "start": 1.2,
+        "end": 1.44
+      },
+      {
+        "word": "en",
+        "start": 1.48,
+        "end": 1.52
+      },
+      {
+        "word": "cours,",
+        "start": 1.56,
+        "end": 2.08
+      },
+      {
+        "word": "les",
+        "start": 2.16,
+        "end": 2.24
+      },
+      {
+        "word": "critères",
+        "start": 2.36,
+        "end": 2.64
+      },
+      {
+        "word": "atteints,",
+        "start": 2.76,
+        "end": 3.2
+      },
+      {
+        "word": "ce",
+        "start": 3.28,
+        "end": 3.36
+      },
+      {
+        "word": "qui",
+        "start": 3.44,
+        "end": 3.52
+      },
+      {
+        "word": "est",
+        "start": 3.6,
+        "end": 3.68
+      },
+      {
+        "word": "déjà",
+        "start": 3.76,
+        "end": 3.92
+      },
+      {
+        "word": "en",
+        "start": 3.96,
+        "end": 4
+      },
+      {
+        "word": "place,",
+        "start": 4.08,
+        "end": 4.64
+      },
+      {
+        "word": "et",
+        "start": 4.68,
+        "end": 4.72
+      },
+      {
+        "word": "ce",
+        "start": 4.8,
+        "end": 4.88
+      },
+      {
+        "word": "que",
+        "start": 4.92,
+        "end": 4.96
+      },
+      {
+        "word": "fait",
+        "start": 5.04,
+        "end": 5.2
+      },
+      {
+        "word": "l'agent",
+        "start": 5.227,
+        "end": 5.52
+      },
+      {
+        "word": "en",
+        "start": 5.56,
+        "end": 5.6
+      },
+      {
+        "word": "ce",
+        "start": 5.64,
+        "end": 5.68
+      },
+      {
+        "word": "moment.",
+        "start": 5.76,
+        "end": 6.4
+      }
+    ],
+    "heard": "Sur la carte, la boucle en cours, les critères atteints, ce qui est déjà en place et ce que fait l'agent en ce moment",
+    "match": 1
+  },
+  "loop.blocked": {
+    "text": "Un ticket bloqué libère sa place et te prévient. Un clic, et il repart.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/loop.blocked.mp3",
+    "duration": 4.85,
+    "words": [
+      {
+        "word": "Un",
+        "start": 0,
+        "end": 0.16
+      },
+      {
+        "word": "ticket",
+        "start": 0.32,
+        "end": 0.48
+      },
+      {
+        "word": "bloqué",
+        "start": 0.56,
+        "end": 0.96
+      },
+      {
+        "word": "libère",
+        "start": 1.04,
+        "end": 1.36
+      },
+      {
+        "word": "sa",
+        "start": 1.44,
+        "end": 1.52
+      },
+      {
+        "word": "place",
+        "start": 1.72,
+        "end": 1.92
+      },
+      {
+        "word": "et",
+        "start": 2,
+        "end": 2.08
+      },
+      {
+        "word": "te",
+        "start": 2.12,
+        "end": 2.16
+      },
+      {
+        "word": "prévient.",
+        "start": 2.24,
+        "end": 3
+      },
+      {
+        "word": "Un",
+        "start": 3.04,
+        "end": 3.12
+      },
+      {
+        "word": "clic,",
+        "start": 3.2,
+        "end": 3.7
+      },
+      {
+        "word": "et",
+        "start": 3.72,
+        "end": 3.74
+      },
+      {
+        "word": "il",
+        "start": 3.76,
+        "end": 3.84
+      },
+      {
+        "word": "repart.",
+        "start": 3.92,
+        "end": 4.8
+      }
+    ],
+    "heard": "Un ticket bloqué libère sa place et te prévient. Un clic et il repart",
+    "match": 1
+  },
+  "loop.report": {
+    "text": "Son bilan s’affiche en carte dans la conversation. Et dans la barre latérale, sa carte porte le ticket et sa boucle.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/loop.report.mp3",
+    "duration": 6.21,
+    "words": [
+      {
+        "word": "Son",
+        "start": 0,
+        "end": 0.16
+      },
+      {
+        "word": "bilan",
+        "start": 0.24,
+        "end": 0.48
+      },
+      {
+        "word": "s’affiche",
+        "start": 0.52,
+        "end": 0.88
+      },
+      {
+        "word": "en",
+        "start": 0.96,
+        "end": 1.04
+      },
+      {
+        "word": "carte",
+        "start": 1.16,
+        "end": 1.36
+      },
+      {
+        "word": "dans",
+        "start": 1.4,
+        "end": 1.52
+      },
+      {
+        "word": "la",
+        "start": 1.56,
+        "end": 1.6
+      },
+      {
+        "word": "conversation.",
+        "start": 1.68,
+        "end": 2.56
+      },
+      {
+        "word": "Et",
+        "start": 2.6,
+        "end": 2.64
+      },
+      {
+        "word": "dans",
+        "start": 2.667,
+        "end": 2.72
+      },
+      {
+        "word": "la",
+        "start": 2.8,
+        "end": 2.88
+      },
+      {
+        "word": "barre",
+        "start": 2.92,
+        "end": 3.04
+      },
+      {
+        "word": "latérale,",
+        "start": 3.12,
+        "end": 3.76
+      },
+      {
+        "word": "sa",
+        "start": 3.84,
+        "end": 3.92
+      },
+      {
+        "word": "carte",
+        "start": 4.04,
+        "end": 4.32
+      },
+      {
+        "word": "porte",
+        "start": 4.44,
+        "end": 4.56
+      },
+      {
+        "word": "le",
+        "start": 4.64,
+        "end": 4.68
+      },
+      {
+        "word": "ticket",
+        "start": 4.72,
+        "end": 5.12
+      },
+      {
+        "word": "et",
+        "start": 5.2,
+        "end": 5.28
+      },
+      {
+        "word": "sa",
+        "start": 5.36,
+        "end": 5.44
+      },
+      {
+        "word": "boucle.",
+        "start": 5.52,
+        "end": 6.16
+      }
+    ],
+    "heard": "Son bilan s'affiche en carte dans la conversation et dans la barre latérale, sa carte porte le ticket et sa boucle",
+    "match": 1
+  },
+  "test.ready": {
+    "text": "Tous les critères sont atteints ? Le ticket passe à tester, et tu es prévenu. Dernière boucle sans tout atteindre ? Il y passe aussi, en « Objectif partiel ».",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/test.ready.mp3",
+    "duration": 8.228571428571472,
+    "words": [
+      {
+        "word": "Tous",
+        "start": 0,
+        "end": 0.08
+      },
+      {
+        "word": "les",
+        "start": 0.16,
+        "end": 0.24
+      },
+      {
+        "word": "critères",
+        "start": 0.32,
+        "end": 0.56
+      },
+      {
+        "word": "sont",
+        "start": 0.613,
+        "end": 0.72
+      },
+      {
+        "word": "atteints",
+        "start": 0.8,
+        "end": 0.96
+      },
+      {
+        "word": "?",
+        "start": 1.36,
+        "end": 1.387
+      },
+      {
+        "word": "Le",
+        "start": 1.413,
+        "end": 1.44
+      },
+      {
+        "word": "ticket",
+        "start": 1.52,
+        "end": 1.84
+      },
+      {
+        "word": "passe",
+        "start": 1.92,
+        "end": 2.08
+      },
+      {
+        "word": "à",
+        "start": 2.12,
+        "end": 2.16
+      },
+      {
+        "word": "tester,",
+        "start": 2.36,
+        "end": 2.8
+      },
+      {
+        "word": "et",
+        "start": 2.84,
+        "end": 2.88
+      },
+      {
+        "word": "tu",
+        "start": 2.96,
+        "end": 3.04
+      },
+      {
+        "word": "es",
+        "start": 3.08,
+        "end": 3.12
+      },
+      {
+        "word": "prévenu.",
+        "start": 3.2,
+        "end": 3.92
+      },
+      {
+        "word": "Dernière",
+        "start": 3.96,
+        "end": 4.32
+      },
+      {
+        "word": "boucle",
+        "start": 4.347,
+        "end": 4.56
+      },
+      {
+        "word": "sans",
+        "start": 4.64,
+        "end": 4.8
+      },
+      {
+        "word": "tout",
+        "start": 4.88,
+        "end": 4.96
+      },
+      {
+        "word": "atteindre",
+        "start": 5.04,
+        "end": 5.36
+      },
+      {
+        "word": "?",
+        "start": 5.68,
+        "end": 5.733
+      },
+      {
+        "word": "Il",
+        "start": 5.787,
+        "end": 5.84
+      },
+      {
+        "word": "y",
+        "start": 5.88,
+        "end": 5.92
+      },
+      {
+        "word": "passe",
+        "start": 5.973,
+        "end": 6.08
+      },
+      {
+        "word": "aussi,",
+        "start": 6.2,
+        "end": 6.64
+      },
+      {
+        "word": "en",
+        "start": 6.76,
+        "end": 6.88
+      },
+      {
+        "word": "«",
+        "start": 6.98,
+        "end": 7.08
+      },
+      {
+        "word": "Objectif",
+        "start": 7.18,
+        "end": 7.36
+      },
+      {
+        "word": "partiel",
+        "start": 7.44,
+        "end": 7.92
+      },
+      {
+        "word": "».",
+        "start": 8.04,
+        "end": 8.16
+      }
+    ],
+    "heard": "Tous les critères sont atteints ? Le ticket passe à tester et tu es prévenu. Dernière boucle sans tout atteindre ? Il y passe aussi en objectif partiel",
+    "match": 1
+  },
+  "test.run": {
+    "text": "Un clic sur Tester : Escouade prépare le projet, lance ses serveurs sur les ports du ticket, attend qu'ils répondent…",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/test.run.mp3",
+    "duration": 6.37,
+    "words": [
+      {
+        "word": "Un",
+        "start": 0,
+        "end": 0.08
+      },
+      {
+        "word": "clic",
+        "start": 0.16,
+        "end": 0.4
+      },
+      {
+        "word": "sur",
+        "start": 0.48,
+        "end": 0.56
+      },
+      {
+        "word": "Tester",
+        "start": 0.64,
+        "end": 1.44
+      },
+      {
+        "word": ":",
+        "start": 1.5,
+        "end": 1.56
+      },
+      {
+        "word": "Escouade",
+        "start": 1.62,
+        "end": 1.92
+      },
+      {
+        "word": "prépare",
+        "start": 2,
+        "end": 2.24
+      },
+      {
+        "word": "le",
+        "start": 2.28,
+        "end": 2.32
+      },
+      {
+        "word": "projet,",
+        "start": 2.44,
+        "end": 3
+      },
+      {
+        "word": "lance",
+        "start": 3.04,
+        "end": 3.2
+      },
+      {
+        "word": "ses",
+        "start": 3.28,
+        "end": 3.36
+      },
+      {
+        "word": "serveurs",
+        "start": 3.44,
+        "end": 3.76
+      },
+      {
+        "word": "sur",
+        "start": 3.84,
+        "end": 3.92
+      },
+      {
+        "word": "les",
+        "start": 4,
+        "end": 4.08
+      },
+      {
+        "word": "ports",
+        "start": 4.16,
+        "end": 4.24
+      },
+      {
+        "word": "du",
+        "start": 4.28,
+        "end": 4.32
+      },
+      {
+        "word": "ticket,",
+        "start": 4.4,
+        "end": 5
+      },
+      {
+        "word": "attend",
+        "start": 5.04,
+        "end": 5.28
+      },
+      {
+        "word": "qu'ils",
+        "start": 5.333,
+        "end": 5.44
+      },
+      {
+        "word": "répondent…",
+        "start": 5.52,
+        "end": 6.32
+      }
+    ],
+    "heard": "Un clic sur Tester et Squad prépare le projet, lance ses serveurs sur les ports du ticket, attend qu'ils répondent",
+    "match": 0.95
+  },
+  "test.open": {
+    "text": "Et ouvre ton navigateur directement sur la fonctionnalité !",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/test.open.mp3",
+    "duration": 3.3299999999999996,
+    "words": [
+      {
+        "word": "Et",
+        "start": 0,
+        "end": 0.08
+      },
+      {
+        "word": "ouvre",
+        "start": 0.16,
+        "end": 0.4
+      },
+      {
+        "word": "ton",
+        "start": 0.48,
+        "end": 0.56
+      },
+      {
+        "word": "navigateur",
+        "start": 0.8,
+        "end": 1.28
+      },
+      {
+        "word": "directement",
+        "start": 1.48,
+        "end": 1.92
+      },
+      {
+        "word": "sur",
+        "start": 1.96,
+        "end": 2
+      },
+      {
+        "word": "la",
+        "start": 2.08,
+        "end": 2.16
+      },
+      {
+        "word": "fonctionnalité",
+        "start": 2.2,
+        "end": 2.8
+      },
+      {
+        "word": "!",
+        "start": 3.2,
+        "end": 3.28
+      }
+    ],
+    "heard": "Et ouvre ton navigateur directement sur la fonctionnalité",
+    "match": 1
+  },
+  "test.logs": {
+    "text": "Les logs ? Dans la section Lancement, sous le nom de l'agent.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/test.logs.mp3",
+    "duration": 3.3436734693877512,
+    "words": [
+      {
+        "word": "Les",
+        "start": 0,
+        "end": 0.16
+      },
+      {
+        "word": "logs",
+        "start": 0.36,
+        "end": 0.56
+      },
+      {
+        "word": "?",
+        "start": 0.88,
+        "end": 0.907
+      },
+      {
+        "word": "Dans",
+        "start": 0.933,
+        "end": 0.96
+      },
+      {
+        "word": "la",
+        "start": 1.04,
+        "end": 1.12
+      },
+      {
+        "word": "section",
+        "start": 1.28,
+        "end": 1.44
+      },
+      {
+        "word": "Lancement,",
+        "start": 1.52,
+        "end": 2.16
+      },
+      {
+        "word": "sous",
+        "start": 2.187,
+        "end": 2.24
+      },
+      {
+        "word": "le",
+        "start": 2.32,
+        "end": 2.4
+      },
+      {
+        "word": "nom",
+        "start": 2.48,
+        "end": 2.56
+      },
+      {
+        "word": "de",
+        "start": 2.6,
+        "end": 2.64
+      },
+      {
+        "word": "l'agent.",
+        "start": 2.68,
+        "end": 3.28
+      }
+    ],
+    "heard": "Les logs dans la section lancement sous le nom de l'agent",
+    "match": 1
+  },
+  "test.prepare": {
+    "text": "Et pour tout agent à worktree, Préparer le lancement lui demande comment le tester.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/test.prepare.mp3",
+    "duration": 4.37,
+    "words": [
+      {
+        "word": "Et",
+        "start": 0,
+        "end": 0.16
+      },
+      {
+        "word": "pour",
+        "start": 0.24,
+        "end": 0.32
+      },
+      {
+        "word": "tout",
+        "start": 0.4,
+        "end": 0.56
+      },
+      {
+        "word": "agent",
+        "start": 0.68,
+        "end": 0.8
+      },
+      {
+        "word": "à",
+        "start": 0.84,
+        "end": 0.88
+      },
+      {
+        "word": "worktree,",
+        "start": 0.96,
+        "end": 1.68
+      },
+      {
+        "word": "Préparer",
+        "start": 1.72,
+        "end": 2.08
+      },
+      {
+        "word": "le",
+        "start": 2.12,
+        "end": 2.16
+      },
+      {
+        "word": "lancement",
+        "start": 2.2,
+        "end": 2.64
+      },
+      {
+        "word": "lui",
+        "start": 2.68,
+        "end": 2.8
+      },
+      {
+        "word": "demande",
+        "start": 2.96,
+        "end": 3.28
+      },
+      {
+        "word": "comment",
+        "start": 3.4,
+        "end": 3.52
+      },
+      {
+        "word": "le",
+        "start": 3.56,
+        "end": 3.6
+      },
+      {
+        "word": "tester.",
+        "start": 3.68,
+        "end": 4.32
+      }
+    ],
+    "heard": "Et pour tout agent à Worktree, préparer le lancement lui demande comment le tester",
+    "match": 1
+  },
+  "validate.ok": {
+    "text": "Ça te va ? Valide ! Escouade relance les tests, commite avec un message généré, fusionne dans ta branche et retire le worktree.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/validate.ok.mp3",
+    "duration": 7.026938775510233,
+    "words": [
+      {
+        "word": "Ça",
+        "start": 0,
+        "end": 0.12
+      },
+      {
+        "word": "te",
+        "start": 0.16,
+        "end": 0.2
+      },
+      {
+        "word": "va",
+        "start": 0.24,
+        "end": 0.4
+      },
+      {
+        "word": "?",
+        "start": 0.533,
+        "end": 0.667
+      },
+      {
+        "word": "Valide",
+        "start": 0.8,
+        "end": 1.2
+      },
+      {
+        "word": "!",
+        "start": 1.52,
+        "end": 1.6
+      },
+      {
+        "word": "Escouade",
+        "start": 1.68,
+        "end": 1.92
+      },
+      {
+        "word": "relance",
+        "start": 2,
+        "end": 2.32
+      },
+      {
+        "word": "les",
+        "start": 2.36,
+        "end": 2.4
+      },
+      {
+        "word": "tests,",
+        "start": 2.48,
+        "end": 2.96
+      },
+      {
+        "word": "commite",
+        "start": 3.04,
+        "end": 3.28
+      },
+      {
+        "word": "avec",
+        "start": 3.36,
+        "end": 3.44
+      },
+      {
+        "word": "un",
+        "start": 3.52,
+        "end": 3.56
+      },
+      {
+        "word": "message",
+        "start": 3.6,
+        "end": 3.92
+      },
+      {
+        "word": "généré,",
+        "start": 3.96,
+        "end": 4.64
+      },
+      {
+        "word": "fusionne",
+        "start": 4.8,
+        "end": 5.04
+      },
+      {
+        "word": "dans",
+        "start": 5.067,
+        "end": 5.12
+      },
+      {
+        "word": "ta",
+        "start": 5.2,
+        "end": 5.28
+      },
+      {
+        "word": "branche",
+        "start": 5.32,
+        "end": 5.76
+      },
+      {
+        "word": "et",
+        "start": 5.8,
+        "end": 5.84
+      },
+      {
+        "word": "retire",
+        "start": 5.92,
+        "end": 6.24
+      },
+      {
+        "word": "le",
+        "start": 6.28,
+        "end": 6.32
+      },
+      {
+        "word": "worktree.",
+        "start": 6.4,
+        "end": 6.96
+      }
+    ],
+    "heard": "Ça te va ? Valide. Esquad relance les tests, commit avec un message généré, fusionne dans ta branche et retire le worktree",
+    "match": 0.9
+  },
+  "validate.settings": {
+    "text": "Plutôt une pull request, ouverte avec G H ? Ou pousser la branche ? Tout se règle par projet, jusqu'aux conflits et aux agents en parallèle.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/validate.settings.mp3",
+    "duration": 7.89,
+    "words": [
+      {
+        "word": "Plutôt",
+        "start": 0,
+        "end": 0.24
+      },
+      {
+        "word": "une",
+        "start": 0.32,
+        "end": 0.4
+      },
+      {
+        "word": "pull",
+        "start": 0.48,
+        "end": 0.64
+      },
+      {
+        "word": "request,",
+        "start": 0.88,
+        "end": 1.28
+      },
+      {
+        "word": "ouverte",
+        "start": 1.36,
+        "end": 1.6
+      },
+      {
+        "word": "avec",
+        "start": 1.68,
+        "end": 1.84
+      },
+      {
+        "word": "G",
+        "start": 1.92,
+        "end": 2
+      },
+      {
+        "word": "H",
+        "start": 2.16,
+        "end": 2.24
+      },
+      {
+        "word": "?",
+        "start": 2.56,
+        "end": 2.587
+      },
+      {
+        "word": "Ou",
+        "start": 2.613,
+        "end": 2.8
+      },
+      {
+        "word": "pousser",
+        "start": 2.88,
+        "end": 3.12
+      },
+      {
+        "word": "la",
+        "start": 3.16,
+        "end": 3.2
+      },
+      {
+        "word": "branche",
+        "start": 3.28,
+        "end": 3.6
+      },
+      {
+        "word": "?",
+        "start": 4,
+        "end": 4.04
+      },
+      {
+        "word": "Tout",
+        "start": 4.08,
+        "end": 4.16
+      },
+      {
+        "word": "se",
+        "start": 4.24,
+        "end": 4.32
+      },
+      {
+        "word": "règle",
+        "start": 4.36,
+        "end": 4.64
+      },
+      {
+        "word": "par",
+        "start": 4.72,
+        "end": 4.8
+      },
+      {
+        "word": "projet,",
+        "start": 4.88,
+        "end": 5.467
+      },
+      {
+        "word": "jusqu'aux",
+        "start": 5.493,
+        "end": 5.76
+      },
+      {
+        "word": "conflits",
+        "start": 5.84,
+        "end": 6.32
+      },
+      {
+        "word": "et",
+        "start": 6.36,
+        "end": 6.4
+      },
+      {
+        "word": "aux",
+        "start": 6.48,
+        "end": 6.56
+      },
+      {
+        "word": "agents",
+        "start": 6.64,
+        "end": 6.8
+      },
+      {
+        "word": "en",
+        "start": 6.84,
+        "end": 6.88
+      },
+      {
+        "word": "parallèle.",
+        "start": 6.96,
+        "end": 7.84
+      }
+    ],
+    "heard": "Plutôt une pull request ouverte avec GH ou pousser la branche ? Tout se règle par projet jusqu'aux conflits et aux agents en parallèle",
+    "match": 0.92
+  },
+  "validate.reject": {
+    "text": "Un souci ? Renvoie le ticket à son agent, en lui disant ce qui ne va pas. Et si un test échoue à la validation, il y repart tout seul.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/validate.reject.mp3",
+    "duration": 6.87020408163268,
+    "words": [
+      {
+        "word": "Un",
+        "start": 0,
+        "end": 0.08
+      },
+      {
+        "word": "souci",
+        "start": 0.16,
+        "end": 0.48
+      },
+      {
+        "word": "?",
+        "start": 0.8,
+        "end": 0.827
+      },
+      {
+        "word": "Renvoie",
+        "start": 0.853,
+        "end": 1.12
+      },
+      {
+        "word": "le",
+        "start": 1.16,
+        "end": 1.2
+      },
+      {
+        "word": "ticket",
+        "start": 1.28,
+        "end": 1.52
+      },
+      {
+        "word": "à",
+        "start": 1.56,
+        "end": 1.6
+      },
+      {
+        "word": "son",
+        "start": 1.68,
+        "end": 1.76
+      },
+      {
+        "word": "agent,",
+        "start": 1.92,
+        "end": 2.24
+      },
+      {
+        "word": "en",
+        "start": 2.28,
+        "end": 2.32
+      },
+      {
+        "word": "lui",
+        "start": 2.36,
+        "end": 2.48
+      },
+      {
+        "word": "disant",
+        "start": 2.56,
+        "end": 2.8
+      },
+      {
+        "word": "ce",
+        "start": 2.84,
+        "end": 2.88
+      },
+      {
+        "word": "qui",
+        "start": 2.96,
+        "end": 3.04
+      },
+      {
+        "word": "ne",
+        "start": 3.067,
+        "end": 3.093
+      },
+      {
+        "word": "va",
+        "start": 3.12,
+        "end": 3.2
+      },
+      {
+        "word": "pas.",
+        "start": 3.28,
+        "end": 3.68
+      },
+      {
+        "word": "Et",
+        "start": 3.76,
+        "end": 3.84
+      },
+      {
+        "word": "si",
+        "start": 3.88,
+        "end": 3.92
+      },
+      {
+        "word": "un",
+        "start": 4,
+        "end": 4.08
+      },
+      {
+        "word": "test",
+        "start": 4.2,
+        "end": 4.32
+      },
+      {
+        "word": "échoue",
+        "start": 4.36,
+        "end": 4.587
+      },
+      {
+        "word": "à",
+        "start": 4.613,
+        "end": 4.64
+      },
+      {
+        "word": "la",
+        "start": 4.68,
+        "end": 4.72
+      },
+      {
+        "word": "validation,",
+        "start": 4.8,
+        "end": 5.52
+      },
+      {
+        "word": "il",
+        "start": 5.56,
+        "end": 5.6
+      },
+      {
+        "word": "y",
+        "start": 5.68,
+        "end": 5.76
+      },
+      {
+        "word": "repart",
+        "start": 5.84,
+        "end": 6.08
+      },
+      {
+        "word": "tout",
+        "start": 6.16,
+        "end": 6.24
+      },
+      {
+        "word": "seul.",
+        "start": 6.28,
+        "end": 6.8
+      }
+    ],
+    "heard": "Un souci ? Renvoie le ticket à son agent en lui disant ce qui ne va pas. Et si un test échoue à la validation, il y repart tout seul",
+    "match": 1
+  },
+  "validate.done": {
+    "text": "Et les tickets terminés gardent leur issue, leurs boucles et leur coût.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/validate.done.mp3",
+    "duration": 3.65,
+    "words": [
+      {
+        "word": "Et",
+        "start": 0,
+        "end": 0.04
+      },
+      {
+        "word": "les",
+        "start": 0.08,
+        "end": 0.16
+      },
+      {
+        "word": "tickets",
+        "start": 0.24,
+        "end": 0.48
+      },
+      {
+        "word": "terminés",
+        "start": 0.64,
+        "end": 0.96
+      },
+      {
+        "word": "gardent",
+        "start": 1.04,
+        "end": 1.28
+      },
+      {
+        "word": "leur",
+        "start": 1.36,
+        "end": 1.44
+      },
+      {
+        "word": "issue,",
+        "start": 1.64,
+        "end": 2.08
+      },
+      {
+        "word": "leurs",
+        "start": 2.2,
+        "end": 2.32
+      },
+      {
+        "word": "boucles",
+        "start": 2.36,
+        "end": 2.8
+      },
+      {
+        "word": "et",
+        "start": 2.84,
+        "end": 2.88
+      },
+      {
+        "word": "leur",
+        "start": 2.96,
+        "end": 3.04
+      },
+      {
+        "word": "coût.",
+        "start": 3.12,
+        "end": 3.6
+      }
+    ],
+    "heard": "Et les tickets terminés gardent leur issue, leur boucle et leur coût",
+    "match": 1
+  },
+  "launch.config": {
+    "text": "Ton projet, en un clic : configure ses commandes, le front, l'API, un worker, chacune avec son shell et son dossier.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/launch.config.mp3",
+    "duration": 7.183673469387786,
+    "words": [
+      {
+        "word": "Ton",
+        "start": 0,
+        "end": 0.16
+      },
+      {
+        "word": "projet,",
+        "start": 0.24,
+        "end": 0.8
+      },
+      {
+        "word": "en",
+        "start": 0.88,
+        "end": 0.96
+      },
+      {
+        "word": "un",
+        "start": 1,
+        "end": 1.04
+      },
+      {
+        "word": "clic",
+        "start": 1.12,
+        "end": 1.44
+      },
+      {
+        "word": ":",
+        "start": 1.76,
+        "end": 1.92
+      },
+      {
+        "word": "configure",
+        "start": 2.08,
+        "end": 2.24
+      },
+      {
+        "word": "ses",
+        "start": 2.32,
+        "end": 2.4
+      },
+      {
+        "word": "commandes,",
+        "start": 2.56,
+        "end": 2.96
+      },
+      {
+        "word": "le",
+        "start": 3,
+        "end": 3.04
+      },
+      {
+        "word": "front,",
+        "start": 3.12,
+        "end": 3.68
+      },
+      {
+        "word": "l'API,",
+        "start": 3.72,
+        "end": 4.32
+      },
+      {
+        "word": "un",
+        "start": 4.4,
+        "end": 4.48
+      },
+      {
+        "word": "worker,",
+        "start": 4.56,
+        "end": 5.2
+      },
+      {
+        "word": "chacune",
+        "start": 5.24,
+        "end": 5.6
+      },
+      {
+        "word": "avec",
+        "start": 5.68,
+        "end": 5.76
+      },
+      {
+        "word": "son",
+        "start": 5.84,
+        "end": 5.92
+      },
+      {
+        "word": "shell",
+        "start": 6,
+        "end": 6.24
+      },
+      {
+        "word": "et",
+        "start": 6.32,
+        "end": 6.4
+      },
+      {
+        "word": "son",
+        "start": 6.48,
+        "end": 6.56
+      },
+      {
+        "word": "dossier.",
+        "start": 6.6,
+        "end": 7.12
+      }
+    ],
+    "heard": "Ton projet en un clic. Configure ses commandes : le front, l'API, un worker, chacune avec son shell et son dossier",
+    "match": 1
+  },
+  "launch.run": {
+    "text": "Tout lancer, et tout démarre : chaque commande a son log et son statut en direct.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/launch.run.mp3",
+    "duration": 4.85,
+    "words": [
+      {
+        "word": "Tout",
+        "start": 0,
+        "end": 0.12
+      },
+      {
+        "word": "lancer,",
+        "start": 0.16,
+        "end": 0.88
+      },
+      {
+        "word": "et",
+        "start": 0.96,
+        "end": 1.04
+      },
+      {
+        "word": "tout",
+        "start": 1.12,
+        "end": 1.2
+      },
+      {
+        "word": "démarre",
+        "start": 1.28,
+        "end": 1.68
+      },
+      {
+        "word": ":",
+        "start": 2,
+        "end": 2.027
+      },
+      {
+        "word": "chaque",
+        "start": 2.053,
+        "end": 2.24
+      },
+      {
+        "word": "commande",
+        "start": 2.4,
+        "end": 2.587
+      },
+      {
+        "word": "a",
+        "start": 2.613,
+        "end": 2.64
+      },
+      {
+        "word": "son",
+        "start": 2.72,
+        "end": 2.8
+      },
+      {
+        "word": "log",
+        "start": 2.88,
+        "end": 3.12
+      },
+      {
+        "word": "et",
+        "start": 3.2,
+        "end": 3.28
+      },
+      {
+        "word": "son",
+        "start": 3.36,
+        "end": 3.44
+      },
+      {
+        "word": "statut",
+        "start": 3.56,
+        "end": 3.76
+      },
+      {
+        "word": "en",
+        "start": 3.84,
+        "end": 3.92
+      },
+      {
+        "word": "direct.",
+        "start": 4.32,
+        "end": 4.8
+      }
+    ],
+    "heard": "Tout lancer et tout démarre. Chaque commande a son log et son statut en direct",
+    "match": 1
+  },
+  "launch.crash": {
+    "text": "L'une plante ? Tu le sais tout de suite, avec son code de sortie.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/launch.crash.mp3",
+    "duration": 3.4220408163265263,
+    "words": [
+      {
+        "word": "L'une",
+        "start": 0,
+        "end": 0.24
+      },
+      {
+        "word": "plante",
+        "start": 0.32,
+        "end": 0.64
+      },
+      {
+        "word": "?",
+        "start": 0.88,
+        "end": 0.933
+      },
+      {
+        "word": "Tu",
+        "start": 0.987,
+        "end": 1.04
+      },
+      {
+        "word": "le",
+        "start": 1.08,
+        "end": 1.12
+      },
+      {
+        "word": "sais",
+        "start": 1.16,
+        "end": 1.36
+      },
+      {
+        "word": "tout",
+        "start": 1.4,
+        "end": 1.44
+      },
+      {
+        "word": "de",
+        "start": 1.48,
+        "end": 1.52
+      },
+      {
+        "word": "suite,",
+        "start": 1.6,
+        "end": 2.08
+      },
+      {
+        "word": "avec",
+        "start": 2.2,
+        "end": 2.32
+      },
+      {
+        "word": "son",
+        "start": 2.4,
+        "end": 2.48
+      },
+      {
+        "word": "code",
+        "start": 2.56,
+        "end": 2.64
+      },
+      {
+        "word": "de",
+        "start": 2.72,
+        "end": 2.8
+      },
+      {
+        "word": "sortie.",
+        "start": 2.92,
+        "end": 3.36
+      }
+    ],
+    "heard": "L'une plante ? Tu le sais tout de suite avec son code de sortie",
+    "match": 1
+  },
+  "terminals.shells": {
+    "text": "Un terminal ? PowerShell, Guite Bash ou WSL, et zsh, bash et fish sur Mac. Avec l'autocomplétion de ton shell, l'historique, et même tes programmes plein écran.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/terminals.shells.mp3",
+    "duration": 10.770000000000001,
+    "words": [
+      {
+        "word": "Un",
+        "start": 0,
+        "end": 0.16
+      },
+      {
+        "word": "terminal",
+        "start": 0.4,
+        "end": 0.64
+      },
+      {
+        "word": "?",
+        "start": 0.747,
+        "end": 0.853
+      },
+      {
+        "word": "PowerShell,",
+        "start": 0.96,
+        "end": 1.76
+      },
+      {
+        "word": "Guite",
+        "start": 1.84,
+        "end": 2
+      },
+      {
+        "word": "Bash",
+        "start": 2.08,
+        "end": 2.4
+      },
+      {
+        "word": "ou",
+        "start": 2.48,
+        "end": 2.56
+      },
+      {
+        "word": "WSL,",
+        "start": 2.72,
+        "end": 3.6
+      },
+      {
+        "word": "et",
+        "start": 3.76,
+        "end": 3.84
+      },
+      {
+        "word": "zsh,",
+        "start": 4,
+        "end": 4.76
+      },
+      {
+        "word": "bash",
+        "start": 4.88,
+        "end": 5.2
+      },
+      {
+        "word": "et",
+        "start": 5.28,
+        "end": 5.36
+      },
+      {
+        "word": "fish",
+        "start": 5.44,
+        "end": 5.68
+      },
+      {
+        "word": "sur",
+        "start": 5.76,
+        "end": 5.84
+      },
+      {
+        "word": "Mac.",
+        "start": 5.92,
+        "end": 6.56
+      },
+      {
+        "word": "Avec",
+        "start": 6.6,
+        "end": 6.8
+      },
+      {
+        "word": "l'autocomplétion",
+        "start": 6.853,
+        "end": 7.44
+      },
+      {
+        "word": "de",
+        "start": 7.48,
+        "end": 7.52
+      },
+      {
+        "word": "ton",
+        "start": 7.6,
+        "end": 7.68
+      },
+      {
+        "word": "shell,",
+        "start": 7.76,
+        "end": 8.16
+      },
+      {
+        "word": "l'historique,",
+        "start": 8.24,
+        "end": 8.92
+      },
+      {
+        "word": "et",
+        "start": 8.96,
+        "end": 9.12
+      },
+      {
+        "word": "même",
+        "start": 9.2,
+        "end": 9.36
+      },
+      {
+        "word": "tes",
+        "start": 9.44,
+        "end": 9.52
+      },
+      {
+        "word": "programmes",
+        "start": 9.64,
+        "end": 9.92
+      },
+      {
+        "word": "plein",
+        "start": 9.96,
+        "end": 10.08
+      },
+      {
+        "word": "écran.",
+        "start": 10.24,
+        "end": 10.72
+      }
+    ],
+    "heard": "Un terminal, PowerShell, Git Bash ou WSL et ZSH, Bash et Fish sur Mac. Avec l'autocomplétion de ton shell, l'historique et même tes programmes plein écran",
+    "match": 0.96
+  },
+  "stats.quota": {
+    "text": "En bas, la barre de statut compte tes agents actifs, en attente et terminés. Et elle suit tes quotas : la session de cinq heures, la semaine, et quand ils repartent à zéro.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/stats.quota.mp3",
+    "duration": 8.855510204081684,
+    "words": [
+      {
+        "word": "En",
+        "start": 0,
+        "end": 0.16
+      },
+      {
+        "word": "bas,",
+        "start": 0.28,
+        "end": 0.56
+      },
+      {
+        "word": "la",
+        "start": 0.64,
+        "end": 0.72
+      },
+      {
+        "word": "barre",
+        "start": 0.8,
+        "end": 0.88
+      },
+      {
+        "word": "de",
+        "start": 0.96,
+        "end": 1
+      },
+      {
+        "word": "statut",
+        "start": 1.04,
+        "end": 1.36
+      },
+      {
+        "word": "compte",
+        "start": 1.44,
+        "end": 1.68
+      },
+      {
+        "word": "tes",
+        "start": 1.76,
+        "end": 1.84
+      },
+      {
+        "word": "agents",
+        "start": 1.96,
+        "end": 2.08
+      },
+      {
+        "word": "actifs,",
+        "start": 2.16,
+        "end": 2.8
+      },
+      {
+        "word": "en",
+        "start": 2.84,
+        "end": 2.88
+      },
+      {
+        "word": "attente",
+        "start": 2.96,
+        "end": 3.44
+      },
+      {
+        "word": "et",
+        "start": 3.52,
+        "end": 3.6
+      },
+      {
+        "word": "terminés.",
+        "start": 3.76,
+        "end": 4.347
+      },
+      {
+        "word": "Et",
+        "start": 4.373,
+        "end": 4.4
+      },
+      {
+        "word": "elle",
+        "start": 4.48,
+        "end": 4.56
+      },
+      {
+        "word": "suit",
+        "start": 4.64,
+        "end": 4.72
+      },
+      {
+        "word": "tes",
+        "start": 4.8,
+        "end": 4.88
+      },
+      {
+        "word": "quotas",
+        "start": 4.96,
+        "end": 5.2
+      },
+      {
+        "word": ":",
+        "start": 5.44,
+        "end": 5.467
+      },
+      {
+        "word": "la",
+        "start": 5.493,
+        "end": 5.52
+      },
+      {
+        "word": "session",
+        "start": 5.6,
+        "end": 5.84
+      },
+      {
+        "word": "de",
+        "start": 5.92,
+        "end": 6
+      },
+      {
+        "word": "cinq",
+        "start": 6.053,
+        "end": 6.16
+      },
+      {
+        "word": "heures,",
+        "start": 6.24,
+        "end": 6.72
+      },
+      {
+        "word": "la",
+        "start": 6.76,
+        "end": 6.8
+      },
+      {
+        "word": "semaine,",
+        "start": 6.88,
+        "end": 7.36
+      },
+      {
+        "word": "et",
+        "start": 7.44,
+        "end": 7.52
+      },
+      {
+        "word": "quand",
+        "start": 7.547,
+        "end": 7.6
+      },
+      {
+        "word": "ils",
+        "start": 7.68,
+        "end": 7.76
+      },
+      {
+        "word": "repartent",
+        "start": 7.84,
+        "end": 8.08
+      },
+      {
+        "word": "à",
+        "start": 8.16,
+        "end": 8.2
+      },
+      {
+        "word": "zéro.",
+        "start": 8.24,
+        "end": 8.8
+      }
+    ],
+    "heard": "En bas, la barre de statut compte tes agents actifs, en attente et terminés. Et elle suit tes quotas. La session de cinq heures, la semaine et quand ils repartent à zéro",
+    "match": 1
+  },
+  "stats.cost": {
+    "text": "Le coût du jour monte en direct, avec la mémoire et le processeur que prend Claude.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/stats.cost.mp3",
+    "duration": 4.545306122448979,
+    "words": [
+      {
+        "word": "Le",
+        "start": 0,
+        "end": 0.08
+      },
+      {
+        "word": "coût",
+        "start": 0.16,
+        "end": 0.32
+      },
+      {
+        "word": "du",
+        "start": 0.4,
+        "end": 0.48
+      },
+      {
+        "word": "jour",
+        "start": 0.6,
+        "end": 0.72
+      },
+      {
+        "word": "monte",
+        "start": 0.8,
+        "end": 1.013
+      },
+      {
+        "word": "en",
+        "start": 1.067,
+        "end": 1.12
+      },
+      {
+        "word": "direct,",
+        "start": 1.36,
+        "end": 1.76
+      },
+      {
+        "word": "avec",
+        "start": 1.88,
+        "end": 2
+      },
+      {
+        "word": "la",
+        "start": 2.04,
+        "end": 2.08
+      },
+      {
+        "word": "mémoire",
+        "start": 2.16,
+        "end": 2.56
+      },
+      {
+        "word": "et",
+        "start": 2.6,
+        "end": 2.64
+      },
+      {
+        "word": "le",
+        "start": 2.72,
+        "end": 2.8
+      },
+      {
+        "word": "processeur",
+        "start": 2.88,
+        "end": 3.36
+      },
+      {
+        "word": "que",
+        "start": 3.44,
+        "end": 3.52
+      },
+      {
+        "word": "prend",
+        "start": 3.6,
+        "end": 3.68
+      },
+      {
+        "word": "Claude.",
+        "start": 3.76,
+        "end": 4.48
+      }
+    ],
+    "heard": "Le coût du jour monte en direct avec la mémoire et le processeur que prend Claude",
+    "match": 1
+  },
+  "stats.resume": {
+    "text": "Limite d'usage atteinte ? L'agent reprend tout seul dès que ton quota revient.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/stats.resume.mp3",
+    "duration": 4.05,
+    "words": [
+      {
+        "word": "Limite",
+        "start": 0,
+        "end": 0.32
+      },
+      {
+        "word": "d'usage",
+        "start": 0.4,
+        "end": 0.64
+      },
+      {
+        "word": "atteinte",
+        "start": 0.72,
+        "end": 1.04
+      },
+      {
+        "word": "?",
+        "start": 1.44,
+        "end": 1.467
+      },
+      {
+        "word": "L'agent",
+        "start": 1.493,
+        "end": 1.76
+      },
+      {
+        "word": "reprend",
+        "start": 1.84,
+        "end": 2.08
+      },
+      {
+        "word": "tout",
+        "start": 2.16,
+        "end": 2.24
+      },
+      {
+        "word": "seul",
+        "start": 2.32,
+        "end": 2.56
+      },
+      {
+        "word": "dès",
+        "start": 2.64,
+        "end": 2.72
+      },
+      {
+        "word": "que",
+        "start": 2.8,
+        "end": 2.88
+      },
+      {
+        "word": "ton",
+        "start": 2.96,
+        "end": 3.04
+      },
+      {
+        "word": "quota",
+        "start": 3.16,
+        "end": 3.28
+      },
+      {
+        "word": "revient.",
+        "start": 3.36,
+        "end": 4
+      }
+    ],
+    "heard": "Limite d'usage atteinte ? L'agent reprend tout seul dès que ton quota revient",
+    "match": 1
+  },
+  "stats.page": {
+    "text": "Et les statistiques : tes tokens en entrée, cache et sortie, ton coût, par jour, semaine ou mois, par projet et par modèle.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/stats.page.mp3",
+    "duration": 7.81,
+    "words": [
+      {
+        "word": "Et",
+        "start": 0,
+        "end": 0.04
+      },
+      {
+        "word": "les",
+        "start": 0.08,
+        "end": 0.16
+      },
+      {
+        "word": "statistiques",
+        "start": 0.28,
+        "end": 0.8
+      },
+      {
+        "word": ":",
+        "start": 1.12,
+        "end": 1.173
+      },
+      {
+        "word": "tes",
+        "start": 1.227,
+        "end": 1.28
+      },
+      {
+        "word": "tokens",
+        "start": 1.44,
+        "end": 1.6
+      },
+      {
+        "word": "en",
+        "start": 1.64,
+        "end": 1.68
+      },
+      {
+        "word": "entrée,",
+        "start": 1.88,
+        "end": 2.32
+      },
+      {
+        "word": "cache",
+        "start": 2.52,
+        "end": 2.72
+      },
+      {
+        "word": "et",
+        "start": 2.76,
+        "end": 2.8
+      },
+      {
+        "word": "sortie,",
+        "start": 2.88,
+        "end": 3.52
+      },
+      {
+        "word": "ton",
+        "start": 3.6,
+        "end": 3.76
+      },
+      {
+        "word": "coût,",
+        "start": 3.84,
+        "end": 4.24
+      },
+      {
+        "word": "par",
+        "start": 4.32,
+        "end": 4.4
+      },
+      {
+        "word": "jour,",
+        "start": 4.56,
+        "end": 4.96
+      },
+      {
+        "word": "semaine",
+        "start": 5.04,
+        "end": 5.44
+      },
+      {
+        "word": "ou",
+        "start": 5.48,
+        "end": 5.52
+      },
+      {
+        "word": "mois,",
+        "start": 5.6,
+        "end": 6.08
+      },
+      {
+        "word": "par",
+        "start": 6.12,
+        "end": 6.16
+      },
+      {
+        "word": "projet",
+        "start": 6.24,
+        "end": 6.8
+      },
+      {
+        "word": "et",
+        "start": 6.84,
+        "end": 6.88
+      },
+      {
+        "word": "par",
+        "start": 6.96,
+        "end": 7.04
+      },
+      {
+        "word": "modèle.",
+        "start": 7.12,
+        "end": 7.76
+      }
+    ],
+    "heard": "Et les statistiques : tes tokens en entrée, cash et sortie, ton coût par jour, semaine ou mois, par projet et par modèle",
+    "match": 0.95
+  },
+  "remote.enable": {
+    "text": "Tu t'éloignes ? Active le remote control : la session de l'agent s'ouvre sur claude point A I, et dans l'app Claude sur ton téléphone.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/remote.enable.mp3",
+    "duration": 7.183673469387786,
+    "words": [
+      {
+        "word": "Tu",
+        "start": 0,
+        "end": 0.16
+      },
+      {
+        "word": "t'éloignes",
+        "start": 0.187,
+        "end": 0.64
+      },
+      {
+        "word": "?",
+        "start": 0.747,
+        "end": 0.853
+      },
+      {
+        "word": "Active",
+        "start": 0.96,
+        "end": 1.36
+      },
+      {
+        "word": "le",
+        "start": 1.4,
+        "end": 1.44
+      },
+      {
+        "word": "remote",
+        "start": 1.52,
+        "end": 1.76
+      },
+      {
+        "word": "control",
+        "start": 1.84,
+        "end": 2.32
+      },
+      {
+        "word": ":",
+        "start": 2.64,
+        "end": 2.667
+      },
+      {
+        "word": "la",
+        "start": 2.693,
+        "end": 2.72
+      },
+      {
+        "word": "session",
+        "start": 2.8,
+        "end": 3.12
+      },
+      {
+        "word": "de",
+        "start": 3.16,
+        "end": 3.2
+      },
+      {
+        "word": "l'agent",
+        "start": 3.227,
+        "end": 3.52
+      },
+      {
+        "word": "s'ouvre",
+        "start": 3.6,
+        "end": 3.92
+      },
+      {
+        "word": "sur",
+        "start": 4,
+        "end": 4.08
+      },
+      {
+        "word": "claude",
+        "start": 4.16,
+        "end": 4.4
+      },
+      {
+        "word": "point",
+        "start": 4.48,
+        "end": 4.56
+      },
+      {
+        "word": "A",
+        "start": 4.72,
+        "end": 4.88
+      },
+      {
+        "word": "I,",
+        "start": 4.96,
+        "end": 5.28
+      },
+      {
+        "word": "et",
+        "start": 5.32,
+        "end": 5.36
+      },
+      {
+        "word": "dans",
+        "start": 5.4,
+        "end": 5.52
+      },
+      {
+        "word": "l'app",
+        "start": 5.573,
+        "end": 5.68
+      },
+      {
+        "word": "Claude",
+        "start": 5.76,
+        "end": 6.08
+      },
+      {
+        "word": "sur",
+        "start": 6.16,
+        "end": 6.24
+      },
+      {
+        "word": "ton",
+        "start": 6.32,
+        "end": 6.4
+      },
+      {
+        "word": "téléphone.",
+        "start": 6.44,
+        "end": 7.12
+      }
+    ],
+    "heard": "Tu t'éloignes ? Active le remote control. La session de l'agent s'ouvre sur claude.ai et dans l'app Claude sur ton téléphone",
+    "match": 0.87
+  },
+  "remote.reply": {
+    "text": "Ce que tu y envoies s’affiche aussi dans Escouade.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/remote.reply.mp3",
+    "duration": 2.77,
+    "words": [
+      {
+        "word": "Ce",
+        "start": 0,
+        "end": 0.16
+      },
+      {
+        "word": "que",
+        "start": 0.2,
+        "end": 0.24
+      },
+      {
+        "word": "tu",
+        "start": 0.32,
+        "end": 0.4
+      },
+      {
+        "word": "y",
+        "start": 0.44,
+        "end": 0.48
+      },
+      {
+        "word": "envoies",
+        "start": 0.56,
+        "end": 0.96
+      },
+      {
+        "word": "s’affiche",
+        "start": 1.04,
+        "end": 1.44
+      },
+      {
+        "word": "aussi",
+        "start": 1.56,
+        "end": 1.76
+      },
+      {
+        "word": "dans",
+        "start": 1.8,
+        "end": 1.92
+      },
+      {
+        "word": "Escouade.",
+        "start": 2.04,
+        "end": 2.72
+      }
+    ],
+    "heard": "Ce que tu y envoies s'affiche aussi dans Esquad",
+    "match": 0.89
+  },
+  "more.extras": {
+    "text": "Et aussi : des réglages pour tout, jusqu'à l'arrêt des agents inactifs, un proxy réseau, des raccourcis clavier, et des mises à jour automatiques.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/more.extras.mp3",
+    "duration": 7.732244897959221,
+    "words": [
+      {
+        "word": "Et",
+        "start": 0,
+        "end": 0.16
+      },
+      {
+        "word": "aussi",
+        "start": 0.28,
+        "end": 0.56
+      },
+      {
+        "word": ":",
+        "start": 0.88,
+        "end": 0.92
+      },
+      {
+        "word": "des",
+        "start": 0.96,
+        "end": 1.04
+      },
+      {
+        "word": "réglages",
+        "start": 1.08,
+        "end": 1.44
+      },
+      {
+        "word": "pour",
+        "start": 1.52,
+        "end": 1.6
+      },
+      {
+        "word": "tout,",
+        "start": 1.68,
+        "end": 2.16
+      },
+      {
+        "word": "jusqu'à",
+        "start": 2.2,
+        "end": 2.48
+      },
+      {
+        "word": "l'arrêt",
+        "start": 2.507,
+        "end": 2.72
+      },
+      {
+        "word": "des",
+        "start": 2.8,
+        "end": 2.88
+      },
+      {
+        "word": "agents",
+        "start": 2.96,
+        "end": 3.12
+      },
+      {
+        "word": "inactifs,",
+        "start": 3.2,
+        "end": 3.92
+      },
+      {
+        "word": "un",
+        "start": 3.96,
+        "end": 4
+      },
+      {
+        "word": "proxy",
+        "start": 4.08,
+        "end": 4.4
+      },
+      {
+        "word": "réseau,",
+        "start": 4.48,
+        "end": 5.04
+      },
+      {
+        "word": "des",
+        "start": 5.08,
+        "end": 5.12
+      },
+      {
+        "word": "raccourcis",
+        "start": 5.2,
+        "end": 5.6
+      },
+      {
+        "word": "clavier,",
+        "start": 5.64,
+        "end": 6.16
+      },
+      {
+        "word": "et",
+        "start": 6.24,
+        "end": 6.32
+      },
+      {
+        "word": "des",
+        "start": 6.36,
+        "end": 6.4
+      },
+      {
+        "word": "mises",
+        "start": 6.48,
+        "end": 6.64
+      },
+      {
+        "word": "à",
+        "start": 6.68,
+        "end": 6.72
+      },
+      {
+        "word": "jour",
+        "start": 6.8,
+        "end": 6.88
+      },
+      {
+        "word": "automatiques.",
+        "start": 7,
+        "end": 7.68
+      }
+    ],
+    "heard": "Et aussi des réglages pour tout, jusqu'à l'arrêt des agents inactifs, un proxy réseau, des raccourcis clavier et des mises à jour automatiques",
+    "match": 1
+  },
+  "more.os": {
+    "text": "Escouade tourne sur Windows et sur Mac.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/more.os.mp3",
+    "duration": 2.61,
+    "words": [
+      {
+        "word": "Escouade",
+        "start": 0,
+        "end": 0.48
+      },
+      {
+        "word": "tourne",
+        "start": 0.64,
+        "end": 0.88
+      },
+      {
+        "word": "sur",
+        "start": 0.96,
+        "end": 1.04
+      },
+      {
+        "word": "Windows",
+        "start": 1.12,
+        "end": 1.6
+      },
+      {
+        "word": "et",
+        "start": 1.68,
+        "end": 1.76
+      },
+      {
+        "word": "sur",
+        "start": 1.84,
+        "end": 1.92
+      },
+      {
+        "word": "Mac.",
+        "start": 2,
+        "end": 2.56
+      }
+    ],
+    "heard": "Esquad tourne sur Windows et sur Mac",
+    "match": 0.86
+  },
+  "outro.bye": {
+    "text": "Escouade est gratuit et open source. Télécharge-le sur Guite-Heub, et donne une escouade à Claude !",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/outro.bye.mp3",
+    "duration": 5.355102040816336,
+    "words": [
+      {
+        "word": "Escouade",
+        "start": 0,
+        "end": 0.4
+      },
+      {
+        "word": "est",
+        "start": 0.44,
+        "end": 0.48
+      },
+      {
+        "word": "gratuit",
+        "start": 0.56,
+        "end": 1.04
+      },
+      {
+        "word": "et",
+        "start": 1.12,
+        "end": 1.2
+      },
+      {
+        "word": "open",
+        "start": 1.36,
+        "end": 1.52
+      },
+      {
+        "word": "source.",
+        "start": 1.72,
+        "end": 2.16
+      },
+      {
+        "word": "Télécharge-le",
+        "start": 2.24,
+        "end": 2.72
+      },
+      {
+        "word": "sur",
+        "start": 2.8,
+        "end": 2.96
+      },
+      {
+        "word": "Guite-Heub,",
+        "start": 3,
+        "end": 3.76
+      },
+      {
+        "word": "et",
+        "start": 3.84,
+        "end": 3.92
+      },
+      {
+        "word": "donne",
+        "start": 4,
+        "end": 4.16
+      },
+      {
+        "word": "une",
+        "start": 4.2,
+        "end": 4.24
+      },
+      {
+        "word": "escouade",
+        "start": 4.32,
+        "end": 4.56
+      },
+      {
+        "word": "à",
+        "start": 4.6,
+        "end": 4.64
+      },
+      {
+        "word": "Claude",
+        "start": 4.72,
+        "end": 5.04
+      },
+      {
+        "word": "!",
+        "start": 5.12,
+        "end": 5.28
+      }
+    ],
+    "heard": "Esquad est gratuit et open source. Télécharge-le sur GitHub et donne une Esquad à Claude",
+    "match": 0.76
+  }
+}

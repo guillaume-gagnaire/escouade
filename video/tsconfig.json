@@ -11,5 +11,5 @@
     "skipLibCheck": true,
     "isolatedModules": true
   },
-  "include": ["src", "music", "scripts", "remotion.config.ts", "vitest.config.ts"]
+  "include": ["src", "sfx", "scripts", "remotion.config.ts", "vitest.config.ts"]
 }

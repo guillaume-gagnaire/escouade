@@ -1,10 +1,10 @@
 import type { FC } from 'react';
 import { useCurrentFrame, useVideoConfig } from 'remotion';
 import { pop, ramp } from '../anim';
+import { useCues } from '../cues';
 import { EMPTY_STATUS, TABS } from '../data';
-import { captionOf } from '../timeline';
 import { Shell } from '../ui/Shell';
-import { AppWindow, Caption, Stage } from '../ui/Stage';
+import { AppWindow, Stage, Title } from '../ui/Stage';
 import { TermWindow } from '../ui/TermWindow';
 
 const PROJECTS = ['demo-api', 'studio-web', 'mobile-app', 'infra', 'site-vitrine'];
@@ -13,24 +13,25 @@ const rnd = (i: number, k: number) => {
   const x = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453;
   return x - Math.floor(x);
 };
-const WINDOWS = Array.from({ length: 22 }, (_, i) => ({
+const WINDOWS = Array.from({ length: 30 }, (_, i) => ({
   x: 40 + rnd(i, 1) * 1420,
   y: 170 + rnd(i, 2) * 620,
   rot: (rnd(i, 3) - 0.5) * 8,
   project: PROJECTS[i % PROJECTS.length],
-  at: i * 5,
 }));
 
-/** Terminals pile up, then the app swallows them. */
+/** Terminals pile up while the voice counts them, then the app swallows them. */
 export const Chaos: FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const suck = ramp(frame, 128, 32);
-  const app = pop(frame, fps, 148, 18);
+  const c = useCues();
+  const pile = c.word('mess', 'ouverts') - 10;
+  const suck = ramp(frame, c.word('one', 'réunit') - 6, 30);
+  const app = pop(frame, fps, c.word('one', 'réunit') + 14, 18);
   return (
     <Stage>
       {WINDOWS.map((w, i) => {
-        const p = Math.min(1, pop(frame, fps, w.at, 12));
+        const p = Math.min(1, pop(frame, fps, (i * pile) / WINDOWS.length, 12));
         return (
           <TermWindow
             key={i}
@@ -45,7 +46,7 @@ export const Chaos: FC = () => {
           />
         );
       })}
-      <Caption text={captionOf('chaos')} delay={6} />
+      <Title />
       <AppWindow enter={app}>
         <Shell tabs={TABS.map((t) => ({ ...t, enter: 0 }))} status={EMPTY_STATUS} sidebar={null} />
       </AppWindow>

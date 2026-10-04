@@ -1,17 +1,18 @@
 import type { FC } from 'react';
 import { useCurrentFrame, useVideoConfig } from 'remotion';
 import { pop } from '../anim';
+import { useCues, useScene } from '../cues';
 import { C } from '../theme';
-import { captionOf } from '../timeline';
 import { Logo } from '../ui/Logo';
 import { Caption, Stage } from '../ui/Stage';
 
-/** The logo builds up window by window, then the name. */
+/** The logo builds up window by window, then the name, while the voice says it. */
 export const Intro: FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const title = pop(frame, fps, 60, 16);
-  const sub = pop(frame, fps, 72, 16);
+  const c = useCues();
+  const title = pop(frame, fps, c.word('hello', 'escouade') - 4, 16);
+  const sub = pop(frame, fps, c.word('hello', 'poste'), 16);
   return (
     <Stage>
       <div
@@ -50,7 +51,7 @@ export const Intro: FC = () => {
           Le poste de pilotage de tes agents Claude Code
         </div>
       </div>
-      <Caption text={captionOf('intro')} delay={100} top={860} />
+      <Caption text={useScene().title} delay={c.word('hello', 'tous')} top={860} />
     </Stage>
   );
 };
