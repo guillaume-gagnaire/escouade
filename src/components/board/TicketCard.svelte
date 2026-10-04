@@ -205,7 +205,7 @@
     {@const a = agent}
     {@const address = openAddress(a)}
     {#if anyRunning(a.id)}
-      <div class="row">
+      <div class="row actions">
         <button class="small" onclick={(e) => act(e, () => stopTests(a.id))}>■ Arrêter</button>
         {#if address}<button class="small" onclick={(e) => act(e, () => app.run(openUrl(address)))}>Ouvrir</button>{/if}
       </div>
@@ -224,7 +224,7 @@
       {#if t.column === 'doing'}
         <div class="row"><button class="small" onclick={(e) => act(e, () => app.run(api.ticketResume(t.id)))}>Reprendre</button></div>
       {:else if t.conflict}
-        <div class="row">
+        <div class="row actions">
           <button class="small" onclick={(e) => act(e, () => app.run(api.ticketResolveConflict(t.id)))}>L'agent résout</button>
           <button class="small" onclick={(e) => act(e, () => app.run(api.ticketDismiss(t.id)))}>Annuler</button>
         </div>
@@ -234,7 +234,7 @@
 
   {#if t.column !== 'todo' && (agent || t.column === 'done')}
     <div class="row foot">
-      {#if agent}<span class="who mono"><StatusDot status={agent.status} size={7} />{agent.name}</span>{/if}
+      {#if agent}<span class="who mono"><StatusDot status={agent.status} size={7} /><span class="name">{agent.name}</span></span>{/if}
       <div style="flex:1"></div>
       {#if t.column === 'review'}<span class="k mono">{met}/{total} critères</span>{/if}
       {#if t.column === 'done'}<span class="k mono">{doneMeta(t)}</span>{/if}
@@ -245,8 +245,8 @@
     {#if rejecting}
       <RejectForm onsubmit={reject} oncancel={() => (rejecting = false)} />
     {:else}
-      <div class="row">
-        <button class="ok" onclick={(e) => act(e, approve)}>{t.blocked ? 'Réessayer' : APPROVE_LABEL[s.action]}</button>
+      <div class="row actions">
+        <button class="approve" onclick={(e) => act(e, approve)}>{t.blocked ? 'Réessayer' : APPROVE_LABEL[s.action]}</button>
         <button class="small grow" onclick={(e) => act(e, () => (rejecting = true))}>Renvoyer</button>
       </div>
     {/if}
@@ -435,7 +435,18 @@
     display: flex;
     align-items: center;
     gap: 6px;
+    min-width: 0;
     font-size: 11px;
+  }
+  /* A long agent name is cut, not broken over the card's lines. */
+  .name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .foot .k {
+    flex: none;
   }
   .blocked {
     display: flex;
@@ -466,12 +477,16 @@
   .small:hover {
     border-color: var(--accent);
   }
+  /* In a narrow column the buttons of a row go under one another (the "Valider" and "Renvoyer" ones then fill their line). */
+  .actions {
+    flex-wrap: wrap;
+  }
   .small.grow,
-  .ok {
+  .approve {
     flex: 1;
     height: 28px;
   }
-  .ok {
+  .approve {
     border: none;
     border-radius: var(--r-sm);
     background: var(--ok);

@@ -75,20 +75,27 @@
     border-bottom: 1px solid var(--line);
     white-space: nowrap;
   }
+  /* In a narrow window the texts of the header are cut (the summary of the settings first), the switch is never pushed out. */
   .who {
     display: flex;
     flex-direction: column;
     gap: 3px;
+    min-width: 0;
   }
   .t {
     font-size: 15px;
     font-weight: 700;
   }
   .sub {
+    overflow: hidden;
+    text-overflow: ellipsis;
     font-size: 11px;
     color: var(--dim);
   }
   .places {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     font-size: 12px;
     color: var(--muted);
   }
@@ -98,6 +105,8 @@
   }
   .cfg {
     height: 34px;
+    min-width: 0;
+    flex-shrink: 4;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -121,10 +130,14 @@
     color: var(--muted);
   }
   .v {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     font-size: 11.5px;
     font-weight: 600;
   }
   .auto {
+    flex: none;
     display: flex;
     align-items: center;
     gap: 10px;
