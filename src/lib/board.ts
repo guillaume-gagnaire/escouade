@@ -57,16 +57,20 @@ export const APPROVE_LABEL: Record<BoardAction, string> = {
   keep: 'Valider',
 };
 
-/** When a ticket "À faire" starts; `queueIndex` is its place in the column. */
-export function waitLabel(t: Ticket, queueIndex: number, s: BoardSettings, busyCount: number): string {
+/**
+ * When a ticket "À faire" starts; `queueIndex` is its place in the column. While the board's `issue` holds (its target
+ * branch has no commit yet, or is gone), none starts, whatever its place.
+ */
+export function waitLabel(t: Ticket, queueIndex: number, s: BoardSettings, busyCount: number, issue: string | null = null): string {
+  if (issue) return 'En attente de la branche cible';
   if (t.forced) return 'Lancement demandé…';
   if (!s.autopilot) return 'Pilote auto désactivé';
   return queueIndex === 0 ? "Pris dès qu'une place se libère" : `En attente d'une place (${busyCount}/${s.maxParallel})`;
 }
 
-/** "Lancer": the autopilot is off, a place is free and no agent waits for its quota. */
-export function canStart(t: Ticket, s: BoardSettings, busyCount: number, quota: number | null): boolean {
-  return !s.autopilot && !t.forced && !quota && busyCount < s.maxParallel;
+/** "Lancer": the autopilot is off, a place is free, no agent waits for its quota and the target branch can start a ticket. */
+export function canStart(t: Ticket, s: BoardSettings, busyCount: number, quota: number | null, issue: string | null = null): boolean {
+  return !issue && !s.autopilot && !t.forced && !quota && busyCount < s.maxParallel;
 }
 
 /** As the backend fixes it: the first three letters of the project's name (accents folded), TIC without any. */

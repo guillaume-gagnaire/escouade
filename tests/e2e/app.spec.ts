@@ -502,8 +502,8 @@ test('a ticket is taken by an agent that loops until its criteria are met, then 
     });
   expect(await sticksOut()).toEqual([]);
   expect(await headerOverlaps()).toEqual([]);
-  // The longest texts the places can say (the real ones need a quota or no Claude Code), set on the
-  // text the board manages and then given back.
+  // The longest texts the places can say (the real ones need a quota, no Claude Code, or a target branch
+  // that cannot start a ticket), set on the text the board manages and then given back.
   const say = (text: string | null, missing: boolean) =>
     page.evaluate(
       ([t, m]) => {
@@ -518,6 +518,8 @@ test('a ticket is taken by an agent that loops until its criteria are met, then 
     ['Toutes les places sont prises', false],
     ['Quota atteint — reprise à 14:35', false],
     ['Claude Code introuvable — aucun ticket ne démarre', true],
+    ["develop n'a encore aucun commit — aucun ticket ne démarre", true],
+    ['Branche cible release/2026-10 introuvable — aucun ticket ne démarre', true],
   ] as const) {
     await say(text, missing);
     expect(await headerOverlaps(), text).toEqual([]);

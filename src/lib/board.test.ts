@@ -59,6 +59,14 @@ describe('board labels', () => {
     expect(canStart(ticket(), board({ autopilot: false }), 0, 5)).toBe(false);
   });
 
+  it('never promises a place while the target branch cannot start a ticket', () => {
+    const issue = 'Branche cible main introuvable — aucun ticket ne démarre';
+    expect(waitLabel(ticket(), 0, board(), 0, issue)).toBe('En attente de la branche cible');
+    expect(waitLabel(ticket({ forced: true }), 0, board({ autopilot: false }), 0, issue)).toBe('En attente de la branche cible');
+    expect(canStart(ticket(), board({ autopilot: false }), 0, null, issue)).toBe(false);
+    expect(waitLabel(ticket(), 0, board(), 0, null)).toBe("Pris dès qu'une place se libère");
+  });
+
   it('previews the commit message with the project key', () => {
     expect(keyPrefix('Écoute-api')).toBe('ECO');
     expect(keyPrefix('42')).toBe('TIC');

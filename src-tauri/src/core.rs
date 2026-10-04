@@ -213,9 +213,9 @@ pub struct Core<R: Runtime = Wry> {
     pub(crate) test_runs: Mutex<HashMap<String, Vec<String>>>,
     /// The last pass found no Claude Code (logged once until it is found again).
     pub(crate) claude_missing: AtomicBool,
-    /// The projects whose board's target branch the last pass did not find (logged once until it
-    /// is back): none of their tickets starts meanwhile.
-    pub(crate) targets_missing: Mutex<std::collections::HashSet<String>>,
+    /// Why no ticket of a project's board starts (its target branch has no commit yet, or is
+    /// gone), by project, as the window is told: not saved, found again by the next pass.
+    pub(crate) board_issues: Mutex<HashMap<String, String>>,
     /// Blocks of ports reserved for agents being made, or being given one: taken until the agent
     /// holds its own.
     pub(crate) ports_reserved: Mutex<Vec<u16>>,
@@ -454,7 +454,7 @@ impl<R: Runtime> Core<R> {
             gh: RwLock::new(locate_gh()),
             test_runs: Mutex::default(),
             claude_missing: AtomicBool::new(false),
-            targets_missing: Mutex::default(),
+            board_issues: Mutex::default(),
             ports_reserved: Mutex::default(),
             merge_locks: Mutex::default(),
             #[cfg(test)]
@@ -2174,6 +2174,11 @@ impl<R: Runtime> Core<R> {
             project_id: project_id.to_string(),
             git: info,
         });
+        // Its board starts nothing until its target is there: a first commit, or the branch made
+        // again, starts the queue without waiting for another change of the board.
+        if self.board_issues.lock().contains_key(project_id) {
+            self.schedule();
+        }
     }
 
     /// Dirty files for the files panel. `agent_id` + scope "agent" restricts to one agent.

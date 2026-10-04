@@ -656,6 +656,19 @@ describe('board', () => {
     expect(app.reviewCount('p1')).toBe(1);
   });
 
+  it('knows why a board starts nothing, from the start and as the backend tells it', async () => {
+    const unborn = "main n'a encore aucun commit — aucun ticket ne démarre";
+    const { emit } = await start({ boardIssues: { p1: unborn } });
+    expect(app.boardIssues).toEqual({ p1: unborn });
+    const missing = 'Branche cible release introuvable — aucun ticket ne démarre';
+    emit({ type: 'boardIssue', projectId: 'p2', issue: missing });
+    emit({ type: 'boardIssue', projectId: 'p1', issue: null });
+    expect(app.boardIssues).toEqual({ p2: missing });
+    // A closed project takes its board's issue with it.
+    app.forgetProject('p2');
+    expect(app.boardIssues).toEqual({});
+  });
+
   it('starts without tickets when the snapshot has none', async () => {
     resetApp({ tickets: [ticket()] });
     await start({ tickets: undefined });

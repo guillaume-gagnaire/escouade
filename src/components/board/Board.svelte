@@ -21,6 +21,8 @@
   const sub = $derived(`${project.name} · ${plural(tickets.length, 'ticket', 'tickets')} · ${looping} en boucle`);
   const summary = $derived(settingsSummary(s, target));
   const places = $derived(placesLabel(busyCount, s.maxParallel, quota));
+  /** Why no ticket starts from the target branch (no commit yet, or gone), as the backend says. */
+  const issue = $derived(app.boardIssues[project.id] ?? null);
 
   async function toggleAutopilot() {
     const saved = await app.run(api.boardSet(project.id, { ...$state.snapshot(s), autopilot: !s.autopilot }));
@@ -35,11 +37,14 @@
       <span class="sub mono" title={sub}>{sub}</span>
     </div>
     <div style="flex:1"></div>
-    {#if app.claudeFound}
-      <span class="places" title={places}>{places}</span>
-    {:else}
+    {#if !app.claudeFound}
       <!-- No place is worth showing: nothing starts without Claude Code. -->
       <span class="places missing" title={MISSING}>{MISSING}</span>
+    {:else if issue}
+      <!-- Nor while the target branch cannot start a ticket. -->
+      <span class="places missing" title={issue}>{issue}</span>
+    {:else}
+      <span class="places" title={places}>{places}</span>
     {/if}
     <button class="cfg" title="Réglages du tableau" onclick={() => (app.modal = { kind: 'boardSettings', projectId: project.id })}>
       <span class="gear">⚙</span><span class="k">Après validation :</span><span class="v mono" title={summary}>{summary}</span>

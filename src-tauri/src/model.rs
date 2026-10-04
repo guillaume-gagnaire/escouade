@@ -591,6 +591,13 @@ pub enum UiEvent {
     FocusBoard {
         project_id: String,
     },
+    /// Why no ticket of the project's board starts (its target branch has no commit yet, or is
+    /// gone), or None once they may start again.
+    #[serde(rename_all = "camelCase")]
+    BoardIssue {
+        project_id: String,
+        issue: Option<String>,
+    },
     /// An address to open in the default browser (a pull request to finish on GitHub).
     OpenUrl {
         url: String,

@@ -40,7 +40,7 @@ Tickets et réglages sont enregistrés avec l'état de l'app (`~/.escouade/state
 Modale « Réglages du tableau » (bouton « ⚙ Après validation : … » de l'en-tête du tableau), appliqués au clic, « Terminé » ferme.
 
 - **Quand je valide un ticket « À tester »** (4 cartes) : Merger dans une branche · Ouvrir une pull request · Pousser la branche du ticket · Laisser en l'état. Défaut : merger.
-- **Branche cible** (merge, PR) : liste des branches locales ; défaut : branche courante du projet à la création du tableau.
+- **Branche cible** (merge, PR) : liste des branches locales ; défaut : branche courante du projet au premier ticket, même sans commit (dépôt neuf) ; sur une HEAD détachée, le premier ticket est refusé (« Le projet n'est sur aucune branche : choisis la branche cible dans les réglages du tableau. »).
 - **Stratégie** (merge) : Merge commit · Squash · Rebase. Défaut : squash.
 - **Ouvrir en brouillon** (PR).
 - **Relancer les tests avant** + champ **Commande de tests** (ex. `npm test`) : bloque l'action si les tests échouent et renvoie le ticket à l'agent. Interrupteur inactif tant que la commande est vide.
@@ -56,7 +56,7 @@ Libellé de l'en-tête : `merge squash → main`, `PR → main`, `push ticket/*`
 
 ### Départ
 
-Le planificateur tourne à chaque changement (ticket créé, modifié, déplacé, fin de tour, réglages, agent archivé ou supprimé, démarrage de l'app). Tant que le nombre de tickets « En cours » non bloqués est sous le maximum, il démarre le premier ticket « À faire » (par rang) si le pilote auto est activé ; sinon seulement ceux lancés à la main (« Lancer »). Il ne démarre rien tant qu'un agent de l'app attend la reprise après une limite d'usage (« Quota atteint — reprise à HH:MM » dans l'en-tête).
+Le planificateur tourne à chaque changement (ticket créé, modifié, déplacé, fin de tour, réglages, agent archivé ou supprimé, démarrage de l'app). Tant que le nombre de tickets « En cours » non bloqués est sous le maximum, il démarre le premier ticket « À faire » (par rang) si le pilote auto est activé ; sinon seulement ceux lancés à la main (« Lancer »). Il ne démarre rien tant qu'un agent de l'app attend la reprise après une limite d'usage (« Quota atteint — reprise à HH:MM » dans l'en-tête), ni tant que la branche cible n'a aucun commit (« <cible> n'a encore aucun commit — aucun ticket ne démarre ») ou n'existe pas (« Branche cible <cible> introuvable — aucun ticket ne démarre ») : l'en-tête le dit à la place des places libres, les cartes « À faire » disent « En attente de la branche cible », et le rafraîchissement git suivant du projet (premier commit, branche recréée) relance la file.
 
 Démarrer un ticket :
 
@@ -159,7 +159,7 @@ Pour tout agent à worktree, ticket ou non.
 ## Interface
 
 - **Barre latérale** : en haut, sélecteur « Agents | Tableau » (pastille jaune = nombre de tickets « À tester »). « Tableau » affiche le tableau dans la zone principale ; choisir un agent, un terminal ou une commande revient aux agents. Les cartes d'agents de ticket portent « ▸ ATL-42 · boucle 2/5 ».
-- **En-tête du tableau** : « Tableau », `<projet> · N tickets · k en boucle` ; à droite « n places libres » (ou « Toutes les places sont prises », ou l'état du quota), bouton « ⚙ Après validation : … », interrupteur « Pilote auto » (« Pilote auto · off »).
+- **En-tête du tableau** : « Tableau », `<projet> · N tickets · k en boucle` ; à droite « n places libres » (ou « Toutes les places sont prises », ou l'état du quota, ou pourquoi aucun ticket ne démarre : Claude Code introuvable, branche cible sans commit ou introuvable), bouton « ⚙ Après validation : … », interrupteur « Pilote auto » (« Pilote auto · off »).
 - **4 colonnes** (À faire · En cours · À tester · Terminé), pastille de couleur, compteur ; « + » sur « À faire » ouvre le formulaire en tête de colonne : titre, description (facultative), critères (un par ligne), boucles max 3 / 5 / 8, Annuler / Ajouter (actif avec un titre ; sans critère : « Implémentation conforme au ticket » et « Tests verts »).
 - **Cartes** (comme le design) :
   - commun : clé, titre ;

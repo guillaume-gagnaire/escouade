@@ -102,7 +102,8 @@ impl<R: Runtime> Core<R> {
     }
 
     /// A ticket "À faire" at the end of the column. The first one fixes the key's prefix and the
-    /// target branch (the project's current one) when not set.
+    /// target branch when not set: the one the project is on, even without any commit yet (a new
+    /// repository); on a detached HEAD, none, so the ticket is refused until one is chosen.
     pub async fn ticket_create(
         self: &Arc<Self>,
         project_id: &str,
@@ -113,18 +114,21 @@ impl<R: Runtime> Core<R> {
             bail!("Un ticket a besoin d'un titre.");
         }
         let project = self.project(project_id)?;
-        let current = git::current_branch(&project.path).await;
+        let current = git::head_branch(&project.path).await;
         let key = {
             let mut projects = self.projects.write();
             let p = projects
                 .iter_mut()
                 .find(|p| p.id == project_id)
                 .ok_or_else(|| anyhow!("projet introuvable"))?;
+            if p.board.target.is_empty() {
+                if current.is_empty() {
+                    bail!(board::NO_BRANCH);
+                }
+                p.board.target = current;
+            }
             if p.board.prefix.is_empty() {
                 p.board.prefix = board::key_prefix(&p.name);
-            }
-            if p.board.target.is_empty() && !current.is_empty() && current != "HEAD" {
-                p.board.target = current;
             }
             let n = p.board.next_number.max(1);
             p.board.next_number = n + 1;
@@ -299,8 +303,9 @@ impl<R: Runtime> Core<R> {
         git::branches(&p.path).await
     }
 
-    /// The project is closed: its tickets go with it.
+    /// The project is closed: its tickets go with it, and what its board said.
     pub(crate) fn drop_project_tickets(&self, project_id: &str) {
+        self.board_issues.lock().remove(project_id);
         let gone: Vec<String> = {
             let mut tickets = self.tickets.write();
             let ids = tickets
@@ -358,36 +363,83 @@ impl<R: Runtime> Core<R> {
         let projects = self.projects.read().clone();
         for p in projects {
             let ids = board::to_start(&self.tickets.read(), &p.id, &p.board, paused);
-            if ids.is_empty() {
+            // A board that told why nothing starts is looked at again even with nothing to start:
+            // its issue goes once its target is there.
+            if ids.is_empty() && !self.board_issues.lock().contains_key(&p.id) {
                 continue;
             }
-            // Every ticket's branch starts from the target: while it is gone (deleted, renamed),
-            // none starts, rather than each make an agent only to block (choosing another target
-            // in the settings, or any change of the board, looks again).
+            // Every ticket's branch starts from the target: while it has no commit yet (a new
+            // repository) or is gone (deleted, renamed), none starts, rather than each make an
+            // agent only to block. The window is told why; choosing another target, any change
+            // of the board, or the project's next git refresh (a first commit, the branch made
+            // again) looks again.
             let target = self.target_of(&p).await;
-            if !git::branch_exists(&p.path, &target).await {
-                if self.targets_missing.lock().insert(p.id.clone()) {
-                    log::info!(
-                        "board of {}: target branch {target:?} not found, no ticket starts until it is",
-                        p.name
-                    );
+            let exists = !target.is_empty() && git::branch_exists(&p.path, &target).await;
+            let unborn = !exists && git::head_branch(&p.path).await == target;
+            let issue = board::target_issue(&target, exists, unborn);
+            if self.set_board_issue(&p.id, issue.clone()) {
+                if let Some(why) = &issue {
+                    log::info!("board of {}: {why}", p.name);
                 }
+            }
+            if issue.is_some() {
                 continue;
             }
-            self.targets_missing.lock().remove(&p.id);
             for id in ids {
                 self.start_ticket(&p, &id).await;
             }
         }
     }
 
-    /// The board's target branch, else the project's current one.
-    pub(crate) async fn target_of(&self, project: &Project) -> String {
-        if project.board.target.is_empty() {
-            git::current_branch(&project.path).await
-        } else {
-            project.board.target.clone()
+    /// Why the project's board starts nothing, as the window is told (only when it changes):
+    /// true when it changed.
+    fn set_board_issue(&self, project_id: &str, issue: Option<String>) -> bool {
+        let changed = {
+            let mut issues = self.board_issues.lock();
+            let changed = issues.get(project_id) != issue.as_ref();
+            match &issue {
+                Some(why) => issues.insert(project_id.to_string(), why.clone()),
+                None => issues.remove(project_id),
+            };
+            changed
+        };
+        if changed {
+            self.hub.emit(UiEvent::BoardIssue {
+                project_id: project_id.to_string(),
+                issue,
+            });
         }
+        changed
+    }
+
+    /// The board's target branch. A board saved without one (its first ticket made by an earlier
+    /// version, on a branch-less HEAD) takes the branch the project is on, for good: it no longer
+    /// moves with what is checked out. Empty on a detached HEAD.
+    pub(crate) async fn target_of(&self, project: &Project) -> String {
+        if !project.board.target.is_empty() {
+            return project.board.target.clone();
+        }
+        let current = git::head_branch(&project.path).await;
+        if current.is_empty() {
+            return current;
+        }
+        // (Set meanwhile, by another pass or the settings: that one.)
+        let (target, fixed) = {
+            let mut projects = self.projects.write();
+            match projects.iter_mut().find(|p| p.id == project.id) {
+                Some(p) if p.board.target.is_empty() => {
+                    p.board.target = current.clone();
+                    (current, Some(p.clone()))
+                }
+                Some(p) => (p.board.target.clone(), None),
+                None => (current, None),
+            }
+        };
+        if let Some(project) = fixed {
+            self.hub.emit(UiEvent::Project { project });
+            self.request_save();
+        }
+        target
     }
 
     /// "En cours" at once (no other pass takes it), then its agent and its first message. A start

@@ -121,6 +121,14 @@ pub async fn current_branch(path: &str) -> String {
         .unwrap_or_default()
 }
 
+/// The branch HEAD is on, even one without any commit yet (a new repository); empty on a detached
+/// HEAD.
+pub async fn head_branch(path: &str) -> String {
+    text(path, &["symbolic-ref", "--short", "-q", "HEAD"])
+        .await
+        .unwrap_or_default()
+}
+
 pub async fn init_repo(path: &str) -> Result<()> {
     run(path, &["init"]).await.map(|_| ())
 }

@@ -35,6 +35,8 @@ pub struct InitialState {
     claude_found: bool,
     version: String,
     models: Vec<ModelInfo>,
+    /// Why no ticket of a project's board starts, by project.
+    board_issues: HashMap<String, String>,
 }
 
 #[tauri::command]
@@ -52,6 +54,7 @@ pub fn subscribe(core: CoreState, channel: Channel<UiEvent>) -> InitialState {
     let git = core.git_cache.read().clone();
     let terminals = core.pty.list();
     let models = core.models.read().clone();
+    let board_issues = core.board_issues.lock().clone();
     InitialState {
         projects,
         tickets,
@@ -65,6 +68,7 @@ pub fn subscribe(core: CoreState, channel: Channel<UiEvent>) -> InitialState {
         terminals,
         version: core.app.package_info().version.to_string(),
         models,
+        board_issues,
     }
 }
 

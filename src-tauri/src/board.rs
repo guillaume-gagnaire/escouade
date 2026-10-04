@@ -298,6 +298,30 @@ pub fn to_start(
     todo.into_iter().take(free).map(|t| t.id.clone()).collect()
 }
 
+/// The refusal of a first ticket on a detached HEAD: there is no branch to start the tickets from
+/// (nor to merge them into) until one is chosen.
+pub const NO_BRANCH: &str =
+    "Le projet n'est sur aucune branche : choisis la branche cible dans les réglages du tableau.";
+
+/// Why no ticket starts from `target`, if none can: no branch at all (a board saved without one,
+/// on a detached HEAD), a branch without any commit yet (a new repository: its first commit makes
+/// it), or one that is gone.
+pub fn target_issue(target: &str, exists: bool, unborn: bool) -> Option<String> {
+    if target.is_empty() {
+        Some(NO_BRANCH.to_string())
+    } else if exists {
+        None
+    } else if unborn {
+        Some(format!(
+            "{target} n'a encore aucun commit — aucun ticket ne démarre"
+        ))
+    } else {
+        Some(format!(
+            "Branche cible {target} introuvable — aucun ticket ne démarre"
+        ))
+    }
+}
+
 /// Back to "À faire" from scratch: its agent was archived or deleted by hand.
 pub fn back_to_todo(t: &mut Ticket) {
     t.column = Column::Todo;
@@ -1089,6 +1113,20 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(to_start(&list, "p1", &zero, false), ["a"]);
+    }
+
+    #[test]
+    fn a_target_that_cannot_start_a_ticket_says_why() {
+        assert_eq!(target_issue("main", true, false), None);
+        assert_eq!(
+            target_issue("main", false, true).as_deref(),
+            Some("main n'a encore aucun commit — aucun ticket ne démarre")
+        );
+        assert_eq!(
+            target_issue("release", false, false).as_deref(),
+            Some("Branche cible release introuvable — aucun ticket ne démarre")
+        );
+        assert_eq!(target_issue("", false, false).as_deref(), Some(NO_BRANCH));
     }
 
     #[test]

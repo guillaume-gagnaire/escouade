@@ -50,6 +50,23 @@ describe('Board', () => {
     expect(screen.queryByText('1 place libre')).not.toBeInTheDocument();
   });
 
+  it('says why no ticket starts while its target branch cannot start one, and no card claims a place', () => {
+    fakeBackend();
+    const issue = "main n'a encore aucun commit — aucun ticket ne démarre";
+    app.boardIssues = { p1: issue };
+    render(Board, { project: app.projects[0] });
+    const said = screen.getByText(issue);
+    expect(said).toHaveClass('places', 'missing');
+    expect(said).toHaveAttribute('title', issue);
+    expect(screen.queryByText('1 place libre')).not.toBeInTheDocument();
+    const todo = col('À faire');
+    expect(within(todo).queryByText("Pris dès qu'une place se libère")).not.toBeInTheDocument();
+    expect(within(todo).getAllByText('En attente de la branche cible')).toHaveLength(2);
+    // Another project's issue says nothing of this one.
+    app.boardIssues = { p2: issue };
+    return expect.poll(() => screen.queryByText('1 place libre')).toBeInTheDocument();
+  });
+
   it('adds a ticket from the form at the top of "À faire"', async () => {
     const backend = fakeBackend({ ticket_create: (a: any) => ticket({ id: 't9', key: 'DEM-9', title: a.draft.title }) });
     render(Board, { project: app.projects[0] });

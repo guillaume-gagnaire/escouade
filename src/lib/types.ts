@@ -463,7 +463,9 @@ export type UiEvent =
   | { type: 'ticketRemoved'; id: string; projectId: string }
   | { type: 'project'; project: Project }
   | { type: 'openUrl'; url: string }
-  | { type: 'focusBoard'; projectId: string };
+  | { type: 'focusBoard'; projectId: string }
+  /** Why no ticket of the project's board starts (its target branch), or null once they may. */
+  | { type: 'boardIssue'; projectId: string; issue: string | null };
 
 export interface InitialState {
   projects: Project[];
@@ -479,6 +481,8 @@ export interface InitialState {
   version: string;
   /** Claude Code's models as it last reported them, empty until a process has started. */
   models: ModelInfo[];
+  /** Why no ticket of a project's board starts, by project (none: they may). */
+  boardIssues?: Record<string, string>;
 }
 
 export interface Bucket {

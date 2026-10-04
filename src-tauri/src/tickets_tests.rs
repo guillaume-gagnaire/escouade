@@ -1578,6 +1578,16 @@ async fn a_ticket_under_way_whose_agent_sits_idle_is_asked_to_go_on_at_the_next_
     assert!(h.agent(&b).resume_at.is_some());
 }
 
+/// The issues of the project's board the window was told, in order (None: cleared).
+fn board_issues(h: &Harness, project_id: &str) -> Vec<Option<String>> {
+    h.events
+        .lock()
+        .iter()
+        .filter(|e| e["type"] == "boardIssue" && e["projectId"] == project_id)
+        .map(|e| e["issue"].as_str().map(str::to_string))
+        .collect()
+}
+
 #[tokio::test]
 async fn no_ticket_starts_while_the_target_branch_is_missing() {
     let h = harness("tk-no-target");
@@ -1598,14 +1608,180 @@ async fn no_ticket_starts_while_the_target_branch_is_missing() {
     );
     assert_eq!(git(&r, &["branch", "--list", "ticket/*"]), "");
     assert!(h.alerts().is_empty(), "{:?}", h.alerts());
-    assert!(h.core.targets_missing.lock().contains(&p.id));
+    // The window is told why, once.
+    let missing = "Branche cible disparue introuvable — aucun ticket ne démarre";
+    assert_eq!(board_issues(&h, &p.id), [Some(missing.to_string())]);
+    assert_eq!(
+        h.core.board_issues.lock().get(&p.id).map(String::as_str),
+        Some(missing)
+    );
     // Another target chosen in the settings: the ticket starts.
     h.set_board(&p.id, |s| s.target = "main".into());
     h.wait_ticket(&t.id, "started once its target exists", |t| {
         t.column == Column::Review
     })
     .await;
-    assert!(!h.core.targets_missing.lock().contains(&p.id));
+    assert!(!h.core.board_issues.lock().contains_key(&p.id));
+    assert_eq!(board_issues(&h, &p.id), [Some(missing.to_string()), None]);
+}
+
+#[tokio::test]
+async fn a_target_branch_made_again_starts_the_queue_at_the_next_git_refresh() {
+    let h = harness("tk-target-back");
+    let (p, r) = h.project(false).await;
+    h.set_board(&p.id, |s| s.target = "release".into());
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Patienter [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.wait_board_idle().await;
+    assert_eq!(h.ticket(&t.id).column, Column::Todo);
+    assert!(h.core.board_issues.lock().contains_key(&p.id));
+    // The branch made again (no board event): the project's git refresh looks again.
+    git(&r, &["branch", "release"]);
+    h.core.compute_git(&p.id).await;
+    h.wait_ticket(&t.id, "started from its target", |t| {
+        t.column == Column::Review
+    })
+    .await;
+    assert!(!h.core.board_issues.lock().contains_key(&p.id));
+    assert_eq!(
+        h.agent_of(&t.id).worktree.unwrap().base_branch.as_str(),
+        "release"
+    );
+}
+
+#[tokio::test]
+async fn a_board_with_nothing_left_to_start_still_drops_its_issue_once_its_target_is_back() {
+    let h = harness("tk-target-idle");
+    let (p, r) = h.project(false).await;
+    h.set_board(&p.id, |s| s.target = "disparue".into());
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Patienter", &[], 5))
+        .await
+        .unwrap();
+    h.wait_board_idle().await;
+    assert!(h.core.board_issues.lock().contains_key(&p.id));
+    // Nothing waits any more; the branch comes back.
+    h.core.ticket_delete(&t.id).await.unwrap();
+    h.wait_board_idle().await;
+    git(&r, &["branch", "disparue"]);
+    h.core.compute_git(&p.id).await;
+    h.wait("the issue gone", |h| {
+        !h.core.board_issues.lock().contains_key(&p.id)
+    })
+    .await;
+    assert_eq!(board_issues(&h, &p.id).last(), Some(&None));
+}
+
+#[tokio::test]
+async fn a_board_on_a_new_repository_waits_for_its_first_commit_then_starts() {
+    let h = harness("tk-unborn");
+    let dir = h.dir.join("neuf");
+    std::fs::create_dir_all(&dir).unwrap();
+    // A folder that is not a repository yet: the project makes one, with no commit.
+    let p = h
+        .core
+        .create_project(
+            &dir.to_string_lossy(),
+            "demo",
+            "oklch(0.72 0.12 48)",
+            false,
+            None,
+        )
+        .await
+        .unwrap();
+    let branch = git(&dir, &["symbolic-ref", "--short", "HEAD"]);
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Premier [ok]", &[], 5))
+        .await
+        .unwrap();
+    // The branch the project is on, though it has no commit yet.
+    assert_eq!(h.core.project(&p.id).unwrap().board.target, branch);
+    h.wait_board_idle().await;
+    let waiting = h.ticket(&t.id);
+    assert_eq!((waiting.column, waiting.agent_id), (Column::Todo, None));
+    let unborn = format!("{branch} n'a encore aucun commit — aucun ticket ne démarre");
+    assert_eq!(board_issues(&h, &p.id), [Some(unborn.clone())]);
+    // The first commit, seen by the project's git refresh: the queue starts.
+    git(&dir, &["config", "user.email", "t@t"]);
+    git(&dir, &["config", "user.name", "t"]);
+    std::fs::write(dir.join("README.md"), "Neuf\n").unwrap();
+    git(&dir, &["add", "-A"]);
+    git(&dir, &["commit", "-qm", "init"]);
+    h.core.compute_git(&p.id).await;
+    h.wait_ticket(&t.id, "started after the first commit", |t| {
+        t.column == Column::Review
+    })
+    .await;
+    assert_eq!(board_issues(&h, &p.id), [Some(unborn), None]);
+}
+
+#[tokio::test]
+async fn a_first_ticket_on_a_detached_head_asks_for_a_target() {
+    let h = harness("tk-detached");
+    let (p, r) = h.project(false).await;
+    git(&r, &["checkout", "-q", "--detach"]);
+    let e = h
+        .core
+        .ticket_create(&p.id, draft("Un", &[], 5))
+        .await
+        .unwrap_err();
+    assert_eq!(
+        format!("{e:#}"),
+        "Le projet n'est sur aucune branche : choisis la branche cible dans les réglages du tableau."
+    );
+    // Nothing made, no number taken.
+    assert!(h.core.tickets.read().is_empty());
+    let board = h.core.project(&p.id).unwrap().board;
+    assert_eq!((board.target.as_str(), board.next_number), ("", 1));
+    // The settings still list the branches; once one is chosen, the ticket is made.
+    assert_eq!(h.core.git_branches(&p.id).await.unwrap(), ["main"]);
+    h.set_board(&p.id, |s| {
+        s.target = "main".into();
+        s.autopilot = false;
+    });
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Un", &[], 5))
+        .await
+        .unwrap();
+    assert_eq!(t.key, "DEM-1");
+    assert_eq!(h.core.project(&p.id).unwrap().board.target, "main");
+}
+
+#[tokio::test]
+async fn a_board_saved_without_a_target_takes_the_projects_branch_for_good() {
+    let h = harness("tk-target-fixed");
+    let (p, r) = h.project(false).await;
+    // Saved by an earlier version, its first ticket made on a branch-less HEAD.
+    h.core.tickets.write().push(Ticket {
+        id: "t1".into(),
+        project_id: p.id.clone(),
+        key: "DEM-1".into(),
+        title: "Ancien [ok]".into(),
+        criteria: vec![Criterion {
+            text: "Un".into(),
+            ..Default::default()
+        }],
+        max_loops: 5,
+        ..Default::default()
+    });
+    h.core.schedule_now().await;
+    h.wait_ticket("t1", "started", |t| t.column == Column::Review)
+        .await;
+    // Fixed once: checking out another branch no longer moves it.
+    assert_eq!(h.core.project(&p.id).unwrap().board.target, "main");
+    git(&r, &["checkout", "-qb", "ailleurs"]);
+    assert_eq!(h.core.project(&p.id).unwrap().board.target, "main");
+    assert!(h
+        .events
+        .lock()
+        .iter()
+        .any(|e| e["type"] == "project" && e["project"]["board"]["target"] == "main"));
 }
 
 #[tokio::test]

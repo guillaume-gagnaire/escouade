@@ -25,6 +25,8 @@
   }: { ticket: Ticket; project: Project; queueIndex: number; busyCount: number; quota: number | null; onedit: () => void } = $props();
 
   const s = $derived(project.board);
+  /** Why no ticket of the board starts now (its target branch), if so. */
+  const issue = $derived(app.boardIssues[project.id] ?? null);
   const agent = $derived(t.agentId ? app.agents[t.agentId] : undefined);
   const met = $derived(criteriaMet(t));
   const total = $derived(t.criteria.length);
@@ -193,9 +195,9 @@
   {#if t.column === 'todo'}
     <span class="meta">{plural(total, 'critère', 'critères')} · max {t.maxLoops} boucles</span>
     <div class="row">
-      <span class="k">{waitLabel(t, queueIndex, s, busyCount)}</span>
+      <span class="k">{waitLabel(t, queueIndex, s, busyCount, issue)}</span>
       <div style="flex:1"></div>
-      {#if canStart(t, s, busyCount, quota)}
+      {#if canStart(t, s, busyCount, quota, issue)}
         <button class="small" onclick={(e) => act(e, () => app.run(api.ticketStart(t.id)))}>Lancer</button>
       {/if}
     </div>

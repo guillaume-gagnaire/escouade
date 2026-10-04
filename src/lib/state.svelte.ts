@@ -122,6 +122,8 @@ class AppState {
   tickets = $state<Record<string, Ticket>>({});
   /** Projects whose board fills the main area (not saved). */
   board = $state<Record<string, boolean>>({});
+  /** Why no ticket of a project's board starts (its target branch has no commit yet, or is gone), by project. */
+  boardIssues = $state<Record<string, string>>({});
   editor = $state<Record<string, EditorState>>({});
 
   project = $derived(this.projects.find((p) => p.id === this.ui.activeProject) ?? null);
@@ -213,6 +215,7 @@ class AppState {
     this.projects = s.projects;
     this.agents = Object.fromEntries(s.agents.map((a) => [a.id, a]));
     this.tickets = Object.fromEntries((s.tickets ?? []).map((t) => [t.id, t]));
+    this.boardIssues = { ...s.boardIssues };
     this.attention = {};
     this.ui = { ...s.ui, view: s.ui.view || 'project', selectedAgent: s.ui.selectedAgent ?? {} };
     if (!this.ui.activeProject || !this.projects.some((p) => p.id === this.ui.activeProject)) {
@@ -268,6 +271,10 @@ class AppState {
       case 'focusBoard':
         // The click of a ticket's notification.
         this.openBoard(e.projectId);
+        break;
+      case 'boardIssue':
+        if (e.issue) this.boardIssues[e.projectId] = e.issue;
+        else delete this.boardIssues[e.projectId];
         break;
       case 'conv':
         applyConvOps(e.agentId, e.ops);
@@ -552,6 +559,7 @@ class AppState {
     if (this.ui.activeProject === id) this.ui.activeProject = this.projects[0]?.id ?? null;
     delete this.editor[id];
     delete this.board[id];
+    delete this.boardIssues[id];
     buffers.closeProject(id);
     trees.closeProject(id);
     this.persistUi();
