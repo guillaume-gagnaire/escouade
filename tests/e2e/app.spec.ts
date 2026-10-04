@@ -472,3 +472,45 @@ test('a file of an agent’s worktree opens in the editor from the uncommitted f
   await expect(page.locator('.cm-content')).toContainText('const a = 42;');
   await expect(page.getByText('1 ligne modifiée vs main')).toBeVisible();
 });
+
+test('a ticket is taken by an agent that loops until its criteria are met, then merged once validated', async ({ app }) => {
+  const { page } = app;
+  // The window of the CI runners, close to the narrowest the app allows (1000): the board must fit in it.
+  await page.setViewportSize({ width: 1028, height: 779 });
+  await addProject(page, app.repo, { firstAgent: false });
+  await page.getByRole('button', { name: /^Tableau/ }).click();
+  // What of the board sticks out of its box: its header, and the cards of its columns.
+  const sticksOut = () =>
+    page.evaluate(() =>
+      [...document.querySelectorAll('main.board .head, main.board .cards')]
+        .filter((e) => e.scrollWidth > e.clientWidth)
+        .map((e) => `${e.className} (${e.scrollWidth} > ${e.clientWidth})`),
+    );
+  expect(await sticksOut()).toEqual([]);
+  await page.getByRole('button', { name: 'Nouveau ticket' }).click();
+  await page.getByRole('textbox', { name: 'Titre du ticket' }).fill('Ajouter le fichier du ticket');
+  await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
+  // The fake agent meets criterion n at loop n: two loops for the two default criteria.
+  const review = page.getByRole('region', { name: 'À tester' });
+  // Exact: the progress list (« Fichier dem-1.txt écrit ») and the agent's name also hold the key.
+  await expect(review.getByText('DEM-1', { exact: true })).toBeVisible({ timeout: 60_000 });
+  await expect(review.getByText('2/2 critères')).toBeVisible();
+  // A met criterion is a plain line, not a green button.
+  await expect(review.getByRole('list', { name: 'Critères' }).getByRole('listitem').first()).toHaveCSS(
+    'background-color',
+    'rgba(0, 0, 0, 0)',
+  );
+  expect(await sticksOut()).toEqual([]);
+  await review.getByRole('button', { name: 'Valider et merger' }).click();
+  const done = page.getByRole('region', { name: 'Terminé' });
+  await expect(done.getByText('⤵ Mergé dans main · squash')).toBeVisible({ timeout: 60_000 });
+  expect(await sticksOut()).toEqual([]);
+  // The agent's file is on the project's branch, committed with a generated message.
+  expect(fs.readFileSync(path.join(app.repo, 'dem-1.txt'), 'utf8')).toBe('Boucle 2\n');
+  const subject = execFileSync('git', ['log', '-1', '--format=%s'], { cwd: app.repo, encoding: 'utf8' }).trim();
+  expect(subject).toBe('feat: travail du faux claude [DEM-1]');
+  // Its agent's conversation tells the loop it went through and its report.
+  await done.getByRole('button', { name: /DEM-1/ }).click();
+  await expect(page.getByText(/Boucle 2\/5\. Critères non atteints : 2/)).toBeVisible();
+  await expect(page.getByText('Bilan des critères').first()).toBeVisible();
+});
