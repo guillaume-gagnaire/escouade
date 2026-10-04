@@ -222,6 +222,31 @@ describe('▶ Tester', () => {
       expect(flows.all.a7.phase).toBe('ready');
     });
 
+    it('leaves nothing running when stopped again while it waits for the dying processes', async () => {
+      const b = backend(() => true);
+      flows.prepared.a7 = JSON.stringify(RECIPE.prepare);
+      const first = testAgent(A, project());
+      await vi.advanceTimersByTimeAsync(1000);
+      await first;
+      stopTests('a7');
+      const again = testAgent(A, project());
+      await vi.advanceTimersByTimeAsync(10);
+      // "Tout arrêter" once more, while it waits for the first processes to end.
+      stopTests('a7');
+      stopped('test:a7:run:0');
+      stopped('test:a7:run:1');
+      await vi.advanceTimersByTimeAsync(1000);
+      await again;
+      expect(flows.all.a7).toMatchObject({ phase: 'failed', error: 'Arrêté' });
+      // Whatever it started once it was over is stopped at once: nothing is left running.
+      const late = b
+        .called('test_run_start')
+        .slice(2)
+        .map((_, i) => `t${i + 3}`);
+      expect(b.called('term_kill').map((c) => c.args.id)).toEqual(expect.arrayContaining(late));
+      expect(Object.values(app.launches).filter((l) => l.status === 'running' && !l.stopping)).toEqual([]);
+    });
+
     it('ends as stopped when its preparation alone is stopped', async () => {
       backend(() => true);
       const run = testAgent(A, project());

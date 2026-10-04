@@ -3,7 +3,7 @@
 
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { api } from './ipc';
-import { startLaunch, stopAgentTests } from './launch-actions';
+import { startLaunch, stopAgentTests, stopLaunch } from './launch-actions';
 import { openAddress, parseTestId, recipeCommands } from './recipe';
 import { app } from './state.svelte';
 import type { Agent, LaunchState, Project, RunCommand } from './types';
@@ -143,6 +143,17 @@ export async function testAgent(agent: Agent, project: Project) {
   const live = () => flows.all[agent.id] === flow;
   /** Nothing more to start or wait for. */
   const over = () => !live() || flow.phase !== 'running';
+  /**
+   * Starts a step for this test. A run it starts once the test is over ("Tout arrêter" again while it waited for the
+   * dying run of the step) is stopped at once: nothing is left running behind a stopped test.
+   */
+  const start = async (cmd: RunCommand) => {
+    const before = app.launches[cmd.id];
+    const why = await startLaunch(project, cmd);
+    const run = app.launches[cmd.id];
+    if (why === null && live() && over() && run !== before && run?.status === 'running') stopLaunch(cmd.id);
+    return why;
+  };
   const cmds = recipeCommands(agent, app.shells[0]?.id ?? '');
   const addLine = (cmd: RunCommand, label: string, detail: string): FlowLine => {
     flow.lines.push({ id: cmd.id, label, state: 'running', detail, launchId: cmd.id });
@@ -186,7 +197,7 @@ export async function testAgent(agent: Agent, project: Project) {
     for (const cmd of cmds.prepare) {
       if (over()) return;
       const line = addLine(cmd, `Préparation : ${cmd.command}`, 'en cours…');
-      const why = await startLaunch(project, cmd);
+      const why = await start(cmd);
       if (!live()) return;
       // Stopped while it was starting: its line already says so.
       if (why !== null) return over() ? undefined : refused(line, cmd, why);
@@ -212,7 +223,7 @@ export async function testAgent(agent: Agent, project: Project) {
   // 2. Every process, each in its own terminal (one already running stays).
   const started = Date.now();
   const lines = cmds.processes.map((cmd) => addLine(cmd, cmd.name, 'démarrage…'));
-  const refusals = await Promise.all(cmds.processes.map((cmd) => startLaunch(project, cmd)));
+  const refusals = await Promise.all(cmds.processes.map(start));
   // Stopped while they were starting: their lines already say so.
   if (over()) return;
   // Those the backend refused say why: they did not start, and the test is over.

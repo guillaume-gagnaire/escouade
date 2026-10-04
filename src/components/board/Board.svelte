@@ -25,8 +25,8 @@
   const issue = $derived(app.boardIssues[project.id] ?? null);
 
   async function toggleAutopilot() {
-    const saved = await app.run(api.boardSet(project.id, { ...$state.snapshot(s), autopilot: !s.autopilot }));
-    if (saved) app.replaceProject(saved);
+    // The project comes back through the backend's event, in order with any newer one: its answer is not written over it.
+    await app.run(api.boardSet(project.id, { ...$state.snapshot(s), autopilot: !s.autopilot }));
   }
 </script>
 
@@ -46,8 +46,13 @@
     {:else}
       <span class="places" title={places}>{places}</span>
     {/if}
-    <button class="cfg" title="Réglages du tableau" onclick={() => (app.modal = { kind: 'boardSettings', projectId: project.id })}>
-      <span class="gear">⚙</span><span class="k">Après validation :</span><span class="v mono" title={summary}>{summary}</span>
+    <!-- Its tooltip holds the summary in full: the summary is cut in a narrow window. -->
+    <button
+      class="cfg"
+      title={`Réglages du tableau — ${summary}`}
+      onclick={() => (app.modal = { kind: 'boardSettings', projectId: project.id })}
+    >
+      <span class="gear">⚙</span><span class="k">Après validation :</span><span class="v mono">{summary}</span>
     </button>
     <div class="auto" title="Les tickets « À faire » partent seuls dès qu'une place se libère">
       <span class="l">{s.autopilot ? 'Pilote auto' : 'Pilote auto · off'}</span>
@@ -124,7 +129,10 @@
     font-weight: 600;
     color: var(--del);
   }
-  /* Under this width the longest places (« Claude Code introuvable — … ») no longer fit beside the rest. */
+  /*
+   * Under this width the longest places (« Claude Code introuvable — … ») no longer fit beside the rest, nor a
+   * long summary in the settings button: it is cut, in full in the button's tooltip.
+   */
   @container head (max-width: 880px) {
     .places {
       max-width: 108px;
@@ -132,6 +140,9 @@
     .places.missing {
       max-width: 132px;
       font-size: 11px;
+    }
+    .v {
+      max-width: 22ch;
     }
   }
   .cfg {
@@ -163,7 +174,6 @@
     color: var(--muted);
   }
   .v {
-    max-width: 22ch;
     overflow: hidden;
     text-overflow: ellipsis;
     font-size: 11.5px;

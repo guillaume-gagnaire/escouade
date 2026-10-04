@@ -157,6 +157,10 @@ pub struct Ticket {
     pub agent_id: Option<String>,
     /// n of "Boucle n/max" (0 before the start).
     pub iteration: u32,
+    /// Every loop its agent began, sent back or not ("Renvoyer", failed tests, a conflict handed
+    /// over start again at 1): what "n boucles" says once it is done. 0 for a ticket saved before
+    /// they were counted.
+    pub loops: u32,
     /// Sent to "À tester" without all its criteria (loop limit).
     pub partial: bool,
     /// Why it no longer moves on by itself.
@@ -798,6 +802,19 @@ mod tests {
             serde_json::to_value(Ticket::default()).unwrap()["progress"],
             json!([])
         );
+    }
+
+    #[test]
+    fn a_ticket_saved_before_its_loops_were_counted_still_loads_with_none() {
+        let t: Ticket =
+            serde_json::from_value(json!({ "id": "t1", "key": "ATL-42", "iteration": 3 })).unwrap();
+        assert_eq!((t.loops, t.iteration), (0, 3));
+        let v = serde_json::to_value(Ticket {
+            loops: 4,
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(v["loops"], json!(4));
     }
 
     #[test]

@@ -61,15 +61,7 @@
       { label: 'Renommer', onClick: () => startRename(a) },
       a.archived
         ? { label: 'Restaurer', onClick: () => app.run(api.archiveAgent(a.id, false)) }
-        : {
-            label: 'Archiver',
-            hint: 'garde la conversation',
-            onClick: () => {
-              // Archiving stops its test launches: stopped first, their ends are no crashes.
-              stopTests(a.id);
-              app.run(api.archiveAgent(a.id, true));
-            },
-          },
+        : { label: 'Archiver', hint: 'garde la conversation', onClick: () => confirmArchive(a) },
       ...(canPrepare(a) ? [{ label: 'Préparer le lancement', onClick: () => prepareLaunch(a) }] : []),
       ...(a.archived
         ? []
@@ -105,6 +97,27 @@
   function remoteTitle(a: Agent) {
     const state = a.remoteState === 'connected' ? 'connecté' : a.remoteState === 'ready' ? 'connexion…' : 'en attente de connexion';
     return `Remote control : ${state} (accessible depuis claude.ai et l’app Claude)`;
+  }
+
+  /** Archives the agent; one whose ticket is under way or to test asks first: its ticket starts over from "À faire". */
+  function confirmArchive(a: Agent) {
+    const archive = () => {
+      // Archiving stops its test launches: stopped first, their ends are no crashes.
+      stopTests(a.id);
+      return app.run(api.archiveAgent(a.id, true));
+    };
+    const t = app.ticketOf(a.id);
+    if (t?.column !== 'doing' && t?.column !== 'review') {
+      archive();
+      return;
+    }
+    app.modal = {
+      kind: 'confirm',
+      title: `Archiver ${a.name} ?`,
+      body: `Son ticket ${t.key} repartira « À faire ».`,
+      confirm: 'Archiver',
+      onConfirm: archive,
+    };
   }
 
   function confirmDelete(a: Agent) {

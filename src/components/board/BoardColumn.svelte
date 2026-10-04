@@ -22,17 +22,20 @@
   let adding = $state(false);
   let editing = $state<string | null>(null);
 
+  // The command's ticket shows at once, unless the backend's event, which may come before its answer, already brought
+  // it, maybe newer (started meanwhile); one coming after brings the same or newer.
   async function add(d: TicketDraft) {
     const t = await app.run(api.ticketCreate(project.id, d));
     if (!t) return;
-    app.tickets[t.id] = t;
+    app.tickets[t.id] ??= t;
     adding = false;
   }
 
   async function save(id: string, d: TicketDraft) {
     const t = await app.run(api.ticketUpdate(id, d));
     if (!t) return;
-    app.tickets[t.id] = t;
+    // Only a ticket "À faire" is edited: one gone or under way since is newer than this.
+    if (app.tickets[t.id]?.column === 'todo') app.tickets[t.id] = t;
     editing = null;
   }
 </script>

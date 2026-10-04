@@ -100,6 +100,7 @@ export function criteriaMet(t: Ticket): number {
   return t.criteria.filter((c) => c.ok).length;
 }
 
+/** "n boucles · coût" of a finished ticket: every loop, those of the rounds it was sent back for included (a ticket saved before they were counted: its last round's). */
 export function doneMeta(t: Ticket): string {
-  return `${plural(t.iteration, 'boucle', 'boucles')} · ${fUsd(t.cost)}`;
+  return `${plural(t.loops || t.iteration, 'boucle', 'boucles')} · ${fUsd(t.cost)}`;
 }

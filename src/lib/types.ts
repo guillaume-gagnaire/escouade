@@ -69,6 +69,8 @@ export interface Ticket {
   agentId: string | null;
   /** n of "Boucle n/max". */
   iteration: number;
+  /** Every loop its agent began, rounds sent back included; 0 for a ticket saved before they were counted. */
+  loops: number;
   partial: boolean;
   blocked: string | null;
   /** The block is a merge conflict: "L'agent résout" and "Annuler". */

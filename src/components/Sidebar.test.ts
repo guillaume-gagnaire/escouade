@@ -199,6 +199,43 @@ describe('Sidebar remote control', () => {
     });
   });
 
+  it('asks before archiving the agent of a ticket under way or to test, whose ticket goes back to do', async () => {
+    resetApp({
+      agents: [agent(), agent({ id: 'a2', name: 'tests-e2e', createdAt: 2 }), agent({ id: 'a3', name: 'libre', createdAt: 3 })],
+      tickets: [
+        ticket({ column: 'doing', agentId: 'a1' }),
+        ticket({ id: 't2', key: 'DEM-2', column: 'review', agentId: 'a2' }),
+        ticket({ id: 't3', key: 'DEM-3', column: 'done', agentId: 'a3' }),
+      ],
+    });
+    const backend = fakeBackend();
+    render(Sidebar, { project: project() });
+    for (const [name, key, id] of [
+      ['refacto-auth', 'DEM-1', 'a1'],
+      ['tests-e2e', 'DEM-2', 'a2'],
+    ] as const) {
+      await fireEvent.contextMenu(screen.getByRole('button', { name: new RegExp(name) }));
+      click('Archiver');
+      expect(backend.called('archive_agent')).toHaveLength(0);
+      expect(app.modal).toMatchObject({
+        kind: 'confirm',
+        title: `Archiver ${name} ?`,
+        body: `Son ticket ${key} repartira « À faire ».`,
+        confirm: 'Archiver',
+      });
+      await (app.modal as any).onConfirm(false);
+      expect(backend.called('archive_agent').at(-1)?.args).toEqual({ id, archived: true });
+      backend.calls.length = 0;
+      app.modal = null;
+    }
+    // A done ticket holds its agent no more: archived at once.
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /libre/ }));
+    click('Archiver');
+    await new Promise((r) => setTimeout(r));
+    expect(app.modal).toBeNull();
+    expect(backend.called('archive_agent')[0].args).toEqual({ id: 'a3', archived: true });
+  });
+
   it('says when a remote agent is not reachable yet', () => {
     resetApp({ projects: [project()], agents: [agent({ remoteControl: true, remoteState: null })] });
     fakeBackend();

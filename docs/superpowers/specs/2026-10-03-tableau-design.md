@@ -28,7 +28,7 @@ Décisions validées le 2026-10-03 :
 | rang | ordre dans « À faire » (priorité) |
 | agent, boucle courante | l'agent du ticket, `n` de « Boucle n/max » |
 | partiel | passé « À tester » sans tous ses critères (limite de boucles) |
-| bloqué | raison (« Interrompu », « Erreur : … », « Bilan des critères manquant », « Conflit avec main », « Tests en échec », message d'une validation ratée), ou rien |
+| bloqué | raison (« Interrompu », « Erreur : … », « Bilan des critères manquant », « Conflit avec main », message d'une validation ratée), ou rien |
 | en cours | étape de validation affichée (« Tests… », « Commit… », « Merge… », « Push… »), ou rien |
 | issue | texte de fin (« ⤵ Mergé dans main · squash », « ⇡ PR #12 → main » + lien…) |
 | dates | création, départ, passage « À tester », fin |
@@ -108,7 +108,7 @@ Démarrage de l'app : un ticket « En cours » dont le tour a été coupé par l
    - **PR** — push de `ticket/<clé>` (`-u`), puis `gh pr create --base <cible> --head <branche> --title <message> --body <description + avancement + critères> [--draft]` si `gh` est dans le PATH (issue « ⇡ PR #N → main » + lien) ; sinon, dépôt GitHub : ouverture de `https://github.com/<owner>/<repo>/compare/<cible>...<branche>?expand=1&title=…&body=…` (issue « ⇡ ticket/atl-42 poussée · PR à finaliser ») ; autre hébergeur : push seul et message ;
    - **pousser** — push de `ticket/<clé>` (`-u`) ;
    - **laisser** — rien ;
-5. **fin** : merge, PR, push → l'agent est archivé (process arrêté) ; après un merge, si « Supprimer le worktree » : worktree et branche supprimés (`branch -D`, nécessaire après un squash) ; PR et push gardent la branche et le worktree. « Laisser » garde l'agent actif. Le ticket passe « Terminé » avec son issue.
+5. **fin** : merge, PR, push → l'agent est archivé (process arrêté) ; après un merge, si « Supprimer le worktree » : worktree et branche supprimés (`branch -D`, nécessaire après un squash ; s'ils ne peuvent l'être, l'issue finit par « · worktree gardé ») ; PR et push gardent la branche et le worktree. « Laisser » garde l'agent actif. Le ticket passe « Terminé » avec son issue.
 
 Une étape ratée (push refusé, merge impossible…) laisse le ticket « À tester », bloqué avec le message ; « Réessayer » relance la validation.
 
@@ -126,7 +126,7 @@ Une étape ratée (push refusé, merge impossible…) laisse le ticket « À tes
 
 - Ticket « À faire » : clic → formulaire de modification ; clic droit : Modifier, Passer en tête, Supprimer.
 - Ticket « En cours » / « À tester » / « Terminé » : clic → conversation de son agent ; clic droit : Ouvrir l'agent, Supprimer (« En cours » et « À tester » : confirmation, l'agent est archivé avec son worktree).
-- Archiver ou supprimer à la main l'agent d'un ticket « En cours » ou « À tester » → le ticket revient « À faire » (boucle et bilan remis à zéro).
+- Archiver ou supprimer à la main l'agent d'un ticket « En cours » ou « À tester » → le ticket revient « À faire » (boucle et bilan remis à zéro). Archiver depuis la barre latérale demande d'abord « Archiver <agent> ? » (« Son ticket <clé> repartira « À faire ». »).
 
 ## Lancement de test
 
@@ -166,7 +166,7 @@ Pour tout agent à worktree, ticket ou non.
   - « À faire » : « N critères · max M boucles », état d'attente (« Pris dès qu'une place se libère », « En attente d'une place (2/2) », « Pilote auto désactivé ») et « Lancer » si une place est libre et le pilote désactivé ;
   - « En cours » : « Boucle n/max », critères ✓ / ○, barre de progression (critères atteints / total), les derniers éléments de l'avancement (3 au plus, « +n » s'il y en a d'autres), activité en direct de l'agent avec les points animés (« Lit src/db.ts », « Modifie src/middleware/auth.ts », « Lance npm test », « Réfléchit »…) ou « Question en attente de ta réponse » (bordure jaune), pied avec l'agent ; bloqué : bandeau avec la raison et « Reprendre » ;
   - « À tester » : avancement complet (« Ce qui a été fait »), critères, « Objectif partiel », « n/N critères », liens et bouton « ▶ Tester » / « ■ Arrêter » si recette, boutons de validation et « Renvoyer » ; étape de validation en cours ; bandeau de blocage ou de conflit avec ses boutons ;
-  - « Terminé » : issue (lien s'il y en a un), « n boucles · coût », carte atténuée ; les plus récents en haut.
+  - « Terminé » : issue (lien s'il y en a un), « n boucles · coût » (toutes les boucles de son agent, renvois, tests en échec et conflits compris), carte atténuée ; les plus récents en haut.
 - **Activité de l'agent** : nouveau champ de la vue d'un agent, tenu par le cœur à partir des outils lancés (Read → « Lit », Grep / Glob → « Cherche », Edit / MultiEdit → « Modifie », Write → « Écrit », Bash → « Lance » + commande tronquée, Task → « Délègue », réflexion → « Réfléchit », texte → « Rédige »), vidé en fin de tour.
 - **Conversation** : un bloc `escouade` s'affiche comme une carte « Bilan des critères » (✓ / ○, texte du critère, note ; puis l'avancement en liste) suivie, s'il y a une recette, de « Lancement de test » (processus, URL, bouton « ▶ Tester »).
 - **Notifications** : passage « À tester » → « ATL-42 prêt à tester » (carillon ; toast système en arrière-plan, clic → tableau du projet) ; ticket bloqué → « ATL-42 bloqué : <raison> ». Les notifications de fin de tour d'un agent de ticket « En cours » sont supprimées ; ses questions notifient comme d'habitude.

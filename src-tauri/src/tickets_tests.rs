@@ -526,7 +526,7 @@ async fn a_ticket_gets_an_agent_on_its_own_branch_and_loops_until_its_criteria_a
     h.wait_ticket(&t.id, "ticket to test", |t| t.column == Column::Review)
         .await;
     let t = h.ticket(&t.id);
-    assert_eq!((t.iteration, t.partial), (2, false));
+    assert_eq!((t.iteration, t.partial, t.loops), (2, false, 2));
     assert!(t.criteria.iter().all(|c| c.ok && c.note == "vérifié"));
     // The agent's last account of what is in place is kept on the ticket.
     assert_eq!(t.progress, ["Fichier dem-1.txt écrit", "Boucle 2 faite"]);
@@ -1900,6 +1900,30 @@ async fn a_merged_tickets_worktree_goes_even_while_its_agent_takes_its_time_to_s
 }
 
 #[tokio::test]
+async fn a_merged_tickets_worktree_that_cannot_be_removed_is_said_kept() {
+    let h = harness("tk-cleanup-kept");
+    let (p, r) = h.project(false).await;
+    let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    // Locked: git keeps it registered, and its branch with it.
+    git(&r, &["worktree", "lock", &wt.to_string_lossy()]);
+    h.core.ticket_approve(&t.id).await.unwrap();
+    let t = h.ticket(&t.id);
+    // Merged all the same: done, and the card says what is left.
+    assert_eq!(
+        (t.column, t.outcome.as_deref()),
+        (
+            Column::Done,
+            Some("⤵ Mergé dans main · squash · worktree gardé")
+        ),
+        "{:?}",
+        t.blocked
+    );
+    assert!(has_branch(&r, "ticket/dem-1"));
+    assert!(h.events.lock().iter().any(|e| e["type"] == "ticket"
+        && e["ticket"]["outcome"] == "⤵ Mergé dans main · squash · worktree gardé"));
+}
+
+#[tokio::test]
 async fn validating_merges_into_a_branch_checked_out_nowhere_through_a_temporary_worktree() {
     let h = harness("tk-merge-temp");
     let (p, r) = h.project(false).await;
@@ -2020,9 +2044,9 @@ async fn failing_tests_send_the_ticket_back_to_its_agent_with_their_last_lines()
         .await;
     assert!(h.last_sent(&wt).contains("1 test en échec"));
     assert_ne!(h.ticket(&t.id).column, Column::Done);
-    // Its agent answers with its report: back to test, from loop 1.
+    // Its agent answers with its report: back to test, from loop 1, its second loop all the same.
     h.wait_ticket(&t.id, "to test again", |t| {
-        t.column == Column::Review && t.iteration == 1
+        t.column == Column::Review && t.iteration == 1 && t.loops == 2
     })
     .await;
 }
@@ -3128,7 +3152,11 @@ async fn when_the_agent_resolves_it_gets_the_target_merged_into_its_branch_with_
     assert!(git(&wt, &["diff", "--name-only", "--diff-filter=U"]).contains("src/app.ts"));
     let c = h.ticket(&t.id);
     assert_ne!(c.column, Column::Done);
-    assert_eq!((c.agent_id, c.iteration, c.conflict), (agent, 1, false));
+    // Loop 1 again, its second loop all the same.
+    assert_eq!(
+        (c.agent_id, c.iteration, c.loops, c.conflict),
+        (agent, 1, 2, false)
+    );
     // The project's folder was left as it was.
     assert_eq!(git(&r, &["status", "--porcelain"]), "");
     assert_eq!(git(&r, &["rev-list", "--count", "main"]), "2");
@@ -3304,13 +3332,17 @@ async fn a_rejected_ticket_goes_back_to_the_same_agent_with_the_comment() {
     h.wait_ticket(&t.id, "to test again", |t| t.column == Column::Review)
         .await;
     let back = h.ticket(&t.id);
-    assert_eq!((back.agent_id, back.iteration), (agent, 1));
+    // Loop 1 again, its second loop all the same.
+    assert_eq!((back.agent_id, back.iteration, back.loops), (agent, 1, 2));
     // Only a ticket to test is sent back.
     h.core.ticket_approve(&t.id).await.unwrap();
     let e = h.core.ticket_reject(&t.id, "encore").await.unwrap_err();
     assert_eq!(format!("{e:#}"), "Ce ticket n'est pas à tester.");
     let done = h.ticket(&t.id);
-    assert_eq!((done.column, done.blocked), (Column::Done, None));
+    assert_eq!(
+        (done.column, done.blocked, done.loops),
+        (Column::Done, None, 2)
+    );
 }
 
 /// The agent read a message starting with `start`.

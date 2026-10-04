@@ -141,6 +141,7 @@ export function ticket(over: Partial<Ticket> = {}): Ticket {
     rank: 1,
     agentId: null,
     iteration: 0,
+    loops: 0,
     partial: false,
     blocked: null,
     conflict: false,

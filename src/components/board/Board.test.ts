@@ -95,8 +95,55 @@ describe('Board', () => {
     expect(within(todo).queryByRole('button', { name: 'Lancer' })).not.toBeInTheDocument();
   });
 
+  it('keeps the newer ticket the backend already sent rather than the one its creation returns', async () => {
+    const created = ticket({ id: 't9', key: 'DEM-9', title: 'Vite parti' });
+    fakeBackend({
+      ticket_create: () => {
+        // Its events came first: created, then started at once.
+        app.tickets.t9 = { ...created, column: 'doing', agentId: 'a1', iteration: 1, startedAt: 2 };
+        return created;
+      },
+    });
+    render(Board, { project: app.projects[0] });
+    await userEvent.click(screen.getByRole('button', { name: 'Nouveau ticket' }));
+    await userEvent.type(screen.getByRole('textbox', { name: 'Titre du ticket' }), 'Vite parti');
+    await userEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
+    expect(await within(col('En cours')).findByText('DEM-9')).toBeInTheDocument();
+    expect(app.tickets.t9.column).toBe('doing');
+    expect(within(col('À faire')).queryByText('DEM-9')).not.toBeInTheDocument();
+  });
+
+  it('keeps the newer board the backend already sent rather than the one the autopilot switch gets back', async () => {
+    fakeBackend({
+      board_set: (a: any) => {
+        // Its event came first, then a newer one (the first ticket fixed the target meanwhile).
+        app.replaceProject(project({ board: { ...a.settings, target: 'release' } }));
+        return project({ board: a.settings });
+      },
+    });
+    render(Board, { project: app.projects[0] });
+    await userEvent.click(screen.getByRole('switch', { name: 'Pilote auto' }));
+    await new Promise((r) => setTimeout(r));
+    expect(app.projects[0].board).toMatchObject({ autopilot: false, target: 'release' });
+  });
+
+  it('names its settings button, and gives what validating does in full in its tooltip', () => {
+    fakeBackend();
+    render(Board, { project: app.projects[0] });
+    const button = screen.getByRole('button', { name: /Après validation/ });
+    expect(button).toHaveAttribute('title', 'Réglages du tableau — merge squash → main');
+    // The summary has no tooltip of its own, which would hide the button's.
+    expect(within(button).getByText('merge squash → main')).not.toHaveAttribute('title');
+  });
+
   it('turns the autopilot off and lets a ticket be launched by hand', async () => {
-    const backend = fakeBackend({ board_set: (a: any) => project({ board: a.settings }) });
+    const backend = fakeBackend({
+      // The board as the backend's event gives it (the command's answer may come after a newer one).
+      board_set: (a: any) => {
+        app.replaceProject(project({ board: a.settings }));
+        return null;
+      },
+    });
     render(Board, { project: app.projects[0] });
     await userEvent.click(screen.getByRole('switch', { name: 'Pilote auto' }));
     expect(backend.called('board_set')[0].args.settings.autopilot).toBe(false);

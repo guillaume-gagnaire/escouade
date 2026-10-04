@@ -526,6 +526,17 @@ test('a ticket is taken by an agent that loops until its criteria are met, then 
     expect(await sticksOut(), text).toEqual([]);
   }
   await say(usual, false);
+  // In a wide window, a long summary of what validating does is shown whole, not cut as in a narrow one.
+  const summary = page.locator('main.board .cfg .v');
+  const usualSummary = await summary.textContent();
+  const cut = () => summary.evaluate((e) => e.scrollWidth > e.clientWidth);
+  await summary.evaluate((e) => (e.firstChild!.nodeValue = 'merge squash → feature/une-branche-au-nom-long'));
+  expect(await cut()).toBe(true);
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await expect.poll(cut).toBe(false);
+  expect(await headerOverlaps()).toEqual([]);
+  await summary.evaluate((e, t) => (e.firstChild!.nodeValue = t), usualSummary);
+  await page.setViewportSize({ width: 1028, height: 779 });
   await page.getByRole('button', { name: 'Nouveau ticket' }).click();
   await page.getByRole('textbox', { name: 'Titre du ticket' }).fill('Ajouter le fichier du ticket');
   await page.getByRole('button', { name: 'Ajouter', exact: true }).click();

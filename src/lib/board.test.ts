@@ -83,6 +83,13 @@ describe('board labels', () => {
     expect(doneMeta(ticket({ iteration: 3, cost: 0.42 }))).toBe('3 boucles · 0,42 $');
   });
 
+  it('counts every loop of a finished ticket, those of its rounds sent back included', () => {
+    // Sent back once after two loops, done in one: three loops, though its last round says 1.
+    expect(doneMeta(ticket({ column: 'done', iteration: 1, loops: 3, cost: 1.5 }))).toBe('3 boucles · 1,50 $');
+    // Saved before the loops were counted: its last round's.
+    expect(doneMeta(ticket({ column: 'done', iteration: 2, loops: 0, cost: 1.5 }))).toBe('2 boucles · 1,50 $');
+  });
+
   it('writes the accent-stripping pattern without any literal combining mark (they get lost when copied)', () => {
     expect(source).not.toMatch(/\p{M}/u);
   });

@@ -199,4 +199,13 @@ describe('escouade blocks', () => {
     // A block still being written (no closing fence) is not one yet.
     expect(splitEscouade('Voilà\n```escouade\n{"criteres": [')).toEqual([{ kind: 'md', text: 'Voilà\n```escouade\n{"criteres": [' }]);
   });
+
+  it('still finds the real block after a mention of the fence in the text', () => {
+    const valid = '{"criteres": [{"n": 1, "ok": true}], "avancement": ["Fichier écrit"]}';
+    const text = `Voici le bilan, dans un bloc \`\`\`escouade comme demandé.\n\n\`\`\`escouade\n${valid}\n\`\`\``;
+    const parts = splitEscouade(text);
+    expect(parts.map((s) => s.kind)).toEqual(['md', 'report']);
+    expect(parts[0]).toEqual({ kind: 'md', text: 'Voici le bilan, dans un bloc ```escouade comme demandé.\n\n' });
+    expect(parts[1]).toMatchObject({ report: { criteria: [{ n: 1, ok: true }], progress: ['Fichier écrit'] } });
+  });
 });

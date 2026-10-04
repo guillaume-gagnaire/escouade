@@ -266,6 +266,7 @@ pub fn turn_end(t: &mut Ticket, end: &TurnEnd, report: Option<&Report>, now: i64
                     next.ready = true;
                 } else {
                     t.iteration += 1;
+                    t.loops += 1;
                     next.send = Some(loop_message(t));
                 }
             }
@@ -327,6 +328,7 @@ pub fn back_to_todo(t: &mut Ticket) {
     t.column = Column::Todo;
     t.agent_id = None;
     t.iteration = 0;
+    t.loops = 0;
     t.partial = false;
     t.blocked = None;
     t.conflict = false;
@@ -343,10 +345,12 @@ pub fn back_to_todo(t: &mut Ticket) {
 }
 
 /// Back "En cours" with the same agent and worktree, from loop 1: its tests failed, a conflict
-/// was handed to it, or it was sent back ("Renvoyer"). What it did and its last report stay.
+/// was handed to it, or it was sent back ("Renvoyer"). What it did and its last report stay; the
+/// loop counts with the others.
 pub fn back_to_work(t: &mut Ticket) {
     t.column = Column::Doing;
     t.iteration = 1;
+    t.loops += 1;
     t.partial = false;
     t.blocked = None;
     t.conflict = false;
@@ -623,6 +627,9 @@ pub fn pushed_outcome(branch: &str) -> String {
 }
 
 pub const KEPT_OUTCOME: &str = "◇ Laissé dans le worktree";
+
+/// Added to a merge's outcome when its worktree and branch could not be removed after it.
+pub const WORKTREE_KEPT: &str = " · worktree gardé";
 
 // ---------- GitHub ----------
 
@@ -976,17 +983,19 @@ mod tests {
         let (end, r) = finished(
             r#"{"criteres": [{"n": 1, "ok": true}, {"n": 2, "ok": false, "note": "reste la rotation"}, {"n": 3, "ok": true}]}"#,
         );
+        // Its first loop under way, a loop of an earlier round counted already.
+        t.loops = 2;
         let next = turn_end(&mut t, &end, r.as_ref(), 1);
-        assert_eq!(t.iteration, 2);
+        assert_eq!((t.iteration, t.loops), (2, 3));
         // A criterion left out counts as missing.
         assert_eq!(
             next.send.as_deref(),
             Some("Boucle 2/3. Critères non atteints : 2 (reste la rotation), 4. Continue jusqu'à les atteindre, puis termine par le bilan.")
         );
         turn_end(&mut t, &end, r.as_ref(), 2);
-        assert_eq!(t.iteration, 3);
+        assert_eq!((t.iteration, t.loops), (3, 4));
         let next = turn_end(&mut t, &end, r.as_ref(), 3);
-        assert_eq!((t.column, t.partial), (Column::Review, true));
+        assert_eq!((t.column, t.partial, t.loops), (Column::Review, true, 4));
         assert!(next.ready && next.send.is_none());
     }
 
@@ -1140,9 +1149,12 @@ mod tests {
         t.criteria[0].ok = true;
         t.criteria[0].note = "vu".into();
         t.progress = vec!["Middleware réécrit".into()];
+        t.loops = 4;
         back_to_todo(&mut t);
-        // A new agent starts from the target branch: nothing of this attempt is in place.
+        // A new agent starts from the target branch: nothing of this attempt is in place, nor
+        // counts.
         assert!(t.progress.is_empty());
+        assert_eq!(t.loops, 0);
         assert_eq!(
             (
                 t.column,
@@ -1173,7 +1185,10 @@ mod tests {
         t.criteria[0].ok = true;
         t.criteria[0].note = "vu".into();
         t.progress = vec!["Middleware réécrit".into()];
+        t.loops = 3;
         back_to_work(&mut t);
+        // Another loop, counted with the others.
+        assert_eq!(t.loops, 4);
         assert_eq!(
             (
                 t.column,

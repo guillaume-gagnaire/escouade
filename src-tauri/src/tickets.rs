@@ -452,6 +452,7 @@ impl<R: Runtime> Core<R> {
             t.column = Column::Doing;
             t.agent_id = None;
             t.iteration = 1;
+            t.loops += 1;
             t.forced = false;
             t.partial = false;
             t.blocked = None;
@@ -1167,7 +1168,8 @@ impl<R: Runtime> Core<R> {
     /// After a merge, with "Supprimer le worktree": the ticket's worktree and branch go. Its
     /// agent's process is killed first with all it started: the archive closed its input, but it
     /// may take its time to end (or something still holds it), and on Windows a live process
-    /// keeps the folder. The removal is tried again for a few seconds.
+    /// keeps the folder. The removal is tried again for a few seconds; when it still fails, the
+    /// ticket's outcome says the worktree is kept.
     async fn remove_worktree_of(
         &self,
         t: &Ticket,
@@ -1188,7 +1190,13 @@ impl<R: Runtime> Core<R> {
             match git::worktree_remove(&project.path, &wt.path, &wt.branch).await {
                 Ok(()) => break,
                 Err(e) if attempt == 10 => {
-                    log::warn!("ticket {}: worktree not removed: {e:#}", t.key)
+                    log::warn!("ticket {}: worktree not removed: {e:#}", t.key);
+                    let _ = self.edit_ticket(&t.id, |x| {
+                        if let Some(outcome) = x.outcome.as_mut() {
+                            outcome.push_str(board::WORKTREE_KEPT);
+                        }
+                        Ok(())
+                    });
                 }
                 Err(_) => tokio::time::sleep(Duration::from_millis(300)).await,
             }

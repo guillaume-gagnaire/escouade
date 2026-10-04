@@ -149,13 +149,19 @@ export function parseReport(json: string): Report | null {
 export function splitEscouade(text: string): Segment[] {
   const out: Segment[] = [];
   let last = 0;
-  for (const m of text.matchAll(BLOCK)) {
+  const block = new RegExp(BLOCK);
+  for (let m = block.exec(text); m; m = block.exec(text)) {
     const report = parseReport(m[1]);
-    if (!report) continue;
+    if (!report) {
+      // Unreadable: maybe a mention of the fence in the text, whose match ran up to the opening fence of the real
+      // block. Read again from just after its own opening fence.
+      block.lastIndex = m.index + 3;
+      continue;
+    }
     const before = text.slice(last, m.index);
     if (before.trim()) out.push({ kind: 'md', text: before });
     out.push({ kind: 'report', report });
-    last = m.index! + m[0].length;
+    last = m.index + m[0].length;
   }
   const rest = text.slice(last);
   if (rest.trim() || !out.length) out.push({ kind: 'md', text: rest });
