@@ -14,8 +14,8 @@ const { version } = useRuntimeConfig().public;
         </h1>
         <p class="lede">
           Escouade, le poste de pilotage de tes agents Claude Code : une app Windows et macOS pour piloter plusieurs agents en parallèle,
-          avec projets en onglets, chat natif, git, éditeur, terminaux, statistiques, et un tableau de tickets que des agents prennent seuls
-          jusqu’au but.
+          avec projets en onglets, chat natif, git, éditeur, terminaux, statistiques, et un Kanban de tickets, écrits par toi ou importés de
+          Jira, Trello ou GitHub, que des agents prennent seuls jusqu’au but.
         </p>
         <div class="cta">
           <a class="btn primary" :href="DOWNLOAD">Télécharger pour Windows et macOS</a>

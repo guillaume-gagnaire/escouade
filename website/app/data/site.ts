@@ -75,14 +75,14 @@ export const FEATURES: Feature[] = [
   {
     id: 'tableau',
     title: 'Des tickets, que des agents prennent seuls',
-    text: 'Le tableau de chaque projet : à faire, en cours, à tester, terminé. Écris un ticket avec ses critères d’acceptation ; en pilote auto, des agents le prennent, chacun dans son worktree avec ses propres ports, et bouclent jusqu’à ce que chaque critère soit atteint.',
+    text: 'Le Kanban de chaque projet : à faire, en cours, à tester, terminé. Écris un ticket avec ses critères d’acceptation ; en pilote auto, des agents le prennent, chacun dans son worktree avec ses propres ports, et bouclent jusqu’à ce que chaque critère soit atteint.',
     points: [
       'Pilote auto, de 1 à 6 agents en parallèle',
       'Boucle, critères et avancement en direct sur chaque carte',
       'Valider : tests, commit généré, merge, pull request ou push ; ou renvoyer à l’agent',
     ],
     image: 'images/board.jpg',
-    alt: 'Le tableau d’un projet : deux tickets en cours avec leur boucle et leurs critères, et les tickets terminés',
+    alt: 'Le Kanban d’un projet : deux tickets en cours avec leur boucle et leurs critères, et les tickets terminés',
   },
   {
     id: 'test',
@@ -95,6 +95,18 @@ export const FEATURES: Feature[] = [
     ],
     image: 'images/test.jpg',
     alt: 'La fenêtre « Tester DEM-6 » : préparation, serveurs prêts et adresse ouverte dans le navigateur',
+  },
+  {
+    id: 'integrations',
+    title: 'Tes tickets Jira, Trello et GitHub, dans le Kanban',
+    text: 'Connecte Jira, Trello ou GitHub Issues et lie une source à ton projet. « Importer » cherche et filtre ses tickets : coche-les, ils arrivent dans le Kanban avec leurs critères d’acceptation. Escouade tient ensuite leur statut à jour et commente le ticket d’origine quand il est prêt à tester, puis terminé.',
+    points: [
+      'Critères d’acceptation repris de la description ou de la checklist',
+      'Statut et commentaires synchronisés, colonne par colonne',
+      'Import automatique, si tu l’actives, des tickets étiquetés claude-ready',
+    ],
+    image: 'images/integrations.jpg',
+    alt: 'La fenêtre « Importer des tickets » : trois tickets Jira cochés, avec leurs critères d’acceptation détectés',
   },
   {
     id: 'lancement',
@@ -143,13 +155,16 @@ export const CARDS: Card[] = [
   { title: 'De vrais terminaux', text: 'PowerShell, Git Bash et WSL intégrés, avec l’autocomplétion de ton shell.' },
   {
     title: 'Limite d’usage ? Il reprend',
-    text: 'Un agent arrêté par sa limite d’usage reprend tout seul dès que ton quota revient, et le tableau attend avant de lancer un nouveau ticket.',
+    text: 'Un agent arrêté par sa limite d’usage reprend tout seul dès que ton quota revient, et le Kanban attend avant de lancer un nouveau ticket.',
   },
   {
     title: 'Toujours là',
     text: 'Fermer la fenêtre ne coupe pas les agents : Escouade reste dans la zone de notification et reprend chaque session au redémarrage.',
   },
-  { title: 'Derrière un proxy', text: 'Proxy HTTP(S) pour Claude, les quotas, les mises à jour et, si tu veux, les terminaux.' },
+  {
+    title: 'Derrière un proxy',
+    text: 'Proxy HTTP(S) pour Claude, les quotas, les mises à jour, les intégrations et, si tu veux, les terminaux.',
+  },
   { title: 'Mises à jour automatiques', text: 'Les nouvelles versions, signées, s’installent depuis l’app.' },
   { title: 'Au clavier', text: 'Ctrl+1…9 pour les projets, Ctrl+N pour un agent, Ctrl+J pour celui qui attend, Échap pour interrompre.' },
 ];
@@ -189,7 +204,11 @@ export const FAQ: Question[] = [
   },
   {
     q: 'Où vont mes données ?',
-    a: 'Nulle part : projets, conversations et statistiques restent sur ta machine, dans ~/.escouade/. Le réseau ne sert qu’à Claude Code lui-même, à la lecture de tes quotas et aux mises à jour de l’app.',
+    a: 'Nulle part : projets, conversations et statistiques restent sur ta machine, dans ~/.escouade/. Le réseau ne sert qu’à Claude Code lui-même, à la lecture de tes quotas, aux mises à jour de l’app et, si tu les connectes, à Jira, Trello ou GitHub : un ticket importé y reçoit son statut et des commentaires (ses critères, ce qui a été fait).',
+  },
+  {
+    q: 'Et mes jetons Jira, Trello ou GitHub ?',
+    a: 'Ils restent sur ta machine, dans ~/.escouade/integrations.json, à part des réglages, et ne servent qu’aux appels de ces services. Pour GitHub, Escouade peut aussi reprendre celui de gh.',
   },
   {
     q: 'Ça marche sur Mac ou Linux ?',

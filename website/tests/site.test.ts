@@ -139,6 +139,22 @@ describe('generated site', () => {
     expect(html).toContain('Pilote auto');
   });
 
+  it('presents the imports from Jira, Trello and GitHub, kept in sync, among the features', () => {
+    const f = FEATURES.find((x) => x.id === 'integrations');
+    expect(f, 'integrations').toBeDefined();
+    const said = [f!.title, f!.text, ...f!.points].join(' ');
+    for (const service of ['Jira', 'Trello', 'GitHub']) expect(said).toContain(service);
+    expect(said).toMatch(/critères d’acceptation/);
+    expect(said).toMatch(/statut/);
+    expect(html).toContain(`src="${BASE}images/integrations.jpg"`);
+  });
+
+  it('calls the board by its name in the app, the Kanban', () => {
+    expect(html).toContain('Kanban');
+    // A Trello board is still a « tableau ».
+    expect(html).not.toMatch(/\b(le|un|du) tableau\b(?! Trello)/i);
+  });
+
   it('tells GitHub Pages not to run Jekyll on it', () => {
     expect(existsSync(new URL('.nojekyll', OUT))).toBe(true);
   });
