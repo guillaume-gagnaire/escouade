@@ -689,6 +689,17 @@ describe('board', () => {
     expect(app.reviewCount('p1')).toBe(1);
   });
 
+  it('knows the external accounts from the start, and says what the automatic import brought', async () => {
+    const accounts = [{ service: 'jira' as const, connected: true, label: '@ada' }];
+    const { emit } = await start({ accounts });
+    expect(app.accounts).toEqual(accounts);
+    emit({ type: 'toast', text: '2 tickets importés depuis GitHub dans demo' });
+    expect(app.toasts.at(-1)).toMatchObject({ text: '2 tickets importés depuis GitHub dans demo', kind: 'info' });
+    // An older backend sends none.
+    await start();
+    expect(app.accounts).toEqual([]);
+  });
+
   it('knows why a board starts nothing, from the start and as the backend tells it', async () => {
     const unborn = "main n'a encore aucun commit — aucun ticket ne démarre";
     const { emit } = await start({ boardIssues: { p1: unborn } });

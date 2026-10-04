@@ -5,6 +5,7 @@
   import { app } from '../../lib/state.svelte';
   import AppTab from '../settings/AppTab.svelte';
   import BoardTab from '../settings/BoardTab.svelte';
+  import IntegrationsTab from '../settings/IntegrationsTab.svelte';
   import ProjectTab from '../settings/ProjectTab.svelte';
 
   // All the settings, the app's and each project's, in one place: a tab at a time, saved together.
@@ -123,12 +124,14 @@
         </div>
       {/if}
       <div class="body" bind:this={body} role="tabpanel" id="settings-panel" aria-labelledby="settings-tab-{current.id}">
-        {#if current.id === 'projects' || current.id === 'board'}
+        {#if current.id === 'projects' || current.id === 'board' || current.id === 'integrations'}
           {#if project && draft}
             {#if current.id === 'projects'}
               <ProjectTab {project} />
-            {:else}
+            {:else if current.id === 'board'}
               <BoardTab {project} />
+            {:else}
+              <IntegrationsTab {project} />
             {/if}
           {:else}
             <p class="none">Aucun projet ouvert.</p>

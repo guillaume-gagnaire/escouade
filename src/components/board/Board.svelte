@@ -46,6 +46,14 @@
     {:else}
       <span class="places" title={places}>{places}</span>
     {/if}
+    <!-- Its label goes in a narrow window, its icon and its name stay. -->
+    <button
+      class="imp"
+      aria-label="Importer"
+      title="Importer des tickets de Jira, Trello ou GitHub Issues"
+      onclick={() => (app.modal = { kind: 'import', projectId: project.id })}
+      ><span class="ic" aria-hidden="true">⤓</span><span class="l">Importer</span></button
+    >
     <!-- Its tooltip holds the summary in full: the summary is cut in a narrow window. -->
     <button
       class="cfg"
@@ -144,6 +152,34 @@
     .v {
       max-width: 22ch;
     }
+    .imp .l {
+      display: none;
+    }
+    .imp {
+      padding: 0 10px;
+    }
+  }
+  .imp {
+    height: 34px;
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 13px;
+    border: 1px solid var(--line2);
+    border-radius: var(--r-sm);
+    background: var(--elev);
+    color: var(--text);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .imp:hover {
+    border-color: var(--accent);
+  }
+  .imp .ic {
+    color: var(--accent);
   }
   .cfg {
     height: 34px;

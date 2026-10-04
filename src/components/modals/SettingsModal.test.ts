@@ -47,7 +47,7 @@ describe('SettingsModal', () => {
       within(dialog)
         .getAllByRole('tab')
         .map((t) => t.textContent?.trim()),
-    ).toEqual(['✳Claude Code', '♪Notifications', '▤Projets', '▦Kanban', '$_Terminaux', '⇄Réseau', 'ⓘÀ propos']);
+    ).toEqual(['✳Claude Code', '♪Notifications', '▤Projets', '▦Kanban', '⧉Intégrations', '$_Terminaux', '⇄Réseau', 'ⓘÀ propos']);
     expect(tab('Claude Code')).toHaveAttribute('aria-selected', 'true');
     expect(within(dialog).getByText('Exécutable, modèle et permissions par défaut')).toBeInTheDocument();
     expect(within(panel()).getByRole('textbox', { name: /Chemin de l'exécutable/ })).toBeInTheDocument();

@@ -12,6 +12,7 @@ import { testCommand } from './recipe';
 import type { SettingsTab } from './settings.svelte';
 import { applyTheme } from './theme';
 import type {
+  AccountView,
   Agent,
   AgentStatus,
   FileTree,
@@ -51,7 +52,8 @@ export type Modal =
       onCancel?: () => void;
     }
   | { kind: 'rename'; title: string; value: string; onSubmit: (v: string) => void | Promise<void> }
-  | { kind: 'testLaunch'; agentId: string };
+  | { kind: 'testLaunch'; agentId: string }
+  | { kind: 'import'; projectId: string };
 
 export interface Toast {
   id: number;
@@ -129,6 +131,8 @@ class AppState {
   board = $state<Record<string, boolean>>({});
   /** Why no ticket of a project's board starts (its target branch has no commit yet, or is gone), by project. */
   boardIssues = $state<Record<string, string>>({});
+  /** The external ticket systems' accounts (their secrets stay in the backend). */
+  accounts = $state<AccountView[]>([]);
   editor = $state<Record<string, EditorState>>({});
 
   project = $derived(this.projects.find((p) => p.id === this.ui.activeProject) ?? null);
@@ -229,6 +233,7 @@ class AppState {
     this.agents = Object.fromEntries(s.agents.map((a) => [a.id, a]));
     this.tickets = Object.fromEntries((s.tickets ?? []).map((t) => [t.id, t]));
     this.boardIssues = { ...s.boardIssues };
+    this.accounts = s.accounts ?? [];
     this.attention = {};
     this.ui = { ...s.ui, view: s.ui.view || 'project', selectedAgent: s.ui.selectedAgent ?? {} };
     if (!this.ui.activeProject || !this.projects.some((p) => p.id === this.ui.activeProject)) {
@@ -284,6 +289,9 @@ class AppState {
       case 'focusBoard':
         // The click of a ticket's notification.
         this.openBoard(e.projectId);
+        break;
+      case 'toast':
+        this.toast(e.text, 'info');
         break;
       case 'boardIssue':
         if (e.issue) this.boardIssues[e.projectId] = e.issue;

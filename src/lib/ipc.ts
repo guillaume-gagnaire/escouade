@@ -1,9 +1,13 @@
 import { Channel, invoke } from '@tauri-apps/api/core';
 import type {
+  AccountForm,
+  AccountView,
   Agent,
   Attachment,
   BoardSettings,
+  Container,
   ConvItem,
+  ExternalIssue,
   FileBase,
   FileChange,
   FileText,
@@ -11,10 +15,13 @@ import type {
   FolderInfo,
   GitLog,
   InitialState,
+  IssuePage,
   Project,
+  Service,
   Settings,
   ShellInfo,
   SlashCommand,
+  StatesView,
   StatsView,
   TermInfo,
   Ticket,
@@ -94,6 +101,17 @@ export const api = {
   ticketDismiss: (id: string) => invoke<void>('ticket_dismiss', { id }),
   boardSet: (projectId: string, settings: BoardSettings) => invoke<Project>('board_set', { projectId, settings }),
   gitBranches: (projectId: string) => invoke<string[]>('git_branches', { projectId }),
+  /** Checks the credentials with the service, then saves them (apart, never sent back). */
+  integrationConnect: (service: Service, account: AccountForm) => invoke<AccountView>('integration_connect', { service, account }),
+  integrationDisconnect: (service: Service) => invoke<AccountView[]>('integration_disconnect', { service }),
+  /** Jira projects, Trello boards, GitHub repositories (the project's own first). */
+  integrationContainers: (service: Service, projectId: string | null) =>
+    invoke<Container[]>('integration_containers', { service, projectId }),
+  integrationStates: (service: Service, container: string) => invoke<StatesView>('integration_states', { service, container }),
+  integrationIssues: (projectId: string, service: Service, text: string, filters: string[]) =>
+    invoke<IssuePage>('integration_issues', { projectId, service, text, filters }),
+  integrationImport: (projectId: string, issues: ExternalIssue[], maxLoops: number) =>
+    invoke<Ticket[]>('integration_import', { projectId, issues, maxLoops }),
   termSpawn: (a: { projectId: string; shell: string; name: string; cols: number; rows: number }, onData: (d: ArrayBuffer) => void) => {
     const output = new Channel<ArrayBuffer>();
     output.onmessage = onData;

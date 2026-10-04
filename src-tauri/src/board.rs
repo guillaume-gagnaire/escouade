@@ -652,7 +652,7 @@ pub fn github_repo(url: &str) -> Option<(String, String)> {
 }
 
 /// Percent-encoding of everything but the unreserved characters (and `/` when `keep_slash`).
-fn encode(s: &str, keep_slash: bool) -> String {
+pub(crate) fn encode(s: &str, keep_slash: bool) -> String {
     let mut out = String::new();
     for b in s.bytes() {
         if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) || (keep_slash && b == b'/') {

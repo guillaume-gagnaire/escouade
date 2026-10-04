@@ -172,6 +172,11 @@ impl DataDir {
         self.0.join("settings.json")
     }
 
+    /// The accounts of the external ticket systems, with their secrets.
+    pub fn integrations_file(&self) -> PathBuf {
+        self.0.join("integrations.json")
+    }
+
     pub fn conversations(&self) -> PathBuf {
         self.0.join("conversations")
     }

@@ -191,3 +191,14 @@ describe('Board', () => {
     expect(app.boardOn).toBe(false);
   });
 });
+
+describe('Board import', () => {
+  beforeEach(() => resetApp());
+
+  it('opens the import of the project’s tickets', async () => {
+    fakeBackend();
+    render(Board, { project: app.projects[0] });
+    await userEvent.click(screen.getByRole('button', { name: 'Importer' }));
+    expect(app.modal).toEqual({ kind: 'import', projectId: 'p1' });
+  });
+});

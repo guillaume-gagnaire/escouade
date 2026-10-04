@@ -376,3 +376,37 @@ describe('TicketCard', () => {
     });
   });
 });
+
+describe('TicketCard of an imported ticket', () => {
+  beforeEach(() => resetApp());
+
+  it('names its external ticket, opens it, and says when its last sync failed', async () => {
+    const backend = fakeBackend();
+    const external = {
+      service: 'jira' as const,
+      id: 'ATL-1287',
+      key: 'ATL-1287',
+      container: 'ATL',
+      url: 'https://atlas.atlassian.net/browse/ATL-1287',
+      error: null,
+    };
+    const { unmount } = show(ticket({ external }));
+    const link = screen.getByRole('button', { name: 'Ouvrir ATL-1287 dans Jira' });
+    expect(link).toHaveTextContent('JATL-1287');
+    expect(screen.getByText('DEM-1')).toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: /Synchro/ })).not.toBeInTheDocument();
+    await userEvent.click(link);
+    expect(backend.called('plugin:opener|open_url')[0].args.url).toBe('https://atlas.atlassian.net/browse/ATL-1287');
+    // The click opens the ticket there, not the card's form.
+    expect(app.modal).toBeNull();
+    unmount();
+    show(ticket({ external: { ...external, error: 'Jira refuse ces identifiants (401)' } }));
+    expect(screen.getByRole('img', { name: 'Synchro avec Jira : Jira refuse ces identifiants (401)' })).toBeInTheDocument();
+  });
+
+  it('shows nothing of the kind for a ticket made on the Kanban', () => {
+    fakeBackend();
+    show(ticket());
+    expect(screen.queryByRole('button', { name: /Ouvrir .* dans/ })).not.toBeInTheDocument();
+  });
+});

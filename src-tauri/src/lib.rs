@@ -9,6 +9,9 @@ mod core_tests;
 mod fsedit;
 mod git;
 mod hub;
+mod integrations;
+#[cfg(test)]
+mod integrations_tests;
 mod job;
 mod model;
 mod notify;
@@ -234,6 +237,12 @@ pub fn run() {
             commands::ticket_resolve_conflict,
             commands::ticket_dismiss,
             commands::board_set,
+            commands::integration_connect,
+            commands::integration_disconnect,
+            commands::integration_containers,
+            commands::integration_states,
+            commands::integration_issues,
+            commands::integration_import,
             commands::git_branches,
             commands::agent_prepare_launch,
             commands::test_run_start,

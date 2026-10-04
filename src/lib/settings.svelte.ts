@@ -4,15 +4,16 @@
 import { api } from './ipc';
 import { forgetLaunches } from './launch-actions';
 import { app } from './state.svelte';
-import type { BoardSettings, Project, RunCommand, Settings } from './types';
+import type { BoardSettings, Project, ProjectIntegrations, RunCommand, Settings } from './types';
 
-export type SettingsTab = 'claude' | 'notifications' | 'projects' | 'board' | 'terminals' | 'network' | 'about';
+export type SettingsTab = 'claude' | 'notifications' | 'projects' | 'board' | 'integrations' | 'terminals' | 'network' | 'about';
 
 export const SETTINGS_TABS: { id: SettingsTab; label: string; icon: string; desc: string; scoped?: boolean }[] = [
   { id: 'claude', label: 'Claude Code', icon: '✳', desc: 'Exécutable, modèle et permissions par défaut' },
   { id: 'notifications', label: 'Notifications', icon: '♪', desc: 'Alertes visuelles et sonores' },
   { id: 'projects', label: 'Projets', icon: '▤', desc: 'Réglages propres à chaque projet', scoped: true },
   { id: 'board', label: 'Kanban', icon: '▦', desc: 'Pilote auto et tickets validés', scoped: true },
+  { id: 'integrations', label: 'Intégrations', icon: '⧉', desc: 'Jira, Trello et GitHub Issues', scoped: true },
   { id: 'terminals', label: 'Terminaux', icon: '$_', desc: 'Shells disponibles dans les terminaux intégrés' },
   { id: 'network', label: 'Réseau', icon: '⇄', desc: 'Proxy HTTP(S) pour Claude Code et les mises à jour' },
   { id: 'about', label: 'À propos', icon: 'ⓘ', desc: 'Version et données locales' },
@@ -24,6 +25,7 @@ const SETTINGS_OF: Partial<Record<SettingsTab, (keyof Settings)[]>> = {
   notifications: ['sound', 'osNotifications'],
   terminals: ['pwshPath', 'bashPath', 'wslDistro'],
   network: ['proxyUrl', 'noProxy', 'proxyTerminals'],
+  integrations: ['integrations'],
 };
 
 /** What the modal sets of a project, as the backend's `update_project` takes it, its board apart. */
@@ -37,11 +39,18 @@ export interface ProjectDraft {
   /** The patterns of the files copied into new worktrees, one per line. */
   copy: string;
   board: BoardSettings;
+  /** Its sources in external ticket systems (the « Intégrations » tab). */
+  integrations: ProjectIntegrations;
 }
 
 function draftOf(p: Project): ProjectDraft {
-  const { name, color, worktreePerAgent, runCommands, worktreeCopy, board } = $state.snapshot(p);
-  return { name, color, worktreePerAgent, runCommands, copy: worktreeCopy.join('\n'), board };
+  const { name, color, worktreePerAgent, runCommands, worktreeCopy, board, integrations } = $state.snapshot(p);
+  return { name, color, worktreePerAgent, runCommands, copy: worktreeCopy.join('\n'), board, integrations };
+}
+
+/** The links as saved: one without a container is none, a column is commented once. */
+function linksOf(d: ProjectDraft): ProjectIntegrations {
+  return { links: d.integrations.links.filter((l) => l.container.trim()), comments: [...new Set(d.integrations.comments)] };
 }
 
 /** The draft as it would be saved: trimmed, the patterns split into lines. */
@@ -125,10 +134,9 @@ class SettingsForm {
   /** A tab has something to save. */
   changed(tab: SettingsTab): boolean {
     const keys = SETTINGS_OF[tab];
-    if (keys) {
-      const diff = changes(settingsOf(this.#base.settings), settingsOf(this.settings));
-      return keys.some((k) => k in diff);
-    }
+    const own = !!keys && keys.some((k) => k in changes(settingsOf(this.#base.settings), settingsOf(this.settings)));
+    if (tab === 'integrations') return own || Object.keys(this.projects).some((id) => this.#linksChanged(id));
+    if (keys) return own;
     if (tab === 'projects') return Object.keys(this.projects).some((id) => !empty(this.#projectChanges(id)));
     if (tab === 'board') return Object.keys(this.projects).some((id) => !empty(this.#boardChanges(id)));
     return false;
@@ -143,6 +151,12 @@ class SettingsForm {
     const base = this.#base.projects[id];
     const d = this.projects[id];
     return base && d ? changes(fieldsOf(base), fieldsOf(d)) : {};
+  }
+
+  #linksChanged(id: string): boolean {
+    const base = this.#base.projects[id];
+    const d = this.projects[id];
+    return !!base && !!d && JSON.stringify(linksOf(base)) !== JSON.stringify(linksOf(d));
   }
 
   #boardChanges(id: string): Partial<BoardSettings> {
@@ -182,20 +196,21 @@ class SettingsForm {
   async #saveProject(id: string): Promise<boolean> {
     let ok = true;
     const fields = this.#projectChanges(id);
+    const links = this.#linksChanged(id) ? linksOf($state.snapshot(this.projects[id])) : null;
     const current = () => app.projects.find((p) => p.id === id);
     let p = current();
     if (!p) return true;
-    if (!empty(fields)) {
+    if (!empty(fields) || links) {
       // As sent: what is typed meanwhile stays a change.
-      const sent = this.#draftFields(id, fields);
-      const next = { ...$state.snapshot(p), ...fields };
+      const sent: Partial<ProjectDraft> = { ...this.#draftFields(id, fields), ...(links ? { integrations: links } : {}) };
+      const next = { ...$state.snapshot(p), ...fields, ...(links ? { integrations: links } : {}) };
       const saved = await app.run(api.updateProject(next).then(() => true));
       p = current();
       if (saved && p) {
         if (fields.runCommands)
           forgetLaunches(p.runCommands.filter((c) => !fields.runCommands!.some((x) => x.id === c.id)).map((c) => c.id));
         // What was saved, and nothing else of the project.
-        Object.assign(p, fields);
+        Object.assign(p, fields, links ? { integrations: links } : {});
         this.#rebase(id, (b) => ({ ...b, ...sent }));
       } else if (!saved) ok = false;
     }

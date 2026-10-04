@@ -3,6 +3,7 @@
   import { APPROVE_LABEL, canStart, criteriaMet, doneMeta, waitLabel } from '../../lib/board';
   import { buffers, lossNotice } from '../../lib/editor/buffers.svelte';
   import { fWhen, plural } from '../../lib/format';
+  import { SERVICES } from '../../lib/integrations';
   import { api } from '../../lib/ipc';
   import { menu, type MenuItem } from '../../lib/menu.svelte';
   import { openAddress } from '../../lib/recipe';
@@ -135,6 +136,24 @@
   oncontextmenu={contextMenu}
 >
   <div class="top">
+    {#if t.external}
+      {@const svc = SERVICES[t.external.service]}
+      <button
+        class="ext"
+        title={`Ouvrir ${t.external.key} dans ${svc.name}`}
+        aria-label={`Ouvrir ${t.external.key} dans ${svc.name}`}
+        onclick={(e) => act(e, () => app.run(openUrl(t.external!.url)))}
+        ><span class="svc" style:background={svc.color} style:color={svc.ink} aria-hidden="true">{svc.letter}</span><span class="mono"
+          >{t.external.key}</span
+        ></button
+      >
+      {#if t.external.error}<span
+          class="sync-err"
+          role="img"
+          aria-label={`Synchro avec ${svc.name} : ${t.external.error}`}
+          title={t.external.error}>⚠</span
+        >{/if}
+    {/if}
     <span class="key mono">{t.key}</span>
     <div style="flex:1"></div>
     {#if t.column === 'doing'}<span class="loop mono">Boucle {t.iteration}/{t.maxLoops}</span>{/if}
@@ -289,6 +308,39 @@
   .key {
     font-size: 10.5px;
     color: var(--dim);
+  }
+  .ext {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    font-size: 10.5px;
+    cursor: pointer;
+  }
+  .ext:hover {
+    color: var(--text);
+  }
+  .svc {
+    min-width: 15px;
+    height: 15px;
+    padding: 0 2px;
+    flex: none;
+    border-radius: 4px;
+    font-size: 8.5px;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .sync-err {
+    font-size: 11px;
+    color: var(--wait);
+    cursor: help;
   }
   .loop {
     font-size: 10.5px;

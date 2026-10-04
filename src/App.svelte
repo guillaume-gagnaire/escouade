@@ -16,6 +16,7 @@
   import RenameModal from './components/modals/RenameModal.svelte';
   import SettingsModal from './components/modals/SettingsModal.svelte';
   import TestLaunchModal from './components/modals/TestLaunchModal.svelte';
+  import ImportModal from './components/modals/ImportModal.svelte';
   import RunView from './components/RunView.svelte';
   import Sidebar from './components/Sidebar.svelte';
   import Stats from './components/Stats.svelte';
@@ -123,6 +124,8 @@
   <RenameModal title={app.modal.title} value={app.modal.value} onSubmit={app.modal.onSubmit} />
 {:else if app.modal?.kind === 'testLaunch'}
   <TestLaunchModal agentId={app.modal.agentId} />
+{:else if app.modal?.kind === 'import'}
+  <ImportModal projectId={app.modal.projectId} />
 {/if}
 
 <ContextMenu />

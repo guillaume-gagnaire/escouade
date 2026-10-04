@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Test double of the GitHub CLI: `gh pr create … --body-file -` prints the address of PR #12.
+// Test double of the GitHub CLI: `gh pr create … --body-file -` prints the address of PR #12,
+// `gh auth token` a token.
 // Each call appends {argv, cwd, body} to <tmp>/fake-gh-<cwd with non-alphanumerics replaced by _>.jsonl.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -14,6 +15,8 @@ process.stdin.on('end', () => {
   fs.appendFileSync(log, JSON.stringify({ argv, cwd: process.cwd(), body }) + '\n');
   if (argv[0] === 'pr' && argv[1] === 'create') {
     process.stdout.write('https://github.com/acme/demo/pull/12\n');
+  } else if (argv[0] === 'auth' && argv[1] === 'token') {
+    process.stdout.write('gho_fake\n');
   } else {
     process.stderr.write(`unsupported: ${argv.join(' ')}\n`);
     process.exit(1);

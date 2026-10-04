@@ -28,6 +28,41 @@ pub struct Settings {
     pub proxy_terminals: bool,
     /// Send "continue" by itself to an agent stopped by the usage limit, once the quota resets.
     pub auto_resume: bool,
+    /// What the external ticket systems' links do (their accounts are kept apart, with their
+    /// secrets: `integrations::Accounts`).
+    pub integrations: IntegrationSettings,
+}
+
+/// The sync with the external ticket systems and their automatic import, for every project.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct IntegrationSettings {
+    /// "Mettre à jour le statut externe": a ticket that changes column gives its external one the
+    /// state its project's link says.
+    pub sync_states: bool,
+    /// "Publier un résumé à chaque boucle".
+    pub loop_comments: bool,
+    /// "Extraire les critères d'acceptation" of an imported ticket's description or checklists.
+    pub extract_criteria: bool,
+    /// "Importer les tickets étiquetés": the open tickets of the linked sources that carry
+    /// `import_label` come in by themselves.
+    pub auto_import: bool,
+    pub import_label: String,
+    /// Minutes between two automatic imports.
+    pub import_every: u32,
+}
+
+impl Default for IntegrationSettings {
+    fn default() -> Self {
+        Self {
+            sync_states: true,
+            loop_comments: false,
+            extract_criteria: true,
+            auto_import: false,
+            import_label: "claude-ready".into(),
+            import_every: 15,
+        }
+    }
 }
 
 impl Settings {
@@ -67,6 +102,7 @@ impl Default for Settings {
             no_proxy: "localhost,127.0.0.1".into(),
             proxy_terminals: false,
             auto_resume: true,
+            integrations: IntegrationSettings::default(),
         }
     }
 }
@@ -91,6 +127,104 @@ pub struct Project {
     /// Untracked files of the project copied into every new worktree (glob patterns).
     #[serde(default = "default_worktree_copy")]
     pub worktree_copy: Vec<String>,
+    /// The external ticket systems its tickets come from, and what moving them does there.
+    #[serde(default)]
+    pub integrations: ProjectIntegrations,
+}
+
+/// An external ticket system.
+#[derive(
+    Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord, Default,
+)]
+#[serde(rename_all = "lowercase")]
+pub enum Service {
+    #[default]
+    Jira,
+    Trello,
+    Github,
+}
+
+impl Service {
+    pub const ALL: [Service; 3] = [Service::Jira, Service::Trello, Service::Github];
+
+    /// Its name, as the window and the comments say it.
+    pub fn label(self) -> &'static str {
+        match self {
+            Service::Jira => "Jira",
+            Service::Trello => "Trello",
+            Service::Github => "GitHub",
+        }
+    }
+}
+
+/// A state of an external ticket: a Jira status, a Trello list, or for GitHub "open", "closed"
+/// or "label:<name>".
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ExternalState {
+    pub id: String,
+    pub name: String,
+}
+
+/// A project's source of tickets in an external system: a Jira project, a Trello board, a GitHub
+/// repository.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SourceLink {
+    pub service: Service,
+    /// The Jira project's key, the Trello board's id, `owner/repo`.
+    pub container: String,
+    /// As the window shows it.
+    pub name: String,
+    /// The state an imported ticket's external one is given when it comes into each column
+    /// (none: left as it is).
+    pub states: BTreeMap<Column, ExternalState>,
+}
+
+/// What a project's tickets have to do with external ticket systems.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ProjectIntegrations {
+    /// One per service at most.
+    pub links: Vec<SourceLink>,
+    /// The columns whose arrival writes a comment on the external ticket.
+    pub comments: Vec<Column>,
+    /// Every external ticket imported into the project (`<service>|<id>`), even those deleted
+    /// since: the automatic import never brings one back.
+    pub imported: Vec<String>,
+}
+
+impl Default for ProjectIntegrations {
+    fn default() -> Self {
+        Self {
+            links: Vec::new(),
+            comments: vec![Column::Review, Column::Done],
+            imported: Vec::new(),
+        }
+    }
+}
+
+impl ProjectIntegrations {
+    pub fn link(&self, service: Service) -> Option<&SourceLink> {
+        self.links.iter().find(|l| l.service == service)
+    }
+}
+
+/// Where an imported ticket comes from.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ExternalRef {
+    pub service: Service,
+    /// What its API knows it by: the Jira issue's key, the Trello card's id, the GitHub issue's
+    /// number.
+    pub id: String,
+    /// As it is shown: ATL-1287, #142, #42.
+    pub key: String,
+    /// Its Jira project, Trello board or GitHub repository (`SourceLink::container`).
+    pub container: String,
+    pub url: String,
+    /// Why its last sync failed, until one succeeds.
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -111,7 +245,9 @@ pub fn default_worktree_copy() -> Vec<String> {
 }
 
 /// Where a ticket stands on the board.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(
+    Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, Default,
+)]
 #[serde(rename_all = "lowercase")]
 pub enum Column {
     /// « À faire »
@@ -182,6 +318,8 @@ pub struct Ticket {
     pub started_at: Option<i64>,
     pub review_at: Option<i64>,
     pub done_at: Option<i64>,
+    /// Imported from an external ticket system: the ticket there, kept in step.
+    pub external: Option<ExternalRef>,
 }
 
 /// A project's board: what validating a ticket does, and its agents.
@@ -606,6 +744,11 @@ pub enum UiEvent {
     OpenUrl {
         url: String,
     },
+    /// Something done in the background the window says in passing (tickets imported by
+    /// themselves).
+    Toast {
+        text: String,
+    },
 }
 
 pub fn now_ms() -> i64 {
@@ -802,6 +945,67 @@ mod tests {
             serde_json::to_value(Ticket::default()).unwrap()["progress"],
             json!([])
         );
+    }
+
+    #[test]
+    fn what_was_saved_before_the_integrations_still_loads_with_their_defaults() {
+        let s: Settings = serde_json::from_value(json!({ "sound": false })).unwrap();
+        assert_eq!(s.integrations, IntegrationSettings::default());
+        assert!(s.integrations.sync_states && s.integrations.extract_criteria);
+        assert!(!s.integrations.auto_import && !s.integrations.loop_comments);
+        assert_eq!(
+            (
+                s.integrations.import_label.as_str(),
+                s.integrations.import_every
+            ),
+            ("claude-ready", 15)
+        );
+        let p: Project = serde_json::from_value(
+            json!({ "id": "p1", "name": "demo", "path": "C:/demo", "color": "red" }),
+        )
+        .unwrap();
+        assert!(p.integrations.links.is_empty());
+        assert_eq!(p.integrations.comments, [Column::Review, Column::Done]);
+        let t: Ticket = serde_json::from_value(json!({ "id": "t1", "key": "ATL-42" })).unwrap();
+        assert_eq!(t.external, None);
+    }
+
+    #[test]
+    fn a_links_states_travel_by_column_and_an_external_ref_in_camel_case() {
+        let mut states = BTreeMap::new();
+        states.insert(
+            Column::Doing,
+            ExternalState {
+                id: "3".into(),
+                name: "In Progress".into(),
+            },
+        );
+        let link = SourceLink {
+            service: Service::Jira,
+            container: "ATL".into(),
+            name: "Atlas".into(),
+            states,
+        };
+        let v = serde_json::to_value(&link).unwrap();
+        assert_eq!(v["service"], "jira");
+        assert_eq!(v["states"]["doing"]["name"], "In Progress");
+        let back: SourceLink = serde_json::from_value(v).unwrap();
+        assert_eq!(back, link);
+        let r = ExternalRef {
+            service: Service::Github,
+            id: "42".into(),
+            key: "#42".into(),
+            container: "acme/api".into(),
+            url: "https://github.com/acme/api/issues/42".into(),
+            error: None,
+        };
+        let t = serde_json::to_value(Ticket {
+            external: Some(r),
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(t["external"]["service"], "github");
+        assert_eq!(t["external"]["container"], "acme/api");
     }
 
     #[test]

@@ -18,6 +18,115 @@ export interface Settings {
   proxyTerminals: boolean;
   /** Send "continue" by itself to an agent stopped by the usage limit, once the quota resets. */
   autoResume: boolean;
+  /** What the external ticket systems' links do (their accounts are kept apart, with their secrets). */
+  integrations: IntegrationSettings;
+}
+
+/** The sync with the external ticket systems and their automatic import, for every project. */
+export interface IntegrationSettings {
+  /** « Mettre à jour le statut externe ». */
+  syncStates: boolean;
+  /** « Publier un résumé à chaque boucle ». */
+  loopComments: boolean;
+  /** « Extraire les critères d'acceptation ». */
+  extractCriteria: boolean;
+  /** « Importer les tickets étiquetés ». */
+  autoImport: boolean;
+  importLabel: string;
+  /** Minutes between two automatic imports. */
+  importEvery: number;
+}
+
+/** An external ticket system. */
+export type Service = 'jira' | 'trello' | 'github';
+
+/** A Jira status, a Trello list, or for GitHub "open", "closed" or "label:<name>". */
+export interface ExternalState {
+  id: string;
+  name: string;
+}
+
+/** A project's source of tickets: a Jira project, a Trello board, a GitHub repository. */
+export interface SourceLink {
+  service: Service;
+  /** The Jira project's key, the Trello board's id, owner/repo. */
+  container: string;
+  name: string;
+  /** The state an imported ticket's external one gets when it comes into each column (none: left as it is). */
+  states: Partial<Record<Column, ExternalState>>;
+}
+
+export interface ProjectIntegrations {
+  /** One per service at most. */
+  links: SourceLink[];
+  /** The columns whose arrival writes a comment on the external ticket. */
+  comments: Column[];
+  /** Every external ticket imported into the project (« service|id »): the backend's own, kept when the links are saved. */
+  imported?: string[];
+}
+
+/** Where an imported ticket comes from. */
+export interface ExternalRef {
+  service: Service;
+  id: string;
+  /** As shown: ATL-1287, #142, #42. */
+  key: string;
+  container: string;
+  url: string;
+  /** Why its last sync failed, until one succeeds. */
+  error: string | null;
+}
+
+export interface AccountView {
+  service: Service;
+  connected: boolean;
+  /** « ada@atlas.dev · atlas.atlassian.net », « @ada ». */
+  label: string;
+}
+
+/** The form of « Connecter… »: the fields its service asks for. */
+export interface AccountForm {
+  site: string;
+  email: string;
+  key: string;
+  token: string;
+}
+
+/** A Jira project, a Trello board, a GitHub repository. */
+export interface Container {
+  id: string;
+  name: string;
+}
+
+export interface StatesView {
+  states: ExternalState[];
+  defaults: Partial<Record<Column, ExternalState>>;
+}
+
+export interface IssueFilter {
+  id: string;
+  label: string;
+}
+
+/** An external ticket as the import lists it. */
+export interface ExternalIssue {
+  service: Service;
+  id: string;
+  key: string;
+  title: string;
+  kind: string;
+  meta: string[];
+  url: string;
+  description: string;
+  criteria: string[];
+  container: string;
+  /** Already on the project's Kanban. */
+  imported: boolean;
+}
+
+export interface IssuePage {
+  issues: ExternalIssue[];
+  filters: IssueFilter[];
 }
 
 export interface Project {
@@ -33,6 +142,8 @@ export interface Project {
   board: BoardSettings;
   /** Untracked files of the project copied into every new worktree (glob patterns). */
   worktreeCopy: string[];
+  /** The external ticket systems its tickets come from, and what moving them does there. */
+  integrations: ProjectIntegrations;
 }
 
 export interface RunCommand {
@@ -86,6 +197,8 @@ export interface Ticket {
   startedAt: number | null;
   reviewAt: number | null;
   doneAt: number | null;
+  /** Imported from an external ticket system: the ticket there, kept in step. */
+  external: ExternalRef | null;
 }
 
 export type BoardAction = 'merge' | 'pr' | 'push' | 'keep';
@@ -467,7 +580,8 @@ export type UiEvent =
   | { type: 'openUrl'; url: string }
   | { type: 'focusBoard'; projectId: string }
   /** Why no ticket of the project's board starts (its target branch), or null once they may. */
-  | { type: 'boardIssue'; projectId: string; issue: string | null };
+  | { type: 'boardIssue'; projectId: string; issue: string | null }
+  | { type: 'toast'; text: string };
 
 export interface InitialState {
   projects: Project[];
@@ -485,6 +599,8 @@ export interface InitialState {
   models: ModelInfo[];
   /** Why no ticket of a project's board starts, by project (none: they may). */
   boardIssues?: Record<string, string>;
+  /** The external ticket systems' accounts. */
+  accounts?: AccountView[];
 }
 
 export interface Bucket {

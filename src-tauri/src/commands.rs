@@ -2,6 +2,9 @@
 
 use crate::core::{Attachment, Core, SyncOp};
 use crate::fsedit;
+use crate::integrations::{
+    Account, AccountView, Container, ExternalIssue, IssuePage, Query, StatesView,
+};
 use crate::model::*;
 use crate::pty::{self, ShellInfo, TermInfo};
 use crate::stats::StatsView;
@@ -37,6 +40,8 @@ pub struct InitialState {
     models: Vec<ModelInfo>,
     /// Why no ticket of a project's board starts, by project.
     board_issues: HashMap<String, String>,
+    /// The external ticket systems' accounts, as the window knows them.
+    accounts: Vec<AccountView>,
 }
 
 #[tauri::command]
@@ -55,6 +60,7 @@ pub fn subscribe(core: CoreState, channel: Channel<UiEvent>) -> InitialState {
     let terminals = core.pty.list();
     let models = core.models.read().clone();
     let board_issues = core.board_issues.lock().clone();
+    let accounts = core.integration_accounts();
     InitialState {
         projects,
         tickets,
@@ -69,6 +75,7 @@ pub fn subscribe(core: CoreState, channel: Channel<UiEvent>) -> InitialState {
         version: core.app.package_info().version.to_string(),
         models,
         board_issues,
+        accounts,
     }
 }
 
@@ -734,4 +741,74 @@ pub fn test_run_start(
 #[tauri::command]
 pub async fn http_ready(url: String) -> bool {
     crate::testlaunch::http_ready(&url).await
+}
+
+// ---------- external ticket systems ----------
+
+#[tauri::command]
+pub async fn integration_connect(
+    core: CoreState<'_>,
+    service: Service,
+    account: Account,
+) -> Res<AccountView> {
+    core.integration_connect(service, account)
+        .await
+        .map_err(err)
+}
+
+#[tauri::command]
+pub fn integration_disconnect(core: CoreState, service: Service) -> Res<Vec<AccountView>> {
+    core.integration_disconnect(service).map_err(err)
+}
+
+#[tauri::command]
+pub async fn integration_containers(
+    core: CoreState<'_>,
+    service: Service,
+    project_id: Option<String>,
+) -> Res<Vec<Container>> {
+    core.integration_containers(service, project_id.as_deref())
+        .await
+        .map_err(err)
+}
+
+#[tauri::command]
+pub async fn integration_states(
+    core: CoreState<'_>,
+    service: Service,
+    container: String,
+) -> Res<StatesView> {
+    core.integration_states(service, &container)
+        .await
+        .map_err(err)
+}
+
+#[tauri::command]
+pub async fn integration_issues(
+    core: CoreState<'_>,
+    project_id: String,
+    service: Service,
+    text: String,
+    filters: Vec<String>,
+) -> Res<IssuePage> {
+    let q = Query {
+        text,
+        filters,
+        label: None,
+    };
+    core.integration_issues(&project_id, service, q)
+        .await
+        .map_err(err)
+}
+
+#[tauri::command]
+pub async fn integration_import(
+    core: CoreState<'_>,
+    project_id: String,
+    issues: Vec<ExternalIssue>,
+    max_loops: u32,
+) -> Res<Vec<Ticket>> {
+    core.integration_import(&project_id, issues, max_loops)
+        .await
+        .map_err(err)
 }

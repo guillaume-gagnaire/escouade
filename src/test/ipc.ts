@@ -43,6 +43,14 @@ export const SETTINGS: Settings = {
   noProxy: 'localhost',
   proxyTerminals: false,
   autoResume: true,
+  integrations: {
+    syncStates: true,
+    loopComments: false,
+    extractCriteria: true,
+    autoImport: false,
+    importLabel: 'claude-ready',
+    importEvery: 15,
+  },
 };
 
 export function project(over: Partial<Project> = {}): Project {
@@ -56,6 +64,7 @@ export function project(over: Partial<Project> = {}): Project {
     runCommands: [],
     board: board(),
     worktreeCopy: ['.env*'],
+    integrations: { links: [], comments: ['review', 'done'] },
     ...over,
   };
 }
@@ -155,6 +164,7 @@ export function ticket(over: Partial<Ticket> = {}): Ticket {
     startedAt: null,
     reviewAt: null,
     doneAt: null,
+    external: null,
     ...over,
   };
 }
@@ -207,6 +217,7 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.toasts = [];
   app.update = null;
   app.models = [];
+  app.accounts = [];
   app.ready = true;
   buffers.reset();
   trees.reset();

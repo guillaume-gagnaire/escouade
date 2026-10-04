@@ -6,6 +6,7 @@ use crate::board::{self, TurnEnd};
 use crate::claude::{self, ClaudeProcess};
 use crate::core::{AgentOptions, Core};
 use crate::git;
+use crate::integrations;
 use crate::model::*;
 use crate::testlaunch;
 use anyhow::{anyhow, bail, Result};
@@ -81,15 +82,20 @@ impl<R: Runtime> Core<R> {
         id: &str,
         f: impl FnOnce(&mut Ticket) -> Result<T>,
     ) -> Result<T> {
-        let (out, ticket) = {
+        let (out, ticket, change) = {
             let mut tickets = self.tickets.write();
             let t = tickets
                 .iter_mut()
                 .find(|t| t.id == id)
                 .ok_or_else(|| anyhow!("ticket introuvable"))?;
+            let before = t.external.is_some().then(|| t.clone());
             let out = f(t)?;
-            (out, t.clone())
+            let change = before.and_then(|b| integrations::sync::change_of(&b, t));
+            (out, t.clone(), change)
         };
+        if let Some(change) = change {
+            self.sync_external(ticket.clone(), change);
+        }
         self.hub.emit(UiEvent::Ticket { ticket });
         self.request_save();
         Ok(out)
@@ -108,6 +114,17 @@ impl<R: Runtime> Core<R> {
         self: &Arc<Self>,
         project_id: &str,
         d: TicketDraft,
+    ) -> Result<Ticket> {
+        self.ticket_create_with(project_id, d, None).await
+    }
+
+    /// `ticket_create` of a ticket imported from `external`: it is in step with it from the start
+    /// (the scheduler may start it at once).
+    pub(crate) async fn ticket_create_with(
+        self: &Arc<Self>,
+        project_id: &str,
+        d: TicketDraft,
+        external: Option<ExternalRef>,
     ) -> Result<Ticket> {
         let title = d.title.trim().to_string();
         if title.is_empty() {
@@ -143,6 +160,7 @@ impl<R: Runtime> Core<R> {
             criteria: board::criteria_from(&d.criteria),
             max_loops: board::max_loops(d.max_loops),
             created_at: now_ms(),
+            external,
             ..Default::default()
         };
         {
@@ -1208,7 +1226,7 @@ impl<R: Runtime> Core<R> {
 
     /// The GitHub CLI: the one known, else looked for again on the PATH (installed since the app
     /// started), and kept once found.
-    fn gh_cli(&self) -> Option<PathBuf> {
+    pub(crate) fn gh_cli(&self) -> Option<PathBuf> {
         let known = self.gh.read().clone();
         if known.is_some() {
             return known;

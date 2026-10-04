@@ -227,6 +227,40 @@ describe('settingsForm', () => {
     expect(settingsForm.projectId).toBe('p1');
   });
 
+  it('saves a project’s links on the « Intégrations » tab alone, without its empty ones', async () => {
+    const backend = fakeBackend();
+    settingsForm.open({ tab: 'integrations', projectId: 'p1' });
+    expect(settingsForm.changed('integrations')).toBe(false);
+    settingsForm.projects.p1.integrations.links.push(
+      { service: 'jira', container: 'ATL', name: 'ATL — Atlas', states: { doing: { id: '3', name: 'In Progress' } } },
+      { service: 'trello', container: '', name: '', states: {} },
+    );
+    settingsForm.projects.p1.integrations.comments = ['done'];
+    expect(settingsForm.changed('integrations')).toBe(true);
+    expect(settingsForm.changed('projects')).toBe(false);
+    expect(await settingsForm.save()).toBe(true);
+    const sent = backend.called('update_project')[0].args.project;
+    expect(sent.integrations).toEqual({
+      links: [{ service: 'jira', container: 'ATL', name: 'ATL — Atlas', states: { doing: { id: '3', name: 'In Progress' } } }],
+      comments: ['done'],
+    });
+    expect(sent.name).toBe('demo-api');
+    expect(app.projects[0].integrations.links.map((l) => l.container)).toEqual(['ATL']);
+    expect(settingsForm.changed('integrations')).toBe(false);
+  });
+
+  it('counts the sync settings as the « Intégrations » tab’s', async () => {
+    const backend = fakeBackend({ save_settings: () => [] });
+    settingsForm.open({ tab: 'integrations' });
+    settingsForm.settings.integrations.autoImport = true;
+    settingsForm.settings.integrations.importLabel = 'escouade';
+    expect(settingsForm.changed('integrations')).toBe(true);
+    expect(settingsForm.changed('claude')).toBe(false);
+    await settingsForm.save();
+    expect(backend.called('save_settings')[0].args.settings.integrations).toMatchObject({ autoImport: true, importLabel: 'escouade' });
+    expect(backend.called('update_project')).toHaveLength(0);
+  });
+
   it('skips a project closed while its settings were open', async () => {
     const backend = fakeBackend();
     settingsForm.open({ projectId: 'p2' });

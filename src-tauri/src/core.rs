@@ -5,6 +5,7 @@ use crate::board;
 use crate::claude::{self, ClaudeProcess, SpawnOpts};
 use crate::git::{self, GitService};
 use crate::hub::Hub;
+use crate::integrations;
 use crate::job::JobUsage;
 use crate::model::*;
 use crate::notify;
@@ -169,6 +170,8 @@ pub struct AgentOptions {
 }
 
 pub struct Core<R: Runtime = Wry> {
+    /// Itself, for what runs in the background from a method that only has `&self`.
+    me: std::sync::Weak<Self>,
     pub app: AppHandle<R>,
     pub data: DataDir,
     pub hub: Hub,
@@ -221,9 +224,23 @@ pub struct Core<R: Runtime = Wry> {
     pub(crate) ports_reserved: Mutex<Vec<u16>>,
     /// One validation's merge at a time per repository (`merge_lock`).
     pub(crate) merge_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
+    /// The accounts of the external ticket systems (`integrations.json`).
+    pub accounts: RwLock<integrations::Accounts>,
+    /// Where the Trello and GitHub APIs are.
+    pub bases: RwLock<integrations::Bases>,
+    /// The GitHub CLI's token, once asked for.
+    pub(crate) gh_token: Mutex<Option<String>>,
+    /// The changes of imported tickets their external ones are told of, one at a time and in
+    /// order, by a single worker (made at the first one).
+    pub(crate) sync_queue: Mutex<Option<integrations::sync::SyncSender>>,
+    /// One import at a time (by hand or by label): a ticket comes in once.
+    pub(crate) import_lock: tokio::sync::Mutex<()>,
     /// Notifications sent, as "<title> | <text>" (tests only).
     #[cfg(test)]
     pub alerts: Mutex<Vec<String>>,
+    /// Syncs of external tickets queued and not over yet (tests only).
+    #[cfg(test)]
+    pub(crate) syncs_queued: AtomicUsize,
     /// What a look for `gh` on the PATH finds (tests only: never the machine's own).
     #[cfg(test)]
     pub gh_on_path: RwLock<Option<PathBuf>>,
@@ -420,8 +437,10 @@ impl<R: Runtime> Core<R> {
                 )
             })
             .collect();
+        let accounts = integrations::sync::load_accounts(&data);
         let (git, rx) = GitService::new();
-        let core = Arc::new(Self {
+        let core = Arc::new_cyclic(|me| Self {
+            me: me.clone(),
             stats: Stats::open(&data.stats_db()),
             app,
             data,
@@ -457,8 +476,15 @@ impl<R: Runtime> Core<R> {
             board_issues: Mutex::default(),
             ports_reserved: Mutex::default(),
             merge_locks: Mutex::default(),
+            accounts: RwLock::new(accounts),
+            bases: RwLock::new(integrations::Bases::from_env()),
+            gh_token: Mutex::default(),
+            sync_queue: Mutex::default(),
+            import_lock: tokio::sync::Mutex::new(()),
             #[cfg(test)]
             alerts: Mutex::default(),
+            #[cfg(test)]
+            syncs_queued: AtomicUsize::new(0),
             #[cfg(test)]
             gh_on_path: RwLock::default(),
             #[cfg(test)]
@@ -533,6 +559,20 @@ impl<R: Runtime> Core<R> {
             loop {
                 c.fetch_all().await;
                 tokio::time::sleep(FETCH_EVERY).await;
+            }
+        });
+        let c = self.clone();
+        tauri::async_runtime::spawn(async move {
+            // The automatic import, once on: shortly after, then every so many minutes.
+            let mut last: Option<std::time::Instant> = None;
+            loop {
+                tokio::time::sleep(Duration::from_secs(30)).await;
+                let s = c.settings.read().integrations.clone();
+                let every = Duration::from_secs(u64::from(s.import_every.clamp(1, 24 * 60)) * 60);
+                if s.auto_import && last.is_none_or(|l| l.elapsed() >= every) {
+                    last = Some(std::time::Instant::now());
+                    c.auto_import().await;
+                }
             }
         });
         self.start_remote_agents();
@@ -613,6 +653,11 @@ impl<R: Runtime> Core<R> {
     }
 
     // ---------- lookups ----------
+
+    /// Itself, without keeping it alive (for a worker that lives as long as it does).
+    pub(crate) fn weak(&self) -> std::sync::Weak<Self> {
+        self.me.clone()
+    }
 
     pub fn agent(&self, id: &str) -> Result<AgentHandle> {
         self.agents
@@ -1974,6 +2019,7 @@ impl<R: Runtime> Core<R> {
             run_commands: Vec::new(),
             board: BoardSettings::default(),
             worktree_copy: default_worktree_copy(),
+            integrations: ProjectIntegrations::default(),
         };
         self.projects.write().push(project.clone());
         {
@@ -2000,6 +2046,10 @@ impl<R: Runtime> Core<R> {
         cur.worktree_per_agent = p.worktree_per_agent;
         cur.run_commands = p.run_commands;
         cur.worktree_copy = p.worktree_copy;
+        // What was imported is the backend's own: the window's copy may be older.
+        let imported = std::mem::take(&mut cur.integrations.imported);
+        cur.integrations = crate::integrations::checked_links(p.integrations);
+        cur.integrations.imported = imported;
         drop(projects);
         self.request_save();
         Ok(())
