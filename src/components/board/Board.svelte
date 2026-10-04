@@ -8,6 +8,8 @@
 
   let { project: given }: { project: Project } = $props();
 
+  const MISSING = 'Claude Code introuvable — aucun ticket ne démarre';
+
   // The project as the app holds it now (its board settings change under this view).
   const project = $derived(app.projects.find((p) => p.id === given.id) ?? given);
   const s = $derived(project.board);
@@ -16,6 +18,9 @@
   const looping = $derived(tickets.filter((t) => t.column === 'doing').length);
   const quota = $derived(quotaUntil(Object.values(app.agents)));
   const target = $derived(s.target || app.git[project.id]?.branch || 'main');
+  const sub = $derived(`${project.name} · ${plural(tickets.length, 'ticket', 'tickets')} · ${looping} en boucle`);
+  const summary = $derived(settingsSummary(s, target));
+  const places = $derived(placesLabel(busyCount, s.maxParallel, quota));
 
   async function toggleAutopilot() {
     const saved = await app.run(api.boardSet(project.id, { ...$state.snapshot(s), autopilot: !s.autopilot }));
@@ -27,17 +32,17 @@
   <header class="head">
     <div class="who">
       <span class="t">Tableau</span>
-      <span class="sub mono">{project.name} · {plural(tickets.length, 'ticket', 'tickets')} · {looping} en boucle</span>
+      <span class="sub mono" title={sub}>{sub}</span>
     </div>
     <div style="flex:1"></div>
     {#if app.claudeFound}
-      <span class="places">{placesLabel(busyCount, s.maxParallel, quota)}</span>
+      <span class="places" title={places}>{places}</span>
     {:else}
       <!-- No place is worth showing: nothing starts without Claude Code. -->
-      <span class="places missing">Claude Code introuvable — aucun ticket ne démarre</span>
+      <span class="places missing" title={MISSING}>{MISSING}</span>
     {/if}
     <button class="cfg" title="Réglages du tableau" onclick={() => (app.modal = { kind: 'boardSettings', projectId: project.id })}>
-      <span class="gear">⚙</span><span class="k">Après validation :</span><span class="v mono">{settingsSummary(s, target)}</span>
+      <span class="gear">⚙</span><span class="k">Après validation :</span><span class="v mono" title={summary}>{summary}</span>
     </button>
     <div class="auto" title="Les tickets « À faire » partent seuls dès qu'une place se libère">
       <span class="l">{s.autopilot ? 'Pilote auto' : 'Pilote auto · off'}</span>
@@ -74,8 +79,13 @@
     padding: 0 20px 0 24px;
     border-bottom: 1px solid var(--line);
     white-space: nowrap;
+    container: head / inline-size;
   }
-  /* In a narrow window the texts of the header are cut (the summary of the settings first), the switch is never pushed out. */
+  /*
+   * In a narrow window the settings button and the switch keep their size (the button's summary is
+   * capped, its label never cut), the places wrap over up to three lines and the project's line is
+   * cut with an ellipsis, the full texts in their tooltips.
+   */
   .who {
     display: flex;
     flex-direction: column;
@@ -93,20 +103,36 @@
     color: var(--dim);
   }
   .places {
-    min-width: 0;
+    flex: none;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
     overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: normal;
+    text-align: right;
     font-size: 12px;
+    line-height: 1.3;
     color: var(--muted);
   }
   .places.missing {
     font-weight: 600;
     color: var(--del);
   }
+  /* Under this width the longest places (« Claude Code introuvable — … ») no longer fit beside the rest. */
+  @container head (max-width: 880px) {
+    .places {
+      max-width: 108px;
+    }
+    .places.missing {
+      max-width: 132px;
+      font-size: 11px;
+    }
+  }
   .cfg {
     height: 34px;
-    min-width: 0;
-    flex-shrink: 4;
+    flex: none;
+    overflow: hidden;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -123,14 +149,16 @@
     border-color: var(--accent);
   }
   .gear {
+    flex: none;
     font-size: 14px;
     color: var(--muted);
   }
   .k {
+    flex: none;
     color: var(--muted);
   }
   .v {
-    min-width: 0;
+    max-width: 22ch;
     overflow: hidden;
     text-overflow: ellipsis;
     font-size: 11.5px;

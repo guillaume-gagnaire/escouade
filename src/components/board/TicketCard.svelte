@@ -234,7 +234,9 @@
 
   {#if t.column !== 'todo' && (agent || t.column === 'done')}
     <div class="row foot">
-      {#if agent}<span class="who mono"><StatusDot status={agent.status} size={7} /><span class="name">{agent.name}</span></span>{/if}
+      {#if agent}<span class="who mono"
+          ><StatusDot status={agent.status} size={7} /><span class="name" title={agent.name}>{agent.name}</span></span
+        >{/if}
       <div style="flex:1"></div>
       {#if t.column === 'review'}<span class="k mono">{met}/{total} critères</span>{/if}
       {#if t.column === 'done'}<span class="k mono">{doneMeta(t)}</span>{/if}

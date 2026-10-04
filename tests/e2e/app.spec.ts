@@ -477,16 +477,53 @@ test('a ticket is taken by an agent that loops until its criteria are met, then 
   const { page } = app;
   // The window of the CI runners, close to the narrowest the app allows (1000): the board must fit in it.
   await page.setViewportSize({ width: 1028, height: 779 });
-  await addProject(page, app.repo, { firstAgent: false });
+  // A long name (19 characters, its key still DEM): the header's left side is at its widest.
+  await addProject(page, app.repo, { firstAgent: false, name: 'demonstration-d-api' });
   await page.getByRole('button', { name: /^Tableau/ }).click();
+  await expect(page.getByRole('button', { name: 'Nouveau ticket' })).toBeVisible();
   // What of the board sticks out of its box: its header, and the cards of its columns.
   const sticksOut = () =>
-    page.evaluate(() =>
-      [...document.querySelectorAll('main.board .head, main.board .cards')]
-        .filter((e) => e.scrollWidth > e.clientWidth)
-        .map((e) => `${e.className} (${e.scrollWidth} > ${e.clientWidth})`),
-    );
+    page.evaluate(() => {
+      const boxes = [...document.querySelectorAll('main.board > .head, main.board .cards')];
+      if (boxes.length !== 5) return [`found ${boxes.length} boxes of the board, not its header and 4 columns`];
+      return boxes.filter((e) => e.scrollWidth > e.clientWidth).map((e) => `${e.className} (${e.scrollWidth} > ${e.clientWidth})`);
+    });
+  // What lies where it should not in the header: the settings button keeps its label, and neither the
+  // places nor the button run over what follows them.
+  const headerOverlaps = () =>
+    page.evaluate(() => {
+      const r = (selector: string) => document.querySelector(`main.board ${selector}`)!.getBoundingClientRect();
+      const [places, cfg, label, auto] = [r('.places'), r('.cfg'), r('.cfg .k'), r('.auto')];
+      const problems: string[] = [];
+      if (label.right > cfg.right + 0.5) problems.push(`label ends at ${label.right}, its button at ${cfg.right}`);
+      if (cfg.right > auto.left + 0.5) problems.push(`button ends at ${cfg.right}, the switch starts at ${auto.left}`);
+      if (places.right > cfg.left + 0.5) problems.push(`places end at ${places.right}, the button starts at ${cfg.left}`);
+      return problems;
+    });
   expect(await sticksOut()).toEqual([]);
+  expect(await headerOverlaps()).toEqual([]);
+  // The longest texts the places can say (the real ones need a quota or no Claude Code), set on the
+  // text the board manages and then given back.
+  const say = (text: string | null, missing: boolean) =>
+    page.evaluate(
+      ([t, m]) => {
+        const places = document.querySelector('main.board .places')!;
+        places.firstChild!.nodeValue = t;
+        places.classList.toggle('missing', m);
+      },
+      [text, missing] as const,
+    );
+  const usual = await page.locator('main.board .places').textContent();
+  for (const [text, missing] of [
+    ['Toutes les places sont prises', false],
+    ['Quota atteint — reprise à 14:35', false],
+    ['Claude Code introuvable — aucun ticket ne démarre', true],
+  ] as const) {
+    await say(text, missing);
+    expect(await headerOverlaps(), text).toEqual([]);
+    expect(await sticksOut(), text).toEqual([]);
+  }
+  await say(usual, false);
   await page.getByRole('button', { name: 'Nouveau ticket' }).click();
   await page.getByRole('textbox', { name: 'Titre du ticket' }).fill('Ajouter le fichier du ticket');
   await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
