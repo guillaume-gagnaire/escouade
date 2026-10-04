@@ -2,6 +2,13 @@
 
 Les changements visibles d'Escouade, version par version. Les notes de chaque release GitHub (et de la mise à jour intégrée) reprennent la section de sa version.
 
+## [1.3.1] — 2026-10-04
+
+### Corrections
+
+- Quand un ticket passe « Terminé », les terminaux de test de son agent quittent la section « Lancement », avec leurs logs, et sa fenêtre « Tester » se ferme.
+- Un lancement relancé pendant l'arrêt du précédent ne démarre plus si sa commande a disparu entre-temps (agent archivé ou supprimé, ticket terminé, projet fermé…).
+
 ## [1.3.0] — 2026-10-04
 
 ### Ajouts
