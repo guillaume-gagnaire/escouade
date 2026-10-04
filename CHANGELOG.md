@@ -2,6 +2,31 @@
 
 Les changements visibles d'Escouade, version par version. Les notes de chaque release GitHub (et de la mise à jour intégrée) reprennent la section de sa version.
 
+## [1.5.0] — 2026-10-04
+
+### Ajouts
+
+#### Éditeur : une arborescence à la manière de VS Code, et la création de fichiers
+
+- L'arborescence de l'éditeur prend l'allure de l'explorateur de VS Code. On y retrouve :
+  - des chevrons, des guides d'indentation et une icône colorée par type de fichier ;
+  - le nom en couleur d'un fichier modifié (M) ou ajouté (A), et un point sur les dossiers qui le contiennent ;
+  - un dossier qui ne contient qu'un autre dossier sur la même ligne que lui (`src/lib/editor`).
+- Le fichier affiché défile jusqu'à l'écran.
+- Au clavier : ↑ ↓ Début Fin pour se déplacer, → pour déplier un dossier ou y entrer, ← pour le replier ou remonter au parent.
+- En tête de l'arborescence : « Nouveau fichier », « Actualiser » et « Tout réduire ».
+- Nouveau fichier : le nom se tape directement dans l'arborescence, et l'icône suit l'extension.
+  - Le fichier va dans le dossier de la dernière ligne cliquée, ou à côté du fichier affiché. Au clic droit, « Nouveau fichier… » le crée dans le dossier, à côté du fichier, ou à la racine depuis l'espace libre.
+  - `dossier/nom.ts` crée les dossiers manquants.
+  - Entrée crée le fichier vide et l'ouvre, le curseur dedans ; Échap annule.
+  - Un nom refusé affiche la raison sous le champ : fichier déjà présent (sans tenir compte de la casse), chemin invalide, ou nom que Windows modifierait ou réserve (`a.`, `?`, `CON`…).
+  - Un fichier créé mais ignoré par git s'ouvre quand même, avec un message : l'arborescence ne l'affiche pas.
+- Clic droit sur une ligne : « Copier le chemin » et « Copier le chemin relatif ».
+
+### Corrections
+
+- Un dossier nommé comme un membre des objets JavaScript (`constructor`, `toString`…) s'ouvre désormais dans l'arborescence.
+
 ## [1.4.0] — 2026-10-04
 
 ### Ajouts
