@@ -564,3 +564,52 @@ test('a ticket is taken by an agent that loops until its criteria are met, then 
   await expect(page.getByText(/Boucle 2\/5\. Critères non atteints : 2/)).toBeVisible();
   await expect(page.getByText('Bilan des critères').first()).toBeVisible();
 });
+
+test('a ticket’s test launches leave the launch section, their processes stopped, once it is done', async ({ app }) => {
+  const { page } = app;
+  // The test server stays up without answering on its address (on the ticket's free ports): no browser opens.
+  // It writes its pid outside the repository.
+  const pidFile = path.join(app.data, 'serveur.pid');
+  fs.writeFileSync(
+    path.join(app.repo, 'serveur.js'),
+    `require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));\nsetInterval(() => {}, 1000);\n`,
+  );
+  execFileSync('git', ['add', '-A'], { cwd: app.repo });
+  execFileSync('git', ['commit', '-qm', 'Serveur de test'], { cwd: app.repo });
+  const alive = (pid: number) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  await addProject(page, app.repo, { firstAgent: false });
+  await page.getByRole('button', { name: /^Tableau/ }).click();
+  await page.getByRole('button', { name: 'Nouveau ticket' }).click();
+  await page.getByRole('textbox', { name: 'Titre du ticket' }).fill('Page [ok] [recette]');
+  await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
+  const review = page.getByRole('region', { name: 'À tester' });
+  await expect(review.getByText('DEM-1', { exact: true })).toBeVisible({ timeout: 60_000 });
+
+  await review.getByRole('button', { name: '▶ Tester' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Tester DEM-1' });
+  await expect(dialog.getByText(/en attente de localhost:\d+…/)).toBeVisible({ timeout: 30_000 });
+  await expect.poll(() => fs.existsSync(pidFile), { timeout: 30_000 }).toBe(true);
+  const pid = Number(fs.readFileSync(pidFile, 'utf8'));
+  expect(alive(pid)).toBe(true);
+  await dialog.getByRole('button', { name: 'Fermer' }).last().click();
+  // Its terminal, in the launch section under its agent's name.
+  const runs = page.locator('.runs');
+  await expect(runs.locator('.group')).toHaveText(/^dem-1/);
+  await expect(runs.locator('.run', { hasText: 'web' })).toContainText('en cours');
+
+  await review.getByRole('button', { name: 'Valider et merger' }).click();
+  const done = page.getByRole('region', { name: 'Terminé' });
+  await expect(done.getByText('⤵ Mergé dans main · squash')).toBeVisible({ timeout: 60_000 });
+  // Done: its terminal is gone from the section, its process with it, and neither crashed.
+  await expect(runs.locator('.group')).toHaveCount(0);
+  await expect(runs.locator('.run')).toHaveCount(0);
+  await expect.poll(() => alive(pid), { timeout: 15_000 }).toBe(false);
+  await expect(page.getByText(/s'est arrêté en erreur/)).toHaveCount(0);
+});

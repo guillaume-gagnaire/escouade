@@ -30,6 +30,8 @@ export async function startLaunch(project: Project, cmd: RunCommand): Promise<st
     while (app.launches[cmd.id] === dying && dying.status === 'running' && Date.now() < until) await sleep(50);
     previous = app.launches[cmd.id];
     if (previous === dying && dying.status === 'running') return `« ${cmd.name} » ne s'arrête pas`;
+    // Forgotten meanwhile (removed, its project closed, its ticket done): nothing to start any more.
+    if (!previous) return `« ${cmd.name} » a été retiré`;
   }
   if (previous?.status === 'running') return null;
   const x = log(cmd.id);
@@ -130,13 +132,14 @@ export function expectStops(commandIds: string[]) {
   };
 }
 
-/** Commands going away (removed, or their project closed): stopped silently, their logs dropped. */
+/** Commands going away (removed, or their project closed): stopped silently, their logs dropped and no longer on screen. */
 export function forgetLaunches(commandIds: string[]) {
   for (const id of commandIds) {
     const pty = app.launches[id]?.ptyId;
     if (pty) api.termKill(pty).catch(() => {});
     delete app.launches[id];
     disposeLog(id);
+    for (const [projectId, shown] of Object.entries(app.selectedLaunch)) if (shown === id) app.selectedLaunch[projectId] = null;
   }
 }
 
@@ -146,6 +149,9 @@ app.onAgentRemoved(forgetAgentTests);
 // Test launches are kept by the index of their step: under a new recipe, step n is another command,
 // which must not be taken for the process still running under that id.
 app.onRecipeChanged(forgetAgentTests);
+// A ticket "Terminé" is tested no more: its agent's test launches leave the section (the backend stopped
+// them at its validation).
+app.onTicketDone(forgetAgentTests);
 
 export function launchStatus(l: LaunchState | undefined): { label: string; color: string } {
   if (!l) return { label: 'prêt', color: 'var(--dim)' };

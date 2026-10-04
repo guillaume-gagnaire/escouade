@@ -49,6 +49,11 @@ app.onAgentRemoved((id) => {
   delete flows.all[id];
   delete flows.prepared[id];
 });
+// So is the test of an agent whose ticket goes "Terminé", and its modal, whose lines had their logs.
+app.onTicketDone((id) => {
+  delete flows.all[id];
+  if (app.modal?.kind === 'testLaunch' && app.modal.agentId === id) app.modal = null;
+});
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const seconds = (ms: number) => (ms / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 });

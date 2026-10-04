@@ -8,7 +8,7 @@ vi.mock('./terminals', () => ({
   disposeLog() {},
 }));
 
-import { agent, fakeBackend, project, resetApp, SETTINGS } from '../test/ipc';
+import { agent, fakeBackend, project, resetApp, SETTINGS, ticket } from '../test/ipc';
 import { app } from './state.svelte';
 import { allRunning, anyRunning, flows, READY_LIMIT_MS, stopTests, testAgent } from './test-launch.svelte';
 import type { Agent, InitialState, TestRecipe, UiEvent } from './types';
@@ -527,6 +527,29 @@ describe('▶ Tester', () => {
       emit({ type: 'agentRemoved', id: 'a7', projectId: 'p1' });
       expect(flows.all.a7).toBeUndefined();
       expect(flows.prepared.a7).toBeUndefined();
+    });
+
+    it('ends the test of an agent whose ticket goes "Terminé", with its modal, and keeps the others', async () => {
+      await boot(() => true);
+      app.agents.a8 = { ...A, id: 'a8' };
+      flows.prepared.a7 = JSON.stringify(RECIPE.prepare);
+      flows.prepared.a8 = JSON.stringify(RECIPE.prepare);
+      await testAgent(app.agents.a8, project());
+      const run = testAgent(A, project());
+      await vi.advanceTimersByTimeAsync(1000);
+      await run;
+      expect(app.modal).toEqual({ kind: 'testLaunch', agentId: 'a7' });
+      emit({ type: 'ticket', ticket: ticket({ column: 'review', agentId: 'a7' }) });
+      emit({ type: 'ticket', ticket: ticket({ column: 'done', agentId: 'a7' }) });
+      expect(flows.all.a7).toBeUndefined();
+      expect(app.modal).toBeNull();
+      expect(Object.keys(app.launches).filter((id) => id.startsWith('test:a7:'))).toEqual([]);
+      expect(flows.all.a8.phase).toBe('ready');
+      // Another agent's test on screen stays on screen.
+      app.modal = { kind: 'testLaunch', agentId: 'a8' };
+      emit({ type: 'ticket', ticket: ticket({ id: 't2', column: 'done', agentId: 'a9' }) });
+      expect(app.modal).toEqual({ kind: 'testLaunch', agentId: 'a8' });
+      expect(flows.all.a8.phase).toBe('ready');
     });
   });
 });

@@ -180,6 +180,8 @@ class AppState {
   private removalHooks = new Set<(agentId: string) => void>();
   /** What goes stale when an agent's launch recipe changes: its test launches, kept by the index of their step. */
   private recipeHooks = new Set<(agentId: string) => void>();
+  /** What is over when an agent's ticket goes "Terminé": its test launches. */
+  private ticketDoneHooks = new Set<(agentId: string) => void>();
 
   /** `f` runs when the backend removes an agent, before the state forgets it. Returns what unregisters it. */
   onAgentRemoved(f: (agentId: string) => void) {
@@ -191,6 +193,12 @@ class AppState {
   onRecipeChanged(f: (agentId: string) => void) {
     this.recipeHooks.add(f);
     return () => void this.recipeHooks.delete(f);
+  }
+
+  /** `f` runs, with its agent, when a ticket goes "Terminé". Returns what unregisters it. */
+  onTicketDone(f: (agentId: string) => void) {
+    this.ticketDoneHooks.add(f);
+    return () => void this.ticketDoneHooks.delete(f);
   }
 
   /** Each hook on its own: one that throws neither stops the others nor what the state does next. */
@@ -532,9 +540,13 @@ class AppState {
     if (place) place.expanded[dir] = !place.expanded[dir];
   }
 
-  /** A ticket that goes "Terminé" by a merge removing its worktree takes its agent's editor source with it. */
+  /**
+   * A ticket that goes "Terminé" ends what other modules hold of its agent's test (its launches), and one done by a
+   * merge removing its worktree takes its agent's editor source with it.
+   */
   private noteTicketDone(prev: Ticket | undefined, next: Ticket) {
     if (next.column !== 'done' || prev?.column === 'done' || !next.agentId) return;
+    this.runHooks(this.ticketDoneHooks, next.agentId);
     const b = this.projects.find((p) => p.id === next.projectId)?.board;
     if (b?.action === 'merge' && b.cleanup) this.forgetEditorSource(next.projectId, next.agentId);
   }

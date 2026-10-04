@@ -128,6 +128,39 @@ describe('AppState', () => {
     expect(seen).toEqual(['a1', 'a1']);
   });
 
+  it('tells other modules once when a ticket goes "Terminé", with its agent', async () => {
+    const { emit } = await start({ tickets: [ticket({ column: 'review', agentId: 'a1' })] });
+    const seen: string[] = [];
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const offs = [
+      app.onTicketDone(() => {
+        throw new Error('boom');
+      }),
+      app.onTicketDone((id) => seen.push(id)),
+    ];
+    try {
+      emit({ type: 'ticket', ticket: ticket({ column: 'review', agentId: 'a1', step: 'Merge…' }) });
+      expect(seen).toEqual([]);
+      emit({ type: 'ticket', ticket: ticket({ column: 'done', agentId: 'a1' }) });
+      // A hook that fails neither stops the others nor the ticket's update.
+      expect(seen).toEqual(['a1']);
+      expect(app.tickets.t1.column).toBe('done');
+      expect(error).toHaveBeenCalled();
+      // Updated again once done (its agent's cost): already told.
+      emit({ type: 'ticket', ticket: ticket({ column: 'done', agentId: 'a1', cost: 2 }) });
+      expect(seen).toEqual(['a1']);
+      // Done with no agent: nothing to tell.
+      emit({ type: 'ticket', ticket: ticket({ id: 't2', column: 'review', agentId: null }) });
+      emit({ type: 'ticket', ticket: ticket({ id: 't2', column: 'done', agentId: null }) });
+      expect(seen).toEqual(['a1']);
+    } finally {
+      for (const off of offs) off();
+    }
+    emit({ type: 'ticket', ticket: ticket({ id: 't3', column: 'review', agentId: 'a2' }) });
+    emit({ type: 'ticket', ticket: ticket({ id: 't3', column: 'done', agentId: 'a2' }) });
+    expect(seen).toEqual(['a1']);
+  });
+
   it('finds the launch on screen among the project’s commands, then among the steps of its agents’ recipes', async () => {
     const run = { id: 'c1', name: 'Front', command: 'npm run dev', shell: 'pwsh', cwd: '' };
     const recipe = {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { agent, fakeBackend, project, SETTINGS } from '../test/ipc';
+import { agent, fakeBackend, project, SETTINGS, ticket } from '../test/ipc';
 import { app } from './state.svelte';
 import type { InitialState, RunCommand, TermInfo, UiEvent } from './types';
 
@@ -75,6 +75,7 @@ async function boot(handlers: Record<string, (args: any) => unknown> = {}) {
   });
   app.launches = {};
   app.exitedTerms = {};
+  app.selectedLaunch = {};
   app.toasts = [];
   await app.init();
   return { backend, emit };
@@ -429,6 +430,80 @@ describe('test launches', () => {
     emit({ type: 'terminalExit', id: 't10', code: 1 });
     expect(app.toasts).toHaveLength(0);
     expect(app.launches.c1.status).toBe('running');
+  });
+
+  it('removes the test launches of an agent whose ticket goes "Terminé", the log on screen with them', async () => {
+    let n = 8;
+    const { backend, emit } = await boot({ test_run_start: () => info(`t${++n}`, 'web'), run_start: () => info('t1') });
+    // Archived once validated, it keeps its recipe.
+    const recipe = {
+      prepare: [{ command: 'npm i', dir: 'web' }],
+      processes: [{ name: 'web', command: 'node serveur.js', dir: '', env: {}, url: '' }],
+      open: '',
+    };
+    app.agents.a1 = agent({ recipe });
+    app.agents.a2 = agent({ id: 'a2', projectId: 'p2', recipe });
+    emit({ type: 'ticket', ticket: ticket({ column: 'review', agentId: 'a1' }) });
+    await startLaunch(P, PREP);
+    await startLaunch(P, WEB);
+    await startLaunch(P, { ...WEB, id: 'test:a2:run:0' });
+    await startLaunch(P, FRONT);
+    // The preparation is over, the server still runs, and its log is on screen.
+    emit({ type: 'terminalExit', id: 't9', code: 0 });
+    app.selectLaunch('test:a1:run:0');
+    app.selectedLaunch.p2 = 'test:a2:run:0';
+    // Being validated, they stay; the server, not stopped by its card here, is still running when its ticket is done.
+    emit({ type: 'ticket', ticket: ticket({ column: 'review', agentId: 'a1', step: 'Merge…' }) });
+    expect(Object.keys(app.launches)).toContain('test:a1:run:0');
+    expect(app.runCommand?.id).toBe('test:a1:run:0');
+    // Done, then its agent archived, as the backend tells it.
+    emit({ type: 'ticket', ticket: ticket({ column: 'done', agentId: 'a1' }) });
+    emit({ type: 'agent', agent: agent({ recipe, archived: true }) });
+    // Gone from the section, with their logs; what still ran is killed. The others stay.
+    expect(Object.keys(app.launches)).toEqual(['test:a2:run:0', 'c1']);
+    expect(logs['test:a1:prep:0']).toBeUndefined();
+    expect(logs['test:a1:run:0']).toBeUndefined();
+    expect(logs['test:a2:run:0']).toBeDefined();
+    expect(backend.called('term_kill').map((c) => c.args.id)).toEqual(['t10']);
+    expect(testLaunchIds('p1')).toEqual([]);
+    expect(testLaunchIds('p2')).toEqual(['test:a2:run:0']);
+    // Its log no longer fills the main area; another project's stays.
+    expect(app.selectedLaunch.p1).toBeNull();
+    expect(app.runCommand).toBeNull();
+    expect(app.selectedLaunch.p2).toBe('test:a2:run:0');
+    // Its end comes after: neither a crash nor an error.
+    emit({ type: 'terminalExit', id: 't10', code: 1 });
+    expect(app.toasts).toHaveLength(0);
+    expect(app.launches['test:a2:run:0'].status).toBe('running');
+    expect(app.launches.c1.status).toBe('running');
+  });
+
+  it('starts nothing for a step waiting for its dying run when its ticket goes "Terminé"', async () => {
+    const { backend, emit } = await boot({ test_run_start: () => info('t9', 'web') });
+    emit({ type: 'ticket', ticket: ticket({ column: 'review', agentId: 'a1' }) });
+    await startLaunch(P, WEB);
+    stopLaunch(WEB.id);
+    // Tested again while it is still stopping: the new start waits for its end.
+    const again = startLaunch(P, WEB);
+    await new Promise((r) => setTimeout(r, 120));
+    emit({ type: 'ticket', ticket: ticket({ column: 'done', agentId: 'a1' }) });
+    expect(await again).not.toBeNull();
+    expect(backend.called('test_run_start')).toHaveLength(1);
+    expect(app.launches[WEB.id]).toBeUndefined();
+    expect(logs[WEB.id]).toBeUndefined();
+    expect(app.toasts).toHaveLength(0);
+  });
+
+  it('keeps the test launches of an agent whose ticket is updated without going "Terminé"', async () => {
+    const { emit } = await boot({ test_run_start: () => info('t9', 'web') });
+    emit({ type: 'ticket', ticket: ticket({ column: 'review', agentId: 'a1' }) });
+    await startLaunch(P, WEB);
+    emit({ type: 'ticket', ticket: ticket({ column: 'review', agentId: 'a1', blocked: 'Conflit' }) });
+    emit({ type: 'ticket', ticket: ticket({ column: 'doing', agentId: 'a1' }) });
+    // Another agent's ticket that goes "Terminé".
+    emit({ type: 'ticket', ticket: ticket({ id: 't2', column: 'done', agentId: 'a2' }) });
+    expect(app.launches['test:a1:run:0']).toMatchObject({ status: 'running', ptyId: 't9' });
+    expect(logs['test:a1:run:0']).toBeDefined();
   });
 
   it('ignores the end of a terminal it never knew', async () => {

@@ -1154,10 +1154,21 @@ async fn a_ticket_agent_gives_its_launch_recipe_in_its_report() {
         .await;
     h.wait("recipe kept", |h| h.agent_of(&t.id).recipe.is_some())
         .await;
-    let recipe = h.agent_of(&t.id).recipe.unwrap();
+    let agent = h.agent_of(&t.id);
+    let recipe = agent.recipe.unwrap();
+    // On the ports its protocol reserved for it.
+    let web = agent.port_base.unwrap() + 1;
     assert_eq!(
-        (recipe.processes[0].name.as_str(), recipe.open.as_str()),
-        ("web", "http://localhost:4100/fonction")
+        (
+            recipe.processes[0].name.as_str(),
+            recipe.processes[0].url.as_str(),
+            recipe.open.as_str()
+        ),
+        (
+            "web",
+            format!("http://localhost:{web}").as_str(),
+            format!("http://localhost:{web}/fonction").as_str()
+        )
     );
 }
 

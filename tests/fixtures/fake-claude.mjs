@@ -10,11 +10,12 @@
 // <key>.txt ("Boucle n") in its folder and ends each turn with an ```escouade report (criteria and
 // "avancement"). The ticket's title, in the protocol, steers it: [ok] every criterion met at once,
 // [jamais] none ever, [sans-bilan] no report, [lent] a turn that lasts 30 s, [recette] a launch
-// recipe, [question] a question first (the turn goes on once it is answered), [fin-d-abord] an
-// interrupted turn's end sent before the answer to the interrupt, [commite] its work committed by
-// itself (every file of its folder, a copied .env forced in), [retire-env] then .env taken out of
-// git again in a second commit (still in the branch's history), [tenace] a process that lasts 5 s
-// once its input is closed; by default criterion n is met from loop n on.
+// recipe (its process on the second port of its block), [question] a question first (the turn goes
+// on once it is answered), [fin-d-abord] an interrupted turn's end sent before the answer to the
+// interrupt, [commite] its work committed by itself (every file of its folder, a copied .env forced
+// in), [retire-env] then .env taken out of git again in a second commit (still in the branch's
+// history), [tenace] a process that lasts 5 s once its input is closed; by default criterion n is
+// met from loop n on.
 // Asked to prepare a test launch (« Prépare le lancement… Ports réservés : <base> »), any agent
 // answers with a recipe whose process listens on <base + 1>.
 // In one-shot mode, asked for a ticket's commit message, it answers `feat: travail du faux claude
@@ -181,9 +182,11 @@ function startSession() {
       avancement: [`Fichier ${file} écrit`, `Boucle ${loop} faite`],
     };
     if (all.includes('[recette]')) {
+      // On its block of ports, as « Prépare le lancement » answers.
+      const port = Number(sys.match(/Ports réservés à ce worktree : (\d+)/)?.[1] ?? 4100) + 1;
       report.lancement = {
-        processus: [{ nom: 'web', commande: 'node serveur.js', url: 'http://localhost:4100' }],
-        ouvrir: 'http://localhost:4100/fonction',
+        processus: [{ nom: 'web', commande: 'node serveur.js', url: `http://localhost:${port}` }],
+        ouvrir: `http://localhost:${port}/fonction`,
       };
     }
     streamText(`Boucle ${loop} faite.\n\n\`\`\`escouade\n${JSON.stringify(report)}\n\`\`\``);
