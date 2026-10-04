@@ -461,6 +461,28 @@ test('a file is browsed, edited and saved in the embedded editor', async ({ app 
   await expect(page.locator('main.conv')).toBeVisible();
 });
 
+test('a file is created from the editor’s tree, folders included, then written and saved', async ({ app }) => {
+  const { page } = app;
+  await addProject(page, app.repo);
+  await page.getByRole('button', { name: 'Parcourir' }).click();
+  await page.getByRole('treeitem', { name: /src/ }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Nouveau fichier…' }).click();
+  const field = page.getByRole('textbox', { name: 'Nom du nouveau fichier' });
+  await field.fill('app.ts');
+  await expect(page.getByRole('alert')).toHaveText('« app.ts » existe déjà à cet endroit.');
+  await field.fill('lib/util.ts');
+  await field.press('Enter');
+  await expect(page.getByRole('tab', { name: /util\.ts/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('treeitem', { name: /util\.ts/ })).toHaveAttribute('aria-selected', 'true');
+  expect(fs.readFileSync(path.join(app.repo, 'src', 'lib', 'util.ts'), 'utf8')).toBe('');
+  // The cursor is in the file created: typing goes there right away.
+  await expect(page.locator('.cm-editor')).toHaveClass(/cm-focused/);
+  await page.keyboard.type('export const u = 1;');
+  await page.keyboard.press('Control+S');
+  await expect(page.getByText('Enregistré', { exact: true })).toBeVisible();
+  expect(fs.readFileSync(path.join(app.repo, 'src', 'lib', 'util.ts'), 'utf8')).toBe('export const u = 1;');
+});
+
 test('a file of an agent’s worktree opens in the editor from the uncommitted files', async ({ app }) => {
   const { page } = app;
   await addProject(page, app.repo, { worktrees: true });

@@ -203,6 +203,56 @@ pub fn write(
     Ok(hash(&bytes))
 }
 
+/// Creates the empty file `rel`, its missing folders with it. Refused when something is already
+/// there: a file is never created over another.
+pub fn create(root: &Path, rel: &str) -> Result<()> {
+    validate_rel(rel)?;
+    #[cfg(windows)]
+    for part in rel.split(['/', '\\']) {
+        windows_name(part).map_err(|_| anyhow!("nom invalide : {rel}"))?;
+    }
+    let path = contained(root, rel)?;
+    if std::fs::symlink_metadata(&path).is_ok() {
+        bail!("{rel} existe déjà");
+    }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| anyhow!("{rel} : {e}"))?;
+    }
+    match std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)
+    {
+        Ok(_) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => bail!("{rel} existe déjà"),
+        Err(e) => Err(anyhow!("{rel} : {e}")),
+    }
+}
+
+/// A name Windows keeps as typed and gives a file: not ending with a dot or a space (it would drop
+/// them), without the characters it refuses, and not a device (`CON`, `NUL.txt`, `COM1`…).
+#[cfg(windows)]
+fn windows_name(name: &str) -> Result<()> {
+    if name.ends_with(['.', ' ']) || name.chars().any(|c| c < ' ' || "<>:\"|?*".contains(c)) {
+        bail!("nom invalide");
+    }
+    let stem = name
+        .split('.')
+        .next()
+        .unwrap_or("")
+        .trim_end()
+        .to_ascii_uppercase();
+    let device = matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || ((stem.starts_with("COM") || stem.starts_with("LPT"))
+            && stem.len() == 4
+            && stem.as_bytes()[3].is_ascii_digit()
+            && stem.as_bytes()[3] != b'0');
+    if device {
+        bail!("nom invalide");
+    }
+    Ok(())
+}
+
 /// The one way bytes reach a file: written to the temporary path `tmp` (created only if nothing
 /// is there, so a planted link is never followed), then renamed over `path`. The temporary file
 /// is removed only when this call created it and the write or the rename failed. `write()` calls
@@ -412,6 +462,59 @@ mod tests {
             .collect();
         assert_eq!(left, vec![std::ffi::OsString::from("b.ts")]);
         assert!(write(&dir, "../escape.ts", "x", "lf", false, None).is_err());
+    }
+
+    #[test]
+    fn creates_an_empty_file_with_its_folders_but_never_over_one_that_is_there() {
+        let dir = test_dir("fsedit-create");
+        create(&dir, "a.ts").unwrap();
+        assert_eq!(std::fs::read(dir.join("a.ts")).unwrap(), b"");
+        create(&dir, "new/deep/b.ts").unwrap();
+        assert!(dir.join("new/deep/b.ts").is_file());
+        // There already, in any case on a disk that ignores it: refused, left as it was.
+        std::fs::write(dir.join("c.ts"), "keep\n").unwrap();
+        let err = create(&dir, "c.ts").unwrap_err().to_string();
+        assert_eq!(err, "c.ts existe déjà");
+        assert_eq!(std::fs::read_to_string(dir.join("c.ts")).unwrap(), "keep\n");
+        assert!(create(&dir, "new")
+            .unwrap_err()
+            .to_string()
+            .contains("existe déjà"));
+        #[cfg(any(windows, target_os = "macos"))]
+        {
+            assert_eq!(
+                create(&dir, "C.TS").unwrap_err().to_string(),
+                "C.TS existe déjà"
+            );
+            assert_eq!(std::fs::read_to_string(dir.join("c.ts")).unwrap(), "keep\n");
+        }
+        // A file where a folder is asked for.
+        assert!(create(&dir, "c.ts/d.ts").is_err());
+        assert!(create(&dir, "../escape.ts").is_err());
+        assert!(!dir.parent().unwrap().join("escape.ts").exists());
+        for rel in ["", ".", "sub/."] {
+            assert!(create(&dir, rel).is_err(), "{rel:?}");
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn creates_no_file_under_a_name_windows_would_change_or_keeps_for_a_device() {
+        let dir = test_dir("fsedit-create-win");
+        for rel in [
+            "a.",
+            "b ",
+            "sub./c.ts",
+            "d?.ts",
+            "e:f",
+            "CON",
+            "nul.txt",
+            "x/com1",
+        ] {
+            let err = create(&dir, rel).unwrap_err().to_string();
+            assert!(err.contains("nom invalide"), "{rel:?}: {err}");
+        }
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0);
     }
 
     #[cfg(unix)]

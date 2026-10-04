@@ -1,8 +1,9 @@
-import { render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buffers } from '../../lib/editor/buffers.svelte';
 import { trees } from '../../lib/editor/trees.svelte';
+import { menu } from '../../lib/menu.svelte';
 import { app } from '../../lib/state.svelte';
 import { agent, fakeBackend, gitInfo, project, resetApp } from '../../test/ipc';
 import EditorView from './EditorView.svelte';
@@ -331,5 +332,228 @@ describe('EditorView', () => {
     await userEvent.click(screen.getByRole('tab', { name: /app\.ts/ }));
     expect(screen.queryByText('Identique à HEAD')).not.toBeInTheDocument();
     expect(await screen.findByText('1 ligne modifiée vs HEAD')).toBeInTheDocument();
+  });
+});
+
+describe('EditorView tree, as VS Code’s explorer', () => {
+  beforeEach(() => {
+    resetApp({ agents: [agent()] });
+    app.git.p1 = gitInfo({ modified: 1 });
+  });
+
+  /** A backend whose tree lists the files created through it; `over` replaces commands, given the files on disk. */
+  function creating(over: Record<string, (a: any) => unknown> | ((files: string[]) => Record<string, (a: any) => unknown>) = {}) {
+    const files = ['README.md', 'src/app.ts'];
+    return backend({
+      fs_tree: () => ({ root: 'C:/code/demo-api', files: [...files], truncated: false }),
+      fs_create: (a) => void files.push(a.path),
+      fs_read: () => text(''),
+      ...(typeof over === 'function' ? over(files) : over),
+    });
+  }
+  const field = () => screen.findByRole('textbox', { name: 'Nom du nouveau fichier' });
+  const item = (name: RegExp) => screen.getByRole('treeitem', { name });
+
+  it('creates a file next to the one shown, folders included, and opens it', async () => {
+    const be = creating();
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    render(EditorView, { project: project() });
+    await screen.findByRole('treeitem', { name: /app\.ts/ });
+    await userEvent.click(screen.getByRole('button', { name: 'Nouveau fichier' }));
+    await userEvent.type(await field(), 'lib/util.ts{Enter}');
+    expect(be.called('fs_create').map((c) => c.args)).toEqual([{ projectId: 'p1', agentId: null, path: 'src/lib/util.ts' }]);
+    expect(await screen.findByRole('tab', { name: /util\.ts/ })).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByRole('treeitem', { name: /util\.ts/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('textbox', { name: 'Nom du nouveau fichier' })).not.toBeInTheDocument();
+    expect(app.toasts).toEqual([]);
+  });
+
+  it('creates it in the folder of the row last clicked', async () => {
+    const be = creating();
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    render(EditorView, { project: project() });
+    await screen.findByRole('treeitem', { name: /app\.ts/ });
+    await userEvent.click(item(/README/));
+    await userEvent.click(screen.getByRole('button', { name: 'Nouveau fichier' }));
+    await userEvent.type(await field(), 'a.ts{Enter}');
+    await screen.findByRole('tab', { name: /a\.ts/ });
+    await userEvent.click(item(/src/));
+    await userEvent.click(screen.getByRole('button', { name: 'Nouveau fichier' }));
+    expect(item(/src/)).toHaveAttribute('aria-expanded', 'true');
+    await userEvent.type(await field(), 'b.ts{Enter}');
+    expect(be.called('fs_create').map((c) => c.args.path)).toEqual(['a.ts', 'src/b.ts']);
+  });
+
+  it('creates a file in a folder from its menu, in its folder from a file’s, at the root from the free space', async () => {
+    creating();
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    render(EditorView, { project: project() });
+    await screen.findByRole('treeitem', { name: /app\.ts/ });
+    const pick = async (target: Element, label: string) => {
+      await fireEvent.contextMenu(target);
+      menu.open!.items.find((i) => i.label === label)!.onClick!();
+      menu.close();
+    };
+    await userEvent.click(screen.getByRole('button', { name: 'Tout réduire' }));
+    expect(app.editor.p1.places.project.expanded).toEqual({});
+    await pick(item(/src/), 'Nouveau fichier…');
+    expect(item(/src/)).toHaveAttribute('aria-expanded', 'true');
+    expect(item(/src/).nextElementSibling).toContainElement(await field());
+    await userEvent.keyboard('{Escape}');
+    await pick(item(/app\.ts/), 'Nouveau fichier…');
+    expect(item(/src/).nextElementSibling).toContainElement(await field());
+    await userEvent.keyboard('{Escape}');
+    await pick(screen.getByRole('tree'), 'Nouveau fichier…');
+    expect(screen.getByRole('tree').firstElementChild).toContainElement(await field());
+  });
+
+  it('tells why a name is refused, by the tree or by the disk', async () => {
+    creating({ fs_create: () => Promise.reject('src/b.ts existe déjà') });
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    render(EditorView, { project: project() });
+    await screen.findByRole('treeitem', { name: /app\.ts/ });
+    await userEvent.click(screen.getByRole('button', { name: 'Nouveau fichier' }));
+    await userEvent.type(await field(), 'APP.ts');
+    expect(screen.getByRole('alert')).toHaveTextContent('« APP.ts » existe déjà à cet endroit.');
+    await userEvent.clear(await field());
+    await userEvent.type(await field(), 'b.ts{Enter}');
+    expect(await screen.findByRole('alert')).toHaveTextContent('src/b.ts existe déjà');
+    expect(app.editor.p1.places.project.open).toEqual(['src/app.ts']);
+  });
+
+  it('says so when the file created is one git ignores, which the tree does not show', async () => {
+    creating({ fs_create: () => null });
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    render(EditorView, { project: project() });
+    await screen.findByRole('treeitem', { name: /app\.ts/ });
+    await userEvent.click(item(/README/));
+    await userEvent.click(screen.getByRole('button', { name: 'Nouveau fichier' }));
+    await userEvent.type(await field(), '.env{Enter}');
+    expect(await screen.findByRole('tab', { name: /\.env/ })).toBeInTheDocument();
+    expect(app.toasts.map((t) => t.text)).toEqual(['.env est ignoré par git : l’arborescence ne le montre pas.']);
+  });
+
+  it('copies the path of a file, from the root of its source or whole', async () => {
+    creating();
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    render(EditorView, { project: project() });
+    const row = await screen.findByRole('treeitem', { name: /app\.ts/ });
+    for (const label of ['Copier le chemin relatif', 'Copier le chemin']) {
+      await fireEvent.contextMenu(row);
+      menu.open!.items.find((i) => i.label === label)!.onClick!();
+      menu.close();
+    }
+    expect(writeText.mock.calls).toEqual([['src/app.ts'], ['C:\\code\\demo-api\\src\\app.ts']]);
+  });
+
+  it('opens a file created in a folder typed in another case under the name the disk gives it', async () => {
+    // As Windows does: `SRC/` is the `src/` already there.
+    creating((files) => ({ fs_create: (a) => void files.push(a.path.replace(/^SRC\//, 'src/')) }));
+    await app.openEditor({ source: 'project', path: 'README.md' });
+    render(EditorView, { project: project() });
+    await screen.findByRole('treeitem', { name: /README/ });
+    await userEvent.click(screen.getByRole('button', { name: 'Nouveau fichier' }));
+    await userEvent.type(await field(), 'SRC/new.ts{Enter}');
+    await expect.poll(() => app.editor.p1.places.project.active).toBe('src/new.ts');
+    expect(app.editor.p1.places.project.open).toEqual(['README.md', 'src/new.ts']);
+    expect(app.toasts).toEqual([]);
+  });
+
+  it('puts the cursor in the file created', async () => {
+    creating();
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    render(EditorView, { project: project() });
+    await screen.findByRole('treeitem', { name: /app\.ts/ });
+    await userEvent.click(screen.getByRole('button', { name: 'Nouveau fichier' }));
+    await userEvent.type(await field(), 'b.ts{Enter}');
+    await expect.poll(() => document.activeElement?.closest('.cm-editor')).not.toBeNull();
+  });
+
+  it('starts no other file while one is being created, and tells a refusal that comes once its field is gone', async () => {
+    let refuse!: (e: string) => void;
+    const be = creating({ fs_create: () => new Promise((_, reject) => (refuse = reject)) });
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    render(EditorView, { project: project() });
+    await screen.findByRole('treeitem', { name: /app\.ts/ });
+    await userEvent.click(screen.getByRole('button', { name: 'Nouveau fichier' }));
+    await userEvent.type(await field(), 'b.ts{Enter}');
+    await userEvent.click(item(/README/));
+    await userEvent.click(screen.getByRole('button', { name: 'Nouveau fichier' }));
+    expect(screen.getAllByRole('textbox', { name: 'Nom du nouveau fichier' })).toHaveLength(1);
+    expect(item(/src/).nextElementSibling).toContainElement(await field());
+    // The source changes: the field goes, the refusal is told otherwise.
+    app.editor.p1.source = 'other';
+    await expect.poll(() => screen.queryByRole('textbox', { name: 'Nom du nouveau fichier' })).toBeNull();
+    refuse('Accès refusé');
+    await expect.poll(() => app.toasts.map((t) => t.text)).toEqual(['Création impossible : Accès refusé']);
+    expect(be.called('fs_create')).toHaveLength(1);
+  });
+
+  it('names the file in the nearest folder the tree shows when the one asked for is not there', async () => {
+    creating();
+    // A file git ignores, opened from the conversation: its folder is not in the tree.
+    await app.openEditor({ source: 'project', path: 'build/out/x.js' });
+    render(EditorView, { project: project() });
+    await screen.findByRole('treeitem', { name: /README/ });
+    await userEvent.click(screen.getByRole('button', { name: 'Nouveau fichier' }));
+    expect(screen.getByRole('tree').firstElementChild).toContainElement(await field());
+  });
+
+  it('does not take a file for one git ignores when the tree could not be read again', async () => {
+    let reads = 0;
+    creating({
+      fs_tree: () =>
+        reads++ ? Promise.reject('git occupé') : { root: 'C:/code/demo-api', files: ['README.md', 'src/app.ts'], truncated: false },
+    });
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    render(EditorView, { project: project() });
+    await screen.findByRole('treeitem', { name: /app\.ts/ });
+    await userEvent.click(screen.getByRole('button', { name: 'Nouveau fichier' }));
+    await userEvent.type(await field(), 'b.ts{Enter}');
+    expect(await screen.findByRole('tab', { name: /b\.ts/ })).toBeInTheDocument();
+    expect(app.toasts).toEqual([]);
+  });
+
+  it('does not take a file for one git ignores when the tree could not list it', async () => {
+    creating({
+      fs_tree: () => ({ root: 'C:/code/demo-api', files: ['README.md', 'src/app.ts'], truncated: true }),
+      fs_create: () => null,
+    });
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    render(EditorView, { project: project() });
+    await screen.findByRole('treeitem', { name: /app\.ts/ });
+    await userEvent.click(screen.getByRole('button', { name: 'Nouveau fichier' }));
+    await userEvent.type(await field(), 'b.ts{Enter}');
+    expect(await screen.findByRole('tab', { name: /b\.ts/ })).toBeInTheDocument();
+    expect(app.toasts).toEqual([]);
+  });
+
+  it('reads the tree again on demand', async () => {
+    const be = creating();
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    render(EditorView, { project: project() });
+    await screen.findByRole('treeitem', { name: /app\.ts/ });
+    const before = be.called('fs_tree').length;
+    await userEvent.click(screen.getByRole('button', { name: 'Actualiser' }));
+    await expect.poll(() => be.called('fs_tree').length).toBe(before + 1);
+  });
+
+  it('gives up the file being named when the source changes', async () => {
+    const wt = { path: 'C:/code/demo-api/.claude/worktrees/wt', branch: 'escouade/wt', baseBranch: 'main' };
+    resetApp({ agents: [agent(), agent({ id: 'a2', name: 'wt', worktree: wt })] });
+    app.git.p1 = gitInfo({ modified: 1 });
+    creating();
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    render(EditorView, { project: project() });
+    await screen.findByRole('treeitem', { name: /app\.ts/ });
+    await userEvent.click(screen.getByRole('button', { name: 'Nouveau fichier' }));
+    expect(await field()).toBeInTheDocument();
+    await app.openEditor({ source: 'a2' });
+    await expect.poll(() => screen.queryByRole('textbox', { name: 'Nom du nouveau fichier' })).toBeNull();
+    await app.openEditor({ source: 'project' });
+    await screen.findByRole('treeitem', { name: /app\.ts/ });
+    expect(screen.queryByRole('textbox', { name: 'Nom du nouveau fichier' })).not.toBeInTheDocument();
   });
 });

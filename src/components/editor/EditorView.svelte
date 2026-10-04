@@ -4,12 +4,14 @@
   import { saveActive, saveKey } from '../../lib/editor/actions';
   import { buffers, sourceAgent } from '../../lib/editor/buffers.svelte';
   import { lineChanges, type LineChanges } from '../../lib/editor/changes';
+  import { newFileError, newFilePath } from '../../lib/editor/create';
   import { detectIndent } from '../../lib/editor/indent';
   import { languageLabel, loadLanguage } from '../../lib/editor/languages';
-  import { treeRows, type FileStatus } from '../../lib/editor/tree';
+  import { ancestors, treeRows, type FileStatus, type TreeRow } from '../../lib/editor/tree';
   import { trees } from '../../lib/editor/trees.svelte';
-  import { basename, plural, tildify } from '../../lib/format';
+  import { basename, joinPath, plural, tildify } from '../../lib/format';
   import { api } from '../../lib/ipc';
+  import { menu, type MenuItem } from '../../lib/menu.svelte';
   import { keyLabel } from '../../lib/platform';
   import { app } from '../../lib/state.svelte';
   import type { Project } from '../../lib/types';
@@ -36,6 +38,10 @@
   let cursor = $state({ line: 1, col: 1 });
   let language = $state<Extension | null>(null);
   let changes = $state<LineChanges>(NONE);
+  /** The folder getting a new file ('' for the root), with the source it was asked on. */
+  let adding = $state<{ source: string; dir: string } | null>(null);
+  /** The folder of the row last clicked: where "Nouveau fichier" creates, as VS Code does with its selection. */
+  let lastDir = $state<{ source: string; dir: string } | null>(null);
 
   /**
    * Tree, git status and open files of the source. Only the refresh `pick`ing, the one a source is shown with, opens
@@ -64,11 +70,15 @@
     }
   }
 
-  // Right away for each source, then 300 ms after each git event of the project.
+  // Right away for each source, then 300 ms after each git event of the project. A file being named in the tree of
+  // the previous source is given up.
   $effect(() => {
     const pid = project.id;
     const src = source;
-    untrack(() => refresh(pid, src, true));
+    untrack(() => {
+      adding = null;
+      refresh(pid, src, true);
+    });
   });
   let tick = untrack(() => app.gitTick);
   let gitTimer: ReturnType<typeof setTimeout> | undefined;
@@ -144,7 +154,71 @@
     return () => clearTimeout(changeTimer);
   });
 
-  const rows = $derived(tree ? treeRows(tree.files, place?.expanded ?? {}, status) : []);
+  const addingDir = $derived(adding?.source === source ? adding.dir : null);
+  const parentOf = (path: string) => ancestors(path).at(-1) ?? '';
+
+  /** A file being created: no other field opens until it is, so the field `adding` is still its own, or none. */
+  let creating = false;
+
+  /** Opens the field naming a new file in `dir`, or in the nearest folder above it the tree shows. */
+  function startNew(dir: string) {
+    if (creating) return;
+    const files = tree?.files ?? [];
+    while (dir && !files.some((f) => f.startsWith(dir + '/'))) dir = parentOf(dir);
+    app.expandEditorDir(project.id, source, dir);
+    adding = { source, dir };
+  }
+  const newHere = () => startNew(lastDir?.source === source ? lastDir.dir : activePath ? parentOf(activePath) : '');
+
+  /** Creates the file `name` the field `mine` names and opens it; what refused it otherwise, for the field to show. */
+  async function create(mine: { source: string; dir: string } | null, name: string): Promise<string | null> {
+    if (!mine) return null;
+    const pid = project.id;
+    const src = mine.source;
+    const path = newFilePath(mine.dir, name);
+    creating = true;
+    try {
+      await api.fsCreate(pid, sourceAgent(src), path);
+    } catch (e) {
+      // Its field gone meanwhile (the source changed), the refusal is told otherwise.
+      if (adding !== mine) app.toast(`Création impossible : ${e}`, 'error');
+      return String(e);
+    } finally {
+      creating = false;
+    }
+    adding = null;
+    const before = trees.get(pid, src);
+    await refresh(pid, src, false);
+    if (!alive || pid !== project.id || src !== source) return null;
+    // As the disk names it: `SRC/x.ts` typed is the `src/x.ts` the tree shows on Windows and macOS, not a second tab.
+    const t = trees.get(pid, src);
+    const fresh = t && t !== before && !t.truncated ? t : null;
+    const lower = path.toLowerCase();
+    const real = t?.files.includes(path) ? path : (t?.files.find((f) => f.toLowerCase() === lower) ?? path);
+    lastDir = { source: src, dir: parentOf(real) };
+    // Line 1 asked for: the cursor goes in the file, to type in it right away.
+    await app.openEditor({ projectId: pid, source: src, path: real, line: 1 });
+    if (fresh && !fresh.files.includes(real)) app.toast(`${basename(real)} est ignoré par git : l’arborescence ne le montre pas.`);
+    return null;
+  }
+
+  const copy = (text: string) => navigator.clipboard.writeText(text).catch((e) => app.toast(`Copie impossible : ${e}`, 'error'));
+
+  function treeMenu(e: MouseEvent, r: TreeRow | null) {
+    const dir = !r ? '' : r.kind === 'dir' ? r.path : parentOf(r.path);
+    const items: MenuItem[] = [{ label: 'Nouveau fichier…', onClick: () => startNew(dir) }];
+    const root = tree?.root;
+    if (r && root) {
+      items.push(
+        { label: '', separator: true },
+        { label: 'Copier le chemin', onClick: () => copy(joinPath(root, r.path)) },
+        { label: 'Copier le chemin relatif', onClick: () => copy(r.path) },
+      );
+    }
+    menu.show(e, items);
+  }
+
+  const rows = $derived(tree ? treeRows(tree.files, place?.expanded ?? {}, status, addingDir) : []);
   const changedCount = $derived(Object.keys(status).length);
   const tabs = $derived(
     (place?.open ?? []).map((p) => ({
@@ -226,21 +300,52 @@
     <aside class="files">
       <div class="ftitle">
         <div class="row">
-          <span class="label">Fichiers</span><span class="mono dim">{tree ? `${tree.files.length} · ${changedCount} modif.` : ''}</span>
+          <span class="label">Fichiers</span>
+          <div class="actions">
+            <button class="act" aria-label="Nouveau fichier" title="Nouveau fichier" disabled={!tree} onclick={newHere}>
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"
+                ><path
+                  d="M8.5 2H4.5A1.5 1.5 0 0 0 3 3.5v9A1.5 1.5 0 0 0 4.5 14H8M8.5 2 13 6.5M8.5 2v4.5H13M13 6.5V9M12 10.5v4M10 12.5h4"
+                /></svg
+              >
+            </button>
+            <button class="act" aria-label="Actualiser" title="Actualiser" onclick={() => refresh(project.id, source, false)}>
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5V5h-2.5" /></svg>
+            </button>
+            <button class="act" aria-label="Tout réduire" title="Tout réduire" onclick={() => app.collapseEditorDirs(project.id, source)}>
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"
+                ><rect x="5.5" y="5.5" width="8" height="8" rx="1" /><path d="M3 10.5V3.8a.8.8 0 0 1 .8-.8h6.7M7.5 9.5h4" /></svg
+              >
+            </button>
+          </div>
         </div>
         <span class="mono dim root" title={tree?.root}
           >{srcAgent
             ? `.claude/worktrees/${srcAgent.worktree ? basename(srcAgent.worktree.path) : srcAgent.name}`
             : tildify(project.path)}</span
         >
-        {#if tree?.truncated}<span class="dim small">Liste tronquée à {tree.files.length} fichiers.</span>{/if}
+        {#if tree}
+          <span class="mono dim count"
+            >{plural(tree.files.length, 'fichier', 'fichiers')} · {changedCount} modif.{tree.truncated ? ' · liste tronquée' : ''}</span
+          >
+        {/if}
       </div>
       <div class="scroll">
         <FileTree
           {rows}
           active={activePath}
-          ontoggle={(d) => app.toggleEditorDir(project.id, source, d)}
-          onopen={(p) => app.openEditor({ projectId: project.id, source, path: p })}
+          ontoggle={(d) => {
+            lastDir = { source, dir: d };
+            app.toggleEditorDir(project.id, source, d);
+          }}
+          onopen={(p) => {
+            lastDir = { source, dir: parentOf(p) };
+            app.openEditor({ projectId: project.id, source, path: p });
+          }}
+          onmenu={treeMenu}
+          check={(name) => newFileError(name, addingDir ?? '', tree?.files ?? [])}
+          oncreate={(name) => create(adding, name)}
+          oncancel={() => (adding = null)}
         />
       </div>
     </aside>
@@ -381,18 +486,48 @@
     text-transform: uppercase;
     color: var(--muted);
   }
+  .actions {
+    margin-left: auto;
+    display: flex;
+    gap: 2px;
+  }
+  .act {
+    width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: none;
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .act:hover:not(:disabled) {
+    background: var(--elev2);
+    color: var(--text);
+  }
+  .act:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+  .act svg {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
   .dim {
     font-size: 11px;
     color: var(--dim);
   }
-  .root {
+  .root,
+  .count {
     font-size: 10.5px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-  .small {
-    font-size: 10.5px;
   }
   .scroll {
     flex: 1;

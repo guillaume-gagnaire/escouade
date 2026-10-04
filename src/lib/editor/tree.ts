@@ -1,18 +1,20 @@
-// The editor's file tree: a flat list of paths shown as folders and files.
+// The editor's file tree: a flat list of paths shown as folders and files, the way VS Code's explorer does.
 
 export type FileStatus = 'M' | 'A' | 'D';
 
 export interface TreeRow {
-  kind: 'dir' | 'file';
+  /** `new`: the field naming a file to create in the folder `path` ('' for the root). */
+  kind: 'dir' | 'file' | 'new';
   path: string;
+  /** For a folder holding a single folder and no file, the chain shown on one row (`src/lib/editor`). */
   name: string;
   depth: number;
   /** A folder shown open. */
   open: boolean;
   /** A file changed in git. */
   status: FileStatus | null;
-  /** A folder holding changed files. */
-  changedInside: boolean;
+  /** A folder holding changed files: the strongest change among them. */
+  inside: FileStatus | null;
 }
 
 interface Node {
@@ -23,8 +25,15 @@ interface Node {
 const nameOf = (p: string) => p.slice(p.lastIndexOf('/') + 1);
 const collator = new Intl.Collator(undefined, { sensitivity: 'base' });
 const byName = (a: string, b: string) => collator.compare(a, b) || (a < b ? -1 : a > b ? 1 : 0);
+const STRENGTH: FileStatus[] = ['M', 'A', 'D'];
 
-export function treeRows(files: string[], expanded: Record<string, boolean>, status: Record<string, FileStatus>): TreeRow[] {
+/** The rows shown, `adding` the folder getting a new file ('' for the root), its field first among what it holds. */
+export function treeRows(
+  files: string[],
+  expanded: Record<string, boolean>,
+  status: Record<string, FileStatus>,
+  adding: string | null = null,
+): TreeRow[] {
   const root: Node = { dirs: new Map(), files: [] };
   for (const f of files) {
     let n = root;
@@ -35,14 +44,35 @@ export function treeRows(files: string[], expanded: Record<string, boolean>, sta
     }
     n.files.push(f);
   }
-  const changed = Object.keys(status);
+  // The strongest change under each folder, in one pass over the changes.
+  const held = new Map<string, FileStatus>();
+  for (const [p, s] of Object.entries(status)) {
+    for (const d of ancestors(p)) {
+      const was = held.get(d);
+      if (!was || STRENGTH.indexOf(s) < STRENGTH.indexOf(was)) held.set(d, s);
+    }
+  }
+  const inside = (dir: string) => held.get(dir) ?? null;
+  const isOpen = (path: string) => Object.hasOwn(expanded, path) && !!expanded[path];
+  const field = (path: string, depth: number): TreeRow => ({ kind: 'new', path, name: '', depth, open: false, status: null, inside: null });
   const rows: TreeRow[] = [];
   const walk = (n: Node, depth: number, prefix: string) => {
-    for (const name of [...n.dirs.keys()].sort(byName)) {
-      const path = prefix + name;
-      const open = Object.hasOwn(expanded, path) && !!expanded[path];
-      rows.push({ kind: 'dir', path, name, depth, open, status: null, changedInside: changed.some((p) => p.startsWith(path + '/')) });
-      if (open) walk(n.dirs.get(name)!, depth + 1, path + '/');
+    for (const first of [...n.dirs.keys()].sort(byName)) {
+      let node = n.dirs.get(first)!;
+      let path = prefix + first;
+      let name = first;
+      // A folder that only holds a folder shares its row, unless it gets the new file.
+      while (!node.files.length && node.dirs.size === 1 && path !== adding) {
+        const [[child, next]] = node.dirs;
+        path += '/' + child;
+        name += '/' + child;
+        node = next;
+      }
+      const open = isOpen(path);
+      rows.push({ kind: 'dir', path, name, depth, open, status: null, inside: inside(path) });
+      if (!open) continue;
+      if (path === adding) rows.push(field(path, depth + 1));
+      walk(node, depth + 1, path + '/');
     }
     for (const path of [...n.files].sort((a, b) => byName(nameOf(a), nameOf(b)))) {
       rows.push({
@@ -52,10 +82,11 @@ export function treeRows(files: string[], expanded: Record<string, boolean>, sta
         depth,
         open: false,
         status: Object.hasOwn(status, path) ? status[path] : null,
-        changedInside: false,
+        inside: null,
       });
     }
   };
+  if (adding === '') rows.push(field('', 0));
   walk(root, 0, '');
   return rows;
 }

@@ -400,6 +400,19 @@ pub async fn fs_write(
 }
 
 #[tauri::command]
+pub async fn fs_create(
+    core: CoreState<'_>,
+    project_id: String,
+    agent_id: Option<String>,
+    path: String,
+) -> Res<()> {
+    let (root, _) = core.edit_root(&project_id, agent_id).await.map_err(err)?;
+    fsedit::create(std::path::Path::new(&root), &path).map_err(err)?;
+    core.git.refresh(&project_id);
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn fs_base(
     core: CoreState<'_>,
     project_id: String,

@@ -512,7 +512,7 @@ class AppState {
     if (path) {
       if (!place.open.includes(path)) place.open.push(path);
       place.active = path;
-      for (const d of ancestors(path)) place.expanded[d] = true;
+      this.expandEditorDir(projectId, req.source, ancestors(path).at(-1) ?? '');
       if (req.line) st.reveal = { path, line: req.line, seq: (st.reveal?.seq ?? 0) + 1 };
     }
     this.persistUi();
@@ -548,9 +548,25 @@ class AppState {
     if (place.active === path) place.active = place.open.at(-1) ?? null;
   }
 
+  /** Opened, a folder opens the ones above it too: the tree may show them all on its row. Closed, it closes alone. */
   toggleEditorDir(projectId: string, source: string, dir: string) {
     const place = this.editor[projectId]?.places[source];
-    if (place) place.expanded[dir] = !place.expanded[dir];
+    if (!place) return;
+    // A new object rather than a key written: the `$state` proxy drops a write of a key Object has (`constructor`).
+    if (Object.hasOwn(place.expanded, dir) && place.expanded[dir]) place.expanded = { ...place.expanded, [dir]: false };
+    else this.expandEditorDir(projectId, source, dir);
+  }
+
+  /** Opens a folder of the tree and the ones above it ('' is the root, always open). */
+  expandEditorDir(projectId: string, source: string, dir: string) {
+    const place = this.editor[projectId]?.places[source];
+    if (!place || !dir) return;
+    place.expanded = { ...place.expanded, ...Object.fromEntries([...ancestors(dir), dir].map((d) => [d, true])) };
+  }
+
+  collapseEditorDirs(projectId: string, source: string) {
+    const place = this.editor[projectId]?.places[source];
+    if (place) place.expanded = {};
   }
 
   /**

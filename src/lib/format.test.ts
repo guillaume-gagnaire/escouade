@@ -1,5 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { basename, dirname, fAgo, fBytes, fCountdown, fDur, fTok, fUsd, fWhen, isAbsPath, plural, relPath, tildify } from './format';
+import {
+  basename,
+  dirname,
+  fAgo,
+  fBytes,
+  fCountdown,
+  fDur,
+  fTok,
+  fUsd,
+  fWhen,
+  isAbsPath,
+  joinPath,
+  plural,
+  relPath,
+  tildify,
+} from './format';
 
 describe('fTok', () => {
   it.each([
@@ -43,6 +58,13 @@ describe('fCountdown', () => {
 describe('paths', () => {
   it('relPath strips the base case-insensitively and normalizes slashes', () => {
     expect(relPath('C:\\Code\\App', 'c:\\code\\app\\src\\main.ts')).toBe('src/main.ts');
+  });
+  it('joinPath puts a path of a folder under it, with the folder’s separator', () => {
+    expect(joinPath('C:\\code\\app', 'src/main.ts')).toBe('C:\\code\\app\\src\\main.ts');
+    // Git spells a Windows folder with slashes: the path is given as Windows writes it.
+    expect(joinPath('C:/code/app/', 'src/main.ts')).toBe('C:\\code\\app\\src\\main.ts');
+    expect(joinPath('\\\\server\\share', 'a.ts')).toBe('\\\\server\\share\\a.ts');
+    expect(joinPath('/home/me/app', 'a.ts')).toBe('/home/me/app/a.ts');
   });
   it('relPath leaves unrelated paths untouched', () => {
     expect(relPath('C:\\code\\app', 'C:\\code\\application\\x.ts')).toBe('C:/code/application/x.ts');

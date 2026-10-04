@@ -81,6 +81,12 @@ export function relPath(base: string, p: string): string {
   return s.toLowerCase().startsWith(b.toLowerCase() + '/') ? s.slice(b.length + 1) : s;
 }
 
+/** `rel` (forward slashes) under the folder `root`, written as its system does: with `\` for a Windows folder. */
+export function joinPath(root: string, rel: string): string {
+  const sep = /^[A-Za-z]:|\\/.test(root) ? '\\' : '/';
+  return (root.replace(/[\\/]+$/, '') + '/' + rel).replace(/[\\/]/g, sep);
+}
+
 /** A path from the root of a drive or of the filesystem (`C:\x`, `/x`, `\\server\x`), not relative to a folder. */
 export function isAbsPath(p: string): boolean {
   return /^([A-Za-z]:[\\/]|[\\/])/.test(p);

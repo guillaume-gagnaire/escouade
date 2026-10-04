@@ -18,9 +18,56 @@ describe('treeRows', () => {
 
   it('marks changed files and the folders holding them', () => {
     const rows = treeRows(files, {}, { 'src/a/x.ts': 'M', 'README.md': 'A' });
-    expect(rows.find((r) => r.name === 'src')).toMatchObject({ changedInside: true });
+    expect(rows.find((r) => r.name === 'src')).toMatchObject({ inside: 'M' });
     expect(rows.find((r) => r.name === 'README.md')).toMatchObject({ status: 'A' });
-    expect(rows.find((r) => r.name === 'package.json')).toMatchObject({ status: null });
+    expect(rows.find((r) => r.name === 'package.json')).toMatchObject({ status: null, inside: null });
+  });
+
+  it('gives a folder the strongest change it holds: modified, then added, then deleted', () => {
+    const inside = (status: Record<string, 'M' | 'A' | 'D'>) => treeRows(['d/x', 'd/y', 'd/z'], {}, status)[0].inside;
+    expect(inside({ 'd/x': 'D', 'd/y': 'A', 'd/z': 'M' })).toBe('M');
+    expect(inside({ 'd/x': 'D', 'd/y': 'A' })).toBe('A');
+    expect(inside({ 'd/x': 'D' })).toBe('D');
+    expect(inside({ 'dx/x': 'M' })).toBe(null);
+  });
+});
+
+describe('treeRows of folders holding a single folder', () => {
+  const deep = ['src/lib/editor/a.ts', 'src/lib/editor/b.ts', 'README.md'];
+
+  it('shows them as one row, opened and closed as the deepest one', () => {
+    expect(shape(treeRows(deep, {}, {}))).toEqual(['0d src/lib/editor', '0f README.md']);
+    const rows = treeRows(deep, { 'src/lib/editor': true }, { 'src/lib/editor/a.ts': 'M' });
+    expect(rows[0]).toMatchObject({ kind: 'dir', path: 'src/lib/editor', open: true, inside: 'M' });
+    expect(shape(rows)).toEqual(['0d src/lib/editor', '1f a.ts', '1f b.ts', '0f README.md']);
+  });
+
+  it('keeps a folder that holds files, or two folders, on a row of its own', () => {
+    expect(shape(treeRows(['src/a.ts', 'src/lib/x.ts'], { src: true }, {}))).toEqual(['0d src', '1d lib', '1f a.ts']);
+    expect(shape(treeRows(['src/a/x.ts', 'src/b/y.ts'], { src: true }, {}))).toEqual(['0d src', '1d a', '1d b']);
+  });
+});
+
+describe('treeRows with a file being named', () => {
+  const deep = ['src/lib/editor/a.ts', 'README.md'];
+
+  it('puts the name field first in its folder, one level deeper', () => {
+    const rows = treeRows(['src/a.ts', 'README.md'], { src: true }, {}, 'src');
+    expect(shape(rows)).toEqual(['0d src', '1n ', '1f a.ts', '0f README.md']);
+    expect(rows[1]).toMatchObject({ kind: 'new', path: 'src' });
+  });
+
+  it('puts it first of all at the root', () => {
+    expect(shape(treeRows(['src/a.ts', 'README.md'], {}, {}, ''))).toEqual(['0n ', '0d src', '0f README.md']);
+  });
+
+  it('shows on its own row a folder of a single folder that gets the new file', () => {
+    const rows = treeRows(deep, { src: true, 'src/lib': true }, {}, 'src');
+    expect(shape(rows)).toEqual(['0d src', '1n ', '1d lib/editor', '0f README.md']);
+  });
+
+  it('shows no field in a closed folder', () => {
+    expect(shape(treeRows(['src/a.ts'], {}, {}, 'src'))).toEqual(['0d src']);
   });
 });
 

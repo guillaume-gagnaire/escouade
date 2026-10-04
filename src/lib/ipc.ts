@@ -85,6 +85,8 @@ export const api = {
     bom: boolean;
     expectedHash: string | null;
   }) => invoke<string>('fs_write', a),
+  /** Creates an empty file, its folders with it; refused when something is already there. */
+  fsCreate: (projectId: string, agentId: string | null, path: string) => invoke<void>('fs_create', { projectId, agentId, path }),
   fsBase: (projectId: string, agentId: string | null, path: string) => invoke<FileBase | null>('fs_base', { projectId, agentId, path }),
   setUnsaved: (count: number) => invoke<void>('set_unsaved', { count }),
   cancelResume: (id: string) => invoke<void>('cancel_resume', { id }),

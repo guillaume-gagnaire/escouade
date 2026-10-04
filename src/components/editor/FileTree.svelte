@@ -1,45 +1,162 @@
 <script lang="ts">
-  import type { TreeRow } from '../../lib/editor/tree';
+  import { untrack } from 'svelte';
+  import type { FileStatus, TreeRow } from '../../lib/editor/tree';
+  import FileIcon from './FileIcon.svelte';
+  import NewFileField from './NewFileField.svelte';
 
   let {
     rows,
     active,
     ontoggle,
     onopen,
-  }: { rows: TreeRow[]; active: string | null; ontoggle: (dir: string) => void; onopen: (path: string) => void } = $props();
+    onmenu,
+    check = () => null,
+    oncreate = async () => null,
+    oncancel = () => {},
+  }: {
+    rows: TreeRow[];
+    active: string | null;
+    ontoggle: (dir: string) => void;
+    onopen: (path: string) => void;
+    /** A right click on a row, or on the free space below them (`row` null). */
+    onmenu?: (e: MouseEvent, row: TreeRow | null) => void;
+    /** For the `new` row: why a name cannot be created, creating it, giving it up. */
+    check?: (name: string) => string | null;
+    oncreate?: (name: string) => Promise<string | null>;
+    oncancel?: () => void;
+  } = $props();
 
-  const SC: Record<string, string> = { M: 'var(--wait)', A: 'var(--add)', D: 'var(--del)' };
+  // As VS Code draws them: 8 px from the edge, 12 px a level, a 16 px chevron whose middle the level's guide goes through.
+  const PAD = 8;
+  const INDENT = 12;
+  const pad = (depth: number) => PAD + depth * INDENT;
+  const COLOR: Record<FileStatus, string> = { M: 'var(--wait)', A: 'var(--add)', D: 'var(--del)' };
+
+  let el = $state<HTMLDivElement>();
+  /** The row holding the focus, the tree's one Tab stop; the file shown or the first row until one does. */
+  let focused = $state<string | null>(null);
+  const keyOf = (r: TreeRow) => `${r.kind}:${r.path}`;
+  const stop = $derived.by(() => {
+    const keys = rows.filter((r) => r.kind !== 'new').map(keyOf);
+    if (focused && keys.includes(focused)) return focused;
+    return active && keys.includes(`file:${active}`) ? `file:${active}` : (keys[0] ?? null);
+  });
+
+  const focusRow = (i: number) => el?.querySelector<HTMLElement>(`[data-index="${i}"]`)?.focus();
+
+  // The keys of a tree (WAI-ARIA), as VS Code's explorer has them; Enter and Space are the buttons' own.
+  function onkeydown(e: KeyboardEvent) {
+    const i = Number((e.target as HTMLElement).dataset.index);
+    const r = rows[i];
+    if (!r) return;
+    const shown = rows.flatMap((row, j) => (row.kind === 'new' ? [] : [j]));
+    const at = shown.indexOf(i);
+    const move: Record<string, () => void> = {
+      ArrowDown: () => at + 1 < shown.length && focusRow(shown[at + 1]),
+      ArrowUp: () => at > 0 && focusRow(shown[at - 1]),
+      Home: () => focusRow(shown[0]),
+      End: () => focusRow(shown[shown.length - 1]),
+      ArrowRight: () => {
+        if (r.kind !== 'dir') return;
+        if (!r.open) ontoggle(r.path);
+        else if (rows[shown[at + 1]]?.depth > r.depth) focusRow(shown[at + 1]);
+      },
+      ArrowLeft: () => {
+        if (r.kind === 'dir' && r.open) return ontoggle(r.path);
+        const parent = shown
+          .slice(0, at)
+          .reverse()
+          .find((j) => rows[j].kind === 'dir' && rows[j].depth < r.depth);
+        if (parent !== undefined) focusRow(parent);
+      },
+    };
+    if (!Object.hasOwn(move, e.key)) return;
+    e.preventDefault();
+    move[e.key]();
+  }
+
+  // The file shown is brought into view, as VS Code's explorer reveals it; not again when other folders open.
+  $effect(() => {
+    const a = active;
+    if (!a) return;
+    untrack(() => {
+      const i = rows.findIndex((r) => r.kind === 'file' && r.path === a);
+      if (i >= 0) el?.querySelector<HTMLElement>(`[data-index="${i}"]`)?.scrollIntoView?.({ block: 'nearest' });
+    });
+  });
 </script>
 
-<div class="tree" role="tree" aria-label="Fichiers">
-  {#each rows as r (r.kind + ':' + r.path)}
-    {#if r.kind === 'dir'}
-      <button
-        class="row dir"
-        role="treeitem"
-        aria-expanded={r.open}
-        aria-selected="false"
-        style:padding-left="{8 + r.depth * 14}px"
-        onclick={() => ontoggle(r.path)}
+<!-- A click on the free space focuses the tree itself: its Tab stop takes the focus, for the arrows to work. -->
+<div
+  class="tree"
+  role="tree"
+  aria-label="Fichiers"
+  tabindex="-1"
+  bind:this={el}
+  {onkeydown}
+  onfocus={(e) => e.target === el && el.querySelector<HTMLElement>('[role="treeitem"][tabindex="0"]')?.focus({ preventScroll: true })}
+  oncontextmenu={(e) => onmenu?.(e, null)}
+>
+  {#each rows as r, i (keyOf(r))}
+    {#snippet guides()}
+      {#each { length: r.depth } as _, level (level)}
+        <span class="guide" style:left="{pad(level) + 8}px"></span>
+      {/each}
+    {/snippet}
+    {#if r.kind === 'new'}
+      <div
+        class="row new"
+        role="none"
+        style:padding-left="{pad(r.depth)}px"
+        style:--field-left="{pad(r.depth) + 40}px"
+        oncontextmenu={(e) => e.stopPropagation()}
       >
-        <span class="chev">{r.open ? '▾' : '▸'}</span>
-        <span class="name">{r.name}</span>
-        {#if r.changedInside}<span class="st" style:color="var(--wait)">•</span>{/if}
-      </button>
+        {@render guides()}
+        <span class="twistie"></span>
+        <NewFileField {check} {oncreate} {oncancel} />
+      </div>
     {:else}
+      {@const color = r.status ? COLOR[r.status] : r.inside ? COLOR[r.inside] : undefined}
       <button
         class="row"
-        class:on={r.path === active}
+        class:on={r.kind === 'file' && r.path === active}
         role="treeitem"
-        aria-selected={r.path === active}
+        aria-level={r.depth + 1}
+        aria-expanded={r.kind === 'dir' ? r.open : undefined}
+        aria-selected={r.kind === 'file' && r.path === active}
+        tabindex={keyOf(r) === stop ? 0 : -1}
         title={r.path}
-        style:padding-left="{8 + r.depth * 14}px"
-        style:color={r.status ? SC[r.status] : undefined}
-        onclick={() => onopen(r.path)}
+        data-index={i}
+        style:padding-left="{pad(r.depth)}px"
+        onfocus={() => (focused = keyOf(r))}
+        onclick={() => (r.kind === 'dir' ? ontoggle(r.path) : onopen(r.path))}
+        oncontextmenu={(e) => {
+          e.stopPropagation();
+          onmenu?.(e, r);
+        }}
       >
-        <span class="chev"></span>
-        <span class="name">{r.name}</span>
-        {#if r.status}<span class="st mono">{r.status}</span>{/if}
+        {@render guides()}
+        <span class="twistie">
+          {#if r.kind === 'dir'}
+            <svg class:open={r.open} width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"
+              ><path
+                d="M6 4l4 4-4 4"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.3"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              /></svg
+            >
+          {/if}
+        </span>
+        {#if r.kind === 'file'}<FileIcon path={r.path} />{/if}
+        <span class="name" style:color>{r.name}</span>
+        {#if r.status}
+          <span class="st mono" style:color>{r.status}</span>
+        {:else if r.inside}
+          <span class="dot" style:background={color} aria-hidden="true"></span>
+        {/if}
       </button>
     {/if}
   {/each}
@@ -47,24 +164,27 @@
 
 <style>
   .tree {
+    min-height: 100%;
     display: flex;
     flex-direction: column;
-    padding: 0 6px 12px;
+    padding: 2px 0 12px;
+    outline: none;
   }
   .row {
+    position: relative;
     width: 100%;
     flex: none;
-    height: 26px;
+    height: 22px;
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding-right: 8px;
+    gap: 4px;
+    padding-right: 10px;
     border: none;
-    border-radius: var(--r-sm);
+    border-radius: 0;
     background: transparent;
     color: var(--text);
     font: inherit;
-    font-size: 12.5px;
+    font-size: 13px;
     text-align: left;
     white-space: nowrap;
     cursor: pointer;
@@ -74,17 +194,41 @@
   }
   .row.on {
     background: var(--elev2);
-    font-weight: 600;
   }
-  .row.dir {
-    color: var(--muted);
-    font-weight: 600;
+  .row:focus-visible {
+    outline: 1px solid var(--accent);
+    outline-offset: -1px;
   }
-  .chev {
-    width: 10px;
+  .row.new {
+    cursor: default;
+  }
+  .row.new:hover {
+    background: transparent;
+  }
+  .guide {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--line);
+    pointer-events: none;
+  }
+  .tree:hover .guide {
+    background: var(--line2);
+  }
+  .twistie {
+    width: 16px;
+    height: 16px;
     flex: none;
-    font-size: 9px;
-    color: var(--dim);
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+  }
+  .twistie svg {
+    transition: transform 0.1s ease-out;
+  }
+  .twistie svg.open {
+    transform: rotate(90deg);
   }
   .name {
     flex: 1;
@@ -93,7 +237,20 @@
     text-overflow: ellipsis;
   }
   .st {
-    font-size: 10.5px;
-    font-weight: 700;
+    flex: none;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .dot {
+    width: 6px;
+    height: 6px;
+    flex: none;
+    margin-right: 2px;
+    border-radius: 50%;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .twistie svg {
+      transition: none;
+    }
   }
 </style>

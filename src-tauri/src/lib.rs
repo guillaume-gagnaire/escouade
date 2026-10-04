@@ -217,6 +217,7 @@ pub fn run() {
             commands::fs_tree,
             commands::fs_read,
             commands::fs_write,
+            commands::fs_create,
             commands::fs_base,
             commands::term_spawn,
             commands::run_start,

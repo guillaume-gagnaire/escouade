@@ -398,6 +398,25 @@ describe('editor', () => {
     expect(app.editor.p1.places.a2.open).toEqual(['src/a/x.ts']);
   });
 
+  it('unfolds a folder with the ones above it, folds it alone, and folds them all', async () => {
+    fakeBackend();
+    await app.openEditor({ source: 'project' });
+    const place = () => app.editor.p1.places.project;
+    // A row `src/lib/editor` stands for its three folders: they all open with it.
+    app.toggleEditorDir('p1', 'project', 'src/lib/editor');
+    expect(place().expanded).toEqual({ src: true, 'src/lib': true, 'src/lib/editor': true });
+    app.toggleEditorDir('p1', 'project', 'src/lib/editor');
+    expect(place().expanded).toEqual({ src: true, 'src/lib': true, 'src/lib/editor': false });
+    app.toggleEditorDir('p1', 'project', 'constructor');
+    expect(place().expanded.constructor).toBe(true);
+    app.expandEditorDir('p1', 'project', 'docs/api');
+    expect(place().expanded).toMatchObject({ docs: true, 'docs/api': true });
+    app.expandEditorDir('p1', 'project', '');
+    expect(Object.hasOwn(place().expanded, '')).toBe(false);
+    app.collapseEditorDirs('p1', 'project');
+    expect(place().expanded).toEqual({});
+  });
+
   it('does not count the editor as open behind the statistics', async () => {
     fakeBackend();
     await app.openEditor({ source: 'project', path: 'a.ts' });
