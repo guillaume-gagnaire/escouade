@@ -108,7 +108,8 @@ export const BoardView: FC<{
   form?: ReactNode;
   plusPressed?: number;
   pressedCfg?: number;
-}> = ({ tickets, places, autopilot, summary = 'merge squash → main', glow = {}, form, plusPressed, pressedCfg }) => (
+  pressedImport?: number;
+}> = ({ tickets, places, autopilot, summary = 'merge squash → main', glow = {}, form, plusPressed, pressedCfg, pressedImport }) => (
   <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
     <BoardHeader
       project="demo-api"
@@ -118,6 +119,7 @@ export const BoardView: FC<{
       summary={summary}
       autopilot={autopilot}
       pressedCfg={pressedCfg}
+      pressedImport={pressedImport}
     />
     <div
       style={{

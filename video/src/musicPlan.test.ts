@@ -18,12 +18,12 @@ describe('compositionPlan', () => {
   });
 
   it('follows the script: the beat from the start, a peak on the board, a big ending on the logo', () => {
-    // A part cut in two keeps its name: « Tableau 1/2 », « Tableau 2/2 ».
+    // A part cut in two keeps its name: « Kanban 1/2 », « Kanban 2/2 ».
     expect([...new Set(plan.sections.map((s) => s.section_name.replace(/ \d+\/\d+$/, '')))]).toEqual([
       'Intro',
       'Drive',
       'Drive 2',
-      'Tableau',
+      'Kanban',
       'Drive 3',
       'Final',
     ]);
@@ -33,7 +33,7 @@ describe('compositionPlan', () => {
   it('cuts a part longer than ElevenLabs accepts into equal sections of the same style', () => {
     const long = TIMELINE.map((s) => (s.id === 'loop' ? { ...s, durationInFrames: s.durationInFrames + 150 * FPS } : s));
     const sections = compositionPlan(long).sections;
-    const board = sections.filter((s) => s.section_name.startsWith('Tableau'));
+    const board = sections.filter((s) => s.section_name.startsWith('Kanban'));
     expect(board.length).toBeGreaterThan(1);
     expect(new Set(board.map((s) => JSON.stringify(s.positive_local_styles))).size).toBe(1);
     for (const s of sections) expect(s.duration_ms, s.section_name).toBeLessThanOrEqual(120000);

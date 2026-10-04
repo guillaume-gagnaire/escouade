@@ -180,7 +180,7 @@ export const More: FC = () => {
               fontWeight: 700,
             }}
           >
-            Mise à jour 1.4.0 disponible → installer
+            Mise à jour 1.4.1 disponible → installer
           </span>
           <span style={{ fontSize: 16, color: C.muted, lineHeight: 1.5 }}>
             L'app cherche une nouvelle version toutes les cinq minutes. Les versions sont signées, et leurs notes viennent du journal des

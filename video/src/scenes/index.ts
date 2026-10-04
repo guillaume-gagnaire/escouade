@@ -13,6 +13,7 @@ import { BoardScene } from './BoardScene';
 import { Loop } from './Loop';
 import { TestScene } from './TestScene';
 import { Validate } from './Validate';
+import { IntegrationsScene } from './IntegrationsScene';
 import { LaunchScene } from './LaunchScene';
 import { Terminals } from './Terminals';
 import { StatsScene } from './StatsScene';
@@ -34,6 +35,7 @@ export const SCENES: Record<SceneId, FC> = {
   loop: Loop,
   test: TestScene,
   validate: Validate,
+  integrations: IntegrationsScene,
   launch: LaunchScene,
   terminals: Terminals,
   stats: StatsScene,

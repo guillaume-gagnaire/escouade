@@ -19,6 +19,7 @@ const SHOTS: { name: string; scene: SceneId; frame: (c: ReturnType<typeof cuesOf
   { name: 'editor', scene: 'editor', frame: (c) => c.word('look', 'recherche') + 12 },
   { name: 'board', scene: 'loop', frame: (c) => c.word('loop', 'repart') + 30 },
   { name: 'test', scene: 'test', frame: (c) => c.at('open') + 2 },
+  { name: 'integrations', scene: 'integrations', frame: (c) => c.word('import', 'critères') + 8 },
   { name: 'launch', scene: 'launch', frame: (c) => c.word('crash', 'plante') + 24 },
   { name: 'stats', scene: 'stats', frame: (c) => c.word('page', 'entrée') - 2 },
   { name: 'remote', scene: 'remote', frame: (c) => c.length - 6 },

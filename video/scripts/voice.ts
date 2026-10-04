@@ -8,7 +8,7 @@ import { mp3Duration, similarity, speak, transcribe, type Voice, type Word } fro
 /** Corentin: young, French, bright and enthusiastic: a launch, not a lesson. */
 const VOICE: Voice = { id: 'IHngRooVccHyPqB4uQkG', model: 'eleven_v4', seed: 7 };
 /** Lines taken again with another seed, when the first take said a name wrong (heard back by --check). */
-const RETAKES: Record<string, number> = { 'intro.hello': 200 };
+const RETAKES: Record<string, number> = { 'intro.hello': 200, 'integrations.sync': 203 };
 const seedOf = (key: string) => RETAKES[key] ?? VOICE.seed;
 /** Under this share of its words heard back, a line is reported. */
 const CLOSE_ENOUGH = 0.85;

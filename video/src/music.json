@@ -1,11 +1,12 @@
 {
-  "key": "a51856080e107131",
-  "durationMs": 397662,
+  "key": "6192e4145629623f",
+  "durationMs": 424960,
   "sections": [
     ["Intro", 15967],
     ["Drive", 99767],
     ["Drive 2", 75867],
-    ["Tableau", 115933],
+    ["Kanban 1/2", 71600],
+    ["Kanban 2/2", 71600],
     ["Drive 3", 69200],
     ["Final", 20899]
   ]

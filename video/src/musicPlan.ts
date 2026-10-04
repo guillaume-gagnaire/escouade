@@ -17,7 +17,11 @@ const PARTS: { name: string; until: SceneId; styles: string[] }[] = [
     styles: ['driving four-on-the-floor', 'syncopated plucked synth bass', 'crisp hi-hats', 'high energy'],
   },
   { name: 'Drive 2', until: 'editor', styles: ['driving beat continues', 'new arpeggiated lead', 'filter sweeps', 'high energy'] },
-  { name: 'Tableau', until: 'validate', styles: ['peak energy', 'bigger drums and claps', 'bright lead hook', 'euphoric but controlled'] },
+  {
+    name: 'Kanban',
+    until: 'integrations',
+    styles: ['peak energy', 'bigger drums and claps', 'bright lead hook', 'euphoric but controlled'],
+  },
   { name: 'Drive 3', until: 'remote', styles: ['driving groove', 'funky synth bass', 'crisp percussion', 'high energy'] },
   { name: 'Final', until: 'outro', styles: ['final lift', 'big wide chords', 'punchy ending hit on the tonic', 'short tail'] },
 ];

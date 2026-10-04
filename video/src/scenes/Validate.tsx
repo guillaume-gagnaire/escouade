@@ -168,6 +168,7 @@ export const Validate: FC = () => {
                 hover={frame >= s('pousser') ? 2 : frame >= s('pull') ? 1 : undefined}
                 glow={frame >= s('parallèle') - 4 ? 'agents' : frame >= s('conflits') - 4 ? 'conflicts' : undefined}
                 parallel={parallel}
+                scroll={ramp(frame, s('parallèle') - 14, 10)}
               />
               <PointerPath
                 keys={[

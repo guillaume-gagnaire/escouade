@@ -19,7 +19,7 @@ export const BoardScene: FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const c = useCues();
-  const open = c.word('switch', 'tableau') + 2;
+  const open = c.word('switch', 'kanban') + 2;
   const glow = (word: string) => ramp(frame, c.word('switch', word) - 3, 6) - ramp(frame, c.word('switch', word) + 22, 10);
   const plus = c.at('ticket') - 4;
   const t = (word: string, nth = 0) => c.word('ticket', word, nth);

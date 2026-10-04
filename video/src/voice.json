@@ -2839,12 +2839,12 @@
     "match": 0.93
   },
   "board.switch": {
-    "text": "Et maintenant, le tableau ! À faire, en cours, à tester, terminé.",
+    "text": "Et maintenant, le Kanban ! À faire, en cours, à tester, terminé.",
     "voice": "IHngRooVccHyPqB4uQkG",
     "model": "eleven_v4",
     "seed": 7,
     "file": "voice/board.switch.mp3",
-    "duration": 4.702040816326532,
+    "duration": 4.858775510204085,
     "words": [
       {
         "word": "Et",
@@ -2862,52 +2862,52 @@
         "end": 0.88
       },
       {
-        "word": "tableau",
-        "start": 0.96,
-        "end": 1.28
+        "word": "Kanban",
+        "start": 1.04,
+        "end": 1.44
       },
       {
         "word": "!",
-        "start": 1.6,
-        "end": 1.627
+        "start": 1.84,
+        "end": 1.867
       },
       {
         "word": "À",
-        "start": 1.653,
-        "end": 1.68
+        "start": 1.893,
+        "end": 1.92
       },
       {
         "word": "faire,",
-        "start": 1.76,
-        "end": 2.32
+        "start": 2,
+        "end": 2.56
       },
       {
         "word": "en",
-        "start": 2.4,
-        "end": 2.48
+        "start": 2.64,
+        "end": 2.72
       },
       {
         "word": "cours,",
-        "start": 2.56,
-        "end": 3.12
+        "start": 2.8,
+        "end": 3.28
       },
       {
         "word": "à",
-        "start": 3.16,
-        "end": 3.2
+        "start": 3.32,
+        "end": 3.36
       },
       {
         "word": "tester,",
         "start": 3.44,
-        "end": 4
+        "end": 4.16
       },
       {
         "word": "terminé.",
-        "start": 4.16,
-        "end": 4.64
+        "start": 4.32,
+        "end": 4.8
       }
     ],
-    "heard": "Et maintenant, le tableau. À faire, en cours, à tester, terminé",
+    "heard": "Et maintenant, le Kanban. À faire, en cours, à tester, terminé",
     "match": 1
   },
   "board.ticket": {
@@ -4782,6 +4782,446 @@
       }
     ],
     "heard": "Et les tickets terminés gardent leur issue, leur boucle et leur coût",
+    "match": 1
+  },
+  "integrations.connect": {
+    "text": "Tes tickets sont dans Djira, Trello ou Guite-Heub ? Connecte ton compte, et lie une source à ton projet.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/integrations.connect.mp3",
+    "duration": 5.590204081632665,
+    "words": [
+      {
+        "word": "Tes",
+        "start": 0,
+        "end": 0.16
+      },
+      {
+        "word": "tickets",
+        "start": 0.32,
+        "end": 0.48
+      },
+      {
+        "word": "sont",
+        "start": 0.52,
+        "end": 0.64
+      },
+      {
+        "word": "dans",
+        "start": 0.68,
+        "end": 0.8
+      },
+      {
+        "word": "Djira,",
+        "start": 0.88,
+        "end": 1.44
+      },
+      {
+        "word": "Trello",
+        "start": 1.48,
+        "end": 1.84
+      },
+      {
+        "word": "ou",
+        "start": 1.92,
+        "end": 2
+      },
+      {
+        "word": "Guite-Heub",
+        "start": 2.16,
+        "end": 2.56
+      },
+      {
+        "word": "?",
+        "start": 2.96,
+        "end": 3.067
+      },
+      {
+        "word": "Connecte",
+        "start": 3.173,
+        "end": 3.36
+      },
+      {
+        "word": "ton",
+        "start": 3.44,
+        "end": 3.52
+      },
+      {
+        "word": "compte,",
+        "start": 3.6,
+        "end": 4
+      },
+      {
+        "word": "et",
+        "start": 4.08,
+        "end": 4.16
+      },
+      {
+        "word": "lie",
+        "start": 4.24,
+        "end": 4.32
+      },
+      {
+        "word": "une",
+        "start": 4.4,
+        "end": 4.48
+      },
+      {
+        "word": "source",
+        "start": 4.6,
+        "end": 4.72
+      },
+      {
+        "word": "à",
+        "start": 4.8,
+        "end": 4.853
+      },
+      {
+        "word": "ton",
+        "start": 4.907,
+        "end": 4.96
+      },
+      {
+        "word": "projet.",
+        "start": 5.04,
+        "end": 5.52
+      }
+    ],
+    "heard": "Tes tickets sont dans Jira, Trello ou GitHub ? Connecte ton compte et lie une source à ton projet",
+    "match": 0.84
+  },
+  "integrations.import": {
+    "text": "Un clic sur Importer : cherche, filtre, coche. Et leurs critères d'acceptation sont détectés tout seuls.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/integrations.import.mp3",
+    "duration": 6.45,
+    "words": [
+      {
+        "word": "Un",
+        "start": 0,
+        "end": 0.08
+      },
+      {
+        "word": "clic",
+        "start": 0.16,
+        "end": 0.4
+      },
+      {
+        "word": "sur",
+        "start": 0.52,
+        "end": 0.64
+      },
+      {
+        "word": "Importer",
+        "start": 0.72,
+        "end": 1.28
+      },
+      {
+        "word": ":",
+        "start": 1.6,
+        "end": 1.64
+      },
+      {
+        "word": "cherche,",
+        "start": 1.68,
+        "end": 2.32
+      },
+      {
+        "word": "filtre,",
+        "start": 2.4,
+        "end": 3.04
+      },
+      {
+        "word": "coche.",
+        "start": 3.12,
+        "end": 3.76
+      },
+      {
+        "word": "Et",
+        "start": 3.787,
+        "end": 3.813
+      },
+      {
+        "word": "leurs",
+        "start": 3.84,
+        "end": 3.92
+      },
+      {
+        "word": "critères",
+        "start": 4,
+        "end": 4.24
+      },
+      {
+        "word": "d'acceptation",
+        "start": 4.28,
+        "end": 4.88
+      },
+      {
+        "word": "sont",
+        "start": 4.96,
+        "end": 5.04
+      },
+      {
+        "word": "détectés",
+        "start": 5.12,
+        "end": 5.52
+      },
+      {
+        "word": "tout",
+        "start": 5.6,
+        "end": 5.68
+      },
+      {
+        "word": "seuls.",
+        "start": 5.76,
+        "end": 6.4
+      }
+    ],
+    "heard": "Un clic sur Importer, cherche, filtre, coche et leurs critères d'acceptation sont détectés tout seuls",
+    "match": 1
+  },
+  "integrations.arrive": {
+    "text": "Les voilà dans le Kanban, avec leur clé d'origine.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/integrations.arrive.mp3",
+    "duration": 2.6122448979591835,
+    "words": [
+      {
+        "word": "Les",
+        "start": 0,
+        "end": 0.16
+      },
+      {
+        "word": "voilà",
+        "start": 0.2,
+        "end": 0.4
+      },
+      {
+        "word": "dans",
+        "start": 0.427,
+        "end": 0.48
+      },
+      {
+        "word": "le",
+        "start": 0.52,
+        "end": 0.56
+      },
+      {
+        "word": "Kanban,",
+        "start": 0.64,
+        "end": 1.2
+      },
+      {
+        "word": "avec",
+        "start": 1.32,
+        "end": 1.44
+      },
+      {
+        "word": "leur",
+        "start": 1.52,
+        "end": 1.6
+      },
+      {
+        "word": "clé",
+        "start": 1.68,
+        "end": 1.76
+      },
+      {
+        "word": "d'origine.",
+        "start": 1.8,
+        "end": 2.56
+      }
+    ],
+    "heard": "Les voilà dans le Kanban avec leur clé d'origine",
+    "match": 1
+  },
+  "integrations.sync": {
+    "text": "Escouade tient leur statut à jour, et commente le ticket quand il est prêt à tester, puis validé.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 203,
+    "file": "voice/integrations.sync.mp3",
+    "duration": 5.015510204081638,
+    "words": [
+      {
+        "word": "Escouade",
+        "start": 0,
+        "end": 0.48
+      },
+      {
+        "word": "tient",
+        "start": 0.56,
+        "end": 0.72
+      },
+      {
+        "word": "leur",
+        "start": 0.8,
+        "end": 0.88
+      },
+      {
+        "word": "statut",
+        "start": 1,
+        "end": 1.2
+      },
+      {
+        "word": "à",
+        "start": 1.24,
+        "end": 1.28
+      },
+      {
+        "word": "jour,",
+        "start": 1.36,
+        "end": 1.76
+      },
+      {
+        "word": "et",
+        "start": 1.84,
+        "end": 1.92
+      },
+      {
+        "word": "commente",
+        "start": 2.04,
+        "end": 2.24
+      },
+      {
+        "word": "le",
+        "start": 2.28,
+        "end": 2.32
+      },
+      {
+        "word": "ticket",
+        "start": 2.48,
+        "end": 2.64
+      },
+      {
+        "word": "quand",
+        "start": 2.68,
+        "end": 2.8
+      },
+      {
+        "word": "il",
+        "start": 2.88,
+        "end": 2.96
+      },
+      {
+        "word": "est",
+        "start": 3,
+        "end": 3.04
+      },
+      {
+        "word": "prêt",
+        "start": 3.12,
+        "end": 3.2
+      },
+      {
+        "word": "à",
+        "start": 3.28,
+        "end": 3.36
+      },
+      {
+        "word": "tester,",
+        "start": 3.56,
+        "end": 3.92
+      },
+      {
+        "word": "puis",
+        "start": 3.96,
+        "end": 4.08
+      },
+      {
+        "word": "validé.",
+        "start": 4.16,
+        "end": 4.96
+      }
+    ],
+    "heard": "Esquad tient leur statut à jour et commente le ticket quand il est prêt à tester, puis valider",
+    "match": 0.89
+  },
+  "integrations.auto": {
+    "text": "Encore mieux : étiquette un ticket, et il arrive tout seul dans ton Kanban.",
+    "voice": "IHngRooVccHyPqB4uQkG",
+    "model": "eleven_v4",
+    "seed": 7,
+    "file": "voice/integrations.auto.mp3",
+    "duration": 3.8899999999999997,
+    "words": [
+      {
+        "word": "Encore",
+        "start": 0,
+        "end": 0.32
+      },
+      {
+        "word": "mieux",
+        "start": 0.36,
+        "end": 0.56
+      },
+      {
+        "word": ":",
+        "start": 0.88,
+        "end": 0.933
+      },
+      {
+        "word": "étiquette",
+        "start": 0.987,
+        "end": 1.28
+      },
+      {
+        "word": "un",
+        "start": 1.36,
+        "end": 1.4
+      },
+      {
+        "word": "ticket,",
+        "start": 1.44,
+        "end": 2
+      },
+      {
+        "word": "et",
+        "start": 2.04,
+        "end": 2.08
+      },
+      {
+        "word": "il",
+        "start": 2.12,
+        "end": 2.16
+      },
+      {
+        "word": "arrive",
+        "start": 2.24,
+        "end": 2.56
+      },
+      {
+        "word": "tout",
+        "start": 2.68,
+        "end": 2.8
+      },
+      {
+        "word": "seul",
+        "start": 2.84,
+        "end": 2.96
+      },
+      {
+        "word": "dans",
+        "start": 3,
+        "end": 3.12
+      },
+      {
+        "word": "ton",
+        "start": 3.2,
+        "end": 3.28
+      },
+      {
+        "word": "Kanban.",
+        "start": 3.333,
+        "end": 3.84
+      }
+    ],
+    "heard": "Encore mieux, étiquette un ticket et il arrive tout seul dans ton Kanban",
     "match": 1
   },
   "launch.config": {

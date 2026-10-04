@@ -64,7 +64,7 @@ export const Button: FC<{ children: ReactNode; pressed?: number; accent?: boolea
   </span>
 );
 
-/** « Agents | Tableau » at the top of the sidebar; `badge`: tickets to test. */
+/** « Agents | Kanban » at the top of the sidebar; `badge`: tickets to test. */
 export const Switcher: FC<{ board: boolean; badge?: number }> = ({ board, badge }) => (
   <div style={{ display: 'flex', gap: 2, padding: 3, borderRadius: 10, background: C.bg, border: `1px solid ${C.line}`, flex: 'none' }}>
     {[false, true].map((b) => (
@@ -84,7 +84,7 @@ export const Switcher: FC<{ board: boolean; badge?: number }> = ({ board, badge 
           fontWeight: 600,
         }}
       >
-        {b ? 'Tableau' : 'Agents'}
+        {b ? 'Kanban' : 'Agents'}
         {b && badge ? (
           <span
             style={{

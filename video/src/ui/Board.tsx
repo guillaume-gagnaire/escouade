@@ -1,7 +1,9 @@
 import type { FC, ReactNode } from 'react';
 import { useCurrentFrame } from 'remotion';
 import { C, MONO, soft } from '../theme';
-import { Chips, Field, Modal, Switch } from './Modal';
+import { Chips, Field, Switch } from './Modal';
+import { SettingsShell } from './Settings';
+import { ServiceBadge, type Service } from './services';
 import { Dot } from './Shell';
 import { Button, STATUS_COLOR, type AgentStatus } from './Sidebar';
 
@@ -41,6 +43,8 @@ export interface Ticket {
   /** The « Renvoyer » form, with what is typed in it. */
   rejecting?: string;
   pressed?: { approve?: number; reject?: number; test?: number; resume?: number };
+  /** Imported from Jira, Trello or GitHub: its service and its key there. */
+  external?: { service: Service; key: string };
 }
 
 export const BoardHeader: FC<{
@@ -51,7 +55,8 @@ export const BoardHeader: FC<{
   summary: string;
   autopilot: boolean;
   pressedCfg?: number;
-}> = ({ project, count, looping, places, summary, autopilot, pressedCfg = 0 }) => (
+  pressedImport?: number;
+}> = ({ project, count, looping, places, summary, autopilot, pressedCfg = 0, pressedImport = 0 }) => (
   <div
     style={{
       height: 64,
@@ -65,13 +70,31 @@ export const BoardHeader: FC<{
     }}
   >
     <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-      <span style={{ fontSize: 17, fontWeight: 700 }}>Tableau</span>
+      <span style={{ fontSize: 17, fontWeight: 700 }}>Kanban</span>
       <span style={{ fontFamily: MONO, fontSize: 12, color: C.dim }}>
         {project} · {count} tickets · {looping} en boucle
       </span>
     </div>
     <div style={{ flex: 1 }} />
     <span style={{ fontSize: 13.5, color: C.muted }}>{places}</span>
+    <span
+      style={{
+        height: 36,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '0 14px',
+        borderRadius: 6,
+        border: `1px solid ${pressedImport ? C.spark : C.line2}`,
+        background: pressedImport ? soft(C.spark, 20 * pressedImport) : C.elev,
+        fontSize: 13.5,
+        fontWeight: 600,
+        transform: `scale(${1 - 0.05 * pressedImport})`,
+      }}
+    >
+      <span style={{ color: C.spark }}>⤓</span>
+      Importer
+    </span>
     <span
       style={{
         height: 36,
@@ -254,6 +277,12 @@ export const TicketCard: FC<{ t: Ticket }> = ({ t }) => {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {t.external ? (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: MONO, fontSize: 11.5, color: C.muted }}>
+            <ServiceBadge service={t.external.service} size={17} />
+            {t.external.key}
+          </span>
+        ) : null}
         <span style={{ fontFamily: MONO, fontSize: 11.5, color: C.dim }}>{t.key}</span>
         <div style={{ flex: 1 }} />
         {t.column === 'doing' && t.loop ? (
@@ -538,80 +567,98 @@ const ACTIONS = [
   { label: "Laisser en l'état", desc: 'Les modifications restent non commitées dans le worktree.' },
 ];
 
-/** « Réglages du tableau »; `hover` lights an action, `glow` one of the lower blocks. */
-export const BoardSettings: FC<{ enter: number; action: number; hover?: number; glow?: 'conflicts' | 'agents'; parallel: number }> = ({
-  enter,
-  action,
-  hover,
-  glow,
-  parallel,
-}) => (
-  <Modal title="Réglages du tableau" sub="demo-api" width={720} enter={enter} footer={<Button primary={C.spark}>Terminé</Button>}>
-    <Heading>Quand je valide un ticket « À tester »</Heading>
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-      {ACTIONS.map((a, i) => (
-        <div
-          key={a.label}
-          style={{
-            display: 'flex',
-            gap: 10,
-            padding: '10px 12px',
-            borderRadius: 8,
-            border: `1px solid ${i === action ? C.spark : i === hover ? C.line2 : C.line}`,
-            background: i === action ? soft(C.spark, 10) : i === hover ? C.elev : 'transparent',
-          }}
-        >
-          <span
+/** The « Kanban » tab of the settings; `hover` lights an action, `glow` one of the lower blocks. */
+export const BoardSettings: FC<{
+  enter: number;
+  action: number;
+  hover?: number;
+  glow?: 'conflicts' | 'agents';
+  parallel: number;
+  /** 0 to 1: down to the agents. */
+  scroll?: number;
+}> = ({ enter, action, hover, glow, parallel, scroll = 0 }) => (
+  <SettingsShell tab="board" enter={enter} height={780} scroll={90 * scroll}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 14 }}>
+      <Heading>Quand je valide un ticket « À tester »</Heading>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        {ACTIONS.map((a, i) => (
+          <div
+            key={a.label}
             style={{
-              width: 16,
-              height: 16,
-              marginTop: 2,
-              flex: 'none',
-              borderRadius: '50%',
-              border: `2px solid ${i === action ? C.spark : C.dim}`,
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+              gap: 10,
+              padding: '10px 12px',
+              borderRadius: 8,
+              border: `1px solid ${i === action ? C.spark : i === hover ? C.line2 : C.line}`,
+              background: i === action ? soft(C.spark, 10) : i === hover ? C.elev : 'transparent',
             }}
           >
-            {i === action ? <span style={{ width: 7, height: 7, borderRadius: '50%', background: C.spark }} /> : null}
-          </span>
-          <span style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <span style={{ fontSize: 14.5, fontWeight: 600 }}>{a.label}</span>
-            <span style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.35 }}>{a.desc}</span>
-          </span>
+            <span
+              style={{
+                width: 16,
+                height: 16,
+                marginTop: 2,
+                flex: 'none',
+                borderRadius: '50%',
+                border: `2px solid ${i === action ? C.spark : C.dim}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {i === action ? <span style={{ width: 7, height: 7, borderRadius: '50%', background: C.spark }} /> : null}
+            </span>
+            <span style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <span style={{ fontSize: 14.5, fontWeight: 600 }}>{a.label}</span>
+              <span style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.35 }}>{a.desc}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <span style={{ fontSize: 13, color: C.muted, width: 110 }}>Branche cible</span>
+        <Chips items={['⎇ main', '⎇ develop']} on={0} mono />
+        <span style={{ fontSize: 13, color: C.muted, marginLeft: 12 }}>Stratégie</span>
+        <Chips items={['Merge commit', 'Squash', 'Rebase']} on={1} />
+      </div>
+      <div
+        style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '12px 14px', borderRadius: 8, border: `1px solid ${C.line}` }}
+      >
+        {[
+          ['Relancer les tests avant', "Bloque l'action si un test échoue et renvoie le ticket à l'agent.", true],
+          ['Supprimer le worktree après merge', "Libère l'espace disque et repart d'une branche propre.", true],
+          ['Message de commit généré', 'Format Conventional Commits, avec la clé du ticket.', true],
+        ].map(([l, d, on], i) => (
+          <div key={String(l)} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span style={{ fontSize: 14, fontWeight: 600 }}>{l}</span>
+              <span style={{ fontSize: 12.5, color: C.muted }}>{d}</span>
+              {/* The tests' command, under its switch (settings/BoardTab.svelte). */}
+              {i === 0 ? (
+                <span style={{ marginTop: 4, display: 'flex' }}>
+                  <Field value="npm test" mono grow={false} />
+                </span>
+              ) : null}
+            </span>
+            <Switch on={Boolean(on)} />
+          </div>
+        ))}
+        <span style={{ fontFamily: MONO, fontSize: 12.5, color: C.dim }}>feat: limiter les tentatives de connexion [DEM-42]</span>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            padding: 6,
+            margin: -6,
+            borderRadius: 8,
+            boxShadow: glow === 'conflicts' ? `0 0 0 2px ${C.spark}` : 'none',
+          }}
+        >
+          <span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>En cas de conflit</span>
+          <Chips items={['Me demander', "L'agent résout", 'Annuler']} on={0} />
         </div>
-      ))}
-    </div>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-      <span style={{ fontSize: 13, color: C.muted, width: 110 }}>Branche cible</span>
-      <Chips items={['⎇ main', '⎇ develop']} on={0} mono />
-      <span style={{ fontSize: 13, color: C.muted, marginLeft: 12 }}>Stratégie</span>
-      <Chips items={['Merge commit', 'Squash', 'Rebase']} on={1} />
-    </div>
-    <div
-      style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '12px 14px', borderRadius: 8, border: `1px solid ${C.line}` }}
-    >
-      {[
-        ['Relancer les tests avant', "Bloque l'action si un test échoue et renvoie le ticket à l'agent.", true],
-        ['Supprimer le worktree après merge', "Libère l'espace disque et repart d'une branche propre.", true],
-        ['Message de commit généré', 'Format Conventional Commits, avec la clé du ticket.', true],
-      ].map(([l, d, on], i) => (
-        <div key={String(l)} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ fontSize: 14, fontWeight: 600 }}>{l}</span>
-            <span style={{ fontSize: 12.5, color: C.muted }}>{d}</span>
-            {/* The tests' command, under its switch (BoardSettingsModal.svelte). */}
-            {i === 0 ? (
-              <span style={{ marginTop: 4, display: 'flex' }}>
-                <Field value="npm test" mono grow={false} />
-              </span>
-            ) : null}
-          </span>
-          <Switch on={Boolean(on)} />
-        </div>
-      ))}
-      <span style={{ fontFamily: MONO, fontSize: 12.5, color: C.dim }}>feat: limiter les tentatives de connexion [DEM-42]</span>
+      </div>
       <div
         style={{
           display: 'flex',
@@ -620,35 +667,21 @@ export const BoardSettings: FC<{ enter: number; action: number; hover?: number; 
           padding: 6,
           margin: -6,
           borderRadius: 8,
-          boxShadow: glow === 'conflicts' ? `0 0 0 2px ${C.spark}` : 'none',
+          boxShadow: glow === 'agents' ? `0 0 0 2px ${C.spark}` : 'none',
         }}
       >
-        <span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>En cas de conflit</span>
-        <Chips items={['Me demander', "L'agent résout", 'Annuler']} on={0} />
+        <Heading>Agents</Heading>
+        <span style={{ fontSize: 13, color: C.muted, marginLeft: 8 }}>En parallèle</span>
+        <Chips items={['1', '2', '3', '4', '5', '6']} on={parallel - 1} mono />
+        <span style={{ fontSize: 13, color: C.muted, marginLeft: 8 }}>Modèle</span>
+        <Field value="Comme les réglages (Opus 5.5)" grow={false} />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: -4 }}>
+        <span style={{ fontSize: 13, color: C.muted, marginLeft: 70 }}>Effort</span>
+        <Field value="Comme les réglages" grow={false} />
+        <span style={{ fontSize: 13, color: C.muted }}>Mode</span>
+        <Field value="Comme les réglages" grow={false} />
       </div>
     </div>
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        padding: 6,
-        margin: -6,
-        borderRadius: 8,
-        boxShadow: glow === 'agents' ? `0 0 0 2px ${C.spark}` : 'none',
-      }}
-    >
-      <Heading>Agents</Heading>
-      <span style={{ fontSize: 13, color: C.muted, marginLeft: 8 }}>En parallèle</span>
-      <Chips items={['1', '2', '3', '4', '5', '6']} on={parallel - 1} mono />
-      <span style={{ fontSize: 13, color: C.muted, marginLeft: 8 }}>Modèle</span>
-      <Field value="Comme les réglages (Opus 5.5)" grow={false} />
-    </div>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: -4 }}>
-      <span style={{ fontSize: 13, color: C.muted, marginLeft: 70 }}>Effort</span>
-      <Field value="Comme les réglages" grow={false} />
-      <span style={{ fontSize: 13, color: C.muted }}>Mode</span>
-      <Field value="Comme les réglages" grow={false} />
-    </div>
-  </Modal>
+  </SettingsShell>
 );

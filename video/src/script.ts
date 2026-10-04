@@ -18,6 +18,7 @@ export type SceneId =
   | 'loop'
   | 'test'
   | 'validate'
+  | 'integrations'
   | 'launch'
   | 'terminals'
   | 'stats'
@@ -202,7 +203,7 @@ export const SCRIPT: SceneScript[] = [
     title: 'Des tickets, que des agents prennent seuls.',
     shows: ['board', 'tickets', 'max-loops', 'ticket-menu', 'manual-start', 'autopilot', 'parallel'],
     lines: [
-      { id: 'switch', text: 'Et maintenant, le tableau ! À faire, en cours, à tester, terminé.', hold: 0.3 },
+      { id: 'switch', text: 'Et maintenant, le Kanban ! À faire, en cours, à tester, terminé.', hold: 0.3 },
       {
         id: 'ticket',
         text: "Un ticket : un titre, une description, des critères d'acceptation… et un nombre maximum de boucles.",
@@ -298,6 +299,35 @@ export const SCRIPT: SceneScript[] = [
     ],
   },
   {
+    id: 'integrations',
+    title: 'Jira, Trello, GitHub : importés et synchronisés.',
+    shows: [
+      'integrations-accounts',
+      'integrations-link',
+      'import',
+      'criteria-extract',
+      'external-card',
+      'status-sync',
+      'sync-comments',
+      'auto-import',
+    ],
+    lines: [
+      { id: 'connect', text: 'Tes tickets sont dans Jira, Trello ou GitHub ? Connecte ton compte, et lie une source à ton projet.' },
+      {
+        id: 'import',
+        text: "Un clic sur Importer : cherche, filtre, coche. Et leurs critères d'acceptation sont détectés tout seuls.",
+        hold: 0.3,
+      },
+      { id: 'arrive', text: "Les voilà dans le Kanban, avec leur clé d'origine.", hold: 0.3 },
+      {
+        id: 'sync',
+        text: 'Escouade tient leur statut à jour, et commente le ticket quand il est prêt à tester, puis validé.',
+        hold: 0.5,
+      },
+      { id: 'auto', text: 'Encore mieux : étiquette un ticket, et il arrive tout seul dans ton Kanban.', hold: 0.6 },
+    ],
+  },
+  {
     id: 'launch',
     title: 'Lance ton projet d’un clic.',
     shows: ['launch-commands', 'launch-all', 'launch-crash'],
@@ -388,6 +418,7 @@ const SAY: [RegExp, string | ((m: string) => string)][] = [
   [/(^|\s)\.env\b/g, (m) => m.replace('.env', 'point E N V')],
   [/\bclaude\.ai\b/g, 'claude point A I'],
   [/\bgh\b/g, 'G H'],
+  [/\bJira\b/g, 'Djira'],
   [/\bmacOS\b/g, 'Mac'],
 ];
 
