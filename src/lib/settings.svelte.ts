@@ -4,7 +4,7 @@
 import { api } from './ipc';
 import { forgetLaunches } from './launch-actions';
 import { app } from './state.svelte';
-import type { BoardSettings, Project, ProjectIntegrations, RunCommand, Settings } from './types';
+import type { BoardSettings, Project, ProjectIntegrations, RunCommand, Settings, WorktreeStep } from './types';
 
 export type SettingsTab = 'claude' | 'notifications' | 'projects' | 'board' | 'integrations' | 'terminals' | 'network' | 'about';
 
@@ -29,7 +29,13 @@ const SETTINGS_OF: Partial<Record<SettingsTab, (keyof Settings)[]>> = {
 };
 
 /** What the modal sets of a project, as the backend's `update_project` takes it, its board apart. */
-type ProjectFields = Pick<Project, 'name' | 'color' | 'worktreePerAgent' | 'runCommands' | 'worktreeCopy'>;
+type ProjectFields = Pick<
+  Project,
+  'name' | 'color' | 'worktreePerAgent' | 'runCommands' | 'worktreeCopy' | 'worktreeSetup' | 'worktreeTeardown'
+>;
+
+/** Which commands of a project's worktrees: run once one is made, or before one is removed. */
+export type StepKind = 'setup' | 'teardown';
 
 export interface ProjectDraft {
   name: string;
@@ -38,15 +44,32 @@ export interface ProjectDraft {
   runCommands: RunCommand[];
   /** The patterns of the files copied into new worktrees, one per line. */
   copy: string;
+  worktreeSetup: WorktreeStep[];
+  worktreeTeardown: WorktreeStep[];
   board: BoardSettings;
   /** Its sources in external ticket systems (the « Intégrations » tab). */
   integrations: ProjectIntegrations;
 }
 
 function draftOf(p: Project): ProjectDraft {
-  const { name, color, worktreePerAgent, runCommands, worktreeCopy, board, integrations } = $state.snapshot(p);
-  return { name, color, worktreePerAgent, runCommands, copy: worktreeCopy.join('\n'), board, integrations };
+  const { name, color, worktreePerAgent, runCommands, worktreeCopy, worktreeSetup, worktreeTeardown, board, integrations } =
+    $state.snapshot(p);
+  return {
+    name,
+    color,
+    worktreePerAgent,
+    runCommands,
+    copy: worktreeCopy.join('\n'),
+    worktreeSetup,
+    worktreeTeardown,
+    board,
+    integrations,
+  };
 }
+
+/** The steps as saved: trimmed, without those that run nothing. */
+const stepsOf = (steps: WorktreeStep[]) =>
+  steps.map((x) => ({ ...x, command: x.command.trim(), cwd: x.cwd.trim() })).filter((x) => x.command);
 
 /** The links as saved: one without a container is none, a column is commented once. */
 function linksOf(d: ProjectDraft): ProjectIntegrations {
@@ -64,6 +87,8 @@ function fieldsOf(d: ProjectDraft): ProjectFields {
       .split('\n')
       .map((l) => l.trim())
       .filter(Boolean),
+    worktreeSetup: stepsOf(d.worktreeSetup),
+    worktreeTeardown: stepsOf(d.worktreeTeardown),
   };
 }
 
@@ -96,6 +121,8 @@ class SettingsForm {
   /** By project. */
   projects = $state<Record<string, ProjectDraft>>({});
   busy = $state(false);
+  /** Claude reads the project to suggest its worktree steps, by project. */
+  suggesting = $state<Record<string, boolean>>({});
   /** As last opened or saved: what a change is measured against. */
   #base = $state.raw<{ settings: Settings; projects: Record<string, ProjectDraft> }>({ settings: {} as Settings, projects: {} });
 
@@ -145,6 +172,38 @@ class SettingsForm {
   /** A launch command for the project on screen in the modal, run by the first shell found. */
   addCommand() {
     this.project?.runCommands.push({ id: crypto.randomUUID(), name: '', command: '', shell: app.shells[0]?.id ?? 'pwsh', cwd: '' });
+  }
+
+  /** A worktree step for the project on screen in the modal, run by the first shell found. */
+  addStep(kind: StepKind) {
+    const step: WorktreeStep = { id: crypto.randomUUID(), command: '', shell: app.shells[0]?.id ?? 'pwsh', cwd: '' };
+    this.project?.[kind === 'setup' ? 'worktreeSetup' : 'worktreeTeardown'].push(step);
+  }
+
+  /**
+   * « Remplir automatiquement »: Claude reads the project and its suggestion replaces the draft's worktree steps
+   * (left as they are when it finds none, or fails).
+   */
+  async suggest(projectId: string) {
+    if (this.suggesting[projectId]) return;
+    this.suggesting[projectId] = true;
+    try {
+      const s = await api.suggestWorktreeSteps(projectId);
+      const d = this.projects[projectId];
+      const n = s.setup.length + s.teardown.length;
+      if (!n) return app.toast("Claude n'a trouvé aucune commande à lancer pour ce projet.");
+      // Closed and opened again meanwhile: a fresh draft, which takes it all the same.
+      if (!d) return;
+      d.worktreeSetup = s.setup;
+      d.worktreeTeardown = s.teardown;
+      app.toast(
+        n > 1 ? `${n} commandes proposées : relis-les avant d'enregistrer.` : "1 commande proposée : relis-la avant d'enregistrer.",
+      );
+    } catch (e) {
+      app.toast(String(e), 'error');
+    } finally {
+      this.suggesting[projectId] = false;
+    }
   }
 
   #projectChanges(id: string): Partial<ProjectFields> {

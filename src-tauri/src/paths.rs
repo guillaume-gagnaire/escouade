@@ -290,7 +290,7 @@ pub fn test_dir(name: &str) -> PathBuf {
     dir
 }
 
-/// The fake `claude` and `gh` keep their logs in the temporary folder, named after the folder they
+/// The fake `claude`, `gh` and `isola` keep their logs in the temporary folder, named after the folder they
 /// ran in (every character but ASCII letters and digits replaced by `_`). Those of `dir` and its
 /// subfolders that an earlier run left go: its process had the same id (Windows reuses them), and
 /// a test would count their lines with its own. Those of this run stay: another test's folder may
@@ -314,7 +314,13 @@ fn forget_fake_logs(dir: &Path, start: std::time::SystemTime) {
     }
     let prefixes: Vec<String> = keys
         .iter()
-        .flat_map(|k| [format!("fake-claude-{k}"), format!("fake-gh-{k}")])
+        .flat_map(|k| {
+            [
+                format!("fake-claude-{k}"),
+                format!("fake-gh-{k}"),
+                format!("fake-isola-{k}"),
+            ]
+        })
         .collect();
     let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) else {
         return;

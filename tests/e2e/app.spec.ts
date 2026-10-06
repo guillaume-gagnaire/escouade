@@ -311,6 +311,46 @@ test('a deleted agent leaves the list for good', async ({ app }) => {
   await expect(page.locator('.card .name')).toHaveText('agent-2');
 });
 
+test('a new worktree is set up before its agent takes a message, and torn down before it goes', async ({ app }) => {
+  const { page } = app;
+  await addProject(page, app.repo, { worktrees: true, firstAgent: false });
+  await page.getByRole('button', { name: 'Configurer', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Réglages' });
+  await dialog.getByRole('button', { name: 'Ajouter une commande de préparation' }).click();
+  await dialog
+    .getByRole('group', { name: 'Commande de préparation 1' })
+    .getByLabel('Commande', { exact: true })
+    .fill('Start-Sleep 3; Set-Content prepare.txt $env:ESCOUADE_BRANCH');
+  await dialog.getByRole('button', { name: 'Ajouter une commande de démontage' }).click();
+  await dialog
+    .getByRole('group', { name: 'Commande de démontage 1' })
+    .getByLabel('Commande', { exact: true })
+    .fill('Set-Content (Join-Path $env:ESCOUADE_PROJECT_DIR teardown.txt) (Test-Path prepare.txt)');
+  await dialog.getByRole('button', { name: 'Enregistrer' }).click();
+  await expect(dialog).toBeHidden();
+
+  await page.getByRole('button', { name: '+ Nouvel agent' }).first().click();
+  await expect(page.getByRole('status').filter({ hasText: 'Préparation du worktree' })).toContainText(
+    'Préparation du worktree · 1/1 · Start-Sleep 3',
+  );
+  await expect(page.locator('.card')).toContainText('Préparation…');
+  // Sent during the setup, the message goes once it is over.
+  await send(page, 'Bonjour');
+  await expect(page.getByText(/^Worktree préparé \(1 commande, \d+ s\)\.$/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Bonjour, tu as dit : Bonjour')).toBeVisible();
+  const worktrees = path.join(app.repo, '.claude', 'worktrees');
+  const wt = path.join(worktrees, fs.readdirSync(worktrees)[0]);
+  expect(fs.readFileSync(path.join(wt, 'prepare.txt'), 'utf8').trim()).toMatch(/^escouade\/agent-1/);
+
+  await page.locator('.card').first().click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Supprimer…' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Supprimer' }).click();
+  await expect(page.locator('.card')).toHaveCount(0);
+  // Torn down in the worktree while it was there, then removed.
+  await expect.poll(() => fs.existsSync(wt), { timeout: 30_000 }).toBe(false);
+  expect(fs.readFileSync(path.join(app.repo, 'teardown.txt'), 'utf8').trim()).toBe('True');
+});
+
 test('a terminal runs commands in the project folder', async ({ app }) => {
   const { page } = app;
   await addProject(page, app.repo);

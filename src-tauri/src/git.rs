@@ -645,6 +645,15 @@ pub async fn worktree_add_on(repo: &str, branch: &str, base: &str) -> Result<(St
 
 /// Removes a worktree and its branch, tolerating a worktree folder that is already gone.
 pub async fn worktree_remove(repo: &str, path: &str, branch: &str) -> Result<()> {
+    worktree_remove_dir(repo, path).await?;
+    if branch_exists(repo, branch).await {
+        run(repo, &["branch", "-D", branch]).await?;
+    }
+    Ok(())
+}
+
+/// Removes a worktree, its branch kept, tolerating a worktree folder that is already gone.
+pub async fn worktree_remove_dir(repo: &str, path: &str) -> Result<()> {
     if run(repo, &["worktree", "remove", "--force", path])
         .await
         .is_err()
@@ -653,9 +662,17 @@ pub async fn worktree_remove(repo: &str, path: &str, branch: &str) -> Result<()>
         std::fs::remove_dir_all(path).map_err(|e| anyhow::anyhow!("{path} : {e}"))?;
     }
     let _ = run(repo, &["worktree", "prune"]).await;
-    if branch_exists(repo, branch).await {
-        run(repo, &["branch", "-D", branch]).await?;
+    Ok(())
+}
+
+/// Checks `branch` out again at `path`, a worktree folder that went (after `worktree_remove_dir`).
+pub async fn worktree_restore(repo: &str, path: &str, branch: &str) -> Result<()> {
+    if branch.starts_with('-') {
+        bail!("« {branch} » n'est pas un nom de branche valide");
     }
+    ensure_excluded(repo, ".claude/worktrees/").await?;
+    let _ = run(repo, &["worktree", "prune"]).await;
+    run(repo, &["worktree", "add", path, branch]).await?;
     Ok(())
 }
 
@@ -668,13 +685,12 @@ pub async fn ahead_count(repo: &str, branch: &str) -> u32 {
         .unwrap_or(0)
 }
 
-/// Commits of `branch` that `base` does not have.
-pub async fn ahead_of(repo: &str, base: &str, branch: &str) -> u32 {
-    text(repo, &["rev-list", "--count", &format!("{base}..{branch}")])
-        .await
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(0)
+/// Commits of `branch` that `base` does not have; an error when git cannot count them.
+pub async fn ahead_of(repo: &str, base: &str, branch: &str) -> Result<u32> {
+    let n = text(repo, &["rev-list", "--count", &format!("{base}..{branch}")]).await?;
+    n.trim()
+        .parse()
+        .map_err(|_| anyhow::anyhow!("git rev-list a répondu « {} »", n.trim()))
 }
 
 /// Where `branch` is checked out: the folder of the worktree that has it (the main one included).
@@ -1521,7 +1537,11 @@ mod repo_tests {
         assert!(same(&checkout_of(&r, "main").await.unwrap().unwrap(), &r));
         assert!(same(&checkout_of(&r, "side").await.unwrap().unwrap(), &wt));
         assert_eq!(checkout_of(&r, "free").await.unwrap(), None);
-        assert_eq!(ahead_of(&r, "main", "side").await, 0);
+        assert_eq!(ahead_of(&r, "main", "side").await.unwrap(), 0);
+        git(&r, &["commit", "-q", "--allow-empty", "-m", "one more"]);
+        assert_eq!(ahead_of(&r, "side", "main").await.unwrap(), 1);
+        // A count git could not make is not "none": a ticket must not be taken as without change.
+        assert!(ahead_of(&r, "main", "nowhere").await.is_err());
     }
 
     #[tokio::test]

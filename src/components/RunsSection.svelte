@@ -1,6 +1,6 @@
 <script lang="ts">
   import { launchStatus, restartLaunch, startAll, startLaunch, stopAll, stopLaunch } from '../lib/launch-actions';
-  import { recipeCommands } from '../lib/recipe';
+  import { isolaCommand, recipeCommands } from '../lib/recipe';
   import { app } from '../lib/state.svelte';
   import type { Project, RunCommand } from '../lib/types';
 
@@ -12,10 +12,12 @@
   // Each agent's test launches, under its name, once one of them ran.
   const groups = $derived(
     Object.values(app.agents)
-      .filter((a) => a.projectId === project.id && a.recipe)
+      .filter((a) => a.projectId === project.id && (a.recipe || a.isola))
       .map((a) => {
-        const c = recipeCommands(a, app.shells[0]?.id ?? '');
-        return { agent: a, cmds: [...c.prepare, ...c.processes].filter((x) => app.launches[x.id]) };
+        const shell = app.shells[0]?.id ?? '';
+        const c = recipeCommands(a, shell);
+        const isola = a.isola ? [isolaCommand(a, shell)] : [];
+        return { agent: a, cmds: [...isola, ...c.prepare, ...c.processes].filter((x) => app.launches[x.id]) };
       })
       .filter((g) => g.cmds.length > 0),
   );

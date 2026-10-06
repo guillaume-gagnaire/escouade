@@ -116,7 +116,8 @@ fn recipe_is_safe(r: &TestRecipe) -> bool {
         && r.processes
             .iter()
             .all(|p| safe_dir(&p.dir) && !p.command.trim().is_empty())
-        && (!r.prepare.is_empty() || !r.processes.is_empty())
+        // Something to run, or at least the address to open (isola runs the services).
+        && (!r.prepare.is_empty() || !r.processes.is_empty() || !r.open.trim().is_empty())
 }
 
 /// The progress list of a report: the first 8 usable items of the `avancement` (or `progress`)
@@ -406,6 +407,17 @@ pub fn first_message(t: &Ticket) -> String {
     s
 }
 
+/// `message`, followed by what went wrong with the setup of the agent's worktree, if anything.
+pub fn with_setup_failure(message: String, failure: Option<&str>) -> String {
+    match failure {
+        Some(f) => format!(
+            "{message}\n\n{} Fais le nécessaire pour pouvoir travailler et tester, puis continue.",
+            f.trim()
+        ),
+        None => message,
+    }
+}
+
 /// The message of the next loop: the criteria still missing, with the agent's notes.
 pub fn loop_message(t: &Ticket) -> String {
     let missing: Vec<String> = t
@@ -628,6 +640,9 @@ pub fn pushed_outcome(branch: &str) -> String {
 
 pub const KEPT_OUTCOME: &str = "◇ Laissé dans le worktree";
 
+/// Validated with nothing to merge, propose or push: its branch brings no change.
+pub const NOTHING_OUTCOME: &str = "∅ Aucune modification";
+
 /// Added to a merge's outcome when its worktree and branch could not be removed after it.
 pub const WORKTREE_KEPT: &str = " · worktree gardé";
 
@@ -774,8 +789,9 @@ pub(crate) fn escaped_len(s: &str) -> usize {
         .sum()
 }
 
-/// The protocol around `criteria`, already joined.
-fn protocol(t: &Ticket, criteria: &str, ports: Option<u16>) -> String {
+/// The protocol around `criteria`, already joined: with the reserved ports and the recipe asked
+/// for them, or isola's services when `isola` runs the worktree's.
+fn protocol(t: &Ticket, criteria: &str, ports: Option<u16>, isola: bool) -> String {
     let mut p = format!(
         "Tu travailles en autonomie sur le ticket {key} « {title} » d'Escouade. \
          Critères d'acceptation ({n}) : {criteria}. \
@@ -804,6 +820,13 @@ fn protocol(t: &Ticket, criteria: &str, ports: Option<u16>) -> String {
              « dossier » est relatif au worktree, « url » répond quand le processus est prêt, « ouvrir » est l'adresse qui montre \
              directement la fonctionnalité développée (la page, l'écran, l'état précis à tester)."
         ));
+    } else if isola {
+        p.push_str(
+            " isola gère les services de ce worktree (.isola.toml) : « isola up » les lance sur leurs propres ports, \
+             « isola ls --json » donne leurs adresses, « isola down » les arrête ; ne choisis aucun port toi-même. \
+             Au plus tard quand tous les critères sont atteints, ajoute au JSON une clé \"lancement\": {\"ouvrir\": \"<adresse>\"} \
+             avec l'adresse isola qui montre directement la fonctionnalité développée (la page, l'écran, l'état précis à tester).",
+        );
     }
     p
 }
@@ -812,8 +835,14 @@ fn protocol(t: &Ticket, criteria: &str, ports: Option<u16>) -> String {
 /// that it outlives compaction and resumes. On one line: it is a command-line argument, which a
 /// `.cmd` (npm's claude.cmd) cannot take with line breaks. Once escaped for cmd.exe it weighs at
 /// most `PROTOCOL_BUDGET`: the criteria that do not fit are replaced by a "…".
+#[cfg(test)]
 pub fn protocol_prompt(t: &Ticket, ports: Option<u16>) -> String {
-    let room = PROTOCOL_BUDGET.saturating_sub(escaped_len(&protocol(t, "", ports)));
+    protocol_prompt_for(t, ports, false)
+}
+
+/// `protocol_prompt`, for a worktree whose services isola runs when `isola`.
+pub fn protocol_prompt_for(t: &Ticket, ports: Option<u16>, isola: bool) -> String {
+    let room = PROTOCOL_BUDGET.saturating_sub(escaped_len(&protocol(t, "", ports, isola)));
     let mut criteria = String::new();
     let mut used = 0;
     for (i, c) in t.criteria.iter().enumerate() {
@@ -837,7 +866,7 @@ pub fn protocol_prompt(t: &Ticket, ports: Option<u16>) -> String {
         used += weight;
         criteria.push_str(&item);
     }
-    protocol(t, &criteria, ports)
+    protocol(t, &criteria, ports, isola)
 }
 
 #[cfg(test)]
@@ -941,6 +970,23 @@ mod tests {
                 serde_json::to_string(bad).unwrap()
             );
             assert_eq!(parse_report(&block(&json)).unwrap().recipe, None, "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_recipe_that_only_gives_the_address_to_open_is_kept_but_an_empty_one_is_not() {
+        // What an agent whose services isola runs gives.
+        let r = parse_report(&block(
+            r#"{"criteres": [], "lancement": {"ouvrir": "http://ticket-atl-42.demo.localhost:3000/connexion"}}"#,
+        ))
+        .unwrap();
+        assert_eq!(
+            r.recipe.map(|x| x.open),
+            Some("http://ticket-atl-42.demo.localhost:3000/connexion".to_string())
+        );
+        for empty in [r#"{}"#, r#"{"ouvrir": "  "}"#, r#"{"ouvrir": null}"#] {
+            let json = format!(r#"{{"criteres": [], "lancement": {empty}}}"#);
+            assert_eq!(parse_report(&block(&json)).unwrap().recipe, None, "{empty}");
         }
     }
 
@@ -1321,6 +1367,51 @@ mod tests {
             })
             .collect();
         assert!(protocol_prompt(&t, Some(4100)).len() < 7000);
+    }
+
+    #[test]
+    fn with_isola_the_protocol_asks_for_the_address_to_open_and_reserves_no_port() {
+        let mut t = ticket(2, 5);
+        let p = protocol_prompt_for(&t, None, true);
+        assert!(!p.contains('\n') && !p.contains("Ports réservés"), "{p}");
+        assert!(
+            p.contains("isola up") && p.contains("isola ls --json"),
+            "{p}"
+        );
+        assert!(p.contains("\"lancement\": {\"ouvrir\": "), "{p}");
+        assert!(p.contains("Critères d'acceptation (2) : 1) critère 1 ; 2) critère 2."));
+        // Without isola, the same as before.
+        assert_eq!(
+            protocol_prompt_for(&t, Some(4120), false),
+            protocol_prompt(&t, Some(4120))
+        );
+        // The criteria still give way to the budget.
+        t.criteria = (0..300)
+            .map(|i| Criterion {
+                text: format!("{i} {}", "%".repeat(300)),
+                ..Default::default()
+            })
+            .collect();
+        let p = protocol_prompt_for(&t, None, true);
+        assert!(escaped_len(&p) <= PROTOCOL_BUDGET && p.contains(MORE.trim()));
+    }
+
+    #[test]
+    fn a_setup_that_failed_is_told_after_the_first_message() {
+        let t = ticket(1, 5);
+        assert_eq!(
+            with_setup_failure(first_message(&t), None),
+            first_message(&t)
+        );
+        let m = with_setup_failure(
+            first_message(&t),
+            Some("La préparation du worktree a échoué sur `npm ci` (code 1)."),
+        );
+        assert!(m.starts_with(&first_message(&t)), "{m}");
+        assert!(
+            m.ends_with("La préparation du worktree a échoué sur `npm ci` (code 1). Fais le nécessaire pour pouvoir travailler et tester, puis continue."),
+            "{m}"
+        );
     }
 
     /// What a `.cmd` argument weighs once Rust has escaped it for cmd.exe, as std's

@@ -12,6 +12,7 @@ mod hub;
 mod integrations;
 #[cfg(test)]
 mod integrations_tests;
+mod isola;
 mod job;
 mod model;
 mod notify;
@@ -30,6 +31,7 @@ mod tickets;
 mod tickets_tests;
 mod usage;
 mod which;
+mod worktrees;
 
 use crate::core::Core;
 use std::io::Write;
@@ -248,6 +250,9 @@ pub fn run() {
             commands::agent_prepare_launch,
             commands::test_run_start,
             commands::http_ready,
+            commands::isola_services,
+            commands::isola_down,
+            commands::suggest_worktree_steps,
         ])
         .build(tauri::generate_context!())
         .expect("error while building the application")

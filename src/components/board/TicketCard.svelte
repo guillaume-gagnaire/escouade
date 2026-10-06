@@ -8,7 +8,7 @@
   import { menu, type MenuItem } from '../../lib/menu.svelte';
   import { openAddress } from '../../lib/recipe';
   import { app } from '../../lib/state.svelte';
-  import { anyRunning, stopTests, testAgent } from '../../lib/test-launch.svelte';
+  import { anyRunning, flows, stopTests, testAgent } from '../../lib/test-launch.svelte';
   import type { Project, Ticket } from '../../lib/types';
   import StatusDot from '../StatusDot.svelte';
   import RejectForm from './RejectForm.svelte';
@@ -205,6 +205,10 @@
         <div class="act wait"><span class="pulse" style="width:7px;height:7px"></span>Question en attente de ta réponse</div>
       {:else if agent?.resumeAt}
         <div class="act">Reprise {fWhen(agent.resumeAt, app.now)}</div>
+      {:else if agent?.setup}
+        <div class="act" title={agent.setup}>
+          <span class="dots"><span></span><span></span><span></span></span>Prépare le worktree · {agent.setup}
+        </div>
       {:else if agent?.status === 'running'}
         <div class="act"><span class="dots"><span></span><span></span><span></span></span>{agent.activity ?? 'Réfléchit'}</div>
       {/if}
@@ -222,9 +226,9 @@
     </div>
   {/if}
 
-  {#if agent?.recipe && (t.column === 'doing' || t.column === 'review')}
+  {#if (agent?.recipe || agent?.isola) && (t.column === 'doing' || t.column === 'review')}
     {@const a = agent}
-    {@const address = openAddress(a)}
+    {@const address = flows.all[a.id]?.opened ?? openAddress(a)}
     {#if anyRunning(a.id)}
       <div class="row actions">
         <button class="small" onclick={(e) => act(e, () => stopTests(a.id))}>■ Arrêter</button>

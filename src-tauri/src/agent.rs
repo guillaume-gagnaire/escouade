@@ -96,6 +96,10 @@ pub struct AgentRt {
     pub activity: Option<String>,
     /// The assistant's text of the running turn (main thread), for the board's report.
     turn_text: String,
+    /// The setup of its new worktree under way: the step running ("npm ci (1/2)").
+    pub setup: Option<String>,
+    /// Why the setup of its worktree failed, until its ticket's first message tells it.
+    pub setup_failure: Option<String>,
     blocks: HashMap<String, Vec<Block>>,
     current_msg: HashMap<String, String>,
     pending: HashMap<String, PendingReq>,
@@ -136,6 +140,8 @@ impl AgentRt {
             remote_linked: false,
             activity: None,
             turn_text: String::new(),
+            setup: None,
+            setup_failure: None,
             blocks: HashMap::new(),
             current_msg: HashMap::new(),
             pending: HashMap::new(),
@@ -168,6 +174,12 @@ impl AgentRt {
             live_cost,
             remote_state: self.remote_state.clone(),
             activity: self.activity.clone(),
+            setup: self.setup.clone(),
+            isola: self
+                .meta
+                .worktree
+                .as_ref()
+                .is_some_and(|w| crate::isola::manages(&w.path)),
         }
     }
 

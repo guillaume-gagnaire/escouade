@@ -7,6 +7,7 @@ use crate::claude::{self, ClaudeProcess};
 use crate::core::{AgentOptions, Core};
 use crate::git;
 use crate::integrations;
+use crate::isola;
 use crate::model::*;
 use crate::testlaunch;
 use anyhow::{anyhow, bail, Result};
@@ -488,24 +489,34 @@ impl<R: Runtime> Core<R> {
         let Ok(t) = started else { return };
         if let Err(e) = self.launch_ticket_agent(project, &t).await {
             log::warn!("ticket {}: start failed: {e:#}", t.key);
-            let _ = self.edit_ticket(id, |t| {
-                t.blocked = Some(error_reason(&e));
-                Ok(())
+            // Only while it is still this start's: one sent back to do meanwhile (its agent
+            // archived or deleted), or started again with another agent, stays as it is.
+            let blocked = self.edit_ticket(id, |x| {
+                let ours = x.column == Column::Doing && x.started_at == t.started_at;
+                if ours {
+                    x.blocked = Some(error_reason(&e));
+                }
+                Ok(ours)
             });
-            self.notify_ticket(id, false);
+            if blocked.unwrap_or(false) {
+                self.notify_ticket(id, false);
+            }
             self.schedule();
         }
     }
 
     /// The ticket's agent: its worktree on `ticket/<key>` from the target branch, its block of
-    /// ports, the protocol appended to its system prompt; then its first message.
+    /// ports (none when isola runs the project's services), the protocol appended to its system
+    /// prompt; then, its worktree set up, its first message.
     async fn launch_ticket_agent(self: &Arc<Self>, project: &Project, t: &Ticket) -> Result<()> {
         let s = &project.board;
         let target = self.target_of(project).await;
         let settings = self.settings.read().clone();
         let or = |v: &str, default: &str| Some(if v.is_empty() { default } else { v }.to_string());
+        // As its worktree will be: the target branch has isola's configuration.
+        let isola = isola::cli().is_some() && isola::configured_on(&project.path, &target).await;
         // Reserved at once: no other start or launch preparation gets this block meanwhile.
-        let ports = self.reserve_ports();
+        let ports = if isola { None } else { self.reserve_ports() };
         let made = self
             .create_agent_with(
                 &project.id,
@@ -515,7 +526,7 @@ impl<R: Runtime> Core<R> {
                     mode: or(&s.mode, &settings.default_mode),
                     name: Some(board::agent_name(&t.key, &t.title)),
                     worktree: Some((board::branch_of(&t.key), target)),
-                    append_prompt: Some(board::protocol_prompt(t, ports)),
+                    append_prompt: Some(board::protocol_prompt_for(t, ports, isola)),
                     ticket_id: Some(t.id.clone()),
                     port_base: ports,
                     select: false,
@@ -533,8 +544,22 @@ impl<R: Runtime> Core<R> {
             let _ = self.archive_agent(&agent_id, true).await;
             return Err(e);
         }
-        self.send_message(&agent_id, board::first_message(t), vec![])
-            .await
+        // Its worktree set up first; what failed there is said with its first message.
+        self.wait_setup(&agent_id).await;
+        // Archived or deleted meanwhile (the ticket sent back to do, maybe started again with
+        // another agent), or the ticket deleted: it is not this agent's to take any more.
+        let still_ours = self
+            .ticket(&t.id)
+            .is_ok_and(|x| x.column == Column::Doing && x.agent_id.as_deref() == Some(&agent_id));
+        if !still_ours || self.live_agent(&agent_id).is_none() {
+            return Ok(());
+        }
+        let failure = self
+            .agent(&agent_id)
+            .ok()
+            .and_then(|h| h.lock().setup_failure.take());
+        let first = board::with_setup_failure(board::first_message(t), failure.as_deref());
+        self.send_message(&agent_id, first, vec![]).await
     }
 
     // ---------- ends of turns ----------
@@ -972,6 +997,9 @@ impl<R: Runtime> Core<R> {
         let copied = testlaunch::matching_ignored(&project.path, &project.worktree_copy).await;
         self.still_validating(&t.id, &agent_id)?;
         let mut message = None;
+        // The branch brings nothing (no change, or only changes taken back): the ticket is done
+        // all the same, with nothing to merge, propose or push.
+        let mut nothing = false;
         if s.action != "keep" {
             if !git::branch_exists(&wt.path, &target).await {
                 bail!("La branche cible {target} n'existe pas.");
@@ -1004,21 +1032,11 @@ impl<R: Runtime> Core<R> {
             if let Some(refusal) = board::copied_refusal(&in_tree, &in_history) {
                 bail!(refusal);
             }
-            // Nothing to merge, to propose or to push.
-            if git::ahead_of(&wt.path, &target, &wt.branch).await == 0 {
-                let what = match s.action.as_str() {
-                    "pr" => "proposer",
-                    "push" => "pousser",
-                    _ => "merger",
-                };
-                bail!(
-                    "Rien à {what} : {} n'a pas de commit de plus que {target}.",
-                    wt.branch
-                );
-            }
+            nothing = git::ahead_of(&wt.path, &target, &wt.branch).await? == 0;
             self.still_validating(&t.id, &agent_id)?;
         }
         let (outcome, url): (String, Option<String>) = match s.action.as_str() {
+            _ if nothing => (board::NOTHING_OUTCOME.to_string(), None),
             "merge" => {
                 self.set_step(&t.id, "Merge…");
                 match self
@@ -1071,8 +1089,13 @@ impl<R: Runtime> Core<R> {
             if let Err(e) = self.archive_agent(&agent_id, true).await {
                 log::warn!("ticket {}: its agent was not archived: {e:#}", t.key);
             }
-            if s.action == "merge" && s.cleanup {
-                self.remove_worktree_of(t, &project, &wt, proc).await;
+            if s.cleanup {
+                // Merged, or with nothing on it, its branch goes too; pushed or proposed, it stays
+                // (and an agent restored gets its worktree back from it).
+                let keep_branch = !nothing && s.action != "merge";
+                let ports = meta.port_base;
+                self.remove_worktree_of(t, &project, &wt, proc, ports, keep_branch)
+                    .await;
             }
         }
         Ok(())
@@ -1183,17 +1206,20 @@ impl<R: Runtime> Core<R> {
         }
     }
 
-    /// After a merge, with "Supprimer le worktree": the ticket's worktree and branch go. Its
-    /// agent's process is killed first with all it started: the archive closed its input, but it
-    /// may take its time to end (or something still holds it), and on Windows a live process
-    /// keeps the folder. The removal is tried again for a few seconds; when it still fails, the
-    /// ticket's outcome says the worktree is kept.
+    /// Once validated, with "Supprimer le worktree": the ticket's worktree goes, its branch too
+    /// unless `keep_branch`. Its agent's process is killed first with all it started: the archive
+    /// closed its input, but it may take its time to end (or something still holds it), and on
+    /// Windows a live process keeps the folder. The project's teardown then runs in it (`ports`:
+    /// those its agent held). The removal is tried again for a few seconds; when it still fails,
+    /// the ticket's outcome says the worktree is kept.
     async fn remove_worktree_of(
         &self,
         t: &Ticket,
         project: &Project,
         wt: &Worktree,
         proc: Option<Arc<ClaudeProcess>>,
+        ports: Option<u16>,
+        keep_branch: bool,
     ) {
         if let Some(p) = proc {
             p.kill();
@@ -1204,8 +1230,16 @@ impl<R: Runtime> Core<R> {
                 tokio::time::sleep(Duration::from_millis(100)).await;
             }
         }
+        if let Some(problem) = self.teardown_worktree(project, wt, ports).await {
+            log::warn!("ticket {}: {problem}", t.key);
+        }
         for attempt in 1..=10 {
-            match git::worktree_remove(&project.path, &wt.path, &wt.branch).await {
+            let removed = if keep_branch {
+                git::worktree_remove_dir(&project.path, &wt.path).await
+            } else {
+                git::worktree_remove(&project.path, &wt.path, &wt.branch).await
+            };
+            match removed {
                 Ok(()) => break,
                 Err(e) if attempt == 10 => {
                     log::warn!("ticket {}: worktree not removed: {e:#}", t.key);
@@ -1457,16 +1491,19 @@ impl<R: Runtime> Core<R> {
     /// Only for an agent with a worktree, and not archived (it would hold a block for nothing).
     pub async fn agent_prepare_launch(self: &Arc<Self>, id: &str) -> Result<()> {
         let h = self.agent(id)?;
-        let (has_worktree, archived, base) = {
+        let (worktree, archived, base) = {
             let rt = h.lock();
             (
-                rt.meta.worktree.is_some(),
+                rt.meta.worktree.clone(),
                 rt.meta.archived,
                 rt.meta.port_base,
             )
         };
-        if !has_worktree {
+        let Some(worktree) = worktree else {
             bail!(NO_WORKTREE);
+        };
+        if isola::manages(&worktree.path) {
+            bail!("isola lance ce worktree : « ▶ Tester » suffit, sans recette.");
         }
         if archived {
             bail!(ARCHIVED);
@@ -1528,7 +1565,41 @@ impl<R: Runtime> Core<R> {
         if let Some(why) = self.launch_refusal(&meta) {
             bail!(why);
         }
+        if kind == "isola" {
+            let wt = isola_worktree(&meta)?;
+            return Ok(testlaunch::RunSpec {
+                name: "isola up".into(),
+                command: isola::UP.into(),
+                cwd: wt.path,
+                env: Vec::new(),
+            });
+        }
         testlaunch::run_spec(&meta, kind, index)
+    }
+
+    /// The services isola runs for the agent's worktree (`isola ls --json`), when it may launch
+    /// them now.
+    pub async fn isola_services(&self, agent_id: &str) -> Result<Vec<isola::Service>> {
+        let wt = self.isola_launch(agent_id)?;
+        isola::services(&wt.path, &wt.branch).await
+    }
+
+    /// Stops the services isola runs for the agent's worktree (`isola down`).
+    pub async fn isola_down(&self, agent_id: &str) -> Result<()> {
+        let meta = self.agent(agent_id)?.lock().meta.clone();
+        let wt = isola_worktree(&meta)?;
+        isola::run(&wt.path, &["down"], isola::LIMIT)
+            .await
+            .map(|_| ())
+    }
+
+    /// The agent's worktree, whose services isola runs, when it may launch them now.
+    fn isola_launch(&self, agent_id: &str) -> Result<Worktree> {
+        let meta = self.agent(agent_id)?.lock().meta.clone();
+        if let Some(why) = self.launch_refusal(&meta) {
+            bail!(why);
+        }
+        isola_worktree(&meta)
     }
 
     /// The terminal `term_id` is one of the agent's test launches, kept to be stopped with them.
@@ -1556,13 +1627,30 @@ impl<R: Runtime> Core<R> {
         Ok(())
     }
 
-    /// The agent's test launches stop (its validation, archive or deletion, its project closed).
+    /// The agent's test launches stop (its validation, archive or deletion, its project closed),
+    /// isola's services of its worktree included.
     pub fn stop_test_runs(&self, agent_id: &str) {
         let ids = self.test_runs.lock().remove(agent_id).unwrap_or_default();
         for id in ids {
             self.pty.kill(&id);
         }
+        let dir = self
+            .agent(agent_id)
+            .ok()
+            .and_then(|h| h.lock().meta.worktree.as_ref().map(|w| w.path.clone()));
+        if let Some(dir) = dir.filter(|d| isola::manages(d)) {
+            isola::down_later(dir);
+        }
     }
+}
+
+/// The agent's worktree, when isola runs its services.
+fn isola_worktree(meta: &AgentMeta) -> Result<Worktree> {
+    let wt = meta.worktree.clone().ok_or_else(|| anyhow!(NO_WORKTREE))?;
+    if !isola::manages(&wt.path) {
+        bail!("isola ne lance pas ce worktree (isola introuvable, ou pas de .isola.toml).");
+    }
+    Ok(wt)
 }
 
 /// How long `gh pr create` may take.

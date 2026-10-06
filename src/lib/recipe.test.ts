@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { agent } from '../test/ipc';
-import { openAddress, parseTestId, recipeCommands, testCommand, testId } from './recipe';
+import { isolaCommand, openAddress, parseTestId, recipeCommands, testCommand, testId } from './recipe';
 
 const a = agent({
   id: 'a1',
@@ -39,6 +39,16 @@ describe('recipe', () => {
     expect(testCommand('test:a2:run:0', { a1: a }, 'pwsh')).toBeNull();
     expect(testCommand('test:a1:run:0', { a1: agent({ id: 'a1' }) }, 'pwsh')).toBeNull();
     expect(testCommand('c1', { a1: a }, 'pwsh')).toBeNull();
+  });
+
+  it('makes isola up the test launch of an agent whose services isola runs', () => {
+    const i = agent({ id: 'a1', isola: true });
+    expect(isolaCommand(i, 'bash')).toEqual({ id: 'test:a1:isola:0', name: 'isola up', command: 'isola up', shell: 'bash', cwd: '' });
+    expect(parseTestId('test:a1:isola:0')).toEqual({ agentId: 'a1', kind: 'isola', index: 0 });
+    expect(testCommand('test:a1:isola:0', { a1: i }, 'bash')?.command).toBe('isola up');
+    // No longer isola's (its .isola.toml gone), or another index: no command.
+    expect(testCommand('test:a1:isola:0', { a1: agent({ id: 'a1' }) }, 'bash')).toBeNull();
+    expect(testCommand('test:a1:isola:1', { a1: i }, 'bash')).toBeNull();
   });
 
   it('opens the address of the feature, else the first process’s', () => {

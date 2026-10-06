@@ -64,6 +64,8 @@ export function project(over: Partial<Project> = {}): Project {
     runCommands: [],
     board: board(),
     worktreeCopy: ['.env*'],
+    worktreeSetup: [],
+    worktreeTeardown: [],
     integrations: { links: [], comments: ['review', 'done'] },
     ...over,
   };
@@ -107,6 +109,8 @@ export function agent(over: Partial<Agent> = {}): Agent {
     portBase: null,
     recipe: null,
     activity: null,
+    setup: null,
+    isola: false,
     ...over,
   };
 }

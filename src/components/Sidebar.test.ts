@@ -29,6 +29,14 @@ describe('Sidebar', () => {
     expect(screen.getByText(/Archivés \(1\)/)).toBeInTheDocument();
   });
 
+  it('says an agent sets its new worktree up', () => {
+    fakeBackend();
+    app.agents.a1 = { ...app.agents.a1, status: 'idle', setup: '2/3 · npm run gen (web)' };
+    render(Sidebar, { project: project() });
+    const status = within(screen.getByRole('button', { name: /refacto-auth/ })).getByText('Préparation…');
+    expect(status).toHaveAttribute('title', 'Préparation du worktree : 2/3 · npm run gen (web)');
+  });
+
   it('names an agent’s model with the version Claude Code runs for it', () => {
     fakeBackend();
     app.models = [{ value: 'opus', resolvedModel: 'claude-opus-5-5' }];

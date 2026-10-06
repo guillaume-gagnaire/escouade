@@ -15,6 +15,7 @@ import type {
   FolderInfo,
   GitLog,
   InitialState,
+  IsolaService,
   IssuePage,
   Project,
   Service,
@@ -28,6 +29,7 @@ import type {
   TicketDraft,
   UiEvent,
   UiState,
+  WorktreeSuggestion,
 } from './types';
 
 export const api = {
@@ -130,13 +132,19 @@ export const api = {
   /** "Préparer le lancement": reserves the agent's ports and asks it for its recipe. */
   agentPrepareLaunch: (id: string) => invoke<void>('agent_prepare_launch', { id }),
   testRunStart: (
-    a: { agentId: string; kind: 'prep' | 'run'; index: number; cols: number; rows: number; cursorRow: number },
+    a: { agentId: string; kind: 'prep' | 'run' | 'isola'; index: number; cols: number; rows: number; cursorRow: number },
     onData: (d: ArrayBuffer) => void,
   ) => {
     const output = new Channel<ArrayBuffer>();
     output.onmessage = onData;
     return invoke<TermInfo>('test_run_start', { ...a, output });
   },
+  /** The services isola runs for the agent's worktree, with their addresses. */
+  isolaServices: (agentId: string) => invoke<IsolaService[]>('isola_services', { agentId }),
+  /** Stops the services isola runs for the agent's worktree. */
+  isolaDown: (agentId: string) => invoke<void>('isola_down', { agentId }),
+  /** The setup and teardown Claude suggests for the project's worktrees, from what it reads of it. */
+  suggestWorktreeSteps: (projectId: string) => invoke<WorktreeSuggestion>('suggest_worktree_steps', { projectId }),
   /** One HTTP request without proxy (2 s): true for any answer. */
   httpReady: (url: string) => invoke<boolean>('http_ready', { url }),
   termWrite: (id: string, data: string) => invoke<void>('term_write', { id, data }),

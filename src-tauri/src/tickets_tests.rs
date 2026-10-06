@@ -9,7 +9,7 @@
 
 use crate::board::TurnEnd;
 use crate::core::{AgentOptions, Core};
-use crate::core_tests::{commit_change, git, harness, ignore, Harness};
+use crate::core_tests::{commit_change, git, harness, ignore, wt_step, Harness};
 use crate::model::*;
 use crate::tickets::{error_reason, TicketDraft};
 use serde_json::{json, Value};
@@ -2209,21 +2209,34 @@ async fn a_worktree_left_with_unresolved_conflicts_is_not_committed() {
 }
 
 #[tokio::test]
-async fn a_ticket_with_nothing_to_merge_is_blocked_with_why() {
+async fn a_ticket_with_nothing_to_merge_is_done_without_a_change() {
     let h = harness("tk-nothing");
     let (p, r) = h.project(false).await;
-    let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
-    std::fs::remove_file(wt.join("dem-1.txt")).unwrap();
+    let (t, wt) = reviewed(&h, &p.id, "Rien à changer [ok] [rien]").await;
     h.core.ticket_approve(&t.id).await.unwrap();
     let t = h.ticket(&t.id);
     assert_eq!(
-        (t.column, t.blocked.as_deref()),
-        (
-            Column::Review,
-            Some("Rien à merger : ticket/dem-1 n'a pas de commit de plus que main.")
-        )
+        (t.column, t.outcome.as_deref(), t.blocked.as_deref()),
+        (Column::Done, Some("∅ Aucune modification"), None)
     );
+    assert!(t.done_at.is_some() && t.step.is_none());
     assert_eq!(git(&r, &["rev-list", "--count", "main"]), "1");
+    // Cleaned up as after a merge: its agent archived, its worktree and its empty branch gone.
+    assert!(h.agent(t.agent_id.as_deref().unwrap()).archived);
+    assert!(!wt.exists());
+    assert!(!has_branch(&r, "ticket/dem-1"));
+    // A change made and then taken back is no change either.
+    let (u, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    std::fs::remove_file(wt.join("dem-2.txt")).unwrap();
+    h.set_board(&p.id, |s| s.cleanup = false);
+    h.core.ticket_approve(&u.id).await.unwrap();
+    let u = h.ticket(&u.id);
+    assert_eq!(
+        (u.column, u.outcome.as_deref()),
+        (Column::Done, Some("∅ Aucune modification"))
+    );
+    // Without the cleanup, its worktree stays.
+    assert!(wt.is_dir() && has_branch(&r, "ticket/dem-2"));
 }
 
 #[tokio::test]
@@ -2873,13 +2886,22 @@ async fn validating_by_push_publishes_the_tickets_branch_and_archives_its_agent(
         "feat: travail du faux claude [DEM-1]"
     );
     assert_eq!(
-        git(&wt, &["rev-parse", "--abbrev-ref", "@{upstream}"]),
+        git(
+            &r,
+            &["rev-parse", "--abbrev-ref", "ticket/dem-1@{upstream}"]
+        ),
         "origin/ticket/dem-1"
     );
     assert!(h.agent(t.agent_id.as_deref().unwrap()).archived);
-    // The branch and the worktree stay; the target is untouched.
-    assert!(wt.is_dir() && has_branch(&r, "ticket/dem-1"));
+    // Its worktree goes, its branch (pushed) stays; the target is untouched.
+    assert!(!wt.exists() && has_branch(&r, "ticket/dem-1"));
     assert_eq!(git(&r, &["rev-list", "--count", "main"]), "1");
+    // Without the cleanup, the worktree stays too.
+    h.set_board(&p.id, |s| s.cleanup = false);
+    let (u, wt) = reviewed(&h, &p.id, "Autre fichier [ok]").await;
+    h.core.ticket_approve(&u.id).await.unwrap();
+    assert_eq!(h.ticket(&u.id).column, Column::Done);
+    assert!(wt.is_dir() && has_branch(&r, "ticket/dem-2"));
 }
 
 #[tokio::test]
@@ -2910,7 +2932,8 @@ async fn without_gh_a_github_pull_request_is_finished_in_the_browser() {
         .any(|e| e["type"] == "openUrl" && e["url"] == url.as_str()));
     assert_eq!(git(&bare, &["show", "ticket/dem-1:dem-1.txt"]), "Boucle 1");
     assert!(h.agent(t.agent_id.as_deref().unwrap()).archived);
-    assert!(wt.is_dir() && has_branch(&r, "ticket/dem-1"));
+    // Its worktree goes, its branch (pushed, proposed) stays.
+    assert!(!wt.exists() && has_branch(&r, "ticket/dem-1"));
 }
 
 #[tokio::test]
@@ -3442,37 +3465,26 @@ async fn a_ticket_that_leaves_while_its_target_is_merged_into_its_worktree_leave
 }
 
 #[tokio::test]
-async fn a_ticket_with_nothing_beyond_its_target_is_neither_pushed_nor_proposed() {
-    for (action, why) in [
-        (
-            "push",
-            "Rien à pousser : ticket/dem-1 n'a pas de commit de plus que main.",
-        ),
-        (
-            "pr",
-            "Rien à proposer : ticket/dem-1 n'a pas de commit de plus que main.",
-        ),
-    ] {
+async fn a_ticket_with_nothing_beyond_its_target_is_done_neither_pushed_nor_proposed() {
+    for action in ["push", "pr"] {
         let h = harness(&format!("tk-nothing-{action}"));
         let (p, r) = h.project(false).await;
         let bare = github_remote(&h, &r);
         *h.core.gh.write() = Some(fake_gh());
         h.set_board(&p.id, |s| s.action = action.into());
-        let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
-        std::fs::remove_file(wt.join("dem-1.txt")).unwrap();
+        let (t, wt) = reviewed(&h, &p.id, "Rien à changer [ok] [rien]").await;
         h.core.ticket_approve(&t.id).await.unwrap();
         let t = h.ticket(&t.id);
         assert_eq!(
-            (t.column, t.blocked.as_deref()),
-            (Column::Review, Some(why)),
+            (t.column, t.outcome.as_deref(), t.blocked.as_deref()),
+            (Column::Done, Some("∅ Aucune modification"), None),
             "{action}"
         );
         assert_eq!(branches_of(&bare), "main", "{action}");
         assert!(gh_calls(&wt).is_empty(), "{action}");
-        assert!(
-            !h.agent(t.agent_id.as_deref().unwrap()).archived,
-            "{action}"
-        );
+        assert!(h.agent(t.agent_id.as_deref().unwrap()).archived, "{action}");
+        // Nothing worth keeping on its branch: it goes with the worktree.
+        assert!(!wt.exists() && !has_branch(&r, "ticket/dem-1"), "{action}");
     }
 }
 
@@ -3864,4 +3876,162 @@ async fn an_archived_or_deleted_agent_has_no_test_launch() {
     h.core.delete_agent(&b.id, false).await.unwrap();
     assert!(h.core.track_test_run(&b.id, "tk-late-2").is_err());
     assert!(!tracks_runs_of(&h, &b.id));
+}
+
+// ---------- worktree setup and teardown, isola ----------
+
+#[tokio::test]
+async fn a_tickets_first_message_waits_for_its_worktree_setup_and_tells_its_failure() {
+    let h = harness("tk-setup");
+    let (p, _) = h.project(false).await;
+    h.set_worktree_steps(
+        &p.id,
+        vec![
+            wt_step(
+                r#"node -e "require('fs').writeFileSync('prepared.txt', process.env.ESCOUADE_PORT_BASE || '')""#,
+                "",
+            ),
+            wt_step(
+                r#"node -e "setTimeout(() => { console.log('dépendances absentes'); process.exit(1) }, 1000)""#,
+                "",
+            ),
+        ],
+        vec![],
+    );
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Fichier [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.wait_ticket(&t.id, "to test", |t| t.column == Column::Review)
+        .await;
+    let wt = h.worktree_of(&t.id);
+    // Set up with its reserved ports.
+    let base = std::fs::read_to_string(wt.join("prepared.txt")).unwrap();
+    assert!(base.parse::<u16>().is_ok_and(|b| b >= 4100), "{base}");
+    // Its first message went after the setup, and says what failed.
+    let first = h.stdin_messages(&wt)[0]["message"]["content"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(first.starts_with("Ticket DEM-1 : Fichier [ok]"), "{first}");
+    assert!(
+        first.contains("La préparation du worktree a échoué sur `node -e")
+            && first.contains("dépendances absentes")
+            && first
+                .ends_with("Fais le nécessaire pour pouvoir travailler et tester, puis continue."),
+        "{first}"
+    );
+}
+
+#[tokio::test]
+async fn a_tickets_agent_archived_or_deleted_during_its_setup_is_never_sent_the_ticket() {
+    for how in ["archive", "delete"] {
+        let h = harness(&format!("tk-setup-gone-{how}"));
+        let (p, _) = h.project(false).await;
+        h.set_worktree_steps(
+            &p.id,
+            vec![wt_step(r#"node -e "setTimeout(() => {}, 2500)""#, "")],
+            vec![],
+        );
+        let t = h
+            .core
+            .ticket_create(&p.id, draft("Fichier [ok]", &[], 5))
+            .await
+            .unwrap();
+        h.wait("its agent setting its worktree up", |h| {
+            h.ticket(&t.id)
+                .agent_id
+                .is_some_and(|a| h.view(&a).setup.is_some())
+        })
+        .await;
+        let first = h.ticket(&t.id).agent_id.unwrap();
+        let wt = h.worktree_of(&t.id);
+        match how {
+            "archive" => h.core.archive_agent(&first, true).await.unwrap(),
+            _ => {
+                h.core.delete_agent(&first, false).await.unwrap();
+            }
+        }
+        // Back to do, then started again with another agent, which it is the ticket of.
+        h.wait_ticket(&t.id, "to test with another agent", |t| {
+            t.column == Column::Review && t.agent_id.as_deref() != Some(first.as_str())
+        })
+        .await;
+        let t = h.ticket(&t.id);
+        assert_eq!(t.blocked, None, "{how}");
+        // The first agent never took the ticket, and never will.
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        assert!(h.stdin_messages(&wt).is_empty(), "{how}");
+        if how == "archive" {
+            assert_eq!(h.view(&first).setup, None);
+            assert!(!h.alive(&first));
+        }
+        assert!(
+            h.alerts().iter().all(|a| !a.contains("bloqué")),
+            "{how}: {:?}",
+            h.alerts()
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_merged_tickets_worktree_is_torn_down_before_it_goes() {
+    let h = harness("tk-teardown");
+    let (p, r) = h.project(false).await;
+    h.set_worktree_steps(
+        &p.id,
+        vec![],
+        vec![wt_step(
+            r#"node -e "const fs = require('fs'); fs.writeFileSync(require('path').join(process.env.ESCOUADE_PROJECT_DIR, '..', 'down.txt'), process.env.ESCOUADE_BRANCH + ' ' + fs.existsSync('dem-1.txt'))""#,
+            "",
+        )],
+    );
+    let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    h.core.ticket_approve(&t.id).await.unwrap();
+    assert_eq!(h.ticket(&t.id).column, Column::Done);
+    assert_eq!(
+        std::fs::read_to_string(h.dir.join("down.txt")).unwrap(),
+        "ticket/dem-1 true"
+    );
+    assert!(!wt.exists());
+    // Kept (no cleanup), no teardown.
+    std::fs::remove_file(h.dir.join("down.txt")).unwrap();
+    h.set_board(&p.id, |s| s.cleanup = false);
+    let (u, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    h.core.ticket_approve(&u.id).await.unwrap();
+    assert_eq!(h.ticket(&u.id).column, Column::Done);
+    assert!(wt.is_dir() && !h.dir.join("down.txt").exists());
+    let _ = r;
+}
+
+#[tokio::test]
+async fn an_isola_projects_ticket_reserves_no_port_and_is_told_of_isola() {
+    crate::isola::tests::use_fake();
+    let h = harness("tk-isola");
+    let (p, r) = h.project(false).await;
+    std::fs::write(r.join(".isola.toml"), "setup = \"npm ci\"\n").unwrap();
+    git(&r, &["add", "-A"]);
+    git(&r, &["commit", "-qm", "isola"]);
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Fichier [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.wait_ticket(&t.id, "to test", |t| t.column == Column::Review)
+        .await;
+    let a = h.agent_of(&t.id);
+    assert_eq!(a.port_base, None);
+    let argv = h.launches(&h.worktree_of(&t.id)).pop().unwrap();
+    let i = argv
+        .iter()
+        .position(|x| x == "--append-system-prompt")
+        .unwrap();
+    assert!(
+        argv[i + 1].contains("isola up") && !argv[i + 1].contains("Ports réservés"),
+        "{}",
+        argv[i + 1]
+    );
+    // Its launch is isola's: nothing to prepare.
+    assert!(h.core.agent_prepare_launch(&a.id).await.is_err());
 }

@@ -115,6 +115,63 @@ describe('settingsForm', () => {
     expect(app.launches.c1).toBeUndefined();
   });
 
+  it('saves the worktree steps trimmed, without those that have no command', async () => {
+    const backend = fakeBackend();
+    app.shells = [{ id: 'bash', label: 'Git Bash', path: 'bash.exe' }];
+    settingsForm.open({ tab: 'projects', projectId: 'p1' });
+    settingsForm.addStep('setup');
+    settingsForm.addStep('setup');
+    settingsForm.addStep('teardown');
+    const [first, empty] = settingsForm.projects.p1.worktreeSetup;
+    expect(first).toMatchObject({ command: '', shell: 'bash', cwd: '' });
+    Object.assign(first, { command: ' npm ci ', cwd: ' web ' });
+    empty.command = '   ';
+    settingsForm.projects.p1.worktreeTeardown[0].command = 'docker compose down';
+    expect(settingsForm.changed('projects')).toBe(true);
+    expect(await settingsForm.save()).toBe(true);
+
+    const saved = backend.called('update_project')[0].args.project;
+    expect(saved.worktreeSetup).toEqual([{ id: first.id, command: 'npm ci', shell: 'bash', cwd: 'web' }]);
+    expect(saved.worktreeTeardown).toMatchObject([{ command: 'docker compose down', shell: 'bash', cwd: '' }]);
+    expect(app.projects[0].worktreeSetup).toEqual(saved.worktreeSetup);
+    expect(settingsForm.changed('projects')).toBe(false);
+  });
+
+  it("fills the worktree steps with Claude's suggestion, and says when it has none", async () => {
+    let answer!: (v: unknown) => void;
+    const backend = fakeBackend({
+      suggest_worktree_steps: () => new Promise((r) => (answer = r)),
+    });
+    settingsForm.open({ tab: 'projects', projectId: 'p1' });
+    settingsForm.addStep('teardown');
+    const asked = settingsForm.suggest('p1');
+    expect(settingsForm.suggesting.p1).toBe(true);
+    expect(backend.called('suggest_worktree_steps')[0].args).toEqual({ projectId: 'p1' });
+    answer({
+      setup: [{ id: 's1', command: 'npm ci', shell: 'pwsh', cwd: '' }],
+      teardown: [],
+    });
+    await asked;
+    expect(settingsForm.suggesting.p1).toBe(false);
+    expect(settingsForm.projects.p1.worktreeSetup).toEqual([{ id: 's1', command: 'npm ci', shell: 'pwsh', cwd: '' }]);
+    expect(settingsForm.projects.p1.worktreeTeardown).toEqual([]);
+    expect(app.toasts.at(-1)?.text).toBe("1 commande proposée : relis-la avant d'enregistrer.");
+
+    fakeBackend({ suggest_worktree_steps: () => ({ setup: [], teardown: [] }) });
+    await settingsForm.suggest('p1');
+    // Nothing found: what was there stays.
+    expect(settingsForm.projects.p1.worktreeSetup).toHaveLength(1);
+    expect(app.toasts.at(-1)?.text).toBe("Claude n'a trouvé aucune commande à lancer pour ce projet.");
+
+    fakeBackend({
+      suggest_worktree_steps: () => Promise.reject("Claude n'a pas proposé de commandes lisibles."),
+    });
+    await settingsForm.suggest('p1');
+    expect(settingsForm.suggesting.p1).toBe(false);
+    expect(settingsForm.projects.p1.worktreeSetup).toHaveLength(1);
+    expect(app.toasts.at(-1)).toMatchObject({ text: "Claude n'a pas proposé de commandes lisibles.", kind: 'error' });
+  });
+
   it('gives a new command the first shell found', () => {
     app.shells = [{ id: 'bash', label: 'Git Bash', path: 'bash.exe' }];
     settingsForm.open({ projectId: 'p2' });

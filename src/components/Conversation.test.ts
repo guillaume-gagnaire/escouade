@@ -54,6 +54,13 @@ describe('Conversation', () => {
     expect(scroller.scrollTop).toBe(2000);
   });
 
+  it('says the worktree is being set up, and that messages wait for it', () => {
+    setup({ status: 'idle', setup: '1/2 · npm ci' });
+    const line = screen.getByRole('status');
+    expect(line).toHaveTextContent('Préparation du worktree · 1/2 · npm ci — tes messages partiront une fois terminée.');
+    expect(screen.queryByText('Claude travaille…')).toBeNull();
+  });
+
   it('does not yank the reader back to the bottom when the agent is updated', async () => {
     const { a, scroller, rerender } = setup();
     await frame();
@@ -383,6 +390,15 @@ describe('Conversation header test launch', () => {
     expect(screen.getByRole('button', { name: '▶ Tester' })).toBeInTheDocument();
     app.tickets.t1 = ticket({ agentId: a.id, column: 'review', step: 'Tests…' });
     await waitFor(() => expect(screen.queryByRole('button', { name: '▶ Tester' })).not.toBeInTheDocument());
+  });
+
+  it('tests a worktree whose services isola runs without a recipe, and asks for none', () => {
+    setup({ worktree: WT, isola: true });
+    expect(screen.getByRole('button', { name: '▶ Tester' })).toHaveAttribute(
+      'title',
+      'Lance les services isola de ce worktree et ouvre la fonctionnalité dans le navigateur',
+    );
+    expect(screen.queryByRole('button', { name: 'Préparer le lancement' })).not.toBeInTheDocument();
   });
 
   it('offers neither to an agent without a worktree, nor to an archived one', () => {

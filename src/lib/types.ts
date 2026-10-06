@@ -142,6 +142,10 @@ export interface Project {
   board: BoardSettings;
   /** Untracked files of the project copied into every new worktree (glob patterns). */
   worktreeCopy: string[];
+  /** Run in every new worktree, one after the other, before its agent's first message. */
+  worktreeSetup: WorktreeStep[];
+  /** Run in a worktree before the app removes it. */
+  worktreeTeardown: WorktreeStep[];
   /** The external ticket systems its tickets come from, and what moving them does there. */
   integrations: ProjectIntegrations;
 }
@@ -154,6 +158,33 @@ export interface RunCommand {
   shell: string;
   /** Folder relative to the project's, empty for the project itself. */
   cwd: string;
+}
+
+/** A command run in a worktree once it is made (setup) or before it is removed (teardown). */
+export interface WorktreeStep {
+  id: string;
+  command: string;
+  /** Shell id; the system's default one when not found. */
+  shell: string;
+  /** Folder relative to the worktree's, empty for the worktree itself. */
+  cwd: string;
+}
+
+/** The setup and teardown Claude suggests for a project's worktrees. */
+export interface WorktreeSuggestion {
+  setup: WorktreeStep[];
+  teardown: WorktreeStep[];
+}
+
+/** A service isola runs for a worktree. */
+export interface IsolaService {
+  name: string;
+  /** "running", "stopped"…, as isola says it. */
+  status: string;
+  /** Its address through isola's proxy, else on its port; empty for a background process. */
+  url: string;
+  /** What tells it is up: its own port (the proxy answers before it does), else `url`. */
+  probe: string;
 }
 
 export type Column = 'todo' | 'doing' | 'review' | 'done';
@@ -320,6 +351,10 @@ export interface Agent {
   recipe: TestRecipe | null;
   /** What it is doing right now ("Lit src/db.ts", "Lance npm test"…), during a turn. */
   activity: string | null;
+  /** The setup of its new worktree under way: the step running ("1/2 · npm ci"). */
+  setup: string | null;
+  /** isola runs its worktree's services: its test launch goes through it, with no recipe. */
+  isola: boolean;
 }
 
 /** A choice of Claude Code's model picker: an alias or a full id, and the model it stands for. */

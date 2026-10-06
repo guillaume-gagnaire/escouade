@@ -10,7 +10,7 @@ vi.mock('./terminals', () => ({
 
 import { agent, fakeBackend, project, resetApp, SETTINGS, ticket } from '../test/ipc';
 import { app } from './state.svelte';
-import { allRunning, anyRunning, flows, READY_LIMIT_MS, stopTests, testAgent } from './test-launch.svelte';
+import { allRunning, anyRunning, canPrepare, canTest, flows, READY_LIMIT_MS, stopTests, testAgent } from './test-launch.svelte';
 import type { Agent, InitialState, TestRecipe, UiEvent } from './types';
 
 const RECIPE: TestRecipe = {
@@ -551,5 +551,112 @@ describe('▶ Tester', () => {
       expect(app.modal).toEqual({ kind: 'testLaunch', agentId: 'a8' });
       expect(flows.all.a8.phase).toBe('ready');
     });
+  });
+});
+
+describe('▶ Tester with isola', () => {
+  const ISOLA = { path: 'C:\code\demo-api\.claude\worktrees\dem-1', branch: 'ticket/dem-1', baseBranch: 'main' };
+  const SERVICES = [
+    { name: 'api', status: 'running', url: 'http://localhost:8117', probe: 'http://localhost:8117' },
+    // Through isola's proxy, which answers before the service does: probed on its own port.
+    { name: 'web', status: 'running', url: 'http://ticket-dem-1.demo.localhost:3000', probe: 'http://127.0.0.1:3117' },
+    { name: 'worker', status: 'running', url: '', probe: '' },
+  ];
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    A = agent({ id: 'a7', worktree: ISOLA, isola: true });
+    resetApp({ agents: [A] });
+    flows.all = {};
+    flows.prepared = {};
+  });
+  afterEach(() => vi.useRealTimers());
+
+  /** `isola up` in a terminal of its own, then the services isola lists, each answering once `up` says so. */
+  function isolaBackend(up: (url: string) => boolean, services: unknown = SERVICES) {
+    return fakeBackend({
+      test_run_start: (a: any) => ({ id: 't1', projectId: 'p1', name: a.kind, shell: 'pwsh' }),
+      isola_services: () => services,
+      http_ready: (a: any) => up(a.url),
+    });
+  }
+
+  it('can be tested without a recipe, and has nothing to prepare', () => {
+    expect(canTest(A)).toBe(true);
+    expect(canPrepare(A)).toBe(false);
+    expect(canTest(agent({ id: 'a7', worktree: ISOLA }))).toBe(false);
+    expect(canTest({ ...A, archived: true })).toBe(false);
+  });
+
+  it('runs isola up, waits for its services, then opens the first address', async () => {
+    let up = false;
+    const b = isolaBackend(() => up);
+    const run = testAgent(A, project());
+    await vi.advanceTimersByTimeAsync(10);
+    expect(b.called('test_run_start').map((c) => c.args)).toMatchObject([{ agentId: 'a7', kind: 'isola', index: 0 }]);
+    expect(flows.all.a7.lines.map((l) => l.label)).toEqual(['isola up']);
+    exit('test:a7:isola:0', 0);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(b.called('isola_services')[0].args).toEqual({ agentId: 'a7' });
+    expect(flows.all.a7.lines.map((l) => [l.label, l.detail])).toEqual([
+      ['isola up', 'terminé'],
+      ['api', 'en attente de localhost:8117…'],
+      ['web', 'en attente de 127.0.0.1:3117…'],
+      ['worker', 'démarré'],
+    ]);
+    // Services have no log of their own: only isola up's.
+    expect(flows.all.a7.lines.slice(1).every((l) => l.launchId === '')).toBe(true);
+    expect(new Set(b.called('http_ready').map((c) => c.args.url))).toEqual(new Set(['http://localhost:8117', 'http://127.0.0.1:3117']));
+    up = true;
+    await vi.advanceTimersByTimeAsync(600);
+    await run;
+    expect(flows.all.a7.phase).toBe('ready');
+    expect(b.called('plugin:opener|open_url').map((c) => c.args.url)).toEqual(['http://localhost:8117']);
+    // Asked again, it checks again: isola up (all running: at once), then the services.
+    const again = testAgent(A, project());
+    await vi.advanceTimersByTimeAsync(10);
+    expect(b.called('test_run_start')).toHaveLength(2);
+    exit('test:a7:isola:0', 0);
+    await vi.advanceTimersByTimeAsync(600);
+    await again;
+    expect(b.called('isola_services')).toHaveLength(2);
+    expect(flows.all.a7.phase).toBe('ready');
+    // Its services run: the test is up, and stopping it is isola down.
+    expect(anyRunning('a7')).toBe(true);
+    stopTests('a7');
+    expect(b.called('isola_down')[0].args).toEqual({ agentId: 'a7' });
+    expect(flows.all.a7.phase).toBe('failed');
+    expect(anyRunning('a7')).toBe(false);
+  });
+
+  it('opens the address the agent gave for the feature', async () => {
+    const b = isolaBackend(() => true);
+    A = { ...A, recipe: { prepare: [], processes: [], open: 'http://ticket-dem-1.demo.localhost:3000/connexion' } };
+    app.agents.a7 = A;
+    const run = testAgent(A, project());
+    await vi.advanceTimersByTimeAsync(10);
+    exit('test:a7:isola:0', 0);
+    await vi.advanceTimersByTimeAsync(1000);
+    await run;
+    expect(b.called('plugin:opener|open_url').map((c) => c.args.url)).toEqual(['http://ticket-dem-1.demo.localhost:3000/connexion']);
+  });
+
+  it('stops when isola up fails, or a service does not run', async () => {
+    isolaBackend(() => true);
+    let run = testAgent(A, project());
+    await vi.advanceTimersByTimeAsync(10);
+    exit('test:a7:isola:0', 1);
+    await vi.advanceTimersByTimeAsync(300);
+    await run;
+    expect(flows.all.a7).toMatchObject({ phase: 'failed', error: 'isola up en échec (code 1)' });
+
+    isolaBackend(() => true, [{ name: 'api', status: 'stopped', url: 'http://localhost:8117', probe: 'http://localhost:8117' }]);
+    run = testAgent(A, project());
+    await vi.advanceTimersByTimeAsync(10);
+    exit('test:a7:isola:0', 0);
+    await vi.advanceTimersByTimeAsync(300);
+    await run;
+    expect(flows.all.a7).toMatchObject({ phase: 'failed', error: 'api ne tourne pas' });
+    expect(flows.all.a7.lines[1]).toMatchObject({ label: 'api', state: 'failed', detail: 'stopped' });
   });
 });

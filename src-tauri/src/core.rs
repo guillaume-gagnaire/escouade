@@ -6,6 +6,7 @@ use crate::claude::{self, ClaudeProcess, SpawnOpts};
 use crate::git::{self, GitService};
 use crate::hub::Hub;
 use crate::integrations;
+use crate::isola;
 use crate::job::JobUsage;
 use crate::model::*;
 use crate::notify;
@@ -15,6 +16,7 @@ use crate::resources;
 use crate::stats::Stats;
 use crate::testlaunch;
 use crate::usage;
+use crate::worktrees::{self, WorktreeSuggestion};
 use anyhow::{anyhow, bail, Context, Result};
 use parking_lot::{Mutex, RwLock};
 use serde::Deserialize;
@@ -45,6 +47,36 @@ pub enum SyncOp {
     Fetch,
     Pull,
     Push,
+}
+
+/// A question to Claude with `claude -p` (`Core::ask_claude`).
+struct Ask<'a> {
+    /// As a timeout names it.
+    who: &'a str,
+    model: &'a str,
+    /// The tools it may use (`--tools`), none when empty.
+    tools: &'a str,
+    cwd: &'a Path,
+    system: &'a str,
+    prompt: &'a str,
+    limit: Duration,
+}
+
+/// "1/2 · npm ci": step `i` of a setup, as the agent shows it.
+fn setup_label(steps: &[WorktreeStep], i: usize) -> String {
+    format!(
+        "{}/{} · {}",
+        i + 1,
+        steps.len(),
+        worktrees::label(&steps[i])
+    )
+}
+
+/// The setup of an agent's new worktree, under way.
+struct Setup {
+    /// True once it is over, whichever way (its sender dropped: stopped).
+    done: tokio::sync::watch::Receiver<bool>,
+    task: tauri::async_runtime::JoinHandle<()>,
 }
 
 /// After the usage limit resets, before sending "continue": clocks may differ a little.
@@ -214,6 +246,8 @@ pub struct Core<R: Runtime = Wry> {
     pub gh: RwLock<Option<PathBuf>>,
     /// The terminals of each agent's test launches.
     pub(crate) test_runs: Mutex<HashMap<String, Vec<String>>>,
+    /// The setups of new worktrees under way, by agent.
+    setups: Mutex<HashMap<String, Setup>>,
     /// The last pass found no Claude Code (logged once until it is found again).
     pub(crate) claude_missing: AtomicBool,
     /// Why no ticket of a project's board starts (its target branch has no commit yet, or is
@@ -472,6 +506,7 @@ impl<R: Runtime> Core<R> {
             cut_turns: Mutex::new(cut_turns),
             gh: RwLock::new(locate_gh()),
             test_runs: Mutex::default(),
+            setups: Mutex::default(),
             claude_missing: AtomicBool::new(false),
             board_issues: Mutex::default(),
             ports_reserved: Mutex::default(),
@@ -1338,6 +1373,10 @@ impl<R: Runtime> Core<R> {
 
     pub fn shutdown(&self) {
         self.quitting.store(true, Ordering::Release);
+        // Setups under way stop, with what they started.
+        for (_, s) in self.setups.lock().drain() {
+            s.task.abort();
+        }
         for h in self.agents.read().values() {
             let mut rt = h.lock();
             if let Some(p) = rt.proc.take() {
@@ -1357,6 +1396,9 @@ impl<R: Runtime> Core<R> {
     ) -> Result<()> {
         // Refused before starting Claude: the composer keeps the message.
         let content = user_content(&text, &attachments)?;
+        // Its new worktree is set up first: Claude would work in it meanwhile (an install running
+        // twice, files half written).
+        self.wait_setup(id).await;
         // Two attempts: the process may die between being started and receiving the message.
         for attempt in 0..2 {
             let proc = self.ensure_process(id).await?;
@@ -1648,12 +1690,17 @@ impl<R: Runtime> Core<R> {
             None => {}
         }
         let id = meta.id.clone();
+        let fresh = meta.worktree.clone();
         let h = Arc::new(Mutex::new(AgentRt::new(meta, &self.data.conversations())));
         if let Some(w) = warning {
             let mut fx = Effects::default();
             h.lock().notice("warn", w, &mut fx);
         }
         self.agents.write().insert(id.clone(), h.clone());
+        // Its new worktree is set up (dependencies…) before it takes a message.
+        let setting_up = fresh
+            .as_ref()
+            .is_some_and(|wt| self.start_setup(&h, &project, wt));
         if o.select {
             self.ui
                 .write()
@@ -1663,9 +1710,250 @@ impl<R: Runtime> Core<R> {
         self.request_save();
         self.emit_agent(&h);
         self.git.refresh(project_id);
-        self.warm(&id);
+        // Once set up, if it is (`run_setup`): its hooks and MCP servers would meet a worktree
+        // half set up.
+        if !setting_up {
+            self.warm(&id);
+        }
         let view = h.lock().view();
         Ok(view)
+    }
+
+    // ---------- worktree setup and teardown ----------
+
+    /// Starts the project's setup in the agent's new worktree `wt`, in the background (an earlier
+    /// one of the agent stops); its messages wait for it (`wait_setup`), and its process starts
+    /// once it is over. False when the project has none.
+    fn start_setup(self: &Arc<Self>, h: &AgentHandle, project: &Project, wt: &Worktree) -> bool {
+        let steps = worktrees::runnable(&project.worktree_setup);
+        if steps.is_empty() {
+            return false;
+        }
+        let (id, ports) = {
+            let mut rt = h.lock();
+            rt.setup = Some(setup_label(&steps, 0));
+            rt.setup_failure = None;
+            (rt.meta.id.clone(), rt.meta.port_base)
+        };
+        let (tx, done) = tokio::sync::watch::channel(false);
+        let mine = done.clone();
+        let (c, task_id, project_dir, wt) =
+            (self.clone(), id.clone(), project.path.clone(), wt.clone());
+        // Held while it starts: its end, however soon, finds it in the map.
+        let mut setups = self.setups.lock();
+        let task = tauri::async_runtime::spawn(async move {
+            c.run_setup(&task_id, &project_dir, &wt, ports, &steps)
+                .await;
+            let _ = tx.send(true);
+            let mut setups = c.setups.lock();
+            if setups
+                .get(&task_id)
+                .is_some_and(|s| s.done.same_channel(&mine))
+            {
+                setups.remove(&task_id);
+            }
+        });
+        if let Some(earlier) = setups.insert(id, Setup { done, task }) {
+            earlier.task.abort();
+        }
+        true
+    }
+
+    /// The setup's steps, one after the other, the agent showing the one running; the first that
+    /// fails ends it, and the conversation says why (as does its ticket's first message).
+    async fn run_setup(
+        self: &Arc<Self>,
+        id: &str,
+        project_dir: &str,
+        wt: &Worktree,
+        ports: Option<u16>,
+        steps: &[WorktreeStep],
+    ) {
+        let settings = self.settings.read().clone();
+        let shells = crate::pty::detect_shells(&settings);
+        let mut env = if settings.proxy_terminals {
+            settings.proxy_env()
+        } else {
+            Vec::new()
+        };
+        env.extend(worktrees::step_env(project_dir, wt, ports));
+        let started = Instant::now();
+        for (i, step) in steps.iter().enumerate() {
+            if i > 0 {
+                let label = setup_label(steps, i);
+                // Gone meanwhile: nothing more to set up.
+                if self
+                    .with_agent(id, |rt, _| {
+                        rt.setup = Some(label);
+                        Ok(())
+                    })
+                    .is_err()
+                {
+                    return;
+                }
+            }
+            let ran =
+                worktrees::run_step(step, &shells, &wt.path, &env, worktrees::SETUP_LIMIT).await;
+            if let Err(f) = ran {
+                let text = f.describe("La préparation du worktree");
+                log::warn!("agent {id}: {text}");
+                let _ = self.with_agent(id, |rt, fx| {
+                    rt.setup = None;
+                    rt.setup_failure = Some(text.clone());
+                    rt.notice("warn", text, fx);
+                    Ok(())
+                });
+                self.warm(id);
+                return;
+            }
+        }
+        let n = steps.len();
+        let text = format!(
+            "Worktree préparé ({n} commande{}, {} s).",
+            if n > 1 { "s" } else { "" },
+            started.elapsed().as_secs()
+        );
+        let _ = self.with_agent(id, |rt, fx| {
+            rt.setup = None;
+            rt.notice("info", text, fx);
+            Ok(())
+        });
+        self.warm(id);
+    }
+
+    /// Waits until the setup of the agent's new worktree is over, if one is under way.
+    pub(crate) async fn wait_setup(&self, id: &str) {
+        let done = self.setups.lock().get(id).map(|s| s.done.clone());
+        if let Some(mut done) = done {
+            // An error: stopped, which is over too.
+            let _ = done.wait_for(|over| *over).await;
+        }
+    }
+
+    /// Stops the setup of the agent's worktree, if one is under way, with all it started (its
+    /// processes die with their job once its task is dropped); the agent no longer shows it.
+    async fn stop_setup(self: &Arc<Self>, id: &str) {
+        let setup = self.setups.lock().remove(id);
+        if let Some(s) = setup {
+            s.task.abort();
+            let _ = s.task.await;
+            let _ = self.with_agent(id, |rt, _| {
+                rt.setup = None;
+                Ok(())
+            });
+        }
+    }
+
+    /// Before the project's worktree `wt` is removed: the project's teardown runs in it, each step
+    /// even after one failed, then isola's when it runs the worktree's services. What went
+    /// wrong, as the user is told after "mais".
+    pub(crate) async fn teardown_worktree(
+        &self,
+        project: &Project,
+        wt: &Worktree,
+        ports: Option<u16>,
+    ) -> Option<String> {
+        if !Path::new(&wt.path).is_dir() {
+            return None;
+        }
+        let mut problems = Vec::new();
+        let steps = worktrees::runnable(&project.worktree_teardown);
+        if !steps.is_empty() {
+            let settings = self.settings.read().clone();
+            let shells = crate::pty::detect_shells(&settings);
+            let mut env = if settings.proxy_terminals {
+                settings.proxy_env()
+            } else {
+                Vec::new()
+            };
+            env.extend(worktrees::step_env(&project.path, wt, ports));
+            for step in &steps {
+                let ran =
+                    worktrees::run_step(step, &shells, &wt.path, &env, worktrees::TEARDOWN_LIMIT)
+                        .await;
+                if let Err(f) = ran {
+                    log::warn!("{}", f.describe("Le démontage du worktree"));
+                    problems.push(f.summary("le démontage du worktree"));
+                }
+            }
+        }
+        if isola::manages(&wt.path) {
+            if let Err(e) = isola::run(&wt.path, &["destroy"], isola::LIMIT).await {
+                log::warn!("{}: {e:#}", wt.path);
+                problems.push(format!("{e:#}"));
+            }
+        }
+        (!problems.is_empty()).then(|| problems.join(" ; "))
+    }
+
+    /// A restored agent whose worktree folder went (removed after a pull request or a push) gets
+    /// it back from its branch, with the project's files to copy and its setup. Without its
+    /// branch (merged, then deleted), it stays as it is.
+    async fn restore_worktree(self: &Arc<Self>, id: &str) {
+        let Ok(h) = self.agent(id) else { return };
+        let (pid, wt) = {
+            let rt = h.lock();
+            (rt.meta.project_id.clone(), rt.meta.worktree.clone())
+        };
+        let (Some(wt), Ok(project)) = (wt, self.project(&pid)) else {
+            return;
+        };
+        if Path::new(&wt.path).exists() || !git::branch_exists(&project.path, &wt.branch).await {
+            return;
+        }
+        let problem = match git::worktree_restore(&project.path, &wt.path, &wt.branch).await {
+            Ok(()) => {
+                let copied = testlaunch::copy_worktree_files(
+                    &project.path,
+                    &wt.path,
+                    &project.worktree_copy,
+                )
+                .await;
+                self.start_setup(&h, &project, &wt);
+                copied
+                    .err()
+                    .map(|e| format!("Fichiers non copiés dans le worktree : {e:#}"))
+            }
+            Err(e) => Some(format!("Worktree non recréé depuis {} : {e:#}", wt.branch)),
+        };
+        let _ = self.with_agent(id, |rt, fx| {
+            if let Some(p) = problem {
+                rt.notice("warn", p, fx);
+            }
+            Ok(())
+        });
+        self.git.refresh(&pid);
+    }
+
+    /// The setup and teardown Claude suggests for the project's worktrees, from what it reads of
+    /// the project (in its folder, with tools that only read).
+    pub async fn suggest_worktree_steps(&self, project_id: &str) -> Result<WorktreeSuggestion> {
+        let project = self.project(project_id)?;
+        let settings = self.settings.read().clone();
+        let shell = crate::pty::detect_shells(&settings)
+            .into_iter()
+            .next()
+            .ok_or_else(|| anyhow!("Aucun shell détecté."))?;
+        let prompt = worktrees::suggest_prompt(
+            &shell.label,
+            &project.worktree_copy,
+            isola::configured(&project.path),
+        );
+        let answer = self
+            .ask_claude(Ask {
+                who: "Claude",
+                model: "sonnet",
+                tools: "Read,Glob,Grep",
+                cwd: Path::new(&project.path),
+                system: worktrees::SUGGEST_SYSTEM,
+                prompt: &prompt,
+                limit: worktrees::SUGGEST_LIMIT,
+            })
+            .await?;
+        let (setup, teardown) =
+            worktrees::parse_suggestion(&answer, Path::new(&project.path), &shell.id)
+                .ok_or_else(|| anyhow!("Claude n'a pas proposé de commandes lisibles."))?;
+        Ok(WorktreeSuggestion { setup, teardown })
     }
 
     async fn auto_name(self: &Arc<Self>, id: &str, prompt: &str) {
@@ -1696,7 +1984,31 @@ impl<R: Runtime> Core<R> {
         prompt: &str,
         limit: Duration,
     ) -> Result<String> {
+        self.ask_claude(Ask {
+            who: "Haiku",
+            model: "haiku",
+            tools: "",
+            cwd: &std::env::temp_dir(),
+            system,
+            prompt,
+            limit,
+        })
+        .await
+    }
+
+    /// One question to Claude (`claude -p`, no session, no settings, no MCP), as `ask` says: its
+    /// answer, within its limit.
+    async fn ask_claude(&self, ask: Ask<'_>) -> Result<String> {
         use tokio::io::AsyncWriteExt;
+        let Ask {
+            who,
+            model,
+            tools,
+            cwd,
+            system,
+            prompt,
+            limit,
+        } = ask;
         let settings = self.settings.read().clone();
         let program =
             claude::resolve_binary(&settings.claude_path).context("claude introuvable")?;
@@ -1704,25 +2016,27 @@ impl<R: Runtime> Core<R> {
         cmd.args([
             "-p",
             "--model",
-            "haiku",
+            model,
             "--output-format",
             "json",
             "--no-session-persistence",
             "--tools",
-            "",
+            tools,
             "--setting-sources",
             "",
             // No MCP servers (account connectors included): nothing that invites the model to act.
             "--strict-mcp-config",
             "--system-prompt",
             system,
-        ])
-        .current_dir(std::env::temp_dir())
-        .envs(settings.proxy_env())
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .kill_on_drop(true);
+        ]);
+        // Reading needs no permission in its folder, and is refused outside of it: nothing more is
+        // allowed.
+        cmd.current_dir(cwd)
+            .envs(settings.proxy_env())
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .kill_on_drop(true);
         #[cfg(windows)]
         cmd.creation_flags(claude::CREATE_NO_WINDOW);
         crate::job::isolate(&mut cmd);
@@ -1738,7 +2052,7 @@ impl<R: Runtime> Core<R> {
         };
         let out = tokio::time::timeout(limit, asked)
             .await
-            .map_err(|_| anyhow!("pas de réponse de Haiku en {} s", limit.as_secs()))??;
+            .map_err(|_| anyhow!("pas de réponse de {who} en {} s", limit.as_secs()))??;
         let v: Value = serde_json::from_slice(&out.stdout)?;
         Ok(v["result"].as_str().unwrap_or("").to_string())
     }
@@ -1881,8 +2195,13 @@ impl<R: Runtime> Core<R> {
         // Its test launches stop with it. Its ticket already let go of it (above); what may start
         // starts now that its place, its ports and its quota wait are free.
         if archived {
+            // The setup of its worktree stops; what waited for it finds it archived (and its
+            // ticket let go of it, above).
+            self.stop_setup(id).await;
             self.stop_test_runs(id);
             self.release_ticket(id);
+        } else {
+            self.restore_worktree(id).await;
         }
         Ok(())
     }
@@ -1898,6 +2217,8 @@ impl<R: Runtime> Core<R> {
         if self.agent(id)?.lock().meta.remote_control {
             let _ = self.set_remote_control(id, false).await;
         }
+        // The setup of its worktree stops, with what it started (which holds the worktree).
+        self.stop_setup(id).await;
         // Wait for an in-flight start (warm-up) so that its process is killed too.
         let lock = self.spawn_lock(id);
         let _guard = lock.lock().await;
@@ -1906,14 +2227,18 @@ impl<R: Runtime> Core<R> {
             .write()
             .remove(id)
             .ok_or_else(|| anyhow!("agent introuvable"))?;
-        let (pid, worktree) = {
+        let (pid, worktree, ports) = {
             let mut rt = h.lock();
             rt.gen += 1;
             if let Some(p) = rt.proc.take() {
                 p.kill();
             }
             rt.conv.delete_file();
-            (rt.meta.project_id.clone(), rt.meta.worktree.clone())
+            (
+                rt.meta.project_id.clone(),
+                rt.meta.worktree.clone(),
+                rt.meta.port_base,
+            )
         };
         self.spawn_locks.lock().remove(id);
         {
@@ -1930,16 +2255,22 @@ impl<R: Runtime> Core<R> {
         self.update_tray();
         self.stop_test_runs(id);
         self.release_ticket(id);
-        let mut warning = None;
-        if let (true, Some(wt), Ok(project)) = (remove_worktree, worktree, self.project(&pid)) {
-            // Give the killed process tree a moment to release its handles on the worktree.
-            tokio::time::sleep(Duration::from_millis(300)).await;
-            if let Err(e) = git::worktree_remove(&project.path, &wt.path, &wt.branch).await {
-                warning = Some(format!(
-                    "Agent supprimé, mais le worktree n'a pas pu être nettoyé : {e:#}"
-                ));
+        let mut problems = Vec::new();
+        match (remove_worktree, worktree, self.project(&pid)) {
+            (true, Some(wt), Ok(project)) => {
+                // Give the killed process tree a moment to release its handles on the worktree.
+                tokio::time::sleep(Duration::from_millis(300)).await;
+                problems.extend(self.teardown_worktree(&project, &wt, ports).await);
+                if let Err(e) = git::worktree_remove(&project.path, &wt.path, &wt.branch).await {
+                    problems.push(format!("le worktree n'a pas pu être nettoyé : {e:#}"));
+                }
             }
+            // Kept: isola's services of the worktree stop all the same.
+            (false, Some(wt), _) if isola::manages(&wt.path) => isola::down_later(wt.path),
+            _ => {}
         }
+        let warning = (!problems.is_empty())
+            .then(|| format!("Agent supprimé, mais {}", problems.join(" ; ")));
         self.git.refresh(&pid);
         Ok(warning)
     }
@@ -2019,6 +2350,8 @@ impl<R: Runtime> Core<R> {
             run_commands: Vec::new(),
             board: BoardSettings::default(),
             worktree_copy: default_worktree_copy(),
+            worktree_setup: Vec::new(),
+            worktree_teardown: Vec::new(),
             integrations: ProjectIntegrations::default(),
         };
         self.projects.write().push(project.clone());
@@ -2046,6 +2379,8 @@ impl<R: Runtime> Core<R> {
         cur.worktree_per_agent = p.worktree_per_agent;
         cur.run_commands = p.run_commands;
         cur.worktree_copy = p.worktree_copy;
+        cur.worktree_setup = p.worktree_setup;
+        cur.worktree_teardown = p.worktree_teardown;
         // What was imported is the backend's own: the window's copy may be older.
         let imported = std::mem::take(&mut cur.integrations.imported);
         cur.integrations = crate::integrations::checked_links(p.integrations);
@@ -2071,6 +2406,7 @@ impl<R: Runtime> Core<R> {
         for aid in agents {
             // Bound first: the map guard must not live across the agent lock and the I/O below.
             let removed = self.agents.write().remove(&aid);
+            let mut worktree = None;
             if let Some(h) = removed {
                 let mut rt = h.lock();
                 rt.gen += 1;
@@ -2078,10 +2414,18 @@ impl<R: Runtime> Core<R> {
                     p.kill();
                 }
                 rt.conv.delete_file();
+                worktree = rt.meta.worktree.clone();
+            }
+            // The setup of its worktree stops, with what it started.
+            if let Some(s) = self.setups.lock().remove(&aid) {
+                s.task.abort();
             }
             // Its test launches are the project's terminals too (killed below all the same):
-            // none is kept for it.
+            // none is kept for it. isola's services of its worktree stop too.
             self.stop_test_runs(&aid);
+            if let Some(wt) = worktree.filter(|w| isola::manages(&w.path)) {
+                isola::down_later(wt.path);
+            }
             self.hub.emit(UiEvent::AgentRemoved {
                 id: aid,
                 project_id: id.to_string(),

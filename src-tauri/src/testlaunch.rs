@@ -159,10 +159,12 @@ pub async fn http_ready(url: &str) -> bool {
 
 // ---------- tests before a validation ----------
 
-/// What the tests run before a validation gave.
+/// What the tests run before a validation (or any command run without a window) gave.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TestRun {
     pub passed: bool,
+    /// Its exit code, when it has one.
+    pub code: Option<i32>,
     /// Their last lines, for the agent.
     pub tail: String,
 }
@@ -194,6 +196,27 @@ pub async fn run_tests(
     env: &[(String, String)],
     limit: Duration,
 ) -> Result<TestRun> {
+    Ok(run_command(shell, cwd, command, env, limit)
+        .await?
+        .unwrap_or_else(|| TestRun {
+            passed: false,
+            code: None,
+            tail: format!(
+                "Les tests n'ont pas fini en {} min.",
+                (limit.as_secs() / 60).max(1)
+            ),
+        }))
+}
+
+/// Runs `command` in `cwd` with `shell`, `env` added, without a window: how it ended and its last
+/// lines, or None when it did not end within `limit` (killed then with what it started).
+pub async fn run_command(
+    shell: &ShellInfo,
+    cwd: &str,
+    command: &str,
+    env: &[(String, String)],
+    limit: Duration,
+) -> Result<Option<TestRun>> {
     let mut cmd = tokio::process::Command::new(&shell.path);
     cmd.args(shell_args(&shell.id, command))
         .current_dir(cwd)
@@ -219,22 +242,17 @@ pub async fn run_tests(
                 String::from_utf8_lossy(&out.stdout),
                 String::from_utf8_lossy(&out.stderr)
             );
-            Ok(TestRun {
+            Ok(Some(TestRun {
                 passed: out.status.success(),
+                code: out.status.code(),
                 tail: tail_lines(&crate::agent::strip_ansi(&text), 80),
-            })
+            }))
         }
         Err(_) => {
             if let Some(j) = &job {
                 j.terminate();
             }
-            Ok(TestRun {
-                passed: false,
-                tail: format!(
-                    "Les tests n'ont pas fini en {} min.",
-                    (limit.as_secs() / 60).max(1)
-                ),
-            })
+            Ok(None)
         }
     }
 }

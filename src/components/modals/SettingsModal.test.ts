@@ -179,7 +179,7 @@ describe('SettingsModal', () => {
     expect(screen.getByText('feat: limiter les tentatives de connexion [DEM-42]')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('switch', { name: 'Message de commit généré' }));
     expect(screen.getByText('DEM-42 Limiter les tentatives de connexion')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('switch', { name: 'Supprimer le worktree après merge' }));
+    await userEvent.click(screen.getByRole('switch', { name: 'Supprimer le worktree une fois validé' }));
     await save();
     expect(backend.called('board_set')[0].args.settings).toMatchObject({
       testCommand: 'npm test',
@@ -301,6 +301,32 @@ describe('SettingsModal', () => {
     await userEvent.type(field, '{Enter}**/.env.local');
     await save();
     expect(backend.called('update_project')[0].args.project.worktreeCopy).toEqual(['.env*', '**/.env.local']);
+  });
+
+  it('sets the commands run in new worktrees, by hand or as Claude suggests them', async () => {
+    let answer!: (v: unknown) => void;
+    const backend = backendSaving({ suggest_worktree_steps: () => new Promise((r) => (answer = r)) });
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    await userEvent.click(screen.getByRole('button', { name: 'Ajouter une commande de démontage' }));
+    const down = screen.getByRole('group', { name: 'Commande de démontage 1' });
+    expect(within(down).getByLabelText('Shell')).toHaveValue('pwsh');
+    await userEvent.type(within(down).getByLabelText('Commande'), 'docker compose down');
+    await userEvent.click(screen.getByRole('button', { name: '✦ Remplir automatiquement' }));
+    expect(screen.getByRole('button', { name: 'Claude lit le projet…' })).toBeDisabled();
+    expect(backend.called('suggest_worktree_steps')[0].args).toEqual({ projectId: 'p1' });
+    answer({ setup: [{ id: 's1', command: 'npm ci', shell: 'bash', cwd: 'web' }], teardown: [] });
+    const setup = await screen.findByRole('group', { name: 'Commande de préparation 1' });
+    expect(within(setup).getByLabelText('Commande')).toHaveValue('npm ci');
+    expect(within(setup).getByLabelText('Shell')).toHaveValue('bash');
+    expect(within(setup).getByLabelText('Sous-dossier')).toHaveValue('web');
+    // The suggestion replaces both lists.
+    expect(screen.queryByRole('group', { name: 'Commande de démontage 1' })).toBeNull();
+    expect(screen.getByRole('button', { name: '✦ Remplir automatiquement' })).toBeEnabled();
+    await save();
+    expect(backend.called('update_project')[0].args.project).toMatchObject({
+      worktreeSetup: [{ id: 's1', command: 'npm ci', shell: 'bash', cwd: 'web' }],
+      worktreeTeardown: [],
+    });
   });
 
   it('asks before closing the project', async () => {

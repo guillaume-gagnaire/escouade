@@ -234,6 +234,8 @@
               title="Arrêté par la limite d’usage : reprise automatique {fWhen(a.resumeAt, app.now)}"
               >Reprise {fWhen(a.resumeAt, app.now)}</span
             >
+          {:else if a.setup}
+            <span class="status" style:color="var(--wait)" title="Préparation du worktree : {a.setup}">Préparation…</span>
           {:else}
             <span class="status" style:color={SC[a.status]}>{SL[a.status]}</span>
           {/if}

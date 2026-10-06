@@ -106,8 +106,11 @@
       bind:on={() => b.testsFirst && !!b.testCommand.trim(), (v) => (b.testsFirst = v)}
     />
   </Row>
-  <Row label="Supprimer le worktree après merge" desc="Libère l'espace disque et repart d'une branche propre.">
-    <Switch label="Supprimer le worktree après merge" bind:on={b.cleanup} />
+  <Row
+    label="Supprimer le worktree une fois validé"
+    desc="Libère l'espace disque, après ses commandes de démontage. Après un merge, sa branche part aussi ; poussée ou proposée en PR, elle reste."
+  >
+    <Switch label="Supprimer le worktree une fois validé" bind:on={b.cleanup} />
   </Row>
   <Row label="Message de commit généré" desc={commitPreview(b, draft.name.trim() || project.name)}>
     <Switch label="Message de commit généré" bind:on={b.conventional} />

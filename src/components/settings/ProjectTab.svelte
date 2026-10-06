@@ -7,9 +7,11 @@
   import type { Project } from '../../lib/types';
   import Group from './Group.svelte';
   import Row from './Row.svelte';
+  import StepList from './StepList.svelte';
   import Switch from './Switch.svelte';
 
-  // A project's own settings: who it is, its worktrees, its launch commands (its draft: the modal's project).
+  // A project's own settings: who it is, its worktrees and what runs in them, its launch commands (its draft: the
+  // modal's project).
   let { project }: { project: Project } = $props();
 
   const draft = $derived(settingsForm.project!);
@@ -66,6 +68,35 @@
       aria-describedby="copy-desc"
       bind:value={draft.copy}
     ></textarea>
+  </Row>
+</Group>
+
+<Group
+  title="Worktrees"
+  anchor="worktrees"
+  note="Variables disponibles : ESCOUADE_PROJECT_DIR (le projet), ESCOUADE_WORKTREE_DIR, ESCOUADE_BRANCH, et les ports réservés d'un ticket (ESCOUADE_PORT_BASE, ESCOUADE_PORT_END). Un échec est signalé dans la conversation de l'agent."
+>
+  <Row
+    label="Remplir automatiquement"
+    desc="Claude lit le projet (manifestes, lockfiles, README…) sans rien modifier et propose les commandes. Relis-les avant d'enregistrer."
+  >
+    <button class="btn suggest" disabled={settingsForm.suggesting[project.id]} onclick={() => settingsForm.suggest(project.id)}>
+      {settingsForm.suggesting[project.id] ? 'Claude lit le projet…' : '✦ Remplir automatiquement'}
+    </button>
+  </Row>
+  <Row
+    label="À l'ouverture d'un worktree"
+    desc="Dans l'ordre, avant le premier message de son agent : dépendances, code généré… Les messages attendent la fin."
+    wide
+  >
+    <StepList bind:steps={draft.worktreeSetup} label="Commande de préparation" onadd={() => settingsForm.addStep('setup')} />
+  </Row>
+  <Row
+    label="Avant sa suppression"
+    desc="Ce que la préparation a créé hors du worktree (base de données, conteneurs…) ; souvent rien."
+    wide
+  >
+    <StepList bind:steps={draft.worktreeTeardown} label="Commande de démontage" onadd={() => settingsForm.addStep('teardown')} />
   </Row>
 </Group>
 
@@ -218,5 +249,8 @@
   }
   .add {
     padding: 12px 16px;
+  }
+  .suggest {
+    flex-shrink: 0;
   }
 </style>

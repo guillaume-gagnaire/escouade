@@ -173,12 +173,14 @@
     >
       <span class="mono glyph">&lt;/&gt;</span><span class="lbl">Éditeur</span>
     </button>
-    {#if agent.recipe}
+    {#if agent.recipe || agent.isola}
       {#if canTest(agent)}
         <button
           class="btn test"
           aria-label="▶ Tester"
-          title="Lance le worktree de cet agent et ouvre la fonctionnalité dans le navigateur"
+          title={agent.isola
+            ? 'Lance les services isola de ce worktree et ouvre la fonctionnalité dans le navigateur'
+            : 'Lance le worktree de cet agent et ouvre la fonctionnalité dans le navigateur'}
           onclick={() => testAgent(agent, project)}
         >
           <span class="glyph">▶</span><span class="lbl">Tester</span>
@@ -331,6 +333,13 @@
       {#if running}
         <div class="working">
           <span class="dots"><span></span><span></span><span></span></span>Claude travaille…
+        </div>
+      {/if}
+      {#if agent.setup}
+        <div class="working" role="status">
+          <span class="dots"><span></span><span></span><span></span></span><span
+            >Préparation du worktree · <span class="mono">{agent.setup}</span> — tes messages partiront une fois terminée.</span
+          >
         </div>
       {/if}
     </div>

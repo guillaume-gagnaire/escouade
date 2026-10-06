@@ -749,6 +749,30 @@ pub fn test_run_start(
     Ok(info)
 }
 
+/// The services isola runs for the agent's worktree, with their addresses.
+#[tauri::command]
+pub async fn isola_services(
+    core: CoreState<'_>,
+    agent_id: String,
+) -> Res<Vec<crate::isola::Service>> {
+    core.isola_services(&agent_id).await.map_err(err)
+}
+
+/// Stops the services isola runs for the agent's worktree.
+#[tauri::command]
+pub async fn isola_down(core: CoreState<'_>, agent_id: String) -> Res<()> {
+    core.isola_down(&agent_id).await.map_err(err)
+}
+
+/// The setup and teardown Claude suggests for the project's worktrees, from what it reads of it.
+#[tauri::command]
+pub async fn suggest_worktree_steps(
+    core: CoreState<'_>,
+    project_id: String,
+) -> Res<crate::worktrees::WorktreeSuggestion> {
+    core.suggest_worktree_steps(&project_id).await.map_err(err)
+}
+
 /// One HTTP request to `url` (http or https only) without proxy, 2 s at most: true for any
 /// answer.
 #[tauri::command]

@@ -127,6 +127,13 @@ pub struct Project {
     /// Untracked files of the project copied into every new worktree (glob patterns).
     #[serde(default = "default_worktree_copy")]
     pub worktree_copy: Vec<String>,
+    /// Run in every new worktree, one after the other, before its agent's first message
+    /// (dependencies, generated code…).
+    #[serde(default)]
+    pub worktree_setup: Vec<WorktreeStep>,
+    /// Run in a worktree before the app removes it (what its setup made outside of it).
+    #[serde(default)]
+    pub worktree_teardown: Vec<WorktreeStep>,
     /// The external ticket systems its tickets come from, and what moving them does there.
     #[serde(default)]
     pub integrations: ProjectIntegrations,
@@ -236,6 +243,19 @@ pub struct RunCommand {
     /// Shell id ("pwsh", "powershell", "bash", "wsl").
     pub shell: String,
     /// Folder relative to the project's, empty for the project itself.
+    pub cwd: String,
+}
+
+/// A command run in a worktree once it is made (its setup) or before it is removed (its
+/// teardown).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct WorktreeStep {
+    pub id: String,
+    pub command: String,
+    /// Shell id ("pwsh", "powershell", "bash", "wsl"…), the system's default one when not found.
+    pub shell: String,
+    /// Folder relative to the worktree's, empty for the worktree itself.
     pub cwd: String,
 }
 
@@ -531,6 +551,11 @@ pub struct AgentView {
     pub remote_state: Option<String>,
     /// What it does right now ("Lit src/db.ts", "Lance npm test"…), during a turn.
     pub activity: Option<String>,
+    /// The setup of its new worktree under way: the command running ("npm ci (1/2)").
+    pub setup: Option<String>,
+    /// isola runs its worktree's services (installed, and an `.isola.toml` in the worktree): its
+    /// test launches go through it, with no recipe nor reserved ports.
+    pub isola: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -872,6 +897,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(p.worktree_copy, vec![".env*".to_string()]);
+        assert!(p.worktree_setup.is_empty() && p.worktree_teardown.is_empty());
         assert_eq!(p.board, BoardSettings::default());
         assert_eq!(
             (
@@ -888,6 +914,29 @@ mod tests {
         assert_eq!((a.ticket_id, a.port_base, a.recipe), (None, None, None));
         let s: PersistedState = serde_json::from_value(json!({ "projects": [] })).unwrap();
         assert!(s.tickets.is_empty());
+    }
+
+    #[test]
+    fn a_projects_worktree_steps_travel_in_camel_case() {
+        let p: Project = serde_json::from_value(json!({
+            "id": "p1", "name": "demo", "path": "C:/demo", "color": "red",
+            "worktreeSetup": [{ "id": "s1", "command": "npm ci", "shell": "pwsh", "cwd": "web" }],
+            "worktreeTeardown": [{ "command": "docker compose down" }],
+        }))
+        .unwrap();
+        assert_eq!(
+            p.worktree_setup,
+            [WorktreeStep {
+                id: "s1".into(),
+                command: "npm ci".into(),
+                shell: "pwsh".into(),
+                cwd: "web".into(),
+            }]
+        );
+        assert_eq!(p.worktree_teardown[0].command, "docker compose down");
+        let sent = serde_json::to_value(&p).unwrap();
+        assert_eq!(sent["worktreeSetup"][0]["cwd"], "web");
+        assert_eq!(sent["worktreeTeardown"][0]["shell"], "");
     }
 
     #[test]

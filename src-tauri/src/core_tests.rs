@@ -132,7 +132,7 @@ impl Harness {
         self.core.agent(id).unwrap().lock().conv.items()
     }
 
-    fn alive(&self, id: &str) -> bool {
+    pub(crate) fn alive(&self, id: &str) -> bool {
         self.core.agent(id).unwrap().lock().proc.is_some()
     }
 
@@ -1433,4 +1433,447 @@ async fn an_agent_created_by_the_user_is_selected_and_left_for_haiku_to_name() {
     let a = h.core.create_agent(&p.id, None).await.unwrap();
     assert_eq!((a.meta.name.as_str(), a.meta.named), ("agent-1", false));
     assert_eq!(h.core.ui.read().selected_agent.get(&p.id), Some(&a.meta.id));
+}
+
+// ---------- worktree setup and teardown ----------
+
+/// The worktree at `path` removed as the app does it, tried again while something still holds the
+/// folder for a moment (Windows).
+async fn remove_worktree_eventually(repo: &Path, path: &str) {
+    let repo = repo.to_string_lossy();
+    for _ in 0..50 {
+        let removed = crate::git::worktree_remove_dir(&repo, path).await;
+        if removed.is_ok() && !Path::new(path).exists() {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    }
+    panic!("{path} not removed");
+}
+
+/// A worktree step run by the system's first shell.
+pub(crate) fn wt_step(command: &str, cwd: &str) -> WorktreeStep {
+    WorktreeStep {
+        id: uuid::Uuid::new_v4().to_string(),
+        command: command.into(),
+        shell: String::new(),
+        cwd: cwd.into(),
+    }
+}
+
+impl Harness {
+    pub(crate) fn set_worktree_steps(
+        &self,
+        project_id: &str,
+        setup: Vec<WorktreeStep>,
+        teardown: Vec<WorktreeStep>,
+    ) {
+        self.core
+            .update_project(Project {
+                worktree_setup: setup,
+                worktree_teardown: teardown,
+                ..self.core.project(project_id).unwrap()
+            })
+            .unwrap();
+    }
+
+    pub(crate) fn view(&self, id: &str) -> AgentView {
+        self.core.agent(id).unwrap().lock().view()
+    }
+
+    fn notices(&self, id: &str, level: &str) -> Vec<String> {
+        self.items(id)
+            .iter()
+            .filter(|i| i["kind"] == "notice" && i["level"] == level)
+            .map(|i| i["text"].as_str().unwrap().to_string())
+            .collect()
+    }
+}
+
+#[tokio::test]
+async fn a_new_worktree_is_set_up_before_its_agent_takes_a_message() {
+    let h = harness("wt-setup");
+    let (p, _) = h.project(true).await;
+    let first = r#"node -e "setTimeout(() => require('fs').writeFileSync('ready.txt', process.env.ESCOUADE_BRANCH), 1500)""#;
+    h.set_worktree_steps(
+        &p.id,
+        vec![
+            wt_step(first, ""),
+            wt_step(
+                r#"node -e "require('fs').writeFileSync('second.txt', require('fs').readFileSync('../ready.txt'))""#,
+                "src",
+            ),
+        ],
+        vec![],
+    );
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let id = a.meta.id.clone();
+    let wt = a.meta.worktree.clone().unwrap();
+    let dir = PathBuf::from(&wt.path);
+    // Made at once, its setup under way.
+    assert_eq!(
+        a.setup,
+        Some(format!(
+            "1/2 · {}",
+            crate::worktrees::label(&wt_step(first, ""))
+        ))
+    );
+    // Claude Code does not start before it is over (its hooks and MCP servers would meet a
+    // worktree half set up), then starts at once.
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert!(!h.alive(&id));
+    h.wait("started once set up", |h| h.alive(&id)).await;
+    assert!(dir.join("src").join("second.txt").exists());
+    h.turn(&id, "Bonjour").await;
+    // The message went once the setup was over: both steps ran, in order, each in its folder.
+    assert_eq!(
+        std::fs::read_to_string(dir.join("ready.txt")).unwrap(),
+        wt.branch
+    );
+    assert_eq!(
+        std::fs::read_to_string(dir.join("src").join("second.txt")).unwrap(),
+        wt.branch
+    );
+    assert_eq!(h.view(&id).setup, None);
+    let items = h.items(&id);
+    let ready = items.iter().position(|i| {
+        i["kind"] == "notice"
+            && i["text"]
+                .as_str()
+                .unwrap()
+                .starts_with("Worktree préparé (2 commandes")
+    });
+    let user = items.iter().position(|i| i["kind"] == "user");
+    assert!(ready.is_some() && ready < user, "{items:?}");
+    assert!(h.events.lock().iter().any(|e| e["type"] == "agent"
+        && e["agent"]["id"] == id.as_str()
+        && e["agent"]["setup"]
+            .as_str()
+            .is_some_and(|s| s.starts_with("2/2 · "))));
+}
+
+#[tokio::test]
+async fn a_failed_setup_is_said_and_stops_there_but_the_agent_still_works() {
+    let h = harness("wt-setup-fail");
+    let (p, _) = h.project(true).await;
+    h.set_worktree_steps(
+        &p.id,
+        vec![
+            wt_step(
+                r#"node -e "console.log('npm ERR! introuvable'); process.exit(2)""#,
+                "",
+            ),
+            wt_step(
+                r#"node -e "require('fs').writeFileSync('never.txt', '')""#,
+                "",
+            ),
+        ],
+        vec![],
+    );
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let id = a.meta.id.clone();
+    let dir = PathBuf::from(a.meta.worktree.unwrap().path);
+    h.turn(&id, "Bonjour").await;
+    let warns = h.notices(&id, "warn");
+    assert_eq!(warns.len(), 1, "{warns:?}");
+    assert!(
+        warns[0].starts_with("La préparation du worktree a échoué sur `node -e")
+            && warns[0].contains("(code 2).")
+            && warns[0].contains("npm ERR! introuvable"),
+        "{}",
+        warns[0]
+    );
+    assert!(!dir.join("never.txt").exists());
+    assert_eq!(h.view(&id).setup, None);
+}
+
+#[tokio::test]
+async fn an_agent_without_a_worktree_is_not_set_up() {
+    let h = harness("wt-setup-none");
+    let (p, _) = h.project(false).await;
+    h.set_worktree_steps(
+        &p.id,
+        vec![wt_step(r#"node -e "process.exit(1)""#, "")],
+        vec![],
+    );
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    assert_eq!(a.setup, None);
+    h.turn(&a.meta.id, "Bonjour").await;
+    assert!(h.notices(&a.meta.id, "warn").is_empty());
+}
+
+#[tokio::test]
+async fn deleting_an_agent_runs_the_teardown_in_its_worktree_before_removing_it() {
+    let h = harness("wt-teardown");
+    let (p, r) = h.project(true).await;
+    h.set_worktree_steps(
+        &p.id,
+        vec![],
+        vec![
+            wt_step(
+                r#"node -e "const fs = require('fs'); fs.writeFileSync(require('path').join(process.env.ESCOUADE_PROJECT_DIR, 'down.txt'), process.env.ESCOUADE_BRANCH + ' ' + fs.existsSync('src'))""#,
+                "",
+            ),
+            wt_step(r#"node -e "process.exit(4)""#, ""),
+            wt_step(
+                r#"node -e "require('fs').writeFileSync(require('path').join(process.env.ESCOUADE_PROJECT_DIR, 'after.txt'), '')""#,
+                "",
+            ),
+        ],
+    );
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let wt = a.meta.worktree.clone().unwrap();
+    let warning = h.core.delete_agent(&a.meta.id, true).await.unwrap();
+    // Run in the worktree while it was still there, every step even after one failed.
+    assert_eq!(
+        std::fs::read_to_string(r.join("down.txt")).unwrap(),
+        format!("{} true", wt.branch)
+    );
+    assert!(r.join("after.txt").exists());
+    assert_eq!(
+        warning.as_deref(),
+        Some("Agent supprimé, mais le démontage du worktree a échoué sur `node -e \"process.exit(4)\"` (code 4).")
+    );
+    // Removed all the same.
+    assert!(!Path::new(&wt.path).exists());
+    assert_eq!(git(&r, &["branch", "--list", &wt.branch]), "");
+}
+
+#[tokio::test]
+async fn deleting_an_agent_but_not_its_worktree_runs_no_teardown() {
+    let h = harness("wt-teardown-kept");
+    let (p, r) = h.project(true).await;
+    h.set_worktree_steps(
+        &p.id,
+        vec![],
+        vec![wt_step(
+            r#"node -e "require('fs').writeFileSync(require('path').join(process.env.ESCOUADE_PROJECT_DIR, 'down.txt'), '')""#,
+            "",
+        )],
+    );
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let wt = a.meta.worktree.clone().unwrap();
+    assert_eq!(h.core.delete_agent(&a.meta.id, false).await.unwrap(), None);
+    assert!(Path::new(&wt.path).is_dir() && !r.join("down.txt").exists());
+}
+
+#[tokio::test]
+async fn deleting_an_agent_stops_the_setup_of_its_worktree() {
+    let h = harness("wt-setup-stop");
+    let (p, r) = h.project(true).await;
+    h.set_worktree_steps(
+        &p.id,
+        vec![wt_step(
+            r#"node -e "setTimeout(() => require('fs').writeFileSync(require('path').join(process.env.ESCOUADE_PROJECT_DIR, 'late.txt'), ''), 4000)""#,
+            "",
+        )],
+        vec![],
+    );
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let wt = a.meta.worktree.clone().unwrap();
+    // Under way (its process started).
+    tokio::time::sleep(Duration::from_millis(800)).await;
+    let started = std::time::Instant::now();
+    assert_eq!(h.core.delete_agent(&a.meta.id, true).await.unwrap(), None);
+    assert!(
+        started.elapsed() < Duration::from_secs(3),
+        "{:?}",
+        started.elapsed()
+    );
+    assert!(!Path::new(&wt.path).exists());
+    // Killed with it: it never ends its work.
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    assert!(!r.join("late.txt").exists());
+}
+
+#[tokio::test]
+async fn an_archived_agent_whose_worktree_went_gets_it_back_from_its_branch_when_restored() {
+    let h = harness("wt-restore");
+    let (p, r) = h.project(true).await;
+    ignore(&r, ".env");
+    std::fs::write(r.join(".env"), "SECRET=1\n").unwrap();
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let id = a.meta.id.clone();
+    let wt = a.meta.worktree.clone().unwrap();
+    let dir = PathBuf::from(&wt.path);
+    std::fs::write(dir.join("travail.txt"), "fait\n").unwrap();
+    git(&dir, &["add", "travail.txt"]);
+    git(&dir, &["commit", "-qm", "travail"]);
+    h.wait("warm-up", |h| h.alive(&id)).await;
+    let held = h.core.agent(&id).unwrap().lock().proc.clone().unwrap();
+    h.core.archive_agent(&id, true).await.unwrap();
+    h.wait("its process over", |_| !held.is_alive()).await;
+    // Its folder went (as after a pull request or a push), its branch stayed.
+    remove_worktree_eventually(&r, &wt.path).await;
+    h.set_worktree_steps(
+        &p.id,
+        vec![wt_step(
+            r#"node -e "require('fs').writeFileSync('prepared.txt', '')""#,
+            "",
+        )],
+        vec![],
+    );
+    h.core.archive_agent(&id, false).await.unwrap();
+    assert_eq!(
+        std::fs::read_to_string(dir.join("travail.txt")).unwrap(),
+        "fait\n"
+    );
+    assert_eq!(git(&dir, &["rev-parse", "--abbrev-ref", "HEAD"]), wt.branch);
+    assert_eq!(
+        std::fs::read_to_string(dir.join(".env")).unwrap(),
+        "SECRET=1\n"
+    );
+    // Set up again before it takes a message.
+    h.turn(&id, "Reprends").await;
+    assert!(dir.join("prepared.txt").exists());
+    // Without its branch (merged and deleted), it stays as it is.
+    h.core.archive_agent(&id, true).await.unwrap();
+    remove_worktree_eventually(&r, &wt.path).await;
+    git(&r, &["branch", "-D", &wt.branch]);
+    h.core.archive_agent(&id, false).await.unwrap();
+    assert!(!dir.exists());
+}
+
+// ---------- isola ----------
+
+#[tokio::test]
+async fn an_isola_worktree_is_listed_stopped_and_torn_down_by_isola() {
+    crate::isola::tests::use_fake();
+    let h = harness("wt-isola");
+    let (p, r) = h.project(true).await;
+    std::fs::write(
+        r.join(".isola.toml"),
+        "[services.web]\ncommand = \"npm run dev\"\n",
+    )
+    .unwrap();
+    git(&r, &["add", "-A"]);
+    git(&r, &["commit", "-qm", "isola"]);
+    ignore(&r, ".isola-*");
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let id = a.meta.id.clone();
+    let wt = a.meta.worktree.clone().unwrap();
+    let dir = PathBuf::from(&wt.path);
+    assert!(a.isola);
+    // Up (the test launch runs `isola up` in a terminal), its services are the worktree's.
+    assert!(h.core.isola_services(&id).await.unwrap().is_empty());
+    crate::isola::run(&wt.path, &["up"], crate::isola::LIMIT)
+        .await
+        .unwrap();
+    let services = h.core.isola_services(&id).await.unwrap();
+    assert_eq!(
+        (
+            services.len(),
+            services[0].name.as_str(),
+            services[0].url.as_str(),
+            services[0].probe.as_str()
+        ),
+        (
+            1,
+            "web",
+            "http://escouade-agent-1.demo.localhost:3000",
+            "http://127.0.0.1:9"
+        )
+    );
+    h.core.isola_down(&id).await.unwrap();
+    assert!(h.core.isola_services(&id).await.unwrap().is_empty());
+    // Its test launch is isola's: `isola up` in the worktree.
+    let spec = h.core.test_run_spec(&id, "isola", 0).unwrap();
+    assert_eq!(
+        (spec.command.as_str(), spec.cwd.as_str()),
+        (crate::isola::UP, wt.path.as_str())
+    );
+    // Archived, its services stop.
+    crate::isola::run(&wt.path, &["up"], crate::isola::LIMIT)
+        .await
+        .unwrap();
+    h.core.archive_agent(&id, true).await.unwrap();
+    h.wait("isola down", |_| {
+        crate::isola::tests::calls(&dir).last().map(String::as_str) == Some("down")
+    })
+    .await;
+    // Deleted with its worktree, isola tears it down first.
+    h.core.archive_agent(&id, false).await.unwrap();
+    assert_eq!(h.core.delete_agent(&id, true).await.unwrap(), None);
+    assert_eq!(
+        crate::isola::tests::calls(&dir).last().map(String::as_str),
+        Some("destroy")
+    );
+    assert!(!dir.exists());
+}
+
+#[tokio::test]
+async fn closing_a_project_stops_its_worktrees_setups_and_isolas_services() {
+    crate::isola::tests::use_fake();
+    let h = harness("wt-close");
+    let (p, r) = h.project(true).await;
+    std::fs::write(r.join(".isola.toml"), "").unwrap();
+    git(&r, &["add", "-A"]);
+    git(&r, &["commit", "-qm", "isola"]);
+    ignore(&r, ".isola-*");
+    h.set_worktree_steps(
+        &p.id,
+        vec![wt_step(
+            r#"node -e "setTimeout(() => require('fs').writeFileSync(require('path').join(process.env.ESCOUADE_PROJECT_DIR, 'late.txt'), ''), 4000)""#,
+            "",
+        )],
+        vec![],
+    );
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let dir = PathBuf::from(a.meta.worktree.clone().unwrap().path);
+    tokio::time::sleep(Duration::from_millis(800)).await;
+    h.core.remove_project(&p.id).unwrap();
+    h.wait("isola down", |_| {
+        crate::isola::tests::calls(&dir).last().map(String::as_str) == Some("down")
+    })
+    .await;
+    // Its setup was stopped with the project: it never ends its work.
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    assert!(!r.join("late.txt").exists());
+}
+
+#[tokio::test]
+async fn a_worktree_without_isolas_configuration_is_not_isolas() {
+    crate::isola::tests::use_fake();
+    let h = harness("wt-isola-none");
+    let (p, _) = h.project(true).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    assert!(!a.isola);
+    assert!(h.core.isola_services(&a.meta.id).await.is_err());
+    assert!(h.core.test_run_spec(&a.meta.id, "isola", 0).is_err());
+    let dir = PathBuf::from(a.meta.worktree.clone().unwrap().path);
+    h.core.delete_agent(&a.meta.id, true).await.unwrap();
+    assert!(crate::isola::tests::calls(&dir).is_empty());
+}
+
+// ---------- suggested by Claude ----------
+
+#[tokio::test]
+async fn claude_reads_the_project_with_read_only_tools_to_suggest_its_worktree_commands() {
+    let h = harness("wt-suggest-claude");
+    let (p, r) = h.project(false).await;
+    let s = h.core.suggest_worktree_steps(&p.id).await.unwrap();
+    let setup: Vec<(&str, &str)> = s
+        .setup
+        .iter()
+        .map(|x| (x.command.as_str(), x.cwd.as_str()))
+        .collect();
+    // The step whose folder leaves the project is dropped.
+    assert_eq!(setup, [("npm ci", ""), ("npm run gen", "src")]);
+    assert_eq!(s.teardown.len(), 1);
+    assert_eq!(s.teardown[0].command, "docker compose down");
+    let first = crate::pty::detect_shells(&h.core.settings.read())
+        .first()
+        .map(|s| s.id.clone())
+        .unwrap();
+    assert!(s.setup.iter().chain(&s.teardown).all(|x| x.shell == first));
+    // Run in the project, with nothing but tools that read.
+    let argv = h.launches(&r).pop().expect("claude run in the project");
+    let tools = argv.iter().position(|a| a == "--tools").unwrap();
+    assert_eq!(argv[tools + 1], "Read,Glob,Grep");
+    assert!(argv.contains(&"--strict-mcp-config".to_string()));
+    assert!(!argv
+        .iter()
+        .any(|a| a.contains("Bash") || a.contains("Edit")));
+    let sent = serde_json::to_value(&s).unwrap();
+    assert_eq!(sent["setup"][1]["cwd"], "src");
 }

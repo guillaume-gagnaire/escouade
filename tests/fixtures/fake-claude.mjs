@@ -14,13 +14,15 @@
 // on once it is answered), [fin-d-abord] an interrupted turn's end sent before the answer to the
 // interrupt, [commite] its work committed by itself (every file of its folder, a copied .env forced
 // in), [retire-env] then .env taken out of git again in a second commit (still in the branch's
-// history), [tenace] a process that lasts 5 s once its input is closed; by default criterion n is
-// met from loop n on.
+// history), [tenace] a process that lasts 5 s once its input is closed, [rien] no file written (nothing
+// to merge); by default criterion n is met from loop n on.
 // Asked to prepare a test launch (« Prépare le lancement… Ports réservés : <base> »), any agent
 // answers with a recipe whose process listens on <base + 1>.
 // In one-shot mode, asked for a ticket's commit message, it answers `feat: travail du faux claude
 // [<KEY>]`, or a sentence out of form when the ticket's title says [message-libre]; with [sourd]
-// in its system prompt it never reads its input and answers nothing for 20 s.
+// in its system prompt it never reads its input and answers nothing for 20 s. Asked for a project's
+// worktree commands (<worktrees>), it suggests a setup (one of whose folders leaves the project) and a
+// teardown.
 
 import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -39,6 +41,20 @@ if (argv.includes('-p') && argv.some((a) => a.includes('[sourd]'))) {
   let input = '';
   process.stdin.on('data', (d) => (input += d));
   process.stdin.on('end', () => {
+    // A project's worktree commands.
+    if (input.includes('<worktrees>')) {
+      const steps = {
+        preparation: [
+          { commande: 'npm ci', dossier: '' },
+          { commande: 'npm run gen', dossier: 'src' },
+          { commande: 'rm -rf /', dossier: '../dehors' },
+        ],
+        demontage: [{ commande: 'docker compose down', dossier: '' }],
+      };
+      const result = `Voici les commandes.\n\n\`\`\`json\n${JSON.stringify(steps)}\n\`\`\``;
+      process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result }));
+      return;
+    }
     // A ticket's commit message.
     const ticket = input.match(/<ticket>\s*([A-Z]+-\d+)/)?.[1];
     if (ticket) {
@@ -156,7 +172,7 @@ function startSession() {
       return;
     }
     const file = `${key.toLowerCase()}.txt`;
-    fs.writeFileSync(path.join(process.cwd(), file), `Boucle ${loop}\n`);
+    if (!all.includes('[rien]')) fs.writeFileSync(path.join(process.cwd(), file), `Boucle ${loop}\n`);
     if (all.includes('[commite]')) {
       execFileSync('git', ['add', '-A']);
       // The copied .env, which git ignores, forced in.

@@ -57,6 +57,13 @@ describe('TicketCard', () => {
     expect(screen.getByRole('button', { name: /DEM-1/ })).toHaveClass('waiting');
   });
 
+  it('says its agent sets its worktree up before its first loop', () => {
+    resetApp({ agents: [agent({ status: 'idle', setup: '1/2 · npm ci' })] });
+    fakeBackend();
+    show(doing({ iteration: 1 }));
+    expect(screen.getByText('Prépare le worktree · 1/2 · npm ci')).toBeInTheDocument();
+  });
+
   it('takes a blocked ticket up again', async () => {
     const backend = fakeBackend();
     show(doing({ blocked: 'Interrompu' }));
