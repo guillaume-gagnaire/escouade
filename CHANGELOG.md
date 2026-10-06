@@ -2,6 +2,36 @@
 
 Les changements visibles d'Escouade, version par version. Les notes de chaque release GitHub (et de la mise à jour intégrée) reprennent la section de sa version.
 
+## [1.5.1] — 2026-10-06
+
+### Ajouts
+
+#### Worktrees : préparation et démontage
+
+- Nouveau groupe « Worktrees » dans l'onglet « Projets » des réglages : des commandes lancées dans chaque nouveau worktree, l'une après l'autre (installer les dépendances, générer du code…), pour l'agent d'un ticket comme pour un agent créé à la main. Chacune a son shell et son sous-dossier.
+  - Pendant la préparation, l'agent affiche « Préparation… », Claude Code ne démarre pas encore et ses messages attendent qu'elle soit finie : Claude ne travaille jamais sur un worktree à moitié installé.
+  - Archiver ou supprimer l'agent, fermer le projet ou quitter Escouade arrête la préparation.
+  - Un échec s'affiche dans la conversation avec les dernières lignes de la commande ; l'agent d'un ticket le lit à la suite de son premier message.
+- Des commandes de démontage, lancées dans le worktree juste avant qu'Escouade le supprime (agent supprimé avec son worktree, ticket validé), pour défaire ce que la préparation a créé ailleurs (base de données, conteneurs…).
+- « ✦ Remplir automatiquement » : Claude lit le projet en arrière-plan (sans rien modifier ni exécuter) et propose les commandes, à relire avant d'enregistrer.
+- Les commandes disposent de `ESCOUADE_PROJECT_DIR`, `ESCOUADE_WORKTREE_DIR`, `ESCOUADE_BRANCH`, et des ports réservés d'un ticket.
+
+#### isola
+
+- Quand [isola](https://github.com/cyucelen/isola) est installé et que le projet a un `.isola.toml`, isola lance les services de chaque worktree sur ses propres ports :
+  - l'agent d'un ticket ne reçoit plus de bloc de ports, et on ne lui demande plus de recette, seulement l'adresse de la fonctionnalité ;
+  - « ▶ Tester » lance `isola up`, attend que chaque service réponde, puis ouvre la fonctionnalité dans le navigateur ;
+  - « Tout arrêter », la validation, l'archivage et la fermeture du projet arrêtent les services (`isola down`) ; supprimer le worktree supprime aussi ses données (`isola destroy`).
+
+### Modifications
+
+- Une fois un ticket validé par « Valider + PR » ou « Valider et pousser », son worktree est supprimé lui aussi (sa branche reste). Le réglage s'appelle désormais « Supprimer le worktree une fois validé ».
+- Restaurer un agent archivé dont le worktree a été supprimé le recrée depuis sa branche, avec ses fichiers copiés et sa préparation.
+
+### Corrections
+
+- Un ticket validé sans aucune modification de code passe « Terminé » avec « ∅ Aucune modification », au lieu de rester bloqué sur « Rien à merger ».
+
 ## [1.5.0] — 2026-10-04
 
 ### Ajouts
