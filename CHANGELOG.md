@@ -2,6 +2,12 @@
 
 Les changements visibles d'Escouade, version par version. Les notes de chaque release GitHub (et de la mise à jour intégrée) reprennent la section de sa version.
 
+## [1.5.3] — 2026-10-07
+
+### Corrections
+
+- macOS : les commandes de lancement lancées avec zsh lisent `~/.zshrc`, comme un terminal, et prennent donc en compte les gestionnaires de versions qui s'y initialisent (rbenv, rvm, asdf, mise, nvm…). Un serveur Rails ne démarre plus avec le Ruby du système, sans bundler. Il en va de même pour les tests et pour la préparation et le démontage des worktrees.
+
 ## [1.5.2] — 2026-10-07
 
 ### Ajouts

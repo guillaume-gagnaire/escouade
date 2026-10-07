@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Escouade",
   "mainBinaryName": "escouade",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "identifier": "dev.gagnaire.escouade",
   "build": {
     "beforeDevCommand": "npm run dev",
