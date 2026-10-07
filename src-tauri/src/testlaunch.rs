@@ -186,6 +186,7 @@ fn shell_args(shell_id: &str, command: &str) -> Vec<String> {
         ],
         "bash" => vec!["--login".into(), "-c".into(), command.into()],
         "wsl" => vec!["--".into(), "bash".into(), "-lc".into(), command.into()],
+        "zsh" => pty::zsh_command_args(command).map(String::from).into(),
         _ => vec!["-l".into(), "-c".into(), command.into()],
     }
 }
@@ -563,6 +564,33 @@ mod tests {
         assert!(!ko.passed);
         assert_eq!(ko.tail.lines().count(), 80, "{}", ko.tail);
         assert!(ko.tail.trim_end().ends_with("ligne 100"), "{}", ko.tail);
+    }
+
+    #[tokio::test]
+    async fn a_zsh_command_reads_the_zshrc_like_a_terminal() {
+        let Some(zsh) = pty::detect_shells(&Settings::default())
+            .into_iter()
+            .find(|s| s.id == "zsh")
+        else {
+            eprintln!("zsh not installed: skipped");
+            return;
+        };
+        // Version managers (rbenv, nvm, asdf…) set themselves up there: without it, a worktree's
+        // `bundle install` runs with the system's Ruby.
+        let home = test_dir("launch-zshrc-steps");
+        std::fs::write(home.join(".zshrc"), "export ESCOUADE_FROM_ZSHRC=oui\n").unwrap();
+        let env = [("ZDOTDIR".to_string(), home.to_string_lossy().into_owned())];
+        let run = run_command(
+            &zsh,
+            &home.to_string_lossy(),
+            "echo zshrc=$ESCOUADE_FROM_ZSHRC",
+            &env,
+            Duration::from_secs(60),
+        )
+        .await
+        .unwrap()
+        .expect("ended");
+        assert!(run.passed && run.tail.contains("zshrc=oui"), "{}", run.tail);
     }
 
     /// Whether the process `pid` is running.

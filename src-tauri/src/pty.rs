@@ -220,6 +220,15 @@ pub(crate) fn with_exit_code(command: &str) -> String {
     format!("{command}\nif (-not $?) {{ if ($LASTEXITCODE) {{ exit $LASTEXITCODE }} exit 1 }}")
 }
 
+/// The arguments making zsh run `command` as the user's terminal would: a login shell, interactive
+/// too so that it reads ~/.zshrc, where rbenv, nvm, asdf… set themselves up (a login shell alone
+/// runs the system's Ruby or Node: macOS's /etc/zprofile puts the system folders first in the
+/// PATH). Without job control (`+m`), which would give what it starts a process group of its own,
+/// out of reach of the Job stopping it.
+pub(crate) fn zsh_command_args(command: &str) -> [&str; 5] {
+    ["-l", "-i", "+m", "-c", command]
+}
+
 /// Working folder of a launch command: the project's, or one of its folders.
 pub fn run_cwd(project: &str, sub: &str) -> Result<String> {
     let sub = sub.trim();
@@ -329,7 +338,13 @@ impl PtyManager {
                 cmd.env("CHERE_INVOKING", "1");
             }
             ("zsh" | "fish" | "sh", None) => cmd.arg("-l"),
-            ("zsh" | "fish" | "sh", Some(c)) => cmd.args(["-l", "-c", c]),
+            ("zsh", Some(c)) => {
+                cmd.args(zsh_command_args(c));
+                // Oh My Zsh would ask whether to update itself in a log that takes no input
+                // (unless its update mode is set by zstyle).
+                cmd.env("DISABLE_AUTO_UPDATE", "true");
+            }
+            ("fish" | "sh", Some(c)) => cmd.args(["-l", "-c", c]),
             ("wsl", run) => {
                 if !wsl_distro.is_empty() {
                     cmd.args(["-d", wsl_distro]);
@@ -717,13 +732,25 @@ mod unix_tests {
             .any(|s| s.id == "sh" || s.id == "bash" || s.id == "zsh"));
     }
 
-    /// Runs `command` with sh as a launch command; returns its output and exit code.
+    /// Runs `command` with zsh or bash as a launch command, away from the machine's ~/.zshrc;
+    /// returns its output and exit code.
     fn launch(command: &str) -> (String, Option<u32>) {
-        let _one = one_shell_at_a_time();
         let shell = detect_unix_shells(None, &[], &Settings::default())
             .into_iter()
             .find(|s| s.id == "bash" || s.id == "zsh")
             .expect("a shell");
+        let home = crate::paths::test_dir("launch-zdotdir");
+        launch_with(&shell, command, zdotdir(&home))
+    }
+
+    /// Runs `command` with `shell` as a launch command, `env` added; returns its output and exit
+    /// code.
+    fn launch_with(
+        shell: &ShellInfo,
+        command: &str,
+        env: Vec<(String, String)>,
+    ) -> (String, Option<u32>) {
+        let _one = one_shell_at_a_time();
         let pty = PtyManager::default();
         let out = Arc::new(Mutex::new(String::new()));
         let exit = Arc::new(Mutex::new(None));
@@ -737,11 +764,11 @@ mod unix_tests {
         let cwd = std::env::temp_dir().to_string_lossy().to_string();
         pty.spawn_command(
             info,
-            &shell,
+            shell,
             "",
             &cwd,
             (120, 30),
-            vec![],
+            env,
             1,
             command,
             move |b| sink.lock().push_str(&String::from_utf8_lossy(&b)),
@@ -769,6 +796,108 @@ mod unix_tests {
         assert!(out.contains("hello-escouade"), "{out}");
         assert_eq!(code, Some(3));
         assert_eq!(launch("true").1, Some(0));
+    }
+
+    /// zsh, when the machine has it (macOS always does).
+    fn zsh() -> Option<ShellInfo> {
+        let zsh = detect_unix_shells(None, &[], &Settings::default())
+            .into_iter()
+            .find(|s| s.id == "zsh");
+        if zsh.is_none() {
+            eprintln!("zsh not installed: skipped");
+        }
+        zsh
+    }
+
+    /// The variables pointing zsh to `dir` for its startup files, with an empty .zshrc there
+    /// unless it has one: without any, zsh-newuser-install (Homebrew's zsh, Linux's) would wait
+    /// for an answer.
+    fn zdotdir(dir: &Path) -> Vec<(String, String)> {
+        let zshrc = dir.join(".zshrc");
+        if !zshrc.exists() {
+            std::fs::write(zshrc, "").unwrap();
+        }
+        vec![("ZDOTDIR".into(), dir.to_string_lossy().into_owned())]
+    }
+
+    #[test]
+    fn a_zsh_launch_command_runs_the_ruby_its_zshrc_sets_up_like_a_terminal() {
+        use std::os::unix::fs::PermissionsExt;
+        let Some(zsh) = zsh() else { return };
+        // Version managers (rbenv, nvm, asdf…) set themselves up in ~/.zshrc: without it, a
+        // Rails server starts with the system's Ruby, which macOS's /etc/zprofile puts first.
+        let home = crate::paths::test_dir("launch-zshrc");
+        let ruby = home.join("bin").join("ruby");
+        std::fs::create_dir_all(home.join("bin")).unwrap();
+        std::fs::write(&ruby, "#!/bin/sh\necho ruby-du-zshrc\n").unwrap();
+        std::fs::set_permissions(&ruby, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::write(home.join(".zshrc"), "export PATH=\"$ZDOTDIR/bin:$PATH\"\n").unwrap();
+        let (out, code) = launch_with(&zsh, "ruby; echo omz=$DISABLE_AUTO_UPDATE", zdotdir(&home));
+        assert!(out.contains("ruby-du-zshrc"), "{out}");
+        // Oh My Zsh would ask whether to update itself in the log, which takes no input.
+        assert!(out.contains("omz=true"), "{out}");
+        assert_eq!(code, Some(0));
+    }
+
+    #[test]
+    fn stopping_a_zsh_launch_command_kills_the_programs_it_started() {
+        let Some(zsh) = zsh() else { return };
+        let _one = one_shell_at_a_time();
+        let home = crate::paths::test_dir("launch-zsh-stop");
+        let pid_file = home.join("pid.txt");
+        // Out of the shell's process group (job control), a program ignoring SIGHUP (started
+        // with nohup, a server handling it) would outlive the launch command. `; true`: the shell
+        // forks the program instead of becoming it.
+        let command = format!(
+            "sh -c 'trap \"\" HUP; echo $$ > \"{}\"; exec sleep 60'; true",
+            pid_file.display()
+        );
+        let pty = PtyManager::default();
+        let info = TermInfo {
+            id: "run-zsh-stop".into(),
+            project_id: "p".into(),
+            name: "serveur".into(),
+            shell: zsh.id.clone(),
+        };
+        pty.spawn_command(
+            info,
+            &zsh,
+            "",
+            &home.to_string_lossy(),
+            (120, 30),
+            zdotdir(&home),
+            1,
+            &command,
+            |_| {},
+            |_| {},
+        )
+        .unwrap();
+        let start = Instant::now();
+        let pid: i32 = loop {
+            if let Some(p) = std::fs::read_to_string(&pid_file)
+                .ok()
+                .and_then(|s| s.trim().parse().ok())
+            {
+                break p;
+            }
+            assert!(
+                start.elapsed() < Duration::from_secs(30),
+                "the program did not start"
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        };
+        pty.kill("run-zsh-stop");
+        // SAFETY: signal 0 only checks that the process exists.
+        let alive = || unsafe { libc::kill(pid, 0) == 0 };
+        let start = Instant::now();
+        while alive() {
+            if start.elapsed() > Duration::from_secs(5) {
+                // SAFETY: plain syscall on the process this test started.
+                unsafe { libc::kill(pid, libc::SIGKILL) };
+                panic!("process {pid} survived its launch command");
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
     }
 }
 
