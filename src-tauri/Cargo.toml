@@ -1,6 +1,6 @@
 [package]
 name = "escouade"
-version = "1.5.1"
+version = "1.5.2"
 description = "Le poste de pilotage de tes agents Claude Code"
 authors = ["Guillaume Gagnaire"]
 license = "MIT"

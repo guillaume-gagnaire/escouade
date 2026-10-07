@@ -2,6 +2,17 @@
 
 Les changements visibles d'Escouade, version par version. Les notes de chaque release GitHub (et de la mise à jour intégrée) reprennent la section de sa version.
 
+## [1.5.2] — 2026-10-07
+
+### Ajouts
+
+- Réglages › Réseau › Certificats : « Ignorer la vérification des certificats TLS », pour un proxy d'entreprise qui déchiffre le trafic avec son propre certificat (erreur « UnknownIssuer », par exemple en se connectant à Jira). L'option vaut pour les intégrations, les quotas, les mises à jour et les processus Claude Code, avec les commandes que lancent les agents. Désactivée par défaut, elle est à réserver à un réseau de confiance.
+
+### Modifications
+
+- Les intégrations, les quotas et les mises à jour font aussi confiance aux certificats installés sur le système (le plus souvent, celui du proxy de l'entreprise) : pour eux, l'option ci-dessus n'est alors pas nécessaire.
+- La recherche et l'installation des mises à jour suivent les réglages réseau du moment (proxy et certificats).
+
 ## [1.5.1] — 2026-10-06
 
 ### Ajouts
