@@ -13,6 +13,10 @@ Les changements visibles d'Escouade, version par version. Les notes de chaque re
 - Les intégrations, les quotas et les mises à jour font aussi confiance aux certificats installés sur le système (le plus souvent, celui du proxy de l'entreprise) : pour eux, l'option ci-dessus n'est alors pas nécessaire.
 - La recherche et l'installation des mises à jour suivent les réglages réseau du moment (proxy et certificats).
 
+### Corrections
+
+- L'agent d'un ticket supprimé pendant la préparation de son worktree ne prend plus le ticket une fois la préparation arrêtée.
+
 ## [1.5.1] — 2026-10-06
 
 ### Ajouts

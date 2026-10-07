@@ -2217,8 +2217,6 @@ impl<R: Runtime> Core<R> {
         if self.agent(id)?.lock().meta.remote_control {
             let _ = self.set_remote_control(id, false).await;
         }
-        // The setup of its worktree stops, with what it started (which holds the worktree).
-        self.stop_setup(id).await;
         // Wait for an in-flight start (warm-up) so that its process is killed too.
         let lock = self.spawn_lock(id);
         let _guard = lock.lock().await;
@@ -2241,6 +2239,9 @@ impl<R: Runtime> Core<R> {
             )
         };
         self.spawn_locks.lock().remove(id);
+        // The setup of its worktree stops, with what it started (which holds the worktree). Once it
+        // is gone: what waited for that setup (its ticket's first message) finds no agent to send to.
+        self.stop_setup(id).await;
         {
             let mut ui = self.ui.write();
             if ui.selected_agent.get(&pid).map(String::as_str) == Some(id) {
