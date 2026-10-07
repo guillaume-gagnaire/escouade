@@ -143,11 +143,12 @@ Une seule modale pour toute l'app : ses onglets à gauche (point sur un onglet m
 - **Kanban** (même sélecteur) : action à la validation (branche cible, stratégie ou PR en brouillon), commande de tests et « Relancer les tests avant », suppression du worktree une fois validé, message de commit généré (avec son aperçu), conflit, pilote auto, agents en parallèle et leurs modèle / effort / mode.
 - **Intégrations** (même sélecteur) : comptes Jira, Trello, GitHub, sources liées au projet, correspondance des statuts, synchronisation et import automatique (voir *Intégrations*).
 - **Terminaux** : PowerShell 7, Git Bash, distribution WSL (bash sur macOS), shells détectés.
-- **Réseau** : proxy (ci-dessous).
+- **Réseau** : proxy et certificats (ci-dessous).
 - **À propos** : version, « Rechercher une mise à jour », données locales.
 - Raccourcis : « ⚙ Après validation » du Kanban (onglet Kanban de son projet) ; ⚙ et « Configurer » de la section Lancement (onglet Projets, sur ses commandes de lancement), « Réglages du projet… » au clic droit sur un onglet (onglet Projets de ce projet). Chaque onglet, et chaque projet, s'affiche depuis son début.
 
-- **Proxy réseau** : URL HTTP(S) (avec identifiants éventuels) + exclusions `NO_PROXY`. Injecté dans les process `claude` (`HTTPS_PROXY` / `HTTP_PROXY` / `NO_PROXY`), les appels de quotas et le vérificateur de mises à jour ; option pour l'exporter aussi dans les terminaux intégrés.
+- **Proxy réseau** : URL HTTP(S) (avec identifiants éventuels) + exclusions `NO_PROXY`. Injecté dans les process `claude` (`HTTPS_PROXY` / `HTTP_PROXY` / `NO_PROXY`), les appels de quotas, ceux des intégrations et le vérificateur de mises à jour ; option pour l'exporter aussi dans les terminaux intégrés.
+- **Certificats** : les requêtes de l'app (intégrations, quotas, mises à jour) font confiance aux autorités habituelles et à celles du magasin du système (le certificat d'un proxy d'entreprise qui y est installé) ; Claude Code garde sa propre liste. « Ignorer la vérification des certificats TLS » (désactivé par défaut), pour un proxy qui déchiffre le trafic avec un certificat que le système ne reconnaît pas (« UnknownIssuer ») : plus aucun certificat vérifié pour les intégrations, les quotas, les mises à jour, ni les process `claude` (`NODE_TLS_REJECT_UNAUTHORIZED=0`, au prochain démarrage de leur process, hérité par les commandes que lancent les agents) ; les terminaux et les commandes des worktrees ne sont pas concernés. Les mises à jour sont donc vérifiées et installées par le backend (le plugin de mise à jour ne lit ce réglage qu'à la compilation), avec les réglages réseau du moment.
 - Les coûts enregistrés viennent directement de Claude Code (`costUSD` par modèle). La grille de `pricing.rs` ne sert qu'à l'estimation en cours de tour ; un modèle absent de la grille n'a simplement pas d'estimation.
 
 ## Raccourcis (défauts)

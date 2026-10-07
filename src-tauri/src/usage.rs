@@ -23,8 +23,12 @@ pub fn parse_windows(v: &Value) -> Windows {
     (parse("five_hour"), parse("seven_day"))
 }
 
+/// The app's own requests (quotas, ticket systems): through the proxy, trusting the certificates
+/// the system trusts as well as the usual ones, or none checked when TLS verification is off.
 pub fn http_client(settings: &Settings) -> Result<reqwest::Client> {
-    let mut b = reqwest::Client::builder().timeout(Duration::from_secs(15));
+    let mut b = reqwest::Client::builder()
+        .timeout(Duration::from_secs(15))
+        .danger_accept_invalid_certs(settings.insecure_tls);
     let url = settings.proxy_url.trim();
     if !url.is_empty() {
         let proxy =

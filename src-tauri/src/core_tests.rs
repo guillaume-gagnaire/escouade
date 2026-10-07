@@ -172,6 +172,22 @@ impl Harness {
     }
 
     pub(crate) fn launches(&self, cwd: &Path) -> Vec<Vec<String>> {
+        self.launch_log(cwd)
+            .iter()
+            .map(|l| {
+                l["argv"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|a| a.as_str().unwrap().to_string())
+                    .collect()
+            })
+            .collect()
+    }
+
+    /// What each launch of the fake CLI in `cwd` logged: its arguments, its folder, its proxy and
+    /// TLS variables.
+    pub(crate) fn launch_log(&self, cwd: &Path) -> Vec<Value> {
         let key: String = cwd
             .to_string_lossy()
             .chars()
@@ -181,14 +197,7 @@ impl Harness {
         std::fs::read_to_string(file)
             .unwrap_or_default()
             .lines()
-            .map(|l| {
-                serde_json::from_str::<Value>(l).unwrap()["argv"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .map(|a| a.as_str().unwrap().to_string())
-                    .collect()
-            })
+            .map(|l| serde_json::from_str(l).unwrap())
             .collect()
     }
 
@@ -238,6 +247,36 @@ async fn a_message_runs_a_turn_and_records_the_cost() {
         .items(&a.meta.id)
         .iter()
         .any(|i| i["text"] == "Bonjour, tu as dit : Bonjour"));
+}
+
+#[tokio::test]
+async fn claude_code_goes_through_the_proxy_and_skips_tls_verification_when_set() {
+    let h = harness("network");
+    let (p, r) = h.project(false).await;
+    // What the last launch of the fake CLI in the project saw: (proxy, tls).
+    let seen = |h: &Harness| {
+        h.launch_log(&r)
+            .last()
+            .map(|v| (v["proxy"].clone(), v["tls"].clone()))
+    };
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.turn(&a, "Bonjour").await;
+    assert_eq!(seen(&h), Some((Value::Null, Value::Null)));
+    {
+        let mut s = h.core.settings.write();
+        s.proxy_url = "http://proxy.corp:3128".into();
+        s.insecure_tls = true;
+    }
+    let set = Some((json!("http://proxy.corp:3128"), json!("0")));
+    let b = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.turn(&b, "Bonjour").await;
+    assert_eq!(seen(&h), set);
+    // The one-shot questions too (here, the worktree commands read in the project).
+    let before = h.launch_log(&r).len();
+    h.core.suggest_worktree_steps(&p.id).await.unwrap();
+    assert_eq!(h.launch_log(&r).len(), before + 1);
+    assert!(h.launches(&r).last().unwrap().contains(&"-p".to_string()));
+    assert_eq!(seen(&h), set);
 }
 
 #[tokio::test]

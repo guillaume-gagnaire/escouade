@@ -16,6 +16,8 @@ export interface Settings {
   proxyUrl: string;
   noProxy: string;
   proxyTerminals: boolean;
+  /** TLS certificates are not checked (a proxy with a certificate of its own). */
+  insecureTls: boolean;
   /** Send "continue" by itself to an agent stopped by the usage limit, once the quota resets. */
   autoResume: boolean;
   /** What the external ticket systems' links do (their accounts are kept apart, with their secrets). */
@@ -158,6 +160,13 @@ export interface RunCommand {
   shell: string;
   /** Folder relative to the project's, empty for the project itself. */
   cwd: string;
+}
+
+/** A newer release found by the backend, kept there for its install. */
+export interface FoundRelease {
+  id: number;
+  version: string;
+  notes: string;
 }
 
 /** A command run in a worktree once it is made (setup) or before it is removed (teardown). */

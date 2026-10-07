@@ -4,7 +4,7 @@ import { app } from './state.svelte';
 
 // What the update server announces on the next check.
 const server = vi.hoisted(() => ({ check: vi.fn() }));
-vi.mock('@tauri-apps/plugin-updater', () => ({ check: server.check }));
+vi.mock('./update-check', () => ({ check: server.check }));
 vi.mock('@tauri-apps/plugin-process', () => ({ relaunch: vi.fn() }));
 
 import { checkForUpdate, watchForUpdates } from './updater';

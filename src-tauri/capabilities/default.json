@@ -19,7 +19,6 @@
       "identifier": "opener:allow-open-path",
       "allow": [{ "path": "**" }]
     },
-    "process:allow-restart",
-    "updater:default"
+    "process:allow-restart"
   ]
 }

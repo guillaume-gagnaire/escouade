@@ -99,12 +99,23 @@
 {:else if tab === 'network'}
   <Group
     title="Proxy"
-    note="Le proxy est transmis aux processus Claude Code, à la lecture des quotas et aux mises à jour. Il s'applique aux agents au prochain (re)démarrage de leur processus."
+    note="Le proxy est transmis aux processus Claude Code, à la lecture des quotas, aux intégrations et aux mises à jour. Il s'applique aux agents au prochain (re)démarrage de leur processus."
   >
     {@render text('Proxy HTTP(S)', 'ex. http://utilisateur:motdepasse@proxy:3128', s.proxyUrl, (v) => (s.proxyUrl = v), 'aucun')}
     {@render text('Exclusions', 'NO_PROXY, séparées par des virgules', s.noProxy, (v) => (s.noProxy = v))}
     <Row label="Appliquer aussi le proxy aux terminaux intégrés">
       <Switch label="Appliquer aussi le proxy aux terminaux intégrés" bind:on={s.proxyTerminals} />
+    </Row>
+  </Group>
+  <Group
+    title="Certificats"
+    note="Les intégrations, les quotas et les mises à jour font confiance aux certificats reconnus et à ceux installés sur ce système (celui d'un proxy d'entreprise, le plus souvent). Claude Code, lui, a sa propre liste."
+  >
+    <Row
+      label="Ignorer la vérification des certificats TLS"
+      desc="Pour un proxy qui déchiffre le trafic avec un certificat non reconnu (erreur « UnknownIssuer »). S'applique aux intégrations, aux quotas, aux mises à jour, et aux processus Claude Code (au prochain démarrage de leur processus) avec les commandes que lancent les agents (npm, node…). À réserver à un réseau de confiance : une connexion interceptée, jetons compris, ne serait plus détectée."
+    >
+      <Switch label="Ignorer la vérification des certificats TLS" bind:on={s.insecureTls} />
     </Row>
   </Group>
 {:else}

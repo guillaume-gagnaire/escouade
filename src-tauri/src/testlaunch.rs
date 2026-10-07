@@ -147,8 +147,10 @@ pub async fn http_ready(url: &str) -> bool {
         // A local server must never be reached through the user's proxy.
         .no_proxy()
         .redirect(reqwest::redirect::Policy::none())
-        // Only a readiness probe of the machine's own servers: nothing it reads is trusted.
+        // Only a readiness probe of the machine's own servers: nothing it reads is trusted (and
+        // the system's certificates are not even loaded, every 500 ms).
         .danger_accept_invalid_certs(true)
+        .tls_built_in_root_certs(false)
         .timeout(Duration::from_secs(2))
         .build()
     else {

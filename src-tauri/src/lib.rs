@@ -29,6 +29,7 @@ mod testlaunch;
 mod tickets;
 #[cfg(test)]
 mod tickets_tests;
+mod updates;
 mod usage;
 mod which;
 mod worktrees;
@@ -164,6 +165,7 @@ pub fn run() {
                 paths::DataDir::new(paths::default_data_dir()),
             );
             app.manage(core.clone());
+            app.manage(updates::Updates::default());
             build_tray(app)?;
             core.start(git_rx);
             if let Some(w) = app.get_webview_window("main") {
@@ -250,6 +252,9 @@ pub fn run() {
             commands::agent_prepare_launch,
             commands::test_run_start,
             commands::http_ready,
+            commands::update_check,
+            commands::update_install,
+            commands::update_close,
             commands::isola_services,
             commands::isola_down,
             commands::suggest_worktree_steps,

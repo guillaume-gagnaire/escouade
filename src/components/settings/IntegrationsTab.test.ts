@@ -7,7 +7,6 @@ import { fakeBackend, project, resetApp } from '../../test/ipc';
 import SettingsModal from '../modals/SettingsModal.svelte';
 
 vi.mock('../../lib/terminals', () => ({ launchLog: () => ({}), disposeLog() {} }));
-vi.mock('@tauri-apps/plugin-updater', () => ({ check: vi.fn(async () => null) }));
 const opened = vi.hoisted(() => [] as string[]);
 vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl: vi.fn(async (u: string) => void opened.push(u)), openPath: vi.fn() }));
 

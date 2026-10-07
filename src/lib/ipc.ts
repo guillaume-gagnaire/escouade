@@ -13,6 +13,7 @@ import type {
   FileText,
   FileTree,
   FolderInfo,
+  FoundRelease,
   GitLog,
   InitialState,
   IsolaService,
@@ -145,6 +146,10 @@ export const api = {
   isolaDown: (agentId: string) => invoke<void>('isola_down', { agentId }),
   /** The setup and teardown Claude suggests for the project's worktrees, from what it reads of it. */
   suggestWorktreeSteps: (projectId: string) => invoke<WorktreeSuggestion>('suggest_worktree_steps', { projectId }),
+  /** A newer release, through the network settings (proxy, TLS verification), kept by the backend for its install. */
+  updateCheck: () => invoke<FoundRelease | null>('update_check'),
+  updateInstall: (id: number) => invoke<void>('update_install', { id }),
+  updateClose: (id: number) => invoke<void>('update_close', { id }),
   /** One HTTP request without proxy (2 s): true for any answer. */
   httpReady: (url: string) => invoke<boolean>('http_ready', { url }),
   termWrite: (id: string, data: string) => invoke<void>('term_write', { id, data }),

@@ -1012,7 +1012,7 @@ impl<R: Runtime> Core<R> {
                 program,
                 cwd: rt.meta.cwd.clone(),
                 args: claude_args(&rt.meta),
-                env: settings.proxy_env(),
+                env: settings.claude_env(),
             };
             (opts, rt.gen)
         };
@@ -2032,7 +2032,7 @@ impl<R: Runtime> Core<R> {
         // Reading needs no permission in its folder, and is refused outside of it: nothing more is
         // allowed.
         cmd.current_dir(cwd)
-            .envs(settings.proxy_env())
+            .envs(settings.claude_env())
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null())

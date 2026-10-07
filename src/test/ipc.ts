@@ -42,6 +42,7 @@ export const SETTINGS: Settings = {
   proxyUrl: '',
   noProxy: 'localhost',
   proxyTerminals: false,
+  insecureTls: false,
   autoResume: true,
   integrations: {
     syncStates: true,

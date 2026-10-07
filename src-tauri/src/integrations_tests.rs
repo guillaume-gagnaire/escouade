@@ -505,6 +505,39 @@ async fn accounts_are_checked_saved_apart_and_forgotten() {
     assert!(!std::fs::read_to_string(&file).unwrap().contains("ada"));
 }
 
+#[tokio::test]
+async fn a_site_behind_a_self_signed_certificate_is_reached_once_tls_verification_is_off() {
+    let h = harness("ig-insecure-tls");
+    // As a corporate proxy that decrypts the traffic presents it: a certificate no system trusts.
+    let server = FakeServer::start_tls().await;
+    jira_routes(&server);
+    let account = || Account {
+        site: server.url.clone(),
+        email: "ada@atlas.dev".into(),
+        token: "t".into(),
+        ..Default::default()
+    };
+    let refused = h
+        .core
+        .integration_connect(Service::Jira, account())
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(
+        refused.starts_with("Jira injoignable : ") && refused.contains("UnknownIssuer"),
+        "{refused}"
+    );
+    assert!(server.requests().is_empty());
+    h.core.settings.write().insecure_tls = true;
+    let view = h
+        .core
+        .integration_connect(Service::Jira, account())
+        .await
+        .unwrap();
+    assert!(view.connected, "{view:?}");
+    assert_eq!(server.requests()[0].path(), "/rest/api/3/myself");
+}
+
 fn fake_gh() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("..")

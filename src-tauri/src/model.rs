@@ -26,6 +26,9 @@ pub struct Settings {
     pub no_proxy: String,
     /// Also export the proxy variables in integrated terminals.
     pub proxy_terminals: bool,
+    /// TLS certificates are not checked (a proxy that decrypts the traffic with a certificate of
+    /// its own): the app's own requests, its updates and Claude Code's.
+    pub insecure_tls: bool,
     /// Send "continue" by itself to an agent stopped by the usage limit, once the quota resets.
     pub auto_resume: bool,
     /// What the external ticket systems' links do (their accounts are kept apart, with their
@@ -66,6 +69,16 @@ impl Default for IntegrationSettings {
 }
 
 impl Settings {
+    /// The network settings of a Claude Code process: its proxy, and its TLS verification off
+    /// when asked.
+    pub fn claude_env(&self) -> Vec<(String, String)> {
+        let mut env = self.proxy_env();
+        if self.insecure_tls {
+            env.push(("NODE_TLS_REJECT_UNAUTHORIZED".into(), "0".into()));
+        }
+        env
+    }
+
     /// Environment variables to inject into child processes for the configured proxy.
     pub fn proxy_env(&self) -> Vec<(String, String)> {
         let url = self.proxy_url.trim();
@@ -101,6 +114,7 @@ impl Default for Settings {
             proxy_url: String::new(),
             no_proxy: "localhost,127.0.0.1".into(),
             proxy_terminals: false,
+            insecure_tls: false,
             auto_resume: true,
             integrations: IntegrationSettings::default(),
         }
@@ -825,6 +839,32 @@ mod tests {
         assert!(!s.sound);
         // The field is gone: saved again, it is not written back.
         assert!(!serde_json::to_string(&s).unwrap().contains("editorCommand"));
+        // Saved before the TLS setting: certificates are checked.
+        assert!(!s.insecure_tls);
+    }
+
+    #[test]
+    fn claude_code_gets_the_proxy_and_skips_tls_verification_only_when_asked() {
+        let mut s = Settings::default();
+        assert!(s.claude_env().is_empty());
+        s.insecure_tls = true;
+        assert_eq!(
+            s.claude_env(),
+            [("NODE_TLS_REJECT_UNAUTHORIZED".to_string(), "0".to_string())]
+        );
+        s.proxy_url = "http://proxy:3128".into();
+        let env = s.claude_env();
+        assert!(env.contains(&("HTTPS_PROXY".to_string(), "http://proxy:3128".to_string())));
+        assert!(env.contains(&("NODE_TLS_REJECT_UNAUTHORIZED".to_string(), "0".to_string())));
+        // The terminals' proxy stays the proxy alone.
+        assert!(s
+            .proxy_env()
+            .iter()
+            .all(|(k, _)| k != "NODE_TLS_REJECT_UNAUTHORIZED"));
+        assert_eq!(
+            serde_json::to_value(&s).unwrap()["insecureTls"],
+            json!(true)
+        );
     }
 
     #[test]

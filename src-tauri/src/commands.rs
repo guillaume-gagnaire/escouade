@@ -773,6 +773,31 @@ pub async fn suggest_worktree_steps(
     core.suggest_worktree_steps(&project_id).await.map_err(err)
 }
 
+/// Looks for a newer release, through the network settings as they are now.
+#[tauri::command]
+pub async fn update_check(
+    app: tauri::AppHandle,
+    core: CoreState<'_>,
+    updates: State<'_, crate::updates::Updates>,
+) -> Res<Option<crate::updates::Found>> {
+    let settings = core.settings.read().clone();
+    crate::updates::check(&app, &settings, &updates)
+        .await
+        .map_err(err)
+}
+
+/// Downloads and installs the update found as `id`.
+#[tauri::command]
+pub async fn update_install(updates: State<'_, crate::updates::Updates>, id: u32) -> Res<()> {
+    crate::updates::install(&updates, id).await.map_err(err)
+}
+
+/// The update found as `id` is no longer offered.
+#[tauri::command]
+pub fn update_close(updates: State<crate::updates::Updates>, id: u32) {
+    updates.free(id);
+}
+
 /// One HTTP request to `url` (http or https only) without proxy, 2 s at most: true for any
 /// answer.
 #[tauri::command]

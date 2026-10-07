@@ -9,8 +9,6 @@ import { board, fakeBackend, gitInfo, project, resetApp } from '../../test/ipc';
 import SettingsModal from './SettingsModal.svelte';
 
 vi.mock('../../lib/terminals', () => ({ launchLog: () => ({}), disposeLog() {} }));
-// No release newer than this one.
-vi.mock('@tauri-apps/plugin-updater', () => ({ check: vi.fn(async () => null) }));
 
 const FRONT: RunCommand = { id: 'c1', name: 'Front', command: 'npm run dev', shell: 'pwsh', cwd: 'web' };
 const SHELLS = [
@@ -88,6 +86,19 @@ describe('SettingsModal', () => {
     expect(app.modal).toBeNull();
     expect(app.shells.map((s) => s.id)).toEqual(['pwsh']);
     expect(app.toasts.at(-1)?.text).toBe('Réglages enregistrés');
+  });
+
+  it('turns TLS verification off for a proxy with a certificate of its own', async () => {
+    const backend = fakeBackend({ save_settings: () => [] });
+    render(SettingsModal);
+    await userEvent.click(tab('Réseau'));
+    const insecure = screen.getByRole('switch', { name: 'Ignorer la vérification des certificats TLS' });
+    expect(insecure).toHaveAttribute('aria-checked', 'false');
+    await userEvent.click(insecure);
+    expect(tab('Réseau')).toHaveClass('changed');
+    await save();
+    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ insecureTls: true });
+    expect(app.settings.insecureTls).toBe(true);
   });
 
   it('sets the defaults of new agents, named with the version Claude Code runs', async () => {

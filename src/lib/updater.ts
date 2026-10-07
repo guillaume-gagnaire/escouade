@@ -1,7 +1,7 @@
-// Auto-update through GitHub Releases (tauri-plugin-updater).
+// Auto-update through GitHub Releases (tauri-plugin-updater, driven by the backend: see update-check).
 
 import { relaunch } from '@tauri-apps/plugin-process';
-import { check, type Update } from '@tauri-apps/plugin-updater';
+import { check, type FoundUpdate } from './update-check';
 import { app } from './state.svelte';
 
 const FIRST_CHECK_MS = 8000;
@@ -9,10 +9,10 @@ const CHECK_EVERY_MS = 5 * 60_000;
 
 // The latest update found: it holds the proxy and the signature of its check, so installing it
 // follows a proxy changed since or a release published again.
-let latest: Update | null = null;
+let latest: FoundUpdate | null = null;
 let installing = false;
 
-function free(update: Update | null) {
+function free(update: FoundUpdate | null) {
   update?.close().catch(() => {});
 }
 
@@ -29,8 +29,7 @@ async function install() {
 
 export async function checkForUpdate(manual = false): Promise<boolean> {
   try {
-    const proxy = app.settings.proxyUrl?.trim() || undefined;
-    const update = await check({ proxy, timeout: 20000 });
+    const update = await check();
     // The update being installed stays: the app relaunches once it is in.
     if (installing) {
       free(update);

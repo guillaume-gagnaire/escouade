@@ -1,11 +1,11 @@
 //! A fake HTTP server for the tests of the external ticket systems: canned answers by method and
-//! path, and every request kept to be looked at.
+//! path, and every request kept to be looked at; over https too, with a self-signed certificate.
 
 use parking_lot::Mutex;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpListener;
 
 #[derive(Debug, Clone)]
@@ -79,33 +79,70 @@ pub struct FakeServer {
 impl FakeServer {
     pub async fn start() -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let url = format!("http://{}", listener.local_addr().unwrap());
-        let server = Self {
-            url,
-            routes: Arc::default(),
-            requests: Arc::default(),
-        };
+        let server = Self::at(format!("http://{}", listener.local_addr().unwrap()));
         let s = server.clone();
         tokio::spawn(async move {
-            while let Ok((mut stream, _)) = listener.accept().await {
+            while let Ok((stream, _)) = listener.accept().await {
                 let s = s.clone();
+                tokio::spawn(async move { s.serve(stream).await });
+            }
+        });
+        server
+    }
+
+    /// The same over https, with a self-signed certificate for 127.0.0.1 (as a corporate proxy's
+    /// own, which no system trusts).
+    pub async fn start_tls() -> Self {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let server = Self::at(format!("https://{}", listener.local_addr().unwrap()));
+        let made = rcgen::generate_simple_self_signed(vec!["127.0.0.1".to_string()]).unwrap();
+        let key = rustls::pki_types::PrivateKeyDer::Pkcs8(made.key_pair.serialize_der().into());
+        let config = rustls::ServerConfig::builder_with_provider(Arc::new(
+            rustls::crypto::ring::default_provider(),
+        ))
+        .with_safe_default_protocol_versions()
+        .unwrap()
+        .with_no_client_auth()
+        .with_single_cert(vec![made.cert.der().clone()], key)
+        .unwrap();
+        let acceptor = tokio_rustls::TlsAcceptor::from(Arc::new(config));
+        let s = server.clone();
+        tokio::spawn(async move {
+            while let Ok((stream, _)) = listener.accept().await {
+                let (s, acceptor) = (s.clone(), acceptor.clone());
                 tokio::spawn(async move {
-                    let Some(req) = read_request(&mut stream).await else {
-                        return;
-                    };
-                    let (status, body) = s.answer(&req);
-                    s.requests.lock().push(req);
-                    let head = format!(
-                        "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                        body.len()
-                    );
-                    let _ = stream.write_all(head.as_bytes()).await;
-                    let _ = stream.write_all(body.as_bytes()).await;
-                    let _ = stream.shutdown().await;
+                    // A client that refuses the certificate ends the handshake: nothing to serve.
+                    if let Ok(tls) = acceptor.accept(stream).await {
+                        s.serve(tls).await;
+                    }
                 });
             }
         });
         server
+    }
+
+    fn at(url: String) -> Self {
+        Self {
+            url,
+            routes: Arc::default(),
+            requests: Arc::default(),
+        }
+    }
+
+    /// One request read from `stream`, answered as its route says; then the connection closes.
+    async fn serve<S: AsyncRead + AsyncWrite + Unpin>(&self, mut stream: S) {
+        let Some(req) = read_request(&mut stream).await else {
+            return;
+        };
+        let (status, body) = self.answer(&req);
+        self.requests.lock().push(req);
+        let head = format!(
+            "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            body.len()
+        );
+        let _ = stream.write_all(head.as_bytes()).await;
+        let _ = stream.write_all(body.as_bytes()).await;
+        let _ = stream.shutdown().await;
     }
 
     /// Answers `method target` (the last route set for it wins) with `status` and `body`.
@@ -152,7 +189,7 @@ impl FakeServer {
     }
 }
 
-async fn read_request(stream: &mut tokio::net::TcpStream) -> Option<Request> {
+async fn read_request<S: AsyncRead + Unpin>(stream: &mut S) -> Option<Request> {
     let mut buf = Vec::new();
     let mut chunk = [0u8; 4096];
     let head_end = loop {

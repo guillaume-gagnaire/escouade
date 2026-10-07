@@ -3,9 +3,9 @@
 // It replays the frame shapes documented in docs/PROTOCOL.md. The user message text picks the
 // scenario: "question", "permission", "edit", "slow", "crash", "grandchild"; anything else is a
 // plain reply. A `--resume=missing…` session fails like an unknown session does.
-// Every launch appends {argv, cwd} to $FAKE_CLAUDE_LOG, by default
-// <tmp>/fake-claude-<cwd with non-alphanumerics replaced by _>.jsonl, and every user message
-// read on stdin to <log>.stdin.jsonl.
+// Every launch appends {argv, cwd, proxy, tls} (its HTTPS_PROXY and NODE_TLS_REJECT_UNAUTHORIZED)
+// to $FAKE_CLAUDE_LOG, by default <tmp>/fake-claude-<cwd with non-alphanumerics replaced by
+// _>.jsonl, and every user message read on stdin to <log>.stdin.jsonl.
 // Started with --append-system-prompt (a ticket's protocol), it plays the ticket's agent: it writes
 // <key>.txt ("Boucle n") in its folder and ends each turn with an ```escouade report (criteria and
 // "avancement"). The ticket's title, in the protocol, steers it: [ok] every criterion met at once,
@@ -32,7 +32,15 @@ import readline from 'node:readline';
 
 const argv = process.argv.slice(2);
 const logFile = process.env.FAKE_CLAUDE_LOG || path.join(os.tmpdir(), `fake-claude-${process.cwd().replace(/[^a-zA-Z0-9]/g, '_')}.jsonl`);
-fs.appendFileSync(logFile, JSON.stringify({ argv, cwd: process.cwd(), proxy: process.env.HTTPS_PROXY ?? null }) + '\n');
+fs.appendFileSync(
+  logFile,
+  JSON.stringify({
+    argv,
+    cwd: process.cwd(),
+    proxy: process.env.HTTPS_PROXY ?? null,
+    tls: process.env.NODE_TLS_REJECT_UNAUTHORIZED ?? null,
+  }) + '\n',
+);
 
 // One-shot mode (`-p --output-format json`), used by the app to name agents.
 if (argv.includes('-p') && argv.some((a) => a.includes('[sourd]'))) {

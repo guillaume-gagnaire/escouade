@@ -15,7 +15,12 @@ export const SETTINGS_TABS: { id: SettingsTab; label: string; icon: string; desc
   { id: 'board', label: 'Kanban', icon: '▦', desc: 'Pilote auto et tickets validés', scoped: true },
   { id: 'integrations', label: 'Intégrations', icon: '⧉', desc: 'Jira, Trello et GitHub Issues', scoped: true },
   { id: 'terminals', label: 'Terminaux', icon: '$_', desc: 'Shells disponibles dans les terminaux intégrés' },
-  { id: 'network', label: 'Réseau', icon: '⇄', desc: 'Proxy HTTP(S) pour Claude Code et les mises à jour' },
+  {
+    id: 'network',
+    label: 'Réseau',
+    icon: '⇄',
+    desc: 'Proxy HTTP(S) et certificats TLS pour Claude Code, les intégrations et les mises à jour',
+  },
   { id: 'about', label: 'À propos', icon: 'ⓘ', desc: 'Version et données locales' },
 ];
 
@@ -24,7 +29,7 @@ const SETTINGS_OF: Partial<Record<SettingsTab, (keyof Settings)[]>> = {
   claude: ['claudePath', 'defaultModel', 'defaultEffort', 'defaultMode', 'autoResume', 'idleStopMinutes'],
   notifications: ['sound', 'osNotifications'],
   terminals: ['pwshPath', 'bashPath', 'wslDistro'],
-  network: ['proxyUrl', 'noProxy', 'proxyTerminals'],
+  network: ['proxyUrl', 'noProxy', 'proxyTerminals', 'insecureTls'],
   integrations: ['integrations'],
 };
 
