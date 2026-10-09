@@ -90,6 +90,23 @@
     app.modal = { kind: 'diff', projectId: project.id, agentId, paths, title };
   }
 
+  /** « Voir le diff » of the footer: the listed files, which for the whole project are in several
+   *  checkouts (the project's, and each agent's worktree), so the backend reads them all. */
+  function openListedDiff() {
+    if (scope === 'project') {
+      app.modal = {
+        kind: 'diff',
+        projectId: project.id,
+        agentId: null,
+        paths: [],
+        title: `Modifications de ${project.name}`,
+        wholeProject: true,
+      };
+    } else {
+      openDiff(agent && !agent.worktree ? files.map((f) => f.path) : [], agent?.id ?? null, `Modifications de ${agent?.name}`);
+    }
+  }
+
   const keyOf = (f: FileChange) => f.agentId + ':' + f.path;
 
   /** The agent whose worktree holds `f` (null: the project checkout), as listed: a row still
@@ -205,17 +222,7 @@
     {/if}
   {/if}
   <div class="foot">
-    <button
-      class="btn"
-      style="flex:1"
-      disabled={!files.length}
-      onclick={() =>
-        openDiff(
-          scope === 'agent' && agent && !agent.worktree ? files.map((f) => f.path) : [],
-          scope === 'agent' ? (agent?.id ?? null) : null,
-          scope === 'agent' ? `Modifications de ${agent?.name}` : `Modifications de ${project.name}`,
-        )}>Voir le diff</button
-    >
+    <button class="btn" style="flex:1" disabled={!files.length} onclick={openListedDiff}>Voir le diff</button>
     <button class="btn primary" style="flex:1" disabled={!agent || !files.length} onclick={() => agent && commitViaAgent(agent, scope)}>
       {scope === 'agent' ? 'Commit…' : 'Commit tout…'}
     </button>

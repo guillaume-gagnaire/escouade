@@ -2681,6 +2681,43 @@ impl<R: Runtime> Core<R> {
         git::diff(&root, &paths).await
     }
 
+    /// The diff of the files panel's « Tout le projet » list: exactly the files `git_files` lists
+    /// (the project's checkout and every agent's worktree), one entry per owner and checkout, in
+    /// the order the list first shows them.
+    pub async fn git_project_diff(self: &Arc<Self>, project_id: &str) -> Result<Vec<OwnedDiff>> {
+        let mut groups: Vec<(Option<String>, bool, Vec<String>)> = Vec::new();
+        for f in self.git_files(project_id, None).await? {
+            match groups
+                .iter_mut()
+                .find(|(a, w, _)| *a == f.agent_id && *w == f.in_worktree)
+            {
+                Some((_, _, paths)) => paths.push(f.path),
+                None => groups.push((f.agent_id, f.in_worktree, vec![f.path])),
+            }
+        }
+        let mut out = Vec::new();
+        for (agent_id, in_worktree, paths) in groups {
+            let diff = if in_worktree {
+                // An agent deleted (or its worktree removed) since the list was made has no file
+                // left to show: the project's checkout must not be read in its place.
+                let worktree = agent_id
+                    .as_deref()
+                    .and_then(|a| self.agent(a).ok())
+                    .and_then(|h| h.lock().meta.worktree.clone());
+                let Some(worktree) = worktree else { continue };
+                git::diff(&worktree.path, &paths).await.unwrap_or_default()
+            } else {
+                git::diff(&self.files_root(project_id, None).await?, &paths).await?
+            };
+            out.push(OwnedDiff {
+                agent_id,
+                in_worktree,
+                diff,
+            });
+        }
+        Ok(out)
+    }
+
     /// Reverts a file of the files panel to HEAD (a new file is deleted).
     pub async fn git_discard(
         self: &Arc<Self>,

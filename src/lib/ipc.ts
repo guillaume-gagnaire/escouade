@@ -16,6 +16,7 @@ import type {
   FoundRelease,
   GitLog,
   InitialState,
+  OwnedDiff,
   IsolaService,
   IssuePage,
   Project,
@@ -66,6 +67,7 @@ export const api = {
   fileSuggestions: (id: string, query: string) => invoke<string[]>('file_suggestions', { id, query }),
   gitFiles: (projectId: string, agentId: string | null) => invoke<FileChange[]>('git_files', { projectId, agentId }),
   gitDiff: (projectId: string, agentId: string | null, paths: string[]) => invoke<string>('git_diff', { projectId, agentId, paths }),
+  gitProjectDiff: (projectId: string) => invoke<OwnedDiff[]>('git_project_diff', { projectId }),
   gitLog: (projectId: string, agentId: string | null) => invoke<GitLog>('git_log', { projectId, agentId }),
   gitShow: (projectId: string, hash: string) => invoke<string>('git_show', { projectId, hash }),
   /** Fetch, pull (fast-forward only) and push of the project's checkout; each returns a summary. */

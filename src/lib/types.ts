@@ -429,6 +429,13 @@ export interface FileChange {
   inWorktree: boolean;
 }
 
+/** The unified diff of the listed files that one agent owns in one checkout (null: no agent). */
+export interface OwnedDiff {
+  agentId: string | null;
+  inWorktree: boolean;
+  diff: string;
+}
+
 /** The files of an editor source, relative to `root`. */
 export interface FileTree {
   root: string;

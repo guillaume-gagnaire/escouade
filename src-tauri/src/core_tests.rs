@@ -905,6 +905,68 @@ async fn a_file_is_discarded_and_read_in_the_checkout_that_holds_it() {
 }
 
 #[tokio::test]
+async fn the_project_diff_covers_the_checkout_and_each_agents_worktree() {
+    let h = harness("core-project-diff");
+    let (p, r) = h.project(true).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let wt = PathBuf::from(a.meta.worktree.clone().unwrap().path);
+    // The same file edited in both checkouts, and a file only the agent has.
+    std::fs::write(r.join("src").join("app.ts"), "const a = 2;\n").unwrap();
+    std::fs::write(wt.join("src").join("app.ts"), "const a = 3;\n").unwrap();
+    std::fs::write(wt.join("new.ts"), "x\n").unwrap();
+
+    let parts = h.core.git_project_diff(&p.id).await.unwrap();
+    let owners: Vec<_> = parts
+        .iter()
+        .map(|d| (d.agent_id.clone(), d.in_worktree))
+        .collect();
+    let id = Some(a.meta.id.clone());
+    assert_eq!(owners.len(), 2, "{owners:?}");
+    assert!(owners.contains(&(None, false)), "{owners:?}");
+    assert!(owners.contains(&(id.clone(), true)), "{owners:?}");
+
+    let of = |agent: Option<String>| parts.iter().find(|d| d.agent_id == agent).unwrap();
+    // The project's checkout shows its own edit only.
+    let project_diff = &of(None).diff;
+    assert!(project_diff.contains("+const a = 2;"), "{project_diff}");
+    assert!(!project_diff.contains("+const a = 3;"), "{project_diff}");
+    assert!(!project_diff.contains("new.ts"), "{project_diff}");
+    // The agent's worktree shows both of its files, as the list does.
+    let agent_diff = &of(id).diff;
+    assert!(agent_diff.contains("+const a = 3;"), "{agent_diff}");
+    assert!(agent_diff.contains("+++ b/new.ts"), "{agent_diff}");
+    assert!(!agent_diff.contains("+const a = 2;"), "{agent_diff}");
+}
+
+#[tokio::test]
+async fn the_project_diff_credits_checkout_files_to_the_agent_that_edited_them() {
+    let h = harness("core-project-diff-owners");
+    let (p, r) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.turn(&id, "edit").await; // the fake reports src/app.ts as edited by the agent
+    std::fs::write(r.join("src").join("app.ts"), "const a = 2;\n").unwrap();
+    std::fs::write(r.join("notes.md"), "x\n").unwrap();
+
+    let parts = h.core.git_project_diff(&p.id).await.unwrap();
+    assert!(parts.iter().all(|d| !d.in_worktree));
+    let of = |agent: Option<String>| parts.iter().find(|d| d.agent_id == agent).unwrap();
+    let credited = &of(Some(id)).diff;
+    assert!(credited.contains("+const a = 2;"), "{credited}");
+    assert!(!credited.contains("notes.md"), "{credited}");
+    let uncredited = &of(None).diff;
+    assert!(uncredited.contains("+++ b/notes.md"), "{uncredited}");
+    assert!(!uncredited.contains("src/app.ts"), "{uncredited}");
+}
+
+#[tokio::test]
+async fn the_project_diff_is_empty_when_nothing_is_listed() {
+    let h = harness("core-project-diff-clean");
+    let (p, _r) = h.project(true).await;
+    h.core.create_agent(&p.id, None).await.unwrap();
+    assert!(h.core.git_project_diff(&p.id).await.unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn git_counts_attribute_files_to_the_agent_that_edited_them() {
     let h = harness("git-counts");
     let (p, r) = h.project(false).await;

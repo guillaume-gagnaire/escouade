@@ -5,24 +5,46 @@
   import { app } from '../lib/state.svelte';
   import DiffView from './DiffView.svelte';
 
-  // Uncommitted changes (`paths` of the agent's checkout), or what `commit` changed.
+  // Uncommitted changes (`paths` of the agent's checkout), what `commit` changed, or, with
+  // `wholeProject`, every file the project's list shows: the project's checkout and each agent's worktree.
   let {
     projectId,
     agentId,
     paths,
     title,
     commit = null,
-  }: { projectId: string; agentId: string | null; paths: string[]; title: string; commit?: string | null } = $props();
+    wholeProject = false,
+  }: {
+    projectId: string;
+    agentId: string | null;
+    paths: string[];
+    title: string;
+    commit?: string | null;
+    wholeProject?: boolean;
+  } = $props();
 
-  let files = $state<DiffFile[]>([]);
+  // `agentId`: the agent a whole-project file is listed under, as in the files panel. `key`: the same
+  // path can be modified in the project and in a worktree, so the path alone does not identify a file.
+  type Shown = DiffFile & { key: string; agentId: string | null };
+  const shown = (diff: string, owner: string | null, group: number): Shown[] =>
+    parseUnifiedDiff(diff).map((f) => ({ ...f, key: `${group}:${f.path}`, agentId: owner }));
+
+  let files = $state<Shown[]>([]);
   let current = $state(0);
   let loading = $state(true);
   let error = $state<string | null>(null);
 
+  const agentName = (id: string) => app.agents[id]?.name ?? '?';
+
   $effect(() => {
-    (commit ? api.gitShow(projectId, commit) : api.gitDiff(projectId, agentId, paths))
-      .then((d) => {
-        files = parseUnifiedDiff(d);
+    (commit
+      ? api.gitShow(projectId, commit).then((d) => shown(d, null, 0))
+      : wholeProject
+        ? api.gitProjectDiff(projectId).then((parts) => parts.flatMap((p, i) => shown(p.diff, p.agentId, i)))
+        : api.gitDiff(projectId, agentId, paths).then((d) => shown(d, null, 0))
+    )
+      .then((list) => {
+        files = list;
         loading = false;
       })
       .catch((e) => {
@@ -52,10 +74,11 @@
     <div class="body">
       {#if files.length > 1}
         <nav class="files">
-          {#each files as f, i (f.path)}
+          {#each files as f, i (f.key)}
             <button class:on={i === current} onclick={() => (current = i)}>
               <span class="st" class:a={f.status === 'A'} class:d={f.status === 'D'}>{f.status}</span>
               <span class="p mono">{f.path}</span>
+              {#if f.agentId}<span class="tag mono">{agentName(f.agentId)}</span>{/if}
               <span class="add mono">+{f.add}</span><span class="del mono">−{f.del}</span>
             </button>
           {/each}
@@ -69,7 +92,11 @@
         {:else if !file}
           <div class="msg">Aucune différence.</div>
         {:else}
-          <div class="fhead mono">{file.path} <span class="add">+{file.add}</span> <span class="del">−{file.del}</span></div>
+          <div class="fhead mono">
+            {file.path}
+            {#if file.agentId}<span class="tag">{agentName(file.agentId)}</span>{/if}
+            <span class="add">+{file.add}</span> <span class="del">−{file.del}</span>
+          </div>
           {#if file.binary}
             <div class="msg">Fichier binaire.</div>
           {:else}
@@ -171,6 +198,23 @@
     white-space: nowrap;
     direction: rtl;
     text-align: left;
+  }
+  /* The agent a file is listed under, as in the files panel. */
+  .tag {
+    flex: none;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    background: var(--elev2);
+    color: var(--muted);
+    white-space: nowrap;
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .fhead .tag {
+    display: inline-block;
+    vertical-align: bottom;
   }
   .add {
     color: var(--add);

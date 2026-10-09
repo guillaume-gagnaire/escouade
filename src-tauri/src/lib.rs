@@ -208,6 +208,7 @@ pub fn run() {
             commands::file_suggestions,
             commands::git_files,
             commands::git_diff,
+            commands::git_project_diff,
             commands::git_log,
             commands::git_show,
             commands::git_fetch,

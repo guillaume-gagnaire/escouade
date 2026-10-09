@@ -68,6 +68,42 @@ describe('FilesPanel', () => {
   });
 });
 
+describe('FilesPanel « Voir le diff »', () => {
+  const wt = { path: 'C:/wt', branch: 'ccm/wt', baseBranch: 'main' };
+  beforeEach(() => resetApp({ projects: [project()], agents: [agent(), agent({ id: 'a2', name: 'wt-agent', worktree: wt })] }));
+
+  it('covers the project and every agent’s worktree for the whole project', async () => {
+    fakeBackend({ git_files: () => [change('README.md', null), change('src/wt.ts', 'a2', true)] });
+    app.filesScope = 'project';
+    render(FilesPanel, { project: project(), agent: app.agents.a1 });
+    await screen.findByText('wt.ts');
+    await userEvent.click(screen.getByRole('button', { name: 'Voir le diff' }));
+    expect(app.modal).toMatchObject({ kind: 'diff', projectId: 'p1', title: 'Modifications de demo-api', wholeProject: true });
+  });
+
+  it('reads one checkout for an agent: its worktree, or the files it edited in the project’s', async () => {
+    fakeBackend({ git_files: () => [change('src/auth.ts', 'a1'), change('new.txt', 'a1')] });
+    const { unmount } = render(FilesPanel, { project: project(), agent: app.agents.a1 });
+    await screen.findByText('auth.ts');
+    await userEvent.click(screen.getByRole('button', { name: 'Voir le diff' }));
+    expect(app.modal).toMatchObject({
+      kind: 'diff',
+      agentId: 'a1',
+      paths: ['src/auth.ts', 'new.txt'],
+      title: 'Modifications de refacto-auth',
+    });
+    expect(app.modal).not.toHaveProperty('wholeProject', true);
+    unmount();
+
+    fakeBackend({ git_files: () => [change('src/wt.ts', 'a2', true)] });
+    render(FilesPanel, { project: project(), agent: app.agents.a2 });
+    await screen.findByText('wt.ts');
+    await userEvent.click(screen.getByRole('button', { name: 'Voir le diff' }));
+    expect(app.modal).toMatchObject({ kind: 'diff', agentId: 'a2', paths: [], title: 'Modifications de wt-agent' });
+    expect(app.modal).not.toHaveProperty('wholeProject', true);
+  });
+});
+
 describe('FilesPanel docked in the split layout', () => {
   beforeEach(() =>
     resetApp({

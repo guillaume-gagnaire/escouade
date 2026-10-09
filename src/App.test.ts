@@ -1,9 +1,9 @@
-import { render, screen } from '@testing-library/svelte';
+import { render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import App from './App.svelte';
 import { app } from './lib/state.svelte';
-import type { InitialState } from './lib/types';
+import type { Agent, InitialState } from './lib/types';
 import { agent, fakeBackend, project, resetApp, SETTINGS } from './test/ipc';
 
 const DIFF = `diff --git a/src/auth.ts b/src/auth.ts
@@ -14,10 +14,10 @@ const DIFF = `diff --git a/src/auth.ts b/src/auth.ts
 +const b = 3;
 `;
 
-function start(layout: '' | 'split') {
+function start(layout: '' | 'split', over: { agents?: Agent[]; handlers?: Record<string, (args: any) => unknown> } = {}) {
   const initial: InitialState = {
     projects: [project()],
-    agents: [agent()],
+    agents: over.agents ?? [agent()],
     ui: { activeProject: 'p1', view: 'project', selectedAgent: {}, layout },
     settings: SETTINGS,
     usage: { fiveHour: null, sevenDay: null, todayCost: 0, updatedAt: 0 },
@@ -35,6 +35,7 @@ function start(layout: '' | 'split') {
     git_files: () => [{ path: 'src/auth.ts', status: 'M', add: 1, del: 1, agentId: 'a1' }],
     git_diff: () => DIFF,
     git_branches: () => ['main'],
+    ...over.handlers,
   });
   // Nothing rendered from a previous test's state until the snapshot is in.
   resetApp();
@@ -53,6 +54,42 @@ describe('App layout', () => {
     start('');
     expect(await screen.findByRole('main')).toBeInTheDocument();
     expect(screen.queryByText('Non commités')).not.toBeInTheDocument();
+  });
+
+  it('shows the files of the agents’ worktrees in the diff of the whole project, as the list does', async () => {
+    const diffOf = (path: string, line: string) =>
+      `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1 +1 @@\n-old\n+${line}\n`;
+    const change = (path: string, agentId: string | null, inWorktree: boolean) => ({
+      path,
+      status: 'M',
+      add: 1,
+      del: 1,
+      agentId,
+      inWorktree,
+    });
+    const wt = { path: 'C:/wt', branch: 'escouade/a2', baseBranch: 'main' };
+    start('', {
+      agents: [agent(), agent({ id: 'a2', name: 'tests-e2e', worktree: wt })],
+      handlers: {
+        git_files: () => [change('README.md', null, false), change('src/wt.ts', 'a2', true)],
+        // What « Voir le diff » used to read: the project's checkout only.
+        git_diff: () => diffOf('README.md', 'racine'),
+        git_project_diff: () => [
+          { agentId: null, inWorktree: false, diff: diffOf('README.md', 'racine') },
+          { agentId: 'a2', inWorktree: true, diff: diffOf('src/wt.ts', 'dans le worktree') },
+        ],
+      },
+    });
+    expect(await screen.findByRole('main')).toBeInTheDocument();
+    app.filesScope = 'project';
+    app.filesOpen = true;
+    await screen.findByText('wt.ts');
+    await userEvent.click(screen.getByRole('button', { name: 'Voir le diff' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Modifications de demo-api' });
+    const rows = await within(dialog).findAllByRole('button', { name: /^M / });
+    expect(rows.map((r) => r.textContent)).toEqual([expect.stringMatching(/README\.md/), expect.stringMatching(/src\/wt\.ts\s*tests-e2e/)]);
+    await userEvent.click(rows[1]);
+    expect(within(dialog).getByText('dans le worktree')).toBeInTheDocument();
   });
 
   it('shows the board of the project in place of its agent, and the agent again when asked for', async () => {

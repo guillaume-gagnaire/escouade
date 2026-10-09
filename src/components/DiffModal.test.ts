@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { app } from '../lib/state.svelte';
-import { fakeBackend, project, resetApp } from '../test/ipc';
+import { agent, fakeBackend, project, resetApp } from '../test/ipc';
 import DiffModal from './DiffModal.svelte';
 
 export const DIFF = `diff --git a/src/auth.ts b/src/auth.ts
@@ -56,6 +56,58 @@ describe('DiffModal', () => {
     render(DiffModal, props);
     await userEvent.keyboard('{Escape}');
     expect(app.modal).toBeNull();
+  });
+});
+
+describe('DiffModal for the whole project', () => {
+  const diffOf = (path: string, line: string) => `diff --git a/${path} b/${path}
+--- a/${path}
++++ b/${path}
+@@ -1 +1 @@
+-old
++${line}
+`;
+  const whole = { projectId: 'p1', agentId: null, paths: [], title: 'Modifications de demo-api', wholeProject: true };
+  beforeEach(() => resetApp({ projects: [project()], agents: [agent({ id: 'a2', name: 'tests-e2e' })] }));
+
+  it('shows the project’s files and each worktree’s, the latter named after their agent', async () => {
+    const backend = fakeBackend({
+      git_project_diff: () => [
+        { agentId: null, inWorktree: false, diff: diffOf('README.md', 'racine') },
+        { agentId: 'a2', inWorktree: true, diff: diffOf('README.md', 'worktree') + diffOf('src/wt.ts', 'seulement ici') },
+      ],
+    });
+    render(DiffModal, whole);
+    expect(await screen.findByText('racine')).toBeInTheDocument();
+    expect(backend.called('git_project_diff')[0].args).toEqual({ projectId: 'p1' });
+    expect(backend.called('git_diff')).toHaveLength(0);
+    expect(screen.getByText('3 fichiers')).toBeInTheDocument();
+    // Three rows, although two share a path: the same file in two checkouts is two files.
+    const rows = screen.getAllByRole('button', { name: /^M / });
+    expect(rows.map((r) => r.textContent)).toEqual([
+      expect.stringMatching(/^M README\.md\s*\+1−1$/),
+      expect.stringMatching(/^M README\.md\s*tests-e2e\s*\+1−1$/),
+      expect.stringMatching(/^M src\/wt\.ts\s*tests-e2e\s*\+1−1$/),
+    ]);
+    await userEvent.click(rows[1]);
+    expect(screen.getByText('worktree')).toBeInTheDocument();
+    expect(screen.queryByText('racine')).not.toBeInTheDocument();
+    await userEvent.click(rows[2]);
+    expect(screen.getByText('seulement ici')).toBeInTheDocument();
+  });
+
+  it('names a file’s agent even when it is the only file', async () => {
+    fakeBackend({ git_project_diff: () => [{ agentId: 'a2', inWorktree: true, diff: diffOf('src/wt.ts', 'seul') }] });
+    render(DiffModal, whole);
+    expect(await screen.findByText('seul')).toBeInTheDocument();
+    expect(screen.getByText('tests-e2e')).toBeInTheDocument();
+    expect(screen.queryByText('Aucune différence.')).not.toBeInTheDocument();
+  });
+
+  it('says there is no difference only when no checkout has any', async () => {
+    fakeBackend({ git_project_diff: () => [] });
+    render(DiffModal, whole);
+    expect(await screen.findByText('Aucune différence.')).toBeInTheDocument();
   });
 });
 

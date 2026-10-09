@@ -37,7 +37,8 @@ export type Modal =
    * scrolled to a section of it; `resume`: with the draft it had, back from a modal it opened.
    */
   | { kind: 'settings'; tab?: SettingsTab; projectId?: string; section?: 'launch'; resume?: boolean }
-  | { kind: 'diff'; projectId: string; agentId: string | null; paths: string[]; title: string; commit?: string }
+  /** `wholeProject`: every uncommitted file the project's list shows, worktrees of the agents included. */
+  | { kind: 'diff'; projectId: string; agentId: string | null; paths: string[]; title: string; commit?: string; wholeProject?: boolean }
   | {
       kind: 'confirm';
       title: string;

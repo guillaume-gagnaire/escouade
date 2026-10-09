@@ -299,6 +299,11 @@ pub async fn git_diff(
 }
 
 #[tauri::command]
+pub async fn git_project_diff(core: CoreState<'_>, project_id: String) -> Res<Vec<OwnedDiff>> {
+    core.git_project_diff(&project_id).await.map_err(err)
+}
+
+#[tauri::command]
 pub async fn git_log(
     core: CoreState<'_>,
     project_id: String,

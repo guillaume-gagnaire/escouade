@@ -117,6 +117,7 @@
     paths={app.modal.paths}
     title={app.modal.title}
     commit={app.modal.commit}
+    wholeProject={app.modal.wholeProject}
   />
 {:else if app.modal?.kind === 'confirm'}
   <ConfirmModal {...app.modal} />

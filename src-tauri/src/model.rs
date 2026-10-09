@@ -652,6 +652,17 @@ pub struct FileChange {
     pub in_worktree: bool,
 }
 
+/// The unified diff of the files of the files panel that one agent owns in one checkout (the
+/// project's own, or the agent's worktree); `agent_id` is `None` for files no agent is credited with.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OwnedDiff {
+    pub agent_id: Option<String>,
+    /// Read from `agent_id`'s worktree rather than the project's repository.
+    pub in_worktree: bool,
+    pub diff: String,
+}
+
 /// One commit of the repository graph.
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
