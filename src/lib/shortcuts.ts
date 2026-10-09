@@ -56,14 +56,14 @@ const agentCycle = (e: KeyboardEvent) => e.key === 'Tab' && e.ctrlKey && !e.meta
  * Shortcuts the terminal hands over to the app. Shell keys (Ctrl+C, Ctrl+R, Ctrl+N…) stay
  * with the shell; Ctrl+J is only a line feed there, which Enter already sends. On macOS the
  * app's shortcuts use Cmd, which the shell never gets: they all go to the app, except copy and
- * paste, handled by the terminal.
+ * paste, handled by the terminal. Ctrl+K stays with the shell (it cuts the end of the line).
  */
 export function isAppShortcut(e: KeyboardEvent, mac = IS_MAC): boolean {
   if (e.altKey) return false;
   if (agentCycle(e)) return true;
   if (!primaryKey(e, mac)) return false;
   const k = e.key.toLowerCase();
-  if (mac) return digit(e) !== null || ['n', 't', 'j', ',', 'b', 'l'].includes(k);
+  if (mac) return digit(e) !== null || ['n', 't', 'j', ',', 'b', 'l', 'k'].includes(k);
   return digit(e) !== null || k === ',' || k === 'j';
 }
 
@@ -101,6 +101,10 @@ export function handleShortcut(e: KeyboardEvent, mac = IS_MAC): boolean {
   }
   if (k === ',') {
     app.modal = { kind: 'settings' };
+    return true;
+  }
+  if (k === 'k' && !e.shiftKey) {
+    app.modal = { kind: 'convSearch' };
     return true;
   }
   if (k === 't' && !e.shiftKey && app.project) {

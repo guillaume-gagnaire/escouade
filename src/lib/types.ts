@@ -644,6 +644,32 @@ export type ConvOp =
   | { op: 'patch'; id: string; patch: Record<string, unknown> }
   | { op: 'delta'; id: string; text: string };
 
+/** A message of a conversation that matches a search (Ctrl+K). */
+export interface ConvHit {
+  agentId: string;
+  projectId: string;
+  agentName: string;
+  archived: boolean;
+  /** Its rank among the conversation's items. */
+  eventIndex: number;
+  itemId: string;
+  /** The text around the match, on one line. */
+  snippet: string;
+  /** Where the match is in `snippet` (string indices). */
+  mark: [number, number];
+  /** When it was written (epoch ms). */
+  at: number;
+}
+
+export interface ConvSearchResult {
+  /** Agent by agent, the most recently active first; in each, the newest messages first. */
+  hits: ConvHit[];
+  /** More messages match than the results given (200). */
+  capped: boolean;
+  /** Stopped after 5 s, before the end of the conversations. */
+  timedOut: boolean;
+}
+
 export type UiEvent =
   | { type: 'agent'; agent: Agent }
   | { type: 'agentRemoved'; id: string; projectId: string }

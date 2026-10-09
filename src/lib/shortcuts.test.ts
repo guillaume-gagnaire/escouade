@@ -47,6 +47,16 @@ describe('handleShortcut', () => {
     expect(app.modal).toEqual({ kind: 'settings' });
   });
 
+  it('opens the search through the conversations with Ctrl+K, Cmd+K on macOS', () => {
+    fakeBackend();
+    expect(handleShortcut(key('k'), false)).toBe(true);
+    expect(app.modal).toEqual({ kind: 'convSearch' });
+    app.modal = null;
+    expect(handleShortcut(key('k'), true)).toBe(false);
+    expect(handleShortcut(new KeyboardEvent('keydown', { key: 'k', metaKey: true }), true)).toBe(true);
+    expect(app.modal).toEqual({ kind: 'convSearch' });
+  });
+
   it('switches the screen layout with Ctrl+Shift+L', () => {
     fakeBackend();
     expect(handleShortcut(key('L', { shiftKey: true }))).toBe(true);
@@ -141,15 +151,17 @@ describe('isAppShortcut', () => {
     expect(isAppShortcut(key('c'))).toBe(false); // SIGINT
     expect(isAppShortcut(key('r'))).toBe(false); // reverse search
     expect(isAppShortcut(key('n'))).toBe(false); // readline: next history
+    expect(isAppShortcut(key('k'), false)).toBe(false); // readline: kill to the end of the line
     expect(isAppShortcut(new KeyboardEvent('keydown', { key: '3' }))).toBe(false);
   });
 
   it('hands every Cmd shortcut to the app on macOS but copy and paste, and leaves Ctrl keys to the shell', () => {
     const cmd = (k: string) => new KeyboardEvent('keydown', { key: k, metaKey: true });
-    for (const k of ['3', 'n', 't', 'j', ',']) expect(isAppShortcut(cmd(k), true)).toBe(true);
+    for (const k of ['3', 'n', 't', 'j', ',', 'k']) expect(isAppShortcut(cmd(k), true)).toBe(true);
     expect(isAppShortcut(cmd('c'), true)).toBe(false);
     expect(isAppShortcut(cmd('v'), true)).toBe(false);
     expect(isAppShortcut(key('j'), true)).toBe(false);
+    expect(isAppShortcut(key('k'), true)).toBe(false);
     expect(isAppShortcut(key('Tab'), true)).toBe(true);
   });
 

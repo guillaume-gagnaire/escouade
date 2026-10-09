@@ -59,7 +59,9 @@ export type Modal =
   /** The update downloaded (`app.update`), which a restart installs. */
   | { kind: 'update' }
   /** The release notes of the update installed since the last start. */
-  | { kind: 'notes'; version: string; notes: string };
+  | { kind: 'notes'; version: string; notes: string }
+  /** « Rechercher dans les conversations » (Ctrl+K). */
+  | { kind: 'convSearch' };
 
 export interface Toast {
   id: number;

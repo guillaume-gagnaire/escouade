@@ -7,6 +7,7 @@ import type {
   BoardSettings,
   Container,
   ConvItem,
+  ConvSearchResult,
   ExternalIssue,
   FileBase,
   FileChange,
@@ -51,6 +52,9 @@ export const api = {
   createAgent: (projectId: string, model: string | null = null) => invoke<Agent>('create_agent', { projectId, model }),
   warmAgent: (id: string) => invoke<void>('warm_agent', { id }),
   getConversation: (id: string) => invoke<ConvItem[]>('get_conversation', { id }),
+  /** Searches the conversations of a project's agents (all projects' with null), archived agents included or not. */
+  searchConversations: (query: string, projectId: string | null, archived: boolean) =>
+    invoke<ConvSearchResult>('search_conversations', { query, projectId, archived }),
   sendMessage: (id: string, text: string, attachments: Attachment[] = []) => invoke<void>('send_message', { id, text, attachments }),
   interrupt: (id: string) => invoke<void>('interrupt', { id }),
   answerQuestion: (id: string, requestId: string, answers: Record<string, string>) =>

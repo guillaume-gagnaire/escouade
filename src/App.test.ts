@@ -135,6 +135,40 @@ describe('App layout', () => {
     expect(screen.getByPlaceholderText('aucun')).toHaveValue('http://proxy:3128');
   });
 
+  it('opens « Rechercher dans les conversations » with Ctrl+K, and the agent of the result chosen', async () => {
+    const a2 = agent({ id: 'a2', name: 'pagination', createdAt: 2 });
+    start('', {
+      agents: [agent(), a2],
+      handlers: {
+        search_conversations: () => ({
+          hits: [
+            {
+              agentId: 'a2',
+              projectId: 'p1',
+              agentName: 'pagination',
+              archived: false,
+              eventIndex: 0,
+              itemId: 'u1',
+              snippet: 'Ajoute la pagination',
+              mark: [10, 20],
+              at: Date.now(),
+            },
+          ],
+          capped: false,
+          timedOut: false,
+        }),
+      },
+    });
+    expect(await screen.findByRole('main')).toBeInTheDocument();
+    await userEvent.keyboard('{Control>}k{/Control}');
+    const field = await screen.findByRole('combobox', { name: 'Rechercher dans les conversations' });
+    await userEvent.type(field, 'pagination');
+    await screen.findByRole('option', { name: /Ajoute la pagination/ });
+    await userEvent.keyboard('{Enter}');
+    await expect.poll(() => screen.queryByRole('dialog', { name: 'Rechercher dans les conversations' })).toBeNull();
+    expect(app.agent?.id).toBe('a2');
+  });
+
   it('counts an agent as seen once the board that hid it is closed', async () => {
     const focus = vi.spyOn(document, 'hasFocus').mockReturnValue(true);
     start('');

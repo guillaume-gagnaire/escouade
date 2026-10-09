@@ -9,6 +9,7 @@
   import Board from './components/board/Board.svelte';
   import ContextMenu from './components/ContextMenu.svelte';
   import Conversation from './components/Conversation.svelte';
+  import ConvSearch from './components/ConvSearch.svelte';
   import DiffModal from './components/DiffModal.svelte';
   import EditorView from './components/editor/EditorView.svelte';
   import SidePanel from './components/SidePanel.svelte';
@@ -139,6 +140,8 @@
   <UpdateModal version={app.update.version} notes={app.update.notes} />
 {:else if app.modal?.kind === 'notes'}
   <UpdateModal version={app.modal.version} notes={app.modal.notes} installed />
+{:else if app.modal?.kind === 'convSearch'}
+  <ConvSearch />
 {/if}
 
 <ContextMenu />
