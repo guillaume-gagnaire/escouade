@@ -462,6 +462,45 @@ async fn archiving_is_silent_and_a_restored_agent_resumes() {
 }
 
 #[tokio::test]
+async fn searches_the_conversations_of_the_agents_archived_ones_included_when_asked() {
+    let h = harness("conv-search");
+    let (p, _) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    // Its log is being written by the agent, alive, as it is read.
+    h.turn(&id, "Ajoute la pagination à l'événement").await;
+    let found = h.core.search_conversations("EVENEMENT", Some(&p.id), true);
+    // Claude's answer (the fake one repeats the message), then the message.
+    let snippets: Vec<&str> = found.hits.iter().map(|x| x.snippet.as_str()).collect();
+    assert_eq!(
+        snippets,
+        [
+            "Bonjour, tu as dit : Ajoute la pagination à l'événement",
+            "Ajoute la pagination à l'événement"
+        ]
+    );
+    let hit = &found.hits[1];
+    assert_eq!(
+        (hit.agent_id.as_str(), hit.project_id.as_str()),
+        (id.as_str(), p.id.as_str())
+    );
+    assert_eq!(hit.agent_name, h.agent(&id).name);
+    assert!(!hit.archived);
+    assert!(h
+        .core
+        .search_conversations("evenement", Some("ailleurs"), true)
+        .hits
+        .is_empty());
+    h.core.archive_agent(&id, true).await.unwrap();
+    assert!(h
+        .core
+        .search_conversations("evenement", None, false)
+        .hits
+        .is_empty());
+    let found = h.core.search_conversations("evenement", None, true);
+    assert!(found.hits.iter().any(|x| x.agent_id == id && x.archived));
+}
+
+#[tokio::test]
 async fn archiving_a_running_agent_ends_what_it_was_doing() {
     let h = harness("archive-live");
     let (p, _) = h.project(false).await;

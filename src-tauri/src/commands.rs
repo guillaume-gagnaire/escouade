@@ -210,6 +210,22 @@ pub fn get_conversation(core: CoreState, id: String) -> Res<Vec<Value>> {
     Ok(items)
 }
 
+/// Searches the conversations (Ctrl+K) away from the window's threads: it reads every log.
+#[tauri::command]
+pub async fn search_conversations(
+    core: CoreState<'_>,
+    query: String,
+    project_id: Option<String>,
+    archived: bool,
+) -> Res<crate::convsearch::Found> {
+    let core = core.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        core.search_conversations(&query, project_id.as_deref(), archived)
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub async fn send_message(
     core: CoreState<'_>,

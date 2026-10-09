@@ -262,7 +262,8 @@ pub fn relative_slash(base: &str, path: &str) -> String {
     path.replace('\\', "/").trim_end_matches('/').to_string()
 }
 
-fn strip_base(base: &str, path: &str) -> Option<String> {
+/// `path` relative to `base` (forward slashes, case ignored) when it is inside it, without reading the disk.
+pub(crate) fn strip_base(base: &str, path: &str) -> Option<String> {
     let norm = |s: &str| {
         s.trim_start_matches(r"\\?\")
             .replace('\\', "/")

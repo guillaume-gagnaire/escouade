@@ -3,6 +3,7 @@ mod board;
 mod claude;
 mod commands;
 mod conv;
+mod convsearch;
 mod core;
 #[cfg(test)]
 mod core_tests;
@@ -216,6 +217,7 @@ pub fn run() {
             commands::create_agent,
             commands::warm_agent,
             commands::get_conversation,
+            commands::search_conversations,
             commands::send_message,
             commands::interrupt,
             commands::answer_question,

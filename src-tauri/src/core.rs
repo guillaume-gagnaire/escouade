@@ -3,6 +3,7 @@
 use crate::agent::{AgentAlert, AgentHandle, AgentRt, Effects, NotifyKind};
 use crate::board;
 use crate::claude::{self, ClaudeProcess, SpawnOpts};
+use crate::convsearch;
 use crate::git::{self, GitService};
 use crate::hub::Hub;
 use crate::integrations;
@@ -327,6 +328,8 @@ pub struct Core<R: Runtime = Wry> {
     pub(crate) sync_queue: Mutex<Option<integrations::sync::SyncSender>>,
     /// One import at a time (by hand or by label): a ticket comes in once.
     pub(crate) import_lock: tokio::sync::Mutex<()>,
+    /// The searches through the conversations the window started (Ctrl+K).
+    searches: convsearch::Searches,
     /// Notifications sent, as "<title> | <text>" (tests only).
     #[cfg(test)]
     pub alerts: Mutex<Vec<String>>,
@@ -594,6 +597,7 @@ impl<R: Runtime> Core<R> {
             gh_token: Mutex::default(),
             sync_queue: Mutex::default(),
             import_lock: tokio::sync::Mutex::new(()),
+            searches: convsearch::Searches::default(),
             #[cfg(test)]
             alerts: Mutex::default(),
             #[cfg(test)]
@@ -812,6 +816,43 @@ impl<R: Runtime> Core<R> {
             .collect();
         v.sort_by_key(|a| a.meta.created_at);
         v
+    }
+
+    /// Searches the agents' conversations, those of one project or of all, archived agents
+    /// included or not. Blocking: up to `convsearch::TIME_LIMIT` of reading, less when the
+    /// window starts another search meanwhile.
+    pub fn search_conversations(
+        &self,
+        text: &str,
+        project_id: Option<&str>,
+        archived: bool,
+    ) -> convsearch::Found {
+        let stale = self.searches.start();
+        let agents: Vec<convsearch::AgentRef> = self
+            .agents
+            .read()
+            .values()
+            .map(|h| {
+                let rt = h.lock();
+                let m = &rt.meta;
+                convsearch::AgentRef {
+                    id: m.id.clone(),
+                    project_id: m.project_id.clone(),
+                    name: m.name.clone(),
+                    archived: m.archived,
+                    cwd: m.cwd.clone(),
+                    last_activity: m.last_activity,
+                    created_at: m.created_at,
+                }
+            })
+            .collect();
+        let q = convsearch::Query {
+            text,
+            project_id,
+            archived,
+        };
+        let deadline = Instant::now() + convsearch::TIME_LIMIT;
+        convsearch::search(&self.data.conversations(), &agents, &q, deadline, &stale)
     }
 
     pub(crate) fn project_agents(&self, project_id: &str) -> Vec<AgentHandle> {

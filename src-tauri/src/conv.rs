@@ -30,7 +30,7 @@ impl Conv {
     }
 
     fn path(&self) -> PathBuf {
-        self.dir.join(format!("{}.jsonl", self.agent_id))
+        log_path(&self.dir, &self.agent_id)
     }
 
     pub fn ensure_loaded(&mut self) {
@@ -38,26 +38,12 @@ impl Conv {
             return;
         }
         self.loaded = true;
-        let Ok(file) = File::open(self.path()) else {
+        let Some(log) = replay(&self.path()) else {
             return;
         };
-        let mut ops = 0usize;
-        for line in BufReader::new(file).lines().map_while(Result::ok) {
-            let Ok(v) = serde_json::from_str::<Value>(&line) else {
-                continue;
-            };
-            ops += 1;
-            match v["op"].as_str() {
-                Some("append") => self.apply_append(v["item"].clone()),
-                Some("patch") => {
-                    if let Some(id) = v["id"].as_str() {
-                        self.apply_patch(id, &v["patch"]);
-                    }
-                }
-                _ => {}
-            }
-        }
-        if ops > self.items.len() * 2 + 64 {
+        self.items = log.items;
+        self.index = log.index;
+        if log.ops > self.items.len() * 2 + 64 {
             self.compact();
         }
     }
@@ -76,24 +62,11 @@ impl Conv {
     }
 
     fn apply_append(&mut self, item: Value) {
-        let Some(id) = item["id"].as_str().map(str::to_string) else {
-            return;
-        };
-        if let Some(&i) = self.index.get(&id) {
-            self.items[i] = item;
-        } else {
-            self.index.insert(id, self.items.len());
-            self.items.push(item);
-        }
+        append_item(&mut self.items, &mut self.index, item);
     }
 
     fn apply_patch(&mut self, id: &str, patch: &Value) {
-        let Some(&i) = self.index.get(id) else { return };
-        if let (Some(target), Some(fields)) = (self.items[i].as_object_mut(), patch.as_object()) {
-            for (k, v) in fields {
-                target.insert(k.clone(), v.clone());
-            }
-        }
+        patch_item(&mut self.items, &self.index, id, patch);
     }
 
     /// Applies an operation in memory and persists it (streaming deltas are memory-only;
@@ -183,5 +156,69 @@ impl Conv {
     pub fn delete_file(&mut self) {
         self.writer = None;
         let _ = std::fs::remove_file(self.path());
+    }
+}
+
+/// The log of an agent's conversation in the conversations' folder `dir`.
+pub fn log_path(dir: &Path, agent_id: &str) -> PathBuf {
+    dir.join(format!("{agent_id}.jsonl"))
+}
+
+/// What a conversation's log leaves once its operations are applied in order.
+pub struct Replayed {
+    pub items: Vec<Value>,
+    /// Each item's place in `items`, by id.
+    pub index: HashMap<String, usize>,
+    /// The operations read.
+    pub ops: usize,
+}
+
+/// Reads a log back, without writing anything: the search reads the logs of agents that are
+/// writing theirs. A line that is no operation (cut short as the app stopped while writing it,
+/// damaged) is skipped. None when there is no log.
+pub fn replay(path: &Path) -> Option<Replayed> {
+    let file = File::open(path).ok()?;
+    let mut log = Replayed {
+        items: Vec::new(),
+        index: HashMap::new(),
+        ops: 0,
+    };
+    for line in BufReader::new(file).lines().map_while(Result::ok) {
+        let Ok(v) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
+        log.ops += 1;
+        match v["op"].as_str() {
+            Some("append") => append_item(&mut log.items, &mut log.index, v["item"].clone()),
+            Some("patch") => {
+                if let Some(id) = v["id"].as_str() {
+                    patch_item(&mut log.items, &log.index, id, &v["patch"]);
+                }
+            }
+            _ => {}
+        }
+    }
+    Some(log)
+}
+
+/// An item appended again (same id) replaces the one in place.
+fn append_item(items: &mut Vec<Value>, index: &mut HashMap<String, usize>, item: Value) {
+    let Some(id) = item["id"].as_str().map(str::to_string) else {
+        return;
+    };
+    if let Some(&i) = index.get(&id) {
+        items[i] = item;
+    } else {
+        index.insert(id, items.len());
+        items.push(item);
+    }
+}
+
+fn patch_item(items: &mut [Value], index: &HashMap<String, usize>, id: &str, patch: &Value) {
+    let Some(&i) = index.get(id) else { return };
+    if let (Some(target), Some(fields)) = (items[i].as_object_mut(), patch.as_object()) {
+        for (k, v) in fields {
+            target.insert(k.clone(), v.clone());
+        }
     }
 }
