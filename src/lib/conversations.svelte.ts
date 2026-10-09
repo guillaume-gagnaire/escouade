@@ -1,7 +1,7 @@
 // Per-agent conversation items, kept in sync with the backend through append/patch/delta ops.
 
 import { api } from './ipc';
-import type { ConvItem, ConvOp } from './types';
+import type { ConvItem, ConvOp, UserItem } from './types';
 
 /** Where the reader left a conversation, to put the view back there when the agent is opened again. */
 export interface ReadingPlace {
@@ -17,10 +17,14 @@ export interface ReadingPlace {
   anchor: { index: number; offset: number } | null;
 }
 
+let held = 0;
+
 export class Conversation {
   items = $state<ConvItem[]>([]);
   loaded = $state(false);
   error = $state<string | null>(null);
+  /** Messages sent while the worktree is being prepared: the backend records them once it is over, they show until then. */
+  waiting = $state<UserItem[]>([]);
   /** Not reactive: only read when the view opens. Goes with the conversation, which goes with its agent. */
   place: ReadingPlace | null = null;
   private index = new Map<string, number>();
@@ -43,6 +47,16 @@ export class Conversation {
     // Streaming deltas may already be included in the snapshot; final patches restore the text.
     for (const op of buffered) if (op.op !== 'delta') this.apply(op);
     this.loaded = true;
+  }
+
+  /** Shows a message that waits for the worktree's preparation; returns what takes it off (sent, or refused). */
+  holdMessage(message: Pick<UserItem, 'text' | 'images' | 'files'>): () => void {
+    const item: UserItem = { ...message, kind: 'user', id: `waiting-${++held}`, ts: Date.now(), queued: false };
+    this.waiting.push(item);
+    return () => {
+      const i = this.waiting.findIndex((w) => w.id === item.id);
+      if (i >= 0) this.waiting.splice(i, 1);
+    };
   }
 
   apply(op: ConvOp) {

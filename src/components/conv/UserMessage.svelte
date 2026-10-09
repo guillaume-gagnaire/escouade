@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { UserItem } from '../../lib/types';
 
-  let { item }: { item: UserItem } = $props();
+  let { item, waiting = false }: { item: UserItem; waiting?: boolean } = $props();
 </script>
 
 <div class="wrap">
@@ -13,6 +13,8 @@
       <span class="chip">📄 {name}</span>
     {/each}
     <span class="text">{item.text}</span>
+    <!-- Sent while the worktree is prepared: the backend takes it once that is over. -->
+    {#if waiting}<span class="note">En attente de la préparation…</span>{/if}
     <!-- Sent while Claude worked: the CLI takes it at the turn's next step (after the running tool). -->
     {#if item.queued}<span class="note" title="Claude en tient compte dès sa prochaine étape">transmis pendant le tour</span>{/if}
     {#if item.origin === 'remote'}<span class="note" title="Envoyé depuis claude.ai ou l’app Claude (remote control)">depuis claude.ai</span

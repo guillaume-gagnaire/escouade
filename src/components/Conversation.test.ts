@@ -11,7 +11,7 @@ vi.mock('../lib/terminals', () => ({
   disposeLog() {},
 }));
 
-import { conversationOf } from '../lib/conversations.svelte';
+import { applyConvOps, conversationOf } from '../lib/conversations.svelte';
 import { app } from '../lib/state.svelte';
 import type { Agent } from '../lib/types';
 import { agent, fakeBackend, project, resetApp, ticket } from '../test/ipc';
@@ -59,6 +59,78 @@ describe('Conversation', () => {
     const line = screen.getByRole('status');
     expect(line).toHaveTextContent('Préparation du worktree · 1/2 · npm ci — tes messages partiront une fois terminée.');
     expect(screen.queryByText('Claude travaille…')).toBeNull();
+  });
+
+  describe('a message sent while the worktree is being set up', () => {
+    // The backend answers once the setup is over, and records the message then.
+    function sendDuringSetup(setupLabel: string | null = '1/2 · npm ci') {
+      const a = agent({ id: `s${Math.random()}`, status: 'idle', setup: setupLabel });
+      resetApp({ projects: [project()], agents: [a] });
+      let finish: (reply: unknown) => void = () => {};
+      const reply = new Promise((resolve, reject) => {
+        finish = (r) => (r instanceof Error ? reject(r) : resolve(r));
+      });
+      const backend = fakeBackend({ get_conversation: () => [], send_message: () => reply });
+      render(Conversation, { agent: a, project: project() });
+      return { a, backend, finish, textarea: screen.getByRole('textbox') as HTMLTextAreaElement };
+    }
+
+    it('shows its bubble at once, saying it waits for the preparation', async () => {
+      const { backend, textarea } = sendDuringSetup();
+      await userEvent.type(textarea, 'Ajoute des tests{Enter}');
+      await waitFor(() => expect(backend.called('send_message')).toHaveLength(1));
+      const bubble = (await screen.findByText('Ajoute des tests')).closest('.bubble') as HTMLElement;
+      expect(within(bubble).getByText('En attente de la préparation…')).toBeInTheDocument();
+      expect(textarea).toHaveValue('');
+    });
+
+    it('does not say the agent is ready for a task while the message waits', async () => {
+      const { a, textarea } = sendDuringSetup();
+      await waitFor(() => expect(conversationOf(a.id).loaded).toBe(true));
+      expect(screen.getByText('Agent prêt')).toBeInTheDocument();
+      await userEvent.type(textarea, 'Ajoute des tests{Enter}');
+      await screen.findByText('En attente de la préparation…');
+      expect(screen.queryByText('Agent prêt')).not.toBeInTheDocument();
+    });
+
+    it('gives its place to the recorded message once the preparation is over', async () => {
+      const { a, finish, textarea } = sendDuringSetup();
+      await userEvent.type(textarea, 'Ajoute des tests{Enter}');
+      await screen.findByText('En attente de la préparation…');
+      // The backend records the message, then answers.
+      applyConvOps(a.id, [{ op: 'append', item: { kind: 'user', id: 'u1', text: 'Ajoute des tests', images: 0, ts: 2, queued: false } }]);
+      finish(null);
+      await waitFor(() => expect(screen.queryByText('En attente de la préparation…')).not.toBeInTheDocument());
+      expect(screen.getAllByText('Ajoute des tests')).toHaveLength(1);
+    });
+
+    it('is taken off, and given back to the field, when it is refused', async () => {
+      const { finish, textarea } = sendDuringSetup();
+      await userEvent.type(textarea, 'Ajoute des tests{Enter}');
+      await screen.findByText('En attente de la préparation…');
+      finish(new Error('Claude Code est introuvable'));
+      await waitFor(() => expect(screen.queryByText('En attente de la préparation…')).not.toBeInTheDocument());
+      expect(textarea).toHaveValue('Ajoute des tests');
+    });
+
+    it('shows the files it carries', async () => {
+      const { textarea } = sendDuringSetup();
+      await userEvent.upload(
+        screen.getByLabelText('Joindre un fichier', { selector: 'input' }),
+        new File(['%PDF-1.4'], 'rapport.pdf', { type: 'application/pdf' }),
+      );
+      await screen.findByText('rapport.pdf');
+      await userEvent.type(textarea, 'Résume{Enter}');
+      const bubble = (await screen.findByText('En attente de la préparation…')).closest('.bubble') as HTMLElement;
+      expect(within(bubble).getByText(/rapport\.pdf/)).toBeInTheDocument();
+    });
+
+    it('shows no waiting bubble once the worktree is ready: the message goes out at once', async () => {
+      const { backend, textarea } = sendDuringSetup(null);
+      await userEvent.type(textarea, 'Ajoute des tests{Enter}');
+      await waitFor(() => expect(backend.called('send_message')).toHaveLength(1));
+      expect(screen.queryByText('En attente de la préparation…')).not.toBeInTheDocument();
+    });
   });
 
   it('does not yank the reader back to the bottom when the agent is updated', async () => {

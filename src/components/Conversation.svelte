@@ -329,7 +329,7 @@
           Impossible de charger la conversation : {conv.error}
           <button class="btn" onclick={() => conv.load()}>Réessayer</button>
         </div>
-      {:else if conv.loaded && top.length === 0}
+      {:else if conv.loaded && top.length === 0 && !conv.waiting.length}
         <div class="empty">
           <span class="t">Agent prêt</span>
           <span class="s">Décris la tâche à confier à Claude. L'agent travaille dans <span class="mono">{agent.cwd}</span>.</span>
@@ -390,6 +390,9 @@
         {:else if item.kind === 'notice'}
           <Notice {item} />
         {/if}
+      {/each}
+      {#each conv.waiting as item (item.id)}
+        <UserMessage {item} waiting />
       {/each}
       {#if running}
         <div class="working">

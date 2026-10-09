@@ -257,6 +257,15 @@
     sending = true;
     const prevText = text;
     const prevFiles = files;
+    // A new worktree is prepared first: the backend holds the message until then, and it shows meanwhile.
+    const unhold =
+      !answering && agent.setup
+        ? conv.holdMessage({
+            text: body,
+            images: prevFiles.filter((f) => f.mediaType.startsWith('image/')).length,
+            files: prevFiles.filter((f) => !f.mediaType.startsWith('image/')).map((f) => f.name),
+          })
+        : undefined;
     text = '';
     if (!answering) files = [];
     try {
@@ -280,6 +289,8 @@
       files = prevFiles;
       app.toast(String(e), 'error');
     }
+    // Recorded by now, or given back to the field above.
+    unhold?.();
     sending = false;
   }
 
