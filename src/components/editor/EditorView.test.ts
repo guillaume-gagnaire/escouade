@@ -609,6 +609,18 @@ describe('EditorView navigation', () => {
     await expect.poll(active).toBe('src/util.ts');
   });
 
+  it('does not open what a link leads to once the editor is closed', async () => {
+    navBackend();
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    const { container, unmount } = render(EditorView, { project: project() });
+    ctrlClick(await shown(container, 'import'), APP.indexOf('util'));
+    // Closed before the answer: the editor leaves the screen with its view.
+    app.closeEditor();
+    unmount();
+    await new Promise((r) => setTimeout(r, 30));
+    expect(app.editor.p1).toMatchObject({ on: false, places: { project: { active: 'src/app.ts' } } });
+  });
+
   it('says when the file a link leads to is not in the tree, and stays', async () => {
     navBackend();
     await app.openEditor({ source: 'project', path: 'src/app.ts' });

@@ -5,7 +5,7 @@
   import { buffers, sourceAgent } from '../../lib/editor/buffers.svelte';
   import { lineChanges, type LineChanges } from '../../lib/editor/changes';
   import { newFileError, newFilePath } from '../../lib/editor/create';
-  import type { NavTarget } from '../../lib/editor/goto';
+  import type { NavFrom, NavTarget } from '../../lib/editor/goto';
   import { navHistory, type NavEntry } from '../../lib/editor/history';
   import { detectIndent } from '../../lib/editor/indent';
   import { languageLabel, loadLanguage } from '../../lib/editor/languages';
@@ -262,19 +262,19 @@
     if (s?.reveal?.seq === seq) s.reveal = null;
   }
 
-  /** Where the editor is: what a jump keeps in the history, to come back to. */
-  const here = (): NavEntry | null =>
-    activePath ? { projectId: project.id, source, path: activePath, line: cursor.line, col: cursor.col } : null;
+  /** Where the cursor is (its column in characters): what a jump keeps in the history, to come back to. */
+  const here = (): NavFrom | null => (activePath ? { path: activePath, line: cursor.line, col: cursor.col } : null);
 
   /** Opens `t` in the source shown (at its top without a line), the place left kept in the history: `from`, else the cursor. */
-  function jump(t: NavTarget, from: { line: number; col: number } = cursor) {
-    const at = here();
-    if (at) navHistory.push({ ...at, line: from.line, col: from.col });
+  function jump(t: NavTarget, from: NavFrom | null = here()) {
+    if (from) navHistory.push({ projectId: project.id, source, ...from });
     app.openEditor({ projectId: project.id, source, path: t.path, line: t.line ?? 1, col: t.col });
   }
 
   /** A link followed: to the first of its targets the tree has, only those being files of the source. */
-  function follow(targets: NavTarget[], from: { line: number; col: number }) {
+  function follow(targets: NavTarget[], from: NavFrom) {
+    // The editor closed meanwhile is not opened again.
+    if (!alive) return;
     const files = tree?.files ?? [];
     const t = targets.find((x) => files.includes(x.path));
     if (t) jump(t, from);
@@ -283,8 +283,9 @@
 
   /** Back (or forward) in the history of the source shown, past the places whose file is gone from its tree. */
   function travel(back: boolean) {
-    const at = here();
-    if (!at) return;
+    const from = here();
+    if (!from) return;
+    const at: NavEntry = { projectId: project.id, source, ...from };
     const exists = (e: NavEntry) => !!trees.get(e.projectId, e.source)?.files.includes(e.path);
     const e = back ? navHistory.back(at, exists) : navHistory.forward(at, exists);
     if (e) app.openEditor({ projectId: e.projectId, source: e.source, path: e.path, line: e.line, col: e.col });
@@ -440,6 +441,7 @@
             onchange={(t) => buffers.edit(buf.key, t)}
             oncursor={(c) => (cursor = c)}
             ontargets={follow}
+            onnaverror={(e) => alive && app.toast(`Navigation impossible : ${e}`, 'error')}
             onback={() => travel(true)}
             onforward={() => travel(false)}
           />

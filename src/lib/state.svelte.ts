@@ -84,7 +84,7 @@ export interface EditorState {
   on: boolean;
   source: string;
   places: Record<string, EditorPlace>;
-  /** A line to bring into view, with the cursor on its column when given (`seq` changes for each request). */
+  /** A line to bring into view, the cursor on its column (in characters) when given (`seq` changes for each request). */
   reveal: { path: string; line: number; col?: number; seq: number } | null;
 }
 
@@ -482,7 +482,7 @@ class AppState {
 
   /**
    * Opens the editor of a project on `source`; with a file (`path` from the source's root, or an absolute `abs`), shows
-   * it, at `line` and `col` (1-based) when given.
+   * it, at `line` and `col` when given (1-based, the column in characters: an emoji is one).
    */
   async openEditor(req: { projectId?: string; source: string; path?: string; abs?: string; line?: number; col?: number }) {
     const projectId = req.projectId ?? this.ui.activeProject;

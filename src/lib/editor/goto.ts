@@ -3,10 +3,13 @@
 // files in `links.ts`); the editor view makes the jump and keeps the history that Alt+← and Alt+→ walk.
 
 import { Prec, StateEffect, StateField, type EditorState, type Extension } from '@codemirror/state';
-import { Decoration, EditorView, keymap, ViewPlugin } from '@codemirror/view';
+import { Decoration, EditorView, keymap, ViewPlugin, type Rect } from '@codemirror/view';
 import { IS_MAC, primaryKey } from '../platform';
 
-/** Where a link leads: a file from the source's root (with `/`), and a place in it (1-based). */
+/**
+ * Where a link leads: a file from the source's root (with `/`), and a place in it, 1-based, the column counted in
+ * characters (code points: an emoji is one, as Rust counts them).
+ */
 export interface NavTarget {
   path: string;
   line?: number;
@@ -18,6 +21,34 @@ export interface NavSpot {
   from: number;
   to: number;
   resolve: () => Promise<NavTarget[]>;
+  /** What it names, for a message (« Aucune définition trouvée pour … »): its text by default. */
+  label?: string;
+}
+
+/** The place a spot was followed from: its file, from the source's root, line and column (1-based, in characters). */
+export interface NavFrom {
+  path: string;
+  line: number;
+  col: number;
+}
+
+/** The spot followed: what it names, and where it is on the screen (null when it is not drawn), to show a list under it. */
+export interface NavFollowed {
+  label: string;
+  rect: Rect | null;
+}
+
+/** The 1-based column, in characters, of the UTF-16 `offset` in the line `text`. */
+export function charColumn(text: string, offset: number): number {
+  const before = text.slice(0, offset);
+  return before.length - (before.match(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g)?.length ?? 0) + 1;
+}
+
+/** The UTF-16 offset in the line `text` of the 1-based column `col` counted in characters, at most the line's end. */
+export function columnOffset(text: string, col: number): number {
+  let offset = 0;
+  for (let n = 1; n < col && offset < text.length; n++) offset += (text.codePointAt(offset) ?? 0) > 0xffff ? 2 : 1;
+  return Math.min(offset, text.length);
 }
 
 /** What a resolver looks at: a position in the file `path` of a source, whose tree has `files`. */
@@ -41,8 +72,13 @@ export function spotAt(resolvers: readonly NavResolver[], ctx: NavContext): NavS
 
 export interface GotoOptions {
   resolvers: NavResolver[];
-  /** Where a followed spot leads, and the place it was followed from (1-based). */
-  onTargets: (t: NavTarget[], from: { line: number; col: number }) => void;
+  /**
+   * Where a followed spot leads, the place it was followed from and the spot. Only while the user is still there: an
+   * answer coming once another file is shown, the text edited or the editor gone is dropped.
+   */
+  onTargets: (t: NavTarget[], from: NavFrom, spot: NavFollowed) => void;
+  /** Where a followed spot leads could not be worked out (dropped too once the user moved on). */
+  onError?: (e: unknown) => void;
   /** The file shown, from the source's root, and the source's files; null while they are unknown (nothing leads anywhere). */
   context: () => { path: string; files: readonly string[] } | null;
   /** Alt+← / Alt+→ (Ctrl+- / Ctrl+Maj+- on macOS) and the back and forward buttons of the mouse. */
@@ -85,15 +121,31 @@ export function gotoExtension(o: GotoOptions): Extension {
   }
 
   function follow(view: EditorView, s: NavSpot, pos: number) {
-    const line = view.state.doc.lineAt(pos);
-    const from = { line: line.number, col: pos - line.from + 1 };
-    void s.resolve().then((t) => o.onTargets(t, from));
+    const c = o.context();
+    const plugin = view.plugin(hover);
+    if (!c || !plugin) return;
+    const doc = view.state.doc;
+    const line = doc.lineAt(pos);
+    const from: NavFrom = { path: c.path, line: line.number, col: charColumn(line.text, pos - line.from) };
+    const label = s.label ?? view.state.sliceDoc(s.from, s.to);
+    // A search may take seconds: the user may have moved on meanwhile (the plugin goes with the file or the editor).
+    const here = () => plugin.live && view.state.doc === doc && o.context()?.path === c.path;
+    s.resolve().then(
+      (t) => {
+        if (here()) o.onTargets(t, from, { label, rect: view.coordsAtPos(s.from) });
+      },
+      (e) => {
+        if (here()) o.onError?.(e);
+      },
+    );
   }
 
   const hover = ViewPlugin.fromClass(
     class {
       /** Where the mouse is over the text, for a modifier pressed without moving it. */
       mouse: { x: number; y: number } | null = null;
+      /** False once destroyed: with the editor, or when another file's state replaces this one. */
+      live = true;
 
       constructor(readonly view: EditorView) {
         // On the window: the modifier may be pressed while the focus is elsewhere, the mouse over the editor.
@@ -103,6 +155,7 @@ export function gotoExtension(o: GotoOptions): Extension {
       }
 
       destroy() {
+        this.live = false;
         window.removeEventListener('keydown', this.key);
         window.removeEventListener('keyup', this.key);
         window.removeEventListener('blur', this.clear);

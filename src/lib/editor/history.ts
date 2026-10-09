@@ -1,7 +1,7 @@
 // Where the editor was before each jump (a Ctrl+click, F12, a search result), by project and source: Alt+← goes
 // back there and Alt+→ forward again, as a browser does with its pages.
 
-/** A place in a file of a source: `line` and `col` 1-based. */
+/** A place in a file of a source: `line` and `col` 1-based, the column in characters. */
 export interface NavEntry {
   projectId: string;
   source: string;

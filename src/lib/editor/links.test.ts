@@ -95,6 +95,7 @@ describe('imports of scripts', () => {
         "paths": {
           "@/*": ["src/*"],
           "~utils": ["src/a/util.ts",],
+          "~gone": ["src/gone.ts"],
         },
       },
     }`);
@@ -103,7 +104,16 @@ describe('imports of scripts', () => {
       targets: [{ path: 'src/lib/x.ts' }],
     });
     expect(await at("import { u } from '~ut|ils';", 'src/a/b.ts', files, aliases)).toMatchObject({ targets: [{ path: 'src/a/util.ts' }] });
-    expect(await at("import { m } from '@/mis|sing';", 'src/a/b.ts', files, aliases)).toMatchObject({ targets: [{ path: 'src/missing' }] });
+    // An alias of one name leads to its file even when it is missing, for the editor to say so.
+    expect(await at("import { g } from '~go|ne';", 'src/a/b.ts', files, aliases)).toMatchObject({ targets: [{ path: 'src/gone.ts' }] });
+  });
+
+  it('leaves to the packages what a wildcard alias does not find, as TypeScript does', async () => {
+    const aliases = parseAliases('{ "compilerOptions": { "paths": { "*": ["types/*"], "@/*": ["src/*"] } } }');
+    const typed = [...files, 'types/foo.d.ts'];
+    expect(await at("import React from 're|act';", 'src/a/b.ts', typed, aliases)).toBeNull();
+    expect(await at("import { m } from '@/mis|sing';", 'src/a/b.ts', typed, aliases)).toBeNull();
+    expect(await at("import { f } from 'fo|o';", 'src/a/b.ts', typed, aliases)).toMatchObject({ targets: [{ path: 'types/foo.d.ts' }] });
   });
 
   it('resolves from baseUrl what the tree has, and leaves the rest to the packages', async () => {

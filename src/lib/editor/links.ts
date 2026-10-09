@@ -113,7 +113,12 @@ function moduleFile(base: string, files: ReadonlySet<string>): string | null {
   return candidates.find((f) => files.has(f)) ?? null;
 }
 
-/** Where the alias matching `spec` leads (an exact one first, then the longest prefix, as TypeScript does); undefined without one. */
+/**
+ * Where the alias matching `spec` leads (an exact one first, then the longest prefix, as TypeScript does); undefined
+ * without one. An exact alias whose targets the tree lacks gives its first one, for the editor to say it is missing; a
+ * wildcard one finding nothing gives undefined: TypeScript then looks for a package, and `"*": ["types/*"]` must not
+ * make `react` a missing file.
+ */
 function aliasTarget(spec: string, aliases: Aliases, files: ReadonlySet<string>): string | null | undefined {
   let best: { star: string; targets: string[]; rank: number } | null = null;
   for (const p of aliases.paths) {
@@ -139,7 +144,7 @@ function aliasTarget(spec: string, aliases: Aliases, files: ReadonlySet<string>)
     const f = moduleFile(b, files);
     if (f) return f;
   }
-  return bases[0] ?? null;
+  return best.rank === Infinity ? (bases[0] ?? null) : undefined;
 }
 
 /**

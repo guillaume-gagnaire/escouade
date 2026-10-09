@@ -7,7 +7,15 @@
   import { drawSelection, EditorView, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view';
   import { onDestroy, onMount, untrack } from 'svelte';
   import type { LineChanges } from '../../lib/editor/changes';
-  import { gotoExtension, type NavResolver, type NavTarget } from '../../lib/editor/goto';
+  import {
+    charColumn,
+    columnOffset,
+    gotoExtension,
+    type NavFollowed,
+    type NavFrom,
+    type NavResolver,
+    type NavTarget,
+  } from '../../lib/editor/goto';
   import { changeGutter, setChanges } from '../../lib/editor/gutter';
   import { reloadChange } from '../../lib/editor/reload';
   import { editorTheme, PHRASES } from '../../lib/editor/theme';
@@ -27,6 +35,7 @@
     oncursor,
     onrevealed,
     ontargets,
+    onnaverror,
     onback,
     onforward,
   }: {
@@ -36,15 +45,19 @@
     language?: Extension | null;
     indent: { tabs: boolean; size: number };
     changes: LineChanges;
+    /** A line to bring into view, the cursor on `col` (in characters) when given. */
     reveal?: { line: number; col?: number; seq: number } | null;
     /** What leads elsewhere in the file `path` of a source whose tree has `files` (resolvers read for each file shown). */
     nav?: { path: string; files: readonly string[]; resolvers: NavResolver[] } | null;
     onchange: (text: string) => void;
+    /** The cursor's line and column, 1-based, the column in characters as links and searches count it. */
     oncursor: (pos: { line: number; col: number }) => void;
     /** The line of request `seq` is in view: the request is done, it must not move the cursor again. */
     onrevealed?: (seq: number) => void;
-    /** A link followed (Ctrl+click, F12): where it leads, and where it was followed from. */
-    ontargets?: (targets: NavTarget[], from: { line: number; col: number }) => void;
+    /** A link followed (Ctrl+click, F12): where it leads, where it was followed from, and the spot. */
+    ontargets?: (targets: NavTarget[], from: NavFrom, spot: NavFollowed) => void;
+    /** Where a followed link leads could not be worked out. */
+    onnaverror?: (e: unknown) => void;
     onback?: () => void;
     onforward?: () => void;
   } = $props();
@@ -66,7 +79,7 @@
   function reportCursor(state: EditorState) {
     const head = state.selection.main.head;
     const line = state.doc.lineAt(head);
-    oncursor({ line: line.number, col: head - line.from + 1 });
+    oncursor({ line: line.number, col: charColumn(state.sliceDoc(line.from, head), head - line.from) });
   }
 
   function makeState(doc: string) {
@@ -79,7 +92,8 @@
         gotoExtension({
           resolvers: untrack(() => nav?.resolvers ?? []),
           context: () => (nav ? { path: nav.path, files: nav.files } : null),
-          onTargets: (t, from) => ontargets?.(t, from),
+          onTargets: (t, from, spot) => ontargets?.(t, from, spot),
+          onError: (e) => onnaverror?.(e),
           onBack: () => onback?.(),
           onForward: () => onforward?.(),
         }),
@@ -162,8 +176,7 @@
     untrack(() => {
       if (!view) return;
       const line = view.state.doc.line(Math.min(Math.max(1, r.line), view.state.doc.lines));
-      // The column as the status bar counts it, within the line.
-      const pos = line.from + Math.min(Math.max(0, (r.col ?? 1) - 1), line.length);
+      const pos = line.from + columnOffset(line.text, r.col ?? 1);
       view.dispatch({ selection: { anchor: pos }, effects: EditorView.scrollIntoView(pos, { y: 'center' }) });
       view.focus();
       onrevealed?.(r.seq);

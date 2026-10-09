@@ -222,6 +222,29 @@ describe('CodeEditor', () => {
     expect(viewOf(container).state.selection.main.head).toBe(7);
   });
 
+  it('counts the column to reveal and the one it reports in characters, an emoji being one', async () => {
+    const oncursor = vi.fn();
+    const props = { ...base, oncursor, docKey: 'k1', text: 'a\n😀é x\n', version: 0, onchange: () => {} };
+    const { container, rerender } = render(CodeEditor, props);
+    await tick();
+    await rerender({ ...props, reveal: { line: 2, col: 4, seq: 1 } });
+    // `x`: after the emoji (two UTF-16 units), `é` and the space.
+    expect(viewOf(container).state.selection.main.head).toBe(6);
+    expect(oncursor).toHaveBeenLastCalledWith({ line: 2, col: 4 });
+  });
+
+  it('tells when what a link leads to could not be found', async () => {
+    const onnaverror = vi.fn();
+    const failing: NavResolver = () => ({ from: 4, to: 7, resolve: () => Promise.reject('boom') });
+    const nav = { path: 'a.ts', files: [], resolvers: [failing] };
+    const { container } = render(CodeEditor, { ...base, docKey: 'k1', text: 'abc def\n', version: 0, onchange: () => {}, nav, onnaverror });
+    await tick();
+    const view = viewOf(container);
+    view.dispatch({ selection: { anchor: 5 } });
+    press(view.contentDOM, 'F12');
+    await vi.waitFor(() => expect(onnaverror).toHaveBeenCalledExactlyOnceWith('boom'));
+  });
+
   it('adds a cursor with Alt+click, and with Ctrl+click follows the link under the mouse instead', async () => {
     const ontargets = vi.fn();
     const props = { ...base, docKey: 'k1', text: 'abc def\n', version: 0, onchange: () => {}, nav: navOn(), ontargets };
@@ -235,7 +258,13 @@ describe('CodeEditor', () => {
     vi.spyOn(view, 'posAtCoords').mockReturnValue(5);
     click(view, { ctrlKey: true });
     expect(view.state.selection.ranges.map((r) => r.head)).toEqual([1]);
-    await vi.waitFor(() => expect(ontargets).toHaveBeenCalledExactlyOnceWith([{ path: 'b.ts', line: 2 }], { line: 1, col: 6 }));
+    await vi.waitFor(() =>
+      expect(ontargets).toHaveBeenCalledExactlyOnceWith(
+        [{ path: 'b.ts', line: 2 }],
+        { path: 'a.ts', line: 1, col: 6 },
+        expect.objectContaining({ label: 'def' }),
+      ),
+    );
   });
 
   it('places the cursor with Ctrl+click where nothing leads elsewhere', async () => {
@@ -259,7 +288,13 @@ describe('CodeEditor', () => {
     const view = viewOf(container);
     view.dispatch({ selection: { anchor: 10 } });
     press(view.contentDOM, 'F12');
-    await vi.waitFor(() => expect(ontargets).toHaveBeenCalledExactlyOnceWith([{ path: 'b.ts', line: 2 }], { line: 2, col: 7 }));
+    await vi.waitFor(() =>
+      expect(ontargets).toHaveBeenCalledExactlyOnceWith(
+        [{ path: 'b.ts', line: 2 }],
+        { path: 'a.ts', line: 2, col: 7 },
+        expect.objectContaining({ label: 'def' }),
+      ),
+    );
     expect(asked).toEqual([10]);
   });
 
