@@ -958,6 +958,68 @@ async fn the_project_diff_credits_checkout_files_to_the_agent_that_edited_them()
     assert!(!uncredited.contains("src/app.ts"), "{uncredited}");
 }
 
+/// `n` new files with long names under `dir/generated`: listing all of them on one command line
+/// overflows what Windows accepts (about 32,000 characters).
+fn write_many_files(dir: &Path, n: usize) {
+    let folder = dir.join("generated");
+    std::fs::create_dir_all(&folder).unwrap();
+    for i in 0..n {
+        let name = format!("a-rather-long-generated-file-name-{i:04}.txt");
+        std::fs::write(folder.join(name), "x\n").unwrap();
+    }
+}
+
+#[tokio::test]
+async fn the_project_diff_of_a_worktree_with_hundreds_of_new_files_keeps_its_edits() {
+    let h = harness("core-project-diff-many-worktree");
+    let (p, _r) = h.project(true).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let wt = PathBuf::from(a.meta.worktree.clone().unwrap().path);
+    std::fs::write(wt.join("src").join("app.ts"), "const a = 3;\n").unwrap();
+    write_many_files(&wt, 800);
+
+    let parts = h.core.git_project_diff(&p.id).await.unwrap();
+    assert_eq!(parts.len(), 1);
+    // The edit of a tracked file is still there, and so is the last of the new files.
+    let diff = &parts[0].diff;
+    assert!(
+        diff.contains("+const a = 3;"),
+        "{}",
+        &diff[..diff.len().min(300)]
+    );
+    assert!(diff.contains("a-rather-long-generated-file-name-0799.txt"));
+}
+
+#[tokio::test]
+async fn the_project_diff_of_a_checkout_split_between_owners_keeps_the_edits_among_hundreds_of_new_files(
+) {
+    let h = harness("core-project-diff-many-checkout");
+    let (p, r) = h.project(false).await;
+    std::fs::write(r.join("lib.ts"), "export {};\n").unwrap();
+    git(&r, &["add", "lib.ts"]);
+    git(&r, &["commit", "-qm", "lib"]);
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.turn(&id, "edit").await; // the fake reports src/app.ts as edited by the agent
+    std::fs::write(r.join("src").join("app.ts"), "const a = 2;\n").unwrap();
+    std::fs::write(r.join("lib.ts"), "export const b = 1;\n").unwrap();
+    write_many_files(&r, 800);
+
+    let parts = h.core.git_project_diff(&p.id).await.unwrap();
+    let of = |agent: Option<String>| parts.iter().find(|d| d.agent_id == agent).unwrap();
+    let credited = &of(Some(id)).diff;
+    assert!(credited.contains("+const a = 2;"), "{credited}");
+    assert!(!credited.contains("lib.ts"));
+    // No agent edited lib.ts or the new files: they share one part, hundreds of paths long.
+    let rest = &of(None).diff;
+    assert!(
+        rest.contains("+export const b = 1;"),
+        "{}",
+        &rest[..rest.len().min(300)]
+    );
+    assert!(rest.contains("a-rather-long-generated-file-name-0799.txt"));
+    assert!(!rest.contains("src/app.ts"));
+}
+
 #[tokio::test]
 async fn the_project_diff_is_empty_when_nothing_is_listed() {
     let h = harness("core-project-diff-clean");

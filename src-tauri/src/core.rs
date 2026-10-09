@@ -2695,6 +2695,7 @@ impl<R: Runtime> Core<R> {
                 None => groups.push((f.agent_id, f.in_worktree, vec![f.path])),
             }
         }
+        let checkout_groups = groups.iter().filter(|(_, w, _)| !w).count();
         let mut out = Vec::new();
         for (agent_id, in_worktree, paths) in groups {
             let diff = if in_worktree {
@@ -2705,9 +2706,13 @@ impl<R: Runtime> Core<R> {
                     .and_then(|a| self.agent(a).ok())
                     .and_then(|h| h.lock().meta.worktree.clone());
                 let Some(worktree) = worktree else { continue };
-                git::diff(&worktree.path, &paths).await.unwrap_or_default()
+                // Its group is all of the worktree's dirty files: no path to list.
+                git::diff(&worktree.path, &[]).await.unwrap_or_default()
             } else {
-                git::diff(&self.files_root(project_id, None).await?, &paths).await?
+                // Likewise for the checkout when no agent is credited with some of its files;
+                // else each group lists its own paths.
+                let listed: &[String] = if checkout_groups == 1 { &[] } else { &paths };
+                git::diff(&self.files_root(project_id, None).await?, listed).await?
             };
             out.push(OwnedDiff {
                 agent_id,

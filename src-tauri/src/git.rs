@@ -4,7 +4,7 @@ use crate::model::{Commit, FileChange};
 use anyhow::{bail, Result};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use parking_lot::Mutex;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -321,24 +321,50 @@ pub async fn file_changes(root: &str) -> Result<Vec<FileChange>> {
         .collect())
 }
 
+/// `paths` cut into runs that fit one command line. Windows refuses one of more than about 32,000
+/// characters, which a few hundred listed files (new ones included) can reach.
+fn command_line_chunks(paths: &[String]) -> Vec<&[String]> {
+    const BUDGET: usize = 16_000;
+    let mut chunks = Vec::new();
+    let (mut start, mut len) = (0, 0);
+    for (i, path) in paths.iter().enumerate() {
+        if len > 0 && len + path.len() + 1 > BUDGET {
+            chunks.push(&paths[start..i]);
+            (start, len) = (i, 0);
+        }
+        len += path.len() + 1;
+    }
+    if start < paths.len() {
+        chunks.push(&paths[start..]);
+    }
+    chunks
+}
+
 /// Unified diff of the given paths (all dirty files when empty), untracked files included.
 pub async fn diff(root: &str, paths: &[String]) -> Result<String> {
     let st = status(root).await?;
-    let wanted = |p: &str| paths.is_empty() || paths.iter().any(|x| x == p);
+    let listed: HashSet<&str> = paths.iter().map(String::as_str).collect();
+    let wanted = |p: &str| paths.is_empty() || listed.contains(p);
     let untracked: Vec<String> = st
         .entries
         .iter()
         .filter(|e| e.status == 'A' && wanted(&e.path))
         .map(|e| e.path.clone())
         .collect();
-    let mut args: Vec<&str> = vec!["diff", "HEAD", "--no-color", "--no-ext-diff", "--"];
-    for p in paths {
-        args.push(p);
-    }
-    let mut out = match run(root, &args).await {
-        Ok(o) => String::from_utf8_lossy(&o).to_string(),
-        Err(_) => String::new(),
+    // Without a path git reads every dirty file by itself; a long list is read a run at a time.
+    let runs = if paths.is_empty() {
+        vec![paths]
+    } else {
+        command_line_chunks(paths)
     };
+    let mut out = String::new();
+    for run_paths in runs {
+        let mut args: Vec<&str> = vec!["diff", "HEAD", "--no-color", "--no-ext-diff", "--"];
+        args.extend(run_paths.iter().map(String::as_str));
+        if let Ok(o) = run(root, &args).await {
+            out.push_str(&String::from_utf8_lossy(&o));
+        }
+    }
     for path in untracked {
         if out.contains(&format!("+++ b/{path}")) {
             continue;
@@ -1380,6 +1406,24 @@ mod tests {
         assert_eq!(m["src/a.ts"], (3, 1));
         assert_eq!(m["img.png"], (0, 0));
         assert_eq!(m["new.ts"], (5, 0));
+    }
+
+    #[test]
+    fn a_long_list_of_paths_is_cut_into_command_lines_that_fit() {
+        let paths: Vec<String> = (0..2000)
+            .map(|i| format!("generated/a-rather-long-file-name-{i:04}.txt"))
+            .collect();
+        let chunks = command_line_chunks(&paths);
+        assert!(chunks.len() > 1);
+        assert!(chunks
+            .iter()
+            .all(|c| c.iter().map(|p| p.len() + 1).sum::<usize>() <= 16_000));
+        // Nothing lost, nothing reordered.
+        assert_eq!(chunks.concat(), paths);
+        assert!(command_line_chunks(&[]).is_empty());
+        // A path longer than the budget goes through alone rather than being dropped.
+        let long = vec!["x".repeat(20_000), "y".to_string()];
+        assert_eq!(command_line_chunks(&long).len(), 2);
     }
 
     #[test]
