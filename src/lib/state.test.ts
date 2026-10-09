@@ -442,6 +442,15 @@ describe('editor', () => {
     expect(app.editor.p1.reveal).toMatchObject({ path: 'src/x.ts', line: 12 });
   });
 
+  it('asks for the column too, when given', async () => {
+    fakeBackend();
+    await app.openEditor({ source: 'project', path: 'src/x.ts', line: 12, col: 7 });
+    const seq = app.editor.p1.reveal!.seq;
+    expect(app.editor.p1.reveal).toEqual({ path: 'src/x.ts', line: 12, col: 7, seq });
+    await app.openEditor({ source: 'project', path: 'src/x.ts', line: 3 });
+    expect(app.editor.p1.reveal).toEqual({ path: 'src/x.ts', line: 3, seq: seq + 1 });
+  });
+
   it.each([
     ['a Windows file of another folder', 'C:\\Users\\guill\\.claude\\plans\\plan.md'],
     ['a rooted file', '/tmp/notes.md'],

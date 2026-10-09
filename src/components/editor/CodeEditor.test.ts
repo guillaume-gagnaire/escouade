@@ -7,6 +7,7 @@ import { EditorView } from '@codemirror/view';
 import { render } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { describe, expect, it, vi } from 'vitest';
+import type { NavResolver } from '../../lib/editor/goto';
 import CodeEditor from './CodeEditor.svelte';
 
 const none = { changed: [], deleted: [], count: 0 };
@@ -14,6 +15,25 @@ const base = { indent: { tabs: false, size: 2 }, changes: none, oncursor: () => 
 
 function viewOf(container: HTMLElement): EditorView {
   return EditorView.findFromDOM(container.querySelector('.cm-editor') as HTMLElement)!;
+}
+
+/** A click on the text; jsdom has no layout, CodeMirror's own selection takes it at position 0. */
+function click(view: EditorView, init: MouseEventInit) {
+  const o = { bubbles: true, cancelable: true, button: 0, detail: 1, clientX: 1, clientY: 1, ...init };
+  view.contentDOM.dispatchEvent(new MouseEvent('mousedown', o));
+  view.contentDOM.dispatchEvent(new MouseEvent('mouseup', o));
+}
+
+const press = (el: EventTarget, key: string, init: KeyboardEventInit = {}) =>
+  el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init }));
+
+/** Navigation from `from` to `to` (`def` in `abc def`), recording the positions it was asked about. */
+function navOn(asked: number[] = [], from = 4, to = 7) {
+  const resolver: NavResolver = ({ pos }) => {
+    asked.push(pos);
+    return pos >= from && pos <= to ? { from, to, resolve: async () => [{ path: 'b.ts', line: 2 }] } : null;
+  };
+  return { path: 'a.ts', files: ['a.ts', 'b.ts'], resolvers: [resolver] };
 }
 
 describe('CodeEditor', () => {
@@ -190,6 +210,75 @@ describe('CodeEditor', () => {
     expect(viewOf(container).state.selection.main.head).toBe(2);
     await rerender({ ...props, reveal: { line: 99, seq: 2 } });
     expect(viewOf(container).state.selection.main.head).toBe(6);
+  });
+
+  it('puts the cursor on the column to reveal, within the line', async () => {
+    const props = { ...base, docKey: 'k1', text: 'a\nbcdef\nc\n', version: 0, onchange: () => {} };
+    const { container, rerender } = render(CodeEditor, props);
+    await tick();
+    await rerender({ ...props, reveal: { line: 2, col: 3, seq: 1 } });
+    expect(viewOf(container).state.selection.main.head).toBe(4);
+    await rerender({ ...props, reveal: { line: 2, col: 99, seq: 2 } });
+    expect(viewOf(container).state.selection.main.head).toBe(7);
+  });
+
+  it('adds a cursor with Alt+click, and with Ctrl+click follows the link under the mouse instead', async () => {
+    const ontargets = vi.fn();
+    const props = { ...base, docKey: 'k1', text: 'abc def\n', version: 0, onchange: () => {}, nav: navOn(), ontargets };
+    const { container } = render(CodeEditor, props);
+    await tick();
+    const view = viewOf(container);
+    view.dispatch({ selection: { anchor: 5 } });
+    click(view, { altKey: true });
+    expect(view.state.selection.ranges.map((r) => r.head)).toEqual([0, 5]);
+    view.dispatch({ selection: { anchor: 1 } });
+    vi.spyOn(view, 'posAtCoords').mockReturnValue(5);
+    click(view, { ctrlKey: true });
+    expect(view.state.selection.ranges.map((r) => r.head)).toEqual([1]);
+    await vi.waitFor(() => expect(ontargets).toHaveBeenCalledExactlyOnceWith([{ path: 'b.ts', line: 2 }], { line: 1, col: 6 }));
+  });
+
+  it('places the cursor with Ctrl+click where nothing leads elsewhere', async () => {
+    const ontargets = vi.fn();
+    const props = { ...base, docKey: 'k1', text: 'abc def\n', version: 0, onchange: () => {}, nav: navOn(), ontargets };
+    const { container } = render(CodeEditor, props);
+    await tick();
+    const view = viewOf(container);
+    view.dispatch({ selection: { anchor: 5 } });
+    click(view, { ctrlKey: true });
+    expect(view.state.selection.ranges.map((r) => r.head)).toEqual([0]);
+    expect(ontargets).not.toHaveBeenCalled();
+  });
+
+  it('follows the link at the cursor with F12', async () => {
+    const ontargets = vi.fn();
+    const asked: number[] = [];
+    const props = { ...base, docKey: 'k1', text: 'xyz\nabc def\n', version: 0, onchange: () => {}, nav: navOn(asked, 8, 11), ontargets };
+    const { container } = render(CodeEditor, props);
+    await tick();
+    const view = viewOf(container);
+    view.dispatch({ selection: { anchor: 10 } });
+    press(view.contentDOM, 'F12');
+    await vi.waitFor(() => expect(ontargets).toHaveBeenCalledExactlyOnceWith([{ path: 'b.ts', line: 2 }], { line: 2, col: 7 }));
+    expect(asked).toEqual([10]);
+  });
+
+  it('goes back and forth with Alt+← and Alt+→, and the buttons of the mouse, in the editor only', async () => {
+    const onback = vi.fn();
+    const onforward = vi.fn();
+    const props = { ...base, docKey: 'k1', text: 'abc def\n', version: 0, onchange: () => {}, nav: navOn(), onback, onforward };
+    const { container } = render(CodeEditor, props);
+    await tick();
+    const view = viewOf(container);
+    press(view.contentDOM, 'ArrowLeft', { altKey: true });
+    expect(onback).toHaveBeenCalledTimes(1);
+    press(view.contentDOM, 'ArrowRight', { altKey: true });
+    expect(onforward).toHaveBeenCalledTimes(1);
+    view.contentDOM.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, button: 3 }));
+    view.contentDOM.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, button: 4 }));
+    expect([onback.mock.calls.length, onforward.mock.calls.length]).toEqual([2, 2]);
+    press(document.body, 'ArrowLeft', { altKey: true });
+    expect(onback).toHaveBeenCalledTimes(2);
   });
 
   it('tells which request for a line it brought into view', async () => {

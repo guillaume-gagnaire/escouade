@@ -7,6 +7,7 @@
   import { drawSelection, EditorView, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view';
   import { onDestroy, onMount, untrack } from 'svelte';
   import type { LineChanges } from '../../lib/editor/changes';
+  import { gotoExtension, type NavResolver, type NavTarget } from '../../lib/editor/goto';
   import { changeGutter, setChanges } from '../../lib/editor/gutter';
   import { reloadChange } from '../../lib/editor/reload';
   import { editorTheme, PHRASES } from '../../lib/editor/theme';
@@ -21,9 +22,13 @@
     indent,
     changes,
     reveal = null,
+    nav = null,
     onchange,
     oncursor,
     onrevealed,
+    ontargets,
+    onback,
+    onforward,
   }: {
     docKey: string;
     text: string;
@@ -31,11 +36,17 @@
     language?: Extension | null;
     indent: { tabs: boolean; size: number };
     changes: LineChanges;
-    reveal?: { line: number; seq: number } | null;
+    reveal?: { line: number; col?: number; seq: number } | null;
+    /** What leads elsewhere in the file `path` of a source whose tree has `files` (resolvers read for each file shown). */
+    nav?: { path: string; files: readonly string[]; resolvers: NavResolver[] } | null;
     onchange: (text: string) => void;
     oncursor: (pos: { line: number; col: number }) => void;
     /** The line of request `seq` is in view: the request is done, it must not move the cursor again. */
     onrevealed?: (seq: number) => void;
+    /** A link followed (Ctrl+click, F12): where it leads, and where it was followed from. */
+    ontargets?: (targets: NavTarget[], from: { line: number; col: number }) => void;
+    onback?: () => void;
+    onforward?: () => void;
   } = $props();
 
   let host: HTMLDivElement;
@@ -63,6 +74,15 @@
       doc,
       extensions: [
         EditorState.allowMultipleSelections.of(true),
+        // Ctrl+click (Cmd+click) follows a link: Alt+click (Option+click) adds a cursor, as in VS Code.
+        EditorView.clickAddsSelectionRange.of((e) => e.altKey),
+        gotoExtension({
+          resolvers: untrack(() => nav?.resolvers ?? []),
+          context: () => (nav ? { path: nav.path, files: nav.files } : null),
+          onTargets: (t, from) => ontargets?.(t, from),
+          onBack: () => onback?.(),
+          onForward: () => onforward?.(),
+        }),
         changeGutter(),
         lineNumbers(),
         highlightActiveLineGutter(),
@@ -141,8 +161,9 @@
     if (!r) return;
     untrack(() => {
       if (!view) return;
-      const n = Math.min(Math.max(1, r.line), view.state.doc.lines);
-      const pos = view.state.doc.line(n).from;
+      const line = view.state.doc.line(Math.min(Math.max(1, r.line), view.state.doc.lines));
+      // The column as the status bar counts it, within the line.
+      const pos = line.from + Math.min(Math.max(0, (r.col ?? 1) - 1), line.length);
       view.dispatch({ selection: { anchor: pos }, effects: EditorView.scrollIntoView(pos, { y: 'center' }) });
       view.focus();
       onrevealed?.(r.seq);

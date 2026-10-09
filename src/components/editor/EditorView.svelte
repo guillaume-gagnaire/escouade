@@ -5,8 +5,11 @@
   import { buffers, sourceAgent } from '../../lib/editor/buffers.svelte';
   import { lineChanges, type LineChanges } from '../../lib/editor/changes';
   import { newFileError, newFilePath } from '../../lib/editor/create';
+  import type { NavTarget } from '../../lib/editor/goto';
+  import { navHistory, type NavEntry } from '../../lib/editor/history';
   import { detectIndent } from '../../lib/editor/indent';
   import { languageLabel, loadLanguage } from '../../lib/editor/languages';
+  import { DEFAULT_ALIASES, linkResolvers, parseAliases, type Aliases } from '../../lib/editor/links';
   import { ancestors, treeRows, type FileStatus, type TreeRow } from '../../lib/editor/tree';
   import { trees } from '../../lib/editor/trees.svelte';
   import { basename, joinPath, plural, tildify } from '../../lib/format';
@@ -42,6 +45,9 @@
   let adding = $state<{ source: string; dir: string } | null>(null);
   /** The folder of the row last clicked: where "Nouveau fichier" creates, as VS Code does with its selection. */
   let lastDir = $state<{ source: string; dir: string } | null>(null);
+  /** The import aliases of the source shown, from its tsconfig.json or jsconfig.json: read when a link is looked for. */
+  let aliases: Aliases = DEFAULT_ALIASES;
+  const resolvers = linkResolvers(() => aliases);
 
   /**
    * Tree, git status and open files of the source. Only the refresh `pick`ing, the one a source is shown with, opens
@@ -58,6 +64,7 @@
     ]);
     const current = () => alive && pid === project.id && src === source;
     if (!current()) return;
+    if (pick && t) readAliases(pid, src, t.files);
     status = Object.fromEntries(
       files.filter((f) => (src === 'project' ? !f.inWorktree : f.inWorktree && f.agentId === src)).map((f) => [f.path, f.status]),
     );
@@ -70,6 +77,13 @@
     }
   }
 
+  /** The aliases of the tsconfig.json (else jsconfig.json) at the source's root, read each time the source is shown. */
+  async function readAliases(pid: string, src: string, files: readonly string[]) {
+    const name = ['tsconfig.json', 'jsconfig.json'].find((f) => files.includes(f));
+    const f = name ? await api.fsRead(pid, sourceAgent(src), name).catch(() => null) : null;
+    if (alive && pid === project.id && src === source) aliases = f?.text ? parseAliases(f.text) : DEFAULT_ALIASES;
+  }
+
   // Right away for each source, then 300 ms after each git event of the project. A file being named in the tree of
   // the previous source is given up.
   $effect(() => {
@@ -77,6 +91,7 @@
     const src = source;
     untrack(() => {
       adding = null;
+      aliases = DEFAULT_ALIASES;
       refresh(pid, src, true);
     });
   });
@@ -246,6 +261,35 @@
     const s = app.editor[project.id];
     if (s?.reveal?.seq === seq) s.reveal = null;
   }
+
+  /** Where the editor is: what a jump keeps in the history, to come back to. */
+  const here = (): NavEntry | null =>
+    activePath ? { projectId: project.id, source, path: activePath, line: cursor.line, col: cursor.col } : null;
+
+  /** Opens `t` in the source shown (at its top without a line), the place left kept in the history: `from`, else the cursor. */
+  function jump(t: NavTarget, from: { line: number; col: number } = cursor) {
+    const at = here();
+    if (at) navHistory.push({ ...at, line: from.line, col: from.col });
+    app.openEditor({ projectId: project.id, source, path: t.path, line: t.line ?? 1, col: t.col });
+  }
+
+  /** A link followed: to the first of its targets the tree has, only those being files of the source. */
+  function follow(targets: NavTarget[], from: { line: number; col: number }) {
+    const files = tree?.files ?? [];
+    const t = targets.find((x) => files.includes(x.path));
+    if (t) jump(t, from);
+    else if (targets.length) app.toast(`Fichier introuvable : ${targets[0].path}`);
+  }
+
+  /** Back (or forward) in the history of the source shown, past the places whose file is gone from its tree. */
+  function travel(back: boolean) {
+    const at = here();
+    if (!at) return;
+    const exists = (e: NavEntry) => !!trees.get(e.projectId, e.source)?.files.includes(e.path);
+    const e = back ? navHistory.back(at, exists) : navHistory.forward(at, exists);
+    if (e) app.openEditor({ projectId: e.projectId, source: e.source, path: e.path, line: e.line, col: e.col });
+  }
+
   const sizeMb = (n: number) => (n / (1024 * 1024)).toLocaleString('fr-FR', { maximumFractionDigits: 1 });
 
   function closeTab(path: string) {
@@ -391,9 +435,13 @@
             {indent}
             {changes}
             {reveal}
+            nav={{ path: activePath, files: tree?.files ?? [], resolvers }}
             onrevealed={revealed}
             onchange={(t) => buffers.edit(buf.key, t)}
             oncursor={(c) => (cursor = c)}
+            ontargets={follow}
+            onback={() => travel(true)}
+            onforward={() => travel(false)}
           />
           <div class="status mono">
             <span>Ln {cursor.line}, Col {cursor.col}</span>

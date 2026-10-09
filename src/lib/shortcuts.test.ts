@@ -152,6 +152,20 @@ describe('isAppShortcut', () => {
     expect(isAppShortcut(key('j'), true)).toBe(false);
     expect(isAppShortcut(key('Tab'), true)).toBe(true);
   });
+
+  it('leaves the keys of the editor’s history to the shell and the composer: only the editor takes them', () => {
+    resetApp();
+    const alt = (k: string) => new KeyboardEvent('keydown', { key: k, altKey: true });
+    for (const e of [alt('ArrowLeft'), alt('ArrowRight')]) {
+      expect(isAppShortcut(e, false)).toBe(false);
+      expect(handleShortcut(e, false)).toBe(false);
+    }
+    // macOS: Ctrl+- and Ctrl+Shift+-.
+    for (const e of [key('-'), key('_', { shiftKey: true })]) {
+      expect(isAppShortcut(e, true)).toBe(false);
+      expect(handleShortcut(e, true)).toBe(false);
+    }
+  });
 });
 
 describe('keys that answer a waiting request', () => {

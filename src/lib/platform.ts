@@ -4,8 +4,8 @@
 /** True on macOS. */
 export const IS_MAC = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform || navigator.userAgent);
 
-/** The app's shortcut modifier is held alone: Cmd on macOS, Ctrl elsewhere. */
-export function primaryKey(e: KeyboardEvent, mac = IS_MAC): boolean {
+/** The app's shortcut modifier is held alone: Cmd on macOS, Ctrl elsewhere (for a key or a click). */
+export function primaryKey(e: { ctrlKey: boolean; metaKey: boolean }, mac = IS_MAC): boolean {
   return mac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
 }
 

@@ -84,8 +84,8 @@ export interface EditorState {
   on: boolean;
   source: string;
   places: Record<string, EditorPlace>;
-  /** A line to bring into view (`seq` changes for each request). */
-  reveal: { path: string; line: number; seq: number } | null;
+  /** A line to bring into view, with the cursor on its column when given (`seq` changes for each request). */
+  reveal: { path: string; line: number; col?: number; seq: number } | null;
 }
 
 class AppState {
@@ -480,8 +480,11 @@ class AppState {
     return Object.values(this.tickets).filter((t) => t.projectId === projectId && t.column === 'review').length;
   }
 
-  /** Opens the editor of a project on `source`; with a file (`path` from the source's root, or an absolute `abs`), shows it. */
-  async openEditor(req: { projectId?: string; source: string; path?: string; abs?: string; line?: number }) {
+  /**
+   * Opens the editor of a project on `source`; with a file (`path` from the source's root, or an absolute `abs`), shows
+   * it, at `line` and `col` (1-based) when given.
+   */
+  async openEditor(req: { projectId?: string; source: string; path?: string; abs?: string; line?: number; col?: number }) {
     const projectId = req.projectId ?? this.ui.activeProject;
     if (!projectId) return;
     // The file comes first: one outside the source's folder opens nothing, the editor stays as it was.
@@ -514,7 +517,10 @@ class AppState {
       if (!place.open.includes(path)) place.open.push(path);
       place.active = path;
       this.expandEditorDir(projectId, req.source, ancestors(path).at(-1) ?? '');
-      if (req.line) st.reveal = { path, line: req.line, seq: (st.reveal?.seq ?? 0) + 1 };
+      if (req.line) {
+        const seq = (st.reveal?.seq ?? 0) + 1;
+        st.reveal = req.col ? { path, line: req.line, col: req.col, seq } : { path, line: req.line, seq };
+      }
     }
     this.persistUi();
   }

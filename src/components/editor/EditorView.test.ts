@@ -1,3 +1,4 @@
+import { EditorView as CodeMirror } from '@codemirror/view';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -555,5 +556,106 @@ describe('EditorView tree, as VS Code’s explorer', () => {
     await app.openEditor({ source: 'project' });
     await screen.findByRole('treeitem', { name: /app\.ts/ });
     expect(screen.queryByRole('textbox', { name: 'Nom du nouveau fichier' })).not.toBeInTheDocument();
+  });
+});
+
+describe('EditorView navigation', () => {
+  beforeEach(() => {
+    resetApp({ agents: [agent()] });
+    app.git.p1 = gitInfo({ modified: 1 });
+  });
+
+  const APP = "import { u } from './util';\nimport { m } from './missing';\nconsole.log(u); // see src/util.ts:2:5\n";
+  const UTIL = 'export const u = 1;\nexport const v = 2;\n';
+  const files = ['src/app.ts', 'src/util.ts', 'tsconfig.json'];
+
+  function navBackend(over: Record<string, (a: any) => unknown> = {}) {
+    return backend({
+      fs_tree: () => ({ root: 'C:/code/demo-api', files, truncated: false }),
+      git_files: () => [],
+      fs_read: (a) => text(a.path === 'src/util.ts' ? UTIL : a.path === 'tsconfig.json' ? '{}' : APP),
+      ...over,
+    });
+  }
+
+  /** The CodeMirror view, once it shows the text starting with `start`. */
+  async function shown(container: HTMLElement, start: string): Promise<CodeMirror> {
+    await expect.poll(() => container.querySelector('.cm-content')?.textContent?.startsWith(start)).toBe(true);
+    return CodeMirror.findFromDOM(container.querySelector('.cm-editor') as HTMLElement)!;
+  }
+
+  /** A Ctrl+click at `pos` (jsdom has no layout to find it from the mouse). */
+  function ctrlClick(view: CodeMirror, pos: number) {
+    vi.spyOn(view, 'posAtCoords').mockReturnValue(pos);
+    const o = { bubbles: true, cancelable: true, button: 0, detail: 1, ctrlKey: true };
+    view.contentDOM.dispatchEvent(new MouseEvent('mousedown', o));
+    view.contentDOM.dispatchEvent(new MouseEvent('mouseup', o));
+  }
+  const press = (view: CodeMirror, key: string, init: KeyboardEventInit = {}) =>
+    view.contentDOM.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init }));
+  const active = () => app.editor.p1.places.project.active;
+
+  it('follows an import with Ctrl+click, comes back to it with Alt+← and goes forward again with Alt+→', async () => {
+    navBackend();
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    const { container } = render(EditorView, { project: project() });
+    const at = APP.indexOf('util');
+    ctrlClick(await shown(container, 'import'), at);
+    await expect.poll(active).toBe('src/util.ts');
+    press(await shown(container, 'export'), 'ArrowLeft', { altKey: true });
+    await expect.poll(active).toBe('src/app.ts');
+    expect(await screen.findByText(`Ln 1, Col ${at + 1}`)).toBeInTheDocument();
+    press(await shown(container, 'import'), 'ArrowRight', { altKey: true });
+    await expect.poll(active).toBe('src/util.ts');
+  });
+
+  it('says when the file a link leads to is not in the tree, and stays', async () => {
+    navBackend();
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    const { container } = render(EditorView, { project: project() });
+    ctrlClick(await shown(container, 'import'), APP.indexOf('missing'));
+    await expect.poll(() => app.toasts.map((t) => t.text)).toEqual(['Fichier introuvable : src/missing']);
+    expect(active()).toBe('src/app.ts');
+  });
+
+  it('follows a path at the cursor with F12, to its line and column', async () => {
+    navBackend();
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    const { container } = render(EditorView, { project: project() });
+    const view = await shown(container, 'import');
+    view.dispatch({ selection: { anchor: APP.indexOf('src/util.ts') + 2 } });
+    press(view, 'F12');
+    await expect.poll(active).toBe('src/util.ts');
+    expect(await screen.findByText('Ln 2, Col 5')).toBeInTheDocument();
+  });
+
+  it('follows the aliases of the source’s tsconfig.json', async () => {
+    const tsconfig = '{\n  // aliases\n  "compilerOptions": { "paths": { "@/*": ["src/*"] } }\n}';
+    const be = navBackend({
+      fs_read: (a) => text(a.path === 'src/util.ts' ? UTIL : a.path === 'tsconfig.json' ? tsconfig : "import { u } from '@/util';\n"),
+    });
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    const { container } = render(EditorView, { project: project() });
+    const view = await shown(container, 'import');
+    await expect.poll(() => be.called('fs_read').map((c) => c.args.path)).toContain('tsconfig.json');
+    // Read in the background: followed once it is there (and clicked only while app.ts is shown).
+    await expect
+      .poll(() => {
+        if (active() === 'src/app.ts') ctrlClick(view, "import { u } from '@/u".length);
+        return active();
+      })
+      .toBe('src/util.ts');
+  });
+
+  it('skips, going back, a place whose file is gone from the tree', async () => {
+    navBackend();
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    const { container } = render(EditorView, { project: project() });
+    ctrlClick(await shown(container, 'import'), APP.indexOf('util'));
+    await expect.poll(active).toBe('src/util.ts');
+    trees.all['p1|project'] = { root: 'C:/code/demo-api', files: ['src/util.ts'], truncated: false };
+    press(await shown(container, 'export'), 'ArrowLeft', { altKey: true });
+    await new Promise((r) => setTimeout(r, 30));
+    expect(active()).toBe('src/util.ts');
   });
 });
