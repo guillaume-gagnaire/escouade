@@ -27,7 +27,7 @@ export const SETTINGS_TABS: { id: SettingsTab; label: string; icon: string; desc
 /** The app's settings each tab sets. */
 const SETTINGS_OF: Partial<Record<SettingsTab, (keyof Settings)[]>> = {
   claude: ['claudePath', 'defaultModel', 'defaultEffort', 'defaultMode', 'autoResume', 'idleStopMinutes'],
-  notifications: ['sound', 'osNotifications'],
+  notifications: ['sound', 'osNotifications', 'notifyFor'],
   terminals: ['pwshPath', 'bashPath', 'wslDistro'],
   network: ['proxyUrl', 'noProxy', 'proxyTerminals', 'insecureTls'],
   integrations: ['integrations'],

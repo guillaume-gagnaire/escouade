@@ -36,6 +36,7 @@ export const SETTINGS: Settings = {
   defaultMode: 'auto',
   sound: true,
   osNotifications: true,
+  notifyFor: { questions: true, done: true, errors: true, tickets: true },
   idleStopMinutes: 30,
   pwshPath: '',
   bashPath: '',

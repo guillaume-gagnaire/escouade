@@ -9,6 +9,8 @@ export interface Settings {
   defaultMode: string;
   sound: boolean;
   osNotifications: boolean;
+  /** « Me prévenir pour »: what the chime and the system notifications are for. */
+  notifyFor: NotifyFor;
   idleStopMinutes: number;
   pwshPath: string;
   bashPath: string;
@@ -22,6 +24,18 @@ export interface Settings {
   autoResume: boolean;
   /** What the external ticket systems' links do (their accounts are kept apart, with their secrets). */
   integrations: IntegrationSettings;
+}
+
+/** Which events chime and show a system notification; the agent's tab and card flash all the same. */
+export interface NotifyFor {
+  /** « Questions et autorisations ». */
+  questions: boolean;
+  /** « Tâches terminées ». */
+  done: boolean;
+  /** « Erreurs ». */
+  errors: boolean;
+  /** « Tickets (prêt à tester, bloqué) ». */
+  tickets: boolean;
 }
 
 /** The sync with the external ticket systems and their automatic import, for every project. */

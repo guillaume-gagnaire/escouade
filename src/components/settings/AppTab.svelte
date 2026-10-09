@@ -73,6 +73,23 @@
     </Row>
   </Group>
 {:else if tab === 'notifications'}
+  <Group
+    title="Me prévenir pour"
+    note="Décoché, un type de notification ne joue plus de son et n’affiche plus de notification système. L’onglet et la carte de l’agent clignotent quand même."
+  >
+    <Row label="Questions et autorisations">
+      <Switch label="Questions et autorisations" bind:on={s.notifyFor.questions} />
+    </Row>
+    <Row label="Tâches terminées">
+      <Switch label="Tâches terminées" bind:on={s.notifyFor.done} />
+    </Row>
+    <Row label="Erreurs">
+      <Switch label="Erreurs" bind:on={s.notifyFor.errors} />
+    </Row>
+    <Row label="Tickets (prêt à tester, bloqué)">
+      <Switch label="Tickets (prêt à tester, bloqué)" bind:on={s.notifyFor.tickets} />
+    </Row>
+  </Group>
   <Group title="Canaux">
     <Row label="Notifications {IS_MAC ? 'macOS' : 'Windows'} quand l'app n'est pas au premier plan">
       <Switch label="Notifications système" bind:on={s.osNotifications} />

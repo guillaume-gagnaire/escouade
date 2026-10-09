@@ -101,6 +101,34 @@ describe('SettingsModal', () => {
     expect(app.settings.insecureTls).toBe(true);
   });
 
+  it('chooses what to be told about, everything on by default', async () => {
+    const backend = backendSaving();
+    render(SettingsModal);
+    await userEvent.click(tab('Notifications'));
+    const group = within(panel()).getByRole('heading', { name: 'Me prévenir pour' }).closest('section')!;
+    const labels = ['Questions et autorisations', 'Tâches terminées', 'Erreurs', 'Tickets (prêt à tester, bloqué)'];
+    expect(
+      within(group)
+        .getAllByRole('switch')
+        .map((s) => s.getAttribute('aria-label')),
+    ).toEqual(labels);
+    for (const label of labels) expect(within(group).getByRole('switch', { name: label })).toHaveAttribute('aria-checked', 'true');
+    expect(tab('Notifications')).not.toHaveClass('changed');
+
+    await userEvent.click(within(group).getByRole('switch', { name: 'Tâches terminées' }));
+    expect(within(group).getByRole('switch', { name: 'Tâches terminées' })).toHaveAttribute('aria-checked', 'false');
+    expect(within(group).getByRole('switch', { name: 'Erreurs' })).toHaveAttribute('aria-checked', 'true');
+    expect(tab('Notifications')).toHaveClass('changed');
+    await save();
+    expect(backend.called('save_settings')[0].args.settings.notifyFor).toEqual({
+      questions: true,
+      done: false,
+      errors: true,
+      tickets: true,
+    });
+    expect(app.settings.notifyFor.done).toBe(false);
+  });
+
   it('sets the defaults of new agents, named with the version Claude Code runs', async () => {
     const backend = backendSaving();
     app.models = [{ value: 'sonnet', resolvedModel: 'claude-sonnet-5-5' }];
