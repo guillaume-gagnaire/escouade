@@ -2,7 +2,7 @@
   import { keyLabel } from '../lib/platform';
   import { onMount } from 'svelte';
   import { api } from '../lib/ipc';
-  import { conversationOf } from '../lib/conversations.svelte';
+  import { conversationOf, type ReadingPlace } from '../lib/conversations.svelte';
   import { splitEscouade } from '../lib/escouade';
   import { fDur, fInt, fTok } from '../lib/format';
   import { modelLabel } from '../lib/models';
@@ -35,6 +35,8 @@
     done: 'var(--ok)',
     error: 'var(--del)',
   };
+  /** How long a view put back in place is kept there while its messages are measured. */
+  const SETTLE_MS = 1000;
 
   const conv = $derived(conversationOf(agent.id));
   // The ticket the agent works on, whose criteria the reports of its turns name.
@@ -92,6 +94,12 @@
   let stick = true;
   let showJump = $state(false);
   let lastTop = 0;
+  // The observer's first report is the size the view starts from, not new content.
+  let sized = false;
+  // A view put back in place is put back again while the messages around it are drawn at their real
+  // height (content-visibility sizes those off screen by a guess), until the reader takes over.
+  let settling: ReadingPlace | null = null;
+  let settleEnd = 0;
 
   function atBottom() {
     return !scroller || scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 24;
@@ -104,6 +112,40 @@
     }
     stick = true;
     showJump = false;
+    remember();
+  }
+
+  // Kept as the reader moves: when the view is destroyed it is already out of the page, with no layout to read.
+  function remember() {
+    if (!scroller) return;
+    conv.place = { stick, top: scroller.scrollTop, anchor: stick ? null : anchorOf(scroller) };
+  }
+
+  /** The first block (child of `.msgs`) that ends below the top of the view, found by halving: blocks are in order. */
+  function anchorOf(view: HTMLElement) {
+    const blocks = content?.children;
+    if (!blocks) return null;
+    const viewTop = view.getBoundingClientRect().top;
+    let lo = 0;
+    let hi = blocks.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (blocks[mid].getBoundingClientRect().bottom > viewTop + 1) hi = mid;
+      else lo = mid + 1;
+    }
+    return lo < blocks.length ? { index: lo, offset: blocks[lo].getBoundingClientRect().top - viewTop } : null;
+  }
+
+  function restore(place: ReadingPlace) {
+    if (!scroller) return;
+    const block = place.anchor && content?.children[place.anchor.index];
+    if (block && place.anchor) {
+      scroller.scrollTop += block.getBoundingClientRect().top - scroller.getBoundingClientRect().top - place.anchor.offset;
+    } else {
+      scroller.scrollTop = place.top;
+    }
+    lastTop = scroller.scrollTop;
+    remember();
   }
 
   // The reader scrolling up leaves the bottom, however close to it: messages rendered as they come
@@ -113,7 +155,14 @@
   let readerAt = 0;
   let dragging = false;
   const reading = () => dragging || performance.now() - readerAt < 500;
-  const byReader = () => (readerAt = performance.now());
+  const byReader = () => {
+    readerAt = performance.now();
+    settling = null;
+  };
+  const grab = () => {
+    dragging = true;
+    settling = null;
+  };
 
   function onScroll() {
     if (!scroller) return;
@@ -122,18 +171,30 @@
     else if (atBottom()) stick = true;
     lastTop = top;
     if (stick) showJump = false;
+    remember();
   }
 
-  // The view is re-created for each agent ({#key}): scroll down once, not on every agent update.
+  // The view is re-created for each agent ({#key}): put it back where the reader left it (the bottom,
+  // for an agent opened the first time or left following the conversation) once, not on every agent update.
   onMount(() => {
-    requestAnimationFrame(toBottom);
+    const place = conv.place;
+    if (place && !place.stick) {
+      stick = false;
+      settling = place;
+      settleEnd = performance.now() + SETTLE_MS;
+      requestAnimationFrame(() => restore(place));
+    } else {
+      requestAnimationFrame(toBottom);
+    }
   });
 
   $effect(() => {
     if (!content) return;
     const ro = new ResizeObserver(() => {
       if (stick) toBottom();
-      else showJump = true;
+      else if (settling && performance.now() < settleEnd) restore(settling);
+      else if (sized) showJump = true;
+      sized = true;
     });
     ro.observe(content);
     return () => ro.disconnect();
@@ -261,14 +322,7 @@
   </header>
 
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
-    class="scroll"
-    bind:this={scroller}
-    onscroll={onScroll}
-    onwheel={byReader}
-    onkeydown={byReader}
-    onpointerdown={() => (dragging = true)}
-  >
+  <div class="scroll" bind:this={scroller} onscroll={onScroll} onwheel={byReader} onkeydown={byReader} onpointerdown={grab}>
     <div class="msgs" bind:this={content}>
       {#if conv.error}
         <div class="load-error">

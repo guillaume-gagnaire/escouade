@@ -3,10 +3,26 @@
 import { api } from './ipc';
 import type { ConvItem, ConvOp } from './types';
 
+/** Where the reader left a conversation, to put the view back there when the agent is opened again. */
+export interface ReadingPlace {
+  /** The view was at the bottom, following the conversation. */
+  stick: boolean;
+  /** How far it was scrolled, in pixels. */
+  top: number;
+  /**
+   * The block of the conversation at the top of the view (its rank among the blocks) and where its top edge was
+   * relative to the view's. Messages off screen are not rendered at their real height (content-visibility): the
+   * same distance from the top would be another message, so the place is told by the message.
+   */
+  anchor: { index: number; offset: number } | null;
+}
+
 export class Conversation {
   items = $state<ConvItem[]>([]);
   loaded = $state(false);
   error = $state<string | null>(null);
+  /** Not reactive: only read when the view opens. Goes with the conversation, which goes with its agent. */
+  place: ReadingPlace | null = null;
   private index = new Map<string, number>();
   private buffer: ConvOp[] | null = null;
 

@@ -155,6 +155,157 @@ describe('Conversation', () => {
       resized.forEach((cb) => cb([]));
       expect(scroller.scrollTop).toBe(2000);
     });
+
+    describe('when the agent is opened again', () => {
+      // App re-creates the conversation for each agent ({#key}): the view is a new element each time.
+      const reopen = async (a: Agent) => {
+        resized = [];
+        const r = render(Conversation, { agent: a, project: project() });
+        await frame();
+        return r.container.querySelector('.scroll') as HTMLElement;
+      };
+
+      it('puts the conversation back where the reader left it', async () => {
+        const { a, scroller, unmount } = setup();
+        await frame();
+        readerScrollsTo(scroller, 700);
+        unmount();
+        expect((await reopen(a)).scrollTop).toBe(700);
+      });
+
+      it('keeps each agent’s own place', async () => {
+        const first = setup();
+        await frame();
+        readerScrollsTo(first.scroller, 700);
+        first.unmount();
+        const b = agent({ id: `v${Math.random()}`, status: 'running' });
+        app.agents[b.id] = b;
+        const other = render(Conversation, { agent: b, project: project() });
+        await frame();
+        expect((other.container.querySelector('.scroll') as HTMLElement).scrollTop).toBe(2000);
+        other.unmount();
+        expect((await reopen(first.a)).scrollTop).toBe(700);
+      });
+
+      it('stays glued to the bottom when it was left there, and follows the new messages', async () => {
+        const { a, scroller, unmount } = setup();
+        await frame();
+        expect(scroller.scrollTop).toBe(2000);
+        unmount();
+        const view = await reopen(a);
+        expect(view.scrollTop).toBe(2000);
+        const height = grows(view);
+        height(2600);
+        resized.forEach((cb) => cb([]));
+        expect(view.scrollTop).toBe(2600);
+      });
+
+      it('does not take the reader back down when new messages come in', async () => {
+        const { a, scroller, unmount } = setup();
+        await frame();
+        readerScrollsTo(scroller, 700);
+        unmount();
+        const view = await reopen(a);
+        const height = grows(view);
+        height(2600);
+        resized.forEach((cb) => cb([]));
+        expect(view.scrollTop).toBe(700);
+      });
+
+      it('does not announce new messages just for being reopened, only for those that come in after', async () => {
+        const { a, scroller, unmount } = setup();
+        await frame();
+        readerScrollsTo(scroller, 700);
+        unmount();
+        const view = await reopen(a);
+        // The observer's first report is the size the view starts from.
+        resized.forEach((cb) => cb([]));
+        expect(screen.queryByRole('button', { name: /Nouveaux messages/ })).not.toBeInTheDocument();
+        // Once the view has settled back in place, what grows is new messages.
+        const now = performance.now();
+        vi.spyOn(performance, 'now').mockReturnValue(now + 5000);
+        grows(view)(2600);
+        resized.forEach((cb) => cb([]));
+        expect(await screen.findByRole('button', { name: /Nouveaux messages/ })).toBeInTheDocument();
+      });
+
+      describe('with the messages laid out', () => {
+        const items = Array.from({ length: 8 }, (_, i) => ({
+          kind: 'user',
+          id: `u${i}`,
+          text: `Message ${i}`,
+          images: 0,
+          ts: i,
+          queued: false,
+        }));
+        // What a message weighs once drawn, and what the browser takes it for until then (content-visibility).
+        const REAL = 150;
+        const ESTIMATE = 60;
+        let height = REAL;
+        let spy: ReturnType<typeof vi.spyOn>;
+        beforeEach(() => {
+          height = REAL;
+          // Every message is `height` tall, the view is 500 px high and starts at the top of the screen.
+          spy = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+            const rect = (top: number, h: number) => ({
+              top,
+              bottom: top + h,
+              height: h,
+              left: 0,
+              right: 0,
+              width: 0,
+              x: 0,
+              y: top,
+              toJSON: () => ({}),
+            });
+            if (this.classList.contains('scroll')) return rect(0, 500);
+            const msgs = this.parentElement;
+            if (msgs?.classList.contains('msgs')) {
+              const scroller = msgs.parentElement as HTMLElement;
+              return rect([...msgs.children].indexOf(this) * height - scroller.scrollTop, height);
+            }
+            return rect(0, 0);
+          });
+        });
+        afterEach(() => spy.mockRestore());
+
+        it('puts back the message the reader was on, not the same distance from the top', async () => {
+          const { a, scroller, unmount } = setup({}, items);
+          await frame();
+          // Message 2 (300-450) is the first in view, 50 px above the top of the view.
+          readerScrollsTo(scroller, 350);
+          unmount();
+          // Messages off screen are not drawn, so they weigh less: 350 px from the top is then another message.
+          height = ESTIMATE;
+          expect((await reopen(a)).scrollTop).toBe(170);
+        });
+
+        it('keeps it there while the messages around it are drawn at their real height', async () => {
+          const { a, scroller, unmount } = setup({}, items);
+          await frame();
+          readerScrollsTo(scroller, 350);
+          unmount();
+          height = ESTIMATE;
+          const view = await reopen(a);
+          height = REAL;
+          resized.forEach((cb) => cb([]));
+          expect(view.scrollTop).toBe(350);
+        });
+
+        it('leaves the reader alone once they scroll, however the messages are drawn', async () => {
+          const { a, scroller, unmount } = setup({}, items);
+          await frame();
+          readerScrollsTo(scroller, 350);
+          unmount();
+          height = ESTIMATE;
+          const view = await reopen(a);
+          readerScrollsTo(view, 200);
+          height = REAL;
+          resized.forEach((cb) => cb([]));
+          expect(view.scrollTop).toBe(200);
+        });
+      });
+    });
   });
 
   it('names the agent’s model with the version Claude Code runs for it', () => {
