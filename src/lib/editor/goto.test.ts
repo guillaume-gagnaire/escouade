@@ -190,6 +190,34 @@ describe('following a spot', () => {
     await vi.waitFor(() => expect(onTargets).toHaveBeenCalledOnce());
   });
 
+  it('takes only the answer of the last spot followed, whichever comes first', async () => {
+    const l = later();
+    const onTargets = vi.fn();
+    const onError = vi.fn();
+    const v = editor({ resolvers: [l.resolver], onTargets, onError });
+    ctrlClick(v);
+    const first = l.last();
+    ctrlClick(v);
+    const second = l.last();
+    first.answer([{ path: 'first.ts' }]);
+    await settled();
+    expect(onTargets).not.toHaveBeenCalled();
+    second.answer([{ path: 'second.ts' }]);
+    await vi.waitFor(() => expect(onTargets).toHaveBeenCalledOnce());
+    expect(onTargets.mock.calls[0][0]).toEqual([{ path: 'second.ts' }]);
+    // The later one answering first: the earlier one, answer or failure, comes too late.
+    ctrlClick(v);
+    const third = l.last();
+    ctrlClick(v);
+    l.last().answer([{ path: 'fourth.ts' }]);
+    await vi.waitFor(() => expect(onTargets).toHaveBeenCalledTimes(2));
+    third.answer([{ path: 'third.ts' }]);
+    third.fail('late');
+    await settled();
+    expect(onTargets.mock.calls.map((c) => c[0][0].path)).toEqual(['second.ts', 'fourth.ts']);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   it('tells of a failure to find where a spot leads, unless the user moved on', async () => {
     const l = later();
     const onError = vi.fn();

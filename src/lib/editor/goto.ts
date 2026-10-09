@@ -128,8 +128,10 @@ export function gotoExtension(o: GotoOptions): Extension {
     const line = doc.lineAt(pos);
     const from: NavFrom = { path: c.path, line: line.number, col: charColumn(line.text, pos - line.from) };
     const label = s.label ?? view.state.sliceDoc(s.from, s.to);
-    // A search may take seconds: the user may have moved on meanwhile (the plugin goes with the file or the editor).
-    const here = () => plugin.live && view.state.doc === doc && o.context()?.path === c.path;
+    const seq = ++plugin.followed;
+    // A search may take seconds: the user may have moved on meanwhile (the plugin goes with the file or the editor),
+    // or followed another spot, whose answer is the only one to take.
+    const here = () => plugin.live && plugin.followed === seq && view.state.doc === doc && o.context()?.path === c.path;
     s.resolve().then(
       (t) => {
         if (here()) o.onTargets(t, from, { label, rect: view.coordsAtPos(s.from) });
@@ -146,6 +148,8 @@ export function gotoExtension(o: GotoOptions): Extension {
       mouse: { x: number; y: number } | null = null;
       /** False once destroyed: with the editor, or when another file's state replaces this one. */
       live = true;
+      /** How many spots were followed: only the answer of the last one is taken. */
+      followed = 0;
 
       constructor(readonly view: EditorView) {
         // On the window: the modifier may be pressed while the focus is elsewhere, the mouse over the editor.
