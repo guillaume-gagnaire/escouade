@@ -121,6 +121,8 @@ class AppState {
   gitTick = $state(0);
   update = $state<UpdateInfo | null>(null);
   focusComposer = $state(0);
+  /** Agent whose waiting request takes the focus, in place of its message field (Ctrl+J): the card claims it. */
+  focusPending = $state<string | null>(null);
   /**
    * Agents that asked a question, finished or failed while not on screen, and that the user
    * has not looked at since: their project tab and their card blink.
@@ -417,6 +419,7 @@ class AppState {
       ed.places[ed.source] ??= { open: [], active: null, expanded: {} };
     }
     this.persistUi();
+    this.focusPending = null;
     this.focusComposer++;
   }
 
@@ -654,6 +657,8 @@ class AppState {
     this.selectAgent(next.id);
     // Its question or its end of turn is what Ctrl+J is for: show the conversation, not the editor.
     this.closeEditor(next.projectId);
+    // A request to answer is what Ctrl+J is for: its card takes the focus, not the message field.
+    if (next.pending.length) this.focusPending = next.id;
   }
 
   toast(text: string, kind: Toast['kind'] = 'info') {

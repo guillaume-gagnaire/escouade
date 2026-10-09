@@ -12,6 +12,43 @@ function digit(e: KeyboardEvent): number | null {
   return d ? Number(d) : null;
 }
 
+/**
+ * Ctrl+Enter (Cmd+Enter on macOS) answers the request Claude waits on: "yes", or "always" with
+ * Shift. Not Ctrl+Alt+Enter (AltGr), not an input method confirming its composition, and not a key
+ * held down: the press that answers a request must not answer the next one on its repeats.
+ */
+export function enterAnswer(e: KeyboardEvent, mac = IS_MAC): 'plain' | 'shift' | null {
+  if (e.key !== 'Enter' || e.altKey || e.isComposing || e.repeat || !primaryKey(e, mac)) return null;
+  return e.shiftKey ? 'shift' : 'plain';
+}
+
+/**
+ * Alt+1…9 picks the nth option of a question, read from the physical key as for Ctrl+digit. Never
+ * with Ctrl (Ctrl+Alt is AltGr on French keyboards), and not from the numpad, where Alt+digits type
+ * a character by its code on Windows.
+ */
+export function optionAnswer(e: KeyboardEvent): number | null {
+  if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.repeat) return null;
+  const d = e.code ? /^Digit([1-9])$/.exec(e.code)?.[1] : /^[1-9]$/.exec(e.key)?.[0];
+  return d ? Number(d) : null;
+}
+
+/** The `aria-keyshortcuts` of {@link enterAnswer}'s keys. */
+export function ariaEnter(shift = false, mac = IS_MAC): string {
+  return `${mac ? 'Meta' : 'Control'}+${shift ? 'Shift+' : ''}Enter`;
+}
+
+/**
+ * Where a waiting request is answered from the keyboard: the conversation (`.conv`, with its
+ * message field), or the page itself when nothing has the focus. A terminal and the editor keep
+ * their keys, and so does a dialog.
+ */
+export function answersHere(target: EventTarget | null): boolean {
+  if (app.modal || !(target instanceof Element)) return false;
+  if (target.closest('.xterm, .cm-editor')) return false;
+  return target === document.body || !!target.closest('.conv');
+}
+
 /** Ctrl+Tab cycles agents on every system: Cmd+Tab switches applications on macOS. */
 const agentCycle = (e: KeyboardEvent) => e.key === 'Tab' && e.ctrlKey && !e.metaKey;
 

@@ -499,3 +499,148 @@ describe('Conversation editor entry', () => {
     expect(app.editor.p1).toMatchObject({ on: true, source: 'project', reveal: { path: 'src/auth.ts', line: 7 } });
   });
 });
+
+describe('Conversation answers from the keyboard', () => {
+  beforeEach(() => {
+    app.focusPending = null;
+  });
+
+  const perm = (id: string) => ({
+    kind: 'permission',
+    id,
+    toolUseId: `t-${id}`,
+    toolName: 'Bash',
+    input: { command: `rm -rf ${id}` },
+    canAlways: true,
+    defaultNo: false,
+    decision: null,
+    ts: 1,
+  });
+  const ask = (id: string) => ({
+    kind: 'question',
+    id,
+    toolUseId: `t-${id}`,
+    ts: 1,
+    answers: null,
+    questions: [
+      { question: 'Base ?', multiSelect: false, options: [{ label: 'PG' }, { label: 'SQLite' }] },
+      { question: 'Cible ?', multiSelect: false, options: [{ label: 'Web' }, { label: 'Desktop' }] },
+    ],
+  });
+  // An agent waiting on the requests of `items`, its conversation on screen.
+  function waiting(items: unknown[], over: Partial<Agent> = {}) {
+    const a = agent({ id: `k${Math.random()}`, status: 'waiting', pending: items.map((i) => (i as { id: string }).id), ...over });
+    resetApp({ projects: [project()], agents: [a] });
+    const backend = fakeBackend({ get_conversation: () => items });
+    render(Conversation, { agent: a, project: project() });
+    return { a, backend };
+  }
+  const field = () => screen.getByRole('textbox') as HTMLTextAreaElement;
+
+  it('allows a request with Ctrl+Enter typed in the message field, and keeps what was typed there', async () => {
+    const { a, backend } = waiting([perm('r1')]);
+    await screen.findByTestId('permission-pending');
+    await userEvent.type(field(), 'Plutôt npm run clean');
+    await userEvent.keyboard('{Control>}{Enter}{/Control}');
+    await waitFor(() => expect(backend.called('answer_permission')).toHaveLength(1));
+    expect(backend.called('answer_permission')[0].args).toEqual({ id: a.id, requestId: 'r1', decision: 'allow', message: null });
+    expect(backend.called('send_message')).toHaveLength(0);
+    expect(field()).toHaveValue('Plutôt npm run clean');
+  });
+
+  it('still refuses with the typed explanation on Enter', async () => {
+    const { a, backend } = waiting([perm('r1')]);
+    await screen.findByTestId('permission-pending');
+    await userEvent.type(field(), 'Plutôt npm run clean{Enter}');
+    await waitFor(() => expect(backend.called('answer_permission')).toHaveLength(1));
+    expect(backend.called('answer_permission')[0].args).toEqual({
+      id: a.id,
+      requestId: 'r1',
+      decision: 'deny',
+      message: 'Plutôt npm run clean',
+    });
+  });
+
+  it('answers only the first of several requests, and shows the keys on it alone', async () => {
+    const { backend } = waiting([perm('r1'), perm('r2')]);
+    const cards = await screen.findAllByTestId('permission-pending');
+    expect(cards).toHaveLength(2);
+    expect(within(cards[0]).getByRole('button', { name: 'Autoriser' })).toHaveAttribute('aria-keyshortcuts', 'Control+Enter');
+    expect(within(cards[1]).getByRole('button', { name: 'Autoriser' })).not.toHaveAttribute('aria-keyshortcuts');
+    await userEvent.type(field(), '{Control>}{Enter}{/Control}');
+    await waitFor(() => expect(backend.called('answer_permission')).toHaveLength(1));
+    expect(backend.called('answer_permission')[0].args.requestId).toBe('r1');
+  });
+
+  it('picks the options of a question with Alt+digit from the message field, then validates with Ctrl+Enter', async () => {
+    const { a, backend } = waiting([ask('q1')]);
+    await screen.findByTestId('question-pending');
+    await userEvent.type(field(), 'un mot');
+    await userEvent.keyboard('{Alt>}2{/Alt}'); // Base: SQLite
+    await userEvent.keyboard('{Alt>}1{/Alt}'); // Cible: Web
+    expect(field()).toHaveValue('un mot');
+    await userEvent.keyboard('{Control>}{Enter}{/Control}');
+    await waitFor(() => expect(backend.called('answer_question')).toHaveLength(1));
+    expect(backend.called('answer_question')[0].args).toEqual({
+      id: a.id,
+      requestId: 'q1',
+      answers: { 'Base ?': 'SQLite', 'Cible ?': 'Web' },
+    });
+    expect(backend.called('send_message')).toHaveLength(0);
+  });
+
+  it('lets Ctrl+Enter send the typed answer to a question the options have not answered', async () => {
+    const { backend } = waiting([ask('q1')]);
+    await screen.findByTestId('question-pending');
+    await userEvent.type(field(), 'Les deux{Control>}{Enter}{/Control}');
+    await waitFor(() => expect(backend.called('answer_question')).toHaveLength(1));
+    expect(backend.called('answer_question')[0].args.answers).toEqual({ 'Base ?': 'Les deux', 'Cible ?': 'Les deux' });
+  });
+
+  it('keeps Ctrl+Enter for sending when nothing waits', async () => {
+    const { a, backend } = waiting([], { status: 'idle' });
+    await userEvent.type(field(), 'Lance les tests{Control>}{Enter}{/Control}');
+    await waitFor(() => expect(backend.called('send_message')).toHaveLength(1));
+    expect(backend.called('send_message')[0].args).toMatchObject({ id: a.id, text: 'Lance les tests' });
+  });
+
+  describe('Ctrl+J', () => {
+    it('puts the focus on the request of the agent it goes to, not on its message field', async () => {
+      waiting([perm('r1')]);
+      const card = await screen.findByTestId('permission-pending');
+      field().focus();
+      app.nextWaiting();
+      await waitFor(() => expect(card).toHaveFocus());
+      expect(field()).not.toHaveFocus();
+      expect(app.focusPending).toBeNull();
+    });
+
+    it('does so for an agent brought in, whose conversation is still loading', async () => {
+      const a = agent({ id: `j${Math.random()}`, status: 'waiting', pending: ['q1'] });
+      resetApp({ projects: [project()], agents: [a] });
+      app.focusPending = a.id;
+      fakeBackend({ get_conversation: () => [ask('q1')] });
+      render(Conversation, { agent: a, project: project() });
+      const card = await screen.findByTestId('question-pending');
+      await waitFor(() => expect(card).toHaveFocus());
+      expect(field()).not.toHaveFocus();
+    });
+
+    it('puts the focus on the message field, as before, when no request waits', async () => {
+      waiting([]);
+      field().blur();
+      app.nextWaiting();
+      await waitFor(() => expect(field()).toHaveFocus());
+    });
+
+    it('gives the focus back to the message field once the request is answered from the card', async () => {
+      const { backend } = waiting([perm('r1')]);
+      const card = await screen.findByTestId('permission-pending');
+      app.nextWaiting();
+      await waitFor(() => expect(card).toHaveFocus());
+      await userEvent.keyboard('{Control>}{Enter}{/Control}');
+      await waitFor(() => expect(backend.called('answer_permission')).toHaveLength(1));
+      await waitFor(() => expect(field()).toHaveFocus());
+    });
+  });
+});

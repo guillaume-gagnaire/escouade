@@ -98,7 +98,11 @@
 
   $effect(() => {
     void app.focusComposer;
-    queueMicrotask(() => ta?.focus());
+    // Ctrl+J brought this agent in for its request: the request's card takes the focus, not this field.
+    const forRequest = untrack(() => app.focusPending === agentId && agent.pending.length > 0);
+    queueMicrotask(() => {
+      if (!forRequest) ta?.focus();
+    });
   });
 
   function autosize() {

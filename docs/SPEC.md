@@ -153,7 +153,7 @@ Une seule modale pour toute l'app : ses onglets à gauche (point sur un onglet m
 
 ## Raccourcis (défauts)
 
-`Ctrl+1..9` projets · `Ctrl+N` nouvel agent · `Ctrl+J` prochain agent en attente · `Ctrl+Maj+L` disposition · `Ctrl+S` enregistrer (éditeur) · `Échap` interrompre · `Ctrl+,` réglages.
+`Ctrl+1..9` projets · `Ctrl+N` nouvel agent · `Ctrl+J` prochain agent en attente (sa demande prend le focus) · `Ctrl+Entrée` / `Ctrl+Maj+Entrée` autoriser / toujours autoriser · `Alt+1..9` option d'une question, `Ctrl+Entrée` pour valider · `Ctrl+Maj+L` disposition · `Ctrl+S` enregistrer (éditeur) · `Échap` interrompre · `Ctrl+,` réglages.
 
 ## Livraison
 

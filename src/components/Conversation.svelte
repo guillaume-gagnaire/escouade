@@ -155,6 +155,7 @@
 
 <svelte:window onpointerup={() => (dragging = false)} onpointercancel={() => (dragging = false)} />
 
+<!-- `.conv` is where the keys answering a waiting request apply (answersHere, in shortcuts.ts). -->
 <main class="conv">
   <header class="head">
     <div class="who">
@@ -315,9 +316,15 @@
             <ToolRow {item} cwd={agent.cwd} childrenOf={(id) => children.get(id) ?? []} onOpenFile={openFile} />
           {/if}
         {:else if item.kind === 'question'}
-          <QuestionCard {item} agentId={agent.id} pending={agent.pending.includes(item.id)} />
+          <QuestionCard {item} agentId={agent.id} pending={agent.pending.includes(item.id)} current={agent.pending[0] === item.id} />
         {:else if item.kind === 'permission'}
-          <PermissionCard {item} agentId={agent.id} cwd={agent.cwd} pending={agent.pending.includes(item.id)} />
+          <PermissionCard
+            {item}
+            agentId={agent.id}
+            cwd={agent.cwd}
+            pending={agent.pending.includes(item.id)}
+            current={agent.pending[0] === item.id}
+          />
         {:else if item.kind === 'turn'}
           <TurnCard
             {item}

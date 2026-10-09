@@ -63,7 +63,9 @@ Sous macOS, `Ctrl` devient `⌘` (sauf `Ctrl+Tab`, `⌘Tab` changeant d'applicat
 | `Ctrl+1` … `Ctrl+9` | aller au projet n |
 | `Ctrl+N` | nouvel agent |
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | agent suivant / précédent |
-| `Ctrl+J` | prochain agent en attente de réponse ou à voir (question, fin ou erreur pas encore vue) |
+| `Ctrl+J` | prochain agent en attente de réponse ou à voir (question, fin ou erreur pas encore vue) ; sa demande en attente prend le focus |
+| `Ctrl+Entrée` / `Ctrl+Shift+Entrée` (dans la conversation) | autoriser / toujours autoriser la demande d'autorisation en attente (le texte tapé puis `Entrée` la refuse avec ce message) |
+| `Alt+1` … `Alt+9` (dans la conversation) | choisir l'option n de la question en attente (coche ou décoche pour un choix multiple) ; `Ctrl+Entrée` valide quand la réponse est complète |
 | `Ctrl+T` | nouveau terminal |
 | `Ctrl+S` (dans l'éditeur) | enregistrer le fichier |
 | `Ctrl+Shift+B` | panneau des fichiers non commités (disposition classique ; toujours affiché dans l'autre) |
