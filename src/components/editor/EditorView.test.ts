@@ -1,5 +1,5 @@
 import { EditorView as CodeMirror } from '@codemirror/view';
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buffers } from '../../lib/editor/buffers.svelte';
@@ -657,6 +657,73 @@ describe('EditorView navigation', () => {
         return active();
       })
       .toBe('src/util.ts');
+  });
+
+  it('goes to the definition of an identifier of the file with Ctrl+click, and back with Alt+←', async () => {
+    const MAIN = 'function helper() {}\n\nconst x = helper();\n';
+    navBackend({ fs_read: (a) => text(a.path === 'tsconfig.json' ? '{}' : MAIN) });
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    const { container } = render(EditorView, { project: project() });
+    const view = await shown(container, 'function');
+    ctrlClick(view, MAIN.lastIndexOf('helper') + 1);
+    expect(await screen.findByText('Ln 1, Col 10')).toBeInTheDocument();
+    press(view, 'ArrowLeft', { altKey: true });
+    expect(await screen.findByText('Ln 3, Col 12')).toBeInTheDocument();
+  });
+
+  it('lists the definitions a search finds in the tree, its folder first, and opens the one picked where it is', async () => {
+    const texts: Record<string, string> = {
+      'src/app.ts': 'render(1);\n',
+      'lib/render.ts': '// draws\n\n\nexport function render(n: number) {}\n',
+      'tsconfig.json': '{}',
+    };
+    const be = navBackend({
+      fs_tree: () => ({
+        root: 'C:/code/demo-api',
+        files: ['lib/render.ts', 'src/app.ts', 'src/draw.ts', 'tsconfig.json'],
+        truncated: false,
+      }),
+      fs_read: (a) => text(texts[a.path] ?? ''),
+      code_search: () => ({
+        matches: [
+          { path: 'lib/render.ts', line: 4, col: 8, text: 'export function render(n: number) {}' },
+          { path: 'src/draw.ts', line: 2, col: 8, text: 'export const render = (n: number) => n;' },
+          // Gone since: not offered.
+          { path: 'src/gone.ts', line: 1, col: 1, text: 'function render() {}' },
+        ],
+        truncated: false,
+      }),
+    });
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    const { container } = render(EditorView, { project: project() });
+    ctrlClick(await shown(container, 'render'), 2);
+    const list = await screen.findByRole('listbox', { name: 'Définitions de « render »' });
+    expect(
+      within(list)
+        .getAllByRole('option')
+        .map((o) => o.textContent?.replace(/\s+/g, ' ').trim()),
+    ).toEqual(['src/draw.ts:2 export const render = (n: number) => n;', 'lib/render.ts:4 export function render(n: number) {}']);
+    expect(be.called('code_search')[0].args).toMatchObject({ projectId: 'p1', agentId: null, query: { regex: true, caseSensitive: true } });
+    await userEvent.keyboard('{ArrowDown}{Enter}');
+    await expect.poll(active).toBe('lib/render.ts');
+    expect(await screen.findByText('Ln 4, Col 17')).toBeInTheDocument();
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    // Through the history, as any jump.
+    press(await shown(container, '// draws'), 'ArrowLeft', { altKey: true });
+    await expect.poll(active).toBe('src/app.ts');
+    expect(await screen.findByText('Ln 1, Col 3')).toBeInTheDocument();
+  });
+
+  it('says when no definition of an identifier is found, and stays', async () => {
+    navBackend({
+      fs_read: (a) => text(a.path === 'tsconfig.json' ? '{}' : 'nowhere();\n'),
+      code_search: () => ({ matches: [], truncated: false }),
+    });
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    const { container } = render(EditorView, { project: project() });
+    ctrlClick(await shown(container, 'nowhere'), 2);
+    await expect.poll(() => app.toasts.map((t) => t.text)).toEqual(['Aucune définition trouvée pour « nowhere ».']);
+    expect(active()).toBe('src/app.ts');
   });
 
   it('skips, going back, a place whose file is gone from the tree', async () => {

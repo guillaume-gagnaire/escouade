@@ -93,7 +93,7 @@ const extOf = (path: string) => /\.([^./]+)$/.exec(path)?.[1].toLowerCase() ?? '
 const sets = new WeakMap<readonly string[], ReadonlySet<string>>();
 
 /** The tree's files as a set, made once per tree: a big one is looked up at each move of the mouse. */
-function fileSet(files: readonly string[]): ReadonlySet<string> {
+export function fileSet(files: readonly string[]): ReadonlySet<string> {
   let s = sets.get(files);
   if (!s) sets.set(files, (s = new Set(files)));
   return s;
@@ -296,6 +296,11 @@ function pyTarget(mod: string, from: string, files: ReadonlySet<string>): string
   }
   const candidates = name ? [`${join(base, name)}.py`, join(base, `${name}/__init__.py`)] : [join(base, '__init__.py')];
   return candidates.find((f) => files.has(f)) ?? (dots ? candidates[0] : null);
+}
+
+/** The file of the Python module `mod` (`.x`, `pkg.sub`) the file `from` imports, as its imports are followed. */
+export function pythonModule(mod: string, from: string, files: readonly string[]): string | null {
+  return pyTarget(mod, from, fileSet(files));
 }
 
 const pythonResolver: NavResolver = ({ state, pos, path, files }) => {

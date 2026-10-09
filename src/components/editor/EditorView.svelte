@@ -5,11 +5,12 @@
   import { buffers, sourceAgent } from '../../lib/editor/buffers.svelte';
   import { lineChanges, type LineChanges } from '../../lib/editor/changes';
   import { newFileError, newFilePath } from '../../lib/editor/create';
-  import type { NavFrom, NavTarget } from '../../lib/editor/goto';
+  import { definitionResolver } from '../../lib/editor/definitions';
+  import type { NavFollowed, NavFrom, NavTarget } from '../../lib/editor/goto';
   import { navHistory, type NavEntry } from '../../lib/editor/history';
   import { detectIndent } from '../../lib/editor/indent';
   import { languageLabel, loadLanguage } from '../../lib/editor/languages';
-  import { DEFAULT_ALIASES, linkResolvers, parseAliases, type Aliases } from '../../lib/editor/links';
+  import { DEFAULT_ALIASES, fileSet, linkResolvers, parseAliases, type Aliases } from '../../lib/editor/links';
   import { ancestors, treeRows, type FileStatus, type TreeRow } from '../../lib/editor/tree';
   import { trees } from '../../lib/editor/trees.svelte';
   import { basename, joinPath, plural, tildify } from '../../lib/format';
@@ -22,6 +23,7 @@
   import EditorTabs from './EditorTabs.svelte';
   import FileTree from './FileTree.svelte';
   import SourcePicker from './SourcePicker.svelte';
+  import TargetPicker from './TargetPicker.svelte';
 
   let { project }: { project: Project } = $props();
 
@@ -47,7 +49,23 @@
   let lastDir = $state<{ source: string; dir: string } | null>(null);
   /** The import aliases of the source shown, from its tsconfig.json or jsconfig.json: read when a link is looked for. */
   let aliases: Aliases = DEFAULT_ALIASES;
-  const resolvers = linkResolvers(() => aliases);
+  // The links first; else the definition of the identifier.
+  const resolvers = [
+    ...linkResolvers(() => aliases),
+    definitionResolver({
+      read: readSource,
+      search: (q) => api.codeSearch(project.id, sourceAgent(source), q),
+      aliases: () => aliases,
+    }),
+  ];
+
+  /** A file of the source shown, as the editor has it when it is open (with what is not saved yet); null when unreadable. */
+  async function readSource(path: string): Promise<string | null> {
+    const b = buffers.all[buffers.key(project.id, source, path)];
+    if (b?.kind === 'text') return b.text;
+    const f = await api.fsRead(project.id, sourceAgent(source), path).catch(() => null);
+    return f?.text ?? null;
+  }
 
   /**
    * Tree, git status and open files of the source. Only the refresh `pick`ing, the one a source is shown with, opens
@@ -271,15 +289,38 @@
     app.openEditor({ projectId: project.id, source, path: t.path, line: t.line ?? 1, col: t.col });
   }
 
-  /** A link followed: to the first of its targets the tree has, only those being files of the source. */
-  function follow(targets: NavTarget[], from: NavFrom) {
+  /** The places a followed identifier may lead to, listed under it, and where it was followed from. */
+  let picking = $state<{ targets: NavTarget[]; from: NavFrom; label: string; at: NavFollowed['rect'] } | null>(null);
+
+  /**
+   * A link or an identifier followed, to those of its targets that are files of the source (the file shown always is,
+   * even one the tree leaves out): straight to a single one, to the one picked from a list of several.
+   */
+  function follow(targets: NavTarget[], from: NavFrom, spot: NavFollowed) {
     // The editor closed meanwhile is not opened again.
     if (!alive) return;
-    const files = tree?.files ?? [];
-    const t = targets.find((x) => files.includes(x.path));
-    if (t) jump(t, from);
+    const files = fileSet(tree?.files ?? []);
+    const found = targets.filter((x) => x.path === from.path || files.has(x.path));
+    picking = null;
+    if (found.length === 1) jump(found[0], from);
+    else if (found.length) picking = { targets: found, from, label: spot.label, at: spot.rect };
     else if (targets.length) app.toast(`Fichier introuvable : ${targets[0].path}`);
+    else app.toast(`Aucune définition trouvée pour « ${spot.label} ».`);
   }
+
+  /** The place picked from the list: a jump from where the identifier was followed. */
+  function pick(t: NavTarget) {
+    const p = picking;
+    picking = null;
+    if (p) jump(t, p.from);
+  }
+
+  // The list goes with the file or the source it was made in.
+  $effect(() => {
+    void activePath;
+    void source;
+    picking = null;
+  });
 
   /** Back (or forward) in the history of the source shown, past the places whose file is gone from its tree. */
   function travel(back: boolean) {
@@ -445,6 +486,9 @@
             onback={() => travel(true)}
             onforward={() => travel(false)}
           />
+          {#if picking}
+            <TargetPicker targets={picking.targets} label={picking.label} at={picking.at} onpick={pick} onclose={() => (picking = null)} />
+          {/if}
           <div class="status mono">
             <span>Ln {cursor.line}, Col {cursor.col}</span>
             <span>{languageLabel(activePath)}</span>

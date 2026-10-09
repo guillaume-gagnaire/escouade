@@ -14,6 +14,8 @@ export interface NavTarget {
   path: string;
   line?: number;
   col?: number;
+  /** The text of that line, for a list of places to show. */
+  text?: string;
 }
 
 /** A stretch of text that leads elsewhere; where to is only worked out when it is followed. */
