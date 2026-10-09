@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { captureKeys, takeFocusOnRequest } from '../../lib/answer-keys.svelte';
+  import { captureKeys } from '../../lib/answer-keys.svelte';
   import { api } from '../../lib/ipc';
   import { keyLabel } from '../../lib/platform';
   import { answersHere, ariaEnter, enterAnswer } from '../../lib/shortcuts';
@@ -47,15 +47,10 @@
   }
 
   captureKeys(() => keys, onKeydown);
-  takeFocusOnRequest(
-    () => card,
-    () => agentId,
-    () => keys,
-  );
 </script>
 
 {#if pending}
-  <div class="card pending" data-testid="permission-pending" role="group" aria-label={title} tabindex="-1" bind:this={card}>
+  <div class="card pending" data-testid="permission-pending" role="group" aria-label={title} bind:this={card}>
     <div class="title">
       <span class="pulse" style="width:8px;height:8px"></span>
       {title}
@@ -106,10 +101,6 @@
     border: 1px solid var(--wait);
     background: var(--wait-soft);
     animation: ccFadeIn 0.2s ease-out;
-  }
-  .card:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
   }
   .title {
     display: flex;

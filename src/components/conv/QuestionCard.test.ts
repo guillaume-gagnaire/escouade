@@ -89,10 +89,7 @@ describe('QuestionCard edge cases', () => {
 });
 
 describe('QuestionCard keyboard', () => {
-  beforeEach(() => {
-    resetApp();
-    app.focusPending = null;
-  });
+  beforeEach(() => resetApp());
   // What a test added around the card (a terminal) must not keep the focus for the next one.
   afterEach(() => document.querySelectorAll('.xterm').forEach((n) => n.remove()));
 
@@ -244,25 +241,12 @@ describe('QuestionCard keyboard', () => {
     expect(screen.getByRole('button', { name: 'PostgreSQL' })).toHaveTextContent('Alt+1');
   });
 
-  it('gives the focus back to the message field once answered with the keyboard from the card', async () => {
+  it('gives the focus back to the message field once answered while it was on the card', async () => {
     fakeBackend();
     show();
-    screen.getByRole('group', { name: 'Claude attend ta réponse' }).focus();
+    screen.getByRole('button', { name: 'SQLite' }).focus();
     const focus = app.focusComposer;
     await alt('1');
     await waitFor(() => expect(app.focusComposer).toBe(focus + 1));
-  });
-
-  it('takes the focus when Ctrl+J brings its agent in, and only for its own agent', async () => {
-    fakeBackend();
-    app.focusPending = 'a2';
-    const { unmount } = show();
-    await tick();
-    expect(screen.getByRole('group', { name: 'Claude attend ta réponse' })).not.toHaveFocus();
-    unmount();
-    app.focusPending = 'a1';
-    show();
-    await waitFor(() => expect(screen.getByRole('group', { name: 'Claude attend ta réponse' })).toHaveFocus());
-    expect(app.focusPending).toBeNull();
   });
 });

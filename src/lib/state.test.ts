@@ -250,29 +250,13 @@ describe('AppState', () => {
     expect(app.agent?.id).toBe('a2');
   });
 
-  it('asks for the focus on the request of the waiting agent Ctrl+J goes to, not on its message field', async () => {
+  it('sends the focus to the message field of the waiting agent Ctrl+J goes to, whatever it waits for', async () => {
     const { emit } = await start();
     emit({ type: 'agent', agent: agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, status: 'waiting', pending: ['req-1'] }) });
+    const focus = app.focusComposer;
     app.nextWaiting();
     expect(app.agent?.id).toBe('a2');
-    expect(app.focusPending).toBe('a2');
-  });
-
-  it('keeps the focus on the message field when the agent Ctrl+J goes to has no request waiting', async () => {
-    const { emit } = await start();
-    emit({ type: 'agent', agent: agent({ id: 'b1', projectId: 'p2', name: 'landing', status: 'running' }) });
-    emit({ type: 'agent', agent: agent({ id: 'b1', projectId: 'p2', name: 'landing', status: 'done' }) });
-    app.nextWaiting();
-    expect(app.agent?.id).toBe('b1');
-    expect(app.focusPending).toBeNull();
-  });
-
-  it('drops a focus request left over when another agent is picked', async () => {
-    const { emit } = await start();
-    emit({ type: 'agent', agent: agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, status: 'waiting', pending: ['req-1'] }) });
-    app.nextWaiting();
-    app.selectAgent('a1');
-    expect(app.focusPending).toBeNull();
+    expect(app.focusComposer).toBe(focus + 1);
   });
 
   it('flags an agent that asks, finishes or fails out of sight until it is seen', async () => {

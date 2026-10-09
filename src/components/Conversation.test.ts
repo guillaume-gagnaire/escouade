@@ -501,10 +501,6 @@ describe('Conversation editor entry', () => {
 });
 
 describe('Conversation answers from the keyboard', () => {
-  beforeEach(() => {
-    app.focusPending = null;
-  });
-
   const perm = (id: string) => ({
     kind: 'permission',
     id,
@@ -605,41 +601,37 @@ describe('Conversation answers from the keyboard', () => {
   });
 
   describe('Ctrl+J', () => {
-    it('puts the focus on the request of the agent it goes to, not on its message field', async () => {
-      waiting([perm('r1')]);
-      const card = await screen.findByTestId('permission-pending');
-      field().focus();
-      app.nextWaiting();
-      await waitFor(() => expect(card).toHaveFocus());
-      expect(field()).not.toHaveFocus();
-      expect(app.focusPending).toBeNull();
-    });
-
-    it('does so for an agent brought in, whose conversation is still loading', async () => {
-      const a = agent({ id: `j${Math.random()}`, status: 'waiting', pending: ['q1'] });
-      resetApp({ projects: [project()], agents: [a] });
-      app.focusPending = a.id;
-      fakeBackend({ get_conversation: () => [ask('q1')] });
-      render(Conversation, { agent: a, project: project() });
-      const card = await screen.findByTestId('question-pending');
-      await waitFor(() => expect(card).toHaveFocus());
-      expect(field()).not.toHaveFocus();
-    });
-
-    it('puts the focus on the message field, as before, when no request waits', async () => {
-      waiting([]);
+    it('puts the focus on the message field of an agent with a request waiting, where typing then Enter refuses', async () => {
+      const { a, backend } = waiting([perm('r1')]);
+      await screen.findByTestId('permission-pending');
       field().blur();
       app.nextWaiting();
       await waitFor(() => expect(field()).toHaveFocus());
+      await userEvent.keyboard('Plutôt npm run clean{Enter}');
+      await waitFor(() => expect(backend.called('answer_permission')).toHaveLength(1));
+      expect(backend.called('answer_permission')[0].args).toEqual({
+        id: a.id,
+        requestId: 'r1',
+        decision: 'deny',
+        message: 'Plutôt npm run clean',
+      });
     });
 
-    it('gives the focus back to the message field once the request is answered from the card', async () => {
+    it('lets the keys that answer work from there', async () => {
       const { backend } = waiting([perm('r1')]);
-      const card = await screen.findByTestId('permission-pending');
+      await screen.findByTestId('permission-pending');
+      field().blur();
       app.nextWaiting();
-      await waitFor(() => expect(card).toHaveFocus());
+      await waitFor(() => expect(field()).toHaveFocus());
       await userEvent.keyboard('{Control>}{Enter}{/Control}');
       await waitFor(() => expect(backend.called('answer_permission')).toHaveLength(1));
+      expect(backend.called('answer_permission')[0].args).toMatchObject({ requestId: 'r1', decision: 'allow' });
+    });
+
+    it('puts the focus on the message field when no request waits', async () => {
+      waiting([]);
+      field().blur();
+      app.nextWaiting();
       await waitFor(() => expect(field()).toHaveFocus());
     });
   });

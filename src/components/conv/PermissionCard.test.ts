@@ -1,6 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
-import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { app } from '../../lib/state.svelte';
 import type { PermissionItem } from '../../lib/types';
@@ -73,10 +72,7 @@ describe('PermissionCard', () => {
 });
 
 describe('PermissionCard keyboard', () => {
-  beforeEach(() => {
-    resetApp();
-    app.focusPending = null;
-  });
+  beforeEach(() => resetApp());
   // What a test added around the card (a terminal, a sidebar) must not keep the focus for the next one.
   afterEach(() => document.querySelectorAll('.xterm, nav').forEach((n) => n.remove()));
 
@@ -185,35 +181,22 @@ describe('PermissionCard keyboard', () => {
     expect(screen.getByRole('button', { name: 'Autoriser' })).not.toHaveAttribute('aria-keyshortcuts');
   });
 
-  it('gives the focus back to the message field once answered with the keyboard from the card', async () => {
+  it('gives the focus back to the message field once answered while it was on the card', async () => {
     fakeBackend();
     show();
-    screen.getByRole('group', { name: 'Claude demande une autorisation' }).focus();
+    screen.getByRole('button', { name: 'Refuser' }).focus();
     const focus = app.focusComposer;
     await ctrl('{Enter}');
     expect(app.focusComposer).toBe(focus + 1);
   });
 
-  it('takes the focus when Ctrl+J brings its agent in', async () => {
-    fakeBackend();
-    app.focusPending = 'a1';
+  it('leaves the focus where it is when it was not on the card', async () => {
+    const backend = fakeBackend();
     show();
-    const card = screen.getByRole('group', { name: 'Claude demande une autorisation' });
-    await waitFor(() => expect(card).toHaveFocus());
-    expect(app.focusPending).toBeNull();
-  });
-
-  it('leaves the focus alone when Ctrl+J is for another agent or another request', async () => {
-    fakeBackend();
-    app.focusPending = 'a2';
-    const { unmount } = show();
-    await tick();
-    expect(screen.getByRole('group', { name: 'Claude demande une autorisation' })).not.toHaveFocus();
-    expect(app.focusPending).toBe('a2');
-    unmount();
-    app.focusPending = 'a1';
-    show({}, { current: false });
-    await tick();
-    expect(screen.getByRole('group', { name: 'Claude demande une autorisation' })).not.toHaveFocus();
+    const focus = app.focusComposer;
+    await ctrl('{Enter}');
+    await waitFor(() => expect(backend.called('answer_permission')).toHaveLength(1));
+    await new Promise((r) => setTimeout(r)); // lets the answer settle
+    expect(app.focusComposer).toBe(focus);
   });
 });
