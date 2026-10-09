@@ -36,7 +36,7 @@ Sous macOS, une app lancée depuis le Finder ou le Dock ne reçoit pas le `PATH`
 
 **Windows** : télécharge l'installeur `.exe` de la [dernière release](https://github.com/guillaume-gagnaire/escouade/releases/latest).
 
-**macOS** : télécharge le `.dmg` (universel, Apple Silicon et Intel) de la [dernière release](https://github.com/guillaume-gagnaire/escouade/releases/latest), ouvre-le et glisse Escouade dans Applications. Tant que l'app n'est pas signée avec un certificat Apple Developer ID, macOS bloque le premier lancement : clic droit sur l'app → « Ouvrir » (ou Réglages Système → Confidentialité et sécurité → « Ouvrir quand même »), ou en ligne de commande `xattr -dr com.apple.quarantine /Applications/Escouade.app`.
+**macOS** : télécharge le `.dmg` (universel, Apple Silicon et Intel) de la [dernière release](https://github.com/guillaume-gagnaire/escouade/releases/latest), ouvre-le et glisse Escouade dans Applications. Depuis la 1.5.4, l'app est signée avec un certificat Apple Developer ID et notarisée par Apple : macOS l'ouvre sans demander d'autorisation.
 
 Les versions suivantes s'installent depuis l'application (barre de statut → « Mise à jour disponible »).
 
