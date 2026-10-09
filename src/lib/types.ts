@@ -26,7 +26,10 @@ export interface Settings {
   integrations: IntegrationSettings;
 }
 
-/** Which events chime and show a system notification; the agent's tab and card flash all the same. */
+/**
+ * Which kinds of event chime and show a system notification. One switched off does neither; the agent's tab and card
+ * still blink, and the taskbar (the Dock) still signals it.
+ */
 export interface NotifyFor {
   /** « Questions et autorisations ». */
   questions: boolean;

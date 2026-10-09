@@ -41,10 +41,10 @@ fn one_line(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// "Autoriser Bash : npm test ?": the tool, and what it is asked to act on (the command, the file
-/// shown from the agent's folder, the URL, the search…), the whole in 120 characters.
-pub fn permission_body(tool: &str, input: &Value, cwd: &str) -> String {
-    let target = TOOL_TARGETS
+/// What a tool is asked to act on, on one line (a file shown from the agent's folder); empty when
+/// its input has none of the fields that tell it.
+fn tool_target(input: &Value, cwd: &str) -> String {
+    TOOL_TARGETS
         .iter()
         .find_map(|key| {
             let value = one_line(input[*key].as_str()?);
@@ -56,8 +56,19 @@ pub fn permission_body(tool: &str, input: &Value, cwd: &str) -> String {
             };
             (!shown.is_empty()).then_some(shown)
         })
-        .unwrap_or_default();
-    let head = format!("Autoriser {tool}");
+        .unwrap_or_default()
+}
+
+/// "Autoriser Bash : npm test ?": the tool, and what it is asked to act on (the command, the file
+/// shown from the agent's folder, the URL, the search…), the whole in 120 characters. A plan to
+/// approve is worded as the app words it: "Approuver le plan : <first line of the plan> ?".
+pub fn permission_body(tool: &str, input: &Value, cwd: &str) -> String {
+    let (head, target) = if tool == "ExitPlanMode" {
+        let plan = input["plan"].as_str().and_then(first_plain_line);
+        ("Approuver le plan".to_string(), plan.unwrap_or_default())
+    } else {
+        (format!("Autoriser {tool}"), tool_target(input, cwd))
+    };
     if target.is_empty() {
         return clip(&format!("{head} ?"), MAX_BODY);
     }
@@ -88,8 +99,14 @@ pub fn question_body(input: &Value) -> String {
 /// The first line of the agent's final reply, without Markdown, in 120 characters; "Tâche
 /// terminée" when it has no words.
 pub fn done_body(reply: &str) -> String {
+    first_plain_line(reply).map_or_else(|| "Tâche terminée".to_string(), |l| clip(&l, MAX_BODY))
+}
+
+/// The first line of `text` that says something, as plain words: blank lines, rules and fenced
+/// code blocks do not count.
+fn first_plain_line(text: &str) -> Option<String> {
     let mut in_code = false;
-    for line in reply.lines() {
+    for line in text.lines() {
         let line = line.trim();
         if line.starts_with("```") || line.starts_with("~~~") {
             in_code = !in_code;
@@ -100,10 +117,10 @@ pub fn done_body(reply: &str) -> String {
         }
         let plain = plain_line(line);
         if !plain.is_empty() {
-            return clip(&plain, MAX_BODY);
+            return Some(plain);
         }
     }
-    "Tâche terminée".to_string()
+    None
 }
 
 /// "Erreur : <reason>", the reason's first line, in 120 characters.
@@ -155,9 +172,26 @@ fn plain_line(line: &str) -> String {
     one_line(&strip_inline(rest))
 }
 
+/// Where, from `from`, a run of exactly `len` backticks begins: the end of a code span.
+fn closing_fence(chars: &[char], from: usize, len: usize) -> Option<usize> {
+    let mut at = from;
+    while at < chars.len() {
+        if chars[at] != '`' {
+            at += 1;
+            continue;
+        }
+        let run = chars[at..].iter().take_while(|x| **x == '`').count();
+        if run == len {
+            return Some(at);
+        }
+        at += run;
+    }
+    None
+}
+
 /// Inline Markdown as plain words: `[text](url)` and `![alt](url)` read as their text, the marks of
-/// code, bold, italic and strikethrough dropped. A star between spaces and an underscore inside a
-/// word (`snake_case`) are not marks.
+/// bold, italic and strikethrough dropped, the backticks of code spans too (their text is kept as
+/// it is). A star between spaces and an underscore inside a word (`snake_case`) are not marks.
 fn strip_inline(text: &str) -> String {
     let chars: Vec<char> = text.chars().collect();
     let mut out = String::with_capacity(text.len());
@@ -186,7 +220,20 @@ fn strip_inline(text: &str) -> String {
                     }
                 }
             }
-            '`' => i += 1,
+            '`' => {
+                // A code span is copied as it is, only its backticks go: what looks like emphasis
+                // or a link in it (`*.log`, `__init__`) is code. A span ends at a run of as many
+                // backticks as opened it; one that never ends loses its backticks alone.
+                let fence = chars[i..].iter().take_while(|x| **x == '`').count();
+                let body = i + fence;
+                match closing_fence(&chars, body, fence) {
+                    Some(close) => {
+                        out.extend(&chars[body..close]);
+                        i = close + fence;
+                    }
+                    None => i = body,
+                }
+            }
             '*' | '_' | '~' => {
                 let run = chars[i..].iter().take_while(|x| **x == c).count();
                 let prev = i.checked_sub(1).map(|p| chars[p]);
@@ -478,6 +525,39 @@ mod tests {
     }
 
     #[test]
+    fn a_plan_asks_for_its_approval_in_the_apps_words() {
+        // The first line of the plan, without Markdown.
+        assert_eq!(
+            permission_body(
+                "ExitPlanMode",
+                &json!({ "plan": "\n## Ajouter le **filtre** PDF\n\n1. Écrire le test\n2. Le coder" }),
+                "C:/p"
+            ),
+            "Approuver le plan : Ajouter le filtre PDF ?"
+        );
+        // No plan to read: the question alone.
+        assert_eq!(
+            permission_body("ExitPlanMode", &json!({}), "C:/p"),
+            "Approuver le plan ?"
+        );
+        assert_eq!(
+            permission_body("ExitPlanMode", &json!({ "plan": " \n---\n" }), "C:/p"),
+            "Approuver le plan ?"
+        );
+        // Cut like any other, the question mark kept.
+        let long = permission_body(
+            "ExitPlanMode",
+            &json!({ "plan": "Refaire ".repeat(40) }),
+            "C:/p",
+        );
+        assert_eq!(long.chars().count(), 120);
+        assert!(
+            long.starts_with("Approuver le plan : Refaire Refaire") && long.ends_with("… ?"),
+            "{long}"
+        );
+    }
+
+    #[test]
     fn a_question_is_its_own_text() {
         let input = json!({ "questions": [
             { "question": "Quelle base de données ?", "header": "Base", "options": [] },
@@ -547,6 +627,31 @@ mod tests {
         assert_eq!(
             plain("Renommé snake_case_name et 2 * 3"),
             "Renommé snake_case_name et 2 * 3"
+        );
+    }
+
+    #[test]
+    fn what_is_between_backticks_is_copied_as_it_is() {
+        // Stars and underscores in code are no emphasis; only the backticks go.
+        assert_eq!(
+            done_body("Ignore `*.log` et `src/**/*.ts` dans `__init__.py`."),
+            "Ignore *.log et src/**/*.ts dans __init__.py."
+        );
+        assert_eq!(
+            done_body("Appelle `a_b_c(*args)` !"),
+            "Appelle a_b_c(*args) !"
+        );
+        // Not read as a link either; a longer fence holds a single backtick.
+        assert_eq!(done_body("Voir `[a](b)`"), "Voir [a](b)");
+        assert_eq!(done_body("Écris ``a ` b`` ici"), "Écris a ` b ici");
+        // A backtick that never closes is just dropped, and the text after it is read as usual.
+        assert_eq!(
+            done_body("Reste `ouvert et **gras**"),
+            "Reste ouvert et gras"
+        );
+        assert_eq!(
+            question_body(&json!({ "questions": [{ "question": "Garder `*.tmp` ?" }] })),
+            "Garder *.tmp ?"
         );
     }
 

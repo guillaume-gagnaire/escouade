@@ -114,6 +114,10 @@ describe('SettingsModal', () => {
     ).toEqual(labels);
     for (const label of labels) expect(within(group).getByRole('switch', { name: label })).toHaveAttribute('aria-checked', 'true');
     expect(tab('Notifications')).not.toHaveClass('changed');
+    // Off, a type is silent outside the window; what blinks or flashes still does.
+    expect(group).toHaveTextContent(
+      /Désactivé : ni notification système ni carillon pour ce type ; l’onglet, la carte et (la barre des tâches|le Dock) signalent toujours l’agent\./,
+    );
 
     await userEvent.click(within(group).getByRole('switch', { name: 'Tâches terminées' }));
     expect(within(group).getByRole('switch', { name: 'Tâches terminées' })).toHaveAttribute('aria-checked', 'false');

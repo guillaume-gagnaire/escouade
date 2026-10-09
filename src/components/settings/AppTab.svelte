@@ -75,7 +75,9 @@
 {:else if tab === 'notifications'}
   <Group
     title="Me prévenir pour"
-    note="Décoché, un type de notification ne joue plus de son et n’affiche plus de notification système. L’onglet et la carte de l’agent clignotent quand même."
+    note="Désactivé : ni notification système ni carillon pour ce type ; l’onglet, la carte et {IS_MAC
+      ? 'le Dock'
+      : 'la barre des tâches'} signalent toujours l’agent."
   >
     <Row label="Questions et autorisations">
       <Switch label="Questions et autorisations" bind:on={s.notifyFor.questions} />

@@ -39,8 +39,9 @@ pub struct Settings {
     pub integrations: IntegrationSettings,
 }
 
-/// "Me prévenir pour": which events chime and show a system notification. Unchecked, one stays
-/// silent outside the window; the flashing of the agent's tab and card, and of the taskbar, stays.
+/// "Me prévenir pour": which kinds of event chime and show a system notification. A kind switched
+/// off does neither; the other signals stay: the agent's tab and card blink, and the taskbar
+/// flashes (the Dock bounces).
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct NotifyFor {

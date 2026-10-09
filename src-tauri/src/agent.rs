@@ -1468,6 +1468,23 @@ mod tests {
     }
 
     #[test]
+    fn a_plan_to_approve_notifies_in_the_apps_words() {
+        let mut a = rt();
+        let fx = can_use_tool(
+            &mut a,
+            "ExitPlanMode",
+            json!({"plan":"# Découper le module\n\n1. Extraire le parseur"}),
+        );
+        assert_eq!(
+            fx.notify,
+            Some(AgentAlert::new(
+                NotifyKind::Question,
+                "Approuver le plan : Découper le module ?"
+            ))
+        );
+    }
+
+    #[test]
     fn the_end_of_a_turn_notifies_with_the_first_line_of_the_final_reply() {
         let mut a = rt();
         a.push_user("u1", "Corrige", 0, &[], &mut Effects::default());

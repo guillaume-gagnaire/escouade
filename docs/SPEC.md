@@ -114,7 +114,7 @@ Dossier (+ Parcourir…), détection git (sinon `git init`), nom, aperçu d'ongl
 
 - Déclencheurs : question de Claude (AskUserQuestion / permission) et fin de tour.
 - Titre : « <projet> · <agent> ». Corps (120 caractères au plus) : autorisation « Autoriser <Outil> : <argument> ? » (la commande Bash, le fichier depuis le dossier de l'agent, l'URL…) ; question : le texte de la question ; fin de tour : la première ligne de la réponse finale, sans markdown, sinon « Tâche terminée » ; erreur : « Erreur : <raison> ».
-- Réglages › Notifications › « Me prévenir pour » : « Questions et autorisations », « Tâches terminées », « Erreurs », « Tickets (prêt à tester, bloqué) », toutes cochées par défaut. Une case décochée coupe le carillon et la notification système de ce type ; l'onglet et la carte de l'agent clignotent quand même.
+- Réglages › Notifications › « Me prévenir pour » : « Questions et autorisations », « Tâches terminées », « Erreurs », « Tickets (prêt à tester, bloqué) », tous activés par défaut. Un interrupteur désactivé coupe le carillon et la notification système de ce type ; l'onglet et la carte de l'agent clignotent quand même, et la barre des tâches (le Dock) signale toujours l'agent.
 - Kanban : « ATL-42 prêt à tester », « ATL-42 bloqué : <raison> » (clic → Kanban du projet) ; pas de notification par fin de tour d'un agent de ticket « En cours » (ses questions notifient).
 - Dans l'app : pastilles pulsantes (onglet, carte agent, barre de statut) + carillon du design (2 notes synthétisées), coupable via « ♪ On/Off ».
 - App en arrière-plan / tray : toast Windows (clic → ouvre l'agent) + clignotement barre des tâches + badge tray.
