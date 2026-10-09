@@ -2,6 +2,12 @@
 
 Les changements visibles d'Escouade, version par version. Les notes de chaque release GitHub (et de la mise à jour intégrée) reprennent la section de sa version.
 
+## [1.5.4] — 2026-10-10
+
+### Modifications
+
+- macOS : l'app est signée avec un certificat Apple Developer ID et notarisée par Apple. Au premier lancement, macOS ne la bloque plus : plus besoin de l'autoriser dans Réglages Système › Confidentialité et sécurité. Après cette mise à jour, macOS peut redemander une fois les autorisations déjà accordées à Escouade.
+
 ## [1.5.3] — 2026-10-07
 
 ### Corrections
