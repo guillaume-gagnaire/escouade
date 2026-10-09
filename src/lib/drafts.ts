@@ -58,15 +58,18 @@ function save(agentId: string) {
   if (text && readPref(pref(agentId)) !== text) writePref(pref(agentId), text);
 }
 
-// The window closing or reloading must not take the last keystrokes with it.
-if (typeof window !== 'undefined') {
-  window.addEventListener('pagehide', () => {
-    for (const [agentId, timer] of timers) {
-      clearTimeout(timer);
-      save(agentId);
-    }
-    timers.clear();
-  });
+/** Writes at once the drafts still waiting for the end of the typing. */
+export function flushDrafts() {
+  for (const [agentId, timer] of timers) {
+    clearTimeout(timer);
+    save(agentId);
+  }
+  timers.clear();
 }
+
+// The window closing or reloading, or the app about to restart for an update, must not take the
+// last keystrokes with it.
+if (typeof window !== 'undefined') window.addEventListener('pagehide', flushDrafts);
+app.onRestartWarned(flushDrafts);
 
 app.onAgentRemoved(forgetDraft);

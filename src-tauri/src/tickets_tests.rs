@@ -4372,3 +4372,65 @@ async fn an_isola_projects_ticket_reserves_no_port_and_is_told_of_isola() {
     // Its launch is isola's: nothing to prepare.
     assert!(h.core.agent_prepare_launch(&a.id).await.is_err());
 }
+
+// ---------- automatic restarts for an update ----------
+
+#[tokio::test]
+async fn a_ticket_being_started_holds_off_a_restart_until_its_agent_works() {
+    let h = harness("upd-ticket-start");
+    let (p, _) = h.project(false).await;
+    // From "En cours" to its agent's turn: its worktree made and its files copied with no agent
+    // yet, then its process started with the agent not at work yet.
+    let (stop, sampler) = h.sample_rest(|c| {
+        let doing = c.tickets.read().iter().any(|t| t.column == Column::Doing);
+        let working = c
+            .agents
+            .read()
+            .values()
+            .any(|a| a.lock().meta.status == AgentStatus::Running);
+        doing && !working
+    });
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Fichier [lent]", &[], 5))
+        .await
+        .unwrap();
+    wait_running(&h, &t.id).await;
+    stop.store(true, Ordering::Release);
+    let seen = sampler.join().unwrap();
+    // The mark first, then what a restart finds: the start never looks at rest.
+    let starting: Vec<_> = seen.iter().filter(|(_, starting, _)| *starting).collect();
+    assert!(!starting.is_empty(), "the start was never seen");
+    let rest = starting
+        .iter()
+        .filter(|(_, _, then)| then.is_none())
+        .count();
+    assert_eq!(rest, 0, "at rest in {rest} of {} samples", starting.len());
+}
+
+#[tokio::test]
+async fn a_validation_holds_off_a_restart_until_its_cleanup_is_over() {
+    let h = harness("upd-ticket-validate");
+    let (p, _) = h.project(false).await;
+    let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    let aid = t.agent_id.clone().unwrap();
+    // Done, its step over, and still cleaning up: its agent not archived yet, or its worktree
+    // still there.
+    let (stop, sampler) = h.sample_rest(move |c| {
+        let done = c.tickets.read().iter().any(|t| t.column == Column::Done);
+        let archived = c.agent(&aid).is_ok_and(|a| a.lock().meta.archived);
+        done && (!archived || wt.exists())
+    });
+    h.core.ticket_approve(&t.id).await.unwrap();
+    stop.store(true, Ordering::Release);
+    let seen = sampler.join().unwrap();
+    assert_eq!(h.ticket(&t.id).column, Column::Done);
+    // What a restart finds first, then the mark: the validation over, its cleanup is too.
+    let cleaning: Vec<_> = seen.iter().filter(|(_, cleaning, _)| *cleaning).collect();
+    assert!(!cleaning.is_empty(), "the cleanup was never seen");
+    let rest = cleaning
+        .iter()
+        .filter(|(first, _, _)| first.is_none())
+        .count();
+    assert_eq!(rest, 0, "at rest in {rest} of {} samples", cleaning.len());
+}

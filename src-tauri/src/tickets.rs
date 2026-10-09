@@ -540,6 +540,8 @@ impl<R: Runtime> Core<R> {
     /// "En cours" at once (no other pass takes it), then its agent and its first message. A start
     /// that fails blocks the ticket, which then holds no place: the next one is tried.
     async fn start_ticket(self: &Arc<Self>, project: &Project, id: &str) {
+        // From "En cours" to its agent's first turn, with no agent at work for a while.
+        let _working = self.working();
         let started = self.edit_ticket(id, |t| {
             if t.column != Column::Todo {
                 bail!("ce ticket est déjà parti");
@@ -984,6 +986,8 @@ impl<R: Runtime> Core<R> {
     /// with the reason ("Réessayer" runs it again). Refused while its agent works (its files would
     /// be committed mid-write) and while a validation of it runs (a second click).
     pub async fn ticket_approve(self: &Arc<Self>, id: &str) -> Result<()> {
+        // To the end of its cleanup (agent archived, worktree removed), after its step is over.
+        let _working = self.working();
         let t = self.ticket(id)?;
         if t.column != Column::Review {
             bail!("Ce ticket n'est pas à tester.");

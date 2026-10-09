@@ -136,6 +136,8 @@ class AppState {
   update = $state<UpdateInfo | null>(null);
   /** When the automatic restart for the update comes (the backend warned of it), if one is planned. */
   restartAt = $state<number | null>(null);
+  /** A version that did not install at the last try: told of once it is downloaded again. */
+  failedUpdate = $state<string | null>(null);
   focusComposer = $state(0);
   /**
    * Agents that asked a question, finished or failed while not on screen, and that the user
@@ -210,6 +212,8 @@ class AppState {
   private recipeHooks = new Set<(agentId: string) => void>();
   /** What is over when an agent's ticket goes "Terminé": its test launches. */
   private ticketDoneHooks = new Set<(agentId: string) => void>();
+  /** What must be written before the app restarts by itself for an update (the composers' drafts). */
+  private restartHooks = new Set<() => void>();
 
   /** `f` runs when the backend removes an agent, before the state forgets it. Returns what unregisters it. */
   onAgentRemoved(f: (agentId: string) => void) {
@@ -227,6 +231,12 @@ class AppState {
   onTicketDone(f: (agentId: string) => void) {
     this.ticketDoneHooks.add(f);
     return () => void this.ticketDoneHooks.delete(f);
+  }
+
+  /** `f` runs when the backend warns of an automatic restart, before the app stops. Returns what unregisters it. */
+  onRestartWarned(f: () => void) {
+    this.restartHooks.add(f);
+    return () => void this.restartHooks.delete(f);
   }
 
   /** Each hook on its own: one that throws neither stops the others nor what the state does next. */
@@ -267,6 +277,7 @@ class AppState {
     this.version = s.version;
     this.models = s.models;
     this.restartAt = s.restartAt ?? null;
+    this.failedUpdate = s.failedUpdate ?? null;
     if (s.installed) {
       const { version, notes } = s.installed;
       this.toast(`Escouade ${version} est installée.`, 'ok', {
@@ -368,6 +379,15 @@ class AppState {
         break;
       case 'updateRestart':
         this.restartAt = e.at;
+        if (e.at !== null) {
+          for (const f of this.restartHooks) {
+            try {
+              f();
+            } catch (err) {
+              console.error(err);
+            }
+          }
+        }
         break;
     }
   }

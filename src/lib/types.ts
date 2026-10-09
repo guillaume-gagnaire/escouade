@@ -692,6 +692,8 @@ export interface InitialState {
   installed?: InstalledUpdate | null;
   /** When the automatic restart planned for an update comes. */
   restartAt?: number | null;
+  /** A version that did not install at the last try. */
+  failedUpdate?: string | null;
 }
 
 /** An update installed: its version and its release notes (markdown). */

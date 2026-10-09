@@ -48,6 +48,8 @@ pub struct InitialState {
     installed: Option<crate::updates::Installed>,
     /// The automatic restart planned for an update: when it comes.
     restart_at: Option<i64>,
+    /// A version that did not install at the last try (the window offers to try again).
+    failed_update: Option<String>,
 }
 
 #[tauri::command]
@@ -85,8 +87,9 @@ pub fn subscribe(
         usage,
         git,
         terminals,
-        installed: crate::updates::take_installed(&core.data, &version),
+        installed: updates.take_installed(),
         restart_at: updates.restart_at(),
+        failed_update: updates.failed(),
         version,
         models,
         board_issues,
@@ -274,13 +277,10 @@ pub async fn delete_agent(
 #[tauri::command]
 pub async fn merge_agent(
     core: CoreState<'_>,
-    updates: State<'_, crate::updates::Updates>,
     id: String,
     squash: bool,
     switch_to_base: bool,
 ) -> Res<String> {
-    // The app does not restart for an update in the middle of it.
-    let _merging = updates.merging();
     core.merge_agent(&id, squash, switch_to_base)
         .await
         .map_err(|e| match e.downcast_ref::<NotOnBase>() {

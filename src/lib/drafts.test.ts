@@ -126,6 +126,13 @@ describe('drafts', () => {
       return (e: UiEvent) => channel!.onmessage(e);
     }
 
+    it('are written at once when the app is about to restart for an update', async () => {
+      const emit = await start();
+      setDraft('a1', { text: 'Presque redémarré', files: [] });
+      emit({ type: 'updateRestart', at: Date.now() + 30_000 });
+      expect(kept('a1')).toBe('Presque redémarré');
+    });
+
     it('are deleted with it, and only its own', async () => {
       const emit = await start();
       setDraft('a1', { text: 'reste', files: [] });

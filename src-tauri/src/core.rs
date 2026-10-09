@@ -241,6 +241,15 @@ pub struct AgentOptions {
     pub select: bool,
 }
 
+/// Work under way, counted in `Core::works` until dropped.
+pub(crate) struct Working<'a>(&'a AtomicUsize);
+
+impl Drop for Working<'_> {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
 pub struct Core<R: Runtime = Wry> {
     /// Itself, for what runs in the background from a method that only has `&self`.
     me: std::sync::Weak<Self>,
@@ -278,6 +287,9 @@ pub struct Core<R: Runtime = Wry> {
     pub quitting: AtomicBool,
     /// Files left unsaved in the editor, as the window last said.
     pub unsaved: AtomicUsize,
+    /// Work under way outside of an agent's turn that a restart would cut (`Core::working`): a
+    /// ticket being started, a validation and its cleanup, a message being delivered, a merge.
+    pub(crate) works: AtomicUsize,
     /// One scheduling pass of the board at a time.
     pub(crate) board_lock: tokio::sync::Mutex<()>,
     /// Agents whose turn the app's previous stop cut (active when saved): their tickets go on.
@@ -565,6 +577,7 @@ impl<R: Runtime> Core<R> {
             waiting: AtomicUsize::new(usize::MAX),
             quitting: AtomicBool::new(false),
             unsaved: AtomicUsize::new(0),
+            works: AtomicUsize::new(0),
             board_lock: tokio::sync::Mutex::new(()),
             cut_turns: Mutex::new(cut_turns),
             gh: RwLock::new(locate_gh()),
@@ -1448,6 +1461,12 @@ impl<R: Runtime> Core<R> {
     }
 
     /// A window that subscribes (started, or reloaded and so without the files it held) has no unsaved file yet.
+    /// Work under way that an automatic restart for an update waits for, while the guard lives.
+    pub(crate) fn working(&self) -> Working<'_> {
+        self.works.fetch_add(1, Ordering::AcqRel);
+        Working(&self.works)
+    }
+
     pub fn reset_unsaved(&self) {
         self.unsaved.store(0, Ordering::Release);
     }
@@ -1485,6 +1504,8 @@ impl<R: Runtime> Core<R> {
         text: String,
         attachments: Vec<Attachment>,
     ) -> Result<()> {
+        // Until its turn runs (its process started, the message delivered), it is under way.
+        let _working = self.working();
         // Refused before starting Claude: the composer keeps the message.
         let content = user_content(&text, &attachments)?;
         // Its new worktree is set up first: Claude would work in it meanwhile (an install running
@@ -1700,6 +1721,8 @@ impl<R: Runtime> Core<R> {
         project_id: &str,
         o: AgentOptions,
     ) -> Result<AgentView> {
+        // Its worktree is made and its files copied before the agent is one of the app's.
+        let _working = self.working();
         let _creating = self.create_lock.lock().await;
         let project = self.project(project_id)?;
         let settings = self.settings.read().clone();
@@ -2376,6 +2399,8 @@ impl<R: Runtime> Core<R> {
         squash: bool,
         switch_to_base: bool,
     ) -> Result<String> {
+        // The app does not restart for an update in the middle of it.
+        let _working = self.working();
         let h = self.agent(id)?;
         let (pid, name, wt) = {
             let rt = h.lock();

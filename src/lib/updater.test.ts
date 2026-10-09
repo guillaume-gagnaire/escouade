@@ -201,6 +201,25 @@ describe('checkForUpdate', () => {
     expect(app.toasts.at(-1)?.text).toContain('Téléchargement de la mise à jour impossible');
   });
 
+  it('tells of a version that did not install at the last try, once it is ready again, with a way to try again', async () => {
+    app.failedUpdate = '1.6.0';
+    server.check.mockResolvedValueOnce(release('1.6.0'));
+    await checkForUpdate();
+    await expect.poll(() => app.update?.ready).toBe(true);
+    const toast = app.toasts.at(-1)!;
+    expect(toast).toMatchObject({ text: 'La mise à jour vers 1.6.0 n’a pas pu s’installer.', kind: 'error' });
+    expect(toast.action?.label).toBe('Réessayer');
+    toast.action!.onClick();
+    expect(app.modal).toEqual({ kind: 'update' });
+
+    // Another version says nothing of it.
+    app.toasts = [];
+    server.check.mockResolvedValueOnce(release('1.7.0'));
+    await checkForUpdate();
+    await expect.poll(() => app.update).toMatchObject({ version: '1.7.0', ready: true });
+    expect(app.toasts).toEqual([]);
+  });
+
   it('says nothing when an automatic check fails, but tells the user who asked', async () => {
     server.check.mockRejectedValue(new Error('offline'));
     expect(await checkForUpdate()).toBe(false);

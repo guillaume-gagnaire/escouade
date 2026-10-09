@@ -1,7 +1,9 @@
 import { render, screen } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { forgetDraft, setDraft } from '../../lib/drafts';
 import { buffers } from '../../lib/editor/buffers.svelte';
+import { readPref } from '../../lib/prefs';
 import { app } from '../../lib/state.svelte';
 import { agent, fakeBackend, resetApp } from '../../test/ipc';
 import UpdateModal from './UpdateModal.svelte';
@@ -76,26 +78,44 @@ describe('UpdateModal', () => {
     expect(screen.getByText('Enregistre d’abord tes fichiers : 1 fichier n’est pas enregistré.')).toBeInTheDocument();
   });
 
-  it('says the agents at work go on after the restart, which stays possible', () => {
+  it('says what a restart does to the agents at work or waiting for an answer, and stays possible', () => {
     resetApp({
       agents: [
         agent({ id: 'a1', status: 'running' }),
-        agent({ id: 'a2', status: 'running' }),
+        agent({ id: 'a2', status: 'waiting' }),
         agent({ id: 'a3', status: 'running', archived: true }),
         agent({ id: 'a4', status: 'done' }),
       ],
     });
     fakeBackend();
     render(UpdateModal, { version: '1.6.0', notes: NOTES });
-    expect(screen.getByText('2 agents travaillent : ils reprendront après le redémarrage.')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        '2 agents travaillent ou attendent ta réponse : leur tour en cours sera interrompu. Les agents de ticket reprennent d’eux-mêmes ; les autres attendent ton prochain message.',
+      ),
+    ).toBeInTheDocument();
     expect(restartButton()).toBeEnabled();
   });
 
   it('says it of a single agent too', () => {
-    resetApp({ agents: [agent({ id: 'a1', status: 'running' })] });
+    resetApp({ agents: [agent({ id: 'a1', status: 'waiting' })] });
     fakeBackend();
     render(UpdateModal, { version: '1.6.0', notes: NOTES });
-    expect(screen.getByText('1 agent travaille : il reprendra après le redémarrage.')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        '1 agent travaille ou attend ta réponse : son tour en cours sera interrompu. S’il travaille sur un ticket, il reprend de lui-même ; sinon, il attend ton prochain message.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps what is typed in the composers before the app restarts', async () => {
+    let written: string | null = null;
+    fakeBackend({ update_restart: () => void (written = readPref('draft.a1')) });
+    setDraft('a1', { text: 'Pas encore envoyé', files: [] });
+    render(UpdateModal, { version: '1.6.0', notes: NOTES });
+    await userEvent.click(restartButton());
+    expect(written).toBe('Pas encore envoyé');
+    forgetDraft('a1');
   });
 
   it('shows the notes of the version installed, with nothing to restart', async () => {

@@ -9,10 +9,18 @@ use crate::paths::{test_dir, DataDir};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::test::{mock_app, MockRuntime};
+
+/// One sample of `Harness::sample_rest`: what stops an automatic restart, the mark, then again.
+pub(crate) type RestSample<T> = (
+    Option<crate::updates::Busy>,
+    T,
+    Option<crate::updates::Busy>,
+);
 
 pub(crate) struct Harness {
     pub(crate) core: Arc<Core<MockRuntime>>,
@@ -127,6 +135,33 @@ impl Harness {
 
     pub(crate) fn agent(&self, id: &str) -> AgentMeta {
         self.core.agent(id).unwrap().lock().meta.clone()
+    }
+
+    /// Samples, about every millisecond until the flag returned is set (30 s at most), what an
+    /// automatic restart would find (`updates::busy`) just before and just after what `mark`
+    /// says of that moment.
+    pub(crate) fn sample_rest<T: Send + 'static>(
+        &self,
+        mark: impl Fn(&Core<MockRuntime>) -> T + Send + 'static,
+    ) -> (Arc<AtomicBool>, std::thread::JoinHandle<Vec<RestSample<T>>>) {
+        use crate::updates::{busy, snapshot, Updates};
+        let stop = Arc::new(AtomicBool::new(false));
+        let (core, done) = (self.core.clone(), stop.clone());
+        let sampler = std::thread::spawn(move || {
+            // No window in tests: only what is under way counts.
+            let u = Updates::default();
+            let rest = |c: &Core<MockRuntime>| busy(&snapshot(c, &u, now_ms()));
+            let started = std::time::Instant::now();
+            let mut seen = Vec::new();
+            while !done.load(Ordering::Acquire) && started.elapsed() < Duration::from_secs(30) {
+                let before = rest(&core);
+                let m = mark(&core);
+                seen.push((before, m, rest(&core)));
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            seen
+        });
+        (stop, sampler)
     }
 
     pub(crate) fn items(&self, id: &str) -> Vec<Value> {

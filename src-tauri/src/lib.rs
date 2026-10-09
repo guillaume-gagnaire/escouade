@@ -132,6 +132,12 @@ pub fn run() {
     #[cfg(unix)]
     shellenv::adopt_login_path();
     paths::migrate_app_folders();
+    // What the last stop for an update left: the window comes back as it was then.
+    let after_update = updates::take_note(
+        &paths::DataDir::new(paths::default_data_dir()),
+        env!("CARGO_PKG_VERSION"),
+    );
+    let window = updates::AfterUpdate::window(&after_update);
     let mut builder = tauri::Builder::default();
     // Sandboxed runs (end-to-end tests, demos) must not hand over to an instance the user
     // already has open.
@@ -152,25 +158,40 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build());
     #[cfg(target_os = "macos")]
     let builder = builder.plugin(tauri_plugin_notification::init());
+    // Restarted by itself behind another app, it does not take the focus from it.
+    #[cfg(target_os = "macos")]
+    let builder = builder.activate_ignoring_other_apps(window == updates::Window::Front);
     builder
-        .setup(|app| {
+        .setup(move |app| {
             init_logging();
             for note in paths::take_migration_notes() {
                 log::info!("migration: {note}");
             }
             log::info!("Escouade {} starting", app.package_info().version);
+            if let Some(updates::AfterUpdate::Failed(version)) = &after_update {
+                log::warn!("Escouade {version} did not install: the app still runs this version");
+            }
             let (core, git_rx) = Core::load(
                 app.handle().clone(),
                 paths::DataDir::new(paths::default_data_dir()),
             );
             app.manage(core.clone());
-            app.manage(updates::Updates::default());
+            app.manage(updates::Updates::started(after_update));
             build_tray(app)?;
             core.start(git_rx);
             updates::watch(app.handle().clone());
             if let Some(w) = app.get_webview_window("main") {
-                let _ = w.show();
-                let _ = w.set_focus();
+                match window {
+                    updates::Window::Front => {
+                        let _ = w.show();
+                        let _ = w.set_focus();
+                    }
+                    updates::Window::Behind => {
+                        let _ = w.show();
+                    }
+                    // Closed to the tray when the app restarted for an update: it stays there.
+                    updates::Window::Hidden => {}
+                }
             }
             Ok(())
         })
@@ -270,6 +291,14 @@ pub fn run() {
             tauri::RunEvent::Exit => {
                 if let Some(core) = app.try_state::<Arc<Core>>() {
                     if !core.quitting.load(Ordering::Acquire) {
+                        // macOS: Cmd+Q, the app menu's and the Dock's « Quitter » come here
+                        // straight, with no exit request first: the update ready installs now.
+                        #[cfg(target_os = "macos")]
+                        {
+                            if updates::install_at_exit(app) {
+                                return;
+                            }
+                        }
                         core.shutdown();
                     }
                 }

@@ -2,7 +2,7 @@
 //! xterm.js.
 
 use crate::job::Job;
-use crate::model::Settings;
+use crate::model::{now_ms, Settings};
 use anyhow::{anyhow, Context, Result};
 use parking_lot::Mutex;
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
@@ -10,6 +10,7 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Serialize)]
@@ -37,6 +38,19 @@ struct Term {
     /// A launch command's whole process tree, including what it starts outside its console:
     /// killed when the terminal goes.
     _job: Option<Job>,
+    /// A launch command (or a step of a test launch), not an interactive shell.
+    launch: bool,
+    /// When it last had input or output (ms).
+    io_at: Arc<AtomicI64>,
+}
+
+/// What runs in the terminals, as an automatic restart for an update goes.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Activity {
+    /// Launch commands (and steps of test launches) still running.
+    pub launches: usize,
+    /// When an interactive terminal last had input or output (ms), if one is open.
+    pub shell_io_at: Option<i64>,
 }
 
 #[derive(Default, Clone)]
@@ -376,6 +390,7 @@ impl PtyManager {
         let mut reader = pair.master.try_clone_reader().map_err(|e| anyhow!("{e}"))?;
         let writer = pair.master.take_writer().map_err(|e| anyhow!("{e}"))?;
         let id = info.id.clone();
+        let io_at = Arc::new(AtomicI64::new(now_ms()));
         self.terms.lock().insert(
             id.clone(),
             Term {
@@ -384,6 +399,8 @@ impl PtyManager {
                 writer,
                 killer,
                 _job: job,
+                launch: command.is_some(),
+                io_at: io_at.clone(),
             },
         );
 
@@ -392,7 +409,10 @@ impl PtyManager {
             loop {
                 match reader.read(&mut buf) {
                     Ok(0) | Err(_) => break,
-                    Ok(n) => on_data(buf[..n].to_vec()),
+                    Ok(n) => {
+                        io_at.store(now_ms(), Ordering::Release);
+                        on_data(buf[..n].to_vec())
+                    }
                 }
             }
         });
@@ -412,6 +432,7 @@ impl PtyManager {
     pub fn write(&self, id: &str, data: &[u8]) -> Result<()> {
         let mut terms = self.terms.lock();
         let t = terms.get_mut(id).ok_or_else(|| anyhow!("terminal fermé"))?;
+        t.io_at.store(now_ms(), Ordering::Release);
         t.writer.write_all(data)?;
         t.writer.flush()?;
         Ok(())
@@ -436,6 +457,19 @@ impl PtyManager {
         let term = self.terms.lock().remove(id);
         if let Some(mut t) = term {
             let _ = t.killer.kill();
+        }
+    }
+
+    /// The launch commands running, and the interactive terminals' last input or output.
+    pub fn activity(&self) -> Activity {
+        let terms = self.terms.lock();
+        Activity {
+            launches: terms.values().filter(|t| t.launch).count(),
+            shell_io_at: terms
+                .values()
+                .filter(|t| !t.launch)
+                .map(|t| t.io_at.load(Ordering::Acquire))
+                .max(),
         }
     }
 
@@ -1161,5 +1195,95 @@ mod run_cwd_tests {
         );
         let err = run_cwd(&root, "api").unwrap_err().to_string();
         assert!(err.contains("api"), "{err}");
+    }
+}
+
+#[cfg(test)]
+mod activity_tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    /// A shell of this machine that runs a launch command the way the app does.
+    fn shell() -> Option<ShellInfo> {
+        detect_shells(&Settings::default())
+            .into_iter()
+            .find(|s| matches!(s.id.as_str(), "pwsh" | "powershell" | "bash" | "zsh"))
+    }
+
+    fn info(id: &str, shell: &ShellInfo) -> TermInfo {
+        TermInfo {
+            id: id.into(),
+            project_id: "p".into(),
+            name: id.into(),
+            shell: shell.id.clone(),
+        }
+    }
+
+    #[test]
+    fn a_launch_counts_while_it_runs_and_a_terminal_by_its_last_input_or_output() {
+        let _one = one_shell_at_a_time();
+        let Some(sh) = shell() else {
+            eprintln!("no shell found: skipped");
+            return;
+        };
+        let pty = PtyManager::default();
+        let cwd = std::env::temp_dir().to_string_lossy().to_string();
+        assert_eq!(pty.activity(), Activity::default());
+
+        let pause = match sh.id.as_str() {
+            "pwsh" | "powershell" => "Start-Sleep -Milliseconds 1500",
+            _ => "sleep 1.5",
+        };
+        let ended = Arc::new(Mutex::new(false));
+        let done = ended.clone();
+        pty.spawn_command(
+            info("act-run", &sh),
+            &sh,
+            "",
+            &cwd,
+            (80, 24),
+            vec![],
+            1,
+            pause,
+            |_| {},
+            move |_| *done.lock() = true,
+        )
+        .unwrap();
+        // A launch is no interactive terminal: it counts while it runs, whatever it prints.
+        assert_eq!(
+            pty.activity(),
+            Activity {
+                launches: 1,
+                shell_io_at: None
+            }
+        );
+        let start = Instant::now();
+        while !*ended.lock() {
+            assert!(start.elapsed() < Duration::from_secs(60), "did not end");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(pty.activity().launches, 0);
+
+        let opened = now_ms();
+        pty.spawn(
+            info("act-shell", &sh),
+            &sh,
+            "",
+            &cwd,
+            (80, 24),
+            vec![],
+            |_| {},
+            |_| {},
+        )
+        .unwrap();
+        let first = pty.activity().shell_io_at.expect("a terminal open");
+        assert!(first >= opened);
+        std::thread::sleep(Duration::from_millis(30));
+        let typed = now_ms();
+        pty.write("act-shell", b" ").unwrap();
+        assert!(pty.activity().shell_io_at.unwrap() >= typed);
+        assert_eq!(pty.activity().launches, 0);
+        pty.kill("act-shell");
+        assert_eq!(pty.activity(), Activity::default());
     }
 }

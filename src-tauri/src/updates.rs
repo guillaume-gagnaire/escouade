@@ -16,8 +16,9 @@ use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::future::Future;
+use std::path::Path;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Manager, Runtime};
@@ -220,8 +221,13 @@ pub struct Snapshot {
     pub setups: usize,
     /// Tickets being validated (their merge, pull request or push).
     pub validations: usize,
-    /// Merges asked for by hand (« Merger »).
-    pub merges: usize,
+    /// Work under way outside of a turn (`Core::working`): a ticket being started, a validation
+    /// being cleaned up, a message being delivered, a merge asked for by hand.
+    pub works: usize,
+    /// Launch commands and steps of test launches still running.
+    pub launches: usize,
+    /// Since an integrated terminal's last input or output, in ms (`i64::MAX` without one).
+    pub terminal_quiet: i64,
     /// A test launch is being prepared or started.
     pub testing: bool,
     /// Files the editor holds unsaved.
@@ -241,7 +247,9 @@ pub enum Busy {
     Question,
     Setup,
     Validation,
-    Merge,
+    Work,
+    Launch,
+    Terminal,
     Testing,
     Unsaved,
     Modal,
@@ -256,7 +264,11 @@ pub fn busy(s: &Snapshot) -> Option<Busy> {
         (s.questions > 0, Busy::Question),
         (s.setups > 0, Busy::Setup),
         (s.validations > 0, Busy::Validation),
-        (s.merges > 0, Busy::Merge),
+        (s.works > 0, Busy::Work),
+        // A dev server, a watcher, a test launch's step: running, whatever they print.
+        (s.launches > 0, Busy::Launch),
+        // An idle terminal does not count: one used lately may be running something.
+        (s.terminal_quiet < AWAY, Busy::Terminal),
         (s.testing, Busy::Testing),
         (s.unsaved > 0, Busy::Unsaved),
         (s.modal, Busy::Modal),
@@ -288,8 +300,10 @@ pub struct Updates {
     installing: AtomicBool,
     presence: Mutex<Presence>,
     plan: Mutex<Plan>,
-    /// Merges asked for by hand under way.
-    merges: AtomicUsize,
+    /// The update installed since the last start, for the window (told once).
+    installed: Mutex<Option<Installed>>,
+    /// A version that did not install at the last try: no automatic restart for it.
+    failed: Mutex<Option<String>>,
 }
 
 impl Default for Updates {
@@ -305,17 +319,9 @@ impl Default for Updates {
                 ..Presence::default()
             }),
             plan: Mutex::default(),
-            merges: AtomicUsize::new(0),
+            installed: Mutex::default(),
+            failed: Mutex::default(),
         }
-    }
-}
-
-/// A merge asked for by hand, under way until dropped.
-pub struct Merging<'a>(&'a AtomicUsize);
-
-impl Drop for Merging<'_> {
-    fn drop(&mut self) {
-        self.0.fetch_sub(1, Ordering::AcqRel);
     }
 }
 
@@ -406,10 +412,36 @@ impl Updates {
         plan.at.take().is_some()
     }
 
-    /// A merge asked for by hand, under way while the guard lives.
-    pub fn merging(&self) -> Merging<'_> {
-        self.merges.fetch_add(1, Ordering::AcqRel);
-        Merging(&self.merges)
+    /// What the note of the last install said at this start (`take_note`).
+    pub fn started(after: Option<AfterUpdate>) -> Self {
+        let u = Self::default();
+        match after {
+            Some(AfterUpdate::Installed(installed, _)) => *u.installed.lock() = Some(installed),
+            Some(AfterUpdate::Failed(version)) => *u.failed.lock() = Some(version),
+            None => {}
+        }
+        u
+    }
+
+    /// The update installed since the last start, told once.
+    pub fn take_installed(&self) -> Option<Installed> {
+        self.installed.lock().take()
+    }
+
+    /// The version that did not install at the last try, if any.
+    pub fn failed(&self) -> Option<String> {
+        self.failed.lock().clone()
+    }
+
+    /// The app may restart by itself (`setting`: « Installer les mises à jour automatiquement »):
+    /// an update is ready, no install is under way, and it is not one that failed to install.
+    pub fn restart_wanted(&self, setting: bool) -> bool {
+        let failed = self.failed.lock().clone();
+        setting
+            && !self.installing.load(Ordering::Acquire)
+            && self
+                .ready()
+                .is_some_and(|r| failed.as_deref() != Some(r.version.as_str()))
     }
 }
 
@@ -477,7 +509,10 @@ pub fn snapshot<R: Runtime>(core: &Core<R>, updates: &Updates, now: i64) -> Snap
         .iter()
         .filter(|t| t.step.is_some())
         .count();
-    s.merges = updates.merges.load(Ordering::Acquire);
+    s.works = core.works.load(Ordering::Acquire);
+    let terminals = core.pty.activity();
+    s.launches = terminals.launches;
+    s.terminal_quiet = terminals.shell_io_at.map_or(i64::MAX, |at| now - at);
     s.unsaved = core.unsaved.load(Ordering::Acquire);
     let presence = *updates.presence.lock();
     s.testing = presence.testing;
@@ -549,16 +584,61 @@ pub struct Installed {
     pub notes: String,
 }
 
+/// How the window was when the app stopped for an update: the app restarted for it brings it
+/// back so, neither shown nor taking the focus when it was not.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum Window {
+    /// On screen and in front (or nothing to go by): shown and focused.
+    #[default]
+    Front,
+    /// On screen behind another app's window: shown, not focused.
+    Behind,
+    /// Closed to the tray or minimized: left so.
+    Hidden,
+}
+
+/// The note written before an install (`install_ready`), read at the next start (`take_note`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct Note {
+    version: String,
+    notes: String,
+    /// Not in a note written before it was noted: in front.
+    #[serde(default)]
+    window: Window,
+}
+
+/// What the note of the last install says at this start.
+#[derive(Debug, Clone, PartialEq)]
+pub enum AfterUpdate {
+    /// The app runs the version it stopped for, its window to be as it was.
+    Installed(Installed, Window),
+    /// It still runs another one: that version did not install.
+    Failed(String),
+}
+
+impl AfterUpdate {
+    /// How the window comes back at this start.
+    pub fn window(after: &Option<Self>) -> Window {
+        match after {
+            Some(Self::Installed(_, window)) => *window,
+            _ => Window::Front,
+        }
+    }
+}
+
 /// Installs the update ready, the app stopped cleanly first (`Core::shutdown`: its agents and
-/// terminals stop, its state is saved) and the update noted for the next start
-/// (`take_installed`). With `relaunch`, the app starts again on it, else it stays closed:
-/// `leave` restarts or closes it once the update is in place (`apply`). False when there is
-/// nothing to install, or an install is under way already; an error when it failed with the app
-/// still running.
+/// terminals stop, its state is saved) and the update noted for the next start (`take_note`),
+/// with how the `window` is now. With `relaunch`, the app starts again on it, else it stays
+/// closed: `leave` restarts or closes it once the update is in place (`apply`). False when there
+/// is nothing to install, or an install is under way already; an error when it failed with the
+/// app still running.
 pub fn install_ready<R: Runtime>(
     core: &Arc<Core<R>>,
     updates: &Updates,
     relaunch: bool,
+    window: Window,
     leave: impl FnOnce(bool),
 ) -> Result<bool> {
     let Some(ready) = updates.ready() else {
@@ -568,9 +648,10 @@ pub fn install_ready<R: Runtime>(
         return Ok(false);
     }
     let note = core.data.update_note_file();
-    let noted = serde_json::to_vec(&Installed {
+    let noted = serde_json::to_vec(&Note {
         version: ready.version.clone(),
         notes: ready.notes.clone(),
+        window,
     })
     .map_err(anyhow::Error::from)
     .and_then(|bytes| Ok(crate::paths::write_atomic(&note, &bytes)?));
@@ -595,10 +676,11 @@ pub fn install_ready<R: Runtime>(
 }
 
 /// « Redémarrer maintenant », or the automatic restart: the update ready installs and the app
-/// starts again on it. Never while the editor holds unsaved files.
+/// starts again on it, its `window` as it is now. Never while the editor holds unsaved files.
 pub fn restart<R: Runtime>(
     core: &Arc<Core<R>>,
     updates: &Updates,
+    window: Window,
     leave: impl FnOnce(bool),
 ) -> Result<()> {
     match core.unsaved.load(Ordering::Acquire) {
@@ -606,20 +688,71 @@ pub fn restart<R: Runtime>(
         1 => bail!("Enregistre d'abord tes fichiers : 1 fichier n'est pas enregistré."),
         n => bail!("Enregistre d'abord tes fichiers : {n} fichiers ne sont pas enregistrés."),
     }
-    if !install_ready(core, updates, true, leave)? {
+    if !install_ready(core, updates, true, window, leave)? {
         bail!("Aucune mise à jour n'est prête : recherche-la de nouveau.");
     }
     Ok(())
 }
 
-/// The note of the update the app stopped for (`install_ready`), taken once: when the app now
-/// runs its version (an install that failed leaves the note of a version it does not run).
-pub fn take_installed(data: &DataDir, version: &str) -> Option<Installed> {
+/// The note of the last install (`install_ready`), taken once: the app runs its version (the
+/// window is told of it), or still another one (that version did not install).
+pub fn take_note(data: &DataDir, version: &str) -> Option<AfterUpdate> {
     let file = data.update_note_file();
     let bytes = std::fs::read(&file).ok()?;
     let _ = std::fs::remove_file(&file);
-    let note: Installed = serde_json::from_slice(&bytes).ok()?;
-    (note.version == version).then_some(note)
+    let note: Note = serde_json::from_slice(&bytes).ok()?;
+    Some(if note.version == version {
+        AfterUpdate::Installed(
+            Installed {
+                version: note.version,
+                notes: note.notes,
+            },
+            note.window,
+        )
+    } else {
+        AfterUpdate::Failed(note.version)
+    })
+}
+
+/// What « Quitter » did (`closing`).
+#[derive(Debug, PartialEq, Eq)]
+pub enum Closing {
+    /// The app stopped for the update ready, which `leave` closed.
+    Installed,
+    /// The app is to close as usual: nothing to install, or an install that failed with the app
+    /// still running.
+    Close,
+    /// An install under way still runs after the wait: it ends the app itself, nothing else may.
+    Wait,
+}
+
+/// « Quitter »: the update ready installs without the app starting again. One installing
+/// already (« Redémarrer maintenant », the automatic restart) ends the app itself: waited for,
+/// `wait` at most, never closed under it.
+pub fn closing<R: Runtime>(
+    core: &Arc<Core<R>>,
+    updates: &Updates,
+    wait: Duration,
+    leave: impl FnOnce(bool),
+) -> Closing {
+    match install_ready(core, updates, false, Window::Front, leave) {
+        Ok(true) => return Closing::Installed,
+        Ok(false) => {}
+        Err(e) => {
+            log::error!("update not installed when closing: {e:#}");
+            return Closing::Close;
+        }
+    }
+    // Nothing to install, or one installing already, which ends the app itself.
+    let until = std::time::Instant::now() + wait;
+    while updates.installing.load(Ordering::Acquire) {
+        if std::time::Instant::now() >= until {
+            return Closing::Wait;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    // Not installing (any more): it failed with the app still running, which closes as usual.
+    Closing::Close
 }
 
 /// Restarts or closes the app once its update is in place, or after an install that failed once
@@ -638,24 +771,44 @@ fn leave<R: Runtime>(app: &AppHandle<R>, env: &tauri::Env, relaunch: bool) {
     app.exit(0);
 }
 
+/// How the main window is now.
+fn window_now<R: Runtime>(app: &AppHandle<R>) -> Window {
+    match app.get_webview_window("main") {
+        Some(w) if w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(false) => {
+            if w.is_focused().unwrap_or(false) {
+                Window::Front
+            } else {
+                Window::Behind
+            }
+        }
+        Some(_) => Window::Hidden,
+        None => Window::Front,
+    }
+}
+
 /// « Redémarrer maintenant », or the automatic restart, off the async runtime (the stop and the
 /// install block).
 pub async fn restart_now<R: Runtime>(app: AppHandle<R>) -> Result<()> {
     tauri::async_runtime::spawn_blocking(move || {
         let core = app.state::<Arc<Core<R>>>().inner().clone();
         let env = app.env();
-        restart(&core, &app.state::<Updates>(), |relaunch| {
+        let window = window_now(&app);
+        restart(&core, &app.state::<Updates>(), window, |relaunch| {
             leave(&app, &env, relaunch)
         })
     })
     .await?
 }
 
+/// How long « Quitter » waits for an install under way to end the app.
+const QUIT_WAIT: Duration = Duration::from_secs(120);
+
 /// « Quitter »: the app stops; with an update ready, it installs silently and the app stays
-/// closed.
+/// closed (`closing`).
 pub fn quit<R: Runtime>(app: &AppHandle<R>) {
     let core = app.state::<Arc<Core<R>>>().inner().clone();
-    if app.state::<Updates>().ready().is_none() {
+    let updates = app.state::<Updates>();
+    if updates.ready().is_none() && !updates.installing.load(Ordering::Acquire) {
         core.shutdown();
         app.exit(0);
         return;
@@ -668,18 +821,73 @@ pub fn quit<R: Runtime>(app: &AppHandle<R>) {
     let app = app.clone();
     std::thread::spawn(move || {
         let env = app.env();
-        let installed = install_ready(&core, &app.state::<Updates>(), false, |relaunch| {
+        let closed = closing(&core, &app.state::<Updates>(), QUIT_WAIT, |relaunch| {
             leave(&app, &env, relaunch)
         });
-        if !matches!(installed, Ok(true)) {
-            if let Err(e) = installed {
-                log::error!("update not installed when closing: {e:#}");
-            }
-            // The app closes all the same.
+        if closed == Closing::Close {
             core.shutdown();
             app.exit(0);
         }
     });
+}
+
+/// How long the end of the app waits for an update to install there (macOS).
+#[cfg(target_os = "macos")]
+const EXIT_LIMIT: Duration = Duration::from_secs(60);
+
+/// The `.app` bundle the executable at `exe` runs from (`…/Escouade.app/Contents/MacOS/escouade`).
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn app_bundle(exe: &Path) -> Option<&Path> {
+    let macos = exe.parent()?;
+    let contents = macos.parent()?;
+    let bundle = contents.parent()?;
+    let named = |p: &Path, name: &str| p.file_name().is_some_and(|n| n == name);
+    let is_app = bundle.extension().is_some_and(|e| e == "app");
+    (named(macos, "MacOS") && named(contents, "Contents") && is_app).then_some(bundle)
+}
+
+/// The file or folder at `p` can be written by the app.
+#[cfg(target_os = "macos")]
+fn writable(p: &Path) -> bool {
+    use std::os::unix::ffi::OsStrExt;
+    let Ok(c) = std::ffi::CString::new(p.as_os_str().as_bytes()) else {
+        return false;
+    };
+    // SAFETY: `c` is a valid NUL-terminated path for the call's duration.
+    unsafe { libc::access(c.as_ptr(), libc::W_OK) == 0 }
+}
+
+/// macOS: Cmd+Q, the app menu's and the Dock's « Quitter » end the app with no request first,
+/// right at `RunEvent::Exit`: the update ready installs there, without the app starting again,
+/// when its bundle can be replaced without an administrator's password (the plugin would ask for
+/// it on the main thread, which waits here). True when the app stopped for it.
+#[cfg(target_os = "macos")]
+pub fn install_at_exit<R: Runtime>(app: &AppHandle<R>) -> bool {
+    let updates = app.state::<Updates>();
+    if updates.ready().is_none() || updates.installing.load(Ordering::Acquire) {
+        return false;
+    }
+    let exe = std::env::current_exe().ok();
+    let replaceable = exe
+        .as_deref()
+        .and_then(app_bundle)
+        .is_some_and(|b| writable(b) && b.parent().is_some_and(writable));
+    if !replaceable {
+        log::info!("update left for a restart: replacing the app needs an administrator");
+        return false;
+    }
+    let core = app.state::<Arc<Core<R>>>().inner().clone();
+    let (a, c) = (app.clone(), core.clone());
+    bounded(
+        move || {
+            let updates = a.state::<Updates>();
+            if let Err(e) = install_ready(&c, &updates, false, Window::Front, |_| {}) {
+                log::error!("update not installed when closing: {e:#}");
+            }
+        },
+        EXIT_LIMIT,
+    );
+    core.quitting.load(Ordering::Acquire)
 }
 
 /// « Plus tard »: the automatic restart planned is called off, and none comes for a while.
@@ -711,9 +919,7 @@ async fn tick<R: Runtime>(app: &AppHandle<R>) {
     let updates = app.state::<Updates>();
     let now = now_ms();
     let ready = updates.ready();
-    let on = core.settings.read().auto_update
-        && ready.is_some()
-        && !updates.installing.load(Ordering::Acquire);
+    let on = updates.restart_wanted(core.settings.read().auto_update);
     let busy = if on {
         busy(&snapshot(&core, &updates, now))
     } else {
@@ -723,23 +929,23 @@ async fn tick<R: Runtime>(app: &AppHandle<R>) {
         Step::Wait => {}
         Step::Warn(at) => {
             core.hub.emit(UiEvent::UpdateRestart { at: Some(at) });
-            if core.settings.read().os_notifications {
-                let version = ready.map(|r| r.version.clone()).unwrap_or_default();
-                let a = app.clone();
-                crate::notify::toast_with_button(
-                    app,
-                    "Escouade redémarre pour se mettre à jour",
-                    &format!("La version {version} s'installe dans 30 secondes."),
-                    "Plus tard",
-                    move |later| {
-                        if later {
-                            postpone(&a);
-                        } else {
-                            crate::notify::show_main(&a);
-                        }
-                    },
-                );
-            }
+            // Whatever « Notifications système » says: it is not an agent's notification, and
+            // the window may be out of sight.
+            let version = ready.map(|r| r.version.clone()).unwrap_or_default();
+            let a = app.clone();
+            crate::notify::toast_with_button(
+                app,
+                "Escouade redémarre pour se mettre à jour",
+                &format!("La version {version} s'installe dans 30 secondes."),
+                "Plus tard",
+                move |later| {
+                    if later {
+                        postpone(&a);
+                    } else {
+                        crate::notify::show_main(&a);
+                    }
+                },
+            );
         }
         Step::Cancel => core.hub.emit(UiEvent::UpdateRestart { at: None }),
         // The countdown stays on screen while the app stops.
@@ -758,8 +964,15 @@ async fn tick<R: Runtime>(app: &AppHandle<R>) {
 mod tests {
     use super::*;
     use crate::core_tests::harness;
-    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::{AtomicBool, AtomicUsize};
     use tokio::sync::Notify;
+
+    /// `f` within 5 s, or the test fails: a regression never hangs it.
+    async fn within<T>(what: &str, f: impl Future<Output = T>) -> T {
+        tokio::time::timeout(Duration::from_secs(5), f)
+            .await
+            .unwrap_or_else(|_| panic!("timed out: {what}"))
+    }
 
     #[test]
     fn what_is_found_is_kept_until_taken_or_freed_each_under_its_own_id() {
@@ -778,10 +991,12 @@ mod tests {
 
     // ---------- at rest ----------
 
-    /// The app at rest: nothing under way, the user away for 5 minutes, window on screen.
+    /// The app at rest: nothing under way, no terminal used, the user away for 5 minutes,
+    /// window on screen.
     fn rest() -> Snapshot {
         Snapshot {
             inactive: AWAY,
+            terminal_quiet: i64::MAX,
             visible: true,
             ..Snapshot::default()
         }
@@ -800,7 +1015,9 @@ mod tests {
             (with(|s| s.questions = 1), Busy::Question),
             (with(|s| s.setups = 1), Busy::Setup),
             (with(|s| s.validations = 1), Busy::Validation),
-            (with(|s| s.merges = 1), Busy::Merge),
+            (with(|s| s.works = 1), Busy::Work),
+            (with(|s| s.launches = 1), Busy::Launch),
+            (with(|s| s.terminal_quiet = AWAY - 1), Busy::Terminal),
             (with(|s| s.testing = true), Busy::Testing),
             (with(|s| s.unsaved = 2), Busy::Unsaved),
             (with(|s| s.modal = true), Busy::Modal),
@@ -817,13 +1034,17 @@ mod tests {
             let expected = (why != Busy::Activity).then_some(why);
             assert_eq!(busy(&hidden), expected, "{hidden:?}");
         }
+        // A terminal quiet for 5 minutes blocks nothing.
+        assert_eq!(busy(&with(|s| s.terminal_quiet = AWAY)), None);
         // Used a minute ago, the window hidden since: at rest.
-        let hidden = Snapshot {
-            inactive: 60_000,
-            visible: false,
-            ..Snapshot::default()
-        };
-        assert_eq!(busy(&hidden), None);
+        assert_eq!(
+            busy(&Snapshot {
+                inactive: 60_000,
+                visible: false,
+                ..rest()
+            }),
+            None
+        );
     }
 
     #[test]
@@ -874,6 +1095,34 @@ mod tests {
             u.advance(true, None, t + 2_000 + POSTPONE),
             Step::Warn(t + 2_000 + POSTPONE + WARNING)
         );
+    }
+
+    #[tokio::test]
+    async fn the_app_restarts_by_itself_only_for_an_update_ready_that_did_not_fail_before() {
+        let u = Updates::default();
+        assert!(!u.restart_wanted(true));
+        ready(&u, Install::Ok).await;
+        assert!(u.restart_wanted(true));
+        assert!(!u.restart_wanted(false));
+        // The last try of 1.6.0 did not install: no automatic restart for it.
+        let failed = Updates::started(Some(AfterUpdate::Failed("1.6.0".into())));
+        assert_eq!(failed.failed().as_deref(), Some("1.6.0"));
+        ready(&failed, Install::Ok).await;
+        assert!(!failed.restart_wanted(true));
+        // A newer one does.
+        let r = Arc::new(release("1.7.0"));
+        let id = failed.offer(r).id;
+        failed.download(id).await.unwrap();
+        assert!(failed.restart_wanted(true));
+    }
+
+    #[tokio::test]
+    async fn a_version_that_failed_to_install_can_still_be_installed_by_hand() {
+        let h = harness("upd-failed-by-hand");
+        let u = Updates::started(Some(AfterUpdate::Failed("1.6.0".into())));
+        let log = ready(&u, Install::Ok).await;
+        restart(&h.core, &u, Window::Front, |_| {}).unwrap();
+        assert_eq!(*log.lock(), ["installer (relaunch: true)"]);
     }
 
     // ---------- download ----------
@@ -960,6 +1209,16 @@ mod tests {
         }
     }
 
+    /// Until `r`'s download has started.
+    async fn fetching(r: &FakeRelease) {
+        within("the download to start", async {
+            while r.fetches.load(Ordering::Acquire) == 0 {
+                tokio::time::sleep(Duration::from_millis(1)).await;
+            }
+        })
+        .await
+    }
+
     #[tokio::test]
     async fn a_version_found_is_downloaded_once_and_kept_until_it_installs() {
         let u = Updates::default();
@@ -1008,12 +1267,10 @@ mod tests {
             let u = u.clone();
             async move { u.download(id).await }
         });
-        while newer.fetches.load(Ordering::Acquire) == 0 {
-            tokio::task::yield_now().await;
-        }
+        fetching(&newer).await;
         assert!(u.ready().is_none());
         gate.notify_one();
-        assert!(downloading.await.unwrap().unwrap());
+        assert!(within("the download", downloading).await.unwrap().unwrap());
         assert_eq!(u.ready().unwrap().version, "1.7.0");
         // Withdrawn from the server: nothing is ready any more.
         u.withdraw();
@@ -1033,12 +1290,10 @@ mod tests {
             let u = u.clone();
             async move { u.download(id).await }
         });
-        while r.fetches.load(Ordering::Acquire) == 0 {
-            tokio::task::yield_now().await;
-        }
+        fetching(&r).await;
         u.withdraw();
         gate.notify_one();
-        assert!(!downloading.await.unwrap().unwrap());
+        assert!(!within("the download", downloading).await.unwrap().unwrap());
         assert!(u.ready().is_none());
     }
 
@@ -1148,7 +1403,7 @@ mod tests {
         core.ui.write().view = "stats".into();
         let seen = log.clone();
         let c = core.clone();
-        restart(&core, &u, move |relaunch| {
+        restart(&core, &u, Window::Behind, move |relaunch| {
             // What the installer found: the app stopped, its state saved, the update noted.
             let state = std::fs::read_to_string(c.data.state_file()).unwrap_or_default();
             seen.lock().push(format!(
@@ -1166,15 +1421,28 @@ mod tests {
                 "leave (relaunch: true, stopped: true, saved: true, noted: true)"
             ]
         );
+        // The window behind another app's: it comes back so.
+        let after = take_note(&core.data, "1.6.0");
         assert_eq!(
-            take_installed(&core.data, "1.6.0"),
-            Some(Installed {
-                version: "1.6.0".into(),
-                notes: "- Mises à jour silencieuses".into()
-            })
+            after,
+            Some(AfterUpdate::Installed(
+                Installed {
+                    version: "1.6.0".into(),
+                    notes: "- Mises à jour silencieuses".into()
+                },
+                Window::Behind
+            ))
         );
+        assert_eq!(AfterUpdate::window(&after), Window::Behind);
         // Told once.
-        assert_eq!(take_installed(&core.data, "1.6.0"), None);
+        assert_eq!(take_note(&core.data, "1.6.0"), None);
+        let u = Updates::started(after);
+        assert_eq!(
+            u.take_installed().map(|i| i.version).as_deref(),
+            Some("1.6.0")
+        );
+        assert_eq!(u.take_installed(), None);
+        assert_eq!(u.failed(), None);
     }
 
     #[tokio::test]
@@ -1183,25 +1451,64 @@ mod tests {
         let u = Updates::default();
         let log = ready(&u, Install::Ok).await;
         let left = log.clone();
-        assert!(install_ready(&h.core, &u, false, move |relaunch| {
+        let closed = closing(&h.core, &u, Duration::from_secs(5), move |relaunch| {
             left.lock().push(format!("leave (relaunch: {relaunch})"))
-        })
-        .unwrap());
+        });
+        assert_eq!(closed, Closing::Installed);
         assert!(h.core.quitting.load(Ordering::Acquire));
         assert_eq!(
             *log.lock(),
             ["installer (relaunch: false)", "leave (relaunch: false)"]
         );
-        // One install at a time.
-        assert!(!install_ready(&h.core, &u, false, |_| {}).unwrap());
+        // Started a new version: the next start finds it in front.
+        assert_eq!(
+            AfterUpdate::window(&take_note(&h.core.data, "1.6.0")),
+            Window::Front
+        );
+    }
+
+    #[tokio::test]
+    async fn closing_the_app_during_an_install_waits_for_it_never_closing_it_under_it() {
+        let h = harness("upd-quit-installing");
+        let u = Arc::new(Updates::default());
+        let log = ready(&u, Install::Ok).await;
+        // « Redémarrer maintenant » under way.
+        u.installing.store(true, Ordering::Release);
+        assert_eq!(
+            closing(&h.core, &u, Duration::from_millis(100), |_| panic!("left")),
+            Closing::Wait
+        );
+        assert!(!h.core.quitting.load(Ordering::Acquire));
+        // That install fails with the app still running: the app then closes as usual.
+        let failing = {
+            let u = u.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(200));
+                u.installing.store(false, Ordering::Release);
+            })
+        };
+        let started = std::time::Instant::now();
+        assert_eq!(
+            closing(&h.core, &u, Duration::from_secs(5), |_| panic!("left")),
+            Closing::Close
+        );
+        assert!(started.elapsed() >= Duration::from_millis(150));
+        failing.join().unwrap();
+        // Nothing installed by the closing itself, nor stopped under the install.
+        assert!(log.lock().is_empty());
+        assert!(!h.core.quitting.load(Ordering::Acquire));
     }
 
     #[tokio::test]
     async fn nothing_installs_without_an_update_downloaded() {
         let h = harness("upd-none");
         let u = Updates::default();
-        assert!(!install_ready(&h.core, &u, true, |_| panic!("left")).unwrap());
-        assert!(restart(&h.core, &u, |_| panic!("left")).is_err());
+        assert!(!install_ready(&h.core, &u, true, Window::Front, |_| panic!("left")).unwrap());
+        assert!(restart(&h.core, &u, Window::Front, |_| panic!("left")).is_err());
+        assert_eq!(
+            closing(&h.core, &u, Duration::from_secs(5), |_| panic!("left")),
+            Closing::Close
+        );
         assert!(!h.core.quitting.load(Ordering::Acquire));
     }
 
@@ -1211,7 +1518,7 @@ mod tests {
         let u = Updates::default();
         let log = ready(&u, Install::Ok).await;
         h.core.unsaved.store(2, Ordering::Release);
-        let e = restart(&h.core, &u, |_| panic!("left")).unwrap_err();
+        let e = restart(&h.core, &u, Window::Front, |_| panic!("left")).unwrap_err();
         assert!(
             e.to_string().contains("2 fichiers ne sont pas enregistrés"),
             "{e}"
@@ -1225,25 +1532,64 @@ mod tests {
         let h = harness("upd-fails");
         let u = Updates::default();
         ready(&u, Install::FailsBefore).await;
-        assert!(install_ready(&h.core, &u, true, |_| panic!("left")).is_err());
+        assert!(install_ready(&h.core, &u, true, Window::Front, |_| panic!("left")).is_err());
         assert!(!h.core.quitting.load(Ordering::Acquire));
         // Not noted: the next start says nothing of it.
         assert!(!h.core.data.update_note_file().exists());
-        assert!(install_ready(&h.core, &u, true, |_| panic!("left")).is_err());
+        assert!(install_ready(&h.core, &u, true, Window::Front, |_| panic!("left")).is_err());
+    }
+
+    fn write_note(data: &DataDir, note: serde_json::Value) {
+        std::fs::write(data.update_note_file(), note.to_string()).unwrap();
     }
 
     #[test]
-    fn the_note_of_a_version_the_app_does_not_run_is_dropped() {
-        let dir = crate::paths::test_dir("upd-note");
-        let data = DataDir::new(dir);
-        let note = Installed {
-            version: "1.6.0".into(),
-            notes: "…".into(),
-        };
-        std::fs::write(data.update_note_file(), serde_json::to_vec(&note).unwrap()).unwrap();
-        assert_eq!(take_installed(&data, "1.5.4"), None);
+    fn the_next_start_knows_an_update_that_did_not_install() {
+        let data = DataDir::new(crate::paths::test_dir("upd-note-failed"));
+        write_note(
+            &data,
+            serde_json::json!({ "version": "1.6.0", "notes": "…", "window": "hidden" }),
+        );
+        // Still on 1.5.4: 1.6.0 did not install, and the window shows as at any start.
+        let after = take_note(&data, "1.5.4");
+        assert_eq!(after, Some(AfterUpdate::Failed("1.6.0".into())));
+        assert_eq!(AfterUpdate::window(&after), Window::Front);
         assert!(!data.update_note_file().exists());
-        assert_eq!(take_installed(&data, "1.5.4"), None);
+        assert_eq!(take_note(&data, "1.5.4"), None);
+        let u = Updates::started(after);
+        assert_eq!(u.failed().as_deref(), Some("1.6.0"));
+        assert_eq!(u.take_installed(), None);
+    }
+
+    #[test]
+    fn a_note_without_the_window_brings_it_in_front() {
+        let data = DataDir::new(crate::paths::test_dir("upd-note-old"));
+        write_note(
+            &data,
+            serde_json::json!({ "version": "1.6.0", "notes": "…" }),
+        );
+        let after = take_note(&data, "1.6.0");
+        assert!(matches!(
+            after,
+            Some(AfterUpdate::Installed(_, Window::Front))
+        ));
+        assert_eq!(AfterUpdate::window(&None), Window::Front);
+    }
+
+    #[test]
+    fn the_app_bundle_is_found_from_its_executable() {
+        assert_eq!(
+            app_bundle(Path::new(
+                "/Applications/Escouade.app/Contents/MacOS/escouade"
+            )),
+            Some(Path::new("/Applications/Escouade.app"))
+        );
+        // A build run from the repository has no bundle to replace.
+        assert_eq!(
+            app_bundle(Path::new("/code/escouade/src-tauri/target/debug/escouade")),
+            None
+        );
+        assert_eq!(app_bundle(Path::new("/x/Contents/MacOS/escouade")), None);
     }
 
     #[tokio::test]
@@ -1276,7 +1622,7 @@ mod tests {
         });
         h.core.unsaved.store(3, Ordering::Release);
         let u = Updates::default();
-        let _merging = u.merging();
+        let working = h.core.working();
         u.set_presence(Presence {
             modal: true,
             testing: true,
@@ -1289,7 +1635,10 @@ mod tests {
                 questions: 1,
                 setups: 1,
                 validations: 1,
-                merges: 1,
+                works: 1,
+                launches: 0,
+                // No terminal open.
+                terminal_quiet: i64::MAX,
                 testing: true,
                 unsaved: 3,
                 modal: true,
@@ -1298,7 +1647,33 @@ mod tests {
                 visible: false,
             }
         );
-        drop(_merging);
-        assert_eq!(snapshot(&h.core, &u, 61_000).merges, 0);
+        drop(working);
+        assert_eq!(snapshot(&h.core, &u, 61_000).works, 0);
+    }
+
+    #[tokio::test]
+    async fn a_message_being_delivered_holds_off_a_restart_until_its_turn_runs() {
+        let h = harness("upd-send");
+        let (p, _) = h.project(false).await;
+        let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+        let a = id.clone();
+        // Its process starting, the agent not at work yet.
+        let (stop, sampler) = h.sample_rest(move |c| {
+            let running = c
+                .agent(&a)
+                .is_ok_and(|h| h.lock().meta.status == AgentStatus::Running);
+            !running && c.works.load(Ordering::Acquire) > 0
+        });
+        within(
+            "the message",
+            h.core.send_message(&id, "Bonjour".into(), vec![]),
+        )
+        .await
+        .unwrap();
+        stop.store(true, Ordering::Release);
+        let seen = sampler.join().unwrap();
+        let sending: Vec<_> = seen.iter().filter(|(_, sending, _)| *sending).collect();
+        assert!(!sending.is_empty(), "the message was never seen under way");
+        assert!(sending.iter().all(|(_, _, then)| then.is_some()));
     }
 }

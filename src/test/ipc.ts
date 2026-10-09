@@ -227,6 +227,7 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.toasts = [];
   app.update = null;
   app.restartAt = null;
+  app.failedUpdate = null;
   app.models = [];
   app.accounts = [];
   app.ready = true;

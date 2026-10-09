@@ -358,6 +358,13 @@ describe('AppState start-up', () => {
     resetApp();
     await start({ installed: null });
     expect(app.toasts).toEqual([]);
+    expect(app.failedUpdate).toBeNull();
+  });
+
+  it('knows the version that did not install at the last try', async () => {
+    resetApp();
+    await start({ failedUpdate: '1.6.0' });
+    expect(app.failedUpdate).toBe('1.6.0');
   });
 
   it('follows the automatic restart the backend plans, and calls off', async () => {

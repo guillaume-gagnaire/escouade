@@ -26,7 +26,15 @@ async function download(update: FoundUpdate, manual: boolean) {
   try {
     const ready = await update.download();
     // A newer one found meanwhile, or this one withdrawn: not this one's to say.
-    if (ready && latest === update && app.update) app.update = { ...app.update, ready: true };
+    if (!ready || latest !== update || !app.update) return;
+    app.update = { ...app.update, ready: true };
+    // The backend restarts no more by itself for it: the user tries again, or not.
+    if (app.failedUpdate === update.version) {
+      app.toast(`La mise à jour vers ${update.version} n’a pas pu s’installer.`, 'error', {
+        label: 'Réessayer',
+        onClick: () => (app.modal = { kind: 'update' }),
+      });
+    }
   } catch (e) {
     if (latest !== update) return;
     // Downloaded again at the next check.

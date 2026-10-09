@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { flushDrafts } from '../../lib/drafts';
   import { buffers } from '../../lib/editor/buffers.svelte';
   import { plural } from '../../lib/format';
   import { api } from '../../lib/ipc';
@@ -11,11 +12,16 @@
 
   // The files « Quitter » asks about, which a restart would lose: saved first.
   const unsaved = $derived(buffers.unsaved);
-  const working = $derived(Object.values(app.agents).filter((a) => !a.archived && a.status === 'running').length);
+  // A restart stops every agent's process: a turn under way, or a question waiting, is cut.
+  const working = $derived(
+    Object.values(app.agents).filter((a) => !a.archived && (a.status === 'running' || a.status === 'waiting')).length,
+  );
   let restarting = $state(false);
 
   async function restart() {
     restarting = true;
+    // What is being typed in the composers is written before the app stops.
+    flushDrafts();
     // Once it is in, the app goes: nothing comes back but a failure.
     await app.run(api.updateRestart());
     restarting = false;
@@ -38,8 +44,8 @@
       {#if working}
         <p>
           {working > 1
-            ? `${working} agents travaillent : ils reprendront après le redémarrage.`
-            : '1 agent travaille : il reprendra après le redémarrage.'}
+            ? `${working} agents travaillent ou attendent ta réponse : leur tour en cours sera interrompu. Les agents de ticket reprennent d’eux-mêmes ; les autres attendent ton prochain message.`
+            : '1 agent travaille ou attend ta réponse : son tour en cours sera interrompu. S’il travaille sur un ticket, il reprend de lui-même ; sinon, il attend ton prochain message.'}
         </p>
       {/if}
     </div>
