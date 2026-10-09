@@ -41,6 +41,45 @@ impl std::fmt::Display for StartupFailure {
 
 impl std::error::Error for StartupFailure {}
 
+/// The tag that opens `NotOnBase::wire`: the frontend recognizes the refusal by it.
+const NOT_ON_BASE: &str = "NOT_ON_BASE";
+
+/// A merge refused because the project's folder is not on the branch the agent's worktree left
+/// (its base): the merge would land on whatever is checked out. The user may let Escouade switch.
+#[derive(Debug)]
+pub struct NotOnBase {
+    /// The branch the folder is on; empty on a detached HEAD.
+    pub current: String,
+    pub base: String,
+}
+
+impl NotOnBase {
+    /// What the frontend gets: the tag and the current branch, which cannot hold a `:`.
+    pub fn wire(&self) -> String {
+        format!("{NOT_ON_BASE}:{}:{}", self.current, self.base)
+    }
+}
+
+impl std::fmt::Display for NotOnBase {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.current.is_empty() {
+            write!(
+                f,
+                "Le projet n'est sur aucune branche (HEAD détachée) : bascule sur « {} » avant de merger.",
+                self.base
+            )
+        } else {
+            write!(
+                f,
+                "Le projet est sur la branche « {} » : bascule sur « {} » avant de merger.",
+                self.current, self.base
+            )
+        }
+    }
+}
+
+impl std::error::Error for NotOnBase {}
+
 /// A sync of a project's checkout with its remote, asked by the user.
 #[derive(Debug, Clone, Copy)]
 pub enum SyncOp {
@@ -2276,7 +2315,15 @@ impl<R: Runtime> Core<R> {
         Ok(warning)
     }
 
-    pub async fn merge_agent(self: &Arc<Self>, id: &str, squash: bool) -> Result<String> {
+    /// Merges the agent's branch into its base branch, in the project's folder. When the folder is
+    /// on another branch the merge is refused (`NotOnBase`), unless `switch_to_base`: the folder is
+    /// switched to the base first (it has no tracked change, checked here).
+    pub async fn merge_agent(
+        self: &Arc<Self>,
+        id: &str,
+        squash: bool,
+        switch_to_base: bool,
+    ) -> Result<String> {
         let h = self.agent(id)?;
         let (pid, name, wt) = {
             let rt = h.lock();
@@ -2295,16 +2342,39 @@ impl<R: Runtime> Core<R> {
         if dirty > 0 {
             bail!("L'agent a {dirty} fichier(s) non commité(s) : demande-lui de commiter avant de merger.");
         }
-        if git::ahead_count(&project.path, &wt.branch).await == 0 {
+        if !git::branch_exists(&project.path, &wt.base_branch).await {
+            bail!(
+                "La branche de base « {} » n'existe plus : « {} » ne peut pas être mergée dedans.",
+                wt.base_branch,
+                wt.branch
+            );
+        }
+        // Counted from the base, not from HEAD: the folder may be on another branch.
+        if git::ahead_of(&project.path, &wt.base_branch, &wt.branch).await? == 0 {
             bail!(
                 "Rien à merger : la branche {} n'a pas de nouveau commit.",
                 wt.branch
             );
         }
+        let current = git::head_branch(&project.path).await;
+        if current != wt.base_branch {
+            if !switch_to_base {
+                return Err(NotOnBase {
+                    current,
+                    base: wt.base_branch,
+                }
+                .into());
+            }
+            git::switch(&project.path, &wt.base_branch).await?;
+        }
         let message = if squash {
             let subjects = git::text(
                 &project.path,
-                &["log", "--format=- %s", &format!("HEAD..{}", wt.branch)],
+                &[
+                    "log",
+                    "--format=- %s",
+                    &format!("{}..{}", wt.base_branch, wt.branch),
+                ],
             )
             .await
             .unwrap_or_default();

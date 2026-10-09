@@ -62,7 +62,8 @@ export const api = {
   renameAgent: (id: string, name: string) => invoke<void>('rename_agent', { id, name }),
   archiveAgent: (id: string, archived: boolean) => invoke<void>('archive_agent', { id, archived }),
   deleteAgent: (id: string, removeWorktree: boolean) => invoke<string | null>('delete_agent', { id, removeWorktree }),
-  mergeAgent: (id: string, squash: boolean) => invoke<string>('merge_agent', { id, squash }),
+  /** Merges into the agent's base branch; `switchToBase`: the project's folder is switched to it first. */
+  mergeAgent: (id: string, squash: boolean, switchToBase = false) => invoke<string>('merge_agent', { id, squash, switchToBase }),
   getCommands: (id: string) => invoke<SlashCommand[]>('get_commands', { id }),
   fileSuggestions: (id: string, query: string) => invoke<string[]>('file_suggestions', { id, query }),
   gitFiles: (projectId: string, agentId: string | null) => invoke<FileChange[]>('git_files', { projectId, agentId }),

@@ -15,19 +15,46 @@ export async function commitViaAgent(agent: Agent, scope: 'agent' | 'project' = 
   if (ok !== undefined) app.toast(`Demande de commit envoyée à ${agent.name}`, 'ok');
 }
 
+/**
+ * The branch the project is on ('' on a detached HEAD) when the backend refused to merge because
+ * it is not the agent's base branch; null for any other error.
+ */
+function branchInTheWay(error: unknown): string | null {
+  return /^NOT_ON_BASE:([^:]*):/.exec(String(error))?.[1] ?? null;
+}
+
 export function mergeAgent(agent: Agent) {
   if (!agent.worktree) return;
   const wt = agent.worktree;
+  const merge = async (squash: boolean, switchToBase: boolean) => {
+    try {
+      const out = await api.mergeAgent(agent.id, squash, switchToBase);
+      app.toast(out || 'Merge effectué', 'ok');
+    } catch (e) {
+      const current = branchInTheWay(e);
+      // Asked once: a refusal of the switch itself (git's) is an error like any other.
+      if (current === null || switchToBase) {
+        app.toast(String(e), 'error');
+        return;
+      }
+      app.modal = {
+        kind: 'confirm',
+        title: `Basculer sur « ${wt.baseBranch} » ?`,
+        body:
+          (current ? `Le projet est sur la branche « ${current} ».` : 'Le projet n’est sur aucune branche (HEAD détachée).') +
+          ` Escouade bascule sur « ${wt.baseBranch} » puis merge « ${wt.branch} ».`,
+        confirm: 'Basculer et merger',
+        onConfirm: () => merge(squash, true),
+      };
+    }
+  };
   app.modal = {
     kind: 'confirm',
     title: `Merger ${wt.branch} dans ${wt.baseBranch} ?`,
-    body: `Les commits de l'agent « ${agent.name} » sont intégrés dans la branche courante du projet.`,
+    body: `Les commits de l'agent « ${agent.name} » sont intégrés dans la branche « ${wt.baseBranch} » du projet.`,
     confirm: 'Merger',
     option: { label: 'Squash (un seul commit)', value: false },
-    onConfirm: async (squash) => {
-      const out = await app.run(api.mergeAgent(agent.id, squash));
-      if (out !== undefined) app.toast(out || 'Merge effectué', 'ok');
-    },
+    onConfirm: (squash) => merge(squash, false),
   };
 }
 

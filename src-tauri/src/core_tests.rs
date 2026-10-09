@@ -2,7 +2,7 @@
 //! (tests/fixtures/fake-claude.cmd, or the `fake-claude` shell script outside Windows) and Tauri's
 //! mock runtime.
 
-use crate::core::{AgentOptions, Attachment, Core, SyncOp};
+use crate::core::{AgentOptions, Attachment, Core, NotOnBase, SyncOp};
 use crate::model::*;
 use crate::paths::{test_dir, DataDir};
 use serde_json::{json, Value};
@@ -771,7 +771,7 @@ async fn merging_refuses_a_dirty_main_checkout() {
     std::fs::write(r.join("src").join("app.ts"), "const a = 99; // wip\n").unwrap();
     let err = h
         .core
-        .merge_agent(&a.meta.id, true)
+        .merge_agent(&a.meta.id, true, false)
         .await
         .unwrap_err()
         .to_string();
@@ -793,7 +793,7 @@ async fn a_conflicting_squash_merge_leaves_the_main_checkout_clean() {
         "agent change",
     );
     commit_change(&r, "const a = 3;\n", "main change");
-    assert!(h.core.merge_agent(&a.meta.id, true).await.is_err());
+    assert!(h.core.merge_agent(&a.meta.id, true, false).await.is_err());
     assert_eq!(git(&r, &["status", "--porcelain"]), "");
     assert_eq!(
         std::fs::read_to_string(r.join("src").join("app.ts")).unwrap(),
@@ -811,12 +811,191 @@ async fn a_clean_squash_merge_lands_one_commit() {
         "const a = 2;\n",
         "agent change",
     );
-    h.core.merge_agent(&a.meta.id, true).await.unwrap();
+    h.core.merge_agent(&a.meta.id, true, false).await.unwrap();
     assert_eq!(
         std::fs::read_to_string(r.join("src").join("app.ts")).unwrap(),
         "const a = 2;\n"
     );
     assert_eq!(git(&r, &["rev-list", "--count", "HEAD"]), "2");
+}
+
+#[tokio::test]
+async fn merging_is_refused_with_a_typed_error_when_the_project_is_not_on_the_base() {
+    let h = harness("merge-other-branch");
+    let (p, r) = h.project(true).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    commit_change(
+        Path::new(&a.meta.worktree.as_ref().unwrap().path),
+        "const a = 2;\n",
+        "agent change",
+    );
+    git(&r, &["switch", "-qc", "other"]);
+    let err = h
+        .core
+        .merge_agent(&a.meta.id, true, false)
+        .await
+        .unwrap_err();
+    let refused = err.downcast_ref::<NotOnBase>().expect("a typed refusal");
+    assert_eq!(
+        (refused.current.as_str(), refused.base.as_str()),
+        ("other", "main")
+    );
+    assert_eq!(refused.wire(), "NOT_ON_BASE:other:main");
+    // Neither the branch the project is on nor the agent's base got the agent's commits.
+    assert_eq!(git(&r, &["branch", "--show-current"]), "other");
+    assert_eq!(git(&r, &["rev-list", "--count", "other"]), "1");
+    assert_eq!(git(&r, &["rev-list", "--count", "main"]), "1");
+    assert_eq!(
+        std::fs::read_to_string(r.join("src").join("app.ts")).unwrap(),
+        "const a = 1;\n"
+    );
+}
+
+#[tokio::test]
+async fn a_detached_head_is_not_the_base_either() {
+    let h = harness("merge-detached");
+    let (p, r) = h.project(true).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    commit_change(
+        Path::new(&a.meta.worktree.as_ref().unwrap().path),
+        "const a = 2;\n",
+        "agent change",
+    );
+    git(&r, &["switch", "-q", "--detach"]);
+    let err = h
+        .core
+        .merge_agent(&a.meta.id, true, false)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        err.downcast_ref::<NotOnBase>().unwrap().wire(),
+        "NOT_ON_BASE::main"
+    );
+    assert_eq!(git(&r, &["rev-list", "--count", "main"]), "1");
+}
+
+#[tokio::test]
+async fn merging_can_switch_the_project_to_the_base_first() {
+    let h = harness("merge-switch");
+    let (p, r) = h.project(true).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    commit_change(
+        Path::new(&a.meta.worktree.as_ref().unwrap().path),
+        "const a = 2;\n",
+        "agent change",
+    );
+    git(&r, &["switch", "-qc", "other"]);
+    h.core.merge_agent(&a.meta.id, true, true).await.unwrap();
+    assert_eq!(git(&r, &["branch", "--show-current"]), "main");
+    assert_eq!(git(&r, &["rev-list", "--count", "main"]), "2");
+    assert_eq!(git(&r, &["log", "-1", "--format=%s", "main"]), "agent-1");
+    // The squash lists the agent's commits, counted from the base.
+    assert!(
+        git(&r, &["log", "-1", "--format=%b", "main"]).contains("- agent change"),
+        "{}",
+        git(&r, &["log", "-1", "--format=%b", "main"])
+    );
+    assert_eq!(git(&r, &["rev-list", "--count", "other"]), "1");
+    assert_eq!(
+        std::fs::read_to_string(r.join("src").join("app.ts")).unwrap(),
+        "const a = 2;\n"
+    );
+}
+
+#[tokio::test]
+async fn a_switch_git_refuses_is_reported_as_it_is_and_merges_nothing() {
+    let h = harness("merge-switch-refused");
+    let (p, r) = h.project(true).await;
+    git(&r, &["branch", "other"]);
+    // main has a file that `other` lacks.
+    std::fs::write(r.join("only-on-main.txt"), "tracked\n").unwrap();
+    git(&r, &["add", "only-on-main.txt"]);
+    git(&r, &["commit", "-qm", "a file of main"]);
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    commit_change(
+        Path::new(&a.meta.worktree.as_ref().unwrap().path),
+        "const a = 2;\n",
+        "agent change",
+    );
+    // On `other` the file is gone; the user's own, untracked, takes its place: switching to main
+    // would overwrite it.
+    git(&r, &["switch", "-q", "other"]);
+    std::fs::write(r.join("only-on-main.txt"), "the user's\n").unwrap();
+    let err = h
+        .core
+        .merge_agent(&a.meta.id, true, true)
+        .await
+        .unwrap_err();
+    assert!(err.downcast_ref::<NotOnBase>().is_none());
+    assert!(format!("{err:#}").contains("only-on-main.txt"), "{err:#}");
+    assert_eq!(git(&r, &["branch", "--show-current"]), "other");
+    assert_eq!(git(&r, &["rev-list", "--count", "main"]), "2");
+    assert_eq!(
+        std::fs::read_to_string(r.join("only-on-main.txt")).unwrap(),
+        "the user's\n"
+    );
+}
+
+#[tokio::test]
+async fn a_base_branch_that_is_gone_is_said_and_nothing_is_merged() {
+    let h = harness("merge-base-gone");
+    let (p, r) = h.project(true).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    commit_change(
+        Path::new(&a.meta.worktree.as_ref().unwrap().path),
+        "const a = 2;\n",
+        "agent change",
+    );
+    git(&r, &["branch", "-m", "main", "trunk"]);
+    let err = h
+        .core
+        .merge_agent(&a.meta.id, true, true)
+        .await
+        .unwrap_err();
+    assert!(err.downcast_ref::<NotOnBase>().is_none());
+    assert!(
+        err.to_string().contains("La branche de base « main »"),
+        "{err:#}"
+    );
+    assert_eq!(git(&r, &["rev-list", "--count", "trunk"]), "1");
+}
+
+#[tokio::test]
+async fn a_branch_the_folders_branch_already_holds_still_has_to_go_into_the_base() {
+    let h = harness("merge-held-elsewhere");
+    let (p, r) = h.project(true).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let wt = a.meta.worktree.clone().unwrap();
+    commit_change(Path::new(&wt.path), "const a = 2;\n", "agent change");
+    // `other` got the agent's commit (counted from HEAD, nothing would be left to merge).
+    git(&r, &["switch", "-qc", "other"]);
+    git(&r, &["merge", "-q", "--ff-only", &wt.branch]);
+    let err = h
+        .core
+        .merge_agent(&a.meta.id, true, false)
+        .await
+        .unwrap_err();
+    assert!(err.downcast_ref::<NotOnBase>().is_some(), "{err:#}");
+}
+
+#[tokio::test]
+async fn what_there_is_to_merge_is_counted_from_the_base_not_from_head() {
+    let h = harness("merge-count-from-base");
+    let (p, r) = h.project(true).await;
+    // A branch left behind at the first commit, which the project's folder then sits on.
+    git(&r, &["branch", "behind"]);
+    commit_change(&r, "const a = 2;\n", "main moves on");
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    git(&r, &["switch", "-q", "behind"]);
+    // The agent has no commit of its own: HEAD lacks "main moves on", its base has it.
+    let err = h
+        .core
+        .merge_agent(&a.meta.id, true, false)
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("Rien à merger"), "{err}");
+    assert_eq!(git(&r, &["rev-list", "--count", "behind"]), "1");
 }
 
 #[tokio::test]

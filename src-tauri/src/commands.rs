@@ -1,6 +1,6 @@
 //! Tauri commands invoked by the frontend.
 
-use crate::core::{Attachment, Core, SyncOp};
+use crate::core::{Attachment, Core, NotOnBase, SyncOp};
 use crate::fsedit;
 use crate::integrations::{
     Account, AccountView, Container, ExternalIssue, IssuePage, Query, StatesView,
@@ -256,8 +256,19 @@ pub async fn delete_agent(
 }
 
 #[tauri::command]
-pub async fn merge_agent(core: CoreState<'_>, id: String, squash: bool) -> Res<String> {
-    core.merge_agent(&id, squash).await.map_err(err)
+pub async fn merge_agent(
+    core: CoreState<'_>,
+    id: String,
+    squash: bool,
+    switch_to_base: bool,
+) -> Res<String> {
+    core.merge_agent(&id, squash, switch_to_base)
+        .await
+        .map_err(|e| match e.downcast_ref::<NotOnBase>() {
+            // The one refusal the frontend turns into a question rather than an error.
+            Some(refused) => refused.wire(),
+            None => err(e),
+        })
 }
 
 #[tauri::command]

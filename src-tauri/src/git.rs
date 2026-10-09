@@ -702,13 +702,16 @@ pub async fn worktree_restore(repo: &str, path: &str, branch: &str) -> Result<()
     Ok(())
 }
 
-/// Commits of `branch` not yet in the current branch of `repo`.
-pub async fn ahead_count(repo: &str, branch: &str) -> u32 {
-    text(repo, &["rev-list", "--count", &format!("HEAD..{branch}")])
+/// Checks the existing local branch `branch` out in `repo`; git's refusal (untracked files in the
+/// way, the branch held by another worktree…) comes back as it is.
+pub async fn switch(repo: &str, branch: &str) -> Result<()> {
+    if branch.starts_with('-') {
+        bail!("« {branch} » n'est pas un nom de branche valide");
+    }
+    // `--no-guess`: a branch only the remote has is not made, the base is a local one.
+    run(repo, &["switch", "--no-guess", branch])
         .await
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(0)
+        .map(|_| ())
 }
 
 /// Commits of `branch` that `base` does not have; an error when git cannot count them.
@@ -1586,6 +1589,25 @@ mod repo_tests {
         assert_eq!(ahead_of(&r, "side", "main").await.unwrap(), 1);
         // A count git could not make is not "none": a ticket must not be taken as without change.
         assert!(ahead_of(&r, "main", "nowhere").await.is_err());
+    }
+
+    #[tokio::test]
+    async fn only_a_local_branch_is_switched_to() {
+        let r = repo("git-switch");
+        git(&r, &["branch", "side"]);
+        switch(&r, "side").await.unwrap();
+        assert_eq!(head_branch(&r).await, "side");
+        // A branch of the remote only: git would make a local one from it, a base is never guessed.
+        git(
+            &r,
+            &["remote", "add", "origin", "https://example.invalid/r.git"],
+        );
+        git(&r, &["update-ref", "refs/remotes/origin/feat", "HEAD"]);
+        assert!(switch(&r, "feat").await.is_err());
+        assert!(!branch_exists(&r, "feat").await);
+        // A name git would read as an option.
+        assert!(switch(&r, "--detach").await.is_err());
+        assert_eq!(head_branch(&r).await, "side");
     }
 
     #[tokio::test]
