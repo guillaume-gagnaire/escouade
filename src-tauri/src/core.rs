@@ -292,6 +292,11 @@ pub struct Core<R: Runtime = Wry> {
     /// Why no ticket of a project's board starts (its target branch has no commit yet, or is
     /// gone), by project, as the window is told: not saved, found again by the next pass.
     pub(crate) board_issues: Mutex<HashMap<String, String>>,
+    /// What holds the autopilot back besides the quota windows read (the pause after a usage
+    /// limit with no resume planned), or no longer does ("Reprendre maintenant"). Not saved.
+    pub(crate) hold: Mutex<board::Hold>,
+    /// The autopilot's pause as the window was last told (`refresh_pause`).
+    pub(crate) pause_shown: Mutex<Option<AutopilotPause>>,
     /// Blocks of ports reserved for agents being made, or being given one: taken until the agent
     /// holds its own.
     pub(crate) ports_reserved: Mutex<Vec<u16>>,
@@ -320,6 +325,10 @@ pub struct Core<R: Runtime = Wry> {
     /// Scheduling passes asked for (`schedule`) and not over yet (tests only).
     #[cfg(test)]
     pub(crate) passes_queued: AtomicUsize,
+    /// How far ahead of the real clock the autopilot's pauses go by, in milliseconds (tests only:
+    /// the end of a pause without waiting for it).
+    #[cfg(test)]
+    pub(crate) clock_ahead: std::sync::atomic::AtomicI64,
 }
 
 /// The GitHub CLI on the PATH. Tests never see the machine's own: there it is absent, unless a
@@ -548,6 +557,8 @@ impl<R: Runtime> Core<R> {
             setups: Mutex::default(),
             claude_missing: AtomicBool::new(false),
             board_issues: Mutex::default(),
+            hold: Mutex::default(),
+            pause_shown: Mutex::default(),
             ports_reserved: Mutex::default(),
             merge_locks: Mutex::default(),
             accounts: RwLock::new(accounts),
@@ -563,6 +574,8 @@ impl<R: Runtime> Core<R> {
             gh_on_path: RwLock::default(),
             #[cfg(test)]
             passes_queued: AtomicUsize::new(0),
+            #[cfg(test)]
+            clock_ahead: std::sync::atomic::AtomicI64::new(0),
         });
         core.usage.lock().today_cost = core.stats.today_cost();
         (core, rx)
@@ -611,6 +624,8 @@ impl<R: Runtime> Core<R> {
             loop {
                 tokio::time::sleep(Duration::from_secs(20)).await;
                 c.resume_due().await;
+                // The autopilot's pause ends by itself: a window's end, its 30 minutes after a limit.
+                c.pause_tick();
             }
         });
         let c = self.clone();
@@ -859,15 +874,19 @@ impl<R: Runtime> Core<R> {
             self.hub.emit(UiEvent::Usage { usage: u.clone() });
         }
         if let Some((five, week)) = fx.rate {
-            let mut u = self.usage.lock();
-            if five.is_some() {
-                u.five_hour = five;
+            {
+                let mut u = self.usage.lock();
+                if five.is_some() {
+                    u.five_hour = five;
+                }
+                if week.is_some() {
+                    u.seven_day = week;
+                }
+                u.updated_at = now_ms();
+                self.hub.emit(UiEvent::Usage { usage: u.clone() });
             }
-            if week.is_some() {
-                u.seven_day = week;
-            }
-            u.updated_at = now_ms();
-            self.hub.emit(UiEvent::Usage { usage: u.clone() });
+            // The autopilot pauses (or goes on) as the quotas just read say.
+            self.pause_tick();
         }
         if let Some(resets_at) = fx.limited {
             self.plan_resume(id, resets_at);
@@ -2969,6 +2988,7 @@ impl<R: Runtime> Core<R> {
                 Err(e) => log::debug!("usage endpoint: {e:#}"),
             }
         }
+        let read = windows.is_some();
         let snapshot = {
             let mut u = self.usage.lock();
             if let Some((five, week)) = windows {
@@ -2980,6 +3000,10 @@ impl<R: Runtime> Core<R> {
             u.clone()
         };
         self.hub.emit(UiEvent::Usage { usage: snapshot });
+        if read {
+            // Back under the threshold, the tickets go on at once.
+            self.pause_tick();
+        }
     }
 }
 

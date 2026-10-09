@@ -250,6 +250,29 @@ describe('SettingsModal', () => {
     });
   });
 
+  it('pauses the autopilot past a quota, for every project', async () => {
+    const backend = backendSaving();
+    render(SettingsModal, { tab: 'board', projectId: 'p1' });
+    const pause = screen.getByRole('group', { name: 'Pause au-delà du quota' });
+    expect(
+      within(pause)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['80 %', '90 %', '95 %', '100 %']);
+    expect(within(pause).getByRole('button', { name: '100 %' })).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      screen.getByText('Aucun ticket ne démarre tant que la fenêtre de 5 h ou la fenêtre hebdomadaire dépasse ce seuil.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('pour tous les projets')).toBeInTheDocument();
+    await userEvent.click(within(pause).getByRole('button', { name: '90 %' }));
+    expect(tab('Kanban')).toHaveClass('changed');
+    await save();
+    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ quotaPause: 90 });
+    // An app setting: no board changes.
+    expect(backend.called('board_set')).toHaveLength(0);
+    expect(app.settings.quotaPause).toBe(90);
+  });
+
   it('keeps the modal open, the changes in it, when a part could not be saved', async () => {
     backendSaving({
       board_set: () => {

@@ -108,6 +108,8 @@ export const api = {
   ticketResolveConflict: (id: string) => invoke<void>('ticket_resolve_conflict', { id }),
   ticketDismiss: (id: string) => invoke<void>('ticket_dismiss', { id }),
   boardSet: (projectId: string, settings: BoardSettings) => invoke<Project>('board_set', { projectId, settings }),
+  /** « Reprendre maintenant »: the autopilot's pause (a quota, a usage limit) is lifted. */
+  autopilotResume: () => invoke<void>('autopilot_resume'),
   gitBranches: (projectId: string) => invoke<string[]>('git_branches', { projectId }),
   /** Checks the credentials with the service, then saves them (apart, never sent back). */
   integrationConnect: (service: Service, account: AccountForm) => invoke<AccountView>('integration_connect', { service, account }),

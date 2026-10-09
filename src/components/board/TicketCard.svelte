@@ -220,7 +220,7 @@
     <div class="row">
       <span class="k">{waitLabel(t, queueIndex, s, busyCount, issue)}</span>
       <div style="flex:1"></div>
-      {#if canStart(t, s, busyCount, quota, issue)}
+      {#if canStart(t, s, busyCount, quota, issue, app.autopilotPause)}
         <button class="small" onclick={(e) => act(e, () => app.run(api.ticketStart(t.id)))}>Lancer</button>
       {/if}
     </div>

@@ -67,6 +67,36 @@ describe('Board', () => {
     return expect.poll(() => screen.queryByText('1 place libre')).toBeInTheDocument();
   });
 
+  it('says why the autopilot is paused, and resumes it at once on demand', async () => {
+    const backend = fakeBackend();
+    const at = new Date();
+    at.setHours(14, 0, 0, 0);
+    app.autopilotPause = { reason: 'week', pct: 96, until: at.getTime() };
+    render(Board, { project: app.projects[0] });
+    const said = 'Pilote auto en pause : quota hebdo à 96 % (reprise à 14:00)';
+    expect(screen.getByRole('status')).toHaveTextContent(said);
+    expect(screen.getByText(said)).toHaveAttribute('title', said);
+    // No place is worth showing meanwhile: none is taken.
+    expect(screen.queryByText('1 place libre')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Reprendre maintenant' }));
+    expect(backend.called('autopilot_resume')).toHaveLength(1);
+    // Over, as the backend tells it: the places again.
+    app.autopilotPause = null;
+    await expect.poll(() => screen.queryByText('1 place libre')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reprendre maintenant' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('offers no ticket to launch by hand while the autopilot is paused', async () => {
+    fakeBackend();
+    app.projects[0].board = { ...app.projects[0].board, autopilot: false };
+    app.autopilotPause = { reason: 'limit', pct: null, until: Date.now() + 1_800_000 };
+    render(Board, { project: app.projects[0] });
+    expect(within(col('À faire')).queryByRole('button', { name: 'Lancer' })).not.toBeInTheDocument();
+    app.autopilotPause = null;
+    await expect.poll(() => within(col('À faire')).queryAllByRole('button', { name: 'Lancer' }).length).toBe(2);
+  });
+
   it('adds a ticket from the form at the top of "À faire"', async () => {
     const backend = fakeBackend({ ticket_create: (a: any) => ticket({ id: 't9', key: 'DEM-9', title: a.draft.title }) });
     render(Board, { project: app.projects[0] });

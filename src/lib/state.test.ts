@@ -750,6 +750,21 @@ describe('board', () => {
     expect(app.boardIssues).toEqual({});
   });
 
+  it('knows why the autopilot is paused, from the start and as the backend tells it', async () => {
+    const pause = { reason: 'limit' as const, pct: null, until: 5 };
+    const { emit } = await start({ autopilotPause: pause });
+    expect(app.autopilotPause).toEqual(pause);
+    const week = { reason: 'week' as const, pct: 96, until: 9 };
+    emit({ type: 'autopilotPause', pause: week });
+    expect(app.autopilotPause).toEqual(week);
+    emit({ type: 'autopilotPause', pause: null });
+    expect(app.autopilotPause).toBeNull();
+    // An older backend sends none.
+    app.autopilotPause = pause;
+    await start();
+    expect(app.autopilotPause).toBeNull();
+  });
+
   it('starts without tickets when the snapshot has none', async () => {
     resetApp({ tickets: [ticket()] });
     await start({ tickets: undefined });

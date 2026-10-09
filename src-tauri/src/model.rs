@@ -34,6 +34,9 @@ pub struct Settings {
     pub insecure_tls: bool,
     /// Send "continue" by itself to an agent stopped by the usage limit, once the quota resets.
     pub auto_resume: bool,
+    /// "Pause au-delà du quota", in percent (80, 90, 95 or 100): no ticket of any board starts
+    /// while the 5-hour or the weekly window is used this much or more (`board::autopilot_pause`).
+    pub quota_pause: u32,
     /// What the external ticket systems' links do (their accounts are kept apart, with their
     /// secrets: `integrations::Accounts`).
     pub integrations: IntegrationSettings,
@@ -159,6 +162,7 @@ impl Default for Settings {
             proxy_terminals: false,
             insecure_tls: false,
             auto_resume: true,
+            quota_pause: 100,
             integrations: IntegrationSettings::default(),
         }
     }
@@ -737,6 +741,27 @@ pub struct RateWindow {
     pub resets_at: Option<i64>,
 }
 
+/// What holds the autopilot back: a quota window over "Pause au-delà du quota", or the pause
+/// after a usage limit with no resume planned.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum PauseReason {
+    FiveHour,
+    Week,
+    Limit,
+}
+
+/// Why no ticket of any board starts, and until when (`board::autopilot_pause`).
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AutopilotPause {
+    pub reason: PauseReason,
+    /// The window's use, 0-100 (none after a limit).
+    pub pct: Option<f64>,
+    /// When the tickets start again: the window's end, or about then after a limit.
+    pub until: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct UsageSnapshot {
@@ -832,6 +857,11 @@ pub enum UiEvent {
     BoardIssue {
         project_id: String,
         issue: Option<String>,
+    },
+    /// Why no ticket of any board starts for now (a quota, a usage limit), or None once they may
+    /// start again.
+    AutopilotPause {
+        pause: Option<AutopilotPause>,
     },
     /// An address to open in the default browser (a pull request to finish on GitHub).
     OpenUrl {
@@ -949,6 +979,41 @@ mod tests {
                 assert_eq!(n.allows(kind), kind != off, "{kind:?} with {off:?} off");
             }
         }
+    }
+
+    #[test]
+    fn settings_saved_before_the_quota_pause_hold_tickets_back_at_100_percent_only() {
+        let s: Settings =
+            serde_json::from_value(json!({ "sound": false, "autoResume": false })).unwrap();
+        assert_eq!(s.quota_pause, 100);
+        assert_eq!(Settings::default().quota_pause, 100);
+        let v = serde_json::to_value(Settings {
+            quota_pause: 90,
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(v["quotaPause"], json!(90));
+    }
+
+    #[test]
+    fn the_autopilots_pause_travels_in_camel_case() {
+        let e = UiEvent::AutopilotPause {
+            pause: Some(AutopilotPause {
+                reason: PauseReason::FiveHour,
+                pct: Some(100.0),
+                until: 5,
+            }),
+        };
+        assert_eq!(
+            serde_json::to_value(&e).unwrap(),
+            json!({ "type": "autopilotPause",
+                    "pause": { "reason": "fiveHour", "pct": 100.0, "until": 5 } })
+        );
+        let over = UiEvent::AutopilotPause { pause: None };
+        assert_eq!(
+            serde_json::to_value(&over).unwrap(),
+            json!({ "type": "autopilotPause", "pause": null })
+        );
     }
 
     #[test]

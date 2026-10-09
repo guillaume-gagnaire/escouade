@@ -22,6 +22,8 @@ export interface Settings {
   insecureTls: boolean;
   /** Send "continue" by itself to an agent stopped by the usage limit, once the quota resets. */
   autoResume: boolean;
+  /** « Pause au-delà du quota », in percent (80, 90, 95 or 100): no ticket of any board starts while the 5-hour or the weekly window is used this much. */
+  quotaPause: number;
   /** What the external ticket systems' links do (their accounts are kept apart, with their secrets). */
   integrations: IntegrationSettings;
 }
@@ -488,6 +490,15 @@ export interface Usage {
   updatedAt: number;
 }
 
+/** Why no ticket of any board starts, and until when: a quota window over « Pause au-delà du quota », or a usage limit with no resume planned. */
+export interface AutopilotPause {
+  reason: 'fiveHour' | 'week' | 'limit';
+  /** The window's use, 0-100 (null after a limit). */
+  pct: number | null;
+  /** When the tickets start again: the window's end, or about then after a limit. */
+  until: number;
+}
+
 /** What the running Claude processes use (each with what it started), per agent and in all. */
 export interface Resources {
   instances: number;
@@ -649,6 +660,8 @@ export type UiEvent =
   | { type: 'focusBoard'; projectId: string }
   /** Why no ticket of the project's board starts (its target branch), or null once they may. */
   | { type: 'boardIssue'; projectId: string; issue: string | null }
+  /** Why no ticket of any board starts for now, or null once they may. */
+  | { type: 'autopilotPause'; pause: AutopilotPause | null }
   | { type: 'toast'; text: string };
 
 export interface InitialState {
@@ -667,6 +680,8 @@ export interface InitialState {
   models: ModelInfo[];
   /** Why no ticket of a project's board starts, by project (none: they may). */
   boardIssues?: Record<string, string>;
+  /** Why no ticket of any board starts for now (none: they may). */
+  autopilotPause?: AutopilotPause | null;
   /** The external ticket systems' accounts. */
   accounts?: AccountView[];
 }

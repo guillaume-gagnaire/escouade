@@ -243,6 +243,7 @@ pub fn run() {
             commands::ticket_resolve_conflict,
             commands::ticket_dismiss,
             commands::board_set,
+            commands::autopilot_resume,
             commands::integration_connect,
             commands::integration_disconnect,
             commands::integration_containers,

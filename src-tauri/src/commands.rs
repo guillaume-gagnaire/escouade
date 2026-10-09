@@ -40,6 +40,8 @@ pub struct InitialState {
     models: Vec<ModelInfo>,
     /// Why no ticket of a project's board starts, by project.
     board_issues: HashMap<String, String>,
+    /// Why no ticket of any board starts for now (a quota, a usage limit), if none does.
+    autopilot_pause: Option<AutopilotPause>,
     /// The external ticket systems' accounts, as the window knows them.
     accounts: Vec<AccountView>,
 }
@@ -60,6 +62,8 @@ pub fn subscribe(core: CoreState, channel: Channel<UiEvent>) -> InitialState {
     let terminals = core.pty.list();
     let models = core.models.read().clone();
     let board_issues = core.board_issues.lock().clone();
+    // As it is now: the timer tells this window when it ends (and the board goes on then).
+    let autopilot_pause = core.autopilot_pause();
     let accounts = core.integration_accounts();
     InitialState {
         projects,
@@ -75,6 +79,7 @@ pub fn subscribe(core: CoreState, channel: Channel<UiEvent>) -> InitialState {
         version: core.app.package_info().version.to_string(),
         models,
         board_issues,
+        autopilot_pause,
         accounts,
     }
 }
@@ -701,6 +706,12 @@ pub fn ticket_dismiss(core: CoreState, id: String) -> Res<()> {
 #[tauri::command(async)]
 pub fn board_set(core: CoreState, project_id: String, settings: BoardSettings) -> Res<Project> {
     core.board_set(&project_id, settings).map_err(err)
+}
+
+/// « Reprendre maintenant » in the board's header: the autopilot's pause is lifted.
+#[tauri::command(async)]
+pub fn autopilot_resume(core: CoreState) {
+    core.autopilot_resume();
 }
 
 #[tauri::command]

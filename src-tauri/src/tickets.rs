@@ -366,9 +366,68 @@ impl<R: Runtime> Core<R> {
         })
     }
 
+    /// The time the autopilot's pauses go by: the real one (ahead by `clock_ahead` in tests).
+    pub(crate) fn pause_now(&self) -> i64 {
+        #[cfg(test)]
+        return now_ms() + self.clock_ahead.load(Ordering::SeqCst);
+        #[cfg(not(test))]
+        now_ms()
+    }
+
+    /// Why no ticket of any board starts now, if none does (`board::autopilot_pause`): the quota
+    /// windows last read, the pause after a usage limit, what "Reprendre maintenant" lifted.
+    pub(crate) fn autopilot_pause(&self) -> Option<AutopilotPause> {
+        let threshold = board::quota_threshold(self.settings.read().quota_pause);
+        let usage = self.usage.lock().clone();
+        let hold = *self.hold.lock();
+        board::autopilot_pause(&usage, threshold, &hold, self.pause_now())
+    }
+
+    /// The autopilot's pause looked at again, the window told when it changed (in order: looked
+    /// at and told under one lock): true when it changed.
+    fn refresh_pause(&self) -> bool {
+        let mut shown = self.pause_shown.lock();
+        let pause = self.autopilot_pause();
+        if *shown == pause {
+            return false;
+        }
+        *shown = pause.clone();
+        self.hub.emit(UiEvent::AutopilotPause { pause });
+        true
+    }
+
+    /// The autopilot's pause looked at again, as the quotas are read and by the timer: the window
+    /// is told when it changed, and once it is over, what may start starts.
+    pub fn pause_tick(self: &Arc<Self>) {
+        if self.refresh_pause() {
+            self.schedule();
+        }
+    }
+
+    /// A ticket met the usage limit with no resume planned: the next one would meet it too, so
+    /// none starts for a while (`board::LIMIT_PAUSE_MS`), or until "Reprendre maintenant".
+    fn pause_after_limit(&self) {
+        let until = self.pause_now() + board::LIMIT_PAUSE_MS;
+        self.hold.lock().limit_until = Some(until);
+        self.refresh_pause();
+    }
+
+    /// "Reprendre maintenant": the autopilot's pause is lifted (the one after a usage limit, and
+    /// the windows over the threshold until their end), and what may start starts.
+    pub fn autopilot_resume(self: &Arc<Self>) {
+        let threshold = board::quota_threshold(self.settings.read().quota_pause);
+        let usage = self.usage.lock().clone();
+        let now = self.pause_now();
+        self.hold.lock().lift(&usage, threshold, now);
+        self.refresh_pause();
+        self.schedule();
+    }
+
     /// One pass at a time: the tickets "À faire" that fit start, project by project.
     pub async fn schedule_now(self: &Arc<Self>) {
         let _pass = self.board_lock.lock().await;
+        // The window is told of the pause whatever else holds the tickets back.
+        self.refresh_pause();
         // Without Claude Code no agent can work: rather than make every ticket's worktree and
         // agent only to block it, none starts until it is found (saving the settings looks again).
         let claude_path = self.settings.read().claude_path.clone();
@@ -379,7 +438,9 @@ impl<R: Runtime> Core<R> {
             return;
         }
         self.claude_missing.store(false, Ordering::Release);
-        let paused = self.quota_paused();
+        // An agent waits for its quota, or the autopilot is paused (a quota window over the
+        // threshold, a usage limit with no resume): none starts, even launched by hand.
+        let paused = self.quota_paused() || self.autopilot_pause().is_some();
         let projects = self.projects.read().clone();
         for p in projects {
             let ids = board::to_start(&self.tickets.read(), &p.id, &p.board, paused);
@@ -588,9 +649,14 @@ impl<R: Runtime> Core<R> {
         };
         let Some(ticket_id) = ticket_id else { return };
         let limited = end == TurnEnd::Limited;
-        // A usage limit with no resume planned (turned off) would leave the ticket waiting forever.
+        // A usage limit with no resume planned (turned off, no reset known) would leave the
+        // ticket waiting forever: it is blocked. The next ticket would meet the limit too: the
+        // autopilot pauses first, so that no pass starts one in the place this frees.
         let end = match end {
-            TurnEnd::Limited if !resumes => TurnEnd::Error(QUOTA_LOST.into()),
+            TurnEnd::Limited if !resumes => {
+                self.pause_after_limit();
+                TurnEnd::Error(QUOTA_LOST.into())
+            }
             end => end,
         };
         let Ok(next) = self.edit_ticket(&ticket_id, |t| {
@@ -640,11 +706,14 @@ impl<R: Runtime> Core<R> {
     }
 
     /// The automatic resume its agent waited for after the usage limit is gone (cancelled, turned
-    /// off): its ticket "En cours" is blocked rather than hold its place forever.
+    /// off): its ticket "En cours" is blocked rather than hold its place forever, and the autopilot
+    /// pauses as after any usage limit with no resume (the limit is still there).
     pub(crate) fn resume_lost(self: &Arc<Self>, agent_id: &str) {
         let Some(id) = self.doing_ticket_of(agent_id) else {
             return;
         };
+        // Before its place is free: no pass starts the next ticket, which would meet the limit.
+        self.pause_after_limit();
         let blocked = self.edit_ticket(&id, |t| {
             let waiting = t.column == Column::Doing
                 && t.blocked.is_none()

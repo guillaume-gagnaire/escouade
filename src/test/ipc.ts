@@ -46,6 +46,7 @@ export const SETTINGS: Settings = {
   proxyTerminals: false,
   insecureTls: false,
   autoResume: true,
+  quotaPause: 100,
   integrations: {
     syncStates: true,
     loopComments: false,
@@ -204,6 +205,7 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.tickets = Object.fromEntries((over.tickets ?? []).map((t) => [t.id, t]));
   app.board = {};
   app.boardIssues = {};
+  app.autopilotPause = null;
   app.editor = {};
   app.ui = { activeProject: projects[0]?.id ?? null, view: 'project', selectedAgent: {} };
   app.settings = { ...SETTINGS };

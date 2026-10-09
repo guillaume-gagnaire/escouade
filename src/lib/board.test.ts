@@ -8,6 +8,7 @@ import {
   commitPreview,
   doneMeta,
   keyPrefix,
+  pauseLabel,
   placesLabel,
   quotaUntil,
   settingsSummary,
@@ -37,6 +38,26 @@ describe('board labels', () => {
       3,
     );
     expect(quotaUntil([agent()])).toBeNull();
+  });
+
+  it('tells why the autopilot is paused, and until when', () => {
+    const now = new Date(2026, 9, 3, 13, 30).getTime();
+    const at = new Date(2026, 9, 3, 14, 0).getTime();
+    expect(pauseLabel({ reason: 'week', pct: 96, until: at }, now)).toBe('Pilote auto en pause : quota hebdo à 96 % (reprise à 14:00)');
+    expect(pauseLabel({ reason: 'fiveHour', pct: 100, until: at }, now)).toBe(
+      'Pilote auto en pause : quota de 5 h à 100 % (reprise à 14:00)',
+    );
+    const about = new Date(2026, 9, 3, 14, 30).getTime();
+    expect(pauseLabel({ reason: 'limit', pct: null, until: about }, now)).toBe(
+      "Pilote auto en pause : limite d'usage atteinte (reprise vers 14:30)",
+    );
+    // A weekly window that ends another day says which, its use as the status bar rounds it.
+    const monday = new Date(2026, 9, 5, 9, 0).getTime();
+    expect(pauseLabel({ reason: 'week', pct: 95.6, until: monday }, now)).toBe(
+      'Pilote auto en pause : quota hebdo à 96 % (reprise le lundi 5 octobre à 09:00)',
+    );
+    // While it holds, no ticket is to launch by hand.
+    expect(canStart(ticket(), board({ autopilot: false }), 0, null, null, { reason: 'limit', pct: null, until: about })).toBe(false);
   });
 
   it('sums up what validating does, and names the button', () => {

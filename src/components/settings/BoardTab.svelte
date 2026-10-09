@@ -1,5 +1,6 @@
 <script lang="ts">
   import { commitPreview } from '../../lib/board';
+  import { fPct } from '../../lib/format';
   import { api } from '../../lib/ipc';
   import { EFFORTS, MODES, modelLabel, modelOptions } from '../../lib/models';
   import { settingsForm } from '../../lib/settings.svelte';
@@ -48,6 +49,8 @@
     { value: 'abort', label: 'Annuler' },
   ];
   const PARALLEL = [1, 2, 3, 4, 5, 6].map((n) => ({ value: n, label: String(n) }));
+  /** As the backend offers them (`board::QUOTA_PAUSES`). */
+  const QUOTA_PAUSES = [80, 90, 95, 100].map((n) => ({ value: n, label: fPct(n) }));
 </script>
 
 <Group title="Quand je valide un ticket « À tester »" plain>
@@ -123,6 +126,14 @@
 <Group title="Pilote auto">
   <Row label="Attribuer les tickets automatiquement" desc="Un agent libre prend le prochain ticket « À faire »">
     <Switch label="Attribuer les tickets automatiquement" bind:on={b.autopilot} />
+  </Row>
+  <!-- The quotas are the account's: an app setting, shown with each project's autopilot. -->
+  <Row
+    label="Pause au-delà du quota"
+    hint="pour tous les projets"
+    desc="Aucun ticket ne démarre tant que la fenêtre de 5 h ou la fenêtre hebdomadaire dépasse ce seuil."
+  >
+    <Chips label="Pause au-delà du quota" options={QUOTA_PAUSES} mono bind:value={settingsForm.settings.quotaPause} />
   </Row>
 </Group>
 

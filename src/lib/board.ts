@@ -1,7 +1,7 @@
 // The board's labels and counts, without state: what its header, columns and cards say.
 
-import { fTime, fUsd, plural } from './format';
-import type { Agent, BoardAction, BoardSettings, Column, Ticket } from './types';
+import { fPct, fTime, fUsd, fWhen, plural } from './format';
+import type { Agent, AutopilotPause, BoardAction, BoardSettings, Column, Ticket } from './types';
 
 export const COLUMNS: { id: Column; label: string; color: string; empty: string }[] = [
   { id: 'todo', label: 'À faire', color: 'var(--dim)', empty: "Ajoute un ticket : un agent le prendra dès qu'une place se libère." },
@@ -36,6 +36,15 @@ export function placesLabel(busyCount: number, max: number, quota: number | null
   return free ? plural(free, 'place libre', 'places libres') : 'Toutes les places sont prises';
 }
 
+/** Why no ticket starts, in the header: a window's end is known to the minute, the end of the pause after a limit only about. */
+export function pauseLabel(p: AutopilotPause, now: number): string {
+  const why =
+    p.reason === 'limit'
+      ? `limite d'usage atteinte (reprise vers ${fTime(p.until)})`
+      : `quota ${p.reason === 'week' ? 'hebdo' : 'de 5 h'} à ${fPct(p.pct ?? 100)} (reprise ${fWhen(p.until, now)})`;
+  return `Pilote auto en pause : ${why}`;
+}
+
 /** What validating a ticket does, in the header's button. */
 export function settingsSummary(s: BoardSettings, target: string): string {
   switch (s.action) {
@@ -68,9 +77,19 @@ export function waitLabel(t: Ticket, queueIndex: number, s: BoardSettings, busyC
   return queueIndex === 0 ? "Pris dès qu'une place se libère" : `En attente d'une place (${busyCount}/${s.maxParallel})`;
 }
 
-/** "Lancer": the autopilot is off, a place is free, no agent waits for its quota and the target branch can start a ticket. */
-export function canStart(t: Ticket, s: BoardSettings, busyCount: number, quota: number | null, issue: string | null = null): boolean {
-  return !issue && !s.autopilot && !t.forced && !quota && busyCount < s.maxParallel;
+/**
+ * "Lancer": the autopilot is off, a place is free, no agent waits for its quota, the target branch can start a ticket
+ * and the autopilot is not paused (a ticket launched meanwhile would wait all the same).
+ */
+export function canStart(
+  t: Ticket,
+  s: BoardSettings,
+  busyCount: number,
+  quota: number | null,
+  issue: string | null = null,
+  pause: AutopilotPause | null = null,
+): boolean {
+  return !issue && !pause && !s.autopilot && !t.forced && !quota && busyCount < s.maxParallel;
 }
 
 /** As the backend fixes it: the first three letters of the project's name (accents folded), TIC without any. */

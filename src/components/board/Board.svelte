@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { busy, COLUMNS, columnTickets, placesLabel, quotaUntil, settingsSummary } from '../../lib/board';
+  import { busy, COLUMNS, columnTickets, pauseLabel, placesLabel, quotaUntil, settingsSummary } from '../../lib/board';
   import { plural } from '../../lib/format';
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
@@ -23,6 +23,9 @@
   const places = $derived(placesLabel(busyCount, s.maxParallel, quota));
   /** Why no ticket starts from the target branch (no commit yet, or gone), as the backend says. */
   const issue = $derived(app.boardIssues[project.id] ?? null);
+  /** Why no ticket of any board starts for now (a quota window, a usage limit), as the backend says. */
+  const pause = $derived(app.autopilotPause);
+  const paused = $derived(pause ? pauseLabel(pause, app.now) : '');
 
   async function toggleAutopilot() {
     // The project comes back through the backend's event, in order with any newer one: its answer is not written over it.
@@ -43,6 +46,8 @@
     {:else if issue}
       <!-- Nor while the target branch cannot start a ticket. -->
       <span class="places missing" title={issue}>{issue}</span>
+    {:else if pause}
+      <!-- Nor while the autopilot is paused: the line under the header says why. -->
     {:else}
       <span class="places" title={places}>{places}</span>
     {/if}
@@ -74,6 +79,14 @@
       ></button>
     </div>
   </header>
+  {#if pause}
+    <!-- A line of its own under the header: its text and its button would not fit in a narrow one. -->
+    <div class="pause" role="status">
+      <span class="dot" aria-hidden="true"></span>
+      <span class="why" title={paused}>{paused}</span>
+      <button class="resume" onclick={() => app.run(api.autopilotResume())}>Reprendre maintenant</button>
+    </div>
+  {/if}
   <div class="cols">
     {#each COLUMNS as c (c.id)}
       <BoardColumn column={c} tickets={columnTickets(tickets, c.id)} {project} {busyCount} {quota} />
@@ -229,6 +242,48 @@
   .auto .l {
     font-size: 12.5px;
     font-weight: 600;
+  }
+  .pause {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 20px 8px 24px;
+    border-bottom: 1px solid var(--line);
+    background: var(--elev);
+    font-size: 12.5px;
+  }
+  .pause .dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--wait);
+  }
+  /* Cut with an ellipsis in a narrow window, in full in its tooltip. */
+  .why {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+  }
+  .resume {
+    flex: none;
+    height: 28px;
+    padding: 0 12px;
+    border: 1px solid var(--line2);
+    border-radius: var(--r-sm);
+    background: var(--elev2);
+    color: var(--text);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .resume:hover {
+    border-color: var(--accent);
   }
   .cols {
     flex: 1;

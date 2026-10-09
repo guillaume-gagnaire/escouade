@@ -78,6 +78,29 @@ impl Harness {
         .await
     }
 
+    /// The app's settings changed by `f`, saved as the window does.
+    fn set_settings(&self, f: impl FnOnce(&mut Settings)) {
+        let mut s = self.core.settings.read().clone();
+        f(&mut s);
+        self.core.save_settings(s).unwrap();
+    }
+
+    /// The autopilot's pauses the window was told of, in order (null: over).
+    fn pauses(&self) -> Vec<Value> {
+        self.events
+            .lock()
+            .iter()
+            .filter(|e| e["type"] == "autopilotPause")
+            .map(|e| e["pause"].clone())
+            .collect()
+    }
+
+    /// The autopilot's clock `ms` ahead of the real one, and its timer's look at its pause then.
+    fn pause_tick_after(&self, ms: i64) {
+        self.core.clock_ahead.store(ms, Ordering::SeqCst);
+        self.core.pause_tick();
+    }
+
     /// Claude Code can no longer be found: no agent process starts.
     fn lose_claude(&self) {
         self.core.settings.write().claude_path =
@@ -980,16 +1003,23 @@ async fn a_ticket_stopped_by_the_usage_limit_waits_and_nothing_starts_until_the_
         h.ticket(&a.id).blocked.as_deref(),
         Some("Erreur : limite d'usage atteinte")
     );
-    h.wait_ticket(&b.id, "started after the quota", |t| {
-        t.column != Column::Todo
-    })
-    .await;
     h.wait("notified", |h| {
         h.alerts()
             .iter()
             .any(|x| x.ends_with("DEM-1 bloqué : Erreur : limite d'usage atteinte"))
     })
     .await;
+    // The next one would meet the limit too: none starts in its place before the quota resets
+    // (the fake CLI's 5-hour window, used up, ends in an hour).
+    h.wait_board_idle().await;
+    assert_eq!(h.ticket(&b.id).column, Column::Todo);
+    assert_eq!(h.pauses().last().unwrap()["reason"], "fiveHour");
+    h.pause_tick_after(3_600_000 + 1_000);
+    h.wait_ticket(&b.id, "started after the quota", |t| {
+        t.column != Column::Todo
+    })
+    .await;
+    assert_eq!(h.pauses().last(), Some(&Value::Null));
 }
 
 #[tokio::test]
@@ -1008,23 +1038,166 @@ async fn turning_the_automatic_resume_off_blocks_the_ticket_that_waited_for_it()
         .ticket_create(&p.id, draft("Ensuite [ok]", &[], 5))
         .await
         .unwrap();
-    let off = Settings {
-        auto_resume: false,
-        ..h.core.settings.read().clone()
-    };
-    h.core.save_settings(off).unwrap();
+    h.set_settings(|s| s.auto_resume = false);
     assert_eq!(
         h.ticket(&a.id).blocked.as_deref(),
         Some("Erreur : limite d'usage atteinte")
     );
-    h.wait_ticket(&b.id, "started in its place", |t| t.column != Column::Todo)
-        .await;
     h.wait("notified", |h| {
         h.alerts()
             .iter()
             .any(|x| x.ends_with("DEM-1 bloqué : Erreur : limite d'usage atteinte"))
     })
     .await;
+    // Nothing starts in its place: the next one would meet the limit too.
+    h.wait_board_idle().await;
+    assert_eq!(h.ticket(&b.id).column, Column::Todo);
+    assert!(h.pauses().last().unwrap().is_object());
+    // Until "Reprendre maintenant", which lifts the pause after the limit and the window's.
+    h.core.autopilot_resume();
+    h.wait_ticket(&b.id, "started on « Reprendre maintenant »", |t| {
+        t.column != Column::Todo
+    })
+    .await;
+    assert_eq!(h.pauses().last(), Some(&Value::Null));
+}
+
+#[tokio::test]
+async fn a_usage_limit_with_no_resume_blocks_its_ticket_and_pauses_the_autopilot_for_30_minutes() {
+    let h = harness("tk-quota-pause");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.max_parallel = 1);
+    h.set_settings(|s| s.auto_resume = false);
+    let a = h
+        .core
+        .ticket_create(&p.id, draft("Atteindre la limite", &[], 5))
+        .await
+        .unwrap();
+    let b = h
+        .core
+        .ticket_create(&p.id, draft("Ensuite [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.wait_ticket(&a.id, "blocked by the limit", |t| t.blocked.is_some())
+        .await;
+    assert_eq!(
+        h.ticket(&a.id).blocked.as_deref(),
+        Some("Erreur : limite d'usage atteinte")
+    );
+    // As with an API key: no quota window is known, only the pause after the limit holds.
+    {
+        let mut u = h.core.usage.lock();
+        u.five_hour = None;
+        u.seven_day = None;
+    }
+    h.core.pause_tick();
+    h.wait_board_idle().await;
+    assert_eq!(h.ticket(&b.id).column, Column::Todo);
+    let pause = h.pauses().last().cloned().unwrap();
+    assert_eq!(
+        (&pause["reason"], &pause["pct"]),
+        (&json!("limit"), &Value::Null)
+    );
+    let left = pause["until"].as_i64().unwrap() - now_ms();
+    assert!((29 * 60_000..=30 * 60_000).contains(&left), "{left}");
+    // Not before its 30 minutes are over.
+    h.pause_tick_after(29 * 60_000);
+    h.wait_board_idle().await;
+    assert_eq!(h.ticket(&b.id).column, Column::Todo);
+    h.pause_tick_after(30 * 60_000 + 1_000);
+    h.wait_ticket(&b.id, "started after the pause", |t| {
+        t.column != Column::Todo
+    })
+    .await;
+    assert_eq!(h.pauses().last(), Some(&Value::Null));
+}
+
+#[tokio::test]
+async fn nothing_starts_while_a_window_is_used_past_the_threshold_until_it_reads_under_it() {
+    let h = harness("tk-quota-window");
+    let (p, _) = h.project(false).await;
+    // A process to read the quotas from: the fake CLI's are well under any threshold.
+    h.agent_that_worked(&p.id).await;
+    h.set_settings(|s| s.quota_pause = 95);
+    let end = now_ms() + 3_600_000;
+    h.core.usage.lock().seven_day = Some(RateWindow {
+        pct: 96.0,
+        resets_at: Some(end),
+    });
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Patienter [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.wait_board_idle().await;
+    assert_eq!(h.ticket(&t.id).column, Column::Todo);
+    assert_eq!(
+        h.pauses(),
+        [json!({ "reason": "week", "pct": 96.0, "until": end })]
+    );
+    // Launched by hand ("Lancer", the autopilot off), it waits too.
+    h.set_board(&p.id, |s| s.autopilot = false);
+    h.core.ticket_start(&t.id).unwrap();
+    h.wait_board_idle().await;
+    assert_eq!(h.ticket(&t.id).column, Column::Todo);
+    // Read under it, the tickets go by themselves.
+    h.core.refresh_usage().await;
+    h.wait_ticket(&t.id, "started under the threshold", |t| {
+        t.column != Column::Todo
+    })
+    .await;
+    assert_eq!(h.pauses().last(), Some(&Value::Null));
+}
+
+#[tokio::test]
+async fn a_window_past_the_threshold_holds_nothing_back_once_it_ends() {
+    let h = harness("tk-quota-window-end");
+    let (p, _) = h.project(false).await;
+    // Ended already: it holds nothing back.
+    h.core.usage.lock().five_hour = Some(RateWindow {
+        pct: 100.0,
+        resets_at: Some(now_ms() - 1_000),
+    });
+    let a = h
+        .core
+        .ticket_create(&p.id, draft("Tout de suite [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.wait_ticket(&a.id, "to test", |t| t.column == Column::Review)
+        .await;
+    // Under the threshold (the default 100 %): nothing holds either.
+    h.core.usage.lock().five_hour = Some(RateWindow {
+        pct: 96.0,
+        resets_at: Some(now_ms() + 60_000),
+    });
+    let b = h
+        .core
+        .ticket_create(&p.id, draft("Aussi [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.wait_ticket(&b.id, "to test", |t| t.column == Column::Review)
+        .await;
+    assert!(h.pauses().is_empty(), "{:?}", h.pauses());
+    // Used up until a minute from now: the next one waits for its end (every place free), then
+    // goes by itself.
+    h.core.usage.lock().five_hour = Some(RateWindow {
+        pct: 100.0,
+        resets_at: Some(now_ms() + 60_000),
+    });
+    let c = h
+        .core
+        .ticket_create(&p.id, draft("Ensuite [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.wait_board_idle().await;
+    assert_eq!(h.ticket(&c.id).column, Column::Todo);
+    assert_eq!(h.pauses().last().unwrap()["reason"], "fiveHour");
+    h.pause_tick_after(61_000);
+    h.wait_ticket(&c.id, "started once the window ended", |t| {
+        t.column != Column::Todo
+    })
+    .await;
+    assert_eq!(h.pauses().last(), Some(&Value::Null));
 }
 
 #[tokio::test]

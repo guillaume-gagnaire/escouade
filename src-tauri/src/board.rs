@@ -277,15 +277,15 @@ pub fn turn_end(t: &mut Ticket, end: &TurnEnd, report: Option<&Report>, now: i64
 }
 
 /// The tickets of `project_id` to start now, in order: "À faire" by rank (with the autopilot, or
-/// launched by hand), while tickets "En cours" and not blocked leave places; none while an agent
-/// waits for its quota.
+/// launched by hand), while tickets "En cours" and not blocked leave places; none while `paused`
+/// (an agent waits for its quota, or `autopilot_pause` holds them back).
 pub fn to_start(
     tickets: &[Ticket],
     project_id: &str,
     s: &BoardSettings,
-    quota_paused: bool,
+    paused: bool,
 ) -> Vec<String> {
-    if quota_paused {
+    if paused {
         return Vec::new();
     }
     let mine = || tickets.iter().filter(|t| t.project_id == project_id);
@@ -298,6 +298,98 @@ pub fn to_start(
         .collect();
     todo.sort_by_key(|t| (t.rank, t.created_at));
     todo.into_iter().take(free).map(|t| t.id.clone()).collect()
+}
+
+/// How long no ticket starts once one met the usage limit with no resume planned (turned off, an
+/// API key, no reset known): the next one would meet it too.
+pub const LIMIT_PAUSE_MS: i64 = 30 * 60_000;
+
+/// The choices of "Pause au-delà du quota", in percent of a window.
+pub const QUOTA_PAUSES: [u32; 4] = [80, 90, 95, 100];
+
+/// The threshold of "Pause au-delà du quota" as saved, 100 % when it is not one of the choices (a
+/// hand-edited file: 0 would hold every ticket back for good).
+pub fn quota_threshold(saved: u32) -> u32 {
+    if QUOTA_PAUSES.contains(&saved) {
+        saved
+    } else {
+        100
+    }
+}
+
+/// What holds the autopilot back besides the quota windows read, or no longer does.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Hold {
+    /// After a usage limit with no resume planned: until then.
+    pub limit_until: Option<i64>,
+    /// "Reprendre maintenant": the 5-hour and the weekly window hold nothing back until the end
+    /// they had then (the next window holds again).
+    pub lifted: [Option<i64>; 2],
+}
+
+impl Hold {
+    /// "Reprendre maintenant" at `now`: the pause after a limit goes, and so do the windows over
+    /// the threshold, until their end.
+    pub fn lift(&mut self, usage: &UsageSnapshot, threshold: u32, now: i64) {
+        self.limit_until = None;
+        for (i, w) in windows(usage).into_iter().enumerate() {
+            if let Some(end) = w.and_then(|w| over_until(w, threshold, now)) {
+                self.lifted[i] = Some(end);
+            }
+        }
+    }
+}
+
+/// The 5-hour and the weekly window, in the order of `Hold::lifted`.
+fn windows(usage: &UsageSnapshot) -> [Option<&RateWindow>; 2] {
+    [usage.five_hour.as_ref(), usage.seven_day.as_ref()]
+}
+
+/// The window's end, when it is used `threshold` percent or more and its end is still to come.
+fn over_until(w: &RateWindow, threshold: u32, now: i64) -> Option<i64> {
+    // Claude Code gives a fraction, times 100 here: 0.95 may come as 94.99999….
+    let over = w.pct + 1e-6 >= f64::from(threshold);
+    w.resets_at.filter(|end| over && *end > now)
+}
+
+/// Why no ticket of any board starts at `now`, if none does: a window (5 h, weekly) used
+/// `threshold` percent or more until its end, unless "Reprendre maintenant" lifted it, or the
+/// pause after a usage limit with no resume planned. When several hold, the one that ends last:
+/// the tickets wait for it. A window whose end is unknown holds nothing back: a reading that no
+/// longer comes would hold them forever.
+pub fn autopilot_pause(
+    usage: &UsageSnapshot,
+    threshold: u32,
+    hold: &Hold,
+    now: i64,
+) -> Option<AutopilotPause> {
+    let reasons = [PauseReason::FiveHour, PauseReason::Week];
+    let mut pauses: Vec<AutopilotPause> = windows(usage)
+        .into_iter()
+        .zip(reasons)
+        .zip(hold.lifted)
+        .filter_map(|((w, reason), lifted)| {
+            let w = w?;
+            let until = over_until(w, threshold, now)?;
+            // Lifted by "Reprendre maintenant" until the end it had then.
+            if lifted.is_some_and(|end| now < end) {
+                return None;
+            }
+            Some(AutopilotPause {
+                reason,
+                pct: Some(w.pct),
+                until,
+            })
+        })
+        .collect();
+    if let Some(until) = hold.limit_until.filter(|t| *t > now) {
+        pauses.push(AutopilotPause {
+            reason: PauseReason::Limit,
+            pct: None,
+            until,
+        });
+    }
+    pauses.into_iter().max_by_key(|p| p.until)
 }
 
 /// The refusal of a first ticket on a detached HEAD: there is no branch to start the tickets from
@@ -1168,6 +1260,128 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(to_start(&list, "p1", &zero, false), ["a"]);
+    }
+
+    fn window(pct: f64, resets_at: Option<i64>) -> Option<RateWindow> {
+        Some(RateWindow { pct, resets_at })
+    }
+
+    fn usage(five_hour: Option<RateWindow>, seven_day: Option<RateWindow>) -> UsageSnapshot {
+        UsageSnapshot {
+            five_hour,
+            seven_day,
+            ..Default::default()
+        }
+    }
+
+    const NOW: i64 = 1_790_000_000_000;
+
+    #[test]
+    fn a_window_used_up_to_the_threshold_pauses_the_autopilot_until_its_end() {
+        let free = Hold::default();
+        let u = usage(
+            window(40.0, Some(NOW + 10)),
+            window(96.0, Some(NOW + 5_000)),
+        );
+        assert_eq!(
+            autopilot_pause(&u, 95, &free, NOW),
+            Some(AutopilotPause {
+                reason: PauseReason::Week,
+                pct: Some(96.0),
+                until: NOW + 5_000
+            })
+        );
+        // Under the threshold, nothing holds.
+        assert_eq!(autopilot_pause(&u, 100, &free, NOW), None);
+        // At it, it holds, even read as a fraction times 100 that falls just under.
+        let at = usage(window(94.999_999_9, Some(NOW + 10)), None);
+        assert_eq!(
+            autopilot_pause(&at, 95, &free, NOW).map(|p| p.reason),
+            Some(PauseReason::FiveHour)
+        );
+        // Its end past, or unknown, it holds nothing back (a reading that no longer comes would
+        // hold the tickets forever).
+        let over = usage(window(100.0, Some(NOW)), window(100.0, None));
+        assert_eq!(autopilot_pause(&over, 100, &free, NOW), None);
+        // Both over it: the one that ends last, which the tickets wait for.
+        let both = usage(
+            window(100.0, Some(NOW + 9_000)),
+            window(97.0, Some(NOW + 5_000)),
+        );
+        assert_eq!(
+            autopilot_pause(&both, 95, &free, NOW).map(|p| (p.reason, p.until)),
+            Some((PauseReason::FiveHour, NOW + 9_000))
+        );
+    }
+
+    #[test]
+    fn a_usage_limit_with_no_resume_pauses_the_autopilot_for_a_while() {
+        let hold = Hold {
+            limit_until: Some(NOW + LIMIT_PAUSE_MS),
+            ..Default::default()
+        };
+        assert_eq!(LIMIT_PAUSE_MS, 30 * 60_000);
+        let unknown = UsageSnapshot::default();
+        assert_eq!(
+            autopilot_pause(&unknown, 100, &hold, NOW),
+            Some(AutopilotPause {
+                reason: PauseReason::Limit,
+                pct: None,
+                until: NOW + LIMIT_PAUSE_MS
+            })
+        );
+        assert_eq!(
+            autopilot_pause(&unknown, 100, &hold, NOW + LIMIT_PAUSE_MS),
+            None
+        );
+        // A window over the threshold that ends later: it is the one waited for.
+        let later = usage(window(100.0, Some(NOW + 2 * LIMIT_PAUSE_MS)), None);
+        assert_eq!(
+            autopilot_pause(&later, 100, &hold, NOW).map(|p| p.reason),
+            Some(PauseReason::FiveHour)
+        );
+    }
+
+    #[test]
+    fn resuming_now_lifts_the_pause_until_the_end_the_windows_had() {
+        let u = usage(
+            window(100.0, Some(NOW + 9_000)),
+            window(50.0, Some(NOW + 50_000)),
+        );
+        let mut hold = Hold {
+            limit_until: Some(NOW + LIMIT_PAUSE_MS),
+            ..Default::default()
+        };
+        hold.lift(&u, 90, NOW);
+        assert_eq!(hold.limit_until, None);
+        assert_eq!(autopilot_pause(&u, 90, &hold, NOW), None);
+        assert_eq!(autopilot_pause(&u, 90, &hold, NOW + 8_999), None);
+        // The weekly window, under the threshold then, was not lifted: over it since, it holds.
+        let week = usage(
+            window(100.0, Some(NOW + 9_000)),
+            window(92.0, Some(NOW + 50_000)),
+        );
+        assert_eq!(
+            autopilot_pause(&week, 90, &hold, NOW + 1_000).map(|p| p.reason),
+            Some(PauseReason::Week)
+        );
+        // The next 5-hour window, over it in its turn, holds again.
+        let next = usage(window(95.0, Some(NOW + 30_000)), None);
+        assert_eq!(
+            autopilot_pause(&next, 90, &hold, NOW + 9_000).map(|p| p.reason),
+            Some(PauseReason::FiveHour)
+        );
+    }
+
+    #[test]
+    fn a_quota_threshold_not_offered_is_100_percent() {
+        for v in QUOTA_PAUSES {
+            assert_eq!(quota_threshold(v), v);
+        }
+        assert_eq!(QUOTA_PAUSES, [80, 90, 95, 100]);
+        // A hand-edited settings file: 0 would hold every ticket back for good.
+        assert_eq!(quota_threshold(0), 100);
+        assert_eq!(quota_threshold(85), 100);
     }
 
     #[test]

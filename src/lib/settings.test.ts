@@ -222,6 +222,14 @@ describe('settingsForm', () => {
     expect(settingsForm.changed('projects')).toBe(true);
   });
 
+  it('marks the Kanban tab for its app setting, the quota pause, as for its boards', () => {
+    settingsForm.open();
+    expect(settingsForm.changed('board')).toBe(false);
+    settingsForm.settings.quotaPause = 90;
+    expect(settingsForm.changed('board')).toBe(true);
+    expect(settingsForm.changed('claude')).toBe(false);
+  });
+
   it('keeps what could not be saved to try again, without saving twice what was', async () => {
     let fail = true;
     const backend = fakeBackend({

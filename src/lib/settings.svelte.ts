@@ -30,6 +30,8 @@ const SETTINGS_OF: Partial<Record<SettingsTab, (keyof Settings)[]>> = {
   notifications: ['sound', 'osNotifications', 'notifyFor'],
   terminals: ['pwshPath', 'bashPath', 'wslDistro'],
   network: ['proxyUrl', 'noProxy', 'proxyTerminals', 'insecureTls'],
+  // The quotas are the account's: one pause for every project's board.
+  board: ['quotaPause'],
   integrations: ['integrations'],
 };
 
@@ -168,9 +170,9 @@ class SettingsForm {
     const keys = SETTINGS_OF[tab];
     const own = !!keys && keys.some((k) => k in changes(settingsOf(this.#base.settings), settingsOf(this.settings)));
     if (tab === 'integrations') return own || Object.keys(this.projects).some((id) => this.#linksChanged(id));
+    if (tab === 'board') return own || Object.keys(this.projects).some((id) => !empty(this.#boardChanges(id)));
     if (keys) return own;
     if (tab === 'projects') return Object.keys(this.projects).some((id) => !empty(this.#projectChanges(id)));
-    if (tab === 'board') return Object.keys(this.projects).some((id) => !empty(this.#boardChanges(id)));
     return false;
   }
 

@@ -15,6 +15,7 @@ import type {
   AccountView,
   Agent,
   AgentStatus,
+  AutopilotPause,
   FileTree,
   GitInfo,
   LaunchState,
@@ -132,6 +133,8 @@ class AppState {
   board = $state<Record<string, boolean>>({});
   /** Why no ticket of a project's board starts (its target branch has no commit yet, or is gone), by project. */
   boardIssues = $state<Record<string, string>>({});
+  /** Why no ticket of any board starts for now (a quota window, a usage limit), as the backend says. */
+  autopilotPause = $state<AutopilotPause | null>(null);
   /** The external ticket systems' accounts (their secrets stay in the backend). */
   accounts = $state<AccountView[]>([]);
   editor = $state<Record<string, EditorState>>({});
@@ -234,6 +237,7 @@ class AppState {
     this.agents = Object.fromEntries(s.agents.map((a) => [a.id, a]));
     this.tickets = Object.fromEntries((s.tickets ?? []).map((t) => [t.id, t]));
     this.boardIssues = { ...s.boardIssues };
+    this.autopilotPause = s.autopilotPause ?? null;
     this.accounts = s.accounts ?? [];
     this.attention = {};
     this.ui = { ...s.ui, view: s.ui.view || 'project', selectedAgent: s.ui.selectedAgent ?? {} };
@@ -297,6 +301,9 @@ class AppState {
       case 'boardIssue':
         if (e.issue) this.boardIssues[e.projectId] = e.issue;
         else delete this.boardIssues[e.projectId];
+        break;
+      case 'autopilotPause':
+        this.autopilotPause = e.pause;
         break;
       case 'conv':
         applyConvOps(e.agentId, e.ops);
