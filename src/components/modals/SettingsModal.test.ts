@@ -419,6 +419,21 @@ describe('SettingsModal', () => {
     await expect.poll(() => app.toasts.at(-1)?.text).toBe('Aucune mise à jour disponible.');
   });
 
+  it('installs updates by itself unless told not to', async () => {
+    const backend = fakeBackend({ save_settings: () => [] });
+    render(SettingsModal, { tab: 'about' });
+    const auto = screen.getByRole('switch', { name: 'Installer les mises à jour automatiquement' });
+    expect(auto).toHaveAttribute('aria-checked', 'true');
+    expect(
+      screen.getByText('Escouade redémarre d’elle-même quand aucun agent ne travaille et que tout est enregistré.'),
+    ).toBeInTheDocument();
+    await userEvent.click(auto);
+    expect(tab('À propos')).toHaveClass('changed');
+    await save();
+    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ autoUpdate: false });
+    expect(app.settings.autoUpdate).toBe(false);
+  });
+
   it('keeps the focus inside, from the tab it opens on', async () => {
     fakeBackend();
     const outside = document.createElement('button');

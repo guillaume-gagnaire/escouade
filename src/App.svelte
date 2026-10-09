@@ -4,6 +4,7 @@
   import { app } from './lib/state.svelte';
   import { handleShortcut } from './lib/shortcuts';
   import { watchForUpdates } from './lib/updater';
+  import { watchPresence } from './lib/presence';
   import { createWarmer } from './lib/warm';
   import Board from './components/board/Board.svelte';
   import ContextMenu from './components/ContextMenu.svelte';
@@ -17,6 +18,7 @@
   import SettingsModal from './components/modals/SettingsModal.svelte';
   import TestLaunchModal from './components/modals/TestLaunchModal.svelte';
   import ImportModal from './components/modals/ImportModal.svelte';
+  import UpdateModal from './components/modals/UpdateModal.svelte';
   import RunView from './components/RunView.svelte';
   import Sidebar from './components/Sidebar.svelte';
   import Stats from './components/Stats.svelte';
@@ -30,7 +32,13 @@
 
   onMount(() => {
     app.init().catch((e) => (initError = String(e)));
-    if (import.meta.env.PROD) return watchForUpdates();
+    if (!import.meta.env.PROD) return;
+    const stopChecks = watchForUpdates();
+    const stopPresence = watchPresence();
+    return () => {
+      stopChecks();
+      stopPresence();
+    };
   });
 
   $effect(() => {
@@ -127,6 +135,10 @@
   <TestLaunchModal agentId={app.modal.agentId} />
 {:else if app.modal?.kind === 'import'}
   <ImportModal projectId={app.modal.projectId} />
+{:else if app.modal?.kind === 'update' && app.update}
+  <UpdateModal version={app.update.version} notes={app.update.notes} />
+{:else if app.modal?.kind === 'notes'}
+  <UpdateModal version={app.modal.version} notes={app.modal.notes} installed />
 {/if}
 
 <ContextMenu />

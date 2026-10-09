@@ -47,6 +47,7 @@ export const SETTINGS: Settings = {
   insecureTls: false,
   autoResume: true,
   quotaPause: 100,
+  autoUpdate: true,
   integrations: {
     syncStates: true,
     loopComments: false,
@@ -225,6 +226,7 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.modal = null;
   app.toasts = [];
   app.update = null;
+  app.restartAt = null;
   app.models = [];
   app.accounts = [];
   app.ready = true;

@@ -28,7 +28,13 @@
     app.run(api.saveSettings($state.snapshot(app.settings)));
   }
 
-  let installing = $state(false);
+  /** Seconds left before the automatic restart for the update, when one is planned. */
+  const restartIn = $derived(app.restartAt === null ? null : Math.max(0, Math.ceil((app.restartAt - app.now) / 1000)));
+
+  function postpone() {
+    app.restartAt = null;
+    app.run(api.updatePostpone());
+  }
 
   type SyncOp = 'pull' | 'push' | 'fetch';
   const SYNC: Record<SyncOp, { label: string; call: (projectId: string) => Promise<string> }> = {
@@ -150,16 +156,13 @@
     </button>
   {/if}
   <div style="flex:1"></div>
-  {#if app.update}
-    <button
-      class="upd"
-      disabled={installing}
-      onclick={async () => {
-        installing = true;
-        await app.run(app.update!.install());
-        installing = false;
-      }}>{installing ? 'Installation…' : `Mise à jour ${app.update.version} disponible → installer`}</button
-    >
+  {#if restartIn !== null}
+    <span class="it v">Redémarrage dans {restartIn} s</span>
+    <button class="small" onclick={postpone}>Plus tard</button>
+  {:else if app.update?.ready}
+    <button class="upd" onclick={() => (app.modal = { kind: 'update' })}>Mise à jour {app.update.version} prête · Redémarrer</button>
+  {:else if app.update}
+    <span class="it">Mise à jour {app.update.version}…</span>
   {/if}
   <button class="small" onclick={toggleSound} title="Son des notifications">♪ {app.settings.sound ? 'On' : 'Off'}</button>
   <button

@@ -230,6 +230,42 @@ describe('StatusBar sync with the remote', () => {
   });
 });
 
+describe('StatusBar update', () => {
+  beforeEach(() => {
+    resetApp();
+    app.now = Date.UTC(2026, 9, 10, 9, 0, 0);
+  });
+
+  it('shows the update downloading, then offers the restart that installs it', async () => {
+    fakeBackend();
+    app.update = { version: '1.6.0', notes: '- Nouveautés', ready: false };
+    render(StatusBar);
+    expect(screen.getByText('Mise à jour 1.6.0…')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Mise à jour/ })).toBeNull();
+
+    app.update = { ...app.update, ready: true };
+    await tick();
+    await userEvent.click(screen.getByRole('button', { name: 'Mise à jour 1.6.0 prête · Redémarrer' }));
+    expect(app.modal).toEqual({ kind: 'update' });
+  });
+
+  it('counts down to the automatic restart, which « Plus tard » calls off', async () => {
+    const backend = fakeBackend();
+    app.update = { version: '1.6.0', notes: '', ready: true };
+    app.restartAt = app.now + 25_000;
+    render(StatusBar);
+    expect(screen.getByText('Redémarrage dans 25 s')).toBeInTheDocument();
+    app.now += 1_000;
+    await tick();
+    expect(screen.getByText('Redémarrage dans 24 s')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Plus tard' }));
+    expect(backend.called('update_postpone')).toHaveLength(1);
+    expect(screen.queryByText(/Redémarrage dans/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Mise à jour 1.6.0 prête · Redémarrer' })).toBeInTheDocument();
+  });
+});
+
 describe('StatusBar day cost', () => {
   it('includes what running turns cost so far, marked as an estimate', () => {
     resetApp({ agents: [agent({ id: 'a1', status: 'running', liveCost: 0.5 }), agent({ id: 'a2', liveCost: 0.25 })] });

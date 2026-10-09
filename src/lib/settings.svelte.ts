@@ -33,6 +33,7 @@ const SETTINGS_OF: Partial<Record<SettingsTab, (keyof Settings)[]>> = {
   // The quotas are the account's: one pause for every project's board.
   board: ['quotaPause'],
   integrations: ['integrations'],
+  about: ['autoUpdate'],
 };
 
 /** What the modal sets of a project, as the backend's `update_project` takes it, its board apart. */

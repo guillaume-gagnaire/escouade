@@ -1,10 +1,17 @@
 <script lang="ts">
-  import { app } from '../lib/state.svelte';
+  import { app, type Toast } from '../lib/state.svelte';
+
+  function act(t: Toast) {
+    app.dismissToast(t.id);
+    t.action?.onClick();
+  }
 </script>
 
 <div class="toasts" role="status" aria-live="polite">
   {#each app.toasts as t (t.id)}
-    <div class="toast {t.kind}">{t.text}</div>
+    <div class="toast {t.kind}">
+      {t.text}{#if t.action}<button class="act" onclick={() => act(t)}>{t.action.label}</button>{/if}
+    </div>
   {/each}
 </div>
 
@@ -37,5 +44,18 @@
   }
   .ok {
     border-color: var(--ok);
+  }
+  .act {
+    margin-left: 10px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--accent);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .act:hover {
+    text-decoration: underline;
   }
 </style>

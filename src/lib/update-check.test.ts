@@ -3,12 +3,15 @@ import { fakeBackend } from '../test/ipc';
 import { check } from './update-check';
 
 describe('check', () => {
-  it('finds an update through the backend, which installs or frees it', async () => {
-    const backend = fakeBackend({ update_check: () => ({ id: 3, version: '1.6.0', notes: 'Notes 1.6.0' }) });
+  it('finds an update through the backend, which downloads or frees it', async () => {
+    const backend = fakeBackend({
+      update_check: () => ({ id: 3, version: '1.6.0', notes: 'Notes 1.6.0' }),
+      update_download: () => true,
+    });
     const update = await check();
     expect(update).toMatchObject({ version: '1.6.0', body: 'Notes 1.6.0' });
-    await update!.downloadAndInstall();
-    expect(backend.called('update_install').map((c) => c.args)).toEqual([{ id: 3 }]);
+    expect(await update!.download()).toBe(true);
+    expect(backend.called('update_download').map((c) => c.args)).toEqual([{ id: 3 }]);
     await update!.close();
     expect(backend.called('update_close').map((c) => c.args)).toEqual([{ id: 3 }]);
   });

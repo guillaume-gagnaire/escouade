@@ -142,6 +142,12 @@
     <Row label="Escouade {app.version}" desc={app.claudeFound ? 'Claude Code détecté' : 'Claude Code introuvable'}>
       <button class="btn" disabled={checking} onclick={check}>{checking ? 'Recherche…' : 'Rechercher une mise à jour'}</button>
     </Row>
+    <Row
+      label="Installer les mises à jour automatiquement"
+      desc="Escouade redémarre d’elle-même quand aucun agent ne travaille et que tout est enregistré."
+    >
+      <Switch label="Installer les mises à jour automatiquement" bind:on={s.autoUpdate} />
+    </Row>
     <Row label="Données locales" desc="~/.escouade/" />
   </Group>
 {/if}

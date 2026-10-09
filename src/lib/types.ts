@@ -24,6 +24,8 @@ export interface Settings {
   autoResume: boolean;
   /** « Pause au-delà du quota », in percent (80, 90, 95 or 100): no ticket of any board starts while the 5-hour or the weekly window is used this much. */
   quotaPause: number;
+  /** « Installer les mises à jour automatiquement »: the app restarts by itself for an update once at rest. */
+  autoUpdate: boolean;
   /** What the external ticket systems' links do (their accounts are kept apart, with their secrets). */
   integrations: IntegrationSettings;
 }
@@ -653,6 +655,8 @@ export type UiEvent =
   | { type: 'resources'; resources: Resources }
   | { type: 'models'; models: ModelInfo[] }
   | { type: 'quitRequested'; unsaved: number }
+  /** The automatic restart for the update downloaded: when it comes, or null once called off. */
+  | { type: 'updateRestart'; at: number | null }
   | { type: 'ticket'; ticket: Ticket }
   | { type: 'ticketRemoved'; id: string; projectId: string }
   | { type: 'project'; project: Project }
@@ -684,6 +688,16 @@ export interface InitialState {
   autopilotPause?: AutopilotPause | null;
   /** The external ticket systems' accounts. */
   accounts?: AccountView[];
+  /** The update installed since the app's last start, told once. */
+  installed?: InstalledUpdate | null;
+  /** When the automatic restart planned for an update comes. */
+  restartAt?: number | null;
+}
+
+/** An update installed: its version and its release notes (markdown). */
+export interface InstalledUpdate {
+  version: string;
+  notes: string;
 }
 
 export interface Bucket {

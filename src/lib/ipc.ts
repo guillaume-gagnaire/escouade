@@ -151,10 +151,17 @@ export const api = {
   isolaDown: (agentId: string) => invoke<void>('isola_down', { agentId }),
   /** The setup and teardown Claude suggests for the project's worktrees, from what it reads of it. */
   suggestWorktreeSteps: (projectId: string) => invoke<WorktreeSuggestion>('suggest_worktree_steps', { projectId }),
-  /** A newer release, through the network settings (proxy, TLS verification), kept by the backend for its install. */
+  /** A newer release, through the network settings (proxy, TLS verification), kept by the backend for its download. */
   updateCheck: () => invoke<FoundRelease | null>('update_check'),
-  updateInstall: (id: number) => invoke<void>('update_install', { id }),
+  /** Downloads the release found, its signature checked, kept by the backend until it installs: true once it is the one ready. */
+  updateDownload: (id: number) => invoke<boolean>('update_download', { id }),
   updateClose: (id: number) => invoke<void>('update_close', { id }),
+  /** « Redémarrer maintenant »: the update downloaded installs, the app stopped cleanly first, and the app starts again. */
+  updateRestart: () => invoke<void>('update_restart'),
+  /** « Plus tard »: the automatic restart planned is called off. */
+  updatePostpone: () => invoke<void>('update_postpone'),
+  /** What an automatic restart waits for, as the window sees it. */
+  updatePresence: (presence: { modal: boolean; testing: boolean; activeAt: number }) => invoke<void>('update_presence', { presence }),
   /** One HTTP request without proxy (2 s): true for any answer. */
   httpReady: (url: string) => invoke<boolean>('http_ready', { url }),
   termWrite: (id: string, data: string) => invoke<void>('term_write', { id, data }),

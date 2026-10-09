@@ -44,10 +44,18 @@ pub struct InitialState {
     autopilot_pause: Option<AutopilotPause>,
     /// The external ticket systems' accounts, as the window knows them.
     accounts: Vec<AccountView>,
+    /// The update installed since the app's last start, told once (« Voir les nouveautés »).
+    installed: Option<crate::updates::Installed>,
+    /// The automatic restart planned for an update: when it comes.
+    restart_at: Option<i64>,
 }
 
 #[tauri::command]
-pub fn subscribe(core: CoreState, channel: Channel<UiEvent>) -> InitialState {
+pub fn subscribe(
+    core: CoreState,
+    updates: State<crate::updates::Updates>,
+    channel: Channel<UiEvent>,
+) -> InitialState {
     core.hub.set_channel(channel);
     core.reset_unsaved();
     // One lock at a time, each guard ending with its statement: in a struct literal the guards
@@ -65,6 +73,7 @@ pub fn subscribe(core: CoreState, channel: Channel<UiEvent>) -> InitialState {
     // As it is now: the timer tells this window when it ends (and the board goes on then).
     let autopilot_pause = core.autopilot_pause();
     let accounts = core.integration_accounts();
+    let version = core.app.package_info().version.to_string();
     InitialState {
         projects,
         tickets,
@@ -76,7 +85,9 @@ pub fn subscribe(core: CoreState, channel: Channel<UiEvent>) -> InitialState {
         usage,
         git,
         terminals,
-        version: core.app.package_info().version.to_string(),
+        installed: crate::updates::take_installed(&core.data, &version),
+        restart_at: updates.restart_at(),
+        version,
         models,
         board_issues,
         autopilot_pause,
@@ -263,10 +274,13 @@ pub async fn delete_agent(
 #[tauri::command]
 pub async fn merge_agent(
     core: CoreState<'_>,
+    updates: State<'_, crate::updates::Updates>,
     id: String,
     squash: bool,
     switch_to_base: bool,
 ) -> Res<String> {
+    // The app does not restart for an update in the middle of it.
+    let _merging = updates.merging();
     core.merge_agent(&id, squash, switch_to_base)
         .await
         .map_err(|e| match e.downcast_ref::<NotOnBase>() {
@@ -629,10 +643,10 @@ pub fn play_chime() {
     crate::notify::play_chime();
 }
 
+/// « Quitter »: with an update downloaded, it installs silently and the app stays closed.
 #[tauri::command]
-pub fn quit_app(core: CoreState, app: tauri::AppHandle) {
-    core.shutdown();
-    app.exit(0);
+pub fn quit_app(app: tauri::AppHandle) {
+    crate::updates::quit(&app);
 }
 
 /// How many files the editor holds unsaved: "Quitter" asks the window first when there are some.
@@ -813,10 +827,34 @@ pub async fn update_check(
         .map_err(err)
 }
 
-/// Downloads and installs the update found as `id`.
+/// Downloads the update found as `id`, its signature checked, and keeps it until it installs:
+/// true when it is the one ready now.
 #[tauri::command]
-pub async fn update_install(updates: State<'_, crate::updates::Updates>, id: u32) -> Res<()> {
-    crate::updates::install(&updates, id).await.map_err(err)
+pub async fn update_download(updates: State<'_, crate::updates::Updates>, id: u32) -> Res<bool> {
+    updates.download(id).await.map_err(err)
+}
+
+/// « Redémarrer maintenant »: the update downloaded installs, the app stopped cleanly first, and
+/// the app starts again on it.
+#[tauri::command]
+pub async fn update_restart(app: tauri::AppHandle) -> Res<()> {
+    crate::updates::restart_now(app).await.map_err(err)
+}
+
+/// « Plus tard »: the automatic restart planned is called off.
+#[tauri::command]
+pub fn update_postpone(app: tauri::AppHandle) {
+    crate::updates::postpone(&app);
+}
+
+/// What the window says of itself for an automatic restart: a modal open, a test launch being
+/// prepared, its last key or mouse input.
+#[tauri::command]
+pub fn update_presence(
+    updates: State<crate::updates::Updates>,
+    presence: crate::updates::Presence,
+) {
+    updates.set_presence(presence);
 }
 
 /// The update found as `id` is no longer offered.

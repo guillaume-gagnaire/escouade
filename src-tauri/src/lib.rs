@@ -106,8 +106,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
                 if core.ask_before_quit() {
                     notify::show_main(app);
                 } else {
-                    core.shutdown();
-                    app.exit(0);
+                    updates::quit(app);
                 }
             }
             _ => {}
@@ -168,6 +167,7 @@ pub fn run() {
             app.manage(updates::Updates::default());
             build_tray(app)?;
             core.start(git_rx);
+            updates::watch(app.handle().clone());
             if let Some(w) = app.get_webview_window("main") {
                 let _ = w.show();
                 let _ = w.set_focus();
@@ -255,7 +255,10 @@ pub fn run() {
             commands::test_run_start,
             commands::http_ready,
             commands::update_check,
-            commands::update_install,
+            commands::update_download,
+            commands::update_restart,
+            commands::update_postpone,
+            commands::update_presence,
             commands::update_close,
             commands::isola_services,
             commands::isola_down,

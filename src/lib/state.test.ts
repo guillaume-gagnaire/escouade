@@ -343,6 +343,32 @@ describe('AppState start-up', () => {
     await init;
     expect(app.agents.a1).toMatchObject({ status: 'running', tokens: 500 });
   });
+
+  it('tells of the update installed since the last start, its notes a click away', async () => {
+    resetApp();
+    await start({ installed: { version: '1.6.0', notes: '- Mises à jour silencieuses' } });
+    const toast = app.toasts.at(-1)!;
+    expect(toast).toMatchObject({ text: 'Escouade 1.6.0 est installée.', kind: 'ok' });
+    expect(toast.action?.label).toBe('Voir les nouveautés');
+    toast.action!.onClick();
+    expect(app.modal).toEqual({ kind: 'notes', version: '1.6.0', notes: '- Mises à jour silencieuses' });
+  });
+
+  it('says nothing of an update when none was installed', async () => {
+    resetApp();
+    await start({ installed: null });
+    expect(app.toasts).toEqual([]);
+  });
+
+  it('follows the automatic restart the backend plans, and calls off', async () => {
+    resetApp();
+    const { emit } = await start({ restartAt: 1_000 });
+    expect(app.restartAt).toBe(1_000);
+    emit({ type: 'updateRestart', at: null });
+    expect(app.restartAt).toBeNull();
+    emit({ type: 'updateRestart', at: 2_000 });
+    expect(app.restartAt).toBe(2_000);
+  });
 });
 
 describe('AppState launch commands', () => {

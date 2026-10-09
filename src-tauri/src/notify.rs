@@ -410,6 +410,46 @@ pub fn toast<R: Runtime>(
     let _ = (app, title, body, on_click);
 }
 
+/// System notification with a button, shown long. On Windows, `on_click` runs when the user
+/// activates the toast, told whether it was by its button; macOS notifications have no button
+/// (the window offers the same choice).
+pub fn toast_with_button<R: Runtime>(
+    app: &AppHandle<R>,
+    title: &str,
+    body: &str,
+    button: &str,
+    on_click: impl Fn(bool) + Send + 'static,
+) {
+    #[cfg(windows)]
+    {
+        use tauri_winrt_notification::{Duration, Toast};
+        let app_id = if cfg!(debug_assertions) {
+            Toast::POWERSHELL_APP_ID.to_string()
+        } else {
+            app.config().identifier.clone()
+        };
+        let res = Toast::new(&app_id)
+            .title(title)
+            .text1(body)
+            .sound(None)
+            .duration(Duration::Long)
+            .add_button(button, "button")
+            .on_activated(move |action| {
+                on_click(action.as_deref() == Some("button"));
+                Ok(())
+            })
+            .show();
+        if let Err(e) = res {
+            log::warn!("toast failed: {e:?}");
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = button;
+        toast(app, title, body, move || on_click(false));
+    }
+}
+
 /// Tray icon with an amber dot in the corner when agents are waiting.
 pub fn tray_icon<R: Runtime>(app: &AppHandle<R>, waiting: usize) -> Option<Image<'static>> {
     let base = app.default_window_icon()?;

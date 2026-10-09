@@ -37,6 +37,10 @@ pub struct Settings {
     /// "Pause au-delà du quota", in percent (80, 90, 95 or 100): no ticket of any board starts
     /// while the 5-hour or the weekly window is used this much or more (`board::autopilot_pause`).
     pub quota_pause: u32,
+    /// "Installer les mises à jour automatiquement": a downloaded update restarts the app by
+    /// itself once it is at rest (`updates::busy`). Off, the user restarts it, or the update
+    /// installs when the app is closed.
+    pub auto_update: bool,
     /// What the external ticket systems' links do (their accounts are kept apart, with their
     /// secrets: `integrations::Accounts`).
     pub integrations: IntegrationSettings,
@@ -163,6 +167,7 @@ impl Default for Settings {
             insecure_tls: false,
             auto_resume: true,
             quota_pause: 100,
+            auto_update: true,
             integrations: IntegrationSettings::default(),
         }
     }
@@ -847,6 +852,11 @@ pub enum UiEvent {
     QuitRequested {
         unsaved: usize,
     },
+    /// The automatic restart for the update downloaded: when it comes (the user is warned before
+    /// it), or none once it is called off.
+    UpdateRestart {
+        at: Option<i64>,
+    },
     #[serde(rename_all = "camelCase")]
     TerminalExit {
         id: String,
@@ -1067,6 +1077,15 @@ mod tests {
             serde_json::to_value(&over).unwrap(),
             json!({ "type": "autopilotPause", "pause": null })
         );
+    }
+
+    #[test]
+    fn settings_saved_before_automatic_updates_install_them() {
+        let s: Settings = serde_json::from_str(r#"{"sound":false}"#).unwrap();
+        assert!(s.auto_update);
+        assert_eq!(serde_json::to_value(&s).unwrap()["autoUpdate"], json!(true));
+        let off: Settings = serde_json::from_str(r#"{"autoUpdate":false}"#).unwrap();
+        assert!(!off.auto_update);
     }
 
     #[test]

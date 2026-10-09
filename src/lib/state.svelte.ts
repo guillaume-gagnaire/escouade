@@ -55,12 +55,23 @@ export type Modal =
     }
   | { kind: 'rename'; title: string; value: string; onSubmit: (v: string) => void | Promise<void> }
   | { kind: 'testLaunch'; agentId: string }
-  | { kind: 'import'; projectId: string };
+  | { kind: 'import'; projectId: string }
+  /** The update downloaded (`app.update`), which a restart installs. */
+  | { kind: 'update' }
+  /** The release notes of the update installed since the last start. */
+  | { kind: 'notes'; version: string; notes: string };
 
 export interface Toast {
   id: number;
   text: string;
   kind: 'info' | 'error' | 'ok';
+  /** A button of the toast, which closes it. */
+  action?: ToastAction;
+}
+
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
 }
 
 /** Statuses that call for the user: a question, the end of a turn, an error. */
@@ -68,8 +79,10 @@ const ALERT: ReadonlySet<AgentStatus> = new Set(['waiting', 'done', 'error']);
 
 export interface UpdateInfo {
   version: string;
+  /** Its release notes (markdown). */
   notes: string;
-  install: () => Promise<void>;
+  /** Downloaded, its signature checked: a restart installs it. */
+  ready: boolean;
 }
 
 /** What the editor shows for one source of a project. */
@@ -121,6 +134,8 @@ class AppState {
   now = $state(Date.now());
   gitTick = $state(0);
   update = $state<UpdateInfo | null>(null);
+  /** When the automatic restart for the update comes (the backend warned of it), if one is planned. */
+  restartAt = $state<number | null>(null);
   focusComposer = $state(0);
   /**
    * Agents that asked a question, finished or failed while not on screen, and that the user
@@ -251,6 +266,14 @@ class AppState {
     this.claudeFound = s.claudeFound;
     this.version = s.version;
     this.models = s.models;
+    this.restartAt = s.restartAt ?? null;
+    if (s.installed) {
+      const { version, notes } = s.installed;
+      this.toast(`Escouade ${version} est installée.`, 'ok', {
+        label: 'Voir les nouveautés',
+        onClick: () => (this.modal = { kind: 'notes', version, notes }),
+      });
+    }
     const early = this.early;
     this.early = null;
     for (const e of early) this.onEvent(e);
@@ -342,6 +365,9 @@ class AppState {
           danger: true,
           onConfirm: () => api.quit(),
         };
+        break;
+      case 'updateRestart':
+        this.restartAt = e.at;
         break;
     }
   }
@@ -669,10 +695,15 @@ class AppState {
     this.closeEditor(next.projectId);
   }
 
-  toast(text: string, kind: Toast['kind'] = 'info') {
+  toast(text: string, kind: Toast['kind'] = 'info', action?: ToastAction) {
     const id = ++this.toastId;
-    this.toasts.push({ id, text, kind });
-    setTimeout(() => (this.toasts = this.toasts.filter((t) => t.id !== id)), kind === 'error' ? 7000 : 3500);
+    this.toasts.push(action ? { id, text, kind, action } : { id, text, kind });
+    // One with a button stays long enough to reach it.
+    setTimeout(() => this.dismissToast(id), action ? 12_000 : kind === 'error' ? 7000 : 3500);
+  }
+
+  dismissToast(id: number) {
+    this.toasts = this.toasts.filter((t) => t.id !== id);
   }
 
   async run<T>(p: Promise<T>): Promise<T | undefined> {

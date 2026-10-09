@@ -189,6 +189,11 @@ impl DataDir {
         self.0.join("app.log")
     }
 
+    /// The update the app stopped to install, for the window of its next start.
+    pub fn update_note_file(&self) -> PathBuf {
+        self.0.join("update.json")
+    }
+
     pub fn ensure(&self) -> std::io::Result<()> {
         std::fs::create_dir_all(self.conversations())
     }
