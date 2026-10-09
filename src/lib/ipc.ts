@@ -21,6 +21,8 @@ import type {
   IsolaService,
   IssuePage,
   Project,
+  SearchQuery,
+  SearchResult,
   Service,
   Settings,
   ShellInfo,
@@ -98,6 +100,9 @@ export const api = {
   /** Creates an empty file, its folders with it; refused when something is already there. */
   fsCreate: (projectId: string, agentId: string | null, path: string) => invoke<void>('fs_create', { projectId, agentId, path }),
   fsBase: (projectId: string, agentId: string | null, path: string) => invoke<FileBase | null>('fs_base', { projectId, agentId, path }),
+  /** The lines of the source's files (the ignored ones and the agents' worktrees left out) that match `query`. */
+  codeSearch: (projectId: string, agentId: string | null, query: SearchQuery) =>
+    invoke<SearchResult>('code_search', { projectId, agentId, query }),
   setUnsaved: (count: number) => invoke<void>('set_unsaved', { count }),
   cancelResume: (id: string) => invoke<void>('cancel_resume', { id }),
   ticketCreate: (projectId: string, draft: TicketDraft) => invoke<Ticket>('ticket_create', { projectId, draft }),

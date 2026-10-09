@@ -474,6 +474,32 @@ export interface FileText {
   bom: boolean;
 }
 
+/**
+ * What `code_search` looks for in a source's files: `pattern` as written, or with `regex` an extended regular
+ * expression as git reads it (POSIX: `[[:space:]]`, and no `\b` on macOS). At most 5 000 matches, whatever is asked.
+ */
+export interface SearchQuery {
+  pattern: string;
+  regex: boolean;
+  caseSensitive: boolean;
+  wholeWord: boolean;
+  maxResults: number;
+}
+
+/** A matching line: its file from the source's root, its line and the column of its first match (1-based, in characters), its text cut at 300 characters. */
+export interface SearchMatch {
+  path: string;
+  line: number;
+  col: number;
+  text: string;
+}
+
+export interface SearchResult {
+  matches: SearchMatch[];
+  /** More lines matched than were asked for, or the search was stopped after 10 s. */
+  truncated: boolean;
+}
+
 /** The version a file is compared with ("HEAD", or the branch a worktree left). */
 export interface FileBase {
   reference: string;

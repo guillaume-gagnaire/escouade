@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 
-fn command(cwd: &str, args: &[&str]) -> tokio::process::Command {
+pub(crate) fn command(cwd: &str, args: &[&str]) -> tokio::process::Command {
     let mut cmd = tokio::process::Command::new("git");
     cmd.arg("-C")
         .arg(cwd)
@@ -530,18 +530,21 @@ pub async fn list_files(cwd: &str) -> Result<Vec<String>> {
     Ok(files)
 }
 
+/// The folders a folder that is not a repository is walked without: what builds and installs
+/// leave there (the search of such a folder leaves them out too).
+pub const WALK_SKIPPED: &[&str] = &[
+    ".git",
+    "node_modules",
+    "target",
+    "dist",
+    "build",
+    ".venv",
+    "__pycache__",
+    ".next",
+];
+
 /// Fallback file listing for folders that are not git repositories.
 pub fn walk_files(root: &str, limit: usize) -> Vec<String> {
-    const SKIP: &[&str] = &[
-        ".git",
-        "node_modules",
-        "target",
-        "dist",
-        "build",
-        ".venv",
-        "__pycache__",
-        ".next",
-    ];
     let mut out = Vec::new();
     let mut stack = vec![std::path::PathBuf::from(root)];
     while let Some(dir) = stack.pop() {
@@ -552,7 +555,7 @@ pub fn walk_files(root: &str, limit: usize) -> Vec<String> {
             let name = e.file_name().to_string_lossy().to_string();
             let Ok(ft) = e.file_type() else { continue };
             if ft.is_dir() {
-                if !SKIP.contains(&name.as_str()) {
+                if !WALK_SKIPPED.contains(&name.as_str()) {
                     stack.push(e.path());
                 }
             } else if let Ok(rel) = e.path().strip_prefix(root) {

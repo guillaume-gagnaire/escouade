@@ -49,6 +49,16 @@ describe('board commands', () => {
   });
 });
 
+describe('code search', () => {
+  it('asks the backend to search the files of a source with the names its command takes', async () => {
+    const result = { matches: [{ path: 'src/a.ts', line: 3, col: 7, text: 'const foo = 1;' }], truncated: false };
+    const backend = fakeBackend({ code_search: () => result });
+    const query = { pattern: 'foo', regex: false, caseSensitive: true, wholeWord: true, maxResults: 2000 };
+    expect(await api.codeSearch('p1', 'a2', query)).toEqual(result);
+    expect(backend.calls).toEqual([{ cmd: 'code_search', args: { projectId: 'p1', agentId: 'a2', query } }]);
+  });
+});
+
 describe('test launch commands', () => {
   it('asks the backend to prepare a launch, start a step of a recipe and probe an address', async () => {
     const info = { id: 't1', projectId: 'p1', name: 'web', shell: 'pwsh' };

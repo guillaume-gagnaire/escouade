@@ -7,6 +7,7 @@ use crate::integrations::{
 };
 use crate::model::*;
 use crate::pty::{self, ShellInfo, TermInfo};
+use crate::search;
 use crate::stats::StatsView;
 use crate::tickets::TicketDraft;
 use serde::Serialize;
@@ -474,6 +475,18 @@ pub async fn fs_base(
     fsedit::base(&root, base.as_deref(), &path)
         .await
         .map_err(err)
+}
+
+/// The lines of the source's files matching `query` (the agent's worktree, else the project).
+#[tauri::command]
+pub async fn code_search(
+    core: CoreState<'_>,
+    project_id: String,
+    agent_id: Option<String>,
+    query: search::SearchQuery,
+) -> Res<search::SearchResult> {
+    let (root, _) = core.edit_root(&project_id, agent_id).await.map_err(err)?;
+    search::search(&root, &query).await.map_err(err)
 }
 
 #[tauri::command(async)]

@@ -23,6 +23,7 @@ mod pricing;
 mod process_tests;
 mod pty;
 mod resources;
+mod search;
 #[cfg(unix)]
 mod shellenv;
 mod stats;
@@ -247,6 +248,7 @@ pub fn run() {
             commands::fs_write,
             commands::fs_create,
             commands::fs_base,
+            commands::code_search,
             commands::term_spawn,
             commands::run_start,
             commands::term_write,
