@@ -113,6 +113,8 @@ Dossier (+ Parcourir…), détection git (sinon `git init`), nom, aperçu d'ongl
 ## Notifications
 
 - Déclencheurs : question de Claude (AskUserQuestion / permission) et fin de tour.
+- Titre : « <projet> · <agent> ». Corps (120 caractères au plus) : autorisation « Autoriser <Outil> : <argument> ? » (la commande Bash, le fichier depuis le dossier de l'agent, l'URL…) ; question : le texte de la question ; fin de tour : la première ligne de la réponse finale, sans markdown, sinon « Tâche terminée » ; erreur : « Erreur : <raison> ».
+- Réglages › Notifications › « Me prévenir pour » : « Questions et autorisations », « Tâches terminées », « Erreurs », « Tickets (prêt à tester, bloqué) », toutes cochées par défaut. Une case décochée coupe le carillon et la notification système de ce type ; l'onglet et la carte de l'agent clignotent quand même.
 - Kanban : « ATL-42 prêt à tester », « ATL-42 bloqué : <raison> » (clic → Kanban du projet) ; pas de notification par fin de tour d'un agent de ticket « En cours » (ses questions notifient).
 - Dans l'app : pastilles pulsantes (onglet, carte agent, barre de statut) + carillon du design (2 notes synthétisées), coupable via « ♪ On/Off ».
 - App en arrière-plan / tray : toast Windows (clic → ouvre l'agent) + clignotement barre des tâches + badge tray.
@@ -138,7 +140,7 @@ Actifs · en attente · terminés │ Session 5 h (barre, %, reset dans) · Hebd
 Une seule modale pour toute l'app : ses onglets à gauche (point sur un onglet modifié, version d'Escouade en bas), un onglet à la fois sous son titre et sa description. « Enregistrer » enregistre d'un coup ce qui a changé dans tous les onglets et tous les projets, chaque partie par-dessus ce que l'app a alors (le Kanban avance seul) ; refusé, avec la raison, tant qu'un projet n'a pas de nom ou qu'une commande de lancement n'a pas de nom ou de ligne de commande ; ce qui n'a pas pu être enregistré reste dans la modale. « Annuler », Échap ou × jettent tout.
 
 - **Claude Code** : chemin de `claude`, modèle / effort / mode par défaut des nouveaux agents, reprise automatique après la limite d'usage, arrêt des process inactifs.
-- **Notifications** : notifications Windows, son (activé, « ▶ Tester »).
+- **Notifications** : « Me prévenir pour » (questions et autorisations, tâches terminées, erreurs, tickets), notifications Windows, son (activé, « ▶ Tester »).
 - **Projets** (sélecteur de projet, celui affiché par défaut) : nom, dossier (« Ouvrir »), couleur ; worktree par agent, fichiers copiés dans les worktrees, commandes de préparation et de démontage des worktrees (« ✦ Remplir automatiquement ») ; commandes de lancement ; « Fermer le projet… » (sa confirmation, acceptée ou non, revient aux réglages, brouillon intact).
 - **Kanban** (même sélecteur) : action à la validation (branche cible, stratégie ou PR en brouillon), commande de tests et « Relancer les tests avant », suppression du worktree une fois validé, message de commit généré (avec son aperçu), conflit, pilote auto, agents en parallèle et leurs modèle / effort / mode.
 - **Intégrations** (même sélecteur) : comptes Jira, Trello, GitHub, sources liées au projet, correspondance des statuts, synchronisation et import automatique (voir *Intégrations*).

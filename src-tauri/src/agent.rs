@@ -5,6 +5,7 @@ use crate::board::TurnEnd;
 use crate::claude::{truncate, ClaudeProcess};
 use crate::conv::Conv;
 use crate::model::*;
+use crate::notify;
 use crate::paths::relative_slash;
 use crate::pricing::{self, Usage};
 use anyhow::{anyhow, Result};
@@ -14,11 +15,33 @@ use std::sync::Arc;
 
 pub type AgentHandle = Arc<parking_lot::Mutex<AgentRt>>;
 
+/// What a notification is about: each kind has its own choice in the settings ("Me prévenir pour").
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NotifyKind {
+    /// A question or a permission waits for the user.
     Question,
+    /// A turn ended.
     Done,
+    /// A turn failed, or the process died.
     Error,
+    /// A ticket is ready to test, or blocked (raised by the board, never by an agent's own turn).
+    Ticket,
+}
+
+/// A notification an agent raises: its kind, and the words it says (its title is the agent's).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentAlert {
+    pub kind: NotifyKind,
+    pub body: String,
+}
+
+impl AgentAlert {
+    fn new(kind: NotifyKind, body: impl Into<String>) -> Self {
+        Self {
+            kind,
+            body: body.into(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -36,7 +59,7 @@ pub struct Effects {
     pub ops: Vec<ConvOp>,
     pub agent_changed: bool,
     pub save: bool,
-    pub notify: Option<NotifyKind>,
+    pub notify: Option<AgentAlert>,
     pub turns: Vec<TurnRow>,
     pub rate: Option<(Option<RateWindow>, Option<RateWindow>)>,
     /// The turn was stopped by the usage limit, which resets then (if Claude Code told).
@@ -96,6 +119,9 @@ pub struct AgentRt {
     pub activity: Option<String>,
     /// The assistant's text of the running turn (main thread), for the board's report.
     turn_text: String,
+    /// The latest text of the running turn's main thread that no tool followed: its final reply,
+    /// for the notification.
+    final_text: String,
     /// The setup of its new worktree under way: the step running ("npm ci (1/2)").
     pub setup: Option<String>,
     /// Why the setup of its worktree failed, until its ticket's first message tells it.
@@ -140,6 +166,7 @@ impl AgentRt {
             remote_linked: false,
             activity: None,
             turn_text: String::new(),
+            final_text: String::new(),
             setup: None,
             setup_failure: None,
             blocks: HashMap::new(),
@@ -230,6 +257,7 @@ impl AgentRt {
     fn forget_turn(&mut self) {
         self.activity = None;
         self.turn_text.clear();
+        self.final_text.clear();
     }
 
     /// What the agent does now, shown live; unchanged by a tool it has no words for, and never
@@ -309,6 +337,7 @@ impl AgentRt {
             self.queued += 1;
         } else {
             self.turn_text.clear();
+            self.final_text.clear();
             self.interrupted = false;
             self.set_status(AgentStatus::Running, fx);
         }
@@ -465,12 +494,14 @@ impl AgentRt {
                 fx,
             );
             self.set_status(AgentStatus::Error, fx);
+            let reason = format!("Claude Code s'est arrêté (code {code})");
+            fx.notify = Some(AgentAlert::new(
+                NotifyKind::Error,
+                notify::error_body(&reason),
+            ));
             if was_running {
-                fx.turn_end = Some(TurnEnd::Error(format!(
-                    "Claude Code s'est arrêté (code {code})"
-                )));
+                fx.turn_end = Some(TurnEnd::Error(reason));
             }
-            fx.notify = Some(NotifyKind::Error);
         }
         fx.agent_changed = true;
     }
@@ -729,9 +760,12 @@ impl AgentRt {
                                 self.turn_text.push_str("\n\n");
                             }
                             self.turn_text.push_str(text);
+                            self.final_text = text.to_string();
                         }
                     }
                     "tool" => {
+                        // What was said before a tool was a step on the way, not the final reply.
+                        self.final_text.clear();
                         let activity = tool_activity(
                             block["name"].as_str().unwrap_or_default(),
                             &block["input"],
@@ -1015,24 +1049,31 @@ impl AgentRt {
         } else {
             None
         };
+        let failed = is_error && !interrupted;
+        // Always with words: the frame's, else the kind of result it is, else a generic one.
+        let failure = failed.then(|| {
+            error
+                .clone()
+                .filter(|e| !e.trim().is_empty())
+                .or_else(|| {
+                    f["subtype"]
+                        .as_str()
+                        .filter(|s| !s.is_empty() && *s != "success")
+                        .map(str::to_string)
+                })
+                .unwrap_or_else(|| "Claude Code a signalé une erreur".to_string())
+        });
+        // The final reply: the text that no tool followed, else what Claude Code makes of it.
+        let reply = match std::mem::take(&mut self.final_text) {
+            text if !text.trim().is_empty() => text,
+            _ => f["result"].as_str().unwrap_or_default().to_string(),
+        };
         let end = if interrupted {
             TurnEnd::Interrupted
         } else if limited && is_error {
             TurnEnd::Limited
-        } else if is_error {
-            // Always with words: the frame's, else the kind of result it is, else a generic one.
-            TurnEnd::Error(
-                error
-                    .clone()
-                    .filter(|e| !e.trim().is_empty())
-                    .or_else(|| {
-                        f["subtype"]
-                            .as_str()
-                            .filter(|s| !s.is_empty() && *s != "success")
-                            .map(str::to_string)
-                    })
-                    .unwrap_or_else(|| "Claude Code a signalé une erreur".to_string()),
-            )
+        } else if let Some(reason) = failure.clone() {
+            TurnEnd::Error(reason)
         } else {
             let text = std::mem::take(&mut self.turn_text);
             TurnEnd::Finished(if text.trim().is_empty() {
@@ -1062,7 +1103,6 @@ impl AgentRt {
                 self.patch(&id, json!({ "queued": false }), fx);
             }
         }
-        let failed = is_error && !interrupted;
         self.set_status(
             if failed {
                 AgentStatus::Error
@@ -1072,10 +1112,9 @@ impl AgentRt {
             fx,
         );
         if !interrupted && !had_queue {
-            fx.notify = Some(if failed {
-                NotifyKind::Error
-            } else {
-                NotifyKind::Done
+            fx.notify = Some(match &failure {
+                Some(reason) => AgentAlert::new(NotifyKind::Error, notify::error_body(reason)),
+                None => AgentAlert::new(NotifyKind::Done, notify::done_body(&reply)),
             });
         }
         fx.agent_changed = true;
@@ -1094,6 +1133,11 @@ impl AgentRt {
                 let input = req["input"].clone();
                 let tool_use_id = req["tool_use_id"].as_str().unwrap_or("").to_string();
                 let suggestions = req["permission_suggestions"].clone();
+                let body = if tool == "AskUserQuestion" {
+                    notify::question_body(&input)
+                } else {
+                    notify::permission_body(&tool, &input, &self.meta.cwd)
+                };
                 let item = if tool == "AskUserQuestion" {
                     json!({
                         "kind": "question", "id": rid, "toolUseId": tool_use_id,
@@ -1122,7 +1166,7 @@ impl AgentRt {
                     },
                 );
                 self.set_status(AgentStatus::Waiting, fx);
-                fx.notify = Some(NotifyKind::Question);
+                fx.notify = Some(AgentAlert::new(NotifyKind::Question, body));
                 fx.agent_changed = true;
             }
             "elicitation" => {
@@ -1340,7 +1384,7 @@ mod tests {
         let mut fx = Effects::default();
         a.handle_frame(&json!({"type":"control_request","request_id":"r1","request":{"subtype":"can_use_tool","tool_name":"AskUserQuestion","tool_use_id":"tu1","input":{"questions":[{"question":"Q?","options":[]}]}}}), &mut fx);
         assert_eq!(a.meta.status, AgentStatus::Waiting);
-        assert_eq!(fx.notify, Some(NotifyKind::Question));
+        assert_eq!(fx.notify, Some(AgentAlert::new(NotifyKind::Question, "Q?")));
         assert!(a.has_pending("r1"));
 
         let usage = |inp: u64, out: u64, cost: f64| {
@@ -1362,6 +1406,143 @@ mod tests {
         assert_eq!(fx.turns[0].cache, 0);
         assert!((fx.turns[0].cost - 0.3).abs() < 1e-9);
         assert!((a.meta.cost - 0.8).abs() < 1e-9);
+    }
+
+    fn can_use_tool(a: &mut AgentRt, tool: &str, input: Value) -> Effects {
+        let mut fx = Effects::default();
+        a.handle_frame(
+            &json!({"type":"control_request","request_id":"r1","request":{
+                "subtype":"can_use_tool","tool_name":tool,"tool_use_id":"tu1","input":input}}),
+            &mut fx,
+        );
+        fx
+    }
+
+    fn says(a: &mut AgentRt, id: &str, text: &str) {
+        a.handle_frame(
+            &json!({"type":"assistant","message":{"id":id,"content":[{"type":"text","text":text}]},"parent_tool_use_id":null}),
+            &mut Effects::default(),
+        );
+    }
+
+    fn runs_tool(a: &mut AgentRt, id: &str) {
+        a.handle_frame(
+            &json!({"type":"assistant","message":{"id":id,"content":[{"type":"tool_use","id":format!("t-{id}"),"name":"Bash","input":{"command":"npm test"}}]},"parent_tool_use_id":null}),
+            &mut Effects::default(),
+        );
+    }
+
+    /// The turn's result frame, with Claude Code's own `result` text when given.
+    fn ends(a: &mut AgentRt, result: Option<&str>) -> Effects {
+        let mut fx = Effects::default();
+        a.handle_frame(
+            &json!({"type":"result","subtype":"success","is_error":false,"duration_ms":1,
+                "result":result,"modelUsage":{}}),
+            &mut fx,
+        );
+        fx
+    }
+
+    #[test]
+    fn a_permission_notifies_with_the_tool_and_what_it_acts_on() {
+        let mut a = rt();
+        let fx = can_use_tool(&mut a, "Bash", json!({"command":"rm -rf build"}));
+        assert_eq!(
+            fx.notify,
+            Some(AgentAlert::new(
+                NotifyKind::Question,
+                "Autoriser Bash : rm -rf build ?"
+            ))
+        );
+        // A file is told from the agent's folder.
+        let fx = can_use_tool(&mut a, "Edit", json!({"file_path":"C:/p/src/app.ts"}));
+        assert_eq!(
+            fx.notify.map(|n| n.body),
+            Some("Autoriser Edit : src/app.ts ?".to_string())
+        );
+        let fx = can_use_tool(&mut a, "WebFetch", json!({"url":"https://example.com/a"}));
+        assert_eq!(
+            fx.notify.map(|n| n.body),
+            Some("Autoriser WebFetch : https://example.com/a ?".to_string())
+        );
+    }
+
+    #[test]
+    fn the_end_of_a_turn_notifies_with_the_first_line_of_the_final_reply() {
+        let mut a = rt();
+        a.push_user("u1", "Corrige", 0, &[], &mut Effects::default());
+        // What was said on the way is no final reply: only what follows the last tool is.
+        says(&mut a, "m1", "Je regarde le filtre.");
+        runs_tool(&mut a, "m2");
+        says(&mut a, "m3", "## Bilan\n\nLe **filtre** accepte les PDF.");
+        let fx = ends(&mut a, Some("## Bilan\n\nLe filtre accepte les PDF."));
+        assert_eq!(fx.notify, Some(AgentAlert::new(NotifyKind::Done, "Bilan")));
+    }
+
+    #[test]
+    fn a_turn_that_ends_on_a_tool_tells_claude_codes_own_result_else_it_is_just_done() {
+        let mut a = rt();
+        a.push_user("u1", "Lance", 0, &[], &mut Effects::default());
+        says(&mut a, "m1", "Je lance les tests.");
+        runs_tool(&mut a, "m2");
+        let fx = ends(&mut a, Some("Les tests passent.\nDétail"));
+        assert_eq!(
+            fx.notify,
+            Some(AgentAlert::new(NotifyKind::Done, "Les tests passent."))
+        );
+        // Another turn, wordless: nothing of the previous one is told again.
+        a.push_user("u2", "Encore", 0, &[], &mut Effects::default());
+        let fx = ends(&mut a, None);
+        assert_eq!(
+            fx.notify,
+            Some(AgentAlert::new(NotifyKind::Done, "Tâche terminée"))
+        );
+    }
+
+    #[test]
+    fn a_failed_turn_notifies_with_its_reason() {
+        let mut a = rt();
+        a.push_user("u1", "Lance", 0, &[], &mut Effects::default());
+        let mut fx = Effects::default();
+        a.handle_frame(
+            &json!({"type":"result","subtype":"success","is_error":true,"duration_ms":1,
+                "result":"API Error: 500\nrequest id 42","modelUsage":{}}),
+            &mut fx,
+        );
+        assert_eq!(
+            fx.notify,
+            Some(AgentAlert::new(
+                NotifyKind::Error,
+                "Erreur : API Error: 500"
+            ))
+        );
+        // Without words of its own, the kind of result it is.
+        a.push_user("u2", "Encore", 0, &[], &mut Effects::default());
+        let mut fx = Effects::default();
+        a.handle_frame(
+            &json!({"type":"result","subtype":"error_during_execution","is_error":true,
+                "duration_ms":1,"modelUsage":{}}),
+            &mut fx,
+        );
+        assert_eq!(
+            fx.notify.map(|n| n.body),
+            Some("Erreur : error_during_execution".to_string())
+        );
+    }
+
+    #[test]
+    fn a_process_that_dies_mid_turn_notifies_with_its_exit_code() {
+        let mut a = rt();
+        a.push_user("u1", "Lance", 0, &[], &mut Effects::default());
+        let mut fx = Effects::default();
+        a.on_exit(a.gen, Some(3), "", &mut fx);
+        assert_eq!(
+            fx.notify,
+            Some(AgentAlert::new(
+                NotifyKind::Error,
+                "Erreur : Claude Code s'est arrêté (code 3)"
+            ))
+        );
     }
 
     #[test]

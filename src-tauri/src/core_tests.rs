@@ -2,6 +2,7 @@
 //! (tests/fixtures/fake-claude.cmd, or the `fake-claude` shell script outside Windows) and Tauri's
 //! mock runtime.
 
+use crate::agent::NotifyKind;
 use crate::core::{AgentOptions, Attachment, Core, NotOnBase, SyncOp};
 use crate::model::*;
 use crate::paths::{test_dir, DataDir};
@@ -224,6 +225,16 @@ impl Harness {
     /// User messages written to the stdin of the fake CLI started in `cwd`.
     pub(crate) fn stdin_messages(&self, cwd: &Path) -> Vec<Value> {
         self.fake_log(cwd, "stdin")
+    }
+
+    /// The notifications sent so far, as "<title> | <text>".
+    pub(crate) fn alerts(&self) -> Vec<String> {
+        self.core.alerts.lock().clone()
+    }
+
+    /// Waits for `n` notifications to have been sent.
+    async fn wait_alerts(&self, n: usize) {
+        self.wait("notifications", |h| h.alerts().len() >= n).await;
     }
 
     fn removed_events(&self, id: &str) -> usize {
@@ -2218,4 +2229,127 @@ async fn claude_reads_the_project_with_read_only_tools_to_suggest_its_worktree_c
         .any(|a| a.contains("Bash") || a.contains("Edit")));
     let sent = serde_json::to_value(&s).unwrap();
     assert_eq!(sent["setup"][1]["cwd"], "src");
+}
+
+#[tokio::test]
+async fn a_kind_of_notification_switched_off_is_not_sent_but_the_others_are() {
+    let h = harness("notify-kinds");
+    let kinds = [
+        NotifyKind::Question,
+        NotifyKind::Done,
+        NotifyKind::Error,
+        NotifyKind::Ticket,
+    ];
+    for off in kinds {
+        h.core.alerts.lock().clear();
+        {
+            let mut s = h.core.settings.write();
+            s.notify_for = NotifyFor::default();
+            match off {
+                NotifyKind::Question => s.notify_for.questions = false,
+                NotifyKind::Done => s.notify_for.done = false,
+                NotifyKind::Error => s.notify_for.errors = false,
+                NotifyKind::Ticket => s.notify_for.tickets = false,
+            }
+        }
+        for kind in kinds {
+            h.core.alert(
+                kind,
+                "demo".into(),
+                format!("{kind:?}"),
+                UiEvent::FocusBoard {
+                    project_id: "p1".into(),
+                },
+            );
+        }
+        let sent = h.alerts();
+        let expected: Vec<String> = kinds
+            .iter()
+            .filter(|k| **k != off)
+            .map(|k| format!("demo | {k:?}"))
+            .collect();
+        assert_eq!(sent, expected, "with {off:?} off");
+    }
+}
+
+#[tokio::test]
+async fn a_question_or_a_permission_is_told_with_its_own_words() {
+    let h = harness("notify-asks");
+    let (p, _) = h.project(false).await;
+    let asking = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.core
+        .send_message(&asking, "question".into(), vec![])
+        .await
+        .unwrap();
+    h.wait_alerts(1).await;
+    assert!(
+        h.alerts()[0].ends_with(" | Quelle base de données ?"),
+        "{:?}",
+        h.alerts()
+    );
+    let asked = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.core
+        .send_message(&asked, "permission".into(), vec![])
+        .await
+        .unwrap();
+    h.wait_alerts(2).await;
+    assert!(
+        h.alerts()[1].ends_with(" | Autoriser Bash : rm -rf build ?"),
+        "{:?}",
+        h.alerts()
+    );
+}
+
+#[tokio::test]
+async fn the_end_of_a_turn_and_a_crash_are_told_unless_their_kind_is_off() {
+    let h = harness("notify-ends");
+    let (p, _) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.turn(&id, "Bonjour").await;
+    h.wait_alerts(1).await;
+    // Titled with the project and the agent (named by Claude meanwhile), saying the first line
+    // of the reply.
+    let sent = h.alerts();
+    assert!(
+        sent.len() == 1
+            && sent[0].starts_with("demo · ")
+            && sent[0].ends_with(" | Bonjour, tu as dit : Bonjour"),
+        "{sent:?}"
+    );
+
+    // Ends and errors off: the next turn and a crash are silent, though a question still is.
+    {
+        let mut s = h.core.settings.write();
+        s.notify_for.done = false;
+        s.notify_for.errors = false;
+    }
+    h.turn(&id, "Encore").await;
+    h.core
+        .send_message(&id, "crash".into(), vec![])
+        .await
+        .unwrap();
+    h.wait("crash", |h| h.agent(&id).status == AgentStatus::Error)
+        .await;
+    let asking = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.core
+        .send_message(&asking, "question".into(), vec![])
+        .await
+        .unwrap();
+    h.wait_alerts(2).await;
+    let sent = h.alerts();
+    assert_eq!(sent.len(), 2, "{sent:?}");
+    assert!(sent[1].ends_with(" | Quelle base de données ?"), "{sent:?}");
+
+    // Errors back on: the crash tells its exit code.
+    h.core.settings.write().notify_for.errors = true;
+    h.core
+        .send_message(&id, "crash".into(), vec![])
+        .await
+        .unwrap();
+    h.wait_alerts(3).await;
+    assert!(
+        h.alerts()[2].ends_with(" | Erreur : Claude Code s'est arrêté (code 3)"),
+        "{:?}",
+        h.alerts()
+    );
 }

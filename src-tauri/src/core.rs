@@ -1,6 +1,6 @@
 //! Application core: projects, agents and their Claude processes, git, usage, persistence.
 
-use crate::agent::{AgentHandle, AgentRt, Effects, NotifyKind};
+use crate::agent::{AgentAlert, AgentHandle, AgentRt, Effects, NotifyKind};
 use crate::board;
 use crate::claude::{self, ClaudeProcess, SpawnOpts};
 use crate::git::{self, GitService};
@@ -881,11 +881,11 @@ impl<R: Runtime> Core<R> {
         if changed {
             self.update_tray();
         }
-        if let Some(kind) = fx.notify {
+        if let Some(alert) = fx.notify {
             // A ticket's agent at work: its board tells when the ticket is ready or blocked; its
             // questions still call for the user.
-            if kind == NotifyKind::Question || !self.ticket_doing(id) {
-                self.notify_agent(kind, project_id, id, name);
+            if alert.kind == NotifyKind::Question || !self.ticket_doing(id) {
+                self.notify_agent(alert, project_id, id, name);
             }
         }
         if let Some(end) = fx.turn_end {
@@ -946,18 +946,30 @@ impl<R: Runtime> Core<R> {
 
     /// Chime, then, out of sight, the taskbar flashes and a system notification shows; a click on
     /// it brings the window back and sends it `focus`.
-    pub(crate) fn alert(self: &Arc<Self>, title: String, body: String, focus: UiEvent) {
-        #[cfg(test)]
-        self.alerts.lock().push(format!("{title} | {body}"));
+    ///
+    /// A kind the user switched off ("Me prévenir pour") neither chimes nor shows a system
+    /// notification; the taskbar flashes all the same, like the agent's tab and card.
+    pub(crate) fn alert(
+        self: &Arc<Self>,
+        kind: NotifyKind,
+        title: String,
+        body: String,
+        focus: UiEvent,
+    ) {
         let settings = self.settings.read().clone();
-        if settings.sound {
+        let wanted = settings.notify_for.allows(kind);
+        #[cfg(test)]
+        if wanted {
+            self.alerts.lock().push(format!("{title} | {body}"));
+        }
+        if wanted && settings.sound {
             notify::play_chime();
         }
         if notify::window_attended(&self.app) {
             return;
         }
         notify::flash(&self.app);
-        if settings.os_notifications {
+        if wanted && settings.os_notifications {
             let (app, weak) = (self.app.clone(), Arc::downgrade(self));
             notify::toast(&self.app, &title, &body, move || {
                 notify::show_main(&app);
@@ -970,20 +982,16 @@ impl<R: Runtime> Core<R> {
 
     fn notify_agent(
         self: &Arc<Self>,
-        kind: NotifyKind,
+        alert: AgentAlert,
         project_id: &str,
         agent_id: &str,
         agent_name: &str,
     ) {
         let project = self.project(project_id).map(|p| p.name).unwrap_or_default();
-        let body = match kind {
-            NotifyKind::Question => "Claude attend ta réponse",
-            NotifyKind::Done => "Tâche terminée",
-            NotifyKind::Error => "Erreur : l'agent s'est arrêté",
-        };
         self.alert(
+            alert.kind,
             format!("{project} · {agent_name}"),
-            body.to_string(),
+            alert.body,
             UiEvent::Focus {
                 project_id: project_id.to_string(),
                 agent_id: Some(agent_id.to_string()),

@@ -1,5 +1,6 @@
 //! Types persisted on disk and exchanged with the frontend.
 
+use crate::agent::NotifyKind;
 use crate::resources::Resources;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -15,6 +16,8 @@ pub struct Settings {
     pub default_mode: String,
     pub sound: bool,
     pub os_notifications: bool,
+    /// "Me prévenir pour": what the chime and the system notifications are for.
+    pub notify_for: NotifyFor,
     /// Stop idle Claude processes after N minutes (0 = never). Sessions stay resumable.
     pub idle_stop_minutes: u32,
     pub pwsh_path: String,
@@ -34,6 +37,44 @@ pub struct Settings {
     /// What the external ticket systems' links do (their accounts are kept apart, with their
     /// secrets: `integrations::Accounts`).
     pub integrations: IntegrationSettings,
+}
+
+/// "Me prévenir pour": which events chime and show a system notification. Unchecked, one stays
+/// silent outside the window; the flashing of the agent's tab and card, and of the taskbar, stays.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct NotifyFor {
+    /// "Questions et autorisations".
+    pub questions: bool,
+    /// "Tâches terminées".
+    pub done: bool,
+    /// "Erreurs".
+    pub errors: bool,
+    /// "Tickets (prêt à tester, bloqué)".
+    pub tickets: bool,
+}
+
+impl Default for NotifyFor {
+    fn default() -> Self {
+        Self {
+            questions: true,
+            done: true,
+            errors: true,
+            tickets: true,
+        }
+    }
+}
+
+impl NotifyFor {
+    /// The user wants to be told of this kind of event.
+    pub fn allows(&self, kind: NotifyKind) -> bool {
+        match kind {
+            NotifyKind::Question => self.questions,
+            NotifyKind::Done => self.done,
+            NotifyKind::Error => self.errors,
+            NotifyKind::Ticket => self.tickets,
+        }
+    }
 }
 
 /// The sync with the external ticket systems and their automatic import, for every project.
@@ -107,6 +148,7 @@ impl Default for Settings {
             default_mode: "auto".into(),
             sound: true,
             os_notifications: true,
+            notify_for: NotifyFor::default(),
             idle_stop_minutes: 30,
             pwsh_path: String::new(),
             bash_path: String::new(),
@@ -852,6 +894,60 @@ mod tests {
         assert!(!serde_json::to_string(&s).unwrap().contains("editorCommand"));
         // Saved before the TLS setting: certificates are checked.
         assert!(!s.insecure_tls);
+    }
+
+    #[test]
+    fn what_was_saved_before_the_notification_choices_notifies_for_everything() {
+        let s: Settings =
+            serde_json::from_str(r#"{"sound":false,"osNotifications":true}"#).unwrap();
+        assert_eq!(s.notify_for, NotifyFor::default());
+        for kind in [
+            NotifyKind::Question,
+            NotifyKind::Done,
+            NotifyKind::Error,
+            NotifyKind::Ticket,
+        ] {
+            assert!(s.notify_for.allows(kind), "{kind:?}");
+        }
+        // A choice saved alone leaves the others on.
+        let s: Settings = serde_json::from_str(r#"{"notifyFor":{"done":false}}"#).unwrap();
+        assert_eq!(
+            s.notify_for,
+            NotifyFor {
+                done: false,
+                ..NotifyFor::default()
+            }
+        );
+        assert_eq!(
+            serde_json::to_value(&s).unwrap()["notifyFor"],
+            json!({ "questions": true, "done": false, "errors": true, "tickets": true })
+        );
+    }
+
+    #[test]
+    fn a_notification_kind_is_let_through_by_its_own_choice_only() {
+        let all_but = |off: NotifyKind| {
+            let mut n = NotifyFor::default();
+            match off {
+                NotifyKind::Question => n.questions = false,
+                NotifyKind::Done => n.done = false,
+                NotifyKind::Error => n.errors = false,
+                NotifyKind::Ticket => n.tickets = false,
+            }
+            n
+        };
+        let kinds = [
+            NotifyKind::Question,
+            NotifyKind::Done,
+            NotifyKind::Error,
+            NotifyKind::Ticket,
+        ];
+        for off in kinds {
+            let n = all_but(off);
+            for kind in kinds {
+                assert_eq!(n.allows(kind), kind != off, "{kind:?} with {off:?} off");
+            }
+        }
     }
 
     #[test]

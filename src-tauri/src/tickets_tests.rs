@@ -51,10 +51,6 @@ impl Harness {
         PathBuf::from(self.agent_of(ticket_id).worktree.unwrap().path)
     }
 
-    fn alerts(&self) -> Vec<String> {
-        self.core.alerts.lock().clone()
-    }
-
     fn last_sent(&self, dir: &Path) -> String {
         self.stdin_messages(dir).last().unwrap()["message"]["content"]
             .as_str()
@@ -598,8 +594,9 @@ async fn a_ticket_gets_an_agent_on_its_own_branch_and_loops_until_its_criteria_a
         1,
         "{alerts:?}"
     );
+    // None from the agent's own end of turn (titled with the project and the agent).
     assert!(
-        !alerts.iter().any(|x| x.contains("Tâche terminée")),
+        !alerts.iter().any(|x| x.starts_with("demo · ")),
         "{alerts:?}"
     );
     // Titled with the project's name.
@@ -710,7 +707,7 @@ async fn a_ticket_whose_agent_dies_is_blocked_and_frees_its_place() {
     .await;
     let alerts = h.alerts();
     assert!(
-        !alerts.iter().any(|x| x.contains("l'agent s'est arrêté")),
+        !alerts.iter().any(|x| x.starts_with("demo · ")),
         "{alerts:?}"
     );
 }
@@ -839,7 +836,7 @@ async fn a_ticket_agents_question_still_calls_for_the_user() {
     h.wait("question notified", |h| {
         h.alerts()
             .iter()
-            .any(|x| x.ends_with(" | Claude attend ta réponse"))
+            .any(|x| x.ends_with(" | Quelle base de données ?"))
     })
     .await;
     let id = h.ticket(&t.id).agent_id.unwrap();
@@ -860,16 +857,39 @@ async fn a_ticket_agents_question_still_calls_for_the_user() {
     .await;
     // The question was for the user; the end of the turn is the board's to tell.
     let alerts = h.alerts();
+    let from_the_agent: Vec<_> = alerts.iter().filter(|x| x.starts_with("demo · ")).collect();
     assert!(
-        alerts
-            .iter()
-            .any(|x| x.starts_with("demo · dem-1-") && x.ends_with("| Claude attend ta réponse")),
+        matches!(
+            from_the_agent[..],
+            [x] if x.starts_with("demo · dem-1-") && x.ends_with(" | Quelle base de données ?")
+        ),
         "{alerts:?}"
     );
-    assert!(
-        !alerts.iter().any(|x| x.contains("Tâche terminée")),
-        "{alerts:?}"
-    );
+}
+
+#[tokio::test]
+async fn a_tickets_notifications_follow_the_tickets_choice_alone() {
+    let h = harness("tk-notify-choice");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Choix [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.core.settings.write().notify_for.tickets = false;
+    h.core.notify_ticket(&t.id, true);
+    h.core.notify_ticket(&t.id, false);
+    assert!(h.alerts().is_empty(), "{:?}", h.alerts());
+    // Every other choice off, this one on: the ticket is told.
+    h.core.settings.write().notify_for = NotifyFor {
+        questions: false,
+        done: false,
+        errors: false,
+        tickets: true,
+    };
+    h.core.notify_ticket(&t.id, true);
+    assert_eq!(h.alerts(), ["demo | DEM-1 prêt à tester"]);
 }
 
 #[tokio::test]

@@ -2,6 +2,7 @@
 //! of their own, what each end of turn does to them, their validation (tests, commit, merge, pull
 //! request, push) and the test launches of the worktrees.
 
+use crate::agent::NotifyKind;
 use crate::board::{self, TurnEnd};
 use crate::claude::{self, ClaudeProcess};
 use crate::core::{AgentOptions, Core};
@@ -678,6 +679,7 @@ impl<R: Runtime> Core<R> {
             )
         };
         self.alert(
+            NotifyKind::Ticket,
             project,
             body,
             UiEvent::FocusBoard {
