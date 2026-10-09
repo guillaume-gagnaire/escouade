@@ -1,15 +1,13 @@
 <script lang="ts" module>
-  import type { DraftAttachment } from '../lib/attachments';
-
-  const drafts = new Map<string, { text: string; files: DraftAttachment[] }>();
   const commandCache = new Map<string, { name: string; description: string; argumentHint?: string }[]>();
 </script>
 
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { ACCEPT, MAX_TOTAL, readAttachment, sizeLabel } from '../lib/attachments';
+  import { ACCEPT, MAX_TOTAL, readAttachment, sizeLabel, type DraftAttachment } from '../lib/attachments';
   import { applyCompletion, detectTrigger, filterCommands, type Trigger } from '../lib/complete';
   import { conversationOf } from '../lib/conversations.svelte';
+  import { getDraft, setDraft } from '../lib/drafts';
   import { injectedSource } from '../lib/events';
   import { basename, dirname } from '../lib/format';
   import { api } from '../lib/ipc';
@@ -24,9 +22,9 @@
   // The agent object is replaced on every backend update: only its id may drive the draft.
   const agentId = $derived(agent.id);
   let draftFor = untrack(() => agent.id);
-  const initial = drafts.get(draftFor);
-  let text = $state(initial?.text ?? '');
-  let files = $state<DraftAttachment[]>(initial?.files ?? []);
+  const initial = getDraft(draftFor);
+  let text = $state(initial.text);
+  let files = $state<DraftAttachment[]>(initial.files);
   let ta = $state<HTMLTextAreaElement>();
   let trigger = $state<Trigger | null>(null);
   let suggestions = $state<{ label: string; detail: string; value: string }[]>([]);
@@ -74,22 +72,19 @@
     if (id === draftFor) return;
     untrack(() => {
       draftFor = id;
-      const d = drafts.get(id);
-      text = d?.text ?? '';
-      files = d?.files ?? [];
+      const d = getDraft(id);
+      text = d.text;
+      files = d.files;
       trigger = null;
       suggestions = [];
       queueMicrotask(autosize);
     });
   });
 
-  // Drafts are saved as they are typed, so they survive agent switches.
+  // Drafts are saved as they are typed, so they survive agent switches (and, for their text, a restart).
   $effect(() => {
     const draft = { text, files: files.slice() };
-    untrack(() => {
-      if (draft.text || draft.files.length) drafts.set(draftFor, draft);
-      else drafts.delete(draftFor);
-    });
+    untrack(() => setDraft(draftFor, draft));
   });
 
   $effect(() => {
@@ -221,12 +216,12 @@
       for (const f of list) {
         try {
           const a = await readAttachment(f);
-          const target = owner === draftFor ? files : (drafts.get(owner)?.files ?? []);
+          const target = owner === draftFor ? files : getDraft(owner).files;
           if (target.reduce((n, x) => n + x.size, a.size) > MAX_TOTAL) {
             throw new Error(`${f.name} n'est pas joint : les fichiers d'un message sont limités à ${sizeLabel(MAX_TOTAL)} en tout.`);
           }
           if (owner === draftFor) files.push(a);
-          else drafts.set(owner, { text: drafts.get(owner)?.text ?? '', files: [...target, a] });
+          else setDraft(owner, { text: getDraft(owner).text, files: [...target, a] });
         } catch (e) {
           app.toast(e instanceof Error ? e.message : String(e), 'error');
         }

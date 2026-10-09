@@ -2,6 +2,7 @@ import { createEvent, fireEvent, render, screen, waitFor } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { conversationOf } from '../lib/conversations.svelte';
+import { readPref, writePref } from '../lib/prefs';
 import { app } from '../lib/state.svelte';
 import { agent, fakeBackend, resetApp } from '../test/ipc';
 import Composer from './Composer.svelte';
@@ -113,6 +114,68 @@ describe('Composer', () => {
     second.unmount();
     render(Composer, { agent: app.agents[a.id] });
     expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('brouillon de A');
+  });
+
+  describe('draft kept in the local preferences', () => {
+    const kept = (id: string) => readPref(`draft.${id}`);
+
+    it('is written once the typing pauses', async () => {
+      const { a, textarea } = setup();
+      await userEvent.type(textarea, 'Pense aux tests');
+      expect(kept(a.id)).toBeNull();
+      await waitFor(() => expect(kept(a.id)).toBe('Pense aux tests'));
+    });
+
+    it('comes back when the app restarts, from the preferences alone', () => {
+      const a = agent({ id: `r${Math.random()}` });
+      resetApp({ agents: [a] });
+      fakeBackend({ get_conversation: () => [] });
+      // Nothing in memory for this agent: only what an earlier run kept.
+      writePref(`draft.${a.id}`, 'Reprends la migration\navec les tests');
+      render(Composer, { agent: app.agents[a.id] });
+      expect(screen.getByRole('textbox')).toHaveValue('Reprends la migration\navec les tests');
+    });
+
+    it('is emptied as the message is sent', async () => {
+      const { a, backend, textarea } = setup();
+      await userEvent.type(textarea, 'Ajoute des tests');
+      await waitFor(() => expect(kept(a.id)).toBe('Ajoute des tests'));
+      await userEvent.keyboard('{Enter}');
+      await waitFor(() => expect(backend.called('send_message')).toHaveLength(1));
+      expect(kept(a.id)).toBeNull();
+    });
+
+    it('is written again when the message is refused and given back', async () => {
+      const { a, textarea } = setup();
+      fakeBackend({
+        send_message: () => {
+          throw new Error('Claude Code est introuvable');
+        },
+      });
+      await userEvent.type(textarea, 'Résume{Enter}');
+      await waitFor(() => expect(app.toasts.at(-1)?.text).toMatch(/introuvable/));
+      expect(textarea).toHaveValue('Résume');
+      await waitFor(() => expect(kept(a.id)).toBe('Résume'));
+    });
+
+    it('is kept for each agent, and not for the attachments', async () => {
+      const a = agent({ id: `p${Math.random()}` });
+      const b = agent({ id: `q${Math.random()}` });
+      resetApp({ agents: [a, b] });
+      fakeBackend({ get_conversation: () => [] });
+      const { rerender } = render(Composer, { agent: app.agents[a.id] });
+      await userEvent.upload(
+        screen.getByLabelText('Joindre un fichier', { selector: 'input' }),
+        new File(['%PDF-1.4'], 'rapport.pdf', { type: 'application/pdf' }),
+      );
+      await screen.findByText('rapport.pdf');
+      await userEvent.type(screen.getByRole('textbox'), 'pour A');
+      await rerender({ agent: app.agents[b.id] });
+      await userEvent.type(screen.getByRole('textbox'), 'pour B');
+      await waitFor(() => expect(kept(b.id)).toBe('pour B'));
+      expect(kept(a.id)).toBe('pour A');
+      expect(Object.keys(localStorage).filter((k) => localStorage.getItem(k)?.includes('rapport.pdf'))).toEqual([]);
+    });
   });
 
   it('ignores Escape while a dialog is open', async () => {

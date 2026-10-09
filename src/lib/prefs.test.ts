@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { readPref, writePref } from './prefs';
+import { readPref, removePref, writePref } from './prefs';
 
 describe('preferences', () => {
   beforeEach(() => localStorage.clear());
@@ -21,6 +21,15 @@ describe('preferences', () => {
     localStorage.setItem('ccm.statsRange', 'month');
     localStorage.setItem('escouade.statsRange', 'week');
     expect(readPref('statsRange')).toBe('week');
+  });
+
+  it('removed leave neither the current key nor a former one to come back from', () => {
+    writePref('draft.a1', 'texte');
+    localStorage.setItem('ccm.draft.a1', 'ancien');
+    removePref('draft.a1');
+    expect(localStorage.getItem('escouade.draft.a1')).toBeNull();
+    expect(localStorage.getItem('ccm.draft.a1')).toBeNull();
+    expect(readPref('draft.a1')).toBeNull();
   });
 
   it('never set are empty', () => {

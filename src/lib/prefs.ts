@@ -26,3 +26,13 @@ export function writePref(name: string, value: string) {
     // Storage unavailable: the choice lasts until the app closes.
   }
 }
+
+/** Forgets a preference, including the key it had before the rename (which would be taken over again). */
+export function removePref(name: string) {
+  try {
+    localStorage.removeItem(key(name));
+    localStorage.removeItem(oldKey(name));
+  } catch {
+    // Storage unavailable: nothing was kept.
+  }
+}
