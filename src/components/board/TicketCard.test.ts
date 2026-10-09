@@ -210,6 +210,24 @@ describe('TicketCard', () => {
     expect(app.ui.selectedAgent.p1).toBe('a1');
   });
 
+  it('asks before deleting a ticket to do, and deletes it only once confirmed', async () => {
+    const backend = fakeBackend();
+    show(ticket());
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /DEM-1/ }));
+    expect(menu.open!.items.map((i) => i.label)).toEqual(['Modifier', 'Passer en tête', '', 'Supprimer']);
+    menu.open!.items.find((i) => i.label === 'Supprimer')!.onClick!();
+    expect(app.modal).toMatchObject({
+      kind: 'confirm',
+      title: 'Supprimer DEM-1 ?',
+      body: 'Le ticket et sa description sont supprimés.',
+      confirm: 'Supprimer',
+      danger: true,
+    });
+    expect(backend.called('ticket_delete')).toEqual([]);
+    await (app.modal as any).onConfirm(false);
+    expect(backend.called('ticket_delete')).toEqual([{ cmd: 'ticket_delete', args: { id: 't1' } }]);
+  });
+
   it('deletes a finished ticket from its menu without asking', async () => {
     const backend = fakeBackend();
     show(doing({ column: 'done' }));
@@ -409,6 +427,25 @@ describe('TicketCard of an imported ticket', () => {
     unmount();
     show(ticket({ external: { ...external, error: 'Jira refuse ces identifiants (401)' } }));
     expect(screen.getByRole('img', { name: 'Synchro avec Jira : Jira refuse ces identifiants (401)' })).toBeInTheDocument();
+  });
+
+  it.each([
+    ['jira', 'Jira'],
+    ['trello', 'Trello'],
+    ['github', 'GitHub'],
+  ] as const)('says before deleting it that it will not be imported again from %s', async (service, name) => {
+    const backend = fakeBackend();
+    show(ticket({ external: { service, id: 'x-1', key: 'X-1', container: 'X', url: 'https://example.com/x-1', error: null } }));
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /DEM-1/ }));
+    menu.open!.items.find((i) => i.label === 'Supprimer')!.onClick!();
+    // Its own key, not the external one.
+    expect(app.modal).toMatchObject({
+      title: 'Supprimer DEM-1 ?',
+      body: `Le ticket et sa description sont supprimés. Il ne sera plus importé depuis ${name}.`,
+      confirm: 'Supprimer',
+      danger: true,
+    });
+    expect(backend.called('ticket_delete')).toEqual([]);
   });
 
   it('shows nothing of the kind for a ticket made on the Kanban', () => {

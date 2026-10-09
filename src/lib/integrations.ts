@@ -37,6 +37,8 @@ export const SERVICES: Record<
 /** How a service names itself in a sentence (« depuis GitHub »). */
 const SHORT: Record<Service, string> = { jira: 'Jira', trello: 'Trello', github: 'GitHub' };
 
+export const shortName = (service: Service) => SHORT[service];
+
 /** The page where Trello gives a token for an API key (read and write, no expiry). */
 export function trelloTokenPage(key: string): string {
   return `https://trello.com/1/authorize?expiration=never&scope=read,write&response_type=token&name=Escouade&key=${encodeURIComponent(key.trim())}`;

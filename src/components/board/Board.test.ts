@@ -210,7 +210,28 @@ describe('Board', () => {
     expect(backend.called('ticket_prioritize')).toEqual([{ cmd: 'ticket_prioritize', args: { id: 't2' } }]);
     await fireEvent.contextMenu(screen.getByRole('button', { name: /DEM-2/ }));
     menu.open!.items.find((i) => i.label === 'Supprimer')!.onClick!();
+    // Asked first: the ticket stays until it is confirmed.
+    expect(app.modal).toMatchObject({ kind: 'confirm', title: 'Supprimer DEM-2 ?' });
+    expect(backend.called('ticket_delete')).toEqual([]);
+    await (app.modal as any).onConfirm(false);
     await expect.poll(() => app.tickets.t2).toBeUndefined();
+  });
+
+  it('closes the form of a new ticket at once when nothing was typed, and after a confirmation when something was', async () => {
+    fakeBackend();
+    render(Board, { project: app.projects[0] });
+    await userEvent.click(screen.getByRole('button', { name: 'Nouveau ticket' }));
+    await userEvent.click(screen.getByRole('textbox', { name: 'Titre du ticket' }));
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('textbox', { name: 'Titre du ticket' })).not.toBeInTheDocument();
+    expect(app.modal).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Nouveau ticket' }));
+    await userEvent.type(screen.getByRole('textbox', { name: 'Titre du ticket' }), 'Un début');
+    await userEvent.keyboard('{Escape}');
+    expect(app.modal).toMatchObject({ kind: 'confirm', title: 'Abandonner les modifications ?', confirm: 'Abandonner' });
+    expect(screen.getByRole('textbox', { name: 'Titre du ticket' })).toHaveValue('Un début');
+    await (app.modal as any).onConfirm(false);
+    expect(screen.queryByRole('textbox', { name: 'Titre du ticket' })).not.toBeInTheDocument();
   });
 
   it('opens the agent of a ticket under way', async () => {

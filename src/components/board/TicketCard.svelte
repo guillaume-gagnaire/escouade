@@ -3,7 +3,7 @@
   import { APPROVE_LABEL, canStart, criteriaMet, doneMeta, waitLabel } from '../../lib/board';
   import { buffers, lossNotice } from '../../lib/editor/buffers.svelte';
   import { fWhen, plural } from '../../lib/format';
-  import { SERVICES } from '../../lib/integrations';
+  import { SERVICES, shortName } from '../../lib/integrations';
   import { api } from '../../lib/ipc';
   import { menu, type MenuItem } from '../../lib/menu.svelte';
   import { openAddress } from '../../lib/recipe';
@@ -49,6 +49,19 @@
     if (gone) delete app.tickets[t.id];
   }
 
+  /** A ticket « À faire » goes with its description, and an imported one is not brought back by the next import. */
+  function confirmRemove() {
+    const from = t.external ? ` Il ne sera plus importé depuis ${shortName(t.external.service)}.` : '';
+    app.modal = {
+      kind: 'confirm',
+      title: `Supprimer ${t.key} ?`,
+      body: `Le ticket et sa description sont supprimés.${from}`,
+      confirm: 'Supprimer',
+      danger: true,
+      onConfirm: remove,
+    };
+  }
+
   function contextMenu(e: MouseEvent) {
     // A text field keeps the browser's menu (copy, paste), as in main.ts.
     if ((e.target as Element).closest('input, textarea')) return;
@@ -58,7 +71,7 @@
             { label: 'Modifier', onClick: onedit },
             { label: 'Passer en tête', onClick: () => app.run(api.ticketPrioritize(t.id)) },
             { label: '', separator: true },
-            { label: 'Supprimer', danger: true, onClick: remove },
+            { label: 'Supprimer', danger: true, onClick: confirmRemove },
           ]
         : [
             { label: "Ouvrir l'agent", onClick: open, disabled: !agent },

@@ -1,16 +1,51 @@
 <script lang="ts">
   import { untrack } from 'svelte';
+  import { app } from '../../lib/state.svelte';
   import type { Ticket, TicketDraft } from '../../lib/types';
 
   let { ticket, onsubmit, oncancel }: { ticket?: Ticket; onsubmit: (d: TicketDraft) => void | Promise<void>; oncancel: () => void } =
     $props();
 
-  let title = $state(untrack(() => ticket?.title ?? ''));
-  let description = $state(untrack(() => ticket?.description ?? ''));
-  let criteria = $state(untrack(() => ticket?.criteria.map((c) => c.text).join('\n') ?? ''));
-  let maxLoops = $state(untrack(() => ticket?.maxLoops ?? 5));
+  // What the form opened with, to tell whether leaving it loses anything.
+  const start = untrack(() => ({
+    title: ticket?.title ?? '',
+    description: ticket?.description ?? '',
+    criteria: ticket?.criteria.map((c) => c.text).join('\n') ?? '',
+    maxLoops: ticket?.maxLoops ?? 5,
+  }));
+
+  let title = $state(start.title);
+  let description = $state(start.description);
+  let criteria = $state(start.criteria);
+  let maxLoops = $state(start.maxLoops);
   let busy = $state(false);
   const ready = $derived(title.trim().length > 0 && !busy);
+  const changed = $derived(
+    title !== start.title || description !== start.description || criteria !== start.criteria || maxLoops !== start.maxLoops,
+  );
+
+  /** Leaves the form; what was typed is only given up once the user agrees. */
+  function leave() {
+    if (!changed) {
+      oncancel();
+      return;
+    }
+    app.modal = {
+      kind: 'confirm',
+      title: 'Abandonner les modifications ?',
+      body: 'Ce que tu as saisi dans ce ticket ne sera pas enregistré.',
+      confirm: 'Abandonner',
+      danger: true,
+      onConfirm: oncancel,
+    };
+  }
+
+  function escape(e: KeyboardEvent) {
+    if (e.key !== 'Escape') return;
+    // The confirmation closes on Escape through a window listener, which is already there when this very event reaches the window: it would close at once.
+    if (changed) e.stopPropagation();
+    leave();
+  }
 
   async function submit() {
     if (!ready) return;
@@ -29,7 +64,7 @@
 </script>
 
 <!-- Escape leaves the form from any of its fields; Enter only submits from the title (the textareas take it as a new line). -->
-<div class="form" role="presentation" onkeydown={(e) => e.key === 'Escape' && oncancel()}>
+<div class="form" role="presentation" onkeydown={escape}>
   <!-- svelte-ignore a11y_autofocus -->
   <input
     class="title"
@@ -49,7 +84,7 @@
     {/each}
   </div>
   <div class="actions">
-    <button class="btn ghost" onclick={oncancel}>Annuler</button>
+    <button class="btn ghost" onclick={leave}>Annuler</button>
     <button class="btn primary" disabled={!ready} onclick={submit}>{ticket ? 'Enregistrer' : 'Ajouter'}</button>
   </div>
 </div>
