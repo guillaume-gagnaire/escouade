@@ -661,6 +661,8 @@ pub struct PersistedState {
     pub models: Vec<ModelInfo>,
     /// Every project's tickets.
     pub tickets: Vec<Ticket>,
+    /// The autopilot's pause as the app stopped: the next start holds the tickets back the same.
+    pub pause: SavedPause,
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
@@ -732,8 +734,8 @@ pub struct GitLog {
     pub head: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Default, PartialEq)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
 pub struct RateWindow {
     /// 0-100.
     pub pct: f64,
@@ -749,6 +751,28 @@ pub enum PauseReason {
     FiveHour,
     Week,
     Limit,
+}
+
+/// What holds the autopilot back besides the quota windows read, or no longer does
+/// (`board::autopilot_pause`).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Hold {
+    /// After a usage limit with no resume planned: until then.
+    pub limit_until: Option<i64>,
+    /// "Reprendre maintenant": the 5-hour and the weekly window hold nothing back until the end
+    /// they had then (the next window holds again).
+    pub lifted: [Option<i64>; 2],
+}
+
+/// The autopilot's pause, kept across a restart: the quota windows last read (a reading holds
+/// until its window's end, and with an API key none comes again) and what else holds it.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SavedPause {
+    pub five_hour: Option<RateWindow>,
+    pub seven_day: Option<RateWindow>,
+    pub hold: Hold,
 }
 
 /// Why no ticket of any board starts, and until when (`board::autopilot_pause`).
@@ -993,6 +1017,35 @@ mod tests {
         })
         .unwrap();
         assert_eq!(v["quotaPause"], json!(90));
+    }
+
+    #[test]
+    fn a_state_saved_before_the_autopilots_pause_still_loads_without_one() {
+        let s: PersistedState = serde_json::from_value(json!({ "projects": [] })).unwrap();
+        assert_eq!(s.pause, SavedPause::default());
+        let saved = SavedPause {
+            five_hour: Some(RateWindow {
+                pct: 100.0,
+                resets_at: Some(9),
+            }),
+            seven_day: None,
+            hold: Hold {
+                limit_until: Some(5),
+                lifted: [None, Some(7)],
+            },
+        };
+        let v = serde_json::to_value(PersistedState {
+            pause: saved,
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(v["pause"]["fiveHour"]["resetsAt"], json!(9));
+        assert_eq!(v["pause"]["hold"]["limitUntil"], json!(5));
+        let back: PersistedState = serde_json::from_value(v).unwrap();
+        assert_eq!(back.pause, saved);
+        // Saved with only part of it.
+        let part: SavedPause = serde_json::from_value(json!({ "hold": {} })).unwrap();
+        assert_eq!(part, SavedPause::default());
     }
 
     #[test]

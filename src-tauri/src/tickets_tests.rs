@@ -7,8 +7,8 @@
 //! by default criterion n is met from loop n on. Pushes go to a local bare repository, and pull
 //! requests to the fake `gh` (tests/fixtures/fake-gh.cmd), or to none.
 
-use crate::board::TurnEnd;
-use crate::core::{AgentOptions, Core};
+use crate::board::{TurnEnd, LIMIT_PAUSE_MS};
+use crate::core::{AgentOptions, Core, RESUME_MARGIN_MS};
 use crate::core_tests::{commit_change, git, harness, ignore, wt_step, Harness};
 use crate::model::*;
 use crate::tickets::{error_reason, TicketDraft};
@@ -1010,11 +1010,11 @@ async fn a_ticket_stopped_by_the_usage_limit_waits_and_nothing_starts_until_the_
     })
     .await;
     // The next one would meet the limit too: none starts in its place before the quota resets
-    // (the fake CLI's 5-hour window, used up, ends in an hour).
+    // (the fake CLI's 5-hour window, used up, ends in an hour), and the margin after it.
     h.wait_board_idle().await;
     assert_eq!(h.ticket(&b.id).column, Column::Todo);
     assert_eq!(h.pauses().last().unwrap()["reason"], "fiveHour");
-    h.pause_tick_after(3_600_000 + 1_000);
+    h.pause_tick_after(3_600_000 + RESUME_MARGIN_MS + 1_000);
     h.wait_ticket(&b.id, "started after the quota", |t| {
         t.column != Column::Todo
     })
@@ -1133,7 +1133,7 @@ async fn nothing_starts_while_a_window_is_used_past_the_threshold_until_it_reads
     assert_eq!(h.ticket(&t.id).column, Column::Todo);
     assert_eq!(
         h.pauses(),
-        [json!({ "reason": "week", "pct": 96.0, "until": end })]
+        [json!({ "reason": "week", "pct": 96.0, "until": end + RESUME_MARGIN_MS })]
     );
     // Launched by hand ("Lancer", the autopilot off), it waits too.
     h.set_board(&p.id, |s| s.autopilot = false);
@@ -1153,10 +1153,10 @@ async fn nothing_starts_while_a_window_is_used_past_the_threshold_until_it_reads
 async fn a_window_past_the_threshold_holds_nothing_back_once_it_ends() {
     let h = harness("tk-quota-window-end");
     let (p, _) = h.project(false).await;
-    // Ended already: it holds nothing back.
+    // Ended already, and the margin after it: it holds nothing back.
     h.core.usage.lock().five_hour = Some(RateWindow {
         pct: 100.0,
-        resets_at: Some(now_ms() - 1_000),
+        resets_at: Some(now_ms() - RESUME_MARGIN_MS - 1_000),
     });
     let a = h
         .core
@@ -1192,12 +1192,156 @@ async fn a_window_past_the_threshold_holds_nothing_back_once_it_ends() {
     h.wait_board_idle().await;
     assert_eq!(h.ticket(&c.id).column, Column::Todo);
     assert_eq!(h.pauses().last().unwrap()["reason"], "fiveHour");
+    // Just past its end, a clock a little ahead of the server's would start it into the limit:
+    // it waits the margin an agent's resume waits.
     h.pause_tick_after(61_000);
+    h.wait_board_idle().await;
+    assert_eq!(h.ticket(&c.id).column, Column::Todo);
+    h.pause_tick_after(60_000 + RESUME_MARGIN_MS + 1_000);
     h.wait_ticket(&c.id, "started once the window ended", |t| {
         t.column != Column::Todo
     })
     .await;
     assert_eq!(h.pauses().last(), Some(&Value::Null));
+}
+
+/// The app stopped and started again on the same data: what recovery and the first pass do.
+fn restart(
+    h: &Harness,
+) -> (
+    Arc<Core<tauri::test::MockRuntime>>,
+    tauri::App<tauri::test::MockRuntime>,
+) {
+    h.core.save_now();
+    let app = mock_app();
+    let (re, _rx) = Core::load(app.handle().clone(), h.core.data.clone());
+    re.recover_tickets();
+    (re, app)
+}
+
+/// No scheduling pass of `core` is queued or running.
+async fn passes_over(core: &Core<tauri::test::MockRuntime>) {
+    for _ in 0..750 {
+        if core.passes_queued.load(Ordering::SeqCst) == 0 {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    panic!("timed out waiting for the passes to end");
+}
+
+async fn wait_started(core: &Core<tauri::test::MockRuntime>, id: &str) {
+    for _ in 0..750 {
+        if core.ticket(id).unwrap().column != Column::Todo {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    panic!("timed out waiting for the ticket to start");
+}
+
+#[tokio::test]
+async fn a_quota_window_read_before_a_restart_still_holds_the_tickets_back_until_lifted() {
+    let h = harness("tk-quota-restart");
+    let (p, _) = h.project(false).await;
+    // Used up until tomorrow, as last read (with an API key, no reading comes again); an ended
+    // window is not kept.
+    let end = now_ms() + 86_400_000;
+    {
+        let mut u = h.core.usage.lock();
+        u.seven_day = Some(RateWindow {
+            pct: 100.0,
+            resets_at: Some(end),
+        });
+        u.five_hour = Some(RateWindow {
+            pct: 100.0,
+            resets_at: Some(now_ms() - RESUME_MARGIN_MS - 1_000),
+        });
+    }
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Patienter [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.wait_board_idle().await;
+    assert_eq!(h.ticket(&t.id).column, Column::Todo);
+    let (re, _app) = restart(&h);
+    passes_over(&re).await;
+    assert_eq!(re.ticket(&t.id).unwrap().column, Column::Todo);
+    assert_eq!(
+        re.autopilot_pause().map(|p| (p.reason, p.until)),
+        Some((PauseReason::Week, end + RESUME_MARGIN_MS))
+    );
+    assert_eq!(re.usage.lock().five_hour, None);
+    re.autopilot_resume();
+    wait_started(&re, &t.id).await;
+}
+
+#[tokio::test]
+async fn the_pause_after_a_usage_limit_holds_across_a_restart_until_its_end() {
+    let h = harness("tk-quota-restart-limit");
+    let (p, _) = h.project(false).await;
+    h.core.pause_after_limit();
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Patienter [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.wait_board_idle().await;
+    assert_eq!(h.ticket(&t.id).column, Column::Todo);
+    let (re, _app) = restart(&h);
+    passes_over(&re).await;
+    assert_eq!(re.ticket(&t.id).unwrap().column, Column::Todo);
+    assert_eq!(
+        re.autopilot_pause().map(|p| p.reason),
+        Some(PauseReason::Limit)
+    );
+    re.clock_ahead
+        .store(LIMIT_PAUSE_MS + 1_000, Ordering::SeqCst);
+    re.pause_tick();
+    wait_started(&re, &t.id).await;
+}
+
+#[tokio::test]
+async fn a_pass_under_way_starts_no_more_tickets_once_the_autopilot_pauses() {
+    let h = harness("tk-quota-mid-pass");
+    let (p, _) = h.project(false).await;
+    // Every ticket's worktree setup waits for the test's go: the pass stays on its first start.
+    h.set_worktree_steps(
+        &p.id,
+        vec![wt_step(
+            r#"node -e "const fs = require('fs'); const go = require('path').join(process.env.ESCOUADE_PROJECT_DIR, '..', 'go'); setInterval(() => { if (fs.existsSync(go)) process.exit(0) }, 50); setTimeout(() => process.exit(1), 20000)""#,
+            "",
+        )],
+        vec![],
+    );
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let a = h
+        .core
+        .ticket_create(&p.id, draft("Un [ok]", &[], 5))
+        .await
+        .unwrap();
+    let b = h
+        .core
+        .ticket_create(&p.id, draft("Deux [ok]", &[], 5))
+        .await
+        .unwrap();
+    // Both are to start in the same pass.
+    h.set_board(&p.id, |s| s.autopilot = true);
+    h.wait("the first one setting its worktree up", |h| {
+        h.ticket(&a.id)
+            .agent_id
+            .is_some_and(|x| h.view(&x).setup.is_some())
+    })
+    .await;
+    assert_eq!(h.ticket(&b.id).column, Column::Todo);
+    // Meanwhile another ticket meets the usage limit with no resume: the autopilot pauses.
+    h.core.pause_after_limit();
+    std::fs::write(h.dir.join("go"), "").unwrap();
+    h.wait_ticket(&a.id, "to test", |t| t.column == Column::Review)
+        .await;
+    h.wait_board_idle().await;
+    assert_eq!(h.ticket(&b.id).column, Column::Todo);
 }
 
 #[tokio::test]

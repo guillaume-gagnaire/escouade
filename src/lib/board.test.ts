@@ -56,8 +56,16 @@ describe('board labels', () => {
     expect(pauseLabel({ reason: 'week', pct: 95.6, until: monday }, now)).toBe(
       'Pilote auto en pause : quota hebdo à 96 % (reprise le lundi 5 octobre à 09:00)',
     );
-    // While it holds, no ticket is to launch by hand.
-    expect(canStart(ticket(), board({ autopilot: false }), 0, null, null, { reason: 'limit', pct: null, until: about })).toBe(false);
+    // While it holds, no ticket is to launch by hand, and none is promised a place.
+    const pause = { reason: 'limit' as const, pct: null, until: about };
+    expect(canStart(ticket(), board({ autopilot: false }), 0, null, null, pause)).toBe(false);
+    expect(waitLabel(ticket(), 0, board(), 0, null, pause)).toBe('En attente : pilote auto en pause');
+    expect(waitLabel(ticket(), 1, board(), 2, null, pause)).toBe('En attente : pilote auto en pause');
+    expect(waitLabel(ticket({ forced: true }), 0, board({ autopilot: false }), 0, null, pause)).toBe('En attente : pilote auto en pause');
+    // The target branch first: the pause over, it still holds them back.
+    expect(waitLabel(ticket(), 0, board(), 0, 'Branche cible main introuvable — aucun ticket ne démarre', pause)).toBe(
+      'En attente de la branche cible',
+    );
   });
 
   it('sums up what validating does, and names the button', () => {

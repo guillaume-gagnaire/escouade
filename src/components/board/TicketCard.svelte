@@ -218,7 +218,7 @@
   {#if t.column === 'todo'}
     <span class="meta">{plural(total, 'critère', 'critères')} · max {t.maxLoops} boucles</span>
     <div class="row">
-      <span class="k">{waitLabel(t, queueIndex, s, busyCount, issue)}</span>
+      <span class="k">{waitLabel(t, queueIndex, s, busyCount, issue, app.autopilotPause)}</span>
       <div style="flex:1"></div>
       {#if canStart(t, s, busyCount, quota, issue, app.autopilotPause)}
         <button class="small" onclick={(e) => act(e, () => app.run(api.ticketStart(t.id)))}>Lancer</button>

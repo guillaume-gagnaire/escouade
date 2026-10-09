@@ -76,8 +76,10 @@ describe('Board', () => {
     const said = 'Pilote auto en pause : quota hebdo à 96 % (reprise à 14:00)';
     expect(screen.getByRole('status')).toHaveTextContent(said);
     expect(screen.getByText(said)).toHaveAttribute('title', said);
-    // No place is worth showing meanwhile: none is taken.
+    // No place is worth showing meanwhile: none is taken, and no card is promised one.
     expect(screen.queryByText('1 place libre')).not.toBeInTheDocument();
+    expect(within(col('À faire')).getAllByText('En attente : pilote auto en pause')).toHaveLength(2);
+    expect(within(col('À faire')).queryByText("Pris dès qu'une place se libère")).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Reprendre maintenant' }));
     expect(backend.called('autopilot_resume')).toHaveLength(1);
     // Over, as the backend tells it: the places again.

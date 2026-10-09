@@ -383,8 +383,14 @@ impl<R: Runtime> Core<R> {
         board::autopilot_pause(&usage, threshold, &hold, self.pause_now())
     }
 
+    /// No ticket may start now: an agent waits for its quota, or the autopilot is paused (a quota
+    /// window over the threshold, a usage limit with no resume).
+    fn held(&self) -> bool {
+        self.quota_paused() || self.autopilot_pause().is_some()
+    }
+
     /// The autopilot's pause looked at again, the window told when it changed (in order: looked
-    /// at and told under one lock): true when it changed.
+    /// at and told under one lock), and saved then: a restart keeps it. True when it changed.
     fn refresh_pause(&self) -> bool {
         let mut shown = self.pause_shown.lock();
         let pause = self.autopilot_pause();
@@ -393,6 +399,7 @@ impl<R: Runtime> Core<R> {
         }
         *shown = pause.clone();
         self.hub.emit(UiEvent::AutopilotPause { pause });
+        self.request_save();
         true
     }
 
@@ -406,9 +413,11 @@ impl<R: Runtime> Core<R> {
 
     /// A ticket met the usage limit with no resume planned: the next one would meet it too, so
     /// none starts for a while (`board::LIMIT_PAUSE_MS`), or until "Reprendre maintenant".
-    fn pause_after_limit(&self) {
+    pub(crate) fn pause_after_limit(&self) {
         let until = self.pause_now() + board::LIMIT_PAUSE_MS;
         self.hold.lock().limit_until = Some(until);
+        // Saved even when a longer pause hides it: it may outlast that one once lifted.
+        self.request_save();
         self.refresh_pause();
     }
 
@@ -419,6 +428,7 @@ impl<R: Runtime> Core<R> {
         let usage = self.usage.lock().clone();
         let now = self.pause_now();
         self.hold.lock().lift(&usage, threshold, now);
+        self.request_save();
         self.refresh_pause();
         self.schedule();
     }
@@ -438,12 +448,13 @@ impl<R: Runtime> Core<R> {
             return;
         }
         self.claude_missing.store(false, Ordering::Release);
-        // An agent waits for its quota, or the autopilot is paused (a quota window over the
-        // threshold, a usage limit with no resume): none starts, even launched by hand.
-        let paused = self.quota_paused() || self.autopilot_pause().is_some();
         let projects = self.projects.read().clone();
         for p in projects {
-            let ids = board::to_start(&self.tickets.read(), &p.id, &p.board, paused);
+            // Held (`held`), none starts, even launched by hand. Looked at again for each project
+            // and each start: one started in this pass, or already at work, may meet the usage
+            // limit while the pass goes on (each start takes seconds).
+            let held = self.held();
+            let ids = board::to_start(&self.tickets.read(), &p.id, &p.board, held);
             // A board that told why nothing starts is looked at again even with nothing to start:
             // its issue goes once its target is there.
             if ids.is_empty() && !self.board_issues.lock().contains_key(&p.id) {
@@ -467,6 +478,9 @@ impl<R: Runtime> Core<R> {
                 continue;
             }
             for id in ids {
+                if self.held() {
+                    break;
+                }
                 self.start_ticket(&p, &id).await;
             }
         }

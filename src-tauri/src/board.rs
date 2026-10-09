@@ -3,7 +3,7 @@
 //! sent to the agents.
 
 use crate::claude::truncate;
-use crate::core::slugify;
+use crate::core::{slugify, RESUME_MARGIN_MS};
 use crate::model::*;
 use serde_json::Value;
 
@@ -317,16 +317,6 @@ pub fn quota_threshold(saved: u32) -> u32 {
     }
 }
 
-/// What holds the autopilot back besides the quota windows read, or no longer does.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct Hold {
-    /// After a usage limit with no resume planned: until then.
-    pub limit_until: Option<i64>,
-    /// "Reprendre maintenant": the 5-hour and the weekly window hold nothing back until the end
-    /// they had then (the next window holds again).
-    pub lifted: [Option<i64>; 2],
-}
-
 impl Hold {
     /// "Reprendre maintenant" at `now`: the pause after a limit goes, and so do the windows over
     /// the threshold, until their end.
@@ -345,11 +335,15 @@ fn windows(usage: &UsageSnapshot) -> [Option<&RateWindow>; 2] {
     [usage.five_hour.as_ref(), usage.seven_day.as_ref()]
 }
 
-/// The window's end, when it is used `threshold` percent or more and its end is still to come.
+/// When the window stops holding the tickets back, if it is used `threshold` percent or more:
+/// its end, and the margin an agent's resume waits after it too (a clock a little ahead of the
+/// server's would start them into the limit), if that is still to come.
 fn over_until(w: &RateWindow, threshold: u32, now: i64) -> Option<i64> {
     // Claude Code gives a fraction, times 100 here: 0.95 may come as 94.99999….
     let over = w.pct + 1e-6 >= f64::from(threshold);
-    w.resets_at.filter(|end| over && *end > now)
+    w.resets_at
+        .map(|end| end + RESUME_MARGIN_MS)
+        .filter(|until| over && *until > now)
 }
 
 /// Why no ticket of any board starts at `now`, if none does: a window (5 h, weekly) used
@@ -1288,7 +1282,7 @@ mod tests {
             Some(AutopilotPause {
                 reason: PauseReason::Week,
                 pct: Some(96.0),
-                until: NOW + 5_000
+                until: NOW + 5_000 + RESUME_MARGIN_MS
             })
         );
         // Under the threshold, nothing holds.
@@ -1299,9 +1293,12 @@ mod tests {
             autopilot_pause(&at, 95, &free, NOW).map(|p| p.reason),
             Some(PauseReason::FiveHour)
         );
-        // Its end past, or unknown, it holds nothing back (a reading that no longer comes would
-        // hold the tickets forever).
-        let over = usage(window(100.0, Some(NOW)), window(100.0, None));
+        // Its end (and the margin after it) past, or its end unknown, it holds nothing back (a
+        // reading that no longer comes would hold the tickets forever).
+        let over = usage(
+            window(100.0, Some(NOW - RESUME_MARGIN_MS)),
+            window(100.0, None),
+        );
         assert_eq!(autopilot_pause(&over, 100, &free, NOW), None);
         // Both over it: the one that ends last, which the tickets wait for.
         let both = usage(
@@ -1310,7 +1307,23 @@ mod tests {
         );
         assert_eq!(
             autopilot_pause(&both, 95, &free, NOW).map(|p| (p.reason, p.until)),
-            Some((PauseReason::FiveHour, NOW + 9_000))
+            Some((PauseReason::FiveHour, NOW + 9_000 + RESUME_MARGIN_MS))
+        );
+    }
+
+    #[test]
+    fn a_window_holds_the_tickets_back_a_little_past_its_end_as_a_resume_waits() {
+        // The clocks may differ a little: as an agent's resume, the tickets wait a margin more.
+        assert_eq!(RESUME_MARGIN_MS, 30_000);
+        let ended = usage(window(100.0, Some(NOW - 1_000)), None);
+        let free = Hold::default();
+        assert_eq!(
+            autopilot_pause(&ended, 100, &free, NOW).map(|p| p.until),
+            Some(NOW - 1_000 + RESUME_MARGIN_MS)
+        );
+        assert_eq!(
+            autopilot_pause(&ended, 100, &free, NOW - 1_000 + RESUME_MARGIN_MS),
+            None
         );
     }
 
@@ -1366,9 +1379,9 @@ mod tests {
             Some(PauseReason::Week)
         );
         // The next 5-hour window, over it in its turn, holds again.
-        let next = usage(window(95.0, Some(NOW + 30_000)), None);
+        let next = usage(window(95.0, Some(NOW + 90_000)), None);
         assert_eq!(
-            autopilot_pause(&next, 90, &hold, NOW + 9_000).map(|p| p.reason),
+            autopilot_pause(&next, 90, &hold, NOW + 9_000 + RESUME_MARGIN_MS).map(|p| p.reason),
             Some(PauseReason::FiveHour)
         );
     }

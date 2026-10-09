@@ -68,10 +68,19 @@ export const APPROVE_LABEL: Record<BoardAction, string> = {
 
 /**
  * When a ticket "À faire" starts; `queueIndex` is its place in the column. While the board's `issue` holds (its target
- * branch has no commit yet, or is gone), none starts, whatever its place.
+ * branch has no commit yet, or is gone), or the autopilot's `pause` (a quota, a usage limit), none starts, whatever its
+ * place, even launched by hand.
  */
-export function waitLabel(t: Ticket, queueIndex: number, s: BoardSettings, busyCount: number, issue: string | null = null): string {
+export function waitLabel(
+  t: Ticket,
+  queueIndex: number,
+  s: BoardSettings,
+  busyCount: number,
+  issue: string | null = null,
+  pause: AutopilotPause | null = null,
+): string {
   if (issue) return 'En attente de la branche cible';
+  if (pause) return 'En attente : pilote auto en pause';
   if (t.forced) return 'Lancement demandé…';
   if (!s.autopilot) return 'Pilote auto désactivé';
   return queueIndex === 0 ? "Pris dès qu'une place se libère" : `En attente d'une place (${busyCount}/${s.maxParallel})`;

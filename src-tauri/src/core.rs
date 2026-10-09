@@ -118,8 +118,9 @@ struct Setup {
     task: tauri::async_runtime::JoinHandle<()>,
 }
 
-/// After the usage limit resets, before sending "continue": clocks may differ a little.
-const RESUME_MARGIN_MS: i64 = 30_000;
+/// After the usage limit resets, before sending "continue" (or starting a ticket again): clocks
+/// may differ a little.
+pub(crate) const RESUME_MARGIN_MS: i64 = 30_000;
 
 /// How often every repository with a remote is fetched in the background.
 const FETCH_EVERY: Duration = Duration::from_secs(5 * 60);
@@ -293,8 +294,9 @@ pub struct Core<R: Runtime = Wry> {
     /// gone), by project, as the window is told: not saved, found again by the next pass.
     pub(crate) board_issues: Mutex<HashMap<String, String>>,
     /// What holds the autopilot back besides the quota windows read (the pause after a usage
-    /// limit with no resume planned), or no longer does ("Reprendre maintenant"). Not saved.
-    pub(crate) hold: Mutex<board::Hold>,
+    /// limit with no resume planned), or no longer does ("Reprendre maintenant"). Saved with the
+    /// quota windows last read (`SavedPause`).
+    pub(crate) hold: Mutex<Hold>,
     /// The autopilot's pause as the window was last told (`refresh_pause`).
     pub(crate) pause_shown: Mutex<Option<AutopilotPause>>,
     /// Blocks of ports reserved for agents being made, or being given one: taken until the agent
@@ -520,6 +522,19 @@ impl<R: Runtime> Core<R> {
             })
             .collect();
         let accounts = integrations::sync::load_accounts(&data);
+        // The autopilot's pause as the app stopped, for the first pass (before any new reading of
+        // the quotas, which with an API key never comes): a window read holds until its end, an
+        // ended one is dropped (the status bar would show it).
+        let saved = state.pause;
+        let now = now_ms();
+        let ongoing = |w: Option<RateWindow>| {
+            w.filter(|w| w.resets_at.is_some_and(|end| end + RESUME_MARGIN_MS > now))
+        };
+        let usage = UsageSnapshot {
+            five_hour: ongoing(saved.five_hour),
+            seven_day: ongoing(saved.seven_day),
+            ..Default::default()
+        };
         let (git, rx) = GitService::new();
         let core = Arc::new_cyclic(|me| Self {
             me: me.clone(),
@@ -532,7 +547,7 @@ impl<R: Runtime> Core<R> {
             tickets: RwLock::new(tickets),
             ui: RwLock::new(state.ui),
             agents: RwLock::new(agents),
-            usage: Mutex::new(UsageSnapshot::default()),
+            usage: Mutex::new(usage),
             models: RwLock::new(state.models),
             git,
             git_cache: RwLock::default(),
@@ -557,7 +572,7 @@ impl<R: Runtime> Core<R> {
             setups: Mutex::default(),
             claude_missing: AtomicBool::new(false),
             board_issues: Mutex::default(),
-            hold: Mutex::default(),
+            hold: Mutex::new(saved.hold),
             pause_shown: Mutex::default(),
             ports_reserved: Mutex::default(),
             merge_locks: Mutex::default(),
@@ -684,12 +699,22 @@ impl<R: Runtime> Core<R> {
         let ui = self.ui.read().clone();
         let models = self.models.read().clone();
         let tickets = self.tickets.read().clone();
+        let (five_hour, seven_day) = {
+            let u = self.usage.lock();
+            (u.five_hour, u.seven_day)
+        };
+        let hold = *self.hold.lock();
         PersistedState {
             projects,
             agents,
             ui,
             models,
             tickets,
+            pause: SavedPause {
+                five_hour,
+                seven_day,
+                hold,
+            },
         }
     }
 
