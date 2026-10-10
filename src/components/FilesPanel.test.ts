@@ -302,7 +302,9 @@ describe('FilesPanel with thousands of files', () => {
     fakeBackend({ git_files: () => many(620) });
     render(FilesPanel, { project: project(), agent: app.agents.a1 });
     await screen.findByText('f0.ts');
-    await userEvent.click(screen.getByRole('button', { name: 'Voir le diff' }));
+    // By its text, not its role: working out the accessible name of the 500 rows' buttons takes
+    // seconds on a slow machine.
+    await userEvent.click(screen.getByText('Voir le diff', { selector: 'button' }));
     expect(app.modal).toMatchObject({ kind: 'diff', agentId: 'a1' });
     expect((app.modal as Extract<typeof app.modal, { kind: 'diff' }>).paths).toHaveLength(620);
   });
