@@ -5,7 +5,7 @@ import { fmt, plural } from '../app/data/catalog';
 import { en } from '../app/data/en';
 import { fr } from '../app/data/fr';
 import { FEATURE_SHOTS, IMAGE_DIR, VIDEO, imageOf } from '../app/data/site';
-import { LANGS, langOfPath } from '../app/data/language';
+import { LANGS, LANG_KEY, langOfPath, rememberLanguage } from '../app/data/language';
 import { leaves } from './helpers';
 
 const PUBLIC = new URL('../public/', import.meta.url);
@@ -155,5 +155,31 @@ describe('what the two pages share', () => {
       for (const t of VIDEO[lang].tracks) expect(existsSync(new URL(t.src, PUBLIC)), t.src).toBe(true);
     }
     expect(VIDEO.fr.tracks[0]).toMatchObject({ srclang: 'fr', label: 'Français', src: 'escouade.vtt' });
+  });
+});
+
+describe('the language the visitor chose', () => {
+  it('is kept in the browser’s storage under the name the redirection reads', () => {
+    const kept = new Map<string, string>();
+    rememberLanguage('en', () => ({ setItem: (k, v) => void kept.set(k, v) }));
+    expect(kept).toEqual(new Map([[LANG_KEY, 'en']]));
+    rememberLanguage('fr', () => ({ setItem: (k, v) => void kept.set(k, v) }));
+    expect(kept.get(LANG_KEY)).toBe('fr');
+    expect(LANG_KEY).toBe('escouade-lang');
+  });
+
+  it('lets the visit go on when the browser refuses to store it', () => {
+    const refusing = () => ({
+      setItem: () => {
+        throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+      },
+    });
+    expect(() => rememberLanguage('en', refusing)).not.toThrow();
+    // Some browsers refuse to even hand over the storage (cookies blocked).
+    expect(() =>
+      rememberLanguage('en', () => {
+        throw new DOMException('The operation is insecure.', 'SecurityError');
+      }),
+    ).not.toThrow();
   });
 });

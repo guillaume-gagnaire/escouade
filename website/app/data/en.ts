@@ -24,7 +24,7 @@ export const en: Catalog = {
 
   hero: {
     line1: 'A squad of Claudes.',
-    line2: 'One single window.',
+    line2: 'A single window.',
     lede: 'Escouade, the cockpit for your Claude Code agents: a Windows and macOS app to run several agents in parallel, with projects in tabs, a native chat, git, an editor, terminals, statistics, and a Kanban of tickets, written by you or imported from Jira, Trello or GitHub, that agents pick up and carry through to the end.',
     download: 'Download for Windows and macOS',
     github: 'View on GitHub',

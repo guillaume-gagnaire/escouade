@@ -21,3 +21,19 @@ export const LANGS: readonly LangInfo[] = [
 export function langOfPath(path: string): Lang {
   return /^\/en(?:[/?#]|$)/.test(path) ? 'en' : 'fr';
 }
+
+/** Where the visitor’s choice is kept in the browser; the redirection of the French root reads it. */
+export const LANG_KEY = 'escouade-lang';
+
+/**
+ * Keeps the visitor’s choice, so that the redirection of the root leaves them where they asked to be. Some
+ * browsers refuse to store anything (private mode, cookies blocked), even to hand the storage over: that is
+ * no reason to stop the visit, so the storage is asked for here, inside the guard.
+ */
+export function rememberLanguage(lang: Lang, storage: () => Pick<Storage, 'setItem'> = () => localStorage): void {
+  try {
+    storage().setItem(LANG_KEY, lang);
+  } catch {
+    // The choice just won’t be kept.
+  }
+}

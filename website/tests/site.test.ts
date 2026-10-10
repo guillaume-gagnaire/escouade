@@ -256,6 +256,20 @@ describe.each(PAGES)('generated site ($lang)', ({ lang, file, url, other }) => {
     expect(html).not.toMatch(/\b(le|un|du) tableau\b(?! Trello)/i);
   });
 
+  it('lets the visitor switch language with real links, and marks the language shown', () => {
+    const header = html.match(/<header[\s\S]*?<\/header>/)?.[0] ?? '';
+    const nav = header.match(/<nav[^>]*class="lang"[^>]*>[\s\S]*?<\/nav>/)?.[0] ?? '';
+    expect(tags(nav, 'nav')[0]['aria-label']).toBe(text.header.language);
+    const links = tags(nav, 'a');
+    // The French link asks for French explicitly, so that the first visit’s redirection leaves it alone.
+    expect(links.map((a) => [a.lang, a.hreflang, a.href, a.title])).toEqual([
+      ['fr', 'fr', `${BASE}?lang=fr`, 'Français'],
+      ['en', 'en', `${BASE}en/`, 'English'],
+    ]);
+    expect(links.map((a) => a['aria-current'])).toEqual(lang === 'fr' ? ['page', undefined] : [undefined, 'page']);
+    expect([...nav.matchAll(/<a[^>]*>([^<]*)<\/a>/g)].map((m) => m[1])).toEqual(['FR', 'EN']);
+  });
+
   it('points the header’s links at sections that exist', () => {
     const header = html.match(/<header[\s\S]*?<\/header>/)?.[0] ?? '';
     const targets = tags(header, 'a')

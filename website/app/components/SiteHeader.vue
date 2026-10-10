@@ -14,7 +14,10 @@ const { text } = useLang();
         <a :href="`#${text.anchors.install}`">{{ text.header.install }}</a>
         <a href="#faq">{{ text.header.faq }}</a>
       </nav>
-      <a class="gh" :href="REPO">{{ text.header.github }}</a>
+      <div class="tools">
+        <LangSwitch />
+        <a class="gh" :href="REPO">{{ text.header.github }}</a>
+      </div>
     </div>
   </header>
 </template>
@@ -47,6 +50,11 @@ const { text } = useLang();
   gap: 24px;
   margin-left: auto;
 }
+.tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
 .nav a,
 .gh {
   color: var(--muted);
@@ -67,7 +75,7 @@ const { text } = useLang();
   .nav {
     display: none;
   }
-  .gh {
+  .tools {
     margin-left: auto;
   }
 }
