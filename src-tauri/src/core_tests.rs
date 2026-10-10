@@ -2967,34 +2967,51 @@ async fn deleting_an_agent_but_not_its_worktree_runs_no_teardown() {
 
 #[tokio::test]
 async fn deleting_an_agent_stops_the_setup_of_its_worktree() {
+    // How long the setup command would take on its own: far more than the deletion needs, so that
+    // what is asserted holds on a loaded machine too (it compares with this, not with a clock).
+    const DELAY_MS: u64 = 20_000;
     let h = harness("wt-setup-stop");
     let (p, r) = h.project(true).await;
-    h.set_worktree_steps(
-        &p.id,
-        vec![wt_step(
-            r#"node -e "setTimeout(() => require('fs').writeFileSync(require('path').join(process.env.ESCOUADE_PROJECT_DIR, 'late.txt'), ''), 4000)""#,
-            "",
-        )],
-        vec![],
+    // Says it is under way (its process id), then would write `late.txt` once the delay is over.
+    let command = format!(
+        r#"node -e "const fs = require('fs'), path = require('path'); const dir = process.env.ESCOUADE_PROJECT_DIR; fs.writeFileSync(path.join(dir, 'started.txt'), String(process.pid)); setTimeout(() => fs.writeFileSync(path.join(dir, 'late.txt'), ''), {DELAY_MS})""#
     );
+    h.set_worktree_steps(&p.id, vec![wt_step(&command, "")], vec![]);
     let a = h.core.create_agent(&p.id, None).await.unwrap();
     let wt = a.meta.worktree.clone().unwrap();
-    // Under way (its process started).
-    tokio::time::sleep(Duration::from_millis(800)).await;
+    // Under way: its process really started, whatever time that takes.
+    let pid_of = || -> Option<u32> {
+        std::fs::read_to_string(r.join("started.txt"))
+            .ok()?
+            .trim()
+            .parse()
+            .ok()
+    };
+    h.wait("its setup started", |_| pid_of().is_some()).await;
+    let pid = pid_of().unwrap();
+    assert!(process_exists(pid));
     let log = h.core.data.setup_log(&a.meta.id);
     assert!(log.is_file());
     let started = std::time::Instant::now();
     assert_eq!(h.core.delete_agent(&a.meta.id, true).await.unwrap(), None);
-    // Its log goes with it.
+    let took = started.elapsed();
+    // Its log goes with it, and its worktree.
     assert!(!log.exists());
-    assert!(
-        started.elapsed() < Duration::from_secs(3),
-        "{:?}",
-        started.elapsed()
-    );
     assert!(!Path::new(&wt.path).exists());
-    // Killed with it: it never ends its work.
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    // It did not wait for the command to end on its own (which takes DELAY_MS after it started).
+    assert!(
+        took < Duration::from_millis(DELAY_MS / 2),
+        "deleted in {took:?}, the setup would have ended by itself in {DELAY_MS} ms"
+    );
+    // Killed with it, long before its delay: it never ends its work.
+    let deadline = std::time::Instant::now() + Duration::from_secs(15);
+    while process_exists(pid) {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the setup's process {pid} survived the agent"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
     assert!(!r.join("late.txt").exists());
 }
 
