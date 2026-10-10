@@ -5137,9 +5137,10 @@ async fn a_ticket_on_an_existing_branch_works_there_and_its_validation_merges_it
     assert_eq!(t.column, Column::Done, "{:?}", t.blocked);
     assert_eq!(t.outcome.as_deref(), Some("⤵ Mergé dans main · squash"));
     assert!(r.join("login.txt").exists() && r.join("dem-1.txt").exists());
-    // Cleaned up as the board's setting says: the worktree goes, and the branch, merged.
+    // Cleaned up as the board's setting says: the worktree goes. The branch was the user's before
+    // the ticket: it stays, whatever the setting.
     assert!(!dir.exists());
-    assert!(!has_branch(&r, "feat/login"));
+    assert!(has_branch(&r, "feat/login"));
 }
 
 #[tokio::test]
@@ -5214,4 +5215,77 @@ async fn a_ticket_on_a_branch_the_folder_or_an_agent_has_is_blocked_with_the_rea
         ))
     );
     assert_eq!(git(&r, &["branch", "--list", "ticket/*"]), "");
+}
+
+#[tokio::test]
+async fn a_ticket_started_again_takes_its_branch_back_from_its_archived_agent_unless_that_one_has_changes(
+) {
+    let h = harness("g4f-ticket-branch-archived");
+    let (p, r) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    branch_with_file(&r, "feat/login", "login.txt");
+    let t = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                branch: "feat/login".into(),
+                ..draft("Fichier [ok]", &[], 5)
+            },
+        )
+        .await
+        .unwrap();
+    h.core.ticket_start(&t.id).unwrap();
+    h.wait_ticket(&t.id, "to test", |t| t.column == Column::Review)
+        .await;
+    let first = h.ticket(&t.id).agent_id.unwrap();
+    let old = h.worktree_of(&t.id);
+    // What it did, committed (the fake CLI only writes a file): nothing is left to lose there.
+    git(&old, &["add", "-A"]);
+    git(&old, &["commit", "-qm", "travail"]);
+    // Its agent is archived: the ticket goes back to do, and the agent keeps its worktree, which
+    // holds the branch.
+    h.core.archive_agent(&first, true).await.unwrap();
+    assert_eq!(h.ticket(&t.id).column, Column::Todo);
+    assert!(old.exists());
+
+    // With changes in that worktree: nothing of them is thrown away, the ticket does not start,
+    // and its block says who has the branch, and what to do.
+    std::fs::write(old.join("src").join("app.ts"), "const a = 9; // en cours\n").unwrap();
+    h.core.ticket_start(&t.id).unwrap();
+    h.wait_ticket(&t.id, "blocked", |t| t.blocked.is_some())
+        .await;
+    assert_eq!(
+        h.ticket(&t.id).blocked,
+        Some(format!(
+            "Erreur : L’agent {}, archivé, garde la branche « feat/login » dans son worktree avec des changements non commités : commite-les ou supprime l’agent, puis reprends le ticket.",
+            h.agent(&first).name
+        ))
+    );
+    assert_eq!(
+        std::fs::read_to_string(old.join("src").join("app.ts")).unwrap(),
+        "const a = 9; // en cours\n"
+    );
+
+    // Clean, that worktree is let go of (the branch stays, it is the user's): the ticket goes on
+    // with a new agent on the same branch.
+    git(&old, &["checkout", "--", "src/app.ts"]);
+    h.core.ticket_resume(&t.id).await.unwrap();
+    h.wait_ticket(&t.id, "to test again", |t| {
+        t.column == Column::Review && t.agent_id.as_deref().is_some_and(|a| a != first)
+    })
+    .await;
+    let wt = h.agent_of(&t.id).worktree.unwrap();
+    assert_eq!(
+        (wt.branch.as_str(), wt.base_branch.as_str(), wt.existing),
+        ("feat/login", "main", true)
+    );
+    assert!(has_branch(&r, "feat/login"));
+    assert!(Path::new(&wt.path).join("login.txt").exists());
+    assert!(h.agent(&first).archived);
+    let held = git(&r, &["worktree", "list", "--porcelain"])
+        .lines()
+        .filter(|l| *l == "branch refs/heads/feat/login")
+        .count();
+    assert_eq!(held, 1);
 }

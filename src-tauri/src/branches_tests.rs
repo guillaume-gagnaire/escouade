@@ -1216,7 +1216,7 @@ fn what_an_agent_on_a_branch_is_told_reads_in_both_languages() {
     );
     assert_eq!(
         integrate_dirty(Fr),
-        "Commite ou mets de côté les changements de l'agent d'abord."
+        "Commite ou mets de côté les changements de l’agent d’abord."
     );
     assert_eq!(
         integrate_dirty(En),
@@ -1384,7 +1384,7 @@ async fn the_base_is_not_integrated_while_the_agent_works_or_has_changes_or_cann
     let e = h.core.integrate_base(&id).await.unwrap_err();
     assert_eq!(
         e.to_string(),
-        "Commite ou mets de côté les changements de l'agent d'abord."
+        "Commite ou mets de côté les changements de l’agent d’abord."
     );
     git(&wt, &["checkout", "--", "src/app.ts"]);
     // During its turn.

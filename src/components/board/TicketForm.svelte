@@ -71,6 +71,8 @@
       { label: own, onClick: () => (branch = '') },
       {
         label: t('branches.ticket.existing'),
+        // The branch is the user's: validating the ticket never deletes it.
+        title: t('branches.ticket.existingKept'),
         // Once the menu has given the focus back to its button: the picker gives it back there in turn.
         onClick: async () => {
           await tick();

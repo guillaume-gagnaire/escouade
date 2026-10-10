@@ -898,8 +898,8 @@ pub async fn worktree_add_existing(repo: &str, name: &str) -> Result<(String, St
     }
     let path = dir.to_string_lossy().to_string();
     // `--`: whatever the name is, git reads it as the commit-ish.
-    match local {
-        Some(local) => run(repo, &["worktree", "add", &path, "--", &local]).await,
+    let made = match &local {
+        Some(local) => run(repo, &["worktree", "add", &path, "--", local]).await,
         None => {
             run(
                 repo,
@@ -909,7 +909,16 @@ pub async fn worktree_add_existing(repo: &str, name: &str) -> Result<(String, St
             )
             .await
         }
-    }?;
+    };
+    if let Err(e) = made {
+        // Git leaves what it made before it failed (a hook refusing the checkout): its folder,
+        // registered, which would hold the branch, and the local branch it made (none was there).
+        let _ = worktree_remove_dir(repo, &path).await;
+        if local.is_none() && branch_exists(repo, &branch).await {
+            let _ = run(repo, &["branch", "-D", "--", &branch]).await;
+        }
+        return Err(e);
+    }
     Ok((path, branch))
 }
 
@@ -4961,6 +4970,51 @@ mod repo_tests {
             );
         }
         assert_eq!(worktree_paths(&l).await.unwrap().len(), before);
+    }
+
+    /// A hook of the repository at `repo` that fails every checkout, a new worktree's included.
+    fn fail_checkouts(repo: &Path) {
+        let hook = repo.join(".git").join("hooks").join("post-checkout");
+        std::fs::write(&hook, "#!/bin/sh\necho 'refused' >&2\nexit 1\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn a_worktree_that_git_could_not_finish_leaves_neither_its_folder_nor_the_branch_it_made()
+    {
+        let (local, other, _) = with_remote("git-g4f-add-failed");
+        let l = s(&local);
+        git_in(&other, &["push", "-q", "origin", "main:feat/r"]);
+        git_in(&local, &["branch", "kept"]);
+        git_in(&local, &["fetch", "-q"]);
+        let before = worktree_paths(&l).await.unwrap().len();
+        let hook = local.join(".git").join("hooks").join("post-checkout");
+        fail_checkouts(&local);
+        // A remote branch: git made the local branch, then failed. It did not exist before: it goes.
+        let e = worktree_add_existing(&l, "origin/feat/r")
+            .await
+            .unwrap_err();
+        assert!(format!("{e:#}").contains("refused"), "{e:#}");
+        assert!(!branch_exists(&l, "feat/r").await);
+        assert_eq!(worktree_paths(&l).await.unwrap().len(), before);
+        assert!(!Path::new(&l).join(".claude/worktrees/r").exists());
+        // A branch that was there: it stays, and nothing holds it any more.
+        assert!(worktree_add_existing(&l, "kept").await.is_err());
+        assert!(branch_exists(&l, "kept").await);
+        assert_eq!(worktree_paths(&l).await.unwrap().len(), before);
+        assert!(!Path::new(&l).join(".claude/worktrees/kept").exists());
+        assert_eq!(checkout_of(&l, "kept").await.unwrap(), None);
+        // Once git can do it again, both are taken up.
+        std::fs::remove_file(&hook).unwrap();
+        assert_eq!(
+            worktree_add_existing(&l, "origin/feat/r").await.unwrap().1,
+            "feat/r"
+        );
+        assert_eq!(worktree_add_existing(&l, "kept").await.unwrap().1, "kept");
     }
 
     /// `feat` (own commit, on `b.txt` or on the file `main` changes since: `conflict`) in a

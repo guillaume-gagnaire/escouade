@@ -71,11 +71,12 @@ pub fn branch_of(key: &str) -> String {
 }
 
 /// Whether the branch of a validated ticket stays when its worktree goes (« Supprimer le worktree »):
-/// when it was pushed or proposed (its pull request, an agent restored gets its worktree back from
-/// it); and, when it was there before the ticket (`existing`), also when the ticket brought nothing
-/// to merge, since nothing of it went into the target. Merged, a branch goes, whoever made it.
+/// always when it was there before the ticket (`existing`), the user's own, whatever the Kanban's
+/// setting and whatever became of the ticket; the ticket's own branch stays when it was pushed or
+/// proposed (its pull request, an agent restored gets its worktree back from it), and goes once
+/// merged or when the ticket brought nothing.
 pub fn keeps_branch(existing: bool, nothing: bool, action: &str) -> bool {
-    (!nothing && action != "merge") || (nothing && existing)
+    existing || (!nothing && action != "merge")
 }
 
 /// One criterion per non-empty line; the default two without any.
@@ -1336,9 +1337,9 @@ mod tests {
             "atl-42-limiter-les-tentatives"
         );
         assert_eq!(branch_of("ATL-42"), "ticket/atl-42");
-        // (existing, nothing, action) → the branch stays. Merged, it goes; pushed or proposed it
-        // stays (the PR, a restored agent). A ticket that brought nothing leaves its own branch to
-        // go, but not one that was there before it.
+        // (existing, nothing, action) → the branch stays. The ticket's own, merged, goes; pushed or
+        // proposed it stays (the PR, a restored agent). One that was there before the ticket is the
+        // user's: it stays whatever became of the ticket.
         let kept = |existing, nothing, action| keeps_branch(existing, nothing, action);
         assert_eq!(
             [
@@ -1352,7 +1353,7 @@ mod tests {
                 kept(true, true, "merge"),
                 kept(true, true, "pr"),
             ],
-            [false, true, true, false, false, false, true, true, true]
+            [false, true, true, false, false, true, true, true, true]
         );
         let texts = |c: Vec<Criterion>| c.into_iter().map(|c| c.text).collect::<Vec<_>>();
         assert_eq!(

@@ -151,6 +151,8 @@ export default defineZone('branches', {
     /** `{branch}`: the ticket’s own branch (`ticket/dem-3`). */
     own: 'New branch {branch}',
     existing: 'Take up an existing branch…',
+    /** The tooltip of that entry. */
+    existingKept: 'Escouade never deletes this branch, even once the ticket is approved.',
   },
   /** “Merged branches”: the clean-up. */
   merged: {

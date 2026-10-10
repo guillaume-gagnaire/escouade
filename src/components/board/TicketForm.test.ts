@@ -57,6 +57,15 @@ describe('TicketForm', () => {
       expect(menu.open!.items.map((i) => i.label)).toEqual(['Nouvelle branche ticket/<clé>', 'Reprendre une branche existante…']);
     });
 
+    it('says on the entry that takes a branch up that Escouade never deletes it', async () => {
+      open();
+      await userEvent.click(field());
+      expect(menu.open!.items.map((i) => i.title)).toEqual([
+        undefined,
+        'Escouade ne supprime jamais cette branche, même une fois le ticket validé.',
+      ]);
+    });
+
     it('sends the branch chosen in the picker with the ticket, and shows it', async () => {
       const { onsubmit } = open();
       await takeUp('feat/login');
@@ -136,6 +145,7 @@ describe('TicketForm', () => {
       expect(english).toHaveTextContent('New branch ticket/<key>');
       await userEvent.click(english);
       expect(menu.open!.items.map((i) => i.label)).toEqual(['New branch ticket/<key>', 'Take up an existing branch…']);
+      expect(menu.open!.items[1].title).toBe('Escouade never deletes this branch, even once the ticket is approved.');
     });
   });
 

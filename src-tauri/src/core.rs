@@ -248,7 +248,7 @@ pub(crate) fn folder_branch_refusal(lang: i18n::Lang) -> String {
 pub(crate) fn integrate_dirty(lang: i18n::Lang) -> String {
     tr_in!(
         lang,
-        "Commite ou mets de côté les changements de l'agent d'abord.",
+        "Commite ou mets de côté les changements de l’agent d’abord.",
         "Commit or stash the agent’s changes first."
     )
 }

@@ -254,11 +254,14 @@
         >{t('git.files.merge', { branch: agent.worktree.branch, base: agent.worktree.baseBranch })}</button
       >
     </div>
-    <div class="foot merge">
-      <button class="btn" style="flex:1" onclick={() => agent && integrateBase(agent)}
-        >{t('branches.integrate.menu', { base: agent.worktree.baseBranch })}</button
-      >
-    </div>
+    <!-- Not for an archived agent, as in the sidebar's menu: nothing goes into the worktree of one that is not running. -->
+    {#if !agent.archived}
+      <div class="foot merge">
+        <button class="btn" style="flex:1" onclick={() => agent && integrateBase(agent)}
+          >{t('branches.integrate.menu', { base: agent.worktree.baseBranch })}</button
+        >
+      </div>
+    {/if}
   {/if}
 </div>
 

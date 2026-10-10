@@ -259,12 +259,12 @@ describe('integrateBase', () => {
   it('tells the refusal of the backend as it is', async () => {
     fakeBackend({
       integrate_base: () => {
-        throw "Commite ou mets de côté les changements de l'agent d'abord.";
+        throw 'Commite ou mets de côté les changements de l’agent d’abord.';
       },
     });
     await integrateBase(app.agents.a2);
     expect(app.toasts).toEqual([
-      expect.objectContaining({ text: "Commite ou mets de côté les changements de l'agent d'abord.", kind: 'error' }),
+      expect.objectContaining({ text: 'Commite ou mets de côté les changements de l’agent d’abord.', kind: 'error' }),
     ]);
   });
 

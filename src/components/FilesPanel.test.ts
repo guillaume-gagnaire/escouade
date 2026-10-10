@@ -597,6 +597,14 @@ describe('FilesPanel « Intégrer <base> »', () => {
     );
   });
 
+  it('is not there for an archived agent, as it is not in the sidebar’s menu, where the merge stays', async () => {
+    resetApp({ agents: [agent({ id: 'a3', name: 'landing', worktree: wt, archived: true })] });
+    fakeBackend({ git_files: () => [] });
+    render(FilesPanel, { project: project(), agent: app.agents.a3 });
+    expect(screen.getByRole('button', { name: 'Merger ccm/landing → develop…' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Intégrer/ })).toBeNull();
+  });
+
   it('is not there for an agent without a worktree, nor for the whole project', async () => {
     fakeBackend({ git_files: () => [] });
     render(FilesPanel, { project: project(), agent: app.agents.a1 });

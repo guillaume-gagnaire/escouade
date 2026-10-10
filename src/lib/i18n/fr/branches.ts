@@ -150,6 +150,8 @@ export default {
     /** `{branch}`: the ticket’s own branch (`ticket/dem-3`). */
     own: 'Nouvelle branche {branch}',
     existing: 'Reprendre une branche existante…',
+    /** The tooltip of that entry. */
+    existingKept: 'Escouade ne supprime jamais cette branche, même une fois le ticket validé.',
   },
   /** « Branches mergées » : the clean-up. */
   merged: {

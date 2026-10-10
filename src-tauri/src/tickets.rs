@@ -148,6 +148,16 @@ fn branch_name(branch: &str) -> Result<String> {
     Ok(branch.to_string())
 }
 
+/// Why a ticket cannot start again on the branch it took up: the agent it had, archived, holds it in
+/// its worktree, with changes that no start may throw away.
+fn archived_holds(lang: Lang, agent: &str, branch: &str) -> String {
+    tr_in!(
+        lang,
+        "L’agent {agent}, archivé, garde la branche « {branch} » dans son worktree avec des changements non commités : commite-les ou supprime l’agent, puis reprends le ticket.",
+        "The archived agent {agent} holds the branch “{branch}” in its worktree with uncommitted changes: commit them or delete the agent, then resume the ticket."
+    )
+}
+
 fn ticket_not_found() -> anyhow::Error {
     anyhow!(tr!("ticket introuvable", "ticket not found"))
 }
@@ -875,6 +885,55 @@ impl<R: Runtime> Core<R> {
         }
     }
 
+    /// A ticket started again on a branch it took up: the agent it had, archived, still has that
+    /// branch in its worktree, which would keep the new agent from taking it up. That folder goes,
+    /// after the project's teardown (the branch is the user's and stays, and restoring the agent
+    /// makes the folder again, if the branch is free then). One that holds changes, new files
+    /// included, is left as it is, and the start is refused, saying what to do.
+    async fn release_archived_holder(&self, project: &Project, t: &Ticket) -> Result<()> {
+        let Some(root) = self.toplevel(&project.path).await else {
+            return Ok(());
+        };
+        let Ok(Some(local)) = git::local_of(&root, &t.branch).await else {
+            return Ok(());
+        };
+        let holders: Vec<(String, Worktree)> = self
+            .agents
+            .read()
+            .values()
+            .filter_map(|h| {
+                let rt = h.lock();
+                let m = &rt.meta;
+                let wt = m.worktree.clone()?;
+                (m.archived
+                    && m.ticket_id.as_deref() == Some(&t.id)
+                    && wt.existing
+                    && wt.branch == local)
+                    .then(|| (m.name.clone(), wt))
+            })
+            .collect();
+        for (name, wt) in holders {
+            if !Path::new(&wt.path).is_dir() {
+                continue;
+            }
+            // Whatever is not committed there (new files included) would be lost.
+            if !git::status(&wt.path)
+                .await
+                .is_ok_and(|s| s.entries.is_empty())
+            {
+                bail!(archived_holds(i18n::ui(), &name, &local));
+            }
+            if let Some(problem) = self.teardown_worktree(project, &wt, None).await {
+                log::warn!("ticket {}: {name}'s worktree: {problem}", t.key);
+            }
+            if let Err(e) = git::worktree_remove_dir(&project.path, &wt.path).await {
+                log::warn!("ticket {}: {name}'s worktree not released: {e:#}", t.key);
+            }
+        }
+        self.git.refresh(&project.id);
+        Ok(())
+    }
+
     /// The ticket's agent: its worktree on `ticket/<key>` from the target branch, its block of
     /// ports (none when isola runs the project's services), the protocol appended to its system
     /// prompt; then, its worktree set up, its first message.
@@ -885,6 +944,10 @@ impl<R: Runtime> Core<R> {
         // What its Claude is told, from its protocol to its first message.
         let lang = self.lang().claude;
         let or = |v: &str, default: &str| Some(if v.is_empty() { default } else { v }.to_string());
+        // The branch it takes up may still be in the worktree of its earlier agent, archived.
+        if !t.branch.is_empty() {
+            self.release_archived_holder(project, t).await?;
+        }
         // The ticket's own branch from the target, or one that exists, which the agent takes up.
         let (new_branch, taken_up, base) = match t.branch.as_str() {
             "" => (Some((board::branch_of(&t.key), target.clone())), None, None),
