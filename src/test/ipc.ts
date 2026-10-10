@@ -224,6 +224,7 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.boardIssues = {};
   app.setupOutput = {};
   app.autopilotPause = null;
+  app.claudePathFound = true;
   app.projectPauses = {};
   app.editor = {};
   app.ui = { activeProject: projects[0]?.id ?? null, view: 'project', selectedAgent: {} };

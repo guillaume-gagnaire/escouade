@@ -360,12 +360,19 @@
   });
 
   /** Empty: « Automatique », which account that is is the backend's to say (it tells the agent back). */
-  function pickAccount(id: string) {
+  async function pickAccount(id: string) {
     menu = null;
     const a = app.agents[agent.id];
+    const before = a?.account;
     if (a && id) a.account = id;
-    app.run(api.setAgentAccount(agent.id, id));
     ta?.focus();
+    try {
+      await api.setAgentAccount(agent.id, id);
+    } catch (e) {
+      // Refused: the agent is where it was, as the chip must say.
+      if (a && before !== undefined) a.account = before;
+      app.toast(String(e), 'error');
+    }
   }
 
   function setOption(o: { model?: string; effort?: string; mode?: string }) {

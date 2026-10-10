@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/svelte';
+import { render, screen, waitFor } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { setLang } from '../lib/i18n';
@@ -60,6 +60,20 @@ describe('the account chip of the Composer', () => {
     expect(backend.called('set_agent_account').at(-1)?.args).toEqual({ id: a.id, account: 'pro' });
     expect(chip('Compte : Pro')).toBeInTheDocument();
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it('gives the agent its account back, and says why, when the backend refuses the change', async () => {
+    const { a } = setup({ account: 'principal' });
+    const backend = fakeBackend({
+      get_conversation: () => [],
+      set_agent_account: () => Promise.reject('Le compte « Pro » est désactivé.'),
+    });
+    await userEvent.click(chip('Compte : Principal'));
+    await userEvent.click(screen.getByRole('menuitemradio', { name: 'Pro' }));
+    expect(backend.called('set_agent_account')).toHaveLength(1);
+    await waitFor(() => expect(app.toasts.at(-1)).toMatchObject({ kind: 'error', text: 'Le compte « Pro » est désactivé.' }));
+    expect(app.agents[a.id].account).toBe('principal');
+    expect(chip('Compte : Principal')).toBeInTheDocument();
   });
 
   it('leaves « Automatique » to the backend, which says which account that is', async () => {

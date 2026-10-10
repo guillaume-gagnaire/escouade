@@ -159,8 +159,11 @@
             onblur={(e) => commit(a, e.currentTarget, 'claudePath')}
           />
           <div style="flex:1"></div>
-          {#if status && (!status.connected || late)}
-            <button class="btn" onclick={() => (app.modal = { kind: 'account', accountId: a.id })}>{t('accounts.tab.signIn')}</button>
+          {#if status}
+            <!-- Not signed in, or out of date: to sign in. Signed in: to sign in again (another claude.ai account, say). -->
+            <button class="btn" onclick={() => (app.modal = { kind: 'account', accountId: a.id })}>
+              {status.connected && !late ? t('accounts.tab.signInAgain') : t('accounts.tab.signIn')}
+            </button>
           {/if}
           {#if a.id !== PRINCIPAL}
             <button class="btn ghost danger" onclick={() => remove(a)}>{t('accounts.tab.remove')}</button>

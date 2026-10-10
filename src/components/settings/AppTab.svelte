@@ -45,7 +45,7 @@
       t('settings.claude.pathHint'),
       s.claudePath,
       (v) => (s.claudePath = v),
-      app.claudeFound ? t('settings.claude.pathFound') : t('settings.claude.pathMissing'),
+      app.claudePathFound ? t('settings.claude.pathFound') : t('settings.claude.pathMissing'),
     )}
   </Group>
   <Group title={t('settings.claude.newAgents')}>

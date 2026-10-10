@@ -18,6 +18,7 @@ export default {
     up: 'Monter {name}',
     down: 'Descendre {name}',
     signIn: 'Se connecter…',
+    signInAgain: 'Se reconnecter…',
     remove: 'Supprimer',
     add: 'Ajouter un compte…',
     stillUsed: { one: 'Le compte sert encore à {count} agent.', other: 'Le compte sert encore à {count} agents.' },

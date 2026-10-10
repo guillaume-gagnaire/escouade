@@ -16,6 +16,7 @@ export default defineZone('accounts', {
     up: 'Move {name} up',
     down: 'Move {name} down',
     signIn: 'Sign in…',
+    signInAgain: 'Sign in again…',
     remove: 'Remove',
     add: 'Add an account…',
     stillUsed: { one: 'The account is still used by {count} agent.', other: 'The account is still used by {count} agents.' },

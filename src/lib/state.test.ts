@@ -1085,6 +1085,31 @@ describe('board', () => {
     expect(app.projectPauses).toEqual({});
   });
 
+  it('forgets the exit of a terminal the window killed itself, whether it came before or comes after', async () => {
+    const { emit } = await start();
+    // Killed, its exit comes after.
+    app.dropExit('t1');
+    emit({ type: 'terminalExit', id: 't1', code: 1 });
+    expect('t1' in app.exitedTerms).toBe(false);
+    // The exit came first.
+    emit({ type: 'terminalExit', id: 't2', code: 0 });
+    expect(app.exitedTerms.t2).toBe(0);
+    app.dropExit('t2');
+    expect('t2' in app.exitedTerms).toBe(false);
+    // Only once, and only for it: the others are kept.
+    emit({ type: 'terminalExit', id: 't1', code: 1 });
+    emit({ type: 'terminalExit', id: 't3', code: null });
+    expect(app.exitedTerms).toEqual({ t1: 1, t3: null });
+  });
+
+  it('knows whether the settings’ path to Claude Code is found, apart from whether the current account’s Claude Code is', async () => {
+    await start({ claudeFound: true, claudePathFound: false });
+    expect([app.claudeFound, app.claudePathFound]).toEqual([true, false]);
+    // An older backend says one thing only.
+    await start({ claudeFound: false, claudePathFound: undefined });
+    expect([app.claudeFound, app.claudePathFound]).toEqual([false, false]);
+  });
+
   it('starts without tickets when the snapshot has none', async () => {
     resetApp({ tickets: [ticket()] });
     await start({ tickets: undefined });

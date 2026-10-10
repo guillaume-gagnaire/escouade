@@ -145,6 +145,8 @@ class AppState {
   shells = $state<ShellInfo[]>([]);
   terminals = $state<TermInfo[]>([]);
   exitedTerms = $state<Record<string, number | null>>({});
+  /** Terminals the window killed itself, whose exit is still to come: nobody reads it. */
+  private droppedTerms = new Set<string>();
   /**
    * What the step running of each agent's worktree setup wrote, its last lines, by agent. Replaced whole at each
    * change (a few hundred lines, often): not made deeply reactive.
@@ -155,6 +157,8 @@ class AppState {
   selectedLaunch = $state<Record<string, string | null>>({});
   selectedTerm = $state<Record<string, string | null>>({});
   claudeFound = $state(true);
+  /** The settings' own path to Claude Code leads to it (what its field's hint says, whatever the current account runs). */
+  claudePathFound = $state(true);
   /** Claude Code's models as it last reported them: the version each alias runs. */
   models = $state<ModelInfo[]>([]);
   version = $state('');
@@ -368,6 +372,7 @@ class AppState {
     this.git = s.git;
     this.shells = s.shells;
     this.claudeFound = s.claudeFound;
+    this.claudePathFound = s.claudePathFound ?? s.claudeFound;
     this.version = s.version;
     this.models = s.models;
     this.restartAt = s.restartAt ?? null;
@@ -489,6 +494,7 @@ class AppState {
         }
         break;
       case 'terminalExit':
+        if (this.droppedTerms.delete(e.id)) break;
         this.exitedTerms[e.id] = e.code;
         this.onLaunchExit(e.id, e.code);
         break;
@@ -890,6 +896,12 @@ class AppState {
     recentFiles.closeProject(id);
     fileSearches.closeProject(id);
     this.persistUi();
+  }
+
+  /** A terminal the window kills (its sign-in terminal): its exit is not kept, whether it came already or comes after. */
+  dropExit(id: string) {
+    if (id in this.exitedTerms) delete this.exitedTerms[id];
+    else this.droppedTerms.add(id);
   }
 
   /** A launch command's process is up; it may have ended, or been stopped, in the meantime. */

@@ -899,7 +899,7 @@ describe('SettingsModal in English', () => {
     ).toEqual(['Auto', 'Ask', 'Plan', 'Accept edits', 'Bypass']);
     const path = screen.getByRole('textbox', { name: 'Executable path' });
     expect(path).toHaveAttribute('placeholder', 'claude (found in PATH)');
-    app.claudeFound = false;
+    app.claudePathFound = false;
     flushSync();
     expect(path).toHaveAttribute('placeholder', 'not found — enter the path to claude.exe');
     expect(screen.getByRole('switch', { name: 'Auto-resume after the usage limit' })).toBeInTheDocument();
@@ -907,6 +907,20 @@ describe('SettingsModal in English', () => {
     await userEvent.type(screen.getByRole('spinbutton', { name: /Stop idle/ }), '0');
     expect(tab('Claude Code')).toHaveClass('changed');
     expect(tab('Claude Code')).toHaveAccessibleDescription('Modified, not saved yet');
+  });
+
+  it('says of the executable path whether it is found, not whether the current account’s Claude Code is', async () => {
+    fakeBackend();
+    // An account with a `claude` of its own is the current one: Claude Code is found, the settings' path is not.
+    app.claudeFound = true;
+    app.claudePathFound = false;
+    render(SettingsModal, { tab: 'claude' });
+    const path = screen.getByRole('textbox', { name: 'Executable path' });
+    expect(path).toHaveAttribute('placeholder', 'not found — enter the path to claude.exe');
+    app.claudePathFound = true;
+    app.claudeFound = false;
+    flushSync();
+    expect(path).toHaveAttribute('placeholder', 'claude (found in PATH)');
   });
 
   it('says the notifications, the network and the terminals in English', async () => {

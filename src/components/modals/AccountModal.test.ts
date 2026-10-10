@@ -27,8 +27,10 @@ import AccountModal from './AccountModal.svelte';
 const PRINCIPAL: Account = { id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true };
 const PRO: Account = { id: 'pro', name: 'Pro', configDir: 'C:\\Users\\ada\\.escouade\\claude\\pro', claudePath: '', active: true };
 const SHAREABLE = ['settings.json', 'CLAUDE.md', 'skills', 'agents'];
-const OUT: AccountStatus = { connected: false, email: null, dir: PRO.configDir };
-const IN: AccountStatus = { connected: true, email: 'ada@pro.dev', dir: PRO.configDir };
+const OUT: AccountStatus = { connected: false, email: null, dir: PRO.configDir, stamp: null };
+const IN: AccountStatus = { connected: true, email: 'ada@pro.dev', dir: PRO.configDir, stamp: 'new-sign-in' };
+/** Signed in before the user does it again (the token out of date, or not): another stamp than IN's. */
+const BEFORE: AccountStatus = { connected: true, email: 'ada@pro.dev', dir: PRO.configDir, stamp: 'old-sign-in' };
 
 /** A backend whose `account_status` answers `answers` in turn (the last one again after). */
 function backend(answers: AccountStatus[] = [OUT], over: Record<string, (a: any) => unknown> = {}) {
@@ -96,7 +98,7 @@ describe('AccountModal', () => {
   });
 
   it('makes the account with what is checked, then runs its claude until the sign-in is there', async () => {
-    const b = backend([OUT, IN]);
+    const b = backend([OUT, OUT, IN]);
     render(AccountModal, {});
     await screen.findByRole('group', { name: 'Partager avec Principal' });
     await userEvent.type(screen.getByRole('textbox', { name: 'Nom' }), 'Pro');
@@ -114,10 +116,10 @@ describe('AccountModal', () => {
     expect(said).toHaveTextContent(HINT);
     expect(term.opened).toEqual(['pro']);
     await waitFor(() => expect(term.mounted).toContain('term-1'));
-    // Looked at every 2 s.
-    expect(b.called('account_status')).toHaveLength(0);
-    await vi.advanceTimersByTimeAsync(2000);
+    // Where it stands before the terminal opens, then looked at every 2 s.
     expect(b.called('account_status').map((c) => c.args.id)).toEqual(['pro']);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(b.called('account_status').map((c) => c.args.id)).toEqual(['pro', 'pro']);
     expect(said).toHaveTextContent(HINT);
     await vi.advanceTimersByTimeAsync(2000);
     await waitFor(() => expect(said).toHaveTextContent('Connecté au compte ada@pro.dev'));
@@ -129,22 +131,91 @@ describe('AccountModal', () => {
     expect(b.called('refresh_usage')).toHaveLength(1);
     // No more looking.
     await vi.advanceTimersByTimeAsync(6000);
-    expect(b.called('account_status')).toHaveLength(2);
+    expect(b.called('account_status')).toHaveLength(3);
     await userEvent.click(within(dialog).getByRole('button', { name: 'Terminé' }));
     expect(app.modal).toEqual({ kind: 'settings', tab: 'accounts', resume: true });
   });
 
   it('waits a moment more for the email Claude Code writes after the sign-in', async () => {
-    backend([
-      { ...IN, email: null },
-      { ...IN, email: null },
-    ]);
+    backend([OUT, { ...IN, email: null }, { ...IN, email: null }]);
     app.settings.accounts = [PRINCIPAL, PRO];
     render(AccountModal, { accountId: 'pro' });
     await vi.advanceTimersByTimeAsync(2000);
     expect(screen.getByRole('status')).toHaveTextContent(HINT);
     await vi.advanceTimersByTimeAsync(2000);
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/^Connecté$/));
+  });
+
+  it('does not take the sign-in an account had, out of date, for the one the user is about to make', async () => {
+    // « Se connecter… » on an account whose sign-in expired: connected, but not signed in just now.
+    const b = backend([BEFORE, BEFORE, BEFORE, BEFORE, IN]);
+    app.settings.accounts = [PRINCIPAL, PRO];
+    render(AccountModal, { accountId: 'pro' });
+    await waitFor(() => expect(term.opened).toEqual(['pro']));
+    const said = screen.getByRole('status');
+    for (let i = 0; i < 3; i++) await vi.advanceTimersByTimeAsync(2000);
+    expect(b.called('account_status')).toHaveLength(4);
+    expect(said).toHaveTextContent(HINT);
+    expect(term.disposed).toEqual([]);
+    expect(screen.queryByRole('button', { name: 'Terminé' })).not.toBeInTheDocument();
+    // The user signs in: another sign-in, which is told, then the terminal goes.
+    await vi.advanceTimersByTimeAsync(2000);
+    await waitFor(() => expect(said).toHaveTextContent('Connecté au compte ada@pro.dev'));
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(term.disposed).toEqual(['term-1']);
+    expect(b.called('refresh_usage')).toHaveLength(1);
+  });
+
+  it('signs an account that is signed in already in again, the same way', async () => {
+    backend([BEFORE, BEFORE, IN]);
+    app.settings.accounts = [PRINCIPAL, PRO];
+    render(AccountModal, { accountId: 'pro' });
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(screen.getByRole('status')).toHaveTextContent(HINT);
+    await vi.advanceTimersByTimeAsync(2000);
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Connecté au compte ada@pro.dev'));
+  });
+
+  it('keeps the account as it stood when it could not be read before the terminal opened', async () => {
+    // Nothing known of its sign-in: any sign-in found then is the user’s.
+    let n = 0;
+    fakeBackend({
+      account_status: () => (n++ === 0 ? Promise.reject('refusé') : IN),
+      refresh_usage: () => undefined,
+    });
+    app.settings.accounts = [PRINCIPAL, PRO];
+    render(AccountModal, { accountId: 'pro' });
+    await vi.advanceTimersByTimeAsync(2000);
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Connecté au compte ada@pro.dev'));
+  });
+
+  it('does not ask again while the last look is still going', async () => {
+    let release: (s: AccountStatus) => void = () => {};
+    let n = 0;
+    const b = fakeBackend({
+      account_status: () => (n++ === 0 ? OUT : new Promise((r) => (release = r))),
+      refresh_usage: () => undefined,
+    });
+    app.settings.accounts = [PRINCIPAL, PRO];
+    render(AccountModal, { accountId: 'pro' });
+    await waitFor(() => expect(term.opened).toEqual(['pro']));
+    // The first look (the keychain, on macOS, may be waiting for an answer) goes on for a while.
+    for (let i = 0; i < 4; i++) await vi.advanceTimersByTimeAsync(2000);
+    expect(b.called('account_status')).toHaveLength(2);
+    release(OUT);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(b.called('account_status').length).toBeGreaterThan(2);
+  });
+
+  it('forgets the exit of the terminal it killed, which comes after', async () => {
+    backend();
+    const drop = vi.spyOn(app, 'dropExit');
+    app.settings.accounts = [PRINCIPAL, PRO];
+    render(AccountModal, { accountId: 'pro' });
+    await waitFor(() => expect(term.opened).toEqual(['pro']));
+    await userEvent.click(screen.getByRole('button', { name: 'Fermer' }));
+    expect(term.disposed).toEqual(['term-1']);
+    expect(drop).toHaveBeenCalledWith('term-1');
   });
 
   it('closed before the sign-in, the account stays and its terminal goes', async () => {
@@ -190,7 +261,7 @@ describe('AccountModal', () => {
 
   it('reads in English', async () => {
     setLang('en');
-    backend([IN]);
+    backend([OUT, IN]);
     render(AccountModal, {});
     expect(screen.getByRole('dialog', { name: 'Add a Claude account' })).toBeInTheDocument();
     const share = await screen.findByRole('group', { name: 'Share with Main' });

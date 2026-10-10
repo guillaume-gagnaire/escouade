@@ -39,6 +39,14 @@
   /** Signed in without its email yet: looked at once more for it. */
   let waitedForEmail = false;
   let closed = false;
+  /**
+   * Which sign-in the account had before its terminal opened (its status' stamp), none when it had none or could not be
+   * read. A sign-in out of date is « connected » too: the user is signed in just now only once it is another one.
+   * Undefined until read, once for the window (a terminal started again keeps it).
+   */
+  let before: string | null | undefined;
+  /** A look at the sign-in is under way: the next tick waits for it. */
+  let looking = false;
 
   const principal = $derived(accountName(app.settings.accounts.find((a) => a.id === PRINCIPAL) ?? { id: PRINCIPAL, name: '' }));
   const files = $derived((shareable ?? []).filter((n) => SHARED_FILES.includes(n)));
@@ -88,6 +96,13 @@
     if (!account || closed) return;
     error = null;
     try {
+      if (before === undefined) {
+        before = await api.accountStatus(account.id).then(
+          (s) => s.stamp,
+          () => null,
+        );
+        if (closed) return;
+      }
       const info = await openAccountLogin(account.id);
       if (closed) return disposeTerminal(info.id);
       termId = info.id;
@@ -99,14 +114,18 @@
   }
 
   async function check() {
-    if (!account || signedIn) return;
+    // The last look may be waiting still (the keychain asking its user): not another meanwhile.
+    if (!account || signedIn || looking) return;
+    looking = true;
     let s;
     try {
       s = await api.accountStatus(account.id);
     } catch {
       return;
+    } finally {
+      looking = false;
     }
-    if (closed || signedIn || !s.connected) return;
+    if (closed || signedIn || !s.connected || s.stamp === before) return;
     // Claude Code writes the email beside the sign-in: a moment more for it.
     if (!s.email && !waitedForEmail) {
       waitedForEmail = true;
@@ -120,7 +139,8 @@
   function dropTerminal() {
     if (!termId) return;
     disposeTerminal(termId);
-    delete app.exitedTerms[termId];
+    // Killed here: its exit, which comes after, is nobody's to read.
+    app.dropExit(termId);
     termId = null;
   }
 

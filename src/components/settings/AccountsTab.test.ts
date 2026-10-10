@@ -16,8 +16,8 @@ const PRO: Account = { id: 'pro', name: 'Pro', configDir: 'C:\\Users\\ada\\.esco
 
 const status = (over: Record<string, Partial<AccountStatus>> = {}) => {
   const all: Record<string, AccountStatus> = {
-    principal: { connected: true, email: 'ada@atlas.dev', dir: 'C:\\Users\\ada\\.claude', ...over.principal },
-    pro: { connected: false, email: null, dir: PRO.configDir, ...over.pro },
+    principal: { connected: true, email: 'ada@atlas.dev', dir: 'C:\\Users\\ada\\.claude', stamp: 'principal-sign-in', ...over.principal },
+    pro: { connected: false, email: null, dir: PRO.configDir, stamp: null, ...over.pro },
   };
   return (a: { id: string }) => all[a.id];
 };
@@ -51,9 +51,11 @@ describe('AccountsTab', () => {
     expect(b.called('account_status').map((c) => c.args.id)).toEqual(['principal', 'pro']);
     // Its own claude, else the settings' one.
     expect(within(row('Pro')).getByRole('textbox', { name: 'Exécutable' })).toHaveAttribute('placeholder', 'Celui des réglages');
-    // Not signed in: « Se connecter… »; signed in, nothing to do.
+    // Not signed in: « Se connecter… »; signed in, « Se reconnecter… ».
     expect(within(row('Pro')).getByRole('button', { name: 'Se connecter…' })).toBeInTheDocument();
     expect(within(row('Principal')).queryByRole('button', { name: 'Se connecter…' })).not.toBeInTheDocument();
+    expect(within(row('Principal')).getByRole('button', { name: 'Se reconnecter…' })).toBeInTheDocument();
+    expect(within(row('Pro')).queryByRole('button', { name: 'Se reconnecter…' })).not.toBeInTheDocument();
     // Principal never goes.
     expect(within(row('Principal')).queryByRole('button', { name: 'Supprimer' })).not.toBeInTheDocument();
     expect(within(row('Pro')).getByRole('button', { name: 'Supprimer' })).toBeInTheDocument();
