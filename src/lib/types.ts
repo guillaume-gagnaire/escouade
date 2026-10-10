@@ -517,6 +517,83 @@ export interface Agent {
   setup: string | null;
   /** isola runs its worktree's services: its test launch goes through it, with no recipe. */
   isola: boolean;
+  /** How far it is through a plan (its task list, its subagents, its workflows), worked out by the backend from its stream; absent until it has any. */
+  plan?: PlanState;
+}
+
+/** Where a plan's task list comes from: the agent's task tools (what the stream tells), or a plan file of its folder. */
+export type PlanSource = 'tools' | 'plan';
+
+export type PlanTaskStatus = 'pending' | 'inProgress' | 'done';
+
+/** How a subagent or a workflow run is going; 'interrupted': the process that ran it is gone, or its turn was stopped, before it ended. */
+export type RunStatus = 'running' | 'done' | 'failed' | 'stopped' | 'interrupted';
+
+export interface PlanTask {
+  /** Claude Code's id for it (a number as text with the task tools, the rank with TodoWrite). */
+  id: string;
+  title: string;
+  status: PlanTaskStatus;
+  /** What it is doing while in progress ("Running tests"). */
+  active?: string;
+  /** Steps done and in all, when a plan file counts them. */
+  steps?: [done: number, total: number];
+  /** The ids of the tasks it waits for. */
+  blockedBy?: string[];
+}
+
+/** A subagent the agent launched (a `Task` / `Agent` call). */
+export interface SubAgent {
+  /** The id of the call that launched it. */
+  id: string;
+  title: string;
+  /** Its type ("Explore"…). */
+  kind?: string;
+  /** The model the call asked for, as it wrote it ("haiku", "sonnet"…). */
+  model?: string;
+  status: RunStatus;
+  background: boolean;
+  /** Tools it used. */
+  tools: number;
+  tokens?: number;
+  startedAt: number;
+  endedAt?: number;
+  /** What it does now ("Édite src/a.ts"), while it runs, in the language of the moment. */
+  doing?: string;
+  /** The id of the task it works on, when it can be told. */
+  planTask?: string;
+}
+
+/** A workflow of Claude Code the agent runs. */
+export interface WorkflowRun {
+  /** Claude Code's id of its task. */
+  id: string;
+  name?: string;
+  title: string;
+  status: RunStatus;
+  /** The phase and the agent running now ("Phase 1 : lecteur A"). */
+  now?: string;
+  tools: number;
+  tokens: number;
+  startedAt: number;
+  endedAt?: number;
+}
+
+/** How far an agent is through a plan: its task list, its subagents, its workflows. */
+export interface PlanState {
+  source: PlanSource | null;
+  /** The plan file the tasks come from, relative to the agent's folder (source 'plan'). */
+  planFile?: string;
+  /** The plan's title (from its file); else the window falls back to the ticket's, then the agent's name. */
+  title?: string;
+  /** At most 100. */
+  tasks: PlanTask[];
+  /** All the subagents running, then the latest ended: 30 at most. */
+  agents: SubAgent[];
+  /** Every subagent launched since the plan was reset, those whose row went included. */
+  launched: number;
+  /** At most 10. */
+  workflows: WorkflowRun[];
 }
 
 /** A choice of Claude Code's model picker: an alias or a full id, and the model it stands for. */

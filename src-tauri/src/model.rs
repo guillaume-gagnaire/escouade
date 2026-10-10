@@ -1,6 +1,7 @@
 //! Types persisted on disk and exchanged with the frontend.
 
 use crate::agent::NotifyKind;
+use crate::plan::PlanState;
 use crate::resources::Resources;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -715,6 +716,10 @@ pub struct AgentMeta {
     /// an agent saved before there were accounts.
     #[serde(default = "principal_id")]
     pub account: String,
+    /// How far it is through a plan: its task list, its subagents, its workflows, worked out from
+    /// its stream (`plan`). None until it has any.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plan: Option<PlanState>,
 }
 
 fn principal_id() -> String {

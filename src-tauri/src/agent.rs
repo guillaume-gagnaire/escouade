@@ -8,6 +8,7 @@ use crate::i18n::{self, Lang};
 use crate::model::*;
 use crate::notify;
 use crate::paths::relative_slash;
+use crate::plan::{Change, PlanState};
 use crate::pricing::{self, Usage};
 use anyhow::{anyhow, Result};
 use serde_json::{json, Map, Value};
@@ -154,6 +155,10 @@ impl AgentRt {
         if meta.status.is_active() {
             meta.status = AgentStatus::Done;
         }
+        // Neither can what ran for it: the plan was saved with rows running.
+        if let Some(plan) = meta.plan.as_mut() {
+            plan.close_running(now_ms());
+        }
         Self {
             conv: Conv::new(conv_dir, &meta.id),
             meta,
@@ -237,6 +242,35 @@ impl AgentRt {
         self.queued = 0;
         self.foreground_tasks.clear();
         self.announced_tasks.clear();
+        // What ran in the process before is gone with it.
+        self.interrupt_plan();
+    }
+
+    /// Runs `f` on the agent's plan (made when it has none yet), keeps it only when it holds
+    /// something, and tells what changed: a detail goes to the window, the rest is saved too.
+    fn plan_apply(&mut self, fx: &mut Effects, f: impl FnOnce(&mut PlanState) -> Change) {
+        let mut plan = self.meta.plan.take().unwrap_or_default();
+        let change = f(&mut plan);
+        if !plan.is_empty() {
+            self.meta.plan = Some(plan);
+        }
+        match change {
+            Change::None => {}
+            Change::View => fx.agent_changed = true,
+            Change::Saved => {
+                fx.agent_changed = true;
+                fx.save = true;
+            }
+        }
+    }
+
+    /// The process is gone: what the plan has running is interrupted (the caller sends the view).
+    fn interrupt_plan(&mut self) -> Change {
+        let now = now_ms();
+        self.meta
+            .plan
+            .as_mut()
+            .map_or(Change::None, |plan| plan.close_running(now))
     }
 
     fn push(&mut self, op: ConvOp, fx: &mut Effects) {
@@ -350,6 +384,11 @@ impl AgentRt {
             self.final_text.clear();
             self.interrupted = false;
             self.set_status(AgentStatus::Running, fx);
+            // A new turn after a plan that is over (or that was none) starts a plan of its own; one
+            // that is under way goes on, and so does a message queued behind a turn.
+            if self.meta.plan.as_ref().is_some_and(PlanState::is_finished) {
+                self.plan_apply(fx, PlanState::reset);
+            }
         }
         self.meta.prompts += 1;
         self.meta.last_activity = now_ms();
@@ -361,8 +400,10 @@ impl AgentRt {
     /// Deliberate stop (idle, archive): detaches the process so that its exit is ignored and
     /// the next action spawns a fresh one resuming the same session.
     pub fn detach(&mut self) -> Option<Arc<ClaudeProcess>> {
-        // Nothing more is heard from the process, so a turn it was running never ends here.
+        // Nothing more is heard from the process, so a turn it was running never ends here, nor
+        // what it ran for the plan (the caller sends the view).
         self.forget_turn();
+        self.interrupt_plan();
         let p = self.proc.take()?;
         self.gen += 1;
         Some(p)
@@ -485,6 +526,7 @@ impl AgentRt {
         self.remote_state = None;
         self.remote_linked = false;
         self.forget_turn();
+        self.plan_apply(fx, |plan| plan.close_running(now_ms()));
         self.clear_pending(fx);
         self.close_open_items(fx);
         let was_running = self.meta.status.is_active();
@@ -559,10 +601,20 @@ impl AgentRt {
     }
 
     fn on_system(&mut self, f: &Value, fx: &mut Effects) {
-        match f["subtype"].as_str().unwrap_or("") {
+        let subtype = f["subtype"].as_str().unwrap_or("");
+        // The tasks of the plan (the rows of events below are about the same frames).
+        if matches!(
+            subtype,
+            "task_started" | "task_updated" | "task_notification" | "task_progress"
+        ) {
+            self.plan_apply(fx, |plan| plan.on_system(f, now_ms()));
+        }
+        match subtype {
             "init" => {
                 if let Some(sid) = f["session_id"].as_str() {
                     if self.meta.session_id.as_deref() != Some(sid) {
+                        // Another conversation: what the plan was about is not in its context.
+                        self.plan_apply(fx, PlanState::reset);
                         if self.saw_init {
                             self.notice(
                                 "info",
@@ -835,6 +887,9 @@ impl AgentRt {
                     _ => {}
                 }
             }
+            if kind == "tool" {
+                self.plan_tool_use(parent.as_deref(), block, fx);
+            }
             let streamed = self
                 .blocks
                 .get_mut(&mid)
@@ -882,6 +937,24 @@ impl AgentRt {
                 _ => {}
             }
         }
+    }
+
+    /// A tool the assistant calls, for the plan: its task list, a subagent it launches, a tool one
+    /// of its subagents (`parent`) uses and what it makes of it.
+    fn plan_tool_use(&mut self, parent: Option<&str>, block: &Value, fx: &mut Effects) {
+        let (Some(id), Some(name)) = (block["id"].as_str(), block["name"].as_str()) else {
+            return;
+        };
+        let input = &block["input"];
+        let doing = parent.and_then(|_| tool_activity(name, input, &self.meta.cwd));
+        let now = now_ms();
+        self.plan_apply(fx, |plan| {
+            let change = plan.on_tool_use(parent, id, name, input, now);
+            match parent {
+                Some(p) => change.and(plan.on_child_activity(p, doing.as_deref())),
+                None => change,
+            }
+        });
     }
 
     /// A user message re-emitted by Claude Code (`--replay-user-messages`): the echo of one sent
@@ -980,6 +1053,10 @@ impl AgentRt {
                 continue;
             };
             let is_error = b["is_error"].as_bool().unwrap_or(false);
+            let said = tool_result_text(&b["content"]);
+            self.plan_apply(fx, |plan| {
+                plan.on_tool_result(id, is_error, &said, tur, now_ms())
+            });
             let mut result = json!({ "isError": is_error });
             let mut text = tool_result_text(&b["content"]);
             if let Some(stdout) = tur["stdout"].as_str() {
@@ -1165,6 +1242,8 @@ impl AgentRt {
         };
         self.forget_turn();
         self.close_open_items(fx);
+        // A subagent in the foreground did not outlive the turn: it was stopped.
+        self.plan_apply(fx, |plan| plan.end_turn(now_ms()));
         let item = json!({
             "kind": "turn", "id": f["uuid"].as_str().map(str::to_string).unwrap_or_else(new_id), "ts": now_ms(),
             "durationMs": f["duration_ms"], "cost": cost, "tokens": tokens,
@@ -3083,5 +3162,407 @@ mod tests {
             &mut fx,
         );
         assert_eq!(a.view().activity, None);
+    }
+
+    // ---------- the plan ----------
+
+    use crate::plan::{RunStatus, TaskStatus};
+
+    /// The assistant calls `name` (in the thread of the subagent `parent`, or the main one).
+    fn call(a: &mut AgentRt, parent: Option<&str>, id: &str, name: &str, input: Value) -> Effects {
+        let mut fx = Effects::default();
+        a.handle_frame(
+            &json!({"type":"assistant","message":{"id":format!("m-{id}"),"content":[{"type":"tool_use","id":id,"name":name,"input":input}]},"parent_tool_use_id":parent}),
+            &mut fx,
+        );
+        fx
+    }
+
+    /// The result of the call `id`, with the frame's structured `tur`.
+    fn returns(a: &mut AgentRt, id: &str, text: &str, tur: Value) -> Effects {
+        let mut fx = Effects::default();
+        a.handle_frame(
+            &json!({"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":id,"content":text}]},"tool_use_result":tur,"parent_tool_use_id":null}),
+            &mut fx,
+        );
+        fx
+    }
+
+    fn system(a: &mut AgentRt, f: Value) -> Effects {
+        let mut fx = Effects::default();
+        a.handle_frame(&f, &mut fx);
+        fx
+    }
+
+    fn session(a: &mut AgentRt, id: &str) -> Effects {
+        system(a, json!({"type":"system","subtype":"init","session_id":id}))
+    }
+
+    /// The turn's result frame.
+    fn turn_ends(a: &mut AgentRt) {
+        a.handle_frame(
+            &json!({"type":"result","subtype":"success","is_error":false,"duration_ms":1}),
+            &mut Effects::default(),
+        );
+    }
+
+    /// A task made through `TaskCreate`, with its result.
+    fn creates(a: &mut AgentRt, id: &str, subject: &str, number: u32) {
+        call(a, None, id, "TaskCreate", json!({ "subject": subject }));
+        returns(
+            a,
+            id,
+            &format!("Task #{number} created successfully: {subject}"),
+            Value::Null,
+        );
+    }
+
+    fn plan(a: &AgentRt) -> PlanState {
+        a.view().meta.plan.expect("a plan")
+    }
+
+    #[test]
+    fn the_plan_follows_the_task_tools_and_the_subagents_of_the_stream() {
+        let mut a = rt();
+        assert!(a.view().meta.plan.is_none());
+        creates(&mut a, "c0", "Lire", 1);
+        creates(&mut a, "c1", "Écrire", 2);
+        call(
+            &mut a,
+            None,
+            "u1",
+            "TaskUpdate",
+            json!({"taskId":"1","status":"in_progress","activeForm":"Lit"}),
+        );
+        call(
+            &mut a,
+            None,
+            "a1",
+            "Agent",
+            json!({"description":"Lire le code","prompt":"Read task-1-brief.md","model":"haiku","subagent_type":"Explore"}),
+        );
+        // What the agent does, as before: the subagent's tools are its own business.
+        assert_eq!(a.view().activity.as_deref(), Some("Délègue"));
+        call(
+            &mut a,
+            Some("a1"),
+            "k1",
+            "Read",
+            json!({"file_path":"C:/p/src/a.ts"}),
+        );
+        assert_eq!(a.view().activity.as_deref(), Some("Délègue"));
+
+        let p = plan(&a);
+        assert_eq!(
+            serde_json::to_value(&p.tasks).unwrap(),
+            json!([
+                {"id":"1","title":"Lire","status":"inProgress","active":"Lit"},
+                {"id":"2","title":"Écrire","status":"pending"},
+            ])
+        );
+        let row = &p.agents[0];
+        assert_eq!(
+            (row.id.as_str(), row.title.as_str(), row.status, row.tools),
+            ("a1", "Lire le code", RunStatus::Running, 1)
+        );
+        assert_eq!(row.doing.as_deref(), Some("Lit src/a.ts"));
+        assert_eq!(row.model.as_deref(), Some("haiku"));
+        assert_eq!(row.plan_task.as_deref(), Some("1"));
+        assert_eq!(p.launched, 1);
+
+        returns(
+            &mut a,
+            "a1",
+            "Trouvé",
+            json!({"status":"completed","agentId":"x","totalToolUseCount":3,"totalDurationMs":1500,"totalTokens":900}),
+        );
+        let p = plan(&a);
+        assert_eq!(p.agents[0].status, RunStatus::Done);
+        assert_eq!((p.agents[0].tools, p.agents[0].tokens), (3, Some(900)));
+        assert_eq!(p.agents[0].doing, None);
+        call(
+            &mut a,
+            None,
+            "u2",
+            "TaskUpdate",
+            json!({"taskId":"1","status":"completed"}),
+        );
+        assert_eq!(plan(&a).tasks[0].status, TaskStatus::Done);
+    }
+
+    #[test]
+    fn a_frame_that_comes_twice_is_one_task_and_one_subagent() {
+        let mut a = rt();
+        for _ in 0..2 {
+            call(&mut a, None, "c0", "TaskCreate", json!({"subject":"Lire"}));
+            call(
+                &mut a,
+                None,
+                "a1",
+                "Agent",
+                json!({"description":"Aide","prompt":""}),
+            );
+        }
+        let p = plan(&a);
+        assert_eq!((p.tasks.len(), p.agents.len(), p.launched), (1, 1, 1));
+    }
+
+    #[test]
+    fn a_detail_of_a_subagent_goes_to_the_window_and_only_a_change_is_saved() {
+        let mut a = rt();
+        // A subagent starts: the structure changed.
+        let fx = call(
+            &mut a,
+            None,
+            "a1",
+            "Agent",
+            json!({"description":"Aide","prompt":""}),
+        );
+        assert!(fx.agent_changed && fx.save);
+        // What it does: the window hears of it, nothing is saved for it.
+        let read = json!({"file_path":"C:/p/src/a.ts"});
+        let fx = call(&mut a, Some("a1"), "k1", "Read", read.clone());
+        assert!(fx.agent_changed);
+        assert!(!fx.save);
+        assert_eq!(plan(&a).agents[0].doing.as_deref(), Some("Lit src/a.ts"));
+        // The same step by another call: nothing to tell.
+        let fx = call(&mut a, Some("a1"), "k2", "Read", read);
+        assert!(!fx.agent_changed && !fx.save);
+        assert_eq!(plan(&a).agents[0].tools, 2);
+        // Another step is news again.
+        let fx = call(&mut a, Some("a1"), "k3", "Grep", json!({"pattern":"TODO"}));
+        assert!(fx.agent_changed && !fx.save);
+        // Its end is saved.
+        let fx = returns(
+            &mut a,
+            "a1",
+            "Fini",
+            json!({"status":"completed","totalToolUseCount":3}),
+        );
+        assert!(fx.agent_changed && fx.save);
+        // A tool of the main thread that is no business of the plan changes nothing of it.
+        let fx = call(&mut a, None, "b1", "Bash", json!({"command":"npm test"}));
+        assert!(fx.agent_changed, "the activity changed");
+        assert_eq!(plan(&a).agents.len(), 1);
+    }
+
+    #[test]
+    fn the_notification_of_a_background_subagent_ends_its_row_and_still_says_it_in_the_conversation(
+    ) {
+        let mut a = rt();
+        call(
+            &mut a,
+            None,
+            "a1",
+            "Agent",
+            json!({"description":"Tests","prompt":"","run_in_background":true}),
+        );
+        returns(
+            &mut a,
+            "a1",
+            "Async agent launched successfully.\nagentId: bg1",
+            json!({"status":"async_launched","agentId":"bg1"}),
+        );
+        system(
+            &mut a,
+            json!({"type":"system","subtype":"task_started","task_id":"bg1","tool_use_id":"a1",
+                "description":"Tests","task_type":"local_agent","is_backgrounded":true}),
+        );
+        assert_eq!(plan(&a).agents[0].status, RunStatus::Running);
+        let fx = system(
+            &mut a,
+            json!({"type":"system","subtype":"task_notification","task_id":"bg1","tool_use_id":"a1",
+                "status":"completed","summary":"Agent \"Tests\" finished","uuid":"n1",
+                "usage":{"total_tokens":700,"tool_uses":4,"duration_ms":10}}),
+        );
+        let p = plan(&a);
+        assert_eq!(p.agents[0].status, RunStatus::Done);
+        assert_eq!((p.agents[0].tools, p.agents[0].tokens), (4, Some(700)));
+        assert!(fx.save);
+        // The event row of the conversation is still made.
+        assert_eq!(a.conv.get("n1").unwrap()["source"], "task");
+    }
+
+    #[test]
+    fn a_workflow_is_followed_from_the_system_frames() {
+        let mut a = rt();
+        system(
+            &mut a,
+            json!({"type":"system","subtype":"task_started","task_id":"w1","tool_use_id":"tw",
+                "description":"Revue","task_type":"local_workflow","workflow_name":"review"}),
+        );
+        let fx = system(
+            &mut a,
+            json!({"type":"system","subtype":"task_progress","task_id":"w1","tool_use_id":"tw",
+                "description":"Phase 1 : lecteur A","usage":{"total_tokens":50,"tool_uses":2,"duration_ms":1}}),
+        );
+        assert!(fx.agent_changed && !fx.save);
+        let p = plan(&a);
+        assert_eq!(p.workflows[0].now.as_deref(), Some("Phase 1 : lecteur A"));
+        assert_eq!(p.workflows[0].status, RunStatus::Running);
+        // A background command is not a workflow, nor a subagent.
+        system(
+            &mut a,
+            json!({"type":"system","subtype":"task_started","task_id":"b1","tool_use_id":"tb",
+                "description":"npm test","task_type":"local_bash","is_backgrounded":true}),
+        );
+        assert_eq!(plan(&a).workflows.len(), 1);
+        assert!(plan(&a).agents.is_empty());
+    }
+
+    #[test]
+    fn a_new_conversation_starts_a_plan_of_its_own() {
+        let mut a = rt();
+        session(&mut a, "s1");
+        creates(&mut a, "c0", "Lire", 1);
+        // The same conversation, a new process: the plan goes on.
+        session(&mut a, "s1");
+        assert_eq!(plan(&a).tasks.len(), 1);
+        // « /clear »: another session, nothing of the plan is in the context.
+        let fx = session(&mut a, "s2");
+        assert!(a.view().meta.plan.is_none());
+        assert!(fx.save && fx.agent_changed);
+    }
+
+    #[test]
+    fn a_message_starts_a_new_plan_only_after_a_plan_that_is_over() {
+        let mut a = rt();
+        let mut fx = Effects::default();
+        a.push_user("h1", "Fais ceci", 0, &[], &mut fx);
+        creates(&mut a, "c0", "Lire", 1);
+        turn_ends(&mut a);
+        // The plan is under way: a message goes on with it.
+        a.push_user("h2", "Continue", 0, &[], &mut fx);
+        assert_eq!(plan(&a).tasks.len(), 1);
+        call(
+            &mut a,
+            None,
+            "u1",
+            "TaskUpdate",
+            json!({"taskId":"1","status":"completed"}),
+        );
+        // A message queued behind the running turn is not the start of one.
+        assert!(a.push_user("h3", "Et aussi", 0, &[], &mut fx));
+        assert_eq!(plan(&a).tasks.len(), 1);
+        turn_ends(&mut a);
+        // The plan is over, and so is the turn: the next message starts another.
+        let mut fx = Effects::default();
+        a.push_user("h4", "Autre chose", 0, &[], &mut fx);
+        assert!(a.view().meta.plan.is_none());
+        assert!(fx.save);
+        // No plan at all: nothing to reset, nothing made.
+        turn_ends(&mut a);
+        a.push_user("h5", "Encore", 0, &[], &mut Effects::default());
+        assert!(a.view().meta.plan.is_none());
+    }
+
+    #[test]
+    fn a_background_subagent_still_running_keeps_the_plan_across_a_message() {
+        let mut a = rt();
+        let mut fx = Effects::default();
+        a.push_user("h1", "Fais ceci", 0, &[], &mut fx);
+        call(
+            &mut a,
+            None,
+            "a1",
+            "Agent",
+            json!({"description":"Tests","prompt":"","run_in_background":true}),
+        );
+        turn_ends(&mut a);
+        a.push_user("h2", "Où en est-il ?", 0, &[], &mut fx);
+        assert_eq!(plan(&a).agents[0].status, RunStatus::Running);
+    }
+
+    #[test]
+    fn the_end_of_a_turn_ends_the_subagents_of_the_foreground_only() {
+        let mut a = rt();
+        call(
+            &mut a,
+            None,
+            "a1",
+            "Agent",
+            json!({"description":"Avant","prompt":""}),
+        );
+        call(
+            &mut a,
+            None,
+            "a2",
+            "Agent",
+            json!({"description":"Fond","prompt":"","run_in_background":true}),
+        );
+        turn_ends(&mut a);
+        let p = plan(&a);
+        assert_eq!(p.agents[0].status, RunStatus::Interrupted);
+        assert_eq!(p.agents[1].status, RunStatus::Running);
+    }
+
+    #[test]
+    fn what_ran_in_a_process_that_is_gone_is_interrupted() {
+        let busy = |a: &mut AgentRt| {
+            creates(a, "c0", "Lire", 1);
+            call(
+                a,
+                None,
+                "u1",
+                "TaskUpdate",
+                json!({"taskId":"1","status":"in_progress"}),
+            );
+            call(
+                a,
+                None,
+                "a1",
+                "Agent",
+                json!({"description":"Fond","prompt":"","run_in_background":true}),
+            );
+        };
+        let interrupted = |a: &AgentRt| {
+            let p = plan(a);
+            assert_eq!(p.agents[0].status, RunStatus::Interrupted);
+            // The tasks keep their status: the agent picks them up again.
+            assert_eq!(p.tasks[0].status, TaskStatus::InProgress);
+        };
+        // Stopped on purpose.
+        let mut a = rt();
+        busy(&mut a);
+        a.detach();
+        interrupted(&a);
+        // The process died.
+        let mut a = rt();
+        busy(&mut a);
+        let mut fx = Effects::default();
+        a.on_exit(a.gen, Some(1), "", &mut fx);
+        interrupted(&a);
+        assert!(fx.save && fx.agent_changed);
+        // The app was closed: the plan saved with it is loaded interrupted.
+        let mut a = rt();
+        busy(&mut a);
+        let b = AgentRt::new(
+            a.meta.clone(),
+            &std::env::temp_dir().join("ccm-agent-tests-plan"),
+        );
+        interrupted(&b);
+        assert_eq!(
+            b.view().meta.plan.unwrap().agents[0].status,
+            RunStatus::Interrupted
+        );
+    }
+
+    #[test]
+    fn an_agent_saved_before_the_plan_loads_without_one_and_a_saved_plan_comes_back() {
+        let meta: AgentMeta = serde_json::from_value(json!({"id":"a1","name":"ancien"})).unwrap();
+        assert!(meta.plan.is_none());
+        // Nothing is written for it.
+        assert!(serde_json::to_value(&meta).unwrap().get("plan").is_none());
+        let mut a = rt();
+        creates(&mut a, "c0", "Lire", 1);
+        let saved = serde_json::to_value(&a.meta).unwrap();
+        assert_eq!(saved["plan"]["tasks"][0]["title"], "Lire");
+        let back: AgentMeta = serde_json::from_value(saved.clone()).unwrap();
+        assert_eq!(serde_json::to_value(&back).unwrap(), saved);
+        // The window gets it with the agent.
+        assert_eq!(
+            serde_json::to_value(a.view()).unwrap()["plan"]["tasks"][0]["status"],
+            "pending"
+        );
     }
 }

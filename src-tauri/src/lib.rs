@@ -26,6 +26,9 @@ mod menus;
 mod model;
 mod notify;
 mod paths;
+mod plan;
+#[cfg(test)]
+mod plan_tests;
 mod pricing;
 #[cfg(test)]
 mod process_tests;

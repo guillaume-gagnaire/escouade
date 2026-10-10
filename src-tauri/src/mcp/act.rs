@@ -203,7 +203,7 @@ fn is_hidden(c: char) -> bool {
 /// `text` as a status line is kept: on one line (breaks, tabs and runs of spaces are single
 /// spaces) and with none of the characters that are not drawn (`is_hidden`), which could hide
 /// part of it or reverse its reading (U+202E).
-fn visible_line(text: &str) -> String {
+pub(crate) fn visible_line(text: &str) -> String {
     let spaced: String = text
         .chars()
         .filter_map(|c| match c {
