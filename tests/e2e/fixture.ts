@@ -97,22 +97,49 @@ function webviewDiagnostics(root: string): string {
   return out.join('\n');
 }
 
+export type Language = 'fr' | 'en';
+
+/** What the helpers below click and read, in each language of the interface. */
+const LABELS = {
+  fr: {
+    addProject: /Ajouter un projet/,
+    newProject: 'Nouveau projet',
+    path: 'C:\\chemin\\vers\\le\\projet',
+    repo: /Dépôt git détecté · branche main · propre/,
+    firstAgent: 'Créer un premier agent',
+    worktrees: 'Un worktree git par agent',
+    create: 'Créer le projet',
+  },
+  en: {
+    addProject: /Add a project/,
+    newProject: 'New project',
+    path: 'C:\\path\\to\\the\\project',
+    repo: /Git repository detected · branch main · clean/,
+    firstAgent: 'Create a first agent',
+    worktrees: 'One git worktree per agent',
+    create: 'Create project',
+  },
+} as const;
+
 /** The usage endpoint the app asks: a closed port, unless a test gives its own (`appEnv`). */
 const NO_USAGE_API = 'http://127.0.0.1:9/api/oauth/usage';
 
-export const test = base.extend<{ app: App; appEnv: Record<string, string> }>({
+export const test = base.extend<{ app: App; appEnv: Record<string, string>; language: Language }>({
   // Variables for the app on top of the fixture's, which they replace (`test.use({ appEnv: … })`):
   // a fake usage endpoint, Principal's folder with a fake-limit in it.
   appEnv: [{}, { option: true }],
-  app: async ({ appEnv }, use, testInfo) => {
+  // The language of the interface the app starts in (`test.use({ language: 'en' })`): French, whatever the machine's.
+  language: ['fr', { option: true }],
+  app: async ({ appEnv, language }, use, testInfo) => {
     if (!fs.existsSync(EXE)) throw new Error(`build the app first: npx tauri build --debug --no-bundle (missing ${EXE})`);
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ccm-e2e-'));
     const data = path.join(root, 'data');
     fs.mkdirSync(data);
-    // French whatever the machine's language (CI runners are English): the tests read the French interface.
+    // French unless a test asks otherwise, whatever the machine's language (CI runners are English): the tests read the
+    // French interface.
     fs.writeFileSync(
       path.join(data, 'settings.json'),
-      JSON.stringify({ claudePath: FAKE, sound: false, osNotifications: false, idleStopMinutes: 0, language: 'fr' }),
+      JSON.stringify({ claudePath: FAKE, sound: false, osNotifications: false, idleStopMinutes: 0, language }),
     );
     const repo = makeRepo(root);
     const log = path.join(root, 'fake-claude.jsonl');
@@ -174,7 +201,7 @@ export const test = base.extend<{ app: App; appEnv: Record<string, string> }>({
         return `--- page ---\n${shown}\n--- app (${stopped ?? 'running'}) ---\n${tail(path.join(data, 'app.log'), 25)}`;
       };
       try {
-        await expect(page.getByRole('button', { name: /Ajouter un projet/ }).first()).toBeVisible();
+        await expect(page.getByRole('button', { name: LABELS[language].addProject }).first()).toBeVisible();
       } catch (e) {
         throw new Error(`${(e as Error).message.split('\n')[0]}\n${await state()}`);
       }
@@ -209,16 +236,24 @@ export const test = base.extend<{ app: App; appEnv: Record<string, string> }>({
   },
 });
 
-/** Adds `repo` as a project through the "Nouveau projet" dialog, with a first agent. */
-export async function addProject(page: Page, repo: string, opts: { worktrees?: boolean; name?: string; firstAgent?: boolean } = {}) {
-  await page.getByRole('button', { name: 'Ajouter un projet' }).first().click();
-  const dialog = page.getByRole('dialog', { name: 'Nouveau projet' });
-  await dialog.getByPlaceholder('C:\\chemin\\vers\\le\\projet').fill(repo);
-  await expect(dialog.getByText(/Dépôt git détecté · branche main · propre/)).toBeVisible();
+/**
+ * Adds `repo` as a project through the "Nouveau projet" dialog (`lang: 'en'`: "New project"), with a first agent.
+ * The dialog is read in the language of the interface the test started in, French unless it says so.
+ */
+export async function addProject(
+  page: Page,
+  repo: string,
+  opts: { worktrees?: boolean; name?: string; firstAgent?: boolean; lang?: Language } = {},
+) {
+  const words = LABELS[opts.lang ?? 'fr'];
+  await page.getByRole('button', { name: words.addProject }).first().click();
+  const dialog = page.getByRole('dialog', { name: words.newProject });
+  await dialog.getByPlaceholder(words.path).fill(repo);
+  await expect(dialog.getByText(words.repo)).toBeVisible();
   if (opts.name) await dialog.locator('input').nth(1).fill(opts.name);
-  if (opts.firstAgent === false) await dialog.getByRole('switch', { name: 'Créer un premier agent' }).click();
-  if (opts.worktrees) await dialog.getByRole('switch', { name: 'Un worktree git par agent' }).click();
-  await dialog.getByRole('button', { name: 'Créer le projet' }).click();
+  if (opts.firstAgent === false) await dialog.getByRole('switch', { name: words.firstAgent }).click();
+  if (opts.worktrees) await dialog.getByRole('switch', { name: words.worktrees }).click();
+  await dialog.getByRole('button', { name: words.create }).click();
   await expect(dialog).toBeHidden();
 }
 
