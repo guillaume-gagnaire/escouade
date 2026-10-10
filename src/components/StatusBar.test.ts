@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { setLang } from '../lib/i18n';
 import { menu } from '../lib/menu.svelte';
 import { app } from '../lib/state.svelte';
-import { agent, fakeBackend, gitInfo, resetApp } from '../test/ipc';
+import { agent, branchInfo, fakeBackend, gitInfo, resetApp } from '../test/ipc';
 import StatusBar from './StatusBar.svelte';
 
 describe('StatusBar', () => {
@@ -113,10 +113,11 @@ describe('StatusBar', () => {
   });
 });
 
-describe('StatusBar sync with the remote', () => {
+describe('StatusBar branch and sync with the remote', () => {
   const tracked = { upstream: 'origin/main', hasRemote: true };
   const syncButton = () => screen.getByRole('button', { name: /⎇ main/ });
-  const item = (label: string) => menu.open!.items.find((i) => i.label === label)!;
+  const picker = () => screen.findByRole('dialog', { name: 'Branches' });
+  const LIST = [branchInfo({ name: 'main', current: true, worktree: 'C:\\code\\demo-api' }), branchInfo({ name: 'feat/login' })];
 
   beforeEach(() => {
     resetApp();
@@ -124,22 +125,28 @@ describe('StatusBar sync with the remote', () => {
     app.now = Date.UTC(2026, 8, 27, 20, 0, 0);
   });
 
-  it('shows the branch with the commits to pull and to push, and when it was last fetched', () => {
+  it('shows the branch with the commits to push and to pull, and when it was last fetched', () => {
     fakeBackend();
     app.git = { p1: gitInfo({ ...tracked, behind: 3, ahead: 1, lastFetch: app.now - 3 * 60_000 }) };
     render(StatusBar);
-    expect(syncButton()).toHaveTextContent('↓3');
     expect(syncButton()).toHaveTextContent('↑1');
+    expect(syncButton()).toHaveTextContent('↓3');
+    // The way they are in the picker: ahead first.
+    expect(syncButton().textContent!.replace(/\s+/g, ' ')).toContain('⎇ main ↑1 ↓3');
     expect(syncButton().title).toContain('origin/main');
     expect(syncButton().title).toContain('Dernier fetch : il y a 3 min');
   });
 
-  it('only shows up in a project whose repository has a remote and a branch checked out', async () => {
+  it('shows the branch of any repository, with no sync to say when it has no remote, and a detached HEAD', async () => {
     fakeBackend();
     app.git = { p1: gitInfo({ hasRemote: false }) };
     render(StatusBar);
-    expect(screen.queryByText(/⎇/)).toBeNull();
+    expect(syncButton()).toHaveTextContent(/^⎇ main$/);
+    expect(syncButton().title).toBe('Changer de branche');
     app.git = { p1: gitInfo({ ...tracked, branch: '(detached)', upstream: null }) };
+    await tick();
+    expect(screen.getByRole('button', { name: /⎇ HEAD détachée/ })).toHaveTextContent(/^⎇ HEAD détachée$/);
+    app.git = { p1: gitInfo({ isRepo: false, branch: '' }) };
     await tick();
     expect(screen.queryByText(/⎇/)).toBeNull();
     app.git = { p1: gitInfo(tracked) };
@@ -150,61 +157,66 @@ describe('StatusBar sync with the remote', () => {
     expect(screen.queryByText(/⎇/)).toBeNull();
   });
 
-  it('offers to pull and push only what there is to pull or push', async () => {
-    fakeBackend();
-    app.git = { p1: gitInfo({ ...tracked, ahead: 2 }) };
+  it('opens the branch picker over the bar, and puts the focus back on the button when it closes', async () => {
+    const backend = fakeBackend({ branch_list: () => LIST });
+    app.git = { p1: gitInfo(tracked) };
     render(StatusBar);
+    expect(syncButton()).toHaveAttribute('aria-expanded', 'false');
+    expect(syncButton()).toHaveAttribute('aria-haspopup', 'dialog');
     await userEvent.click(syncButton());
-    expect(menu.open!.items.map((i) => i.label)).toEqual(['Pull', 'Push', '', 'Fetch']);
-    expect(item('Pull')).toMatchObject({ hint: '↓0', disabled: true });
-    expect(item('Push')).toMatchObject({ hint: '↑2', disabled: false });
-    expect(item('Fetch')).toMatchObject({ hint: 'maintenant' });
-    expect(item('Fetch').disabled).toBeFalsy();
+    await picker();
+    expect(syncButton()).toHaveAttribute('aria-expanded', 'true');
+    expect(backend.called('branch_list')[0].args).toEqual({ projectId: 'p1' });
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Branches' })).toBeNull());
+    expect(syncButton()).toHaveAttribute('aria-expanded', 'false');
+    expect(syncButton()).toHaveFocus();
   });
 
-  it('offers to publish a branch that tracks none', async () => {
+  it('closes the picker when the project has no branch to show any more', async () => {
+    fakeBackend({ branch_list: () => LIST });
+    app.git = { p1: gitInfo(tracked) };
+    render(StatusBar);
+    await userEvent.click(syncButton());
+    await picker();
+    app.ui.view = 'stats';
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Branches' })).toBeNull());
+  });
+
+  it('says a branch is not published, or that its remote branch is gone', async () => {
     fakeBackend();
     app.git = { p1: gitInfo({ hasRemote: true, branch: 'feat/x' }) };
     render(StatusBar);
-    const button = screen.getByRole('button', { name: /⎇ feat\/x/ });
-    expect(button).toHaveTextContent('non publiée');
-    await userEvent.click(button);
-    expect(item('Pull').disabled).toBe(true);
-    expect(item('Publier la branche').disabled).toBeFalsy();
-  });
-
-  it('offers to publish again a branch deleted from the remote', async () => {
-    fakeBackend();
+    expect(screen.getByRole('button', { name: /⎇ feat\/x/ })).toHaveTextContent('non publiée');
     app.git = { p1: gitInfo({ hasRemote: true, branch: 'feat/x', upstream: 'origin/feat/x', upstreamGone: true }) };
-    render(StatusBar);
+    await tick();
     const button = screen.getByRole('button', { name: /⎇ feat\/x/ });
     expect(button).toHaveTextContent('distante supprimée');
     expect(button.title).toContain("origin/feat/x n'existe plus");
-    await userEvent.click(button);
-    expect(item('Pull').disabled).toBe(true);
-    expect(item('Publier la branche').disabled).toBeFalsy();
   });
 
-  it('pulls, then says what came in', async () => {
-    const backend = fakeBackend({ git_pull: () => '3 commits tirés' });
+  it('pulls from the picker, then says what came in', async () => {
+    const backend = fakeBackend({ branch_list: () => LIST, git_pull: () => '3 commits tirés' });
     app.git = { p1: gitInfo({ ...tracked, behind: 3 }) };
     render(StatusBar);
     await userEvent.click(syncButton());
-    expect(item('Pull').disabled).toBe(false);
-    item('Pull').onClick!();
+    await picker();
+    await userEvent.click(screen.getByRole('button', { name: /Récupérer/ }));
     await waitFor(() => expect(app.toasts).toEqual([expect.objectContaining({ text: '3 commits tirés', kind: 'ok' })]));
     expect(backend.called('git_pull')[0].args).toEqual({ projectId: 'p1' });
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Branches' })).toBeNull());
   });
 
   it('shows the push running and allows nothing else meanwhile', async () => {
     let finish!: (summary: string) => void;
-    const backend = fakeBackend({ git_push: () => new Promise((r) => (finish = r)) });
+    const backend = fakeBackend({ branch_list: () => LIST, git_push: () => new Promise((r) => (finish = r)) });
     app.git = { p1: gitInfo({ ...tracked, ahead: 1 }) };
     render(StatusBar);
     await userEvent.click(syncButton());
-    item('Push').onClick!();
+    await picker();
+    await userEvent.click(screen.getByRole('button', { name: /Pousser/ }));
     await waitFor(() => expect(syncButton()).toBeDisabled());
-    expect(syncButton()).toHaveTextContent('Push…');
+    expect(syncButton()).toHaveTextContent('Envoi…');
     expect(backend.called('git_push')[0].args).toEqual({ projectId: 'p1' });
     finish('1 commit poussé');
     await waitFor(() => expect(syncButton()).toBeEnabled());
@@ -212,11 +224,12 @@ describe('StatusBar sync with the remote', () => {
   });
 
   it('fetches on demand', async () => {
-    const backend = fakeBackend({ git_fetch: () => 'Fetch terminé : déjà à jour' });
+    const backend = fakeBackend({ branch_list: () => LIST, git_fetch: () => 'Fetch terminé : déjà à jour' });
     app.git = { p1: gitInfo(tracked) };
     render(StatusBar);
     await userEvent.click(syncButton());
-    item('Fetch').onClick!();
+    await picker();
+    await userEvent.click(screen.getByRole('button', { name: /Fetch/ }));
     await waitFor(() => expect(app.toasts.map((t) => t.text)).toEqual(['Fetch terminé : déjà à jour']));
     expect(backend.called('git_fetch')[0].args).toEqual({ projectId: 'p1' });
   });
@@ -224,6 +237,7 @@ describe('StatusBar sync with the remote', () => {
   it('reports a failed pull as an error', async () => {
     const refusal = 'La branche locale et origin/main ont divergé : pull impossible en avance rapide.';
     fakeBackend({
+      branch_list: () => LIST,
       git_pull: () => {
         throw refusal;
       },
@@ -231,9 +245,10 @@ describe('StatusBar sync with the remote', () => {
     app.git = { p1: gitInfo({ ...tracked, ahead: 1, behind: 1 }) };
     render(StatusBar);
     await userEvent.click(syncButton());
-    item('Pull').onClick!();
+    await picker();
+    await userEvent.click(screen.getByRole('button', { name: /Récupérer/ }));
     await waitFor(() => expect(app.toasts).toEqual([expect.objectContaining({ text: refusal, kind: 'error' })]));
-    expect(syncButton()).toBeEnabled();
+    await waitFor(() => expect(syncButton()).toBeEnabled());
   });
 });
 
@@ -360,37 +375,41 @@ describe('StatusBar in English', () => {
     expect(screen.getByText('≈ $0.50')).toBeInTheDocument();
   });
 
-  it('writes the sync with the remote, its menu and its toast in English', async () => {
-    const backend = fakeBackend({ git_pull: () => '3 commits pulled' });
+  it('writes the sync with the remote, the picker’s foot and the toast in English', async () => {
+    const backend = fakeBackend({ branch_list: () => [branchInfo({ name: 'main', current: true })], git_pull: () => '3 commits pulled' });
     app.git = { p1: gitInfo({ upstream: 'origin/main', hasRemote: true, behind: 3, ahead: 1, lastFetch: app.now - 3 * 60_000 }) };
     render(StatusBar);
     const button = screen.getByRole('button', { name: /⎇ main/ });
     expect(button.title).toBe('Tracking origin/main: 3 to pull, 1 to push\nLast fetch: 3 min ago');
     await userEvent.click(button);
-    const labels = menu.open!.items.map((i) => i.label);
-    expect(labels).toEqual(['Pull', 'Push', '', 'Fetch']);
-    expect(menu.open!.items.find((i) => i.label === 'Fetch')).toMatchObject({ hint: 'now' });
-    menu.open!.items.find((i) => i.label === 'Pull')!.onClick!();
+    await screen.findByRole('dialog', { name: 'Branches' });
+    expect(screen.getByRole('button', { name: /Push/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Fetch/ })).toHaveTextContent('now');
+    await userEvent.click(screen.getByRole('button', { name: /Pull/ }));
     await waitFor(() => expect(app.toasts).toEqual([expect.objectContaining({ text: '3 commits pulled', kind: 'ok' })]));
     expect(backend.called('git_pull')).toHaveLength(1);
   });
 
-  it('says a branch is not published, or was deleted from the remote, and that it was never fetched', async () => {
-    fakeBackend();
+  it('says a branch is not published, or was deleted from the remote, that it was never fetched, and a detached HEAD', async () => {
+    fakeBackend({ branch_list: () => [] });
     app.git = { p1: gitInfo({ hasRemote: true, branch: 'feat/x' }) };
     render(StatusBar);
     const button = screen.getByRole('button', { name: /⎇ feat\/x/ });
     expect(button).toHaveTextContent('not published');
     expect(button.title).toBe('Branch not published to the remote repository yet\nLast fetch: never');
     await userEvent.click(button);
-    expect(menu.open!.items.map((i) => i.label)).toContain('Publish branch');
-    menu.close();
+    await screen.findByRole('dialog', { name: 'Branches' });
+    expect(screen.getByRole('button', { name: 'Publish' })).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
     app.git = { p1: gitInfo({ hasRemote: true, branch: 'feat/x', upstream: 'origin/feat/x', upstreamGone: true }) };
     await tick();
     expect(screen.getByRole('button', { name: /⎇ feat\/x/ })).toHaveTextContent('remote deleted');
     expect(screen.getByRole('button', { name: /⎇ feat\/x/ }).title).toContain(
       'The tracked branch origin/feat/x no longer exists on the remote repository',
     );
+    app.git = { p1: gitInfo({ hasRemote: false, branch: '(detached)' }) };
+    await tick();
+    expect(screen.getByRole('button', { name: /⎇ Detached HEAD/ }).title).toBe('Switch branch');
   });
 
   it('writes the update, its countdown and the sound in English', async () => {

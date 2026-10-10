@@ -5,7 +5,7 @@ import App from './App.svelte';
 import { setLang } from './lib/i18n';
 import { app } from './lib/state.svelte';
 import type { Agent, InitialState, Project, UiEvent } from './lib/types';
-import { agent, fakeBackend, project, resetApp, SETTINGS } from './test/ipc';
+import { agent, branchInfo, fakeBackend, gitInfo, project, resetApp, SETTINGS } from './test/ipc';
 
 const DIFF = `diff --git a/src/auth.ts b/src/auth.ts
 --- a/src/auth.ts
@@ -272,6 +272,21 @@ describe('App layout', () => {
     expect(within(dialog).getByText('dans le worktree')).toBeInTheDocument();
   });
 
+  it('opens the comparison of two branches in the diff window, as the git graph asks for it', async () => {
+    start('', { handlers: { git_diff_refs: () => DIFF.replace('const b = 3;', 'const b = 4;') } });
+    expect(await screen.findByRole('main')).toBeInTheDocument();
+    app.modal = {
+      kind: 'diff',
+      projectId: 'p1',
+      agentId: null,
+      paths: [],
+      title: 'main ↔ feat/login',
+      refs: { from: 'main', to: 'feat/login' },
+    };
+    const dialog = await screen.findByRole('dialog', { name: 'main ↔ feat/login' });
+    expect(await within(dialog).findByText('const b = 4;')).toBeInTheDocument();
+  });
+
   it('opens « Ouvrir un fichier » with Ctrl+P, the WebView’s own key (printing) held back, and opens the file picked', async () => {
     start('', {
       handlers: {
@@ -527,5 +542,77 @@ describe('App frame', () => {
     expect(within(ask).getByText('2 files in the editor aren’t saved: their changes will be lost.')).toBeInTheDocument();
     expect(within(ask).getByRole('button', { name: 'Quit anyway' })).toBeInTheDocument();
     expect(within(ask).getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+  });
+});
+
+describe('App branches', () => {
+  const BRANCHES = [
+    branchInfo({ name: 'main', current: true, worktree: 'C:\\code\\demo-api', upstream: 'origin/main' }),
+    branchInfo({ name: 'feat/login' }),
+  ];
+
+  /** The app on a project whose checkout is on main, with a remote. */
+  async function onMain(handlers: Record<string, (args: any) => unknown> = {}) {
+    const view = start('', { handlers: { branch_list: () => BRANCHES, ...handlers } });
+    await screen.findByRole('main');
+    emit({ type: 'git', projectId: 'p1', git: gitInfo({ upstream: 'origin/main', hasRemote: true }) });
+    return { ...view, button: await screen.findByRole('button', { name: /⎇ main/ }) };
+  }
+
+  it('switches branch from the status bar: the question about the changes takes the focus and gives it back to the button', async () => {
+    const calls: boolean[] = [];
+    const { button } = await onMain({
+      branch_switch: (args) => {
+        calls.push(args.stash);
+        if (!args.stash) throw 'DIRTY';
+        return 'escouade: avant de passer sur feat/login';
+      },
+    });
+    await userEvent.click(button);
+    const picker = await screen.findByRole('dialog', { name: 'Branches' });
+    await userEvent.click(within(picker).getByText('feat/login'));
+    const ask = await screen.findByRole('dialog', { name: 'Changer pour « feat/login » ?' });
+    expect(screen.queryByRole('dialog', { name: 'Branches' })).toBeNull();
+    expect(ask).toContainElement(document.activeElement as HTMLElement);
+    expect(within(ask).getByText('Il reste des changements non commités dans le dossier du projet.')).toBeInTheDocument();
+    await userEvent.click(within(ask).getByRole('button', { name: 'Mettre de côté (stash) et changer' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(calls).toEqual([false, true]);
+    expect(app.toasts.at(-1)).toMatchObject({
+      text: 'Changements mis de côté : « escouade: avant de passer sur feat/login » (git stash).',
+      kind: 'ok',
+    });
+    expect(button).toHaveFocus();
+  });
+
+  it('creates a branch from the picker', async () => {
+    const created: unknown[] = [];
+    const { button } = await onMain({
+      branch_check: () => null,
+      branch_create: (args) => {
+        created.push(args);
+        return null;
+      },
+    });
+    await userEvent.click(button);
+    await userEvent.click(await screen.findByRole('button', { name: 'Nouvelle branche…' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Nouvelle branche' });
+    expect(screen.queryByRole('dialog', { name: 'Branches' })).toBeNull();
+    const name = within(dialog).getByRole('textbox', { name: 'Nom' });
+    expect(name).toHaveFocus();
+    await userEvent.type(name, 'feat/search{Enter}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(created).toEqual([{ projectId: 'p1', name: 'feat/search', start: 'main', switch: true, stash: false }]);
+    expect(button).toHaveFocus();
+  });
+
+  it('opens the new branch window on a commit the graph gives, and the cleaning of the merged branches', async () => {
+    await onMain({ branches_merged: () => ['ticket/DEM-1'] });
+    app.modal = { kind: 'newBranch', projectId: 'p1', start: 'a1b2c3d4e5f60718' };
+    const dialog = await screen.findByRole('dialog', { name: 'Nouvelle branche' });
+    expect(within(dialog).getByRole('combobox', { name: 'À partir de' })).toHaveValue('a1b2c3d4e5f60718');
+    app.modal = { kind: 'mergedBranches', projectId: 'p1' };
+    const cleaning = await screen.findByRole('dialog', { name: 'Branches mergées' });
+    expect(await within(cleaning).findByRole('button', { name: 'Supprimer 1 branche' })).toBeInTheDocument();
   });
 });

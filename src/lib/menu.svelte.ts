@@ -14,7 +14,8 @@ export interface MenuItem {
 }
 
 class MenuState {
-  open = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
+  /** `keyboard`: opened from an element (a button, the menu key): the focus goes into it, and comes back. */
+  open = $state<{ x: number; y: number; items: MenuItem[]; keyboard?: boolean } | null>(null);
 
   show(e: MouseEvent, items: MenuItem[]) {
     e.preventDefault();
@@ -24,7 +25,7 @@ class MenuState {
 
   showAt(el: HTMLElement, items: MenuItem[]) {
     const r = el.getBoundingClientRect();
-    this.open = { x: r.left, y: r.bottom + 4, items };
+    this.open = { x: r.left, y: r.bottom + 4, items, keyboard: true };
   }
 
   close() {

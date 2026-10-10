@@ -915,6 +915,33 @@ async fn the_remote_copy_goes_with_a_branch_only_when_it_is_its_own() {
 }
 
 #[tokio::test]
+async fn the_pointer_to_the_remotes_default_branch_is_not_a_branch_to_delete() {
+    let h = harness("g2-remote-head");
+    let (p, r) = h.project(false).await;
+    remote(&h, &r);
+    // `origin/HEAD` is a symbolic ref: deleting it as a branch would follow it to origin/main.
+    git(&r, &["remote", "set-head", "origin", "main"]);
+    for force in [false, true] {
+        let e = h
+            .core
+            .branch_delete(&p.id, "origin/HEAD", false, force)
+            .await
+            .unwrap_err();
+        let said = e.to_string();
+        assert!(
+            said.contains("origin/HEAD") && said.contains("n’est pas une branche"),
+            "{said}"
+        );
+    }
+    // Neither the pointer nor the branch it points to has moved.
+    assert_eq!(
+        git(&r, &["rev-parse", "--abbrev-ref", "origin/HEAD"]),
+        "origin/main"
+    );
+    assert!(!git(&r, &["branch", "-r", "--list", "origin/main"]).is_empty());
+}
+
+#[tokio::test]
 async fn two_branches_of_a_project_are_compared() {
     let h = harness("g1-diff-refs");
     let (p, r) = h.project(false).await;

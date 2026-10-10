@@ -45,8 +45,20 @@ export type Modal =
    * reads the project at once to suggest its launch commands.
    */
   | { kind: 'settings'; tab?: SettingsTab; projectId?: string; section?: 'launch'; resume?: boolean; suggest?: boolean }
-  /** `wholeProject`: every uncommitted file the project's list shows, worktrees of the agents included. */
-  | { kind: 'diff'; projectId: string; agentId: string | null; paths: string[]; title: string; commit?: string; wholeProject?: boolean }
+  /**
+   * `commit`: what it changed; `refs`: what changes from `from` to `to` (branches, or commits); `wholeProject`: every
+   * uncommitted file the project's list shows, worktrees of the agents included.
+   */
+  | {
+      kind: 'diff';
+      projectId: string;
+      agentId: string | null;
+      paths: string[];
+      title: string;
+      commit?: string;
+      refs?: { from: string; to: string };
+      wholeProject?: boolean;
+    }
   | {
       kind: 'confirm';
       title: string;
@@ -75,12 +87,26 @@ export type Modal =
    * A direct commit of the agent's changes; `agentId` null: of the project's own checkout. `resume`: what it had
    * written, back from a dialog that took its place.
    */
-  | { kind: 'commit'; projectId: string; agentId: string | null; resume?: CommitDraft };
+  | { kind: 'commit'; projectId: string; agentId: string | null; resume?: CommitDraft }
+  /**
+   * « Nouvelle branche » on a project. `start`: where it starts (a branch, or the commit the graph gave), the current
+   * branch by default; `resume`: what had been written, back from the question of the stash.
+   */
+  | { kind: 'newBranch'; projectId: string; start?: string; resume?: NewBranchDraft }
+  /** « Branches mergées » : the local branches already in the project's base, to delete together. */
+  | { kind: 'mergedBranches'; projectId: string };
 
 /** What a commit's window had written when another dialog took its place: its message, and Haiku's proposal as it came. */
 export interface CommitDraft {
   message: string;
   proposed: string;
+}
+
+/** What the window of a new branch had written when the question of the stash took its place. */
+export interface NewBranchDraft {
+  name: string;
+  start: string;
+  switchTo: boolean;
 }
 
 export interface Toast {

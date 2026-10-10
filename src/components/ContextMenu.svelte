@@ -14,6 +14,52 @@
       y: m.y + r.height > window.innerHeight - 8 ? Math.max(8, m.y - r.height) : m.y,
     };
   });
+
+  /** What the keys reach: not the entries that are disabled. */
+  const reachable = () => [...(el?.querySelectorAll<HTMLElement>('[role^="menuitem"]:not(:disabled)') ?? [])];
+
+  // A menu opened from an element takes the focus, so that the keyboard can work it, and gives it back when it closes.
+  $effect(() => {
+    const menuEl = el;
+    if (!menu.open?.keyboard || !menuEl) return;
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    reachable()[0]?.focus();
+    return () => {
+      // Not when an entry opened a dialog meanwhile: the focus is then the dialog's.
+      const now = document.activeElement;
+      if ((!now || now === document.body || menuEl.contains(now)) && opener?.isConnected) opener.focus();
+    };
+  });
+
+  function onKeydown(e: KeyboardEvent) {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      menu.close();
+      return;
+    }
+    const list = reachable();
+    const at = list.indexOf(document.activeElement as HTMLElement);
+    const last = list.length - 1;
+    let to: number;
+    switch (e.key) {
+      case 'ArrowDown':
+        to = at >= last ? 0 : at + 1;
+        break;
+      case 'ArrowUp':
+        to = at <= 0 ? last : at - 1;
+        break;
+      case 'Home':
+        to = 0;
+        break;
+      case 'End':
+        to = last;
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
+    list[to]?.focus();
+  }
 </script>
 
 <svelte:window onkeydown={(e) => e.key === 'Escape' && menu.open && (menu.close(), e.stopPropagation())} onblur={() => menu.close()} />
@@ -21,7 +67,16 @@
 {#if menu.open}
   <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
   <div class="backdrop" onclick={() => menu.close()} oncontextmenu={(e) => (e.preventDefault(), menu.close())}></div>
-  <div class="menu" bind:this={el} style:left="{pos.x || menu.open.x}px" style:top="{pos.y || menu.open.y}px" role="menu">
+  <div
+    class="menu"
+    bind:this={el}
+    style:left="{pos.x || menu.open.x}px"
+    style:top="{pos.y || menu.open.y}px"
+    role="menu"
+    tabindex="-1"
+    onkeydown={onKeydown}
+    oncontextmenu={(e) => e.preventDefault()}
+  >
     {#each menu.open.items as item, i (i)}
       {#if item.separator}
         <div class="sep"></div>
