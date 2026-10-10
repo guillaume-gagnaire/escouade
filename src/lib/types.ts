@@ -150,6 +150,10 @@ export interface ExternalIssue {
 export interface IssuePage {
   issues: ExternalIssue[];
   filters: IssueFilter[];
+  /** What asks for the next page (« Afficher plus »), when the service has more. */
+  next: string | null;
+  /** How many tickets match in all, when the service says so. */
+  total: number | null;
 }
 
 export interface Project {

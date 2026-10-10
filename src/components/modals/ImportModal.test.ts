@@ -51,10 +51,14 @@ const JIRA: IssuePage = {
     { id: 'mine', label: 'Assignés à moi' },
     { id: 'sprint', label: 'Sprint actif' },
   ],
+  next: null,
+  total: null,
 };
 const TRELLO: IssuePage = {
   issues: [issue({ service: 'trello', id: 'c1', key: '#151', title: 'Exporter le journal', kind: 'Carte', container: 'b1' })],
   filters: [{ id: 'mine', label: 'Mes cartes' }],
+  next: null,
+  total: null,
 };
 
 const dialog = () => screen.getByRole('dialog', { name: 'Importer des tickets' });
@@ -149,6 +153,49 @@ describe('ImportModal', () => {
     expect(app.modal).toBeNull();
     expect(app.tickets.n1.key).toBe('DEM-4');
     expect(app.toasts.at(-1)?.text).toBe('2 tickets importés depuis Jira et Trello');
+  });
+
+  it('shows more of a long list with « Afficher plus », and how many there are in all', async () => {
+    const more: IssuePage = {
+      ...JIRA,
+      issues: [issue({ id: 'ATL-1400', key: 'ATL-1400', title: 'Paginer les exports' })],
+      next: null,
+      total: null,
+    };
+    const backend = fakeBackend({
+      integration_issues: (a: any) => (a.page === 'p2' ? more : { ...JIRA, next: 'p2', total: 312 }),
+    });
+    render(ImportModal, { projectId: 'p1' });
+    const d = within(dialog());
+    await waitFor(() => expect(d.getByText('3 affichés sur 312')).toBeInTheDocument());
+    await userEvent.click(d.getByRole('button', { name: 'Afficher plus' }));
+    await waitFor(() => expect(row(/ATL-1400/)).toBeInTheDocument());
+    expect(backend.called('integration_issues').at(-1)!.args).toEqual({
+      projectId: 'p1',
+      service: 'jira',
+      text: '',
+      filters: [],
+      page: 'p2',
+    });
+    // The first ones stay, the next ones follow; all there, nothing more to ask for.
+    expect(d.getAllByRole('checkbox', { name: /ATL-/ })).toHaveLength(4);
+    expect(d.getByText('4 résultats')).toBeInTheDocument();
+    expect(d.queryByRole('button', { name: 'Afficher plus' })).not.toBeInTheDocument();
+    // Its button gone, the focus goes to the first ticket it brought.
+    expect(row(/ATL-1400/)).toHaveFocus();
+    // A new search starts again from the first page.
+    await userEvent.type(d.getByRole('textbox', { name: 'Rechercher' }), 'token');
+    await waitFor(() => expect(backend.called('integration_issues').at(-1)!.args.text).toBe('token'));
+    expect(backend.called('integration_issues').at(-1)!.args.page).toBeUndefined();
+    await waitFor(() => expect(d.queryByRole('checkbox', { name: /ATL-1400/ })).not.toBeInTheDocument());
+  });
+
+  it('says how many are shown when the service does not say how many there are', async () => {
+    fakeBackend({ integration_issues: () => ({ ...JIRA, next: '2', total: null }) });
+    render(ImportModal, { projectId: 'p1' });
+    const d = within(dialog());
+    await waitFor(() => expect(d.getByText('3 affichés')).toBeInTheDocument());
+    expect(d.getByRole('button', { name: 'Afficher plus' })).toBeInTheDocument();
   });
 
   it('says what the service answered when it fails', async () => {

@@ -11,6 +11,7 @@ pub mod trello;
 
 use crate::model::*;
 use anyhow::{anyhow, bail, Result};
+use reqwest::header::HeaderMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -119,6 +120,8 @@ pub struct Query {
     pub filters: Vec<String>,
     /// Only the tickets that carry this label (automatic import).
     pub label: Option<String>,
+    /// The page after the first one (« Afficher plus »): `IssuePage::next` of the one before.
+    pub page: Option<String>,
 }
 
 /// An external ticket as the import modal lists it, and as it is imported.
@@ -145,12 +148,16 @@ pub struct ExternalIssue {
     pub imported: bool,
 }
 
-/// A source's tickets for the import modal, and the chips that filter them.
+/// A page of a source's tickets for the import modal, and the chips that filter them.
 #[derive(Debug, Clone, Serialize, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct IssuePage {
     pub issues: Vec<ExternalIssue>,
     pub filters: Vec<IssueFilter>,
+    /// What asks for the next page (`Query::page`), when the service has more.
+    pub next: Option<String>,
+    /// How many tickets match in all, when the service says so.
+    pub total: Option<u64>,
 }
 
 /// Where the Trello and GitHub APIs are (Jira's is the account's site); `ESCOUADE_TRELLO_API`
@@ -255,6 +262,25 @@ impl Client {
 /// Sends a request to `service` and reads its JSON answer (null when empty); an error says, in
 /// French, what went wrong and what the service said.
 pub(crate) async fn call(service: Service, rb: reqwest::RequestBuilder) -> Result<Value> {
+    Ok(send(service, rb).await?.0)
+}
+
+/// `call`, and whether the answer's `Link` header points to a next page (GitHub's lists).
+pub(crate) async fn call_page(
+    service: Service,
+    rb: reqwest::RequestBuilder,
+) -> Result<(Value, bool)> {
+    let (v, headers) = send(service, rb).await?;
+    let next = headers
+        .get_all(reqwest::header::LINK)
+        .iter()
+        .filter_map(|h| h.to_str().ok())
+        .flat_map(|h| h.split(','))
+        .any(|link| link.contains("rel=\"next\""));
+    Ok((v, next))
+}
+
+async fn send(service: Service, rb: reqwest::RequestBuilder) -> Result<(Value, HeaderMap)> {
     let resp = rb.send().await.map_err(|e| {
         anyhow!(
             "{} injoignable : {:#}",
@@ -263,14 +289,17 @@ pub(crate) async fn call(service: Service, rb: reqwest::RequestBuilder) -> Resul
         )
     })?;
     let status = resp.status().as_u16();
+    let headers = resp.headers().clone();
     let text = resp.text().await.unwrap_or_default();
     if !(200..300).contains(&status) {
         bail!(http_error(service, status, &text));
     }
     if text.trim().is_empty() {
-        return Ok(Value::Null);
+        return Ok((Value::Null, headers));
     }
-    serde_json::from_str(&text).map_err(|_| anyhow!("{} : réponse illisible", service.label()))
+    let v = serde_json::from_str(&text)
+        .map_err(|_| anyhow!("{} : réponse illisible", service.label()))?;
+    Ok((v, headers))
 }
 
 /// An HTTP error of `service`, and what its body says.

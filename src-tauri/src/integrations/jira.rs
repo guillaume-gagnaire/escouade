@@ -208,11 +208,15 @@ impl Jira {
         } else if !words(text).is_empty() {
             jql.push(format!("text ~ {}", quoted(&words(text))));
         }
-        let body = json!({
-            "jql": format!("{} ORDER BY updated DESC", jql.join(" AND ")),
+        let jql = jql.join(" AND ");
+        let mut body = json!({
+            "jql": format!("{jql} ORDER BY updated DESC"),
             "maxResults": 50,
             "fields": ["summary", "status", "issuetype", "priority", "assignee", "description", "labels"],
         });
+        if let Some(token) = q.page.as_deref().filter(|t| !t.is_empty()) {
+            body["nextPageToken"] = json!(token);
+        }
         let v = call(S, self.post("/rest/api/3/search/jql", &body)).await?;
         let issues = v["issues"]
             .as_array()
@@ -220,6 +224,15 @@ impl Jira {
             .flatten()
             .map(|i| self.issue(project, i))
             .collect();
+        let next = v["nextPageToken"]
+            .as_str()
+            .filter(|t| !t.is_empty() && v["isLast"].as_bool() != Some(true))
+            .map(str::to_string);
+        // The search gives no total: it is counted apart, only when the list is cut.
+        let total = match &next {
+            Some(_) => self.count(&jql).await,
+            None => None,
+        };
         Ok(IssuePage {
             issues,
             filters: [
@@ -233,7 +246,22 @@ impl Jira {
                 label: label.to_string(),
             })
             .collect(),
+            next,
+            total,
         })
+    }
+
+    /// About how many issues `jql` finds; none when Jira does not say (only the total is missing
+    /// then).
+    async fn count(&self, jql: &str) -> Option<u64> {
+        let body = json!({ "jql": jql });
+        match call(S, self.post("/rest/api/3/search/approximate-count", &body)).await {
+            Ok(v) => v["count"].as_u64(),
+            Err(e) => {
+                log::info!("Jira count: {e:#}");
+                None
+            }
+        }
     }
 
     fn issue(&self, project: &str, i: &Value) -> ExternalIssue {
@@ -466,6 +494,7 @@ mod tests {
             text: "token \"refresh\"+".into(),
             filters: vec!["mine".into(), "sprint".into(), "todo".into()],
             label: Some("claude-ready".into()),
+            ..Default::default()
         };
         let page = j.issues("ATL", &q).await.unwrap();
         let sent = server.requests()[0].json();
@@ -517,6 +546,78 @@ mod tests {
             j.issues("ATL", &q).await.unwrap_err().to_string(),
             "Jira : erreur 400 — Field 'sprint' does not exist."
         );
+    }
+
+    #[tokio::test]
+    async fn the_search_goes_on_from_its_next_page_and_says_about_how_many_match() {
+        let (server, j) = jira().await;
+        let page = |keys: &[&str], next: Option<&str>| {
+            let issues: Vec<Value> = keys
+                .iter()
+                .map(|k| json!({ "id": k, "key": k, "fields": { "summary": k } }))
+                .collect();
+            match next {
+                Some(token) => json!({ "issues": issues, "nextPageToken": token, "isLast": false }),
+                None => json!({ "issues": issues, "isLast": true }),
+            }
+        };
+        server.on(
+            "POST",
+            "/rest/api/3/search/jql",
+            200,
+            page(&["ATL-1", "ATL-2"], Some("p2")),
+        );
+        server.on(
+            "POST",
+            "/rest/api/3/search/approximate-count",
+            200,
+            json!({ "count": 312 }),
+        );
+        let first = j.issues("ATL", &Query::default()).await.unwrap();
+        assert_eq!(
+            (first.next.as_deref(), first.total),
+            (Some("p2"), Some(312))
+        );
+        let sent = server.requests();
+        assert_eq!(sent[0].json()["maxResults"], 50);
+        assert!(sent[0].json().get("nextPageToken").is_none());
+        // Counted on the same issues, without their order.
+        assert_eq!(sent[1].path(), "/rest/api/3/search/approximate-count");
+        assert_eq!(
+            sent[1].json()["jql"],
+            "project = \"ATL\" AND statusCategory != Done"
+        );
+        server.on(
+            "POST",
+            "/rest/api/3/search/jql",
+            200,
+            page(&["ATL-3"], None),
+        );
+        let q = Query {
+            page: Some("p2".into()),
+            ..Default::default()
+        };
+        let last = j.issues("ATL", &q).await.unwrap();
+        assert_eq!(server.requests()[2].json()["nextPageToken"], "p2");
+        assert_eq!(last.issues[0].key, "ATL-3");
+        // The last page: nothing more, nothing to count.
+        assert_eq!((last.next, last.total), (None, None));
+        assert_eq!(server.requests().len(), 3);
+        // A count refused only leaves the total unknown.
+        server.on(
+            "POST",
+            "/rest/api/3/search/jql",
+            200,
+            page(&["ATL-1"], Some("p2")),
+        );
+        server.on(
+            "POST",
+            "/rest/api/3/search/approximate-count",
+            404,
+            Value::Null,
+        );
+        let again = j.issues("ATL", &Query::default()).await.unwrap();
+        assert_eq!((again.next.as_deref(), again.total), (Some("p2"), None));
     }
 
     #[tokio::test]

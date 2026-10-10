@@ -1030,11 +1030,13 @@ pub async fn integration_issues(
     service: Service,
     text: String,
     filters: Vec<String>,
+    page: Option<String>,
 ) -> Res<IssuePage> {
     let q = Query {
         text,
         filters,
         label: None,
+        page,
     };
     core.integration_issues(&project_id, service, q)
         .await

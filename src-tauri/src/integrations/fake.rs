@@ -67,6 +67,8 @@ struct Route {
     target: String,
     status: u16,
     body: String,
+    /// Headers of the answer besides its type and length (GitHub's `Link`).
+    headers: Vec<(String, String)>,
 }
 
 #[derive(Clone)]
@@ -134,10 +136,14 @@ impl FakeServer {
         let Some(req) = read_request(&mut stream).await else {
             return;
         };
-        let (status, body) = self.answer(&req);
+        let (status, body, headers) = self.answer(&req);
         self.requests.lock().push(req);
+        let extra: String = headers
+            .iter()
+            .map(|(k, v)| format!("{k}: {v}\r\n"))
+            .collect();
         let head = format!(
-            "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\n{extra}Connection: close\r\n\r\n",
             body.len()
         );
         let _ = stream.write_all(head.as_bytes()).await;
@@ -147,6 +153,18 @@ impl FakeServer {
 
     /// Answers `method target` (the last route set for it wins) with `status` and `body`.
     pub fn on(&self, method: &str, target: &str, status: u16, body: Value) {
+        self.on_with(method, target, status, body, &[]);
+    }
+
+    /// `on`, the answer carrying `headers` too.
+    pub fn on_with(
+        &self,
+        method: &str,
+        target: &str,
+        status: u16,
+        body: Value,
+        headers: &[(&str, &str)],
+    ) {
         self.routes.lock().push(Route {
             method: method.into(),
             target: target.into(),
@@ -156,10 +174,14 @@ impl FakeServer {
             } else {
                 body.to_string()
             },
+            headers: headers
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
         });
     }
 
-    fn answer(&self, req: &Request) -> (u16, String) {
+    fn answer(&self, req: &Request) -> (u16, String, Vec<(String, String)>) {
         let routes = self.routes.lock();
         routes
             .iter()
@@ -172,8 +194,8 @@ impl FakeServer {
                         r.target == req.path()
                     }
             })
-            .map(|r| (r.status, r.body.clone()))
-            .unwrap_or((404, r#"{"message":"Not Found"}"#.into()))
+            .map(|r| (r.status, r.body.clone(), r.headers.clone()))
+            .unwrap_or((404, r#"{"message":"Not Found"}"#.into(), Vec::new()))
     }
 
     pub fn requests(&self) -> Vec<Request> {

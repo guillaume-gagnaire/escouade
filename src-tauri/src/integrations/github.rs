@@ -2,7 +2,9 @@
 //! Kanban is open or closed, or a label of the repository.
 
 use super::text::criteria_of;
-use super::{call, encode, Account, Container, ExternalIssue, IssueFilter, IssuePage, Query};
+use super::{
+    call, call_page, encode, Account, Container, ExternalIssue, IssueFilter, IssuePage, Query,
+};
 use crate::model::{ExternalRef, ExternalState, Service};
 use anyhow::Result;
 use serde_json::{json, Value};
@@ -101,28 +103,40 @@ impl Github {
 
     /// The open issues (pull requests aside): searched when there is text, an assignee or a
     /// label to look for, else listed; a label's chip keeps those that carry one of the chosen.
+    /// A page at a time: the `Link` header says when there is a next one, a search how many
+    /// match.
     pub async fn issues(&self, repo: &str, q: &Query) -> Result<IssuePage> {
         let mine = q.filters.iter().any(|f| f == "mine");
         let text = q.text.trim().trim_start_matches('#');
         let label = q.label.as_deref().map(str::trim).filter(|l| !l.is_empty());
         let number = !text.is_empty() && text.chars().all(|c| c.is_ascii_digit());
-        let items: Vec<Value> = if number {
+        let page: u32 = q
+            .page
+            .as_deref()
+            .and_then(|p| p.parse().ok())
+            .unwrap_or(1)
+            .max(1);
+        let at = if page > 1 {
+            format!("&page={page}")
+        } else {
+            String::new()
+        };
+        let (items, more, total): (Vec<Value>, bool, Option<u64>) = if number {
             // The issue itself: none when there is no such issue.
-            match call(S, self.get(&format!("/repos/{repo}/issues/{text}"))).await {
+            let items = match call(S, self.get(&format!("/repos/{repo}/issues/{text}"))).await {
                 Ok(i) if i["state"].as_str() == Some(OPEN) => vec![i],
                 Ok(_) => Vec::new(),
                 Err(e) if e.to_string().contains("(404)") => Vec::new(),
                 Err(e) => return Err(e),
-            }
+            };
+            (items, false, None)
         } else if text.is_empty() && !mine && label.is_none() {
-            call(
+            let (v, more) = call_page(
                 S,
-                self.get(&format!("/repos/{repo}/issues?state=open&per_page=100")),
+                self.get(&format!("/repos/{repo}/issues?state=open&per_page=100{at}")),
             )
-            .await?
-            .as_array()
-            .cloned()
-            .unwrap_or_default()
+            .await?;
+            (v.as_array().cloned().unwrap_or_default(), more, None)
         } else {
             let mut terms = vec![format!("repo:{repo}"), "is:issue".into(), "is:open".into()];
             if mine {
@@ -134,15 +148,16 @@ impl Github {
             if !text.is_empty() {
                 terms.push(text.replace('"', " "));
             }
-            let v = call(
+            let (v, more) = call_page(
                 S,
                 self.get(&format!(
-                    "/search/issues?per_page=50&q={}",
+                    "/search/issues?per_page=50{at}&q={}",
                     encode(&terms.join(" "))
                 )),
             )
             .await?;
-            v["items"].as_array().cloned().unwrap_or_default()
+            let items = v["items"].as_array().cloned().unwrap_or_default();
+            (items, more, v["total_count"].as_u64())
         };
         let chosen: Vec<&str> = q
             .filters
@@ -171,7 +186,12 @@ impl Github {
                     label: l,
                 }),
         );
-        Ok(IssuePage { issues, filters })
+        Ok(IssuePage {
+            issues,
+            filters,
+            next: more.then(|| (page + 1).to_string()),
+            total,
+        })
     }
 
     fn issue_path(r: &ExternalRef) -> String {
@@ -394,6 +414,7 @@ mod tests {
             text: "#crash".into(),
             filters: vec!["mine".into()],
             label: Some("claude-ready".into()),
+            ..Default::default()
         };
         assert_eq!(g.issues("acme/api", &q).await.unwrap().issues.len(), 2);
         let search = server
@@ -437,6 +458,82 @@ mod tests {
             ..Default::default()
         };
         assert!(g.issues("acme/api", &q).await.unwrap().issues.is_empty());
+    }
+
+    #[tokio::test]
+    async fn the_issues_come_a_page_at_a_time_and_a_search_says_how_many_there_are() {
+        let (server, g) = github().await;
+        server.on("GET", "/repos/acme/api/labels", 200, json!([]));
+        let issue = |n: u64| json!({ "number": n, "title": format!("Issue {n}"), "labels": [] });
+        let more = format!(
+            "<{0}/repositories/1/issues?page=2>; rel=\"next\", <{0}/repositories/1/issues?page=4>; rel=\"last\"",
+            server.url
+        );
+        server.on_with(
+            "GET",
+            "/repos/acme/api/issues",
+            200,
+            json!([issue(1), issue(2)]),
+            &[("Link", &more)],
+        );
+        let first = g.issues("acme/api", &Query::default()).await.unwrap();
+        assert_eq!((first.next.as_deref(), first.total), (Some("2"), None));
+        assert_eq!(server.requests()[0].query("page"), None);
+        let end = format!(
+            "<{0}/repositories/1/issues?page=1>; rel=\"prev\", <{0}/repositories/1/issues?page=1>; rel=\"first\"",
+            server.url
+        );
+        server.on_with(
+            "GET",
+            "/repos/acme/api/issues",
+            200,
+            json!([issue(3)]),
+            &[("Link", &end)],
+        );
+        let q = Query {
+            page: Some("2".into()),
+            ..Default::default()
+        };
+        let last = g.issues("acme/api", &q).await.unwrap();
+        let listed = |path: &str| {
+            server
+                .requests()
+                .into_iter()
+                .rfind(|r| r.path() == path)
+                .unwrap()
+        };
+        assert_eq!(
+            listed("/repos/acme/api/issues").query("page").as_deref(),
+            Some("2")
+        );
+        assert_eq!(last.issues[0].key, "#3");
+        assert_eq!(last.next, None);
+        server.on_with(
+            "GET",
+            "/search/issues",
+            200,
+            json!({ "total_count": 312, "items": [issue(4)] }),
+            &[("Link", &more)],
+        );
+        let q = Query {
+            text: "crash".into(),
+            ..Default::default()
+        };
+        let found = g.issues("acme/api", &q).await.unwrap();
+        assert_eq!((found.next.as_deref(), found.total), (Some("2"), Some(312)));
+        let q = Query {
+            page: Some("3".into()),
+            ..q
+        };
+        g.issues("acme/api", &q).await.unwrap();
+        let search = listed("/search/issues");
+        assert_eq!(
+            (
+                search.query("per_page").as_deref(),
+                search.query("page").as_deref()
+            ),
+            (Some("50"), Some("3"))
+        );
     }
 
     #[tokio::test]

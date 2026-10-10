@@ -209,7 +209,11 @@ impl Trello {
             id: format!("list:{}", l.id),
             label: l.name.clone(),
         }));
-        Ok(IssuePage { issues, filters })
+        Ok(IssuePage {
+            issues,
+            filters,
+            ..Default::default()
+        })
     }
 
     /// The card goes into the list.
@@ -359,11 +363,14 @@ mod tests {
         assert_eq!(page.issues[1].criteria, ["Template HTML"]);
         let ids: Vec<&str> = page.filters.iter().map(|f| f.id.as_str()).collect();
         assert_eq!(ids, ["mine", "list:l1", "list:l2", "list:l3"]);
+        // A board's open cards come all at once: no next page.
+        assert_eq!((&page.next, page.total), (&None, None));
         let keys = |p: IssuePage| p.issues.into_iter().map(|i| i.key).collect::<Vec<_>>();
         let q = |text: &str, filters: &[&str], label: Option<&str>| Query {
             text: text.into(),
             filters: filters.iter().map(|f| f.to_string()).collect(),
             label: label.map(str::to_string),
+            ..Default::default()
         };
         assert_eq!(
             keys(t.issues("b1", &q("bienvenue", &[], None)).await.unwrap()),

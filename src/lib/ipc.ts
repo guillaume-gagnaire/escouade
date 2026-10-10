@@ -140,8 +140,9 @@ export const api = {
   integrationContainers: (service: Service, projectId: string | null) =>
     invoke<Container[]>('integration_containers', { service, projectId }),
   integrationStates: (service: Service, container: string) => invoke<StatesView>('integration_states', { service, container }),
-  integrationIssues: (projectId: string, service: Service, text: string, filters: string[]) =>
-    invoke<IssuePage>('integration_issues', { projectId, service, text, filters }),
+  /** `page`: the `next` of the page before (« Afficher plus »); none for the first one. */
+  integrationIssues: (projectId: string, service: Service, text: string, filters: string[], page?: string) =>
+    invoke<IssuePage>('integration_issues', { projectId, service, text, filters, page }),
   integrationImport: (projectId: string, issues: ExternalIssue[], maxLoops: number) =>
     invoke<Ticket[]>('integration_import', { projectId, issues, maxLoops }),
   /** « Resynchroniser »: the ticket's failed syncs go again at once; rejected with why they still fail. */

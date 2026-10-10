@@ -1,6 +1,7 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { trapFocus } from '../../lib/focus';
-  import { plural } from '../../lib/format';
+  import { fInt, plural } from '../../lib/format';
   import { importedLabel, issueKey, SERVICE_IDS, SERVICES } from '../../lib/integrations';
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
@@ -27,8 +28,12 @@
   let query = $state('');
   /** The chips turned on, by service. */
   let filters = $state<Partial<Record<Service, string[]>>>({});
+  /** The search's pages so far, one after the other (« Afficher plus »). */
   let page = $state<IssuePage | null>(null);
   let loading = $state(false);
+  /** The next page is on its way. */
+  let more = $state(false);
+  let list = $state<HTMLDivElement>();
   let failure = $state<string | null>(null);
   let selected = $state<Record<string, ExternalIssue>>({});
   let maxLoops = $state(5);
@@ -49,6 +54,7 @@
     const f = [...(filters[service] ?? [])];
     const n = ++asked;
     loading = true;
+    more = false;
     failure = null;
     api
       .integrationIssues(projectId, service, q, f)
@@ -66,6 +72,13 @@
   });
 
   const issues = $derived(page?.issues ?? []);
+  /** « 3 résultats »; when the service has more, « 50 affichés sur 312 » (or « 50 affichés » when it does not say how many). */
+  const counted = $derived.by(() => {
+    if (loading) return 'Recherche…';
+    if (!page?.next) return plural(issues.length, 'résultat', 'résultats');
+    const shown = plural(issues.length, 'affiché', 'affichés');
+    return page.total != null ? `${shown} sur ${fInt(page.total)}` : shown;
+  });
   const selectable = $derived(issues.filter((i) => !i.imported));
   const allOn = $derived(selectable.length > 0 && selectable.every((i) => selected[issueKey(i)]));
   const picked = $derived(Object.values(selected));
@@ -85,6 +98,37 @@
     text = '';
     query = '';
     page = null;
+  }
+
+  /** « Afficher plus »: the search's next page, after the tickets already listed (and chosen). */
+  async function showMore() {
+    const service = current;
+    const next = page?.next;
+    if (!service || !next || more) return;
+    // A new search meanwhile wins: this page would belong to the one before.
+    const n = asked;
+    more = true;
+    try {
+      const p = await api.integrationIssues(projectId, service, query, [...(filters[service] ?? [])], next);
+      if (n !== asked || !page) return;
+      const listed = new Set(page.issues.map(issueKey));
+      const first = page.issues.length;
+      page = {
+        ...page,
+        issues: [...page.issues, ...p.issues.filter((i) => !listed.has(issueKey(i)))],
+        next: p.next,
+        total: p.total ?? page.total,
+      };
+      if (!p.next) {
+        // Its button goes: the focus goes to the first ticket it brought, not to the window.
+        await tick();
+        list?.querySelectorAll<HTMLElement>('.row')[first]?.focus();
+      }
+    } catch (e) {
+      if (n === asked) app.toast(String(e), 'error');
+    } finally {
+      if (n === asked) more = false;
+    }
   }
 
   function toggleFilter(id: string) {
@@ -197,11 +241,11 @@
         <button class="cb" class:on={allOn} role="checkbox" aria-checked={allOn} aria-label="Tout sélectionner" onclick={toggleAll}
           >{allOn ? '✓' : ''}</button
         >
-        <span class="count-l">{loading ? 'Recherche…' : plural(issues.length, 'résultat', 'résultats')}</span>
+        <span class="count-l">{counted}</span>
         <div style="flex:1"></div>
         <span class="ctx mono">{[account?.label.split(' · ')[0], link.name].filter(Boolean).join(' · ')}</span>
       </div>
-      <div class="list" aria-busy={loading}>
+      <div class="list" bind:this={list} aria-busy={loading || more}>
         {#if failure}
           <p class="empty error" role="alert">{failure}</p>
         {:else if !loading && !issues.length}
@@ -242,6 +286,9 @@
             {#if i.imported}<span class="already">Déjà dans le Kanban</span>{/if}
           </div>
         {/each}
+        {#if page?.next && !loading && !failure}
+          <button class="btn ghost more" disabled={more} onclick={showMore}>Afficher plus</button>
+        {/if}
       </div>
       <div class="foot">
         <span class="sel"
@@ -598,6 +645,11 @@
   }
   .crit {
     color: var(--ok);
+  }
+  .more {
+    flex: none;
+    align-self: center;
+    margin: 8px 0 6px;
   }
   .already {
     flex: none;
