@@ -2,7 +2,8 @@
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { APPROVE_LABEL, canStart, criteriaMet, doneMeta, launchAnyway, ticketSpent, waitingFor, waitLabel } from '../../lib/board';
   import { buffers, lossNotice } from '../../lib/editor/buffers.svelte';
-  import { fWhen, plural } from '../../lib/format';
+  import { fWhen } from '../../lib/format';
+  import { t } from '../../lib/i18n';
   import { SERVICES, shortName } from '../../lib/integrations';
   import { api } from '../../lib/ipc';
   import { menu, type MenuItem } from '../../lib/menu.svelte';
@@ -18,7 +19,7 @@
   const SHOWN = 3;
 
   let {
-    ticket: t,
+    ticket,
     project,
     queueIndex,
     busyCount,
@@ -29,19 +30,19 @@
   const s = $derived(project.board);
   /** Why no ticket of the board starts now (its target branch), if so. */
   const issue = $derived(app.boardIssues[project.id] ?? null);
-  const agent = $derived(t.agentId ? app.agents[t.agentId] : undefined);
+  const agent = $derived(ticket.agentId ? app.agents[ticket.agentId] : undefined);
   /** What every agent of the ticket used so far: the card of a finished ticket keeps the cost it was closed with. */
-  const used = $derived(t.column === 'doing' || t.column === 'review' ? ticketSpent(t, app.agents) : null);
-  const met = $derived(criteriaMet(t));
-  const total = $derived(t.criteria.length);
+  const used = $derived(ticket.column === 'doing' || ticket.column === 'review' ? ticketSpent(ticket, app.agents) : null);
+  const met = $derived(criteriaMet(ticket));
+  const total = $derived(ticket.criteria.length);
   /** The foot's figures: what the ticket cost, the criteria met of a ticket to test, the loops of a finished one. */
-  const figures = $derived(!!used || t.column === 'review' || t.column === 'done');
-  const waiting = $derived(t.column === 'doing' && agent?.status === 'waiting');
+  const figures = $derived(!!used || ticket.column === 'review' || ticket.column === 'done');
+  const waiting = $derived(ticket.column === 'doing' && agent?.status === 'waiting');
   // Under way, the last items; to test, all of them.
-  const steps = $derived(t.column === 'doing' ? t.progress.slice(-SHOWN) : t.progress);
-  const hidden = $derived(t.progress.length - steps.length);
+  const steps = $derived(ticket.column === 'doing' ? ticket.progress.slice(-SHOWN) : ticket.progress);
+  const hidden = $derived(ticket.progress.length - steps.length);
   /** The keys of the tickets it comes after that are not done yet: the autopilot leaves it until they are. */
-  const awaited = $derived(t.column === 'todo' ? waitingFor(t, app.tickets) : []);
+  const awaited = $derived(ticket.column === 'todo' ? waitingFor(ticket, app.tickets) : []);
   let rejecting = $state(false);
   /** The ⚠ of a failed sync shows its reason and « Resynchroniser ». */
   let syncOpen = $state(false);
@@ -52,7 +53,7 @@
   // The error gone (a retry went through, by itself or not), the ⚠ and its panel go: before they do, the focus they
   // hold moves to the card, not to the window. A later failure starts closed again.
   $effect.pre(() => {
-    if (t.external?.error) return;
+    if (ticket.external?.error) return;
     if ([warn, panel].some((el) => el?.contains(document.activeElement))) card?.focus();
     syncOpen = false;
   });
@@ -61,7 +62,7 @@
   async function resync() {
     if (resyncing) return;
     resyncing = true;
-    const ok = await app.run(api.integrationResync(t.id).then(() => true));
+    const ok = await app.run(api.integrationResync(ticket.id).then(() => true));
     resyncing = false;
     if (!ok) return;
     syncOpen = false;
@@ -71,40 +72,41 @@
 
   /** "Lancer": a ticket that waits for others starts without them only once the user agrees. */
   function launch() {
-    const start = () => app.run(api.ticketStart(t.id));
+    const start = () => app.run(api.ticketStart(ticket.id));
     if (!awaited.length) {
       start();
       return;
     }
     app.modal = {
       kind: 'confirm',
-      title: `Lancer ${t.key} ?`,
-      body: launchAnyway(t.key, awaited),
-      confirm: 'Lancer quand même',
+      title: t('board.card.launchTitle', { key: ticket.key }),
+      body: launchAnyway(ticket.key, awaited),
+      confirm: t('board.card.launchAnyway'),
       onConfirm: start,
     };
   }
 
   function open() {
-    if (t.column === 'todo') onedit();
-    else if (t.agentId) app.selectAgent(t.agentId);
+    if (ticket.column === 'todo') onedit();
+    else if (ticket.agentId) app.selectAgent(ticket.agentId);
   }
 
   async function remove() {
     // Its agent is archived with it, which stops its test launches: stopped first, their ends are no crashes.
-    if (t.column !== 'todo' && t.agentId) stopTests(t.agentId);
-    const gone = await app.run(api.ticketDelete(t.id).then(() => true));
-    if (gone) delete app.tickets[t.id];
+    if (ticket.column !== 'todo' && ticket.agentId) stopTests(ticket.agentId);
+    const gone = await app.run(api.ticketDelete(ticket.id).then(() => true));
+    if (gone) delete app.tickets[ticket.id];
   }
 
   /** A ticket « À faire » goes with its description, and an imported one is not brought back by the next import. */
   function confirmRemove() {
-    const from = t.external ? ` Il ne sera plus importé depuis ${shortName(t.external.service)}.` : '';
     app.modal = {
       kind: 'confirm',
-      title: `Supprimer ${t.key} ?`,
-      body: `Le ticket et sa description sont supprimés.${from}`,
-      confirm: 'Supprimer',
+      title: t('board.card.removeTitle', { key: ticket.key }),
+      body: ticket.external
+        ? t('board.card.removeBodyImported', { service: shortName(ticket.external.service) })
+        : t('board.card.removeBody'),
+      confirm: t('common.delete'),
       danger: true,
       onConfirm: remove,
     };
@@ -114,26 +116,26 @@
     // A text field keeps the browser's menu (copy, paste), as in main.ts.
     if ((e.target as Element).closest('input, textarea')) return;
     const items: MenuItem[] =
-      t.column === 'todo'
+      ticket.column === 'todo'
         ? [
-            { label: 'Modifier', onClick: onedit },
-            { label: 'Passer en tête', onClick: () => app.run(api.ticketPrioritize(t.id)) },
+            { label: t('common.edit'), onClick: onedit },
+            { label: t('board.card.prioritize'), onClick: () => app.run(api.ticketPrioritize(ticket.id)) },
             { label: '', separator: true },
-            { label: 'Supprimer', danger: true, onClick: confirmRemove },
+            { label: t('common.delete'), danger: true, onClick: confirmRemove },
           ]
         : [
-            { label: "Ouvrir l'agent", onClick: open, disabled: !agent },
+            { label: t('board.card.openAgent'), onClick: open, disabled: !agent },
             { label: '', separator: true },
             {
-              label: 'Supprimer',
+              label: t('common.delete'),
               danger: true,
               onClick: () => {
-                if (t.column === 'done') return remove();
+                if (ticket.column === 'done') return remove();
                 app.modal = {
                   kind: 'confirm',
-                  title: `Supprimer le ticket ${t.key} ?`,
-                  body: 'Son agent est archivé, avec son worktree.',
-                  confirm: 'Supprimer',
+                  title: t('board.card.removeRunningTitle', { key: ticket.key }),
+                  body: t('board.card.removeRunningBody'),
+                  confirm: t('common.delete'),
                   danger: true,
                   onConfirm: remove,
                 };
@@ -160,19 +162,19 @@
   function approve() {
     const send = () => {
       // The test launches stop first (the backend does it too): their ends are no crashes.
-      if (t.agentId) stopTests(t.agentId);
-      return app.run(api.ticketApprove(t.id));
+      if (ticket.agentId) stopTests(ticket.agentId);
+      return app.run(api.ticketApprove(ticket.id));
     };
     // A merge that removes the worktree takes the files of the agent open in the editor with it.
-    const lost = s.action === 'merge' && s.cleanup && t.agentId ? buffers.unsavedIn(project.id, t.agentId) : 0;
+    const lost = s.action === 'merge' && s.cleanup && ticket.agentId ? buffers.unsavedIn(project.id, ticket.agentId) : 0;
     if (!lost) {
       send();
       return;
     }
     app.modal = {
       kind: 'confirm',
-      title: `Valider ${t.key} ?`,
-      body: 'Le worktree de son agent est supprimé après le merge.' + lossNotice(lost),
+      title: t('board.card.approveTitle', { key: ticket.key }),
+      body: t('board.card.approveBody') + lossNotice(lost),
       confirm: APPROVE_LABEL.merge,
       danger: true,
       onConfirm: send,
@@ -180,7 +182,7 @@
   }
 
   async function reject(comment: string) {
-    const sent = await app.run(api.ticketReject(t.id, comment).then(() => true));
+    const sent = await app.run(api.ticketReject(ticket.id, comment).then(() => true));
     if (sent) rejecting = false;
   }
 </script>
@@ -188,149 +190,163 @@
 <div
   bind:this={card}
   class="card"
-  class:done={t.column === 'done'}
+  class:done={ticket.column === 'done'}
   class:waiting
   role="button"
   tabindex="0"
-  aria-label={`${t.key} ${t.title}`}
+  aria-label={`${ticket.key} ${ticket.title}`}
   onclick={open}
   onkeydown={key}
   oncontextmenu={contextMenu}
 >
   <div class="top">
-    {#if t.external}
-      {@const svc = SERVICES[t.external.service]}
+    {#if ticket.external}
+      {@const svc = SERVICES[ticket.external.service]}
       <button
         class="ext"
-        title={`Ouvrir ${t.external.key} dans ${svc.name}`}
-        aria-label={`Ouvrir ${t.external.key} dans ${svc.name}`}
-        onclick={(e) => act(e, () => app.run(openUrl(t.external!.url)))}
+        title={t('board.card.openExternal', { key: ticket.external.key, service: svc.name })}
+        aria-label={t('board.card.openExternal', { key: ticket.external.key, service: svc.name })}
+        onclick={(e) => act(e, () => app.run(openUrl(ticket.external!.url)))}
         ><span class="svc" style:background={svc.color} style:color={svc.ink} aria-hidden="true">{svc.letter}</span><span class="mono"
-          >{t.external.key}</span
+          >{ticket.external.key}</span
         ></button
       >
-      {#if t.external.error}<button
+      {#if ticket.external.error}<button
           bind:this={warn}
           class="sync-err"
-          aria-label={`Synchro avec ${svc.name} : ${t.external.error}`}
+          aria-label={t('board.card.syncError', { service: svc.name, error: ticket.external.error })}
           aria-expanded={syncOpen}
-          title={t.external.error}
+          title={ticket.external.error}
           onclick={(e) => act(e, () => (syncOpen = !syncOpen))}>⚠</button
         >{/if}
     {/if}
-    <span class="key mono">{t.key}</span>
+    <span class="key mono">{ticket.key}</span>
     <div style="flex:1"></div>
-    {#if t.column === 'doing'}<span class="loop mono">Boucle {t.iteration}/{t.maxLoops}</span>{/if}
-    {#if t.partial && (t.column === 'review' || t.column === 'done')}<span class="partial">Objectif partiel</span>{/if}
+    {#if ticket.column === 'doing'}<span class="loop mono"
+        >{t('board.card.loop', { iteration: ticket.iteration, max: ticket.maxLoops })}</span
+      >{/if}
+    {#if ticket.partial && (ticket.column === 'review' || ticket.column === 'done')}<span class="partial">{t('board.card.partial')}</span
+      >{/if}
   </div>
-  {#if t.external?.error && syncOpen}
+  {#if ticket.external?.error && syncOpen}
     <div class="sync" bind:this={panel}>
-      <span class="why">{t.external.error}</span>
+      <span class="why">{ticket.external.error}</span>
       <div class="row">
         <!-- Not disabled while it runs: the focus stays on it (resync asks once). -->
-        <button class="small" aria-disabled={resyncing} onclick={(e) => act(e, resync)}>Resynchroniser</button>
+        <button class="small" aria-disabled={resyncing} onclick={(e) => act(e, resync)}>{t('board.card.resync')}</button>
       </div>
     </div>
   {/if}
-  <span class="title">{t.title}</span>
+  <span class="title">{ticket.title}</span>
 
-  {#if t.column === 'done' && t.outcome}
-    {#if t.outcomeUrl}
-      <button class="outcome mono link" onclick={(e) => act(e, () => app.run(openUrl(t.outcomeUrl!)))}>{t.outcome}</button>
+  {#if ticket.column === 'done' && ticket.outcome}
+    {#if ticket.outcomeUrl}
+      <button class="outcome mono link" onclick={(e) => act(e, () => app.run(openUrl(ticket.outcomeUrl!)))}>{ticket.outcome}</button>
     {:else}
-      <span class="outcome mono">{t.outcome}</span>
+      <span class="outcome mono">{ticket.outcome}</span>
     {/if}
   {/if}
 
   {#snippet stepList()}
-    <ul class="steps" aria-label="Avancement">
+    <ul class="steps" aria-label={t('board.card.progressLabel')}>
       {#each steps as p, i (i)}<li>{p}</li>{/each}
     </ul>
   {/snippet}
 
-  {#if t.column === 'review' && steps.length}
+  {#if ticket.column === 'review' && steps.length}
     <div class="prog">
-      <span class="h">Ce qui a été fait</span>
+      <span class="h">{t('board.card.doneHeading')}</span>
       {@render stepList()}
     </div>
   {/if}
 
-  {#if t.column === 'doing' || t.column === 'review'}
-    <ul class="crit" aria-label="Critères">
-      {#each t.criteria as c, i (i)}
+  {#if ticket.column === 'doing' || ticket.column === 'review'}
+    <ul class="crit" aria-label={t('board.card.criteriaLabel')}>
+      {#each ticket.criteria as c, i (i)}
         <li class:ok={c.ok} title={c.note || undefined}><span class="mark">{c.ok ? '✓' : '○'}</span><span>{c.text}</span></li>
       {/each}
     </ul>
   {/if}
 
-  {#if t.column === 'doing'}
-    <div class="bar" role="progressbar" aria-label="Critères atteints" aria-valuemin={0} aria-valuemax={total} aria-valuenow={met}>
+  {#if ticket.column === 'doing'}
+    <div
+      class="bar"
+      role="progressbar"
+      aria-label={t('board.card.criteriaMetLabel')}
+      aria-valuemin={0}
+      aria-valuemax={total}
+      aria-valuenow={met}
+    >
       <div style:width={`${total ? (met / total) * 100 : 0}%`}></div>
     </div>
     {#if steps.length}
       <div class="prog">
         {@render stepList()}
-        {#if hidden > 0}<span class="more mono" title={plural(hidden, 'autre élément', 'autres éléments')}>+{hidden}</span>{/if}
+        {#if hidden > 0}<span class="more mono" title={t('board.card.moreSteps', { count: hidden })}>+{hidden}</span>{/if}
       </div>
     {/if}
-    {#if !t.blocked}
+    {#if !ticket.blocked}
       {#if waiting}
-        <div class="act wait"><span class="pulse" style="width:7px;height:7px"></span>Question en attente de ta réponse</div>
+        <div class="act wait"><span class="pulse" style="width:7px;height:7px"></span>{t('board.card.questionWaiting')}</div>
       {:else if agent?.resumeAt}
-        <div class="act">Reprise {fWhen(agent.resumeAt, app.now)}</div>
+        <div class="act">{t('board.card.resumes', { when: fWhen(agent.resumeAt, app.now) })}</div>
       {:else if agent?.setup}
         <div class="act" title={agent.setup}>
-          <span class="dots"><span></span><span></span><span></span></span>Prépare le worktree · {agent.setup}
+          <span class="dots"><span></span><span></span><span></span></span>{t('board.card.settingUp', { step: agent.setup })}
         </div>
       {:else if agent?.status === 'running'}
-        <div class="act"><span class="dots"><span></span><span></span><span></span></span>{agent.activity ?? 'Réfléchit'}</div>
+        <div class="act"><span class="dots"><span></span><span></span><span></span></span>{agent.activity ?? t('board.card.thinking')}</div>
       {/if}
     {/if}
   {/if}
 
-  {#if t.column === 'todo'}
-    <span class="meta">{plural(total, 'critère', 'critères')} · max {t.maxLoops} boucles</span>
+  {#if ticket.column === 'todo'}
+    <span class="meta">{t('board.card.todoMeta', { count: total, max: ticket.maxLoops })}</span>
     <div class="row">
-      <span class="k">{waitLabel(t, queueIndex, s, busyCount, issue, app.autopilotPause, awaited)}</span>
+      <span class="k">{waitLabel(ticket, queueIndex, s, busyCount, issue, app.autopilotPause, awaited)}</span>
       <div style="flex:1"></div>
-      {#if canStart(t, s, busyCount, quota, issue, app.autopilotPause)}
-        <button class="small" onclick={(e) => act(e, launch)}>Lancer</button>
+      {#if canStart(ticket, s, busyCount, quota, issue, app.autopilotPause)}
+        <button class="small" onclick={(e) => act(e, launch)}>{t('board.card.launch')}</button>
       {/if}
     </div>
   {/if}
 
-  {#if (agent?.recipe || agent?.isola) && (t.column === 'doing' || t.column === 'review')}
+  {#if (agent?.recipe || agent?.isola) && (ticket.column === 'doing' || ticket.column === 'review')}
     {@const a = agent}
     {@const address = flows.all[a.id]?.opened ?? openAddress(a)}
     {#if anyRunning(a.id)}
       <div class="row actions">
-        <button class="small" onclick={(e) => act(e, () => stopTests(a.id))}>■ Arrêter</button>
-        {#if address}<button class="small" onclick={(e) => act(e, () => app.run(openUrl(address)))}>Ouvrir</button>{/if}
+        <button class="small" onclick={(e) => act(e, () => stopTests(a.id))}>■ {t('board.card.stopTests')}</button>
+        {#if address}<button class="small" onclick={(e) => act(e, () => app.run(openUrl(address)))}>{t('common.open')}</button>{/if}
       </div>
-    {:else if t.column === 'review' && !t.step}
-      <div class="row"><button class="small" onclick={(e) => act(e, () => testAgent(a, project))}>▶ Tester</button></div>
+    {:else if ticket.column === 'review' && !ticket.step}
+      <div class="row"><button class="small" onclick={(e) => act(e, () => testAgent(a, project))}>▶ {t('board.card.test')}</button></div>
     {/if}
   {/if}
 
-  {#if t.step}
-    <div class="act"><span class="dots"><span></span><span></span><span></span></span>{t.step}</div>
+  {#if ticket.step}
+    <div class="act"><span class="dots"><span></span><span></span><span></span></span>{ticket.step}</div>
   {/if}
 
-  {#if t.blocked}
-    <div class="blocked" class:conflict={t.conflict}>
-      <span class="why">{t.blocked}</span>
-      {#if t.column === 'doing'}
-        <div class="row"><button class="small" onclick={(e) => act(e, () => app.run(api.ticketResume(t.id)))}>Reprendre</button></div>
-      {:else if t.conflict}
+  {#if ticket.blocked}
+    <div class="blocked" class:conflict={ticket.conflict}>
+      <span class="why">{ticket.blocked}</span>
+      {#if ticket.column === 'doing'}
+        <div class="row">
+          <button class="small" onclick={(e) => act(e, () => app.run(api.ticketResume(ticket.id)))}>{t('board.card.resume')}</button>
+        </div>
+      {:else if ticket.conflict}
         <div class="row actions">
-          <button class="small" onclick={(e) => act(e, () => app.run(api.ticketResolveConflict(t.id)))}>L'agent résout</button>
-          <button class="small" onclick={(e) => act(e, () => app.run(api.ticketDismiss(t.id)))}>Annuler</button>
+          <button class="small" onclick={(e) => act(e, () => app.run(api.ticketResolveConflict(ticket.id)))}
+            >{t('board.card.agentResolves')}</button
+          >
+          <button class="small" onclick={(e) => act(e, () => app.run(api.ticketDismiss(ticket.id)))}>{t('common.cancel')}</button>
         </div>
       {/if}
     </div>
   {/if}
 
-  {#if t.column !== 'todo' && (agent || t.column === 'done')}
+  {#if ticket.column !== 'todo' && (agent || ticket.column === 'done')}
     <div class="row foot">
       {#if agent}<span class="who mono"
           ><StatusDot status={agent.status} size={7} /><span class="name" title={agent.name}>{agent.name}</span></span
@@ -339,23 +355,23 @@
         <div class="figures">
           {#if used}
             <span class="k mono" title={used.estimated ? ESTIMATE_HINT : undefined}
-              ><span class="sr">Coût du ticket </span>{fSpentUsd(used)}</span
+              ><span class="sr">{t('board.card.costLabel')}{' '}</span>{fSpentUsd(used)}</span
             >
           {/if}
-          {#if t.column === 'review'}<span class="k mono">{met}/{total} critères</span>{/if}
-          {#if t.column === 'done'}<span class="k mono">{doneMeta(t)}</span>{/if}
+          {#if ticket.column === 'review'}<span class="k mono">{t('board.card.criteriaMet', { count: total, met, total })}</span>{/if}
+          {#if ticket.column === 'done'}<span class="k mono">{doneMeta(ticket)}</span>{/if}
         </div>
       {/if}
     </div>
   {/if}
 
-  {#if t.column === 'review' && !t.step && !t.conflict}
+  {#if ticket.column === 'review' && !ticket.step && !ticket.conflict}
     {#if rejecting}
       <RejectForm onsubmit={reject} oncancel={() => (rejecting = false)} />
     {:else}
       <div class="row actions">
-        <button class="approve" onclick={(e) => act(e, approve)}>{t.blocked ? 'Réessayer' : APPROVE_LABEL[s.action]}</button>
-        <button class="small grow" onclick={(e) => act(e, () => (rejecting = true))}>Renvoyer</button>
+        <button class="approve" onclick={(e) => act(e, approve)}>{ticket.blocked ? t('common.retry') : APPROVE_LABEL[s.action]}</button>
+        <button class="small grow" onclick={(e) => act(e, () => (rejecting = true))}>{t('board.card.sendBack')}</button>
       </div>
     {/if}
   {/if}

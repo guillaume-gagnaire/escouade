@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Report } from '../../lib/escouade';
+  import { t } from '../../lib/i18n';
   import { app } from '../../lib/state.svelte';
   import { canTest, testAgent } from '../../lib/test-launch.svelte';
   import type { Agent, Criterion } from '../../lib/types';
@@ -13,43 +14,43 @@
 <div class="report">
   {#if report.criteria}
     <div class="head">
-      <span class="t">Bilan des critères</span>
+      <span class="t">{t('board.report.title')}</span>
       <span class="n mono">{met}/{report.criteria.length}</span>
     </div>
-    <ul aria-label="Bilan des critères">
+    <ul aria-label={t('board.report.title')}>
       {#each report.criteria as c, i (i)}
         <li class:ok={c.ok}>
-          <span class="mark">{c.ok ? '✓' : '○'}</span><span class="text">{criteria[c.n - 1]?.text ?? `Critère ${c.n}`}</span
+          <span class="mark">{c.ok ? '✓' : '○'}</span><span class="text"
+            >{criteria[c.n - 1]?.text ?? t('board.report.criterion', { n: c.n })}</span
           >{#if c.note}<span class="note">{c.note}</span>{/if}
         </li>
       {/each}
     </ul>
   {/if}
   {#if report.progress}
-    <div class="head"><span class="t">Ce qui a été fait</span></div>
-    <ul class="steps" aria-label="Avancement">
+    <div class="head"><span class="t">{t('board.report.doneHeading')}</span></div>
+    <ul class="steps" aria-label={t('board.report.progressLabel')}>
       {#each report.progress as p, i (i)}
         <li>{p}</li>
       {/each}
     </ul>
   {/if}
   {#if report.recipe}
-    <div class="head"><span class="t">Lancement de test</span></div>
+    <div class="head"><span class="t">{t('board.report.testLaunch')}</span></div>
     <!-- A recipe has a step at least: a preparation alone shows as such. -->
-    <ul aria-label="Lancement de test">
+    <ul aria-label={t('board.report.testLaunch')}>
       {#each report.recipe.prepare as s, i (i)}
-        <li><span class="mono name">Préparation</span><span class="mono cmd">{s.command}</span></li>
+        <li><span class="mono name">{t('board.report.prepare')}</span><span class="mono cmd">{s.command}</span></li>
       {/each}
       {#each report.recipe.processes as p, i (i)}
         <li>
-          <span class="mono name">{p.name || `processus ${i + 1}`}</span><span class="mono cmd">{p.command}</span>{#if p.url}<span
-              class="mono url">{p.url}</span
-            >{/if}
+          <span class="mono name">{p.name || t('board.report.process', { n: i + 1 })}</span><span class="mono cmd">{p.command}</span
+          >{#if p.url}<span class="mono url">{p.url}</span>{/if}
         </li>
       {/each}
     </ul>
     {#if project && canTest(agent)}
-      <button class="btn test" onclick={() => testAgent(agent, project)}>▶ Tester</button>
+      <button class="btn test" onclick={() => testAgent(agent, project)}>▶ {t('board.report.test')}</button>
     {/if}
   {/if}
 </div>

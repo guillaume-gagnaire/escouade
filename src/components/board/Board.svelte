@@ -1,6 +1,6 @@
 <script lang="ts">
   import { busy, COLUMNS, columnTickets, pauseLabel, placesLabel, quotaUntil, settingsSummary } from '../../lib/board';
-  import { plural } from '../../lib/format';
+  import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
   import type { Project } from '../../lib/types';
@@ -8,17 +8,15 @@
 
   let { project: given }: { project: Project } = $props();
 
-  const MISSING = 'Claude Code introuvable — aucun ticket ne démarre';
-
   // The project as the app holds it now (its board settings change under this view).
   const project = $derived(app.projects.find((p) => p.id === given.id) ?? given);
   const s = $derived(project.board);
-  const tickets = $derived(Object.values(app.tickets).filter((t) => t.projectId === project.id));
+  const tickets = $derived(Object.values(app.tickets).filter((x) => x.projectId === project.id));
   const busyCount = $derived(busy(tickets));
-  const looping = $derived(tickets.filter((t) => t.column === 'doing').length);
+  const looping = $derived(tickets.filter((x) => x.column === 'doing').length);
   const quota = $derived(quotaUntil(Object.values(app.agents)));
   const target = $derived(s.target || app.git[project.id]?.branch || 'main');
-  const sub = $derived(`${project.name} · ${plural(tickets.length, 'ticket', 'tickets')} · ${looping} en boucle`);
+  const sub = $derived(t('board.header.sub', { name: project.name, count: tickets.length, looping }));
   const summary = $derived(settingsSummary(s, target));
   const places = $derived(placesLabel(busyCount, s.maxParallel, quota));
   /** Why no ticket starts from the target branch (no commit yet, or gone), as the backend says. */
@@ -42,7 +40,7 @@
     <div style="flex:1"></div>
     {#if !app.claudeFound}
       <!-- No place is worth showing: nothing starts without Claude Code. -->
-      <span class="places missing" title={MISSING}>{MISSING}</span>
+      <span class="places missing" title={t('board.header.claudeMissing')}>{t('board.header.claudeMissing')}</span>
     {:else if issue}
       <!-- Nor while the target branch cannot start a ticket. -->
       <span class="places missing" title={issue}>{issue}</span>
@@ -54,27 +52,27 @@
     <!-- Its label goes in a narrow window, its icon and its name stay. -->
     <button
       class="imp"
-      aria-label="Importer"
-      title="Importer des tickets de Jira, Trello ou GitHub Issues"
+      aria-label={t('common.import')}
+      title={t('board.header.importTitle')}
       onclick={() => (app.modal = { kind: 'import', projectId: project.id })}
-      ><span class="ic" aria-hidden="true">⤓</span><span class="l">Importer</span></button
+      ><span class="ic" aria-hidden="true">⤓</span><span class="l">{t('common.import')}</span></button
     >
     <!-- Its tooltip holds the summary in full: the summary is cut in a narrow window. -->
     <button
       class="cfg"
-      title={`Réglages du Kanban — ${summary}`}
+      title={t('board.header.settingsTitle', { summary })}
       onclick={() => (app.modal = { kind: 'settings', tab: 'board', projectId: project.id })}
     >
-      <span class="gear">⚙</span><span class="k">Après validation :</span><span class="v mono">{summary}</span>
+      <span class="gear">⚙</span><span class="k">{t('board.header.afterApproval')}</span><span class="v mono">{summary}</span>
     </button>
-    <div class="auto" title="Les tickets « À faire » partent seuls dès qu'une place se libère">
-      <span class="l">{s.autopilot ? 'Pilote auto' : 'Pilote auto · off'}</span>
+    <div class="auto" title={t('board.header.autopilotTitle')}>
+      <span class="l">{s.autopilot ? t('board.header.autopilot') : t('board.header.autopilotOff')}</span>
       <button
         class="switch"
         class:on={s.autopilot}
         role="switch"
         aria-checked={s.autopilot}
-        aria-label="Pilote auto"
+        aria-label={t('board.header.autopilot')}
         onclick={toggleAutopilot}
       ></button>
     </div>
@@ -84,7 +82,7 @@
     <div class="pause" role="status">
       <span class="dot" aria-hidden="true"></span>
       <span class="why" title={paused}>{paused}</span>
-      <button class="resume" onclick={() => app.run(api.autopilotResume())}>Reprendre maintenant</button>
+      <button class="resume" onclick={() => app.run(api.autopilotResume())}>{t('board.header.resumeNow')}</button>
     </div>
   {/if}
   <div class="cols">

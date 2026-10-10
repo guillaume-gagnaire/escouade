@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { t } from '../../lib/i18n';
+
   let { onsubmit, oncancel }: { onsubmit: (comment: string) => void | Promise<void>; oncancel: () => void } = $props();
 
   let comment = $state('');
@@ -21,8 +23,8 @@
   <!-- svelte-ignore a11y_autofocus -->
   <textarea
     rows="3"
-    placeholder="Ce qui ne va pas"
-    aria-label="Ce qui ne va pas"
+    placeholder={t('board.reject.comment')}
+    aria-label={t('board.reject.comment')}
     bind:value={comment}
     autofocus
     onkeydown={(e) => {
@@ -31,8 +33,8 @@
     }}
   ></textarea>
   <div class="row">
-    <button class="btn ghost" onclick={oncancel}>Annuler</button>
-    <button class="btn primary" disabled={!comment.trim() || busy} onclick={submit}>Renvoyer</button>
+    <button class="btn ghost" onclick={oncancel}>{t('common.cancel')}</button>
+    <button class="btn primary" disabled={!comment.trim() || busy} onclick={submit}>{t('board.reject.submit')}</button>
   </div>
 </div>
 
