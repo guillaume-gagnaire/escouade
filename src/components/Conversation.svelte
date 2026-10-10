@@ -234,19 +234,20 @@
 
   // The reader scrolling up leaves the bottom, however close to it: messages rendered as they come
   // into view (content-visibility) resize the content, which must not pull them back. Only the
-  // reader does, but not going down: the wheel down and the keys that scroll down are left out,
-  // every other key counts (a key up, Shift+Tab, whatever a focused element does with it), and a
-  // drag, whose way is not told. Content shrinking under the view, or the message field shrinking
-  // back once a message is sent, moves the view up too, even while the reader wheels down, and the
-  // conversation must go on following.
+  // reader does, but not going down: the wheel down and the keys that scroll down are left out, so
+  // are the modifiers pressed alone (the first keystroke of Ctrl+Entrée or Alt+1…9 answering a card,
+  // which then folds), every other key counts (a key up, Ctrl+Home, Shift+Tab, whatever a focused
+  // element does with it), and a drag, whose way is not told. Content shrinking under the view, or
+  // the message field shrinking back once a message is sent, moves the view up too, even while the
+  // reader wheels down, and the conversation must go on following.
   let readerAt = 0;
   let dragging = false;
   const reading = () => dragging || performance.now() - readerAt < 500;
-  const DOWN_KEYS = new Set(['ArrowDown', 'PageDown', 'End']);
+  const STAYING_KEYS = new Set(['ArrowDown', 'PageDown', 'End', 'Shift', 'Control', 'Alt', 'AltGraph', 'Meta', 'OS', 'Hyper', 'Super']);
   const byReader = (e: WheelEvent | KeyboardEvent) => {
     settling = null;
-    const down = e instanceof WheelEvent ? e.deltaY >= 0 : DOWN_KEYS.has(e.key) || (e.key === ' ' && !e.shiftKey);
-    if (!down) readerAt = performance.now();
+    const stays = e instanceof WheelEvent ? e.deltaY >= 0 : STAYING_KEYS.has(e.key) || (e.key === ' ' && !e.shiftKey);
+    if (!stays) readerAt = performance.now();
   };
   const grab = () => {
     dragging = true;

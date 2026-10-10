@@ -286,23 +286,45 @@ describe('Conversation', () => {
       expect(scroller.scrollTop).toBe(1300);
     });
 
-    const press = (el: HTMLElement, key: string, shiftKey = false) =>
-      el.dispatchEvent(new KeyboardEvent('keydown', { key, shiftKey, bubbles: true }));
+    const press = (el: HTMLElement, key: string, mods: KeyboardEventInit = {}) =>
+      el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, ...mods }));
 
     it.each([
-      ['ArrowUp', false],
-      ['PageUp', false],
-      ['Home', false],
-      [' ', true],
+      ['ArrowUp', {}],
+      ['PageUp', {}],
+      ['Home', {}],
+      ['Home', { ctrlKey: true }],
+      [' ', { shiftKey: true }],
       // A focus move up: the browser brings what gets the focus into view.
-      ['Tab', true],
-    ])('leaves the bottom when the reader presses « %s » (Maj : %s)', async (key, shift) => {
+      ['Tab', { shiftKey: true }],
+    ])('leaves the bottom when the reader presses « %s » %o', async (key, mods) => {
       const { scroller } = setup();
       await frame();
-      press(scroller, key, shift);
+      press(scroller, key, mods);
       layoutMovesTo(scroller, 1300);
       resized.forEach((cb) => cb([]));
       expect(scroller.scrollTop).toBe(1300);
+    });
+
+    // The first keystroke of Ctrl+Entrée or Alt+1…9 answering a card (which then folds to its summary line), with the
+    // focus in the conversation: a modifier pressed alone scrolls nothing.
+    it.each([
+      ['a tool row', (c: HTMLElement) => c.querySelector('[data-item="t1"] .row') as HTMLElement],
+      ['the conversation', (c: HTMLElement) => c.querySelector('.scroll') as HTMLElement],
+    ])('keeps following when the content shrinks just after modifiers pressed alone, the focus on %s', async (_, target) => {
+      const bash = { kind: 'tool', id: 't1', name: 'Bash', input: { command: 'ls' }, status: 'ok', ts: 1 };
+      const { container, scroller } = setup({}, [bash]);
+      await screen.findByText('ls');
+      await frame();
+      const el = target(container);
+      el.focus();
+      const height = grows(scroller);
+      for (const key of ['Control', 'Alt', 'Shift', 'Meta', 'AltGraph']) press(el, key);
+      height(1800);
+      layoutMovesTo(scroller, 1300);
+      height(2400);
+      resized.forEach((cb) => cb([]));
+      expect(scroller.scrollTop).toBe(2400);
     });
 
     it.each(['ArrowDown', 'PageDown', 'End', ' '])(
@@ -770,7 +792,7 @@ describe('Conversation', () => {
             // Shift+Tab in the message field, whose keys are not the conversation's, lands above.
             const field = screen.getByRole('textbox');
             field.focus();
-            press(field, 'Tab', true);
+            press(field, 'Tab', { shiftKey: true });
             screen.getByRole('button', { name: 'Afficher les 80 précédents' }).focus();
             // The browser brings it into view.
             layoutMovesTo(scroller, 0);
