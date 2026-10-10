@@ -17,7 +17,7 @@ use crate::model::UiEvent;
 use crate::paths;
 use anyhow::{anyhow, Context, Result};
 use base64::Engine;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::{Mutex, MutexGuard, RwLock};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::net::{Ipv4Addr, TcpListener};
@@ -94,16 +94,23 @@ impl Tokens {
     }
 }
 
+/// `McpServer::sync` held: a start or a stop is done under it, so none comes between the
+/// settings a sync read and what it does, nor between a stop and the port it closes.
+type SyncHeld<'a> = MutexGuard<'a, ()>;
+
 /// The MCP server of the app, held by its core.
 pub struct McpServer<R: Runtime> {
     core: Weak<Core<R>>,
-    /// One `Core::sync_mcp` at a time, from the settings it reads to the start or stop it does.
+    /// One start or stop at a time, and one `Core::sync_mcp` from the settings it reads to the
+    /// start or stop it does.
     sync: Mutex<()>,
     running: Mutex<Option<Running>>,
     /// Why its last start failed, until it starts or is no longer wanted.
     error: Mutex<Option<String>>,
     tokens: Tokens,
     pub activity: activity::Activity,
+    /// What a connection may take, read at each start (tests make them small).
+    limits: Mutex<http::Limits>,
 }
 
 impl<R: Runtime> McpServer<R> {
@@ -115,15 +122,29 @@ impl<R: Runtime> McpServer<R> {
             error: Mutex::new(None),
             tokens: Tokens::default(),
             activity: activity::Activity::default(),
+            limits: Mutex::new(http::Limits::default()),
         }
     }
 
     /// Listens on 127.0.0.1:`port` (another free port of `PORTS` when it is taken, or 0), and
-    /// gives the port it listens on. Already listening: its port.
+    /// gives the port it listens on. Already listening: its port. Never once the app quits.
+    // The app starts it through `Core::sync_mcp` (which holds `sync` from the settings it reads),
+    // the tests directly.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn start(&self, port: u16) -> Result<u16> {
+        let held = self.sync.lock();
+        self.start_held(&held, port)
+    }
+
+    fn start_held(&self, _held: &SyncHeld<'_>, port: u16) -> Result<u16> {
         let mut running = self.running.lock();
         if let Some(r) = &*running {
             return Ok(r.port);
+        }
+        // A sync that read the settings just before the app quit: `shutdown` has stopped it, or
+        // waits for this one to stop it.
+        if self.quitting() {
+            return Err(anyhow!("the app is stopping"));
         }
         let launched = self.launch(port);
         *self.error.lock() = launched.as_ref().err().map(|e| format!("{e:#}"));
@@ -137,6 +158,12 @@ impl<R: Runtime> McpServer<R> {
         port
     }
 
+    fn quitting(&self) -> bool {
+        self.core
+            .upgrade()
+            .is_none_or(|c| c.quitting.load(Ordering::Acquire))
+    }
+
     fn launch(&self, port: u16) -> Result<Running> {
         let core = self
             .core
@@ -148,8 +175,11 @@ impl<R: Runtime> McpServer<R> {
         let (stop, stopped) = watch::channel(false);
         let (closed_tx, closed) = mpsc::sync_channel(1);
         let gate = http::Gate::new(port, std::sync::Arc::downgrade(&core));
+        let limits = self.limits.lock().clone();
+        // On the app's own runtime: never the single-threaded one of a caller, which a stop's
+        // wait would block (`wait_closed`).
         tauri::async_runtime::spawn(async move {
-            http::serve(listener, gate, stopped).await;
+            http::serve(listener, gate, stopped, limits).await;
             let _ = closed_tx.send(());
         });
         log::info!("mcp: listening on 127.0.0.1:{port}");
@@ -157,13 +187,19 @@ impl<R: Runtime> McpServer<R> {
     }
 
     /// Stops listening, once the port is closed (`STOP_WAIT` at most): a client is refused from
-    /// then on. The agents' tokens stay valid for its next start.
+    /// then on. The agents' tokens stay valid for its next start. Waits for a start or a sync
+    /// under way.
     pub fn stop(&self) {
+        let held = self.sync.lock();
+        self.stop_held(&held);
+    }
+
+    fn stop_held(&self, _held: &SyncHeld<'_>) {
         let running = self.running.lock().take();
         let had_error = self.error.lock().take().is_some();
         if let Some(r) = running {
             let _ = r.stop.send(true);
-            if r.closed.recv_timeout(STOP_WAIT).is_err() {
+            if !wait_closed(&r.closed) {
                 log::warn!("mcp: the server did not say it stopped");
             }
             log::info!("mcp: stopped (port {})", r.port);
@@ -194,9 +230,14 @@ impl<R: Runtime> McpServer<R> {
     }
 
     /// The token of Claude outside Escouade: read from the keychain once (made at the first need,
-    /// `secrets::mcp_token`).
+    /// `secrets::mcp_token`). Two first needs at once get the same one.
     pub fn external_token(&self) -> Result<String> {
         if let Some(t) = &*self.tokens.external.read() {
+            return Ok(t.clone());
+        }
+        // Held from the read to the cache: a second caller waits for the token the first makes.
+        let mut kept = self.tokens.external.write();
+        if let Some(t) = &*kept {
             return Ok(t.clone());
         }
         let core = self
@@ -210,7 +251,28 @@ impl<R: Runtime> McpServer<R> {
                     "The MCP server’s token could not be kept"
                 )
             })?;
-        *self.tokens.external.write() = Some(token.clone());
+        *kept = Some(token.clone());
+        Ok(token)
+    }
+
+    /// A new token for Claude outside Escouade in place of the one it had (« Désactiver change le
+    /// jeton »): the old one is refused at once, and forgotten by the keychain and the file.
+    // Allowed unused until the window's switch (M5) calls it (then drop the allow).
+    #[allow(dead_code)]
+    pub fn renew_external_token(&self) -> Result<String> {
+        let mut kept = self.tokens.external.write();
+        let core = self
+            .core
+            .upgrade()
+            .ok_or_else(|| anyhow!("the app is stopping"))?;
+        let token =
+            secrets::renew_mcp_token(&*core.secrets, &core.data, new_token).with_context(|| {
+                tr!(
+                    "Le jeton du serveur MCP n’a pas pu être gardé",
+                    "The MCP server’s token could not be kept"
+                )
+            })?;
+        *kept = Some(token.clone());
         Ok(token)
     }
 
@@ -240,12 +302,25 @@ impl<R: Runtime> McpServer<R> {
     }
 }
 
-/// 32 random bytes in base64url (43 characters): two v4 UUIDs, 244 of their bits from the
-/// system's random generator.
+/// Waits until the accept loop says it closed the port (`STOP_WAIT` at most); false when it did
+/// not say so. On a worker of a multi-threaded runtime (an async command, a tool), the wait first
+/// hands the worker's other tasks to another one, the accept loop among them maybe. Elsewhere (a
+/// thread of its own, a single-threaded runtime) it blocks: the loop runs on the app's runtime.
+fn wait_closed(closed: &mpsc::Receiver<()>) -> bool {
+    use tokio::runtime::{Handle, RuntimeFlavor};
+    let wait = || closed.recv_timeout(STOP_WAIT).is_ok();
+    match Handle::try_current() {
+        Ok(h) if h.runtime_flavor() == RuntimeFlavor::MultiThread => {
+            tokio::task::block_in_place(wait)
+        }
+        _ => wait(),
+    }
+}
+
+/// 32 bytes from the system's random generator, in base64url (43 characters).
 fn new_token() -> String {
     let mut bytes = [0u8; 32];
-    bytes[..16].copy_from_slice(uuid::Uuid::new_v4().as_bytes());
-    bytes[16..].copy_from_slice(uuid::Uuid::new_v4().as_bytes());
+    getrandom::fill(&mut bytes).expect("the system's random generator");
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes)
 }
 
@@ -281,20 +356,21 @@ impl<R: Runtime> Core<R> {
     /// The MCP server is wanted: « Claude peut piloter Escouade », or a project whose agents may
     /// use Escouade.
     pub fn mcp_wanted(&self) -> bool {
-        self.settings.read().mcp_enabled
-            || self.projects.read().iter().any(|p| p.agents_use_escouade)
+        // One lock at a time.
+        let enabled = self.settings.read().mcp_enabled;
+        enabled || self.projects.read().iter().any(|p| p.agents_use_escouade)
     }
 
     /// Starts or stops the MCP server as the settings want it (never once the app quits). A port
     /// chosen in place of the one saved (none yet, or taken) is saved.
     pub fn sync_mcp(&self) {
-        let _one = self.mcp.sync.lock();
+        let held = self.mcp.sync.lock();
         if !self.mcp_wanted() || self.quitting.load(Ordering::Acquire) {
-            self.mcp.stop();
+            self.mcp.stop_held(&held);
             return;
         }
         let saved = self.settings.read().mcp_port;
-        match self.mcp.start(saved) {
+        match self.mcp.start_held(&held, saved) {
             Ok(port) if port != saved => {
                 if let Err(e) = self.keep_mcp_port(port) {
                     log::error!("mcp: port {port} not saved: {e:#}");

@@ -65,6 +65,13 @@ impl Activity {
     pub fn entries(&self) -> Vec<ActivityEntry> {
         self.entries.lock().iter().cloned().collect()
     }
+
+    /// « Effacer »: no entry left.
+    // Allowed unused until the window's activity section (M5) calls it (then drop the allow).
+    #[allow(dead_code)]
+    pub fn clear(&self) {
+        self.entries.lock().clear();
+    }
 }
 
 /// Logs what the server was asked and how it ended, and tells the window. `caller`: None for a

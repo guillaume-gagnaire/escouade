@@ -11,7 +11,7 @@ use hyper::body::{Body, Bytes, Frame, Incoming, SizeHint};
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::{header, Request, Response, StatusCode};
-use hyper_util::rt::TokioIo;
+use hyper_util::rt::{TokioIo, TokioTimer};
 use rmcp::transport::streamable_http_server::session::never::NeverSessionManager;
 use rmcp::transport::{StreamableHttpServerConfig, StreamableHttpService};
 use std::convert::Infallible;
@@ -20,10 +20,32 @@ use std::sync::{Arc, Weak};
 use std::task::{Context, Poll};
 use std::time::Duration;
 use tauri::Runtime;
-use tokio::sync::watch;
+use tokio::sync::{watch, Semaphore};
 
 /// How long a connection open when the server stops may finish the request it is answering.
 const DRAIN: Duration = Duration::from_secs(5);
+
+/// What the clients may take of the server: a local program, the token unknown to it, could
+/// otherwise hold it with connections that never end their request.
+#[derive(Debug, Clone)]
+pub(super) struct Limits {
+    /// How long a connection has to send a request's headers (also how long it may stay idle
+    /// between two requests): then it is closed.
+    pub header_read: Duration,
+    /// Connections open at once; the next ones wait (the system queues them) until one closes.
+    pub connections: usize,
+}
+
+impl Default for Limits {
+    fn default() -> Self {
+        Self {
+            // A client opens a connection to send its request at once.
+            header_read: Duration::from_secs(10),
+            // Each Claude Code (a terminal, every agent) keeps one or two open.
+            connections: 64,
+        }
+    }
+}
 
 /// The guards and the MCP service behind them, for the server listening on `port`.
 pub(super) struct Gate<R: Runtime> {
@@ -35,6 +57,8 @@ pub(super) struct Gate<R: Runtime> {
 /// Why a request was refused before rmcp.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Refusal {
+    /// It has no `Host` (and no absolute URI).
+    NoHost,
     /// Its `Host` (shown) is not the server's.
     Host(String),
     /// It has an `Origin` (shown): a browser's page sent it.
@@ -48,7 +72,7 @@ enum Refusal {
 impl Refusal {
     fn status(&self) -> StatusCode {
         match self {
-            Refusal::Host(_) | Refusal::Origin(_) => StatusCode::FORBIDDEN,
+            Refusal::NoHost | Refusal::Host(_) | Refusal::Origin(_) => StatusCode::FORBIDDEN,
             Refusal::NoToken | Refusal::UnknownToken => StatusCode::UNAUTHORIZED,
             Refusal::Path(_) => StatusCode::NOT_FOUND,
         }
@@ -57,6 +81,10 @@ impl Refusal {
     /// What the activity log and the answer say.
     fn message(&self) -> String {
         match self {
+            Refusal::NoHost => tr!(
+                "Requête refusée : pas d’en-tête Host",
+                "Request refused: no Host header"
+            ),
             Refusal::Host(host) => tr!(
                 "Requête refusée : en-tête Host inattendu ({host})",
                 "Request refused: unexpected Host header ({host})"
@@ -142,11 +170,16 @@ impl<R: Runtime> Gate<R> {
         req: &Request<Incoming>,
     ) -> Result<Caller, (Option<Caller>, Refusal)> {
         let headers = req.headers();
-        let host = headers.get(header::HOST).map(shown).unwrap_or_default();
+        let host = headers.get(header::HOST).map(shown);
         // An absolute URI (`POST http://…/mcp`) names the host in place of the header.
         let authority = req.uri().authority().map(|a| a.as_str().to_string());
-        if !self.is_mine(&host) || authority.as_deref().is_some_and(|a| !self.is_mine(a)) {
-            return Err((None, Refusal::Host(authority.unwrap_or(host))));
+        if let Some(a) = authority.as_deref().filter(|a| !self.is_mine(a)) {
+            return Err((None, Refusal::Host(clip(a))));
+        }
+        match host {
+            None => return Err((None, Refusal::NoHost)),
+            Some(h) if !self.is_mine(&h) => return Err((None, Refusal::Host(h))),
+            Some(_) => {}
         }
         if let Some(origin) = headers.get(header::ORIGIN) {
             return Err((None, Refusal::Origin(shown(origin))));
@@ -235,11 +268,13 @@ impl Body for Reply {
 
 /// Answers on `listener` until `stop` says so (or its sender goes), then closes it: from then on
 /// a connection is refused. The connections open finish the request they are answering
-/// (`DRAIN` at most) and close.
+/// (`DRAIN` at most) and close. No more than `limits.connections` at once, each closed when it
+/// does not send its headers in time.
 pub(super) async fn serve<R: Runtime>(
     listener: std::net::TcpListener,
     gate: Gate<R>,
     mut stop: watch::Receiver<bool>,
+    limits: Limits,
 ) {
     let listener = match listener
         .set_nonblocking(true)
@@ -252,7 +287,17 @@ pub(super) async fn serve<R: Runtime>(
         }
     };
     let gate = Arc::new(gate);
+    let slots = Arc::new(Semaphore::new(limits.connections.max(1)));
     loop {
+        // A free slot before the next connection is taken: beyond, they wait in the system's
+        // queue.
+        let slot = tokio::select! {
+            _ = stop.changed() => break,
+            slot = slots.clone().acquire_owned() => match slot {
+                Ok(slot) => slot,
+                Err(_) => break,
+            },
+        };
         let accepted = tokio::select! {
             _ = stop.changed() => break,
             accepted = listener.accept() => accepted,
@@ -268,12 +313,19 @@ pub(super) async fn serve<R: Runtime>(
         };
         let gate = gate.clone();
         let mut stop = stop.clone();
+        let header_read = limits.header_read;
         tauri::async_runtime::spawn(async move {
+            // Its slot is free again once the connection closes.
+            let _slot = slot;
             let service = service_fn(move |req| {
                 let gate = gate.clone();
                 async move { Ok::<_, Infallible>(gate.answer(req).await) }
             });
-            let conn = http1::Builder::new().serve_connection(TokioIo::new(stream), service);
+            // Without a timer, hyper's timeout on the headers would not apply.
+            let conn = http1::Builder::new()
+                .timer(TokioTimer::new())
+                .header_read_timeout(header_read)
+                .serve_connection(TokioIo::new(stream), service);
             let mut conn = std::pin::pin!(conn);
             tokio::select! {
                 _ = conn.as_mut() => {}
