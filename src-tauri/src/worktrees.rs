@@ -826,7 +826,7 @@ mod tests {
 
     #[test]
     fn the_commands_refused_as_not_plain_are_counted_the_others_left_out_are_not() {
-        let root = test_dir("run-suggest-refused");
+        let root = test_dir("run-suggest-counts");
         std::fs::create_dir_all(root.join("web")).unwrap();
         let answer = serde_json::json!({ "commandes": [
             { "nom": "Web", "commande": "npm run dev", "dossier": "web" },

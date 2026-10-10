@@ -2809,7 +2809,7 @@ async fn claude_reads_the_project_with_read_only_tools_to_suggest_its_launch_com
 
 #[tokio::test]
 async fn launch_commands_that_were_all_refused_are_told_so_and_not_as_nothing_found() {
-    let h = harness("run-suggest-refused");
+    let h = harness("run-suggest-all-refused");
     let (p, _) = h.project(false).await;
     let e = h
         .core
