@@ -4093,15 +4093,13 @@ impl<R: Runtime> Core<R> {
     }
 
     /// `change` made to the quotas, which are then settled and told to the window.
-    fn update_usage(&self, change: impl FnOnce(&mut UsageSnapshot)) {
+    pub(crate) fn update_usage(&self, change: impl FnOnce(&mut UsageSnapshot)) {
         let settings = self.settings.read().clone();
-        let snapshot = {
-            let mut u = self.usage.lock();
-            change(&mut u);
-            u.settle(&settings, now_ms());
-            u.clone()
-        };
-        self.hub.emit(UiEvent::Usage { usage: snapshot });
+        let mut u = self.usage.lock();
+        change(&mut u);
+        u.settle(&settings, now_ms());
+        // Told under the lock: two changes at once reach the window in the order they were made.
+        self.hub.emit(UiEvent::Usage { usage: u.clone() });
     }
 
     /// Every account's quota read again: from a process of the account when one runs
@@ -4166,15 +4164,26 @@ impl<R: Runtime> Core<R> {
         if !account.active {
             return None;
         }
-        {
+        // Noted before asking: two readings at once ask the endpoint once.
+        let before = {
             let mut last = self.last_oauth_call.lock();
             if !usage::oauth_due(last.get(&account.id).copied(), now_ms()) {
                 return None;
             }
-            last.insert(account.id.clone(), now_ms());
-        }
+            last.insert(account.id.clone(), now_ms())
+        };
         let api = self.usage_api.read().clone();
         match usage::read_oauth(settings, &api, &usage::sign_in(account)).await {
+            Ok(usage::Reading::NotSignedIn) => {
+                // The endpoint was not asked: the next reading looks again, so that a sign-in
+                // shows within a minute rather than five.
+                let mut last = self.last_oauth_call.lock();
+                match before {
+                    Some(t) => last.insert(account.id.clone(), t),
+                    None => last.remove(&account.id),
+                };
+                Some(usage::Reading::NotSignedIn)
+            }
             Ok(reading) => Some(reading),
             Err(e) => {
                 log::debug!("usage endpoint, account {}: {e:#}", account.id);

@@ -12,6 +12,7 @@ use crate::core::{AgentOptions, Core, RESUME_MARGIN_MS};
 use crate::core_tests::{commit_change, git, harness, ignore, wt_step, Harness};
 use crate::model::*;
 use crate::tickets::{error_reason, TicketDraft};
+use crate::usage::Reading;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
@@ -1241,11 +1242,11 @@ async fn a_usage_limit_with_no_resume_blocks_its_ticket_and_pauses_the_autopilot
         Some("Erreur : limite d'usage atteinte")
     );
     // As with an API key: no quota window is known, only the pause after the limit holds.
-    {
-        let mut u = h.core.usage.lock();
-        u.five_hour = None;
-        u.seven_day = None;
-    }
+    h.core.update_usage(|u| {
+        let main = u.account_mut("principal");
+        main.five_hour = None;
+        main.seven_day = None;
+    });
     h.core.pause_tick();
     h.wait_board_idle().await;
     assert_eq!(h.ticket(&b.id).column, Column::Todo);
@@ -1276,10 +1277,12 @@ async fn nothing_starts_while_a_window_is_used_past_the_threshold_until_it_reads
     h.agent_that_worked(&p.id).await;
     h.set_settings(|s| s.quota_pause = 95);
     let end = now_ms() + 3_600_000;
-    h.core.usage.lock().seven_day = Some(RateWindow {
+    let week = Some(RateWindow {
         pct: 96.0,
         resets_at: Some(end),
     });
+    h.core
+        .record_usage("principal", Reading::Windows((None, week)));
     let t = h
         .core
         .ticket_create(&p.id, draft("Patienter [ok]", &[], 5))
@@ -1310,10 +1313,12 @@ async fn a_window_past_the_threshold_holds_nothing_back_once_it_ends() {
     let h = harness("tk-quota-window-end");
     let (p, _) = h.project(false).await;
     // Ended already, and the margin after it: it holds nothing back.
-    h.core.usage.lock().five_hour = Some(RateWindow {
+    let ended = Some(RateWindow {
         pct: 100.0,
         resets_at: Some(now_ms() - RESUME_MARGIN_MS - 1_000),
     });
+    h.core
+        .record_usage("principal", Reading::Windows((ended, None)));
     let a = h
         .core
         .ticket_create(&p.id, draft("Tout de suite [ok]", &[], 5))
@@ -1322,10 +1327,12 @@ async fn a_window_past_the_threshold_holds_nothing_back_once_it_ends() {
     h.wait_ticket(&a.id, "to test", |t| t.column == Column::Review)
         .await;
     // Under the threshold (the default 100 %): nothing holds either.
-    h.core.usage.lock().five_hour = Some(RateWindow {
+    let under = Some(RateWindow {
         pct: 96.0,
         resets_at: Some(now_ms() + 60_000),
     });
+    h.core
+        .record_usage("principal", Reading::Windows((under, None)));
     let b = h
         .core
         .ticket_create(&p.id, draft("Aussi [ok]", &[], 5))
@@ -1336,10 +1343,12 @@ async fn a_window_past_the_threshold_holds_nothing_back_once_it_ends() {
     assert!(h.pauses().is_empty(), "{:?}", h.pauses());
     // Used up until a minute from now: the next one waits for its end (every place free), then
     // goes by itself.
-    h.core.usage.lock().five_hour = Some(RateWindow {
+    let full = Some(RateWindow {
         pct: 100.0,
         resets_at: Some(now_ms() + 60_000),
     });
+    h.core
+        .record_usage("principal", Reading::Windows((full, None)));
     let c = h
         .core
         .ticket_create(&p.id, draft("Ensuite [ok]", &[], 5))
@@ -1412,7 +1421,7 @@ async fn a_quota_window_read_before_a_restart_still_holds_the_tickets_back_until
         resets_at: Some(now_ms() - RESUME_MARGIN_MS - 1_000),
     });
     h.core
-        .record_usage("principal", crate::usage::Reading::Windows((ended, week)));
+        .record_usage("principal", Reading::Windows((ended, week)));
     let t = h
         .core
         .ticket_create(&p.id, draft("Patienter [ok]", &[], 5))

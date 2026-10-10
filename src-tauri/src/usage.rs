@@ -98,18 +98,22 @@ pub enum Credentials {
     Missing,
 }
 
-/// The account's sign-in, read-only: `<dir>/.credentials.json`, else on macOS the keychain entry
-/// named `keychain_service`.
+/// The account's sign-in, read-only, where Claude Code reads it: on macOS the keychain entry named
+/// `keychain_service`, `<dir>/.credentials.json` only without one (its « keychain with plaintext
+/// fallback »: a file left behind does not hide the entry); elsewhere the file.
 pub async fn read_credentials(dir: &Path, keychain_service: &str) -> Result<Credentials> {
-    let creds: Value = match tokio::fs::read_to_string(dir.join(".credentials.json")).await {
-        Ok(text) => serde_json::from_str(&text)?,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            match from_keychain(keychain_service).await? {
-                Some(creds) => creds,
-                None => return Ok(Credentials::Missing),
-            }
-        }
-        Err(e) => return Err(e.into()),
+    credentials_from(from_keychain(keychain_service).await?, dir).await
+}
+
+/// The sign-in the keychain entry holds (`keychain`), else the one of `<dir>/.credentials.json`.
+async fn credentials_from(keychain: Option<Value>, dir: &Path) -> Result<Credentials> {
+    let creds: Value = match keychain {
+        Some(creds) => creds,
+        None => match tokio::fs::read_to_string(dir.join(".credentials.json")).await {
+            Ok(text) => serde_json::from_str(&text)?,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Credentials::Missing),
+            Err(e) => return Err(e.into()),
+        },
     };
     let oauth = &creds["claudeAiOauth"];
     let Some(token) = oauth["accessToken"].as_str().filter(|t| !t.is_empty()) else {
@@ -196,17 +200,11 @@ pub fn sign_in_with(
             },
             service: keychain_service(Some(dir)),
         },
-        None => {
-            // The CLAUDE_CONFIG_DIR its processes run with: its own, else the app's.
-            let own = accounts::launch_env(account)
-                .into_iter()
-                .next()
-                .map(|(_, dir)| dir);
-            SignIn {
-                dir: accounts::config_dir_with(account, config_env, home),
-                service: keychain_service(own.as_deref().or(config_env)),
-            }
-        }
+        // The CLAUDE_CONFIG_DIR its processes run with: its own, else the app's.
+        None => SignIn {
+            dir: accounts::config_dir_with(account, config_env, home),
+            service: keychain_service(accounts::own_dir(account).or(config_env)),
+        },
     }
 }
 
@@ -581,6 +579,26 @@ mod tests {
         std::fs::create_dir_all(&broken).unwrap();
         std::fs::write(broken.join(".credentials.json"), "{ pas du json").unwrap();
         assert!(read_credentials(&broken, NO_ENTRY).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn on_macos_the_keychain_entry_comes_before_a_file_left_in_the_folder() {
+        let dir = test_dir("usage-keychain-first");
+        // A file left behind, out of date.
+        credentials(
+            &dir,
+            json!({ "claudeAiOauth": { "accessToken": "tok-file", "expiresAt": now_ms() - 1_000 } }),
+        );
+        let entry = json!({ "claudeAiOauth": { "accessToken": "tok-keychain", "expiresAt": now_ms() + 60_000 } });
+        assert_eq!(
+            credentials_from(Some(entry), &dir).await.unwrap(),
+            Credentials::Token("tok-keychain".into())
+        );
+        // No entry: the file.
+        assert_eq!(
+            credentials_from(None, &dir).await.unwrap(),
+            Credentials::Expired
+        );
     }
 
     #[tokio::test]

@@ -707,10 +707,12 @@ async fn nothing_is_planned_without_a_reset_still_to_come() {
     // A reset already passed (an old reading): retrying would only meet the limit again.
     h.core.plan_resume(&id, Some(now_ms() - 60_000));
     assert_eq!(h.agent(&id).resume_at, None);
-    h.core.usage.lock().five_hour = Some(RateWindow {
+    let full_before = Some(RateWindow {
         pct: 100.0,
         resets_at: Some(now_ms() - 60_000),
     });
+    h.core
+        .record_usage("principal", Reading::Windows((full_before, None)));
     h.core.plan_resume(&id, None);
     assert_eq!(h.agent(&id).resume_at, None);
 }
@@ -4354,6 +4356,25 @@ async fn each_active_account_is_read_with_its_own_sign_in_at_most_every_five_min
     // Again within the five minutes: not asked again.
     h.core.refresh_usage().await;
     assert_eq!(tokens(&server).len(), 1);
+    // Signed in meanwhile: the account that had no sign-in is read at the next reading, not five
+    // minutes later.
+    let creds = json!({ "claudeAiOauth": { "accessToken": "tok-vide", "expiresAt": later } });
+    std::fs::write(
+        h.dir.join("claude-vide").join(".credentials.json"),
+        creds.to_string(),
+    )
+    .unwrap();
+    h.core.refresh_usage().await;
+    assert_eq!(tokens(&server), ["Bearer tok-pro", "Bearer tok-vide"]);
+    let signed = get(&h, "vide");
+    assert_eq!(
+        (
+            signed.connected,
+            signed.reason,
+            signed.five_hour.map(|w| w.pct)
+        ),
+        (true, None, Some(40.0))
+    );
     // Five minutes later, the network down: the last values stay.
     h.core.last_oauth_call.lock().clear();
     *h.core.usage_api.write() = crate::usage::api_from_env();
@@ -4364,6 +4385,28 @@ async fn each_active_account_is_read_with_its_own_sign_in_at_most_every_five_min
         (Some(40.0), true)
     );
     assert_eq!(kept.updated_at, read.updated_at);
+}
+
+#[tokio::test]
+async fn each_account_with_a_running_agent_is_asked_its_quota_by_a_process_of_its_own() {
+    use crate::integrations::fake::FakeServer;
+    let h = harness("accounts-quota-get-usage");
+    let server = FakeServer::start().await;
+    *h.core.usage_api.write() = format!("{}/api/oauth/usage", server.url);
+    let (p, _) = h.project(false).await;
+    let pro = second_account(&h);
+    // Pro out of quota: its processes say 100 %, Principal's 12 %.
+    std::fs::create_dir_all(&pro.config_dir).unwrap();
+    std::fs::write(Path::new(&pro.config_dir).join("fake-limit"), "").unwrap();
+    let main = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    let id = agent_on(&h, &p, "pro").await.id;
+    h.wait("both processes", |h| h.alive(&main) && h.alive(&id))
+        .await;
+    h.core.refresh_usage().await;
+    assert_eq!(five_hour_pct(&h, "pro"), Some(100.0));
+    assert_eq!(five_hour_pct(&h, "principal"), Some(12.0));
+    // Both read from their processes: the endpoint was asked nothing.
+    assert!(server.requests().is_empty(), "{:?}", server.requests());
 }
 
 #[tokio::test]

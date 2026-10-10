@@ -154,8 +154,9 @@ pub fn config_dir_with(account: &Account, env: Option<&str>, home: &Path) -> Pat
     }
 }
 
-/// The account's own folder: none for Principal, whatever its settings say.
-fn own_dir(account: &Account) -> Option<&str> {
+/// The account's own folder, the `CLAUDE_CONFIG_DIR` its processes get: none for Principal,
+/// whatever its settings say.
+pub(crate) fn own_dir(account: &Account) -> Option<&str> {
     let dir = account.config_dir.trim();
     (account.id != PRINCIPAL && !dir.is_empty()).then_some(dir)
 }
