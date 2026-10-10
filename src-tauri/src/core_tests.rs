@@ -3201,7 +3201,7 @@ async fn an_isola_launch_runs_only_the_configuration_the_user_approved() {
         )
         .unwrap_err()
         .to_string();
-    assert_eq!(e, crate::tickets::ISOLA_CONFIG_CHANGED);
+    assert_eq!(e, crate::tickets::Refusal::IsolaConfigChanged.to_string());
     assert_eq!(refused(&h), crate::testlaunch::ISOLA_NOT_APPROVED);
     h.core
         .approve_isola(&id, shown.clone(), String::new())
@@ -3255,7 +3255,7 @@ async fn an_isola_launch_runs_only_the_configuration_the_user_approved() {
         .approve_isola(&id, shown.clone(), "http://elsewhere.test".into())
         .unwrap_err()
         .to_string();
-    assert_eq!(e, crate::tickets::RECIPE_CHANGED);
+    assert_eq!(e, crate::tickets::Refusal::RecipeChanged.to_string());
 }
 
 #[tokio::test]

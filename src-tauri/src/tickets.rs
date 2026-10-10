@@ -5,8 +5,9 @@
 use crate::agent::NotifyKind;
 use crate::board::{self, TurnEnd};
 use crate::claude::{self, ClaudeProcess};
-use crate::core::{AgentOptions, Core};
+use crate::core::{not_a_repo, project_not_found, AgentOptions, Core};
 use crate::git;
+use crate::i18n::{self, Lang};
 use crate::integrations;
 use crate::isola;
 use crate::model::*;
@@ -22,14 +23,152 @@ use tauri::Runtime;
 
 /// Why a ticket "En cours" stops when its agent's automatic resume after the usage limit is gone
 /// (turned off, cancelled, never planned): it would otherwise hold its place forever.
-const QUOTA_LOST: &str = "limite d'usage atteinte";
+pub(crate) fn quota_lost(lang: Lang) -> String {
+    tr_in!(lang, "limite d'usage atteinte", "usage limit reached")
+}
 
 /// The reason a ticket is blocked by an error, on one line (a git error may run over many; the
 /// whole error goes to the log): the contexts the app gave, then git's `fatal:` or `error:` line,
 /// the one that tells why, when there is one; else the first line, as `board::turn_end` does with
 /// an agent's.
 pub(crate) fn error_reason(e: &anyhow::Error) -> String {
-    format!("Erreur : {}", error_line(e))
+    board::error_blocked(i18n::ui(), &error_line(e))
+}
+
+/// The refusals of a ticket's validation and of an agent's test launch, as the window shows them
+/// (in the interface's language when they are told).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Refusal {
+    /// The block when the ticket left its validation (its agent archived or deleted meanwhile).
+    Changed,
+    /// The refusal while the ticket's agent works: its files may be half written.
+    AgentBusy,
+    /// "Renvoyer" refused while the ticket's agent works: the end of that turn would be read as
+    /// the end of the rework.
+    AgentBusyReject,
+    /// An archived agent holds no ports and runs no test launch.
+    Archived,
+    /// Only an agent with a worktree has ports and a test launch.
+    NoWorktree,
+    /// The `.isola.toml` changed between what the user read and their « Lancer ».
+    IsolaConfigChanged,
+    /// The recipe changed between what the user read and their « Lancer ».
+    RecipeChanged,
+    /// No test launch while its ticket is validated: its servers would take the ports its tests
+    /// use.
+    Validating,
+    /// Approving, sending back, dismissing: only a ticket « À tester ».
+    NotInReview,
+    /// A second « Valider » (or « Renvoyer », « L'agent résout ») while the first runs.
+    ApprovingAlready,
+    NoAgent,
+    AgentWithoutWorktree,
+}
+
+impl Refusal {
+    pub fn text(self, lang: Lang) -> String {
+        match self {
+            Refusal::Changed => tr_in!(
+                lang,
+                "Ce ticket a changé pendant sa validation.",
+                "This ticket changed while it was being approved."
+            ),
+            Refusal::AgentBusy => tr_in!(
+                lang,
+                "L'agent de ce ticket travaille encore : attends la fin de son tour pour valider.",
+                "This ticket’s agent is still working: wait for the end of its turn to approve it."
+            ),
+            Refusal::AgentBusyReject => tr_in!(
+                lang,
+                "L'agent de ce ticket travaille encore : attends la fin de son tour pour le renvoyer.",
+                "This ticket’s agent is still working: wait for the end of its turn to send it back."
+            ),
+            Refusal::Archived => tr_in!(
+                lang,
+                "Cet agent est archivé : il n'a pas de lancement de test.",
+                "This agent is archived: it has no test launch."
+            ),
+            Refusal::NoWorktree => tr_in!(
+                lang,
+                "Seul un agent à worktree a un lancement de test.",
+                "Only an agent with a worktree has a test launch."
+            ),
+            Refusal::IsolaConfigChanged => tr_in!(
+                lang,
+                "Le .isola.toml a changé pendant que tu le lisais : relance « ▶ Tester » pour le relire.",
+                "The .isola.toml changed while you were reading it: run “▶ Test” again to read it."
+            ),
+            Refusal::RecipeChanged => tr_in!(
+                lang,
+                "La recette a changé pendant que tu la lisais : relance « ▶ Tester » pour la relire.",
+                "The recipe changed while you were reading it: run “▶ Test” again to read it."
+            ),
+            Refusal::Validating => tr_in!(
+                lang,
+                "Validation en cours : le lancement de test attendra sa fin.",
+                "Approval under way: the test launch will wait until it’s over."
+            ),
+            Refusal::NotInReview => tr_in!(
+                lang,
+                "Ce ticket n'est pas à tester.",
+                "This ticket isn’t in “To review”."
+            ),
+            Refusal::ApprovingAlready => tr_in!(
+                lang,
+                "La validation de ce ticket est déjà en cours.",
+                "This ticket is already being approved."
+            ),
+            Refusal::NoAgent => tr_in!(lang, "Ce ticket n'a pas d'agent.", "This ticket has no agent."),
+            Refusal::AgentWithoutWorktree => tr_in!(
+                lang,
+                "L'agent de ce ticket n'a pas de worktree.",
+                "This ticket’s agent has no worktree."
+            ),
+        }
+    }
+}
+
+impl std::fmt::Display for Refusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.text(i18n::ui()))
+    }
+}
+
+impl std::error::Error for Refusal {}
+
+fn ticket_not_found() -> anyhow::Error {
+    anyhow!(tr!("ticket introuvable", "ticket not found"))
+}
+
+fn title_missing() -> anyhow::Error {
+    anyhow!(tr!(
+        "Un ticket a besoin d'un titre.",
+        "A ticket needs a title."
+    ))
+}
+
+/// The notification of a ticket that reached « À tester », or got blocked (`blocked`, why).
+pub(crate) fn ticket_alert(lang: Lang, key: &str, ready: bool, blocked: &str) -> String {
+    if ready {
+        tr_in!(lang, "{key} prêt à tester", "{key} ready to review")
+    } else {
+        tr_in!(lang, "{key} bloqué : {blocked}", "{key} blocked: {blocked}")
+    }
+}
+
+/// Why a validation stopped on a conflict with `target`: the files named when the user is not
+/// asked (`ask`) what to do.
+pub(crate) fn conflict_reason(lang: Lang, target: &str, files: &[String], ask: bool) -> String {
+    if ask {
+        tr_in!(lang, "Conflit avec {target}", "Conflict with {target}")
+    } else {
+        let files = files.join(", ");
+        board::first_line(&tr_in!(
+            lang,
+            "Conflit avec {target} sur : {files}",
+            "Conflict with {target} on: {files}"
+        ))
+    }
 }
 
 /// An error on one line, as `error_reason` tells it: a failed validation step is blocked with it
@@ -76,7 +215,7 @@ impl<R: Runtime> Core<R> {
             .iter()
             .find(|t| t.id == id)
             .cloned()
-            .ok_or_else(|| anyhow!("ticket introuvable"))
+            .ok_or_else(ticket_not_found)
     }
 
     /// Changes a ticket under the lock, then tells the window and saves. `f` runs with the tickets
@@ -102,7 +241,7 @@ impl<R: Runtime> Core<R> {
             let i = tickets
                 .iter()
                 .position(|t| t.id == id)
-                .ok_or_else(|| anyhow!("ticket introuvable"))?;
+                .ok_or_else(ticket_not_found)?;
             let checked = check(&tickets)?;
             let t = &mut tickets[i];
             let before = t.external.is_some().then(|| t.clone());
@@ -145,7 +284,7 @@ impl<R: Runtime> Core<R> {
     ) -> Result<Ticket> {
         let title = d.title.trim().to_string();
         if title.is_empty() {
-            bail!("Un ticket a besoin d'un titre.");
+            return Err(title_missing());
         }
         let project = self.project(project_id)?;
         let current = git::head_branch(&project.path).await;
@@ -154,10 +293,10 @@ impl<R: Runtime> Core<R> {
             let p = projects
                 .iter_mut()
                 .find(|p| p.id == project_id)
-                .ok_or_else(|| anyhow!("projet introuvable"))?;
+                .ok_or_else(project_not_found)?;
             if p.board.target.is_empty() {
                 if current.is_empty() {
-                    bail!(board::NO_BRANCH);
+                    bail!(board::no_branch(i18n::ui()));
                 }
                 p.board.target = current;
             }
@@ -186,7 +325,7 @@ impl<R: Runtime> Core<R> {
             // waits for this, and it takes the project's tickets once it is out.
             let projects = self.projects.read();
             if !projects.iter().any(|p| p.id == project_id) {
-                bail!("projet introuvable");
+                return Err(project_not_found());
             }
             let mut tickets = self.tickets.write();
             ticket.rank = tickets
@@ -213,7 +352,7 @@ impl<R: Runtime> Core<R> {
     pub fn ticket_update(self: &Arc<Self>, id: &str, d: TicketDraft) -> Result<Ticket> {
         let title = d.title.trim().to_string();
         if title.is_empty() {
-            bail!("Un ticket a besoin d'un titre.");
+            return Err(title_missing());
         }
         let ticket = self.edit_ticket_with(
             id,
@@ -221,12 +360,15 @@ impl<R: Runtime> Core<R> {
                 let me = all
                     .iter()
                     .find(|t| t.id == id)
-                    .ok_or_else(|| anyhow!("ticket introuvable"))?;
+                    .ok_or_else(ticket_not_found)?;
                 if me.column != Column::Todo {
-                    bail!("Seul un ticket « À faire » se modifie.");
+                    bail!(tr!(
+                        "Seul un ticket « À faire » se modifie.",
+                        "Only a ticket in “To do” can be edited."
+                    ));
                 }
                 let after = board::after_of(all, &me.project_id, id, &d.after);
-                match board::cycle_refusal(all, id, &after) {
+                match board::cycle_refusal(i18n::ui(), all, id, &after) {
                     Some(refusal) => bail!(refusal),
                     None => Ok(after),
                 }
@@ -257,7 +399,10 @@ impl<R: Runtime> Core<R> {
             .unwrap_or(0);
         self.edit_ticket(id, |t| {
             if t.column != Column::Todo {
-                bail!("Seul un ticket « À faire » passe en tête.");
+                bail!(tr!(
+                    "Seul un ticket « À faire » passe en tête.",
+                    "Only a ticket in “To do” can move to the top."
+                ));
             }
             t.rank = first - 1;
             Ok(())
@@ -270,7 +415,10 @@ impl<R: Runtime> Core<R> {
     pub fn ticket_start(self: &Arc<Self>, id: &str) -> Result<()> {
         self.edit_ticket(id, |t| {
             if t.column != Column::Todo {
-                bail!("Ce ticket est déjà parti.");
+                bail!(tr!(
+                    "Ce ticket est déjà parti.",
+                    "This ticket has already started."
+                ));
             }
             t.forced = true;
             Ok(())
@@ -288,7 +436,7 @@ impl<R: Runtime> Core<R> {
             let i = tickets
                 .iter()
                 .position(|x| x.id == id)
-                .ok_or_else(|| anyhow!("ticket introuvable"))?;
+                .ok_or_else(ticket_not_found)?;
             let t = tickets.remove(i);
             let freed: Vec<Ticket> = tickets
                 .iter_mut()
@@ -337,7 +485,7 @@ impl<R: Runtime> Core<R> {
             let p = projects
                 .iter_mut()
                 .find(|p| p.id == project_id)
-                .ok_or_else(|| anyhow!("projet introuvable"))?;
+                .ok_or_else(project_not_found)?;
             let target = s.target.trim();
             p.board = BoardSettings {
                 prefix: p.board.prefix.clone(),
@@ -513,7 +661,7 @@ impl<R: Runtime> Core<R> {
             let target = self.target_of(&p).await;
             let exists = !target.is_empty() && git::branch_exists(&p.path, &target).await;
             let unborn = !exists && git::head_branch(&p.path).await == target;
-            let issue = board::target_issue(&target, exists, unborn);
+            let issue = board::target_issue(i18n::ui(), &target, exists, unborn);
             if self.set_board_issue(&p.id, issue.clone()) {
                 if let Some(why) = &issue {
                     log::info!("board of {}: {why}", p.name);
@@ -589,7 +737,10 @@ impl<R: Runtime> Core<R> {
         let _working = self.working();
         let started = self.edit_ticket(id, |t| {
             if t.column != Column::Todo {
-                bail!("ce ticket est déjà parti");
+                bail!(tr!(
+                    "ce ticket est déjà parti",
+                    "this ticket has already started"
+                ));
             }
             t.column = Column::Doing;
             t.agent_id = None;
@@ -717,7 +868,7 @@ impl<R: Runtime> Core<R> {
         let end = match end {
             TurnEnd::Limited if !resumes => {
                 self.pause_after_limit();
-                TurnEnd::Error(QUOTA_LOST.into())
+                TurnEnd::Error(quota_lost(i18n::ui()))
             }
             end => end,
         };
@@ -781,7 +932,8 @@ impl<R: Runtime> Core<R> {
                 && t.blocked.is_none()
                 && t.agent_id.as_deref() == Some(agent_id);
             if waiting {
-                t.blocked = Some(format!("Erreur : {QUOTA_LOST}"));
+                let lang = i18n::ui();
+                t.blocked = Some(board::error_blocked(lang, &quota_lost(lang)));
             }
             Ok(waiting)
         });
@@ -800,15 +952,8 @@ impl<R: Runtime> Core<R> {
             .project(&t.project_id)
             .map(|p| p.name)
             .unwrap_or_default();
-        let body = if ready {
-            format!("{} prêt à tester", t.key)
-        } else {
-            format!(
-                "{} bloqué : {}",
-                t.key,
-                t.blocked.clone().unwrap_or_default()
-            )
-        };
+        let blocked = t.blocked.clone().unwrap_or_default();
+        let body = ticket_alert(i18n::ui(), &t.key, ready, &blocked);
         self.alert(
             NotifyKind::Ticket,
             project,
@@ -922,15 +1067,25 @@ impl<R: Runtime> Core<R> {
             .and_then(|a| self.live_agent(&a))
             .and_then(|m| m.resume_at);
         if let Some(at) = waiting {
-            bail!("En attente du quota — reprise à {}", board::clock(at));
+            bail!(tr!(
+                "En attente du quota — reprise à {at}",
+                "Waiting for the quota — resumes at {at}",
+                at = board::clock(at)
+            ));
         }
         let t = self.edit_ticket(id, |t| {
             if t.column != Column::Doing {
-                bail!("Ce ticket n'est pas en cours.");
+                bail!(tr!(
+                    "Ce ticket n'est pas en cours.",
+                    "This ticket isn’t in progress."
+                ));
             }
             // Taken up already (a second click): its agent is not asked twice.
             if t.blocked.is_none() {
-                bail!("Ce ticket n'est pas bloqué.");
+                bail!(tr!(
+                    "Ce ticket n'est pas bloqué.",
+                    "This ticket isn’t blocked."
+                ));
             }
             t.blocked = None;
             t.reminded = false;
@@ -1019,13 +1174,13 @@ impl<R: Runtime> Core<R> {
     /// work (a message sent during the tests: its files may be half written).
     fn still_validating(&self, id: &str, agent_id: &str) -> Result<()> {
         if !validating(&self.ticket(id)?, agent_id) {
-            bail!(CHANGED);
+            bail!(Refusal::Changed);
         }
         if self
             .live_agent(agent_id)
             .is_some_and(|m| m.status.is_active())
         {
-            bail!(AGENT_BUSY);
+            bail!(Refusal::AgentBusy);
         }
         Ok(())
     }
@@ -1049,7 +1204,7 @@ impl<R: Runtime> Core<R> {
         let _working = self.working();
         let t = self.ticket(id)?;
         if t.column != Column::Review {
-            bail!("Ce ticket n'est pas à tester.");
+            bail!(Refusal::NotInReview);
         }
         let busy = t
             .agent_id
@@ -1057,18 +1212,18 @@ impl<R: Runtime> Core<R> {
             .and_then(|a| self.live_agent(a))
             .is_some_and(|m| m.status.is_active());
         if busy {
-            bail!(AGENT_BUSY);
+            bail!(Refusal::AgentBusy);
         }
         let t = self.edit_ticket(id, |t| {
             if t.column != Column::Review {
-                bail!("Ce ticket n'est pas à tester.");
+                bail!(Refusal::NotInReview);
             }
             if t.step.is_some() {
-                bail!("La validation de ce ticket est déjà en cours.");
+                bail!(Refusal::ApprovingAlready);
             }
             t.blocked = None;
             t.conflict = false;
-            t.step = Some("Validation…".into());
+            t.step = Some(tr!("Validation…", "Approving…"));
             Ok(t.clone())
         })?;
         if let Err(e) = self.validate(&t).await {
@@ -1095,15 +1250,9 @@ impl<R: Runtime> Core<R> {
     async fn validate(self: &Arc<Self>, t: &Ticket) -> Result<()> {
         let project = self.project(&t.project_id)?;
         let s = project.board.clone();
-        let agent_id = t
-            .agent_id
-            .clone()
-            .ok_or_else(|| anyhow!("Ce ticket n'a pas d'agent."))?;
+        let agent_id = t.agent_id.clone().ok_or(Refusal::NoAgent)?;
         let meta = self.agent(&agent_id)?.lock().meta.clone();
-        let wt = meta
-            .worktree
-            .clone()
-            .ok_or_else(|| anyhow!("L'agent de ce ticket n'a pas de worktree."))?;
+        let wt = meta.worktree.clone().ok_or(Refusal::AgentWithoutWorktree)?;
         let target = self.target_of(&project).await;
         // Its test launches stop first: their servers would hold the worktree's files and ports.
         self.stop_test_runs(&agent_id);
@@ -1114,7 +1263,12 @@ impl<R: Runtime> Core<R> {
             let shell = crate::pty::detect_shells(&settings)
                 .into_iter()
                 .next()
-                .ok_or_else(|| anyhow!("Aucun shell pour lancer les tests."))?;
+                .ok_or_else(|| {
+                    anyhow!(tr!(
+                        "Aucun shell pour lancer les tests.",
+                        "No shell to run the tests."
+                    ))
+                })?;
             let command = s.test_command.trim();
             let env = testlaunch::port_env(meta.port_base);
             let run = testlaunch::run_tests(&shell, &wt.path, command, &env, TEST_LIMIT).await?;
@@ -1123,7 +1277,7 @@ impl<R: Runtime> Core<R> {
                 // maybe on with another agent); the old agent is told nothing (it would start again).
                 self.edit_ticket(&t.id, |x| {
                     if !validating(x, &agent_id) {
-                        bail!(CHANGED);
+                        bail!(Refusal::Changed);
                     }
                     board::back_to_work(x);
                     Ok(())
@@ -1150,20 +1304,28 @@ impl<R: Runtime> Core<R> {
         let mut nothing = false;
         if s.action != "keep" {
             if !git::branch_exists(&wt.path, &target).await {
-                bail!("La branche cible {target} n'existe pas.");
+                bail!(tr!(
+                    "La branche cible {target} n'existe pas.",
+                    "The target branch {target} doesn’t exist."
+                ));
             }
             // Commit what is left in the worktree.
             self.set_step(&t.id, "Commit…");
             let unmerged = git::unmerged(&wt.path).await;
             if !unmerged.is_empty() {
-                bail!(
-                    "Conflits non résolus dans le worktree sur : {}",
-                    unmerged.join(", ")
-                );
+                bail!(tr!(
+                    "Conflits non résolus dans le worktree sur : {files}",
+                    "Unresolved conflicts in the worktree on: {files}",
+                    files = unmerged.join(", ")
+                ));
             }
             // A commit elsewhere (another branch, a detached HEAD) would never reach the target.
             if git::current_branch(&wt.path).await != wt.branch {
-                bail!("Le worktree n'est plus sur la branche {}", wt.branch);
+                bail!(tr!(
+                    "Le worktree n'est plus sur la branche {b}",
+                    "The worktree is no longer on the branch {b}",
+                    b = wt.branch
+                ));
             }
             self.still_validating(&t.id, &agent_id)?;
             let keep_out = not_committed(&wt.path, &copied).await;
@@ -1177,14 +1339,14 @@ impl<R: Runtime> Core<R> {
             // bring along all the same).
             let in_tree = git::changed_in(&wt.path, &target, &wt.branch, &copied).await?;
             let in_history = git::touched_by(&wt.path, &target, &wt.branch, &copied).await?;
-            if let Some(refusal) = board::copied_refusal(&in_tree, &in_history) {
+            if let Some(refusal) = board::copied_refusal(i18n::ui(), &in_tree, &in_history) {
                 bail!(refusal);
             }
             nothing = git::ahead_of(&wt.path, &target, &wt.branch).await? == 0;
             self.still_validating(&t.id, &agent_id)?;
         }
         let (outcome, url): (String, Option<String>) = match s.action.as_str() {
-            _ if nothing => (board::NOTHING_OUTCOME.to_string(), None),
+            _ if nothing => (board::nothing_outcome(i18n::ui()), None),
             "merge" => {
                 self.set_step(&t.id, "Merge…");
                 match self
@@ -1203,9 +1365,9 @@ impl<R: Runtime> Core<R> {
             "push" => {
                 self.set_step(&t.id, "Push…");
                 git::push_branch(&wt.path, &wt.branch).await?;
-                (board::pushed_outcome(&wt.branch), None)
+                (board::pushed_outcome(i18n::ui(), &wt.branch), None)
             }
-            _ => (board::KEPT_OUTCOME.to_string(), None),
+            _ => (board::kept_outcome(i18n::ui()), None),
         };
         // What every agent of the ticket cost, archived ones included (a ticket sent back and taken
         // over has several), as « À tester » and the statistics add it up; at least its own.
@@ -1222,7 +1384,7 @@ impl<R: Runtime> Core<R> {
         self.edit_ticket(&t.id, |x| {
             // Its agent archived or deleted meanwhile: it went back to do, and stays there.
             if !validating(x, &agent_id) {
-                bail!(CHANGED);
+                bail!(Refusal::Changed);
             }
             x.column = Column::Done;
             x.step = None;
@@ -1290,10 +1452,7 @@ impl<R: Runtime> Core<R> {
         target: &str,
         message: Option<String>,
     ) -> Result<Option<(String, Option<String>)>> {
-        let repo = self
-            .toplevel(&project.path)
-            .await
-            .ok_or_else(|| anyhow!("pas un dépôt git"))?;
+        let repo = self.toplevel(&project.path).await.ok_or_else(not_a_repo)?;
         let message = match message {
             Some(m) => m,
             None => self.commit_message(t, s, &wt.path, target).await,
@@ -1320,7 +1479,10 @@ impl<R: Runtime> Core<R> {
         let (dir, temporary) = match checkout {
             Some(p) if same_dir(&p, &repo) => {
                 if git::has_tracked_changes(&repo).await? {
-                    bail!("Le dossier du projet a des modifications non commitées sur {target}");
+                    bail!(tr!(
+                        "Le dossier du projet a des modifications non commitées sur {target}",
+                        "The project’s folder has uncommitted changes on {target}"
+                    ));
                 }
                 (repo.clone(), false)
             }
@@ -1332,7 +1494,10 @@ impl<R: Runtime> Core<R> {
                     .find(|m| m.worktree.as_ref().is_some_and(|w| same_dir(&w.path, &p)))
                     .map(|m| m.name)
                     .unwrap_or(p);
-                bail!("{target} est extraite dans le worktree de {who}");
+                bail!(tr!(
+                    "{target} est extraite dans le worktree de {who}",
+                    "{target} is checked out in the worktree of {who}"
+                ));
             }
             None => {
                 git::ensure_excluded(&repo, ".claude/worktrees/").await?;
@@ -1349,7 +1514,10 @@ impl<R: Runtime> Core<R> {
         // The target is as it was: the next merge into this repository may go.
         drop(merging);
         match result? {
-            git::Integrated::Done => Ok(Some((board::merged_outcome(target, &s.strategy), None))),
+            git::Integrated::Done => Ok(Some((
+                board::merged_outcome(i18n::ui(), target, &s.strategy),
+                None,
+            ))),
             git::Integrated::Conflict(files) => {
                 self.on_conflict(t, s, target, files).await?;
                 Ok(None)
@@ -1396,7 +1564,7 @@ impl<R: Runtime> Core<R> {
                     log::warn!("ticket {}: worktree not removed: {e:#}", t.key);
                     let _ = self.edit_ticket(&t.id, |x| {
                         if let Some(outcome) = x.outcome.as_mut() {
-                            outcome.push_str(board::WORKTREE_KEPT);
+                            outcome.push_str(&board::worktree_kept(i18n::ui()));
                         }
                         Ok(())
                     });
@@ -1447,7 +1615,10 @@ impl<R: Runtime> Core<R> {
             .as_deref()
             .and_then(board::github_repo);
         let Some((owner, repo)) = github else {
-            return Ok((board::pushed_elsewhere_outcome(&wt.branch), None));
+            return Ok((
+                board::pushed_elsewhere_outcome(i18n::ui(), &wt.branch),
+                None,
+            ));
         };
         if let Some(gh) = self.gh_cli() {
             let pr = PullRequest {
@@ -1470,7 +1641,10 @@ impl<R: Runtime> Core<R> {
         }
         let url = board::compare_url(&owner, &repo, target, &wt.branch, &title, &body);
         self.hub.emit(UiEvent::OpenUrl { url: url.clone() });
-        Ok((board::pushed_for_pr_outcome(&wt.branch), Some(url)))
+        Ok((
+            board::pushed_for_pr_outcome(i18n::ui(), &wt.branch),
+            Some(url),
+        ))
     }
 
     /// A merge stopped on conflicts (undone): blocked with "L'agent résout" / "Annuler" ("ask"),
@@ -1486,16 +1660,12 @@ impl<R: Runtime> Core<R> {
             return self.agent_resolves(&t.id).await;
         }
         let ask = s.conflict != "abort";
-        let reason = if ask {
-            format!("Conflit avec {target}")
-        } else {
-            board::first_line(&format!("Conflit avec {target} sur : {}", files.join(", ")))
-        };
+        let reason = conflict_reason(i18n::ui(), target, &files, ask);
         let agent_id = t.agent_id.clone().unwrap_or_default();
         self.edit_ticket(&t.id, |x| {
             // Its agent archived or deleted meanwhile: it went back to do, and stays there.
             if !validating(x, &agent_id) {
-                bail!(CHANGED);
+                bail!(Refusal::Changed);
             }
             x.step = None;
             x.conflict = ask;
@@ -1514,17 +1684,14 @@ impl<R: Runtime> Core<R> {
     async fn agent_resolves(self: &Arc<Self>, id: &str) -> Result<()> {
         let t = self.ticket(id)?;
         let project = self.project(&t.project_id)?;
-        let agent_id = t
-            .agent_id
-            .clone()
-            .ok_or_else(|| anyhow!("Ce ticket n'a pas d'agent."))?;
+        let agent_id = t.agent_id.clone().ok_or(Refusal::NoAgent)?;
         let wt = self
             .agent(&agent_id)?
             .lock()
             .meta
             .worktree
             .clone()
-            .ok_or_else(|| anyhow!("L'agent de ce ticket n'a pas de worktree."))?;
+            .ok_or(Refusal::AgentWithoutWorktree)?;
         let target = self.target_of(&project).await;
         // Nothing goes into the worktree of an agent archived meanwhile, or at work.
         self.still_validating(id, &agent_id)?;
@@ -1537,9 +1704,11 @@ impl<R: Runtime> Core<R> {
                 Err(e) => {
                     let files = git::unmerged(&wt.path).await;
                     if files.is_empty() {
-                        return Err(
-                            e.context(format!("Merge de {target} dans {} impossible", wt.branch))
-                        );
+                        return Err(e.context(tr!(
+                            "Merge de {target} dans {b} impossible",
+                            "Can’t merge {target} into {b}",
+                            b = wt.branch
+                        )));
                     }
                     board::conflict_message(&target, &files)
                 }
@@ -1547,7 +1716,7 @@ impl<R: Runtime> Core<R> {
         };
         let handed = self.edit_ticket(id, |x| {
             if !validating(x, &agent_id) {
-                bail!(CHANGED);
+                bail!(Refusal::Changed);
             }
             board::back_to_work(x);
             Ok(())
@@ -1567,10 +1736,10 @@ impl<R: Runtime> Core<R> {
     pub async fn ticket_resolve_conflict(self: &Arc<Self>, id: &str) -> Result<()> {
         let agent_id = self.edit_ticket(id, |t| {
             if t.column != Column::Review {
-                bail!("Ce ticket n'est pas à tester.");
+                bail!(Refusal::NotInReview);
             }
             if t.step.is_some() {
-                bail!("La validation de ce ticket est déjà en cours.");
+                bail!(Refusal::ApprovingAlready);
             }
             t.step = Some("Merge…".into());
             Ok(t.agent_id.clone())
@@ -1593,7 +1762,7 @@ impl<R: Runtime> Core<R> {
     pub fn ticket_dismiss(&self, id: &str) -> Result<()> {
         self.edit_ticket(id, |t| {
             if t.column != Column::Review {
-                bail!("Ce ticket n'est pas à tester.");
+                bail!(Refusal::NotInReview);
             }
             t.blocked = None;
             t.conflict = false;
@@ -1607,7 +1776,7 @@ impl<R: Runtime> Core<R> {
     pub async fn ticket_reject(self: &Arc<Self>, id: &str, comment: &str) -> Result<()> {
         let comment = comment.trim();
         if comment.is_empty() {
-            bail!("Dis ce qui ne va pas.");
+            bail!(tr!("Dis ce qui ne va pas.", "Say what’s wrong."));
         }
         let busy = self
             .ticket(id)?
@@ -1615,19 +1784,16 @@ impl<R: Runtime> Core<R> {
             .and_then(|a| self.live_agent(&a))
             .is_some_and(|m| m.status.is_active());
         if busy {
-            bail!(AGENT_BUSY_REJECT);
+            bail!(Refusal::AgentBusyReject);
         }
         let (key, agent_id) = self.edit_ticket(id, |t| {
             if t.column != Column::Review {
-                bail!("Ce ticket n'est pas à tester.");
+                bail!(Refusal::NotInReview);
             }
             if t.step.is_some() {
-                bail!("La validation de ce ticket est déjà en cours.");
+                bail!(Refusal::ApprovingAlready);
             }
-            let agent_id = t
-                .agent_id
-                .clone()
-                .ok_or_else(|| anyhow!("Ce ticket n'a pas d'agent."))?;
+            let agent_id = t.agent_id.clone().ok_or(Refusal::NoAgent)?;
             board::back_to_work(t);
             Ok((t.key.clone(), agent_id))
         })?;
@@ -1651,22 +1817,28 @@ impl<R: Runtime> Core<R> {
             )
         };
         let Some(worktree) = worktree else {
-            bail!(NO_WORKTREE);
+            bail!(Refusal::NoWorktree);
         };
         if isola::manages(&worktree.path) {
-            bail!("isola lance ce worktree : « ▶ Tester » suffit, sans recette.");
+            bail!(tr!(
+                "isola lance ce worktree : « ▶ Tester » suffit, sans recette.",
+                "isola runs this worktree: “▶ Test” is enough, without a recipe."
+            ));
         }
         if archived {
-            bail!(ARCHIVED);
+            bail!(Refusal::Archived);
         }
         let base = match base {
             Some(b) => b,
             None => {
                 // Reserved, then written on the agent with no wait in between: no other start
                 // or preparation gets this block meanwhile.
-                let reserved = self
-                    .reserve_ports()
-                    .ok_or_else(|| anyhow!("Aucun bloc de ports libre à partir de 4100."))?;
+                let reserved = self.reserve_ports().ok_or_else(|| {
+                    anyhow!(tr!(
+                        "Aucun bloc de ports libre à partir de 4100.",
+                        "No free block of ports from 4100 on."
+                    ))
+                })?;
                 let held = {
                     let mut rt = h.lock();
                     // Archived meanwhile, it holds no block; given one meanwhile (another
@@ -1675,7 +1847,7 @@ impl<R: Runtime> Core<R> {
                 };
                 // The agent holds its block from now on (or the one reserved is free again).
                 self.unreserve_ports(Some(reserved));
-                let base = held.ok_or_else(|| anyhow!(ARCHIVED))?;
+                let base = held.ok_or_else(|| anyhow!(Refusal::Archived))?;
                 self.emit_agent(&h);
                 self.request_save();
                 base
@@ -1683,7 +1855,7 @@ impl<R: Runtime> Core<R> {
         };
         // Archived meanwhile, whichever way it got its block: it is not woken up for nothing.
         if h.lock().meta.archived {
-            bail!(ARCHIVED);
+            bail!(Refusal::Archived);
         }
         self.send_message(id, board::prepare_message(base), vec![])
             .await
@@ -1692,13 +1864,13 @@ impl<R: Runtime> Core<R> {
     /// Why the agent may run no test launch now: archived (its launches stopped with it), without
     /// a worktree, or its ticket being validated (or its conflict handed to it), whose tests
     /// would find its ports taken.
-    fn launch_refusal(&self, meta: &AgentMeta) -> Option<&'static str> {
+    fn launch_refusal(&self, meta: &AgentMeta) -> Option<Refusal> {
         if meta.archived {
-            Some(ARCHIVED)
+            Some(Refusal::Archived)
         } else if meta.worktree.is_none() {
-            Some(NO_WORKTREE)
+            Some(Refusal::NoWorktree)
         } else if self.tickets.read().iter().any(|t| validating(t, &meta.id)) {
-            Some(VALIDATING)
+            Some(Refusal::Validating)
         } else {
             None
         }
@@ -1712,7 +1884,7 @@ impl<R: Runtime> Core<R> {
         {
             let mut rt = h.lock();
             if rt.meta.recipe.as_ref() != Some(&recipe) {
-                bail!(RECIPE_CHANGED);
+                bail!(Refusal::RecipeChanged);
             }
             rt.meta.approved_recipe = Some(recipe);
         }
@@ -1736,13 +1908,13 @@ impl<R: Runtime> Core<R> {
         let meta = h.lock().meta.clone();
         let wt = isola_worktree(&meta)?;
         if isola::read_config(&wt.path)? != config {
-            bail!(ISOLA_CONFIG_CHANGED);
+            bail!(Refusal::IsolaConfigChanged);
         }
         {
             let mut rt = h.lock();
             let current = rt.meta.recipe.as_ref().map_or("", |r| r.open.as_str());
             if current != open {
-                bail!(RECIPE_CHANGED);
+                bail!(Refusal::RecipeChanged);
             }
             rt.meta.approved_isola = Some(IsolaApproval { config, open });
         }
@@ -1845,9 +2017,15 @@ impl<R: Runtime> Core<R> {
 
 /// The agent's worktree, when isola runs its services.
 fn isola_worktree(meta: &AgentMeta) -> Result<Worktree> {
-    let wt = meta.worktree.clone().ok_or_else(|| anyhow!(NO_WORKTREE))?;
+    let wt = meta
+        .worktree
+        .clone()
+        .ok_or_else(|| anyhow!(Refusal::NoWorktree))?;
     if !isola::manages(&wt.path) {
-        bail!("isola ne lance pas ce worktree (isola introuvable, ou pas de .isola.toml).");
+        bail!(tr!(
+            "isola ne lance pas ce worktree (isola introuvable, ou pas de .isola.toml).",
+            "isola doesn’t run this worktree (isola not found, or no .isola.toml)."
+        ));
     }
     Ok(wt)
 }
@@ -1911,10 +2089,11 @@ async fn gh_pr_create(gh: &Path, cwd: &str, pr: &PullRequest<'_>) -> Result<Stri
     let out = tokio::time::timeout(GH_LIMIT, created)
         .await
         .map_err(|_| {
-            anyhow!(
-                "gh pr create toujours pas terminé après {} s",
-                GH_LIMIT.as_secs()
-            )
+            anyhow!(tr!(
+                "gh pr create toujours pas terminé après {s} s",
+                "gh pr create still not done after {s} s",
+                s = GH_LIMIT.as_secs()
+            ))
         })??;
     if !out.status.success() {
         bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
@@ -1946,35 +2125,6 @@ pub(crate) fn merge_lock_key(repo: &str) -> String {
         Err(_) => repo.replace('\\', "/").trim_end_matches('/').to_lowercase(),
     }
 }
-
-/// The block when the ticket left its validation (its agent archived or deleted meanwhile).
-const CHANGED: &str = "Ce ticket a changé pendant sa validation.";
-
-/// The refusal while the ticket's agent works: its files may be half written.
-const AGENT_BUSY: &str =
-    "L'agent de ce ticket travaille encore : attends la fin de son tour pour valider.";
-
-/// "Renvoyer" refused while the ticket's agent works: the end of that turn would be read as the
-/// end of the rework.
-const AGENT_BUSY_REJECT: &str =
-    "L'agent de ce ticket travaille encore : attends la fin de son tour pour le renvoyer.";
-
-/// An archived agent holds no ports and runs no test launch.
-const ARCHIVED: &str = "Cet agent est archivé : il n'a pas de lancement de test.";
-
-/// Only an agent with a worktree has ports and a test launch.
-const NO_WORKTREE: &str = "Seul un agent à worktree a un lancement de test.";
-
-/// The `.isola.toml` changed between what the user read and their « Lancer ».
-pub const ISOLA_CONFIG_CHANGED: &str =
-    "Le .isola.toml a changé pendant que tu le lisais : relance « ▶ Tester » pour le relire.";
-
-/// The recipe changed between what the user read and their « Lancer ».
-pub const RECIPE_CHANGED: &str =
-    "La recette a changé pendant que tu la lisais : relance « ▶ Tester » pour la relire.";
-
-/// No test launch while its ticket is validated: its servers would take the ports its tests use.
-const VALIDATING: &str = "Validation en cours : le lancement de test attendra sa fin.";
 
 /// `t` is still "À tester" with this agent, its validation under way.
 fn validating(t: &Ticket, agent_id: &str) -> bool {

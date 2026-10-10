@@ -275,6 +275,17 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 | Tâche terminée | Task done | notification du système |
 | activité d’un agent : Lit, Cherche, Modifie, Écrit, Lance, Délègue, Rédige, Réfléchit | Reading, Searching, Editing, Writing, Running, Delegating, Replying, Thinking | le verbe seul est le début du verbe suivi de ce qu’il touche (« Lit src/a.ts » → “Reading src/a.ts”) |
 | Contexte compacté / Nouvelle conversation Claude (contexte vidé) | Context compacted / New Claude conversation (context cleared) | notices de la conversation |
+| Implémentation conforme au ticket / Tests verts | Implementation matches the ticket / Tests pass | critères par défaut d’un ticket |
+| aucun ticket ne démarre | no tickets will start | ce que dit le Kanban (`BoardIssue`), comme `board.claudeMissing` |
+| Interrompu / Erreur : … / Bilan des critères manquant | Interrupted / Error: … / Criteria report missing | pourquoi un ticket est bloqué |
+| Validation… / Validation interrompue / Validation en cours | Approving… / Approval interrupted / Approval under way | l’étape d’un ticket « À tester » qu’on valide |
+| prêt à tester / bloqué | ready to review / blocked | notification d’un ticket |
+| ⤵ Mergé dans … / ⇡ Poussé sur … / ◇ Laissé dans le worktree / ∅ Aucune modification | ⤵ Merged into … / ⇡ Pushed to … / ◇ Left in the worktree / ∅ No changes | ce que devient un ticket validé |
+| recette (de lancement) | recipe | ce que l’agent propose pour lancer son worktree |
+| (copie), (copie 2) | (copy), (copy 2) | le nom d’un agent dupliqué |
+| La préparation / le démontage du worktree a échoué sur … | The worktree setup / the worktree teardown failed on … | |
+| Worktree préparé (3 commandes, 12 s). | Worktree set up (3 commands, 12 s). | |
+| Ko / Mo | KB / MB | tailles écrites par le backend |
 
 ## K — accounts
 
