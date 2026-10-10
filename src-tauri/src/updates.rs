@@ -796,14 +796,18 @@ fn window_now<R: Runtime>(app: &AppHandle<R>) -> Window {
             w.is_visible().unwrap_or(false),
             w.is_minimized().unwrap_or(false),
             w.is_focused().unwrap_or(false),
+            cfg!(target_os = "macos"),
         ),
         None => Window::Front,
     }
 }
 
-/// How a window `visible` (shown, or closed to the tray), `minimized` and `focused` is noted.
-fn window_of(visible: bool, minimized: bool, focused: bool) -> Window {
+/// How a window `visible` (shown, or closed to the tray), `minimized` and `focused` is noted. On
+/// `macos`, a window minimized to the Dock is not visible (`NSWindow.isVisible`), though not in the
+/// tray: minimized wins there.
+fn window_of(visible: bool, minimized: bool, focused: bool, macos: bool) -> Window {
     match (visible, minimized, focused) {
+        (_, true, _) if macos => Window::Minimized,
         (true, false, true) => Window::Front,
         (true, false, false) => Window::Behind,
         (true, true, _) => Window::Minimized,
@@ -1751,15 +1755,21 @@ mod tests {
 
     #[test]
     fn a_minimized_window_comes_back_minimized_after_a_restart_not_hidden_in_the_tray() {
-        // On screen: in front or behind another app's window.
-        assert_eq!(window_of(true, false, true), Window::Front);
-        assert_eq!(window_of(true, false, false), Window::Behind);
-        // Closed to the tray: it stays there.
-        assert_eq!(window_of(false, false, false), Window::Hidden);
-        // Minimized: back in the taskbar or the Dock, with its button, not in the tray.
         let noted = |w: Window| serde_json::to_value(w).unwrap();
-        assert_eq!(noted(window_of(true, true, false)), "minimized");
-        assert_eq!(noted(window_of(true, true, true)), "minimized");
+        for macos in [false, true] {
+            // On screen: in front or behind another app's window.
+            assert_eq!(window_of(true, false, true, macos), Window::Front);
+            assert_eq!(window_of(true, false, false, macos), Window::Behind);
+            // Closed to the tray: it stays there.
+            assert_eq!(window_of(false, false, false, macos), Window::Hidden);
+            // Minimized: back in the taskbar or the Dock, with its button, not in the tray.
+            assert_eq!(noted(window_of(true, true, false, macos)), "minimized");
+            assert_eq!(noted(window_of(true, true, true, macos)), "minimized");
+        }
+        // macOS says a window minimized to the Dock is not visible: it is not in the tray for that.
+        assert_eq!(noted(window_of(false, true, false, true)), "minimized");
+        // Windows says it is: one that is not is in the tray, minimized or not.
+        assert_eq!(window_of(false, true, false, false), Window::Hidden);
         // As the note of the install keeps it, read at the next start.
         let data = DataDir::new(crate::paths::test_dir("upd-note-minimized"));
         write_note(
