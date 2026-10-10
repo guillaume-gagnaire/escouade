@@ -6,9 +6,9 @@
   import { api } from '../lib/ipc';
   import { conversationOf, type ReadingPlace } from '../lib/conversations.svelte';
   import { splitEscouade } from '../lib/escouade';
-  import { fDur, fNum, fTok } from '../lib/format';
+  import { fDur, fInt, fNum, fTok } from '../lib/format';
   import { modelLabel } from '../lib/models';
-  import { contextUse, ESTIMATE_HINT, fSpentUsd, spent } from '../lib/spend';
+  import { contextUse, estimateHint, fSpentUsd, spent } from '../lib/spend';
   import { injectedSource, parseAgentMessage, subagentLabels } from '../lib/events';
   import { editsByTurn } from '../lib/tools';
   import { app } from '../lib/state.svelte';
@@ -236,7 +236,7 @@
     restore(at);
     if (!olderButton) scroller.focus({ preventScroll: true });
     drewOlder = {
-      text: t('conv.older.drawn', { count }),
+      text: t('conv.older.drawn', { count, n: fInt(count) }),
       seq: (drewOlder?.seq ?? 0) + 1,
     };
   }
@@ -469,7 +469,7 @@
         <span class="k">{t('conv.header.context')}</span><span class="v mono" class:full={context.full}>{context.shown}</span>
       </div>
       <div class="m opt"><span class="k">{t('conv.header.tokens')}</span><span class="v mono">{fTok(used.tokens)}</span></div>
-      <div class="m opt2" title={used.estimated ? ESTIMATE_HINT : undefined}>
+      <div class="m opt2" title={used.estimated ? estimateHint() : undefined}>
         <span class="k">{t('common.cost')}</span><span class="v mono">{fSpentUsd(used)}</span>
       </div>
       {#if app.split}
@@ -555,7 +555,7 @@
       {/if}
       {#if older > 0}
         <button class="btn older" bind:this={olderButton} onclick={showOlder}>
-          {t('conv.older.show', { count: older })}
+          {t('conv.older.show', { count: older, n: fInt(older) })}
         </button>
       {/if}
       {#each drawn as item, j (item.id)}

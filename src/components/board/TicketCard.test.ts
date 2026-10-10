@@ -13,7 +13,7 @@ vi.mock('../../lib/terminals', () => ({
 import { buffers, lossNotice } from '../../lib/editor/buffers.svelte';
 import { setLang } from '../../lib/i18n';
 import { menu } from '../../lib/menu.svelte';
-import { ESTIMATE_HINT } from '../../lib/spend';
+import { estimateHint } from '../../lib/spend';
 import { app } from '../../lib/state.svelte';
 import type { LaunchState, Project, TestRecipe, Ticket } from '../../lib/types';
 import { agent, board, fakeBackend, project, resetApp, ticket } from '../../test/ipc';
@@ -592,7 +592,7 @@ describe('TicketCard cost of a ticket under way', () => {
     fakeBackend();
     show(doing());
     const cost = screen.getByText('≈ 1,63 $');
-    expect(cost).toHaveAttribute('title', ESTIMATE_HINT);
+    expect(cost).toHaveAttribute('title', estimateHint());
   });
 
   it('shows the exact cost of a ticket to test, next to its criteria', () => {

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeBackend, project, resetApp } from '../test/ipc';
+import { setLang } from './i18n';
 import { app } from './state.svelte';
 
 vi.mock('./terminals', () => ({
@@ -86,5 +87,19 @@ describe('terminals opened in an agent or a folder', () => {
     expect(openTerminal).not.toHaveBeenCalled();
     expect(app.toasts[0]).toMatchObject({ kind: 'error' });
     expect(app.terminals).toEqual([]);
+  });
+});
+
+describe('terminals in English', () => {
+  it('says in English when no shell was found, and which ones were expected', async () => {
+    setLang('en');
+    resetApp({ projects: [project()] });
+    fakeBackend();
+    app.shells = [];
+    await newTerminal('p1');
+    expect(app.toasts[0]).toMatchObject({
+      text: 'No shell detected (PowerShell 7, Git Bash, WSL). Check the settings.',
+      kind: 'error',
+    });
   });
 });

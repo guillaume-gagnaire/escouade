@@ -1,5 +1,7 @@
 // Launch commands: each runs in its own read-only terminal, whose log outlives its runs.
 
+import { fTime } from './format';
+import { t } from './i18n';
 import { api } from './ipc';
 import { parseTestId } from './recipe';
 import { app } from './state.svelte';
@@ -14,7 +16,6 @@ export function log(commandId: string) {
   });
 }
 
-const time = () => new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** How long a start waits for a run of the same command being stopped to end. */
@@ -29,15 +30,15 @@ export async function startLaunch(project: Project, cmd: RunCommand): Promise<st
     const until = Date.now() + STOP_WAIT_MS;
     while (app.launches[cmd.id] === dying && dying.status === 'running' && Date.now() < until) await sleep(50);
     previous = app.launches[cmd.id];
-    if (previous === dying && dying.status === 'running') return `« ${cmd.name} » ne s'arrête pas`;
+    if (previous === dying && dying.status === 'running') return t('runs.launch.wontStop', { name: cmd.name });
     // Forgotten meanwhile (removed, its project closed, its ticket done): nothing to start any more.
-    if (!previous) return `« ${cmd.name} » a été retiré`;
+    if (!previous) return t('runs.launch.removed', { name: cmd.name });
   }
   if (previous?.status === 'running') return null;
   const x = log(cmd.id);
   app.launches[cmd.id] = { status: 'running', ptyId: null, name: cmd.name, stopping: false, code: null, startedAt: Date.now() };
   // A run killed in a full-screen program, or with its cursor hidden, must not leave the log so.
-  const again = previous ? `\x1b[?1049l\x1b[!p\r\n\x1b[2m— relancé à ${time()} —\x1b[0m\r\n\r\n` : '';
+  const again = previous ? `\x1b[?1049l\x1b[!p\r\n\x1b[2m${t('runs.launch.restartedAt', { time: fTime(Date.now()) })}\x1b[0m\r\n\r\n` : '';
   // Once written, the header's end is where the command starts. The process gets the log's size
   // as it is: displayed, it is already fitted.
   await new Promise<void>((done) => x.term.write(`${again}\x1b[2m$ ${cmd.command}\x1b[0m\r\n`, done));
@@ -64,11 +65,11 @@ export async function startLaunch(project: Project, cmd: RunCommand): Promise<st
         delete app.launches[cmd.id];
         disposeLog(cmd.id);
       }
-      if (!l.stopping) app.toast(`« ${cmd.name} » n'a pas pu démarrer : ${why}`, 'error');
+      if (!l.stopping) app.toast(t('runs.launch.couldNotStart', { name: cmd.name, why }), 'error');
       return why;
     }
     Object.assign(l, { status: l.stopping ? 'stopped' : 'crashed', code: null, stopping: false });
-    if (l.status === 'crashed') app.toast(`« ${cmd.name} » n'a pas pu démarrer : ${why}`, 'error');
+    if (l.status === 'crashed') app.toast(t('runs.launch.couldNotStart', { name: cmd.name, why }), 'error');
     return why;
   }
 }
@@ -153,16 +154,23 @@ app.onRecipeChanged(forgetAgentTests);
 // them at its validation).
 app.onTicketDone(forgetAgentTests);
 
+/** How a run that crashed is said: with its exit code when it has one (on a command's status and on a test's line). */
+export function crashedLabel(code: number | null | undefined): string {
+  return code == null ? t('runs.status.crashed') : t('runs.status.crashedCode', { code });
+}
+
 export function launchStatus(l: LaunchState | undefined): { label: string; color: string } {
-  if (!l) return { label: 'prêt', color: 'var(--dim)' };
+  if (!l) return { label: t('runs.status.ready'), color: 'var(--dim)' };
   switch (l.status) {
     case 'running':
-      return l.stopping ? { label: 'arrêt…', color: 'var(--wait)' } : { label: 'en cours', color: 'var(--ok)' };
+      return l.stopping
+        ? { label: t('runs.status.stopping'), color: 'var(--wait)' }
+        : { label: t('runs.status.running'), color: 'var(--ok)' };
     case 'stopped':
-      return { label: 'arrêté', color: 'var(--muted)' };
+      return { label: t('runs.status.stopped'), color: 'var(--muted)' };
     case 'done':
-      return { label: 'terminé', color: 'var(--muted)' };
+      return { label: t('runs.status.done'), color: 'var(--muted)' };
     case 'crashed':
-      return { label: l.code === null ? 'planté' : `planté (code ${l.code})`, color: 'var(--del)' };
+      return { label: crashedLabel(l.code), color: 'var(--del)' };
   }
 }

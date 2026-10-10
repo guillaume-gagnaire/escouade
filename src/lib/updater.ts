@@ -2,6 +2,7 @@
 // A version found downloads at once, its signature checked, and the backend keeps it: it installs with a
 // restart (« Redémarrer maintenant », or the backend's own once the app is at rest), or when the app is closed.
 
+import { t } from './i18n';
 import { check, type FoundUpdate } from './update-check';
 import { app } from './state.svelte';
 
@@ -34,7 +35,7 @@ async function download(update: FoundUpdate, manual: boolean) {
     if (latest !== update) return;
     // Downloaded again at the next check.
     forget();
-    if (manual) app.toast(`Téléchargement de la mise à jour impossible : ${e}`, 'error');
+    if (manual) app.toast(t('shell.update.downloadFailed', { error: String(e) }), 'error');
   }
 }
 
@@ -59,7 +60,7 @@ export async function checkForUpdate(manual = false): Promise<boolean> {
     void download(update, manual);
     return true;
   } catch (e) {
-    if (manual) app.toast(`Vérification des mises à jour impossible : ${e}`, 'error');
+    if (manual) app.toast(t('shell.update.checkFailed', { error: String(e) }), 'error');
     return false;
   }
 }

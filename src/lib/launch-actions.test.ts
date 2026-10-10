@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { agent, fakeBackend, project, SETTINGS, ticket } from '../test/ipc';
+import { setLang } from './i18n';
 import { app } from './state.svelte';
 import type { InitialState, RunCommand, TermInfo, UiEvent } from './types';
 
@@ -512,5 +513,40 @@ describe('test launches', () => {
     expect(() => emit({ type: 'terminalExit', id: 't404', code: 1 })).not.toThrow();
     expect(app.toasts).toHaveLength(0);
     expect(app.launches['test:a1:run:0']).toMatchObject({ status: 'running', ptyId: 't9' });
+  });
+});
+
+describe('launch commands in English', () => {
+  beforeEach(() => setLang('en'));
+
+  it('names each state in English', () => {
+    const l = { ptyId: null, name: 'Front', stopping: false, code: null, startedAt: 1 };
+    expect(launchStatus(undefined).label).toBe('ready');
+    expect(launchStatus({ ...l, status: 'running', ptyId: 't1' }).label).toBe('running');
+    expect(launchStatus({ ...l, status: 'running', stopping: true }).label).toBe('stopping…');
+    expect(launchStatus({ ...l, status: 'stopped' }).label).toBe('stopped');
+    expect(launchStatus({ ...l, status: 'done', code: 0 }).label).toBe('done');
+    expect(launchStatus({ ...l, status: 'crashed', code: 2 }).label).toBe('crashed (code 2)');
+    expect(launchStatus({ ...l, status: 'crashed' }).label).toBe('crashed');
+  });
+
+  it('says in English why a command could not start, and when its log was started again', async () => {
+    await boot({
+      run_start: () => {
+        throw 'bash not found';
+      },
+    });
+    await startLaunch(P, API);
+    expect(app.toasts.at(-1)).toMatchObject({ text: '“API” couldn’t start: bash not found', kind: 'error' });
+    expect(logs.c2).toContain('bash not found');
+
+    // Started, ended, started again: the log says when, in the time of the language.
+    const { backend } = await boot();
+    await startLaunch(P, FRONT);
+    emit({ type: 'terminalExit', id: 't1', code: 1 });
+    expect(app.toasts.at(-1)).toMatchObject({ text: '“Front” stopped with an error (code 1)', kind: 'error' });
+    await startLaunch(P, FRONT);
+    expect(logs.c1).toMatch(/— restarted at \d{1,2}:\d{2}\s[AP]M —/);
+    expect(backend.called('run_start')).toHaveLength(2);
   });
 });

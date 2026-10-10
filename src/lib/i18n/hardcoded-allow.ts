@@ -73,6 +73,12 @@ export const ALLOWED: Allowed[] = [
   { file: 'src/components/Conversation.svelte', text: 'C', why: 'l’initiale de Claude dans l’avatar de ses messages : un nom propre' },
 
   // L9 — runs, shell
+  { file: 'src/components/Welcome.svelte', text: 'C', why: 'l’initiale de Claude dans la marque de l’écran d’accueil : un nom propre' },
+  {
+    file: 'src/components/Welcome.svelte',
+    text: 'irm https://claude.ai/install.ps1 | iex',
+    why: 'la commande qui installe Claude Code, la même dans toutes les langues',
+  },
 
   // L10 — errors, backend
 

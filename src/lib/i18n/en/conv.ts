@@ -30,8 +30,8 @@ export default defineZone('conv', {
     claudeMissing: 'Claude Code couldn’t be found on this machine: install it or set its path in the settings (⚙).',
   },
   older: {
-    show: { one: 'Show the previous message', other: 'Show the previous {count} messages' },
-    drawn: { one: '{count} previous message shown', other: '{count} previous messages shown' },
+    show: { one: 'Show the previous message', other: 'Show the previous {n} messages' },
+    drawn: { one: '{n} previous message shown', other: '{n} previous messages shown' },
   },
   working: 'Claude is working…',
   newMessages: 'New messages',

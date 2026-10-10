@@ -8,7 +8,7 @@
   import { api } from '../../lib/ipc';
   import { menu, type MenuItem } from '../../lib/menu.svelte';
   import { openAddress } from '../../lib/recipe';
-  import { ESTIMATE_HINT, fSpentUsd } from '../../lib/spend';
+  import { estimateHint, fSpentUsd } from '../../lib/spend';
   import { app } from '../../lib/state.svelte';
   import { anyRunning, flows, stopTests, testAgent } from '../../lib/test-launch.svelte';
   import type { Project, Ticket } from '../../lib/types';
@@ -354,7 +354,7 @@
       {#if figures}
         <div class="figures">
           {#if used}
-            <span class="k mono" title={used.estimated ? ESTIMATE_HINT : undefined}
+            <span class="k mono" title={used.estimated ? estimateHint() : undefined}
               ><span class="sr">{t('board.card.costLabel')}{' '}</span>{fSpentUsd(used)}</span
             >
           {/if}

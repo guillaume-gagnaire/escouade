@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { createRawSnippet } from 'svelte';
 import { describe, expect, it, vi } from 'vitest';
+import { setLang } from '../../lib/i18n';
 import Modal from './Modal.svelte';
 
 const body = createRawSnippet(() => ({ render: () => '<div><input aria-label="Nom" /><button>Valider</button></div>' }));
@@ -42,5 +43,14 @@ describe('Modal', () => {
     await fireEvent.mouseDown(overlay);
     await fireEvent.click(overlay);
     expect(onclose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Modal in English', () => {
+  it('names its close button in English', () => {
+    setLang('en');
+    render(Modal, { title: 'Settings', onclose: () => {}, children: body });
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Fermer' })).not.toBeInTheDocument();
   });
 });

@@ -261,7 +261,7 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 | tâche de fond | background task | |
 | En cours / Question / Prêt / Terminé / Erreur | Running / Question / Ready / Done / Error | état d’un agent (en-tête de la conversation) |
 | Bas / Moyen / Élevé / Très élevé / Max | Low / Medium / High / Very high / Max | niveaux d’effort |
-| Demander / Plan / Édits auto / Bypass | Ask / Plan / Auto edits / Bypass | modes de permission (« Auto » reste « Auto ») |
+| Demander / Plan / Édits auto / Bypass | Ask / Plan / Accept edits / Bypass | modes de permission (« Auto » reste « Auto ») |
 | Approuver le plan | Approve the plan | carte de permission d’un plan |
 | Continuer à planifier | Keep planning | refus d’un plan |
 | Valider (les réponses à une question) | Submit | carte de question |
@@ -274,6 +274,23 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 
 | Français | Anglais | Note |
 |---|---|---|
+| Lancement (la section des commandes) | Launch | comme dans les réglages : « Commandes de lancement… » → “Launch commands…” |
+| Tout lancer / Tout arrêter | Run all / Stop all | |
+| Proposer des commandes | Suggest commands | |
+| Configurer | Configure | |
+| prêt / en cours / arrêt… / arrêté / terminé / planté | ready / running / stopping… / stopped / done / crashed | l’état d’une commande de lancement, en minuscules (« planté (code 2) » → “crashed (code 2)”) |
+| recette | recipe | les commandes que l’agent propose pour tester son travail |
+| Préparation n / processus n | Setup n / process n | les noms donnés aux étapes d’une recette quand l’agent n’en a pas donné |
+| non attendu | skipped | une étape qu’un test en échec n’attend plus |
+| Rouvrir | Reopen | le navigateur d’un test |
+| Voir le log / Voir les logs | View log / View logs | |
+| racine du worktree | worktree root | |
+| Processus terminé | Process exited | un terminal dont le shell s’est arrêté |
+| Session 5 h / Hebdo / reset | 5-hour session / Weekly / resets in | barre d’état, telle qu’elle est aujourd’hui (la tâche K5 la refait) |
+| Aperçu de l’onglet | Tab preview | fenêtre d’un nouveau projet |
+| Nouveautés (d’une version) | What’s new | notes d’une mise à jour |
+| prête · Redémarrer (mise à jour) | ready · Restart | barre d’état |
+| Quitter quand même | Quit anyway | quand des fichiers ne sont pas enregistrés |
 
 ## L10 — errors, backend
 

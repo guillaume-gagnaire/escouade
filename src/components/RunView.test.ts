@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { setLang } from '../lib/i18n';
 import { app } from '../lib/state.svelte';
 import type { RunCommand } from '../lib/types';
 import { agent, fakeBackend, project, resetApp } from '../test/ipc';
@@ -122,5 +123,41 @@ describe('RunView', () => {
       expect(backend.called('test_run_start')[0].args).toMatchObject({ agentId: 'a7', kind: 'run', index: 0 });
       expect(backend.called('run_start')).toHaveLength(0);
     });
+  });
+});
+
+describe('RunView in English', () => {
+  beforeEach(() => {
+    resetApp({ projects: [P] });
+    app.shells = [{ id: 'pwsh', label: 'PowerShell 7', path: 'pwsh.exe' }];
+    setLang('en');
+  });
+
+  it('writes the buttons and the empty state in English', () => {
+    fakeBackend();
+    render(RunView, { cmd: FRONT, project: P });
+    expect(screen.getByText('Not run yet.')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: '▶ Run' })).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Clear' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^⌕$/ })).toHaveAttribute('title', 'Search (Ctrl+Shift+F)');
+  });
+
+  it('says since when it runs, in the time of the language, and offers to restart or stop it', () => {
+    fakeBackend();
+    const startedAt = new Date(2026, 9, 2, 21, 30).getTime();
+    app.launches.c1 = { status: 'running', ptyId: 't1', name: 'Front', stopping: false, code: null, startedAt };
+    render(RunView, { cmd: FRONT, project: P });
+    expect(screen.getByText('running')).toBeInTheDocument();
+    expect(screen.getByText(/^since 9:30\sPM$/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '⟳ Restart' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '■ Stop' })).toBeInTheDocument();
+  });
+
+  it('says how the last run ended', () => {
+    fakeBackend();
+    app.launches.c1 = { status: 'crashed', ptyId: null, name: 'Front', stopping: false, code: 1, startedAt: 1 };
+    render(RunView, { cmd: FRONT, project: P });
+    expect(screen.getByText('crashed (code 1)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '⟳ Restart' })).toBeInTheDocument();
   });
 });

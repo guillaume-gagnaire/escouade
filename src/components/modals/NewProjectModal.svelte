@@ -1,5 +1,6 @@
 <script lang="ts">
   import { open } from '@tauri-apps/plugin-dialog';
+  import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { modelOptions } from '../../lib/models';
   import { app } from '../../lib/state.svelte';
@@ -36,19 +37,21 @@
 
   const gitLine = $derived(
     !info
-      ? { text: 'Choisis le dossier du projet', color: 'var(--dim)' }
+      ? { text: t('shell.newProject.git.choose'), color: 'var(--dim)' }
       : !info.exists
-        ? { text: 'Dossier introuvable', color: 'var(--del)' }
+        ? { text: t('shell.newProject.git.missing'), color: 'var(--del)' }
         : info.isRepo
           ? {
-              text: `Dépôt git détecté · branche ${info.branch || '—'} · ${info.dirty ? `${info.dirty} fichier${info.dirty > 1 ? 's' : ''} modifié${info.dirty > 1 ? 's' : ''}` : 'propre'}`,
+              text: info.dirty
+                ? t('shell.newProject.git.repoDirty', { branch: info.branch || '—', count: info.dirty })
+                : t('shell.newProject.git.repoClean', { branch: info.branch || '—' }),
               color: 'var(--ok)',
             }
-          : { text: 'Aucun dépôt git · un dépôt sera initialisé', color: 'var(--muted)' },
+          : { text: t('shell.newProject.git.none'), color: 'var(--muted)' },
   );
 
   async function browse() {
-    const dir = await open({ directory: true, multiple: false, title: 'Dossier du projet' });
+    const dir = await open({ directory: true, multiple: false, title: t('shell.newProject.folderTitle') });
     if (typeof dir === 'string') path = dir;
   }
 
@@ -66,35 +69,41 @@
   }
 </script>
 
-<Modal title="Nouveau projet" onclose={() => (app.modal = null)}>
+<Modal title={t('shell.newProject.title')} onclose={() => (app.modal = null)}>
   <div class="grp">
-    <span class="lab">Dossier</span>
+    <span class="lab">{t('common.folder')}</span>
     <div class="row">
       <!-- svelte-ignore a11y_autofocus -->
-      <input class="field mono" style="flex:1;font-size:12.5px" bind:value={path} placeholder="C:\chemin\vers\le\projet" autofocus />
-      <button class="btn" style="height:36px" onclick={browse}>Parcourir…</button>
+      <input
+        class="field mono"
+        style="flex:1;font-size:12.5px"
+        bind:value={path}
+        placeholder={t('shell.newProject.pathPlaceholder')}
+        autofocus
+      />
+      <button class="btn" style="height:36px" onclick={browse}>{t('shell.newProject.browse')}</button>
     </div>
     <span class="git mono" style:color={gitLine.color}><span class="d" style:background={gitLine.color}></span>{gitLine.text}</span>
   </div>
   <div class="two">
     <div class="grp">
-      <span class="lab">Nom</span>
+      <span class="lab">{t('common.name')}</span>
       <input class="field" style="font-weight:600;font-size:13.5px" bind:value={name} oninput={() => (nameTouched = true)} />
     </div>
     <div class="grp">
-      <span class="lab">Aperçu de l'onglet</span>
+      <span class="lab">{t('shell.newProject.tabPreview')}</span>
       <div class="preview" style:border-bottom-color={color}>
-        <span class="sw" style:background={color}></span>{name || 'nouveau-projet'}
+        <span class="sw" style:background={color}></span>{name || t('shell.newProject.untitled')}
       </div>
     </div>
   </div>
   <div class="grp">
-    <span class="lab">Couleur</span>
+    <span class="lab">{t('common.color')}</span>
     <div class="colors">
       {#each PROJECT_COLORS as c, i (c)}
         <button
           class="swatch"
-          aria-label="Couleur {i + 1}"
+          aria-label={t('shell.newProject.colorN', { n: i + 1 })}
           aria-pressed={color === c}
           style:background={c}
           style:box-shadow={color === c ? '0 0 0 2px var(--panel), 0 0 0 4px var(--text)' : 'none'}
@@ -107,21 +116,21 @@
   <div class="grp" style="gap:14px">
     <div class="toggle">
       <div class="tx">
-        <span class="tt">Créer un premier agent</span>
-        <span class="ts">Ouvre directement une conversation dans ce projet</span>
+        <span class="tt">{t('shell.newProject.firstAgent')}</span>
+        <span class="ts">{t('shell.newProject.firstAgentDesc')}</span>
       </div>
       <button
         class="switch"
         role="switch"
         aria-checked={firstAgent}
         class:on={firstAgent}
-        aria-label="Créer un premier agent"
+        aria-label={t('shell.newProject.firstAgent')}
         onclick={() => (firstAgent = !firstAgent)}
       ></button>
     </div>
     {#if firstAgent}
       <div class="models">
-        <span class="ts">Modèle</span>
+        <span class="ts">{t('common.model')}</span>
         {#each modelOptions(app.models) as m (m.value)}
           <button class="mbtn mono" class:on={model === m.value} onclick={() => (model = m.value)}>{m.label}</button>
         {/each}
@@ -129,23 +138,23 @@
     {/if}
     <div class="toggle">
       <div class="tx">
-        <span class="tt">Un worktree git par agent</span>
-        <span class="ts">Isole le travail de chaque agent et permet de voir ses fichiers modifiés séparément</span>
+        <span class="tt">{t('shell.newProject.worktree')}</span>
+        <span class="ts">{t('shell.newProject.worktreeDesc')}</span>
       </div>
       <button
         class="switch"
         role="switch"
         aria-checked={worktree}
         class:on={worktree}
-        aria-label="Un worktree git par agent"
+        aria-label={t('shell.newProject.worktree')}
         onclick={() => (worktree = !worktree)}
       ></button>
     </div>
   </div>
   {#snippet footer()}
-    <button class="btn ghost" onclick={() => (app.modal = null)}>Annuler</button>
+    <button class="btn ghost" onclick={() => (app.modal = null)}>{t('common.cancel')}</button>
     <button class="btn primary" style:background={color} disabled={!info?.exists || busy} onclick={create}>
-      {busy ? 'Création…' : 'Créer le projet'}
+      {busy ? t('shell.newProject.creating') : t('shell.newProject.create')}
     </button>
   {/snippet}
 </Modal>
