@@ -1070,6 +1070,21 @@ describe('board', () => {
     expect(app.autopilotPause).toBeNull();
   });
 
+  it('knows why the projects that prefer an account wait for it, from the start and as the backend tells it', async () => {
+    const mine = { reason: 'fiveHour' as const, pct: 100, until: 7, accounts: ['pro'] };
+    const { emit } = await start({ projectPauses: { p1: mine } });
+    expect(app.projectPauses).toEqual({ p1: mine });
+    // Told with the other pause, each time: what it no longer names is over.
+    emit({ type: 'autopilotPause', pause: null, projects: { p2: mine } });
+    expect(app.projectPauses).toEqual({ p2: mine });
+    emit({ type: 'autopilotPause', pause: null });
+    expect(app.projectPauses).toEqual({});
+    // An older backend sends none.
+    app.projectPauses = { p1: mine };
+    await start();
+    expect(app.projectPauses).toEqual({});
+  });
+
   it('starts without tickets when the snapshot has none', async () => {
     resetApp({ tickets: [ticket()] });
     await start({ tickets: undefined });

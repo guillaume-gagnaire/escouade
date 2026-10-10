@@ -56,4 +56,24 @@ export default defineZone('accounts', {
     restart: 'Restart',
     done: 'Done',
   },
+
+  composer: {
+    caption: 'Account',
+    auto: 'Automatic ({name})',
+    autoDetail: 'The project’s, else the first account under the pause threshold.',
+    inactive: '{name} (inactive)',
+    locked: 'An agent’s account can’t change after its first message (its conversation is filed in that account).',
+  },
+
+  project: {
+    label: 'Preferred account',
+    desc: 'The account this project’s new agents and tickets go to.',
+    auto: 'Automatic',
+    autoTitle: 'The first active account under the pause threshold, in the order of the accounts',
+    inactive: '{name} (inactive)',
+  },
+
+  pause: {
+    over: { one: 'The {accounts} account is past the threshold.', other: 'The {accounts} accounts are past the threshold.' },
+  },
 });

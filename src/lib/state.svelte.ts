@@ -188,6 +188,8 @@ class AppState {
   boardIssues = $state<Record<string, string>>({});
   /** Why no ticket of any board starts for now (a quota window, a usage limit), as the backend says. */
   autopilotPause = $state<AutopilotPause | null>(null);
+  /** The same for the paused projects that prefer an account, by project (they wait for that account alone). */
+  projectPauses = $state<Record<string, AutopilotPause>>({});
   /** The external ticket systems' accounts (their secrets stay in the backend). */
   accounts = $state<AccountView[]>([]);
   editor = $state<Record<string, EditorState>>({});
@@ -353,6 +355,7 @@ class AppState {
     this.boardIssues = { ...s.boardIssues };
     this.setupOutput = { ...s.setupOutput };
     this.autopilotPause = s.autopilotPause ?? null;
+    this.projectPauses = s.projectPauses ?? {};
     this.accounts = s.accounts ?? [];
     this.attention = {};
     this.ui = { ...s.ui, view: s.ui.view || 'project', selectedAgent: s.ui.selectedAgent ?? {} };
@@ -456,6 +459,7 @@ class AppState {
         break;
       case 'autopilotPause':
         this.autopilotPause = e.pause;
+        this.projectPauses = e.projects ?? {};
         break;
       case 'setupOutput':
         this.takeSetupOutput(e.agentId, e);

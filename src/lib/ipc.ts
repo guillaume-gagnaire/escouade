@@ -89,6 +89,8 @@ export const api = {
     invoke<void>('answer_permission', { id, requestId, decision, message }),
   setAgentOptions: (id: string, o: { model?: string; effort?: string; mode?: string }) =>
     invoke<void>('set_agent_options', { id, model: o.model ?? null, effort: o.effort ?? null, mode: o.mode ?? null }),
+  /** The Claude account of an agent that has not started (empty: « Automatique », the backend chooses). */
+  setAgentAccount: (id: string, account: string) => invoke<void>('set_agent_account', { id, account }),
   renameAgent: (id: string, name: string) => invoke<void>('rename_agent', { id, name }),
   /** A copy of the agent, « <nom> (copie) », whose Claude Code session forks the original’s (refused during its turn). */
   duplicateAgent: (id: string) => invoke<Agent>('duplicate_agent', { id }),

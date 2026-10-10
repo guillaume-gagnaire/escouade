@@ -72,7 +72,7 @@ const SETTINGS_OF: Partial<Record<SettingsTab, (keyof Settings)[]>> = {
 /** What the modal sets of a project, as the backend's `update_project` takes it, its board apart. */
 type ProjectFields = Pick<
   Project,
-  'name' | 'color' | 'worktreePerAgent' | 'runCommands' | 'worktreeCopy' | 'worktreeSetup' | 'worktreeTeardown' | 'commitMode'
+  'name' | 'color' | 'worktreePerAgent' | 'runCommands' | 'worktreeCopy' | 'worktreeSetup' | 'worktreeTeardown' | 'commitMode' | 'account'
 >;
 
 /** Which commands of a project's worktrees: run once one is made, or before one is removed. */
@@ -89,14 +89,27 @@ export interface ProjectDraft {
   worktreeTeardown: WorktreeStep[];
   /** « Commit »: the agent writes the commits, or the app commits with the message the user read. */
   commitMode: CommitMode;
+  /** « Compte préféré »: the Claude account its agents and tickets go to; empty is « Automatique ». */
+  account: string;
   board: BoardSettings;
   /** Its sources in external ticket systems (the « Intégrations » tab). */
   integrations: ProjectIntegrations;
 }
 
 function draftOf(p: Project): ProjectDraft {
-  const { name, color, worktreePerAgent, runCommands, worktreeCopy, worktreeSetup, worktreeTeardown, commitMode, board, integrations } =
-    $state.snapshot(p);
+  const {
+    name,
+    color,
+    worktreePerAgent,
+    runCommands,
+    worktreeCopy,
+    worktreeSetup,
+    worktreeTeardown,
+    commitMode,
+    account,
+    board,
+    integrations,
+  } = $state.snapshot(p);
   return {
     name,
     color,
@@ -106,6 +119,7 @@ function draftOf(p: Project): ProjectDraft {
     worktreeSetup,
     worktreeTeardown,
     commitMode,
+    account,
     board,
     integrations,
   };
@@ -134,6 +148,7 @@ function fieldsOf(d: ProjectDraft): ProjectFields {
     worktreeSetup: stepsOf(d.worktreeSetup),
     worktreeTeardown: stepsOf(d.worktreeTeardown),
     commitMode: d.commitMode,
+    account: d.account,
   };
 }
 

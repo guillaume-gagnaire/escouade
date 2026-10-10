@@ -372,6 +372,9 @@ Ce qu’Escouade dit à Claude ou lui fait écrire suit « Langue des textes ré
 | Lier / Copier | Link / Copy | « Lier (un changement vaut pour les deux comptes) » → “Link (a change applies to both accounts)” |
 | styles de sortie | output styles | le dossier `output-styles` de Claude Code |
 | seuil de pause | pause threshold | « Pause au-delà du quota » |
+| Compte préféré | Preferred account | le réglage d’un projet ; « Automatique » → “Automatic” |
+| Automatique (Pro) | Automatic (Pro) | le choix du Composer qui laisse Escouade choisir, avec le compte qu’elle choisirait |
+| a passé le seuil | is past the threshold | un compte dont une fenêtre de quota atteint « Pause au-delà du quota » |
 
 ## M — mcp
 

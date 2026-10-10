@@ -5,6 +5,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { ACCEPT, MAX_TOTAL, readAttachment, sizeLabel, type DraftAttachment } from '../lib/attachments';
+  import { accountName, newAgentAccount } from '../lib/accounts';
   import { applyCompletion, detectTrigger, filterCommands, type Trigger } from '../lib/complete';
   import { conversationOf } from '../lib/conversations.svelte';
   import { getDraft, setDraft } from '../lib/drafts';
@@ -37,7 +38,7 @@
   /** Files being read, not attached yet. */
   let reading = $state(0);
   let dragOver = $state(false);
-  let menu = $state<'model' | 'effort' | 'mode' | null>(null);
+  let menu = $state<'model' | 'effort' | 'mode' | 'account' | null>(null);
   let width = $state(0);
   let fileInput = $state<HTMLInputElement>();
   let reqSeq = 0;
@@ -57,6 +58,26 @@
         disabled: unavailable,
       };
     }),
+  );
+  // The account chip: with several accounts, beside the model. It changes the account only while the agent has no session
+  // (nothing said to it yet, no copy's original behind it): then its conversation is filed in that account.
+  const project = $derived(app.projects.find((p) => p.id === agent.projectId));
+  const accounts = $derived(app.settings.accounts);
+  const accountLocked = $derived(!!agent.sessionId || !!agent.forkOf || agent.prompts > 0 || busy);
+  const accountOptions = $derived(
+    accounts.length < 2
+      ? []
+      : [
+          {
+            value: '',
+            label: t('accounts.composer.auto', { name: accountName(newAgentAccount(project) ?? accounts[0]) }),
+            detail: t('accounts.composer.autoDetail'),
+          },
+          // The agent's own, even switched off since: it is where it is.
+          ...accounts
+            .filter((a) => a.active || a.id === agent.account)
+            .map((a) => ({ value: a.id, label: a.active ? accountName(a) : t('accounts.composer.inactive', { name: accountName(a) }) })),
+        ],
   );
   // Keeps the send button on the same line in a narrow column (split layout): drop the captions.
   const tight = $derived(width > 0 && width < (busy ? 640 : 540));
@@ -323,7 +344,7 @@
     app.run(api.interrupt(agent.id));
   }
 
-  function toggleMenu(m: 'model' | 'effort' | 'mode') {
+  function toggleMenu(m: 'model' | 'effort' | 'mode' | 'account') {
     menu = menu === m ? null : m;
   }
 
@@ -337,6 +358,15 @@
   $effect(() => {
     if (app.modal) menu = null;
   });
+
+  /** Empty: « Automatique », which account that is is the backend's to say (it tells the agent back). */
+  function pickAccount(id: string) {
+    menu = null;
+    const a = app.agents[agent.id];
+    if (a && id) a.account = id;
+    app.run(api.setAgentAccount(agent.id, id));
+    ta?.focus();
+  }
 
   function setOption(o: { model?: string; effort?: string; mode?: string }) {
     const a = app.agents[agent.id];
@@ -428,6 +458,19 @@
         onToggle={() => toggleMenu('model')}
         onPick={(v) => pick({ model: v })}
       />
+      {#if accounts.length > 1}
+        <Dropdown
+          caption={t('accounts.composer.caption')}
+          value={agent.account}
+          options={accountOptions}
+          open={menu === 'account'}
+          showCaption={!tight}
+          readonly={accountLocked}
+          title={accountLocked ? t('accounts.composer.locked') : undefined}
+          onToggle={() => toggleMenu('account')}
+          onPick={pickAccount}
+        />
+      {/if}
       <Dropdown
         caption={t('composer.bar.effort')}
         value={effortOk ? agent.effort : ''}

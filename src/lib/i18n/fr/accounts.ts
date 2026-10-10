@@ -60,4 +60,27 @@ export default {
     restart: 'Relancer',
     done: 'Terminé',
   },
+
+  // The account chip of the Composer, before the agent's first message.
+  composer: {
+    caption: 'Compte',
+    auto: 'Automatique ({name})',
+    autoDetail: 'Celui du projet, sinon le premier compte sous le seuil de pause.',
+    inactive: '{name} (inactif)',
+    locked: 'Le compte d’un agent ne change plus après son premier message (sa conversation est rangée dans ce compte).',
+  },
+
+  // « Compte préféré » in a project's settings.
+  project: {
+    label: 'Compte préféré',
+    desc: 'Le compte sur lequel partent les nouveaux agents et les tickets de ce projet.',
+    auto: 'Automatique',
+    autoTitle: 'Le premier compte actif sous le seuil de pause, dans l’ordre des comptes',
+    inactive: '{name} (inactif)',
+  },
+
+  // Under the autopilot's pause: the accounts that are past « Pause au-delà du quota ».
+  pause: {
+    over: { one: 'Le compte {accounts} a passé le seuil.', other: 'Les comptes {accounts} ont passé le seuil.' },
+  },
 } as const satisfies Tree;

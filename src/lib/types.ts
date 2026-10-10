@@ -224,6 +224,8 @@ export interface Project {
   integrations: ProjectIntegrations;
   /** « Commit »: who writes the commits of the files panel's « Commit… » and « Commit tout… ». */
   commitMode: CommitMode;
+  /** « Compte préféré »: the Claude account its new agents and tickets go to (an `Account`'s id); empty is « Automatique ». */
+  account: string;
 }
 
 /** « Rédigé par l'agent » (the agent is asked to commit) or « Direct, avec un message proposé ». */
@@ -676,6 +678,8 @@ export interface AutopilotPause {
   pct: number | null;
   /** When the tickets start again: the window's end, or about then after a limit. */
   until: number;
+  /** The accounts a ticket could start on, all held back (the reason and the end are those of the first to be free again); none with a single account. */
+  accounts?: string[];
 }
 
 /** What the running Claude processes use (each with what it started), per agent and in all. */
@@ -869,8 +873,8 @@ export type UiEvent =
   | { type: 'focusBoard'; projectId: string }
   /** Why no ticket of the project's board starts (its target branch), or null once they may. */
   | { type: 'boardIssue'; projectId: string; issue: string | null }
-  /** Why no ticket of any board starts for now, or null once they may. */
-  | { type: 'autopilotPause'; pause: AutopilotPause | null }
+  /** Why no ticket of a project that goes to any account starts for now, or null once they may; `projects`: the same for the paused projects that prefer an account. */
+  | { type: 'autopilotPause'; pause: AutopilotPause | null; projects?: Record<string, AutopilotPause> }
   | { type: 'toast'; text: string }
   /** The settings changed a language: the window switches to it at once. */
   | { type: 'language'; lang: LangInfo }
@@ -900,8 +904,10 @@ export interface InitialState {
   models: ModelInfo[];
   /** Why no ticket of a project's board starts, by project (none: they may). */
   boardIssues?: Record<string, string>;
-  /** Why no ticket of any board starts for now (none: they may). */
+  /** Why no ticket of a project that goes to any account starts for now (none: they may). */
   autopilotPause?: AutopilotPause | null;
+  /** The same for the paused projects that prefer an account, by project. */
+  projectPauses?: Record<string, AutopilotPause>;
   /** The external ticket systems' accounts. */
   accounts?: AccountView[];
   /** The update installed since the app's last start, told once. */
