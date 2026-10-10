@@ -154,6 +154,14 @@ Le site est une page Nuxt générée en statique (`website/`, preset `github_pag
 ### Docs
 - [ ] SPEC : la règle des langues et des formats. README et CHANGELOG restent en français ; un README en anglais (`README.en.md`) est à décider.
 
+## 5. Avancée d'un agent qui exécute un plan (ajouté en cours de 1.7)
+
+But : quand un agent déroule un plan (liste de tâches, sous-agents), Escouade montre où il en est, sans avoir à lire sa conversation.
+
+- [ ] Les agents remontent les détails de leur avancée pendant l'exécution d'un plan : la liste des tâches (faites, en cours, à venir), le nombre de sous-agents lancés et en cours, ce qui se passe en ce moment.
+- [ ] Design de référence : https://claude.ai/design/p/9047fbff-8fa3-4f27-bf04-68c6672302d1?file=Claude+Code+Manager.dc.html (le design en ligne, plus récent que `design/Claude Code Manager.dc.html`).
+- [ ] À tester avec superpowers : un agent qui suit un plan superpowers (writing-plans puis executing-plans ou subagent-driven-development, avec son ledger et ses sous-agents) ou un workflow apparaît correctement dans cette vue ; un essai réel, et un scénario du faux `claude` qui rejoue ce déroulé.
+
 ## Ordre proposé
 
 1. Langues, la mécanique et l'extraction des textes existants (app, puis site) : sinon chaque texte des autres chantiers serait écrit en dur puis repris. Les textes nouveaux s'écrivent ensuite directement dans les deux langues.
