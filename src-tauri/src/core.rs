@@ -12,6 +12,7 @@ use crate::i18n::{self, LangInfo};
 use crate::integrations;
 use crate::isola;
 use crate::job::JobUsage;
+use crate::menus;
 use crate::model::*;
 use crate::notify;
 use crate::paths::{self, DataDir};
@@ -992,8 +993,10 @@ impl<R: Runtime> Core<R> {
         *self.settings.write() = s;
         let lang = self.lang();
         if lang != before {
-            // At once, without a restart: what the backend writes from now on, and the window.
+            // At once, without a restart: what the backend writes from now on, the native menus,
+            // and the window.
             i18n::set(lang);
+            self.relabel_menus(lang.ui);
             self.hub.emit(UiEvent::Language { lang });
         }
         if !auto_resume {
@@ -1390,15 +1393,20 @@ impl<R: Runtime> Core<R> {
         if self.waiting.swap(n, Ordering::AcqRel) == n {
             return;
         }
-        if let Some(tray) = self.app.tray_by_id("main") {
+        if let Some(tray) = self.app.tray_by_id(menus::TRAY_ID) {
             let _ = tray.set_icon(notify::tray_icon(&self.app, n));
-            let tip = match n {
-                0 => "Escouade".to_string(),
-                1 => "Escouade — 1 agent en attente".to_string(),
-                n => format!("Escouade — {n} agents en attente"),
-            };
-            let _ = tray.set_tooltip(Some(tip));
+            let _ = tray.set_tooltip(Some(menus::tray_tooltip(i18n::ui(), n)));
         }
+    }
+
+    /// The native menus and the tray icon's tooltip in `lang`, after a change of language.
+    fn relabel_menus(&self, lang: i18n::Lang) {
+        // Before the first count (`start`), no agent is counted as waiting.
+        let waiting = match self.waiting.load(Ordering::Acquire) {
+            usize::MAX => 0,
+            n => n,
+        };
+        menus::relabel(&self.app, lang, waiting);
     }
 
     // ---------- claude processes ----------

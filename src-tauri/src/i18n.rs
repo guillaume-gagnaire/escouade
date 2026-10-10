@@ -67,8 +67,6 @@ static UI: AtomicU8 = AtomicU8::new(Lang::Fr.code());
 static CLAUDE: AtomicU8 = AtomicU8::new(Lang::Fr.code());
 
 /// The language of the interface: what the window, the menus and the notifications are written in.
-// Allowed unused until the backend's texts go through `tr!` (then drop the allow).
-#[allow(dead_code)]
 pub fn ui() -> Lang {
     Lang::of_code(UI.load(Ordering::Relaxed))
 }
@@ -136,8 +134,6 @@ pub fn configure(language: &str, claude_language: &str) -> LangInfo {
 }
 
 /// A text in `lang`: `tr_in!(lang, "français", "English", args…)`.
-// Allowed unused until the backend's texts go through it (then drop the allow).
-#[allow(unused_macros)]
 macro_rules! tr_in {
     ($lang:expr, $fr:literal, $en:literal $(,)?) => {
         match $lang {
