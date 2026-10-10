@@ -38,12 +38,24 @@ impl Conv {
             return;
         }
         self.loaded = true;
-        let Some(log) = replay(&self.path()) else {
-            return;
-        };
+        if let Some(log) = replay(&self.path()) {
+            self.take(log);
+        }
+    }
+
+    /// Takes the conversation as its log was read, and compacts the log when it holds many more
+    /// operations than items. Not a log read in part only: rewritten from what was read, it would
+    /// lose the rest for good. The operations to come are appended to it all the same.
+    fn take(&mut self, log: Replayed) {
+        self.loaded = true;
         self.items = log.items;
         self.index = log.index;
-        if log.ops > self.items.len() * 2 + 64 {
+        if log.partial {
+            log::warn!(
+                "conversation of {} read in part only: its log is not compacted",
+                self.agent_id
+            );
+        } else if log.ops > self.items.len() * 2 + 64 {
             self.compact();
         }
     }
@@ -183,6 +195,9 @@ pub struct Replayed {
     pub index: HashMap<String, usize>,
     /// The operations read.
     pub ops: usize,
+    /// The reading failed before the end of the log (a disk error, not a damaged line): what
+    /// follows is not in `items`.
+    pub partial: bool,
 }
 
 /// Reads a log back, without writing anything: the search reads the logs of agents that are
@@ -191,13 +206,27 @@ pub struct Replayed {
 /// read. None when there is no log.
 pub fn replay(path: &Path) -> Option<Replayed> {
     let file = File::open(path).ok()?;
+    Some(replay_from(BufReader::new(file)))
+}
+
+/// `replay` of the log `reader` gives.
+fn replay_from(reader: impl BufRead) -> Replayed {
     let mut log = Replayed {
         items: Vec::new(),
         index: HashMap::new(),
         ops: 0,
+        partial: false,
     };
     // Lines as bytes: reading them as text would stop at the first one that is not UTF-8.
-    for line in BufReader::new(file).split(b'\n').map_while(Result::ok) {
+    for line in reader.split(b'\n') {
+        let line = match line {
+            Ok(line) => line,
+            Err(e) => {
+                log::warn!("conversation log read in part only: {e}");
+                log.partial = true;
+                break;
+            }
+        };
         let Ok(v) = serde_json::from_slice::<Value>(&line) else {
             continue;
         };
@@ -212,7 +241,7 @@ pub fn replay(path: &Path) -> Option<Replayed> {
             _ => {}
         }
     }
-    Some(log)
+    log
 }
 
 /// An item appended again (same id) replaces the one in place.
@@ -289,5 +318,67 @@ mod tests {
         let log = replay(&log_path(&dir, "a1")).unwrap();
         assert_eq!(log.ops, 2);
         assert_eq!(ids(&log.items), ["m1", "u2"]);
+    }
+
+    /// Gives `bytes` up to `fail_at`, then fails as a disk can: not the end of the file.
+    struct FailsMidway {
+        bytes: Vec<u8>,
+        at: usize,
+        fail_at: usize,
+    }
+
+    impl std::io::Read for FailsMidway {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            if self.at >= self.fail_at {
+                return Err(std::io::Error::other("the disk went away"));
+            }
+            let n = buf.len().min(self.fail_at - self.at);
+            buf[..n].copy_from_slice(&self.bytes[self.at..self.at + n]);
+            self.at += n;
+            Ok(n)
+        }
+    }
+
+    #[test]
+    fn a_log_whose_reading_fails_midway_is_not_rewritten_from_the_part_read() {
+        let dir = test_dir("conv-read-fails-midway");
+        let op = |v: Value| format!("{v}\n").into_bytes();
+        let mut bytes =
+            op(json!({ "op": "append", "item": { "kind": "user", "id": "u1", "text": "avant" } }));
+        // Enough operations for the log to be compacted once read.
+        for i in 0..70 {
+            bytes.extend(op(
+                json!({ "op": "patch", "id": "u1", "patch": { "text": format!("v{i}") } }),
+            ));
+        }
+        // The reading fails in the middle of the next line.
+        let fail_at = bytes.len() + 10;
+        bytes.extend(op(
+            json!({ "op": "append", "item": { "kind": "user", "id": "u2", "text": "après" } }),
+        ));
+        let path = log_path(&dir, "a1");
+        std::fs::write(&path, &bytes).unwrap();
+
+        let log = replay_from(BufReader::new(FailsMidway {
+            bytes: bytes.clone(),
+            at: 0,
+            fail_at,
+        }));
+        assert!(log.partial);
+        assert_eq!(log.ops, 71);
+        let mut conv = Conv::new(&dir, "a1");
+        conv.take(log);
+        // What was read is shown, and the log keeps all it holds.
+        assert_eq!(conv.items().len(), 1);
+        assert_eq!(conv.get("u1").unwrap()["text"], "v69");
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            String::from_utf8(bytes).unwrap()
+        );
+
+        // Read whole, the same log is compacted.
+        assert!(!replay(&path).unwrap().partial);
+        assert_eq!(Conv::new(&dir, "a1").items().len(), 2);
+        assert_eq!(replay(&path).unwrap().ops, 2);
     }
 }
