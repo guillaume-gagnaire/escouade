@@ -1,7 +1,9 @@
 <script lang="ts">
+  import { accountName, resumeTargets } from '../../lib/accounts';
   import { fDur, fTok, fUsd, fWhen, isAbsPath } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
+  import { menu } from '../../lib/menu.svelte';
   import { app } from '../../lib/state.svelte';
   import type { FileEdit } from '../../lib/tools';
   import type { Agent, TurnItem } from '../../lib/types';
@@ -17,16 +19,58 @@
   }: { item: TurnItem; agent: Agent; last: boolean; latest?: boolean; edits?: FileEdit[] } = $props();
 
   const big = $derived(last && agent.status === 'done' && !item.isError && !item.interrupted);
+
+  const working = $derived(agent.status === 'running' || agent.status === 'waiting');
+  const accountById = (id: string) => app.settings.accounts?.find((a) => a.id === id);
+  // Stopped by the usage limit (a turn saved before the accounts only has its wait for the reset to tell it): the other
+  // accounts it can go on on, with its session. Not once it works again, nor for an earlier turn.
+  const targets = $derived(latest && !working && !agent.archived && (item.limited || agent.resumeAt) ? resumeTargets(agent) : []);
+  // The first turn after a resume on another account failed there: the sentence replaces the error, which it holds.
+  const resumeFailed = $derived(latest && !working && !item.limited && agent.movedFrom ? accountById(agent.account) : undefined);
+  const before = $derived(resumeFailed && agent.movedFrom ? accountById(agent.movedFrom) : undefined);
+
+  function resumeOn(account: string) {
+    app.run(api.resumeOnAccount(agent.id, account));
+  }
+
+  /** The other accounts, in a menu under their button. */
+  function more(e: MouseEvent) {
+    menu.showAt(
+      e.currentTarget as HTMLElement,
+      targets.slice(1).map((a) => ({ label: t('accounts.resume.on', { account: accountName(a) }), onClick: () => resumeOn(a.id) })),
+    );
+  }
 </script>
 
 {#if item.isError}
   <div class="card error">
     <div class="title"><span class="dot" style="width:8px;height:8px;background:var(--del)"></span>{t('conv.turn.failed')}</div>
-    {#if item.error}<pre class="err">{item.error}</pre>{/if}
-    {#if latest && agent.resumeAt}
+    {#if resumeFailed}
+      <pre class="err">{t('accounts.resume.failed', { account: accountName(resumeFailed), error: item.error ?? '—' })}</pre>
+      {#if before?.active}
+        <div class="resume">
+          <button class="btn small" onclick={() => app.run(api.backToPreviousAccount(agent.id))}
+            >{t('accounts.resume.back', { account: accountName(before) })}</button
+          >
+        </div>
+      {/if}
+    {:else if item.error}<pre class="err">{item.error}</pre>{/if}
+    {#if (latest && agent.resumeAt) || targets.length}
       <div class="resume">
-        <span>{t('conv.turn.resumeAt', { when: fWhen(agent.resumeAt, app.now) })}</span>
-        <button class="btn small" onclick={() => app.run(api.cancelResume(agent.id))}>{t('conv.turn.cancelResume')}</button>
+        {#if latest && agent.resumeAt}
+          <span>{t('conv.turn.resumeAt', { when: fWhen(agent.resumeAt, app.now) })}</span>
+          <button class="btn small" onclick={() => app.run(api.cancelResume(agent.id))}>{t('conv.turn.cancelResume')}</button>
+        {/if}
+        {#if targets.length}
+          <span class="pair">
+            <button class="btn small" onclick={() => resumeOn(targets[0].id)}
+              >{t('accounts.resume.on', { account: accountName(targets[0]) })}</button
+            >
+            {#if targets.length > 1}
+              <button class="btn small" aria-haspopup="menu" aria-label={t('accounts.resume.another')} onclick={more}>▾</button>
+            {/if}
+          </span>
+        {/if}
       </div>
     {/if}
   </div>
@@ -156,10 +200,15 @@
   }
   .resume {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 12px;
     font-size: 12.5px;
     color: var(--text);
+  }
+  .pair {
+    display: inline-flex;
+    gap: 2px;
   }
   .err {
     margin: 0;

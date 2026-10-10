@@ -49,6 +49,7 @@ export const SETTINGS: Settings = {
   proxyTerminals: false,
   insecureTls: false,
   autoResume: true,
+  switchOnLimit: true,
   quotaPause: 100,
   autoUpdate: true,
   integrations: {
@@ -130,6 +131,7 @@ export function agent(over: Partial<Agent> = {}): Agent {
     approvedRecipe: null,
     approvedIsola: null,
     account: 'principal',
+    movedFrom: null,
     activity: null,
     setup: null,
     isola: false,
