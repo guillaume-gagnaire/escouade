@@ -568,9 +568,10 @@ pub async fn git_diff_refs(
     core.diff_refs(&project_id, &a, &b).await.map_err(err)
 }
 
+/// The statistics of a period, of every account or (`account`) of one.
 #[tauri::command(async)]
-pub fn stats(core: CoreState, range: String) -> StatsView {
-    core.stats_view(&range)
+pub fn stats(core: CoreState, range: String, account: Option<String>) -> StatsView {
+    core.stats_view(&range, account.as_deref().filter(|a| !a.is_empty()))
 }
 
 #[tauri::command]

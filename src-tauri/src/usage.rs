@@ -387,6 +387,15 @@ impl UsageSnapshot {
         &mut self.accounts[at]
     }
 
+    /// What the turns cost today (`by_account`: what the statistics say), in total and for each
+    /// account of the snapshot; an account with no turn today has none.
+    pub fn set_today(&mut self, by_account: &std::collections::HashMap<String, f64>) {
+        self.today_cost = by_account.values().sum();
+        for a in &mut self.accounts {
+            a.today_cost = by_account.get(&a.id).copied().unwrap_or(0.0);
+        }
+    }
+
     /// What a reading of the account's quota found, at `now`.
     pub fn record(&mut self, id: &str, reading: Reading, now: i64) {
         let a = self.account_mut(id);
@@ -504,6 +513,32 @@ mod tests {
     use crate::paths::test_dir;
     use serde_json::json;
     use std::collections::BTreeMap;
+
+    #[test]
+    fn the_cost_of_the_day_is_set_for_each_account_and_in_total() {
+        use std::collections::HashMap;
+        let mut u = UsageSnapshot::default();
+        for id in ["principal", "pro", "team"] {
+            u.account_mut(id);
+        }
+        let today =
+            |u: &UsageSnapshot| -> Vec<f64> { u.accounts.iter().map(|a| a.today_cost).collect() };
+        // An account of the statistics that the settings no longer list still counts in the total.
+        u.set_today(&HashMap::from([
+            ("principal".to_string(), 1.5),
+            ("pro".to_string(), 0.25),
+            ("gone".to_string(), 2.0),
+        ]));
+        assert_eq!(today(&u), [1.5, 0.25, 0.0]);
+        assert!((u.today_cost - 3.75).abs() < 1e-9);
+        // Set, not added to: the day's figures replace the last ones.
+        u.set_today(&HashMap::from([("team".to_string(), 0.5)]));
+        assert_eq!(today(&u), [0.0, 0.0, 0.5]);
+        assert!((u.today_cost - 0.5).abs() < 1e-9);
+        u.set_today(&HashMap::new());
+        assert_eq!(today(&u), [0.0, 0.0, 0.0]);
+        assert_eq!(u.today_cost, 0.0);
+    }
 
     #[test]
     fn parses_usage_windows() {
