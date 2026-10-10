@@ -2386,6 +2386,52 @@ async fn validating_squashes_the_ticket_into_the_projects_branch_with_a_generate
 }
 
 #[tokio::test]
+async fn a_finished_ticket_costs_what_all_its_agents_cost() {
+    let h = harness("tk-cost-all-agents");
+    let (p, _) = h.project(false).await;
+    let (t, _) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    let current = t.agent_id.clone().unwrap();
+    // An earlier agent of the ticket, archived when another one took it over: "À tester" added up
+    // both, so "Terminé" must not say less.
+    let first = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                ticket_id: Some(t.id.clone()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta
+        .id;
+    h.core.agent(&first).unwrap().lock().meta.cost = 1.0;
+    h.core.archive_agent(&first, true).await.unwrap();
+    // An agent of another ticket is no part of it.
+    let other = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                ticket_id: Some("another-ticket".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta
+        .id;
+    h.core.agent(&other).unwrap().lock().meta.cost = 40.0;
+    let own = h.agent(&current).cost;
+    assert!(own > 0.0);
+    h.core.ticket_approve(&t.id).await.unwrap();
+    let t = h.ticket(&t.id);
+    assert_eq!(t.column, Column::Done, "{:?}", t.blocked);
+    assert!((t.cost - (own + 1.0)).abs() < 1e-9, "{} vs {}", t.cost, own);
+}
+
+#[tokio::test]
 async fn a_merged_tickets_worktree_goes_even_while_its_agent_takes_its_time_to_stop() {
     let h = harness("tk-cleanup-linger");
     let (p, r) = h.project(false).await;

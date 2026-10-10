@@ -173,6 +173,37 @@ describe('Stats by agent and by ticket', () => {
     expect(screen.getAllByRole('button', { name: /Tout voir/ })).toHaveLength(1);
   });
 
+  it('tells assistive technologies whether a list is open, and closes it again with « Réduire »', async () => {
+    fakeBackend({
+      stats: (a: any) => ({
+        ...view(a.range),
+        byAgent: Array.from({ length: 23 }, (_, i) => agentShare(i + 1)),
+        byTicket: Array.from({ length: 21 }, (_, i) => ticketShare(i + 1)),
+      }),
+    });
+    render(Stats);
+    await screen.findByRole('table', { name: 'Par agent' });
+    const [agents, tickets] = screen.getAllByRole('button', { name: 'Tout voir' });
+    expect(agents).toHaveAttribute('aria-expanded', 'false');
+    expect(tickets).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(agents);
+    const less = screen.getByRole('button', { name: 'Réduire' });
+    expect(less).toHaveAttribute('aria-expanded', 'true');
+    // The other list stays closed.
+    expect(screen.getByRole('button', { name: 'Tout voir' })).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(less);
+    expect(lines('Par agent')).toHaveLength(20);
+    expect(screen.getAllByRole('button', { name: 'Tout voir' })).toHaveLength(2);
+  });
+
+  it('says the cost of a ticket is the one of the period, as its agents cost over it', async () => {
+    fakeBackend({ stats: (a: any) => ({ ...view(a.range), byTicket: [ticketShare(1)] }) });
+    render(Stats);
+    const table = await screen.findByRole('table', { name: 'Par ticket' });
+    expect(within(table).getByRole('columnheader', { name: 'Coût sur la période' })).toBeInTheDocument();
+    expect(within(table).queryByRole('columnheader', { name: 'Coût' })).not.toBeInTheDocument();
+  });
+
   it('offers no « Tout voir » for 20 lines or fewer', async () => {
     fakeBackend({
       stats: (a: any) => ({ ...view(a.range), byAgent: Array.from({ length: 20 }, (_, i) => agentShare(i + 1)) }),

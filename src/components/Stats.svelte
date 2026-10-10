@@ -229,7 +229,9 @@
           </table>
           {#if view.byAgent.length > ROWS}
             <div class="more">
-              <button class="btn ghost small" onclick={() => (allAgents = !allAgents)}>{allAgents ? 'Réduire' : 'Tout voir'}</button>
+              <button class="btn ghost small" aria-expanded={allAgents} onclick={() => (allAgents = !allAgents)}
+                >{allAgents ? 'Réduire' : 'Tout voir'}</button
+              >
               {#if !allAgents}<span class="none">{ROWS} sur {view.byAgent.length}</span>{/if}
             </div>
           {/if}
@@ -243,7 +245,11 @@
         {#if view.byTicket.length}
           <table class="list" aria-labelledby="stats-tickets">
             <thead>
-              <tr><th class="w-key">Ticket</th><th>Titre</th><th class="num w-loops">Boucles</th><th class="num">Coût</th></tr>
+              <tr
+                ><th class="w-key">Ticket</th><th>Titre</th><th class="num w-loops">Boucles</th><th class="num w-period"
+                  >Coût sur la période</th
+                ></tr
+              >
             </thead>
             <tbody>
               {#each shown(view.byTicket, allTickets) as t (t.id)}
@@ -258,7 +264,9 @@
           </table>
           {#if view.byTicket.length > ROWS}
             <div class="more">
-              <button class="btn ghost small" onclick={() => (allTickets = !allTickets)}>{allTickets ? 'Réduire' : 'Tout voir'}</button>
+              <button class="btn ghost small" aria-expanded={allTickets} onclick={() => (allTickets = !allTickets)}
+                >{allTickets ? 'Réduire' : 'Tout voir'}</button
+              >
               {#if !allTickets}<span class="none">{ROWS} sur {view.byTicket.length}</span>{/if}
             </div>
           {/if}
@@ -558,6 +566,9 @@
   }
   .list .w-loops {
     width: 110px;
+  }
+  .list .w-period {
+    width: 150px;
   }
   .list td.num {
     font-size: 11.5px;

@@ -425,7 +425,7 @@ pub struct Ticket {
     pub forced: bool,
     /// Its agent was reminded once to end with its report.
     pub reminded: bool,
-    /// What its agent cost, once done.
+    /// What its agents cost together (archived ones included), once done.
     pub cost: f64,
     pub created_at: i64,
     pub started_at: Option<i64>,

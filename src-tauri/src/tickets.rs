@@ -964,6 +964,19 @@ impl<R: Runtime> Core<R> {
         self.schedule();
     }
 
+    /// What the agents of a ticket cost together: every agent whose `ticket_id` is the ticket's, archived
+    /// or not, as `stats_view` attaches them.
+    fn ticket_agents_cost(&self, ticket_id: &str) -> f64 {
+        self.agents
+            .read()
+            .values()
+            .filter_map(|h| {
+                let rt = h.lock();
+                (rt.meta.ticket_id.as_deref() == Some(ticket_id)).then_some(rt.meta.cost)
+            })
+            .sum()
+    }
+
     /// The agent's ticket "En cours" or "À tester" goes back to "À faire", from scratch: from
     /// then on, none of the agent's turns moves it.
     pub(crate) fn unlink_ticket(&self, agent_id: &str) {
@@ -1193,10 +1206,13 @@ impl<R: Runtime> Core<R> {
             }
             _ => (board::KEPT_OUTCOME.to_string(), None),
         };
-        let cost = self
+        // What every agent of the ticket cost, archived ones included (a ticket sent back and taken
+        // over has several), as « À tester » and the statistics add it up; at least its own.
+        let own = self
             .agent(&agent_id)
             .map(|h| h.lock().meta.cost)
             .unwrap_or(meta.cost);
+        let cost = self.ticket_agents_cost(&t.id).max(own);
         // Its process, killed for good before its worktree goes (see `remove_worktree_of`).
         let proc = self
             .agent(&agent_id)
