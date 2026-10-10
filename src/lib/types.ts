@@ -105,6 +105,8 @@ export interface AccountView {
   connected: boolean;
   /** « ada@atlas.dev · atlas.atlassian.net », « @ada ». */
   label: string;
+  /** Its token stays in integrations.json: the system keychain refused it. */
+  inFile?: boolean;
 }
 
 /** The form of « Connecter… »: the fields its service asks for. */

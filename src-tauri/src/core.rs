@@ -342,8 +342,10 @@ pub struct Core<R: Runtime = Wry> {
     pub(crate) ports_reserved: Mutex<Vec<u16>>,
     /// One validation's merge at a time per repository (`merge_lock`).
     pub(crate) merge_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
-    /// The accounts of the external ticket systems (`integrations.json`).
+    /// The accounts of the external ticket systems (`integrations.json`), with their secrets.
     pub accounts: RwLock<integrations::Accounts>,
+    /// Where the accounts' secrets are kept: the system's keychain (memory in tests).
+    pub(crate) secrets: Arc<dyn integrations::secrets::SecretStore>,
     /// Where the Trello and GitHub APIs are.
     pub bases: RwLock<integrations::Bases>,
     /// The GitHub CLI's token, once asked for.
@@ -713,7 +715,8 @@ impl<R: Runtime> Core<R> {
                 )
             })
             .collect();
-        let accounts = integrations::sync::load_accounts(&data);
+        let secrets = integrations::secrets::store_for(&data);
+        let accounts = integrations::secrets::load_accounts(&data, &*secrets);
         let pending_syncs = read_json(&data.sync_queue_file()).unwrap_or_default();
         // The autopilot's pause as the app stopped, for the first pass (before any new reading of
         // the quotas, which with an API key never comes): a window read holds until its end, an
@@ -771,6 +774,7 @@ impl<R: Runtime> Core<R> {
             ports_reserved: Mutex::default(),
             merge_locks: Mutex::default(),
             accounts: RwLock::new(accounts),
+            secrets,
             bases: RwLock::new(integrations::Bases::from_env()),
             gh_token: Mutex::default(),
             sync_queue: Mutex::default(),

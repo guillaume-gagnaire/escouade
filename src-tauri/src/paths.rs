@@ -5,8 +5,9 @@ use std::path::{Path, PathBuf};
 
 pub const DATA_DIR_NAME: &str = ".escouade";
 const OLD_DATA_DIR_NAME: &str = ".claude-code-manager";
-/// The app identifier (tauri.conf.json), which names its WebView and window-state folders.
-const IDENTIFIER: &str = "dev.gagnaire.escouade";
+/// The app identifier (tauri.conf.json), which names its WebView and window-state folders, and its
+/// entries in the system's keychain.
+pub(crate) const IDENTIFIER: &str = "dev.gagnaire.escouade";
 const OLD_IDENTIFIER: &str = "dev.gagnaire.claude-code-manager";
 /// Prefix of the agents' worktree branches (agents made before 0.1.4 keep `ccm/`).
 pub const BRANCH_PREFIX: &str = "escouade/";
@@ -172,7 +173,8 @@ impl DataDir {
         self.0.join("settings.json")
     }
 
-    /// The accounts of the external ticket systems, with their secrets.
+    /// The accounts of the external ticket systems; their secrets are in the system's keychain,
+    /// unless it refused them (`integrations::secrets`).
     pub fn integrations_file(&self) -> PathBuf {
         self.0.join("integrations.json")
     }
@@ -213,6 +215,29 @@ impl DataDir {
 /// Writes a file atomically (temp file + rename) so a crash never leaves a truncated file.
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let tmp = path.with_extension("tmp");
+    std::fs::write(&tmp, bytes)?;
+    std::fs::rename(&tmp, path)
+}
+
+/// `write_atomic` for a file that may hold secrets: on Unix, only its owner may read it (0600),
+/// from the moment it is written.
+pub fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let tmp = path.with_extension("tmp");
+    #[cfg(unix)]
+    {
+        use std::io::Write;
+        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+        let mut f = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&tmp)?;
+        // The mode only applies to a new file: one left by a crash keeps its own, emptied.
+        f.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+        f.write_all(bytes)?;
+    }
+    #[cfg(not(unix))]
     std::fs::write(&tmp, bytes)?;
     std::fs::rename(&tmp, path)
 }

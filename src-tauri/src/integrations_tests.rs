@@ -6,6 +6,7 @@
 use crate::core::Core;
 use crate::core_tests::{git, harness, Harness};
 use crate::integrations::fake::{FakeServer, Request};
+use crate::integrations::secrets::{self, SecretStore};
 use crate::integrations::{Account, Bases, ExternalIssue, Query};
 use crate::model::*;
 use serde_json::{json, Value};
@@ -600,6 +601,108 @@ async fn accounts_are_checked_saved_apart_and_forgotten() {
     let views = h.core.integration_disconnect(Service::Github).unwrap();
     assert!(!views[2].connected);
     assert!(!std::fs::read_to_string(&file).unwrap().contains("ada"));
+}
+
+#[tokio::test]
+async fn an_accounts_secrets_go_to_the_keychain_never_to_the_file_and_leave_with_it() {
+    let h = harness("ig-keychain");
+    let server = FakeServer::start().await;
+    h.serve(&server);
+    let keychain = secrets::memory_of(&h.core.data);
+    server.on(
+        "GET",
+        "/members/me",
+        200,
+        json!({ "id": "m1", "username": "ada" }),
+    );
+    let view = h
+        .core
+        .integration_connect(
+            Service::Trello,
+            Account {
+                key: "trello-key".into(),
+                token: "trello-secret".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert!(view.connected && !view.in_file, "{view:?}");
+    assert_eq!(
+        keychain.entry("trello").as_deref(),
+        Some(r#"{"key":"trello-key","token":"trello-secret"}"#)
+    );
+    let file = h.core.data.integrations_file();
+    let saved = std::fs::read_to_string(&file).unwrap();
+    assert!(saved.contains("@ada"), "{saved}");
+    assert!(
+        !saved.contains("trello-key") && !saved.contains("trello-secret"),
+        "{saved}"
+    );
+    // The calls carry them.
+    let sent = &server.requests()[0];
+    assert_eq!(
+        (sent.query("key"), sent.query("token")),
+        (Some("trello-key".into()), Some("trello-secret".into()))
+    );
+    // The next start finds them in the keychain.
+    let app = mock_app();
+    let (again, _rx) = Core::load(app.handle().clone(), h.core.data.clone());
+    let trello = again.accounts.read().trello.clone().unwrap();
+    assert_eq!(
+        (trello.key.as_str(), trello.token.as_str()),
+        ("trello-key", "trello-secret")
+    );
+    // GitHub through gh keeps none: the token of a former account goes.
+    keychain
+        .set("github", r#"{"key":"","token":"ghp-former"}"#)
+        .unwrap();
+    *h.core.gh_on_path.write() = Some(fake_gh());
+    server.on("GET", "/user", 200, json!({ "login": "ada" }));
+    h.core
+        .integration_connect(Service::Github, Account::default())
+        .await
+        .unwrap();
+    assert_eq!(keychain.entry("github"), None);
+    // Disconnected, its secrets go.
+    h.core.integration_disconnect(Service::Trello).unwrap();
+    assert_eq!(keychain.entry("trello"), None);
+}
+
+#[tokio::test]
+async fn a_token_the_keychain_refuses_stays_in_the_file_and_the_window_is_told() {
+    let h = harness("ig-keychain-refused");
+    let server = FakeServer::start().await;
+    jira_routes(&server);
+    let keychain = secrets::memory_of(&h.core.data);
+    keychain.refuse.store(true, Ordering::SeqCst);
+    let view = h
+        .core
+        .integration_connect(
+            Service::Jira,
+            Account {
+                site: server.url.clone(),
+                email: "ada@atlas.dev".into(),
+                token: "jira-secret".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert!(view.connected && view.in_file, "{view:?}");
+    let file = h.core.data.integrations_file();
+    assert!(std::fs::read_to_string(&file)
+        .unwrap()
+        .contains("jira-secret"));
+    let views = serde_json::to_string(&h.core.integration_accounts()).unwrap();
+    assert!(views.contains(r#""inFile":true"#), "{views}");
+    assert!(!views.contains("jira-secret"), "{views}");
+    // Disconnected, it leaves the file.
+    let views = h.core.integration_disconnect(Service::Jira).unwrap();
+    assert!(!views[0].connected && !views[0].in_file);
+    assert!(!std::fs::read_to_string(&file)
+        .unwrap()
+        .contains("jira-secret"));
 }
 
 #[tokio::test]

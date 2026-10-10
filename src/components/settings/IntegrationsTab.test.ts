@@ -61,6 +61,15 @@ describe('IntegrationsTab', () => {
     expect(within(panel()).queryByText('Correspondance des statuts')).not.toBeInTheDocument();
   });
 
+  it('says which token stays in integrations.json when the system keychain is unavailable', () => {
+    backend();
+    app.accounts = [{ ...ACCOUNTS[0], inFile: true }, off('trello'), { service: 'github', connected: true, label: '@ada', inFile: false }];
+    render(SettingsModal, { tab: 'integrations', projectId: 'p1' });
+    const notes = within(panel()).getAllByText('Trousseau du système indisponible : le jeton reste dans ~/.escouade/integrations.json.');
+    expect(notes).toHaveLength(1);
+    expect(notes[0].closest('.acct')).toHaveTextContent('Connecté · ada@atlas.dev · atlas.atlassian.net');
+  });
+
   it('connects an account once the service accepts it, and says why it refused', async () => {
     let refuse = true;
     const b = backend({

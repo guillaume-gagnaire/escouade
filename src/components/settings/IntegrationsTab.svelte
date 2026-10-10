@@ -167,6 +167,9 @@
       <div class="txt">
         <span class="l">{SERVICES[id].name}</span>
         <span class="d" class:on={a?.connected}>{a?.connected ? `Connecté · ${a.label}` : 'Non connecté'}</span>
+        {#if a?.connected && a.inFile}
+          <span class="d warn">Trousseau du système indisponible : le jeton reste dans ~/.escouade/integrations.json.</span>
+        {/if}
       </div>
       {#if a?.connected}
         <button class="btn small ghost" onclick={() => disconnect(id)}>Déconnecter</button>
@@ -375,6 +378,9 @@
   }
   .d.on {
     color: var(--muted);
+  }
+  .d.warn {
+    color: var(--wait);
   }
   .small {
     height: 30px;

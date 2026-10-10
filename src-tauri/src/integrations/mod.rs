@@ -5,6 +5,7 @@
 pub(crate) mod fake;
 pub mod github;
 pub mod jira;
+pub mod secrets;
 pub mod sync;
 pub mod text;
 pub mod trello;
@@ -16,8 +17,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
 
-/// The accounts as saved (`integrations.json`, apart from the settings): their secrets never go
-/// to the window.
+/// The accounts as saved (`integrations.json`, apart from the settings; their secrets in the
+/// system's keychain, `secrets`): their secrets never go to the window.
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Accounts {
@@ -32,6 +33,14 @@ impl Accounts {
             Service::Jira => self.jira.as_ref(),
             Service::Trello => self.trello.as_ref(),
             Service::Github => self.github.as_ref(),
+        }
+    }
+
+    pub fn get_mut(&mut self, s: Service) -> Option<&mut Account> {
+        match s {
+            Service::Jira => self.jira.as_mut(),
+            Service::Trello => self.trello.as_mut(),
+            Service::Github => self.github.as_mut(),
         }
     }
 
@@ -54,6 +63,7 @@ impl Accounts {
                     .get(service)
                     .map(|a| a.label.clone())
                     .unwrap_or_default(),
+                in_file: self.get(service).is_some_and(|a| a.in_file),
             })
             .collect()
     }
@@ -67,7 +77,7 @@ pub struct Account {
     pub site: String,
     /// Jira: the e-mail its API token belongs to.
     pub email: String,
-    /// Trello: the API key.
+    /// Trello: the API key. A secret, as the token is.
     pub key: String,
     /// The API token; for GitHub, empty: the GitHub CLI's (`gh auth token`).
     pub token: String,
@@ -76,6 +86,10 @@ pub struct Account {
     /// Who it is for the service (Jira account id, Trello member id, GitHub login): what "mine"
     /// filters on.
     pub user: String,
+    /// The system's keychain refused its key and token: they stay in `integrations.json` (they
+    /// move at the next start that it takes them). Known while the app runs, never saved.
+    #[serde(skip)]
+    pub in_file: bool,
 }
 
 /// An account as the window knows it.
@@ -85,6 +99,8 @@ pub struct AccountView {
     pub service: Service,
     pub connected: bool,
     pub label: String,
+    /// Its token stays in `integrations.json`: the system's keychain refused it.
+    pub in_file: bool,
 }
 
 /// Where an account's tickets live: a Jira project, a Trello board, a GitHub repository.

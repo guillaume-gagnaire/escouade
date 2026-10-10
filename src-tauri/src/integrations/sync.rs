@@ -1,15 +1,16 @@
-//! The integrations on the core: the accounts saved apart, what the window asks of the services
-//! (containers, states, tickets), the import (by hand or by label), and the sync of an imported
-//! ticket's external one when it changes column or begins a loop: its operations kept until they
-//! go through, tried again later when one fails.
+//! The integrations on the core: the accounts saved apart (their secrets in the system's
+//! keychain, `secrets`), what the window asks of the services (containers, states, tickets), the
+//! import (by hand or by label), and the sync of an imported ticket's external one when it changes
+//! column or begins a loop: its operations kept until they go through, tried again later when one
+//! fails.
 
+use super::secrets;
 use super::text::{column_comment, default_states, loop_comment};
 use super::*;
 use crate::core::Core;
-use crate::paths::{self, DataDir};
+use crate::paths;
 use crate::tickets::TicketDraft;
 use crate::{board, git};
-use anyhow::Context;
 use std::path::Path;
 use std::process::Stdio;
 use std::sync::Arc;
@@ -255,19 +256,6 @@ impl SyncQueue {
     }
 }
 
-/// The accounts as saved; none when the file is missing or unreadable (logged, set aside).
-pub(crate) fn load_accounts(data: &DataDir) -> Accounts {
-    let path = data.integrations_file();
-    let Ok(text) = std::fs::read_to_string(&path) else {
-        return Accounts::default();
-    };
-    serde_json::from_str(&text).unwrap_or_else(|e| {
-        log::error!("invalid {}: {e}", path.display());
-        let _ = std::fs::copy(&path, path.with_extension("broken.json"));
-        Accounts::default()
-    })
-}
-
 /// How long `gh auth token` may take.
 const GH_TOKEN_LIMIT: Duration = Duration::from_secs(15);
 
@@ -354,10 +342,7 @@ pub(crate) fn imported_label(tickets: &[Ticket]) -> String {
 
 impl<R: Runtime> Core<R> {
     fn save_accounts(&self) -> Result<()> {
-        let bytes = serde_json::to_vec_pretty(&*self.accounts.read())?;
-        paths::write_atomic(&self.data.integrations_file(), &bytes)
-            .context("enregistrement des comptes")?;
-        Ok(())
+        secrets::save_accounts(&self.data, &self.accounts.read())
     }
 
     pub fn integration_accounts(&self) -> Vec<AccountView> {
@@ -413,7 +398,8 @@ impl<R: Runtime> Core<R> {
     }
 
     /// "Connecter…": the credentials are checked with the service, then saved with what it said
-    /// of them (label, user).
+    /// of them (label, user): their secrets into the system's keychain first, so that the file
+    /// leaves them out only once it holds them.
     pub async fn integration_connect(
         &self,
         service: Service,
@@ -453,6 +439,7 @@ impl<R: Runtime> Core<R> {
         }
         account.label = label;
         account.user = user;
+        secrets::place(&*self.secrets, service, &mut account);
         self.accounts.write().set(service, Some(account));
         self.save_accounts()?;
         Ok(self
@@ -462,9 +449,10 @@ impl<R: Runtime> Core<R> {
             .expect("every service has a view"))
     }
 
-    /// "Déconnecter": the account is forgotten (the projects keep their links, unused until one is
-    /// connected again).
+    /// "Déconnecter": the account is forgotten, its secrets with it (the projects keep their links,
+    /// unused until one is connected again).
     pub fn integration_disconnect(&self, service: Service) -> Result<Vec<AccountView>> {
+        secrets::forget(&*self.secrets, service);
         self.accounts.write().set(service, None);
         if service == Service::Github {
             *self.gh_token.lock() = None;
