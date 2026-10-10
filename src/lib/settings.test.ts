@@ -147,21 +147,41 @@ describe('settingsForm', () => {
     const asked = settingsForm.suggest('p1');
     expect(settingsForm.suggesting.p1).toBe(true);
     expect(backend.called('suggest_worktree_steps')[0].args).toEqual({ projectId: 'p1' });
-    answer({
-      setup: [{ id: 's1', command: 'npm ci', shell: 'pwsh', cwd: '' }],
-      teardown: [],
-    });
+    const ci = { id: 's1', command: 'npm ci', shell: 'pwsh', cwd: '' };
+    answer({ setup: [ci], teardown: [], refused: 0 });
     await asked;
     expect(settingsForm.suggesting.p1).toBe(false);
-    expect(settingsForm.projects.p1.worktreeSetup).toEqual([{ id: 's1', command: 'npm ci', shell: 'pwsh', cwd: '' }]);
+    expect(settingsForm.projects.p1.worktreeSetup).toEqual([ci]);
     expect(settingsForm.projects.p1.worktreeTeardown).toEqual([]);
     expect(app.toasts.at(-1)?.text).toBe("1 commande proposée : relis-la avant d'enregistrer.");
 
-    fakeBackend({ suggest_worktree_steps: () => ({ setup: [], teardown: [] }) });
+    // Some were refused (a line break, invisible characters, a long run of blanks, too long): said, as for the launch commands.
+    const down = { id: 's2', command: 'docker compose down', shell: 'pwsh', cwd: '' };
+    fakeBackend({ suggest_worktree_steps: () => ({ setup: [ci], teardown: [down], refused: 1 }) });
+    await settingsForm.suggest('p1');
+    expect(settingsForm.projects.p1.worktreeTeardown).toEqual([down]);
+    expect(app.toasts.at(-1)?.text).toBe(
+      "2 commandes proposées, 1 écartée (caractères invisibles ou trop longue) : relis-les avant d'enregistrer.",
+    );
+    fakeBackend({ suggest_worktree_steps: () => ({ setup: [ci], teardown: [], refused: 2 }) });
+    await settingsForm.suggest('p1');
+    expect(app.toasts.at(-1)?.text).toBe(
+      "1 commande proposée, 2 écartées (caractères invisibles ou trop longues) : relis-la avant d'enregistrer.",
+    );
+
+    fakeBackend({ suggest_worktree_steps: () => ({ setup: [], teardown: [], refused: 0 }) });
     await settingsForm.suggest('p1');
     // Nothing found: what was there stays.
-    expect(settingsForm.projects.p1.worktreeSetup).toHaveLength(1);
+    expect(settingsForm.projects.p1.worktreeSetup).toEqual([ci]);
     expect(app.toasts.at(-1)?.text).toBe("Claude n'a trouvé aucune commande à lancer pour ce projet.");
+
+    // All refused is told by the backend, as a failure and not as nothing found.
+    fakeBackend({
+      suggest_worktree_steps: () => Promise.reject("Claude a proposé des commandes illisibles : aucune n'a été gardée."),
+    });
+    await settingsForm.suggest('p1');
+    expect(settingsForm.projects.p1.worktreeSetup).toEqual([ci]);
+    expect(app.toasts.at(-1)).toMatchObject({ text: "Claude a proposé des commandes illisibles : aucune n'a été gardée.", kind: 'error' });
 
     fakeBackend({
       suggest_worktree_steps: () => Promise.reject("Claude n'a pas proposé de commandes lisibles."),

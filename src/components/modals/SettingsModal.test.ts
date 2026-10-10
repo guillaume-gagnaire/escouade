@@ -399,7 +399,7 @@ describe('SettingsModal', () => {
     expect(group('Lancement').getByRole('button', { name: '✦ Remplir automatiquement' })).toBeEnabled();
     expect(backend.called('suggest_worktree_steps')[0].args).toEqual({ projectId: 'p1' });
     expect(backend.called('suggest_run_commands')).toHaveLength(0);
-    answer({ setup: [{ id: 's1', command: 'npm ci', shell: 'bash', cwd: 'web' }], teardown: [] });
+    answer({ setup: [{ id: 's1', command: 'npm ci', shell: 'bash', cwd: 'web' }], teardown: [], refused: 0 });
     const setup = await screen.findByRole('group', { name: 'Commande de préparation 1' });
     expect(within(setup).getByLabelText('Commande')).toHaveValue('npm ci');
     expect(within(setup).getByLabelText('Shell')).toHaveValue('bash');

@@ -21,11 +21,12 @@
 // In one-shot mode, asked for a ticket's commit message, it answers `feat: travail du faux claude
 // [<KEY>]`, or a sentence out of form when the ticket's title says [message-libre]; with [sourd]
 // in its system prompt it never reads its input and answers nothing for 20 s. Asked for a project's
-// worktree commands (<worktrees>), it suggests a setup (one of whose folders leaves the project) and a
-// teardown. Asked for a project's launch commands (<lancement>), it suggests five (two of whose folders
-// are no folders of the project, one that holds a line break), only such ones in a folder named
-// "refused", or nothing readable in a folder named "unreadable". Asked for a direct commit's message
-// (<fichiers>), it names the latest commit subject and the files of the diff it read.
+// worktree commands (<worktrees>), it suggests a setup (one of whose folders leaves the project, one
+// that holds a line break) and a teardown, or only refused ones in a folder named "all-refused". Asked
+// for a project's launch commands (<lancement>), it suggests five (two of whose folders are no folders
+// of the project, one that holds a line break), only refused ones in a folder named "all-refused", or
+// nothing readable in a folder named "unreadable". Asked for a direct commit's message (<fichiers>),
+// it names the latest commit subject and the files of the diff it read.
 
 import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -52,26 +53,32 @@ if (argv.includes('-p') && argv.some((a) => a.includes('[sourd]'))) {
   let input = '';
   process.stdin.on('data', (d) => (input += d));
   process.stdin.on('end', () => {
-    // A project's worktree commands.
+    // A project's worktree commands: a setup of two that stand, one whose folder leaves the project and
+    // one on two lines, and a teardown. Only such ones on two lines or padded with blanks when the
+    // project's folder is named "all-refused".
     if (input.includes('<worktrees>')) {
-      const steps = {
-        preparation: [
-          { commande: 'npm ci', dossier: '' },
-          { commande: 'npm run gen', dossier: 'src' },
-          { commande: 'rm -rf /', dossier: '../dehors' },
-        ],
-        demontage: [{ commande: 'docker compose down', dossier: '' }],
-      };
+      const multiline = { commande: 'npm run gen\nrm -rf ~', dossier: '' };
+      const steps = process.cwd().includes('all-refused')
+        ? { preparation: [multiline], demontage: [{ commande: `docker compose down${' '.repeat(40)}; rm -rf ~`, dossier: '' }] }
+        : {
+            preparation: [
+              { commande: 'npm ci', dossier: '' },
+              { commande: 'npm run gen', dossier: 'src' },
+              { commande: 'rm -rf /', dossier: '../dehors' },
+              multiline,
+            ],
+            demontage: [{ commande: 'docker compose down', dossier: '' }],
+          };
       const result = `Voici les commandes.\n\n\`\`\`json\n${JSON.stringify(steps)}\n\`\`\``;
       process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result }));
       return;
     }
     // A project's launch commands: two that stand, one whose folder leaves the project, one whose
     // folder is not there and one on two lines. Only such ones when the project's folder is named
-    // "refused", nothing readable when it is named "unreadable".
+    // "all-refused", nothing readable when it is named "unreadable".
     if (input.includes('<lancement>')) {
       const multiline = { nom: 'Deux lignes', commande: 'npm start\nrm -rf ~' };
-      const commands = process.cwd().includes('refused')
+      const commands = process.cwd().includes('all-refused')
         ? { commandes: [multiline, { nom: 'Large', commande: `npm start${' '.repeat(40)}; rm -rf ~` }] }
         : {
             commandes: [

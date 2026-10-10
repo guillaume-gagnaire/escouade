@@ -2185,10 +2185,14 @@ impl<R: Runtime> Core<R> {
         let answer = self
             .read_project(&project, worktrees::SUGGEST_SYSTEM, &prompt)
             .await?;
-        let (setup, teardown) =
-            worktrees::parse_suggestion(&answer, Path::new(&project.path), &shell.id)
-                .ok_or_else(|| anyhow!("Claude n'a pas proposé de commandes lisibles."))?;
-        Ok(WorktreeSuggestion { setup, teardown })
+        let suggestion = worktrees::parse_suggestion(&answer, Path::new(&project.path), &shell.id)
+            .ok_or_else(|| anyhow!("Claude n'a pas proposé de commandes lisibles."))?;
+        // Not the same as having found nothing to run: it gave some, none of which could be shown
+        // as they would run.
+        if suggestion.setup.is_empty() && suggestion.teardown.is_empty() && suggestion.refused > 0 {
+            bail!(worktrees::ALL_REFUSED);
+        }
+        Ok(suggestion)
     }
 
     /// The launch commands Claude suggests for the project (the servers, watchers and services
@@ -2204,10 +2208,9 @@ impl<R: Runtime> Core<R> {
         let suggestion =
             worktrees::parse_run_suggestion(&answer, Path::new(&project.path), &shell.id)
                 .ok_or_else(|| anyhow!("Claude n'a pas proposé de commandes lisibles."))?;
-        // Not the same as having found nothing to launch: it gave some, none of which could be
-        // shown as they would run.
+        // Not the same as having found nothing to launch (see `suggest_worktree_steps`).
         if suggestion.commands.is_empty() && suggestion.refused > 0 {
-            bail!("Claude a proposé des commandes illisibles : aucune n'a été gardée.");
+            bail!(worktrees::ALL_REFUSED);
         }
         Ok(suggestion)
     }

@@ -2758,8 +2758,10 @@ async fn claude_reads_the_project_with_read_only_tools_to_suggest_its_worktree_c
         .iter()
         .map(|x| (x.command.as_str(), x.cwd.as_str()))
         .collect();
-    // The step whose folder leaves the project is dropped.
+    // The step whose folder leaves the project is dropped; the one that holds a line break is
+    // refused, and counted.
     assert_eq!(setup, [("npm ci", ""), ("npm run gen", "src")]);
+    assert_eq!(s.refused, 1);
     assert_eq!(s.teardown.len(), 1);
     assert_eq!(s.teardown[0].command, "docker compose down");
     let first = crate::pty::detect_shells(&h.core.settings.read())
@@ -2771,6 +2773,23 @@ async fn claude_reads_the_project_with_read_only_tools_to_suggest_its_worktree_c
     assert_reads_only(&h.launches(&r).pop().expect("claude run in the project"));
     let sent = serde_json::to_value(&s).unwrap();
     assert_eq!(sent["setup"][1]["cwd"], "src");
+    assert_eq!(sent["refused"], 1);
+}
+
+#[tokio::test]
+async fn worktree_commands_that_were_all_refused_are_told_so_and_not_as_nothing_found() {
+    let h = harness("wt-suggest-all-refused");
+    let (p, _) = h.project(false).await;
+    let e = h
+        .core
+        .suggest_worktree_steps(&p.id)
+        .await
+        .unwrap_err()
+        .to_string();
+    assert_eq!(
+        e,
+        "Claude a proposé des commandes illisibles : aucune n'a été gardée."
+    );
 }
 
 #[tokio::test]

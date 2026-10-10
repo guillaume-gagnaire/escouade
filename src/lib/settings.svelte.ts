@@ -208,7 +208,7 @@ class SettingsForm {
 
   /**
    * « Remplir automatiquement »: Claude reads the project and its suggestion replaces the draft's worktree steps
-   * (left as they are when it finds none, or fails).
+   * (left as they are when it finds none, or fails). The steps the backend refused are counted in what is said.
    */
   async suggest(projectId: string) {
     if (this.suggesting[projectId]) return;
@@ -222,7 +222,7 @@ class SettingsForm {
       if (!d) return;
       d.worktreeSetup = s.setup;
       d.worktreeTeardown = s.teardown;
-      app.toast(proposed(n));
+      app.toast(proposed(n, s.refused));
     } catch (e) {
       app.toast(String(e), 'error');
     } finally {

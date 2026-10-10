@@ -217,10 +217,11 @@ export interface WorktreeStep {
   cwd: string;
 }
 
-/** The setup and teardown Claude suggests for a project's worktrees. */
+/** The setup and teardown Claude suggests for a project's worktrees, and how many steps it gave that were refused (not one plain line, or too long). */
 export interface WorktreeSuggestion {
   setup: WorktreeStep[];
   teardown: WorktreeStep[];
+  refused: number;
 }
 
 /** A service isola runs for a worktree. */
