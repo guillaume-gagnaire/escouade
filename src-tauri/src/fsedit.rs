@@ -143,8 +143,8 @@ pub fn read(root: &Path, rel: &str) -> Result<FileText> {
 }
 
 /// Writes `text` back with the file's line endings and BOM, through a temporary file renamed
-/// over it. With `expected`, refused (`changed` / `deleted`) when the file is no longer the one
-/// read; without, written anyway (created if need be, parent folders included, but not in the
+/// over it. With `expected`, refused (`changed:<hash>` / `deleted`) when the file is no longer the
+/// one read; without, written anyway (created if need be, parent folders included, but not in the
 /// agents' worktrees).
 pub fn write(
     root: &Path,
@@ -172,7 +172,8 @@ pub fn write(
 
     if let Some(exp) = expected {
         match std::fs::read(&path) {
-            Ok(bytes) if hash(&bytes) != exp => bail!(CHANGED),
+            // The version found named (`changed:<hash>`): « Garder ma version » writes over that one only.
+            Ok(bytes) if hash(&bytes) != exp => bail!("{CHANGED}:{}", hash(&bytes)),
             Ok(_) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => bail!(DELETED),
             Err(e) => return Err(e.into()),
@@ -870,10 +871,10 @@ mod tests {
         let h = write(&dir, "a.ts", "a\nb\n", "crlf", false, Some(&first.hash)).unwrap();
         assert_eq!(std::fs::read(&p).unwrap(), b"a\r\nb\r\n");
         assert_eq!(h, hash(b"a\r\nb\r\n"));
-        // Changed behind the editor's back: refused, unless forced.
+        // Changed behind the editor's back: refused, naming the version found, unless forced.
         std::fs::write(&p, "agent\n").unwrap();
         let err = write(&dir, "a.ts", "mine\n", "lf", false, Some(&h)).unwrap_err();
-        assert_eq!(err.to_string(), CHANGED);
+        assert_eq!(err.to_string(), format!("{CHANGED}:{}", hash(b"agent\n")));
         assert_eq!(std::fs::read_to_string(&p).unwrap(), "agent\n");
         write(&dir, "a.ts", "mine\n", "lf", false, None).unwrap();
         assert_eq!(std::fs::read_to_string(&p).unwrap(), "mine\n");
@@ -1675,7 +1676,7 @@ mod tests {
         std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o644)).unwrap();
         let err = err.unwrap_err().to_string();
         assert!(
-            err != CHANGED && err != DELETED && !err.contains("lecture seule"),
+            !err.starts_with(CHANGED) && err != DELETED && !err.contains("lecture seule"),
             "{err}"
         );
         assert_eq!(std::fs::read_to_string(&p).unwrap(), "secret\n");

@@ -30,6 +30,11 @@ export interface Buffer {
   /** The file on disk changed or vanished since it was read. */
   disk: 'ok' | 'changed' | 'deleted';
   /**
+   * Of the file on disk found changed (`disk` 'changed'), by a read or by a save it refused: « Garder ma version »
+   * writes over that version only, not over one the agent wrote since. Null otherwise.
+   */
+  diskHash: string | null;
+  /**
    * The file as it is on disk, read to compare what was typed with it (« Comparer »), until the user chooses: it
    * follows what the agent writes meanwhile. Null when not compared.
    */
@@ -109,6 +114,7 @@ class Buffers {
       size: 0,
       base: undefined,
       disk: 'ok',
+      diskHash: null,
       onDisk: null,
       error: null,
       version: 0,
@@ -156,7 +162,15 @@ class Buffers {
   /** Where the file on disk stands: a comparison with it lasts as long as it differs from the version read. */
   private mark(b: Buffer, disk: Buffer['disk']) {
     b.disk = disk;
-    if (disk !== 'changed') b.onDisk = null;
+    if (disk === 'changed') return;
+    b.onDisk = null;
+    b.diskHash = null;
+  }
+
+  /** The disk found at the version `hash`, other than the one read: its banner is up, about that version. */
+  private changedTo(b: Buffer, hash: string) {
+    b.disk = 'changed';
+    b.diskHash = hash;
   }
 
   /** The disk's version `f` to compare with; one taking the place of the version shown says why (`replaced`). */
@@ -166,8 +180,8 @@ class Buffers {
   }
 
   /**
-   * Writes the file; false when it changed or vanished on disk meanwhile (see `disk`). Forced, it writes over what
-   * the disk has, or over the version compared with only (`onDisk`).
+   * Writes the file; false when it changed or vanished on disk meanwhile (see `disk`). Forced, it writes over the
+   * version of the disk compared with (`onDisk`) or found changed (`diskHash`) only, else over what the disk has.
    */
   async save(key: string, force = false): Promise<boolean> {
     const b = this.all[key];
@@ -184,7 +198,7 @@ class Buffers {
         text,
         eol: b.eol,
         bom: b.bom,
-        expectedHash: force ? (b.onDisk?.hash ?? null) : b.hash,
+        expectedHash: force ? (b.onDisk?.hash ?? b.diskHash) : b.hash,
       });
       Object.assign(b, { saved: text, hash });
       this.mark(b, 'ok');
@@ -192,7 +206,10 @@ class Buffers {
       return true;
     } catch (e) {
       const msg = String(e);
-      if (msg.startsWith('changed')) this.mark(b, 'changed');
+      // The refusal names the version it found (`changed:<hash>`).
+      const found = /^changed:(\S+)/.exec(msg)?.[1];
+      if (found) this.changedTo(b, found);
+      else if (msg.startsWith('changed')) this.mark(b, 'changed');
       else if (msg.startsWith('deleted')) this.mark(b, 'deleted');
       else throw e;
       return false;
@@ -202,13 +219,16 @@ class Buffers {
   }
 
   /**
-   * Saves over what changed on disk (or creates the file again). Compared with the disk, over the version compared
-   * only: one the agent wrote since is not lost unseen, it is read for the comparison instead (false then).
+   * Saves over what changed on disk (or creates the file again): over the version compared, or the one its banner
+   * came up for, only. One the agent wrote since is not lost unseen, it is read instead (false then): for the
+   * comparison, or for the banner to be about.
    */
   async keepMine(key: string): Promise<boolean> {
     if (await this.save(key, true)) return true;
     const b = this.all[key];
-    if (b?.onDisk && b.disk === 'changed') await this.compare(key, 'save');
+    if (b?.disk !== 'changed') return false;
+    if (b.onDisk) await this.compare(key, 'save');
+    else await this.refresh(key);
     return false;
   }
 
@@ -225,7 +245,7 @@ class Buffers {
     if (f.kind !== 'text') throw 'la version du disque n’est pas du texte';
     // Back to the version read: nothing to choose between.
     if (f.hash === b.hash) return this.mark(b, 'ok');
-    b.disk = 'changed';
+    this.changedTo(b, f.hash);
     this.compareWith(b, f, why);
   }
 
@@ -264,7 +284,7 @@ class Buffers {
       if (f.hash === b.hash) {
         this.mark(b, 'ok');
       } else if (this.isDirty(b)) {
-        b.disk = 'changed';
+        this.changedTo(b, f.hash);
         // Compared with the disk: the comparison shows what the agent wrote since.
         if (b.onDisk) this.compareWith(b, f, 'read');
       } else {

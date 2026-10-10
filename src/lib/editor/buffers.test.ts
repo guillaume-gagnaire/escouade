@@ -70,6 +70,68 @@ describe('buffers', () => {
     expect(buffers.all[k]).toMatchObject({ disk: 'ok', saved: 'mine\n', hash: 'h3' });
   });
 
+  describe('kept over the disk from its banner, without « Comparer »', () => {
+    let disk: ReturnType<typeof text>;
+
+    /** x.ts typed in (`mine`): as the backend does, a write is refused for a version other than the one expected, which the refusal names. */
+    async function typed() {
+      disk = text('a\n', 'h1');
+      const backend = fakeBackend({
+        fs_read: () => disk,
+        fs_base: () => null,
+        fs_write: (a: any) => (a.expectedHash === null || a.expectedHash === disk.hash ? 'h9' : Promise.reject(`changed:${disk.hash}`)),
+        set_unsaved: () => null,
+      });
+      const k = (await buffers.open('p1', 'project', 'x.ts')).key;
+      buffers.edit(k, 'mine\n');
+      return { k, backend };
+    }
+
+    it('writes over the version its banner came up for only, and reads a newer one instead', async () => {
+      const { k, backend } = await typed();
+      disk = text('agent\n', 'h2');
+      await buffers.refresh(k);
+      expect(buffers.all[k]).toMatchObject({ disk: 'changed', diskHash: 'h2', onDisk: null });
+      // Written by the agent once the banner was up, before anything read the file again.
+      disk = text('agent2\n', 'h3');
+      expect(await buffers.keepMine(k)).toBe(false);
+      expect(backend.called('fs_write')[0].args.expectedHash).toBe('h2');
+      expect(buffers.all[k]).toMatchObject({ text: 'mine\n', saved: 'a\n', hash: 'h1', disk: 'changed', diskHash: 'h3', onDisk: null });
+      // Asked again: over the version now known.
+      expect(await buffers.keepMine(k)).toBe(true);
+      expect(backend.called('fs_write')[1].args.expectedHash).toBe('h3');
+      expect(buffers.all[k]).toMatchObject({ saved: 'mine\n', hash: 'h9', disk: 'ok', diskHash: null });
+    });
+
+    it('knows from a refused save which version its banner came up for', async () => {
+      const { k, backend } = await typed();
+      // Not read since: the refusal says what it found.
+      disk = text('agent\n', 'h2');
+      expect(await buffers.save(k)).toBe(false);
+      expect(buffers.all[k]).toMatchObject({ disk: 'changed', diskHash: 'h2' });
+      disk = text('agent2\n', 'h3');
+      expect(await buffers.keepMine(k)).toBe(false);
+      expect(backend.called('fs_write')[1].args.expectedHash).toBe('h2');
+      expect(buffers.all[k]).toMatchObject({ text: 'mine\n', disk: 'changed', diskHash: 'h3' });
+    });
+
+    it('creates a deleted file again, whatever version a banner came up for before', async () => {
+      const { k } = await typed();
+      disk = text('agent\n', 'h2');
+      await buffers.refresh(k);
+      const gone = fakeBackend({
+        fs_read: () => Promise.reject('x.ts introuvable'),
+        fs_base: () => null,
+        fs_write: () => 'h9',
+        set_unsaved: () => null,
+      });
+      await buffers.refresh(k);
+      expect(buffers.all[k]).toMatchObject({ disk: 'deleted', diskHash: null });
+      expect(await buffers.keepMine(k)).toBe(true);
+      expect(gone.called('fs_write')[0].args.expectedHash).toBeNull();
+    });
+  });
+
   it('reloads a clean file changed on disk, flags a modified one', async () => {
     let disk = text('a\n', 'h1');
     fakeBackend({ fs_read: () => disk, fs_base: () => null, set_unsaved: () => null });

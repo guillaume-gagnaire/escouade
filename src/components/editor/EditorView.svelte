@@ -547,11 +547,15 @@
           ? 'Le fichier a encore changé sur le disque : rien n’est enregistré, la comparaison montre sa nouvelle version.'
           : NEWER_ON_DISK,
       );
-      settling = id;
-      clearTimeout(settleTimer);
-      settleTimer = setTimeout(() => (settling = null), 1000);
+      hold(id);
     });
   });
+  /** « Garder ma version » of the file `id` waits a second (see `settling`). */
+  function hold(id: number) {
+    settling = id;
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(() => (settling = null), 1000);
+  }
   onDestroy(() => clearTimeout(settleTimer));
 
   const reveal = $derived(st?.reveal && st.reveal.path === activePath ? st.reveal : null);
@@ -662,10 +666,15 @@
     askToSave(project.id, src, [path], drop);
   }
 
-  /** Saves what was typed over the disk; compared with it, over the version compared only (else it shows the newer one). */
+  /**
+   * Saves what was typed over the version of the disk compared, or the one its banner came up for, only (else it reads
+   * the newer one, and says so).
+   */
   async function keep(key: string) {
-    if (settling !== null && settling === buffers.all[key]?.id) return;
-    const compared = !!buffers.all[key]?.onDisk;
+    const b = buffers.all[key];
+    if (settling !== null && settling === b?.id) return;
+    const compared = !!b?.onDisk;
+    const seen = b?.diskHash ?? null;
     let kept: boolean;
     try {
       kept = await buffers.keepMine(key);
@@ -673,9 +682,18 @@
       app.toast(`Enregistrement impossible : ${e}`, 'error');
       return;
     }
-    // Refused, then found back at the version first read: the banner goes with nothing saved.
-    if (!kept && compared && buffers.all[key]?.disk === 'ok')
+    if (kept) return;
+    const now = buffers.all[key];
+    // Refused, then found back at the version first read: the banner goes with nothing saved (what was typed is
+    // still there: not a save of a click before it that landed meanwhile).
+    if (now?.disk === 'ok' && buffers.isDirty(now))
       app.toast('Rien n’a été enregistré : le fichier est revenu à la version que tu avais ouverte.');
+    // Refused for a version written since the banner came up (a comparison shows it its own way): the banner stays,
+    // and a click aimed at it before it was about that version is not taken.
+    else if (!compared && now?.disk === 'changed' && now.diskHash !== seen) {
+      app.toast('Le fichier a encore changé sur le disque : rien n’est enregistré, tes modifications sont toujours là.');
+      hold(now.id);
+    }
   }
   const compareDisk = (key: string) => buffers.compare(key).catch((e) => app.toast(`Comparaison impossible : ${e}`, 'error'));
   // A deleted file without changes can only be written by creating it again, as its banner offers.

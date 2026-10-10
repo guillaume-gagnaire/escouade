@@ -603,6 +603,52 @@ describe('EditorView changes in the text, and comparison with the disk', () => {
     expect(screen.getByText(/● Non enregistré/)).toBeInTheDocument();
   });
 
+  it('does not write, without « Comparer », over a version the agent wrote once the banner was up, says so, and holds the button back a moment', async () => {
+    const { be, disk, key, container } = await opened();
+    await expect.poll(() => container.querySelector('.cm-content')?.textContent).toBe('aBcdef');
+    typeMine(container);
+    Object.assign(disk, { text: AGENT, hash: 'h2' });
+    await buffers.refresh(key);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Ce fichier a changé sur le disque.');
+    // Written again before the click, before anything read the file.
+    Object.assign(disk, { text: 'a\nB\nc\nd\ne\nagain\n', hash: 'h3' });
+    const keep = screen.getByRole('button', { name: 'Garder ma version' });
+    await userEvent.click(keep);
+    await expect
+      .poll(() => app.toasts.map((t) => t.text))
+      .toEqual(['Le fichier a encore changé sur le disque : rien n’est enregistré, tes modifications sont toujours là.']);
+    expect(be.called('fs_write').map((c) => c.args.expectedHash)).toEqual(['h2']);
+    expect(disk).toEqual({ text: 'a\nB\nc\nd\ne\nagain\n', hash: 'h3' });
+    expect(buffers.all[key].text).toBe(MINE);
+    expect(screen.getByRole('alert')).toHaveTextContent('Ce fichier a changé sur le disque.');
+    // A second click right away is not taken; a moment later it writes over the version now read.
+    expect(keep).toHaveAttribute('aria-disabled', 'true');
+    await userEvent.click(keep);
+    expect(be.called('fs_write')).toHaveLength(1);
+    await expect.poll(() => keep.getAttribute('aria-disabled'), { timeout: 2000 }).toBe('false');
+    await userEvent.click(keep);
+    await expect.poll(() => be.called('fs_write').length).toBe(2);
+    expect(be.called('fs_write')[1].args).toMatchObject({ text: MINE, expectedHash: 'h3' });
+    await expect.poll(() => screen.queryByRole('alert')).toBeNull();
+    expect(app.toasts).toHaveLength(1);
+  });
+
+  it('says that nothing was saved, without « Comparer » too, when « Garder ma version » finds the disk back at the version opened', async () => {
+    const { be, disk, key, container } = await opened();
+    await expect.poll(() => container.querySelector('.cm-content')?.textContent).toBe('aBcdef');
+    typeMine(container);
+    Object.assign(disk, { text: AGENT, hash: 'h2' });
+    await buffers.refresh(key);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Ce fichier a changé sur le disque.');
+    Object.assign(disk, { text: SAVED, hash: 'h1' });
+    await userEvent.click(screen.getByRole('button', { name: 'Garder ma version' }));
+    await expect.poll(() => screen.queryByRole('alert')).toBeNull();
+    expect(app.toasts.map((t) => t.text)).toEqual(['Rien n’a été enregistré : le fichier est revenu à la version que tu avais ouverte.']);
+    expect(be.called('fs_write')).toHaveLength(1);
+    expect(disk).toEqual({ text: SAVED, hash: 'h1' });
+    expect(buffers.all[key].text).toBe(MINE);
+  });
+
   it('reloads from the comparison: the version on disk replaces what was typed, and the comparison is over', async () => {
     const { key, container } = await comparing();
     await userEvent.click(screen.getByRole('button', { name: 'Recharger' }));
