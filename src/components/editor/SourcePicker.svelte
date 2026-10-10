@@ -1,5 +1,6 @@
 <script lang="ts">
   import { basename } from '../../lib/format';
+  import { t } from '../../lib/i18n';
   import type { Agent, GitInfo, Project } from '../../lib/types';
   import StatusDot from '../StatusDot.svelte';
 
@@ -14,7 +15,7 @@
   let open = $state(false);
   let box = $state<HTMLDivElement>();
 
-  const branch = $derived(git?.branch || 'projet');
+  const branch = $derived(git?.branch || t('editor.source.noBranch'));
   const current = $derived(source === 'project' ? null : (agents.find((a) => a.id === source) ?? null));
   // `git` tallies the project's own changes together with those of every worktree: take the worktrees out.
   const projectCount = $derived(
@@ -34,21 +35,25 @@
     class="btn src"
     aria-haspopup="menu"
     aria-expanded={open}
-    aria-label={`Source : ${current ? current.name : branch}`}
+    aria-label={t('editor.source.label', { name: current ? current.name : branch })}
     onclick={() => (open = !open)}
   >
     {#if current}<StatusDot status={current.status} size={7} />{:else}<span class="glyph mono">⎇</span>{/if}
     <span class="nm">{current ? current.name : branch}</span>
-    <span class="kind mono">{current ? 'worktree' : 'branche'}</span>
+    <span class="kind mono">{current ? t('editor.source.kindWorktree') : t('editor.source.kindBranch')}</span>
     <span class="chev">▾</span>
   </button>
   {#if open}
-    <div class="menu" role="menu" aria-label="Parcourir">
-      <span class="title">Parcourir</span>
+    <div class="menu" role="menu" aria-label={t('common.browse')}>
+      <span class="title">{t('common.browse')}</span>
       <button class="opt" role="menuitemradio" aria-checked={source === 'project'} onclick={() => pick('project')}>
         <span class="ic mono">⎇</span>
-        <span class="txt"><span class="nm">{branch}</span><span class="sub mono">Branche du projet · {project.path}</span></span>
-        <span class="count mono" class:some={projectCount > 0}>{projectCount ? `Δ ${projectCount}` : 'propre'}</span>
+        <span class="txt"
+          ><span class="nm">{branch}</span><span class="sub mono">{t('editor.source.projectBranch', { path: project.path })}</span></span
+        >
+        <span class="count mono" class:some={projectCount > 0}
+          >{projectCount ? t('editor.source.delta', { count: projectCount }) : t('editor.source.clean')}</span
+        >
         <span class="check">{source === 'project' ? '✓' : ''}</span>
       </button>
       {#each agents as a (a.id)}
@@ -60,7 +65,7 @@
               >.claude/worktrees/{a.worktree ? basename(a.worktree.path) : a.name} · {a.model}</span
             ></span
           >
-          <span class="count mono" class:some={n > 0}>{n ? `${n} modif.` : 'propre'}</span>
+          <span class="count mono" class:some={n > 0}>{n ? t('editor.source.changes', { count: n }) : t('editor.source.clean')}</span>
           <span class="check">{source === a.id ? '✓' : ''}</span>
         </button>
       {/each}

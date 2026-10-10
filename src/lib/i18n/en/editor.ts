@@ -6,6 +6,38 @@ export default defineZone('editor', {
     saveFailed: 'Could not save: {error}',
   },
 
+  tabs: {
+    label: 'Open files',
+    close: 'Close {name}',
+    closeIn: 'Close {name} · {folder}',
+    closeUnsaved: 'Close (unsaved)',
+  },
+
+  newField: {
+    fileName: 'Name of the new file',
+    folderName: 'Name of the new folder',
+    rename: 'Rename “{name}”',
+  },
+
+  tree: {
+    ignoredByGit: 'Ignored by git',
+  },
+
+  source: {
+    noBranch: 'project',
+    label: 'Source: {name}',
+    kindWorktree: 'worktree',
+    kindBranch: 'branch',
+    projectBranch: 'Project branch · {path}',
+    delta: 'Δ {count}',
+    clean: 'clean',
+    changes: { one: '{count} change', other: '{count} changes' },
+  },
+
+  targets: {
+    title: 'Definitions of “{label}”',
+  },
+
   lossNotice: {
     one: '{count} unsaved file in the editor will be lost.',
     other: '{count} unsaved files in the editor will be lost.',

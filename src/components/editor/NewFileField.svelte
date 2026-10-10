@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import type { EntryKind } from '../../lib/editor/create';
+  import { t } from '../../lib/i18n';
   import FileIcon from './FileIcon.svelte';
 
   let {
@@ -8,7 +9,7 @@
     onsubmit,
     oncancel,
     value = '',
-    label = 'Nom du nouveau fichier',
+    label,
     kind = 'file',
   }: {
     /** Why `name` cannot be taken, or null. */
@@ -18,6 +19,7 @@
     oncancel: () => void;
     /** The name to start from: a file or folder renamed has its own. */
     value?: string;
+    /** What the field is called, for those who cannot see it; the name of a new file or folder when not given. */
     label?: string;
     /** A folder's name has no file icon. */
     kind?: EntryKind;
@@ -31,6 +33,7 @@
   /** Given up or done: the focus lost as the field goes away decides nothing. */
   let done = false;
 
+  const fieldLabel = $derived(label ?? t(kind === 'dir' ? 'editor.newField.folderName' : 'editor.newField.fileName'));
   const invalid = $derived(name.trim() ? check(name) : null);
   const problem = $derived(refused?.name === name ? refused.error : invalid);
 
@@ -84,7 +87,7 @@
   use:take
   bind:this={input}
   bind:value={name}
-  aria-label={label}
+  aria-label={fieldLabel}
   aria-invalid={!!problem}
   spellcheck="false"
   autocomplete="off"

@@ -2,6 +2,7 @@
   import { tick, untrack } from 'svelte';
   import type { EntryKind } from '../../lib/editor/create';
   import { isDeleteKey, type FileStatus, type TreeRow } from '../../lib/editor/tree';
+  import { t } from '../../lib/i18n';
   import FileIcon from './FileIcon.svelte';
   import NewFileField from './NewFileField.svelte';
 
@@ -134,7 +135,7 @@
 <div
   class="tree"
   role="tree"
-  aria-label="Fichiers"
+  aria-label={t('common.files')}
   tabindex="-1"
   bind:this={el}
   {onkeydown}
@@ -161,7 +162,7 @@
           >{#if kind === 'dir'}{@render chevron(r.kind === 'dir' && r.open)}{/if}</span
         >
         {#if r.kind === 'new'}
-          <NewFileField {check} onsubmit={oncreate} {oncancel} {kind} label={kind === 'dir' ? 'Nom du nouveau dossier' : undefined} />
+          <NewFileField {check} onsubmit={oncreate} {oncancel} {kind} />
         {:else}
           {@const name = r.path.slice(r.path.lastIndexOf('/') + 1)}
           <NewFileField
@@ -170,7 +171,7 @@
             oncancel={onrenamecancel}
             {kind}
             value={name}
-            label={`Renommer « ${name} »`}
+            label={t('editor.newField.rename', { name })}
           />
         {/if}
       </div>
@@ -185,7 +186,7 @@
         aria-expanded={r.kind === 'dir' ? r.open : undefined}
         aria-selected={r.kind === 'file' && r.path === active}
         tabindex={keyOf(r) === stop ? 0 : -1}
-        title={r.ignored ? 'Ignoré par git' : r.path}
+        title={r.ignored ? t('editor.tree.ignoredByGit') : r.path}
         data-index={i}
         style:padding-left="{pad(r.depth)}px"
         onfocus={() => (focused = keyOf(r))}

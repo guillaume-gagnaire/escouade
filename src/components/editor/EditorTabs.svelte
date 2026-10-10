@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tabHints } from '../../lib/editor/tabs';
   import type { FileStatus } from '../../lib/editor/tree';
+  import { t } from '../../lib/i18n';
 
   let {
     tabs,
@@ -14,36 +15,36 @@
 
   const SC: Record<string, string> = { M: 'var(--wait)', A: 'var(--add)', D: 'var(--del)' };
   /** The folder that tells a tab from the open ones of the same name; '' for a name that is alone. */
-  const hints = $derived(tabHints(tabs.map((t) => t.path)));
+  const hints = $derived(tabHints(tabs.map((tab) => tab.path)));
 </script>
 
-<div class="tabs" role="tablist" aria-label="Fichiers ouverts">
-  {#each tabs as t (t.path)}
-    {@const hint = hints[t.path]}
+<div class="tabs" role="tablist" aria-label={t('editor.tabs.label')}>
+  {#each tabs as tab (tab.path)}
+    {@const hint = hints[tab.path]}
     <div
       class="tab"
-      class:on={t.active}
+      class:on={tab.active}
       role="tab"
       tabindex="0"
-      aria-selected={t.active}
-      title={t.path}
-      onclick={() => onselect(t.path)}
-      onkeydown={(e) => e.target === e.currentTarget && e.key === 'Enter' && onselect(t.path)}
-      onauxclick={(e) => e.button === 1 && onclose(t.path)}
+      aria-selected={tab.active}
+      title={tab.path}
+      onclick={() => onselect(tab.path)}
+      onkeydown={(e) => e.target === e.currentTarget && e.key === 'Enter' && onselect(tab.path)}
+      onauxclick={(e) => e.button === 1 && onclose(tab.path)}
     >
       <span class="label"
-        ><span class="name" style:color={t.status ? SC[t.status] : undefined}>{t.name}</span>{#if hint}<span class="hint"
+        ><span class="name" style:color={tab.status ? SC[tab.status] : undefined}>{tab.name}</span>{#if hint}<span class="hint"
             >{' · ' + hint}</span
           >{/if}</span
       >
       <button
         class="close"
-        class:dirty={t.dirty}
-        aria-label={`Fermer ${t.name}${hint ? ' · ' + hint : ''}`}
-        title={t.dirty ? 'Fermer (non enregistré)' : 'Fermer'}
+        class:dirty={tab.dirty}
+        aria-label={hint ? t('editor.tabs.closeIn', { name: tab.name, folder: hint }) : t('editor.tabs.close', { name: tab.name })}
+        title={tab.dirty ? t('editor.tabs.closeUnsaved') : t('common.close')}
         onclick={(e) => {
           e.stopPropagation();
-          onclose(t.path);
+          onclose(tab.path);
         }}><span class="dot"></span><span class="x">×</span></button
       >
     </div>

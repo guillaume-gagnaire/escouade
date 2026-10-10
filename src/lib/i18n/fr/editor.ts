@@ -7,6 +7,43 @@ export default {
     saveFailed: 'Enregistrement impossible : {error}',
   },
 
+  tabs: {
+    label: 'Fichiers ouverts',
+    close: 'Fermer {name}',
+    /** `folder` tells two tabs of the same name apart. */
+    closeIn: 'Fermer {name} · {folder}',
+    closeUnsaved: 'Fermer (non enregistré)',
+  },
+
+  /** The field naming a new file or folder, and renaming one, in the tree. */
+  newField: {
+    fileName: 'Nom du nouveau fichier',
+    folderName: 'Nom du nouveau dossier',
+    rename: 'Renommer « {name} »',
+  },
+
+  tree: {
+    ignoredByGit: 'Ignoré par git',
+  },
+
+  /** The source of the editor: the project's branch, or the worktree of an agent. */
+  source: {
+    /** The name of the branch when git gives none. */
+    noBranch: 'projet',
+    label: 'Source : {name}',
+    kindWorktree: 'worktree',
+    kindBranch: 'branche',
+    projectBranch: 'Branche du projet · {path}',
+    delta: 'Δ {count}',
+    clean: 'propre',
+    changes: { one: '{count} modif.', other: '{count} modif.' },
+  },
+
+  /** The places a followed identifier may lead to. */
+  targets: {
+    title: 'Définitions de « {label} »',
+  },
+
   /** Added to the question of a deletion that loses unsaved files (the sentence is added to a text). */
   lossNotice: {
     one: '{count} fichier non enregistré dans l’éditeur sera perdu.',
