@@ -2543,28 +2543,42 @@ async fn the_setup_shows_the_output_of_its_step_as_it_comes_and_logs_all_of_it()
     // Over: nothing more is kept.
     assert!(!h.core.setup_outputs().contains_key(&id));
     // The window was sent each step's lines as they came, a step starting with none (the window
-    // forgets the lines of the step before), each batch counting the lines of its step so far.
+    // forgets the lines of the step before), each batch counting the lines of its step so far and
+    // carrying all of them since the batch before, up to the 500 the window keeps.
     let sent = setup_events(&h, &id);
+    let batches = |step: u64| -> Vec<&(u64, u64, Vec<String>)> {
+        sent.iter().filter(|(s, _, _)| *s == step).collect()
+    };
     for step in [0, 1] {
-        let batches: Vec<&(u64, u64, Vec<String>)> =
-            sent.iter().filter(|(s, _, _)| *s == step).collect();
+        let batches = batches(step);
         assert_eq!(batches[0].1, 0, "{batches:?}");
         assert!(batches[0].2.is_empty(), "{batches:?}");
-        let mut count = 0;
-        for (_, total, lines) in &batches {
-            count += lines.len() as u64;
-            assert_eq!(*total, count);
+        let mut before = 0;
+        for (_, total, lines) in &batches[1..] {
+            assert!(*total > before, "{batches:?}");
+            assert_eq!(lines.len() as u64, (*total - before).min(500));
+            before = *total;
         }
     }
     let lines = |step: u64| -> Vec<String> {
-        sent.iter()
-            .filter(|(s, _, _)| *s == step)
+        batches(step)
+            .iter()
             .flat_map(|(_, _, l)| l.clone())
             .collect()
     };
     assert_eq!(lines(0), ["un", "deux"]);
-    let expected: Vec<String> = (1..=600).map(|i| format!("ligne {i}")).collect();
-    assert_eq!(lines(1), expected);
+    // The second's: the last lines written by each batch's count, the window left with the last 500.
+    for (_, total, lines) in batches(1) {
+        let from = *total as usize - lines.len() + 1;
+        let written: Vec<String> = (from..=*total as usize)
+            .map(|i| format!("ligne {i}"))
+            .collect();
+        assert_eq!(lines, &written);
+    }
+    assert_eq!(batches(1).last().unwrap().1, 600);
+    let kept = lines(1);
+    let expected: Vec<String> = (101..=600).map(|i| format!("ligne {i}")).collect();
+    assert_eq!(kept[kept.len() - 500..], expected[..]);
     // The log has every line of every step, under its label.
     let log = std::fs::read_to_string(h.core.data.setup_log(&id)).unwrap();
     let label = |i: usize, c: &str| {
@@ -2584,6 +2598,30 @@ async fn the_setup_shows_the_output_of_its_step_as_it_comes_and_logs_all_of_it()
         "{log}"
     );
     assert!(log.contains("ligne 600\n── terminée en "), "{log}");
+}
+
+#[tokio::test]
+async fn the_window_gets_a_steps_lines_in_a_few_batches_however_many_writes_it_makes() {
+    let h = harness("wt-setup-batches");
+    let (p, _) = h.project(true).await;
+    // 120 lines, each written on its own a little after the one before: as many reads.
+    let chatty = r#"node -e "let i = 0; const t = setInterval(() => { console.log('ligne ' + ++i); if (i === 120) clearInterval(t); }, 8)""#;
+    h.set_worktree_steps(&p.id, vec![wt_step(chatty, "")], vec![]);
+    let started = std::time::Instant::now();
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let id = a.meta.id.clone();
+    h.wait("set up", |h| h.view(&id).setup.is_none()).await;
+    let elapsed = started.elapsed();
+    let sent = setup_events(&h, &id);
+    // Nothing lost, in order, the totals counting them.
+    let lines: Vec<String> = sent.iter().flat_map(|(_, _, l)| l.clone()).collect();
+    let expected: Vec<String> = (1..=120).map(|i| format!("ligne {i}")).collect();
+    assert_eq!(lines, expected);
+    assert_eq!(sent.last().unwrap().1, 120);
+    // One batch every 50 ms at most, and the last at the step's end: not one per write.
+    let batches = sent.iter().filter(|(_, _, l)| !l.is_empty()).count();
+    let bound = (elapsed.as_millis() / 50) as usize + 2;
+    assert!(batches <= bound, "{batches} batches in {elapsed:?}");
 }
 
 #[tokio::test]

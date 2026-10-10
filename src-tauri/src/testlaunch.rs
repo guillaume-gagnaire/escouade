@@ -276,28 +276,57 @@ fn char_start(bytes: &[u8], at: usize) -> usize {
 /// bar draws over itself), without its ANSI codes. Read as UTF-8, whatever it is.
 fn shown_line(bytes: &[u8]) -> String {
     let text = String::from_utf8_lossy(bytes);
-    let text = text.strip_suffix('\r').unwrap_or(&text);
+    // Every carriage return of its end: a line break written as CRLF through a CRLF translation
+    // ends with two (Python relaying a tool's output, pip, tox…).
+    let text = text.trim_end_matches('\r');
     crate::agent::strip_ansi(text.rsplit('\r').next().unwrap_or_default())
 }
 
-/// Reads `pipe` to its end, handing to `take` the lines each chunk read ends.
+/// The output of a command could not be read to its end: what it wrote is not all known, whatever
+/// its exit code says.
+#[derive(Debug)]
+pub struct OutputLost(pub std::io::Error);
+
+impl std::fmt::Display for OutputLost {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "la sortie de la commande n'a pas pu être lue : {}",
+            self.0
+        )
+    }
+}
+
+impl std::error::Error for OutputLost {}
+
+/// Reads `pipe` to its end, handing to `take` the lines each chunk read ends. A read that fails
+/// is not its end: what was read is handed over all the same, and the failure returned (the pipe
+/// then closed, the command's writes to it fail instead of waiting to be read).
 async fn read_lines(
     pipe: Option<impl tokio::io::AsyncRead + Unpin>,
     take: &(impl Fn(Vec<String>) + Sync),
-) {
+) -> std::io::Result<()> {
     use tokio::io::AsyncReadExt;
-    let Some(mut pipe) = pipe else { return };
+    let Some(mut pipe) = pipe else { return Ok(()) };
     let mut reader = LineReader::default();
     let mut chunk = vec![0; 8 * 1024];
-    while let Ok(n @ 1..) = pipe.read(&mut chunk).await {
-        let lines = reader.feed(&chunk[..n]);
-        if !lines.is_empty() {
-            take(lines);
+    let read = loop {
+        match pipe.read(&mut chunk).await {
+            Ok(0) => break Ok(()),
+            Ok(n) => {
+                let lines = reader.feed(&chunk[..n]);
+                if !lines.is_empty() {
+                    take(lines);
+                }
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(e) => break Err(e),
         }
-    }
+    };
     if let Some(last) = reader.finish() {
         take(vec![last]);
     }
+    read
 }
 
 /// Runs `command` as `run_command` does, handing to `on_lines` what it writes as it comes: the
@@ -342,12 +371,17 @@ pub async fn run_streaming(
     // Both pipes to their end (a process left running that holds them is waited for, as it was
     // when the output was read whole), then the exit.
     let run = async {
-        tokio::join!(read_lines(stdout, &take), read_lines(stderr, &take));
-        child.wait().await
+        let (out, err) = tokio::join!(read_lines(stdout, &take), read_lines(stderr, &take));
+        (child.wait().await, out.and(err))
     };
     match tokio::time::timeout(limit, run).await {
-        Ok(status) => {
+        Ok((status, read)) => {
             let status = status?;
+            // Not a pass, nor a failure of its own, with part of what it wrote missing.
+            if let Err(e) = read {
+                log::warn!("output of `{command}` lost: {e}");
+                return Err(OutputLost(e).into());
+            }
             let tail = Vec::from(std::mem::take(&mut *tail.lock())).join("\n");
             Ok(Some(TestRun {
                 passed: status.success(),
@@ -696,6 +730,8 @@ mod tests {
         // A line ended by the next chunk, Windows' line endings, colors.
         assert_eq!(r.feed(b"un\r\nde"), ["un"]);
         assert_eq!(r.feed(b"ux\n\x1b[32mtrois\x1b[0m\n"), ["deux", "trois"]);
+        // CRLF written through a CRLF translation (Python relaying a tool's output, pip, tox…).
+        assert_eq!(r.feed(b"x\r\r\n"), ["x"]);
         // A progress bar drawn over itself: what it shows last.
         assert_eq!(r.feed(b"10%\r50%\r100%\r\n"), ["100%"]);
         assert_eq!(r.feed(b"\n"), [""]);
@@ -714,6 +750,44 @@ mod tests {
         let rest = r.finish().expect("the end of the line");
         assert_eq!(format!("{}{rest}", lines.concat()), long);
         assert_eq!(LineReader::default().finish(), None);
+    }
+
+    /// A pipe that gives `data`, then fails.
+    struct Failing(Option<&'static [u8]>);
+
+    impl tokio::io::AsyncRead for Failing {
+        fn poll_read(
+            mut self: std::pin::Pin<&mut Self>,
+            _: &mut std::task::Context<'_>,
+            buf: &mut tokio::io::ReadBuf<'_>,
+        ) -> std::task::Poll<std::io::Result<()>> {
+            std::task::Poll::Ready(match self.0.take() {
+                Some(data) => {
+                    buf.put_slice(data);
+                    Ok(())
+                }
+                None => Err(std::io::Error::other("tube cassé")),
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn a_pipe_that_fails_is_not_taken_for_the_end_of_the_output() {
+        let seen = parking_lot::Mutex::new(Vec::new());
+        let read = read_lines(Some(Failing(Some(b"un\ndeu"))), &|l: Vec<String>| {
+            seen.lock().extend(l)
+        })
+        .await;
+        // What was read is handed over, and the failure is told.
+        assert_eq!(seen.into_inner(), ["un", "deu"]);
+        assert_eq!(read.unwrap_err().to_string(), "tube cassé");
+        // As it reads, the command run says so instead of passing on part of its output.
+        let lost = anyhow::Error::from(OutputLost(std::io::Error::other("tube cassé")));
+        assert_eq!(
+            lost.to_string(),
+            "la sortie de la commande n'a pas pu être lue : tube cassé"
+        );
+        assert!(lost.downcast_ref::<OutputLost>().is_some());
     }
 
     #[tokio::test]

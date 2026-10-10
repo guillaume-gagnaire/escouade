@@ -153,14 +153,27 @@ pub async fn run_step(
             format!("pas finie en {} min", (limit.as_secs() / 60).max(1)),
             String::new(),
         )),
-        Err(e) => Err(fail(format!("ne démarre pas : {e:#}"), String::new())),
+        Err(e) => Err(fail(run_error(&e), String::new())),
+    }
+}
+
+/// Why a step's command gave no outcome, as its failure says it: it did not start, or its output
+/// could not be read to its end.
+fn run_error(e: &anyhow::Error) -> String {
+    if e.downcast_ref::<testlaunch::OutputLost>().is_some() {
+        format!("{e:#}")
+    } else {
+        format!("ne démarre pas : {e:#}")
     }
 }
 
 /// The log of the setup of an agent's worktree: each step's whole output under its label, and how
 /// it ended. Written as it comes, a batch of lines at a time: it can be read while a step runs,
 /// and holds what came before the app stopped.
-pub struct SetupLog(parking_lot::Mutex<Option<File>>);
+pub struct SetupLog {
+    path: std::path::PathBuf,
+    file: parking_lot::Mutex<Option<File>>,
+}
 
 impl SetupLog {
     /// A new log at `path` (its folder made), in place of the one of an earlier setup. When it
@@ -177,21 +190,23 @@ impl SetupLog {
                 None
             }
         };
-        Self(parking_lot::Mutex::new(file))
+        Self {
+            path: path.to_path_buf(),
+            file: parking_lot::Mutex::new(file),
+        }
     }
 
     /// It is written: what it holds can be pointed to.
     pub fn written(&self) -> bool {
-        self.0.lock().is_some()
+        self.file.lock().is_some()
     }
 
     fn write(&self, text: &str) {
-        let mut file = self.0.lock();
-        if file
-            .as_mut()
-            .is_some_and(|f| f.write_all(text.as_bytes()).is_err())
-        {
-            // A disk full or gone: the setup goes on without its log.
+        let mut file = self.file.lock();
+        let Some(f) = file.as_mut() else { return };
+        if let Err(e) = f.write_all(text.as_bytes()) {
+            // A disk full or gone: the setup goes on without its log, said once.
+            log::warn!("setup log {} given up: {e}", self.path.display());
             *file = None;
         }
     }
@@ -699,6 +714,19 @@ mod tests {
         assert!(e
             .describe("La préparation du worktree")
             .ends_with("ligne 100\n```"));
+    }
+
+    #[test]
+    fn a_step_whose_output_was_lost_says_so_rather_than_that_it_did_not_start() {
+        let lost = anyhow::Error::from(testlaunch::OutputLost(std::io::Error::other("tube cassé")));
+        assert_eq!(
+            run_error(&lost),
+            "la sortie de la commande n'a pas pu être lue : tube cassé"
+        );
+        assert_eq!(
+            run_error(&anyhow::anyhow!("introuvable")),
+            "ne démarre pas : introuvable"
+        );
     }
 
     #[test]

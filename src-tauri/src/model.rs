@@ -1036,9 +1036,9 @@ pub enum UiEvent {
     Toast {
         text: String,
     },
-    /// Lines the step `step` (from 0) of the setup of an agent's worktree just wrote, its `total`
-    /// lines so far counting them. A step starts with none: the window forgets the lines of the
-    /// step before.
+    /// Lines the step `step` (from 0) of the setup of an agent's worktree wrote since the window
+    /// was last sent some (50 ms apart at most), its `total` lines so far counting them. A step
+    /// starts with none: the window forgets the lines of the step before.
     #[serde(rename_all = "camelCase")]
     SetupOutput {
         agent_id: String,

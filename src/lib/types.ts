@@ -793,7 +793,7 @@ export type UiEvent =
   /** Why no ticket of any board starts for now, or null once they may. */
   | { type: 'autopilotPause'; pause: AutopilotPause | null }
   | { type: 'toast'; text: string }
-  /** Lines a step of the setup of an agent's worktree just wrote, `total` counting all it wrote; a step starts with none. */
+  /** Lines a step of the setup of an agent's worktree wrote since the last event, `total` counting all it wrote; a step starts with none. */
   | ({ type: 'setupOutput'; agentId: string } & SetupOutput);
 
 /** What the step running of a worktree's setup wrote: its rank (from 0), how many lines so far, and the last of them. */

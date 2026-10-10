@@ -114,6 +114,9 @@ fn setup_label(steps: &[WorktreeStep], i: usize) -> String {
     )
 }
 
+/// How often, at most, the window is sent the lines the step running of a worktree's setup wrote.
+const SETUP_SEND_EVERY: Duration = Duration::from_millis(50);
+
 /// The setup of an agent's new worktree, under way.
 struct Setup {
     /// True once it is over, whichever way (its sender dropped: stopped).
@@ -2267,19 +2270,37 @@ impl<R: Runtime> Core<R> {
             });
             setup_log.step(&label);
             let step_started = Instant::now();
+            // The lines the window has not been sent yet: a tool writing line by line would send
+            // it one event per line, each redrawing the output.
+            let unsent = Mutex::new(Vec::new());
             let on_lines = |lines: &[String]| {
                 setup_log.lines(lines);
-                self.take_setup_lines(id, i, lines);
+                if self.keep_setup_lines(id, i, lines) {
+                    let mut unsent = unsent.lock();
+                    unsent.extend_from_slice(lines);
+                    let excess = unsent.len().saturating_sub(SETUP_LINES);
+                    unsent.drain(..excess);
+                }
             };
-            let ran = worktrees::run_step(
+            let running = worktrees::run_step(
                 step,
                 &shells,
                 &wt.path,
                 &env,
                 worktrees::SETUP_LIMIT,
                 &on_lines,
-            )
-            .await;
+            );
+            tokio::pin!(running);
+            let mut every = tokio::time::interval(SETUP_SEND_EVERY);
+            every.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            let ran = loop {
+                tokio::select! {
+                    ran = &mut running => break ran,
+                    _ = every.tick() => self.send_setup_lines(id, i, &unsent),
+                }
+            };
+            // Its last lines, before its end is told.
+            self.send_setup_lines(id, i, &unsent);
             if let Err(f) = ran {
                 setup_log.end(&format!("échec : {}", f.reason));
                 let text = f.describe("La préparation du worktree");
@@ -2320,27 +2341,39 @@ impl<R: Runtime> Core<R> {
         self.warm(id);
     }
 
-    /// Lines the step `step` of the agent's setup just wrote: kept for a window opened while it
-    /// runs (`setup_outputs`), and sent to the window, a batch of them in one event.
-    fn take_setup_lines(&self, id: &str, step: usize, lines: &[String]) {
-        let Ok(h) = self.agent(id) else { return };
-        let total = {
-            let mut rt = h.lock();
-            match rt.setup_output.as_mut() {
-                Some(out) if out.step == step => {
-                    out.push(lines);
-                    out.total
-                }
-                // Stopped meanwhile.
-                _ => return,
+    /// Lines the step `step` of the agent's setup just wrote, kept for a window opened while it
+    /// runs (`setup_outputs`). False when that setup is no longer under way (stopped, the agent
+    /// gone): nothing to send.
+    fn keep_setup_lines(&self, id: &str, step: usize, lines: &[String]) -> bool {
+        let Ok(h) = self.agent(id) else { return false };
+        let mut rt = h.lock();
+        match rt.setup_output.as_mut() {
+            Some(out) if out.step == step => {
+                out.push(lines);
+                true
             }
+            _ => false,
+        }
+    }
+
+    /// Sends the window the lines of the step `step` of the agent's setup it was not sent yet
+    /// (taken from `unsent`, `SETUP_LINES` at most), in one event with the step's count so far.
+    fn send_setup_lines(&self, id: &str, step: usize, unsent: &Mutex<Vec<String>>) {
+        let lines = std::mem::take(&mut *unsent.lock());
+        if lines.is_empty() {
+            return;
+        }
+        let Ok(h) = self.agent(id) else { return };
+        let total = match h.lock().setup_output.as_ref() {
+            Some(out) if out.step == step => out.total,
+            // Stopped meanwhile.
+            _ => return,
         };
         self.hub.emit(UiEvent::SetupOutput {
             agent_id: id.to_string(),
             step,
             total,
-            // No more than the window keeps.
-            lines: lines[lines.len().saturating_sub(SETUP_LINES)..].to_vec(),
+            lines,
         });
     }
 
