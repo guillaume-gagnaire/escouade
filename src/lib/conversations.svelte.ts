@@ -10,11 +10,13 @@ export interface ReadingPlace {
   /** How far it was scrolled, in pixels. */
   top: number;
   /**
-   * The block of the conversation at the top of the view (its rank among the blocks) and where its top edge was
-   * relative to the view's. Messages off screen are not rendered at their real height (content-visibility): the
-   * same distance from the top would be another message, so the place is told by the message.
+   * The item whose block was at the top of the view and where its top edge was relative to the view's. Messages off
+   * screen are not rendered at their real height (content-visibility): the same distance from the top would be another
+   * message, so the place is told by the message. By its id, not its rank: the items drawn above it change.
    */
-  anchor: { index: number; offset: number } | null;
+  anchor: { item: string; offset: number } | null;
+  /** The first item the view drew, the older ones left out; null at the bottom, which draws the latest ones. */
+  from: string | null;
 }
 
 let held = 0;

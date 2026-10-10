@@ -46,6 +46,12 @@ function setup(over: Partial<Agent> = {}, items: unknown[] = []) {
 
 const frame = () => new Promise((r) => requestAnimationFrame(() => r(null)));
 
+const user = (i: number) => ({ kind: 'user' as const, id: `u${i}`, text: `Message ${i}`, images: 0, ts: i, queued: false });
+/** A conversation of `n` messages, `u0` to `u${n - 1}`. */
+const many = (n: number) => Array.from({ length: n }, (_, i) => user(i));
+/** The items the view draws a block for, in order. */
+const drawnIds = (c: HTMLElement) => [...c.querySelectorAll<HTMLElement>('[data-item]')].map((e) => e.dataset.item);
+
 const WT = { path: 'C:\\code\\demo-api\\.claude\\worktrees\\w1', branch: 'escouade/w1', baseBranch: 'main' };
 
 describe('Conversation', () => {
@@ -546,6 +552,147 @@ describe('Conversation', () => {
         await settled();
         expect(scroller.scrollTop).toBe(2000);
         expect(highlighted(container)).toEqual([]);
+      });
+
+      it('goes to a message older than the window, drawing what leads to it', async () => {
+        const { container, scroller } = openAt('u20', many(200));
+        await settled();
+        // From a few messages before it to the end: the button stays above for the older ones.
+        expect(drawnIds(container)[0]).toBe('u10');
+        expect(drawnIds(container)).toHaveLength(190);
+        expect(screen.getByRole('button', { name: 'Afficher les 10 précédents' })).toBeInTheDocument();
+        // The button, then u10…u19 above it.
+        expect(scroller.scrollTop).toBe(middle(11));
+        expect(highlighted(container)).toEqual(['u20']);
+      });
+    });
+
+    describe('a long conversation', () => {
+      it('draws only its last 80 items, with a button for the 80 before', async () => {
+        const { container } = setup({ status: 'done' }, many(2000));
+        await screen.findByText('Message 1999');
+        expect(drawnIds(container)).toHaveLength(80);
+        expect(drawnIds(container)[0]).toBe('u1920');
+        expect(screen.queryByText('Message 1919')).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Afficher les 80 précédents' })).toBeInTheDocument();
+      });
+
+      it('draws no button when every item is drawn', async () => {
+        const { container } = setup({ status: 'done' }, many(80));
+        await screen.findByText('Message 79');
+        expect(drawnIds(container)).toHaveLength(80);
+        expect(screen.queryByRole('button', { name: /Afficher/ })).not.toBeInTheDocument();
+      });
+
+      it('draws the items before by slices of 80, down to the first', async () => {
+        const { container } = setup({ status: 'done' }, many(201));
+        await userEvent.click(await screen.findByRole('button', { name: 'Afficher les 80 précédents' }));
+        expect(drawnIds(container)).toHaveLength(160);
+        expect(drawnIds(container)[0]).toBe('u41');
+        await userEvent.click(screen.getByRole('button', { name: 'Afficher les 41 précédents' }));
+        expect(drawnIds(container)).toHaveLength(201);
+        expect(drawnIds(container)[0]).toBe('u0');
+        expect(screen.queryByRole('button', { name: /Afficher/ })).not.toBeInTheDocument();
+      });
+
+      it('says « Afficher le précédent » for a single one', async () => {
+        setup({ status: 'done' }, many(81));
+        expect(await screen.findByRole('button', { name: 'Afficher le précédent' })).toBeInTheDocument();
+      });
+
+      it('moves the focus on to the conversation once the last slice is drawn, not back to the page', async () => {
+        const { scroller } = setup({ status: 'done' }, many(120));
+        const button = await screen.findByRole('button', { name: 'Afficher les 40 précédents' });
+        button.focus();
+        await userEvent.keyboard('{Enter}');
+        await waitFor(() => expect(scroller).toHaveFocus());
+      });
+
+      describe('laid out', () => {
+        let height = 150;
+        let spy: ReturnType<typeof vi.spyOn>;
+        beforeEach(() => {
+          height = 150;
+          spy = layOut(() => height);
+        });
+        afterEach(() => spy.mockRestore());
+
+        it('keeps the reader on the message they were reading when a slice is drawn above it', async () => {
+          const { container, scroller } = setup({ status: 'done' }, many(160));
+          await frame();
+          grows(scroller)(24_000);
+          // The button (0-150), u80 (150-300), u81 (300-450): u81 is the first in view, 100 px above its top.
+          readerScrollsTo(scroller, 400);
+          await userEvent.click(screen.getByRole('button', { name: 'Afficher les 80 précédents' }));
+          expect(drawnIds(container)[0]).toBe('u0');
+          // u81 is now the 82nd block: still 100 px above the top of the view.
+          expect(scroller.scrollTop).toBe(81 * 150 + 100);
+          // Kept there while the blocks drawn above it are measured.
+          height = 100;
+          resized.forEach((cb) => cb([]));
+          expect(scroller.scrollTop).toBe(81 * 100 + 100);
+        });
+
+        it('puts the reader back among the older items they had drawn', async () => {
+          const { a, container, scroller, unmount } = setup({ status: 'done' }, many(200));
+          await frame();
+          grows(scroller)(30_000);
+          await userEvent.click(screen.getByRole('button', { name: 'Afficher les 80 précédents' }));
+          expect(drawnIds(container)[0]).toBe('u40');
+          // The button, then u40 (150-300)… u59 (3000-3150): u59 at the top of the view.
+          readerScrollsTo(scroller, 3000);
+          unmount();
+          resized = [];
+          const again = render(Conversation, { agent: a, project: project() });
+          await frame();
+          expect(drawnIds(again.container)[0]).toBe('u40');
+          expect((again.container.querySelector('.scroll') as HTMLElement).scrollTop).toBe(3000);
+        });
+      });
+
+      it('follows the new messages at the bottom, drawing the latest 80', async () => {
+        const { a, container, scroller } = setup({ status: 'running' }, many(200));
+        await screen.findByText('Message 199');
+        await frame();
+        expect(scroller.scrollTop).toBe(2000);
+        applyConvOps(a.id, [{ op: 'append', item: user(200) }]);
+        await tick();
+        grows(scroller)(2600);
+        resized.forEach((cb) => cb([]));
+        expect(scroller.scrollTop).toBe(2600);
+        expect(drawnIds(container)).toHaveLength(80);
+        expect(drawnIds(container)[0]).toBe('u121');
+      });
+
+      it('keeps what the reader scrolled up to when new messages come in', async () => {
+        const { a, container, scroller } = setup({ status: 'running' }, many(200));
+        await screen.findByText('Message 199');
+        await frame();
+        readerScrollsTo(scroller, 1000);
+        applyConvOps(a.id, [{ op: 'append', item: user(200) }]);
+        await tick();
+        resized.forEach((cb) => cb([]));
+        expect(scroller.scrollTop).toBe(1000);
+        expect(drawnIds(container)[0]).toBe('u120');
+        expect(drawnIds(container)).toHaveLength(81);
+      });
+
+      it('draws the latest 80 again once the reader goes down to the new messages', async () => {
+        const { a, container } = setup({ status: 'running' }, many(200));
+        await screen.findByText('Message 199');
+        await frame();
+        // The observer's first report is the size the view starts from.
+        resized.forEach((cb) => cb([]));
+        await userEvent.click(screen.getByRole('button', { name: 'Afficher les 80 précédents' }));
+        expect(drawnIds(container)).toHaveLength(160);
+        applyConvOps(a.id, [{ op: 'append', item: user(200) }]);
+        // Out of the settling of the slice: what grows is new messages.
+        const now = performance.now();
+        vi.spyOn(performance, 'now').mockReturnValue(now + 5000);
+        resized.forEach((cb) => cb([]));
+        await userEvent.click(await screen.findByRole('button', { name: /Nouveaux messages/ }));
+        expect(drawnIds(container)).toHaveLength(80);
+        expect(drawnIds(container)[0]).toBe('u121');
       });
     });
   });

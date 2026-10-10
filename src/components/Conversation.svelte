@@ -1,6 +1,6 @@
 <script lang="ts">
   import { keyLabel } from '../lib/platform';
-  import { onMount, tick } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import { api } from '../lib/ipc';
   import { conversationOf, type ReadingPlace } from '../lib/conversations.svelte';
   import { splitEscouade } from '../lib/escouade';
@@ -40,11 +40,28 @@
   const SETTLE_MS = 1000;
   /** How long a message brought into view from a search stays highlighted. */
   const FOUND_MS = 2000;
+  /** How many items the view draws at first, and adds each time the reader asks for the ones before. */
+  const SLICE = 80;
+  /** Items drawn above a message brought into view from the older ones, for it to sit in the middle of the view. */
+  const LEAD = 10;
 
   const conv = $derived(conversationOf(agent.id));
   // The ticket the agent works on, whose criteria the reports of its turns name.
   const ticket = $derived(app.ticketOf(agent.id));
   const top = $derived(conv.items.filter((i) => !i.parent));
+  // A long conversation is drawn from an item on (each block is a DOM node, a message may be heavy Markdown): its
+  // latest SLICE items at first, more when the reader asks for them. `from` is that first item, by its id; null for the
+  // latest SLICE, which slide as items come while the view follows the bottom. It is pinned as soon as the view leaves
+  // the bottom, so that new items never take away what the reader is on.
+  let from = $state<string | null>(null);
+  const rankOf = (id: string) => top.findIndex((i) => i.id === id);
+  const start = $derived.by(() => {
+    const rank = from === null ? -1 : rankOf(from);
+    return rank >= 0 ? rank : Math.max(0, top.length - SLICE);
+  });
+  const drawn = $derived(top.slice(start));
+  // The next slice: what « Afficher les N précédents » adds.
+  const older = $derived(Math.min(SLICE, start));
   const children = $derived.by(() => {
     const m = new Map<string, ConvItem[]>();
     for (const i of conv.items) {
@@ -90,6 +107,7 @@
 
   let scroller = $state<HTMLDivElement>();
   let content = $state<HTMLDivElement>();
+  let olderButton = $state<HTMLButtonElement>();
   let stick = true;
   let showJump = $state(false);
   let lastTop = 0;
@@ -99,6 +117,9 @@
   // height (content-visibility sizes those off screen by a guess), until the reader takes over.
   let settling: ReadingPlace | null = null;
   let settleEnd = 0;
+  // The view is put in place once its conversation is loaded: until then, what it shows is not the reader's place,
+  // which is kept as it was, and its content growing is no news.
+  let placed = false;
 
   function atBottom() {
     return !scroller || scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 24;
@@ -111,16 +132,29 @@
     }
     stick = true;
     showJump = false;
+    // Following the bottom draws the latest items only: those the reader had asked for go.
+    from = null;
     remember();
+  }
+
+  /** The view leaves the bottom: the items it draws stay, whatever comes after them. */
+  function pin() {
+    if (from === null) from = top[start]?.id ?? null;
   }
 
   // Kept as the reader moves: when the view is destroyed it is already out of the page, with no layout to read.
   function remember() {
-    if (!scroller) return;
-    conv.place = { stick, top: scroller.scrollTop, anchor: stick ? null : anchorOf(scroller) };
+    if (!scroller || !placed) return;
+    conv.place = stick
+      ? { stick, top: scroller.scrollTop, anchor: null, from: null }
+      : { stick, top: scroller.scrollTop, anchor: anchorOf(scroller), from: top[start]?.id ?? null };
   }
 
-  /** The first block (child of `.msgs`) that ends below the top of the view, found by halving: blocks are in order. */
+  /**
+   * The item whose block is the first to end below the top of the view (found by halving: blocks are in order), and
+   * where the block's top edge is relative to the view's. The button above the items and the bubbles below them are
+   * not items: the next block that draws one is taken.
+   */
   function anchorOf(view: HTMLElement) {
     const blocks = content?.children;
     if (!blocks) return null;
@@ -132,12 +166,21 @@
       if (blocks[mid].getBoundingClientRect().bottom > viewTop + 1) hi = mid;
       else lo = mid + 1;
     }
-    return lo < blocks.length ? { index: lo, offset: blocks[lo].getBoundingClientRect().top - viewTop } : null;
+    for (let i = lo; i < blocks.length; i++) {
+      const item = (blocks[i] as HTMLElement).dataset.item;
+      if (item) return { item, offset: blocks[i].getBoundingClientRect().top - viewTop };
+    }
+    return null;
+  }
+
+  /** The block that draws the item `id`, if it is drawn (not every item draws one). */
+  function blockOf(id: string): HTMLElement | undefined {
+    for (const b of content?.children ?? []) if (b instanceof HTMLElement && b.dataset.item === id) return b;
   }
 
   function restore(place: ReadingPlace) {
     if (!scroller) return;
-    const block = place.anchor && content?.children[place.anchor.index];
+    const block = place.anchor && blockOf(place.anchor.item);
     if (block && place.anchor) {
       scroller.scrollTop += block.getBoundingClientRect().top - scroller.getBoundingClientRect().top - place.anchor.offset;
     } else {
@@ -145,6 +188,38 @@
     }
     lastTop = scroller.scrollTop;
     remember();
+  }
+
+  /** Where the items drawn start for a place put back: at the first it drew, or at its anchor if that is older. */
+  function windowFor(place: ReadingPlace): string | null {
+    const ranks = [place.from, place.anchor?.item].map((id) => (id ? rankOf(id) : -1)).filter((r) => r >= 0);
+    return ranks.length ? top[Math.min(...ranks)].id : null;
+  }
+
+  /**
+   * Draws the slice before the items drawn. The reader stays on what they were reading: the first message in view keeps
+   * its place on screen, as a place put back does while the blocks drawn above it are measured. The button goes with
+   * the last slice: the focus moves on to the conversation, so that the keyboard neither falls back to the page nor
+   * starts over.
+   */
+  async function showOlder() {
+    if (!scroller) return;
+    const at: ReadingPlace = { stick: false, top: scroller.scrollTop, anchor: anchorOf(scroller), from: null };
+    stick = false;
+    from = top[Math.max(0, start - SLICE)].id;
+    await tick();
+    settling = at;
+    settleEnd = performance.now() + SETTLE_MS;
+    restore(at);
+    if (!olderButton) scroller.focus({ preventScroll: true });
+  }
+
+  /** Draws the item `id`, with a few items before it, if it is older than the items drawn. */
+  function include(id: string | null) {
+    const rank = id === null ? -1 : rankOf(id);
+    if (rank < 0) return;
+    const first = Math.max(0, rank - LEAD);
+    if (first < start) from = top[first].id;
   }
 
   // The reader scrolling up leaves the bottom, however close to it: messages rendered as they come
@@ -165,11 +240,12 @@
 
   function onScroll() {
     if (!scroller) return;
-    const top = scroller.scrollTop;
-    if (top < lastTop - 1 && reading()) stick = false;
+    const at = scroller.scrollTop;
+    if (at < lastTop - 1 && reading()) stick = false;
     else if (atBottom()) stick = true;
-    lastTop = top;
+    lastTop = at;
     if (stick) showJump = false;
+    else if (placed) pin();
     remember();
   }
 
@@ -179,31 +255,48 @@
     const place = conv.place;
     if (place && !place.stick) {
       stick = false;
+      from = windowFor(place);
+      pin();
       settling = place;
       settleEnd = performance.now() + SETTLE_MS;
-      requestAnimationFrame(() => restore(place));
+      requestAnimationFrame(() => {
+        placed = true;
+        restore(place);
+      });
     } else {
-      requestAnimationFrame(toBottom);
+      requestAnimationFrame(() => {
+        placed = true;
+        toBottom();
+      });
     }
   }
 
-  // A message asked for (a search result) wins over the place the reader had left: the view goes to it instead.
-  let placed = false;
   onMount(() => {
-    if (conv.jump) stick = false;
-    else putBack();
-    placed = !conv.jump;
+    // The view does not follow the bottom on its way to another place.
+    if (conv.jump || (conv.place && !conv.place.stick)) stick = false;
   });
 
-  // The message asked for is shown once the conversation is loaded and drawn, whether the view was made before or
-  // after the request (another agent's result, or one of the agent on screen).
+  // Once the conversation is loaded, the view opens where the reader left it, unless a message is asked for (a search
+  // result): that wins, whether the view was made before or after the request (another agent's result, or one of the
+  // agent on screen). The message is drawn first, if it is older than the items drawn.
+  let opened = false;
   let found = $state<string | null>(null);
   let foundTimer: ReturnType<typeof setTimeout> | undefined;
   $effect(() => {
+    if (!conv.loaded) return;
     const id = conv.jump;
-    if (!id || !conv.loaded) return;
-    conv.jump = null;
-    tick().then(() => reveal(id));
+    // Not again for each item that comes: what is drawn is only read here.
+    untrack(() => {
+      if (id) {
+        conv.jump = null;
+        opened = true;
+        include(conv.shownAs(id));
+        tick().then(() => reveal(id));
+      } else if (!opened) {
+        opened = true;
+        putBack();
+      }
+    });
   });
   $effect(() => () => clearTimeout(foundTimer));
 
@@ -214,18 +307,17 @@
    */
   function reveal(id: string) {
     const shown = conv.shownAs(id);
-    const blocks = content ? [...content.children] : [];
-    const index = shown === null ? -1 : blocks.findIndex((b) => b instanceof HTMLElement && b.dataset.item === shown);
-    if (!scroller || index < 0) {
+    const block = shown === null ? undefined : blockOf(shown);
+    if (!scroller || !shown || !block) {
       // Not in the conversation: the view goes where it would have gone.
       if (!placed) putBack();
-      placed = true;
       return;
     }
     placed = true;
-    const room = scroller.clientHeight - blocks[index].getBoundingClientRect().height;
-    const at: ReadingPlace = { stick: false, top: scroller.scrollTop, anchor: { index, offset: Math.max(24, room / 2) } };
+    const room = scroller.clientHeight - block.getBoundingClientRect().height;
+    const at: ReadingPlace = { stick: false, top: scroller.scrollTop, anchor: { item: shown, offset: Math.max(24, room / 2) }, from: null };
     stick = false;
+    pin();
     showJump = false;
     settling = at;
     settleEnd = performance.now() + SETTLE_MS;
@@ -240,7 +332,7 @@
     const ro = new ResizeObserver(() => {
       if (stick) toBottom();
       else if (settling && performance.now() < settleEnd) restore(settling);
-      else if (sized) showJump = true;
+      else if (sized && placed) showJump = true;
       sized = true;
     });
     ro.observe(content);
@@ -256,8 +348,9 @@
     };
   }
 
+  // The first block drawn shows its avatar, even after text left out above it.
   function prevIsText(i: number) {
-    return i > 0 && top[i - 1].kind === 'text';
+    return i > start && top[i - 1].kind === 'text';
   }
 
   /** Items that draw nothing: an empty block of text, the calls whose question or plan has its own card. */
@@ -375,8 +468,9 @@
     </div>
   </header>
 
+  <!-- Focusable for the keyboard to go on reading once the last of the older items are drawn (showOlder). -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="scroll" bind:this={scroller} onscroll={onScroll} onwheel={byReader} onkeydown={byReader} onpointerdown={grab}>
+  <div class="scroll" tabindex="-1" bind:this={scroller} onscroll={onScroll} onwheel={byReader} onkeydown={byReader} onpointerdown={grab}>
     <div class="msgs" bind:this={content}>
       {#if conv.error}
         <div class="load-error">
@@ -392,7 +486,14 @@
           {/if}
         </div>
       {/if}
-      {#each top as item, i (item.id)}
+      {#if older > 0}
+        <button class="btn older" bind:this={olderButton} onclick={showOlder}>
+          {older === 1 ? 'Afficher le précédent' : `Afficher les ${older} précédents`}
+        </button>
+      {/if}
+      {#each drawn as item, j (item.id)}
+        <!-- Its rank in the whole conversation. -->
+        {@const i = start + j}
         {#if shows(item)}
           <!-- The block of an item, found by it (reveal). -->
           <div class="item" class:found={found === item.id} data-item={item.id}>
@@ -612,6 +713,19 @@
   .scroll {
     flex: 1;
     overflow: auto;
+  }
+  .scroll:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+  /* Above the items drawn: the slice before them. */
+  .older {
+    align-self: center;
+    height: 28px;
+    padding: 0 12px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
   }
   .msgs {
     max-width: 780px;
