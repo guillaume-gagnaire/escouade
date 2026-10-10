@@ -831,7 +831,12 @@ impl<R: Runtime> Core<R> {
     /// meet it too, so none starts on it for a while (`board::LIMIT_PAUSE_MS`), or until
     /// "Reprendre maintenant".
     pub(crate) fn pause_after_limit(&self, account: &str) {
-        let until = self.pause_now() + board::LIMIT_PAUSE_MS;
+        self.hold_until(account, self.pause_now() + board::LIMIT_PAUSE_MS);
+    }
+
+    /// The account met the usage limit: nothing starts on it until `until` (its windows may not say
+    /// so, and an agent that left it for another must not come back to it at the next limit).
+    pub(crate) fn hold_until(&self, account: &str, until: i64) {
         self.hold.lock().limit(account, until);
         // Saved even when a longer pause hides it: it may outlast that one once lifted.
         self.request_save();
@@ -1158,6 +1163,11 @@ impl<R: Runtime> Core<R> {
         };
         let Some(ticket_id) = ticket_id else { return };
         let limited = end == TurnEnd::Limited;
+        // Stopped by the usage limit with another account to go on on: it does, rather than wait
+        // for its own to reset. The ticket stays as it is: its agent's next turn is read.
+        if limited && self.switch_on_limit(agent_id).await {
+            return;
+        }
         // A usage limit with no resume planned (turned off, no reset known) would leave the
         // ticket waiting forever: it is blocked. The next ticket would meet the limit too: the
         // autopilot pauses first, so that no pass starts one in the place this frees.
@@ -1194,6 +1204,89 @@ impl<R: Runtime> Core<R> {
             self.notify_ticket(&ticket_id, false);
         }
         self.schedule();
+    }
+
+    /// The agent of a ticket "En cours", stopped by the usage limit, goes on by itself on another
+    /// account (`account_to_switch_to`), its session with it. True when it did; when it could not
+    /// (a failure), it waits for the reset as it does with no other account.
+    async fn switch_on_limit(self: &Arc<Self>, agent_id: &str) -> bool {
+        let Some(target) = self.account_to_switch_to(agent_id) else {
+            return false;
+        };
+        // The account it leaves is at its limit until the reset its resume waited for (planned
+        // when the turn ended), else for a while.
+        let (from, resume) = match self.agent(agent_id) {
+            Ok(h) => {
+                let rt = h.lock();
+                (rt.meta.account.clone(), rt.meta.resume_at)
+            }
+            Err(_) => return false,
+        };
+        let from = accounts::get(&self.settings.read(), &from).id;
+        self.hold_until(
+            &from,
+            resume.unwrap_or(self.pause_now() + board::LIMIT_PAUSE_MS),
+        );
+        match self.resume_on_account(agent_id, &target).await {
+            Ok(()) => true,
+            Err(e) => {
+                log::warn!("agent {agent_id}: no move to the account {target} after the usage limit: {e:#}");
+                let _ = self.with_agent(agent_id, |rt, fx| {
+                    rt.notice(
+                        "warn",
+                        tr!(
+                            "Reprise sur un autre compte impossible : {e:#}",
+                            "Couldn’t resume on another account: {e:#}"
+                        ),
+                        fx,
+                    );
+                    Ok(())
+                });
+                false
+            }
+        }
+    }
+
+    /// The account a ticket's agent stopped by the usage limit goes on on, if there is one and
+    /// the user did not turn that off: the one `accounts::pick` gives (the project's preferred
+    /// account, else the first active one) when it is another than the agent's, usable (signed in,
+    /// under the threshold, no pause after a usage limit, no agent of it waiting for its reset).
+    /// A project that prefers the agent's account keeps it there.
+    fn account_to_switch_to(&self, agent_id: &str) -> Option<String> {
+        let settings = self.settings.read().clone();
+        if !settings.switch_on_limit || self.doing_ticket_of(agent_id).is_none() {
+            return None;
+        }
+        let (project, current) = {
+            let rt = self.agent(agent_id).ok()?;
+            let rt = rt.lock();
+            if rt.meta.archived {
+                return None;
+            }
+            (
+                rt.meta.project_id.clone(),
+                accounts::get(&settings, &rt.meta.account).id,
+            )
+        };
+        let preferred = self
+            .project(&project)
+            .ok()
+            .and_then(|p| accounts::preferred(&settings, &p.account).map(str::to_string));
+        let threshold = board::quota_threshold(settings.quota_pause);
+        let usage = self.usage.lock().accounts.clone();
+        let hold = self.hold.lock().clone();
+        let waiting = self.quota_paused();
+        let now = self.pause_now();
+        let usable = |id: &str| {
+            id != current
+                // Not signed in: its first turn would only fail (an account not read yet is).
+                && usage.iter().find(|u| u.id == id).is_none_or(|u| u.connected)
+                && !waiting.contains_key(id)
+                && board::account_pause(&usage, id, threshold, &hold, now).is_none()
+                && !accounts::over_threshold(&usage, id, threshold, now)
+        };
+        let target = accounts::pick_where(&settings, preferred.as_deref(), usable);
+        usable(&target).then_some(target)
     }
 
     /// Sends the ticket's agent a message; when it cannot, the ticket is blocked with the reason.

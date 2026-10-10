@@ -10,7 +10,8 @@
 use crate::board::{TurnEnd, LIMIT_PAUSE_MS};
 use crate::core::{AgentOptions, Core, RESUME_MARGIN_MS};
 use crate::core_tests::{
-    commit_change, config_dirs, git, harness, ignore, second_account, wt_step, Harness,
+    commit_change, config_dirs, extra_account, git, harness, ignore, second_account, wt_step,
+    Harness,
 };
 use crate::model::*;
 use crate::tickets::{error_reason, TicketDraft};
@@ -5055,7 +5056,9 @@ fn every_test_of_the_board_has_a_folder_of_its_own() {
 // ---------- The accounts a ticket goes to ----------
 
 /// Pro first, Principal after it, and Pro out of quota for good: each turn on it meets the usage
-/// limit (the fake CLI stops them while its folder holds a `fake-limit` file).
+/// limit (the fake CLI stops them while its folder holds a `fake-limit` file). The agent that
+/// meets it waits for the reset (« Reprendre sur un autre compte… » is off: the tests of the move
+/// have their own helper).
 fn pro_first_and_out_of_quota(h: &Harness) -> Account {
     let pro = second_account(h);
     h.core
@@ -5063,6 +5066,7 @@ fn pro_first_and_out_of_quota(h: &Harness) -> Account {
         .unwrap();
     std::fs::create_dir_all(&pro.config_dir).unwrap();
     std::fs::write(Path::new(&pro.config_dir).join("fake-limit"), "").unwrap();
+    h.set_settings(|s| s.switch_on_limit = false);
     pro
 }
 
@@ -5307,6 +5311,162 @@ async fn a_project_that_prefers_an_account_waits_for_it_alone() {
         (told["pause"].clone(), told.get("projects")),
         (Value::Null, None)
     );
+}
+
+/// Pro first and out of quota for good, then Équipe, then Principal: an agent that meets the
+/// usage limit on Pro has two accounts to go on on (« Reprendre sur un autre compte… » is on).
+fn pro_then_team_then_principal(h: &Harness) -> (Account, Account) {
+    let pro = second_account(h);
+    let team = extra_account(h, "equipe", "Équipe");
+    let order = ["pro", "equipe", "principal"].map(String::from);
+    h.core.reorder_claude_accounts(&order).unwrap();
+    std::fs::create_dir_all(&pro.config_dir).unwrap();
+    std::fs::write(Path::new(&pro.config_dir).join("fake-limit"), "").unwrap();
+    (pro, team)
+}
+
+/// `account` read as used `pct` percent until in an hour.
+fn used_for_an_hour(h: &Harness, account: &str, pct: f64) {
+    let window = RateWindow {
+        pct,
+        resets_at: Some(now_ms() + 3_600_000),
+    };
+    h.core
+        .record_usage(account, Reading::Windows((Some(window), None)));
+}
+
+#[tokio::test]
+async fn a_tickets_agent_stopped_by_the_limit_goes_on_by_itself_on_the_first_other_account_usable()
+{
+    let h = harness("tk-limit-switch");
+    let (p, _) = h.project(false).await;
+    let (pro, team) = pro_then_team_then_principal(&h);
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Un [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.wait_ticket(&t.id, "to test", |t| t.column == Column::Review)
+        .await;
+    // It met the limit on Pro, and went on on Équipe, the first other one under the threshold:
+    // not blocked, nothing to wait for.
+    let a = h.agent_of(&t.id);
+    assert_eq!(
+        (a.account.as_str(), a.moved_from.as_deref(), a.resume_at),
+        ("equipe", None, None)
+    );
+    assert_eq!(h.ticket(&t.id).blocked, None);
+    let cwd = h.worktree_of(&t.id);
+    assert_eq!(
+        config_dirs(&h, &cwd),
+        [json!(pro.config_dir), json!(team.config_dir)]
+    );
+    // It was sent "continue", as after a wait for the reset.
+    assert_eq!(h.stdin_messages(&cwd).len(), 2);
+    assert_eq!(h.last_sent(&cwd), "continue");
+    assert!(h.pauses().is_empty(), "{:?}", h.pauses());
+    // Pro is at its limit: nothing goes to it until it resets, whatever its windows say.
+    let held = h.core.hold.lock().of("pro").limit_until;
+    assert!(held.is_some_and(|until| until > now_ms()), "{held:?}");
+    assert_eq!(h.core.hold.lock().of("equipe").limit_until, None);
+}
+
+#[tokio::test]
+async fn an_agent_is_not_passed_back_and_forth_between_two_accounts_that_are_both_at_the_limit() {
+    let h = harness("tk-limit-both");
+    let (p, _) = h.project(false).await;
+    let (_, team) = pro_then_team_then_principal(&h);
+    // Équipe is out of quota too, and Principal is past the threshold: no account is left.
+    std::fs::create_dir_all(&team.config_dir).unwrap();
+    std::fs::write(Path::new(&team.config_dir).join("fake-limit"), "").unwrap();
+    used_for_an_hour(&h, "principal", 100.0);
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Un [ok]", &[], 5))
+        .await
+        .unwrap();
+    // It goes from Pro to Équipe, meets the limit there, and cannot go back to Pro (at its limit
+    // too): it waits for Équipe's reset.
+    h.wait("it waits on Équipe", |h| {
+        h.ticket(&t.id).agent_id.is_some_and(|id| {
+            let a = h.agent(&id);
+            a.account == "equipe" && a.resume_at.is_some() && !a.status.is_active()
+        })
+    })
+    .await;
+    let cwd = h.worktree_of(&t.id);
+    h.core
+        .turn_ended(
+            h.ticket(&t.id).agent_id.as_deref().unwrap(),
+            TurnEnd::Limited,
+        )
+        .await;
+    assert_eq!(h.agent_of(&t.id).account, "equipe");
+    assert_eq!(config_dirs(&h, &cwd).len(), 2);
+    assert_eq!(h.ticket(&t.id).column, Column::Doing);
+    assert_eq!(h.ticket(&t.id).blocked, None);
+}
+
+/// A ticket meets the usage limit on Pro, and its agent stays on it, waiting for the reset.
+async fn a_limited_ticket_stays_on_pro(h: &Harness, p: &Project) {
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Un [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.wait_resume_planned(&t.id).await;
+    // Its turn's end is read by now, or is again here: where a move would be decided.
+    let agent = h.ticket(&t.id).agent_id.unwrap();
+    h.core.turn_ended(&agent, TurnEnd::Limited).await;
+    let a = h.agent(&agent);
+    assert_eq!((a.account.as_str(), a.moved_from.as_deref()), ("pro", None));
+    assert!(a.resume_at.is_some());
+    assert_eq!(h.ticket(&t.id).column, Column::Doing);
+    assert_eq!(h.ticket(&t.id).blocked, None);
+    assert_eq!(config_dirs(h, &h.worktree_of(&t.id)).len(), 1);
+}
+
+#[tokio::test]
+async fn a_tickets_agent_waits_for_its_own_account_when_the_move_is_turned_off() {
+    let h = harness("tk-limit-stay-off");
+    let (p, _) = h.project(false).await;
+    pro_then_team_then_principal(&h);
+    h.set_settings(|s| s.switch_on_limit = false);
+    a_limited_ticket_stays_on_pro(&h, &p).await;
+}
+
+#[tokio::test]
+async fn a_tickets_agent_waits_when_no_other_account_is_usable() {
+    let h = harness("tk-limit-stay-none");
+    let (p, _) = h.project(false).await;
+    pro_then_team_then_principal(&h);
+    // Équipe is not signed in, Principal is past the threshold.
+    h.core.record_usage("equipe", Reading::NotSignedIn);
+    used_for_an_hour(&h, "principal", 100.0);
+    a_limited_ticket_stays_on_pro(&h, &p).await;
+}
+
+#[tokio::test]
+async fn a_tickets_agent_waits_when_another_account_has_an_agent_waiting_for_its_reset() {
+    let h = harness("tk-limit-stay-held");
+    let (p, _) = h.project(true).await;
+    pro_then_team_then_principal(&h);
+    used_for_an_hour(&h, "principal", 100.0);
+    // An agent of Équipe waits for its own reset: Équipe takes nothing more.
+    let waiting = crate::core_tests::agent_on(&h, &p, "equipe").await.id;
+    h.core.plan_resume(&waiting, Some(now_ms() + 3_600_000));
+    a_limited_ticket_stays_on_pro(&h, &p).await;
+}
+
+#[tokio::test]
+async fn a_tickets_agent_stays_on_the_account_its_project_prefers() {
+    let h = harness("tk-limit-stay-preferred");
+    let (p, _) = h.project(false).await;
+    pro_then_team_then_principal(&h);
+    let mut project = h.core.project(&p.id).unwrap();
+    project.account = "pro".into();
+    h.core.update_project(project).unwrap();
+    a_limited_ticket_stays_on_pro(&h, &p).await;
 }
 
 #[tokio::test]
