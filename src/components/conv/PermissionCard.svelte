@@ -38,7 +38,7 @@
   }
 
   function onKeydown(e: KeyboardEvent) {
-    if (!answersHere(e.target)) return;
+    if (!keys || !answersHere(e.target)) return;
     const answer = enterAnswer(e);
     if (answer === 'plain' || (answer === 'shift' && item.canAlways)) {
       e.preventDefault();
@@ -47,7 +47,8 @@
     }
   }
 
-  captureKeys(() => keys, onKeydown);
+  // Listened to without its own keys too: the message field waits the same moment before refusing it.
+  captureKeys(() => pending && current, onKeydown);
 </script>
 
 {#if pending}

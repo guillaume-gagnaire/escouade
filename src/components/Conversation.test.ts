@@ -1349,9 +1349,26 @@ describe('Conversation answers from the keyboard', () => {
     expect(field()).toHaveValue('Plutôt npm run clean');
   });
 
+  it('neither refuses nor answers with the text typed when Enter comes just as a request does: the text stays in the field', async () => {
+    const { backend } = waiting([perm('r1')]);
+    await screen.findByTestId('permission-pending');
+    await userEvent.type(field(), 'Lance les tests{Enter}');
+    await tick();
+    expect(backend.called('answer_permission')).toHaveLength(0);
+    expect(backend.called('send_message')).toHaveLength(0);
+    expect(field()).toHaveValue('Lance les tests');
+    // A new line still goes in.
+    await userEvent.keyboard('{Shift>}{Enter}{/Shift}');
+    expect(field()).toHaveValue('Lance les tests\n');
+    settle();
+    await userEvent.keyboard('{Backspace}{Enter}');
+    await waitFor(() => expect(backend.called('answer_permission')).toHaveLength(1));
+    expect(backend.called('answer_permission')[0].args).toMatchObject({ requestId: 'r1', decision: 'deny', message: 'Lance les tests' });
+  });
+
   it('still refuses with the typed explanation on Enter', async () => {
     const { a, backend } = waiting([perm('r1')]);
-    await screen.findByTestId('permission-pending');
+    await shown('permission-pending');
     await userEvent.type(field(), 'Plutôt npm run clean{Enter}');
     await waitFor(() => expect(backend.called('answer_permission')).toHaveLength(1));
     expect(backend.called('answer_permission')[0].args).toEqual({
@@ -1408,7 +1425,7 @@ describe('Conversation answers from the keyboard', () => {
   describe('Ctrl+J', () => {
     it('puts the focus on the message field of an agent with a request waiting, where typing then Enter refuses', async () => {
       const { a, backend } = waiting([perm('r1')]);
-      await screen.findByTestId('permission-pending');
+      await shown('permission-pending');
       field().blur();
       app.nextWaiting();
       await waitFor(() => expect(field()).toHaveFocus());

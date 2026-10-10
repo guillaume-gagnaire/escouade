@@ -9,13 +9,17 @@ import { answersHere, enterAnswer, optionAnswer } from './shortcuts';
  */
 export const HOLD_MS = 500;
 
+/** Enter as the message field takes it to send its text: the answer to the request waiting, or its refusal. */
+const sends = (e: KeyboardEvent) =>
+  e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.target instanceof Element && e.target.matches('.composer textarea');
+
 /**
  * Hands every key press to `handler` while `on()`, before anything else sees it (capture phase on the
  * window): the message field must not also take Ctrl+Enter for "send". Listening only while a card is
  * the one the keyboard answers keeps the cards of a long conversation out of every key press.
- * For `HOLD_MS` after `on()` turns true, the keys that answer (Ctrl+Enter, Ctrl+Shift+Enter, Alt+digit)
- * do nothing at all: the message field does not get them either, which would send its text as the
- * answer.
+ * For `HOLD_MS` after `on()` turns true, the keys that answer (Ctrl+Enter, Ctrl+Shift+Enter, Alt+digit,
+ * and Enter in the message field) do nothing at all: the message field does not get them either, which
+ * would send its text as the answer. The text stays there.
  */
 export function captureKeys(on: () => boolean, handler: (e: KeyboardEvent) => void) {
   $effect(() => {
@@ -23,7 +27,8 @@ export function captureKeys(on: () => boolean, handler: (e: KeyboardEvent) => vo
     // A monotonic clock: a change of the system's time neither ends the wait early nor makes it last.
     const since = performance.now();
     const listen = (e: KeyboardEvent) => {
-      if (performance.now() - since < HOLD_MS && answersHere(e.target) && (enterAnswer(e) || optionAnswer(e) !== null)) {
+      const answers = enterAnswer(e) || optionAnswer(e) !== null || sends(e);
+      if (performance.now() - since < HOLD_MS && answers && answersHere(e.target)) {
         e.preventDefault();
         e.stopPropagation();
         return;

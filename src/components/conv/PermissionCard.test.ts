@@ -174,6 +174,24 @@ describe('PermissionCard keyboard', () => {
     expect(backend.called('answer_permission')[0].args).toMatchObject({ requestId: 'req-2', decision: 'allow' });
   });
 
+  it('holds Enter in the message field a moment once it comes, as the keys that answer, a request refused by default too', async () => {
+    fakeBackend();
+    const host = conversationHost();
+    host.insertAdjacentHTML('beforeend', '<div class="composer"><textarea aria-label="message"></textarea></div>');
+    render(PermissionCard, { target: host, props: { item: item({ defaultNo: true }), agentId: 'a1', pending: true, cwd: 'C:\\code' } });
+    const enter = (over: KeyboardEventInit = {}) => {
+      const keydown = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, ...over });
+      screen.getByLabelText('message').dispatchEvent(keydown);
+      return keydown.defaultPrevented;
+    };
+    expect(enter()).toBe(true);
+    // A new line, and an input method confirming its text, go in.
+    expect(enter({ shiftKey: true })).toBe(false);
+    expect(enter({ isComposing: true })).toBe(false);
+    settle();
+    expect(enter()).toBe(false);
+  });
+
   it('approves a plan the same way', async () => {
     const backend = fakeBackend();
     show({ toolName: 'ExitPlanMode', input: { plan: '## Plan' } });
