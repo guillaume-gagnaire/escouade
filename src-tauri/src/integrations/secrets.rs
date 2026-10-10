@@ -206,13 +206,13 @@ pub(crate) fn store_for(data: &DataDir) -> Arc<dyn SecretStore> {
 
 /// Where the account's secrets go: into the store, read back to check, else they stay in the file
 /// (`Account::in_file`). An account without any (GitHub through `gh`) leaves no entry: the one a
-/// former account of the service left goes.
-pub(crate) fn place(store: &dyn SecretStore, service: Service, a: &mut Account) {
+/// former account of the service left goes; false when it stays (to forget at the next start,
+/// `Accounts::to_forget`).
+pub(crate) fn place(store: &dyn SecretStore, service: Service, a: &mut Account) -> bool {
     let secrets = Secrets::of(a);
     a.in_file = false;
     if secrets.is_empty() {
-        forget(store, service);
-        return;
+        return forget(store, service);
     }
     if let Err(e) = keep(store, service, &secrets) {
         log::warn!(
@@ -221,6 +221,7 @@ pub(crate) fn place(store: &dyn SecretStore, service: Service, a: &mut Account) 
         );
         a.in_file = true;
     }
+    true
 }
 
 /// Puts `secrets` into the service's entry, then reads them back: Ok once the store gives them as
@@ -288,8 +289,9 @@ fn fill(store: &dyn SecretStore, service: Service, a: &mut Account) {
 /// The accounts of `data` (none when the file is missing or unreadable: logged, set aside),
 /// with their secrets. Those the file holds (left by a version before 1.6, or refused by the
 /// keychain last time) move into the store, and leave the file once the store gives them back,
-/// unless it keeps a copy (`file_copy`, `file_keeps_copy`). The entries of services without an
-/// account (a « Déconnecter » the keychain did not follow) go.
+/// unless it keeps a copy (`file_copy`, `file_keeps_copy`). The entries a « Déconnecter » could
+/// not delete (`Accounts::to_forget`) go; no other, even of a service no account lists: a file
+/// written again after a broken one, or by another version, would cost the others their tokens.
 pub(crate) fn load_accounts(data: &DataDir, store: &dyn SecretStore, file_copy: bool) -> Accounts {
     let path = data.integrations_file();
     let none = || Accounts {
@@ -308,26 +310,35 @@ pub(crate) fn load_accounts(data: &DataDir, store: &dyn SecretStore, file_copy: 
         }
     };
     accounts.file_copy = file_copy;
+    let pending = std::mem::take(&mut accounts.to_forget);
+    for &service in &pending {
+        let done = match accounts.get(service) {
+            // Connected again since with a token of its own: the entry is that account's.
+            Some(a) if !through_gh(service, a) => true,
+            _ => forget(store, service),
+        };
+        if !done {
+            accounts.to_forget.push(service);
+        }
+    }
+    let forgot = accounts.to_forget != pending;
     let mut moved = false;
     for service in Service::ALL {
         match accounts.get_mut(service) {
-            None => {
-                forget(store, service);
-            }
+            None => {}
             Some(a) if !Secrets::of(a).is_empty() => {
                 place(store, service, a);
                 moved |= !a.in_file;
             }
-            // A token of a former account would be used in place of the CLI's.
-            Some(a) if through_gh(service, a) => {
-                forget(store, service);
-            }
+            // The CLI's token: an entry a former account left is never read.
+            Some(a) if through_gh(service, a) => {}
             Some(a) => fill(store, service, a),
         }
     }
-    // Written again once secrets left it, and while some stay: readable by its owner only.
+    // Written again once secrets or entries to forget left it, and while secrets stay: readable
+    // by its owner only.
     let kept = accounts.views().iter().any(|v| v.in_file);
-    if (moved && !file_copy) || kept {
+    if (moved && !file_copy) || forgot || kept {
         if let Err(e) = save_accounts(data, &accounts) {
             log::error!("{e:#}");
         }
@@ -469,6 +480,8 @@ mod tests {
         assert_eq!(saved.trello.as_ref().unwrap().user, "m1");
         assert_eq!(saved.github.as_ref().unwrap().label, "@ada · via gh");
         assert_eq!(in_file(&a), [false, false, false]);
+        // No entry to delete in a file of before.
+        assert!(a.to_forget.is_empty() && saved.to_forget.is_empty());
         // The next start finds them in the keychain, and leaves the file as it is.
         assert_eq!(load_accounts(&d, &store, false), a);
         assert_eq!(file(&d), text);
@@ -574,23 +587,51 @@ mod tests {
     }
 
     #[test]
-    fn an_entry_left_without_its_account_goes_at_the_next_start() {
+    fn an_entry_goes_at_a_start_only_when_a_disconnect_left_it() {
         let d = DataDir::new(test_dir("secrets-leftover"));
-        let text = r#"{ "github": { "label": "@ada · via gh", "user": "ada" } }"#;
-        std::fs::write(d.integrations_file(), text).unwrap();
         let store = MemoryStore::default();
-        // A « Déconnecter » the keychain did not follow, a former token of GitHub now through gh.
-        store
-            .set("jira", r#"{"key":"","token":"jira-secret"}"#)
-            .unwrap();
+        let jira = r#"{"key":"","token":"jira-secret"}"#;
+        let trello = r#"{"key":"trello-key","token":"trello-secret"}"#;
+        store.set("jira", jira).unwrap();
+        store.set("trello", trello).unwrap();
         store
             .set("github", r#"{"key":"","token":"ghp-former"}"#)
             .unwrap();
+        // No account lists them (a file written again after a broken one, another version's):
+        // they may be the only copy of their tokens, and stay.
+        let text = r#"{ "github": { "label": "@ada · via gh", "user": "ada" } }"#;
+        std::fs::write(d.integrations_file(), text).unwrap();
         let a = load_accounts(&d, &store, false);
-        assert_eq!((store.entry("jira"), store.entry("github")), (None, None));
+        assert_eq!(store.entry("jira").as_deref(), Some(jira));
+        assert_eq!(store.entry("trello").as_deref(), Some(trello));
+        // Through gh, a former token is never read.
+        assert!(store.entry("github").is_some());
         let github = a.github.as_ref().unwrap();
         assert_eq!((github.token.as_str(), github.unread), ("", false));
         assert_eq!(file(&d), text);
+        // Those a « Déconnecter » left go; one whose service has an account again stays.
+        let text =
+            r#"{ "trello": { "label": "@ada", "user": "m1" }, "toForget": ["jira", "trello"] }"#;
+        std::fs::write(d.integrations_file(), text).unwrap();
+        let a = load_accounts(&d, &store, false);
+        assert_eq!(store.entry("jira"), None);
+        assert_eq!(store.entry("trello").as_deref(), Some(trello));
+        assert_eq!(a.trello.as_ref().unwrap().token, "trello-secret");
+        assert!(store.entry("github").is_some());
+        let saved: Accounts = serde_json::from_str(&file(&d)).unwrap();
+        assert!(a.to_forget.is_empty() && saved.to_forget.is_empty());
+        assert!(!file(&d).contains("trello-secret"));
+        // Still refused: kept for the start after.
+        store.set("jira", jira).unwrap();
+        std::fs::write(d.integrations_file(), r#"{ "toForget": ["jira"] }"#).unwrap();
+        store.refuse.store(true, Ordering::SeqCst);
+        let a = load_accounts(&d, &store, false);
+        assert_eq!(a.to_forget, [Service::Jira]);
+        let saved: Accounts = serde_json::from_str(&file(&d)).unwrap();
+        assert_eq!(saved.to_forget, [Service::Jira]);
+        store.refuse.store(false, Ordering::SeqCst);
+        assert!(load_accounts(&d, &store, false).to_forget.is_empty());
+        assert_eq!(store.entry("jira"), None);
     }
 
     #[test]

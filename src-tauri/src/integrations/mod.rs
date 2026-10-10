@@ -25,6 +25,10 @@ pub struct Accounts {
     pub jira: Option<Account>,
     pub trello: Option<Account>,
     pub github: Option<Account>,
+    /// The services whose entry in the system's keychain a « Déconnecter » (or a switch to the
+    /// GitHub CLI's token) could not delete: deleted at the next start, unless the service has a
+    /// token of its own again. Their names only, never a secret.
+    pub to_forget: Vec<Service>,
     /// The file keeps a copy of the secrets the keychain holds (`secrets::file_keeps_copy`).
     /// Known while the app runs, never saved.
     #[serde(skip)]

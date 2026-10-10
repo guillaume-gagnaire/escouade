@@ -447,8 +447,17 @@ impl<R: Runtime> Core<R> {
         }
         account.label = label;
         account.user = user;
-        secrets::place(&*self.secrets, service, &mut account);
-        self.accounts.write().set(service, Some(account));
+        let left = !secrets::place(&*self.secrets, service, &mut account);
+        {
+            let mut accounts = self.accounts.write();
+            // The entry is this account's now: an earlier « Déconnecter » must not take it.
+            accounts.to_forget.retain(|&s| s != service);
+            // Through the CLI, the token of a former account goes at the next start.
+            if left {
+                accounts.to_forget.push(service);
+            }
+            accounts.set(service, Some(account));
+        }
         self.save_accounts()?;
         Ok(self
             .integration_accounts()
@@ -458,15 +467,18 @@ impl<R: Runtime> Core<R> {
     }
 
     /// "Déconnecter": the account is forgotten, its secrets with it (the projects keep their links,
-    /// unused until one is connected again). Secrets the keychain keeps are said, and go at the
-    /// next start.
+    /// unused until one is connected again). An entry the keychain keeps goes at the next start
+    /// (`Accounts::to_forget`); the window is told when it held the account's token.
     pub fn integration_disconnect(&self, service: Service) -> Result<Vec<AccountView>> {
-        let own = self
+        // Not for GitHub through the CLI (no token of its own), nor a token the keychain refused
+        // (in the file, which is written again without it).
+        let in_keychain = self
             .accounts
             .read()
             .get(service)
-            .is_some_and(|a| !secrets::through_gh(service, a));
-        if !secrets::forget(&*self.secrets, service) && own {
+            .is_some_and(|a| !secrets::through_gh(service, a) && !a.in_file);
+        let forgotten = secrets::forget(&*self.secrets, service);
+        if !forgotten && in_keychain {
             self.hub.emit(UiEvent::Toast {
                 text: format!(
                     "Le jeton {} n'a pas pu être retiré du trousseau du système : Escouade réessaiera au prochain démarrage, ou retire-le à la main (son nom contient « escouade »).",
@@ -474,7 +486,13 @@ impl<R: Runtime> Core<R> {
                 ),
             });
         }
-        self.accounts.write().set(service, None);
+        {
+            let mut accounts = self.accounts.write();
+            if !forgotten && !accounts.to_forget.contains(&service) {
+                accounts.to_forget.push(service);
+            }
+            accounts.set(service, None);
+        }
         if service == Service::Github {
             *self.gh_token.lock() = None;
         }

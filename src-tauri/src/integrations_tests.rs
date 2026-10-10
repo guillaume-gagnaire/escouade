@@ -7,7 +7,7 @@ use crate::core::Core;
 use crate::core_tests::{git, harness, Harness};
 use crate::integrations::fake::{FakeServer, Request};
 use crate::integrations::secrets::{self, SecretStore};
-use crate::integrations::{Account, Bases, ExternalIssue, Query};
+use crate::integrations::{self, Account, Bases, ExternalIssue, Query};
 use crate::model::*;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -697,12 +697,14 @@ async fn a_token_the_keychain_refuses_stays_in_the_file_and_the_window_is_told()
     let views = serde_json::to_string(&h.core.integration_accounts()).unwrap();
     assert!(views.contains(r#""inFile":true"#), "{views}");
     assert!(!views.contains("jira-secret"), "{views}");
-    // Disconnected, it leaves the file.
+    // Disconnected, it leaves the file; the keychain never had it: nothing to say.
     let views = h.core.integration_disconnect(Service::Jira).unwrap();
     assert!(!views[0].connected && !views[0].in_file);
     assert!(!std::fs::read_to_string(&file)
         .unwrap()
         .contains("jira-secret"));
+    let events = h.events.lock().clone();
+    assert!(!events.iter().any(|e| e["type"] == "toast"), "{events:?}");
 }
 
 #[tokio::test]
@@ -848,11 +850,136 @@ async fn a_secret_the_keychain_cannot_forget_is_said_and_forgotten_at_the_next_s
         ]
     );
     assert!(keychain.entry("trello").is_some());
-    // The next start forgets it.
+    // Kept in the file for the next start: the services only, never a secret.
+    let file = h.core.data.integrations_file();
+    let saved = std::fs::read_to_string(&file).unwrap();
+    let listed: integrations::Accounts = serde_json::from_str(&saved).unwrap();
+    assert_eq!(listed.to_forget, [Service::Trello, Service::Github]);
+    assert!(!saved.contains("trello-secret"), "{saved}");
+    // GitHub connected again meanwhile, with a token of its own: its entry is its own now.
     keychain.refuse.store(false, Ordering::SeqCst);
+    h.core
+        .integration_connect(
+            Service::Github,
+            Account {
+                token: "ghp-new".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let listed: integrations::Accounts =
+        serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    assert_eq!(listed.to_forget, [Service::Trello]);
+    // The next start forgets Trello's only.
     let app = mock_app();
     let (_again, _rx) = Core::load(app.handle().clone(), h.core.data.clone());
     assert_eq!(keychain.entry("trello"), None);
+    assert_eq!(
+        keychain.entry("github").as_deref(),
+        Some(r#"{"key":"","token":"ghp-new"}"#)
+    );
+    let listed: integrations::Accounts =
+        serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    assert!(listed.to_forget.is_empty());
+}
+
+#[tokio::test]
+async fn a_broken_file_then_another_account_never_costs_the_others_their_tokens() {
+    let h = harness("ig-keychain-broken-file");
+    let server = FakeServer::start().await;
+    h.serve(&server);
+    server.on(
+        "GET",
+        "/members/me",
+        200,
+        json!({ "id": "m1", "username": "ada" }),
+    );
+    jira_routes(&server);
+    h.core
+        .integration_connect(
+            Service::Trello,
+            Account {
+                key: "trello-key".into(),
+                token: "trello-secret".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    h.core
+        .integration_connect(
+            Service::Jira,
+            Account {
+                site: server.url.clone(),
+                email: "ada@atlas.dev".into(),
+                token: "jira-secret".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let keychain = secrets::memory_of(&h.core.data);
+    let entries = || (keychain.entry("trello"), keychain.entry("jira"));
+    let kept = entries();
+    assert!(kept.0.is_some() && kept.1.is_some());
+    // The file breaks; the next start knows no account, and GitHub is connected.
+    let file = h.core.data.integrations_file();
+    std::fs::write(&file, r#"{ "jira": "#).unwrap();
+    let app = mock_app();
+    let (again, _rx) = Core::load(app.handle().clone(), h.core.data.clone());
+    *again.bases.write() = h.core.bases.read().clone();
+    *again.gh_on_path.write() = Some(fake_gh());
+    server.on("GET", "/user", 200, json!({ "login": "ada" }));
+    again
+        .integration_connect(Service::Github, Account::default())
+        .await
+        .unwrap();
+    let listed: integrations::Accounts =
+        serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    assert!(listed.jira.is_none() && listed.trello.is_none());
+    // The start after lists GitHub only: the others' tokens stay where they are.
+    let app = mock_app();
+    let (_third, _rx) = Core::load(app.handle().clone(), h.core.data.clone());
+    assert_eq!(entries(), kept);
+}
+
+#[tokio::test]
+async fn the_token_a_switch_to_the_cli_could_not_delete_goes_at_the_next_start() {
+    let h = harness("ig-keychain-switch-gh");
+    let server = FakeServer::start().await;
+    h.serve(&server);
+    server.on("GET", "/user", 200, json!({ "login": "ada" }));
+    h.core
+        .integration_connect(
+            Service::Github,
+            Account {
+                token: "ghp-former".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let keychain = secrets::memory_of(&h.core.data);
+    keychain.refuse.store(true, Ordering::SeqCst);
+    *h.core.gh_on_path.write() = Some(fake_gh());
+    let view = h
+        .core
+        .integration_connect(Service::Github, Account::default())
+        .await
+        .unwrap();
+    assert_eq!(view.label, "@ada · via gh");
+    assert!(keychain.entry("github").is_some());
+    let file = h.core.data.integrations_file();
+    let listed: integrations::Accounts =
+        serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    assert_eq!(listed.to_forget, [Service::Github]);
+    keychain.refuse.store(false, Ordering::SeqCst);
+    let app = mock_app();
+    let (again, _rx) = Core::load(app.handle().clone(), h.core.data.clone());
+    assert_eq!(keychain.entry("github"), None);
+    let github = again.accounts.read().github.clone().unwrap();
+    assert_eq!((github.token.as_str(), github.unread), ("", false));
 }
 
 #[tokio::test]
