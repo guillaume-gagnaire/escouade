@@ -85,4 +85,11 @@ export default defineZone('accounts', {
     tip: '{pct} · resets on {date} at {time}',
     unavailable: 'Quota unavailable',
   },
+
+  panel: {
+    open: 'Quota by account (current account: {name})',
+    title: 'Claude accounts quota',
+    current: 'current',
+    over: 'past the pause threshold',
+  },
 });

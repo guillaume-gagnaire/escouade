@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { agent, project, resetApp } from '../test/ipc';
-import { newAgentAccount, pausedAccounts, pauseOf, quotaOf } from './accounts';
+import { newAgentAccount, overThreshold, pausedAccounts, pauseOf, quotaOf, quotaRows } from './accounts';
 import { setLang } from './i18n';
 import { app } from './state.svelte';
-import type { Account, AutopilotPause } from './types';
+import type { Account, AccountUsage, AutopilotPause, RateWindow } from './types';
 
 const PRINCIPAL: Account = { id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true };
 const PRO: Account = { id: 'pro', name: 'Pro', configDir: 'C:\\claude\\pro', claudePath: '', active: true };
@@ -85,5 +85,111 @@ describe('the accounts of a project', () => {
     app.settings.accounts = [PRINCIPAL];
     app.agents = { a1: agent({ id: 'a1', resumeAt: 6_000 }), a2: agent({ id: 'a2', resumeAt: 4_000, archived: true }) };
     expect(quotaOf(project())).toBe(6_000);
+  });
+});
+
+describe('the quota of each account', () => {
+  const NOW = 1_000_000;
+  const win = (pct: number, resetsAt: number | null = NOW + 3_600_000): RateWindow => ({ pct, resetsAt });
+  const read = (id: string, over: Partial<AccountUsage> = {}): AccountUsage => ({
+    id,
+    fiveHour: null,
+    sevenDay: null,
+    connected: true,
+    reason: null,
+    todayCost: 0,
+    updatedAt: 1,
+    ...over,
+  });
+
+  beforeEach(() => {
+    resetApp();
+    app.settings.accounts = [PRINCIPAL, PRO, TEAM];
+    app.settings.quotaPause = 90;
+  });
+
+  it('holds a window back from the threshold up, until an end still to come', () => {
+    expect(overThreshold(win(89), 90, NOW)).toBe(false);
+    expect(overThreshold(win(90), 90, NOW)).toBe(true);
+    // Claude Code gives a fraction times 100: 0.9 may come as 89.99999….
+    expect(overThreshold(win(89.9999999), 90, NOW)).toBe(true);
+    expect(overThreshold(win(100), 90, NOW)).toBe(true);
+    // Reset already, or an end nobody knows: it holds nothing back (a reading that no longer comes would hold forever).
+    expect(overThreshold(win(100, NOW - 1), 90, NOW)).toBe(false);
+    expect(overThreshold(win(100, null), 90, NOW)).toBe(false);
+    expect(overThreshold(null, 90, NOW)).toBe(false);
+  });
+
+  it('lists every account, the current one first and the others in the order of the settings', () => {
+    app.usage.current = 'pro';
+    expect(quotaRows(NOW).map((r) => [r.account.id, r.current])).toEqual([
+      ['pro', true],
+      ['principal', false],
+      ['team', false],
+    ]);
+    app.usage.current = 'principal';
+    expect(quotaRows(NOW).map((r) => r.account.id)).toEqual(['principal', 'pro', 'team']);
+    // Not told yet: the order of the settings, none marked.
+    app.usage.current = '';
+    expect(quotaRows(NOW).map((r) => [r.account.id, r.current])).toEqual([
+      ['principal', false],
+      ['pro', false],
+      ['team', false],
+    ]);
+  });
+
+  it('gives each account the windows it was read with, and none before it was', () => {
+    app.usage.accounts = [read('pro', { fiveHour: win(42), sevenDay: win(12) })];
+    const rows = quotaRows(NOW);
+    expect(rows.find((r) => r.account.id === 'pro')?.usage).toMatchObject({ fiveHour: { pct: 42 }, sevenDay: { pct: 12 } });
+    expect(rows.find((r) => r.account.id === 'principal')?.usage).toBeNull();
+  });
+
+  it('flags an active account with a window past the pause threshold', () => {
+    app.usage.accounts = [
+      read('principal', { fiveHour: win(95), sevenDay: win(10) }),
+      read('pro', { fiveHour: win(40), sevenDay: win(91) }),
+      // Switched off: nothing goes to it, the threshold does not matter.
+      read('team', { fiveHour: win(100) }),
+    ];
+    expect(quotaRows(NOW).map((r) => [r.account.id, r.over])).toEqual([
+      ['principal', true],
+      ['pro', true],
+      ['team', false],
+    ]);
+    app.settings.quotaPause = 100;
+    expect(quotaRows(NOW).map((r) => r.over)).toEqual([false, false, false]);
+  });
+
+  it('says why an account is dimmed: switched off, not signed in, sign-in expired', () => {
+    app.usage.accounts = [
+      read('principal', { connected: false, reason: 'Pas connecté' }),
+      read('pro', { connected: true, reason: 'Connexion expirée : relance Claude Code pour ce compte.', fiveHour: win(20) }),
+      read('team', { connected: false, reason: 'Pas connecté' }),
+    ];
+    const reasons = Object.fromEntries(quotaRows(NOW).map((r) => [r.account.id, r.reasons]));
+    // Main, signed in with a key and not claude.ai: the wording of the tab of the accounts.
+    expect(reasons.principal).toEqual(['Pas connecté par un compte claude.ai (clé d’API ?)']);
+    expect(reasons.pro).toEqual(['Connexion expirée : relance Claude Code pour ce compte.']);
+    expect(reasons.team).toEqual(['Inactif', 'Pas connecté']);
+    // Not read yet: nothing to say.
+    app.usage.accounts = [];
+    expect(Object.fromEntries(quotaRows(NOW).map((r) => [r.account.id, r.reasons]))).toEqual({
+      principal: [],
+      pro: [],
+      team: ['Inactif'],
+    });
+  });
+
+  it('says it in the language of the interface', () => {
+    app.usage.accounts = [
+      read('principal', { connected: false, reason: 'Not signed in' }),
+      read('pro', { connected: false, reason: 'Not signed in' }),
+    ];
+    setLang('en');
+    const reasons = Object.fromEntries(quotaRows(NOW).map((r) => [r.account.id, r.reasons]));
+    expect(reasons.principal).toEqual(['Not signed in with a claude.ai account (API key?)']);
+    expect(reasons.pro).toEqual(['Not signed in']);
+    expect(reasons.team).toEqual(['Inactive']);
   });
 });

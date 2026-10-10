@@ -95,4 +95,13 @@ export default {
     tip: '{pct} · remise à zéro le {date} à {time}',
     unavailable: 'Quota indisponible',
   },
+
+  // The panel the quota group opens, above the status bar, when there are several accounts.
+  panel: {
+    /** The button that is the quota group; `{name}`: the current account. */
+    open: 'Quotas par compte (compte en cours : {name})',
+    title: 'Quotas des comptes Claude',
+    current: 'en cours',
+    over: 'au-delà du seuil de pause',
+  },
 } as const satisfies Tree;
