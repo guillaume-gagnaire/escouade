@@ -107,6 +107,8 @@ export interface AccountView {
   label: string;
   /** Its token stays in integrations.json: the system keychain refused it. */
   inFile?: boolean;
+  /** The system keychain did not give its token at this start: no call goes out for it. */
+  unread?: boolean;
 }
 
 /** The form of « Connecter… »: the fields its service asks for. */

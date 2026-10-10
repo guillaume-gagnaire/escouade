@@ -70,6 +70,15 @@ describe('IntegrationsTab', () => {
     expect(notes[0].closest('.acct')).toHaveTextContent('Connecté · ada@atlas.dev · atlas.atlassian.net');
   });
 
+  it('says which account the system keychain did not give its token at this start', () => {
+    backend();
+    app.accounts = [ACCOUNTS[0], off('trello'), { service: 'github', connected: true, label: '@work', unread: true }];
+    render(SettingsModal, { tab: 'integrations', projectId: 'p1' });
+    const notes = within(panel()).getAllByText('Trousseau du système illisible : relance Escouade ou reconnecte le compte.');
+    expect(notes).toHaveLength(1);
+    expect(notes[0].closest('.acct')).toHaveTextContent('Connecté · @work');
+  });
+
   it('connects an account once the service accepts it, and says why it refused', async () => {
     let refuse = true;
     const b = backend({

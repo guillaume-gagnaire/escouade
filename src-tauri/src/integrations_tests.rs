@@ -706,6 +706,156 @@ async fn a_token_the_keychain_refuses_stays_in_the_file_and_the_window_is_told()
 }
 
 #[tokio::test]
+async fn a_keychain_unreadable_at_a_start_loses_nothing_and_no_call_goes_without_its_token() {
+    let h = harness("ig-keychain-unread");
+    let server = FakeServer::start().await;
+    h.serve(&server);
+    server.on(
+        "GET",
+        "/members/me",
+        200,
+        json!({ "id": "m1", "username": "ada" }),
+    );
+    server.on("GET", "/user", 200, json!({ "login": "work" }));
+    h.core
+        .integration_connect(
+            Service::Trello,
+            Account {
+                key: "trello-key".into(),
+                token: "trello-secret".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    h.core
+        .integration_connect(
+            Service::Github,
+            Account {
+                token: "ghp-work".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let file = h.core.data.integrations_file();
+    let before = std::fs::read_to_string(&file).unwrap();
+    let keychain = secrets::memory_of(&h.core.data);
+    let entries = || (keychain.entry("trello"), keychain.entry("github"));
+    let kept = entries();
+    // The next start finds the keychain out of reach.
+    keychain.refuse.store(true, Ordering::SeqCst);
+    let app = mock_app();
+    let (again, _rx) = Core::load(app.handle().clone(), h.core.data.clone());
+    *again.bases.write() = h.core.bases.read().clone();
+    // The CLI would answer for whoever it is logged in as: never asked in the account's place.
+    *again.gh_on_path.write() = Some(fake_gh());
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), before);
+    assert_eq!(entries(), kept);
+    let views = again.integration_accounts();
+    assert!(
+        views[1].connected && views[1].unread && views[2].connected && views[2].unread,
+        "{views:?}"
+    );
+    let calls = server.requests().len();
+    for service in [Service::Trello, Service::Github] {
+        let e = again
+            .integration_containers(service, None)
+            .await
+            .unwrap_err();
+        assert_eq!(
+            e.to_string(),
+            format!(
+                "Trousseau du système illisible : relance Escouade ou reconnecte le compte {}.",
+                service.label()
+            )
+        );
+    }
+    assert_eq!(server.requests().len(), calls);
+    // An account connected meanwhile leaves their entries alone.
+    jira_routes(&server);
+    let view = again
+        .integration_connect(
+            Service::Jira,
+            Account {
+                site: server.url.clone(),
+                email: "ada@atlas.dev".into(),
+                token: "jira-secret".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert!(view.in_file && !view.unread, "{view:?}");
+    assert_eq!(entries(), kept);
+    // Back at the start after: everything is there.
+    keychain.refuse.store(false, Ordering::SeqCst);
+    let app = mock_app();
+    let (third, _rx) = Core::load(app.handle().clone(), h.core.data.clone());
+    let a = third.accounts.read().clone();
+    assert_eq!(a.trello.unwrap().token, "trello-secret");
+    assert_eq!(a.github.unwrap().token, "ghp-work");
+    assert_eq!(a.jira.unwrap().token, "jira-secret");
+    let views = third.integration_accounts();
+    assert!(views.iter().all(|v| !v.unread && !v.in_file), "{views:?}");
+}
+
+#[tokio::test]
+async fn a_secret_the_keychain_cannot_forget_is_said_and_forgotten_at_the_next_start() {
+    let h = harness("ig-keychain-forget");
+    let server = FakeServer::start().await;
+    h.serve(&server);
+    server.on(
+        "GET",
+        "/members/me",
+        200,
+        json!({ "id": "m1", "username": "ada" }),
+    );
+    h.core
+        .integration_connect(
+            Service::Trello,
+            Account {
+                key: "trello-key".into(),
+                token: "trello-secret".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    *h.core.gh_on_path.write() = Some(fake_gh());
+    server.on("GET", "/user", 200, json!({ "login": "ada" }));
+    h.core
+        .integration_connect(Service::Github, Account::default())
+        .await
+        .unwrap();
+    let keychain = secrets::memory_of(&h.core.data);
+    keychain.refuse.store(true, Ordering::SeqCst);
+    let views = h.core.integration_disconnect(Service::Trello).unwrap();
+    assert!(!views[1].connected);
+    // GitHub through gh has no token of its own to remove: nothing to say.
+    h.core.integration_disconnect(Service::Github).unwrap();
+    let toasts: Vec<Value> = h
+        .events
+        .lock()
+        .iter()
+        .filter(|e| e["type"] == "toast")
+        .cloned()
+        .collect();
+    assert_eq!(
+        toasts,
+        [
+            json!({ "type": "toast", "text": "Le jeton Trello n'a pas pu être retiré du trousseau du système : Escouade réessaiera au prochain démarrage, ou retire-le à la main (son nom contient « escouade »)." })
+        ]
+    );
+    assert!(keychain.entry("trello").is_some());
+    // The next start forgets it.
+    keychain.refuse.store(false, Ordering::SeqCst);
+    let app = mock_app();
+    let (_again, _rx) = Core::load(app.handle().clone(), h.core.data.clone());
+    assert_eq!(keychain.entry("trello"), None);
+}
+
+#[tokio::test]
 async fn a_site_behind_a_self_signed_certificate_is_reached_once_tls_verification_is_off() {
     let h = harness("ig-insecure-tls");
     // As a corporate proxy that decrypts the traffic presents it: a certificate no system trusts.

@@ -219,26 +219,30 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     std::fs::rename(&tmp, path)
 }
 
-/// `write_atomic` for a file that may hold secrets: on Unix, only its owner may read it (0600),
-/// from the moment it is written.
+/// `write_atomic` for a file that may hold secrets, maybe their only copy: on disk before it takes
+/// the old one's place, and on Unix readable by its owner only (0600) from the moment it is
+/// written.
 pub fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
     let tmp = path.with_extension("tmp");
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
     #[cfg(unix)]
     {
-        use std::io::Write;
-        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
-        let mut f = std::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .mode(0o600)
-            .open(&tmp)?;
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut f = options.open(&tmp)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
         // The mode only applies to a new file: one left by a crash keeps its own, emptied.
         f.set_permissions(std::fs::Permissions::from_mode(0o600))?;
-        f.write_all(bytes)?;
     }
-    #[cfg(not(unix))]
-    std::fs::write(&tmp, bytes)?;
+    f.write_all(bytes)?;
+    f.sync_all()?;
+    // Closed first: Windows does not move a file still open.
+    drop(f);
     std::fs::rename(&tmp, path)
 }
 

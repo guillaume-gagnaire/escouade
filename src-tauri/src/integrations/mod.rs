@@ -25,6 +25,10 @@ pub struct Accounts {
     pub jira: Option<Account>,
     pub trello: Option<Account>,
     pub github: Option<Account>,
+    /// The file keeps a copy of the secrets the keychain holds (`secrets::file_keeps_copy`).
+    /// Known while the app runs, never saved.
+    #[serde(skip)]
+    pub file_copy: bool,
 }
 
 impl Accounts {
@@ -64,6 +68,7 @@ impl Accounts {
                     .map(|a| a.label.clone())
                     .unwrap_or_default(),
                 in_file: self.get(service).is_some_and(|a| a.in_file),
+                unread: self.get(service).is_some_and(|a| a.unread),
             })
             .collect()
     }
@@ -90,7 +95,16 @@ pub struct Account {
     /// move at the next start that it takes them). Known while the app runs, never saved.
     #[serde(skip)]
     pub in_file: bool,
+    /// The system's keychain holds its key and token, and did not give them at this start (out of
+    /// reach, refused, the entry gone or unreadable): no call goes out without them. Known while
+    /// the app runs, never saved.
+    #[serde(skip)]
+    pub unread: bool,
 }
+
+/// What `integration_connect` adds to the label of a GitHub account without a token of its own:
+/// it uses the CLI's.
+pub(crate) const VIA_GH: &str = " · via gh";
 
 /// An account as the window knows it.
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -101,6 +115,8 @@ pub struct AccountView {
     pub label: String,
     /// Its token stays in `integrations.json`: the system's keychain refused it.
     pub in_file: bool,
+    /// The system's keychain did not give its token at this start (`Account::unread`).
+    pub unread: bool,
 }
 
 /// Where an account's tickets live: a Jira project, a Trello board, a GitHub repository.

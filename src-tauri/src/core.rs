@@ -716,7 +716,11 @@ impl<R: Runtime> Core<R> {
             })
             .collect();
         let secrets = integrations::secrets::store_for(&data);
-        let accounts = integrations::secrets::load_accounts(&data, &*secrets);
+        let accounts = integrations::secrets::load_accounts(
+            &data,
+            &*secrets,
+            integrations::secrets::file_keeps_copy(),
+        );
         let pending_syncs = read_json(&data.sync_queue_file()).unwrap_or_default();
         // The autopilot's pause as the app stopped, for the first pass (before any new reading of
         // the quotas, which with an API key never comes): a window read holds until its end, an

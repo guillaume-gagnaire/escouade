@@ -2,7 +2,7 @@
 //! Manager, macOS' Keychain. `integrations.json` keeps the rest of the accounts, and the secrets
 //! the keychain refuses stay there, readable by their owner only.
 
-use super::{Account, Accounts};
+use super::{Account, Accounts, VIA_GH};
 use crate::model::Service;
 use crate::paths::{self, DataDir};
 use anyhow::{bail, Context, Result};
@@ -235,70 +235,99 @@ fn keep(store: &dyn SecretStore, service: Service, secrets: &Secrets) -> Result<
     Ok(())
 }
 
-/// The service's secrets leave the store (its account goes, or has none now).
-pub(crate) fn forget(store: &dyn SecretStore, service: Service) {
+/// The service's secrets leave the store (its account goes, or has none now); false when they
+/// could not (logged).
+pub(crate) fn forget(store: &dyn SecretStore, service: Service) -> bool {
     if let Err(e) = store.delete(&entry(service)) {
         log::warn!(
             "{}: the system keychain did not forget its secrets: {e:#}",
             service.label()
         );
+        return false;
     }
+    true
 }
 
-/// The account's secrets, from the store when it holds them.
+/// A development build on the user's own data folder (not sandboxed) leaves the file a copy of
+/// the secrets the keychain holds: the installed Escouade, maybe older, still reads them there (a
+/// development build never moves the user's data). Never in tests (throwaway folders).
+pub(crate) fn file_keeps_copy() -> bool {
+    !cfg!(test) && cfg!(debug_assertions) && paths::sandbox_dir().is_none()
+}
+
+/// A GitHub account that uses the CLI's token: it has none of its own.
+pub(crate) fn through_gh(service: Service, a: &Account) -> bool {
+    service == Service::Github && a.label.ends_with(VIA_GH)
+}
+
+/// The account's secrets, from the store. Missing (out of reach, refused, the entry gone or
+/// unreadable), the account says so (`Account::unread`): a call without them would be refused,
+/// or for GitHub go out with the CLI's token, as whoever it is logged in as.
 fn fill(store: &dyn SecretStore, service: Service, a: &mut Account) {
     match store.get(&entry(service)) {
         Ok(Some(text)) => match serde_json::from_str::<Secrets>(&text) {
             Ok(s) => {
                 a.key = s.key;
                 a.token = s.token;
+                return;
             }
             Err(_) => log::warn!(
                 "{}: its entry in the system keychain is unreadable",
                 service.label()
             ),
         },
-        // GitHub may have none: the CLI's token.
-        Ok(None) if service == Service::Github => {}
         Ok(None) => log::warn!("{}: no secrets in the system keychain", service.label()),
         Err(e) => log::warn!(
             "{}: the system keychain did not give its secrets: {e:#}",
             service.label()
         ),
     }
+    a.unread = true;
 }
 
 /// The accounts of `data` (none when the file is missing or unreadable: logged, set aside),
 /// with their secrets. Those the file holds (left by a version before 1.6, or refused by the
-/// keychain last time) move into the store, and leave the file once the store gives them back.
-pub(crate) fn load_accounts(data: &DataDir, store: &dyn SecretStore) -> Accounts {
+/// keychain last time) move into the store, and leave the file once the store gives them back,
+/// unless it keeps a copy (`file_copy`, `file_keeps_copy`). The entries of services without an
+/// account (a « Déconnecter » the keychain did not follow) go.
+pub(crate) fn load_accounts(data: &DataDir, store: &dyn SecretStore, file_copy: bool) -> Accounts {
     let path = data.integrations_file();
+    let none = || Accounts {
+        file_copy,
+        ..Default::default()
+    };
     let Ok(text) = std::fs::read_to_string(&path) else {
-        return Accounts::default();
+        return none();
     };
     let mut accounts: Accounts = match serde_json::from_str(&text) {
         Ok(a) => a,
         Err(e) => {
             log::error!("invalid {}: {e}", path.display());
             let _ = std::fs::copy(&path, path.with_extension("broken.json"));
-            return Accounts::default();
+            return none();
         }
     };
+    accounts.file_copy = file_copy;
     let mut moved = false;
     for service in Service::ALL {
-        let Some(a) = accounts.get_mut(service) else {
-            continue;
-        };
-        if Secrets::of(a).is_empty() {
-            fill(store, service, a);
-        } else {
-            place(store, service, a);
-            moved |= !a.in_file;
+        match accounts.get_mut(service) {
+            None => {
+                forget(store, service);
+            }
+            Some(a) if !Secrets::of(a).is_empty() => {
+                place(store, service, a);
+                moved |= !a.in_file;
+            }
+            // A token of a former account would be used in place of the CLI's.
+            Some(a) if through_gh(service, a) => {
+                forget(store, service);
+            }
+            Some(a) => fill(store, service, a),
         }
     }
     // Written again once secrets left it, and while some stay: readable by its owner only.
     let kept = accounts.views().iter().any(|v| v.in_file);
-    if moved || kept {
+    if (moved && !file_copy) || kept {
         if let Err(e) = save_accounts(data, &accounts) {
             log::error!("{e:#}");
         }
@@ -306,11 +335,15 @@ pub(crate) fn load_accounts(data: &DataDir, store: &dyn SecretStore) -> Accounts
     accounts
 }
 
-/// Writes the accounts to `integrations.json`, without the secrets the store holds.
+/// Writes the accounts to `integrations.json`, without the secrets the store holds (unless the
+/// file keeps a copy of them).
 pub(crate) fn save_accounts(data: &DataDir, accounts: &Accounts) -> Result<()> {
     let mut saved = accounts.clone();
     for service in Service::ALL {
-        if let Some(a) = saved.get_mut(service).filter(|a| !a.in_file) {
+        if let Some(a) = saved
+            .get_mut(service)
+            .filter(|a| !a.in_file && !accounts.file_copy)
+        {
             a.key.clear();
             a.token.clear();
         }
@@ -401,7 +434,7 @@ mod tests {
     fn the_secrets_of_an_older_file_move_to_the_keychain_and_leave_the_file() {
         let d = older("secrets-move");
         let store = MemoryStore::default();
-        let a = load_accounts(&d, &store);
+        let a = load_accounts(&d, &store, false);
         // In use as before.
         let jira = a.jira.as_ref().unwrap();
         assert_eq!(
@@ -437,7 +470,7 @@ mod tests {
         assert_eq!(saved.github.as_ref().unwrap().label, "@ada · via gh");
         assert_eq!(in_file(&a), [false, false, false]);
         // The next start finds them in the keychain, and leaves the file as it is.
-        assert_eq!(load_accounts(&d, &store), a);
+        assert_eq!(load_accounts(&d, &store, false), a);
         assert_eq!(file(&d), text);
     }
 
@@ -447,7 +480,7 @@ mod tests {
         let text = r#"{ "github": { "label": "@ada · via gh", "user": "ada" } }"#;
         std::fs::write(d.integrations_file(), text).unwrap();
         let store = MemoryStore::default();
-        let a = load_accounts(&d, &store);
+        let a = load_accounts(&d, &store, false);
         assert_eq!(a.github.as_ref().unwrap().label, "@ada · via gh");
         assert!(a.jira.is_none() && a.trello.is_none());
         assert_eq!(file(&d), text);
@@ -455,7 +488,7 @@ mod tests {
         // Nor is one that cannot be read.
         let broken = r#"{ "jira": { "token": "jira-secret" "#;
         std::fs::write(d.integrations_file(), broken).unwrap();
-        assert_eq!(load_accounts(&d, &store), Accounts::default());
+        assert_eq!(load_accounts(&d, &store, false), Accounts::default());
         assert_eq!(file(&d), broken);
         assert_eq!(store.entry("jira"), None);
     }
@@ -465,7 +498,7 @@ mod tests {
         let d = older("secrets-refused");
         let store = MemoryStore::default();
         store.refuse.store(true, Ordering::SeqCst);
-        let a = load_accounts(&d, &store);
+        let a = load_accounts(&d, &store, false);
         assert_eq!(a.jira.as_ref().unwrap().token, "jira-secret");
         let text = file(&d);
         for s in SECRETS {
@@ -475,7 +508,7 @@ mod tests {
         assert_eq!(in_file(&a), [true, true, false]);
         // Back: the next start moves them.
         store.refuse.store(false, Ordering::SeqCst);
-        let a = load_accounts(&d, &store);
+        let a = load_accounts(&d, &store, false);
         assert_eq!(in_file(&a), [false, false, false]);
         assert_eq!(a.jira.as_ref().unwrap().token, "jira-secret");
         let text = file(&d);
@@ -489,13 +522,103 @@ mod tests {
         let d = older("secrets-lost");
         let store = MemoryStore::default();
         store.lose.store(true, Ordering::SeqCst);
-        let a = load_accounts(&d, &store);
+        let a = load_accounts(&d, &store, false);
         let text = file(&d);
         for s in SECRETS {
             assert!(text.contains(s), "{text}");
         }
         assert_eq!(in_file(&a), [true, true, false]);
         assert_eq!(a.trello.as_ref().unwrap().token, "trello-secret");
+    }
+
+    fn unread(a: &Accounts) -> Vec<bool> {
+        a.views().iter().map(|v| v.unread).collect()
+    }
+
+    #[test]
+    fn secrets_the_keychain_does_not_give_at_a_start_are_said_missing_and_left_where_they_are() {
+        let d = older("secrets-unread");
+        let store = MemoryStore::default();
+        load_accounts(&d, &store, false);
+        let text = file(&d);
+        let entries = || (store.entry("jira"), store.entry("trello"));
+        let kept = entries();
+        // Out of reach at the next start: GitHub through gh has none to read.
+        store.refuse.store(true, Ordering::SeqCst);
+        let a = load_accounts(&d, &store, false);
+        assert_eq!(unread(&a), [true, true, false]);
+        assert_eq!(a.jira.as_ref().unwrap().token, "");
+        assert_eq!(in_file(&a), [false, false, false]);
+        // Nothing lost: the file and the entries as they were.
+        assert_eq!(file(&d), text);
+        assert_eq!(entries(), kept);
+        // Back, without the Jira entry (removed by hand): only Jira's are missing.
+        store.refuse.store(false, Ordering::SeqCst);
+        store.delete("jira").unwrap();
+        let a = load_accounts(&d, &store, false);
+        assert_eq!(unread(&a), [true, false, false]);
+        assert_eq!(a.trello.as_ref().unwrap().token, "trello-secret");
+        // A GitHub token of its own that is missing is never the CLI's.
+        let mine = r#"{ "github": { "label": "@work", "user": "work" } }"#;
+        std::fs::write(d.integrations_file(), mine).unwrap();
+        assert_eq!(
+            unread(&load_accounts(&d, &store, false)),
+            [false, false, true]
+        );
+        store.set("github", "not json").unwrap();
+        assert_eq!(
+            unread(&load_accounts(&d, &store, false)),
+            [false, false, true]
+        );
+        assert_eq!(file(&d), mine);
+    }
+
+    #[test]
+    fn an_entry_left_without_its_account_goes_at_the_next_start() {
+        let d = DataDir::new(test_dir("secrets-leftover"));
+        let text = r#"{ "github": { "label": "@ada · via gh", "user": "ada" } }"#;
+        std::fs::write(d.integrations_file(), text).unwrap();
+        let store = MemoryStore::default();
+        // A « Déconnecter » the keychain did not follow, a former token of GitHub now through gh.
+        store
+            .set("jira", r#"{"key":"","token":"jira-secret"}"#)
+            .unwrap();
+        store
+            .set("github", r#"{"key":"","token":"ghp-former"}"#)
+            .unwrap();
+        let a = load_accounts(&d, &store, false);
+        assert_eq!((store.entry("jira"), store.entry("github")), (None, None));
+        let github = a.github.as_ref().unwrap();
+        assert_eq!((github.token.as_str(), github.unread), ("", false));
+        assert_eq!(file(&d), text);
+    }
+
+    #[test]
+    fn a_development_build_leaves_the_file_a_copy_of_the_secrets() {
+        let d = older("secrets-dev-copy");
+        let store = MemoryStore::default();
+        let mut a = load_accounts(&d, &store, true);
+        // In the keychain, and still where an installed Escouade reads them.
+        assert_eq!(
+            store.entry("trello").as_deref(),
+            Some(r#"{"key":"trello-key","token":"trello-secret"}"#)
+        );
+        assert!(store.entry("jira").is_some());
+        assert_eq!(file(&d), OLD_FILE);
+        assert_eq!(in_file(&a), [false, false, false]);
+        // Saved again (an account connected): they stay.
+        a.set(Service::Github, None);
+        save_accounts(&d, &a).unwrap();
+        let text = file(&d);
+        for s in SECRETS {
+            assert!(text.contains(s), "{text}");
+        }
+        // A release build moves them.
+        load_accounts(&d, &store, false);
+        let text = file(&d);
+        for s in SECRETS {
+            assert!(!text.contains(s), "{text}");
+        }
     }
 
     #[cfg(unix)]
@@ -507,7 +630,7 @@ mod tests {
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
         let store = MemoryStore::default();
         store.refuse.store(true, Ordering::SeqCst);
-        load_accounts(&d, &store);
+        load_accounts(&d, &store, false);
         assert!(file(&d).contains("jira-secret"));
         let mode = std::fs::metadata(&path).unwrap().permissions().mode();
         assert_eq!(mode & 0o777, 0o600);

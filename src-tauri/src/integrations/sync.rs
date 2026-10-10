@@ -367,6 +367,14 @@ impl<R: Runtime> Core<R> {
             .get(service)
             .cloned()
             .ok_or_else(|| anyhow!("Aucun compte {} connecté", service.label()))?;
+        // Without its secrets, a call would be refused, or for GitHub go out with the CLI's
+        // token, as whoever it is logged in as.
+        if account.unread {
+            bail!(
+                "Trousseau du système illisible : relance Escouade ou reconnecte le compte {}.",
+                service.label()
+            );
+        }
         self.client_for(service, &account).await
     }
 
@@ -435,7 +443,7 @@ impl<R: Runtime> Core<R> {
         }
         let (mut label, user) = self.client_for(service, &account).await?.me().await?;
         if service == Service::Github && account.token.is_empty() {
-            label.push_str(" · via gh");
+            label.push_str(VIA_GH);
         }
         account.label = label;
         account.user = user;
@@ -450,9 +458,22 @@ impl<R: Runtime> Core<R> {
     }
 
     /// "Déconnecter": the account is forgotten, its secrets with it (the projects keep their links,
-    /// unused until one is connected again).
+    /// unused until one is connected again). Secrets the keychain keeps are said, and go at the
+    /// next start.
     pub fn integration_disconnect(&self, service: Service) -> Result<Vec<AccountView>> {
-        secrets::forget(&*self.secrets, service);
+        let own = self
+            .accounts
+            .read()
+            .get(service)
+            .is_some_and(|a| !secrets::through_gh(service, a));
+        if !secrets::forget(&*self.secrets, service) && own {
+            self.hub.emit(UiEvent::Toast {
+                text: format!(
+                    "Le jeton {} n'a pas pu être retiré du trousseau du système : Escouade réessaiera au prochain démarrage, ou retire-le à la main (son nom contient « escouade »).",
+                    service.label()
+                ),
+            });
+        }
         self.accounts.write().set(service, None);
         if service == Service::Github {
             *self.gh_token.lock() = None;

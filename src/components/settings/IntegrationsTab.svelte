@@ -170,6 +170,9 @@
         {#if a?.connected && a.inFile}
           <span class="d warn">Trousseau du système indisponible : le jeton reste dans ~/.escouade/integrations.json.</span>
         {/if}
+        {#if a?.connected && a.unread}
+          <span class="d warn">Trousseau du système illisible : relance Escouade ou reconnecte le compte.</span>
+        {/if}
       </div>
       {#if a?.connected}
         <button class="btn small ghost" onclick={() => disconnect(id)}>Déconnecter</button>
