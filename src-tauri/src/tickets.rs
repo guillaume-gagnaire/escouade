@@ -786,6 +786,8 @@ impl<R: Runtime> Core<R> {
         let s = &project.board;
         let target = self.target_of(project).await;
         let settings = self.settings.read().clone();
+        // What its Claude is told, from its protocol to its first message.
+        let lang = self.lang().claude;
         let or = |v: &str, default: &str| Some(if v.is_empty() { default } else { v }.to_string());
         // As its worktree will be: the target branch has isola's configuration.
         let isola = isola::cli().is_some() && isola::configured_on(&project.path, &target).await;
@@ -800,7 +802,7 @@ impl<R: Runtime> Core<R> {
                     mode: or(&s.mode, &settings.default_mode),
                     name: Some(board::agent_name(&t.key, &t.title)),
                     worktree: Some((board::branch_of(&t.key), target)),
-                    append_prompt: Some(board::protocol_prompt_for(t, ports, isola)),
+                    append_prompt: Some(board::protocol_prompt_for(lang, t, ports, isola)),
                     ticket_id: Some(t.id.clone()),
                     port_base: ports,
                     select: false,
@@ -834,7 +836,8 @@ impl<R: Runtime> Core<R> {
             .agent(&agent_id)
             .ok()
             .and_then(|h| h.lock().setup_failure.take());
-        let first = board::with_setup_failure(board::first_message(t), failure.as_deref());
+        let first =
+            board::with_setup_failure(lang, board::first_message(lang, t), failure.as_deref());
         self.send_message(&agent_id, first, vec![]).await
     }
 
@@ -873,6 +876,7 @@ impl<R: Runtime> Core<R> {
             }
             end => end,
         };
+        let lang = self.lang().claude;
         let Ok(next) = self.edit_ticket(&ticket_id, |t| {
             // A ticket started again has another agent: the old one's turns never move it.
             if t.agent_id.as_deref() != Some(agent_id) {
@@ -884,7 +888,7 @@ impl<R: Runtime> Core<R> {
             if limited && t.blocked.is_some() {
                 return Ok(board::Next::default());
             }
-            Ok(board::turn_end(t, &end, report.as_ref(), now_ms()))
+            Ok(board::turn_end(lang, t, &end, report.as_ref(), now_ms()))
         }) else {
             return;
         };
@@ -992,6 +996,7 @@ impl<R: Runtime> Core<R> {
     /// quota; a ticket whose start the stop cut goes back to "À faire", and the agent made for it,
     /// if any, is archived. Then what may start starts.
     pub fn recover_tickets(self: &Arc<Self>) {
+        let lang = self.lang().claude;
         let cut = std::mem::take(&mut *self.cut_turns.lock());
         let doing: Vec<(String, String, Option<String>)> = self
             .tickets
@@ -1008,7 +1013,11 @@ impl<R: Runtime> Core<R> {
                     let c = self.clone();
                     tauri::async_runtime::spawn(async move {
                         let _ = c
-                            .send_or_block(&ticket_id, &agent.id, board::restart_message(&key))
+                            .send_or_block(
+                                &ticket_id,
+                                &agent.id,
+                                board::restart_message(lang, &key),
+                            )
                             .await;
                     });
                 }
@@ -1058,6 +1067,7 @@ impl<R: Runtime> Core<R> {
     /// first message gets it, with the ticket's description and criteria), or, when it has none
     /// left, the ticket starts again. The block goes as the message is sent.
     pub async fn ticket_resume(self: &Arc<Self>, id: &str) -> Result<()> {
+        let lang = self.lang().claude;
         // Its agent waits for its quota: a message now would meet the limit again (and drop the
         // automatic resume, which takes it up).
         let waiting = self
@@ -1096,9 +1106,9 @@ impl<R: Runtime> Core<R> {
             Some(agent) => {
                 // Its start failed once it was made: the ticket was never given to it.
                 let text = if agent.prompts == 0 {
-                    board::first_message(&t)
+                    board::first_message(lang, &t)
                 } else {
-                    board::resume_message(&t.key)
+                    board::resume_message(lang, &t.key)
                 };
                 self.send_or_block(id, &agent.id, text).await
             }
@@ -1249,6 +1259,7 @@ impl<R: Runtime> Core<R> {
     }
 
     async fn validate(self: &Arc<Self>, t: &Ticket) -> Result<()> {
+        let lang = self.lang().claude;
         let project = self.project(&t.project_id)?;
         let s = project.board.clone();
         let agent_id = t.agent_id.clone().ok_or(Refusal::NoAgent)?;
@@ -1272,7 +1283,8 @@ impl<R: Runtime> Core<R> {
                 })?;
             let command = s.test_command.trim();
             let env = testlaunch::port_env(meta.port_base);
-            let run = testlaunch::run_tests(&shell, &wt.path, command, &env, TEST_LIMIT).await?;
+            let run =
+                testlaunch::run_tests(&shell, &wt.path, command, &env, TEST_LIMIT, lang).await?;
             if !run.passed {
                 // Its agent archived or deleted during the tests: the ticket went back to do (and
                 // maybe on with another agent); the old agent is told nothing (it would start again).
@@ -1288,7 +1300,7 @@ impl<R: Runtime> Core<R> {
                     .send_or_block(
                         &t.id,
                         &agent_id,
-                        board::tests_failed_message(command, &run.tail),
+                        board::tests_failed_message(lang, command, &run.tail),
                     )
                     .await;
                 return Ok(());
@@ -1428,10 +1440,15 @@ impl<R: Runtime> Core<R> {
             return board::plain_commit(t);
         }
         let stat = git::staged_stat(cwd, target).await;
+        let lang = self.lang().claude;
         // Asked of the account of the ticket's agent.
         let agent = t.agent_id.as_deref();
         match self
-            .one_shot(board::COMMIT_SYSTEM, &board::commit_prompt(t, &stat), agent)
+            .one_shot(
+                &board::commit_system(lang),
+                &board::commit_prompt(lang, t, &stat),
+                agent,
+            )
             .await
         {
             Ok(answer) => board::commit_from_answer(&answer, &t.key)
@@ -1612,7 +1629,7 @@ impl<R: Runtime> Core<R> {
             Some(m) => m,
             None => self.commit_message(t, s, &wt.path, target).await,
         };
-        let body = board::pr_body(t);
+        let body = board::pr_body(self.lang().claude, t);
         let github = git::remote_url(&wt.path, &remote)
             .await
             .as_deref()
@@ -1685,6 +1702,7 @@ impl<R: Runtime> Core<R> {
     /// nothing. Runs while the ticket is held, its step set (its validation, or
     /// `ticket_resolve_conflict`).
     async fn agent_resolves(self: &Arc<Self>, id: &str) -> Result<()> {
+        let lang = self.lang().claude;
         let t = self.ticket(id)?;
         let project = self.project(&t.project_id)?;
         let agent_id = t.agent_id.clone().ok_or(Refusal::NoAgent)?;
@@ -1700,10 +1718,10 @@ impl<R: Runtime> Core<R> {
         self.still_validating(id, &agent_id)?;
         let rebase = project.board.strategy == "rebase";
         let text = if rebase {
-            board::rebase_message(&target)
+            board::rebase_message(lang, &target)
         } else {
             match git::run(&wt.path, &["merge", "--no-edit", &target]).await {
-                Ok(_) => board::conflict_message(&target, &[]),
+                Ok(_) => board::conflict_message(lang, &target, &[]),
                 Err(e) => {
                     let files = git::unmerged(&wt.path).await;
                     if files.is_empty() {
@@ -1713,7 +1731,7 @@ impl<R: Runtime> Core<R> {
                             b = wt.branch
                         )));
                     }
-                    board::conflict_message(&target, &files)
+                    board::conflict_message(lang, &target, &files)
                 }
             }
         };
@@ -1800,8 +1818,12 @@ impl<R: Runtime> Core<R> {
             board::back_to_work(t);
             Ok((t.key.clone(), agent_id))
         })?;
-        self.send_or_block(id, &agent_id, board::reject_message(&key, comment))
-            .await
+        self.send_or_block(
+            id,
+            &agent_id,
+            board::reject_message(self.lang().claude, &key, comment),
+        )
+        .await
     }
 
     // ---------- test launches ----------
@@ -1860,7 +1882,7 @@ impl<R: Runtime> Core<R> {
         if h.lock().meta.archived {
             bail!(Refusal::Archived);
         }
-        self.send_message(id, board::prepare_message(base), vec![])
+        self.send_message(id, board::prepare_message(self.lang().claude, base), vec![])
             .await
     }
 

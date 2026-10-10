@@ -274,11 +274,15 @@ pub struct WorktreeSuggestion {
 
 /// What Claude is told of the form of a command, whichever suggestion: the settings show it on one
 /// line, and what is read there must be what runs.
-fn one_line_rule() -> String {
-    format!(
+fn one_line_rule(lang: Lang) -> String {
+    tr_in!(
+        lang,
         "Chaque commande tient sur une seule ligne, sans retour à la ligne ni suite de {MAX_BLANKS} espaces ou plus, \
          et sur {MAX_COMMAND} caractères au plus, sans quoi elle est écartée \
-         (un enchaînement plus long va dans un script du projet, que la commande appelle)."
+         (un enchaînement plus long va dans un script du projet, que la commande appelle).",
+        "Each command fits on a single line, without line breaks or runs of {MAX_BLANKS} spaces or more, \
+         and in {MAX_COMMAND} characters at most, or it is left out \
+         (a longer sequence goes in a script of the project, which the command calls)."
     )
 }
 
@@ -292,12 +296,21 @@ pub fn all_refused(lang: Lang) -> String {
     )
 }
 
+// The questions of « Remplir automatiquement », in `lang` (the language of the texts for Claude):
+// the keys of the JSON asked for are the same in every language, as the parsers below read them.
+
 /// Claude's role when it suggests a project's worktree commands.
-pub const SUGGEST_SYSTEM: &str = "Tu lis un projet pour préparer les commandes qu'Escouade lance dans ses worktrees git. Tu ne modifies rien et n'exécutes rien : tu lis les fichiers, puis tu réponds uniquement par le bloc JSON demandé.";
+pub fn suggest_system(lang: Lang) -> String {
+    tr_in!(
+        lang,
+        "Tu lis un projet pour préparer les commandes qu'Escouade lance dans ses worktrees git. Tu ne modifies rien et n'exécutes rien : tu lis les fichiers, puis tu réponds uniquement par le bloc JSON demandé.",
+        "You read a project to prepare the commands Escouade runs in its git worktrees. You change nothing and run nothing: you read the files, then answer with the JSON block asked for only."
+    )
+}
 
 /// What Claude is asked: the setup and teardown commands of the project's worktrees, for `shell`
 /// (as named to the user), knowing what is copied into them and whether isola runs them.
-pub fn suggest_prompt(shell: &str, copied: &[String], isola: bool) -> String {
+pub fn suggest_prompt(lang: Lang, shell: &str, copied: &[String], isola: bool) -> String {
     let copied = copied
         .iter()
         .map(|p| p.trim())
@@ -305,17 +318,30 @@ pub fn suggest_prompt(shell: &str, copied: &[String], isola: bool) -> String {
         .collect::<Vec<_>>()
         .join(", ");
     let copied = if copied.is_empty() {
-        "aucun fichier ignoré par git".to_string()
+        tr_in!(
+            lang,
+            "aucun fichier ignoré par git",
+            "no file ignored by git"
+        )
     } else {
-        format!("seulement les fichiers ignorés par git qui correspondent à {copied}, copiés depuis le projet")
+        tr_in!(
+            lang,
+            "seulement les fichiers ignorés par git qui correspondent à {copied}, copiés depuis le projet",
+            "only the files ignored by git that match {copied}, copied from the project"
+        )
     };
     let isola = if isola {
-        " Le projet a un .isola.toml : isola lance lui-même ses services et ses étapes « setup » (isola up), ne les répète pas."
+        tr_in!(
+            lang,
+            " Le projet a un .isola.toml : isola lance lui-même ses services et ses étapes « setup » (isola up), ne les répète pas.",
+            " The project has an .isola.toml: isola itself runs its services and its “setup” steps (isola up), don’t repeat them."
+        )
     } else {
-        ""
+        String::new()
     };
-    let one_line = one_line_rule();
-    format!(
+    let one_line = one_line_rule(lang);
+    tr_in!(
+        lang,
         "<worktrees>\nChaque agent d'Escouade travaille dans un nouveau worktree git de ce projet : un checkout neuf de la branche, \
          sans dépendances installées ni rien de généré, avec {copied}.{isola}\n\n\
          Lis le projet (manifestes et lockfiles, README, CONTRIBUTING, Makefile, scripts, docker-compose… à la racine et dans les sous-dossiers) \
@@ -328,7 +354,20 @@ pub fn suggest_prompt(shell: &str, copied: &[String], isola: bool) -> String {
          pour lui) ; le plus souvent rien. {one_line}\n\n\
          Les commandes tournent dans {shell}, chacune dans le dossier « dossier » (relatif à la racine du worktree, vide pour la racine). \
          Variables disponibles : ESCOUADE_PROJECT_DIR (dossier du projet principal), ESCOUADE_WORKTREE_DIR, ESCOUADE_BRANCH.\n\n\
-         Réponds uniquement par :\n```json\n{{\"preparation\": [{{\"commande\": \"npm ci\", \"dossier\": \"\"}}], \"demontage\": []}}\n```\n</worktrees>"
+         Réponds uniquement par :\n```json\n{{\"preparation\": [{{\"commande\": \"npm ci\", \"dossier\": \"\"}}], \"demontage\": []}}\n```\n</worktrees>",
+        "<worktrees>\nEach Escouade agent works in a new git worktree of this project: a fresh checkout of the branch, \
+         with no dependencies installed and nothing generated, with {copied}.{isola}\n\n\
+         Read the project (manifests and lockfiles, README, CONTRIBUTING, Makefile, scripts, docker-compose… at the root and in the subfolders) \
+         and give:\n\
+         - “preparation”: the commands that make a fresh worktree ready to develop and test, in order: install the dependencies \
+         with the lockfile’s package manager (npm ci, pnpm install --frozen-lockfile, yarn install --immutable, bundle install, uv sync, poetry install, \
+         composer install, go mod download…) in each folder that has one, then what the build or the tests need beforehand (generated code, \
+         Prisma client…). Never a server or a command that doesn’t end, nor tests, nor a build that isn’t needed.\n\
+         - “demontage”: only what must be undone outside the worktree before deleting it (database or containers created \
+         for it); most often nothing. {one_line}\n\n\
+         The commands run in {shell}, each in the folder “dossier” (relative to the root of the worktree, blank for the root). \
+         Available variables: ESCOUADE_PROJECT_DIR (folder of the main project), ESCOUADE_WORKTREE_DIR, ESCOUADE_BRANCH.\n\n\
+         Answer with this only:\n```json\n{{\"preparation\": [{{\"commande\": \"npm ci\", \"dossier\": \"\"}}], \"demontage\": []}}\n```\n</worktrees>"
     )
 }
 
@@ -525,11 +564,17 @@ pub fn parse_suggestion(answer: &str, root: &Path, shell: &str) -> Option<Worktr
 // ---------- launch commands suggested by Claude ----------
 
 /// Claude's role when it suggests a project's launch commands.
-pub const RUN_SUGGEST_SYSTEM: &str = "Tu lis un projet pour préparer les commandes qu'Escouade lance pour le développer (serveurs de développement, watchers…). Tu ne modifies rien et n'exécutes rien : tu lis les fichiers, puis tu réponds uniquement par le bloc JSON demandé.";
+pub fn run_suggest_system(lang: Lang) -> String {
+    tr_in!(
+        lang,
+        "Tu lis un projet pour préparer les commandes qu'Escouade lance pour le développer (serveurs de développement, watchers…). Tu ne modifies rien et n'exécutes rien : tu lis les fichiers, puis tu réponds uniquement par le bloc JSON demandé.",
+        "You read a project to prepare the commands Escouade runs to develop it (development servers, watchers…). You change nothing and run nothing: you read the files, then answer with the JSON block asked for only."
+    )
+}
 
 /// What Claude is asked: the commands that launch what the project needs while it is developed,
-/// for `shell` (the one they will run in).
-pub fn run_suggest_prompt(shell: &ShellInfo) -> String {
+/// for `shell` (the one they will run in), with names in `lang`.
+pub fn run_suggest_prompt(lang: Lang, shell: &ShellInfo) -> String {
     // The commands get none of Escouade's variables: a project's own go in front of the command,
     // in the syntax of the shell that runs it.
     let set_variable = if matches!(shell.id.as_str(), "pwsh" | "powershell") {
@@ -538,8 +583,9 @@ pub fn run_suggest_prompt(shell: &ShellInfo) -> String {
         "PORT=3000 npm run dev"
     };
     let label = &shell.label;
-    let one_line = one_line_rule();
-    format!(
+    let one_line = one_line_rule(lang);
+    tr_in!(
+        lang,
         "<lancement>\nL'utilisateur lance les processus dont il a besoin pour développer ce projet depuis la section « Lancement » d'Escouade : \
          chaque commande tourne dans son propre terminal, qu'il garde ouvert pendant qu'il travaille.\n\n\
          Lis le projet (manifestes et scripts : package.json, Makefile, Procfile, justfile, pyproject.toml…, docker-compose, README, CONTRIBUTING, \
@@ -553,7 +599,21 @@ pub fn run_suggest_prompt(shell: &ShellInfo) -> String {
          Aucune variable d'Escouade (ESCOUADE_…) n'est définie pour elles : si un processus exige une variable d'environnement qu'il ne lit pas \
          lui-même dans un fichier .env, écris-la devant la commande, avec la syntaxe de {label} ({set_variable}).\n\n\
          Réponds uniquement par :\n```json\n{{\"commandes\": [{{\"nom\": \"Front\", \"commande\": \"npm run dev\", \"dossier\": \"web\"}}, \
-         {{\"nom\": \"Base\", \"commande\": \"docker compose up db\", \"dossier\": \"\"}}]}}\n```\n</lancement>"
+         {{\"nom\": \"Base\", \"commande\": \"docker compose up db\", \"dossier\": \"\"}}]}}\n```\n</lancement>",
+        "<launch>\nThe user runs the processes they need to develop this project from Escouade’s “Launch” section: \
+         each command runs in its own terminal, which they keep open while they work.\n\n\
+         Read the project (manifests and scripts: package.json, Makefile, Procfile, justfile, pyproject.toml…, docker-compose, README, CONTRIBUTING, \
+         at the root and in the subfolders) and give the commands that run these processes: development servers (front end, API…), \
+         watchers (continuous compilation or generation), workers and job queues, database and local services (docker compose up db…). \
+         One command per process, with a short name (“Front”, “API”, “Database”). A command that returns at once \
+         (docker compose up -d) can’t be followed in a terminal: give it in the foreground (docker compose up db).\n\
+         Never an install or test command, nor a command that ends by itself (build, lint, migration). \
+         At most {MAX_SUGGESTED} commands, none if the project has nothing to run. {one_line}\n\n\
+         The commands run in {label}, each in the folder “dossier” (relative to the root of the project, blank for the root). \
+         No Escouade variable (ESCOUADE_…) is set for them: if a process needs an environment variable that it doesn’t read \
+         by itself from a .env file, write it in front of the command, in the syntax of {label} ({set_variable}).\n\n\
+         Answer with this only:\n```json\n{{\"commandes\": [{{\"nom\": \"Front\", \"commande\": \"npm run dev\", \"dossier\": \"web\"}}, \
+         {{\"nom\": \"Database\", \"commande\": \"docker compose up db\", \"dossier\": \"\"}}]}}\n```\n</launch>"
     )
 }
 
@@ -949,11 +1009,18 @@ mod tests {
 
     #[test]
     fn the_question_names_the_shell_the_copied_files_and_isola() {
-        let p = suggest_prompt("PowerShell 7", &[".env*".into(), " ".into()], false);
+        let p = suggest_prompt(
+            Lang::Fr,
+            "PowerShell 7",
+            &[".env*".into(), " ".into()],
+            false,
+        );
         assert!(p.contains("PowerShell 7") && p.contains(".env*"), "{p}");
         assert!(!p.contains("isola"));
-        assert!(suggest_prompt("bash", &[], true).contains(".isola.toml"));
-        assert!(suggest_prompt("bash", &[], false).contains("aucun fichier ignoré par git"));
+        assert!(suggest_prompt(Lang::Fr, "bash", &[], true).contains(".isola.toml"));
+        assert!(
+            suggest_prompt(Lang::Fr, "bash", &[], false).contains("aucun fichier ignoré par git")
+        );
         // One command per line, short, with no long run of blanks: what the settings can show.
         assert!(
             p.contains("sur une seule ligne, sans retour à la ligne")
@@ -961,6 +1028,51 @@ mod tests {
                 && p.contains("24 espaces ou plus"),
             "{p}"
         );
+    }
+
+    #[test]
+    fn the_questions_of_fill_in_automatically_read_in_english_with_the_keys_read_back() {
+        use crate::i18n::check::{french_in, json_keys};
+        use Lang::{En, Fr};
+        for (copied, isola) in [(vec![".env*".to_string()], false), (vec![], true)] {
+            let en = suggest_prompt(En, "PowerShell 7", &copied, isola);
+            assert_eq!(french_in(&en), None, "{en}");
+            assert!(
+                en.starts_with("<worktrees>\n") && en.contains("PowerShell 7"),
+                "{en}"
+            );
+            assert_eq!(
+                json_keys(&en),
+                json_keys(&suggest_prompt(Fr, "PowerShell 7", &copied, isola))
+            );
+        }
+        let en = suggest_prompt(En, "bash", &[], false);
+        assert!(
+            en.contains("no file ignored by git")
+                && en.contains("on a single line, without line breaks")
+                && en.contains("300 characters at most")
+                && en.contains("24 spaces or more"),
+            "{en}"
+        );
+        let root = test_dir("wt-run-suggest-en");
+        std::fs::create_dir_all(root.join("web")).unwrap();
+        for id in ["pwsh", "bash"] {
+            let shell = shell_of(id, "PowerShell 7");
+            let en = run_suggest_prompt(En, &shell);
+            assert_eq!(french_in(&en), None, "{en}");
+            assert!(
+                en.starts_with("<launch>\n") && en.contains("development servers"),
+                "{en}"
+            );
+            assert_eq!(json_keys(&en), json_keys(&run_suggest_prompt(Fr, &shell)));
+            // Its example answer reads as one.
+            let block = &en[en.find("```json\n").unwrap()..];
+            let s = parse_run_suggestion(block, &root, id).expect("{en}");
+            assert_eq!(s.commands[0].name, "Front");
+        }
+        for system in [suggest_system(En), run_suggest_system(En)] {
+            assert_eq!(french_in(&system), None, "{system}");
+        }
     }
 
     fn shell_of(id: &str, label: &str) -> ShellInfo {
@@ -973,7 +1085,7 @@ mod tests {
 
     #[test]
     fn the_launch_question_names_the_shell_the_way_to_set_a_variable_in_it_and_what_not_to_give() {
-        let pwsh = run_suggest_prompt(&shell_of("pwsh", "PowerShell 7"));
+        let pwsh = run_suggest_prompt(Lang::Fr, &shell_of("pwsh", "PowerShell 7"));
         assert!(pwsh.contains("PowerShell 7"), "{pwsh}");
         // The commands get no variable of Escouade's, and a project's own go in front of them, in
         // the shell's syntax.
@@ -981,7 +1093,7 @@ mod tests {
         assert!(pwsh.contains("$env:PORT = '3000'; npm run dev"), "{pwsh}");
         assert!(!pwsh.contains("PORT=3000 npm"), "{pwsh}");
         for id in ["bash", "wsl", "zsh"] {
-            let posix = run_suggest_prompt(&shell_of(id, "Git Bash"));
+            let posix = run_suggest_prompt(Lang::Fr, &shell_of(id, "Git Bash"));
             assert!(posix.contains("PORT=3000 npm run dev"), "{id}: {posix}");
             assert!(!posix.contains("$env:"), "{id}: {posix}");
         }

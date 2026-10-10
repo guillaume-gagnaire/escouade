@@ -20,8 +20,18 @@ pub fn default_criteria(lang: Lang) -> [String; 2] {
         tr_in!(lang, "Tests verts", "Tests pass"),
     ]
 }
+// What the agents are told (`lang` is the language of the texts for Claude): the markers they
+// write back (the ```escouade fence, the keys of its JSON) are the same in every language, as
+// `parse_report` and the window read them.
+
 /// Sent once when a turn ended without its report.
-pub const REMINDER: &str = "Termine par le bilan des critères (bloc escouade).";
+pub fn reminder(lang: Lang) -> String {
+    tr_in!(
+        lang,
+        "Termine par le bilan des critères (bloc escouade).",
+        "End with the criteria report (escouade block)."
+    )
+}
 const FENCE: &str = "```escouade";
 
 /// How an agent's turn ended, as the core tells the board.
@@ -237,8 +247,15 @@ pub(crate) fn report_missing(lang: Lang) -> String {
     )
 }
 
-/// What the end of its agent's turn does to a ticket "En cours" (nothing to any other).
-pub fn turn_end(t: &mut Ticket, end: &TurnEnd, report: Option<&Report>, now: i64) -> Next {
+/// What the end of its agent's turn does to a ticket "En cours" (nothing to any other); what its
+/// agent is sent next is written in `lang`.
+pub fn turn_end(
+    lang: Lang,
+    t: &mut Ticket,
+    end: &TurnEnd,
+    report: Option<&Report>,
+    now: i64,
+) -> Next {
     let mut next = Next::default();
     if t.column != Column::Doing {
         return next;
@@ -268,7 +285,7 @@ pub fn turn_end(t: &mut Ticket, end: &TurnEnd, report: Option<&Report>, now: i64
         TurnEnd::Finished(_) => match report.and_then(|r| r.criteria.as_ref()) {
             None if !t.reminded => {
                 t.reminded = true;
-                next.send = Some(REMINDER.into());
+                next.send = Some(reminder(lang));
             }
             None => {
                 t.reminded = false;
@@ -298,7 +315,7 @@ pub fn turn_end(t: &mut Ticket, end: &TurnEnd, report: Option<&Report>, now: i64
                 } else {
                     t.iteration += 1;
                     t.loops += 1;
-                    next.send = Some(loop_message(t));
+                    next.send = Some(loop_message(lang, t));
                 }
             }
         },
@@ -574,32 +591,38 @@ fn numbered(t: &Ticket) -> String {
 }
 
 /// The first message of a ticket's agent.
-pub fn first_message(t: &Ticket) -> String {
-    let mut s = format!("Ticket {} : {}\n", t.key, t.title);
+pub fn first_message(lang: Lang, t: &Ticket) -> String {
+    let (key, title) = (&t.key, &t.title);
+    let mut s = tr_in!(lang, "Ticket {key} : {title}\n", "Ticket {key}: {title}\n");
     if !t.description.trim().is_empty() {
         s.push_str(&format!("\n{}\n", t.description.trim()));
     }
-    s.push_str(&format!(
-        "\nCritères d'acceptation :\n{}\n\nBoucle 1/{}. Travaille jusqu'à atteindre tous les critères, puis termine par le bilan.",
-        numbered(t),
-        t.max_loops
+    s.push_str(&tr_in!(
+        lang,
+        "\nCritères d'acceptation :\n{criteria}\n\nBoucle 1/{max}. Travaille jusqu'à atteindre tous les critères, puis termine par le bilan.",
+        "\nAcceptance criteria:\n{criteria}\n\nLoop 1/{max}. Work until every criterion is met, then end with the report.",
+        criteria = numbered(t),
+        max = t.max_loops
     ));
     s
 }
 
-/// `message`, followed by what went wrong with the setup of the agent's worktree, if anything.
-pub fn with_setup_failure(message: String, failure: Option<&str>) -> String {
+/// `message`, followed by what went wrong with the setup of the agent's worktree, if anything
+/// (`failure`, written in `lang` too).
+pub fn with_setup_failure(lang: Lang, message: String, failure: Option<&str>) -> String {
     match failure {
-        Some(f) => format!(
-            "{message}\n\n{} Fais le nécessaire pour pouvoir travailler et tester, puis continue.",
-            f.trim()
+        Some(f) => tr_in!(
+            lang,
+            "{message}\n\n{f} Fais le nécessaire pour pouvoir travailler et tester, puis continue.",
+            "{message}\n\n{f} Do what it takes to be able to work and test, then go on.",
+            f = f.trim()
         ),
         None => message,
     }
 }
 
 /// The message of the next loop: the criteria still missing, with the agent's notes.
-pub fn loop_message(t: &Ticket) -> String {
+pub fn loop_message(lang: Lang, t: &Ticket) -> String {
     let missing: Vec<String> = t
         .criteria
         .iter()
@@ -613,11 +636,13 @@ pub fn loop_message(t: &Ticket) -> String {
             }
         })
         .collect();
-    format!(
-        "Boucle {}/{}. Critères non atteints : {}. Continue jusqu'à les atteindre, puis termine par le bilan.",
-        t.iteration,
-        t.max_loops,
-        missing.join(", ")
+    tr_in!(
+        lang,
+        "Boucle {i}/{max}. Critères non atteints : {missing}. Continue jusqu'à les atteindre, puis termine par le bilan.",
+        "Loop {i}/{max}. Criteria not met: {missing}. Go on until they are, then end with the report.",
+        i = t.iteration,
+        max = t.max_loops,
+        missing = missing.join(", ")
     )
 }
 
@@ -631,63 +656,103 @@ pub fn clock(ms: i64) -> String {
         .unwrap_or_default()
 }
 
-pub fn resume_message(key: &str) -> String {
-    format!("Reprends le ticket {key} là où tu en étais, puis termine par le bilan.")
-}
-
-pub fn restart_message(key: &str) -> String {
-    format!("L'app a redémarré pendant ton travail sur {key} : reprends là où tu en étais, puis termine par le bilan.")
-}
-
-pub fn reject_message(key: &str, comment: &str) -> String {
-    let comment = comment.trim().trim_end_matches('.');
-    format!("Retour de test sur {key} : {comment}. Corrige, revérifie tous les critères, puis termine par le bilan.")
-}
-
-pub fn tests_failed_message(command: &str, tail: &str) -> String {
-    format!("Les tests (`{command}`) échouent :\n\n```\n{tail}\n```\n\nCorrige, revérifie les critères, puis termine par le bilan.")
-}
-
-pub fn conflict_message(target: &str, files: &[String]) -> String {
-    if files.is_empty() {
-        return format!("J'ai mergé {target} dans ta branche, sans conflit. Revérifie les critères, puis termine par le bilan.");
-    }
-    format!(
-        "Le merge de {target} dans ta branche a des conflits sur : {}. Résous-les, commite le merge, revérifie les critères, puis termine par le bilan.",
-        files.join(", ")
+pub fn resume_message(lang: Lang, key: &str) -> String {
+    tr_in!(
+        lang,
+        "Reprends le ticket {key} là où tu en étais, puis termine par le bilan.",
+        "Pick up ticket {key} where you left off, then end with the report."
     )
 }
 
-pub fn rebase_message(target: &str) -> String {
-    format!("Rebase ta branche sur {target} et résous ses conflits, puis revérifie les critères et termine par le bilan.")
+pub fn restart_message(lang: Lang, key: &str) -> String {
+    tr_in!(
+        lang,
+        "L'app a redémarré pendant ton travail sur {key} : reprends là où tu en étais, puis termine par le bilan.",
+        "The app restarted while you were working on {key}: pick up where you left off, then end with the report."
+    )
+}
+
+pub fn reject_message(lang: Lang, key: &str, comment: &str) -> String {
+    let comment = comment.trim().trim_end_matches('.');
+    tr_in!(
+        lang,
+        "Retour de test sur {key} : {comment}. Corrige, revérifie tous les critères, puis termine par le bilan.",
+        "Test feedback on {key}: {comment}. Fix it, check every criterion again, then end with the report."
+    )
+}
+
+pub fn tests_failed_message(lang: Lang, command: &str, tail: &str) -> String {
+    tr_in!(
+        lang,
+        "Les tests (`{command}`) échouent :\n\n```\n{tail}\n```\n\nCorrige, revérifie les critères, puis termine par le bilan.",
+        "The tests (`{command}`) fail:\n\n```\n{tail}\n```\n\nFix them, check the criteria again, then end with the report."
+    )
+}
+
+pub fn conflict_message(lang: Lang, target: &str, files: &[String]) -> String {
+    if files.is_empty() {
+        return tr_in!(
+            lang,
+            "J'ai mergé {target} dans ta branche, sans conflit. Revérifie les critères, puis termine par le bilan.",
+            "I merged {target} into your branch, without conflicts. Check the criteria again, then end with the report."
+        );
+    }
+    tr_in!(
+        lang,
+        "Le merge de {target} dans ta branche a des conflits sur : {files}. Résous-les, commite le merge, revérifie les critères, puis termine par le bilan.",
+        "The merge of {target} into your branch has conflicts in: {files}. Resolve them, commit the merge, check the criteria again, then end with the report.",
+        files = files.join(", ")
+    )
+}
+
+pub fn rebase_message(lang: Lang, target: &str) -> String {
+    tr_in!(
+        lang,
+        "Rebase ta branche sur {target} et résous ses conflits, puis revérifie les critères et termine par le bilan.",
+        "Rebase your branch onto {target} and resolve its conflicts, then check the criteria again and end with the report."
+    )
 }
 
 /// "Préparer le lancement": the agent is asked how to launch its worktree, with its ports.
-pub fn prepare_message(base: u16) -> String {
+pub fn prepare_message(lang: Lang, base: u16) -> String {
     let (end, web) = (base.saturating_add(PORT_BLOCK - 1), base.saturating_add(1));
-    format!(
+    tr_in!(
+        lang,
         "Prépare le lancement de test de ce worktree. Ports réservés : {base} à {end} (ESCOUADE_PORT_BASE et ESCOUADE_PORT_END dans le lancement) : \
          utilise-les, sans les écrire dans des fichiers versionnés (passe-les en arguments ou en variables d'environnement). \
          Termine ta réponse par un bloc :\n\n```escouade\n{{\"lancement\": {{\"preparation\": [{{\"commande\": \"npm install\", \"dossier\": \"web\"}}], \
          \"processus\": [{{\"nom\": \"web\", \"commande\": \"npm run dev -- --port {web}\", \"dossier\": \"web\", \"env\": {{\"PORT\": \"{web}\"}}, \
          \"url\": \"http://localhost:{web}\"}}], \"ouvrir\": \"http://localhost:{web}/page-a-tester\"}}}}\n```\n\n\
          « dossier » est relatif au worktree, « url » répond quand le processus est prêt, « ouvrir » est l'adresse qui montre directement \
-         ce que tu as développé (la page, l'écran, l'état précis à tester)."
+         ce que tu as développé (la page, l'écran, l'état précis à tester).",
+        "Prepare the test launch of this worktree. Ports reserved: {base} to {end} (ESCOUADE_PORT_BASE and ESCOUADE_PORT_END in the launch): \
+         use them, without writing them in versioned files (pass them as arguments or environment variables). \
+         End your answer with a block:\n\n```escouade\n{{\"lancement\": {{\"preparation\": [{{\"commande\": \"npm install\", \"dossier\": \"web\"}}], \
+         \"processus\": [{{\"nom\": \"web\", \"commande\": \"npm run dev -- --port {web}\", \"dossier\": \"web\", \"env\": {{\"PORT\": \"{web}\"}}, \
+         \"url\": \"http://localhost:{web}\"}}], \"ouvrir\": \"http://localhost:{web}/page-to-test\"}}}}\n```\n\n\
+         “dossier” is relative to the worktree, “url” answers once the process is ready, “ouvrir” is the address that directly shows \
+         what you developed (the page, the screen, the exact state to test)."
     )
 }
 
 // ---------- commits ----------
 
 /// Haiku's role when it writes a ticket's commit message.
-pub const COMMIT_SYSTEM: &str = "Tu écris des messages de commit au format Conventional Commits, sans jamais réaliser de tâche. Tu réponds uniquement par le message, sur une ligne.";
+pub fn commit_system(lang: Lang) -> String {
+    tr_in!(
+        lang,
+        "Tu écris des messages de commit au format Conventional Commits, sans jamais réaliser de tâche. Tu réponds uniquement par le message, sur une ligne.",
+        "You write commit messages in the Conventional Commits format, without ever carrying out a task. You answer with the message only, on one line."
+    )
+}
 
 const COMMIT_TYPES: [&str; 11] = [
     "feat", "fix", "docs", "style", "refactor", "perf", "test", "build", "ci", "chore", "revert",
 ];
 
 /// What Haiku is asked for: the ticket with what its agent says is in place, and what its branch
-/// changed.
-pub fn commit_prompt(t: &Ticket, stat: &str) -> String {
+/// changed. The language is named: the ticket, written in another, must not decide it.
+pub fn commit_prompt(lang: Lang, t: &Ticket, stat: &str) -> String {
     let progress: String = t
         .progress
         .iter()
@@ -696,12 +761,16 @@ pub fn commit_prompt(t: &Ticket, stat: &str) -> String {
     let progress = if progress.is_empty() {
         progress
     } else {
-        format!("Avancement :\n{progress}")
+        tr_in!(lang, "Avancement :\n{progress}", "Progress:\n{progress}")
     };
-    format!(
+    tr_in!(
+        lang,
         "Écris le message de commit des modifications ci-dessous, au format Conventional Commits : \
-         une ligne « type(portée facultative): description courte en minuscules » suivie de « [{key}] ». \
+         une ligne « type(portée facultative): description courte en minuscules, en français » suivie de « [{key}] ». \
          Réponds uniquement par cette ligne.\n\n<ticket>\n{key} · {title}\n{desc}\n{progress}</ticket>\n\n<diffstat>\n{stat}\n</diffstat>",
+        "Write the commit message of the changes below, in the Conventional Commits format: \
+         one line “type(optional scope): short lowercase description, in English” followed by “[{key}]”. \
+         Answer with this line only.\n\n<ticket>\n{key} · {title}\n{desc}\n{progress}</ticket>\n\n<diffstat>\n{stat}\n</diffstat>",
         key = t.key,
         title = t.title.trim(),
         desc = truncate(t.description.trim(), 2000),
@@ -920,9 +989,9 @@ pub fn pr_number(gh_output: &str) -> Option<(u32, String)> {
     })
 }
 
-/// A PR's description: the ticket's, what its agent says it did (when it said), then its
-/// criteria as a checklist.
-pub fn pr_body(t: &Ticket) -> String {
+/// A PR's description, in `lang`: the ticket's, what its agent says it did (when it said), then
+/// its criteria as a checklist.
+pub fn pr_body(lang: Lang, t: &Ticket) -> String {
     let mut parts = Vec::new();
     if !t.description.trim().is_empty() {
         parts.push(t.description.trim().to_string());
@@ -935,14 +1004,20 @@ pub fn pr_body(t: &Ticket) -> String {
         .map(|p| format!("- {p}"))
         .collect();
     if !done.is_empty() {
-        parts.push(format!("Ce qui a été fait :\n{}", done.join("\n")));
+        let done = done.join("\n");
+        parts.push(tr_in!(
+            lang,
+            "Ce qui a été fait :\n{done}",
+            "What was done:\n{done}"
+        ));
     }
-    let list: Vec<String> = t
+    let list = t
         .criteria
         .iter()
         .map(|c| format!("- [{}] {}", if c.ok { "x" } else { " " }, c.text))
-        .collect();
-    parts.push(format!("Critères :\n{}", list.join("\n")));
+        .collect::<Vec<_>>()
+        .join("\n");
+    parts.push(tr_in!(lang, "Critères :\n{list}", "Criteria:\n{list}"));
     parts.join("\n\n")
 }
 
@@ -980,8 +1055,22 @@ fn one_line(s: &str, max: usize) -> String {
 /// What the protocol may weigh as a command-line argument, once escaped (see `escaped_len`).
 /// cmd.exe takes 8191 characters for the whole command line; the rest goes to the other arguments.
 pub(crate) const PROTOCOL_BUDGET: usize = 6000;
+
+/// What goes between two criteria of the protocol, with the punctuation of `lang`.
+fn between(lang: Lang) -> &'static str {
+    match lang {
+        Lang::Fr => " ; ",
+        Lang::En => "; ",
+    }
+}
+
 /// Ends the criteria when some did not fit.
-const MORE: &str = " ; …";
+fn more(lang: Lang) -> &'static str {
+    match lang {
+        Lang::Fr => " ; …",
+        Lang::En => "; …",
+    }
+}
 
 /// What `s` weighs as an argument of a `.cmd`: Rust escapes it for cmd.exe, where `%` becomes a
 /// longer sequence (8 characters) and `"` is doubled, as are the backslashes just before it (and
@@ -997,10 +1086,11 @@ pub(crate) fn escaped_len(s: &str) -> usize {
         .sum()
 }
 
-/// The protocol around `criteria`, already joined: with the reserved ports and the recipe asked
-/// for them, or isola's services when `isola` runs the worktree's.
-fn protocol(t: &Ticket, criteria: &str, ports: Option<u16>, isola: bool) -> String {
-    let mut p = format!(
+/// The protocol around `criteria`, already joined, in `lang`: with the reserved ports and the
+/// recipe asked for them, or isola's services when `isola` runs the worktree's.
+fn protocol(lang: Lang, t: &Ticket, criteria: &str, ports: Option<u16>, isola: bool) -> String {
+    let mut p = tr_in!(
+        lang,
         "Tu travailles en autonomie sur le ticket {key} « {title} » d'Escouade. \
          Critères d'acceptation ({n}) : {criteria}. \
          Vérifie toi-même chaque critère (tests, exécution) avant de le déclarer atteint. \
@@ -1012,13 +1102,25 @@ fn protocol(t: &Ticket, criteria: &str, ports: Option<u16>, isola: bool) -> Stri
          \"avancement\": [\"Tokens d'accès signés\", \"Middleware réécrit\", \"Adaptateur des sessions\"]}} \
          avec un élément par critère dans \"criteres\" (n à partir de 1). \
          Ajoute au bilan « avancement » : la liste succincte (3 à 8 éléments courts) des fonctionnalités en place jusque-là.",
+        "You work on your own on Escouade ticket {key} “{title}”. \
+         Acceptance criteria ({n}): {criteria}. \
+         Check each criterion yourself (tests, runs) before declaring it met. \
+         Don’t commit the files copied from the project (.env…). \
+         If you need a decision, ask the question with the question tool. \
+         At the end of EVERY answer, finish with a code block opened by ```escouade and closed by ``` \
+         that holds a JSON {{\"criteres\": [{{\"n\": 1, \"ok\": true, \"note\": \"checked by …\"}}, \
+         {{\"n\": 2, \"ok\": false, \"note\": \"what is missing\"}}], \
+         \"avancement\": [\"Signed access tokens\", \"Middleware rewritten\", \"Session adapter\"]}} \
+         with one item per criterion in \"criteres\" (n from 1). \
+         Add “avancement” to the report: the brief list (3 to 8 short items) of the features in place so far.",
         key = t.key,
         title = one_line(&t.title, 200),
         n = t.criteria.len(),
     );
     if let Some(base) = ports {
         let (end, web) = (base.saturating_add(9), base.saturating_add(1));
-        p.push_str(&format!(
+        p.push_str(&tr_in!(
+            lang,
             " Ports réservés à ce worktree : {base} à {end} (ESCOUADE_PORT_BASE et ESCOUADE_PORT_END dans ses lancements de test) ; \
              ne les écris pas dans des fichiers versionnés, passe-les en arguments ou en variables d'environnement. \
              Au plus tard quand tous les critères sont atteints, ajoute au JSON une clé \"lancement\" qui dit comment lancer \
@@ -1026,15 +1128,28 @@ fn protocol(t: &Ticket, criteria: &str, ports: Option<u16>, isola: bool) -> Stri
              \"processus\": [{{\"nom\": \"web\", \"commande\": \"npm run dev -- --port {web}\", \"dossier\": \"web\", \
              \"env\": {{\"PORT\": \"{web}\"}}, \"url\": \"http://localhost:{web}\"}}], \"ouvrir\": \"http://localhost:{web}/page-de-la-fonctionnalite\"}} : \
              « dossier » est relatif au worktree, « url » répond quand le processus est prêt, « ouvrir » est l'adresse qui montre \
-             directement la fonctionnalité développée (la page, l'écran, l'état précis à tester)."
+             directement la fonctionnalité développée (la page, l'écran, l'état précis à tester).",
+            " Ports reserved for this worktree: {base} to {end} (ESCOUADE_PORT_BASE and ESCOUADE_PORT_END in its test launches); \
+             don’t write them in versioned files, pass them as arguments or environment variables. \
+             At the latest when every criterion is met, add to the JSON a key \"lancement\" that says how to launch \
+             this worktree to test it, for example \"lancement\": {{\"preparation\": [{{\"commande\": \"npm install\", \"dossier\": \"web\"}}], \
+             \"processus\": [{{\"nom\": \"web\", \"commande\": \"npm run dev -- --port {web}\", \"dossier\": \"web\", \
+             \"env\": {{\"PORT\": \"{web}\"}}, \"url\": \"http://localhost:{web}\"}}], \"ouvrir\": \"http://localhost:{web}/feature-page\"}}: \
+             “dossier” is relative to the worktree, “url” answers once the process is ready, “ouvrir” is the address that directly \
+             shows the feature developed (the page, the screen, the exact state to test)."
         ));
     } else if isola {
-        p.push_str(
+        p.push_str(&tr_in!(
+            lang,
             " isola gère les services de ce worktree (.isola.toml) : « isola up » les lance sur leurs propres ports, \
              « isola ls --json » donne leurs adresses, « isola down » les arrête ; ne choisis aucun port toi-même. \
-             Au plus tard quand tous les critères sont atteints, ajoute au JSON une clé \"lancement\": {\"ouvrir\": \"<adresse>\"} \
+             Au plus tard quand tous les critères sont atteints, ajoute au JSON une clé \"lancement\": {{\"ouvrir\": \"<adresse>\"}} \
              avec l'adresse isola qui montre directement la fonctionnalité développée (la page, l'écran, l'état précis à tester).",
-        );
+            " isola runs the services of this worktree (.isola.toml): “isola up” starts them on their own ports, \
+             “isola ls --json” gives their addresses, “isola down” stops them; don’t pick any port yourself. \
+             At the latest when every criterion is met, add to the JSON a key \"lancement\": {{\"ouvrir\": \"<address>\"}} \
+             with the isola address that directly shows the feature developed (the page, the screen, the exact state to test)."
+        ));
     }
     p
 }
@@ -1042,39 +1157,40 @@ fn protocol(t: &Ticket, criteria: &str, ports: Option<u16>, isola: bool) -> Stri
 /// The ticket's protocol, appended to Claude Code's system prompt (`--append-system-prompt`), so
 /// that it outlives compaction and resumes. On one line: it is a command-line argument, which a
 /// `.cmd` (npm's claude.cmd) cannot take with line breaks. Once escaped for cmd.exe it weighs at
-/// most `PROTOCOL_BUDGET`: the criteria that do not fit are replaced by a "…".
+/// most `PROTOCOL_BUDGET`: the criteria that do not fit are replaced by a "…". In French here
+/// (most tests read it so); `protocol_prompt_for` writes it in any language.
 #[cfg(test)]
 pub fn protocol_prompt(t: &Ticket, ports: Option<u16>) -> String {
-    protocol_prompt_for(t, ports, false)
+    protocol_prompt_for(Lang::Fr, t, ports, false)
 }
 
-/// `protocol_prompt`, for a worktree whose services isola runs when `isola`.
-pub fn protocol_prompt_for(t: &Ticket, ports: Option<u16>, isola: bool) -> String {
-    let room = PROTOCOL_BUDGET.saturating_sub(escaped_len(&protocol(t, "", ports, isola)));
+/// `protocol_prompt` in `lang`, for a worktree whose services isola runs when `isola`.
+pub fn protocol_prompt_for(lang: Lang, t: &Ticket, ports: Option<u16>, isola: bool) -> String {
+    let room = PROTOCOL_BUDGET.saturating_sub(escaped_len(&protocol(lang, t, "", ports, isola)));
     let mut criteria = String::new();
     let mut used = 0;
     for (i, c) in t.criteria.iter().enumerate() {
         let item = format!(
             "{}{}) {}",
-            if i > 0 { " ; " } else { "" },
+            if i > 0 { between(lang) } else { "" },
             i + 1,
             one_line(&c.text, 200)
         );
         let weight = escaped_len(&item);
         // Room is kept for the "…" unless this is the last criterion.
-        let more = if i + 1 < t.criteria.len() {
-            escaped_len(MORE)
+        let more_weight = if i + 1 < t.criteria.len() {
+            escaped_len(more(lang))
         } else {
             0
         };
-        if used + weight + more > room {
-            criteria.push_str(MORE);
+        if used + weight + more_weight > room {
+            criteria.push_str(more(lang));
             break;
         }
         used += weight;
         criteria.push_str(&item);
     }
-    protocol(t, &criteria, ports, isola)
+    protocol(lang, t, &criteria, ports, isola)
 }
 
 #[cfg(test)]
@@ -1219,7 +1335,7 @@ mod tests {
         let (end, r) = finished(
             r#"{"criteres": [{"n": 1, "ok": true}, {"n": 2, "ok": true, "note": "tests verts"}]}"#,
         );
-        let next = turn_end(&mut t, &end, r.as_ref(), 100);
+        let next = turn_end(Lang::Fr, &mut t, &end, r.as_ref(), 100);
         assert_eq!(
             (t.column, t.partial, t.review_at),
             (Column::Review, false, Some(100))
@@ -1242,16 +1358,16 @@ mod tests {
         );
         // Its first loop under way, a loop of an earlier round counted already.
         t.loops = 2;
-        let next = turn_end(&mut t, &end, r.as_ref(), 1);
+        let next = turn_end(Lang::Fr, &mut t, &end, r.as_ref(), 1);
         assert_eq!((t.iteration, t.loops), (2, 3));
         // A criterion left out counts as missing.
         assert_eq!(
             next.send.as_deref(),
             Some("Boucle 2/3. Critères non atteints : 2 (reste la rotation), 4. Continue jusqu'à les atteindre, puis termine par le bilan.")
         );
-        turn_end(&mut t, &end, r.as_ref(), 2);
+        turn_end(Lang::Fr, &mut t, &end, r.as_ref(), 2);
         assert_eq!((t.iteration, t.loops), (3, 4));
-        let next = turn_end(&mut t, &end, r.as_ref(), 3);
+        let next = turn_end(Lang::Fr, &mut t, &end, r.as_ref(), 3);
         assert_eq!((t.column, t.partial, t.loops), (Column::Review, true, 4));
         assert!(next.ready && next.send.is_none());
     }
@@ -1260,28 +1376,31 @@ mod tests {
     fn a_missing_report_is_asked_for_once_then_blocks() {
         let mut t = ticket(1, 5);
         let end = TurnEnd::Finished("Fini.".into());
-        let next = turn_end(&mut t, &end, None, 1);
-        assert_eq!(next.send.as_deref(), Some(REMINDER));
+        let next = turn_end(Lang::Fr, &mut t, &end, None, 1);
+        assert_eq!(next.send.as_deref(), Some(reminder(Lang::Fr).as_str()));
         assert_eq!((t.iteration, t.blocked.as_deref()), (1, None));
-        let next = turn_end(&mut t, &end, None, 2);
+        let next = turn_end(Lang::Fr, &mut t, &end, None, 2);
         assert_eq!(t.blocked.as_deref(), Some("Bilan des critères manquant"));
         assert!(next.blocked && next.send.is_none());
         // A report with no criteria (a launch recipe alone) is no report either.
         let mut t = ticket(1, 5);
         let (end, r) = finished("{}");
         assert_eq!(
-            turn_end(&mut t, &end, r.as_ref(), 1).send.as_deref(),
-            Some(REMINDER)
+            turn_end(Lang::Fr, &mut t, &end, r.as_ref(), 1)
+                .send
+                .as_deref(),
+            Some(reminder(Lang::Fr).as_str())
         );
     }
 
     #[test]
     fn a_stop_or_an_error_blocks_and_the_usage_limit_waits() {
         let mut t = ticket(1, 5);
-        assert!(turn_end(&mut t, &TurnEnd::Interrupted, None, 1).blocked);
+        assert!(turn_end(Lang::Fr, &mut t, &TurnEnd::Interrupted, None, 1).blocked);
         assert_eq!(t.blocked.as_deref(), Some("Interrompu"));
         let mut t = ticket(1, 5);
         turn_end(
+            Lang::Fr,
             &mut t,
             &TurnEnd::Error("\nAPI Error: 500\nretry".into()),
             None,
@@ -1289,11 +1408,11 @@ mod tests {
         );
         assert_eq!(t.blocked.as_deref(), Some("Erreur : API Error: 500"));
         let mut t = ticket(1, 5);
-        turn_end(&mut t, &TurnEnd::Error(String::new()), None, 1);
+        turn_end(Lang::Fr, &mut t, &TurnEnd::Error(String::new()), None, 1);
         assert_eq!(t.blocked.as_deref(), Some("Erreur : erreur inconnue"));
         let mut t = ticket(1, 5);
         assert_eq!(
-            turn_end(&mut t, &TurnEnd::Limited, None, 1),
+            turn_end(Lang::Fr, &mut t, &TurnEnd::Limited, None, 1),
             Next::default()
         );
         assert_eq!((t.column, t.blocked.clone()), (Column::Doing, None));
@@ -1304,10 +1423,13 @@ mod tests {
         let mut t = ticket(1, 5);
         t.blocked = Some("Interrompu".into());
         let (end, r) = finished(r#"{"criteres": [{"n": 1, "ok": true}]}"#);
-        turn_end(&mut t, &end, r.as_ref(), 1);
+        turn_end(Lang::Fr, &mut t, &end, r.as_ref(), 1);
         assert_eq!((t.blocked.clone(), t.column), (None, Column::Review));
         let (end, r) = finished(r#"{"criteres": [{"n": 1, "ok": false}]}"#);
-        assert_eq!(turn_end(&mut t, &end, r.as_ref(), 2), Next::default());
+        assert_eq!(
+            turn_end(Lang::Fr, &mut t, &end, r.as_ref(), 2),
+            Next::default()
+        );
         assert_eq!(t.column, Column::Review);
     }
 
@@ -1753,42 +1875,193 @@ mod tests {
         let mut t = ticket(2, 5);
         t.description = "Contexte : l'API publique.".into();
         assert_eq!(
-            first_message(&t),
+            first_message(Lang::Fr, &t),
             "Ticket ATL-42 : Limiter les tentatives\n\nContexte : l'API publique.\n\nCritères d'acceptation :\n1. critère 1\n2. critère 2\n\nBoucle 1/5. Travaille jusqu'à atteindre tous les critères, puis termine par le bilan."
         );
         assert_eq!(
-            resume_message("ATL-42"),
+            resume_message(Lang::Fr, "ATL-42"),
             "Reprends le ticket ATL-42 là où tu en étais, puis termine par le bilan."
         );
         assert_eq!(
-            restart_message("ATL-42"),
+            restart_message(Lang::Fr, "ATL-42"),
             "L'app a redémarré pendant ton travail sur ATL-42 : reprends là où tu en étais, puis termine par le bilan."
         );
         assert_eq!(
-            reject_message("ATL-42", " le bouton est mal placé. "),
+            reject_message(Lang::Fr, "ATL-42", " le bouton est mal placé. "),
             "Retour de test sur ATL-42 : le bouton est mal placé. Corrige, revérifie tous les critères, puis termine par le bilan."
         );
         assert_eq!(
-            tests_failed_message("npm test", "1 failed"),
+            tests_failed_message(Lang::Fr, "npm test", "1 failed"),
             "Les tests (`npm test`) échouent :\n\n```\n1 failed\n```\n\nCorrige, revérifie les critères, puis termine par le bilan."
         );
         assert_eq!(
-            conflict_message("main", &["src/a.ts".into(), "src/b.ts".into()]),
+            conflict_message(Lang::Fr, "main", &["src/a.ts".into(), "src/b.ts".into()]),
             "Le merge de main dans ta branche a des conflits sur : src/a.ts, src/b.ts. Résous-les, commite le merge, revérifie les critères, puis termine par le bilan."
         );
         assert_eq!(
-            conflict_message("main", &[]),
+            conflict_message(Lang::Fr, "main", &[]),
             "J'ai mergé main dans ta branche, sans conflit. Revérifie les critères, puis termine par le bilan."
         );
         assert_eq!(
-            rebase_message("main"),
+            rebase_message(Lang::Fr, "main"),
             "Rebase ta branche sur main et résous ses conflits, puis revérifie les critères et termine par le bilan."
+        );
+    }
+
+    /// `ticket`, written in English (what an English text is checked against has no French).
+    fn ticket_en(n: usize, max: u32) -> Ticket {
+        Ticket {
+            title: "Limit the retries".into(),
+            criteria: (1..=n)
+                .map(|i| Criterion {
+                    text: format!("criterion {i}"),
+                    ..Default::default()
+                })
+                .collect(),
+            ..ticket(n, max)
+        }
+    }
+
+    #[test]
+    fn what_the_agents_are_told_reads_in_english() {
+        use crate::i18n::check::french_in;
+        use Lang::En;
+        let mut t = ticket_en(2, 5);
+        t.description = "Context: the public API.".into();
+        let sent = [
+            (
+                reminder(En),
+                "End with the criteria report (escouade block).",
+            ),
+            (
+                first_message(En, &t),
+                "Ticket ATL-42: Limit the retries\n\nContext: the public API.\n\nAcceptance criteria:\n1. criterion 1\n2. criterion 2\n\nLoop 1/5. Work until every criterion is met, then end with the report.",
+            ),
+            (
+                resume_message(En, "ATL-42"),
+                "Pick up ticket ATL-42 where you left off, then end with the report.",
+            ),
+            (
+                restart_message(En, "ATL-42"),
+                "The app restarted while you were working on ATL-42: pick up where you left off, then end with the report.",
+            ),
+            (
+                reject_message(En, "ATL-42", " the button is misplaced. "),
+                "Test feedback on ATL-42: the button is misplaced. Fix it, check every criterion again, then end with the report.",
+            ),
+            (
+                tests_failed_message(En, "npm test", "1 failed"),
+                "The tests (`npm test`) fail:\n\n```\n1 failed\n```\n\nFix them, check the criteria again, then end with the report.",
+            ),
+            (
+                conflict_message(En, "main", &["src/a.ts".into(), "src/b.ts".into()]),
+                "The merge of main into your branch has conflicts in: src/a.ts, src/b.ts. Resolve them, commit the merge, check the criteria again, then end with the report.",
+            ),
+            (
+                conflict_message(En, "main", &[]),
+                "I merged main into your branch, without conflicts. Check the criteria again, then end with the report.",
+            ),
+            (
+                rebase_message(En, "main"),
+                "Rebase your branch onto main and resolve its conflicts, then check the criteria again and end with the report.",
+            ),
+            (
+                with_setup_failure(
+                    En,
+                    "Go.".into(),
+                    Some("The worktree setup failed on `npm ci` (code 1)."),
+                ),
+                "Go.\n\nThe worktree setup failed on `npm ci` (code 1). Do what it takes to be able to work and test, then go on.",
+            ),
+        ];
+        for (text, expected) in &sent {
+            assert_eq!(text, expected);
+            assert_eq!(french_in(text), None, "{text}");
+        }
+        // A loop asked for by the end of a turn, and the report asked for again, in English.
+        let mut t = ticket_en(2, 5);
+        let (end, r) = finished(
+            r#"{"criteres": [{"n": 1, "ok": true}, {"n": 2, "ok": false, "note": "what is missing"}]}"#,
+        );
+        assert_eq!(
+            turn_end(En, &mut t, &end, r.as_ref(), 1).send.as_deref(),
+            Some("Loop 2/5. Criteria not met: 2 (what is missing). Go on until they are, then end with the report.")
+        );
+        let end = TurnEnd::Finished("Done.".into());
+        assert_eq!(turn_end(En, &mut t, &end, None, 2).send, Some(reminder(En)));
+    }
+
+    #[test]
+    fn the_english_protocol_and_launch_request_ask_for_the_markers_the_board_reads_back() {
+        use crate::i18n::check::{french_in, json_keys};
+        use Lang::{En, Fr};
+        let t = ticket_en(2, 5);
+        for (ports, isola) in [(None, false), (Some(4120), false), (None, true)] {
+            let en = protocol_prompt_for(En, &t, ports, isola);
+            assert_eq!(french_in(&en), None, "{en}");
+            assert!(!en.contains('\n') && en.contains("```escouade"), "{en}");
+            assert!(
+                en.contains("Escouade ticket ATL-42 “Limit the retries”")
+                    && en.contains("Acceptance criteria (2): 1) criterion 1; 2) criterion 2."),
+                "{en}"
+            );
+            // The same keys as the French protocol asks for: the board reads them back.
+            assert_eq!(
+                json_keys(&en),
+                json_keys(&protocol_prompt_for(Fr, &t, ports, isola)),
+                "{en}"
+            );
+            assert!(escaped_len(&en) <= PROTOCOL_BUDGET);
+        }
+        let ports = protocol_prompt_for(En, &t, Some(4120), false);
+        assert!(
+            ports.contains("Ports reserved for this worktree: 4120 to 4129")
+                && ports.contains("http://localhost:4121"),
+            "{ports}"
+        );
+        let m = prepare_message(En, 4120);
+        assert_eq!(french_in(&m), None, "{m}");
+        assert!(
+            m.starts_with("Prepare the test launch of this worktree. Ports reserved: 4120 to 4129"),
+            "{m}"
+        );
+        assert_eq!(json_keys(&m), json_keys(&prepare_message(Fr, 4120)));
+        // Its example is a recipe the app keeps, as the French one.
+        let recipe = parse_report(&m).and_then(|r| r.recipe).expect("{m}");
+        assert_eq!(
+            (recipe.processes[0].url.as_str(), recipe.prepare.len()),
+            ("http://localhost:4121", 1)
+        );
+    }
+
+    #[test]
+    fn a_commit_message_and_a_pull_request_are_asked_for_and_written_in_english() {
+        use crate::i18n::check::french_in;
+        use Lang::En;
+        let mut t = ticket_en(2, 5);
+        assert_eq!(french_in(&commit_system(En)), None);
+        t.progress = vec!["Signed tokens".into(), "Middleware rewritten".into()];
+        let p = commit_prompt(En, &t, " src/a.ts | 3 ++-");
+        assert_eq!(french_in(&p), None, "{p}");
+        assert!(
+            p.contains("in English")
+                && p.contains("[ATL-42]")
+                && p.contains("<ticket>\nATL-42 · Limit the retries")
+                && p.contains("Progress:\n- Signed tokens\n- Middleware rewritten\n")
+                && p.contains("<diffstat>\nsrc/a.ts | 3 ++-\n</diffstat>"),
+            "{p}"
+        );
+        t.description = "Context".into();
+        t.criteria[0].ok = true;
+        assert_eq!(
+            pr_body(En, &t),
+            "Context\n\nWhat was done:\n- Signed tokens\n- Middleware rewritten\n\nCriteria:\n- [x] criterion 1\n- [ ] criterion 2"
         );
     }
 
     #[test]
     fn the_launch_request_gives_the_ports_and_the_form_of_the_recipe() {
-        let m = prepare_message(4120);
+        let m = prepare_message(Lang::Fr, 4120);
         assert!(
             m.starts_with(
                 "Prépare le lancement de test de ce worktree. Ports réservés : 4120 à 4129"
@@ -1810,7 +2083,7 @@ mod tests {
             ("http://localhost:4121", 1)
         );
         // A block read back from a damaged file must not panic on its last port.
-        assert!(prepare_message(u16::MAX).contains("65535 à 65535"));
+        assert!(prepare_message(Lang::Fr, u16::MAX).contains("65535 à 65535"));
     }
 
     #[test]
@@ -1843,7 +2116,7 @@ mod tests {
     #[test]
     fn with_isola_the_protocol_asks_for_the_address_to_open_and_reserves_no_port() {
         let mut t = ticket(2, 5);
-        let p = protocol_prompt_for(&t, None, true);
+        let p = protocol_prompt_for(Lang::Fr, &t, None, true);
         assert!(!p.contains('\n') && !p.contains("Ports réservés"), "{p}");
         assert!(
             p.contains("isola up") && p.contains("isola ls --json"),
@@ -1853,7 +2126,7 @@ mod tests {
         assert!(p.contains("Critères d'acceptation (2) : 1) critère 1 ; 2) critère 2."));
         // Without isola, the same as before.
         assert_eq!(
-            protocol_prompt_for(&t, Some(4120), false),
+            protocol_prompt_for(Lang::Fr, &t, Some(4120), false),
             protocol_prompt(&t, Some(4120))
         );
         // The criteria still give way to the budget.
@@ -1863,22 +2136,23 @@ mod tests {
                 ..Default::default()
             })
             .collect();
-        let p = protocol_prompt_for(&t, None, true);
-        assert!(escaped_len(&p) <= PROTOCOL_BUDGET && p.contains(MORE.trim()));
+        let p = protocol_prompt_for(Lang::Fr, &t, None, true);
+        assert!(escaped_len(&p) <= PROTOCOL_BUDGET && p.contains(more(Lang::Fr).trim()));
     }
 
     #[test]
     fn a_setup_that_failed_is_told_after_the_first_message() {
         let t = ticket(1, 5);
         assert_eq!(
-            with_setup_failure(first_message(&t), None),
-            first_message(&t)
+            with_setup_failure(Lang::Fr, first_message(Lang::Fr, &t), None),
+            first_message(Lang::Fr, &t)
         );
         let m = with_setup_failure(
-            first_message(&t),
+            Lang::Fr,
+            first_message(Lang::Fr, &t),
             Some("La préparation du worktree a échoué sur `npm ci` (code 1)."),
         );
-        assert!(m.starts_with(&first_message(&t)), "{m}");
+        assert!(m.starts_with(&first_message(Lang::Fr, &t)), "{m}");
         assert!(
             m.ends_with("La préparation du worktree a échoué sur `npm ci` (code 1). Fais le nécessaire pour pouvoir travailler et tester, puis continue."),
             "{m}"
@@ -1923,16 +2197,23 @@ mod tests {
                 ..Default::default()
             })
             .collect();
-        for ports in [None, Some(4100)] {
-            let p = protocol_prompt(&t, ports);
-            assert!(!p.contains('\n') && !p.contains('\r'));
-            // cmd.exe takes 8191 characters for the whole command line; the protocol keeps to
-            // 6000 of them and leaves the rest to the other arguments.
-            let weight = escaped_weight(&p);
-            assert!(weight <= 6000, "{ports:?}: {weight}");
-            // The criteria are cut, not dropped: the first is there, the count is the real one.
-            assert!(p.contains("Critères d'acceptation (50) : 1) "), "{ports:?}");
-            assert!(p.contains(" ; …"), "{ports:?}");
+        // In each language the protocol can be written in.
+        let langs = [
+            (Lang::Fr, "Critères d'acceptation (50) : 1) ", " ; …"),
+            (Lang::En, "Acceptance criteria (50): 1) ", "; …"),
+        ];
+        for (lang, count, more) in langs {
+            for ports in [None, Some(4100)] {
+                let p = protocol_prompt_for(lang, &t, ports, false);
+                assert!(!p.contains('\n') && !p.contains('\r'));
+                // cmd.exe takes 8191 characters for the whole command line; the protocol keeps
+                // to 6000 of them and leaves the rest to the other arguments.
+                let weight = escaped_weight(&p);
+                assert!(weight <= 6000, "{lang:?} {ports:?}: {weight}");
+                // The criteria are cut, not dropped: the first is there, the count is the real one.
+                assert!(p.contains(count), "{lang:?} {ports:?}");
+                assert!(p.contains(more), "{lang:?} {ports:?}");
+            }
         }
         // Long accented text weighs its bytes, never less.
         t.title = "é".repeat(300);
@@ -1942,7 +2223,9 @@ mod tests {
                 ..Default::default()
             })
             .collect();
-        assert!(escaped_weight(&protocol_prompt(&t, Some(4100))) <= 6000);
+        for (lang, _, _) in langs {
+            assert!(escaped_weight(&protocol_prompt_for(lang, &t, Some(4100), false)) <= 6000);
+        }
         // A short list is kept whole.
         let mut t = ticket(30, 5);
         t.title = "Court".into();
@@ -1968,6 +2251,9 @@ mod tests {
             assert!(weight <= 6000, "{ports:?}: {weight}");
             assert!(p.contains("Critères d'acceptation (50) : 1) "), "{ports:?}");
             assert!(p.contains(" ; …"), "{ports:?}");
+            let en = protocol_prompt_for(Lang::En, &t, ports, false);
+            assert!(escaped_weight(&en) <= 6000, "{ports:?}");
+            assert!(en.contains("Acceptance criteria (50): 1) ") && en.contains("; …"));
         }
         // Backslashes alone are never doubled by std unless a quote follows; the bound is safe.
         t.criteria = (0..50)
@@ -1977,6 +2263,7 @@ mod tests {
             })
             .collect();
         assert!(escaped_weight(&protocol_prompt(&t, Some(4100))) <= 6000);
+        assert!(escaped_weight(&protocol_prompt_for(Lang::En, &t, Some(4100), false)) <= 6000);
     }
 
     #[test]
@@ -1995,13 +2282,17 @@ mod tests {
         for stop in [TurnEnd::Interrupted, TurnEnd::Error("boom".into())] {
             let mut t = ticket(1, 5);
             let end = TurnEnd::Finished("Fini.".into());
-            let next = turn_end(&mut t, &end, None, 1);
-            assert_eq!(next.send.as_deref(), Some(REMINDER));
+            let next = turn_end(Lang::Fr, &mut t, &end, None, 1);
+            assert_eq!(next.send.as_deref(), Some(reminder(Lang::Fr).as_str()));
             // The reminder's own turn is stopped…
-            assert!(turn_end(&mut t, &stop, None, 2).blocked);
+            assert!(turn_end(Lang::Fr, &mut t, &stop, None, 2).blocked);
             // …then the user resumes: the next turn without a report is asked again, not blocked.
-            let next = turn_end(&mut t, &end, None, 3);
-            assert_eq!(next.send.as_deref(), Some(REMINDER), "{stop:?}");
+            let next = turn_end(Lang::Fr, &mut t, &end, None, 3);
+            assert_eq!(
+                next.send.as_deref(),
+                Some(reminder(Lang::Fr).as_str()),
+                "{stop:?}"
+            );
             assert_eq!((t.blocked.clone(), next.blocked), (None, false), "{stop:?}");
         }
     }
@@ -2028,9 +2319,13 @@ mod tests {
             assert_eq!(parse_report(&block(json)).unwrap().criteria, None, "{json}");
             let mut t = ticket(1, 5);
             let (end, r) = finished(json);
-            let next = turn_end(&mut t, &end, r.as_ref(), 1);
+            let next = turn_end(Lang::Fr, &mut t, &end, r.as_ref(), 1);
             // The reminder, not a loop spent.
-            assert_eq!(next.send.as_deref(), Some(REMINDER), "{json}");
+            assert_eq!(
+                next.send.as_deref(),
+                Some(reminder(Lang::Fr).as_str()),
+                "{json}"
+            );
             assert_eq!((t.iteration, t.reminded), (1, true), "{json}");
         }
         // An empty list is still a (empty) list.
@@ -2149,30 +2444,30 @@ mod tests {
         t.progress = vec!["ancien".into()];
         let (end, r) =
             finished(r#"{"criteres": [{"n": 1, "ok": false}], "avancement": ["x", "y"]}"#);
-        turn_end(&mut t, &end, r.as_ref(), 1);
+        turn_end(Lang::Fr, &mut t, &end, r.as_ref(), 1);
         assert_eq!(t.progress, ["x", "y"]);
         // A report without `avancement` leaves it as it was (a loop, here).
         let (end, r) = finished(r#"{"criteres": [{"n": 1, "ok": false}]}"#);
-        let next = turn_end(&mut t, &end, r.as_ref(), 2);
+        let next = turn_end(Lang::Fr, &mut t, &end, r.as_ref(), 2);
         assert!(next.send.is_some());
         assert_eq!(t.progress, ["x", "y"]);
         // So does one whose `avancement` is not a list, is empty, or has nothing usable in it.
         for bad in [r#""fait""#, "[]", r#"["", 1, null]"#] {
             let json = format!(r#"{{"criteres": [{{"n": 1, "ok": false}}], "avancement": {bad}}}"#);
             let (end, r) = finished(&json);
-            turn_end(&mut t, &end, r.as_ref(), 3);
+            turn_end(Lang::Fr, &mut t, &end, r.as_ref(), 3);
             assert_eq!(t.progress, ["x", "y"], "{bad}");
         }
         // The last one wins, on the turn that sends the ticket to review too.
         let (end, r) = finished(r#"{"criteres": [{"n": 1, "ok": true}], "avancement": ["z"]}"#);
-        turn_end(&mut t, &end, r.as_ref(), 4);
+        turn_end(Lang::Fr, &mut t, &end, r.as_ref(), 4);
         assert_eq!(
             (t.column, t.progress.clone()),
             (Column::Review, vec!["z".to_string()])
         );
         // Neither a ticket no longer "En cours" nor an end without a report touches it.
         let (end, r) = finished(r#"{"criteres": [{"n": 1, "ok": true}], "avancement": ["autre"]}"#);
-        turn_end(&mut t, &end, r.as_ref(), 5);
+        turn_end(Lang::Fr, &mut t, &end, r.as_ref(), 5);
         assert_eq!(t.progress, ["z"]);
         let mut t = ticket(1, 5);
         t.progress = vec!["a".into()];
@@ -2182,7 +2477,7 @@ mod tests {
             TurnEnd::Error("boom".into()),
             TurnEnd::Finished("Fini.".into()),
         ] {
-            turn_end(&mut t, &end, None, 6);
+            turn_end(Lang::Fr, &mut t, &end, None, 6);
             assert_eq!(t.progress, ["a"], "{end:?}");
         }
     }
@@ -2191,8 +2486,8 @@ mod tests {
     fn a_report_with_a_progress_but_no_criteria_still_gives_it_and_is_asked_for_again() {
         let mut t = ticket(1, 5);
         let (end, r) = finished(r#"{"avancement": ["a", "b"]}"#);
-        let next = turn_end(&mut t, &end, r.as_ref(), 1);
-        assert_eq!(next.send.as_deref(), Some(REMINDER));
+        let next = turn_end(Lang::Fr, &mut t, &end, r.as_ref(), 1);
+        assert_eq!(next.send.as_deref(), Some(reminder(Lang::Fr).as_str()));
         assert_eq!((t.iteration, t.reminded), (1, true));
         assert_eq!(t.progress, ["a", "b"]);
     }
@@ -2280,7 +2575,7 @@ mod tests {
         let t = ticket(1, 5);
         assert_eq!(fallback_commit(&t), "feat: Limiter les tentatives [ATL-42]");
         assert_eq!(plain_commit(&t), "ATL-42 Limiter les tentatives");
-        let p = commit_prompt(&t, " src/a.ts | 3 ++-");
+        let p = commit_prompt(Lang::Fr, &t, " src/a.ts | 3 ++-");
         assert!(
             p.contains("<ticket>\nATL-42 · Limiter les tentatives"),
             "{p}"
@@ -2292,13 +2587,13 @@ mod tests {
         // What the agent says is in place goes with the ticket.
         let mut t = t;
         t.progress = vec!["Tokens signés".into(), "Middleware réécrit".into()];
-        let p = commit_prompt(&t, "");
+        let p = commit_prompt(Lang::Fr, &t, "");
         let ticket = &p[p.find("<ticket>").unwrap()..p.find("</ticket>").unwrap()];
         assert!(
             ticket.contains("Avancement :\n- Tokens signés\n- Middleware réécrit\n"),
             "{p}"
         );
-        assert!(!commit_prompt(&ticket_of_progress(&[]), "").contains("Avancement"));
+        assert!(!commit_prompt(Lang::Fr, &ticket_of_progress(&[]), "").contains("Avancement"));
     }
 
     fn ticket_of_progress(items: &[&str]) -> Ticket {
@@ -2517,11 +2812,11 @@ mod tests {
         t.description = "Contexte".into();
         t.criteria[0].ok = true;
         assert_eq!(
-            pr_body(&t),
+            pr_body(Lang::Fr, &t),
             "Contexte\n\nCritères :\n- [x] critère 1\n- [ ] critère 2"
         );
         t.description.clear();
-        assert!(pr_body(&t).starts_with("Critères :"));
+        assert!(pr_body(Lang::Fr, &t).starts_with("Critères :"));
     }
 
     #[test]
@@ -2531,11 +2826,11 @@ mod tests {
         t.criteria[0].ok = true;
         t.progress = vec!["Tokens signés".into(), " Middleware réécrit ".into()];
         assert_eq!(
-            pr_body(&t),
+            pr_body(Lang::Fr, &t),
             "Contexte\n\nCe qui a été fait :\n- Tokens signés\n- Middleware réécrit\n\nCritères :\n- [x] critère 1\n- [ ] critère 2"
         );
         t.description.clear();
-        assert!(pr_body(&t).starts_with("Ce qui a été fait :\n- Tokens signés\n"));
+        assert!(pr_body(Lang::Fr, &t).starts_with("Ce qui a été fait :\n- Tokens signés\n"));
     }
 
     #[test]

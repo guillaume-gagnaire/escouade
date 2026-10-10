@@ -783,6 +783,67 @@ async fn a_ticket_gets_an_agent_on_its_own_branch_and_loops_until_its_criteria_a
 }
 
 #[tokio::test]
+async fn a_ticket_is_told_its_protocol_and_its_loops_in_the_language_of_the_texts_for_claude() {
+    let h = harness("tk-loop-en");
+    let (p, _) = h.project(false).await;
+    h.set_settings(|s| s.claude_language = "en".into());
+    let t = h
+        .core
+        .ticket_create(
+            &p.id,
+            draft("Add the file", &["The file exists", "It says its loop"], 5),
+        )
+        .await
+        .unwrap();
+    h.wait_ticket(&t.id, "ticket to test", |t| t.column == Column::Review)
+        .await;
+    // The fake agent read the English protocol and messages as it reads the French ones.
+    let t = h.ticket(&t.id);
+    assert_eq!((t.iteration, t.partial, t.loops), (2, false, 2));
+    let a = h.agent_of(&t.id);
+    let base = a.port_base.unwrap();
+    let dir = PathBuf::from(a.worktree.unwrap().path);
+    assert_eq!(
+        std::fs::read_to_string(dir.join("dem-1.txt")).unwrap(),
+        "Boucle 2\n"
+    );
+    let argv = h.launches(&dir).pop().unwrap();
+    let i = argv
+        .iter()
+        .position(|x| x == "--append-system-prompt")
+        .unwrap();
+    let protocol = &argv[i + 1];
+    assert!(
+        protocol.starts_with("You work on your own on Escouade ticket DEM-1 “Add the file”.")
+            && protocol
+                .contains("Acceptance criteria (2): 1) The file exists; 2) It says its loop.")
+            && protocol.contains(&format!("Ports reserved for this worktree: {base} to")),
+        "{protocol}"
+    );
+    let sent: Vec<String> = h
+        .stdin_messages(&dir)
+        .iter()
+        .map(|m| {
+            m["message"]["content"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string()
+        })
+        .collect();
+    assert!(
+        sent[0].starts_with("Ticket DEM-1: Add the file\n")
+            && sent[0].ends_with(
+                "Loop 1/5. Work until every criterion is met, then end with the report."
+            ),
+        "{sent:?}"
+    );
+    assert!(
+        sent[1].starts_with("Loop 2/5. Criteria not met: 2 (reste le critère 2)"),
+        "{sent:?}"
+    );
+}
+
+#[tokio::test]
 async fn a_ticket_out_of_loops_goes_to_test_as_a_partial_goal() {
     let h = harness("tk-partial");
     let (p, _) = h.project(false).await;
@@ -4145,6 +4206,35 @@ async fn preparing_a_launch_reserves_ports_and_keeps_the_recipe_the_agent_answer
     let plain = h.core.create_agent(&p.id, None).await.unwrap().meta;
     assert!(h.core.agent_prepare_launch(&plain.id).await.is_err());
     assert_eq!(h.agent(&plain.id).port_base, None);
+}
+
+#[tokio::test]
+async fn an_agent_asked_in_english_to_prepare_its_launch_answers_with_its_recipe_all_the_same() {
+    let h = harness("tk-prepare-en");
+    let (p, _) = h.project(true).await;
+    h.set_settings(|s| s.claude_language = "en".into());
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    h.core.agent_prepare_launch(&a.id).await.unwrap();
+    let base = h.agent(&a.id).port_base.unwrap();
+    h.wait_sent(
+        Path::new(&a.cwd),
+        &format!(
+            "Prepare the test launch of this worktree. Ports reserved: {base} to {}",
+            base + 9
+        ),
+    )
+    .await;
+    h.wait("recipe", |h| h.agent(&a.id).recipe.is_some()).await;
+    // The fake agent's own answer (not the example of the request, which a reply quoting it
+    // would carry).
+    let recipe = h.agent(&a.id).recipe.unwrap();
+    assert_eq!(
+        (
+            recipe.processes[0].command.as_str(),
+            recipe.processes[0].url.clone()
+        ),
+        ("node serveur.js", format!("http://localhost:{}", base + 1))
+    );
 }
 
 /// What the user approves in the test modal: the recipe the agent holds right now.

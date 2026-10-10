@@ -74,9 +74,8 @@ pub fn ui() -> Lang {
     Lang::of_code(UI.load(Ordering::Relaxed))
 }
 
-/// The language of the texts Claude is made to write, and of what agents are told.
-// Allowed unused until the texts for Claude go through `tr_claude!` (then drop the allow).
-#[allow(dead_code)]
+/// The language of the texts Claude is made to write, and of what agents are told. The core reads
+/// its own (`Core::lang().claude`, the same but in tests): this is for what has no core at hand.
 pub fn claude() -> Lang {
     Lang::of_code(CLAUDE.load(Ordering::Relaxed))
 }
@@ -115,6 +114,12 @@ pub fn resolve_with(language: &str, claude_language: &str, system: Lang) -> Lang
         system,
         claude: Lang::named(claude_language).unwrap_or(ui),
     }
+}
+
+/// Whether a setting names a language ("fr", "en") rather than leaving it to another (« Système »,
+/// « Comme l'interface »).
+pub fn names_a_language(value: &str) -> bool {
+    Lang::named(value).is_some()
 }
 
 /// The languages the settings stand for, on this system.
@@ -200,12 +205,73 @@ macro_rules! tr {
 }
 
 /// A text in the language of the texts Claude writes: `tr_claude!("français", "English", args…)`.
-// Allowed unused until the texts for Claude go through it (then drop the allow).
+// Allowed unused, as `tr_n!`: the texts for Claude are all written by functions that take the
+// language (the core's own, `Core::lang().claude`), for their English to be tested, in a core
+// test too. Drop the allow once a text uses it.
 #[allow(unused_macros)]
 macro_rules! tr_claude {
     ($($t:tt)+) => {
         tr_in!($crate::i18n::claude(), $($t)+)
     };
+}
+
+/// What the tests of the texts written for Claude check them with.
+#[cfg(test)]
+pub(crate) mod check {
+    /// The small words French cannot do without, and English never writes.
+    const FRENCH_WORDS: [&str; 33] = [
+        "le", "la", "les", "un", "une", "des", "du", "de", "et", "est", "en", "au", "aux", "ce",
+        "cette", "ces", "dans", "sur", "pour", "avec", "sans", "par", "pas", "ne", "que", "qui",
+        "tu", "ton", "ta", "tes", "ou", "puis", "si",
+    ];
+
+    /// The first sign of French in `text`, if any: a letter English never writes (é, à, ç…),
+    /// French quotes (« »), or one of French's small words. The data a test puts in (a ticket's
+    /// title…) must be English too.
+    pub(crate) fn french_in(text: &str) -> Option<String> {
+        if let Some(c) = text
+            .chars()
+            .find(|c| (c.is_alphabetic() && !c.is_ascii()) || matches!(c, '«' | '»'))
+        {
+            return Some(c.to_string());
+        }
+        text.split(|c: char| !c.is_alphanumeric())
+            .find(|w| FRENCH_WORDS.contains(&w.to_lowercase().as_str()))
+            .map(str::to_string)
+    }
+
+    /// The keys of the JSON written in `text` (`"key":`), in order: what the code reads back in
+    /// Claude's answer must be asked for in the same words whatever the language.
+    pub(crate) fn json_keys(text: &str) -> Vec<String> {
+        let mut keys = Vec::new();
+        let mut rest = text;
+        while let Some(start) = rest.find('"') {
+            let after = &rest[start + 1..];
+            let Some(end) = after.find('"') else { break };
+            let word = &after[..end];
+            rest = &after[end + 1..];
+            if rest.trim_start().starts_with(':')
+                && !word.is_empty()
+                && word.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+            {
+                keys.push(word.to_string());
+            }
+        }
+        keys
+    }
+
+    #[test]
+    fn french_is_told_apart_from_english_and_the_keys_are_read_in_order() {
+        assert_eq!(french_in("Fix the tests, then end with the report."), None);
+        assert_eq!(french_in("“dossier” is relative: don’t…"), None);
+        assert_eq!(french_in("Corrige les tests").as_deref(), Some("les"));
+        assert_eq!(french_in("Ports réservés").as_deref(), Some("é"));
+        assert_eq!(french_in("the « ouvrir » key").as_deref(), Some("«"));
+        assert_eq!(
+            json_keys(r#"{"criteres": [{"n": 1, "note": "a: b"}], "x" : {"PORT": "4121"}}"#),
+            ["criteres", "n", "note", "x", "PORT"]
+        );
+    }
 }
 
 #[cfg(test)]
@@ -252,6 +318,14 @@ mod tests {
             }
         );
         assert_eq!(resolve_with("en", "de", Fr).claude, En);
+    }
+
+    #[test]
+    fn only_french_and_english_name_a_language() {
+        assert!(names_a_language("fr") && names_a_language("en"));
+        for left_to_another in ["ui", "system", "", "de"] {
+            assert!(!names_a_language(left_to_another), "{left_to_another}");
+        }
     }
 
     #[test]
