@@ -9,6 +9,8 @@
 //! tr!("{name} est introuvable", "{name} not found", name = path.display())
 //! tr_claude!("Corrige les tests.", "Fix the tests.")        // the texts for Claude
 //! tr_in!(Lang::En, "{n} agents en attente", "{n} agents waiting", n = n)
+//! // A count: French singular for 0 and 1, English for 1 only (`is_one`).
+//! tr_n!(n, "{n} fichier", "{n} fichiers", "{n} file", "{n} files", n = n)
 //! ```
 //!
 //! Each gives a `String`, its arguments as `format!` takes them (named, positional or captured
@@ -19,6 +21,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::OnceLock;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -79,12 +82,15 @@ pub fn claude() -> Lang {
 }
 
 /// The system's language: French when its first preferred locale is French, English otherwise.
-/// French in tests, whatever the machine's.
+/// Read once per run: a change of the system's language while the app runs (rare, and it often
+/// takes a new session) would otherwise make what the window was told and what a later save
+/// compares disagree. French in tests, whatever the machine's.
 pub fn system() -> Lang {
     if cfg!(test) {
         return Lang::Fr;
     }
-    of_locale(sys_locale::get_locale().as_deref().unwrap_or_default())
+    static SYSTEM: OnceLock<Lang> = OnceLock::new();
+    *SYSTEM.get_or_init(|| of_locale(sys_locale::get_locale().as_deref().unwrap_or_default()))
 }
 
 /// The language of a locale tag (`fr-FR`, `fr_CA`, `en-US`, POSIX `fr_FR.UTF-8`): French when
@@ -146,6 +152,42 @@ macro_rules! tr_in {
             $crate::i18n::Lang::Fr => format!($fr, $($args)+),
             $crate::i18n::Lang::En => format!($en, $($args)+),
         }
+    };
+}
+
+/// Whether `count` takes the singular form (CLDR's « one ») in `lang`, as the window's
+/// `Intl.PluralRules` says: 0 and 1 in French, only 1 in English.
+pub fn is_one(lang: Lang, count: i128) -> bool {
+    match lang {
+        Lang::Fr => count.unsigned_abs() <= 1,
+        Lang::En => count.unsigned_abs() == 1,
+    }
+}
+
+/// A text that depends on a count, in `lang`: `tr_n_in!(lang, count, "fr singulier",
+/// "fr pluriel", "en singular", "en plural", args…)`. `count` (any integer) picks the form by the
+/// rule of the language (`is_one`); it is not an argument of the texts by itself: pass it
+/// (`n = count`) or capture it. Every form writes every argument, « {n} file » and not
+/// « one file » (`format!` refuses one left out).
+macro_rules! tr_n_in {
+    ($lang:expr, $count:expr, $fr_one:literal, $fr_other:literal, $en_one:literal, $en_other:literal $(, $($args:tt)+)?) => {{
+        let lang = $lang;
+        match (lang, $crate::i18n::is_one(lang, ($count) as i128)) {
+            ($crate::i18n::Lang::Fr, true) => format!($fr_one $(, $($args)+)?),
+            ($crate::i18n::Lang::Fr, false) => format!($fr_other $(, $($args)+)?),
+            ($crate::i18n::Lang::En, true) => format!($en_one $(, $($args)+)?),
+            ($crate::i18n::Lang::En, false) => format!($en_other $(, $($args)+)?),
+        }
+    }};
+}
+
+/// A text that depends on a count, in the interface's language: `tr_n!(count, "fr singulier",
+/// "fr pluriel", "en singular", "en plural", args…)`.
+// Allowed unused until the backend's texts go through it (then drop the allow).
+#[allow(unused_macros)]
+macro_rules! tr_n {
+    ($($t:tt)+) => {
+        tr_n_in!($crate::i18n::ui(), $($t)+)
     };
 }
 
@@ -283,5 +325,74 @@ mod tests {
             1
         );
         assert_eq!((text.as_str(), i), ("1 file", 1));
+    }
+
+    #[test]
+    fn a_language_is_kept_as_its_code_and_read_back() {
+        // What `set` stores and `ui()` / `claude()` read (`set` itself does nothing in tests).
+        for lang in [Fr, En] {
+            assert_eq!(Lang::of_code(lang.code()), lang);
+        }
+        assert_eq!(Lang::of_code(7), Fr);
+    }
+
+    #[test]
+    fn french_puts_0_and_1_in_the_singular_english_only_1() {
+        let one = |lang| [0, 1, 2, 5, -1].map(|n| is_one(lang, n));
+        assert_eq!(one(Fr), [true, true, false, false, true]);
+        assert_eq!(one(En), [false, true, false, false, true]);
+    }
+
+    #[test]
+    fn a_count_picks_the_form_of_its_language() {
+        let files = |lang, n: usize| {
+            tr_n_in!(
+                lang,
+                n,
+                "{n} fichier commité",
+                "{n} fichiers commités",
+                "{n} file committed",
+                "{n} files committed",
+                n = n
+            )
+        };
+        assert_eq!(
+            [0, 1, 2].map(|n| files(Fr, n)),
+            [
+                "0 fichier commité",
+                "1 fichier commité",
+                "2 fichiers commités"
+            ]
+        );
+        assert_eq!(
+            [0, 1, 2].map(|n| files(En, n)),
+            ["0 files committed", "1 file committed", "2 files committed"]
+        );
+        // The count captured from the scope, another argument besides; the count an expression of
+        // any integer type, evaluated once.
+        let branch = "main";
+        let mut calls = 0;
+        let mut count = || {
+            calls += 1;
+            1u64
+        };
+        assert_eq!(
+            tr_n_in!(
+                En,
+                count(),
+                "{n} commit à tirer sur {branch}",
+                "{n} commits à tirer sur {branch}",
+                "{n} commit to pull on {branch}",
+                "{n} commits to pull on {branch}",
+                n = 1
+            ),
+            "1 commit to pull on main"
+        );
+        assert_eq!(calls, 1);
+        let n = 3;
+        assert_eq!(
+            tr_n_in!(Fr, n, "{n} agent", "{n} agents", "{n} agent", "{n} agents"),
+            "3 agents"
+        );
     }
 }

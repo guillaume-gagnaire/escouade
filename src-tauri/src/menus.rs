@@ -32,14 +32,12 @@ pub fn tray_labels(lang: Lang) -> TrayLabels {
 pub fn tray_tooltip(lang: Lang, waiting: usize) -> String {
     match waiting {
         0 => "Escouade".into(),
-        1 => tr_in!(
+        n => tr_n_in!(
             lang,
-            "Escouade — 1 agent en attente",
-            "Escouade — 1 agent waiting"
-        ),
-        n => tr_in!(
-            lang,
+            n,
+            "Escouade — {n} agent en attente",
             "Escouade — {n} agents en attente",
+            "Escouade — {n} agent waiting",
             "Escouade — {n} agents waiting"
         ),
     }
