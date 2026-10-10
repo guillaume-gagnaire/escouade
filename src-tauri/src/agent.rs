@@ -1396,6 +1396,14 @@ fn capped(text: &str, cut: &mut bool) -> String {
     text.chars().take(MAX_PENDING_FIELD).collect()
 }
 
+/// How Claude Code names the tools of Escouade's own MCP server: `mcp__escouade__<tool>`.
+const ESCOUADE_TOOLS: &str = "mcp__escouade__";
+
+/// What a tool of Escouade is about, first found first (`toolArg` in `src/lib/tools.ts` reads
+/// them in the same order): the ticket it makes, the ticket or the agent it acts on, what an agent
+/// it starts is told, the line an agent reports, the project it reads.
+const ESCOUADE_MAIN_ARGS: &[&str] = &["title", "ticket", "agent", "message", "line", "project"];
+
 /// What a tool is asked to act on, as the conversation's card sums it up (`toolArg` in
 /// `src/lib/tools.ts`): the command, the file from the agent's folder, the search…, its line
 /// breaks kept. `SUMMED_UP` there lists the tools whose summary says all a permission asks:
@@ -1437,6 +1445,13 @@ fn tool_arg_in(lang: Lang, tool: &str, input: &Value, cwd: &str) -> String {
         "Skill" => input["skill"]
             .as_str()
             .or(input["command"].as_str())
+            .unwrap_or_default()
+            .to_string(),
+        // A tool of Escouade's own server: its main argument (the ticket's title, the ticket, the
+        // agent…), whatever comes first in what Claude sends. Its card lists them all.
+        t if t.starts_with(ESCOUADE_TOOLS) => ESCOUADE_MAIN_ARGS
+            .iter()
+            .find_map(|k| input[*k].as_str())
             .unwrap_or_default()
             .to_string(),
         // The first text of its input (the keys in their order, as the card reads them).
@@ -1799,6 +1814,80 @@ mod tests {
             sent["requests"][2]["questions"][0]["options"][1],
             "Postgres"
         );
+    }
+
+    #[test]
+    fn the_view_names_what_a_tool_of_escouade_acts_on_its_title_ticket_or_agent() {
+        use crate::i18n::Lang::Fr;
+        let arg = |tool: &str, input: Value| {
+            tool_arg_in(Fr, &format!("mcp__escouade__{tool}"), &input, "C:/p")
+        };
+        // Its main argument, whatever comes first in what Claude sends.
+        assert_eq!(
+            arg(
+                "create_ticket",
+                json!({"project":"demo","title":"Corriger la connexion","description":"Le jeton expire"})
+            ),
+            "Corriger la connexion"
+        );
+        assert_eq!(
+            arg(
+                "update_ticket",
+                json!({"description":"Plus court","ticket":"DEM-4"})
+            ),
+            "DEM-4"
+        );
+        assert_eq!(arg("start_ticket", json!({"ticket":"DEM-3"})), "DEM-3");
+        assert_eq!(
+            arg(
+                "send_message",
+                json!({"text":"Relis le test","agent":"fix-login"})
+            ),
+            "fix-login"
+        );
+        assert_eq!(
+            arg(
+                "get_agent_summary",
+                json!({"project":"demo","agent":"fix-login"})
+            ),
+            "fix-login"
+        );
+        // Without one: what the agent is told, its line, its project.
+        assert_eq!(
+            arg(
+                "create_agent",
+                json!({"project":"demo","message":"Écris la doc","worktree":true})
+            ),
+            "Écris la doc"
+        );
+        assert_eq!(
+            arg("report_progress", json!({"line":"Tests verts"})),
+            "Tests verts"
+        );
+        assert_eq!(
+            arg("list_tickets", json!({"project":"demo","column":"todo"})),
+            "demo"
+        );
+        assert_eq!(arg("list_projects", json!({})), "");
+        // Another server's tool: its first text, as before.
+        assert_eq!(
+            tool_arg_in(
+                Fr,
+                "mcp__github__create_issue",
+                &json!({"title":"Bug"}),
+                "C:/p"
+            ),
+            "Bug"
+        );
+        // And the overview is told it.
+        let mut a = rt();
+        asks(
+            &mut a,
+            "r1",
+            json!({"tool_name":"mcp__escouade__create_ticket","tool_use_id":"t1",
+                "input":{"project":"demo","title":"Corriger la connexion"}}),
+        );
+        assert_eq!(a.view().requests[0].arg, "Corriger la connexion");
     }
 
     #[test]

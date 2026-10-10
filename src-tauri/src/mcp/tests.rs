@@ -27,7 +27,7 @@ pub(super) const EXPOSED: &[&str] = &[
 ];
 
 /// The test's own tool, beside them in tests (`tools::Tools::test_router`).
-const TEST_TOOL: &str = "whoami";
+pub(super) const TEST_TOOL: &str = "whoami";
 
 /// What a tool's name may never hold.
 const FORBIDDEN: &[&str] = &[
@@ -50,7 +50,7 @@ const FORBIDDEN: &[&str] = &[
 ];
 
 /// The `initialize` of Claude Code 2.1.289 (the version of the handshake it falls back on).
-const INITIALIZE: &str = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"claude-code","version":"2.1.289"}}}"#;
+pub(super) const INITIALIZE: &str = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"claude-code","version":"2.1.289"}}}"#;
 
 fn url(port: u16) -> String {
     format!("http://127.0.0.1:{port}/mcp")
@@ -83,7 +83,7 @@ fn http() -> reqwest::Client {
 
 /// A raw POST of `body` to the server, with `headers` besides what MCP asks: its status and its
 /// text.
-async fn post(port: u16, headers: &[(&str, &str)], body: &str) -> (u16, String) {
+pub(super) async fn post(port: u16, headers: &[(&str, &str)], body: &str) -> (u16, String) {
     let mut req = http()
         .post(url(port))
         .header("content-type", "application/json")
@@ -147,7 +147,7 @@ fn refusals(h: &Harness) -> Vec<ActivityEntry> {
 }
 
 /// What a tool's call answered, as text.
-fn answer_text(result: &rmcp::model::CallToolResult) -> String {
+pub(super) fn answer_text(result: &rmcp::model::CallToolResult) -> String {
     serde_json::to_value(result).unwrap()["content"][0]["text"]
         .as_str()
         .unwrap()

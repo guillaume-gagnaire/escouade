@@ -78,9 +78,28 @@ Escouade sert ses outils à Claude Code (un terminal, un autre outil, ses propre
   - un en-tête `Origin` (une page web) → 403 ;
   - `Authorization: Bearer <jeton>` absent ou inconnu → 401 avec `WWW-Authenticate: Bearer` (comparaison à temps constant) ;
   - un autre chemin que `/mcp` → 404.
-- Jetons : celui de Claude hors Escouade (32 octets aléatoires en base64url, dans le trousseau, entrée `mcp`, ou dans `mcp-token.json`, lisible par son seul propriétaire, quand le trousseau refuse) ; celui de chaque agent d'Escouade, en mémoire seulement. Le jeton dit qui appelle : un outil le sait (`Caller`).
+- Jetons : celui de Claude hors Escouade (32 octets aléatoires en base64url, dans le trousseau, entrée `mcp`, ou dans `mcp-token.json`, lisible par son seul propriétaire, quand le trousseau refuse) ; celui de chaque process d'un agent d'Escouade, en mémoire et dans le fichier de config que ce process reçoit (voir « Les agents d'Escouade »). Le jeton dit qui appelle : un outil le sait (`Caller`).
 - Une connexion a 10 s pour envoyer les en-têtes d'une requête (et reste 10 s au plus sans requête) ; 64 connexions à la fois au plus, les suivantes attendent.
 - Journal d'activité : chaque appel d'outil (refus et erreurs compris, y compris un outil inconnu ou des arguments qui ne collent pas au schéma) et chaque requête refusée, sans jamais les jetons ; les 200 derniers, en mémoire.
+
+### Les agents d'Escouade
+
+Ce que reçoit chaque lancement du process `claude` d'un agent (`Core::agent_access`, à la fin des arguments : les deux options prennent plusieurs valeurs) :
+
+| Serveur | Projet (« Les agents peuvent utiliser Escouade ») | Arguments |
+|---|---|---|
+| arrêté (ou pas encore démarré) | — | rien : lancé comme avant |
+| en marche | activé | `--mcp-config <dossier de données>/mcp/<id de l'agent>.json` |
+| en marche | désactivé (défaut) | `--disallowedTools mcp__escouade` |
+
+- Le fichier : `{ "mcpServers": { "escouade": { "type": "http", "url": "http://127.0.0.1:<port>/mcp", "headers": { "Authorization": "Bearer <jeton du process>" } } } }`, écrit par `paths::write_private` (0600 sous Unix). Un chemin et non du JSON en ligne : un lanceur `.cmd` prend 8 191 caractères au plus, et le journal de l'app écrit les arguments (le jeton n'y est jamais).
+- Le jeton : nouveau à chaque lancement (celui d'avant est refusé dès lors) ; refusé et le fichier supprimé quand ce process se termine (arrêt pour inactivité, archivage, plantage, `kill`), sauf si un process plus récent du même agent a déjà le sien ; tout de suite à la suppression de l'agent ou à la fermeture de son projet ; le dossier `mcp/` est vidé quand l'app s'arrête et quand elle démarre (avant tout agent : un plantage l'a peut-être laissé).
+- Un serveur `escouade` passé par `--mcp-config` (source « dynamic ») remplace celui du même nom de la portée `user` : seul le premier est contacté, avec son en-tête.
+- Essai du 2026-10-10, Claude Code 2.1.296, `CLAUDE_CONFIG_DIR` et dossier de travail jetables, le serveur d'Escouade en marche et `escouade` déclaré en portée `user` (`claude mcp add --scope user --transport http escouade http://127.0.0.1:<port>/mcp --header "Authorization: Bearer <jeton externe>"`), puis `claude -p ok --output-format stream-json --verbose …` (sans connexion : le `system/init` vient avant « Not logged in ») :
+  - sans option : `mcp_servers` `escouade=connected`, 31 outils dont les 7 `mcp__escouade__*` (les six de lecture et `whoami`, l'outil des tests : l'essai tournait sur un serveur de test) ;
+  - `--disallowedTools mcp__escouade` : `escouade=connected` toujours (Claude Code se connecte et liste les outils), mais 24 outils, aucun `mcp__escouade__*` ;
+  - `--mcp-config <fichier d'un agent>` : `escouade=connected`, les 7 outils ; avec `--disallowedTools mcp__escouade` en plus : aucun ;
+  - `--mcp-config` d'un fichier au jeton inconnu : `escouade=failed`, aucun outil, et le journal d'activité montre deux « Requête refusée : jeton inconnu » : l'entrée `user` (au jeton valable) n'a pas été essayée.
 
 ### Réponses et erreurs
 

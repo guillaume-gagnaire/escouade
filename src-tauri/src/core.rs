@@ -1031,13 +1031,14 @@ impl<R: Runtime> Core<R> {
                 }
             }
         });
+        // The MCP server first: the agents started below reach it.
+        self.start_mcp();
         self.start_remote_agents();
         // The syncs the app's last run left waiting go again now, before those of the tickets
         // that go on.
         self.retry_all_syncs();
         self.recover_tickets();
         self.update_tray();
-        self.sync_mcp();
     }
 
     // ---------- persistence ----------
@@ -1547,7 +1548,7 @@ impl<R: Runtime> Core<R> {
                 "Claude Code not found. Install it or give its path in the settings."
             ))
         })?;
-        let (opts, gen) = {
+        let (mut opts, gen, project_id) = {
             let mut rt = h.lock();
             rt.gen += 1;
             let opts = SpawnOpts {
@@ -1556,7 +1557,7 @@ impl<R: Runtime> Core<R> {
                 args: claude_args(&rt.meta),
                 env: [settings.claude_env(), accounts::launch_env(&account)].concat(),
             };
-            (opts, rt.gen)
+            (opts, rt.gen, rt.meta.project_id.clone())
         };
         if !Path::new(&opts.cwd).is_dir() {
             bail!(tr!(
@@ -1565,6 +1566,11 @@ impl<R: Runtime> Core<R> {
                 dir = opts.cwd
             ));
         }
+        // Escouade's MCP server, as this agent (a token of its own) or refused to it.
+        let access = self.agent_access(id, &project_id);
+        opts.args.extend(access.args());
+        // Given back when this process ends, unless a newer one of the agent has its own.
+        let token = access.token().map(str::to_string);
         log::info!(
             "agent {id}: starting {} {} in {} (account {})",
             opts.program.display(),
@@ -1575,7 +1581,8 @@ impl<R: Runtime> Core<R> {
         let started = std::time::Instant::now();
         let (w1, w2) = (Arc::downgrade(self), Arc::downgrade(self));
         let (h1, h2) = (h.clone(), h.clone());
-        let proc = ClaudeProcess::spawn(
+        let (agent_id, granted) = (id.to_string(), token.clone());
+        let spawned = ClaudeProcess::spawn(
             opts,
             move |frame| {
                 if let Some(c) = w1.upgrade() {
@@ -1584,10 +1591,22 @@ impl<R: Runtime> Core<R> {
             },
             move |code, stderr| {
                 if let Some(c) = w2.upgrade() {
+                    if let Some(t) = &granted {
+                        c.mcp.release_agent(&agent_id, t);
+                    }
                     c.on_exit(&h2, gen, code, stderr);
                 }
             },
-        )?;
+        );
+        let proc = match spawned {
+            Ok(p) => p,
+            Err(e) => {
+                if let Some(t) = &token {
+                    self.mcp.release_agent(id, t);
+                }
+                return Err(e);
+            }
+        };
         h.lock().attach(proc.clone());
         self.emit_agent(&h);
         match proc
@@ -1954,6 +1973,8 @@ impl<R: Runtime> Core<R> {
                 p.kill();
             }
         }
+        // Their tokens go with the app: their MCP configs too.
+        self.mcp.clear_agent_configs();
         self.pty.kill_all();
         self.save_now();
     }
@@ -3110,6 +3131,8 @@ impl<R: Runtime> Core<R> {
                 rt.meta.port_base,
             )
         };
+        // Refused at once, without waiting for its process to end.
+        self.mcp.forget_agent(id);
         self.spawn_locks.lock().remove(id);
         // The setup of its worktree stops, with what it started (which holds the worktree). Once it
         // is gone: what waited for that setup (its ticket's first message) finds no agent to send to.
@@ -3351,6 +3374,7 @@ impl<R: Runtime> Core<R> {
                 rt.conv.delete_file();
                 worktree = rt.meta.worktree.clone();
             }
+            self.mcp.forget_agent(&aid);
             // The setup of its worktree stops, with what it started; its log goes.
             if let Some(s) = self.setups.lock().remove(&aid) {
                 s.task.abort();

@@ -185,6 +185,16 @@ impl DataDir {
         self.0.join("mcp-token.json")
     }
 
+    /// The MCP configs the agents' processes are started with (`--mcp-config`), one per agent.
+    pub fn mcp_agents(&self) -> PathBuf {
+        self.0.join("mcp")
+    }
+
+    /// The MCP config of the agent's process: Escouade's server, with the agent's own token.
+    pub fn mcp_agent_config(&self, agent_id: &str) -> PathBuf {
+        self.mcp_agents().join(format!("{agent_id}.json"))
+    }
+
     /// The syncs of imported tickets not through yet (`integrations::sync::SyncQueue`).
     pub fn sync_queue_file(&self) -> PathBuf {
         self.0.join("sync-queue.json")

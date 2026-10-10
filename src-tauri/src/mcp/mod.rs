@@ -2,10 +2,13 @@
 //! an agent of Escouade, reads the projects, agents and tickets and acts on them through the
 //! tools of `tools`. On HTTP, on 127.0.0.1 only (`http`: hyper, guards of its own, then the
 //! official SDK `rmcp`), each request with a bearer token: the one for Claude outside Escouade
-//! (in the keychain, written into Claude Code's config) or an agent's (`register_agent`, in
-//! memory only). It runs while the settings want it (`Core::sync_mcp`) and stops with the app.
+//! (in the keychain, written into Claude Code's config) or an agent's (`grant_agent`: in memory,
+//! and in the config file its process is started with, both gone when it stops). It runs while
+//! the settings want it (`Core::sync_mcp`) and stops with the app.
 
 pub(crate) mod activity;
+#[cfg(test)]
+mod agents_tests;
 mod http;
 mod read;
 mod resolve;
@@ -26,6 +29,7 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::net::{Ipv4Addr, TcpListener};
 use std::ops::RangeInclusive;
+use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use std::sync::{mpsc, Weak};
 use std::time::Duration;
@@ -60,6 +64,46 @@ pub struct McpStatus {
     pub port: u16,
     /// Why it does not run though the settings want it to.
     pub error: Option<String>,
+}
+
+/// What `--disallowedTools` is given to refuse an agent every tool of Escouade's server, whatever
+/// config declares it: Claude Code names them `mcp__escouade__<tool>`.
+const ALL_TOOLS: &str = "mcp__escouade";
+
+/// What an agent's process is started with of Escouade (`Core::agent_access`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AgentAccess {
+    /// No server to reach: started as it always was.
+    None,
+    /// Its project does not let its agents use Escouade: its tools are refused to it, those of an
+    /// entry of the user's config of Claude Code included (the agent would inherit it).
+    Denied,
+    /// The server, as the agent itself: `config` (`--mcp-config`) names it with `token`, the
+    /// agent's own, valid until the process stops (`McpServer::release_agent`).
+    Granted { config: PathBuf, token: String },
+}
+
+impl AgentAccess {
+    /// Its arguments for `claude`: never the token, only the path of the file that holds it (a
+    /// `.cmd` launcher takes 8,191 characters at most, and the app's log writes the arguments).
+    /// Both options take several values: given last, nothing after them is read as one.
+    pub fn args(&self) -> Vec<String> {
+        match self {
+            AgentAccess::None => Vec::new(),
+            AgentAccess::Denied => vec!["--disallowedTools".into(), ALL_TOOLS.into()],
+            AgentAccess::Granted { config, .. } => {
+                vec!["--mcp-config".into(), config.to_string_lossy().into_owned()]
+            }
+        }
+    }
+
+    /// The agent's token, when it has one.
+    pub fn token(&self) -> Option<&str> {
+        match self {
+            AgentAccess::Granted { token, .. } => Some(token),
+            _ => None,
+        }
+    }
 }
 
 /// The server listening: its accept loop stops when `stop` says so (or goes), then says it
@@ -112,6 +156,9 @@ pub struct McpServer<R: Runtime> {
     /// Why its last start failed, until it starts or is no longer wanted.
     error: Mutex<Option<String>>,
     tokens: Tokens,
+    /// One write or removal of an agent's config at a time, with its token: a process that ends
+    /// never removes the file the agent's next process is about to read (`release_agent`).
+    agent_files: Mutex<()>,
     pub activity: activity::Activity,
     /// What a connection may take, read at each start (tests make them small).
     limits: Mutex<http::Limits>,
@@ -125,6 +172,7 @@ impl<R: Runtime> McpServer<R> {
             running: Mutex::new(None),
             error: Mutex::new(None),
             tokens: Tokens::default(),
+            agent_files: Mutex::new(()),
             activity: activity::Activity::default(),
             limits: Mutex::new(http::Limits::default()),
         }
@@ -281,9 +329,7 @@ impl<R: Runtime> McpServer<R> {
     }
 
     /// A new token for the agent `agent_id` (in place of the one it had), valid until
-    /// `forget_agent` or the app's stop: in memory only.
-    // Allowed unused until the agents' launch (M3) calls it (then drop the allow).
-    #[allow(dead_code)]
+    /// `forget_agent`, `release_agent` or the app's stop: in memory only.
     pub fn register_agent(&self, agent_id: &str) -> String {
         let token = new_token();
         self.tokens
@@ -293,11 +339,82 @@ impl<R: Runtime> McpServer<R> {
         token
     }
 
-    /// The agent's token is refused from now on.
-    // Allowed unused until the agents' stop and removal (M3) call it (then drop the allow).
-    #[allow(dead_code)]
+    /// What the agent's next process reaches the server at `port` with: a new token (the one it
+    /// had is refused from now on), in the config file the process is started with
+    /// (`--mcp-config`, `<data>/mcp/<agent id>.json`), private like every file holding a token.
+    pub fn grant_agent(&self, agent_id: &str, port: u16) -> Result<AgentAccess> {
+        let core = self
+            .core
+            .upgrade()
+            .ok_or_else(|| anyhow!("the app is stopping"))?;
+        let config = core.data.mcp_agent_config(agent_id);
+        let _files = self.agent_files.lock();
+        let token = self.register_agent(agent_id);
+        // As `claude mcp add --transport http` declares a server, under the same name: the user's
+        // own entry of that name, if any, gives way to this one (« dynamic » before « user »).
+        let body = serde_json::json!({ "mcpServers": { "escouade": {
+            "type": "http",
+            "url": format!("http://127.0.0.1:{port}{PATH}"),
+            "headers": { "Authorization": format!("Bearer {token}") },
+        } } });
+        let written = std::fs::create_dir_all(core.data.mcp_agents())
+            .and_then(|()| paths::write_private(&config, body.to_string().as_bytes()));
+        if let Err(e) = written {
+            self.tokens.agents.write().remove(agent_id);
+            return Err(e).with_context(|| format!("{} not written", config.display()));
+        }
+        Ok(AgentAccess::Granted { config, token })
+    }
+
+    /// The agent's process given `token` stopped: the token is refused from now on and its config
+    /// file goes, unless a newer process of the agent has its own already (both are then left).
+    pub fn release_agent(&self, agent_id: &str, token: &str) {
+        let _files = self.agent_files.lock();
+        {
+            let mut agents = self.tokens.agents.write();
+            if agents.get(agent_id).map(String::as_str) != Some(token) {
+                return;
+            }
+            agents.remove(agent_id);
+        }
+        self.remove_agent_config(agent_id);
+    }
+
+    /// The agent's token is refused from now on, and its config file goes (the agent is deleted).
     pub fn forget_agent(&self, agent_id: &str) {
+        let _files = self.agent_files.lock();
         self.tokens.agents.write().remove(agent_id);
+        self.remove_agent_config(agent_id);
+    }
+
+    /// `agent_files` held.
+    fn remove_agent_config(&self, agent_id: &str) {
+        let Some(core) = self.core.upgrade() else {
+            return;
+        };
+        let file = core.data.mcp_agent_config(agent_id);
+        match std::fs::remove_file(&file) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+                log::warn!("mcp: {} not removed: {e}", file.display());
+            }
+            _ => {}
+        }
+    }
+
+    /// Every agent's config file goes: the app starts or quits, and the tokens they hold (in
+    /// memory only) are none the server knows any more.
+    pub fn clear_agent_configs(&self) {
+        let Some(core) = self.core.upgrade() else {
+            return;
+        };
+        let _files = self.agent_files.lock();
+        let dir = core.data.mcp_agents();
+        match std::fs::remove_dir_all(&dir) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+                log::warn!("mcp: {} not removed: {e}", dir.display());
+            }
+            _ => {}
+        }
     }
 
     /// Who brings `token`: None when it is no token the server gave.
@@ -382,6 +499,42 @@ impl<R: Runtime> Core<R> {
             }
             Ok(_) => {}
             Err(e) => log::error!("mcp: not started: {e:#}"),
+        }
+    }
+
+    /// The MCP server as the app starts, before any agent does: the agents' configs a crash left
+    /// go (their tokens died with it), then the server runs if the settings want it.
+    pub fn start_mcp(&self) {
+        self.mcp.clear_agent_configs();
+        self.sync_mcp();
+    }
+
+    /// What the agent's next process is started with of Escouade (`AgentAccess`):
+    /// - the server not running, nothing (none to reach: the user's config of Claude Code declares
+    ///   it only while Claude may drive Escouade, which runs it);
+    /// - its project letting its agents use Escouade, the server as the agent itself;
+    /// - otherwise its tools refused, those of the user's entry of that name included.
+    pub(crate) fn agent_access(&self, agent_id: &str, project_id: &str) -> AgentAccess {
+        let status = self.mcp.status();
+        if !status.running {
+            return AgentAccess::None;
+        }
+        let allowed = self
+            .projects
+            .read()
+            .iter()
+            .any(|p| p.id == project_id && p.agents_use_escouade);
+        if !allowed {
+            return AgentAccess::Denied;
+        }
+        match self.mcp.grant_agent(agent_id, status.port) {
+            Ok(access) => access,
+            Err(e) => {
+                // Without a token of its own, it would reach the server through the user's entry,
+                // taken for Claude outside Escouade: refused rather than taken for another.
+                log::error!("mcp: agent {agent_id} not given the server: {e:#}");
+                AgentAccess::Denied
+            }
         }
     }
 
