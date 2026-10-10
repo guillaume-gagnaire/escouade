@@ -166,6 +166,7 @@
       bind:this={branchButton}
       aria-haspopup="menu"
       aria-labelledby="{uid}-branch {uid}-branch-value"
+      title={branch || own}
       onclick={branchMenu}
     >
       <span id="{uid}-branch-value">{branch || own}</span>
