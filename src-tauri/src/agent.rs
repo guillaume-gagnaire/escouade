@@ -133,6 +133,10 @@ pub struct AgentRt {
     /// When its conversation began, in milliseconds: the files of a plan that were last touched
     /// before are not its own.
     pub(crate) plan_since: i64,
+    /// What the last look at the files of its plan read (not saved): a look that finds them as
+    /// they were hands nothing over, so this is what its plan is named and titled from again when
+    /// the agent's own list changes.
+    plan_list: Option<FileList>,
     /// The assistant's text of the running turn (main thread), for the board's report.
     turn_text: String,
     /// The latest text of the running turn's main thread that no tool followed: its final reply,
@@ -204,6 +208,7 @@ impl AgentRt {
             plan_written: Vec::new(),
             plan_calls: HashSet::new(),
             plan_since: now_ms(),
+            plan_list: None,
             turn_text: String::new(),
             final_text: String::new(),
             setup: None,
@@ -305,6 +310,7 @@ impl AgentRt {
         self.plan_since = now_ms();
         self.plan_written.clear();
         self.plan_calls.clear();
+        self.plan_list = None;
     }
 
     /// What a look at the agent's folder read (`planfiles`, off its lock), unless its conversation
@@ -317,6 +323,9 @@ impl AgentRt {
     ) -> bool {
         if since != self.plan_since {
             return false;
+        }
+        if list.is_some() {
+            self.plan_list = list.clone();
         }
         self.plan_apply(fx, |plan| plan.set_files(list));
         true
@@ -1000,11 +1009,19 @@ impl AgentRt {
         }
         let doing = parent.and_then(|_| tool_activity(name, input, &self.meta.cwd));
         let now = now_ms();
+        // The agent's own list moved: the plan it follows is named and titled again from what the
+        // files said last, for the look that comes finds them as they were and says nothing.
+        let files = (parent.is_none() && matches!(name, "TodoWrite" | "TaskCreate" | "TaskUpdate"))
+            .then(|| self.plan_list.clone())
+            .flatten();
         self.plan_apply(fx, |plan| {
             let change = plan.on_tool_use(parent, id, name, input, now);
-            match parent {
-                Some(p) => change.and(plan.on_child_activity(p, doing.as_deref())),
-                None => change,
+            match (parent, files) {
+                (Some(p), _) => change.and(plan.on_child_activity(p, doing.as_deref())),
+                (None, Some(files)) if change != Change::None => {
+                    change.and(plan.set_files(Some(files)))
+                }
+                (None, _) => change,
             }
         });
     }
@@ -3925,6 +3942,66 @@ mod tests {
         assert_eq!(plan(&b).tasks[0].title, "Ma tâche");
         assert_eq!(plan(&b).title, None);
         assert_eq!(plan(&b).plan_file, None);
+    }
+
+    #[test]
+    fn the_plans_name_and_title_come_back_with_the_agents_list_without_the_files_being_read_again()
+    {
+        let mut a = rt();
+        let since = a.plan_since;
+        a.plan_from_files(since, demo_list(), &mut Effects::default());
+        // The agent starts a list of its own, made of the tasks of that plan: the tasks of the
+        // files make room, and so do the plan's name and title... until the files are read, which
+        // they are not while they stay as they were (the look finds them unchanged and hands
+        // nothing over). The name and title are there all the same.
+        creates(&mut a, "c0", "Task 1: Un", 1);
+        let p = plan(&a);
+        assert_eq!(p.source, Some(crate::plan::PlanSource::Tools));
+        assert_eq!(p.title.as_deref(), Some("Démo"));
+        assert_eq!(
+            p.plan_file.as_deref(),
+            Some("docs/superpowers/plans/demo.md")
+        );
+        // The same when it writes its list whole.
+        let mut b = rt();
+        b.plan_from_files(b.plan_since, demo_list(), &mut Effects::default());
+        call(
+            &mut b,
+            None,
+            "t0",
+            "TodoWrite",
+            json!({"todos":[{"content":"Un","status":"in_progress","activeForm":"Fait un"}]}),
+        );
+        assert_eq!(plan(&b).source, Some(crate::plan::PlanSource::Tools));
+        assert_eq!(plan(&b).title.as_deref(), Some("Démo"));
+
+        // And it goes when the list stops being the plan's, with no read either: the agent
+        // replaces its tasks by others.
+        call(
+            &mut a,
+            None,
+            "t1",
+            "TodoWrite",
+            json!({"todos":[{"content":"Autre chose","status":"pending"}]}),
+        );
+        let p = plan(&a);
+        assert_eq!(p.tasks[0].title, "Autre chose");
+        assert_eq!(p.title, None);
+        assert_eq!(p.plan_file, None);
+        // Back to the plan's tasks: back to its name.
+        call(
+            &mut a,
+            None,
+            "t2",
+            "TodoWrite",
+            json!({"todos":[{"content":"Task 1: Un","status":"pending"}]}),
+        );
+        assert_eq!(plan(&a).title.as_deref(), Some("Démo"));
+
+        // A new conversation forgets what was read: a list of its own is no plan's.
+        session(&mut a, "s9");
+        creates(&mut a, "c9", "Task 1: Un", 1);
+        assert_eq!(plan(&a).title, None);
     }
 
     #[test]

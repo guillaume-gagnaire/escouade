@@ -579,6 +579,55 @@ async fn a_command_that_wrote_the_ledger_moves_the_plan_without_any_other_event(
 }
 
 #[tokio::test]
+async fn the_plans_name_stays_with_the_agents_own_list_while_the_files_do_not_move() {
+    let (h, id, repo) = plan_agent("p4-own-list").await;
+    plan_workspace(&repo);
+    h.command(&id, "b1", "sdd-workspace docs/superpowers/plans/demo.md");
+    h.wait("the plan", |h| h.plan_statuses(&id).len() == 3)
+        .await;
+    assert_eq!(
+        h.agent(&id).plan.unwrap().source,
+        Some(crate::plan::PlanSource::Plan)
+    );
+    // The agent lists a task of its own (one of the plan's): its list is the list now.
+    h.feed(
+        &id,
+        json!({"type":"assistant","message":{"id":"m-c1","content":[{"type":"tool_use","id":"c1","name":"TaskCreate","input":{"subject":"Task 1: Un"}}]},"parent_tool_use_id":null}),
+    );
+    h.feed(
+        &id,
+        json!({"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"c1","content":"Task #1 created successfully: Task 1: Un"}]},"parent_tool_use_id":null}),
+    );
+    let plan = h.agent(&id).plan.unwrap();
+    assert_eq!(plan.source, Some(crate::plan::PlanSource::Tools));
+    assert_eq!(plan.tasks.len(), 1);
+    // The files do not move, whatever the commands: the look reads nothing and hands nothing
+    // over, and the plan keeps its name and title all the same.
+    let (reads, looks) = (h.plan_reads(), h.plan_looks());
+    h.command(&id, "b2", "echo nothing moved");
+    h.wait("a look that finds them as they were", |h| {
+        h.plan_looks() > looks
+    })
+    .await;
+    assert_eq!(h.plan_reads(), reads);
+    let plan = h.agent(&id).plan.unwrap();
+    assert_eq!(plan.title.as_deref(), Some("Démo"));
+    assert_eq!(
+        plan.plan_file.as_deref(),
+        Some("docs/superpowers/plans/demo.md")
+    );
+    let sent = h
+        .events
+        .lock()
+        .iter()
+        .rev()
+        .find(|e| e["type"] == "agent" && e["agent"]["id"] == id.as_str())
+        .cloned()
+        .unwrap();
+    assert_eq!(sent["agent"]["plan"]["title"], "Démo");
+}
+
+#[tokio::test]
 async fn the_end_of_a_turn_looks_at_the_files_too() {
     let (h, id, repo) = plan_agent("p2-turn-end").await;
     let ledger = plan_workspace(&repo);
