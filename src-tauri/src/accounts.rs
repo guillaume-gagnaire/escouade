@@ -523,6 +523,12 @@ pub(crate) fn junction_line(dst: &Path, src: &Path) -> Result<String> {
     ))
 }
 
+/// What `cmd.exe` is started with to run the `mklink` line: no AutoRun commands (`/d`), no delayed
+/// expansion (`/v:off`: a machine that turns it on would have `!name!` in a path read as a
+/// variable), then the line (`/c`, which takes all that follows).
+#[cfg_attr(not(windows), allow(dead_code))]
+const CMD_SWITCHES: [&str; 3] = ["/v:off", "/d", "/c"];
+
 /// `dst` made a junction to the folder `src`: unlike a symbolic link, it needs no administrator
 /// rights (nor the developer mode).
 #[cfg(windows)]
@@ -532,7 +538,7 @@ fn link_dir(src: &Path, dst: &Path) -> Result<()> {
     // The line as cmd.exe reads it, not as Rust would quote it (only what has a space).
     let line = junction_line(dst, &std::path::absolute(src)?)?;
     let out = std::process::Command::new(cmd)
-        .args(["/d", "/c"])
+        .args(CMD_SWITCHES)
         .raw_arg(line)
         .creation_flags(claude::CREATE_NO_WINDOW)
         .output()?;
@@ -1359,6 +1365,8 @@ mod tests {
         for (parent, from, to) in [
             ("Équipe à 100 pour cent", "source dossier", "lien é"),
             ("A&B^C(1)", "src&dir", "lien^&é"),
+            // `!` is read by cmd.exe when the machine turns delayed expansion on.
+            ("Bravo !HOME! !", "src!dir!", "lien!é"),
         ] {
             let src = dir.join(parent).join(from);
             std::fs::create_dir_all(&src).unwrap();
@@ -1395,6 +1403,21 @@ mod tests {
             assert_eq!(junction_line(other, ok).unwrap_err().to_string(), want);
             assert_eq!(junction_line(ok, other).unwrap_err().to_string(), want);
         }
+    }
+
+    #[test]
+    fn the_cmd_that_makes_a_junction_reads_no_delayed_expansion_whatever_the_machine_says() {
+        // With it on (a registry setting of the machine or the user), cmd.exe eats the `!` of a
+        // path, even inside quotes.
+        let at = |switch: &str| {
+            CMD_SWITCHES
+                .iter()
+                .position(|s| s.eq_ignore_ascii_case(switch))
+        };
+        assert!(at("/v:off").is_some(), "{CMD_SWITCHES:?}");
+        assert!(at("/v:off") < at("/c"), "{CMD_SWITCHES:?}");
+        // `/c` takes the rest of the line as the command: it comes last.
+        assert_eq!(CMD_SWITCHES.last(), Some(&"/c"));
     }
 
     #[cfg(windows)]
