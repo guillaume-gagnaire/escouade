@@ -1,6 +1,6 @@
 # Escouade 1.7 — à faire
 
-Deux chantiers : un serveur MCP pour piloter Escouade depuis Claude, et plusieurs comptes Claude avec bascule automatique. Les deux se touchent : chaque compte a son propre `~/.claude.json`, donc le serveur MCP doit être déclaré dans chacun.
+Trois chantiers : un serveur MCP pour piloter Escouade depuis Claude, plusieurs comptes Claude avec bascule automatique, et une meilleure gestion des branches. Les deux premiers se touchent : chaque compte a son propre `~/.claude.json`, donc le serveur MCP doit être déclaré dans chacun.
 
 ## 0. À vérifier avant de concevoir (essais jetables)
 
@@ -84,6 +84,27 @@ But : plusieurs comptes Claude (perso, pro…) dans la même app ; chaque agent 
 - [ ] e2e : deux comptes simulés, le premier atteint la limite, le ticket suivant part sur le second.
 - [ ] Docs : SPEC (« Comptes Claude »), README, CHANGELOG ; dire clairement ce qui reste partagé entre comptes et ce qui ne l'est pas.
 
+## 3. Branches : en créer, en changer, les tenir à jour
+
+But : gérer les branches depuis Escouade sans passer par un terminal.
+
+### Ce qui existe aujourd'hui
+- Chaque agent avec worktree a sa branche (`ticket/<clé>` ou celle de l'agent), créée depuis la branche de base du projet ; elle se renomme, se pousse, et se merge à la validation (squash, merge ou rebase ; « Ouvrir une pull request » en option).
+- La liste des branches ne sert qu'à choisir la branche cible dans les réglages du Kanban ; le graphe git est en lecture seule (il ouvre un commit) ; `fetch` et `pull` existent pour la synchro.
+
+### À faire
+- [ ] **Sélecteur de branche** du projet (barre d'état ou onglet Git) : la branche courante du dossier du projet, la liste des branches locales (la courante en tête) et distantes, une recherche.
+- [ ] **Changer de branche** dans le dossier du projet : refusé tant qu'il reste des changements non commités, avec le choix « Mettre de côté (stash) et changer » ; une branche déjà prise par un worktree d'agent est signalée (« utilisée par l'agent X ») au lieu d'échouer sur l'erreur de git.
+- [ ] **Créer une branche** : nom (vérifié comme git le fait : `git check-ref-format`), point de départ (branche courante, une autre branche, un commit du graphe), « et y passer » coché par défaut.
+- [ ] **Lancer un agent sur une branche existante** (une branche distante comprise, suivie en local) au lieu d'une branche neuve ; et un ticket pareil (« Reprendre la branche … »).
+- [ ] **Mettre à jour la branche d'un agent avec sa base** : « Intégrer <base> » (merge ou rebase, le choix du projet) ; un conflit est rendu à l'agent avec la liste des fichiers en conflit, comme une demande de correction.
+- [ ] **Depuis le graphe git** : clic droit sur un commit ou une branche → « Créer une branche ici », « Passer sur cette branche », « Comparer avec la branche courante » (le diff des deux, dans la fenêtre de diff existante).
+- [ ] **Supprimer une branche** : seulement une branche mergée dans la base, ou après confirmation (« n commits ne sont dans aucune autre branche ») ; jamais la branche courante ni celle d'un worktree d'agent ; la branche distante en option.
+- [ ] **Nettoyage** : « Branches mergées » liste les branches locales déjà dans la base (les branches de ticket validés surtout) et propose de les supprimer en une fois.
+- [ ] **Avance et retard** sur la branche distante (« ↑2 ↓5 ») à côté du nom de branche, avec « Récupérer » (pull) et « Pousser ».
+- [ ] Tests : dépôts git réels dans les tests Rust (changer avec et sans changements, branche prise par un worktree, création depuis un commit, suppression refusée, intégration de la base avec et sans conflit) ; composants (sélecteur, confirmations) ; un e2e : créer une branche, y passer, la voir dans le graphe.
+- [ ] Docs : SPEC (section Git), README, CHANGELOG.
+
 ## Ordre proposé
 
 1. Les essais du point 0 : ils décident de la forme de la bascule et du support macOS.
@@ -91,3 +112,5 @@ But : plusieurs comptes Claude (perso, pro…) dans la même app ; chaque agent 
 3. Serveur MCP en lecture seule, avec l'installation automatique dans chaque compte.
 4. Bascule automatique (nouveaux agents, puis reprise sur un autre compte si l'essai l'a permis).
 5. Outils MCP qui agissent, puis les outils réservés aux agents d'Escouade.
+
+Les branches (chantier 3) ne dépendent pas des deux autres : elles peuvent avancer en parallèle dès le début. Les outils MCP pourront ensuite s'en servir (créer une branche, lancer un agent dessus).
