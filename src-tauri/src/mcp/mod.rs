@@ -7,9 +7,13 @@
 
 pub(crate) mod activity;
 mod http;
+mod read;
+mod resolve;
 #[cfg(test)]
 mod tests;
 pub(crate) mod tools;
+#[cfg(test)]
+mod tools_tests;
 
 use crate::core::Core;
 use crate::integrations::secrets;

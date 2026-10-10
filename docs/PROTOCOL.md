@@ -64,3 +64,39 @@ Compaction : la chaîne repart de l'entrée `compact_boundary` (`parentUuid: nul
 ## Transcripts
 
 `~/.claude/projects/<cwd encodé>/<session_id>.jsonl` — pas de titre généré en mode `-p` ; l'app tient son propre journal de conversation normalisé.
+
+## Serveur MCP d'Escouade
+
+Escouade sert ses outils à Claude Code (un terminal, un autre outil, ses propres agents) en MCP « Streamable HTTP », par le SDK officiel `rmcp` (3.5) derrière `hyper` (`src-tauri/src/mcp/`). Il tourne quand « Claude peut piloter Escouade » est activé ou qu'un projet laisse ses agents l'utiliser, et s'arrête avec l'app.
+
+### Transport et garde-fous
+
+- `http://127.0.0.1:<port>/mcp`, sur la boucle locale seulement. Port choisi au premier démarrage entre 47000 et 47999, puis gardé (`Settings.mcpPort`) ; s'il est pris, un autre est choisi et enregistré.
+- Sans état (pas de `Mcp-Session-Id`), réponses en JSON (pas de flux SSE). Les deux poignées de main passent : `initialize` en `2025-11-25`, et le chemin `2026-07-28` (sonde `server/discover`, puis chaque requête porte sa version dans `_meta` et l'en-tête `MCP-Protocol-Version`, sans `initialize`), celui que prend Claude Code 2.1.296.
+- Chaque requête, avant `rmcp` :
+  - `Host` (ou l'autorité d'une URI absolue) autre que `127.0.0.1:<port>` ou `localhost:<port>`, ou absent → 403 ;
+  - un en-tête `Origin` (une page web) → 403 ;
+  - `Authorization: Bearer <jeton>` absent ou inconnu → 401 avec `WWW-Authenticate: Bearer` (comparaison à temps constant) ;
+  - un autre chemin que `/mcp` → 404.
+- Jetons : celui de Claude hors Escouade (32 octets aléatoires en base64url, dans le trousseau, entrée `mcp`, ou dans `mcp-token.json`, lisible par son seul propriétaire, quand le trousseau refuse) ; celui de chaque agent d'Escouade, en mémoire seulement. Le jeton dit qui appelle : un outil le sait (`Caller`).
+- Une connexion a 10 s pour envoyer les en-têtes d'une requête (et reste 10 s au plus sans requête) ; 64 connexions à la fois au plus, les suivantes attendent.
+- Journal d'activité : chaque appel d'outil (refus et erreurs compris, y compris un outil inconnu ou des arguments qui ne collent pas au schéma) et chaque requête refusée, sans jamais les jetons ; les 200 derniers, en mémoire.
+
+### Réponses et erreurs
+
+- Un outil répond un seul bloc `text` : du JSON, clés en camelCase, dates en millisecondes depuis l'epoch.
+- Un refus ou un échec est un résultat d'erreur que le modèle lit (`isError: true`, le texte dit pourquoi, dans la langue de l'interface). Des arguments qui ne collent pas au schéma donnent aussi un résultat d'erreur (texte de `rmcp`, « failed to deserialize parameters: … ») ; un outil inconnu, une erreur JSON-RPC.
+- Résolution des noms : un projet par son id ou son nom (sans casse) ; un agent par son id (archivés compris) ou son nom (sans casse, parmi les agents non archivés, sinon parmi les archivés), dans le projet donné s'il y en a un ; un ticket par son id ou sa clé (sans casse). Un nom inconnu ou ambigu est une erreur qui le dit et liste 5 choix au plus (ceux dont le nom contient le texte demandé d'abord, « … » s'il y en a d'autres), par exemple « Plusieurs projets s’appellent « demo » : demo (id 1a2b), demo (id 3c4d). Donne son id. ».
+
+### Outils de lecture
+
+Tous annotés `readOnlyHint: true`, `openWorldHint: false`.
+
+| Outil | Arguments | Réponse |
+|---|---|---|
+| `list_projects` | — | `[{ id, name, path, branch, agents, tickets: { todo, doing, review, done } }]`, dans l'ordre de l'app. `branch` : la branche courante, `null` hors dépôt ou sur une HEAD détachée ; `agents` : le nombre d'agents non archivés. |
+| `list_agents` | `project?` | `[{ id, name, project, status, waiting, ticket, model, account, cost }]` : les agents non archivés, du plus ancien au plus récent, de tous les projets ou d'un seul. `project` : le nom du projet ; `status` : `idle`, `running`, `waiting`, `done` ou `error` ; `waiting` : une question ou une permission attend la réponse de l'utilisateur ; `ticket` : la clé ; `account` : le nom du compte Claude ; `cost` : en dollars, tour en cours compris. |
+| `list_tickets` | `project`, `column?` (`todo`, `doing`, `review`, `done`) | `[{ id, key, title, column, after, agent, blocked }]` dans l'ordre du Kanban : les colonnes de « À faire » à « Terminé », « À faire » par priorité, « En cours » et « À tester » par arrivée, « Terminé » du plus récent au plus ancien. `after` : les clés des tickets dont il dépend ; `agent` : le nom de son agent ; `blocked` : pourquoi il n'avance plus seul, sinon `null`. |
+| `get_ticket` | `ticket?` | `{ id, key, title, description, criteria: [{ text, ok, note }], loops: { iteration, max }, column, after, progress, external: { service, key, url, error } \| null }`. Sans `ticket`, un agent d'Escouade lit le sien ; un agent sans ticket reçoit une erreur, Claude hors Escouade un refus. `progress` : les fonctionnalités en place, telles que l'agent les a listées ; `external` : le ticket Jira, Trello ou GitHub d'origine (`error` : l'échec de sa dernière synchro). |
+| `get_usage` | — | `{ accounts: [{ name, current, fiveHour: { pct, resetsAt } \| null, sevenDay: … }], autopilotPause: { reason, until } \| null }`. `current` : le compte où partiraient les nouveaux agents (le premier actif) ; `pct` de 0 à 100 ; `reason` : `fiveHour`, `week` ou `limit`. En attendant le quota par compte (K2), les fenêtres lues par l'app sont données au compte en cours et `null` aux autres. |
+| `get_agent_summary` | `agent`, `project?` | `{ id, name, status, ticket, lastMessage, touchedFiles }`, jamais la conversation : `lastMessage`, la dernière réponse de l'agent (fil principal, pas un sous-agent), 2 000 caractères au plus, coupée après un mot entier avec « … » (dans un mot seulement s'il est très long) ; `touchedFiles`, les 100 derniers fichiers qu'il a commencé à modifier, relatifs à son dossier. |

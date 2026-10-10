@@ -155,7 +155,7 @@ impl<R: Runtime> Gate<R> {
                 return answer;
             }
         };
-        req.extensions_mut().insert(ToolCtx { core, caller });
+        req.extensions_mut().insert(ToolCtx::new(core, caller));
         self.mcp
             .handle(req)
             .await

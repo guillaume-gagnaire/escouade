@@ -15,9 +15,16 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 use tauri::test::{mock_app, MockRuntime};
 
-/// The tools the server offers, sorted: none yet. M2 and M4 add theirs here, knowingly. None may
-/// accept a permission, answer for the user, run a command or the tests, merge or delete.
-const EXPOSED: &[&str] = &[];
+/// The tools the server offers, sorted: those that read (M2). M4 adds its own here, knowingly.
+/// None may accept a permission, answer for the user, run a command or the tests, merge or delete.
+pub(super) const EXPOSED: &[&str] = &[
+    "get_agent_summary",
+    "get_ticket",
+    "get_usage",
+    "list_agents",
+    "list_projects",
+    "list_tickets",
+];
 
 /// The test's own tool, beside them in tests (`tools::Tools::test_router`).
 const TEST_TOOL: &str = "whoami";
@@ -50,13 +57,13 @@ fn url(port: u16) -> String {
 }
 
 /// The harness's server started: its port and the token of Claude outside Escouade.
-fn started(h: &Harness) -> (u16, String) {
+pub(super) fn started(h: &Harness) -> (u16, String) {
     let port = h.core.mcp.start(0).unwrap();
     (port, h.core.mcp.external_token().unwrap())
 }
 
 /// A real MCP client, initialized with `token`.
-async fn client(
+pub(super) async fn client(
     port: u16,
     token: &str,
 ) -> Result<RunningService<RoleClient, ()>, Box<rmcp::service::ClientInitializeError>> {
@@ -88,7 +95,7 @@ async fn post(port: u16, headers: &[(&str, &str)], body: &str) -> (u16, String) 
     (resp.status().as_u16(), resp.text().await.unwrap())
 }
 
-fn bearer(token: &str) -> String {
+pub(super) fn bearer(token: &str) -> String {
     format!("Bearer {token}")
 }
 
@@ -147,7 +154,7 @@ fn answer_text(result: &rmcp::model::CallToolResult) -> String {
         .to_string()
 }
 
-fn names(tools: &[rmcp::model::Tool]) -> Vec<String> {
+pub(super) fn names(tools: &[rmcp::model::Tool]) -> Vec<String> {
     let mut names: Vec<String> = tools.iter().map(|t| t.name.to_string()).collect();
     names.sort();
     names
@@ -663,11 +670,11 @@ fn the_server_starts_and_stops_from_a_thread_an_async_worker_or_a_single_threade
 }
 
 #[tokio::test]
-async fn a_client_that_does_not_finish_its_headers_is_cut_off() {
+async fn a_connection_that_sends_no_headers_in_time_is_cut_off_even_after_an_answer() {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let h = harness("mcp-slow-headers");
     h.core.mcp.limits.lock().header_read = Duration::from_millis(300);
-    let (port, _) = started(&h);
+    let (port, token) = started(&h);
     let mut s = tokio::net::TcpStream::connect((Ipv4Addr::LOCALHOST, port))
         .await
         .unwrap();
@@ -677,6 +684,23 @@ async fn a_client_that_does_not_finish_its_headers_is_cut_off() {
     let mut out = Vec::new();
     let closed = tokio::time::timeout(Duration::from_secs(3), s.read_to_end(&mut out)).await;
     assert!(closed.is_ok(), "the connection is still open");
+    // Answered (its body read whole), then kept open without a next request: closed the same.
+    let mut s = tokio::net::TcpStream::connect((Ipv4Addr::LOCALHOST, port))
+        .await
+        .unwrap();
+    let request = raw_post(
+        "/mcp",
+        &[
+            format!("Host: 127.0.0.1:{port}"),
+            format!("Authorization: {}", bearer(&token)),
+        ],
+    )
+    .replace("Connection: close\r\n", "");
+    s.write_all(request.as_bytes()).await.unwrap();
+    let mut out = Vec::new();
+    let closed = tokio::time::timeout(Duration::from_secs(3), s.read_to_end(&mut out)).await;
+    assert!(closed.is_ok(), "the idle connection is still open");
+    assert_eq!(raw_status(&String::from_utf8_lossy(&out)), 200);
     h.core.mcp.stop();
 }
 
