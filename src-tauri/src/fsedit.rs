@@ -2,6 +2,7 @@
 //! the version a file is compared with.
 
 use crate::git;
+use crate::i18n::{self, Lang};
 use crate::paths::contained;
 use crate::testlaunch;
 use anyhow::{anyhow, bail, Result};
@@ -9,21 +10,65 @@ use serde::Serialize;
 use std::path::{Component, Path};
 use std::sync::atomic::{AtomicU64, Ordering};
 
+/// The tag that opens `NotFound::wire`: the editor tells a missing file by it, and writes the text.
+const NOT_FOUND: &str = "NOT_FOUND";
+
+/// Refused: nothing is at `path` (from the root, as asked).
+#[derive(Debug, Clone, PartialEq)]
+pub struct NotFound {
+    pub path: String,
+}
+
+impl NotFound {
+    /// As the window gets it: `NOT_FOUND:<path>`.
+    pub fn wire(&self) -> String {
+        format!("{NOT_FOUND}:{}", self.path)
+    }
+
+    pub fn text(&self, lang: Lang) -> String {
+        tr_in!(lang, "{p} introuvable", "{p} not found", p = self.path)
+    }
+}
+
+impl std::fmt::Display for NotFound {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.text(i18n::ui()))
+    }
+}
+
+impl std::error::Error for NotFound {}
+
+fn not_found(rel: &str) -> anyhow::Error {
+    NotFound {
+        path: rel.to_string(),
+    }
+    .into()
+}
+
+/// Refused: something is at `rel` already.
+fn exists_already(lang: Lang, rel: &str) -> String {
+    tr_in!(lang, "{rel} existe déjà", "{rel} already exists")
+}
+
+fn invalid_path(rel: &str) -> anyhow::Error {
+    anyhow!(tr!("chemin invalide : {rel}", "invalid path: {rel}"))
+}
+
 /// Validate that `rel` is a normal file path component (not `.`, `sub/.`, or empty).
 fn validate_rel(rel: &str) -> Result<()> {
     if rel.is_empty() {
-        bail!("chemin invalide : ");
+        return Err(invalid_path(rel));
     }
     // The last component must be normal (not current dir, parent, etc).
     // Rust drops trailing `.` from components(), so also check the suffix.
     let path = Path::new(rel);
     match path.components().next_back() {
         Some(Component::Normal(_)) => {}
-        _ => bail!("chemin invalide : {rel}"),
+        _ => return Err(invalid_path(rel)),
     }
     // Additional check: refuse if ends with `.` preceded by separator.
     if rel.ends_with("/.") || rel.ends_with("\\.") || rel == "." {
-        bail!("chemin invalide : {rel}");
+        return Err(invalid_path(rel));
     }
     Ok(())
 }
@@ -123,11 +168,11 @@ pub fn read(root: &Path, rel: &str) -> Result<FileText> {
     let path = contained(root, rel)?;
     let meta = match std::fs::metadata(&path) {
         Ok(m) => m,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => bail!("{rel} introuvable"),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Err(not_found(rel)),
         Err(e) => return Err(e.into()),
     };
     if meta.is_dir() {
-        bail!("{rel} est un dossier");
+        bail!(tr!("{rel} est un dossier", "{rel} is a folder"));
     }
     if meta.len() > MAX_EDIT_BYTES {
         return Ok(FileText {
@@ -165,7 +210,7 @@ pub fn write(
         let real = std::fs::canonicalize(&path)?;
         let real_root = std::fs::canonicalize(root)?;
         if !real.starts_with(&real_root) {
-            bail!("chemin hors du dossier : {rel}");
+            return Err(crate::paths::outside(rel));
         }
         path = real;
     }
@@ -188,7 +233,7 @@ pub fn write(
     // Refuse to write to read-only files.
     if let Ok(meta) = std::fs::metadata(&path) {
         if meta.permissions().readonly() {
-            bail!("{rel} est en lecture seule");
+            bail!(tr!("{rel} est en lecture seule", "{rel} is read-only"));
         }
     }
 
@@ -198,7 +243,7 @@ pub fn write(
     }
     let name = path
         .file_name()
-        .ok_or_else(|| anyhow!("chemin invalide : {rel}"))?
+        .ok_or_else(|| invalid_path(rel))?
         .to_string_lossy()
         .into_owned();
 
@@ -215,7 +260,8 @@ pub fn write(
 fn valid_names(rel: &str) -> Result<()> {
     #[cfg(windows)]
     for part in rel.split(['/', '\\']) {
-        windows_name(part).map_err(|_| anyhow!("nom invalide : {rel}"))?;
+        windows_name(part)
+            .map_err(|_| anyhow!(tr!("nom invalide : {rel}", "invalid name: {rel}")))?;
     }
     #[cfg(not(windows))]
     let _ = rel;
@@ -230,10 +276,10 @@ pub fn create(root: &Path, rel: &str) -> Result<()> {
     in_worktrees(root, rel)?;
     let path = contained(root, rel)?;
     if std::fs::symlink_metadata(&path).is_ok() {
-        bail!("{rel} existe déjà");
+        bail!(exists_already(i18n::ui(), rel));
     }
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| anyhow!("{rel} : {e}"))?;
+        std::fs::create_dir_all(parent).map_err(|e| io_failed(rel, e))?;
     }
     match std::fs::OpenOptions::new()
         .write(true)
@@ -241,8 +287,10 @@ pub fn create(root: &Path, rel: &str) -> Result<()> {
         .open(&path)
     {
         Ok(_) => Ok(()),
-        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => bail!("{rel} existe déjà"),
-        Err(e) => Err(anyhow!("{rel} : {e}")),
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            bail!(exists_already(i18n::ui(), rel))
+        }
+        Err(e) => Err(io_failed(rel, e)),
     }
 }
 
@@ -254,15 +302,17 @@ pub fn mkdir(root: &Path, rel: &str) -> Result<()> {
     in_worktrees(root, rel)?;
     let path = contained(root, rel)?;
     if std::fs::symlink_metadata(&path).is_ok() {
-        bail!("{rel} existe déjà");
+        bail!(exists_already(i18n::ui(), rel));
     }
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| anyhow!("{rel} : {e}"))?;
+        std::fs::create_dir_all(parent).map_err(|e| io_failed(rel, e))?;
     }
     match std::fs::create_dir(&path) {
         Ok(()) => Ok(()),
-        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => bail!("{rel} existe déjà"),
-        Err(e) => Err(anyhow!("{rel} : {e}")),
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            bail!(exists_already(i18n::ui(), rel))
+        }
+        Err(e) => Err(io_failed(rel, e)),
     }
 }
 
@@ -281,7 +331,7 @@ pub fn rename(root: &Path, from: &str, to: &str, kept: &[Kept]) -> Result<()> {
     let src = native(root, from)?;
     let dst = native(root, to)?;
     if std::fs::symlink_metadata(&src).is_err() {
-        bail!("{from} introuvable");
+        return Err(not_found(from));
     }
     let slash = |s: &str| s.replace('\\', "/");
     let (a, b) = (slash(from), slash(to));
@@ -290,32 +340,37 @@ pub fn rename(root: &Path, from: &str, to: &str, kept: &[Kept]) -> Result<()> {
     }
     let (lower_a, lower_b) = (a.to_lowercase(), b.to_lowercase());
     if lower_b.starts_with(&format!("{lower_a}/")) {
-        bail!("{to} est dans {from}");
+        bail!(tr!("{to} est dans {from}", "{to} is inside {from}"));
     }
     if std::fs::symlink_metadata(&dst).is_ok() {
         // On a disk that ignores case, `to` is found because it is `from`: its name, spelled as
         // typed, is then not one its folder lists.
         let same_folder = Path::new(&a).parent() == Path::new(&b).parent();
         if !(same_folder && lower_a == lower_b && !listed(&dst)) {
-            bail!("{to} existe déjà");
+            bail!(exists_already(i18n::ui(), to));
         }
-        return std::fs::rename(&src, &dst).map_err(|e| anyhow!("{from} : {e}"));
+        return std::fs::rename(&src, &dst).map_err(|e| io_failed(from, e));
     }
     // Refused, the move takes back the folders it made for itself.
     let made = dst.parent().map(missing_dirs).unwrap_or_default();
     if let Some(parent) = dst.parent() {
         std::fs::create_dir_all(parent).map_err(|e| {
             unmake(&made);
-            anyhow!("{to} : {e}")
+            io_failed(to, e)
         })?;
     }
     move_new(&src, &dst).map_err(|e| {
         unmake(&made);
         match e.kind() {
-            std::io::ErrorKind::AlreadyExists => anyhow!("{to} existe déjà"),
-            _ => anyhow!("{from} : {e}"),
+            std::io::ErrorKind::AlreadyExists => anyhow!(exists_already(i18n::ui(), to)),
+            _ => io_failed(from, e),
         }
     })
+}
+
+/// What the system said when `rel` could not be made, moved or opened.
+fn io_failed(rel: &str, e: std::io::Error) -> anyhow::Error {
+    anyhow!(tr!("{rel} : {e}", "{rel}: {e}"))
 }
 
 /// The folders missing on the way to `dir`, it included, deepest first: those `create_dir_all`
@@ -367,10 +422,12 @@ async fn case_of_tracked(root: &str, from: &str, to: &str) -> Result<()> {
     .await;
     // Git unable to list the index: the tree is the folder walked, which shows the new name.
     if listed.is_ok_and(|out| !out.is_empty()) {
-        bail!(
+        bail!(tr!(
             "git suit « {from} » sous ce nom : pour n’en changer que la casse, passe par git mv \
-             dans un terminal."
-        );
+             dans un terminal.",
+            "git tracks “{from}” under this name: to change only its case, use git mv in a \
+             terminal."
+        ));
     }
     Ok(())
 }
@@ -389,11 +446,14 @@ pub fn delete(
     holds_kept(root, rel, kept)?;
     let path = native(root, rel)?;
     if std::fs::symlink_metadata(&path).is_err() {
-        bail!("{rel} introuvable");
+        return Err(not_found(rel));
     }
     // A link to the root would take its place in the trash's eyes, or in the user's.
     if std::fs::canonicalize(&path)? == std::fs::canonicalize(root)? {
-        bail!("{rel} est la racine de la source");
+        bail!(tr!(
+            "{rel} est la racine de la source",
+            "{rel} is the root of the source"
+        ));
     }
     send(&path)
 }
@@ -416,11 +476,16 @@ pub fn to_trash(path: &Path) -> Result<()> {
         let ctx = trash::TrashContext::default();
         ctx.delete(&path).map_err(|e| {
             log::warn!("trash {}: {e}", path.display());
-            anyhow!(trash_message(&e))
+            anyhow!(trash_message(i18n::ui(), &e))
         })
     })
     .join()
-    .map_err(|_| anyhow!("la corbeille n’a pas répondu"))?
+    .map_err(|_| {
+        anyhow!(tr!(
+            "la corbeille n’a pas répondu",
+            "the trash didn’t respond"
+        ))
+    })?
 }
 
 /// Where the agents' worktrees are, from the folder holding them (the project's, or the root).
@@ -446,7 +511,10 @@ fn in_worktrees(root: &Path, rel: &str) -> Result<()> {
             .windows(2)
             .any(|w| w[0] == ".claude" && w[1] == "worktrees")
         {
-            bail!("{rel} est dans les worktrees des agents");
+            bail!(tr!(
+                "{rel} est dans les worktrees des agents",
+                "{rel} is in the agents’ worktrees"
+            ));
         }
     }
     Ok(())
@@ -458,14 +526,60 @@ fn in_worktrees(root: &Path, rel: &str) -> Result<()> {
 pub struct Kept {
     /// From the root, with `/`.
     pub path: String,
-    pub what: &'static str,
+    pub what: Holds,
 }
 
 /// What a kept folder is: a `.claude/worktrees` folder, one agent's worktree (of any project of the
 /// repository, or a validation's), a project's folder.
-pub const WORKTREES_KEPT: &str = "les worktrees des agents";
-pub const WORKTREE_KEPT: &str = "le worktree d’un agent";
-pub const PROJECT_KEPT: &str = "le dossier d’un projet";
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Holds {
+    Worktrees,
+    Worktree,
+    Project,
+}
+
+pub const WORKTREES_KEPT: Holds = Holds::Worktrees;
+pub const WORKTREE_KEPT: Holds = Holds::Worktree;
+pub const PROJECT_KEPT: Holds = Holds::Project;
+
+impl Holds {
+    /// Why `rel` is not renamed nor deleted: it is such a folder (`itself`), or holds one. A whole
+    /// sentence each, the words around the folder's change from one language to the other.
+    pub fn refusal(self, lang: Lang, rel: &str, itself: bool) -> String {
+        match (self, itself) {
+            (Holds::Worktrees, true) => tr_in!(
+                lang,
+                "{rel} est les worktrees des agents",
+                "{rel} is the folder of the agents’ worktrees"
+            ),
+            (Holds::Worktrees, false) => tr_in!(
+                lang,
+                "{rel} contient les worktrees des agents",
+                "{rel} holds the agents’ worktrees"
+            ),
+            (Holds::Worktree, true) => tr_in!(
+                lang,
+                "{rel} est le worktree d’un agent",
+                "{rel} is an agent’s worktree"
+            ),
+            (Holds::Worktree, false) => tr_in!(
+                lang,
+                "{rel} contient le worktree d’un agent",
+                "{rel} holds an agent’s worktree"
+            ),
+            (Holds::Project, true) => tr_in!(
+                lang,
+                "{rel} est le dossier d’un projet",
+                "{rel} is a project’s folder"
+            ),
+            (Holds::Project, false) => tr_in!(
+                lang,
+                "{rel} contient le dossier d’un projet",
+                "{rel} holds a project’s folder"
+            ),
+        }
+    }
+}
 
 /// Refuses `rel` when renaming or deleting it would take one of the `kept` folders that are there
 /// with it: it is one, or holds one, as spelled or as the disk has them (an 8.3 name is its folder).
@@ -485,22 +599,26 @@ fn holds_kept(root: &Path, rel: &str, kept: &[Kept]) -> Result<()> {
         else {
             continue;
         };
-        if names.iter().any(|n| n == path) {
-            bail!("{rel} est {}", k.what);
-        }
-        bail!("{rel} contient {}", k.what);
+        let itself = names.iter().any(|n| n == path);
+        bail!(k.what.refusal(i18n::ui(), rel, itself));
     }
     Ok(())
 }
 
-/// Why the trash refused, in the user's words (its own are English, and kept in the log).
-fn trash_message(e: &trash::Error) -> &'static str {
+/// Why the trash refused, in the user's words (its own are terse, and kept in the log).
+fn trash_message(lang: Lang, e: &trash::Error) -> String {
     match e {
-        trash::Error::CouldNotAccess { .. } | trash::Error::CanonicalizePath { .. } => {
-            "le fichier est introuvable ou inaccessible"
-        }
+        trash::Error::CouldNotAccess { .. } | trash::Error::CanonicalizePath { .. } => tr_in!(
+            lang,
+            "le fichier est introuvable ou inaccessible",
+            "the file can’t be found or accessed"
+        ),
         // Windows' shell says « Some operations were aborted » for a file in use or protected.
-        _ => "un fichier est peut-être ouvert ailleurs ou protégé",
+        _ => tr_in!(
+            lang,
+            "un fichier est peut-être ouvert ailleurs ou protégé",
+            "a file may be open elsewhere or protected"
+        ),
     }
 }
 
@@ -622,7 +740,7 @@ fn move_new(from: &Path, to: &Path) -> std::io::Result<()> {
 #[cfg(windows)]
 fn windows_name(name: &str) -> Result<()> {
     if name.ends_with(['.', ' ']) || name.chars().any(|c| c < ' ' || "<>:\"|?*".contains(c)) {
-        bail!("nom invalide");
+        bail!(tr!("nom invalide", "invalid name"));
     }
     let stem = name
         .split('.')
@@ -636,7 +754,7 @@ fn windows_name(name: &str) -> Result<()> {
             && stem.as_bytes()[3].is_ascii_digit()
             && stem.as_bytes()[3] != b'0');
     if device {
-        bail!("nom invalide");
+        bail!(tr!("nom invalide", "invalid name"));
     }
     Ok(())
 }
@@ -1311,7 +1429,7 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&file).unwrap(), "again\n");
     }
 
-    fn keep(path: &str, what: &'static str) -> Kept {
+    fn keep(path: &str, what: Holds) -> Kept {
         Kept {
             path: path.to_string(),
             what,
@@ -1391,12 +1509,46 @@ mod tests {
     }
 
     #[test]
+    fn says_in_english_what_the_editor_refuses_and_names_a_missing_file_by_a_code() {
+        use crate::i18n::Lang::En;
+        let dir = test_dir("fsedit-english");
+        std::fs::create_dir_all(dir.join("sub")).unwrap();
+        // A file not there: a typed refusal, told to the window as a code it writes itself.
+        for e in [
+            read(&dir, "gone.ts").unwrap_err(),
+            delete(&dir, "gone.ts", &[], |_| Ok(())).unwrap_err(),
+            rename(&dir, "gone.ts", "b.ts", &[]).unwrap_err(),
+        ] {
+            let missing = e.downcast_ref::<NotFound>().expect("a typed refusal");
+            assert_eq!(missing.wire(), "NOT_FOUND:gone.ts");
+            assert_eq!(missing.text(En), "gone.ts not found");
+            assert_eq!(e.to_string(), "gone.ts introuvable");
+        }
+        assert_eq!(
+            Holds::Worktree.refusal(En, "sub", false),
+            "sub holds an agent’s worktree"
+        );
+        assert_eq!(
+            Holds::Project.refusal(En, "web", true),
+            "web is a project’s folder"
+        );
+        let gone = trash::Error::CouldNotAccess {
+            target: "C:/x".into(),
+        };
+        assert_eq!(
+            trash_message(En, &gone),
+            "the file can’t be found or accessed"
+        );
+        assert_eq!(exists_already(En, "sub"), "sub already exists");
+    }
+
+    #[test]
     fn says_in_french_why_the_trash_refused() {
         let aborted = trash::Error::Unknown {
             description: "Some operations were aborted".into(),
         };
         assert_eq!(
-            trash_message(&aborted),
+            trash_message(crate::i18n::Lang::Fr, &aborted),
             "un fichier est peut-être ouvert ailleurs ou protégé"
         );
         let os = trash::Error::Os {
@@ -1404,14 +1556,14 @@ mod tests {
             description: "Access is denied.".into(),
         };
         assert_eq!(
-            trash_message(&os),
+            trash_message(crate::i18n::Lang::Fr, &os),
             "un fichier est peut-être ouvert ailleurs ou protégé"
         );
         let gone = trash::Error::CouldNotAccess {
             target: "C:/x".into(),
         };
         assert_eq!(
-            trash_message(&gone),
+            trash_message(crate::i18n::Lang::Fr, &gone),
             "le fichier est introuvable ou inaccessible"
         );
     }

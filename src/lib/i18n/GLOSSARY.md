@@ -259,6 +259,11 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 
 | Français | Anglais | Note |
 |---|---|---|
+| introuvable | not found | « {path} introuvable » → “{path} not found” ; une erreur du backend, en minuscules comme en français |
+| existe déjà | already exists | |
+| en lecture seule | read-only | |
+| chemin hors du dossier | path outside the folder | |
+| racine (de la source) | root (of the source) | |
 
 ## K — accounts
 

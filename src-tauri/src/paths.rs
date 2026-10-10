@@ -246,11 +246,19 @@ pub fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     std::fs::rename(&tmp, path)
 }
 
+/// Refused: `rel` leads out of the folder it is asked inside of.
+pub fn outside(rel: &str) -> anyhow::Error {
+    anyhow::anyhow!(tr!(
+        "chemin hors du dossier : {rel}",
+        "path outside the folder: {rel}"
+    ))
+}
+
 /// `rel` inside `root`, refused when it could leave it: absolute or drive-prefixed paths, `..`,
 /// or a symbolic link on the way that points outside. `rel` may not exist yet (a file to create).
 pub fn contained(root: &Path, rel: &str) -> anyhow::Result<PathBuf> {
     use std::path::Component;
-    let out = || anyhow::anyhow!("chemin hors du dossier : {rel}");
+    let out = || outside(rel);
     if rel.trim().is_empty() {
         return Err(out());
     }

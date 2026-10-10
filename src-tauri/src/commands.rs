@@ -473,7 +473,13 @@ pub async fn fs_read(
     path: String,
 ) -> Res<fsedit::FileText> {
     let (root, _) = core.edit_root(&project_id, agent_id).await.map_err(err)?;
-    fsedit::read(std::path::Path::new(&root), &path).map_err(err)
+    fsedit::read(std::path::Path::new(&root), &path).map_err(|e| {
+        match e.downcast_ref::<fsedit::NotFound>() {
+            // The editor shows a missing file rather than an error: a code it tells apart.
+            Some(missing) => missing.wire(),
+            None => err(e),
+        }
+    })
 }
 
 #[allow(clippy::too_many_arguments)]

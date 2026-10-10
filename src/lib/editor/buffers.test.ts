@@ -121,7 +121,7 @@ describe('buffers', () => {
       disk = text('agent\n', 'h2');
       await buffers.refresh(k);
       const gone = fakeBackend({
-        fs_read: () => Promise.reject('x.ts introuvable'),
+        fs_read: () => Promise.reject('NOT_FOUND:x.ts'),
         fs_base: () => null,
         fs_write: () => 'h9',
         set_unsaved: () => null,
@@ -153,7 +153,7 @@ describe('buffers', () => {
     let gone = false;
     fakeBackend({
       fs_read: () => {
-        if (gone) throw 'x.ts introuvable';
+        if (gone) throw 'NOT_FOUND:x.ts';
         return text('a\n');
       },
       fs_base: () => null,
@@ -166,10 +166,21 @@ describe('buffers', () => {
     expect(buffers.all[k]).toMatchObject({ disk: 'deleted', text: 'mine\n' });
   });
 
+  it('tells a missing file by the code the backend sends, and shows any other refusal', async () => {
+    fakeBackend({
+      fs_read: (a: any) => {
+        throw a.path === 'gone.ts' ? 'NOT_FOUND:gone.ts' : 'projet introuvable';
+      },
+      set_unsaved: () => null,
+    });
+    expect((await buffers.open('p1', 'project', 'gone.ts')).kind).toBe('missing');
+    expect(await buffers.open('p1', 'project', 'x.ts')).toMatchObject({ kind: 'error', error: 'projet introuvable' });
+  });
+
   it('opens binary, too large and missing files without text', async () => {
     fakeBackend({
       fs_read: (a: any) => {
-        if (a.path === 'gone.ts') throw 'gone.ts introuvable';
+        if (a.path === 'gone.ts') throw 'NOT_FOUND:gone.ts';
         return { kind: a.path === 'a.png' ? 'binary' : 'tooLarge', text: null, size: 3_500_000, hash: '', eol: 'lf', bom: false };
       },
       set_unsaved: () => null,
@@ -282,7 +293,7 @@ describe('buffers', () => {
     let phase: 'open' | 'gone' | 'slow' = 'open';
     fakeBackend({
       fs_read: () => {
-        if (phase === 'gone') throw 'x.ts introuvable';
+        if (phase === 'gone') throw 'NOT_FOUND:x.ts';
         return phase === 'slow' ? late.promise : text('a\n', 'h1');
       },
       fs_base: () => null,
@@ -335,7 +346,7 @@ describe('buffers', () => {
     });
     const k = (await buffers.open('p1', 'project', 'x.ts')).key;
     buffers.edit(k, 'mine\n');
-    failure = 'x.ts introuvable';
+    failure = 'NOT_FOUND:x.ts';
     await expect(buffers.reload(k)).resolves.toBeUndefined();
     expect(buffers.all[k]).toMatchObject({ disk: 'deleted', text: 'mine\n', version: 0 });
     failure = 'boom';
@@ -346,7 +357,7 @@ describe('buffers', () => {
     let state: 'missing' | 'broken' | 'there' = 'missing';
     const backend = fakeBackend({
       fs_read: () => {
-        if (state === 'missing') throw 'x.ts introuvable';
+        if (state === 'missing') throw 'NOT_FOUND:x.ts';
         if (state === 'broken') throw 'boom';
         return text('a\n');
       },
@@ -393,7 +404,7 @@ describe('buffers', () => {
       disk = text('a\n', 'h1');
       const backend = fakeBackend({
         fs_read: () => {
-          if (!disk) throw 'x.ts introuvable';
+          if (!disk) throw 'NOT_FOUND:x.ts';
           return disk;
         },
         fs_base: () => null,
