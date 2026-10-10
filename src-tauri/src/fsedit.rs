@@ -144,7 +144,8 @@ pub fn read(root: &Path, rel: &str) -> Result<FileText> {
 
 /// Writes `text` back with the file's line endings and BOM, through a temporary file renamed
 /// over it. With `expected`, refused (`changed` / `deleted`) when the file is no longer the one
-/// read; without, written anyway (created if need be, parent folders included).
+/// read; without, written anyway (created if need be, parent folders included, but not in the
+/// agents' worktrees).
 pub fn write(
     root: &Path,
     rel: &str,
@@ -176,6 +177,11 @@ pub fn write(
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => bail!(DELETED),
             Err(e) => return Err(e.into()),
         }
+    }
+    // Never a new file in the agents' worktrees: in one removed since, its folders made again
+    // would stand where git keeps that worktree. One there opened through a link is saved.
+    if std::fs::symlink_metadata(&path).is_err() {
+        in_worktrees(root, rel)?;
     }
 
     // Refuse to write to read-only files.
@@ -216,10 +222,11 @@ fn valid_names(rel: &str) -> Result<()> {
 }
 
 /// Creates the empty file `rel`, its missing folders with it. Refused when something is already
-/// there: a file is never created over another.
+/// there (a file is never created over another), and in the agents' worktrees.
 pub fn create(root: &Path, rel: &str) -> Result<()> {
     validate_rel(rel)?;
     valid_names(rel)?;
+    in_worktrees(root, rel)?;
     let path = contained(root, rel)?;
     if std::fs::symlink_metadata(&path).is_ok() {
         bail!("{rel} existe déjà");
@@ -1191,6 +1198,38 @@ mod tests {
         delete(&dir, ".claude/settings.json", &kept, &send).unwrap();
         mkdir(&dir, ".claude/agents").unwrap();
         assert_eq!(sent.borrow().len(), 1);
+    }
+
+    #[test]
+    fn creates_no_file_in_the_agents_worktrees_but_saves_one_open_there() {
+        let dir = test_dir("fsedit-worktrees-create");
+        let file = dir.join(".claude/worktrees/dem-1/x.ts");
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(&file, "x\n").unwrap();
+        // A new file there, or one written again in a worktree removed since (its folders made
+        // again would stand where git keeps the agent's worktree).
+        for rel in [
+            ".claude/worktrees/dem-1/new.ts",
+            ".CLAUDE/Worktrees/dem-1/new.ts",
+            ".claude/worktrees/gone/src/x.ts",
+            "packages/web/.claude/worktrees/dem-2/y.ts",
+        ] {
+            let err = create(&dir, rel).unwrap_err().to_string();
+            assert!(err.contains("worktrees des agents"), "{rel}: {err}");
+            let err = write(&dir, rel, "mine\n", "lf", false, None)
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains("worktrees des agents"), "{rel}: {err}");
+        }
+        assert_eq!(names(&dir.join(".claude/worktrees")), vec!["dem-1"]);
+        assert_eq!(names(&dir.join(".claude/worktrees/dem-1")), vec!["x.ts"]);
+        assert!(!dir.join("packages").exists());
+        // A file of it opened from the project (a link followed) is saved where it is.
+        let h = hash(b"x\n");
+        let rel = ".claude/worktrees/dem-1/x.ts";
+        write(&dir, rel, "mine\n", "lf", false, Some(&h)).unwrap();
+        write(&dir, rel, "again\n", "lf", false, None).unwrap();
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "again\n");
     }
 
     fn keep(path: &str, what: &'static str) -> Kept {
