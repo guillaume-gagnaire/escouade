@@ -480,11 +480,12 @@ pub async fn diff(root: &str, paths: &[String]) -> Result<String> {
             out.push_str(&cap_file_diffs(&String::from_utf8_lossy(&o), MAX_FILE_DIFF));
         }
     }
-    // The new files git's own diff already shows (those in the index).
+    // The new files git's own diff already shows (those in the index). Git ends the `+++` line of
+    // a name holding a space with a tab, a flagged file's header included.
     let covered: HashSet<String> = out
         .lines()
         .filter(|l| l.starts_with("+++ "))
-        .map(str::to_string)
+        .map(|l| l.trim_end_matches('\t').to_string())
         .collect();
     let mut unread = 0;
     for path in untracked {
@@ -2106,6 +2107,25 @@ mod repo_tests {
         let d = diff(&r, &["[.]env".to_string()]).await.unwrap();
         assert!(d.contains("+++ b/[.]env"), "{d}");
         assert!(!d.contains("SECRET"), "{d}");
+    }
+
+    #[tokio::test]
+    async fn a_staged_new_file_with_a_space_in_its_name_is_listed_once() {
+        let r = repo("git-diff-staged-space");
+        let root = Path::new(&r);
+        git(&r, &["config", "core.autocrlf", "false"]);
+        // Git ends the `+++` line of such a name with a tab.
+        std::fs::write(root.join("my file.txt"), "x\n").unwrap();
+        std::fs::write(root.join("big file.txt"), big_text(MAX_FILE_DIFF + 100_000)).unwrap();
+        git(&r, &["add", "my file.txt", "big file.txt"]);
+        let d = diff(&r, &[]).await.unwrap();
+        assert_eq!(d.matches("diff --git a/my file.txt").count(), 1, "{d:.600}");
+        assert_eq!(
+            d.matches("diff --git a/big file.txt").count(),
+            1,
+            "{d:.600}"
+        );
+        assert!(d.contains(TOO_LARGE), "{d:.600}");
     }
 
     /// A text of `len` bytes, in lines of 100.
