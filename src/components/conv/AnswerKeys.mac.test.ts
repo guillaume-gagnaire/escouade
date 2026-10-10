@@ -14,7 +14,7 @@ vi.mock('../../lib/platform', async (original) => {
 });
 
 import type { PermissionItem, QuestionItem } from '../../lib/types';
-import { conversationHost } from '../../test/conversation';
+import { answerClock, conversationHost, settle } from '../../test/conversation';
 import { fakeBackend, resetApp } from '../../test/ipc';
 import PermissionCard from './PermissionCard.svelte';
 import QuestionCard from './QuestionCard.svelte';
@@ -44,10 +44,12 @@ const question: QuestionItem = {
 
 describe('answering from the keyboard on macOS', () => {
   beforeEach(() => resetApp());
+  answerClock();
 
   it('allows with Cmd+Enter and "always" with Cmd+Shift+Enter, not with Ctrl', async () => {
     const backend = fakeBackend();
     render(PermissionCard, { target: conversationHost(), props: { item: permission, agentId: 'a1', pending: true, cwd: 'C:\\code' } });
+    settle();
     await userEvent.keyboard('{Control>}{Enter}{/Control}');
     expect(backend.called('answer_permission')).toHaveLength(0);
     await userEvent.keyboard('{Meta>}{Shift>}{Enter}{/Shift}{/Meta}');
@@ -66,6 +68,7 @@ describe('answering from the keyboard on macOS', () => {
   it('validates a question with Cmd+Enter once it is answered, and picks its options with Alt+digit', async () => {
     const backend = fakeBackend();
     render(QuestionCard, { target: conversationHost(), props: { item: question, agentId: 'a1', pending: true } });
+    settle();
     await userEvent.keyboard('{Alt>}1{/Alt}{Alt>}2{/Alt}');
     expect(screen.getByRole('button', { name: 'Valider' })).toHaveTextContent('⌘Entrée');
     await userEvent.keyboard('{Control>}{Enter}{/Control}');

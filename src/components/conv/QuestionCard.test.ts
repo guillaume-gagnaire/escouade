@@ -1,10 +1,10 @@
 import { render, screen, waitFor } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { tick } from 'svelte';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { app } from '../../lib/state.svelte';
 import type { QuestionItem } from '../../lib/types';
-import { conversationHost } from '../../test/conversation';
+import { answerClock, conversationHost, settle } from '../../test/conversation';
 import { fakeBackend, resetApp } from '../../test/ipc';
 import QuestionCard from './QuestionCard.svelte';
 
@@ -92,14 +92,22 @@ describe('QuestionCard keyboard', () => {
   beforeEach(() => resetApp());
   // What a test added around the card (a terminal) must not keep the focus for the next one.
   afterEach(() => document.querySelectorAll('.xterm').forEach((n) => n.remove()));
+  answerClock();
 
   const alt = (digit: string) => userEvent.keyboard(`{Alt>}${digit}{/Alt}`);
   const ctrlEnter = () => userEvent.keyboard('{Control>}{Enter}{/Control}');
-  const show = (over: Partial<QuestionItem> = {}, props: { pending?: boolean; current?: boolean } = {}) =>
+  /** The card, just drawn: its keys still wait. */
+  const draw = (over: Partial<QuestionItem> = {}, props: { pending?: boolean; current?: boolean } = {}) =>
     render(QuestionCard, {
       target: conversationHost(),
       props: { item: item(over), agentId: 'a1', pending: true, ...props },
     });
+  /** The card, drawn a moment ago: its keys answer. */
+  const show = (over: Partial<QuestionItem> = {}, props: { pending?: boolean; current?: boolean } = {}) => {
+    const shown = draw(over, props);
+    settle();
+    return shown;
+  };
 
   const [base, tools, target] = [
     { question: 'Base ?', header: 'Base', options: [{ label: 'PG' }, { label: 'SQLite' }] },
@@ -119,6 +127,21 @@ describe('QuestionCard keyboard', () => {
     expect(backend.called('answer_question')).toEqual([
       { cmd: 'answer_question', args: { id: 'a1', requestId: 'req-1', answers: { 'Quelle base de données ?': 'SQLite' } } },
     ]);
+  });
+
+  it('answers nothing from the keys just after it comes, the message field included', async () => {
+    const backend = fakeBackend();
+    draw();
+    vi.advanceTimersByTime(100);
+    await alt('2');
+    const keydown = new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true, cancelable: true });
+    document.body.dispatchEvent(keydown);
+    await tick();
+    expect(keydown.defaultPrevented).toBe(true);
+    expect(backend.called('answer_question')).toHaveLength(0);
+    vi.advanceTimersByTime(500);
+    await alt('2');
+    expect(backend.called('answer_question')[0].args.answers).toEqual({ 'Quelle base de données ?': 'SQLite' });
   });
 
   it('reads the digit from the physical key, as on an AZERTY keyboard', async () => {

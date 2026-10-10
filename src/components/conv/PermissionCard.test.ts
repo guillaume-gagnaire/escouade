@@ -1,9 +1,9 @@
 import { render, screen, waitFor } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { app } from '../../lib/state.svelte';
 import type { PermissionItem } from '../../lib/types';
-import { conversationHost } from '../../test/conversation';
+import { answerClock, conversationHost, settle } from '../../test/conversation';
 import { fakeBackend, resetApp } from '../../test/ipc';
 import PermissionCard from './PermissionCard.svelte';
 
@@ -75,13 +75,50 @@ describe('PermissionCard keyboard', () => {
   beforeEach(() => resetApp());
   // What a test added around the card (a terminal, a sidebar) must not keep the focus for the next one.
   afterEach(() => document.querySelectorAll('.xterm, nav').forEach((n) => n.remove()));
+  answerClock();
 
   const ctrl = (keys: string) => userEvent.keyboard(`{Control>}${keys}{/Control}`);
-  const show = (over: Partial<PermissionItem> = {}, props: { pending?: boolean; current?: boolean } = {}) =>
+  /** The card, just drawn: its keys still wait. */
+  const draw = (over: Partial<PermissionItem> = {}, props: { pending?: boolean; current?: boolean } = {}) =>
     render(PermissionCard, {
       target: conversationHost(),
       props: { item: item(over), agentId: 'a1', pending: true, cwd: 'C:\\code', ...props },
     });
+  /** The card, drawn a moment ago: its keys answer. */
+  const show = (over: Partial<PermissionItem> = {}, props: { pending?: boolean; current?: boolean } = {}) => {
+    const shown = draw(over, props);
+    settle();
+    return shown;
+  };
+
+  it('answers nothing from the keys just after it comes: a Ctrl+Enter meant to send the message does not allow it unread', async () => {
+    const backend = fakeBackend();
+    draw();
+    vi.advanceTimersByTime(100);
+    const keydown = new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true, cancelable: true });
+    document.body.dispatchEvent(keydown);
+    await ctrl('{Shift>}{Enter}{/Shift}');
+    expect(backend.called('answer_permission')).toHaveLength(0);
+    // Not given to the message field either, which would send the text typed there as a refusal.
+    expect(keydown.defaultPrevented).toBe(true);
+    vi.advanceTimersByTime(500);
+    await ctrl('{Enter}');
+    expect(backend.called('answer_permission')).toEqual([
+      { cmd: 'answer_permission', args: { id: 'a1', requestId: 'req-2', decision: 'allow', message: null } },
+    ]);
+  });
+
+  it('waits again once it becomes the request the keys answer, the one before it answered', async () => {
+    const backend = fakeBackend();
+    const { rerender } = draw({}, { current: false });
+    settle();
+    await rerender({ current: true });
+    await ctrl('{Enter}');
+    expect(backend.called('answer_permission')).toHaveLength(0);
+    settle();
+    await ctrl('{Enter}');
+    expect(backend.called('answer_permission')[0].args).toMatchObject({ requestId: 'req-2', decision: 'allow' });
+  });
 
   it('allows with Ctrl+Enter', async () => {
     const backend = fakeBackend();

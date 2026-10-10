@@ -15,6 +15,7 @@ vi.mock('../lib/terminals', () => ({
 import { applyConvOps, conversationOf, releaseIdle } from '../lib/conversations.svelte';
 import { app } from '../lib/state.svelte';
 import type { Agent } from '../lib/types';
+import { answerClock, settle } from '../test/conversation';
 import { agent, fakeBackend, project, resetApp, ticket } from '../test/ipc';
 import Conversation from './Conversation.svelte';
 
@@ -1279,14 +1280,52 @@ describe('Conversation answers from the keyboard', () => {
     const a = agent({ id: `k${Math.random()}`, status: 'waiting', pending: items.map((i) => (i as { id: string }).id), ...over });
     resetApp({ projects: [project()], agents: [a] });
     const backend = fakeBackend({ get_conversation: () => items });
-    render(Conversation, { agent: a, project: project() });
-    return { a, backend };
+    const { rerender } = render(Conversation, { agent: a, project: project() });
+    return { a, backend, rerender };
   }
   const field = () => screen.getByRole('textbox') as HTMLTextAreaElement;
+  answerClock();
+  /** The cards of the requests, drawn a moment ago: the keys answer them. */
+  async function shown(testId: string) {
+    const cards = await screen.findAllByTestId(testId);
+    settle();
+    return cards;
+  }
+
+  it('answers nothing, and sends nothing, when a Ctrl+Enter meant to send the message comes just as a request does', async () => {
+    const { backend } = waiting([perm('r1')]);
+    await screen.findByTestId('permission-pending');
+    await userEvent.type(field(), 'Lance les tests');
+    await userEvent.keyboard('{Control>}{Enter}{/Control}');
+    await tick();
+    expect(backend.called('answer_permission')).toHaveLength(0);
+    expect(backend.called('send_message')).toHaveLength(0);
+    expect(field()).toHaveValue('Lance les tests');
+    settle();
+    await userEvent.keyboard('{Control>}{Enter}{/Control}');
+    await waitFor(() => expect(backend.called('answer_permission')).toHaveLength(1));
+    expect(backend.called('answer_permission')[0].args).toMatchObject({ requestId: 'r1', decision: 'allow' });
+  });
+
+  it('waits again on the next request once Ctrl+Enter answered the first: a second press does not allow it unread', async () => {
+    const { a, backend, rerender } = waiting([perm('r1'), perm('r2')]);
+    await shown('permission-pending');
+    await userEvent.keyboard('{Control>}{Enter}{/Control}');
+    await waitFor(() => expect(backend.called('answer_permission')).toHaveLength(1));
+    // The backend's answer: the second request is the first to wait now.
+    await rerender({ agent: { ...a, pending: ['r2'] }, project: project() });
+    await userEvent.keyboard('{Control>}{Enter}{/Control}');
+    await tick();
+    expect(backend.called('answer_permission')).toHaveLength(1);
+    settle();
+    await userEvent.keyboard('{Control>}{Enter}{/Control}');
+    await waitFor(() => expect(backend.called('answer_permission')).toHaveLength(2));
+    expect(backend.called('answer_permission')[1].args).toMatchObject({ requestId: 'r2', decision: 'allow' });
+  });
 
   it('allows a request with Ctrl+Enter typed in the message field, and keeps what was typed there', async () => {
     const { a, backend } = waiting([perm('r1')]);
-    await screen.findByTestId('permission-pending');
+    await shown('permission-pending');
     await userEvent.type(field(), 'Plutôt npm run clean');
     await userEvent.keyboard('{Control>}{Enter}{/Control}');
     await waitFor(() => expect(backend.called('answer_permission')).toHaveLength(1));
@@ -1310,7 +1349,7 @@ describe('Conversation answers from the keyboard', () => {
 
   it('answers only the first of several requests, and shows the keys on it alone', async () => {
     const { backend } = waiting([perm('r1'), perm('r2')]);
-    const cards = await screen.findAllByTestId('permission-pending');
+    const cards = await shown('permission-pending');
     expect(cards).toHaveLength(2);
     expect(within(cards[0]).getByRole('button', { name: 'Autoriser' })).toHaveAttribute('aria-keyshortcuts', 'Control+Enter');
     expect(within(cards[1]).getByRole('button', { name: 'Autoriser' })).not.toHaveAttribute('aria-keyshortcuts');
@@ -1321,7 +1360,7 @@ describe('Conversation answers from the keyboard', () => {
 
   it('picks the options of a question with Alt+digit from the message field, then validates with Ctrl+Enter', async () => {
     const { a, backend } = waiting([ask('q1')]);
-    await screen.findByTestId('question-pending');
+    await shown('question-pending');
     await userEvent.type(field(), 'un mot');
     await userEvent.keyboard('{Alt>}2{/Alt}'); // Base: SQLite
     await userEvent.keyboard('{Alt>}1{/Alt}'); // Cible: Web
@@ -1338,7 +1377,7 @@ describe('Conversation answers from the keyboard', () => {
 
   it('lets Ctrl+Enter send the typed answer to a question the options have not answered', async () => {
     const { backend } = waiting([ask('q1')]);
-    await screen.findByTestId('question-pending');
+    await shown('question-pending');
     await userEvent.type(field(), 'Les deux{Control>}{Enter}{/Control}');
     await waitFor(() => expect(backend.called('answer_question')).toHaveLength(1));
     expect(backend.called('answer_question')[0].args.answers).toEqual({ 'Base ?': 'Les deux', 'Cible ?': 'Les deux' });
@@ -1370,7 +1409,7 @@ describe('Conversation answers from the keyboard', () => {
 
     it('lets the keys that answer work from there', async () => {
       const { backend } = waiting([perm('r1')]);
-      await screen.findByTestId('permission-pending');
+      await shown('permission-pending');
       field().blur();
       app.nextWaiting();
       await waitFor(() => expect(field()).toHaveFocus());
