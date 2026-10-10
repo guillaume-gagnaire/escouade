@@ -249,10 +249,12 @@ describe('Conversation', () => {
           toJSON: () => ({}),
         });
         if (this.classList.contains('scroll')) return rect(0, 500);
-        const msgs = this.parentElement;
-        if (msgs?.classList.contains('msgs')) {
+        // What a block holds is where its block is.
+        const block = this.closest('.msgs > *');
+        const msgs = block?.parentElement;
+        if (block && msgs) {
           const scroller = msgs.parentElement as HTMLElement;
-          return rect([...msgs.children].indexOf(this) * height() - scroller.scrollTop, height());
+          return rect([...msgs.children].indexOf(block) * height() - scroller.scrollTop, height());
         }
         return rect(0, 0);
       });
@@ -283,6 +285,40 @@ describe('Conversation', () => {
       resized.forEach((cb) => cb([]));
       expect(scroller.scrollTop).toBe(1300);
     });
+
+    const press = (el: HTMLElement, key: string, shiftKey = false) =>
+      el.dispatchEvent(new KeyboardEvent('keydown', { key, shiftKey, bubbles: true }));
+
+    it.each([
+      ['ArrowUp', false],
+      ['PageUp', false],
+      ['Home', false],
+      [' ', true],
+      // A focus move up: the browser brings what gets the focus into view.
+      ['Tab', true],
+    ])('leaves the bottom when the reader presses « %s » (Maj : %s)', async (key, shift) => {
+      const { scroller } = setup();
+      await frame();
+      press(scroller, key, shift);
+      layoutMovesTo(scroller, 1300);
+      resized.forEach((cb) => cb([]));
+      expect(scroller.scrollTop).toBe(1300);
+    });
+
+    it.each(['ArrowDown', 'PageDown', 'End', ' '])(
+      'keeps following when the content shrinks just after the reader pressed « %s », which scrolls down',
+      async (key) => {
+        const { scroller } = setup();
+        await frame();
+        const height = grows(scroller);
+        press(scroller, key);
+        height(1800);
+        layoutMovesTo(scroller, 1300);
+        height(2400);
+        resized.forEach((cb) => cb([]));
+        expect(scroller.scrollTop).toBe(2400);
+      },
+    );
 
     it('keeps following when the content shrinks under a view at the bottom', async () => {
       const { scroller } = setup();
@@ -713,6 +749,44 @@ describe('Conversation', () => {
           await frame();
           expect(drawnIds(again.container)[0]).toBe('u40');
           expect((again.container.querySelector('.scroll') as HTMLElement).scrollTop).toBe(3000);
+        });
+
+        describe('the focus moving while the view follows the bottom', () => {
+          const bash = { kind: 'tool', id: 't1', name: 'Bash', input: { command: 'ls' }, status: 'ok', ts: 1 };
+          // 81 blocks of 150 px (the button, then 80 items) in the 500 px view, at its bottom.
+          const BOTTOM = 81 * 150 - 500;
+          async function atTheBottom(items: unknown[]) {
+            const r = setup({ status: 'running' }, items);
+            await frame();
+            await frame();
+            const height = grows(r.scroller);
+            height(81 * 150);
+            layoutMovesTo(r.scroller, BOTTOM);
+            return { ...r, height };
+          }
+
+          it('leaves the bottom for an element above it, the focus coming from the message field', async () => {
+            const { scroller } = await atTheBottom(many(200));
+            // Shift+Tab in the message field, whose keys are not the conversation's, lands above.
+            const field = screen.getByRole('textbox');
+            field.focus();
+            press(field, 'Tab', true);
+            screen.getByRole('button', { name: 'Afficher les 80 précédents' }).focus();
+            // The browser brings it into view.
+            layoutMovesTo(scroller, 0);
+            resized.forEach((cb) => cb([]));
+            expect(scroller.scrollTop).toBe(0);
+          });
+
+          it('keeps following when the focus goes to an element at the bottom', async () => {
+            const { container, scroller, height } = await atTheBottom([...many(199), bash]);
+            (container.querySelector('[data-item="t1"] .row') as HTMLElement).focus();
+            // The content shrinks under the view, which goes on following.
+            height(81 * 150 - 100);
+            layoutMovesTo(scroller, BOTTOM - 100);
+            resized.forEach((cb) => cb([]));
+            expect(scroller.scrollTop).toBe(81 * 150 - 100);
+          });
         });
       });
 

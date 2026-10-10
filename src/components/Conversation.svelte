@@ -234,22 +234,36 @@
 
   // The reader scrolling up leaves the bottom, however close to it: messages rendered as they come
   // into view (content-visibility) resize the content, which must not pull them back. Only the
-  // reader going up does (the wheel or a key up, or a drag, whose way is not told): content
-  // shrinking under the view, or the message field shrinking back once a message is sent, moves the
-  // view up too, even while the reader wheels down, and the conversation must go on following.
+  // reader does, but not going down: the wheel down and the keys that scroll down are left out,
+  // every other key counts (a key up, Shift+Tab, whatever a focused element does with it), and a
+  // drag, whose way is not told. Content shrinking under the view, or the message field shrinking
+  // back once a message is sent, moves the view up too, even while the reader wheels down, and the
+  // conversation must go on following.
   let readerAt = 0;
   let dragging = false;
   const reading = () => dragging || performance.now() - readerAt < 500;
-  const UP_KEYS = new Set(['ArrowUp', 'PageUp', 'Home']);
+  const DOWN_KEYS = new Set(['ArrowDown', 'PageDown', 'End']);
   const byReader = (e: WheelEvent | KeyboardEvent) => {
     settling = null;
-    const up = e instanceof WheelEvent ? e.deltaY < 0 : UP_KEYS.has(e.key) || (e.key === ' ' && e.shiftKey);
-    if (up) readerAt = performance.now();
+    const down = e instanceof WheelEvent ? e.deltaY >= 0 : DOWN_KEYS.has(e.key) || (e.key === ' ' && !e.shiftKey);
+    if (!down) readerAt = performance.now();
   };
   const grab = () => {
     dragging = true;
     settling = null;
   };
+
+  // The focus moving to an element above the bottom view (Shift+Tab, from the message field too, whose keys are not
+  // the conversation's): the browser brings it into view, which is the reader going up. One already in the bottom
+  // view (a card's button, being answered) leaves the conversation following.
+  function onFocusIn(e: FocusEvent) {
+    const el = e.target;
+    if (!scroller || !(el instanceof HTMLElement) || el === scroller) return;
+    const at = el.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+    if (at >= scroller.scrollHeight - scroller.clientHeight) return;
+    readerAt = performance.now();
+    settling = null;
+  }
 
   // The latest items sliding under a view that follows the bottom take blocks away above it, and the browser lowers
   // the view (scroll anchoring, or clamping): that is no reader leaving the bottom, even one dragging (a selection).
@@ -498,7 +512,16 @@
 
   <!-- Focusable for the keyboard to go on reading once the last of the older items are drawn (showOlder). -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="scroll" tabindex="-1" bind:this={scroller} onscroll={onScroll} onwheel={byReader} onkeydown={byReader} onpointerdown={grab}>
+  <div
+    class="scroll"
+    tabindex="-1"
+    bind:this={scroller}
+    onscroll={onScroll}
+    onwheel={byReader}
+    onkeydown={byReader}
+    onfocusin={onFocusIn}
+    onpointerdown={grab}
+  >
     <div class="msgs" bind:this={content}>
       {#if conv.error}
         <div class="load-error">
