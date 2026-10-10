@@ -386,8 +386,12 @@ export interface Agent {
   effort: string;
   mode: string;
   sessionId: string | null;
+  /** The latest entry of its session (the uuid of its latest assistant message): where a copy made now forks it. */
+  lastEntry: string | null;
   /** A copy of another agent: the original’s session, which its starts fork until a turn gives it its own. */
   forkOf: string | null;
+  /** Where the copy forks it: the original’s latest entry when it was copied (null: the whole session). */
+  forkAt: string | null;
   cwd: string;
   worktree: Worktree | null;
   createdAt: number;

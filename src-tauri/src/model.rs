@@ -593,9 +593,15 @@ pub struct AgentMeta {
     pub effort: String,
     pub mode: String,
     pub session_id: Option<String>,
+    /// The latest entry of its session's main chain (the uuid of its latest assistant message),
+    /// saved with the end of each turn: where a copy made now forks its session.
+    pub last_entry: Option<String>,
     /// A copy of another agent (« Dupliquer la conversation »): the original's session, which
     /// its starts fork (`--resume <it> --fork-session`) until a turn gives it one of its own.
     pub fork_of: Option<String>,
+    /// The original's latest entry when it was copied: the copy's starts fork its session there
+    /// (`--resume-session-at`), the turns it ran since left out. None: the whole session.
+    pub fork_at: Option<String>,
     pub cwd: String,
     pub worktree: Option<Worktree>,
     pub created_at: i64,
@@ -1331,17 +1337,34 @@ mod tests {
             "agents": [{ "id": "a1", "name": "x", "sessionId": "s1" }]
         }))
         .unwrap();
-        assert_eq!(s.agents[0].session_id.as_deref(), Some("s1"));
-        assert_eq!(s.agents[0].fork_of, None);
-        // A copy's is saved with it, in camel case.
+        let a = &s.agents[0];
+        assert_eq!(a.session_id.as_deref(), Some("s1"));
+        // No entry recorded yet: a copy made before its next turn forks its whole session.
+        assert_eq!(
+            (&a.fork_of, &a.fork_at, &a.last_entry),
+            (&None, &None, &None)
+        );
+        // A copy's are saved with it, in camel case.
         let copy = AgentMeta {
             fork_of: Some("s1".into()),
+            fork_at: Some("e1".into()),
+            last_entry: Some("e2".into()),
             ..Default::default()
         };
         let v = serde_json::to_value(&copy).unwrap();
-        assert_eq!(v["forkOf"], "s1");
+        assert_eq!(
+            (&v["forkOf"], &v["forkAt"], &v["lastEntry"]),
+            (&json!("s1"), &json!("e1"), &json!("e2"))
+        );
         let back: AgentMeta = serde_json::from_value(v).unwrap();
-        assert_eq!(back.fork_of.as_deref(), Some("s1"));
+        assert_eq!(
+            (
+                back.fork_of.as_deref(),
+                back.fork_at.as_deref(),
+                back.last_entry.as_deref()
+            ),
+            (Some("s1"), Some("e1"), Some("e2"))
+        );
     }
 
     #[test]

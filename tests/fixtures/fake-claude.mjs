@@ -3,11 +3,14 @@
 // It replays the frame shapes documented in docs/PROTOCOL.md. The user message text picks the
 // scenario: "question", "permission", "edit", "slow", "crash", "grandchild"; anything else is a
 // plain reply. A `--resume=missing…` session fails like an unknown session does, forked or not;
-// with `--fork-session`, the resumed conversation goes on under a new session id.
+// with `--fork-session`, the resumed conversation goes on under a new session id, and a
+// `--resume-session-at=missing…` entry fails as one Claude Code cannot find does. Each assistant
+// message carries the uuid of its entry in the session (`entry-<pid>-<n>`).
 // Every launch appends {argv, cwd, proxy, tls} (its HTTPS_PROXY and NODE_TLS_REJECT_UNAUTHORIZED)
 // to $FAKE_CLAUDE_LOG, by default <tmp>/fake-claude-<cwd with non-alphanumerics replaced by
 // _>.jsonl, and every user message read on stdin to <log>.stdin.jsonl.
-// Started with --append-system-prompt (a ticket's protocol), it plays the ticket's agent: it writes
+// Started with --append-system-prompt (a ticket's protocol; not what a copy of an agent is told of
+// its new folder, « Cette conversation a été copiée… »), it plays the ticket's agent: it writes
 // <key>.txt ("Boucle n") in its folder and ends each turn with an ```escouade report (criteria and
 // "avancement"). The ticket's title, in the protocol, steers it: [ok] every criterion met at once,
 // [jamais] none ever, [sans-bilan] no report, [lent] a turn that lasts 30 s, [recette] a launch
@@ -125,6 +128,11 @@ function startSession() {
     process.stderr.write(`No conversation found with session ID: ${resume}\n`);
     process.exit(1);
   }
+  const at = argv.find((a) => a.startsWith('--resume-session-at='))?.slice('--resume-session-at='.length);
+  if (at?.startsWith('missing')) {
+    process.stderr.write(`No message found with message.uuid of: ${at}\n`);
+    process.exit(1);
+  }
   // Forked, as Claude Code does it: the session resumed is left as it is, a new one goes on.
   const sessionId = resume && !argv.includes('--fork-session') ? resume : `sess-${process.pid}`;
   const model = argv[argv.indexOf('--model') + 1] ?? 'sonnet';
@@ -134,14 +142,18 @@ function startSession() {
   let slowTimer = null;
   let asked = false;
   const replay = argv.includes('--replay-user-messages');
-  const sys = argv.includes('--append-system-prompt') ? (argv[argv.indexOf('--append-system-prompt') + 1] ?? '') : '';
+  const appended = argv.includes('--append-system-prompt') ? (argv[argv.indexOf('--append-system-prompt') + 1] ?? '') : '';
+  // What a copy of an agent is told of its folder is no ticket's protocol: it plays a plain agent.
+  const sys = appended.startsWith('Cette conversation a été copiée') ? '' : appended;
   let remoteSent = false;
+  let entries = 0;
 
   const out = (o) => process.stdout.write(JSON.stringify(o) + '\n');
   const ok = (id, response = {}) => out({ type: 'control_response', response: { subtype: 'success', request_id: id, response } });
 
   function assistant(block, id = `msg_${process.pid}_${++msg}`) {
-    out({ type: 'assistant', message: { id, role: 'assistant', content: [block] }, parent_tool_use_id: null, session_id: sessionId });
+    const uuid = `entry-${process.pid}-${++entries}`;
+    out({ type: 'assistant', message: { id, role: 'assistant', content: [block] }, parent_tool_use_id: null, session_id: sessionId, uuid });
     return id;
   }
 

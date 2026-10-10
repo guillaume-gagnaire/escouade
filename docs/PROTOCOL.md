@@ -9,12 +9,15 @@ claude --output-format stream-json --verbose --input-format stream-json
        --permission-prompt-tool stdio --include-partial-messages
        --permission-mode <auto|plan|acceptEdits|bypassPermissions>
        --model <fable|opus|sonnet|haiku> --effort <low|medium|high|xhigh|max>
-       [--resume=<session_id> [--fork-session]] [--allow-dangerously-skip-permissions]
+       [--resume=<session_id> [--fork-session [--resume-session-at=<uuid>]]]
+       [--allow-dangerously-skip-permissions]
 ```
 
 Une ligne JSON par message, dans les deux sens (stdin / stdout).
 
 `--resume=<id> --fork-session` (copie d'un agent, vérifié sur 2.1.289 avec `--input-format stream-json`) : la conversation reprise continue sous un nouveau `session_id` (les événements d'un hook `SessionStart`, s'il y en a, le portent dès le démarrage, avec la source `fork`), et le fichier de la session d'origine n'est pas touché, alors qu'un `--resume` simple y ajoute des lignes dès le démarrage. La nouvelle session n'est écrite qu'au premier message : tant qu'aucun `system/init` n'est venu, il faut forker de nouveau. Une session d'origine introuvable échoue comme un `--resume` (« No conversation found with session ID »).
+
+`--resume-session-at=<uuid>` (option cachée, absente de `--help`, vérifiée sur 2.1.289) ne garde de la session reprise que les messages jusqu'à l'entrée `<uuid>` incluse (« any chain-entry UUID, typically the kept turn's last entry »). Le binaire la dit « ignorée hors du mode print », mais nos lancements stream-json sans `-p` y sont : forkée à l'entrée du premier de deux tours, la session ne contient plus que ce tour (`export_conversation`, une requête de contrôle sans paramètre, rend son texte sans appel au modèle). L'`uuid` d'une frame `assistant` du fil principal est celle de son entrée dans le transcript (le CLI la recopie de son message), sauf pour les messages qu'il fabrique (`is_meta`) ; Escouade garde celle de la dernière comme point de copie. Une entrée introuvable fait échouer le démarrage (« No message found with message.uuid of: <uuid> », code 1).
 
 ## Hôte → CLI
 

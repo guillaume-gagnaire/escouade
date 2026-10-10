@@ -3197,9 +3197,12 @@ async fn a_copy_shows_the_conversation_again_and_forks_its_session_leaving_the_o
     h.turn(&id, "Premier").await;
     let original = h.agent(&id);
     let session = original.session_id.clone().unwrap();
+    // The last entry of the turn it ran: where a copy forks its session.
+    let entry = original.last_entry.clone().expect("its last entry");
     let items = h.items(&id);
 
     let copy = h.core.duplicate_agent(&id).await.unwrap().meta;
+    assert_eq!(copy.fork_at.as_deref(), Some(entry.as_str()));
     assert_eq!(
         (copy.name.as_str(), copy.named, copy.project_id.as_str()),
         ("refacto-auth (copie)", true, p.id.as_str())
@@ -3218,14 +3221,31 @@ async fn a_copy_shows_the_conversation_again_and_forks_its_session_leaving_the_o
     assert_eq!(h.items(&copy.id), items);
     // Shown at once, as an agent the user made.
     assert_eq!(h.core.ui.read().selected_agent.get(&p.id), Some(&copy.id));
-    // Started on a fork of the original's session.
+    let pinned = |argv: &[String]| {
+        argv.windows(3).any(|w| {
+            w[0] == format!("--resume={session}")
+                && w[1] == "--fork-session"
+                && w[2] == format!("--resume-session-at={entry}")
+        })
+    };
+    // Started on a fork of the original's session where it was copied…
     h.core.ensure_process(&copy.id).await.unwrap();
     let argv = h.launches(&r).pop().unwrap();
+    assert!(pinned(&argv), "{argv:?}");
+    // Nothing to say of its folder: it is the original's.
     assert!(
-        argv.windows(2)
-            .any(|w| w[0] == format!("--resume={session}") && w[1] == "--fork-session"),
+        !argv.contains(&"--append-system-prompt".to_string()),
         "{argv:?}"
     );
+    // …and there still, the original having gone on meanwhile, at every start until its first turn.
+    h.turn(&id, "Ensuite").await;
+    assert_ne!(h.agent(&id).last_entry.as_deref(), Some(entry.as_str()));
+    h.core.agent(&copy.id).unwrap().lock().meta.last_activity = 0;
+    h.core.stop_idle_processes();
+    h.wait("the copy stopped", |h| !h.alive(&copy.id)).await;
+    h.core.ensure_process(&copy.id).await.unwrap();
+    let argv = h.launches(&r).pop().unwrap();
+    assert!(pinned(&argv), "{argv:?}");
     // Its first turn gives it a session of its own.
     h.turn(&copy.id, "Second").await;
     let copied = h.agent(&copy.id);
@@ -3234,14 +3254,14 @@ async fn a_copy_shows_the_conversation_again_and_forks_its_session_leaving_the_o
         "{:?}",
         copied.session_id
     );
-    assert_eq!(copied.fork_of, None);
-    // The original is as it was: its session, its name, its conversation.
+    assert_eq!((copied.fork_of, copied.fork_at), (None, None));
+    // The original is as it was before its own next turn: its session, its name, its conversation.
     let after = h.agent(&id);
     assert_eq!(
         (after.session_id.as_deref(), after.name.as_str()),
         (Some(session.as_str()), "refacto-auth")
     );
-    assert_eq!(h.items(&id), items);
+    assert_eq!(h.items(&id)[..items.len()], items[..]);
 }
 
 #[tokio::test]
@@ -3305,6 +3325,25 @@ async fn a_copy_of_a_worktree_agent_has_its_own_from_the_current_commit_set_up_l
         std::fs::read_to_string(cdir.join("prepared.txt")).unwrap(),
         cwt.branch
     );
+    // Its Claude is told at every start that it works in another folder than the one its
+    // conversation names.
+    let moved = format!(
+        "Cette conversation a été copiée depuis un agent qui travaillait dans {}. Tu travailles maintenant dans {} : ne lis et n'écris que dedans.",
+        wt.path, cwt.path
+    );
+    assert_eq!(copy.append_prompt.as_deref(), Some(moved.as_str()));
+    h.core.ensure_process(&copy.id).await.unwrap();
+    let argv = h.launches(&cdir).pop().unwrap();
+    assert!(
+        argv.windows(2)
+            .any(|w| w[0] == "--append-system-prompt" && w[1] == moved),
+        "{argv:?}"
+    );
+    h.turn(&copy.id, "Bonjour").await;
+    assert!(h
+        .items(&copy.id)
+        .iter()
+        .any(|i| i["text"] == "Bonjour, tu as dit : Bonjour"));
     // The original is untouched: its branch, its changes.
     assert_eq!(git(&dir, &["rev-parse", "HEAD"]), head);
     assert!(dir.join("brouillon.txt").exists());
@@ -3372,29 +3411,70 @@ async fn a_ticket_agent_is_copied_as_an_ordinary_agent() {
         .meta;
     let copy = h.core.duplicate_agent(&a.id).await.unwrap().meta;
     assert_eq!(copy.name, "dem-1-ajouter (copie)");
-    assert_eq!(
-        (
-            copy.ticket_id.as_deref(),
-            copy.append_prompt.as_deref(),
-            copy.port_base
-        ),
-        (None, None, None)
-    );
+    assert_eq!((copy.ticket_id.as_deref(), copy.port_base), (None, None));
     // Its own worktree from the ticket's branch, whose base it keeps.
     let wt = copy.worktree.unwrap();
     assert_eq!(
         (wt.branch.as_str(), wt.base_branch.as_str()),
         ("escouade/dem-1-ajouter-copie", "main")
     );
-    // No ticket's protocol at its start.
+    // No ticket's protocol at its start: only what it is told of its new folder.
     h.core.ensure_process(&copy.id).await.unwrap();
     let argv = h.launches(Path::new(&wt.path)).pop().unwrap();
+    let i = argv
+        .iter()
+        .position(|x| x == "--append-system-prompt")
+        .unwrap();
     assert!(
-        !argv.contains(&"--append-system-prompt".to_string()),
+        argv[i + 1].starts_with("Cette conversation a été copiée depuis un agent"),
         "{argv:?}"
     );
+    assert!(!argv.iter().any(|x| x.contains("Protocole")), "{argv:?}");
     // The ticket's agent is still the original.
     assert_eq!(h.agent(&a.id).ticket_id.as_deref(), Some("t1"));
+}
+
+#[tokio::test]
+async fn a_copy_whose_fork_point_is_not_in_the_session_forks_all_of_it() {
+    let h = harness("copy-unpinned");
+    let (p, r) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.core.rename_agent(&id, "source").await.unwrap();
+    h.turn(&id, "Premier").await;
+    let session = h.agent(&id).session_id.unwrap();
+    h.core.agent(&id).unwrap().lock().meta.last_entry = Some("missing-e1".into());
+    let before = h.launches(&r).len();
+    let copy = h.core.duplicate_agent(&id).await.unwrap().meta.id;
+    // Its start refused, it is started again at once, on the whole session.
+    h.wait("a second start", |h| h.launches(&r).len() == before + 2)
+        .await;
+    let launches = h.launches(&r);
+    let [.., refused, forked] = &launches[..] else {
+        panic!("{launches:?}")
+    };
+    assert!(
+        refused.contains(&"--resume-session-at=missing-e1".to_string()),
+        "{refused:?}"
+    );
+    assert!(
+        forked
+            .windows(2)
+            .any(|w| w[0] == format!("--resume={session}") && w[1] == "--fork-session")
+            && !forked.iter().any(|x| x.starts_with("--resume-session-at")),
+        "{forked:?}"
+    );
+    // Its message goes to that process.
+    h.turn(&copy, "Bonjour").await;
+    assert_eq!(h.launches(&r).len(), before + 2);
+    assert!(h
+        .items(&copy)
+        .iter()
+        .any(|i| i["text"] == "Bonjour, tu as dit : Bonjour"));
+    assert!(h
+        .notices(&copy, "warn")
+        .iter()
+        .any(|n| n.starts_with("Point de copie introuvable")));
+    assert_eq!(h.agent(&copy).fork_of, None);
 }
 
 #[tokio::test]

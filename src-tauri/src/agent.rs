@@ -488,11 +488,27 @@ impl AgentRt {
         self.clear_pending(fx);
         self.close_open_items(fx);
         let was_running = self.meta.status.is_active();
-        if !self.saw_init && stderr.contains("No conversation found") {
-            let lost = "Session Claude introuvable : une nouvelle session sera démarrée au prochain message.";
+        // Gone before it started: what it was to resume could not be.
+        let lost = if self.saw_init {
+            None
+        } else if stderr.contains("No conversation found") {
             self.meta.session_id = None;
+            self.meta.last_entry = None;
             // A copy whose original's session is gone: the same, a new session.
             self.meta.fork_of = None;
+            self.meta.fork_at = None;
+            Some("Session Claude introuvable : une nouvelle session sera démarrée au prochain message.")
+        } else if self.meta.fork_at.is_some()
+            && stderr.contains("No message found with message.uuid")
+        {
+            // A copy whose point in its original's session is not there: still a copy of that
+            // session, of all of it.
+            self.meta.fork_at = None;
+            Some("Point de copie introuvable dans la session de l'original : Claude reprend toute sa conversation, jusqu'à maintenant.")
+        } else {
+            None
+        };
+        if let Some(lost) = lost {
             self.notice("warn", lost, fx);
             self.set_status(AgentStatus::Done, fx);
             // The message it was to carry never ran: that turn ends here, though not as a failure
@@ -554,11 +570,15 @@ impl AgentRt {
                             self.notice("info", "Nouvelle conversation Claude (contexte vidé)", fx);
                         }
                         self.meta.session_id = Some(sid.to_string());
+                        // None of the entries of the session it leaves is one of this one's.
+                        self.meta.last_entry = None;
                         fx.save = true;
                     }
                     // A copy has a session of its own from its first turn on: its next starts
                     // resume that one, never the original's again.
-                    if self.meta.fork_of.take().is_some() {
+                    let forked = self.meta.fork_of.take().is_some();
+                    self.meta.fork_at = None;
+                    if forked {
                         fx.save = true;
                     }
                 }
@@ -764,6 +784,13 @@ impl AgentRt {
                 .to_string();
             self.notice("error", text, fx);
             return;
+        }
+        // An entry of its session's main chain (not a subagent's, nor one Claude Code makes up),
+        // saved with the turn's end: where a copy made afterwards forks the session.
+        if parent.is_none() && f["is_meta"] != true {
+            if let Some(uuid) = f["uuid"].as_str() {
+                self.meta.last_entry = Some(uuid.to_string());
+            }
         }
         let Some(content) = msg["content"].as_array() else {
             return;
@@ -2450,32 +2477,109 @@ mod tests {
 
     #[test]
     fn a_copy_forks_no_more_once_it_has_a_session_or_once_the_original_is_gone() {
+        let forks = |a: &AgentRt| {
+            (
+                a.meta.session_id.clone(),
+                a.meta.fork_of.clone(),
+                a.meta.fork_at.clone(),
+            )
+        };
         // Its first turn gives it a session of its own.
         let mut a = rt();
         a.meta.fork_of = Some("s1".into());
+        a.meta.fork_at = Some("e1".into());
         let mut fx = Effects::default();
         a.handle_frame(
             &json!({ "type": "system", "subtype": "init", "session_id": "s2" }),
             &mut fx,
         );
-        assert_eq!(
-            (a.meta.session_id.as_deref(), a.meta.fork_of.as_deref()),
-            (Some("s2"), None)
-        );
+        assert_eq!(forks(&a), (Some("s2".into()), None, None));
         assert!(fx.save);
         // The original's session is gone: a new session, as for a lost one of its own.
         let mut a = rt();
         a.meta.fork_of = Some("missing-1".into());
+        a.meta.fork_at = Some("e1".into());
         a.on_exit(
             a.gen,
             Some(1),
             "No conversation found with session ID: missing-1",
             &mut Effects::default(),
         );
-        assert_eq!(
-            (a.meta.session_id.as_deref(), a.meta.fork_of.as_deref()),
-            (None, None)
+        assert_eq!(forks(&a), (None, None, None));
+    }
+
+    #[test]
+    fn a_copy_whose_fork_point_is_gone_forks_the_whole_session() {
+        let mut a = rt();
+        a.meta.fork_of = Some("s1".into());
+        a.meta.fork_at = Some("missing-e1".into());
+        let mut fx = Effects::default();
+        a.on_exit(
+            a.gen,
+            Some(1),
+            "No message found with message.uuid of: missing-e1",
+            &mut fx,
         );
+        // Still a copy of the original's session, from its end.
+        assert_eq!(
+            (a.meta.fork_of.as_deref(), a.meta.fork_at.as_deref()),
+            (Some("s1"), None)
+        );
+        assert_eq!(a.meta.status, AgentStatus::Done);
+        assert_eq!(fx.notify, None);
+        let notices: Vec<Value> = a
+            .conv
+            .items()
+            .into_iter()
+            .filter(|i| i["kind"] == "notice")
+            .collect();
+        assert_eq!(notices.len(), 1, "{notices:?}");
+        assert_eq!(notices[0]["level"], "warn");
+        assert_eq!(
+            notices[0]["text"],
+            "Point de copie introuvable dans la session de l'original : Claude reprend toute sa conversation, jusqu'à maintenant."
+        );
+    }
+
+    #[test]
+    fn the_last_entry_of_its_session_is_kept_for_a_copy_to_fork_at() {
+        let mut a = rt();
+        let mut fx = Effects::default();
+        let frame = |uuid: &str, extra: Value| {
+            let mut f = json!({ "type": "assistant", "uuid": uuid, "parent_tool_use_id": null,
+                "message": { "id": format!("m-{uuid}"), "role": "assistant", "content": [{ "type": "text", "text": "ok" }] } });
+            if let (Some(f), Some(extra)) = (f.as_object_mut(), extra.as_object()) {
+                f.extend(extra.clone());
+            }
+            f
+        };
+        a.handle_frame(
+            &json!({ "type": "system", "subtype": "init", "session_id": "s1" }),
+            &mut fx,
+        );
+        a.handle_frame(&frame("e1", json!({})), &mut fx);
+        assert_eq!(a.meta.last_entry.as_deref(), Some("e1"));
+        // Not entries of its main chain: a subagent's, a message Claude Code makes up, an error.
+        a.handle_frame(
+            &frame("e2", json!({ "parent_tool_use_id": "tu1" })),
+            &mut fx,
+        );
+        a.handle_frame(&frame("e3", json!({ "is_meta": true })), &mut fx);
+        a.handle_frame(&frame("e4", json!({ "error": "rate_limit" })), &mut fx);
+        assert_eq!(a.meta.last_entry.as_deref(), Some("e1"));
+        // Same session, next turn: its later entry.
+        a.handle_frame(
+            &json!({ "type": "system", "subtype": "init", "session_id": "s1" }),
+            &mut fx,
+        );
+        a.handle_frame(&frame("e5", json!({})), &mut fx);
+        assert_eq!(a.meta.last_entry.as_deref(), Some("e5"));
+        // A new session (the context cleared): none of its entries is the old one's.
+        a.handle_frame(
+            &json!({ "type": "system", "subtype": "init", "session_id": "s2" }),
+            &mut fx,
+        );
+        assert_eq!(a.meta.last_entry, None);
     }
 
     #[test]
