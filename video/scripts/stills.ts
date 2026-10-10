@@ -1,5 +1,5 @@
-// Stills of scenes, to check them: `npm run stills -- <scene ids> [--every=<seconds>]`.
-// By default, one at each line's start, middle and end; one bundle for them all.
+// Stills of scenes, to check them: `npm run stills -- <scene ids> [--every=<seconds>] [--lang=en]`.
+// By default, one at each line's start, middle and end; one bundle for them all. `--lang=en` draws the English interface.
 
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -11,10 +11,12 @@ const args = process.argv.slice(2);
 // At least a frame apart: a step of 0 would never end.
 const every = Math.max(0, Number(args.find((a) => a.startsWith('--every='))?.slice(8) ?? 0));
 const only = args.filter((a) => !a.startsWith('--'));
+const lang = args.find((a) => a.startsWith('--lang='))?.slice(7) ?? 'fr';
 const scenes = TIMELINE.filter((s) => !only.length || only.includes(s.id));
 
 const serveUrl = await bundle({ entryPoint: fileURLToPath(new URL('../src/index.ts', import.meta.url)) });
-const composition = await selectComposition({ serveUrl, id: 'Presentation' });
+const inputProps = { lang };
+const composition = await selectComposition({ serveUrl, id: 'Presentation', inputProps });
 mkdirSync('out/stills', { recursive: true });
 for (const s of scenes) {
   const frames = new Set<number>();
@@ -26,8 +28,8 @@ for (const s of scenes) {
     }
   frames.add(s.durationInFrames - 2);
   for (const f of [...frames].sort((a, b) => a - b)) {
-    const output = `out/stills/${s.id}-${String(f).padStart(4, '0')}.jpg`;
-    await renderStill({ composition, serveUrl, output, frame: s.from + f, imageFormat: 'jpeg', jpegQuality: 80 });
+    const output = `out/stills/${lang === 'fr' ? '' : `${lang}-`}${s.id}-${String(f).padStart(4, '0')}.jpg`;
+    await renderStill({ composition, serveUrl, output, frame: s.from + f, inputProps, imageFormat: 'jpeg', jpegQuality: 80 });
     console.log(output);
   }
 }

@@ -1,58 +1,52 @@
 // The website's images, video and subtitles, from the video: `npm run site-images` (after `npm run render` and
-// `npm run web-video`).
+// `npm run web-video`). The images and the subtitles are made in each language: the pictures at the same moments of
+// the French voice, with the interface in English for the English page. `-- --lang=en` makes one language only.
 
-import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { bundle } from '@remotion/bundler';
 import { renderStill, selectComposition } from '@remotion/renderer';
 import { cuesOf } from '../src/cues';
+import { LANGS } from '../src/lang';
+import { imagePath, posterFrame, SITE_SHOTS, subtitlesFile } from '../src/siteShots';
 import { webvtt } from '../src/subtitles';
-import { sceneOf, TIMELINE, type SceneId } from '../src/timeline';
+import { sceneOf, TIMELINE } from '../src/timeline';
 
 const SITE = '../website/public';
-/** Each image: a scene, at a moment of its voice (no spotlight, no pointer on the way). */
-const SHOTS: { name: string; scene: SceneId; frame: (c: ReturnType<typeof cuesOf>) => number }[] = [
-  { name: 'agents', scene: 'agents', frame: (c) => c.at('card') - 12 },
-  { name: 'chat', scene: 'chat', frame: (c) => c.word('diff', 'déplie-les') + 50 },
-  { name: 'notifications', scene: 'notify', frame: (c) => c.end('jump') - 4 },
-  { name: 'git', scene: 'git', frame: (c) => c.word('split', 'pendant') + 40 },
-  { name: 'editor', scene: 'editor', frame: (c) => c.word('look', 'recherche') + 12 },
-  { name: 'board', scene: 'loop', frame: (c) => c.word('loop', 'repart') + 30 },
-  { name: 'test', scene: 'test', frame: (c) => c.at('open') + 2 },
-  { name: 'integrations', scene: 'integrations', frame: (c) => c.word('import', 'critères') + 8 },
-  { name: 'launch', scene: 'launch', frame: (c) => c.word('crash', 'plante') + 24 },
-  { name: 'stats', scene: 'stats', frame: (c) => c.word('page', 'entrée') - 2 },
-  { name: 'remote', scene: 'remote', frame: (c) => c.length - 6 },
-];
+const only = process.argv.find((a) => a.startsWith('--lang='))?.slice(7);
+const langs = LANGS.filter((l) => !only || l === only);
+if (!langs.length) throw new Error(`Langue inconnue : ${only}`);
 
 const serveUrl = await bundle({ entryPoint: fileURLToPath(new URL('../src/index.ts', import.meta.url)) });
-mkdirSync(`${SITE}/images`, { recursive: true });
-for (const s of SHOTS) {
-  const composition = await selectComposition({ serveUrl, id: 'Shot', inputProps: { scene: s.scene } });
-  const frame = s.frame(cuesOf(sceneOf(s.scene)));
+for (const lang of langs) {
+  for (const s of SITE_SHOTS) {
+    const inputProps = { scene: s.scene, lang };
+    const composition = await selectComposition({ serveUrl, id: 'Shot', inputProps });
+    const frame = s.frame(cuesOf(sceneOf(s.scene)));
+    const output = `${SITE}/${imagePath(lang, s.name)}`;
+    mkdirSync(dirname(output), { recursive: true });
+    await renderStill({ composition, serveUrl, output, frame, inputProps, imageFormat: 'jpeg', jpegQuality: 85 });
+    console.log(`${imagePath(lang, s.name)} (${s.scene}, image ${frame})`);
+  }
+  // The poster: the board, with the scene's title.
+  const inputProps = { lang };
+  const presentation = await selectComposition({ serveUrl, id: 'Presentation', inputProps });
   await renderStill({
-    composition,
+    composition: presentation,
     serveUrl,
-    output: `${SITE}/images/${s.name}.jpg`,
-    frame,
-    inputProps: { scene: s.scene },
+    output: `${SITE}/${imagePath(lang, 'poster')}`,
+    frame: posterFrame(),
+    inputProps,
     imageFormat: 'jpeg',
     jpegQuality: 85,
   });
-  console.log(`images/${s.name}.jpg (${s.scene}, image ${frame})`);
+  writeFileSync(`${SITE}/${subtitlesFile(lang)}`, webvtt(TIMELINE, lang));
+  console.log(`${imagePath(lang, 'poster')}, ${subtitlesFile(lang)}`);
 }
-// The poster: the board, with the scene's title.
-const presentation = await selectComposition({ serveUrl, id: 'Presentation' });
-const board = sceneOf('board');
-await renderStill({
-  composition: presentation,
-  serveUrl,
-  output: `${SITE}/images/poster.jpg`,
-  frame: board.from + board.durationInFrames - 8,
-  imageFormat: 'jpeg',
-  jpegQuality: 85,
-});
-writeFileSync(`${SITE}/escouade.vtt`, webvtt(TIMELINE));
-copyFileSync('out/escouade-web.mp4', `${SITE}/escouade.mp4`);
+// The video is the French one, for both pages; the logo is shared.
+if (existsSync('out/escouade-web.mp4')) {
+  copyFileSync('out/escouade-web.mp4', `${SITE}/escouade.mp4`);
+  console.log('escouade.mp4');
+} else console.log('out/escouade-web.mp4 absent : escouade.mp4 reste celui du site (npm run render, puis npm run web-video)');
 copyFileSync('../public/logo.svg', `${SITE}/logo.svg`);
-console.log('images/poster.jpg, escouade.vtt, escouade.mp4');
