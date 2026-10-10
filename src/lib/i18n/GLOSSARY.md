@@ -142,6 +142,26 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 
 | Français | Anglais | Note |
 |---|---|---|
+| Après validation | After approval | résumé de ce que fait « Valider », dans l’en-tête du Kanban |
+| Passer en tête | Move to top | menu d’un ticket à faire |
+| Après (un ticket) | After | les tickets que celui-ci attend |
+| Boucles max | Max loops | |
+| Critères d’acceptation | Acceptance criteria | le formulaire d’un ticket |
+| Objectif partiel | Partial goal | |
+| Ce qui a été fait | What was done | |
+| Avancement | Progress | |
+| Resynchroniser | Resync | ticket importé |
+| Lancer quand même | Start anyway | |
+| L’agent résout | Let the agent resolve | conflit de merge |
+| Tester (▶) | Test | lancement de test |
+| Arrêter (les tests) | Stop | |
+| Abandonner (les modifications) | Discard | |
+| Abandonner les modifications ? | Discard your changes? | |
+| statut d’un agent : En cours / Question / Prêt / Terminé / Erreur | Running / Question / Ready / Done / Error | « En cours » est « In progress » pour une colonne du Kanban, « Running » pour un agent |
+| Entrée / Cache / Sortie | Input / Cache / Output | les séries de tokens |
+| prompt | prompt | |
+| Tout voir / Réduire | Show all / Show less | les listes des statistiques |
+| Jour / Semaine / Mois | Day / Week / Month | la période des statistiques |
 
 ## L7 — nav, git
 

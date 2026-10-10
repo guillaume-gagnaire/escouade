@@ -11,6 +11,7 @@ vi.mock('../../lib/terminals', () => ({
 }));
 
 import { buffers, lossNotice } from '../../lib/editor/buffers.svelte';
+import { setLang } from '../../lib/i18n';
 import { menu } from '../../lib/menu.svelte';
 import { ESTIMATE_HINT } from '../../lib/spend';
 import { app } from '../../lib/state.svelte';
@@ -670,5 +671,109 @@ describe('TicketCard foot', () => {
     const { container } = show(doing());
     expect(foot(container)).toContainElement(screen.getByText('refacto-auth'));
     expect(container.querySelector('.figures')).toBeNull();
+  });
+});
+
+// The window in English: the texts of the card come from the English catalog, its counts follow the plural rules of the
+// language and its amounts and times are written as English does. (What `lib/board.ts` and `lib/spend.ts` say is theirs.)
+describe('TicketCard in English', () => {
+  beforeEach(() => {
+    resetApp({ agents: [agent({ id: 'a1', ticketId: 't1', status: 'running' })] });
+    fakeBackend();
+    setLang('en');
+  });
+
+  it('writes a ticket under way in English', () => {
+    show(doing());
+    expect(screen.getByText('Loop 2/5')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar', { name: 'Criteria met' })).toHaveAttribute('aria-valuenow', '1');
+    expect(within(screen.getByRole('list', { name: 'Criteria' })).getAllByRole('listitem')).toHaveLength(2);
+    // The agent has not said what it does yet.
+    expect(screen.getByText('Thinking')).toBeInTheDocument();
+  });
+
+  it('points at a question waiting for an answer, in English', () => {
+    resetApp({ agents: [agent({ id: 'a1', status: 'waiting' })] });
+    show(doing());
+    expect(screen.getByText('Question waiting for your answer')).toBeInTheDocument();
+  });
+
+  it('writes the time an agent resumes at in English', () => {
+    const at = new Date();
+    at.setHours(15, 0, 0, 0);
+    resetApp({ agents: [agent({ id: 'a1', status: 'idle', resumeAt: at.getTime() })] });
+    app.now = at.getTime() - 1000;
+    show(doing());
+    expect(screen.getByText('Resumes at 3:00 PM')).toBeInTheDocument();
+  });
+
+  it('writes the setup of a worktree in English', () => {
+    resetApp({ agents: [agent({ id: 'a1', status: 'idle', setup: '1/2 · npm ci' })] });
+    show(doing({ iteration: 1 }));
+    expect(screen.getByText('Setting up the worktree · 1/2 · npm ci')).toBeInTheDocument();
+  });
+
+  it('counts the criteria of a ticket to do with the plural of English', () => {
+    const { unmount } = show(ticket());
+    expect(screen.getByText('2 criteria · max 5 loops')).toBeInTheDocument();
+    unmount();
+    show(ticket({ criteria: [{ text: 'Le fichier existe', ok: false, note: '' }] }));
+    expect(screen.getByText('1 criterion · max 5 loops')).toBeInTheDocument();
+  });
+
+  it('shows the cost of a ticket to test in dollars, with what it is for a screen reader, and its criteria met', () => {
+    resetApp({ agents: [agent({ id: 'a1', ticketId: 't1', status: 'done', tokens: 1000, cost: 1.5 })] });
+    const { container } = show(doing({ column: 'review' }));
+    const figures = container.querySelector<HTMLElement>('.figures')!;
+    expect(within(figures).getByText('$1.50')).toBeInTheDocument();
+    expect(within(figures).getByText('1/2 criteria')).toBeInTheDocument();
+    // The hidden label and the amount are apart for a screen reader.
+    expect(figures.textContent).toContain('Ticket cost $1.50');
+    expect(screen.getByRole('button', { name: 'Send back' })).toBeInTheDocument();
+  });
+
+  it('writes the send-back form in English', async () => {
+    show(doing({ column: 'review' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Send back' }));
+    expect(screen.getByRole('textbox', { name: 'What is wrong' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Send back' })).toHaveLength(1);
+  });
+
+  it('writes the menu of a ticket to do, and the confirmation to delete it, in English', async () => {
+    show(ticket());
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /DEM-1/ }));
+    expect(menu.open!.items.map((i) => i.label)).toEqual(['Edit', 'Move to top', '', 'Delete']);
+    menu.open!.items.find((i) => i.label === 'Delete')!.onClick!();
+    expect(app.modal).toMatchObject({
+      kind: 'confirm',
+      title: 'Delete DEM-1?',
+      body: 'The ticket and its description are deleted.',
+      confirm: 'Delete',
+    });
+  });
+
+  it('says it will no longer import a deleted ticket that came from a service', async () => {
+    const external = { service: 'jira' as const, id: 'ATL-1', key: 'ATL-1', container: 'ATL', url: 'https://a.test/ATL-1', error: null };
+    show(ticket({ external }));
+    expect(screen.getByRole('button', { name: 'Open ATL-1 in Jira' })).toBeInTheDocument();
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /DEM-1/ }));
+    menu.open!.items.find((i) => i.label === 'Delete')!.onClick!();
+    expect(app.modal).toMatchObject({
+      body: 'The ticket and its description are deleted. It will no longer be imported from Jira.',
+    });
+  });
+
+  it('writes the menu of a ticket under way in English', async () => {
+    show(doing());
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /DEM-1/ }));
+    expect(menu.open!.items.map((i) => i.label)).toEqual(['Open agent', '', 'Delete']);
+    menu.open!.items.find((i) => i.label === 'Delete')!.onClick!();
+    expect(app.modal).toMatchObject({ title: 'Delete ticket DEM-1?', body: 'Its agent is archived, along with its worktree.' });
+  });
+
+  it('says how many items of the progress are hidden, with the plural of English', () => {
+    show(doing({ progress: ['One', 'Two', 'Three', 'Four'] }));
+    expect(screen.getByText('+1')).toHaveAttribute('title', '1 more item');
   });
 });
