@@ -242,6 +242,13 @@ describe('QuickOpen', () => {
     expect(screen.getByRole('status')).toHaveTextContent('6 fichiers · liste tronquée');
   });
 
+  it('groups the thousands of the files it counts', async () => {
+    const files = Array.from({ length: 1234 }, (_, i) => `src/file${i}.ts`);
+    setup({ files, ignored: [] });
+    // The space of the grouping is Intl’s: `toHaveTextContent` reads any space as one.
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('1 234 fichiers'));
+  });
+
   it('shows the files it already has while it reads them again, and tells when it cannot', async () => {
     trees.all['p1|project'] = { root: 'C:/code/demo-api', files: ['old.ts'], truncated: false, ignored: [] };
     setup({ fsTree: () => Promise.reject('git est introuvable') });

@@ -62,6 +62,8 @@ describe('StatusBar', () => {
     const week = screen.getByText(/Hebdo/).closest('.it')!;
     expect(week).toHaveTextContent('38 %');
     expect(week).toHaveTextContent('reset 2j 5h');
+    // The date of the reset, in full, without seconds: the day depends on the time zone of the machine.
+    expect(week.getAttribute('title')).toMatch(/^Réinitialisation : (29|30) septembre 2026 à \d{2}:\d{2}$/);
   });
 
   it('counts active, waiting and finished agents (archived excluded)', () => {

@@ -194,7 +194,7 @@ describe('DiffModal in English', () => {
     expect(screen.getByTitle('Close (Esc)')).toBeInTheDocument();
   });
 
-  it('says a diff is empty, binary or too large, in English', async () => {
+  it('says a diff is empty or binary, in English', async () => {
     fakeBackend({ git_diff: () => '' });
     const { unmount } = render(DiffModal, props);
     expect(await screen.findByText('No differences.')).toBeInTheDocument();
@@ -202,5 +202,13 @@ describe('DiffModal in English', () => {
     fakeBackend({ git_diff: () => 'diff --git a/logo.png b/logo.png\nBinary files a/logo.png and b/logo.png differ\n' });
     render(DiffModal, props);
     expect(await screen.findByText('Binary file.')).toBeInTheDocument();
+  });
+
+  it('says a diff is too large to be displayed, in English', async () => {
+    const header =
+      'diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml\nindex 1111111..2222222 100644\n--- a/pnpm-lock.yaml\n+++ b/pnpm-lock.yaml\n';
+    fakeBackend({ git_diff: () => `${header}Diff too large\n` });
+    render(DiffModal, props);
+    expect(await screen.findByText('This diff is too large to display.')).toBeInTheDocument();
   });
 });

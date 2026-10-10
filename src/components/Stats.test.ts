@@ -294,6 +294,15 @@ describe('Stats in English', () => {
     expect(kpi('Prompts').getByText('2 per day on average')).toBeInTheDocument();
   });
 
+  it('says when no prompt was sent in the period, in English', async () => {
+    fakeBackend({ stats: (a: any) => ({ ...view(a.range), prompts: 0 }) });
+    render(Stats);
+    await screen.findAllByText('74.5k');
+    const kpi = within(screen.getByText('Average cost / prompt').parentElement!);
+    expect(kpi.getByText('—')).toBeInTheDocument();
+    expect(kpi.getByText('no prompts in this period')).toBeInTheDocument();
+  });
+
   it('names the step of the period, the series and the table in English', async () => {
     fakeBackend({ stats: (a: any) => view(a.range) });
     render(Stats);
