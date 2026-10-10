@@ -114,7 +114,8 @@ async fn an_agent_reaches_escouade_with_a_token_of_its_own_only_where_its_projec
     h.turn(&id, "Bonjour").await;
     let argv = h.launches(&r).pop().unwrap();
     let (config, denied) = escouade_flags(&argv);
-    let config = config.expect("--mcp-config");
+    let status = h.core.mcp.status();
+    let config = config.unwrap_or_else(|| panic!("no --mcp-config: {argv:?} {status:?}"));
     assert!(!denied, "{argv:?}");
     assert_eq!(config, h.core.data.mcp_agent_config(&id));
     let token = token_in(&config);

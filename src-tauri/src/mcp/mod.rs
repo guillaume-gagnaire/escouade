@@ -76,7 +76,8 @@ const ALL_TOOLS: &str = "mcp__escouade";
 /// What an agent's process is started with of Escouade (`Core::agent_access`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AgentAccess {
-    /// No server to reach: started as it always was.
+    /// Its project lets its agents use Escouade, but the server is not running: nothing to reach,
+    /// the process is started as it always was.
     None,
     /// Its project does not let its agents use Escouade: its tools are refused to it, those of an
     /// entry of the user's config of Claude Code included (the agent would inherit it).
