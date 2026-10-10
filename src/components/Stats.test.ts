@@ -123,8 +123,8 @@ describe('Stats by agent and by ticket', () => {
     render(Stats);
     await screen.findByRole('table', { name: 'Par agent' });
     expect(lines('Par agent')).toEqual([
-      ['refacto-auth', 'demo-api', '52,0 k', '1,20 $'],
-      ['Agent supprimé', 'Projet fermé', '8,0 k', '0,31 $'],
+      ['refacto-auth', 'demo-api', '52,0 k', '1,20 $'],
+      ['Agent supprimé', 'Projet fermé', '8,0 k', '0,31 $'],
     ]);
   });
 
@@ -138,8 +138,8 @@ describe('Stats by agent and by ticket', () => {
     render(Stats);
     await screen.findByRole('table', { name: 'Par ticket' });
     expect(lines('Par ticket')).toEqual([
-      ['DEM-4', 'Ajouter le login', '3 boucles', '2,50 $'],
-      ['DEM-1', 'Ticket 1', '1 boucle', '0,40 $'],
+      ['DEM-4', 'Ajouter le login', '3 boucles', '2,50 $'],
+      ['DEM-1', 'Ticket 1', '1 boucle', '0,40 $'],
     ]);
   });
 

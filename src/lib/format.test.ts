@@ -35,6 +35,8 @@ describe('fUsd', () => {
   it('shows three decimals for small amounts so cents do not round to zero', () => expect(nbsp(fUsd(0.0062))).toBe('0,006 $'));
   it('keeps two decimals for zero', () => expect(nbsp(fUsd(0))).toBe('0,00 $'));
   it('groups thousands', () => expect(nbsp(fUsd(1284.6))).toBe('1 284,60 $'));
+  // In a narrow card, « $ » never goes to a line of its own.
+  it('keeps the dollar sign on the line of its amount', () => expect(fUsd(2.84)).toBe('2,84 $'));
 });
 
 describe('fDur', () => {

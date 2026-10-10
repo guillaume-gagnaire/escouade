@@ -9,7 +9,8 @@ export function fTok(n: number): string {
 
 export function fUsd(x: number): string {
   const digits = x > 0 && x < 0.1 ? 3 : 2;
-  return x.toLocaleString('fr-FR', { minimumFractionDigits: digits, maximumFractionDigits: digits }) + ' $';
+  // A non-breaking space: « $ » never goes to a line of its own in a narrow card.
+  return x.toLocaleString('fr-FR', { minimumFractionDigits: digits, maximumFractionDigits: digits }) + ' $';
 }
 
 export function fDur(ms: number): string {
