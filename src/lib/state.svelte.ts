@@ -326,10 +326,13 @@ class AppState {
     setInterval(() => releaseIdle(Date.now(), (id) => this.atWork(id)), 60_000);
   }
 
-  /** An agent working, or waiting for an answer: its conversation stays in the window's memory, out of sight too. */
+  /**
+   * An agent working, or waiting for an answer (a pending request always comes with « waiting »): its conversation
+   * stays in the window's memory, out of sight too.
+   */
   private atWork(id: string): boolean {
     const a = this.agents[id];
-    return !!a && (a.status === 'running' || a.status === 'waiting' || a.pending.length > 0);
+    return !!a && (a.status === 'running' || a.status === 'waiting');
   }
 
   private onEvent(e: UiEvent) {

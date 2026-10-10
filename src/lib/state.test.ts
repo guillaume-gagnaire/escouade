@@ -247,7 +247,8 @@ describe('AppState', () => {
         agents: [
           agent({ id: 'out-done' }),
           agent({ id: 'out-running', status: 'running' }),
-          agent({ id: 'out-waiting', status: 'waiting', pending: ['q1'] }),
+          // Each status on its own (a pending request always comes with « waiting »).
+          agent({ id: 'out-waiting', status: 'waiting', pending: [] }),
         ],
       });
       const convs = ['out-done', 'out-running', 'out-waiting'].map((id) => conversationOf(id));
