@@ -1494,7 +1494,7 @@ describe('Conversation in English', () => {
   it('words the header, with the figures written as in English', async () => {
     setLang('en');
     setup({ status: 'running', contextTokens: 120_000, contextWindow: 200_000, activeMs: 151_000 });
-    expect(screen.getByText('In progress')).toBeInTheDocument();
+    expect(screen.getByText('Running')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Editor' })).toHaveAttribute('title', 'Browse and edit the files of this agent');
     expect(screen.getByText('Context').nextElementSibling).toHaveTextContent('120.0k / 200k');
     expect(screen.getByText('Cost')).toBeInTheDocument();

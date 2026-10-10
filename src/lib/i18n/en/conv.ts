@@ -2,7 +2,7 @@ import { defineZone } from '../types';
 
 // The conversation with an agent.
 export default defineZone('conv', {
-  status: { running: 'In progress', waiting: 'Question', idle: 'Ready', done: 'Done', error: 'Error' },
+  status: { running: 'Running', waiting: 'Question', idle: 'Ready', done: 'Done', error: 'Error' },
 
   header: {
     renameTitle: 'Rename the agent',
