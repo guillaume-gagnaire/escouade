@@ -857,6 +857,302 @@ async fn an_agent_saved_with_the_plan_of_a_file_gets_it_back() {
     assert_eq!((older.title, older.plan_file), (None, None));
 }
 
+// ---------- a plan run, as the fake claude plays it ("plan superpowers") ----------
+
+impl Harness {
+    /// The plan of every `agent` event the window got for `id`, oldest first.
+    fn plans_sent(&self, id: &str) -> Vec<Value> {
+        self.events
+            .lock()
+            .iter()
+            .filter(|e| e["type"] == "agent" && e["agent"]["id"] == id)
+            .filter_map(|e| e["agent"].get("plan").cloned())
+            .collect()
+    }
+
+    /// The agent asks its question (the third task waits on it): it is told to take SQLite.
+    async fn answer_the_question(&self, id: &str) {
+        self.wait("the question", |h| {
+            h.agent(id).status == AgentStatus::Waiting
+        })
+        .await;
+        self.core
+            .answer_question(
+                id,
+                "req_question",
+                json!({"Quelle base de données ?": "SQLite"}),
+            )
+            .unwrap();
+    }
+
+    /// The turn that began has ended.
+    async fn end_of_the_run(&self, id: &str) {
+        self.wait("the end of the turn", |h| {
+            h.items(id).iter().any(|i| i["kind"] == "turn") && !h.agent(id).status.is_active()
+        })
+        .await;
+    }
+
+    fn statuses_of(&self, id: &str) -> Vec<crate::plan::TaskStatus> {
+        self.plan_statuses(id).into_iter().map(|(_, s)| s).collect()
+    }
+}
+
+/// The index of the first plan sent that `holds`.
+fn first_plan(sent: &[Value], holds: impl Fn(&Value) -> bool) -> Option<usize> {
+    sent.iter().position(holds)
+}
+
+fn has_task_status(plan: &Value, n: usize, status: &str) -> bool {
+    plan["tasks"][n]["status"] == status
+}
+
+fn has_agent(plan: &Value, holds: impl Fn(&Value) -> bool) -> bool {
+    plan["agents"]
+        .as_array()
+        .is_some_and(|a| a.iter().any(holds))
+}
+
+#[tokio::test]
+async fn a_superpowers_run_with_a_task_list_goes_from_pending_tasks_to_done_with_its_subagents() {
+    use crate::plan::{PlanSource, RunStatus, TaskStatus::*};
+    let h = harness("p4-run");
+    let (p, r) = h.project(false).await;
+    h.core.plan_scan_ms.store(0, Ordering::Release);
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.core
+        .send_message(&id, "plan superpowers".into(), vec![])
+        .await
+        .unwrap();
+
+    // The third task waits for an answer: the first two are done, it is under way, and one
+    // subagent goes on in the background.
+    h.answer_the_question(&id).await;
+    let plan = h.agent(&id).plan.expect("a plan");
+    assert_eq!(plan.source, Some(PlanSource::Tools));
+    assert_eq!(h.statuses_of(&id), [Done, Done, InProgress]);
+    assert_eq!(plan.tasks[2].title, "Brancher dans l’interface");
+    assert_eq!(
+        plan.launched, 5,
+        "two per task done, and the one in the background"
+    );
+    let running: Vec<_> = plan
+        .agents
+        .iter()
+        .filter(|a| a.status == RunStatus::Running)
+        .collect();
+    assert_eq!(running.len(), 1);
+    assert!(running[0].background);
+    assert_eq!(running[0].title, "Surveiller la suite de tests");
+
+    h.end_of_the_run(&id).await;
+    // The background subagent ends by itself, after the turn.
+    h.wait("the end of the background subagent", |h| {
+        h.agent(&id)
+            .plan
+            .is_some_and(|p| p.agents.iter().all(|a| a.status != RunStatus::Running))
+    })
+    .await;
+    // And the files are read for the plan's name.
+    h.wait("the plan's title", |h| {
+        h.agent(&id).plan.is_some_and(|p| p.title.is_some())
+    })
+    .await;
+    let plan = h.agent(&id).plan.unwrap();
+    assert_eq!(plan.source, Some(PlanSource::Tools));
+    assert_eq!(h.statuses_of(&id), [Done, Done, Done]);
+    assert_eq!(plan.title.as_deref(), Some("Démo"));
+    assert_eq!(
+        plan.plan_file.as_deref(),
+        Some("docs/superpowers/plans/2026-10-10-demo.md")
+    );
+    // Three implementers, three reviewers and the one in the background; the workflow is none.
+    assert_eq!((plan.launched, plan.agents.len()), (7, 7));
+    let foreground = |a: &&crate::plan::SubAgent| !a.background;
+    assert_eq!(plan.agents.iter().filter(foreground).count(), 6);
+    assert!(plan
+        .agents
+        .iter()
+        .filter(foreground)
+        .all(|a| a.status == RunStatus::Done && a.tokens == Some(1500)));
+    for n in 1..=3 {
+        for what in ["Implémenter", "Relire"] {
+            let row = plan
+                .agents
+                .iter()
+                .find(|a| a.title == format!("{what} la tâche {n}"))
+                .unwrap_or_else(|| panic!("{what} {n}"));
+            assert_eq!(row.plan_task.as_deref(), Some(n.to_string().as_str()));
+            assert_eq!(row.kind.as_deref(), Some("general-purpose"));
+            // The tools it used, as its result totals them: three for the implementer.
+            assert_eq!(row.tools, if what == "Relire" { 2 } else { 3 });
+        }
+    }
+    assert_eq!(plan.workflows.len(), 1);
+    let flow = &plan.workflows[0];
+    assert_eq!(flow.name.as_deref(), Some("revue-finale"));
+    assert_eq!(flow.status, RunStatus::Done);
+    assert_eq!((flow.tools, flow.tokens), (5, 640));
+    assert_eq!(flow.now, None);
+
+    // What the window was told on the way, in order.
+    let sent = h.plans_sent(&id);
+    let pending = first_plan(&sent, |p| {
+        (0..3).all(|n| has_task_status(p, n, "pending")) && p["tasks"][3].is_null()
+    })
+    .expect("three tasks to do");
+    let started = first_plan(&sent, |p| has_task_status(p, 0, "inProgress"))
+        .expect("the first one under way");
+    let working = first_plan(&sent, |p| {
+        has_agent(p, |a| {
+            a["status"] == "running"
+                && a["planTask"] == "1"
+                && a["doing"].as_str().is_some_and(|d| d.contains("slugify"))
+        })
+    })
+    .expect("a subagent at work on the first task, with what it does");
+    let finished =
+        first_plan(&sent, |p| has_task_status(p, 0, "done")).expect("the first one done");
+    assert!(pending < started && started < working && working < finished);
+    // Every task done, and only the background subagent running, until its notification.
+    assert!(first_plan(&sent, |p| {
+        (0..3).all(|n| has_task_status(p, n, "done"))
+            && p["agents"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|a| a["status"] == "running")
+                .map(|a| a["background"].clone())
+                .collect::<Vec<_>>()
+                == [json!(true)]
+    })
+    .is_some());
+    // The workflow was seen at work, with its phase.
+    assert!(sent.iter().any(|p| p["workflows"][0]["status"] == "running"
+        && p["workflows"][0]["now"] == "Relecture : style"));
+
+    // It was launched with the task list tools; the agent saved its plan with itself.
+    assert_eq!(
+        h.launch_log(&r).last().map(|v| v["todoTools"].clone()),
+        Some(json!("1"))
+    );
+    assert!(h.core.agent(&id).unwrap().lock().meta.plan.is_some());
+}
+
+#[tokio::test]
+async fn a_superpowers_run_without_a_task_list_is_read_from_the_plan_and_the_ledger() {
+    use crate::plan::{PlanSource, RunStatus, TaskStatus::*};
+    let h = harness("p4-run-no-list");
+    let (p, r) = h.project(false).await;
+    h.core.plan_scan_ms.store(0, Ordering::Release);
+    // The setting is off: no task tool reaches the agent (the fake is told so by its environment),
+    // and what it does is all there is: the plan, the ledger, the calls of its subagents.
+    change_settings(&h, |s| s.todo_tools = false);
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.core
+        .send_message(&id, "plan superpowers sans liste".into(), vec![])
+        .await
+        .unwrap();
+
+    h.wait("the plan and the ledger read", |h| {
+        h.statuses_of(&id) == [Done, Done, InProgress]
+    })
+    .await;
+    let plan = h.agent(&id).plan.expect("a plan");
+    assert_eq!(plan.source, Some(PlanSource::Plan));
+    assert_eq!(plan.title.as_deref(), Some("Démo"));
+    assert_eq!(
+        plan.plan_file.as_deref(),
+        Some("docs/superpowers/plans/2026-10-10-demo.md")
+    );
+    let titles: Vec<_> = plan.tasks.iter().map(|t| t.title.as_str()).collect();
+    assert_eq!(
+        titles,
+        [
+            "Écrire la fonction",
+            "Écrire les tests",
+            "Brancher dans l’interface"
+        ]
+    );
+    // The steps the plan counts: none done.
+    assert!(plan.tasks.iter().all(|t| t.steps == Some((0, 2))));
+    h.answer_the_question(&id).await;
+    h.end_of_the_run(&id).await;
+    h.wait("every task done", |h| {
+        h.statuses_of(&id) == [Done, Done, Done]
+    })
+    .await;
+    h.wait("the end of the background subagent", |h| {
+        h.agent(&id)
+            .plan
+            .is_some_and(|p| p.agents.iter().all(|a| a.status != RunStatus::Running))
+    })
+    .await;
+    let plan = h.agent(&id).plan.unwrap();
+    assert_eq!(plan.source, Some(PlanSource::Plan));
+    assert_eq!(plan.launched, 7);
+    // The subagents of the third task are tied to it by the brief their prompt names.
+    for what in ["Implémenter", "Relire"] {
+        let row = plan
+            .agents
+            .iter()
+            .find(|a| a.title == format!("{what} la tâche 3"))
+            .unwrap();
+        assert_eq!(row.plan_task.as_deref(), Some("3"));
+        assert_eq!(row.status, RunStatus::Done);
+    }
+    assert_eq!(plan.workflows.len(), 1);
+
+    // The agent called no task tool at all, and the tools were not given to it.
+    let tools: Vec<_> = h
+        .items(&id)
+        .iter()
+        .filter(|i| i["kind"] == "tool")
+        .filter_map(|i| i["name"].as_str().map(str::to_string))
+        .collect();
+    assert!(!tools.is_empty());
+    assert!(tools.iter().all(|n| !n.starts_with("Task")), "{tools:?}");
+    assert!(h.plans_sent(&id).iter().all(|p| p["source"] != "tools"));
+    assert_eq!(
+        h.launch_log(&r).last().map(|v| v["todoTools"].clone()),
+        Some(Value::Null)
+    );
+}
+
+#[tokio::test]
+async fn a_turn_cut_in_the_middle_of_a_subagent_leaves_it_interrupted() {
+    use crate::plan::{RunStatus, TaskStatus::*};
+    let h = harness("p4-run-cut");
+    let (p, _) = h.project(false).await;
+    h.core.plan_scan_ms.store(0, Ordering::Release);
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.core
+        .send_message(&id, "plan superpowers interrompu".into(), vec![])
+        .await
+        .unwrap();
+    h.wait("the subagent interrupted", |h| {
+        h.agent(&id)
+            .plan
+            .is_some_and(|p| p.agents.iter().any(|a| a.status == RunStatus::Interrupted))
+    })
+    .await;
+    h.end_of_the_run(&id).await;
+    let plan = h.agent(&id).plan.unwrap();
+    // The implementer of the first task, and nothing else: it was cut before it came back.
+    assert_eq!(plan.launched, 1);
+    assert_eq!(plan.agents.len(), 1);
+    assert_eq!(plan.agents[0].title, "Implémenter la tâche 1");
+    assert_eq!(plan.agents[0].status, RunStatus::Interrupted);
+    assert_eq!(plan.agents[0].doing, None);
+    assert!(plan.agents[0].ended_at.is_some());
+    // The tasks stay where they were.
+    assert_eq!(h.statuses_of(&id), [InProgress, Pending, Pending]);
+    assert!(plan.workflows.is_empty());
+    // Saved with the agent as it is.
+    let saved = h.core.agent(&id).unwrap().lock().meta.plan.clone().unwrap();
+    assert_eq!(saved.agents[0].status, RunStatus::Interrupted);
+}
+
 #[tokio::test]
 async fn attached_files_reach_claude_as_content_blocks() {
     let h = harness("attach");

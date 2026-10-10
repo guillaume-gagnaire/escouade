@@ -29,6 +29,13 @@
 // in), [retire-env] then .env taken out of git again in a second commit (still in the branch's
 // history), [tenace] a process that lasts 5 s once its input is closed, [rien] no file written (nothing
 // to merge); by default criterion n is met from loop n on.
+// "plan superpowers" in the message plays a plan run as superpowers:subagent-driven-development does it
+// (see tests/fixtures/superpowers-run.md): the plan and its ledger written for real in the agent's
+// folder, a task list (TaskCreate/TaskUpdate), a foreground implementer and reviewer subagent per
+// task, a background subagent and a workflow on the second one, a question in the middle of the third,
+// then "Plan terminé". "plan superpowers sans liste": the same without any task tool, so that the
+// plan file and the ledger are all there is to read; "interrompu" in the message cuts the turn in
+// the middle of the first implementer.
 // Asked to prepare a test launch (« Prépare le lancement… Ports réservés : <base> », “Prepare the test
 // launch… Ports reserved: <base>”), any agent answers with a recipe whose process listens on <base + 1>.
 // In one-shot mode, asked for a ticket's commit message, it answers `feat: travail du faux claude
@@ -205,11 +212,12 @@ function startSession() {
     seven_day: { utilization: 0.34, resetsAt: 1790805600 },
   });
 
-  function assistant(block, id = `msg_${process.pid}_${++msg}`) {
+  // `parent`: the call of the subagent that makes this message (null: the main thread).
+  function assistant(block, id = `msg_${process.pid}_${++msg}`, parent = null) {
     const uuid = `entry-${process.pid}-${++entries}`;
     const message = { id, role: 'assistant', content: [block] };
-    out({ type: 'assistant', message, parent_tool_use_id: null, session_id: sessionId, uuid });
-    keep({ type: 'assistant', uuid, message });
+    out({ type: 'assistant', message, parent_tool_use_id: parent, session_id: sessionId, uuid });
+    if (!parent) keep({ type: 'assistant', uuid, message });
     return id;
   }
 
@@ -322,6 +330,155 @@ function startSession() {
     result();
   }
 
+  // ---------- "plan superpowers" ----------
+
+  let planCut = false;
+
+  // A pause of a few dozen ms between frames, so that the app sees them one by one; it ends the run
+  // when an interrupt came meanwhile.
+  const beat = (ms = 25) =>
+    new Promise((resolve, reject) => setTimeout(() => (planCut ? reject(new Error('interrupted')) : resolve()), ms));
+
+  async function planRun(text) {
+    planCut = false;
+    const withList = !text.includes('sans liste');
+    const cutShort = text.includes('interrompu');
+    const dir = process.cwd();
+    const planRel = 'docs/superpowers/plans/2026-10-10-demo.md';
+    const space = '.superpowers/sdd/2026-10-10-demo';
+    const ledger = path.join(dir, space, 'progress.md');
+    const titles = ['Écrire la fonction', 'Écrire les tests', 'Brancher dans l’interface'];
+    const doing = ['Écrit la fonction', 'Écrit les tests', 'Branche dans l’interface'];
+    const file = (rel) => path.join(dir, rel);
+    const put = (rel, content) => {
+      fs.mkdirSync(path.dirname(file(rel)), { recursive: true });
+      fs.writeFileSync(file(rel), content);
+    };
+    // A call of the main thread and its result.
+    const tool = async (id, name, input, content, extra = {}) => {
+      assistant({ type: 'tool_use', id, name, input });
+      await beat();
+      toolResult(id, content, extra);
+      await beat();
+    };
+    const bash = (id, command, content = 'ok') =>
+      tool(id, 'Bash', { command, description: command }, content, { tool_use_result: { stdout: content, stderr: '', interrupted: false } });
+    // A subagent in the foreground: its own calls, in its thread, then its result. False: the turn
+    // was cut in the middle of it.
+    const subagent = async (id, description, n, calls) => {
+      const prompt = `Lis ${space}/task-${n}-brief.md et fais ce qu'il demande.`;
+      assistant({ type: 'tool_use', id, name: 'Agent', input: { description, subagent_type: 'general-purpose', prompt } });
+      await beat();
+      for (const [i, [name, input]] of calls.entries()) {
+        assistant({ type: 'tool_use', id: `${id}_${i}`, name, input }, undefined, id);
+        await beat();
+        if (cutShort && n === 1 && i === 1) return false;
+        toolResult(`${id}_${i}`, 'ok', { parent_tool_use_id: id });
+        await beat();
+      }
+      const content = [{ type: 'text', text: `${description} : fait.` }];
+      const done = { status: 'completed', agentId: `agent-${id}`, content, totalToolUseCount: calls.length, totalDurationMs: 90, totalTokens: 1500 };
+      toolResult(id, content, { tool_use_result: done });
+      await beat();
+      return true;
+    };
+    const system = (o) => out({ type: 'system', session_id: sessionId, ...o });
+
+    streamText('J’écris le plan, puis je l’exécute tâche par tâche.');
+    await beat();
+    const plan = [
+      '# Démo Implementation Plan',
+      '',
+      '> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development.',
+      '',
+      ...titles.flatMap((title, i) => [`### Task ${i + 1}: ${title}`, '', '- [ ] **Step 1: Écrire**', '- [ ] **Step 2: Vérifier**', '']),
+    ].join('\n');
+    put(planRel, plan);
+    await tool('toolu_sp_plan', 'Write', { file_path: file(planRel), content: plan }, `File created successfully at: ${file(planRel)}`, {
+      tool_use_result: { type: 'create', filePath: file(planRel), content: plan, structuredPatch: [] },
+    });
+    // What sdd-workspace and the controller make: the marker and the ledger.
+    put(`${space}/plan-path`, `${planRel}\n`);
+    put(`${space}/progress.md`, `# SDD ledger — plan: ${planRel}\n`);
+    await bash('toolu_sp_ws', `sdd-workspace ${planRel}`, space);
+    if (withList) {
+      for (const [i, title] of titles.entries()) {
+        await tool(
+          `toolu_sp_tc${i + 1}`,
+          'TaskCreate',
+          { subject: title, description: `Task ${i + 1} du plan`, activeForm: doing[i] },
+          `Task #${i + 1} created successfully: ${title}`,
+          { tool_use_result: { task: { id: String(i + 1), subject: title } } },
+        );
+      }
+    }
+    const status = (n, from, to) => ({
+      tool_use_result: { success: true, taskId: String(n), updatedFields: ['status'], statusChange: { from, to } },
+    });
+    try {
+      for (const [i, title] of titles.entries()) {
+        const n = i + 1;
+        if (withList) {
+          await tool(`toolu_sp_ts${n}`, 'TaskUpdate', { taskId: String(n), status: 'in_progress' }, `Updated task #${n} status`, status(n, 'pending', 'in_progress'));
+        }
+        put(`${space}/task-${n}-brief.md`, `### Task ${n}: ${title}\n\n- [ ] **Step 1: Écrire**\n`);
+        await bash(`toolu_sp_st${n}`, `task-start ${planRel} ${n}`, `${space}/task-${n}-brief.md`);
+        if (n === 3) {
+          // The question the third task waits on.
+          await new Promise((resolve) => askQuestion(resolve));
+          await beat();
+        }
+        const read = ['Read', { file_path: file('src/slugify.ts') }];
+        const edit = ['Edit', { file_path: file('src/slugify.ts'), old_string: 'a', new_string: 'b' }];
+        const test = ['Bash', { command: 'npm test', description: 'npm test' }];
+        if (!(await subagent(`toolu_sp_im${n}`, `Implémenter la tâche ${n}`, n, [read, edit, test]))) {
+          result({ isError: true, subtype: 'error_during_execution' });
+          return;
+        }
+        await subagent(`toolu_sp_rv${n}`, `Relire la tâche ${n}`, n, [read, ['Bash', { command: 'git diff', description: 'git diff' }]]);
+        if (n === 2) {
+          // A subagent that goes on after the turn, and a workflow that ends within it.
+          const bg = { description: 'Surveiller la suite de tests', subagent_type: 'general-purpose', prompt: 'Surveille les tests.', run_in_background: true };
+          assistant({ type: 'tool_use', id: 'toolu_sp_bg', name: 'Agent', input: bg });
+          await beat();
+          system({ subtype: 'task_started', task_id: 'fakebg-agent', tool_use_id: 'toolu_sp_bg', description: bg.description, subagent_type: bg.subagent_type, is_backgrounded: true, task_type: 'local_agent' });
+          await beat();
+          toolResult('toolu_sp_bg', 'Async agent launched successfully.\nagentId: fakebg-agent (internal ID)', {
+            tool_use_result: { status: 'async_launched', agentId: 'fakebg-agent', description: bg.description },
+          });
+          await beat();
+          assistant({ type: 'tool_use', id: 'toolu_sp_wf', name: 'Workflow', input: { workflow: 'revue-finale' } });
+          await beat();
+          system({ subtype: 'task_started', task_id: 'fakewf1', tool_use_id: 'toolu_sp_wf', description: 'Revue finale', task_type: 'local_workflow', workflow_name: 'revue-finale' });
+          await beat();
+          for (const [phase, tokens, uses] of [['Relecture : sécurité', 300, 2], ['Relecture : style', 640, 5]]) {
+            const usage = { total_tokens: tokens, tool_uses: uses, duration_ms: uses * 20 };
+            system({ subtype: 'task_progress', task_id: 'fakewf1', tool_use_id: 'toolu_sp_wf', description: phase, usage, last_tool_name: phase.split(' : ')[1] });
+            await beat();
+          }
+          system({ subtype: 'task_notification', task_id: 'fakewf1', tool_use_id: 'toolu_sp_wf', status: 'completed', summary: 'Workflow "revue-finale" completed', usage: { total_tokens: 640, tool_uses: 5, duration_ms: 100 } });
+          toolResult('toolu_sp_wf', 'Workflow revue-finale completed');
+          await beat();
+        }
+        fs.appendFileSync(ledger, `Task ${n}: complete (commits a1b2c3${n}..d4e5f6${n}, tests: npm test → 12 passed, review clean)\n`);
+        await bash(`toolu_sp_td${n}`, `task-done ${planRel} ${n} d4e5f6${n} -- npm test`, `recorded: Task ${n}`);
+        if (withList) {
+          await tool(`toolu_sp_tu${n}`, 'TaskUpdate', { taskId: String(n), status: 'completed' }, `Updated task #${n} status`, status(n, 'in_progress', 'completed'));
+        }
+      }
+    } catch (e) {
+      // An interrupt came: the turn already ended with its answer.
+      if (e.message === 'interrupted') return;
+      throw e;
+    }
+    streamText('Plan terminé');
+    result();
+    // The background subagent ends after the turn, and Claude Code tells it by itself.
+    setTimeout(() => {
+      system({ subtype: 'task_notification', task_id: 'fakebg-agent', tool_use_id: 'toolu_sp_bg', status: 'completed', summary: 'Agent "Surveiller la suite de tests" completed', usage: { total_tokens: 2200, tool_uses: 6, duration_ms: 800 }, uuid: `bgagent-${msg}` });
+    }, 400);
+  }
+
   function toolResult(toolUseId, content, extra = {}) {
     out({
       type: 'user',
@@ -383,6 +540,13 @@ function startSession() {
       return;
     }
     if (sys) return ticketTurn(text);
+    if (text.includes('plan superpowers')) {
+      planRun(text).catch((e) => {
+        process.stderr.write(`plan superpowers: ${e.stack}\n`);
+        result({ isError: true, subtype: 'error_during_execution' });
+      });
+      return;
+    }
     if (text.includes('tâche de fond')) {
       // A command left running in the background: it ends once the turn is over, and Claude Code
       // only tells it with a system frame before starting a turn by itself.
@@ -555,6 +719,7 @@ function startSession() {
           });
         case 'interrupt':
           clearTimeout(slowTimer);
+          planCut = true;
           if (sys.includes('[fin-d-abord]')) {
             // The app reads the turn's end before the interrupt's answer reaches its caller.
             result({ isError: true, subtype: 'error_during_execution' });
