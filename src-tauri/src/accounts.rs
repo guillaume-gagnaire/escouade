@@ -590,6 +590,111 @@ fn copy_dir(src: &Path, dst: &Path, depth: u32) -> Result<()> {
     Ok(())
 }
 
+/// A session id as Claude Code makes them (a UUID): letters, digits, `-` and `_`, so that it
+/// names a file and nothing else.
+fn valid_session_id(id: &str) -> bool {
+    !id.is_empty()
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+/// The session `session_id` of the account whose folder is `from`, copied into the folder `to` of
+/// another account, where its `--resume` finds it: Claude Code looks a session up in the account's
+/// `projects/*/<id>.jsonl`. Its transcript and the folder `<id>/` beside it (what its subagents and
+/// tools keep) go to the same project folder of `to`. A file `to` already has is replaced only by a
+/// more recent one: the session may have been there before, and gone on.
+///
+/// Nobody may write the session while it is copied: the agent's process is stopped (and gone)
+/// before.
+pub fn copy_session(from: &Path, to: &Path, session_id: &str) -> Result<()> {
+    if !valid_session_id(session_id) {
+        bail!(tr!(
+            "Identifiant de session invalide : {id}",
+            "Invalid session id: {id}",
+            id = session_id
+        ));
+    }
+    let file = format!("{session_id}.jsonl");
+    // The project folder that holds it; if several do, the one written last.
+    let mut found: Option<(std::time::SystemTime, std::ffi::OsString)> = None;
+    if let Ok(folders) = std::fs::read_dir(from.join("projects")) {
+        for folder in folders.flatten() {
+            let Ok(meta) = std::fs::metadata(folder.path().join(&file)) else {
+                continue;
+            };
+            let at = meta.modified().unwrap_or(std::time::UNIX_EPOCH);
+            if meta.is_file() && found.as_ref().is_none_or(|(best, _)| at > *best) {
+                found = Some((at, folder.file_name()));
+            }
+        }
+    }
+    let Some((_, folder)) = found else {
+        bail!(tr!(
+            "Session « {id} » introuvable dans le dossier du compte : {dir}",
+            "Session “{id}” not found in the account’s folder: {dir}",
+            id = session_id,
+            dir = from.display()
+        ));
+    };
+    let (src, dst) = (
+        from.join("projects").join(&folder),
+        to.join("projects").join(&folder),
+    );
+    std::fs::create_dir_all(&dst)?;
+    // What it keeps first, its transcript last: a transcript that is there has all that goes with it.
+    let kept = src.join(session_id);
+    if kept.is_dir() {
+        copy_newer_dir(&kept, &dst.join(session_id), 0)?;
+    }
+    copy_newer(&src.join(&file), &dst.join(&file))
+}
+
+/// The folder `src` copied into `dst`, file by file (`copy_newer`); a link is left where it is.
+fn copy_newer_dir(src: &Path, dst: &Path, depth: u32) -> Result<()> {
+    if depth > 32 {
+        bail!("{}: too deep", src.display());
+    }
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let (from, to) = (entry.path(), dst.join(entry.file_name()));
+        let kind = entry.file_type()?;
+        if kind.is_dir() {
+            copy_newer_dir(&from, &to, depth + 1)?;
+        } else if kind.is_file() {
+            copy_newer(&from, &to)?;
+        }
+    }
+    Ok(())
+}
+
+/// The file `src` copied to `dst`, with its modification time, unless `dst` is there and at least
+/// as recent. Written beside and renamed: never a half-written transcript where a resume reads.
+fn copy_newer(src: &Path, dst: &Path) -> Result<()> {
+    let modified = std::fs::metadata(src)?.modified()?;
+    if let Ok(there) = std::fs::metadata(dst) {
+        if there.modified().is_ok_and(|t| t >= modified) {
+            return Ok(());
+        }
+    }
+    let mut name = dst.file_name().unwrap_or_default().to_os_string();
+    name.push(".part");
+    let part = dst.with_file_name(name);
+    let copied = std::fs::copy(src, &part)
+        .and_then(|_| {
+            // The copy is as old as what it copies: the more recent of two is told by it.
+            let f = std::fs::OpenOptions::new().write(true).open(&part)?;
+            f.set_modified(modified)
+        })
+        .and_then(|_| std::fs::rename(&part, dst));
+    if let Err(e) = copied {
+        let _ = std::fs::remove_file(&part);
+        return Err(e.into());
+    }
+    Ok(())
+}
+
 /// Whether an account is signed in to claude.ai, as its tab shows it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -1742,5 +1847,152 @@ mod tests {
         assert_eq!(pick_where(&s, None, |_| false), "principal");
         // Asked for, it is taken even if it is not usable.
         assert_eq!(pick_where(&s, Some("pro"), only("team")), "pro");
+    }
+
+    /// A session as Claude Code files it in an account's folder: its transcript in the project's
+    /// folder, with the folder of what it keeps beside it.
+    fn keep_session(account: &Path, project: &str, id: &str, text: &str) -> PathBuf {
+        let folder = account.join("projects").join(project);
+        std::fs::create_dir_all(folder.join(id).join("subagents")).unwrap();
+        std::fs::write(
+            folder.join(id).join("subagents").join("agent-1.jsonl"),
+            text,
+        )
+        .unwrap();
+        let file = folder.join(format!("{id}.jsonl"));
+        std::fs::write(&file, text).unwrap();
+        file
+    }
+
+    fn modified(file: &Path, secs_ago: u64) {
+        let at = std::time::SystemTime::now() - std::time::Duration::from_secs(secs_ago);
+        let f = std::fs::OpenOptions::new().write(true).open(file).unwrap();
+        f.set_modified(at).unwrap();
+    }
+
+    #[test]
+    fn a_session_is_copied_with_its_folder_into_the_same_project_folder_of_the_other_account() {
+        let dir = test_dir("accounts-copy-session");
+        let (from, to) = (dir.join("principal"), dir.join("pro"));
+        let kept = keep_session(&from, "C--code-demo", "s-1", "bonjour\n");
+        // Another session of the account, and another project's: not copied.
+        keep_session(&from, "C--code-demo", "s-2", "autre\n");
+        keep_session(&from, "C--code-autre", "s-3", "autre\n");
+        copy_session(&from, &to, "s-1").unwrap();
+        let folder = to.join("projects").join("C--code-demo");
+        assert_eq!(
+            std::fs::read_to_string(folder.join("s-1.jsonl")).unwrap(),
+            "bonjour\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(folder.join("s-1").join("subagents").join("agent-1.jsonl"))
+                .unwrap(),
+            "bonjour\n"
+        );
+        assert_eq!(names_in(&to.join("projects")), ["C--code-demo"]);
+        assert_eq!(names_in(&folder), ["s-1", "s-1.jsonl"]);
+        // Copied, not moved; no half-written file left beside it.
+        assert!(kept.is_file());
+        assert!(!names_in(&folder).iter().any(|n| n.ends_with(".part")));
+        // The copy is as old as the transcript: the more recent of the two is told by it.
+        assert_eq!(
+            std::fs::metadata(folder.join("s-1.jsonl"))
+                .unwrap()
+                .modified()
+                .unwrap(),
+            std::fs::metadata(&kept).unwrap().modified().unwrap()
+        );
+    }
+
+    #[test]
+    fn a_session_the_account_does_not_have_is_refused_with_where_it_looked() {
+        let dir = test_dir("accounts-copy-session-missing");
+        let (from, to) = (dir.join("principal"), dir.join("pro"));
+        keep_session(&from, "C--code-demo", "s-1", "bonjour\n");
+        let e = copy_session(&from, &to, "s-9").unwrap_err().to_string();
+        assert_eq!(
+            e,
+            format!(
+                "Session « s-9 » introuvable dans le dossier du compte : {}",
+                from.display()
+            )
+        );
+        // An account that has no `projects` folder yet says the same, and nothing is made.
+        let e = copy_session(&dir.join("vide"), &to, "s-1").unwrap_err();
+        assert!(
+            e.to_string().starts_with("Session « s-1 » introuvable"),
+            "{e}"
+        );
+        assert!(!to.exists());
+    }
+
+    #[test]
+    fn a_session_id_that_is_a_path_is_refused_before_anything_is_read() {
+        let dir = test_dir("accounts-copy-session-id");
+        let (from, to) = (dir.join("principal"), dir.join("pro"));
+        keep_session(&from, "C--code-demo", "s-1", "bonjour\n");
+        std::fs::write(from.join("secret.jsonl"), "secret").unwrap();
+        for bad in ["", "..", "../secret", "a/b", "a\\b", "s-1.jsonl", "s 1"] {
+            let e = copy_session(&from, &to, bad).unwrap_err().to_string();
+            assert_eq!(
+                e,
+                format!("Identifiant de session invalide : {bad}"),
+                "{bad}"
+            );
+        }
+        assert!(!to.exists());
+    }
+
+    #[test]
+    fn the_more_recent_copy_of_a_session_wins_file_by_file() {
+        let dir = test_dir("accounts-copy-session-newest");
+        let (from, to) = (dir.join("principal"), dir.join("pro"));
+        let old = keep_session(&from, "C--code-demo", "s-1", "ancien\n");
+        let annexed = |account: &Path| {
+            let folder = account.join("projects").join("C--code-demo");
+            folder.join("s-1").join("subagents").join("agent-1.jsonl")
+        };
+        modified(&old, 600);
+        modified(&annexed(&from), 600);
+        // The other account has this session too, and it went on there: it is the newer.
+        let newer = keep_session(&to, "C--code-demo", "s-1", "plus récent\n");
+        modified(&newer, 60);
+        modified(&annexed(&to), 60);
+        copy_session(&from, &to, "s-1").unwrap();
+        assert_eq!(std::fs::read_to_string(&newer).unwrap(), "plus récent\n");
+        // The folder beside it is of the same rule: a file only the older one has comes over.
+        let annex = to.join("projects").join("C--code-demo").join("s-1");
+        std::fs::write(
+            from.join("projects")
+                .join("C--code-demo")
+                .join("s-1")
+                .join("tool-results.txt"),
+            "résultat",
+        )
+        .unwrap();
+        copy_session(&from, &to, "s-1").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(annex.join("tool-results.txt")).unwrap(),
+            "résultat"
+        );
+        assert_eq!(
+            std::fs::read_to_string(annex.join("subagents").join("agent-1.jsonl")).unwrap(),
+            "plus récent\n"
+        );
+        // The other way round: the copy here is the older one, it is replaced.
+        modified(&newer, 3600);
+        copy_session(&from, &to, "s-1").unwrap();
+        assert_eq!(std::fs::read_to_string(&newer).unwrap(), "ancien\n");
+    }
+
+    #[test]
+    fn a_session_filed_in_several_project_folders_is_copied_from_the_most_recent_one() {
+        let dir = test_dir("accounts-copy-session-twice");
+        let (from, to) = (dir.join("principal"), dir.join("pro"));
+        let old = keep_session(&from, "C--code-demo", "s-1", "ancien\n");
+        modified(&old, 600);
+        keep_session(&from, "C--code-demo-wt", "s-1", "récent\n");
+        copy_session(&from, &to, "s-1").unwrap();
+        assert_eq!(names_in(&to.join("projects")), ["C--code-demo-wt"]);
     }
 }
