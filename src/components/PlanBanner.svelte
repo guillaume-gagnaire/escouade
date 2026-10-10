@@ -80,6 +80,7 @@
   let userAt = 0;
   let ownAt = 0;
   let centredFor: string | null = null;
+  let centredIn: HTMLElement | undefined;
   function centre(force: boolean) {
     if (!listEl) return;
     if (!force && Date.now() - userAt < QUIET_MS) return;
@@ -96,6 +97,10 @@
     void [open, listEl, focusId, rowCount];
     const another = id !== centredFor;
     centredFor = id;
+    // A list that was not there before (unfolded again, or the next agent's) was scrolled by nobody: what the reader did
+    // to the one before says nothing of it.
+    if (another || listEl !== centredIn) userAt = 0;
+    centredIn = listEl;
     centre(another);
   });
 
@@ -579,7 +584,7 @@
       grid-template-columns: 22px 20px minmax(0, 1fr) 56px;
     }
     .rbar,
-    .subs {
+    .head:not(.static) .subs {
       display: none;
     }
   }

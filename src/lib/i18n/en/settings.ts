@@ -81,7 +81,7 @@ export default defineZone('settings', {
     idleStopLabel: 'Stop idle Claude processes after (minutes)',
     todoTools: 'Agents keep a task list',
     todoToolsDesc:
-      'Gives agents Claude Code’s task list tool, so Escouade can show their progress in the “Plan” banner. Applies to agents started afterwards.',
+      'Gives agents Claude Code’s task list tool: if they keep a list, Escouade shows their progress in the “Plan” banner (the model does not have to use it). Applies to agents started afterwards.',
   },
 
   notifications: {

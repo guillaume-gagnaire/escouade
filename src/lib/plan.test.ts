@@ -152,18 +152,20 @@ describe('planView', () => {
     });
 
     it('is the share of the steps done for a task under way that has some', () => {
-      const v = view([
-        task('1', 'inProgress', { steps: [2, 4] }),
-        task('2', 'inProgress', { steps: [1, 3] }),
-        task('3', 'inProgress', { steps: [0, 5] }),
-      ]);
-      expect(v.rows.map((r) => r.percent)).toEqual([50, 33, 0]);
+      const v = view([task('1', 'inProgress', { steps: [2, 4] }), task('2', 'inProgress', { steps: [1, 3] })]);
+      expect(v.rows.map((r) => r.percent)).toEqual([50, 33]);
       expect(v.rows[0].steps).toEqual([2, 4]);
     });
 
-    it('is not measured for a task under way without steps: no number is made up', () => {
-      const v = view([task('1', 'inProgress'), task('2', 'inProgress', { steps: [0, 0] })]);
-      expect(v.rows.map((r) => r.percent)).toEqual([null, null]);
+    it('is not measured for a task under way without steps, nor with none done yet: a task begun is not shown at 0 %', () => {
+      const v = view([task('1', 'inProgress'), task('2', 'inProgress', { steps: [0, 0] }), task('3', 'inProgress', { steps: [0, 5] })]);
+      expect(v.rows.map((r) => r.percent)).toEqual([null, null, null]);
+      // The steps are still told, for the tooltip.
+      expect(v.rows[2].steps).toEqual([0, 5]);
+      // And a blocked task is the same.
+      const blocked = view([task('1', 'inProgress', { steps: [0, 3] })], {}, { status: 'waiting' });
+      expect(blocked.rows[0].state).toBe('block');
+      expect(blocked.rows[0].percent).toBeNull();
     });
 
     it('holds a task’s steps between 0 and 100', () => {

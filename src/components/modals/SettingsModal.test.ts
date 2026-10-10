@@ -181,7 +181,11 @@ describe('SettingsModal', () => {
     expect(todo).toHaveAttribute('aria-checked', 'true');
     // Next to the other settings of the processes, with its help.
     expect(processes.getByRole('switch', { name: 'Reprise automatique après la limite d’usage' })).toBeInTheDocument();
-    expect(processes.getByText(/Donne aux agents l’outil de liste de tâches de Claude Code/)).toBeInTheDocument();
+    // The help says what the setting does, and that the model is the one to use the tool: the banner is not promised.
+    const help = processes.getByText(/Donne aux agents l’outil de liste de tâches de Claude Code/);
+    expect(help).toHaveTextContent(/s’ils la tiennent, Escouade montre leur avancée dans le bandeau « Plan »/);
+    expect(help).toHaveTextContent(/le modèle n’est pas obligé de s’en servir/);
+    expect(help).not.toHaveTextContent(/Escouade peut alors montrer/);
     expect(tab('Claude Code')).not.toHaveClass('changed');
     await userEvent.click(todo);
     expect(todo).toHaveAttribute('aria-checked', 'false');
@@ -944,9 +948,10 @@ describe('SettingsModal in English', () => {
     render(SettingsModal);
     const todo = screen.getByRole('switch', { name: 'Agents keep a task list' });
     expect(todo).toHaveAttribute('aria-checked', 'true');
-    expect(
-      screen.getByText(/Gives agents Claude Code’s task list tool, so Escouade can show their progress in the “Plan” banner/),
-    ).toBeInTheDocument();
+    const help = screen.getByText(/Gives agents Claude Code’s task list tool/);
+    expect(help).toHaveTextContent(/if they keep a list, Escouade shows their progress in the “Plan” banner/);
+    expect(help).toHaveTextContent(/the model does not have to use it/);
+    expect(help).not.toHaveTextContent(/so Escouade can show/);
     expect(screen.getByRole('heading', { name: 'Processes' })).toBeInTheDocument();
   });
 

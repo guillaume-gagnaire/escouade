@@ -47,9 +47,12 @@ export interface PlanViewModel {
 /** Two digits at least: "01", "12", "100". */
 const rank = (i: number) => String(i + 1).padStart(2, '0');
 
-/** How far a task under way is by its steps, 0 to 100; null when nothing counts them. */
+/**
+ * How far a task under way is by its steps, 0 to 100; null when nothing counts them, or none is done yet (a task begun is
+ * shown at "0 %" beside a spinner as stalled: it is under way, nobody knows how far).
+ */
 function measured(steps: [number, number] | undefined): number | null {
-  if (!steps || !(steps[1] > 0)) return null;
+  if (!steps || !(steps[1] > 0) || !(steps[0] > 0)) return null;
   return Math.max(0, Math.min(100, Math.round((steps[0] / steps[1]) * 100)));
 }
 
@@ -68,7 +71,7 @@ export function planView(agent: Agent, ticket?: Ticket): PlanViewModel | null {
 
   // The agent waits for an answer or a permission: the first task under way waits with it. That is all the stream says.
   const waiting = agent.status === 'waiting';
-  let blocked = waiting ? plan.tasks.findIndex((x) => x.status === 'inProgress') : -1;
+  const blocked = waiting ? plan.tasks.findIndex((x) => x.status === 'inProgress') : -1;
   const ranks = new Map<string, number>();
   plan.tasks.forEach((x, i) => {
     if (!ranks.has(x.id)) ranks.set(x.id, i);

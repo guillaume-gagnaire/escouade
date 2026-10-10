@@ -347,6 +347,16 @@ describe('PlanBanner', () => {
       expect(bars[2]).toHaveClass('unmeasured');
     });
 
+    it('says “En cours”, not “0 %”, for a task under way whose steps are none of them done yet', () => {
+      show(agentOf([task('1', 'inProgress', { steps: [0, 2] }), task('2', 'pending')]));
+      const row = rows()[0];
+      expect(row.querySelector('.rpct')).toHaveTextContent('En cours');
+      expect(row).not.toHaveTextContent('%');
+      // The steps are still there for whoever points at it.
+      expect(row.querySelector('.rpct')).toHaveAttribute('title', '0/2 étapes');
+      expect(row.querySelector('.rfill')).toHaveClass('unmeasured');
+    });
+
     it('says a blocked task is blocked, whether it is measured or not', () => {
       show(agentOf([task('1', 'inProgress'), task('2', 'inProgress', { steps: [1, 4] })], { status: 'waiting' }));
       const [blocked, run] = rows();
@@ -526,6 +536,44 @@ describe('PlanBanner', () => {
       await userEvent.click(toggle());
       await frame();
       expect(list().scrollTop).toBe(40);
+    });
+
+    it('is put in the middle when the list is unfolded again, whenever the reader scrolled the one before', async () => {
+      let now = 1_000_000;
+      vi.spyOn(Date, 'now').mockImplementation(() => now);
+      show(agentOf(FIVE()));
+      await frame();
+      now += 2000;
+      list().scrollTop = 7;
+      await fireEvent.scroll(list());
+      // Folded and unfolded within the 6 seconds: it is another list, which nobody scrolled.
+      now += 1000;
+      await userEvent.click(toggle());
+      await userEvent.click(toggle());
+      await frame();
+      expect(list().scrollTop).toBe(40);
+    });
+
+    it('is not held back on another agent by what the reader did on the one before', async () => {
+      let now = 1_000_000;
+      vi.spyOn(Date, 'now').mockImplementation(() => now);
+      const second = (focus: number) =>
+        agentOf(
+          ['a', 'b', 'c', 'd', 'e'].map((id, i) => task(id, i < focus ? 'done' : i === focus ? 'inProgress' : 'pending')),
+          { id: 'a2' },
+        );
+      const { rerender } = show(agentOf(FIVE(), { id: 'a1' }));
+      await frame();
+      now += 2000;
+      list().scrollTop = 5;
+      await fireEvent.scroll(list());
+      now += 1000;
+      await rerender({ agent: second(2) });
+      expect(list().scrollTop).toBe(40);
+      // Two seconds after the switch, the second agent moves on: the list follows, nobody scrolled it.
+      now += 2000;
+      await rerender({ agent: second(4) });
+      expect(list().scrollTop).toBe(160 - 40);
     });
 
     it('does not scroll to rows when none is to look at', async () => {
@@ -758,6 +806,21 @@ describe('PlanBanner', () => {
       setLang('fr');
       flushSync();
       expect(rows()[0].querySelector('.ico .sr')).toHaveTextContent('Terminé');
+    });
+  });
+
+  describe('in a narrow conversation', () => {
+    // jsdom applies no container query: the stylesheet is read for what it hides under 560 px.
+    const source = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), 'PlanBanner.svelte'), 'utf8');
+    const narrow = source.slice(source.indexOf('@container (max-width: 560px)'), source.indexOf('@media (prefers-reduced-motion: reduce)'));
+
+    it('hides the bar of a row and the count of subagents of a list, not the one of the banner that has no list', () => {
+      expect(narrow).toContain('.rbar');
+      // The count is hidden only in the head of a banner that has a list (the title needs the room there); in the banner of
+      // subagents alone it is all there is to read.
+      expect(narrow).toMatch(/\.head:not\(\.static\) \.subs/);
+      const selectors = (narrow.match(/[^{}]+(?=\{)/g) ?? []).flatMap((list) => list.split(',').map((s) => s.trim()));
+      expect(selectors).not.toContain('.subs');
     });
   });
 
