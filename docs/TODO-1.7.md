@@ -72,12 +72,20 @@ But : plusieurs comptes Claude (perso, pro…) dans la même app ; chaque agent 
 
 ### Quota et bascule
 - [ ] `usage.rs` par compte : identifiants lus dans le dossier de chaque compte (sous macOS, selon l'essai du trousseau) ; un appel par compte toutes les 5 min, comme aujourd'hui.
-- [ ] Barre d'état : le compte actif et son usage ; au clic, tous les comptes avec leurs fenêtres (5 h, semaine) et leurs remises à zéro.
+- [ ] **Barre d'état, compacte** : seulement les quotas du compte en cours d'utilisation, sous la forme `5h <barre> reset 3h01 | W <barre> reset 4j 12h` (aujourd'hui : « Session 5 h <barre> 42 % reset 3h01 » et « Hebdo <barre> 12 % reset 4j 12h »). Le libellé « W » est à trancher face à « 7 j », plus cohérent avec une interface en français.
+  - Le pourcentage n'est plus écrit : il s'affiche au survol de la barre, dans une infobulle (« 42 % · remise à zéro le 10/10 à 18:00 »). Pour le clavier et les lecteurs d'écran, la barre reste un `role="meter"` avec sa valeur, et l'infobulle s'affiche aussi au focus.
+  - La barre passe à la couleur d'alerte au-delà de 80 %, comme aujourd'hui.
+  - Le nom du compte en cours apparaît devant les quotas dès qu'il y a plusieurs comptes (« Pro · 5h <barre> … »), pour savoir de qui sont ces quotas.
+- [ ] **Détail des autres comptes** : avec plusieurs comptes, tout le groupe des quotas de la barre d'état est un bouton. Au clic, un panneau s'ouvre au-dessus de la barre d'état : chaque compte avec ses deux fenêtres (barre, pourcentage écrit cette fois, remise à zéro), le compte en cours en tête et marqué, un compte au-delà du seuil de pause signalé, un compte inactif ou déconnecté grisé avec sa raison. Échap, un clic dehors ou un nouveau clic sur le groupe le referment ; le focus va dans le panneau à l'ouverture et revient au bouton à la fermeture. Avec un seul compte, le groupe n'est pas cliquable.
 - [ ] « Automatique » : un nouvel agent ou ticket part sur le premier compte actif sous le seuil de « Pause au-delà du quota », dans l'ordre de la liste. Le pilote auto ne se met en pause que quand tous les comptes ont passé le seuil.
 - [ ] Toast à chaque bascule : « Le compte Pro a atteint 95 % : les nouveaux agents partent sur Principal. »
 - [ ] Agent arrêté par la limite en plein tour : aujourd'hui il attend la remise à zéro. Nouveau, si l'essai de reprise entre comptes marche : « Reprendre sur <compte> » sur sa carte de fin de tour, et automatique pour un agent de ticket si le réglage le permet (la session est copiée dans le dossier de l'autre compte, l'agent change de compte).
 - [ ] Serveur MCP (chantier 1) déclaré dans chaque compte ; un compte ajouté plus tard le reçoit aussi.
-- [ ] Coûts et statistiques : colonne « Compte » dans « Par agent » / « Par ticket ».
+- [ ] **Statistiques globales et par compte** :
+  - Chaque tour enregistre son compte (colonne `account` dans la table des tours, comme `ticket_id` en 1.6 ; les tours d'avant la 1.7 comptent pour « Principal »).
+  - Vue « Stats » : un sélecteur « Tous les comptes » (défaut : les totaux globaux, comme aujourd'hui) / un compte, qui filtre toutes les vues (période, « Par agent », « Par ticket ») ; une vue « Par compte » qui met les comptes côte à côte (coût, tokens, tours, agents, sur la période choisie).
+  - « Aujourd'hui » dans la barre d'état reste le total de tous les comptes ; le panneau des comptes donne celui de chaque compte.
+  - Un agent repris sur un autre compte compte ses tours pour le compte de chaque tour, pas pour celui de départ.
 
 ### Tests et docs
 - [ ] Le faux `claude` respecte `CLAUDE_CONFIG_DIR` (ses sessions et sa limite simulée par dossier) ; tests du choix de compte, de la bascule, de la pause quand tous sont au seuil, du compte gardé par un agent repris.
