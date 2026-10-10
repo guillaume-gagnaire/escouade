@@ -98,6 +98,29 @@ pub enum Credentials {
     Missing,
 }
 
+/// What Claude Code keeps of an account's sign-in, and which sign-in that is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Stored {
+    pub credentials: Credentials,
+    /// A fingerprint of the sign-in (a hash, never the token): another after a new sign-in, the
+    /// same while it is out of date. None when not signed in.
+    pub stamp: Option<String>,
+}
+
+/// `read_credentials`, with which sign-in it is.
+pub async fn read_stored(dir: &Path, keychain_service: &str) -> Result<Stored> {
+    stored_from(from_keychain(keychain_service).await?, dir).await
+}
+
+/// A short fingerprint of the sign-in in `oauth` (`claudeAiOauth`): a hash of its tokens, whose
+/// first bytes tell one sign-in from another without ever holding a token.
+fn stamp_of(oauth: &Value) -> Option<String> {
+    let token = oauth["accessToken"].as_str().filter(|t| !t.is_empty())?;
+    let refresh = oauth["refreshToken"].as_str().unwrap_or_default();
+    let hash = Sha256::digest(format!("{token}\n{refresh}").as_bytes());
+    Some(hash.iter().take(8).map(|b| format!("{b:02x}")).collect())
+}
+
 /// The account's sign-in, read-only, where Claude Code reads it: on macOS the keychain entry named
 /// `keychain_service`, `<dir>/.credentials.json` only without one (its « keychain with plaintext
 /// fallback »: a file left behind does not hide the entry); elsewhere the file.
@@ -107,25 +130,38 @@ pub async fn read_credentials(dir: &Path, keychain_service: &str) -> Result<Cred
 
 /// The sign-in the keychain entry holds (`keychain`), else the one of `<dir>/.credentials.json`.
 async fn credentials_from(keychain: Option<Value>, dir: &Path) -> Result<Credentials> {
+    Ok(stored_from(keychain, dir).await?.credentials)
+}
+
+/// `credentials_from`, with which sign-in it is.
+async fn stored_from(keychain: Option<Value>, dir: &Path) -> Result<Stored> {
+    let missing = Stored {
+        credentials: Credentials::Missing,
+        stamp: None,
+    };
     let creds: Value = match keychain {
         Some(creds) => creds,
         None => match tokio::fs::read_to_string(dir.join(".credentials.json")).await {
             Ok(text) => serde_json::from_str(&text)?,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Credentials::Missing),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(missing),
             Err(e) => return Err(e.into()),
         },
     };
     let oauth = &creds["claudeAiOauth"];
     let Some(token) = oauth["accessToken"].as_str().filter(|t| !t.is_empty()) else {
-        return Ok(Credentials::Missing);
+        return Ok(missing);
     };
-    if oauth["expiresAt"]
+    let expired = oauth["expiresAt"]
         .as_i64()
-        .is_some_and(|exp| exp < crate::model::now_ms())
-    {
-        return Ok(Credentials::Expired);
-    }
-    Ok(Credentials::Token(token.to_string()))
+        .is_some_and(|exp| exp < crate::model::now_ms());
+    Ok(Stored {
+        credentials: if expired {
+            Credentials::Expired
+        } else {
+            Credentials::Token(token.to_string())
+        },
+        stamp: stamp_of(oauth),
+    })
 }
 
 /// What `security find-generic-password -w` answered.
@@ -648,6 +684,46 @@ mod tests {
         std::fs::create_dir_all(&broken).unwrap();
         std::fs::write(broken.join(".credentials.json"), "{ pas du json").unwrap();
         assert!(read_credentials(&broken, NO_ENTRY).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn one_sign_in_is_told_from_another_by_a_stamp_that_is_never_the_token() {
+        let dir = test_dir("usage-stamp");
+        let later = now_ms() + 3_600_000;
+        let sign_in = |token: &str, expires_at: i64| json!({ "claudeAiOauth": { "accessToken": token, "refreshToken": "ref", "expiresAt": expires_at } });
+        let stamp = |d: PathBuf| async move { read_stored(&d, NO_ENTRY).await.unwrap().stamp };
+        credentials(&dir, sign_in("tok-old", later));
+        let first = stamp(dir.clone()).await.expect("signed in: a stamp");
+        assert_eq!(first.len(), 16);
+        assert!(first.chars().all(|c| c.is_ascii_hexdigit()));
+        assert!(!first.contains("tok"));
+        // Read again, the same sign-in: the same stamp.
+        assert_eq!(stamp(dir.clone()).await.as_deref(), Some(first.as_str()));
+        // Out of date, it is still that sign-in: signed in, and told by the same stamp, which
+        // is how a window tells it from the one the user is about to make.
+        credentials(&dir, sign_in("tok-old", now_ms() - 1_000));
+        let stored = read_stored(&dir, NO_ENTRY).await.unwrap();
+        assert_eq!(stored.credentials, Credentials::Expired);
+        assert_eq!(stored.stamp.as_deref(), Some(first.as_str()));
+        // A new sign-in, another token: another stamp.
+        credentials(&dir, sign_in("tok-new", later));
+        let second = stamp(dir.clone()).await.unwrap();
+        assert_ne!(second, first);
+        // Not signed in (nothing there, or only the sign-ins of MCP servers): none.
+        let nothing = dir.join("nothing");
+        std::fs::create_dir_all(&nothing).unwrap();
+        assert_eq!(stamp(nothing).await, None);
+        let other = dir.join("other");
+        credentials(
+            &other,
+            json!({ "mcpOAuth": { "x": { "accessToken": "t" } } }),
+        );
+        assert_eq!(stamp(other).await, None);
+        // The keychain's entry, when there is one, is the sign-in the stamp is of.
+        let entry = sign_in("tok-keychain", later);
+        let kept = stored_from(Some(entry), &dir).await.unwrap();
+        assert_eq!(kept.credentials, Credentials::Token("tok-keychain".into()));
+        assert_ne!(kept.stamp.unwrap(), second);
     }
 
     #[tokio::test]

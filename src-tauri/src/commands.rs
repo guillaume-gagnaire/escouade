@@ -48,7 +48,10 @@ pub struct InitialState {
     git: HashMap<String, GitInfo>,
     shells: Vec<ShellInfo>,
     terminals: Vec<TermInfo>,
+    /// Claude Code is found for the account new agents go to.
     claude_found: bool,
+    /// The settings' own path to Claude Code leads to it (what the field's hint says).
+    claude_path_found: bool,
     version: String,
     models: Vec<ModelInfo>,
     /// Why no ticket of a project's board starts, by project.
@@ -99,6 +102,7 @@ pub fn subscribe(
     let accounts = core.integration_accounts();
     let version = core.app.package_info().version.to_string();
     let lang = core.lang();
+    let claude_path_found = crate::claude::resolve_binary(&settings.claude_path).is_some();
     InitialState {
         lang,
         projects,
@@ -107,6 +111,7 @@ pub fn subscribe(
         ui,
         shells: pty::detect_shells(&settings),
         claude_found: core.claude_found(),
+        claude_path_found,
         settings,
         usage,
         git,

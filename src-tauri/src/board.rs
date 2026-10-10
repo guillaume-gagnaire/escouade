@@ -8,7 +8,7 @@ use crate::core::{slugify, RESUME_MARGIN_MS};
 use crate::i18n::{self, Lang};
 use crate::model::*;
 use serde_json::Value;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 /// A ticket's criteria when none was given, in `lang`: they stay in the language they were made in.
 pub fn default_criteria(lang: Lang) -> [String; 2] {
@@ -505,22 +505,40 @@ pub fn over_threshold(w: &RateWindow, threshold: u32, now: i64) -> bool {
 
 /// Why no ticket starts at `now`, if none does, when it may go to any of `accounts` (the ones a
 /// project allows, or all the active ones): only when every one of them is held back
-/// (`account_pause`), and then until the first of them is free again. A window whose end is
-/// unknown holds nothing back: a reading that no longer comes would hold them forever.
+/// (`account_pause`, or an agent of it waiting for its usage limit to reset, `waiting`: its
+/// resume), at least one by its quota, and then until the first of them is free again. A window
+/// whose end is unknown holds nothing back: a reading that no longer comes would hold them
+/// forever.
 pub fn autopilot_pause(
     usage: &[AccountUsage],
     accounts: &[String],
     threshold: u32,
     hold: &Hold,
+    waiting: &BTreeMap<String, i64>,
     now: i64,
 ) -> Option<AutopilotPause> {
     // The first to be free again; an account that is free now lets a ticket start.
     let mut soonest: Option<AutopilotPause> = None;
+    let mut by_quota = false;
     for id in accounts {
-        let pause = account_pause(usage, id, threshold, hold, now)?;
+        let window = account_pause(usage, id, threshold, hold, now);
+        // An agent of the account waits for its usage limit to reset, until then.
+        let agent = waiting.get(id).copied().filter(|until| *until > now);
+        by_quota |= window.is_some();
+        let pause = match (window, agent) {
+            (None, None) => return None,
+            (Some(p), None) => p,
+            (None, Some(until)) => limit_pause(until),
+            (Some(p), Some(until)) if until > p.until => limit_pause(until),
+            (Some(p), Some(_)) => p,
+        };
         if soonest.as_ref().is_none_or(|s| pause.until < s.until) {
             soonest = Some(pause);
         }
+    }
+    // Only agents waiting: the places say it (« Quota atteint »), as with a single account.
+    if !by_quota {
+        return None;
     }
     let mut pause = soonest?;
     // With a single account there is nothing to tell apart.
@@ -528,6 +546,16 @@ pub fn autopilot_pause(
         pause.accounts = accounts.to_vec();
     }
     Some(pause)
+}
+
+/// The pause of an account an agent waits the usage limit's reset of, until `until`.
+fn limit_pause(until: i64) -> AutopilotPause {
+    AutopilotPause {
+        reason: PauseReason::Limit,
+        pct: None,
+        until,
+        accounts: Vec::new(),
+    }
 }
 
 /// Why no ticket starts on the account `id` at `now`, if none does: one of its windows (5 h,
@@ -1755,7 +1783,14 @@ mod tests {
         hold: &Hold,
         now: i64,
     ) -> Option<AutopilotPause> {
-        super::autopilot_pause(usage, &["principal".to_string()], threshold, hold, now)
+        super::autopilot_pause(
+            usage,
+            &["principal".to_string()],
+            threshold,
+            hold,
+            &no_waiting(),
+            now,
+        )
     }
 
     const NOW: i64 = 1_790_000_000_000;
@@ -1887,6 +1922,11 @@ mod tests {
         }
     }
 
+    /// No agent waits for the usage limit to reset.
+    fn no_waiting() -> BTreeMap<String, i64> {
+        BTreeMap::new()
+    }
+
     fn ids(list: &[&str]) -> Vec<String> {
         list.iter().map(|s| s.to_string()).collect()
     }
@@ -1900,17 +1940,33 @@ mod tests {
         ];
         // A ticket may start on Pro: nothing holds.
         assert_eq!(
-            super::autopilot_pause(&two, &ids(&["principal", "pro"]), 95, &free, NOW),
+            super::autopilot_pause(
+                &two,
+                &ids(&["principal", "pro"]),
+                95,
+                &free,
+                &no_waiting(),
+                NOW
+            ),
             None
         );
         // An account no reading is known of is usable.
         let one_read = [account("principal", 100.0, NOW + 9_000)];
         assert_eq!(
-            super::autopilot_pause(&one_read, &ids(&["principal", "pro"]), 95, &free, NOW),
+            super::autopilot_pause(
+                &one_read,
+                &ids(&["principal", "pro"]),
+                95,
+                &free,
+                &no_waiting(),
+                NOW
+            ),
             None
         );
         // A project that prefers Principal waits for it, whatever the others read.
-        let held = super::autopilot_pause(&two, &ids(&["principal"]), 95, &free, NOW).unwrap();
+        let held =
+            super::autopilot_pause(&two, &ids(&["principal"]), 95, &free, &no_waiting(), NOW)
+                .unwrap();
         assert_eq!(
             (held.reason, held.pct, held.until, held.accounts),
             (
@@ -1922,7 +1978,7 @@ mod tests {
         );
         // One that prefers Pro does not.
         assert_eq!(
-            super::autopilot_pause(&two, &ids(&["pro"]), 95, &free, NOW),
+            super::autopilot_pause(&two, &ids(&["pro"]), 95, &free, &no_waiting(), NOW),
             None
         );
     }
@@ -1936,7 +1992,7 @@ mod tests {
             account("team", 99.0, NOW + 7_000),
         ];
         let accounts = ids(&["principal", "pro", "team"]);
-        let pause = super::autopilot_pause(&all, &accounts, 95, &free, NOW).unwrap();
+        let pause = super::autopilot_pause(&all, &accounts, 95, &free, &no_waiting(), NOW).unwrap();
         // Pro's window ends first: its reason, its use, its end; every account is named.
         assert_eq!(
             (pause.reason, pause.pct, pause.until),
@@ -1949,7 +2005,14 @@ mod tests {
         assert_eq!(pause.accounts, accounts);
         // Once Pro is free again, nothing holds.
         assert_eq!(
-            super::autopilot_pause(&all, &accounts, 95, &free, NOW + 5_000 + RESUME_MARGIN_MS),
+            super::autopilot_pause(
+                &all,
+                &accounts,
+                95,
+                &free,
+                &no_waiting(),
+                NOW + 5_000 + RESUME_MARGIN_MS
+            ),
             None
         );
         // An account past the threshold on both its windows is free when both are over: its
@@ -1959,15 +2022,24 @@ mod tests {
             ..account("pro", 97.0, NOW + 5_000)
         };
         let two = [account("principal", 100.0, NOW + 9_000), both];
-        let pause =
-            super::autopilot_pause(&two, &ids(&["principal", "pro"]), 95, &free, NOW).unwrap();
+        let pause = super::autopilot_pause(
+            &two,
+            &ids(&["principal", "pro"]),
+            95,
+            &free,
+            &no_waiting(),
+            NOW,
+        )
+        .unwrap();
         assert_eq!(
             (pause.reason, pause.until),
             (PauseReason::FiveHour, NOW + 9_000 + RESUME_MARGIN_MS)
         );
         // With a single account, there are no accounts to tell apart.
         let alone = [account("principal", 100.0, NOW + 9_000)];
-        let pause = super::autopilot_pause(&alone, &ids(&["principal"]), 95, &free, NOW).unwrap();
+        let pause =
+            super::autopilot_pause(&alone, &ids(&["principal"]), 95, &free, &no_waiting(), NOW)
+                .unwrap();
         assert!(pause.accounts.is_empty());
     }
 
@@ -1996,11 +2068,13 @@ mod tests {
         assert_eq!(hold.of("pro"), AccountHold::default());
         // Pro is free.
         assert_eq!(
-            super::autopilot_pause(&none, &accounts, 100, &hold, NOW),
+            super::autopilot_pause(&none, &accounts, 100, &hold, &no_waiting(), NOW),
             None
         );
         // A project that prefers Principal waits.
-        let pause = super::autopilot_pause(&none, &ids(&["principal"]), 100, &hold, NOW).unwrap();
+        let pause =
+            super::autopilot_pause(&none, &ids(&["principal"]), 100, &hold, &no_waiting(), NOW)
+                .unwrap();
         assert_eq!(
             (pause.reason, pause.pct, pause.until),
             (PauseReason::Limit, None, NOW + LIMIT_PAUSE_MS)
@@ -2008,14 +2082,86 @@ mod tests {
         // Both met it: the first to end.
         let mut both = limit("pro", NOW + 1_000);
         both.limit_until = Some(NOW + LIMIT_PAUSE_MS);
-        let pause = super::autopilot_pause(&none, &accounts, 100, &both, NOW).unwrap();
+        let pause =
+            super::autopilot_pause(&none, &accounts, 100, &both, &no_waiting(), NOW).unwrap();
         assert_eq!(
             (pause.reason, pause.until, pause.accounts),
             (PauseReason::Limit, NOW + 1_000, accounts)
         );
         // Over, it holds nothing.
         assert_eq!(
-            super::autopilot_pause(&none, &ids(&["pro"]), 100, &both, NOW + 1_000),
+            super::autopilot_pause(
+                &none,
+                &ids(&["pro"]),
+                100,
+                &both,
+                &no_waiting(),
+                NOW + 1_000
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn an_agent_waiting_for_one_account_and_a_window_over_the_other_pause_the_autopilot_together() {
+        let free = Hold::default();
+        let accounts = ids(&["pro", "principal"]);
+        // Pro: an agent waits for its reset, no window known; Principal: its window is over.
+        let waiting = BTreeMap::from([("pro".to_string(), NOW + 7_000)]);
+        let usage = [
+            account("pro", 0.0, NOW),
+            account("principal", 100.0, NOW + 9_000),
+        ];
+        let pause = super::autopilot_pause(&usage, &accounts, 95, &free, &waiting, NOW).unwrap();
+        // The first to be free again is Pro, whose agent resumes then.
+        assert_eq!(
+            (pause.reason, pause.pct, pause.until, pause.accounts.clone()),
+            (PauseReason::Limit, None, NOW + 7_000, accounts.clone())
+        );
+        // Principal's reset comes first: its window is the one waited for.
+        let waiting = BTreeMap::from([("pro".to_string(), NOW + 60_000)]);
+        let pause = super::autopilot_pause(&usage, &accounts, 95, &free, &waiting, NOW).unwrap();
+        assert_eq!(
+            (pause.reason, pause.until),
+            (PauseReason::FiveHour, NOW + 9_000 + RESUME_MARGIN_MS)
+        );
+        // Over, the agent waits for nothing any more: Pro is free.
+        assert_eq!(
+            super::autopilot_pause(&usage, &accounts, 95, &free, &waiting, NOW + 60_000),
+            None
+        );
+        // Pro waiting and held by a window too: free when both are over, the later of the two.
+        let both = [
+            account("pro", 100.0, NOW + 30_000),
+            account("principal", 100.0, NOW + 9_000),
+        ];
+        let pro = ids(&["pro"]);
+        let later = BTreeMap::from([("pro".to_string(), NOW + 100_000)]);
+        let pause = super::autopilot_pause(&both, &pro, 95, &free, &later, NOW).unwrap();
+        assert_eq!(
+            (pause.reason, pause.until),
+            (PauseReason::Limit, NOW + 100_000)
+        );
+        let sooner = BTreeMap::from([("pro".to_string(), NOW + 40_000)]);
+        let pause = super::autopilot_pause(&both, &pro, 95, &free, &sooner, NOW).unwrap();
+        assert_eq!(
+            (pause.reason, pause.until),
+            (PauseReason::FiveHour, NOW + 30_000 + RESUME_MARGIN_MS)
+        );
+        // Only agents waiting, for every account: the places say it (« Quota atteint »), not a pause.
+        let none = [account("pro", 0.0, NOW), account("principal", 0.0, NOW)];
+        let all = BTreeMap::from([
+            ("pro".to_string(), NOW + 7_000),
+            ("principal".to_string(), NOW + 8_000),
+        ]);
+        assert_eq!(
+            super::autopilot_pause(&none, &accounts, 95, &free, &all, NOW),
+            None
+        );
+        // An account that is free lets a ticket start, whoever waits elsewhere.
+        let lone = BTreeMap::from([("pro".to_string(), NOW + 7_000)]);
+        assert_eq!(
+            super::autopilot_pause(&none, &accounts, 95, &free, &lone, NOW),
             None
         );
     }
@@ -2053,7 +2199,7 @@ mod tests {
         assert_eq!(hold.of("team"), AccountHold::default());
         let pro_and_principal = ids(&["principal", "pro"]);
         assert_eq!(
-            super::autopilot_pause(&all, &pro_and_principal, 90, &hold, NOW),
+            super::autopilot_pause(&all, &pro_and_principal, 90, &hold, &no_waiting(), NOW),
             None
         );
         // The next 5-hour window of Principal, over it in its turn, holds again; Pro's, lifted
@@ -2064,11 +2210,12 @@ mod tests {
         ];
         let later = NOW + 9_000 + RESUME_MARGIN_MS;
         assert_eq!(
-            super::autopilot_pause(&next, &ids(&["principal"]), 90, &hold, later).map(|p| p.reason),
+            super::autopilot_pause(&next, &ids(&["principal"]), 90, &hold, &no_waiting(), later)
+                .map(|p| p.reason),
             Some(PauseReason::FiveHour)
         );
         assert_eq!(
-            super::autopilot_pause(&next, &pro_and_principal, 90, &hold, later),
+            super::autopilot_pause(&next, &pro_and_principal, 90, &hold, &no_waiting(), later),
             None
         );
     }

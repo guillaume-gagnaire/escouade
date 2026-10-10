@@ -15,7 +15,7 @@ use crate::model::*;
 use crate::testlaunch;
 use anyhow::{anyhow, bail, Result};
 use serde::Deserialize;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::atomic::Ordering;
@@ -553,19 +553,22 @@ impl<R: Runtime> Core<R> {
         });
     }
 
-    /// The accounts an agent of the app waits for the quota of (usage limit): no ticket starts on
-    /// them meanwhile, but on another account one may.
-    pub(crate) fn quota_paused(&self) -> HashSet<String> {
+    /// The accounts an agent of the app waits for the quota of (usage limit), each with when its
+    /// first one resumes: no ticket starts on them meanwhile, but on another account one may.
+    pub(crate) fn quota_paused(&self) -> BTreeMap<String, i64> {
         let settings = self.settings.read().clone();
-        self.agents
-            .read()
-            .values()
-            .filter_map(|h| {
-                let rt = h.lock();
-                let waits = rt.meta.resume_at.is_some() && !rt.meta.archived;
-                waits.then(|| accounts::get(&settings, &rt.meta.account).id)
-            })
-            .collect()
+        let mut waiting = BTreeMap::new();
+        for h in self.agents.read().values() {
+            let rt = h.lock();
+            let Some(at) = rt.meta.resume_at.filter(|_| !rt.meta.archived) else {
+                continue;
+            };
+            let first = waiting
+                .entry(accounts::get(&settings, &rt.meta.account).id)
+                .or_insert(at);
+            *first = (*first).min(at);
+        }
+        waiting
     }
 
     /// The time the autopilot's pauses go by: the real one (ahead by `clock_ahead` in tests).
@@ -591,7 +594,15 @@ impl<R: Runtime> Core<R> {
         let accounts = accounts::candidates(&settings, preferred);
         let usage = self.usage.lock().accounts.clone();
         let hold = self.hold.lock().clone();
-        board::autopilot_pause(&usage, &accounts, threshold, &hold, self.pause_now())
+        let waiting = self.quota_paused();
+        board::autopilot_pause(
+            &usage,
+            &accounts,
+            threshold,
+            &hold,
+            &waiting,
+            self.pause_now(),
+        )
     }
 
     /// Why the tickets of the projects that prefer an account do not start, by project: each
@@ -630,7 +641,7 @@ impl<R: Runtime> Core<R> {
         let waiting = self.quota_paused();
         let now = self.pause_now();
         let held = |id: &str| {
-            waiting.contains(id)
+            waiting.contains_key(id)
                 || board::account_pause(&usage, id, threshold, &hold, now).is_some()
         };
         let usable = |id: &str| !held(id) && !accounts::over_threshold(&usage, id, threshold, now);
@@ -660,7 +671,7 @@ impl<R: Runtime> Core<R> {
         let now = self.pause_now();
         !accounts.is_empty()
             && accounts.iter().all(|a| {
-                waiting.contains(a)
+                waiting.contains_key(a)
                     || board::account_pause(&usage, a, threshold, &hold, now).is_some()
             })
     }

@@ -5181,6 +5181,69 @@ async fn with_every_account_past_the_threshold_the_autopilot_pauses_and_names_th
 }
 
 #[tokio::test]
+async fn an_agent_waiting_on_one_account_and_a_window_over_on_the_other_pause_the_autopilot() {
+    let h = harness("tk-accounts-mixed");
+    let (p, _) = h.project(false).await;
+    pro_first_and_out_of_quota(&h);
+    // Pro's agent meets the usage limit and waits for its reset.
+    let a = h
+        .core
+        .ticket_create(&p.id, draft("Un [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.wait_resume_planned(&a.id).await;
+    let resume = h.agent_of(&a.id).resume_at.unwrap();
+    // No window of Pro is known (its quota was not read): only its agent holds it back. Principal
+    // is held back by its window.
+    h.core.update_usage(|u| {
+        let pro = u.account_mut("pro");
+        pro.five_hour = None;
+        pro.seven_day = None;
+    });
+    let end = now_ms() + 3_600_000;
+    h.core.record_usage(
+        "principal",
+        Reading::Windows((
+            Some(RateWindow {
+                pct: 100.0,
+                resets_at: Some(end),
+            }),
+            None,
+        )),
+    );
+    let b = h
+        .core
+        .ticket_create(&p.id, draft("Deux [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.wait_board_idle().await;
+    assert_eq!(h.ticket(&b.id).column, Column::Todo);
+    // Neither alone would say why: the window is told, until Pro's agent resumes (the first to be
+    // free again), with the accounts it waits for.
+    assert_eq!(
+        h.pauses().last().cloned(),
+        Some(json!({ "reason": "limit", "pct": null, "until": resume,
+                     "accounts": ["pro", "principal"] }))
+    );
+    // Principal back under the threshold: a ticket goes there.
+    h.core.record_usage(
+        "principal",
+        Reading::Windows((
+            Some(RateWindow {
+                pct: 20.0,
+                resets_at: Some(end),
+            }),
+            None,
+        )),
+    );
+    h.core.pause_tick();
+    h.wait_ticket(&b.id, "started on Principal", |t| t.column != Column::Todo)
+        .await;
+    assert_eq!(account_of_ticket(&h, &b.id).await, "principal");
+    assert_eq!(h.pauses().last(), Some(&Value::Null));
+}
+
+#[tokio::test]
 async fn a_project_that_prefers_an_account_waits_for_it_alone() {
     let h = harness("tk-account-preferred");
     let (p, _) = h.project(false).await;

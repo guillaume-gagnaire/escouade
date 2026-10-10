@@ -500,16 +500,40 @@ fn link_dir(src: &Path, dst: &Path) -> Result<()> {
     Ok(())
 }
 
+/// The `mklink /J` command line `cmd /c` runs for the junction `dst` to the folder `src`, each path
+/// quoted: inside quotes, `&`, `^` and parentheses are plain text (Rust quotes an argument only
+/// when it has a space). Not `%`, which cmd.exe expands there too, nor a straight quote, which
+/// cannot be quoted: such a path is refused.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn junction_line(dst: &Path, src: &Path) -> Result<String> {
+    for path in [dst, src] {
+        let shown = path.to_string_lossy();
+        if shown.contains(['%', '"']) {
+            bail!(tr!(
+                "« {path} » contient « % » ou un guillemet droit, que cmd.exe ne sait pas lier : choisis « Copier ».",
+                "“{path}” has a “%” or a straight quote, which cmd.exe can’t link: choose “Copy”.",
+                path = shown
+            ));
+        }
+    }
+    Ok(format!(
+        "mklink /J \"{}\" \"{}\"",
+        dst.display(),
+        src.display()
+    ))
+}
+
 /// `dst` made a junction to the folder `src`: unlike a symbolic link, it needs no administrator
 /// rights (nor the developer mode).
 #[cfg(windows)]
 fn link_dir(src: &Path, dst: &Path) -> Result<()> {
     use std::os::windows::process::CommandExt;
     let cmd = std::env::var_os("ComSpec").unwrap_or_else(|| "cmd.exe".into());
+    // The line as cmd.exe reads it, not as Rust would quote it (only what has a space).
+    let line = junction_line(dst, &std::path::absolute(src)?)?;
     let out = std::process::Command::new(cmd)
-        .args(["/d", "/c", "mklink", "/J"])
-        .arg(dst)
-        .arg(std::path::absolute(src)?)
+        .args(["/d", "/c"])
+        .raw_arg(line)
         .creation_flags(claude::CREATE_NO_WINDOW)
         .output()?;
     if !out.status.success() {
@@ -570,6 +594,9 @@ pub struct AccountStatus {
     pub email: Option<String>,
     /// Its configuration folder (Principal's: the app's `CLAUDE_CONFIG_DIR`, else `~/.claude`).
     pub dir: String,
+    /// Which sign-in it is (a fingerprint, never the token): the same while the sign-in is, even
+    /// out of date, another once the user signs in again. None when not signed in.
+    pub stamp: Option<String>,
 }
 
 /// Refused: no account has the id the window gave (removed meanwhile).
@@ -823,17 +850,20 @@ impl<R: Runtime> Core<R> {
     pub async fn claude_account_status(&self, id: &str) -> Result<AccountStatus> {
         let account = self.claude_account(id)?;
         let sign_in = crate::usage::sign_in(&account);
-        let connected = match crate::usage::read_credentials(&sign_in.dir, &sign_in.service).await {
-            Ok(crate::usage::Credentials::Missing) => false,
-            Ok(_) => true,
+        let stored = match crate::usage::read_stored(&sign_in.dir, &sign_in.service).await {
+            Ok(stored) => Some(stored),
             // A file being written, the keychain refused: not signed in as far as can be told.
             Err(e) => {
                 log::debug!("sign-in of account {id}: {e:#}");
-                false
+                None
             }
         };
+        let connected = stored
+            .as_ref()
+            .is_some_and(|s| s.credentials != crate::usage::Credentials::Missing);
         Ok(AccountStatus {
             connected,
+            stamp: stored.and_then(|s| s.stamp),
             email: connected
                 .then(|| email_in(&claude_json(&account)))
                 .flatten(),
@@ -1319,6 +1349,64 @@ mod tests {
                 "skills"
             ]
         );
+    }
+
+    #[test]
+    fn a_folder_with_spaces_accents_and_cmd_symbols_in_its_path_is_linked_all_the_same() {
+        let dir = test_dir("accounts-link-odd");
+        // Spaces and accents are quoted by Rust's own rules; `&` and `^` (with no space beside
+        // them to make Rust quote the path) are what cmd.exe reads as commands.
+        for (parent, from, to) in [
+            ("Équipe à 100 pour cent", "source dossier", "lien é"),
+            ("A&B^C(1)", "src&dir", "lien^&é"),
+        ] {
+            let src = dir.join(parent).join(from);
+            std::fs::create_dir_all(&src).unwrap();
+            std::fs::write(src.join("a.txt"), "dedans").unwrap();
+            let dst = dir.join(parent).join(to);
+            link_dir(&src, &dst).unwrap();
+            assert!(std::fs::metadata(&dst).unwrap().is_dir(), "{parent}");
+            assert_eq!(
+                std::fs::read_to_string(dst.join("a.txt")).unwrap(),
+                "dedans"
+            );
+            // A change of the folder is the link's.
+            std::fs::write(src.join("b.txt"), "aussi").unwrap();
+            assert!(dst.join("b.txt").is_file());
+        }
+    }
+
+    #[test]
+    fn the_command_line_of_a_junction_quotes_each_path_and_refuses_what_cmd_reads_inside_quotes() {
+        let line = junction_line(
+            Path::new(r"C:\Users\ada\Équipe & Co ^ (x)\dst"),
+            Path::new(r"C:\Mes docs\src"),
+        );
+        assert_eq!(
+            line.unwrap(),
+            r#"mklink /J "C:\Users\ada\Équipe & Co ^ (x)\dst" "C:\Mes docs\src""#
+        );
+        // cmd.exe expands %NAME% inside quotes too, and a straight quote cannot be quoted.
+        for bad in [r"C:\100%\x", r"C:\%TEMP%\x", "C:\\a\"b\\x"] {
+            let want = format!(
+                "« {bad} » contient « % » ou un guillemet droit, que cmd.exe ne sait pas lier : choisis « Copier »."
+            );
+            let (ok, other) = (Path::new(r"C:\ok\x"), Path::new(bad));
+            assert_eq!(junction_line(other, ok).unwrap_err().to_string(), want);
+            assert_eq!(junction_line(ok, other).unwrap_err().to_string(), want);
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_folder_with_a_percent_in_its_path_is_not_linked_on_windows_and_nothing_is_made() {
+        let dir = test_dir("accounts-link-percent");
+        let src = dir.join("100%").join("src");
+        std::fs::create_dir_all(&src).unwrap();
+        let dst = dir.join("lien");
+        let e = link_dir(&src, &dst).unwrap_err();
+        assert!(e.to_string().ends_with("choisis « Copier »."), "{e}");
+        assert!(!dst.exists());
     }
 
     #[test]

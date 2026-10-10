@@ -4833,13 +4833,14 @@ async fn an_accounts_status_tells_whether_it_is_signed_in_and_with_which_email()
             connected: false,
             email: None,
             dir: pro.config_dir.clone(),
+            stamp: None,
         }
     );
     // Signed in: Claude Code wrote its sign-in and its email in the account's folder.
-    let creds = |expires_at: i64| {
-        json!({ "claudeAiOauth": { "accessToken": "tok-pro", "expiresAt": expires_at } })
-            .to_string()
+    let creds_of = |token: &str, expires_at: i64| {
+        json!({ "claudeAiOauth": { "accessToken": token, "expiresAt": expires_at } }).to_string()
     };
+    let creds = |expires_at: i64| creds_of("tok-pro", expires_at);
     std::fs::write(dir.join(".credentials.json"), creds(now_ms() + 3_600_000)).unwrap();
     std::fs::write(
         dir.join(".claude.json"),
@@ -4851,12 +4852,30 @@ async fn an_accounts_status_tells_whether_it_is_signed_in_and_with_which_email()
         (signed.connected, signed.email.as_deref()),
         (true, Some("ada@atlas.dev"))
     );
-    // Its token out of date: still signed in (Claude Code gets another one when it runs).
+    // Which sign-in it is, told without the token.
+    let stamp = signed.stamp.clone().expect("signed in: a stamp");
+    assert!(!stamp.contains("tok-pro"));
+    // Its token out of date: still signed in (Claude Code gets another one when it runs), and
+    // the same sign-in: the window tells it from the one the user makes next.
     std::fs::write(dir.join(".credentials.json"), creds(now_ms() - 1_000)).unwrap();
-    assert!(status(&h, "pro").await.unwrap().connected);
-    // Signed out: its email is not told.
+    let late = status(&h, "pro").await.unwrap();
+    assert_eq!(
+        (late.connected, late.stamp.as_deref()),
+        (true, Some(stamp.as_str()))
+    );
+    // Signed in again: another token, another stamp.
+    std::fs::write(
+        dir.join(".credentials.json"),
+        creds_of("tok-again", now_ms() + 3_600_000),
+    )
+    .unwrap();
+    let again = status(&h, "pro").await.unwrap();
+    assert!(again.connected);
+    assert!(again.stamp.is_some() && again.stamp.as_deref() != Some(stamp.as_str()));
+    // Signed out: its email is not told, nor its stamp.
     std::fs::remove_file(dir.join(".credentials.json")).unwrap();
-    assert_eq!(status(&h, "pro").await.unwrap().email, None);
+    let out = status(&h, "pro").await.unwrap();
+    assert_eq!((out.email, out.stamp), (None, None));
     // Principal, in unit tests: a home folder that is no one's, never the machine user's.
     let main = status(&h, "principal").await.unwrap();
     assert!(!main.connected);
