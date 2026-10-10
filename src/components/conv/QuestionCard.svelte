@@ -1,5 +1,6 @@
 <script lang="ts">
   import { captureKeys } from '../../lib/answer-keys.svelte';
+  import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { keyLabel } from '../../lib/platform';
   import { answersHere, ariaEnter, enterAnswer, optionAnswer } from '../../lib/shortcuts';
@@ -80,8 +81,8 @@
 </script>
 
 {#if pending}
-  <div class="card pending" data-testid="question-pending" role="group" aria-label="Claude attend ta réponse" bind:this={card}>
-    <div class="title"><span class="pulse" style="width:8px;height:8px"></span>Claude attend ta réponse</div>
+  <div class="card pending" data-testid="question-pending" role="group" aria-label={t('composer.question.waiting')} bind:this={card}>
+    <div class="title"><span class="pulse" style="width:8px;height:8px"></span>{t('composer.question.waiting')}</div>
     {#each item.questions as q, qi (qi)}
       <div class="q">
         {#if q.header && item.questions.length > 1}<span class="chip">{q.header}</span>{/if}
@@ -114,7 +115,7 @@
       </div>
     {/each}
     <div class="foot">
-      <span class="hint">ou réponds librement dans le champ ci-dessous</span>
+      <span class="hint">{t('composer.question.orWrite')}</span>
       {#if needsConfirm}
         <button
           class="btn primary"
@@ -122,8 +123,8 @@
           aria-keyshortcuts={keys && complete ? ariaEnter() : undefined}
           onclick={submit}
         >
-          Valider
-          {#if keys && complete}<kbd class="kbd" aria-hidden="true">{keyLabel('Ctrl+Entrée')}</kbd>{/if}
+          {t('composer.question.submit')}
+          {#if keys && complete}<kbd class="kbd" aria-hidden="true">{keyLabel('Ctrl+Enter')}</kbd>{/if}
         </button>
       {/if}
     </div>
@@ -138,7 +139,7 @@
 {:else}
   <div class="card done">
     {#each item.questions as q, qi (qi)}<div class="done-q">{q.question}</div>{/each}
-    <div class="ans mono" style="color:var(--dim)">Question restée sans réponse</div>
+    <div class="ans mono" style="color:var(--dim)">{t('composer.question.unanswered')}</div>
   </div>
 {/if}
 
