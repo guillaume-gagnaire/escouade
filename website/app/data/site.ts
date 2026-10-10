@@ -31,11 +31,11 @@ export const FEATURES: Feature[] = [
   {
     id: 'chat',
     title: 'Un vrai chat, pas un terminal',
-    text: 'Markdown, code coloré, appels d’outils compacts que tu déplies pour voir un diff ou la sortie d’une commande. Joins une image, un PDF ou un fichier, cite un @fichier, lance une /commande, et écris pendant que Claude travaille : il en tient compte à l’étape suivante.',
+    text: 'Markdown, code coloré, appels d’outils compacts que tu déplies pour voir un diff ou la sortie d’une commande. Joins une image, un PDF ou un fichier, cite un @fichier, lance une /commande, et écris pendant que Claude travaille : il en tient compte à l’étape suivante. Ctrl+K retrouve un message dans les conversations de tous tes agents.',
     points: [
-      'Les questions et autorisations de Claude en cartes cliquables',
+      'Les questions et autorisations de Claude en cartes, auxquelles tu réponds aussi au clavier',
       'Modèle (avec sa version), effort et mode modifiables à tout moment',
-      'Une carte résume chaque tâche : durée, coût, fichiers, commit',
+      'Une carte résume chaque tâche : durée, coût, fichiers modifiés',
     ],
     image: 'images/chat.jpg',
     alt: 'Une conversation : réponse de Claude en markdown, appel d’outil déplié sur son diff',
@@ -43,8 +43,12 @@ export const FEATURES: Feature[] = [
   {
     id: 'notifications',
     title: 'Tu sais quand on t’attend',
-    text: 'Quand un agent pose une question ou termine, Escouade le signale : onglet et carte qui clignotent, carillon, notification système, barre des tâches qui clignote (ou icône du Dock qui rebondit). Fermer la fenêtre ne coupe rien : chaque agent reprend sa session au redémarrage.',
-    points: ['Ctrl+J saute au prochain agent qui attend', 'Badge dans la zone de notification', 'Rien à surveiller : tu es prévenu'],
+    text: 'Quand un agent pose une question ou termine, Escouade le signale : onglet et carte qui clignotent, carillon, notification système qui dit ce qui est demandé, barre des tâches qui clignote (ou icône du Dock qui rebondit). Fermer la fenêtre ne coupe rien : chaque agent reprend sa session au redémarrage.',
+    points: [
+      'Ctrl+J saute au prochain agent qui attend',
+      'La vue d’ensemble montre tous les agents, ceux qui attendent en tête',
+      'Tu choisis ce qui te prévient : questions, fins, erreurs, tickets',
+    ],
     image: 'images/notifications.jpg',
     alt: 'Un agent en attente de réponse, sa question et sa carte dans la barre latérale',
   },
@@ -53,8 +57,8 @@ export const FEATURES: Feature[] = [
     title: 'Git sous les yeux',
     text: 'Fichiers non commités par agent ou pour tout le projet, diff unifié ou côte à côte, git graph du dépôt avec la branche de l’agent en avant. La disposition moitié / moitié montre la conversation et les fichiers ensemble, mis à jour pendant que l’agent écrit.',
     points: [
-      'Commit rédigé par l’agent lui-même',
-      'Merge ou squash d’un worktree, puis nettoyage',
+      'Commit rédigé par l’agent, ou direct avec un message proposé que tu relis',
+      'Merge ou squash d’un worktree dans sa branche de base, puis nettoyage',
       'Pull, push et fetch depuis la barre de statut',
     ],
     image: 'images/git.jpg',
@@ -63,11 +67,11 @@ export const FEATURES: Feature[] = [
   {
     id: 'editeur',
     title: 'Un éditeur, sans quitter l’app',
-    text: 'Retouche un fichier du projet ou du worktree d’un agent sans changer de fenêtre : arborescence, onglets, coloration, recherche, et les lignes modifiées depuis le dernier commit marquées dans la marge. Il s’ouvre depuis l’agent, ses fichiers non commités ou les fichiers cités dans la conversation.',
+    text: 'Retouche un fichier du projet ou du worktree d’un agent sans changer de fenêtre : arborescence, onglets, coloration, recherche, et les lignes modifiées depuis le dernier commit marquées dans la marge. Ctrl+clic va à une définition sans serveur de langage, Ctrl+P ouvre un fichier par son nom, Ctrl+Maj+F cherche dans tous.',
     points: [
-      'Ctrl+S pour enregistrer, fins de ligne conservées',
-      'Lignes modifiées par rapport à main',
-      'Prévient quand l’agent change le fichier ouvert',
+      'Voir les changements dans le texte, et annuler un bloc',
+      'Compare avec ce que l’agent vient d’écrire avant de choisir',
+      'Renommer, supprimer vers la corbeille, ouvrir un terminal ici',
     ],
     image: 'images/editor.jpg',
     alt: 'L’éditeur intégré : l’arborescence du worktree, des onglets et le code avec ses lignes modifiées',
@@ -77,8 +81,8 @@ export const FEATURES: Feature[] = [
     title: 'Des tickets, que des agents prennent seuls',
     text: 'Le Kanban de chaque projet : à faire, en cours, à tester, terminé. Écris un ticket avec ses critères d’acceptation ; en pilote auto, des agents le prennent, chacun dans son worktree avec ses propres ports, et bouclent jusqu’à ce que chaque critère soit atteint.',
     points: [
-      'Pilote auto, de 1 à 6 agents en parallèle',
-      'Boucle, critères et avancement en direct sur chaque carte',
+      'Pilote auto, de 1 à 6 agents en parallèle, en pause près de la limite de tes quotas',
+      'Boucle, critères, avancement et coût en direct sur chaque carte',
       'Valider : tests, commit généré, merge, pull request ou push ; ou renvoyer à l’agent',
     ],
     image: 'images/board.jpg',
@@ -87,9 +91,9 @@ export const FEATURES: Feature[] = [
   {
     id: 'test',
     title: 'Teste chaque ticket en un clic',
-    text: 'Quand un ticket passe « À tester », « ▶ Tester » prépare son worktree, lance ses serveurs sur ses ports réservés, attend qu’ils répondent et ouvre ton navigateur directement sur la fonctionnalité développée.',
+    text: 'Quand un ticket passe « À tester », « ▶ Tester » te montre la recette de l’agent, puis prépare son worktree, lance ses serveurs sur ses ports réservés, attend qu’ils répondent et ouvre ton navigateur directement sur la fonctionnalité développée.',
     points: [
-      'La recette de lancement vient de l’agent lui-même',
+      'La recette vient de l’agent : tu la lis avant qu’elle tourne',
       'Les logs restent dans la section Lancement, sous son nom',
       '« Préparer le lancement » pour tout agent à worktree',
     ],
@@ -102,7 +106,7 @@ export const FEATURES: Feature[] = [
     text: 'Connecte Jira, Trello ou GitHub Issues et lie une source à ton projet. « Importer » cherche et filtre ses tickets : coche-les, ils arrivent dans le Kanban avec leurs critères d’acceptation. Escouade tient ensuite leur statut à jour et commente le ticket d’origine quand il est prêt à tester, puis terminé.',
     points: [
       'Critères d’acceptation repris de la description ou de la checklist',
-      'Statut et commentaires synchronisés, colonne par colonne',
+      'Statut et commentaires synchronisés, colonne par colonne, et retentés en cas d’échec',
       'Import automatique, si tu l’actives, des tickets étiquetés claude-ready',
     ],
     image: 'images/integrations.jpg',
@@ -111,7 +115,7 @@ export const FEATURES: Feature[] = [
   {
     id: 'lancement',
     title: 'Lance ton projet d’un clic',
-    text: 'Configure les commandes qui lancent ton projet (front, API, worker…), chacune avec son shell et son dossier. Chaque commande tourne dans son terminal, avec son statut en direct.',
+    text: 'Configure les commandes qui lancent ton projet (front, API, worker…), chacune avec son shell et son dossier, ou laisse Claude lire le projet et te les proposer. Chaque commande tourne dans son terminal, avec son statut en direct.',
     points: [
       'Tout lancer, tout arrêter, relancer',
       'Un plantage se voit tout de suite, avec son code',
@@ -126,7 +130,7 @@ export const FEATURES: Feature[] = [
     text: 'La barre de statut suit ton quota de session de 5 h, ton quota hebdomadaire, leur réinitialisation et le coût du jour, qui monte pendant que Claude travaille. Un agent arrêté par sa limite d’usage reprend tout seul quand le quota revient.',
     points: [
       'Tokens d’entrée, de cache et de sortie, par jour, semaine ou mois',
-      'Coût par projet et par modèle',
+      'Coût par projet, par modèle, par agent et par ticket',
       'Mémoire et processeur pris par Claude',
     ],
     image: 'images/stats.jpg',
@@ -165,8 +169,14 @@ export const CARDS: Card[] = [
     title: 'Derrière un proxy',
     text: 'Proxy HTTP(S) pour Claude, les quotas, les mises à jour, les intégrations et, si tu veux, les terminaux.',
   },
-  { title: 'Mises à jour automatiques', text: 'Les nouvelles versions, signées, s’installent depuis l’app.' },
-  { title: 'Au clavier', text: 'Ctrl+1…9 pour les projets, Ctrl+N pour un agent, Ctrl+J pour celui qui attend, Échap pour interrompre.' },
+  {
+    title: 'Mises à jour automatiques',
+    text: 'Les nouvelles versions, signées, se téléchargent en arrière-plan et s’installent sans fenêtre, quand aucun agent ne travaille.',
+  },
+  {
+    title: 'Au clavier',
+    text: 'Ctrl+1…9 pour les projets, Ctrl+N pour un agent, Ctrl+J pour celui qui attend, Ctrl+Entrée pour autoriser, Ctrl+K pour chercher, Échap pour interrompre.',
+  },
 ];
 
 export interface Step {
@@ -208,7 +218,7 @@ export const FAQ: Question[] = [
   },
   {
     q: 'Et mes jetons Jira, Trello ou GitHub ?',
-    a: 'Ils restent sur ta machine, dans ~/.escouade/integrations.json, à part des réglages, et ne servent qu’aux appels de ces services. Pour GitHub, Escouade peut aussi reprendre celui de gh.',
+    a: 'Ils restent sur ta machine, dans le trousseau du système (Gestionnaire d’identification Windows, Trousseau macOS), et ne servent qu’aux appels de ces services. Pour GitHub, Escouade peut aussi reprendre celui de gh.',
   },
   {
     q: 'Ça marche sur Mac ou Linux ?',
@@ -216,7 +226,7 @@ export const FAQ: Question[] = [
   },
   {
     q: 'Le pilote auto peut-il épuiser mon quota ?',
-    a: 'Tu choisis combien d’agents travaillent en parallèle (de 1 à 6) et combien de boucles chaque ticket a au plus. Rien ne démarre tant qu’un agent attend la fin de sa limite d’usage, et un ticket arrivé à sa dernière boucle passe « À tester » avec « Objectif partiel ».',
+    a: 'Tu choisis combien d’agents travaillent en parallèle (de 1 à 6), combien de boucles chaque ticket a au plus, et à quel pourcentage de tes quotas le pilote auto se met en pause. Rien ne démarre tant qu’un agent attend la fin de sa limite d’usage, et un ticket arrivé à sa dernière boucle passe « À tester » avec « Objectif partiel ».',
   },
   {
     q: 'Mes fichiers .env partent-ils dans les commits ?',
@@ -224,7 +234,7 @@ export const FAQ: Question[] = [
   },
   {
     q: 'Comment se font les mises à jour ?',
-    a: 'L’app cherche une nouvelle version toutes les cinq minutes et te la propose ; un clic, et elle s’installe.',
+    a: 'L’app cherche une nouvelle version toutes les cinq minutes et la télécharge en arrière-plan. Elle s’installe sans fenêtre d’installeur, au redémarrage que tu choisis, ou d’elle-même quand aucun agent ne travaille et que tout est enregistré, après t’avoir prévenu 30 secondes avant.',
   },
   {
     q: 'C’est un produit Anthropic ?',
