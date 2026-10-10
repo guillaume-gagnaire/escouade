@@ -510,15 +510,12 @@ impl<R: Runtime> Core<R> {
     }
 
     /// What the agent's next process is started with of Escouade (`AgentAccess`):
-    /// - the server not running, nothing (none to reach: the user's config of Claude Code declares
-    ///   it only while Claude may drive Escouade, which runs it);
-    /// - its project letting its agents use Escouade, the server as the agent itself;
-    /// - otherwise its tools refused, those of the user's entry of that name included.
+    /// - its project not letting its agents use Escouade, its tools refused, those of an entry of
+    ///   that name in the user's config of Claude Code included, the server running or not (the
+    ///   entry may be declared while it is stopped: it was while Claude drove Escouade);
+    /// - letting them, with the server not running, nothing (none to reach);
+    /// - letting them, the server as the agent itself.
     pub(crate) fn agent_access(&self, agent_id: &str, project_id: &str) -> AgentAccess {
-        let status = self.mcp.status();
-        if !status.running {
-            return AgentAccess::None;
-        }
         let allowed = self
             .projects
             .read()
@@ -526,6 +523,10 @@ impl<R: Runtime> Core<R> {
             .any(|p| p.id == project_id && p.agents_use_escouade);
         if !allowed {
             return AgentAccess::Denied;
+        }
+        let status = self.mcp.status();
+        if !status.running {
+            return AgentAccess::None;
         }
         match self.mcp.grant_agent(agent_id, status.port) {
             Ok(access) => access,

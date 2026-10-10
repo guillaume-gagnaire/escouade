@@ -88,9 +88,11 @@ Ce que reçoit chaque lancement du process `claude` d'un agent (`Core::agent_acc
 
 | Serveur | Projet (« Les agents peuvent utiliser Escouade ») | Arguments |
 |---|---|---|
-| arrêté (ou pas encore démarré) | — | rien : lancé comme avant |
+| arrêté (ou pas encore démarré) | activé | rien (il n'y a rien à joindre) |
 | en marche | activé | `--mcp-config <dossier de données>/mcp/<id de l'agent>.json` |
-| en marche | désactivé (défaut) | `--disallowedTools mcp__escouade` |
+| arrêté ou en marche | désactivé (défaut) | `--disallowedTools mcp__escouade` |
+
+Le projet qui ne laisse pas ses agents utiliser Escouade refuse donc leurs outils même quand le serveur est arrêté : une entrée `escouade` peut rester déclarée dans la config de Claude Code de l'utilisateur (elle l'était pendant que Claude pilotait Escouade), que l'agent hérite.
 
 - Le fichier : `{ "mcpServers": { "escouade": { "type": "http", "url": "http://127.0.0.1:<port>/mcp", "headers": { "Authorization": "Bearer <jeton du process>" } } } }`, écrit par `paths::write_private` (0600 sous Unix). Un chemin et non du JSON en ligne : un lanceur `.cmd` prend 8 191 caractères au plus, et le journal de l'app écrit les arguments (le jeton n'y est jamais).
 - Le jeton : nouveau à chaque lancement (celui d'avant est refusé dès lors) ; refusé et le fichier supprimé quand ce process se termine (arrêt pour inactivité, archivage, plantage, `kill`), sauf si un process plus récent du même agent a déjà le sien ; tout de suite à la suppression de l'agent ou à la fermeture de son projet ; le dossier `mcp/` est vidé quand l'app s'arrête et quand elle démarre (avant tout agent : un plantage l'a peut-être laissé).

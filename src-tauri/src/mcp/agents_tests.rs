@@ -99,12 +99,12 @@ fn what_an_agents_process_is_given_of_escouade_never_holds_its_token() {
 async fn an_agent_reaches_escouade_with_a_token_of_its_own_only_where_its_project_lets_it() {
     let h = harness("mcp-agents-launch");
     let (p, r) = h.project(false).await;
-    // Nothing wants the server: the agent starts as it always did.
+    // Nothing wants the server and the project does not let its agents use it: no server to
+    // reach, and Escouade's tools refused to the agent all the same (an entry of the user's config
+    // of Claude Code may declare them).
     let id = started_agent(&h, &p).await;
-    assert_eq!(
-        escouade_flags(&h.launches(&r).pop().unwrap()),
-        (None, false)
-    );
+    assert!(!h.core.mcp.status().running);
+    assert_eq!(escouade_flags(&h.launches(&r).pop().unwrap()), (None, true));
     stop(&h, &id).await;
 
     // Its project lets its agents use Escouade: the server runs, and the agent's next process
@@ -161,6 +161,15 @@ async fn an_agent_reaches_escouade_with_a_token_of_its_own_only_where_its_projec
         (None, false)
     );
     assert!(!config.exists());
+    stop(&h, &id).await;
+
+    // The project does not let them, and the server is stopped: nothing runs, yet an entry of the
+    // same name may still be declared in the user's config of Claude Code (it was while Claude
+    // drove Escouade), which the agent would inherit: its tools are refused all the same.
+    lets_agents(&h, &p, false);
+    assert!(!h.core.mcp.status().running);
+    h.turn(&id, "Sans serveur").await;
+    assert_eq!(escouade_flags(&h.launches(&r).pop().unwrap()), (None, true));
     stop(&h, &id).await;
 
     // The project no longer lets them, the server running all the same (Claude may drive
