@@ -97,10 +97,12 @@
     error = null;
     try {
       if (before === undefined) {
-        before = await api.accountStatus(account.id).then(
-          (s) => s.stamp,
-          () => null,
-        );
+        // A look that fails (the keychain busy, a file being written) is no account without a sign-in: asked once more
+        // before it is taken for one, since a baseline of none would count the sign-in the account has, out of date, as
+        // the user's own a moment later.
+        const id = account.id;
+        const look = () => api.accountStatus(id).then((s) => s.stamp);
+        before = await look().catch(() => look().catch(() => null));
         if (closed) return;
       }
       const info = await openAccountLogin(account.id);

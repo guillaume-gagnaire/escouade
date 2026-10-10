@@ -176,17 +176,45 @@ describe('AccountModal', () => {
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Connecté au compte ada@pro.dev'));
   });
 
-  it('keeps the account as it stood when it could not be read before the terminal opened', async () => {
+  it('keeps the account as it stood when it could not be read before the terminal opened, even asked twice', async () => {
     // Nothing known of its sign-in: any sign-in found then is the user’s.
     let n = 0;
-    fakeBackend({
-      account_status: () => (n++ === 0 ? Promise.reject('refusé') : IN),
+    const b = fakeBackend({
+      account_status: () => (n++ < 2 ? Promise.reject('refusé') : IN),
       refresh_usage: () => undefined,
     });
     app.settings.accounts = [PRINCIPAL, PRO];
     render(AccountModal, { accountId: 'pro' });
     await vi.advanceTimersByTimeAsync(2000);
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Connecté au compte ada@pro.dev'));
+    // Asked once more, not more: the third look is the first of the poll.
+    expect(b.called('account_status').length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('asks once more for the sign-in it had when the first look failed (the keychain busy, a file being written)', async () => {
+    // A look that fails is not an account with no sign-in: read again, so that the out-of-date sign-in it has is not
+    // taken, a moment later, for the one the user has just made.
+    let n = 0;
+    const b = fakeBackend({
+      account_status: () => {
+        n++;
+        if (n === 1) return Promise.reject('trousseau occupé');
+        return n <= 4 ? BEFORE : IN;
+      },
+      refresh_usage: () => undefined,
+    });
+    app.settings.accounts = [PRINCIPAL, PRO];
+    render(AccountModal, { accountId: 'pro' });
+    await waitFor(() => expect(term.opened).toEqual(['pro']));
+    const said = screen.getByRole('status');
+    for (let i = 0; i < 2; i++) await vi.advanceTimersByTimeAsync(2000);
+    // The retry and two looks of the poll: all the same out-of-date sign-in, none the user’s.
+    expect(b.called('account_status')).toHaveLength(4);
+    expect(said).toHaveTextContent(HINT);
+    expect(term.disposed).toEqual([]);
+    // The user signs in: another sign-in.
+    await vi.advanceTimersByTimeAsync(2000);
+    await waitFor(() => expect(said).toHaveTextContent('Connecté au compte ada@pro.dev'));
   });
 
   it('does not ask again while the last look is still going', async () => {
