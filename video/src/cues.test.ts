@@ -5,6 +5,7 @@ import { FPS, sceneOf, type Placed } from './timeline';
 const scene: Placed = {
   id: 'board',
   title: 'T',
+  titleEn: 'T',
   from: 600,
   durationInFrames: 300,
   cues: { a: 15, b: 120 },
@@ -13,6 +14,7 @@ const scene: Placed = {
       key: 'board.a',
       id: 'a',
       text: 'À faire, en cours.',
+      en: 'To do, in progress.',
       from: 615,
       durationInFrames: 90,
       words: [
@@ -22,7 +24,7 @@ const scene: Placed = {
         { word: 'cours.', start: 1.1, end: 1.5 },
       ],
     },
-    { key: 'board.b', id: 'b', text: 'b', from: 720, durationInFrames: 60, words: [] },
+    { key: 'board.b', id: 'b', text: 'b', en: 'b', from: 720, durationInFrames: 60, words: [] },
   ],
 };
 

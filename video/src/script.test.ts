@@ -25,11 +25,11 @@ describe('script', () => {
   it('says « claude point A I » where it shows claude.ai', () => {
     const line = SCRIPT.flatMap((s) => s.lines).find((l) => l.text.includes('claude.ai'))!;
     expect(spoken(line)).toContain('claude point A I');
-    expect(spoken({ id: 'x', text: 'Bonjour' })).toBe('Bonjour');
+    expect(spoken({ id: 'x', text: 'Bonjour', en: 'Hello' })).toBe('Bonjour');
   });
 
   it('writes for the voice the words it would say wrong, as they sound', () => {
-    const say = (text: string) => spoken({ id: 'x', text });
+    const say = (text: string) => spoken({ id: 'x', text, en: text });
     // « Git » with a hard g, as the French say it; not « jit ».
     expect(say('le dépôt git, Git Bash')).toBe('le dépôt guite, Guite Bash');
     expect(say('sur GitHub')).toBe('sur Guite-Heub');
@@ -39,11 +39,16 @@ describe('script', () => {
     // Only whole words: « digital », « chateau », « ghost » stay as they are.
     expect(say('digital chateau ghost')).toBe('digital chateau ghost');
     // A line can still say something else entirely.
-    expect(spoken({ id: 'x', text: 'git', say: 'autre' })).toBe('autre');
+    expect(spoken({ id: 'x', text: 'git', en: 'git', say: 'autre' })).toBe('autre');
   });
 
   it('says every line through that table: no « git » or « chat » left as written', () => {
     for (const l of SCRIPT.flatMap((s) => s.lines)) expect(spoken(l), l.id).not.toMatch(/\b(git|chat|gh)\b|\.env|macOS/i);
+  });
+
+  it('says the French text, never the English one: the English is for the eyes (subtitles, titles)', () => {
+    const line = { id: 'x', text: 'Bonjour', en: 'Hello' };
+    expect(spoken(line)).toBe('Bonjour');
   });
 
   it('has its voice recorded, line by line, with the text said now', () => {
@@ -56,5 +61,51 @@ describe('script', () => {
     }
     // No clip left over from a line that is gone.
     expect(Object.keys(voice).sort()).toEqual(keys.map(([k]) => k).sort());
+  });
+});
+
+describe('the English script', () => {
+  const lines = SCRIPT.flatMap((s) => s.lines.map((l) => ({ key: lineKey(s.id, l.id), ...l })));
+
+  it('translates every title and every line, next to the French one', () => {
+    for (const s of SCRIPT) expect(s.titleEn?.trim(), `${s.id} : titleEn`).toBeTruthy();
+    for (const l of lines) expect(l.en?.trim(), `${l.key} : en`).toBeTruthy();
+  });
+
+  it('is English: not a copy of the French, and no French accent or guillemet left', () => {
+    const french = /[àâäçéèêëîïôöùûüœ«»]/i;
+    for (const s of SCRIPT) {
+      expect(s.titleEn, s.id).not.toBe(s.title);
+      expect(s.titleEn, s.id).not.toMatch(french);
+    }
+    for (const l of lines) {
+      expect(l.en, l.key).not.toBe(l.text);
+      expect(l.en, l.key).not.toMatch(french);
+    }
+  });
+
+  it('is written like the app’s English: typographic apostrophes and quotes, one space after a stop', () => {
+    const texts = [...SCRIPT.map((s) => s.titleEn), ...lines.map((l) => l.en)];
+    for (const t of texts) {
+      expect(t, t).not.toMatch(/['"]/);
+      expect(t, t).not.toMatch(/ {2}|\s$|^\s|\.\.\./);
+    }
+  });
+
+  it('is as short as a product launch needs: about the length of the French, never much longer', () => {
+    for (const l of lines) expect(l.en.length, l.key).toBeLessThanOrEqual(Math.ceil(l.text.length * 1.15));
+  });
+
+  it('keeps the product’s names and the glossary’s words', () => {
+    const all = lines.map((l) => l.en).join(' ');
+    // Fixed by the app’s glossary: the Kanban is never a « board » here, an agent is an agent.
+    expect(all).toMatch(/Kanban/);
+    expect(all).not.toMatch(/\b(board|boards)\b/i);
+    expect(all).not.toMatch(/\bautopilote\b|\bauto-pilot\b|\bauto pilot\b/i);
+    expect(all).toMatch(/\bautopilot\b/i);
+    expect(all).toMatch(/\bworktree\b/);
+    // The « À tester » column is « To review » (the glossary), whatever the French says.
+    expect(all).toMatch(/To do, in progress, to review, done/);
+    expect(all).not.toMatch(/\bto test,|\bTo test\b/);
   });
 });
