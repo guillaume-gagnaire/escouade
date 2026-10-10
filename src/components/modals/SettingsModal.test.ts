@@ -173,6 +173,36 @@ describe('SettingsModal', () => {
     });
   });
 
+  it('lets the agents keep a task list, from the group of the processes, on by default', async () => {
+    const backend = backendSaving();
+    render(SettingsModal);
+    const processes = group('Processus');
+    const todo = processes.getByRole('switch', { name: 'Les agents tiennent une liste de tâches' });
+    expect(todo).toHaveAttribute('aria-checked', 'true');
+    // Next to the other settings of the processes, with its help.
+    expect(processes.getByRole('switch', { name: 'Reprise automatique après la limite d’usage' })).toBeInTheDocument();
+    expect(processes.getByText(/Donne aux agents l’outil de liste de tâches de Claude Code/)).toBeInTheDocument();
+    expect(tab('Claude Code')).not.toHaveClass('changed');
+    await userEvent.click(todo);
+    expect(todo).toHaveAttribute('aria-checked', 'false');
+    expect(tab('Claude Code')).toHaveClass('changed');
+    await save();
+    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ todoTools: false });
+    expect(app.settings.todoTools).toBe(false);
+  });
+
+  it('puts the task list back, and saves nothing when it is switched on again', async () => {
+    const backend = backendSaving();
+    render(SettingsModal);
+    const todo = screen.getByRole('switch', { name: 'Les agents tiennent une liste de tâches' });
+    await userEvent.click(todo);
+    await userEvent.click(todo);
+    expect(todo).toHaveAttribute('aria-checked', 'true');
+    expect(tab('Claude Code')).not.toHaveClass('changed');
+    await save();
+    expect(backend.called('save_settings')).toHaveLength(0);
+  });
+
   it('changes nothing when cancelled, nor when closed', async () => {
     const backend = fakeBackend();
     render(SettingsModal);
@@ -907,6 +937,17 @@ describe('SettingsModal in English', () => {
     await userEvent.type(screen.getByRole('spinbutton', { name: /Stop idle/ }), '0');
     expect(tab('Claude Code')).toHaveClass('changed');
     expect(tab('Claude Code')).toHaveAccessibleDescription('Modified, not saved yet');
+  });
+
+  it('names the task list setting in English', async () => {
+    fakeBackend();
+    render(SettingsModal);
+    const todo = screen.getByRole('switch', { name: 'Agents keep a task list' });
+    expect(todo).toHaveAttribute('aria-checked', 'true');
+    expect(
+      screen.getByText(/Gives agents Claude Code’s task list tool, so Escouade can show their progress in the “Plan” banner/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Processes' })).toBeInTheDocument();
   });
 
   it('says of the executable path whether it is found, not whether the current account’s Claude Code is', async () => {

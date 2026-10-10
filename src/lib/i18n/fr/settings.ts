@@ -91,6 +91,9 @@ export default {
     idleStop: 'Arrêter les processus Claude inactifs après',
     idleStopHint: 'minutes, 0 = jamais',
     idleStopLabel: 'Arrêter les processus Claude inactifs après (minutes)',
+    todoTools: 'Les agents tiennent une liste de tâches',
+    todoToolsDesc:
+      'Donne aux agents l’outil de liste de tâches de Claude Code : Escouade peut alors montrer leur avancée dans le bandeau « Plan ». S’applique aux agents lancés ensuite.',
   },
 
   // The « Notifications » tab.

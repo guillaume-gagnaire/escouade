@@ -63,6 +63,9 @@
     <Row label={t('settings.claude.autoResume')} desc={t('settings.claude.autoResumeDesc')}>
       <Switch label={t('settings.claude.autoResume')} bind:on={s.autoResume} />
     </Row>
+    <Row label={t('settings.claude.todoTools')} desc={t('settings.claude.todoToolsDesc')}>
+      <Switch label={t('settings.claude.todoTools')} bind:on={s.todoTools} />
+    </Row>
     <Row label={t('settings.claude.idleStop')} hint={t('settings.claude.idleStopHint')}>
       <input
         class="field mono input short"
