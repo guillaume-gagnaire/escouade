@@ -1165,10 +1165,20 @@ impl AgentRt {
         };
         self.forget_turn();
         self.close_open_items(fx);
+        // Stopped by the usage limit: the card offers to go on, on another account.
+        let at_limit = limited && is_error && !interrupted;
+        // The turn that follows a resume on another account ended. Failing, it is the resume's
+        // failure, and the agent keeps the account it can go back to; otherwise (done, at the limit
+        // there too, interrupted) it came from nowhere any more.
+        if !matches!(end, TurnEnd::Error(_)) && self.meta.moved_from.take().is_some() {
+            fx.save = true;
+            fx.agent_changed = true;
+        }
         let item = json!({
             "kind": "turn", "id": f["uuid"].as_str().map(str::to_string).unwrap_or_else(new_id), "ts": now_ms(),
             "durationMs": f["duration_ms"], "cost": cost, "tokens": tokens,
             "isError": is_error && !interrupted, "interrupted": interrupted, "error": error,
+            "limited": at_limit,
         });
         self.append(item, fx);
         if !self.pending.is_empty() {

@@ -5345,3 +5345,297 @@ async fn claude_is_found_on_the_account_new_agents_would_go_to() {
     );
     assert!(h.core.claude_found());
 }
+
+// ---------- Resuming on another account ----------
+
+/// Another Claude account, `id`, its folder in the test's, put after the others in the settings.
+pub(crate) fn extra_account(h: &Harness, id: &str, name: &str) -> Account {
+    let account = Account {
+        id: id.into(),
+        name: name.into(),
+        config_dir: h.dir.join(format!("claude-{id}")).to_string_lossy().into(),
+        ..Default::default()
+    };
+    let mut s = h.core.settings.read().clone();
+    s.accounts.push(account.clone());
+    h.core.save_settings(s).unwrap();
+    account
+}
+
+/// Pro out of quota for good (its folder holds a `fake-limit`), and Équipe, another account.
+fn pro_out_of_quota_and_team(h: &Harness) -> (Account, Account) {
+    let pro = second_account(h);
+    let team = extra_account(h, "equipe", "Équipe");
+    std::fs::create_dir_all(&pro.config_dir).unwrap();
+    std::fs::write(Path::new(&pro.config_dir).join("fake-limit"), "").unwrap();
+    (pro, team)
+}
+
+/// The files the account's folder keeps the session in (`projects/*/<session>.jsonl`).
+fn kept_session(config_dir: &str, session: &str) -> Vec<PathBuf> {
+    let Ok(folders) = std::fs::read_dir(Path::new(config_dir).join("projects")) else {
+        return Vec::new();
+    };
+    folders
+        .flatten()
+        .map(|f| f.path().join(format!("{session}.jsonl")))
+        .filter(|f| f.is_file())
+        .collect()
+}
+
+#[tokio::test]
+async fn an_agent_stopped_by_the_limit_resumes_on_another_account_with_its_session_once_its_process_is_gone(
+) {
+    let h = harness("accounts-resume-on");
+    // In its worktree: its own log of launches and messages.
+    let (p, _) = h.project(true).await;
+    let (pro, team) = pro_out_of_quota_and_team(&h);
+    let id = agent_on(&h, &p, "pro").await.id;
+    // Stopped by the limit; its process takes a moment to end once its input is closed, and writes
+    // its session to the last.
+    turn_over(&h, &id, "Bonjour [ferme-lentement] la limite").await;
+    h.wait("its resume planned", |h| h.agent(&id).resume_at.is_some())
+        .await;
+    let session = h.agent(&id).session_id.unwrap();
+    assert_eq!(kept_session(&pro.config_dir, &session).len(), 1);
+    assert!(kept_session(&team.config_dir, &session).is_empty());
+    let old = h.core.agent(&id).unwrap().lock().proc.clone().unwrap();
+    assert!(old.is_alive());
+
+    h.core.resume_on_account(&id, "equipe").await.unwrap();
+
+    // Never two processes on the session: the old one was gone before the session was copied.
+    assert!(!old.is_alive());
+    let m = h.agent(&id);
+    assert_eq!(
+        (m.account.as_str(), m.moved_from.as_deref(), m.resume_at),
+        ("equipe", Some("pro"), None)
+    );
+    let cwd = PathBuf::from(&m.cwd);
+    h.wait("the continue answered", |h| {
+        h.stdin_messages(&cwd).len() == 2 && !h.agent(&id).status.is_active()
+    })
+    .await;
+    // The same message as the automatic resume.
+    assert_eq!(
+        h.stdin_messages(&cwd).last().unwrap()["message"]["content"],
+        "continue"
+    );
+    // Launched again with the other account's folder, resuming the same session.
+    assert_eq!(
+        config_dirs(&h, &cwd),
+        [json!(pro.config_dir), json!(team.config_dir)]
+    );
+    assert!(h
+        .launches(&cwd)
+        .last()
+        .unwrap()
+        .contains(&format!("--resume={session}")));
+    // The copy has what the old process wrote as it ended, and the new one's turn after it.
+    let copy = kept_session(&team.config_dir, &session);
+    assert_eq!(copy.len(), 1);
+    let text = std::fs::read_to_string(&copy[0]).unwrap();
+    let (closed, went_on) = (text.find("\"closed\""), text.find("continue"));
+    assert!(closed.is_some() && closed < went_on, "{text}");
+    // Copied, not moved.
+    assert_eq!(kept_session(&pro.config_dir, &session).len(), 1);
+    // The conversation tells it.
+    assert!(
+        h.items(&id).iter().any(|i| i["kind"] == "notice"
+            && i["text"] == "L’agent reprend sur le compte Équipe (il était sur Pro)."),
+        "{:?}",
+        h.items(&id)
+    );
+}
+
+#[tokio::test]
+async fn a_resume_on_another_account_is_refused_where_it_cannot_be_and_changes_nothing() {
+    let h = harness("accounts-resume-refused");
+    let (p, _) = h.project(true).await;
+    let (pro, _) = pro_out_of_quota_and_team(&h);
+    let refusal = |id: &str, to: &str| {
+        let core = h.core.clone();
+        let (id, to) = (id.to_string(), to.to_string());
+        async move {
+            core.resume_on_account(&id, &to)
+                .await
+                .unwrap_err()
+                .to_string()
+        }
+    };
+    // Not started: no session to take along.
+    let id = agent_on(&h, &p, "pro").await.id;
+    assert_eq!(
+        refusal(&id, "equipe").await,
+        "Cette conversation n’a pas encore de session à reprendre."
+    );
+    turn_over(&h, &id, "la limite").await;
+    // An account the settings do not know, one that is off, the agent's own.
+    assert_eq!(
+        refusal(&id, "parti").await,
+        "compte Claude « parti » introuvable"
+    );
+    assert_eq!(
+        refusal(&id, "pro").await,
+        "L’agent tourne déjà sur le compte « Pro »."
+    );
+    let mut off = h.core.settings.read().accounts[2].clone();
+    off.active = false;
+    h.core.update_claude_account(off).unwrap();
+    assert_eq!(
+        refusal(&id, "equipe").await,
+        "Le compte « Équipe » est désactivé."
+    );
+    let mut on = h.core.settings.read().accounts[2].clone();
+    on.active = true;
+    h.core.update_claude_account(on).unwrap();
+    // The session is not in the folder of the agent's account: nothing is made on the other.
+    let session = h.agent(&id).session_id.unwrap();
+    for file in kept_session(&pro.config_dir, &session) {
+        std::fs::remove_file(file).unwrap();
+    }
+    let said = refusal(&id, "equipe").await;
+    assert!(
+        said.starts_with(&format!("Session « {session} » introuvable")),
+        "{said}"
+    );
+    assert!(!h.dir.join("claude-equipe").exists());
+    let m = h.agent(&id);
+    assert_eq!((m.account.as_str(), m.moved_from), ("pro", None));
+    // At work: it finishes its turn first.
+    let busy = agent_on(&h, &p, "pro").await.id;
+    std::fs::remove_file(Path::new(&pro.config_dir).join("fake-limit")).unwrap();
+    h.core
+        .send_message(&busy, "slow".to_string(), vec![])
+        .await
+        .unwrap();
+    h.wait("it works", |h| {
+        let m = h.agent(&busy);
+        m.status.is_active() && m.session_id.is_some()
+    })
+    .await;
+    assert_eq!(
+        refusal(&busy, "equipe").await,
+        "L’agent travaille encore : reprends quand son tour est fini."
+    );
+    assert_eq!(h.agent(&busy).account, "pro");
+    assert!(h.alive(&busy));
+}
+
+#[tokio::test]
+async fn a_resume_that_fails_on_the_new_account_says_so_and_can_go_back_to_the_account_before() {
+    let h = harness("accounts-resume-failed");
+    let (p, _) = h.project(true).await;
+    let (pro, team) = pro_out_of_quota_and_team(&h);
+    // The other account answers with an error of the API (no sign-in, say).
+    std::fs::create_dir_all(&team.config_dir).unwrap();
+    std::fs::write(Path::new(&team.config_dir).join("fake-error"), "").unwrap();
+    let id = agent_on(&h, &p, "pro").await.id;
+    turn_over(&h, &id, "la limite").await;
+    h.wait("its resume planned", |h| h.agent(&id).resume_at.is_some())
+        .await;
+    let session = h.agent(&id).session_id.unwrap();
+    let turns = |h: &Harness| h.items(&id).iter().filter(|i| i["kind"] == "turn").count();
+    assert_eq!(turns(&h), 1);
+
+    h.core.resume_on_account(&id, "equipe").await.unwrap();
+    h.wait("the failed turn", |h| {
+        turns(h) == 2 && !h.agent(&id).status.is_active()
+    })
+    .await;
+    // The failure is the turn's, and the agent remembers where it came from.
+    let last = h
+        .items(&id)
+        .into_iter()
+        .rfind(|i| i["kind"] == "turn")
+        .unwrap();
+    assert_eq!(last["isError"], true);
+    assert_eq!(last["error"], "Invalid API key · Please run /login");
+    assert_eq!(last["limited"], false);
+    let m = h.agent(&id);
+    assert_eq!(
+        (m.account.as_str(), m.moved_from.as_deref()),
+        ("equipe", Some("pro"))
+    );
+
+    // Back to Pro: the session goes back with what the failed turn added, the agent waits for
+    // Pro's reset as before, and it no longer says it came from anywhere.
+    h.core.back_to_previous_account(&id).await.unwrap();
+    let m = h.agent(&id);
+    assert_eq!((m.account.as_str(), m.moved_from), ("pro", None));
+    let at = m.resume_at.expect("it waits for Pro's reset again");
+    assert!(at > now_ms(), "{at}");
+    assert!(!h.alive(&id));
+    let back = std::fs::read_to_string(&kept_session(&pro.config_dir, &session)[0]).unwrap();
+    let there = std::fs::read_to_string(&kept_session(&team.config_dir, &session)[0]).unwrap();
+    assert_eq!(back, there);
+    // Nothing to go back to once back.
+    assert_eq!(
+        h.core
+            .back_to_previous_account(&id)
+            .await
+            .unwrap_err()
+            .to_string(),
+        "Cet agent n’a pas changé de compte."
+    );
+}
+
+#[tokio::test]
+async fn the_account_an_agent_came_from_is_forgotten_once_a_turn_of_the_resume_ends_well() {
+    let h = harness("accounts-resume-forgotten");
+    let (p, _) = h.project(true).await;
+    pro_out_of_quota_and_team(&h);
+    let id = agent_on(&h, &p, "pro").await.id;
+    turn_over(&h, &id, "la limite").await;
+    h.core.resume_on_account(&id, "equipe").await.unwrap();
+    assert_eq!(h.agent(&id).moved_from.as_deref(), Some("pro"));
+    h.wait("the resume's turn", |h| {
+        h.agent(&id).moved_from.is_none() && !h.agent(&id).status.is_active()
+    })
+    .await;
+    assert_eq!(h.agent(&id).account, "equipe");
+    let last = h.items(&id).into_iter().rfind(|i| i["kind"] == "turn");
+    assert_eq!(last.unwrap()["isError"], false);
+}
+
+#[tokio::test]
+async fn an_agent_that_is_no_tickets_stays_on_its_account_at_the_limit_and_waits_for_the_reset() {
+    let h = harness("accounts-limit-no-ticket");
+    let (p, _) = h.project(true).await;
+    pro_out_of_quota_and_team(&h);
+    assert!(h.core.settings.read().switch_on_limit);
+    let id = agent_on(&h, &p, "pro").await.id;
+    turn_over(&h, &id, "Bonjour").await;
+    h.wait("its resume planned", |h| h.agent(&id).resume_at.is_some())
+        .await;
+    // The move is for the tickets' agents: a conversation is the user's to move, from its card.
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let m = h.agent(&id);
+    assert_eq!((m.account.as_str(), m.moved_from), ("pro", None));
+    assert!(m.resume_at.is_some());
+    assert_eq!(config_dirs(&h, Path::new(&m.cwd)).len(), 1);
+}
+
+#[tokio::test]
+async fn the_account_an_agent_came_from_is_forgotten_when_the_account_it_went_to_is_at_the_limit_too(
+) {
+    let h = harness("accounts-resume-limited-again");
+    let (p, _) = h.project(true).await;
+    let (_, team) = pro_out_of_quota_and_team(&h);
+    std::fs::create_dir_all(&team.config_dir).unwrap();
+    std::fs::write(Path::new(&team.config_dir).join("fake-limit"), "").unwrap();
+    let id = agent_on(&h, &p, "pro").await.id;
+    turn_over(&h, &id, "la limite").await;
+    h.core.resume_on_account(&id, "equipe").await.unwrap();
+    // The limit again, there: no failure of the resume, but one more limit to wait for.
+    h.wait("the limit met again", |h| {
+        h.items(&id).iter().filter(|i| i["kind"] == "turn").count() == 2
+            && !h.agent(&id).status.is_active()
+    })
+    .await;
+    let m = h.agent(&id);
+    assert_eq!((m.account.as_str(), m.moved_from), ("equipe", None));
+    assert!(m.resume_at.is_some());
+    let last = h.items(&id).into_iter().rfind(|i| i["kind"] == "turn");
+    assert_eq!(last.unwrap()["limited"], true);
+}

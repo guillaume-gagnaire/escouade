@@ -253,6 +253,8 @@ pub fn run() {
             commands::answer_permission,
             commands::set_agent_options,
             commands::set_agent_account,
+            commands::resume_on_account,
+            commands::back_to_previous_account,
             commands::rename_agent,
             commands::duplicate_agent,
             commands::archive_agent,

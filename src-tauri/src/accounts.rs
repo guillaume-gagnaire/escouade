@@ -6,7 +6,7 @@
 //! The order of `Settings::accounts` is their priority: new agents go to the first one usable.
 
 use crate::board;
-use crate::claude;
+use crate::claude::{self, ClaudeProcess};
 use crate::core::Core;
 use crate::i18n::Lang;
 use crate::model::{Account, AccountUsage, Settings};
@@ -17,6 +17,7 @@ use serde_json::Value;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 use tauri::Runtime;
 
 /// The id of the user's own account.
@@ -718,6 +719,37 @@ fn unknown(id: &str) -> anyhow::Error {
     ))
 }
 
+/// Refused: the account is switched off, nothing goes to it.
+fn switched_off(account: &Account) -> anyhow::Error {
+    anyhow::anyhow!(tr!(
+        "Le compte « {name} » est désactivé.",
+        "The account “{name}” is switched off.",
+        name = name_in(crate::i18n::ui(), account)
+    ))
+}
+
+/// How long a process is given to end once its input is closed, and once it is killed.
+const STOP_GRACE: Duration = Duration::from_secs(10);
+const KILL_GRACE: Duration = Duration::from_secs(5);
+
+/// The process stopped (its input closed: it finishes what it does and ends; killed if it does not
+/// within `STOP_GRACE`) and gone. A session is never copied before: the process may write it as
+/// it ends, and the account it goes to would resume a session another still writes.
+async fn stop_and_wait(p: &Arc<ClaudeProcess>) -> Result<()> {
+    p.close_input();
+    if p.wait_exit(STOP_GRACE).await {
+        return Ok(());
+    }
+    p.kill();
+    if p.wait_exit(KILL_GRACE).await {
+        return Ok(());
+    }
+    bail!(tr!(
+        "Le process de l’agent ne s’arrête pas : la session n’a pas été copiée.",
+        "The agent’s process won’t stop: the session wasn’t copied."
+    ))
+}
+
 /// Refused: an account named as another one.
 fn name_taken(name: &str) -> anyhow::Error {
     anyhow::anyhow!(tr!(
@@ -912,11 +944,7 @@ impl<R: Runtime> Core<R> {
                 let found = settings.accounts.iter().find(|a| a.id == wanted);
                 let found = found.ok_or_else(|| unknown(wanted))?;
                 if !found.active {
-                    bail!(tr!(
-                        "Le compte « {name} » est désactivé.",
-                        "The account “{name}” is switched off.",
-                        name = name_in(crate::i18n::ui(), found)
-                    ));
+                    return Err(switched_off(found));
                 }
                 found.id.clone()
             }
@@ -947,6 +975,126 @@ impl<R: Runtime> Core<R> {
         self.request_save();
         self.warm(id);
         Ok(())
+    }
+
+    /// « Reprendre sur <compte> »: the agent stopped by the usage limit goes on, with its session,
+    /// on the account `account` (an active one, other than its own), sent "continue" as the
+    /// automatic resume sends it. The resume it waited for is dropped. If the turn that follows
+    /// fails there, the agent remembers where it came from (`back_to_previous_account`).
+    pub async fn resume_on_account(self: &Arc<Self>, id: &str, account: &str) -> Result<()> {
+        let from = self.move_session(id, account).await?;
+        let to = get(&self.settings.read(), account);
+        self.with_agent(id, |rt, fx| {
+            rt.meta.moved_from = Some(from.id.clone());
+            let lang = crate::i18n::ui();
+            rt.notice(
+                "info",
+                tr!(
+                    "L’agent reprend sur le compte {to} (il était sur {from}).",
+                    "The agent resumes on the {to} account (it was on {from}).",
+                    to = name_in(lang, &to),
+                    from = name_in(lang, &from)
+                ),
+                fx,
+            );
+            Ok(())
+        })?;
+        self.send_continue(id).await
+    }
+
+    /// « Revenir sur <compte> »: a resume on another account failed, and the agent goes back to
+    /// the one it came from, its session with it (what the failed turn added included). It waits
+    /// there for the reset of the usage limit it met, as it did.
+    pub async fn back_to_previous_account(self: &Arc<Self>, id: &str) -> Result<()> {
+        let h = self.agent(id)?;
+        let previous = h.lock().meta.moved_from.clone();
+        let Some(previous) = previous else {
+            bail!(tr!(
+                "Cet agent n’a pas changé de compte.",
+                "This agent hasn’t changed account."
+            ));
+        };
+        self.move_session(id, &previous).await?;
+        let to = get(&self.settings.read(), &previous);
+        self.with_agent(id, |rt, fx| {
+            rt.meta.moved_from = None;
+            rt.notice(
+                "info",
+                tr!(
+                    "L’agent revient sur le compte {to}.",
+                    "The agent goes back to the {to} account.",
+                    to = name_in(crate::i18n::ui(), &to)
+                ),
+                fx,
+            );
+            Ok(())
+        })?;
+        self.plan_resume(id, None);
+        // No reset to wait for (turned off, none known): a ticket would wait for ever.
+        if h.lock().meta.resume_at.is_none() {
+            self.resume_lost(id);
+        }
+        Ok(())
+    }
+
+    /// The agent's session moved to the account `target`, an active one other than its own: its
+    /// process is stopped, and gone (never two on one session), then the session is copied into
+    /// the folder of `target` (`copy_session`), then the agent's account is changed and the resume
+    /// it planned dropped. Nothing is changed when it fails before. The account it left.
+    async fn move_session(self: &Arc<Self>, id: &str, target: &str) -> Result<Account> {
+        let h = self.agent(id)?;
+        // Its process is not started again meanwhile (a message, a warm-up wait for the lock).
+        let lock = self.spawn_lock(id);
+        let _guard = lock.lock().await;
+        let settings = self.settings.read().clone();
+        let to = settings
+            .accounts
+            .iter()
+            .find(|a| a.id == target)
+            .ok_or_else(|| unknown(target))?;
+        if !to.active {
+            return Err(switched_off(to));
+        }
+        let (from, session, stopped) = {
+            let mut rt = h.lock();
+            let from = get(&settings, &rt.meta.account);
+            if from.id == to.id {
+                bail!(tr!(
+                    "L’agent tourne déjà sur le compte « {name} ».",
+                    "The agent already runs on the “{name}” account.",
+                    name = name_in(crate::i18n::ui(), &from)
+                ));
+            }
+            if rt.meta.status.is_active() {
+                bail!(tr!(
+                    "L’agent travaille encore : reprends quand son tour est fini.",
+                    "The agent is still working: resume once its turn is over."
+                ));
+            }
+            let Some(session) = rt.meta.session_id.clone() else {
+                bail!(tr!(
+                    "Cette conversation n’a pas encore de session à reprendre.",
+                    "This conversation has no session to resume yet."
+                ));
+            };
+            (from, session, rt.detach())
+        };
+        if let Some(p) = stopped {
+            stop_and_wait(&p).await?;
+        }
+        let (from_dir, to_dir) = (config_dir(&from), config_dir(to));
+        tokio::task::spawn_blocking(move || copy_session(&from_dir, &to_dir, &session))
+            .await
+            .map_err(|e| anyhow::anyhow!(e))??;
+        {
+            let mut rt = h.lock();
+            rt.meta.account = to.id.clone();
+            // It goes on now: nothing left to wait for.
+            rt.meta.resume_at = None;
+        }
+        self.emit_agent(&h);
+        self.request_save();
+        Ok(from)
     }
 
     /// Whether Claude Code is found for the account new agents would go to (the current one): its
