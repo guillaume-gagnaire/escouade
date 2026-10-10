@@ -17,6 +17,8 @@
 
   /** How often the sign-in is looked for. */
   const POLL_MS = 2000;
+  /** How long the sign-in the account had is left alone before it is read once more, when the first look failed. */
+  const RETRY_MS = 300;
   /** How long « Connecté » is seen above its terminal before the terminal goes. */
   const SEEN_MS = 1500;
 
@@ -102,7 +104,12 @@
         // the user's own a moment later.
         const id = account.id;
         const look = () => api.accountStatus(id).then((s) => s.stamp);
-        before = await look().catch(() => look().catch(() => null));
+        // After a moment: what made the first look fail (a keychain asking its user, a file being written) may be over.
+        const again = async () => {
+          await new Promise((resolve) => setTimeout(resolve, RETRY_MS));
+          return closed ? null : look().catch(() => null);
+        };
+        before = await look().catch(again);
         if (closed) return;
       }
       const info = await openAccountLogin(account.id);

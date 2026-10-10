@@ -185,7 +185,8 @@ describe('AccountModal', () => {
     });
     app.settings.accounts = [PRINCIPAL, PRO];
     render(AccountModal, { accountId: 'pro' });
-    await vi.advanceTimersByTimeAsync(2000);
+    // The second look comes after a short wait; the poll starts once the terminal is open.
+    await vi.advanceTimersByTimeAsync(2500);
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Connecté au compte ada@pro.dev'));
     // Asked once more, not more: the third look is the first of the poll.
     expect(b.called('account_status').length).toBeGreaterThanOrEqual(3);
@@ -195,12 +196,9 @@ describe('AccountModal', () => {
     // A look that fails is not an account with no sign-in: read again, so that the out-of-date sign-in it has is not
     // taken, a moment later, for the one the user has just made.
     let n = 0;
+    let signedIn = false;
     const b = fakeBackend({
-      account_status: () => {
-        n++;
-        if (n === 1) return Promise.reject('trousseau occupé');
-        return n <= 4 ? BEFORE : IN;
-      },
+      account_status: () => (n++ === 0 ? Promise.reject('trousseau occupé') : signedIn ? IN : BEFORE),
       refresh_usage: () => undefined,
     });
     app.settings.accounts = [PRINCIPAL, PRO];
@@ -208,13 +206,30 @@ describe('AccountModal', () => {
     await waitFor(() => expect(term.opened).toEqual(['pro']));
     const said = screen.getByRole('status');
     for (let i = 0; i < 2; i++) await vi.advanceTimersByTimeAsync(2000);
-    // The retry and two looks of the poll: all the same out-of-date sign-in, none the user’s.
-    expect(b.called('account_status')).toHaveLength(4);
+    // The retry and the looks of the poll: all the same out-of-date sign-in, none the user’s.
+    expect(b.called('account_status').length).toBeGreaterThanOrEqual(3);
     expect(said).toHaveTextContent(HINT);
     expect(term.disposed).toEqual([]);
     // The user signs in: another sign-in.
+    signedIn = true;
     await vi.advanceTimersByTimeAsync(2000);
     await waitFor(() => expect(said).toHaveTextContent('Connecté au compte ada@pro.dev'));
+  });
+
+  it('waits a moment before it looks again at the sign-in it had, which the first look may have failed on for a moment only', async () => {
+    let n = 0;
+    const b = fakeBackend({
+      account_status: () => (n++ === 0 ? Promise.reject('trousseau occupé') : BEFORE),
+      refresh_usage: () => undefined,
+    });
+    app.settings.accounts = [PRINCIPAL, PRO];
+    render(AccountModal, { accountId: 'pro' });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(b.called('account_status')).toHaveLength(1);
+    expect(term.opened).toEqual([]);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(b.called('account_status')).toHaveLength(2);
+    await waitFor(() => expect(term.opened).toEqual(['pro']));
   });
 
   it('does not ask again while the last look is still going', async () => {
