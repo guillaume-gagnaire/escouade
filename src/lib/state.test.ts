@@ -1308,4 +1308,23 @@ describe('quitting with unsaved files', () => {
     await (app.modal as any).onConfirm(false);
     expect(backend.called('quit_app')).toHaveLength(1);
   });
+
+  it('comes back, once cancelled, to the dialog it took the place of, asked twice as well', async () => {
+    const { emit } = await start();
+    // A commit's window, its message written (kept in it when another dialog takes its place).
+    const commit = { kind: 'commit', projectId: 'p1', agentId: null, resume: { message: 'fix: à moitié', proposed: '' } } as const;
+    app.modal = commit;
+    emit({ type: 'quitRequested', unsaved: 1 });
+    emit({ type: 'quitRequested', unsaved: 1 });
+    expect(app.modal).toMatchObject({ kind: 'confirm', title: 'Quitter Escouade ?' });
+    (app.modal as any).onCancel();
+    expect(app.modal).toEqual(commit);
+  });
+
+  it('goes back to no dialog once cancelled when none was open', async () => {
+    resetApp();
+    const { emit } = await start();
+    emit({ type: 'quitRequested', unsaved: 1 });
+    expect((app.modal as any).onCancel).toBeUndefined();
+  });
 });

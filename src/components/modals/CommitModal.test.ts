@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { app } from '../../lib/state.svelte';
+import { app, type Modal } from '../../lib/state.svelte';
 import type { CommitScope, FileChange } from '../../lib/types';
 import { agent, fakeBackend, resetApp } from '../../test/ipc';
 import CommitModal from './CommitModal.svelte';
@@ -189,6 +189,63 @@ describe('CommitModal', () => {
     expect(await screen.findByText('Jamais commité : .env (copié dans les worktrees).')).toBeInTheDocument();
     expect(backend.called('commit_preview')[0].args).toEqual({ projectId: 'p1', agentId: null });
     await waitFor(() => expect(field()).toHaveValue('docs: le README'));
+  });
+
+  describe('closed with a message written', () => {
+    const ASK = { kind: 'confirm', title: 'Abandonner le message ?', confirm: 'Abandonner', danger: true };
+
+    it('closes at once on the proposal as it came, or on an empty message', async () => {
+      fakeBackend({ commit_preview: () => SCOPE, commit_propose: () => 'feat: proposé' });
+      const { unmount } = render(CommitModal, { projectId: 'p1', agentId: 'a1' });
+      await waitFor(() => expect(field()).toHaveValue('feat: proposé'));
+      await userEvent.keyboard('{Escape}');
+      expect(app.modal).toBeNull();
+      unmount();
+
+      app.modal = { kind: 'commit', projectId: 'p1', agentId: 'a1' };
+      render(CommitModal, { projectId: 'p1', agentId: 'a1' });
+      await waitFor(() => expect(field()).toHaveValue('feat: proposé'));
+      await userEvent.clear(field());
+      await userEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+      expect(app.modal).toBeNull();
+    });
+
+    it('asks before Escape, « Annuler » or the overlay drops it, and comes back to it with its message', async () => {
+      const backend = fakeBackend({ commit_preview: () => SCOPE, commit_propose: () => 'feat: proposé' });
+      const commit = app.modal;
+      const { unmount } = render(CommitModal, { projectId: 'p1', agentId: 'a1' });
+      await waitFor(() => expect(field()).toHaveValue('feat: proposé'));
+      await userEvent.type(field(), ' (relu)');
+      for (const leave of [
+        () => userEvent.keyboard('{Escape}'),
+        () => userEvent.click(screen.getByRole('button', { name: 'Annuler' })),
+        async () => {
+          const overlay = screen.getByRole('dialog', { name: 'Commit' }).parentElement!;
+          await fireEvent.mouseDown(overlay);
+          await fireEvent.click(overlay);
+        },
+      ]) {
+        app.modal = commit;
+        await leave();
+        expect(app.modal).toMatchObject(ASK);
+      }
+      // As App.svelte does: the confirmation takes the window's place, and « Annuler » there brings it back.
+      unmount();
+      const ask = app.modal as Extract<Modal, { kind: 'confirm' }>;
+      app.modal = null;
+      ask.onCancel!();
+      expect(app.modal).toMatchObject({ kind: 'commit', projectId: 'p1', agentId: 'a1' });
+      // Read again: the type checker takes it for the null set above.
+      const back = app.modal as Modal | null as Extract<Modal, { kind: 'commit' }>;
+      render(CommitModal, { projectId: back.projectId, agentId: back.agentId, resume: back.resume });
+      expect(field()).toHaveValue('feat: proposé (relu)');
+      // Its files are listed again; its message is not proposed again over what was written.
+      await screen.findByRole('list', { name: 'Fichiers du commit' });
+      expect(backend.called('commit_propose')).toHaveLength(1);
+      // Still asked: what was written is still not the proposal.
+      await userEvent.keyboard('{Escape}');
+      expect(app.modal).toMatchObject(ASK);
+    });
   });
 
   it('has nothing to commit, nor to propose, when the scope has no file', async () => {

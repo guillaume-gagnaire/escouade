@@ -159,7 +159,7 @@
 {:else if app.modal?.kind === 'quickOpen'}
   <QuickOpen projectId={app.modal.projectId} source={app.modal.source} />
 {:else if app.modal?.kind === 'commit'}
-  <CommitModal projectId={app.modal.projectId} agentId={app.modal.agentId} />
+  <CommitModal projectId={app.modal.projectId} agentId={app.modal.agentId} resume={app.modal.resume} />
 {/if}
 
 <ContextMenu />

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import App from './App.svelte';
 import { app } from './lib/state.svelte';
-import type { Agent, InitialState, Project } from './lib/types';
+import type { Agent, InitialState, Project, UiEvent } from './lib/types';
 import { agent, fakeBackend, project, resetApp, SETTINGS } from './test/ipc';
 
 const DIFF = `diff --git a/src/auth.ts b/src/auth.ts
@@ -13,6 +13,10 @@ const DIFF = `diff --git a/src/auth.ts b/src/auth.ts
 -const b = 2;
 +const b = 3;
 `;
+
+/** The backend's events, to the app started last. */
+let channel: { onmessage: (e: UiEvent) => void } | null = null;
+const emit = (e: UiEvent) => channel!.onmessage(e);
 
 function start(
   layout: '' | 'split',
@@ -33,7 +37,10 @@ function start(
     models: [],
   };
   fakeBackend({
-    subscribe: () => initial,
+    subscribe: (args: any) => {
+      channel = args.channel;
+      return initial;
+    },
     get_conversation: () => [],
     git_files: () => [{ path: 'src/auth.ts', status: 'M', add: 1, del: 1, agentId: 'a1' }],
     git_diff: () => DIFF,
@@ -70,6 +77,60 @@ describe('App layout', () => {
     const field = within(dialog).getByRole('textbox', { name: 'Message' });
     await waitFor(() => expect(field).toHaveValue('fix(auth): un jeton plus court'));
     expect(field).toHaveFocus();
+  });
+
+  it('asks before Escape drops the commit message written, and comes back to it, the message kept, on « Annuler »', async () => {
+    let proposals = 0;
+    start('split', {
+      projects: [project({ commitMode: 'direct' })],
+      handlers: {
+        commit_preview: () => ({
+          files: [{ path: 'src/auth.ts', status: 'M', add: 1, del: 1, agentId: 'a1', inWorktree: false }],
+          leftOut: [],
+        }),
+        commit_propose: () => (proposals++, 'fix(auth): un jeton plus court'),
+      },
+    });
+    await screen.findByText('const b = 3;');
+    await userEvent.click(screen.getByRole('button', { name: 'Commit…' }));
+    const field = () => within(screen.getByRole('dialog', { name: 'Commit' })).getByRole('textbox', { name: 'Message' });
+    await waitFor(() => expect(field()).toHaveValue('fix(auth): un jeton plus court'));
+    await userEvent.type(field(), ' (relu)');
+    await userEvent.keyboard('{Escape}');
+    const ask = await screen.findByRole('dialog', { name: 'Abandonner le message ?' });
+    expect(screen.queryByRole('dialog', { name: 'Commit' })).not.toBeInTheDocument();
+    await userEvent.click(within(ask).getByRole('button', { name: 'Annuler' }));
+    await waitFor(() => expect(field()).toHaveValue('fix(auth): un jeton plus court (relu)'));
+    expect(proposals).toBe(1);
+    // Given up once agreed.
+    await userEvent.keyboard('{Escape}');
+    await userEvent.click(
+      within(await screen.findByRole('dialog', { name: 'Abandonner le message ?' })).getByRole('button', { name: 'Abandonner' }),
+    );
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(app.modal).toBeNull();
+  });
+
+  it('comes back to the commit being written, its message kept, once quitting with files not saved is cancelled', async () => {
+    start('split', {
+      projects: [project({ commitMode: 'direct' })],
+      handlers: {
+        commit_preview: () => ({
+          files: [{ path: 'src/auth.ts', status: 'M', add: 1, del: 1, agentId: 'a1', inWorktree: false }],
+          leftOut: [],
+        }),
+        commit_propose: () => 'fix(auth): un jeton plus court',
+      },
+    });
+    await screen.findByText('const b = 3;');
+    await userEvent.click(screen.getByRole('button', { name: 'Commit…' }));
+    const field = () => within(screen.getByRole('dialog', { name: 'Commit' })).getByRole('textbox', { name: 'Message' });
+    await waitFor(() => expect(field()).toHaveValue('fix(auth): un jeton plus court'));
+    await userEvent.type(field(), ' (relu)');
+    emit({ type: 'quitRequested', unsaved: 1 });
+    const ask = await screen.findByRole('dialog', { name: 'Quitter Escouade ?' });
+    await userEvent.click(within(ask).getByRole('button', { name: 'Annuler' }));
+    await waitFor(() => expect(field()).toHaveValue('fix(auth): un jeton plus court (relu)'));
   });
 
   it('asks the next question of a confirmation in a dialog of its own, the focus in it', async () => {

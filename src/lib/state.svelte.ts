@@ -69,8 +69,17 @@ export type Modal =
   | { kind: 'convSearch' }
   /** « Ouvrir un fichier » (Ctrl+P): the files of `source` ('project' or an agent's id) in a project. */
   | { kind: 'quickOpen'; projectId: string; source: string }
-  /** A direct commit of the agent's changes; `agentId` null: of the project's own checkout. */
-  | { kind: 'commit'; projectId: string; agentId: string | null };
+  /**
+   * A direct commit of the agent's changes; `agentId` null: of the project's own checkout. `resume`: what it had
+   * written, back from a dialog that took its place.
+   */
+  | { kind: 'commit'; projectId: string; agentId: string | null; resume?: CommitDraft };
+
+/** What a commit's window had written when another dialog took its place: its message, and Haiku's proposal as it came. */
+export interface CommitDraft {
+  message: string;
+  proposed: string;
+}
 
 export interface Toast {
   id: number;
@@ -90,6 +99,9 @@ const ALERT: ReadonlySet<AgentStatus> = new Set(['waiting', 'done', 'error']);
 
 /** How many of the last lines of the step running a worktree's setup the window keeps (as the backend does). */
 const SETUP_LINES = 500;
+
+/** The title of the confirmation of quitting with files not saved. */
+const QUIT_TITLE = 'Quitter Escouade ?';
 
 export interface UpdateInfo {
   version: string;
@@ -438,16 +450,22 @@ class AppState {
         this.exitedTerms[e.id] = e.code;
         this.onLaunchExit(e.id, e.code);
         break;
-      case 'quitRequested':
+      case 'quitRequested': {
+        // Cancelled, it goes back to the dialog it takes the place of (a commit's window keeps its message in it); asked
+        // again while it asks, back to that same one.
+        const open = this.modal;
+        const again = open?.kind === 'confirm' && open.title === QUIT_TITLE;
         this.modal = {
           kind: 'confirm',
-          title: 'Quitter Escouade ?',
+          title: QUIT_TITLE,
           body: `${plural(e.unsaved, 'fichier n’est pas enregistré', 'fichiers ne sont pas enregistrés')} dans l’éditeur : leurs modifications seront perdues.`,
           confirm: 'Quitter quand même',
           danger: true,
           onConfirm: () => api.quit(),
+          onCancel: again ? open.onCancel : open ? () => (this.modal = open) : undefined,
         };
         break;
+      }
       case 'updateFailed':
         this.failedUpdate = e.version;
         this.tellFailedUpdate(e.version);

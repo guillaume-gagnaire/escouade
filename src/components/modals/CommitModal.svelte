@@ -1,14 +1,15 @@
 <script lang="ts">
-  import { onDestroy, onMount } from 'svelte';
+  import { onDestroy, onMount, untrack } from 'svelte';
   import { plural } from '../../lib/format';
   import { api } from '../../lib/ipc';
-  import { app } from '../../lib/state.svelte';
+  import { app, type CommitDraft } from '../../lib/state.svelte';
   import type { CommitScope } from '../../lib/types';
   import Modal from './Modal.svelte';
 
   // A direct commit: the files it takes, a message Haiku proposes that the user reads and edits, and « Commiter »,
-  // the only thing that commits. `agentId` null: the project's own checkout, its agents' worktrees apart.
-  let { projectId, agentId }: { projectId: string; agentId: string | null } = $props();
+  // the only thing that commits. `agentId` null: the project's own checkout, its agents' worktrees apart. `resume`:
+  // what it had written, back from a dialog that took its place.
+  let { projectId, agentId, resume }: { projectId: string; agentId: string | null; resume?: CommitDraft } = $props();
 
   const owner = $derived((agentId ? app.agents[agentId]?.name : app.projects.find((p) => p.id === projectId)?.name) ?? '');
   const SC: Record<string, string> = { A: 'var(--add)', M: 'var(--wait)', D: 'var(--del)' };
@@ -18,7 +19,9 @@
   let scope = $state<CommitScope | null>(null);
   /** Why the files could not be listed. */
   let failure = $state<string | null>(null);
-  let message = $state('');
+  let message = $state(untrack(() => resume?.message ?? ''));
+  /** Haiku's proposal as it was put in the field: leaving the window on it loses nothing. */
+  let proposed = untrack(() => resume?.proposed ?? '');
   let proposing = $state(false);
   let noProposal = $state<string | null>(null);
   let committing = $state(false);
@@ -29,7 +32,15 @@
   let asked = 0;
   /** Replaced by another modal while the commit ran: its outcome goes to a toast. */
   let gone = false;
-  onDestroy(() => (gone = true));
+  /**
+   * The dialog it is. Another one taking its place (the confirmation of its closing, « Quitter Escouade ? ») comes back to
+   * it once cancelled: what was written is kept in it.
+   */
+  const self = untrack(() => app.modal);
+  onDestroy(() => {
+    gone = true;
+    if (self?.kind === 'commit') self.resume = { message, proposed };
+  });
 
   const paths = $derived(scope?.files.map((f) => f.path) ?? []);
   const leftOut = $derived.by(() => {
@@ -47,7 +58,8 @@
       failure = String(e);
       return;
     }
-    if (scope.files.length) propose();
+    // Back with a message: not replaced by a new proposal.
+    if (scope.files.length && !message) propose();
   });
 
   /** Asks Haiku for a message; the field stays editable meanwhile. */
@@ -58,7 +70,7 @@
     typed = false;
     try {
       const proposal = await api.commitPropose(projectId, agentId, paths);
-      if (mine === asked && !typed) message = proposal;
+      if (mine === asked && !typed) message = proposed = proposal;
     } catch (e) {
       if (mine === asked) noProposal = `Pas de proposition : ${String(e).trim().replace(/\.$/, '')}.`;
     } finally {
@@ -84,9 +96,25 @@
     }
   }
 
-  /** Not while the commit runs: its outcome (a hook's refusal…) would have nowhere to show. */
+  /**
+   * Not while the commit runs: its outcome (a hook's refusal…) would have nowhere to show. A message written (not the
+   * proposal as it came) is given up only once the user agrees; « Annuler » there comes back to it.
+   */
   function close() {
-    if (!committing) app.modal = null;
+    if (committing) return;
+    if (!message.trim() || message === proposed) {
+      app.modal = null;
+      return;
+    }
+    app.modal = {
+      kind: 'confirm',
+      title: 'Abandonner le message ?',
+      body: 'Le message que tu as écrit pour ce commit sera perdu.',
+      confirm: 'Abandonner',
+      danger: true,
+      onConfirm: () => {},
+      onCancel: () => (app.modal = self),
+    };
   }
 </script>
 
