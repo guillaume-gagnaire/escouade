@@ -1,7 +1,7 @@
 <script lang="ts">
   import { flushDrafts } from '../../lib/drafts';
   import { buffers } from '../../lib/editor/buffers.svelte';
-  import { plural } from '../../lib/format';
+  import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
   import Markdown from '../conv/Markdown.svelte';
@@ -30,33 +30,27 @@
   const close = () => (app.modal = null);
 </script>
 
-<Modal title={installed ? `Nouveautés d’Escouade ${version}` : `Escouade ${version} est prête`} width={580} onclose={close}>
+<Modal title={installed ? t('shell.update.notes', { version }) : t('shell.update.ready', { version })} width={580} onclose={close}>
   {#if notes.trim()}
     <div class="notes"><Markdown text={notes} /></div>
   {/if}
   {#if !installed && (unsaved || working)}
     <div class="state">
       {#if unsaved}
-        <p class="warn">
-          Enregistre d’abord tes fichiers : {plural(unsaved, 'fichier n’est pas enregistré', 'fichiers ne sont pas enregistrés')}.
-        </p>
+        <p class="warn">{t('shell.update.saveFirst', { count: unsaved })}</p>
       {/if}
       {#if working}
-        <p>
-          {working > 1
-            ? `${working} agents travaillent ou attendent ta réponse : leur tour en cours sera interrompu. Les agents de ticket reprennent d’eux-mêmes ; les autres attendent ton prochain message.`
-            : '1 agent travaille ou attend ta réponse : son tour en cours sera interrompu. S’il travaille sur un ticket, il reprend de lui-même ; sinon, il attend ton prochain message.'}
-        </p>
+        <p>{t('shell.update.working', { count: working })}</p>
       {/if}
     </div>
   {/if}
   {#snippet footer()}
     {#if installed}
-      <button class="btn primary" onclick={close}>Fermer</button>
+      <button class="btn primary" onclick={close}>{t('common.close')}</button>
     {:else}
-      <button class="btn ghost" onclick={close}>Plus tard</button>
+      <button class="btn ghost" onclick={close}>{t('common.later')}</button>
       <button class="btn primary" disabled={!!unsaved || restarting} onclick={restart}
-        >{restarting ? 'Redémarrage…' : 'Redémarrer maintenant'}</button
+        >{restarting ? t('shell.update.restarting') : t('shell.update.restartNow')}</button
       >
     {/if}
   {/snippet}

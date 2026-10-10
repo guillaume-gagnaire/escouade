@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { trapFocus } from '../../lib/focus';
+  import { t } from '../../lib/i18n';
 
   let {
     title,
@@ -36,7 +37,7 @@
     <div class="head">
       <span class="t">{title}</span>
       <div style="flex:1"></div>
-      <button class="icon-btn" style="width:28px;height:28px;font-size:16px" onclick={onclose} aria-label="Fermer">×</button>
+      <button class="icon-btn" style="width:28px;height:28px;font-size:16px" onclick={onclose} aria-label={t('common.close')}>×</button>
     </div>
     <div class="body">{@render children()}</div>
     {#if footer}<div class="foot">{@render footer()}</div>{/if}

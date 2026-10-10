@@ -1,9 +1,11 @@
 <script lang="ts">
   import { keyLabel } from '../lib/platform';
-  import { fAgo, fBytes, fCountdown, fPct } from '../lib/format';
+  import { fAgo, fBytes, fCountdown, fDateTime, fPct } from '../lib/format';
+  import { t } from '../lib/i18n';
+  import Rich from '../lib/i18n/Rich.svelte';
   import { api } from '../lib/ipc';
   import { menu } from '../lib/menu.svelte';
-  import { ESTIMATE_HINT, fSpentUsd } from '../lib/spend';
+  import { estimateHint, fSpentUsd } from '../lib/spend';
   import { app } from '../lib/state.svelte';
 
   const agents = $derived(Object.values(app.agents).filter((a) => !a.archived));
@@ -14,7 +16,7 @@
   const procs = $derived(app.resources);
   const procsTitle = $derived(
     [
-      'Processus Claude en cours (avec les outils et serveurs MCP qu’ils lancent)',
+      t('shell.status.procsTitle'),
       ...[...procs.agents]
         .sort((a, b) => b.memory - a.memory)
         .map((r) => `${app.agents[r.id]?.name ?? '?'} : ${fBytes(r.memory)} · ${fPct(r.cpu)}`),
@@ -58,14 +60,14 @@
 
   const syncTitle = $derived.by(() => {
     if (!sync) return '';
-    const fetched = sync.lastFetch ? fAgo(sync.lastFetch / 1000, app.now) : 'jamais';
+    const fetched = sync.lastFetch ? fAgo(sync.lastFetch / 1000, app.now) : t('shell.status.sync.never');
     return [
       sync.tracked
-        ? `Suit ${sync.upstream} : ${sync.behind} à tirer, ${sync.ahead} à pousser`
+        ? t('shell.status.sync.tracked', { upstream: sync.upstream ?? '', behind: sync.behind, ahead: sync.ahead })
         : sync.upstream
-          ? `La branche suivie ${sync.upstream} n'existe plus sur le dépôt distant`
-          : 'Branche pas encore publiée sur le dépôt distant',
-      `Dernier fetch : ${fetched}`,
+          ? t('shell.status.sync.gone', { upstream: sync.upstream })
+          : t('shell.status.sync.unpublished'),
+      t('shell.status.sync.lastFetch', { when: fetched }),
     ].join('\n');
   });
 
@@ -84,62 +86,68 @@
       { label: 'Pull', hint: `↓${s.behind}`, disabled: !s.tracked || s.behind === 0, onClick: go('pull') },
       s.tracked
         ? { label: 'Push', hint: `↑${s.ahead}`, disabled: s.ahead === 0, onClick: go('push') }
-        : { label: 'Publier la branche', onClick: go('push') },
+        : { label: t('shell.status.sync.publish'), onClick: go('push') },
       { label: '', separator: true },
-      { label: 'Fetch', hint: 'maintenant', onClick: go('fetch') },
+      { label: 'Fetch', hint: t('shell.status.sync.now'), onClick: go('fetch') },
     ]);
   }
 </script>
 
 <footer class="bar mono">
-  <span class="it"><span class="dot" style="width:7px;height:7px;background:var(--ok)"></span>{running} actif{running > 1 ? 's' : ''}</span>
+  <span class="it"
+    ><span class="dot" style="width:7px;height:7px;background:var(--ok)"></span>{t('shell.status.active', { count: running })}</span
+  >
   <button
     class="it link"
     style:color={waiting ? 'var(--wait)' : 'var(--muted)'}
     onclick={() => app.nextWaiting()}
-    title={`Aller au prochain agent en attente ou à voir (${keyLabel('Ctrl+J')})`}
+    title={t('shell.status.nextWaiting', { key: keyLabel('Ctrl+J') })}
   >
     {#if waiting}<span class="pulse" style="width:7px;height:7px"></span>{:else}<span
         class="dot"
         style="width:7px;height:7px;background:var(--dim)"
       ></span>{/if}
-    {waiting} en attente
+    {t('shell.status.waiting', { n: waiting })}
   </button>
-  <span class="it"><span style="color:var(--ok)">✓</span>{done} terminé{done > 1 ? 's' : ''}</span>
+  <span class="it"><span style="color:var(--ok)">✓</span>{t('shell.status.done', { count: done })}</span>
   {#if procs.instances}
     <span class="vsep"></span>
     <span class="it" title={procsTitle}
-      >{procs.instances} Claude · <span class="v">{fBytes(procs.memory)}</span> · <span class="v">{fPct(procs.cpu)}</span> CPU</span
+      ><Rich k="shell.status.procs" instances={procs.instances}
+        >{#snippet memory()}<span class="v">{fBytes(procs.memory)}</span>{/snippet}{#snippet cpu()}<span class="v">{fPct(procs.cpu)}</span
+          >{/snippet}</Rich
+      ></span
     >
   {/if}
   <span class="vsep"></span>
   <span
     class="it"
-    title={five?.resetsAt ? `Réinitialisation : ${new Date(five.resetsAt).toLocaleString('fr-FR')}` : 'Quota de session indisponible'}
+    title={five?.resetsAt ? t('shell.status.resetsAt', { date: fDateTime(five.resetsAt) }) : t('shell.status.sessionUnavailable')}
   >
-    Session 5 h
+    {t('shell.status.session')}
     <span class="meter"
       ><span style:width="{Math.min(100, five?.pct ?? 0)}%" style:background={(five?.pct ?? 0) > 80 ? 'var(--wait)' : 'var(--accent)'}
       ></span></span
     >
     <span class="v">{five ? fPct(five.pct) : '—'}</span>
-    {#if five?.resetsAt}<span class="d">reset {fCountdown(five.resetsAt, app.now)}</span>{/if}
+    {#if five?.resetsAt}<span class="d">{t('shell.status.reset', { countdown: fCountdown(five.resetsAt, app.now) })}</span>{/if}
   </span>
   <span
     class="it"
-    title={week?.resetsAt ? `Réinitialisation : ${new Date(week.resetsAt).toLocaleString('fr-FR')}` : 'Quota hebdomadaire indisponible'}
+    title={week?.resetsAt ? t('shell.status.resetsAt', { date: fDateTime(week.resetsAt) }) : t('shell.status.weekUnavailable')}
   >
-    Hebdo
+    {t('shell.status.week')}
     <span class="meter"
       ><span style:width="{Math.min(100, week?.pct ?? 0)}%" style:background={(week?.pct ?? 0) > 80 ? 'var(--wait)' : 'var(--accent)'}
       ></span></span
     >
     <span class="v">{week ? fPct(week.pct) : '—'}</span>
-    {#if week?.resetsAt}<span class="d">reset {fCountdown(week.resetsAt, app.now)}</span>{/if}
+    {#if week?.resetsAt}<span class="d">{t('shell.status.reset', { countdown: fCountdown(week.resetsAt, app.now) })}</span>{/if}
   </span>
   <span class="vsep"></span>
-  <span class="it" title={app.liveCost > 0 ? ESTIMATE_HINT : undefined}
-    >Aujourd'hui <span class="v strong">{fSpentUsd({ cost: app.usage.todayCost + app.liveCost, estimated: app.liveCost > 0 })}</span></span
+  <span class="it" title={app.liveCost > 0 ? estimateHint() : undefined}
+    >{t('shell.status.today')}
+    <span class="v strong">{fSpentUsd({ cost: app.usage.todayCost + app.liveCost, estimated: app.liveCost > 0 })}</span></span
   >
   {#if sync}
     <span class="vsep"></span>
@@ -151,26 +159,30 @@
         <span style:color={sync.behind ? 'var(--wait)' : 'var(--dim)'}>↓{sync.behind}</span>
         <span style:color={sync.ahead ? 'var(--text)' : 'var(--dim)'}>↑{sync.ahead}</span>
       {:else}
-        <span class="d">{sync.upstream ? 'distante supprimée' : 'non publiée'}</span>
+        <span class="d">{sync.upstream ? t('shell.status.sync.goneShort') : t('shell.status.sync.unpublishedShort')}</span>
       {/if}
     </button>
   {/if}
   <div style="flex:1"></div>
   {#if restartIn !== null}
-    <span class="it v">Redémarrage dans {restartIn} s</span>
-    <button class="small" onclick={postpone}>Plus tard</button>
+    <span class="it v">{t('shell.status.restartIn', { seconds: restartIn })}</span>
+    <button class="small" onclick={postpone}>{t('common.later')}</button>
   {:else if app.update?.ready}
-    <button class="upd" onclick={() => (app.modal = { kind: 'update' })}>Mise à jour {app.update.version} prête · Redémarrer</button>
+    <button class="upd" onclick={() => (app.modal = { kind: 'update' })}
+      >{t('shell.status.updateReady', { version: app.update.version })}</button
+    >
   {:else if app.update}
-    <span class="it">Mise à jour {app.update.version}…</span>
+    <span class="it">{t('shell.status.updating', { version: app.update.version })}</span>
   {/if}
-  <button class="small" onclick={toggleSound} title="Son des notifications">♪ {app.settings.sound ? 'On' : 'Off'}</button>
+  <button class="small" onclick={toggleSound} title={t('shell.status.sound')}
+    >♪ {app.settings.sound ? t('shell.status.soundOn') : t('shell.status.soundOff')}</button
+  >
   <button
     class="small"
     onclick={() => {
       app.modal = { kind: 'settings' };
     }}
-    title={`Réglages (${keyLabel('Ctrl+,')})`}>⚙</button
+    title={t('shell.status.settings', { key: keyLabel('Ctrl+,') })}>⚙</button
   >
 </footer>
 

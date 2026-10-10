@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { forgetDraft, setDraft } from '../../lib/drafts';
 import { buffers } from '../../lib/editor/buffers.svelte';
+import { setLang } from '../../lib/i18n';
 import { readPref } from '../../lib/prefs';
 import { app } from '../../lib/state.svelte';
 import { agent, fakeBackend, resetApp } from '../../test/ipc';
@@ -128,5 +129,65 @@ describe('UpdateModal', () => {
     // The footer's, after the title bar's ×.
     await userEvent.click(screen.getAllByRole('button', { name: 'Fermer' }).at(-1)!);
     expect(app.modal).toBeNull();
+  });
+});
+
+describe('UpdateModal in English', () => {
+  beforeEach(() => {
+    resetApp();
+    app.modal = { kind: 'update' };
+    setLang('en');
+  });
+
+  it('writes the title and the buttons in English', () => {
+    fakeBackend();
+    render(UpdateModal, { version: '1.7.0', notes: NOTES });
+    expect(screen.getByRole('dialog', { name: 'Escouade 1.7.0 is ready' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Restart now' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Later' })).toBeInTheDocument();
+  });
+
+  it('says which files to save first, one or several', async () => {
+    fakeBackend(files);
+    await unsaved(1);
+    const { unmount } = render(UpdateModal, { version: '1.7.0', notes: NOTES });
+    expect(screen.getByText('Save your files first: 1 file isn’t saved.')).toBeInTheDocument();
+    unmount();
+    await unsaved(2);
+    render(UpdateModal, { version: '1.7.0', notes: NOTES });
+    expect(screen.getByText('Save your files first: 2 files aren’t saved.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Restart now' })).toBeDisabled();
+  });
+
+  it('says what a restart does to the agents at work, one or several', () => {
+    resetApp({ agents: [agent({ id: 'a1', status: 'running' }), agent({ id: 'a2', status: 'waiting' })] });
+    fakeBackend();
+    const { unmount } = render(UpdateModal, { version: '1.7.0', notes: NOTES });
+    expect(
+      screen.getByText(
+        '2 agents are working or waiting for your answer: their current turn will be interrupted. Ticket agents pick up again by themselves; the others wait for your next message.',
+      ),
+    ).toBeInTheDocument();
+    unmount();
+    resetApp({ agents: [agent({ id: 'a1', status: 'waiting' })] });
+    render(UpdateModal, { version: '1.7.0', notes: NOTES });
+    expect(
+      screen.getByText(
+        '1 agent is working or waiting for your answer: its current turn will be interrupted. If it’s working on a ticket, it picks up again by itself; otherwise it waits for your next message.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('says what restarting looks like, and titles the notes of the version installed', async () => {
+    let finish = () => {};
+    fakeBackend({ update_restart: () => new Promise<void>((done) => (finish = done)) });
+    const { unmount } = render(UpdateModal, { version: '1.7.0', notes: NOTES });
+    await userEvent.click(screen.getByRole('button', { name: 'Restart now' }));
+    expect(screen.getByRole('button', { name: 'Restarting…' })).toBeDisabled();
+    finish();
+    unmount();
+    app.modal = { kind: 'notes', version: '1.7.0', notes: NOTES };
+    render(UpdateModal, { version: '1.7.0', notes: NOTES, installed: true });
+    expect(screen.getByRole('dialog', { name: 'What’s new in Escouade 1.7.0' })).toBeInTheDocument();
   });
 });

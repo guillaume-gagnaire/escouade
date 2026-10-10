@@ -1,5 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
+  import { t } from '../../lib/i18n';
   import { app } from '../../lib/state.svelte';
   import Modal from './Modal.svelte';
 
@@ -55,7 +56,7 @@
     </label>
   {/if}
   {#snippet footer()}
-    <button class="btn ghost" onclick={cancel}>Annuler</button>
+    <button class="btn ghost" onclick={cancel}>{t('common.cancel')}</button>
     {#if alt}
       <button class="btn" disabled={busy} onclick={() => choose(alt.onClick)}>{alt.label}</button>
     {/if}
