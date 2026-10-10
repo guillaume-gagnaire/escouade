@@ -152,7 +152,7 @@ describe('formatting, as in the app', () => {
 });
 
 describe('formatting in English', () => {
-  it('writes tokens, dollars and durations the English way', () => {
+  it('writes tokens and dollars the English way, and durations as ever', () => {
     expect(fTok(184_210, 'en')).toBe('184.2k');
     expect(fTok(999, 'en')).toBe('999');
     expect(fTok(1_250_000, 'en')).toBe('1.25M');
@@ -160,8 +160,9 @@ describe('formatting in English', () => {
     expect(fUsd(2.414, 'en')).toBe('$2.41');
     expect(fUsd(0.02, 'en')).toBe('$0.020');
     expect(fUsd(1234.5, 'en')).toBe('$1,234.50');
-    expect(fDur(760_000, 'en')).toBe('12m 40s');
-    expect(fDur(3_900_000, 'en')).toBe('1h 05m');
+    // Durations read the same in both languages.
+    expect(fDur(760_000)).toBe('12m 40s');
+    expect(fDur(3_900_000)).toBe('1h 05m');
   });
 
   it('keeps writing French by default', () => {

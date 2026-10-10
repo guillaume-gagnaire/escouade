@@ -41,8 +41,8 @@ export const en: Catalog = {
         title: 'Projects in tabs, agents in parallel',
         text: 'Each project gets its own tab and its own color, which tints the whole interface. In each one, run as many Claude Code agents as you like, each with its own conversation, model and effort; Haiku names each of them as soon as you send your first request.',
         points: [
-          'Live status: working, asking, done',
-          'Tokens, cost and touched files per agent',
+          'Live status: running, question, done',
+          'Tokens, cost and files touched, per agent',
           'One git worktree per agent, if you want',
         ],
         alt: 'Escouade’s window: the projects in tabs, the list of agents and the conversation of one of them',
