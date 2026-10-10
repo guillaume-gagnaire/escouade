@@ -1,5 +1,7 @@
 // Files attached to a message: images, PDFs and text files, as Claude reads them.
 
+import { fBytes } from './format';
+import { t } from './i18n';
 import type { Attachment } from './types';
 
 export type AttachmentKind = 'image' | 'pdf' | 'text';
@@ -43,11 +45,10 @@ const LIMITS: Record<AttachmentKind, number> = { image: 5 * MB, pdf: 18 * MB, te
 /** All the files of a message: sent in base64 (4/3 bigger), under the API's 32 MB a request. */
 export const MAX_TOTAL = 18 * MB;
 
+/** A size, rounded down: « 5 Mo », « 256 Ko ». */
 export function sizeLabel(bytes: number): string {
-  return bytes >= MB ? `${Math.floor(bytes / MB)} Mo` : `${Math.floor(bytes / KB)} Ko`;
+  return bytes >= MB ? fBytes(Math.floor(bytes / MB) * MB) : t('composer.attachments.kilobytes', { n: Math.floor(bytes / KB) });
 }
-
-const SUPPORTED = 'les fichiers acceptés sont les images (PNG, JPEG, GIF, WebP), les PDF et les fichiers texte';
 
 /** For the file dialog's filter. */
 export const ACCEPT = [...IMAGE_TYPES, 'application/pdf', '.pdf', 'text/*', ...[...TEXT_EXTENSIONS].map((e) => '.' + e)].join(',');
@@ -71,7 +72,7 @@ function read(f: File, as: 'dataURL' | 'arrayBuffer'): Promise<string | ArrayBuf
   return new Promise((resolve, reject) => {
     const r = new FileReader();
     r.onload = () => resolve(r.result!);
-    r.onerror = () => reject(new Error(`${f.name} n'a pas pu être lu`));
+    r.onerror = () => reject(new Error(t('composer.attachments.unreadable', { name: f.name })));
     if (as === 'dataURL') r.readAsDataURL(f);
     else r.readAsArrayBuffer(f);
   });
@@ -96,17 +97,17 @@ function decodeText(buf: ArrayBuffer, legacy: boolean): string | null {
 /** Reads a file to attach; rejects with the reason to show when it cannot be. */
 export async function readAttachment(f: File): Promise<DraftAttachment> {
   const kind = attachmentKind(f);
-  const unsupported = new Error(`« ${f.name} » ne peut pas être joint : ${SUPPORTED}.`);
+  const unsupported = new Error(t('composer.attachments.unsupported', { name: f.name }));
   // Of no known kind and given no type by Windows (.env.local, Jenkinsfile…), it may be text.
   const maybeText = !kind && (!f.type || f.type === 'application/octet-stream') && f.size <= LIMITS.text;
   if (!kind && !maybeText) throw unsupported;
   const max = LIMITS[kind ?? 'text'];
-  if (f.size > max) throw new Error(`${f.name} dépasse ${sizeLabel(max)}`);
+  if (f.size > max) throw new Error(t('composer.attachments.tooBig', { name: f.name, max: sizeLabel(max) }));
   if (kind === 'text' || maybeText) {
     const data = decodeText(await read(f, 'arrayBuffer'), kind === 'text');
     if (data === null) {
       if (maybeText) throw unsupported;
-      throw new Error(`${f.name} n'est pas un fichier texte : il ne peut pas être joint.`);
+      throw new Error(t('composer.attachments.notText', { name: f.name }));
     }
     return { kind: 'text', name: f.name, mediaType: 'text/plain', data, size: f.size };
   }

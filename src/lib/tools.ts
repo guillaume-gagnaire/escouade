@@ -1,6 +1,7 @@
 // One-line summaries of tool calls for the compact rows of the conversation.
 
-import { relPath } from './format';
+import { fInt, relPath } from './format';
+import { t } from './i18n';
 import type { ConvItem, ToolItem } from './types';
 
 const lines = (s: string | undefined) => (s ? s.split('\n').length : 0);
@@ -39,10 +40,10 @@ export const SUMMED_UP: ReadonlySet<string> = new Set([
   'WebSearch',
 ]);
 
-export function toolArg(t: ToolItem, cwd: string): string {
-  const i = t.input ?? {};
+export function toolArg(tool: ToolItem, cwd: string): string {
+  const i = tool.input ?? {};
   const p = (x: unknown) => (typeof x === 'string' ? relPath(cwd, x) : '');
-  switch (t.name) {
+  switch (tool.name) {
     case 'Bash':
     case 'PowerShell':
       return i.command ?? '';
@@ -65,7 +66,7 @@ export function toolArg(t: ToolItem, cwd: string): string {
     case 'Agent':
       return i.description ?? i.subagent_type ?? '';
     case 'TodoWrite':
-      return Array.isArray(i.todos) ? `${i.todos.length} tâches` : '';
+      return Array.isArray(i.todos) ? t('conv.tools.tasks', { count: i.todos.length }) : '';
     case 'Skill':
       return i.skill ?? i.command ?? '';
     case 'SlashCommand':
@@ -77,26 +78,28 @@ export function toolArg(t: ToolItem, cwd: string): string {
   }
 }
 
-export function toolResultSummary(t: ToolItem): string {
-  const r = t.result;
-  if (t.status === 'running') return '';
-  if (t.status === 'interrupted') return 'interrompu';
+export function toolResultSummary(tool: ToolItem): string {
+  const r = tool.result;
+  if (tool.status === 'running') return '';
+  if (tool.status === 'interrupted') return t('conv.tools.interrupted');
   if (!r) return '';
-  if (r.isError) return lastLine(r.text) || 'erreur';
-  switch (t.name) {
-    case 'Read':
-      return `${lines(r.text)} lignes`;
+  if (r.isError) return lastLine(r.text) || t('conv.tools.error');
+  switch (tool.name) {
+    case 'Read': {
+      const n = lines(r.text);
+      return t('conv.tools.lines', { count: n, n: fInt(n) });
+    }
     case 'Grep':
     case 'Glob': {
       const n = (r.text ?? '').split('\n').filter(Boolean).length;
-      return n ? `${n} résultat${n > 1 ? 's' : ''}` : 'aucun résultat';
+      return n ? t('conv.tools.results', { count: n, n: fInt(n) }) : t('conv.tools.noResults');
     }
     case 'Bash':
     case 'PowerShell':
       return lastLine(r.text) || '✓';
     case 'Task':
     case 'Agent':
-      return 'terminé';
+      return t('conv.tools.done');
     case 'TodoWrite':
       return '';
     default:
@@ -104,8 +107,8 @@ export function toolResultSummary(t: ToolItem): string {
   }
 }
 
-export function hasDiff(t: ToolItem): boolean {
-  return !!t.result && typeof t.result.add === 'number';
+export function hasDiff(tool: ToolItem): boolean {
+  return !!tool.result && typeof tool.result.add === 'number';
 }
 
 export interface FileEdit {

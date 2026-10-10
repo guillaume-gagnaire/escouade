@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import { renderMarkdown } from './markdown';
+import { describe, expect, it, vi } from 'vitest';
+import { setLang } from './i18n';
+import { handleMarkdownClick, renderMarkdown } from './markdown';
 
 function dom(md: string) {
   const d = document.createElement('div');
@@ -45,5 +46,37 @@ describe('renderMarkdown', () => {
 
   it('marks links as noopener', () => {
     expect(dom('[doc](https://example.com)').querySelector('a')?.getAttribute('rel')).toBe('noopener noreferrer');
+  });
+});
+
+describe('the texts of the code blocks', () => {
+  const block = '```\nplain\n```';
+  const head = (d: HTMLElement) => [d.querySelector('.code-head span')?.textContent, d.querySelector('.copy-btn')?.textContent];
+
+  it('are in the language of the interface, and a rendering is not reused in another', () => {
+    expect(head(dom(block))).toEqual(['texte', 'Copier']);
+    setLang('en');
+    expect(head(dom(block))).toEqual(['text', 'Copy']);
+    setLang('fr');
+    expect(head(dom(block))).toEqual(['texte', 'Copier']);
+  });
+
+  it('say the code was copied, then go back to the copy button', () => {
+    vi.useFakeTimers();
+    const writeText = vi.fn();
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    try {
+      setLang('en');
+      const d = dom(block);
+      const button = d.querySelector<HTMLElement>('.copy-btn')!;
+      handleMarkdownClick({ target: button, preventDefault() {} } as unknown as MouseEvent);
+      expect(writeText).toHaveBeenCalledWith('plain');
+      expect(button.textContent).toBe('Copied ✓');
+      vi.advanceTimersByTime(1300);
+      expect(button.textContent).toBe('Copy');
+    } finally {
+      vi.useRealTimers();
+      Reflect.deleteProperty(navigator, 'clipboard');
+    }
   });
 });
