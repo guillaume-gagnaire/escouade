@@ -566,9 +566,12 @@ describe('SettingsModal', () => {
   });
 
   it('spells out in Claude’s proposal what a command would hide', async () => {
+    // Written by their code: invisible in this file, they would hide from its reader too.
+    const ZWSP = String.fromCodePoint(0x200b);
+    const RLO = String.fromCodePoint(0x202e);
     backendSaving({
       suggest_run_commands: () => ({
-        commands: [{ id: 's1', name: 'We​b', command: 'npm‮ run dev', shell: 'zsh', cwd: 'a​pp' }],
+        commands: [{ id: 's1', name: `We${ZWSP}b`, command: `npm${RLO} run dev`, shell: 'zsh', cwd: `a${ZWSP}pp` }],
         refused: 0,
       }),
     });
@@ -580,6 +583,36 @@ describe('SettingsModal', () => {
     expect(proposal.getByText('a⟨U+200B⟩pp')).toBeInTheDocument();
     // A shell this machine does not have.
     expect(proposal.getByText('zsh (introuvable)')).toBeInTheDocument();
+  });
+
+  it('styles Claude’s proposal with classes of its own, leaving the commands around it as they are', async () => {
+    app.projects = [project({ runCommands: [FRONT], worktreeSetup: [{ id: 'w1', command: 'npm ci', shell: 'pwsh', cwd: '' }] })];
+    backendSaving({
+      suggest_worktree_steps: () => ({ setup: [{ id: 's1', command: 'npm ci', shell: 'pwsh', cwd: 'web' }], teardown: [], refused: 0 }),
+      suggest_run_commands: () => ({ commands: [{ id: 's2', name: 'API', command: 'cargo run', shell: 'pwsh', cwd: '' }], refused: 0 }),
+    });
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    await userEvent.click(group('Worktrees').getByRole('button', { name: '✦ Remplir automatiquement' }));
+    await userEvent.click(group('Lancement').getByRole('button', { name: '✦ Remplir automatiquement' }));
+    const proposals = [
+      await screen.findByRole('region', { name: 'Commandes de worktree proposées' }),
+      await screen.findByRole('region', { name: 'Commandes de lancement proposées' }),
+    ];
+    // A rule of the tab applies to whatever has its scope's class and the rule's: a class of the proposal that the rest
+    // of the tab uses too restyles both (a launch command's box, the proposal's commands). The app's own classes
+    // (app.css), which the tab does not style, aside.
+    const global = new Set(['btn', 'ghost', 'primary', 'mono', 'section-label']);
+    const scope = [...proposals[0].classList].find((c) => c.startsWith('svelte-'))!;
+    const classes = (inside: boolean) =>
+      new Set(
+        [...panel().querySelectorAll(`.${scope}`)]
+          .filter((e) => proposals.some((p) => p.contains(e)) === inside)
+          .flatMap((e) => [...e.classList])
+          .filter((c) => c !== scope && !global.has(c)),
+      );
+    const others = classes(false);
+    expect(others.size).toBeGreaterThan(0);
+    expect([...classes(true)].filter((c) => others.has(c))).toEqual([]);
   });
 
   it('tells the two « ✦ Remplir automatiquement » buttons apart by the text of their own row', () => {

@@ -88,7 +88,7 @@
       <ol class="steps">
         {#each steps as s (s.id)}
           <li>
-            <pre class="cmd mono">{revealHidden(s.command)}</pre>
+            <pre class="command mono">{revealHidden(s.command)}</pre>
             {@render facts(s.shell, s.cwd.trim() && s.cwd.trim() !== '.' ? revealHidden(s.cwd) : 'la racine du worktree')}
           </li>
         {/each}
@@ -109,7 +109,7 @@
     {#each launchProposal! as c (c.id)}
       <li>
         <span class="name">{revealHidden(c.name.trim())}</span>
-        <pre class="cmd mono">{revealHidden(c.command)}</pre>
+        <pre class="command mono">{revealHidden(c.command)}</pre>
         {@render facts(c.shell, c.cwd.trim() ? revealHidden(c.cwd) : 'le dossier du projet')}
       </li>
     {/each}
@@ -439,7 +439,7 @@
   }
   /* What is read here is what the shell reads, in that order: right-to-left letters must not reorder a « ; » or a « | ». */
   .name,
-  .cmd,
+  .command,
   .facts dd {
     unicode-bidi: bidi-override;
     direction: ltr;
@@ -449,7 +449,7 @@
     font-weight: 600;
   }
   /* The whole command, as written: never cut, never scrolled out of sight, however long. */
-  .cmd {
+  .command {
     margin: 0;
     padding: 6px 10px;
     border: 1px solid var(--line);
