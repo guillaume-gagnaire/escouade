@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { app } from '../../lib/state.svelte';
@@ -120,6 +120,49 @@ describe('CommitModal', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('lint en échec');
     expect(app.modal).toMatchObject({ kind: 'commit' });
     expect(field()).toHaveValue('feat: proposé');
+  });
+
+  it('cannot be closed while the commit runs, and then shows git’s refusal', async () => {
+    let refuse: (e: string) => void = () => {};
+    fakeBackend({
+      commit_preview: () => SCOPE,
+      commit_propose: () => 'feat: proposé',
+      commit_direct: () => new Promise<string>((_, reject) => (refuse = reject)),
+    });
+    render(CommitModal, { projectId: 'p1', agentId: 'a1' });
+    await waitFor(() => expect(field()).toHaveValue('feat: proposé'));
+    await userEvent.click(commitButton());
+    const running = screen.getByRole('button', { name: 'Commit…' });
+    expect(running).toBeDisabled();
+    // Escape, « Annuler », the close button and the overlay leave it open.
+    await userEvent.keyboard('{Escape}');
+    await userEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Fermer' }));
+    const overlay = screen.getByRole('dialog', { name: 'Commit' }).parentElement!;
+    await fireEvent.mouseDown(overlay);
+    await fireEvent.click(overlay);
+    expect(app.modal).toMatchObject({ kind: 'commit' });
+    refuse('lint en échec');
+    expect(await screen.findByRole('alert')).toHaveTextContent('lint en échec');
+    expect(commitButton()).toBeEnabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+    expect(app.modal).toBeNull();
+  });
+
+  it('tells a refusal that arrives once the window is gone', async () => {
+    let refuse: (e: string) => void = () => {};
+    fakeBackend({
+      commit_preview: () => SCOPE,
+      commit_propose: () => 'feat: proposé',
+      commit_direct: () => new Promise<string>((_, reject) => (refuse = reject)),
+    });
+    const { unmount } = render(CommitModal, { projectId: 'p1', agentId: 'a1' });
+    await waitFor(() => expect(field()).toHaveValue('feat: proposé'));
+    await userEvent.click(commitButton());
+    // Another modal took its place.
+    unmount();
+    refuse('lint en échec');
+    await waitFor(() => expect(app.toasts.at(-1)).toMatchObject({ text: 'lint en échec', kind: 'error' }));
   });
 
   it('commits the project’s own checkout, and names the copied files it leaves out', async () => {

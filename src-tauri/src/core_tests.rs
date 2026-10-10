@@ -1404,11 +1404,8 @@ async fn a_direct_commit_never_takes_nor_shows_haiku_the_files_copied_into_the_w
         .commit_propose(&p.id, id.clone(), asked.clone())
         .await
         .unwrap();
-    // The changes first, then the new files.
-    assert!(
-        proposal.contains("Diff de : src/app.ts, .env.example."),
-        "{proposal}"
-    );
+    // Nor does Haiku read the example: no file matching the copy's patterns goes into its diff.
+    assert!(proposal.contains("Diff de : src/app.ts."), "{proposal}");
     h.core
         .commit_direct(&p.id, id, asked, "feat: l'exemple".into())
         .await
@@ -1421,6 +1418,117 @@ async fn a_direct_commit_never_takes_nor_shows_haiku_the_files_copied_into_the_w
         std::fs::read_to_string(wt.join(".env")).unwrap(),
         "SECRET=1\n"
     );
+}
+
+/// The project's repository `r` with a committed `.gitignore` that ignores `.env`, and a `.env`.
+fn committed_gitignore(r: &Path) {
+    std::fs::write(r.join(".gitignore"), ".env\n").unwrap();
+    git(r, &["add", ".gitignore"]);
+    git(r, &["commit", "-qm", "ignore .env"]);
+    std::fs::write(r.join(".env"), "SECRET=1\n").unwrap();
+}
+
+#[tokio::test]
+async fn a_copied_env_stays_out_even_once_the_agent_no_longer_ignores_it_in_its_worktree() {
+    let h = harness("commit-direct-env-unignored");
+    let (p, r) = h.project(true).await;
+    committed_gitignore(&r);
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let wt = PathBuf::from(a.meta.worktree.unwrap().path);
+    assert_eq!(
+        std::fs::read_to_string(wt.join(".env")).unwrap(),
+        "SECRET=1\n"
+    );
+    // The agent's own rules no longer ignore it: git now lists it as a new file.
+    std::fs::write(wt.join(".gitignore"), "").unwrap();
+    assert!(git(&wt, &["status", "--porcelain"]).contains("?? .env"));
+    let id = Some(a.meta.id.clone());
+    let scope = h.core.commit_preview(&p.id, id.clone()).await.unwrap();
+    assert_eq!(paths_of(&scope), [".gitignore"]);
+    assert_eq!(scope.left_out, [".env"]);
+    let asked = strings(&[".env", ".gitignore"]);
+    let proposal = h
+        .core
+        .commit_propose(&p.id, id.clone(), asked.clone())
+        .await
+        .unwrap();
+    assert!(proposal.contains("Diff de : .gitignore."), "{proposal}");
+    h.core
+        .commit_direct(&p.id, id, asked, "chore: les règles".into())
+        .await
+        .unwrap();
+    assert_eq!(
+        git(&wt, &["ls-tree", "-r", "--name-only", "HEAD"]),
+        ".gitignore\nsrc/app.ts"
+    );
+}
+
+#[tokio::test]
+async fn haiku_never_reads_a_file_matching_the_copy_patterns() {
+    let h = harness("commit-propose-env-unread");
+    let (p, r) = h.project(false).await;
+    committed_gitignore(&r);
+    // The project's own rules no longer ignore it: it is listed, for the user to see, but its
+    // content is never sent.
+    std::fs::write(r.join(".gitignore"), "").unwrap();
+    let scope = h.core.commit_preview(&p.id, None).await.unwrap();
+    assert_eq!(paths_of(&scope), [".env", ".gitignore"]);
+    let proposal = h
+        .core
+        .commit_propose(&p.id, None, paths_of(&scope))
+        .await
+        .unwrap();
+    assert!(proposal.contains("Diff de : .gitignore."), "{proposal}");
+    // Asked for it alone: no diff at all, never the whole checkout's.
+    let proposal = h
+        .core
+        .commit_propose(&p.id, None, strings(&[".env"]))
+        .await
+        .unwrap();
+    assert!(proposal.ends_with("Diff de : ."), "{proposal}");
+}
+
+#[tokio::test]
+async fn a_direct_commit_and_its_proposal_hold_off_a_restart_while_they_run() {
+    let h = harness("commit-direct-working");
+    let (p, r) = h.project(false).await;
+    std::fs::write(r.join("src").join("app.ts"), "const a = 2;\n").unwrap();
+    let paths = strings(&["src/app.ts"]);
+    // What runs alongside sees the work under way, and none once it is over.
+    async fn seen_working(h: &Harness, run: impl std::future::Future<Output = ()>) -> bool {
+        let done = AtomicBool::new(false);
+        let watch = async {
+            let mut seen = false;
+            while !done.load(Ordering::Acquire) {
+                seen |= h.core.works.load(Ordering::Acquire) > 0;
+                tokio::time::sleep(Duration::from_millis(1)).await;
+            }
+            seen
+        };
+        let run = async {
+            run.await;
+            done.store(true, Ordering::Release);
+        };
+        tokio::join!(watch, run).0
+    }
+    let core = h.core.clone();
+    let (pid, asked) = (p.id.clone(), paths.clone());
+    let proposing = seen_working(&h, async move {
+        core.commit_propose(&pid, None, asked).await.unwrap();
+    })
+    .await;
+    assert!(proposing, "the proposal was never seen under way");
+    assert_eq!(h.core.works.load(Ordering::Acquire), 0);
+    let core = h.core.clone();
+    let committing = seen_working(&h, async move {
+        core.commit_direct(&p.id, None, paths, "fix: x".into())
+            .await
+            .unwrap();
+    })
+    .await;
+    assert!(committing, "the commit was never seen under way");
+    assert_eq!(h.core.works.load(Ordering::Acquire), 0);
+    assert_eq!(git(&r, &["log", "-1", "--format=%s"]), "fix: x");
 }
 
 #[tokio::test]

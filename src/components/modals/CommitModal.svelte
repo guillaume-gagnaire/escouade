@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
   import type { CommitScope } from '../../lib/types';
@@ -26,6 +26,9 @@
   /** Typed since the last proposal was asked for: the proposal arriving then does not replace it. */
   let typed = false;
   let asked = 0;
+  /** Replaced by another modal while the commit ran: its outcome goes to a toast. */
+  let gone = false;
+  onDestroy(() => (gone = true));
 
   const paths = $derived(scope?.files.map((f) => f.path) ?? []);
   const leftOut = $derived.by(() => {
@@ -68,17 +71,22 @@
     refused = null;
     try {
       const hash = await api.commitDirect(projectId, agentId, paths, message);
-      // Closed meanwhile, another modal may be open now.
-      if (app.modal?.kind === 'commit') app.modal = null;
+      // Another modal may have taken its place meanwhile.
+      if (!gone) app.modal = null;
       app.toast(`Commit ${hash} créé`, 'ok');
     } catch (e) {
-      refused = String(e);
+      // A refusal is never lost: in the window, or told once it is gone.
+      if (gone) app.toast(String(e), 'error');
+      else refused = String(e);
     } finally {
       committing = false;
     }
   }
 
-  const close = () => (app.modal = null);
+  /** Not while the commit runs: its outcome (a hook's refusal…) would have nowhere to show. */
+  function close() {
+    if (!committing) app.modal = null;
+  }
 </script>
 
 <Modal title="Commit" width={600} onclose={close}>
@@ -111,9 +119,11 @@
     {#if refused}<p class="error" role="alert">{refused}</p>{/if}
   </div>
   {#snippet footer()}
-    <button class="btn ghost" onclick={close}>Annuler</button>
+    <button class="btn ghost" disabled={committing} onclick={close}>Annuler</button>
     <button class="btn" disabled={proposing || committing || !paths.length} onclick={propose}>Régénérer</button>
-    <button class="btn primary" disabled={!message.trim() || committing || !paths.length} onclick={commit}>Commiter</button>
+    <button class="btn primary" disabled={!message.trim() || committing || !paths.length} onclick={commit}
+      >{committing ? 'Commit…' : 'Commiter'}</button
+    >
   {/snippet}
 </Modal>
 

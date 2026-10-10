@@ -140,6 +140,8 @@ pub struct Entry {
     pub status: char,
     /// The path before a rename.
     pub orig: Option<String>,
+    /// Not in the index yet (a new file never added).
+    pub untracked: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -233,6 +235,7 @@ pub fn parse_status(out: &[u8]) -> Status {
             path: path.to_string(),
             status,
             orig,
+            untracked: xy == "??",
         });
     }
     // Git counts only against an upstream that still exists.
@@ -359,7 +362,15 @@ pub async fn diff(root: &str, paths: &[String]) -> Result<String> {
     };
     let mut out = String::new();
     for run_paths in runs {
-        let mut args: Vec<&str> = vec!["diff", "HEAD", "--no-color", "--no-ext-diff", "--"];
+        // File names, not patterns: `[.]env` must not also bring `.env`'s changes.
+        let mut args: Vec<&str> = vec![
+            "--literal-pathspecs",
+            "diff",
+            "HEAD",
+            "--no-color",
+            "--no-ext-diff",
+            "--",
+        ];
         args.extend(run_paths.iter().map(String::as_str));
         if let Ok(o) = run(root, &args).await {
             out.push_str(&String::from_utf8_lossy(&o));
@@ -897,43 +908,62 @@ pub async fn ignored(cwd: &str, paths: &[String]) -> Result<Vec<String>> {
 }
 
 /// Commits the changes of `paths` in `cwd`, and only them: new, changed and deleted files alike,
-/// a renamed file's former name with it. What else is staged stays staged, out of the commit.
+/// a renamed file's former name with it. What else is staged stays staged, out of the commit; a
+/// refused commit (a hook) leaves the index as it was.
 pub async fn commit_paths(cwd: &str, paths: &[String], message: &str) -> Result<()> {
     const LITERAL: &str = "--literal-pathspecs";
     const FROM_STDIN: [&str; 2] = ["--pathspec-from-file=-", "--pathspec-file-nul"];
-    let entries = status(cwd).await?.entries;
+    let entries: HashMap<String, Entry> = status(cwd)
+        .await?
+        .entries
+        .into_iter()
+        .map(|e| (e.path.clone(), e))
+        .collect();
     let mut all: Vec<&str> = Vec::new();
+    let mut new: Vec<&str> = Vec::new();
     for p in paths {
         all.push(p);
-        if let Some(orig) = entries
-            .iter()
-            .find(|e| e.path == *p)
-            .and_then(|e| e.orig.as_deref())
-        {
-            all.push(orig);
+        match entries.get(p) {
+            Some(e) if e.untracked => new.push(p),
+            Some(Entry {
+                orig: Some(orig), ..
+            }) => all.push(orig),
+            _ => {}
         }
     }
-    // A new file is unknown to the commit until added; a deleted one is not there to add (the
-    // commit takes its deletion by itself).
-    let on_disk: Vec<&str> = paths
-        .iter()
-        .filter(|p| Path::new(cwd).join(p).symlink_metadata().is_ok())
-        .map(String::as_str)
-        .collect();
-    if !on_disk.is_empty() {
-        let args = [&[LITERAL, "add", "-A"][..], &FROM_STDIN].concat();
-        checked(
-            run_input(cwd, &args, &nul_separated(&on_disk)).await?,
-            &args,
-        )?;
+    // A new file is unknown to the commit until added. The others are not: `--only` takes them as
+    // they are on disk without touching what the index holds for them (a file staged in part
+    // stays so until the commit is made).
+    if !new.is_empty() {
+        let args = [&[LITERAL, "add"][..], &FROM_STDIN].concat();
+        checked(run_input(cwd, &args, &nul_separated(&new)).await?, &args)?;
     }
-    // `--only`: the listed paths as they are on disk, whatever the index holds for the others.
     let args = [
         &[LITERAL, "commit", "-q", "--only", "-m", message][..],
         &FROM_STDIN,
     ]
     .concat();
-    checked(run_input(cwd, &args, &nul_separated(&all)).await?, &args).map(|_| ())
+    let committed = checked(run_input(cwd, &args, &nul_separated(&all)).await?, &args);
+    if committed.is_err() && !new.is_empty() {
+        // Refused: the new files go back to untracked, as they were (their content stays on disk).
+        let args = [
+            &[
+                LITERAL,
+                "rm",
+                "--cached",
+                "--force",
+                "--quiet",
+                "--ignore-unmatch",
+            ][..],
+            &FROM_STDIN,
+        ]
+        .concat();
+        let unstaged = run_input(cwd, &args, &nul_separated(&new)).await;
+        if let Err(e) = unstaged.and_then(|out| checked(out, &args)) {
+            log::warn!("{cwd}: the new files of a refused commit stay staged: {e:#}");
+        }
+    }
+    committed.map(|_| ())
 }
 
 /// What the branch checked out in `cwd` changed since it left `target`, staged changes included.
@@ -1819,6 +1849,64 @@ mod repo_tests {
         // Not a repository: an error, never "nothing is ignored".
         let elsewhere = crate::paths::test_dir("git-ignored-not-a-repo");
         assert!(ignored(&elsewhere.to_string_lossy(), &asked).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn a_diff_reads_the_names_listed_as_they_are() {
+        let r = repo("git-diff-literal");
+        let root = Path::new(&r);
+        git(&r, &["config", "core.autocrlf", "false"]);
+        std::fs::write(root.join(".git/info/exclude"), ".env\n").unwrap();
+        std::fs::write(root.join(".env"), "SECRET=1\n").unwrap();
+        git(&r, &["add", "-f", ".env"]);
+        // A name that, read as a pattern, would match `.env`.
+        std::fs::write(root.join("[.]env"), "x\n").unwrap();
+        let d = diff(&r, &["[.]env".to_string()]).await.unwrap();
+        assert!(d.contains("+++ b/[.]env"), "{d}");
+        assert!(!d.contains("SECRET"), "{d}");
+    }
+
+    /// A pre-commit hook in the repository at `r` that refuses every commit.
+    fn refusing_hook(r: &str) {
+        let hook = Path::new(r).join(".git").join("hooks").join("pre-commit");
+        std::fs::create_dir_all(hook.parent().unwrap()).unwrap();
+        std::fs::write(&hook, "#!/bin/sh\necho 'lint en échec' >&2\nexit 1\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn a_refused_commit_leaves_the_index_as_it_was() {
+        let r = repo("git-commit-refused");
+        let root = Path::new(&r);
+        git(&r, &["config", "core.autocrlf", "false"]);
+        std::fs::write(root.join("b.txt"), "1\n").unwrap();
+        git(&r, &["add", "b.txt"]);
+        git(&r, &["commit", "-qm", "b"]);
+        // Partly staged: version 2 in the index, version 3 on disk. And a new file.
+        std::fs::write(root.join("b.txt"), "2\n").unwrap();
+        git(&r, &["add", "b.txt"]);
+        std::fs::write(root.join("b.txt"), "3\n").unwrap();
+        std::fs::write(root.join("n.txt"), "n\n").unwrap();
+        let index = || async { text(&r, &["ls-files", "--stage"]).await.unwrap() };
+        let before = (
+            index().await,
+            text(&r, &["status", "--porcelain"]).await.unwrap(),
+        );
+        refusing_hook(&r);
+        let chosen = ["b.txt", "n.txt"].map(String::from).to_vec();
+        let e = commit_paths(&r, &chosen, "fix: refusé").await.unwrap_err();
+        assert!(format!("{e:#}").contains("lint en échec"), "{e:#}");
+        let after = (
+            index().await,
+            text(&r, &["status", "--porcelain"]).await.unwrap(),
+        );
+        assert_eq!(after, before);
+        assert_eq!(text(&r, &["show", ":b.txt"]).await.unwrap(), "2");
+        assert_eq!(text(&r, &["log", "-1", "--format=%s"]).await.unwrap(), "b");
     }
 
     /// `main` and a branch `feat` that changed the same file (`conflict`) or another one.

@@ -22,7 +22,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use parking_lot::{Mutex, RwLock};
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -538,10 +538,19 @@ pub(crate) fn commit_proposal_prompt(
 /// A direct commit asked for files that no longer have changes to commit.
 const NOTHING_TO_COMMIT: &str = "Plus rien à commiter : ces fichiers n'ont plus de modification.";
 
+/// What a direct commit works on: its checkout, its files, and those of them Haiku never reads.
+struct DirectScope {
+    root: String,
+    scope: CommitScope,
+    /// The changed files matching the copy's patterns (`.env*`…), committed or not: their content
+    /// never goes into Haiku's prompt.
+    unread: HashSet<String>,
+}
+
 /// Of the files a direct commit takes, those of `paths`: a path from the window counts only when
 /// its checkout still lists it.
 fn committed(scope: CommitScope, paths: &[String]) -> Vec<FileChange> {
-    let asked: std::collections::HashSet<&str> = paths.iter().map(String::as_str).collect();
+    let asked: HashSet<&str> = paths.iter().map(String::as_str).collect();
     scope
         .files
         .into_iter()
@@ -3018,7 +3027,7 @@ impl<R: Runtime> Core<R> {
         self: &Arc<Self>,
         project_id: &str,
         agent_id: Option<String>,
-    ) -> Result<(String, CommitScope)> {
+    ) -> Result<DirectScope> {
         let project = self.project(project_id)?;
         let in_worktree = match &agent_id {
             Some(a) => self.agent(a)?.lock().meta.worktree.is_some(),
@@ -3048,16 +3057,31 @@ impl<R: Runtime> Core<R> {
                         .is_some_and(|rel| testlaunch::glob_match(pattern, rel))
             })
         };
-        let candidates: Vec<String> = listed
+        let unread: HashSet<String> = listed
             .iter()
             .filter(|f| copy_pattern(&f.path))
             .map(|f| f.path.clone())
             .collect();
-        let copied = git::ignored(&root, &candidates).await?;
+        let candidates: Vec<String> = unread.iter().cloned().collect();
+        let mut copied: HashSet<String> = git::ignored(&root, &candidates)
+            .await?
+            .into_iter()
+            .collect();
+        if in_worktree {
+            // What the copy took, as a ticket's validation goes by: in its worktree the rules are
+            // the agent's, which may have taken `.env` out of its `.gitignore`. The copy put each
+            // file where it is in the project's folder.
+            let took = testlaunch::matching_ignored(&project.path, &project.worktree_copy).await;
+            copied.extend(took.into_iter().filter(|f| unread.contains(f)));
+        }
         let (left_out, files): (Vec<FileChange>, Vec<FileChange>) =
             listed.into_iter().partition(|f| copied.contains(&f.path));
         let left_out = left_out.into_iter().map(|f| f.path).collect();
-        Ok((root, CommitScope { files, left_out }))
+        Ok(DirectScope {
+            root,
+            scope: CommitScope { files, left_out },
+            unread,
+        })
     }
 
     /// What a direct commit of `agent_id`'s changes (the project's own checkout when None) takes.
@@ -3066,7 +3090,7 @@ impl<R: Runtime> Core<R> {
         project_id: &str,
         agent_id: Option<String>,
     ) -> Result<CommitScope> {
-        Ok(self.commit_scope(project_id, agent_id).await?.1)
+        Ok(self.commit_scope(project_id, agent_id).await?.scope)
     }
 
     /// Haiku's message for a direct commit of `paths`, in the style of the repository's latest
@@ -3077,7 +3101,13 @@ impl<R: Runtime> Core<R> {
         agent_id: Option<String>,
         paths: Vec<String>,
     ) -> Result<String> {
-        let (root, scope) = self.commit_scope(project_id, agent_id).await?;
+        // Haiku may take its 90 s: the app does not restart for an update meanwhile.
+        let _working = self.working();
+        let DirectScope {
+            root,
+            scope,
+            unread,
+        } = self.commit_scope(project_id, agent_id).await?;
         let files = committed(scope, &paths);
         if files.is_empty() {
             bail!(NOTHING_TO_COMMIT);
@@ -3087,14 +3117,20 @@ impl<R: Runtime> Core<R> {
             .await
             .map(|s| s.lines().map(str::to_string).collect())
             .unwrap_or_default();
-        // The diff of the files the prompt lists, never more: without a path, git would read every
-        // change of the checkout, a copied `.env` included.
+        // The diff of the files the prompt lists, never more, and never of a file matching the
+        // copy's patterns (`.env*`…), whatever git's rules say of it now.
         let read: Vec<String> = files
             .iter()
             .take(PROPOSAL_FILES)
+            .filter(|f| !unread.contains(&f.path))
             .map(|f| f.path.clone())
             .collect();
-        let diff = git::diff(&root, &read).await.unwrap_or_default();
+        // Without a path, git would read every change of the checkout.
+        let diff = if read.is_empty() {
+            String::new()
+        } else {
+            git::diff(&root, &read).await.unwrap_or_default()
+        };
         let prompt = commit_proposal_prompt(&subjects, &files, &diff);
         let answer = self.one_shot(COMMIT_PROPOSAL_SYSTEM, &prompt).await?;
         proposal_from_answer(&answer).ok_or_else(|| anyhow!("Haiku n'a rien proposé"))
@@ -3113,7 +3149,9 @@ impl<R: Runtime> Core<R> {
         if message.is_empty() {
             bail!("Écris le message du commit.");
         }
-        let (root, scope) = self.commit_scope(project_id, agent_id).await?;
+        // The app does not restart for an update in the middle of it (a hook may take its time).
+        let _working = self.working();
+        let DirectScope { root, scope, .. } = self.commit_scope(project_id, agent_id).await?;
         let files: Vec<String> = committed(scope, &paths)
             .into_iter()
             .map(|f| f.path)
@@ -3122,7 +3160,7 @@ impl<R: Runtime> Core<R> {
             bail!(NOTHING_TO_COMMIT);
         }
         let done = git::commit_paths(&root, &files, message).await;
-        // Even after a refusal: git may have staged the new files, a hook may have changed some.
+        // Even after a refusal: a hook may have changed files (a formatter) before saying no.
         self.git.refresh(project_id);
         done?;
         git::text(&root, &["rev-parse", "--short", "HEAD"]).await
