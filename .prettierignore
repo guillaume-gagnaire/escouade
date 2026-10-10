@@ -9,3 +9,4 @@ playwright-report
 video/out
 website/.nuxt
 website/.output
+.claude
