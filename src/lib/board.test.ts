@@ -117,14 +117,14 @@ describe('board labels', () => {
     expect(ticketTag(ticket({ column: 'review' }))).toBe('DEM-1 · à tester');
     expect(ticketTag(ticket())).toBeNull();
     expect(ticketTag(undefined)).toBeNull();
-    expect(doneMeta(ticket({ iteration: 3, cost: 0.42 }))).toBe('3 boucles · 0,42 $');
+    expect(doneMeta(ticket({ iteration: 3, cost: 0.42 }))).toBe('3 boucles · 0,42\u00a0$');
   });
 
   it('counts every loop of a finished ticket, those of its rounds sent back included', () => {
     // Sent back once after two loops, done in one: three loops, though its last round says 1.
-    expect(doneMeta(ticket({ column: 'done', iteration: 1, loops: 3, cost: 1.5 }))).toBe('3 boucles · 1,50 $');
+    expect(doneMeta(ticket({ column: 'done', iteration: 1, loops: 3, cost: 1.5 }))).toBe('3 boucles · 1,50\u00a0$');
     // Saved before the loops were counted: its last round's.
-    expect(doneMeta(ticket({ column: 'done', iteration: 2, loops: 0, cost: 1.5 }))).toBe('2 boucles · 1,50 $');
+    expect(doneMeta(ticket({ column: 'done', iteration: 2, loops: 0, cost: 1.5 }))).toBe('2 boucles · 1,50\u00a0$');
   });
 
   it('writes the accent-stripping pattern without any literal combining mark (they get lost when copied)', () => {
@@ -213,7 +213,7 @@ describe('what a ticket under way cost', () => {
     );
     const s = ticketSpent(t, agents)!;
     expect(s).toEqual({ tokens: 1750, cost: 1.625, estimated: true });
-    expect(fSpentUsd(s)).toBe('≈ 1,63 $');
+    expect(fSpentUsd(s)).toBe('≈\u00a01,63\u00a0$');
   });
 
   it('says nothing until something was used', () => {

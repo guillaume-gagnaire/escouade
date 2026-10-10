@@ -17,7 +17,8 @@ export function spent(a: Pick<Agent, 'tokens' | 'cost' | 'liveTokens' | 'liveCos
 }
 
 export function fSpentUsd(s: { cost: number; estimated: boolean }): string {
-  return (s.estimated ? '≈ ' : '') + fUsd(s.cost);
+  // A non-breaking space, as in fUsd: « ≈ » never ends a line alone.
+  return (s.estimated ? '≈\u00a0' : '') + fUsd(s.cost);
 }
 
 export const ESTIMATE_HINT = 'Estimation (tarifs publics) pendant que Claude travaille ; coût exact à la fin du tour';
