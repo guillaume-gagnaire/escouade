@@ -239,7 +239,7 @@ describe('TicketForm in English', () => {
     expect(screen.getByRole('group', { name: 'Max loops' })).toBeInTheDocument();
     const after = screen.getByRole('group', { name: 'After' });
     await userEvent.type(within(after).getByRole('searchbox', { name: 'Search for a key' }), 'ZZZ');
-    expect(within(after).getByText('No ticket for this key')).toBeInTheDocument();
+    expect(within(after).getByText('No tickets for this key')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add' })).toBeInTheDocument();
   });
