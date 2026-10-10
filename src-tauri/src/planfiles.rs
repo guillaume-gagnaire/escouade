@@ -22,8 +22,9 @@ const SDD: &str = ".superpowers/sdd";
 /// Where `writing-plans` writes a plan, and the only place a plan the agent wrote is read from
 /// (without a ledger that names it, the plan can be any file of the repository).
 const PLANS: &str = "docs/superpowers/plans/";
-/// The most workspaces listed, and of those the most opened, newest first.
-const MAX_WORKSPACES: usize = 256;
+/// The most entries of `.superpowers/sdd` looked at, and of those the most workspaces opened,
+/// newest first.
+const MAX_WORKSPACES: usize = 4096;
 const MAX_TRIED: usize = 8;
 /// The most entries of a workspace looked at for briefs.
 const MAX_ENTRIES: usize = 4096;
@@ -304,13 +305,30 @@ fn ledger_plan(first: &str) -> Option<String> {
     (!value.is_empty()).then(|| value.to_string())
 }
 
-/// A line `Task <id>: <text>`: the id and the text.
-fn task_line(line: &str) -> Option<(&str, &str)> {
-    let (token, text) = line
+/// `Task <id>: <text>` at the start of `statement`: the id and the text.
+fn task_statement(statement: &str) -> Option<(&str, &str)> {
+    let (token, text) = statement
         .strip_prefix("Task ")?
         .split_once(char::is_whitespace)?;
     let id = token.strip_suffix(':').filter(|id| !id.is_empty())?;
     Some((id, text.trim()))
+}
+
+/// The statements of a ledger line: a line that starts with `Task <id>: …` says that, and may go
+/// on with more after a semicolon, a full stop, an arrow or a dash (`Task M4: complete (…);
+/// Task M3: complete (…)`, `… accepted without re-review; Task K7: complete`). A task named in
+/// a sentence is not one, and neither is a line that does not start with one.
+fn task_statements(line: &str) -> Vec<(&str, &str)> {
+    if !line.starts_with("Task ") {
+        return Vec::new();
+    }
+    line.match_indices("Task ")
+        .filter(|(at, _)| {
+            let before = line[..*at].trim_end();
+            before.is_empty() || before.ends_with([';', '.', '→', ')', '—', '–'])
+        })
+        .filter_map(|(at, _)| task_statement(&line[at..]))
+        .collect()
 }
 
 /// The first word of `text` (letters, digits, hyphens), lowercase, and what follows it.
@@ -344,7 +362,7 @@ pub fn parse_ledger(text: &str) -> Ledger {
         plan: text.lines().next().and_then(ledger_plan),
         ..Ledger::default()
     };
-    for (id, text) in text.lines().filter_map(task_line) {
+    for (id, text) in text.lines().flat_map(task_statements) {
         match progress_of(text) {
             Some(true) => {
                 ledger.active.remove(id);
@@ -410,36 +428,87 @@ fn mtime_ms(meta: &std::fs::Metadata) -> i64 {
         .map_or(0, |d| d.as_millis().min(i64::MAX as u128) as i64)
 }
 
+/// A path on another machine or a device: UNC (`\\host\share`), verbatim (`\\?\`), device
+/// (`\\.\`), NT (`\??\`). Windows reads `/` and `\` as one separator, so the check is on the path
+/// with every separator the same: `\/host/share`, `/\host\share` and `//host/share` are the
+/// same path. Such a path is never looked at (asking for it can start a connection to a machine
+/// that a committed file names) unless the repository is itself on the network.
+pub(crate) fn is_remote_path(path: &str, root: &str) -> bool {
+    let remote = |p: &str| {
+        let unified = p.trim_start().replace('\\', "/");
+        unified.starts_with("//") || unified.starts_with("/??/")
+    };
+    remote(path) && !remote(root)
+}
+
+/// A name that is a device on Windows whatever its extension (`CON`, `NUL.md`, `COM1.x.md`).
+fn is_device_name(component: &str) -> bool {
+    let stem = component
+        .split('.')
+        .next()
+        .unwrap_or_default()
+        .trim_end()
+        .to_ascii_uppercase();
+    match stem.as_bytes() {
+        b"CON" | b"PRN" | b"AUX" | b"NUL" => true,
+        [b'C', b'O', b'M', n] | [b'L', b'P', b'T', n] => matches!(n, b'1'..=b'9'),
+        _ => false,
+    }
+}
+
+/// `rel` names a plain file: no stream (`a.md:stream`, `a.md::$DATA`), no device name.
+fn is_plain(rel: &str) -> bool {
+    !rel.contains(':') && !rel.split('/').any(is_device_name)
+}
+
 /// `raw`, a path as a ledger, a marker or a tool wrote it, as a path relative to `root` with
-/// forward slashes; none for an absolute path that is not inside `root`.
-fn relative_to(root: &Path, raw: &str) -> Option<String> {
+/// forward slashes. An absolute path is read **by its spelling only**: it is inside `root` if it
+/// starts with the root's own (or the root's real) path, else it is refused, with no question
+/// asked of the disk about it. A remote or device path, a stream or a device name: refused.
+pub(crate) fn relative_to(root: &Path, raw: &str) -> Option<String> {
+    let root_text = root.to_string_lossy();
+    if is_remote_path(raw, &root_text) {
+        return None;
+    }
     let slashed = raw.replace('\\', "/");
     let absolute = slashed.starts_with('/')
         || Path::new(raw).is_absolute()
         || slashed.chars().nth(1) == Some(':');
-    if !absolute {
+    let rel = if absolute {
+        paths::strip_base(&root_text, raw).or_else(|| {
+            let real = std::fs::canonicalize(root).ok()?;
+            paths::strip_base(&real.to_string_lossy(), raw)
+        })?
+    } else {
         let mut rel = slashed.as_str();
         while let Some(rest) = rel.strip_prefix("./") {
             rel = rest;
         }
-        return Some(rel.to_string());
-    }
-    let root_text = root.to_string_lossy();
-    if let Some(rel) = paths::strip_base(&root_text, raw) {
-        return Some(rel);
-    }
-    // A path on another machine is not looked at (it could be slow, and it is not inside `root`).
-    let network = |p: &str| p.starts_with("//") || p.starts_with("\\\\");
-    if network(raw) && !network(&root_text) {
-        return None;
-    }
-    // Spelled another way (a short Windows name, a link on the way): both read as the system does.
-    let real = |p: &str| {
-        std::fs::canonicalize(p)
-            .ok()
-            .map(|p| p.to_string_lossy().into_owned())
+        rel.to_string()
     };
-    paths::strip_base(&real(&root_text)?, &real(raw)?)
+    is_plain(&rel).then_some(rel)
+}
+
+/// The paths the agent wrote, given as it spelled its folder, rooted where git says the
+/// repository is: when the agent's folder is the repository (the same folder, however it is
+/// spelled: a link, a short Windows name), a path under it is rewritten under `root`, so that
+/// `relative_to` finds it inside without asking the disk about the path itself.
+pub fn reroot(root: &Path, cwd: &Path, written: &[String]) -> Vec<String> {
+    let same = match (std::fs::canonicalize(root), std::fs::canonicalize(cwd)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
+    };
+    if !same {
+        return written.to_vec();
+    }
+    let (root_text, cwd_text) = (root.to_string_lossy(), cwd.to_string_lossy());
+    written
+        .iter()
+        .map(|path| match paths::strip_base(&cwd_text, path) {
+            Some(rel) => format!("{}/{rel}", root_text.trim_end_matches(['/', '\\'])),
+            None => path.clone(),
+        })
+        .collect()
 }
 
 /// The plan `raw` names, if it is a Markdown file inside `root` (`paths::contained`: no `..`, no

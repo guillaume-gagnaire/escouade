@@ -668,6 +668,37 @@ async fn a_plan_untouched_since_the_conversation_began_is_not_the_agents() {
 }
 
 #[tokio::test]
+async fn a_plan_written_through_another_name_of_the_agents_folder_is_found_in_the_repository() {
+    let (h, id, repo) = plan_agent("p2-alias").await;
+    plan_workspace(&repo);
+    std::fs::remove_dir_all(repo.join(".superpowers")).unwrap();
+    // The agent's folder is spelled through a link (a short Windows name, a symlinked project):
+    // the paths its tools use are spelled the same, git says where the repository really is.
+    let alias = repo.parent().unwrap().join("alias");
+    if !crate::paths::make_dir_link(&repo, &alias) {
+        eprintln!("no link to a folder here: skipped");
+        return;
+    }
+    h.core.agent(&id).unwrap().lock().meta.cwd = alias.to_string_lossy().into_owned();
+    let plan = alias
+        .join("docs")
+        .join("superpowers")
+        .join("plans")
+        .join("demo.md");
+    h.feed(
+        &id,
+        json!({"type":"assistant","message":{"id":"m-w1","content":[{"type":"tool_use","id":"w1","name":"Write","input":{"file_path":plan.to_string_lossy(),"content":"x"}}]},"parent_tool_use_id":null}),
+    );
+    h.feed(
+        &id,
+        json!({"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w1","content":"ok"}]},"parent_tool_use_id":null}),
+    );
+    h.wait("the plan", |h| h.plan_statuses(&id).len() == 3)
+        .await;
+    assert_eq!(h.agent(&id).plan.unwrap().title.as_deref(), Some("Démo"));
+}
+
+#[tokio::test]
 async fn a_plan_the_agent_wrote_is_shown_without_a_ledger_and_the_ones_outside_are_not_read() {
     let (h, id, repo) = plan_agent("p2-written").await;
     plan_workspace(&repo);
