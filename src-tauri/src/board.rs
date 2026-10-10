@@ -2157,15 +2157,25 @@ mod tests {
             protocol_prompt_for(Lang::Fr, &t, Some(4120), false),
             protocol_prompt(&t, Some(4120))
         );
-        // The criteria still give way to the budget.
+        // The criteria still give way to the budget, in each language (the fixed part of the
+        // protocol weighs otherwise in each): some criteria are kept, the others are one "…".
         t.criteria = (0..300)
             .map(|i| Criterion {
                 text: format!("{i} {}", "%".repeat(300)),
                 ..Default::default()
             })
             .collect();
-        let p = protocol_prompt_for(Lang::Fr, &t, None, true);
-        assert!(escaped_len(&p) <= PROTOCOL_BUDGET && p.contains(more(Lang::Fr).trim()));
+        for lang in [Lang::Fr, Lang::En] {
+            for ports in [None, Some(4120)] {
+                let p = protocol_prompt_for(lang, &t, ports, true);
+                assert!(
+                    escaped_len(&p) <= PROTOCOL_BUDGET
+                        && p.contains(more(lang).trim())
+                        && p.contains("1) 0 %"),
+                    "{lang:?} {ports:?}: {p}"
+                );
+            }
+        }
     }
 
     #[test]
@@ -2612,6 +2622,11 @@ mod tests {
             p.contains("src/a.ts | 3 ++-") && p.contains("[ATL-42]"),
             "{p}"
         );
+        // The language is asked for apart from the format, which Haiku could echo with it.
+        assert!(
+            p.contains("« type(portée facultative): description courte en minuscules » suivie de « [ATL-42] ». Écris-la en français."),
+            "{p}"
+        );
         // What the agent says is in place goes with the ticket.
         let mut t = t;
         t.progress = vec!["Tokens signés".into(), "Middleware réécrit".into()];
@@ -2622,11 +2637,6 @@ mod tests {
             "{p}"
         );
         assert!(!commit_prompt(Lang::Fr, &ticket_of_progress(&[]), "").contains("Avancement"));
-        // The language is asked for apart from the format, which Haiku could echo with it.
-        assert!(
-            p.contains("« type(portée facultative): description courte en minuscules » suivie de « [ATL-42] ». Écris-la en français."),
-            "{p}"
-        );
     }
 
     fn ticket_of_progress(items: &[&str]) -> Ticket {
