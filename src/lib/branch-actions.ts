@@ -94,6 +94,16 @@ export function askStash(title: string, again: () => unknown, onCancel?: () => v
   };
 }
 
+/**
+ * Why a local branch can be neither switched to nor deleted: a worktree other than the project's folder holds it (an
+ * agent's, named, or any other, by its folder). Null for the branch of the folder, and for a branch nothing holds.
+ */
+export function worktreeReason(b: BranchInfo): string | null {
+  if (b.current || !b.worktree) return null;
+  if (b.agent) return t('branches.picker.usedByWhy', { branch: b.name, agent: app.agents[b.agent]?.name ?? '?' });
+  return t('branches.picker.otherWorktreeWhy', { branch: b.name, path: b.worktree });
+}
+
 /** A branch that can be deleted: neither the one the project's folder is on nor one a worktree holds. */
 export const deletable = (b: BranchInfo) => b.remote || (!b.current && !b.worktree);
 

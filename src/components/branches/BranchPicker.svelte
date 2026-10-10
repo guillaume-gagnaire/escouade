@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { deletable, deleteBranch, switchBranch } from '../../lib/branch-actions';
+  import { deletable, deleteBranch, switchBranch, worktreeReason } from '../../lib/branch-actions';
   import { rankFiles } from '../../lib/editor/quick-open';
   import { trapFocus } from '../../lib/focus';
   import { gitSync, syncInfo, type SyncOp } from '../../lib/git-sync.svelte';
@@ -75,9 +75,7 @@
   /** Why `b` can't be picked: an agent's worktree (or another one) has its branch. */
   function reasonOf(b: BranchInfo): string | null {
     const h = held(b);
-    if (!h) return null;
-    if (h.agent) return t('branches.picker.usedByWhy', { branch: h.name, agent: app.agents[h.agent]?.name ?? '?' });
-    return t('branches.picker.otherWorktreeWhy', { branch: h.name, path: h.worktree ?? '' });
+    return h && worktreeReason(h);
   }
 
   /** The short word after a branch's name. */

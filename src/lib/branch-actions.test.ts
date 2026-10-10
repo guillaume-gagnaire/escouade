@@ -2,8 +2,17 @@ import { waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { setLang } from './i18n';
 import { app } from './state.svelte';
-import { branchInfo, fakeBackend, resetApp } from '../test/ipc';
-import { branchRefusal, deletable, deleteBranch, refusalText, remoteCopy, switchBranch, tellRefusal } from './branch-actions';
+import { agent, branchInfo, fakeBackend, resetApp } from '../test/ipc';
+import {
+  branchRefusal,
+  deletable,
+  deleteBranch,
+  refusalText,
+  remoteCopy,
+  switchBranch,
+  tellRefusal,
+  worktreeReason,
+} from './branch-actions';
 
 describe('branchRefusal', () => {
   it('reads the codes the backend refuses a branch operation with', () => {
@@ -182,6 +191,35 @@ describe('what can be deleted', () => {
     expect(remoteCopy(branchInfo({ name: 'feat', upstream: 'origin/feat', upstreamGone: true }))).toBeNull();
     expect(remoteCopy(branchInfo({ name: 'feat' }))).toBeNull();
     expect(remoteCopy(branchInfo({ name: 'origin/feat', remote: true }))).toBeNull();
+  });
+});
+
+describe('worktreeReason', () => {
+  beforeEach(() => resetApp({ agents: [agent({ id: 'a2', name: 'refacto-auth' })] }));
+
+  it('names the agent whose worktree holds a branch, or the folder of a worktree that is no agent’s', () => {
+    expect(worktreeReason(branchInfo({ name: 'escouade/x', worktree: 'C:/wt', agent: 'a2' }))).toBe(
+      'La branche « escouade/x » est utilisée par l’agent refacto-auth, dans son worktree.',
+    );
+    expect(worktreeReason(branchInfo({ name: 'elsewhere', worktree: 'D:/other' }))).toBe(
+      'La branche « elsewhere » est prise par le worktree D:/other.',
+    );
+    // An agent the app no longer knows is still told apart from a missing one.
+    expect(worktreeReason(branchInfo({ name: 'gone', worktree: 'C:/wt2', agent: 'zz' }))).toBe(
+      'La branche « gone » est utilisée par l’agent ?, dans son worktree.',
+    );
+  });
+
+  it('has nothing to say of the branch of the folder, nor of one no worktree holds', () => {
+    expect(worktreeReason(branchInfo({ name: 'main', current: true, worktree: 'C:/code/demo-api' }))).toBeNull();
+    expect(worktreeReason(branchInfo({ name: 'feat' }))).toBeNull();
+  });
+
+  it('writes it in English', () => {
+    setLang('en');
+    expect(worktreeReason(branchInfo({ name: 'escouade/x', worktree: 'C:/wt', agent: 'a2' }))).toBe(
+      'The branch “escouade/x” is used by agent refacto-auth, in its worktree.',
+    );
   });
 });
 
