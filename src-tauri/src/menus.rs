@@ -3,7 +3,9 @@
 //! changes (`relabel`).
 
 use crate::i18n::Lang;
-use tauri::menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu, WINDOW_SUBMENU_ID};
+use tauri::menu::{
+    AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu, HELP_SUBMENU_ID, WINDOW_SUBMENU_ID,
+};
 use tauri::{AppHandle, Runtime};
 
 /// The tray icon's id.
@@ -56,6 +58,7 @@ pub fn tray_menu<R: Runtime>(app: &AppHandle<R>, lang: Lang) -> tauri::Result<Me
 #[derive(Debug, PartialEq, Eq)]
 pub struct AppMenuLabels {
     pub about: String,
+    pub services: String,
     pub hide: String,
     pub hide_others: String,
     pub show_all: String,
@@ -67,15 +70,19 @@ pub struct AppMenuLabels {
     pub copy: String,
     pub paste: String,
     pub select_all: String,
+    pub view: String,
+    pub fullscreen: String,
     pub window: String,
     pub minimize: String,
     pub zoom: String,
     pub close: String,
+    pub help: String,
 }
 
 pub fn app_menu_labels(lang: Lang) -> AppMenuLabels {
     AppMenuLabels {
         about: tr_in!(lang, "À propos d’Escouade", "About Escouade"),
+        services: tr_in!(lang, "Services", "Services"),
         hide: tr_in!(lang, "Masquer Escouade", "Hide Escouade"),
         hide_others: tr_in!(lang, "Masquer les autres", "Hide Others"),
         show_all: tr_in!(lang, "Tout afficher", "Show All"),
@@ -87,17 +94,27 @@ pub fn app_menu_labels(lang: Lang) -> AppMenuLabels {
         copy: tr_in!(lang, "Copier", "Copy"),
         paste: tr_in!(lang, "Coller", "Paste"),
         select_all: tr_in!(lang, "Tout sélectionner", "Select All"),
+        view: tr_in!(lang, "Présentation", "View"),
+        // macOS writes it again as it toggles (« Quitter le mode plein écran »).
+        fullscreen: tr_in!(lang, "Passer en mode plein écran", "Enter Full Screen"),
         window: tr_in!(lang, "Fenêtre", "Window"),
         minimize: tr_in!(lang, "Placer dans le Dock", "Minimize"),
         zoom: tr_in!(lang, "Réduire/Agrandir", "Zoom"),
         close: tr_in!(lang, "Fermer", "Close"),
+        help: tr_in!(lang, "Aide", "Help"),
     }
 }
 
-/// macOS's app menu, set at startup in place of Tauri's default (written in English): the app's,
-/// Edit's (without it, the WebView's fields would neither copy nor paste) and Window's. Its
-/// entries are macOS's own (`PredefinedMenuItem`): « Quitter Escouade » ends the app as Cmd+Q
-/// does, through `RunEvent::Exit` (see `run`). Only macOS sets it; it builds everywhere.
+/// macOS's app menu, set at startup in place of Tauri's default (written in English), with the
+/// same menus: the app's, Edit (without it, the WebView's fields would neither copy nor paste),
+/// View, Window and Help. Its entries are macOS's own (`PredefinedMenuItem`): « Quitter Escouade »
+/// ends the app as Cmd+Q does, through `RunEvent::Exit` (see `run`). No File menu: Window's
+/// « Fermer » keeps Cmd+W. Only macOS sets it; it builds everywhere.
+///
+/// What macOS adds to it by itself (« Démarrer la dictée », « Emoji et symboles », the list of the
+/// windows, the about panel's texts) is in the system's language among those the bundle declares
+/// (`CFBundleLocalizations` in `src-tauri/Info.plist`, which Tauri merges): it follows the system,
+/// not the app's setting.
 pub fn app_menu<R: Runtime>(app: &AppHandle<R>, lang: Lang) -> tauri::Result<Menu<R>> {
     let l = app_menu_labels(lang);
     let package = app.package_info();
@@ -116,6 +133,8 @@ pub fn app_menu<R: Runtime>(app: &AppHandle<R>, lang: Lang) -> tauri::Result<Men
         true,
         &[
             &PredefinedMenuItem::about(app, Some(l.about.as_str()), Some(about))?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::services(app, Some(l.services.as_str()))?,
             &PredefinedMenuItem::separator(app)?,
             &PredefinedMenuItem::hide(app, Some(l.hide.as_str()))?,
             &PredefinedMenuItem::hide_others(app, Some(l.hide_others.as_str()))?,
@@ -151,7 +170,18 @@ pub fn app_menu<R: Runtime>(app: &AppHandle<R>, lang: Lang) -> tauri::Result<Men
             &PredefinedMenuItem::close_window(app, Some(l.close.as_str()))?,
         ],
     )?;
-    Menu::with_id_and_items(app, APP_MENU_ID, &[&own, &edit, &window])
+    let view = Submenu::with_items(
+        app,
+        &l.view,
+        true,
+        &[&PredefinedMenuItem::fullscreen(
+            app,
+            Some(l.fullscreen.as_str()),
+        )?],
+    )?;
+    // Its id makes it macOS's Help menu, which holds the search through the menus.
+    let help = Submenu::with_id_and_items(app, HELP_SUBMENU_ID, &l.help, true, &[])?;
+    Menu::with_id_and_items(app, APP_MENU_ID, &[&own, &edit, &view, &window, &help])
 }
 
 /// The native menus written again in `lang` after a change of language: the tray icon's menu and
@@ -201,6 +231,7 @@ mod tests {
         let all = |l: AppMenuLabels| {
             [
                 l.about,
+                l.services,
                 l.hide,
                 l.hide_others,
                 l.show_all,
@@ -212,16 +243,20 @@ mod tests {
                 l.copy,
                 l.paste,
                 l.select_all,
+                l.view,
+                l.fullscreen,
                 l.window,
                 l.minimize,
                 l.zoom,
                 l.close,
+                l.help,
             ]
         };
         assert_eq!(
             all(app_menu_labels(Fr)),
             [
                 "À propos d’Escouade",
+                "Services",
                 "Masquer Escouade",
                 "Masquer les autres",
                 "Tout afficher",
@@ -233,16 +268,20 @@ mod tests {
                 "Copier",
                 "Coller",
                 "Tout sélectionner",
+                "Présentation",
+                "Passer en mode plein écran",
                 "Fenêtre",
                 "Placer dans le Dock",
                 "Réduire/Agrandir",
                 "Fermer",
+                "Aide",
             ]
         );
         assert_eq!(
             all(app_menu_labels(En)),
             [
                 "About Escouade",
+                "Services",
                 "Hide Escouade",
                 "Hide Others",
                 "Show All",
@@ -254,10 +293,13 @@ mod tests {
                 "Copy",
                 "Paste",
                 "Select All",
+                "View",
+                "Enter Full Screen",
                 "Window",
                 "Minimize",
                 "Zoom",
                 "Close",
+                "Help",
             ]
         );
     }
@@ -294,6 +336,8 @@ mod tests {
                     &[
                         "À propos d’Escouade",
                         "",
+                        "Services",
+                        "",
                         "Masquer Escouade",
                         "Masquer les autres",
                         "Tout afficher",
@@ -313,14 +357,26 @@ mod tests {
                         "Tout sélectionner",
                     ]
                 ),
+                texts("Présentation", &["Passer en mode plein écran"]),
                 texts(
                     "Fenêtre",
                     &["Placer dans le Dock", "Réduire/Agrandir", "", "Fermer"]
                 ),
+                // Empty: macOS puts its search field in it.
+                texts("Aide", &[]),
             ]
         );
-        // macOS's Window menu, which lists the windows open.
-        assert_eq!(menu.items().unwrap()[2].id().as_ref(), WINDOW_SUBMENU_ID);
+        // macOS's Window menu, which lists the windows open, and its Help menu.
+        let ids: Vec<String> = menu
+            .items()
+            .unwrap()
+            .iter()
+            .map(|item| item.id().as_ref().to_string())
+            .collect();
+        assert_eq!(
+            (ids[3].as_str(), ids[4].as_str()),
+            (WINDOW_SUBMENU_ID, HELP_SUBMENU_ID)
+        );
     }
 
     #[cfg(not(target_os = "macos"))]
@@ -332,7 +388,7 @@ mod tests {
         let menu = app.menu().unwrap();
         assert_eq!(menu.id().as_ref(), APP_MENU_ID);
         let names: Vec<String> = submenus(&menu).into_iter().map(|(name, _)| name).collect();
-        assert_eq!(names[1..], ["Edit", "Window"]);
+        assert_eq!(names[1..], ["Edit", "View", "Window", "Help"]);
         assert_eq!(submenus(&menu)[1].1[0], "Undo");
         // One the app did not make stays as it is.
         let other = Menu::with_items(
