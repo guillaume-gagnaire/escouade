@@ -1330,6 +1330,80 @@ pub async fn switch_to(repo: &str, name: &str) -> Result<String> {
     }
 }
 
+/// The operation the checkout at `repo` is in the middle of, by what git leaves in its git folder
+/// while it waits for the user: `merge`, `cherry-pick`, `revert` or `rebase` (an `am` is one).
+pub async fn operation_in_progress(repo: &str) -> Option<&'static str> {
+    const MARKERS: [(&str, &str); 5] = [
+        ("MERGE_HEAD", "merge"),
+        ("CHERRY_PICK_HEAD", "cherry-pick"),
+        ("REVERT_HEAD", "revert"),
+        ("rebase-merge", "rebase"),
+        ("rebase-apply", "rebase"),
+    ];
+    // The git folder of the checkout itself: a linked worktree's own, not the main one's.
+    let mut args = vec!["rev-parse"];
+    for (marker, _) in MARKERS {
+        args.extend(["--git-path", marker]);
+    }
+    let paths = text(repo, &args).await.ok()?;
+    paths
+        .lines()
+        .zip(MARKERS)
+        .find_map(|(path, (_, operation))| {
+            // Relative to the folder git was run in.
+            Path::new(repo).join(path).exists().then_some(operation)
+        })
+}
+
+/// Refused: the folder is in the middle of `operation` (`operation_in_progress`).
+pub fn operation_refusal(lang: crate::i18n::Lang, operation: &str) -> String {
+    tr_in!(
+        lang,
+        "Un {operation} est en cours dans le dossier du projet : termine-le ou abandonne-le avant de changer de branche.",
+        "A {operation} is in progress in the project’s folder: finish or abort it before switching branches."
+    )
+}
+
+/// How many commits a detached HEAD has that no branch, remote branch or tag has: leaving it
+/// leaves them to the reflog. 0 on a branch (even one without commit yet).
+pub async fn detached_commits(repo: &str) -> Result<u32> {
+    if !head_branch(repo).await.is_empty() {
+        return Ok(0);
+    }
+    let n = text(
+        repo,
+        &[
+            "rev-list",
+            "--count",
+            "HEAD",
+            "--not",
+            "--branches",
+            "--remotes",
+            "--tags",
+        ],
+    )
+    .await?;
+    n.parse().map_err(|_| {
+        anyhow::anyhow!(tr!(
+            "git rev-list a répondu « {n} »",
+            "git rev-list answered “{n}”"
+        ))
+    })
+}
+
+/// Refused: the folder is on a detached HEAD with `commits` that no branch has.
+pub fn detached_refusal(lang: crate::i18n::Lang, commits: u32) -> String {
+    tr_n_in!(
+        lang,
+        commits,
+        "Le dossier du projet est sur un HEAD détaché qui porte {n} commit qu’aucune branche n’a : crée une branche ici avant de partir, sinon il ne sera plus que dans le reflog.",
+        "Le dossier du projet est sur un HEAD détaché qui porte {n} commits qu’aucune branche n’a : crée une branche ici avant de partir, sinon ils ne seront plus que dans le reflog.",
+        "The project’s folder is on a detached HEAD that holds {n} commit no branch has: create a branch here before leaving, or it will only be in the reflog.",
+        "The project’s folder is on a detached HEAD that holds {n} commits no branch has: create a branch here before leaving, or they will only be in the reflog.",
+        n = commits
+    )
+}
+
 const LATEST_STASH: [&str; 4] = ["rev-parse", "--verify", "--quiet", "refs/stash"];
 
 /// Puts the uncommitted changes of tracked files aside (staged ones included) in a stash named
@@ -4146,6 +4220,101 @@ mod repo_tests {
             files_in_the_way(En, &files)
         );
         assert!(!files_in_the_way(En, &files).contains("f11.txt"));
+    }
+
+    #[tokio::test]
+    async fn an_operation_under_way_in_the_folder_is_known() {
+        let r = repo("git-g1f-operation");
+        assert_eq!(operation_in_progress(&r).await, None);
+        let git_dir = Path::new(&r).join(".git");
+        // What git leaves while a merge, a pick, a revert or a rebase waits for the user.
+        let markers = [
+            ("MERGE_HEAD", "merge", false),
+            ("CHERRY_PICK_HEAD", "cherry-pick", false),
+            ("REVERT_HEAD", "revert", false),
+            ("rebase-merge", "rebase", true),
+            ("rebase-apply", "rebase", true),
+        ];
+        for (marker, operation, is_dir) in markers {
+            let path = git_dir.join(marker);
+            if is_dir {
+                std::fs::create_dir(&path).unwrap();
+            } else {
+                std::fs::write(&path, "0123456789012345678901234567890123456789\n").unwrap();
+            }
+            assert_eq!(operation_in_progress(&r).await, Some(operation), "{marker}");
+            if is_dir {
+                std::fs::remove_dir(&path).unwrap();
+            } else {
+                std::fs::remove_file(&path).unwrap();
+            }
+        }
+        assert_eq!(operation_in_progress(&r).await, None);
+        // A real one: a merge that stops before its commit.
+        git(&r, &["branch", "side"]);
+        git(&r, &["switch", "-q", "side"]);
+        std::fs::write(Path::new(&r).join("side.txt"), "s\n").unwrap();
+        git(&r, &["add", "-A"]);
+        git(&r, &["commit", "-qm", "side"]);
+        git(&r, &["switch", "-q", "main"]);
+        git(&r, &["merge", "-q", "--no-commit", "--no-ff", "side"]);
+        assert_eq!(operation_in_progress(&r).await, Some("merge"));
+    }
+
+    #[test]
+    fn what_stops_a_switch_is_told_in_both_languages() {
+        use crate::i18n::Lang::{En, Fr};
+        assert_eq!(
+            [operation_refusal(En, "rebase"), operation_refusal(Fr, "merge")],
+            [
+                "A rebase is in progress in the project’s folder: finish or abort it before switching branches.",
+                "Un merge est en cours dans le dossier du projet : termine-le ou abandonne-le avant de changer de branche."
+            ]
+        );
+        assert_eq!(
+            [1, 3].map(|n| detached_refusal(En, n)),
+            [
+                "The project’s folder is on a detached HEAD that holds 1 commit no branch has: create a branch here before leaving, or it will only be in the reflog.",
+                "The project’s folder is on a detached HEAD that holds 3 commits no branch has: create a branch here before leaving, or they will only be in the reflog."
+            ]
+        );
+        assert_eq!(
+            [1, 3].map(|n| detached_refusal(Fr, n)),
+            [
+                "Le dossier du projet est sur un HEAD détaché qui porte 1 commit qu’aucune branche n’a : crée une branche ici avant de partir, sinon il ne sera plus que dans le reflog.",
+                "Le dossier du projet est sur un HEAD détaché qui porte 3 commits qu’aucune branche n’a : crée une branche ici avant de partir, sinon ils ne seront plus que dans le reflog."
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn the_commits_only_a_detached_head_has_are_counted() {
+        let r = repo("git-g1f-detached");
+        let commit = |msg: &str| git(&r, &["commit", "-q", "--allow-empty", "-m", msg]);
+        // On a branch: nothing is at risk.
+        assert_eq!(detached_commits(&r).await.unwrap(), 0);
+        // Detached on a commit a branch has.
+        git(&r, &["switch", "-q", "--detach"]);
+        assert_eq!(detached_commits(&r).await.unwrap(), 0);
+        commit("one");
+        commit("two");
+        assert_eq!(detached_commits(&r).await.unwrap(), 2);
+        // A tag keeps them findable; so does a branch.
+        git(&r, &["tag", "keep"]);
+        assert_eq!(detached_commits(&r).await.unwrap(), 0);
+        git(&r, &["tag", "-d", "keep"]);
+        commit("three");
+        assert_eq!(detached_commits(&r).await.unwrap(), 3);
+        git(&r, &["branch", "rescue"]);
+        assert_eq!(detached_commits(&r).await.unwrap(), 0);
+        // A remote branch too.
+        commit("four");
+        git(&r, &["update-ref", "refs/remotes/origin/x", "HEAD"]);
+        assert_eq!(detached_commits(&r).await.unwrap(), 0);
+        // A repository with no commit yet is on a branch.
+        let fresh = crate::paths::test_dir("git-g1f-detached-fresh");
+        git(&s(&fresh), &["init", "-q", "-b", "main"]);
+        assert_eq!(detached_commits(&s(&fresh)).await.unwrap(), 0);
     }
 
     #[tokio::test]

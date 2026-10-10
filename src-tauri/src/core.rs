@@ -4286,6 +4286,23 @@ impl<R: Runtime> Core<R> {
         Ok(())
     }
 
+    /// Before the folder at `root` leaves where it is, refused (in words, before anything is put
+    /// aside) in the middle of a merge, cherry-pick, revert or rebase, which a switch would
+    /// scramble, and from a detached HEAD whose commits no branch has, which the switch would
+    /// leave to the reflog. `head_kept`: the branch it goes to starts at HEAD, so it keeps them.
+    async fn may_leave(&self, root: &str, head_kept: bool) -> Result<()> {
+        if let Some(operation) = git::operation_in_progress(root).await {
+            bail!(git::operation_refusal(i18n::ui(), operation));
+        }
+        if !head_kept {
+            let commits = git::detached_commits(root).await?;
+            if commits > 0 {
+                bail!(git::detached_refusal(i18n::ui(), commits));
+            }
+        }
+        Ok(())
+    }
+
     /// Before the folder at `root` goes to `branch`: refused with uncommitted changes to tracked
     /// files (`DIRTY`), unless `stash`: then they are put aside in a stash named for `branch`,
     /// whose name is returned. Untracked files stay, as git carries them over (refusing what they
@@ -4348,8 +4365,11 @@ impl<R: Runtime> Core<R> {
     /// Switches the project's folder to `name`: a local branch, or a remote one (`origin/feat`)
     /// through the local branch that tracks it (made when there is none). Refused for a branch an
     /// agent's worktree holds (`IN_WORKTREE`), while an agent without worktree works in the folder
-    /// (`AGENT_WORKING`), and with uncommitted changes (`DIRTY`) unless `stash`: they are put aside
-    /// first, and back if the switch fails. Returns the stash's name when one was made.
+    /// (`AGENT_WORKING`, any project's on this checkout), in the middle of a merge, cherry-pick,
+    /// revert or rebase, from a detached HEAD whose commits no branch has (in words), and with
+    /// uncommitted changes (`DIRTY`) unless `stash`: they are put aside first, and back if the
+    /// switch fails (else the error says which stash holds them). Returns the stash's name when
+    /// one was made.
     pub async fn branch_switch(
         self: &Arc<Self>,
         project_id: &str,
@@ -4368,6 +4388,7 @@ impl<R: Runtime> Core<R> {
             }
         }
         self.no_agent_at_work(&root).await?;
+        self.may_leave(&root, false).await?;
         let stashed = self.put_aside(&root, name, stash).await?;
         let switched = git::switch_to(&root, name).await;
         let mut restored = Ok(());
@@ -4409,7 +4430,9 @@ impl<R: Runtime> Core<R> {
         if switch {
             self.no_agent_at_work(&root).await?;
             let head = git::commit_of(&root, "HEAD").await.ok();
-            if head.as_deref() != Some(commit.as_str()) {
+            let from_head = head.as_deref() == Some(commit.as_str());
+            self.may_leave(&root, from_head).await?;
+            if !from_head {
                 stashed = self.put_aside(&root, name, stash).await?;
             }
         }

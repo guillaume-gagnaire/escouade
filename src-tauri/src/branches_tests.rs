@@ -276,6 +276,86 @@ async fn changes_that_cannot_come_back_are_found_in_a_stash_the_error_names() {
 }
 
 #[tokio::test]
+async fn a_merge_under_way_stops_a_switch_before_anything_is_put_aside() {
+    let h = harness("g1f-switch-merging");
+    let (p, r) = h.project(false).await;
+    work_on(&r, "side", "const a = 2;\n");
+    git(&r, &["branch", "other"]);
+    // A merge that waits for its commit, and a change of the user's on top.
+    git(&r, &["merge", "-q", "--no-commit", "--no-ff", "side"]);
+    std::fs::write(r.join("src").join("app.ts"), "const a = 3; // wip\n").unwrap();
+    for stash in [false, true] {
+        let e = h
+            .core
+            .branch_switch(&p.id, "other", stash)
+            .await
+            .unwrap_err();
+        assert!(e.downcast_ref::<BranchRefusal>().is_none(), "{e:#}");
+        assert!(e.to_string().contains("merge"), "{e}");
+    }
+    let e = h
+        .core
+        .branch_create(&p.id, "next", "other", true, true)
+        .await
+        .unwrap_err();
+    assert!(e.to_string().contains("merge"), "{e}");
+    // Nothing moved, nothing stashed, the merge and the change as they were.
+    assert_eq!(current(&r), "main");
+    assert!(!exists(&r, "next"));
+    assert_eq!(git(&r, &["stash", "list"]), "");
+    assert_eq!(app_ts(&r), "const a = 3; // wip\n");
+    assert!(r.join(".git").join("MERGE_HEAD").exists());
+    // Making a branch without going there is no leaving.
+    h.core
+        .branch_create(&p.id, "kept", "other", false, false)
+        .await
+        .unwrap();
+    assert!(exists(&r, "kept"));
+}
+
+#[tokio::test]
+async fn commits_only_a_detached_head_has_are_not_left_behind_but_a_branch_made_there_keeps_them() {
+    let h = harness("g1f-switch-detached");
+    let (p, r) = h.project(false).await;
+    git(&r, &["branch", "side"]);
+    // Detached on a commit a branch has: free to leave.
+    git(&r, &["switch", "-q", "--detach"]);
+    h.core.branch_switch(&p.id, "side", false).await.unwrap();
+    assert_eq!(current(&r), "side");
+    // Two commits of its own, no branch has them.
+    git(&r, &["switch", "-q", "--detach"]);
+    commit_change(&r, "const a = 2;\n", "one");
+    commit_change(&r, "const a = 3;\n", "two");
+    let head = git(&r, &["rev-parse", "HEAD"]);
+    let e = h
+        .core
+        .branch_switch(&p.id, "main", false)
+        .await
+        .unwrap_err();
+    assert!(e.downcast_ref::<BranchRefusal>().is_none(), "{e:#}");
+    assert!(e.to_string().contains("2 commits"), "{e}");
+    // A start elsewhere leaves them too; not the new branch's own start at HEAD.
+    let e = h
+        .core
+        .branch_create(&p.id, "next", "main", true, true)
+        .await
+        .unwrap_err();
+    assert!(e.to_string().contains("2 commits"), "{e}");
+    assert!(!exists(&r, "next"));
+    assert_eq!(current(&r), "");
+    assert_eq!(git(&r, &["rev-parse", "HEAD"]), head);
+    // A branch made at HEAD holds them: the way out.
+    h.core
+        .branch_create(&p.id, "rescue", "", true, false)
+        .await
+        .unwrap();
+    assert_eq!(current(&r), "rescue");
+    assert_eq!(git(&r, &["rev-parse", "rescue"]), head);
+    h.core.branch_switch(&p.id, "main", false).await.unwrap();
+    assert_eq!(current(&r), "main");
+}
+
+#[tokio::test]
 async fn untracked_files_a_switch_would_overwrite_are_named_and_stay_where_they_are() {
     let h = harness("g1f-switch-untracked");
     let (p, r) = h.project(false).await;
