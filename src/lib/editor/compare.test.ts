@@ -1,9 +1,9 @@
 import { history, undo } from '@codemirror/commands';
-import { getChunks, rejectChunk } from '@codemirror/merge';
+import { getChunks, rejectChunk, type Change } from '@codemirror/merge';
 import { Compartment, EditorState, type TransactionSpec } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { afterEach, describe, expect, it } from 'vitest';
-import { comparison, showComparison, type Comparison } from './compare';
+import { blockDiff, comparison, showComparison, type Comparison } from './compare';
 
 const views: EditorView[] = [];
 afterEach(() => views.splice(0).forEach((v) => v.destroy()));
@@ -30,6 +30,25 @@ const buttons = (view: EditorView) => [...view.dom.querySelectorAll<HTMLButtonEl
 /** The blocks with no line on either side: nothing drawn, and nothing for their button to put back. */
 const emptyBlocks = (state: EditorState) =>
   (getChunks(state)?.chunks ?? []).filter((c) => c.fromA === c.toA && c.fromB === c.toB).map((c) => [c.fromA, c.fromB]);
+
+/** Why `changes` is not a diff from `a` to `b` (out of order, overlapping, empty, or not giving `b` once applied); null when it is. */
+function notADiff(changes: readonly Change[], a: string, b: string): string | null {
+  let out = '';
+  let posA = 0;
+  let posB = 0;
+  for (const c of changes) {
+    const at = JSON.stringify([c.fromA, c.toA, c.fromB, c.toB]);
+    if (c.fromA < posA || c.fromB < posB) return `out of order or overlapping at ${at}`;
+    if (c.fromA > c.toA || c.fromB > c.toB) return `backwards at ${at}`;
+    if (c.fromA === c.toA && c.fromB === c.toB) return `empty at ${at}`;
+    if (c.fromA - posA !== c.fromB - posB) return `gaps of different lengths before ${at}`;
+    out += a.slice(posA, c.fromA) + b.slice(c.fromB, c.toB);
+    posA = c.toA;
+    posB = c.toB;
+  }
+  out += a.slice(posA);
+  return out === b ? null : 'does not give b once applied to a';
+}
 
 /** Numbers between 0 and 1, the same ones each run (mulberry32). */
 function seeded(seed: number) {
@@ -169,35 +188,59 @@ describe('comparison', () => {
       [BRACES, BRACES.replace('\n\n}', '\n\n\n}')],
       [FENCE.replace('\n\n```', '\n\n\n```'), FENCE],
       [FENCE, FENCE.replace('```\n\n', '```\n\n\n')],
+      // Blank lines added or removed within a run of lines rewritten (the line diff's heuristics leave the run
+      // larger than it needs to be), where the character diff puts a line break added at the start of the same ones.
+      ['\n\n{\n\n\n// c\n\n\n\n// c\n{\n\n', '// c\n\n\n// c\n{\nx'],
+      ['\n\n}\n// c\n// c\n\n\n\n\nx\n\n{\n\nx\n\n\n\n\n{\n}\nx\nx\n{\n', '\n\n}\n// c\n}\n// c\n\n\n\n\nx\n\n\n\n\n{\n'],
     ];
     for (const [doc, original] of pairs) {
       const { view } = editor(doc, { original, against: 'reference' });
       expect(emptyBlocks(view.state), JSON.stringify([doc, original])).toEqual([]);
-      for (let i = 0; i < 20 && buttons(view).length; i++) buttons(view)[0].click();
+      expect(notADiff(blockDiff(original, doc), original, doc), JSON.stringify([doc, original])).toBeNull();
+      for (let i = 0; i < 20 && buttons(view).length; i++) {
+        const before = view.state.doc.toString();
+        buttons(view)[0].click();
+        // Each block puts something back.
+        expect(view.state.doc.toString(), JSON.stringify([doc, original])).not.toBe(before);
+      }
       expect(view.state.doc.toString(), JSON.stringify([doc, original])).toBe(original);
     }
   });
 
+  it('moves a change past the same characters without cutting a surrogate pair', () => {
+    // The diff moves a change past the same characters that follow it one at a time; an emoji is two of them.
+    const changes = blockDiff('x\n😁\n', 'x\n😀😁\n').map((c) => [c.fromA, c.toA, c.fromB, c.toB]);
+    expect(changes).toEqual([[2, 2, 2, 4]]);
+  });
+
   it('puts the other version back block by block, a block never empty, for thousands of texts and of keys typed in them', () => {
     const random = seeded(20261010);
-    const LINES = ['', '', '', '}', '{', '  run();', '  go();', '```', '# Titre', 'function a() {', 'x', 'y'];
+    const LINES = ['', '', '', '}', '{', '  run();', '  go();', '```', '# Titre', 'function a() {', 'x', 'y', '// c'];
     const pick = () => LINES[Math.floor(random() * LINES.length)];
-    /** A few lines added, removed or replaced, and the last line break sometimes taken away or added. */
+    const some = () => Array.from({ length: Math.floor(random() * 7) }, pick);
+    /**
+     * A few lines added, removed or replaced, or a block of lines replaced by other ones, and the last line break
+     * sometimes taken away or added.
+     */
     const edit = (lines: string[]) => {
       const out = [...lines];
       for (let n = 1 + Math.floor(random() * 3); n > 0; n--) {
         const at = Math.floor(random() * (out.length + 1));
         const what = random();
-        if (what < 0.4) out.splice(at, 0, pick());
-        else if (what < 0.7) out.splice(at, 1);
-        else out.splice(at, 1, pick());
+        if (what < 0.25) out.splice(at, 0, pick());
+        else if (what < 0.45) out.splice(at, 1);
+        else if (what < 0.65) out.splice(at, 1, pick());
+        else out.splice(at, 1 + Math.floor(random() * 6), ...some());
       }
       return out;
     };
     const text = (lines: string[]) => lines.join('\n') + (random() < 0.8 ? '\n' : '');
     const failures: string[] = [];
-    for (let n = 0; n < 3000; n++) {
-      const lines = Array.from({ length: Math.floor(random() * 25) }, pick);
+    for (let n = 0; n < 6000; n++) {
+      // One text in ten is longer than the merge view's margin (1 000 characters): a key typed in it diffs again only
+      // a slice around it, cut at an arbitrary character.
+      const long = random() < 0.1;
+      const lines = Array.from({ length: long ? 40 + Math.floor(random() * 560) : Math.floor(random() * 25) }, pick);
       const original = text(lines);
       let state = EditorState.create({
         doc: text(edit(lines)),
@@ -211,13 +254,21 @@ describe('comparison', () => {
         }).state;
       }
       const doc = state.doc.toString();
-      if (emptyBlocks(state).length) failures.push(`empty block: ${JSON.stringify([doc, original])}`);
-      // What « Annuler ce bloc » does, block after block.
+      const pair = JSON.stringify([doc, original]);
+      const why = notADiff(blockDiff(original, doc), original, doc);
+      if (why) failures.push(`${why}: ${pair}`);
+      if (emptyBlocks(state).length) failures.push(`empty block: ${pair}`);
+      // What « Annuler ce bloc » does, block after block: each one puts something back.
       const view = { state, dispatch: (spec: TransactionSpec) => (view.state = view.state.update(spec).state) };
       for (let i = 0; i < 50 && getChunks(view.state)?.chunks.length; i++) {
+        const before = view.state.doc;
         rejectChunk(view as unknown as EditorView, getChunks(view.state)!.chunks[0].fromB);
+        if (view.state.doc.eq(before)) {
+          failures.push(`a block that puts nothing back: ${pair}`);
+          break;
+        }
       }
-      if (view.state.doc.toString() !== original) failures.push(`not put back: ${JSON.stringify([doc, original])}`);
+      if (view.state.doc.toString() !== original) failures.push(`not put back: ${pair}`);
     }
     expect({ failures: failures.length, first: failures.slice(0, 3) }).toEqual({ failures: 0, first: [] });
   });

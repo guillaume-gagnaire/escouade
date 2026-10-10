@@ -55,13 +55,22 @@ function starts(pieces: readonly string[]): number[] {
 
 /**
  * The merge view's own limit on the changes scanned, past which a diff gives a cruder answer at once, and the
- * gutter's limit on the time it takes, a bound whatever the lines (the same few over and over give no anchor).
+ * gutter's limit on the time one takes. Each call to `diff` gets its own 300 ms: a stretch of lines between two
+ * anchors (the same few lines over and over give none, so a stretch can be the whole file), then each run of
+ * characters.
  */
 const BOUNDED = { scanLimit: 500, timeout: DIFF_TIMEOUT };
 
-/** The diff of `a` and `b` within the limit, its changes moved to where the two strings start in a longer one. */
+/**
+ * The diff of `a` and `b` within the limit, its changes moved to where the two strings start in a longer one. The
+ * merge view's diff sometimes gives an empty change: its common-prefix check compares the start of one range with
+ * the end of the other (`fromA == toB`, a slip), misses a prefix, and the shortcut that follows splits off nothing.
+ * Left out, as the merge view would draw it as a block with nothing to put back.
+ */
 function boundedDiff(a: string, b: string, fromA: number, fromB: number, out: Change[]) {
-  for (const c of diff(a, b, BOUNDED)) out.push(new Change(c.fromA + fromA, c.toA + fromA, c.fromB + fromB, c.toB + fromB));
+  for (const c of diff(a, b, BOUNDED)) {
+    if (c.fromA < c.toA || c.fromB < c.toB) out.push(new Change(c.fromA + fromA, c.toA + fromA, c.fromB + fromB, c.toB + fromB));
+  }
 }
 
 /** Of `pairs`, in the order of their second item, the longest run whose first items increase too. */
@@ -113,23 +122,29 @@ function lineRuns(a: string, b: string): Change[] {
   return runs;
 }
 
+const isHighSurrogate = (code: number) => code >= 0xd800 && code <= 0xdbff;
+const isLowSurrogate = (code: number) => code >= 0xdc00 && code <= 0xdfff;
+
 /**
- * The runs of lines only added (or only removed) moved down past the same lines that follow them, as far as the
- * lines in common before the next run go: where a diff of the characters puts them. The line diff puts one at the
- * start of the same lines instead; begun at an empty line on both sides (a blank line added next to another), it is
- * taken by the merge view for the end of the line above and drawn as an empty block, with nothing to put back.
+ * The changes that only add (or only remove) text, each moved forward one character at a time while its first
+ * character is the one just after it, as far as the text in common before the next change goes: where taking the
+ * common start off two texts puts one. Diffed line by line, then run by run, a change can be left at the start of
+ * the same characters instead (the line diff's heuristics are not minimal, and a run's diff knows nothing past the
+ * run); begun at an empty line on both sides, a line break added or removed there is taken by the merge view for the
+ * end of the line above and drawn as an empty block, with nothing to put back. Moved forward, a change never begins
+ * with the character that follows it, so never there. A move stops short of the middle of a surrogate pair.
  */
-function slideDown(runs: readonly Change[], a: string, b: string): Change[] {
-  return runs.map((r, n) => {
-    const endA = n + 1 < runs.length ? runs[n + 1].fromA : a.length;
-    const endB = n + 1 < runs.length ? runs[n + 1].fromB : b.length;
-    let { fromA, toA, fromB, toB } = r;
-    if (fromA === toA) {
-      while (toB < endB && fromA < endA && b[fromB] === b[toB]) [fromA, toA, fromB, toB] = [fromA + 1, toA + 1, fromB + 1, toB + 1];
-    } else if (fromB === toB) {
-      while (toA < endA && fromB < endB && a[fromA] === a[toA]) [fromA, toA, fromB, toB] = [fromA + 1, toA + 1, fromB + 1, toB + 1];
-    }
-    return new Change(fromA, toA, fromB, toB);
+function slideForward(changes: readonly Change[], a: string, b: string): Change[] {
+  return changes.map((c, n) => {
+    const endA = n + 1 < changes.length ? changes[n + 1].fromA : a.length;
+    const endB = n + 1 < changes.length ? changes[n + 1].fromB : b.length;
+    // The text that has the change, and where the change is in it.
+    const [text, from, to] = c.fromA === c.toA ? [b, c.fromB, c.toB] : c.fromB === c.toB ? [a, c.fromA, c.toA] : [null, 0, 0];
+    if (!text) return c;
+    let by = 0;
+    while (c.toA + by < endA && c.toB + by < endB && text.charCodeAt(from + by) === text.charCodeAt(to + by)) by++;
+    if (by && isLowSurrogate(text.charCodeAt(from + by)) && isHighSurrogate(text.charCodeAt(from + by - 1))) by--;
+    return by ? new Change(c.fromA + by, c.toA + by, c.fromB + by, c.toB + by) : c;
   });
 }
 
@@ -140,23 +155,23 @@ function slideDown(runs: readonly Change[], a: string, b: string): Change[] {
  * which the merge view diffs again each time. Line by line, both are quick; within a run, the limit keeps a big one
  * quick and only cruder.
  */
-function blockDiff(a: string, b: string): readonly Change[] {
+export function blockDiff(a: string, b: string): readonly Change[] {
   const linesA = linesOf(a);
   const linesB = linesOf(b);
   const tokens = lineTokens(linesA, linesB);
   const out: Change[] = [];
-  if (!tokens) {
+  if (tokens) {
+    const atA = starts(linesA);
+    const atB = starts(linesB);
+    for (const run of lineRuns(tokens[0], tokens[1])) {
+      const fromA = atA[run.fromA];
+      const fromB = atB[run.fromB];
+      boundedDiff(a.slice(fromA, atA[run.toA]), b.slice(fromB, atB[run.toB]), fromA, fromB, out);
+    }
+  } else {
     boundedDiff(a, b, 0, 0, out);
-    return out;
   }
-  const atA = starts(linesA);
-  const atB = starts(linesB);
-  for (const run of slideDown(lineRuns(tokens[0], tokens[1]), tokens[0], tokens[1])) {
-    const fromA = atA[run.fromA];
-    const fromB = atB[run.fromB];
-    boundedDiff(a.slice(fromA, atA[run.toA]), b.slice(fromB, atB[run.toB]), fromA, fromB, out);
-  }
-  return out;
+  return slideForward(out, a, b);
 }
 
 function compareView(c: Comparison): Extension {
