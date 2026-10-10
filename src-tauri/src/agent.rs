@@ -1335,7 +1335,8 @@ fn capped(text: &str, cut: &mut bool) -> String {
 
 /// What a tool is asked to act on, as the conversation's card sums it up (`toolArg` in
 /// `src/lib/tools.ts`): the command, the file from the agent's folder, the search…, its line
-/// breaks kept.
+/// breaks kept. `SUMMED_UP` there lists the tools whose summary says all a permission asks:
+/// only those are answered from « Vue d'ensemble ».
 fn tool_arg(tool: &str, input: &Value, cwd: &str) -> String {
     let text = |key: &str| input[key].as_str().unwrap_or_default().to_string();
     let path = |key: &str| {

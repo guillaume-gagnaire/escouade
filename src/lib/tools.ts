@@ -19,6 +19,26 @@ export function toolLabel(name: string): string {
   return name;
 }
 
+/**
+ * Tools whose summary (`toolArg`, and `tool_arg` in the backend) says what a permission asks: the command, the file,
+ * the search, the address. Another tool's says part of it at most (an MCP tool's first field, a subagent's title, a
+ * skill's name): asked for permission, it is read in the conversation, where the whole request is.
+ */
+export const SUMMED_UP: ReadonlySet<string> = new Set([
+  'Bash',
+  'PowerShell',
+  'SlashCommand',
+  'Read',
+  'Edit',
+  'Write',
+  'MultiEdit',
+  'NotebookEdit',
+  'Grep',
+  'Glob',
+  'WebFetch',
+  'WebSearch',
+]);
+
 export function toolArg(t: ToolItem, cwd: string): string {
   const i = t.input ?? {};
   const p = (x: unknown) => (typeof x === 'string' ? relPath(cwd, x) : '');

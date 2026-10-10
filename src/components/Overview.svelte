@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, untrack } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import { ticketTag } from '../lib/board';
   import { fPct, fSince, fWhen, plural } from '../lib/format';
   import { api } from '../lib/ipc';
@@ -7,7 +7,8 @@
   import { modelLabel } from '../lib/models';
   import { contextUse, ESTIMATE_HINT, fSpentUsd, spent } from '../lib/spend';
   import { app } from '../lib/state.svelte';
-  import { toolLabel } from '../lib/tools';
+  import { revealHidden } from '../lib/recipe';
+  import { SUMMED_UP, toolLabel } from '../lib/tools';
   import type { Agent, PendingRequest, Project } from '../lib/types';
   import StatusDot from './StatusDot.svelte';
 
@@ -67,23 +68,30 @@
   const current = $derived(chosen && order.includes(chosen) ? chosen : (order[0] ?? null));
   /** Answers on their way, by agent: its buttons wait for the backend. */
   let busy = $state<Record<string, boolean>>({});
-  /** Rows whose request just changed, by agent: their buttons wait `HOLD_MS`. */
+  /** Rows whose place or request just changed, by agent: their buttons wait `HOLD_MS`. */
   let held = $state<Record<string, boolean>>({});
   const holdTimers = new Map<string, ReturnType<typeof setTimeout>>();
-  /** The request each waiting row shows, by agent, as last drawn (null before the first drawing). */
+  /** What each waiting row shows, by agent, as last drawn: its place in the list and its request (null before the first drawing). */
   let shown: Record<string, string> | null = null;
   /** Arguments taller than their four lines, by request: shown cut, they are answered in the conversation. */
   let overflows = $state<Record<string, boolean>>({});
 
-  // A row whose request changes (the next one after an answer, one that comes) holds its buttons a moment: the click
-  // meant for what was there must not answer what is there now. Not the rows drawn when the view opens.
+  // A row that changes under the pointer holds its buttons a moment: the click meant for what was there must not answer
+  // what is there now. It changes when its request does (the next one after an answer, the same one asked again with
+  // other words), and when it moves (a row above answered, or a new one above it: every row below slides). Not the rows
+  // drawn when the view opens.
   $effect.pre(() => {
-    const now = Object.fromEntries(waiting.flatMap((a) => (requestOf(a) ? [[a.id, requestOf(a)!.id]] : [])));
+    const now = Object.fromEntries(
+      waiting.map((a, i) => {
+        const r = requestOf(a);
+        return [a.id, JSON.stringify([i, r?.id, r?.arg, r?.description, r?.reason])];
+      }),
+    );
     const before = shown;
     shown = now;
     if (!before) return;
     untrack(() => {
-      for (const [agentId, id] of Object.entries(now)) if (before[agentId] !== id) hold(agentId);
+      for (const [agentId, what] of Object.entries(now)) if (before[agentId] !== what) hold(agentId);
     });
   });
   $effect(() => () => holdTimers.forEach(clearTimeout));
@@ -101,25 +109,48 @@
   }
 
   /**
-   * Whether a permission's argument is shown whole: not cut by the backend, within its four lines, and none of them
-   * wrapping past them. Only then is it answered on the spot.
+   * Why a permission is not answered on the spot, null when it is: only what is read whole here is. A tool whose
+   * summary says part of what it asks at most (an MCP tool's, a subagent's), or says nothing, is read in the
+   * conversation; so is an argument cut by the backend, longer than its four lines, or wrapping past them (`shown`: the
+   * argument as drawn, its hidden characters spelled out).
    */
-  function whole(req: PendingRequest): boolean {
-    return !req.cut && req.arg.split('\n').length <= ARG_LINES && !overflows[req.id];
+  function notHere(req: PendingRequest, shown: string): string | null {
+    if (!SUMMED_UP.has(req.tool) || !shown.trim()) return 'À lire dans la conversation avant de répondre.';
+    if (req.cut || shown.split('\n').length > ARG_LINES || overflows[req.id]) {
+      return 'Trop long pour être lu ici : lis-la et réponds dans la conversation.';
+    }
+    return null;
   }
 
-  /** Tells, as its size changes, whether the argument of `id` runs past its four lines. */
-  function measure(node: HTMLElement, id: string) {
+  /**
+   * Tells whether the argument of a request runs past its four lines: once drawn, and again when its size changes, when
+   * its text changes (the same request asked again with other words), and when the app's fonts have loaded (the
+   * fallback's letters are not as wide).
+   */
+  function measure(node: HTMLElement, arg: { id: string; text: string }) {
+    let id = arg.id;
+    // A measure asked for just before the row went is not taken.
+    let gone = false;
     const check = () => {
+      if (gone) return;
       const over = node.scrollHeight > node.clientHeight + 1;
       if (!!overflows[id] !== over) overflows[id] = over;
     };
     check();
     const ro = new ResizeObserver(check);
     ro.observe(node);
+    document.fonts?.addEventListener('loadingdone', check);
     return {
-      destroy: () => {
+      update(next: { id: string; text: string }) {
+        if (next.id !== id) delete overflows[id];
+        id = next.id;
+        // Measured once the new text is in.
+        tick().then(check);
+      },
+      destroy() {
+        gone = true;
         ro.disconnect();
+        document.fonts?.removeEventListener('loadingdone', check);
         delete overflows[id];
       },
     };
@@ -280,19 +311,21 @@
       {#key req?.id}
         <div class="req">
           {#if req?.kind === 'permission' && req.tool !== 'ExitPlanMode'}
-            {@const ok = whole(req)}
+            <!-- What is read is what runs: an invisible or direction character is spelled out, not drawn. -->
+            {@const arg = revealHidden(req.arg)}
+            {@const note = notHere(req, arg)}
             <div class="what">
               <div class="cmd">
                 <span class="badge mono">{toolLabel(req.tool)}</span>
-                <span class="arg mono" use:measure={req.id}>{req.arg}</span>
+                <span class="arg mono" use:measure={{ id: req.id, text: arg }}>{arg}</span>
               </div>
-              {#if req.description}<span class="why">{req.description}</span>{/if}
-              {#if req.reason}<span class="why">{req.reason}</span>{/if}
-              {#if !ok}<span class="why more">La suite se lit dans la conversation.</span>{/if}
+              {#if req.description}<span class="why">{revealHidden(req.description)}</span>{/if}
+              {#if req.reason}<span class="why">{revealHidden(req.reason)}</span>{/if}
+              {#if note}<span class="why more">{note}</span>{/if}
             </div>
             <!-- Allowed on the spot only what is read whole here. -->
             <span class="acts">
-              {#if ok}
+              {#if !note}
                 <button class="opt primary" disabled={busy[a.id] || held[a.id]} onclick={(e) => decide(e, a, req, 'allow')}
                   >Autoriser</button
                 >
@@ -627,7 +660,10 @@
     font-size: 11px;
     font-weight: 600;
   }
-  /* The command as it runs, its lines kept, over four lines at most (one taller is answered in the conversation). */
+  /*
+   * The command as it runs, its lines kept, over four lines at most (one taller is answered in the conversation), in
+   * the order the shell reads it: right-to-left letters must not reorder a « ; » or a « | » (as the test launch's).
+   */
   .arg {
     flex: 1;
     min-width: 0;
@@ -638,6 +674,8 @@
     overflow: hidden;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
+    unicode-bidi: bidi-override;
+    direction: ltr;
     font-size: 12px;
     line-height: 1.5;
   }
