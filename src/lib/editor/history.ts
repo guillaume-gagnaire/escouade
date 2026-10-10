@@ -1,6 +1,8 @@
 // Where the editor was before each jump (a Ctrl+click, F12, a search result), by project and source: Alt+← goes
 // back there and Alt+→ forward again, as a browser does with its pages.
 
+import { movedPath } from './tree';
+
 /** A place in a file of a source: `line` and `col` 1-based, the column in characters. */
 export interface NavEntry {
   projectId: string;
@@ -48,6 +50,13 @@ class NavHistory {
   forward(current: NavEntry, exists: (e: NavEntry) => boolean): NavEntry | null {
     const s = this.of(current);
     return move(s.forward, s.back, current, exists);
+  }
+
+  /** `from` (a file, or a folder holding files) renamed `to` in a source: its places follow it, both ways. */
+  rename(projectId: string, source: string, from: string, to: string) {
+    const s = this.all.get(`${projectId}|${source}`);
+    if (!s) return;
+    for (const e of [...s.back, ...s.forward]) e.path = movedPath(e.path, from, to) ?? e.path;
   }
 
   reset() {

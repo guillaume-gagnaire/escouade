@@ -2,6 +2,7 @@
 // last, and the editor's answer to a file picked.
 
 import type { NavTarget } from './goto';
+import { movedPath } from './tree';
 
 /** Files the palette shows. */
 export const QUICK_OPEN_MAX = 50;
@@ -114,6 +115,13 @@ class RecentFiles {
   /** The files, the latest first. */
   list(projectId: string, source: string): string[] {
     return [...(this.all.get(this.key(projectId, source)) ?? [])];
+  }
+
+  /** `from` (a file, or a folder holding files) renamed `to` in a source: its files keep their place in the list. */
+  rename(projectId: string, source: string, from: string, to: string) {
+    const k = this.key(projectId, source);
+    const list = this.all.get(k);
+    if (list) this.all.set(k, [...new Set(list.map((p) => movedPath(p, from, to) ?? p))]);
   }
 
   /** Forgets a source that is gone (a deleted agent's worktree). */

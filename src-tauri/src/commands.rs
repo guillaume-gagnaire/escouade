@@ -511,6 +511,56 @@ pub async fn fs_create(
     Ok(())
 }
 
+/// Renames or moves a file or a folder of the source; refused when something else is at `to`.
+#[tauri::command]
+pub async fn fs_rename(
+    core: CoreState<'_>,
+    project_id: String,
+    agent_id: Option<String>,
+    from: String,
+    to: String,
+) -> Res<()> {
+    let (root, kept) = core.edit_kept(&project_id, agent_id).await.map_err(err)?;
+    // An update's restart waits: a folder on a slow disk can take a moment.
+    let _working = core.working();
+    fsedit::rename(std::path::Path::new(&root), &from, &to, &kept).map_err(err)?;
+    core.git.refresh(&project_id);
+    Ok(())
+}
+
+/// Sends a file or a folder of the source to the system's trash.
+#[tauri::command]
+pub async fn fs_delete(
+    core: CoreState<'_>,
+    project_id: String,
+    agent_id: Option<String>,
+    path: String,
+) -> Res<()> {
+    let (root, kept) = core.edit_kept(&project_id, agent_id).await.map_err(err)?;
+    let _working = core.working();
+    // A big folder takes a while to go: off the async workers.
+    tokio::task::spawn_blocking(move || {
+        fsedit::delete(std::path::Path::new(&root), &path, &kept, fsedit::to_trash)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(err)?;
+    core.git.refresh(&project_id);
+    Ok(())
+}
+
+/// Creates an empty folder, its parents with it; refused when something is already there.
+#[tauri::command]
+pub async fn fs_mkdir(
+    core: CoreState<'_>,
+    project_id: String,
+    agent_id: Option<String>,
+    path: String,
+) -> Res<()> {
+    let (root, _) = core.edit_root(&project_id, agent_id).await.map_err(err)?;
+    fsedit::mkdir(std::path::Path::new(&root), &path).map_err(err)
+}
+
 #[tauri::command]
 pub async fn fs_base(
     core: CoreState<'_>,

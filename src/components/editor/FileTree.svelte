@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
-  import type { FileStatus, TreeRow } from '../../lib/editor/tree';
+  import { tick, untrack } from 'svelte';
+  import type { EntryKind } from '../../lib/editor/create';
+  import { isDeleteKey, type FileStatus, type TreeRow } from '../../lib/editor/tree';
   import FileIcon from './FileIcon.svelte';
   import NewFileField from './NewFileField.svelte';
 
@@ -13,6 +14,13 @@
     check = () => null,
     oncreate = async () => null,
     oncancel = () => {},
+    adding = 'file',
+    renaming = null,
+    renameCheck = () => null,
+    onrename = async () => null,
+    onrenamecancel = () => {},
+    onrenamerow,
+    ondeleterow,
   }: {
     rows: TreeRow[];
     active: string | null;
@@ -24,6 +32,16 @@
     check?: (name: string) => string | null;
     oncreate?: (name: string) => Promise<string | null>;
     oncancel?: () => void;
+    /** What the `new` row names: a file or a folder. */
+    adding?: EntryKind;
+    /** The file or folder renamed, its row a field holding its name: why a name cannot be taken, renaming, giving up. */
+    renaming?: { kind: EntryKind; path: string } | null;
+    renameCheck?: (name: string) => string | null;
+    onrename?: (name: string) => Promise<string | null>;
+    onrenamecancel?: () => void;
+    /** F2 on a row, and Delete (Cmd+Backspace too on macOS). */
+    onrenamerow?: (row: TreeRow) => void;
+    ondeleterow?: (row: TreeRow) => void;
   } = $props();
 
   // As VS Code draws them: 8 px from the edge, 12 px a level, a 16 px chevron whose middle the level's guide goes through.
@@ -36,20 +54,38 @@
   /** The row holding the focus, the tree's one Tab stop; the file shown or the first row until one does. */
   let focused = $state<string | null>(null);
   const keyOf = (r: TreeRow) => `${r.kind}:${r.path}`;
+  /** The row of the file or folder renamed: a field, not a row to go to. */
+  const renamed = (r: TreeRow) => !!renaming && r.kind === renaming.kind && r.path === renaming.path;
+  const isField = (r: TreeRow) => r.kind === 'new' || renamed(r);
   const stop = $derived.by(() => {
-    const keys = rows.filter((r) => r.kind !== 'new').map(keyOf);
+    const keys = rows.filter((r) => !isField(r)).map(keyOf);
     if (focused && keys.includes(focused)) return focused;
     return active && keys.includes(`file:${active}`) ? `file:${active}` : (keys[0] ?? null);
   });
 
   const focusRow = (i: number) => el?.querySelector<HTMLElement>(`[data-index="${i}"]`)?.focus();
 
+  /**
+   * Puts the focus on the row of the file or folder `path` once the rows given are drawn (a field closed, a file
+   * renamed or made), else on the tree's Tab stop: the row is gone.
+   */
+  export async function focusPath(kind: EntryKind, path: string) {
+    await tick();
+    const i = rows.findIndex((r) => r.kind === kind && r.path === path);
+    if (i >= 0) return focusRow(i);
+    el?.querySelector<HTMLElement>('[role="treeitem"][tabindex="0"]')?.focus();
+  }
+
   // The keys of a tree (WAI-ARIA), as VS Code's explorer has them; Enter and Space are the buttons' own.
   function onkeydown(e: KeyboardEvent) {
     const i = Number((e.target as HTMLElement).dataset.index);
     const r = rows[i];
     if (!r) return;
-    const shown = rows.flatMap((row, j) => (row.kind === 'new' ? [] : [j]));
+    if (r.kind !== 'new' && (e.key === 'F2' || isDeleteKey(e))) {
+      e.preventDefault();
+      return e.key === 'F2' ? onrenamerow?.(r) : ondeleterow?.(r);
+    }
+    const shown = rows.flatMap((row, j) => (isField(row) ? [] : [j]));
     const at = shown.indexOf(i);
     const move: Record<string, () => void> = {
       ArrowDown: () => at + 1 < shown.length && focusRow(shown[at + 1]),
@@ -86,6 +122,12 @@
   });
 </script>
 
+{#snippet chevron(open: boolean)}
+  <svg class:open width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"
+    ><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" /></svg
+  >
+{/snippet}
+
 <!-- A click on the free space focuses the tree itself: its Tab stop takes the focus, for the arrows to work. -->
 <div
   class="tree"
@@ -103,17 +145,32 @@
         <span class="guide" style:left="{pad(level) + 8}px"></span>
       {/each}
     {/snippet}
-    {#if r.kind === 'new'}
+    {#if isField(r)}
+      {@const kind = r.kind === 'new' ? adding : r.kind}
       <div
         class="row new"
         role="none"
         style:padding-left="{pad(r.depth)}px"
-        style:--field-left="{pad(r.depth) + 40}px"
+        style:--field-left="{pad(r.depth) + (kind === 'file' ? 40 : 20)}px"
         oncontextmenu={(e) => e.stopPropagation()}
       >
         {@render guides()}
-        <span class="twistie"></span>
-        <NewFileField {check} {oncreate} {oncancel} />
+        <span class="twistie"
+          >{#if kind === 'dir'}{@render chevron(r.kind === 'dir' && r.open)}{/if}</span
+        >
+        {#if r.kind === 'new'}
+          <NewFileField {check} onsubmit={oncreate} {oncancel} {kind} label={kind === 'dir' ? 'Nom du nouveau dossier' : undefined} />
+        {:else}
+          {@const name = r.path.slice(r.path.lastIndexOf('/') + 1)}
+          <NewFileField
+            check={renameCheck}
+            onsubmit={onrename}
+            oncancel={onrenamecancel}
+            {kind}
+            value={name}
+            label={`Renommer « ${name} »`}
+          />
+        {/if}
       </div>
     {:else}
       {@const color = r.status ? COLOR[r.status] : r.inside ? COLOR[r.inside] : undefined}
@@ -137,20 +194,9 @@
         }}
       >
         {@render guides()}
-        <span class="twistie">
-          {#if r.kind === 'dir'}
-            <svg class:open={r.open} width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"
-              ><path
-                d="M6 4l4 4-4 4"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.3"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              /></svg
-            >
-          {/if}
-        </span>
+        <span class="twistie"
+          >{#if r.kind === 'dir'}{@render chevron(r.open)}{/if}</span
+        >
         {#if r.kind === 'file'}<FileIcon path={r.path} />{/if}
         <span class="name" style:color>{r.name}</span>
         {#if r.status}

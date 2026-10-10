@@ -4,9 +4,10 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 import { api } from './ipc';
 import { applyConvOps, dropConversation, releaseIdle } from './conversations.svelte';
 import { buffers } from './editor/buffers.svelte';
+import { navHistory } from './editor/history';
 import { recentFiles } from './editor/quick-open';
 import { fileSearches } from './editor/search.svelte';
-import { ancestors } from './editor/tree';
+import { ancestors, movedPath } from './editor/tree';
 import { trees } from './editor/trees.svelte';
 import { basename, isAbsPath, plural, relPath } from './format';
 import { readPref, writePref } from './prefs';
@@ -706,6 +707,36 @@ class AppState {
     if (!place) return;
     place.open = place.open.filter((p) => p !== path);
     if (place.active === path) place.active = place.open.at(-1) ?? null;
+  }
+
+  /**
+   * `from` (a file, or a folder holding files) renamed `to` in a source: its tabs and open folders follow, the same
+   * files with their unsaved changes, and so do the history of the jumps and the files opened last.
+   */
+  renameEditorPath(projectId: string, source: string, from: string, to: string) {
+    buffers.move(projectId, source, from, to);
+    navHistory.rename(projectId, source, from, to);
+    recentFiles.rename(projectId, source, from, to);
+    const st = this.editor[projectId];
+    const place = st?.places[source];
+    if (!st || !place) return;
+    const moved = (p: string) => movedPath(p, from, to) ?? p;
+    // A tab left open at the new path (its file was deleted) is the one renamed now.
+    place.open = [...new Set(place.open.map(moved))];
+    if (place.active) place.active = moved(place.active);
+    place.expanded = Object.fromEntries(Object.entries(place.expanded).map(([d, open]) => [moved(d), open]));
+    if (st.reveal && st.source === source) st.reveal = { ...st.reveal, path: moved(st.reveal.path) };
+  }
+
+  /** `path` (a file, or a folder holding files) deleted from a source: its tabs close, unsaved changes and all. */
+  closeEditorPath(projectId: string, source: string, path: string) {
+    buffers.closePath(projectId, source, path);
+    const place = this.editor[projectId]?.places[source];
+    if (!place) return;
+    const gone = (p: string) => movedPath(p, path, path) !== null;
+    place.open = place.open.filter((p) => !gone(p));
+    if (place.active && gone(place.active)) place.active = place.open.at(-1) ?? null;
+    place.expanded = Object.fromEntries(Object.entries(place.expanded).filter(([d]) => !gone(d)));
   }
 
   /** Opened, a folder opens the ones above it too: the tree may show them all on its row. Closed, it closes alone. */

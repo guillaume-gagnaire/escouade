@@ -112,6 +112,13 @@ export const api = {
   }) => invoke<string>('fs_write', a),
   /** Creates an empty file, its folders with it; refused when something is already there. */
   fsCreate: (projectId: string, agentId: string | null, path: string) => invoke<void>('fs_create', { projectId, agentId, path }),
+  /** Renames or moves a file or a folder (folders of `to` created); refused when something else is at `to`. */
+  fsRename: (projectId: string, agentId: string | null, from: string, to: string) =>
+    invoke<void>('fs_rename', { projectId, agentId, from, to }),
+  /** Sends a file or a folder to the system's trash; never the root nor the agents' worktrees. */
+  fsDelete: (projectId: string, agentId: string | null, path: string) => invoke<void>('fs_delete', { projectId, agentId, path }),
+  /** Creates an empty folder, its parents with it; refused when something is already there. */
+  fsMkdir: (projectId: string, agentId: string | null, path: string) => invoke<void>('fs_mkdir', { projectId, agentId, path }),
   fsBase: (projectId: string, agentId: string | null, path: string) => invoke<FileBase | null>('fs_base', { projectId, agentId, path }),
   /** The lines of the source's files (the ignored ones and the agents' worktrees left out) that match `query`. */
   codeSearch: (projectId: string, agentId: string | null, query: SearchQuery) =>

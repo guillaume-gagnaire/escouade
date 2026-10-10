@@ -123,6 +123,17 @@ describe('recentFiles', () => {
     expect(recentFiles.list('p3', 'project')).toEqual([]);
   });
 
+  it('follows a file renamed, and the files of a folder renamed, in their place', () => {
+    recentFiles.reset();
+    for (const f of ['src/a.ts', 'README.md', 'src/lib/b.ts', 'src2/c.ts']) recentFiles.note('p1', 'project', f);
+    recentFiles.note('p1', 'a1', 'src/a.ts');
+    recentFiles.rename('p1', 'project', 'src', 'source');
+    expect(recentFiles.list('p1', 'project')).toEqual(['src2/c.ts', 'source/lib/b.ts', 'README.md', 'source/a.ts']);
+    recentFiles.rename('p1', 'project', 'README.md', 'docs/README.md');
+    expect(recentFiles.list('p1', 'project')).toEqual(['src2/c.ts', 'source/lib/b.ts', 'docs/README.md', 'source/a.ts']);
+    expect(recentFiles.list('p1', 'a1')).toEqual(['src/a.ts']);
+  });
+
   it('forgets the oldest past thirty', () => {
     recentFiles.reset();
     for (let i = 0; i < 35; i++) recentFiles.note('p1', 'project', `f${i}.ts`);

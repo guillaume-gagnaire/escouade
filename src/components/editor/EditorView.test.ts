@@ -1,8 +1,10 @@
+import { undoDepth } from '@codemirror/commands';
 import { EditorView as CodeMirror } from '@codemirror/view';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buffers } from '../../lib/editor/buffers.svelte';
+import { movedPath } from '../../lib/editor/tree';
 import { trees } from '../../lib/editor/trees.svelte';
 import { menu } from '../../lib/menu.svelte';
 import { handleShortcut } from '../../lib/shortcuts';
@@ -744,12 +746,22 @@ describe('EditorView tree, as VS Code’s explorer', () => {
       const items = menu.open!.items;
       expect(items.map((i) => i.label)).toEqual([
         'Nouveau fichier…',
+        'Nouveau dossier…',
         'Ouvrir un terminal ici',
+        '',
+        'Renommer…',
+        'Supprimer',
         '',
         'Copier le chemin',
         'Copier le chemin relatif',
       ]);
-      expect(items[2].separator).toBe(true);
+      expect([items[3].separator, items[6].separator]).toEqual([true, true]);
+      expect(items.find((i) => i.label === 'Renommer…')?.hint).toBe('F2');
+      expect(items.find((i) => i.label === 'Supprimer')).toMatchObject({ hint: 'Suppr', danger: true });
+      menu.close();
+      // The root of the source is neither renamed nor deleted.
+      await fireEvent.contextMenu(screen.getByRole('tree'));
+      expect(menu.open!.items.map((i) => i.label)).toEqual(['Nouveau fichier…', 'Nouveau dossier…', 'Ouvrir un terminal ici']);
       menu.close();
     });
   });
@@ -920,6 +932,292 @@ describe('EditorView tree, as VS Code’s explorer', () => {
     await app.openEditor({ source: 'project' });
     await screen.findByRole('treeitem', { name: /app\.ts/ });
     expect(screen.queryByRole('textbox', { name: 'Nom du nouveau fichier' })).not.toBeInTheDocument();
+  });
+});
+
+describe('EditorView renaming, deleting and new folders', () => {
+  beforeEach(() => {
+    resetApp({ agents: [agent()] });
+    app.git.p1 = gitInfo({ modified: 1 });
+  });
+
+  /** A backend whose tree follows what is created, renamed and deleted through it; `over` is given the files on disk. */
+  function fsBackend(over: (files: string[]) => Record<string, (a: any) => unknown> = () => ({})) {
+    const files = ['README.md', 'src/app.ts', 'src/lib/x.ts'];
+    const be = backend({
+      fs_tree: () => ({ root: 'C:/code/demo-api', files: [...files], truncated: false }),
+      git_files: () => [],
+      fs_read: (a) => text(`// ${a.path}\n`),
+      fs_base: () => null,
+      fs_create: (a) => void files.push(a.path),
+      fs_mkdir: () => null,
+      fs_rename: (a) => files.forEach((f, i) => (files[i] = movedPath(f, a.from, a.to) ?? f)),
+      fs_delete: (a) => files.splice(0, files.length, ...files.filter((f) => movedPath(f, a.path, a.path) === null)),
+      ...over(files),
+    });
+    return be;
+  }
+  const item = (name: RegExp) => screen.getByRole('treeitem', { name });
+  const field = async (name: string) => (await screen.findByRole('textbox', { name: `Renommer « ${name} »` })) as HTMLInputElement;
+  const pick = async (target: Element, label: string) => {
+    await fireEvent.contextMenu(target);
+    menu.open!.items.find((i) => i.label === label)!.onClick!();
+    menu.close();
+  };
+  const codeOf = (c: HTMLElement) => CodeMirror.findFromDOM(c.querySelector('.cm-editor') as HTMLElement)!;
+  const place = () => app.editor.p1.places.project;
+
+  it('renames a file from its menu in a field at its row: its tab follows, with what was typed and its undo', async () => {
+    const be = fsBackend();
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    const { container } = render(EditorView, { project: project() });
+    await expect.poll(() => container.querySelector('.cm-content')?.textContent).toBe('// src/app.ts');
+    const view = codeOf(container);
+    view.dispatch({ changes: { from: 0, insert: 'mine ' } });
+    expect(await screen.findByText(/● Non enregistré/)).toBeInTheDocument();
+    await pick(item(/app\.ts/), 'Renommer…');
+    expect(await field('app.ts')).toHaveValue('app.ts');
+    await userEvent.keyboard('main{Enter}');
+    expect(be.called('fs_rename').map((c) => c.args)).toEqual([{ projectId: 'p1', agentId: null, from: 'src/app.ts', to: 'src/main.ts' }]);
+    expect(await screen.findByRole('tab', { name: /main\.ts/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('tab', { name: /app\.ts/ })).not.toBeInTheDocument();
+    expect(await screen.findByRole('treeitem', { name: /main\.ts/ })).toHaveAttribute('aria-selected', 'true');
+    expect(buffers.all[buffers.key('p1', 'project', 'src/main.ts')]).toMatchObject({ text: 'mine // src/app.ts\n', disk: 'ok' });
+    expect(buffers.all[buffers.key('p1', 'project', 'src/app.ts')]).toBeUndefined();
+    expect(screen.getByText(/● Non enregistré/)).toBeInTheDocument();
+    // The same document in the editor: what was typed can still be undone.
+    expect(undoDepth(codeOf(container).state)).toBe(1);
+    expect(app.toasts).toEqual([]);
+  });
+
+  it('renames a folder with F2 on its row, the tabs of its files following, and says why a name is refused', async () => {
+    const be = fsBackend();
+    await app.openEditor({ source: 'project', path: 'src/lib/x.ts' });
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    render(EditorView, { project: project() });
+    await screen.findByRole('treeitem', { name: /app\.ts/ });
+    item(/^src$/).focus();
+    await userEvent.keyboard('{F2}');
+    const f = await field('src');
+    expect([f.selectionStart, f.selectionEnd]).toEqual([0, 3]);
+    await userEvent.keyboard('README.MD');
+    expect(screen.getByRole('alert')).toHaveTextContent('« README.MD » existe déjà à cet endroit.');
+    await userEvent.clear(f);
+    await userEvent.keyboard('source{Enter}');
+    expect(be.called('fs_rename').map((c) => c.args)).toEqual([{ projectId: 'p1', agentId: null, from: 'src', to: 'source' }]);
+    await expect.poll(() => place().open).toEqual(['source/lib/x.ts', 'source/app.ts']);
+    expect(place().active).toBe('source/app.ts');
+    // The focus is back on the folder, under its new name.
+    await expect.poll(() => document.activeElement?.textContent?.trim()).toBe('source');
+  });
+
+  it('renames a file in another case only, and gives up a name left as it was', async () => {
+    const be = fsBackend();
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    render(EditorView, { project: project() });
+    await screen.findByRole('treeitem', { name: /app\.ts/ });
+    item(/app\.ts/).focus();
+    await userEvent.keyboard('{F2}');
+    await field('app.ts');
+    await userEvent.keyboard('{Enter}');
+    expect(screen.queryByRole('textbox', { name: /^Renommer/ })).not.toBeInTheDocument();
+    expect(be.called('fs_rename')).toEqual([]);
+    await expect.poll(() => document.activeElement).toBe(item(/app\.ts/));
+    await userEvent.keyboard('{F2}');
+    await field('app.ts');
+    await userEvent.keyboard('App{Enter}');
+    expect(be.called('fs_rename').map((c) => c.args.to)).toEqual(['src/App.ts']);
+    expect(await screen.findByRole('tab', { name: /App\.ts/ })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('shows a rename the disk refused under its field, and leaves the tabs as they were', async () => {
+    fsBackend(() => ({ fs_rename: () => Promise.reject('src/b.ts existe déjà') }));
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    render(EditorView, { project: project() });
+    await screen.findByRole('treeitem', { name: /app\.ts/ });
+    await pick(item(/app\.ts/), 'Renommer…');
+    await field('app.ts');
+    await userEvent.keyboard('b{Enter}');
+    expect(await screen.findByRole('alert')).toHaveTextContent('src/b.ts existe déjà');
+    expect(place().open).toEqual(['src/app.ts']);
+  });
+
+  it('tells when a file renamed is one git ignores now, which the tree does not show', async () => {
+    // As git sees them: `*.log` ignored, and not copied into the worktrees, so left out of the tree.
+    fsBackend((files) => ({
+      fs_tree: () => ({ root: 'C:/code/demo-api', files: files.filter((f) => !f.endsWith('.log')), truncated: false }),
+    }));
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    render(EditorView, { project: project() });
+    await pick(await screen.findByRole('treeitem', { name: /app\.ts/ }), 'Renommer…');
+    await userEvent.clear(await field('app.ts'));
+    await userEvent.keyboard('debug.log{Enter}');
+    await expect.poll(() => app.toasts.map((t) => t.text)).toEqual(['debug.log est ignoré par git : l’arborescence ne le montre pas.']);
+    expect(place().active).toBe('src/debug.log');
+  });
+
+  it('tells when a file git ignored is renamed to a name it does not ignore, which can be committed', async () => {
+    fsBackend((files) => {
+      files.push('.env');
+      return {
+        fs_tree: () => ({ root: 'C:/code/demo-api', files: [...files], truncated: false, ignored: files.filter((f) => f === '.env') }),
+      };
+    });
+    await app.openEditor({ source: 'project', path: 'README.md' });
+    render(EditorView, { project: project() });
+    await pick(await screen.findByRole('treeitem', { name: /\.env/ }), 'Renommer…');
+    await userEvent.clear(await field('.env'));
+    await userEvent.keyboard('env.txt{Enter}');
+    await expect.poll(() => app.toasts.map((t) => t.text)).toEqual(['env.txt n’est plus ignoré par git : il peut être commité.']);
+  });
+
+  it('keeps what was typed in a file the agent wrote as it was renamed: its banner tells so under the new name', async () => {
+    let renamed = false;
+    fsBackend((files) => ({
+      fs_read: (a) => (renamed ? text('agent\n', 'h2') : text(`// ${a.path}\n`)),
+      fs_rename: (a) => {
+        files.forEach((f, i) => (files[i] = movedPath(f, a.from, a.to) ?? f));
+        renamed = true;
+      },
+    }));
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    render(EditorView, { project: project() });
+    const k = buffers.key('p1', 'project', 'src/app.ts');
+    await expect.poll(() => buffers.all[k]?.kind).toBe('text');
+    buffers.edit(k, 'mine\n');
+    await pick(await screen.findByRole('treeitem', { name: /app\.ts/ }), 'Renommer…');
+    await field('app.ts');
+    await userEvent.keyboard('main{Enter}');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Ce fichier a changé sur le disque.');
+    expect(buffers.all[buffers.key('p1', 'project', 'src/main.ts')]).toMatchObject({ text: 'mine\n', disk: 'changed' });
+  });
+
+  it('deletes a file to the trash once confirmed, and closes its tab', async () => {
+    const be = fsBackend();
+    await app.openEditor({ source: 'project', path: 'README.md' });
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    render(EditorView, { project: project() });
+    await screen.findByRole('treeitem', { name: /app\.ts/ });
+    await pick(item(/app\.ts/), 'Supprimer');
+    expect(app.modal).toMatchObject({
+      kind: 'confirm',
+      title: 'Supprimer « app.ts » ?',
+      body: 'Il part dans la corbeille.',
+      confirm: 'Supprimer',
+      danger: true,
+    });
+    expect(be.called('fs_delete')).toEqual([]);
+    await (app.modal as any).onConfirm();
+    expect(be.called('fs_delete').map((c) => c.args)).toEqual([{ projectId: 'p1', agentId: null, path: 'src/app.ts' }]);
+    expect(place()).toMatchObject({ open: ['README.md'], active: 'README.md' });
+    expect(buffers.all[buffers.key('p1', 'project', 'src/app.ts')]).toBeUndefined();
+    await expect.poll(() => screen.queryByRole('treeitem', { name: /app\.ts/ })).toBeNull();
+  });
+
+  it('says how many files a folder takes with it, from the Delete key on its row', async () => {
+    const be = fsBackend();
+    await app.openEditor({ source: 'project', path: 'src/lib/x.ts' });
+    render(EditorView, { project: project() });
+    await screen.findByRole('treeitem', { name: /x\.ts/ });
+    item(/^src$/).focus();
+    await userEvent.keyboard('{Delete}');
+    expect(app.modal).toMatchObject({ title: 'Supprimer « src » ?', body: 'Le dossier et ses 2 fichiers partent dans la corbeille.' });
+    app.modal = null;
+    item(/^lib$/).focus();
+    await userEvent.keyboard('{Delete}');
+    expect(app.modal).toMatchObject({ title: 'Supprimer « lib » ?', body: 'Le dossier et son fichier partent dans la corbeille.' });
+    app.modal = null;
+    expect(be.called('fs_delete')).toEqual([]);
+  });
+
+  it('asks first whether to save an unsaved file of what is deleted, as closing its tab does', async () => {
+    const be = fsBackend();
+    await app.openEditor({ source: 'project', path: 'src/lib/x.ts' });
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    render(EditorView, { project: project() });
+    const k = buffers.key('p1', 'project', 'src/app.ts');
+    await expect.poll(() => buffers.all[k]?.kind).toBe('text');
+    buffers.edit(k, 'mine\n');
+    await pick(item(/^src$/), 'Supprimer');
+    expect(app.modal).toMatchObject({
+      title: 'Enregistrer « app.ts » ?',
+      body: 'Ses modifications seront perdues si tu ne les enregistres pas.',
+      confirm: 'Enregistrer',
+      alt: { label: 'Ne pas enregistrer' },
+    });
+    // Cancelled: nothing more is asked, nothing is lost.
+    app.modal = null;
+    expect(buffers.isDirty(buffers.all[k])).toBe(true);
+    await pick(item(/^src$/), 'Supprimer');
+    await (app.modal as any).alt.onClick();
+    expect(app.modal).toMatchObject({ title: 'Supprimer « src » ?', body: 'Le dossier et ses 2 fichiers partent dans la corbeille.' });
+    await (app.modal as any).onConfirm();
+    expect(be.called('fs_write')).toEqual([]);
+    expect(be.called('fs_delete').map((c) => c.args.path)).toEqual(['src']);
+    expect(place().open).toEqual([]);
+    expect(buffers.unsaved).toBe(0);
+  });
+
+  it('saves the file first when asked to, then asks to delete it', async () => {
+    const be = fsBackend();
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    render(EditorView, { project: project() });
+    const k = buffers.key('p1', 'project', 'src/app.ts');
+    await expect.poll(() => buffers.all[k]?.kind).toBe('text');
+    buffers.edit(k, 'mine\n');
+    await pick(item(/app\.ts/), 'Supprimer');
+    await (app.modal as any).onConfirm();
+    expect(be.called('fs_write').map((c) => c.args)).toMatchObject([{ path: 'src/app.ts', text: 'mine\n' }]);
+    expect(app.modal).toMatchObject({ title: 'Supprimer « app.ts » ?', body: 'Il part dans la corbeille.' });
+    expect(be.called('fs_delete')).toEqual([]);
+  });
+
+  it('tells why the disk refused to delete, and keeps the tabs', async () => {
+    fsBackend(() => ({ fs_delete: () => Promise.reject('src contient les worktrees des agents') }));
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    render(EditorView, { project: project() });
+    await screen.findByRole('treeitem', { name: /app\.ts/ });
+    await pick(item(/^src$/), 'Supprimer');
+    await (app.modal as any).onConfirm();
+    expect(app.toasts.map((t) => [t.kind, t.text])).toEqual([['error', 'Suppression impossible : src contient les worktrees des agents']]);
+    expect(place().open).toEqual(['src/app.ts']);
+  });
+
+  it('makes a folder from the header, shows it empty in the tree, and makes a file in it', async () => {
+    const be = fsBackend();
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    render(EditorView, { project: project() });
+    await screen.findByRole('treeitem', { name: /app\.ts/ });
+    await userEvent.click(screen.getByRole('button', { name: 'Nouveau dossier' }));
+    await userEvent.type(await screen.findByRole('textbox', { name: 'Nom du nouveau dossier' }), 'docs{Enter}');
+    expect(be.called('fs_mkdir').map((c) => c.args)).toEqual([{ projectId: 'p1', agentId: null, path: 'src/docs' }]);
+    const docs = await screen.findByRole('treeitem', { name: /^docs$/ });
+    expect(docs).toHaveAttribute('aria-level', '2');
+    await expect.poll(() => document.activeElement).toBe(docs);
+    // Named in it, a file goes there, though the tree has nothing below it.
+    await pick(docs, 'Nouveau fichier…');
+    await userEvent.type(await screen.findByRole('textbox', { name: 'Nom du nouveau fichier' }), 'a.md{Enter}');
+    expect(be.called('fs_create').map((c) => c.args.path)).toEqual(['src/docs/a.md']);
+    expect(await screen.findByRole('treeitem', { name: /a\.md/ })).toBeInTheDocument();
+  });
+
+  it('tells an empty folder it deletes as such, and forgets the empty folders made once the source changes', async () => {
+    const wt = { path: 'C:/code/demo-api/.claude/worktrees/wt', branch: 'escouade/wt', baseBranch: 'main' };
+    resetApp({ agents: [agent(), agent({ id: 'a2', name: 'wt', worktree: wt })] });
+    fsBackend();
+    await app.openEditor({ source: 'project', path: 'README.md' });
+    render(EditorView, { project: project() });
+    await screen.findByRole('treeitem', { name: /README/ });
+    await pick(screen.getByRole('tree'), 'Nouveau dossier…');
+    await userEvent.type(await screen.findByRole('textbox', { name: 'Nom du nouveau dossier' }), 'empty{Enter}');
+    const empty = await screen.findByRole('treeitem', { name: /^empty$/ });
+    await pick(empty, 'Supprimer');
+    expect(app.modal).toMatchObject({ title: 'Supprimer « empty » ?', body: 'Le dossier part dans la corbeille.' });
+    app.modal = null;
+    await app.openEditor({ source: 'a2' });
+    await app.openEditor({ source: 'project' });
+    await screen.findByRole('treeitem', { name: /README/ });
+    expect(screen.queryByRole('treeitem', { name: /^empty$/ })).not.toBeInTheDocument();
   });
 });
 

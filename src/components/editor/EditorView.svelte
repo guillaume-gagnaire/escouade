@@ -5,7 +5,7 @@
   import { buffers, sourceAgent } from '../../lib/editor/buffers.svelte';
   import { lineChanges, type LineChanges } from '../../lib/editor/changes';
   import type { Comparison } from '../../lib/editor/compare';
-  import { newFileError, newFilePath } from '../../lib/editor/create';
+  import { newFileError, newFilePath, renameError, type EntryKind, type Names } from '../../lib/editor/create';
   import { definitionResolver } from '../../lib/editor/definitions';
   import type { NavFollowed, NavFrom, NavTarget } from '../../lib/editor/goto';
   import { navHistory, type NavEntry } from '../../lib/editor/history';
@@ -15,12 +15,12 @@
   import { DEFAULT_ALIASES, fileSet, linkResolvers, parseAliases, type Aliases } from '../../lib/editor/links';
   import { setEditorJump } from '../../lib/editor/quick-open';
   import { fileSearches, setFindInFiles } from '../../lib/editor/search.svelte';
-  import { ancestors, treeRows, type FileStatus, type TreeRow } from '../../lib/editor/tree';
+  import { ancestors, movedPath, treeRows, type FileStatus, type TreeRow } from '../../lib/editor/tree';
   import { trees } from '../../lib/editor/trees.svelte';
   import { basename, joinPath, plural, tildify } from '../../lib/format';
   import { api } from '../../lib/ipc';
   import { menu, type MenuItem } from '../../lib/menu.svelte';
-  import { keyLabel } from '../../lib/platform';
+  import { IS_MAC, keyLabel } from '../../lib/platform';
   import { clamp, observeWidth } from '../../lib/resize';
   import { app } from '../../lib/state.svelte';
   import { terminalIn } from '../../lib/term-actions';
@@ -59,10 +59,18 @@
   let cursor = $state({ line: 1, col: 1 });
   let language = $state<Extension | null>(null);
   let changes = $state<LineChanges>(NONE);
-  /** The folder getting a new file ('' for the root), with the source it was asked on. */
-  let adding = $state<{ source: string; dir: string } | null>(null);
+  /** The folder getting a new file or folder ('' for the root), with the source it was asked on. */
+  let adding = $state<{ source: string; dir: string; kind: EntryKind } | null>(null);
+  /** The file or folder being renamed in the tree, with the source it was asked on. */
+  let renaming = $state<{ source: string; kind: EntryKind; path: string } | null>(null);
+  /**
+   * The folders made in the source shown that hold no file yet: git lists none such, the tree shows them all the same,
+   * until a file is in them or the source changes.
+   */
+  let madeDirs = $state<string[]>([]);
   /** The folder of the row last clicked: where "Nouveau fichier" creates, as VS Code does with its selection. */
   let lastDir = $state<{ source: string; dir: string } | null>(null);
+  let fileTree = $state<ReturnType<typeof FileTree>>();
   /** The import aliases of the source shown, from its tsconfig.json or jsconfig.json: read when a link is looked for. */
   let aliases: Aliases = DEFAULT_ALIASES;
   // The links first; else the definition of the identifier.
@@ -96,14 +104,18 @@
       }),
       api.gitFiles(pid, sourceAgent(src)).catch(() => []),
     ]);
-    const current = () => alive && pid === project.id && src === source;
-    if (!current()) return;
+    if (!current(pid, src)) return;
     if (pick && t) readAliases(pid, src, t.files);
+    if (t && madeDirs.length) {
+      // A folder made empty that a file is in now is in the tree with it.
+      const held = t.files.map((f) => f.toLowerCase());
+      madeDirs = madeDirs.filter((d) => !held.some((f) => f.startsWith(d.toLowerCase() + '/')));
+    }
     status = Object.fromEntries(
       files.filter((f) => (src === 'project' ? !f.inWorktree : f.inWorktree && f.agentId === src)).map((f) => [f.path, f.status]),
     );
     await buffers.refreshAll(pid, src);
-    if (!pick || !current()) return;
+    if (!pick || !current(pid, src)) return;
     const p = app.editor[pid]?.places[src];
     if (t && p && !p.active && !p.open.length) {
       const first = t.files.find((f) => status[f]) ?? (t.files.includes('README.md') ? 'README.md' : null);
@@ -118,13 +130,15 @@
     if (alive && pid === project.id && src === source) aliases = f?.text ? parseAliases(f.text) : DEFAULT_ALIASES;
   }
 
-  // Right away for each source, then 300 ms after each git event of the project. A file being named in the tree of
-  // the previous source is given up.
+  // Right away for each source, then 300 ms after each git event of the project. A file being named or renamed in the
+  // tree of the previous source is given up, and so are the empty folders made in it.
   $effect(() => {
     const pid = project.id;
     const src = source;
     untrack(() => {
       adding = null;
+      renaming = null;
+      madeDirs = [];
       aliases = DEFAULT_ALIASES;
       refresh(pid, src, true);
     });
@@ -205,37 +219,62 @@
 
   const addingDir = $derived(adding?.source === source ? adding.dir : null);
   const parentOf = (path: string) => ancestors(path).at(-1) ?? '';
+  /** What the source shown holds, for a name typed in the tree to be checked against. */
+  const names = (): Names => ({ files: tree?.files ?? [], dirs: madeDirs, ignored: tree?.ignored });
+  /** `dir` is a folder of the tree: one holding a file, or made empty. */
+  const isDir = (dir: string) =>
+    (tree?.files ?? []).some((f) => f.startsWith(dir + '/')) || madeDirs.some((d) => d === dir || d.startsWith(dir + '/'));
+  const current = (pid: string, src: string) => alive && pid === project.id && src === source;
 
-  /** A file being created: no other field opens until it is, so the field `adding` is still its own, or none. */
-  let creating = false;
+  /** A file or folder being created or renamed: no other field opens until it is, so the field open is still its own, or none. */
+  let busy = false;
 
-  /** Opens the field naming a new file in `dir`, or in the nearest folder above it the tree shows. */
-  function startNew(dir: string) {
-    if (creating) return;
-    const files = tree?.files ?? [];
-    while (dir && !files.some((f) => f.startsWith(dir + '/'))) dir = parentOf(dir);
+  /** Opens the field naming a new file (or folder) in `dir`, or in the nearest folder above it the tree shows. */
+  function startNew(dir: string, kind: EntryKind = 'file') {
+    if (busy) return;
+    renaming = null;
+    while (dir && !isDir(dir)) dir = parentOf(dir);
     app.expandEditorDir(project.id, source, dir);
-    adding = { source, dir };
+    adding = { source, dir, kind };
   }
-  const newHere = () => startNew(lastDir?.source === source ? lastDir.dir : activePath ? parentOf(activePath) : '');
+  const newHere = (kind: EntryKind) => startNew(lastDir?.source === source ? lastDir.dir : activePath ? parentOf(activePath) : '', kind);
 
-  /** Creates the file `name` the field `mine` names and opens it; what refused it otherwise, for the field to show. */
-  async function create(mine: { source: string; dir: string } | null, name: string): Promise<string | null> {
+  /** `path` as the disk spells its folders already there: `SRC/x` typed is in the `src` the tree shows on Windows and macOS. */
+  function spelled(path: string): string {
+    const dir = parentOf(path);
+    if (!dir) return path;
+    const lower = dir.toLowerCase() + '/';
+    const known = [...(tree?.files ?? []), ...madeDirs.map((d) => d + '/')].find((f) => f.toLowerCase().startsWith(lower));
+    return known ? `${known.slice(0, dir.length)}/${basename(path)}` : path;
+  }
+
+  /** Creates the file or folder `name` the field `mine` names; what refused it, for the field to show. */
+  async function create(mine: typeof adding, name: string): Promise<string | null> {
     if (!mine) return null;
     const pid = project.id;
     const src = mine.source;
     const path = newFilePath(mine.dir, name);
-    creating = true;
+    busy = true;
     try {
-      await api.fsCreate(pid, sourceAgent(src), path);
+      await (mine.kind === 'dir' ? api.fsMkdir : api.fsCreate)(pid, sourceAgent(src), path);
     } catch (e) {
       // Its field gone meanwhile (the source changed), the refusal is told otherwise.
       if (adding !== mine) app.toast(`Création impossible : ${e}`, 'error');
       return String(e);
     } finally {
-      creating = false;
+      busy = false;
     }
     adding = null;
+    if (mine.kind === 'dir') {
+      // Shown though git lists no empty folder, the next file made in it, the focus on it.
+      if (!current(pid, src)) return null;
+      const real = spelled(path);
+      madeDirs = [...madeDirs, real];
+      lastDir = { source: src, dir: real };
+      app.expandEditorDir(pid, src, parentOf(real));
+      fileTree?.focusPath('dir', real);
+      return null;
+    }
     const before = trees.get(pid, src);
     await refresh(pid, src, false);
     if (!alive || pid !== project.id || src !== source) return null;
@@ -259,12 +298,165 @@
     terminalIn(project.id, dir ? { agentId, subdir: dir } : { agentId }, dir ? basename(dir) : (srcAgent?.name ?? project.name));
   }
 
+  /** Opens the field renaming the file or folder of the row `r`, in its place. */
+  function startRename(r: TreeRow) {
+    if (busy || r.kind === 'new') return;
+    adding = null;
+    renaming = { source, kind: r.kind, path: r.path };
+  }
+
+  /** Why the file or folder renamed cannot take `name`: as for a creation, and not over an unsaved file left open. */
+  function renameCheck(name: string): string | null {
+    const r = renaming;
+    if (!r) return null;
+    const problem = renameError(name, r.path, r.kind, names());
+    if (problem || !name.trim()) return problem;
+    // A tab whose file is gone from the disk can hold changes at the new path: they would be taken over.
+    const to = newFilePath(parentOf(r.path), name);
+    const under = (p: string, dir: string) => movedPath(p, dir, dir) !== null;
+    const left = Object.values(buffers.all).find(
+      (b) => b.projectId === project.id && b.source === r.source && buffers.isDirty(b) && under(b.path, to) && !under(b.path, r.path),
+    );
+    return left ? `« ${basename(left.path)} » est ouvert avec des modifications non enregistrées.` : null;
+  }
+
+  /** Renames the file or folder of the field `mine` to `name`, its tabs following; what refused it, for the field to show. */
+  async function rename(mine: typeof renaming, name: string): Promise<string | null> {
+    if (!mine) return null;
+    const pid = project.id;
+    const src = mine.source;
+    const to = newFilePath(parentOf(mine.path), name);
+    if (to === mine.path) {
+      cancelRename();
+      return null;
+    }
+    busy = true;
+    try {
+      await api.fsRename(pid, sourceAgent(src), mine.path, to);
+    } catch (e) {
+      if (renaming !== mine) app.toast(`Renommage impossible : ${e}`, 'error');
+      return String(e);
+    } finally {
+      busy = false;
+    }
+    renaming = null;
+    // Followed right away, not once the tree is read again: the tabs never show the old path missing meanwhile.
+    const real = spelled(to);
+    app.renameEditorPath(pid, src, mine.path, real);
+    if (current(pid, src)) {
+      madeDirs = madeDirs.map((d) => movedPath(d, mine.path, real) ?? d);
+      if (lastDir?.source === src) lastDir = { source: src, dir: movedPath(lastDir.dir, mine.path, real) ?? lastDir.dir };
+    }
+    app.expandEditorDir(pid, src, parentOf(real));
+    const before = trees.get(pid, src);
+    await refresh(pid, src, false);
+    if (!current(pid, src)) return null;
+    fileTree?.focusPath(mine.kind, real);
+    // What git makes of the new name, as a file created is told: out of the tree, or no longer kept out of a commit.
+    const t = trees.get(pid, src);
+    const fresh = mine.kind === 'file' && t && t !== before && !t.truncated ? t : null;
+    if (fresh && !fresh.files.includes(real)) app.toast(`${basename(real)} est ignoré par git : l’arborescence ne le montre pas.`);
+    else if (fresh && before?.ignored?.includes(mine.path) && !fresh.ignored?.includes(real))
+      app.toast(`${basename(real)} n’est plus ignoré par git : il peut être commité.`);
+    return null;
+  }
+
+  /** The rename given up: the focus goes back to its row, unless something else took it (a click elsewhere). */
+  async function cancelRename() {
+    const r = renaming;
+    renaming = null;
+    await drawn();
+    const free = !document.activeElement || document.activeElement === document.body;
+    if (r && free && current(project.id, r.source)) fileTree?.focusPath(r.kind, r.path);
+  }
+
+  /**
+   * Asks for each unsaved file of `paths` in turn whether to save it first, as closing its tab does, then goes on with
+   * `then`. Cancelled, or a save refused (the file changed on disk: its tab shows why), it goes no further.
+   */
+  function askToSave(pid: string, src: string, paths: string[], then: () => void) {
+    const [path, ...rest] = paths;
+    if (path === undefined) return then();
+    const key = buffers.key(pid, src, path);
+    const next = () => askToSave(pid, src, rest, then);
+    app.modal = {
+      kind: 'confirm',
+      title: `Enregistrer « ${basename(path)} » ?`,
+      body: 'Ses modifications seront perdues si tu ne les enregistres pas.',
+      confirm: 'Enregistrer',
+      alt: { label: 'Ne pas enregistrer', onClick: next },
+      onConfirm: async () => {
+        if (await saveKey(key)) next();
+        // Refused: show the tab, the banner telling why is only drawn for the file on screen.
+        else app.openEditor({ projectId: pid, source: src, path });
+      },
+    };
+  }
+
+  /** Sends the file or folder of the row `r` to the trash once confirmed, its unsaved files saved first or not. */
+  function remove(r: TreeRow) {
+    if (r.kind === 'new') return;
+    const kind = r.kind;
+    const pid = project.id;
+    const src = source;
+    const gone = (p: string) => movedPath(p, r.path, r.path) !== null;
+    const unsaved = Object.values(buffers.all)
+      .filter((b) => b.projectId === pid && b.source === src && gone(b.path) && buffers.isDirty(b))
+      .map((b) => b.path);
+    // Counted in the tree the user sees: the files git ignores in it go too, uncounted.
+    const n = (tree?.files ?? []).filter(gone).length;
+    const body =
+      kind === 'file'
+        ? 'Il part dans la corbeille.'
+        : n > 1
+          ? `Le dossier et ses ${n} fichiers partent dans la corbeille.`
+          : n
+            ? 'Le dossier et son fichier partent dans la corbeille.'
+            : 'Le dossier part dans la corbeille.';
+    askToSave(pid, src, unsaved, () => {
+      app.modal = {
+        kind: 'confirm',
+        title: `Supprimer « ${basename(r.path)} » ?`,
+        body,
+        confirm: 'Supprimer',
+        danger: true,
+        onConfirm: async () => {
+          try {
+            await api.fsDelete(pid, sourceAgent(src), r.path);
+          } catch (e) {
+            app.toast(`Suppression impossible : ${e}`, 'error');
+            return;
+          }
+          app.closeEditorPath(pid, src, r.path);
+          if (current(pid, src)) {
+            madeDirs = madeDirs.filter((d) => !gone(d));
+            if (lastDir?.source === src && gone(lastDir.dir)) lastDir = null;
+            if (renaming?.source === src && gone(renaming.path)) renaming = null;
+            if (adding?.source === src && gone(adding.dir)) adding = null;
+          }
+          await refresh(pid, src, false);
+          // Its row gone, the tree's Tab stop takes the focus.
+          if (current(pid, src)) fileTree?.focusPath(kind, r.path);
+        },
+      };
+    });
+  }
+
   function treeMenu(e: MouseEvent, r: TreeRow | null) {
     const dir = !r ? '' : r.kind === 'dir' ? r.path : parentOf(r.path);
     const items: MenuItem[] = [
       { label: 'Nouveau fichier…', onClick: () => startNew(dir) },
+      { label: 'Nouveau dossier…', onClick: () => startNew(dir, 'dir') },
       { label: 'Ouvrir un terminal ici', onClick: () => terminalHere(dir) },
     ];
+    // The root of the source is neither renamed nor deleted.
+    if (r) {
+      items.push(
+        { label: '', separator: true },
+        { label: 'Renommer…', hint: 'F2', onClick: () => startRename(r) },
+        { label: 'Supprimer', hint: IS_MAC ? '⌘⌫' : 'Suppr', danger: true, onClick: () => remove(r) },
+      );
+    }
     const root = tree?.root;
     if (r && root) {
       items.push(
@@ -276,7 +468,7 @@
     menu.show(e, items);
   }
 
-  const rows = $derived(tree ? treeRows(tree.files, place?.expanded ?? {}, status, addingDir, tree.ignored) : []);
+  const rows = $derived(tree ? treeRows(tree.files, place?.expanded ?? {}, status, addingDir, tree.ignored, madeDirs) : []);
   const changedCount = $derived(Object.keys(status).length);
   const tabs = $derived(
     (place?.open ?? []).map((p) => ({
@@ -314,32 +506,32 @@
 
   const NEWER_ON_DISK = 'Le fichier a encore changé sur le disque : la comparaison montre sa nouvelle version.';
   /**
-   * The file whose « Garder ma version » waits a second, a newer version having just taken the place of the one
-   * compared on screen: a click aimed at the one shown before is not taken.
+   * The file (its buffer's id, which a rename keeps) whose « Garder ma version » waits a second, a newer version having
+   * just taken the place of the one compared on screen: a click aimed at the one shown before is not taken.
    */
-  let settling = $state<string | null>(null);
+  let settling = $state<number | null>(null);
   let settleTimer: ReturnType<typeof setTimeout> | undefined;
   /**
-   * For each file compared with the disk, the version last seen on screen: a newer one is told when it takes its
-   * place there, or when the file is shown again after it did meanwhile.
+   * For each file compared with the disk (by its buffer's id: a rename keeps it), the version last seen on screen: a
+   * newer one is told when it takes its place there, or when the file is shown again after it did meanwhile.
    */
-  const seenOnDisk = new Map<string, string>();
+  const seenOnDisk = new Map<number, string>();
   $effect(() => {
-    const key = buf?.key ?? null;
+    const id = buf?.id ?? null;
     const hash = onDisk?.hash ?? null;
     const replaced = onDisk?.replaced ?? null;
     untrack(() => {
-      if (!key) return;
-      const before = seenOnDisk.get(key);
-      if (hash) seenOnDisk.set(key, hash);
-      else seenOnDisk.delete(key);
+      if (id === null) return;
+      const before = seenOnDisk.get(id);
+      if (hash) seenOnDisk.set(id, hash);
+      else seenOnDisk.delete(id);
       if (!replaced || !before || before === hash) return;
       app.toast(
         replaced === 'save'
           ? 'Le fichier a encore changé sur le disque : rien n’est enregistré, la comparaison montre sa nouvelle version.'
           : NEWER_ON_DISK,
       );
-      settling = key;
+      settling = id;
       clearTimeout(settleTimer);
       settleTimer = setTimeout(() => (settling = null), 1000);
     });
@@ -451,23 +643,12 @@
       app.closeEditorTab(project.id, src, path);
     };
     if (!buffers.isDirty(buffers.all[key])) return drop();
-    app.modal = {
-      kind: 'confirm',
-      title: `Enregistrer « ${basename(path)} » ?`,
-      body: 'Ses modifications seront perdues si tu ne les enregistres pas.',
-      confirm: 'Enregistrer',
-      alt: { label: 'Ne pas enregistrer', onClick: drop },
-      onConfirm: async () => {
-        if (await saveKey(key)) drop();
-        // Refused: show the tab, the banner telling why is only drawn for the file on screen.
-        else app.openEditor({ projectId: project.id, source: src, path });
-      },
-    };
+    askToSave(project.id, src, [path], drop);
   }
 
   /** Saves what was typed over the disk; compared with it, over the version compared only (else it shows the newer one). */
   async function keep(key: string) {
-    if (settling === key) return;
+    if (settling !== null && settling === buffers.all[key]?.id) return;
     const compared = !!buffers.all[key]?.onDisk;
     let kept: boolean;
     try {
@@ -540,10 +721,17 @@
           <div class="row">
             <span class="label">Fichiers</span>
             <div class="actions">
-              <button class="act" aria-label="Nouveau fichier" title="Nouveau fichier" disabled={!tree} onclick={newHere}>
+              <button class="act" aria-label="Nouveau fichier" title="Nouveau fichier" disabled={!tree} onclick={() => newHere('file')}>
                 <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"
                   ><path
                     d="M8.5 2H4.5A1.5 1.5 0 0 0 3 3.5v9A1.5 1.5 0 0 0 4.5 14H8M8.5 2 13 6.5M8.5 2v4.5H13M13 6.5V9M12 10.5v4M10 12.5h4"
+                  /></svg
+                >
+              </button>
+              <button class="act" aria-label="Nouveau dossier" title="Nouveau dossier" disabled={!tree} onclick={() => newHere('dir')}>
+                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"
+                  ><path
+                    d="M8 13H3.5A1.5 1.5 0 0 1 2 11.5v-7A1.5 1.5 0 0 1 3.5 3h2.6l1.5 1.5h4.9A1.5 1.5 0 0 1 14 6v2.5M12 10.5v4M10 12.5h4"
                   /></svg
                 >
               </button>
@@ -570,6 +758,7 @@
         </div>
         <div class="scroll">
           <FileTree
+            bind:this={fileTree}
             {rows}
             active={activePath}
             ontoggle={(d) => {
@@ -581,9 +770,16 @@
               app.openEditor({ projectId: project.id, source, path: p });
             }}
             onmenu={treeMenu}
-            check={(name) => newFileError(name, addingDir ?? '', tree?.files ?? [], undefined, tree?.ignored)}
+            check={(name) => newFileError(name, addingDir ?? '', names(), adding?.kind)}
             oncreate={(name) => create(adding, name)}
             oncancel={() => (adding = null)}
+            adding={adding?.kind}
+            renaming={renaming?.source === source ? renaming : null}
+            {renameCheck}
+            onrename={(name) => rename(renaming, name)}
+            onrenamecancel={cancelRename}
+            onrenamerow={startRename}
+            ondeleterow={remove}
           />
         </div>
       </div>
@@ -623,7 +819,7 @@
               <button class="btn small" onclick={() => compareDisk(buf.key)}>Comparer</button>
             {/if}
             <!-- Held back, not disabled: a disabled button would lose the focus it has. -->
-            <button class="btn small" aria-disabled={settling === buf.key} onclick={() => keep(buf.key)}>Garder ma version</button>
+            <button class="btn small" aria-disabled={settling === buf.id} onclick={() => keep(buf.key)}>Garder ma version</button>
           </div>
         {:else if buf?.disk === 'deleted'}
           <div class="banner" role="alert">
@@ -645,7 +841,7 @@
         {:else}
           <CodeEditor
             bind:this={code}
-            docKey={buf.key}
+            docKey={`${buf.id}`}
             text={buf.text}
             version={buf.version}
             {language}

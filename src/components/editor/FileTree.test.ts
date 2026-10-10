@@ -262,6 +262,91 @@ describe('FileTree naming a new file', () => {
   });
 });
 
+describe('FileTree naming a new folder', () => {
+  it('has a field of its own, without the icon of a file', async () => {
+    const oncreate = vi.fn(async () => null);
+    render(FileTree, { ...base, rows: treeRows(['src/app.ts'], { src: true }, {}, 'src'), adding: 'dir', oncreate, oncancel: noop });
+    const field = screen.getByRole('textbox', { name: 'Nom du nouveau dossier' });
+    expect(field).toHaveFocus();
+    await userEvent.keyboard('data.json');
+    expect(field.closest('.row')).not.toHaveTextContent('{}');
+    await userEvent.keyboard('{Enter}');
+    expect(oncreate).toHaveBeenCalledWith('data.json');
+  });
+});
+
+describe('FileTree renaming and deleting', () => {
+  const rows = treeRows(['src/app.ts', 'src/.env', 'README.md'], { src: true }, {});
+  const item = (name: RegExp) => screen.getByRole('treeitem', { name });
+  const field = (name: string) => screen.getByRole('textbox', { name: `Renommer « ${name} »` }) as HTMLInputElement;
+
+  it('asks to rename the row it is on with F2 and to delete it with Delete, other keys left alone', async () => {
+    const onrenamerow = vi.fn();
+    const ondeleterow = vi.fn();
+    render(FileTree, { ...base, rows, onrenamerow, ondeleterow });
+    item(/app\.ts/).focus();
+    await userEvent.keyboard('{F2}');
+    expect(onrenamerow).toHaveBeenCalledWith(expect.objectContaining({ kind: 'file', path: 'src/app.ts' }));
+    item(/src/).focus();
+    await userEvent.keyboard('{Delete}');
+    expect(ondeleterow).toHaveBeenCalledWith(expect.objectContaining({ kind: 'dir', path: 'src' }));
+    await userEvent.keyboard('{Backspace}{F3}');
+    expect([onrenamerow.mock.calls.length, ondeleterow.mock.calls.length]).toEqual([1, 1]);
+  });
+
+  it('puts the name of the row renamed in a field at its place, the extension left out of the selection', () => {
+    render(FileTree, { ...base, rows, renaming: { kind: 'file', path: 'src/app.ts' } });
+    const f = field('app.ts');
+    expect(f).toHaveValue('app.ts');
+    expect(f).toHaveFocus();
+    expect([f.selectionStart, f.selectionEnd]).toEqual([0, 3]);
+    expect(screen.queryByRole('treeitem', { name: /app\.ts/ })).not.toBeInTheDocument();
+    expect(item(/\.env/).nextElementSibling).toContainElement(f);
+    expect(f.closest('.row')).toHaveTextContent('TS');
+  });
+
+  it('selects all of a name without an extension, and of a folder', async () => {
+    const { unmount } = render(FileTree, { ...base, rows, renaming: { kind: 'file', path: 'src/.env' } });
+    expect([field('.env').selectionStart, field('.env').selectionEnd]).toEqual([0, 4]);
+    unmount();
+    render(FileTree, { ...base, rows, renaming: { kind: 'dir', path: 'src' } });
+    expect([field('src').selectionStart, field('src').selectionEnd]).toEqual([0, 3]);
+  });
+
+  it('renames on Enter with what the name typed is checked against, and gives up with Escape', async () => {
+    const onrename = vi.fn(async () => null);
+    const onrenamecancel = vi.fn();
+    const renameCheck = (name: string) => (name === 'README.md' ? '« README.md » existe déjà à cet endroit.' : null);
+    const props = { ...base, rows, renaming: { kind: 'file' as const, path: 'src/app.ts' }, renameCheck, onrename, onrenamecancel };
+    const { unmount } = render(FileTree, props);
+    await userEvent.keyboard('main{Enter}');
+    expect(onrename).toHaveBeenCalledWith('main.ts');
+    unmount();
+    render(FileTree, props);
+    await userEvent.clear(field('app.ts'));
+    await userEvent.keyboard('README.md');
+    expect(screen.getByRole('alert')).toHaveTextContent('« README.md » existe déjà à cet endroit.');
+    await userEvent.keyboard('{Escape}');
+    expect(onrenamecancel).toHaveBeenCalledTimes(1);
+    expect(onrename).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the row renamed out of the arrows', async () => {
+    render(FileTree, { ...base, rows, renaming: { kind: 'file', path: 'src/.env' } });
+    item(/src/).focus();
+    await userEvent.keyboard('{ArrowDown}');
+    expect(item(/app\.ts/)).toHaveFocus();
+  });
+
+  it('puts the focus back on a row named, or on its Tab stop when it is gone', async () => {
+    const { component } = render(FileTree, { ...base, rows, active: 'README.md' });
+    await component.focusPath('file', 'src/gone.ts');
+    expect(item(/README/)).toHaveFocus();
+    await component.focusPath('dir', 'src');
+    expect(item(/src/)).toHaveFocus();
+  });
+});
+
 describe('FileTree and the file shown', () => {
   afterEach(() => vi.restoreAllMocks());
 

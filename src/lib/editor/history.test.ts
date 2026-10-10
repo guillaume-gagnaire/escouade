@@ -54,6 +54,20 @@ describe('navHistory', () => {
     expect(navHistory.back(at('x.ts', 1, 1, 'a2'), all)).toEqual(at('w.ts', 1, 1, 'a2'));
   });
 
+  it('follows a file renamed, and the files of a folder renamed, both ways, in its source only', () => {
+    navHistory.push(at('src/a.ts', 3));
+    navHistory.push(at('src/lib/b.ts', 4));
+    navHistory.push(at('src2/c.ts', 5));
+    navHistory.push(at('src/a.ts', 6, 1, 'a2'));
+    expect(navHistory.back(at('d.ts'), all)).toEqual(at('src2/c.ts', 5));
+    navHistory.rename('p1', 'project', 'src', 'source');
+    expect(navHistory.back(at('src2/c.ts', 5), all)).toEqual(at('source/lib/b.ts', 4));
+    expect(navHistory.forward(at('source/lib/b.ts', 4), all)).toEqual(at('src2/c.ts', 5));
+    navHistory.rename('p1', 'project', 'd.ts', 'e.ts');
+    expect(navHistory.forward(at('src2/c.ts', 5), all)).toEqual(at('e.ts'));
+    expect(navHistory.back(at('x.ts', 1, 1, 'a2'), all)).toEqual(at('src/a.ts', 6, 1, 'a2'));
+  });
+
   it('does not keep the same place twice in a row', () => {
     navHistory.push(at('a.ts', 2));
     navHistory.push(at('a.ts', 2));

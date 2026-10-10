@@ -36,9 +36,10 @@ rusqlite = { version = "0.37", features = ["bundled"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots", "json"] }
 base64 = "0.22"
 log = "0.4"
+trash = "5"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.60", features = ["Win32_Media_Audio", "Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_ProcessStatus", "Win32_System_Threading"] }
+windows-sys = { version = "0.60", features = ["Win32_Media_Audio", "Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_JobObjects", "Win32_System_ProcessStatus", "Win32_System_Threading"] }
 tauri-winrt-notification = "0.7"
 # The integrations' secrets in the Credential Manager. Its own store only: neither the fallback
 # that keeps them in memory (lost at the next start) nor Linux's secret-service.

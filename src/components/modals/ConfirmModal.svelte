@@ -26,14 +26,15 @@
   let checked = $state(untrack(() => option?.value ?? false));
   let busy = $state(false);
 
-  async function go() {
+  /** Runs a choice, then closes, unless the choice opened another modal (the next question). */
+  async function choose(run: () => void | Promise<void>) {
     const self = app.modal;
     busy = true;
-    await onConfirm(checked);
+    await run();
     busy = false;
-    // Unless the confirmation opened another one.
     if (app.modal === self) app.modal = null;
   }
+  const go = () => choose(() => onConfirm(checked));
 
   function cancel() {
     // Read before closing: the props are the modal's, gone once it is closed.
@@ -54,16 +55,7 @@
   {#snippet footer()}
     <button class="btn ghost" onclick={cancel}>Annuler</button>
     {#if alt}
-      <button
-        class="btn"
-        disabled={busy}
-        onclick={async () => {
-          busy = true;
-          await alt.onClick();
-          busy = false;
-          app.modal = null;
-        }}>{alt.label}</button
-      >
+      <button class="btn" disabled={busy} onclick={() => choose(alt.onClick)}>{alt.label}</button>
     {/if}
     <button class="btn {danger ? 'danger' : 'primary'}" disabled={busy} onclick={go}>{confirm}</button>
   {/snippet}

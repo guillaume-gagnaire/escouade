@@ -1,5 +1,7 @@
 // The editor's file tree: a flat list of paths shown as folders and files, the way VS Code's explorer does.
 
+import { IS_MAC } from '../platform';
+
 export type FileStatus = 'M' | 'A' | 'D';
 
 export interface TreeRow {
@@ -31,7 +33,8 @@ const STRENGTH: FileStatus[] = ['M', 'A', 'D'];
 
 /**
  * The rows shown, `adding` the folder getting a new file ('' for the root), its field first among what it holds.
- * `ignored` lists the files git ignores, which the tree draws apart.
+ * `ignored` lists the files git ignores, which the tree draws apart; `dirs` folders to show even without any file (git
+ * lists none of those).
  */
 export function treeRows(
   files: string[],
@@ -39,18 +42,22 @@ export function treeRows(
   status: Record<string, FileStatus>,
   adding: string | null = null,
   ignored: readonly string[] = [],
+  dirs: readonly string[] = [],
 ): TreeRow[] {
   const ignoredSet = new Set(ignored);
   const root: Node = { dirs: new Map(), files: [] };
-  for (const f of files) {
+  /** The node of the folder `parts`, made with those above it when missing. */
+  const folder = (parts: string[]) => {
     let n = root;
-    for (const d of f.split('/').slice(0, -1)) {
+    for (const d of parts) {
       let c = n.dirs.get(d);
       if (!c) n.dirs.set(d, (c = { dirs: new Map(), files: [] }));
       n = c;
     }
-    n.files.push(f);
-  }
+    return n;
+  };
+  for (const f of files) folder(f.split('/').slice(0, -1)).files.push(f);
+  for (const d of dirs) folder(d.split('/'));
   // The strongest change under each folder, in one pass over the changes.
   const held = new Map<string, FileStatus>();
   for (const [p, s] of Object.entries(status)) {
@@ -112,4 +119,18 @@ export function treeRows(
 export function ancestors(path: string): string[] {
   const parts = path.split('/').slice(0, -1);
   return parts.map((_, i) => parts.slice(0, i + 1).join('/'));
+}
+
+type Keys = Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'altKey' | 'shiftKey' | 'metaKey'>;
+
+/** The key deleting the row it is on: Delete alone, and on macOS Cmd+Backspace too, as in the Finder (a MacBook has no Delete key). */
+export function isDeleteKey(e: Keys, mac = IS_MAC): boolean {
+  const none = !e.ctrlKey && !e.altKey && !e.shiftKey;
+  return none && ((e.key === 'Delete' && !e.metaKey) || (mac && e.key === 'Backspace' && e.metaKey));
+}
+
+/** Where `path` is once `from` (a file, or a folder holding it) is renamed `to`; null when it is neither it nor in it. */
+export function movedPath(path: string, from: string, to: string): string | null {
+  if (path === from) return to;
+  return path.startsWith(from + '/') ? to + path.slice(from.length) : null;
 }

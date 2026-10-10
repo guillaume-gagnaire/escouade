@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { agent, board, fakeBackend, gitInfo, project, resetApp, SETTINGS, ticket } from '../test/ipc';
 import { conversationOf } from './conversations.svelte';
 import { buffers } from './editor/buffers.svelte';
+import { navHistory } from './editor/history';
 import { recentFiles } from './editor/quick-open';
 import { fileSearches } from './editor/search.svelte';
 import { trees } from './editor/trees.svelte';
@@ -656,6 +657,49 @@ describe('editor', () => {
     await app.openEditor({ source: 'project', path: 'b.ts' });
     app.closeEditorTab('p1', 'project', 'b.ts');
     expect(app.editor.p1.places.project).toMatchObject({ open: ['a.ts'], active: 'a.ts' });
+  });
+
+  it('moves the tabs, open folders, history and recent files of a folder renamed, its unsaved changes kept', async () => {
+    fakeBackend({ fs_read: (a: any) => ({ kind: 'text', text: a.path, size: 1, hash: 'h1', eol: 'lf', bom: false }), fs_base: () => null });
+    await app.openEditor({ source: 'project', path: 'src/a.ts' });
+    await app.openEditor({ source: 'project', path: 'README.md' });
+    await app.openEditor({ source: 'project', path: 'src/lib/x.ts', line: 4 });
+    await app.openEditor({ source: 'a2', path: 'src/a.ts' });
+    await app.openEditor({ source: 'project' });
+    const key = (await buffers.open('p1', 'project', 'src/lib/x.ts')).key;
+    buffers.edit(key, 'mine');
+    navHistory.push({ projectId: 'p1', source: 'project', path: 'src/a.ts', line: 2, col: 1 });
+    app.renameEditorPath('p1', 'project', 'src', 'source');
+    expect(app.editor.p1.places.project).toEqual({
+      open: ['source/a.ts', 'README.md', 'source/lib/x.ts'],
+      active: 'source/lib/x.ts',
+      expanded: { source: true, 'source/lib': true },
+    });
+    expect(app.editor.p1.reveal).toMatchObject({ path: 'source/lib/x.ts', line: 4 });
+    expect(buffers.all['p1|project|source/lib/x.ts']).toMatchObject({ text: 'mine' });
+    expect(recentFiles.list('p1', 'project')).toEqual(['source/lib/x.ts', 'README.md', 'source/a.ts']);
+    const here = { projectId: 'p1', source: 'project', path: 'README.md', line: 1, col: 1 };
+    expect(navHistory.back(here, () => true)).toMatchObject({ path: 'source/a.ts', line: 2 });
+    // The other source has its own files.
+    expect(app.editor.p1.places.a2.open).toEqual(['src/a.ts']);
+  });
+
+  it('keeps one tab when a file is renamed to the path of a tab left open', async () => {
+    fakeBackend();
+    await app.openEditor({ source: 'project', path: 'gone.ts' });
+    await app.openEditor({ source: 'project', path: 'a.ts' });
+    app.renameEditorPath('p1', 'project', 'a.ts', 'gone.ts');
+    expect(app.editor.p1.places.project).toMatchObject({ open: ['gone.ts'], active: 'gone.ts' });
+  });
+
+  it('closes the tabs of a folder deleted, unsaved ones included, and shows the last one left', async () => {
+    fakeBackend({ fs_read: () => ({ kind: 'text', text: 'x', size: 1, hash: 'h1', eol: 'lf', bom: false }), fs_base: () => null });
+    for (const p of ['README.md', 'src/a.ts', 'src2/b.ts', 'src/lib/x.ts']) await app.openEditor({ source: 'project', path: p });
+    const key = (await buffers.open('p1', 'project', 'src/lib/x.ts')).key;
+    buffers.edit(key, 'mine');
+    app.closeEditorPath('p1', 'project', 'src');
+    expect(app.editor.p1.places.project).toEqual({ open: ['README.md', 'src2/b.ts'], active: 'src2/b.ts', expanded: { src2: true } });
+    expect(buffers.all[key]).toBeUndefined();
   });
 
   it('follows the agent picked in the sidebar, and gives way to a terminal or a launch', async () => {

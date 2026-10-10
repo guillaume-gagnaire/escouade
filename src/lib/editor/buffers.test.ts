@@ -462,6 +462,97 @@ describe('buffers', () => {
   });
 });
 
+describe('buffers of files renamed or deleted', () => {
+  beforeEach(() => buffers.reset());
+
+  /** A backend whose files read `<path>\n` (hash h1), and whose reference version is HEAD's for `src/a.ts` only. */
+  function files() {
+    return fakeBackend({
+      fs_read: (a: any) => text(`${a.path}\n`),
+      fs_base: (a: any) => ({ reference: 'HEAD', text: a.path === 'src/a.ts' ? 'head\n' : null }),
+      fs_write: () => 'h2',
+      set_unsaved: () => null,
+    });
+  }
+
+  it('moves a file renamed to its new path: the same buffer, what was typed and the comparison with the disk kept', async () => {
+    const backend = files();
+    const from = (await buffers.open('p1', 'project', 'src/a.ts')).key;
+    await expect.poll(() => buffers.all[from].base?.text).toBe('head\n');
+    buffers.edit(from, 'mine\n');
+    buffers.all[from].disk = 'changed';
+    buffers.all[from].onDisk = { text: 'agent\n', hash: 'h3', replaced: null };
+    const before = buffers.all[from];
+    buffers.move('p1', 'project', 'src/a.ts', 'lib/b.ts');
+    const to = buffers.key('p1', 'project', 'lib/b.ts');
+    expect(buffers.all[from]).toBeUndefined();
+    expect(buffers.all[to]).toBe(before);
+    expect(buffers.all[to]).toMatchObject({
+      key: to,
+      path: 'lib/b.ts',
+      text: 'mine\n',
+      saved: 'src/a.ts\n',
+      hash: 'h1',
+      disk: 'changed',
+      onDisk: { text: 'agent\n', hash: 'h3' },
+    });
+    expect(buffers.isDirty(buffers.all[to])).toBe(true);
+    // The reference version is the new path's.
+    await expect.poll(() => buffers.all[to].base).toEqual({ reference: 'HEAD', text: null });
+    expect(backend.called('fs_base').at(-1)?.args.path).toBe('lib/b.ts');
+    // Saved where it is now, over the version read.
+    expect(await buffers.save(to, true)).toBe(true);
+    expect(backend.called('fs_write')[0].args).toMatchObject({ path: 'lib/b.ts', text: 'mine\n', expectedHash: 'h3' });
+    expect(backend.called('set_unsaved').at(-1)?.args).toEqual({ count: 0 });
+  });
+
+  it('moves the files of a folder renamed, of its source only, and none of a folder whose name starts the same', async () => {
+    files();
+    for (const p of ['src/a.ts', 'src/lib/x.ts', 'src2/y.ts']) await buffers.open('p1', 'project', p);
+    await buffers.open('p1', 'a2', 'src/a.ts');
+    buffers.move('p1', 'project', 'src', 'source');
+    expect(Object.keys(buffers.all).sort()).toEqual([
+      'p1|a2|src/a.ts',
+      'p1|project|source/a.ts',
+      'p1|project|source/lib/x.ts',
+      'p1|project|src2/y.ts',
+    ]);
+    expect(buffers.all['p1|project|source/lib/x.ts']).toMatchObject({ path: 'source/lib/x.ts', text: 'src/lib/x.ts\n' });
+  });
+
+  it('keeps the same id through a rename, and gives each file opened its own', async () => {
+    files();
+    const a = await buffers.open('p1', 'project', 'a.ts');
+    const b = await buffers.open('p1', 'project', 'b.ts');
+    expect(a.id).not.toBe(b.id);
+    const id = a.id;
+    buffers.move('p1', 'project', 'a.ts', 'c.ts');
+    expect(buffers.all['p1|project|c.ts'].id).toBe(id);
+  });
+
+  it('does not take a read that was under way for the old path', async () => {
+    const late = deferred<unknown>();
+    fakeBackend({ fs_read: () => late.promise, fs_base: () => null, set_unsaved: () => null });
+    const reading = buffers.open('p1', 'project', 'a.ts');
+    buffers.move('p1', 'project', 'a.ts', 'b.ts');
+    late.resolve(text('a\n'));
+    await reading;
+    expect(buffers.all).toEqual({});
+  });
+
+  it('forgets the files of a file or a folder deleted, unsaved ones included, and no other', async () => {
+    const backend = files();
+    for (const p of ['src/a.ts', 'src/lib/x.ts', 'src2/y.ts', 'README.md']) await buffers.open('p1', 'project', p);
+    await buffers.open('p1', 'a2', 'src/a.ts');
+    buffers.edit('p1|project|src/lib/x.ts', 'mine\n');
+    expect(backend.called('set_unsaved').at(-1)?.args).toEqual({ count: 1 });
+    buffers.closePath('p1', 'project', 'src');
+    buffers.closePath('p1', 'project', 'README.md');
+    expect(Object.keys(buffers.all).sort()).toEqual(['p1|a2|src/a.ts', 'p1|project|src2/y.ts']);
+    expect(backend.called('set_unsaved').at(-1)?.args).toEqual({ count: 0 });
+  });
+});
+
 describe('trees', () => {
   beforeEach(() => trees.reset());
 

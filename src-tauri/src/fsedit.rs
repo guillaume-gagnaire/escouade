@@ -204,14 +204,22 @@ pub fn write(
     Ok(hash(&bytes))
 }
 
-/// Creates the empty file `rel`, its missing folders with it. Refused when something is already
-/// there: a file is never created over another.
-pub fn create(root: &Path, rel: &str) -> Result<()> {
-    validate_rel(rel)?;
+/// Refuses on Windows a path with a part it would not keep as typed or keeps for a device.
+fn valid_names(rel: &str) -> Result<()> {
     #[cfg(windows)]
     for part in rel.split(['/', '\\']) {
         windows_name(part).map_err(|_| anyhow!("nom invalide : {rel}"))?;
     }
+    #[cfg(not(windows))]
+    let _ = rel;
+    Ok(())
+}
+
+/// Creates the empty file `rel`, its missing folders with it. Refused when something is already
+/// there: a file is never created over another.
+pub fn create(root: &Path, rel: &str) -> Result<()> {
+    validate_rel(rel)?;
+    valid_names(rel)?;
     let path = contained(root, rel)?;
     if std::fs::symlink_metadata(&path).is_ok() {
         bail!("{rel} existe déjà");
@@ -228,6 +236,264 @@ pub fn create(root: &Path, rel: &str) -> Result<()> {
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => bail!("{rel} existe déjà"),
         Err(e) => Err(anyhow!("{rel} : {e}")),
     }
+}
+
+/// Creates the empty folder `rel`, its missing parents with it. Refused when something is already
+/// there, and in the agents' worktrees.
+pub fn mkdir(root: &Path, rel: &str) -> Result<()> {
+    validate_rel(rel)?;
+    valid_names(rel)?;
+    in_worktrees(root, rel)?;
+    let path = contained(root, rel)?;
+    if std::fs::symlink_metadata(&path).is_ok() {
+        bail!("{rel} existe déjà");
+    }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| anyhow!("{rel} : {e}"))?;
+    }
+    match std::fs::create_dir(&path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => bail!("{rel} existe déjà"),
+        Err(e) => Err(anyhow!("{rel} : {e}")),
+    }
+}
+
+/// Renames the file or folder `from` to `to`, into other folders when `to` names some (made if
+/// need be). Refused when something is at `to` already, unless it is `from` itself, spelled in
+/// another case on a disk that ignores it: changing only the case is a rename like any other. A
+/// file written at `to` meanwhile (by an agent) makes it fail rather than be replaced.
+pub fn rename(root: &Path, from: &str, to: &str, kept: &[String]) -> Result<()> {
+    validate_rel(from)?;
+    validate_rel(to)?;
+    valid_names(to)?;
+    in_worktrees(root, from)?;
+    holds_worktrees(root, from, kept)?;
+    // Named as a folder that would hold worktrees, `to` holds none: nothing is there.
+    in_worktrees(root, to)?;
+    let src = native(root, from)?;
+    let dst = native(root, to)?;
+    if std::fs::symlink_metadata(&src).is_err() {
+        bail!("{from} introuvable");
+    }
+    let slash = |s: &str| s.replace('\\', "/");
+    let (a, b) = (slash(from), slash(to));
+    if a == b {
+        return Ok(());
+    }
+    let (lower_a, lower_b) = (a.to_lowercase(), b.to_lowercase());
+    if lower_b.starts_with(&format!("{lower_a}/")) {
+        bail!("{to} est dans {from}");
+    }
+    if std::fs::symlink_metadata(&dst).is_ok() {
+        // On a disk that ignores case, `to` is found because it is `from`: its name, spelled as
+        // typed, is then not one its folder lists.
+        let same_folder = Path::new(&a).parent() == Path::new(&b).parent();
+        if !(same_folder && lower_a == lower_b && !listed(&dst)) {
+            bail!("{to} existe déjà");
+        }
+        return std::fs::rename(&src, &dst).map_err(|e| anyhow!("{from} : {e}"));
+    }
+    if let Some(parent) = dst.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| anyhow!("{to} : {e}"))?;
+    }
+    move_new(&src, &dst).map_err(|e| match e.kind() {
+        std::io::ErrorKind::AlreadyExists => anyhow!("{to} existe déjà"),
+        _ => anyhow!("{from} : {e}"),
+    })
+}
+
+/// Sends the file or folder `rel` (with all it holds) to the trash with `send` (`to_trash`, or
+/// what a test gives). Never the root, nor the agents' worktrees or a folder holding them; a link
+/// goes, not what it points to (which is never outside the root anyway).
+pub fn delete(
+    root: &Path,
+    rel: &str,
+    kept: &[String],
+    send: impl FnOnce(&Path) -> Result<()>,
+) -> Result<()> {
+    validate_rel(rel)?;
+    in_worktrees(root, rel)?;
+    holds_worktrees(root, rel, kept)?;
+    let path = native(root, rel)?;
+    if std::fs::symlink_metadata(&path).is_err() {
+        bail!("{rel} introuvable");
+    }
+    // A link to the root would take its place in the trash's eyes, or in the user's.
+    if std::fs::canonicalize(&path)? == std::fs::canonicalize(root)? {
+        bail!("{rel} est la racine de la source");
+    }
+    send(&path)
+}
+
+/// The system's trash: the Recycle Bin on Windows, the Trash on macOS, where the user can put the
+/// file back. On a thread of its own: Windows' shell wants COM set up its way on the thread that
+/// calls it, and `trash` panics when something else set it up otherwise on one of the pool's.
+pub fn to_trash(path: &Path) -> Result<()> {
+    let path = path.to_path_buf();
+    std::thread::spawn(move || {
+        #[cfg(target_os = "macos")]
+        let ctx = {
+            use trash::macos::{DeleteMethod, TrashContextExtMacos};
+            let mut c = trash::TrashContext::default();
+            // Through the Finder, macOS would first ask to let the app control it.
+            c.set_delete_method(DeleteMethod::NsFileManager);
+            c
+        };
+        #[cfg(not(target_os = "macos"))]
+        let ctx = trash::TrashContext::default();
+        ctx.delete(&path)
+    })
+    .join()
+    .map_err(|_| anyhow!("la corbeille n’a pas répondu"))?
+    .map_err(|e| anyhow!("{e}"))
+}
+
+/// Where the agents' worktrees are, from the folder holding them (the project's, or the root).
+pub const WORKTREES: &str = ".claude/worktrees";
+
+/// The names of a path, lowercase: case is ignored on Windows and macOS.
+fn lower_parts(s: &str) -> Vec<String> {
+    s.split(['/', '\\'])
+        .filter(|p| !p.is_empty() && *p != ".")
+        .map(str::to_lowercase)
+        .collect()
+}
+
+/// Refuses `rel` when it is in the agents' worktrees: below a `.claude/worktrees` at any depth (as
+/// the search leaves them out), spelled so or reached through a link on the way.
+fn in_worktrees(root: &Path, rel: &str) -> Result<()> {
+    for path in [Some(rel.to_string()), real_rel(root, rel)]
+        .into_iter()
+        .flatten()
+    {
+        let parts = lower_parts(&path);
+        if parts
+            .windows(2)
+            .any(|w| w[0] == ".claude" && w[1] == "worktrees")
+        {
+            bail!("{rel} est dans les worktrees des agents");
+        }
+    }
+    Ok(())
+}
+
+/// Refuses `rel` when renaming or deleting it would take worktrees with it: it holds one of the
+/// `kept` folders (relative to the root) that is there.
+fn holds_worktrees(root: &Path, rel: &str, kept: &[String]) -> Result<()> {
+    let path = lower_parts(rel);
+    let holds = |k: &String| lower_parts(k).starts_with(&path);
+    if kept
+        .iter()
+        .any(|k| holds(k) && std::fs::symlink_metadata(root.join(k)).is_ok())
+    {
+        bail!("{rel} contient les worktrees des agents");
+    }
+    Ok(())
+}
+
+/// `rel` from the root as the disk has it: the links on the way to it followed (from the deepest
+/// part of it that is there), not the one it may be itself. None outside the root, which
+/// `contained` refuses anyway.
+fn real_rel(root: &Path, rel: &str) -> Option<String> {
+    let full = root.join(rel);
+    let mut rest = vec![full.file_name()?.to_os_string()];
+    let mut dir = full.parent()?.to_path_buf();
+    let real = loop {
+        if let Ok(real) = std::fs::canonicalize(&dir) {
+            break real;
+        }
+        rest.push(dir.file_name()?.to_os_string());
+        dir = dir.parent()?.to_path_buf();
+    };
+    let mut path = real
+        .strip_prefix(std::fs::canonicalize(root).ok()?)
+        .ok()?
+        .to_path_buf();
+    path.extend(rest.iter().rev());
+    Some(path.to_string_lossy().replace('\\', "/"))
+}
+
+/// `rel` inside `root` (see `contained`), joined part by part: the tree's paths use `/`, which
+/// the shell taking a file to the trash on Windows does not read as its `\`.
+fn native(root: &Path, rel: &str) -> Result<std::path::PathBuf> {
+    contained(root, rel)?;
+    let mut path = root.to_path_buf();
+    path.extend(Path::new(rel).components().filter_map(|c| match c {
+        Component::Normal(name) => Some(name),
+        _ => None,
+    }));
+    Ok(path)
+}
+
+/// Whether the folder of `path` lists its name as written, case included.
+fn listed(path: &Path) -> bool {
+    let (Some(dir), Some(name)) = (path.parent(), path.file_name()) else {
+        return false;
+    };
+    std::fs::read_dir(dir)
+        .map(|entries| entries.flatten().any(|e| e.file_name() == name))
+        .unwrap_or(false)
+}
+
+/// Moves `from` to `to`, failing with `AlreadyExists` rather than replacing what is at `to` at
+/// that very moment, an empty folder included. Never a copy: both are in the same root.
+#[cfg(windows)]
+fn move_new(from: &Path, to: &Path) -> std::io::Result<()> {
+    use windows_sys::Win32::Storage::FileSystem::MoveFileExW;
+    // No MOVEFILE_REPLACE_EXISTING: what is there stays, and the call fails.
+    let ok = unsafe { MoveFileExW(wide(from).as_ptr(), wide(to).as_ptr(), 0) };
+    if ok == 0 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
+/// `path` for a wide Win32 call, in its `\\?\` form when long: past 260 characters, a plain
+/// path is refused.
+#[cfg(windows)]
+fn wide(path: &Path) -> Vec<u16> {
+    use std::os::windows::ffi::OsStrExt;
+    let plain = path.to_string_lossy().replace('/', "\\");
+    let long = if plain.len() < 248 || plain.starts_with(r"\\?\") {
+        plain
+    } else if let Some(share) = plain.strip_prefix(r"\\") {
+        format!(r"\\?\UNC\{share}")
+    } else {
+        format!(r"\\?\{plain}")
+    };
+    std::ffi::OsStr::new(&long)
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect()
+}
+
+#[cfg(target_os = "macos")]
+fn move_new(from: &Path, to: &Path) -> std::io::Result<()> {
+    use std::os::unix::ffi::OsStrExt;
+    let c = |p: &Path| {
+        std::ffi::CString::new(p.as_os_str().as_bytes())
+            .map_err(|_| std::io::Error::from(std::io::ErrorKind::InvalidInput))
+    };
+    let (f, t) = (c(from)?, c(to)?);
+    if unsafe { libc::renamex_np(f.as_ptr(), t.as_ptr(), libc::RENAME_EXCL) } == 0 {
+        return Ok(());
+    }
+    let e = std::io::Error::last_os_error();
+    // A volume that cannot (ENOTSUP): an ordinary rename, `to` found free just before.
+    if e.raw_os_error() == Some(libc::ENOTSUP) && std::fs::symlink_metadata(to).is_err() {
+        return std::fs::rename(from, to);
+    }
+    Err(e)
+}
+
+/// Elsewhere (the app is made for Windows and macOS), `to` is found free just before.
+#[cfg(not(any(windows, target_os = "macos")))]
+fn move_new(from: &Path, to: &Path) -> std::io::Result<()> {
+    if std::fs::symlink_metadata(to).is_ok() {
+        return Err(std::io::ErrorKind::AlreadyExists.into());
+    }
+    std::fs::rename(from, to)
 }
 
 /// A name Windows keeps as typed and gives a file: not ending with a dot or a space (it would drop
@@ -562,6 +828,368 @@ mod tests {
             assert!(err.contains("nom invalide"), "{rel:?}: {err}");
         }
         assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0);
+    }
+
+    /// The names in `dir`, sorted.
+    fn names(dir: &Path) -> Vec<String> {
+        let mut n: Vec<String> = std::fs::read_dir(dir)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        n.sort();
+        n
+    }
+
+    #[test]
+    fn renames_a_file_and_a_folder_with_all_it_holds() {
+        let dir = test_dir("fsedit-rename");
+        std::fs::write(dir.join("a.ts"), "a\n").unwrap();
+        rename(&dir, "a.ts", "b.ts", &[]).unwrap();
+        assert_eq!(names(&dir), vec!["b.ts"]);
+        assert_eq!(std::fs::read_to_string(dir.join("b.ts")).unwrap(), "a\n");
+        // Into folders made on the way.
+        rename(&dir, "b.ts", "lib/deep/b.ts", &[]).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(dir.join("lib/deep/b.ts")).unwrap(),
+            "a\n"
+        );
+        std::fs::write(dir.join("lib/c.ts"), "c\n").unwrap();
+        rename(&dir, "lib", "src", &[]).unwrap();
+        assert_eq!(names(&dir), vec!["src"]);
+        assert_eq!(names(&dir.join("src")), vec!["c.ts", "deep"]);
+        assert!(dir.join("src/deep/b.ts").is_file());
+        // Out of a folder, back to the root.
+        rename(&dir, "src/deep/b.ts", "b.ts", &[]).unwrap();
+        assert!(dir.join("b.ts").is_file());
+        assert_eq!(
+            rename(&dir, "missing.ts", "x.ts", &[])
+                .unwrap_err()
+                .to_string(),
+            "missing.ts introuvable"
+        );
+        assert!(!dir.join("x.ts").exists());
+    }
+
+    #[test]
+    fn renames_over_nothing_that_is_there() {
+        let dir = test_dir("fsedit-rename-taken");
+        std::fs::write(dir.join("a.ts"), "a\n").unwrap();
+        std::fs::write(dir.join("b.ts"), "b\n").unwrap();
+        std::fs::create_dir(dir.join("empty")).unwrap();
+        let refused = |from: &str, to: &str| rename(&dir, from, to, &[]).unwrap_err().to_string();
+        assert_eq!(refused("a.ts", "b.ts"), "b.ts existe déjà");
+        // Not even an empty folder, which a rename could take the place of on macOS.
+        assert_eq!(refused("a.ts", "empty"), "empty existe déjà");
+        assert_eq!(refused("empty", "a.ts"), "a.ts existe déjà");
+        #[cfg(any(windows, target_os = "macos"))]
+        assert_eq!(refused("a.ts", "B.TS"), "B.TS existe déjà");
+        assert_eq!(names(&dir), vec!["a.ts", "b.ts", "empty"]);
+        assert_eq!(std::fs::read_to_string(dir.join("a.ts")).unwrap(), "a\n");
+        assert_eq!(std::fs::read_to_string(dir.join("b.ts")).unwrap(), "b\n");
+        // A folder into itself: refused before any folder is made in it.
+        assert_eq!(
+            refused("empty", "empty/sub/empty"),
+            "empty/sub/empty est dans empty"
+        );
+        assert_eq!(names(&dir.join("empty")), Vec::<String>::new());
+        // A folder where a file is.
+        assert!(rename(&dir, "a.ts", "b.ts/a.ts", &[]).is_err());
+        assert_eq!(names(&dir), vec!["a.ts", "b.ts", "empty"]);
+    }
+
+    #[test]
+    fn renames_a_file_or_a_folder_in_another_case_only() {
+        let dir = test_dir("fsedit-rename-case");
+        std::fs::write(dir.join("a.ts"), "a\n").unwrap();
+        rename(&dir, "a.ts", "A.ts", &[]).unwrap();
+        assert_eq!(names(&dir), vec!["A.ts"]);
+        assert_eq!(std::fs::read_to_string(dir.join("A.ts")).unwrap(), "a\n");
+        std::fs::create_dir(dir.join("src")).unwrap();
+        std::fs::write(dir.join("src/x.ts"), "x\n").unwrap();
+        rename(&dir, "src", "Src", &[]).unwrap();
+        assert_eq!(names(&dir), vec!["A.ts", "Src"]);
+        assert_eq!(names(&dir.join("Src")), vec!["x.ts"]);
+        // The same name: nothing to do.
+        rename(&dir, "A.ts", "A.ts", &[]).unwrap();
+        assert_eq!(names(&dir), vec!["A.ts", "Src"]);
+    }
+
+    #[test]
+    fn renames_nothing_out_of_its_root_nor_through_a_link_leaving_it() {
+        let base = test_dir("fsedit-rename-out");
+        let root = base.join("root");
+        let outside = base.join("outside");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(root.join("a.ts"), "a\n").unwrap();
+        std::fs::write(outside.join("secret.txt"), "s\n").unwrap();
+        for (from, to) in [
+            ("../outside/secret.txt", "s.txt"),
+            ("a.ts", "../escape.ts"),
+            ("a.ts", "sub/../../escape.ts"),
+            ("", "x.ts"),
+            (".", "x"),
+            ("a.ts", ""),
+            ("a.ts", "."),
+            ("a.ts", "sub/."),
+        ] {
+            assert!(rename(&root, from, to, &[]).is_err(), "{from:?} -> {to:?}");
+        }
+        let abs = outside.join("moved.ts").to_string_lossy().into_owned();
+        assert!(rename(&root, "a.ts", &abs, &[]).is_err());
+        if crate::paths::make_dir_link(&outside, &root.join("out")) {
+            assert!(rename(&root, "out/secret.txt", "s.txt", &[]).is_err());
+            assert!(rename(&root, "a.ts", "out/a.ts", &[]).is_err());
+            assert!(rename(&root, "a.ts", "out/new/a.ts", &[]).is_err());
+            assert_eq!(names(&outside), vec!["secret.txt"]);
+        } else {
+            eprintln!("skipped: cannot create a directory link here");
+        }
+        assert!(root.join("a.ts").is_file());
+        assert!(!root.join("s.txt").exists());
+        assert_eq!(names(&base), vec!["outside", "root"]);
+    }
+
+    #[test]
+    fn the_move_itself_fails_rather_than_replace_what_appeared_at_its_target() {
+        // What an agent writes at the target between the check and the move is never replaced.
+        let dir = test_dir("fsedit-move-new");
+        std::fs::write(dir.join("a.ts"), "a\n").unwrap();
+        std::fs::write(dir.join("b.ts"), "agent\n").unwrap();
+        std::fs::create_dir(dir.join("d")).unwrap();
+        let e = move_new(&dir.join("a.ts"), &dir.join("b.ts")).unwrap_err();
+        assert_eq!(e.kind(), std::io::ErrorKind::AlreadyExists, "{e}");
+        assert_eq!(
+            std::fs::read_to_string(dir.join("b.ts")).unwrap(),
+            "agent\n"
+        );
+        std::fs::create_dir(dir.join("empty")).unwrap();
+        assert!(move_new(&dir.join("d"), &dir.join("empty")).is_err());
+        assert_eq!(names(&dir), vec!["a.ts", "b.ts", "d", "empty"]);
+        move_new(&dir.join("a.ts"), &dir.join("c.ts")).unwrap();
+        assert_eq!(names(&dir), vec!["b.ts", "c.ts", "d", "empty"]);
+    }
+
+    /// What the trash of a test was sent.
+    type Sent = std::rc::Rc<std::cell::RefCell<Vec<std::path::PathBuf>>>;
+
+    /// A trash that keeps what it is sent, and leaves it on the disk.
+    fn bin() -> (Sent, impl Fn(&Path) -> Result<()>) {
+        let sent = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        let keep = sent.clone();
+        (sent, move |p: &Path| {
+            keep.borrow_mut().push(p.to_path_buf());
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn deletes_a_file_or_a_folder_by_sending_it_to_the_trash() {
+        let dir = test_dir("fsedit-delete");
+        std::fs::create_dir_all(dir.join("src/lib")).unwrap();
+        std::fs::write(dir.join("src/lib/a.ts"), "a\n").unwrap();
+        let (sent, send) = bin();
+        delete(&dir, "src/lib/a.ts", &[], &send).unwrap();
+        delete(&dir, "src", &[], &send).unwrap();
+        // Given with the system's separators, for its trash to read; nothing removed but by it.
+        assert_eq!(
+            *sent.borrow(),
+            vec![dir.join("src").join("lib").join("a.ts"), dir.join("src")]
+        );
+        assert!(dir.join("src/lib/a.ts").is_file());
+        assert_eq!(
+            delete(&dir, "missing.ts", &[], &send)
+                .unwrap_err()
+                .to_string(),
+            "missing.ts introuvable"
+        );
+        let err = delete(&dir, "src", &[], |_| bail!("corbeille pleine")).unwrap_err();
+        assert_eq!(err.to_string(), "corbeille pleine");
+        assert_eq!(sent.borrow().len(), 2);
+    }
+
+    #[test]
+    fn deletes_neither_the_root_nor_anything_out_of_it() {
+        let base = test_dir("fsedit-delete-root");
+        let root = base.join("root");
+        let outside = base.join("outside");
+        std::fs::create_dir_all(root.join("sub")).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(outside.join("secret.txt"), "s\n").unwrap();
+        let (sent, send) = bin();
+        for rel in [
+            "",
+            ".",
+            "./",
+            "sub/..",
+            "sub/.",
+            "..",
+            "../outside/secret.txt",
+        ] {
+            assert!(delete(&root, rel, &[], &send).is_err(), "{rel:?}");
+        }
+        let abs = outside.join("secret.txt").to_string_lossy().into_owned();
+        assert!(delete(&root, &abs, &[], &send).is_err());
+        if crate::paths::make_dir_link(&outside, &root.join("out")) {
+            assert!(delete(&root, "out/secret.txt", &[], &send).is_err());
+        }
+        // A link to the root itself is the root.
+        if crate::paths::make_dir_link(&root, &root.join("self")) {
+            let err = delete(&root, "self", &[], &send).unwrap_err().to_string();
+            assert!(err.contains("racine"), "{err}");
+        }
+        assert!(sent.borrow().is_empty());
+    }
+
+    #[test]
+    fn never_renames_deletes_or_makes_a_folder_in_the_agents_worktrees() {
+        let dir = test_dir("fsedit-worktrees");
+        for f in [
+            ".claude/settings.json",
+            ".claude/worktrees/dem-1/x.ts",
+            "packages/web/index.ts",
+            "packages/web/.claude/worktrees/dem-2/y.ts",
+            "sub/.claude/worktrees/z/z.ts",
+        ] {
+            let p = dir.join(f);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, "x").unwrap();
+        }
+        let kept = vec![
+            ".claude/worktrees".to_string(),
+            "packages/web/.claude/worktrees".to_string(),
+        ];
+        let (sent, send) = bin();
+        // In them, at any depth, or holding those of the project's folder.
+        for rel in [
+            ".claude/worktrees/dem-1/x.ts",
+            ".claude/worktrees/dem-1",
+            ".claude/worktrees",
+            ".CLAUDE/Worktrees/dem-1",
+            "sub/.claude/worktrees/z",
+            ".claude",
+            "packages",
+            "packages/web",
+            "packages/web/.claude",
+        ] {
+            let err = delete(&dir, rel, &kept, &send).unwrap_err().to_string();
+            assert!(err.contains("worktrees des agents"), "{rel}: {err}");
+            let err = rename(&dir, rel, "moved", &kept).unwrap_err().to_string();
+            assert!(err.contains("worktrees des agents"), "{rel}: {err}");
+        }
+        assert!(rename(
+            &dir,
+            ".claude/settings.json",
+            ".claude/worktrees/s.json",
+            &kept
+        )
+        .is_err());
+        assert!(mkdir(&dir, ".claude/worktrees/new").is_err());
+        assert!(mkdir(&dir, "packages/web/.claude/worktrees/new").is_err());
+        assert!(sent.borrow().is_empty());
+        assert!(!dir.join("moved").exists());
+        // What is beside them is the project's like any file.
+        rename(&dir, "packages/web/index.ts", "packages/web/main.ts", &kept).unwrap();
+        delete(&dir, ".claude/settings.json", &kept, &send).unwrap();
+        mkdir(&dir, ".claude/agents").unwrap();
+        assert_eq!(sent.borrow().len(), 1);
+    }
+
+    #[test]
+    fn a_folder_that_would_hold_worktrees_but_holds_none_is_like_any_other() {
+        let dir = test_dir("fsedit-worktrees-none");
+        std::fs::create_dir_all(dir.join(".claude")).unwrap();
+        std::fs::write(dir.join(".claude/settings.json"), "x").unwrap();
+        std::fs::create_dir_all(dir.join("docs")).unwrap();
+        // The project's folder and the root, where no agent has a worktree yet.
+        let kept = vec![
+            ".claude/worktrees".to_string(),
+            "web/.claude/worktrees".to_string(),
+        ];
+        let (sent, send) = bin();
+        // Named as one of them, or as a folder above one: still none there.
+        rename(&dir, "docs", "web", &kept).unwrap();
+        rename(&dir, "web", "docs", &kept).unwrap();
+        delete(&dir, ".claude", &kept, &send).unwrap();
+        assert_eq!(*sent.borrow(), vec![dir.join(".claude")]);
+    }
+
+    #[test]
+    fn a_link_into_the_agents_worktrees_does_not_lead_into_them() {
+        let dir = test_dir("fsedit-worktrees-link");
+        // Joined part by part: `mklink /J` takes no `/`.
+        let wt = dir.join(".claude").join("worktrees").join("dem-1");
+        std::fs::create_dir_all(&wt).unwrap();
+        std::fs::write(wt.join("x.ts"), "x").unwrap();
+        if !crate::paths::make_dir_link(&wt, &dir.join("wt")) {
+            eprintln!("skipped: cannot create a directory link here");
+            return;
+        }
+        let kept = vec![".claude/worktrees".to_string()];
+        let (sent, send) = bin();
+        let err = delete(&dir, "wt/x.ts", &kept, &send)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("worktrees des agents"), "{err}");
+        let err = rename(&dir, "wt/x.ts", "x.ts", &kept)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("worktrees des agents"), "{err}");
+        std::fs::write(dir.join("a.ts"), "a").unwrap();
+        let err = rename(&dir, "a.ts", "wt/a.ts", &kept)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("worktrees des agents"), "{err}");
+        let err = rename(&dir, "a.ts", "wt/new/a.ts", &kept)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("worktrees des agents"), "{err}");
+        assert!(mkdir(&dir, "wt/new").is_err());
+        assert!(wt.join("x.ts").is_file());
+        assert!(!wt.join("new").exists());
+        // The link itself goes, not what it leads to.
+        delete(&dir, "wt", &kept, &send).unwrap();
+        assert_eq!(*sent.borrow(), vec![dir.join("wt")]);
+    }
+
+    #[test]
+    fn makes_an_empty_folder_with_its_parents_but_never_over_what_is_there() {
+        let dir = test_dir("fsedit-mkdir");
+        mkdir(&dir, "a").unwrap();
+        assert!(dir.join("a").is_dir());
+        assert_eq!(names(&dir.join("a")), Vec::<String>::new());
+        mkdir(&dir, "b/c/d").unwrap();
+        assert!(dir.join("b/c/d").is_dir());
+        std::fs::write(dir.join("f.ts"), "keep\n").unwrap();
+        let refused = |rel: &str| mkdir(&dir, rel).unwrap_err().to_string();
+        assert_eq!(refused("a"), "a existe déjà");
+        assert_eq!(refused("f.ts"), "f.ts existe déjà");
+        #[cfg(any(windows, target_os = "macos"))]
+        assert_eq!(refused("A"), "A existe déjà");
+        assert!(mkdir(&dir, "f.ts/x").is_err());
+        assert_eq!(std::fs::read_to_string(dir.join("f.ts")).unwrap(), "keep\n");
+        for rel in ["", ".", "sub/.", "../escape"] {
+            assert!(mkdir(&dir, rel).is_err(), "{rel:?}");
+        }
+        assert!(!dir.parent().unwrap().join("escape").exists());
+        #[cfg(windows)]
+        for rel in ["x.", "CON", "y/nul", "q?"] {
+            assert!(refused(rel).contains("nom invalide"), "{rel}");
+        }
+        assert_eq!(names(&dir), vec!["a", "b", "f.ts"]);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn renames_to_no_name_windows_would_change_or_keeps_for_a_device() {
+        let dir = test_dir("fsedit-rename-win");
+        std::fs::write(dir.join("a.ts"), "a\n").unwrap();
+        for to in ["b.", "CON", "x/nul.txt", "c?.ts"] {
+            let err = rename(&dir, "a.ts", to, &[]).unwrap_err().to_string();
+            assert!(err.contains("nom invalide"), "{to:?}: {err}");
+        }
+        assert_eq!(names(&dir), vec!["a.ts"]);
     }
 
     #[cfg(unix)]

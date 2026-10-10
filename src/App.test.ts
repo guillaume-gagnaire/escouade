@@ -72,6 +72,38 @@ describe('App layout', () => {
     expect(field).toHaveFocus();
   });
 
+  it('asks the next question of a confirmation in a dialog of its own, the focus in it', async () => {
+    start('');
+    await screen.findByRole('main');
+    const onConfirm = vi.fn();
+    app.modal = {
+      kind: 'confirm',
+      title: 'Enregistrer « a.ts » ?',
+      body: 'b',
+      confirm: 'Enregistrer',
+      onConfirm: vi.fn(),
+      alt: {
+        label: 'Ne pas enregistrer',
+        onClick: () => {
+          app.modal = {
+            kind: 'confirm',
+            title: 'Supprimer « a.ts » ?',
+            body: 'Il part dans la corbeille.',
+            confirm: 'Supprimer',
+            onConfirm,
+          };
+        },
+      },
+    };
+    await userEvent.click(await screen.findByRole('button', { name: 'Ne pas enregistrer' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Supprimer « a.ts » ?' });
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+    await userEvent.keyboard('{Tab}');
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Supprimer' }));
+    expect(onConfirm).toHaveBeenCalled();
+  });
+
   it('keeps the files panel closed in the classic layout until asked for', async () => {
     start('');
     expect(await screen.findByRole('main')).toBeInTheDocument();

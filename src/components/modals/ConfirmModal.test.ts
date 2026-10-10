@@ -46,4 +46,21 @@ describe('ConfirmModal', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Fermer le projet' }));
     expect(app.modal).toEqual({ kind: 'settings', resume: true });
   });
+
+  it('leaves the modal its third choice opened', async () => {
+    const alt = vi.fn(() => {
+      app.modal = { kind: 'settings', resume: true };
+    });
+    app.modal = {
+      kind: 'confirm',
+      title: 'Enregistrer ?',
+      body: 'b',
+      confirm: 'Enregistrer',
+      onConfirm: vi.fn(),
+      alt: { label: 'Ne pas enregistrer', onClick: alt },
+    };
+    render(ConfirmModal, { ...(app.modal as any) });
+    await userEvent.click(screen.getByRole('button', { name: 'Ne pas enregistrer' }));
+    expect(app.modal).toEqual({ kind: 'settings', resume: true });
+  });
 });

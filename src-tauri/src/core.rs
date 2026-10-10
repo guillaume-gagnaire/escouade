@@ -682,6 +682,23 @@ fn sub_prefix(root: &str, sub: &str) -> String {
     }
 }
 
+/// The folders of an editor source (`root`, an agent's `worktree` or else the checkout holding
+/// the folder `project`) that hold the agents' worktrees, relative to it: the editor neither
+/// renames nor deletes them, nor a folder holding one. The project's own are in its folder, below
+/// the root when it is a subfolder of its repository; a validation's are at the root.
+fn worktrees_kept(root: &str, project: &str, worktree: bool) -> Vec<String> {
+    let mut kept = vec![fsedit::WORKTREES.to_string()];
+    let below = if worktree {
+        String::new()
+    } else {
+        sub_prefix(root, project)
+    };
+    if !below.is_empty() {
+        kept.push(format!("{below}{}", fsedit::WORKTREES));
+    }
+    kept
+}
+
 impl<R: Runtime> Core<R> {
     pub fn load(app: AppHandle<R>, data: DataDir) -> (Arc<Self>, mpsc::UnboundedReceiver<String>) {
         if let Err(e) = data.ensure() {
@@ -3337,6 +3354,18 @@ impl<R: Runtime> Core<R> {
         Ok((root, None))
     }
 
+    /// `edit_root`, with the folders holding the agents' worktrees that the editor's renames and
+    /// deletions keep away from (see `worktrees_kept`).
+    pub async fn edit_kept(
+        &self,
+        project_id: &str,
+        agent_id: Option<String>,
+    ) -> Result<(String, Vec<String>)> {
+        let (root, base) = self.edit_root(project_id, agent_id).await?;
+        let kept = worktrees_kept(&root, &self.project(project_id)?.path, base.is_some());
+        Ok((root, kept))
+    }
+
     /// The files of an editor source (the agent's worktree, else the project's checkout), with the
     /// ignored ones the project's « Fichiers copiés dans les worktrees » patterns name.
     pub async fn fs_tree(
@@ -4161,6 +4190,23 @@ mod tests {
         assert_eq!(
             sub_prefix("C:/code/mono", "C:/code/mono/packages/web"),
             "packages/web/"
+        );
+    }
+
+    #[test]
+    fn the_editor_keeps_the_worktrees_of_the_projects_folder_and_of_its_root() {
+        assert_eq!(
+            worktrees_kept("C:/code/app", "C:\\code\\app", false),
+            vec![".claude/worktrees"]
+        );
+        assert_eq!(
+            worktrees_kept("C:/code/mono", "C:/code/mono/packages/web", false),
+            vec![".claude/worktrees", "packages/web/.claude/worktrees"]
+        );
+        // An agent's worktree holds none of the project's.
+        assert_eq!(
+            worktrees_kept("C:/code/mono/.claude/worktrees/dem-1", "C:/code/mono", true),
+            vec![".claude/worktrees"]
         );
     }
 

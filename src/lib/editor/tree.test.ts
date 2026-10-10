@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ancestors, treeRows } from './tree';
+import { ancestors, isDeleteKey, movedPath, treeRows } from './tree';
 
 const files = ['src/b.ts', 'README.md', 'src/a/x.ts', 'package.json', 'src/A.ts'];
 const shape = (rows: ReturnType<typeof treeRows>) => rows.map((r) => `${r.depth}${r.kind[0]} ${r.name}`);
@@ -102,9 +102,60 @@ describe('treeRows with names that Object has too', () => {
   });
 });
 
+describe('treeRows with empty folders', () => {
+  it('shows a folder made without a file, at its place among the others, and what it holds once open', () => {
+    const rows = treeRows(['src/a.ts', 'README.md'], { src: true }, {}, null, [], ['src/empty', 'docs']);
+    expect(shape(rows)).toEqual(['0d docs', '0d src', '1d empty', '1f a.ts', '0f README.md']);
+    expect(rows[2]).toMatchObject({ kind: 'dir', path: 'src/empty', open: false });
+  });
+
+  it('shares the row of the folder holding only it, as any folder, and gets the field naming a file in it', () => {
+    expect(shape(treeRows([], {}, {}, null, [], ['a/b']))).toEqual(['0d a/b']);
+    expect(shape(treeRows([], { a: true, 'a/b': true }, {}, 'a/b', [], ['a/b']))).toEqual(['0d a/b', '1n ']);
+  });
+
+  it('shows a folder the files list already only once', () => {
+    expect(shape(treeRows(['src/a.ts'], {}, {}, null, [], ['src']))).toEqual(['0d src']);
+  });
+});
+
 describe('ancestors', () => {
   it('gives the folders above a file, outermost first', () => {
     expect(ancestors('src/a/x.ts')).toEqual(['src', 'src/a']);
     expect(ancestors('x.ts')).toEqual([]);
+  });
+});
+
+describe('isDeleteKey', () => {
+  const key = (key: string, mods: Partial<KeyboardEvent> = {}) => ({
+    key,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+    metaKey: false,
+    ...mods,
+  });
+
+  it('is Delete alone, and Cmd+Backspace too on macOS as in the Finder', () => {
+    expect(isDeleteKey(key('Delete'), false)).toBe(true);
+    expect(isDeleteKey(key('Delete'), true)).toBe(true);
+    expect(isDeleteKey(key('Backspace', { metaKey: true }), true)).toBe(true);
+    expect(isDeleteKey(key('Backspace', { metaKey: true }), false)).toBe(false);
+    expect(isDeleteKey(key('Backspace'), true)).toBe(false);
+    for (const mod of ['ctrlKey', 'altKey', 'shiftKey', 'metaKey'])
+      expect(isDeleteKey(key('Delete', { [mod]: true }), false), mod).toBe(false);
+  });
+});
+
+describe('movedPath', () => {
+  it('gives the new path of a file renamed or moved, and of what a folder renamed holds', () => {
+    expect(movedPath('src/a.ts', 'src/a.ts', 'lib/b.ts')).toBe('lib/b.ts');
+    expect(movedPath('src/lib/x.ts', 'src', 'source')).toBe('source/lib/x.ts');
+    expect(movedPath('src', 'src', 'source')).toBe('source');
+  });
+
+  it('gives null for a path that is neither it nor in it', () => {
+    expect(movedPath('src2/a.ts', 'src', 'source')).toBeNull();
+    expect(movedPath('README.md', 'src', 'source')).toBeNull();
   });
 });

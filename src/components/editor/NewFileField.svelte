@@ -1,24 +1,34 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
+  import type { EntryKind } from '../../lib/editor/create';
   import FileIcon from './FileIcon.svelte';
 
   let {
     check,
-    oncreate,
+    onsubmit,
     oncancel,
+    value = '',
+    label = 'Nom du nouveau fichier',
+    kind = 'file',
   }: {
-    /** Why `name` cannot be created, or null. */
+    /** Why `name` cannot be taken, or null. */
     check: (name: string) => string | null;
-    /** Creates the file `name`: null once done, else what refused it. */
-    oncreate: (name: string) => Promise<string | null>;
+    /** Creates (or renames to) `name`: null once done, else what refused it. */
+    onsubmit: (name: string) => Promise<string | null>;
     oncancel: () => void;
+    /** The name to start from: a file or folder renamed has its own. */
+    value?: string;
+    label?: string;
+    /** A folder's name has no file icon. */
+    kind?: EntryKind;
   } = $props();
 
   let input = $state<HTMLInputElement>();
-  let name = $state('');
-  /** What refused the creation of `name`: shown until another name is typed; Enter tries it again. */
+  let name = $state(untrack(() => value));
+  /** What refused `name`: shown until another name is typed; Enter tries it again. */
   let refused = $state<{ name: string; error: string } | null>(null);
   let busy = false;
-  /** Given up or created: the focus lost as the field goes away decides nothing. */
+  /** Given up or done: the focus lost as the field goes away decides nothing. */
   let done = false;
 
   const invalid = $derived(name.trim() ? check(name) : null);
@@ -35,7 +45,7 @@
     if (invalid) return;
     busy = true;
     const typed = name;
-    const error = await oncreate(typed).catch((e) => String(e));
+    const error = await onsubmit(typed).catch((e) => String(e));
     busy = false;
     if (!error) {
       done = true;
@@ -57,18 +67,24 @@
     });
   }
 
+  // A name given is selected but its extension, as VS Code does: what is typed replaces the name, `.ts` stays. A folder's,
+  // or a name with nothing before its dot (`.env`), is selected whole.
   function take(node: HTMLInputElement) {
     node.focus();
+    // Given before the binding does, for the selection to be made in it.
+    node.value = name;
+    const dot = kind === 'file' ? name.lastIndexOf('.') : -1;
+    node.setSelectionRange(0, dot > 0 ? dot : name.length);
     node.scrollIntoView?.({ block: 'nearest' });
   }
 </script>
 
-<FileIcon path={name.replaceAll('\\', '/')} />
+{#if kind === 'file'}<FileIcon path={name.replaceAll('\\', '/')} />{/if}
 <input
   use:take
   bind:this={input}
   bind:value={name}
-  aria-label="Nom du nouveau fichier"
+  aria-label={label}
   aria-invalid={!!problem}
   spellcheck="false"
   autocomplete="off"

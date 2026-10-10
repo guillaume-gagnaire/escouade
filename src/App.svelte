@@ -140,7 +140,10 @@
     wholeProject={app.modal.wholeProject}
   />
 {:else if app.modal?.kind === 'confirm'}
-  <ConfirmModal {...app.modal} />
+  <!-- A choice can ask the next question (save, then delete): a dialog of its own, which takes the focus. -->
+  {#key app.modal}
+    <ConfirmModal {...app.modal} />
+  {/key}
 {:else if app.modal?.kind === 'rename'}
   <RenameModal title={app.modal.title} value={app.modal.value} onSubmit={app.modal.onSubmit} />
 {:else if app.modal?.kind === 'testLaunch'}

@@ -4,11 +4,14 @@
 import { plural } from '../format';
 import { api } from '../ipc';
 import type { FileBase, FileText } from '../types';
+import { movedPath } from './tree';
 
 export type BufferKind = 'text' | 'binary' | 'tooLarge' | 'missing' | 'error';
 
 export interface Buffer {
   key: string;
+  /** The same through a rename, which changes `key`: the editor keeps the file's state (undo, cursor) across it. */
+  id: number;
   projectId: string;
   source: string;
   path: string;
@@ -52,8 +55,15 @@ export const lossNotice = (n: number) =>
 
 const notFound = (e: unknown) => String(e).includes('introuvable');
 
+/** The source and path of a key (a path may hold a `|` on macOS). */
+const parseKey = (k: string) => {
+  const [projectId, source, ...path] = k.split('|');
+  return { projectId, source, path: path.join('|') };
+};
+
 class Buffers {
   all = $state<Record<string, Buffer>>({});
+  private ids = 0;
   private sent = 0;
   private pending = new Map<string, Promise<Buffer>>();
   private saving = new Set<string>();
@@ -86,6 +96,7 @@ class Buffers {
   private async load(key: string, projectId: string, source: string, path: string): Promise<Buffer> {
     const b: Buffer = {
       key,
+      id: ++this.ids,
       projectId,
       source,
       path,
@@ -292,6 +303,37 @@ class Buffers {
     this.sync();
   }
 
+  /**
+   * `from` (a file, or a folder holding files) renamed `to` in a source: its open files follow to their new path, the
+   * same buffers, with what was typed and the comparison with the disk. Their reference version is read again: the
+   * new path's is not the old one's.
+   */
+  move(projectId: string, source: string, from: string, to: string) {
+    for (const b of Object.values(this.all)) {
+      const path = b.projectId === projectId && b.source === source ? movedPath(b.path, from, to) : null;
+      if (path === null) continue;
+      const key = this.key(projectId, source, path);
+      delete this.all[b.key];
+      Object.assign(b, { key, path });
+      this.all[key] = b;
+      this.loadBase(key);
+    }
+    // A read under way is the old path's: not taken when it arrives (the file is read at its new path when shown).
+    for (const k of [...this.pending.keys()]) {
+      const p = parseKey(k);
+      if (p.projectId === projectId && p.source === source && movedPath(p.path, from, to) !== null) this.pending.delete(k);
+    }
+  }
+
+  /** Forgets the files of `path` (a file, or a folder holding files) in a source, which was deleted: unsaved ones too. */
+  closePath(projectId: string, source: string, path: string) {
+    const gone = (b: { projectId: string; source: string; path: string }) =>
+      b.projectId === projectId && b.source === source && movedPath(b.path, path, path) !== null;
+    for (const b of Object.values(this.all)) if (gone(b)) delete this.all[b.key];
+    for (const k of [...this.pending.keys()]) if (gone(parseKey(k))) this.pending.delete(k);
+    this.sync();
+  }
+
   /** Unsaved files of a project, or of one of its sources. */
   unsavedIn(projectId: string, source?: string): number {
     return Object.values(this.all).filter(
@@ -312,10 +354,7 @@ class Buffers {
   private drop(gone: (b: Pick<Buffer, 'projectId' | 'source'>) => boolean) {
     for (const b of Object.values(this.all)) if (gone(b)) delete this.all[b.key];
     // A read under way is not taken when it arrives.
-    for (const k of this.pending.keys()) {
-      const [projectId, source] = k.split('|');
-      if (gone({ projectId, source })) this.pending.delete(k);
-    }
+    for (const k of [...this.pending.keys()]) if (gone(parseKey(k))) this.pending.delete(k);
     this.sync();
   }
 
