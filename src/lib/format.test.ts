@@ -1,12 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
   basename,
   dirname,
   fAgo,
   fBytes,
   fCountdown,
+  fDate,
   fDur,
+  fInt,
+  fPct,
   fSince,
+  fTime,
   fTok,
   fUsd,
   fWhen,
@@ -16,6 +20,10 @@ import {
   relPath,
   tildify,
 } from './format';
+import { setLang } from './i18n';
+
+/** Any space as a plain one: `Intl` puts non-breaking ones between digits, and before « AM » in some versions. */
+const spaces = (s: string) => s.replace(/\s/g, ' ');
 
 describe('fTok', () => {
   it.each([
@@ -141,5 +149,71 @@ describe('fWhen', () => {
     const now = new Date(2026, 8, 30, 12, 0).getTime();
     expect(fWhen(new Date(2026, 8, 30, 15, 0).getTime(), now)).toBe('à 15:00');
     expect(fWhen(new Date(2026, 9, 2, 9, 30).getTime(), now)).toBe('le vendredi 2 octobre à 09:30');
+  });
+});
+
+describe('fPct, fInt, fDate, fTime', () => {
+  const day = new Date(2026, 9, 2, 9, 30).getTime();
+  it('write a percentage, an integer, a date and a time the French way', () => {
+    expect(fPct(41.6)).toBe('42 %');
+    expect(spaces(fInt(1_234_567.4))).toBe('1 234 567');
+    expect(fDate(day)).toBe('2 octobre 2026');
+    expect(fTime(day)).toBe('09:30');
+  });
+});
+
+describe('in English', () => {
+  beforeEach(() => setLang('en'));
+  const now = Date.UTC(2026, 8, 28, 12, 0, 0);
+
+  it('writes tokens with a dot and a unit stuck to the number', () => {
+    expect([999, 1000, 182400, 2_345_678, 3_200_000_000].map(fTok)).toEqual(['999', '1.0k', '182.4k', '2.35M', '3.20B']);
+  });
+
+  it('puts the dollar sign before the amount', () => {
+    expect(fUsd(0.1)).toBe('$0.10');
+    expect(fUsd(0.0062)).toBe('$0.006');
+    expect(fUsd(1284.6)).toBe('$1,284.60');
+  });
+
+  it('writes a percentage without a space, and an integer with commas', () => {
+    expect(fPct(41.6)).toBe('42%');
+    expect(fInt(1_234_567.4)).toBe('1,234,567');
+  });
+
+  it('writes durations and countdowns with d for days', () => {
+    expect(fDur(312_000)).toBe('5m 12s');
+    expect(fDur(3_920_000)).toBe('1h 05m');
+    expect(fCountdown(now + (1 * 3600 + 48 * 60) * 1000, now)).toBe('1h48');
+    expect(fCountdown(now + (4 * 86400 + 12 * 3600) * 1000, now)).toBe('4d 12h');
+    expect(fCountdown(null, now)).toBe('—');
+  });
+
+  it('says how long ago', () => {
+    const ago = (s: number) => fAgo(now / 1000 - s, now);
+    expect([20, 5 * 60, 3 * 3600, 30 * 3600, 4 * 86400].map(ago)).toEqual(['just now', '5 min ago', '3h ago', 'yesterday', '4d ago']);
+    expect(ago(40 * 86400)).toBe(new Date(now - 40 * 86400e3).toLocaleDateString('en-US'));
+  });
+
+  it('says for how long', () => {
+    const since = (s: number) => fSince(now - s * 1000, now);
+    expect([20, 3 * 60 + 40, 2 * 3600 + 59 * 60, 3 * 86400].map(since)).toEqual(['< 1 min', '3 min', '2h', '3d']);
+  });
+
+  it('writes sizes in MB and GB', () => {
+    const MB = 1024 * 1024;
+    expect([0, 312.4 * MB, 1024 * MB, 1.26 * 1024 * MB].map(fBytes)).toEqual(['0 MB', '312 MB', '1 GB', '1.3 GB']);
+  });
+
+  it('writes dates and times the American way', () => {
+    const day = new Date(2026, 9, 2, 9, 30).getTime();
+    expect(fDate(day)).toBe('October 2, 2026');
+    expect(spaces(fTime(day))).toBe('9:30 AM');
+  });
+
+  it('says when something happens', () => {
+    const today = new Date(2026, 8, 30, 12, 0).getTime();
+    expect(spaces(fWhen(new Date(2026, 8, 30, 15, 0).getTime(), today))).toBe('at 3:00 PM');
+    expect(spaces(fWhen(new Date(2026, 9, 2, 9, 30).getTime(), today))).toBe('on Friday, October 2 at 9:30 AM');
   });
 });
