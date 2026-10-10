@@ -67,6 +67,40 @@ describe('the detector of texts written in the code', () => {
     expect(texts('src/lib/x.ts', "export const s = '</script>';\nexport const t = 'Fermé';")).toEqual(['Fermé']);
   });
 
+  it('finds a text in the props this app shows, and a sentence in any prop of a component', () => {
+    const source = [
+      '<Row label="Son" desc="Question de Claude, fin de tour" hint="minutes, 0 = jamais" note="pour tous les projets" />',
+      '<Dropdown caption="Mode" kind="todo" class="btn ghost" size="small" />',
+      '<Thing message="Rien a faire ici" icon="⚙" />',
+      '<div data-tip="deux mots"></div>',
+    ].join('\n');
+    expect(scan('src/A.svelte', source).map((f) => [f.line, f.text])).toEqual([
+      [1, 'Son'],
+      [1, 'Question de Claude, fin de tour'],
+      [1, 'minutes, 0 = jamais'],
+      [1, 'pour tous les projets'],
+      [2, 'Mode'],
+      [3, 'Rien a faire ici'],
+    ]);
+  });
+
+  it('finds every call to the deprecated plural(), whose words have no accent', () => {
+    const component = [
+      '<script lang="ts">',
+      "  const sub = $derived(plural(tickets.length, 'ticket', 'tickets'));",
+      '</script>',
+      '',
+      "<p>{plural(n, 'ligne', 'lignes')} de plus</p>",
+    ].join('\n');
+    expect(scan('src/A.svelte', component).map((f) => [f.kind, f.line, f.text])).toEqual([
+      ['string', 2, "plural(tickets.length, 'ticket', 'tickets')"],
+      ['string', 5, "plural(n, 'ligne', 'lignes')"],
+      ['text', 5, 'de plus'],
+    ]);
+    const module = "export const loops = (t: T) => `${plural(t.loops, 'boucle', 'boucles')} · ${t.cost}`;";
+    expect(texts('src/lib/board.ts', module)).toEqual(["plural(t.loops, 'boucle', 'boucles')"]);
+  });
+
   it('lets through the exceptions, for their file or for all', () => {
     const found = [
       ...scan('src/A.svelte', '<p>Escouade</p><p>Claude Code</p><p>Bonjour</p>'),
