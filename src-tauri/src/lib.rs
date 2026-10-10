@@ -191,6 +191,12 @@ pub fn run() {
                     updates::Window::Behind => {
                         let _ = w.show();
                     }
+                    // Minimized when the app restarted for an update: minimized again, its button
+                    // in the taskbar (hidden, it would only be found in the tray).
+                    updates::Window::Minimized => {
+                        let _ = w.show();
+                        let _ = w.minimize();
+                    }
                     // Closed to the tray when the app restarted for an update: it stays there.
                     updates::Window::Hidden => {}
                 }

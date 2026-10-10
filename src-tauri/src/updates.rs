@@ -596,7 +596,9 @@ pub enum Window {
     Front,
     /// On screen behind another app's window: shown, not focused.
     Behind,
-    /// Closed to the tray or minimized: left so.
+    /// Minimized: shown then minimized again, its button in the taskbar or its window in the Dock.
+    Minimized,
+    /// Closed to the tray: left so.
     Hidden,
 }
 
@@ -781,15 +783,22 @@ fn leave<R: Runtime>(app: &AppHandle<R>, env: &tauri::Env, relaunch: bool) {
 /// How the main window is now.
 fn window_now<R: Runtime>(app: &AppHandle<R>) -> Window {
     match app.get_webview_window("main") {
-        Some(w) if w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(false) => {
-            if w.is_focused().unwrap_or(false) {
-                Window::Front
-            } else {
-                Window::Behind
-            }
-        }
-        Some(_) => Window::Hidden,
+        Some(w) => window_of(
+            w.is_visible().unwrap_or(false),
+            w.is_minimized().unwrap_or(false),
+            w.is_focused().unwrap_or(false),
+        ),
         None => Window::Front,
+    }
+}
+
+/// How a window `visible` (shown, or closed to the tray), `minimized` and `focused` is noted.
+fn window_of(visible: bool, minimized: bool, focused: bool) -> Window {
+    match (visible, minimized, focused) {
+        (true, false, true) => Window::Front,
+        (true, false, false) => Window::Behind,
+        (true, true, _) => Window::Minimized,
+        (false, _, _) => Window::Hidden,
     }
 }
 
@@ -1628,6 +1637,37 @@ mod tests {
             Some(AfterUpdate::Installed(_, Window::Front))
         ));
         assert_eq!(AfterUpdate::window(&None), Window::Front);
+    }
+
+    #[test]
+    fn a_minimized_window_comes_back_minimized_after_a_restart_not_hidden_in_the_tray() {
+        // On screen: in front or behind another app's window.
+        assert_eq!(window_of(true, false, true), Window::Front);
+        assert_eq!(window_of(true, false, false), Window::Behind);
+        // Closed to the tray: it stays there.
+        assert_eq!(window_of(false, false, false), Window::Hidden);
+        // Minimized: back in the taskbar or the Dock, with its button, not in the tray.
+        let noted = |w: Window| serde_json::to_value(w).unwrap();
+        assert_eq!(noted(window_of(true, true, false)), "minimized");
+        assert_eq!(noted(window_of(true, true, true)), "minimized");
+        // As the note of the install keeps it, read at the next start.
+        let data = DataDir::new(crate::paths::test_dir("upd-note-minimized"));
+        write_note(
+            &data,
+            serde_json::json!({ "version": "1.6.0", "notes": "…", "window": "minimized" }),
+        );
+        let after = take_note(&data, "1.6.0");
+        assert!(after.is_some(), "the note is read");
+        assert_eq!(noted(AfterUpdate::window(&after)), "minimized");
+        // A note written before still reads as it did.
+        write_note(
+            &data,
+            serde_json::json!({ "version": "1.6.0", "notes": "…", "window": "hidden" }),
+        );
+        assert_eq!(
+            AfterUpdate::window(&take_note(&data, "1.6.0")),
+            Window::Hidden
+        );
     }
 
     #[test]
