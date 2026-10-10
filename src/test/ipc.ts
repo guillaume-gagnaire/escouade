@@ -121,6 +121,7 @@ export function agent(over: Partial<Agent> = {}): Agent {
     remoteState: null,
     resumeAt: null,
     ticketId: null,
+    progressLine: null,
     appendPrompt: null,
     portBase: null,
     recipe: null,

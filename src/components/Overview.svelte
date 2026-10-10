@@ -310,6 +310,10 @@
         ><span class="sr">{t('stats.overview.since')}{' '}</span>{fSince(a.lastActivity, app.now)}</span
       >
     </div>
+    {#if a.progressLine}
+      <!-- What the agent reported through Escouade's MCP server, until its next report. -->
+      <div class="said" title={a.progressLine}><span class="sr">{t('mcp.progress.label')}{' '}</span>{a.progressLine}</div>
+    {/if}
     {#if asks}
       <!-- Drawn anew for each request: its argument is measured for itself. -->
       {#key req?.id}
@@ -553,6 +557,15 @@
   .row:has(.line:focus-visible) {
     outline: 2px solid var(--accent);
     outline-offset: -1px;
+  }
+  /* Under the agent's name (12px of padding, its dot and its gap before it), on one line. */
+  .said {
+    margin: -4px 12px 8px 29px;
+    font-size: 11.5px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .agent {
     display: flex;

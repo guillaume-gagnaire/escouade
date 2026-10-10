@@ -26,6 +26,9 @@ export default defineZone('mcp', {
     reportProgress: 'Report progress',
     splitTicket: 'Split its ticket',
   },
+  progress: {
+    label: 'What the agent says it is doing',
+  },
   permission: {
     args: 'What Claude gives the tool',
     argName: '{name}:',

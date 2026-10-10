@@ -356,6 +356,9 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 | en-tête (HTTP) | (HTTP) header | « en-tête Host », “Host header” |
 | Les agents peuvent utiliser Escouade | Agents can use Escouade | réglage d’un projet, groupe « Serveur MCP » → “MCP server” |
 | Escouade · Créer un ticket | Escouade · Create a ticket | badge d’un outil du serveur d’Escouade : « Lister les projets / agents / tickets » → “List the projects / agents / tickets”, « Lire un ticket / le quota » → “Read a ticket / the quota”, « Résumer un agent » → “Sum up an agent”, « Modifier / Déplacer un ticket » → “Edit / Move a ticket”, « Lancer un ticket / un agent » → “Start a ticket / an agent”, « Envoyer un message » → “Send a message”, « Arrêter un agent » → “Stop an agent”, « Donner son avancement » → “Report progress”, « Découper son ticket » → “Split its ticket” |
+| ligne d’état (d’un agent) | status line | ce qu’un agent annonce faire par `report_progress`, sous son nom et sur la carte de son ticket : « Ce que l’agent dit faire » → “What the agent says it is doing” |
+| le pilote auto est en pause jusqu’à 14:30 | the autopilot is paused until 14:30 | refus d’un outil du serveur MCP : « 2026-10-12 14:30 » un autre jour (une heure ou une date, pas une durée) |
+| le maximum de tickets en parallèle / d’agents qui travaillent en même temps | the most tickets in parallel / agents working at once | réglage « En parallèle » → “In parallel” |
 
 ## G — branches
 

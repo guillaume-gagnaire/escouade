@@ -27,6 +27,10 @@ export default {
     reportProgress: 'Donner son avancement',
     splitTicket: 'Découper son ticket',
   },
+  progress: {
+    /** What a status line an agent reported (`report_progress`) is, for assistive technologies; the line is the agent's own words. */
+    label: 'Ce que l’agent dit faire',
+  },
   permission: {
     /** What a permission card lists: each argument the tool is given, by its name. */
     args: 'Ce que Claude donne à l’outil',
