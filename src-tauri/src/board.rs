@@ -6,6 +6,7 @@ use crate::claude::truncate;
 use crate::core::{slugify, RESUME_MARGIN_MS};
 use crate::model::*;
 use serde_json::Value;
+use std::collections::{HashMap, HashSet};
 
 /// A ticket's criteria when none was given.
 pub const DEFAULT_CRITERIA: [&str; 2] = ["Implémentation conforme au ticket", "Tests verts"];
@@ -278,7 +279,9 @@ pub fn turn_end(t: &mut Ticket, end: &TurnEnd, report: Option<&Report>, now: i64
 
 /// The tickets of `project_id` to start now, in order: "À faire" by rank (with the autopilot, or
 /// launched by hand), while tickets "En cours" and not blocked leave places; none while `paused`
-/// (an agent waits for its quota, or `autopilot_pause` holds them back).
+/// (an agent waits for its quota, or `autopilot_pause` holds them back). The autopilot leaves a
+/// ticket that comes after one not "Terminé" yet for the next; one launched by hand starts all the
+/// same (the window asked first).
 pub fn to_start(
     tickets: &[Ticket],
     project_id: &str,
@@ -293,11 +296,61 @@ pub fn to_start(
         .filter(|t| t.column == Column::Doing && t.blocked.is_none())
         .count();
     let free = (s.max_parallel.clamp(1, 6) as usize).saturating_sub(busy);
+    // A ticket gone, or of another project, holds nothing back.
+    let unfinished: HashSet<&str> = mine()
+        .filter(|t| t.column != Column::Done)
+        .map(|t| t.id.as_str())
+        .collect();
+    let waits = |t: &Ticket| t.after.iter().any(|a| unfinished.contains(a.as_str()));
     let mut todo: Vec<&Ticket> = mine()
-        .filter(|t| t.column == Column::Todo && (s.autopilot || t.forced))
+        .filter(|t| t.column == Column::Todo && (t.forced || (s.autopilot && !waits(t))))
         .collect();
     todo.sort_by_key(|t| (t.rank, t.created_at));
     todo.into_iter().take(free).map(|t| t.id.clone()).collect()
+}
+
+/// What a ticket's form asks it to come after, as kept: tickets of `project_id` other than `id`
+/// itself, each once, in the order given. One gone meanwhile (deleted), or another project's (a
+/// window behind), is left out.
+pub fn after_of(tickets: &[Ticket], project_id: &str, id: &str, wanted: &[String]) -> Vec<String> {
+    let mut after: Vec<String> = Vec::new();
+    for w in wanted {
+        let known = tickets
+            .iter()
+            .any(|t| t.id == *w && t.project_id == project_id);
+        if known && w != id && !after.contains(w) {
+            after.push(w.clone());
+        }
+    }
+    after
+}
+
+/// Why ticket `id` cannot come after `after`: one of them already waits for it, directly or
+/// through others, and neither would ever start by itself. None when none does.
+pub fn cycle_refusal(tickets: &[Ticket], id: &str, after: &[String]) -> Option<String> {
+    let by_id: HashMap<&str, &Ticket> = tickets.iter().map(|t| (t.id.as_str(), t)).collect();
+    let me = by_id.get(id)?;
+    after.iter().find_map(|first| {
+        let first = by_id.get(first.as_str())?;
+        // Every ticket `first` waits for, directly or not, once each: a loop already there (a
+        // hand-edited file) cannot hang the search.
+        let mut seen: HashSet<&str> = HashSet::new();
+        let mut next: Vec<&str> = first.after.iter().map(String::as_str).collect();
+        while let Some(x) = next.pop() {
+            if x == id {
+                return Some(format!(
+                    "{} attend déjà {} (directement ou non).",
+                    first.key, me.key
+                ));
+            }
+            if seen.insert(x) {
+                if let Some(t) = by_id.get(x) {
+                    next.extend(t.after.iter().map(String::as_str));
+                }
+            }
+        }
+        None
+    })
 }
 
 /// How long no ticket starts once one met the usage limit with no resume planned (turned off, an
@@ -1254,6 +1307,122 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(to_start(&list, "p1", &zero, false), ["a"]);
+    }
+
+    #[test]
+    fn a_ticket_waiting_for_another_not_done_yet_is_skipped_for_the_next_one() {
+        let s = BoardSettings::default();
+        let mut list = vec![
+            Ticket {
+                column: Column::Doing,
+                ..todo("before", 0)
+            },
+            Ticket {
+                after: vec!["before".into()],
+                ..todo("a", 1)
+            },
+            todo("b", 2),
+        ];
+        // The one place left goes to the next ticket of the column.
+        assert_eq!(to_start(&list, "p1", &s, false), ["b"]);
+        // To test, the ticket it waits for holds no place, but is not done.
+        list[0].column = Column::Review;
+        assert_eq!(to_start(&list, "p1", &s, false), ["b"]);
+        // Done, it starts in its turn.
+        list[0].column = Column::Done;
+        assert_eq!(to_start(&list, "p1", &s, false), ["a", "b"]);
+    }
+
+    #[test]
+    fn a_ticket_waits_for_every_ticket_it_comes_after_unless_launched_by_hand() {
+        let s = BoardSettings {
+            max_parallel: 6,
+            ..Default::default()
+        };
+        let mut list = vec![
+            Ticket {
+                column: Column::Done,
+                ..todo("done", 0)
+            },
+            Ticket {
+                column: Column::Review,
+                ..todo("review", 0)
+            },
+            Ticket {
+                after: vec!["done".into(), "review".into()],
+                ..todo("a", 1)
+            },
+            // A ticket that is gone, or another project's (a hand-edited file), holds nothing back.
+            Ticket {
+                after: vec!["gone".into(), "other".into()],
+                ..todo("b", 2)
+            },
+            Ticket {
+                project_id: "p2".into(),
+                ..todo("other", 0)
+            },
+        ];
+        assert_eq!(to_start(&list, "p1", &s, false), ["b"]);
+        // "Le lancer quand même ?": launched by hand, it starts all the same, with the autopilot
+        // or without.
+        list[2].forced = true;
+        assert_eq!(to_start(&list, "p1", &s, false), ["a", "b"]);
+        let off = BoardSettings {
+            autopilot: false,
+            ..s
+        };
+        assert_eq!(to_start(&list, "p1", &off, false), ["a"]);
+    }
+
+    #[test]
+    fn a_ticket_comes_after_other_tickets_of_its_project_each_once() {
+        let list = vec![
+            todo("a", 1),
+            todo("b", 2),
+            Ticket {
+                project_id: "p2".into(),
+                ..todo("x", 1)
+            },
+        ];
+        let wanted = ["b", "a", "b", "x", "gone", "c"].map(String::from);
+        // Neither itself, nor a ticket that is gone or another project's.
+        assert_eq!(after_of(&list, "p1", "c", &wanted), ["b", "a"]);
+        assert_eq!(after_of(&list, "p1", "a", &wanted), ["b"]);
+    }
+
+    #[test]
+    fn a_ticket_that_already_waits_for_it_is_refused_as_a_dependency() {
+        let ticket = |id: &str, key: &str, after: &[&str]| Ticket {
+            key: key.into(),
+            after: after.iter().map(|a| a.to_string()).collect(),
+            ..todo(id, 1)
+        };
+        let list = vec![
+            ticket("t3", "DEM-3", &["t4"]),
+            ticket("t4", "DEM-4", &["t5"]),
+            ticket("t5", "DEM-5", &[]),
+            ticket("t6", "DEM-6", &["t7"]),
+            // A loop already there (a hand-edited file) does not hang the search.
+            ticket("t7", "DEM-7", &["t6"]),
+        ];
+        let refusal = |after: &[&str]| {
+            let after: Vec<String> = after.iter().map(|a| a.to_string()).collect();
+            cycle_refusal(&list, "t5", &after)
+        };
+        // Through DEM-4, then directly.
+        assert_eq!(
+            refusal(&["t6", "t3"]).as_deref(),
+            Some("DEM-3 attend déjà DEM-5 (directement ou non).")
+        );
+        assert_eq!(
+            refusal(&["t4"]).as_deref(),
+            Some("DEM-4 attend déjà DEM-5 (directement ou non).")
+        );
+        assert_eq!(refusal(&["t6", "t7"]), None);
+        assert_eq!(refusal(&[]), None);
+        // DEM-3 after DEM-5 as well is no loop: it waits for it already.
+        let after = vec!["t5".to_string(), "t4".to_string()];
+        assert_eq!(cycle_refusal(&list, "t3", &after), None);
     }
 
     fn window(pct: f64, resets_at: Option<i64>) -> Option<RateWindow> {

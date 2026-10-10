@@ -400,6 +400,9 @@ pub struct Ticket {
     pub column: Column,
     /// Order in "À faire": the lowest first.
     pub rank: i64,
+    /// The tickets of its project it comes after ("Après"), by id: the autopilot starts it once
+    /// they are all "Terminé". Empty for a ticket saved before.
+    pub after: Vec<String>,
     pub agent_id: Option<String>,
     /// n of "Boucle n/max" (0 before the start).
     pub iteration: u32,
@@ -1499,6 +1502,25 @@ mod tests {
         })
         .unwrap();
         assert_eq!(v["loops"], json!(4));
+    }
+
+    #[test]
+    fn a_state_saved_before_dependencies_still_loads_with_tickets_waiting_for_none() {
+        // A state.json of 1.5: its tickets have no `after`.
+        let s: PersistedState = serde_json::from_value(json!({
+            "projects": [],
+            "tickets": [{ "id": "t1", "projectId": "p1", "key": "DEM-1", "column": "todo" }]
+        }))
+        .unwrap();
+        assert!(s.tickets[0].after.is_empty());
+        let v = serde_json::to_value(Ticket {
+            after: vec!["t2".into(), "t3".into()],
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(v["after"], json!(["t2", "t3"]));
+        let back: Ticket = serde_json::from_value(v).unwrap();
+        assert_eq!(back.after, ["t2", "t3"]);
     }
 
     #[test]

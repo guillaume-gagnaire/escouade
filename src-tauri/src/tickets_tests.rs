@@ -25,6 +25,15 @@ fn draft(title: &str, criteria: &[&str], max_loops: u32) -> TicketDraft {
         description: String::new(),
         criteria: criteria.iter().map(|c| c.to_string()).collect(),
         max_loops,
+        after: Vec::new(),
+    }
+}
+
+/// `draft`, coming after the tickets `after`.
+fn draft_after(title: &str, after: &[&Ticket]) -> TicketDraft {
+    TicketDraft {
+        after: after.iter().map(|t| t.id.clone()).collect(),
+        ..draft(title, &[], 5)
     }
 }
 
@@ -519,6 +528,153 @@ async fn only_a_ticket_to_do_is_started_or_moved_to_the_top() {
     assert_eq!(h.ticket(&b.id).rank, rank);
     assert!(h.core.ticket_start("inconnu").is_err());
     assert!(h.core.ticket_prioritize("inconnu").is_err());
+}
+
+#[tokio::test]
+async fn a_ticket_comes_after_others_of_its_project_but_never_in_a_loop() {
+    let h = harness("tk-after-cycle");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let one = h
+        .core
+        .ticket_create(&p.id, draft("Un", &[], 5))
+        .await
+        .unwrap();
+    // Another project's ticket (a stale window) is left out, and so is one that is gone.
+    h.core.tickets.write().push(Ticket {
+        id: "ailleurs".into(),
+        project_id: "autre".into(),
+        key: "AUT-1".into(),
+        ..Default::default()
+    });
+    let mut wanted = draft_after("Deux", &[&one, &one]);
+    wanted
+        .after
+        .extend(["ailleurs".to_string(), "disparu".to_string()]);
+    let two = h.core.ticket_create(&p.id, wanted).await.unwrap();
+    assert_eq!(two.after, [one.id.as_str()]);
+    let three = h
+        .core
+        .ticket_create(&p.id, draft_after("Trois", &[&two]))
+        .await
+        .unwrap();
+    assert_eq!(h.ticket(&three.id).after, [two.id.as_str()]);
+    // DEM-1 after DEM-3, which waits for DEM-2, which waits for DEM-1: refused, and so is DEM-1
+    // after DEM-2 directly.
+    let refusal = |after: &Ticket| {
+        h.core
+            .ticket_update(&one.id, draft_after("Un", &[after]))
+            .unwrap_err()
+            .to_string()
+    };
+    assert_eq!(
+        refusal(&three),
+        "DEM-3 attend déjà DEM-1 (directement ou non)."
+    );
+    assert_eq!(
+        refusal(&two),
+        "DEM-2 attend déjà DEM-1 (directement ou non)."
+    );
+    assert!(h.ticket(&one.id).after.is_empty());
+    // A ticket never waits for itself.
+    let edited = h
+        .core
+        .ticket_update(&one.id, draft_after("Un", &[&one]))
+        .unwrap();
+    assert!(edited.after.is_empty());
+    // DEM-3 after DEM-1 as well is no loop; the form gives the whole list again.
+    let edited = h
+        .core
+        .ticket_update(&three.id, draft_after("Trois", &[&two, &one]))
+        .unwrap();
+    assert_eq!(edited.after, [two.id.as_str(), one.id.as_str()]);
+    assert!(h.events.lock().iter().any(|e| e["type"] == "ticket"
+        && e["ticket"]["id"] == three.id.as_str()
+        && e["ticket"]["after"] == json!([two.id, one.id])));
+    let edited = h
+        .core
+        .ticket_update(&three.id, draft("Trois", &[], 5))
+        .unwrap();
+    assert!(edited.after.is_empty());
+}
+
+#[tokio::test]
+async fn a_deleted_ticket_is_waited_for_by_no_other() {
+    let h = harness("tk-after-delete");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let one = h
+        .core
+        .ticket_create(&p.id, draft("Un", &[], 5))
+        .await
+        .unwrap();
+    let two = h
+        .core
+        .ticket_create(&p.id, draft("Deux", &[], 5))
+        .await
+        .unwrap();
+    let three = h
+        .core
+        .ticket_create(&p.id, draft_after("Trois", &[&one, &two]))
+        .await
+        .unwrap();
+    let four = h
+        .core
+        .ticket_create(&p.id, draft_after("Quatre", &[&one]))
+        .await
+        .unwrap();
+    h.core.ticket_delete(&one.id).await.unwrap();
+    assert_eq!(h.ticket(&three.id).after, [two.id.as_str()]);
+    assert!(h.ticket(&four.id).after.is_empty());
+    // The window is told of each.
+    let told = |id: &str| {
+        h.events
+            .lock()
+            .iter()
+            .rev()
+            .find(|e| e["type"] == "ticket" && e["ticket"]["id"] == id)
+            .map(|e| e["ticket"]["after"].clone())
+    };
+    assert_eq!(told(&three.id), Some(json!([two.id])));
+    assert_eq!(told(&four.id), Some(json!([])));
+}
+
+#[tokio::test]
+async fn a_ticket_starts_once_those_it_comes_after_are_done_and_the_next_one_goes_meanwhile() {
+    let h = harness("tk-after-start");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| {
+        s.autopilot = false;
+        s.action = "keep".into();
+    });
+    let first = h
+        .core
+        .ticket_create(&p.id, draft("Avant [ok]", &[], 5))
+        .await
+        .unwrap();
+    let then = h
+        .core
+        .ticket_create(&p.id, draft_after("Ensuite [ok]", &[&first]))
+        .await
+        .unwrap();
+    let other = h
+        .core
+        .ticket_create(&p.id, draft("Autre [ok]", &[], 5))
+        .await
+        .unwrap();
+    // Two places: the first ticket, and the next one that waits for nothing.
+    h.set_board(&p.id, |s| s.autopilot = true);
+    for id in [&first.id, &other.id] {
+        h.wait_ticket(id, "to test", |t| t.column == Column::Review)
+            .await;
+    }
+    // Places are free, but the ticket it comes after is not done yet.
+    h.wait_board_idle().await;
+    assert_eq!(h.ticket(&then.id).column, Column::Todo);
+    h.core.ticket_approve(&first.id).await.unwrap();
+    assert_eq!(h.ticket(&first.id).column, Column::Done);
+    h.wait_ticket(&then.id, "to test", |t| t.column == Column::Review)
+        .await;
 }
 
 // ---------- the scheduler and the loop of a ticket ----------

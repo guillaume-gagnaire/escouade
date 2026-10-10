@@ -63,6 +63,8 @@ pub struct TicketDraft {
     /// One per line of the form; empty lines are dropped.
     pub criteria: Vec<String>,
     pub max_loops: u32,
+    /// The ids of the tickets it comes after ("Après"), the whole list.
+    pub after: Vec<String>,
 }
 
 impl<R: Runtime> Core<R> {
@@ -84,14 +86,27 @@ impl<R: Runtime> Core<R> {
         id: &str,
         f: impl FnOnce(&mut Ticket) -> Result<T>,
     ) -> Result<T> {
+        self.edit_ticket_with(id, |_| Ok(()), |t, ()| f(t))
+    }
+
+    /// `edit_ticket`, `f` given what `check` makes of all the tickets first, under the same lock:
+    /// what it found among the others (the tickets it waits for) cannot change in between.
+    pub(crate) fn edit_ticket_with<C, T>(
+        &self,
+        id: &str,
+        check: impl FnOnce(&[Ticket]) -> Result<C>,
+        f: impl FnOnce(&mut Ticket, C) -> Result<T>,
+    ) -> Result<T> {
         let (out, ticket, change) = {
             let mut tickets = self.tickets.write();
-            let t = tickets
-                .iter_mut()
-                .find(|t| t.id == id)
+            let i = tickets
+                .iter()
+                .position(|t| t.id == id)
                 .ok_or_else(|| anyhow!("ticket introuvable"))?;
+            let checked = check(&tickets)?;
+            let t = &mut tickets[i];
             let before = t.external.is_some().then(|| t.clone());
-            let out = f(t)?;
+            let out = f(t, checked)?;
             let change = before.and_then(|b| integrations::sync::change_of(&b, t));
             (out, t.clone(), change)
         };
@@ -181,6 +196,8 @@ impl<R: Runtime> Core<R> {
                 .max()
                 .unwrap_or(0)
                 + 1;
+            // No ticket waits for a new one yet: it closes no loop.
+            ticket.after = board::after_of(&tickets, project_id, &ticket.id, &d.after);
             tickets.push(ticket.clone());
         }
         self.emit_project(project_id);
@@ -192,22 +209,37 @@ impl<R: Runtime> Core<R> {
         Ok(ticket)
     }
 
-    /// Only a ticket "À faire" changes.
+    /// Only a ticket "À faire" changes. It never comes after a ticket that waits for it already.
     pub fn ticket_update(self: &Arc<Self>, id: &str, d: TicketDraft) -> Result<Ticket> {
         let title = d.title.trim().to_string();
         if title.is_empty() {
             bail!("Un ticket a besoin d'un titre.");
         }
-        let ticket = self.edit_ticket(id, |t| {
-            if t.column != Column::Todo {
-                bail!("Seul un ticket « À faire » se modifie.");
-            }
-            t.title = title;
-            t.description = d.description.trim().to_string();
-            t.criteria = board::criteria_from(&d.criteria);
-            t.max_loops = board::max_loops(d.max_loops);
-            Ok(t.clone())
-        })?;
+        let ticket = self.edit_ticket_with(
+            id,
+            |all| {
+                let me = all
+                    .iter()
+                    .find(|t| t.id == id)
+                    .ok_or_else(|| anyhow!("ticket introuvable"))?;
+                if me.column != Column::Todo {
+                    bail!("Seul un ticket « À faire » se modifie.");
+                }
+                let after = board::after_of(all, &me.project_id, id, &d.after);
+                match board::cycle_refusal(all, id, &after) {
+                    Some(refusal) => bail!(refusal),
+                    None => Ok(after),
+                }
+            },
+            |t, after| {
+                t.title = title;
+                t.description = d.description.trim().to_string();
+                t.criteria = board::criteria_from(&d.criteria);
+                t.max_loops = board::max_loops(d.max_loops);
+                t.after = after;
+                Ok(t.clone())
+            },
+        )?;
         self.schedule();
         Ok(ticket)
     }
@@ -247,21 +279,34 @@ impl<R: Runtime> Core<R> {
         Ok(())
     }
 
-    /// The ticket goes; one "En cours" or "À tester" has its agent archived (worktree kept). The
-    /// card is gone for good: an agent that cannot be archived is logged, not reported.
+    /// The ticket goes, and no other waits for it any more; one "En cours" or "À tester" has its
+    /// agent archived (worktree kept). The card is gone for good: an agent that cannot be archived
+    /// is logged, not reported.
     pub async fn ticket_delete(self: &Arc<Self>, id: &str) -> Result<()> {
-        let t = {
+        let (t, freed) = {
             let mut tickets = self.tickets.write();
             let i = tickets
                 .iter()
                 .position(|x| x.id == id)
                 .ok_or_else(|| anyhow!("ticket introuvable"))?;
-            tickets.remove(i)
+            let t = tickets.remove(i);
+            let freed: Vec<Ticket> = tickets
+                .iter_mut()
+                .filter(|x| x.after.contains(&t.id))
+                .map(|x| {
+                    x.after.retain(|a| *a != t.id);
+                    x.clone()
+                })
+                .collect();
+            (t, freed)
         };
         self.hub.emit(UiEvent::TicketRemoved {
             id: id.to_string(),
             project_id: t.project_id.clone(),
         });
+        for ticket in freed {
+            self.hub.emit(UiEvent::Ticket { ticket });
+        }
         self.request_save();
         if matches!(t.column, Column::Doing | Column::Review) {
             if let Some(a) = t.agent_id.as_deref().filter(|a| self.agent(a).is_ok()) {

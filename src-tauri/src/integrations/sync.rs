@@ -72,6 +72,7 @@ pub(crate) fn draft_of(i: &ExternalIssue, max_loops: u32, extract: bool) -> Tick
             Vec::new()
         },
         max_loops,
+        after: Vec::new(),
     }
 }
 
