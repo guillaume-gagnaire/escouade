@@ -119,27 +119,45 @@ pub(crate) fn agent<R: Runtime>(
             choices = listed(&found, asked, |a| &a.name, label)
         ))),
         Named::None => {
-            let choices = listed(&live.iter().collect::<Vec<_>>(), asked, |a| &a.name, label);
-            Err(ToolError::Failed(match (project, live.is_empty()) {
-                (Some(p), true) => tr!(
-                    "Aucun agent « {asked} » dans le projet {project} : il n’en a aucun.",
-                    "No agent “{asked}” in the project {project}: it has none.",
-                    project = p.name
-                ),
-                (Some(p), false) => tr!(
-                    "Aucun agent « {asked} » dans le projet {project}. Agents : {choices}",
-                    "No agent “{asked}” in the project {project}. Agents: {choices}",
-                    project = p.name
-                ),
-                (None, true) => tr!(
-                    "Aucun agent « {asked} » : Escouade n’en a aucun.",
-                    "No agent “{asked}”: Escouade has none."
-                ),
-                (None, false) => tr!(
-                    "Aucun agent « {asked} ». Agents : {choices}",
-                    "No agent “{asked}”. Agents: {choices}"
-                ),
-            }))
+            let choices = |list: &[AgentRef]| {
+                listed(&list.iter().collect::<Vec<_>>(), asked, |a| &a.name, label)
+            };
+            Err(ToolError::Failed(
+                match (project, live.is_empty(), archived.is_empty()) {
+                    (Some(p), true, true) => tr!(
+                        "Aucun agent « {asked} » dans le projet {project} : il n’en a aucun.",
+                        "No agent “{asked}” in the project {project}: it has none.",
+                        project = p.name
+                    ),
+                    // Only archived ones, none of that name: they are the choices.
+                    (Some(p), true, false) => tr!(
+                        "Aucun agent « {asked} » dans le projet {project} : ses agents sont tous archivés. Agents archivés : {choices}",
+                        "No agent “{asked}” in the project {project}: its agents are all archived. Archived agents: {choices}",
+                        project = p.name,
+                        choices = choices(&archived)
+                    ),
+                    (Some(p), false, _) => tr!(
+                        "Aucun agent « {asked} » dans le projet {project}. Agents : {choices}",
+                        "No agent “{asked}” in the project {project}. Agents: {choices}",
+                        project = p.name,
+                        choices = choices(&live)
+                    ),
+                    (None, true, true) => tr!(
+                        "Aucun agent « {asked} » : Escouade n’en a aucun.",
+                        "No agent “{asked}”: Escouade has none."
+                    ),
+                    (None, true, false) => tr!(
+                        "Aucun agent « {asked} » : ceux d’Escouade sont tous archivés. Agents archivés : {choices}",
+                        "No agent “{asked}”: Escouade’s agents are all archived. Archived agents: {choices}",
+                        choices = choices(&archived)
+                    ),
+                    (None, false, _) => tr!(
+                        "Aucun agent « {asked} ». Agents : {choices}",
+                        "No agent “{asked}”. Agents: {choices}",
+                        choices = choices(&live)
+                    ),
+                },
+            ))
         }
     }
 }

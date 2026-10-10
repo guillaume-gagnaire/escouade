@@ -311,6 +311,7 @@ async fn the_agents_are_listed_with_what_waits_their_ticket_model_account_and_co
             "id": worker.id,
             "name": "dem-1-ajouter",
             "project": "demo",
+            "projectId": p.id,
             "status": "idle",
             "waiting": false,
             "ticket": "DEM-1",
@@ -324,7 +325,10 @@ async fn the_agents_are_listed_with_what_waits_their_ticket_model_account_and_co
         (&json!("waiting"), &json!(true), &json!(null))
     );
     assert!(all[1]["cost"].is_number(), "{}", all[1]);
-    assert_eq!(all[2]["project"], "autre");
+    assert_eq!(
+        (&all[2]["project"], &all[2]["projectId"]),
+        (&json!("autre"), &json!(other.id))
+    );
     // One project: by its name in any case, or by its id.
     let demo = read(&c, "list_agents", json!({ "project": "DEMO" })).await;
     assert_eq!(demo.as_array().unwrap().len(), 2);
@@ -681,6 +685,43 @@ async fn an_ambiguous_or_unknown_name_is_an_error_that_lists_the_choices() {
         read(&c, "get_ticket", json!({ "ticket": theirs.id })).await["title"],
         "Le leur"
     );
+    // A project whose agents are all archived: told so, with them as the choices.
+    let quiet = other_project(&h, "calme").await;
+    let old = put_agent(&h, &quiet, "ancien", 1);
+    h.core.agent(&old.id).unwrap().lock().meta.archived = true;
+    let said = refused(
+        &c,
+        "get_agent_summary",
+        json!({ "agent": "nouveau", "project": "calme" }),
+    )
+    .await;
+    assert_eq!(
+        said,
+        format!(
+            "Aucun agent « nouveau » dans le projet calme : ses agents sont tous archivés. Agents archivés : ancien (projet calme, id {}).",
+            old.id
+        )
+    );
+    // An archived one is found by its name all the same.
+    let found = read(
+        &c,
+        "get_agent_summary",
+        json!({ "agent": "ancien", "project": "calme" }),
+    )
+    .await;
+    assert_eq!(found["id"], json!(old.id));
+    // A project without any.
+    let empty = other_project(&h, "vide").await;
+    let said = refused(
+        &c,
+        "get_agent_summary",
+        json!({ "agent": "personne", "project": empty.id }),
+    )
+    .await;
+    assert_eq!(
+        said,
+        "Aucun agent « personne » dans le projet vide : il n’en a aucun."
+    );
     c.cancel().await.unwrap();
     h.core.mcp.stop();
 }
@@ -713,15 +754,24 @@ async fn an_agents_summary_gives_its_last_message_cut_cleanly_and_the_files_it_e
             "ok"
         )
     );
-    // A reply of 2,400 characters and more: cut between two words, 2,000 characters at most.
-    let long = ["mot"; 600].join(" ");
+    // A reply of 2,400 characters and more: its start and its end (what the agent concluded or
+    // asks), each cut between two words, « … » between them, 2,000 characters at most.
+    let long = format!("début {} fin, on fusionne ?", ["mot"; 600].join(" "));
     h.turn(&a.id, &long).await;
     let summary = read(&c, "get_agent_summary", json!({ "agent": a.id })).await;
     let last = summary["lastMessage"].as_str().unwrap();
     assert!(last.chars().count() <= 2000, "{}", last.chars().count());
     assert!(last.chars().count() > 1900, "{}", last.chars().count());
-    assert!(last.starts_with("Bonjour, tu as dit : mot mot"), "{last}");
-    assert!(last.ends_with("mot…"), "{last}");
+    assert!(last.starts_with("Bonjour, tu as dit : début mot"), "{last}");
+    assert!(last.ends_with("mot mot fin, on fusionne ?"), "{last}");
+    let (head, tail) = last.split_once(" … ").unwrap();
+    assert!(head.ends_with(" mot") && tail.starts_with("mot "), "{last}");
+    assert!(
+        (400..=500).contains(&head.chars().count()),
+        "{}",
+        head.chars().count()
+    );
+    assert!(!tail.contains('…'), "{last}");
     // Never the whole conversation: neither the message sent nor anything else.
     let text = serde_json::to_string(&summary).unwrap();
     assert!(text.chars().count() < 2300, "{}", text.chars().count());

@@ -17,6 +17,10 @@ use tauri::Runtime;
 /// The longest last message an agent's summary gives, in characters.
 pub(crate) const LAST_MESSAGE_MAX: usize = 2000;
 
+/// Of a last message longer than that, the most its start keeps: the rest goes to its end, where
+/// an agent says what it concluded or what it asks.
+pub(crate) const LAST_MESSAGE_START: usize = 500;
+
 /// The most files an agent's summary lists: the latest it began to edit.
 pub(crate) const TOUCHED_MAX: usize = 100;
 
@@ -104,8 +108,9 @@ pub(super) async fn projects<R: Runtime>(core: &Core<R>) -> Result<String, ToolE
 struct AgentRow {
     id: String,
     name: String,
-    /// Its project's name.
+    /// Its project's name, and its id (two projects may have the same name).
     project: String,
+    project_id: String,
     status: AgentStatus,
     /// A question or a permission waits for the user's answer.
     waiting: bool,
@@ -146,6 +151,7 @@ pub(super) fn agents<R: Runtime>(
             ticket: v.meta.ticket_id.as_ref().and_then(|t| keys.get(t).cloned()),
             account: accounts::get(&settings, &v.meta.account).name,
             cost: dollars(v.meta.cost + v.live_cost),
+            project_id: v.meta.project_id,
             status: v.meta.status,
             model: v.meta.model,
             name: v.meta.name,
@@ -280,6 +286,9 @@ struct External {
     error: Option<String>,
 }
 
+/// `t` as `get_ticket` answers it. Reads the tickets (the keys of those it comes after): never
+/// call it with the tickets' lock held (a write one would deadlock, a read one too behind a
+/// writer waiting for it).
 pub(crate) fn ticket_view<R: Runtime>(core: &Core<R>, t: &Ticket) -> TicketView {
     let keys = ticket_keys(core);
     let keys: HashMap<&str, &str> = keys
@@ -405,7 +414,8 @@ struct Summary {
     status: AgentStatus,
     /// Its ticket's key.
     ticket: Option<String>,
-    /// Its latest reply, `LAST_MESSAGE_MAX` characters at most.
+    /// Its latest reply, `LAST_MESSAGE_MAX` characters at most: a longer one by its start and
+    /// its end (`start_and_end`). None before its first.
     last_message: Option<String>,
     /// The latest `TOUCHED_MAX` files it began to edit, relative to its folder.
     touched_files: Vec<String>,
@@ -432,7 +442,7 @@ pub(super) fn agent_summary<R: Runtime>(
             .conv
             .last_where(is_reply)
             .and_then(|v| v["text"].as_str())
-            .map(|t| cut_cleanly(t, LAST_MESSAGE_MAX));
+            .map(|t| start_and_end(t, LAST_MESSAGE_MAX, LAST_MESSAGE_START));
         let files = &rt.meta.touched_files;
         let from = files.len().saturating_sub(TOUCHED_MAX);
         let summary = Summary {
@@ -463,41 +473,88 @@ fn is_reply(item: &Value) -> bool {
         && item["text"].as_str().is_some_and(|t| !t.trim().is_empty())
 }
 
-/// `text` in `max` characters at most: cut after a whole word (unless that loses a fifth of it: a
-/// long word, an address), « … » in place of what follows.
-pub(crate) fn cut_cleanly(text: &str, max: usize) -> String {
+/// What stands between the start and the end of a text too long to give whole.
+const ELIDED: &str = " … ";
+
+/// `text` in `max` characters at most: whole when it fits, else its start (`start_max` characters
+/// at most) and its end (the rest), each cut on a whole word, « … » between them.
+pub(crate) fn start_and_end(text: &str, max: usize, start_max: usize) -> String {
     let text = text.trim();
     if text.chars().count() <= max {
         return text.to_string();
     }
-    let head: String = text.chars().take(max - 1).collect();
-    let whole_word = text.chars().nth(max - 1).is_some_and(char::is_whitespace);
-    let cut = match head.rfind(char::is_whitespace) {
-        _ if whole_word => head.trim_end(),
-        Some(at) if head[..at].chars().count() >= (max - 1) * 4 / 5 => head[..at].trim_end(),
-        _ => head.as_str(),
+    let end_max = max.saturating_sub(start_max + ELIDED.chars().count());
+    format!(
+        "{}{ELIDED}{}",
+        start_words(text, start_max),
+        end_words(text, end_max)
+    )
+}
+
+/// The start of `text`, `max` characters at most, ending with a whole word (inside one only when
+/// the last space would lose a fifth of it: a long word, an address).
+fn start_words(text: &str, max: usize) -> &str {
+    let cut = text.char_indices().nth(max).map_or(text.len(), |(i, _)| i);
+    let head = &text[..cut];
+    if cut == text.len() || text[cut..].starts_with(char::is_whitespace) {
+        return head.trim_end();
+    }
+    match head.rfind(char::is_whitespace) {
+        Some(at) if head[..at].chars().count() >= max * 4 / 5 => head[..at].trim_end(),
+        _ => head,
+    }
+}
+
+/// The end of `text`, `max` characters at most, starting with a whole word (inside one only when
+/// the first space would lose a fifth of it).
+fn end_words(text: &str, max: usize) -> &str {
+    let count = text.chars().count();
+    let cut = match count.checked_sub(max) {
+        Some(skip) if skip > 0 => text.char_indices().nth(skip).map_or(0, |(i, _)| i),
+        _ => 0,
     };
-    format!("{cut}…")
+    let tail = &text[cut..];
+    if cut == 0 || text[..cut].ends_with(char::is_whitespace) {
+        return tail.trim_start();
+    }
+    match tail.find(char::is_whitespace) {
+        Some(at) if tail[at..].chars().count() >= max * 4 / 5 => tail[at..].trim_start(),
+        _ => tail,
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::cut_cleanly;
+    use super::start_and_end;
 
     #[test]
-    fn a_long_text_is_cut_after_a_whole_word_within_its_limit() {
-        assert_eq!(cut_cleanly("  court  ", 10), "court");
-        assert_eq!(cut_cleanly("un deux trois quatre", 16), "un deux trois…");
-        // The limit falls between two words: the first one kept whole.
-        assert_eq!(cut_cleanly("un deux trois", 8), "un deux…");
-        // A single long word (an address): cut inside it rather than lose it all.
-        let url = format!("voir https://example.com/{}", "a".repeat(50));
-        let cut = cut_cleanly(&url, 30);
-        assert_eq!(cut.chars().count(), 30);
-        assert!(cut.starts_with("voir https://example.com/aaa"), "{cut}");
-        assert!(cut.ends_with('…'));
+    fn a_long_text_keeps_its_start_and_its_end_each_cut_on_a_whole_word() {
+        assert_eq!(start_and_end("  court  ", 10, 4), "court");
+        let words: Vec<String> = (0..100).map(|i| format!("m{i:02}")).collect();
+        let text = words.join(" ");
+        assert_eq!(
+            start_and_end(&text, 40, 12),
+            "m00 m01 m02 … m94 m95 m96 m97 m98 m99"
+        );
+        // Both limits fall between two words: each one kept whole.
+        assert_eq!(
+            start_and_end("un deux trois quatre cinq", 14, 7),
+            "un deux … cinq"
+        );
+        // A long word (an address) at the end: cut inside it rather than lose it all.
+        let url = format!(
+            "{}voir https://example.com/{}",
+            "début ".repeat(20),
+            "a".repeat(60)
+        );
+        assert_eq!(
+            start_and_end(&url, 60, 12),
+            format!("début début … {}", "a".repeat(45))
+        );
         // Characters, not bytes: never a cut inside one.
-        let accents = "é".repeat(30);
-        assert_eq!(cut_cleanly(&accents, 10), format!("{}…", "é".repeat(9)));
+        assert_eq!(
+            start_and_end(&"é".repeat(100), 20, 5),
+            format!("{} … {}", "é".repeat(5), "é".repeat(12))
+        );
     }
 }

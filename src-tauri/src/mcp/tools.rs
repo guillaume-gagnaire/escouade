@@ -239,7 +239,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "List Escouade's Claude Code agents, oldest first (archived ones left out), of every project or of one: their id, name, project, status (idle, running, waiting, done or error), whether a question or a permission waits for the user's answer, the key of their ticket, their model, their Claude account and what they cost so far in US dollars.",
+        description = "List Escouade's Claude Code agents, oldest first (archived ones left out), of every project or of one: their id, name, project (its name) and projectId, status (idle, running, waiting, done or error), whether a question or a permission waits for the user's answer, the key of their ticket (null when none), their model, their Claude account and what they cost so far in US dollars.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn list_agents(
@@ -293,7 +293,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Sum up an agent without reading its conversation: its id, name, status, the key of its ticket, its last message (2,000 characters at most) and the files it edited (the latest 100 at most, relative to its folder).",
+        description = "Sum up an agent without reading its conversation: its id, name, status, the key of its ticket (null when none), its last message (null before its first; 2,000 characters at most, a longer one given by its start and its end, where it says what it concluded or asks, joined by \" … \") and the files it edited (the latest 100 at most, relative to its folder).",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn get_agent_summary(
