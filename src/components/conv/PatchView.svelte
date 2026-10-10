@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { DiffLine } from '../../lib/diff';
+  import { plural } from '../../lib/format';
   import { app } from '../../lib/state.svelte';
   import DiffView from '../DiffView.svelte';
 
@@ -20,7 +21,7 @@
     {/each}
   {/if}
   {#if lines.length > max}
-    <div class="more">… {lines.length - max} lignes de plus</div>
+    <div class="more">… {plural(lines.length - max, 'ligne', 'lignes')} de plus</div>
   {/if}
 </div>
 
