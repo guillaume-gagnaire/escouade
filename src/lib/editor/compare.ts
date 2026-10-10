@@ -1,10 +1,10 @@
 // The text compared with another version of the file, in the text itself (« Voir les changements », « Comparer »):
 // above each block that differs, the lines the other version has there, and a button that puts them in the text.
 
-import { unifiedMergeView } from '@codemirror/merge';
+import { Change, diff, unifiedMergeView } from '@codemirror/merge';
 import { Compartment, EditorState, Facet, type Extension, type TransactionSpec } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
-import { DIFF_TIMEOUT } from './changes';
+import { lineTokens } from './changes';
 
 /** What the text is compared with: the reference version (HEAD, or where a worktree's branch left its base), or the file on disk. */
 export type CompareWith = 'reference' | 'disk';
@@ -43,6 +43,99 @@ function blockButton(label: string) {
   };
 }
 
+/** Each line with its line break: the pieces of a text, back to back. */
+const linesOf = (text: string) => text.match(/[^\n]*\n|[^\n]+$/g) ?? [];
+
+/** Where each piece starts in the text, and where the last one ends. */
+function starts(pieces: readonly string[]): number[] {
+  const at = [0];
+  for (const p of pieces) at.push(at[at.length - 1] + p.length);
+  return at;
+}
+
+/** The merge view's own limit on the changes scanned: past it, a diff gives a cruder answer, at once. */
+const BOUNDED = { scanLimit: 500 };
+
+/** The diff of `a` and `b` within the limit, its changes moved to where the two strings start in a longer one. */
+function boundedDiff(a: string, b: string, fromA: number, fromB: number, out: Change[]) {
+  for (const c of diff(a, b, BOUNDED)) out.push(new Change(c.fromA + fromA, c.toA + fromA, c.fromB + fromB, c.toB + fromB));
+}
+
+/** Of `pairs`, in the order of their second item, the longest run whose first items increase too. */
+function longestIncreasing(pairs: readonly [number, number][]): [number, number][] {
+  // The last pair of the best run of each length found so far, and the pair before each one in its run.
+  const tails: number[] = [];
+  const before: number[] = new Array(pairs.length);
+  for (let k = 0; k < pairs.length; k++) {
+    let lo = 0;
+    let hi = tails.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (pairs[tails[mid]][0] < pairs[k][0]) lo = mid + 1;
+      else hi = mid;
+    }
+    before[k] = lo > 0 ? tails[lo - 1] : -1;
+    tails[lo] = k;
+  }
+  const run: [number, number][] = [];
+  for (let k = tails.length ? tails[tails.length - 1] : -1; k >= 0; k = before[k]) run.push(pairs[k]);
+  return run.reverse();
+}
+
+/**
+ * The runs of lines that differ between two texts, one token a line (see `lineTokens`). Anchored on the lines found
+ * once in each text and in the same order in both, as patience diff does, each stretch between two anchors diffed
+ * within the limit: a lockfile's lines are nearly all unique, so its changes, however many, are found one by one,
+ * and a block rewritten, which has no anchor, is one run at once.
+ */
+function lineRuns(a: string, b: string): Change[] {
+  // Where each line is, -1 for a line found more than once.
+  const inA = new Map<string, number>();
+  for (let i = 0; i < a.length; i++) inA.set(a[i], inA.has(a[i]) ? -1 : i);
+  const inB = new Map<string, number>();
+  for (let j = 0; j < b.length; j++) inB.set(b[j], inB.has(b[j]) ? -1 : j);
+  const pairs: [number, number][] = [];
+  for (let j = 0; j < b.length; j++) {
+    const i = inA.get(b[j]) ?? -1;
+    if (i >= 0 && inB.get(b[j]) === j) pairs.push([i, j]);
+  }
+  const runs: Change[] = [];
+  let i0 = 0;
+  let j0 = 0;
+  for (const [i, j] of [...longestIncreasing(pairs), [a.length, b.length]]) {
+    if (i > i0 || j > j0) boundedDiff(a.slice(i0, i), b.slice(j0, j), i0, j0, runs);
+    i0 = i + 1;
+    j0 = j + 1;
+  }
+  return runs;
+}
+
+/**
+ * The diff of the merge view: line by line, then character by character within each run of lines that differ. A
+ * character diff of the whole text either gives up on a big file (one block from its first change to its last: a
+ * lockfile's scattered changes) or, unbounded, takes its whole timeout at each key typed in a big block rewritten,
+ * which the merge view diffs again each time. Line by line, both are quick; within a run, the limit keeps a big one
+ * quick and only cruder.
+ */
+function blockDiff(a: string, b: string): readonly Change[] {
+  const linesA = linesOf(a);
+  const linesB = linesOf(b);
+  const tokens = lineTokens(linesA, linesB);
+  const out: Change[] = [];
+  if (!tokens) {
+    boundedDiff(a, b, 0, 0, out);
+    return out;
+  }
+  const atA = starts(linesA);
+  const atB = starts(linesB);
+  for (const run of lineRuns(tokens[0], tokens[1])) {
+    const fromA = atA[run.fromA];
+    const fromB = atB[run.fromB];
+    boundedDiff(a.slice(fromA, atA[run.toA]), b.slice(fromB, atB[run.toB]), fromA, fromB, out);
+  }
+  return out;
+}
+
 function compareView(c: Comparison): Extension {
   return [
     shown.of(c),
@@ -51,9 +144,7 @@ function compareView(c: Comparison): Extension {
       // The gutter has its own marks, of the lines changed since the reference version.
       gutter: false,
       mergeControls: blockButton(ACTION[c.against]),
-      // Bounded in time, as for the gutter's marks, not by the merge view's default limit on the changes scanned: past
-      // it, changes scattered through a big file (a lockfile) make one block of all the lines between them.
-      diffConfig: { timeout: DIFF_TIMEOUT },
+      diffConfig: { override: blockDiff },
     }),
   ];
 }

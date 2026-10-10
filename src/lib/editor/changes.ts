@@ -14,7 +14,7 @@ export interface LineChanges {
 const NONE = (): LineChanges => ({ changed: [], deleted: [], count: 0 });
 
 /** The longest the diff may run before it settles for a cruder answer, in ms. */
-export const DIFF_TIMEOUT = 300;
+const DIFF_TIMEOUT = 300;
 
 // The diff runs on lines, not on characters: a character-level diff of two big files takes seconds. Each
 // distinct line stands for one character (from U+0100, so never a line break or other control; surrogates
@@ -26,7 +26,7 @@ const SURROGATES_FROM = 0xd800;
 const SURROGATES_TO = 0xdfff;
 
 /** The lines as one string of tokens, or null when there are more distinct lines than tokens. */
-function tokenize(lines: string[], tokens: Map<string, string>, next: { code: number }): string | null {
+function tokenize(lines: readonly string[], tokens: Map<string, string>, next: { code: number }): string | null {
   const out: string[] = new Array(lines.length);
   for (let i = 0; i < lines.length; i++) {
     let token = tokens.get(lines[i]);
@@ -41,6 +41,15 @@ function tokenize(lines: string[], tokens: Map<string, string>, next: { code: nu
   return out.join('');
 }
 
+/** The lines of two texts as strings of tokens, the same line the same token in both; null when there are too many. */
+export function lineTokens(a: readonly string[], b: readonly string[]): [string, string] | null {
+  const tokens = new Map<string, string>();
+  const next = { code: FIRST_TOKEN };
+  const ta = tokenize(a, tokens, next);
+  const tb = ta === null ? null : tokenize(b, tokens, next);
+  return ta === null || tb === null ? null : [ta, tb];
+}
+
 export function lineChanges(base: string | null, current: string): LineChanges {
   const lines = current.split('\n');
   if (base === null) {
@@ -50,11 +59,9 @@ export function lineChanges(base: string | null, current: string): LineChanges {
     return { changed, deleted: [], count: changed.length };
   }
   if (base === current) return NONE();
-  const tokens = new Map<string, string>();
-  const next = { code: FIRST_TOKEN };
-  const a = tokenize(base.split('\n'), tokens, next);
-  const b = a === null ? null : tokenize(lines, tokens, next);
-  if (a === null || b === null) return NONE();
+  const tokens = lineTokens(base.split('\n'), lines);
+  if (!tokens) return NONE();
+  const [a, b] = tokens;
   const changed = new Set<number>();
   const deleted = new Set<number>();
   for (const c of diff(a, b, { timeout: DIFF_TIMEOUT })) {

@@ -528,17 +528,22 @@ describe('EditorView changes in the text, and comparison with the disk', () => {
   const NEWER = 'Le fichier a encore changé sur le disque : la comparaison montre sa nouvelle version.';
 
   it('keeps what was typed while the agent writes again during the comparison, says so, and holds « Garder ma version » back a moment', async () => {
-    const { disk, key, container } = await comparing();
+    const { be, disk, key, container } = await comparing();
+    const keep = screen.getByRole('button', { name: 'Garder ma version' });
+    keep.focus();
     Object.assign(disk, { text: 'a\nB\nc\nd\ne\nagain\n', hash: 'h3' });
     app.gitTick++;
     await expect.poll(() => removed(container)).toEqual(['B', 'again']);
     expect(buffers.all[key].text).toBe(MINE);
     expect(screen.getByRole('alert')).toHaveTextContent(NEWER);
     expect(app.toasts.map((t) => t.text)).toEqual([NEWER]);
-    // A click aimed at the version shown before is not taken.
-    const keep = screen.getByRole('button', { name: 'Garder ma version' });
-    expect(keep).toBeDisabled();
-    await expect.poll(() => keep, { timeout: 2000 }).toBeEnabled();
+    // A click aimed at the version shown before is not taken; the button keeps the focus it had.
+    expect(keep).toHaveAttribute('aria-disabled', 'true');
+    expect(keep).toHaveFocus();
+    await userEvent.click(keep);
+    expect(be.called('fs_write')).toHaveLength(0);
+    await expect.poll(() => keep.getAttribute('aria-disabled'), { timeout: 2000 }).toBe('false');
+    expect(keep).toHaveFocus();
     expect(screen.getByRole('alert')).toHaveTextContent(NEWER);
     // Typing in the comparison: the newer version has been seen.
     codeOf(container).dispatch({ changes: { from: 0, insert: 'x' }, userEvent: 'input.type' });
@@ -556,10 +561,32 @@ describe('EditorView changes in the text, and comparison with the disk', () => {
     expect(disk).toEqual({ text: 'a\nB\nc\nd\ne\nagain\n', hash: 'h3' });
     expect(buffers.all[key].text).toBe(MINE);
     expect(screen.getByRole('alert')).toHaveTextContent(NEWER);
-    expect(screen.getByRole('button', { name: 'Garder ma version' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Garder ma version' })).toHaveAttribute('aria-disabled', 'true');
     expect(app.toasts.map((t) => t.text)).toEqual([
       'Le fichier a encore changé sur le disque : rien n’est enregistré, la comparaison montre sa nouvelle version.',
     ]);
+  });
+
+  it('tells, back on its tab, that the agent wrote the file again while another one was shown, and holds « Garder ma version » back', async () => {
+    const { disk, key } = await comparing();
+    await app.openEditor({ source: 'project', path: 'README.md' });
+    await expect.poll(() => screen.queryByRole('alert')).toBeNull();
+    Object.assign(disk, { text: 'a\nB\nc\nd\ne\nagain\n', hash: 'h3' });
+    await buffers.refresh(key);
+    expect(buffers.all[key].onDisk).toMatchObject({ hash: 'h3', replaced: 'read' });
+    expect(app.toasts).toHaveLength(0);
+    await userEvent.click(screen.getByRole('tab', { name: /app\.ts/ }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(NEWER);
+    expect(app.toasts.map((t) => t.text)).toEqual([NEWER]);
+    const keep = screen.getByRole('button', { name: 'Garder ma version' });
+    expect(keep).toHaveAttribute('aria-disabled', 'true');
+    await expect.poll(() => keep.getAttribute('aria-disabled'), { timeout: 2000 }).toBe('false');
+    // Shown again with nothing new: nothing more to tell.
+    await userEvent.click(screen.getByRole('tab', { name: /README\.md/ }));
+    await userEvent.click(screen.getByRole('tab', { name: /app\.ts/ }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(NEWER);
+    expect(app.toasts).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Garder ma version' })).toHaveAttribute('aria-disabled', 'false');
   });
 
   it('says that nothing was saved when « Garder ma version » finds the disk back at the version opened', async () => {

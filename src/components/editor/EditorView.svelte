@@ -319,17 +319,21 @@
    */
   let settling = $state<string | null>(null);
   let settleTimer: ReturnType<typeof setTimeout> | undefined;
-  /** The version compared last seen on screen, to tell when a newer one takes its place there. */
-  let seenOnDisk: { key: string; hash: string } | null = null;
+  /**
+   * For each file compared with the disk, the version last seen on screen: a newer one is told when it takes its
+   * place there, or when the file is shown again after it did meanwhile.
+   */
+  const seenOnDisk = new Map<string, string>();
   $effect(() => {
     const key = buf?.key ?? null;
     const hash = onDisk?.hash ?? null;
     const replaced = onDisk?.replaced ?? null;
     untrack(() => {
-      const before = seenOnDisk;
-      seenOnDisk = key && hash ? { key, hash } : null;
-      // Replaced while another file was shown, it is told by the banner only.
-      if (!key || !replaced || before?.key !== key || before.hash === hash) return;
+      if (!key) return;
+      const before = seenOnDisk.get(key);
+      if (hash) seenOnDisk.set(key, hash);
+      else seenOnDisk.delete(key);
+      if (!replaced || !before || before === hash) return;
       app.toast(
         replaced === 'save'
           ? 'Le fichier a encore changé sur le disque : rien n’est enregistré, la comparaison montre sa nouvelle version.'
@@ -463,6 +467,7 @@
 
   /** Saves what was typed over the disk; compared with it, over the version compared only (else it shows the newer one). */
   async function keep(key: string) {
+    if (settling === key) return;
     const compared = !!buffers.all[key]?.onDisk;
     let kept: boolean;
     try {
@@ -617,7 +622,8 @@
             {#if !onDisk}
               <button class="btn small" onclick={() => compareDisk(buf.key)}>Comparer</button>
             {/if}
-            <button class="btn small" disabled={settling === buf.key} onclick={() => keep(buf.key)}>Garder ma version</button>
+            <!-- Held back, not disabled: a disabled button would lose the focus it has. -->
+            <button class="btn small" aria-disabled={settling === buf.key} onclick={() => keep(buf.key)}>Garder ma version</button>
           </div>
         {:else if buf?.disk === 'deleted'}
           <div class="banner" role="alert">
@@ -880,6 +886,12 @@
     border-bottom: 1px solid var(--line);
     color: var(--wait);
     font-size: 12.5px;
+  }
+  /* As the app's disabled buttons look. */
+  .banner .btn[aria-disabled='true'] {
+    opacity: 0.5;
+    cursor: default;
+    border-color: var(--line2);
   }
   .empty {
     flex: 1;

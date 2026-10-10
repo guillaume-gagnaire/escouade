@@ -96,14 +96,63 @@ describe('comparison', () => {
     expect(view.dom.querySelector('.cm-deletedChunk')).toBe(shown);
   });
 
-  it('finds each of the changes scattered through a big file, a lockfile’s, as a block of its own', () => {
+  it('finds each of the changes scattered through a big file, a lockfile’s, as a block of its own, however many', () => {
     const lines = Array.from({ length: 15000 }, (_, i) => `    "node_modules/package-${i}": { "version": "1.${i % 13}.${i % 7}" },`);
-    const bumped = lines.map((l, i) => (i % 300 === 150 ? l.replace('"1.', '"2.') : l));
-    const { view } = editor(bumped.join('\n') + '\n', { original: lines.join('\n') + '\n', against: 'reference' });
-    const chunks = getChunks(view.state)?.chunks ?? [];
-    expect(chunks.length).toBe(50);
-    // One line each: « Annuler ce bloc » puts that line back, not the whole file.
-    expect(chunks.every((c) => view.state.doc.lineAt(c.fromB).number === view.state.doc.lineAt(c.endB).number)).toBe(true);
+    for (const [every, blocks] of [
+      [300, 50],
+      [5, 3000],
+    ]) {
+      const bumped = lines.map((l, i) => (i % every === Math.floor(every / 2) ? l.replace('"1.', '"2.') : l));
+      const { view } = editor(bumped.join('\n') + '\n', { original: lines.join('\n') + '\n', against: 'reference' });
+      const chunks = getChunks(view.state)?.chunks ?? [];
+      expect(chunks.length).toBe(blocks);
+      // One line each: « Annuler ce bloc » puts that line back, not the whole file.
+      expect(chunks.every((c) => view.state.doc.lineAt(c.fromB).number === view.state.doc.lineAt(c.endB).number)).toBe(true);
+    }
+  });
+
+  it('follows each key typed in a big block rewritten in a short time', () => {
+    const lines = Array.from({ length: 13000 }, (_, i) => `  const value${i} = compute(${i}, "${'x'.repeat(i % 17)}");`);
+    for (const [from, to] of [
+      [1000, 1300],
+      [1000, 11000],
+    ]) {
+      const rewritten = lines.map((l, i) => (i >= from && i < to ? l.replace('const', 'let').replace('compute', 'evaluate') : l));
+      const { view } = editor(rewritten.join('\n') + '\n', { original: lines.join('\n') + '\n', against: 'reference' });
+      expect(getChunks(view.state)?.chunks).toHaveLength(1);
+      const inBlock = view.state.doc.line((from + to) / 2).from;
+      const times: number[] = [];
+      for (let i = 0; i < 5; i++) {
+        const start = performance.now();
+        view.dispatch({ changes: { from: inBlock, insert: 'z' } });
+        times.push(performance.now() - start);
+      }
+      // The block is read again at each key: a few ms line by line, 100 ms to a second character by character (300
+      // and 10 000 lines). The quickest of five, not to fail for a machine busy elsewhere.
+      expect(Math.min(...times), `${to - from} lines`).toBeLessThan(50);
+      expect(getChunks(view.state)?.chunks).toHaveLength(1);
+    }
+  });
+
+  it('puts the whole other version back, block by block, whatever the ends of the two texts', () => {
+    const pairs: [string, string][] = [
+      ['x\ny', 'x'],
+      ['x', 'x\ny'],
+      ['a\n', ''],
+      ['', 'a\n'],
+      ['a\nb', 'a\nb\n'],
+      ['a\nb\nc', 'a\nB\nc\n'],
+      ['\n\na\n', 'a\n\n\n'],
+      ['one\ntwo\nthree\nfour\n', 'zero\none\n2\nthree\nfive'],
+      // Lines moved, and lines found more than once.
+      ['a\nb\nc\nd\n', 'd\nc\nb\na\n'],
+      ['x\nx\ny\nx\n', 'x\ny\nx\nx\nz\n'],
+    ];
+    for (const [doc, original] of pairs) {
+      const { view } = editor(doc, { original, against: 'reference' });
+      for (let i = 0; i < 20 && buttons(view).length; i++) buttons(view)[0].click();
+      expect(view.state.doc.toString(), JSON.stringify([doc, original])).toBe(original);
+    }
   });
 
   it('compares a version with Windows line breaks line by line', () => {
