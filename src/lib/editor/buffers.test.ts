@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { fakeBackend } from '../../test/ipc';
+import { setLang } from '../i18n';
 import { buffers, lossNotice } from './buffers.svelte';
 import { trees } from './trees.svelte';
 
@@ -217,6 +218,10 @@ describe('buffers', () => {
     expect(lossNotice(0)).toBe('');
     expect(lossNotice(1)).toBe(' 1 fichier non enregistré dans l’éditeur sera perdu.');
     expect(lossNotice(3)).toBe(' 3 fichiers non enregistrés dans l’éditeur seront perdus.');
+    setLang('en');
+    expect(lossNotice(0)).toBe('');
+    expect(lossNotice(1)).toBe(' 1 unsaved file in the editor will be lost.');
+    expect(lossNotice(3)).toBe(' 3 unsaved files in the editor will be lost.');
   });
 
   it('reads a file once when it is opened twice at the same time', async () => {
@@ -484,6 +489,13 @@ describe('buffers', () => {
       expect(buffers.all[k]).toMatchObject({ text: 'mine\n', disk: 'changed', onDisk: null });
     });
 
+    it('says in English that the version of the disk is not text', async () => {
+      const { k } = await conflict();
+      disk = { kind: 'binary', text: null, size: 10, hash: 'h3', eol: 'lf', bom: false } as unknown as ReturnType<typeof text>;
+      setLang('en');
+      await expect(buffers.compare(k)).rejects.toBe('the version on disk is not text');
+    });
+
     it('does not take for a comparison an answer from the disk that comes after a save', async () => {
       const { k } = await conflict();
       const late = deferred<unknown>();
@@ -617,6 +629,8 @@ describe('buffers of files renamed or deleted', () => {
     );
     // A folder whose files would take the place of one.
     expect(() => buffers.move('p1', 'project', 'src', 'lib')).toThrow('« b.ts » est ouvert avec des modifications non enregistrées.');
+    setLang('en');
+    expect(() => buffers.move('p1', 'project', 'src', 'lib')).toThrow('“b.ts” is open with unsaved changes.');
     expect(Object.keys(buffers.all).sort()).toEqual([
       'p1|project|gone.ts',
       'p1|project|lib/b.ts',

@@ -127,6 +127,21 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 
 | Français | Anglais | Note |
 |---|---|---|
+| Nouveau fichier / Nouveau dossier | New file / New folder | arborescence, menu |
+| Ignoré par git | Ignored by git | fichier de l’arborescence |
+| Voir les changements | Show changes | le texte comparé à sa version de référence |
+| Comparer | Compare | le fichier comparé à la version du disque |
+| Recharger | Reload | |
+| Garder ma version | Keep my version | |
+| bloc (d’une comparaison) | block | « Annuler ce bloc » → “Revert this block”, « Prendre ce bloc » → “Take this block” ; remplace le « chunk » de CodeMirror |
+| corbeille | trash | « Il part dans la corbeille. » → “It goes to the trash.” |
+| propre (un worktree sans modification) | clean | |
+| modif. | change(s) | « 4 modif. » → “4 changes” |
+| liste tronquée | list truncated | l’arborescence trop grande pour être lue en entier |
+| Tabulations / Espaces | Tabs / Spaces | l’indentation, dans la barre d’état |
+| Texte | Plain text | langue d’un fichier inconnu |
+| Définitions | Definitions | liste des endroits où mène un identifiant |
+| Suppr | Del | la touche, dans le menu de l’arborescence |
 
 ## L4 — settings
 

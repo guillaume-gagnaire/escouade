@@ -1,6 +1,7 @@
 import { render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+import { setLang } from '../../lib/i18n';
 import EditorTabs from './EditorTabs.svelte';
 
 describe('EditorTabs', () => {
@@ -76,5 +77,21 @@ describe('EditorTabs', () => {
       await rerender({ tabs: twins.slice(0, 1), onselect: () => {}, onclose: () => {} });
       expect(screen.getByRole('tab', { name: /index\.ts/ })).not.toHaveTextContent('·');
     });
+  });
+});
+
+describe('EditorTabs in English', () => {
+  it('names the tab bar and the close buttons, with the folder of twins and the unsaved mark', () => {
+    setLang('en');
+    const twins = [
+      { path: 'src/a/index.ts', name: 'index.ts', dirty: true, status: null, active: true },
+      { path: 'src/b/index.ts', name: 'index.ts', dirty: false, status: null, active: false },
+      { path: 'main.ts', name: 'main.ts', dirty: false, status: null, active: false },
+    ];
+    render(EditorTabs, { tabs: twins, onselect: () => {}, onclose: () => {} });
+    expect(screen.getByRole('tablist', { name: 'Open files' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Close index.ts · a' })).toHaveAttribute('title', 'Close (unsaved)');
+    expect(screen.getByRole('button', { name: 'Close index.ts · b' })).toHaveAttribute('title', 'Close');
+    expect(screen.getByRole('button', { name: 'Close main.ts' })).toBeInTheDocument();
   });
 });

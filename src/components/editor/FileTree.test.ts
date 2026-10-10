@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { tick } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { treeRows } from '../../lib/editor/tree';
+import { setLang } from '../../lib/i18n';
 import FileTree from './FileTree.svelte';
 
 const noop = () => {};
@@ -360,5 +361,19 @@ describe('FileTree and the file shown', () => {
     await rerender({ ...base, rows, active: 'b.ts' });
     expect(scroll).toHaveBeenLastCalledWith({ block: 'nearest' });
     expect(scroll.mock.contexts.at(-1)).toBe(screen.getByRole('treeitem', { name: /b\.ts/ }));
+  });
+});
+
+describe('FileTree in English', () => {
+  it('names the tree, the fields and the files git ignores in English', () => {
+    setLang('en');
+    const rows = treeRows(['src/app.ts', '.env'], { src: true }, {}, 'src', ['.env']);
+    const { unmount } = render(FileTree, { ...base, rows, adding: 'dir' });
+    expect(screen.getByRole('tree', { name: 'Files' })).toBeInTheDocument();
+    expect(screen.getByRole('treeitem', { name: /\.env/ })).toHaveAttribute('title', 'Ignored by git');
+    expect(screen.getByRole('textbox', { name: 'Name of the new folder' })).toBeInTheDocument();
+    unmount();
+    render(FileTree, { ...base, rows: treeRows(['src/app.ts'], { src: true }, {}), renaming: { kind: 'file', path: 'src/app.ts' } });
+    expect(screen.getByRole('textbox', { name: 'Rename “app.ts”' })).toBeInTheDocument();
   });
 });

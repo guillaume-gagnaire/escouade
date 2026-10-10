@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { setLang } from '../i18n';
 import { languageLabel, loadLanguage } from './languages';
 
 describe('languages', () => {
@@ -9,6 +10,12 @@ describe('languages', () => {
     expect(languageLabel('Dockerfile')).toBe('Dockerfile');
     expect(languageLabel('prisma/schema.prisma')).toBe('Prisma');
     expect(languageLabel('notes')).toBe('Texte');
+  });
+
+  it('calls a file of an unknown language plain text in English, and keeps the names of the others', () => {
+    setLang('en');
+    expect(languageLabel('notes')).toBe('Plain text');
+    expect(languageLabel('src/app.ts')).toBe('TypeScript');
   });
 
   it('loads the syntax of a known language, none for plain text', async () => {

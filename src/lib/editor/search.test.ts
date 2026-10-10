@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeBackend } from '../../test/ipc';
+import { setLang } from '../i18n';
 import type { SearchQuery, SearchResult } from '../types';
 import { FileSearch, fileSearches, findInFiles, pieces, setFindInFiles } from './search.svelte';
 
@@ -81,6 +82,15 @@ describe('FileSearch', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(s.result).toEqual(found('abcd.ts'));
     expect(s.error).toBeNull();
+  });
+
+  it('says why in English when the language of the interface is', async () => {
+    setLang('en');
+    const s = new FileSearch(vi.fn(async () => found()));
+    s.toggle('regex');
+    s.type('foo(');
+    await vi.advanceTimersByTimeAsync(250);
+    expect(s.error).toBe('Invalid regular expression.');
   });
 
   it('sends no invalid expression, and says why', async () => {

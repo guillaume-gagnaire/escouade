@@ -5,7 +5,8 @@ import { EditorView } from '@codemirror/view';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
-import { editorTheme, PHRASES } from './theme';
+import { setLang } from '../i18n';
+import { editorTheme, phrases } from './theme';
 
 // jsdom has no cascade, so compare the rules CodeMirror injects: our rule must be at least as specific as
 // the base theme's one (a class counts for as much as another) and come after it, or the base wins.
@@ -73,13 +74,21 @@ describe('editorTheme', () => {
   });
 });
 
-describe('PHRASES', () => {
+describe('phrases', () => {
   it('has all the texts the merge view asks for in French', () => {
     const merge = readFileSync(createRequire(import.meta.url).resolve('@codemirror/merge'), 'utf8');
     const asked = new Set([...merge.matchAll(/\.phrase\("([^"]+)"/g)].map((m) => m[1]));
     expect(asked.size).toBeGreaterThan(0);
-    expect([...asked].filter((p) => !(p in PHRASES))).toEqual([]);
-    const state = EditorState.create({ extensions: EditorState.phrases.of(PHRASES) });
+    expect([...asked].filter((p) => !(p in phrases()))).toEqual([]);
+    const state = EditorState.create({ extensions: EditorState.phrases.of(phrases()) });
     expect(state.phrase('$ unchanged lines', 12)).toBe('12 lignes inchangées');
+  });
+
+  it('says them in the language of the interface, whenever it is asked', () => {
+    setLang('en');
+    const state = EditorState.create({ extensions: EditorState.phrases.of(phrases()) });
+    expect(state.phrase('$ unchanged lines', 12)).toBe('12 unchanged lines');
+    expect(state.phrase('Find')).toBe('Find');
+    expect(state.phrase('Revert this chunk')).toBe('Revert this block');
   });
 });

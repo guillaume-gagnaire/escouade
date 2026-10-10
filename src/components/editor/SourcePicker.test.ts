@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+import { setLang } from '../../lib/i18n';
 import { agent, gitInfo, project } from '../../test/ipc';
 import SourcePicker from './SourcePicker.svelte';
 
@@ -59,5 +60,31 @@ describe('SourcePicker', () => {
     const option = screen.getByRole('menuitemradio', { name: /nouveau-nom/ });
     expect(option).toHaveTextContent('.claude/worktrees/dossier-initial · opus');
     expect(option).not.toHaveTextContent('worktrees/nouveau-nom');
+  });
+});
+
+describe('SourcePicker in English', () => {
+  it('says the source, the branch and the changes of each place in English', async () => {
+    setLang('en');
+    const wt = agent({
+      id: 'a2',
+      name: 'refacto',
+      worktree: { path: 'C:\\code\\demo-api\\.claude\\worktrees\\refacto', branch: 'escouade/refacto', baseBranch: 'main' },
+    });
+    render(SourcePicker, {
+      project: project(),
+      source: 'project',
+      agents: [wt, agent({ id: 'a3', name: 'tidy' })],
+      git: gitInfo({ modified: 6, added: 1, agents: { a2: 4 } }),
+      onpick: () => {},
+    });
+    const button = screen.getByRole('button', { name: /Source: main/ });
+    expect(button).toHaveTextContent('branch');
+    await userEvent.click(button);
+    expect(screen.getByRole('menu', { name: 'Browse' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitemradio', { name: /main/ })).toHaveTextContent('Project branch · ');
+    expect(screen.getByRole('menuitemradio', { name: /main/ })).toHaveTextContent('Δ 3');
+    expect(screen.getByRole('menuitemradio', { name: /refacto/ })).toHaveTextContent('4 changes');
+    expect(screen.getByRole('menuitemradio', { name: /tidy/ })).toHaveTextContent('clean');
   });
 });

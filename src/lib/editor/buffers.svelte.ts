@@ -1,7 +1,8 @@
 // Files open in the editor: their text, as last read or saved, and the state of the file on disk.
 // A source is 'project' (the project's checkout) or the id of an agent (its worktree).
 
-import { basename, plural } from '../format';
+import { basename } from '../format';
+import { t } from '../i18n';
 import { api } from '../ipc';
 import type { FileBase, FileText } from '../types';
 import { movedPath } from './tree';
@@ -55,8 +56,7 @@ export interface Buffer {
 export const sourceAgent = (source: string) => (source === 'project' ? null : source);
 
 /** The sentence a confirmation adds when removing something loses `n` unsaved files ('' for none). */
-export const lossNotice = (n: number) =>
-  n ? ` ${plural(n, 'fichier non enregistré dans l’éditeur sera perdu', 'fichiers non enregistrés dans l’éditeur seront perdus')}.` : '';
+export const lossNotice = (n: number) => (n ? ` ${t('editor.lossNotice', { count: n })}` : '');
 
 const notFound = (e: unknown) => String(e).includes('introuvable');
 
@@ -242,7 +242,7 @@ class Buffers {
     const f = await this.read(b);
     if (f === undefined) return;
     if (f === null) return this.mark(b, 'deleted');
-    if (f.kind !== 'text') throw 'la version du disque n’est pas du texte';
+    if (f.kind !== 'text') throw t('editor.buffers.diskNotText');
     // Back to the version read: nothing to choose between.
     if (f.hash === b.hash) return this.mark(b, 'ok');
     this.changedTo(b, f.hash);
@@ -349,7 +349,7 @@ class Buffers {
    */
   move(projectId: string, source: string, from: string, to: string) {
     const left = this.inTheWay(projectId, source, from, to);
-    if (left) throw new Error(`« ${basename(left.path)} » est ouvert avec des modifications non enregistrées.`);
+    if (left) throw new Error(t('editor.rename.openUnsaved', { name: basename(left.path) }));
     for (const { b, path } of this.moving(projectId, source, from, to)) {
       const key = this.key(projectId, source, path);
       delete this.all[b.key];

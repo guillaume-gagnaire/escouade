@@ -5,9 +5,10 @@ import { openSearchPanel } from '@codemirror/search';
 import { EditorSelection, Transaction } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { render } from '@testing-library/svelte';
-import { tick } from 'svelte';
+import { flushSync, tick } from 'svelte';
 import { describe, expect, it, vi } from 'vitest';
 import type { NavResolver } from '../../lib/editor/goto';
+import { setLang } from '../../lib/i18n';
 import CodeEditor from './CodeEditor.svelte';
 
 const none = { changed: [], deleted: [], count: 0 };
@@ -348,6 +349,44 @@ describe('CodeEditor', () => {
     expect(panel.querySelector('input[name=search]')?.getAttribute('placeholder')).toBe('Rechercher');
     expect(panel.querySelector('button[name=next]')?.textContent).toBe('suivant');
     expect(panel.querySelector('button[name=close]')?.getAttribute('aria-label')).toBe('fermer');
+  });
+
+  it('opens its search panel in English when the interface is', async () => {
+    setLang('en');
+    const { container } = render(CodeEditor, { ...base, docKey: 'k1', text: 'abc\n', version: 0, onchange: () => {} });
+    await tick();
+    expect(openSearchPanel(viewOf(container))).toBe(true);
+    const panel = container.querySelector('.cm-search') as HTMLElement;
+    expect(panel.querySelector('input[name=search]')?.getAttribute('placeholder')).toBe('Find');
+    expect(panel.querySelector('button[name=next]')?.textContent).toBe('next');
+    expect(panel.querySelector('button[name=close]')?.getAttribute('aria-label')).toBe('close');
+  });
+
+  it('changes the words of CodeMirror and the buttons of the blocks with the language of the interface', async () => {
+    const props = {
+      ...base,
+      docKey: 'k1',
+      text: 'a\nB\nc\n',
+      version: 0,
+      onchange: () => {},
+      compare: { original: 'a\nb\nc\n', against: 'reference' as const },
+    };
+    const { container } = render(CodeEditor, props);
+    await tick();
+    expect(blockButtons(container).map((b) => b.textContent)).toEqual(['Annuler ce bloc']);
+    setLang('en');
+    flushSync();
+    await tick();
+    expect(blockButtons(container).map((b) => b.textContent)).toEqual(['Revert this block']);
+    expect(removedLines(container)).toEqual(['b']);
+    // The panel is drawn with the words of the moment.
+    expect(openSearchPanel(viewOf(container))).toBe(true);
+    expect(container.querySelector('.cm-search button[name=next]')?.textContent).toBe('next');
+    setLang('fr');
+    flushSync();
+    await tick();
+    expect(blockButtons(container).map((b) => b.textContent)).toEqual(['Annuler ce bloc']);
+    expect(viewOf(container).state.phrase('next')).toBe('suivant');
   });
 
   it('indents the way the project does, and follows a change of style', async () => {

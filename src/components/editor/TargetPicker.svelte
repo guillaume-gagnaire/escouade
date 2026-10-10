@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { NavTarget } from '../../lib/editor/goto';
+  import { t } from '../../lib/i18n';
 
   /** More places than that are not listed. */
   const MAX = 50;
@@ -70,7 +71,7 @@
 <svelte:window onpointerdown={(e) => box && !box.contains(e.target as Node) && onclose()} />
 
 <div class="picker" bind:this={box} style:left="{pos?.x ?? at?.left ?? 8}px" style:top="{pos?.y ?? (at ? at.bottom + 4 : 8)}px">
-  <div class="title" id="{uid}-title">Définitions de « {label} »</div>
+  <div class="title" id="{uid}-title">{t('editor.targets.title', { label })}</div>
   <ul
     class="list"
     role="listbox"
@@ -80,7 +81,7 @@
     bind:this={list}
     onkeydown={key}
   >
-    {#each shown as t, i (i)}
+    {#each shown as target, i (i)}
       <!-- The list takes the keys; the mouse keeps the focus on it. -->
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <li
@@ -91,10 +92,10 @@
         aria-selected={i === sel}
         onmouseenter={() => (sel = i)}
         onmousedown={(e) => e.preventDefault()}
-        onclick={() => onpick(t)}
+        onclick={() => onpick(target)}
       >
-        <span class="where mono">{t.path}{t.line ? `:${t.line}` : ''}</span>
-        <span class="text mono">{t.text?.trim() ?? ''}</span>
+        <span class="where mono">{target.path}{target.line ? `:${target.line}` : ''}</span>
+        <span class="text mono">{target.text?.trim() ?? ''}</span>
       </li>
     {/each}
   </ul>

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buffers } from '../../lib/editor/buffers.svelte';
 import { movedPath } from '../../lib/editor/tree';
 import { trees } from '../../lib/editor/trees.svelte';
+import { setLang } from '../../lib/i18n';
 import { menu } from '../../lib/menu.svelte';
 import { handleShortcut } from '../../lib/shortcuts';
 import { app } from '../../lib/state.svelte';
@@ -1862,5 +1863,112 @@ describe('EditorView left column width', () => {
     await app.openEditor({ source: 'project' });
     const { container } = render(EditorView, { project: project() });
     expect(column(container)).toHaveStyle({ width: '240px' });
+  });
+});
+
+describe('EditorView in English', () => {
+  beforeEach(() => {
+    resetApp({ agents: [agent()] });
+    app.git.p1 = gitInfo({ modified: 1 });
+    setLang('en');
+  });
+
+  it('writes the bar, the left column, the line above the text and the status bar in English', async () => {
+    backend({ fs_tree: () => ({ root: 'C:/code/demo-api', files: ['README.md', 'src/app.ts'], truncated: true }) });
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    render(EditorView, { project: project() });
+    expect(await screen.findByText('1 line changed vs HEAD')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '← Conversation' })).toBeInTheDocument();
+    expect(screen.getByText('Saved')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    for (const name of ['New file', 'New folder', 'Refresh', 'Collapse all', 'Search in files']) {
+      expect(screen.getByRole('button', { name })).toBeInTheDocument();
+    }
+    expect(screen.getByRole('button', { name: 'Show changes' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Column view' })).toBeInTheDocument();
+    expect(screen.getByRole('separator', { name: 'Width of the files column' })).toBeInTheDocument();
+    expect(screen.getByText('2 files · 1 change · list truncated')).toBeInTheDocument();
+    const status = document.querySelector('.status') as HTMLElement;
+    expect(status).toHaveTextContent('Ln 1, Col 1');
+    expect(status).toHaveTextContent('branch · main');
+  });
+
+  it('tells in English that the file changed on disk, and asks before closing an unsaved tab', async () => {
+    backend({ fs_write: () => Promise.reject('changed') });
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    render(EditorView, { project: project() });
+    const key = buffers.key('p1', 'project', 'src/app.ts');
+    await expect.poll(() => buffers.all[key]?.kind).toBe('text');
+    buffers.edit(key, 'mine\n');
+    expect(await screen.findByText('● Unsaved · Ctrl+S')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('This file changed on disk.');
+    for (const name of ['Reload', 'Compare', 'Keep my version']) expect(screen.getByRole('button', { name })).toBeInTheDocument();
+    const close = screen.getByRole('button', { name: 'Close app.ts' });
+    expect(close).toHaveAttribute('title', 'Close (unsaved)');
+    await userEvent.click(close);
+    expect(app.modal).toMatchObject({
+      kind: 'confirm',
+      title: 'Save “app.ts”?',
+      body: 'Its changes will be lost if you don’t save them.',
+      confirm: 'Save',
+      alt: { label: 'Don’t save' },
+    });
+  });
+
+  it('writes the menu of the tree and what is asked before a folder goes to the trash in English', async () => {
+    const be = backend({ fs_delete: () => Promise.reject('boom') });
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    render(EditorView, { project: project() });
+    const row = await screen.findByRole('treeitem', { name: /app\.ts/ });
+    await fireEvent.contextMenu(row);
+    const items = menu.open!.items;
+    expect(items.map((i) => i.label)).toEqual([
+      'New file…',
+      'New folder…',
+      'Open a terminal here',
+      '',
+      'Rename…',
+      'Delete',
+      '',
+      'Copy path',
+      'Copy relative path',
+    ]);
+    expect(items.find((i) => i.label === 'Delete')).toMatchObject({ hint: 'Del', danger: true });
+    menu.close();
+    screen.getByRole('treeitem', { name: /^src$/ }).focus();
+    await userEvent.keyboard('{Delete}');
+    expect(app.modal).toMatchObject({
+      title: 'Delete “src”?',
+      body: 'The folder and its file go to the trash.',
+      confirm: 'Delete',
+      danger: true,
+    });
+    await (app.modal as any).onConfirm();
+    expect(be.called('fs_delete')).toHaveLength(1);
+    expect(app.toasts.map((t) => t.text)).toEqual(['Could not delete: boom']);
+  });
+
+  it('says in English what takes the place of the text', async () => {
+    backend({
+      fs_tree: () => ({ root: 'C:/code/demo-api', files: ['logo.png', 'big.bin', 'gone.ts', 'src/a.ts'], truncated: false }),
+      git_files: () => [],
+      fs_base: () => null,
+      fs_read: (a) => {
+        if (a.path === 'logo.png') return { kind: 'binary', text: null, size: 10, hash: '', eol: 'lf', bom: false };
+        if (a.path === 'big.bin') return { kind: 'tooLarge', text: null, size: 1363149, hash: '', eol: 'lf', bom: false };
+        if (a.path === 'gone.ts') return Promise.reject('gone.ts introuvable');
+        return text('x\n');
+      },
+    });
+    await app.openEditor({ source: 'project', path: 'logo.png' });
+    render(EditorView, { project: project() });
+    expect(await screen.findByText('Binary file: no preview.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('treeitem', { name: /big\.bin/ }));
+    expect(await screen.findByText('File too large for the editor (1.3 MB).')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('treeitem', { name: /gone\.ts/ }));
+    expect(await screen.findByText('This file doesn’t exist (or no longer exists).')).toBeInTheDocument();
+    for (const name of ['logo.png', 'big.bin', 'gone.ts']) await userEvent.click(screen.getByRole('button', { name: `Close ${name}` }));
+    expect(screen.getByText('Select a file in the file tree.')).toBeInTheDocument();
   });
 });

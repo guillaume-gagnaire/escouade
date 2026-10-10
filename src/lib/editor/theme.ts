@@ -2,7 +2,8 @@
 
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { EditorView } from '@codemirror/view';
-import { tags as t } from '@lezer/highlight';
+import { tags } from '@lezer/highlight';
+import { t, type Key } from '../i18n';
 
 const C = {
   kw: 'var(--accent)',
@@ -17,19 +18,22 @@ const C = {
 };
 
 const highlight = HighlightStyle.define([
-  { tag: [t.keyword, t.modifier, t.controlKeyword, t.operatorKeyword, t.definitionKeyword, t.moduleKeyword], color: C.kw },
-  { tag: t.heading, color: C.kw, fontWeight: '700' },
-  { tag: [t.string, t.special(t.string), t.regexp, t.inserted], color: C.str },
-  { tag: [t.number, t.bool, t.null, t.atom], color: C.num },
-  { tag: [t.comment, t.lineComment, t.blockComment, t.docComment], color: C.com, fontStyle: 'italic' },
-  { tag: [t.typeName, t.className, t.namespace, t.tagName], color: C.type },
-  { tag: [t.function(t.variableName), t.function(t.propertyName), t.macroName], color: C.fn },
-  { tag: [t.propertyName, t.attributeName, t.labelName], color: C.prop },
-  { tag: [t.punctuation, t.bracket, t.operator, t.separator], color: C.pun },
-  { tag: t.strong, fontWeight: '700' },
-  { tag: t.emphasis, fontStyle: 'italic' },
-  { tag: t.link, color: C.type, textDecoration: 'underline' },
-  { tag: t.invalid, color: 'var(--del)' },
+  {
+    tag: [tags.keyword, tags.modifier, tags.controlKeyword, tags.operatorKeyword, tags.definitionKeyword, tags.moduleKeyword],
+    color: C.kw,
+  },
+  { tag: tags.heading, color: C.kw, fontWeight: '700' },
+  { tag: [tags.string, tags.special(tags.string), tags.regexp, tags.inserted], color: C.str },
+  { tag: [tags.number, tags.bool, tags.null, tags.atom], color: C.num },
+  { tag: [tags.comment, tags.lineComment, tags.blockComment, tags.docComment], color: C.com, fontStyle: 'italic' },
+  { tag: [tags.typeName, tags.className, tags.namespace, tags.tagName], color: C.type },
+  { tag: [tags.function(tags.variableName), tags.function(tags.propertyName), tags.macroName], color: C.fn },
+  { tag: [tags.propertyName, tags.attributeName, tags.labelName], color: C.prop },
+  { tag: [tags.punctuation, tags.bracket, tags.operator, tags.separator], color: C.pun },
+  { tag: tags.strong, fontWeight: '700' },
+  { tag: tags.emphasis, fontStyle: 'italic' },
+  { tag: tags.link, color: C.type, textDecoration: 'underline' },
+  { tag: tags.invalid, color: 'var(--del)' },
 ]);
 
 export const editorTheme = [
@@ -100,27 +104,32 @@ export const editorTheme = [
   syntaxHighlighting(highlight),
 ];
 
-/** CodeMirror's texts (search panel, merge view…) in French. */
-export const PHRASES: Record<string, string> = {
-  Accept: 'Accepter',
-  Reject: 'Rejeter',
-  'Revert this chunk': 'Annuler ce bloc',
-  '$ unchanged lines': '$ lignes inchangées',
-  Find: 'Rechercher',
-  Replace: 'Remplacer',
-  next: 'suivant',
-  previous: 'précédent',
-  all: 'tout',
-  'match case': 'respecter la casse',
-  'by word': 'mot entier',
-  regexp: 'expression régulière',
-  replace: 'remplacer',
-  'replace all': 'tout remplacer',
-  close: 'fermer',
-  'current match': 'occurrence courante',
-  'replaced $ matches': '$ remplacements',
-  'replaced match on line $': 'remplacé à la ligne $',
-  'on line': 'à la ligne',
-  'Go to line': 'Aller à la ligne',
-  go: 'aller',
-};
+/** The texts CodeMirror asks for (search panel, merge view…), by the English phrase it asks with, and the key of their text. */
+const PHRASE_KEYS = {
+  Accept: 'editor.cm.accept',
+  Reject: 'editor.cm.reject',
+  'Revert this chunk': 'editor.compare.revertBlock',
+  '$ unchanged lines': 'editor.cm.unchangedLines',
+  Find: 'editor.cm.find',
+  Replace: 'editor.cm.replace',
+  next: 'editor.cm.next',
+  previous: 'editor.cm.previous',
+  all: 'editor.cm.all',
+  'match case': 'editor.cm.matchCase',
+  'by word': 'editor.cm.byWord',
+  regexp: 'editor.cm.regexp',
+  replace: 'editor.cm.replaceVerb',
+  'replace all': 'editor.cm.replaceAll',
+  close: 'editor.cm.close',
+  'current match': 'editor.cm.currentMatch',
+  'replaced $ matches': 'editor.cm.replacedMatches',
+  'replaced match on line $': 'editor.cm.replacedOnLine',
+  'on line': 'editor.cm.onLine',
+  'Go to line': 'editor.cm.goToLine',
+  go: 'editor.cm.go',
+} as const satisfies Record<string, Key>;
+
+/** CodeMirror's texts (search panel, merge view…) in the language of the interface, for `EditorState.phrases`. */
+export function phrases(): Record<string, string> {
+  return Object.fromEntries(Object.entries(PHRASE_KEYS).map(([phrase, key]) => [phrase, t(key)]));
+}

@@ -1,5 +1,6 @@
 // Saving from the editor's button, Ctrl+S and the close prompts.
 
+import { t } from '../i18n';
 import { app } from '../state.svelte';
 import { buffers } from './buffers.svelte';
 
@@ -17,7 +18,7 @@ export async function saveKey(key: string): Promise<boolean> {
   try {
     return await buffers.save(key);
   } catch (e) {
-    app.toast(`Enregistrement impossible : ${e}`, 'error');
+    app.toast(t('editor.toast.saveFailed', { error: String(e) }), 'error');
     return false;
   }
 }

@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { NavTarget } from '../../lib/editor/goto';
+import { setLang } from '../../lib/i18n';
 import TargetPicker from './TargetPicker.svelte';
 
 describe('TargetPicker', () => {
@@ -68,5 +69,19 @@ describe('TargetPicker', () => {
     await userEvent.click(screen.getByRole('option', { name: /lib\/far\.ts:3/ }));
     expect(onpick).toHaveBeenCalledExactlyOnceWith(targets[2]);
     expect(onclose).not.toHaveBeenCalled();
+  });
+});
+
+describe('TargetPicker in English', () => {
+  it('titles the list with the word followed', () => {
+    setLang('en');
+    render(TargetPicker, {
+      targets: [{ path: 'src/a.ts', line: 1, col: 1, text: 'x' }],
+      label: 'render',
+      at: null,
+      onpick: () => {},
+      onclose: () => {},
+    });
+    expect(screen.getByRole('listbox', { name: 'Definitions of “render”' })).toBeInTheDocument();
   });
 });
