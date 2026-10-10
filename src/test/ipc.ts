@@ -6,6 +6,7 @@ import { navHistory } from '../lib/editor/history';
 import { recentFiles } from '../lib/editor/quick-open';
 import { fileSearches } from '../lib/editor/search.svelte';
 import { gitSync } from '../lib/git-sync.svelte';
+import { mcp } from '../lib/mcp.svelte';
 import { trees } from '../lib/editor/trees.svelte';
 import { app } from '../lib/state.svelte';
 import type { Agent, BoardSettings, BranchInfo, GitInfo, Project, Settings, Ticket } from '../lib/types';
@@ -62,6 +63,8 @@ export const SETTINGS: Settings = {
   language: 'system',
   claudeLanguage: 'ui',
   accounts: [{ id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true }],
+  mcpEnabled: false,
+  mcpPort: 0,
 };
 
 export function project(over: Partial<Project> = {}): Project {
@@ -275,6 +278,7 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.lang = { ui: 'fr', system: 'fr', claude: 'fr' };
   app.ready = true;
   buffers.reset();
+  mcp.reset();
   trees.reset();
   navHistory.reset();
   recentFiles.reset();

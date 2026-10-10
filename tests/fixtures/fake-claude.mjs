@@ -127,13 +127,19 @@ function mcpCommand(args) {
   const servers = read().mcpServers ?? {};
   const refused = path.join(dir, 'fake-mcp-fail');
   if ((sub === 'add' || sub === 'remove') && fs.existsSync(path.join(dir, 'fake-mcp-hang'))) setInterval(() => {}, 1000);
-  else if ((sub === 'add' || sub === 'remove') && fs.existsSync(refused)) fail(fs.readFileSync(refused, 'utf8').trim() || 'fake claude: refused');
+  else if ((sub === 'add' || sub === 'remove') && fs.existsSync(refused))
+    fail(fs.readFileSync(refused, 'utf8').trim() || 'fake claude: refused');
   else if (sub === 'add') {
     if (!name || !url) fail('error: missing required argument');
     if (name in servers) fail(`MCP server ${name} already exists in user config`);
-    const headers = Object.fromEntries((options['--header'] ?? []).map((h) => [h.slice(0, h.indexOf(':')).trim(), h.slice(h.indexOf(':') + 1).trim()]));
+    const headers = Object.fromEntries(
+      (options['--header'] ?? []).map((h) => [h.slice(0, h.indexOf(':')).trim(), h.slice(h.indexOf(':') + 1).trim()]),
+    );
     const json = read();
-    json.mcpServers = { ...servers, [name]: { type: options['--transport']?.[0] ?? 'stdio', url, ...(Object.keys(headers).length ? { headers } : {}) } };
+    json.mcpServers = {
+      ...servers,
+      [name]: { type: options['--transport']?.[0] ?? 'stdio', url, ...(Object.keys(headers).length ? { headers } : {}) },
+    };
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(file, JSON.stringify(json, null, 2));
     process.stdout.write(`Added HTTP MCP server ${name} with URL: ${url} to user config\nFile modified: ${file}\n`);
@@ -149,7 +155,11 @@ function mcpCommand(args) {
     process.stdout.write(`${name}:\n  Scope: User config\n  Status: ✔ Connected\n  Type: ${s.type}\n  URL: ${s.url}\n`);
   } else if (sub === 'list') {
     const lines = Object.entries(servers).map(([n, s]) => `${n}: ${s.url} (${s.type.toUpperCase()}) - ✔ Connected`);
-    process.stdout.write(lines.length ? `Checking MCP server health...\n\n${lines.join('\n')}\n` : 'No MCP servers configured. Use `claude mcp add` to add a server.\n');
+    process.stdout.write(
+      lines.length
+        ? `Checking MCP server health...\n\n${lines.join('\n')}\n`
+        : 'No MCP servers configured. Use `claude mcp add` to add a server.\n',
+    );
   } else fail(`fake claude: unknown mcp command ${sub}`, 2);
 }
 

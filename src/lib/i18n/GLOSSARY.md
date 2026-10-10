@@ -389,6 +389,10 @@ Ce qu’Escouade dit à Claude ou lui fait écrire suit « Langue des textes ré
 | ligne d’état (d’un agent) | status line | ce qu’un agent annonce faire par `report_progress`, sous son nom et sur la carte de son ticket : « Ce que l’agent dit faire » → “What the agent says it is doing” |
 | le pilote auto est en pause jusqu’à 14:30 | the autopilot is paused until 14:30 | refus d’un outil du serveur MCP : « 2026-10-12 14:30 » un autre jour (une heure ou une date, pas une durée) |
 | le maximum de tickets en parallèle / d’agents qui travaillent en même temps | the most tickets in parallel / agents working at once | réglage « En parallèle » → “In parallel” |
+| Claude peut piloter Escouade | Claude can drive Escouade | l’interrupteur du groupe « Escouade dans Claude » → “Escouade in Claude” (onglet « Claude Code ») |
+| Déclaré dans Claude · compte Principal, compte Pro | Declared in Claude · Main account, Pro account | l’état du serveur MCP dans la config de Claude Code de chaque compte actif ; « Pas déclaré pour le compte Pro : … » → “Not declared for the Pro account: …” |
+| Activité MCP | MCP activity | le journal des appels au serveur ; résultat « Fait / Refusé / Erreur » → “Done / Refused / Error” |
+| Créé par <auteur> via Escouade | Created by <author> through Escouade | dernière ligne de la description d’un ticket créé ou découpé par le serveur MCP |
 | Message de <auteur> : … | Message from <author>: … | en-tête d’un message qui vient du serveur MCP (`send_message`, premier message de `create_agent`), l’auteur étant un agent ou « Claude (hors Escouade) » → “Claude (outside Escouade)” |
 
 ## G — branches

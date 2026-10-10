@@ -8,6 +8,28 @@ export default defineZone('mcp', {
     agentsUseDesc:
       'They read the tickets and the agents, and can create tickets or start other agents, which uses quota. Applies the next time their process starts.',
   },
+  section: {
+    title: 'Escouade in Claude',
+    enable: 'Claude can drive Escouade',
+    enableDesc:
+      'Claude Code (in a terminal, another tool or an Escouade agent) reads your projects, agents and tickets, and can create tickets or start agents.',
+    declared: 'Declared in Claude · {accounts}',
+    account: '{name} account',
+    working: 'Declaring in Claude…',
+    notDeclared: 'Not declared for the {name} account: {error}',
+    serverFailed: 'The server did not start: {error}',
+    command: 'Run it by hand:',
+    copy: 'Copy the command',
+    copied: 'Command copied',
+    copyFailed: 'Copy failed: {error}',
+    note: 'The token is written in plain text in Claude Code’s config (~/.claude.json for the Main account). Turning it off changes the token.',
+  },
+  activity: {
+    title: 'MCP activity',
+    list: 'Calls to the MCP server, the most recent first',
+    empty: 'No calls yet.',
+    outcome: { ok: 'Done', refused: 'Refused', error: 'Error' },
+  },
   tools: {
     named: 'Escouade · {tool}',
     listProjects: 'List the projects',

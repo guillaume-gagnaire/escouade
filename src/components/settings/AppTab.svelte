@@ -8,6 +8,7 @@
   import { checkForUpdate } from '../../lib/updater';
   import Chips from './Chips.svelte';
   import Group from './Group.svelte';
+  import McpSection from './McpSection.svelte';
   import Row from './Row.svelte';
   import Switch from './Switch.svelte';
 
@@ -73,6 +74,7 @@
       />
     </Row>
   </Group>
+  <McpSection />
 {:else if tab === 'notifications'}
   <Group
     title={t('settings.notifications.notifyFor')}
