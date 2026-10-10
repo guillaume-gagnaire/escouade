@@ -21,6 +21,7 @@
   import TestLaunchModal from './components/modals/TestLaunchModal.svelte';
   import ImportModal from './components/modals/ImportModal.svelte';
   import UpdateModal from './components/modals/UpdateModal.svelte';
+  import Overview from './components/Overview.svelte';
   import RunView from './components/RunView.svelte';
   import Sidebar from './components/Sidebar.svelte';
   import Stats from './components/Stats.svelte';
@@ -77,6 +78,8 @@
       <div class="fatal">Impossible de démarrer : {initError}</div>
     {:else if !app.ready}
       <div class="fatal"></div>
+    {:else if app.ui.view === 'overview'}
+      <Overview />
     {:else if app.ui.view === 'stats'}
       <Stats />
     {:else if app.project}

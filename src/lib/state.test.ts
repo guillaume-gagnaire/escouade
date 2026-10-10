@@ -238,6 +238,36 @@ describe('AppState', () => {
     expect(app.split).toBe(false);
   });
 
+  it('opens « Vue d’ensemble » over the project or the statistics, and goes back to the one it covered', async () => {
+    const { backend } = await start();
+    app.toggleOverview();
+    expect(app.ui.view).toBe('overview');
+    // No project on screen behind it: its board is not shown.
+    app.openBoard('p1');
+    app.openOverview();
+    expect(app.boardOn).toBe(false);
+    app.toggleOverview();
+    expect(app.ui.view).toBe('project');
+    expect(app.boardOn).toBe(true);
+    app.openStats();
+    app.openOverview();
+    app.closeOverview();
+    expect(app.ui.view).toBe('stats');
+    // Closed, it stays closed.
+    app.closeOverview();
+    expect(app.ui.view).toBe('stats');
+    app.openOverview();
+    await new Promise((r) => setTimeout(r, 300));
+    expect(backend.called('set_ui').at(-1)?.args.ui).toMatchObject({ view: 'overview' });
+  });
+
+  it('goes back to the project from « Vue d’ensemble » restored at start-up', async () => {
+    await start({ ui: { activeProject: 'p1', view: 'overview', selectedAgent: {} } });
+    expect(app.ui.view).toBe('overview');
+    app.closeOverview();
+    expect(app.ui.view).toBe('project');
+  });
+
   it('cycles through waiting agents across projects', async () => {
     const { emit } = await start();
     emit({ type: 'agent', agent: agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, status: 'waiting', lastActivity: 5 }) });

@@ -6,6 +6,7 @@ import {
   fBytes,
   fCountdown,
   fDur,
+  fSince,
   fTok,
   fUsd,
   fWhen,
@@ -105,6 +106,20 @@ describe('fAgo', () => {
 
   it('gives the date beyond a month', () => {
     expect(ago(40 * 86400)).toBe(new Date(now - 40 * 86400e3).toLocaleDateString('fr-FR'));
+  });
+});
+
+describe('fSince', () => {
+  const now = Date.UTC(2026, 9, 10, 12, 0, 0);
+  const since = (s: number) => fSince(now - s * 1000, now);
+
+  it('says for how long, to follow « depuis »', () => {
+    expect(since(20)).toBe('< 1 min');
+    expect(since(3 * 60 + 40)).toBe('3 min');
+    expect(since(2 * 3600 + 59 * 60)).toBe('2 h');
+    expect(since(3 * 86400)).toBe('3 j');
+    // A clock set back is no negative time.
+    expect(since(-30)).toBe('< 1 min');
   });
 });
 

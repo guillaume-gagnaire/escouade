@@ -58,6 +58,26 @@ describe('TitleBar', () => {
     expect(screen.getByRole('button', { name: /studio-web/ }).querySelector('.pill')).toBeNull();
   });
 
+  it('opens « Vue d’ensemble » from its button, left of the project tabs, and goes back with it', async () => {
+    fakeBackend();
+    app.openStats();
+    render(TitleBar);
+    const button = screen.getByRole('button', { name: 'Vue d’ensemble' });
+    expect(
+      button.compareDocumentPosition(screen.getByRole('button', { name: /demo-api/ })) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(button).toHaveAttribute('title', expect.stringContaining('Ctrl+Maj+A'));
+    expect(button).toHaveAttribute('aria-pressed', 'false');
+    await userEvent.click(button);
+    expect(app.ui.view).toBe('overview');
+    expect(button).toHaveAttribute('aria-pressed', 'true');
+    // Nor a project's tab, nor the statistics', is the one on screen.
+    expect(screen.getByRole('button', { name: /Stats/ })).not.toHaveClass('active');
+    expect(screen.getByRole('button', { name: /demo-api/ })).not.toHaveClass('active');
+    await userEvent.click(button);
+    expect(app.ui.view).toBe('stats');
+  });
+
   it('switches project and opens the stats', async () => {
     fakeBackend();
     render(TitleBar);

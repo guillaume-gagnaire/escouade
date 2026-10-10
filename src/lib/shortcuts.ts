@@ -53,17 +53,22 @@ export function answersHere(target: EventTarget | null): boolean {
 /** Ctrl+Tab cycles agents on every system: Cmd+Tab switches applications on macOS. */
 const agentCycle = (e: KeyboardEvent) => e.key === 'Tab' && e.ctrlKey && !e.metaKey;
 
+/** Ctrl+Shift+A (Cmd+Shift+A on macOS) opens « Vue d’ensemble ». */
+const overviewKey = (e: KeyboardEvent) => e.shiftKey && e.key.toLowerCase() === 'a';
+
 /**
  * Shortcuts the terminal hands over to the app. Shell keys (Ctrl+C, Ctrl+R, Ctrl+N…) stay
- * with the shell; Ctrl+J is only a line feed there, which Enter already sends. On macOS the
- * app's shortcuts use Cmd, which the shell never gets: they all go to the app, except copy and
- * paste, handled by the terminal. Ctrl+K stays with the shell (it cuts the end of the line).
+ * with the shell; Ctrl+J is only a line feed there, which Enter already sends, and the terminal
+ * sends nothing at all for Ctrl+Shift+A. On macOS the app's shortcuts use Cmd, which the shell
+ * never gets: they all go to the app, except copy, paste and select all (Cmd+A), handled by the
+ * terminal. Ctrl+K stays with the shell (it cuts the end of the line).
  */
 export function isAppShortcut(e: KeyboardEvent, mac = IS_MAC): boolean {
   if (e.altKey) return false;
   if (agentCycle(e)) return true;
   if (!primaryKey(e, mac)) return false;
   const k = e.key.toLowerCase();
+  if (overviewKey(e)) return true;
   if (mac) return digit(e) !== null || ['n', 't', 'j', ',', 'b', 'l', 'k'].includes(k);
   return digit(e) !== null || k === ',' || k === 'j';
 }
@@ -121,6 +126,10 @@ export function handleShortcut(e: KeyboardEvent, mac = IS_MAC): boolean {
   }
   if (k === 'l' && e.shiftKey) {
     app.toggleLayout();
+    return true;
+  }
+  if (overviewKey(e)) {
+    app.toggleOverview();
     return true;
   }
   return false;

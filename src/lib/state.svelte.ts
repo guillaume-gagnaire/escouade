@@ -266,6 +266,8 @@ class AppState {
   }
 
   private uiTimer: ReturnType<typeof setTimeout> | undefined;
+  /** The view « Vue d’ensemble » covers, which closing it goes back to (the project's, after a start on it). */
+  private overviewFrom = 'project';
   /** Events received while the initial snapshot is in flight (newer than the snapshot). */
   private early: UiEvent[] | null = null;
   private toastId = 0;
@@ -281,6 +283,7 @@ class AppState {
     this.accounts = s.accounts ?? [];
     this.attention = {};
     this.ui = { ...s.ui, view: s.ui.view || 'project', selectedAgent: s.ui.selectedAgent ?? {} };
+    this.overviewFrom = 'project';
     if (!this.ui.activeProject || !this.projects.some((p) => p.id === this.ui.activeProject)) {
       this.ui.activeProject = this.projects[0]?.id ?? null;
     }
@@ -462,6 +465,27 @@ class AppState {
   openStats() {
     this.ui.view = 'stats';
     this.persistUi();
+  }
+
+  /** Shows « Vue d’ensemble » (every agent of every project) in place of the project or the statistics. */
+  openOverview() {
+    if (this.ui.view === 'overview') return;
+    this.overviewFrom = this.ui.view;
+    this.ui.view = 'overview';
+    this.persistUi();
+  }
+
+  /** Goes back from « Vue d’ensemble » to the view it covered. */
+  closeOverview() {
+    if (this.ui.view !== 'overview') return;
+    this.ui.view = this.overviewFrom;
+    this.persistUi();
+  }
+
+  /** Its button and Ctrl+Shift+A open « Vue d’ensemble », and close it when it is open. */
+  toggleOverview() {
+    if (this.ui.view === 'overview') this.closeOverview();
+    else this.openOverview();
   }
 
   toggleLayout() {

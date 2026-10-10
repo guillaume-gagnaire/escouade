@@ -58,6 +58,20 @@ describe('handleShortcut', () => {
     expect(app.modal).toEqual({ kind: 'convSearch' });
   });
 
+  it('opens and closes « Vue d’ensemble » with Ctrl+Shift+A, Cmd+Shift+A on macOS', () => {
+    fakeBackend();
+    expect(handleShortcut(key('A', { shiftKey: true }), false)).toBe(true);
+    expect(app.ui.view).toBe('overview');
+    expect(handleShortcut(key('A', { shiftKey: true }), false)).toBe(true);
+    expect(app.ui.view).toBe('project');
+    // Not Ctrl+A (select all, in a field), nor Ctrl+Alt+Shift+A (AltGr), nor Ctrl on macOS.
+    expect(handleShortcut(key('a'), false)).toBe(false);
+    expect(handleShortcut(key('A', { shiftKey: true, altKey: true }), false)).toBe(false);
+    expect(handleShortcut(key('A', { shiftKey: true }), true)).toBe(false);
+    expect(handleShortcut(new KeyboardEvent('keydown', { key: 'a', metaKey: true, shiftKey: true }), true)).toBe(true);
+    expect(app.ui.view).toBe('overview');
+  });
+
   it('switches the screen layout with Ctrl+Shift+L', () => {
     fakeBackend();
     expect(handleShortcut(key('L', { shiftKey: true }))).toBe(true);
@@ -176,6 +190,14 @@ describe('isAppShortcut', () => {
     expect(isAppShortcut(key('n'))).toBe(false); // readline: next history
     expect(isAppShortcut(key('k'), false)).toBe(false); // readline: kill to the end of the line
     expect(isAppShortcut(new KeyboardEvent('keydown', { key: '3' }))).toBe(false);
+  });
+
+  it('hands Ctrl+Shift+A to the app, which the terminal sends nothing for, and leaves Ctrl+A to the shell', () => {
+    expect(isAppShortcut(key('A', { shiftKey: true }), false)).toBe(true);
+    expect(isAppShortcut(key('a'), false)).toBe(false); // readline: start of the line
+    const cmd = (k: string, mods: Partial<KeyboardEventInit> = {}) => new KeyboardEvent('keydown', { key: k, metaKey: true, ...mods });
+    expect(isAppShortcut(cmd('a', { shiftKey: true }), true)).toBe(true);
+    expect(isAppShortcut(cmd('a'), true)).toBe(false); // the terminal selects all
   });
 
   it('hands every Cmd shortcut to the app on macOS but copy and paste, and leaves Ctrl keys to the shell', () => {

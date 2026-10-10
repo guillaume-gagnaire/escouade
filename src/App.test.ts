@@ -196,6 +196,20 @@ describe('App layout', () => {
     expect(document.querySelector('.found')).toHaveTextContent('Ajoute la pagination');
   });
 
+  it('shows « Vue d’ensemble » in place of the project on Ctrl+Shift+A, and the agent again on Escape', async () => {
+    start('', { agents: [agent(), agent({ id: 'b1', name: 'landing', status: 'waiting', createdAt: 2 })] });
+    expect(await screen.findByRole('main')).toHaveClass('conv');
+    await userEvent.keyboard('{Control>}{Shift>}A{/Shift}{/Control}');
+    const view = await screen.findByRole('main', { name: 'Vue d’ensemble' });
+    expect(screen.getAllByRole('main')).toEqual([view]);
+    // Every project's agents: the sidebar of the one on screen goes too.
+    expect(screen.queryByRole('button', { name: /Nouvel agent/ })).not.toBeInTheDocument();
+    expect(within(view).getByRole('region', { name: 'Attend ta réponse' })).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    await expect.poll(() => screen.queryByRole('main', { name: 'Vue d’ensemble' })).toBeNull();
+    expect(screen.getByRole('main')).toHaveClass('conv');
+  });
+
   it('counts an agent as seen once the board that hid it is closed', async () => {
     const focus = vi.spyOn(document, 'hasFocus').mockReturnValue(true);
     start('');

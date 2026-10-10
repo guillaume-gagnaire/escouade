@@ -5,7 +5,7 @@
   import { menu } from '../lib/menu.svelte';
   import { askCloseProject } from '../lib/project-actions';
   import { app } from '../lib/state.svelte';
-  import { IS_MAC } from '../lib/platform';
+  import { IS_MAC, keyLabel } from '../lib/platform';
   import { PROJECT_COLORS } from '../lib/theme';
   import type { Project } from '../lib/types';
 
@@ -98,6 +98,35 @@
 <header class="bar" class:mac={IS_MAC} data-tauri-drag-region>
   <div class="brand" data-tauri-drag-region>
     <img class="mark" src="/logo.svg" alt="Escouade" draggable="false" />
+  </div>
+  <!-- Every project's agents: before the tabs of the projects, apart from them. -->
+  <div class="all" data-tauri-drag-region>
+    <button
+      class="tab stats"
+      class:active={app.ui.view === 'overview'}
+      aria-pressed={app.ui.view === 'overview'}
+      title={`Tous les agents de tous les projets (${keyLabel('Ctrl+Maj+A')})`}
+      onclick={() => app.toggleOverview()}
+    >
+      <svg
+        width="14"
+        height="12"
+        viewBox="0 0 14 12"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linecap="round"
+        aria-hidden="true"
+        ><path d="M5.5 2h7.5M5.5 6h7.5M5.5 10h7.5" /><circle cx="1.75" cy="2" r="1.1" fill="currentColor" stroke="none" /><circle
+          cx="1.75"
+          cy="6"
+          r="1.1"
+          fill="currentColor"
+          stroke="none"
+        /><circle cx="1.75" cy="10" r="1.1" fill="currentColor" stroke="none" /></svg
+      >
+      Vue d’ensemble
+    </button>
   </div>
   <nav class="tabs" data-tauri-drag-region>
     {#each app.projects as p, i (p.id)}
@@ -218,6 +247,19 @@
     height: 24px;
     display: block;
     pointer-events: none;
+  }
+  .all {
+    flex: none;
+    display: flex;
+    align-items: flex-end;
+  }
+  /* A rule between the view of all the projects and the tabs of each. */
+  .all::after {
+    content: '';
+    width: 1px;
+    height: 18px;
+    margin: 0 8px 10px;
+    background: var(--line2);
   }
   .tabs {
     display: flex;

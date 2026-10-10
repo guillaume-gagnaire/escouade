@@ -32,6 +32,15 @@ export function fAgo(seconds: number, now: number): string {
   return new Date(seconds * 1000).toLocaleDateString('fr-FR');
 }
 
+/** For how long since `since` (ms), relative to `now` (ms), to follow « depuis »: "< 1 min", "3 min", "2 h", "3 j". */
+export function fSince(since: number, now: number): string {
+  const s = Math.max(0, (now - since) / 1000);
+  if (s < 60) return '< 1 min';
+  if (s < 3600) return `${Math.floor(s / 60)} min`;
+  if (s < 86400) return `${Math.floor(s / 3600)} h`;
+  return `${Math.floor(s / 86400)} j`;
+}
+
 /** "1h48" style countdown until a timestamp. */
 export function fCountdown(target: number | null, now: number): string {
   if (!target) return '—';
