@@ -540,16 +540,53 @@ describe('buffers of files renamed or deleted', () => {
     expect(buffers.all).toEqual({});
   });
 
-  it('forgets the files of a file or a folder deleted, unsaved ones included, and no other', async () => {
+  it('refuses to move a file over an unsaved one left open at its new path, and moves nothing then', async () => {
+    files();
+    await buffers.open('p1', 'project', 'src/a.ts');
+    await buffers.open('p1', 'project', 'src/b.ts');
+    // Deleted on disk by the agent, their tabs still hold what was typed.
+    await buffers.open('p1', 'project', 'gone.ts');
+    buffers.edit('p1|project|gone.ts', 'mine\n');
+    await buffers.open('p1', 'project', 'lib/b.ts');
+    buffers.edit('p1|project|lib/b.ts', 'mine\n');
+    expect(buffers.inTheWay('p1', 'project', 'src/a.ts', 'gone.ts')?.path).toBe('gone.ts');
+    expect(() => buffers.move('p1', 'project', 'src/a.ts', 'gone.ts')).toThrow(
+      '« gone.ts » est ouvert avec des modifications non enregistrées.',
+    );
+    // A folder whose files would take the place of one.
+    expect(() => buffers.move('p1', 'project', 'src', 'lib')).toThrow('« b.ts » est ouvert avec des modifications non enregistrées.');
+    expect(Object.keys(buffers.all).sort()).toEqual([
+      'p1|project|gone.ts',
+      'p1|project|lib/b.ts',
+      'p1|project|src/a.ts',
+      'p1|project|src/b.ts',
+    ]);
+    expect(buffers.all['p1|project|gone.ts'].text).toBe('mine\n');
+    // Saved, it gives its place.
+    buffers.edit('p1|project|gone.ts', 'gone.ts\n');
+    expect(buffers.inTheWay('p1', 'project', 'src/a.ts', 'gone.ts')).toBeUndefined();
+    buffers.move('p1', 'project', 'src/a.ts', 'gone.ts');
+    expect(buffers.all['p1|project|gone.ts'].text).toBe('src/a.ts\n');
+  });
+
+  it('forgets the clean files of a file or a folder deleted, and the unsaved ones given up, as they were then', async () => {
     const backend = files();
-    for (const p of ['src/a.ts', 'src/lib/x.ts', 'src2/y.ts', 'README.md']) await buffers.open('p1', 'project', p);
+    for (const p of ['src/a.ts', 'src/lib/x.ts', 'src/lib/y.ts', 'src2/y.ts', 'README.md']) await buffers.open('p1', 'project', p);
     await buffers.open('p1', 'a2', 'src/a.ts');
     buffers.edit('p1|project|src/lib/x.ts', 'mine\n');
+    buffers.edit('p1|project|src/lib/y.ts', 'given up\n');
+    // « Ne pas enregistrer » answered for both, then typed in again in one of them.
+    const discarded = new Map([
+      ['p1|project|src/lib/x.ts', 'mine\n'],
+      ['p1|project|src/lib/y.ts', 'given up\n'],
+    ]);
+    buffers.edit('p1|project|src/lib/x.ts', 'mine, typed since\n');
+    expect(backend.called('set_unsaved').at(-1)?.args).toEqual({ count: 2 });
+    expect(buffers.closePath('p1', 'project', 'src', discarded)).toEqual(['src/lib/x.ts']);
+    expect(buffers.closePath('p1', 'project', 'README.md')).toEqual([]);
+    expect(Object.keys(buffers.all).sort()).toEqual(['p1|a2|src/a.ts', 'p1|project|src/lib/x.ts', 'p1|project|src2/y.ts']);
+    expect(buffers.all['p1|project|src/lib/x.ts'].text).toBe('mine, typed since\n');
     expect(backend.called('set_unsaved').at(-1)?.args).toEqual({ count: 1 });
-    buffers.closePath('p1', 'project', 'src');
-    buffers.closePath('p1', 'project', 'README.md');
-    expect(Object.keys(buffers.all).sort()).toEqual(['p1|a2|src/a.ts', 'p1|project|src2/y.ts']);
-    expect(backend.called('set_unsaved').at(-1)?.args).toEqual({ count: 0 });
   });
 });
 

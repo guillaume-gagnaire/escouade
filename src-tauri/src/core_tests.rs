@@ -2247,6 +2247,72 @@ async fn the_editor_tree_of_a_project_in_a_subfolder_shows_the_files_copied_from
 }
 
 #[tokio::test]
+async fn the_editor_keeps_the_folders_and_worktrees_of_every_project_of_the_repository() {
+    let h = harness("core-edit-kept");
+    let (whole, r) = h.project(true).await;
+    // Two more projects in folders of the same repository, each with an agent in a worktree.
+    let mut subs = Vec::new();
+    for name in ["api", "web"] {
+        let dir = r.join("packages").join(name);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("index.ts"), "x\n").unwrap();
+        git(&r, &["add", "-A"]);
+        git(&r, &["commit", "-qm", name]);
+        let p = h
+            .core
+            .create_project(
+                &dir.to_string_lossy(),
+                name,
+                "oklch(0.72 0.12 48)",
+                true,
+                None,
+            )
+            .await
+            .unwrap();
+        h.core.create_agent(&p.id, None).await.unwrap();
+        subs.push(p);
+    }
+    let sent = std::cell::RefCell::new(Vec::new());
+    let send = |p: &Path| {
+        sent.borrow_mut().push(p.to_path_buf());
+        Ok(())
+    };
+    // From `web`, whose source is the repository: the other project and its agents' checkouts too.
+    let (root, kept) = h.core.edit_kept(&subs[1].id, None).await.unwrap();
+    let root = Path::new(&root);
+    for rel in [
+        "packages/api",
+        "packages/api/.claude",
+        "packages",
+        "packages/web",
+    ] {
+        let err = crate::fsedit::delete(root, rel, &kept, send)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("projet") || err.contains("worktree"),
+            "{rel}: {err}"
+        );
+        assert!(
+            crate::fsedit::rename(root, rel, "moved", &kept).is_err(),
+            "{rel}"
+        );
+    }
+    // From the project at the root of the repository: the same.
+    let (_, kept) = h.core.edit_kept(&whole.id, None).await.unwrap();
+    for rel in ["packages/web", "packages/api/.claude"] {
+        assert!(
+            crate::fsedit::delete(root, rel, &kept, send).is_err(),
+            "{rel}"
+        );
+    }
+    assert!(sent.borrow().is_empty());
+    // Their files are files like any other.
+    crate::fsedit::delete(root, "packages/api/index.ts", &kept, send).unwrap();
+    assert_eq!(sent.borrow().len(), 1);
+}
+
+#[tokio::test]
 async fn quitting_with_unsaved_files_asks_the_window_first() {
     use std::sync::atomic::Ordering;
     let h = harness("core-quit-unsaved");

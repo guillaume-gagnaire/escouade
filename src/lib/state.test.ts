@@ -692,14 +692,33 @@ describe('editor', () => {
     expect(app.editor.p1.places.project).toMatchObject({ open: ['gone.ts'], active: 'gone.ts' });
   });
 
-  it('closes the tabs of a folder deleted, unsaved ones included, and shows the last one left', async () => {
+  it('leaves the tabs as they were when a rename would take the place of an unsaved file', async () => {
+    fakeBackend({ fs_read: () => ({ kind: 'text', text: 'x', size: 1, hash: 'h1', eol: 'lf', bom: false }), fs_base: () => null });
+    await app.openEditor({ source: 'project', path: 'gone.ts' });
+    await app.openEditor({ source: 'project', path: 'a.ts' });
+    buffers.edit((await buffers.open('p1', 'project', 'gone.ts')).key, 'mine');
+    expect(() => app.renameEditorPath('p1', 'project', 'a.ts', 'gone.ts')).toThrow('est ouvert avec des modifications non enregistrées');
+    expect(app.editor.p1.places.project).toMatchObject({ open: ['gone.ts', 'a.ts'], active: 'a.ts' });
+  });
+
+  it('closes the tabs of a folder deleted, unsaved ones given up included, and shows the last one left', async () => {
     fakeBackend({ fs_read: () => ({ kind: 'text', text: 'x', size: 1, hash: 'h1', eol: 'lf', bom: false }), fs_base: () => null });
     for (const p of ['README.md', 'src/a.ts', 'src2/b.ts', 'src/lib/x.ts']) await app.openEditor({ source: 'project', path: p });
     const key = (await buffers.open('p1', 'project', 'src/lib/x.ts')).key;
     buffers.edit(key, 'mine');
-    app.closeEditorPath('p1', 'project', 'src');
+    app.closeEditorPath('p1', 'project', 'src', new Map([[key, 'mine']]));
     expect(app.editor.p1.places.project).toEqual({ open: ['README.md', 'src2/b.ts'], active: 'src2/b.ts', expanded: { src2: true } });
     expect(buffers.all[key]).toBeUndefined();
+  });
+
+  it('keeps the tab of a file deleted with changes the user did not give up, and shows it', async () => {
+    fakeBackend({ fs_read: () => ({ kind: 'text', text: 'x', size: 1, hash: 'h1', eol: 'lf', bom: false }), fs_base: () => null });
+    for (const p of ['README.md', 'src/lib/x.ts', 'src/a.ts']) await app.openEditor({ source: 'project', path: p });
+    const key = (await buffers.open('p1', 'project', 'src/lib/x.ts')).key;
+    buffers.edit(key, 'typed while it was deleted');
+    app.closeEditorPath('p1', 'project', 'src');
+    expect(app.editor.p1.places.project).toMatchObject({ open: ['README.md', 'src/lib/x.ts'], active: 'src/lib/x.ts' });
+    expect(buffers.all[key].text).toBe('typed while it was deleted');
   });
 
   it('follows the agent picked in the sidebar, and gives way to a terminal or a launch', async () => {

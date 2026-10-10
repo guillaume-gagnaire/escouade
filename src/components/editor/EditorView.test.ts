@@ -1172,6 +1172,95 @@ describe('EditorView renaming, deleting and new folders', () => {
     expect(be.called('fs_delete')).toEqual([]);
   });
 
+  it('keeps a file typed in while it was being deleted, the dialog closed meanwhile: its tab stays with what was typed', async () => {
+    let finish!: () => void;
+    fsBackend((files) => ({
+      fs_read: (a) => (files.includes(a.path) ? text(`// ${a.path}\n`) : Promise.reject(`${a.path} introuvable`)),
+      fs_delete: (a) =>
+        new Promise<null>((resolve) => {
+          finish = () => {
+            files.splice(0, files.length, ...files.filter((f) => movedPath(f, a.path, a.path) === null));
+            resolve(null);
+          };
+        }),
+    }));
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    render(EditorView, { project: project() });
+    const k = buffers.key('p1', 'project', 'src/app.ts');
+    await expect.poll(() => buffers.all[k]?.kind).toBe('text');
+    await pick(item(/app\.ts/), 'Supprimer');
+    const deleting = (app.modal as any).onConfirm();
+    // « Annuler » while the trash works: the deletion goes on, and the user types in the file.
+    app.modal = null;
+    buffers.edit(k, 'typed since\n');
+    finish();
+    await deleting;
+    expect(buffers.all[k]).toMatchObject({ text: 'typed since\n' });
+    expect(place().open).toEqual(['src/app.ts']);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Ce fichier a été supprimé.');
+  });
+
+  it('keeps, of a folder deleted, an unsaved file given up but typed in again before the deletion was confirmed', async () => {
+    fsBackend();
+    await app.openEditor({ source: 'project', path: 'src/lib/x.ts' });
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    render(EditorView, { project: project() });
+    const k = buffers.key('p1', 'project', 'src/app.ts');
+    await expect.poll(() => buffers.all[k]?.kind).toBe('text');
+    buffers.edit(k, 'mine\n');
+    await pick(item(/^src$/), 'Supprimer');
+    await (app.modal as any).alt.onClick();
+    buffers.edit(k, 'mine, and more\n');
+    await (app.modal as any).onConfirm();
+    expect(buffers.all[k]).toMatchObject({ text: 'mine, and more\n' });
+    expect(place().open).toEqual(['src/app.ts']);
+  });
+
+  it('refuses to rename a file to the path of an unsaved file left open, whose file was deleted', async () => {
+    const be = fsBackend();
+    await app.openEditor({ source: 'project', path: 'src/gone.ts' });
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    render(EditorView, { project: project() });
+    const gone = (await buffers.open('p1', 'project', 'src/gone.ts')).key;
+    buffers.edit(gone, 'mine\n');
+    buffers.all[gone].disk = 'deleted';
+    item(/app\.ts/).focus();
+    await userEvent.keyboard('{F2}');
+    await field('app.ts');
+    await userEvent.keyboard('gone');
+    expect(screen.getByRole('alert')).toHaveTextContent('« gone.ts » est ouvert avec des modifications non enregistrées.');
+    await userEvent.keyboard('{Enter}');
+    expect(be.called('fs_rename')).toEqual([]);
+    expect(buffers.all[gone].text).toBe('mine\n');
+  });
+
+  it('leaves the tabs at the old name when an unsaved file is typed in at the new path while the disk renames', async () => {
+    let finish!: () => void;
+    fsBackend((files) => ({
+      fs_rename: (a) =>
+        new Promise<null>((resolve) => {
+          finish = () => {
+            files.forEach((f, i) => (files[i] = movedPath(f, a.from, a.to) ?? f));
+            resolve(null);
+          };
+        }),
+    }));
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    render(EditorView, { project: project() });
+    (await screen.findByRole('treeitem', { name: /app\.ts/ })).focus();
+    await userEvent.keyboard('{F2}');
+    await field('app.ts');
+    await userEvent.keyboard('gone{Enter}');
+    const gone = (await buffers.open('p1', 'project', 'src/gone.ts')).key;
+    buffers.edit(gone, 'mine\n');
+    finish();
+    await expect
+      .poll(() => app.toasts.map((t) => t.text))
+      .toEqual(['Les onglets restent à l’ancien nom : « gone.ts » est ouvert avec des modifications non enregistrées.']);
+    expect(buffers.all[gone].text).toBe('mine\n');
+    expect(place().open).toEqual(['src/app.ts']);
+  });
+
   it('tells why the disk refused to delete, and keeps the tabs', async () => {
     fsBackend(() => ({ fs_delete: () => Promise.reject('src contient les worktrees des agents') }));
     await app.openEditor({ source: 'project', path: 'src/app.ts' });

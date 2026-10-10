@@ -81,9 +81,11 @@
     const i = Number((e.target as HTMLElement).dataset.index);
     const r = rows[i];
     if (!r) return;
-    if (r.kind !== 'new' && (e.key === 'F2' || isDeleteKey(e))) {
+    // F2 alone, as Delete: with a modifier, it is another shortcut.
+    const f2 = e.key === 'F2' && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey;
+    if (r.kind !== 'new' && (f2 || isDeleteKey(e))) {
       e.preventDefault();
-      return e.key === 'F2' ? onrenamerow?.(r) : ondeleterow?.(r);
+      return f2 ? onrenamerow?.(r) : ondeleterow?.(r);
     }
     const shown = rows.flatMap((row, j) => (isField(row) ? [] : [j]));
     const at = shown.indexOf(i);

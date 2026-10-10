@@ -881,6 +881,16 @@ pub async fn ahead_of(repo: &str, base: &str, branch: &str) -> Result<u32> {
         .map_err(|_| anyhow::anyhow!("git rev-list a répondu « {} »", n.trim()))
 }
 
+/// The folders of the repository's worktrees, the main one included.
+pub async fn worktree_paths(repo: &str) -> Result<Vec<String>> {
+    let out = text(repo, &["worktree", "list", "--porcelain"]).await?;
+    Ok(out
+        .lines()
+        .filter_map(|l| l.strip_prefix("worktree "))
+        .map(str::to_string)
+        .collect())
+}
+
 /// Where `branch` is checked out: the folder of the worktree that has it (the main one included).
 pub async fn checkout_of(repo: &str, branch: &str) -> Result<Option<String>> {
     let out = text(repo, &["worktree", "list", "--porcelain"]).await?;

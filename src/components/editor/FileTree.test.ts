@@ -291,6 +291,8 @@ describe('FileTree renaming and deleting', () => {
     await userEvent.keyboard('{Delete}');
     expect(ondeleterow).toHaveBeenCalledWith(expect.objectContaining({ kind: 'dir', path: 'src' }));
     await userEvent.keyboard('{Backspace}{F3}');
+    // F2 with a modifier is another shortcut, as Delete with one is.
+    await userEvent.keyboard('{Shift>}{F2}{/Shift}{Control>}{F2}{/Control}{Alt>}{F2}{/Alt}{Meta>}{F2}{/Meta}');
     expect([onrenamerow.mock.calls.length, ondeleterow.mock.calls.length]).toEqual([1, 1]);
   });
 

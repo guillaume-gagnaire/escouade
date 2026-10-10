@@ -312,11 +312,7 @@
     const problem = renameError(name, r.path, r.kind, names());
     if (problem || !name.trim()) return problem;
     // A tab whose file is gone from the disk can hold changes at the new path: they would be taken over.
-    const to = newFilePath(parentOf(r.path), name);
-    const under = (p: string, dir: string) => movedPath(p, dir, dir) !== null;
-    const left = Object.values(buffers.all).find(
-      (b) => b.projectId === project.id && b.source === r.source && buffers.isDirty(b) && under(b.path, to) && !under(b.path, r.path),
-    );
+    const left = buffers.inTheWay(project.id, r.source, r.path, newFilePath(parentOf(r.path), name));
     return left ? `« ${basename(left.path)} » est ouvert avec des modifications non enregistrées.` : null;
   }
 
@@ -340,9 +336,14 @@
       busy = false;
     }
     renaming = null;
-    // Followed right away, not once the tree is read again: the tabs never show the old path missing meanwhile.
+    // Followed right away, not once the tree is read again: the tabs never show the old path missing meanwhile. Not
+    // over an unsaved file typed in at the new path since the name was checked: its tab is left as it is.
     const real = spelled(to);
-    app.renameEditorPath(pid, src, mine.path, real);
+    try {
+      app.renameEditorPath(pid, src, mine.path, real);
+    } catch (e) {
+      app.toast(`Les onglets restent à l’ancien nom : ${(e as Error).message}`, 'error');
+    }
     if (current(pid, src)) {
       madeDirs = madeDirs.map((d) => movedPath(d, mine.path, real) ?? d);
       if (lastDir?.source === src) lastDir = { source: src, dir: movedPath(lastDir.dir, mine.path, real) ?? lastDir.dir };
@@ -372,19 +373,33 @@
 
   /**
    * Asks for each unsaved file of `paths` in turn whether to save it first, as closing its tab does, then goes on with
-   * `then`. Cancelled, or a save refused (the file changed on disk: its tab shows why), it goes no further.
+   * `then`, given the files whose changes the user gave up (their text then: one typed in since is not given up).
+   * Cancelled, or a save refused (the file changed on disk: its tab shows why), it goes no further.
    */
-  function askToSave(pid: string, src: string, paths: string[], then: () => void) {
+  function askToSave(
+    pid: string,
+    src: string,
+    paths: string[],
+    then: (discarded: Map<string, string>) => void,
+    discarded = new Map<string, string>(),
+  ) {
     const [path, ...rest] = paths;
-    if (path === undefined) return then();
+    if (path === undefined) return then(discarded);
     const key = buffers.key(pid, src, path);
-    const next = () => askToSave(pid, src, rest, then);
+    const next = () => askToSave(pid, src, rest, then, discarded);
     app.modal = {
       kind: 'confirm',
       title: `Enregistrer « ${basename(path)} » ?`,
       body: 'Ses modifications seront perdues si tu ne les enregistres pas.',
       confirm: 'Enregistrer',
-      alt: { label: 'Ne pas enregistrer', onClick: next },
+      alt: {
+        label: 'Ne pas enregistrer',
+        onClick: () => {
+          const b = buffers.all[key];
+          if (b) discarded.set(key, b.text);
+          next();
+        },
+      },
       onConfirm: async () => {
         if (await saveKey(key)) next();
         // Refused: show the tab, the banner telling why is only drawn for the file on screen.
@@ -413,7 +428,7 @@
           : n
             ? 'Le dossier et son fichier partent dans la corbeille.'
             : 'Le dossier part dans la corbeille.';
-    askToSave(pid, src, unsaved, () => {
+    askToSave(pid, src, unsaved, (discarded) => {
       app.modal = {
         kind: 'confirm',
         title: `Supprimer « ${basename(r.path)} » ?`,
@@ -427,7 +442,8 @@
             app.toast(`Suppression impossible : ${e}`, 'error');
             return;
           }
-          app.closeEditorPath(pid, src, r.path);
+          // The dialog can be closed while the trash works: a file typed in meanwhile keeps its tab and its text.
+          app.closeEditorPath(pid, src, r.path, discarded);
           if (current(pid, src)) {
             madeDirs = madeDirs.filter((d) => !gone(d));
             if (lastDir?.source === src && gone(lastDir.dir)) lastDir = null;

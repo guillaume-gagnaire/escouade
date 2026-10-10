@@ -728,12 +728,15 @@ class AppState {
     if (st.reveal && st.source === source) st.reveal = { ...st.reveal, path: moved(st.reveal.path) };
   }
 
-  /** `path` (a file, or a folder holding files) deleted from a source: its tabs close, unsaved changes and all. */
-  closeEditorPath(projectId: string, source: string, path: string) {
-    buffers.closePath(projectId, source, path);
+  /**
+   * `path` (a file, or a folder holding files) deleted from a source: its tabs close, with the changes the user gave
+   * up (`discarded`, see `buffers.closePath`). The tab of a file typed in since stays, its text with it.
+   */
+  closeEditorPath(projectId: string, source: string, path: string, discarded?: ReadonlyMap<string, string>) {
+    const left = new Set(buffers.closePath(projectId, source, path, discarded));
     const place = this.editor[projectId]?.places[source];
     if (!place) return;
-    const gone = (p: string) => movedPath(p, path, path) !== null;
+    const gone = (p: string) => movedPath(p, path, path) !== null && !left.has(p);
     place.open = place.open.filter((p) => !gone(p));
     if (place.active && gone(place.active)) place.active = place.open.at(-1) ?? null;
     place.expanded = Object.fromEntries(Object.entries(place.expanded).filter(([d]) => !gone(d)));

@@ -1,7 +1,7 @@
 // Files open in the editor: their text, as last read or saved, and the state of the file on disk.
 // A source is 'project' (the project's checkout) or the id of an agent (its worktree).
 
-import { plural } from '../format';
+import { basename, plural } from '../format';
 import { api } from '../ipc';
 import type { FileBase, FileText } from '../types';
 import { movedPath } from './tree';
@@ -303,15 +303,34 @@ class Buffers {
     this.sync();
   }
 
+  /** The open files of `from` (a file, or a folder holding files) in a source, with where a rename to `to` takes them. */
+  private moving(projectId: string, source: string, from: string, to: string): { b: Buffer; path: string }[] {
+    return Object.values(this.all).flatMap((b) => {
+      const path = b.projectId === projectId && b.source === source ? movedPath(b.path, from, to) : null;
+      return path === null ? [] : [{ b, path }];
+    });
+  }
+
+  /**
+   * An unsaved file left open (its file gone from the disk) at `to` or below it, which renaming `from` to `to` would
+   * put a file (or its tab) in the place of: its changes would be lost under it.
+   */
+  inTheWay(projectId: string, source: string, from: string, to: string): Buffer | undefined {
+    const under = (p: string, dir: string) => movedPath(p, dir, dir) !== null;
+    return Object.values(this.all).find(
+      (b) => b.projectId === projectId && b.source === source && this.isDirty(b) && under(b.path, to) && !under(b.path, from),
+    );
+  }
+
   /**
    * `from` (a file, or a folder holding files) renamed `to` in a source: its open files follow to their new path, the
    * same buffers, with what was typed and the comparison with the disk. Their reference version is read again: the
-   * new path's is not the old one's.
+   * new path's is not the old one's. Refused, nothing moved, when an unsaved file is in the way (see `inTheWay`).
    */
   move(projectId: string, source: string, from: string, to: string) {
-    for (const b of Object.values(this.all)) {
-      const path = b.projectId === projectId && b.source === source ? movedPath(b.path, from, to) : null;
-      if (path === null) continue;
+    const left = this.inTheWay(projectId, source, from, to);
+    if (left) throw new Error(`« ${basename(left.path)} » est ouvert avec des modifications non enregistrées.`);
+    for (const { b, path } of this.moving(projectId, source, from, to)) {
       const key = this.key(projectId, source, path);
       delete this.all[b.key];
       Object.assign(b, { key, path });
@@ -325,13 +344,23 @@ class Buffers {
     }
   }
 
-  /** Forgets the files of `path` (a file, or a folder holding files) in a source, which was deleted: unsaved ones too. */
-  closePath(projectId: string, source: string, path: string) {
+  /**
+   * Forgets the files of `path` (a file, or a folder holding files) in a source, which was deleted: the clean ones,
+   * and the unsaved ones the user gave up, as they were then (`discarded`: their text when the user answered). One
+   * typed in since stays, with what was typed (its banner tells the file is gone); their paths are given back.
+   */
+  closePath(projectId: string, source: string, path: string, discarded: ReadonlyMap<string, string> = new Map()): string[] {
     const gone = (b: { projectId: string; source: string; path: string }) =>
       b.projectId === projectId && b.source === source && movedPath(b.path, path, path) !== null;
-    for (const b of Object.values(this.all)) if (gone(b)) delete this.all[b.key];
+    const left: string[] = [];
+    for (const b of Object.values(this.all)) {
+      if (!gone(b)) continue;
+      if (this.isDirty(b) && discarded.get(b.key) !== b.text) left.push(b.path);
+      else delete this.all[b.key];
+    }
     for (const k of [...this.pending.keys()]) if (gone(parseKey(k))) this.pending.delete(k);
     this.sync();
+    return left;
   }
 
   /** Unsaved files of a project, or of one of its sources. */

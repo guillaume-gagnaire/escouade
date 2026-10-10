@@ -262,12 +262,12 @@ pub fn mkdir(root: &Path, rel: &str) -> Result<()> {
 /// need be). Refused when something is at `to` already, unless it is `from` itself, spelled in
 /// another case on a disk that ignores it: changing only the case is a rename like any other. A
 /// file written at `to` meanwhile (by an agent) makes it fail rather than be replaced.
-pub fn rename(root: &Path, from: &str, to: &str, kept: &[String]) -> Result<()> {
+pub fn rename(root: &Path, from: &str, to: &str, kept: &[Kept]) -> Result<()> {
     validate_rel(from)?;
     validate_rel(to)?;
     valid_names(to)?;
     in_worktrees(root, from)?;
-    holds_worktrees(root, from, kept)?;
+    holds_kept(root, from, kept)?;
     // Named as a folder that would hold worktrees, `to` holds none: nothing is there.
     in_worktrees(root, to)?;
     let src = native(root, from)?;
@@ -308,12 +308,12 @@ pub fn rename(root: &Path, from: &str, to: &str, kept: &[String]) -> Result<()> 
 pub fn delete(
     root: &Path,
     rel: &str,
-    kept: &[String],
+    kept: &[Kept],
     send: impl FnOnce(&Path) -> Result<()>,
 ) -> Result<()> {
     validate_rel(rel)?;
     in_worktrees(root, rel)?;
-    holds_worktrees(root, rel, kept)?;
+    holds_kept(root, rel, kept)?;
     let path = native(root, rel)?;
     if std::fs::symlink_metadata(&path).is_err() {
         bail!("{rel} introuvable");
@@ -341,11 +341,13 @@ pub fn to_trash(path: &Path) -> Result<()> {
         };
         #[cfg(not(target_os = "macos"))]
         let ctx = trash::TrashContext::default();
-        ctx.delete(&path)
+        ctx.delete(&path).map_err(|e| {
+            log::warn!("trash {}: {e}", path.display());
+            anyhow!(trash_message(&e))
+        })
     })
     .join()
     .map_err(|_| anyhow!("la corbeille n’a pas répondu"))?
-    .map_err(|e| anyhow!("{e}"))
 }
 
 /// Where the agents' worktrees are, from the folder holding them (the project's, or the root).
@@ -377,27 +379,73 @@ fn in_worktrees(root: &Path, rel: &str) -> Result<()> {
     Ok(())
 }
 
-/// Refuses `rel` when renaming or deleting it would take worktrees with it: it holds one of the
-/// `kept` folders (relative to the root) that is there.
-fn holds_worktrees(root: &Path, rel: &str, kept: &[String]) -> Result<()> {
-    let path = lower_parts(rel);
-    let holds = |k: &String| lower_parts(k).starts_with(&path);
-    if kept
-        .iter()
-        .any(|k| holds(k) && std::fs::symlink_metadata(root.join(k)).is_ok())
-    {
-        bail!("{rel} contient les worktrees des agents");
+/// A folder of the source that no rename or deletion takes with it, and what it is, for the refusal
+/// to say.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Kept {
+    /// From the root, with `/`.
+    pub path: String,
+    pub what: &'static str,
+}
+
+/// What a kept folder is: a `.claude/worktrees` folder, one agent's worktree (of any project of the
+/// repository, or a validation's), a project's folder.
+pub const WORKTREES_KEPT: &str = "les worktrees des agents";
+pub const WORKTREE_KEPT: &str = "le worktree d’un agent";
+pub const PROJECT_KEPT: &str = "le dossier d’un projet";
+
+/// Refuses `rel` when renaming or deleting it would take one of the `kept` folders that are there
+/// with it: it is one, or holds one, as spelled or as the disk has them (an 8.3 name is its folder).
+fn holds_kept(root: &Path, rel: &str, kept: &[Kept]) -> Result<()> {
+    let spelled = lower_parts(rel);
+    let real = real_rel(root, rel).map(|r| lower_parts(&r));
+    for k in kept {
+        if std::fs::symlink_metadata(root.join(&k.path)).is_err() {
+            continue;
+        }
+        let mut names = vec![lower_parts(&k.path)];
+        names.extend(real_rel(root, &k.path).map(|r| lower_parts(&r)));
+        let Some(path) = [Some(&spelled), real.as_ref()]
+            .into_iter()
+            .flatten()
+            .find(|p| names.iter().any(|n| n.starts_with(p)))
+        else {
+            continue;
+        };
+        if names.iter().any(|n| n == path) {
+            bail!("{rel} est {}", k.what);
+        }
+        bail!("{rel} contient {}", k.what);
     }
     Ok(())
 }
 
+/// Why the trash refused, in the user's words (its own are English, and kept in the log).
+fn trash_message(e: &trash::Error) -> &'static str {
+    match e {
+        trash::Error::CouldNotAccess { .. } | trash::Error::CanonicalizePath { .. } => {
+            "le fichier est introuvable ou inaccessible"
+        }
+        // Windows' shell says « Some operations were aborted » for a file in use or protected.
+        _ => "un fichier est peut-être ouvert ailleurs ou protégé",
+    }
+}
+
 /// `rel` from the root as the disk has it: the links on the way to it followed (from the deepest
-/// part of it that is there), not the one it may be itself. None outside the root, which
-/// `contained` refuses anyway.
+/// part of it that is there), not the one it may be itself; its own name as the disk has it when it
+/// is not a link (an 8.3 name read as its long one). None outside the root, which `contained`
+/// refuses anyway.
 fn real_rel(root: &Path, rel: &str) -> Option<String> {
     let full = root.join(rel);
-    let mut rest = vec![full.file_name()?.to_os_string()];
-    let mut dir = full.parent()?.to_path_buf();
+    let itself = std::fs::symlink_metadata(&full).is_ok_and(|m| !m.file_type().is_symlink());
+    let (mut dir, mut rest) = if itself {
+        (full.clone(), Vec::new())
+    } else {
+        (
+            full.parent()?.to_path_buf(),
+            vec![full.file_name()?.to_os_string()],
+        )
+    };
     let real = loop {
         if let Ok(real) = std::fs::canonicalize(&dir) {
             break real;
@@ -1057,11 +1105,13 @@ mod tests {
             std::fs::write(p, "x").unwrap();
         }
         let kept = vec![
-            ".claude/worktrees".to_string(),
-            "packages/web/.claude/worktrees".to_string(),
+            keep(".claude/worktrees", WORKTREES_KEPT),
+            keep("packages/web/.claude/worktrees", WORKTREES_KEPT),
+            // As the repository's list of worktrees gives it: an agent of another project, in `sub`.
+            keep("sub/.claude/worktrees/z", WORKTREE_KEPT),
         ];
         let (sent, send) = bin();
-        // In them, at any depth, or holding those of the project's folder.
+        // In them, at any depth, or holding those of the project's folder or of another project.
         for rel in [
             ".claude/worktrees/dem-1/x.ts",
             ".claude/worktrees/dem-1",
@@ -1072,12 +1122,18 @@ mod tests {
             "packages",
             "packages/web",
             "packages/web/.claude",
+            "sub",
+            "sub/.claude",
         ] {
             let err = delete(&dir, rel, &kept, &send).unwrap_err().to_string();
-            assert!(err.contains("worktrees des agents"), "{rel}: {err}");
+            assert!(err.contains("worktree"), "{rel}: {err}");
             let err = rename(&dir, rel, "moved", &kept).unwrap_err().to_string();
-            assert!(err.contains("worktrees des agents"), "{rel}: {err}");
+            assert!(err.contains("worktree"), "{rel}: {err}");
         }
+        assert_eq!(
+            delete(&dir, "sub", &kept, &send).unwrap_err().to_string(),
+            "sub contient le worktree d’un agent"
+        );
         assert!(rename(
             &dir,
             ".claude/settings.json",
@@ -1096,6 +1152,111 @@ mod tests {
         assert_eq!(sent.borrow().len(), 1);
     }
 
+    fn keep(path: &str, what: &'static str) -> Kept {
+        Kept {
+            path: path.to_string(),
+            what,
+        }
+    }
+
+    #[test]
+    fn never_renames_nor_deletes_the_folder_of_a_project_or_one_holding_it() {
+        let dir = test_dir("fsedit-kept-project");
+        for f in ["packages/web/index.ts", "packages/api/x.ts", "README.md"] {
+            let p = dir.join(f);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, "x").unwrap();
+        }
+        // Another project of the repository: renamed or deleted, it would point at nothing.
+        let kept = vec![keep("packages/web", PROJECT_KEPT)];
+        let (sent, send) = bin();
+        for (rel, err) in [
+            ("packages/web", "packages/web est le dossier d’un projet"),
+            ("PACKAGES/Web", "PACKAGES/Web est le dossier d’un projet"),
+            ("packages", "packages contient le dossier d’un projet"),
+        ] {
+            assert_eq!(
+                delete(&dir, rel, &kept, &send).unwrap_err().to_string(),
+                err
+            );
+            assert_eq!(
+                rename(&dir, rel, "moved", &kept).unwrap_err().to_string(),
+                err
+            );
+        }
+        assert!(sent.borrow().is_empty());
+        // What it holds and what is beside it are files like any other.
+        rename(&dir, "packages/web/index.ts", "packages/web/main.ts", &kept).unwrap();
+        delete(&dir, "packages/api", &kept, &send).unwrap();
+        assert_eq!(sent.borrow().len(), 1);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn the_short_name_of_a_folder_holding_worktrees_is_that_folder() {
+        let dir = test_dir("fsedit-worktrees-short");
+        let claude = dir.join(".claude");
+        std::fs::create_dir_all(claude.join("worktrees").join("dem-1")).unwrap();
+        let (Some(short_claude), Some(short_worktrees)) =
+            (short_name(&claude), short_name(&claude.join("worktrees")))
+        else {
+            eprintln!("skipped: no 8.3 names on this volume");
+            return;
+        };
+        let kept = vec![keep(".claude/worktrees", WORKTREES_KEPT)];
+        let (sent, send) = bin();
+        for rel in [format!(".claude/{short_worktrees}"), short_claude] {
+            let err = delete(&dir, &rel, &kept, &send).unwrap_err().to_string();
+            assert!(err.contains("worktrees des agents"), "{rel}: {err}");
+            let err = rename(&dir, &rel, "moved", &kept).unwrap_err().to_string();
+            assert!(err.contains("worktrees des agents"), "{rel}: {err}");
+        }
+        assert!(sent.borrow().is_empty());
+        assert!(claude.join("worktrees").join("dem-1").is_dir());
+    }
+
+    /// The 8.3 name Windows gives `path`, None when it has none other than its own.
+    #[cfg(windows)]
+    fn short_name(path: &Path) -> Option<String> {
+        use std::os::windows::ffi::{OsStrExt, OsStringExt};
+        use windows_sys::Win32::Storage::FileSystem::GetShortPathNameW;
+        let long: Vec<u16> = path.as_os_str().encode_wide().chain([0]).collect();
+        let mut buf = vec![0u16; 1024];
+        let n = unsafe { GetShortPathNameW(long.as_ptr(), buf.as_mut_ptr(), buf.len() as u32) };
+        if n == 0 || n as usize >= buf.len() {
+            return None;
+        }
+        let short = std::path::PathBuf::from(std::ffi::OsString::from_wide(&buf[..n as usize]));
+        let name = short.file_name()?.to_string_lossy().into_owned();
+        (!name.eq_ignore_ascii_case(&path.file_name()?.to_string_lossy())).then_some(name)
+    }
+
+    #[test]
+    fn says_in_french_why_the_trash_refused() {
+        let aborted = trash::Error::Unknown {
+            description: "Some operations were aborted".into(),
+        };
+        assert_eq!(
+            trash_message(&aborted),
+            "un fichier est peut-être ouvert ailleurs ou protégé"
+        );
+        let os = trash::Error::Os {
+            code: 5,
+            description: "Access is denied.".into(),
+        };
+        assert_eq!(
+            trash_message(&os),
+            "un fichier est peut-être ouvert ailleurs ou protégé"
+        );
+        let gone = trash::Error::CouldNotAccess {
+            target: "C:/x".into(),
+        };
+        assert_eq!(
+            trash_message(&gone),
+            "le fichier est introuvable ou inaccessible"
+        );
+    }
+
     #[test]
     fn a_folder_that_would_hold_worktrees_but_holds_none_is_like_any_other() {
         let dir = test_dir("fsedit-worktrees-none");
@@ -1104,8 +1265,8 @@ mod tests {
         std::fs::create_dir_all(dir.join("docs")).unwrap();
         // The project's folder and the root, where no agent has a worktree yet.
         let kept = vec![
-            ".claude/worktrees".to_string(),
-            "web/.claude/worktrees".to_string(),
+            keep(".claude/worktrees", WORKTREES_KEPT),
+            keep("web/.claude/worktrees", WORKTREES_KEPT),
         ];
         let (sent, send) = bin();
         // Named as one of them, or as a folder above one: still none there.
@@ -1126,7 +1287,7 @@ mod tests {
             eprintln!("skipped: cannot create a directory link here");
             return;
         }
-        let kept = vec![".claude/worktrees".to_string()];
+        let kept = vec![keep(".claude/worktrees", WORKTREES_KEPT)];
         let (sent, send) = bin();
         let err = delete(&dir, "wt/x.ts", &kept, &send)
             .unwrap_err()

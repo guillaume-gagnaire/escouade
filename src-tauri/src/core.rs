@@ -699,6 +699,14 @@ fn worktrees_kept(root: &str, project: &str, worktree: bool) -> Vec<String> {
     kept
 }
 
+/// `path` from `root` when it is strictly inside it (case, separators and links seen through), as
+/// the editor's paths are; None for the root itself or a folder elsewhere.
+fn below_root(root: &str, path: &str) -> Option<String> {
+    let rel = paths::relative_slash(root, path);
+    let elsewhere = rel.is_empty() || rel.contains(':') || Path::new(&rel).is_absolute();
+    (!elsewhere && !rel.split('/').any(|p| p == "..")).then_some(rel)
+}
+
 impl<R: Runtime> Core<R> {
     pub fn load(app: AppHandle<R>, data: DataDir) -> (Arc<Self>, mpsc::UnboundedReceiver<String>) {
         if let Err(e) = data.ensure() {
@@ -3354,15 +3362,44 @@ impl<R: Runtime> Core<R> {
         Ok((root, None))
     }
 
-    /// `edit_root`, with the folders holding the agents' worktrees that the editor's renames and
-    /// deletions keep away from (see `worktrees_kept`).
+    /// `edit_root`, with the folders of it that the editor's renames and deletions keep away from:
+    /// those holding the agents' worktrees (see `worktrees_kept`), every worktree of the
+    /// repository (the agents' of every project sharing it, a validation's), every agent's, and
+    /// every project's folder (renamed, its project would point at nothing).
     pub async fn edit_kept(
         &self,
         project_id: &str,
         agent_id: Option<String>,
-    ) -> Result<(String, Vec<String>)> {
+    ) -> Result<(String, Vec<fsedit::Kept>)> {
         let (root, base) = self.edit_root(project_id, agent_id).await?;
-        let kept = worktrees_kept(&root, &self.project(project_id)?.path, base.is_some());
+        let kept_as = |what| move |path| fsedit::Kept { path, what };
+        let mut kept: Vec<fsedit::Kept> =
+            worktrees_kept(&root, &self.project(project_id)?.path, base.is_some())
+                .into_iter()
+                .map(kept_as(fsedit::WORKTREES_KEPT))
+                .collect();
+        let mut worktrees = git::worktree_paths(&root).await.unwrap_or_default();
+        worktrees.extend(self.agents.read().values().filter_map(|h| {
+            let wt = h.lock().meta.worktree.clone();
+            wt.map(|w| w.path)
+        }));
+        let projects: Vec<String> = self
+            .projects
+            .read()
+            .iter()
+            .map(|p| p.path.clone())
+            .collect();
+        for (paths, what) in [
+            (worktrees, fsedit::WORKTREE_KEPT),
+            (projects, fsedit::PROJECT_KEPT),
+        ] {
+            kept.extend(
+                paths
+                    .iter()
+                    .filter_map(|p| below_root(&root, p))
+                    .map(kept_as(what)),
+            );
+        }
         Ok((root, kept))
     }
 
@@ -4191,6 +4228,27 @@ mod tests {
             sub_prefix("C:/code/mono", "C:/code/mono/packages/web"),
             "packages/web/"
         );
+    }
+
+    #[test]
+    fn a_folder_below_the_root_is_given_from_it_and_no_other() {
+        let root = "C:/code/mono";
+        assert_eq!(
+            below_root(root, "C:\\code\\mono\\packages\\web").as_deref(),
+            Some("packages/web")
+        );
+        assert_eq!(
+            below_root(root, "c:/CODE/mono/.claude/worktrees/dem-1").as_deref(),
+            Some(".claude/worktrees/dem-1")
+        );
+        for elsewhere in [
+            "C:/code/mono",
+            "C:/code/mono/",
+            "C:/code/other",
+            "D:/mono/x",
+        ] {
+            assert_eq!(below_root(root, elsewhere), None, "{elsewhere}");
+        }
     }
 
     #[test]
