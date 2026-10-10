@@ -140,7 +140,7 @@
         class="field mono"
         bind:value={name}
         oninput={typed}
-        onkeydown={(e) => e.key === 'Enter' && !e.isComposing && (e.preventDefault(), create())}
+        onkeydown={(e) => e.key === 'Enter' && !e.isComposing && (e.preventDefault(), ready && create())}
         autofocus
         spellcheck="false"
         autocomplete="off"

@@ -27,8 +27,10 @@
   ];
 
   let log = $state<GitLog | null>(null);
-  /** The repository's branches, read with the history; null when they could not be. */
+  /** The repository's branches, read with the history; null when they could not be, and there is no earlier reading. */
   let branches = $state<BranchInfo[] | null>(null);
+  /** The project `branches` were read for. */
+  let branchesOf: string | null = null;
   let error = $state<string | null>(null);
   let list = $state<HTMLElement>();
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -55,7 +57,14 @@
       const [result, all] = await Promise.all([api.gitLog(pid, aid), api.branchList(pid).catch(() => null)]);
       if (mine !== seq) return; // superseded by a newer request
       log = result;
-      branches = all;
+      // A read that fails for a moment leaves the last list in place (the menu keeps its entries); one read for another project is no use.
+      if (all) {
+        branches = all;
+        branchesOf = pid;
+      } else if (branchesOf !== pid) {
+        branches = null;
+        branchesOf = null;
+      }
       error = null;
     } catch (e) {
       if (mine !== seq) return;

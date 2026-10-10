@@ -111,8 +111,6 @@ export default {
       unpublished: 'Branche pas encore publiée sur le dépôt distant',
       lastFetch: 'Dernier fetch : {when}',
       never: 'jamais',
-      publish: 'Publier la branche',
-      now: 'maintenant',
       goneShort: 'distante supprimée',
       unpublishedShort: 'non publiée',
     },

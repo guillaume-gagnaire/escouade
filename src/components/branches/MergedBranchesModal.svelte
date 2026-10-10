@@ -28,7 +28,9 @@
       const names = await api.branchesMerged(projectId);
       if (gone) return;
       merged = names;
-      selected = Object.fromEntries(names.map((n) => [n, true]));
+      // All ticked at first; read again after some failed, a branch keeps the box it had (one the user left alone stays so).
+      const before = selected;
+      selected = Object.fromEntries(names.map((n) => [n, before[n] ?? true]));
       failure = null;
     } catch (e) {
       if (!gone) failure = String(e);

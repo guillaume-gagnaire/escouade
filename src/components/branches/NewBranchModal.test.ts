@@ -75,6 +75,21 @@ describe('NewBranchModal', () => {
     expect(create()).toBeEnabled();
   });
 
+  it('does not submit on Enter a name that was refused, any more than the button does', async () => {
+    const { backend } = setup({
+      branch_check: () => {
+        throw 'La branche « feat/login » existe déjà.';
+      },
+    });
+    await userEvent.type(field(), 'feat/login');
+    await screen.findByText('La branche « feat/login » existe déjà.');
+    await userEvent.type(field(), '{Enter}');
+    expect(create()).toBeDisabled();
+    // Nothing goes to the backend, and the window stays.
+    expect(backend.called('branch_create')).toEqual([]);
+    expect(app.modal).not.toBeNull();
+  });
+
   it('does not check an empty name, and takes away the message once it is empty again', async () => {
     const { backend } = setup({
       branch_check: () => {

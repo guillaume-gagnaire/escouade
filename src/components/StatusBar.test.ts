@@ -223,6 +223,39 @@ describe('StatusBar branch and sync with the remote', () => {
     expect(app.toasts.map((t) => [t.text, t.kind])).toEqual([['1 commit poussé', 'ok']]);
   });
 
+  it('gives the focus back to the branch button once a sync from the picker is over', async () => {
+    let finish!: (summary: string) => void;
+    fakeBackend({ branch_list: () => LIST, git_push: () => new Promise((r) => (finish = r)) });
+    app.git = { p1: gitInfo({ ...tracked, ahead: 1 }) };
+    render(StatusBar);
+    await userEvent.click(syncButton());
+    await picker();
+    await userEvent.click(screen.getByRole('button', { name: /Pousser/ }));
+    await waitFor(() => expect(syncButton()).toBeDisabled());
+    // A browser takes the focus off a control that becomes disabled: the keyboard would be lost.
+    (document.activeElement as HTMLElement | null)?.blur();
+    expect(document.body).toHaveFocus();
+    finish('1 commit poussé');
+    await waitFor(() => expect(syncButton()).toBeEnabled());
+    expect(syncButton()).toHaveFocus();
+  });
+
+  it('leaves the focus where the user put it while a sync ran', async () => {
+    let finish!: (summary: string) => void;
+    fakeBackend({ branch_list: () => LIST, git_push: () => new Promise((r) => (finish = r)) });
+    app.git = { p1: gitInfo({ ...tracked, ahead: 1 }) };
+    render(StatusBar);
+    await userEvent.click(syncButton());
+    await picker();
+    await userEvent.click(screen.getByRole('button', { name: /Pousser/ }));
+    await waitFor(() => expect(syncButton()).toBeDisabled());
+    const sound = screen.getByTitle('Son des notifications');
+    sound.focus();
+    finish('1 commit poussé');
+    await waitFor(() => expect(syncButton()).toBeEnabled());
+    expect(sound).toHaveFocus();
+  });
+
   it('fetches on demand', async () => {
     const backend = fakeBackend({ branch_list: () => LIST, git_fetch: () => 'Fetch terminé : déjà à jour' });
     app.git = { p1: gitInfo(tracked) };
