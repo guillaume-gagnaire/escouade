@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tabHints } from '../../lib/editor/tabs';
   import type { FileStatus } from '../../lib/editor/tree';
 
   let {
@@ -12,10 +13,13 @@
   } = $props();
 
   const SC: Record<string, string> = { M: 'var(--wait)', A: 'var(--add)', D: 'var(--del)' };
+  /** The folder that tells a tab from the open ones of the same name; '' for a name that is alone. */
+  const hints = $derived(tabHints(tabs.map((t) => t.path)));
 </script>
 
 <div class="tabs" role="tablist" aria-label="Fichiers ouverts">
   {#each tabs as t (t.path)}
+    {@const hint = hints[t.path]}
     <div
       class="tab"
       class:on={t.active}
@@ -27,11 +31,15 @@
       onkeydown={(e) => e.target === e.currentTarget && e.key === 'Enter' && onselect(t.path)}
       onauxclick={(e) => e.button === 1 && onclose(t.path)}
     >
-      <span class="name" style:color={t.status ? SC[t.status] : undefined}>{t.name}</span>
+      <span class="label"
+        ><span class="name" style:color={t.status ? SC[t.status] : undefined}>{t.name}</span>{#if hint}<span class="hint"
+            >{' · ' + hint}</span
+          >{/if}</span
+      >
       <button
         class="close"
         class:dirty={t.dirty}
-        aria-label={`Fermer ${t.name}`}
+        aria-label={`Fermer ${t.name}${hint ? ' · ' + hint : ''}`}
         title={t.dirty ? 'Fermer (non enregistré)' : 'Fermer'}
         onclick={(e) => {
           e.stopPropagation();
@@ -68,6 +76,9 @@
     border-top-color: var(--accent);
     background: var(--term);
     color: var(--text);
+  }
+  .hint {
+    color: var(--dim);
   }
   .close {
     width: 20px;

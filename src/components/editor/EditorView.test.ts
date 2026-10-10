@@ -115,6 +115,20 @@ describe('EditorView', () => {
     await expect.poll(reads).toBe(2);
   });
 
+  it('tells the tabs of files of the same name apart by their folder', async () => {
+    backend({
+      fs_tree: () => ({ root: 'C:/code/demo-api', files: ['src/board/index.ts', 'src/editor/index.ts', 'README.md'], truncated: false }),
+      git_files: () => [],
+    });
+    await app.openEditor({ source: 'project', path: 'src/editor/index.ts' });
+    await app.openEditor({ source: 'project', path: 'src/board/index.ts' });
+    await app.openEditor({ source: 'project', path: 'README.md' });
+    render(EditorView, { project: project() });
+    expect(await screen.findByRole('tab', { name: /index\.ts · editor/ })).toHaveAttribute('title', 'src/editor/index.ts');
+    expect(screen.getByRole('tab', { name: /index\.ts · board/ })).toHaveAttribute('title', 'src/board/index.ts');
+    expect(screen.getByRole('tab', { name: /README\.md/ })).not.toHaveTextContent('·');
+  });
+
   it('says what a file without text is', async () => {
     backend({ fs_read: () => ({ kind: 'binary', text: null, size: 10, hash: '', eol: 'lf', bom: false }) });
     await app.openEditor({ source: 'project', path: 'logo.png' });
