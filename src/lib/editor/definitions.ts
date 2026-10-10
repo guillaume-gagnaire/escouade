@@ -59,17 +59,15 @@ const PARSE_MS = 500;
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, (c) => `\\${c}`);
 
 /**
- * `template` with `name` in it, as git's extended expressions read it on every system: macOS's know neither `\b` nor
- * `\s`. Wider than the template, whose JavaScript form checks what it finds: the `\b` ending the name at the end of
- * an alternative becomes the next character not being a letter, a digit or `_`; the other ones go.
+ * `template` with `name` in it, as git is asked for it. Wider than the template, whose JavaScript form checks each line
+ * found: git's `\b` only knows ASCII letters (`café` would never end at one). So the `\b` ending the name at the end of
+ * an alternative becomes a character that is no letter, digit or `_` (or the line's end), and the other ones go.
  */
 function gitPattern(template: string, name: string): string {
   return template
-    .replace(/NAME\\b(?=\||$)/g, () => 'NAME([^[:alnum:]_]|$)')
+    .replace(/NAME\\b(?=\||$)/g, () => 'NAME(\\W|$)')
     .split('\\b')
     .join('')
-    .split('\\s')
-    .join('[[:space:]]')
     .split('NAME')
     .join(escapeRegExp(name));
 }
@@ -410,8 +408,9 @@ async function searched(src: DefinitionSource, ctx: NavContext, name: string): P
     if (familyOf(m.path) !== family || (m.path === ctx.path && m.line === line)) continue;
     const x = exact.exec(m.text);
     if (!x) continue;
-    // The name ends what defines it, or begins it for the other languages' `name =`.
-    const col = charColumn(m.text, x.index + x[0].lastIndexOf(name));
+    // The name ends what defines it, or begins it for the other languages' `name =`; the text may start further in
+    // the line.
+    const col = m.offset + charColumn(m.text, x.index + x[0].lastIndexOf(name));
     found.push({ t: { path: m.path, line: m.line, col, text: m.text }, rank: m.path === ctx.path ? 0 : dirOf(m.path) === dir ? 1 : 2 });
   }
   return found.sort((a, b) => a.rank - b.rank).map((f) => f.t);

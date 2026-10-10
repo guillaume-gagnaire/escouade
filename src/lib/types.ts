@@ -475,8 +475,10 @@ export interface FileText {
 }
 
 /**
- * What `code_search` looks for in a source's files: `pattern` as written, or with `regex` an extended regular
- * expression as git reads it (POSIX: `[[:space:]]`, and no `\b` on macOS). At most 5 000 matches, whatever is asked.
+ * What `code_search` looks for in a source's files: `pattern` as written, or with `regex` an expression as JavaScript
+ * writes them (git's Perl expressions when it has them, else translated for its extended ones: what these cannot say
+ * is refused with « Cette expression n'est pas prise en charge par git sur ce poste : … »). A pattern holds on one line.
+ * At most 5 000 matches, whatever is asked.
  */
 export interface SearchQuery {
   pattern: string;
@@ -486,18 +488,28 @@ export interface SearchQuery {
   maxResults: number;
 }
 
-/** A matching line: its file from the source's root, its line and the column of its first match (1-based, in characters), its text cut at 300 characters. */
+/**
+ * A matching line: its file from the source's root, its line and the column of its first match (1-based, in
+ * characters: code points, an emoji being one). All offsets are in characters too.
+ */
 export interface SearchMatch {
   path: string;
   line: number;
   col: number;
+  /** At most 300 characters of the line: all of it, or a stretch starting 40 characters before its first match. */
   text: string;
+  /** Where `text` starts in the line (0 for the line's start). */
+  offset: number;
+  /** Each match in `text`, `[start, end)` from the start of `text`, as git found them. */
+  ranges: [number, number][];
 }
 
 export interface SearchResult {
   matches: SearchMatch[];
   /** More lines matched than were asked for, or the search was stopped after 10 s. */
   truncated: boolean;
+  /** The 10 s limit stopped the search (`truncated` is set too). */
+  timedOut: boolean;
 }
 
 /** The version a file is compared with ("HEAD", or the branch a worktree left). */

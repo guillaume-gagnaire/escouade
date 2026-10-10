@@ -1,6 +1,6 @@
 import { EditorState } from '@codemirror/state';
 import { describe, expect, it, vi } from 'vitest';
-import type { SearchMatch, SearchQuery } from '../types';
+import type { SearchMatch, SearchQuery, SearchResult } from '../types';
 import { definitionResolver, type DefinitionSource } from './definitions';
 import type { NavTarget } from './goto';
 import { DEFAULT_ALIASES } from './links';
@@ -18,7 +18,7 @@ interface Clicked {
 function source(over: Partial<DefinitionSource> = {}): DefinitionSource {
   return {
     read: async () => null,
-    search: async () => ({ matches: [], truncated: false }),
+    search: async () => ({ matches: [], truncated: false, timedOut: false }),
     aliases: () => DEFAULT_ALIASES,
     ...over,
   };
@@ -150,11 +150,13 @@ describe('definitions an import brings', () => {
 });
 
 describe('definitions searched for in the source', () => {
-  const match = (path: string, line: number, text: string): SearchMatch => ({ path, line, col: 1, text });
+  /** A line git found (the ranges of its matches do not matter here: the name is found again in it). */
+  const match = (path: string, line: number, text: string, offset = 0): SearchMatch => ({ path, line, col: 1, text, offset, ranges: [] });
+  const found = (...matches: SearchMatch[]): SearchResult => ({ matches, truncated: false, timedOut: false });
 
   it('searches the files of the same language, the clicked line left out, the same file first, then its folder', async () => {
-    const search = vi.fn(async (_: SearchQuery) => ({
-      matches: [
+    const search = vi.fn(async (_: SearchQuery) =>
+      found(
         match('lib/far.c', 3, 'int render(void) {'),
         match('src/ui/app.c', 2, '  render();'),
         match('src/ui/app.py', 1, 'render = 1'),
@@ -162,12 +164,11 @@ describe('definitions searched for in the source', () => {
         match('src/ui/x.c', 4, 'prerender(1);'),
         match('src/ui/app.h', 5, 'int render(void);'),
         match('src/ui/app.c', 9, 'int render(void) { return 0; }'),
-      ],
-      truncated: false,
-    }));
+      ),
+    );
     const c = await click('src/ui/app.c', 'int main(void) {\n  ¦render();\n}\n', source({ search }));
     expect(search).toHaveBeenCalledExactlyOnceWith({
-      pattern: 'render[[:space:]]*[:=(]',
+      pattern: String.raw`render\s*[:=(]`,
       regex: true,
       caseSensitive: true,
       wholeWord: false,
@@ -182,31 +183,28 @@ describe('definitions searched for in the source', () => {
   });
 
   it.each([
-    ['src/a.ts', 'run();', String.raw`(function\*?|class|interface|type|enum|const|let|var)[[:space:]]+run([^[:alnum:]_]|$)`],
-    [
-      'src/a.rs',
-      'fn f() { run(); }',
-      String.raw`(fn|struct|enum|trait|type|mod|const|static|macro_rules!)[[:space:]]+run([^[:alnum:]_]|$)`,
-    ],
-    ['a.py', 'run()', String.raw`(def|class)[[:space:]]+run([^[:alnum:]_]|$)`],
-    [
-      'a.go',
-      'package a\nfunc f() { run() }',
-      String.raw`func[[:space:]]+(\([^)]*\)[[:space:]]*)?run([^[:alnum:]_]|$)|type[[:space:]]+run([^[:alnum:]_]|$)`,
-    ],
-  ])('asks git for what defines a name in %s, without the `\\b` and `\\s` git lacks on macOS', async (path, text, pattern) => {
-    const search = vi.fn(async (_: SearchQuery) => ({
-      matches: [match('lib/x' + path.slice(path.lastIndexOf('.')), 4, 'pub(crate) fn run_all() {}; fn run() {}')],
-      truncated: false,
-    }));
+    ['src/a.ts', 'run();', String.raw`(function\*?|class|interface|type|enum|const|let|var)\s+run(\W|$)`],
+    ['src/a.rs', 'fn f() { run(); }', String.raw`(fn|struct|enum|trait|type|mod|const|static|macro_rules!)\s+run(\W|$)`],
+    ['a.py', 'run()', String.raw`(def|class)\s+run(\W|$)`],
+    ['a.go', 'package a\nfunc f() { run() }', String.raw`func\s+(\([^)]*\)\s*)?run(\W|$)|type\s+run(\W|$)`],
+  ])('asks git for what defines a name in %s, without the `\\b` git only knows for ASCII letters', async (path, text, pattern) => {
+    const search = vi.fn(async (_: SearchQuery) =>
+      found(match('lib/x' + path.slice(path.lastIndexOf('.')), 4, 'pub(crate) fn run_all() {}; fn run() {}')),
+    );
     const c = await click(path, caret(text, 'run'), source({ search }));
     expect(search.mock.calls[0][0].pattern).toBe(pattern);
     // What git finds more than the language's pattern is left out.
     expect(c?.targets.length).toBe(path.endsWith('.rs') ? 1 : 0);
   });
 
+  it('counts the column from the start of the line when git shows a stretch of a long one', async () => {
+    const search = vi.fn(async (_: SearchQuery) => found(match('lib/min.js', 1, 'x;function render(){}', 360)));
+    const c = await click('src/a.ts', '¦render();', source({ search }));
+    expect(c?.targets).toMatchObject([{ path: 'lib/min.js', line: 1, col: 360 + 12 }]);
+  });
+
   it('counts Svelte and Vue files with the scripts', async () => {
-    const search = vi.fn(async () => ({ matches: [match('src/B.svelte', 2, '  export let run = 1;')], truncated: false }));
+    const search = vi.fn(async () => found(match('src/B.svelte', 2, '  export let run = 1;')));
     const c = await click('src/a.ts', '¦run();', source({ search }));
     expect(c?.targets).toEqual([{ path: 'src/B.svelte', line: 2, col: 14, text: '  export let run = 1;' }]);
   });

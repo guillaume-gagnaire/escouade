@@ -686,12 +686,13 @@ describe('EditorView navigation', () => {
       fs_read: (a) => text(texts[a.path] ?? ''),
       code_search: () => ({
         matches: [
-          { path: 'lib/render.ts', line: 4, col: 8, text: 'export function render(n: number) {}' },
-          { path: 'src/draw.ts', line: 2, col: 8, text: 'export const render = (n: number) => n;' },
+          { path: 'lib/render.ts', line: 4, col: 8, text: 'export function render(n: number) {}', offset: 0, ranges: [[7, 23]] },
+          { path: 'src/draw.ts', line: 2, col: 8, text: 'export const render = (n: number) => n;', offset: 0, ranges: [[7, 20]] },
           // Gone since: not offered.
-          { path: 'src/gone.ts', line: 1, col: 1, text: 'function render() {}' },
+          { path: 'src/gone.ts', line: 1, col: 1, text: 'function render() {}', offset: 0, ranges: [[0, 16]] },
         ],
         truncated: false,
+        timedOut: false,
       }),
     });
     await app.openEditor({ source: 'project', path: 'src/app.ts' });
@@ -717,7 +718,7 @@ describe('EditorView navigation', () => {
   it('says when no definition of an identifier is found, and stays', async () => {
     navBackend({
       fs_read: (a) => text(a.path === 'tsconfig.json' ? '{}' : 'nowhere();\n'),
-      code_search: () => ({ matches: [], truncated: false }),
+      code_search: () => ({ matches: [], truncated: false, timedOut: false }),
     });
     await app.openEditor({ source: 'project', path: 'src/app.ts' });
     const { container } = render(EditorView, { project: project() });

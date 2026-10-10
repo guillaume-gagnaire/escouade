@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { board, fakeBackend, project, ticket } from '../test/ipc';
 import { api } from './ipc';
+import type { SearchResult } from './types';
 
 describe('board commands', () => {
   const draft = { title: 'Ajouter le fichier', description: '', criteria: ['Le fichier existe'], maxLoops: 5 };
@@ -51,7 +52,11 @@ describe('board commands', () => {
 
 describe('code search', () => {
   it('asks the backend to search the files of a source with the names its command takes', async () => {
-    const result = { matches: [{ path: 'src/a.ts', line: 3, col: 7, text: 'const foo = 1;' }], truncated: false };
+    const result: SearchResult = {
+      matches: [{ path: 'src/a.ts', line: 3, col: 7, text: 'const foo = 1;', offset: 0, ranges: [[6, 9]] }],
+      truncated: false,
+      timedOut: false,
+    };
     const backend = fakeBackend({ code_search: () => result });
     const query = { pattern: 'foo', regex: false, caseSensitive: true, wholeWord: true, maxResults: 2000 };
     expect(await api.codeSearch('p1', 'a2', query)).toEqual(result);
