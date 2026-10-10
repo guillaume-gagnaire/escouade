@@ -1,3 +1,4 @@
+import { t } from './i18n';
 import { IS_MAC } from './platform';
 import { app } from './state.svelte';
 import { disposeTerminal, openTerminal, type TermPlace } from './terminals';
@@ -16,7 +17,7 @@ export const SHELL_GLYPH: Record<string, { glyph: string; c: string }> = {
 async function show(projectId: string, shell: string | undefined, name: (shell: string) => string, place?: TermPlace) {
   if (!shell) {
     const expected = IS_MAC ? 'zsh, bash' : 'PowerShell 7, Git Bash, WSL';
-    app.toast(`Aucun shell détecté (${expected}). Vérifie les réglages.`, 'error');
+    app.toast(t('runs.term.noShell', { expected }), 'error');
     return;
   }
   const info = await app.run(openTerminal(projectId, shell, name(shell), place));

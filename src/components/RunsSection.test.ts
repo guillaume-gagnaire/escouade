@@ -1,6 +1,7 @@
 import { render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { setLang } from '../lib/i18n';
 import { app } from '../lib/state.svelte';
 import type { LaunchState, RunCommand, TestRecipe } from '../lib/types';
 import { agent, fakeBackend, project, resetApp } from '../test/ipc';
@@ -160,5 +161,61 @@ describe('RunsSection', () => {
     expect(await within(row('web')).findByText('en cours')).toBeInTheDocument();
     await userEvent.click(within(row('web')).getByRole('button', { name: 'Stopper' }));
     expect(backend.called('term_kill')[0].args).toEqual({ id: 't7' });
+  });
+});
+
+describe('RunsSection in English', () => {
+  beforeEach(() => {
+    resetApp({ projects: [P] });
+    setLang('en');
+  });
+
+  it('writes the section, the statuses and the buttons in English', () => {
+    fakeBackend();
+    app.launches.c2 = state({ status: 'crashed', code: 2, ptyId: null, name: 'API' });
+    render(RunsSection, { project: P });
+    expect(screen.getByText('Launch')).toBeInTheDocument();
+    expect(within(row('Front')).getByText('ready')).toBeInTheDocument();
+    expect(within(row('Front')).getByRole('button', { name: 'Run' })).toBeInTheDocument();
+    expect(within(row('API')).getByText('crashed (code 2)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Run all' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Launch commands…' })).toBeInTheDocument();
+  });
+
+  it('offers to restart or stop what runs, and to stop everything', () => {
+    fakeBackend();
+    app.launches.c1 = state({});
+    render(RunsSection, { project: P });
+    expect(within(row('Front')).getByText('running')).toBeInTheDocument();
+    expect(within(row('Front')).getByRole('button', { name: 'Restart' })).toBeInTheDocument();
+    expect(within(row('Front')).getByRole('button', { name: 'Stop' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Stop all' })).toBeInTheDocument();
+  });
+
+  it('says there is nothing to launch, and offers Claude’s proposal', () => {
+    fakeBackend();
+    render(RunsSection, { project: project() });
+    expect(screen.getByText('No commands.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Configure' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '✦ Suggest commands' })).toBeInTheDocument();
+  });
+
+  it('names the steps of a recipe in English', () => {
+    const a = agent({
+      id: 'a7',
+      name: 'dem-1-add',
+      recipe: {
+        prepare: [{ command: 'npm ci', dir: '' }],
+        processes: [{ name: '', command: 'node app.js', dir: '', env: {}, url: '' }],
+        open: '',
+      },
+    });
+    resetApp({ projects: [P], agents: [a] });
+    app.launches['test:a7:prep:0'] = state({ status: 'done', ptyId: null, name: 'Setup 1' });
+    app.launches['test:a7:run:0'] = state({ name: 'process 1' });
+    fakeBackend();
+    render(RunsSection, { project: P });
+    expect(within(row('Setup 1')).getByText('done')).toBeInTheDocument();
+    expect(within(row('process 1')).getByText('running')).toBeInTheDocument();
   });
 });

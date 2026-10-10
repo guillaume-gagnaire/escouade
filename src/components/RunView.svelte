@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../lib/i18n';
   import { keyLabel, primaryKey } from '../lib/platform';
   import { launchStatus, log, restartLaunch, startLaunch, stopLaunch } from '../lib/launch-actions';
   import { parseTestId } from '../lib/recipe';
@@ -6,7 +7,7 @@
   import { SHELL_GLYPH } from '../lib/term-actions';
   import { getXTerm, logKey, mountTerminal } from '../lib/terminals';
   import type { Project, RunCommand } from '../lib/types';
-  import { joinPath, tildify } from '../lib/format';
+  import { fTime, joinPath, tildify } from '../lib/format';
 
   let { cmd, project }: { cmd: RunCommand; project: Project } = $props();
   let box = $state<HTMLDivElement>();
@@ -25,9 +26,7 @@
   });
   // The folder is written as the system of its root does: `\` under a Windows folder, `/` on macOS.
   const where = $derived(tildify(cmd.cwd ? joinPath(root, cmd.cwd) : root));
-  const since = $derived(
-    running && run ? new Date(run.startedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : null,
-  );
+  const since = $derived(running && run ? fTime(run.startedAt) : null);
 
   $effect(() => {
     const id = cmd.id;
@@ -64,7 +63,7 @@
         <span class="name">{cmd.name}</span>
         <span class="badge mono" style:color={SHELL_GLYPH[cmd.shell]?.c}>{shell}</span>
         <span class="status" style:color={st.color}>{st.label}</span>
-        {#if since}<span class="since">depuis {since}</span>{/if}
+        {#if since}<span class="since">{t('runs.log.since', { time: since })}</span>{/if}
       </div>
       <span class="sub mono" title={where}><span class="cmdline">{cmd.command}</span> <span class="where">· {where}</span></span>
     </div>
@@ -73,7 +72,7 @@
       <!-- svelte-ignore a11y_autofocus -->
       <input
         class="field search"
-        placeholder="Rechercher…"
+        placeholder={t('common.searchEllipsis')}
         bind:value={query}
         autofocus
         onkeydown={(e) => {
@@ -82,15 +81,17 @@
         }}
       />
     {/if}
-    <button class="btn ghost" title={`Rechercher (${keyLabel('Ctrl+Shift+F')})`} onclick={() => (searchOpen = !searchOpen)}>⌕</button>
-    <button class="btn ghost" onclick={() => getXTerm(logKey(cmd.id))?.term.clear()}>Effacer</button>
+    <button class="btn ghost" title={t('runs.log.searchKey', { key: keyLabel('Ctrl+Shift+F') })} onclick={() => (searchOpen = !searchOpen)}
+      >⌕</button
+    >
+    <button class="btn ghost" onclick={() => getXTerm(logKey(cmd.id))?.term.clear()}>{t('common.clear')}</button>
     {#if running}
-      <button class="btn" onclick={() => restartLaunch(project, cmd)}>⟳ Relancer</button>
-      <button class="btn danger" onclick={() => stopLaunch(cmd.id)}>■ Stopper</button>
+      <button class="btn" onclick={() => restartLaunch(project, cmd)}>⟳ {t('runs.action.restart')}</button>
+      <button class="btn danger" onclick={() => stopLaunch(cmd.id)}>■ {t('common.stop')}</button>
     {:else if run}
-      <button class="btn primary" onclick={() => startLaunch(project, cmd)}>⟳ Relancer</button>
+      <button class="btn primary" onclick={() => startLaunch(project, cmd)}>⟳ {t('runs.action.restart')}</button>
     {:else}
-      <button class="btn primary" onclick={() => startLaunch(project, cmd)}>▶ Lancer</button>
+      <button class="btn primary" onclick={() => startLaunch(project, cmd)}>▶ {t('runs.action.run')}</button>
     {/if}
   </header>
   <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -106,8 +107,8 @@
   ></div>
   {#if !run}
     <div class="idle">
-      <span>Pas encore lancée.</span>
-      <button class="btn primary" onclick={() => startLaunch(project, cmd)}>▶ Lancer</button>
+      <span>{t('runs.log.notRun')}</span>
+      <button class="btn primary" onclick={() => startLaunch(project, cmd)}>▶ {t('runs.action.run')}</button>
     </div>
   {/if}
 </main>

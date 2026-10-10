@@ -1,6 +1,8 @@
 <script lang="ts">
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { onDestroy } from 'svelte';
+  import { t } from '../../lib/i18n';
+  import Rich from '../../lib/i18n/Rich.svelte';
   import { isolaApproved, openAddress, recipeApproved, revealHidden } from '../../lib/recipe';
   import { app } from '../../lib/state.svelte';
   import { approveAndTest, flows, stopTests } from '../../lib/test-launch.svelte';
@@ -84,7 +86,7 @@
   }
 
   /** What the recipe says of a folder: relative to the worktree, empty for its root. */
-  const where = (dir: string) => (dir.trim() && dir.trim() !== '.' ? revealHidden(dir) : 'la racine du worktree');
+  const where = (dir: string) => (dir.trim() && dir.trim() !== '.' ? revealHidden(dir) : t('runs.testLaunch.root'));
 
   /** The log of a step, in the main area. */
   function viewLog(id: string | null) {
@@ -95,51 +97,50 @@
   }
 </script>
 
-<Modal title={`Tester ${ticket?.key ?? agent?.name ?? ''}`} width={560} onclose={close}>
+<Modal title={t('runs.testLaunch.title', { name: ticket?.key ?? agent?.name ?? '' })} width={560} onclose={close}>
   {#if flow}
-    <ul class="lines" aria-label="Étapes du lancement">
+    <ul class="lines" aria-label={t('runs.testLaunch.steps')}>
       {#each flow.lines as l (l.id)}
         <li class={l.state}>
           <span class="mark">{MARK[l.state]}</span>
           <span class="label">{l.label}</span>
           <span class="detail mono">{l.detail}</span>
           {#if l.state === 'failed' && hasLog(l.launchId)}
-            <button class="link" onclick={() => viewLog(l.launchId)}>Voir le log</button>
+            <button class="link" onclick={() => viewLog(l.launchId)}>{t('runs.testLaunch.viewLog')}</button>
           {/if}
         </li>
       {/each}
     </ul>
     {#if flow.error}<p class="error">{flow.error}</p>{/if}
-    {#if flow.opened}<p class="opened">Ouvert dans le navigateur : <span class="mono">{flow.opened}</span></p>{/if}
+    {#if flow.opened}
+      <p class="opened">
+        <Rich k="runs.testLaunch.opened">{#snippet address()}<span class="mono">{flow.opened}</span>{/snippet}</Rich>
+      </p>
+    {/if}
   {:else if reading}
-    <p class="opened">Lecture du .isola.toml…</p>
+    <p class="opened">{t('runs.testLaunch.reading')}</p>
   {:else if toRead && agent}
     {#if changed}
-      <p class="notice changed" role="status">La recette vient de changer : relis-la avant de lancer.</p>
+      <p class="notice changed" role="status">{t('runs.testLaunch.changed')}</p>
     {/if}
     {#if agent.isola && isolaConfig !== undefined}
-      <p class="notice">
-        isola lance les commandes de ce fichier dans ton shell, hors du mode de permission de Claude Code. {agent.name} peut l’avoir écrit ou
-        modifié.
-      </p>
+      <p class="notice">{t('runs.testLaunch.isolaNotice', { name: agent.name })}</p>
       <section>
-        <h3 class="section-label">Configuration isola (.isola.toml)</h3>
+        <h3 class="section-label">{t('runs.testLaunch.isolaConfig')}</h3>
         <pre class="cmd mono">{revealHidden(isolaConfig)}</pre>
       </section>
     {:else if agent.recipe}
       {@const recipe = agent.recipe}
-      <p class="notice">
-        Ces commandes ont été écrites par {agent.name}. Elles tournent dans ton shell, hors du mode de permission de Claude Code.
-      </p>
+      <p class="notice">{t('runs.testLaunch.recipeNotice', { name: agent.name })}</p>
       {#if recipe.prepare.length}
         <section>
-          <h3 class="section-label">Préparation</h3>
+          <h3 class="section-label">{t('runs.testLaunch.prepare')}</h3>
           <ol class="steps">
             {#each recipe.prepare as step, i (i)}
               <li>
                 <pre class="cmd mono">{revealHidden(step.command)}</pre>
                 <dl class="facts">
-                  <dt>Dossier</dt>
+                  <dt>{t('common.folder')}</dt>
                   <dd class="mono">{where(step.dir)}</dd>
                 </dl>
               </li>
@@ -149,21 +150,21 @@
       {/if}
       {#if recipe.processes.length}
         <section>
-          <h3 class="section-label">Lancement</h3>
+          <h3 class="section-label">{t('runs.testLaunch.launch')}</h3>
           <ul class="steps">
             {#each recipe.processes as p, i (i)}
               <li>
-                <span class="name">{revealHidden(p.name.trim()) || `processus ${i + 1}`}</span>
+                <span class="name">{revealHidden(p.name.trim()) || t('runs.recipe.process', { n: i + 1 })}</span>
                 <pre class="cmd mono">{revealHidden(p.command)}</pre>
                 <dl class="facts">
-                  <dt>Dossier</dt>
+                  <dt>{t('common.folder')}</dt>
                   <dd class="mono">{where(p.dir)}</dd>
                   {#each Object.entries(p.env) as [key, value] (key)}
-                    <dt>Variable</dt>
+                    <dt>{t('runs.testLaunch.variable')}</dt>
                     <dd class="mono">{revealHidden(`${key}=${value}`)}</dd>
                   {/each}
                   {#if p.url.trim()}
-                    <dt>Adresse</dt>
+                    <dt>{t('runs.testLaunch.address')}</dt>
                     <dd class="mono">{revealHidden(p.url)}</dd>
                   {/if}
                 </dl>
@@ -175,28 +176,28 @@
     {/if}
     {#if address}
       <section>
-        <h3 class="section-label">Ouverture</h3>
+        <h3 class="section-label">{t('runs.testLaunch.opening')}</h3>
         <p class="cmd mono">{revealHidden(address)}</p>
       </section>
     {/if}
   {:else if agent?.recipe && !agent.isola}
     <!-- A recipe and no test: the agent sent another recipe, which dropped the test shown. -->
-    <p class="opened">La recette a changé : relance ▶ Tester.</p>
+    <p class="opened">{t('runs.testLaunch.recipeChanged')}</p>
   {/if}
   {#snippet footer()}
     {#if !flow && (toRead || reading)}
-      <button class="btn" disabled={approving} onclick={close}>Annuler</button>
+      <button class="btn" disabled={approving} onclick={close}>{t('common.cancel')}</button>
       {#if toRead}
-        <button class="btn primary" disabled={approving || settling || !project} onclick={launch}>Lancer</button>
+        <button class="btn primary" disabled={approving || settling || !project} onclick={launch}>{t('runs.action.run')}</button>
       {/if}
     {:else}
       {#if flow?.opened}
         {@const opened = flow.opened}
-        <button class="btn" onclick={() => app.run(openUrl(opened))}>Rouvrir</button>
+        <button class="btn" onclick={() => app.run(openUrl(opened))}>{t('runs.testLaunch.reopen')}</button>
       {/if}
-      <button class="btn" disabled={!logs} onclick={() => viewLog(logs)}>Voir les logs</button>
-      <button class="btn danger" onclick={() => stopTests(agentId)}>Tout arrêter</button>
-      <button class="btn primary" onclick={close}>Fermer</button>
+      <button class="btn" disabled={!logs} onclick={() => viewLog(logs)}>{t('runs.testLaunch.viewLogs')}</button>
+      <button class="btn danger" onclick={() => stopTests(agentId)}>{t('common.stopAll')}</button>
+      <button class="btn primary" onclick={close}>{t('common.close')}</button>
     {/if}
   {/snippet}
 </Modal>

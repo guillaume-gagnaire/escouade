@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../lib/i18n';
   import { keyLabel, primaryKey } from '../lib/platform';
   import { app } from '../lib/state.svelte';
   import { closeTerminal, newTerminal, SHELL_GLYPH } from '../lib/term-actions';
@@ -61,7 +62,7 @@
       <!-- svelte-ignore a11y_autofocus -->
       <input
         class="field search"
-        placeholder="Rechercher…"
+        placeholder={t('common.searchEllipsis')}
         bind:value={query}
         autofocus
         onkeydown={(e) => {
@@ -73,9 +74,11 @@
         }}
       />
     {/if}
-    <button class="btn ghost" title={`Rechercher (${keyLabel('Ctrl+Shift+F')})`} onclick={() => (searchOpen = !searchOpen)}>⌕</button>
-    <button class="btn ghost" onclick={() => getXTerm(term.id)?.term.clear()}>Effacer</button>
-    <button class="btn danger" onclick={() => closeTerminal(term.id)}>Fermer le terminal</button>
+    <button class="btn ghost" title={t('runs.log.searchKey', { key: keyLabel('Ctrl+Shift+F') })} onclick={() => (searchOpen = !searchOpen)}
+      >⌕</button
+    >
+    <button class="btn ghost" onclick={() => getXTerm(term.id)?.term.clear()}>{t('common.clear')}</button>
+    <button class="btn danger" onclick={() => closeTerminal(term.id)}>{t('runs.terminal.close')}</button>
   </header>
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
@@ -90,9 +93,9 @@
   ></div>
   {#if exited !== undefined}
     <div class="exited">
-      Processus terminé{exited !== null ? ` (code ${exited})` : ''}.
-      <button class="btn" onclick={restart}>Relancer</button>
-      <button class="btn ghost" onclick={() => closeTerminal(term.id)}>Fermer</button>
+      {exited !== null ? t('runs.terminal.exitedCode', { code: exited }) : t('runs.terminal.exited')}
+      <button class="btn" onclick={restart}>{t('runs.action.restart')}</button>
+      <button class="btn ghost" onclick={() => closeTerminal(term.id)}>{t('common.close')}</button>
     </div>
   {/if}
 </main>

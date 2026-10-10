@@ -2,6 +2,7 @@
 // processes, or `isola up` when isola runs its worktree's services, each with an id
 // `test:<agent>:<prep|run|isola>:<n>` among the launches.
 
+import { t } from './i18n';
 import type { Agent, RunCommand } from './types';
 
 export type TestKind = 'prep' | 'run' | 'isola';
@@ -20,14 +21,14 @@ export function recipeCommands(agent: Agent, shell: string): { prepare: RunComma
   return {
     prepare: r.prepare.map((s, i) => ({
       id: testId(agent.id, 'prep', i),
-      name: `Préparation ${i + 1}`,
+      name: t('runs.recipe.prepStep', { n: i + 1 }),
       command: s.command,
       shell,
       cwd: s.dir,
     })),
     processes: r.processes.map((p, i) => ({
       id: testId(agent.id, 'run', i),
-      name: p.name || `processus ${i + 1}`,
+      name: p.name || t('runs.recipe.process', { n: i + 1 }),
       command: p.command,
       shell,
       cwd: p.dir,
@@ -114,7 +115,7 @@ const spelled = (ch: string) => `⟨U+${(ch.codePointAt(0) ?? 0).toString(16).to
 /** A stretch of blank characters as it is shown: as it is, with each hidden one spelled out, or counted when it is long. */
 function showBlanks(run: string[]): string {
   if (run.length < SPACES) return run.map((ch) => (hidden(ch) ? spelled(ch) : ch)).join('');
-  return `⟨${run.length} espaces${run.some(hidden) ? ' ou invisibles' : ''}⟩`;
+  return t(run.some(hidden) ? 'runs.recipe.spacesInvisible' : 'runs.recipe.spaces', { n: run.length });
 }
 
 /** A line as it is shown: its hidden characters spelled out, its long stretches of blanks (hidden ones too) counted. */
@@ -149,7 +150,7 @@ export function revealHidden(text: string): string {
   const flush = () => {
     if (empty.length >= BLANK_LINES) {
       const invisible = empty.some((line) => Array.from(line).some(hidden));
-      out.push(`⟨${empty.length} lignes vides${invisible ? ' ou invisibles' : ''}⟩`);
+      out.push(t(invisible ? 'runs.recipe.emptyLinesInvisible' : 'runs.recipe.emptyLines', { n: empty.length }));
     } else out.push(...empty.map(showLine));
     empty = [];
   };
