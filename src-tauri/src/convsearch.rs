@@ -863,6 +863,27 @@ mod tests {
     }
 
     #[test]
+    fn finds_a_file_of_an_agent_whose_folder_changes_length_in_lowercase() {
+        // The Kelvin sign is three bytes, its lowercase `k` one.
+        let dir = logs(
+            "cs-kelvin",
+            &[(
+                "a1",
+                vec![tool(
+                    "t1",
+                    "Read",
+                    json!({ "file_path": r"C:\code\kelvin\src\db.ts" }),
+                    "",
+                )],
+            )],
+        );
+        let mut a = agent("a1", "p1");
+        a.cwd = "C:\\code\\\u{212A}elvin".into();
+        let found = find(&dir, &[a], "db.ts");
+        assert_eq!(found.hits[0].snippet, "Read · src/db.ts");
+    }
+
+    #[test]
     fn dates_a_message_by_the_one_before_it_when_it_has_no_time_of_its_own() {
         let dir = logs(
             "cs-at",

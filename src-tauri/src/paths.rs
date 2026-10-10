@@ -271,9 +271,27 @@ pub(crate) fn strip_base(base: &str, path: &str) -> Option<String> {
             .to_string()
     };
     let (b, p) = (norm(base), norm(path));
-    let (bl, pl) = (b.to_lowercase(), p.to_lowercase());
-    pl.starts_with(&(bl + "/"))
-        .then(|| p[b.len() + 1..].to_string())
+    // Compared lowercase character by character, and cut where the path's own characters end:
+    // a letter's lowercase can be longer or shorter in UTF-8 (the Kelvin sign is `k`, `ẞ` is
+    // `ß`), so the base's length in bytes is not where the rest of the path starts.
+    let want: Vec<char> = b
+        .chars()
+        .flat_map(char::to_lowercase)
+        .chain(['/'])
+        .collect();
+    let mut matched = 0;
+    for (i, c) in p.char_indices() {
+        for l in c.to_lowercase() {
+            if want.get(matched) != Some(&l) {
+                return None;
+            }
+            matched += 1;
+        }
+        if matched == want.len() {
+            return Some(p[i + c.len_utf8()..].to_string());
+        }
+    }
+    None
 }
 
 /// When this run made its first test folder: a fake CLI's log written before is an earlier run's.
@@ -396,6 +414,28 @@ mod tests {
             "README.md"
         );
         assert_eq!(relative_slash("C:/code/app", "D:/other/x"), "D:/other/x");
+    }
+
+    #[test]
+    fn relative_paths_whatever_the_length_of_their_letters_in_lowercase() {
+        // The Kelvin sign (3 bytes) is `k` (1 byte) in lowercase, `ẞ` (3 bytes) is `ß` (2 bytes).
+        let rel = |base, path| strip_base(base, path);
+        assert_eq!(
+            rel("C:/code/\u{212A}elvin", "C:/code/kelvin/src/a.ts").as_deref(),
+            Some("src/a.ts")
+        );
+        assert_eq!(
+            rel("C:/code/kelvin", "C:/code/\u{212A}elvin/src/a.ts").as_deref(),
+            Some("src/a.ts")
+        );
+        assert_eq!(
+            rel("C:/Stra\u{1E9E}e", "c:/straße/x.ts").as_deref(),
+            Some("x.ts")
+        );
+        // The base's length in bytes falls inside a character of the path.
+        assert_eq!(rel("C:/\u{212A}", "C:/k/€€.ts").as_deref(), Some("€€.ts"));
+        assert_eq!(rel("C:/code/kelvin", "C:/code/kelvinx/a.ts"), None);
+        assert_eq!(rel("C:/code/kelvin", "C:/code/kelvin"), None);
     }
 
     #[cfg(unix)]
