@@ -46,7 +46,11 @@
   <div class="card error">
     <div class="title"><span class="dot" style="width:8px;height:8px;background:var(--del)"></span>{t('conv.turn.failed')}</div>
     {#if resumeFailed}
-      <pre class="err">{t('accounts.resume.failed', { account: accountName(resumeFailed), error: item.error ?? '—' })}</pre>
+      <!-- The sentence closes with its own period: an error that ends with one does not make two. -->
+      <pre class="err">{t('accounts.resume.failed', {
+          account: accountName(resumeFailed),
+          error: item.error?.trimEnd().replace(/\.+$/, '') || '—',
+        })}</pre>
       {#if before?.active}
         <div class="resume">
           <button class="btn small" onclick={() => app.run(api.backToPreviousAccount(agent.id))}

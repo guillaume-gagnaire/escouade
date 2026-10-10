@@ -175,6 +175,19 @@ describe('TurnCard of a resume that failed on the other account', () => {
     expect(backend.called('back_to_previous_account')[0].args).toEqual({ agentId: 'a1' });
   });
 
+  it('does not double the period of an error that ends with one, nor of an ellipsis', () => {
+    const a = failed();
+    const done = render(TurnCard, { item: turn({ limited: false, error: 'Invalid API key. \n' }), agent: a, last: true });
+    expect(screen.getByText('La reprise sur Pro a échoué : Invalid API key.')).toBeInTheDocument();
+    done.unmount();
+    const more = render(TurnCard, { item: turn({ limited: false, error: 'Could not connect...' }), agent: a, last: true });
+    expect(screen.getByText('La reprise sur Pro a échoué : Could not connect.')).toBeInTheDocument();
+    more.unmount();
+    // Another end is left as it is: the sentence closes with its own period.
+    render(TurnCard, { item: turn({ limited: false, error: 'Quoi ?' }), agent: a, last: true });
+    expect(screen.getByText('La reprise sur Pro a échoué : Quoi ?.')).toBeInTheDocument();
+  });
+
   it('is the card of an agent that came from nowhere as it always was', () => {
     const a = failed({ movedFrom: null });
     render(TurnCard, { item: turn({ limited: false, error: 'Rate limit reached' }), agent: a, last: true });
