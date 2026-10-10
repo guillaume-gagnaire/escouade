@@ -3,6 +3,7 @@
   import { accountName, quotaRows } from '../lib/accounts';
   import { trapFocus } from '../lib/focus';
   import { t } from '../lib/i18n';
+  import { estimateHint, fSpentUsd } from '../lib/spend';
   import { app } from '../lib/state.svelte';
   import QuotaMeter from './QuotaMeter.svelte';
 
@@ -67,6 +68,9 @@
         <span class="name">{accountName(r.account)}</span>
         {#if r.current}<span class="tag cur">{t('accounts.panel.current')}</span>{/if}
         {#if r.over}<span class="tag over">{t('accounts.panel.over')}</span>{/if}
+        <span class="today" title={r.today.estimated ? estimateHint() : undefined}
+          >{t('accounts.panel.today', { amount: fSpentUsd(r.today) })}</span
+        >
       </div>
       {#if r.reasons.length}<div class="why">{r.reasons.join(' · ')}</div>{/if}
       <!-- An account that is not signed in and was never read has no windows to show. -->
@@ -143,6 +147,13 @@
   .over {
     color: var(--wait);
     background: var(--wait-soft);
+  }
+  .today {
+    margin-left: auto;
+    font-size: 11.5px;
+    color: var(--muted);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
   }
   .why {
     color: var(--muted);

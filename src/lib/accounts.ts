@@ -94,6 +94,15 @@ export interface QuotaRow {
   over: boolean;
   /** Why it is dimmed: switched off, not signed in, sign-in expired. */
   reasons: string[];
+  /** What its turns cost today, the ones running now included (an estimate): the status bar's total, account by account. */
+  today: { cost: number; estimated: boolean };
+}
+
+/** What the turns running on the account's agents cost so far: archived agents too, as the status bar counts them. */
+function liveCostOf(id: string): number {
+  return Object.values(app.agents)
+    .filter((a) => accountOf(a) === id)
+    .reduce((sum, a) => sum + (a.liveCost ?? 0), 0);
 }
 
 /** Every account for the panel of the quotas: the current one first, the others in the order of the settings. */
@@ -113,7 +122,9 @@ export function quotaRows(now: number): QuotaRow[] {
     const threshold = app.settings.quotaPause;
     const over =
       account.active && (overThreshold(usage?.fiveHour ?? null, threshold, now) || overThreshold(usage?.sevenDay ?? null, threshold, now));
-    return { account, usage, current: account.id === app.usage.current, over, reasons };
+    const live = liveCostOf(account.id);
+    const today = { cost: (usage?.todayCost ?? 0) + live, estimated: live > 0 };
+    return { account, usage, current: account.id === app.usage.current, over, reasons, today };
   });
   return [...rows.filter((r) => r.current), ...rows.filter((r) => !r.current)];
 }

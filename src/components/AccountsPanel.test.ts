@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { setLang } from '../lib/i18n';
 import { app } from '../lib/state.svelte';
-import { resetApp } from '../test/ipc';
+import { agent, resetApp } from '../test/ipc';
 import type { Account, AccountUsage, RateWindow } from '../lib/types';
 import AccountsPanel from './AccountsPanel.svelte';
 
@@ -127,6 +127,29 @@ describe('AccountsPanel', () => {
     expect(pro).not.toHaveClass('off');
   });
 
+  it('says what each account spent today, on the line of its name', () => {
+    app.usage.accounts = [read('principal', { todayCost: 1.2 }), read('pro', { todayCost: 0.5 }), read('team', { todayCost: 0 })];
+    render(AccountsPanel, { onclose: () => {} });
+    expect(group('Principal')).toHaveTextContent("Aujourd'hui : 1,20 $");
+    expect(group('Pro')).toHaveTextContent("Aujourd'hui : 0,50 $");
+    // An account switched off or that spent nothing says so too, rather than leave a hole.
+    expect(group('Équipe')).toHaveTextContent("Aujourd'hui : 0,00 $");
+    const head = within(group('Pro')).getByText("Aujourd'hui : 0,50 $").parentElement!;
+    expect(head).toHaveClass('head');
+    expect(head).toHaveTextContent('Pro');
+  });
+
+  it('says it for an account that was never read, and counts the turn running on an agent as an estimate', () => {
+    app.usage.accounts = [read('principal', { todayCost: 1.2 })];
+    app.agents = { a1: agent({ id: 'a1', account: 'pro', liveCost: 0.3 }) };
+    render(AccountsPanel, { onclose: () => {} });
+    // Pro has no reading yet, but its agent is running.
+    expect(group('Pro')).toHaveTextContent("Aujourd'hui : ≈ 0,30 $");
+    expect(within(group('Pro')).getByText(/Aujourd'hui/)).toHaveAttribute('title', expect.stringContaining('Estimation'));
+    expect(group('Principal')).toHaveTextContent("Aujourd'hui : 1,20 $");
+    expect(within(group('Principal')).getByText(/Aujourd'hui/)).not.toHaveAttribute('title');
+  });
+
   it('takes the focus when it opens', () => {
     render(AccountsPanel, { onclose: () => {} });
     expect(panel()).toHaveFocus();
@@ -187,5 +210,13 @@ describe('AccountsPanel', () => {
     expect(pro).toHaveTextContent('42%');
     expect(pro).toHaveTextContent('reset 4d 12h');
     expect(within(pro).getByRole('meter', { name: '7-day quota' })).toBeInTheDocument();
+  });
+
+  it('writes what was spent today in English', () => {
+    app.usage.accounts = [read('principal', { todayCost: 1.2 }), read('pro', { todayCost: 0.5 })];
+    setLang('en');
+    render(AccountsPanel, { onclose: () => {} });
+    expect(screen.getByRole('group', { name: 'Main' })).toHaveTextContent('Today: $1.20');
+    expect(screen.getByRole('group', { name: 'Pro' })).toHaveTextContent('Today: $0.50');
   });
 });

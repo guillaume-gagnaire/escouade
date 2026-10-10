@@ -382,6 +382,7 @@ Ce qu’Escouade dit à Claude ou lui fait écrire suit « Langue des textes ré
 | Tous les comptes | All accounts | le choix en haut des statistiques (avec plusieurs comptes) : les totaux de tous les comptes, ou ceux d’un seul |
 | Par compte | By account | les statistiques des comptes côte à côte : « Tokens », « Coût », « Tours » → “Turns” (les réponses de Claude), « Agents » |
 | Compte supprimé (ancien) | Deleted account (ancien) | un compte que les réglages ne listent plus, dont les tours restent dans les statistiques ; l’identifiant entre parenthèses |
+| Aujourd'hui : 1,20 $ | Today: $1.20 | ce qu’un compte a dépensé aujourd’hui, dans le panneau des quotas (« ≈ » tant qu’un tour tourne) |
 
 ## M — mcp
 

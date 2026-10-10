@@ -103,5 +103,7 @@ export default {
     title: 'Quotas des comptes Claude',
     current: 'en cours',
     over: 'au-delà du seuil de pause',
+    /** What the account's turns cost today; `{amount}`: « 1,20 $ » (« ≈ 1,20 $ » while a turn is running). */
+    today: "Aujourd'hui : {amount}",
   },
 } as const satisfies Tree;

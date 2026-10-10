@@ -91,5 +91,6 @@ export default defineZone('accounts', {
     title: 'Claude accounts quota',
     current: 'current',
     over: 'past the pause threshold',
+    today: 'Today: {amount}',
   },
 });

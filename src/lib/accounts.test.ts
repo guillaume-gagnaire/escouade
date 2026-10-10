@@ -181,6 +181,28 @@ describe('the quota of each account', () => {
     });
   });
 
+  it('gives what each account spent today, with the turns running on its agents as an estimate', () => {
+    app.usage.accounts = [read('principal', { todayCost: 1.2 }), read('pro', { todayCost: 0.5 })];
+    app.agents = {
+      a1: agent({ id: 'a1', account: 'pro', liveCost: 0.3 }),
+      a2: agent({ id: 'a2', account: 'principal' }),
+      // On an account the settings no longer list: the backend takes it for Principal's.
+      a3: agent({ id: 'a3', account: 'parti', liveCost: 0.1 }),
+      // Archived: its turn is still running, as the status bar counts it.
+      a4: agent({ id: 'a4', account: 'pro', liveCost: 0.2, archived: true }),
+    };
+    const today = Object.fromEntries(quotaRows(NOW).map((r) => [r.account.id, r.today]));
+    expect(today.principal.cost).toBeCloseTo(1.3);
+    expect(today.principal.estimated).toBe(true);
+    expect(today.pro.cost).toBeCloseTo(1.0);
+    expect(today.pro.estimated).toBe(true);
+    // Not read yet, nothing running: nothing spent, nothing estimated.
+    expect(today.team).toEqual({ cost: 0, estimated: false });
+    // Together they are what the status bar says (the total and every running turn).
+    app.usage.todayCost = 1.7;
+    expect(Object.values(today).reduce((sum, t) => sum + t.cost, 0)).toBeCloseTo(app.usage.todayCost + app.liveCost);
+  });
+
   it('says it in the language of the interface', () => {
     app.usage.accounts = [
       read('principal', { connected: false, reason: 'Not signed in' }),
