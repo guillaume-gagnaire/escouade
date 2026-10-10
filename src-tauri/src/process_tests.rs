@@ -5,7 +5,7 @@ use crate::agent::{AgentHandle, AgentRt, Effects};
 use crate::board::TurnEnd;
 use crate::claude::{ClaudeProcess, SpawnOpts};
 use crate::core::claude_args;
-use crate::model::{AgentMeta, AgentStatus};
+use crate::model::{AgentMeta, AgentStatus, RateWindow};
 use serde_json::{json, Value};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -54,16 +54,38 @@ fn spawn_recording(
     log: &std::path::Path,
     ends: Arc<parking_lot::Mutex<Vec<TurnEnd>>>,
 ) -> Arc<ClaudeProcess> {
+    spawn_with(h, log, None, ends, Arc::default())
+}
+
+/// What a launch of the fake CLI saw: its turns' ends, the quota windows it told.
+type Rates = Arc<parking_lot::Mutex<Vec<(Option<RateWindow>, Option<RateWindow>)>>>;
+
+/// Like `spawn_recording`, with `CLAUDE_CONFIG_DIR` set to `config_dir` when given (an account
+/// of its own), and the quota windows it tells noted in `rates`.
+fn spawn_with(
+    h: &AgentHandle,
+    log: &std::path::Path,
+    config_dir: Option<&std::path::Path>,
+    ends: Arc<parking_lot::Mutex<Vec<TurnEnd>>>,
+    rates: Rates,
+) -> Arc<ClaudeProcess> {
     let (opts, gen) = {
         let mut rt = h.lock();
         rt.gen += 1;
         let mut args = vec![fixture().to_string_lossy().to_string()];
         args.extend(claude_args(&rt.meta));
+        let mut env = vec![("FAKE_CLAUDE_LOG".into(), log.to_string_lossy().to_string())];
+        if let Some(dir) = config_dir {
+            env.push((
+                "CLAUDE_CONFIG_DIR".into(),
+                dir.to_string_lossy().to_string(),
+            ));
+        }
         let opts = SpawnOpts {
             program: PathBuf::from("node"),
             cwd: rt.meta.cwd.clone(),
             args,
-            env: vec![("FAKE_CLAUDE_LOG".into(), log.to_string_lossy().to_string())],
+            env,
         };
         (opts, rt.gen)
     };
@@ -77,6 +99,7 @@ fn spawn_recording(
                 let mut fx = Effects::default();
                 rt.handle_frame(&frame, &mut fx);
                 ends1.lock().extend(fx.turn_end);
+                rates.lock().extend(fx.rate);
             }
         },
         move |code, stderr| {
@@ -395,6 +418,164 @@ async fn a_session_claude_code_does_not_know_still_ends_the_turn_sent_to_it() {
     let rt = h.lock();
     assert_eq!(rt.meta.status, AgentStatus::Done);
     assert_eq!(rt.meta.session_id, None);
+}
+
+/// The `projects/*/<session>.jsonl` of a Claude Code configuration folder.
+fn session_files(config_dir: &std::path::Path, session: &str) -> Vec<PathBuf> {
+    std::fs::read_dir(config_dir.join("projects"))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path().join(format!("{session}.jsonl")))
+        .filter(|p| p.is_file())
+        .collect()
+}
+
+fn logged(log: &std::path::Path) -> Vec<Value> {
+    std::fs::read_to_string(log)
+        .unwrap_or_default()
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect()
+}
+
+async fn wait_ends(ends: &parking_lot::Mutex<Vec<TurnEnd>>, n: usize) {
+    for _ in 0..500 {
+        if ends.lock().len() >= n {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    panic!("timed out waiting for {n} turn ends: {:?}", ends.lock());
+}
+
+#[tokio::test]
+async fn an_account_keeps_its_sessions_in_its_folder_and_resumes_them_from_there() {
+    let dir = temp_dir("account-sessions");
+    let (log, config) = (dir.join("log.jsonl"), dir.join("pro"));
+    let h = new_agent(&dir);
+    let proc = spawn_with(&h, &log, Some(&config), Arc::default(), Arc::default());
+    send(&h, &proc, "Premier");
+    wait_for(&h, "first turn", |rt| rt.meta.status == AgentStatus::Done).await;
+    let session = h.lock().meta.session_id.clone().unwrap();
+    // Where Claude Code keeps it: in a folder named after the project's, every character but
+    // letters and digits a dash.
+    let files = session_files(&config, &session);
+    assert_eq!(files.len(), 1, "{files:?}");
+    let folder = files[0].parent().unwrap().file_name().unwrap();
+    let ours = format!("ccm-test-account-sessions-{}", std::process::id())
+        .replace(|c: char| !c.is_ascii_alphanumeric(), "-");
+    assert!(folder.to_string_lossy().ends_with(&ours), "{folder:?}");
+    assert_eq!(
+        logged(&log)[0]["configDir"],
+        json!(config.to_string_lossy())
+    );
+
+    // A new process of the same account finds it.
+    let old = h.lock().detach().expect("a running process");
+    old.close_input();
+    let proc = spawn_with(&h, &log, Some(&config), Arc::default(), Arc::default());
+    send(&h, &proc, "Second");
+    wait_for(&h, "second turn", |rt| {
+        rt.meta.status == AgentStatus::Done
+            && rt
+                .conv
+                .items()
+                .iter()
+                .filter(|i| i["kind"] == "turn")
+                .count()
+                == 2
+    })
+    .await;
+    assert_eq!(h.lock().meta.session_id.as_deref(), Some(session.as_str()));
+    assert!(launches(&log)[1].contains(&format!("--resume={session}")));
+    let texts: Vec<Value> = items(&h)
+        .into_iter()
+        .filter(|i| i["kind"] == "text")
+        .map(|i| i["text"].clone())
+        .collect();
+    assert_eq!(
+        texts,
+        [
+            json!("Bonjour, tu as dit : Premier"),
+            json!("Bonjour, tu as dit : Second")
+        ]
+    );
+}
+
+#[tokio::test]
+async fn a_session_absent_from_the_accounts_folder_is_not_found() {
+    let dir = temp_dir("account-elsewhere");
+    let h = new_agent(&dir);
+    {
+        // A session kept in another account's folder, and a message waiting for it.
+        let mut rt = h.lock();
+        rt.meta.session_id = Some("sess-ailleurs".into());
+        rt.push_user("u1", "Bonjour", 0, &[], &mut Effects::default());
+    }
+    let ends = Arc::<parking_lot::Mutex<Vec<TurnEnd>>>::default();
+    let log = dir.join("log.jsonl");
+    spawn_with(
+        &h,
+        &log,
+        Some(&dir.join("pro")),
+        ends.clone(),
+        Arc::default(),
+    );
+    wait_ends(&ends, 1).await;
+    assert_eq!(
+        *ends.lock(),
+        vec![TurnEnd::Error(
+            "Session Claude introuvable : une nouvelle session sera démarrée au prochain message."
+                .into()
+        )]
+    );
+    assert_eq!(h.lock().meta.session_id, None);
+}
+
+#[tokio::test]
+async fn an_accounts_fake_limit_stops_every_turn_at_the_limit_at_100_percent() {
+    let dir = temp_dir("account-limit");
+    let config = dir.join("pro");
+    std::fs::create_dir_all(&config).unwrap();
+    std::fs::write(config.join("fake-limit"), "").unwrap();
+    let h = new_agent(&dir);
+    let (ends, rates) = (
+        Arc::<parking_lot::Mutex<Vec<TurnEnd>>>::default(),
+        Rates::default(),
+    );
+    let proc = spawn_with(
+        &h,
+        &dir.join("log.jsonl"),
+        Some(&config),
+        ends.clone(),
+        rates.clone(),
+    );
+    let five_hour = |usage: Value| usage["rate_limits"]["five_hour"]["utilization"].clone();
+    let usage = proc
+        .control(json!({ "subtype": "get_usage" }), Duration::from_secs(10))
+        .await
+        .unwrap();
+    assert_eq!(five_hour(usage), json!(100));
+    send(&h, &proc, "Bonjour");
+    wait_ends(&ends, 1).await;
+    assert_eq!(*ends.lock(), vec![TurnEnd::Limited]);
+    let told = rates.lock().clone();
+    assert_eq!(told.len(), 1, "{told:?}");
+    assert_eq!(told[0].0.map(|w| w.pct), Some(100.0));
+
+    // The file gone, the account has quota again.
+    std::fs::remove_file(config.join("fake-limit")).unwrap();
+    send(&h, &proc, "Encore");
+    wait_ends(&ends, 2).await;
+    assert!(matches!(ends.lock()[1], TurnEnd::Finished(_)));
+    let pct = rates.lock()[1].0.map(|w| w.pct).unwrap();
+    assert!((pct - 12.0).abs() < 1e-9, "{pct}");
+    let usage = proc
+        .control(json!({ "subtype": "get_usage" }), Duration::from_secs(10))
+        .await
+        .unwrap();
+    assert_eq!(five_hour(usage), json!(12));
 }
 
 #[tokio::test]
