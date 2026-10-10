@@ -534,6 +534,37 @@ async fn a_session_absent_from_the_accounts_folder_is_not_found() {
 }
 
 #[tokio::test]
+async fn a_session_kept_under_another_project_folder_of_the_account_is_resumed() {
+    // A copy of an agent made in a worktree of its own resumes the original's session from
+    // another folder: Claude Code finds it among all the account's projects.
+    let dir = temp_dir("account-other-folder");
+    let config = dir.join("pro");
+    let elsewhere = config.join("projects").join("C--Users-x-ailleurs");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    std::fs::write(
+        elsewhere.join("sess-ailleurs.jsonl"),
+        "{\"type\":\"user\",\"sessionId\":\"sess-ailleurs\"}\n",
+    )
+    .unwrap();
+    let h = new_agent(&dir);
+    h.lock().meta.session_id = Some("sess-ailleurs".into());
+    let (ends, log) = (
+        Arc::<parking_lot::Mutex<Vec<TurnEnd>>>::default(),
+        dir.join("log.jsonl"),
+    );
+    let proc = spawn_with(&h, &log, Some(&config), ends.clone(), Arc::default());
+    send(&h, &proc, "Bonjour");
+    wait_ends(&ends, 1).await;
+    assert!(
+        matches!(ends.lock()[0], TurnEnd::Finished(_)),
+        "{:?}",
+        ends.lock()
+    );
+    assert!(launches(&log)[0].contains(&"--resume=sess-ailleurs".to_string()));
+    assert_eq!(h.lock().meta.session_id.as_deref(), Some("sess-ailleurs"));
+}
+
+#[tokio::test]
 async fn an_accounts_fake_limit_stops_every_turn_at_the_limit_at_100_percent() {
     let dir = temp_dir("account-limit");
     let config = dir.join("pro");

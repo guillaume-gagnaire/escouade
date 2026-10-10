@@ -12,9 +12,10 @@
 // read on stdin to <log>.stdin.jsonl.
 // With CLAUDE_CONFIG_DIR (a Claude account of its own), it keeps its sessions where Claude Code
 // does, in <dir>/projects/<cwd with non-alphanumerics replaced by ->/<session id>.jsonl (each user
-// message and assistant entry on a line), and a --resume of a session absent from there fails as an
-// unknown one does; while a <dir>/fake-limit file is there, every turn is stopped by the usage limit
-// (as "limite") and its quota windows say 100 % (rate_limit_event, get_usage). Without it, none of this.
+// message and assistant entry on a line), and a --resume of a session absent from every
+// <dir>/projects/* folder fails as an unknown one does; while a <dir>/fake-limit file is there, every
+// turn is stopped by the usage limit (as "limite") and its quota windows say 100 % (rate_limit_event,
+// get_usage). Without it, none of this.
 // Started with --append-system-prompt (a ticket's protocol; not what a copy of an agent is told of
 // its new folder, « Cette conversation a été copiée… »), it plays the ticket's agent: it writes
 // <key>.txt ("Boucle n") in its folder and ends each turn with an ```escouade report (criteria and
@@ -60,6 +61,13 @@ fs.appendFileSync(
 // The account's own folder, if it has one (set empty: as if it were not).
 const configDir = process.env.CLAUDE_CONFIG_DIR || null;
 const sessionFile = (id) => path.join(configDir, 'projects', process.cwd().replace(/[^a-zA-Z0-9]/g, '-'), `${id}.jsonl`);
+// Claude Code finds a session to resume in any project folder of the account (a copy made in a
+// worktree of its own resumes the original's from another one).
+const sessionKept = (id) => {
+  const projects = path.join(configDir, 'projects');
+  const folders = fs.existsSync(projects) ? fs.readdirSync(projects) : [];
+  return folders.some((f) => fs.existsSync(path.join(projects, f, `${id}.jsonl`)));
+};
 // Out of quota, for as long as the file is there.
 const limited = () => configDir !== null && fs.existsSync(path.join(configDir, 'fake-limit'));
 
@@ -138,7 +146,7 @@ if (argv.includes('-p') && argv.some((a) => a.includes('[sourd]'))) {
 function startSession() {
   const resume = argv.find((a) => a.startsWith('--resume='))?.slice('--resume='.length);
   // A session of another account (or none) is not in this one's folder.
-  if (resume?.startsWith('missing') || (resume && configDir && !fs.existsSync(sessionFile(resume)))) {
+  if (resume?.startsWith('missing') || (resume && configDir && !sessionKept(resume))) {
     process.stderr.write(`No conversation found with session ID: ${resume}\n`);
     process.exit(1);
   }

@@ -4104,6 +4104,22 @@ async fn an_agent_on_a_second_account_runs_with_its_folder_and_one_on_principal_
 }
 
 #[tokio::test]
+async fn an_agent_on_a_second_account_goes_through_the_proxy_with_its_folder() {
+    let h = harness("accounts-proxy");
+    let (p, r) = h.project(false).await;
+    let pro = second_account(&h);
+    h.core.settings.write().proxy_url = "http://proxy.corp:3128".into();
+    let id = agent_on(&h, &p, "pro").await.id;
+    h.turn(&id, "Bonjour").await;
+    // Its folder is added to the network settings, neither taking the other's place.
+    let last = h.launch_log(&r).last().cloned().unwrap();
+    assert_eq!(
+        (&last["proxy"], &last["configDir"]),
+        (&json!("http://proxy.corp:3128"), &json!(pro.config_dir))
+    );
+}
+
+#[tokio::test]
 async fn an_agent_resumes_its_session_on_its_account_after_its_process_restarts() {
     let h = harness("accounts-resume");
     let (p, r) = h.project(false).await;
