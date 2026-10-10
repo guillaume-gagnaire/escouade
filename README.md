@@ -8,20 +8,30 @@ Escouade s'appelait auparavant « Claude Code Manager » : la mise à jour rempl
 
 ## Fonctionnalités
 
+Cette liste décrit la version 1.6, pas encore publiée : la dernière release est la 1.5.4. Ce qui change d'une version à l'autre est dans le [journal des versions](CHANGELOG.md).
+
 - **Projets en onglets** : compteur de modifications git non commitées, pastille quand un agent attend une réponse, couleur par projet (qui teinte toute l'interface), réordonnables par glisser-déposer.
-- **Agents** : une conversation Claude Code par agent, nommée automatiquement d'après la première demande. Modèle (Fable, Opus, Sonnet, Haiku, toujours le plus récent que connaît Claude Code, affiché avec sa version : « Sonnet 5.5 »), effort (jusqu'à `max`) et mode de permission (Auto, Demander, Plan, Édits auto, Bypass) modifiables en cours de conversation. Archivage, suppression, renommage.
-- **Chat natif** : markdown avec coloration syntaxique, réflexion repliable, appels d'outils compacts et dépliables (diffs, sorties de commandes, sous-agents). Questions de Claude et demandes d'autorisation sous forme de cartes cliquables (ou réponse libre). Images (coller/glisser), autocomplétion `@fichier` et `/commande`, messages envoyés pendant que Claude travaille (il en tient compte dès sa prochaine étape, comme dans Claude Code), interruption par `Échap`.
-- **Notifications** : l'onglet du projet et la carte de l'agent clignotent (ambre : question, vert : terminé, rouge : erreur) jusqu'à ce que tu affiches l'agent ; carillon, notification système (Windows : cliquable), clignotement de la barre des tâches (macOS : rebond de l'icône du Dock) et badge dans la zone de notification / la barre des menus quand un agent pose une question ou termine.
-- **Git** : panneau des fichiers non commités (par agent ou pour tout le projet), visionneuse de diff (unifié / côte à côte, un choix qui s'applique aussi aux diffs de la conversation), commit rédigé par l'agent lui-même, **git graph** de tout le dépôt avec la branche de l'agent mise en avant (onglet « Historique », clic sur un commit pour son diff). Disposition **moitié / moitié** au choix : la conversation à gauche, les fichiers modifiés et leur diff à droite, rafraîchis pendant que l'agent travaille. Option **un worktree par agent** avec merge (ou squash) dans la branche du projet et nettoyage.
-- **Éditeur intégré** : parcourir et modifier les fichiers du projet ou du worktree d'un agent sans quitter l'app (arborescence, onglets, coloration syntaxique, recherche, lignes modifiées marquées dans la marge, `Ctrl+S` pour enregistrer). Il s'ouvre depuis l'en-tête d'un agent, les fichiers non commités ou les fichiers édités dans la conversation (une modification s'ouvre à sa première ligne modifiée), et prévient quand un fichier ouvert change sur le disque pendant que l'agent travaille.
-- **Terminaux** : vrais terminaux (ConPTY ou pty + xterm.js) PowerShell 7, Git Bash et WSL sous Windows, zsh, bash et fish sous macOS, avec l'autocomplétion native du shell.
+- **Agents** : une conversation Claude Code par agent, nommée automatiquement d'après la première demande. Modèle (Fable, Opus, Sonnet, Haiku, toujours le plus récent que connaît Claude Code, affiché avec sa version : « Sonnet 5.5 »), effort (jusqu'à `max`) et mode de permission (Auto, Demander, Plan, Édits auto, Bypass) modifiables en cours de conversation. Archivage, suppression, renommage. « Dupliquer la conversation » crée une copie de l'agent qui reprend tout son contexte dans une nouvelle session (et son propre worktree), sans toucher à l'original.
+- **Vue d'ensemble** (`Ctrl+Shift+A`) : tous les agents de tous les projets sur une page, ceux qui attendent ta réponse en tête ; une autorisation qui s'y lit en entier s'accorde ou se refuse sur place.
+- **Chat natif** : markdown avec coloration syntaxique, réflexion repliable, appels d'outils compacts et dépliables (diffs, sorties de commandes, sous-agents). Questions de Claude et demandes d'autorisation sous forme de cartes cliquables (ou réponse libre), auxquelles tu réponds aussi au clavier (`Ctrl+Entrée`, `Alt+1` … `Alt+9`). Images (coller/glisser), autocomplétion `@fichier` et `/commande`, messages envoyés pendant que Claude travaille (il en tient compte dès sa prochaine étape, comme dans Claude Code), interruption par `Échap`. Le texte que tu commences est gardé d'un redémarrage à l'autre, chaque agent se rouvre là où tu l'avais laissé, et une longue conversation n'affiche que ses 80 derniers éléments (« Afficher les N précédents » pour remonter).
+- **Rechercher dans les conversations** (`Ctrl+K`) : dans ce que toi et tes agents avez écrit, les commandes, les fichiers et les sorties d'outils, sans tenir compte de la casse ni des accents ; un résultat ouvre l'agent sur le message.
+- **Notifications** : l'onglet du projet et la carte de l'agent clignotent (ambre : question, vert : terminé, rouge : erreur) jusqu'à ce que tu affiches l'agent ; carillon, notification système (Windows : cliquable), clignotement de la barre des tâches (macOS : rebond de l'icône du Dock) et badge dans la zone de notification / la barre des menus quand un agent pose une question ou termine. La notification dit de quoi il s'agit (« Autoriser Bash : npm test ? », la question, la première ligne de la réponse), et « Me prévenir pour » choisit les types qui sonnent.
+- **Git** : panneau des fichiers non commités (par agent ou pour tout le projet, worktrees compris), visionneuse de diff (unifié / côte à côte, un choix qui s'applique aussi aux diffs de la conversation ; un long diff se déplie par tranches), commit rédigé par l'agent lui-même ou commit direct avec un message proposé par Haiku, que tu relis avant de cliquer, **git graph** de tout le dépôt avec la branche de l'agent mise en avant (onglet « Historique », clic sur un commit pour son diff). Disposition **moitié / moitié** au choix : la conversation à gauche, les fichiers modifiés et leur diff à droite, rafraîchis pendant que l'agent travaille. Option **un worktree par agent**, avec les fichiers `.env*` du projet copiés et des commandes de préparation (installer les dépendances…) dont tu suis la sortie en direct, puis merge (ou squash) dans la branche de base de l'agent et nettoyage.
+- **Éditeur intégré** : parcourir et modifier les fichiers du projet ou du worktree d'un agent sans quitter l'app (arborescence, onglets, coloration syntaxique, recherche, lignes modifiées marquées dans la marge, `Ctrl+S` pour enregistrer). Il s'ouvre depuis l'en-tête d'un agent, les fichiers non commités ou les fichiers édités dans la conversation (une modification s'ouvre à sa première ligne modifiée), et prévient quand un fichier ouvert change sur le disque pendant que l'agent travaille, avec « Comparer » pour voir ce que le disque a de différent avant de choisir. Et aussi :
+  - `Ctrl+clic` ou `F12` suit un import, un lien ou un chemin, et va à la définition d'un nom, sans serveur de langage ; `Alt+←` revient ;
+  - `Ctrl+P` ouvre un fichier par son nom, `Ctrl+Shift+F` cherche dans tous les fichiers, `Shift+F12` trouve les références d'un nom ;
+  - « Voir les changements » montre dans le texte ce qui a changé depuis le dernier commit, et « Annuler ce bloc » le remet ;
+  - au clic droit dans l'arborescence : renommer (`F2`), supprimer vers la corbeille (`Suppr`), créer un dossier, ouvrir un terminal ici ; les fichiers `.env*` copiés dans les worktrees y apparaissent en grisé.
+- **Terminaux** : vrais terminaux (ConPTY ou pty + xterm.js) PowerShell 7, Git Bash et WSL sous Windows, zsh, bash et fish sous macOS, avec l'autocomplétion native du shell. Un terminal s'ouvre aussi dans le worktree d'un agent ou dans un dossier de l'éditeur.
 - **Lancement du projet** : par projet, une liste de commandes (nom, ligne de commande, shell, sous-dossier) à lancer une par une ou toutes ensemble. Chacune tourne dans son propre terminal, en lecture seule, et garde son log d'un lancement à l'autre. Statut en direct (en cours, arrêté, terminé, planté avec le code de sortie et une notification) ; lancer, relancer, stopper. « ✦ Remplir automatiquement » laisse Claude lire le projet (sans rien modifier) et proposer ces commandes, à relire avant d'enregistrer.
+- **Kanban** : des tickets avec leurs critères d'acceptation, que des agents prennent seuls (pilote auto, de 1 à 6 en parallèle), chacun dans son worktree, en bouclant jusqu'à les atteindre ; un ticket peut en attendre d'autres, et le pilote auto se met en pause près de la limite de tes quotas. « ▶ Tester » lance la fonctionnalité sur des ports à part, après t'avoir montré la recette écrite par l'agent ; la validation commite, merge, ouvre une pull request ou pousse.
+- **Intégrations** : importe tes tickets Jira, Trello ou GitHub Issues dans le Kanban, avec leurs critères ; leur statut et des commentaires suivent, et une synchro ratée est retentée. Les jetons restent dans le trousseau du système.
 - **Barre de statut** : agents actifs, en attente et terminés, quota de session 5 h (avec délai avant réinitialisation), quota hebdomadaire, coût du jour. Tokens et coût montent en direct pendant que Claude travaille (estimation « ≈ » d'après les tarifs publics), puis prennent le chiffre exact de Claude Code à la fin du tour.
 - **Statistiques** : tokens (entrée, cache, sortie) par jour, semaine ou mois, coût global, coût moyen par prompt, répartition par projet, par modèle, par agent et par ticket.
 - **Remote control** : clic droit sur un agent → « Activer le remote control ». Sa session devient accessible depuis claude.ai et l'app Claude sur mobile ; ce que tu y envoies s'affiche aussi dans l'app, et l'agent reste joignable tant que l'app tourne (même session après un redémarrage).
 - **Fermer la fenêtre ne coupe pas les agents** : l'app reste dans la zone de notification. Au redémarrage, chaque agent reprend sa session Claude (`--resume`). Les processus inactifs sont arrêtés après un délai réglable et reprennent automatiquement à la prochaine action.
-- **Proxy réseau** configurable (processus Claude, quotas, mises à jour, et optionnellement terminaux).
-- **Mises à jour automatiques** via les releases GitHub.
+- **Proxy réseau** configurable (processus Claude, quotas, intégrations, mises à jour, et optionnellement terminaux).
+- **Mises à jour silencieuses** via les releases GitHub : téléchargées en arrière-plan, installées sans fenêtre d'installeur, au redémarrage que tu choisis, ou d'elles-mêmes quand aucun agent ne travaille et que tout est enregistré.
 
 ## Prérequis
 
@@ -38,7 +48,7 @@ Sous macOS, une app lancée depuis le Finder ou le Dock ne reçoit pas le `PATH`
 
 **macOS** : télécharge le `.dmg` (universel, Apple Silicon et Intel) de la [dernière release](https://github.com/guillaume-gagnaire/escouade/releases/latest), ouvre-le et glisse Escouade dans Applications. Depuis la 1.5.4, l'app est signée avec un certificat Apple Developer ID et notarisée par Apple : macOS l'ouvre sans demander d'autorisation.
 
-Les versions suivantes s'installent depuis l'application (barre de statut → « Mise à jour disponible »).
+Les versions suivantes s'installent depuis l'application. Jusqu'à la 1.5.4, la barre de statut propose « Mise à jour disponible » ; à partir de la 1.6, la mise à jour se télécharge seule, la barre de statut affiche « Mise à jour X prête · Redémarrer », et l'app redémarre d'elle-même quand elle est au repos (réglage « Installer les mises à jour automatiquement », dans « À propos »).
 
 ## Données locales
 
@@ -48,7 +58,10 @@ Tout est stocké dans `~/.escouade/` (anciennement `~/.claude-code-manager/`, d�
 |---|---|
 | `settings.json` | réglages |
 | `state.json` | projets, agents, état de l'interface |
+| `integrations.json` | comptes Jira, Trello et GitHub, sans leurs jetons (dans le trousseau du système) |
+| `sync-queue.json` | synchros avec Jira, Trello ou GitHub qui attendent d'être retentées |
 | `conversations/<agent>.jsonl` | journal de chaque conversation |
+| `logs/<agent>-setup.log` | sortie complète de la dernière préparation du worktree d'un agent |
 | `stats.db` | statistiques (SQLite) |
 | `app.log` | journal de l'application |
 
@@ -63,16 +76,26 @@ Sous macOS, `Ctrl` devient `⌘` (sauf `Ctrl+Tab`, `⌘Tab` changeant d'applicat
 | `Ctrl+1` … `Ctrl+9` | aller au projet n |
 | `Ctrl+N` | nouvel agent |
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | agent suivant / précédent |
-| `Ctrl+J` | prochain agent en attente de réponse ou à voir (question, fin ou erreur pas encore vue) |
+| `Ctrl+J` | prochain agent en attente de réponse ou à voir (question, fin ou erreur pas encore vue), le curseur dans son champ de saisie |
+| `Ctrl+Shift+A` | vue d'ensemble de tous les agents (aussi depuis un terminal) |
+| `Ctrl+K` | rechercher dans les conversations (dans un terminal sous Windows, `Ctrl+K` reste au shell) |
+| `Ctrl+P` | ouvrir un fichier par son nom (`nom:42` pour la ligne 42 ; dans un terminal sous Windows, `Ctrl+P` reste au shell) |
 | `Ctrl+Entrée` / `Ctrl+Shift+Entrée` (dans la conversation) | autoriser / toujours autoriser la demande d'autorisation en attente (le texte tapé puis `Entrée` la refuse avec ce message) |
 | `Alt+1` … `Alt+9` (dans la conversation) | choisir l'option n de la question en attente (coche ou décoche pour un choix multiple) ; `Ctrl+Entrée` valide quand la réponse est complète |
 | `Ctrl+T` | nouveau terminal |
 | `Ctrl+S` (dans l'éditeur) | enregistrer le fichier |
+| `Ctrl+Shift+F` (dans l'éditeur) | rechercher dans tous les fichiers de la source |
+| `Ctrl+clic` / `F12` (dans l'éditeur) | aller à ce que désigne le mot : fichier importé, lien, chemin, définition |
+| `Shift+F12` (dans l'éditeur) | trouver les références du nom sous le curseur |
+| `Alt+←` / `Alt+→` (dans l'éditeur ; sous macOS `Ctrl+-` / `Ctrl+Shift+-`) | revenir là où tu étais avant un saut / y retourner (aussi les boutons « précédent » et « suivant » de la souris) |
+| `Alt+clic` (dans l'éditeur) | ajouter un curseur |
+| `F2` / `Suppr` (dans l'arborescence ; sous macOS `⌘⌫` pour supprimer) | renommer / supprimer vers la corbeille |
 | `Ctrl+Shift+B` | panneau des fichiers non commités (disposition classique ; toujours affiché dans l'autre) |
 | `Ctrl+Shift+L` | disposition classique / conversation et fichiers côte à côte |
 | `Ctrl+,` | réglages |
 | `Échap` (dans le champ de saisie) | interrompre Claude |
 | `↑` (champ vide) | rappeler le dernier message envoyé, pour le renvoyer tel quel ou modifié (l'original reste dans la conversation) |
+| `Alt+↑` / `Alt+↓` (réglages des worktrees) | monter / descendre une commande de préparation ou de démontage |
 
 ## Développement
 

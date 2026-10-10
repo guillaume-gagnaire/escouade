@@ -25,22 +25,26 @@ Une fenêtre qui pilote une escouade d'agents Claude Code : un onglet par projet
 ## Operating Context
 
 - Chaque agent est un process `claude` local, dans le dossier du projet ou dans son propre worktree ; conversations, projets et statistiques restent dans `~/.escouade/`.
-- Le réseau ne sert qu'à Claude Code lui-même, à la lecture des quotas et aux mises à jour de l'app.
+- Le réseau ne sert qu'à Claude Code lui-même, à la lecture des quotas, aux mises à jour de l'app et, si l'utilisateur les connecte, à Jira, Trello ou GitHub.
 - Statuts d'un agent : Prêt, En cours, Question, Terminé (et erreur). Un ticket passe par À faire, En cours (avec sa boucle, « boucle 2/5 »), À tester, Terminé.
 - Les raccourcis portent l'usage quotidien : Ctrl+N nouvel agent, Ctrl+J prochain agent qui attend, Ctrl+1…9 projets.
 
 ## Capabilities and Constraints
 
-- Projets en onglets, agents en parallèle avec leur modèle (Fable, Opus, Sonnet, Haiku), leur effort et leur mode de permission.
-- Chat natif : markdown, appels d'outils compacts, questions et autorisations en cartes cliquables.
-- Notifications : onglet et carte qui clignotent, carillon, notification système, barre des tâches ou Dock.
-- Git : fichiers non commités, diffs, git graph, commit rédigé par l'agent, merge ou squash d'un worktree.
-- Éditeur intégré et vrais terminaux (PowerShell, Git Bash, WSL ; zsh, bash, fish).
-- Commandes de lancement du projet, et lancements de test sur des ports réservés pour les agents de ticket.
-- Barre de statut et statistiques : tokens et coût en direct, quotas de session de 5 h et hebdomadaire.
-- Kanban (1.3) : des tickets avec critères d'acceptation, pris par des agents dans leur propre worktree, qui bouclent jusqu'à les atteindre puis passent « À tester » ; validation par merge, pull request ou push.
+- Projets en onglets, agents en parallèle avec leur modèle (Fable, Opus, Sonnet, Haiku), leur effort et leur mode de permission ; copie d'un agent qui reprend sa conversation (1.6).
+- Vue d'ensemble (1.6) : tous les agents de tous les projets, ceux qui attendent en tête, avec les autorisations qui s'accordent sur place.
+- Chat natif : markdown, appels d'outils compacts, questions et autorisations en cartes cliquables, auxquelles on répond aussi au clavier ; brouillons gardés, position de lecture retrouvée, longues conversations dessinées par tranches.
+- Recherche dans les conversations de tous les agents (1.6), sans tenir compte de la casse ni des accents.
+- Notifications : onglet et carte qui clignotent, carillon, notification système qui dit ce qui est demandé, barre des tâches ou Dock ; choix des types qui préviennent.
+- Git : fichiers non commités, diffs (les gros se déplient par tranches), git graph, commit rédigé par l'agent ou commit direct avec un message proposé par Haiku, merge ou squash d'un worktree dans sa branche de base.
+- Éditeur intégré : aller à une définition sans serveur de langage, recherche dans les fichiers, ouverture rapide d'un fichier, changements montrés dans le texte et comparaison avec la version du disque, renommer et supprimer (1.6) ; vrais terminaux (PowerShell, Git Bash, WSL ; zsh, bash, fish).
+- Commandes de lancement du projet (proposées par Claude), et lancements de test sur des ports réservés, dont la recette écrite par l'agent se lit et s'approuve avant de tourner.
+- Barre de statut et statistiques : tokens et coût en direct, quotas de session de 5 h et hebdomadaire, coût par agent et par ticket.
+- Kanban (1.3) : des tickets avec critères d'acceptation, pris par des agents dans leur propre worktree, qui bouclent jusqu'à les atteindre puis passent « À tester » ; validation par merge, pull request ou push. Dépendances entre tickets et pause du pilote auto près de la limite des quotas (1.6).
+- Intégrations (1.4) : import et synchro des tickets Jira, Trello et GitHub Issues, synchros ratées retentées, jetons dans le trousseau du système (1.6).
+- Mises à jour silencieuses (1.6) : téléchargées en arrière-plan, installées sans fenêtre, au redémarrage quand l'app est au repos.
 - Remote control depuis claude.ai et l'app Claude sur mobile.
-- Pas encore de Linux. Pas encore signé avec un certificat Apple Developer ID (le premier lancement sous macOS passe par « Ouvrir »).
+- Pas encore de Linux. L'app macOS est signée avec un certificat Apple Developer ID et notarisée depuis la 1.5.4.
 
 ## Brand Commitments
 
