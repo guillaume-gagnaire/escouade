@@ -7,8 +7,9 @@
 //! ```text
 //! tr!("Afficher", "Show")                                   // the interface's language
 //! tr!("{name} est introuvable", "{name} not found", name = path.display())
-//! tr_claude!("Corrige les tests.", "Fix the tests.")        // the texts for Claude
 //! tr_in!(Lang::En, "{n} agents en attente", "{n} agents waiting", n = n)
+//! // The texts for Claude are written so, by a function that takes the language (the core's own,
+//! // `Core::lang().claude`: the settings' even in tests, unlike `claude()`).
 //! // A count: French singular for 0 and 1, English for 1 only (`is_one`).
 //! tr_n!(n, "{n} fichier", "{n} fichiers", "{n} file", "{n} files", n = n)
 //! ```
@@ -204,17 +205,6 @@ macro_rules! tr {
     };
 }
 
-/// A text in the language of the texts Claude writes: `tr_claude!("français", "English", args…)`.
-// Allowed unused, as `tr_n!`: the texts for Claude are all written by functions that take the
-// language (the core's own, `Core::lang().claude`), for their English to be tested, in a core
-// test too. Drop the allow once a text uses it.
-#[allow(unused_macros)]
-macro_rules! tr_claude {
-    ($($t:tt)+) => {
-        tr_in!($crate::i18n::claude(), $($t)+)
-    };
-}
-
 /// What the tests of the texts written for Claude check them with.
 #[cfg(test)]
 pub(crate) mod check {
@@ -355,10 +345,6 @@ mod tests {
         );
         assert_eq!((ui(), claude()), (Fr, Fr));
         assert_eq!(tr!("Afficher", "Show"), "Afficher");
-        assert_eq!(
-            tr_claude!("Corrige les tests.", "Fix the tests."),
-            "Corrige les tests."
-        );
     }
 
     #[test]
