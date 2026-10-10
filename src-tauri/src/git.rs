@@ -4141,16 +4141,16 @@ mod repo_tests {
     async fn a_switch_that_would_overwrite_untracked_files_says_which() {
         let (local, other, _) = with_remote("git-g1f-untracked");
         let l = s(&local);
-        // `feat` has notes.txt and sub/deep.txt, which the folder has too without tracking them.
+        // `feat` has notes.txt and sub/déjà-vu.txt, which the folder has too without tracking them.
         git_in(&other, &["checkout", "-qb", "feat"]);
         std::fs::create_dir_all(other.join("sub")).unwrap();
-        std::fs::write(other.join("sub").join("deep.txt"), "theirs\n").unwrap();
+        std::fs::write(other.join("sub").join("déjà-vu.txt"), "theirs\n").unwrap();
         commit_file(&other, "notes.txt", "theirs\n");
         git_in(&other, &["push", "-qu", "origin", "feat"]);
         git_in(&local, &["fetch", "-q"]);
         git_in(&local, &["branch", "-q", "feat", "origin/feat"]);
         std::fs::create_dir_all(local.join("sub")).unwrap();
-        std::fs::write(local.join("sub").join("deep.txt"), "mine\n").unwrap();
+        std::fs::write(local.join("sub").join("déjà-vu.txt"), "mine\n").unwrap();
         std::fs::write(local.join("notes.txt"), "mine\n").unwrap();
 
         // The local branch, through `switch`, and through `switch_to` for a remote one.
@@ -4159,7 +4159,10 @@ mod repo_tests {
         let remote_branch = switch_to(&l, "origin/feat").await.unwrap_err().to_string();
         for e in [local_branch, remote_branch] {
             assert!(e.contains("écraserait"), "{e}");
-            assert!(e.contains("notes.txt") && e.contains("sub/deep.txt"), "{e}");
+            assert!(
+                e.contains("notes.txt") && e.contains("sub/déjà-vu.txt"),
+                "{e}"
+            );
             assert!(!e.contains("Please move"), "git's own text: {e}");
         }
         // Nothing moved, nothing lost.
@@ -4169,7 +4172,7 @@ mod repo_tests {
             "mine\n"
         );
         assert_eq!(
-            std::fs::read_to_string(local.join("sub").join("deep.txt")).unwrap(),
+            std::fs::read_to_string(local.join("sub").join("déjà-vu.txt")).unwrap(),
             "mine\n"
         );
     }
