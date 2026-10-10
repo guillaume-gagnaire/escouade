@@ -173,7 +173,7 @@ async fn a_ticket_is_created_in_to_do_with_its_criteria_and_what_it_comes_after(
             "id": id,
             "key": "DEM-1",
             "title": "Ajouter la page d’accueil",
-            "description": "Une page.\nAvec un titre.",
+            "description": "Une page.\nAvec un titre.\n\nCréé par Claude (hors Escouade) via Escouade",
             "criteria": [
                 { "text": "Le titre s’affiche", "ok": false, "note": "" },
                 { "text": "Le lien marche", "ok": false, "note": "" },
@@ -213,6 +213,11 @@ async fn a_ticket_is_created_in_to_do_with_its_criteria_and_what_it_comes_after(
     )
     .await;
     assert_eq!(second["key"], "DEM-2");
+    // No description of its own: the origin line is all it has.
+    assert_eq!(
+        second["description"],
+        "Créé par Claude (hors Escouade) via Escouade"
+    );
     assert_eq!(second["after"], json!(["DEM-1"]));
     assert_eq!(
         second["criteria"][0]["text"],
@@ -1195,8 +1200,22 @@ async fn a_ticket_is_split_into_tickets_after_it_in_a_chain_or_all_after_it_alon
             first.title.as_str(),
             first.description.as_str()
         ),
-        (Column::Todo, "Étape 1", "D’abord")
+        (
+            Column::Todo,
+            "Étape 1",
+            "D’abord\n\nCréé par gros via Escouade"
+        )
     );
+    // Each one says who split the ticket, with a description or without.
+    let second_step = h
+        .core
+        .tickets
+        .read()
+        .iter()
+        .find(|t| t.key == "DEM-3")
+        .cloned()
+        .unwrap();
+    assert_eq!(second_step.description, "Créé par gros via Escouade");
     assert_eq!(first.criteria.len(), 1);
     assert!(ticket_events(&h, &first.id) >= 1);
     // The agent's own ticket is left as it was.
@@ -1320,6 +1339,66 @@ fn a_message_from_the_server_is_headed_by_its_author_in_the_language_of_the_inte
         from_origin(En, "agent\n1  b", "a\n\nb"),
         "Message from agent 1 b: a\n\nb"
     );
+}
+
+#[test]
+fn a_ticket_made_through_the_server_ends_with_who_made_it_in_the_language_of_the_interface() {
+    use super::act::{made_by, with_origin};
+    use crate::i18n::Lang::{En, Fr};
+    assert_eq!(made_by(Fr, "chef"), "Créé par chef via Escouade");
+    assert_eq!(
+        made_by(En, "Claude (outside Escouade)"),
+        "Created by Claude (outside Escouade) through Escouade"
+    );
+    // The origin is one line, whatever its name holds.
+    assert_eq!(
+        made_by(En, "agent\n1  b"),
+        "Created by agent 1 b through Escouade"
+    );
+    // After the description, a blank line between; alone when there is no description.
+    assert_eq!(with_origin("", "L"), "L");
+    assert_eq!(with_origin("D\nE", "L"), "D\nE\n\nL");
+}
+
+#[tokio::test]
+async fn a_ticket_made_by_an_agent_names_it_and_the_line_is_no_part_of_the_descriptions_limit() {
+    let h = harness("mcp-act-origin-line");
+    let p = project(&h).await;
+    let a = put_agent(&h, &p, "chef", 1);
+    let c = as_agent(&h, &a.id).await;
+    // The limit is on what the caller wrote: 10,000 characters still make a ticket.
+    let long = "a".repeat(10_000);
+    let made = read(
+        &c,
+        "create_ticket",
+        json!({ "project": "demo", "title": "Long", "description": long }),
+    )
+    .await;
+    // (Compared as a boolean: a failure would print 10,000 characters.)
+    assert!(
+        made["description"] == format!("{long}\n\nCréé par chef via Escouade"),
+        "the description does not end with the origin line"
+    );
+    let too_long = refused(
+        &c,
+        "create_ticket",
+        json!({ "project": "demo", "title": "Trop", "description": "a".repeat(10_001) }),
+    )
+    .await;
+    assert!(
+        too_long.contains("10000") || too_long.contains("10 000"),
+        "{too_long}"
+    );
+    // Editing a description is the caller's own words: the line is not added again.
+    let edited = read(
+        &c,
+        "update_ticket",
+        json!({ "ticket": made["key"], "description": "Autre" }),
+    )
+    .await;
+    assert_eq!(edited["description"], "Autre");
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
 }
 
 #[tokio::test]
