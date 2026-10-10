@@ -78,6 +78,7 @@ export function project(over: Partial<Project> = {}): Project {
     worktreeTeardown: [],
     integrations: { links: [], comments: ['review', 'done'] },
     commitMode: 'agent',
+    agentsUseEscouade: false,
     ...over,
   };
 }

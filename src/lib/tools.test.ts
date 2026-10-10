@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { setLang } from './i18n';
-import { editsByTurn, hasDiff, toolArg, toolLabel, toolResultSummary } from './tools';
+import { editsByTurn, escouadeArgs, hasDiff, isEscouadeTool, toolArg, toolLabel, toolResultSummary } from './tools';
 import type { ConvItem, ToolItem, TurnItem } from './types';
 
 const CWD = 'C:\\code\\app';
@@ -33,6 +33,76 @@ describe('toolLabel', () => {
     expect(toolLabel('mcp__github__create_issue')).toBe('github·create_issue');
     expect(toolLabel('Task')).toBe('Agent');
     expect(toolLabel('Read')).toBe('Read');
+  });
+});
+
+describe('the tools of Escouade’s own server', () => {
+  it('are named in words, after Escouade', () => {
+    expect(toolLabel('mcp__escouade__create_ticket')).toBe('Escouade · Créer un ticket');
+    expect(toolLabel('mcp__escouade__create_agent')).toBe('Escouade · Lancer un agent');
+    expect(toolLabel('mcp__escouade__list_projects')).toBe('Escouade · Lister les projets');
+    expect(toolLabel('mcp__escouade__get_agent_summary')).toBe('Escouade · Résumer un agent');
+    // One this window does not know yet: as Claude names it.
+    expect(toolLabel('mcp__escouade__frobnicate')).toBe('Escouade · frobnicate');
+    // Another server's keep their names.
+    expect(toolLabel('mcp__github__create_issue')).toBe('github·create_issue');
+    expect(isEscouadeTool('mcp__escouade__create_ticket')).toBe(true);
+    expect(isEscouadeTool('mcp__escouade_bis__create_ticket')).toBe(false);
+    expect(isEscouadeTool('mcp__github__create_issue')).toBe(false);
+  });
+
+  it('are summed up by what they act on: the title, the ticket or the agent, as the backend does', () => {
+    const arg = (name: string, input: Record<string, unknown>) => toolArg(tool(`mcp__escouade__${name}`, input), CWD);
+    expect(arg('create_ticket', { project: 'demo', title: 'Corriger la connexion', description: 'Le jeton expire' })).toBe(
+      'Corriger la connexion',
+    );
+    expect(arg('update_ticket', { description: 'Plus court', ticket: 'DEM-4' })).toBe('DEM-4');
+    expect(arg('send_message', { text: 'Relis le test', agent: 'fix-login' })).toBe('fix-login');
+    // Without one: what the agent is told, its line, its project.
+    expect(arg('create_agent', { project: 'demo', message: 'Écris la doc', worktree: true })).toBe('Écris la doc');
+    expect(arg('report_progress', { line: 'Tests verts' })).toBe('Tests verts');
+    expect(arg('list_tickets', { project: 'demo', column: 'todo' })).toBe('demo');
+    expect(arg('list_projects', {})).toBe('');
+  });
+
+  it('give each argument in clear, in its order: a text as written, a list one item per line, anything else as JSON', () => {
+    expect(
+      escouadeArgs({
+        project: 'demo',
+        title: 'Corriger la connexion',
+        description: 'Le jeton expire.\nIl faut le renouveler.',
+        criteria: ['Le test passe', 'La doc suit'],
+        after: ['DEM-1'],
+        worktree: true,
+        position: 2,
+        before: null,
+        tickets: [{ title: 'A' }],
+      }),
+    ).toEqual([
+      { name: 'project', value: 'demo' },
+      { name: 'title', value: 'Corriger la connexion' },
+      { name: 'description', value: 'Le jeton expire.\nIl faut le renouveler.' },
+      { name: 'criteria', value: 'Le test passe\nLa doc suit' },
+      { name: 'after', value: 'DEM-1' },
+      { name: 'worktree', value: 'true' },
+      { name: 'position', value: '2' },
+      { name: 'tickets', value: '[\n  {\n    "title": "A"\n  }\n]' },
+    ]);
+    expect(escouadeArgs({})).toEqual([]);
+  });
+
+  it('give a value of 2,000 characters at most, counted as they are read', () => {
+    expect(escouadeArgs({ description: 'x'.repeat(2000) })[0].value).toBe('x'.repeat(2000));
+    const [cut] = escouadeArgs({ description: '😀'.repeat(2500) });
+    expect([...cut.value]).toHaveLength(2001);
+    expect(cut.value.endsWith('😀…')).toBe(true);
+  });
+
+  it('are named in English', () => {
+    setLang('en');
+    expect(toolLabel('mcp__escouade__create_ticket')).toBe('Escouade · Create a ticket');
+    expect(toolLabel('mcp__escouade__create_agent')).toBe('Escouade · Start an agent');
+    expect(toolLabel('mcp__escouade__frobnicate')).toBe('Escouade · frobnicate');
   });
 });
 

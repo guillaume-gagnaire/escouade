@@ -211,6 +211,8 @@ export interface Project {
   integrations: ProjectIntegrations;
   /** « Commit »: who writes the commits of the files panel's « Commit… » and « Commit tout… ». */
   commitMode: CommitMode;
+  /** « Les agents peuvent utiliser Escouade »: its agents' next processes get Escouade's MCP server, as themselves. */
+  agentsUseEscouade: boolean;
 }
 
 /** « Rédigé par l'agent » (the agent is asked to commit) or « Direct, avec un message proposé ». */

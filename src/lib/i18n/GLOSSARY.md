@@ -354,6 +354,8 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 | journal d’activité | activity log | ce que le serveur MCP a reçu et répondu |
 | requête refusée | request refused | « Requête refusée : jeton inconnu » → “Request refused: unknown token” |
 | en-tête (HTTP) | (HTTP) header | « en-tête Host », “Host header” |
+| Les agents peuvent utiliser Escouade | Agents can use Escouade | réglage d’un projet, groupe « Serveur MCP » → “MCP server” |
+| Escouade · Créer un ticket | Escouade · Create a ticket | badge d’un outil du serveur d’Escouade : « Lister les projets / agents / tickets » → “List the projects / agents / tickets”, « Lire un ticket / le quota » → “Read a ticket / the quota”, « Résumer un agent » → “Sum up an agent”, « Modifier / Déplacer un ticket » → “Edit / Move a ticket”, « Lancer un ticket / un agent » → “Start a ticket / an agent”, « Envoyer un message » → “Send a message”, « Arrêter un agent » → “Stop an agent”, « Donner son avancement » → “Report progress”, « Découper son ticket » → “Split its ticket” |
 
 ## G — branches
 

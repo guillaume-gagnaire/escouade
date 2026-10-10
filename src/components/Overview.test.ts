@@ -234,6 +234,19 @@ describe('Overview', () => {
     expect(be.called('answer_permission')).toHaveLength(0);
   });
 
+  it('names a tool of Escouade in words, and sends its request to the conversation, where all it is given is read', () => {
+    const be = backend();
+    resetApp({ agents: [asking([permission({ tool: 'mcp__escouade__create_ticket', arg: 'Corriger la connexion' })], { id: 'a1' })] });
+    render(Overview);
+    const row = screen.getByRole('listitem', { name: /refacto-auth/ });
+    expect(row).toHaveTextContent('Escouade · Créer un ticket');
+    expect(row).toHaveTextContent('Corriger la connexion');
+    expect(row).toHaveTextContent('À lire dans la conversation avant de répondre.');
+    expect(within(row).queryByRole('button', { name: 'Autoriser' })).not.toBeInTheDocument();
+    expect(within(row).getByRole('button', { name: 'Répondre' })).toBeInTheDocument();
+    expect(be.called('answer_permission')).toHaveLength(0);
+  });
+
   it('sends to its agent a request Claude Code would refuse by default: it is not allowed in one click', async () => {
     const be = backend();
     resetApp({ agents: [asking([permission({ arg: 'rm -rf /', defaultNo: true })], { id: 'a1' })] });
