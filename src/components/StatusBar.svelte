@@ -19,7 +19,7 @@
       t('shell.status.procsTitle'),
       ...[...procs.agents]
         .sort((a, b) => b.memory - a.memory)
-        .map((r) => `${app.agents[r.id]?.name ?? '?'} : ${fBytes(r.memory)} · ${fPct(r.cpu)}`),
+        .map((r) => t('shell.status.procRow', { name: app.agents[r.id]?.name ?? '?', memory: fBytes(r.memory), cpu: fPct(r.cpu) })),
     ].join('\n'),
   );
   const five = $derived(app.usage.fiveHour);

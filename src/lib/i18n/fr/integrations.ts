@@ -87,7 +87,7 @@ export default {
     thisProject: 'ce projet',
     linkSource: 'Lier une source',
     sources: 'Sources',
-    pickedCount: { one: '{count} sélectionné', other: '{count} sélectionnés' },
+    pickedCount: { one: '{n} sélectionné', other: '{n} sélectionnés' },
     manage: '⚙ Gérer les sources',
     filters: 'Filtres',
     selectAll: 'Tout sélectionner',

@@ -10,7 +10,7 @@ export default defineZone('shell', {
     newAgent: 'New agent',
   },
   welcome: {
-    intro: 'Add a project to run Claude Code agents in it, follow their questions and open terminals.',
+    intro: 'Add a project to run Claude Code agents, follow their questions, and open terminals.',
     /** `{command}`: the command that installs it, in code style. */
     claudeMissing: 'Claude Code couldn’t be found on this machine. Install it ({command}) or set its path in the settings.',
     addProject: 'Add a project',
@@ -95,6 +95,7 @@ export default defineZone('shell', {
     procsTitle: 'Running Claude processes (with the tools and MCP servers they start)',
     /** `{memory}` and `{cpu}`: the amounts, in code style. */
     procs: '{instances} Claude · {memory} · {cpu} CPU',
+    procRow: '{name}: {memory} · {cpu}',
     session: '5-hour session',
     week: 'Weekly',
     resetsAt: 'Resets: {date}',

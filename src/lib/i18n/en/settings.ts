@@ -172,7 +172,7 @@ export default defineZone('settings', {
     projectFolder: 'the project folder',
     setupTitle: 'When a worktree opens',
     setupDesc: 'In order, before its agent’s first message: dependencies, generated code… Messages wait for them to finish.',
-    teardownTitle: 'Before it is removed',
+    teardownTitle: 'Before a worktree is removed',
     teardownDesc: 'What the setup created outside the worktree (database, containers…); often nothing.',
     launch: 'Launch',
     launchNote: 'Each command runs in its own terminal, read-only. Start them from the “Launch” section of the sidebar.',

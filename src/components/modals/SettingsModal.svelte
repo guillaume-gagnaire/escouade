@@ -80,23 +80,23 @@
     <nav>
       <span class="title">{t('common.settings')}</span>
       <div class="tabs" role="tablist" aria-orientation="vertical" aria-label={t('common.settings')}>
-        {#each SETTINGS_TABS as tab, i (tab.id)}
-          {@const on = tab.id === current.id}
-          {@const changed = settingsForm.changed(tab.id)}
+        {#each SETTINGS_TABS as entry, i (entry.id)}
+          {@const on = entry.id === current.id}
+          {@const changed = settingsForm.changed(entry.id)}
           <button
             class="tab"
             class:on
             class:changed
             aria-describedby={changed ? 'settings-changed' : undefined}
             role="tab"
-            id="settings-tab-{tab.id}"
+            id="settings-tab-{entry.id}"
             aria-selected={on}
             aria-controls="settings-panel"
             tabindex={on ? 0 : -1}
-            onclick={() => (settingsForm.tab = tab.id)}
+            onclick={() => (settingsForm.tab = entry.id)}
             onkeydown={(e) => onTabKey(e, i)}
           >
-            <span class="ic" aria-hidden="true">{tab.icon}</span>{tab.label}
+            <span class="ic" aria-hidden="true">{entry.icon}</span>{entry.label}
             <span class="mark" title={t('settings.modal.changed')} aria-hidden="true"></span>
           </button>
         {/each}

@@ -344,7 +344,7 @@ describe('StatusBar in English', () => {
     const item = screen.getByText(/2 Claude/).closest('.it')!;
     expect(item).toHaveTextContent('2 Claude · 1.5 GB · 12% CPU');
     expect(item.getAttribute('title')!.split('\n')[0]).toBe('Running Claude processes (with the tools and MCP servers they start)');
-    expect(item.getAttribute('title')!.split('\n')[1]).toBe('refacto-auth : 512 MB · 2%');
+    expect(item.getAttribute('title')!.split('\n')[1]).toBe('refacto-auth: 512 MB · 2%');
   });
 
   it('marks the day cost as an estimate while a turn runs, and says why', () => {

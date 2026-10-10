@@ -102,7 +102,6 @@ const ALERT: ReadonlySet<AgentStatus> = new Set(['waiting', 'done', 'error']);
 /** How many of the last lines of the step running a worktree's setup the window keeps (as the backend does). */
 const SETUP_LINES = 500;
 
-/** The title of the confirmation of quitting with files not saved. */
 /** The title of the question asked on quitting, in the language of the interface (the open dialog is told by it). */
 const quitTitle = () => t('shell.quit.title');
 

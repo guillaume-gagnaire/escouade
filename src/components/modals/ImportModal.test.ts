@@ -247,6 +247,8 @@ describe('ImportModal', () => {
     await waitFor(() => expect(d.getByText('1 234 résultats')).toBeInTheDocument());
     await userEvent.click(d.getByRole('checkbox', { name: 'Tout sélectionner' }));
     expect(d.getByText('1 234 tickets sélectionnés')).toBeInTheDocument();
+    // The badge of the source says it too, to a screen reader, with the digits grouped.
+    expect(d.getByLabelText(/^1\s234 sélectionnés$/)).toBeInTheDocument();
     expect(d.getByRole('button', { name: /^Importer 1\s234 tickets$/ })).toBeEnabled();
   });
 

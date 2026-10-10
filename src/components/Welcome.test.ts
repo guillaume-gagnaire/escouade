@@ -46,7 +46,7 @@ describe('Welcome in English', () => {
     fakeBackend();
     app.claudeFound = false;
     render(Welcome);
-    expect(screen.getByText(/^Add a project to run Claude Code agents in it/)).toBeInTheDocument();
+    expect(screen.getByText(/^Add a project to run Claude Code agents, follow/)).toBeInTheDocument();
     expect(screen.getByText(/Claude Code couldn’t be found on this machine/)).toHaveTextContent(
       'Claude Code couldn’t be found on this machine. Install it (irm https://claude.ai/install.ps1 | iex) or set its path in the settings.',
     );
