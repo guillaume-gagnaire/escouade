@@ -340,6 +340,83 @@ async fn claude_code_goes_through_the_proxy_and_skips_tls_verification_when_set(
 }
 
 #[tokio::test]
+async fn agents_start_with_the_task_list_tools_unless_the_setting_is_off_and_one_shot_questions_never_get_them(
+) {
+    let h = harness("todo-tools");
+    let (p, r) = h.project(false).await;
+    // The task list variable of the last launch of the fake CLI in the project.
+    let seen = |h: &Harness| h.launch_log(&r).last().map(|v| v["todoTools"].clone());
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.turn(&a, "Bonjour").await;
+    assert_eq!(seen(&h), Some(json!("1")));
+    // A one-shot question (here, the worktree commands read in the project) has no use for them.
+    let before = h.launch_log(&r).len();
+    h.core.suggest_worktree_steps(&p.id).await.unwrap();
+    assert_eq!(h.launch_log(&r).len(), before + 1);
+    assert!(h.launches(&r).last().unwrap().contains(&"-p".to_string()));
+    assert_eq!(seen(&h), Some(Value::Null));
+    // Off: the agents that start next have none, and the variable is not forced to another value.
+    change_settings(&h, |s| s.todo_tools = false);
+    let b = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.turn(&b, "Bonjour").await;
+    assert_eq!(seen(&h), Some(Value::Null));
+    // And on again.
+    change_settings(&h, |s| s.todo_tools = true);
+    let c = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.turn(&c, "Bonjour").await;
+    assert_eq!(seen(&h), Some(json!("1")));
+}
+
+#[tokio::test]
+async fn files_saved_before_the_plan_load_and_a_plan_saved_while_running_comes_back_interrupted() {
+    let dir = test_dir("plan-old-files");
+    let data = DataDir::new(dir.join("data"));
+    data.ensure().unwrap();
+    // A settings.json of 1.6: no word of the task list setting.
+    std::fs::write(data.settings_file(), r#"{"claudePath":"","sound":false}"#).unwrap();
+    let agent = |id: &str, plan: Option<Value>| {
+        let mut a = json!({ "id": id, "projectId": "p1", "name": id, "model": "sonnet",
+                            "effort": "medium", "mode": "auto", "cwd": dir.to_string_lossy() });
+        if let Some(plan) = plan {
+            a["plan"] = plan;
+        }
+        a
+    };
+    // The window's shape of a plan, written as the app stopped in the middle of a subagent.
+    let plan = json!({ "source": "tools",
+        "tasks": [{ "id": "1", "title": "Lire", "status": "inProgress" }],
+        "agents": [{ "id": "a1", "title": "Aide", "status": "running", "background": true,
+                     "tools": 2, "startedAt": 5, "doing": "Lit src/a.ts", "planTask": "1" }],
+        "launched": 1, "workflows": [{ "id": "w1", "title": "Revue", "status": "running",
+                     "tools": 0, "tokens": 0, "startedAt": 6 }] });
+    std::fs::write(
+        data.state_file(),
+        json!({ "projects": [], "agents": [agent("old", None), agent("busy", Some(plan))] })
+            .to_string(),
+    )
+    .unwrap();
+    let app = mock_app();
+    let (core, _rx) = Core::load(app.handle().clone(), data);
+    assert!(core.settings.read().todo_tools);
+    assert!(core.agent("old").unwrap().lock().meta.plan.is_none());
+    let busy = core.agent("busy").unwrap().lock().view();
+    let plan = busy.meta.plan.expect("its plan");
+    // Its tasks are where it left them; what ran in the process that is gone did not end.
+    assert_eq!(plan.tasks[0].title, "Lire");
+    assert_eq!(plan.agents[0].status, crate::plan::RunStatus::Interrupted);
+    assert_eq!(plan.agents[0].doing, None);
+    assert_eq!(
+        plan.workflows[0].status,
+        crate::plan::RunStatus::Interrupted
+    );
+    assert_eq!(plan.launched, 1);
+    // The window gets it with the agent, in its own words.
+    let sent = serde_json::to_value(core.agent("busy").unwrap().lock().view()).unwrap();
+    assert_eq!(sent["plan"]["agents"][0]["status"], "interrupted");
+    assert_eq!(sent["plan"]["agents"][0]["planTask"], "1");
+}
+
+#[tokio::test]
 async fn attached_files_reach_claude_as_content_blocks() {
     let h = harness("attach");
     let (p, r) = h.project(false).await;

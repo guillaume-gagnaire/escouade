@@ -62,6 +62,7 @@ export const SETTINGS: Settings = {
   language: 'system',
   claudeLanguage: 'ui',
   accounts: [{ id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true }],
+  todoTools: true,
 };
 
 export function project(over: Partial<Project> = {}): Project {

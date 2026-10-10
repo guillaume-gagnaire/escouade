@@ -36,6 +36,8 @@ export interface Settings {
   claudeLanguage: 'ui' | Lang;
   /** The Claude accounts, in the order new agents try them; Principal (id "principal") always among them. */
   accounts: Account[];
+  /** « Les agents tiennent une liste de tâches »: Claude Code's task list tools are on for the agents that start, so their progress can be shown (`Agent.plan`). */
+  todoTools: boolean;
 }
 
 /** A Claude account: Claude Code with a configuration folder of its own (its own sign-in, sessions and quota). */

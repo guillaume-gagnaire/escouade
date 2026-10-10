@@ -1881,7 +1881,7 @@ impl<R: Runtime> Core<R> {
                 program,
                 cwd: rt.meta.cwd.clone(),
                 args: claude_args(&rt.meta),
-                env: [settings.claude_env(), accounts::launch_env(&account)].concat(),
+                env: [settings.agent_env(), accounts::launch_env(&account)].concat(),
             };
             (opts, rt.gen, rt.meta.project_id.clone())
         };

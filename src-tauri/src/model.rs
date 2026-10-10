@@ -59,6 +59,10 @@ pub struct Settings {
     /// The Claude accounts, in the order new agents try them; Principal always among them
     /// (`accounts::normalize`, at every load and save).
     pub accounts: Vec<Account>,
+    /// « Les agents tiennent une liste de tâches »: Claude Code's task list tools are switched on
+    /// for the agents that start (`CLAUDE_CODE_ENABLE_TODO_TOOLS`, see `Settings::agent_env`), so
+    /// that their progress can be shown (`plan`).
+    pub todo_tools: bool,
 }
 
 /// A Claude account: Claude Code with a configuration folder of its own (`accounts`).
@@ -159,6 +163,9 @@ impl Default for IntegrationSettings {
     }
 }
 
+/// The variable that turns on Claude Code's task list tools (read in its binary, not documented).
+pub const TODO_TOOLS_VAR: &str = "CLAUDE_CODE_ENABLE_TODO_TOOLS";
+
 impl Settings {
     /// The network settings of a Claude Code process: its proxy, and its TLS verification off
     /// when asked.
@@ -166,6 +173,19 @@ impl Settings {
         let mut env = self.proxy_env();
         if self.insecure_tls {
             env.push(("NODE_TLS_REJECT_UNAUTHORIZED".into(), "0".into()));
+        }
+        env
+    }
+
+    /// What a Claude Code process that runs an agent is started with: its network settings, and
+    /// the variable that gives it the task list tools (`TaskCreate`, `TaskUpdate`…) when the
+    /// setting is on. Claude Code 2.1.296 has none of them for the current models without it. Off,
+    /// nothing is added (the user's own environment decides); the other Claude Code processes
+    /// (naming, commit messages, sign-in) have no use for the tools and get `claude_env` alone.
+    pub fn agent_env(&self) -> Vec<(String, String)> {
+        let mut env = self.claude_env();
+        if self.todo_tools {
+            env.push((TODO_TOOLS_VAR.into(), "1".into()));
         }
         env
     }
@@ -216,6 +236,7 @@ impl Default for Settings {
             mcp_enabled: false,
             mcp_port: 0,
             accounts: Vec::new(),
+            todo_tools: true,
         }
     }
 }
@@ -1572,6 +1593,35 @@ mod tests {
             serde_json::to_value(&s).unwrap()["insecureTls"],
             json!(true)
         );
+    }
+
+    #[test]
+    fn agents_get_the_task_list_tools_while_the_setting_is_on_and_nothing_else_does() {
+        let mut s = Settings::default();
+        assert!(s.todo_tools);
+        let var = (TODO_TOOLS_VAR.to_string(), "1".to_string());
+        assert_eq!(s.agent_env(), vec![var.clone()]);
+        // The other Claude Code processes (naming, commit messages, sign-in) have no use for them.
+        assert!(s.claude_env().is_empty());
+        // Added to the network settings, not instead of them.
+        s.proxy_url = "http://proxy:3128".into();
+        s.insecure_tls = true;
+        assert!(s.agent_env().contains(&var));
+        assert!(s.agent_env().len() > 2);
+        assert!(!s.claude_env().contains(&var));
+        // Off: nothing is added, and no value is forced the other way (the user's environment decides).
+        s.todo_tools = false;
+        assert_eq!(s.agent_env(), s.claude_env());
+        assert!(s.agent_env().iter().all(|(k, _)| k != TODO_TOOLS_VAR));
+    }
+
+    #[test]
+    fn settings_saved_before_the_task_list_setting_keep_it_on() {
+        let s: Settings = serde_json::from_str(r#"{"sound":false}"#).unwrap();
+        assert!(s.todo_tools);
+        assert_eq!(serde_json::to_value(&s).unwrap()["todoTools"], json!(true));
+        let off: Settings = serde_json::from_str(r#"{"todoTools":false}"#).unwrap();
+        assert!(!off.todo_tools);
     }
 
     #[test]

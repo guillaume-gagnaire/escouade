@@ -6,8 +6,8 @@
 // with `--fork-session`, the resumed conversation goes on under a new session id, and a
 // `--resume-session-at=missing…` entry fails as one Claude Code cannot find does. Each assistant
 // message carries the uuid of its entry in the session (`entry-<pid>-<n>`).
-// Every launch appends {argv, cwd, proxy, tls, configDir} (its HTTPS_PROXY,
-// NODE_TLS_REJECT_UNAUTHORIZED and CLAUDE_CONFIG_DIR, null when unset) to $FAKE_CLAUDE_LOG, by
+// Every launch appends {argv, cwd, proxy, tls, configDir, todoTools} (its HTTPS_PROXY,
+// NODE_TLS_REJECT_UNAUTHORIZED, CLAUDE_CONFIG_DIR and CLAUDE_CODE_ENABLE_TODO_TOOLS, null when unset) to $FAKE_CLAUDE_LOG, by
 // default <tmp>/fake-claude-<cwd with non-alphanumerics replaced by _>.jsonl, and every user message
 // read on stdin to <log>.stdin.jsonl.
 // With CLAUDE_CONFIG_DIR (a Claude account of its own), it keeps its sessions where Claude Code
@@ -60,6 +60,7 @@ fs.appendFileSync(
     proxy: process.env.HTTPS_PROXY ?? null,
     tls: process.env.NODE_TLS_REJECT_UNAUTHORIZED ?? null,
     configDir: process.env.CLAUDE_CONFIG_DIR ?? null,
+    todoTools: process.env.CLAUDE_CODE_ENABLE_TODO_TOOLS ?? null,
   }) + '\n',
 );
 
