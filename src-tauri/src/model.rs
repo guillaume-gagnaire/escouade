@@ -670,6 +670,8 @@ pub struct PendingView {
     pub questions: Vec<PendingQuestion>,
     /// A text, a question or an option was cut: what is shown is not the whole request.
     pub cut: bool,
+    /// Claude Code would refuse it by default (`default_to_no`): it is not allowed in one click.
+    pub default_no: bool,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]

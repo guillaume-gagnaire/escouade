@@ -69,6 +69,26 @@ describe('PermissionCard', () => {
     expect(screen.getByText(/utilise npm run clean/)).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
+
+  it('makes the refusal its main button when Claude Code would refuse it by default', () => {
+    fakeBackend();
+    const { unmount } = render(PermissionCard, { item: item(), agentId: 'a1', pending: true, cwd: 'C:\\code' });
+    expect(screen.getByRole('button', { name: 'Autoriser' })).toHaveClass('primary');
+    expect(screen.getByRole('button', { name: 'Refuser' })).not.toHaveClass('primary');
+    unmount();
+    const { unmount: gone } = render(PermissionCard, { item: item({ defaultNo: true }), agentId: 'a1', pending: true, cwd: 'C:\\code' });
+    expect(screen.getByRole('button', { name: 'Refuser' })).toHaveClass('primary');
+    expect(screen.getByRole('button', { name: 'Autoriser' })).not.toHaveClass('primary');
+    gone();
+    render(PermissionCard, {
+      item: item({ defaultNo: true, toolName: 'ExitPlanMode', input: { plan: '## Plan' } }),
+      agentId: 'a1',
+      pending: true,
+      cwd: 'C:\\code',
+    });
+    expect(screen.getByRole('button', { name: 'Continuer à planifier' })).toHaveClass('primary');
+    expect(screen.getByRole('button', { name: 'Approuver le plan' })).not.toHaveClass('primary');
+  });
 });
 
 describe('PermissionCard keyboard', () => {
@@ -138,6 +158,20 @@ describe('PermissionCard keyboard', () => {
     show({ canAlways: false });
     await ctrl('{Shift>}{Enter}{/Shift}');
     expect(backend.called('answer_permission')).toHaveLength(1);
+  });
+
+  it('allows a request Claude Code would refuse by default with its button only, not with the keys', async () => {
+    const backend = fakeBackend();
+    show({ defaultNo: true });
+    await ctrl('{Enter}');
+    await ctrl('{Shift>}{Enter}{/Shift}');
+    expect(backend.called('answer_permission')).toHaveLength(0);
+    expect(screen.queryByText('Ctrl+Entrée')).not.toBeInTheDocument();
+    expect(screen.queryByText('Ctrl+Maj+Entrée')).not.toBeInTheDocument();
+    const allow = screen.getByRole('button', { name: 'Autoriser' });
+    expect(allow).not.toHaveAttribute('aria-keyshortcuts');
+    await userEvent.click(allow);
+    expect(backend.called('answer_permission')[0].args).toMatchObject({ requestId: 'req-2', decision: 'allow' });
   });
 
   it('approves a plan the same way', async () => {

@@ -383,6 +383,8 @@ export interface PendingRequest {
   questions: { question: string; options: string[] }[];
   /** A text was cut: what is shown is not the whole request. */
   cut: boolean;
+  /** Claude Code would refuse it by default: it is not allowed in one click. */
+  defaultNo: boolean;
 }
 
 export interface Agent {

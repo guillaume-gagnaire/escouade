@@ -21,6 +21,7 @@ const permission = (over: Partial<PendingRequest> = {}): PendingRequest => ({
   reason: null,
   questions: [],
   cut: false,
+  defaultNo: false,
   ...over,
 });
 
@@ -33,6 +34,7 @@ const question = (over: Partial<PendingRequest> = {}): PendingRequest => ({
   reason: null,
   questions: [{ question: 'Quelle base de données ?', options: ['SQLite', 'Postgres'] }],
   cut: false,
+  defaultNo: false,
   ...over,
 });
 
@@ -228,6 +230,20 @@ describe('Overview', () => {
       expect(within(row).queryByRole('button', { name: 'Refuser' })).not.toBeInTheDocument();
       expect(within(row).getByRole('button', { name: 'Répondre' })).toBeInTheDocument();
     }
+    expect(be.called('answer_permission')).toHaveLength(0);
+  });
+
+  it('sends to its agent a request Claude Code would refuse by default: it is not allowed in one click', async () => {
+    const be = backend();
+    resetApp({ agents: [asking([permission({ arg: 'rm -rf /', defaultNo: true })], { id: 'a1' })] });
+    render(Overview);
+    const row = screen.getByRole('listitem', { name: /refacto-auth/ });
+    expect(row).toHaveTextContent('rm -rf /');
+    expect(row).toHaveTextContent('À lire dans la conversation avant de répondre.');
+    expect(within(row).queryByRole('button', { name: 'Autoriser' })).not.toBeInTheDocument();
+    expect(within(row).queryByRole('button', { name: 'Refuser' })).not.toBeInTheDocument();
+    await userEvent.click(within(row).getByRole('button', { name: 'Répondre' }));
+    expect(app.agent?.id).toBe('a1');
     expect(be.called('answer_permission')).toHaveLength(0);
   });
 

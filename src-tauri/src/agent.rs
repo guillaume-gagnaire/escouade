@@ -1462,6 +1462,7 @@ fn pending_view(rid: &str, tool: &str, req: &Value, input: &Value, cwd: &str) ->
             reason: None,
             questions,
             cut,
+            default_no: false,
         };
     }
     let arg = capped(&tool_arg(tool, input, cwd), &mut cut);
@@ -1478,6 +1479,7 @@ fn pending_view(rid: &str, tool: &str, req: &Value, input: &Value, cwd: &str) ->
         reason,
         questions: vec![],
         cut,
+        default_no: req["default_to_no"].as_bool().unwrap_or(false),
     }
 }
 
@@ -1707,6 +1709,7 @@ mod tests {
                 reason: Some("Commande hors de la liste".into()),
                 questions: vec![],
                 cut: false,
+                default_no: false,
             }
         );
         // A file from the agent's folder, as the conversation's card shows it.
@@ -1724,6 +1727,28 @@ mod tests {
         assert_eq!(
             sent["requests"][2]["questions"][0]["options"][1],
             "Postgres"
+        );
+    }
+
+    #[test]
+    fn the_view_tells_a_request_claude_code_would_refuse_by_default() {
+        let mut a = rt();
+        asks(
+            &mut a,
+            "r1",
+            json!({"tool_name":"Bash","tool_use_id":"t1","input":{"command":"rm -rf /"},"default_to_no":true}),
+        );
+        asks(
+            &mut a,
+            "r2",
+            json!({"tool_name":"Bash","tool_use_id":"t2","input":{"command":"ls"}}),
+        );
+        let v = a.view();
+        assert!(v.requests[0].default_no);
+        assert!(!v.requests[1].default_no);
+        assert_eq!(
+            serde_json::to_value(&v).unwrap()["requests"][0]["defaultNo"],
+            true
         );
     }
 

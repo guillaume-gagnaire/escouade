@@ -20,7 +20,8 @@
   let card = $state<HTMLElement>();
 
   const isPlan = $derived(item.toolName === 'ExitPlanMode');
-  const keys = $derived(pending && current);
+  // A request Claude Code would refuse by default: the refusal is its main button, and only a click allows it.
+  const keys = $derived(pending && current && !item.defaultNo);
   const title = $derived(isPlan ? 'Claude propose un plan' : 'Claude demande une autorisation');
   const summary = $derived(
     toolArg({ kind: 'tool', id: item.id, name: item.toolName, input: item.input, status: 'running', ts: 0 } as ToolItem, cwd),
@@ -66,7 +67,13 @@
     {/if}
     {#if item.reason}<div class="reason">{item.reason}</div>{/if}
     <div class="opts">
-      <button class="opt primary" disabled={busy} aria-keyshortcuts={keys ? ariaEnter() : undefined} onclick={() => decide('allow')}>
+      <button
+        class="opt"
+        class:primary={!item.defaultNo}
+        disabled={busy}
+        aria-keyshortcuts={keys ? ariaEnter() : undefined}
+        onclick={() => decide('allow')}
+      >
         {isPlan ? 'Approuver le plan' : 'Autoriser'}
         {#if keys}<kbd class="kbd" aria-hidden="true">{keyLabel('Ctrl+Entrée')}</kbd>{/if}
       </button>
@@ -76,7 +83,9 @@
           {#if keys}<kbd class="kbd" aria-hidden="true">{keyLabel('Ctrl+Maj+Entrée')}</kbd>{/if}
         </button>
       {/if}
-      <button class="opt" disabled={busy} onclick={() => decide('deny')}>{isPlan ? 'Continuer à planifier' : 'Refuser'}</button>
+      <button class="opt" class:primary={item.defaultNo} disabled={busy} onclick={() => decide('deny')}
+        >{isPlan ? 'Continuer à planifier' : 'Refuser'}</button
+      >
     </div>
     <span class="hint">Pour refuser en expliquant quoi faire à la place, écris-le dans le champ ci-dessous.</span>
   </div>

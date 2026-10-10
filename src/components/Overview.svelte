@@ -112,10 +112,10 @@
    * Why a permission is not answered on the spot, null when it is: only what is read whole here is. A tool whose
    * summary says part of what it asks at most (an MCP tool's, a subagent's), or says nothing, is read in the
    * conversation; so is an argument cut by the backend, longer than its four lines, or wrapping past them (`shown`: the
-   * argument as drawn, its hidden characters spelled out).
+   * argument as drawn, its hidden characters spelled out); and so is a request Claude Code would refuse by default.
    */
   function notHere(req: PendingRequest, shown: string): string | null {
-    if (!SUMMED_UP.has(req.tool) || !shown.trim()) return 'À lire dans la conversation avant de répondre.';
+    if (req.defaultNo || !SUMMED_UP.has(req.tool) || !shown.trim()) return 'À lire dans la conversation avant de répondre.';
     if (req.cut || shown.split('\n').length > ARG_LINES || overflows[req.id]) {
       return 'Trop long pour être lu ici : lis-la et réponds dans la conversation.';
     }
