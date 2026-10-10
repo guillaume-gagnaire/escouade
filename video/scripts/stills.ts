@@ -5,6 +5,7 @@ import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { bundle } from '@remotion/bundler';
 import { renderStill, selectComposition } from '@remotion/renderer';
+import { LANGS } from '../src/lang';
 import { FPS, TIMELINE } from '../src/timeline';
 
 const args = process.argv.slice(2);
@@ -12,6 +13,7 @@ const args = process.argv.slice(2);
 const every = Math.max(0, Number(args.find((a) => a.startsWith('--every='))?.slice(8) ?? 0));
 const only = args.filter((a) => !a.startsWith('--'));
 const lang = args.find((a) => a.startsWith('--lang='))?.slice(7) ?? 'fr';
+if (!LANGS.some((l) => l === lang)) throw new Error(`Langue inconnue : ${lang}`);
 const scenes = TIMELINE.filter((s) => !only.length || only.includes(s.id));
 
 const serveUrl = await bundle({ entryPoint: fileURLToPath(new URL('../src/index.ts', import.meta.url)) });

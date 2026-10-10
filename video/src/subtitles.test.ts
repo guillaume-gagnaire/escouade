@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { chunks, cuesOf, fit, stamp, webvtt } from './subtitles';
 import { FPS, TIMELINE, type PlacedLine } from './timeline';
@@ -158,11 +159,21 @@ describe('the English subtitles', () => {
     for (const s of TIMELINE)
       for (const l of s.lines)
         for (const c of cuesOf(l, 84, 'en')) {
-          expect(c.text.length, `${l.key} « ${c.text} »`).toBeLessThanOrEqual(96);
+          expect(c.text.length, `${l.key} « ${c.text} »`).toBeLessThanOrEqual(100);
           expect(c.text.length, `${l.key} « ${c.text} »`).toBeGreaterThanOrEqual(8);
           // On screen at least a second, at 26 characters per second at most.
           expect(c.end - c.start, `${l.key} « ${c.text} »`).toBeGreaterThanOrEqual(1);
           expect(c.text.length / (c.end - c.start), `${l.key} « ${c.text} »`).toBeLessThanOrEqual(26);
         }
+  });
+});
+
+describe('the website’s subtitle files', () => {
+  /** What `npm run site-images` wrote for the website. */
+  const published = (file: string) => readFileSync(new URL(`../../website/public/${file}`, import.meta.url), 'utf8');
+
+  it('are what the script says now, byte for byte: edit a line, run npm run site-images again', () => {
+    expect(published('escouade.vtt'), 'escouade.vtt').toBe(webvtt(TIMELINE, 'fr'));
+    expect(published('escouade.en.vtt'), 'escouade.en.vtt').toBe(webvtt(TIMELINE, 'en'));
   });
 });

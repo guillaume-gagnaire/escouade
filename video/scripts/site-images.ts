@@ -1,6 +1,9 @@
 // The website's images, video and subtitles, from the video: `npm run site-images` (after `npm run render` and
 // `npm run web-video`). The images and the subtitles are made in each language: the pictures at the same moments of
 // the French voice, with the interface in English for the English page. `-- --lang=en` makes one language only.
+// Two guards: the tests compare the subtitles files byte for byte to the script's, and src/scenes/frenchText.test.tsx
+// keeps the French interface's text in a snapshot. The French images are deterministic: after a change to the
+// interface, `npm run site-images -- --lang=fr` and `git status` must show none of them modified.
 
 import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';

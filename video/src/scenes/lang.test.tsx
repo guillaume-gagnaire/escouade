@@ -149,14 +149,18 @@ describe('every scene, in English', () => {
 
     it(`${s.id} shows English only: no French word, accent or untranslated text`, () => {
       const left = new Set<string>();
+      const euro = new Set<string>();
       for (const f of framesOf(s))
         for (const t of texts(draw(s.id, 'en', f, true))) {
+          // The euro goes before the amount in English: « €1,234.56 », never « 1,234.56 € ».
+          if (/\d\s?€/.test(t)) euro.add(t);
           if (ACCENT.test(t) || FRENCH.test(t)) left.add(t);
           // The same words in both languages that are neither a name nor code: a text nobody translated.
           else if (french.has(t) && /^[A-Z][A-Za-z’' ,.…!?:-]{2,}$/.test(t) && !NEUTRAL.has(t) && !NEUTRAL.has(t.replace(/[,.:!?…]+$/, '')))
             left.add(t);
         }
       expect([...left], `${s.id} : à traduire`).toEqual([]);
+      expect([...euro], `${s.id} : l'euro avant le montant`).toEqual([]);
     });
   }
 
