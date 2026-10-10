@@ -648,7 +648,7 @@ fn a_plan_that_is_a_link_out_of_the_repository_is_refused() {
     }
     r.workspace("link", "docs/superpowers/plans/link.md", &[]);
     assert!(r.load().is_none());
-    assert!(fallback(&r.root, &["docs/superpowers/plans/link.md".into()]).is_none());
+    assert!(fallback(&r.root, &["docs/superpowers/plans/link.md".into()], 0).is_none());
 }
 
 #[test]
@@ -726,7 +726,7 @@ fn a_plan_or_a_marker_that_is_a_link_to_a_file_of_the_repository_is_not_read_eit
     }
     r.workspace("link", "docs/superpowers/plans/link.md", &[]);
     assert!(r.load().is_none());
-    assert!(fallback(&r.root, &["docs/superpowers/plans/link.md".into()]).is_none());
+    assert!(fallback(&r.root, &["docs/superpowers/plans/link.md".into()], 0).is_none());
     // The marker is a link to one, and the ledger's own line leads nowhere.
     let r = Repo::new("link-marker");
     r.plan("docs/superpowers/plans/demo.md");
@@ -1049,12 +1049,12 @@ fn only_a_plan_of_the_plans_folder_is_read_without_a_ledger() {
         "docs/superpowers/plans/",
     ] {
         assert!(
-            fallback(&r.root, &[named.to_string()]).is_none(),
+            fallback(&r.root, &[named.to_string()], 0).is_none(),
             "{named:?}"
         );
     }
     let abs_outside = outside.to_string_lossy().into_owned();
-    assert!(fallback(&r.root, &[abs_outside]).is_none());
+    assert!(fallback(&r.root, &[abs_outside], 0).is_none());
 }
 
 #[test]
@@ -1271,10 +1271,10 @@ fn a_path_not_lexically_under_the_root_is_refused_without_asking_the_disk() {
         .join("demo.md");
     let through = through.to_string_lossy().into_owned();
     assert_eq!(relative_to(&r.root, &through), None);
-    assert!(fallback(&r.root, std::slice::from_ref(&through)).is_none());
+    assert!(fallback(&r.root, std::slice::from_ref(&through), 0).is_none());
     // Rooted where the repository is, it is the plan.
     let rooted = reroot(&r.root, &alias, std::slice::from_ref(&through));
-    assert!(fallback(&r.root, &rooted).is_some(), "{rooted:?}");
+    assert!(fallback(&r.root, &rooted, 0).is_some(), "{rooted:?}");
     // A folder that is not the repository's second name changes nothing.
     let other = r.root.join("docs");
     let same = reroot(&r.root, &other, std::slice::from_ref(&through));
@@ -1419,4 +1419,65 @@ fn a_command_that_removes_the_workspace_of_the_plan_is_how_a_run_ends() {
     // A plan with no name leaves none to remove.
     assert!(!removes_workspace("rm -rf .superpowers/sdd/x", ""));
     assert!(!removes_workspace("rm -rf .superpowers/sdd/", "docs/.md"));
+}
+
+#[test]
+fn a_stale_plan_among_the_ones_named_does_not_shadow_the_fresh_one() {
+    let r = Repo::new("stale-shadow");
+    r.plan("docs/superpowers/plans/fresh.md");
+    let stale = r.put(
+        "docs/superpowers/plans/stale.md",
+        "# Vieux\n\n### Task 1: Ancien\n",
+    );
+    age(&stale, 3600);
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    let since = now - 60_000;
+    // The agent wrote the fresh one; the stale one was named after it (the newest is last).
+    let written = [
+        "docs/superpowers/plans/fresh.md".to_string(),
+        "docs/superpowers/plans/stale.md".to_string(),
+    ];
+    let found = fallback(&r.root, &written, since).expect("the fresh one");
+    assert_eq!(found.plan_rel, "docs/superpowers/plans/fresh.md");
+    let (_, list) = read(scan(&r.root, &written, since, None));
+    assert_eq!(list.plan_file, "docs/superpowers/plans/fresh.md");
+    // Nothing but the stale one: nothing is the agent's.
+    assert!(fallback(&r.root, &written[1..], since).is_none());
+    assert_eq!(scan(&r.root, &written[1..], since, None), Scan::Nothing);
+    // Before the conversation began there was no `since`: the stale one is found as it was.
+    assert!(fallback(&r.root, &written[1..], 0).is_some());
+}
+
+#[test]
+fn a_variable_removes_the_workspace_only_when_it_is_that_folder_and_nothing_more() {
+    let plan = "docs/superpowers/plans/demo.md";
+    for command in [
+        "W=.superpowers/sdd/demo; rm -rf $W",
+        "W=.superpowers/sdd/demo\nrm -rf \"$W\"\n",
+        "W=.superpowers/sdd/demo; rm -rf \"$W/\"",
+        "W=.superpowers/sdd/demo; rm -rf $W/*",
+        "W=\"C:/p/.superpowers/sdd/demo\"; rm -rf \"${W}\"",
+        "export W=.superpowers/sdd/demo && rm -rf $W",
+    ] {
+        assert!(removes_workspace(command, plan), "{command}");
+    }
+    for command in [
+        // A file of the folder, by the variable that names the folder.
+        "W=.superpowers/sdd/demo; rm -f \"$W/task-1-brief.md\"",
+        "W=.superpowers/sdd/demo; rm -rf $W/old",
+        // Another variable, with the folder named elsewhere in the command.
+        "cat .superpowers/sdd/demo/progress.md; rm -rf \"$TMP\"",
+        "W=.superpowers/sdd/demo; rm -rf \"$OTHER\"",
+        "W=.superpowers/sdd/other; rm -rf $W",
+        // A variable that is a file of the folder, or not assigned at all.
+        "W=.superpowers/sdd/demo/progress.md; rm $W",
+        "rm -rf $W",
+        // The variable changed before the removal.
+        "W=.superpowers/sdd/demo; W=build; rm -rf $W",
+    ] {
+        assert!(!removes_workspace(command, plan), "{command}");
+    }
 }

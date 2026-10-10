@@ -179,27 +179,62 @@ fn in_sdd_workspace(path: &str) -> bool {
     slashed.starts_with(SDD) || slashed.contains(&format!("/{SDD}"))
 }
 
-/// The plans of the plans folder (`docs/superpowers/plans/*.md`) that a command names, as it
-/// spells them: how a run writes its plan when it does not use a write tool (`cat > … <<'EOF'`,
-/// `tee`, `git add`). A pattern or a variable is no name.
-fn plans_named_by(command: &str) -> impl Iterator<Item = &str> {
-    let said = command.to_ascii_lowercase().contains("superpowers");
-    command
-        .split(|c: char| {
-            c.is_whitespace()
-                || matches!(
-                    c,
-                    ';' | '&' | '|' | '<' | '>' | '(' | ')' | '"' | '\'' | '`' | '='
-                )
-        })
-        .filter(move |token| {
-            said && {
-                let token = token.replace('\\', "/").to_ascii_lowercase();
-                token.ends_with(".md")
-                    && token.contains("docs/superpowers/plans/")
-                    && !token.contains(['*', '?', '$', '{'])
+/// The plans of the plans folder (`docs/superpowers/plans/*.md`) that a command writes, as it
+/// spells them: how a run writes its plan when it does not use a write tool. A redirection
+/// (`cat > …`, `>>`, `2>`), `tee`, the destination of `cp` or `mv`; not a plan the command only
+/// reads, searches, counts, adds to git or copies from (a stale plan it names is not one it wrote),
+/// and no pattern or variable.
+fn plans_written_by(command: &str) -> Vec<&str> {
+    let mut written = Vec::new();
+    if !command.to_ascii_lowercase().contains("superpowers") {
+        return written;
+    }
+    let is_flag = |w: &str| w.starts_with('-') || (w.len() <= 2 && w.starts_with('/'));
+    for statement in command.split([';', '&', '|', '\n']) {
+        let words: Vec<&str> = statement
+            .split_whitespace()
+            .take_while(|w| !w.starts_with('#'))
+            .collect();
+        // A redirection: `> file`, `>file`, `>> file`, `2> file`.
+        for (i, word) in words.iter().enumerate() {
+            let op = word.trim_start_matches(|c: char| c.is_ascii_digit());
+            if let Some(rest) = op.strip_prefix(">>").or_else(|| op.strip_prefix('>')) {
+                let target = if rest.is_empty() {
+                    words.get(i + 1).copied()
+                } else {
+                    Some(rest)
+                };
+                written.extend(target);
             }
+        }
+        // `VAR=value` before the command is not the command.
+        let mut command_words = words
+            .iter()
+            .copied()
+            .skip_while(|w| w.split_once('=').is_some_and(|(var, _)| !var.is_empty()));
+        let verb = command_words
+            .next()
+            .and_then(|verb| verb.rsplit(['/', '\\']).next())
+            .map(str::to_ascii_lowercase);
+        let args: Vec<&str> = command_words.filter(|w| !is_flag(w)).collect();
+        match verb.as_deref() {
+            Some("tee") => written.extend(args),
+            Some("cp" | "mv" | "copy" | "move" | "copy-item" | "move-item") => {
+                written.extend(args.last().copied())
+            }
+            _ => {}
+        }
+    }
+    written
+        .into_iter()
+        .map(|w| w.trim_matches(['"', '\'']))
+        .filter(|w| {
+            let w = w.replace('\\', "/").to_ascii_lowercase();
+            w.ends_with(".md")
+                && w.contains("docs/superpowers/plans/")
+                && !w.contains(['*', '?', '$', '{'])
         })
+        .collect()
 }
 
 impl AgentRt {
@@ -1068,7 +1103,7 @@ impl AgentRt {
             for plan in input["command"]
                 .as_str()
                 .into_iter()
-                .flat_map(plans_named_by)
+                .flat_map(plans_written_by)
             {
                 self.note_written_plan(plan);
             }
@@ -4037,7 +4072,7 @@ npm test")
     }
 
     #[test]
-    fn a_plan_a_command_names_is_remembered_like_one_a_write_makes() {
+    fn a_plan_a_command_writes_is_remembered_like_one_a_write_makes_and_one_it_only_reads_is_not() {
         // How a real run wrote its plan: a command, with the plan in its text (seen on two of two).
         let mut a = rt();
         let command = "mkdir -p docs/superpowers/plans && cat > docs/superpowers/plans/2026-10-11-slugify.md <<'EOF'
@@ -4052,31 +4087,68 @@ git add docs/superpowers/plans/2026-10-11-slugify.md && git commit -qm plan";
             ["C:/p/docs/superpowers/plans/2026-10-11-slugify.md"]
         );
         assert!(returns(&mut a, "b1", "ok", Value::Null).plan_files);
-        // Spelled with backslashes, in quotes, or absolute: as a write would be.
-        call(
-            &mut a,
-            None,
-            "b2",
-            "Bash",
-            json!({"command": r#"copy x "docs\superpowers\plans\other.md"; tee C:/p/docs/superpowers/plans/third.md"#}),
-        );
-        assert_eq!(
-            a.plan_written[1..],
-            [
+        // Every way a command writes a file: a redirection (appending, on a descriptor, with no
+        // blank), `tee`, the destination of a copy or a move; spelled with backslashes, in quotes,
+        // or absolute, as a write would be.
+        let writes = [
+            (
+                r#"copy x "docs\superpowers\plans\other.md""#,
                 r"C:/p/docs\superpowers\plans\other.md",
-                "C:/p/docs/superpowers/plans/third.md"
-            ]
-        );
-        // A pattern, a variable, a folder, another kind of file, a command of a subagent: no plan.
+            ),
+            (
+                "tee -a C:/p/docs/superpowers/plans/third.md",
+                "C:/p/docs/superpowers/plans/third.md",
+            ),
+            (
+                "echo x >> docs/superpowers/plans/fourth.md",
+                "C:/p/docs/superpowers/plans/fourth.md",
+            ),
+            (
+                "echo x >docs/superpowers/plans/fifth.md",
+                "C:/p/docs/superpowers/plans/fifth.md",
+            ),
+            (
+                "make 2> docs/superpowers/plans/sixth.md",
+                "C:/p/docs/superpowers/plans/sixth.md",
+            ),
+            (
+                "cp /tmp/x.md docs/superpowers/plans/seventh.md",
+                "C:/p/docs/superpowers/plans/seventh.md",
+            ),
+            (
+                "mv -f x.md 'docs/superpowers/plans/eighth.md'",
+                "C:/p/docs/superpowers/plans/eighth.md",
+            ),
+        ];
+        for (i, (command, plan)) in writes.iter().enumerate() {
+            let mut b = rt();
+            call(
+                &mut b,
+                None,
+                &format!("w{i}"),
+                "Bash",
+                json!({ "command": command }),
+            );
+            assert_eq!(b.plan_written, [*plan], "{command}");
+        }
+        // Named but not written: read, searched, counted, logged, added, copied from, or the
+        // source of a redirection; a pattern, a variable, a folder, another kind of file, a
+        // command of a subagent.
         let before = a.plan_written.clone();
         for (parent, command) in [
+            (None, "cat docs/superpowers/plans/old.md"),
+            (None, "grep -n Task docs/superpowers/plans/old.md | head"),
+            (None, "git log --oneline -- docs/superpowers/plans/old.md"),
+            (None, "git add docs/superpowers/plans/old.md"),
+            (None, "wc -l docs/superpowers/plans/old.md"),
+            (None, "cp docs/superpowers/plans/old.md /tmp/copy.md"),
+            (None, "head -5 docs/superpowers/plans/old.md > /tmp/x.txt"),
+            (None, "sort < docs/superpowers/plans/old.md"),
             (None, "ls docs/superpowers/plans/*.md"),
-            (None, "cat docs/superpowers/plans/$NAME.md"),
-            (None, "ls docs/superpowers/plans/"),
-            (
-                None,
-                "cat docs/superpowers/specs/s.md docs/superpowers/plans/n.txt",
-            ),
+            (None, "cat > docs/superpowers/plans/$NAME.md"),
+            (None, "cat > docs/superpowers/plans/"),
+            (None, "cat > docs/superpowers/specs/s.md"),
+            (None, "cat > docs/superpowers/plans/n.txt"),
             (Some("s1"), "cat > docs/superpowers/plans/sub.md"),
         ] {
             call(&mut a, parent, "bx", "Bash", json!({ "command": command }));

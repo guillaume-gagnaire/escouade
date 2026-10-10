@@ -646,6 +646,8 @@ function startSession() {
     if (sys) return ticketTurn(text);
     if (text.includes('plan superpowers')) {
       planRun(text).catch((e) => {
+        // An interrupt came at any moment of the run: the turn already ended with its answer.
+        if (e.message === 'interrupted') return;
         process.stderr.write(`plan superpowers: ${e.stack}\n`);
         result({ isError: true, subtype: 'error_during_execution' });
       });

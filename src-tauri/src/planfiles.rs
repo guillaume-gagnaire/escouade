@@ -629,11 +629,17 @@ pub fn discover(root: &Path) -> Option<Found> {
 }
 
 /// Without a ledger: the latest of the plans the agent wrote (`written`, oldest first) that is
-/// still there, inside `root`, in the plans folder.
-pub fn fallback(root: &Path, written: &[String]) -> Option<Found> {
+/// still there, inside `root`, in the plans folder, and touched since `since`: one nobody touched
+/// since the conversation began is skipped, not preferred over an older name in the list.
+pub fn fallback(root: &Path, written: &[String], since: i64) -> Option<Found> {
     written.iter().rev().find_map(|raw| {
         let (plan, plan_rel) = resolve_plan(root, raw, true)?;
         let meta = std::fs::metadata(&plan).ok()?;
+        // A plan nobody touched since the conversation began is not the agent's, and does not
+        // stand in the way of one written before it in the list.
+        if mtime_ms(&meta) < since {
+            return None;
+        }
         Some(Found {
             ledger: None,
             modified: mtime_ms(&meta),
@@ -653,7 +659,7 @@ pub fn fallback(root: &Path, written: &[String]) -> Option<Found> {
 fn find(root: &Path, written: &[String], since: i64) -> Option<Found> {
     discover(root)
         .filter(|f| f.modified >= since)
-        .or_else(|| fallback(root, written).filter(|f| f.modified >= since))
+        .or_else(|| fallback(root, written, since))
 }
 
 /// The tasks of the plan of `found` with the status its ledger gives them: done when the ledger
@@ -736,24 +742,43 @@ pub fn removes_workspace(command: &str, plan_file: &str) -> bool {
     }
     let target = format!(".superpowers/sdd/{name}");
     let said = command.replace('\\', "/").to_lowercase();
-    let aimed = |arg: &str| {
-        let arg = arg.trim_end_matches('*').trim_end_matches('/');
-        // A variable stands for what the command says of the folder before.
-        arg == target
-            || arg.ends_with(&format!("/{target}"))
-            || (arg.starts_with('$') && said.contains(&target))
+    // `value` is that folder: alone or at the end of a longer path, with or without its last slash.
+    let is_target = |value: &str| {
+        let value = value.trim_matches(['"', '\'']).trim_end_matches('/');
+        value == target || value.ends_with(&format!("/{target}"))
     };
+    let is_assignment = |word: &str| {
+        word.split_once('=').is_some_and(|(var, _)| {
+            !var.is_empty() && var.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        })
+    };
+    // What each variable the command assigned is, at the statement being read: that folder or not.
+    let mut folder_vars = std::collections::HashSet::new();
     said.split([';', '&', '|', '\n']).any(|statement| {
-        let words = statement
+        let mut words = statement
             .split_whitespace()
             .take_while(|w| !w.starts_with('#'))
-            .map(|w| w.trim_matches(['"', '\'']));
-        let mut words = words.skip_while(|w| {
-            // VAR=value before the command.
-            w.split_once('=').is_some_and(|(var, _)| {
-                !var.is_empty() && var.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
-            })
-        });
+            .map(|w| w.trim_matches(['"', '\'']))
+            .peekable();
+        // `VAR=value` before the command (and `export` and the like): the last one wins.
+        while let Some(word) = words.peek().copied() {
+            if matches!(
+                word,
+                "export" | "declare" | "local" | "readonly" | "typeset"
+            ) {
+                words.next();
+            } else if is_assignment(word) {
+                let (var, value) = word.split_once('=').unwrap_or_default();
+                if is_target(value) {
+                    folder_vars.insert(var.to_string());
+                } else {
+                    folder_vars.remove(var);
+                }
+                words.next();
+            } else {
+                break;
+            }
+        }
         let removal = words
             .next()
             .and_then(|verb| verb.rsplit('/').next())
@@ -763,6 +788,17 @@ pub fn removes_workspace(command: &str, plan_file: &str) -> bool {
                     "rm" | "rmdir" | "rd" | "del" | "erase" | "remove-item" | "ri"
                 )
             });
-        removal && words.any(aimed)
+        // The folder itself, or a variable that is exactly that folder (`$W`, `${W}`, then
+        // `/` or `/*`): not a file under it, not another variable.
+        removal
+            && words.any(|arg| {
+                let arg = arg.trim_end_matches('*').trim_end_matches('/');
+                match arg.strip_prefix('$') {
+                    Some(var) => {
+                        folder_vars.contains(var.trim_start_matches('{').trim_end_matches('}'))
+                    }
+                    None => is_target(arg),
+                }
+            })
     })
 }

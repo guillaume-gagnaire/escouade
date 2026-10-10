@@ -843,6 +843,49 @@ git add docs/superpowers/plans/demo.md",
 }
 
 #[tokio::test]
+async fn an_old_plan_a_command_only_reads_does_not_replace_the_one_the_agent_wrote() {
+    let (h, id, repo) = plan_agent("p4-stale-read").await;
+    plan_workspace(&repo);
+    std::fs::remove_dir_all(repo.join(".superpowers")).unwrap();
+    // An old plan of the repository, from before the conversation: not the agent's.
+    let old = repo.join("docs/superpowers/plans/old.md");
+    std::fs::write(&old, "# Ancien Implementation Plan\n\n### Task 1: Vieux\n").unwrap();
+    std::fs::File::options()
+        .write(true)
+        .open(&old)
+        .unwrap()
+        .set_modified(std::time::SystemTime::now() - Duration::from_secs(3600))
+        .unwrap();
+    // It writes its plan, then reads, searches and logs the old one (five mentions or one).
+    h.command(
+        &id,
+        "b1",
+        "cat > docs/superpowers/plans/demo.md <<'EOF'\n# Démo Implementation Plan\nEOF",
+    );
+    h.wait("the plan", |h| h.plan_statuses(&id).len() == 3)
+        .await;
+    for (n, command) in [
+        "cat docs/superpowers/plans/old.md",
+        "grep -n Task docs/superpowers/plans/old.md",
+        "git log --oneline -- docs/superpowers/plans/old.md",
+        "wc -l docs/superpowers/plans/old.md",
+        "git add docs/superpowers/plans/old.md",
+        "head -3 docs/superpowers/plans/old.md",
+    ]
+    .iter()
+    .enumerate()
+    {
+        let looks = h.plan_looks();
+        h.command(&id, &format!("r{n}"), command);
+        h.wait("a look", |h| h.plan_looks() > looks).await;
+    }
+    let plan = h.agent(&id).plan.unwrap();
+    assert_eq!(plan.title.as_deref(), Some("Démo"));
+    assert_eq!(plan.tasks.len(), 3);
+    assert!(plan.tasks.iter().all(|t| t.title != "Vieux"));
+}
+
+#[tokio::test]
 async fn a_plan_that_cannot_be_read_any_more_is_no_notice_and_leaves_the_last_state() {
     let (h, id, repo) = plan_agent("p2-unreadable").await;
     let ledger = plan_workspace(&repo);
@@ -1186,6 +1229,29 @@ async fn a_superpowers_run_without_a_task_list_is_read_from_the_plan_and_the_led
         h.launch_log(&r).last().map(|v| v["todoTools"].clone()),
         Some(Value::Null)
     );
+}
+
+#[tokio::test]
+async fn a_run_interrupted_in_its_first_moments_ends_its_turn_once() {
+    let h = harness("p4-run-stopped-early");
+    let (p, _) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.core
+        .send_message(&id, "plan superpowers".into(), vec![])
+        .await
+        .unwrap();
+    // The first words of the run are out: it is still writing its plan, before the first task.
+    h.wait("the first words", |h| {
+        h.items(&id).iter().any(|i| i["kind"] == "text")
+    })
+    .await;
+    h.core.interrupt(&id).await.unwrap();
+    h.end_of_the_run(&id).await;
+    // The fake went on to the next frame it had in hand, which it must not have: one turn's end.
+    tokio::time::sleep(Duration::from_millis(600)).await;
+    let turns = h.items(&id).iter().filter(|i| i["kind"] == "turn").count();
+    assert_eq!(turns, 1);
+    assert!(h.agent(&id).plan.is_none_or(|p| p.agents.is_empty()));
 }
 
 #[tokio::test]
