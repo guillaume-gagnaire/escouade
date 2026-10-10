@@ -408,17 +408,8 @@ async fn a_failed_sync_is_noted_on_the_ticket_until_one_succeeds_and_loops_can_b
         h.tk(&t.id).external.unwrap().error.as_deref(),
         Some("Trello refuse ces identifiants (401) — invalid token")
     );
-    // Its second loop was to be told, after the move (tried again with it): the summary waited
-    // behind it until the ticket left « En cours », which took the move away, then was tried at
-    // once.
-    assert_eq!(
-        trace(&server),
-        [
-            "PUT /cards/c1 l2",
-            "PUT /cards/c1 l2",
-            "POST /cards/c1/actions/comments"
-        ]
-    );
+    // Its second loop was to be told, after the move: the summary waits behind it.
+    assert!(writes_to(&server, "/actions/comments").is_empty());
     // Sent back, the card moves this time: the summary goes first, then the move, and the error
     // goes.
     server.on("PUT", "/cards/c1", 200, json!({}));
@@ -431,13 +422,12 @@ async fn a_failed_sync_is_noted_on_the_ticket_until_one_succeeds_and_loops_can_b
     .await;
     let comments = writes_to(&server, "/actions/comments");
     assert_eq!(
-        comments[1].json()["text"],
+        comments[0].json()["text"],
         "Escouade : DEM-1, boucle 2/5 — 1/2 critères atteints.\n\n✓ un — vérifié\n○ deux — reste le critère 2"
     );
-    assert_eq!(
-        trace(&server)[3..5],
-        ["POST /cards/c1/actions/comments", "PUT /cards/c1 l2"]
-    );
+    let after = trace(&server);
+    let said = after.iter().position(|w| w.starts_with("POST")).unwrap();
+    assert_eq!(after[said + 1], "PUT /cards/c1 l2");
 }
 
 #[tokio::test]
@@ -1482,7 +1472,7 @@ async fn a_failed_transition_gives_way_to_the_next_one() {
 }
 
 #[tokio::test]
-async fn a_failed_transition_goes_when_its_ticket_comes_into_a_column_without_a_state() {
+async fn a_failed_transition_goes_when_its_ticket_comes_back_into_a_column_without_a_state() {
     let h = harness("ig-retry-unmapped");
     let server = FakeServer::start().await;
     let p = h.trello_board(&server, &[]).await;

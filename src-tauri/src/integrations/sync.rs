@@ -50,6 +50,10 @@ pub(crate) enum SyncOp {
     State {
         state: ExternalState,
         mapped: Vec<ExternalState>,
+        /// The column whose state it is (none in a file of before: then only a move back to
+        /// « À faire » takes it away, `SyncQueue::moved`).
+        #[serde(default)]
+        column: Option<Column>,
     },
     Comment {
         text: String,
@@ -147,14 +151,20 @@ impl SyncQueue {
         self.ops.extend(ops);
     }
 
-    /// The ticket changed column: its transition not through yet (set aside or not) goes, even
-    /// when the new column gives the external ticket no state in its place (« À faire », mostly):
-    /// sent later, it would put the external ticket where the ticket no longer is. True when one
-    /// went.
-    pub fn moved(&mut self, ticket_id: &str) -> bool {
+    /// The ticket came back into `to`, a column before the one of its transition not through yet
+    /// (« À faire » always is): that transition goes (set aside or not), even when `to` gives the
+    /// external ticket no state in its place. Sent later, it would put the external ticket where
+    /// the ticket no longer is. Moved on into a column without a state, the ticket keeps it: the
+    /// external ticket would be there had the service answered. True when one went.
+    pub fn moved(&mut self, ticket_id: &str, to: Column) -> bool {
+        let back = |p: &PendingSync| match &p.op {
+            SyncOp::State { column, .. } => {
+                to == Column::Todo || column.is_some_and(|from| to < from)
+            }
+            SyncOp::Comment { .. } => false,
+        };
         let before = self.ops.len();
-        self.ops
-            .retain(|p| p.ticket_id != ticket_id || !matches!(p.op, SyncOp::State { .. }));
+        self.ops.retain(|p| p.ticket_id != ticket_id || !back(p));
         self.ops.len() != before
     }
 
@@ -756,8 +766,12 @@ impl<R: Runtime> Core<R> {
     async fn run_sync_job(self: &Arc<Self>, job: SyncJob) {
         match job {
             SyncJob::Change(t, change) => {
-                let moved =
-                    matches!(change, Change::Column(_)) && self.pending_syncs.lock().moved(&t.id);
+                // Back into a column without a state, its transition not through yet goes; into one
+                // with a state, the new transition takes its place (`SyncQueue::push`).
+                let moved = match change {
+                    Change::Column(to) => self.pending_syncs.lock().moved(&t.id, to),
+                    Change::Loop => false,
+                };
                 let ops = self.ops_of(&t, change);
                 if ops.is_empty() && !moved {
                     return;
@@ -837,6 +851,7 @@ impl<R: Runtime> Core<R> {
         Some(SyncOp::State {
             state: state.clone(),
             mapped: link.states.values().cloned().collect(),
+            column: Some(column),
         })
     }
 
@@ -910,7 +925,7 @@ impl<R: Runtime> Core<R> {
         }
         let c = client.as_ref().expect("made above");
         match &p.op {
-            SyncOp::State { state, mapped } => c.set_state(&p.external, state, mapped).await,
+            SyncOp::State { state, mapped, .. } => c.set_state(&p.external, state, mapped).await,
             SyncOp::Comment { text } => c.comment(&p.external, text).await,
         }
     }
@@ -1076,6 +1091,7 @@ mod tests {
         q.failed(ticket, 0, now, "Trello : erreur 500", false)
     }
 
+    /// A transition to `list`, its column not known (as a file of before has it).
     fn move_to(list: &str) -> SyncOp {
         SyncOp::State {
             state: ExternalState {
@@ -1083,6 +1099,19 @@ mod tests {
                 name: list.into(),
             },
             mapped: Vec::new(),
+            column: None,
+        }
+    }
+
+    /// The transition to `list` that `column` gives.
+    fn move_in(list: &str, column: Column) -> SyncOp {
+        match move_to(list) {
+            SyncOp::State { state, mapped, .. } => SyncOp::State {
+                state,
+                mapped,
+                column: Some(column),
+            },
+            op => op,
         }
     }
 
@@ -1170,23 +1199,36 @@ mod tests {
     }
 
     #[test]
-    fn a_column_change_takes_its_tickets_transitions_away_and_leaves_the_rest() {
+    fn a_move_back_takes_its_tickets_transition_away_and_a_move_on_keeps_it() {
         let mut q = SyncQueue::new(Vec::new());
         q.push(vec![
-            pending("t1", move_to("l2")),
-            pending("t1", say("pris")),
+            pending("t1", move_in("l3", Column::Review)),
+            pending("t1", say("prêt")),
         ]);
-        q.push(vec![pending("t2", move_to("l2"))]);
-        // Set aside or not.
+        q.push(vec![pending("t2", move_in("l2", Column::Doing))]);
+        // On into « Terminé » left « — inchangé »: the card would be in l3 had the service
+        // answered.
+        assert!(!q.moved("t1", Column::Done));
+        assert_eq!(q.ops.len(), 3);
+        // Back into « En cours », set aside or not: it goes, the comment and the other ticket's
+        // stay.
         q.failed("t1", 0, 0, "Trello : introuvable (404)", true);
-        assert!(q.moved("t1"));
+        assert!(q.moved("t1", Column::Doing));
         let ops: Vec<(&str, &SyncOp)> = q
             .ops
             .iter()
             .map(|p| (p.ticket_id.as_str(), &p.op))
             .collect();
-        assert_eq!(ops, [("t1", &say("pris")), ("t2", &move_to("l2"))]);
-        assert!(!q.moved("t1"));
+        assert_eq!(
+            ops,
+            [("t1", &say("prêt")), ("t2", &move_in("l2", Column::Doing))]
+        );
+        assert!(!q.moved("t1", Column::Todo));
+        // « À faire » is always back, even for a transition whose column is not known.
+        q.push(vec![pending("t2", move_to("l2"))]);
+        assert!(!q.moved("t2", Column::Review));
+        assert!(q.moved("t2", Column::Todo));
+        assert_eq!(q.ops.len(), 1);
     }
 
     #[test]
@@ -1243,7 +1285,10 @@ mod tests {
         q.save(&path);
         // Nothing waits: no file for nothing.
         assert!(!path.exists());
-        q.push(vec![pending("t1", say("un"))]);
+        q.push(vec![
+            pending("t1", say("un")),
+            pending("t1", move_in("l2", Column::Doing)),
+        ]);
         fail(&mut q, "t1", 0);
         q.save(&path);
         let read: Vec<PendingSync> =
@@ -1262,6 +1307,12 @@ mod tests {
             (say("un"), 0, None)
         );
         assert_eq!((old[0].set_aside, &old[0].error), (false, &None));
+        // A transition of before, without its column.
+        let old: PendingSync = serde_json::from_str(
+            r#"{ "ticketId": "t1", "external": { "service": "trello", "id": "c1" }, "op": { "kind": "state", "state": { "id": "l2", "name": "l2" }, "mapped": [] } }"#,
+        )
+        .unwrap();
+        assert_eq!(old.op, move_to("l2"));
     }
 
     #[test]
