@@ -538,10 +538,6 @@ pub enum Holds {
     Project,
 }
 
-pub const WORKTREES_KEPT: Holds = Holds::Worktrees;
-pub const WORKTREE_KEPT: Holds = Holds::Worktree;
-pub const PROJECT_KEPT: Holds = Holds::Project;
-
 impl Holds {
     /// Why `rel` is not renamed nor deleted: it is such a folder (`itself`), or holds one. A whole
     /// sentence each, the words around the folder's change from one language to the other.
@@ -1350,10 +1346,10 @@ mod tests {
             std::fs::write(p, "x").unwrap();
         }
         let kept = vec![
-            keep(".claude/worktrees", WORKTREES_KEPT),
-            keep("packages/web/.claude/worktrees", WORKTREES_KEPT),
+            keep(".claude/worktrees", Holds::Worktrees),
+            keep("packages/web/.claude/worktrees", Holds::Worktrees),
             // As the repository's list of worktrees gives it: an agent of another project, in `sub`.
-            keep("sub/.claude/worktrees/z", WORKTREE_KEPT),
+            keep("sub/.claude/worktrees/z", Holds::Worktree),
         ];
         let (sent, send) = bin();
         // In them, at any depth, or holding those of the project's folder or of another project.
@@ -1445,7 +1441,7 @@ mod tests {
             std::fs::write(p, "x").unwrap();
         }
         // Another project of the repository: renamed or deleted, it would point at nothing.
-        let kept = vec![keep("packages/web", PROJECT_KEPT)];
+        let kept = vec![keep("packages/web", Holds::Project)];
         let (sent, send) = bin();
         for (rel, err) in [
             ("packages/web", "packages/web est le dossier d’un projet"),
@@ -1480,7 +1476,7 @@ mod tests {
             eprintln!("skipped: no 8.3 names on this volume");
             return;
         };
-        let kept = vec![keep(".claude/worktrees", WORKTREES_KEPT)];
+        let kept = vec![keep(".claude/worktrees", Holds::Worktrees)];
         let (sent, send) = bin();
         for rel in [format!(".claude/{short_worktrees}"), short_claude] {
             let err = delete(&dir, &rel, &kept, &send).unwrap_err().to_string();
@@ -1576,8 +1572,8 @@ mod tests {
         std::fs::create_dir_all(dir.join("docs")).unwrap();
         // The project's folder and the root, where no agent has a worktree yet.
         let kept = vec![
-            keep(".claude/worktrees", WORKTREES_KEPT),
-            keep("web/.claude/worktrees", WORKTREES_KEPT),
+            keep(".claude/worktrees", Holds::Worktrees),
+            keep("web/.claude/worktrees", Holds::Worktrees),
         ];
         let (sent, send) = bin();
         // Named as one of them, or as a folder above one: still none there.
@@ -1598,7 +1594,7 @@ mod tests {
             eprintln!("skipped: cannot create a directory link here");
             return;
         }
-        let kept = vec![keep(".claude/worktrees", WORKTREES_KEPT)];
+        let kept = vec![keep(".claude/worktrees", Holds::Worktrees)];
         let (sent, send) = bin();
         let err = delete(&dir, "wt/x.ts", &kept, &send)
             .unwrap_err()

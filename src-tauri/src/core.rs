@@ -291,7 +291,8 @@ pub struct AgentOptions {
 /// What a copy takes of its original, read while no turn of the original ran.
 #[derive(Debug, Clone)]
 pub struct CopyOf {
-    /// The copy is « <name> (copie) » (`copy_name`), never renamed by Haiku.
+    /// The copy is « <name> (copie) », “<name> (copy)” in English (`copy_name`), never renamed by
+    /// Haiku.
     pub name: String,
     /// The original's session, which the copy's first start forks.
     pub session_id: Option<String>,
@@ -559,8 +560,9 @@ pub(crate) fn copy_name(lang: i18n::Lang, original: &str, taken: &[String]) -> S
 }
 
 /// The branch of `copy`, the copy of the agent `original` that `copy_name` named:
-/// `escouade/<original as a slug>-copie` (`-copie-2`…), the original's part shortened so that the
-/// marker always fits in a slug's 40 characters.
+/// `escouade/<original as a slug>-copie` (`-copie-2`…; `-copy`, `-copy-2` for a copy named in
+/// English), the original's part shortened so that the marker always fits in a slug's 40
+/// characters.
 fn copy_branch(original: &str, copy: &str) -> String {
     let marker = slugify(copy.strip_prefix(original).unwrap_or(copy));
     let base = slug_within(original, 40usize.saturating_sub(marker.len() + 1));
@@ -662,6 +664,11 @@ pub(crate) fn commit_proposal_prompt(
          {style}\n\n<fichiers>\n{listed}</fichiers>\n\n<diff>\n{}\n</diff>",
         claude::truncate(diff.trim_end(), PROPOSAL_DIFF)
     )
+}
+
+/// The block of a ticket whose validation the app's stop cut, set as the app starts again.
+fn approval_interrupted(lang: i18n::Lang) -> String {
+    tr_in!(lang, "Validation interrompue", "Approval interrupted")
 }
 
 /// A direct commit asked for files that no longer have changes to commit.
@@ -815,7 +822,7 @@ impl<R: Runtime> Core<R> {
         for t in &mut tickets {
             // A validation the app's stop cut: to run again by hand.
             if t.step.take().is_some() {
-                t.blocked = Some(tr!("Validation interrompue", "Approval interrupted"));
+                t.blocked = Some(approval_interrupted(lang.ui));
                 t.conflict = false;
             }
         }
@@ -2324,7 +2331,7 @@ impl<R: Runtime> Core<R> {
     }
 
     /// A copy of the agent (« Dupliquer la conversation »), refused during its turn: « <name>
-    /// (copie) » in the same project, with its model, effort and permission mode, its conversation
+    /// (copie) » (“(copy)” in English) in the same project, with its model, effort and permission mode, its conversation
     /// shown again, and its Claude Code session forked where the original is now (the turns it
     /// runs before the copy's first are not the copy's), the original's left as it is. It works in
     /// a worktree of its own from the commit the original's is on (what the original did not
@@ -3575,7 +3582,7 @@ impl<R: Runtime> Core<R> {
         let mut kept: Vec<fsedit::Kept> =
             worktrees_kept(&root, &self.project(project_id)?.path, base.is_some())
                 .into_iter()
-                .map(kept_as(fsedit::WORKTREES_KEPT))
+                .map(kept_as(fsedit::Holds::Worktrees))
                 .collect();
         let mut worktrees = git::worktree_paths(&root).await.unwrap_or_default();
         worktrees.extend(self.agents.read().values().filter_map(|h| {
@@ -3589,8 +3596,8 @@ impl<R: Runtime> Core<R> {
             .map(|p| p.path.clone())
             .collect();
         for (paths, what) in [
-            (worktrees, fsedit::WORKTREE_KEPT),
-            (projects, fsedit::PROJECT_KEPT),
+            (worktrees, fsedit::Holds::Worktree),
+            (projects, fsedit::Holds::Project),
         ] {
             kept.extend(
                 paths
@@ -4563,6 +4570,14 @@ mod tests {
     #[test]
     fn what_the_core_tells_the_window_reads_in_english() {
         use crate::i18n::Lang::{En, Fr};
+        // A copy named in English has its branch named so too.
+        assert_eq!(
+            copy_branch("refacto-auth", "refacto-auth (copy 2)"),
+            "escouade/refacto-auth-copy-2"
+        );
+        // A validation the app's stop cut, told as the ticket's block when the app starts again.
+        assert_eq!(approval_interrupted(En), "Approval interrupted");
+        assert_eq!(approval_interrupted(Fr), "Validation interrompue");
         assert_eq!(
             [size_label(En, 18 * MB), size_label(En, 256 * KB)],
             ["18 MB", "256 KB"]

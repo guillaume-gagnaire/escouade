@@ -361,8 +361,13 @@ pub(crate) fn save_accounts(data: &DataDir, accounts: &Accounts) -> Result<()> {
     }
     let bytes = serde_json::to_vec_pretty(&saved)?;
     paths::write_private(&data.integrations_file(), &bytes)
-        .with_context(|| tr!("enregistrement des comptes", "saving the accounts"))?;
+        .with_context(|| saving_accounts(crate::i18n::ui()))?;
     Ok(())
+}
+
+/// What a failed write of the accounts' file was doing, before the system's reason.
+fn saving_accounts(lang: crate::i18n::Lang) -> String {
+    tr_in!(lang, "enregistrement des comptes", "saving the accounts")
 }
 
 #[cfg(test)]
@@ -370,6 +375,14 @@ mod tests {
     use super::*;
     use crate::paths::test_dir;
     use std::sync::atomic::Ordering;
+
+    #[test]
+    fn a_save_of_the_accounts_that_fails_says_so_in_english() {
+        assert_eq!(
+            saving_accounts(crate::i18n::Lang::En),
+            "saving the accounts"
+        );
+    }
 
     #[test]
     fn the_memory_store_keeps_gives_back_and_forgets_a_secret() {

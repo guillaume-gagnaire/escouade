@@ -1,7 +1,7 @@
 // Files open in the editor: their text, as last read or saved, and the state of the file on disk.
 // A source is 'project' (the project's checkout) or the id of an agent (its worktree).
 
-import { errorText, notFoundPath } from '../errors';
+import { notFoundPath } from '../errors';
 import { basename } from '../format';
 import { t } from '../i18n';
 import { api } from '../ipc';
@@ -124,7 +124,7 @@ class Buffers {
     try {
       this.take(b, await api.fsRead(projectId, sourceAgent(source), path));
     } catch (e) {
-      Object.assign(b, notFound(e) ? { kind: 'missing' } : { kind: 'error', error: errorText(e) });
+      Object.assign(b, notFound(e) ? { kind: 'missing' } : { kind: 'error', error: String(e) });
     }
     // Forgotten while it was read (its source or its project is gone): not brought back.
     if (!this.pending.has(key)) return b;

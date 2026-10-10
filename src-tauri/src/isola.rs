@@ -246,6 +246,7 @@ pub async fn services(dir: &str, branch: &str) -> Result<Vec<Service>> {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+    use crate::paths::test_dir;
 
     #[test]
     fn what_isola_refuses_reads_in_english() {
@@ -259,7 +260,6 @@ pub(crate) mod tests {
             ".isola.toml is too large to be read before the launch (300000 bytes)."
         );
     }
-    use crate::paths::test_dir;
 
     /// The fake isola (tests/fixtures/fake-isola.mjs), set as the CLI of every test: only a
     /// worktree with an `.isola.toml` is its.

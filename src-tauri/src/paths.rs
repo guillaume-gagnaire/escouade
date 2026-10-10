@@ -248,7 +248,12 @@ pub fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 
 /// Refused: `rel` leads out of the folder it is asked inside of.
 pub fn outside(rel: &str) -> anyhow::Error {
-    anyhow::anyhow!(tr!(
+    outside_in(crate::i18n::ui(), rel)
+}
+
+fn outside_in(lang: crate::i18n::Lang, rel: &str) -> anyhow::Error {
+    anyhow::anyhow!(tr_in!(
+        lang,
         "chemin hors du dossier : {rel}",
         "path outside the folder: {rel}"
     ))
@@ -450,6 +455,19 @@ pub fn make_file_link(target: &Path, link: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_path_leaving_its_folder_is_refused_in_english() {
+        use crate::i18n::Lang::{En, Fr};
+        assert_eq!(
+            outside_in(En, "../x").to_string(),
+            "path outside the folder: ../x"
+        );
+        assert_eq!(
+            outside_in(Fr, "../x").to_string(),
+            "chemin hors du dossier : ../x"
+        );
+    }
 
     #[test]
     fn relative_paths() {

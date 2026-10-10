@@ -665,6 +665,8 @@ fn parse_line(raw: &[u8]) -> Option<SearchMatch> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::paths::test_dir;
+    use std::path::{Path, PathBuf};
 
     #[test]
     fn a_search_refused_says_why_in_english() {
@@ -678,8 +680,6 @@ mod tests {
             "nothing to search for: the pattern is empty"
         );
     }
-    use crate::paths::test_dir;
-    use std::path::{Path, PathBuf};
 
     fn query(pattern: &str) -> SearchQuery {
         SearchQuery {
