@@ -87,6 +87,15 @@ fn repo(dir: &Path) -> PathBuf {
     r
 }
 
+impl Drop for Harness {
+    fn drop(&mut self) {
+        // The board's passes and the other tasks of the core run on the application's runtime,
+        // which goes on after the test: the processes they started would stay until the whole run
+        // ends (see `a_process_started_in_the_background_stops_with_the_harness_that_owns_it`).
+        self.core.stop_for_good();
+    }
+}
+
 pub(crate) fn harness(name: &str) -> Harness {
     let dir = test_dir(name);
     let data = DataDir::new(dir.join("data"));
@@ -460,6 +469,52 @@ async fn a_freshly_started_process_is_not_idle_stopped() {
     h.core.stop_idle_processes();
     tokio::time::sleep(Duration::from_millis(300)).await;
     assert!(h.alive(&id));
+}
+
+/// What the board's scheduling passes do (they run on the application's runtime, which outlives
+/// the test): start an agent's process. On Windows each process holds two threads of that
+/// runtime's blocking pool (512 at most) to read its output, so the processes left by the tests
+/// that ended pile up to the pool's end, and what runs next (a `git`, a new agent) waits for a
+/// thread that never comes.
+#[tokio::test]
+async fn a_process_started_in_the_background_stops_with_the_harness_that_owns_it() {
+    let h = harness("harness-stops-processes");
+    let (p, _) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    let core = h.core.clone();
+    let started = id.clone();
+    tauri::async_runtime::spawn(async move { core.ensure_process(&started).await.map(|_| ()) })
+        .await
+        .unwrap()
+        .unwrap();
+    let process = h.core.agent(&id).unwrap().lock().proc.clone().unwrap();
+    assert!(process.is_alive());
+    // The test is over.
+    drop(h);
+    assert!(
+        process.wait_exit(Duration::from_secs(20)).await,
+        "the process is still running after its harness is gone"
+    );
+}
+
+/// The warm-up of a new agent (`Core::warm`) is such a task too: it can start after the core was
+/// stopped, and nothing would stop that process then.
+#[tokio::test]
+async fn no_agent_process_starts_once_the_core_is_stopped() {
+    let h = harness("harness-no-late-start");
+    let (p, _) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.wait("the warm-up", |h| h.alive(&id)).await;
+    h.core.stop_for_good();
+    assert!(!h.alive(&id));
+    let Err(refused) = h.core.ensure_process(&id).await else {
+        panic!("a process started");
+    };
+    assert_eq!(
+        refused.to_string(),
+        "Escouade se ferme : aucun agent ne démarre."
+    );
+    assert!(!h.alive(&id));
 }
 
 #[tokio::test]

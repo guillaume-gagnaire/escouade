@@ -65,6 +65,14 @@ pub(crate) fn not_a_repo() -> anyhow::Error {
     anyhow!(tr!("pas un dépôt git", "not a git repository"))
 }
 
+/// Refused: the app is quitting, no agent process starts any more.
+fn quitting_refusal() -> anyhow::Error {
+    anyhow!(tr!(
+        "Escouade se ferme : aucun agent ne démarre.",
+        "Escouade is quitting: no agent starts."
+    ))
+}
+
 /// The tag that opens `NotOnBase::wire`: the frontend recognizes the refusal by it.
 const NOT_ON_BASE: &str = "NOT_ON_BASE";
 
@@ -1870,6 +1878,12 @@ impl<R: Runtime> Core<R> {
                 return Ok(p);
             }
         }
+        // None starts once the app quits: the stop of the processes has been through, and one
+        // started after (the warm-up of an agent just made comes as late as the runtime lets it)
+        // would be left running.
+        if self.quitting.load(Ordering::Acquire) {
+            bail!(quitting_refusal());
+        }
         let settings = self.settings.read().clone();
         // Its account's Claude Code, where its session is kept.
         let account = accounts::get(&settings, &h.lock().meta.account);
@@ -1939,6 +1953,14 @@ impl<R: Runtime> Core<R> {
             }
         };
         h.lock().attach(proc.clone());
+        // The app began to quit while it started: the stop of the processes missed this one.
+        if self.quitting.load(Ordering::Acquire) {
+            if let Some(p) = h.lock().proc.take() {
+                p.close_input();
+                p.kill();
+            }
+            bail!(quitting_refusal());
+        }
         self.emit_agent(&h);
         match proc
             .control(json!({ "subtype": "initialize" }), Duration::from_secs(90))
@@ -2301,6 +2323,15 @@ impl<R: Runtime> Core<R> {
         for (_, s) in self.setups.lock().drain() {
             s.task.abort();
         }
+        self.kill_agent_processes();
+        // Their tokens go with the app: their MCP configs too.
+        self.mcp.clear_agent_configs();
+        self.pty.kill_all();
+        self.save_now();
+    }
+
+    /// Every agent's process stops, with what it started.
+    fn kill_agent_processes(&self) {
         for h in self.agents.read().values() {
             let mut rt = h.lock();
             if let Some(p) = rt.proc.take() {
@@ -2308,10 +2339,14 @@ impl<R: Runtime> Core<R> {
                 p.kill();
             }
         }
-        // Their tokens go with the app: their MCP configs too.
-        self.mcp.clear_agent_configs();
-        self.pty.kill_all();
-        self.save_now();
+    }
+
+    /// What is left of a core that is done with (a test's): its agents' processes stop, and none
+    /// starts after. The background tasks it spawned live on, on the application's runtime.
+    #[cfg(test)]
+    pub(crate) fn stop_for_good(&self) {
+        self.quitting.store(true, Ordering::Release);
+        self.kill_agent_processes();
     }
 
     pub async fn send_message(
