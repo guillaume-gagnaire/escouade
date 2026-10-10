@@ -408,8 +408,6 @@ pub(crate) fn mcp_token(
 
 /// A new MCP token (`make`) in place of the one kept: the old one leaves the keychain and the
 /// file, the new one is kept as `mcp_token` keeps one it makes.
-// Allowed unused until the window's switch (M5) renews the token (then drop the allow).
-#[allow(dead_code)]
 pub(crate) fn renew_mcp_token(
     store: &dyn SecretStore,
     data: &DataDir,

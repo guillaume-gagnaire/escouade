@@ -1308,8 +1308,13 @@ impl<R: Runtime> Core<R> {
         let bytes = serde_json::to_vec_pretty(&s)?;
         paths::write_atomic(&self.data.settings_file(), &bytes)?;
         let auto_resume = s.auto_resume;
-        let before = self.lang();
-        *self.settings.write() = s;
+        let (mcp_enabled, before) = (s.mcp_enabled, self.lang());
+        let mcp_was_enabled = std::mem::replace(&mut *self.settings.write(), s).mcp_enabled;
+        if mcp_was_enabled && !mcp_enabled {
+            // « Claude peut piloter Escouade » turned off: its entry leaves every account and the
+            // token changes (`declare_now`), once the server is stopped or kept by a project.
+            self.mcp.ask_renewal();
+        }
         let lang = self.lang();
         if lang != before {
             // At once, without a restart: what the backend writes from now on, the native menus

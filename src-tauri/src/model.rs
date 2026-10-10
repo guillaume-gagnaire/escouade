@@ -1207,6 +1207,10 @@ pub enum UiEvent {
     McpActivity {
         entry: crate::mcp::activity::ActivityEntry,
     },
+    /// Where the server stands in each active account's Claude Code (declared, or why not).
+    McpDeclared {
+        declared: Vec<crate::mcp::install::Declaration>,
+    },
 }
 
 pub fn now_ms() -> i64 {

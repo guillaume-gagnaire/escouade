@@ -618,11 +618,13 @@ fn name_taken(name: &str) -> anyhow::Error {
 // The accounts' tab: each change saved at once, through `save_settings` (normalized, checked, the
 // quotas settled again), one at a time (`claude_accounts_lock`).
 impl<R: Runtime> Core<R> {
-    /// The settings the window saves, but for the accounts: those are the backend's, which the
-    /// accounts' tab changes on its own (the window's copy may be older).
+    /// The settings the window saves, but for the accounts and for « Claude peut piloter
+    /// Escouade »: those are the backend's, which their tabs change on their own (the window's copy
+    /// may be older).
     pub fn save_window_settings(self: &Arc<Self>, mut s: Settings) -> Result<()> {
         let _one = self.claude_accounts_lock.lock();
         s.accounts = self.settings.read().accounts.clone();
+        s.mcp_enabled = self.settings.read().mcp_enabled;
         self.save_settings(s)
     }
 
