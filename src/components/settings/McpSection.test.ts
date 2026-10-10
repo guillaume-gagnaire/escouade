@@ -17,14 +17,18 @@ const PRINCIPAL: Account = { id: 'principal', name: 'Principal', configDir: '', 
 const PRO: Account = { id: 'pro', name: 'Pro', configDir: 'C:\\Users\\ada\\.escouade\\claude\\pro', claudePath: '', active: true };
 
 const TOKEN = 'k3Zr9-Q_tokenOfTheServer0123456789abcdefghi';
-const ADD = `mcp add --scope user --transport http escouade http://127.0.0.1:47123/mcp --header "Authorization: Bearer ${TOKEN}"`;
+const ADD = (token: string) =>
+  `mcp add --scope user --transport http escouade http://127.0.0.1:47123/mcp --header "Authorization: Bearer ${token}"`;
+const WITH_FOLDER = (add: string) =>
+  `$old = $env:CLAUDE_CONFIG_DIR; $env:CLAUDE_CONFIG_DIR = 'C:\\Users\\ada\\.escouade\\claude\\pro'; claude ${add}; $env:CLAUDE_CONFIG_DIR = $old`;
 
-const ok = (account: string): McpDeclaration => ({ account, ok: true, error: null, command: `claude ${ADD}` });
+// As the backend sends them: the commands have their token hidden. The real one is asked for when it is copied.
+const ok = (account: string): McpDeclaration => ({ account, ok: true, error: null, command: `claude ${ADD('••••••••')}` });
 const failed = (account: string, error: string): McpDeclaration => ({
   account,
   ok: false,
   error,
-  command: `$old = $env:CLAUDE_CONFIG_DIR; $env:CLAUDE_CONFIG_DIR = 'C:\\Users\\ada\\.escouade\\claude\\pro'; claude ${ADD}; $env:CLAUDE_CONFIG_DIR = $old`,
+  command: WITH_FOLDER(ADD('••••••••')),
 });
 const RUNNING: McpStatus = { running: true, port: 47123, error: null };
 
@@ -114,6 +118,17 @@ describe('McpSection', () => {
     expect(screen.queryByText(/Déclaré dans Claude/)).not.toBeInTheDocument();
   });
 
+  it('shows the switch busy while the change is saved', async () => {
+    let done: (v: null) => void = () => {};
+    backend({ mcp_set_enabled: () => new Promise((r) => (done = r)) });
+    render(McpSection);
+    await userEvent.click(switchEl());
+    expect(switchEl()).toBeDisabled();
+    done(null);
+    await waitFor(() => expect(switchEl()).toBeEnabled());
+    expect(switchEl()).toHaveAttribute('aria-checked', 'true');
+  });
+
   it('leaves the switch where it was, and says why, when the backend refuses', async () => {
     backend({
       mcp_set_enabled: () => {
@@ -133,9 +148,11 @@ describe('McpSection', () => {
     app.settings.mcpEnabled = true;
     const writeText = vi.fn(async () => {});
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
-    backend({
+    const be = backend({
       mcp_status: () => RUNNING,
       mcp_declare_status: () => [ok('principal'), failed('pro', 'Failed to write to config')],
+      // Asked for when it is copied: the real command, the real token.
+      mcp_manual_command: () => WITH_FOLDER(ADD(TOKEN)),
     });
     render(McpSection);
     expect(await screen.findByText('Déclaré dans Claude · compte Principal')).toBeInTheDocument();
@@ -146,15 +163,52 @@ describe('McpSection', () => {
     expect(shown).toHaveTextContent('Bearer ••••••••');
     expect(document.body.textContent).not.toContain(TOKEN);
     expect(shown).toHaveTextContent("$env:CLAUDE_CONFIG_DIR = 'C:\\Users\\ada\\.escouade\\claude\\pro'");
+    // The shell it is written for is said.
+    expect(within(alert.parentElement!).getByText('À lancer à la main dans PowerShell :')).toBeInTheDocument();
+    // The real command is not in the window until it is asked for.
+    expect(be.called('mcp_manual_command')).toHaveLength(0);
     // Copied whole.
     await userEvent.click(screen.getByRole('button', { name: 'Copier la commande' }));
-    expect(writeText).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    expect(be.called('mcp_manual_command').map((c) => c.args)).toEqual([{ account: 'pro' }]);
     const copied = (writeText.mock.calls as unknown as string[][])[0][0];
     expect(copied).toContain(`Bearer ${TOKEN}`);
     expect(copied).toContain('$env:CLAUDE_CONFIG_DIR');
     expect(app.toasts.map((t) => t.text)).toEqual(['Commande copiée']);
     // The one that went is not offered a command.
     expect(screen.getAllByRole('button', { name: 'Copier la commande' })).toHaveLength(1);
+    // Still not on the screen.
+    expect(document.body.textContent).not.toContain(TOKEN);
+  });
+
+  it('copies nothing, and says why, when the backend cannot give the command', async () => {
+    app.settings.mcpEnabled = true;
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    backend({
+      mcp_status: () => RUNNING,
+      mcp_declare_status: () => [failed('pro', 'locked')],
+      mcp_manual_command: () => {
+        throw 'Le serveur MCP ne tourne pas';
+      },
+    });
+    render(McpSection);
+    await userEvent.click(await screen.findByRole('button', { name: 'Copier la commande' }));
+    await waitFor(() => expect(app.toasts.map((t) => t.text)).toEqual(['Le serveur MCP ne tourne pas']));
+    expect(writeText).not.toHaveBeenCalled();
+  });
+
+  it('hides a token in what Claude Code said, whatever the backend sent', async () => {
+    app.settings.mcpEnabled = true;
+    backend({
+      mcp_status: () => RUNNING,
+      mcp_declare_status: () => [failed('pro', `Invalid header Authorization: Bearer ${TOKEN}`)],
+    });
+    render(McpSection);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Pas déclaré pour le compte Pro : Invalid header Authorization: Bearer ••••••••',
+    );
+    expect(document.body.textContent).not.toContain(TOKEN);
   });
 
   it('tells each failed account apart, and names Principal as the interface does', async () => {
@@ -196,6 +250,7 @@ describe('McpSection', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Not declared for the Pro account: locked');
     expect(screen.getByRole('switch', { name: 'Claude can drive Escouade' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy the command' })).toBeInTheDocument();
+    expect(screen.getByText('Run it by hand in PowerShell:')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Escouade in Claude' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'MCP activity' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Clear' })).toBeInTheDocument();
@@ -262,6 +317,8 @@ describe('McpSection', () => {
       expect(rows[2]).toHaveClass('bad');
       expect(rows[3]).not.toHaveClass('bad');
       expect(rows[3]).toHaveTextContent('Fait');
+      // A log that scrolls is reached with the keyboard.
+      expect(log).toHaveAttribute('tabindex', '0');
       expect(screen.getByRole('button', { name: 'Effacer' })).toBeEnabled();
     });
 

@@ -341,6 +341,7 @@ pub fn run() {
             commands::mcp_clear_activity,
             commands::mcp_set_enabled,
             commands::mcp_declare_status,
+            commands::mcp_manual_command,
         ])
         .build(tauri::generate_context!())
         .expect("error while building the application")

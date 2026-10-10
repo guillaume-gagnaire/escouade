@@ -1332,10 +1332,17 @@ pub fn mcp_set_enabled(core: CoreState, enabled: bool) -> Res<()> {
 }
 
 /// Where the server stands in each active account's Claude Code: declared, or why not and the
-/// command to run by hand.
+/// command to run by hand, its token hidden.
 #[tauri::command]
 pub fn mcp_declare_status(core: CoreState) -> Vec<crate::mcp::install::Declaration> {
     core.mcp.declared()
+}
+
+/// The command that declares the server by hand in the account, with the real token: asked for
+/// when the user copies it, never sent with the state.
+#[tauri::command]
+pub fn mcp_manual_command(core: CoreState, account: String) -> Res<String> {
+    core.mcp_manual_command(&account).map_err(err)
 }
 
 #[cfg(test)]

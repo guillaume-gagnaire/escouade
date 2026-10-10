@@ -20,7 +20,8 @@ export default {
     working: 'Déclaration dans Claude…',
     notDeclared: 'Pas déclaré pour le compte {name} : {error}',
     serverFailed: 'Le serveur n’a pas démarré : {error}',
-    command: 'À lancer à la main :',
+    /** `{shell}`: the shell the command is written for, PowerShell or sh. */
+    command: 'À lancer à la main dans {shell} :',
     copy: 'Copier la commande',
     copied: 'Commande copiée',
     copyFailed: 'Copie impossible : {error}',

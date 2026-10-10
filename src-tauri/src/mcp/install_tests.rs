@@ -2,7 +2,8 @@
 //! which keeps the user scope's servers in the `.claude.json` of a folder of the test's.
 
 use super::install::{
-    current, declare, manual_command_in, wanted, withdraw, Declared, Entry, Target, COMMAND_TIMEOUT,
+    current, declare, manual_command_in, mask_bearer, wanted, withdraw, Declared, Entry, Target,
+    COMMAND_TIMEOUT, MASK,
 };
 use crate::core_tests::{fake_cli, harness, second_account, Harness};
 use crate::model::*;
@@ -267,6 +268,79 @@ async fn withdrawing_removes_the_entry_and_an_entry_already_absent_is_no_error()
 }
 
 #[test]
+fn a_token_is_hidden_wherever_it_could_be_printed() {
+    // A {:?} of an entry (a failed assertion, a log line) does not print it.
+    let e = entry(47123, "s3cr3t-token");
+    assert!(!format!("{e:?}").contains("s3cr3t-token"), "{e:?}");
+    assert!(format!("{e:?}").contains(MASK));
+    // A command shown: the token goes, the rest stays, wherever the shell has it.
+    let add = "claude mcp add --header \"Authorization: Bearer s3cr3t-token\"";
+    assert_eq!(
+        mask_bearer(add),
+        format!("claude mcp add --header \"Authorization: Bearer {MASK}\"")
+    );
+    assert_eq!(
+        mask_bearer("a 'Authorization: Bearer s3cr3t-token'; b Bearer other\nz"),
+        format!("a 'Authorization: Bearer {MASK}'; b Bearer {MASK}\nz")
+    );
+    assert_eq!(
+        mask_bearer("claude mcp remove escouade"),
+        "claude mcp remove escouade"
+    );
+}
+
+#[tokio::test]
+async fn what_claude_code_says_never_carries_the_token_into_the_error() {
+    let t = target("mcp-install-leak");
+    std::fs::create_dir_all(t.claude_json.parent().unwrap()).unwrap();
+    // Claude Code says what it was given: the header, and the token on its own.
+    std::fs::write(
+        t.claude_json.parent().unwrap().join("fake-mcp-fail"),
+        "Invalid header Authorization: Bearer s3cr3t-token (token s3cr3t-token)",
+    )
+    .unwrap();
+    let e = declare(&t, &entry(47123, "s3cr3t-token"))
+        .await
+        .unwrap_err();
+    let said = format!("{e:#}");
+    assert!(!said.contains("s3cr3t-token"), "{said}");
+    assert!(said.contains("Invalid header"), "{said}");
+    // The token of the entry being replaced is hidden as well, when the removal says it.
+    let t = target("mcp-install-leak-old");
+    declare(&t, &entry(47123, "old-token-1")).await.unwrap();
+    std::fs::write(
+        t.claude_json.parent().unwrap().join("fake-mcp-fail"),
+        "cannot remove old-token-1",
+    )
+    .unwrap();
+    let e = declare(&t, &entry(47123, "new-token-2")).await.unwrap_err();
+    assert!(!format!("{e:#}").contains("old-token-1"), "{e:#}");
+    // And withdrawing.
+    let e = withdraw(&t).await.unwrap_err();
+    assert!(!format!("{e:#}").contains("old-token-1"), "{e:#}");
+}
+
+#[tokio::test]
+async fn a_file_that_cannot_be_read_may_hold_the_entry_so_the_command_is_run_all_the_same() {
+    let t = target("mcp-install-unreadable");
+    // No file: nothing to take out, nothing run.
+    assert!(!withdraw(&t).await.unwrap());
+    assert!(launches(&t).is_empty());
+    // A file that is no JSON: nothing can be told of it, so Claude Code is asked, and its failure is one.
+    std::fs::create_dir_all(t.claude_json.parent().unwrap()).unwrap();
+    std::fs::write(&t.claude_json, "{ not json").unwrap();
+    assert!(withdraw(&t).await.is_err());
+    assert_eq!(
+        launches(&t),
+        [["mcp", "remove", "escouade", "--scope", "user"]]
+    );
+    // A file that is JSON and holds no entry: nothing run.
+    write_json(&t.claude_json, &json!({ "mcpServers": {} }));
+    assert!(!withdraw(&t).await.unwrap());
+    assert_eq!(launches(&t).len(), 1);
+}
+
+#[test]
 fn the_command_to_declare_it_by_hand_reads_in_the_shell_of_the_platform() {
     let e = entry(47123, "tok-1");
     let add = "mcp add --scope user --transport http escouade http://127.0.0.1:47123/mcp --header \"Authorization: Bearer tok-1\"";
@@ -424,7 +498,8 @@ async fn turning_it_on_declares_the_server_in_each_active_account_as_that_accoun
             format!("Authorization: Bearer {}", want.token)
         );
     }
-    // The window was told, with no token on show in the status but the command that has it.
+    // The window was told, and the token is nowhere in what it is told or can ask for: the
+    // commands it shows have it hidden.
     let told = h
         .events
         .lock()
@@ -436,10 +511,20 @@ async fn turning_it_on_declares_the_server_in_each_active_account_as_that_accoun
     assert_eq!(told["declared"][0]["account"], "principal");
     assert_eq!(told["declared"][0]["ok"], true);
     assert_eq!(told["declared"][0]["error"], Value::Null);
-    assert!(told["declared"][1]["command"]
-        .as_str()
-        .unwrap()
-        .contains(&want.token));
+    let shown = told["declared"][1]["command"].as_str().unwrap();
+    assert!(shown.contains(&format!("Bearer {MASK}")), "{shown}");
+    assert!(shown.contains("mcp add --scope user"), "{shown}");
+    let everything = serde_json::to_string(&*h.events.lock()).unwrap();
+    assert!(
+        !everything.contains(&want.token),
+        "a token went to the window"
+    );
+    let status = serde_json::to_string(&h.core.mcp.declared()).unwrap();
+    assert!(!status.contains(&want.token), "{status}");
+    // The real command is built when it is asked for (« Copier la commande »).
+    let real = h.core.mcp_manual_command("pro").unwrap();
+    assert!(real.contains(&format!("Bearer {}", want.token)), "{real}");
+    assert!(real.contains(&want.url), "{real}");
 
     // The app starts again with it on: what is there as wanted is left alone.
     let launched = mcp_launches(&h).len();
@@ -560,20 +645,26 @@ async fn an_account_that_fails_is_told_with_the_command_to_run_by_hand_and_the_o
             .contains("Failed to write to config"),
         "{pro:?}"
     );
-    // The command is the real one: the real token, the account's folder.
+    // What it is told is the command with its token hidden; the real one (the real token, the
+    // account's folder) is built when the user copies it.
     let token = h.core.mcp.external_token().unwrap();
     let port = h.core.mcp.status().port;
-    assert!(pro.command.contains(&format!("Bearer {token}")), "{pro:?}");
-    assert!(
-        pro.command
-            .contains(&format!("http://127.0.0.1:{port}/mcp")),
-        "{pro:?}"
-    );
+    assert!(!pro.command.contains(&token), "{pro:?}");
+    assert!(pro.command.contains(&format!("Bearer {MASK}")), "{pro:?}");
     assert!(pro.command.contains("CLAUDE_CONFIG_DIR"));
     assert!(pro.command.contains(&*folder.to_string_lossy()));
-    assert!(pro
-        .command
-        .contains("mcp add --scope user --transport http escouade"));
+    let real = h.core.mcp_manual_command("pro").unwrap();
+    assert!(real.contains(&format!("Bearer {token}")), "{real}");
+    assert!(
+        real.contains(&format!("http://127.0.0.1:{port}/mcp")),
+        "{real}"
+    );
+    assert!(real.contains("CLAUDE_CONFIG_DIR"));
+    assert!(real.contains(&*folder.to_string_lossy()));
+    assert!(real.contains("mcp add --scope user --transport http escouade"));
+    assert_eq!(mask_bearer(&real), pro.command);
+    // The error Claude Code gave is shown as it said it.
+    assert!(!format!("{pro:?}").contains(&token));
     // Nothing was written in it.
     assert_eq!(current(&pro_json(&h)), None);
 
@@ -586,6 +677,30 @@ async fn an_account_that_fails_is_told_with_the_command_to_run_by_hand_and_the_o
     assert!(h.core.mcp.declared().iter().all(|d| d.ok));
     assert_eq!(current(&pro_json(&h)), Some(now_wanted(&h)));
     assert_eq!(mcp_launches(&h).len(), launched + 1);
+    h.core.shutdown();
+}
+
+#[tokio::test]
+async fn the_real_command_is_given_only_for_an_account_it_can_be_run_in_while_the_server_runs() {
+    let h = harness("mcp-install-real-command");
+    second_account(&h);
+    // Off: no server, no token to give.
+    let e = h.core.mcp_manual_command("pro").unwrap_err();
+    assert!(format!("{e:#}").contains("ne tourne pas"), "{e:#}");
+    let before = runs(&h);
+    h.core.set_mcp_enabled(true).unwrap();
+    run_after(&h, before).await;
+    let e = h.core.mcp_manual_command("nope").unwrap_err();
+    assert!(format!("{e:#}").contains("« nope »"), "{e:#}");
+    // Principal's has no folder to name.
+    let principal = h.core.mcp_manual_command("principal").unwrap();
+    assert!(!principal.contains("CLAUDE_CONFIG_DIR"), "{principal}");
+    assert!(principal.contains(&now_wanted(&h).token));
+    // It holds the entry already: the command takes it out first, then adds it.
+    assert!(
+        principal.contains("mcp remove escouade --scope user; ") && principal.contains("mcp add"),
+        "{principal}"
+    );
     h.core.shutdown();
 }
 
@@ -660,6 +775,107 @@ async fn turning_it_off_takes_the_server_out_of_every_account_and_changes_the_to
     run_after(&h, before).await;
     assert_eq!(current(&principal_json(&h)).unwrap().token, new);
     assert_eq!(current(&pro_json(&h)).unwrap().token, new);
+    h.core.shutdown();
+}
+
+#[tokio::test]
+async fn turning_it_off_changes_the_token_before_the_commands_that_take_the_entries_out() {
+    let h = harness("mcp-install-off-order");
+    let before = runs(&h);
+    h.core.set_mcp_enabled(true).unwrap();
+    run_after(&h, before).await;
+    let old = h.core.mcp.external_token().unwrap();
+    // Claude Code is slow to remove: for two seconds the entry is still in the file.
+    let folder = principal_json(&h).parent().unwrap().to_path_buf();
+    std::fs::write(folder.join("fake-mcp-slow"), "2000").unwrap();
+    let before = runs(&h);
+    h.core.set_mcp_enabled(false).unwrap();
+    h.wait("the token to change", |h| {
+        h.core.mcp.external_token().unwrap() != old
+    })
+    .await;
+    // The old token opens nothing, and the entry that holds it has not gone yet.
+    assert_eq!(h.core.mcp.caller(&old), None);
+    assert!(current(&principal_json(&h)).is_some());
+    run_after(&h, before).await;
+    assert_eq!(current(&principal_json(&h)), None);
+    h.core.shutdown();
+}
+
+#[tokio::test]
+async fn removing_an_account_takes_the_server_out_of_its_folder_and_leaves_the_token_to_the_others()
+{
+    let h = harness("mcp-install-remove-on");
+    second_account(&h);
+    let before = runs(&h);
+    h.core.set_mcp_enabled(true).unwrap();
+    run_after(&h, before).await;
+    let token = h.core.mcp.external_token().unwrap();
+    assert_eq!(current(&pro_json(&h)), Some(now_wanted(&h)));
+
+    // Removed: its folder stays on the disk, but the entry that holds the token does not.
+    // Two runs follow: the declaration the settings call for, and the removal from its folder.
+    let before = runs(&h);
+    h.core.remove_claude_account("pro").unwrap();
+    h.wait("both runs", |h| runs(h) >= before + 2).await;
+    assert_eq!(current(&pro_json(&h)), None);
+    assert!(h.dir.join("claude-pro").join(".claude.json").exists());
+    let pro_dir = h.dir.join("claude-pro").to_string_lossy().to_string();
+    let removals: Vec<Value> = h
+        .launch_log(&data(&h))
+        .into_iter()
+        .filter(|l| l["argv"][0] == "mcp" && l["argv"][1] == "remove")
+        .collect();
+    assert_eq!(removals.len(), 1, "{removals:?}");
+    assert_eq!(removals[0]["configDir"], pro_dir.as_str());
+    assert_eq!(
+        removals[0]["argv"],
+        json!(["mcp", "remove", "escouade", "--scope", "user"])
+    );
+    // The others are left as they were, with the same token.
+    assert_eq!(current(&principal_json(&h)), Some(now_wanted(&h)));
+    assert_eq!(h.core.mcp.external_token().unwrap(), token);
+    assert_eq!(h.core.mcp.declared().len(), 1);
+    h.core.shutdown();
+}
+
+#[tokio::test]
+async fn removing_an_account_while_it_is_off_takes_a_leftover_entry_out_too() {
+    let h = harness("mcp-install-remove-off");
+    let off = off_account(&h);
+    second_account(&h);
+    // Leftovers of when it was on: in the account that is switched off, and in another.
+    let held = json!({ "mcpServers": { "escouade": { "type": "http", "url": "http://127.0.0.1:1/mcp", "headers": { "Authorization": "Bearer old-token" } } } });
+    write_json(&off.join(".claude.json"), &held);
+    // The one removed with no entry (and no file) is not run for.
+    assert!(mcp_launches(&h).is_empty());
+    let before = runs(&h);
+    h.core.remove_claude_account("off").unwrap();
+    run_after(&h, before).await;
+    assert_eq!(current(&off.join(".claude.json")), None);
+    let removals: Vec<Value> = h
+        .launch_log(&data(&h))
+        .into_iter()
+        .filter(|l| l["argv"][0] == "mcp")
+        .collect();
+    assert_eq!(removals.len(), 1, "{removals:?}");
+    assert_eq!(removals[0]["argv"][1], "remove");
+    let off_dir = off.to_string_lossy().to_string();
+    assert_eq!(removals[0]["configDir"], off_dir.as_str());
+    // Off all along: no server, no token made, no declaration.
+    assert!(!h.core.mcp.status().running);
+    assert_eq!(
+        h.core
+            .secrets
+            .get(crate::integrations::secrets::MCP_ENTRY)
+            .unwrap(),
+        None
+    );
+    // An account with nothing in its folder: nothing run.
+    let before = runs(&h);
+    h.core.remove_claude_account("pro").unwrap();
+    run_after(&h, before).await;
+    assert_eq!(mcp_launches(&h).len(), 1);
     h.core.shutdown();
 }
 

@@ -18,7 +18,7 @@ export default defineZone('mcp', {
     working: 'Declaring in Claude…',
     notDeclared: 'Not declared for the {name} account: {error}',
     serverFailed: 'The server did not start: {error}',
-    command: 'Run it by hand:',
+    command: 'Run it by hand in {shell}:',
     copy: 'Copy the command',
     copied: 'Command copied',
     copyFailed: 'Copy failed: {error}',

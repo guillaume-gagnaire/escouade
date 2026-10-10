@@ -948,7 +948,7 @@ export interface McpDeclaration {
   account: string;
   ok: boolean;
   error: string | null;
-  /** The command that declares it by hand, with the real token (the window hides it on screen). */
+  /** The command that declares it by hand, its token already hidden (`mcp_manual_command` gives the real one when it is copied). */
   command: string;
 }
 

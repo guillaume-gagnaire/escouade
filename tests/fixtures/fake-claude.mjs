@@ -85,19 +85,26 @@ const limited = () => configDir !== null && fs.existsSync(path.join(configDir, '
 // fails (exit 1, "already exists"), `remove` and `get` of one that is absent too; `--header` takes every
 // argument that follows it (so Escouade puts it last). While a <folder>/fake-mcp-fail file is there, `add`
 // and `remove` fail with its text; while a <folder>/fake-mcp-hang file is there, they never answer; while a
-// <folder>/fake-mcp-raced file is there, the entry is removed behind their back. Every call is in the launch
-// log above (its argv).
-function mcpCommand(args) {
+// <folder>/fake-mcp-raced file is there, the entry is removed behind their back; while a <folder>/fake-mcp-slow
+// file is there, they wait as many milliseconds as it says. Every call is in the launch log above (its argv).
+async function mcpCommand(args) {
   const dir = process.env.CLAUDE_CONFIG_DIR || process.env.FAKE_CLAUDE_HOME;
   if (!dir) {
     process.stderr.write('fake claude: set FAKE_CLAUDE_HOME or CLAUDE_CONFIG_DIR, `claude mcp` never touches the real home\n');
     process.exit(2);
   }
   const file = path.join(dir, '.claude.json');
-  const read = () => (fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {});
   const fail = (text, code = 1) => {
     process.stderr.write(`${text}\n`);
     process.exit(code);
+  };
+  const read = () => {
+    if (!fs.existsSync(file)) return {};
+    try {
+      return JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch {
+      return fail(`fake claude: ${file} is not JSON`);
+    }
   };
   const [sub, ...rest] = args;
   const options = {};
@@ -117,6 +124,9 @@ function mcpCommand(args) {
   const scope = options['--scope']?.[0] ?? 'local';
   if ((sub === 'add' || sub === 'remove') && scope !== 'user') fail(`fake claude: only the user scope is kept (got ${scope})`);
   const [name, url] = positional;
+  const slow = path.join(dir, 'fake-mcp-slow');
+  if ((sub === 'add' || sub === 'remove') && fs.existsSync(slow))
+    await new Promise((r) => setTimeout(r, Number(fs.readFileSync(slow, 'utf8')) || 1000));
   // While a <folder>/fake-mcp-raced file is there, someone else removes the entry just before `add` and
   // `remove` look at it.
   if ((sub === 'add' || sub === 'remove') && fs.existsSync(path.join(dir, 'fake-mcp-raced')) && read().mcpServers?.[name]) {
