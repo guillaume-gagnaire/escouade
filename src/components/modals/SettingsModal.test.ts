@@ -416,6 +416,12 @@ describe('SettingsModal', () => {
     expect(proposal.getByText('web')).toBeInTheDocument();
     expect(proposal.getByText('la racine du worktree')).toBeInTheDocument();
     expect(proposal.getByText('Git Bash')).toBeInTheDocument();
+    // When each list runs by itself, once saved.
+    expect(
+      proposal.getByText(
+        "Proposition de Claude : relis chaque commande en entier. Elles remplacent les deux listes et, une fois enregistrées, tournent seules : la préparation à l'ouverture de chaque nouveau worktree, le démontage avant sa suppression.",
+      ),
+    ).toBeInTheDocument();
     // The steps of the draft it would remove are said too.
     expect(proposal.getByText('Aucune commande.')).toBeInTheDocument();
     expect(screen.queryByRole('group', { name: 'Commande de préparation 1' })).toBeNull();

@@ -189,7 +189,7 @@
     {@render proposed(
       'worktrees-proposal',
       'Commandes de worktree proposées',
-      'Proposition de Claude : relis chaque commande en entier. Elles remplacent les deux listes et, une fois enregistrées, tournent seules dans chaque nouveau worktree.',
+      "Proposition de Claude : relis chaque commande en entier. Elles remplacent les deux listes et, une fois enregistrées, tournent seules : la préparation à l'ouverture de chaque nouveau worktree, le démontage avant sa suppression.",
       proposedSteps,
       () => settle(() => settingsForm.takeProposal(project.id), suggestButton),
       () => settle(() => delete settingsForm.proposal[project.id], suggestButton),
