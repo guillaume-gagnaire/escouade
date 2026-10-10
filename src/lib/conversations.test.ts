@@ -66,4 +66,30 @@ describe('Conversation', () => {
     expect(c.error).toMatch(/agent introuvable/);
     expect(c.loaded).toBe(true);
   });
+
+  it('keeps the message asked for until the view shows it', () => {
+    fakeBackend({ get_conversation: () => [] });
+    const c = new Conversation('a1');
+    expect(c.jump).toBeNull();
+    c.reveal('m:0');
+    expect(c.jump).toBe('m:0');
+  });
+
+  it('tells which item shows a message: itself, or the call of the subagent that wrote it', async () => {
+    fakeBackend({
+      get_conversation: () => [
+        text('m:0', 'Je délègue', false),
+        { kind: 'tool', id: 't1', name: 'Agent', input: {}, status: 'ok', ts: 1 },
+        { kind: 'tool', id: 't2', name: 'Agent', input: {}, status: 'ok', ts: 1, parent: 't1' },
+        { ...text('s:0', 'Trouvé', false), parent: 't2' },
+        { ...text('lost:0', 'Orphelin', false), parent: 'gone' },
+      ],
+    });
+    const c = new Conversation('a1');
+    await c.load();
+    expect(c.shownAs('m:0')).toBe('m:0');
+    expect(c.shownAs('s:0')).toBe('t1');
+    expect(c.shownAs('lost:0')).toBeNull();
+    expect(c.shownAs('nope')).toBeNull();
+  });
 });

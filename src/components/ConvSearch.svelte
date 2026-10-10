@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { conversationOf } from '../lib/conversations.svelte';
   import { trapFocus } from '../lib/focus';
   import { fAgo, plural } from '../lib/format';
   import { api } from '../lib/ipc';
@@ -6,7 +7,7 @@
   import type { ConvHit, ConvSearchResult } from '../lib/types';
 
   // « Rechercher dans les conversations » (Ctrl+K): what the agents' conversations said, found by the backend in their
-  // logs; a result opens its agent.
+  // logs; a result opens its agent at the message.
 
   /** Characters typed before a search starts, and the pause after the last key. */
   const MIN_CHARS = 2;
@@ -121,7 +122,10 @@
     }
   }
 
-  /** Shows the agent of a result (an archived one in reading, as its card opens it), its conversation rather than the editor. */
+  /**
+   * Shows the agent of a result (an archived one in reading, as its card opens it), its conversation rather than the
+   * editor, scrolled to the message: asked for before its view is made, which shows it once loaded.
+   */
   function open(hit: ConvHit) {
     close();
     const a = app.agents[hit.agentId];
@@ -130,6 +134,7 @@
       return;
     }
     if (a.archived) app.showArchived = true;
+    conversationOf(a.id).reveal(hit.itemId);
     app.selectAgent(a.id);
     app.closeEditor(a.projectId);
   }

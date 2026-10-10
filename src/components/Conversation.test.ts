@@ -1,5 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
+import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // "▶ Tester" starts test launches, which have logs (xterm.js): none in jsdom.
@@ -175,6 +176,36 @@ describe('Conversation', () => {
       Object.defineProperty(scroller, 'scrollHeight', { configurable: true, get: () => height });
       return (h: number) => (height = h);
     };
+    /** Every block of the conversation is `height()` tall, one under the other; the view is 500 px high, at the top of the screen. */
+    const layOut = (height: () => number) =>
+      vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+        const rect = (top: number, h: number) => ({
+          top,
+          bottom: top + h,
+          height: h,
+          left: 0,
+          right: 0,
+          width: 0,
+          x: 0,
+          y: top,
+          toJSON: () => ({}),
+        });
+        if (this.classList.contains('scroll')) return rect(0, 500);
+        const msgs = this.parentElement;
+        if (msgs?.classList.contains('msgs')) {
+          const scroller = msgs.parentElement as HTMLElement;
+          return rect([...msgs.children].indexOf(this) * height() - scroller.scrollTop, height());
+        }
+        return rect(0, 0);
+      });
+    const messages = Array.from({ length: 8 }, (_, i) => ({
+      kind: 'user',
+      id: `u${i}`,
+      text: `Message ${i}`,
+      images: 0,
+      ts: i,
+      queued: false,
+    }));
 
     it('lets the reader scroll up a little without pulling them back down', async () => {
       const { scroller } = setup();
@@ -302,14 +333,7 @@ describe('Conversation', () => {
       });
 
       describe('with the messages laid out', () => {
-        const items = Array.from({ length: 8 }, (_, i) => ({
-          kind: 'user',
-          id: `u${i}`,
-          text: `Message ${i}`,
-          images: 0,
-          ts: i,
-          queued: false,
-        }));
+        const items = messages;
         // What a message weighs once drawn, and what the browser takes it for until then (content-visibility).
         const REAL = 150;
         const ESTIMATE = 60;
@@ -317,27 +341,7 @@ describe('Conversation', () => {
         let spy: ReturnType<typeof vi.spyOn>;
         beforeEach(() => {
           height = REAL;
-          // Every message is `height` tall, the view is 500 px high and starts at the top of the screen.
-          spy = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
-            const rect = (top: number, h: number) => ({
-              top,
-              bottom: top + h,
-              height: h,
-              left: 0,
-              right: 0,
-              width: 0,
-              x: 0,
-              y: top,
-              toJSON: () => ({}),
-            });
-            if (this.classList.contains('scroll')) return rect(0, 500);
-            const msgs = this.parentElement;
-            if (msgs?.classList.contains('msgs')) {
-              const scroller = msgs.parentElement as HTMLElement;
-              return rect([...msgs.children].indexOf(this) * height - scroller.scrollTop, height);
-            }
-            return rect(0, 0);
-          });
+          spy = layOut(() => height);
         });
         afterEach(() => spy.mockRestore());
 
@@ -376,6 +380,120 @@ describe('Conversation', () => {
           resized.forEach((cb) => cb([]));
           expect(view.scrollTop).toBe(200);
         });
+      });
+    });
+
+    describe('going to a message (a search result)', () => {
+      let height = 150;
+      let spy: ReturnType<typeof vi.spyOn>;
+      beforeEach(() => {
+        height = 150;
+        spy = layOut(() => height);
+      });
+      afterEach(() => {
+        spy.mockRestore();
+        vi.useRealTimers();
+      });
+      /** Where the view is with the message `i` in its middle: 150 px tall, 175 px below the top of the 500 px view. */
+      const middle = (i: number) => i * 150 - 175;
+      const highlighted = (c: HTMLElement) => [...c.querySelectorAll<HTMLElement>('.found')].map((e) => e.dataset.item);
+      const settled = async () => {
+        await frame();
+        await frame();
+      };
+
+      /** The agent opened from a result: the message is asked for before its view is made. */
+      function openAt(id: string, items: unknown[], load: () => unknown = () => items) {
+        const a = agent({ id: `j${Math.random()}`, status: 'done' });
+        resetApp({ projects: [project()], agents: [a] });
+        fakeBackend({ get_conversation: load });
+        conversationOf(a.id).reveal(id);
+        const r = render(Conversation, { agent: a, project: project() });
+        return { a, ...r, scroller: r.container.querySelector('.scroll') as HTMLElement };
+      }
+
+      it('brings the message into the middle of the view and highlights it for 2 s', async () => {
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        const { container, scroller } = openAt('u5', messages);
+        await settled();
+        expect(scroller.scrollTop).toBe(middle(5));
+        expect(highlighted(container)).toEqual(['u5']);
+        vi.advanceTimersByTime(1999);
+        await tick();
+        expect(highlighted(container)).toEqual(['u5']);
+        vi.advanceTimersByTime(1);
+        await tick();
+        expect(highlighted(container)).toEqual([]);
+      });
+
+      it('wins over the place the reader had left, and is the place kept after', async () => {
+        const { a, scroller, unmount } = setup({ status: 'done' }, messages);
+        await frame();
+        readerScrollsTo(scroller, 700);
+        unmount();
+        conversationOf(a.id).reveal('u3');
+        const again = render(Conversation, { agent: a, project: project() });
+        await settled();
+        expect((again.container.querySelector('.scroll') as HTMLElement).scrollTop).toBe(middle(3));
+        again.unmount();
+        const later = render(Conversation, { agent: a, project: project() });
+        await settled();
+        expect((later.container.querySelector('.scroll') as HTMLElement).scrollTop).toBe(middle(3));
+      });
+
+      it('goes there once the conversation is loaded', async () => {
+        let release: (items: unknown[]) => void = () => {};
+        const { container, scroller } = openAt('u6', messages, () => new Promise((r) => (release = r)));
+        await settled();
+        expect(highlighted(container)).toEqual([]);
+        release(messages);
+        await settled();
+        expect(scroller.scrollTop).toBe(middle(6));
+        expect(highlighted(container)).toEqual(['u6']);
+      });
+
+      it('goes to a message of the agent already on screen', async () => {
+        const { a, container, scroller } = setup({ status: 'done' }, messages);
+        await frame();
+        expect(scroller.scrollTop).toBe(2000);
+        conversationOf(a.id).reveal('u4');
+        await settled();
+        expect(scroller.scrollTop).toBe(middle(4));
+        expect(highlighted(container)).toEqual(['u4']);
+        // Not taken back down by the messages drawn around it.
+        resized.forEach((cb) => cb([]));
+        expect(scroller.scrollTop).toBe(middle(4));
+      });
+
+      it('keeps the message in view while the messages around it are drawn at their real height', async () => {
+        // Off screen, messages weigh a guess (content-visibility) until drawn.
+        height = 60;
+        const { scroller } = openAt('u5', messages);
+        await settled();
+        // Message 5 (300-360) in the middle: 220 px below the top of the view.
+        expect(scroller.scrollTop).toBe(80);
+        height = 150;
+        resized.forEach((cb) => cb([]));
+        expect(scroller.scrollTop).toBe(5 * 150 - 220);
+      });
+
+      it('shows a subagent’s message in the call that ran it', async () => {
+        const items = [
+          messages[0],
+          { kind: 'tool', id: 't1', name: 'Agent', input: { description: 'Enquête' }, status: 'ok', ts: 1 },
+          { kind: 'text', id: 's1:0', parent: 't1', text: 'Trouvé dans db.ts', streaming: false },
+          messages[1],
+        ];
+        const { container } = openAt('s1:0', items);
+        await settled();
+        expect(highlighted(container)).toEqual(['t1']);
+      });
+
+      it('leaves the view where it would have been when the message is not there', async () => {
+        const { container, scroller } = openAt('nope', messages);
+        await settled();
+        expect(scroller.scrollTop).toBe(2000);
+        expect(highlighted(container)).toEqual([]);
       });
     });
   });

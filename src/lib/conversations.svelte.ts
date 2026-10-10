@@ -27,6 +27,11 @@ export class Conversation {
   waiting = $state<UserItem[]>([]);
   /** Not reactive: only read when the view opens. Goes with the conversation, which goes with its agent. */
   place: ReadingPlace | null = null;
+  /**
+   * The item to bring into view (a search result), by its id: kept until the view shows it, which may be made, or
+   * the conversation loaded, after the request. It wins over `place`.
+   */
+  jump = $state<string | null>(null);
   private index = new Map<string, number>();
   private buffer: ConvOp[] | null = null;
 
@@ -47,6 +52,27 @@ export class Conversation {
     // Streaming deltas may already be included in the snapshot; final patches restore the text.
     for (const op of buffered) if (op.op !== 'delta') this.apply(op);
     this.loaded = true;
+  }
+
+  /** Asks the view to bring the item `id` into view and highlight it. */
+  reveal(id: string) {
+    this.jump = id;
+  }
+
+  /**
+   * The item the conversation shows `id` in: itself, or the call of the subagent that wrote it (its first ancestor
+   * without a parent: a subagent's items are drawn inside it). Null for an item it does not have.
+   */
+  shownAs(id: string): string | null {
+    let item = this.itemOf(id);
+    // A depth limit rather than trust: a damaged log could loop.
+    for (let depth = 0; item?.parent && depth < 16; depth++) item = this.itemOf(item.parent);
+    return item && !item.parent ? item.id : null;
+  }
+
+  private itemOf(id: string): ConvItem | undefined {
+    const i = this.index.get(id);
+    return i === undefined ? undefined : this.items[i];
   }
 
   /** Shows a message that waits for the worktree's preparation; returns what takes it off (sent, or refused). */

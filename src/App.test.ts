@@ -135,11 +135,14 @@ describe('App layout', () => {
     expect(screen.getByPlaceholderText('aucun')).toHaveValue('http://proxy:3128');
   });
 
-  it('opens « Rechercher dans les conversations » with Ctrl+K, and the agent of the result chosen', async () => {
+  it('opens « Rechercher dans les conversations » with Ctrl+K, and the message of the result chosen', async () => {
     const a2 = agent({ id: 'a2', name: 'pagination', createdAt: 2 });
+    const said = (id: string, text: string) => ({ kind: 'user', id, text, images: 0, ts: 1, queued: false });
     start('', {
       agents: [agent(), a2],
       handlers: {
+        get_conversation: ({ id }: { id: string }) =>
+          id === 'a2' ? [said('u0', 'Bonjour'), said('u1', 'Ajoute la pagination'), said('u2', 'Merci')] : [],
         search_conversations: () => ({
           hits: [
             {
@@ -167,6 +170,8 @@ describe('App layout', () => {
     await userEvent.keyboard('{Enter}');
     await expect.poll(() => screen.queryByRole('dialog', { name: 'Rechercher dans les conversations' })).toBeNull();
     expect(app.agent?.id).toBe('a2');
+    await expect.poll(() => [...document.querySelectorAll<HTMLElement>('.found')].map((e) => e.dataset.item)).toEqual(['u1']);
+    expect(document.querySelector('.found')).toHaveTextContent('Ajoute la pagination');
   });
 
   it('counts an agent as seen once the board that hid it is closed', async () => {

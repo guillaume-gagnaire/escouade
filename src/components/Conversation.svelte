@@ -1,6 +1,6 @@
 <script lang="ts">
   import { keyLabel } from '../lib/platform';
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { api } from '../lib/ipc';
   import { conversationOf, type ReadingPlace } from '../lib/conversations.svelte';
   import { splitEscouade } from '../lib/escouade';
@@ -37,6 +37,8 @@
   };
   /** How long a view put back in place is kept there while its messages are measured. */
   const SETTLE_MS = 1000;
+  /** How long a message brought into view from a search stays highlighted. */
+  const FOUND_MS = 2000;
 
   const conv = $derived(conversationOf(agent.id));
   // The ticket the agent works on, whose criteria the reports of its turns name.
@@ -176,7 +178,7 @@
 
   // The view is re-created for each agent ({#key}): put it back where the reader left it (the bottom,
   // for an agent opened the first time or left following the conversation) once, not on every agent update.
-  onMount(() => {
+  function putBack() {
     const place = conv.place;
     if (place && !place.stick) {
       stick = false;
@@ -186,7 +188,55 @@
     } else {
       requestAnimationFrame(toBottom);
     }
+  }
+
+  // A message asked for (a search result) wins over the place the reader had left: the view goes to it instead.
+  let placed = false;
+  onMount(() => {
+    if (conv.jump) stick = false;
+    else putBack();
+    placed = !conv.jump;
   });
+
+  // The message asked for is shown once the conversation is loaded and drawn, whether the view was made before or
+  // after the request (another agent's result, or one of the agent on screen).
+  let found = $state<string | null>(null);
+  let foundTimer: ReturnType<typeof setTimeout> | undefined;
+  $effect(() => {
+    const id = conv.jump;
+    if (!id || !conv.loaded) return;
+    conv.jump = null;
+    tick().then(() => reveal(id));
+  });
+  $effect(() => () => clearTimeout(foundTimer));
+
+  /**
+   * Puts the block that shows the item `id` in the middle of the view (its top a little below the view's, when it
+   * is taller) and highlights it. The block is found by the item it shows: not every item draws one. Kept there while
+   * the blocks around it are measured, as a place put back is.
+   */
+  function reveal(id: string) {
+    const shown = conv.shownAs(id);
+    const blocks = content ? [...content.children] : [];
+    const index = shown === null ? -1 : blocks.findIndex((b) => b instanceof HTMLElement && b.dataset.item === shown);
+    if (!scroller || index < 0) {
+      // Not in the conversation: the view goes where it would have gone.
+      if (!placed) putBack();
+      placed = true;
+      return;
+    }
+    placed = true;
+    const room = scroller.clientHeight - blocks[index].getBoundingClientRect().height;
+    const at: ReadingPlace = { stick: false, top: scroller.scrollTop, anchor: { index, offset: Math.max(24, room / 2) } };
+    stick = false;
+    showJump = false;
+    settling = at;
+    settleEnd = performance.now() + SETTLE_MS;
+    restore(at);
+    found = shown;
+    clearTimeout(foundTimer);
+    foundTimer = setTimeout(() => (found = null), FOUND_MS);
+  }
 
   $effect(() => {
     if (!content) return;
@@ -211,6 +261,13 @@
 
   function prevIsText(i: number) {
     return i > 0 && top[i - 1].kind === 'text';
+  }
+
+  /** Items that draw nothing: an empty block of text, the calls whose question or plan has its own card. */
+  function shows(item: ConvItem) {
+    if (item.kind === 'text' || item.kind === 'thinking') return !!item.text.trim() || item.streaming;
+    if (item.kind === 'tool') return item.name !== 'AskUserQuestion' && item.name !== 'ExitPlanMode';
+    return true;
   }
 </script>
 
@@ -339,56 +396,57 @@
         </div>
       {/if}
       {#each top as item, i (item.id)}
-        {#if item.kind === 'user'}
-          {@const injected = injectedSource(item)}
-          {#if injected}
-            <EventMessage source={injected} text={item.text} label={labels.get(parseAgentMessage(item.text).from ?? '')} />
-          {:else}
-            <UserMessage {item} />
-          {/if}
-        {:else if item.kind === 'event'}
-          <EventMessage source={item.source} text={item.text} label={labels.get(item.from ?? '')} />
-        {:else if item.kind === 'text'}
-          {#if item.text.trim() || item.streaming}
-            <div class="assistant">
-              {#if !prevIsText(i)}<span class="avatar">C</span>{:else}<span class="avatar ghost"></span>{/if}
-              <div class="blocks">
-                {#each splitEscouade(item.text) as seg, si (si)}
-                  {#if seg.kind === 'report'}
-                    <CriteriaReport report={seg.report} criteria={ticket?.criteria ?? []} {agent} />
-                  {:else}
-                    <Markdown text={seg.text} streaming={item.streaming} />
-                  {/if}
-                {/each}
+        {#if shows(item)}
+          <!-- The block of an item, found by it (reveal). -->
+          <div class="item" class:found={found === item.id} data-item={item.id}>
+            {#if item.kind === 'user'}
+              {@const injected = injectedSource(item)}
+              {#if injected}
+                <EventMessage source={injected} text={item.text} label={labels.get(parseAgentMessage(item.text).from ?? '')} />
+              {:else}
+                <UserMessage {item} />
+              {/if}
+            {:else if item.kind === 'event'}
+              <EventMessage source={item.source} text={item.text} label={labels.get(item.from ?? '')} />
+            {:else if item.kind === 'text'}
+              <div class="assistant">
+                {#if !prevIsText(i)}<span class="avatar">C</span>{:else}<span class="avatar ghost"></span>{/if}
+                <div class="blocks">
+                  {#each splitEscouade(item.text) as seg, si (si)}
+                    {#if seg.kind === 'report'}
+                      <CriteriaReport report={seg.report} criteria={ticket?.criteria ?? []} {agent} />
+                    {:else}
+                      <Markdown text={seg.text} streaming={item.streaming} />
+                    {/if}
+                  {/each}
+                </div>
               </div>
-            </div>
-          {/if}
-        {:else if item.kind === 'thinking'}
-          <Thinking {item} />
-        {:else if item.kind === 'tool'}
-          {#if item.name !== 'AskUserQuestion' && item.name !== 'ExitPlanMode'}
-            <ToolRow {item} cwd={agent.cwd} childrenOf={(id) => children.get(id) ?? []} onOpenFile={openFile} />
-          {/if}
-        {:else if item.kind === 'question'}
-          <QuestionCard {item} agentId={agent.id} pending={agent.pending.includes(item.id)} current={agent.pending[0] === item.id} />
-        {:else if item.kind === 'permission'}
-          <PermissionCard
-            {item}
-            agentId={agent.id}
-            cwd={agent.cwd}
-            pending={agent.pending.includes(item.id)}
-            current={agent.pending[0] === item.id}
-          />
-        {:else if item.kind === 'turn'}
-          <TurnCard
-            {item}
-            {agent}
-            last={i === top.length - 1}
-            latest={item.id === latestTurn}
-            edits={i === top.length - 1 ? lastEdits : []}
-          />
-        {:else if item.kind === 'notice'}
-          <Notice {item} />
+            {:else if item.kind === 'thinking'}
+              <Thinking {item} />
+            {:else if item.kind === 'tool'}
+              <ToolRow {item} cwd={agent.cwd} childrenOf={(id) => children.get(id) ?? []} onOpenFile={openFile} />
+            {:else if item.kind === 'question'}
+              <QuestionCard {item} agentId={agent.id} pending={agent.pending.includes(item.id)} current={agent.pending[0] === item.id} />
+            {:else if item.kind === 'permission'}
+              <PermissionCard
+                {item}
+                agentId={agent.id}
+                cwd={agent.cwd}
+                pending={agent.pending.includes(item.id)}
+                current={agent.pending[0] === item.id}
+              />
+            {:else if item.kind === 'turn'}
+              <TurnCard
+                {item}
+                {agent}
+                last={i === top.length - 1}
+                latest={item.id === latestTurn}
+                edits={i === top.length - 1 ? lastEdits : []}
+              />
+            {:else if item.kind === 'notice'}
+              <Notice {item} />
+            {/if}
+          </div>
         {/if}
       {/each}
       {#each conv.waiting as item (item.id)}
@@ -573,6 +631,37 @@
   .msgs > :global(*) {
     content-visibility: auto;
     contain-intrinsic-size: auto 60px;
+  }
+  /* The block of an item lays its content out as the list does. */
+  .item {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    border-radius: var(--r);
+  }
+  .item.found {
+    animation: found 2s ease-out forwards;
+  }
+  @keyframes found {
+    0%,
+    70% {
+      background: color-mix(in oklch, var(--accent) 9%, transparent);
+      outline: 2px solid var(--accent-soft);
+      outline-offset: 6px;
+    }
+    100% {
+      background: transparent;
+      outline: 2px solid transparent;
+      outline-offset: 6px;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .item.found {
+      animation: none;
+      background: color-mix(in oklch, var(--accent) 9%, transparent);
+      outline: 2px solid var(--accent-soft);
+      outline-offset: 6px;
+    }
   }
   .empty {
     padding: 90px 0 0;

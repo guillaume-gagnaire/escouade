@@ -1,6 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { conversationOf } from '../lib/conversations.svelte';
 import { app } from '../lib/state.svelte';
 import type { ConvHit, ConvSearchResult } from '../lib/types';
 import { agent, fakeBackend, project, resetApp } from '../test/ipc';
@@ -130,6 +131,8 @@ describe('ConvSearch', () => {
     await userEvent.keyboard('{Enter}');
     expect(app.modal).toBeNull();
     expect(app.agent?.id).toBe('a1');
+    // Its conversation is asked to show the message, by its id.
+    expect(conversationOf('a1').jump).toBe('m1:0');
   });
 
   it('opens an archived agent, to read, in its project', async () => {
@@ -140,6 +143,7 @@ describe('ConvSearch', () => {
     expect(app.project?.id).toBe('p2');
     expect(app.agent?.id).toBe('a2');
     expect(app.showArchived).toBe(true);
+    expect(conversationOf('a2').jump).toBe('u9');
   });
 
   it('shows the conversation rather than the editor', async () => {
