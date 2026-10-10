@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { CATALOGS, featuresFor } from '../app/data/catalogs';
 import { fmt } from '../app/data/catalog';
 import { LANG_KEY, type Lang } from '../app/data/language';
-import { SITE, VIDEO, imageOf } from '../app/data/site';
+import { FEATURE_SHOTS, SITE, VIDEO, imageOf } from '../app/data/site';
 import { SNAPSHOT, squadAt } from '../app/data/squad';
 import { escapeText, headOf, leaves, tags } from './helpers';
 
@@ -312,6 +312,32 @@ describe.each(PAGES)('generated site ($lang)', ({ lang, file, url, other }) => {
     expect(html).toMatch(/<video[^>]*preload="none"/);
   });
 
+  it('shows the screenshots and the poster of its own language, and none of the other', () => {
+    const dir = lang === 'fr' ? 'images/' : 'images/en/';
+    for (const { file } of FEATURE_SHOTS) expect(html, file).toContain(`src="${BASE}${dir}${file}"`);
+    expect(html).toContain(`poster="${BASE}${dir}poster.jpg"`);
+    expect(meta('og:image')).toBe(`${SITE}${dir}poster.jpg`);
+    expect(meta('twitter:image')).toBe(`${SITE}${dir}poster.jpg`);
+    const images = [...html.matchAll(/(?:src|poster)="(\/escouade\/images\/[^"]+\.jpg)"/g)].map((m) => m[1]);
+    expect(images.length).toBe(FEATURE_SHOTS.length + 1);
+    for (const image of images) expect(image.startsWith(`${BASE}${dir}`), image).toBe(true);
+    // The app’s window in the pictures says what the page does: no French on the English page.
+    if (lang === 'en') expect(html).not.toMatch(/images\/(?!en\/)[a-z]+\.jpg/);
+  });
+
+  it('turns on the subtitles of the language of the page, which the English page still offers in French', () => {
+    const expected = {
+      fr: [['fr', 'Français', false]],
+      en: [
+        ['en', 'English', true],
+        ['fr', 'Français', false],
+      ],
+    }[lang];
+    const raw = html.match(/<track[^>]*>/g) ?? [];
+    expect(raw.map((t) => [tags(t, 'track')[0].srclang, tags(t, 'track')[0].label, /\sdefault[\s>=/]/.test(t)])).toEqual(expected);
+    if (lang === 'en') expect(tags(html, 'track').map((t) => t.src)).toEqual([`${BASE}escouade.en.vtt`, `${BASE}escouade.vtt`]);
+  });
+
   it('offers the subtitle tracks of its video, turned on from the player unless one is the default', () => {
     const tracks = tags(html, 'track');
     expect(tracks.map((t) => [t.kind, t.srclang, t.label, t.src])).toEqual(
@@ -323,10 +349,11 @@ describe.each(PAGES)('generated site ($lang)', ({ lang, file, url, other }) => {
       const vtt = readFileSync(new URL(t.src, OUT), 'utf8');
       expect(vtt.startsWith('WEBVTT')).toBe(true);
     }
-    // The voice over is French, and so are its subtitles for now.
+    // The voice over is French; the French subtitles say it, the English ones translate it.
     expect(readFileSync(new URL('escouade.vtt', OUT), 'utf8')).toContain(
       'Voici Escouade : le poste de pilotage de tous tes agents Claude Code.',
     );
+    expect(readFileSync(new URL('escouade.en.vtt', OUT), 'utf8')).toContain('Meet Escouade: the cockpit for all your Claude Code agents.');
   });
 
   it('presents the board, the test launch and the editor among the features', () => {

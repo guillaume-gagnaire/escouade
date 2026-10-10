@@ -28,11 +28,10 @@ export const FEATURE_SHOTS = [
 export type FeatureId = (typeof FEATURE_SHOTS)[number]['id'];
 
 /**
- * The folder of public/ holding the screenshots (and the video's poster) each language's page shows. The
- * English page borrows the French ones for now: giving it its own is a matter of pointing `en` at
- * 'images/en/' once the captures are there.
+ * The folder of public/ holding the screenshots (and the video's poster) each language's page shows: the same
+ * moments of the video, with the app in the language of the page (`npm run site-images` in video/ makes both).
  */
-export const IMAGE_DIR: Record<Lang, string> = { fr: 'images/', en: 'images/' };
+export const IMAGE_DIR: Record<Lang, string> = { fr: 'images/', en: 'images/en/' };
 
 /** A file of public/ for the page of `lang`. */
 export const imageOf = (lang: Lang, file: string) => `${IMAGE_DIR[lang]}${file}`;
@@ -47,10 +46,16 @@ export interface Track {
 }
 
 /**
- * The presentation video and the subtitle tracks each page offers. Its voice is French: the English page
- * has nothing else to offer yet than the French subtitles.
+ * The presentation video and the subtitle tracks each page offers. Its voice is French: the English page turns
+ * on the English subtitles (same moments, translated) and still offers the French ones.
  */
 export const VIDEO: Record<Lang, { src: string; tracks: Track[] }> = {
   fr: { src: 'escouade.mp4', tracks: [{ srclang: 'fr', label: 'Français', src: 'escouade.vtt' }] },
-  en: { src: 'escouade.mp4', tracks: [{ srclang: 'fr', label: 'Français', src: 'escouade.vtt' }] },
+  en: {
+    src: 'escouade.mp4',
+    tracks: [
+      { srclang: 'en', label: 'English', src: 'escouade.en.vtt', default: true },
+      { srclang: 'fr', label: 'Français', src: 'escouade.vtt' },
+    ],
+  },
 };

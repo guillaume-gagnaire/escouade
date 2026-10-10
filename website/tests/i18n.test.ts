@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { CATALOGS, featuresFor } from '../app/data/catalogs';
 import { fmt, plural } from '../app/data/catalog';
@@ -159,12 +159,24 @@ describe('what the two pages share', () => {
     }
   });
 
-  it('keeps the screenshots of each language in a folder of its own, ready for the English ones', () => {
+  it('keeps the screenshots of each language in a folder of its own', () => {
     expect(Object.keys(IMAGE_DIR)).toEqual(['fr', 'en']);
     expect(imageOf('fr', 'poster.jpg')).toBe(`${IMAGE_DIR.fr}poster.jpg`);
     // The French folder is the one the site has always used: its links stay good.
     expect(IMAGE_DIR.fr).toBe('images/');
-    for (const lang of ['fr', 'en'] as const) expect(existsSync(new URL(imageOf(lang, 'poster.jpg'), PUBLIC)), lang).toBe(true);
+    expect(IMAGE_DIR.en).toBe('images/en/');
+    expect(imageOf('en', 'poster.jpg')).toBe('images/en/poster.jpg');
+  });
+
+  it('has every screenshot and the poster in both languages, and the English ones are not the French ones', () => {
+    for (const file of [...FEATURE_SHOTS.map((s) => s.file), 'poster.jpg']) {
+      const [fr, en] = (['fr', 'en'] as const).map((lang) => new URL(imageOf(lang, file), PUBLIC));
+      expect(existsSync(fr), `fr ${file}`).toBe(true);
+      expect(existsSync(en), `en ${file}`).toBe(true);
+      // The same moment, with the app in English: a picture of its own.
+      expect(readFileSync(en).equals(readFileSync(fr)), file).toBe(false);
+      for (const url of [fr, en]) expect(readFileSync(url).subarray(0, 2).toString('hex'), file).toBe('ffd8');
+    }
   });
 
   it('plays the one video in both languages, with the subtitles of its voice', () => {
@@ -173,7 +185,36 @@ describe('what the two pages share', () => {
       expect(VIDEO[lang].tracks.length).toBeGreaterThan(0);
       for (const t of VIDEO[lang].tracks) expect(existsSync(new URL(t.src, PUBLIC)), t.src).toBe(true);
     }
-    expect(VIDEO.fr.tracks[0]).toMatchObject({ srclang: 'fr', label: 'Français', src: 'escouade.vtt' });
+    expect(VIDEO.fr.tracks).toEqual([{ srclang: 'fr', label: 'Français', src: 'escouade.vtt' }]);
+  });
+
+  it('turns the English subtitles on by default for the English page, and still offers the French ones', () => {
+    expect(VIDEO.en.tracks).toEqual([
+      { srclang: 'en', label: 'English', src: 'escouade.en.vtt', default: true },
+      { srclang: 'fr', label: 'Français', src: 'escouade.vtt' },
+    ]);
+  });
+
+  it('has English subtitles that time every piece of the voice like the French ones', () => {
+    /** The cues of a WebVTT file: its number, its times and its text. */
+    const cues = (file: string) =>
+      readFileSync(new URL(file, PUBLIC), 'utf8')
+        .replace(/^WEBVTT\n\n/, '')
+        .trim()
+        .split('\n\n')
+        .map((block) => {
+          const [id, time, ...text] = block.split('\n');
+          return { id, time, text: text.join(' ') };
+        });
+    const fr = cues('escouade.vtt');
+    const en = cues('escouade.en.vtt');
+    expect(fr.length).toBeGreaterThan(100);
+    expect(en.map((c) => [c.id, c.time])).toEqual(fr.map((c) => [c.id, c.time]));
+    expect(en[0].text).toBe('Meet Escouade: the cockpit for all your Claude Code agents.');
+    expect(en.at(-1)!.text).toBe('and give Claude a squad!');
+    // Not a copy of the French.
+    for (const [i, c] of en.entries()) expect(c.text, `cue ${i + 1}`).not.toBe(fr[i].text);
+    expect(en.map((c) => c.text).join(' ')).not.toMatch(/[àâçéèêîôùû«»]/);
   });
 });
 

@@ -1,0 +1,441 @@
+WEBVTT
+
+1
+00:00:01.000 --> 00:00:05.400
+Meet Escouade: the cockpit for all your Claude Code agents.
+
+2
+00:00:07.033 --> 00:00:11.913
+Five projects. Twelve agents. Thirty terminals open… Seriously?
+
+3
+00:00:12.500 --> 00:00:15.220
+Escouade brings it all together in a single window.
+
+4
+00:00:16.333 --> 00:00:20.866
+One project, one tab, one color: the whole interface follows. A green dot?
+
+5
+00:00:20.920 --> 00:00:24.253
+An agent is at work. The number? Modified files.
+
+6
+00:00:24.567 --> 00:00:29.367
+Drag tabs to sort them. Right-click: rename, recolor, close.
+
+7
+00:00:29.967 --> 00:00:34.767
+New project? Pick its folder: Escouade detects the git repository… or creates it.
+
+8
+00:00:35.067 --> 00:00:39.387
+A color, a first agent, and if you want, a git worktree per agent.
+
+9
+00:00:41.133 --> 00:00:44.413
+Agents? As many as you want, each with its own conversation.
+
+10
+00:00:44.700 --> 00:00:49.740
+Its card says it all: status, model, working time, tokens, cost,
+
+11
+00:00:49.820 --> 00:00:50.860
+modified files.
+
+12
+00:00:51.167 --> 00:00:53.647
+Your first request? Haiku finds it a name.
+
+13
+00:00:54.367 --> 00:00:58.287
+It’s done? Archive it: its conversation stays one click away.
+
+14
+00:00:58.600 --> 00:01:00.360
+Double-click to rename it.
+
+15
+00:01:00.440 --> 00:01:03.720
+And Delete stops its process and removes its worktree.
+
+16
+00:01:05.067 --> 00:01:10.107
+This is a real chat: markdown, colored code, Claude’s thinking folded away,
+
+17
+00:01:10.227 --> 00:01:11.547
+compact tool calls.
+
+18
+00:01:11.867 --> 00:01:15.707
+Unfold them: a change’s diff, a command’s output.
+
+19
+00:01:16.400 --> 00:01:18.840
+During the turn, you see what the agent does.
+
+20
+00:01:18.880 --> 00:01:21.360
+Its tokens and cost climb live.
+
+21
+00:01:21.667 --> 00:01:25.187
+A question? A permission? Answer in one click.
+
+22
+00:01:26.000 --> 00:01:29.573
+Write to it while it works: it takes it into account at the next step.
+
+23
+00:01:29.627 --> 00:01:31.360
+And Esc stops it cold.
+
+24
+00:01:32.267 --> 00:01:38.107
+Model, effort, mode: change them whenever you want. Fable, Opus, Sonnet or Haiku,
+
+25
+00:01:38.147 --> 00:01:39.787
+in the version Claude Code uses.
+
+26
+00:01:40.367 --> 00:01:45.087
+Drop in an image, a PDF, a file. Mention a file with @,
+
+27
+00:01:45.167 --> 00:01:47.087
+run a command with /.
+
+28
+00:01:47.733 --> 00:01:53.413
+Done? A card sums up the task: time, cost, files. One click to review them,
+
+29
+00:01:53.493 --> 00:01:55.173
+another to ask for the commit.
+
+30
+00:01:56.100 --> 00:02:00.020
+An agent is waiting for you, or finished? Its tab and card blink,
+
+31
+00:02:00.060 --> 00:02:02.100
+and a chime rings, which you can mute.
+
+32
+00:02:02.700 --> 00:02:05.660
+Escouade in the background? A notification arrives,
+
+33
+00:02:05.740 --> 00:02:07.420
+the taskbar flashes.
+
+34
+00:02:08.033 --> 00:02:10.913
+Ctrl+J: straight to the next agent waiting for you.
+
+35
+00:02:11.633 --> 00:02:13.873
+You close the window? Nothing stops:
+
+36
+00:02:13.953 --> 00:02:17.233
+Escouade slips into the notification area. And on restart,
+
+37
+00:02:17.313 --> 00:02:18.993
+every agent picks up its session.
+
+38
+00:02:19.933 --> 00:02:22.573
+Split view: the conversation on the left,
+
+39
+00:02:22.613 --> 00:02:26.653
+the modified files and their diff on the right, live while the agent writes.
+
+40
+00:02:26.967 --> 00:02:32.247
+This agent or the whole project. Side by side or unified. Even full screen.
+
+41
+00:02:32.933 --> 00:02:36.853
+History? The repository graph, with the agent’s branch highlighted.
+
+42
+00:02:36.893 --> 00:02:39.013
+Click a commit, and there’s its diff.
+
+43
+00:02:39.733 --> 00:02:41.933
+A worktree per agent? When it’s ready,
+
+44
+00:02:41.973 --> 00:02:45.653
+one click merges its branch into main, as a merge or a squash.
+
+45
+00:02:47.433 --> 00:02:51.993
+And the status bar follows your branch: pull, push and fetch, in one click.
+
+46
+00:02:53.333 --> 00:02:56.773
+A file to tweak? The built-in editor opens on the project,
+
+47
+00:02:56.853 --> 00:02:58.373
+or on an agent’s worktree.
+
+48
+00:02:58.667 --> 00:03:03.387
+File tree, tabs, syntax highlighting, search, and modified lines,
+
+49
+00:03:03.467 --> 00:03:04.507
+marked in the margin.
+
+50
+00:03:05.100 --> 00:03:09.340
+Ctrl+S, and it’s saved. And if the agent changes your open file,
+
+51
+00:03:09.367 --> 00:03:10.620
+the editor warns you.
+
+52
+00:03:11.967 --> 00:03:16.767
+And now, the Kanban! To do, in progress, to review, done.
+
+53
+00:03:17.367 --> 00:03:21.474
+A ticket: a title, a description, acceptance criteria…
+
+54
+00:03:21.500 --> 00:03:23.447
+and a maximum number of loops.
+
+55
+00:03:24.133 --> 00:03:27.413
+Right-click: edit, move to the top, delete.
+
+56
+00:03:28.033 --> 00:03:31.206
+Start a ticket by hand… or switch on autopilot:
+
+57
+00:03:31.260 --> 00:03:33.553
+agents take tickets on their own, in order,
+
+58
+00:03:33.633 --> 00:03:36.113
+up to the number of parallel agents you chose.
+
+59
+00:03:37.633 --> 00:03:41.873
+Each ticket gets its own agent, its branch, its worktree with your .env files,
+
+60
+00:03:41.953 --> 00:03:44.193
+and its own ports for tests.
+
+61
+00:03:44.500 --> 00:03:48.927
+And the agent loops until it gets there: every turn, it checks its criteria.
+
+62
+00:03:48.953 --> 00:03:50.660
+Some missing? It goes again.
+
+63
+00:03:51.367 --> 00:03:56.007
+On the card: the current loop, the criteria met, what’s already in place,
+
+64
+00:03:56.047 --> 00:03:57.767
+and what the agent is doing right now.
+
+65
+00:03:58.067 --> 00:04:02.867
+A blocked ticket frees its slot and lets you know. One click, and it goes again.
+
+66
+00:04:03.567 --> 00:04:07.327
+Its report shows as a card in the conversation. And in the sidebar,
+
+67
+00:04:07.407 --> 00:04:09.727
+its card carries the ticket and its loop.
+
+68
+00:04:11.067 --> 00:04:14.987
+All criteria met? The ticket moves to To review, and you’re notified.
+
+69
+00:04:15.027 --> 00:04:19.227
+Last loop without meeting them all? It goes there too, as “Partial goal”.
+
+70
+00:04:19.933 --> 00:04:22.933
+One click on Test: Escouade sets up the project,
+
+71
+00:04:22.973 --> 00:04:26.253
+starts its servers on the ticket’s ports, waits for them to answer…
+
+72
+00:04:26.833 --> 00:04:30.113
+And opens your browser right on the feature!
+
+73
+00:04:31.033 --> 00:04:34.313
+The logs? In the Launch section, under the agent’s name.
+
+74
+00:04:34.633 --> 00:04:38.953
+And for any worktree agent, Prepare launch asks it how to test it.
+
+75
+00:04:39.867 --> 00:04:44.507
+Looks good? Approve! Escouade reruns the tests, commits with a generated message,
+
+76
+00:04:44.667 --> 00:04:46.827
+merges into your branch and removes the worktree.
+
+77
+00:04:47.533 --> 00:04:51.573
+Rather a pull request, opened with gh? Or push the branch?
+
+78
+00:04:51.613 --> 00:04:55.373
+It’s all set per project, down to conflicts and parallel agents.
+
+79
+00:04:55.967 --> 00:04:59.647
+Something’s off? Send the ticket back to its agent, telling it what’s wrong.
+
+80
+00:04:59.727 --> 00:05:02.767
+And if a test fails at approval, it goes back by itself.
+
+81
+00:05:03.500 --> 00:05:07.100
+And finished tickets keep their outcome, their loops and their cost.
+
+82
+00:05:08.033 --> 00:05:12.033
+Your tickets are in Jira, Trello or GitHub? Connect your account,
+
+83
+00:05:12.113 --> 00:05:13.553
+and link a source to your project.
+
+84
+00:05:13.867 --> 00:05:17.627
+One click on Import: search, filter, tick.
+
+85
+00:05:17.654 --> 00:05:20.267
+And their acceptance criteria are detected on their own.
+
+86
+00:05:20.867 --> 00:05:23.427
+There they are in the Kanban, with their original key.
+
+87
+00:05:24.033 --> 00:05:28.993
+Escouade keeps their status up to date, and comments when it’s ready for review, then approved.
+
+88
+00:05:29.800 --> 00:05:33.640
+Even better: label a ticket, and it lands in your Kanban on its own.
+
+89
+00:05:35.167 --> 00:05:40.367
+Your project, in one click: set up its commands, the front end, the API, a worker,
+
+90
+00:05:40.407 --> 00:05:42.287
+each with its own shell and folder.
+
+91
+00:05:42.600 --> 00:05:47.400
+Run all, and everything starts: each command has its log and live status.
+
+92
+00:05:48.000 --> 00:05:51.360
+One crashes? You know right away, with its exit code.
+
+93
+00:05:52.700 --> 00:05:59.260
+A terminal? PowerShell, Git Bash or WSL, and zsh, bash and fish on Mac.
+
+94
+00:05:59.300 --> 00:06:01.620
+With your shell’s autocomplete, history,
+
+95
+00:06:01.660 --> 00:06:03.420
+and even your full-screen programs.
+
+96
+00:06:04.833 --> 00:06:09.180
+At the bottom, the status bar counts your active, waiting and finished agents.
+
+97
+00:06:09.206 --> 00:06:12.193
+And it tracks your quotas: the 5-hour window, the week,
+
+98
+00:06:12.273 --> 00:06:13.633
+and when they reset.
+
+99
+00:06:13.933 --> 00:06:18.413
+Today’s cost climbs live, with the memory and CPU Claude takes.
+
+100
+00:06:19.033 --> 00:06:23.033
+Usage limit reached? The agent resumes by itself as soon as your quota is back.
+
+101
+00:06:23.633 --> 00:06:28.593
+And the stats: your input, cache and output tokens, your cost, by day,
+
+102
+00:06:28.673 --> 00:06:31.393
+week or month, by project and by model.
+
+103
+00:06:32.800 --> 00:06:35.520
+Stepping away? Turn on remote control:
+
+104
+00:06:35.600 --> 00:06:39.920
+the agent’s session opens on claude.ai, and in the Claude app on your phone.
+
+105
+00:06:40.233 --> 00:06:42.953
+What you send there shows up in Escouade too.
+
+106
+00:06:44.367 --> 00:06:48.287
+And more: settings for everything, down to stopping idle agents,
+
+107
+00:06:48.327 --> 00:06:52.047
+a network proxy, keyboard shortcuts, and automatic updates.
+
+108
+00:06:52.633 --> 00:06:55.193
+Escouade runs on Windows and macOS.
+
+109
+00:06:56.533 --> 00:07:00.293
+Escouade is free and open source. Download it on GitHub,
+
+110
+00:07:00.373 --> 00:07:01.813
+and give Claude a squad!
