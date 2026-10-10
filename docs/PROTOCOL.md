@@ -11,7 +11,10 @@ claude --output-format stream-json --verbose --input-format stream-json
        --model <fable|opus|sonnet|haiku> --effort <low|medium|high|xhigh|max>
        [--resume=<session_id> [--fork-session [--resume-session-at=<uuid>]]]
        [--allow-dangerously-skip-permissions]
+       [--mcp-config <fichier> | --disallowedTools mcp__escouade]
 ```
+
+L'environnement du process est celui de l'app, plus les variables des réglages réseau (`HTTPS_PROXY` / `HTTP_PROXY` / `NO_PROXY`, `NODE_TLS_REJECT_UNAUTHORIZED`) et, pour un compte autre que Principal, `CLAUDE_CONFIG_DIR=<dossier du compte>` (voir « Comptes Claude »). `--mcp-config` et `--disallowedTools` sont donnés à la fin, l'un ou l'autre selon le projet (voir « Les agents d'Escouade »).
 
 Une ligne JSON par message, dans les deux sens (stdin / stdout).
 
@@ -63,7 +66,16 @@ Compaction : la chaîne repart de l'entrée `compact_boundary` (`parentUuid: nul
 
 ## Transcripts
 
-`~/.claude/projects/<cwd encodé>/<session_id>.jsonl` — pas de titre généré en mode `-p` ; l'app tient son propre journal de conversation normalisé.
+`<dossier de config du compte>/projects/<cwd encodé>/<session_id>.jsonl` (`~/.claude/` pour Principal, `CLAUDE_CONFIG_DIR` pour un autre compte) — pas de titre généré en mode `-p` ; l'app tient son propre journal de conversation normalisé.
+
+## Comptes Claude (`CLAUDE_CONFIG_DIR`)
+
+Un compte est un dossier de config de Claude Code : `CLAUDE_CONFIG_DIR` (défaut `~/.claude`) en contient la configuration, la connexion et les transcripts. Essais du 2026-10-10 sur Claude Code 2.1.289, dossiers jetables :
+
+- **Principal se lance sans toucher à `CLAUDE_CONFIG_DIR`**, même vers `~/.claude` : sous macOS, le nom du service du trousseau en dépend. Lu dans le binaire : `Claude Code-credentials` quand la variable n'est pas définie, `Claude Code-credentials-<h>` sinon, `<h>` étant les 8 premiers caractères hexadécimaux du SHA-256 de la valeur normalisée en NFC (`CLAUDE_SECURESTORAGE_CONFIG_DIR`, s'il est défini, prend le pas) ; le trousseau passe avant le fichier. Définir la variable changerait donc l'entrée lue et déconnecterait l'utilisateur ; un autre compte reçoit exactement la chaîne dont Escouade calcule le hachage. Chaque dossier a sa connexion : les comptes multiples marchent sous macOS.
+- Sous Windows (et hors macOS), la connexion est `<dossier>/.credentials.json` (`claudeAiOauth.accessToken`, `expiresAt`). Un drapeau distant, `tengu_windows_credman`, pourrait la faire passer au Gestionnaire d'identification avec les mêmes noms : hors périmètre. L'e-mail du compte est `oauthAccount.emailAddress` du `.claude.json`, qui est `<dossier>/.claude.json` quand la variable est définie, sinon `~/.claude.json` (à côté de `~/.claude/`, pas dedans).
+- **Reprise dans un autre dossier** : un transcript `projects/<cwd encodé>/<id>.jsonl` copié dans le `CLAUDE_CONFIG_DIR` d'un autre compte est trouvé par `claude -p --resume <id>` lancé depuis le même dossier de travail (sans connexion, le refus porte sur elle : « Not logged in » ; un identifiant inconnu donne « No conversation found with session ID »). Escouade copie `projects/*/<id>.jsonl` et le dossier voisin `<id>/` (sous-agents, résultats d'outils), pas `file-history/`, `todos/` ni `session-env/`, après avoir arrêté le process de l'agent. **Non vérifié avec un second compte réel** : que l'API accepte une conversation commencée sur un autre compte (blocs de réflexion signés) ; un refus arrive comme un `result` en erreur au premier tour.
+- Quota d'un compte : `get_usage` sur un process vivant du compte, sinon l'endpoint de `/usage` avec le jeton OAuth de sa connexion (voir « CLI → hôte » pour `rate_limit_event`).
 
 ## Serveur MCP d'Escouade
 
@@ -148,7 +160,7 @@ Annotés `readOnlyHint: false`, `openWorldHint: false` (`stop_agent` : `destruct
 | `update_ticket` | `ticket`, `title?`, `description?`, `criteria?`, `after?` | le ticket comme `get_ticket`. Seuls les champs donnés changent (`criteria` et `after` remplacent la liste entière : `after: []` retire les dépendances). Rien de donné : erreur. |
 | `move_ticket` | `ticket`, `position: "top" \| "bottom" \| "before"`, `before?` (clé, avec `before` seulement) | `{ ticket, todo: [clés de « À faire » dans le nouvel ordre] }`. Les rangs ne changent que pour ce ticket, sauf quand deux voisins n'ont plus de rang entre eux (la colonne est renumérotée). Déjà à sa place : rien ne change. |
 | `start_ticket` | `ticket` | `{ key, starting: true }` : le ticket est lancé à la main comme par « Lancer », le Kanban le démarre dès qu'il peut (il passe « En cours » en quelques secondes : `get_ticket`). |
-| `create_agent` | `project`, `message`, `worktree?: bool`, `model?` | `{ id, name }`. L'agent est créé (sans changer l'agent sélectionné de la barre latérale) puis reçoit `message`, **sous le nom de son auteur** (voir plus bas). L'appel ne répond **qu'une fois ce premier message remis** : il attend donc la préparation du worktree de l'agent (les commandes de préparation du projet) et le démarrage de son process, et tient entre-temps un verrou (un seul `create_agent` à la fois, pour que deux appels simultanés ne trouvent pas la même place libre). `name` est celui du moment (Haiku le renomme d'après le texte du message, sans l'en-tête). `worktree` : `true` un worktree à lui, `false` le dossier du projet, absent comme le réglage du projet. `model` : un nom que Claude Code propose (alias ou modèle résolu, tels que la fenêtre les liste quand ils sont connus ; sinon seulement une forme sûre : lettres, chiffres et `._-:[]/`). Le compte est celui par défaut. |
+| `create_agent` | `project`, `message`, `worktree?: bool`, `model?` | `{ id, name }`. L'agent est créé (sans changer l'agent sélectionné de la barre latérale) puis reçoit `message`, **sous le nom de son auteur** (voir plus bas). L'appel ne répond **qu'une fois ce premier message remis** : il attend donc la préparation du worktree de l'agent (les commandes de préparation du projet) et le démarrage de son process, et tient entre-temps un verrou (un seul `create_agent` à la fois, pour que deux appels simultanés ne trouvent pas la même place libre). `name` est celui du moment (Haiku le renomme d'après le texte du message, sans l'en-tête). `worktree` : `true` un worktree à lui, `false` le dossier du projet, absent comme le réglage du projet. `model` : un nom que Claude Code propose (alias ou modèle résolu, tels que la fenêtre les liste quand ils sont connus ; sinon seulement une forme sûre : lettres, chiffres et `._-:[]/`). Le compte est celui d'un nouvel agent du projet (son « Compte préféré », sinon le premier compte utilisable). |
 | `send_message` | `agent`, `project?`, `text` | `{ id, name, queued }` : `queued` est vrai quand l'agent travaille (le message est lu après son tour). Le message est remis **sous le nom de son auteur** (voir plus bas). |
 | `stop_agent` | `agent`, `project?` | `{ id, name, interrupted }` : `interrupted` est vrai quand un tour tournait (l'agent reste, on peut lui écrire après). |
 
