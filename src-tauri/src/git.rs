@@ -4,6 +4,7 @@ use crate::model::{Commit, FileChange};
 use anyhow::{bail, Result};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use parking_lot::Mutex;
+use serde::Serialize;
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -54,7 +55,32 @@ fn never_prompt(cmd: &mut tokio::process::Command) {
 /// user's may ask: Git Credential Manager can then start a browser, which must outlive the
 /// command, so no job object for those.
 async fn run_net(cwd: &str, args: &[&str], background: bool) -> Result<Vec<u8>> {
-    let mut cmd = command(cwd, args);
+    run_net_command(command(cwd, args), args, background).await
+}
+
+/// `cmd` with git's messages in English, whatever the system's language: for the commands whose
+/// refusals are told apart by their text.
+fn in_english(mut cmd: tokio::process::Command) -> tokio::process::Command {
+    cmd.env("LC_ALL", "C");
+    cmd
+}
+
+/// `run`, with git's messages in English (`in_english`).
+async fn run_english(cwd: &str, args: &[&str]) -> Result<Vec<u8>> {
+    let out = in_english(command(cwd, args)).output().await?;
+    checked(out, args)
+}
+
+/// `run_net`, with git's messages in English (`in_english`).
+async fn run_net_english(cwd: &str, args: &[&str], background: bool) -> Result<Vec<u8>> {
+    run_net_command(in_english(command(cwd, args)), args, background).await
+}
+
+async fn run_net_command(
+    mut cmd: tokio::process::Command,
+    args: &[&str],
+    background: bool,
+) -> Result<Vec<u8>> {
     cmd.kill_on_drop(true);
     if background {
         never_prompt(&mut cmd);
@@ -354,8 +380,14 @@ const TOO_LARGE: &str = "Diff too large";
 
 /// `diff`, with the file diffs over `limit` bytes cut down to their header and the `TOO_LARGE` line.
 fn cap_file_diffs(diff: &str, limit: usize) -> Cow<'_, str> {
-    // No file can pass the cap when the whole text does not.
-    if diff.len() <= limit {
+    cap_diff(diff, limit, usize::MAX)
+}
+
+/// `cap_file_diffs`, and the files that would bring the whole past `budget` bytes flagged the same:
+/// a comparison of two distant branches can span thousands of files.
+fn cap_diff(diff: &str, limit: usize, budget: usize) -> Cow<'_, str> {
+    // No file can pass the cap, nor the whole the budget, when the whole text does not.
+    if diff.len() <= limit.min(budget) {
         return Cow::Borrowed(diff);
     }
     // A hunk line starts with its sign (+, -, space or \), so a line starting "diff --git " is
@@ -373,7 +405,7 @@ fn cap_file_diffs(diff: &str, limit: usize) -> Cow<'_, str> {
         out.push_str(&diff[from..start]);
         let end = starts.get(i + 1).copied().unwrap_or(diff.len());
         let file = &diff[start..end];
-        if file.len() > limit {
+        if file.len() > limit || out.len() + file.len() > budget {
             out.push_str(&flagged(file));
         } else {
             out.push_str(file);
@@ -759,18 +791,11 @@ pub async fn ensure_excluded(repo: &str, pattern: &str) -> Result<()> {
     Ok(())
 }
 
+/// True when `repo` has a local branch of exactly that name: `show-ref --verify` takes a ref and
+/// nothing else, where `rev-parse` would read `main~1` or `main@{1}` as `refs/heads/main~1` and say
+/// yes to a revision.
 pub async fn branch_exists(repo: &str, branch: &str) -> bool {
-    run(
-        repo,
-        &[
-            "rev-parse",
-            "--verify",
-            "--quiet",
-            &format!("refs/heads/{branch}"),
-        ],
-    )
-    .await
-    .is_ok()
+    ref_exists(repo, &format!("refs/heads/{branch}")).await
 }
 
 /// The local branches, the checked-out one first.
@@ -888,16 +913,55 @@ fn invalid_branch(branch: &str) -> anyhow::Error {
     ))
 }
 
-/// Checks the existing local branch `branch` out in `repo`; git's refusal (untracked files in the
-/// way, the branch held by another worktree…) comes back as it is.
+/// The untracked files of the folder that git says a checkout would overwrite (or remove), from
+/// its refusal in English:
+/// `error: The following untracked working tree files would be overwritten by checkout:`, the
+/// names on the lines that follow, one tab in.
+fn untracked_in_the_way(message: &str) -> Option<Vec<String>> {
+    let (_, rest) = message.split_once("untracked working tree files would be ")?;
+    let files: Vec<String> = rest
+        .lines()
+        .skip(1)
+        .take_while(|l| l.starts_with('\t'))
+        .map(|l| l.trim().to_string())
+        .collect();
+    (!files.is_empty()).then_some(files)
+}
+
+/// Refused: the switch would overwrite untracked `files` (the first ones when they are many).
+fn files_in_the_way(lang: crate::i18n::Lang, files: &[String]) -> String {
+    const SHOWN: usize = 10;
+    let mut list = files[..files.len().min(SHOWN)].join(", ");
+    if files.len() > SHOWN {
+        list.push_str(", …");
+    }
+    tr_in!(
+        lang,
+        "Ce changement de branche écraserait des fichiers non suivis du dossier : {list}. Déplace-les ou supprime-les, puis réessaie.",
+        "This switch would overwrite untracked files of the folder: {list}. Move or delete them, then try again."
+    )
+}
+
+/// The failure of a `git switch`, git's refusal over untracked files told in words and kept short;
+/// any other as it is.
+fn switch_failed(e: anyhow::Error) -> anyhow::Error {
+    match untracked_in_the_way(&e.to_string()) {
+        Some(files) => anyhow::anyhow!(files_in_the_way(crate::i18n::ui(), &files)),
+        None => e,
+    }
+}
+
+/// Checks the existing local branch `branch` out in `repo`; git's refusal (the branch held by
+/// another worktree…) comes back as it is, but for untracked files in the way: they are named.
 pub async fn switch(repo: &str, branch: &str) -> Result<()> {
     if branch.starts_with('-') {
         bail!(invalid_branch(branch));
     }
     // `--no-guess`: a branch only the remote has is not made, the base is a local one.
-    run(repo, &["switch", "--no-guess", branch])
+    run_english(repo, &["switch", "--no-guess", branch])
         .await
         .map(|_| ())
+        .map_err(switch_failed)
 }
 
 /// Commits of `branch` that `base` does not have; an error when git cannot count them.
@@ -935,6 +999,769 @@ pub async fn checkout_of(repo: &str, branch: &str) -> Result<Option<String>> {
         }
     }
     Ok(None)
+}
+
+// ---------- branches ----------
+
+/// A branch as the branch picker lists it: a local one, or a remote one (`origin/feat`).
+#[derive(Debug, Clone, PartialEq, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchInfo {
+    /// A local branch's name (`feat/x`), a remote one's with its remote (`origin/feat/x`).
+    pub name: String,
+    pub remote: bool,
+    /// Checked out in the repository's own folder.
+    pub current: bool,
+    /// The branch a local one tracks (`origin/feat/x`).
+    pub upstream: Option<String>,
+    /// That upstream no longer exists (deleted on the remote, as of the last fetch).
+    pub upstream_gone: bool,
+    /// Commits not in the upstream / in the upstream only, as of the last fetch.
+    pub ahead: u32,
+    pub behind: u32,
+    /// The folder of the worktree that has it checked out, the repository's own included.
+    pub worktree: Option<String>,
+    /// A remote one: the local branch that tracks it.
+    pub tracked_by: Option<String>,
+    /// The agent whose worktree has it checked out (its id): told by the core, never by git.
+    pub agent: Option<String>,
+    /// When its latest commit was made (committer date), ms since epoch.
+    pub last_commit_at: i64,
+}
+
+/// The fields of a local branch, NUL-separated: its ref, its upstream's, how it stands against that
+/// upstream (`ahead 1, behind 2`, `gone`), its tip's committer date, `*` when checked out in the
+/// repository's folder, and the folder of the worktree that has it checked out.
+const LOCAL_BRANCH: &str = "--format=%(refname)%00%(upstream)%00%(upstream:track,nobracket)\
+                            %00%(committerdate:unix)%00%(HEAD)%00%(worktreepath)";
+
+/// The fields of a remote branch: its ref, the ref it stands for (a remote's HEAD), its tip's date.
+const REMOTE_BRANCH: &str = "--format=%(refname)%00%(symref)%00%(committerdate:unix)";
+
+/// A branch's short name: `feat` for `refs/heads/feat`, `origin/feat` for `refs/remotes/origin/feat`.
+fn short_ref(refname: &str) -> &str {
+    refname
+        .strip_prefix("refs/heads/")
+        .or_else(|| refname.strip_prefix("refs/remotes/"))
+        .unwrap_or(refname)
+}
+
+/// (ahead, behind, gone) from `%(upstream:track,nobracket)`: `ahead 1, behind 2`, `gone` or nothing.
+fn parse_track(track: &str) -> (u32, u32, bool) {
+    let (mut ahead, mut behind) = (0, 0);
+    for part in track.split(", ") {
+        if let Some(n) = part.strip_prefix("ahead ") {
+            ahead = n.parse().unwrap_or(0);
+        } else if let Some(n) = part.strip_prefix("behind ") {
+            behind = n.parse().unwrap_or(0);
+        }
+    }
+    (ahead, behind, track == "gone")
+}
+
+/// The repository's branches: the local ones (the one checked out in `repo` first), then the
+/// remote ones, those a local branch tracks included, a remote's HEAD left out.
+pub async fn branch_list(repo: &str) -> Result<Vec<BranchInfo>> {
+    let (locals, remotes) = tokio::join!(
+        text(repo, &["for-each-ref", LOCAL_BRANCH, "refs/heads"]),
+        text(repo, &["for-each-ref", REMOTE_BRANCH, "refs/remotes"]),
+    );
+    let (locals, remotes) = (locals?, remotes?);
+    let mut list = Vec::new();
+    // The local branch that tracks each remote one.
+    let mut tracked_by: HashMap<&str, &str> = HashMap::new();
+    for line in locals.lines() {
+        let fields: Vec<&str> = line.split('\0').collect();
+        let [refname, upstream, track, date, head, worktree] = fields[..] else {
+            continue;
+        };
+        let Some(name) = refname.strip_prefix("refs/heads/") else {
+            continue;
+        };
+        if !upstream.is_empty() {
+            tracked_by.insert(upstream, name);
+        }
+        let (ahead, behind, upstream_gone) = parse_track(track);
+        list.push(BranchInfo {
+            name: name.to_string(),
+            current: head == "*",
+            upstream: (!upstream.is_empty()).then(|| short_ref(upstream).to_string()),
+            upstream_gone,
+            ahead,
+            behind,
+            worktree: (!worktree.is_empty()).then(|| worktree.to_string()),
+            last_commit_at: date.parse::<i64>().unwrap_or(0) * 1000,
+            ..BranchInfo::default()
+        });
+    }
+    list.sort_by_key(|b| !b.current);
+    for line in remotes.lines() {
+        let fields: Vec<&str> = line.split('\0').collect();
+        let [refname, symref, date] = fields[..] else {
+            continue;
+        };
+        let Some(name) = refname.strip_prefix("refs/remotes/") else {
+            continue;
+        };
+        // `origin/HEAD` stands for the remote's default branch, listed for itself.
+        if !symref.is_empty() || name.ends_with("/HEAD") {
+            continue;
+        }
+        list.push(BranchInfo {
+            name: name.to_string(),
+            remote: true,
+            tracked_by: tracked_by.get(refname).map(|b| b.to_string()),
+            last_commit_at: date.parse::<i64>().unwrap_or(0) * 1000,
+            ..BranchInfo::default()
+        });
+    }
+    Ok(list)
+}
+
+/// Refused: `name` is no name git takes for a branch, with what makes one.
+fn not_a_branch_name(name: &str) -> anyhow::Error {
+    anyhow::anyhow!(tr!(
+        "« {name} » n’est pas un nom de branche valide : ni espace, ni « .. », « ~ », « ^ », « : », « ? », « * », « [ » ou « \\ », ni « - » au début, ni « / », « . » ou « .lock » à la fin.",
+        "“{name}” isn’t a valid branch name: no spaces, “..”, “~”, “^”, “:”, “?”, “*”, “[” or “\\”, no “-” at the start, no “/”, “.” or “.lock” at the end."
+    ))
+}
+
+/// Refused: a branch of that name exists already.
+pub fn branch_taken(name: &str) -> anyhow::Error {
+    anyhow::anyhow!(tr!(
+        "La branche « {name} » existe déjà.",
+        "The branch “{name}” already exists."
+    ))
+}
+
+fn no_branch(name: &str) -> anyhow::Error {
+    anyhow::anyhow!(tr!(
+        "La branche « {name} » est introuvable.",
+        "The branch “{name}” wasn’t found."
+    ))
+}
+
+/// Checks `name` for a new branch the way git does (`git check-ref-format --branch`), and refuses
+/// what git would read as something else: an option (`-x`), HEAD (`@`), an earlier branch (`@{-1}`).
+pub async fn check_ref_format(name: &str) -> Result<()> {
+    if name.trim().is_empty() {
+        bail!(tr!("Donne un nom à la branche.", "Give the branch a name."));
+    }
+    let other_meaning = name.starts_with('-') || name == "@" || name.contains("@{");
+    // Outside any repository: none has a say on a plain name (`@{-1}`, which would read one, is
+    // refused above).
+    let anywhere = std::env::temp_dir().to_string_lossy().to_string();
+    if other_meaning
+        || run(&anywhere, &["check-ref-format", "--branch", name])
+            .await
+            .is_err()
+    {
+        return Err(not_a_branch_name(name));
+    }
+    Ok(())
+}
+
+/// Checks `name` for a new branch of `repo`: a name git takes, that no local branch has, and that
+/// does not start like a branch of a remote (`origin/feat`): the local one would hide it, and
+/// every `origin/feat` would then be read as the local branch.
+pub async fn check_new_branch(repo: &str, name: &str) -> Result<()> {
+    check_ref_format(name).await?;
+    if branch_exists(repo, name).await {
+        return Err(branch_taken(name));
+    }
+    if let Some(remote) = remotes(repo)
+        .await
+        .into_iter()
+        .find(|r| name.starts_with(&format!("{r}/")))
+    {
+        bail!(tr!(
+            "« {name} » commence comme une branche du dépôt distant « {remote} » : une branche locale de ce nom la cacherait. Choisis un autre nom.",
+            "“{name}” starts like a branch of the remote “{remote}”: a local branch of that name would hide it. Pick another name."
+        ));
+    }
+    Ok(())
+}
+
+/// The commit `rev` names (a branch, a remote branch, a tag, a hash); refused when it names none,
+/// or looks like an option.
+pub async fn commit_of(repo: &str, rev: &str) -> Result<String> {
+    if !rev.is_empty() && !rev.starts_with('-') {
+        let peeled = format!("{rev}^{{commit}}");
+        if let Ok(hash) = text(repo, &["rev-parse", "--verify", "--quiet", &peeled]).await {
+            if !hash.is_empty() {
+                return Ok(hash);
+            }
+        }
+    }
+    bail!(tr!(
+        "« {rev} » ne désigne aucun commit.",
+        "“{rev}” names no commit."
+    ))
+}
+
+/// Creates the branch `name` at `start` (a branch, a remote branch, a commit; HEAD when empty),
+/// tracking nothing: one made from `origin/main` must not push to main. Nothing is checked out.
+pub async fn branch_create(repo: &str, name: &str, start: &str) -> Result<()> {
+    check_new_branch(repo, name).await?;
+    let start = match start.trim() {
+        "" => "HEAD",
+        s => s,
+    };
+    let commit = commit_of(repo, start).await?;
+    run(repo, &["branch", "--no-track", "--", name, &commit])
+        .await
+        .map(|_| ())
+}
+
+/// True when `refname` (a full name: `refs/heads/feat`, `refs/remotes/origin/feat`) is a ref
+/// of `repo`, and not a revision that starts with one.
+pub async fn ref_exists(repo: &str, refname: &str) -> bool {
+    run(repo, &["show-ref", "--verify", "--quiet", refname])
+        .await
+        .is_ok()
+}
+
+/// The remote of a remote branch's name and the branch's name there (`origin/feat/x`: `origin`,
+/// `feat/x`), the longest remote name matching: one may hold a `/`.
+pub async fn split_remote(repo: &str, name: &str) -> Option<(String, String)> {
+    let remotes = remotes(repo).await;
+    let remote = remotes
+        .iter()
+        .filter(|r| name.starts_with(&format!("{r}/")))
+        .max_by_key(|r| r.len())?;
+    Some((remote.clone(), name[remote.len() + 1..].to_string()))
+}
+
+/// The branch a local branch tracks on a remote, while the remote has it (as of the last fetch).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Upstream {
+    /// Its tracking branch here: `refs/remotes/origin/feat`.
+    pub tracking: String,
+    pub remote: String,
+    /// Its name on the remote: `feat`.
+    pub branch: String,
+}
+
+pub async fn upstream_of(repo: &str, name: &str) -> Option<Upstream> {
+    let local = format!("refs/heads/{name}");
+    let out = text(
+        repo,
+        &[
+            "for-each-ref",
+            "--format=%(upstream)%00%(upstream:remotename)%00%(upstream:remoteref)",
+            &local,
+        ],
+    )
+    .await
+    .ok()?;
+    let [tracking, remote, remote_ref] = out.split('\0').collect::<Vec<_>>()[..] else {
+        return None;
+    };
+    // `.`: it tracks a local branch.
+    let branch = remote_ref.strip_prefix("refs/heads/")?;
+    if remote.is_empty() || remote == "." || !ref_exists(repo, tracking).await {
+        return None;
+    }
+    Some(Upstream {
+        tracking: tracking.to_string(),
+        remote: remote.to_string(),
+        branch: branch.to_string(),
+    })
+}
+
+/// The local branch `name` stands for: itself, or for a remote branch (`origin/feat`) the local one
+/// that tracks it, whatever its name; None when there is none yet (`switch_to` makes it). Refused
+/// when it is neither, or when the local branch it would make exists and tracks something else.
+pub async fn local_of(repo: &str, name: &str) -> Result<Option<String>> {
+    if name.is_empty() || name.starts_with('-') {
+        bail!(invalid_branch(name));
+    }
+    if branch_exists(repo, name).await {
+        return Ok(Some(name.to_string()));
+    }
+    let tracking = format!("refs/remotes/{name}");
+    if !ref_exists(repo, &tracking).await {
+        return Err(no_branch(name));
+    }
+    let locals = text(
+        repo,
+        &[
+            "for-each-ref",
+            "--format=%(refname)%00%(upstream)",
+            "refs/heads",
+        ],
+    )
+    .await?;
+    let tracked = locals.lines().find_map(|l| {
+        let (local, upstream) = l.split_once('\0')?;
+        (upstream == tracking).then(|| short_ref(local).to_string())
+    });
+    if tracked.is_some() {
+        return Ok(tracked);
+    }
+    // `switch --track` names it after the remote's branch.
+    let Some((_, short)) = split_remote(repo, name).await else {
+        return Err(no_branch(name));
+    };
+    check_ref_format(&short).await?;
+    if branch_exists(repo, &short).await {
+        bail!(tr!(
+            "Une branche locale « {short} » existe déjà et ne suit pas {name} : passe sur elle, ou renomme-la d’abord.",
+            "A local branch “{short}” already exists and doesn’t track {name}: switch to it, or rename it first."
+        ));
+    }
+    Ok(None)
+}
+
+/// Checks `name` out in `repo`: a local branch, or a remote one through the local branch that
+/// tracks it, made (`switch --track`) when there is none. Returns the local branch.
+pub async fn switch_to(repo: &str, name: &str) -> Result<String> {
+    match local_of(repo, name).await? {
+        Some(local) => {
+            switch(repo, &local).await?;
+            Ok(local)
+        }
+        None => {
+            run_english(repo, &["switch", "--track", name])
+                .await
+                .map_err(switch_failed)?;
+            Ok(head_branch(repo).await)
+        }
+    }
+}
+
+/// The operation the checkout at `repo` is in the middle of, by what git leaves in its git folder
+/// while it waits for the user: `merge`, `cherry-pick`, `revert` or `rebase` (an `am` is one).
+pub async fn operation_in_progress(repo: &str) -> Option<&'static str> {
+    const MARKERS: [(&str, &str); 5] = [
+        ("MERGE_HEAD", "merge"),
+        ("CHERRY_PICK_HEAD", "cherry-pick"),
+        ("REVERT_HEAD", "revert"),
+        ("rebase-merge", "rebase"),
+        ("rebase-apply", "rebase"),
+    ];
+    // The git folder of the checkout itself: a linked worktree's own, not the main one's.
+    let mut args = vec!["rev-parse"];
+    for (marker, _) in MARKERS {
+        args.extend(["--git-path", marker]);
+    }
+    let paths = text(repo, &args).await.ok()?;
+    paths
+        .lines()
+        .zip(MARKERS)
+        .find_map(|(path, (_, operation))| {
+            // Relative to the folder git was run in.
+            Path::new(repo).join(path).exists().then_some(operation)
+        })
+}
+
+/// Refused: the folder is in the middle of `operation` (`operation_in_progress`).
+pub fn operation_refusal(lang: crate::i18n::Lang, operation: &str) -> String {
+    tr_in!(
+        lang,
+        "Un {operation} est en cours dans le dossier du projet : termine-le ou abandonne-le avant de changer de branche.",
+        "A {operation} is in progress in the project’s folder: finish or abort it before switching branches."
+    )
+}
+
+/// How many commits a detached HEAD has that no branch, remote branch or tag has: leaving it
+/// leaves them to the reflog. 0 on a branch (even one without commit yet).
+pub async fn detached_commits(repo: &str) -> Result<u32> {
+    if !head_branch(repo).await.is_empty() {
+        return Ok(0);
+    }
+    let n = text(
+        repo,
+        &[
+            "rev-list",
+            "--count",
+            "HEAD",
+            "--not",
+            "--branches",
+            "--remotes",
+            "--tags",
+        ],
+    )
+    .await?;
+    n.parse().map_err(|_| {
+        anyhow::anyhow!(tr!(
+            "git rev-list a répondu « {n} »",
+            "git rev-list answered “{n}”"
+        ))
+    })
+}
+
+/// Refused: the folder is on a detached HEAD with `commits` that no branch has.
+pub fn detached_refusal(lang: crate::i18n::Lang, commits: u32) -> String {
+    tr_n_in!(
+        lang,
+        commits,
+        "Le dossier du projet est sur un HEAD détaché qui porte {n} commit qu’aucune branche n’a : crée une branche ici avant de partir, sinon il ne sera plus que dans le reflog.",
+        "Le dossier du projet est sur un HEAD détaché qui porte {n} commits qu’aucune branche n’a : crée une branche ici avant de partir, sinon ils ne seront plus que dans le reflog.",
+        "The project’s folder is on a detached HEAD that holds {n} commit no branch has: create a branch here before leaving, or it will only be in the reflog.",
+        "The project’s folder is on a detached HEAD that holds {n} commits no branch has: create a branch here before leaving, or they will only be in the reflog.",
+        n = commits
+    )
+}
+
+const LATEST_STASH: [&str; 4] = ["rev-parse", "--verify", "--quiet", "refs/stash"];
+
+/// Puts the uncommitted changes of tracked files aside (staged ones included) in a stash named
+/// `message`; untracked files stay where they are. Returns the stash's commit; an error when there
+/// was nothing to put aside.
+pub async fn stash_push(repo: &str, message: &str) -> Result<String> {
+    let before = text(repo, &LATEST_STASH).await.ok();
+    run(repo, &["stash", "push", "--quiet", "-m", message]).await?;
+    match text(repo, &LATEST_STASH).await {
+        Ok(stash) if Some(&stash) != before.as_ref() => Ok(stash),
+        _ => bail!(tr!(
+            "Rien à mettre de côté : aucun changement non commité.",
+            "Nothing to stash: no uncommitted change."
+        )),
+    }
+}
+
+/// Puts the stash whose commit is `hash` back (what was staged staged again) and drops it. Found
+/// by its commit in the stash list: others may have been stashed on top of it since, and the
+/// latest one is not necessarily the one asked for. Refused when it is not in the list any more,
+/// and what `git stash pop` refuses (the stash then stays) comes back as it is.
+pub async fn stash_pop(repo: &str, hash: &str) -> Result<()> {
+    let listed = text(repo, &["stash", "list", "--format=%H"]).await?;
+    let Some(n) = listed.lines().position(|l| l == hash) else {
+        bail!(tr!(
+            "Le stash {hash} n’est plus dans la liste : quelqu’un l’a repris ou supprimé.",
+            "The stash {hash} is no longer in the list: someone applied or dropped it."
+        ));
+    };
+    let entry = format!("stash@{{{n}}}");
+    run(repo, &["stash", "pop", "--index", "--quiet", &entry])
+        .await
+        .map(|_| ())
+}
+
+/// Deletes the local branch `name`: once merged into HEAD or its upstream (git's own check,
+/// `branch -d`), whatever it holds with `force`.
+pub async fn branch_delete(repo: &str, name: &str, force: bool) -> Result<()> {
+    if name.is_empty() || name.starts_with('-') {
+        bail!(invalid_branch(name));
+    }
+    let flag = if force { "-D" } else { "-d" };
+    run(repo, &["branch", flag, "--", name]).await.map(|_| ())
+}
+
+/// A remote branch to delete is no longer where the last fetch saw it.
+fn remote_moved(lang: crate::i18n::Lang) -> String {
+    tr_in!(
+        lang,
+        "La branche distante a bougé : récupère d’abord (fetch).",
+        "The remote branch has moved: fetch first."
+    )
+}
+
+/// Deletes the branch `name` of `remote` (`git push <remote> :refs/heads/<name>`), and its tracking
+/// branch here, but only while the remote still has it where the last fetch saw it: a commit
+/// someone pushed since is not deleted unseen (`--force-with-lease`). A branch the remote no longer
+/// has is no error. The user's: credentials may be asked.
+pub async fn branch_delete_remote(repo: &str, remote: &str, name: &str) -> Result<()> {
+    if name.is_empty() || name.starts_with('-') {
+        bail!(invalid_branch(name));
+    }
+    if remote.starts_with('-') || !remotes(repo).await.iter().any(|r| r == remote) {
+        bail!(tr!(
+            "Le dépôt distant « {remote} » est introuvable.",
+            "The remote “{remote}” wasn’t found."
+        ));
+    }
+    // What the lease holds the remote to; without a fetch of it there is nothing to compare.
+    let tracking = format!("refs/remotes/{remote}/{name}");
+    let seen = match ref_exists(repo, &tracking).await {
+        true => text(repo, &["rev-parse", "--verify", &tracking]).await.ok(),
+        false => None,
+    };
+    let Some(seen) = seen else {
+        bail!(tr!(
+            "La branche distante {remote}/{name} n’a pas été récupérée ici : récupère d’abord (fetch).",
+            "The remote branch {remote}/{name} wasn’t fetched here: fetch first."
+        ));
+    };
+    let full = format!("refs/heads/{name}");
+    let lease = format!("--force-with-lease={full}:{seen}");
+    let refspec = format!(":{full}");
+    let pushed = run_net_english(repo, &["push", &lease, remote, &refspec], false).await;
+    if let Err(e) = pushed {
+        if !e.to_string().contains("stale info") {
+            return Err(e);
+        }
+        // Refused for it not being where it was seen: gone altogether (deleted by someone else,
+        // or with the merge of a pull request) is nothing left to delete, anywhere else is a
+        // branch that moved.
+        let there = run_net(repo, &["ls-remote", remote, &full], false).await?;
+        let there = String::from_utf8_lossy(&there);
+        if there.lines().any(|l| l.ends_with(&format!("\t{full}"))) {
+            bail!(remote_moved(crate::i18n::ui()));
+        }
+    }
+    // A push that deleted it took its tracking branch along; one that found nothing did not.
+    let _ = run(repo, &["update-ref", "-d", &tracking, &seen]).await;
+    Ok(())
+}
+
+/// Why a remote branch stays when the local branch that tracks it is deleted with its remote copy.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RemoteKept {
+    /// The remote's default branch (its HEAD).
+    Default,
+    /// The upstream of the project's base branch.
+    Base,
+    /// It is called otherwise there: `feature` tracking `origin/main` has no copy of its own.
+    OtherName,
+    /// Another local branch tracks it too.
+    TrackedBy(String),
+}
+
+impl RemoteKept {
+    /// Said after the local branch alone went; `shown` is the remote branch (`origin/main`).
+    pub fn text(&self, lang: crate::i18n::Lang, shown: &str) -> String {
+        match self {
+            RemoteKept::Default => tr_in!(
+                lang,
+                "« {shown} » est la branche par défaut du dépôt distant : seule la branche locale est supprimée.",
+                "“{shown}” is the remote’s default branch: only the local branch is deleted."
+            ),
+            RemoteKept::Base => tr_in!(
+                lang,
+                "« {shown} » est la branche distante de la base du projet : seule la branche locale est supprimée.",
+                "“{shown}” is the remote branch of the project’s base: only the local branch is deleted."
+            ),
+            RemoteKept::OtherName => tr_in!(
+                lang,
+                "La branche locale suit « {shown} », qui ne porte pas son nom : seule la branche locale est supprimée.",
+                "The local branch tracks “{shown}”, which isn’t named like it: only the local branch is deleted."
+            ),
+            RemoteKept::TrackedBy(other) => tr_in!(
+                lang,
+                "La branche « {other} » suit aussi « {shown} » : seule la branche locale est supprimée.",
+                "The branch “{other}” also tracks “{shown}”: only the local branch is deleted."
+            ),
+        }
+    }
+
+    /// Said when asked to delete that remote branch itself (the two that may never go).
+    pub fn refusal(&self, lang: crate::i18n::Lang, shown: &str) -> String {
+        match self {
+            RemoteKept::Default => tr_in!(
+                lang,
+                "« {shown} » est la branche par défaut du dépôt distant : elle n’est pas supprimée d’ici.",
+                "“{shown}” is the remote’s default branch: it isn’t deleted from here."
+            ),
+            _ => tr_in!(
+                lang,
+                "« {shown} » est la branche distante de la base du projet : elle n’est pas supprimée d’ici.",
+                "“{shown}” is the remote branch of the project’s base: it isn’t deleted from here."
+            ),
+        }
+    }
+}
+
+/// What goes on the remote with a local branch deleted along with its remote copy.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RemoteCopy {
+    /// Nothing: the branch has no upstream, or the remote no longer has it.
+    Absent,
+    /// Its own copy: the branch `branch` of `remote`.
+    Delete { remote: String, branch: String },
+    /// Not its own, left alone.
+    Keep { shown: String, why: RemoteKept },
+}
+
+impl RemoteCopy {
+    /// What to tell the user of a copy that stays.
+    pub fn note(&self, lang: crate::i18n::Lang) -> Option<String> {
+        match self {
+            RemoteCopy::Keep { shown, why } => Some(why.text(lang, shown)),
+            _ => None,
+        }
+    }
+}
+
+/// Of the remote branch `tracking` (`refs/remotes/origin/main`) of `remote`, why it may never be
+/// deleted: it is the remote's default branch (`refs/remotes/<remote>/HEAD`), or one of `bases`, the
+/// project's base and its upstream (full names).
+pub async fn remote_guard(
+    repo: &str,
+    remote: &str,
+    tracking: &str,
+    bases: &[String],
+) -> Option<RemoteKept> {
+    let head = format!("refs/remotes/{remote}/HEAD");
+    if text(repo, &["symbolic-ref", "-q", &head])
+        .await
+        .ok()
+        .as_deref()
+        == Some(tracking)
+    {
+        return Some(RemoteKept::Default);
+    }
+    bases
+        .iter()
+        .any(|b| b == tracking)
+        .then_some(RemoteKept::Base)
+}
+
+/// The remote copy of the local branch `name` to delete along with it: its upstream, when that is
+/// the branch of the same name, no other local branch tracks and `remote_guard` allows: a branch
+/// tracking `origin/main` is no copy of it.
+pub async fn remote_copy(repo: &str, name: &str, bases: &[String]) -> Result<RemoteCopy> {
+    let Some(up) = upstream_of(repo, name).await else {
+        return Ok(RemoteCopy::Absent);
+    };
+    let shown = format!("{}/{}", up.remote, up.branch);
+    let keep = |why| RemoteCopy::Keep {
+        shown: shown.clone(),
+        why,
+    };
+    if let Some(why) = remote_guard(repo, &up.remote, &up.tracking, bases).await {
+        return Ok(keep(why));
+    }
+    if up.branch != name {
+        return Ok(keep(RemoteKept::OtherName));
+    }
+    let tracks = text(
+        repo,
+        &[
+            "for-each-ref",
+            "--format=%(refname)%00%(upstream)",
+            "refs/heads",
+        ],
+    )
+    .await?;
+    let other = tracks.lines().find_map(|l| {
+        let (local, upstream) = l.split_once('\0')?;
+        (upstream == up.tracking && short_ref(local) != name).then(|| short_ref(local).to_string())
+    });
+    Ok(match other {
+        Some(other) => keep(RemoteKept::TrackedBy(other)),
+        None => RemoteCopy::Delete {
+            remote: up.remote,
+            branch: up.branch,
+        },
+    })
+}
+
+/// The tree of the commit `rev` names; refused like `commit_of`.
+async fn tree_of(repo: &str, rev: &str) -> Result<String> {
+    let commit = commit_of(repo, rev).await?;
+    text(repo, &["rev-parse", &format!("{commit}^{{tree}}")]).await
+}
+
+/// True when merging `refname` into `base`, whose tree is `tree`, would leave that tree as it is:
+/// what it changed is in `base` already, squashed or picked. False when git cannot tell: a
+/// conflict, unrelated histories, a git older than 2.38 (no `merge-tree --write-tree`).
+async fn brings_nothing(repo: &str, base: &str, tree: &str, refname: &str) -> bool {
+    text(
+        repo,
+        &["merge-tree", "--write-tree", "--no-messages", base, refname],
+    )
+    .await
+    .is_ok_and(|out| out.lines().next() == Some(tree))
+}
+
+/// True when the work of `refname` (a full ref: `refs/heads/feat`) is in `base`: part of it, or
+/// merging it would change nothing (squash-merged).
+pub async fn is_merged(repo: &str, refname: &str, base: &str) -> bool {
+    if !refname.starts_with("refs/") {
+        return false;
+    }
+    let Ok(tree) = tree_of(repo, base).await else {
+        return false;
+    };
+    run(repo, &["merge-base", "--is-ancestor", refname, base])
+        .await
+        .is_ok()
+        || brings_nothing(repo, base, &tree, refname).await
+}
+
+/// The local branches whose work `base` has, `base` aside: those it contains, and those whose merge
+/// would bring it nothing (squash-merged, picked). By name.
+pub async fn merged_into(repo: &str, base: &str) -> Result<Vec<String>> {
+    let tree = tree_of(repo, base).await?;
+    let (merged, unmerged) = (format!("--merged={base}"), format!("--no-merged={base}"));
+    let in_base = ["for-each-ref", "--format=%(refname)", &merged, "refs/heads"];
+    let others = [
+        "for-each-ref",
+        "--format=%(refname)",
+        &unmerged,
+        "refs/heads",
+    ];
+    let (merged, unmerged) = tokio::join!(text(repo, &in_base), text(repo, &others));
+    let mut names: Vec<String> = merged?
+        .lines()
+        .filter_map(|r| r.strip_prefix("refs/heads/"))
+        .map(str::to_string)
+        .collect();
+    for refname in unmerged?.lines() {
+        if brings_nothing(repo, base, &tree, refname).await {
+            names.extend(refname.strip_prefix("refs/heads/").map(str::to_string));
+        }
+    }
+    names.retain(|n| n != base && format!("refs/heads/{n}") != base);
+    names.sort();
+    Ok(names)
+}
+
+/// How many commits of `refs` (full names: `refs/heads/feat`, `refs/remotes/origin/feat`) no other
+/// branch has, local or remote: what deleting them all would lose.
+pub async fn unique_commits(repo: &str, refs: &[String]) -> Result<u32> {
+    if let Some(r) = refs.iter().find(|r| !r.starts_with("refs/")) {
+        bail!(tr!(
+            "« {r} » n’est pas une référence de branche",
+            "“{r}” isn’t a branch reference"
+        ));
+    }
+    let mut args: Vec<String> = vec!["rev-list".into(), "--count".into()];
+    args.extend(refs.iter().cloned());
+    args.push("--not".into());
+    // `--exclude` takes the names `--branches` and `--remotes` see, and holds for the next one.
+    let excluded = |prefix: &str| -> Vec<String> {
+        refs.iter()
+            .filter_map(|r| r.strip_prefix(prefix))
+            .map(|n| format!("--exclude={n}"))
+            .collect()
+    };
+    args.extend(excluded("refs/heads/"));
+    args.push("--branches".into());
+    args.extend(excluded("refs/remotes/"));
+    // A remote's HEAD stands for one of its branches: maybe one that goes.
+    args.push("--exclude=*/HEAD".into());
+    args.push("--remotes".into());
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    let n = text(repo, &args).await?;
+    n.parse().map_err(|_| {
+        anyhow::anyhow!(tr!(
+            "git rev-list a répondu « {n} »",
+            "git rev-list answered “{n}”"
+        ))
+    })
+}
+
+/// What changes from `a` to `b` (`git diff a b`: two branches, two commits), each file's diff
+/// capped as a commit's is, and the whole kept within `DIFF_BUDGET`.
+pub async fn diff_refs(repo: &str, a: &str, b: &str) -> Result<String> {
+    let (from, to) = (commit_of(repo, a).await?, commit_of(repo, b).await?);
+    let out = run(
+        repo,
+        &[
+            "diff",
+            "--no-color",
+            "--no-ext-diff",
+            "-M",
+            &from,
+            &to,
+            "--",
+        ],
+    )
+    .await?;
+    Ok(cap_diff(&String::from_utf8_lossy(&out), MAX_FILE_DIFF, DIFF_BUDGET).into_owned())
 }
 
 /// Of `paths`, those that `branch` changed since it left `base` (`base...branch`), whatever
@@ -1440,7 +2267,8 @@ pub async fn pull(repo: &str) -> Result<String> {
              Rebase or merge by hand (or ask an agent)."
         ));
     }
-    if let Err(e) = run(repo, &["merge", "--ff-only", "--quiet", "@{upstream}"]).await {
+    // In English: the refusal is told apart by git's own words.
+    if let Err(e) = run_english(repo, &["merge", "--ff-only", "--quiet", "@{upstream}"]).await {
         if e.to_string().contains("would be overwritten") {
             bail!(tr!(
                 "Des modifications non commitées seraient écrasées par le pull : commite-les ou mets-les de côté d'abord.",
@@ -1473,7 +2301,9 @@ pub async fn push(repo: &str) -> Result<String> {
     let st = status(repo).await?;
     let branch = sync_branch(&st)?;
     if st.upstream.is_some() && !st.upstream_gone {
-        run_net(repo, &["push"], false).await.map_err(rejected)?;
+        run_net_english(repo, &["push"], false)
+            .await
+            .map_err(rejected)?;
         return Ok(pushed(crate::i18n::ui(), st.ahead));
     }
     let remotes = remotes(repo).await;
@@ -1486,7 +2316,7 @@ pub async fn push(repo: &str) -> Result<String> {
             "Several remotes and none is called origin: publish the branch by hand (git push -u <remote> {branch})."
         ));
     };
-    run_net(repo, &["push", "-u", remote, branch], false)
+    run_net_english(repo, &["push", "-u", remote, branch], false)
         .await
         .map_err(rejected)?;
     Ok(tr!(
@@ -1508,7 +2338,7 @@ pub async fn push_branch(cwd: &str, branch: &str) -> Result<String> {
             "Several remotes and none is called origin: push {branch} by hand."
         ));
     };
-    run_net(cwd, &["push", "-u", &remote, branch], false)
+    run_net_english(cwd, &["push", "-u", &remote, branch], false)
         .await
         .map_err(rejected)?;
     Ok(remote)
@@ -1709,6 +2539,33 @@ mod tests {
         assert!(all.len() > longest);
         assert_eq!(cap_file_diffs(&all, longest), all);
         assert_eq!(cap_file_diffs("", 10), "");
+    }
+
+    #[test]
+    fn past_the_budget_the_files_left_are_flagged() {
+        let (a, b, c) = (
+            file_diff("a.txt", 30),
+            file_diff("b.txt", 60),
+            file_diff("c.txt", 3),
+        );
+        let all = format!("{a}{b}{c}");
+        // Each fits the cap; once the first spent the budget, the others are only flagged.
+        assert_eq!(
+            cap_diff(&all, 1_000, a.len()),
+            format!("{a}{}{}", flagged_file("b.txt"), flagged_file("c.txt"))
+        );
+        // A file too large for what is left is flagged, a later one that fits is sent.
+        let budget = a.len() + flagged_file("b.txt").len() + c.len();
+        assert_eq!(
+            cap_diff(&all, 1_000, budget),
+            format!("{a}{}{c}", flagged_file("b.txt"))
+        );
+        assert_eq!(cap_diff(&all, 1_000, all.len()), all);
+        // The cap on one file still holds.
+        assert_eq!(
+            cap_diff(&all, a.len() - 1, all.len()),
+            format!("{}{}{c}", flagged_file("a.txt"), flagged_file("b.txt"))
+        );
     }
 
     #[test]
@@ -2911,6 +3768,50 @@ mod repo_tests {
         );
     }
 
+    /// A hook of `repo` that writes, on a line of `out`, the language git runs in (`LC_ALL`).
+    fn note_locale_in_hook(repo: &Path, hook: &str, out: &Path) {
+        let file = repo.join(".git").join("hooks").join(hook);
+        let out = out.to_string_lossy().replace('\\', "/");
+        std::fs::write(
+            &file,
+            format!("#!/bin/sh\necho \"${{LC_ALL:-unset}}\" >> '{out}'\n"),
+        )
+        .unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    }
+
+    // `pull` and `push` tell a refusal from git's own words ("would be overwritten", "[rejected]"):
+    // git must write them in English, whatever the system's language is.
+    #[tokio::test]
+    async fn pull_and_push_run_git_in_english_since_they_read_its_refusals() {
+        let (local, other, _) = with_remote("g2-sync-english");
+        let seen = local.parent().unwrap().join("locale.txt");
+        note_locale_in_hook(&local, "post-merge", &seen);
+        note_locale_in_hook(&local, "pre-push", &seen);
+        commit_file(&other, "b.txt", "b\n");
+        git_in(&other, &["push", "-q"]);
+        pull(&s(&local)).await.unwrap();
+        commit_file(&local, "c.txt", "c\n");
+        push(&s(&local)).await.unwrap();
+        // A branch published: `push -u`, from the project's checkout and from a worktree's.
+        git_in(&local, &["checkout", "-qb", "feat/y"]);
+        commit_file(&local, "d.txt", "d\n");
+        push(&s(&local)).await.unwrap();
+        git_in(&local, &["checkout", "-qb", "feat/z"]);
+        commit_file(&local, "e.txt", "e\n");
+        push_branch(&s(&local), "feat/z").await.unwrap();
+        let lines = std::fs::read_to_string(&seen).unwrap();
+        assert_eq!(
+            lines.lines().collect::<Vec<_>>(),
+            ["C", "C", "C", "C"],
+            "one line for the pull and one for each push: {lines:?}"
+        );
+    }
+
     #[tokio::test]
     async fn pushing_a_new_branch_publishes_it_and_tracks_it() {
         let (local, _, bare) = with_remote("git-sync-publish");
@@ -3085,5 +3986,819 @@ mod repo_tests {
         assert!(err.contains("Aucun dépôt distant"), "{err}");
         let err = pull(&r).await.unwrap_err().to_string();
         assert!(err.contains("ne suit aucune branche distante"), "{err}");
+    }
+
+    /// The same folder, however git and Windows spell it (slashes, short names).
+    fn same(a: &str, b: &Path) -> bool {
+        Path::new(a).canonicalize().unwrap() == b.canonicalize().unwrap()
+    }
+
+    #[tokio::test]
+    async fn branches_are_listed_local_then_remote_with_their_upstream_and_worktree() {
+        let (local, other, _) = with_remote("git-g1-list");
+        let l = s(&local);
+        // feat: published, then one commit more of its own.
+        git_in(&local, &["checkout", "-qb", "feat"]);
+        commit_file(&local, "f.txt", "f\n");
+        git_in(&local, &["push", "-qu", "origin", "feat"]);
+        commit_file(&local, "g.txt", "g\n");
+        git_in(&local, &["checkout", "-q", "main"]);
+        // gone: published, then deleted on the remote.
+        git_in(&local, &["branch", "gone"]);
+        git_in(&local, &["push", "-qu", "origin", "gone"]);
+        git_in(&other, &["push", "-q", "origin", "--delete", "gone"]);
+        // main: one commit behind origin/main; a branch only the remote has.
+        commit_file(&other, "b.txt", "b\n");
+        git_in(&other, &["push", "-q"]);
+        git_in(&other, &["push", "-q", "origin", "main:theirs"]);
+        git_in(&local, &["fetch", "-q", "--prune"]);
+        git_in(&local, &["remote", "set-head", "origin", "main"]);
+        // One a worktree has checked out, one nothing has.
+        let wt = local.parent().unwrap().join("wt");
+        git_in(&local, &["worktree", "add", "-q", "-b", "agent", &s(&wt)]);
+        git_in(&local, &["branch", "aaa"]);
+
+        let list = branch_list(&l).await.unwrap();
+        let names: Vec<&str> = list.iter().map(|b| b.name.as_str()).collect();
+        // The current one first, the other local ones in order, then the remote ones (its HEAD
+        // left out).
+        assert_eq!(
+            names,
+            [
+                "main",
+                "aaa",
+                "agent",
+                "feat",
+                "gone",
+                "origin/feat",
+                "origin/main",
+                "origin/theirs"
+            ]
+        );
+        let get = |n: &str| list.iter().find(|b| b.name == n).unwrap();
+        let main = get("main");
+        assert!(main.current && !main.remote);
+        assert_eq!(main.upstream.as_deref(), Some("origin/main"));
+        assert_eq!((main.ahead, main.behind, main.upstream_gone), (0, 1, false));
+        assert!(same(main.worktree.as_deref().unwrap(), &local));
+        let feat = get("feat");
+        assert!(!feat.current && !feat.remote);
+        assert_eq!(feat.upstream.as_deref(), Some("origin/feat"));
+        assert_eq!((feat.ahead, feat.behind), (1, 0));
+        assert_eq!(feat.worktree, None);
+        let gone = get("gone");
+        assert_eq!(gone.upstream.as_deref(), Some("origin/gone"));
+        assert!(gone.upstream_gone);
+        assert!(same(get("agent").worktree.as_deref().unwrap(), &wt));
+        assert_eq!(get("aaa").upstream, None);
+        // A remote branch tracked here is still listed, with the local branch that tracks it.
+        let tracked = get("origin/feat");
+        assert!(tracked.remote && !tracked.current);
+        assert_eq!(tracked.tracked_by.as_deref(), Some("feat"));
+        assert_eq!(
+            (tracked.upstream.clone(), tracked.worktree.clone()),
+            (None, None)
+        );
+        assert_eq!(get("origin/main").tracked_by.as_deref(), Some("main"));
+        assert_eq!(get("origin/theirs").tracked_by, None);
+        // Git never names an agent.
+        assert!(list.iter().all(|b| b.agent.is_none()));
+        // In ms, made just now.
+        let now = crate::model::now_ms();
+        assert!(
+            list.iter()
+                .all(|b| (now - b.last_commit_at).abs() < 3_600_000),
+            "{list:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_detached_head_has_no_current_branch() {
+        let r = repo("git-g1-list-detached");
+        git(&r, &["switch", "-q", "--detach"]);
+        let list = branch_list(&r).await.unwrap();
+        assert_eq!(list.len(), 1);
+        assert!(!list[0].current && list[0].name == "main");
+        assert_eq!(list[0].worktree, None);
+    }
+
+    #[tokio::test]
+    async fn a_branch_name_is_checked_the_way_git_does() {
+        for ok in ["feat/x", "ticket/dem-1", "résumé", "fix_2.0"] {
+            check_ref_format(ok)
+                .await
+                .unwrap_or_else(|e| panic!("{ok}: {e:#}"));
+        }
+        for bad in [
+            "a..b", "-x", "x.lock", "a b", "x/", "HEAD", "@", "@{-1}", "a~1", "a:b", "*",
+        ] {
+            let e = check_ref_format(bad).await.expect_err(bad);
+            assert!(e.to_string().contains(bad), "{bad}: {e}");
+        }
+        for empty in ["", "  "] {
+            assert_eq!(
+                check_ref_format(empty).await.unwrap_err().to_string(),
+                "Donne un nom à la branche."
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn a_branch_is_created_from_a_commit_or_from_another_branch() {
+        let r = repo("git-g1-create");
+        let first = text(&r, &["rev-parse", "HEAD"]).await.unwrap();
+        git(&r, &["checkout", "-qb", "side"]);
+        std::fs::write(Path::new(&r).join("side.txt"), "s\n").unwrap();
+        git(&r, &["add", "-A"]);
+        git(&r, &["commit", "-qm", "side"]);
+        git(&r, &["checkout", "-q", "main"]);
+        git(&r, &["commit", "-q", "--allow-empty", "-m", "second"]);
+        let at = |b: &str| {
+            let r = r.clone();
+            let b = b.to_string();
+            async move { text(&r, &["rev-parse", &b]).await.unwrap() }
+        };
+
+        branch_create(&r, "from-commit", &first[..7]).await.unwrap();
+        assert_eq!(at("from-commit").await, first);
+        branch_create(&r, "from-side", "side").await.unwrap();
+        assert_eq!(at("from-side").await, at("side").await);
+        // At HEAD when no start is given; the folder stays on its branch.
+        branch_create(&r, "here", "").await.unwrap();
+        assert_eq!(at("here").await, at("main").await);
+        assert_eq!(head_branch(&r).await, "main");
+        // Refused, nothing made or moved: a name taken, a name git refuses, a start that names
+        // nothing or looks like an option.
+        let side = at("side").await;
+        let e = branch_create(&r, "side", "main").await.unwrap_err();
+        assert!(e.to_string().contains("existe déjà"), "{e}");
+        assert_eq!(at("side").await, side);
+        assert!(branch_create(&r, "a..b", "main").await.is_err());
+        for start in ["nowhere", "--orphan", "-f"] {
+            let e = branch_create(&r, "lost", start).await.expect_err(start);
+            assert!(e.to_string().contains(start), "{start}: {e}");
+            assert!(!branch_exists(&r, "lost").await, "{start}");
+        }
+        assert_eq!(head_branch(&r).await, "main");
+    }
+
+    #[tokio::test]
+    async fn a_stash_puts_the_changes_aside_and_leaves_the_untracked_files() {
+        let r = repo("git-g1-stash");
+        let root = Path::new(&r);
+        git(&r, &["config", "core.autocrlf", "false"]);
+        std::fs::write(root.join("résumé.md"), "changed\n").unwrap();
+        std::fs::write(root.join("staged.txt"), "staged\n").unwrap();
+        git(&r, &["add", "staged.txt"]);
+        std::fs::write(root.join("notes.txt"), "mine\n").unwrap();
+
+        let hash = stash_push(&r, "escouade: avant de passer sur side")
+            .await
+            .unwrap();
+        assert_eq!(text(&r, &["rev-parse", "stash@{0}"]).await.unwrap(), hash);
+        assert_eq!(
+            text(&r, &["stash", "list", "--format=%gs"]).await.unwrap(),
+            "On main: escouade: avant de passer sur side"
+        );
+        let kept = text(&r, &["stash", "show", "-p", "stash@{0}"])
+            .await
+            .unwrap();
+        assert!(
+            kept.contains("+changed") && kept.contains("+staged"),
+            "{kept}"
+        );
+        assert_eq!(
+            text(&r, &["status", "--porcelain"]).await.unwrap(),
+            "?? notes.txt"
+        );
+        assert_eq!(
+            std::fs::read_to_string(root.join("résumé.md")).unwrap(),
+            "a\n"
+        );
+        // Nothing left to put aside (the untracked file stays out): an error, no new stash.
+        let e = stash_push(&r, "again").await.unwrap_err();
+        assert!(e.to_string().contains("Rien à mettre de côté"), "{e}");
+        assert_eq!(
+            text(&r, &["stash", "list"]).await.unwrap().lines().count(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn a_switch_that_would_overwrite_untracked_files_says_which() {
+        let (local, other, _) = with_remote("git-g1f-untracked");
+        let l = s(&local);
+        // `feat` has notes.txt and sub/déjà-vu.txt, which the folder has too without tracking them.
+        git_in(&other, &["checkout", "-qb", "feat"]);
+        std::fs::create_dir_all(other.join("sub")).unwrap();
+        std::fs::write(other.join("sub").join("déjà-vu.txt"), "theirs\n").unwrap();
+        commit_file(&other, "notes.txt", "theirs\n");
+        git_in(&other, &["push", "-qu", "origin", "feat"]);
+        git_in(&local, &["fetch", "-q"]);
+        git_in(&local, &["branch", "-q", "feat", "origin/feat"]);
+        std::fs::create_dir_all(local.join("sub")).unwrap();
+        std::fs::write(local.join("sub").join("déjà-vu.txt"), "mine\n").unwrap();
+        std::fs::write(local.join("notes.txt"), "mine\n").unwrap();
+
+        // The local branch, through `switch`, and through `switch_to` for a remote one.
+        let local_branch = switch(&l, "feat").await.unwrap_err().to_string();
+        git_in(&local, &["branch", "-qD", "feat"]);
+        let remote_branch = switch_to(&l, "origin/feat").await.unwrap_err().to_string();
+        for e in [local_branch, remote_branch] {
+            assert!(e.contains("écraserait"), "{e}");
+            assert!(
+                e.contains("notes.txt") && e.contains("sub/déjà-vu.txt"),
+                "{e}"
+            );
+            assert!(!e.contains("Please move"), "git's own text: {e}");
+        }
+        // Nothing moved, nothing lost.
+        assert_eq!(head_branch(&l).await, "main");
+        assert_eq!(
+            std::fs::read_to_string(local.join("notes.txt")).unwrap(),
+            "mine\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(local.join("sub").join("déjà-vu.txt")).unwrap(),
+            "mine\n"
+        );
+    }
+
+    #[test]
+    fn the_untracked_files_in_the_way_are_read_from_gits_refusal_and_told_in_both_languages() {
+        use crate::i18n::Lang::{En, Fr};
+        let refusal = |verb: &str, files: &[&str]| {
+            let names: String = files.iter().map(|f| format!("\t{f}\n")).collect();
+            format!(
+                "error: The following untracked working tree files would be {verb} by checkout:\n{names}Please move or remove them before you switch branches.\nAborting"
+            )
+        };
+        assert_eq!(
+            untracked_in_the_way(&refusal("overwritten", &["a.txt", "dir/b c.txt"])),
+            Some(vec!["a.txt".to_string(), "dir/b c.txt".to_string()])
+        );
+        assert_eq!(
+            untracked_in_the_way(&refusal("removed", &["a.txt"])),
+            Some(vec!["a.txt".to_string()])
+        );
+        // CRLF line ends, as a Windows git may write them.
+        assert_eq!(
+            untracked_in_the_way(&refusal("overwritten", &["a.txt"]).replace('\n', "\r\n")),
+            Some(vec!["a.txt".to_string()])
+        );
+        // Any other refusal is not that one.
+        for other in [
+            "fatal: invalid reference: nowhere",
+            "error: Your local changes to the following files would be overwritten by checkout:\n\ta.txt\nPlease commit your changes or stash them before you switch branches.\nAborting",
+            "",
+        ] {
+            assert_eq!(untracked_in_the_way(other), None, "{other}");
+        }
+        let files: Vec<String> = (1..=12).map(|n| format!("f{n}.txt")).collect();
+        assert_eq!(
+            files_in_the_way(En, &files[..2]),
+            "This switch would overwrite untracked files of the folder: f1.txt, f2.txt. Move or delete them, then try again."
+        );
+        assert_eq!(
+            files_in_the_way(Fr, &files[..1]),
+            "Ce changement de branche écraserait des fichiers non suivis du dossier : f1.txt. Déplace-les ou supprime-les, puis réessaie."
+        );
+        // Many: the first ones.
+        assert!(
+            files_in_the_way(En, &files).contains("f10.txt, …."),
+            "{}",
+            files_in_the_way(En, &files)
+        );
+        assert!(!files_in_the_way(En, &files).contains("f11.txt"));
+    }
+
+    #[tokio::test]
+    async fn an_operation_under_way_in_the_folder_is_known() {
+        let r = repo("git-g1f-operation");
+        assert_eq!(operation_in_progress(&r).await, None);
+        let git_dir = Path::new(&r).join(".git");
+        // What git leaves while a merge, a pick, a revert or a rebase waits for the user.
+        let markers = [
+            ("MERGE_HEAD", "merge", false),
+            ("CHERRY_PICK_HEAD", "cherry-pick", false),
+            ("REVERT_HEAD", "revert", false),
+            ("rebase-merge", "rebase", true),
+            ("rebase-apply", "rebase", true),
+        ];
+        for (marker, operation, is_dir) in markers {
+            let path = git_dir.join(marker);
+            if is_dir {
+                std::fs::create_dir(&path).unwrap();
+            } else {
+                std::fs::write(&path, "0123456789012345678901234567890123456789\n").unwrap();
+            }
+            assert_eq!(operation_in_progress(&r).await, Some(operation), "{marker}");
+            if is_dir {
+                std::fs::remove_dir(&path).unwrap();
+            } else {
+                std::fs::remove_file(&path).unwrap();
+            }
+        }
+        assert_eq!(operation_in_progress(&r).await, None);
+        // A real one: a merge that stops before its commit.
+        git(&r, &["branch", "side"]);
+        git(&r, &["switch", "-q", "side"]);
+        std::fs::write(Path::new(&r).join("side.txt"), "s\n").unwrap();
+        git(&r, &["add", "-A"]);
+        git(&r, &["commit", "-qm", "side"]);
+        git(&r, &["switch", "-q", "main"]);
+        git(&r, &["merge", "-q", "--no-commit", "--no-ff", "side"]);
+        assert_eq!(operation_in_progress(&r).await, Some("merge"));
+    }
+
+    #[test]
+    fn what_stops_a_switch_is_told_in_both_languages() {
+        use crate::i18n::Lang::{En, Fr};
+        assert_eq!(
+            [operation_refusal(En, "rebase"), operation_refusal(Fr, "merge")],
+            [
+                "A rebase is in progress in the project’s folder: finish or abort it before switching branches.",
+                "Un merge est en cours dans le dossier du projet : termine-le ou abandonne-le avant de changer de branche."
+            ]
+        );
+        assert_eq!(
+            [1, 3].map(|n| detached_refusal(En, n)),
+            [
+                "The project’s folder is on a detached HEAD that holds 1 commit no branch has: create a branch here before leaving, or it will only be in the reflog.",
+                "The project’s folder is on a detached HEAD that holds 3 commits no branch has: create a branch here before leaving, or they will only be in the reflog."
+            ]
+        );
+        assert_eq!(
+            [1, 3].map(|n| detached_refusal(Fr, n)),
+            [
+                "Le dossier du projet est sur un HEAD détaché qui porte 1 commit qu’aucune branche n’a : crée une branche ici avant de partir, sinon il ne sera plus que dans le reflog.",
+                "Le dossier du projet est sur un HEAD détaché qui porte 3 commits qu’aucune branche n’a : crée une branche ici avant de partir, sinon ils ne seront plus que dans le reflog."
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn the_commits_only_a_detached_head_has_are_counted() {
+        let r = repo("git-g1f-detached");
+        let commit = |msg: &str| git(&r, &["commit", "-q", "--allow-empty", "-m", msg]);
+        // On a branch: nothing is at risk.
+        assert_eq!(detached_commits(&r).await.unwrap(), 0);
+        // Detached on a commit a branch has.
+        git(&r, &["switch", "-q", "--detach"]);
+        assert_eq!(detached_commits(&r).await.unwrap(), 0);
+        commit("one");
+        commit("two");
+        assert_eq!(detached_commits(&r).await.unwrap(), 2);
+        // A tag keeps them findable; so does a branch.
+        git(&r, &["tag", "keep"]);
+        assert_eq!(detached_commits(&r).await.unwrap(), 0);
+        git(&r, &["tag", "-d", "keep"]);
+        commit("three");
+        assert_eq!(detached_commits(&r).await.unwrap(), 3);
+        git(&r, &["branch", "rescue"]);
+        assert_eq!(detached_commits(&r).await.unwrap(), 0);
+        // A remote branch too.
+        commit("four");
+        git(&r, &["update-ref", "refs/remotes/origin/x", "HEAD"]);
+        assert_eq!(detached_commits(&r).await.unwrap(), 0);
+        // A repository with no commit yet is on a branch.
+        let fresh = crate::paths::test_dir("git-g1f-detached-fresh");
+        git(&s(&fresh), &["init", "-q", "-b", "main"]);
+        assert_eq!(detached_commits(&s(&fresh)).await.unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn a_stash_is_put_back_by_its_commit_not_as_the_latest_one() {
+        let r = repo("git-g1f-stash-pop");
+        let root = Path::new(&r);
+        git(&r, &["config", "core.autocrlf", "false"]);
+        std::fs::write(root.join("résumé.md"), "mine\n").unwrap();
+        std::fs::write(root.join("staged.txt"), "staged\n").unwrap();
+        git(&r, &["add", "staged.txt"]);
+        let mine = stash_push(&r, "mine").await.unwrap();
+        // Another stash comes on top of it.
+        std::fs::write(root.join("résumé.md"), "theirs\n").unwrap();
+        git(&r, &["stash", "push", "-q", "-m", "theirs"]);
+
+        stash_pop(&r, &mine).await.unwrap();
+        assert_eq!(
+            std::fs::read_to_string(root.join("résumé.md")).unwrap(),
+            "mine\n"
+        );
+        // What was staged is staged again; the other stash is the one left.
+        assert_eq!(
+            text(&r, &["status", "--porcelain"]).await.unwrap(),
+            // (Trimmed: the first line is ` M`.)
+            "M résumé.md\nA  staged.txt"
+        );
+        assert_eq!(
+            text(&r, &["stash", "list", "--format=%gs"]).await.unwrap(),
+            "On main: theirs"
+        );
+        // Taken already: not found, and nothing else is taken in its place.
+        let e = stash_pop(&r, &mine).await.unwrap_err();
+        assert!(e.to_string().contains(&mine), "{e}");
+        assert_eq!(
+            text(&r, &["stash", "list"]).await.unwrap().lines().count(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn a_remote_branch_is_switched_to_through_the_local_branch_that_tracks_it() {
+        let (local, other, _) = with_remote("git-g1-track");
+        let l = s(&local);
+        for b in ["feat/r", "other-name", "clash"] {
+            git_in(&other, &["push", "-q", "origin", &format!("main:{b}")]);
+        }
+        git_in(&local, &["fetch", "-q"]);
+        // None yet: one is made, which tracks it.
+        assert_eq!(switch_to(&l, "origin/feat/r").await.unwrap(), "feat/r");
+        assert_eq!(head_branch(&l).await, "feat/r");
+        assert_eq!(
+            status(&l).await.unwrap().upstream.as_deref(),
+            Some("origin/feat/r")
+        );
+        // Then that one, whatever its name.
+        assert_eq!(switch_to(&l, "main").await.unwrap(), "main");
+        assert_eq!(switch_to(&l, "origin/feat/r").await.unwrap(), "feat/r");
+        git_in(
+            &local,
+            &["branch", "-q", "--track", "mine", "origin/other-name"],
+        );
+        assert_eq!(switch_to(&l, "origin/other-name").await.unwrap(), "mine");
+        assert!(!branch_exists(&l, "other-name").await);
+        // A local branch of its name that does not track it: refused, nothing changes.
+        git_in(&local, &["branch", "-q", "clash", "main"]);
+        let e = switch_to(&l, "origin/clash").await.unwrap_err();
+        assert!(e.to_string().contains("« clash »"), "{e}");
+        // Neither a branch nor an option.
+        assert!(switch_to(&l, "origin/nowhere").await.is_err());
+        assert!(switch_to(&l, "--detach").await.is_err());
+        assert_eq!(head_branch(&l).await, "mine");
+        // A branch made from a remote one tracks nothing: it would push there.
+        branch_create(&l, "copy", "origin/main").await.unwrap();
+        let list = branch_list(&l).await.unwrap();
+        let copy = list.iter().find(|b| b.name == "copy").unwrap();
+        assert_eq!(copy.upstream, None);
+    }
+
+    #[tokio::test]
+    async fn a_branch_is_deleted_once_merged_or_forced_and_on_its_remote() {
+        let (local, other, bare) = with_remote("git-g1-delete");
+        let l = s(&local);
+        git_in(&local, &["branch", "merged"]);
+        git_in(&local, &["checkout", "-qb", "open"]);
+        commit_file(&local, "o.txt", "o\n");
+        git_in(&local, &["checkout", "-q", "main"]);
+        branch_delete(&l, "merged", false).await.unwrap();
+        assert!(!branch_exists(&l, "merged").await);
+        // Git's own check (merged into HEAD), unless forced.
+        assert!(branch_delete(&l, "open", false).await.is_err());
+        assert!(branch_exists(&l, "open").await);
+        branch_delete(&l, "open", true).await.unwrap();
+        assert!(!branch_exists(&l, "open").await);
+        assert!(branch_delete(&l, "-D", true).await.is_err());
+
+        let tracking = |b: &str| {
+            let (l, b) = (l.clone(), format!("refs/remotes/origin/{b}"));
+            async move {
+                text(&l, &["rev-parse", "--verify", "--quiet", &b])
+                    .await
+                    .is_ok()
+            }
+        };
+        // On the remote: the branch there, and its tracking branch here.
+        git_in(&local, &["push", "-q", "origin", "main:pub"]);
+        assert!(tracking("pub").await);
+        branch_delete_remote(&l, "origin", "pub").await.unwrap();
+        assert_eq!(git_in(&bare, &["branch", "--list", "pub"]), "");
+        assert!(!tracking("pub").await);
+        // Already deleted there by someone else: no error, the tracking branch goes.
+        git_in(&local, &["push", "-q", "origin", "main:theirs"]);
+        git_in(&other, &["push", "-q", "origin", "--delete", "theirs"]);
+        assert!(tracking("theirs").await);
+        branch_delete_remote(&l, "origin", "theirs").await.unwrap();
+        assert!(!tracking("theirs").await);
+        // Not a remote, not a branch name.
+        assert!(branch_delete_remote(&l, "nowhere", "main").await.is_err());
+        assert!(branch_delete_remote(&l, "origin", "-x").await.is_err());
+        assert_eq!(
+            git_in(&bare, &["branch", "--format=%(refname:short)"]),
+            "main"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_remote_branch_someone_pushed_to_since_the_last_fetch_is_not_deleted() {
+        let (local, other, bare) = with_remote("git-g1f-lease");
+        let l = s(&local);
+        let tracking = |b: &str| {
+            let (l, b) = (l.clone(), format!("refs/remotes/origin/{b}"));
+            async move { ref_exists(&l, &b).await }
+        };
+        git_in(&local, &["push", "-q", "origin", "main:feat"]);
+        git_in(&local, &["push", "-q", "origin", "main:calm"]);
+        assert!(tracking("feat").await);
+        // Someone else adds a commit to feat; here nothing is fetched yet.
+        git_in(&other, &["fetch", "-q"]);
+        git_in(&other, &["checkout", "-q", "-b", "feat", "origin/feat"]);
+        commit_file(&other, "theirs.txt", "theirs\n");
+        git_in(&other, &["push", "-q", "origin", "feat"]);
+        let theirs = git_in(&bare, &["rev-parse", "feat"]);
+
+        let e = branch_delete_remote(&l, "origin", "feat")
+            .await
+            .unwrap_err();
+        assert_eq!(
+            e.to_string(),
+            "La branche distante a bougé : récupère d’abord (fetch)."
+        );
+        // Nothing went: their commit is on the remote, the tracking branch is as it was.
+        assert_eq!(git_in(&bare, &["rev-parse", "feat"]), theirs);
+        assert!(tracking("feat").await);
+        // Fetched, the user has seen where it stands: it goes.
+        git_in(&local, &["fetch", "-q"]);
+        branch_delete_remote(&l, "origin", "feat").await.unwrap();
+        assert_eq!(git_in(&bare, &["branch", "--list", "feat"]), "");
+        assert!(!tracking("feat").await);
+        // One nobody touched goes at once; one that was never fetched here cannot be checked.
+        branch_delete_remote(&l, "origin", "calm").await.unwrap();
+        assert_eq!(git_in(&bare, &["branch", "--list", "calm"]), "");
+        let e = branch_delete_remote(&l, "origin", "never")
+            .await
+            .unwrap_err();
+        assert!(e.to_string().contains("origin/never"), "{e}");
+    }
+
+    #[test]
+    fn a_command_told_apart_by_its_text_runs_git_in_english() {
+        let locale = |cmd: &tokio::process::Command| {
+            cmd.as_std()
+                .get_envs()
+                .find(|(k, _)| *k == "LC_ALL")
+                .and_then(|(_, v)| v.map(|v| v.to_string_lossy().to_string()))
+        };
+        assert_eq!(locale(&command("x", &["push"])), None);
+        assert_eq!(
+            locale(&in_english(command("x", &["push"]))).as_deref(),
+            Some("C")
+        );
+    }
+
+    #[test]
+    fn a_remote_branch_that_moved_is_told_in_both_languages() {
+        use crate::i18n::Lang::{En, Fr};
+        assert_eq!(
+            [remote_moved(Fr), remote_moved(En)],
+            [
+                "La branche distante a bougé : récupère d’abord (fetch).",
+                "The remote branch has moved: fetch first."
+            ]
+        );
+    }
+
+    #[test]
+    fn a_remote_branch_that_stays_is_told_in_both_languages() {
+        use crate::i18n::Lang::{En, Fr};
+        let all = [
+            RemoteKept::Default,
+            RemoteKept::Base,
+            RemoteKept::OtherName,
+            RemoteKept::TrackedBy("twin".into()),
+        ];
+        assert_eq!(
+            all.clone().map(|k| k.text(En, "origin/main")),
+            [
+                "“origin/main” is the remote’s default branch: only the local branch is deleted.",
+                "“origin/main” is the remote branch of the project’s base: only the local branch is deleted.",
+                "The local branch tracks “origin/main”, which isn’t named like it: only the local branch is deleted.",
+                "The branch “twin” also tracks “origin/main”: only the local branch is deleted."
+            ]
+        );
+        assert_eq!(
+            all[3].text(Fr, "origin/main"),
+            "La branche « twin » suit aussi « origin/main » : seule la branche locale est supprimée."
+        );
+        assert_eq!(
+            [&all[0], &all[1]].map(|k| k.refusal(En, "origin/main")),
+            [
+                "“origin/main” is the remote’s default branch: it isn’t deleted from here.",
+                "“origin/main” is the remote branch of the project’s base: it isn’t deleted from here."
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn the_remote_copy_of_a_branch_is_an_upstream_of_its_name_that_nothing_else_needs() {
+        let (local, _, _) = with_remote("git-g1f-copy");
+        let l = s(&local);
+        let track = |branch: &str, upstream: &str| {
+            git_in(&local, &["branch", "-q", branch, "main"]);
+            git_in(&local, &["branch", "-q", "-u", upstream, branch]);
+        };
+        git_in(&local, &["push", "-q", "origin", "main:own"]);
+        git_in(&local, &["branch", "-q", "--track", "own", "origin/own"]);
+        git_in(&local, &["branch", "-q", "plain", "main"]);
+        track("renamed", "origin/own");
+        let copy = |name: &str, bases: &[&str]| {
+            let (l, name) = (l.clone(), name.to_string());
+            let bases: Vec<String> = bases.iter().map(|b| b.to_string()).collect();
+            async move { remote_copy(&l, &name, &bases).await.unwrap() }
+        };
+        let keep = |shown: &str, why| RemoteCopy::Keep {
+            shown: shown.to_string(),
+            why,
+        };
+        // No upstream: nothing. Another branch on the same copy keeps it for itself.
+        assert_eq!(copy("plain", &[]).await, RemoteCopy::Absent);
+        assert_eq!(
+            copy("own", &[]).await,
+            keep("origin/own", RemoteKept::TrackedBy("renamed".into()))
+        );
+        assert_eq!(
+            copy("renamed", &[]).await,
+            keep("origin/own", RemoteKept::OtherName)
+        );
+        git_in(&local, &["branch", "-qD", "renamed"]);
+        assert_eq!(
+            copy("own", &[]).await,
+            RemoteCopy::Delete {
+                remote: "origin".into(),
+                branch: "own".into()
+            }
+        );
+        // A base's upstream is kept; so is the remote's default branch (its HEAD).
+        assert_eq!(
+            copy("own", &["refs/remotes/origin/own"]).await,
+            keep("origin/own", RemoteKept::Base)
+        );
+        git_in(&local, &["remote", "set-head", "origin", "own"]);
+        assert_eq!(
+            copy("own", &[]).await,
+            keep("origin/own", RemoteKept::Default)
+        );
+        assert_eq!(
+            copy("main", &[]).await,
+            RemoteCopy::Delete {
+                remote: "origin".into(),
+                branch: "main".into()
+            }
+        );
+        assert_eq!(RemoteCopy::Absent.note(crate::i18n::Lang::En), None);
+    }
+
+    #[tokio::test]
+    async fn a_remote_branch_deleted_and_made_again_by_someone_else_is_not_taken_for_gone() {
+        let (local, other, bare) = with_remote("git-g1f-lease-again");
+        let l = s(&local);
+        git_in(&local, &["push", "-q", "origin", "main:feat"]);
+        // Deleted, then published again with another commit: not the branch the user saw.
+        git_in(&other, &["push", "-q", "origin", "--delete", "feat"]);
+        git_in(&other, &["checkout", "-q", "-b", "feat"]);
+        commit_file(&other, "again.txt", "again\n");
+        git_in(&other, &["push", "-q", "origin", "feat"]);
+        let again = git_in(&bare, &["rev-parse", "feat"]);
+        let e = branch_delete_remote(&l, "origin", "feat")
+            .await
+            .unwrap_err();
+        assert!(e.to_string().contains("bougé"), "{e}");
+        assert_eq!(git_in(&bare, &["rev-parse", "feat"]), again);
+    }
+
+    #[tokio::test]
+    async fn the_branches_merged_into_a_base_include_the_squashed_ones() {
+        let r = repo("git-g1-merged");
+        git(&r, &["config", "core.autocrlf", "false"]);
+        let root = Path::new(&r);
+        git(&r, &["branch", "behind"]);
+        let work = |b: &str| {
+            git(&r, &["checkout", "-qb", b, "main"]);
+            std::fs::write(root.join(format!("{b}.txt")), format!("{b}\n")).unwrap();
+            git(&r, &["add", "-A"]);
+            git(&r, &["commit", "-qm", b]);
+            git(&r, &["checkout", "-q", "main"]);
+        };
+        work("merged");
+        git(&r, &["merge", "-q", "--no-ff", "-m", "merge", "merged"]);
+        work("squashed");
+        git(&r, &["merge", "-q", "--squash", "squashed"]);
+        git(&r, &["commit", "-qm", "squash"]);
+        work("open");
+
+        let all = ["behind", "merged", "squashed"];
+        assert_eq!(merged_into(&r, "main").await.unwrap(), all);
+        assert_eq!(merged_into(&r, "refs/heads/main").await.unwrap(), all);
+        assert!(merged_into(&r, "behind").await.unwrap().is_empty());
+        assert!(is_merged(&r, "refs/heads/squashed", "main").await);
+        assert!(is_merged(&r, "refs/heads/behind", "main").await);
+        assert!(!is_merged(&r, "refs/heads/open", "main").await);
+        assert!(merged_into(&r, "nowhere").await.is_err());
+        assert!(merged_into(&r, "--all").await.is_err());
+    }
+
+    #[tokio::test]
+    async fn the_commits_no_other_branch_has_are_counted() {
+        let (local, _, _) = with_remote("git-g1-unique");
+        let l = s(&local);
+        git_in(&local, &["checkout", "-qb", "feat"]);
+        commit_file(&local, "f.txt", "f\n");
+        commit_file(&local, "g.txt", "g\n");
+        git_in(&local, &["checkout", "-q", "main"]);
+        let count = |refs: &[&str]| {
+            let l = l.clone();
+            let refs: Vec<String> = refs.iter().map(|r| r.to_string()).collect();
+            async move { unique_commits(&l, &refs).await }
+        };
+        assert_eq!(count(&["refs/heads/feat"]).await.unwrap(), 2);
+        // origin/main has main's.
+        assert_eq!(count(&["refs/heads/main"]).await.unwrap(), 0);
+        // Another branch has them: none would be lost, unless it goes too.
+        git_in(&local, &["branch", "copy", "feat"]);
+        assert_eq!(count(&["refs/heads/feat"]).await.unwrap(), 0);
+        assert_eq!(
+            count(&["refs/heads/feat", "refs/heads/copy"])
+                .await
+                .unwrap(),
+            2
+        );
+        git_in(&local, &["branch", "-qD", "copy"]);
+        // Published: the remote branch has them, unless it goes too.
+        git_in(&local, &["push", "-q", "origin", "feat"]);
+        assert_eq!(count(&["refs/heads/feat"]).await.unwrap(), 0);
+        assert_eq!(count(&["refs/remotes/origin/feat"]).await.unwrap(), 0);
+        assert_eq!(
+            count(&["refs/heads/feat", "refs/remotes/origin/feat"])
+                .await
+                .unwrap(),
+            2
+        );
+        assert!(count(&["--all"]).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn two_refs_are_compared_the_way_git_diff_does() {
+        let r = diverged("git-g1-diff-refs", false);
+        // From main to feat: feat's file comes, main's own change goes back.
+        let d = diff_refs(&r, "main", "feat").await.unwrap();
+        assert!(d.contains("+++ b/b.txt") && d.contains("+feat"), "{d}");
+        assert!(d.contains("-main") && d.contains("+a"), "{d}");
+        let back = diff_refs(&r, "feat", "main").await.unwrap();
+        assert!(back.contains("-feat") && back.contains("+main"), "{back}");
+        let first = text(&r, &["rev-list", "--max-parents=0", "HEAD"])
+            .await
+            .unwrap();
+        let from_first = diff_refs(&r, &first[..8], "main").await.unwrap();
+        assert!(from_first.contains("+main"), "{from_first}");
+        assert_eq!(diff_refs(&r, "main", "main").await.unwrap(), "");
+        for bad in ["nowhere", "--output=x", "-R", ""] {
+            assert!(diff_refs(&r, bad, "main").await.is_err(), "{bad}");
+            assert!(diff_refs(&r, "main", bad).await.is_err(), "{bad}");
+        }
+        assert!(!Path::new(&r).join("x").exists());
+    }
+
+    #[tokio::test]
+    async fn a_branch_is_found_by_its_name_never_by_a_revision_that_starts_with_it() {
+        let r = repo("git-g1f-exact");
+        git(&r, &["commit", "-q", "--allow-empty", "-m", "second"]);
+        git(&r, &["branch", "side"]);
+        assert!(branch_exists(&r, "main").await);
+        assert!(branch_exists(&r, "side").await);
+        for revision in ["main~1", "main^", "main^{commit}", "main@{0}", "side~1", ""] {
+            assert!(!branch_exists(&r, revision).await, "{revision}");
+            assert!(
+                !ref_exists(&r, &format!("refs/heads/{revision}")).await,
+                "{revision}"
+            );
+        }
+        // So a revision is no branch to switch to: nothing moves.
+        let e = switch_to(&r, "main~1").await.unwrap_err();
+        assert!(e.to_string().contains("main~1"), "{e}");
+        assert_eq!(head_branch(&r).await, "main");
+        assert!(local_of(&r, "side^").await.is_err());
+    }
+
+    #[tokio::test]
+    async fn a_new_branch_cannot_take_the_name_of_a_remote_one() {
+        let (local, _, _) = with_remote("git-g1f-shadow");
+        let l = s(&local);
+        // `origin/feat` is how a branch of the remote reads: a local one of that name hides it.
+        let e = branch_create(&l, "origin/feat", "main").await.unwrap_err();
+        assert!(e.to_string().contains("origin"), "{e}");
+        assert!(!branch_exists(&l, "origin/feat").await);
+        let e = check_new_branch(&l, "origin/x").await.unwrap_err();
+        assert!(e.to_string().contains("origin"), "{e}");
+        // Names that only start like the remote's are fine.
+        for ok in ["origin-feat", "originals/x"] {
+            check_new_branch(&l, ok).await.unwrap();
+        }
+        branch_create(&l, "originals/x", "main").await.unwrap();
+        // A name git refuses or a branch has: told as before.
+        assert!(check_new_branch(&l, "a..b").await.is_err());
+        let e = check_new_branch(&l, "originals/x").await.unwrap_err();
+        assert!(e.to_string().contains("existe déjà"), "{e}");
+        let e = check_new_branch(&l, "main~1").await;
+        assert!(e.is_err(), "a revision is no name git takes");
     }
 }

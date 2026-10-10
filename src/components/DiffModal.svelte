@@ -7,14 +7,16 @@
   import { app } from '../lib/state.svelte';
   import DiffView from './DiffView.svelte';
 
-  // Uncommitted changes (`paths` of the agent's checkout), what `commit` changed, or, with
-  // `wholeProject`, every file the project's list shows: the project's checkout and each agent's worktree.
+  // Uncommitted changes (`paths` of the agent's checkout), what `commit` changed, what changes from one ref to
+  // another (`refs`: branches or commits, the git graph's comparison) or, with `wholeProject`, every file the
+  // project's list shows: the project's checkout and each agent's worktree.
   let {
     projectId,
     agentId,
     paths,
     title,
     commit = null,
+    refs = null,
     wholeProject = false,
   }: {
     projectId: string;
@@ -22,6 +24,7 @@
     paths: string[];
     title: string;
     commit?: string | null;
+    refs?: { from: string; to: string } | null;
     wholeProject?: boolean;
   } = $props();
 
@@ -39,11 +42,13 @@
   const agentName = (id: string) => app.agents[id]?.name ?? '?';
 
   $effect(() => {
-    (commit
-      ? api.gitShow(projectId, commit).then((d) => shown(d, null, 0))
-      : wholeProject
-        ? api.gitProjectDiff(projectId).then((parts) => parts.flatMap((p, i) => shown(p.diff, p.agentId, i)))
-        : api.gitDiff(projectId, agentId, paths).then((d) => shown(d, null, 0))
+    (refs
+      ? api.gitDiffRefs(projectId, refs.from, refs.to).then((d) => shown(d, null, 0))
+      : commit
+        ? api.gitShow(projectId, commit).then((d) => shown(d, null, 0))
+        : wholeProject
+          ? api.gitProjectDiff(projectId).then((parts) => parts.flatMap((p, i) => shown(p.diff, p.agentId, i)))
+          : api.gitDiff(projectId, agentId, paths).then((d) => shown(d, null, 0))
     )
       .then((list) => {
         files = list;

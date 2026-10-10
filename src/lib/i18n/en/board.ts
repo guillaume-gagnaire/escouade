@@ -5,7 +5,7 @@ export default defineZone('board', {
   columns: { todo: 'To do', doing: 'In progress', review: 'To review', done: 'Done' },
   empty: {
     todo: 'Add a ticket: an agent will pick it up as soon as a slot is free.',
-    doing: 'No agent looping',
+    doing: 'No agents looping',
     review: 'Nothing to review',
     done: 'No finished tickets',
   },
@@ -18,7 +18,7 @@ export default defineZone('board', {
       other: '{name} · {count} tickets · {looping} looping',
     },
     claudeMissing: 'Claude Code not found — no tickets will start',
-    importTitle: 'Import tickets from Jira, Trello or GitHub Issues',
+    importTitle: 'Import tickets from Jira, Trello, or GitHub Issues',
     settingsTitle: 'Kanban settings — {summary}',
     afterApproval: 'After approval:',
     autopilotTitle: 'Tickets in “To do” start on their own as soon as a slot is free',

@@ -5,9 +5,10 @@ import { buffers } from '../lib/editor/buffers.svelte';
 import { navHistory } from '../lib/editor/history';
 import { recentFiles } from '../lib/editor/quick-open';
 import { fileSearches } from '../lib/editor/search.svelte';
+import { gitSync } from '../lib/git-sync.svelte';
 import { trees } from '../lib/editor/trees.svelte';
 import { app } from '../lib/state.svelte';
-import type { Agent, BoardSettings, GitInfo, Project, Settings, Ticket } from '../lib/types';
+import type { Agent, BoardSettings, BranchInfo, GitInfo, Project, Settings, Ticket } from '../lib/types';
 
 export interface Call {
   cmd: string;
@@ -79,6 +80,7 @@ export function project(over: Partial<Project> = {}): Project {
     integrations: { links: [], comments: ['review', 'done'] },
     commitMode: 'agent',
     account: '',
+    agentsUseEscouade: false,
     ...over,
   };
 }
@@ -121,6 +123,7 @@ export function agent(over: Partial<Agent> = {}): Agent {
     remoteState: null,
     resumeAt: null,
     ticketId: null,
+    progressLine: null,
     appendPrompt: null,
     portBase: null,
     recipe: null,
@@ -213,6 +216,24 @@ export function gitInfo(over: Partial<GitInfo> = {}): GitInfo {
   };
 }
 
+/** A local branch of the project's repository, as `branchList` gives it. */
+export function branchInfo(over: Partial<BranchInfo> = {}): BranchInfo {
+  return {
+    name: 'main',
+    remote: false,
+    current: false,
+    upstream: null,
+    upstreamGone: false,
+    ahead: 0,
+    behind: 0,
+    worktree: null,
+    trackedBy: null,
+    agent: null,
+    lastCommitAt: 1,
+    ...over,
+  };
+}
+
 /** Puts the app singleton back into a known state. */
 export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets?: Ticket[] } = {}) {
   const projects = over.projects ?? [project()];
@@ -232,6 +253,7 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.usage = { fiveHour: null, sevenDay: null, todayCost: 0, updatedAt: 0, accounts: [], current: 'principal' };
   app.resources = { instances: 0, memory: 0, cpu: 0, agents: [] };
   app.git = {};
+  gitSync.running = {};
   app.shells = [];
   app.terminals = [];
   app.exitedTerms = {};

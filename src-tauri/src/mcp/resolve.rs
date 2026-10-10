@@ -165,6 +165,16 @@ pub(crate) fn agent<R: Runtime>(
 /// The ticket `asked` names: its id, else its key in any case (a key may be in two projects whose
 /// keys have the same prefix).
 pub(crate) fn ticket<R: Runtime>(core: &Core<R>, asked: &str) -> Result<Ticket, ToolError> {
+    ticket_in(core, asked, None)
+}
+
+/// `ticket`, among the tickets of `project` when one is given: a ticket comes after, or goes
+/// before, one of its own project.
+pub(crate) fn ticket_in<R: Runtime>(
+    core: &Core<R>,
+    asked: &str,
+    project: Option<&Project>,
+) -> Result<Ticket, ToolError> {
     let asked = asked.trim();
     if asked.is_empty() {
         return Err(ToolError::Failed(tr!(
@@ -173,6 +183,7 @@ pub(crate) fn ticket<R: Runtime>(core: &Core<R>, asked: &str) -> Result<Ticket, 
         )));
     }
     let mut tickets = core.tickets.read().clone();
+    tickets.retain(|t| project.is_none_or(|p| t.project_id == p.id));
     // The newest first among the choices.
     tickets.sort_by(|a, b| (b.created_at, &b.id).cmp(&(a.created_at, &a.id)));
     let projects = project_names(core);
@@ -198,20 +209,34 @@ pub(crate) fn ticket<R: Runtime>(core: &Core<R>, asked: &str) -> Result<Ticket, 
     by_key.reverse();
     match by_key.len() {
         1 => Ok(by_key[0].clone()),
-        0 if tickets.is_empty() => Err(ToolError::Failed(tr!(
-            "Aucun ticket « {asked} » : Escouade n’en a aucun.",
-            "No ticket “{asked}”: Escouade has none."
-        ))),
-        0 => Err(ToolError::Failed(tr!(
-            "Aucun ticket « {asked} ». Tickets : {choices}",
-            "No ticket “{asked}”. Tickets: {choices}",
-            choices = listed(
+        0 => {
+            let choices = listed(
                 &tickets.iter().collect::<Vec<_>>(),
                 asked,
                 |t| &t.key,
-                label
-            )
-        ))),
+                label,
+            );
+            Err(ToolError::Failed(match project {
+                Some(p) if tickets.is_empty() => tr!(
+                    "Aucun ticket « {asked} » dans le projet {project} : il n’en a aucun.",
+                    "No ticket “{asked}” in the project {project}: it has none.",
+                    project = p.name
+                ),
+                Some(p) => tr!(
+                    "Aucun ticket « {asked} » dans le projet {project}. Tickets : {choices}",
+                    "No ticket “{asked}” in the project {project}. Tickets: {choices}",
+                    project = p.name
+                ),
+                None if tickets.is_empty() => tr!(
+                    "Aucun ticket « {asked} » : Escouade n’en a aucun.",
+                    "No ticket “{asked}”: Escouade has none."
+                ),
+                None => tr!(
+                    "Aucun ticket « {asked} ». Tickets : {choices}",
+                    "No ticket “{asked}”. Tickets: {choices}"
+                ),
+            }))
+        }
         _ => Err(ToolError::Failed(tr!(
             "Plusieurs tickets ont la clé « {asked} » : {choices} Donne son id.",
             "Several tickets have the key “{asked}”: {choices} Give its id.",

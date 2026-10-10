@@ -51,6 +51,31 @@ describe('TicketCard', () => {
     expect(items[1]).toHaveTextContent('○Tests verts');
   });
 
+  it('shows the line its agent reported, with what it does right now, until it reports another', () => {
+    resetApp({ agents: [agent({ status: 'running', activity: 'Lit src/db.ts', progressLine: 'Écrit les tests du parseur' })] });
+    fakeBackend();
+    const { unmount } = show(doing());
+    const line = screen.getByText('Écrit les tests du parseur');
+    expect(line).toHaveAttribute('title', 'Écrit les tests du parseur');
+    expect(line).toHaveTextContent('Ce que l’agent dit faire Écrit les tests du parseur');
+    expect(screen.getByText('Lit src/db.ts')).toBeInTheDocument();
+    unmount();
+    // Nothing reported, nothing shown.
+    resetApp({ agents: [agent({ status: 'running', activity: 'Lit src/db.ts', progressLine: null })] });
+    show(doing());
+    expect(screen.queryByText('Ce que l’agent dit faire')).not.toBeInTheDocument();
+  });
+
+  it('shows the reported line only while the ticket is under way', () => {
+    resetApp({ agents: [agent({ status: 'idle', progressLine: 'Écrit les tests du parseur' })] });
+    fakeBackend();
+    const { unmount } = show(doing({ column: 'review' }));
+    expect(screen.queryByText('Écrit les tests du parseur')).not.toBeInTheDocument();
+    unmount();
+    show(ticket());
+    expect(screen.queryByText('Écrit les tests du parseur')).not.toBeInTheDocument();
+  });
+
   it('points at a question waiting for an answer', () => {
     resetApp({ agents: [agent({ status: 'waiting' })] });
     fakeBackend();
@@ -690,6 +715,12 @@ describe('TicketCard in English', () => {
     expect(within(screen.getByRole('list', { name: 'Criteria' })).getAllByRole('listitem')).toHaveLength(2);
     // The agent has not said what it does yet.
     expect(screen.getByText('Thinking')).toBeInTheDocument();
+  });
+
+  it('labels the line its agent reported in English', () => {
+    resetApp({ agents: [agent({ id: 'a1', ticketId: 't1', status: 'running', progressLine: 'Writes the parser tests' })] });
+    show(doing());
+    expect(screen.getByText('Writes the parser tests')).toHaveTextContent('What the agent says it is doing Writes the parser tests');
   });
 
   it('points at a question waiting for an answer, in English', () => {

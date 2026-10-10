@@ -112,6 +112,129 @@ impl std::fmt::Display for NotOnBase {
 
 impl std::error::Error for NotOnBase {}
 
+/// A branch operation on a project's folder refused for a reason the window tells apart by its
+/// code (`wire`), as it does `NotOnBase`; `text` says it where it does not.
+#[derive(Debug)]
+pub enum BranchRefusal {
+    /// Uncommitted changes in the project's folder: a switch would carry them over or fail on them.
+    Dirty,
+    /// The branch is checked out in an agent's worktree.
+    InWorktree {
+        branch: String,
+        agent_id: String,
+        agent: String,
+    },
+    /// An agent without worktree is in the middle of a turn in the project's folder.
+    AgentWorking { agent_id: String, agent: String },
+    /// Not merged into the project's base: `commits` of it are in no other branch.
+    Unmerged {
+        branch: String,
+        base: String,
+        commits: u32,
+    },
+}
+
+impl BranchRefusal {
+    /// What the window gets: `DIRTY`, `IN_WORKTREE:<agent id>:<agent name>`,
+    /// `AGENT_WORKING:<agent id>:<agent name>`, `UNMERGED:<commits>`. An agent's id holds no `:`;
+    /// its name, last, may.
+    pub fn wire(&self) -> String {
+        match self {
+            BranchRefusal::Dirty => "DIRTY".into(),
+            BranchRefusal::InWorktree {
+                agent_id, agent, ..
+            } => format!("IN_WORKTREE:{agent_id}:{agent}"),
+            BranchRefusal::AgentWorking { agent_id, agent } => {
+                format!("AGENT_WORKING:{agent_id}:{agent}")
+            }
+            BranchRefusal::Unmerged { commits, .. } => format!("UNMERGED:{commits}"),
+        }
+    }
+
+    /// The refusal in words, where the window does not tell it by its code.
+    pub fn text(&self, lang: i18n::Lang) -> String {
+        match self {
+            BranchRefusal::Dirty => tr_in!(
+                lang,
+                "Il reste des changements non commités dans le dossier du projet : commite-les ou mets-les de côté (stash) avant de changer de branche.",
+                "There are uncommitted changes in the project’s folder: commit or stash them before switching branches."
+            ),
+            BranchRefusal::InWorktree { branch, agent, .. } => tr_in!(
+                lang,
+                "La branche « {branch} » est utilisée par l’agent {agent}, dans son worktree.",
+                "The branch “{branch}” is used by agent {agent}, in its worktree."
+            ),
+            BranchRefusal::AgentWorking { agent, .. } => tr_in!(
+                lang,
+                "L’agent {agent} travaille dans le dossier du projet : attends la fin de son tour.",
+                "Agent {agent} is working in the project’s folder: wait for the end of its turn."
+            ),
+            BranchRefusal::Unmerged {
+                branch,
+                base,
+                commits,
+            } => tr_n_in!(
+                lang,
+                *commits,
+                "« {branch} » n’est pas mergée dans « {base} » : {n} commit n’est dans aucune autre branche.",
+                "« {branch} » n’est pas mergée dans « {base} » : {n} commits ne sont dans aucune autre branche.",
+                "“{branch}” isn’t merged into “{base}”: {n} commit is in no other branch.",
+                "“{branch}” isn’t merged into “{base}”: {n} commits are in no other branch.",
+                n = commits
+            ),
+        }
+    }
+}
+
+impl std::fmt::Display for BranchRefusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.text(i18n::ui()))
+    }
+}
+
+impl std::error::Error for BranchRefusal {}
+
+/// True when the work of `refname` is in one of `bases` (`Core::merge_bases`), none of which it is:
+/// the base is never merged "into itself", its own commits may be in it alone.
+async fn merged_into_any(root: &str, refname: &str, bases: &[String]) -> bool {
+    if bases.iter().any(|b| b == refname) {
+        return false;
+    }
+    for base in bases {
+        if git::is_merged(root, refname, base).await {
+            return true;
+        }
+    }
+    false
+}
+
+/// The changes of the project's folder put aside before a switch: the stash's name, and its commit
+/// (the stash is found again by it, whatever was stashed since).
+#[derive(Debug, Clone)]
+pub(crate) struct Stash {
+    pub message: String,
+    pub hash: String,
+}
+
+/// The error of a switch that failed, and when the changes put aside could not come back either,
+/// where they are (`take_back`'s error) after it.
+fn failed_with(failed: anyhow::Error, restore: Result<()>) -> anyhow::Error {
+    match restore {
+        Ok(()) => failed,
+        Err(kept) => anyhow::anyhow!("{failed:#}\n{kept:#}"),
+    }
+}
+
+/// The name of the stash a switch to `branch` puts the folder's changes in: what `git stash list`
+/// shows, to find them again.
+pub fn stash_message(lang: i18n::Lang, branch: &str) -> String {
+    tr_in!(
+        lang,
+        "escouade: avant de passer sur {branch}",
+        "escouade: before switching to {branch}"
+    )
+}
+
 /// A sync of a project's checkout with its remote, asked by the user.
 #[derive(Debug, Clone, Copy)]
 pub enum SyncOp {
@@ -196,6 +319,17 @@ fn size_label(lang: i18n::Lang, bytes: usize) -> String {
     } else {
         tr_in!(lang, "{n} Ko", "{n} KB", n = bytes / KB)
     }
+}
+
+/// `text`, written by `origin` (a caller of the MCP server) and not by the user: « Message de
+/// <origin> : <text> ». The author is one line (an agent's name, « Claude (hors Escouade) »).
+pub(crate) fn from_origin(lang: i18n::Lang, origin: &str, text: &str) -> String {
+    let origin = origin.split_whitespace().collect::<Vec<_>>().join(" ");
+    tr_in!(
+        lang,
+        "Message de {origin} : {text}",
+        "Message from {origin}: {text}"
+    )
 }
 
 /// Content of a user message: its text alone, or the attached files as content blocks
@@ -294,6 +428,9 @@ pub struct AgentOptions {
     pub copy_of: Option<CopyOf>,
     /// The Claude account it runs on (an `Account`'s id); None: Principal.
     pub account: Option<String>,
+    /// A worktree of its own (true) or the project's folder (false), whatever the project does by
+    /// default; None: as the project does. `worktree` and `copy_of` name theirs and win.
+    pub isolated: Option<bool>,
 }
 
 /// What a copy takes of its original, read while no turn of the original ran.
@@ -1110,13 +1247,14 @@ impl<R: Runtime> Core<R> {
                 }
             }
         });
+        // The MCP server first: the agents started below reach it.
+        self.start_mcp();
         self.start_remote_agents();
         // The syncs the app's last run left waiting go again now, before those of the tickets
         // that go on.
         self.retry_all_syncs();
         self.recover_tickets();
         self.update_tray();
-        self.sync_mcp();
     }
 
     // ---------- persistence ----------
@@ -1627,7 +1765,7 @@ impl<R: Runtime> Core<R> {
                 "Claude Code not found. Install it or give its path in the settings."
             ))
         })?;
-        let (opts, gen) = {
+        let (mut opts, gen, project_id) = {
             let mut rt = h.lock();
             rt.gen += 1;
             let opts = SpawnOpts {
@@ -1636,7 +1774,7 @@ impl<R: Runtime> Core<R> {
                 args: claude_args(&rt.meta),
                 env: [settings.claude_env(), accounts::launch_env(&account)].concat(),
             };
-            (opts, rt.gen)
+            (opts, rt.gen, rt.meta.project_id.clone())
         };
         if !Path::new(&opts.cwd).is_dir() {
             bail!(tr!(
@@ -1645,6 +1783,11 @@ impl<R: Runtime> Core<R> {
                 dir = opts.cwd
             ));
         }
+        // Escouade's MCP server, as this agent (a token of its own) or refused to it.
+        let access = self.agent_access(id, &project_id);
+        opts.args.extend(access.args());
+        // Given back when this process ends, unless a newer one of the agent has its own.
+        let token = access.token().map(str::to_string);
         log::info!(
             "agent {id}: starting {} {} in {} (account {})",
             opts.program.display(),
@@ -1655,7 +1798,8 @@ impl<R: Runtime> Core<R> {
         let started = std::time::Instant::now();
         let (w1, w2) = (Arc::downgrade(self), Arc::downgrade(self));
         let (h1, h2) = (h.clone(), h.clone());
-        let proc = ClaudeProcess::spawn(
+        let (agent_id, granted) = (id.to_string(), token.clone());
+        let spawned = ClaudeProcess::spawn(
             opts,
             move |frame| {
                 if let Some(c) = w1.upgrade() {
@@ -1664,10 +1808,22 @@ impl<R: Runtime> Core<R> {
             },
             move |code, stderr| {
                 if let Some(c) = w2.upgrade() {
+                    if let Some(t) = &granted {
+                        c.mcp.release_agent(&agent_id, t);
+                    }
                     c.on_exit(&h2, gen, code, stderr);
                 }
             },
-        )?;
+        );
+        let proc = match spawned {
+            Ok(p) => p,
+            Err(e) => {
+                if let Some(t) = &token {
+                    self.mcp.release_agent(id, t);
+                }
+                return Err(e);
+            }
+        };
         h.lock().attach(proc.clone());
         self.emit_agent(&h);
         match proc
@@ -2034,6 +2190,8 @@ impl<R: Runtime> Core<R> {
                 p.kill();
             }
         }
+        // Their tokens go with the app: their MCP configs too.
+        self.mcp.clear_agent_configs();
         self.pty.kill_all();
         self.save_now();
     }
@@ -2044,17 +2202,35 @@ impl<R: Runtime> Core<R> {
         text: String,
         attachments: Vec<Attachment>,
     ) -> Result<()> {
+        self.send_message_from(id, None, text, attachments).await
+    }
+
+    /// `send_message` of a text someone else wrote than the user at the window: the author's name
+    /// is `origin` (a caller of the MCP server). The agent reads it, and the conversation shows
+    /// it, under « Message de <origin> : » (`from_origin`), so that it is never taken for the
+    /// user's own words. The agent is named after the text alone.
+    pub(crate) async fn send_message_from(
+        self: &Arc<Self>,
+        id: &str,
+        origin: Option<&str>,
+        text: String,
+        attachments: Vec<Attachment>,
+    ) -> Result<()> {
         // Until its turn runs (its process started, the message delivered), it is under way.
         let _working = self.working();
+        let delivered = match origin {
+            Some(origin) => from_origin(i18n::ui(), origin, &text),
+            None => text.clone(),
+        };
         // Refused before starting Claude: the composer keeps the message.
-        let content = user_content(&text, &attachments)?;
+        let content = user_content(&delivered, &attachments)?;
         // Its new worktree is set up first: Claude would work in it meanwhile (an install running
         // twice, files half written).
         self.wait_setup(id).await;
         // Two attempts: the process may die between being started and receiving the message.
         for attempt in 0..2 {
             let proc = self.ensure_process(id).await?;
-            if self.deliver(id, &proc, &text, &content, &attachments)? {
+            if self.deliver(id, &proc, &delivered, &text, &content, &attachments)? {
                 return Ok(());
             }
             log::warn!("message not delivered (attempt {attempt}): the process exited");
@@ -2066,11 +2242,14 @@ impl<R: Runtime> Core<R> {
     }
 
     /// Sends the message to `proc` if it is still the agent's live process, then records it.
+    /// `text` is what the agent is sent, `naming` what its name is made from when this is its
+    /// first message (the same, unless the text is headed by its author's name).
     fn deliver(
         self: &Arc<Self>,
         id: &str,
         proc: &Arc<ClaudeProcess>,
         text: &str,
+        naming: &str,
         content: &Value,
         attachments: &[Attachment],
     ) -> Result<bool> {
@@ -2099,9 +2278,9 @@ impl<R: Runtime> Core<R> {
         };
         self.stats.record_prompt(id, &pid);
         self.apply(id, &pid, &name, fx, Some(view));
-        if first && !text.trim().is_empty() && !text.trim_start().starts_with('/') {
-            let (c, id, text) = (self.clone(), id.to_string(), text.to_string());
-            tauri::async_runtime::spawn(async move { c.auto_name(&id, &text).await });
+        if first && !naming.trim().is_empty() && !naming.trim_start().starts_with('/') {
+            let (c, id, naming) = (self.clone(), id.to_string(), naming.to_string());
+            tauri::async_runtime::spawn(async move { c.auto_name(&id, &naming).await });
         }
         Ok(true)
     }
@@ -2343,7 +2522,7 @@ impl<R: Runtime> Core<R> {
                 }
                 None => None,
             },
-            (None, None) if project.worktree_per_agent => {
+            (None, None) if o.isolated.unwrap_or(project.worktree_per_agent) => {
                 Some(git::worktree_add(&project.path, &name).await)
             }
             (None, None) => None,
@@ -3208,6 +3387,8 @@ impl<R: Runtime> Core<R> {
                 rt.meta.port_base,
             )
         };
+        // Refused at once, without waiting for its process to end.
+        self.mcp.forget_agent(id);
         self.spawn_locks.lock().remove(id);
         // The setup of its worktree stops, with what it started (which holds the worktree). Once it
         // is gone: what waited for that setup (its ticket's first message) finds no agent to send to.
@@ -3448,13 +3629,17 @@ impl<R: Runtime> Core<R> {
         self.request_save();
     }
 
-    pub fn remove_project(self: &Arc<Self>, id: &str) -> Result<()> {
+    pub async fn remove_project(self: &Arc<Self>, id: &str) -> Result<()> {
         let agents: Vec<String> = self
             .project_agents(id)
             .iter()
             .map(|h| h.lock().meta.id.clone())
             .collect();
         for aid in agents {
+            // Wait for an in-flight start (a warm-up), as the deletion of an agent does: it would
+            // otherwise start a process, with a token, for an agent that is gone.
+            let lock = self.spawn_lock(&aid);
+            let _guard = lock.lock().await;
             // Bound first: the map guard must not live across the agent lock and the I/O below.
             let removed = self.agents.write().remove(&aid);
             let mut worktree = None;
@@ -3467,6 +3652,8 @@ impl<R: Runtime> Core<R> {
                 rt.conv.delete_file();
                 worktree = rt.meta.worktree.clone();
             }
+            self.mcp.forget_agent(&aid);
+            self.spawn_locks.lock().remove(&aid);
             // The setup of its worktree stops, with what it started; its log goes.
             if let Some(s) = self.setups.lock().remove(&aid) {
                 s.task.abort();
@@ -4187,6 +4374,399 @@ impl<R: Runtime> Core<R> {
         // Even after a failure: a pull that could not fast-forward has fetched.
         self.refresh_repo(&root).await;
         out
+    }
+
+    // ---------- branches ----------
+
+    /// The project and the repository its folder is in.
+    async fn branch_repo(&self, project_id: &str) -> Result<(Project, String)> {
+        let project = self.project(project_id)?;
+        let root = self.toplevel(&project.path).await.ok_or_else(not_a_repo)?;
+        Ok((project, root))
+    }
+
+    /// The refs a branch's work counts as merged into: the project's base (the board's target
+    /// while it exists, else the branch the folder is on, HEAD when detached), and that base's
+    /// upstream (a pull request merged on the remote, fetched but not pulled yet). The base's
+    /// target is only read here, never fixed.
+    async fn merge_bases(&self, project: &Project, root: &str) -> Vec<String> {
+        let target = project.board.target.trim();
+        let base = if !target.is_empty() && git::branch_exists(root, target).await {
+            target.to_string()
+        } else {
+            git::head_branch(root).await
+        };
+        if base.is_empty() || !git::branch_exists(root, &base).await {
+            return vec!["HEAD".into()];
+        }
+        let mut bases = vec![format!("refs/heads/{base}")];
+        bases.extend(git::upstream_of(root, &base).await.map(|u| u.tracking));
+        bases
+    }
+
+    /// The agents' worktrees, any project's: (agent id, agent name, folder).
+    fn agent_worktrees(&self) -> Vec<(String, String, String)> {
+        self.agents
+            .read()
+            .values()
+            .filter_map(|h| {
+                let rt = h.lock();
+                let wt = rt.meta.worktree.as_ref()?;
+                Some((rt.meta.id.clone(), rt.meta.name.clone(), wt.path.clone()))
+            })
+            .collect()
+    }
+
+    /// True when the folder `root` itself has `branch` checked out; refused when another worktree
+    /// has it: an agent's (`IN_WORKTREE`), or one of no agent (said in words).
+    async fn checked_out_here(&self, root: &str, branch: &str) -> Result<bool> {
+        let Some(path) = git::checkout_of(root, branch).await? else {
+            return Ok(false);
+        };
+        if crate::tickets::same_dir(&path, root) {
+            return Ok(true);
+        }
+        let agent = self
+            .agent_worktrees()
+            .into_iter()
+            .find(|(_, _, wt)| crate::tickets::same_dir(wt, &path));
+        if let Some((agent_id, agent, _)) = agent {
+            return Err(BranchRefusal::InWorktree {
+                branch: branch.to_string(),
+                agent_id,
+                agent,
+            }
+            .into());
+        }
+        bail!(tr!(
+            "La branche « {branch} » est prise par le worktree {path}.",
+            "The branch “{branch}” is checked out in the worktree {path}."
+        ))
+    }
+
+    /// Refused while an agent without worktree has a turn under way (waiting for an answer
+    /// included) in the repository at `root`: its folder is the checkout's. Any project's, as
+    /// several may be open on one checkout (`refresh_repo` reads them the same way).
+    async fn no_agent_at_work(&self, root: &str) -> Result<()> {
+        let projects: Vec<(String, String)> = self
+            .projects
+            .read()
+            .iter()
+            .map(|p| (p.id.clone(), p.path.clone()))
+            .collect();
+        for (id, path) in projects {
+            if self.toplevel(&path).await.as_deref() != Some(root) {
+                continue;
+            }
+            let busy = self.project_agents(&id).iter().find_map(|h| {
+                let rt = h.lock();
+                (rt.meta.worktree.is_none() && rt.meta.status.is_active())
+                    .then(|| (rt.meta.id.clone(), rt.meta.name.clone()))
+            });
+            if let Some((agent_id, agent)) = busy {
+                return Err(BranchRefusal::AgentWorking { agent_id, agent }.into());
+            }
+        }
+        Ok(())
+    }
+
+    /// Before the folder at `root` leaves where it is, refused (in words, before anything is put
+    /// aside) in the middle of a merge, cherry-pick, revert or rebase, which a switch would
+    /// scramble, and from a detached HEAD whose commits no branch has, which the switch would
+    /// leave to the reflog. `head_kept`: the branch it goes to starts at HEAD, so it keeps them.
+    async fn may_leave(&self, root: &str, head_kept: bool) -> Result<()> {
+        if let Some(operation) = git::operation_in_progress(root).await {
+            bail!(git::operation_refusal(i18n::ui(), operation));
+        }
+        if !head_kept {
+            let commits = git::detached_commits(root).await?;
+            if commits > 0 {
+                bail!(git::detached_refusal(i18n::ui(), commits));
+            }
+        }
+        Ok(())
+    }
+
+    /// Before the folder at `root` goes to `branch`: refused with uncommitted changes to tracked
+    /// files (`DIRTY`), unless `stash`: then they are put aside in a stash named for `branch`,
+    /// whose name is returned. Untracked files stay, as git carries them over (refusing what they
+    /// would overwrite).
+    pub(crate) async fn put_aside(
+        &self,
+        root: &str,
+        branch: &str,
+        stash: bool,
+    ) -> Result<Option<Stash>> {
+        if !git::has_tracked_changes(root).await? {
+            return Ok(None);
+        }
+        if !stash {
+            return Err(BranchRefusal::Dirty.into());
+        }
+        let message = stash_message(i18n::ui(), branch);
+        let hash = git::stash_push(root, &message).await?;
+        Ok(Some(Stash { message, hash }))
+    }
+
+    /// After a switch that failed (HEAD did not move): the changes put aside come back, from their
+    /// own stash. When they cannot (the folder was written to meanwhile, the stash is gone), the
+    /// error says where they are: the stash stays whenever git could not pop it.
+    pub(crate) async fn take_back(&self, root: &str, stash: &Stash) -> Result<()> {
+        git::stash_pop(root, &stash.hash).await.map_err(|cause| {
+            anyhow::anyhow!(tr!(
+                "Tes changements n’ont pas pu être remis en place. Ils sont dans le stash « {message} » : reprends-les avec « git stash apply {hash} ». ({cause})",
+                "Your changes couldn’t be put back. They’re in the stash “{message}”: get them back with “git stash apply {hash}”. ({cause})",
+                message = stash.message,
+                hash = stash.hash,
+                cause = format!("{cause:#}").trim()
+            ))
+        })
+    }
+
+    /// The project's branches, local then remote, each one an agent's worktree holds with that
+    /// agent.
+    pub async fn branches(&self, project_id: &str) -> Result<Vec<git::BranchInfo>> {
+        let (_, root) = self.branch_repo(project_id).await?;
+        let mut list = git::branch_list(&root).await?;
+        let worktrees = self.agent_worktrees();
+        for b in &mut list {
+            let Some(path) = &b.worktree else { continue };
+            b.agent = worktrees
+                .iter()
+                .find(|(_, _, wt)| crate::tickets::same_dir(wt, path))
+                .map(|(id, _, _)| id.clone());
+        }
+        Ok(list)
+    }
+
+    /// Checks a name for a new branch of the project: as git does, not taken already, and not one
+    /// that hides a branch of a remote.
+    pub async fn branch_check(&self, project_id: &str, name: &str) -> Result<()> {
+        let (_, root) = self.branch_repo(project_id).await?;
+        git::check_new_branch(&root, name).await
+    }
+
+    /// Switches the project's folder to `name`: a local branch, or a remote one (`origin/feat`)
+    /// through the local branch that tracks it (made when there is none). Refused for a branch an
+    /// agent's worktree holds (`IN_WORKTREE`), while an agent without worktree works in the folder
+    /// (`AGENT_WORKING`, any project's on this checkout), in the middle of a merge, cherry-pick,
+    /// revert or rebase, from a detached HEAD whose commits no branch has (in words), and with
+    /// uncommitted changes (`DIRTY`) unless `stash`: they are put aside first, and back if the
+    /// switch fails (else the error says which stash holds them). Returns the stash's name when
+    /// one was made.
+    pub async fn branch_switch(
+        self: &Arc<Self>,
+        project_id: &str,
+        name: &str,
+        stash: bool,
+    ) -> Result<Option<String>> {
+        // The app does not restart for an update in the middle of it.
+        let _working = self.working();
+        let (_, root) = self.branch_repo(project_id).await?;
+        // Not under a pull or a push of the same checkout.
+        let lock = self.sync_lock(&root);
+        let _guard = lock.lock().await;
+        if let Some(local) = git::local_of(&root, name).await? {
+            if self.checked_out_here(&root, &local).await? {
+                return Ok(None);
+            }
+        }
+        self.no_agent_at_work(&root).await?;
+        self.may_leave(&root, false).await?;
+        let stashed = self.put_aside(&root, name, stash).await?;
+        let switched = git::switch_to(&root, name).await;
+        let mut restored = Ok(());
+        if let (Err(_), Some(s)) = (&switched, &stashed) {
+            restored = self.take_back(&root, s).await;
+        }
+        // Every project of the repository: the branch is the checkout's.
+        self.refresh_repo(&root).await;
+        match switched {
+            Ok(_) => Ok(stashed.map(|s| s.message)),
+            Err(e) => Err(failed_with(e, restored)),
+        }
+    }
+
+    /// Creates the branch `name` at `start` (a branch, a remote branch, a commit; the folder's
+    /// HEAD when empty), tracking nothing, and with `switch` switches the project's folder to it
+    /// under the refusals of `branch_switch` (stash included). A start at HEAD changes no file of
+    /// the folder: its uncommitted changes go along. Returns the stash's name when one was made.
+    pub async fn branch_create(
+        self: &Arc<Self>,
+        project_id: &str,
+        name: &str,
+        start: &str,
+        switch: bool,
+        stash: bool,
+    ) -> Result<Option<String>> {
+        let _working = self.working();
+        let (_, root) = self.branch_repo(project_id).await?;
+        let lock = self.sync_lock(&root);
+        let _guard = lock.lock().await;
+        // Everything that can be refused is, before anything is put aside.
+        git::check_new_branch(&root, name).await?;
+        let start = match start.trim() {
+            "" => "HEAD",
+            s => s,
+        };
+        let commit = git::commit_of(&root, start).await?;
+        let mut stashed = None;
+        if switch {
+            self.no_agent_at_work(&root).await?;
+            let head = git::commit_of(&root, "HEAD").await.ok();
+            let from_head = head.as_deref() == Some(commit.as_str());
+            self.may_leave(&root, from_head).await?;
+            if !from_head {
+                stashed = self.put_aside(&root, name, stash).await?;
+            }
+        }
+        let mut done = git::branch_create(&root, name, &commit).await;
+        if done.is_ok() && switch {
+            done = git::switch(&root, name).await;
+            if done.is_err() {
+                // Not left behind half made: it has nothing of its own yet.
+                let _ = git::branch_delete(&root, name, true).await;
+            }
+        }
+        let mut restored = Ok(());
+        if let (Err(_), Some(s)) = (&done, &stashed) {
+            restored = self.take_back(&root, s).await;
+        }
+        self.refresh_repo(&root).await;
+        match done {
+            Ok(()) => Ok(stashed.map(|s| s.message)),
+            Err(e) => Err(failed_with(e, restored)),
+        }
+    }
+
+    /// Deletes the project's branch `name`, its remote copy too with `remote`: its upstream when
+    /// that is the branch of the same name that no other local branch tracks, and neither the
+    /// remote's default branch nor the base's upstream; otherwise only the local branch goes and
+    /// the sentence returned says why. `name` may also be a remote branch alone (`origin/feat`),
+    /// deleted on its remote, but for those two. Never the folder's own branch nor one another
+    /// worktree holds (`IN_WORKTREE` for an agent's). A branch whose work the project's base has
+    /// (contained or squash-merged) goes at once; another is refused (`UNMERGED:<n>`, its commits
+    /// no other branch has) unless `force`.
+    pub async fn branch_delete(
+        self: &Arc<Self>,
+        project_id: &str,
+        name: &str,
+        remote: bool,
+        force: bool,
+    ) -> Result<Option<String>> {
+        let _working = self.working();
+        let (project, root) = self.branch_repo(project_id).await?;
+        let lock = self.sync_lock(&root);
+        let _guard = lock.lock().await;
+        let local = !name.starts_with('-') && git::branch_exists(&root, name).await;
+        let bases = self.merge_bases(&project, &root).await;
+        let mut note = None;
+        // What goes: the local branch, and the remote one as (remote, its name there).
+        let on_remote = if local {
+            if self.checked_out_here(&root, name).await? {
+                bail!(tr!(
+                    "« {name} » est la branche du dossier du projet : passe sur une autre branche avant de la supprimer.",
+                    "“{name}” is the branch of the project’s folder: switch to another branch before deleting it."
+                ));
+            }
+            match remote {
+                true => match git::remote_copy(&root, name, &bases).await? {
+                    git::RemoteCopy::Delete { remote, branch } => Some((remote, branch)),
+                    kept => {
+                        note = kept.note(i18n::ui());
+                        None
+                    }
+                },
+                false => None,
+            }
+        } else {
+            let split = git::split_remote(&root, name).await;
+            if !git::ref_exists(&root, &format!("refs/remotes/{name}")).await || split.is_none() {
+                bail!(tr!(
+                    "La branche « {name} » est introuvable.",
+                    "The branch “{name}” wasn’t found."
+                ));
+            }
+            if let Some((r, b)) = &split {
+                // `origin/HEAD` is a symbolic ref to the remote's default branch: deleting it as a
+                // branch would follow it and delete that branch's copy.
+                if b == "HEAD" {
+                    bail!(tr!(
+                        "« {name} » n’est pas une branche : c’est le renvoi vers la branche par défaut du dépôt distant.",
+                        "“{name}” isn’t a branch: it points to the remote repository’s default branch."
+                    ));
+                }
+                let tracking = format!("refs/remotes/{r}/{b}");
+                if let Some(why) = git::remote_guard(&root, r, &tracking, &bases).await {
+                    bail!(why.refusal(i18n::ui(), name));
+                }
+            }
+            split
+        };
+        let mut refs: Vec<String> = Vec::new();
+        if local {
+            refs.push(format!("refs/heads/{name}"));
+        }
+        if let Some((r, b)) = &on_remote {
+            refs.push(format!("refs/remotes/{r}/{b}"));
+        }
+        if !force {
+            let mut merged = true;
+            for r in &refs {
+                merged = merged && merged_into_any(&root, r, &bases).await;
+            }
+            if !merged {
+                let commits = git::unique_commits(&root, &refs).await?;
+                let base = bases[0].trim_start_matches("refs/heads/").to_string();
+                return Err(BranchRefusal::Unmerged {
+                    branch: name.to_string(),
+                    base,
+                    commits,
+                }
+                .into());
+            }
+        }
+        // The remote first: refused there (rights, network), nothing is deleted.
+        let mut done = Ok(());
+        if let Some((r, b)) = &on_remote {
+            done = git::branch_delete_remote(&root, r, b).await;
+        }
+        if done.is_ok() && local {
+            done = git::branch_delete(&root, name, true).await;
+        }
+        self.refresh_repo(&root).await;
+        done.map(|_| note)
+    }
+
+    /// The project's local branches whose work its base has (contained or squash-merged), but the
+    /// base, the folder's own branch and those a worktree holds: what « Branches mergées » offers
+    /// to delete. By name.
+    pub async fn branches_merged(&self, project_id: &str) -> Result<Vec<String>> {
+        let (project, root) = self.branch_repo(project_id).await?;
+        let bases = self.merge_bases(&project, &root).await;
+        let mut merged: Vec<String> = Vec::new();
+        for b in &bases {
+            for name in git::merged_into(&root, b).await? {
+                if !merged.contains(&name) {
+                    merged.push(name);
+                }
+            }
+        }
+        let held: Vec<String> = git::branch_list(&root)
+            .await?
+            .into_iter()
+            .filter(|b| !b.remote && b.worktree.is_some())
+            .map(|b| b.name)
+            .collect();
+        merged.retain(|n| !held.contains(n) && format!("refs/heads/{n}") != bases[0]);
+        merged.sort();
+        Ok(merged)
+    }
+
+    /// What changes from `a` to `b` in the project's repository (`git diff a b`).
+    pub async fn diff_refs(&self, project_id: &str, a: &str, b: &str) -> Result<String> {
+        let (_, root) = self.branch_repo(project_id).await?;
+        git::diff_refs(&root, a, b).await
     }
 
     pub async fn file_suggestions(

@@ -356,6 +356,64 @@ pub fn to_start(
     todo.into_iter().take(free).map(|t| t.id.clone()).collect()
 }
 
+/// Where a ticket « À faire » goes among its project's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MoveTo<'a> {
+    Top,
+    Bottom,
+    /// Just before this ticket (its id), « À faire » too and of the same project.
+    Before(&'a str),
+}
+
+/// The ranks that change when ticket `id` goes to `to`, as (ticket id, new rank): none when it is
+/// there already. Ticket `id` and the one it goes before are « À faire » tickets of one project
+/// (the caller checked). The others keep their order; they keep their ranks too unless the two
+/// between which it goes have no rank left between them, which renumbers the column.
+pub fn new_ranks(tickets: &[Ticket], id: &str, to: MoveTo<'_>) -> Vec<(String, i64)> {
+    let Some(me) = tickets.iter().find(|t| t.id == id) else {
+        return Vec::new();
+    };
+    // The column in the order the board shows it (equal ranks by age, as `to_start` has them).
+    let mut column: Vec<&Ticket> = tickets
+        .iter()
+        .filter(|t| t.project_id == me.project_id && t.column == Column::Todo)
+        .collect();
+    column.sort_by_key(|t| (t.rank, t.created_at));
+    let others: Vec<&Ticket> = column.iter().copied().filter(|t| t.id != id).collect();
+    let at = match to {
+        MoveTo::Top => 0,
+        MoveTo::Bottom => others.len(),
+        MoveTo::Before(target) => match others.iter().position(|t| t.id == target) {
+            Some(at) => at,
+            None => return Vec::new(),
+        },
+    };
+    // Inserted at `at` among the others it would stay where it is.
+    if column.iter().position(|t| t.id == id) == Some(at) {
+        return Vec::new();
+    }
+    let rank = match (at.checked_sub(1).map(|i| others[i]), others.get(at)) {
+        (None, Some(first)) => first.rank - 1,
+        (Some(last), None) => last.rank + 1,
+        (Some(before), Some(after)) if before.rank + 1 < after.rank => before.rank + 1,
+        // No rank left between them: every ticket of the column takes the rank of its place.
+        (Some(_), Some(_)) => {
+            let mut order = others.clone();
+            order.insert(at, me);
+            let base = column[0].rank;
+            return order
+                .into_iter()
+                .zip(base..)
+                .filter(|(t, rank)| t.rank != *rank)
+                .map(|(t, rank)| (t.id.clone(), rank))
+                .collect();
+        }
+        // Alone in the column: it was in its place.
+        (None, None) => return Vec::new(),
+    };
+    vec![(id.to_string(), rank)]
+}
+
 /// What a ticket's form asks it to come after, as kept: tickets of `project_id` other than `id`
 /// itself, each once, in the order given. One gone meanwhile (deleted), or another project's (a
 /// window behind), is left out.
@@ -1583,6 +1641,101 @@ mod tests {
             column: Column::Todo,
             rank,
             ..Default::default()
+        }
+    }
+
+    /// The ids of the project's tickets « À faire » in the order the board shows them, once the
+    /// ranks `moved` changes are applied.
+    fn order_after(list: &[Ticket], moved: &[(String, i64)]) -> Vec<String> {
+        let mut list = list.to_vec();
+        for (id, rank) in moved {
+            list.iter_mut().find(|t| t.id == *id).unwrap().rank = *rank;
+        }
+        list.retain(|t| t.project_id == "p1" && t.column == Column::Todo);
+        list.sort_by_key(|t| (t.rank, t.created_at));
+        list.into_iter().map(|t| t.id).collect()
+    }
+
+    #[test]
+    fn a_ticket_to_do_moves_to_the_top_the_bottom_or_before_another_changing_as_few_ranks_as_it_can(
+    ) {
+        let list = vec![
+            todo("a", 1),
+            todo("b", 2),
+            todo("c", 3),
+            todo("d", 7),
+            // Not in the column, or not in the project: never counted.
+            Ticket {
+                column: Column::Doing,
+                ..todo("busy", -50)
+            },
+            Ticket {
+                project_id: "p2".into(),
+                ..todo("other", 100)
+            },
+        ];
+        // Top and bottom change the ticket alone: one below the lowest rank, one above the highest.
+        let top = new_ranks(&list, "c", MoveTo::Top);
+        assert_eq!(top, [("c".to_string(), 0)]);
+        assert_eq!(order_after(&list, &top), ["c", "a", "b", "d"]);
+        let bottom = new_ranks(&list, "b", MoveTo::Bottom);
+        assert_eq!(bottom, [("b".to_string(), 8)]);
+        assert_eq!(order_after(&list, &bottom), ["a", "c", "d", "b"]);
+        // Before a ticket whose predecessor leaves room: the ticket alone, in the gap.
+        let gap = new_ranks(&list, "a", MoveTo::Before("d"));
+        assert_eq!(gap, [("a".to_string(), 4)]);
+        assert_eq!(order_after(&list, &gap), ["b", "c", "a", "d"]);
+        // Before the first one is the top.
+        assert_eq!(
+            new_ranks(&list, "d", MoveTo::Before("a")),
+            [("d".to_string(), 0)]
+        );
+        // No room between b and c: the column is renumbered from its lowest rank, and only the
+        // tickets whose rank changes are given.
+        let tight = new_ranks(&list, "d", MoveTo::Before("c"));
+        let changed: Vec<&str> = tight.iter().map(|(i, _)| i.as_str()).collect();
+        assert_eq!(changed, ["d", "c"]);
+        assert_eq!(order_after(&list, &tight), ["a", "b", "d", "c"]);
+        let ranks: Vec<i64> = {
+            let mut l = list.clone();
+            for (id, r) in &tight {
+                l.iter_mut().find(|t| t.id == *id).unwrap().rank = *r;
+            }
+            let mut r: Vec<i64> = l
+                .iter()
+                .filter(|t| t.project_id == "p1" && t.column == Column::Todo)
+                .map(|t| t.rank)
+                .collect();
+            r.sort();
+            r
+        };
+        assert_eq!(ranks, [1, 2, 3, 4]);
+        // Where it is already, nothing changes.
+        assert!(new_ranks(&list, "a", MoveTo::Top).is_empty());
+        assert!(new_ranks(&list, "d", MoveTo::Bottom).is_empty());
+        assert!(new_ranks(&list, "b", MoveTo::Before("c")).is_empty());
+        // Equal ranks (a hand-edited file) are told apart by age: the move still lands right.
+        let same = vec![
+            Ticket {
+                created_at: 1,
+                ..todo("x", 5)
+            },
+            Ticket {
+                created_at: 2,
+                ..todo("y", 5)
+            },
+            Ticket {
+                created_at: 3,
+                ..todo("z", 5)
+            },
+        ];
+        for (id, to, want) in [
+            ("z", MoveTo::Top, ["z", "x", "y"]),
+            ("x", MoveTo::Bottom, ["y", "z", "x"]),
+            ("z", MoveTo::Before("y"), ["x", "z", "y"]),
+        ] {
+            let moved = new_ranks(&same, id, to);
+            assert_eq!(order_after(&same, &moved), want, "{id} {to:?}");
         }
     }
 

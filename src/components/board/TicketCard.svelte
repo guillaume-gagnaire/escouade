@@ -288,6 +288,10 @@
         {#if hidden > 0}<span class="more mono" title={t('board.card.moreSteps', { count: hidden })}>+{hidden}</span>{/if}
       </div>
     {/if}
+    {#if agent?.progressLine}
+      <!-- What the agent reported through Escouade's MCP server, until its next report. -->
+      <div class="said" title={agent.progressLine}><span class="sr">{t('mcp.progress.label')}{' '}</span>{agent.progressLine}</div>
+    {/if}
     {#if !ticket.blocked}
       {#if waiting}
         <div class="act wait"><span class="pulse" style="width:7px;height:7px"></span>{t('board.card.questionWaiting')}</div>
@@ -589,6 +593,11 @@
   }
   .act.wait {
     color: var(--wait);
+  }
+  .said {
+    font-size: 11.5px;
+    color: var(--text);
+    overflow-wrap: anywhere;
   }
   .dots {
     display: inline-flex;

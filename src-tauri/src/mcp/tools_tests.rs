@@ -1,8 +1,9 @@
 //! The tools that read, called by a real MCP client (rmcp's) on a test core: real git
 //! repositories, the fake `claude`, tickets put on the boards as they are (their autopilot off).
 
-use super::tests::{client, names, started, EXPOSED};
+use super::tests::{client, names, started, EXPOSED, READING};
 use crate::agent::AgentRt;
+use crate::core::RESUME_MARGIN_MS;
 use crate::core_tests::{harness, Harness};
 use crate::model::*;
 use crate::usage::Reading;
@@ -12,17 +13,17 @@ use rmcp::RoleClient;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
-type Client = RunningService<RoleClient, ()>;
+pub(super) type Client = RunningService<RoleClient, ()>;
 
 /// The project of the harness (its repository on `main`), its autopilot off: a ticket put on its
 /// board stays where it is put.
-async fn project(h: &Harness) -> Project {
+pub(super) async fn project(h: &Harness) -> Project {
     let (p, _) = h.project(false).await;
     still(h, &p)
 }
 
 /// Another project, named `name`, in a folder of its own (made a repository).
-async fn other_project(h: &Harness, name: &str) -> Project {
+pub(super) async fn other_project(h: &Harness, name: &str) -> Project {
     let dir = h.dir.join(name);
     std::fs::create_dir_all(&dir).unwrap();
     let p = h
@@ -39,7 +40,7 @@ async fn other_project(h: &Harness, name: &str) -> Project {
     still(h, &p)
 }
 
-fn still(h: &Harness, p: &Project) -> Project {
+pub(super) fn still(h: &Harness, p: &Project) -> Project {
     h.core
         .board_set(
             &p.id,
@@ -53,7 +54,7 @@ fn still(h: &Harness, p: &Project) -> Project {
 
 /// A ticket of `p`, in `column`, `at` its creation (and its start, test and end, as its column
 /// has them): its rank in « À faire » too.
-fn ticket(p: &Project, key: &str, title: &str, column: Column, at: i64) -> Ticket {
+pub(super) fn ticket(p: &Project, key: &str, title: &str, column: Column, at: i64) -> Ticket {
     Ticket {
         id: format!("t-{}-{}", p.id, key.to_lowercase()),
         project_id: p.id.clone(),
@@ -71,13 +72,13 @@ fn ticket(p: &Project, key: &str, title: &str, column: Column, at: i64) -> Ticke
 }
 
 /// `t` on its project's board.
-fn put(h: &Harness, t: Ticket) -> Ticket {
+pub(super) fn put(h: &Harness, t: Ticket) -> Ticket {
     h.core.tickets.write().push(t.clone());
     t
 }
 
 /// An agent of `p` named `name`, made as the app keeps one (no process).
-fn put_agent(h: &Harness, p: &Project, name: &str, at: i64) -> AgentMeta {
+pub(super) fn put_agent(h: &Harness, p: &Project, name: &str, at: i64) -> AgentMeta {
     let meta = AgentMeta {
         id: format!("a-{}-{name}", p.id),
         project_id: p.id.clone(),
@@ -97,7 +98,7 @@ fn put_agent(h: &Harness, p: &Project, name: &str, at: i64) -> AgentMeta {
 }
 
 /// The agent `agent_id` works on the ticket `ticket_id`.
-fn link(h: &Harness, agent_id: &str, ticket_id: &str) {
+pub(super) fn link(h: &Harness, agent_id: &str, ticket_id: &str) {
     h.core.agent(agent_id).unwrap().lock().meta.ticket_id = Some(ticket_id.into());
     for t in h.core.tickets.write().iter_mut() {
         if t.id == ticket_id {
@@ -107,13 +108,13 @@ fn link(h: &Harness, agent_id: &str, ticket_id: &str) {
 }
 
 /// Claude outside Escouade, connected to the harness's server.
-async fn external(h: &Harness) -> Client {
+pub(super) async fn external(h: &Harness) -> Client {
     let (port, token) = started(h);
     client(port, &token).await.unwrap()
 }
 
 /// The agent `agent_id`, connected with a token of its own.
-async fn as_agent(h: &Harness, agent_id: &str) -> Client {
+pub(super) async fn as_agent(h: &Harness, agent_id: &str) -> Client {
     let (port, _) = started(h);
     client(port, &h.core.mcp.register_agent(agent_id))
         .await
@@ -121,7 +122,7 @@ async fn as_agent(h: &Harness, agent_id: &str) -> Client {
 }
 
 /// What `tool` answers to `args`: its text, and whether it is an error the model reads.
-async fn call(c: &Client, tool: &'static str, args: Value) -> (String, bool) {
+pub(super) async fn call(c: &Client, tool: &'static str, args: Value) -> (String, bool) {
     let mut params = CallToolRequestParams::new(tool);
     if let Value::Object(args) = args {
         params = params.with_arguments(args);
@@ -132,26 +133,26 @@ async fn call(c: &Client, tool: &'static str, args: Value) -> (String, bool) {
 }
 
 /// What `tool` answers to `args`, a JSON that is no error.
-async fn read(c: &Client, tool: &'static str, args: Value) -> Value {
+pub(super) async fn read(c: &Client, tool: &'static str, args: Value) -> Value {
     let (text, error) = call(c, tool, args).await;
     assert!(!error, "{tool}: {text}");
     serde_json::from_str(&text).unwrap_or_else(|e| panic!("{tool}: {e}: {text}"))
 }
 
 /// The error `tool` answers to `args`.
-async fn refused(c: &Client, tool: &'static str, args: Value) -> String {
+pub(super) async fn refused(c: &Client, tool: &'static str, args: Value) -> String {
     let (text, error) = call(c, tool, args).await;
     assert!(error, "{tool} answered: {text}");
     text
 }
 
 /// The activity log's last entry: (caller, tool, summary, outcome).
-fn last_entry(h: &Harness) -> (String, String, String, &'static str) {
+pub(super) fn last_entry(h: &Harness) -> (String, String, String, &'static str) {
     let e = h.core.mcp.activity.entries().pop().unwrap();
     (e.caller, e.tool, e.summary, e.outcome)
 }
 
-fn keys(rows: &Value) -> Vec<String> {
+pub(super) fn keys(rows: &Value) -> Vec<String> {
     rows.as_array()
         .unwrap()
         .iter()
@@ -167,7 +168,7 @@ async fn the_reading_tools_say_they_only_read_and_what_they_take() {
     let mut listed = names(&tools);
     listed.retain(|n| n != "whoami");
     assert_eq!(listed, EXPOSED);
-    for t in tools.iter().filter(|t| t.name != "whoami") {
+    for t in tools.iter().filter(|t| READING.contains(&&*t.name)) {
         let v = serde_json::to_value(t).unwrap();
         assert!(
             v["description"].as_str().unwrap().len() > 40,
@@ -813,17 +814,20 @@ async fn the_usage_gives_each_account_its_windows_and_the_autopilots_pause() {
             ..Default::default()
         });
     }
+    // Each account's windows, as read from its own Claude Code.
     let soon = now_ms() + 3_600_000;
-    let used = |pct: f64, ends: i64| {
+    let window = |pct: f64, at: i64| {
         Some(RateWindow {
             pct,
-            resets_at: Some(ends),
+            resets_at: Some(at),
         })
     };
     h.core.record_usage(
-        "principal",
-        Reading::Windows((used(42.0, soon), used(10.5, soon + 1))),
+        crate::accounts::PRINCIPAL,
+        Reading::Windows((window(42.0, soon), window(10.5, soon + 1))),
     );
+    h.core
+        .record_usage("pro", Reading::Windows((window(7.0, soon + 2), None)));
     let c = external(&h).await;
     assert_eq!(
         read(&c, "get_usage", json!({})).await,
@@ -835,7 +839,12 @@ async fn the_usage_gives_each_account_its_windows_and_the_autopilots_pause() {
                     "fiveHour": { "pct": 42.0, "resetsAt": soon },
                     "sevenDay": { "pct": 10.5, "resetsAt": soon + 1 },
                 },
-                { "name": "Pro", "current": false, "fiveHour": null, "sevenDay": null },
+                {
+                    "name": "Pro",
+                    "current": false,
+                    "fiveHour": { "pct": 7.0, "resetsAt": soon + 2 },
+                    "sevenDay": null,
+                },
             ],
             "autopilotPause": null,
         })
@@ -849,40 +858,54 @@ async fn the_usage_gives_each_account_its_windows_and_the_autopilots_pause() {
             "ok"
         )
     );
-    // Principal's 5-hour window used up: new agents go to Pro, nothing waits.
-    h.core
-        .record_usage("principal", Reading::Windows((used(100.0, soon), None)));
-    let usage = read(&c, "get_usage", json!({})).await;
-    assert_eq!(usage["autopilotPause"], Value::Null);
-    assert_eq!(
+    let currents = |usage: &Value| {
         (
-            &usage["accounts"][0]["current"],
-            &usage["accounts"][1]["current"]
-        ),
-        (&json!(false), &json!(true))
+            usage["accounts"][0]["current"].clone(),
+            usage["accounts"][1]["current"].clone(),
+        )
+    };
+    // Principal's 5-hour window used up: new agents go to Pro, under the threshold, and the
+    // autopilot goes on with it.
+    h.core.record_usage(
+        crate::accounts::PRINCIPAL,
+        Reading::Windows((window(100.0, soon), None)),
     );
-    // Pro's too, sooner: the autopilot waits for its end, the first.
-    h.core
-        .record_usage("pro", Reading::Windows((used(100.0, soon - 600_000), None)));
-    let until = h.core.autopilot_pause().unwrap().until;
     let usage = read(&c, "get_usage", json!({})).await;
+    assert_eq!(currents(&usage), (json!(false), json!(true)));
+    assert_eq!(usage["accounts"][0]["fiveHour"]["pct"], 100.0);
+    assert_eq!(usage["accounts"][0]["sevenDay"]["pct"], 10.5);
+    assert_eq!(usage["autopilotPause"], Value::Null);
+    // Pro's too, and sooner: no account is left under the threshold, the first active one is
+    // the current again, and the autopilot waits for the nearest reset, Pro's.
+    h.core.record_usage(
+        "pro",
+        Reading::Windows((window(100.0, soon - 600_000), None)),
+    );
+    let usage = read(&c, "get_usage", json!({})).await;
+    assert_eq!(currents(&usage), (json!(true), json!(false)));
+    assert_eq!(
+        usage["autopilotPause"],
+        json!({ "reason": "fiveHour", "until": soon - 600_000 + RESUME_MARGIN_MS })
+    );
+    // Pro switched off: only Principal, whose window holds the autopilot back until its end.
+    // (Not saved: that would take the server down, which no project asks for.)
+    h.core.settings.write().accounts[1].active = false;
+    h.core.update_usage(|_| {});
+    let until = h.core.autopilot_pause().unwrap().until;
+    assert_eq!(until, soon + RESUME_MARGIN_MS);
+    let usage = read(&c, "get_usage", json!({})).await;
+    assert_eq!(currents(&usage), (json!(true), json!(false)));
     assert_eq!(
         usage["autopilotPause"],
         json!({ "reason": "fiveHour", "until": until })
     );
     assert_eq!(usage["accounts"][1]["fiveHour"]["pct"], 100.0);
-    // Principal switched off: only Pro is left to go to.
+    // Pro back on and Principal switched off: only Pro is left to go to.
+    h.core.settings.write().accounts[1].active = true;
     h.core.settings.write().accounts[0].active = false;
-    // (Not saved: that would take the server down, which no project asks for.)
     h.core.update_usage(|_| {});
     let usage = read(&c, "get_usage", json!({})).await;
-    assert_eq!(
-        (
-            &usage["accounts"][0]["current"],
-            &usage["accounts"][1]["current"]
-        ),
-        (&json!(false), &json!(true))
-    );
+    assert_eq!(currents(&usage), (json!(false), json!(true)));
     c.cancel().await.unwrap();
     h.core.mcp.stop();
 }

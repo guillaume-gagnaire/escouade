@@ -95,7 +95,7 @@ test('a changed file is reverted or deleted from its context menu', async ({ app
   expect(fs.existsSync(path.join(app.repo, 'notes.md'))).toBe(false);
 });
 
-test('the status bar shows what there is to pull from the remote, fetched and pulled from its menu', async ({ app }) => {
+test('the status bar shows what there is to pull from the remote, fetched and pulled from the branch picker', async ({ app }) => {
   const { page } = app;
   const git = (cwd: string, ...args: string[]) =>
     execFileSync('git', ['-c', 'user.email=e2e@test', '-c', 'user.name=e2e', ...args], { cwd, stdio: 'pipe' });
@@ -118,10 +118,13 @@ test('the status bar shows what there is to pull from the remote, fetched and pu
   git(other, 'push', '-q');
 
   await sync.click();
-  await page.getByRole('menuitem', { name: /Fetch/ }).click();
+  await page.getByRole('dialog', { name: 'Branches' }).getByRole('button', { name: /Fetch/ }).click();
   await expect(sync).toContainText('↓1');
   await sync.click();
-  await page.getByRole('menuitem', { name: /Pull/ }).click();
+  await page
+    .getByRole('dialog', { name: 'Branches' })
+    .getByRole('button', { name: /Récupérer/ })
+    .click();
   await expect(sync).toContainText('↓0');
   expect(fs.readFileSync(path.join(app.repo, 'README.md'), 'utf8')).toBe('depuis ailleurs\n');
 });

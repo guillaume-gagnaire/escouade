@@ -72,7 +72,16 @@ const SETTINGS_OF: Partial<Record<SettingsTab, (keyof Settings)[]>> = {
 /** What the modal sets of a project, as the backend's `update_project` takes it, its board apart. */
 type ProjectFields = Pick<
   Project,
-  'name' | 'color' | 'worktreePerAgent' | 'runCommands' | 'worktreeCopy' | 'worktreeSetup' | 'worktreeTeardown' | 'commitMode' | 'account'
+  | 'name'
+  | 'color'
+  | 'worktreePerAgent'
+  | 'runCommands'
+  | 'worktreeCopy'
+  | 'worktreeSetup'
+  | 'worktreeTeardown'
+  | 'commitMode'
+  | 'account'
+  | 'agentsUseEscouade'
 >;
 
 /** Which commands of a project's worktrees: run once one is made, or before one is removed. */
@@ -91,6 +100,8 @@ export interface ProjectDraft {
   commitMode: CommitMode;
   /** « Compte préféré »: the Claude account its agents and tickets go to; empty is « Automatique ». */
   account: string;
+  /** « Les agents peuvent utiliser Escouade ». */
+  agentsUseEscouade: boolean;
   board: BoardSettings;
   /** Its sources in external ticket systems (the « Intégrations » tab). */
   integrations: ProjectIntegrations;
@@ -107,6 +118,7 @@ function draftOf(p: Project): ProjectDraft {
     worktreeTeardown,
     commitMode,
     account,
+    agentsUseEscouade,
     board,
     integrations,
   } = $state.snapshot(p);
@@ -120,6 +132,7 @@ function draftOf(p: Project): ProjectDraft {
     worktreeTeardown,
     commitMode,
     account,
+    agentsUseEscouade,
     board,
     integrations,
   };
@@ -149,6 +162,7 @@ function fieldsOf(d: ProjectDraft): ProjectFields {
     worktreeTeardown: stepsOf(d.worktreeTeardown),
     commitMode: d.commitMode,
     account: d.account,
+    agentsUseEscouade: d.agentsUseEscouade,
   };
 }
 

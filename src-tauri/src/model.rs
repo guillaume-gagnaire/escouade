@@ -639,6 +639,9 @@ pub struct Worktree {
     pub base_branch: String,
 }
 
+/// The longest status line an agent reports (`AgentMeta::progress_line`), in characters.
+pub const PROGRESS_LINE_MAX: usize = 120;
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AgentMeta {
@@ -682,6 +685,10 @@ pub struct AgentMeta {
     pub resume_at: Option<i64>,
     /// The board's ticket this agent works on.
     pub ticket_id: Option<String>,
+    /// What the agent last said it does (`report_progress`, a tool of Escouade's MCP server), on
+    /// one line of `PROGRESS_LINE_MAX` characters at most: shown on its card and its ticket's,
+    /// until its next call.
+    pub progress_line: Option<String>,
     /// Appended to Claude Code's system prompt at every start (the ticket's protocol), on one line.
     pub append_prompt: Option<String>,
     /// First of the 10 ports reserved for its test launches.

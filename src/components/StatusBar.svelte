@@ -3,10 +3,11 @@
   import { fAgo, fBytes, fCountdown, fDateTime, fPct } from '../lib/format';
   import { t } from '../lib/i18n';
   import Rich from '../lib/i18n/Rich.svelte';
+  import { gitSync, syncInfo, type SyncOp } from '../lib/git-sync.svelte';
   import { api } from '../lib/ipc';
-  import { menu } from '../lib/menu.svelte';
   import { estimateHint, fSpentUsd } from '../lib/spend';
   import { app } from '../lib/state.svelte';
+  import BranchPicker from './branches/BranchPicker.svelte';
 
   const agents = $derived(Object.values(app.agents).filter((a) => !a.archived));
   const running = $derived(agents.filter((a) => a.status === 'running').length);
@@ -19,7 +20,7 @@
       t('shell.status.procsTitle'),
       ...[...procs.agents]
         .sort((a, b) => b.memory - a.memory)
-        .map((r) => `${app.agents[r.id]?.name ?? '?'} : ${fBytes(r.memory)} · ${fPct(r.cpu)}`),
+        .map((r) => t('shell.status.procRow', { name: app.agents[r.id]?.name ?? '?', memory: fBytes(r.memory), cpu: fPct(r.cpu) })),
     ].join('\n'),
   );
   const five = $derived(app.usage.fiveHour);
@@ -38,28 +39,30 @@
     app.run(api.updatePostpone());
   }
 
-  type SyncOp = 'pull' | 'push' | 'fetch';
-  const SYNC: Record<SyncOp, { label: string; call: (projectId: string) => Promise<string> }> = {
-    pull: { label: 'Pull', call: api.gitPull },
-    push: { label: 'Push', call: api.gitPush },
-    fetch: { label: 'Fetch', call: api.gitFetch },
-  };
+  /** What the branch button says while a sync runs. */
+  const runningLabel = (op: SyncOp) =>
+    ({ pull: t('branches.sync.pulling'), push: t('branches.sync.pushing'), fetch: t('branches.sync.fetching') })[op];
 
-  /** The active project's checkout against its remote, when it can sync (a branch, a remote). */
-  const sync = $derived.by(() => {
+  /** The active project's checkout, when it is a repository with a branch (or a detached HEAD) checked out. */
+  const repo = $derived.by(() => {
     const p = app.ui.view === 'project' ? app.project : null;
     const g = p ? app.git[p.id] : undefined;
-    if (!p || !g?.isRepo || !g.hasRemote || !g.branch || g.branch === '(detached)') return null;
-    // Pull and push need an upstream that still exists; otherwise the branch is (re)published.
-    return { ...g, projectId: p.id, tracked: !!g.upstream && !g.upstreamGone };
+    return p && g?.isRepo && g.branch ? { projectId: p.id, git: g, detached: g.branch === '(detached)' } : null;
   });
-  /** Sync running, by project. */
-  let syncing = $state<Record<string, SyncOp>>({});
-  const busy = $derived(sync ? syncing[sync.projectId] : undefined);
-  let syncButton = $state<HTMLButtonElement>();
+  /** What it can sync with, when it has a remote. */
+  const sync = $derived(repo ? syncInfo(repo.git) : null);
+  const busy = $derived(repo ? gitSync.running[repo.projectId] : undefined);
 
-  const syncTitle = $derived.by(() => {
-    if (!sync) return '';
+  /** The branch picker, open over the button. */
+  let pickerOpen = $state(false);
+  let branchButton = $state<HTMLButtonElement>();
+  // Nothing to pick a branch of any more (another view, another folder): the picker goes.
+  $effect(() => {
+    if (!repo) pickerOpen = false;
+  });
+
+  const branchTitle = $derived.by(() => {
+    if (!sync) return t('branches.picker.switchTitle');
     const fetched = sync.lastFetch ? fAgo(sync.lastFetch / 1000, app.now) : t('shell.status.sync.never');
     return [
       sync.tracked
@@ -70,27 +73,6 @@
       t('shell.status.sync.lastFetch', { when: fetched }),
     ].join('\n');
   });
-
-  async function runSync(op: SyncOp, projectId: string) {
-    syncing[projectId] = op;
-    const summary = await app.run(SYNC[op].call(projectId));
-    delete syncing[projectId];
-    if (summary) app.toast(summary, 'ok');
-  }
-
-  function syncMenu() {
-    const s = sync;
-    if (!s || !syncButton || busy) return;
-    const go = (op: SyncOp) => () => runSync(op, s.projectId);
-    menu.showAt(syncButton, [
-      { label: 'Pull', hint: `↓${s.behind}`, disabled: !s.tracked || s.behind === 0, onClick: go('pull') },
-      s.tracked
-        ? { label: 'Push', hint: `↑${s.ahead}`, disabled: s.ahead === 0, onClick: go('push') }
-        : { label: t('shell.status.sync.publish'), onClick: go('push') },
-      { label: '', separator: true },
-      { label: 'Fetch', hint: t('shell.status.sync.now'), onClick: go('fetch') },
-    ]);
-  }
 </script>
 
 <footer class="bar mono">
@@ -149,16 +131,24 @@
     >{t('shell.status.today')}
     <span class="v strong">{fSpentUsd({ cost: app.usage.todayCost + app.liveCost, estimated: app.liveCost > 0 })}</span></span
   >
-  {#if sync}
+  {#if repo}
     <span class="vsep"></span>
-    <button class="it link sync" bind:this={syncButton} disabled={!!busy} onclick={syncMenu} title={syncTitle}>
-      <span class="v">⎇ {sync.branch}</span>
+    <button
+      class="it link sync"
+      bind:this={branchButton}
+      disabled={!!busy}
+      aria-haspopup="dialog"
+      aria-expanded={pickerOpen}
+      onclick={() => (pickerOpen = !pickerOpen)}
+      title={branchTitle}
+    >
+      <span class="v">⎇ {repo.detached ? t('branches.picker.detached') : repo.git.branch}</span>
       {#if busy}
-        <span>{SYNC[busy].label}…</span>
-      {:else if sync.tracked}
-        <span style:color={sync.behind ? 'var(--wait)' : 'var(--dim)'}>↓{sync.behind}</span>
+        <span>{runningLabel(busy)}</span>
+      {:else if sync?.tracked}
         <span style:color={sync.ahead ? 'var(--text)' : 'var(--dim)'}>↑{sync.ahead}</span>
-      {:else}
+        <span style:color={sync.behind ? 'var(--wait)' : 'var(--dim)'}>↓{sync.behind}</span>
+      {:else if sync}
         <span class="d">{sync.upstream ? t('shell.status.sync.goneShort') : t('shell.status.sync.unpublishedShort')}</span>
       {/if}
     </button>
@@ -185,6 +175,12 @@
     title={t('shell.status.settings', { key: keyLabel('Ctrl+,') })}>⚙</button
   >
 </footer>
+
+{#if pickerOpen && repo}
+  {#key repo.projectId}
+    <BranchPicker projectId={repo.projectId} anchor={branchButton} onclose={() => (pickerOpen = false)} />
+  {/key}
+{/if}
 
 <style>
   .bar {

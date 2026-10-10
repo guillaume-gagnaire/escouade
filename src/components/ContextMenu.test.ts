@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { setLang } from '../lib/i18n';
 import { menu } from '../lib/menu.svelte';
 import ContextMenu from './ContextMenu.svelte';
@@ -45,6 +45,97 @@ describe('ContextMenu', () => {
     expect(entry).toBeDisabled();
     expect(entry).toHaveAttribute('title', 'Attends la fin de son tour.');
     expect(screen.getByRole('menuitem', { name: 'Renommer' })).not.toHaveAttribute('title');
+  });
+});
+
+describe('ContextMenu on the keyboard', () => {
+  let opener: HTMLButtonElement;
+  beforeEach(() => {
+    menu.close();
+    opener = document.createElement('button');
+    document.body.append(opener);
+    opener.focus();
+  });
+  afterEach(() => opener.remove());
+
+  const entries = (ran: string[] = []) => [
+    { label: 'Premier', onClick: () => ran.push('Premier') },
+    { label: 'Interdit', disabled: true, title: 'Pas maintenant.' },
+    { label: 'Dernier', onClick: () => ran.push('Dernier') },
+  ];
+
+  it('takes the focus when opened from an element, and the arrows go from one entry to the next, the disabled ones skipped', async () => {
+    render(ContextMenu);
+    menu.showAt(opener, entries());
+    const [first, last] = [await screen.findByRole('menuitem', { name: 'Premier' }), screen.getByRole('menuitem', { name: 'Dernier' })];
+    await waitFor(() => expect(first).toHaveFocus());
+    await userEvent.keyboard('{ArrowDown}');
+    expect(last).toHaveFocus();
+    await userEvent.keyboard('{ArrowDown}');
+    expect(first).toHaveFocus();
+    await userEvent.keyboard('{ArrowUp}');
+    expect(last).toHaveFocus();
+    await userEvent.keyboard('{Home}');
+    expect(first).toHaveFocus();
+    await userEvent.keyboard('{End}');
+    expect(last).toHaveFocus();
+  });
+
+  it('runs the entry under the focus on Enter, closes, and gives the focus back to where it came from', async () => {
+    const ran: string[] = [];
+    render(ContextMenu);
+    menu.showAt(opener, entries(ran));
+    await waitFor(() => expect(screen.getByRole('menuitem', { name: 'Premier' })).toHaveFocus());
+    await userEvent.keyboard('{ArrowDown}{Enter}');
+    expect(ran).toEqual(['Dernier']);
+    expect(menu.open).toBeNull();
+    await waitFor(() => expect(opener).toHaveFocus());
+  });
+
+  it('closes on Escape, and on Tab, and gives the focus back', async () => {
+    render(ContextMenu);
+    menu.showAt(opener, entries());
+    await waitFor(() => expect(screen.getByRole('menuitem', { name: 'Premier' })).toHaveFocus());
+    await userEvent.keyboard('{Escape}');
+    expect(menu.open).toBeNull();
+    await waitFor(() => expect(opener).toHaveFocus());
+    menu.showAt(opener, entries());
+    await waitFor(() => expect(screen.getByRole('menuitem', { name: 'Premier' })).toHaveFocus());
+    await userEvent.tab();
+    expect(menu.open).toBeNull();
+    await waitFor(() => expect(opener).toHaveFocus());
+  });
+
+  it('leaves the focus to the dialog an entry opens', async () => {
+    render(ContextMenu);
+    const dialog = document.createElement('div');
+    dialog.tabIndex = -1;
+    document.body.append(dialog);
+    menu.showAt(opener, [
+      {
+        label: 'Ouvrir',
+        onClick: () => dialog.focus(),
+      },
+    ]);
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Ouvrir' }));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(dialog).toHaveFocus();
+    dialog.remove();
+  });
+
+  it('keeps the focus where it is when opened by a right click', async () => {
+    render(ContextMenu);
+    menu.open = { x: 5, y: 5, items: entries() };
+    await screen.findByRole('menuitem', { name: 'Premier' });
+    expect(opener).toHaveFocus();
+  });
+
+  it('is not given a native menu of its own by a right click on it', async () => {
+    render(ContextMenu);
+    menu.showAt(opener, entries());
+    const entry = await screen.findByRole('menuitem', { name: 'Premier' });
+    // `false`: something called preventDefault.
+    expect(await fireEvent.contextMenu(entry)).toBe(false);
   });
 });
 

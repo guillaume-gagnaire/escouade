@@ -173,6 +173,12 @@
   </Row>
 </Group>
 
+<Group title={t('mcp.project.group')}>
+  <Row label={t('mcp.project.agentsUse')} desc={t('mcp.project.agentsUseDesc')}>
+    <Switch label={t('mcp.project.agentsUse')} bind:on={draft.agentsUseEscouade} />
+  </Row>
+</Group>
+
 <Group title={t('settings.project.worktrees')} anchor="worktrees" note={t('settings.project.worktreesNote')}>
   <Row label={t('settings.project.fill')} desc={t('settings.project.fillWorktreesDesc')} descId="worktrees-suggest-desc">
     <!-- Two buttons of this tab read the same: what each row says of itself tells them apart. -->

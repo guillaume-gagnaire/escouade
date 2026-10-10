@@ -101,6 +101,7 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 | redémarrer | restart | l’app |
 | compte | account | compte Claude |
 | serveur MCP | MCP server | |
+| statut d’un agent : En cours / Question / Prêt / Terminé / Erreur | Running / Question / Ready / Done / Error | « En cours » est « In progress » pour une colonne du Kanban, « Running » pour un agent (carte, en-tête de la conversation) |
 
 ## Colonnes du Kanban
 
@@ -227,7 +228,6 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 | Arrêter (les tests) | Stop | |
 | Abandonner (les modifications) | Discard | |
 | Abandonner les modifications ? | Discard your changes? | |
-| statut d’un agent : En cours / Question / Prêt / Terminé / Erreur | Running / Question / Ready / Done / Error | « En cours » est « In progress » pour une colonne du Kanban, « Running » pour un agent |
 | Entrée / Cache / Sortie | Input / Cache / Output | les séries de tokens |
 | prompt | prompt | |
 | Tout voir / Réduire | Show all / Show less | les listes des statistiques |
@@ -259,7 +259,6 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 |---|---|---|
 | sous-agent | subagent | |
 | tâche de fond | background task | |
-| En cours / Question / Prêt / Terminé / Erreur | Running / Question / Ready / Done / Error | état d’un agent (en-tête de la conversation) |
 | Bas / Moyen / Élevé / Très élevé / Max | Low / Medium / High / Very high / Max | niveaux d’effort |
 | Demander / Plan / Édits auto / Bypass | Ask / Plan / Accept edits / Bypass | modes de permission (« Auto » reste « Auto ») |
 | Approuver le plan | Approve the plan | carte de permission d’un plan |
@@ -385,8 +384,25 @@ Ce qu’Escouade dit à Claude ou lui fait écrire suit « Langue des textes ré
 | journal d’activité | activity log | ce que le serveur MCP a reçu et répondu |
 | requête refusée | request refused | « Requête refusée : jeton inconnu » → “Request refused: unknown token” |
 | en-tête (HTTP) | (HTTP) header | « en-tête Host », “Host header” |
+| Les agents peuvent utiliser Escouade | Agents can use Escouade | réglage d’un projet, groupe « Serveur MCP » → “MCP server” |
+| Escouade · Créer un ticket | Escouade · Create a ticket | badge d’un outil du serveur d’Escouade : « Lister les projets / agents / tickets » → “List the projects / agents / tickets”, « Lire un ticket / le quota » → “Read a ticket / the quota”, « Résumer un agent » → “Sum up an agent”, « Modifier / Déplacer un ticket » → “Edit / Move a ticket”, « Lancer un ticket / un agent » → “Start a ticket / an agent”, « Envoyer un message » → “Send a message”, « Arrêter un agent » → “Stop an agent”, « Donner son avancement » → “Report progress”, « Découper son ticket » → “Split its ticket” |
+| ligne d’état (d’un agent) | status line | ce qu’un agent annonce faire par `report_progress`, sous son nom et sur la carte de son ticket : « Ce que l’agent dit faire » → “What the agent says it is doing” |
+| le pilote auto est en pause jusqu’à 14:30 | the autopilot is paused until 14:30 | refus d’un outil du serveur MCP : « 2026-10-12 14:30 » un autre jour (une heure ou une date, pas une durée) |
+| le maximum de tickets en parallèle / d’agents qui travaillent en même temps | the most tickets in parallel / agents working at once | réglage « En parallèle » → “In parallel” |
+| Message de <auteur> : … | Message from <author>: … | en-tête d’un message qui vient du serveur MCP (`send_message`, premier message de `create_agent`), l’auteur étant un agent ou « Claude (hors Escouade) » → “Claude (outside Escouade)” |
 
 ## G — branches
 
 | Français | Anglais | Note |
 |---|---|---|
+| Locales / Distantes | Local / Remote | les deux groupes du sélecteur de branche |
+| Mettre de côté (stash) et changer | Stash and switch | changer de branche avec des changements non commités |
+| utilisée par l’agent X | used by agent X | la branche prise par le worktree d’un agent |
+| Récupérer / Pousser / Publier / Fetch | Pull / Push / Publish / Fetch | la synchro, au pied du sélecteur ; « Récupérer » est le pull |
+| Nouvelle branche / et y passer | New branch / and switch to it | « Créer » reste Create |
+| À partir de | Start from | le point de départ d’une nouvelle branche |
+| Branches mergées | Merged branches | le nettoyage des branches déjà dans la base du projet |
+| base (du projet) | base | la branche cible du Kanban, sinon la branche du dossier |
+| Supprimer quand même | Delete anyway | une branche pas mergée |
+| Passer sur une branche | Switch to a branch | le menu d’un commit du graphe ; « Basculer » reste pour le merge |
+| Comparer avec la branche courante | Compare with the current branch | le menu d’un commit du graphe ; sur une HEAD détachée : « Comparer avec HEAD » → “Compare with HEAD” |

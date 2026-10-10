@@ -4,6 +4,8 @@ mod i18n;
 mod accounts;
 mod agent;
 mod board;
+#[cfg(test)]
+mod branches_tests;
 mod claude;
 mod commands;
 mod conv;
@@ -266,6 +268,13 @@ pub fn run() {
             commands::git_fetch,
             commands::git_pull,
             commands::git_push,
+            commands::branch_list,
+            commands::branch_check,
+            commands::branch_switch,
+            commands::branch_create,
+            commands::branch_delete,
+            commands::branches_merged,
+            commands::git_diff_refs,
             commands::set_remote_control,
             commands::stats,
             commands::refresh_usage,

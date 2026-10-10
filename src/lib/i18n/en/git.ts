@@ -22,7 +22,7 @@ export default defineZone('git', {
     discardChanges: 'Discard changes…',
     deleteTitle: 'Delete “{name}”?',
     discardTitle: 'Discard the changes to “{name}”?',
-    deleteBody: '{path} was never committed: it is deleted from the disk, with no way back.',
+    deleteBody: '{path} was never committed: it is deleted from your disk and can’t be recovered.',
     discardBody: '{path} goes back to its state at the last commit: its uncommitted changes are lost.',
     discardConfirm: 'Discard changes',
   },

@@ -285,6 +285,13 @@ describe('FilesPanel with thousands of files', () => {
     expect(screen.getByText('… et 120 autres fichiers')).toBeInTheDocument();
   });
 
+  it('groups the thousands of the files it does not list', async () => {
+    fakeBackend({ git_files: () => many(1502) });
+    render(FilesPanel, { project: project(), agent: app.agents.a1 });
+    // The space of the grouping is Intl’s: the matcher reads any space as one.
+    expect(await screen.findByText('… et 1 002 autres fichiers')).toBeInTheDocument();
+  });
+
   it('says one more file in the singular', async () => {
     fakeBackend({ git_files: () => many(501) });
     render(FilesPanel, { project: project(), agent: app.agents.a1 });
@@ -489,6 +496,15 @@ describe('FilesPanel in English', () => {
     fakeBackend({ git_files: () => many(501) });
     render(FilesPanel, { project: project(), agent: app.agents.a1 });
     expect(await screen.findByText('… and 1 more file')).toBeInTheDocument();
+  });
+
+  it('names the diff docked beside the list, and says when it is too large, in English', async () => {
+    const header =
+      'diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml\nindex 1111111..2222222 100644\n--- a/pnpm-lock.yaml\n+++ b/pnpm-lock.yaml\n';
+    fakeBackend({ git_files: () => [change('pnpm-lock.yaml', 'a1')], git_diff: () => `${header}Diff too large\n` });
+    render(FilesPanel, { project: project(), agent: app.agents.a1, docked: true });
+    expect(await screen.findByText('This diff is too large to display.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Diff of pnpm-lock.yaml')).toBeInTheDocument();
   });
 
   it('names the worktree of an agent, and the merge, in English', async () => {

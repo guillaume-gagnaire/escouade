@@ -228,6 +228,8 @@ export interface Project {
   commitMode: CommitMode;
   /** « Compte préféré »: the Claude account its new agents and tickets go to (an `Account`'s id); empty is « Automatique ». */
   account: string;
+  /** « Les agents peuvent utiliser Escouade »: its agents' next processes get Escouade's MCP server, as themselves. */
+  agentsUseEscouade: boolean;
 }
 
 /** « Rédigé par l'agent » (the agent is asked to commit) or « Direct, avec un message proposé ». */
@@ -486,6 +488,8 @@ export interface Agent {
   resumeAt: number | null;
   /** The board's ticket it works on. */
   ticketId: string | null;
+  /** What the agent last reported of its work through Escouade's MCP server (120 characters at most), until its next report. */
+  progressLine: string | null;
   /** The ticket's protocol, appended to Claude Code's system prompt. */
   appendPrompt: string | null;
   /** First of the 10 ports reserved for its test launches. */
@@ -557,6 +561,29 @@ export interface GitLog {
   commits: Commit[];
   /** The branch the agent works on. */
   head: string | null;
+}
+
+/** A branch of the project's repository (`branchList`): a local one, or a remote one named with its remote ("origin/feat"). */
+export interface BranchInfo {
+  name: string;
+  remote: boolean;
+  /** Checked out in the project's folder. */
+  current: boolean;
+  /** The remote branch a local one tracks ("origin/feat"), null when it tracks none. */
+  upstream: string | null;
+  /** That upstream no longer exists on the remote (as of the last fetch). */
+  upstreamGone: boolean;
+  /** Commits to push / to pull, against the upstream as last fetched. */
+  ahead: number;
+  behind: number;
+  /** The folder of the worktree that has it checked out, the project's own folder included. */
+  worktree: string | null;
+  /** A remote one: the local branch that tracks it (switching to the remote one goes there). */
+  trackedBy: string | null;
+  /** The id of the agent whose worktree holds it: neither switched to nor deleted (« utilisée par l'agent X »). */
+  agent: string | null;
+  /** When its latest commit was made (ms epoch). */
+  lastCommitAt: number;
 }
 
 export interface FileChange {

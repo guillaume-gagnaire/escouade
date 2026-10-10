@@ -1,11 +1,13 @@
 <script lang="ts">
   import { captureKeys } from '../../lib/answer-keys.svelte';
+  import { fInt } from '../../lib/format';
   import { t, tIn } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { keyLabel } from '../../lib/platform';
+  import { revealHidden } from '../../lib/recipe';
   import { answersHere, ariaEnter, enterAnswer } from '../../lib/shortcuts';
   import { app } from '../../lib/state.svelte';
-  import { toolArg, toolLabel } from '../../lib/tools';
+  import { escouadeArgs, isEscouadeTool, toolArg, toolLabel } from '../../lib/tools';
   import type { PermissionItem, ToolItem } from '../../lib/types';
   import Markdown from './Markdown.svelte';
 
@@ -27,6 +29,9 @@
   const summary = $derived(
     toolArg({ kind: 'tool', id: item.id, name: item.toolName, input: item.input, status: 'running', ts: 0 } as ToolItem, cwd),
   );
+  // A tool of Escouade's own server creates tickets, starts agents…: all it is given is read here, not a summary.
+  const escouade = $derived(isEscouadeTool(item.toolName));
+  const args = $derived(escouade ? escouadeArgs(item.input) : []);
 
   async function decide(decision: 'allow' | 'always' | 'deny') {
     busy = true;
@@ -61,6 +66,22 @@
     </div>
     {#if isPlan && typeof item.input.plan === 'string'}
       <div class="plan"><Markdown text={item.input.plan} /></div>
+    {:else if escouade}
+      <div class="what"><span class="badge">{toolLabel(item.toolName)}</span></div>
+      {#if args.length}
+        <!-- What is read is what it gets: an invisible or direction character is spelled out, not drawn. -->
+        <dl class="args" role="group" aria-label={t('mcp.permission.args')}>
+          {#each args as a (a.name)}
+            <div class="arg-line">
+              <dt class="mono">{t('mcp.permission.argName', { name: revealHidden(a.name) })}</dt>
+              <dd class="mono">{revealHidden(a.value)}</dd>
+              <!-- What is not shown is told, and where the whole request is: the conversation. -->
+              {#if a.hidden}<dd class="cut">{t('mcp.permission.cut', { count: a.hidden, n: fInt(a.hidden) })}</dd>{/if}
+            </div>
+          {/each}
+        </dl>
+      {/if}
+      {#if item.description}<div class="desc">{item.description}</div>{/if}
     {:else}
       <div class="what">
         <span class="badge">{toolLabel(item.toolName)}</span>
@@ -156,6 +177,39 @@
     border-radius: var(--r-sm);
     background: var(--panel);
     border: 1px solid var(--line);
+  }
+  /* One argument per line, its name before it; a value of several lines keeps them. */
+  .args {
+    margin: 0;
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 6px 12px;
+    max-height: 420px;
+    overflow: auto;
+    padding: 10px 14px;
+    border-radius: var(--r-sm);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .arg-line {
+    display: contents;
+  }
+  .args dt {
+    color: var(--muted);
+  }
+  .args dd {
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  /* Under its value, in the value's column. */
+  .args dd.cut {
+    grid-column: 2;
+    color: var(--wait);
+    font-size: 11.5px;
+    white-space: normal;
   }
   .opts {
     display: flex;

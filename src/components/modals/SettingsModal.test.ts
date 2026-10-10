@@ -968,7 +968,7 @@ describe('SettingsModal in English', () => {
       within(panel())
         .getAllByRole('heading', { level: 3 })
         .map((h) => h.textContent),
-    ).toEqual(['Identity', 'Git', 'Worktrees', 'Launch', 'Danger zone']);
+    ).toEqual(['Identity', 'Git', 'MCP server', 'Worktrees', 'Launch', 'Danger zone']);
     expect(screen.getByRole('textbox', { name: 'Project name' })).toHaveValue('demo-api');
     expect(screen.getByRole('button', { name: 'Color 4' })).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'One worktree per agent' })).toBeInTheDocument();

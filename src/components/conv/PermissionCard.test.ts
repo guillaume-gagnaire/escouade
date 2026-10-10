@@ -92,6 +92,101 @@ describe('PermissionCard', () => {
   });
 });
 
+describe('PermissionCard of a tool of Escouade', () => {
+  beforeEach(() => resetApp());
+
+  /** Claude Code asks for a tool of Escouade's own server. */
+  const escouade = (input: Record<string, unknown>, over: Partial<PermissionItem> = {}) =>
+    item({
+      toolName: 'mcp__escouade__create_ticket',
+      title: 'Claude wants to use escouade - create_ticket',
+      input,
+      reason: undefined,
+      ...over,
+    });
+  const terms = () => screen.getAllByRole('term').map((t) => t.textContent);
+  const values = () => screen.getAllByRole('definition').map((d) => d.textContent);
+
+  it('names the tool in words, then gives each argument in clear, one per line, its lines kept', async () => {
+    const backend = fakeBackend();
+    render(PermissionCard, {
+      item: escouade({
+        project: 'demo',
+        title: 'Corriger la connexion',
+        description: 'Le jeton expire.\nIl faut le renouveler.',
+        criteria: ['Le test passe', 'La doc suit'],
+      }),
+      agentId: 'a1',
+      pending: true,
+      cwd: 'C:\\code',
+    });
+    expect(screen.getByText('Escouade · Créer un ticket')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Ce que Claude donne à l’outil' })).toBeInTheDocument();
+    expect(terms()).toEqual(['project :', 'title :', 'description :', 'criteria :']);
+    expect(values()).toEqual(['demo', 'Corriger la connexion', 'Le jeton expire.\nIl faut le renouveler.', 'Le test passe\nLa doc suit']);
+    // Said once: Claude Code's title for the request says nothing the badge does not.
+    expect(screen.queryByText(/Claude wants to use/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Autoriser' }));
+    expect(backend.called('answer_permission')[0].args).toEqual({ id: 'a1', requestId: 'req-2', decision: 'allow', message: null });
+  });
+
+  it('cuts a long value at 2,000 characters', () => {
+    fakeBackend();
+    render(PermissionCard, { item: escouade({ description: 'a'.repeat(2400) }), agentId: 'a1', pending: true, cwd: 'C:\\code' });
+    const [value] = values();
+    expect(value).toBe(`${'a'.repeat(2000)}…`);
+  });
+
+  it('says how many characters a cut value hides, and to read the whole request in the conversation', () => {
+    fakeBackend();
+    const { unmount } = render(PermissionCard, {
+      item: escouade({ title: 'court', description: 'a'.repeat(2400) }),
+      agentId: 'a1',
+      pending: true,
+      cwd: 'C:\\code',
+    });
+    expect(
+      screen.getByText('400 caractères de plus ne sont pas montrés : lis la demande entière dans la conversation.'),
+    ).toBeInTheDocument();
+    // Only the value that was cut says it.
+    expect(screen.getAllByText(/de plus/)).toHaveLength(1);
+    unmount();
+    render(PermissionCard, { item: escouade({ description: 'a'.repeat(2001) }), agentId: 'a1', pending: true, cwd: 'C:\\code' });
+    expect(screen.getByText('1 caractère de plus n’est pas montré : lis la demande entière dans la conversation.')).toBeInTheDocument();
+  });
+
+  it('sums up its decision with the tool in words and what it acted on', () => {
+    render(PermissionCard, {
+      item: escouade({ project: 'demo', title: 'Corriger la connexion' }, { decision: 'allow' }),
+      agentId: 'a1',
+      pending: false,
+      cwd: 'C:\\code',
+    });
+    expect(screen.getByText(/Escouade · Créer un ticket/)).toHaveTextContent('Corriger la connexion');
+  });
+
+  it('reads in English', () => {
+    setLang('en');
+    fakeBackend();
+    render(PermissionCard, {
+      item: escouade({ project: 'demo', message: 'Write the docs' }, { toolName: 'mcp__escouade__create_agent' }),
+      agentId: 'a1',
+      pending: true,
+      cwd: 'C:\\code',
+    });
+    expect(screen.getByText('Escouade · Start an agent')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'What Claude gives the tool' })).toBeInTheDocument();
+    expect(terms()).toEqual(['project:', 'message:']);
+  });
+
+  it('says what a cut value hides in English, its count grouped', () => {
+    setLang('en');
+    fakeBackend();
+    render(PermissionCard, { item: escouade({ description: 'a'.repeat(3500) }), agentId: 'a1', pending: true, cwd: 'C:\\code' });
+    expect(screen.getByText('1,500 more characters are not shown: read the whole request in the conversation.')).toBeInTheDocument();
+  });
+});
+
 describe('PermissionCard keyboard', () => {
   beforeEach(() => resetApp());
   // What a test added around the card (a terminal, a sidebar) must not keep the focus for the next one.

@@ -15,9 +15,30 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 use tauri::test::{mock_app, MockRuntime};
 
-/// The tools the server offers, sorted: those that read (M2). M4 adds its own here, knowingly.
-/// None may accept a permission, answer for the user, run a command or the tests, merge or delete.
+/// The tools the server offers, sorted: those that read (`READING`, M2), those that act
+/// (`ACTING`, M4) and those only an agent of Escouade may call (`AGENTS_ONLY`, M4). A tool is added
+/// here knowingly. None may accept a permission, answer for the user, run a command or the tests,
+/// merge or delete.
 pub(super) const EXPOSED: &[&str] = &[
+    "create_agent",
+    "create_ticket",
+    "get_agent_summary",
+    "get_ticket",
+    "get_usage",
+    "list_agents",
+    "list_projects",
+    "list_tickets",
+    "move_ticket",
+    "report_progress",
+    "send_message",
+    "split_ticket",
+    "start_ticket",
+    "stop_agent",
+    "update_ticket",
+];
+
+/// Those of `EXPOSED` that only read.
+pub(super) const READING: &[&str] = &[
     "get_agent_summary",
     "get_ticket",
     "get_usage",
@@ -26,8 +47,22 @@ pub(super) const EXPOSED: &[&str] = &[
     "list_tickets",
 ];
 
+/// Those that act, under the guardrails of the window and the autopilot.
+pub(super) const ACTING: &[&str] = &[
+    "create_agent",
+    "create_ticket",
+    "move_ticket",
+    "send_message",
+    "start_ticket",
+    "stop_agent",
+    "update_ticket",
+];
+
+/// Those an external Claude is refused.
+pub(super) const AGENTS_ONLY: &[&str] = &["report_progress", "split_ticket"];
+
 /// The test's own tool, beside them in tests (`tools::Tools::test_router`).
-const TEST_TOOL: &str = "whoami";
+pub(super) const TEST_TOOL: &str = "whoami";
 
 /// What a tool's name may never hold.
 const FORBIDDEN: &[&str] = &[
@@ -50,7 +85,7 @@ const FORBIDDEN: &[&str] = &[
 ];
 
 /// The `initialize` of Claude Code 2.1.289 (the version of the handshake it falls back on).
-const INITIALIZE: &str = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"claude-code","version":"2.1.289"}}}"#;
+pub(super) const INITIALIZE: &str = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"claude-code","version":"2.1.289"}}}"#;
 
 fn url(port: u16) -> String {
     format!("http://127.0.0.1:{port}/mcp")
@@ -83,7 +118,7 @@ fn http() -> reqwest::Client {
 
 /// A raw POST of `body` to the server, with `headers` besides what MCP asks: its status and its
 /// text.
-async fn post(port: u16, headers: &[(&str, &str)], body: &str) -> (u16, String) {
+pub(super) async fn post(port: u16, headers: &[(&str, &str)], body: &str) -> (u16, String) {
     let mut req = http()
         .post(url(port))
         .header("content-type", "application/json")
@@ -147,7 +182,7 @@ fn refusals(h: &Harness) -> Vec<ActivityEntry> {
 }
 
 /// What a tool's call answered, as text.
-fn answer_text(result: &rmcp::model::CallToolResult) -> String {
+pub(super) fn answer_text(result: &rmcp::model::CallToolResult) -> String {
     serde_json::to_value(result).unwrap()["content"][0]["text"]
         .as_str()
         .unwrap()
@@ -937,7 +972,7 @@ async fn the_server_runs_while_claude_may_drive_escouade_or_a_project_lets_its_a
         })
         .unwrap();
     assert!(h.core.mcp.status().running);
-    h.core.remove_project(&p.id).unwrap();
+    h.core.remove_project(&p.id).await.unwrap();
     assert!(!h.core.mcp.status().running);
 }
 

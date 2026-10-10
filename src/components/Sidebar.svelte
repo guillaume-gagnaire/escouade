@@ -261,6 +261,10 @@
             <span class="status" style:color={SC[a.status]}>{statusLabel(a.status)}</span>
           {/if}
         </div>
+        {#if a.progressLine}
+          <!-- What the agent reported through Escouade's MCP server, until its next report. -->
+          <div class="said" title={a.progressLine}><span class="sr">{t('mcp.progress.label')}{' '}</span>{a.progressLine}</div>
+        {/if}
         <div class="meta">
           <span>{modelLabel(a.model, app.models)}</span><span class="sep">·</span><span>{duration(a)}</span>
           {#if a.worktree}<span class="sep">·</span><span class="wt" title={a.worktree.branch}>⎇ {shortBranch(a.worktree.branch)}</span
@@ -567,6 +571,21 @@
   }
   .meta.dim {
     color: var(--dim);
+  }
+  .said {
+    padding-left: 17px;
+    font-size: 11.5px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
   }
   .ticket-tag {
     margin-left: 17px;
