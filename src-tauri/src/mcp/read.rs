@@ -384,17 +384,17 @@ pub(super) fn usage<R: Runtime>(core: &Core<R>) -> Result<String, ToolError> {
         list.push(accounts::principal());
     }
     let usage = core.usage.lock().clone();
-    // The account new agents go to: the first active one. The windows read so far are the app's
-    // only ones (whichever process answered): they are its, until each account has its own.
-    let current = list.iter().position(|a| a.active).unwrap_or(0);
+    // Each account has its windows as last read; new agents go to the current one.
     let rows = list
         .into_iter()
-        .enumerate()
-        .map(|(i, a)| AccountUsage {
-            name: a.name,
-            current: i == current,
-            five_hour: usage.five_hour.filter(|_| i == current),
-            seven_day: usage.seven_day.filter(|_| i == current),
+        .map(|a| {
+            let read = usage.account(&a.id);
+            AccountUsage {
+                current: a.id == usage.current,
+                five_hour: read.and_then(|u| u.five_hour),
+                seven_day: read.and_then(|u| u.seven_day),
+                name: a.name,
+            }
         })
         .collect();
     json(&Usage {

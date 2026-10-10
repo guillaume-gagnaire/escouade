@@ -8,6 +8,7 @@
 use crate::board;
 use crate::claude;
 use crate::core::Core;
+use crate::i18n::Lang;
 use crate::model::{Account, AccountUsage, Settings};
 use crate::pty::TermInfo;
 use anyhow::{bail, Result};
@@ -144,24 +145,124 @@ pub fn get(settings: &Settings, id: &str) -> Account {
     find(settings, id).cloned().unwrap_or_else(principal)
 }
 
-/// The account new agents would go to, as the status bar shows it: the first active one, in the
-/// settings' order, none of whose quota windows (`usage`) is used `threshold` percent or more at
-/// `now` (as the autopilot counts it), else the first active one.
-pub fn current(settings: &Settings, usage: &[AccountUsage], threshold: u32, now: i64) -> String {
-    let over = |id: &str| {
-        usage.iter().find(|u| u.id == id).is_some_and(|u| {
-            [u.five_hour, u.seven_day]
-                .iter()
-                .flatten()
-                .any(|w| board::over_threshold(w, threshold, now))
-        })
-    };
+/// Whether one of the account's quota windows (`usage`) is used `threshold` percent or more at
+/// `now`, until an end still to come (as the autopilot counts it, `board::over_threshold`).
+pub fn over_threshold(usage: &[AccountUsage], id: &str, threshold: u32, now: i64) -> bool {
+    usage.iter().find(|u| u.id == id).is_some_and(|u| {
+        [u.five_hour, u.seven_day]
+            .iter()
+            .flatten()
+            .any(|w| board::over_threshold(w, threshold, now))
+    })
+}
+
+/// The account a new agent goes to. The one `preferred` names (a project's, or the one asked for)
+/// when it is active; else the first active one, in the settings' order, none of whose quota
+/// windows (`usage`) is used `threshold` percent or more at `now`; when every active account is,
+/// the first active one (the autopilot then pauses). Principal when none is active, which
+/// `normalize` prevents. With no `preferred` it is the account the status bar calls the current one.
+pub fn pick(
+    settings: &Settings,
+    usage: &[AccountUsage],
+    threshold: u32,
+    preferred: Option<&str>,
+    now: i64,
+) -> String {
+    pick_where(settings, preferred, |id| {
+        !over_threshold(usage, id, threshold, now)
+    })
+}
+
+/// `pick`, with the accounts that may take an agent now told by `usable`: for a choice that goes
+/// by more than the quota windows (a pause after a usage limit, an agent waiting for its reset).
+pub fn pick_where(
+    settings: &Settings,
+    preferred: Option<&str>,
+    usable: impl Fn(&str) -> bool,
+) -> String {
     let mut active = settings.accounts.iter().filter(|a| a.active);
+    if let Some(a) = preferred.and_then(|id| active.clone().find(|a| a.id == id)) {
+        return a.id.clone();
+    }
     let first = active.clone().next();
     active
-        .find(|a| !over(&a.id))
+        .find(|a| usable(&a.id))
         .or(first)
         .map_or_else(|| PRINCIPAL.to_string(), |a| a.id.clone())
+}
+
+/// The account a project prefers (`Project::account`), if it is one the settings have and it is
+/// active: what `pick` and `candidates` are given.
+pub fn preferred<'a>(settings: &Settings, id: &'a str) -> Option<&'a str> {
+    let id = id.trim();
+    let known = settings.accounts.iter().any(|a| a.active && a.id == id);
+    (!id.is_empty() && known).then_some(id)
+}
+
+/// The accounts a project's new agents may go to: the one it prefers when that one is active,
+/// else every active one, in order.
+pub fn candidates(settings: &Settings, preferred: Option<&str>) -> Vec<String> {
+    let active = || settings.accounts.iter().filter(|a| a.active);
+    match preferred.and_then(|id| active().find(|a| a.id == id)) {
+        Some(a) => vec![a.id.clone()],
+        None => active().map(|a| a.id.clone()).collect(),
+    }
+}
+
+/// What the account is called in `lang`: its name; Principal still named by default, its default
+/// name in `lang` (the one it was first saved in is not always the one the window is in).
+pub fn name_in(lang: Lang, account: &Account) -> String {
+    let name = account.name.trim();
+    if account.id == PRINCIPAL && (name.is_empty() || default_names().iter().any(|d| d == name)) {
+        return tr_in!(lang, "Principal", "Main");
+    }
+    account.name.clone()
+}
+
+/// What Principal is called until it is renamed, in either language.
+fn default_names() -> [String; 2] {
+    [
+        tr_in!(Lang::Fr, "Principal", "Main"),
+        tr_in!(Lang::En, "Principal", "Main"),
+    ]
+}
+
+/// What the window is told when the account new agents go to (the current one) changed from
+/// `from` to `to`: only when `from` is an active account that passed the threshold (it is why they
+/// go elsewhere now) and `to` is one that did not (with every account past it the first one is
+/// the current again, and the autopilot's pause says so); going back to the first usable one is
+/// not told. None otherwise.
+pub fn switch_notice(
+    lang: Lang,
+    settings: &Settings,
+    usage: &[AccountUsage],
+    threshold: u32,
+    now: i64,
+    from: &str,
+    to: &str,
+) -> Option<String> {
+    if from == to || over_threshold(usage, to, threshold, now) {
+        return None;
+    }
+    let left = settings
+        .accounts
+        .iter()
+        .find(|a| a.active && a.id == from)?;
+    let used = usage.iter().find(|u| u.id == from)?;
+    // The window that went the furthest of those that hold the account back.
+    let pct = [used.five_hour, used.seven_day]
+        .iter()
+        .flatten()
+        .filter(|w| board::over_threshold(w, threshold, now))
+        .map(|w| w.pct)
+        .reduce(f64::max)?;
+    let (from, to) = (name_in(lang, left), name_in(lang, &get(settings, to)));
+    let pct = pct.round();
+    Some(tr_in!(
+        lang,
+        "Le compte {from} a atteint {pct} % : les nouveaux agents partent sur {to}.",
+        "The {from} account has reached {pct}%: new agents now go to {to}."
+    ))
 }
 
 /// The app's `CLAUDE_CONFIG_DIR` (which Principal's processes inherit) and the home folder. In
@@ -286,11 +387,7 @@ pub fn check(settings: &Settings) -> Result<()> {
 /// name in either language (the one it was first saved in is not the one the window shows).
 fn names_of(a: &Account) -> Vec<String> {
     let name = a.name.trim().to_lowercase();
-    let defaults = [
-        tr_in!(crate::i18n::Lang::Fr, "Principal", "Main"),
-        tr_in!(crate::i18n::Lang::En, "Principal", "Main"),
-    ]
-    .map(|n| n.to_lowercase());
+    let defaults = default_names().map(|n| n.to_lowercase());
     if a.id == PRINCIPAL && defaults.contains(&name) {
         defaults.to_vec()
     } else {
@@ -637,7 +734,89 @@ impl<R: Runtime> Core<R> {
             s.accounts.remove(at);
             Ok(())
         })?;
+        // No project prefers it any more.
+        let changed: Vec<crate::model::Project> = self
+            .projects
+            .write()
+            .iter_mut()
+            .filter(|p| p.account == id)
+            .map(|p| {
+                p.account.clear();
+                p.clone()
+            })
+            .collect();
+        if !changed.is_empty() {
+            for project in changed {
+                self.hub.emit(crate::model::UiEvent::Project { project });
+            }
+            self.request_save();
+            // What held their tickets back is theirs no more.
+            self.schedule();
+        }
         Ok(accounts)
+    }
+
+    /// The Claude account of an agent that has not started: `account` (an active one), or the
+    /// one a new agent of its project goes to when empty (« Automatique »). Its warm process, which
+    /// runs on the old one, is stopped and started again on the new. Once it has a first message
+    /// its conversation is filed in its account: it stays there.
+    pub async fn set_agent_account(self: &Arc<Self>, id: &str, account: &str) -> Result<()> {
+        let h = self.agent(id)?;
+        let lock = self.spawn_lock(id);
+        let _guard = lock.lock().await;
+        let settings = self.settings.read().clone();
+        let target = match account.trim() {
+            "" => {
+                let project = h.lock().meta.project_id.clone();
+                self.account_for_new(&project)
+            }
+            wanted => {
+                let found = settings.accounts.iter().find(|a| a.id == wanted);
+                let found = found.ok_or_else(|| unknown(wanted))?;
+                if !found.active {
+                    bail!(tr!(
+                        "Le compte « {name} » est désactivé.",
+                        "The account “{name}” is switched off.",
+                        name = name_in(crate::i18n::ui(), found)
+                    ));
+                }
+                found.id.clone()
+            }
+        };
+        let stopped = {
+            let mut rt = h.lock();
+            // A copy resumes its original's session, filed in the original's account.
+            let started = rt.meta.session_id.is_some()
+                || rt.meta.fork_of.is_some()
+                || rt.meta.prompts > 0
+                || rt.meta.status.is_active();
+            if started {
+                bail!(tr!(
+                    "Le compte d’un agent ne change plus après son premier message.",
+                    "An agent’s account can’t change after its first message."
+                ));
+            }
+            if rt.meta.account == target {
+                return Ok(());
+            }
+            rt.meta.account = target;
+            rt.detach()
+        };
+        if let Some(p) = stopped {
+            p.close_input();
+        }
+        self.emit_agent(&h);
+        self.request_save();
+        self.warm(id);
+        Ok(())
+    }
+
+    /// Whether Claude Code is found for the account new agents would go to (the current one): its
+    /// own `claude`, else the settings'.
+    pub fn claude_found(&self) -> bool {
+        let settings = self.settings.read().clone();
+        let current = self.usage.lock().current.clone();
+        program(&get(&settings, &current), &settings).is_some()
     }
 
     /// Whether the account is signed in, and with which email.
@@ -1250,5 +1429,207 @@ mod tests {
         assert_eq!(get(&s, "pro"), s.accounts[1]);
         assert_eq!(get(&s, "parti"), s.accounts[0]);
         assert_eq!(get(&Settings::default(), "pro"), principal());
+    }
+
+    const NOW: i64 = 1_790_000_000_000;
+
+    /// The account's 5-hour window, used `pct` percent until `ends`.
+    fn used(id: &str, pct: f64, ends: i64) -> AccountUsage {
+        AccountUsage {
+            id: id.into(),
+            five_hour: Some(crate::model::RateWindow {
+                pct,
+                resets_at: Some(ends),
+            }),
+            ..Default::default()
+        }
+    }
+
+    /// Principal, Pro and Team, in that order, all active.
+    fn three() -> Settings {
+        let mut s = Settings {
+            accounts: vec![account("pro", "/pro"), account("team", "/team")],
+            ..Default::default()
+        };
+        normalize(&mut s);
+        s.accounts[1].name = "Pro".into();
+        s.accounts[2].name = "Team".into();
+        s
+    }
+
+    fn deactivate(s: &mut Settings, id: &str) {
+        s.accounts.iter_mut().find(|a| a.id == id).unwrap().active = false;
+    }
+
+    #[test]
+    fn a_new_agent_goes_to_the_first_active_account_under_the_threshold_in_the_order_of_the_accounts(
+    ) {
+        let mut s = three();
+        let pick_at = |s: &Settings, usage: &[AccountUsage]| pick(s, usage, 95, None, NOW);
+        // Nothing read yet: the first.
+        assert_eq!(pick_at(&s, &[]), "principal");
+        let end = NOW + 60_000;
+        // Under the threshold, whatever its use.
+        assert_eq!(pick_at(&s, &[used("principal", 94.0, end)]), "principal");
+        // At it (as the autopilot counts it): the next one.
+        let first_over = [used("principal", 95.0, end)];
+        assert_eq!(pick_at(&s, &first_over), "pro");
+        // Its week counts as well as its 5 hours.
+        let week = AccountUsage {
+            id: "principal".into(),
+            seven_day: Some(crate::model::RateWindow {
+                pct: 99.0,
+                resets_at: Some(end),
+            }),
+            ..Default::default()
+        };
+        assert_eq!(pick_at(&s, &[week]), "pro");
+        // The next one over as well: the one after.
+        let two_over = [used("principal", 100.0, end), used("pro", 96.0, end)];
+        assert_eq!(pick_at(&s, &two_over), "team");
+        // The order is the settings', not the order of the readings.
+        let reversed = [used("pro", 96.0, end), used("principal", 100.0, end)];
+        assert_eq!(pick_at(&s, &reversed), "team");
+        // A window already over (and the margin after it) holds nothing back.
+        let ended = [used("principal", 100.0, NOW - 31_000)];
+        assert_eq!(pick_at(&s, &ended), "principal");
+        // An account switched off is skipped, over or not.
+        deactivate(&mut s, "principal");
+        assert_eq!(pick_at(&s, &[]), "pro");
+        assert_eq!(pick_at(&s, &[used("pro", 100.0, end)]), "team");
+    }
+
+    #[test]
+    fn with_every_account_past_the_threshold_it_is_the_first_active_one() {
+        let mut s = three();
+        let end = NOW + 60_000;
+        let all = [
+            used("principal", 100.0, end),
+            used("pro", 100.0, end),
+            used("team", 100.0, end),
+        ];
+        assert_eq!(pick(&s, &all, 95, None, NOW), "principal");
+        deactivate(&mut s, "principal");
+        assert_eq!(pick(&s, &all, 95, None, NOW), "pro");
+        // The threshold is the user's: at 100 % nothing at 99 % is past it.
+        let under = [used("principal", 99.0, end), used("pro", 99.0, end)];
+        assert_eq!(pick(&three(), &under, 100, None, NOW), "principal");
+    }
+
+    #[test]
+    fn an_account_asked_for_is_taken_when_active_whatever_its_quota() {
+        let mut s = three();
+        let end = NOW + 60_000;
+        let over = [used("pro", 100.0, end)];
+        assert_eq!(pick(&s, &over, 95, Some("pro"), NOW), "pro");
+        assert_eq!(pick(&s, &[], 95, Some("team"), NOW), "team");
+        // Not one to ask for: the automatic choice (the first usable account).
+        let first_over = [used("principal", 100.0, end)];
+        for asked in [Some(""), Some("parti"), None] {
+            assert_eq!(pick(&s, &first_over, 95, asked, NOW), "pro", "{asked:?}");
+        }
+        // An account switched off cannot be asked for either.
+        deactivate(&mut s, "pro");
+        assert_eq!(pick(&s, &first_over, 95, Some("pro"), NOW), "team");
+    }
+
+    #[test]
+    fn a_project_may_start_its_tickets_on_the_account_it_prefers_else_on_any_active_one() {
+        let mut s = three();
+        let all = ["principal", "pro", "team"];
+        assert_eq!(candidates(&s, None), all);
+        assert_eq!(candidates(&s, Some("")), all);
+        assert_eq!(candidates(&s, Some("pro")), ["pro"]);
+        // One that is gone, or switched off: any active one.
+        assert_eq!(candidates(&s, Some("parti")), all);
+        deactivate(&mut s, "pro");
+        assert_eq!(candidates(&s, Some("pro")), ["principal", "team"]);
+        assert_eq!(candidates(&s, None), ["principal", "team"]);
+    }
+
+    #[test]
+    fn the_switch_of_the_current_account_is_told_only_when_the_one_left_passed_the_threshold() {
+        use crate::i18n::Lang::{En, Fr};
+        let mut s = three();
+        let end = NOW + 60_000;
+        let told = |lang, s: &Settings, usage: &[AccountUsage], from: &str, to: &str| {
+            switch_notice(lang, s, usage, 95, NOW, from, to)
+        };
+        let over = [used("principal", 96.2, end), used("pro", 10.0, end)];
+        assert_eq!(
+            told(Fr, &s, &over, "principal", "pro"),
+            Some(
+                "Le compte Principal a atteint 96 % : les nouveaux agents partent sur Pro.".into()
+            )
+        );
+        assert_eq!(
+            told(En, &s, &over, "principal", "pro"),
+            Some("The Main account has reached 96%: new agents now go to Pro.".into())
+        );
+        // The use told is that of the window that went the furthest.
+        let week = AccountUsage {
+            seven_day: Some(crate::model::RateWindow {
+                pct: 98.6,
+                resets_at: Some(end),
+            }),
+            ..used("principal", 96.0, end)
+        };
+        assert_eq!(
+            told(Fr, &s, &[week], "principal", "team"),
+            Some(
+                "Le compte Principal a atteint 99 % : les nouveaux agents partent sur Team.".into()
+            )
+        );
+        // No switch, no word; nor when there was no account before.
+        assert_eq!(told(Fr, &s, &over, "principal", "principal"), None);
+        assert_eq!(told(Fr, &s, &over, "", "pro"), None);
+        // Back to an account that is the first usable again: it is not told.
+        assert_eq!(told(Fr, &s, &over, "pro", "principal"), None);
+        // The account left was not over the threshold (switched off, taken out): not told either.
+        let under = [used("principal", 94.0, end)];
+        assert_eq!(told(Fr, &s, &under, "principal", "pro"), None);
+        assert_eq!(told(Fr, &s, &over, "parti", "pro"), None);
+        deactivate(&mut s, "principal");
+        assert_eq!(told(Fr, &s, &over, "principal", "pro"), None);
+        // An account is called by its name; Principal by default, in the language told.
+        let mut named = three();
+        named.accounts[0].name = "Perso".into();
+        assert_eq!(
+            told(Fr, &named, &over, "principal", "pro"),
+            Some("Le compte Perso a atteint 96 % : les nouveaux agents partent sur Pro.".into())
+        );
+    }
+
+    #[test]
+    fn principal_is_called_by_its_default_name_in_the_language_asked_until_it_is_renamed() {
+        use crate::i18n::Lang::{En, Fr};
+        let mut main = principal();
+        assert_eq!(
+            (name_in(Fr, &main), name_in(En, &main)),
+            ("Principal".into(), "Main".into())
+        );
+        // Saved in the other language: still its default name.
+        main.name = "Main".into();
+        assert_eq!(name_in(Fr, &main), "Principal");
+        main.name = " ".into();
+        assert_eq!(name_in(En, &main), "Main");
+        main.name = "Perso".into();
+        assert_eq!(name_in(Fr, &main), "Perso");
+        // Another account's name is its own, whatever it says.
+        assert_eq!(name_in(En, &account("pro", "/pro")), "PRO");
+        let mut other = account("pro", "/pro");
+        other.name = "Main".into();
+        assert_eq!(name_in(Fr, &other), "Main");
+    }
+
+    #[test]
+    fn a_choice_is_made_among_the_accounts_that_are_usable_else_the_first_active_one() {
+        let s = three();
+        let only = |ok: &'static str| move |id: &str| id == ok;
+        assert_eq!(pick_where(&s, None, only("team")), "team");
+        assert_eq!(pick_where(&s, None, only("principal")), "principal");
+        assert_eq!(pick_where(&s, None, |_| false), "principal");
+        // Asked for, it is taken even if it is not usable.
+        assert_eq!(pick_where(&s, Some("pro"), only("team")), "pro");
     }
 }

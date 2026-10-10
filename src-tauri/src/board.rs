@@ -2,6 +2,7 @@
 //! (```escouade block), what a turn's end does to its ticket, which tickets start, the messages
 //! sent to the agents.
 
+use crate::accounts::PRINCIPAL;
 use crate::claude::truncate;
 use crate::core::{slugify, RESUME_MARGIN_MS};
 use crate::i18n::{self, Lang};
@@ -420,20 +421,68 @@ pub fn quota_threshold(saved: u32) -> u32 {
 }
 
 impl Hold {
-    /// "Reprendre maintenant" at `now`: the pause after a limit goes, and so do the windows over
-    /// the threshold, until their end.
-    pub fn lift(&mut self, usage: &UsageSnapshot, threshold: u32, now: i64) {
-        self.limit_until = None;
-        for (i, w) in windows(usage).into_iter().enumerate() {
-            if let Some(end) = w.and_then(|w| over_until(w, threshold, now)) {
-                self.lifted[i] = Some(end);
+    /// What holds the account `id` back (Principal's are the top-level ones).
+    pub fn of(&self, id: &str) -> AccountHold {
+        if id == PRINCIPAL {
+            AccountHold {
+                limit_until: self.limit_until,
+                lifted: self.lifted,
             }
+        } else {
+            self.accounts.get(id).copied().unwrap_or_default()
+        }
+    }
+
+    /// What holds the account `id` back, as `hold` now says (an account that holds nothing is
+    /// not kept).
+    fn set(&mut self, id: &str, hold: AccountHold) {
+        if id == PRINCIPAL {
+            self.limit_until = hold.limit_until;
+            self.lifted = hold.lifted;
+        } else if hold == AccountHold::default() {
+            self.accounts.remove(id);
+        } else {
+            self.accounts.insert(id.to_string(), hold);
+        }
+    }
+
+    /// A usage limit with no resume planned on the account: none of its tickets start until
+    /// `until`.
+    pub fn limit(&mut self, id: &str, until: i64) {
+        let hold = self.of(id);
+        self.set(
+            id,
+            AccountHold {
+                limit_until: Some(until),
+                ..hold
+            },
+        );
+    }
+
+    /// "Reprendre maintenant" at `now`: the pauses after a limit go, and so do the windows of
+    /// every account over the threshold, until their end.
+    pub fn lift(&mut self, usage: &[AccountUsage], threshold: u32, now: i64) {
+        let held: Vec<String> = self.accounts.keys().cloned().collect();
+        let ids = usage.iter().map(|u| u.id.as_str());
+        let ids = ids.chain(held.iter().map(String::as_str));
+        let ids: HashSet<&str> = ids.chain([PRINCIPAL]).collect();
+        for id in ids {
+            let mut hold = self.of(id);
+            hold.limit_until = None;
+            if let Some(u) = usage.iter().find(|u| u.id == id) {
+                for (i, w) in windows(u).into_iter().enumerate() {
+                    if let Some(end) = w.and_then(|w| over_until(w, threshold, now)) {
+                        hold.lifted[i] = Some(end);
+                    }
+                }
+            }
+            self.set(id, hold);
         }
     }
 }
 
-/// The 5-hour and the weekly window, in the order of `Hold::lifted`.
-fn windows(usage: &UsageSnapshot) -> [Option<&RateWindow>; 2] {
+/// The 5-hour and the weekly window, in the order of `AccountHold::lifted`.
+fn windows(usage: &AccountUsage) -> [Option<&RateWindow>; 2] {
     [usage.five_hour.as_ref(), usage.seven_day.as_ref()]
 }
 
@@ -454,22 +503,52 @@ pub fn over_threshold(w: &RateWindow, threshold: u32, now: i64) -> bool {
     over_until(w, threshold, now).is_some()
 }
 
-/// Why no ticket of any board starts at `now`, if none does: a window (5 h, weekly) used
-/// `threshold` percent or more until its end, unless "Reprendre maintenant" lifted it, or the
-/// pause after a usage limit with no resume planned. When several hold, the one that ends last:
-/// the tickets wait for it. A window whose end is unknown holds nothing back: a reading that no
-/// longer comes would hold them forever.
+/// Why no ticket starts at `now`, if none does, when it may go to any of `accounts` (the ones a
+/// project allows, or all the active ones): only when every one of them is held back
+/// (`account_pause`), and then until the first of them is free again. A window whose end is
+/// unknown holds nothing back: a reading that no longer comes would hold them forever.
 pub fn autopilot_pause(
-    usage: &UsageSnapshot,
+    usage: &[AccountUsage],
+    accounts: &[String],
     threshold: u32,
     hold: &Hold,
     now: i64,
 ) -> Option<AutopilotPause> {
+    // The first to be free again; an account that is free now lets a ticket start.
+    let mut soonest: Option<AutopilotPause> = None;
+    for id in accounts {
+        let pause = account_pause(usage, id, threshold, hold, now)?;
+        if soonest.as_ref().is_none_or(|s| pause.until < s.until) {
+            soonest = Some(pause);
+        }
+    }
+    let mut pause = soonest?;
+    // With a single account there is nothing to tell apart.
+    if usage.len() > 1 {
+        pause.accounts = accounts.to_vec();
+    }
+    Some(pause)
+}
+
+/// Why no ticket starts on the account `id` at `now`, if none does: one of its windows (5 h,
+/// weekly) used `threshold` percent or more until its end, unless "Reprendre maintenant" lifted
+/// it, or its pause after a usage limit with no resume planned. When several hold, the one that
+/// ends last. The reading of an account `usage` knows nothing of holds nothing back.
+pub fn account_pause(
+    usage: &[AccountUsage],
+    id: &str,
+    threshold: u32,
+    hold: &Hold,
+    now: i64,
+) -> Option<AutopilotPause> {
+    let held = hold.of(id);
     let reasons = [PauseReason::FiveHour, PauseReason::Week];
-    let mut pauses: Vec<AutopilotPause> = windows(usage)
+    let windows = usage.iter().find(|u| u.id == id).map(windows);
+    let mut pauses: Vec<AutopilotPause> = windows
         .into_iter()
+        .flatten()
         .zip(reasons)
-        .zip(hold.lifted)
+        .zip(held.lifted)
         .filter_map(|((w, reason), lifted)| {
             let w = w?;
             let until = over_until(w, threshold, now)?;
@@ -481,14 +560,16 @@ pub fn autopilot_pause(
                 reason,
                 pct: Some(w.pct),
                 until,
+                accounts: Vec::new(),
             })
         })
         .collect();
-    if let Some(until) = hold.limit_until.filter(|t| *t > now) {
+    if let Some(until) = held.limit_until.filter(|t| *t > now) {
         pauses.push(AutopilotPause {
             reason: PauseReason::Limit,
             pct: None,
             until,
+            accounts: Vec::new(),
         });
     }
     pauses.into_iter().max_by_key(|p| p.until)
@@ -1657,12 +1738,24 @@ mod tests {
         Some(RateWindow { pct, resets_at })
     }
 
-    fn usage(five_hour: Option<RateWindow>, seven_day: Option<RateWindow>) -> UsageSnapshot {
-        UsageSnapshot {
+    /// The quotas of a single account, Principal.
+    fn usage(five_hour: Option<RateWindow>, seven_day: Option<RateWindow>) -> Vec<AccountUsage> {
+        vec![AccountUsage {
+            id: "principal".into(),
             five_hour,
             seven_day,
             ..Default::default()
-        }
+        }]
+    }
+
+    /// `super::autopilot_pause` for Principal alone, as when there is a single account.
+    fn autopilot_pause(
+        usage: &[AccountUsage],
+        threshold: u32,
+        hold: &Hold,
+        now: i64,
+    ) -> Option<AutopilotPause> {
+        super::autopilot_pause(usage, &["principal".to_string()], threshold, hold, now)
     }
 
     const NOW: i64 = 1_790_000_000_000;
@@ -1679,7 +1772,8 @@ mod tests {
             Some(AutopilotPause {
                 reason: PauseReason::Week,
                 pct: Some(96.0),
-                until: NOW + 5_000 + RESUME_MARGIN_MS
+                until: NOW + 5_000 + RESUME_MARGIN_MS,
+                accounts: vec![],
             })
         );
         // Under the threshold, nothing holds.
@@ -1731,13 +1825,14 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(LIMIT_PAUSE_MS, 30 * 60_000);
-        let unknown = UsageSnapshot::default();
+        let unknown = Vec::new();
         assert_eq!(
             autopilot_pause(&unknown, 100, &hold, NOW),
             Some(AutopilotPause {
                 reason: PauseReason::Limit,
                 pct: None,
-                until: NOW + LIMIT_PAUSE_MS
+                until: NOW + LIMIT_PAUSE_MS,
+                accounts: vec![],
             })
         );
         assert_eq!(
@@ -1780,6 +1875,201 @@ mod tests {
         assert_eq!(
             autopilot_pause(&next, 90, &hold, NOW + 9_000 + RESUME_MARGIN_MS).map(|p| p.reason),
             Some(PauseReason::FiveHour)
+        );
+    }
+
+    /// An account's 5-hour window, used `pct` percent until `end`.
+    fn account(id: &str, pct: f64, end: i64) -> AccountUsage {
+        AccountUsage {
+            id: id.into(),
+            five_hour: window(pct, Some(end)),
+            ..Default::default()
+        }
+    }
+
+    fn ids(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn an_account_under_the_threshold_keeps_the_autopilot_going() {
+        let free = Hold::default();
+        let two = [
+            account("principal", 100.0, NOW + 9_000),
+            account("pro", 40.0, NOW + 9_000),
+        ];
+        // A ticket may start on Pro: nothing holds.
+        assert_eq!(
+            super::autopilot_pause(&two, &ids(&["principal", "pro"]), 95, &free, NOW),
+            None
+        );
+        // An account no reading is known of is usable.
+        let one_read = [account("principal", 100.0, NOW + 9_000)];
+        assert_eq!(
+            super::autopilot_pause(&one_read, &ids(&["principal", "pro"]), 95, &free, NOW),
+            None
+        );
+        // A project that prefers Principal waits for it, whatever the others read.
+        let held = super::autopilot_pause(&two, &ids(&["principal"]), 95, &free, NOW).unwrap();
+        assert_eq!(
+            (held.reason, held.pct, held.until, held.accounts),
+            (
+                PauseReason::FiveHour,
+                Some(100.0),
+                NOW + 9_000 + RESUME_MARGIN_MS,
+                ids(&["principal"])
+            )
+        );
+        // One that prefers Pro does not.
+        assert_eq!(
+            super::autopilot_pause(&two, &ids(&["pro"]), 95, &free, NOW),
+            None
+        );
+    }
+
+    #[test]
+    fn with_every_account_past_the_threshold_the_autopilot_waits_for_the_first_to_reset() {
+        let free = Hold::default();
+        let all = [
+            account("principal", 100.0, NOW + 9_000),
+            account("pro", 97.0, NOW + 5_000),
+            account("team", 99.0, NOW + 7_000),
+        ];
+        let accounts = ids(&["principal", "pro", "team"]);
+        let pause = super::autopilot_pause(&all, &accounts, 95, &free, NOW).unwrap();
+        // Pro's window ends first: its reason, its use, its end; every account is named.
+        assert_eq!(
+            (pause.reason, pause.pct, pause.until),
+            (
+                PauseReason::FiveHour,
+                Some(97.0),
+                NOW + 5_000 + RESUME_MARGIN_MS
+            )
+        );
+        assert_eq!(pause.accounts, accounts);
+        // Once Pro is free again, nothing holds.
+        assert_eq!(
+            super::autopilot_pause(&all, &accounts, 95, &free, NOW + 5_000 + RESUME_MARGIN_MS),
+            None
+        );
+        // An account past the threshold on both its windows is free when both are over: its
+        // pause is the later end.
+        let both = AccountUsage {
+            seven_day: window(96.0, Some(NOW + 50_000)),
+            ..account("pro", 97.0, NOW + 5_000)
+        };
+        let two = [account("principal", 100.0, NOW + 9_000), both];
+        let pause =
+            super::autopilot_pause(&two, &ids(&["principal", "pro"]), 95, &free, NOW).unwrap();
+        assert_eq!(
+            (pause.reason, pause.until),
+            (PauseReason::FiveHour, NOW + 9_000 + RESUME_MARGIN_MS)
+        );
+        // With a single account, there are no accounts to tell apart.
+        let alone = [account("principal", 100.0, NOW + 9_000)];
+        let pause = super::autopilot_pause(&alone, &ids(&["principal"]), 95, &free, NOW).unwrap();
+        assert!(pause.accounts.is_empty());
+    }
+
+    #[test]
+    fn a_usage_limit_pauses_the_account_it_met_it_on_and_a_ticket_goes_to_another() {
+        let limit = |account: &str, until: i64| {
+            let mut hold = Hold::default();
+            if account == "principal" {
+                hold.limit_until = Some(until);
+            } else {
+                hold.accounts.insert(
+                    account.to_string(),
+                    AccountHold {
+                        limit_until: Some(until),
+                        ..Default::default()
+                    },
+                );
+            }
+            hold
+        };
+        // Both read, neither used.
+        let none = [account("principal", 0.0, NOW), account("pro", 0.0, NOW)];
+        let accounts = ids(&["principal", "pro"]);
+        let hold = limit("principal", NOW + LIMIT_PAUSE_MS);
+        assert_eq!(hold.of("principal").limit_until, Some(NOW + LIMIT_PAUSE_MS));
+        assert_eq!(hold.of("pro"), AccountHold::default());
+        // Pro is free.
+        assert_eq!(
+            super::autopilot_pause(&none, &accounts, 100, &hold, NOW),
+            None
+        );
+        // A project that prefers Principal waits.
+        let pause = super::autopilot_pause(&none, &ids(&["principal"]), 100, &hold, NOW).unwrap();
+        assert_eq!(
+            (pause.reason, pause.pct, pause.until),
+            (PauseReason::Limit, None, NOW + LIMIT_PAUSE_MS)
+        );
+        // Both met it: the first to end.
+        let mut both = limit("pro", NOW + 1_000);
+        both.limit_until = Some(NOW + LIMIT_PAUSE_MS);
+        let pause = super::autopilot_pause(&none, &accounts, 100, &both, NOW).unwrap();
+        assert_eq!(
+            (pause.reason, pause.until, pause.accounts),
+            (PauseReason::Limit, NOW + 1_000, accounts)
+        );
+        // Over, it holds nothing.
+        assert_eq!(
+            super::autopilot_pause(&none, &ids(&["pro"]), 100, &both, NOW + 1_000),
+            None
+        );
+    }
+
+    #[test]
+    fn resuming_now_lifts_every_accounts_pause_until_the_end_its_windows_had() {
+        let all = [
+            account("principal", 100.0, NOW + 9_000),
+            account("pro", 99.0, NOW + 20_000),
+            account("team", 20.0, NOW + 5_000),
+        ];
+        let mut hold = Hold {
+            limit_until: Some(NOW + LIMIT_PAUSE_MS),
+            ..Default::default()
+        };
+        hold.accounts.insert(
+            "pro".into(),
+            AccountHold {
+                limit_until: Some(NOW + LIMIT_PAUSE_MS),
+                ..Default::default()
+            },
+        );
+        hold.lift(&all, 90, NOW);
+        assert_eq!(hold.limit_until, None);
+        assert_eq!(hold.of("pro").limit_until, None);
+        assert_eq!(
+            hold.of("principal").lifted,
+            [Some(NOW + 9_000 + RESUME_MARGIN_MS), None]
+        );
+        assert_eq!(
+            hold.of("pro").lifted,
+            [Some(NOW + 20_000 + RESUME_MARGIN_MS), None]
+        );
+        // Under the threshold then: nothing to lift for Team.
+        assert_eq!(hold.of("team"), AccountHold::default());
+        let pro_and_principal = ids(&["principal", "pro"]);
+        assert_eq!(
+            super::autopilot_pause(&all, &pro_and_principal, 90, &hold, NOW),
+            None
+        );
+        // The next 5-hour window of Principal, over it in its turn, holds again; Pro's, lifted
+        // still, lets a ticket start.
+        let next = [
+            account("principal", 95.0, NOW + 90_000),
+            account("pro", 99.0, NOW + 20_000),
+        ];
+        let later = NOW + 9_000 + RESUME_MARGIN_MS;
+        assert_eq!(
+            super::autopilot_pause(&next, &ids(&["principal"]), 90, &hold, later).map(|p| p.reason),
+            Some(PauseReason::FiveHour)
+        );
+        assert_eq!(
+            super::autopilot_pause(&next, &pro_and_principal, 90, &hold, later),
+            None
         );
     }
 

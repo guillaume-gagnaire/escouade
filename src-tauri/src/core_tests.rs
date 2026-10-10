@@ -4070,7 +4070,7 @@ async fn no_copy_is_made_when_its_worktree_cannot_be() {
 // ---------- Claude accounts ----------
 
 /// A second Claude account, its folder in the test's, put after Principal in the settings.
-fn second_account(h: &Harness) -> Account {
+pub(crate) fn second_account(h: &Harness) -> Account {
     let pro = Account {
         id: "pro".into(),
         name: "Pro".into(),
@@ -4083,7 +4083,7 @@ fn second_account(h: &Harness) -> Account {
     pro
 }
 
-async fn agent_on(h: &Harness, project: &Project, account: &str) -> AgentMeta {
+pub(crate) async fn agent_on(h: &Harness, project: &Project, account: &str) -> AgentMeta {
     h.core
         .create_agent_with(
             &project.id,
@@ -4098,7 +4098,7 @@ async fn agent_on(h: &Harness, project: &Project, account: &str) -> AgentMeta {
 }
 
 /// The `CLAUDE_CONFIG_DIR` of each launch of the fake CLI in `cwd`, in order (null: none).
-fn config_dirs(h: &Harness, cwd: &Path) -> Vec<Value> {
+pub(crate) fn config_dirs(h: &Harness, cwd: &Path) -> Vec<Value> {
     h.launch_log(cwd)
         .iter()
         .map(|l| l["configDir"].clone())
@@ -4987,4 +4987,239 @@ async fn an_accounts_sign_in_runs_its_claude_with_its_folder_in_a_terminal() {
     );
     let e = h.core.claude_login("parti", (80, 24), |_| {}).unwrap_err();
     assert_eq!(e.to_string(), "compte Claude « parti » introuvable");
+}
+
+// ---------- Choosing the account ----------
+
+/// Window of `pct` percent that ends in an hour.
+fn used_for_an_hour(pct: f64) -> Option<RateWindow> {
+    Some(RateWindow {
+        pct,
+        resets_at: Some(now_ms() + 3_600_000),
+    })
+}
+
+/// The settings changed by `f` and saved, as the window does.
+fn change_settings(h: &Harness, f: impl FnOnce(&mut Settings)) {
+    let mut s = h.core.settings.read().clone();
+    f(&mut s);
+    h.core.save_settings(s).unwrap();
+}
+
+/// The project asks for the account (empty: any).
+fn prefer(h: &Harness, p: &Project, account: &str) {
+    let mut project = h.core.project(&p.id).unwrap();
+    project.account = account.into();
+    h.core.update_project(project).unwrap();
+}
+
+#[tokio::test]
+async fn a_new_agent_goes_to_the_account_asked_for_then_the_projects_then_the_first_usable_one() {
+    let h = harness("accounts-pick");
+    let (p, _) = h.project(true).await;
+    second_account(&h);
+    let new_agent = || async { h.core.create_agent(&p.id, None).await.unwrap().meta.account };
+    // Nothing read: the first account.
+    assert_eq!(new_agent().await, "principal");
+    // Principal used up until later: the next agents go to Pro.
+    h.core.record_usage(
+        "principal",
+        Reading::Windows((used_for_an_hour(100.0), None)),
+    );
+    assert_eq!(new_agent().await, "pro");
+    // The one asked for comes first, whatever the quota.
+    assert_eq!(agent_on(&h, &p, "principal").await.account, "principal");
+    // The project's, when it names one.
+    prefer(&h, &p, "principal");
+    assert_eq!(new_agent().await, "principal");
+    assert_eq!(agent_on(&h, &p, "pro").await.account, "pro");
+    // One that is switched off, or gone: any account again.
+    prefer(&h, &p, "pro");
+    assert_eq!(new_agent().await, "pro");
+    change_settings(&h, |s| s.accounts[1].active = false);
+    assert_eq!(new_agent().await, "principal");
+    prefer(&h, &p, "");
+    assert_eq!(new_agent().await, "principal");
+    // Every account used up: the first active one (the autopilot pauses).
+    change_settings(&h, |s| s.accounts[1].active = true);
+    h.core
+        .record_usage("pro", Reading::Windows((used_for_an_hour(100.0), None)));
+    assert_eq!(new_agent().await, "principal");
+}
+
+#[tokio::test]
+async fn a_project_keeps_its_preferred_account_only_among_the_accounts_there_are() {
+    let h = harness("accounts-prefer");
+    let (p, _) = h.project(false).await;
+    second_account(&h);
+    // An old project prefers none.
+    assert_eq!(h.core.project(&p.id).unwrap().account, "");
+    prefer(&h, &p, "pro");
+    assert_eq!(h.core.project(&p.id).unwrap().account, "pro");
+    // The window may send an account that is not (a copy older than the accounts' tab).
+    prefer(&h, &p, "parti");
+    assert_eq!(h.core.project(&p.id).unwrap().account, "");
+    // An account removed is no longer preferred by anyone.
+    prefer(&h, &p, "pro");
+    h.core.remove_claude_account("pro").unwrap();
+    assert_eq!(h.core.project(&p.id).unwrap().account, "");
+}
+
+#[tokio::test]
+async fn an_agent_with_no_session_changes_account_and_its_warm_process_restarts_with_it() {
+    let h = harness("accounts-set");
+    // Its own worktree: its own log of launches.
+    let (p, _) = h.project(true).await;
+    let pro = second_account(&h);
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    let cwd = PathBuf::from(&a.cwd);
+    h.wait("warm process", |h| config_dirs(h, &cwd).len() == 1)
+        .await;
+    assert_eq!(config_dirs(&h, &cwd), [Value::Null]);
+    h.core.set_agent_account(&a.id, "pro").await.unwrap();
+    assert_eq!(h.agent(&a.id).account, "pro");
+    h.wait("process of the new account", |h| {
+        config_dirs(h, &cwd).len() == 2
+    })
+    .await;
+    assert_eq!(config_dirs(&h, &cwd), [Value::Null, json!(pro.config_dir)]);
+    // The window was told.
+    let told = h
+        .events
+        .lock()
+        .iter()
+        .rev()
+        .find(|e| e["type"] == "agent" && e["agent"]["id"] == json!(a.id))
+        .cloned()
+        .unwrap();
+    assert_eq!(told["agent"]["account"], "pro");
+    // The same again: nothing restarts.
+    h.core.set_agent_account(&a.id, "pro").await.unwrap();
+    // « Automatique »: the first usable account, here Principal once Pro is used up.
+    h.core
+        .record_usage("pro", Reading::Windows((used_for_an_hour(100.0), None)));
+    h.core.set_agent_account(&a.id, "").await.unwrap();
+    assert_eq!(h.agent(&a.id).account, "principal");
+    // An account to go to, that is there and active.
+    let unknown = h.core.set_agent_account(&a.id, "parti").await.unwrap_err();
+    assert_eq!(unknown.to_string(), "compte Claude « parti » introuvable");
+    change_settings(&h, |s| s.accounts[1].active = false);
+    let off = h.core.set_agent_account(&a.id, "pro").await.unwrap_err();
+    assert_eq!(off.to_string(), "Le compte « Pro » est désactivé.");
+    assert_eq!(h.agent(&a.id).account, "principal");
+    // Its first message files its conversation in its account: it stays there.
+    change_settings(&h, |s| s.accounts[1].active = true);
+    h.turn(&a.id, "Bonjour").await;
+    let refused = h.core.set_agent_account(&a.id, "pro").await.unwrap_err();
+    assert_eq!(
+        refused.to_string(),
+        "Le compte d’un agent ne change plus après son premier message."
+    );
+    assert_eq!(h.agent(&a.id).account, "principal");
+    // A copy resumes its original's session, filed in the original's account.
+    let copy = h.core.duplicate_agent(&a.id).await.unwrap().meta;
+    assert!(h.core.set_agent_account(&copy.id, "pro").await.is_err());
+}
+
+#[tokio::test]
+async fn the_window_is_told_once_when_the_current_account_changes_because_it_passed_the_threshold()
+{
+    let h = harness("accounts-toast");
+    second_account(&h);
+    change_settings(&h, |s| s.quota_pause = 95);
+    let toasts = |h: &Harness| -> Vec<String> {
+        h.events
+            .lock()
+            .iter()
+            .filter(|e| e["type"] == "toast")
+            .map(|e| e["text"].as_str().unwrap().to_string())
+            .collect()
+    };
+    let read = |account: &str, pct: f64| {
+        h.core
+            .record_usage(account, Reading::Windows((used_for_an_hour(pct), None)))
+    };
+    read("principal", 90.0);
+    assert!(toasts(&h).is_empty());
+    // Past the threshold: the new agents go to Pro.
+    read("principal", 96.0);
+    assert_eq!(h.core.usage.lock().current, "pro");
+    assert_eq!(
+        toasts(&h),
+        ["Le compte Principal a atteint 96 % : les nouveaux agents partent sur Pro."]
+    );
+    // Read again, used more: nothing changed, nothing said.
+    read("principal", 99.0);
+    read("pro", 10.0);
+    assert_eq!(toasts(&h).len(), 1);
+    // Pro past it too: every account is, the first one is the current again, said nowhere
+    // (the autopilot's pause tells).
+    read("pro", 97.0);
+    assert_eq!(h.core.usage.lock().current, "principal");
+    assert_eq!(toasts(&h).len(), 1);
+    // Principal reads under it: the first usable one again, not told.
+    read("principal", 20.0);
+    assert_eq!(h.core.usage.lock().current, "principal");
+    assert_eq!(toasts(&h).len(), 1);
+    // Past it once more: said once more.
+    read("pro", 10.0);
+    read("principal", 100.0);
+    assert_eq!(h.core.usage.lock().current, "pro");
+    assert_eq!(toasts(&h).len(), 2);
+    // A change of the settings that moves the current account (the one left passed the
+    // threshold, Pro is switched off) does not say that it passed it.
+    change_settings(&h, |s| s.accounts[1].active = false);
+    assert_eq!(h.core.usage.lock().current, "principal");
+    assert_eq!(toasts(&h).len(), 2);
+}
+
+#[tokio::test]
+async fn a_question_about_no_agent_is_asked_of_the_account_a_new_agent_would_go_to() {
+    let h = harness("accounts-ask");
+    let (p, r) = h.project(false).await;
+    let pro = second_account(&h);
+    // Principal first; used up, the next one.
+    h.core.suggest_worktree_steps(&p.id).await.unwrap();
+    assert_eq!(config_dirs(&h, &r).last(), Some(&Value::Null));
+    h.core.record_usage(
+        "principal",
+        Reading::Windows((used_for_an_hour(100.0), None)),
+    );
+    h.core.suggest_worktree_steps(&p.id).await.unwrap();
+    assert_eq!(config_dirs(&h, &r).last(), Some(&json!(pro.config_dir)));
+    // The project's account, if it names one.
+    prefer(&h, &p, "principal");
+    h.core.suggest_worktree_steps(&p.id).await.unwrap();
+    assert_eq!(config_dirs(&h, &r).last(), Some(&Value::Null));
+}
+
+#[tokio::test]
+async fn claude_is_found_on_the_account_new_agents_would_go_to() {
+    let h = harness("accounts-claude-found");
+    let pro = second_account(&h);
+    // Claude Code is nowhere for the settings, but Pro runs a `claude` of its own.
+    let absent = h.dir.join("absent.cmd").to_string_lossy().to_string();
+    change_settings(&h, |s| {
+        s.claude_path = absent.clone();
+        s.accounts[1].claude_path = fake_cli();
+    });
+    assert!(!h.core.claude_found());
+    // Principal used up: Pro is the current account, and it has one.
+    h.core.record_usage(
+        "principal",
+        Reading::Windows((used_for_an_hour(100.0), None)),
+    );
+    assert!(h.core.claude_found());
+    assert_eq!(h.core.usage.lock().current, pro.id);
+    // Found for the settings: found for Principal.
+    change_settings(&h, |s| {
+        s.claude_path = fake_cli();
+        s.accounts[1].claude_path = absent.clone();
+    });
+    assert!(!h.core.claude_found());
+    h.core.record_usage(
+        "principal",
+        Reading::Windows((used_for_an_hour(10.0), None)),
+    );
+    assert!(h.core.claude_found());
 }

@@ -391,7 +391,7 @@ impl UsageSnapshot {
             a.reason = a.problem.map(|p| reason(p, lang));
         }
         let threshold = board::quota_threshold(settings.quota_pause);
-        self.current = accounts::current(settings, &self.accounts, threshold, now);
+        self.current = accounts::pick(settings, &self.accounts, threshold, None, now);
         if let Some(current) = self.account(&self.current).cloned() {
             self.five_hour = current.five_hour;
             self.seven_day = current.seven_day;
@@ -401,7 +401,10 @@ impl UsageSnapshot {
 
     /// The windows to keep across a restart, with what else holds the autopilot back: Principal's
     /// where the versions before the accounts kept the only ones, the others' by account.
-    pub fn saved(&self, hold: Hold) -> SavedPause {
+    pub fn saved(&self, mut hold: Hold) -> SavedPause {
+        // Of an account gone from the settings, nothing is kept.
+        hold.accounts
+            .retain(|id, _| self.accounts.iter().any(|a| a.id == *id));
         let windows = |a: &AccountUsage| SavedWindows {
             five_hour: a.five_hour,
             seven_day: a.seven_day,
@@ -943,8 +946,9 @@ mod tests {
         let hold = Hold {
             limit_until: Some(5),
             lifted: [None, None],
+            ..Default::default()
         };
-        let saved = u.saved(hold);
+        let saved = u.saved(hold.clone());
         // Principal's where the versions before the accounts read them.
         assert_eq!((saved.five_hour, saved.seven_day), (five, None));
         assert_eq!(saved.hold, hold);
@@ -980,5 +984,26 @@ mod tests {
         let mut u = UsageSnapshot::default();
         u.settle(&s, now);
         assert!(u.saved(Hold::default()).accounts.is_empty());
+    }
+
+    #[test]
+    fn what_holds_the_autopilot_back_is_kept_for_the_accounts_there_are() {
+        let s = two_accounts();
+        let now = now_ms();
+        let mut u = UsageSnapshot::default();
+        u.settle(&s, now);
+        let held = crate::model::AccountHold {
+            limit_until: Some(9),
+            ..Default::default()
+        };
+        let mut hold = Hold::default();
+        hold.accounts.insert("pro".into(), held);
+        hold.accounts.insert("parti".into(), held);
+        // The pause of an account that is gone from the settings goes with it.
+        let saved = u.saved(hold);
+        assert_eq!(
+            saved.hold.accounts,
+            BTreeMap::from([("pro".to_string(), held)])
+        );
     }
 }

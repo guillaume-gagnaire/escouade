@@ -15,7 +15,7 @@ use crate::stats::StatsView;
 use crate::tickets::TicketDraft;
 use serde::Serialize;
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::State;
@@ -53,8 +53,11 @@ pub struct InitialState {
     models: Vec<ModelInfo>,
     /// Why no ticket of a project's board starts, by project.
     board_issues: HashMap<String, String>,
-    /// Why no ticket of any board starts for now (a quota, a usage limit), if none does.
+    /// Why no ticket of a project that goes to any account starts for now (a quota, a usage
+    /// limit), if none does.
     autopilot_pause: Option<AutopilotPause>,
+    /// The same for the projects that prefer an account, by project.
+    project_pauses: BTreeMap<String, AutopilotPause>,
     /// The external ticket systems' accounts, as the window knows them.
     accounts: Vec<AccountView>,
     /// The update installed since the app's last start, told once (« Voir les nouveautés »).
@@ -92,6 +95,7 @@ pub fn subscribe(
     let board_issues = core.board_issues.lock().clone();
     // As it is now: the timer tells this window when it ends (and the board goes on then).
     let autopilot_pause = core.autopilot_pause();
+    let project_pauses = core.project_pauses();
     let accounts = core.integration_accounts();
     let version = core.app.package_info().version.to_string();
     let lang = core.lang();
@@ -102,7 +106,7 @@ pub fn subscribe(
         agents,
         ui,
         shells: pty::detect_shells(&settings),
-        claude_found: crate::claude::resolve_binary(&settings.claude_path).is_some(),
+        claude_found: core.claude_found(),
         settings,
         usage,
         git,
@@ -114,6 +118,7 @@ pub fn subscribe(
         models,
         board_issues,
         autopilot_pause,
+        project_pauses,
         accounts,
         setup_output,
     }
@@ -352,6 +357,13 @@ pub async fn set_agent_options(
     core.set_agent_options(&id, model, effort, mode)
         .await
         .map_err(err)
+}
+
+/// The Claude account of an agent that has not started (the Composer's chip); empty is
+/// « Automatique ».
+#[tauri::command]
+pub async fn set_agent_account(core: CoreState<'_>, id: String, account: String) -> Res<()> {
+    core.set_agent_account(&id, &account).await.map_err(err)
 }
 
 #[tauri::command]

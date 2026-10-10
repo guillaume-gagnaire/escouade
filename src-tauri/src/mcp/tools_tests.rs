@@ -5,6 +5,7 @@ use super::tests::{client, names, started, EXPOSED};
 use crate::agent::AgentRt;
 use crate::core_tests::{harness, Harness};
 use crate::model::*;
+use crate::usage::Reading;
 use rmcp::model::CallToolRequestParams;
 use rmcp::service::RunningService;
 use rmcp::RoleClient;
@@ -813,17 +814,16 @@ async fn the_usage_gives_each_account_its_windows_and_the_autopilots_pause() {
         });
     }
     let soon = now_ms() + 3_600_000;
-    {
-        let mut u = h.core.usage.lock();
-        u.five_hour = Some(RateWindow {
-            pct: 42.0,
-            resets_at: Some(soon),
-        });
-        u.seven_day = Some(RateWindow {
-            pct: 10.5,
-            resets_at: Some(soon + 1),
-        });
-    }
+    let used = |pct: f64, ends: i64| {
+        Some(RateWindow {
+            pct,
+            resets_at: Some(ends),
+        })
+    };
+    h.core.record_usage(
+        "principal",
+        Reading::Windows((used(42.0, soon), used(10.5, soon + 1))),
+    );
     let c = external(&h).await;
     assert_eq!(
         read(&c, "get_usage", json!({})).await,
@@ -849,19 +849,32 @@ async fn the_usage_gives_each_account_its_windows_and_the_autopilots_pause() {
             "ok"
         )
     );
-    // The 5-hour window used up: the autopilot waits for its end.
-    h.core.usage.lock().five_hour = Some(RateWindow {
-        pct: 100.0,
-        resets_at: Some(soon),
-    });
+    // Principal's 5-hour window used up: new agents go to Pro, nothing waits.
+    h.core
+        .record_usage("principal", Reading::Windows((used(100.0, soon), None)));
+    let usage = read(&c, "get_usage", json!({})).await;
+    assert_eq!(usage["autopilotPause"], Value::Null);
+    assert_eq!(
+        (
+            &usage["accounts"][0]["current"],
+            &usage["accounts"][1]["current"]
+        ),
+        (&json!(false), &json!(true))
+    );
+    // Pro's too, sooner: the autopilot waits for its end, the first.
+    h.core
+        .record_usage("pro", Reading::Windows((used(100.0, soon - 600_000), None)));
     let until = h.core.autopilot_pause().unwrap().until;
     let usage = read(&c, "get_usage", json!({})).await;
     assert_eq!(
         usage["autopilotPause"],
         json!({ "reason": "fiveHour", "until": until })
     );
-    // Principal switched off: new agents go to Pro.
+    assert_eq!(usage["accounts"][1]["fiveHour"]["pct"], 100.0);
+    // Principal switched off: only Pro is left to go to.
     h.core.settings.write().accounts[0].active = false;
+    // (Not saved: that would take the server down, which no project asks for.)
+    h.core.update_usage(|_| {});
     let usage = read(&c, "get_usage", json!({})).await;
     assert_eq!(
         (
@@ -870,7 +883,6 @@ async fn the_usage_gives_each_account_its_windows_and_the_autopilots_pause() {
         ),
         (&json!(false), &json!(true))
     );
-    assert_eq!(usage["accounts"][1]["fiveHour"]["pct"], 100.0);
     c.cancel().await.unwrap();
     h.core.mcp.stop();
 }

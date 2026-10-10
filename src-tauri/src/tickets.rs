@@ -2,9 +2,10 @@
 //! of their own, what each end of turn does to them, their validation (tests, commit, merge, pull
 //! request, push) and the test launches of the worktrees.
 
+use crate::accounts;
 use crate::agent::NotifyKind;
 use crate::board::{self, TurnEnd};
-use crate::claude::{self, ClaudeProcess};
+use crate::claude::ClaudeProcess;
 use crate::core::{not_a_repo, project_not_found, AgentOptions, Core};
 use crate::git;
 use crate::i18n::{self, Lang};
@@ -14,6 +15,7 @@ use crate::model::*;
 use crate::testlaunch;
 use anyhow::{anyhow, bail, Result};
 use serde::Deserialize;
+use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::atomic::Ordering;
@@ -551,12 +553,19 @@ impl<R: Runtime> Core<R> {
         });
     }
 
-    /// An agent of the app waits for its quota (usage limit): no ticket starts meanwhile.
-    pub(crate) fn quota_paused(&self) -> bool {
-        self.agents.read().values().any(|h| {
-            let rt = h.lock();
-            rt.meta.resume_at.is_some() && !rt.meta.archived
-        })
+    /// The accounts an agent of the app waits for the quota of (usage limit): no ticket starts on
+    /// them meanwhile, but on another account one may.
+    pub(crate) fn quota_paused(&self) -> HashSet<String> {
+        let settings = self.settings.read().clone();
+        self.agents
+            .read()
+            .values()
+            .filter_map(|h| {
+                let rt = h.lock();
+                let waits = rt.meta.resume_at.is_some() && !rt.meta.archived;
+                waits.then(|| accounts::get(&settings, &rt.meta.account).id)
+            })
+            .collect()
     }
 
     /// The time the autopilot's pauses go by: the real one (ahead by `clock_ahead` in tests).
@@ -567,31 +576,106 @@ impl<R: Runtime> Core<R> {
         now_ms()
     }
 
-    /// Why no ticket of any board starts now, if none does (`board::autopilot_pause`): the quota
-    /// windows last read, the pause after a usage limit, what "Reprendre maintenant" lifted.
+    /// Why no ticket of a project that goes to any account starts now, if none does
+    /// (`board::autopilot_pause`): the quota windows last read, the pause after a usage limit,
+    /// what "Reprendre maintenant" lifted, for every active account.
     pub(crate) fn autopilot_pause(&self) -> Option<AutopilotPause> {
-        let threshold = board::quota_threshold(self.settings.read().quota_pause);
-        let usage = self.usage.lock().clone();
-        let hold = *self.hold.lock();
-        board::autopilot_pause(&usage, threshold, &hold, self.pause_now())
+        self.pause_for(None)
     }
 
-    /// No ticket may start now: an agent waits for its quota, or the autopilot is paused (a quota
-    /// window over the threshold, a usage limit with no resume).
-    fn held(&self) -> bool {
-        self.quota_paused() || self.autopilot_pause().is_some()
+    /// `autopilot_pause` for the projects that go to the account `preferred` (any, when none or
+    /// not an active one).
+    fn pause_for(&self, preferred: Option<&str>) -> Option<AutopilotPause> {
+        let settings = self.settings.read().clone();
+        let threshold = board::quota_threshold(settings.quota_pause);
+        let accounts = accounts::candidates(&settings, preferred);
+        let usage = self.usage.lock().accounts.clone();
+        let hold = self.hold.lock().clone();
+        board::autopilot_pause(&usage, &accounts, threshold, &hold, self.pause_now())
     }
 
-    /// The autopilot's pause looked at again, the window told when it changed (in order: looked
-    /// at and told under one lock), and saved then: a restart keeps it. True when it changed.
+    /// Why the tickets of the projects that prefer an account do not start, by project: each
+    /// waits for its own account.
+    pub(crate) fn project_pauses(&self) -> BTreeMap<String, AutopilotPause> {
+        let settings = self.settings.read().clone();
+        let projects = self.projects.read().clone();
+        projects
+            .iter()
+            .filter_map(|p| {
+                let preferred = accounts::preferred(&settings, &p.account)?;
+                Some((p.id.clone(), self.pause_for(Some(preferred))?))
+            })
+            .collect()
+    }
+
+    /// The account a new agent of the project goes to (a ticket's or not): the one the project
+    /// prefers when it is active, else the first usable one, in the order of the accounts.
+    pub(crate) fn account_for_new(&self, project_id: &str) -> String {
+        let settings = self.settings.read().clone();
+        let preferred = self
+            .project(project_id)
+            .ok()
+            .and_then(|p| accounts::preferred(&settings, &p.account).map(str::to_string));
+        self.pick_account(&settings, preferred.as_deref())
+    }
+
+    /// `accounts::pick` as the board has it: a usable account is under the threshold, holds
+    /// nothing back (a pause after a usage limit) and has no agent waiting for its quota. When
+    /// none is, one that holds nothing back although over the threshold ("Reprendre
+    /// maintenant"), else the first active one.
+    pub(crate) fn pick_account(&self, settings: &Settings, preferred: Option<&str>) -> String {
+        let threshold = board::quota_threshold(settings.quota_pause);
+        let usage = self.usage.lock().accounts.clone();
+        let hold = self.hold.lock().clone();
+        let waiting = self.quota_paused();
+        let now = self.pause_now();
+        let held = |id: &str| {
+            waiting.contains(id)
+                || board::account_pause(&usage, id, threshold, &hold, now).is_some()
+        };
+        let usable = |id: &str| !held(id) && !accounts::over_threshold(&usage, id, threshold, now);
+        let id = accounts::pick_where(settings, preferred, usable);
+        if !held(&id) {
+            return id;
+        }
+        accounts::candidates(settings, preferred)
+            .into_iter()
+            .find(|a| !held(a))
+            .unwrap_or(id)
+    }
+
+    /// No ticket of the project may start now: every account it may go to waits for its quota
+    /// (an agent waiting for its reset, a window over the threshold, a usage limit with no resume).
+    fn held(&self, project_id: &str) -> bool {
+        let settings = self.settings.read().clone();
+        let preferred = self
+            .project(project_id)
+            .ok()
+            .and_then(|p| accounts::preferred(&settings, &p.account).map(str::to_string));
+        let threshold = board::quota_threshold(settings.quota_pause);
+        let accounts = accounts::candidates(&settings, preferred.as_deref());
+        let usage = self.usage.lock().accounts.clone();
+        let hold = self.hold.lock().clone();
+        let waiting = self.quota_paused();
+        let now = self.pause_now();
+        !accounts.is_empty()
+            && accounts.iter().all(|a| {
+                waiting.contains(a)
+                    || board::account_pause(&usage, a, threshold, &hold, now).is_some()
+            })
+    }
+
+    /// The autopilot's pauses looked at again, the window told when they changed (in order: looked
+    /// at and told under one lock), and saved then: a restart keeps them. True when they changed.
     fn refresh_pause(&self) -> bool {
         let mut shown = self.pause_shown.lock();
-        let pause = self.autopilot_pause();
-        if *shown == pause {
+        let now = (self.autopilot_pause(), self.project_pauses());
+        if *shown == now {
             return false;
         }
-        *shown = pause.clone();
-        self.hub.emit(UiEvent::AutopilotPause { pause });
+        *shown = now.clone();
+        let (pause, projects) = now;
+        self.hub.emit(UiEvent::AutopilotPause { pause, projects });
         self.request_save();
         true
     }
@@ -604,11 +688,12 @@ impl<R: Runtime> Core<R> {
         }
     }
 
-    /// A ticket met the usage limit with no resume planned: the next one would meet it too, so
-    /// none starts for a while (`board::LIMIT_PAUSE_MS`), or until "Reprendre maintenant".
-    pub(crate) fn pause_after_limit(&self) {
+    /// A ticket met the usage limit with no resume planned, on the account: the next one would
+    /// meet it too, so none starts on it for a while (`board::LIMIT_PAUSE_MS`), or until
+    /// "Reprendre maintenant".
+    pub(crate) fn pause_after_limit(&self, account: &str) {
         let until = self.pause_now() + board::LIMIT_PAUSE_MS;
-        self.hold.lock().limit_until = Some(until);
+        self.hold.lock().limit(account, until);
         // Saved even when a longer pause hides it: it may outlast that one once lifted.
         self.request_save();
         self.refresh_pause();
@@ -618,7 +703,7 @@ impl<R: Runtime> Core<R> {
     /// the windows over the threshold until their end), and what may start starts.
     pub fn autopilot_resume(self: &Arc<Self>) {
         let threshold = board::quota_threshold(self.settings.read().quota_pause);
-        let usage = self.usage.lock().clone();
+        let usage = self.usage.lock().accounts.clone();
         let now = self.pause_now();
         self.hold.lock().lift(&usage, threshold, now);
         self.request_save();
@@ -631,22 +716,25 @@ impl<R: Runtime> Core<R> {
         let _pass = self.board_lock.lock().await;
         // The window is told of the pause whatever else holds the tickets back.
         self.refresh_pause();
-        // Without Claude Code no agent can work: rather than make every ticket's worktree and
-        // agent only to block it, none starts until it is found (saving the settings looks again).
-        let claude_path = self.settings.read().claude_path.clone();
-        if claude::resolve_binary(&claude_path).is_none() {
-            if !self.claude_missing.swap(true, Ordering::AcqRel) {
-                log::info!("board: Claude Code not found, no ticket starts until it is");
-            }
-            return;
-        }
-        self.claude_missing.store(false, Ordering::Release);
         let projects = self.projects.read().clone();
+        let mut missing = false;
         for p in projects {
+            // Without Claude Code (the one of the account it would go to) no agent can work:
+            // rather than make every ticket's worktree and agent only to block it, none starts
+            // until it is found (saving the settings looks again).
+            let settings = self.settings.read().clone();
+            let account = accounts::get(&settings, &self.account_for_new(&p.id));
+            if accounts::program(&account, &settings).is_none() {
+                missing = true;
+                if !self.claude_missing.swap(true, Ordering::AcqRel) {
+                    log::info!("board: Claude Code not found, no ticket starts until it is");
+                }
+                continue;
+            }
             // Held (`held`), none starts, even launched by hand. Looked at again for each project
             // and each start: one started in this pass, or already at work, may meet the usage
             // limit while the pass goes on (each start takes seconds).
-            let held = self.held();
+            let held = self.held(&p.id);
             let ids = board::to_start(&self.tickets.read(), &p.id, &p.board, held);
             // A board that told why nothing starts is looked at again even with nothing to start:
             // its issue goes once its target is there.
@@ -671,11 +759,14 @@ impl<R: Runtime> Core<R> {
                 continue;
             }
             for id in ids {
-                if self.held() {
+                if self.held(&p.id) {
                     break;
                 }
                 self.start_ticket(&p, &id).await;
             }
+        }
+        if !missing {
+            self.claude_missing.store(false, Ordering::Release);
         }
     }
 
@@ -871,7 +962,7 @@ impl<R: Runtime> Core<R> {
         // autopilot pauses first, so that no pass starts one in the place this frees.
         let end = match end {
             TurnEnd::Limited if !resumes => {
-                self.pause_after_limit();
+                self.pause_after_limit(&self.account_of(agent_id));
                 TurnEnd::Error(quota_lost(i18n::ui()))
             }
             end => end,
@@ -931,7 +1022,7 @@ impl<R: Runtime> Core<R> {
             return;
         };
         // Before its place is free: no pass starts the next ticket, which would meet the limit.
-        self.pause_after_limit();
+        self.pause_after_limit(&self.account_of(agent_id));
         let blocked = self.edit_ticket(&id, |t| {
             let waiting = t.column == Column::Doing
                 && t.blocked.is_none()
