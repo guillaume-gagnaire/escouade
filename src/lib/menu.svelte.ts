@@ -7,6 +7,8 @@ export interface MenuItem {
   disabled?: boolean;
   separator?: boolean;
   hint?: string;
+  /** Its tooltip: why it is disabled, for one. */
+  title?: string;
   /** A row of colors to pick from, named by the label. */
   colors?: { values: string[]; selected: string; onPick: (color: string) => void };
 }

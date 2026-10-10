@@ -3171,3 +3171,300 @@ async fn the_end_of_a_turn_and_a_crash_are_told_unless_their_kind_is_off() {
         h.alerts()
     );
 }
+
+// ---------- copies of an agent ----------
+
+/// What the conversation of a copy tells when its original had changes it had not committed.
+fn uncommitted_notice(original: &str) -> String {
+    format!("Les modifications non commitées de {original} ne sont pas dans cette copie.")
+}
+
+#[tokio::test]
+async fn a_copy_shows_the_conversation_again_and_forks_its_session_leaving_the_original_as_it_is() {
+    let h = harness("copy-plain");
+    let (p, r) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.core.rename_agent(&id, "refacto-auth").await.unwrap();
+    h.core
+        .set_agent_options(
+            &id,
+            Some("opus".into()),
+            Some("max".into()),
+            Some("plan".into()),
+        )
+        .await
+        .unwrap();
+    h.turn(&id, "Premier").await;
+    let original = h.agent(&id);
+    let session = original.session_id.clone().unwrap();
+    let items = h.items(&id);
+
+    let copy = h.core.duplicate_agent(&id).await.unwrap().meta;
+    assert_eq!(
+        (copy.name.as_str(), copy.named, copy.project_id.as_str()),
+        ("refacto-auth (copie)", true, p.id.as_str())
+    );
+    assert_eq!(
+        (
+            copy.model.as_str(),
+            copy.effort.as_str(),
+            copy.mode.as_str()
+        ),
+        ("opus", "max", "plan")
+    );
+    // Without a worktree: in the same folder.
+    assert_eq!(copy.worktree.as_ref().map(|w| &w.path), None);
+    assert_eq!(copy.cwd, original.cwd);
+    assert_eq!(h.items(&copy.id), items);
+    // Shown at once, as an agent the user made.
+    assert_eq!(h.core.ui.read().selected_agent.get(&p.id), Some(&copy.id));
+    // Started on a fork of the original's session.
+    h.core.ensure_process(&copy.id).await.unwrap();
+    let argv = h.launches(&r).pop().unwrap();
+    assert!(
+        argv.windows(2)
+            .any(|w| w[0] == format!("--resume={session}") && w[1] == "--fork-session"),
+        "{argv:?}"
+    );
+    // Its first turn gives it a session of its own.
+    h.turn(&copy.id, "Second").await;
+    let copied = h.agent(&copy.id);
+    assert!(
+        copied.session_id.is_some() && copied.session_id.as_deref() != Some(session.as_str()),
+        "{:?}",
+        copied.session_id
+    );
+    assert_eq!(copied.fork_of, None);
+    // The original is as it was: its session, its name, its conversation.
+    let after = h.agent(&id);
+    assert_eq!(
+        (after.session_id.as_deref(), after.name.as_str()),
+        (Some(session.as_str()), "refacto-auth")
+    );
+    assert_eq!(h.items(&id), items);
+}
+
+#[tokio::test]
+async fn a_copy_of_a_worktree_agent_has_its_own_from_the_current_commit_set_up_like_a_new_one() {
+    let h = harness("copy-worktree");
+    let (p, r) = h.project(true).await;
+    ignore(&r, ".env");
+    ignore(&r, "prepared.txt");
+    std::fs::write(r.join(".env"), "SECRET=1\n").unwrap();
+    h.set_worktree_steps(
+        &p.id,
+        vec![wt_step(
+            r#"node -e "require('fs').writeFileSync('prepared.txt', process.env.ESCOUADE_BRANCH)""#,
+            "",
+        )],
+        vec![],
+    );
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    h.wait("the original set up", |h| h.view(&a.id).setup.is_none())
+        .await;
+    let wt = a.worktree.clone().unwrap();
+    let dir = PathBuf::from(&wt.path);
+    // Its work so far: a commit on its branch, then changes it did not commit.
+    std::fs::write(dir.join("src").join("app.ts"), "const a = 2;\n").unwrap();
+    git(&dir, &["commit", "-qam", "travail"]);
+    let head = git(&dir, &["rev-parse", "HEAD"]);
+    std::fs::write(dir.join("src").join("app.ts"), "const a = 3;\n").unwrap();
+    std::fs::write(dir.join("brouillon.txt"), "b\n").unwrap();
+    let items = h.items(&a.id);
+
+    let copy = h.core.duplicate_agent(&a.id).await.unwrap().meta;
+    assert_eq!(copy.name, "agent-1 (copie)");
+    let cwt = copy.worktree.clone().unwrap();
+    assert_eq!(
+        (cwt.branch.as_str(), cwt.base_branch.as_str()),
+        ("escouade/agent-1-copie", "main")
+    );
+    assert_ne!(cwt.path, wt.path);
+    assert_eq!(copy.cwd, cwt.path);
+    let cdir = PathBuf::from(&cwt.path);
+    // From the original's current commit, without what it did not commit…
+    assert_eq!(git(&cdir, &["rev-parse", "HEAD"]), head);
+    assert_eq!(
+        std::fs::read_to_string(cdir.join("src").join("app.ts")).unwrap(),
+        "const a = 2;\n"
+    );
+    assert!(!cdir.join("brouillon.txt").exists());
+    // …which its conversation says, after the original's.
+    let copied = h.items(&copy.id);
+    assert_eq!(copied[..items.len()], items[..]);
+    assert_eq!(copied[items.len()]["kind"], "notice");
+    assert_eq!(copied[items.len()]["text"], uncommitted_notice("agent-1"));
+    // Prepared as a new agent's: the files copied, then the setup run in it.
+    assert_eq!(
+        std::fs::read_to_string(cdir.join(".env")).unwrap(),
+        "SECRET=1\n"
+    );
+    h.wait("the copy set up", |h| h.view(&copy.id).setup.is_none())
+        .await;
+    assert_eq!(
+        std::fs::read_to_string(cdir.join("prepared.txt")).unwrap(),
+        cwt.branch
+    );
+    // The original is untouched: its branch, its changes.
+    assert_eq!(git(&dir, &["rev-parse", "HEAD"]), head);
+    assert!(dir.join("brouillon.txt").exists());
+
+    // Everything committed: a second copy, with nothing to say of it.
+    git(&dir, &["add", "-A"]);
+    git(&dir, &["commit", "-qm", "suite"]);
+    let second = h.core.duplicate_agent(&a.id).await.unwrap().meta;
+    assert_eq!(second.name, "agent-1 (copie 2)");
+    assert_eq!(second.worktree.unwrap().branch, "escouade/agent-1-copie-2");
+    assert!(
+        !h.items(&second.id)
+            .iter()
+            .any(|i| i["text"] == uncommitted_notice("agent-1")),
+        "{:?}",
+        h.items(&second.id)
+    );
+}
+
+#[tokio::test]
+async fn an_agent_is_not_copied_during_its_turn() {
+    let h = harness("copy-turn");
+    let (p, r) = h.project(true).await;
+    let worktrees = || git(&r, &["worktree", "list"]).lines().count();
+    for (name, message, status) in [
+        ("lent", "slow", AgentStatus::Running),
+        ("curieux", "question", AgentStatus::Waiting),
+    ] {
+        let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+        h.core.rename_agent(&id, name).await.unwrap();
+        h.core
+            .send_message(&id, message.into(), vec![])
+            .await
+            .unwrap();
+        h.wait("the turn", |h| h.agent(&id).status == status).await;
+        let (agents, made) = (h.core.agents.read().len(), worktrees());
+        let e = h.core.duplicate_agent(&id).await.unwrap_err();
+        assert_eq!(
+            e.to_string(),
+            format!("Attends la fin du tour de {name} pour le dupliquer.")
+        );
+        assert_eq!((h.core.agents.read().len(), worktrees()), (agents, made));
+    }
+}
+
+#[tokio::test]
+async fn a_ticket_agent_is_copied_as_an_ordinary_agent() {
+    let h = harness("copy-ticket");
+    let (p, _) = h.project(false).await;
+    let a = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                name: Some("dem-1-ajouter".into()),
+                worktree: Some(("ticket/dem-1".into(), "main".into())),
+                append_prompt: Some("Protocole".into()),
+                ticket_id: Some("t1".into()),
+                port_base: Some(4100),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta;
+    let copy = h.core.duplicate_agent(&a.id).await.unwrap().meta;
+    assert_eq!(copy.name, "dem-1-ajouter (copie)");
+    assert_eq!(
+        (
+            copy.ticket_id.as_deref(),
+            copy.append_prompt.as_deref(),
+            copy.port_base
+        ),
+        (None, None, None)
+    );
+    // Its own worktree from the ticket's branch, whose base it keeps.
+    let wt = copy.worktree.unwrap();
+    assert_eq!(
+        (wt.branch.as_str(), wt.base_branch.as_str()),
+        ("escouade/dem-1-ajouter-copie", "main")
+    );
+    // No ticket's protocol at its start.
+    h.core.ensure_process(&copy.id).await.unwrap();
+    let argv = h.launches(Path::new(&wt.path)).pop().unwrap();
+    assert!(
+        !argv.contains(&"--append-system-prompt".to_string()),
+        "{argv:?}"
+    );
+    // The ticket's agent is still the original.
+    assert_eq!(h.agent(&a.id).ticket_id.as_deref(), Some("t1"));
+}
+
+#[tokio::test]
+async fn a_copy_whose_original_session_is_gone_starts_a_new_one() {
+    let h = harness("copy-lost");
+    let (p, _) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.core.rename_agent(&id, "perdu").await.unwrap();
+    h.core.agent(&id).unwrap().lock().meta.session_id = Some("missing-1".into());
+    let copy = h.core.duplicate_agent(&id).await.unwrap().meta.id;
+    h.turn(&copy, "Bonjour").await;
+    let meta = h.agent(&copy);
+    assert_eq!(meta.fork_of, None);
+    assert!(
+        meta.session_id
+            .as_deref()
+            .is_some_and(|s| s.starts_with("sess-")),
+        "{:?}",
+        meta.session_id
+    );
+    assert!(h
+        .items(&copy)
+        .iter()
+        .any(|i| i["text"] == "Bonjour, tu as dit : Bonjour"));
+}
+
+#[tokio::test]
+async fn a_long_conversation_is_copied_whole_in_one_append_per_item() {
+    let h = harness("copy-long");
+    let (p, _) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    // 2 000 messages, each logged as it was streamed: an append, then the patch of its text.
+    let dir = h.core.data.conversations();
+    let mut log = String::new();
+    for i in 0..2000 {
+        for op in [
+            json!({ "op": "append", "item": { "kind": "text", "id": format!("m{i}"), "text": "", "streaming": true } }),
+            json!({ "op": "patch", "id": format!("m{i}"), "patch": { "text": format!("réponse {i}"), "streaming": false } }),
+        ] {
+            log.push_str(&op.to_string());
+            log.push('\n');
+        }
+    }
+    std::fs::write(crate::conv::log_path(&dir, &id), log).unwrap();
+    // Read from its log, as after a restart.
+    h.core.agent(&id).unwrap().lock().conv = crate::conv::Conv::new(&dir, &id);
+    let copy = h.core.duplicate_agent(&id).await.unwrap().meta.id;
+    let copied = crate::conv::replay(&crate::conv::log_path(&dir, &copy)).unwrap();
+    assert_eq!((copied.items.len(), copied.ops), (2000, 2000));
+    assert_eq!(copied.items[1999]["text"], "réponse 1999");
+    assert_eq!(h.items(&copy), h.items(&id));
+}
+
+#[tokio::test]
+async fn no_copy_is_made_when_its_worktree_cannot_be() {
+    let h = harness("copy-no-worktree");
+    let (p, _) = h.project(true).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    // Its worktree's folder is gone: no commit to start the copy's from.
+    let gone = h.dir.join("gone").to_string_lossy().to_string();
+    if let Some(wt) = h.core.agent(&a.id).unwrap().lock().meta.worktree.as_mut() {
+        wt.path = gone;
+    }
+    let logs = || {
+        std::fs::read_dir(h.core.data.conversations())
+            .unwrap()
+            .count()
+    };
+    let (agents, before) = (h.core.agents.read().len(), logs());
+    assert!(h.core.duplicate_agent(&a.id).await.is_err());
+    // Neither an agent nor its conversation left behind.
+    assert_eq!((h.core.agents.read().len(), logs()), (agents, before));
+}

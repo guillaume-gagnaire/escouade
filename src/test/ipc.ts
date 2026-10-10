@@ -89,6 +89,7 @@ export function agent(over: Partial<Agent> = {}): Agent {
     effort: 'high',
     mode: 'auto',
     sessionId: null,
+    forkOf: null,
     cwd: 'C:\\code\\demo-api',
     worktree: null,
     createdAt: 1,

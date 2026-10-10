@@ -69,6 +69,8 @@ export const api = {
   setAgentOptions: (id: string, o: { model?: string; effort?: string; mode?: string }) =>
     invoke<void>('set_agent_options', { id, model: o.model ?? null, effort: o.effort ?? null, mode: o.mode ?? null }),
   renameAgent: (id: string, name: string) => invoke<void>('rename_agent', { id, name }),
+  /** A copy of the agent, « <nom> (copie) », whose Claude Code session forks the original’s (refused during its turn). */
+  duplicateAgent: (id: string) => invoke<Agent>('duplicate_agent', { id }),
   archiveAgent: (id: string, archived: boolean) => invoke<void>('archive_agent', { id, archived }),
   deleteAgent: (id: string, removeWorktree: boolean) => invoke<string | null>('delete_agent', { id, removeWorktree }),
   /** Merges into the agent's base branch; `switchToBase`: the project's folder is switched to it first. */

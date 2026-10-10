@@ -752,6 +752,19 @@ class AppState {
     }
   }
 
+  /** A copy of the agent (« Dupliquer la conversation »), shown at once, like a new agent. */
+  async duplicateAgent(id: string) {
+    try {
+      const a = await api.duplicateAgent(id);
+      this.agents[a.id] = a;
+      // Its conversation is what the copy is for: the editor gives way to it.
+      this.closeEditor(a.projectId);
+      this.selectAgent(a.id);
+    } catch (e) {
+      this.toast(String(e), 'error');
+    }
+  }
+
   /** Next agent waiting for an answer or needing a look, across all projects (Ctrl+J). */
   nextWaiting() {
     const list = Object.values(this.agents)

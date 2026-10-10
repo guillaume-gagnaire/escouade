@@ -491,6 +491,8 @@ impl AgentRt {
         if !self.saw_init && stderr.contains("No conversation found") {
             let lost = "Session Claude introuvable : une nouvelle session sera démarrée au prochain message.";
             self.meta.session_id = None;
+            // A copy whose original's session is gone: the same, a new session.
+            self.meta.fork_of = None;
             self.notice("warn", lost, fx);
             self.set_status(AgentStatus::Done, fx);
             // The message it was to carry never ran: that turn ends here, though not as a failure
@@ -552,6 +554,11 @@ impl AgentRt {
                             self.notice("info", "Nouvelle conversation Claude (contexte vidé)", fx);
                         }
                         self.meta.session_id = Some(sid.to_string());
+                        fx.save = true;
+                    }
+                    // A copy has a session of its own from its first turn on: its next starts
+                    // resume that one, never the original's again.
+                    if self.meta.fork_of.take().is_some() {
                         fx.save = true;
                     }
                 }
@@ -2439,6 +2446,36 @@ mod tests {
         let mut fx = Effects::default();
         a.on_exit(a.gen, Some(0), "", &mut fx);
         assert_eq!(fx.turn_end, None);
+    }
+
+    #[test]
+    fn a_copy_forks_no_more_once_it_has_a_session_or_once_the_original_is_gone() {
+        // Its first turn gives it a session of its own.
+        let mut a = rt();
+        a.meta.fork_of = Some("s1".into());
+        let mut fx = Effects::default();
+        a.handle_frame(
+            &json!({ "type": "system", "subtype": "init", "session_id": "s2" }),
+            &mut fx,
+        );
+        assert_eq!(
+            (a.meta.session_id.as_deref(), a.meta.fork_of.as_deref()),
+            (Some("s2"), None)
+        );
+        assert!(fx.save);
+        // The original's session is gone: a new session, as for a lost one of its own.
+        let mut a = rt();
+        a.meta.fork_of = Some("missing-1".into());
+        a.on_exit(
+            a.gen,
+            Some(1),
+            "No conversation found with session ID: missing-1",
+            &mut Effects::default(),
+        );
+        assert_eq!(
+            (a.meta.session_id.as_deref(), a.meta.fork_of.as_deref()),
+            (None, None)
+        );
     }
 
     #[test]

@@ -50,6 +50,7 @@
           role="menuitem"
           class:danger={item.danger}
           disabled={item.disabled}
+          title={item.title}
           onclick={() => {
             menu.close();
             item.onClick?.();

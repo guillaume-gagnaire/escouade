@@ -426,3 +426,56 @@ describe('Sidebar editor entries', () => {
     expect(app.boardOn).toBe(false);
   });
 });
+
+describe('Sidebar copies of an agent', () => {
+  const copyItem = () => menu.open!.items.find((i) => i.label === 'Dupliquer la conversation');
+
+  it('duplicates an agent’s conversation from its menu and shows the copy', async () => {
+    resetApp({ agents: [agent()] });
+    const backend = fakeBackend({ duplicate_agent: () => agent({ id: 'a4', name: 'refacto-auth (copie)', createdAt: 4 }) });
+    app.openEditor({ projectId: 'p1', source: 'project' });
+    render(Sidebar, { project: project() });
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
+    expect(copyItem()).toMatchObject({ disabled: false, title: undefined });
+    copyItem()!.onClick!();
+    await expect.poll(() => app.agent?.id).toBe('a4');
+    expect(backend.called('duplicate_agent')).toEqual([{ cmd: 'duplicate_agent', args: { id: 'a1' } }]);
+    // Its conversation is what the copy is for: the editor gives way to it.
+    expect(app.editorOn).toBe(false);
+    expect(await screen.findByRole('button', { name: /refacto-auth \(copie\)/ })).toBeInTheDocument();
+  });
+
+  it('offers no copy during a turn, and says why', async () => {
+    for (const status of ['running', 'waiting'] as const) {
+      resetApp({ agents: [agent({ status })] });
+      fakeBackend();
+      const { unmount } = render(Sidebar, { project: project() });
+      await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
+      expect(copyItem()).toMatchObject({ disabled: true, title: 'Attends la fin de son tour.' });
+      unmount();
+    }
+  });
+
+  it('offers no copy of an archived agent', async () => {
+    resetApp({ agents: [agent({ archived: true })] });
+    fakeBackend();
+    app.showArchived = true;
+    render(Sidebar, { project: project() });
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
+    expect(copyItem()).toBeUndefined();
+  });
+
+  it('tells why a copy was not made', async () => {
+    resetApp({ agents: [agent()] });
+    fakeBackend({
+      duplicate_agent: () => {
+        throw 'worktree de la copie non créé';
+      },
+    });
+    render(Sidebar, { project: project() });
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
+    copyItem()!.onClick!();
+    await expect.poll(() => app.toasts.map((t) => [t.text, t.kind])).toEqual([['worktree de la copie non créé', 'error']]);
+    expect(app.agent?.id).toBe('a1');
+  });
+});

@@ -653,6 +653,7 @@ impl<R: Runtime> Core<R> {
                     ticket_id: Some(t.id.clone()),
                     port_base: ports,
                     select: false,
+                    copy_of: None,
                 },
             )
             .await;

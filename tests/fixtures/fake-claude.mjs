@@ -2,7 +2,8 @@
 // Test double of the `claude` CLI in `--input-format/--output-format stream-json` mode.
 // It replays the frame shapes documented in docs/PROTOCOL.md. The user message text picks the
 // scenario: "question", "permission", "edit", "slow", "crash", "grandchild"; anything else is a
-// plain reply. A `--resume=missing…` session fails like an unknown session does.
+// plain reply. A `--resume=missing…` session fails like an unknown session does, forked or not;
+// with `--fork-session`, the resumed conversation goes on under a new session id.
 // Every launch appends {argv, cwd, proxy, tls} (its HTTPS_PROXY and NODE_TLS_REJECT_UNAUTHORIZED)
 // to $FAKE_CLAUDE_LOG, by default <tmp>/fake-claude-<cwd with non-alphanumerics replaced by
 // _>.jsonl, and every user message read on stdin to <log>.stdin.jsonl.
@@ -124,7 +125,8 @@ function startSession() {
     process.stderr.write(`No conversation found with session ID: ${resume}\n`);
     process.exit(1);
   }
-  const sessionId = resume ?? `sess-${process.pid}`;
+  // Forked, as Claude Code does it: the session resumed is left as it is, a new one goes on.
+  const sessionId = resume && !argv.includes('--fork-session') ? resume : `sess-${process.pid}`;
   const model = argv[argv.indexOf('--model') + 1] ?? 'sonnet';
   const usage = { inputTokens: 0, outputTokens: 0, cacheReadInputTokens: 0, cacheCreationInputTokens: 0, costUSD: 0 };
   let msg = 0;

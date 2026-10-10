@@ -386,6 +386,8 @@ export interface Agent {
   effort: string;
   mode: string;
   sessionId: string | null;
+  /** A copy of another agent: the original’s session, which its starts fork until a turn gives it its own. */
+  forkOf: string | null;
   cwd: string;
   worktree: Worktree | null;
   createdAt: number;

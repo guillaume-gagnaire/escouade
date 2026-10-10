@@ -9,10 +9,12 @@ claude --output-format stream-json --verbose --input-format stream-json
        --permission-prompt-tool stdio --include-partial-messages
        --permission-mode <auto|plan|acceptEdits|bypassPermissions>
        --model <fable|opus|sonnet|haiku> --effort <low|medium|high|xhigh|max>
-       [--resume=<session_id>] [--allow-dangerously-skip-permissions]
+       [--resume=<session_id> [--fork-session]] [--allow-dangerously-skip-permissions]
 ```
 
 Une ligne JSON par message, dans les deux sens (stdin / stdout).
+
+`--resume=<id> --fork-session` (copie d'un agent, vérifié sur 2.1.289 avec `--input-format stream-json`) : la conversation reprise continue sous un nouveau `session_id` (les événements d'un hook `SessionStart`, s'il y en a, le portent dès le démarrage, avec la source `fork`), et le fichier de la session d'origine n'est pas touché, alors qu'un `--resume` simple y ajoute des lignes dès le démarrage. La nouvelle session n'est écrite qu'au premier message : tant qu'aucun `system/init` n'est venu, il faut forker de nouveau. Une session d'origine introuvable échoue comme un `--resume` (« No conversation found with session ID »).
 
 ## Hôte → CLI
 

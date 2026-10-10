@@ -3,6 +3,7 @@
 use crate::agent::{AgentAlert, AgentHandle, AgentRt, Effects, NotifyKind};
 use crate::board;
 use crate::claude::{self, ClaudeProcess, SpawnOpts};
+use crate::conv;
 use crate::convsearch;
 use crate::fsedit;
 use crate::git::{self, GitService};
@@ -241,6 +242,24 @@ pub struct AgentOptions {
     pub port_base: Option<u16>,
     /// Selected in the sidebar (the user created it).
     pub select: bool,
+    /// A copy of this agent (`duplicate_agent`): named after it, and working where it does.
+    pub copy_of: Option<CopyOf>,
+}
+
+/// What a copy takes of its original, read while no turn of the original ran.
+#[derive(Debug, Clone)]
+pub struct CopyOf {
+    /// The copy is « <name> (copie) » (`copy_name`), never renamed by Haiku.
+    pub name: String,
+    /// The original's session, which the copy's first start forks.
+    pub session_id: Option<String>,
+    /// The original's worktree: the copy gets one of its own, on a new branch from the commit it
+    /// is on (none: the copy works in the same folder, whatever the project's setting).
+    pub worktree: Option<Worktree>,
+    /// The original's conversation, which the copy's starts with.
+    pub items: Vec<Value>,
+    /// What the copy's conversation tells after it (the original's changes left out).
+    pub notice: Option<String>,
 }
 
 /// Work under way, counted in `Core::works` until dropped.
@@ -405,6 +424,10 @@ pub(crate) fn claude_args(m: &AgentMeta) -> Vec<String> {
     }
     if let Some(s) = &m.session_id {
         a.push(format!("--resume={s}"));
+    } else if let Some(s) = &m.fork_of {
+        // A copy's conversation so far is its original's, under a new session: the original's
+        // is left as it is.
+        a.extend([format!("--resume={s}"), "--fork-session".into()]);
     }
     a
 }
@@ -455,6 +478,28 @@ pub fn slugify(s: &str) -> String {
         out.push_str(part);
     }
     out
+}
+
+/// The name of a copy of the agent `original`: « <original> (copie) », then « (copie 2) »,
+/// « (copie 3) »… while the project has an agent of that name.
+pub(crate) fn copy_name(original: &str, taken: &[String]) -> String {
+    let mut name = format!("{original} (copie)");
+    let mut n = 2;
+    while taken.contains(&name) {
+        name = format!("{original} (copie {n})");
+        n += 1;
+    }
+    name
+}
+
+/// The worktree of a copy named `name` of the agent whose worktree is `wt`, in the repository
+/// `repo`: on a new branch `escouade/<name as a slug>` from the commit `wt` is on (its branch's,
+/// unless the agent switched it), toward the same base. Returns (path, branch, base branch).
+async fn copy_worktree(repo: &str, wt: &Worktree, name: &str) -> Result<(String, String, String)> {
+    let start = git::text(&wt.path, &["rev-parse", "HEAD"]).await?;
+    let branch = format!("{}{}", paths::BRANCH_PREFIX, slugify(name));
+    let (path, branch) = git::worktree_add_on(repo, &branch, &start).await?;
+    Ok((path, branch, wt.base_branch.clone()))
 }
 
 /// Instructions + the task framed as text to name (so that the model does not try to do it).
@@ -1251,14 +1296,16 @@ impl<R: Runtime> Core<R> {
 
     /// Returns the agent's live process, starting it (with --resume) when needed.
     pub async fn ensure_process(self: &Arc<Self>, id: &str) -> Result<Arc<ClaudeProcess>> {
-        let resumed = self.agent(id)?.lock().meta.session_id.is_some();
+        // A copy's first start resumes its original's session too (`fork_of`).
+        let resumes = |m: &AgentMeta| m.session_id.is_some() || m.fork_of.is_some();
+        let resumed = resumes(&self.agent(id)?.lock().meta);
         match self.start_process(id).await {
             // The session could not be resumed: its exit handler dropped the session id, so a
             // second start opens a new session instead.
             Err(e)
                 if resumed
                     && e.is::<StartupFailure>()
-                    && self.agent(id)?.lock().meta.session_id.is_none() =>
+                    && !resumes(&self.agent(id)?.lock().meta) =>
             {
                 self.start_process(id).await
             }
@@ -1901,8 +1948,9 @@ impl<R: Runtime> Core<R> {
             .iter()
             .map(|h| h.lock().meta.name.clone())
             .collect();
-        let name = match &o.name {
-            Some(base) => {
+        let name = match (&o.copy_of, &o.name) {
+            (Some(c), _) => copy_name(&c.name, &existing),
+            (None, Some(base)) => {
                 let mut name = base.clone();
                 let mut n = 2;
                 while existing.contains(&name) {
@@ -1911,7 +1959,7 @@ impl<R: Runtime> Core<R> {
                 }
                 name
             }
-            None => {
+            (None, None) => {
                 let mut n = existing.len() + 1;
                 while existing.iter().any(|e| *e == format!("agent-{n}")) {
                     n += 1;
@@ -1923,7 +1971,8 @@ impl<R: Runtime> Core<R> {
             id: new_id(),
             project_id: project_id.to_string(),
             name: name.clone(),
-            named: o.name.is_some(),
+            named: o.name.is_some() || o.copy_of.is_some(),
+            fork_of: o.copy_of.as_ref().and_then(|c| c.session_id.clone()),
             model: o.model.unwrap_or(settings.default_model.clone()),
             effort: o.effort.unwrap_or(settings.default_effort.clone()),
             mode: o.mode.unwrap_or(settings.default_mode.clone()),
@@ -1935,16 +1984,25 @@ impl<R: Runtime> Core<R> {
             port_base: o.port_base,
             ..Default::default()
         };
-        let made = match &o.worktree {
-            Some((branch, base)) => Some(
+        let conversations = self.data.conversations();
+        // A copy's conversation is written first: when it cannot be, nothing was made for it.
+        if let Some(c) = &o.copy_of {
+            conv::write_log(&conversations, &meta.id, &c.items)
+                .context("conversation non copiée")?;
+        }
+        let made = match (&o.worktree, o.copy_of.as_ref().map(|c| &c.worktree)) {
+            (Some((branch, base)), _) => Some(
                 git::worktree_add_on(&project.path, branch, base)
                     .await
                     .map(|(path, branch)| (path, branch, base.clone())),
             ),
-            None if project.worktree_per_agent => {
+            // A copy works on its original's code: in a worktree of its own, or in the same folder.
+            (None, Some(Some(wt))) => Some(copy_worktree(&project.path, wt, &name).await),
+            (None, Some(None)) => None,
+            (None, None) if project.worktree_per_agent => {
                 Some(git::worktree_add(&project.path, &name).await)
             }
-            None => None,
+            (None, None) => None,
         };
         let mut warning = None;
         match made {
@@ -1966,6 +2024,11 @@ impl<R: Runtime> Core<R> {
             Some(Err(e)) if o.worktree.is_some() => {
                 return Err(e.context("worktree du ticket non créé"))
             }
+            // So does a copy of an agent that has one: the project's folder is not its code.
+            Some(Err(e)) if o.copy_of.is_some() => {
+                let _ = std::fs::remove_file(conv::log_path(&conversations, &meta.id));
+                return Err(e.context("worktree de la copie non créé"));
+            }
             Some(Err(e)) => {
                 warning = Some(format!(
                     "Worktree non créé, l'agent travaille dans le dossier du projet : {e}"
@@ -1975,10 +2038,11 @@ impl<R: Runtime> Core<R> {
         }
         let id = meta.id.clone();
         let fresh = meta.worktree.clone();
-        let h = Arc::new(Mutex::new(AgentRt::new(meta, &self.data.conversations())));
-        if let Some(w) = warning {
+        let h = Arc::new(Mutex::new(AgentRt::new(meta, &conversations)));
+        // After the conversation a copy starts with.
+        for text in warning.into_iter().chain(o.copy_of.and_then(|c| c.notice)) {
             let mut fx = Effects::default();
-            h.lock().notice("warn", w, &mut fx);
+            h.lock().notice("warn", text, &mut fx);
         }
         self.agents.write().insert(id.clone(), h.clone());
         // Its new worktree is set up (dependencies…) before it takes a message.
@@ -2001,6 +2065,59 @@ impl<R: Runtime> Core<R> {
         }
         let view = h.lock().view();
         Ok(view)
+    }
+
+    /// A copy of the agent (« Dupliquer la conversation »), refused during its turn: « <name>
+    /// (copie) » in the same project, with its model, effort and permission mode, its conversation
+    /// shown again, and its Claude Code session forked at the copy's first start, the original's
+    /// left as it is. It works in a worktree of its own from the commit the original's is on (what
+    /// the original did not commit stays out, as its conversation says), or in the same folder.
+    /// A ticket's agent is copied as an ordinary one: no ticket, protocol nor ports.
+    pub async fn duplicate_agent(self: &Arc<Self>, id: &str) -> Result<AgentView> {
+        // The original's worktree is read, the copy's made, before the copy is one of the app's.
+        let _working = self.working();
+        // Read at once, the session with the conversation it holds.
+        let (original, items) = {
+            let h = self.agent(id)?;
+            let mut rt = h.lock();
+            if rt.meta.status.is_active() {
+                bail!(
+                    "Attends la fin du tour de {} pour le dupliquer.",
+                    rt.meta.name
+                );
+            }
+            (rt.meta.clone(), rt.conv.items())
+        };
+        let mut notice = None;
+        if let Some(wt) = &original.worktree {
+            if git::status(&wt.path)
+                .await
+                .is_ok_and(|s| !s.entries.is_empty())
+            {
+                notice = Some(format!(
+                    "Les modifications non commitées de {} ne sont pas dans cette copie.",
+                    original.name
+                ));
+            }
+        }
+        self.create_agent_with(
+            &original.project_id,
+            AgentOptions {
+                model: Some(original.model),
+                effort: Some(original.effort),
+                mode: Some(original.mode),
+                select: true,
+                copy_of: Some(CopyOf {
+                    name: original.name,
+                    session_id: original.session_id,
+                    worktree: original.worktree,
+                    items,
+                    notice,
+                }),
+                ..Default::default()
+            },
+        )
+        .await
     }
 
     // ---------- worktree setup and teardown ----------
@@ -3613,6 +3730,57 @@ mod tests {
         };
         let a = claude_args(&m);
         assert!(a.windows(2).any(|w| w == ["--effort", "max"]));
+    }
+
+    #[test]
+    fn a_copy_forks_the_session_of_its_original_until_it_has_its_own() {
+        let copy = AgentMeta {
+            model: "opus".into(),
+            effort: "high".into(),
+            mode: "auto".into(),
+            fork_of: Some("s1".into()),
+            ..Default::default()
+        };
+        let a = claude_args(&copy);
+        assert!(
+            a.windows(2).any(|w| w == ["--resume=s1", "--fork-session"]),
+            "{a:?}"
+        );
+        // Its own session once a turn gave it one: the original's is read no more.
+        let own = AgentMeta {
+            session_id: Some("s2".into()),
+            ..copy
+        };
+        let a = claude_args(&own);
+        assert!(a.contains(&"--resume=s2".to_string()), "{a:?}");
+        assert!(
+            !a.iter()
+                .any(|x| x == "--fork-session" || x == "--resume=s1"),
+            "{a:?}"
+        );
+    }
+
+    #[test]
+    fn a_copy_is_named_after_its_original_and_numbered_once_taken() {
+        let taken = |names: &[&str]| names.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(
+            copy_name("refacto-auth", &taken(&["refacto-auth"])),
+            "refacto-auth (copie)"
+        );
+        assert_eq!(
+            copy_name(
+                "refacto-auth",
+                &taken(&["refacto-auth", "refacto-auth (copie)"])
+            ),
+            "refacto-auth (copie 2)"
+        );
+        assert_eq!(
+            copy_name(
+                "refacto-auth",
+                &taken(&["refacto-auth (copie)", "refacto-auth (copie 2)"])
+            ),
+            "refacto-auth (copie 3)"
+        );
     }
 
     #[test]

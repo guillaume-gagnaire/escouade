@@ -278,6 +278,11 @@ pub async fn rename_agent(core: CoreState<'_>, id: String, name: String) -> Res<
 }
 
 #[tauri::command]
+pub async fn duplicate_agent(core: CoreState<'_>, id: String) -> Res<AgentView> {
+    core.duplicate_agent(&id).await.map_err(err)
+}
+
+#[tauri::command]
 pub async fn archive_agent(core: CoreState<'_>, id: String, archived: bool) -> Res<()> {
     core.archive_agent(&id, archived).await.map_err(err)
 }

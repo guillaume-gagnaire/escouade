@@ -29,4 +29,20 @@ describe('ContextMenu', () => {
     expect(picked).toEqual(['blue']);
     expect(menu.open).toBeNull();
   });
+
+  it('says on an entry it offers no more why, in its title', async () => {
+    render(ContextMenu);
+    menu.open = {
+      x: 10,
+      y: 10,
+      items: [
+        { label: 'Renommer', onClick: () => {} },
+        { label: 'Dupliquer la conversation', disabled: true, title: 'Attends la fin de son tour.', onClick: () => {} },
+      ],
+    };
+    const entry = await screen.findByRole('menuitem', { name: 'Dupliquer la conversation' });
+    expect(entry).toBeDisabled();
+    expect(entry).toHaveAttribute('title', 'Attends la fin de son tour.');
+    expect(screen.getByRole('menuitem', { name: 'Renommer' })).not.toHaveAttribute('title');
+  });
 });

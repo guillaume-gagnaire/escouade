@@ -57,8 +57,20 @@
   }
 
   function agentMenu(e: MouseEvent, a: Agent) {
+    // A copy is made from a conversation at rest: during a turn, the original's session moves on.
+    const turn = a.status === 'running' || a.status === 'waiting';
     menu.show(e, [
       { label: 'Renommer', onClick: () => startRename(a) },
+      ...(a.archived
+        ? []
+        : [
+            {
+              label: 'Dupliquer la conversation',
+              disabled: turn,
+              title: turn ? 'Attends la fin de son tour.' : undefined,
+              onClick: () => app.duplicateAgent(a.id),
+            },
+          ]),
       a.archived
         ? { label: 'Restaurer', onClick: () => app.run(api.archiveAgent(a.id, false)) }
         : { label: 'Archiver', hint: 'garde la conversation', onClick: () => confirmArchive(a) },

@@ -225,6 +225,7 @@ pub fn run() {
             commands::answer_permission,
             commands::set_agent_options,
             commands::rename_agent,
+            commands::duplicate_agent,
             commands::archive_agent,
             commands::delete_agent,
             commands::merge_agent,

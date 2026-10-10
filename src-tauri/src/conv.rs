@@ -51,12 +51,7 @@ impl Conv {
     /// Rewrites the log as one append per item.
     fn compact(&mut self) {
         self.writer = None;
-        let mut out = String::new();
-        for item in &self.items {
-            out.push_str(&json!({ "op": "append", "item": item }).to_string());
-            out.push('\n');
-        }
-        if let Err(e) = paths::write_atomic(&self.path(), out.as_bytes()) {
+        if let Err(e) = paths::write_atomic(&self.path(), appends(&self.items).as_bytes()) {
             log::warn!("conversation compaction failed: {e}");
         }
     }
@@ -164,6 +159,23 @@ pub fn log_path(dir: &Path, agent_id: &str) -> PathBuf {
     dir.join(format!("{agent_id}.jsonl"))
 }
 
+/// `items` as a log: one append each, in order.
+fn appends(items: &[Value]) -> String {
+    let mut out = String::new();
+    for item in items {
+        out.push_str(&json!({ "op": "append", "item": item }).to_string());
+        out.push('\n');
+    }
+    out
+}
+
+/// Writes the log of a new agent's conversation, which starts with `items` (a copy of another
+/// agent's): one append each, the history of how they were written left out.
+pub fn write_log(dir: &Path, agent_id: &str, items: &[Value]) -> std::io::Result<()> {
+    std::fs::create_dir_all(dir)?;
+    paths::write_atomic(&log_path(dir, agent_id), appends(items).as_bytes())
+}
+
 /// What a conversation's log leaves once its operations are applied in order.
 pub struct Replayed {
     pub items: Vec<Value>,
@@ -229,6 +241,21 @@ fn patch_item(items: &mut [Value], index: &HashMap<String, usize>, id: &str, pat
 mod tests {
     use super::*;
     use crate::paths::test_dir;
+
+    #[test]
+    fn a_new_log_holds_the_items_given_one_append_each() {
+        let dir = test_dir("conv-write-log");
+        let items: Vec<Value> = (0..3)
+            .map(|i| json!({ "kind": "user", "id": format!("u{i}"), "text": format!("m{i}") }))
+            .collect();
+        // Its folder is made when there is none yet.
+        let conversations = dir.join("conversations");
+        write_log(&conversations, "copy", &items).unwrap();
+        let log = replay(&log_path(&conversations, "copy")).unwrap();
+        assert_eq!(log.items, items);
+        assert_eq!(log.ops, 3);
+        assert_eq!(Conv::new(&conversations, "copy").items(), items);
+    }
 
     #[test]
     fn reads_on_past_a_line_that_is_not_utf8_and_compacts_without_losing_what_follows() {

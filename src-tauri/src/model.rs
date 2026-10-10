@@ -593,6 +593,9 @@ pub struct AgentMeta {
     pub effort: String,
     pub mode: String,
     pub session_id: Option<String>,
+    /// A copy of another agent (« Dupliquer la conversation »): the original's session, which
+    /// its starts fork (`--resume <it> --fork-session`) until a turn gives it one of its own.
+    pub fork_of: Option<String>,
     pub cwd: String,
     pub worktree: Option<Worktree>,
     pub created_at: i64,
@@ -1319,6 +1322,26 @@ mod tests {
         assert!(s.agents[0].recipe.is_some());
         assert_eq!(s.agents[0].approved_recipe, None);
         assert_eq!(s.agents[0].approved_isola, None);
+    }
+
+    #[test]
+    fn an_agent_saved_before_copies_has_no_session_to_fork() {
+        // A state.json of 1.5: an agent with a session of its own, and no copy ever made.
+        let s: PersistedState = serde_json::from_value(json!({
+            "agents": [{ "id": "a1", "name": "x", "sessionId": "s1" }]
+        }))
+        .unwrap();
+        assert_eq!(s.agents[0].session_id.as_deref(), Some("s1"));
+        assert_eq!(s.agents[0].fork_of, None);
+        // A copy's is saved with it, in camel case.
+        let copy = AgentMeta {
+            fork_of: Some("s1".into()),
+            ..Default::default()
+        };
+        let v = serde_json::to_value(&copy).unwrap();
+        assert_eq!(v["forkOf"], "s1");
+        let back: AgentMeta = serde_json::from_value(v).unwrap();
+        assert_eq!(back.fork_of.as_deref(), Some("s1"));
     }
 
     #[test]
