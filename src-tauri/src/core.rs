@@ -684,7 +684,13 @@ pub(crate) fn commit_proposal_prompt(
     files: &[FileChange],
     diff: &str,
 ) -> String {
-    let style = if subjects.is_empty() {
+    let style = if subjects.is_empty() && named {
+        tr_in!(
+            lang,
+            "Le dépôt n'a pas encore de commit : suis le format Conventional Commits (« type(portée): description »). Écris-le en français.",
+            "The repository has no commit yet: follow the Conventional Commits format (“type(scope): description”). Write it in English."
+        )
+    } else if subjects.is_empty() {
         tr_in!(
             lang,
             "Le dépôt n'a pas encore de commit : suis le format Conventional Commits (« type(portée): description »).",
@@ -4342,6 +4348,13 @@ mod tests {
             first.contains("Conventional Commits") && !first.contains("<recent-subjects>"),
             "{first}"
         );
+        // A repository without a commit has no language to imitate: a language named is said all
+        // the same, and none is when the settings leave it to the interface.
+        let unnamed = commit_proposal_prompt(En, false, &[], &files[..1], "");
+        assert!(first.contains("(“type(scope): description”). Write it in English."));
+        assert!(!unnamed.contains("Write it in English"), "{unnamed}");
+        assert!(commit_proposal_prompt(Fr, true, &[], &files[..1], "")
+            .contains("(« type(portée): description »). Écris-le en français."));
         // In French, the language named the same way.
         assert!(commit_proposal_prompt(Fr, true, &subjects, &files, diff)
             .contains("Écris-le en français, dans le style des derniers commits du dépôt ci-dessous : leur format, leur longueur."));
