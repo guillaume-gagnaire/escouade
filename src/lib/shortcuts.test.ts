@@ -1,6 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { agent, fakeBackend, project, resetApp } from '../test/ipc';
 import { buffers } from './editor/buffers.svelte';
+import { setFindInFiles } from './editor/search.svelte';
 import { answersHere, ariaEnter, enterAnswer, handleShortcut, isAppShortcut, optionAnswer } from './shortcuts';
 import { app } from './state.svelte';
 
@@ -138,6 +139,28 @@ describe('handleShortcut', () => {
   it('leaves Ctrl+S alone without the editor', () => {
     resetApp();
     expect(handleShortcut(new KeyboardEvent('keydown', { key: 's', ctrlKey: true }), false)).toBe(false);
+  });
+
+  it('searches through the files with Ctrl+Shift+F in the editor only, with Cmd+Shift+F on macOS', async () => {
+    fakeBackend();
+    const find = vi.fn();
+    const unset = setFindInFiles(find);
+    try {
+      const ctrl = key('F', { shiftKey: true });
+      expect(handleShortcut(ctrl, false)).toBe(false);
+      await app.openEditor({ source: 'project' });
+      expect(handleShortcut(ctrl, false)).toBe(true);
+      expect(find).toHaveBeenCalledTimes(1);
+      // Ctrl+F stays the editor's own: the search in the file.
+      expect(handleShortcut(key('f'), false)).toBe(false);
+      expect(handleShortcut(ctrl, true)).toBe(false);
+      expect(handleShortcut(new KeyboardEvent('keydown', { key: 'f', metaKey: true, shiftKey: true }), true)).toBe(true);
+      expect(find).toHaveBeenCalledTimes(2);
+      // A terminal keeps it: it is no shortcut of the app there.
+      expect(isAppShortcut(ctrl, false)).toBe(false);
+    } finally {
+      unset();
+    }
   });
 });
 

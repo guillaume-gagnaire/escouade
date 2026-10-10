@@ -5,6 +5,7 @@
 import { ensureSyntaxTree, language, syntaxTree } from '@codemirror/language';
 import { EditorState } from '@codemirror/state';
 import { getStyleTags, tags } from '@lezer/highlight';
+import { escapeRegExp } from '../format';
 import type { SearchQuery, SearchResult } from '../types';
 import { charColumn, type NavContext, type NavResolver, type NavTarget } from './goto';
 import { loadLanguage } from './languages';
@@ -51,8 +52,6 @@ const DEFINES_ELSE = String.raw`\bNAME\b\s*[:=(]`;
 const SEARCH_MAX = 1000;
 /** How long a whole file may take to parse, in milliseconds (a part of a huge one is then all there is). */
 const PARSE_MS = 500;
-
-const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, (c) => `\\${c}`);
 
 /**
  * `template` with `name` in it, as git is asked for it. Wider than the template, whose JavaScript form checks each line

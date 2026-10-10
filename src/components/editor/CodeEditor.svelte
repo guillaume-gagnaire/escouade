@@ -71,6 +71,12 @@
   let shownKey = untrack(() => docKey);
   let shownVersion = untrack(() => version);
 
+  /** The text of the main selection, '' when nothing is selected. */
+  export function selectedText(): string {
+    const s = view?.state.selection.main;
+    return view && s ? view.state.sliceDoc(s.from, s.to) : '';
+  }
+
   const indentExt = (i: { tabs: boolean; size: number }) => [
     indentUnit.of(i.tabs ? '\t' : ' '.repeat(i.size)),
     EditorState.tabSize.of(i.tabs ? 4 : i.size),

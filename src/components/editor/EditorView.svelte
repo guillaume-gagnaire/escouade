@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Extension } from '@codemirror/state';
-  import { onDestroy, untrack } from 'svelte';
+  import { onDestroy, onMount, tick as drawn, untrack } from 'svelte';
   import { saveActive, saveKey } from '../../lib/editor/actions';
   import { buffers, sourceAgent } from '../../lib/editor/buffers.svelte';
   import { lineChanges, type LineChanges } from '../../lib/editor/changes';
@@ -11,6 +11,7 @@
   import { detectIndent } from '../../lib/editor/indent';
   import { languageLabel, loadLanguage } from '../../lib/editor/languages';
   import { DEFAULT_ALIASES, fileSet, linkResolvers, parseAliases, type Aliases } from '../../lib/editor/links';
+  import { fileSearches, setFindInFiles } from '../../lib/editor/search.svelte';
   import { ancestors, treeRows, type FileStatus, type TreeRow } from '../../lib/editor/tree';
   import { trees } from '../../lib/editor/trees.svelte';
   import { basename, joinPath, plural, tildify } from '../../lib/format';
@@ -22,6 +23,7 @@
   import CodeEditor from './CodeEditor.svelte';
   import EditorTabs from './EditorTabs.svelte';
   import FileTree from './FileTree.svelte';
+  import SearchPanel from './SearchPanel.svelte';
   import SourcePicker from './SourcePicker.svelte';
   import TargetPicker from './TargetPicker.svelte';
 
@@ -332,6 +334,32 @@
     if (e) app.openEditor({ projectId: e.projectId, source: e.source, path: e.path, line: e.line, col: e.col });
   }
 
+  /** The search through the source's files, kept while the editor is closed. */
+  const search = fileSearches.of(untrack(() => project.id));
+  let panel = $state<ReturnType<typeof SearchPanel>>();
+  let code = $state<ReturnType<typeof CodeEditor>>();
+
+  // What the source shown has: another source is searched again.
+  $effect(() => {
+    const src = source;
+    untrack(() => search.setSource(src));
+  });
+
+  /** The search in the left column, its field focused. */
+  async function showSearch() {
+    search.shown = true;
+    await drawn();
+    panel?.focus();
+  }
+
+  /** Ctrl+Maj+F: the search, with the code's selection to find when the focus is on it and it holds on one line. */
+  function findInFiles() {
+    const selected = document.activeElement?.closest('.cm-editor') ? (code?.selectedText() ?? '') : '';
+    if (selected && !/[\r\n]/.test(selected)) search.seed(selected);
+    showSearch();
+  }
+  onMount(() => setFindInFiles(findInFiles));
+
   const sizeMb = (n: number) => (n / (1024 * 1024)).toLocaleString('fr-FR', { maximumFractionDigits: 1 });
 
   function closeTab(path: string) {
@@ -383,56 +411,88 @@
     >
   </header>
   <div class="body">
-    <aside class="files">
-      <div class="ftitle">
-        <div class="row">
-          <span class="label">Fichiers</span>
-          <div class="actions">
-            <button class="act" aria-label="Nouveau fichier" title="Nouveau fichier" disabled={!tree} onclick={newHere}>
-              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"
-                ><path
-                  d="M8.5 2H4.5A1.5 1.5 0 0 0 3 3.5v9A1.5 1.5 0 0 0 4.5 14H8M8.5 2 13 6.5M8.5 2v4.5H13M13 6.5V9M12 10.5v4M10 12.5h4"
-                /></svg
-              >
-            </button>
-            <button class="act" aria-label="Actualiser" title="Actualiser" onclick={() => refresh(project.id, source, false)}>
-              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5V5h-2.5" /></svg>
-            </button>
-            <button class="act" aria-label="Tout réduire" title="Tout réduire" onclick={() => app.collapseEditorDirs(project.id, source)}>
-              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"
-                ><rect x="5.5" y="5.5" width="8" height="8" rx="1" /><path d="M3 10.5V3.8a.8.8 0 0 1 .8-.8h6.7M7.5 9.5h4" /></svg
-              >
-            </button>
-          </div>
-        </div>
-        <span class="mono dim root" title={tree?.root}
-          >{srcAgent
-            ? `.claude/worktrees/${srcAgent.worktree ? basename(srcAgent.worktree.path) : srcAgent.name}`
-            : tildify(project.path)}</span
-        >
-        {#if tree}
-          <span class="mono dim count"
-            >{plural(tree.files.length, 'fichier', 'fichiers')} · {changedCount} modif.{tree.truncated ? ' · liste tronquée' : ''}</span
+    <!-- The left column: the files' tree or the search, both kept to find them again as they were. -->
+    <aside class="side">
+      <div class="views">
+        <div class="segmented" role="group" aria-label="Vue de la colonne">
+          <button
+            class:on={!search.shown}
+            aria-pressed={!search.shown}
+            aria-label="Fichiers"
+            title="Fichiers"
+            onclick={() => (search.shown = false)}
           >
-        {/if}
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"
+              ><path d="M9 2.5H5A1.5 1.5 0 0 0 3.5 4v8A1.5 1.5 0 0 0 5 13.5h6a1.5 1.5 0 0 0 1.5-1.5V6M9 2.5 12.5 6M9 2.5V6h3.5" /></svg
+            >
+          </button>
+          <button
+            class:on={search.shown}
+            aria-pressed={search.shown}
+            aria-label="Rechercher dans les fichiers"
+            title={`Rechercher dans les fichiers (${keyLabel('Ctrl+Maj+F')})`}
+            onclick={showSearch}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"
+              ><circle cx="7" cy="7" r="4.2" /><path d="M10.2 10.2 13.5 13.5" /></svg
+            >
+          </button>
+        </div>
       </div>
-      <div class="scroll">
-        <FileTree
-          {rows}
-          active={activePath}
-          ontoggle={(d) => {
-            lastDir = { source, dir: d };
-            app.toggleEditorDir(project.id, source, d);
-          }}
-          onopen={(p) => {
-            lastDir = { source, dir: parentOf(p) };
-            app.openEditor({ projectId: project.id, source, path: p });
-          }}
-          onmenu={treeMenu}
-          check={(name) => newFileError(name, addingDir ?? '', tree?.files ?? [])}
-          oncreate={(name) => create(adding, name)}
-          oncancel={() => (adding = null)}
-        />
+      <div class="view" hidden={search.shown}>
+        <div class="ftitle">
+          <div class="row">
+            <span class="label">Fichiers</span>
+            <div class="actions">
+              <button class="act" aria-label="Nouveau fichier" title="Nouveau fichier" disabled={!tree} onclick={newHere}>
+                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"
+                  ><path
+                    d="M8.5 2H4.5A1.5 1.5 0 0 0 3 3.5v9A1.5 1.5 0 0 0 4.5 14H8M8.5 2 13 6.5M8.5 2v4.5H13M13 6.5V9M12 10.5v4M10 12.5h4"
+                  /></svg
+                >
+              </button>
+              <button class="act" aria-label="Actualiser" title="Actualiser" onclick={() => refresh(project.id, source, false)}>
+                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5V5h-2.5" /></svg>
+              </button>
+              <button class="act" aria-label="Tout réduire" title="Tout réduire" onclick={() => app.collapseEditorDirs(project.id, source)}>
+                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"
+                  ><rect x="5.5" y="5.5" width="8" height="8" rx="1" /><path d="M3 10.5V3.8a.8.8 0 0 1 .8-.8h6.7M7.5 9.5h4" /></svg
+                >
+              </button>
+            </div>
+          </div>
+          <span class="mono dim root" title={tree?.root}
+            >{srcAgent
+              ? `.claude/worktrees/${srcAgent.worktree ? basename(srcAgent.worktree.path) : srcAgent.name}`
+              : tildify(project.path)}</span
+          >
+          {#if tree}
+            <span class="mono dim count"
+              >{plural(tree.files.length, 'fichier', 'fichiers')} · {changedCount} modif.{tree.truncated ? ' · liste tronquée' : ''}</span
+            >
+          {/if}
+        </div>
+        <div class="scroll">
+          <FileTree
+            {rows}
+            active={activePath}
+            ontoggle={(d) => {
+              lastDir = { source, dir: d };
+              app.toggleEditorDir(project.id, source, d);
+            }}
+            onopen={(p) => {
+              lastDir = { source, dir: parentOf(p) };
+              app.openEditor({ projectId: project.id, source, path: p });
+            }}
+            onmenu={treeMenu}
+            check={(name) => newFileError(name, addingDir ?? '', tree?.files ?? [])}
+            oncreate={(name) => create(adding, name)}
+            oncancel={() => (adding = null)}
+          />
+        </div>
+      </div>
+      <div class="view" hidden={!search.shown}>
+        <SearchPanel bind:this={panel} {search} onopen={(m) => jump({ path: m.path, line: m.line, col: m.col })} />
       </div>
     </aside>
     <section class="pane">
@@ -470,6 +530,7 @@
           <div class="empty">{buf.error}</div>
         {:else}
           <CodeEditor
+            bind:this={code}
             docKey={buf.key}
             text={buf.text}
             version={buf.version}
@@ -554,7 +615,7 @@
     min-height: 0;
     display: flex;
   }
-  .files {
+  .side {
     width: 240px;
     flex: none;
     display: flex;
@@ -562,11 +623,37 @@
     border-right: 1px solid var(--line);
     background: var(--bg);
   }
+  .views {
+    flex: none;
+    display: flex;
+    padding: 10px 14px 0 14px;
+  }
+  .views button {
+    display: flex;
+    align-items: center;
+    padding: 0 6px;
+  }
+  .views svg {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .view {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .view[hidden] {
+    display: none;
+  }
   .ftitle {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    padding: 14px 14px 10px 16px;
+    padding: 10px 14px 10px 16px;
   }
   .ftitle .row {
     display: flex;

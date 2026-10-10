@@ -1,5 +1,6 @@
 // Global keyboard shortcuts, routed in one place.
 
+import { findInFiles } from './editor/search.svelte';
 import { IS_MAC, primaryKey } from './platform';
 import { app } from './state.svelte';
 
@@ -84,6 +85,8 @@ export function handleShortcut(e: KeyboardEvent, mac = IS_MAC): boolean {
     import('./editor/actions').then((m) => m.saveActive());
     return true;
   }
+  // The editor's search through the files of its source; Ctrl+F stays the search in the file.
+  if (k === 'f' && e.shiftKey && app.editorOn && findInFiles()) return true;
   const n = digit(e);
   if (n !== null && !e.shiftKey) {
     const p = app.projects[n - 1];

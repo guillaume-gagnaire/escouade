@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { agent, board, fakeBackend, gitInfo, project, resetApp, SETTINGS, ticket } from '../test/ipc';
 import { conversationOf } from './conversations.svelte';
 import { buffers } from './editor/buffers.svelte';
+import { fileSearches } from './editor/search.svelte';
 import { trees } from './editor/trees.svelte';
 import { app } from './state.svelte';
 import type { InitialState, LaunchState, UiEvent } from './types';
@@ -754,6 +755,7 @@ describe('editor of a removed agent or project', () => {
     const kept = (await buffers.open('p1', 'project', 'x.ts')).key;
     buffers.edit(gone, 'mine\n');
     buffers.edit(kept, 'kept\n');
+    const search = fileSearches.of('p2');
     app.forgetProject('p2');
     expect(app.projects.map((p) => p.id)).toEqual(['p1']);
     expect(app.ui.activeProject).toBe('p1');
@@ -761,6 +763,7 @@ describe('editor of a removed agent or project', () => {
     expect(buffers.all[gone]).toBeUndefined();
     expect(buffers.all[kept]?.text).toBe('kept\n');
     expect(trees.get('p2', 'project')).toBeUndefined();
+    expect(fileSearches.of('p2')).not.toBe(search);
     expect(backend.called('set_unsaved').at(-1)?.args).toEqual({ count: 1 });
   });
 });

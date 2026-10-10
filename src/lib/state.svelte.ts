@@ -4,6 +4,7 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 import { api } from './ipc';
 import { applyConvOps, dropConversation } from './conversations.svelte';
 import { buffers } from './editor/buffers.svelte';
+import { fileSearches } from './editor/search.svelte';
 import { ancestors } from './editor/tree';
 import { trees } from './editor/trees.svelte';
 import { basename, isAbsPath, plural, relPath } from './format';
@@ -681,6 +682,7 @@ class AppState {
     delete this.boardIssues[id];
     buffers.closeProject(id);
     trees.closeProject(id);
+    fileSearches.closeProject(id);
     this.persistUi();
   }
 

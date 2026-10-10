@@ -3,6 +3,7 @@
 import { mockIPC, mockWindows } from '@tauri-apps/api/mocks';
 import { buffers } from '../lib/editor/buffers.svelte';
 import { navHistory } from '../lib/editor/history';
+import { fileSearches } from '../lib/editor/search.svelte';
 import { trees } from '../lib/editor/trees.svelte';
 import { app } from '../lib/state.svelte';
 import type { Agent, BoardSettings, GitInfo, Project, Settings, Ticket } from '../lib/types';
@@ -237,4 +238,5 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   buffers.reset();
   trees.reset();
   navHistory.reset();
+  fileSearches.reset();
 }

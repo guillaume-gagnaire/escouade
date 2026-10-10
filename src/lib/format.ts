@@ -59,6 +59,9 @@ export function fTime(ts: number): string {
   return new Date(ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 }
 
+/** `s` as an expression of JavaScript that matches it as written. */
+export const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, (c) => `\\${c}`);
+
 export function plural(n: number, one: string, many: string): string {
   return `${n} ${n > 1 ? many : one}`;
 }

@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buffers } from '../../lib/editor/buffers.svelte';
 import { trees } from '../../lib/editor/trees.svelte';
 import { menu } from '../../lib/menu.svelte';
+import { handleShortcut } from '../../lib/shortcuts';
 import { app } from '../../lib/state.svelte';
 import { agent, fakeBackend, gitInfo, project, resetApp } from '../../test/ipc';
 import EditorView from './EditorView.svelte';
@@ -737,5 +738,130 @@ describe('EditorView navigation', () => {
     press(await shown(container, 'export'), 'ArrowLeft', { altKey: true });
     await new Promise((r) => setTimeout(r, 30));
     expect(active()).toBe('src/util.ts');
+  });
+});
+
+describe('EditorView search through the files', () => {
+  beforeEach(() => {
+    resetApp({ agents: [agent()] });
+    app.git.p1 = gitInfo({ modified: 1 });
+  });
+
+  const APP = 'const total = sum(1, 2);\nconsole.log(total);\n';
+  const UTIL = 'export const v = 2;\nexport function sum(a, b) {}\n';
+  const FOUND = {
+    matches: [{ path: 'src/util.ts', line: 2, col: 17, text: 'export function sum(a, b) {}', offset: 0, ranges: [[16, 19]] }],
+    truncated: false,
+    timedOut: false,
+  };
+
+  function searchBackend(over: Record<string, (a: any) => unknown> = {}) {
+    return backend({
+      fs_tree: () => ({ root: 'C:/code/demo-api', files: ['src/app.ts', 'src/util.ts'], truncated: false }),
+      git_files: () => [],
+      fs_read: (a) => text(a.path === 'src/util.ts' ? UTIL : APP),
+      code_search: () => FOUND,
+      ...over,
+    });
+  }
+
+  async function shown(container: HTMLElement, start: string): Promise<CodeMirror> {
+    await expect.poll(() => container.querySelector('.cm-content')?.textContent?.startsWith(start)).toBe(true);
+    return CodeMirror.findFromDOM(container.querySelector('.cm-editor') as HTMLElement)!;
+  }
+  const field = () => screen.getByRole('textbox', { name: 'Rechercher' });
+  const queries = (be: ReturnType<typeof backend>) => be.called('code_search').map((c) => c.args);
+  const query = (pattern: string, o: Record<string, boolean> = {}) => ({
+    pattern,
+    regex: false,
+    caseSensitive: false,
+    wholeWord: false,
+    maxResults: 2000,
+    ...o,
+  });
+  const ctrlShiftF = () => handleShortcut(new KeyboardEvent('keydown', { key: 'F', ctrlKey: true, shiftKey: true }), false);
+
+  it('shows the files or the search in the left column, from its two buttons', async () => {
+    searchBackend();
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    render(EditorView, { project: project() });
+    await screen.findByRole('treeitem', { name: /app\.ts/ });
+    const files = screen.getByRole('button', { name: 'Fichiers' });
+    const find = screen.getByRole('button', { name: 'Rechercher dans les fichiers' });
+    expect([files, find].map((b) => b.getAttribute('aria-pressed'))).toEqual(['true', 'false']);
+    expect(screen.queryByRole('textbox', { name: 'Rechercher' })).not.toBeInTheDocument();
+    await userEvent.click(find);
+    expect([files, find].map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'true']);
+    await vi.waitFor(() => expect(field()).toHaveFocus());
+    expect(screen.queryByRole('tree', { name: 'Fichiers' })).not.toBeInTheDocument();
+    await userEvent.click(files);
+    expect(screen.getByRole('tree', { name: 'Fichiers' })).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Rechercher' })).not.toBeInTheDocument();
+  });
+
+  it('opens the search with Ctrl+Shift+F, the selection of the code in its field when it holds on one line', async () => {
+    const be = searchBackend();
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    const { container } = render(EditorView, { project: project() });
+    const view = await shown(container, 'const');
+    view.focus();
+    view.dispatch({ selection: { anchor: APP.indexOf('sum'), head: APP.indexOf('sum') + 3 } });
+    expect(ctrlShiftF()).toBe(true);
+    await vi.waitFor(() => expect(field()).toHaveFocus());
+    expect(field()).toHaveValue('sum');
+    await expect.poll(() => queries(be)).toEqual([{ projectId: 'p1', agentId: null, query: query('sum') }]);
+    expect(await screen.findByRole('treeitem', { name: 'Ligne 2 : export function sum(a, b) {}' })).toBeInTheDocument();
+    // Over two lines, or with the focus elsewhere than on the code, the selection is not taken.
+    view.focus();
+    view.dispatch({ selection: { anchor: 0, head: APP.indexOf('console') + 3 } });
+    ctrlShiftF();
+    await vi.waitFor(() => expect(field()).toHaveFocus());
+    view.dispatch({ selection: { anchor: 0, head: 5 } });
+    ctrlShiftF();
+    expect(field()).toHaveValue('sum');
+    expect(queries(be)).toHaveLength(1);
+  });
+
+  it('opens a line found at its line and column, and comes back with Alt+←', async () => {
+    searchBackend();
+    await app.openEditor({ source: 'project', path: 'src/app.ts', line: 2, col: 9 });
+    const { container } = render(EditorView, { project: project() });
+    await shown(container, 'const');
+    expect(await screen.findByText('Ln 2, Col 9')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Rechercher dans les fichiers' }));
+    await userEvent.type(field(), 'sum');
+    await userEvent.click(await screen.findByRole('treeitem', { name: 'Ligne 2 : export function sum(a, b) {}' }));
+    await expect.poll(() => app.editor.p1.places.project.active).toBe('src/util.ts');
+    expect(await screen.findByText('Ln 2, Col 17')).toBeInTheDocument();
+    const util = await shown(container, 'export');
+    util.contentDOM.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', altKey: true, bubbles: true, cancelable: true }));
+    await expect.poll(() => app.editor.p1.places.project.active).toBe('src/app.ts');
+    expect(await screen.findByText('Ln 2, Col 9')).toBeInTheDocument();
+  });
+
+  it('searches the source shown, and again in another one', async () => {
+    const be = searchBackend();
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    render(EditorView, { project: project() });
+    await userEvent.click(await screen.findByRole('button', { name: 'Rechercher dans les fichiers' }));
+    await userEvent.type(field(), 'sum');
+    await screen.findByRole('treeitem', { name: /util\.ts/ });
+    await app.openEditor({ projectId: 'p1', source: 'a1' });
+    await expect.poll(() => queries(be).at(-1)).toEqual({ projectId: 'p1', agentId: 'a1', query: query('sum') });
+    expect(field()).toHaveValue('sum');
+  });
+
+  it('keeps the search while the editor is closed, to find it again as it was', async () => {
+    const be = searchBackend();
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    const { unmount } = render(EditorView, { project: project() });
+    await userEvent.click(await screen.findByRole('button', { name: 'Rechercher dans les fichiers' }));
+    await userEvent.type(field(), 'sum');
+    await screen.findByRole('treeitem', { name: /util\.ts/ });
+    unmount();
+    render(EditorView, { project: project() });
+    expect(field()).toHaveValue('sum');
+    expect(screen.getByRole('treeitem', { name: /util\.ts/ })).toBeInTheDocument();
+    expect(queries(be)).toHaveLength(1);
   });
 });
