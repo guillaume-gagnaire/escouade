@@ -15,8 +15,10 @@
 // message and assistant entry on a line), and a --resume of a session absent from there fails as an
 // unknown one does; while a <dir>/fake-limit file is there, every turn is stopped by the usage limit
 // (as "limite") and its quota windows say 100 % (rate_limit_event, get_usage). Without it, none of this.
+// What Escouade tells it is read in French or in English (« Langue des textes rédigés par Claude »):
+// each scenario below is recognized in both, its answers stay the same.
 // Started with --append-system-prompt (a ticket's protocol; not what a copy of an agent is told of
-// its new folder, « Cette conversation a été copiée… »), it plays the ticket's agent: it writes
+// its new folder, « Cette conversation a été copiée… », “This conversation was copied…”), it plays the ticket's agent: it writes
 // <key>.txt ("Boucle n") in its folder and ends each turn with an ```escouade report (criteria and
 // "avancement"). The ticket's title, in the protocol, steers it: [ok] every criterion met at once,
 // [jamais] none ever, [sans-bilan] no report, [lent] a turn that lasts 30 s, [recette] a launch
@@ -26,17 +28,18 @@
 // in), [retire-env] then .env taken out of git again in a second commit (still in the branch's
 // history), [tenace] a process that lasts 5 s once its input is closed, [rien] no file written (nothing
 // to merge); by default criterion n is met from loop n on.
-// Asked to prepare a test launch (« Prépare le lancement… Ports réservés : <base> »), any agent
-// answers with a recipe whose process listens on <base + 1>.
+// Asked to prepare a test launch (« Prépare le lancement… Ports réservés : <base> », “Prepare the test
+// launch… Ports reserved: <base>”), any agent answers with a recipe whose process listens on <base + 1>.
 // In one-shot mode, asked for a ticket's commit message, it answers `feat: travail du faux claude
 // [<KEY>]`, or a sentence out of form when the ticket's title says [message-libre]; with [sourd]
 // in its system prompt it never reads its input and answers nothing for 20 s. Asked for a project's
 // worktree commands (<worktrees>), it suggests a setup (one of whose folders leaves the project, one
 // that holds a line break) and a teardown, or only refused ones in a folder named "all-refused". Asked
-// for a project's launch commands (<lancement>), it suggests five (two of whose folders are no folders
+// for a project's launch commands (<lancement>, <launch>), it suggests five (two of whose folders are no folders
 // of the project, one that holds a line break), only refused ones in a folder named "all-refused", or
-// nothing readable in a folder named "unreadable". Asked for a direct commit's message (<fichiers>),
-// it names the latest commit subject and the files of the diff it read.
+// nothing readable in a folder named "unreadable". Asked for a direct commit's message (<fichiers>, <files>),
+// it names the latest commit subject (<sujets-recents>, <recent-subjects>) and the files of the diff it read.
+// Asked to name a task (<tache>, <task>), it answers with its first two words.
 
 import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -93,7 +96,7 @@ if (argv.includes('-p') && argv.some((a) => a.includes('[sourd]'))) {
     // A project's launch commands: two that stand, one whose folder leaves the project, one whose
     // folder is not there and one on two lines. Only such ones when the project's folder is named
     // "all-refused", nothing readable when it is named "unreadable".
-    if (input.includes('<lancement>')) {
+    if (input.includes('<lancement>') || input.includes('<launch>')) {
       const multiline = { nom: 'Deux lignes', commande: 'npm start\nrm -rf ~' };
       const commands = process.cwd().includes('all-refused')
         ? { commandes: [multiline, { nom: 'Large', commande: `npm start${' '.repeat(40)}; rm -rf ~` }] }
@@ -113,8 +116,8 @@ if (argv.includes('-p') && argv.some((a) => a.includes('[sourd]'))) {
       return;
     }
     // A direct commit's message: it says the latest subject it read and the files whose diff it got.
-    if (input.includes('<fichiers>')) {
-      const latest = input.match(/<sujets-recents>\n([^\n]*)/)?.[1] ?? 'aucun';
+    if (input.includes('<fichiers>') || input.includes('<files>')) {
+      const latest = input.match(/<(?:sujets-recents|recent-subjects)>\n([^\n]*)/)?.[1] ?? 'aucun';
       const diffed = [...input.matchAll(/^\+\+\+ b\/(.+)$/gm)].map((m) => m[1]);
       const result = `feat: proposé par le faux claude\n\nD'après « ${latest} ». Diff de : ${diffed.join(', ')}.`;
       process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result }));
@@ -127,7 +130,7 @@ if (argv.includes('-p') && argv.some((a) => a.includes('[sourd]'))) {
       process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result }));
       return;
     }
-    const task = input.match(/<tache>\s*([\s\S]*?)\s*<\/tache>/)?.[1] ?? '';
+    const task = input.match(/<(tache|task)>\s*([\s\S]*?)\s*<\/\1>/)?.[2] ?? '';
     const words = task.toLowerCase().match(/[a-z]+/g) ?? ['tache'];
     process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result: `${words.slice(0, 2).join('-')}-fake` }));
   });
@@ -158,7 +161,8 @@ function startSession() {
   const replay = argv.includes('--replay-user-messages');
   const appended = argv.includes('--append-system-prompt') ? (argv[argv.indexOf('--append-system-prompt') + 1] ?? '') : '';
   // What a copy of an agent is told of its folder is no ticket's protocol: it plays a plain agent.
-  const sys = appended.startsWith('Cette conversation a été copiée') ? '' : appended;
+  const copied = ['Cette conversation a été copiée', 'This conversation was copied'];
+  const sys = copied.some((c) => appended.startsWith(c)) ? '' : appended;
   let remoteSent = false;
   let entries = 0;
 
@@ -245,9 +249,9 @@ function startSession() {
   }
 
   function ticketTurn(text) {
-    const key = sys.match(/le ticket ([A-Z]+-\d+)/)?.[1] ?? 'TIC-0';
-    const count = Number(sys.match(/Critères d'acceptation \((\d+)\)/)?.[1] ?? 1);
-    const loop = Number(text.match(/Boucle (\d+)\//)?.[1] ?? 1);
+    const key = sys.match(/ticket ([A-Z]+-\d+)/)?.[1] ?? 'TIC-0';
+    const count = Number(sys.match(/(?:Critères d'acceptation|Acceptance criteria) \((\d+)\)/)?.[1] ?? 1);
+    const loop = Number(text.match(/(?:Boucle|Loop) (\d+)\//)?.[1] ?? 1);
     const all = `${sys}\n${text}`;
     if (all.includes('[question]') && !asked) {
       asked = true;
@@ -286,7 +290,7 @@ function startSession() {
     };
     if (all.includes('[recette]')) {
       // On its block of ports, as « Prépare le lancement » answers.
-      const port = Number(sys.match(/Ports réservés à ce worktree : (\d+)/)?.[1] ?? 4100) + 1;
+      const port = Number(sys.match(/(?:Ports réservés à ce worktree : |Ports reserved for this worktree: )(\d+)/)?.[1] ?? 4100) + 1;
       report.lancement = {
         processus: [{ nom: 'web', commande: 'node serveur.js', url: `http://localhost:${port}` }],
         ouvrir: `http://localhost:${port}/fonction`,
@@ -346,8 +350,8 @@ function startSession() {
       });
       return;
     }
-    if (text.includes('Prépare le lancement')) {
-      const port = Number(text.match(/Ports réservés : (\d+)/)?.[1] ?? 4100) + 1;
+    if (text.includes('Prépare le lancement') || text.includes('Prepare the test launch')) {
+      const port = Number(text.match(/(?:Ports réservés : |Ports reserved: )(\d+)/)?.[1] ?? 4100) + 1;
       const lancement = {
         processus: [{ nom: 'web', commande: 'node serveur.js', url: `http://localhost:${port}` }],
         ouvrir: `http://localhost:${port}/fonction`,
