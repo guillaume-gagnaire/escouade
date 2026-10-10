@@ -2,6 +2,7 @@
 //! where Ctrl+click looks for a definition when no link leads anywhere.
 
 use crate::git;
+use crate::i18n::{self, Lang};
 use anyhow::{anyhow, bail, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -122,7 +123,10 @@ fn fresh_dir(parent: &Path) -> std::io::Result<PathBuf> {
     }
     Err(std::io::Error::new(
         std::io::ErrorKind::AlreadyExists,
-        "pas de dossier libre pour essayer git grep",
+        tr!(
+            "pas de dossier libre pour essayer git grep",
+            "no free folder to try git grep in"
+        ),
     ))
 }
 
@@ -182,7 +186,23 @@ async fn finds(root: &str, flag: &str, pattern: &str) -> Option<bool> {
 }
 
 fn unsupported(what: &str) -> anyhow::Error {
-    anyhow!("Cette expression n'est pas prise en charge par git sur ce poste : {what}")
+    unsupported_in(i18n::ui(), what)
+}
+
+fn unsupported_in(lang: Lang, what: &str) -> anyhow::Error {
+    anyhow!(tr_in!(
+        lang,
+        "Cette expression n'est pas prise en charge par git sur ce poste : {what}",
+        "This expression isn’t supported by git on this computer: {what}"
+    ))
+}
+
+fn empty_pattern(lang: Lang) -> String {
+    tr_in!(
+        lang,
+        "rien à chercher : le motif est vide",
+        "nothing to search for: the pattern is empty"
+    )
 }
 
 /// What came before a `\b`, to tell a start of word from an end on BSD.
@@ -377,11 +397,14 @@ async fn run(
     engine: Engine,
 ) -> Result<SearchResult> {
     if query.pattern.is_empty() {
-        bail!("rien à chercher : le motif est vide");
+        bail!(empty_pattern(i18n::ui()));
     }
     // git would take each line for a pattern of its own, an empty one matching every line.
     if query.pattern.contains(['\n', '\r']) {
-        bail!("un motif tient sur une seule ligne");
+        bail!(tr!(
+            "un motif tient sur une seule ligne",
+            "a pattern fits on one line"
+        ));
     }
     let pattern = if query.regex && !engine.perl {
         to_ere(&query.pattern, engine.ere)?
@@ -401,11 +424,13 @@ async fn run(
     let stdout = child
         .stdout
         .take()
-        .ok_or_else(|| anyhow!("git grep : pas de sortie"))?;
-    let mut stderr = child
-        .stderr
-        .take()
-        .ok_or_else(|| anyhow!("git grep : pas de sortie d'erreur"))?;
+        .ok_or_else(|| anyhow!(tr!("git grep : pas de sortie", "git grep: no output")))?;
+    let mut stderr = child.stderr.take().ok_or_else(|| {
+        anyhow!(tr!(
+            "git grep : pas de sortie d'erreur",
+            "git grep: no error output"
+        ))
+    })?;
     // Read meanwhile: a full pipe would block git before its end.
     let errors = tokio::spawn(async move {
         let mut b = Vec::new();
@@ -448,7 +473,7 @@ async fn run(
     let errors = errors.await.unwrap_or_default();
     let msg = String::from_utf8_lossy(&errors).trim().to_string();
     bail!(if msg.is_empty() {
-        "git grep a échoué".to_string()
+        tr!("git grep a échoué", "git grep failed")
     } else {
         msg
     })
@@ -640,6 +665,19 @@ fn parse_line(raw: &[u8]) -> Option<SearchMatch> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_search_refused_says_why_in_english() {
+        use crate::i18n::Lang::En;
+        assert_eq!(
+            unsupported_in(En, "\\b").to_string(),
+            "This expression isn’t supported by git on this computer: \\b"
+        );
+        assert_eq!(
+            empty_pattern(En),
+            "nothing to search for: the pattern is empty"
+        );
+    }
     use crate::paths::test_dir;
     use std::path::{Path, PathBuf};
 

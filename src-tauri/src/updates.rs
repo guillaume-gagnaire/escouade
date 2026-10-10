@@ -9,6 +9,7 @@
 //! cleanly first, its sessions and its state saved (`install_ready`).
 
 use crate::core::Core;
+use crate::i18n::{self, Lang};
 use crate::model::{now_ms, AgentStatus, Settings, UiEvent};
 use crate::paths::DataDir;
 use anyhow::{anyhow, bail, Result};
@@ -357,7 +358,10 @@ impl Updates {
     /// downloaded is no longer offered meanwhile. True when it is the one ready now.
     pub async fn download(&self, id: u32) -> Result<bool> {
         let release = self.found.take(id).ok_or_else(|| {
-            anyhow!("Cette mise à jour n'est plus proposée : recherche-la de nouveau.")
+            anyhow!(tr!(
+                "Cette mise à jour n'est plus proposée : recherche-la de nouveau.",
+                "This update is no longer offered: look for it again."
+            ))
         })?;
         let version = release.version().to_string();
         let started = {
@@ -474,11 +478,12 @@ pub async fn check<R: Runtime>(
     });
     let proxy = settings.proxy_url.trim();
     if !proxy.is_empty() {
-        builder = builder.proxy(
-            proxy
-                .parse()
-                .map_err(|e| anyhow!("adresse du proxy invalide : {e}"))?,
-        );
+        builder = builder.proxy(proxy.parse().map_err(|e| {
+            anyhow!(tr!(
+                "adresse du proxy invalide : {e}",
+                "invalid proxy address: {e}"
+            ))
+        })?);
     }
     if settings.insecure_tls {
         builder = builder.configure_client(|c| c.danger_accept_invalid_certs(true));
@@ -693,6 +698,35 @@ pub fn install_ready<R: Runtime>(
     installed.map(|()| true)
 }
 
+/// Why a restart waits: `n` files of the editor are not saved.
+fn unsaved_first(lang: Lang, n: usize) -> String {
+    tr_n_in!(
+        lang,
+        n,
+        "Enregistre d'abord tes fichiers : {n} fichier n'est pas enregistré.",
+        "Enregistre d'abord tes fichiers : {n} fichiers ne sont pas enregistrés.",
+        "Save your files first: {n} file isn’t saved.",
+        "Save your files first: {n} files aren’t saved."
+    )
+}
+
+/// The system notification of an automatic restart: its title, its text, its button.
+fn restart_toast(lang: Lang, version: &str) -> [String; 3] {
+    [
+        tr_in!(
+            lang,
+            "Escouade redémarre pour se mettre à jour",
+            "Escouade is restarting to update"
+        ),
+        tr_in!(
+            lang,
+            "La version {version} s'installe dans 30 secondes.",
+            "Version {version} installs in 30 seconds."
+        ),
+        tr_in!(lang, "Plus tard", "Later"),
+    ]
+}
+
 /// « Redémarrer maintenant », or the automatic restart: the update ready installs and the app
 /// starts again on it, its `window` as it is now. Never while the editor holds unsaved files.
 pub fn restart<R: Runtime>(
@@ -703,11 +737,13 @@ pub fn restart<R: Runtime>(
 ) -> Result<()> {
     match core.unsaved.load(Ordering::Acquire) {
         0 => {}
-        1 => bail!("Enregistre d'abord tes fichiers : 1 fichier n'est pas enregistré."),
-        n => bail!("Enregistre d'abord tes fichiers : {n} fichiers ne sont pas enregistrés."),
+        n => bail!(unsaved_first(i18n::ui(), n)),
     }
     if !install_ready(core, updates, true, window, leave)? {
-        bail!("Aucune mise à jour n'est prête : recherche-la de nouveau.");
+        bail!(tr!(
+            "Aucune mise à jour n'est prête : recherche-la de nouveau.",
+            "No update is ready: look for it again."
+        ));
     }
     Ok(())
 }
@@ -1009,19 +1045,14 @@ async fn tick<R: Runtime>(app: &AppHandle<R>) {
             // the window may be out of sight.
             let version = ready.map(|r| r.version.clone()).unwrap_or_default();
             let a = app.clone();
-            crate::notify::toast_with_button(
-                app,
-                "Escouade redémarre pour se mettre à jour",
-                &format!("La version {version} s'installe dans 30 secondes."),
-                "Plus tard",
-                move |later| {
-                    if later {
-                        postpone(&a);
-                    } else {
-                        crate::notify::show_main(&a);
-                    }
-                },
-            );
+            let [title, body, later] = restart_toast(i18n::ui(), &version);
+            crate::notify::toast_with_button(app, &title, &body, &later, move |later| {
+                if later {
+                    postpone(&a);
+                } else {
+                    crate::notify::show_main(&a);
+                }
+            });
         }
         Step::Cancel => core.hub.emit(UiEvent::UpdateRestart { at: None }),
         // The countdown stays on screen while the app stops.
@@ -1687,6 +1718,30 @@ mod tests {
             Closing::Close
         );
         assert!(!h.core.quitting.load(Ordering::Acquire));
+    }
+
+    #[test]
+    fn an_update_says_in_english_what_holds_it_back_and_when_it_restarts() {
+        use crate::i18n::Lang::{En, Fr};
+        assert_eq!(
+            [unsaved_first(En, 1), unsaved_first(En, 3)],
+            [
+                "Save your files first: 1 file isn’t saved.",
+                "Save your files first: 3 files aren’t saved."
+            ]
+        );
+        assert_eq!(
+            unsaved_first(Fr, 1),
+            "Enregistre d'abord tes fichiers : 1 fichier n'est pas enregistré."
+        );
+        assert_eq!(
+            restart_toast(En, "1.7.0"),
+            [
+                "Escouade is restarting to update",
+                "Version 1.7.0 installs in 30 seconds.",
+                "Later"
+            ]
+        );
     }
 
     #[tokio::test]

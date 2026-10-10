@@ -1,5 +1,6 @@
 //! A `claude` process driven over the stream-json protocol (see docs/PROTOCOL.md).
 
+use crate::i18n::{self, Lang};
 use crate::job::{Job, JobUsage};
 use anyhow::{anyhow, Context, Result};
 use parking_lot::Mutex;
@@ -59,7 +60,7 @@ impl ClaudeProcess {
 
         let mut child = cmd
             .spawn()
-            .with_context(|| format!("impossible de lancer {}", opts.program.display()))?;
+            .with_context(|| cannot_start(i18n::ui(), &opts.program.display().to_string()))?;
         let job = Job::for_child(&child).map(Arc::new);
         let mut stdin = child.stdin.take().context("stdin")?;
         let stdout = child.stdout.take().context("stdout")?;
@@ -304,9 +305,26 @@ pub fn resolve_binary(configured: &str) -> Option<PathBuf> {
     candidates.into_iter().find(|p| p.is_file())
 }
 
+/// The program of an agent could not be started (not there, not allowed to run).
+fn cannot_start(lang: Lang, program: &str) -> String {
+    tr_in!(
+        lang,
+        "impossible de lancer {program}",
+        "can’t start {program}"
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_program_that_does_not_start_is_named_in_english() {
+        assert_eq!(
+            cannot_start(crate::i18n::Lang::En, "C:/bin/claude.exe"),
+            "can’t start C:/bin/claude.exe"
+        );
+    }
 
     #[test]
     fn truncate_respects_char_boundaries() {
