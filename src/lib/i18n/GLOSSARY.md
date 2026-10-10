@@ -336,6 +336,26 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 | shell « … » introuvable | shell “…” not found | |
 | terminal fermé | terminal closed | |
 
+## L11 — textes pour Claude
+
+Ce qu’Escouade dit à Claude ou lui fait écrire suit « Langue des textes rédigés par Claude » (`Core::lang().claude` côté Rust, `tIn(app.lang.claude, …)` côté fenêtre). Les clés du JSON que le code relit dans ses réponses restent les mêmes dans les deux langues : `criteres`, `n`, `ok`, `note`, `avancement`, `lancement`, `preparation`, `processus`, `nom`, `commande`, `dossier`, `env`, `url`, `ouvrir`, `demontage`, `commandes`, et la clôture ```` ```escouade ````.
+
+| Français | Anglais | Note |
+|---|---|---|
+| Tu travailles en autonomie sur le ticket … | You work on your own on Escouade ticket … | protocole d’un ticket |
+| bilan (des critères), termine par le bilan | (criteria) report, end with the report | |
+| Boucle 2/5 / Critères non atteints | Loop 2/5 / Criteria not met | |
+| Reprends … là où tu en étais | Pick up … where you left off | |
+| revérifie les critères | check the criteria again | |
+| Retour de test sur … | Test feedback on … | « Renvoyer » un ticket |
+| Prépare le lancement de test / Ports réservés | Prepare the test launch / Ports reserved | |
+| L’utilisateur a refusé cette action. | The user refused this action. | refus sans message |
+| Continue à planifier : … | Keep planning: … | refus d’un plan |
+| Cette conversation a été copiée depuis … | This conversation was copied from … | consigne d’une copie |
+| est pris par un agent / est revenu « À faire » | is picked up by an agent / is back in “To do” | commentaires publiés dans Jira, Trello, GitHub |
+| est prêt à tester / est terminé / critères atteints | is ready to review / is done / criteria met | idem |
+| balises `<tache>`, `<fichiers>`, `<sujets-recents>`, `<lancement>` | `<task>`, `<files>`, `<recent-subjects>`, `<launch>` | cadres des questions ; le faux `claude` reconnaît les deux |
+
 ## K — accounts
 
 | Français | Anglais | Note |
