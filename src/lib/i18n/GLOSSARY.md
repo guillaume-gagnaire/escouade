@@ -379,3 +379,12 @@ Ce qu’Escouade dit à Claude ou lui fait écrire suit « Langue des textes ré
 
 | Français | Anglais | Note |
 |---|---|---|
+| Locales / Distantes | Local / Remote | les deux groupes du sélecteur de branche |
+| Mettre de côté (stash) et changer | Stash and switch | changer de branche avec des changements non commités |
+| utilisée par l’agent X | used by agent X | la branche prise par le worktree d’un agent |
+| Récupérer / Pousser / Publier / Fetch | Pull / Push / Publish / Fetch | la synchro, au pied du sélecteur ; « Récupérer » est le pull |
+| Nouvelle branche / et y passer | New branch / and switch to it | « Créer » reste Create |
+| À partir de | Start from | le point de départ d’une nouvelle branche |
+| Branches mergées | Merged branches | le nettoyage des branches déjà dans la base du projet |
+| base (du projet) | base | la branche cible du Kanban, sinon la branche du dossier |
+| Supprimer quand même | Delete anyway | une branche pas mergée |
