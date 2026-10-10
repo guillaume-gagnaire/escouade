@@ -1,12 +1,14 @@
 <script setup lang="ts">
+import { fmt, plural } from '~/data/catalog';
 import { BEAT_MS, SNAPSHOT, fUsd, squadAt, type Answer } from '~/data/squad';
 
 // The logo's three stacked windows, at the size of a real one: the projects behind, and in front
 // the demo's agents at work. Without JavaScript, or with less motion asked, it stands still.
 
+const { lang, text } = useLang();
 const t = ref(SNAPSHOT);
 const answers = ref<Answer[]>([]);
-const squad = computed(() => squadAt(t.value, answers.value));
+const squad = computed(() => squadAt(t.value, answers.value, lang.value));
 
 const root = ref<HTMLElement>();
 const list = ref<HTMLElement>();
@@ -91,7 +93,8 @@ function answer(option: number) {
           </svg>
         </div>
         <div class="head">
-          <span>Agents</span><span class="n">{{ squad.agents.length }}</span>
+          <span>{{ text.demo.agents }}</span
+          ><span class="n">{{ squad.agents.length }}</span>
         </div>
         <ul ref="list" class="agents">
           <li v-for="a in squad.agents" :key="a.slot" :style="{ '--i': a.slot }">
@@ -99,17 +102,11 @@ function answer(option: number) {
           </li>
         </ul>
         <div class="statusbar">
-          <span class="count"><i class="mini running" />{{ squad.counts.running }} en cours</span>
-          <span class="count"><i class="mini question" />{{ squad.counts.waiting }} en attente</span>
-          <span class="count done"><i class="mini done" />{{ squad.counts.done }} terminé{{ squad.counts.done > 1 ? 's' : '' }}</span>
-          <span class="today">Aujourd’hui ≈ {{ fUsd(squad.today) }}</span>
-          <button
-            type="button"
-            class="pause"
-            aria-label="Mettre la démonstration en pause"
-            :aria-pressed="!wanted"
-            @click="wanted = !wanted"
-          >
+          <span class="count"><i class="mini running" />{{ fmt(text.demo.running, { count: squad.counts.running }) }}</span>
+          <span class="count"><i class="mini question" />{{ fmt(text.demo.waiting, { count: squad.counts.waiting }) }}</span>
+          <span class="count done"><i class="mini done" />{{ plural(lang, text.demo.done, squad.counts.done) }}</span>
+          <span class="today">{{ fmt(text.demo.today, { amount: fUsd(squad.today, lang) }) }}</span>
+          <button type="button" class="pause" :aria-label="text.demo.pause" :aria-pressed="!wanted" @click="wanted = !wanted">
             <svg viewBox="0 0 16 16" aria-hidden="true">
               <path v-if="wanted" d="M5.5 3.5v9M10.5 3.5v9" />
               <path v-else d="M5 3.2l7.5 4.8L5 12.8z" class="fill" />
@@ -119,11 +116,8 @@ function answer(option: number) {
       </div>
     </div>
     <figcaption>
-      Démonstration animée · données fictives
-      <span class="sr-only">
-        : cinq agents Claude Code du projet demo-api travaillent en parallèle ; l’un pose une question à laquelle tu peux répondre, un agent
-        de ticket boucle sur ses critères jusqu’à « À tester ».
-      </span>
+      {{ text.demo.caption }}
+      <span class="sr-only">{{ text.demo.description }}</span>
     </figcaption>
   </figure>
 </template>

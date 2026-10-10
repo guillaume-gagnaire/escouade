@@ -1,5 +1,6 @@
 import type { FC, ReactNode } from 'react';
 import { useCurrentFrame } from 'remotion';
+import { useFmt, type Tr } from '../lang';
 import { C, MONO, soft } from '../theme';
 import { Chips, Field, Switch } from './Modal';
 import { SettingsShell } from './Settings';
@@ -9,11 +10,19 @@ import { Button, STATUS_COLOR, type AgentStatus } from './Sidebar';
 
 export type Column = 'todo' | 'doing' | 'review' | 'done';
 
-export const COLUMNS: { id: Column; label: string; color: string; empty: string }[] = [
-  { id: 'todo', label: 'À faire', color: C.dim, empty: "Ajoute un ticket : un agent le prendra dès qu'une place se libère." },
-  { id: 'doing', label: 'En cours', color: C.spark, empty: 'Aucun agent en boucle' },
-  { id: 'review', label: 'À tester', color: C.wait, empty: 'Rien à tester' },
-  { id: 'done', label: 'Terminé', color: C.ok, empty: 'Aucun ticket terminé' },
+export const columnsOf = (tr: Tr): { id: Column; label: string; color: string; empty: string }[] => [
+  {
+    id: 'todo',
+    label: tr('À faire', 'To do'),
+    color: C.dim,
+    empty: tr(
+      "Ajoute un ticket : un agent le prendra dès qu'une place se libère.",
+      'Add a ticket: an agent will pick it up as soon as a slot frees up.',
+    ),
+  },
+  { id: 'doing', label: tr('En cours', 'In progress'), color: C.spark, empty: tr('Aucun agent en boucle', 'No agent looping') },
+  { id: 'review', label: tr('À tester', 'To review'), color: C.wait, empty: tr('Rien à tester', 'Nothing to review') },
+  { id: 'done', label: tr('Terminé', 'Done'), color: C.ok, empty: tr('Aucun ticket terminé', 'No finished tickets') },
 ];
 
 export interface Ticket {
@@ -56,79 +65,89 @@ export const BoardHeader: FC<{
   autopilot: boolean;
   pressedCfg?: number;
   pressedImport?: number;
-}> = ({ project, count, looping, places, summary, autopilot, pressedCfg = 0, pressedImport = 0 }) => (
-  <div
-    style={{
-      height: 64,
-      flex: 'none',
-      display: 'flex',
-      alignItems: 'center',
-      gap: 16,
-      padding: '0 20px 0 24px',
-      borderBottom: `1px solid ${C.line}`,
-      whiteSpace: 'nowrap',
-    }}
-  >
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-      <span style={{ fontSize: 17, fontWeight: 700 }}>Kanban</span>
-      <span style={{ fontFamily: MONO, fontSize: 12, color: C.dim }}>
-        {project} · {count} tickets · {looping} en boucle
+}> = ({ project, count, looping, places, summary, autopilot, pressedCfg = 0, pressedImport = 0 }) => {
+  const { tr, trx } = useFmt();
+  return (
+    <div
+      style={{
+        height: 64,
+        flex: 'none',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 16,
+        padding: '0 20px 0 24px',
+        borderBottom: `1px solid ${C.line}`,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <span style={{ fontSize: 17, fontWeight: 700 }}>Kanban</span>
+        <span style={{ fontFamily: MONO, fontSize: 12, color: C.dim }}>
+          {trx(
+            <>
+              {project} · {count} tickets · {looping} en boucle
+            </>,
+            `${project} · ${count} tickets · ${looping} looping`,
+          )}
+        </span>
+      </div>
+      <div style={{ flex: 1 }} />
+      <span style={{ fontSize: 13.5, color: C.muted }}>{places}</span>
+      <span
+        style={{
+          height: 36,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '0 14px',
+          borderRadius: 6,
+          border: `1px solid ${pressedImport ? C.spark : C.line2}`,
+          background: pressedImport ? soft(C.spark, 20 * pressedImport) : C.elev,
+          fontSize: 13.5,
+          fontWeight: 600,
+          transform: `scale(${1 - 0.05 * pressedImport})`,
+        }}
+      >
+        <span style={{ color: C.spark }}>⤓</span>
+        {tr('Importer', 'Import')}
+      </span>
+      <span
+        style={{
+          height: 36,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '0 12px',
+          borderRadius: 6,
+          border: `1px solid ${pressedCfg ? C.spark : C.line2}`,
+          background: pressedCfg ? soft(C.spark, 20 * pressedCfg) : C.elev,
+          fontSize: 13,
+        }}
+      >
+        <span style={{ color: C.muted }}>⚙</span>
+        <span style={{ color: C.muted }}>{tr('Après validation :', 'After approval:')}</span>
+        <b style={{ fontFamily: MONO, fontSize: 12.5 }}>{summary}</b>
+      </span>
+      <span
+        style={{
+          height: 36,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          padding: '0 8px 0 12px',
+          borderRadius: 6,
+          border: `1px solid ${C.line2}`,
+          background: C.elev,
+        }}
+      >
+        <span style={{ fontSize: 13.5, fontWeight: 600 }}>
+          {autopilot ? tr('Pilote auto', 'Autopilot') : tr('Pilote auto · off', 'Autopilot · off')}
+        </span>
+        <Switch on={autopilot} />
       </span>
     </div>
-    <div style={{ flex: 1 }} />
-    <span style={{ fontSize: 13.5, color: C.muted }}>{places}</span>
-    <span
-      style={{
-        height: 36,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        padding: '0 14px',
-        borderRadius: 6,
-        border: `1px solid ${pressedImport ? C.spark : C.line2}`,
-        background: pressedImport ? soft(C.spark, 20 * pressedImport) : C.elev,
-        fontSize: 13.5,
-        fontWeight: 600,
-        transform: `scale(${1 - 0.05 * pressedImport})`,
-      }}
-    >
-      <span style={{ color: C.spark }}>⤓</span>
-      Importer
-    </span>
-    <span
-      style={{
-        height: 36,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        padding: '0 12px',
-        borderRadius: 6,
-        border: `1px solid ${pressedCfg ? C.spark : C.line2}`,
-        background: pressedCfg ? soft(C.spark, 20 * pressedCfg) : C.elev,
-        fontSize: 13,
-      }}
-    >
-      <span style={{ color: C.muted }}>⚙</span>
-      <span style={{ color: C.muted }}>Après validation :</span>
-      <b style={{ fontFamily: MONO, fontSize: 12.5 }}>{summary}</b>
-    </span>
-    <span
-      style={{
-        height: 36,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10,
-        padding: '0 8px 0 12px',
-        borderRadius: 6,
-        border: `1px solid ${C.line2}`,
-        background: C.elev,
-      }}
-    >
-      <span style={{ fontSize: 13.5, fontWeight: 600 }}>{autopilot ? 'Pilote auto' : 'Pilote auto · off'}</span>
-      <Switch on={autopilot} />
-    </span>
-  </div>
-);
+  );
+};
 
 export const BoardColumn: FC<{ column: Column; count: number; children?: ReactNode; glow?: number; plusPressed?: number }> = ({
   column,
@@ -137,7 +156,8 @@ export const BoardColumn: FC<{ column: Column; count: number; children?: ReactNo
   glow = 0,
   plusPressed = 0,
 }) => {
-  const c = COLUMNS.find((x) => x.id === column)!;
+  const { tr } = useFmt();
+  const c = columnsOf(tr).find((x) => x.id === column)!;
   return (
     <section
       style={{
@@ -245,6 +265,7 @@ const Small: FC<{ children: ReactNode; pressed?: number; grow?: boolean; primary
 );
 
 export const TicketCard: FC<{ t: Ticket }> = ({ t }) => {
+  const { tr, trx } = useFmt();
   const e = t.enter ?? 1;
   if (e <= 0) return null;
   const met = t.criteria?.filter((c) => c.ok).length ?? 0;
@@ -287,12 +308,17 @@ export const TicketCard: FC<{ t: Ticket }> = ({ t }) => {
         <div style={{ flex: 1 }} />
         {t.column === 'doing' && t.loop ? (
           <span style={{ fontFamily: MONO, fontSize: 11.5, fontWeight: 600, color: C.spark }}>
-            Boucle {t.loop[0]}/{t.loop[1]}
+            {trx(
+              <>
+                Boucle {t.loop[0]}/{t.loop[1]}
+              </>,
+              `Loop ${t.loop[0]}/${t.loop[1]}`,
+            )}
           </span>
         ) : null}
         {t.partial ? (
           <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 6px', borderRadius: 3, background: soft(C.wait, 12), color: C.wait }}>
-            Objectif partiel
+            {tr('Objectif partiel', 'Partial goal')}
           </span>
         ) : null}
       </div>
@@ -315,7 +341,7 @@ export const TicketCard: FC<{ t: Ticket }> = ({ t }) => {
       {t.column === 'review' && steps.length ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: C.dim }}>
-            Ce qui a été fait
+            {tr('Ce qui a été fait', 'What was done')}
           </span>
           {list(steps)}
         </div>
@@ -344,7 +370,7 @@ export const TicketCard: FC<{ t: Ticket }> = ({ t }) => {
           {!t.blocked && t.waiting ? (
             <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: C.wait }}>
               <Dot color={C.wait} size={7} pulse />
-              Question en attente de ta réponse
+              {tr('Question en attente de ta réponse', 'Question waiting for your answer')}
             </span>
           ) : !t.blocked && t.activity ? (
             <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: C.muted }}>
@@ -356,22 +382,24 @@ export const TicketCard: FC<{ t: Ticket }> = ({ t }) => {
       ) : null}
       {t.column === 'todo' ? (
         <>
-          <span style={{ fontSize: 12.5, color: C.muted }}>{t.meta ?? `${total} critères · max ${t.loop?.[1] ?? 5} boucles`}</span>
+          <span style={{ fontSize: 12.5, color: C.muted }}>
+            {t.meta ?? tr(`${total} critères · max ${t.loop?.[1] ?? 5} boucles`, `${total} criteria · max ${t.loop?.[1] ?? 5} loops`)}
+          </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 12, color: C.dim }}>{t.wait}</span>
             <div style={{ flex: 1 }} />
-            {t.canStart ? <Small>Lancer</Small> : null}
+            {t.canStart ? <Small>{tr('Lancer', 'Start')}</Small> : null}
           </div>
         </>
       ) : null}
       {t.testing && (t.column === 'review' || t.column === 'doing') ? (
         <div style={{ display: 'flex', gap: 6 }}>
-          <Small>■ Arrêter</Small>
-          <Small>Ouvrir</Small>
+          <Small>{tr('■ Arrêter', '■ Stop')}</Small>
+          <Small>{tr('Ouvrir', 'Open')}</Small>
         </div>
       ) : t.test && t.column === 'review' && !t.step ? (
         <div style={{ display: 'flex' }}>
-          <Small pressed={t.pressed?.test}>▶ Tester</Small>
+          <Small pressed={t.pressed?.test}>{tr('▶ Tester', '▶ Test')}</Small>
         </div>
       ) : null}
       {t.step ? (
@@ -396,7 +424,7 @@ export const TicketCard: FC<{ t: Ticket }> = ({ t }) => {
           <span>{t.blocked}</span>
           {t.column === 'doing' ? (
             <div style={{ display: 'flex' }}>
-              <Small pressed={t.pressed?.resume}>Reprendre</Small>
+              <Small pressed={t.pressed?.resume}>{tr('Reprendre', 'Resume')}</Small>
             </div>
           ) : null}
         </div>
@@ -412,7 +440,12 @@ export const TicketCard: FC<{ t: Ticket }> = ({ t }) => {
           <div style={{ flex: 1 }} />
           {t.column === 'review' ? (
             <span style={{ fontFamily: MONO, fontSize: 11.5, color: C.dim }}>
-              {met}/{total} critères
+              {trx(
+                <>
+                  {met}/{total} critères
+                </>,
+                `${met}/${total} criteria`,
+              )}
             </span>
           ) : null}
           {t.column === 'done' && t.doneMeta ? <span style={{ fontFamily: MONO, fontSize: 11.5, color: C.dim }}>{t.doneMeta}</span> : null}
@@ -433,22 +466,24 @@ export const TicketCard: FC<{ t: Ticket }> = ({ t }) => {
                 color: t.rejecting ? C.text : C.dim,
               }}
             >
-              {t.rejecting || 'Ce qui ne va pas'}
+              {t.rejecting || tr('Ce qui ne va pas', 'What’s wrong')}
             </span>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
-              <Small>Annuler</Small>
+              <Small>{tr('Annuler', 'Cancel')}</Small>
               <Button primary={C.spark} small pressed={t.pressed?.reject}>
-                Renvoyer
+                {tr('Renvoyer', 'Send back')}
               </Button>
             </div>
           </div>
         ) : (
           <div style={{ display: 'flex', gap: 6 }}>
             <Small grow primary={C.ok}>
-              <span style={{ transform: `scale(${1 - 0.05 * (t.pressed?.approve ?? 0)})` }}>{t.approve ?? 'Valider et merger'}</span>
+              <span style={{ transform: `scale(${1 - 0.05 * (t.pressed?.approve ?? 0)})` }}>
+                {t.approve ?? tr('Valider et merger', 'Approve and merge')}
+              </span>
             </Small>
             <Small grow pressed={t.pressed?.reject}>
-              Renvoyer
+              {tr('Renvoyer', 'Send back')}
             </Small>
           </div>
         )
@@ -468,103 +503,126 @@ export const TicketForm: FC<{
   loops: number | null;
   focus?: 'title' | 'description' | 'criteria';
   pressed?: number;
-}> = ({ title, description, criteria, loops, focus, pressed = 0 }) => (
-  <div
-    style={{
-      flex: 'none',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 8,
-      padding: 10,
-      borderRadius: 6,
-      background: C.elev,
-      border: `1px solid ${C.spark}`,
-    }}
-  >
-    <span
+}> = ({ title, description, criteria, loops, focus, pressed = 0 }) => {
+  const { tr } = useFmt();
+  return (
+    <div
       style={{
-        height: 34,
-        display: 'flex',
-        alignItems: 'center',
-        padding: '0 10px',
-        borderRadius: 6,
-        border: `1px solid ${focus === 'title' ? C.spark : C.line2}`,
-        background: C.bg,
-        fontSize: 14,
-        fontWeight: 600,
-        color: title ? C.text : C.dim,
-      }}
-    >
-      {title || 'Titre du ticket'}
-    </span>
-    <span
-      style={{
-        minHeight: 46,
-        padding: '7px 10px',
-        borderRadius: 6,
-        border: `1px solid ${focus === 'description' ? C.spark : C.line2}`,
-        background: C.bg,
-        fontSize: 12.5,
-        lineHeight: 1.45,
-        color: description ? C.text : C.dim,
-      }}
-    >
-      {description || 'Description (facultative)'}
-    </span>
-    <span
-      style={{
-        minHeight: 74,
-        padding: '7px 10px',
-        borderRadius: 6,
-        border: `1px solid ${focus === 'criteria' ? C.spark : C.line2}`,
-        background: C.bg,
-        fontSize: 12.5,
-        lineHeight: 1.45,
-        color: criteria.length ? C.text : C.dim,
+        flex: 'none',
         display: 'flex',
         flexDirection: 'column',
+        gap: 8,
+        padding: 10,
+        borderRadius: 6,
+        background: C.elev,
+        border: `1px solid ${C.spark}`,
       }}
     >
-      {criteria.length ? criteria.map((c, i) => <span key={i}>{c}</span>) : "Critères d'acceptation, un par ligne"}
-    </span>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-      <span style={{ fontSize: 12, color: C.dim, marginRight: 4 }}>Boucles max</span>
-      {[3, 5, 8].map((n) => (
-        <span
-          key={n}
-          style={{
-            height: 26,
-            minWidth: 30,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderRadius: 6,
-            border: `1px solid ${loops === n ? C.spark : C.line2}`,
-            background: loops === n ? C.elev2 : 'transparent',
-            fontFamily: MONO,
-            fontSize: 12,
-            fontWeight: 600,
-            color: loops === n ? C.text : C.muted,
-          }}
-        >
-          {n}
-        </span>
-      ))}
+      <span
+        style={{
+          height: 34,
+          display: 'flex',
+          alignItems: 'center',
+          padding: '0 10px',
+          borderRadius: 6,
+          border: `1px solid ${focus === 'title' ? C.spark : C.line2}`,
+          background: C.bg,
+          fontSize: 14,
+          fontWeight: 600,
+          color: title ? C.text : C.dim,
+        }}
+      >
+        {title || tr('Titre du ticket', 'Ticket title')}
+      </span>
+      <span
+        style={{
+          minHeight: 46,
+          padding: '7px 10px',
+          borderRadius: 6,
+          border: `1px solid ${focus === 'description' ? C.spark : C.line2}`,
+          background: C.bg,
+          fontSize: 12.5,
+          lineHeight: 1.45,
+          color: description ? C.text : C.dim,
+        }}
+      >
+        {description || tr('Description (facultative)', 'Description (optional)')}
+      </span>
+      <span
+        style={{
+          minHeight: 74,
+          padding: '7px 10px',
+          borderRadius: 6,
+          border: `1px solid ${focus === 'criteria' ? C.spark : C.line2}`,
+          background: C.bg,
+          fontSize: 12.5,
+          lineHeight: 1.45,
+          color: criteria.length ? C.text : C.dim,
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        {criteria.length
+          ? criteria.map((c, i) => <span key={i}>{c}</span>)
+          : tr("Critères d'acceptation, un par ligne", 'Acceptance criteria, one per line')}
+      </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <span style={{ fontSize: 12, color: C.dim, marginRight: 4 }}>{tr('Boucles max', 'Max loops')}</span>
+        {[3, 5, 8].map((n) => (
+          <span
+            key={n}
+            style={{
+              height: 26,
+              minWidth: 30,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: 6,
+              border: `1px solid ${loops === n ? C.spark : C.line2}`,
+              background: loops === n ? C.elev2 : 'transparent',
+              fontFamily: MONO,
+              fontSize: 12,
+              fontWeight: 600,
+              color: loops === n ? C.text : C.muted,
+            }}
+          >
+            {n}
+          </span>
+        ))}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+        <Small>{tr('Annuler', 'Cancel')}</Small>
+        <Button primary={C.spark} small pressed={pressed}>
+          {tr('Ajouter', 'Add')}
+        </Button>
+      </div>
     </div>
-    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
-      <Small>Annuler</Small>
-      <Button primary={C.spark} small pressed={pressed}>
-        Ajouter
-      </Button>
-    </div>
-  </div>
-);
+  );
+};
 
-const ACTIONS = [
-  { label: 'Merger dans une branche', desc: "Fusionne le worktree de l'agent dans la branche cible, puis libère l'agent." },
-  { label: 'Ouvrir une pull request', desc: 'Pousse ticket/<clé> et ouvre une PR vers la branche cible pour relecture.' },
-  { label: 'Pousser la branche du ticket', desc: 'Commit et push sur ticket/<clé>, sans merge ni PR.' },
-  { label: "Laisser en l'état", desc: 'Les modifications restent non commitées dans le worktree.' },
+const actionsOf = (tr: Tr) => [
+  {
+    label: tr('Merger dans une branche', 'Merge into a branch'),
+    desc: tr(
+      "Fusionne le worktree de l'agent dans la branche cible, puis libère l'agent.",
+      'Merges the agent’s worktree into the target branch, then frees the agent.',
+    ),
+  },
+  {
+    label: tr('Ouvrir une pull request', 'Open a pull request'),
+    desc: tr(
+      'Pousse ticket/<clé> et ouvre une PR vers la branche cible pour relecture.',
+      'Pushes ticket/<key> and opens a PR to the target branch for review.',
+    ),
+  },
+  {
+    label: tr('Pousser la branche du ticket', 'Push the ticket’s branch'),
+    desc: tr('Commit et push sur ticket/<clé>, sans merge ni PR.', 'Commits and pushes to ticket/<key>, with no merge or PR.'),
+  },
+  {
+    label: tr("Laisser en l'état", 'Leave as is'),
+    desc: tr('Les modifications restent non commitées dans le worktree.', 'Changes stay uncommitted in the worktree.'),
+  },
 ];
 
 /** The « Kanban » tab of the settings; `hover` lights an action, `glow` one of the lower blocks. */
@@ -576,74 +634,115 @@ export const BoardSettings: FC<{
   parallel: number;
   /** 0 to 1: down to the agents. */
   scroll?: number;
-}> = ({ enter, action, hover, glow, parallel, scroll = 0 }) => (
-  <SettingsShell tab="board" enter={enter} height={780} scroll={90 * scroll}>
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 14 }}>
-      <Heading>Quand je valide un ticket « À tester »</Heading>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        {ACTIONS.map((a, i) => (
-          <div
-            key={a.label}
-            style={{
-              display: 'flex',
-              gap: 10,
-              padding: '10px 12px',
-              borderRadius: 8,
-              border: `1px solid ${i === action ? C.spark : i === hover ? C.line2 : C.line}`,
-              background: i === action ? soft(C.spark, 10) : i === hover ? C.elev : 'transparent',
-            }}
-          >
-            <span
+}> = ({ enter, action, hover, glow, parallel, scroll = 0 }) => {
+  const { tr } = useFmt();
+  return (
+    <SettingsShell tab="board" enter={enter} height={780} scroll={90 * scroll}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 14 }}>
+        <Heading>{tr('Quand je valide un ticket « À tester »', 'When I approve a “To review” ticket')}</Heading>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          {actionsOf(tr).map((a, i) => (
+            <div
+              key={a.label}
               style={{
-                width: 16,
-                height: 16,
-                marginTop: 2,
-                flex: 'none',
-                borderRadius: '50%',
-                border: `2px solid ${i === action ? C.spark : C.dim}`,
                 display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
+                gap: 10,
+                padding: '10px 12px',
+                borderRadius: 8,
+                border: `1px solid ${i === action ? C.spark : i === hover ? C.line2 : C.line}`,
+                background: i === action ? soft(C.spark, 10) : i === hover ? C.elev : 'transparent',
               }}
             >
-              {i === action ? <span style={{ width: 7, height: 7, borderRadius: '50%', background: C.spark }} /> : null}
-            </span>
-            <span style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-              <span style={{ fontSize: 14.5, fontWeight: 600 }}>{a.label}</span>
-              <span style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.35 }}>{a.desc}</span>
-            </span>
+              <span
+                style={{
+                  width: 16,
+                  height: 16,
+                  marginTop: 2,
+                  flex: 'none',
+                  borderRadius: '50%',
+                  border: `2px solid ${i === action ? C.spark : C.dim}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {i === action ? <span style={{ width: 7, height: 7, borderRadius: '50%', background: C.spark }} /> : null}
+              </span>
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <span style={{ fontSize: 14.5, fontWeight: 600 }}>{a.label}</span>
+                <span style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.35 }}>{a.desc}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 13, color: C.muted, width: 110 }}>{tr('Branche cible', 'Target branch')}</span>
+          <Chips items={['⎇ main', '⎇ develop']} on={0} mono />
+          <span style={{ fontSize: 13, color: C.muted, marginLeft: 12 }}>{tr('Stratégie', 'Strategy')}</span>
+          <Chips items={['Merge commit', 'Squash', 'Rebase']} on={1} />
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+            padding: '12px 14px',
+            borderRadius: 8,
+            border: `1px solid ${C.line}`,
+          }}
+        >
+          {[
+            [
+              tr('Relancer les tests avant', 'Rerun tests first'),
+              tr(
+                "Bloque l'action si un test échoue et renvoie le ticket à l'agent.",
+                'Blocks the action if a test fails and sends the ticket back to the agent.',
+              ),
+              true,
+            ],
+            [
+              tr('Supprimer le worktree après merge', 'Delete the worktree after merge'),
+              tr("Libère l'espace disque et repart d'une branche propre.", 'Frees disk space and starts again from a clean branch.'),
+              true,
+            ],
+            [
+              tr('Message de commit généré', 'Generated commit message'),
+              tr('Format Conventional Commits, avec la clé du ticket.', 'Conventional Commits format, with the ticket key.'),
+              true,
+            ],
+          ].map(([l, d, on], i) => (
+            <div key={String(l)} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span style={{ fontSize: 14, fontWeight: 600 }}>{l}</span>
+                <span style={{ fontSize: 12.5, color: C.muted }}>{d}</span>
+                {/* The tests' command, under its switch (settings/BoardTab.svelte). */}
+                {i === 0 ? (
+                  <span style={{ marginTop: 4, display: 'flex' }}>
+                    <Field value="npm test" mono grow={false} />
+                  </span>
+                ) : null}
+              </span>
+              <Switch on={Boolean(on)} />
+            </div>
+          ))}
+          <span style={{ fontFamily: MONO, fontSize: 12.5, color: C.dim }}>
+            {tr('feat: limiter les tentatives de connexion [DEM-42]', 'feat: limit login attempts [DEM-42]')}
+          </span>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              padding: 6,
+              margin: -6,
+              borderRadius: 8,
+              boxShadow: glow === 'conflicts' ? `0 0 0 2px ${C.spark}` : 'none',
+            }}
+          >
+            <span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>{tr('En cas de conflit', 'On conflict')}</span>
+            <Chips items={[tr('Me demander', 'Ask me'), tr("L'agent résout", 'The agent resolves'), tr('Annuler', 'Cancel')]} on={0} />
           </div>
-        ))}
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <span style={{ fontSize: 13, color: C.muted, width: 110 }}>Branche cible</span>
-        <Chips items={['⎇ main', '⎇ develop']} on={0} mono />
-        <span style={{ fontSize: 13, color: C.muted, marginLeft: 12 }}>Stratégie</span>
-        <Chips items={['Merge commit', 'Squash', 'Rebase']} on={1} />
-      </div>
-      <div
-        style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '12px 14px', borderRadius: 8, border: `1px solid ${C.line}` }}
-      >
-        {[
-          ['Relancer les tests avant', "Bloque l'action si un test échoue et renvoie le ticket à l'agent.", true],
-          ['Supprimer le worktree après merge', "Libère l'espace disque et repart d'une branche propre.", true],
-          ['Message de commit généré', 'Format Conventional Commits, avec la clé du ticket.', true],
-        ].map(([l, d, on], i) => (
-          <div key={String(l)} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <span style={{ fontSize: 14, fontWeight: 600 }}>{l}</span>
-              <span style={{ fontSize: 12.5, color: C.muted }}>{d}</span>
-              {/* The tests' command, under its switch (settings/BoardTab.svelte). */}
-              {i === 0 ? (
-                <span style={{ marginTop: 4, display: 'flex' }}>
-                  <Field value="npm test" mono grow={false} />
-                </span>
-              ) : null}
-            </span>
-            <Switch on={Boolean(on)} />
-          </div>
-        ))}
-        <span style={{ fontFamily: MONO, fontSize: 12.5, color: C.dim }}>feat: limiter les tentatives de connexion [DEM-42]</span>
+        </div>
         <div
           style={{
             display: 'flex',
@@ -652,36 +751,22 @@ export const BoardSettings: FC<{
             padding: 6,
             margin: -6,
             borderRadius: 8,
-            boxShadow: glow === 'conflicts' ? `0 0 0 2px ${C.spark}` : 'none',
+            boxShadow: glow === 'agents' ? `0 0 0 2px ${C.spark}` : 'none',
           }}
         >
-          <span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>En cas de conflit</span>
-          <Chips items={['Me demander', "L'agent résout", 'Annuler']} on={0} />
+          <Heading>Agents</Heading>
+          <span style={{ fontSize: 13, color: C.muted, marginLeft: 8 }}>{tr('En parallèle', 'In parallel')}</span>
+          <Chips items={['1', '2', '3', '4', '5', '6']} on={parallel - 1} mono />
+          <span style={{ fontSize: 13, color: C.muted, marginLeft: 8 }}>{tr('Modèle', 'Model')}</span>
+          <Field value={tr('Comme les réglages (Opus 5.5)', 'Same as settings (Opus 5.5)')} grow={false} />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: -4 }}>
+          <span style={{ fontSize: 13, color: C.muted, marginLeft: 70 }}>Effort</span>
+          <Field value={tr('Comme les réglages', 'Same as settings')} grow={false} />
+          <span style={{ fontSize: 13, color: C.muted }}>Mode</span>
+          <Field value={tr('Comme les réglages', 'Same as settings')} grow={false} />
         </div>
       </div>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          padding: 6,
-          margin: -6,
-          borderRadius: 8,
-          boxShadow: glow === 'agents' ? `0 0 0 2px ${C.spark}` : 'none',
-        }}
-      >
-        <Heading>Agents</Heading>
-        <span style={{ fontSize: 13, color: C.muted, marginLeft: 8 }}>En parallèle</span>
-        <Chips items={['1', '2', '3', '4', '5', '6']} on={parallel - 1} mono />
-        <span style={{ fontSize: 13, color: C.muted, marginLeft: 8 }}>Modèle</span>
-        <Field value="Comme les réglages (Opus 5.5)" grow={false} />
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: -4 }}>
-        <span style={{ fontSize: 13, color: C.muted, marginLeft: 70 }}>Effort</span>
-        <Field value="Comme les réglages" grow={false} />
-        <span style={{ fontSize: 13, color: C.muted }}>Mode</span>
-        <Field value="Comme les réglages" grow={false} />
-      </div>
-    </div>
-  </SettingsShell>
-);
+    </SettingsShell>
+  );
+};

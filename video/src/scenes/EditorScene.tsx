@@ -2,7 +2,8 @@ import type { FC } from 'react';
 import { useCurrentFrame, useVideoConfig } from 'remotion';
 import { pop, ramp, typed } from '../anim';
 import { useCues } from '../cues';
-import { AGENTS, STATUS, TABS } from '../data';
+import { TABS, useDemo } from '../data';
+import { useFmt, type Tr } from '../lang';
 import { AssistantMsg, Conversation, ConvHeader, Diffstat, ToolCall } from '../ui/Chat';
 import { Composer } from '../ui/Composer';
 import { PointerPath } from '../ui/Cursor';
@@ -27,14 +28,14 @@ const TREE: TreeNode[] = [
   { name: 'README.md', depth: 0 },
 ];
 
-const CODE: EditorLine[] = [
+const codeOf = (tr: Tr): EditorLine[] => [
   { text: "import { Router } from 'express';" },
   { text: "import { db } from '../db';" },
   { text: "import { paginate } from '../db/paginate';", mark: 'added' },
   { text: '' },
   { text: 'export const router = Router();' },
   { text: '' },
-  { text: '// La liste des utilisateurs, page par page.', mark: 'added' },
+  { text: tr('// La liste des utilisateurs, page par page.', '// The list of users, page by page.'), mark: 'added' },
   { text: "router.get('/users', async (req) => {" },
   { text: '  const { limit = 50, cursor } = req.query;', mark: 'changed' },
   { text: '  const page = await paginate(db.users, { limit, cursor });', mark: 'added' },
@@ -50,6 +51,8 @@ export const EditorScene: FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const c = useCues();
+  const { tr, tok, usd } = useFmt();
+  const { agents: AGENTS, status: STATUS } = useDemo();
   const open = c.word('open', 'éditeur') + 4;
   const shown = frame >= open + 6;
   const search = frame >= c.word('look', 'recherche') - 4 && frame < c.word('look', 'lignes') - 2;
@@ -58,8 +61,10 @@ export const EditorScene: FC = () => {
   const disk = c.word('save', 'modifie') + 4;
   const again = c.word('save', 'si');
   const dirty = (frame >= typedAt && frame < saved) || frame >= again;
-  const lines = CODE.map((l, i) =>
-    i === 8 && frame >= typedAt ? { ...l, text: EDITED + (frame >= again ? typed(' // 100 au plus', frame, fps, again, 18) : '') } : l,
+  const lines = codeOf(tr).map((l, i) =>
+    i === 8 && frame >= typedAt
+      ? { ...l, text: EDITED + (frame >= again ? typed(tr(' // 100 au plus', ' // 100 at most'), frame, fps, again, 18) : '') }
+      : l,
   );
   const spot = (word: string, until: string) => ramp(frame, c.word('look', word) - 4, 8) - ramp(frame, c.word('look', until) - 4, 8);
   return (
@@ -120,15 +125,18 @@ export const EditorScene: FC = () => {
                 status="done"
                 sub="demo-api / escouade/pagination-users"
                 test="prepare"
-                metrics={{ model: 'Opus 5.5', tokens: '24,8 k', cost: '0,27 $', files: 3, duration: '4m 02s' }}
+                metrics={{ model: 'Opus 5.5', tokens: tok(24.8, 1), cost: usd(0.27), files: 3, duration: '4m 02s' }}
                 pressed={{ editor: ramp(frame, open - 4, 3) - ramp(frame, open + 2, 4) }}
               />
               <Conversation>
-                <AssistantMsg text="La pagination est en place, avec ses tests." />
+                <AssistantMsg text={tr('La pagination est en place, avec ses tests.', 'Pagination is in place, with its tests.')} />
                 <ToolCall tool="Edit" target="src/routes/users.ts" link meta={<Diffstat add={24} del={3} />} />
                 <ToolCall tool="Write" target="src/db/paginate.ts" link meta={<Diffstat add={41} del={0} />} />
               </Conversation>
-              <Composer placeholder="Envoyer un message à pagination-users…" model="Opus 5.5" />
+              <Composer
+                placeholder={tr('Envoyer un message à pagination-users…', 'Send a message to pagination-users…')}
+                model="Opus 5.5"
+              />
             </>
           )}
         </Shell>

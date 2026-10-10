@@ -2,22 +2,25 @@ import type { FC } from 'react';
 import { useCurrentFrame, useVideoConfig } from 'remotion';
 import { pop, ramp, typed } from '../anim';
 import { useCues } from '../cues';
-import { STATUS, TABS } from '../data';
+import { TABS, useDemo } from '../data';
+import { useFmt } from '../lang';
 import { C, MONO } from '../theme';
 import { BoardSettings, type Ticket } from '../ui/Board';
 import { PointerPath } from '../ui/Cursor';
 import { Shell } from '../ui/Shell';
 import { AgentsSidebar } from '../ui/Sidebar';
 import { AppWindow, Stage, Title } from '../ui/Stage';
-import { AGENT_CSV, AGENT_LOGIN, boardAgents, BoardView, CRITERIA, CSV, DONE, LOGIN, PROGRESS, SEARCH } from './boardCommon';
-
-const REASON = 'Le séparateur doit être un point-virgule, pour Excel.';
+import { BoardView, placesText, useBoard } from './boardCommon';
 
 /** « Valider et merger »: tests, generated commit, merge; the board's settings; a ticket sent back; the finished ones. */
 export const Validate: FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const c = useCues();
+  const { tr, usd } = useFmt();
+  const { status: STATUS } = useDemo();
+  const { AGENT_CSV, AGENT_LOGIN, boardAgents, CRITERIA, CSV, DONE, LOGIN, PROGRESS, SEARCH } = useBoard();
+  const REASON = tr('Le séparateur doit être un point-virgule, pour Excel.', 'The separator must be a semicolon, for Excel.');
   const o = (w: string) => c.word('ok', w);
   const approve = o('valide') + 2;
   const merged = o('fusionne') + 16;
@@ -45,8 +48,8 @@ export const Validate: FC = () => {
           ...LOGIN,
           column: 'done',
           enter: pop(frame, fps, merged, 16),
-          outcome: '⤵ Mergé dans main · squash',
-          doneMeta: '3 boucles · 1,86 $',
+          outcome: tr('⤵ Mergé dans main · squash', '⤵ Merged into main · squash'),
+          doneMeta: tr(`3 boucles · ${usd(1.86)}`, `3 loops · ${usd(1.86)}`),
           agent: { name: AGENT_LOGIN, status: 'done' },
         }
       : {
@@ -66,7 +69,11 @@ export const Validate: FC = () => {
         column: 'review',
         enter: pop(frame, fps, csvReview, 16),
         criteria: CSV.criteria!.map((x) => ({ ...x, ok: true })),
-        progress: ['Route GET /invoices.csv', 'Montants en 1 234,56 €', 'Filtres de la liste repris'],
+        progress: [
+          'Route GET /invoices.csv',
+          tr('Montants en 1 234,56 €', 'Amounts as €1,234.56'),
+          tr('Filtres de la liste repris', 'List filters carried over'),
+        ],
         agent: { name: AGENT_CSV, status: 'done' },
         rejecting: frame >= rejectClick + 4 ? typed(REASON, frame, fps, rejectClick + 8, 40) : undefined,
         pressed: {
@@ -82,8 +89,8 @@ export const Validate: FC = () => {
         enter: frame >= sendBack ? pop(frame, fps, sendBack, 16) : 1,
         loop: [frame >= sendBack ? 1 : 2, 5],
         criteria: CSV.criteria!.map((x, i) => ({ ...x, ok: frame >= sendBack || i < 2 })),
-        progress: ['Route GET /invoices.csv', 'Montants en 1 234,56 €'],
-        activity: frame >= sendBack ? 'Réfléchit' : 'Lance npm test',
+        progress: ['Route GET /invoices.csv', tr('Montants en 1 234,56 €', 'Amounts as €1,234.56')],
+        activity: frame >= sendBack ? tr('Réfléchit', 'Thinking') : tr('Lance npm test', 'Runs npm test'),
         agent: { name: AGENT_CSV, status: 'running' },
       };
   const search: Ticket =
@@ -99,7 +106,7 @@ export const Validate: FC = () => {
           partial: false,
           loop: [1, 5],
           enter: pop(frame, fps, backAt, 16),
-          activity: 'Réfléchit',
+          activity: tr('Réfléchit', 'Thinking'),
           agent: { name: SEARCH.agent!.name, status: 'running' },
         };
   const tickets = [csv, login, search, ...DONE];
@@ -124,13 +131,18 @@ export const Validate: FC = () => {
               agents={boardAgents([
                 {
                   name: AGENT_CSV,
-                  tag: csvInReview ? 'DEM-5 · à tester' : `DEM-5 · boucle ${frame >= sendBack ? 1 : 2}/5`,
+                  tag: csvInReview
+                    ? tr('DEM-5 · à tester', 'DEM-5 · to review')
+                    : tr(`DEM-5 · boucle ${frame >= sendBack ? 1 : 2}/5`, `DEM-5 · loop ${frame >= sendBack ? 1 : 2}/5`),
                   status: csvInReview ? 'done' : 'running',
                 },
-                ...(frame < merged ? [{ name: AGENT_LOGIN, tag: 'DEM-6 · à tester', status: 'done' as const }] : []),
+                ...(frame < merged
+                  ? [{ name: AGENT_LOGIN, tag: tr('DEM-6 · à tester', 'DEM-6 · to review'), status: 'done' as const }]
+                  : []),
                 {
                   name: SEARCH.agent!.name,
-                  tag: search.column === 'review' ? 'DEM-4 · à tester' : 'DEM-4 · boucle 1/5',
+                  tag:
+                    search.column === 'review' ? tr('DEM-4 · à tester', 'DEM-4 · to review') : tr('DEM-4 · boucle 1/5', 'DEM-4 · loop 1/5'),
                   status: search.column === 'review' ? 'done' : 'running',
                 },
               ])}
@@ -157,9 +169,11 @@ export const Validate: FC = () => {
                   }}
                 >
                   <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.muted }}>
-                    Message de commit généré
+                    {tr('Message de commit généré', 'Generated commit message')}
                   </span>
-                  <span style={{ fontFamily: MONO, fontSize: 15 }}>feat(auth): limiter les tentatives de connexion [DEM-6]</span>
+                  <span style={{ fontFamily: MONO, fontSize: 15 }}>
+                    {tr('feat(auth): limiter les tentatives de connexion [DEM-6]', 'feat(auth): limit login attempts [DEM-6]')}
+                  </span>
                 </div>
               ) : null}
               <BoardSettings
@@ -189,7 +203,7 @@ export const Validate: FC = () => {
           <BoardView
             tickets={tickets}
             autopilot
-            places={free ? `${free} ${free > 1 ? 'places libres' : 'place libre'}` : 'Toutes les places sont prises'}
+            places={placesText(tr, free)}
             glow={{ done: doneGlow }}
             pressedCfg={ramp(frame, cfgClick - 3, 3) - ramp(frame, cfgClick + 3, 4)}
           />

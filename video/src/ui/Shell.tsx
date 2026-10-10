@@ -1,6 +1,7 @@
 import type { FC, ReactNode } from 'react';
 import { useCurrentFrame } from 'remotion';
 import { fr } from '../anim';
+import { useFmt } from '../lang';
 import { C, hue, MONO, soft, UI } from '../theme';
 import { Logo } from './Logo';
 
@@ -75,6 +76,7 @@ const Pill: FC<{ n: number }> = ({ n }) => {
 
 const TitleBar: FC<{ tabs: Tab[]; active: number; view: 'project' | 'stats' | 'editor' }> = ({ tabs, active, view }) => {
   const frame = useCurrentFrame();
+  const { tr } = useFmt();
   return (
     <header
       style={{
@@ -134,7 +136,11 @@ const TitleBar: FC<{ tabs: Tab[]; active: number; view: 'project' | 'stats' | 'e
       <div style={{ flex: 1 }} />
       <div style={{ alignSelf: 'stretch', display: 'flex', alignItems: 'flex-end', gap: 2, fontSize: 14, fontWeight: 600 }}>
         {[
-          { id: 'editor', label: 'Éditeur', icon: <span style={{ fontFamily: MONO, fontSize: 12, color: C.spark }}>{'</>'}</span> },
+          {
+            id: 'editor',
+            label: tr('Éditeur', 'Editor'),
+            icon: <span style={{ fontFamily: MONO, fontSize: 12, color: C.spark }}>{'</>'}</span>,
+          },
           {
             id: 'stats',
             label: 'Stats',
@@ -181,101 +187,119 @@ const TitleBar: FC<{ tabs: Tab[]; active: number; view: 'project' | 'stats' | 'e
   );
 };
 
-const Quota: FC<{ label: string; pct: number; reset?: string }> = ({ label, pct, reset }) => (
-  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-    {label}
-    <span style={{ width: 56, height: 6, borderRadius: 3, background: C.elev2, overflow: 'hidden' }}>
-      <span style={{ display: 'block', width: `${pct}%`, height: '100%', background: pct > 80 ? C.wait : C.spark }} />
+const Quota: FC<{ label: string; pct: number; reset?: string }> = ({ label, pct, reset }) => {
+  const { trx } = useFmt();
+  return (
+    <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      {label}
+      <span style={{ width: 56, height: 6, borderRadius: 3, background: C.elev2, overflow: 'hidden' }}>
+        <span style={{ display: 'block', width: `${pct}%`, height: '100%', background: pct > 80 ? C.wait : C.spark }} />
+      </span>
+      <b style={{ color: C.text }}>{trx(<>{Math.round(pct)} %</>, `${Math.round(pct)}%`)}</b>
+      {reset ? <span style={{ color: C.dim }}>reset {reset}</span> : null}
     </span>
-    <b style={{ color: C.text }}>{Math.round(pct)} %</b>
-    {reset ? <span style={{ color: C.dim }}>reset {reset}</span> : null}
-  </span>
-);
+  );
+};
 
 const Sep = () => <span style={{ width: 1, height: 14, background: C.line2 }} />;
 
-export const StatusBar: FC<Status> = (s) => (
-  <footer
-    style={{
-      height: 34,
-      flex: 'none',
-      display: 'flex',
-      alignItems: 'center',
-      gap: 13,
-      padding: '0 10px 0 16px',
-      borderTop: `1px solid ${C.line}`,
-      background: C.bar,
-      fontFamily: MONO,
-      fontSize: 12,
-      color: C.muted,
-      whiteSpace: 'nowrap',
-    }}
-  >
-    <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-      <Dot color={C.ok} size={7} /> {s.active} actif{s.active > 1 ? 's' : ''}
-    </span>
-    <span style={{ display: 'flex', alignItems: 'center', gap: 7, color: s.waiting ? C.wait : C.muted }}>
-      <Dot color={s.waiting ? C.wait : C.dim} size={7} pulse={s.waiting > 0} /> {s.waiting} en attente
-    </span>
-    <span>
-      <span style={{ color: C.ok }}>✓</span> {s.done} terminé{s.done > 1 ? 's' : ''}
-    </span>
-    {s.procs ? (
-      <>
-        <Sep />
-        <span>
-          {s.procs.n} Claude · <b style={{ color: C.text, fontWeight: 500 }}>{s.procs.mem}</b> ·{' '}
-          <b style={{ color: C.text, fontWeight: 500 }}>{s.procs.cpu}</b> CPU
-        </span>
-      </>
-    ) : null}
-    <Sep />
-    <Quota label="Session 5 h" pct={s.session} reset={s.sessionReset} />
-    <Quota label="Hebdo" pct={s.weekly} reset={s.weeklyReset} />
-    <Sep />
-    <span>
-      Aujourd'hui{' '}
-      <b style={{ color: C.text }}>
-        {s.estimated ? '≈ ' : ''}
-        {fr(s.cost)} $
-      </b>
-    </span>
-    {s.sync ? (
-      <>
-        <Sep />
-        <span style={{ display: 'flex', gap: 8 }}>
-          <b style={{ color: C.text, fontWeight: 500 }}>⎇ {s.sync.branch}</b>
-          {s.sync.busy ? (
-            <span>{s.sync.busy}…</span>
-          ) : (
-            <>
-              <span style={{ color: s.sync.behind ? C.wait : C.dim }}>↓{s.sync.behind}</span>
-              <span style={{ color: s.sync.ahead ? C.text : C.dim }}>↑{s.sync.ahead}</span>
-            </>
-          )}
-        </span>
-      </>
-    ) : null}
-    <div style={{ flex: 1 }} />
-    {s.update ? (
-      <span
-        style={{
-          padding: '3px 10px',
-          borderRadius: 6,
-          background: soft(C.ok, 18),
-          color: C.ok,
-          fontFamily: UI,
-          fontSize: 12.5,
-          fontWeight: 700,
-        }}
-      >
-        Mise à jour {s.update} disponible → installer
+export const StatusBar: FC<Status> = (s) => {
+  const { tr, trx, usd } = useFmt();
+  return (
+    <footer
+      style={{
+        height: 34,
+        flex: 'none',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 13,
+        padding: '0 10px 0 16px',
+        borderTop: `1px solid ${C.line}`,
+        background: C.bar,
+        fontFamily: MONO,
+        fontSize: 12,
+        color: C.muted,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+        <Dot color={C.ok} size={7} />{' '}
+        {trx(
+          <>
+            {s.active} actif{s.active > 1 ? 's' : ''}
+          </>,
+          `${s.active} active`,
+        )}
       </span>
-    ) : null}
-    <span style={{ padding: '2px 8px', border: `1px solid ${C.line2}`, borderRadius: 5 }}>♪ On</span>
-    <span style={{ padding: '2px 8px', border: `1px solid ${C.line2}`, borderRadius: 5 }}>⚙</span>
-  </footer>
-);
+      <span style={{ display: 'flex', alignItems: 'center', gap: 7, color: s.waiting ? C.wait : C.muted }}>
+        <Dot color={s.waiting ? C.wait : C.dim} size={7} pulse={s.waiting > 0} /> {trx(<>{s.waiting} en attente</>, `${s.waiting} waiting`)}
+      </span>
+      <span>
+        <span style={{ color: C.ok }}>✓</span>{' '}
+        {trx(
+          <>
+            {s.done} terminé{s.done > 1 ? 's' : ''}
+          </>,
+          `${s.done} done`,
+        )}
+      </span>
+      {s.procs ? (
+        <>
+          <Sep />
+          <span>
+            {s.procs.n} Claude · <b style={{ color: C.text, fontWeight: 500 }}>{s.procs.mem}</b> ·{' '}
+            <b style={{ color: C.text, fontWeight: 500 }}>{s.procs.cpu}</b> CPU
+          </span>
+        </>
+      ) : null}
+      <Sep />
+      <Quota label={tr('Session 5 h', '5h window')} pct={s.session} reset={s.sessionReset} />
+      <Quota label={tr('Hebdo', 'Weekly')} pct={s.weekly} reset={s.weeklyReset} />
+      <Sep />
+      <span>
+        {tr("Aujourd'hui", 'Today')}{' '}
+        <b style={{ color: C.text }}>
+          {s.estimated ? '≈ ' : ''}
+          {trx(<>{fr(s.cost)} $</>, usd(s.cost))}
+        </b>
+      </span>
+      {s.sync ? (
+        <>
+          <Sep />
+          <span style={{ display: 'flex', gap: 8 }}>
+            <b style={{ color: C.text, fontWeight: 500 }}>⎇ {s.sync.branch}</b>
+            {s.sync.busy ? (
+              <span>{s.sync.busy}…</span>
+            ) : (
+              <>
+                <span style={{ color: s.sync.behind ? C.wait : C.dim }}>↓{s.sync.behind}</span>
+                <span style={{ color: s.sync.ahead ? C.text : C.dim }}>↑{s.sync.ahead}</span>
+              </>
+            )}
+          </span>
+        </>
+      ) : null}
+      <div style={{ flex: 1 }} />
+      {s.update ? (
+        <span
+          style={{
+            padding: '3px 10px',
+            borderRadius: 6,
+            background: soft(C.ok, 18),
+            color: C.ok,
+            fontFamily: UI,
+            fontSize: 12.5,
+            fontWeight: 700,
+          }}
+        >
+          {trx(<>Mise à jour {s.update} disponible → installer</>, `Update ${s.update} available → install`)}
+        </span>
+      ) : null}
+      <span style={{ padding: '2px 8px', border: `1px solid ${C.line2}`, borderRadius: 5 }}>♪ On</span>
+      <span style={{ padding: '2px 8px', border: `1px solid ${C.line2}`, borderRadius: 5 }}>⚙</span>
+    </footer>
+  );
+};
 
 /** The app: tabs, sidebar, main area, status bar; `overlay` covers it all (modals, menus, toasts). */
 export const Shell: FC<{

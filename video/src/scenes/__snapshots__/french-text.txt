@@ -1,0 +1,2716 @@
+## intro
+Escouade
+Le poste de pilotage de tes agents Claude Code
+Tous
+tes
+Claude
+Code,
+dans
+une
+seule
+fenêtre.
+
+## chaos
+▲
+claude — demo-api
+— ☐ ✕
+✻ Claude Code
+> corrige le test qui échoue
+● Read(src/app.ts)
+● Bash(npm test)
+⎿ 41 passed, 1 failed
+> ▌
+claude — studio-web
+claude — mobile-app
+claude — infra
+claude — site-vitrine
+5
+projets.
+12
+agents.
+30
+terminaux
+?
++
+</>
+Éditeur
+Stats
+—
+☐
+✕
+0 actif
+0 en attente
+✓
+0 terminé
+Session 5 h
+0 %
+Hebdo
+Aujourd'hui
+0,00 $
+♪ On
+⚙
+
+## projects
+Un
+onglet
+par
+projet.
+demo-api
+Δ 7
+studio-web
+Δ 3
+mobile-app
+Δ 12
+infra
++
+</>
+Éditeur
+Stats
+—
+☐
+✕
+Agents
+Kanban
+5
++ Nouvel agent
+refacto-auth
+En cours
+Opus 5.5
+·
+12m 40s
+184 k tok
+2,41 $
+6 fich.
+tests-e2e
+Sonnet 5.5
+8m 02s
+96 k tok
+0,73 $
+3 fich.
+pagination-users
+3m 15s
+⎇ pagination-users
+41 k tok
+0,32 $
+docs-api
+Terminé
+Haiku 4.5
+1m 50s
+12 k tok
+0,02 $
+1 fich.
+fix-login
+Prêt
+Fable 5.1
+0m 00s
+0 tok
+0,00 $
+0 fich.
+~/dev/demo-api
+main
+Parcourir
+~5 modifiés
++2 ajoutés
+−0 supprimés
+demo-api / main
+Refactore l'auth pour passer aux tokens JWT, sans casser les sessions existantes.
+C
+D'accord. Je cartographie l'existant : middleware, routes et stockage des sessions.
+▸
+Read
+src/auth/middleware.ts
+✓
+Grep
+session
+14 fichiers
+Edit
+src/auth/jwt.ts
++58
+−0
+Je remplace le middleware de session par une vérification du JWT, avec une période de transition.
+Envoyer un message à refacto-auth…
+Modèle
+▾
+Effort
+Élevé
+Mode
+Auto
+■ Stop
+Envoyer ↵
+3 actifs
+0 en attente
+1 terminé
+4 Claude ·
+1,2 Go
+6 %
+CPU
+Session 5 h
+22 %
+reset 2 h 14
+Hebdo
+36 %
+reset 3 j
+Aujourd'hui
+3,48 $
+⎇ main
+↓3
+↑1
+♪ On
+⚙
+Renommer…
+Couleur
+Désactiver le worktree par agent
+nouveaux agents
+Commandes de lancement…
+Ouvrir le dossier
+Fermer le projet…
+Nouveau projet
+Dossier
+C:\dev\boutique
+Parcourir…
+Dépôt git détecté · branche main
+Nom
+Aperçu de l'onglet
+nouveau-projet
+Créer un premier agent
+Ouvre directement une conversation dans ce projet
+Un worktree git par agent
+Isole le travail de chaque agent et permet de voir ses fichiers modifiés séparément
+Annuler
+Créer le projet
+boutique
+Fable
+Opus
+Sonnet
+Haiku
+1
+agent-1
+~0 modifiés
++0 ajoutés
+boutique / main
+Agent prêt
+Décris la tâche à confier à Claude. L'agent travaille dans
+.
+Décris la tâche à confier à Claude…
+↓0
+↑0
+
+## agents
+Autant
+d’agents
+que
+tu
+veux.
+demo-api
+Δ 7
+studio-web
+Δ 3
+mobile-app
+Δ 12
+infra
++
+</>
+Éditeur
+Stats
+—
+☐
+✕
+Agents
+Kanban
+5
++ Nouvel agent
+refacto-auth
+En cours
+Opus 5.5
+·
+12m 40s
+184 k tok
+2,41 $
+6 fich.
+tests-e2e
+Sonnet 5.5
+8m 02s
+96 k tok
+0,73 $
+3 fich.
+pagination-users
+3m 15s
+⎇ pagination-users
+41 k tok
+0,32 $
+docs-api
+Terminé
+Haiku 4.5
+1m 50s
+12 k tok
+0,02 $
+1 fich.
+fix-login
+Prêt
+Fable 5.1
+0m 00s
+⎇ fix-login
+0 tok
+0,00 $
+0 fich.
+~/dev/demo-api
+main
+Parcourir
+~5 modifiés
++2 ajoutés
+−0 supprimés
+demo-api / main
+Refactore l'auth pour passer aux tokens JWT, sans casser les sessions existantes.
+C
+D'accord. Je cartographie l'existant : middleware, routes et stockage des sessions.
+▸
+Read
+src/auth/middleware.ts
+✓
+Grep
+session
+14 fichiers
+Edit
+src/auth/jwt.ts
++58
+−0
+Je remplace le middleware de session par une vérification du JWT, avec une période de transition.
+Claude travaille…
+Envoyer un message à refacto-auth…
+Modèle
+▾
+Effort
+Élevé
+Mode
+Auto
+■ Stop
+Envoyer ↵
+3 actifs
+0 en attente
+1 terminé
+4 Claude ·
+1,2 Go
+6 %
+CPU
+Session 5 h
+22 %
+reset 2 h 14
+Hebdo
+36 %
+reset 3 j
+Aujourd'hui
+3,48 $
+⎇ main
+↓3
+↑1
+♪ On
+⚙
+6
+export-csv-factures
+0m 04s
+3 k tok
+≈ 0,04 $
+Ajoute un export CSV des factures, avec les filtres de la liste.
+Décris la tâche à confier à Claude…
+4 actifs
+▸ Archivés (1)
+fix-login-oauth
+Supprimer l'agent « fix-login-oauth » ?
+Le processus Claude est arrêté et la conversation est retirée de l’application (la session Claude Code reste sur le disque).
+Supprimer aussi le worktree et la branche escouade/fix-login
+Annuler
+Supprimer
+4
+
+## chat
+Un
+vrai
+chat,
+pas
+un
+terminal.
+demo-api
+Δ 7
+studio-web
+Δ 3
+mobile-app
+Δ 12
+infra
++
+</>
+Éditeur
+Stats
+—
+☐
+✕
+Agents
+Kanban
+5
++ Nouvel agent
+refacto-auth
+En cours
+Opus 5.5
+·
+12m 40s
+184 k tok
+2,41 $
+6 fich.
+tests-e2e
+Sonnet 5.5
+8m 02s
+96 k tok
+0,73 $
+3 fich.
+pagination-users
+3m 15s
+⎇ pagination-users
+12,4 k tok
+0,14 $
+docs-api
+Terminé
+Haiku 4.5
+1m 50s
+12 k tok
+0,02 $
+1 fich.
+fix-login
+Prêt
+Fable 5.1
+0m 00s
+0 tok
+0,00 $
+0 fich.
+~/dev/demo-api
+main
+Parcourir
+~5 modifiés
++2 ajoutés
+−0 supprimés
+demo-api / escouade/pagination-users
+▷
+Préparer le lancement
+Contexte
+76,2 k / 200 k
+Tokens
+12,4 k
+Coût
+Fichiers ▸
+3
+Durée
+Ajoute la pagination à l'endpoint
+/users
+, avec un curseur.
+▸
+Réflexion
+C
+Voici le plan :
+une limite par défaut
+, un curseur opaque, et des tests pour chaque cas.
+ts
+export
+async
+function
+paginate
+<
+T
+>
+(
+query
+:
+Query
+,
+{
+limit
+=
+50
+cursor
+}
+Page
+)
+const
+rows
+await
+.
+after
+take
+1
+;
+return
+items
+slice
+0
+next
+[
+]
+?
+id
+Read
+src/routes/users.ts
+✓
+Edit
++24
+−3
+Bash
+npm test
+42 tests
+Envoyer un message à pagination-users…
+Modèle
+▾
+Effort
+Élevé
+Mode
+Auto
+Envoyer ↵
+3 actifs
+0 en attente
+1 terminé
+4 Claude ·
+1,2 Go
+6 %
+CPU
+Session 5 h
+22 %
+reset 2 h 14
+Hebdo
+36 %
+reset 3 j
+Aujourd'hui
+3,48 $
+⎇ main
+↓3
+↑1
+♪ On
+⚙
+> vitest run
+✓ tests/users.test.ts (12 tests)
+✓ tests/paginate.test.ts (6 tests)
+Tests  42 passed (42)
+18,4 k tok
+≈ 0,21 $
+18,4 k
+Les tests passent. J'ajoute le cas de la dernière page, sans curseur suivant.
+tests/users.test.ts
++18
+−0
+npm test -- users
+Claude travaille…
+■ Stop
+≈ 3,55 $
+Question
+0,21 $
+Les 43 tests passent.
+→ 50
+Quelle taille de page par défaut ?
+20
+100
+Claude demande une autorisation
+npm run db:migrate
+Autoriser
+Toujours autoriser
+Refuser
+3,55 $
+Migration appliquée. Je mets à jour la documentation de l'API.
+docs/api.md
++12
+−2
+Et ajoute un test pour la dernière page.
+transmis pendant le tour
+Interrompu · 18,4 k tokens · 0,21 $
+Échap
+
+## composer
+Modèle,
+effort,
+mode
+:
+quand
+tu
+veux.
+demo-api
+Δ 7
+studio-web
+Δ 3
+mobile-app
+Δ 12
+infra
++
+</>
+Éditeur
+Stats
+—
+☐
+✕
+Agents
+Kanban
+5
++ Nouvel agent
+refacto-auth
+En cours
+Opus 5.5
+·
+12m 40s
+184 k tok
+2,41 $
+6 fich.
+tests-e2e
+Sonnet 5.5
+8m 02s
+96 k tok
+0,73 $
+3 fich.
+pagination-users
+3m 15s
+⎇ pagination-users
+41 k tok
+0,32 $
+docs-api
+Terminé
+Haiku 4.5
+1m 50s
+12 k tok
+0,02 $
+1 fich.
+fix-login
+Prêt
+Fable 5.1
+0m 00s
+0 tok
+0,00 $
+0 fich.
+~/dev/demo-api
+main
+Parcourir
+~5 modifiés
++2 ajoutés
+−0 supprimés
+demo-api / escouade/pagination-users
+▷
+Préparer le lancement
+Contexte
+76,2 k / 200 k
+Tokens
+24,8 k
+Coût
+0,27 $
+Fichiers ▸
+3
+Durée
+4m 02s
+Et ajoute un test pour la dernière page.
+▸
+Edit
+tests/users.test.ts
++37
+−2
+Bash
+npm test
+43 tests
+C
+C'est fait : la pagination de
+/users
+est en place, avec ses tests, et la doc de l'API est à jour.
+Envoyer un message à pagination-users…
+Modèle
+▾
+le plus capable
+raisonnement profond
+✓
+rapide et précis
+le plus rapide
+Effort
+Élevé
+Mode
+Auto
+Envoyer ↵
+3 actifs
+0 en attente
+1 terminé
+4 Claude ·
+1,2 Go
+6 %
+CPU
+Session 5 h
+22 %
+reset 2 h 14
+Hebdo
+36 %
+reset 3 j
+Aujourd'hui
+3,48 $
+⎇ main
+↓3
+↑1
+♪ On
+⚙
+/review
+Relit les changements de la branche
+/compact
+Résume la conversation pour libérer du contexte
+/init
+Crée un CLAUDE.md pour le projet
+/pr-comments
+Lit les commentaires d’une pull request
+PDF
+maquette.pdf
+×
+TXT
+notes.md
+/rev
+✓ Tâche terminée
+24,8 k tokens
+3 fichiers modifiés
+src/routes/users.ts
++24
+−3
+src/db/paginate.ts
++41
+−0
+Revoir les fichiers
+Commit…
+
+## notify
+Il
+t’attend
+?
+Tu
+le
+sais
+tout
+de
+suite.
+demo-api
+Δ 7
+1
+studio-web
+Δ 3
+mobile-app
+Δ 12
+infra
++
+</>
+Éditeur
+Stats
+—
+☐
+✕
+Agents
+Kanban
+5
++ Nouvel agent
+refacto-auth
+En cours
+Opus 5.5
+·
+12m 40s
+184 k tok
+2,41 $
+6 fich.
+tests-e2e
+Question
+Sonnet 5.5
+8m 02s
+96 k tok
+0,73 $
+3 fich.
+pagination-users
+3m 15s
+⎇ pagination-users
+41 k tok
+0,32 $
+docs-api
+Terminé
+Haiku 4.5
+1m 50s
+12 k tok
+0,02 $
+1 fich.
+fix-login
+Prêt
+Fable 5.1
+0m 00s
+0 tok
+0,00 $
+0 fich.
+~/dev/demo-api
+main
+Parcourir
+~5 modifiés
++2 ajoutés
+−0 supprimés
+demo-api / main
+Contexte
+76,2 k / 200 k
+Tokens
+184 k
+Coût
+Fichiers ▸
+6
+Durée
+Refactore l'auth pour passer aux tokens JWT, sans casser les sessions existantes.
+C
+D'accord. Je cartographie l'existant : middleware, routes et stockage des sessions.
+▸
+Read
+src/auth/middleware.ts
+✓
+Grep
+session
+14 fichiers
+Edit
+src/auth/jwt.ts
++58
+−0
+Je remplace le middleware de session par une vérification du JWT, avec une période de transition.
+Claude travaille…
+Envoyer un message à refacto-auth…
+Modèle
+▾
+Effort
+Élevé
+Mode
+Auto
+■ Stop
+Envoyer ↵
+2 actifs
+1 en attente
+1 terminé
+4 Claude ·
+1,2 Go
+6 %
+CPU
+Session 5 h
+22 %
+reset 2 h 14
+Hebdo
+36 %
+reset 3 j
+Aujourd'hui
+3,48 $
+⎇ main
+↓3
+↑1
+♪ On
+⚙
+Spécifications — v2
+FR
+14:32
+04/10/2026
+Escouade
+demo-api · tests-e2e
+Claude attend ta réponse
+Ctrl
+J
+96 k
+3
+Les 18 scénarios passent sur Chrome.
+Je lance aussi les tests sur Firefox ?
+Oui
+Non, Chrome suffit
+Réponds à la question ou écris une réponse libre…
+→ Oui
+Je lance les 18 scénarios sur Firefox.
+Envoyer un message à tests-e2e…
+3 actifs
+0 en attente
+
+## git
+Chaque
+modif,
+chaque
+branche,
+sous
+tes
+yeux.
+demo-api
+Δ 7
+studio-web
+Δ 3
+mobile-app
+Δ 12
+infra
++
+</>
+Éditeur
+Stats
+—
+☐
+✕
+Agents
+Kanban
+5
++ Nouvel agent
+refacto-auth
+En cours
+Opus 5.5
+·
+12m 40s
+184 k tok
+2,41 $
+6 fich.
+tests-e2e
+Sonnet 5.5
+8m 02s
+96 k tok
+0,73 $
+3 fich.
+pagination-users
+3m 15s
+⎇ pagination-users
+41 k tok
+0,32 $
+docs-api
+Terminé
+Haiku 4.5
+1m 50s
+12 k tok
+0,02 $
+1 fich.
+fix-login
+Prêt
+Fable 5.1
+0m 00s
+0 tok
+0,00 $
+0 fich.
+~/dev/demo-api
+main
+Parcourir
+~5 modifiés
++2 ajoutés
+−0 supprimés
+demo-api / escouade/pagination-users
+▷
+Coût
+0,27 $
+Fichiers
+3
+C
+La pagination est en place, avec ses tests.
+▸
+Edit
+src/db/paginate.ts
++41
+−0
+Bash
+npm test
+43 tests
+src/routes/users.ts
++5
+Envoyer un message à pagination-users…
+Modèle
+▾
+Effort
+Élevé
+Mode
+Auto
+Envoyer ↵
+Non commités
+Historique
+Cet agent
+Tout le projet
+worktree .claude/worktrees/pagination-users · isolé des autres agents
+M
+users.ts
+src/routes
++29
+−3
+A
+paginate.ts
+src/db
+users.test.ts
+tests
++37
+−2
+12
+router.get('/users', async (req) => {
+13
+const users = await db.users.all();
+const { limit = 50, cursor } = req.query;
+14
+const page = await paginate(db.users, {
+15
+limit: Math.min(limit, 100),
+16
+cursor,
+17
+});
+18
+return users;
+return { users: page.items, next: page.next };
+19
+Voir le diff
+Commit…
+Merger escouade/pagination-users → main…
+3 actifs
+0 en attente
+✓
+1 terminé
+4 Claude ·
+1,2 Go
+6 %
+CPU
+Session 5 h
+22 %
+reset 2 h 14
+Hebdo
+36 %
+reset 3 j
+Aujourd'hui
+3,48 $
+⎇ main
+↓3
+↑0
+♪ On
+⚙
+6
+Toutes les modifications non commitées du projet
+middleware.ts
+src/auth
++58
+−21
+jwt.ts
+login.spec.ts
+e2e
++12
+−4
+-
+const page = await paginate(db.users, { limit, cursor });
+Commit tout…
+Modifications de demo-api
+6 fichiers
+Unifié
+Côte à côte
+×
+tests/users.test.ts
+src/auth/middleware.ts
+src/auth/jwt.ts
+e2e/login.spec.ts
+Pagination de /users (limite, curseur)
+a3f9c21
+Tests de la pagination
+7be01d4
+origin/main
+Corrige le login OAuth
+19ce8a0
+Docs : endpoints v2
+c04d7f2
+Prépare le modèle User
+5d2e9ab
+v1.4.0
+Release 1.4.0
+e8a1f30
+Ajoute le rate limiting global
+2c71e5a
+7be01d4 · Tests de la pagination
+1 fichier
+40
+describe('GET /users', () => {
+41
+it('pages by 50, with a cursor to the next page', async () => {
+42
+const first = await get('/users');
+43
+expect(first.users).toHaveLength(50);
+44
+const next = await get(`/users?cursor=${first.next}`);
+45
+expect(next.users[0].id).not.toBe(first.users[0].id);
+46
+47
+it.todo('pagination');
+Merger escouade/pagination-users dans main ?
+Les commits de l'agent « pagination-users » sont intégrés dans la branche courante du projet.
+Squash (un seul commit)
+Annuler
+Merger
+Branche fusionnée dans
+.
+↓0
+↑1
+3 commits tirés
+
+## editor
+Un
+éditeur,
+sans
+quitter
+l’app.
+demo-api
+Δ 7
+studio-web
+Δ 3
+mobile-app
+Δ 12
+infra
++
+</>
+Éditeur
+Stats
+—
+☐
+✕
+Agents
+Kanban
+5
++ Nouvel agent
+refacto-auth
+En cours
+Opus 5.5
+·
+12m 40s
+184 k tok
+2,41 $
+6 fich.
+tests-e2e
+Sonnet 5.5
+8m 02s
+96 k tok
+0,73 $
+3 fich.
+pagination-users
+Terminé
+3m 15s
+⎇ pagination-users
+41 k tok
+0,32 $
+docs-api
+Haiku 4.5
+1m 50s
+12 k tok
+0,02 $
+1 fich.
+fix-login
+Prêt
+Fable 5.1
+0m 00s
+0 tok
+0,00 $
+0 fich.
+~/dev/demo-api
+main
+Parcourir
+~5 modifiés
++2 ajoutés
+−0 supprimés
+← Conversation
+worktree
+▾
+Enregistré
+Enregistrer
+Fichiers
+128 · 3 modif.
+.claude/worktrees/pagination-users
+src
+•
+▸
+auth
+db
+paginate.ts
+A
+routes
+invoices.ts
+users.ts
+M
+app.ts
+tests
+users.test.ts
+package.json
+README.md
+×
+src  /  routes  /  users.ts
+5 lignes modifiées vs main
+1
+import
+{
+Router
+}
+from
+'express'
+;
+2
+'../db'
+3
+paginate
+'../db/paginate'
+4
+export
+const
+router
+=
+(
+)
+6
+7
+// La liste des utilisateurs, page par page.
+8
+.
+get
+'/users'
+,
+async
+req
+>
+9
+limit
+50
+cursor
+query
+10
+page
+await
+users
+11
+return
+:
+items
+next
+12
+13
+14
+'/users/:id'
+find
+params
+id
+Ln 9, Col 22
+TypeScript
+UTF-8
+LF
+Espaces : 2
+worktree · pagination-users
+3 actifs
+0 en attente
+✓
+1 terminé
+4 Claude ·
+1,2 Go
+6 %
+CPU
+Session 5 h
+22 %
+reset 2 h 14
+Hebdo
+36 %
+reset 3 j
+Aujourd'hui
+3,48 $
+⎇ main
+↓3
+↑1
+♪ On
+⚙
+● Non enregistré · Ctrl+S
+●
+20
+Ctrl
+S
+Ce fichier a changé sur le disque.
+Recharger
+Garder ma version
+// 100 au plus
+
+## board
+Des
+tickets,
+que
+des
+agents
+prennent
+seuls.
+demo-api
+Δ 7
+studio-web
+Δ 3
+mobile-app
+Δ 12
+infra
++
+</>
+Éditeur
+Stats
+—
+☐
+✕
+Agents
+Kanban
+2
++ Nouvel agent
+refacto-auth
+En cours
+Opus 5.5
+·
+12m 40s
+184 k tok
+2,41 $
+6 fich.
+tests-e2e
+Sonnet 5.5
+8m 02s
+96 k tok
+0,73 $
+3 fich.
+~/dev/demo-api
+main
+Parcourir
+~5 modifiés
++2 ajoutés
+−0 supprimés
+demo-api · 4 tickets · 0 en boucle
+2 places libres
+⤓
+Importer
+⚙
+Après validation :
+merge squash → main
+Pilote auto · off
+À faire
+1
+DEM-5
+Export CSV des factures
+3 critères · max 5 boucles
+Pilote auto désactivé
+Lancer
+0
+À tester
+Terminé
+3
+DEM-3
+Pagination de /users
+⇡ Poussé sur ticket/dem-3
+dem-3-pagination-de-users
+2 boucles · 0,61 $
+DEM-2
+Webhooks Stripe
+⇡ PR #41 → main
+dem-2-webhooks-stripe
+3 boucles · 1,12 $
+DEM-1
+Réinitialisation du mot de passe
+⤵ Mergé dans main · squash
+dem-1-reinitialisation-du-mot-de-passe
+1 boucle · 0,48 $
+3 actifs
+0 en attente
+✓
+1 terminé
+4 Claude ·
+1,2 Go
+6 %
+CPU
+Session 5 h
+22 %
+reset 2 h 14
+Hebdo
+36 %
+reset 3 j
+Aujourd'hui
+3,48 $
+⎇ main
+↓3
+↑1
+♪ On
+Limiter les tentatives de connexion
+Bloquer les attaques par force brute sur /login, sans gêner les vrais utilisateurs.
+Au-delà de 5 échecs en 15 min, la connexion est refusée
+Le message d’erreur dit quand réessayer
+Tests verts
+Boucles max
+5
+8
+Annuler
+Ajouter
+demo-api · 5 tickets · 0 en boucle
+DEM-6
+Modifier
+Passer en tête
+Supprimer
+4
+dem-5-export-csv-des-factures
+2m 10s
+⎇ ticket/dem-5
+38 k tok
+≈ 0,41 $
+4 fich.
+▸ DEM-5 · boucle 1/5
+dem-6-limiter-les-tentatives-de
+⎇ ticket/dem-6
+▸ DEM-6 · boucle 1/5
+demo-api · 5 tickets · 2 en boucle
+Toutes les places sont prises
+Pilote auto
+Boucle 1/5
+○
+Le CSV reprend les filtres de la liste
+Montants au format français
+Lit src/billing/invoices.ts
+Réfléchit
+5 actifs
+
+## loop
+Chaque
+agent
+boucle
+jusqu’au
+but.
+demo-api
+Δ 7
+studio-web
+Δ 3
+mobile-app
+Δ 12
+infra
++
+</>
+Éditeur
+Stats
+—
+☐
+✕
+Agents
+Kanban
+4
++ Nouvel agent
+refacto-auth
+En cours
+Opus 5.5
+·
+12m 40s
+184 k tok
+2,41 $
+6 fich.
+tests-e2e
+Sonnet 5.5
+8m 02s
+96 k tok
+0,73 $
+3 fich.
+dem-5-export-csv-des-factures
+2m 10s
+⎇ ticket/dem-5
+38 k tok
+≈ 0,41 $
+4 fich.
+▸ DEM-5 · boucle 1/5
+dem-6-limiter-les-tentatives-de
+⎇ ticket/dem-6
+▸ DEM-6 · boucle 1/5
+~/dev/demo-api
+main
+Parcourir
+~5 modifiés
++2 ajoutés
+−0 supprimés
+demo-api · 5 tickets · 2 en boucle
+Toutes les places sont prises
+⤓
+Importer
+⚙
+Après validation :
+merge squash → main
+Pilote auto
+À faire
+0
+2
+DEM-5
+Boucle 1/5
+Export CSV des factures
+✓
+Le CSV reprend les filtres de la liste
+○
+Montants au format français
+Tests verts
+Route GET /invoices.csv
+Lit src/billing/invoices.ts
+DEM-6
+Limiter les tentatives de connexion
+Au-delà de 5 échecs en 15 min, la connexion est refusée
+Le message d’erreur dit quand réessayer
+Compteur d’échecs par IP et par compte
+Lit src/auth/login.ts
+À tester
+Terminé
+3
+DEM-3
+Pagination de /users
+⇡ Poussé sur ticket/dem-3
+dem-3-pagination-de-users
+2 boucles · 0,61 $
+DEM-2
+Webhooks Stripe
+⇡ PR #41 → main
+dem-2-webhooks-stripe
+3 boucles · 1,12 $
+DEM-1
+Réinitialisation du mot de passe
+⤵ Mergé dans main · squash
+dem-1-reinitialisation-du-mot-de-passe
+1 boucle · 0,48 $
+5 actifs
+0 en attente
+1 terminé
+4 Claude ·
+1,2 Go
+6 %
+CPU
+Session 5 h
+22 %
+reset 2 h 14
+Hebdo
+36 %
+reset 3 j
+Aujourd'hui
+3,48 $
+⎇ main
+↓3
+↑1
+♪ On
+branche
+ticket/dem-6
+worktree
+.claude/worktrees/dem-6
+copiés
+.env  .env.local
+ports
+4100 → 4109
+▸ DEM-6 · boucle 2/5
+Boucle 2/5
+Limiteur branché sur /login
+Modifie src/auth/limiter.ts
+Message « Réessaie dans 15 min »
+Tests du limiteur
++1
+Lance npm test -- limiter
+Lance npm test
+Escouade
+DEM-5 bloqué : Erreur : Claude Code s'est arrêté (code 1)
+▸ DEM-6 · boucle 3/5
+demo-api / ticket/dem-6
+Contexte
+76,2 k / 200 k
+Tokens
+61 k
+Coût
+≈ 0,84 $
+Fichiers ▸
+Durée
+6m 12s
+▸
+Edit
+src/auth/limiter.ts
++64
+−0
+Bash
+npm test -- limiter
+9 tests
+C
+Le limiteur bloque bien au sixième essai, avec un message qui dit quand réessayer.
+Bilan des critères
+2/3
+— vérifié par tests/limiter.test.ts
+— « Réessaie dans 15 min »
+— un test d’intégration échoue encore
+Ce qui a été fait
+Boucle 3/5. Critères non atteints : 3 (un test d'intégration échoue encore). Continue jusqu'à les atteindre, puis termine par le bilan.
+Claude travaille…
+Envoyer un message à dem-6-limiter-les-tentatives-de…
+Modèle
+▾
+Effort
+Élevé
+Mode
+Auto
+■ Stop
+Envoyer ↵
+
+## test
+Teste
+la
+fonctionnalité
+en
+un
+clic.
+demo-api
+Δ 7
+studio-web
+Δ 3
+mobile-app
+Δ 12
+infra
++
+</>
+Éditeur
+Stats
+—
+☐
+✕
+Agents
+Kanban
+1
+4
++ Nouvel agent
+refacto-auth
+En cours
+Opus 5.5
+·
+12m 40s
+184 k tok
+2,41 $
+6 fich.
+tests-e2e
+Sonnet 5.5
+8m 02s
+96 k tok
+0,73 $
+3 fich.
+dem-5-export-csv-des-factures
+2m 10s
+⎇ ticket/dem-5
+38 k tok
+≈ 0,41 $
+4 fich.
+▸ DEM-5 · boucle 2/5
+dem-6-limiter-les-tentatives-de
+Terminé
+⎇ ticket/dem-6
+▸ DEM-6 · à tester
+Lancement
+0/2
+Tout lancer
+⚙
+Front
+prêt
+▶
+API
+demo-api · 6 tickets · 1 en boucle
+1 place libre
+⤓
+Importer
+Après validation :
+merge squash → main
+Pilote auto
+À faire
+0
+DEM-5
+Boucle 2/5
+Export CSV des factures
+✓
+Le CSV reprend les filtres de la liste
+Montants au format français
+○
+Tests verts
+Route GET /invoices.csv
+Montants en 1 234,56 €
+Lance npm test
+À tester
+2
+DEM-6
+Limiter les tentatives de connexion
+Ce qui a été fait
+Compteur d’échecs par IP et par compte
+Limiteur branché sur /login
+Message « Réessaie dans 15 min »
+Tests du limiteur
+Au-delà de 5 échecs en 15 min, la connexion est refusée
+Le message d’erreur dit quand réessayer
+▶ Tester
+3/3 critères
+Valider et merger
+Renvoyer
+DEM-4
+Objectif partiel
+Recherche plein texte des clients
+Index plein texte sur les clients
+Route GET /customers/search
+Tests de la recherche
+Recherche par nom, email et société
+Résultats en moins de 200 ms
+dem-4-recherche-plein-texte-des-clients
+2/3 critères
+3
+DEM-3
+Pagination de /users
+⇡ Poussé sur ticket/dem-3
+dem-3-pagination-de-users
+2 boucles · 0,61 $
+DEM-2
+Webhooks Stripe
+⇡ PR #41 → main
+dem-2-webhooks-stripe
+3 boucles · 1,12 $
+DEM-1
+Réinitialisation du mot de passe
+⤵ Mergé dans main · squash
+dem-1-reinitialisation-du-mot-de-passe
+1 boucle · 0,48 $
+3 actifs
+0 en attente
+1 terminé
+4 Claude ·
+1,2 Go
+6 %
+CPU
+Session 5 h
+22 %
+reset 2 h 14
+Hebdo
+36 %
+reset 3 j
+Aujourd'hui
+3,48 $
+⎇ main
+↓3
+↑1
+♪ On
+localhost:4101/login
+Connexion
+lea@exemple.fr
+••••••••
+Mot de passe incorrect (5/5)
+Se connecter
+Escouade
+DEM-6 prêt à tester
+Préparation 1
+terminé
+api
+en cours
+⟳
+■
+web
+■ Arrêter
+Ouvrir
+Tester DEM-6
+Préparation : npm install
+terminée
+prêt · 2,4 s
+prêt · 2,7 s
+Voir les logs
+Tout arrêter
+Fermer
+Ouvert dans le navigateur :
+http://localhost:4101/login
+Rouvrir
+Trop de tentatives. Réessaie dans 15 min.
+pagination-users
+3m 15s
+⎇ pagination-users
+41 k tok
+0,32 $
+Prêt
+demo-api / escouade/pagination-users
+▷
+Préparer le lancement
+Contexte
+76,2 k / 200 k
+Tokens
+24,8 k
+Coût
+0,27 $
+Fichiers ▸
+Durée
+4m 02s
+Envoyer un message à pagination-users…
+Modèle
+▾
+Effort
+Élevé
+Mode
+Auto
+Envoyer ↵
+Prépare le lancement de test de ce worktree. Ports réservés : 4110 à 4119 (ESCOUADE_PORT_BASE et ESCOUADE_PORT_END dans le lancement)…
+Claude travaille…
+■ Stop
+
+## validate
+Valide,
+ou
+renvoie.
+demo-api
+Δ 7
+studio-web
+Δ 3
+mobile-app
+Δ 12
+infra
++
+</>
+Éditeur
+Stats
+—
+☐
+✕
+Agents
+Kanban
+1
+4
++ Nouvel agent
+refacto-auth
+En cours
+Opus 5.5
+·
+12m 40s
+184 k tok
+2,41 $
+6 fich.
+tests-e2e
+Sonnet 5.5
+8m 02s
+96 k tok
+0,73 $
+3 fich.
+dem-5-export-csv-des-factures
+2m 10s
+⎇ ticket/dem-5
+38 k tok
+≈ 0,41 $
+4 fich.
+▸ DEM-5 · boucle 2/5
+dem-4-recherche-plein-texte-des-clients
+Terminé
+⎇ ticket/dem-4
+▸ DEM-4 · à tester
+▸ Archivés (1)
+~/dev/demo-api
+main
+Parcourir
+~5 modifiés
++2 ajoutés
+−0 supprimés
+demo-api · 6 tickets · 1 en boucle
+1 place libre
+⤓
+Importer
+⚙
+Après validation :
+merge squash → main
+Pilote auto
+À faire
+0
+DEM-5
+Boucle 2/5
+Export CSV des factures
+✓
+Le CSV reprend les filtres de la liste
+Montants au format français
+○
+Tests verts
+Route GET /invoices.csv
+Montants en 1 234,56 €
+Lance npm test
+À tester
+DEM-4
+Objectif partiel
+Recherche plein texte des clients
+Ce qui a été fait
+Index plein texte sur les clients
+Route GET /customers/search
+Tests de la recherche
+Recherche par nom, email et société
+Résultats en moins de 200 ms
+2/3 critères
+Valider et merger
+Renvoyer
+DEM-6
+Limiter les tentatives de connexion
+⤵ Mergé dans main · squash
+dem-6-limiter-les-tentatives-de
+3 boucles · 1,86 $
+DEM-3
+Pagination de /users
+⇡ Poussé sur ticket/dem-3
+dem-3-pagination-de-users
+2 boucles · 0,61 $
+DEM-2
+Webhooks Stripe
+⇡ PR #41 → main
+dem-2-webhooks-stripe
+3 boucles · 1,12 $
+DEM-1
+Réinitialisation du mot de passe
+dem-1-reinitialisation-du-mot-de-passe
+1 boucle · 0,48 $
+3 actifs
+0 en attente
+1 terminé
+4 Claude ·
+1,2 Go
+6 %
+CPU
+Session 5 h
+22 %
+reset 2 h 14
+Hebdo
+36 %
+reset 3 j
+Aujourd'hui
+3,48 $
+⎇ main
+↓3
+↑1
+♪ On
+2
+▸ DEM-5 · à tester
+demo-api · 6 tickets · 0 en boucle
+3 places libres
+Filtres de la liste repris
+3/3 critères
+Réglages
+✳
+Claude Code
+♪
+Notifications
+▤
+Projets
+▦
+⧉
+Intégrations
+$_
+Terminaux
+⇄
+Réseau
+ⓘ
+À propos
+Escouade 1.4.0
+Pilote auto et tickets validés
+Projet
+Quand je valide un ticket « À tester »
+Merger dans une branche
+Fusionne le worktree de l'agent dans la branche cible, puis libère l'agent.
+Ouvrir une pull request
+Pousse ticket/<clé> et ouvre une PR vers la branche cible pour relecture.
+Pousser la branche du ticket
+Commit et push sur ticket/<clé>, sans merge ni PR.
+Laisser en l'état
+Les modifications restent non commitées dans le worktree.
+Branche cible
+⎇ develop
+Stratégie
+Merge commit
+Squash
+Rebase
+Relancer les tests avant
+Bloque l'action si un test échoue et renvoie le ticket à l'agent.
+npm test
+Supprimer le worktree après merge
+Libère l'espace disque et repart d'une branche propre.
+Message de commit généré
+Format Conventional Commits, avec la clé du ticket.
+feat: limiter les tentatives de connexion [DEM-42]
+En cas de conflit
+Me demander
+L'agent résout
+Annuler
+En parallèle
+3
+5
+6
+Modèle
+Comme les réglages (Opus 5.5)
+Effort
+Comme les réglages
+Mode
+Enregistrer
+▸ DEM-5 · boucle 1/5
+▸ DEM-4 · boucle 1/5
+demo-api · 6 tickets · 2 en boucle
+Boucle 1/5
+Réfléchit
+
+## integrations
+Jira,
+Trello,
+GitHub
+:
+importés
+et
+synchronisés.
+demo-api
+Δ 7
+studio-web
+Δ 3
+mobile-app
+Δ 12
+infra
++
+</>
+Éditeur
+Stats
+—
+☐
+✕
+Agents
+Kanban
+4
++ Nouvel agent
+refacto-auth
+En cours
+Opus 5.5
+·
+12m 40s
+184 k tok
+2,41 $
+6 fich.
+tests-e2e
+Sonnet 5.5
+8m 02s
+96 k tok
+0,73 $
+3 fich.
+dem-5-export-csv-des-factures
+2m 10s
+⎇ ticket/dem-5
+38 k tok
+≈ 0,41 $
+4 fich.
+▸ DEM-5 · boucle 1/5
+dem-4-recherche-plein-texte-des-clients
+⎇ ticket/dem-4
+▸ DEM-4 · boucle 1/5
+▸ Archivés (1)
+~/dev/demo-api
+main
+Parcourir
+~5 modifiés
++2 ajoutés
+−0 supprimés
+demo-api · 6 tickets · 2 en boucle
+1 place libre
+⤓
+Importer
+⚙
+Après validation :
+merge squash → main
+Pilote auto
+À faire
+0
+2
+DEM-5
+Boucle 1/5
+Export CSV des factures
+✓
+Le CSV reprend les filtres de la liste
+Montants au format français
+○
+Tests verts
+Route GET /invoices.csv
+Séparateur point-virgule
+Lance npm test
+DEM-4
+Recherche plein texte des clients
+Recherche par nom, email et société
+Résultats en moins de 200 ms
+Index plein texte sur les clients
+Route GET /customers/search
+Tests de la recherche
+Modifie src/search/index.ts
+À tester
+Terminé
+DEM-6
+Limiter les tentatives de connexion
+⤵ Mergé dans main · squash
+dem-6-limiter-les-tentatives-de
+3 boucles · 1,86 $
+DEM-3
+Pagination de /users
+⇡ Poussé sur ticket/dem-3
+dem-3-pagination-de-users
+2 boucles · 0,61 $
+DEM-2
+Webhooks Stripe
+⇡ PR #41 → main
+dem-2-webhooks-stripe
+3 boucles · 1,12 $
+DEM-1
+Réinitialisation du mot de passe
+dem-1-reinitialisation-du-mot-de-passe
+1 boucle · 0,48 $
+4 actifs
+0 en attente
+1 terminé
+4 Claude ·
+1,2 Go
+6 %
+CPU
+Session 5 h
+22 %
+reset 2 h 14
+Hebdo
+36 %
+reset 3 j
+Aujourd'hui
+3,48 $
+⎇ main
+↓3
+↑1
+♪ On
+Réglages
+✳
+Claude Code
+♪
+Notifications
+▤
+Projets
+▦
+⧉
+Intégrations
+$_
+Terminaux
+⇄
+Réseau
+ⓘ
+À propos
+Escouade 1.4.0
+Jira, Trello et GitHub Issues
+Projet
+Comptes connectés
+Les jetons restent sur cette machine, à part des réglages, et ne servent qu'aux appels de ces services.
+J
+Jira
+Connecté · lea@demo.dev · demo.atlassian.net
+Déconnecter
+T
+Trello
+Connecté · @lea
+GH
+GitHub Issues
+Connecté · @lea · via gh
+Sources liées à demo-api
+ATL — Atlas
+▾
+Tableau
+Aucun
+Dépôt
+Correspondance des statuts
+L'état que prend le ticket externe quand son ticket arrive dans la colonne ; « Commenter » y ajoute un commentaire.
+Commenter
+— inchangé
+Annuler
+Enregistrer
+Importer des tickets
+Dans « À faire » du Kanban de demo-api
+3
+⚙ Gérer les sources
+⌕
+factures
+Assignés à moi
+Sprint actif
+4 résultats
+lea@demo.dev · ATL — Atlas
+ATL-1294
+Arrondi faux sur les factures en devises
+Bug
+Critique  ·  Léa M.  ·  À faire
+✓ 2 critères détectés
+ATL-1291
+Relancer les factures impayées par e-mail
+Story
+Moyenne  ·  Léa M.  ·  À faire
+✓ 3 critères détectés
+ATL-1287
+Exporter les factures en PDF
+Haute  ·  Léa M.  ·  À faire
+ATL-1270
+Numérotation continue des factures
+Haute  ·  Léa M.  ·  En cours
+Déjà dans le Kanban
+3 tickets sélectionnés
+Boucles max
+5
+8
+Importer 3 tickets
+dem-7-arrondi-faux-sur-les-factures-en
+⎇ ticket/dem-7
+▸ DEM-7 · boucle 1/5
+demo-api · 9 tickets · 3 en boucle
+Toutes les places sont prises
+DEM-8
+3 critères · max 5 boucles
+Pris dès qu'une place se libère
+DEM-9
+En attente d'une place (3/3)
+DEM-7
+Montants arrondis au centime, devise par devise
+Lit src/billing/currency.ts
+5 actifs
+dem-8-relancer-les-factures-impayees-par
+⎇ ticket/dem-8
+▸ DEM-8 · boucle 1/5
+▸ Archivés (2)
+1
+Relance à J+7, puis à J+15
+Lien de paiement dans l’e-mail
+Réfléchit
+1 boucle · 0,54 $
+/ Atlas /
+Commentaires
+LM
+Léa Martin
+· à l'instant
+Escouade : DEM-7 est prêt à tester.
+Critères :
+✓ Montants arrondis au centime, devise par devise
+✓ Tests verts
+Ce qui a été fait :
+- Arrondi au centime par devise
+- Tests des devises
+Escouade : DEM-7 est terminé — ⤵ Mergé dans main · squash
+demo-api · 10 tickets · 3 en boucle
+ATL-1318
+DEM-10
+Alerte quand un paiement échoue
+1 ticket importé depuis Jira dans demo-api
+paiements
+claude-ready
+
+## launch
+Lance
+ton
+projet
+d’un
+clic.
+demo-api
+Δ 7
+studio-web
+Δ 3
+mobile-app
+Δ 12
+infra
++
+</>
+Éditeur
+Stats
+—
+☐
+✕
+Agents
+Kanban
+3
++ Nouvel agent
+refacto-auth
+En cours
+Opus 5.5
+·
+12m 40s
+184 k tok
+2,41 $
+6 fich.
+tests-e2e
+Sonnet 5.5
+8m 02s
+96 k tok
+0,73 $
+3 fich.
+pagination-users
+3m 15s
+⎇ pagination-users
+41 k tok
+0,32 $
+Lancement
+0/3
+Tout lancer
+⚙
+Front
+prêt
+▶
+API
+Worker
+PowerShell
+npm run dev
+· ~\dev\demo-api\web
+⌕
+Effacer
+▶ Lancer
+Pas encore lancée.
+3 actifs
+0 en attente
+✓
+1 terminé
+4 Claude ·
+1,2 Go
+6 %
+CPU
+Session 5 h
+22 %
+reset 2 h 14
+Hebdo
+36 %
+reset 3 j
+Aujourd'hui
+3,48 $
+⎇ main
+↓3
+↑1
+♪ On
+Commandes de lancement · demo-api
+PowerShell 7
+▾
+×
+web
+npm run api
+api
+Git Bash
+node worker.js
++ Ajouter une commande
+Fichiers copiés dans les worktrees :
+.env*
+Annuler
+Enregistrer
+3/3
+Tout arrêter
+en cours
+⟳
+■
+depuis 14:02
+⟳ Relancer
+■ Stopper
+$ npm run dev
+> demo-web@2.4.0 dev
+> vite
+VITE v6.4.3  ready in 412 ms
+➜  Local:   http://localhost:5173/
+➜  Network: use --host to expose
+12:04:31 [vite] page reload src/routes/users.ts
+2/3
+planté (code 1)
+· ~\dev\demo-api\api
+$ node worker.js
+worker: connexion à la file « factures »…
+Error: connect ECONNREFUSED 127.0.0.1:6379
+at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)
+── terminé · code 1 ──
+« Worker » s'est arrêté en erreur (code 1)
+
+## terminals
+De
+vrais
+terminaux.
+demo-api
+Δ 7
+studio-web
+Δ 3
+mobile-app
+Δ 12
+infra
++
+</>
+Éditeur
+Stats
+—
+☐
+✕
+Agents
+Kanban
+3
++ Nouvel agent
+refacto-auth
+En cours
+Opus 5.5
+·
+12m 40s
+184 k tok
+2,41 $
+6 fich.
+tests-e2e
+Sonnet 5.5
+8m 02s
+96 k tok
+0,73 $
+3 fich.
+pagination-users
+3m 15s
+⎇ pagination-users
+41 k tok
+0,32 $
+Terminaux
+PS
+PowerShell 7
+×
+$_
+Git Bash
+λ
+WSL (Ubuntu)
+wsl
+0
+[
+||||||||||||||||||||
+59.0%
+]
+1
+|||||||||||
+32.0%
+2
+||||||||||||||||||||||
+65.0%
+|||||||||||||
+38.0%
+Mem
+||||||||||||||||||
+||||||
+5.21G/15.5G
+PID USER      CPU% MEM%   TIME+  Command
+812 lea       12.4  2.1  0:42.18 node worker.js
+1024 lea        6.0  4.3  1:03.77 claude -p --input-format stream-json
+1188 lea        3.2  1.2  0:12.04 npm run dev
+1290 lea        0.7  0.4  0:01.92 bash
+F1Aide F2Config F3Chercher F9Tuer F10Quitter
+3 actifs
+0 en attente
+✓
+1 terminé
+4 Claude ·
+1,2 Go
+6 %
+CPU
+Session 5 h
+22 %
+reset 2 h 14
+Hebdo
+36 %
+reset 3 j
+Aujourd'hui
+3,48 $
+⎇ main
+↓3
+↑1
+♪ On
+⚙
+||||||||||
+29.0%
+||||||||||||
+35.0%
+
+## stats
+Tokens,
+coût,
+quotas
+:
+en
+direct.
+demo-api
+Δ 7
+studio-web
+Δ 3
+mobile-app
+Δ 12
+infra
++
+</>
+Éditeur
+Stats
+—
+☐
+✕
+Agents
+Kanban
+5
++ Nouvel agent
+refacto-auth
+En cours
+Opus 5.5
+·
+12m 40s
+184 k tok
+2,41 $
+6 fich.
+tests-e2e
+Sonnet 5.5
+8m 02s
+96 k tok
+0,73 $
+3 fich.
+pagination-users
+3m 15s
+⎇ pagination-users
+41 k tok
+0,32 $
+docs-api
+Terminé
+Haiku 4.5
+1m 50s
+12 k tok
+0,02 $
+1 fich.
+fix-login
+Prêt
+Fable 5.1
+0m 00s
+0 tok
+0,00 $
+0 fich.
+~/dev/demo-api
+main
+Parcourir
+~5 modifiés
++2 ajoutés
+−0 supprimés
+demo-api / main
+Contexte
+76,2 k / 200 k
+Tokens
+184 k
+Coût
+Fichiers ▸
+6
+Durée
+Refactore l'auth pour passer aux tokens JWT, sans casser les sessions existantes.
+C
+D'accord. Je cartographie l'existant : middleware, routes et stockage des sessions.
+▸
+Read
+src/auth/middleware.ts
+✓
+Grep
+session
+14 fichiers
+Edit
+src/auth/jwt.ts
++58
+−0
+Je remplace le middleware de session par une vérification du JWT, avec une période de transition.
+Claude travaille…
+Envoyer un message à refacto-auth…
+Modèle
+▾
+Effort
+Élevé
+Mode
+Auto
+■ Stop
+Envoyer ↵
+3 actifs
+0 en attente
+1 terminé
+4 Claude ·
+1,2 Go
+6 %
+CPU
+Session 5 h
+71 %
+reset 2 h 14
+Hebdo
+38 %
+reset 3 j
+Aujourd'hui
+3,48 $
+⎇ main
+↓3
+↑1
+♪ On
+⚙
+≈ 4,06 $
+Le tour s'est terminé en erreur
+Limite d'usage atteinte · réinitialisation à 14:05
+↻ Quota revenu · reprise automatique
+Je reprends : il reste la période de transition des sessions.
+4,12 $
+Statistiques
+Agents lancés depuis l'app · 4 projets, 12 agents
+Jour
+Semaine
+Mois
+258,52 M
+12 derniers mois · +12 %
+Coût global
+387,96 $
+412,80 $ depuis le 14 août 2025
+Coût moyen / prompt
+0,31 $
+≈ 206,6 k tokens / prompt
+Prompts
+1 251
+104 par mois en moyenne
+Tokens par mois
+Entrée
+Cache
+Sortie
+nov.
+déc.
+janv.
+févr.
+mars
+avr.
+mai
+juin
+juil.
+août
+sept.
+oct.
+Par projet
+196,88 $
+103,04 $
+63,48 $
+23,92 $
+Par modèle
+241,96 $
+109,48 $
+28,52 $
+7,36 $
+
+## remote
+Et
+depuis
+ton
+téléphone.
+demo-api
+Δ 7
+studio-web
+Δ 3
+mobile-app
+Δ 12
+infra
++
+</>
+Éditeur
+Stats
+—
+☐
+✕
+Agents
+Kanban
+4
++ Nouvel agent
+refacto-auth
+Terminé
+Opus 5.5
+·
+12m 40s
+184 k tok
+2,41 $
+6 fich.
+tests-e2e
+En cours
+Sonnet 5.5
+8m 02s
+96 k tok
+0,73 $
+3 fich.
+pagination-users
+3m 15s
+⎇ pagination-users
+41 k tok
+0,32 $
+docs-api
+Haiku 4.5
+1m 50s
+12 k tok
+0,02 $
+1 fich.
+~/dev/demo-api
+main
+Parcourir
+~5 modifiés
++2 ajoutés
+−0 supprimés
+demo-api / main
+Contexte
+76,2 k / 200 k
+Tokens
+214 k
+Coût
+2,86 $
+Fichiers ▸
+6
+Durée
+15m 02s
+C
+La refacto est terminée : JWT en place, période de transition pour les sessions existantes.
+J'ai fini la refacto de l'auth. Je lance les tests ?
+Envoyer un message à refacto-auth…
+Modèle
+▾
+Effort
+Élevé
+Mode
+Auto
+Envoyer ↵
+3 actifs
+0 en attente
+✓
+1 terminé
+4 Claude ·
+1,2 Go
+6 %
+CPU
+Session 5 h
+22 %
+reset 2 h 14
+Hebdo
+36 %
+reset 3 j
+Aujourd'hui
+3,48 $
+⎇ main
+↓3
+↑1
+♪ On
+⚙
+claude.ai
+demo-api · refacto-auth
+Oui, et ajoute
+↑
+Oui, et ajoute les tests Firefox
+depuis claude.ai
+Claude travaille…
+■ Stop
+Répondre…
+
+## more
+Et
+tout
+le
+reste.
+Réglages
+Chemin de claude
+C:\Users\lea\.local\bin\claude.exe
+Modèle, effort, mode
+Opus · Élevé · Auto
+Notifications Windows
+Arrêt des agents inactifs
+après 30 min
+Proxy réseau
+Proxy HTTP(S)
+http://proxy.entreprise.fr:8080
+Exclusions (NO_PROXY)
+localhost, *.interne
+Aussi dans les terminaux
+Pour Claude, les quotas, les mises à jour et, si tu veux, les terminaux.
+Raccourcis clavier
+Ctrl
+1…9
+projet n
+Tab
+agent suivant
+N
+nouvel agent
+T
+nouveau terminal
+J
+agent qui attend
+Maj
+B
+fichiers
+L
+disposition
+,
+réglages
+Échap
+interrompre
+↑
+dernier message
+Mises à jour automatiques
+Mise à jour 1.4.1 disponible → installer
+L'app cherche une nouvelle version toutes les cinq minutes. Les versions sont signées, et leurs notes viennent du journal des versions.
+Windows
+10 et 11 · installeur .exe
+macOS
+11 et plus · .dmg universel
+
+## outro
+Escouade
+Le poste de pilotage de tes agents Claude Code
+Gratuit,
+open
+source,
+pour
+Windows
+et
+macOS.
+github.com/guillaume-gagnaire/escouade

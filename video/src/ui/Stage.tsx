@@ -1,7 +1,7 @@
 import { createContext, useContext, type FC, type ReactNode } from 'react';
 import { AbsoluteFill, Html5Audio, interpolate, Sequence, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
 import { pop } from '../anim';
-import { useScene } from '../cues';
+import { useTitle } from '../cues';
 import { C, UI } from '../theme';
 
 /** The backdrop of every scene: dark, with a warm glow. */
@@ -89,7 +89,7 @@ export const Caption: FC<{ text: string; delay?: number; top?: number; size?: nu
 };
 
 /** The scene's title, from the script. */
-export const Title: FC<{ out?: number }> = ({ out }) => <Caption text={useScene().title} out={out} />;
+export const Title: FC<{ out?: number }> = ({ out }) => <Caption text={useTitle()} out={out} />;
 
 /** Window size and place on the stage. */
 export const WIN = { w: 1500, h: 844, left: 210, top: 190 } as const;

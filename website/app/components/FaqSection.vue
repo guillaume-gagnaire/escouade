@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { FAQ } from '~/data/site';
+const { text } = useLang();
 </script>
 
 <template>
   <section id="faq" class="section">
     <div class="wrap narrow">
-      <p class="eyebrow">FAQ</p>
-      <h2>Questions fréquentes</h2>
-      <details v-for="f in FAQ" :key="f.q" class="item">
+      <p class="eyebrow">{{ text.faq.eyebrow }}</p>
+      <h2>{{ text.faq.title }}</h2>
+      <details v-for="f in text.faq.items" :key="f.q" class="item">
         <summary>{{ f.q }}</summary>
         <p>{{ f.a }}</p>
       </details>

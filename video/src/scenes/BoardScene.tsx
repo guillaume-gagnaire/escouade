@@ -2,7 +2,8 @@ import type { FC } from 'react';
 import { useCurrentFrame, useVideoConfig } from 'remotion';
 import { pop, ramp, typed } from '../anim';
 import { useCues } from '../cues';
-import { STATUS, TABS } from '../data';
+import { TABS, useDemo } from '../data';
+import { useFmt } from '../lang';
 import { TicketForm, type Ticket } from '../ui/Board';
 import { Conversation, ConvHeader, Working } from '../ui/Chat';
 import { Composer } from '../ui/Composer';
@@ -11,7 +12,7 @@ import { ContextMenu } from '../ui/Modal';
 import { Shell } from '../ui/Shell';
 import { AgentsSidebar } from '../ui/Sidebar';
 import { AppWindow, Spotlight, Stage, Title } from '../ui/Stage';
-import { AGENT_CSV, AGENT_LOGIN, boardAgents, BoardView, CRITERIA, CSV, DESCRIPTION, DONE, LOGIN, TITLE } from './boardCommon';
+import { BoardView, useBoard } from './boardCommon';
 import { RefactoConv } from './common';
 
 /** From the agents to the board: its columns, a new ticket, then the autopilot starting two agents. */
@@ -19,6 +20,9 @@ export const BoardScene: FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const c = useCues();
+  const { tr, tok, usd, pick } = useFmt();
+  const { status: STATUS, refactor } = useDemo();
+  const { AGENT_CSV, AGENT_LOGIN, boardAgents, CRITERIA, CSV, DESCRIPTION, DONE, LOGIN, TITLE } = useBoard();
   const open = c.word('switch', 'kanban') + 2;
   const glow = (word: string) => ramp(frame, c.word('switch', word) - 3, 6) - ramp(frame, c.word('switch', word) + 22, 10);
   const plus = c.at('ticket') - 4;
@@ -37,10 +41,16 @@ export const BoardScene: FC = () => {
   const ticket = (base: Ticket, at: number, activity: string, agent: string): Ticket =>
     frame >= at
       ? { ...base, column: 'doing', enter: pop(frame, fps, at, 16), activity, agent: { name: agent, status: 'running' } }
-      : { ...base, wait: autopilot ? "Pris dès qu'une place se libère" : 'Pilote auto désactivé', canStart: !autopilot };
+      : {
+          ...base,
+          wait: autopilot
+            ? tr("Pris dès qu'une place se libère", 'Picked up as soon as a slot frees up')
+            : tr('Pilote auto désactivé', 'Autopilot off'),
+          canStart: !autopilot,
+        };
   const tickets: Ticket[] = [
-    ticket(CSV, startCsv, 'Lit src/billing/invoices.ts', AGENT_CSV),
-    ...(created ? [ticket({ ...LOGIN, enter: pop(frame, fps, add + 2, 16) }, startLogin, 'Réfléchit', AGENT_LOGIN)] : []),
+    ticket(CSV, startCsv, tr('Lit src/billing/invoices.ts', 'Reads src/billing/invoices.ts'), AGENT_CSV),
+    ...(created ? [ticket({ ...LOGIN, enter: pop(frame, fps, add + 2, 16) }, startLogin, tr('Réfléchit', 'Thinking'), AGENT_LOGIN)] : []),
     ...DONE,
   ];
   const criteria = [...CRITERIA.slice(0, Math.max(0, Math.floor(ramp(frame, t('critères'), 70) * 3.99)))];
@@ -58,13 +68,13 @@ export const BoardScene: FC = () => {
               <AgentsSidebar
                 board
                 agents={boardAgents([
-                  ...(frame >= startCsv ? [{ name: AGENT_CSV, tag: 'DEM-5 · boucle 1/5' }] : []),
-                  ...(frame >= startLogin ? [{ name: AGENT_LOGIN, tag: 'DEM-6 · boucle 1/5' }] : []),
+                  ...(frame >= startCsv ? [{ name: AGENT_CSV, tag: tr('DEM-5 · boucle 1/5', 'DEM-5 · loop 1/5') }] : []),
+                  ...(frame >= startLogin ? [{ name: AGENT_LOGIN, tag: tr('DEM-6 · boucle 1/5', 'DEM-6 · loop 1/5') }] : []),
                 ])}
                 enters={[1, 1, pop(frame, fps, startCsv), pop(frame, fps, startLogin)]}
               />
             ) : (
-              <AgentsSidebar agents={boardAgents([])} selected="refacto-auth" />
+              <AgentsSidebar agents={boardAgents([])} selected={refactor} />
             )
           }
           overlay={
@@ -74,7 +84,12 @@ export const BoardScene: FC = () => {
                 y={372}
                 enter={frame >= menuAt + 4 && frame < c.end('manage') + 8 ? pop(frame, fps, menuAt + 4, 20) : 0}
                 hover={frame >= m('supprime') - 4 ? 3 : frame >= m('tête') - 4 ? 1 : frame >= m('modifie') - 4 ? 0 : undefined}
-                items={['Modifier', 'Passer en tête', null, { label: 'Supprimer', danger: true }]}
+                items={[
+                  tr('Modifier', 'Edit'),
+                  tr('Passer en tête', 'Move to the top'),
+                  null,
+                  { label: tr('Supprimer', 'Delete'), danger: true },
+                ]}
               />
               <Spotlight x={510} y={268} w={76} h={34} on={ramp(frame, byHand - 4, 8) - ramp(frame, auto - 10, 8)} />
               <PointerPath
@@ -83,9 +98,9 @@ export const BoardScene: FC = () => {
                   [open - 2, 218, 81, true],
                   [plus - 16, 450, 300],
                   [plus, 576, 154, true],
-                  [t('boucles') - 12, 420, 520],
-                  [t('boucles') + 4, 434, 494, true],
-                  [add - 4, 545, 528, true],
+                  [t('boucles') - 12, pick(420, 408), pick(520, 484)],
+                  [t('boucles') + 4, pick(434, 422), pick(494, 458), true],
+                  [add - 4, pick(545, 556), pick(528, 476), true],
                   [menuAt - 16, 520, 450],
                   [menuAt + 2, 470, 362, true],
                   [m('modifie') - 4, 540, 395],
@@ -104,7 +119,11 @@ export const BoardScene: FC = () => {
               tickets={tickets}
               autopilot={autopilot}
               places={
-                frame >= full - 6 && free === 0 ? 'Toutes les places sont prises' : free === 1 ? '1 place libre' : `${free} places libres`
+                frame >= full - 6 && free === 0
+                  ? tr('Toutes les places sont prises', 'All slots taken')
+                  : free === 1
+                    ? tr('1 place libre', '1 free slot')
+                    : tr(`${free} places libres`, `${free} free slots`)
               }
               glow={{ todo: glow('faire'), doing: glow('cours'), review: glow('tester'), done: glow('terminé') }}
               plusPressed={ramp(frame, plus - 3, 3) - ramp(frame, plus + 3, 4)}
@@ -124,16 +143,16 @@ export const BoardScene: FC = () => {
           ) : (
             <>
               <ConvHeader
-                name="refacto-auth"
+                name={refactor}
                 status="running"
                 sub="demo-api / main"
-                metrics={{ model: 'Opus 5.5', tokens: '184 k', cost: '2,41 $', files: 6, duration: '12m 40s' }}
+                metrics={{ model: 'Opus 5.5', tokens: tok(184), cost: usd(2.41), files: 6, duration: '12m 40s' }}
               />
               <Conversation>
                 <RefactoConv />
                 <Working />
               </Conversation>
-              <Composer placeholder="Envoyer un message à refacto-auth…" busy />
+              <Composer placeholder={tr(`Envoyer un message à ${refactor}…`, `Send a message to ${refactor}…`)} busy />
             </>
           )}
         </Shell>

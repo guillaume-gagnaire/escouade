@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react';
+import { useLang } from './lang';
 import { FPS, sceneOf, type Placed, type SceneId } from './timeline';
 
 /** The scene being drawn: its animations follow its lines. */
@@ -51,3 +52,9 @@ export function cuesOf(s: Placed): Cues {
 }
 
 export const useCues = (): Cues => cuesOf(useScene());
+
+/** The scene's title, on screen, in the language of the picture. */
+export function useTitle(): string {
+  const scene = useScene();
+  return useLang() === 'en' ? scene.titleEn : scene.title;
+}

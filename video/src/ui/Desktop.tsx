@@ -1,5 +1,6 @@
 import type { FC, ReactNode } from 'react';
 import { useCurrentFrame } from 'remotion';
+import { useFmt } from '../lang';
 import { C, soft, UI } from '../theme';
 import { Logo } from './Logo';
 import { blink } from './Shell';
@@ -7,6 +8,7 @@ import { blink } from './Shell';
 /** Windows' taskbar at the bottom of the stage; `flash` makes Escouade's button blink, `badge` puts a count on its tray icon. */
 export const Taskbar: FC<{ enter: number; flash?: boolean; badge?: number; active?: boolean }> = ({ enter, flash, badge, active }) => {
   const frame = useCurrentFrame();
+  const { tr } = useFmt();
   const f = flash ? blink(frame * 1.4) : 0;
   if (enter <= 0) return null;
   const tile = (child: ReactNode, bg = 'transparent', key?: string) => (
@@ -102,10 +104,10 @@ export const Taskbar: FC<{ enter: number; flash?: boolean; badge?: number; activ
             </span>
           ) : null}
         </span>
-        <span style={{ color: '#dddddd' }}>FR</span>
+        <span style={{ color: '#dddddd' }}>{tr('FR', 'ENG')}</span>
         <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1.25 }}>
-          <span>14:32</span>
-          <span>04/10/2026</span>
+          <span>{tr('14:32', '2:32 PM')}</span>
+          <span>{tr('04/10/2026', '10/4/2026')}</span>
         </span>
       </div>
     </div>
@@ -113,8 +115,9 @@ export const Taskbar: FC<{ enter: number; flash?: boolean; badge?: number; activ
 };
 
 /** Another app's window, in front of Escouade. */
-export const OtherWindow: FC<{ enter: number }> = ({ enter }) =>
-  enter <= 0 ? null : (
+export const OtherWindow: FC<{ enter: number }> = ({ enter }) => {
+  const { tr } = useFmt();
+  return enter <= 0 ? null : (
     <div
       style={{
         position: 'absolute',
@@ -147,7 +150,7 @@ export const OtherWindow: FC<{ enter: number }> = ({ enter }) =>
         <span
           style={{ width: 220, height: 26, borderRadius: 6, background: '#fff', display: 'flex', alignItems: 'center', padding: '0 10px' }}
         >
-          Spécifications — v2
+          {tr('Spécifications — v2', 'Specifications — v2')}
         </span>
       </div>
       <div style={{ padding: '40px 60px', display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -158,3 +161,4 @@ export const OtherWindow: FC<{ enter: number }> = ({ enter }) =>
       </div>
     </div>
   );
+};

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Feature } from '~/data/site';
+import type { Feature } from '~/data/catalogs';
 
 defineProps<{ feature: Feature; reverse?: boolean }>();
 const asset = useAsset();

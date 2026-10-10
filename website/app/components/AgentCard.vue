@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { fDur, fTok, fUsd, type Activity, type Agent, type Status } from '~/data/squad';
+import { fmt, plural } from '~/data/catalog';
+import { fDur, fTok, fUsd, type Activity, type Agent } from '~/data/squad';
 
 defineProps<{ agent: Agent }>();
+const { lang, text } = useLang();
 const emit = defineEmits<{ answer: [option: number] }>();
 
 const card = ref<HTMLElement>();
@@ -10,8 +12,6 @@ function answer(option: number, e: MouseEvent) {
   emit('answer', option);
   if (e.detail === 0) nextTick(() => card.value?.focus());
 }
-
-const LABEL: Record<Status, string> = { ready: 'Prêt', running: 'En cours', question: 'Question', done: 'Terminé', totest: 'À tester' };
 
 /** Each tool's pictogram, on a 16-unit grid. */
 const ICON: Record<Activity['tool'], string> = {
@@ -29,15 +29,15 @@ const ICON: Record<Activity['tool'], string> = {
       <i class="dot" aria-hidden="true" />
       <span class="name">{{ agent.name }}</span>
       <span class="model">{{ agent.model }} · {{ fDur(agent.ms) }}</span>
-      <span class="state">{{ LABEL[agent.status] }}</span>
+      <span class="state">{{ text.demo.status[agent.status] }}</span>
     </div>
     <div v-if="agent.ticket" class="row ticket">
       <svg class="caret" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 3.5l5 4.5-5 4.5z" /></svg>
-      <span class="key">{{ agent.ticket.key }} · boucle {{ agent.ticket.loop }}/{{ agent.ticket.max }}</span>
+      <span class="key">{{ agent.ticket.key }} · {{ fmt(text.demo.loop, { loop: agent.ticket.loop, max: agent.ticket.max }) }}</span>
       <span
         class="criteria"
         role="img"
-        :aria-label="`${agent.ticket.met.filter(Boolean).length} critères atteints sur ${agent.ticket.met.length}`"
+        :aria-label="plural(lang, text.demo.criteria, agent.ticket.met.filter(Boolean).length, { total: agent.ticket.met.length })"
       >
         <svg v-for="(m, i) in agent.ticket.met" :key="i" class="criterion" :class="{ met: m }" viewBox="0 0 16 16" aria-hidden="true">
           <circle cx="8" cy="8" r="6" />
@@ -71,7 +71,7 @@ const ICON: Record<Activity['tool'], string> = {
           <span>{{ agent.result }}</span>
         </div>
       </Transition>
-      <span class="spend">{{ fTok(agent.tokens) }} tok · {{ fUsd(agent.cost) }}</span>
+      <span class="spend">{{ fTok(agent.tokens, lang) }} {{ text.demo.tokens }} · {{ fUsd(agent.cost, lang) }}</span>
     </div>
   </article>
 </template>

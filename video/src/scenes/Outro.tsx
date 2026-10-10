@@ -1,8 +1,9 @@
 import type { FC } from 'react';
 import { useCurrentFrame, useVideoConfig } from 'remotion';
 import { pop, ramp } from '../anim';
-import { useCues, useScene } from '../cues';
+import { useCues, useTitle } from '../cues';
 import { C, MONO } from '../theme';
+import { useFmt } from '../lang';
 import { Logo } from '../ui/Logo';
 import { Caption, Stage } from '../ui/Stage';
 
@@ -11,6 +12,8 @@ export const Outro: FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const c = useCues();
+  const { tr } = useFmt();
+  const caption = useTitle();
   const e = pop(frame, fps, 0, 12);
   const name = pop(frame, fps, 12, 16);
   const link = pop(frame, fps, c.word('bye', 'télécharge-le') - 6, 18);
@@ -32,10 +35,10 @@ export const Outro: FC = () => {
           <Logo size={210} stack={[e, e, e]} spark={e} spin={frame * 0.5} />
           <div style={{ fontSize: 130, fontWeight: 800, letterSpacing: -5, lineHeight: 1, opacity: Math.min(1, name) }}>Escouade</div>
           <div style={{ fontSize: 42, fontWeight: 500, color: C.muted, opacity: Math.min(1, name) }}>
-            Le poste de pilotage de tes agents Claude Code
+            {tr('Le poste de pilotage de tes agents Claude Code', 'The cockpit for your Claude Code agents')}
           </div>
         </div>
-        <Caption text={useScene().title} delay={c.word('bye', 'gratuit') - 4} top={760} />
+        <Caption text={caption} delay={c.word('bye', 'gratuit') - 4} top={760} />
         <div
           style={{
             position: 'absolute',

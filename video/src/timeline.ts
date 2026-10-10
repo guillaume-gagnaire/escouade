@@ -28,6 +28,8 @@ export interface PlacedLine {
   key: string;
   id: string;
   text: string;
+  /** The English subtitles of the line. */
+  en: string;
   /** In the whole video. */
   from: number;
   durationInFrames: number;
@@ -37,6 +39,7 @@ export interface PlacedLine {
 export interface Placed {
   id: SceneId;
   title: string;
+  titleEn: string;
   from: number;
   durationInFrames: number;
   /** The frame, from the scene's start, at which each line starts. */
@@ -59,6 +62,7 @@ export function buildTimeline(script: readonly SceneScript[], voice: Record<stri
         key,
         id: l.id,
         text: l.text,
+        en: l.en,
         from: from + cues[l.id],
         durationInFrames: Math.ceil(clip.duration * FPS),
         words: clip.words,
@@ -67,7 +71,7 @@ export function buildTimeline(script: readonly SceneScript[], voice: Record<stri
       return line;
     });
     const durationInFrames = Math.ceil((t + (s.tail ?? TAIL)) * FPS);
-    const placed = { id: s.id, title: s.title, from, durationInFrames, cues, lines };
+    const placed = { id: s.id, title: s.title, titleEn: s.titleEn, from, durationInFrames, cues, lines };
     from += durationInFrames;
     return placed;
   });

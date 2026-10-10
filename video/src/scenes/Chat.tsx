@@ -1,8 +1,9 @@
 import type { FC } from 'react';
 import { useCurrentFrame, useVideoConfig } from 'remotion';
-import { count, fr, pop, ramp, typed } from '../anim';
+import { count, pop, ramp, typed } from '../anim';
 import { useCues } from '../cues';
-import { AGENTS, onSonnet, STATUS, TABS } from '../data';
+import { onSonnet, TABS, useDemo } from '../data';
+import { useFmt } from '../lang';
 import { C } from '../theme';
 import {
   AssistantMsg,
@@ -50,13 +51,15 @@ const TESTS = [
   '',
   ' Tests  42 passed (42)',
 ];
-const LATER = 'Et ajoute un test pour la dernière page.';
 
 /** A turn of the conversation: markdown, tools unfolded, live cost, a question, a permission, a message sent during the turn. */
 export const Chat: FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const c = useCues();
+  const { tr, tok, usd, pick } = useFmt();
+  const { agents: AGENTS, status: STATUS } = useDemo();
+  const LATER = tr('Et ajoute un test pour la dernière page.', 'And add a test for the last page.');
   const md = c.at('md');
   const unfoldEdit = c.word('diff', 'déplie-les');
   const unfoldBash = c.word('diff', 'sortie');
@@ -86,8 +89,8 @@ export const Chat: FC = () => {
                   ? {
                       ...a,
                       status: phase === 'ask' && frame < allowed ? 'waiting' : 'running',
-                      tokens: `${fr(tokens, 1)} k`,
-                      cost: `${working ? '≈ ' : ''}${fr(cost)} $`,
+                      tokens: tok(tokens, 1),
+                      cost: `${working ? '≈ ' : ''}${usd(cost)}`,
                     }
                   : a,
               )}
@@ -95,7 +98,13 @@ export const Chat: FC = () => {
             />
           }
           overlay={
-            <Spotlight x={1116} y={52} w={162} h={56} on={ramp(frame, c.word('live', 'tokens') - 6, 10) - ramp(frame, c.end('live'), 10)} />
+            <Spotlight
+              x={pick(1116, 1156)}
+              y={52}
+              w={pick(162, 140)}
+              h={56}
+              on={ramp(frame, c.word('live', 'tokens') - 6, 10) - ramp(frame, c.end('live'), 10)}
+            />
           }
         >
           <ConvHeader
@@ -105,8 +114,8 @@ export const Chat: FC = () => {
             test="prepare"
             metrics={{
               model: 'Sonnet 5.5',
-              tokens: `${fr(tokens, 1)} k`,
-              cost: `${working ? '≈ ' : ''}${fr(cost)} $`,
+              tokens: tok(tokens, 1),
+              cost: `${working ? '≈ ' : ''}${usd(cost)}`,
               files: 3,
               duration: '3m 15s',
             }}
@@ -114,9 +123,19 @@ export const Chat: FC = () => {
           <Conversation>
             {phase === 'tools' ? (
               <>
-                <UserMsg text="Ajoute la pagination à l'endpoint `/users`, avec un curseur." />
+                <UserMsg
+                  text={tr(
+                    "Ajoute la pagination à l'endpoint `/users`, avec un curseur.",
+                    'Add pagination to the `/users` endpoint, with a cursor.',
+                  )}
+                />
                 <Thinking enter={pop(frame, fps, md)} />
-                <AssistantMsg text="Voici le plan : **une limite par défaut**, un curseur opaque, et des tests pour chaque cas.">
+                <AssistantMsg
+                  text={tr(
+                    'Voici le plan : **une limite par défaut**, un curseur opaque, et des tests pour chaque cas.',
+                    'Here’s the plan: **a default limit**, an opaque cursor, and tests for every case.',
+                  )}
+                >
                   <CodeBlock lines={CODE} shown={Math.floor(ramp(frame, md + 5, 50) * CODE.length)} />
                 </AssistantMsg>
                 <ToolCall
@@ -146,7 +165,12 @@ export const Chat: FC = () => {
               <>
                 <ToolCall tool="Edit" target="src/routes/users.ts" meta={<Diffstat add={24} del={3} />} />
                 <ToolCall tool="Bash" target="npm test" meta={<span style={{ fontSize: 13, color: C.muted }}>42 tests</span>} />
-                <AssistantMsg text="Les tests passent. J'ajoute le cas de la dernière page, sans curseur suivant." />
+                <AssistantMsg
+                  text={tr(
+                    "Les tests passent. J'ajoute le cas de la dernière page, sans curseur suivant.",
+                    'Tests pass. I’m adding the last-page case, with no next cursor.',
+                  )}
+                />
                 <ToolCall
                   tool="Edit"
                   target="tests/users.test.ts"
@@ -160,9 +184,9 @@ export const Chat: FC = () => {
             ) : null}
             {phase === 'ask' ? (
               <>
-                <AssistantMsg text="Les 43 tests passent." />
+                <AssistantMsg text={tr('Les 43 tests passent.', 'All 43 tests pass.')} />
                 <QuestionCard
-                  question="Quelle taille de page par défaut ?"
+                  question={tr('Quelle taille de page par défaut ?', 'What default page size?')}
                   options={['20', '50', '100']}
                   picked={frame >= picked ? 1 : null}
                   enter={pop(frame, fps, askAt)}
@@ -187,23 +211,35 @@ export const Chat: FC = () => {
             ) : null}
             {phase === 'during' ? (
               <>
-                <AssistantMsg text="Migration appliquée. Je mets à jour la documentation de l'API." />
+                <AssistantMsg
+                  text={tr(
+                    "Migration appliquée. Je mets à jour la documentation de l'API.",
+                    'Migration applied. I’m updating the API documentation.',
+                  )}
+                />
                 <ToolCall tool="Edit" target="docs/api.md" meta={<Diffstat add={12} del={2} />} />
-                <UserMsg text={LATER} tag="transmis pendant le tour" enter={pop(frame, fps, sent)} />
-                {frame < esc ? <Working /> : <TurnSep text="Interrompu · 18,4 k tokens · 0,21 $" enter={pop(frame, fps, esc)} />}
+                <UserMsg text={LATER} tag={tr('transmis pendant le tour', 'delivered during the turn')} enter={pop(frame, fps, sent)} />
+                {frame < esc ? (
+                  <Working />
+                ) : (
+                  <TurnSep
+                    text={tr(`Interrompu · ${tok(18.4, 1)} tokens · ${usd(0.21)}`, `Interrupted · ${tok(18.4, 1)} tokens · ${usd(0.21)}`)}
+                    enter={pop(frame, fps, esc)}
+                  />
+                )}
               </>
             ) : null}
           </Conversation>
           <Composer
             text={phase === 'during' && frame < sent ? typed(LATER, frame, fps, typing, 34) : ''}
-            placeholder="Envoyer un message à pagination-users…"
+            placeholder={tr('Envoyer un message à pagination-users…', 'Send a message to pagination-users…')}
             model="Sonnet 5.5"
             busy={working}
             waiting={phase === 'ask' && frame < allowed}
           />
         </Shell>
       </AppWindow>
-      <KeyPress keys={['Échap']} at={esc} />
+      <KeyPress keys={[tr('Échap', 'Esc')]} at={esc} />
     </Stage>
   );
 };

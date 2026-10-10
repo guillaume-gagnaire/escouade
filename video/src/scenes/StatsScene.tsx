@@ -2,7 +2,8 @@ import type { FC } from 'react';
 import { useCurrentFrame, useVideoConfig } from 'remotion';
 import { count, pop, ramp } from '../anim';
 import { useCues } from '../cues';
-import { AGENTS, STATUS, TABS } from '../data';
+import { TABS, useDemo } from '../data';
+import { useFmt } from '../lang';
 import { C, MONO, soft } from '../theme';
 import { AssistantMsg, Conversation, ConvHeader, enterStyle, TurnSep, Working } from '../ui/Chat';
 import { Composer } from '../ui/Composer';
@@ -18,6 +19,8 @@ export const StatsScene: FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const c = useCues();
+  const { tr, tok, usd, pick } = useFmt();
+  const { agents: AGENTS, status: STATUS, refactor } = useDemo();
   const q = (w: string) => c.word('quota', w);
   const limited = frame >= c.at('resume') - 4 && frame < c.word('resume', 'revient') + 6;
   const back = frame >= c.word('resume', 'revient') + 6;
@@ -41,7 +44,7 @@ export const StatsScene: FC = () => {
           status={{
             ...STATUS,
             session,
-            sessionReset: limited ? '0 h 03' : '2 h 14',
+            sessionReset: limited ? tr('0 h 03', '0h03') : tr('2 h 14', '2h14'),
             weekly: count(frame, 20, 200, 36, 38),
             cost: count(frame, c.at('cost'), 150, 3.48, 4.12),
             estimated: frame >= c.at('cost') && frame < c.end('cost') + 30,
@@ -49,18 +52,26 @@ export const StatsScene: FC = () => {
           sidebar={
             <AgentsSidebar
               agents={AGENTS.map((a) =>
-                a.name === 'refacto-auth' && limited ? { ...a, status: 'error' as const, resume: 'Reprise à 14:05' } : a,
+                a.name === refactor && limited
+                  ? { ...a, status: 'error' as const, resume: tr('Reprise à 14:05', 'Resumes at 2:05 PM') }
+                  : a,
               )}
-              selected="refacto-auth"
+              selected={refactor}
             />
           }
           overlay={
             <>
-              <Spotlight x={8} y={812} w={304} h={30} on={spot(q('actifs'), q('quotas'))} />
-              <Spotlight x={540} y={812} w={292} h={30} on={spot(q('session'), q('semaine'))} />
-              <Spotlight x={540} y={812} w={512} h={30} on={spot(q('semaine'), c.at('cost'))} />
-              <Spotlight x={1070} y={812} w={142} h={30} on={spot(c.word('cost', 'coût'), c.word('cost', 'mémoire'))} />
-              <Spotlight x={318} y={812} w={206} h={30} on={spot(c.word('cost', 'mémoire'), c.end('cost') + 4)} />
+              <Spotlight x={8} y={812} w={pick(304, 256)} h={30} on={spot(q('actifs'), q('quotas'))} />
+              <Spotlight x={pick(540, 490)} y={812} w={pick(292, 256)} h={30} on={spot(q('session'), q('semaine'))} />
+              <Spotlight x={pick(540, 490)} y={812} w={pick(512, 469)} h={30} on={spot(q('semaine'), c.at('cost'))} />
+              <Spotlight
+                x={pick(1070, 974)}
+                y={812}
+                w={pick(142, 96)}
+                h={30}
+                on={spot(c.word('cost', 'coût'), c.word('cost', 'mémoire'))}
+              />
+              <Spotlight x={pick(318, 275)} y={812} w={pick(206, 198)} h={30} on={spot(c.word('cost', 'mémoire'), c.end('cost') + 4)} />
               <PointerPath
                 keys={[
                   [statsClick - 22, 1200, 300],
@@ -85,10 +96,10 @@ export const StatsScene: FC = () => {
           ) : (
             <>
               <ConvHeader
-                name="refacto-auth"
+                name={refactor}
                 status={limited ? 'idle' : 'running'}
                 sub="demo-api / main"
-                metrics={{ model: 'Opus 5.5', tokens: '184 k', cost: '2,41 $', files: 6, duration: '12m 40s' }}
+                metrics={{ model: 'Opus 5.5', tokens: tok(184), cost: usd(2.41), files: 6, duration: '12m 40s' }}
               />
               <Conversation>
                 <RefactoConv />
@@ -108,24 +119,30 @@ export const StatsScene: FC = () => {
                   >
                     <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, fontWeight: 700 }}>
                       <span style={{ width: 8, height: 8, borderRadius: 4, background: C.del }} />
-                      Le tour s'est terminé en erreur
+                      {tr("Le tour s'est terminé en erreur", 'The turn ended with an error')}
                     </span>
                     <span style={{ fontFamily: MONO, fontSize: 13, color: C.muted }}>
-                      Limite d'usage atteinte · réinitialisation à 14:05
+                      {tr("Limite d'usage atteinte · réinitialisation à 14:05", 'Usage limit reached · resets at 2:05 PM')}
                     </span>
                     {limited ? (
                       <span style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 14, color: C.wait }}>
-                        Reprise automatique à 14:05
-                        <Button small>Annuler la reprise</Button>
+                        {tr('Reprise automatique à 14:05', 'Auto-resume at 2:05 PM')}
+                        <Button small>{tr('Annuler la reprise', 'Cancel resume')}</Button>
                       </span>
                     ) : null}
                   </div>
                 ) : null}
                 {back ? (
                   <>
-                    <TurnSep text="↻ Quota revenu · reprise automatique" enter={pop(frame, fps, c.word('resume', 'revient') + 6)} />
+                    <TurnSep
+                      text={tr('↻ Quota revenu · reprise automatique', '↻ Quota is back · auto-resume')}
+                      enter={pop(frame, fps, c.word('resume', 'revient') + 6)}
+                    />
                     <AssistantMsg
-                      text="Je reprends : il reste la période de transition des sessions."
+                      text={tr(
+                        'Je reprends : il reste la période de transition des sessions.',
+                        'Picking up: the sessions’ transition period remains.',
+                      )}
                       enter={pop(frame, fps, c.word('resume', 'revient') + 16)}
                     />
                     <Working />
@@ -134,7 +151,7 @@ export const StatsScene: FC = () => {
                   <Working />
                 ) : null}
               </Conversation>
-              <Composer placeholder="Envoyer un message à refacto-auth…" busy={!limited} />
+              <Composer placeholder={tr(`Envoyer un message à ${refactor}…`, `Send a message to ${refactor}…`)} busy={!limited} />
             </>
           )}
         </Shell>

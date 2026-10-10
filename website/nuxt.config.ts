@@ -17,5 +17,6 @@ export default defineNuxtConfig({
     },
   },
   runtimeConfig: { public: { version: tauri.version } },
-  nitro: { preset: 'github_pages' },
+  // One page per language: the French one at the root, the English one under /en/.
+  nitro: { preset: 'github_pages', prerender: { routes: ['/', '/en'] } },
 });

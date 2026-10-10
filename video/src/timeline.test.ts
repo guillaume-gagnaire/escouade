@@ -4,15 +4,16 @@ import { buildTimeline, FPS, GAP, LEAD, TAIL, TIMELINE, TOTAL_FRAMES } from './t
 import VOICE from './voice.json';
 
 const script = [
-  { id: 'intro', title: 'A', shows: [], lead: 1, lines: [{ id: 'a', text: 'a' }] },
+  { id: 'intro', title: 'A', titleEn: 'A', shows: [], lead: 1, lines: [{ id: 'a', text: 'a', en: 'a' }] },
   {
     id: 'chaos',
     title: 'B',
+    titleEn: 'B',
     shows: [],
     tail: 2,
     lines: [
-      { id: 'x', text: 'x', hold: 1 },
-      { id: 'y', text: 'y' },
+      { id: 'x', text: 'x', en: 'x', hold: 1 },
+      { id: 'y', text: 'y', en: 'y' },
     ],
   },
 ] satisfies SceneScript[];

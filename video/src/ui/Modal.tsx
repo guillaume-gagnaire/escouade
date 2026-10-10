@@ -1,4 +1,5 @@
 import type { FC, ReactNode } from 'react';
+import { useFmt } from '../lang';
 import { C, MONO, soft } from '../theme';
 import { Cursor } from './Cursor';
 import { Button } from './Sidebar';
@@ -244,42 +245,45 @@ export const ConfirmModal: FC<{
   option?: { label: string; checked: boolean };
   enter: number;
   pressed?: number;
-}> = ({ title, body, confirm, danger, option, enter, pressed }) => (
-  <Modal
-    title={title}
-    width={560}
-    enter={enter}
-    footer={
-      <>
-        <Button>Annuler</Button>
-        <Button primary={danger ? C.del : C.spark} pressed={pressed}>
-          {confirm}
-        </Button>
-      </>
-    }
-  >
-    <span style={{ fontSize: 15, lineHeight: 1.5, color: C.muted }}>{body}</span>
-    {option ? (
-      <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14.5 }}>
-        <span
-          style={{
-            width: 18,
-            height: 18,
-            borderRadius: 4,
-            border: `1.5px solid ${option.checked ? C.spark : C.line2}`,
-            background: option.checked ? C.spark : 'transparent',
-            color: '#1b1512',
-            fontSize: 13,
-            fontWeight: 800,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          {option.checked ? '✓' : ''}
+}> = ({ title, body, confirm, danger, option, enter, pressed }) => {
+  const { tr } = useFmt();
+  return (
+    <Modal
+      title={title}
+      width={560}
+      enter={enter}
+      footer={
+        <>
+          <Button>{tr('Annuler', 'Cancel')}</Button>
+          <Button primary={danger ? C.del : C.spark} pressed={pressed}>
+            {confirm}
+          </Button>
+        </>
+      }
+    >
+      <span style={{ fontSize: 15, lineHeight: 1.5, color: C.muted }}>{body}</span>
+      {option ? (
+        <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14.5 }}>
+          <span
+            style={{
+              width: 18,
+              height: 18,
+              borderRadius: 4,
+              border: `1.5px solid ${option.checked ? C.spark : C.line2}`,
+              background: option.checked ? C.spark : 'transparent',
+              color: '#1b1512',
+              fontSize: 13,
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {option.checked ? '✓' : ''}
+          </span>
+          {option.label}
         </span>
-        {option.label}
-      </span>
-    ) : null}
-  </Modal>
-);
+      ) : null}
+    </Modal>
+  );
+};

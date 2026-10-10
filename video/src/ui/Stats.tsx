@@ -1,13 +1,15 @@
 import type { FC } from 'react';
 import { fr } from '../anim';
+import { useFmt, type Tr } from '../lang';
 import { C, hue, MONO, soft } from '../theme';
 
 /** The three series of the app's chart. */
-const SERIES = [
-  { key: 'input', label: 'Entrée', color: 'oklch(0.74 0.12 235)' },
-  { key: 'cache', label: 'Cache', color: 'oklch(0.76 0.12 150)' },
-  { key: 'output', label: 'Sortie', color: '#D97757' },
-] as const;
+const seriesOf = (tr: Tr) =>
+  [
+    { key: 'input', label: tr('Entrée', 'Input'), color: 'oklch(0.74 0.12 235)' },
+    { key: 'cache', label: 'Cache', color: 'oklch(0.76 0.12 150)' },
+    { key: 'output', label: tr('Sortie', 'Output'), color: '#D97757' },
+  ] as const;
 /** Millions of tokens per day over 14 days: input, cache, output. */
 const DAYS: [number, number, number][] = [
   [0.6, 1.4, 0.3],
@@ -26,13 +28,40 @@ const DAYS: [number, number, number][] = [
   [1.1, 2.8, 0.6],
 ];
 /** Jour (14 days), Semaine (12 weeks), Mois (12 months), as the app's ranges. */
-const LABELS = [
-  ['21/09', '22/09', '23/09', '24/09', '25/09', '26/09', '27/09', '28/09', '29/09', '30/09', '01/10', '02/10', '03/10', '04/10'],
-  ['S29', 'S30', 'S31', 'S32', 'S33', 'S34', 'S35', 'S36', 'S37', 'S38', 'S39', 'S40'],
-  ['nov.', 'déc.', 'janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.'],
+const labelsOf = (tr: Tr) => [
+  ['21/09', '22/09', '23/09', '24/09', '25/09', '26/09', '27/09', '28/09', '29/09', '30/09', '01/10', '02/10', '03/10', '04/10'].map(
+    (d, i) =>
+      tr(
+        d,
+        [
+          'Sep 21',
+          'Sep 22',
+          'Sep 23',
+          'Sep 24',
+          'Sep 25',
+          'Sep 26',
+          'Sep 27',
+          'Sep 28',
+          'Sep 29',
+          'Sep 30',
+          'Oct 1',
+          'Oct 2',
+          'Oct 3',
+          'Oct 4',
+        ][i],
+      ),
+  ),
+  ['S29', 'S30', 'S31', 'S32', 'S33', 'S34', 'S35', 'S36', 'S37', 'S38', 'S39', 'S40'].map((w) => tr(w, w.replace('S', 'W'))),
+  ['nov.', 'déc.', 'janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.'].map((m, i) =>
+    tr(m, ['Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'][i]),
+  ),
 ];
-const SPANS = ['14 derniers jours', '12 dernières semaines', '12 derniers mois'];
-const UNITS = ['jour', 'semaine', 'mois'];
+const spansOf = (tr: Tr) => [
+  tr('14 derniers jours', 'Last 14 days'),
+  tr('12 dernières semaines', 'Last 12 weeks'),
+  tr('12 derniers mois', 'Last 12 months'),
+];
+const unitsOf = (tr: Tr) => [tr('jour', 'day'), tr('semaine', 'week'), tr('mois', 'month')];
 /** How much more a range holds than the 14 days. */
 const SCALE = [1, 5.4, 9.2];
 const PROJECTS = [
@@ -54,6 +83,7 @@ const Bars: FC<{ title: string; rows: { name: string; cost: number; color: strin
   grow,
   glow,
 }) => {
+  const { trx, usd } = useFmt();
   const max = Math.max(...rows.map((r) => r.cost));
   return (
     <div
@@ -79,7 +109,7 @@ const Bars: FC<{ title: string; rows: { name: string; cost: number; color: strin
           <span style={{ flex: 1, height: 8, borderRadius: 4, background: C.elev2, overflow: 'hidden' }}>
             <span style={{ display: 'block', width: `${(r.cost / max) * 100 * grow}%`, height: '100%', background: r.color }} />
           </span>
-          <span style={{ width: 62, textAlign: 'right', fontFamily: MONO, fontSize: 12.5 }}>{fr(r.cost)} $</span>
+          <span style={{ width: 62, textAlign: 'right', fontFamily: MONO, fontSize: 12.5 }}>{trx(<>{fr(r.cost)} $</>, usd(r.cost))}</span>
         </div>
       ))}
     </div>
@@ -93,12 +123,19 @@ export const StatsView: FC<{
   range?: number;
   glow?: { series?: number; projects?: number; models?: number; range?: number };
 }> = ({ grow, count, range = 0, glow = {} }) => {
+  const { tr, trx, usd, million, int } = useFmt();
+  const SERIES = seriesOf(tr);
+  const LABELS = labelsOf(tr);
+  const SPANS = spansOf(tr);
+  const UNITS = unitsOf(tr);
   const max = 5.5;
   return (
     <div style={{ flex: 1, padding: '22px 30px', display: 'flex', flexDirection: 'column', gap: 16, minHeight: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-        <span style={{ fontSize: 24, fontWeight: 700 }}>Statistiques</span>
-        <span style={{ fontSize: 13.5, color: C.dim }}>Agents lancés depuis l'app · 4 projets, 12 agents</span>
+        <span style={{ fontSize: 24, fontWeight: 700 }}>{tr('Statistiques', 'Statistics')}</span>
+        <span style={{ fontSize: 13.5, color: C.dim }}>
+          {tr("Agents lancés depuis l'app · 4 projets, 12 agents", 'Agents started from the app · 4 projects, 12 agents')}
+        </span>
         <div style={{ flex: 1 }} />
         <div
           style={{
@@ -110,7 +147,7 @@ export const StatsView: FC<{
             border: `1px solid ${glow.range ? C.spark : C.line}`,
           }}
         >
-          {['Jour', 'Semaine', 'Mois'].map((r, i) => (
+          {[tr('Jour', 'Day'), tr('Semaine', 'Week'), tr('Mois', 'Month')].map((r, i) => (
             <span
               key={r}
               style={{
@@ -129,13 +166,24 @@ export const StatsView: FC<{
       </div>
       <div style={{ display: 'flex', gap: 14 }}>
         {[
-          ['Tokens', `${fr(28.1 * SCALE[range] * count, 2)} M`, `${SPANS[range]} · +12 %`],
-          ['Coût global', `${fr(42.17 * SCALE[range] * count)} $`, '412,80 $ depuis le 14 août 2025'],
-          ['Coût moyen / prompt', `${fr(0.31 * count)} $`, '≈ 206,6 k tokens / prompt'],
+          ['Tokens', million(28.1 * SCALE[range] * count), tr(`${SPANS[range]} · +12 %`, `${SPANS[range]} · +12%`)],
+          [
+            tr('Coût global', 'Total cost'),
+            usd(42.17 * SCALE[range] * count),
+            tr('412,80 $ depuis le 14 août 2025', '$412.80 since Aug 14, 2025'),
+          ],
+          [
+            tr('Coût moyen / prompt', 'Average cost / prompt'),
+            usd(0.31 * count),
+            tr('≈ 206,6 k tokens / prompt', '≈ 206.6k tokens / prompt'),
+          ],
           [
             'Prompts',
-            Math.round(136 * SCALE[range] * count).toLocaleString('fr-FR'),
-            `${Math.round((136 * SCALE[range]) / LABELS[range].length)} par ${UNITS[range]} en moyenne`,
+            int(136 * SCALE[range] * count),
+            tr(
+              `${Math.round((136 * SCALE[range]) / LABELS[range].length)} par ${UNITS[range]} en moyenne`,
+              `${Math.round((136 * SCALE[range]) / LABELS[range].length)} per ${UNITS[range]} on average`,
+            ),
           ],
         ].map(([k, v, s]) => (
           <div key={k} style={{ flex: 1, padding: '12px 16px', borderRadius: 12, background: C.elev, border: `1px solid ${C.line}` }}>
@@ -159,7 +207,9 @@ export const StatsView: FC<{
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: C.muted }}>Tokens par {UNITS[range]}</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: C.muted }}>
+            {trx(<>Tokens par {UNITS[range]}</>, `Tokens per ${UNITS[range]}`)}
+          </span>
           <div style={{ flex: 1 }} />
           {SERIES.map((s, i) => (
             <span
@@ -210,12 +260,17 @@ export const StatsView: FC<{
       </div>
       <div style={{ display: 'flex', gap: 14 }}>
         <Bars
-          title="Par projet"
+          title={tr('Par projet', 'By project')}
           rows={PROJECTS.map((p) => ({ name: p.name, cost: p.cost * SCALE[range], color: hue(p.hue) }))}
           grow={grow}
           glow={glow.projects ?? 0}
         />
-        <Bars title="Par modèle" rows={MODELS.map((m) => ({ ...m, cost: m.cost * SCALE[range] }))} grow={grow} glow={glow.models ?? 0} />
+        <Bars
+          title={tr('Par modèle', 'By model')}
+          rows={MODELS.map((m) => ({ ...m, cost: m.cost * SCALE[range] }))}
+          grow={grow}
+          glow={glow.models ?? 0}
+        />
       </div>
     </div>
   );

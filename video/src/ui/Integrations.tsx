@@ -2,8 +2,9 @@
 // (IntegrationsTab.svelte and ImportModal.svelte of the app).
 
 import type { CSSProperties, FC, ReactNode } from 'react';
+import { useFmt, type Tr } from '../lang';
 import { C, MONO, soft } from '../theme';
-import { COLUMNS } from './Board';
+import { columnsOf } from './Board';
 import { Switch } from './Modal';
 import { ServiceBadge, SERVICES, type Service } from './services';
 import { Button } from './Sidebar';
@@ -70,7 +71,11 @@ export interface Account {
   pressed?: number;
 }
 
-const CONTAINER: Record<Service, string> = { jira: 'Projet', trello: 'Tableau', github: 'Dépôt' };
+const containerOf = (tr: Tr): Record<Service, string> => ({
+  jira: tr('Projet', 'Project'),
+  trello: tr('Tableau', 'Board'),
+  github: tr('Dépôt', 'Repository'),
+});
 
 /** The « Intégrations » tab of demo-api: accounts, linked sources, status mapping. */
 export const IntegrationsTab: FC<{
@@ -83,12 +88,17 @@ export const IntegrationsTab: FC<{
   mappingGlow?: number;
   mappingEnter?: number;
 }> = ({ accounts, sources, sourceFlash = {}, mapping, mappingGlow, mappingEnter = 1 }) => {
+  const { tr } = useFmt();
+  const CONTAINER = containerOf(tr);
   const linked = sources.filter(([, name]) => name).map(([s]) => s);
   return (
     <>
       <Group
-        title="Comptes connectés"
-        note="Les jetons restent sur cette machine, à part des réglages, et ne servent qu'aux appels de ces services."
+        title={tr('Comptes connectés', 'Connected accounts')}
+        note={tr(
+          "Les jetons restent sur cette machine, à part des réglages, et ne servent qu'aux appels de ces services.",
+          'Tokens stay on this machine, stored apart from the settings, and are only used for calls to these services.',
+        )}
       >
         {accounts.map((a) => (
           <div key={a.service} style={{ height: 54, display: 'flex', alignItems: 'center', gap: 13, borderBottom: `1px solid ${C.line}` }}>
@@ -96,20 +106,24 @@ export const IntegrationsTab: FC<{
             <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
               <span style={{ fontSize: 14.5, fontWeight: 700 }}>{SERVICES[a.service].name}</span>
               <span style={{ fontSize: 12.5, color: a.label ? C.ok : C.dim }}>
-                {a.checking ? 'Vérification…' : a.label ? `Connecté · ${a.label}` : 'Non connecté'}
+                {a.checking
+                  ? tr('Vérification…', 'Checking…')
+                  : a.label
+                    ? tr(`Connecté · ${a.label}`, `Connected · ${a.label}`)
+                    : tr('Non connecté', 'Not connected')}
               </span>
             </span>
             {a.label ? (
-              <Button small>Déconnecter</Button>
+              <Button small>{tr('Déconnecter', 'Disconnect')}</Button>
             ) : (
               <Button small pressed={a.pressed}>
-                Connecter…
+                {tr('Connecter…', 'Connect…')}
               </Button>
             )}
           </div>
         ))}
       </Group>
-      <Group title="Sources liées à demo-api">
+      <Group title={tr('Sources liées à demo-api', 'Sources linked to demo-api')}>
         {sources.map(([s, name]) => (
           <div key={s} style={{ height: 48, display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ width: 170, display: 'flex', alignItems: 'center', gap: 9, fontSize: 14, fontWeight: 600 }}>
@@ -117,13 +131,16 @@ export const IntegrationsTab: FC<{
               {SERVICES[s].name}
             </span>
             <span style={{ width: 62, fontSize: 12.5, color: C.dim }}>{CONTAINER[s]}</span>
-            <Select value={name ?? 'Aucun'} dim={!name} width={340} flash={sourceFlash[s]} />
+            <Select value={name ?? tr('Aucun', 'None')} dim={!name} width={340} flash={sourceFlash[s]} />
           </div>
         ))}
       </Group>
       <Group
-        title="Correspondance des statuts"
-        note="L'état que prend le ticket externe quand son ticket arrive dans la colonne ; « Commenter » y ajoute un commentaire."
+        title={tr('Correspondance des statuts', 'Status mapping')}
+        note={tr(
+          "L'état que prend le ticket externe quand son ticket arrive dans la colonne ; « Commenter » y ajoute un commentaire.",
+          'The state the external ticket takes when its ticket reaches the column; “Comment” adds a comment to it.',
+        )}
         glow={mappingGlow}
         enter={mappingEnter}
       >
@@ -142,15 +159,15 @@ export const IntegrationsTab: FC<{
               {SERVICES[s].name}
             </span>
           ))}
-          <span style={{ fontSize: 12, fontWeight: 700, color: C.dim, textAlign: 'center' }}>Commenter</span>
-          {COLUMNS.map((col, i) => (
+          <span style={{ fontSize: 12, fontWeight: 700, color: C.dim, textAlign: 'center' }}>{tr('Commenter', 'Comment')}</span>
+          {columnsOf(tr).map((col, i) => (
             <Row key={col.id}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, fontWeight: 600 }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: col.color }} />
                 {col.label}
               </span>
               {linked.map((s) => (
-                <Select key={s} value={mapping[i].states[s] ?? '— inchangé'} dim={!mapping[i].states[s]} />
+                <Select key={s} value={mapping[i].states[s] ?? tr('— inchangé', '— unchanged')} dim={!mapping[i].states[s]} />
               ))}
               <span style={{ display: 'flex', justifyContent: 'center' }}>
                 <Switch on={mapping[i].comment} />
@@ -169,13 +186,13 @@ const Row: FC<{ children: ReactNode }> = ({ children }) => <>{children}</>;
 export interface Issue {
   key: string;
   title: string;
-  kind: 'Story' | 'Bug' | 'Tâche';
+  kind: 'Story' | 'Bug' | 'Tâche' | 'Task';
   meta: string[];
   criteria?: number;
   imported?: boolean;
 }
 
-const KIND_COLOR: Record<Issue['kind'], string> = { Story: C.ok, Bug: C.del, Tâche: C.info };
+const KIND_COLOR: Record<Issue['kind'], string> = { Story: C.ok, Bug: C.del, Tâche: C.info, Task: C.info };
 
 /** « Importer des tickets », on Jira; `checked` of the rows are ticked, `critGlow` lights the criteria found. */
 export const ImportModal: FC<{
@@ -191,6 +208,7 @@ export const ImportModal: FC<{
   critGlow?: number;
   importPressed?: number;
 }> = ({ enter, source, issues, checked, query, focus, searching, filter, critGlow = 0, importPressed = 0 }) => {
+  const { tr, trx, plural } = useFmt();
   if (enter <= 0) return null;
   const e = Math.min(1, enter);
   const n = checked.length;
@@ -225,8 +243,10 @@ export const ImportModal: FC<{
       >
         <div style={{ display: 'flex', alignItems: 'flex-start', padding: '22px 20px 15px 26px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span style={{ fontSize: 19.5, fontWeight: 700 }}>Importer des tickets</span>
-            <span style={{ fontSize: 13.5, color: C.muted }}>Dans « À faire » du Kanban de demo-api</span>
+            <span style={{ fontSize: 19.5, fontWeight: 700 }}>{tr('Importer des tickets', 'Import tickets')}</span>
+            <span style={{ fontSize: 13.5, color: C.muted }}>
+              {tr('Dans « À faire » du Kanban de demo-api', 'Into “To do” in the demo-api Kanban')}
+            </span>
           </div>
           <div style={{ flex: 1 }} />
           <span style={{ color: C.dim, fontSize: 17 }}>✕</span>
@@ -272,7 +292,7 @@ export const ImportModal: FC<{
             ) : null}
           </span>
           <div style={{ flex: 1 }} />
-          <span style={{ fontSize: 13, fontWeight: 600, color: C.muted }}>⚙ Gérer les sources</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: C.muted }}>{tr('⚙ Gérer les sources', '⚙ Manage sources')}</span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 11, padding: '15px 26px 13px', borderTop: `1px solid ${C.line}` }}>
           <span
@@ -289,11 +309,13 @@ export const ImportModal: FC<{
             }}
           >
             <span style={{ color: C.dim }}>⌕</span>
-            <span style={{ color: query ? C.text : C.dim }}>{query || 'Rechercher par clé ou par texte…'}</span>
+            <span style={{ color: query ? C.text : C.dim }}>
+              {query || tr('Rechercher par clé ou par texte…', 'Search by key or text…')}
+            </span>
             {focus ? <span style={{ width: 2, height: 18, marginLeft: -9, background: C.text }} /> : null}
           </span>
           <span style={{ display: 'flex', gap: 7 }}>
-            {['Assignés à moi', 'Sprint actif', 'À faire'].map((f, i) => {
+            {[tr('Assignés à moi', 'Assigned to me'), tr('Sprint actif', 'Active sprint'), tr('À faire', 'To do')].map((f, i) => {
               const on = i === 0 && filter;
               return (
                 <span
@@ -330,7 +352,9 @@ export const ImportModal: FC<{
         >
           <Check on={allOn} />
           <span style={{ fontSize: 13, fontWeight: 600, color: C.muted }}>
-            {searching ? 'Recherche…' : `${issues.length} résultat${issues.length > 1 ? 's' : ''}`}
+            {searching
+              ? tr('Recherche…', 'Searching…')
+              : `${issues.length} ${plural(issues.length, 'résultat', 'résultats', 'result', 'results')}`}
           </span>
           <div style={{ flex: 1 }} />
           <span style={{ fontFamily: MONO, fontSize: 11.5, color: C.dim }}>lea@demo.dev · {source}</span>
@@ -386,7 +410,7 @@ export const ImportModal: FC<{
                           background: critGlow ? soft(C.ok, 14 * critGlow) : 'transparent',
                         }}
                       >
-                        ✓ {i.criteria} critères détectés
+                        {trx(<>✓ {i.criteria} critères détectés</>, `✓ ${i.criteria} criteria detected`)}
                       </span>
                     ) : null}
                   </div>
@@ -403,7 +427,7 @@ export const ImportModal: FC<{
                       color: C.muted,
                     }}
                   >
-                    Déjà dans le Kanban
+                    {tr('Déjà dans le Kanban', 'Already in the Kanban')}
                   </span>
                 ) : null}
               </div>
@@ -412,10 +436,15 @@ export const ImportModal: FC<{
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 15, padding: '15px 20px 17px 26px', borderTop: `1px solid ${C.line}` }}>
           <span style={{ fontSize: 13.5, fontWeight: 600 }}>
-            {n ? `${n} ticket${n > 1 ? 's' : ''} sélectionné${n > 1 ? 's' : ''}` : 'Aucun ticket sélectionné'}
+            {n
+              ? tr(
+                  `${n} ticket${n > 1 ? 's' : ''} sélectionné${n > 1 ? 's' : ''}`,
+                  `${n} ${plural(n, '', '', 'ticket', 'tickets')} selected`,
+                )
+              : tr('Aucun ticket sélectionné', 'No ticket selected')}
           </span>
           <div style={{ flex: 1 }} />
-          <span style={{ fontSize: 12.5, color: C.dim }}>Boucles max</span>
+          <span style={{ fontSize: 12.5, color: C.dim }}>{tr('Boucles max', 'Max loops')}</span>
           <span style={{ display: 'flex', gap: 2, padding: 2, borderRadius: 6, background: C.bg, border: `1px solid ${C.line}` }}>
             {[3, 5, 8].map((l) => (
               <span
@@ -438,9 +467,13 @@ export const ImportModal: FC<{
               </span>
             ))}
           </span>
-          <Button>Annuler</Button>
+          <Button>{tr('Annuler', 'Cancel')}</Button>
           <span style={{ display: 'flex', opacity: n ? 1 : 0.5, transform: `scale(${1 - 0.06 * importPressed})` }}>
-            <Button primary={C.spark}>{n ? `Importer ${n} ticket${n > 1 ? 's' : ''}` : 'Importer'}</Button>
+            <Button primary={C.spark}>
+              {n
+                ? tr(`Importer ${n} ticket${n > 1 ? 's' : ''}`, `Import ${n} ${plural(n, '', '', 'ticket', 'tickets')}`)
+                : tr('Importer', 'Import')}
+            </Button>
           </span>
         </div>
       </div>
@@ -469,7 +502,16 @@ const Check: FC<{ on: boolean }> = ({ on }) => (
   </span>
 );
 
-const STATUS_COLOR: Record<string, string> = { 'À faire': C.muted, 'En cours': C.info, 'À tester': C.wait, Terminé: C.ok };
+const STATUS_COLOR: Record<string, string> = {
+  'À faire': C.muted,
+  'En cours': C.info,
+  'À tester': C.wait,
+  Terminé: C.ok,
+  'To Do': C.muted,
+  'In Progress': C.info,
+  'To Review': C.wait,
+  Done: C.ok,
+};
 
 export interface IssueComment {
   text: ReactNode;
@@ -486,8 +528,9 @@ export const JiraIssue: FC<{
   labels?: { name: string; enter: number }[];
   comments: IssueComment[];
   style?: CSSProperties;
-}> = ({ enter, issueKey, title, status, flash = 0, labels = [], comments, style }) =>
-  enter <= 0 ? null : (
+}> = ({ enter, issueKey, title, status, flash = 0, labels = [], comments, style }) => {
+  const { tr } = useFmt();
+  return enter <= 0 ? null : (
     <div
       style={{
         position: 'absolute',
@@ -568,7 +611,7 @@ export const JiraIssue: FC<{
         {comments.some((c) => c.enter > 0) ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 4 }}>
             <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#626f86' }}>
-              Commentaires
+              {tr('Commentaires', 'Comments')}
             </span>
             {comments
               .filter((c) => c.enter > 0)
@@ -601,7 +644,8 @@ export const JiraIssue: FC<{
                   </span>
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
                     <span style={{ fontSize: 12.5, fontWeight: 700 }}>
-                      Léa Martin <span style={{ fontWeight: 400, color: '#626f86' }}>· à l'instant</span>
+                      {tr('Léa Martin ', 'Lea Martin ')}
+                      <span style={{ fontWeight: 400, color: '#626f86' }}>{tr("· à l'instant", '· just now')}</span>
                     </span>
                     <span
                       style={{
@@ -623,3 +667,4 @@ export const JiraIssue: FC<{
       </div>
     </div>
   );
+};

@@ -2,6 +2,7 @@ import type { FC, ReactNode } from 'react';
 import { useCurrentFrame, useVideoConfig } from 'remotion';
 import { pop, ramp } from '../anim';
 import { useCues } from '../cues';
+import { useFmt } from '../lang';
 import { C, MONO, soft } from '../theme';
 import { Switch } from '../ui/Modal';
 import { Stage, Title } from '../ui/Stage';
@@ -96,6 +97,7 @@ export const More: FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const c = useCues();
+  const { tr } = useFmt();
   const w = (word: string) => c.word('extras', word);
   const glow = (from: number, to: number) => ramp(frame, from - 4, 8) - ramp(frame, to - 4, 8);
   const tilesOut = ramp(frame, c.at('os') - 10, 14);
@@ -117,45 +119,54 @@ export const More: FC = () => {
           transform: `scale(${1 - 0.08 * tilesOut})`,
         }}
       >
-        <Tile title="Réglages" enter={pop(frame, fps, w('réglages') - 6)} glow={glow(w('réglages'), w('proxy'))}>
-          <Row k="Chemin de claude">
+        <Tile title={tr('Réglages', 'Settings')} enter={pop(frame, fps, w('réglages') - 6)} glow={glow(w('réglages'), w('proxy'))}>
+          <Row k={tr('Chemin de claude', 'Path to claude')}>
             <Val>C:\Users\lea\.local\bin\claude.exe</Val>
           </Row>
-          <Row k="Modèle, effort, mode">
-            <Val>Opus · Élevé · Auto</Val>
+          <Row k={tr('Modèle, effort, mode', 'Model, effort, mode')}>
+            <Val>{tr('Opus · Élevé · Auto', 'Opus · High · Auto')}</Val>
           </Row>
-          <Row k="Notifications Windows">
+          <Row k={tr('Notifications Windows', 'Windows notifications')}>
             <Switch on />
           </Row>
-          <Row k="Arrêt des agents inactifs">
-            <Val>après 30 min</Val>
+          <Row k={tr('Arrêt des agents inactifs', 'Stop idle agents')}>
+            <Val>{tr('après 30 min', 'after 30 min')}</Val>
           </Row>
         </Tile>
-        <Tile title="Proxy réseau" enter={pop(frame, fps, w('proxy') - 6)} glow={glow(w('proxy'), w('raccourcis'))}>
+        <Tile title={tr('Proxy réseau', 'Network proxy')} enter={pop(frame, fps, w('proxy') - 6)} glow={glow(w('proxy'), w('raccourcis'))}>
           <Row k="Proxy HTTP(S)">
-            <Val>http://proxy.entreprise.fr:8080</Val>
+            <Val>{tr('http://proxy.entreprise.fr:8080', 'http://proxy.company.com:8080')}</Val>
           </Row>
           <Row k="Exclusions (NO_PROXY)">
-            <Val>localhost, *.interne</Val>
+            <Val>{tr('localhost, *.interne', 'localhost, *.internal')}</Val>
           </Row>
-          <Row k="Aussi dans les terminaux">
+          <Row k={tr('Aussi dans les terminaux', 'Also in terminals')}>
             <Switch on />
           </Row>
-          <span style={{ fontSize: 14, color: C.dim }}>Pour Claude, les quotas, les mises à jour et, si tu veux, les terminaux.</span>
+          <span style={{ fontSize: 14, color: C.dim }}>
+            {tr(
+              'Pour Claude, les quotas, les mises à jour et, si tu veux, les terminaux.',
+              'For Claude, quotas, updates and, if you want, terminals.',
+            )}
+          </span>
         </Tile>
-        <Tile title="Raccourcis clavier" enter={pop(frame, fps, w('raccourcis') - 6)} glow={glow(w('raccourcis'), w('mises'))}>
+        <Tile
+          title={tr('Raccourcis clavier', 'Keyboard shortcuts')}
+          enter={pop(frame, fps, w('raccourcis') - 6)}
+          glow={glow(w('raccourcis'), w('mises'))}
+        >
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 18px' }}>
             {[
-              [['Ctrl', '1…9'], 'projet n'],
-              [['Ctrl', 'Tab'], 'agent suivant'],
-              [['Ctrl', 'N'], 'nouvel agent'],
-              [['Ctrl', 'T'], 'nouveau terminal'],
-              [['Ctrl', 'J'], 'agent qui attend'],
-              [['Ctrl', 'Maj', 'B'], 'fichiers'],
-              [['Ctrl', 'Maj', 'L'], 'disposition'],
-              [['Ctrl', ','], 'réglages'],
-              [['Échap'], 'interrompre'],
-              [['↑'], 'dernier message'],
+              [['Ctrl', '1…9'], tr('projet n', 'project n')],
+              [['Ctrl', 'Tab'], tr('agent suivant', 'next agent')],
+              [['Ctrl', 'N'], tr('nouvel agent', 'new agent')],
+              [['Ctrl', 'T'], tr('nouveau terminal', 'new terminal')],
+              [['Ctrl', 'J'], tr('agent qui attend', 'waiting agent')],
+              [['Ctrl', tr('Maj', 'Shift'), 'B'], tr('fichiers', 'files')],
+              [['Ctrl', tr('Maj', 'Shift'), 'L'], tr('disposition', 'layout')],
+              [['Ctrl', ','], tr('réglages', 'settings')],
+              [[tr('Échap', 'Esc')], tr('interrompre', 'interrupt')],
+              [['↑'], tr('dernier message', 'last message')],
             ].map(([keys, label]) => (
               <div key={String(label)} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 15 }}>
                 <span style={{ width: 140, display: 'flex', gap: 4 }}>
@@ -168,7 +179,11 @@ export const More: FC = () => {
             ))}
           </div>
         </Tile>
-        <Tile title="Mises à jour automatiques" enter={pop(frame, fps, w('mises') - 6)} glow={glow(w('mises'), c.at('os'))}>
+        <Tile
+          title={tr('Mises à jour automatiques', 'Automatic updates')}
+          enter={pop(frame, fps, w('mises') - 6)}
+          glow={glow(w('mises'), c.at('os'))}
+        >
           <span
             style={{
               alignSelf: 'flex-start',
@@ -180,18 +195,20 @@ export const More: FC = () => {
               fontWeight: 700,
             }}
           >
-            Mise à jour 1.4.1 disponible → installer
+            {tr('Mise à jour 1.4.1 disponible → installer', 'Update 1.4.1 available → install')}
           </span>
           <span style={{ fontSize: 16, color: C.muted, lineHeight: 1.5 }}>
-            L'app cherche une nouvelle version toutes les cinq minutes. Les versions sont signées, et leurs notes viennent du journal des
-            versions.
+            {tr(
+              "L'app cherche une nouvelle version toutes les cinq minutes. Les versions sont signées, et leurs notes viennent du journal des versions.",
+              'The app looks for a new version every five minutes. Versions are signed, and their notes come from the changelog.',
+            )}
           </span>
         </Tile>
       </div>
       <div style={{ position: 'absolute', left: 0, right: 0, top: 380, display: 'flex', justifyContent: 'center', gap: 40 }}>
         <Platform
           name="Windows"
-          detail="10 et 11 · installeur .exe"
+          detail={tr('10 et 11 · installeur .exe', '10 and 11 · .exe installer')}
           enter={os('windows')}
           logo={
             <svg width="96" height="96" viewBox="0 0 20 20">
@@ -204,7 +221,7 @@ export const More: FC = () => {
         />
         <Platform
           name="macOS"
-          detail="11 et plus · .dmg universel"
+          detail={tr('11 et plus · .dmg universel', '11 or later · universal .dmg')}
           enter={os('mac')}
           logo={
             <svg width="96" height="96" viewBox="0 0 24 24" fill={C.text}>

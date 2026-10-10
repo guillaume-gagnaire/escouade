@@ -1,4 +1,5 @@
 import type { FC, ReactNode } from 'react';
+import { useFmt, type Tr } from '../lang';
 import { C, MONO, soft } from '../theme';
 import { Button } from './Sidebar';
 
@@ -47,79 +48,89 @@ export const SidePanel: FC<{
   merge?: string;
   pressedMerge?: number;
   children?: ReactNode;
-}> = ({ tab, scope = 'agent', files, selected = 0, hint, merge, pressedMerge, children }) => (
-  <div style={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-    <div style={{ display: 'flex', gap: 20, padding: '14px 18px 0', borderBottom: `1px solid ${C.line}`, fontSize: 14, fontWeight: 600 }}>
-      {(['files', 'history'] as const).map((t) => (
-        <span
-          key={t}
-          style={{ color: tab === t ? C.text : C.dim, borderBottom: `2px solid ${tab === t ? C.spark : 'transparent'}`, paddingBottom: 10 }}
-        >
-          {t === 'files' ? (
-            <>
-              Non commités <span style={{ fontFamily: MONO, color: C.dim }}>{files.length}</span>
-            </>
-          ) : (
-            'Historique'
-          )}
-        </span>
-      ))}
-    </div>
-    {tab === 'files' ? (
-      <>
-        <div style={{ padding: '12px 14px 4px' }}>
-          <Segmented items={['Cet agent', 'Tout le projet']} on={scope === 'agent' ? 0 : 1} />
-        </div>
-        {hint ? <div style={{ padding: '4px 16px 6px', fontFamily: MONO, fontSize: 11.5, color: C.dim }}>{hint}</div> : null}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '0 8px' }}>
-          {files.map((f, i) => (
-            <div
-              key={f.path}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 9,
-                padding: '6px 10px',
-                borderRadius: 6,
-                background: i === selected ? C.elev : 'transparent',
-                fontSize: 13,
-              }}
-            >
-              <span style={{ fontFamily: MONO, fontWeight: 700, color: STATUS_COLOR[f.status], width: 12 }}>{f.status}</span>
-              <span style={{ fontFamily: MONO, fontWeight: 600 }}>{f.path.split('/').pop()}</span>
-              <span style={{ fontFamily: MONO, fontSize: 11.5, color: C.dim, flex: 1, overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                {f.path.split('/').slice(0, -1).join('/')}
-              </span>
-              {f.agent ? (
-                <span style={{ fontFamily: MONO, fontSize: 11, padding: '1px 6px', borderRadius: 3, background: C.elev2, color: C.spark }}>
-                  {f.agent}
-                </span>
-              ) : null}
-              <span style={{ fontFamily: MONO, fontSize: 12, color: C.ok }}>+{f.add}</span>
-              <span style={{ fontFamily: MONO, fontSize: 12, color: C.del }}>−{f.del}</span>
-            </div>
-          ))}
-        </div>
-        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', padding: '8px 12px' }}>{children}</div>
-        <div style={{ display: 'flex', gap: 8, padding: '10px 12px', borderTop: `1px solid ${C.line}` }}>
-          <span style={{ flex: 1, display: 'flex' }}>
-            <Button>Voir le diff</Button>
+}> = ({ tab, scope = 'agent', files, selected = 0, hint, merge, pressedMerge, children }) => {
+  const { tr } = useFmt();
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <div style={{ display: 'flex', gap: 20, padding: '14px 18px 0', borderBottom: `1px solid ${C.line}`, fontSize: 14, fontWeight: 600 }}>
+        {(['files', 'history'] as const).map((t) => (
+          <span
+            key={t}
+            style={{
+              color: tab === t ? C.text : C.dim,
+              borderBottom: `2px solid ${tab === t ? C.spark : 'transparent'}`,
+              paddingBottom: 10,
+            }}
+          >
+            {t === 'files' ? (
+              <>
+                {tr('Non commités ', 'Uncommitted ')}
+                <span style={{ fontFamily: MONO, color: C.dim }}>{files.length}</span>
+              </>
+            ) : (
+              tr('Historique', 'History')
+            )}
           </span>
-          <Button primary={C.spark}>{scope === 'agent' ? 'Commit…' : 'Commit tout…'}</Button>
-        </div>
-        {merge && scope === 'agent' ? (
-          <div style={{ padding: '0 12px 12px', display: 'flex' }}>
-            <span style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-              <Button pressed={pressedMerge}>{merge}</Button>
-            </span>
+        ))}
+      </div>
+      {tab === 'files' ? (
+        <>
+          <div style={{ padding: '12px 14px 4px' }}>
+            <Segmented items={[tr('Cet agent', 'This agent'), tr('Tout le projet', 'Whole project')]} on={scope === 'agent' ? 0 : 1} />
           </div>
-        ) : null}
-      </>
-    ) : (
-      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>{children}</div>
-    )}
-  </div>
-);
+          {hint ? <div style={{ padding: '4px 16px 6px', fontFamily: MONO, fontSize: 11.5, color: C.dim }}>{hint}</div> : null}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '0 8px' }}>
+            {files.map((f, i) => (
+              <div
+                key={f.path}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 9,
+                  padding: '6px 10px',
+                  borderRadius: 6,
+                  background: i === selected ? C.elev : 'transparent',
+                  fontSize: 13,
+                }}
+              >
+                <span style={{ fontFamily: MONO, fontWeight: 700, color: STATUS_COLOR[f.status], width: 12 }}>{f.status}</span>
+                <span style={{ fontFamily: MONO, fontWeight: 600 }}>{f.path.split('/').pop()}</span>
+                <span style={{ fontFamily: MONO, fontSize: 11.5, color: C.dim, flex: 1, overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                  {f.path.split('/').slice(0, -1).join('/')}
+                </span>
+                {f.agent ? (
+                  <span
+                    style={{ fontFamily: MONO, fontSize: 11, padding: '1px 6px', borderRadius: 3, background: C.elev2, color: C.spark }}
+                  >
+                    {f.agent}
+                  </span>
+                ) : null}
+                <span style={{ fontFamily: MONO, fontSize: 12, color: C.ok }}>+{f.add}</span>
+                <span style={{ fontFamily: MONO, fontSize: 12, color: C.del }}>−{f.del}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', padding: '8px 12px' }}>{children}</div>
+          <div style={{ display: 'flex', gap: 8, padding: '10px 12px', borderTop: `1px solid ${C.line}` }}>
+            <span style={{ flex: 1, display: 'flex' }}>
+              <Button>{tr('Voir le diff', 'View diff')}</Button>
+            </span>
+            <Button primary={C.spark}>{scope === 'agent' ? 'Commit…' : tr('Commit tout…', 'Commit all…')}</Button>
+          </div>
+          {merge && scope === 'agent' ? (
+            <div style={{ padding: '0 12px 12px', display: 'flex' }}>
+              <span style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <Button pressed={pressedMerge}>{merge}</Button>
+              </span>
+            </div>
+          ) : null}
+        </>
+      ) : (
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>{children}</div>
+      )}
+    </div>
+  );
+};
 
 export interface DiffRow {
   kind: 'ctx' | 'chg' | 'add';
@@ -174,16 +185,21 @@ export interface Commit {
 }
 
 /** Newest first. Lane 0: main; lane 1: the agent's branch; lane 2: another agent. */
-export const COMMITS: Commit[] = [
+export const commitsOf = (tr: Tr): Commit[] => [
   // The squash merge: one commit on main, named after the agent (core.rs merge_agent), no link to its branch.
   { lane: 0, msg: 'pagination-users', hash: '4e1b2c9', refs: ['main'] },
-  { lane: 1, msg: 'Pagination de /users (limite, curseur)', hash: 'a3f9c21', refs: ['pagination-users'] },
-  { lane: 1, msg: 'Tests de la pagination', hash: '7be01d4' },
-  { lane: 0, msg: 'Corrige le login OAuth', hash: '19ce8a0', refs: ['origin/main'] },
-  { lane: 2, msg: 'Docs : endpoints v2', hash: 'c04d7f2', refs: ['docs-api'] },
-  { lane: 1, msg: 'Prépare le modèle User', hash: '5d2e9ab' },
+  {
+    lane: 1,
+    msg: tr('Pagination de /users (limite, curseur)', 'Pagination for /users (limit, cursor)'),
+    hash: 'a3f9c21',
+    refs: ['pagination-users'],
+  },
+  { lane: 1, msg: tr('Tests de la pagination', 'Pagination tests'), hash: '7be01d4' },
+  { lane: 0, msg: tr('Corrige le login OAuth', 'Fix OAuth login'), hash: '19ce8a0', refs: ['origin/main'] },
+  { lane: 2, msg: tr('Docs : endpoints v2', 'Docs: v2 endpoints'), hash: 'c04d7f2', refs: ['docs-api'] },
+  { lane: 1, msg: tr('Prépare le modèle User', 'Prepare the User model'), hash: '5d2e9ab' },
   { lane: 0, msg: 'Release 1.4.0', hash: 'e8a1f30', refs: ['v1.4.0'] },
-  { lane: 0, msg: 'Ajoute le rate limiting global', hash: '2c71e5a' },
+  { lane: 0, msg: tr('Ajoute le rate limiting global', 'Add global rate limiting'), hash: '2c71e5a' },
 ];
 
 const LANE = [C.muted, C.spark, 'oklch(0.72 0.12 200)'];
@@ -279,8 +295,9 @@ export const SyncMenu: FC<{ x: number; y: number; behind: number; ahead: number;
   ahead,
   hover,
   enter,
-}) =>
-  enter <= 0 ? null : (
+}) => {
+  const { tr } = useFmt();
+  return enter <= 0 ? null : (
     <div
       style={{
         position: 'absolute',
@@ -299,7 +316,7 @@ export const SyncMenu: FC<{ x: number; y: number; behind: number; ahead: number;
       {[
         ['Pull', `↓${behind}`],
         ['Push', `↑${ahead}`],
-        ['Fetch', 'maintenant'],
+        ['Fetch', tr('maintenant', 'now')],
       ].map(([l, h], i) => (
         <div
           key={l}
@@ -321,6 +338,7 @@ export const SyncMenu: FC<{ x: number; y: number; behind: number; ahead: number;
       ))}
     </div>
   );
+};
 
 /** The full-screen diff view (« Voir le diff », or a commit of the history): its files, then the selected one's diff. */
 export const FullDiff: FC<{ title: string; files: ChangedFile[]; selected?: number; children: ReactNode; enter: number }> = ({
@@ -329,8 +347,9 @@ export const FullDiff: FC<{ title: string; files: ChangedFile[]; selected?: numb
   selected = 0,
   children,
   enter,
-}) =>
-  enter <= 0 ? null : (
+}) => {
+  const { tr, trx, plural } = useFmt();
+  return enter <= 0 ? null : (
     <div
       style={{
         position: 'absolute',
@@ -358,11 +377,16 @@ export const FullDiff: FC<{ title: string; files: ChangedFile[]; selected?: numb
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', borderBottom: `1px solid ${C.line}` }}>
           <span style={{ fontSize: 17, fontWeight: 700 }}>{title}</span>
           <span style={{ fontFamily: MONO, fontSize: 12.5, color: C.dim }}>
-            {files.length} fichier{files.length > 1 ? 's' : ''}
+            {trx(
+              <>
+                {files.length} fichier{files.length > 1 ? 's' : ''}
+              </>,
+              `${files.length} ${plural(files.length, '', '', 'file', 'files')}`,
+            )}
           </span>
           <div style={{ flex: 1 }} />
           <span style={{ width: 210 }}>
-            <Segmented items={['Unifié', 'Côte à côte']} on={0} />
+            <Segmented items={[tr('Unifié', 'Unified'), tr('Côte à côte', 'Side by side')]} on={0} />
           </span>
           <span style={{ color: C.dim, fontSize: 18 }}>×</span>
         </div>
@@ -409,3 +433,4 @@ export const FullDiff: FC<{ title: string; files: ChangedFile[]; selected?: numb
       </div>
     </div>
   );
+};

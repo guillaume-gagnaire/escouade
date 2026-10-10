@@ -2,20 +2,48 @@
 
 import type { FC, ReactNode } from 'react';
 import { TABS as PROJECTS } from '../data';
+import { useFmt, type Tr } from '../lang';
 import { C, hue, MONO } from '../theme';
 import { Button } from './Sidebar';
 
-const TABS = [
-  { id: 'claude', label: 'Claude Code', icon: '✳', desc: 'Exécutable, modèle et permissions par défaut' },
-  { id: 'notifications', label: 'Notifications', icon: '♪', desc: 'Alertes visuelles et sonores' },
-  { id: 'projects', label: 'Projets', icon: '▤', desc: 'Réglages propres à chaque projet' },
-  { id: 'board', label: 'Kanban', icon: '▦', desc: 'Pilote auto et tickets validés' },
-  { id: 'integrations', label: 'Intégrations', icon: '⧉', desc: 'Jira, Trello et GitHub Issues' },
-  { id: 'terminals', label: 'Terminaux', icon: '$_', desc: 'Shells disponibles dans les terminaux intégrés' },
-  { id: 'network', label: 'Réseau', icon: '⇄', desc: 'Proxy HTTP(S) pour Claude Code et les mises à jour' },
-  { id: 'about', label: 'À propos', icon: 'ⓘ', desc: 'Version et données locales' },
-] as const;
-export type SettingsTabId = (typeof TABS)[number]['id'];
+const TAB_IDS = ['claude', 'notifications', 'projects', 'board', 'integrations', 'terminals', 'network', 'about'] as const;
+export type SettingsTabId = (typeof TAB_IDS)[number];
+
+const tabsOf = (tr: Tr): { id: SettingsTabId; label: string; icon: string; desc: string }[] => [
+  {
+    id: 'claude',
+    label: 'Claude Code',
+    icon: '✳',
+    desc: tr('Exécutable, modèle et permissions par défaut', 'Executable, model and default permissions'),
+  },
+  { id: 'notifications', label: 'Notifications', icon: '♪', desc: tr('Alertes visuelles et sonores', 'Visual and sound alerts') },
+  {
+    id: 'projects',
+    label: tr('Projets', 'Projects'),
+    icon: '▤',
+    desc: tr('Réglages propres à chaque projet', 'Settings specific to each project'),
+  },
+  { id: 'board', label: 'Kanban', icon: '▦', desc: tr('Pilote auto et tickets validés', 'Autopilot and approved tickets') },
+  {
+    id: 'integrations',
+    label: tr('Intégrations', 'Integrations'),
+    icon: '⧉',
+    desc: tr('Jira, Trello et GitHub Issues', 'Jira, Trello and GitHub Issues'),
+  },
+  {
+    id: 'terminals',
+    label: tr('Terminaux', 'Terminals'),
+    icon: '$_',
+    desc: tr('Shells disponibles dans les terminaux intégrés', 'Shells available in the built-in terminals'),
+  },
+  {
+    id: 'network',
+    label: tr('Réseau', 'Network'),
+    icon: '⇄',
+    desc: tr('Proxy HTTP(S) pour Claude Code et les mises à jour', 'HTTP(S) proxy for Claude Code and updates'),
+  },
+  { id: 'about', label: tr('À propos', 'About'), icon: 'ⓘ', desc: tr('Version et données locales', 'Version and local data') },
+];
 
 /** The settings: their tabs on the left, one tab at a time; `enter` (0 to 1) brings them in, `scroll` moves the tab's body up. */
 export const SettingsShell: FC<{
@@ -28,7 +56,9 @@ export const SettingsShell: FC<{
   savePressed?: number;
   children: ReactNode;
 }> = ({ tab, enter, height = 700, scroll = 0, changed = [], savePressed = 0, children }) => {
+  const { tr } = useFmt();
   if (enter <= 0) return null;
+  const TABS = tabsOf(tr);
   const current = TABS.find((t) => t.id === tab)!;
   const e = Math.min(1, enter);
   return (
@@ -68,7 +98,7 @@ export const SettingsShell: FC<{
             borderRight: `1px solid ${C.line}`,
           }}
         >
-          <span style={{ padding: '0 11px 15px', fontSize: 18.5, fontWeight: 700 }}>Réglages</span>
+          <span style={{ padding: '0 11px 15px', fontSize: 18.5, fontWeight: 700 }}>{tr('Réglages', 'Settings')}</span>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {TABS.map((t) => {
               const on = t.id === tab;
@@ -129,7 +159,7 @@ export const SettingsShell: FC<{
               borderBottom: `1px solid ${C.line}`,
             }}
           >
-            <span style={{ fontSize: 12.5, fontWeight: 700, color: C.dim }}>Projet</span>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: C.dim }}>{tr('Projet', 'Project')}</span>
             {PROJECTS.map((p, i) => (
               <span
                 key={p.name}
@@ -169,9 +199,9 @@ export const SettingsShell: FC<{
               borderTop: `1px solid ${C.line}`,
             }}
           >
-            <Button>Annuler</Button>
+            <Button>{tr('Annuler', 'Cancel')}</Button>
             <span style={{ transform: `scale(${1 - 0.06 * savePressed})`, display: 'flex' }}>
-              <Button primary={C.spark}>Enregistrer</Button>
+              <Button primary={C.spark}>{tr('Enregistrer', 'Save')}</Button>
             </span>
           </div>
         </div>

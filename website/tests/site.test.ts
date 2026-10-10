@@ -1,12 +1,45 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { CARDS, FAQ, FEATURES, STEPS } from '../app/data/site';
+import { CATALOGS, featuresFor } from '../app/data/catalogs';
+import { fmt } from '../app/data/catalog';
+import { LANG_KEY, type Lang } from '../app/data/language';
+import { FEATURE_SHOTS, SITE, VIDEO, imageOf } from '../app/data/site';
 import { SNAPSHOT, squadAt } from '../app/data/squad';
+import { escapeText, headOf, leaves, tags } from './helpers';
 
 const OUT = new URL('../.output/public/', import.meta.url);
 const BASE = '/escouade/';
 const VERSION = (JSON.parse(readFileSync(new URL('../../src-tauri/tauri.conf.json', import.meta.url), 'utf8')) as { version: string })
   .version;
+
+/** The two pages the site generates: where each lives, and its address once online. */
+const PAGES: { lang: Lang; file: string; url: string; other: Lang }[] = [
+  { lang: 'fr', file: 'index.html', url: SITE, other: 'en' },
+  { lang: 'en', file: 'en/index.html', url: `${SITE}en/`, other: 'fr' },
+];
+
+/** What only one of the pages says, in the other one’s words. */
+const SAYS = {
+  fr: {
+    autopilot: 'Pilote auto',
+    // A Trello board is still a « tableau »: only the Kanban has a name of its own.
+    board: /\b(le|un|du) tableau\b(?! Trello)/i,
+    criteria: /critères d’acceptation/,
+    status: /statut/,
+    affiliation: 'non affilié à Anthropic',
+    docs: '/docs/fr/overview',
+  },
+  en: {
+    autopilot: 'Autopilot',
+    // A Trello board is still a “board”: only the Kanban has a name of its own.
+    board: /\b(the|a|your|each) board\b/i,
+    criteria: /acceptance criteria/,
+    status: /status/,
+    affiliation: 'not affiliated with Anthropic',
+    docs: '/docs/en/overview',
+  },
+};
 
 /** `css` without the blocks opening with `open` (their braces balanced). */
 function withoutBlocks(css: string, open: RegExp): string {
@@ -23,35 +56,184 @@ function withoutBlocks(css: string, open: RegExp): string {
   return out + css.slice(from);
 }
 
-/** Text as Vue writes it in HTML. */
-const escape = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+describe('generated site', () => {
+  it('generates one page per language, and keeps Jekyll away from them', () => {
+    for (const p of PAGES) expect(existsSync(new URL(p.file, OUT)), p.file).toBe(true);
+    expect(existsSync(new URL('.nojekyll', OUT))).toBe(true);
+  });
 
-let html = '';
-/** The page's styles: inlined, then linked. */
-let css = '';
-beforeAll(() => {
-  const index = new URL('index.html', OUT);
-  if (!existsSync(index)) throw new Error('Génère d’abord le site : npm run generate');
-  html = readFileSync(index, 'utf8');
-  const inline = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((m) => m[1]);
-  const linked = [...html.matchAll(/<link[^>]*rel="stylesheet"[^>]*href="([^"]+)"/g)].map((m) =>
-    readFileSync(new URL(m[1].slice(BASE.length), OUT), 'utf8'),
-  );
-  css = [...inline, ...linked].join('\n');
+  it('generates the page GitHub Pages shows for an unknown address', () => {
+    const page = new URL('404.html', OUT);
+    expect(existsSync(page)).toBe(true);
+    expect(readFileSync(page, 'utf8')).toContain('<div id="__nuxt">');
+  });
 });
 
-describe('generated site', () => {
-  it('is named and described for search engines and social networks', () => {
-    expect(html).toContain('<title>Escouade — le poste de pilotage de tes agents Claude Code</title>');
-    expect(html).toMatch(/<html[^>]*lang="fr"/);
-    expect(html).toMatch(/<meta[^>]*name="description"[^>]*content="[^"]{40,}"/);
-    expect(html).toMatch(/<meta[^>]*og:image[^>]*content="https:\/\/guillaume-gagnaire\.github\.io\/escouade\/images\/poster\.jpg"/);
+/** What the browser makes of the French root’s inline script, on a visit with these languages, kept choice and address. */
+function visit(script: string, v: { languages?: string[]; language?: string; stored?: string; search?: string; storageThrows?: boolean }) {
+  const kept = new Map<string, string>(v.stored === undefined ? [] : [[LANG_KEY, v.stored]]);
+  const moved: string[] = [];
+  const context = {
+    URLSearchParams,
+    navigator: { languages: v.languages, language: v.language },
+    location: { search: v.search ?? '', replace: (to: string) => void moved.push(to) },
+    localStorage: {
+      getItem: (k: string) => {
+        if (v.storageThrows) throw new DOMException('The operation is insecure.', 'SecurityError');
+        return kept.get(k) ?? null;
+      },
+      setItem: (k: string, value: string) => {
+        if (v.storageThrows) throw new DOMException('The operation is insecure.', 'SecurityError');
+        kept.set(k, value);
+      },
+    },
+  };
+  runInNewContext(script, context);
+  return { moved, kept: kept.get(LANG_KEY) };
+}
+
+describe('the French root’s first visit', () => {
+  let html = '';
+  let english = '';
+  beforeAll(() => {
+    html = readFileSync(new URL('index.html', OUT), 'utf8');
+    english = readFileSync(new URL('en/index.html', OUT), 'utf8');
+  });
+  /** The inline scripts (those without a `src`) of the page’s head. */
+  const inline = (page: string) =>
+    [...headOf(page).matchAll(/<script(?![^>]*\ssrc=)(?![^>]*type="(?:importmap|application\/json)")[^>]*>([\s\S]*?)<\/script>/g)].map(
+      (m) => m[1],
+    );
+  const script = () => inline(html).find((s) => s.includes(LANG_KEY)) ?? '';
+
+  it('is a small script in the French page’s head, and only there', () => {
+    expect(script().length).toBeGreaterThan(100);
+    expect(script().length).toBeLessThan(2000);
+    expect(inline(english).filter((s) => s.includes(LANG_KEY))).toEqual([]);
+    expect(english).not.toContain(LANG_KEY);
+  });
+
+  it('sends a browser with no French among its languages to the English page, under the base URL', () => {
+    expect(visit(script(), { languages: ['en-US', 'en'] }).moved).toEqual([`${BASE}en/`]);
+    expect(visit(script(), { languages: ['de-DE', 'es'] }).moved).toEqual([`${BASE}en/`]);
+  });
+
+  it('leaves a browser that has French among its languages where it is', () => {
+    expect(visit(script(), { languages: ['fr-FR', 'en-US'] }).moved).toEqual([]);
+    expect(visit(script(), { languages: ['en-US', 'fr'] }).moved).toEqual([]);
+  });
+
+  it('respects the language the visitor kept', () => {
+    expect(visit(script(), { languages: ['en-US'], stored: 'fr' }).moved).toEqual([]);
+    expect(visit(script(), { languages: ['fr-FR'], stored: 'en' }).moved).toEqual([`${BASE}en/`]);
+    expect(visit(script(), { languages: ['en-US'], stored: 'klingon' }).moved).toEqual([`${BASE}en/`]);
+  });
+
+  it('respects ?lang=fr, and keeps it as the visitor’s choice', () => {
+    const v = visit(script(), { languages: ['en-US'], search: '?lang=fr' });
+    expect(v.moved).toEqual([]);
+    expect(v.kept).toBe('fr');
+    expect(visit(script(), { languages: ['en-US'], stored: 'en', search: '?utm=x&lang=fr' }).moved).toEqual([]);
+  });
+
+  it('goes to English, and remembers it, when ?lang=en asks for it', () => {
+    const v = visit(script(), { languages: ['fr-FR'], search: '?lang=en' });
+    expect(v.moved).toEqual([`${BASE}en/`]);
+    expect(v.kept).toBe('en');
+  });
+
+  it('does not keep what the browser says as if the visitor had chosen it', () => {
+    expect(visit(script(), { languages: ['en-US'] }).kept).toBeUndefined();
+  });
+
+  it('still works with a browser that only has its one language, or none, or no usable storage', () => {
+    expect(visit(script(), { language: 'en-GB' }).moved).toEqual([`${BASE}en/`]);
+    expect(visit(script(), { language: 'fr-FR' }).moved).toEqual([]);
+    expect(visit(script(), {}).moved).toEqual([]);
+    expect(visit(script(), { languages: ['en-US'], storageThrows: true }).moved).toEqual([`${BASE}en/`]);
+    expect(visit(script(), { languages: ['en-US'], storageThrows: true, search: '?lang=fr' }).moved).toEqual([]);
+  });
+});
+
+describe.each(PAGES)('generated site ($lang)', ({ lang, file, url, other }) => {
+  const text = CATALOGS[lang];
+  const says = SAYS[lang];
+  const features = featuresFor(lang);
+  const video = VIDEO[lang];
+  let html = '';
+  /** The page's styles: inlined, then linked. */
+  let css = '';
+  /** The content of the `<meta>` tag called `key`. */
+  const meta = (key: string) => tags(headOf(html), 'meta').find((t) => t.name === key || t.property === key)?.content;
+
+  beforeAll(() => {
+    const index = new URL(file, OUT);
+    if (!existsSync(index)) throw new Error('Génère d’abord le site : npm run generate');
+    html = readFileSync(index, 'utf8');
+    const inline = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((m) => m[1]);
+    const linked = [...html.matchAll(/<link[^>]*rel="stylesheet"[^>]*href="([^"]+)"/g)].map((m) =>
+      readFileSync(new URL(m[1].slice(BASE.length), OUT), 'utf8'),
+    );
+    css = [...inline, ...linked].join('\n');
+  });
+
+  it('is named and described for search engines, in its language', () => {
+    expect(html).toContain(`<title>${escapeText(text.meta.title)}</title>`);
+    expect(html).toMatch(new RegExp(`<html[^>]*lang="${lang}"`));
+    expect(meta('description')).toBe(text.meta.description);
+    expect(text.meta.description.length).toBeGreaterThan(40);
+  });
+
+  it('is presented as such on social networks, with Open Graph and Twitter tags', () => {
+    const image = `${SITE}${imageOf(lang, 'poster.jpg')}`;
+    expect(meta('og:title')).toBe(text.meta.title);
+    expect(meta('og:description')).toBe(text.meta.description);
+    expect(meta('og:type')).toBe('website');
+    expect(meta('og:url')).toBe(url);
+    expect(meta('og:image')).toBe(image);
+    expect(meta('og:site_name')).toBe('Escouade');
+    expect(meta('og:locale')).toBe(text.meta.locale);
+    expect(meta('og:locale:alternate')).toBe(CATALOGS[other].meta.locale);
+    expect(meta('twitter:card')).toBe('summary_large_image');
+    expect(meta('twitter:title')).toBe(text.meta.title);
+    expect(meta('twitter:description')).toBe(text.meta.description);
+    expect(meta('twitter:image')).toBe(image);
+  });
+
+  it('points search engines to both versions, and to itself as the one to index', () => {
+    const links = tags(headOf(html), 'link');
+    const alternates = links.filter((l) => l.rel === 'alternate' && l.hreflang);
+    expect(alternates.map((l) => [l.hreflang, l.href]).sort()).toEqual(
+      [
+        ['fr', SITE],
+        ['en', `${SITE}en/`],
+        ['x-default', SITE],
+      ].sort(),
+    );
+    expect(links.filter((l) => l.rel === 'canonical').map((l) => l.href)).toEqual([url]);
   });
 
   it('presents every feature, the install steps and the questions', () => {
-    const texts = [...FEATURES.map((f) => f.title), ...CARDS.map((c) => c.title), ...STEPS.map((s) => s.title), ...FAQ.map((f) => f.q)];
-    for (const t of texts) expect(html, t).toContain(escape(t));
-    expect(html).toContain('non affilié à Anthropic');
+    const texts = [
+      ...features.map((f) => f.title),
+      ...text.cards.map((c) => c.title),
+      ...text.install.steps.map((s) => s.title),
+      ...text.faq.items.map((f) => f.q),
+    ];
+    expect(texts.length).toBe(11 + 6 + 3 + 8);
+    for (const t of texts) expect(html, t).toContain(escapeText(t));
+    expect(html).toContain(says.affiliation);
+  });
+
+  it('says nothing in the other language', () => {
+    const mine = new Set(leaves(text).values());
+    let checked = 0;
+    for (const [path, s] of leaves(CATALOGS[other])) {
+      if (s.length < 15 || mine.has(s)) continue;
+      expect(html, `${lang}: ${path}`).not.toContain(escapeText(s));
+      checked++;
+    }
+    expect(checked).toBeGreaterThan(100);
   });
 
   it('goes by its own name, Escouade, and no longer by the old one', () => {
@@ -63,27 +245,32 @@ describe('generated site', () => {
   it('downloads the latest release, links to the code and shows the version', () => {
     expect(html).toContain('href="https://github.com/guillaume-gagnaire/escouade/releases/latest"');
     expect(html).toContain('href="https://github.com/guillaume-gagnaire/escouade"');
+    expect(html).toContain(escapeText(fmt(text.hero.meta, { version: VERSION })));
     expect(html).toContain(`Version ${VERSION}`);
   });
 
   it('opens on a full-screen hero that says what Escouade is', () => {
-    expect(html).toMatch(/<h1[^>]*>[\s\S]*?Une escouade de Claude\.[\s\S]*?Une seule fenêtre\.[\s\S]*?<\/h1>/);
-    expect(html).toContain('Escouade, le poste de pilotage de tes agents Claude Code');
+    const h1 = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/)?.[1] ?? '';
+    expect(h1).toContain(text.hero.line1);
+    expect(h1).toContain(text.hero.line2);
+    expect(html).toContain(escapeText(text.hero.lede));
+    expect(text.hero.lede.startsWith('Escouade, ')).toBe(true);
     expect(css).toMatch(/\.hero[^{]*\{[^}]*min-height:[^;}]*100svh/);
   });
 
   it('shows the squad at work before any script runs, and says its data is made up', () => {
-    const still = squadAt(SNAPSHOT);
-    for (const a of still.agents) expect(html, a.name).toContain(escape(a.name));
-    expect(html).toContain(escape(still.agents.find((a) => a.question)!.question!.text));
+    const still = squadAt(SNAPSHOT, [], lang);
+    for (const a of still.agents) expect(html, a.name).toContain(escapeText(a.name));
+    expect(html).toContain(escapeText(still.agents.find((a) => a.question)!.question!.text));
     const t = still.agents.find((a) => a.ticket)!.ticket!;
-    expect(html).toContain(`${t.key} · boucle ${t.loop}/${t.max}`);
-    expect(html).toContain('données fictives');
+    expect(html).toContain(`${t.key} · ${fmt(text.demo.loop, { loop: t.loop, max: t.max })}`);
+    for (const a of still.agents) if (a.result) expect(html, a.result).toContain(escapeText(a.result));
+    expect(html).toContain(escapeText(text.demo.caption));
   });
 
   it('lets the visitor pause the demonstration', () => {
-    const buttons = [...html.matchAll(/<button[^>]*>/g)].map((m) => m[0]);
-    expect(buttons.some((b) => /aria-pressed="(true|false)"/.test(b) && /aria-label="[^"]*pause/i.test(b))).toBe(true);
+    const buttons = tags(html, 'button');
+    expect(buttons.some((b) => b['aria-pressed'] && b['aria-label'] === text.demo.pause && /pause/i.test(b['aria-label']))).toBe(true);
   });
 
   it('keeps still for visitors who ask for less motion, and until its script runs', () => {
@@ -97,12 +284,15 @@ describe('generated site', () => {
     }
     // Before any script, the demo is still and its button says so.
     expect(html).toMatch(/<figure[^>]*class="[^"]*\bstill\b/);
-    const pause = [...html.matchAll(/<button[^>]*>/g)].map((m) => m[0]).find((b) => /aria-label="[^"]*pause/i.test(b));
-    expect(pause).toContain('aria-pressed="true"');
+    const pause = tags(html, 'button').find((b) => b['aria-label'] === text.demo.pause);
+    expect(pause?.['aria-pressed']).toBe('true');
   });
 
-  it('sends the first install step to Claude Code’s own documentation', () => {
-    expect(html).toContain('href="https://code.claude.com/docs/fr/overview"');
+  it('sends the first install step to Claude Code’s own documentation, in its language', () => {
+    const link = text.install.steps[0].link!;
+    expect(link.href).toContain(says.docs);
+    expect(html).toContain(`href="${link.href}"`);
+    expect(html).toContain(escapeText(link.label));
   });
 
   it('serves every local file under the GitHub Pages path', () => {
@@ -113,49 +303,103 @@ describe('generated site', () => {
       const file = decodeURI(ref.slice(BASE.length).split(/[?#]/)[0]) || 'index.html';
       expect(existsSync(new URL(file, OUT)), ref).toBe(true);
     }
-    for (const f of FEATURES) expect(html).toContain(`src="${BASE}${f.image}"`);
+    for (const f of features) expect(html).toContain(`src="${BASE}${f.image}"`);
   });
 
   it('plays the presentation video on demand, with its poster', () => {
-    expect(html).toContain(`src="${BASE}escouade.mp4"`);
-    expect(html).toContain(`poster="${BASE}images/poster.jpg"`);
+    expect(html).toContain(`src="${BASE}${video.src}"`);
+    expect(html).toContain(`poster="${BASE}${imageOf(lang, 'poster.jpg')}"`);
     expect(html).toMatch(/<video[^>]*preload="none"/);
   });
 
-  it('subtitles the voice over in French, turned on from the player', () => {
-    const track = html.match(/<track[^>]*>/)?.[0] ?? '';
-    expect(track).toContain('kind="captions"');
-    expect(track).toContain('srclang="fr"');
-    expect(track).toContain(`src="${BASE}escouade.vtt"`);
-    expect(track).not.toMatch(/\sdefault[\s>=/]/);
-    const vtt = readFileSync(new URL('escouade.vtt', OUT), 'utf8');
-    expect(vtt.startsWith('WEBVTT')).toBe(true);
-    expect(vtt).toContain('Voici Escouade : le poste de pilotage de tous tes agents Claude Code.');
+  it('shows the screenshots and the poster of its own language, and none of the other', () => {
+    const dir = lang === 'fr' ? 'images/' : 'images/en/';
+    for (const { file } of FEATURE_SHOTS) expect(html, file).toContain(`src="${BASE}${dir}${file}"`);
+    expect(html).toContain(`poster="${BASE}${dir}poster.jpg"`);
+    expect(meta('og:image')).toBe(`${SITE}${dir}poster.jpg`);
+    expect(meta('twitter:image')).toBe(`${SITE}${dir}poster.jpg`);
+    const images = [...html.matchAll(/(?:src|poster)="(\/escouade\/images\/[^"]+\.jpg)"/g)].map((m) => m[1]);
+    expect(images.length).toBe(FEATURE_SHOTS.length + 1);
+    for (const image of images) expect(image.startsWith(`${BASE}${dir}`), image).toBe(true);
+    // The app’s window in the pictures says what the page does: no French on the English page.
+    if (lang === 'en') expect(html).not.toMatch(/images\/(?!en\/)[a-z]+\.jpg/);
+  });
+
+  it('turns on the subtitles of the language of the page, which the English page still offers in French', () => {
+    const expected = {
+      fr: [['fr', 'Français', false]],
+      en: [
+        ['en', 'English', true],
+        ['fr', 'Français', false],
+      ],
+    }[lang];
+    const raw = html.match(/<track[^>]*>/g) ?? [];
+    expect(raw.map((t) => [tags(t, 'track')[0].srclang, tags(t, 'track')[0].label, /\sdefault[\s>=/]/.test(t)])).toEqual(expected);
+    if (lang === 'en') expect(tags(html, 'track').map((t) => t.src)).toEqual([`${BASE}escouade.en.vtt`, `${BASE}escouade.vtt`]);
+  });
+
+  it('offers the subtitle tracks of its video, turned on from the player unless one is the default', () => {
+    const tracks = tags(html, 'track');
+    expect(tracks.map((t) => [t.kind, t.srclang, t.label, t.src])).toEqual(
+      video.tracks.map((t) => ['captions', t.srclang, t.label, `${BASE}${t.src}`]),
+    );
+    const raw = html.match(/<track[^>]*>/g) ?? [];
+    expect(raw.map((t) => /\sdefault[\s>=/]/.test(t))).toEqual(video.tracks.map((t) => !!t.default));
+    for (const t of video.tracks) {
+      const vtt = readFileSync(new URL(t.src, OUT), 'utf8');
+      expect(vtt.startsWith('WEBVTT')).toBe(true);
+    }
+    // The voice over is French; the French subtitles say it, the English ones translate it.
+    expect(readFileSync(new URL('escouade.vtt', OUT), 'utf8')).toContain(
+      'Voici Escouade : le poste de pilotage de tous tes agents Claude Code.',
+    );
+    expect(readFileSync(new URL('escouade.en.vtt', OUT), 'utf8')).toContain('Meet Escouade: the cockpit for all your Claude Code agents.');
   });
 
   it('presents the board, the test launch and the editor among the features', () => {
-    const ids = FEATURES.map((f) => f.id);
+    const ids = features.map((f) => f.id);
     expect(ids).toEqual(expect.arrayContaining(['tableau', 'test', 'editeur']));
-    expect(html).toContain('Pilote auto');
+    expect(html).toContain(says.autopilot);
   });
 
   it('presents the imports from Jira, Trello and GitHub, kept in sync, among the features', () => {
-    const f = FEATURES.find((x) => x.id === 'integrations');
+    const f = features.find((x) => x.id === 'integrations');
     expect(f, 'integrations').toBeDefined();
     const said = [f!.title, f!.text, ...f!.points].join(' ');
     for (const service of ['Jira', 'Trello', 'GitHub']) expect(said).toContain(service);
-    expect(said).toMatch(/critères d’acceptation/);
-    expect(said).toMatch(/statut/);
-    expect(html).toContain(`src="${BASE}images/integrations.jpg"`);
+    expect(said).toMatch(says.criteria);
+    expect(said).toMatch(says.status);
+    expect(html).toContain(`src="${BASE}${f!.image}"`);
   });
 
   it('calls the board by its name in the app, the Kanban', () => {
     expect(html).toContain('Kanban');
-    // A Trello board is still a « tableau ».
-    expect(html).not.toMatch(/\b(le|un|du) tableau\b(?! Trello)/i);
   });
 
-  it('tells GitHub Pages not to run Jekyll on it', () => {
-    expect(existsSync(new URL('.nojekyll', OUT))).toBe(true);
+  it('never calls the Kanban a board, except for a Trello board', () => {
+    expect(html).not.toMatch(says.board);
+  });
+
+  it('lets the visitor switch language with real links, and marks the language shown', () => {
+    const header = html.match(/<header[\s\S]*?<\/header>/)?.[0] ?? '';
+    const nav = header.match(/<nav[^>]*class="lang"[^>]*>[\s\S]*?<\/nav>/)?.[0] ?? '';
+    expect(tags(nav, 'nav')[0]['aria-label']).toBe(text.header.language);
+    const links = tags(nav, 'a');
+    // The French link asks for French explicitly, so that the first visit’s redirection leaves it alone.
+    expect(links.map((a) => [a.lang, a.hreflang, a.href, a.title])).toEqual([
+      ['fr', 'fr', `${BASE}?lang=fr`, 'Français'],
+      ['en', 'en', `${BASE}en/`, 'English'],
+    ]);
+    expect(links.map((a) => a['aria-current'])).toEqual(lang === 'fr' ? ['page', undefined] : [undefined, 'page']);
+    expect([...nav.matchAll(/<a[^>]*>([^<]*)<\/a>/g)].map((m) => m[1])).toEqual(['FR', 'EN']);
+  });
+
+  it('points the header’s links at sections that exist', () => {
+    const header = html.match(/<header[\s\S]*?<\/header>/)?.[0] ?? '';
+    const targets = tags(header, 'a')
+      .map((a) => a.href)
+      .filter((h) => h?.startsWith('#'));
+    expect(targets).toEqual(['#top', '#video', `#${text.anchors.features}`, `#${text.anchors.install}`, '#faq']);
+    for (const target of targets) expect(html, target).toContain(`id="${target.slice(1)}"`);
   });
 });

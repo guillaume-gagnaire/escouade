@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { REPO } from '~/data/site';
+
+const { text } = useLang();
 </script>
 
 <template>
@@ -7,11 +9,11 @@ import { REPO } from '~/data/site';
     <div class="wrap bar">
       <div class="brand"><LogoMark :size="22" /> Escouade</div>
       <div class="links">
-        <a :href="REPO">GitHub</a>
-        <a :href="`${REPO}/blob/main/LICENSE`">Licence MIT</a>
+        <a :href="REPO">{{ text.footer.github }}</a>
+        <a :href="`${REPO}/blob/main/LICENSE`">{{ text.footer.license }}</a>
       </div>
     </div>
-    <p class="wrap note">Projet indépendant, non affilié à Anthropic. Claude et Claude Code sont des marques d’Anthropic.</p>
+    <p class="wrap note">{{ text.footer.note }}</p>
   </footer>
 </template>
 
