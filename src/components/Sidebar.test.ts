@@ -278,6 +278,96 @@ describe('Sidebar agent card', () => {
   });
 });
 
+describe('Sidebar agent card plan line', () => {
+  const task = (id: string, status: 'pending' | 'inProgress' | 'done', over: Record<string, unknown> = {}) => ({
+    id,
+    title: `Tâche ${id}`,
+    status,
+    ...over,
+  });
+  const sub = (id: string, status = 'running') => ({ id, title: `sous-agent ${id}`, status, background: false, tools: 0, startedAt: 1 });
+  const planOf = (tasks: unknown[], agents: unknown[] = [], over: Record<string, unknown> = {}) =>
+    ({ source: 'tools', tasks, agents, launched: agents.length, workflows: [], ...over }) as never;
+  const seven = () => [
+    task('1', 'done'),
+    task('2', 'done'),
+    task('3', 'inProgress', { steps: [1, 2] }),
+    task('4', 'pending'),
+    task('5', 'pending'),
+    task('6', 'pending'),
+    task('7', 'pending'),
+  ];
+  const mini = (name: RegExp) => screen.getByRole('button', { name }).querySelector<HTMLElement>('.plan-mini');
+
+  it('tells the tasks done and how far the plan is, between the figures and the ticket tag', () => {
+    resetApp({ agents: [agent({ plan: planOf(seven()) })], tickets: [ticket({ column: 'doing', agentId: 'a1', iteration: 1 })] });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    const card = screen.getByRole('button', { name: /refacto-auth/ });
+    const line = mini(/refacto-auth/)!;
+    expect(line).not.toBeNull();
+    expect(line).toHaveTextContent('Plan 2/7');
+    expect(line).not.toHaveTextContent('sous-agent');
+    // After the line of tokens, cost and files; before the ticket.
+    const parts = [...card.children];
+    expect(parts.indexOf(line)).toBe(parts.indexOf(card.querySelector('.meta.dim')!) + 1);
+    expect(parts.indexOf(card.querySelector('.ticket-tag')!)).toBe(parts.indexOf(line) + 1);
+    // (100 + 100 + 50) / 7 = 36 %: the bar is that wide, and says nothing to a screen reader the text does not.
+    const bar = line.querySelector<HTMLElement>('.plan-bar')!;
+    expect(bar).toHaveAttribute('aria-hidden', 'true');
+    expect(bar.querySelector<HTMLElement>('span')!.style.width).toBe('36%');
+  });
+
+  it('counts the subagents running, in the plural and in the singular', () => {
+    resetApp({
+      agents: [
+        agent({ plan: planOf(seven(), [sub('a'), sub('b'), sub('c'), sub('d', 'done')]) }),
+        agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, plan: planOf(seven(), [sub('a'), sub('b', 'interrupted')]) }),
+      ],
+    });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    expect(mini(/refacto-auth/)).toHaveTextContent('Plan 2/7 · 3 sous-agents');
+    expect(mini(/tests-e2e/)).toHaveTextContent('Plan 2/7 · 1 sous-agent');
+    expect(mini(/tests-e2e/)).not.toHaveTextContent('sous-agents');
+  });
+
+  it('is not on the card of an agent without tasks, with or without subagents', () => {
+    resetApp({
+      agents: [
+        agent(),
+        agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, plan: planOf([], [], { source: 'plan', planFile: 'docs/p.md' }) }),
+        agent({ id: 'a3', name: 'explorateur', createdAt: 3, plan: planOf([], [sub('a')], { source: null }) }),
+      ],
+    });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    for (const name of [/refacto-auth/, /tests-e2e/, /explorateur/]) expect(mini(name)).toBeNull();
+  });
+
+  it('follows the plan', async () => {
+    resetApp({ agents: [agent({ plan: planOf([task('1', 'inProgress'), task('2', 'pending')]) })] });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    expect(mini(/refacto-auth/)).toHaveTextContent('Plan 0/2');
+    app.agents.a1 = agent({ plan: planOf([task('1', 'done'), task('2', 'inProgress')]) });
+    await Promise.resolve();
+    expect(mini(/refacto-auth/)).toHaveTextContent('Plan 1/2');
+    expect(mini(/refacto-auth/)!.querySelector<HTMLElement>('.plan-bar span')!.style.width).toBe('50%');
+    app.agents.a1 = agent();
+    await Promise.resolve();
+    expect(mini(/refacto-auth/)).toBeNull();
+  });
+
+  it('shows the words of the agent as text', () => {
+    const bad = '<img src=x onerror=alert(1)>';
+    resetApp({ agents: [agent({ plan: planOf([task('1', 'inProgress', { title: bad })], [], { title: bad }) })] });
+    fakeBackend();
+    const { container } = render(Sidebar, { project: project() });
+    expect(container.querySelector('img')).toBeNull();
+  });
+});
+
 describe('Sidebar remote control', () => {
   const items = () => menu.open?.items.map((i) => i.label) ?? [];
   const click = (label: string) => menu.open!.items.find((i) => i.label === label)!.onClick!();
@@ -628,6 +718,43 @@ describe('Sidebar copies of an agent', () => {
 });
 
 describe('Sidebar in English', () => {
+  it('writes the plan line with the plural of English', () => {
+    setLang('en');
+    const plan = (subs: number) =>
+      ({
+        source: 'tools',
+        tasks: [
+          { id: '1', title: 'A', status: 'done' },
+          { id: '2', title: 'B', status: 'pending' },
+        ],
+        agents: Array.from({ length: subs }, (_, i) => ({
+          id: `s${i}`,
+          title: 'x',
+          status: 'running',
+          background: false,
+          tools: 0,
+          startedAt: 1,
+        })),
+        launched: subs,
+        workflows: [],
+      }) as never;
+    resetApp({
+      agents: [
+        agent({ plan: plan(0) }),
+        agent({ id: 'a2', name: 'alpha', createdAt: 2, plan: plan(1) }),
+        agent({ id: 'a3', name: 'beta', createdAt: 3, plan: plan(2) }),
+      ],
+    });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    const line = (name: RegExp) => screen.getByRole('button', { name }).querySelector('.plan-mini');
+    expect(line(/refacto-auth/)).toHaveTextContent('Plan 1/2');
+    expect(line(/refacto-auth/)).not.toHaveTextContent('subagent');
+    expect(line(/alpha/)).toHaveTextContent('Plan 1/2 · 1 subagent');
+    expect(line(/alpha/)).not.toHaveTextContent('subagents');
+    expect(line(/beta/)).toHaveTextContent('Plan 1/2 · 2 subagents');
+  });
+
   it('labels the line an agent reported in English', () => {
     fakeBackend();
     app.agents.a1 = { ...app.agents.a1, progressLine: 'Writes the parser tests' };

@@ -11,6 +11,7 @@
   import { buffers, lossNotice } from '../lib/editor/buffers.svelte';
   import { menu, type MenuItem } from '../lib/menu.svelte';
   import { modelLabel } from '../lib/models';
+  import { planView } from '../lib/plan';
   import { estimateHint, fSpentUsd, spent } from '../lib/spend';
   import { app } from '../lib/state.svelte';
   import { closeTerminal, newTerminal, SHELL_GLYPH, terminalIn } from '../lib/term-actions';
@@ -244,6 +245,7 @@
       {@const sel = a.id === selectedAgentId && !otherView}
       {@const s = spent(a)}
       {@const tag = ticketTag(app.ticketOf(a.id))}
+      {@const plan = planView(a)?.mini}
       <div
         class="card"
         class:sel
@@ -317,6 +319,17 @@
             >{t('nav.sidebar.files', { count: git?.agents[a.id] ?? 0 })}</span
           >
         </div>
+        {#if plan}
+          <!-- How far the agent is through its plan: the bar says it at a glance, the words are read. -->
+          <div class="plan-mini">
+            <span class="plan-bar" aria-hidden="true"><span style:width="{plan.percent}%"></span></span>
+            <span class="plan-text mono"
+              >{plan.subs
+                ? t('plan.miniSubs', { done: plan.done, total: plan.total, count: plan.subs })
+                : t('plan.mini', { done: plan.done, total: plan.total })}</span
+            >
+          </div>
+        {/if}
         {#if tag}
           <div class="ticket-tag mono">▸ {tag}</div>
         {/if}
@@ -587,6 +600,9 @@
       animation: none;
       background: color-mix(in oklch, var(--alert) 14%, transparent);
     }
+    .plan-bar span {
+      transition: none;
+    }
   }
   .card:focus-visible {
     border-color: var(--accent);
@@ -662,6 +678,30 @@
     height: 1px;
     overflow: hidden;
     clip: rect(0 0 0 0);
+  }
+  .plan-mini {
+    margin-left: 17px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .plan-bar {
+    flex: 1;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--elev2);
+    overflow: hidden;
+  }
+  .plan-bar span {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+    transition: width 1s linear;
+  }
+  .plan-text {
+    font-size: 10.5px;
+    color: var(--muted);
+    white-space: nowrap;
   }
   .ticket-tag {
     margin-left: 17px;
