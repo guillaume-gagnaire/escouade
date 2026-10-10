@@ -131,8 +131,8 @@ describe('Conversation', () => {
         finish = (r) => (r instanceof Error ? reject(r) : resolve(r));
       });
       const backend = fakeBackend({ get_conversation: () => [], send_message: () => reply });
-      render(Conversation, { agent: a, project: project() });
-      return { a, backend, finish, textarea: screen.getByRole('textbox') as HTMLTextAreaElement };
+      const { rerender } = render(Conversation, { agent: a, project: project() });
+      return { a, backend, finish, rerender, textarea: screen.getByRole('textbox') as HTMLTextAreaElement };
     }
 
     it('shows its bubble at once, saying it waits for the preparation', async () => {
@@ -186,6 +186,36 @@ describe('Conversation', () => {
       app.toasts = [];
       await userEvent.type(textarea, '{Enter}');
       expect(app.toasts).toEqual([]);
+    });
+
+    it('is given back, refused, above the message typed since, their files together', async () => {
+      const { finish, textarea } = sendDuringSetup();
+      const attach = (f: File) => userEvent.upload(screen.getByLabelText('Joindre un fichier', { selector: 'input' }), f);
+      await attach(new File(['%PDF-1.4'], 'rapport.pdf', { type: 'application/pdf' }));
+      await screen.findByRole('button', { name: 'Retirer rapport.pdf' });
+      await userEvent.type(textarea, 'Résume{Enter}');
+      await screen.findByText('En attente de la préparation…');
+      await attach(new File(['à relire'], 'notes.txt', { type: 'text/plain' }));
+      await userEvent.type(textarea, 'Et la doc');
+      finish(new Error('Claude Code est introuvable'));
+      await waitFor(() => expect(textarea).toHaveValue('Résume\n\nEt la doc'));
+      expect(screen.getByRole('button', { name: 'Retirer rapport.pdf' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Retirer notes.txt' })).toBeInTheDocument();
+    });
+
+    it('is given back, refused, to its own agent’s field, not to the agent shown meanwhile', async () => {
+      const { a, finish, rerender, textarea } = sendDuringSetup();
+      await userEvent.type(textarea, 'Ajoute des tests{Enter}');
+      await screen.findByText('En attente de la préparation…');
+      const b = agent({ id: `s${Math.random()}`, name: 'landing', status: 'idle' });
+      app.agents[b.id] = b;
+      await rerender({ agent: b, project: project() });
+      await userEvent.type(textarea, 'Pour landing');
+      finish(new Error('Claude Code est introuvable'));
+      await waitFor(() => expect(app.toasts.at(-1)).toMatchObject({ text: 'Error: Claude Code est introuvable', kind: 'error' }));
+      expect(textarea).toHaveValue('Pour landing');
+      await rerender({ agent: app.agents[a.id], project: project() });
+      expect(textarea).toHaveValue('Ajoute des tests');
     });
 
     it('shows the files it carries', async () => {

@@ -262,6 +262,7 @@
     // Text typed while Claude waits answers the question / refuses the permission.
     const answering = body ? pendingItem : undefined;
     sending = true;
+    const owner = draftFor;
     const prevText = text;
     const prevFiles = files;
     // A new worktree is prepared first: the backend holds the message until then, and it shows meanwhile.
@@ -293,14 +294,27 @@
         app.toast("Les fichiers joints n'accompagnent pas une réponse : ils restent prêts pour ton prochain message.");
       }
     } catch (e) {
-      text = prevText;
-      files = prevFiles;
+      // The files of an answer never left the field.
+      giveBack(owner, prevText, answering ? [] : prevFiles);
       app.toast(String(e), 'error');
     }
     // Recorded by now, or given back to the field above.
     unhold?.();
     heldFor = null;
     sending = false;
+  }
+
+  /**
+   * A message refused given back to the draft it was sent from (another agent's may be on screen by now), before what
+   * was typed and attached there since: a send held for minutes by a worktree's setup leaves time to write the next one.
+   */
+  function giveBack(owner: string, back: string, backFiles: DraftAttachment[]) {
+    const here = owner === draftFor;
+    const since = here ? { text, files } : getDraft(owner);
+    const draft = { text: since.text.trim() ? `${back}\n\n${since.text}` : back, files: [...backFiles, ...since.files] };
+    if (!here) return setDraft(owner, draft);
+    text = draft.text;
+    files = draft.files;
   }
 
   function stop() {
