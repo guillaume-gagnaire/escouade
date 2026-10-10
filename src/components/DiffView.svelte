@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { splitRows, type DiffLine } from '../lib/diff';
+  import { plural } from '../lib/format';
 
   // Diff lines, unified (merged, red and green lines) or side by side. Each line is a DOM node, so a
   // file of more than FOLD_AT lines stays folded until asked for, then is drawn SLICE lines at a time.
@@ -18,6 +20,18 @@
   const total = $derived(split ? rows.length : lines.length);
   const shown = $derived(long ? drawn : total);
   const rest = $derived(total - shown);
+
+  let moreButton = $state<HTMLButtonElement>();
+  let rowsBox = $state<HTMLElement>();
+
+  // The button pressed goes away with the fold, or with the last slice: the focus moves on to the
+  // next slice's button, else to the rows, so that the keyboard neither falls back to the page (out
+  // of a modal's focus trap) nor starts over. Without scrolling: the reader stays where they were.
+  async function draw(upTo: number) {
+    drawn = upTo;
+    await tick();
+    (moreButton ?? rowsBox)?.focus({ preventScroll: true });
+  }
 </script>
 
 {#if tooLarge}
@@ -25,11 +39,11 @@
 {:else if long && drawn === 0}
   <div class="note">
     <span>Diff volumineux ({lines.length} lignes)</span>
-    <button class="btn" onclick={() => (drawn = SLICE)}>Afficher</button>
+    <button class="btn" onclick={() => draw(SLICE)}>Afficher</button>
   </div>
 {:else if split}
   <!-- Side by side wraps long lines so both columns stay aligned in narrow panes. -->
-  <div class="rows">
+  <div class="rows" tabindex="-1" bind:this={rowsBox}>
     {#each rows.slice(0, shown) as r, i (i)}
       <div class="srow">
         {#each [r.left, r.right] as l, side (side)}
@@ -42,7 +56,7 @@
     {/each}
   </div>
 {:else}
-  <div class="rows unified">
+  <div class="rows unified" tabindex="-1" bind:this={rowsBox}>
     {#each lines.slice(0, shown) as l, i (i)}
       <div class="urow {l.kind}">
         <span class="no">{l.oldNo ?? ''}</span>
@@ -55,7 +69,9 @@
 {/if}
 {#if long && drawn > 0 && rest > 0}
   <div class="note more">
-    <button class="btn" onclick={() => (drawn += SLICE)}>Afficher {Math.min(SLICE, rest)} lignes de plus</button>
+    <button class="btn" bind:this={moreButton} onclick={() => draw(drawn + SLICE)}
+      >Afficher {plural(Math.min(SLICE, rest), 'ligne', 'lignes')} de plus</button
+    >
   </div>
 {/if}
 
@@ -76,6 +92,10 @@
     font-family: var(--mono);
     font-size: 12px;
     line-height: 1.55;
+  }
+  .rows:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
   }
   .rows.unified {
     min-width: max-content;

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/svelte';
+import { render, screen, waitFor } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { app } from '../lib/state.svelte';
@@ -149,6 +149,17 @@ describe('DiffModal with large diffs', () => {
     await userEvent.click(screen.getByRole('button', { name: /b\.lock/ }));
     expect(screen.getByText('Diff volumineux (1601 lignes)')).toBeInTheDocument();
     expect(container.querySelectorAll('.urow')).toHaveLength(0);
+  });
+
+  it('keeps the keyboard inside the window when a long file is unfolded', async () => {
+    fakeBackend({ git_diff: () => long('a.lock', 2000) });
+    render(DiffModal, props);
+    const show = await screen.findByRole('button', { name: 'Afficher' });
+    show.focus();
+    await userEvent.keyboard('{Enter}');
+    const next = await screen.findByRole('button', { name: 'Afficher 500 lignes de plus' });
+    await waitFor(() => expect(next).toHaveFocus());
+    expect(screen.getByRole('dialog').contains(document.activeElement)).toBe(true);
   });
 });
 

@@ -54,6 +54,19 @@ describe('CommitModal', () => {
     expect(app.toasts.at(-1)).toMatchObject({ text: 'Commit abc1234 créé', kind: 'ok' });
   });
 
+  it('lists 500 files at most, and counts the others in the singular or the plural', async () => {
+    const many = (n: number): CommitScope => ({ files: Array.from({ length: n }, (_, i) => change(`src/f${i}.ts`)), leftOut: [] });
+    fakeBackend({ commit_preview: () => many(501), commit_propose: () => 'feat: tout' });
+    const { unmount } = render(CommitModal, { projectId: 'p1', agentId: 'a1' });
+    expect(await screen.findByText('… et 1 autre fichier')).toBeInTheDocument();
+    expect(within(screen.getByRole('list', { name: 'Fichiers du commit' })).getAllByRole('listitem')).toHaveLength(500);
+    unmount();
+
+    fakeBackend({ commit_preview: () => many(503), commit_propose: () => 'feat: tout' });
+    render(CommitModal, { projectId: 'p1', agentId: 'a1' });
+    expect(await screen.findByText('… et 3 autres fichiers')).toBeInTheDocument();
+  });
+
   it('keeps the field editable while Haiku writes, and keeps what is typed then', async () => {
     let answer: (m: string) => void = () => {};
     fakeBackend({ commit_preview: () => SCOPE, commit_propose: () => new Promise<string>((r) => (answer = r)) });

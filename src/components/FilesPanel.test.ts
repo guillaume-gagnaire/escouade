@@ -284,6 +284,12 @@ describe('FilesPanel with thousands of files', () => {
     expect(screen.getByText('… et 120 autres fichiers')).toBeInTheDocument();
   });
 
+  it('says one more file in the singular', async () => {
+    fakeBackend({ git_files: () => many(501) });
+    render(FilesPanel, { project: project(), agent: app.agents.a1 });
+    expect(await screen.findByText('… et 1 autre fichier')).toBeInTheDocument();
+  });
+
   it('lists 500 files without a remainder', async () => {
     fakeBackend({ git_files: () => many(500) });
     const { container } = render(FilesPanel, { project: project(), agent: app.agents.a1 });

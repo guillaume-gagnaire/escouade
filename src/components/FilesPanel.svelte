@@ -1,6 +1,6 @@
 <script lang="ts">
   import { askCommit, canCommit, mergeAgent } from '../lib/agent-actions';
-  import { basename, dirname } from '../lib/format';
+  import { basename, dirname, plural } from '../lib/format';
   import { api } from '../lib/ipc';
   import { menu, type MenuItem } from '../lib/menu.svelte';
   import { app } from '../lib/state.svelte';
@@ -215,7 +215,7 @@
         {/if}
       </div>
     {/each}
-    {#if files.length > SHOWN}<p class="more mono">… et {files.length - SHOWN} autres fichiers</p>{/if}
+    {#if files.length > SHOWN}<p class="more mono">… et {plural(files.length - SHOWN, 'autre fichier', 'autres fichiers')}</p>{/if}
   </div>
   {#if docked}
     {#if currentPath !== null}

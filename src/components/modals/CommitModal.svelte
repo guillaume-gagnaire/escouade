@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
+  import { plural } from '../../lib/format';
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
   import type { CommitScope } from '../../lib/types';
@@ -100,7 +101,7 @@
           <li><span class="st mono" style:color={SC[f.status]}>{f.status}</span> <span class="path mono">{f.path}</span></li>
         {/each}
       </ul>
-      {#if scope.files.length > SHOWN}<p class="note">… et {scope.files.length - SHOWN} autres fichiers</p>{/if}
+      {#if scope.files.length > SHOWN}<p class="note">… et {plural(scope.files.length - SHOWN, 'autre fichier', 'autres fichiers')}</p>{/if}
     {:else}
       <p class="note">
         {agentId

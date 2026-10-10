@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/svelte';
+import { render, screen, waitFor } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import type { DiffLine } from '../lib/diff';
@@ -64,6 +64,40 @@ describe('DiffView with a long diff', () => {
     await rerender({ lines: added(1700), split: false });
     expect(rows(container)).toBe(500);
     expect(screen.queryByText(/Diff volumineux/)).not.toBeInTheDocument();
+  });
+});
+
+describe('DiffView with the last lines of a long diff', () => {
+  it('says one line more in the singular', async () => {
+    render(DiffView, { lines: added(1501), split: false });
+    await userEvent.click(screen.getByRole('button', { name: 'Afficher' }));
+    await userEvent.click(more(500));
+    await userEvent.click(more(500));
+    expect(screen.getByRole('button', { name: 'Afficher 1 ligne de plus' })).toBeInTheDocument();
+  });
+});
+
+describe('DiffView keyboard focus', () => {
+  it('goes from « Afficher » to the button of the next slice, and stays on it', async () => {
+    render(DiffView, { lines: added(1620), split: false });
+    await userEvent.tab();
+    expect(screen.getByRole('button', { name: 'Afficher' })).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(more(500)).toHaveFocus());
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(more(500)).toHaveFocus());
+  });
+
+  it.each([false, true])('falls on the rows once no slice is left (side by side: %s)', async (split) => {
+    const { container } = render(DiffView, { lines: added(1520), split });
+    await userEvent.tab();
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(more(500)).toHaveFocus());
+    await userEvent.keyboard('{Enter}{Enter}');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Afficher 20 lignes de plus' })).toHaveFocus());
+    await userEvent.keyboard('{Enter}');
+    expect(screen.queryByRole('button', { name: /Afficher/ })).not.toBeInTheDocument();
+    await waitFor(() => expect(container.querySelector('.rows')).toHaveFocus());
   });
 });
 
