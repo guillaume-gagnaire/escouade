@@ -874,6 +874,34 @@ fn strategy_label(strategy: &str) -> &'static str {
 
 // What became of a ticket approved, on its card: written once, in the language of that moment.
 
+/// What became of a ticket approved, written in the two languages it is read in: the interface's
+/// (`ui`, the card) and that of the texts for Claude (`claude`, what the comment published for the
+/// team quotes: in the card's, it would mix two languages), with the link that goes with it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Outcome {
+    pub ui: String,
+    pub claude: String,
+    pub url: Option<String>,
+}
+
+impl Outcome {
+    /// `text`, written in both (`claude`: the language of the texts for Claude).
+    pub fn of(claude: Lang, text: impl Fn(Lang) -> String) -> Self {
+        Self {
+            ui: text(i18n::ui()),
+            claude: text(claude),
+            url: None,
+        }
+    }
+
+    pub fn with_url(self, url: String) -> Self {
+        Self {
+            url: Some(url),
+            ..self
+        }
+    }
+}
+
 pub fn merged_outcome(lang: Lang, target: &str, strategy: &str) -> String {
     let how = strategy_label(strategy);
     tr_in!(

@@ -1358,8 +1358,11 @@ impl<R: Runtime> Core<R> {
             nothing = git::ahead_of(&wt.path, &target, &wt.branch).await? == 0;
             self.still_validating(&t.id, &agent_id)?;
         }
-        let (outcome, url): (String, Option<String>) = match s.action.as_str() {
-            _ if nothing => (board::nothing_outcome(i18n::ui()), None),
+        // Written in the interface's language (the card) and in that of the texts for Claude (the
+        // comment published for the team).
+        let lang = self.lang().claude;
+        let outcome: board::Outcome = match s.action.as_str() {
+            _ if nothing => board::Outcome::of(lang, board::nothing_outcome),
             "merge" => {
                 self.set_step(&t.id, "Merge…");
                 match self
@@ -1378,9 +1381,9 @@ impl<R: Runtime> Core<R> {
             "push" => {
                 self.set_step(&t.id, "Push…");
                 git::push_branch(&wt.path, &wt.branch).await?;
-                (board::pushed_outcome(i18n::ui(), &wt.branch), None)
+                board::Outcome::of(lang, |l| board::pushed_outcome(l, &wt.branch))
             }
-            _ => (board::kept_outcome(i18n::ui()), None),
+            _ => board::Outcome::of(lang, board::kept_outcome),
         };
         // What every agent of the ticket cost, archived ones included (a ticket sent back and taken
         // over has several), as « À tester » and the statistics add it up; at least its own.
@@ -1403,8 +1406,9 @@ impl<R: Runtime> Core<R> {
             x.step = None;
             x.blocked = None;
             x.conflict = false;
-            x.outcome = Some(outcome);
-            x.outcome_url = url;
+            x.outcome = Some(outcome.ui);
+            x.outcome_claude = Some(outcome.claude);
+            x.outcome_url = outcome.url;
             x.done_at = Some(now_ms());
             x.cost = cost;
             Ok(())
@@ -1471,7 +1475,7 @@ impl<R: Runtime> Core<R> {
         wt: &Worktree,
         target: &str,
         message: Option<String>,
-    ) -> Result<Option<(String, Option<String>)>> {
+    ) -> Result<Option<board::Outcome>> {
         let repo = self.toplevel(&project.path).await.ok_or_else(not_a_repo)?;
         let message = match message {
             Some(m) => m,
@@ -1534,10 +1538,9 @@ impl<R: Runtime> Core<R> {
         // The target is as it was: the next merge into this repository may go.
         drop(merging);
         match result? {
-            git::Integrated::Done => Ok(Some((
-                board::merged_outcome(i18n::ui(), target, &s.strategy),
-                None,
-            ))),
+            git::Integrated::Done => Ok(Some(board::Outcome::of(self.lang().claude, |l| {
+                board::merged_outcome(l, target, &s.strategy)
+            }))),
             git::Integrated::Conflict(files) => {
                 self.on_conflict(t, s, target, files).await?;
                 Ok(None)
@@ -1582,9 +1585,15 @@ impl<R: Runtime> Core<R> {
                 Ok(()) => break,
                 Err(e) if attempt == 10 => {
                     log::warn!("ticket {}: worktree not removed: {e:#}", t.key);
+                    let claude = self.lang().claude;
                     let _ = self.edit_ticket(&t.id, |x| {
-                        if let Some(outcome) = x.outcome.as_mut() {
-                            outcome.push_str(&board::worktree_kept(i18n::ui()));
+                        for (outcome, lang) in [
+                            (&mut x.outcome, i18n::ui()),
+                            (&mut x.outcome_claude, claude),
+                        ] {
+                            if let Some(outcome) = outcome.as_mut() {
+                                outcome.push_str(&board::worktree_kept(lang));
+                            }
                         }
                         Ok(())
                     });
@@ -1623,22 +1632,22 @@ impl<R: Runtime> Core<R> {
         wt: &Worktree,
         target: &str,
         message: Option<String>,
-    ) -> Result<(String, Option<String>)> {
+    ) -> Result<board::Outcome> {
         let remote = git::push_branch(&wt.path, &wt.branch).await?;
         let title = match message {
             Some(m) => m,
             None => self.commit_message(t, s, &wt.path, target).await,
         };
-        let body = board::pr_body(self.lang().claude, t);
+        let lang = self.lang().claude;
+        let body = board::pr_body(lang, t);
         let github = git::remote_url(&wt.path, &remote)
             .await
             .as_deref()
             .and_then(board::github_repo);
         let Some((owner, repo)) = github else {
-            return Ok((
-                board::pushed_elsewhere_outcome(i18n::ui(), &wt.branch),
-                None,
-            ));
+            return Ok(board::Outcome::of(lang, |l| {
+                board::pushed_elsewhere_outcome(l, &wt.branch)
+            }));
         };
         if let Some(gh) = self.gh_cli() {
             let pr = PullRequest {
@@ -1652,7 +1661,8 @@ impl<R: Runtime> Core<R> {
             match gh_pr_create(&gh, &wt.path, &pr).await {
                 Ok(out) => {
                     if let Some((n, url)) = board::pr_number(&out) {
-                        return Ok((board::pr_outcome(n, target), Some(url)));
+                        let outcome = board::Outcome::of(lang, |_| board::pr_outcome(n, target));
+                        return Ok(outcome.with_url(url));
                     }
                     log::warn!("ticket {}: no pull request in gh's answer: {out}", t.key);
                 }
@@ -1661,10 +1671,8 @@ impl<R: Runtime> Core<R> {
         }
         let url = board::compare_url(&owner, &repo, target, &wt.branch, &title, &body);
         self.hub.emit(UiEvent::OpenUrl { url: url.clone() });
-        Ok((
-            board::pushed_for_pr_outcome(i18n::ui(), &wt.branch),
-            Some(url),
-        ))
+        let outcome = board::Outcome::of(lang, |l| board::pushed_for_pr_outcome(l, &wt.branch));
+        Ok(outcome.with_url(url))
     }
 
     /// A merge stopped on conflicts (undone): blocked with "L'agent résout" / "Annuler" ("ask"),

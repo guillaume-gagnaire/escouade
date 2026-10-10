@@ -335,7 +335,8 @@ fn criteria_lines(t: &Ticket) -> String {
 
 /// What the sync writes on the external ticket when its ticket comes into `column` (`branch`: its
 /// agent's, once it has one), in `lang` (the language of the texts for Claude: what is published
-/// for the team). The outcome of a ticket done is quoted as it was written.
+/// for the team). The outcome of a ticket done is quoted as it was written in that language
+/// (`outcome_claude`), the card's when the ticket has no other.
 pub fn column_comment(lang: Lang, t: &Ticket, column: Column, branch: Option<&str>) -> String {
     let key = &t.key;
     match column {
@@ -390,7 +391,13 @@ pub fn column_comment(lang: Lang, t: &Ticket, column: Column, branch: Option<&st
             s
         }
         Column::Done => {
-            let mut s = match t.outcome.as_deref().filter(|o| !o.is_empty()) {
+            // Its outcome in `lang`'s language (a ticket done before 1.7 only has the card's).
+            let outcome = t
+                .outcome_claude
+                .as_deref()
+                .filter(|o| !o.is_empty())
+                .or(t.outcome.as_deref().filter(|o| !o.is_empty()));
+            let mut s = match outcome {
                 Some(o) => tr_in!(
                     lang,
                     "Escouade : {key} est terminé — {o}",
@@ -644,6 +651,33 @@ mod tests {
         assert_eq!(
             column_comment(Lang::Fr, &t, Column::Todo, None),
             "Escouade : ESC-12 est revenu « À faire »."
+        );
+    }
+
+    #[test]
+    fn a_done_comment_quotes_the_outcome_written_in_its_own_language() {
+        let mut t = ticket();
+        t.outcome = Some("⤵ Mergé dans main · squash".into());
+        // Done before 1.7, a ticket has only the card's outcome: quoted as it is.
+        assert_eq!(
+            column_comment(Lang::En, &t, Column::Done, None),
+            "Escouade: ESC-12 is done — ⤵ Mergé dans main · squash"
+        );
+        t.outcome_claude = Some(String::new());
+        assert_eq!(
+            column_comment(Lang::En, &t, Column::Done, None),
+            "Escouade: ESC-12 is done — ⤵ Mergé dans main · squash"
+        );
+        // With the other, no language is mixed with the comment's.
+        t.outcome_claude = Some("⤵ Merged into main · squash".into());
+        assert_eq!(
+            column_comment(Lang::En, &t, Column::Done, None),
+            "Escouade: ESC-12 is done — ⤵ Merged into main · squash"
+        );
+        t.outcome = None;
+        assert_eq!(
+            column_comment(Lang::En, &t, Column::Done, None),
+            "Escouade: ESC-12 is done — ⤵ Merged into main · squash"
         );
     }
 

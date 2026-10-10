@@ -2425,6 +2425,8 @@ async fn validating_squashes_the_ticket_into_the_projects_branch_with_a_generate
     assert_eq!(t.column, Column::Done, "{:?}", t.blocked);
     assert_eq!(t.outcome.as_deref(), Some("⤵ Mergé dans main · squash"));
     assert!(t.done_at.is_some() && t.cost > 0.0);
+    // Written in the language of the texts for Claude as well (French here, as the interface).
+    assert_eq!(t.outcome_claude, t.outcome);
     assert_eq!(t.step, None);
     assert_eq!(
         std::fs::read_to_string(r.join("dem-1.txt")).unwrap(),
@@ -2530,6 +2532,8 @@ async fn a_merged_tickets_worktree_that_cannot_be_removed_is_said_kept() {
         t.blocked
     );
     assert!(has_branch(&r, "ticket/dem-1"));
+    // Both languages of it say so (the same here).
+    assert_eq!(t.outcome_claude, t.outcome);
     assert!(h.events.lock().iter().any(|e| e["type"] == "ticket"
         && e["ticket"]["outcome"] == "⤵ Mergé dans main · squash · worktree gardé"));
 }
