@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { queueIndices } from '../../lib/board';
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
   import type { Column, Project, Ticket, TicketDraft } from '../../lib/types';
@@ -21,6 +22,8 @@
 
   let adding = $state(false);
   let editing = $state<string | null>(null);
+  /** Each ticket's place in the queue: one that waits for others is passed over, as the autopilot does. */
+  const queue = $derived(column.id === 'todo' ? queueIndices(tickets, app.tickets) : {});
 
   // The command's ticket shows at once, unless the backend's event, which may come before its answer, already brought
   // it, maybe newer (started meanwhile); one coming after brings the same or newer.
@@ -52,13 +55,13 @@
   </div>
   <div class="cards">
     {#if adding}
-      <TicketForm onsubmit={add} oncancel={() => (adding = false)} />
+      <TicketForm projectId={project.id} onsubmit={add} oncancel={() => (adding = false)} />
     {/if}
     {#each tickets as t, i (t.id)}
       {#if editing === t.id}
-        <TicketForm ticket={t} onsubmit={(d) => save(t.id, d)} oncancel={() => (editing = null)} />
+        <TicketForm ticket={t} projectId={project.id} onsubmit={(d) => save(t.id, d)} oncancel={() => (editing = null)} />
       {:else}
-        <TicketCard ticket={t} {project} queueIndex={i} {busyCount} {quota} onedit={() => (editing = t.id)} />
+        <TicketCard ticket={t} {project} queueIndex={queue[t.id] ?? i} {busyCount} {quota} onedit={() => (editing = t.id)} />
       {/if}
     {/each}
     {#if !tickets.length && !adding}

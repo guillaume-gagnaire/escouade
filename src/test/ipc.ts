@@ -162,6 +162,7 @@ export function ticket(over: Partial<Ticket> = {}): Ticket {
     maxLoops: 5,
     column: 'todo',
     rank: 1,
+    after: [],
     agentId: null,
     iteration: 0,
     loops: 0,

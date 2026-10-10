@@ -402,6 +402,52 @@ describe('TicketCard', () => {
   });
 });
 
+describe('TicketCard of a ticket that comes after others', () => {
+  const manual = () => project({ board: board({ autopilot: false }) });
+
+  beforeEach(() =>
+    resetApp({
+      tickets: [ticket({ id: 't3', key: 'DEM-3', column: 'doing' }), ticket({ id: 't4', key: 'DEM-4', column: 'done' })],
+    }),
+  );
+
+  it('says which tickets it waits for, those done left out, until they are done', async () => {
+    fakeBackend();
+    show(ticket({ key: 'DEM-5', after: ['t3', 't4'] }));
+    expect(screen.getByText('⏸ après DEM-3')).toBeInTheDocument();
+    expect(screen.queryByText("Pris dès qu'une place se libère")).not.toBeInTheDocument();
+    app.tickets.t3 = { ...app.tickets.t3, column: 'done' };
+    await expect.poll(() => screen.queryByText("Pris dès qu'une place se libère")).toBeInTheDocument();
+    expect(screen.queryByText(/⏸ après/)).not.toBeInTheDocument();
+  });
+
+  it('asks before launching it by hand, and launches it once confirmed', async () => {
+    const backend = fakeBackend();
+    show(ticket({ key: 'DEM-5', after: ['t3'] }), manual());
+    await userEvent.click(screen.getByRole('button', { name: 'Lancer' }));
+    expect(app.modal).toMatchObject({
+      kind: 'confirm',
+      title: 'Lancer DEM-5 ?',
+      body: 'DEM-5 attend DEM-3, pas encore terminé. Le lancer quand même ?',
+      confirm: 'Lancer quand même',
+    });
+    expect(backend.called('ticket_start')).toEqual([]);
+    await (app.modal as any).onConfirm(false);
+    expect(backend.called('ticket_start')).toEqual([{ cmd: 'ticket_start', args: { id: 't1' } }]);
+    // The click did not open its form.
+    expect(app.ui.selectedAgent.p1).toBeUndefined();
+  });
+
+  it('launches at once a ticket whose tickets before are done', async () => {
+    const backend = fakeBackend();
+    show(ticket({ key: 'DEM-5', after: ['t4'] }), manual());
+    expect(screen.getByText('Pilote auto désactivé')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Lancer' }));
+    expect(app.modal).toBeNull();
+    expect(backend.called('ticket_start')).toEqual([{ cmd: 'ticket_start', args: { id: 't1' } }]);
+  });
+});
+
 describe('TicketCard of an imported ticket', () => {
   beforeEach(() => resetApp());
 

@@ -6,15 +6,21 @@ import {
   canStart,
   columnTickets,
   commitPreview,
+  cycleRefusal,
   doneMeta,
+  keyList,
   keyPrefix,
+  launchAnyway,
   pauseLabel,
   placesLabel,
+  queueIndices,
   quotaUntil,
   settingsSummary,
   ticketTag,
+  waitingFor,
   waitLabel,
 } from './board';
+import type { Ticket } from './types';
 
 describe('board labels', () => {
   it('orders each column', () => {
@@ -121,5 +127,64 @@ describe('board labels', () => {
 
   it('writes the accent-stripping pattern without any literal combining mark (they get lost when copied)', () => {
     expect(source).not.toMatch(/\p{M}/u);
+  });
+});
+
+describe('dependencies between tickets', () => {
+  const all = (...list: Ticket[]) => Object.fromEntries(list.map((t) => [t.id, t]));
+
+  it('names the tickets a ticket comes after that are not done yet, in its order', () => {
+    const t3 = ticket({ id: 't3', key: 'DEM-3', column: 'doing' });
+    const t4 = ticket({ id: 't4', key: 'DEM-4', column: 'done' });
+    const t6 = ticket({ id: 't6', key: 'DEM-6', column: 'review' });
+    // One gone (deleted meanwhile) holds nothing back.
+    const t5 = ticket({ id: 't5', key: 'DEM-5', after: ['t6', 't4', 'gone', 't3'] });
+    expect(waitingFor(t5, all(t3, t4, t5, t6))).toEqual(['DEM-6', 'DEM-3']);
+    expect(waitingFor(ticket(), all(t3))).toEqual([]);
+    expect(keyList(['DEM-3'])).toBe('DEM-3');
+    expect(keyList(['DEM-3', 'DEM-4'])).toBe('DEM-3 et DEM-4');
+    expect(keyList(['DEM-3', 'DEM-4', 'DEM-6'])).toBe('DEM-3, DEM-4 et DEM-6');
+  });
+
+  it('tells a ticket to do that waits for others, after the target branch and before the pause, unless launched by hand', () => {
+    const issue = 'Branche cible main introuvable — aucun ticket ne démarre';
+    const pause = { reason: 'limit' as const, pct: null, until: 1 };
+    expect(waitLabel(ticket(), 0, board(), 0, null, null, ['DEM-3'])).toBe('⏸ après DEM-3');
+    expect(waitLabel(ticket(), 1, board(), 2, null, null, ['DEM-3', 'DEM-4'])).toBe('⏸ après DEM-3 et DEM-4');
+    expect(waitLabel(ticket(), 0, board({ autopilot: false }), 0, null, null, ['DEM-3'])).toBe('⏸ après DEM-3');
+    expect(waitLabel(ticket(), 0, board(), 0, null, pause, ['DEM-3'])).toBe('⏸ après DEM-3');
+    expect(waitLabel(ticket(), 0, board(), 0, issue, pause, ['DEM-3'])).toBe('En attente de la branche cible');
+    // Launched by hand, it starts all the same: only what holds every ticket back holds it.
+    expect(waitLabel(ticket({ forced: true }), 0, board({ autopilot: false }), 0, null, null, ['DEM-3'])).toBe('Lancement demandé…');
+    expect(waitLabel(ticket({ forced: true }), 0, board(), 0, null, pause, ['DEM-3'])).toBe('En attente : pilote auto en pause');
+  });
+
+  it('asks before a ticket that waits is launched by hand', () => {
+    expect(launchAnyway('DEM-5', ['DEM-3'])).toBe('DEM-5 attend DEM-3, pas encore terminé. Le lancer quand même ?');
+    expect(launchAnyway('DEM-5', ['DEM-3', 'DEM-4'])).toBe('DEM-5 attend DEM-3 et DEM-4, pas encore terminés. Le lancer quand même ?');
+  });
+
+  it('passes over the tickets that wait in the queue of « À faire », as the autopilot does, unless launched by hand', () => {
+    const t3 = ticket({ id: 't3', key: 'DEM-3', column: 'doing' });
+    const a = ticket({ id: 'a', after: ['t3'] });
+    const b = ticket({ id: 'b', rank: 2 });
+    const c = ticket({ id: 'c', rank: 3, after: ['t3'], forced: true });
+    const d = ticket({ id: 'd', rank: 4, after: ['b'] });
+    expect(queueIndices([a, b, c, d], all(t3, a, b, c, d))).toEqual({ a: -1, b: 0, c: 1, d: -1 });
+  });
+
+  it('refuses a dependency that already waits for the ticket, directly or not', () => {
+    const t3 = ticket({ id: 't3', key: 'DEM-3', after: ['t4'] });
+    const t4 = ticket({ id: 't4', key: 'DEM-4', after: ['t5'] });
+    const t5 = ticket({ id: 't5', key: 'DEM-5' });
+    const t6 = ticket({ id: 't6', key: 'DEM-6', after: ['t7'] });
+    // A loop already there (a hand-edited file) does not hang the search.
+    const t7 = ticket({ id: 't7', key: 'DEM-7', after: ['t6'] });
+    const list = all(t3, t4, t5, t6, t7);
+    expect(cycleRefusal(t5, t3, list)).toBe('DEM-3 attend déjà DEM-5 (directement ou non).');
+    expect(cycleRefusal(t5, t4, list)).toBe('DEM-4 attend déjà DEM-5 (directement ou non).');
+    expect(cycleRefusal(t5, t6, list)).toBeNull();
+    // DEM-3 after DEM-5 as well is no loop: it waits for it already.
+    expect(cycleRefusal(t3, t5, list)).toBeNull();
   });
 });

@@ -108,10 +108,12 @@ describe('Board', () => {
     await userEvent.type(screen.getByRole('textbox', { name: 'Titre du ticket' }), 'Limiter les tentatives');
     await userEvent.type(screen.getByRole('textbox', { name: "Critères d'acceptation" }), '5 essais{Enter}Réponse 429');
     await userEvent.click(screen.getByRole('button', { name: '8' }));
+    // After the ticket under way, one of the project's.
+    await userEvent.click(within(screen.getByRole('group', { name: 'Après' })).getByRole('checkbox', { name: /^DEM-3 / }));
     await userEvent.click(add);
     expect(backend.called('ticket_create')[0].args).toEqual({
       projectId: 'p1',
-      draft: { title: 'Limiter les tentatives', description: '', criteria: ['5 essais', 'Réponse 429'], maxLoops: 8 },
+      draft: { title: 'Limiter les tentatives', description: '', criteria: ['5 essais', 'Réponse 429'], maxLoops: 8, after: ['t3'] },
     });
     expect(await within(col('À faire')).findByText('DEM-9')).toBeInTheDocument();
     expect(screen.queryByRole('textbox', { name: 'Titre du ticket' })).not.toBeInTheDocument();
@@ -125,6 +127,15 @@ describe('Board', () => {
     expect(within(todo).getByText("Pris dès qu'une place se libère")).toBeInTheDocument();
     expect(within(todo).getByText("En attente d'une place (1/2)")).toBeInTheDocument();
     expect(within(todo).queryByRole('button', { name: 'Lancer' })).not.toBeInTheDocument();
+  });
+
+  it('promises the next place to the first ticket to do that waits for no other', () => {
+    fakeBackend();
+    app.tickets.t1 = { ...app.tickets.t1, after: ['t3'] };
+    render(Board, { project: app.projects[0] });
+    const todo = col('À faire');
+    expect(within(within(todo).getByRole('button', { name: /DEM-1/ })).getByText('⏸ après DEM-3')).toBeInTheDocument();
+    expect(within(within(todo).getByRole('button', { name: /DEM-2/ })).getByText("Pris dès qu'une place se libère")).toBeInTheDocument();
   });
 
   it('keeps the newer ticket the backend already sent rather than the one its creation returns', async () => {

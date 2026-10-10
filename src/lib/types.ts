@@ -256,6 +256,8 @@ export interface Ticket {
   column: Column;
   /** Order in "À faire": the lowest first. */
   rank: number;
+  /** The ids of the tickets of its project it comes after ("Après"): the autopilot starts it once they are all done. */
+  after: string[];
   agentId: string | null;
   /** n of "Boucle n/max". */
   iteration: number;
@@ -306,6 +308,8 @@ export interface TicketDraft {
   description: string;
   criteria: string[];
   maxLoops: number;
+  /** The ids of the tickets it comes after, the whole list. */
+  after: string[];
 }
 
 export interface RecipeStep {

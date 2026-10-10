@@ -1,6 +1,6 @@
 <script lang="ts">
   import { openUrl } from '@tauri-apps/plugin-opener';
-  import { APPROVE_LABEL, canStart, criteriaMet, doneMeta, waitLabel } from '../../lib/board';
+  import { APPROVE_LABEL, canStart, criteriaMet, doneMeta, launchAnyway, waitingFor, waitLabel } from '../../lib/board';
   import { buffers, lossNotice } from '../../lib/editor/buffers.svelte';
   import { fWhen, plural } from '../../lib/format';
   import { SERVICES, shortName } from '../../lib/integrations';
@@ -35,7 +35,25 @@
   // Under way, the last items; to test, all of them.
   const steps = $derived(t.column === 'doing' ? t.progress.slice(-SHOWN) : t.progress);
   const hidden = $derived(t.progress.length - steps.length);
+  /** The keys of the tickets it comes after that are not done yet: the autopilot leaves it until they are. */
+  const awaited = $derived(t.column === 'todo' ? waitingFor(t, app.tickets) : []);
   let rejecting = $state(false);
+
+  /** "Lancer": a ticket that waits for others starts without them only once the user agrees. */
+  function launch() {
+    const start = () => app.run(api.ticketStart(t.id));
+    if (!awaited.length) {
+      start();
+      return;
+    }
+    app.modal = {
+      kind: 'confirm',
+      title: `Lancer ${t.key} ?`,
+      body: launchAnyway(t.key, awaited),
+      confirm: 'Lancer quand même',
+      onConfirm: start,
+    };
+  }
 
   function open() {
     if (t.column === 'todo') onedit();
@@ -231,10 +249,10 @@
   {#if t.column === 'todo'}
     <span class="meta">{plural(total, 'critère', 'critères')} · max {t.maxLoops} boucles</span>
     <div class="row">
-      <span class="k">{waitLabel(t, queueIndex, s, busyCount, issue, app.autopilotPause)}</span>
+      <span class="k">{waitLabel(t, queueIndex, s, busyCount, issue, app.autopilotPause, awaited)}</span>
       <div style="flex:1"></div>
       {#if canStart(t, s, busyCount, quota, issue, app.autopilotPause)}
-        <button class="small" onclick={(e) => act(e, () => app.run(api.ticketStart(t.id)))}>Lancer</button>
+        <button class="small" onclick={(e) => act(e, launch)}>Lancer</button>
       {/if}
     </div>
   {/if}

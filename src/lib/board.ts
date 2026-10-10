@@ -67,9 +67,11 @@ export const APPROVE_LABEL: Record<BoardAction, string> = {
 };
 
 /**
- * When a ticket "À faire" starts; `queueIndex` is its place in the column. While the board's `issue` holds (its target
- * branch has no commit yet, or is gone), or the autopilot's `pause` (a quota, a usage limit), none starts, whatever its
- * place, even launched by hand.
+ * When a ticket "À faire" starts; `queueIndex` is its place in the queue (`queueIndices`), `waiting` the keys of the
+ * tickets it comes after that are not done yet (`waitingFor`). While the board's `issue` holds (its target branch has no
+ * commit yet, or is gone), or the autopilot's `pause` (a quota, a usage limit), none starts, whatever its place, even
+ * launched by hand. The issue comes first (it needs the user); then the tickets it waits for, which outlast a pause (the
+ * header tells that one, and its end), unless it was launched by hand: it starts without them.
  */
 export function waitLabel(
   t: Ticket,
@@ -78,12 +80,60 @@ export function waitLabel(
   busyCount: number,
   issue: string | null = null,
   pause: AutopilotPause | null = null,
+  waiting: string[] = [],
 ): string {
   if (issue) return 'En attente de la branche cible';
+  if (waiting.length && !t.forced) return `⏸ après ${keyList(waiting)}`;
   if (pause) return 'En attente : pilote auto en pause';
   if (t.forced) return 'Lancement demandé…';
   if (!s.autopilot) return 'Pilote auto désactivé';
   return queueIndex === 0 ? "Pris dès qu'une place se libère" : `En attente d'une place (${busyCount}/${s.maxParallel})`;
+}
+
+/** "DEM-3", "DEM-3 et DEM-4", "DEM-3, DEM-4 et DEM-6". */
+export function keyList(keys: string[]): string {
+  return keys.length > 1 ? `${keys.slice(0, -1).join(', ')} et ${keys.at(-1)}` : (keys[0] ?? '');
+}
+
+/** The keys of the tickets `t` comes after that are not "Terminé" yet, in its order: one gone (deleted) holds nothing back. */
+export function waitingFor(t: Ticket, tickets: Record<string, Ticket>): string[] {
+  return t.after.flatMap((id) => {
+    const x = tickets[id];
+    return x && x.column !== 'done' ? [x.key] : [];
+  });
+}
+
+/** What "Lancer" asks first on a ticket that waits for others. */
+export function launchAnyway(key: string, waiting: string[]): string {
+  const done = waiting.length > 1 ? 'terminés' : 'terminé';
+  return `${key} attend ${keyList(waiting)}, pas encore ${done}. Le lancer quand même ?`;
+}
+
+/**
+ * Each ticket's place in the queue of "À faire" (`todo`, in its order), by id: as the autopilot does, one that waits for
+ * others (-1) is passed over for the next, unless it was launched by hand.
+ */
+export function queueIndices(todo: Ticket[], tickets: Record<string, Ticket>): Record<string, number> {
+  let next = 0;
+  return Object.fromEntries(todo.map((t) => [t.id, !t.forced && waitingFor(t, tickets).length ? -1 : next++]));
+}
+
+/**
+ * Why `t` cannot come after `dep`: `dep` already waits for it, directly or through others, and neither would ever start
+ * by itself. Null when it does not.
+ */
+export function cycleRefusal(t: Ticket, dep: Ticket, tickets: Record<string, Ticket>): string | null {
+  // Every ticket `dep` waits for, once each: a loop already there (a hand-edited file) cannot hang the search.
+  const seen = new Set<string>();
+  const next = [...dep.after];
+  while (next.length) {
+    const id = next.pop()!;
+    if (id === t.id) return `${dep.key} attend déjà ${t.key} (directement ou non).`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    next.push(...(tickets[id]?.after ?? []));
+  }
+  return null;
 }
 
 /**

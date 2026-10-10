@@ -4,7 +4,7 @@ import { api } from './ipc';
 import type { SearchResult } from './types';
 
 describe('board commands', () => {
-  const draft = { title: 'Ajouter le fichier', description: '', criteria: ['Le fichier existe'], maxLoops: 5 };
+  const draft = { title: 'Ajouter le fichier', description: '', criteria: ['Le fichier existe'], maxLoops: 5, after: ['t2'] };
 
   it('asks the backend for tickets with the names its commands take', async () => {
     const backend = fakeBackend({ ticket_create: () => ticket(), ticket_update: () => ticket({ title: 'Autre' }) });
