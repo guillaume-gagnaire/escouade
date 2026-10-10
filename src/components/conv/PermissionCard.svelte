@@ -1,6 +1,6 @@
 <script lang="ts">
   import { captureKeys } from '../../lib/answer-keys.svelte';
-  import { t } from '../../lib/i18n';
+  import { t, tIn } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { keyLabel } from '../../lib/platform';
   import { answersHere, ariaEnter, enterAnswer } from '../../lib/shortcuts';
@@ -32,7 +32,8 @@
     busy = true;
     // The card is about to go: the focus it holds would be lost with it.
     const held = !!card?.contains(document.activeElement);
-    const message = decision === 'deny' && isPlan ? t('composer.permission.keepPlanningMessage') : null;
+    // Told to Claude: in the language of the texts for Claude, not the interface's.
+    const message = decision === 'deny' && isPlan ? tIn(app.lang.claude, 'composer.permission.keepPlanningMessage') : null;
     await app.run(api.answerPermission(agentId, item.id, decision, message));
     busy = false;
     if (held) app.focusComposer++;

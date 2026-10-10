@@ -307,6 +307,7 @@ describe('PermissionCard in English', () => {
 
   it('proposes a plan in English, and tells Claude to keep planning in English when it is refused', async () => {
     setLang('en');
+    app.lang = { ui: 'en', system: 'fr', claude: 'en' };
     const backend = fakeBackend();
     render(PermissionCard, {
       item: item({ toolName: 'ExitPlanMode', input: { plan: '## Plan\n\n1. Write the tests' } }),
@@ -319,6 +320,20 @@ describe('PermissionCard in English', () => {
     expect(screen.getByRole('button', { name: 'Approve and accept edits' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Keep planning' }));
     expect(backend.called('answer_permission')[0].args.message).toBe('Keep planning: the plan doesn’t work for me yet.');
+  });
+
+  it('tells Claude to keep planning in the language of the texts for Claude, not the interface’s', async () => {
+    setLang('en');
+    app.lang = { ui: 'en', system: 'en', claude: 'fr' };
+    const backend = fakeBackend();
+    render(PermissionCard, {
+      item: item({ toolName: 'ExitPlanMode', input: { plan: '## Plan' } }),
+      agentId: 'a1',
+      pending: true,
+      cwd: 'C:\\code',
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'Keep planning' }));
+    expect(backend.called('answer_permission')[0].args.message).toBe('Continue à planifier : le plan ne me convient pas encore.');
   });
 
   it('summarizes the decision in English once answered', () => {
