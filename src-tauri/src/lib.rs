@@ -19,6 +19,7 @@ mod integrations;
 mod integrations_tests;
 mod isola;
 mod job;
+mod mcp;
 mod menus;
 mod model;
 mod notify;
@@ -318,6 +319,8 @@ pub fn run() {
             commands::isola_down,
             commands::suggest_worktree_steps,
             commands::suggest_run_commands,
+            commands::mcp_status,
+            commands::mcp_activity,
         ])
         .build(tauri::generate_context!())
         .expect("error while building the application")

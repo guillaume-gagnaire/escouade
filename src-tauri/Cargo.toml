@@ -24,7 +24,7 @@ tauri-plugin-updater = "2"
 tauri-plugin-window-state = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "io-util", "sync", "time", "fs"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "io-util", "sync", "time", "fs", "net"] }
 anyhow = "1"
 parking_lot = "0.12"
 uuid = { version = "1", features = ["v4"] }
@@ -39,6 +39,12 @@ log = "0.4"
 trash = "5"
 # The system's language, for the interface's default one.
 sys-locale = "0.3"
+# The MCP server (« Claude peut piloter Escouade »): the official SDK, its Streamable HTTP
+# transport served by hyper on the loopback, the bearer tokens compared in constant time.
+rmcp = { version = "3.5", default-features = false, features = ["server", "macros", "transport-streamable-http-server"] }
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio", "server", "service"] }
+subtle = "2.6"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.60", features = ["Win32_Media_Audio", "Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_JobObjects", "Win32_System_ProcessStatus", "Win32_System_Threading"] }
@@ -68,3 +74,5 @@ tauri = { version = "2", features = ["test", "tray-icon", "image-png"] }
 rcgen = { version = "0.13", default-features = false, features = ["crypto", "ring"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+# A real MCP client against the app's server.
+rmcp = { version = "3.5", default-features = false, features = ["server", "macros", "transport-streamable-http-server", "client", "transport-streamable-http-client-reqwest"] }
