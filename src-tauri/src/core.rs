@@ -1460,13 +1460,13 @@ impl<R: Runtime> Core<R> {
         }
     }
 
-    /// A window that subscribes (started, or reloaded and so without the files it held) has no unsaved file yet.
     /// Work under way that an automatic restart for an update waits for, while the guard lives.
     pub(crate) fn working(&self) -> Working<'_> {
         self.works.fetch_add(1, Ordering::AcqRel);
         Working(&self.works)
     }
 
+    /// A window that subscribes (started, or reloaded and so without the files it held) has no unsaved file yet.
     pub fn reset_unsaved(&self) {
         self.unsaved.store(0, Ordering::Release);
     }

@@ -434,10 +434,12 @@ impl Updates {
     }
 
     /// The app may restart by itself (`setting`: « Installer les mises à jour automatiquement »):
-    /// an update is ready, no install is under way, and it is not one that failed to install.
-    pub fn restart_wanted(&self, setting: bool) -> bool {
+    /// an update is ready, no install is under way, it is not one that failed to install, and it
+    /// installs `unattended` (`unattended()`: no password asked while the user is away).
+    pub fn restart_wanted(&self, setting: bool, unattended: bool) -> bool {
         let failed = self.failed.lock().clone();
         setting
+            && unattended
             && !self.installing.load(Ordering::Acquire)
             && self
                 .ready()
@@ -668,9 +670,14 @@ pub fn install_ready<R: Runtime>(
     );
     let installed = apply(&*ready.package, relaunch, stop, STOP_LIMIT, leave);
     if installed.is_err() {
-        // The app still runs: the next try, or closing it, installs it again.
+        // The app still runs: it is tried again by hand (« Réessayer »), or when the app closes,
+        // never by itself again.
         updates.installing.store(false, Ordering::Release);
         let _ = std::fs::remove_file(&note);
+        *updates.failed.lock() = Some(ready.version.clone());
+        core.hub.emit(UiEvent::UpdateFailed {
+            version: ready.version.clone(),
+        });
     }
     installed.map(|()| true)
 }
@@ -831,6 +838,24 @@ pub fn quit<R: Runtime>(app: &AppHandle<R>) {
     });
 }
 
+/// The update installs without asking anything: on macOS, the app's bundle and its folder can
+/// be written without an administrator's password, which the plugin would ask for on the main
+/// thread (frozen until answered, the user maybe away).
+fn unattended() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        std::env::current_exe()
+            .ok()
+            .as_deref()
+            .and_then(app_bundle)
+            .is_some_and(|b| writable(b) && b.parent().is_some_and(writable))
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        true
+    }
+}
+
 /// How long the end of the app waits for an update to install there (macOS).
 #[cfg(target_os = "macos")]
 const EXIT_LIMIT: Duration = Duration::from_secs(60);
@@ -867,12 +892,7 @@ pub fn install_at_exit<R: Runtime>(app: &AppHandle<R>) -> bool {
     if updates.ready().is_none() || updates.installing.load(Ordering::Acquire) {
         return false;
     }
-    let exe = std::env::current_exe().ok();
-    let replaceable = exe
-        .as_deref()
-        .and_then(app_bundle)
-        .is_some_and(|b| writable(b) && b.parent().is_some_and(writable));
-    if !replaceable {
+    if !unattended() {
         log::info!("update left for a restart: replacing the app needs an administrator");
         return false;
     }
@@ -919,7 +939,7 @@ async fn tick<R: Runtime>(app: &AppHandle<R>) {
     let updates = app.state::<Updates>();
     let now = now_ms();
     let ready = updates.ready();
-    let on = updates.restart_wanted(core.settings.read().auto_update);
+    let on = updates.restart_wanted(core.settings.read().auto_update, unattended());
     let busy = if on {
         busy(&snapshot(&core, &updates, now))
     } else {
@@ -1100,20 +1120,54 @@ mod tests {
     #[tokio::test]
     async fn the_app_restarts_by_itself_only_for_an_update_ready_that_did_not_fail_before() {
         let u = Updates::default();
-        assert!(!u.restart_wanted(true));
+        assert!(!u.restart_wanted(true, true));
         ready(&u, Install::Ok).await;
-        assert!(u.restart_wanted(true));
-        assert!(!u.restart_wanted(false));
+        assert!(u.restart_wanted(true, true));
+        assert!(!u.restart_wanted(false, true));
         // The last try of 1.6.0 did not install: no automatic restart for it.
         let failed = Updates::started(Some(AfterUpdate::Failed("1.6.0".into())));
         assert_eq!(failed.failed().as_deref(), Some("1.6.0"));
         ready(&failed, Install::Ok).await;
-        assert!(!failed.restart_wanted(true));
+        assert!(!failed.restart_wanted(true, true));
         // A newer one does.
         let r = Arc::new(release("1.7.0"));
         let id = failed.offer(r).id;
         failed.download(id).await.unwrap();
-        assert!(failed.restart_wanted(true));
+        assert!(failed.restart_wanted(true, true));
+    }
+
+    #[tokio::test]
+    async fn an_update_that_would_ask_for_a_password_never_restarts_the_app_by_itself() {
+        let u = Updates::default();
+        ready(&u, Install::Ok).await;
+        // macOS, the app's folder writable by an administrator only: the plugin would ask for the
+        // password on the main thread, the user maybe away.
+        assert!(!u.restart_wanted(true, false));
+        assert!(u.restart_wanted(true, true));
+        // By hand it still installs, password and all.
+        let h = harness("upd-password-by-hand");
+        restart(&h.core, &u, Window::Front, |_| {}).unwrap();
+    }
+
+    #[tokio::test]
+    async fn an_install_that_fails_with_the_app_running_is_remembered_and_told() {
+        let h = harness("upd-fails-told");
+        let u = Updates::default();
+        ready(&u, Install::FailsBefore).await;
+        assert!(u.restart_wanted(true, true));
+        assert!(restart(&h.core, &u, Window::Front, |_| panic!("left")).is_err());
+        // No automatic restart for it any more, in this run either.
+        assert_eq!(u.failed().as_deref(), Some("1.6.0"));
+        assert!(!u.restart_wanted(true, true));
+        // The window is told, to offer « Réessayer ».
+        assert!(h
+            .events
+            .lock()
+            .iter()
+            .any(|e| e["type"] == "updateFailed" && e["version"] == "1.6.0"));
+        // Still ready: by hand, it is tried again.
+        assert!(u.ready().is_some());
+        assert!(restart(&h.core, &u, Window::Front, |_| panic!("left")).is_err());
     }
 
     #[tokio::test]

@@ -233,6 +233,16 @@ class AppState {
     return () => void this.ticketDoneHooks.delete(f);
   }
 
+  /** A version that did not install: the app restarts no more by itself for it, the user tries again or not. */
+  tellFailedUpdate(version: string) {
+    // The update's window, open, already says why its restart failed.
+    if (this.modal?.kind === 'update') return;
+    this.toast(`La mise à jour vers ${version} n’a pas pu s’installer.`, 'error', {
+      label: 'Réessayer',
+      onClick: () => (this.modal = { kind: 'update' }),
+    });
+  }
+
   /** `f` runs when the backend warns of an automatic restart, before the app stops. Returns what unregisters it. */
   onRestartWarned(f: () => void) {
     this.restartHooks.add(f);
@@ -376,6 +386,10 @@ class AppState {
           danger: true,
           onConfirm: () => api.quit(),
         };
+        break;
+      case 'updateFailed':
+        this.failedUpdate = e.version;
+        this.tellFailedUpdate(e.version);
         break;
       case 'updateRestart':
         this.restartAt = e.at;

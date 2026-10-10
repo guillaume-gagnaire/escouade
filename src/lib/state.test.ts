@@ -367,6 +367,29 @@ describe('AppState start-up', () => {
     expect(app.failedUpdate).toBe('1.6.0');
   });
 
+  it('tells of an update that did not install while the app ran, with a way to try again', async () => {
+    resetApp();
+    const { emit } = await start();
+    app.update = { version: '1.6.0', notes: '', ready: true };
+    emit({ type: 'updateFailed', version: '1.6.0' });
+    expect(app.failedUpdate).toBe('1.6.0');
+    const toast = app.toasts.at(-1)!;
+    expect(toast).toMatchObject({ text: 'La mise à jour vers 1.6.0 n’a pas pu s’installer.', kind: 'error' });
+    expect(toast.action?.label).toBe('Réessayer');
+    toast.action!.onClick();
+    expect(app.modal).toEqual({ kind: 'update' });
+  });
+
+  it('adds nothing to the update’s window, which says why its restart failed', async () => {
+    resetApp();
+    const { emit } = await start();
+    app.update = { version: '1.6.0', notes: '', ready: true };
+    app.modal = { kind: 'update' };
+    emit({ type: 'updateFailed', version: '1.6.0' });
+    expect(app.failedUpdate).toBe('1.6.0');
+    expect(app.toasts).toEqual([]);
+  });
+
   it('follows the automatic restart the backend plans, and calls off', async () => {
     resetApp();
     const { emit } = await start({ restartAt: 1_000 });

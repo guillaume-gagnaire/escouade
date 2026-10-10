@@ -657,6 +657,8 @@ export type UiEvent =
   | { type: 'quitRequested'; unsaved: number }
   /** The automatic restart for the update downloaded: when it comes, or null once called off. */
   | { type: 'updateRestart'; at: number | null }
+  /** The update downloaded did not install, the app still running: no automatic restart for it any more. */
+  | { type: 'updateFailed'; version: string }
   | { type: 'ticket'; ticket: Ticket }
   | { type: 'ticketRemoved'; id: string; projectId: string }
   | { type: 'project'; project: Project }

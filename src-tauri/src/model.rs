@@ -857,6 +857,11 @@ pub enum UiEvent {
     UpdateRestart {
         at: Option<i64>,
     },
+    /// The update downloaded did not install, the app still running: it does not restart by
+    /// itself for it any more (« Réessayer »).
+    UpdateFailed {
+        version: String,
+    },
     #[serde(rename_all = "camelCase")]
     TerminalExit {
         id: String,
