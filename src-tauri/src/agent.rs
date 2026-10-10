@@ -601,7 +601,7 @@ impl AgentRt {
                 // Its session's chain starts again at the boundary: the entries before it are no
                 // longer in it (a copy forking at one would be refused), and the next one to come
                 // is where a copy forks it.
-                self.meta.last_entry = None;
+                self.set_last_entry(None, fx);
                 self.notice("info", "Contexte compacté", fx);
             }
             "task_started" => {
@@ -795,11 +795,11 @@ impl AgentRt {
             self.notice("error", text, fx);
             return;
         }
-        // An entry of its session's main chain (not a subagent's, nor one Claude Code makes up),
-        // saved with the turn's end: where a copy made afterwards forks the session.
+        // An entry of its session's main chain (not a subagent's, nor one Claude Code makes up):
+        // where a copy made afterwards forks the session.
         if parent.is_none() && f["is_meta"] != true {
             if let Some(uuid) = f["uuid"].as_str() {
-                self.meta.last_entry = Some(uuid.to_string());
+                self.set_last_entry(Some(uuid.to_string()), fx);
             }
         }
         let Some(content) = msg["content"].as_array() else {
@@ -973,7 +973,7 @@ impl AgentRt {
         // stopped (or failed) before any reply, which a copy must not lose.
         if f["parent_tool_use_id"].is_null() && blocks.iter().any(|b| b["type"] == "tool_result") {
             if let Some(uuid) = f["uuid"].as_str() {
-                self.meta.last_entry = Some(uuid.to_string());
+                self.set_last_entry(Some(uuid.to_string()), fx);
             }
         }
         let tur = &f["tool_use_result"];
@@ -1025,6 +1025,16 @@ impl AgentRt {
             fx.save = true;
         }
         fx.files_changed = true;
+    }
+
+    /// Takes `entry` as the latest entry of its session, saved once it changes, not at the end of
+    /// the turn only: an app stopped for good mid-turn would leave a copy to fork at an older one.
+    /// The saves asked for are grouped (one every 400 ms at most), not one per frame.
+    fn set_last_entry(&mut self, entry: Option<String>, fx: &mut Effects) {
+        if self.meta.last_entry != entry {
+            self.meta.last_entry = entry;
+            fx.save = true;
+        }
     }
 
     fn on_result(&mut self, f: &Value, fx: &mut Effects) {
@@ -2676,6 +2686,38 @@ mod tests {
         assert_eq!(a.meta.last_entry, None);
         a.handle_frame(&reply("e2"), &mut fx);
         assert_eq!(a.meta.last_entry.as_deref(), Some("e2"));
+    }
+
+    #[test]
+    fn a_new_last_entry_is_saved_without_waiting_for_the_end_of_the_turn() {
+        let mut a = rt();
+        let reply = |uuid: &str| {
+            json!({ "type": "assistant", "uuid": uuid, "parent_tool_use_id": null,
+                "message": { "id": format!("m-{uuid}"), "role": "assistant", "content": [{ "type": "text", "text": "ok" }] } })
+        };
+        // What a frame asks to save.
+        let saves = |a: &mut AgentRt, frame: Value| {
+            let mut fx = Effects::default();
+            a.handle_frame(&frame, &mut fx);
+            fx.save
+        };
+        // The app stopping for good mid-turn: a copy still forks at its latest entry.
+        assert!(saves(&mut a, reply("e1")));
+        // The same entry told again: nothing new to save.
+        assert!(!saves(&mut a, reply("e1")));
+        // A tool's result in its main chain.
+        assert!(saves(
+            &mut a,
+            json!({ "type": "user", "uuid": "e2", "parent_tool_use_id": null,
+                "message": { "role": "user", "content": [{ "type": "tool_result", "tool_use_id": "tu1", "content": "fait" }] } })
+        ));
+        assert_eq!(a.meta.last_entry.as_deref(), Some("e2"));
+        // A compaction, which leaves none.
+        assert!(saves(
+            &mut a,
+            json!({ "type": "system", "subtype": "compact_boundary", "uuid": "b1" })
+        ));
+        assert_eq!(a.meta.last_entry, None);
     }
 
     #[test]
