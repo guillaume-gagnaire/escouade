@@ -17,8 +17,18 @@ export interface App {
   /** A git repository with one commit, ready to be added as a project. */
   repo: string;
   data: string;
-  /** Launches of the fake CLI: argv, cwd, the proxy and the task list variable it received (null when unset). */
-  launches: () => { argv: string[]; cwd: string; proxy: string | null; todoTools: string | null }[];
+  /** The test's folder: the app's data (`data`), the repository and Principal's Claude Code folder (`claude`) are in it. */
+  root: string;
+  /** Principal's `.claude.json`: where the fake `claude mcp add` declares Escouade's server (the app's `CLAUDE_CONFIG_DIR` is a test folder). */
+  claudeJson: string;
+  /** Launches of the fake CLI: argv, cwd, the proxy, the Claude Code folder (`CLAUDE_CONFIG_DIR`) and the task list variable it received (null when unset). */
+  launches: () => {
+    argv: string[];
+    cwd: string;
+    proxy: string | null;
+    configDir: string | null;
+    todoTools: string | null;
+  }[];
 }
 
 function git(cwd: string, ...args: string[]) {
@@ -124,13 +134,22 @@ const LABELS = {
 /** The usage endpoint the app asks: a closed port, unless a test gives its own (`appEnv`). */
 const NO_USAGE_API = 'http://127.0.0.1:9/api/oauth/usage';
 
-export const test = base.extend<{ app: App; appEnv: Record<string, string>; language: Language }>({
+export const test = base.extend<{
+  app: App;
+  appEnv: Record<string, string>;
+  language: Language;
+  preStart: { run: (root: string) => Record<string, unknown> | void };
+}>({
   // Variables for the app on top of the fixture's, which they replace (`test.use({ appEnv: … })`):
   // a fake usage endpoint, Principal's folder with a fake-limit in it.
   appEnv: [{}, { option: true }],
   // The language of the interface the app starts in (`test.use({ language: 'en' })`): French, whatever the machine's.
   language: ['fr', { option: true }],
-  app: async ({ appEnv, language }, use, testInfo) => {
+  // `run` is called before the app starts, with the test's folder (`test.use({ preStart: { run: (root) => … } })`): files it
+  // may put there (a second Claude account's folder and sign-in), and the settings to start with, merged into settings.json.
+  // (An object: Playwright reads a function given as an option for a fixture.)
+  preStart: [{ run: () => ({}) }, { option: true }],
+  app: async ({ appEnv, language, preStart }, use, testInfo) => {
     if (!fs.existsSync(EXE)) throw new Error(`build the app first: npx tauri build --debug --no-bundle (missing ${EXE})`);
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ccm-e2e-'));
     const data = path.join(root, 'data');
@@ -139,7 +158,14 @@ export const test = base.extend<{ app: App; appEnv: Record<string, string>; lang
     // French interface.
     fs.writeFileSync(
       path.join(data, 'settings.json'),
-      JSON.stringify({ claudePath: FAKE, sound: false, osNotifications: false, idleStopMinutes: 0, language }),
+      JSON.stringify({
+        claudePath: FAKE,
+        sound: false,
+        osNotifications: false,
+        idleStopMinutes: 0,
+        language,
+        ...(preStart.run(root) ?? {}),
+      }),
     );
     const repo = makeRepo(root);
     const log = path.join(root, 'fake-claude.jsonl');
@@ -162,6 +188,8 @@ export const test = base.extend<{ app: App; appEnv: Record<string, string>; lang
         // Never the machine user's own sign-in nor Anthropic's endpoint: Principal's Claude Code
         // folder is a test one (with no sign-in in it), and the quota is asked of nobody.
         CLAUDE_CONFIG_DIR: path.join(root, 'claude'),
+        // The fake `claude mcp …` keeps its servers in a folder of the test's, never in the user's home.
+        FAKE_CLAUDE_HOME: path.join(root, 'home'),
         CLAUDE_SECURESTORAGE_CONFIG_DIR: undefined,
         ESCOUADE_USAGE_API: NO_USAGE_API,
         ...appEnv,
@@ -214,7 +242,7 @@ export const test = base.extend<{ app: App; appEnv: Record<string, string>; lang
               .filter(Boolean)
               .map((l) => JSON.parse(l))
           : [];
-      await use({ page, repo, data, launches });
+      await use({ page, repo, data, root, claudeJson: path.join(root, 'claude', '.claude.json'), launches });
       if (testInfo.status !== testInfo.expectedStatus) throw new Error(`the app after the failure\n${await state()}`);
     } finally {
       await browser?.close().catch(() => {});

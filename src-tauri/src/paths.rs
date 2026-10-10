@@ -165,6 +165,11 @@ impl DataDir {
         Self(root)
     }
 
+    /// The folder itself.
+    pub fn root(&self) -> &Path {
+        &self.0
+    }
+
     pub fn state_file(&self) -> PathBuf {
         self.0.join("state.json")
     }

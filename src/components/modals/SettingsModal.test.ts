@@ -207,6 +207,30 @@ describe('SettingsModal', () => {
     expect(backend.called('save_settings')).toHaveLength(0);
   });
 
+  it('lets a ticket’s agent stopped by the limit go on on another account, unless told not to', async () => {
+    const backend = backendSaving();
+    app.settings.accounts = [
+      { id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true },
+      { id: 'pro', name: 'Pro', configDir: 'C:\\claude\\pro', claudePath: '', active: true },
+    ];
+    render(SettingsModal);
+    const move = screen.getByRole('switch', { name: 'Reprendre sur un autre compte un agent de ticket arrêté par la limite' });
+    // On by default, beside the automatic resume it is the alternative to.
+    expect(move).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByText('Sinon il attend la remise à zéro de son compte')).toBeInTheDocument();
+    await userEvent.click(move);
+    expect(tab('Claude Code')).toHaveClass('changed');
+    await save();
+    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ switchOnLimit: false });
+  });
+
+  it('has no such switch with a single account, nothing to go on on', () => {
+    backendSaving();
+    render(SettingsModal);
+    expect(screen.getByRole('switch', { name: 'Reprise automatique après la limite d’usage' })).toBeInTheDocument();
+    expect(screen.queryByRole('switch', { name: /Reprendre sur un autre compte/ })).not.toBeInTheDocument();
+  });
+
   it('changes nothing when cancelled, nor when closed', async () => {
     const backend = fakeBackend();
     render(SettingsModal);
@@ -214,7 +238,8 @@ describe('SettingsModal', () => {
     await userEvent.type(screen.getByRole('textbox', { name: /Git Bash/ }), 'C:\\Git\\bin\\bash.exe');
     await userEvent.click(screen.getByRole('button', { name: 'Annuler' }));
     expect(app.modal).toBeNull();
-    expect(backend.calls).toEqual([]);
+    // Nothing saved; the « Claude Code » tab it opened on only read what the MCP server is doing.
+    expect(backend.calls.filter((c) => !['mcp_status', 'mcp_declare_status', 'mcp_activity'].includes(c.cmd))).toEqual([]);
     expect(app.settings.bashPath).toBe('');
   });
 
@@ -967,6 +992,19 @@ describe('SettingsModal in English', () => {
     app.claudeFound = false;
     flushSync();
     expect(path).toHaveAttribute('placeholder', 'claude (found in PATH)');
+  });
+
+  it('says the switch to another account in English', () => {
+    fakeBackend();
+    app.settings.accounts = [
+      { id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true },
+      { id: 'pro', name: 'Pro', configDir: 'C:\\claude\\pro', claudePath: '', active: true },
+    ];
+    render(SettingsModal, { tab: 'claude' });
+    expect(
+      screen.getByRole('switch', { name: 'Resume a ticket’s agent stopped by the usage limit on another account' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Otherwise it waits for its account to reset')).toBeInTheDocument();
   });
 
   it('says the notifications, the network and the terminals in English', async () => {

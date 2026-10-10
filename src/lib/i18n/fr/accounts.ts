@@ -94,6 +94,8 @@ export default {
     /** The value of a bar: `{pct}`: « 42 % »; `{date}`: « 10/10 »; `{time}`: « 18:00 ». */
     tip: '{pct} · remise à zéro le {date} à {time}',
     unavailable: 'Quota indisponible',
+    /** One window as the bar group says it to the keyboard and to screen readers; `{name}`: « Quota sur 5 heures », `{tip}`: the tooltip's text. */
+    line: '{name} : {tip}',
   },
 
   // The panel the quota group opens, above the status bar, when there are several accounts.
@@ -105,5 +107,23 @@ export default {
     over: 'au-delà du seuil de pause',
     /** What the account's turns cost today; `{amount}`: « 1,20 $ » (« ≈ 1,20 $ » while a turn is running). */
     today: "Aujourd'hui : {amount}",
+  },
+
+  // The card of a turn stopped by the usage limit: go on on another account (the session goes along).
+  resume: {
+    /** `{account}`: the account the agent goes on on. */
+    on: 'Reprendre sur {account}',
+    /** The button that opens the menu of the other accounts. */
+    another: 'Reprendre sur un autre compte',
+    /** The turn that followed the move failed; `{account}`: the account it went to, `{error}`: what Claude Code said. */
+    failed: 'La reprise sur {account} a échoué : {error}.',
+    /** `{account}`: the account the agent came from. */
+    back: 'Revenir sur {account}',
+  },
+
+  // The setting of the Claude Code tab.
+  switchOnLimit: {
+    label: 'Reprendre sur un autre compte un agent de ticket arrêté par la limite',
+    desc: 'Sinon il attend la remise à zéro de son compte',
   },
 } as const satisfies Tree;

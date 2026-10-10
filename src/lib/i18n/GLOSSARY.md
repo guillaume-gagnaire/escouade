@@ -383,6 +383,9 @@ Ce qu’Escouade dit à Claude ou lui fait écrire suit « Langue des textes ré
 | Par compte | By account | les statistiques des comptes côte à côte : « Tokens », « Coût », « Tours » → “Turns” (les réponses de Claude), « Agents » |
 | Compte supprimé (ancien) | Deleted account (ancien) | un compte que les réglages ne listent plus, dont les tours restent dans les statistiques ; l’identifiant entre parenthèses |
 | Aujourd'hui : 1,20 $ | Today: $1.20 | ce qu’un compte a dépensé aujourd’hui, dans le panneau des quotas (« ≈ » tant qu’un tour tourne) |
+| Reprendre sur Pro | Resume on Pro | le bouton de la carte d’un tour arrêté par la limite d’usage : l’agent repart avec sa session sur un autre compte ; « Reprendre sur un autre compte » → “Resume on another account” (le menu des autres comptes) |
+| La reprise sur Pro a échoué : … | Resuming on Pro failed: … | le tour qui suit la reprise a échoué sur le nouveau compte ; « Revenir sur Principal » → “Go back to Main” |
+| Reprendre sur un autre compte un agent de ticket arrêté par la limite | Resume a ticket’s agent stopped by the usage limit on another account | le réglage de l’onglet « Claude Code » (avec plusieurs comptes) ; « Sinon il attend la remise à zéro de son compte » → “Otherwise it waits for its account to reset” |
 
 ## M — mcp
 
@@ -398,6 +401,10 @@ Ce qu’Escouade dit à Claude ou lui fait écrire suit « Langue des textes ré
 | ligne d’état (d’un agent) | status line | ce qu’un agent annonce faire par `report_progress`, sous son nom et sur la carte de son ticket : « Ce que l’agent dit faire » → “What the agent says it is doing” |
 | le pilote auto est en pause jusqu’à 14:30 | the autopilot is paused until 14:30 | refus d’un outil du serveur MCP : « 2026-10-12 14:30 » un autre jour (une heure ou une date, pas une durée) |
 | le maximum de tickets en parallèle / d’agents qui travaillent en même temps | the most tickets in parallel / agents working at once | réglage « En parallèle » → “In parallel” |
+| Claude peut piloter Escouade | Claude can drive Escouade | l’interrupteur du groupe « Escouade dans Claude » → “Escouade in Claude” (onglet « Claude Code ») |
+| Déclaré dans Claude · compte Principal, compte Pro | Declared in Claude · Main account, Pro account | l’état du serveur MCP dans la config de Claude Code de chaque compte actif ; « Pas déclaré pour le compte Pro : … » → “Not declared for the Pro account: …” |
+| Activité MCP | MCP activity | le journal des appels au serveur ; résultat « Fait / Refusé / Erreur » → “Done / Refused / Error” |
+| Créé par <auteur> via Escouade | Created by <author> through Escouade | dernière ligne de la description d’un ticket créé ou découpé par le serveur MCP |
 | Message de <auteur> : … | Message from <author>: … | en-tête d’un message qui vient du serveur MCP (`send_message`, premier message de `create_agent`), l’auteur étant un agent ou « Claude (hors Escouade) » → “Claude (outside Escouade)” |
 
 ## G — branches

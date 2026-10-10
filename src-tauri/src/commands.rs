@@ -371,6 +371,21 @@ pub async fn set_agent_account(core: CoreState<'_>, id: String, account: String)
     core.set_agent_account(&id, &account).await.map_err(err)
 }
 
+/// « Reprendre sur <compte> »: the agent stopped by the usage limit goes on, with its session, on
+/// another account.
+#[tauri::command]
+pub async fn resume_on_account(core: CoreState<'_>, agent_id: String, account: String) -> Res<()> {
+    core.resume_on_account(&agent_id, &account)
+        .await
+        .map_err(err)
+}
+
+/// « Revenir sur <compte> »: a resume on another account failed; the agent goes back.
+#[tauri::command]
+pub async fn back_to_previous_account(core: CoreState<'_>, agent_id: String) -> Res<()> {
+    core.back_to_previous_account(&agent_id).await.map_err(err)
+}
+
 #[tauri::command]
 pub async fn rename_agent(core: CoreState<'_>, id: String, name: String) -> Res<()> {
     core.rename_agent(&id, &name).await.map_err(err)
@@ -1336,6 +1351,34 @@ pub fn mcp_status(core: CoreState) -> crate::mcp::McpStatus {
 #[tauri::command]
 pub fn mcp_activity(core: CoreState) -> Vec<crate::mcp::activity::ActivityEntry> {
     core.mcp.activity.entries()
+}
+
+/// « Effacer » of the MCP activity log.
+#[tauri::command]
+pub fn mcp_clear_activity(core: CoreState) {
+    core.mcp.activity.clear();
+}
+
+/// « Claude peut piloter Escouade » turned on or off: saved at once, not through the settings
+/// modal's draft (it writes into the Claude Code config of each account, which « Annuler » could
+/// not take back). The declaration follows by itself (`mcp_declare_status`, `mcpDeclared`).
+#[tauri::command(async)]
+pub fn mcp_set_enabled(core: CoreState, enabled: bool) -> Res<()> {
+    core.set_mcp_enabled(enabled).map_err(err)
+}
+
+/// Where the server stands in each active account's Claude Code: declared, or why not and the
+/// command to run by hand, its token hidden.
+#[tauri::command]
+pub fn mcp_declare_status(core: CoreState) -> Vec<crate::mcp::install::Declaration> {
+    core.mcp.declared()
+}
+
+/// The command that declares the server by hand in the account, with the real token: asked for
+/// when the user copies it, never sent with the state.
+#[tauri::command]
+pub fn mcp_manual_command(core: CoreState, account: String) -> Res<String> {
+    core.mcp_manual_command(&account).map_err(err)
 }
 
 #[cfg(test)]

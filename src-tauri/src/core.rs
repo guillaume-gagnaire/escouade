@@ -68,6 +68,14 @@ pub(crate) fn not_a_repo() -> anyhow::Error {
     anyhow!(tr!("pas un dépôt git", "not a git repository"))
 }
 
+/// Refused: the app is quitting, no agent process starts any more.
+fn quitting_refusal() -> anyhow::Error {
+    anyhow!(tr!(
+        "Escouade se ferme : aucun agent ne démarre.",
+        "Escouade is quitting: no agent starts."
+    ))
+}
+
 /// The tag that opens `NotOnBase::wire`: the frontend recognizes the refusal by it.
 const NOT_ON_BASE: &str = "NOT_ON_BASE";
 
@@ -1484,8 +1492,13 @@ impl<R: Runtime> Core<R> {
         let bytes = serde_json::to_vec_pretty(&s)?;
         paths::write_atomic(&self.data.settings_file(), &bytes)?;
         let auto_resume = s.auto_resume;
-        let before = self.lang();
-        *self.settings.write() = s;
+        let (mcp_enabled, before) = (s.mcp_enabled, self.lang());
+        let mcp_was_enabled = std::mem::replace(&mut *self.settings.write(), s).mcp_enabled;
+        if mcp_was_enabled && !mcp_enabled {
+            // « Claude peut piloter Escouade » turned off: its entry leaves every account and the
+            // token changes (`declare_now`), once the server is stopped or kept by a project.
+            self.mcp.ask_renewal();
+        }
         let lang = self.lang();
         if lang != before {
             // At once, without a restart: what the backend writes from now on, the native menus
@@ -2043,6 +2056,12 @@ impl<R: Runtime> Core<R> {
                 return Ok(p);
             }
         }
+        // None starts once the app quits: the stop of the processes has been through, and one
+        // started after (the warm-up of an agent just made comes as late as the runtime lets it)
+        // would be left running.
+        if self.quitting.load(Ordering::Acquire) {
+            bail!(quitting_refusal());
+        }
         let settings = self.settings.read().clone();
         // Its account's Claude Code, where its session is kept.
         let account = accounts::get(&settings, &h.lock().meta.account);
@@ -2112,6 +2131,14 @@ impl<R: Runtime> Core<R> {
             }
         };
         h.lock().attach(proc.clone());
+        // The app began to quit while it started: the stop of the processes missed this one.
+        if self.quitting.load(Ordering::Acquire) {
+            if let Some(p) = h.lock().proc.take() {
+                p.close_input();
+                p.kill();
+            }
+            bail!(quitting_refusal());
+        }
         self.emit_agent(&h);
         match proc
             .control(json!({ "subtype": "initialize" }), Duration::from_secs(90))
@@ -2340,6 +2367,16 @@ impl<R: Runtime> Core<R> {
         before
     }
 
+    /// "continue", as the agent stopped by the usage limit is sent it when it goes on. A ticket's
+    /// agent that cannot go on blocks its ticket, which would wait forever.
+    pub(crate) async fn send_continue(self: &Arc<Self>, id: &str) -> Result<()> {
+        let text = auto_resume(self.lang().claude);
+        match self.doing_ticket_of(id) {
+            Some(ticket_id) => self.send_or_block(&ticket_id, id, text).await,
+            None => self.send_message(id, text, vec![]).await,
+        }
+    }
+
     /// Sends "continue" to the agents whose planned resume is due.
     pub async fn resume_due(self: &Arc<Self>) {
         if !self.settings.read().auto_resume {
@@ -2367,13 +2404,7 @@ impl<R: Runtime> Core<R> {
         for (id, view) in due {
             self.hub.emit(UiEvent::Agent { agent: view });
             self.request_save();
-            let text = auto_resume(self.lang().claude);
-            // A ticket's agent that cannot go on blocks its ticket, which would wait forever.
-            let sent = match self.doing_ticket_of(&id) {
-                Some(ticket_id) => self.send_or_block(&ticket_id, &id, text).await,
-                None => self.send_message(&id, text, vec![]).await,
-            };
-            if let Err(e) = sent {
+            if let Err(e) = self.send_continue(&id).await {
                 log::warn!("agent {id}: resume after the usage limit failed: {e:#}");
                 let _ = self.with_agent(&id, |rt, fx| {
                     rt.notice(
@@ -2470,6 +2501,15 @@ impl<R: Runtime> Core<R> {
         for (_, s) in self.setups.lock().drain() {
             s.task.abort();
         }
+        self.kill_agent_processes();
+        // Their tokens go with the app: their MCP configs too.
+        self.mcp.clear_agent_configs();
+        self.pty.kill_all();
+        self.save_now();
+    }
+
+    /// Every agent's process stops, with what it started.
+    fn kill_agent_processes(&self) {
         for h in self.agents.read().values() {
             let mut rt = h.lock();
             if let Some(p) = rt.proc.take() {
@@ -2477,10 +2517,14 @@ impl<R: Runtime> Core<R> {
                 p.kill();
             }
         }
-        // Their tokens go with the app: their MCP configs too.
-        self.mcp.clear_agent_configs();
-        self.pty.kill_all();
-        self.save_now();
+    }
+
+    /// What is left of a core that is done with (a test's): its agents' processes stop, and none
+    /// starts after. The background tasks it spawned live on, on the application's runtime.
+    #[cfg(test)]
+    pub(crate) fn stop_for_good(&self) {
+        self.quitting.store(true, Ordering::Release);
+        self.kill_agent_processes();
     }
 
     pub async fn send_message(
@@ -2593,7 +2637,7 @@ impl<R: Runtime> Core<R> {
         Ok(())
     }
 
-    fn with_agent<T>(
+    pub(crate) fn with_agent<T>(
         self: &Arc<Self>,
         id: &str,
         f: impl FnOnce(&mut AgentRt, &mut Effects) -> Result<T>,

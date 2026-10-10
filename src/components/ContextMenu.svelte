@@ -32,6 +32,12 @@
   });
 
   function onKeydown(e: KeyboardEvent) {
+    // Its own Escape: a dialog it was opened from (the branch of a ticket) stays, as the window's listeners would close it.
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      menu.close();
+      return;
+    }
     if (e.key === 'Tab') {
       e.preventDefault();
       menu.close();

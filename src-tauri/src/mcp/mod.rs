@@ -13,6 +13,9 @@ pub(crate) mod activity;
 #[cfg(test)]
 mod agents_tests;
 mod http;
+pub(crate) mod install;
+#[cfg(test)]
+mod install_tests;
 mod read;
 mod resolve;
 #[cfg(test)]
@@ -36,7 +39,7 @@ use std::collections::HashMap;
 use std::net::{Ipv4Addr, TcpListener};
 use std::ops::RangeInclusive;
 use std::path::PathBuf;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Weak};
 use std::time::Duration;
 use subtle::ConstantTimeEq;
@@ -169,6 +172,16 @@ pub struct McpServer<R: Runtime> {
     /// One `create_agent` at a time, from counting the project's agents at work to sending the new
     /// one its message: two calls at once do not both find a place free.
     acting: tokio::sync::Mutex<()>,
+    /// One declaration in Claude Code at a time (`Core::declare_now`).
+    declaring: tokio::sync::Mutex<()>,
+    /// « Claude peut piloter Escouade » was turned off since the last declaration run: that run
+    /// takes the entry out of every account and changes the token.
+    renew: AtomicBool,
+    /// Where the server stands in each active account's Claude Code, as the last run left it.
+    declared: Mutex<Vec<install::Declaration>>,
+    /// How many declaration runs are over (tests wait for the one they cause).
+    #[cfg(test)]
+    runs: std::sync::atomic::AtomicUsize,
     pub activity: activity::Activity,
     /// What a connection may take, read at each start (tests make them small).
     limits: Mutex<http::Limits>,
@@ -184,6 +197,11 @@ impl<R: Runtime> McpServer<R> {
             tokens: Tokens::default(),
             agent_files: Mutex::new(()),
             acting: tokio::sync::Mutex::new(()),
+            declaring: tokio::sync::Mutex::new(()),
+            renew: AtomicBool::new(false),
+            declared: Mutex::new(Vec::new()),
+            #[cfg(test)]
+            runs: std::sync::atomic::AtomicUsize::new(0),
             activity: activity::Activity::default(),
             limits: Mutex::new(http::Limits::default()),
         }
@@ -292,6 +310,32 @@ impl<R: Runtime> McpServer<R> {
         }
     }
 
+    /// « Claude peut piloter Escouade » was turned off: the next declaration run takes the entry
+    /// out of every account and changes the token.
+    pub(crate) fn ask_renewal(&self) {
+        self.renew.store(true, Ordering::Release);
+    }
+
+    /// Where the server stands in each active account's Claude Code, as the last declaration left
+    /// it (none while « Claude peut piloter Escouade » is off).
+    pub fn declared(&self) -> Vec<install::Declaration> {
+        self.declared.lock().clone()
+    }
+
+    /// Keeps where the server stands in the accounts, and tells the window when that changed.
+    fn tell_declared(&self, declared: Vec<install::Declaration>) {
+        {
+            let mut kept = self.declared.lock();
+            if *kept == declared {
+                return;
+            }
+            kept.clone_from(&declared);
+        }
+        if let Some(core) = self.core.upgrade() {
+            core.hub.emit(UiEvent::McpDeclared { declared });
+        }
+    }
+
     /// The token of Claude outside Escouade: read from the keychain once (made at the first need,
     /// `secrets::mcp_token`). Two first needs at once get the same one.
     pub fn external_token(&self) -> Result<String> {
@@ -320,8 +364,6 @@ impl<R: Runtime> McpServer<R> {
 
     /// A new token for Claude outside Escouade in place of the one it had (« Désactiver change le
     /// jeton »): the old one is refused at once, and forgotten by the keychain and the file.
-    // Allowed unused until the window's switch (M5) calls it (then drop the allow).
-    #[allow(dead_code)]
     pub fn renew_external_token(&self) -> Result<String> {
         let mut kept = self.tokens.external.write();
         let core = self
@@ -493,9 +535,17 @@ impl<R: Runtime> Core<R> {
         enabled || self.projects.read().iter().any(|p| p.agents_use_escouade)
     }
 
-    /// Starts or stops the MCP server as the settings want it (never once the app quits). A port
-    /// chosen in place of the one saved (none yet, or taken) is saved.
+    /// Starts or stops the MCP server as the settings want it (never once the app quits), then
+    /// brings the declaration in Claude Code in step (`declare_in_claude`: a port that is another
+    /// one now is declared again everywhere).
     pub fn sync_mcp(&self) {
+        self.sync_server();
+        self.declare_in_claude();
+    }
+
+    /// The server started or stopped as the settings want it. A port chosen in place of the one
+    /// saved (none yet, or taken) is saved.
+    fn sync_server(&self) {
         let held = self.mcp.sync.lock();
         if !self.mcp_wanted() || self.quitting.load(Ordering::Acquire) {
             self.mcp.stop_held(&held);

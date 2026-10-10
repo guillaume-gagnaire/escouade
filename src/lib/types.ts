@@ -24,6 +24,8 @@ export interface Settings {
   insecureTls: boolean;
   /** Send "continue" by itself to an agent stopped by the usage limit, once the quota resets. */
   autoResume: boolean;
+  /** « Reprendre sur un autre compte un agent de ticket arrêté par la limite »: such an agent goes on by itself on another usable account, rather than wait for its own to reset. */
+  switchOnLimit: boolean;
   /** « Pause au-delà du quota », in percent (80, 90, 95 or 100): no ticket of any board starts while the 5-hour or the weekly window is used this much. */
   quotaPause: number;
   /** « Installer les mises à jour automatiquement »: the app restarts by itself for an update once at rest. */
@@ -36,6 +38,10 @@ export interface Settings {
   claudeLanguage: 'ui' | Lang;
   /** The Claude accounts, in the order new agents try them; Principal (id "principal") always among them. */
   accounts: Account[];
+  /** « Claude peut piloter Escouade »: the MCP server runs and is declared in each active account's Claude Code. Changed by `mcp_set_enabled`, not by the settings modal's draft. */
+  mcpEnabled: boolean;
+  /** The port of the MCP server on 127.0.0.1 (0 until its first start): the backend's own. */
+  mcpPort: number;
   /** « Les agents tiennent une liste de tâches »: Claude Code's task list tools are on for the agents that start, so their progress can be shown (`Agent.plan`). */
   todoTools: boolean;
 }
@@ -513,6 +519,8 @@ export interface Agent {
   approvedIsola: IsolaApproval | null;
   /** The Claude account it runs on (an `Account`'s id), where its session is kept. */
   account: string;
+  /** The account it ran on before « Reprendre sur <compte> » moved it, until a turn ends on the new one: a turn that fails there is the resume’s failure. */
+  movedFrom: string | null;
   /** What it is doing right now ("Lit src/db.ts", "Lance npm test"…), during a turn. */
   activity: string | null;
   /** The setup of its new worktree under way: the step running ("1/2 · npm ci"). */
@@ -916,6 +924,8 @@ export interface TurnItem extends Base {
   isError: boolean;
   interrupted: boolean;
   error: string | null;
+  /** Stopped by the usage limit (absent from turns saved before the accounts): the card offers to go on, on another account. */
+  limited?: boolean;
 }
 export interface NoticeItem extends Base {
   kind: 'notice';
@@ -995,8 +1005,46 @@ export type UiEvent =
   | { type: 'toast'; text: string }
   /** The settings changed a language: the window switches to it at once. */
   | { type: 'language'; lang: LangInfo }
+  /** The MCP server started, stopped, could not start, or listens on another port. */
+  | { type: 'mcpStatus'; status: McpStatus }
+  /** A call to the MCP server, or a request refused. */
+  | { type: 'mcpActivity'; entry: McpActivityEntry }
+  /** Where the MCP server stands in each active account's Claude Code. */
+  | { type: 'mcpDeclared'; declared: McpDeclaration[] }
   /** Lines a step of the setup of an agent's worktree wrote since the last event, `total` counting all it wrote; a step starts with none. */
   | ({ type: 'setupOutput'; agentId: string } & SetupOutput);
+
+/** The MCP server as the backend reports it. */
+export interface McpStatus {
+  running: boolean;
+  /** The port it listens on; stopped, the one saved for its next start (0 before the first). */
+  port: number;
+  /** Why it does not run though the settings want it to. */
+  error: string | null;
+}
+
+/** One line of the MCP activity log: a call to a tool, or a request refused. */
+export interface McpActivityEntry {
+  at: number;
+  /** The agent's name, « Claude (hors Escouade) », or « Client inconnu ». */
+  caller: string;
+  /** The tool called; empty for a request refused before it reached one. */
+  tool: string;
+  summary: string;
+  outcome: 'ok' | 'refused' | 'error';
+  /** Why it was refused or how it failed. */
+  message: string | null;
+}
+
+/** Where the server stands in one account's Claude Code. */
+export interface McpDeclaration {
+  /** The id of the Claude account. */
+  account: string;
+  ok: boolean;
+  error: string | null;
+  /** The command that declares it by hand, its token already hidden (`mcp_manual_command` gives the real one when it is copied). */
+  command: string;
+}
 
 /** What the step running of a worktree's setup wrote: its rank (from 0), how many lines so far, and the last of them. */
 export interface SetupOutput {

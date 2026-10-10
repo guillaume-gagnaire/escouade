@@ -17,6 +17,8 @@
 
   /** How often the sign-in is looked for. */
   const POLL_MS = 2000;
+  /** How long the sign-in the account had is left alone before it is read once more, when the first look failed. */
+  const RETRY_MS = 300;
   /** How long « Connecté » is seen above its terminal before the terminal goes. */
   const SEEN_MS = 1500;
 
@@ -97,10 +99,17 @@
     error = null;
     try {
       if (before === undefined) {
-        before = await api.accountStatus(account.id).then(
-          (s) => s.stamp,
-          () => null,
-        );
+        // A look that fails (the keychain busy, a file being written) is no account without a sign-in: asked once more
+        // before it is taken for one, since a baseline of none would count the sign-in the account has, out of date, as
+        // the user's own a moment later.
+        const id = account.id;
+        const look = () => api.accountStatus(id).then((s) => s.stamp);
+        // After a moment: what made the first look fail (a keychain asking its user, a file being written) may be over.
+        const again = async () => {
+          await new Promise((resolve) => setTimeout(resolve, RETRY_MS));
+          return closed ? null : look().catch(() => null);
+        };
+        before = await look().catch(again);
         if (closed) return;
       }
       const info = await openAccountLogin(account.id);

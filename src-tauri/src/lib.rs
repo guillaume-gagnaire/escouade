@@ -259,6 +259,8 @@ pub fn run() {
             commands::answer_permission,
             commands::set_agent_options,
             commands::set_agent_account,
+            commands::resume_on_account,
+            commands::back_to_previous_account,
             commands::rename_agent,
             commands::duplicate_agent,
             commands::archive_agent,
@@ -346,6 +348,10 @@ pub fn run() {
             commands::suggest_run_commands,
             commands::mcp_status,
             commands::mcp_activity,
+            commands::mcp_clear_activity,
+            commands::mcp_set_enabled,
+            commands::mcp_declare_status,
+            commands::mcp_manual_command,
         ])
         .build(tauri::generate_context!())
         .expect("error while building the application")

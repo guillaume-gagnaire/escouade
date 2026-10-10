@@ -728,3 +728,85 @@ test('a ticket’s test launches leave the launch section, their processes stopp
   await expect.poll(() => alive(pid), { timeout: 15_000 }).toBe(false);
   await expect(page.getByText(/s'est arrêté en erreur/)).toHaveCount(0);
 });
+
+test('a ticket is written in a large window, a long description included, and added with Ctrl+Enter', async ({ app }) => {
+  const { page } = app;
+  // The window of the CI runners, close to the narrowest the app allows: the window must fit in it.
+  await page.setViewportSize({ width: 1028, height: 779 });
+  execFileSync('git', ['branch', 'feat/e2e-ticket'], { cwd: app.repo });
+  await addProject(page, app.repo, { firstAgent: false });
+  await page.getByRole('button', { name: /^Kanban/ }).click();
+  // Nothing starts: the ticket stays "À faire", to be opened again.
+  await page.getByRole('switch', { name: 'Pilote auto' }).click();
+  const plus = page.getByRole('button', { name: 'Nouveau ticket' });
+  // A first ticket (DEM-1), for the new one to come after.
+  await plus.click();
+  await page.getByRole('textbox', { name: 'Titre du ticket' }).fill('Le premier');
+  await page.keyboard.press('Control+Enter');
+  await expect(page.getByRole('button', { name: /DEM-1/ })).toBeVisible();
+  await plus.click();
+  const dialog = page.getByRole('dialog', { name: 'Nouveau ticket' });
+  const title = dialog.getByRole('textbox', { name: 'Titre du ticket' });
+  const description = dialog.getByRole('textbox', { name: 'Description' });
+  await expect(title).toBeFocused();
+  await expect(dialog.getByText('Ctrl+Entrée pour ajouter')).toBeVisible();
+  // In a short window the loops, the branch and the dependencies show at once: the window's body has nothing to scroll.
+  for (const name of ['Boucles max', 'Branche', 'Après']) {
+    await expect(dialog.getByRole('group', { name })).toBeVisible();
+  }
+  expect(await dialog.locator('.body').evaluate((body) => body.scrollHeight - body.clientHeight)).toBeLessThanOrEqual(1);
+  // In a tall one the footer stays at the foot of the window, whatever the content leaves free.
+  await page.setViewportSize({ width: 1400, height: 1100 });
+  const [foot, whole] = await Promise.all([dialog.locator('.foot').boundingBox(), dialog.boundingBox()]);
+  expect(Math.abs(foot!.y + foot!.height - (whole!.y + whole!.height))).toBeLessThanOrEqual(2);
+  await page.setViewportSize({ width: 1028, height: 779 });
+  // Large, and inside the window.
+  const box = (await dialog.boundingBox())!;
+  expect(box.width).toBeGreaterThanOrEqual(740);
+  expect(box.height).toBeGreaterThanOrEqual(600);
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.y).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(1028);
+  expect(box.y + box.height).toBeLessThanOrEqual(779);
+  const long = Array.from(
+    { length: 80 },
+    (_, i) => `Ligne ${i + 1} : une phrase assez longue pour remplir la ligne du champ et obliger à défiler`,
+  ).join('\n');
+  await title.fill('Un ticket écrit en grand');
+  await description.fill(long);
+  // The description grew with its text, up to the window's share, and the buttons stay in reach.
+  const field = (await description.boundingBox())!;
+  expect(field.height).toBeGreaterThan(300);
+  expect(field.height).toBeLessThanOrEqual(779 * 0.6 + 2);
+  await expect(dialog.getByRole('button', { name: 'Ajouter', exact: true })).toBeInViewport();
+  // Escape asks first; « Annuler » brings the window back with everything in it.
+  await page.keyboard.press('Escape');
+  const ask = page.getByRole('dialog', { name: 'Abandonner les modifications ?' });
+  await expect(ask).toBeVisible();
+  await ask.getByRole('button', { name: 'Annuler' }).click();
+  await expect(dialog).toBeVisible();
+  await expect(title).toHaveValue('Un ticket écrit en grand');
+  await expect(description).toHaveValue(long);
+  // The branch picker opens over the window: a click on one of its rows would miss under the overlay.
+  await dialog.getByRole('button', { name: /^Branche/ }).click();
+  await page.getByRole('menuitem', { name: 'Reprendre une branche existante…' }).click();
+  const picker = page.getByRole('dialog', { name: 'Choisir une branche' });
+  await picker.getByText('feat/e2e-ticket').click();
+  await expect(picker).toBeHidden();
+  await expect(dialog.getByRole('button', { name: /^Branche/ })).toContainText('feat/e2e-ticket');
+  await expect(dialog).toBeVisible();
+  // Ctrl+Enter adds the ticket from wherever the focus is; the focus goes back to « + ».
+  await page.keyboard.press('Control+Enter');
+  await expect(dialog).toBeHidden();
+  await expect(plus).toBeFocused();
+  // Opened again from its card: nothing was lost on the way.
+  await page.getByRole('button', { name: /DEM-2/ }).click();
+  const edit = page.getByRole('dialog', { name: 'Modifier DEM-2' });
+  await expect(edit.getByRole('textbox', { name: 'Description' })).toHaveValue(long);
+  await expect(edit.getByRole('button', { name: /^Branche/ })).toContainText('feat/e2e-ticket');
+  await expect(edit.getByText('Ctrl+Entrée pour enregistrer')).toBeVisible();
+  // Nothing changed: Escape leaves at once.
+  await page.keyboard.press('Escape');
+  await expect(edit).toBeHidden();
+  await expect(page.getByRole('button', { name: /DEM-2/ })).toBeFocused();
+});

@@ -6,6 +6,7 @@ import { navHistory } from '../lib/editor/history';
 import { recentFiles } from '../lib/editor/quick-open';
 import { fileSearches } from '../lib/editor/search.svelte';
 import { gitSync } from '../lib/git-sync.svelte';
+import { mcp } from '../lib/mcp.svelte';
 import { trees } from '../lib/editor/trees.svelte';
 import { app } from '../lib/state.svelte';
 import type { Agent, BoardSettings, BranchInfo, GitInfo, Project, Settings, Ticket } from '../lib/types';
@@ -49,6 +50,7 @@ export const SETTINGS: Settings = {
   proxyTerminals: false,
   insecureTls: false,
   autoResume: true,
+  switchOnLimit: true,
   quotaPause: 100,
   autoUpdate: true,
   integrations: {
@@ -62,6 +64,8 @@ export const SETTINGS: Settings = {
   language: 'system',
   claudeLanguage: 'ui',
   accounts: [{ id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true }],
+  mcpEnabled: false,
+  mcpPort: 0,
   todoTools: true,
 };
 
@@ -131,6 +135,7 @@ export function agent(over: Partial<Agent> = {}): Agent {
     approvedRecipe: null,
     approvedIsola: null,
     account: 'principal',
+    movedFrom: null,
     activity: null,
     setup: null,
     isola: false,
@@ -278,6 +283,7 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.lang = { ui: 'fr', system: 'fr', claude: 'fr' };
   app.ready = true;
   buffers.reset();
+  mcp.reset();
   trees.reset();
   navHistory.reset();
   recentFiles.reset();

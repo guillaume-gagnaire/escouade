@@ -651,9 +651,13 @@ impl AgentRt {
         self.clear_pending(fx);
         self.close_open_items(fx);
         let was_running = self.meta.status.is_active();
+        // Gone before it started, on the account a resume moved it to: the resume's failure. The
+        // session is not given up (it is where the way back goes from, and the old account has
+        // it): the card tells the failure, with « Revenir sur … ».
+        let resume_failed = !self.saw_init && self.meta.moved_from.is_some();
         // Gone before it started: what it was to resume could not be.
         let [session_lost, fork_point_lost] = exit_notices(i18n::ui());
-        let lost = if self.saw_init {
+        let lost = if self.saw_init || resume_failed {
             None
         } else if stderr.contains("No conversation found") {
             self.meta.session_id = None;
@@ -688,7 +692,22 @@ impl AgentRt {
             };
             let code = code.map(|c| c.to_string()).unwrap_or_else(|| "?".into());
             let reason = stopped(i18n::ui(), &code);
-            self.notice("error", format!("{reason}.{detail}"), fx);
+            if resume_failed {
+                // What the process said, else that it stopped: the card says it as the error.
+                let said = if stderr.trim().is_empty() {
+                    reason.clone()
+                } else {
+                    truncate(stderr.trim(), 2000)
+                };
+                let turn = json!({
+                    "kind": "turn", "id": new_id(), "ts": now_ms(), "durationMs": null,
+                    "cost": 0, "tokens": 0, "isError": true, "interrupted": false,
+                    "error": said, "limited": false,
+                });
+                self.append(turn, fx);
+            } else {
+                self.notice("error", format!("{reason}.{detail}"), fx);
+            }
             self.set_status(AgentStatus::Error, fx);
             fx.notify = Some(AgentAlert::new(
                 NotifyKind::Error,
@@ -1444,10 +1463,21 @@ impl AgentRt {
         self.plan_apply(fx, |plan| plan.end_turn(now_ms()));
         // The turn's last commands may have written the ledger.
         fx.plan_files = true;
+        // Stopped by the usage limit: the card offers to go on, on another account.
+        let at_limit = limited && is_error && !interrupted;
+        // The turn that follows a resume on another account ended. Failing, it is the resume's
+        // failure, and the agent keeps the account it can go back to; otherwise (done, at the limit
+        // there too, interrupted) it came from nowhere any more.
+        if !matches!(end, TurnEnd::Error(_)) && self.meta.moved_from.take().is_some() {
+            self.meta.moved_resume_at = None;
+            fx.save = true;
+            fx.agent_changed = true;
+        }
         let item = json!({
             "kind": "turn", "id": f["uuid"].as_str().map(str::to_string).unwrap_or_else(new_id), "ts": now_ms(),
             "durationMs": f["duration_ms"], "cost": cost, "tokens": tokens,
             "isError": is_error && !interrupted, "interrupted": interrupted, "error": error,
+            "limited": at_limit,
         });
         self.append(item, fx);
         if !self.pending.is_empty() {

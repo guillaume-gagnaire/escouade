@@ -59,7 +59,7 @@ export const SETTINGS_TABS: TabInfo[] = [
 /** The app's settings each tab sets. */
 const SETTINGS_OF: Partial<Record<SettingsTab, (keyof Settings)[]>> = {
   app: ['language', 'claudeLanguage'],
-  claude: ['claudePath', 'defaultModel', 'defaultEffort', 'defaultMode', 'autoResume', 'todoTools', 'idleStopMinutes'],
+  claude: ['claudePath', 'defaultModel', 'defaultEffort', 'defaultMode', 'autoResume', 'switchOnLimit', 'todoTools', 'idleStopMinutes'],
   notifications: ['sound', 'osNotifications', 'notifyFor'],
   terminals: ['pwshPath', 'bashPath', 'wslDistro'],
   network: ['proxyUrl', 'noProxy', 'proxyTerminals', 'insecureTls'],

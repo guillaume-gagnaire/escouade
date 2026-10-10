@@ -63,6 +63,10 @@ pub struct Settings {
     /// for the agents that start (`CLAUDE_CODE_ENABLE_TODO_TOOLS`, see `Settings::agent_env`), so
     /// that their progress can be shown (`plan`).
     pub todo_tools: bool,
+    /// « Reprendre sur un autre compte un agent de ticket arrêté par la limite »: such an agent
+    /// goes on by itself on the account `accounts::pick` gives, when another is usable, rather than
+    /// wait for its own to reset.
+    pub switch_on_limit: bool,
 }
 
 /// A Claude account: Claude Code with a configuration folder of its own (`accounts`).
@@ -237,6 +241,7 @@ impl Default for Settings {
             mcp_port: 0,
             accounts: Vec::new(),
             todo_tools: true,
+            switch_on_limit: true,
         }
     }
 }
@@ -741,6 +746,12 @@ pub struct AgentMeta {
     /// its stream (`plan`). None until it has any.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub plan: Option<PlanState>,
+    /// The account it ran on before « Reprendre sur <compte> » moved it, until a turn ends on the
+    /// new one: a turn that fails there is the resume's failure, and this is where it goes back to.
+    pub moved_from: Option<String>,
+    /// The resume it waited for on that account (`resume_at`), which the move dropped: where it waits
+    /// again when it goes back, if the account's windows no longer say when it resets.
+    pub moved_resume_at: Option<i64>,
 }
 
 fn principal_id() -> String {
@@ -1242,6 +1253,10 @@ pub enum UiEvent {
     McpActivity {
         entry: crate::mcp::activity::ActivityEntry,
     },
+    /// Where the server stands in each active account's Claude Code (declared, or why not).
+    McpDeclared {
+        declared: Vec<crate::mcp::install::Declaration>,
+    },
 }
 
 pub fn now_ms() -> i64 {
@@ -1389,6 +1404,36 @@ mod tests {
         // Settings saved before them have none: the load puts Principal in (`accounts::normalize`).
         let s: Settings = serde_json::from_value(json!({ "sound": false })).unwrap();
         assert!(s.accounts.is_empty());
+    }
+
+    #[test]
+    fn a_tickets_agent_stopped_by_the_limit_goes_to_another_account_unless_old_settings_or_the_user_say_no(
+    ) {
+        // Settings saved before the setting have it on: the move is what they get.
+        let s: Settings = serde_json::from_value(json!({ "sound": false })).unwrap();
+        assert!(s.switch_on_limit);
+        assert!(Settings::default().switch_on_limit);
+        let off: Settings =
+            serde_json::from_value(json!({ "switchOnLimit": false, "autoResume": false })).unwrap();
+        assert!(!off.switch_on_limit);
+        let v = serde_json::to_value(Settings {
+            switch_on_limit: false,
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(v["switchOnLimit"], json!(false));
+        // An agent saved before it was ever moved has no account it came from.
+        let m: AgentMeta =
+            serde_json::from_value(json!({ "id": "a1", "sessionId": "s1" })).unwrap();
+        assert_eq!((m.moved_from, m.moved_resume_at), (None, None));
+        let v = serde_json::to_value(AgentMeta {
+            moved_from: Some("principal".into()),
+            moved_resume_at: Some(1_790_000_000_000),
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(v["movedFrom"], json!("principal"));
+        assert_eq!(v["movedResumeAt"], json!(1_790_000_000_000_i64));
     }
 
     #[test]

@@ -15,7 +15,14 @@
 // message and assistant entry on a line), and a --resume of a session absent from every
 // <dir>/projects/* folder fails as an unknown one does; while a <dir>/fake-limit file is there, every
 // turn is stopped by the usage limit (as "limite") and its quota windows say 100 % (rate_limit_event,
-// get_usage). Without it, none of this.
+// get_usage). While a <dir>/fake-error file is there, every turn fails with an error of the API
+// ("Invalid API key", as an account the user is not signed in to gets), which is no usage limit.
+// While a <dir>/fake-exit file is there, the process ends before it starts (exit code 1), its stderr the text of the file
+// (« No conversation found with session ID: … », « Invalid API key · Please run /login »).
+// A user message with [ferme-lentement] makes the process take 800 ms to end once its input is
+// closed, and write {"type":"closed"} to its session just before it does (a resume that copies
+// the session before the process is gone misses that line). Without CLAUDE_CONFIG_DIR, none of this.
+// `claude mcp add|remove|get|list` keep the user scope's MCP servers in <folder>/.claude.json (see mcpCommand).
 // What Escouade tells it is read in French or in English (« Langue des textes rédigés par Claude »):
 // each scenario below is recognized in both, its answers stay the same.
 // Started with --append-system-prompt (a ticket's protocol; not what a copy of an agent is told of
@@ -83,9 +90,109 @@ const sessionKept = (id) => {
 };
 // Out of quota, for as long as the file is there.
 const limited = () => configDir !== null && fs.existsSync(path.join(configDir, 'fake-limit'));
+// Failing with an error of the API, for as long as the file is there.
+const failing = () => configDir !== null && fs.existsSync(path.join(configDir, 'fake-error'));
 
-// One-shot mode (`-p --output-format json`), used by the app to name agents.
-if (argv.includes('-p') && argv.some((a) => a.includes('[sourd]'))) {
+// `claude mcp add|remove|get|list`: the MCP servers of the user scope, which Escouade declares in each
+// Claude account (« Claude peut piloter Escouade »). Kept where Claude Code keeps them, in the `mcpServers`
+// of <CLAUDE_CONFIG_DIR>/.claude.json (an account's own folder, or the app's when it has one), else of
+// <FAKE_CLAUDE_HOME>/.claude.json (Principal, whose real file is ~/.claude.json). It refuses to run with
+// neither variable set: it never touches the real home. Like Claude Code: `add` of a name already there
+// fails (exit 1, "already exists"), `remove` and `get` of one that is absent too; `--header` takes every
+// argument that follows it (so Escouade puts it last). While a <folder>/fake-mcp-fail file is there, `add`
+// and `remove` fail with its text; while a <folder>/fake-mcp-hang file is there, they never answer; while a
+// <folder>/fake-mcp-raced file is there, the entry is removed behind their back; while a <folder>/fake-mcp-slow
+// file is there, they wait as many milliseconds as it says. Every call is in the launch log above (its argv).
+async function mcpCommand(args) {
+  const dir = process.env.CLAUDE_CONFIG_DIR || process.env.FAKE_CLAUDE_HOME;
+  if (!dir) {
+    process.stderr.write('fake claude: set FAKE_CLAUDE_HOME or CLAUDE_CONFIG_DIR, `claude mcp` never touches the real home\n');
+    process.exit(2);
+  }
+  const file = path.join(dir, '.claude.json');
+  const fail = (text, code = 1) => {
+    process.stderr.write(`${text}\n`);
+    process.exit(code);
+  };
+  const read = () => {
+    if (!fs.existsSync(file)) return {};
+    try {
+      return JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch {
+      return fail(`fake claude: ${file} is not JSON`);
+    }
+  };
+  const [sub, ...rest] = args;
+  const options = {};
+  const positional = [];
+  for (let i = 0; i < rest.length; i++) {
+    const a = rest[i];
+    if (!a.startsWith('-')) {
+      positional.push(a);
+      continue;
+    }
+    const name = { '-s': '--scope', '-t': '--transport', '-H': '--header', '-e': '--env' }[a] ?? a;
+    // One value, but for the two options Claude Code makes variadic: everything up to the next option.
+    const values = [rest[++i]];
+    if (name === '--header' || name === '--env') while (i + 1 < rest.length && !rest[i + 1].startsWith('-')) values.push(rest[++i]);
+    options[name] = [...(options[name] ?? []), ...values];
+  }
+  const scope = options['--scope']?.[0] ?? 'local';
+  if ((sub === 'add' || sub === 'remove') && scope !== 'user') fail(`fake claude: only the user scope is kept (got ${scope})`);
+  const [name, url] = positional;
+  const slow = path.join(dir, 'fake-mcp-slow');
+  if ((sub === 'add' || sub === 'remove') && fs.existsSync(slow))
+    await new Promise((r) => setTimeout(r, Number(fs.readFileSync(slow, 'utf8')) || 1000));
+  // While a <folder>/fake-mcp-raced file is there, someone else removes the entry just before `add` and
+  // `remove` look at it.
+  if ((sub === 'add' || sub === 'remove') && fs.existsSync(path.join(dir, 'fake-mcp-raced')) && read().mcpServers?.[name]) {
+    const json = read();
+    delete json.mcpServers[name];
+    fs.writeFileSync(file, JSON.stringify(json, null, 2));
+  }
+  const servers = read().mcpServers ?? {};
+  const refused = path.join(dir, 'fake-mcp-fail');
+  if ((sub === 'add' || sub === 'remove') && fs.existsSync(path.join(dir, 'fake-mcp-hang'))) setInterval(() => {}, 1000);
+  else if ((sub === 'add' || sub === 'remove') && fs.existsSync(refused))
+    fail(fs.readFileSync(refused, 'utf8').trim() || 'fake claude: refused');
+  else if (sub === 'add') {
+    if (!name || !url) fail('error: missing required argument');
+    if (name in servers) fail(`MCP server ${name} already exists in user config`);
+    const headers = Object.fromEntries(
+      (options['--header'] ?? []).map((h) => [h.slice(0, h.indexOf(':')).trim(), h.slice(h.indexOf(':') + 1).trim()]),
+    );
+    const json = read();
+    json.mcpServers = {
+      ...servers,
+      [name]: { type: options['--transport']?.[0] ?? 'stdio', url, ...(Object.keys(headers).length ? { headers } : {}) },
+    };
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(file, JSON.stringify(json, null, 2));
+    process.stdout.write(`Added HTTP MCP server ${name} with URL: ${url} to user config\nFile modified: ${file}\n`);
+  } else if (sub === 'remove') {
+    if (!(name in servers)) fail(`No MCP server found with name: ${name}`);
+    const json = read();
+    delete json.mcpServers[name];
+    fs.writeFileSync(file, JSON.stringify(json, null, 2));
+    process.stdout.write(`Removed MCP server ${name} from user config\nFile modified: ${file}\n`);
+  } else if (sub === 'get') {
+    if (!(name in servers)) fail(`No MCP server found with name: ${name}`);
+    const s = servers[name];
+    process.stdout.write(`${name}:\n  Scope: User config\n  Status: ✔ Connected\n  Type: ${s.type}\n  URL: ${s.url}\n`);
+  } else if (sub === 'list') {
+    const lines = Object.entries(servers).map(([n, s]) => `${n}: ${s.url} (${s.type.toUpperCase()}) - ✔ Connected`);
+    process.stdout.write(
+      lines.length
+        ? `Checking MCP server health...\n\n${lines.join('\n')}\n`
+        : 'No MCP servers configured. Use `claude mcp add` to add a server.\n',
+    );
+  } else fail(`fake claude: unknown mcp command ${sub}`, 2);
+}
+
+if (argv[0] === 'mcp') {
+  mcpCommand(argv.slice(1));
+} else if (argv.includes('-p') && argv.some((a) => a.includes('[sourd]'))) {
+  // One-shot mode (`-p --output-format json`), used by the app to name agents.
   setTimeout(() => {}, 20_000);
 } else if (argv.includes('-p')) {
   let input = '';
@@ -168,6 +275,10 @@ if (argv.includes('-p') && argv.some((a) => a.includes('[sourd]'))) {
 }
 
 function startSession() {
+  if (configDir && fs.existsSync(path.join(configDir, 'fake-exit'))) {
+    process.stderr.write(fs.readFileSync(path.join(configDir, 'fake-exit'), 'utf8'));
+    process.exit(1);
+  }
   const resume = argv.find((a) => a.startsWith('--resume='))?.slice('--resume='.length);
   // A session of another account (or none) is not in this one's folder.
   if (resume?.startsWith('missing') || (resume && configDir && !sessionKept(resume))) {
@@ -194,6 +305,7 @@ function startSession() {
   const sys = copied.some((c) => appended.startsWith(c)) ? '' : appended;
   let remoteSent = false;
   let entries = 0;
+  let slowClose = false;
 
   const out = (o) => process.stdout.write(JSON.stringify(o) + '\n');
   const ok = (id, response = {}) => out({ type: 'control_response', response: { subtype: 'success', request_id: id, response } });
@@ -594,6 +706,7 @@ function startSession() {
 
   function onUser(text) {
     out({ type: 'system', subtype: 'init', session_id: sessionId, model, cwd: process.cwd(), permissionMode: 'default' });
+    if (text.includes('[ferme-lentement]')) slowClose = true;
     if (text.includes('crash')) process.exit(3);
     if (text.includes('grandchild')) {
       // Like a dev server started by the Bash tool: must die with the agent's process tree.
@@ -631,6 +744,19 @@ function startSession() {
         session_id: sessionId,
         result: "You've hit your limit · resets 3pm",
       });
+      return;
+    }
+    if (failing()) {
+      // An error of the API, as Claude Code tells it: a failed turn, no rate limit.
+      const said = 'Invalid API key · Please run /login';
+      out({
+        type: 'assistant',
+        error: 'authentication_failed',
+        message: { id: `msg_error${msg}`, role: 'assistant', content: [{ type: 'text', text: said }] },
+        parent_tool_use_id: null,
+        session_id: sessionId,
+      });
+      out({ type: 'result', subtype: 'success', is_error: true, duration_ms: 100, session_id: sessionId, result: said });
       return;
     }
     if (text.includes('Prépare le lancement') || text.includes('Prepare the test launch')) {
@@ -878,5 +1004,14 @@ function startSession() {
     }
   }
   // [tenace]: like a CLI that takes its time to finish once its input is closed.
-  rl.on('close', () => (sys.includes('[tenace]') ? setTimeout(() => process.exit(0), 5000) : process.exit(0)));
+  rl.on('close', () => {
+    if (slowClose) {
+      // Still writing its session for a moment: copied too early, the copy misses the last line.
+      return setTimeout(() => {
+        keep({ type: 'closed' });
+        process.exit(0);
+      }, 800);
+    }
+    return sys.includes('[tenace]') ? setTimeout(() => process.exit(0), 5000) : process.exit(0);
+  });
 }
