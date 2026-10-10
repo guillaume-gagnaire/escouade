@@ -17,6 +17,21 @@ export const ALLOWED: Allowed[] = [
   { file: 'src/components/editor/SourcePicker.svelte', text: '.claude/worktrees/', why: 'un chemin de dossier, pas un texte' },
 
   // L4 — settings
+  {
+    file: 'src/components/settings/ProjectTab.svelte',
+    text: 'Git',
+    why: 'nom propre : Git reste Git, titre du groupe des réglages git du projet',
+  },
+  {
+    file: 'src/components/settings/ProjectTab.svelte',
+    text: '.env*',
+    why: 'un motif de fichiers donné en exemple (le champ dit « un motif par ligne »), le même dans toutes les langues',
+  },
+  {
+    file: 'src/components/settings/AppTab.svelte',
+    text: '~/.escouade/',
+    why: 'un chemin de dossier, pas un texte',
+  },
 
   // L5 — integrations, boardSettings
   {

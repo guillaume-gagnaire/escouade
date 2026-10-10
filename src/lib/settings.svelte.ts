@@ -18,31 +18,39 @@ import type {
 
 export type SettingsTab = 'app' | 'claude' | 'notifications' | 'projects' | 'board' | 'integrations' | 'terminals' | 'network' | 'about';
 
-export const SETTINGS_TABS: { id: SettingsTab; label: string; icon: string; desc: string; scoped?: boolean }[] = [
-  {
-    id: 'app',
-    // Read where shown: they follow a change of language.
+interface TabInfo {
+  id: SettingsTab;
+  label: string;
+  icon: string;
+  desc: string;
+  scoped?: boolean;
+}
+
+/** A tab whose label and description are read where shown, so that they follow a change of language. */
+function tabInfo(id: SettingsTab, icon: string, scoped = false): TabInfo {
+  return {
+    id,
+    icon,
+    ...(scoped ? { scoped } : {}),
     get label() {
-      return t('settings.tabs.app.label');
+      return t(`settings.tabs.${id}.label`);
     },
-    icon: 'Aa',
     get desc() {
-      return t('settings.tabs.app.desc');
+      return t(`settings.tabs.${id}.desc`);
     },
-  },
-  { id: 'claude', label: 'Claude Code', icon: '✳', desc: 'Exécutable, modèle et permissions par défaut' },
-  { id: 'notifications', label: 'Notifications', icon: '♪', desc: 'Alertes visuelles et sonores' },
-  { id: 'projects', label: 'Projets', icon: '▤', desc: 'Réglages propres à chaque projet', scoped: true },
-  { id: 'board', label: 'Kanban', icon: '▦', desc: 'Pilote auto et tickets validés', scoped: true },
-  { id: 'integrations', label: 'Intégrations', icon: '⧉', desc: 'Jira, Trello et GitHub Issues', scoped: true },
-  { id: 'terminals', label: 'Terminaux', icon: '$_', desc: 'Shells disponibles dans les terminaux intégrés' },
-  {
-    id: 'network',
-    label: 'Réseau',
-    icon: '⇄',
-    desc: 'Proxy HTTP(S) et certificats TLS pour Claude Code, les intégrations et les mises à jour',
-  },
-  { id: 'about', label: 'À propos', icon: 'ⓘ', desc: 'Version et données locales' },
+  };
+}
+
+export const SETTINGS_TABS: TabInfo[] = [
+  tabInfo('app', 'Aa'),
+  tabInfo('claude', '✳'),
+  tabInfo('notifications', '♪'),
+  tabInfo('projects', '▤', true),
+  tabInfo('board', '▦', true),
+  tabInfo('integrations', '⧉', true),
+  tabInfo('terminals', '$_'),
+  tabInfo('network', '⇄'),
+  tabInfo('about', 'ⓘ'),
 ];
 
 /** The app's settings each tab sets. */
@@ -147,16 +155,12 @@ function changes<T extends object>(base: T, next: T): Partial<T> {
 
 const empty = (o: object) => Object.keys(o).length === 0;
 
-/** What « Remplir automatiquement » says when Claude read the project and found nothing to run. */
-const NOTHING_TO_RUN = "Claude n'a trouvé aucune commande à lancer pour ce projet.";
-
 /** What it says when `n` commands were put in the draft, `refused` others having been left out for what they would hide. */
 const proposed = (n: number, refused = 0) => {
-  const plural = refused > 1 ? 's' : '';
-  const left = refused ? `, ${refused} écartée${plural} (caractères invisibles ou trop longue${plural})` : '';
-  return n > 1
-    ? `${n} commandes proposées${left} : relis-les avant d'enregistrer.`
-    : `1 commande proposée${left} : relis-la avant d'enregistrer.`;
+  if (!refused) return t('settings.suggest.proposed', { count: n });
+  return refused === 1
+    ? t('settings.suggest.proposedLeftOne', { count: n })
+    : t('settings.suggest.proposedLeftMany', { count: n, refused });
 };
 
 class SettingsForm {
@@ -189,9 +193,9 @@ class SettingsForm {
     for (const p of app.projects) {
       const d = this.projects[p.id];
       if (!d) continue;
-      if (!d.name.trim()) return `Le projet « ${p.name} » doit garder un nom.`;
+      if (!d.name.trim()) return t('settings.problem.projectName', { name: p.name });
       if (d.runCommands.some((c) => !c.name.trim() || !c.command.trim())) {
-        return `Chaque commande de lancement de « ${d.name.trim()} » demande un nom et une ligne de commande.`;
+        return t('settings.problem.command', { name: d.name.trim() });
       }
     }
     return null;
@@ -250,7 +254,7 @@ class SettingsForm {
     try {
       const s = await api.suggestWorktreeSteps(projectId);
       const n = s.setup.length + s.teardown.length;
-      if (!n) return app.toast(NOTHING_TO_RUN);
+      if (!n) return app.toast(t('settings.suggest.nothing'));
       // Closed and opened again meanwhile: proposed to the fresh draft all the same.
       if (!this.projects[projectId]) return;
       this.proposal[projectId] = s;
@@ -282,7 +286,7 @@ class SettingsForm {
     this.suggestingLaunch[projectId] = true;
     try {
       const { commands, refused } = await api.suggestRunCommands(projectId);
-      if (!commands.length) return app.toast(NOTHING_TO_RUN);
+      if (!commands.length) return app.toast(t('settings.suggest.nothing'));
       // Closed and opened again meanwhile: proposed to the fresh draft all the same.
       if (!this.projects[projectId]) return;
       this.launchProposal[projectId] = commands;
