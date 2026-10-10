@@ -1064,3 +1064,200 @@ fn a_stale_ledger_does_not_hide_a_plan_written_since() {
     let (_, list) = read(scan(&r.root, &written, now - 60_000, None));
     assert_eq!(list.plan_file, "docs/superpowers/plans/new.md");
 }
+
+// ---------- fix round 1 ----------
+
+#[test]
+fn a_path_on_another_machine_or_a_device_is_remote_whatever_the_separators() {
+    let remote = [
+        r"\\host\share\x.md",
+        "//host/share/x.md",
+        r"\/host/share/x.md",
+        r"/\host\share\x.md",
+        r"\\?\UNC\host\share\x.md",
+        r"\\.\pipe\x",
+        r"\/./pipe/x",
+        r"/\./pipe/x",
+        r"\/?/C:/x.md",
+        r"/\?\C:\x.md",
+        r"\\?\C:\repo\x.md",
+        r"\??\UNC\host\share\x.md",
+        "/??/UNC/host/share/x.md",
+        "///host/x",
+        r"\\\host\x",
+    ];
+    for root in [r"C:\repo", "C:/repo", "/home/me/repo"] {
+        for path in remote {
+            assert!(is_remote_path(path, root), "{path} (root {root})");
+        }
+        for local in [
+            r"C:\repo\x.md",
+            "C:/repo/x.md",
+            "/home/me/repo/x.md",
+            "docs/x.md",
+            "./docs/x.md",
+            r"docs\x.md",
+            "x.md",
+            "..",
+            "",
+        ] {
+            assert!(!is_remote_path(local, root), "{local} (root {root})");
+        }
+    }
+    // A repository that is itself on the network: its own files are not remote.
+    for root in [r"\\srv\share\repo", "//srv/share/repo", r"\/srv/share/repo"] {
+        for own in [r"\\srv\share\repo\docs\x.md", "//srv/share/repo/docs/x.md"] {
+            assert!(!is_remote_path(own, root), "{own} (root {root})");
+        }
+    }
+}
+
+#[test]
+fn a_remote_or_device_path_is_refused_before_it_is_compared_to_the_root() {
+    let r = Repo::new("remote-rel");
+    let root = r.root.to_string_lossy().into_owned();
+    // The root's own files, spelled with a verbatim prefix: a device path all the same.
+    let verbatim = format!(r"\\?\{root}\docs\superpowers\plans\demo.md");
+    assert_eq!(relative_to(&r.root, &verbatim), None);
+    // The same, spelled normally.
+    assert_eq!(
+        relative_to(&r.root, &format!("{root}/docs/superpowers/plans/demo.md")).as_deref(),
+        Some("docs/superpowers/plans/demo.md")
+    );
+    for raw in [
+        r"\\host\share\x.md",
+        r"\/host/share/x.md",
+        r"/\host\share\x.md",
+        r"\/./pipe/x.md",
+        r"\/?/C:/x.md",
+        r"\??\UNC\host\share\x.md",
+    ] {
+        assert_eq!(relative_to(&r.root, raw), None, "{raw}");
+    }
+}
+
+#[test]
+fn a_path_not_lexically_under_the_root_is_refused_without_asking_the_disk() {
+    let r = Repo::new("lexical");
+    r.plan("docs/superpowers/plans/demo.md");
+    // A second name for the repository (a link): the disk would say it is the same folder; the
+    // spelling is not the root's, so it is not looked at.
+    let alias = r.root.parent().unwrap().join("alias");
+    if !make_dir_link(&r.root, &alias) {
+        eprintln!("no link to a folder here: skipped");
+        return;
+    }
+    let through = alias
+        .join("docs")
+        .join("superpowers")
+        .join("plans")
+        .join("demo.md");
+    let through = through.to_string_lossy().into_owned();
+    assert_eq!(relative_to(&r.root, &through), None);
+    assert!(fallback(&r.root, std::slice::from_ref(&through)).is_none());
+    // Rooted where the repository is, it is the plan.
+    let rooted = reroot(&r.root, &alias, std::slice::from_ref(&through));
+    assert!(fallback(&r.root, &rooted).is_some(), "{rooted:?}");
+    // A folder that is not the repository's second name changes nothing.
+    let other = r.root.join("docs");
+    let same = reroot(&r.root, &other, std::slice::from_ref(&through));
+    assert_eq!(same, std::slice::from_ref(&through));
+    // Nor does a path outside the folder it is rooted from.
+    let strange = vec!["/etc/passwd".to_string(), "docs/x.md".to_string()];
+    assert_eq!(reroot(&r.root, &alias, &strange), strange);
+}
+
+#[test]
+fn a_stream_or_a_device_name_is_not_a_plan() {
+    let r = Repo::new("device");
+    r.put("docs/superpowers/plans/demo.md", "# P\n\n### Task 1: Un\n");
+    for named in [
+        "docs/superpowers/plans/demo.md:stream.md",
+        "docs/superpowers/plans/demo.md::$DATA",
+        "docs/superpowers/plans/CON.md",
+        "docs/superpowers/plans/nul.md",
+        "docs/superpowers/plans/Com1.md",
+        "docs/superpowers/plans/lpt9.sub.md",
+        "docs/superpowers/aux/demo.md",
+        "C:demo.md",
+    ] {
+        assert_eq!(relative_to(&r.root, named), None, "{named}");
+    }
+    // Names that only look like them.
+    for named in [
+        "docs/superpowers/plans/console.md",
+        "docs/superpowers/plans/com0.md",
+        "docs/superpowers/plans/com10.md",
+        "docs/superpowers/plans/nullable.md",
+    ] {
+        assert!(relative_to(&r.root, named).is_some(), "{named}");
+    }
+}
+
+#[test]
+fn every_statement_of_a_ledger_line_counts() {
+    // Lines of this repository's ledger, as the controller writes them.
+    let ledger = parse_ledger(
+        "# SDD ledger — plan: p.md
+Task M4: complete (commits 9871993..10666e6); Task M3: complete (commits ba31a2f..9871993, paired review approved)
+Task G2: complete (commits 47a577b..da35091); Task G3: complete (commits da35091..94b8f93) — paired review Approved (minors)
+Task K3: fix round (commits db57e97..19616e8: sign-in stamp baseline, re-login) — to be covered by the K5+K6 paired review. Task K3: complete pending that check; Task K4: complete (commits 4e9eac1..3efd2b7).
+Task K5: complete; Task K6: complete (paired review Approved; K3 fix round approved in the same review → Task K3: complete)
+Task K7: hardening (commits 751d8ba..cde19fb) — accepted without re-review; Task K7: complete (commits 9812b79..cde19fb). Chantier K complete.
+Task L2: dispatched (opus); Task L3: dispatched (sonnet)
+",
+    );
+    assert_eq!(
+        ledger.done,
+        set(&["M3", "M4", "G2", "G3", "K3", "K4", "K5", "K6", "K7"])
+    );
+    assert_eq!(ledger.active, set(&["L2", "L3"]));
+    // The last statement about a task wins, within a line as between lines.
+    let later = parse_ledger(
+        "# SDD ledger — plan: p.md\nTask 1: complete; Task 1: fix round 2/5 (final review)\nTask 2: dispatched; Task 2: complete\n",
+    );
+    assert_eq!(later.done, set(&["2"]));
+    assert_eq!(later.active, set(&["1"]));
+}
+
+#[test]
+fn a_mention_of_a_task_is_not_a_statement() {
+    let ledger = parse_ledger(
+        "# SDD ledger — plan: p.md
+Task 2: Ruling: install_hook → installHook — matches Task 1 Produces — cost if wrong: one rename
+Task 3: review Needs fixes (see the note on Task 4)
+Note: Task 5: complete
+See Task 6: complete
+Task 7: minor (deferred): the Task 8: complete wording
+",
+    );
+    // A task named in a sentence is not a statement; one after a full stop, a semicolon, an
+    // arrow or a dash is. A line that does not start with a task is a note.
+    assert!(ledger.done.is_empty(), "{:?}", ledger.done);
+    assert_eq!(ledger.active, set(&["3"]));
+}
+
+#[test]
+fn the_newest_workspaces_are_kept_not_the_first_the_disk_lists() {
+    let r = Repo::new("many");
+    r.plan("docs/superpowers/plans/demo.md");
+    // Three hundred workspaces whose plan is gone, older; the one that works is the newest and
+    // sorts last by name, where a listing in name order stops before it.
+    for n in 0..300u64 {
+        let ledger = r.workspace(
+            &format!("a{n:03}"),
+            "docs/superpowers/plans/gone.md",
+            &["Task 1: complete"],
+        );
+        std::fs::remove_file(ledger.parent().unwrap().join("plan-path")).unwrap();
+        age(&ledger, 3600 + n);
+    }
+    let good = r.workspace(
+        "zzz",
+        "docs/superpowers/plans/demo.md",
+        &["Task 1: complete"],
+    );
+    age(&good, 5);
+    let found = discover(&r.root).expect("the newest, past the 256th");
+    assert_eq!(found.plan_rel, "docs/superpowers/plans/demo.md");
+}

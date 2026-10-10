@@ -584,7 +584,7 @@ export interface WorkflowRun {
 /** How far an agent is through a plan: its task list, its subagents, its workflows. */
 export interface PlanState {
   source: PlanSource | null;
-  /** The plan file of the agent's folder (relative to it) that the tasks come from (source 'plan'), or that an agent keeping its own task list (source 'tools') is following. */
+  /** The plan file of the agent's folder (relative to it) that the tasks come from (source 'plan'), or that an agent keeping its own task list (source 'tools') is following, when one of its tasks is the plan's. Whether there is a task list is `tasks.length`, not `source`. */
   planFile?: string;
   /** The plan's title (the first heading of its file, without « Implementation Plan »), whatever the source; else the window falls back to the ticket's, then the agent's name. */
   title?: string;

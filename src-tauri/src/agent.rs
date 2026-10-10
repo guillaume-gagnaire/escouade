@@ -164,6 +164,14 @@ const MAX_PLAN_CALLS: usize = 64;
 const MAX_INPUT_STR: usize = 4000;
 const MAX_PATCH_LINES: usize = 800;
 
+/// `path` is in the folder where the superpowers skills keep what a plan's execution leaves
+/// (`.superpowers/sdd`, anywhere in the repository).
+fn in_sdd_workspace(path: &str) -> bool {
+    const SDD: &str = ".superpowers/sdd/";
+    let slashed = path.replace('\\', "/").to_ascii_lowercase();
+    slashed.starts_with(SDD) || slashed.contains(&format!("/{SDD}"))
+}
+
 impl AgentRt {
     pub fn new(mut meta: AgentMeta, conv_dir: &std::path::Path) -> Self {
         // A turn cannot survive an app restart.
@@ -1002,13 +1010,15 @@ impl AgentRt {
     }
 
     /// A call of the main thread after which the files of the plan may have moved: a command (the
-    /// ledger is written by scripts and commands), a subagent, the write of a plan. Its result
-    /// has them looked at (`Effects::plan_files`); a plan it writes is remembered.
+    /// ledger is written by scripts and commands), a subagent, the write of a plan or of a file of
+    /// its workspace (the ledger, a brief). Its result has them looked at
+    /// (`Effects::plan_files`); a plan it writes is remembered.
     fn watch_plan_files(&mut self, id: &str, name: &str, input: &Value) {
         let wrote = matches!(name, "Write" | "Edit" | "MultiEdit")
-            && input["file_path"]
-                .as_str()
-                .is_some_and(|path| self.note_written_plan(path));
+            && input["file_path"].as_str().is_some_and(|path| {
+                let plan = self.note_written_plan(path);
+                plan || in_sdd_workspace(path)
+            });
         if wrote || matches!(name, "Bash" | "Task" | "Agent") {
             if self.plan_calls.len() >= MAX_PLAN_CALLS {
                 self.plan_calls.clear();
@@ -3897,14 +3907,71 @@ mod tests {
         let since = a.plan_since;
         a.plan_from_files(since, demo_list(), &mut Effects::default());
         assert_eq!(plan(&a).tasks[0].title, "Un");
-        creates(&mut a, "c0", "Ma tâche", 1);
+        creates(&mut a, "c0", "Task 1: Un", 1);
         let p = plan(&a);
         assert_eq!(p.tasks.len(), 1);
-        assert_eq!(p.tasks[0].title, "Ma tâche");
-        // The files go on being read: the plan is still named and titled, its list is the agent's.
+        assert_eq!(p.tasks[0].title, "Task 1: Un");
+        assert_eq!(p.source, Some(crate::plan::PlanSource::Tools));
+        // The files go on being read: its list is the agent's, named and titled by the plan its
+        // tasks are the tasks of.
         a.plan_from_files(since, demo_list(), &mut Effects::default());
-        assert_eq!(plan(&a).tasks[0].title, "Ma tâche");
+        assert_eq!(plan(&a).tasks[0].title, "Task 1: Un");
         assert_eq!(plan(&a).title.as_deref(), Some("Démo"));
+
+        // Another agent in the same repository, with tasks of its own: the plan is not its plan.
+        let mut b = rt();
+        creates(&mut b, "c0", "Ma tâche", 1);
+        b.plan_from_files(b.plan_since, demo_list(), &mut Effects::default());
+        assert_eq!(plan(&b).tasks[0].title, "Ma tâche");
+        assert_eq!(plan(&b).title, None);
+        assert_eq!(plan(&b).plan_file, None);
+    }
+
+    #[test]
+    fn writing_the_workspace_of_a_plan_calls_for_a_look_but_is_no_plan_written() {
+        let mut a = rt();
+        for (id, name, path) in [
+            ("w1", "Write", "C:/p/.superpowers/sdd/demo/progress.md"),
+            ("w2", "Edit", ".superpowers/sdd/demo/task-3-brief.md"),
+            (
+                "w3",
+                "MultiEdit",
+                "C:\\p\\.superpowers\\sdd\\demo\\progress.md",
+            ),
+            (
+                "w4",
+                "Write",
+                "C:/p/sub/.superpowers/sdd/demo/task-1-brief.md",
+            ),
+        ] {
+            call(&mut a, None, id, name, json!({ "file_path": path }));
+            assert!(
+                returns(&mut a, id, "ok", Value::Null).plan_files,
+                "{name} {path}"
+            );
+        }
+        assert!(a.plan_written.is_empty());
+        // Other files of that folder, and anything a subagent writes, do not.
+        call(
+            &mut a,
+            None,
+            "s1",
+            "Agent",
+            json!({"description":"Aide","prompt":"x"}),
+        );
+        for (parent, id, path) in [
+            (None, "x1", "C:/p/.superpowers/other/notes.md"),
+            (None, "x2", "C:/p/.superpowers/sdd-notes.md"),
+            (Some("s1"), "x3", "C:/p/.superpowers/sdd/demo/progress.md"),
+        ] {
+            call(&mut a, parent, id, "Write", json!({ "file_path": path }));
+            let fx = if parent.is_some() {
+                returns_in(&mut a, parent, id)
+            } else {
+                returns(&mut a, id, "ok", Value::Null)
+            };
+            assert!(!fx.plan_files, "{path}");
+        }
     }
 
     #[test]

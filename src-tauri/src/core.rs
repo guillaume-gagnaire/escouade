@@ -1862,9 +1862,11 @@ impl<R: Runtime> Core<R> {
             let rt = agent.lock();
             (rt.meta.cwd.clone(), rt.plan_written.clone(), rt.plan_since)
         };
-        let root = self.toplevel(&cwd).await.unwrap_or(cwd);
+        let root = self.toplevel(&cwd).await.unwrap_or_else(|| cwd.clone());
         let last = self.plan_scans.lock().get(id).and_then(|s| s.stamp.clone());
         let scanned = tokio::task::spawn_blocking(move || {
+            // The paths it wrote are spelled as it spells its folder; git says where that is.
+            let written = planfiles::reroot(Path::new(&root), Path::new(&cwd), &written);
             planfiles::scan(Path::new(&root), &written, since, last.as_ref())
         })
         .await;

@@ -6,9 +6,11 @@
 
 use crate::mcp::visible_line;
 use crate::planfiles::FileList;
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::VecDeque;
+use std::sync::Arc;
 
 /// The most tasks a plan keeps; the ones beyond are not listed.
 pub const MAX_TASKS: usize = 100;
@@ -155,11 +157,55 @@ pub struct PlanState {
     pub workflows: Vec<WorkflowRun>,
     /// The latest calls looked at: a frame that comes twice counts once.
     #[serde(skip)]
-    pub(crate) seen: VecDeque<String>,
+    pub(crate) seen: Seen,
 }
 
-/// How many calls `PlanState::seen` remembers: a frame that comes twice comes close to itself.
+/// How many calls `Seen` remembers: a frame that comes twice comes close to itself.
 const SEEN: usize = 512;
+
+/// The latest calls a plan looked at. Not part of what the plan says (two plans are equal whatever
+/// they have seen), and not copied with it: the window's view copies the plan at each frame, and
+/// the copies share the one list instead of each carrying 512 ids.
+#[derive(Clone, Default)]
+pub(crate) struct Seen(Arc<Mutex<VecDeque<String>>>);
+
+impl std::fmt::Debug for Seen {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Seen({})", self.0.lock().len())
+    }
+}
+
+impl PartialEq for Seen {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+impl Seen {
+    /// `call` is met for the first time.
+    fn first_time(&self, call: &str) -> bool {
+        let mut ring = self.0.lock();
+        if ring.iter().any(|s| s == call) {
+            return false;
+        }
+        if ring.len() >= SEEN {
+            ring.pop_front();
+        }
+        ring.push_back(call.to_string());
+        true
+    }
+
+    #[cfg(test)]
+    pub(crate) fn len(&self) -> usize {
+        self.0.lock().len()
+    }
+
+    /// Both are the same list (tests: a copy of a plan does not copy it).
+    #[cfg(test)]
+    pub(crate) fn same_ring(&self, other: &Seen) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
 /// The most tasks one lists as the ones it waits for.
 const MAX_BLOCKERS: usize = 20;
 
@@ -171,6 +217,35 @@ pub(crate) fn clean(text: &str) -> String {
     }
     let cut: String = line.chars().take(MAX_TITLE - 1).collect();
     format!("{}…", cut.trim_end())
+}
+
+/// `title` in words only: lowercase, letters and digits, single spaces.
+fn plain_words(title: &str) -> String {
+    title
+        .to_lowercase()
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// The agent's task titled `mine` is the plan's `task`: the same title, or the form the skills
+/// give to their todos (« Task 2: Deux »), or a longer title that holds the other whole when that
+/// is long enough to say something.
+fn same_task(mine: &str, task: &PlanTask) -> bool {
+    let (mine, plan) = (plain_words(mine), plain_words(&task.title));
+    if mine.is_empty() || plan.is_empty() {
+        return false;
+    }
+    if mine == plan || mine == plain_words(&format!("task {} {}", task.id, task.title)) {
+        return true;
+    }
+    let (short, long) = if mine.len() <= plan.len() {
+        (mine, plan)
+    } else {
+        (plan, mine)
+    };
+    short.len() >= 8 && format!(" {long} ").contains(&format!(" {short} "))
 }
 
 /// A text of a call, cleaned; None when it says nothing.
@@ -338,8 +413,21 @@ impl PlanState {
         let Some(list) = list else {
             return Change::None;
         };
-        let (file, title) = (Some(list.plan_file.clone()), list.title.clone());
+        // Names that come from a file are shown: one visible line, as every title.
+        let file = Some(clean(&list.plan_file)).filter(|f| !f.is_empty());
+        let title = list.title.as_deref().map(clean).filter(|t| !t.is_empty());
+        if file.is_none() {
+            return Change::None;
+        }
         if self.source == Some(PlanSource::Tools) && !self.tasks.is_empty() {
+            // The plan names the agent's list only if it is that plan's: a task of the list is
+            // one of the plan's. (Agents of one repository read the same folder: the plan of
+            // another is not this one's.)
+            let ours = list
+                .tasks
+                .iter()
+                .any(|plan| self.tasks.iter().any(|mine| same_task(&mine.title, plan)));
+            let (file, title) = if ours { (file, title) } else { (None, None) };
             if self.plan_file == file && self.title == title {
                 return Change::None;
             }
@@ -401,14 +489,17 @@ impl PlanState {
         }
     }
 
-    /// The agent has a list of its own now: the one read from the files makes room (the plan
-    /// keeps its name and title).
+    /// The agent has a list of its own now: the one read from the files makes room, and so does
+    /// the plan's name and title (the next look gives them back if the agent's tasks are the
+    /// plan's).
     fn take_over(&mut self) -> Change {
         if self.source != Some(PlanSource::Plan) {
             return Change::None;
         }
         self.tasks.clear();
         self.source = None;
+        self.plan_file = None;
+        self.title = None;
         self.drop_links();
         Change::Saved
     }
@@ -444,14 +535,7 @@ impl PlanState {
 
     /// A call seen for the first time (a frame that comes twice counts once).
     fn first_time(&mut self, call: &str) -> bool {
-        if self.seen.iter().any(|s| s == call) {
-            return false;
-        }
-        if self.seen.len() >= SEEN {
-            self.seen.pop_front();
-        }
-        self.seen.push_back(call.to_string());
-        true
+        self.seen.first_time(call)
     }
 
     /// A tool call of the assistant, `parent` being the call of the subagent it comes from.

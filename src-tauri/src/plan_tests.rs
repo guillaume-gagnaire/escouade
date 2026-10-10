@@ -1314,7 +1314,7 @@ fn a_saved_plan_is_read_back() {
     let back: PlanState = serde_json::from_value(saved.clone()).unwrap();
     assert_eq!(serde_json::to_value(&back).unwrap(), saved);
     // A call seen before the save is not remembered: the process is another one.
-    assert!(back.seen.is_empty());
+    assert_eq!(back.seen.len(), 0);
     // Written by an older version, or by hand: what is missing is empty.
     let old: PlanState =
         serde_json::from_value(json!({ "tasks": [{ "id": "1", "title": "A" }] })).unwrap();
@@ -1396,9 +1396,10 @@ fn nothing_read_changes_nothing() {
 #[test]
 fn the_list_of_the_agent_comes_before_the_one_of_the_files() {
     let mut p = PlanState::default();
-    listed(&mut p, &["Lire", "Écrire"]);
+    listed(&mut p, &["Lire", "Deux"]);
     assert_eq!(p.source, Some(PlanSource::Tools));
-    // The files tell the plan's name and title, not its tasks: the window gets one list.
+    // The files tell the plan's name and title (the agent's second task is the plan's), not its
+    // tasks: the window gets one list.
     assert_eq!(p.set_files(demo_files()), Change::Saved);
     assert_eq!(p.source, Some(PlanSource::Tools));
     assert_eq!(ids(&p), ["1", "2"]);
@@ -1530,7 +1531,7 @@ fn a_subagent_is_linked_to_a_task_of_the_files_by_its_brief() {
 
 #[test]
 fn the_task_tools_take_the_list_over_from_the_files() {
-    // A task made: the list of the files makes room, the plan keeps its name and title.
+    // A task made: the list of the files makes room.
     let mut p = PlanState::default();
     p.set_files(demo_files());
     assert_eq!(
@@ -1540,7 +1541,9 @@ fn the_task_tools_take_the_list_over_from_the_files() {
     assert_eq!(p.source, Some(PlanSource::Tools));
     assert_eq!(p.tasks.len(), 1);
     assert_eq!(p.tasks[0].title, "Mienne");
-    assert_eq!(p.title.as_deref(), Some("Démo"));
+    // The plan of the files has made room altogether: what names it comes back if the agent's
+    // tasks are the plan's.
+    assert!(p.title.is_none() && p.plan_file.is_none());
     // The files go on being read, and no longer change the list.
     assert_eq!(p.set_files(demo_files()), Change::None);
     assert_eq!(p.tasks.len(), 1);
@@ -1623,4 +1626,144 @@ fn a_plan_of_the_files_goes_to_the_window_with_its_steps() {
     let back: PlanState = serde_json::from_value(serde_json::to_value(&p).unwrap()).unwrap();
     assert_eq!(back.source, Some(PlanSource::Plan));
     assert_eq!(task(&back, "2").steps, Some((2, 5)));
+}
+
+// ---------- fix round 1 ----------
+
+#[test]
+fn a_copy_of_a_plan_shares_the_calls_it_has_seen_and_is_equal_to_it() {
+    let mut p = PlanState::default();
+    for i in 0..600 {
+        tool(
+            &mut p,
+            &format!("c{i}"),
+            "TaskCreate",
+            json!({ "subject": format!("T{i}") }),
+        );
+    }
+    assert_eq!(p.seen.len(), 512);
+    // The window's view copies the plan at each frame: the 512 ids are not copied with it.
+    let q = p.clone();
+    assert!(p.seen.same_ring(&q.seen));
+    assert_eq!(p, q);
+    // What was said of the calls stays true for the copy that goes on: a repeat is a repeat.
+    let mut r = p.clone();
+    assert_eq!(
+        tool(&mut r, "c599", "TaskCreate", json!({ "subject": "T599" })),
+        Change::None
+    );
+    // And a plan that starts again forgets them.
+    r.reset();
+    assert_eq!(r.seen.len(), 0);
+    assert!(!r.seen.same_ring(&p.seen));
+}
+
+#[test]
+fn the_files_title_an_agent_list_only_when_a_task_title_is_the_plans() {
+    // Not one title the plan has: the plan of someone else in the same repository.
+    let mut p = PlanState::default();
+    listed(&mut p, &["Lire", "Écrire"]);
+    assert_eq!(p.set_files(demo_files()), Change::None);
+    assert!(p.title.is_none() && p.plan_file.is_none());
+
+    // Titles of the plan, as the skills' todos and a model write them.
+    for (title, name) in [
+        ("deux", "case"),
+        ("  DEUX. ", "spaces and stops"),
+        ("Task 2: Deux", "the skills' « Task N: » form"),
+        ("task 2 - deux", "the same, loosely"),
+    ] {
+        let mut p = PlanState::default();
+        listed(&mut p, &["Lire", title]);
+        assert_eq!(p.set_files(demo_files()), Change::Saved, "{name}");
+        assert_eq!(p.title.as_deref(), Some("Démo"), "{name}");
+        assert_eq!(p.source, Some(PlanSource::Tools));
+        assert_eq!(task(&p, "2").title, title.trim().to_string(), "{name}");
+    }
+
+    // A title that only holds one of the plan's, when that is long enough to be one.
+    let long = |plan: &str| {
+        files(
+            "docs/superpowers/plans/long.md",
+            Some("Long"),
+            vec![file_task("3", plan, TaskStatus::Pending)],
+        )
+    };
+    let mut p = PlanState::default();
+    listed(&mut p, &["Implement the hook installer for Task 3"]);
+    assert_eq!(p.set_files(long("Hook installer")), Change::Saved);
+    // Short ones are the same title or none: « Un » is in « Un autre ».
+    let mut p = PlanState::default();
+    listed(&mut p, &["Un autre"]);
+    assert_eq!(p.set_files(demo_files()), Change::None);
+    assert!(p.title.is_none());
+
+    // The agent's list moves on to another plan's tasks: the name goes.
+    let mut p = PlanState::default();
+    listed(&mut p, &["Deux"]);
+    p.set_files(demo_files());
+    assert_eq!(p.title.as_deref(), Some("Démo"));
+    tool(
+        &mut p,
+        "t1",
+        "TodoWrite",
+        json!({ "todos": [{ "content": "Autre chose", "status": "pending", "activeForm": "x" }] }),
+    );
+    assert_eq!(p.set_files(demo_files()), Change::Saved);
+    assert!(p.title.is_none() && p.plan_file.is_none());
+    assert_eq!(p.set_files(demo_files()), Change::None);
+}
+
+#[test]
+fn the_name_of_a_plan_file_is_one_visible_line_of_a_hundred_and_sixty_characters() {
+    let mut p = PlanState::default();
+    let odd = format!("docs/superpowers/plans/{}\u{202e}.md\n", "é".repeat(300));
+    p.set_files(files(
+        &odd,
+        Some("Démo"),
+        vec![file_task("1", "Un", TaskStatus::Pending)],
+    ));
+    let file = p.plan_file.clone().unwrap();
+    assert_eq!(file.chars().count(), MAX_TITLE);
+    assert!(file.ends_with('…') && !file.contains('\n') && !file.contains('\u{202e}'));
+    // Stable: the same files again are nothing new.
+    assert_eq!(
+        p.set_files(files(
+            &odd,
+            Some("Démo"),
+            vec![file_task("1", "Un", TaskStatus::Pending)]
+        )),
+        Change::None
+    );
+    let mut q = PlanState::default();
+    q.set_files(files(
+        "docs/superpowers/plans/a\u{200b}b\u{202e}.md",
+        None,
+        vec![file_task("1", "Un", TaskStatus::Pending)],
+    ));
+    assert_eq!(q.plan_file.as_deref(), Some("docs/superpowers/plans/ab.md"));
+}
+
+#[test]
+fn an_empty_todo_list_with_subagents_is_a_plan_with_no_tasks() {
+    // What the window keys on to know whether the agent has a task list (documented for it).
+    let mut p = PlanState::default();
+    tool(
+        &mut p,
+        "t1",
+        "TodoWrite",
+        json!({ "todos": [{ "content": "Lire", "status": "pending", "activeForm": "Lit" }] }),
+    );
+    launch(&mut p, "a1", json!({ "description": "Aide", "prompt": "" }));
+    tool(&mut p, "t2", "TodoWrite", json!({ "todos": [] }));
+    assert!(p.tasks.is_empty());
+    assert_eq!(
+        p.source,
+        Some(PlanSource::Tools),
+        "the source says who made it, not that it is not empty"
+    );
+    assert!(!p.is_empty(), "the subagent is still there");
+    // Files then fill the empty list, as for an agent that never had one.
+    assert_eq!(p.set_files(demo_files()), Change::Saved);
+    assert_eq!(p.source, Some(PlanSource::Plan));
 }
