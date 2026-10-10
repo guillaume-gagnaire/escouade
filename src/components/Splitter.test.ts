@@ -14,7 +14,8 @@ function setup(over: Record<string, unknown> = {}) {
 }
 
 const down = (el: Element, clientX: number, pointerId = 1) => fireEvent.pointerDown(el, { clientX, pointerId, button: 0 });
-const move = (el: Element, clientX: number, pointerId = 1) => fireEvent.pointerMove(el, { clientX, pointerId });
+// A pointer that moves while it is down has its button pressed, as the browser reports it.
+const move = (el: Element, clientX: number, pointerId = 1, buttons = 1) => fireEvent.pointerMove(el, { clientX, pointerId, buttons });
 const up = (el: Element, pointerId = 1) => fireEvent.pointerUp(el, { pointerId });
 
 describe('Splitter', () => {
@@ -124,6 +125,87 @@ describe('Splitter', () => {
       expect(oncommit).toHaveBeenLastCalledWith(250);
       await up(handle);
       expect(oncommit).toHaveBeenCalledTimes(2);
+    });
+
+    it('is over when the pointer moves with no button pressed any more: the release was missed', async () => {
+      const { handle, onresize, oncommit } = setup();
+      await down(handle, 300);
+      await move(handle, 340);
+      expect(onresize).toHaveBeenLastCalledWith(280);
+      // The button was let go where no event came back (over a menu, out of the window): the next move says so.
+      await move(handle, 380, 1, 0);
+      expect(oncommit).toHaveBeenCalledOnce();
+      expect(oncommit).toHaveBeenCalledWith(280);
+      expect(onresize).toHaveBeenCalledTimes(1);
+      expect(handle).not.toHaveClass('dragging');
+      // And the column does not follow the pointer any more, button pressed again or not.
+      await move(handle, 420);
+      expect(onresize).toHaveBeenCalledTimes(1);
+      await up(handle);
+      expect(oncommit).toHaveBeenCalledOnce();
+    });
+
+    it('keeps nothing when the pointer moves with no button pressed before the column moved', async () => {
+      const { handle, onresize, oncommit } = setup();
+      await down(handle, 300);
+      await move(handle, 340, 1, 0);
+      expect(onresize).not.toHaveBeenCalled();
+      expect(oncommit).not.toHaveBeenCalled();
+      expect(handle).not.toHaveClass('dragging');
+    });
+
+    it('is over when the window loses the focus', async () => {
+      const { handle, onresize, oncommit } = setup();
+      await down(handle, 300);
+      await move(handle, 340);
+      await fireEvent.blur(window);
+      expect(oncommit).toHaveBeenCalledOnce();
+      expect(oncommit).toHaveBeenCalledWith(280);
+      expect(handle).not.toHaveClass('dragging');
+      await move(handle, 400);
+      expect(onresize).toHaveBeenCalledTimes(1);
+      // Nothing is dragged any more: a blur and the release that comes after change nothing.
+      await fireEvent.blur(window);
+      await up(handle);
+      expect(oncommit).toHaveBeenCalledOnce();
+    });
+
+    it('does not mind a blur when nothing is dragged', async () => {
+      const { oncommit } = setup();
+      await fireEvent.blur(window);
+      expect(oncommit).not.toHaveBeenCalled();
+    });
+
+    it('starts again from a new press when the previous drag never ended, keeping what it had moved', async () => {
+      const { handle, onresize, oncommit, rerender } = setup();
+      await down(handle, 300, 1);
+      await move(handle, 340, 1);
+      expect(onresize).toHaveBeenLastCalledWith(280);
+      // The column now has the width it was told of; the release of the first press never came.
+      await rerender({ value: 280 });
+      await down(handle, 500, 2);
+      expect(oncommit).toHaveBeenCalledOnce();
+      expect(oncommit).toHaveBeenCalledWith(280);
+      expect(handle).toHaveClass('dragging');
+      // The old pointer is forgotten, the new one is followed from where the column is.
+      await move(handle, 600, 1);
+      expect(onresize).toHaveBeenCalledTimes(1);
+      await move(handle, 520, 2);
+      expect(onresize).toHaveBeenLastCalledWith(300);
+      await up(handle, 2);
+      expect(oncommit).toHaveBeenLastCalledWith(300);
+      expect(oncommit).toHaveBeenCalledTimes(2);
+    });
+
+    it('starts again from a new press of the same pointer when the previous drag never ended', async () => {
+      const { handle, onresize, oncommit } = setup();
+      await down(handle, 300);
+      await down(handle, 400);
+      await move(handle, 420);
+      expect(onresize).toHaveBeenLastCalledWith(260);
+      await up(handle);
+      expect(oncommit).toHaveBeenCalledOnce();
+      expect(oncommit).toHaveBeenCalledWith(260);
     });
 
     it('marks the handle while it is dragged', async () => {

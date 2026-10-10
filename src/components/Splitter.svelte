@@ -33,7 +33,9 @@
   let dragging = $state(false);
 
   function down(e: PointerEvent) {
-    if (e.button !== 0 || gesture) return;
+    if (e.button !== 0) return;
+    // A press while a drag is still on means the release of that drag never came: it is over, and this one starts.
+    finish();
     try {
       // The moves keep coming when the pointer leaves the handle, over the code or out of the window.
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -46,6 +48,11 @@
 
   function move(e: PointerEvent) {
     if (!gesture || e.pointerId !== gesture.id) return;
+    // The button was let go where no event came back to the handle: the drag is over, not stuck to the pointer.
+    if (e.buttons === 0) {
+      finish();
+      return;
+    }
     // Whole pixels: a scaled screen gives the pointer fractions.
     const width = clamp(Math.round(gesture.from + e.clientX - gesture.x), min, max);
     if (width === gesture.last) return;
@@ -55,7 +62,13 @@
   }
 
   function end(e: PointerEvent) {
-    if (!gesture || e.pointerId !== gesture.id) return;
+    if (gesture && e.pointerId === gesture.id) finish();
+  }
+
+  // Ends the drag in progress, whatever ended it: the release, a cancelled pointer, a lost capture, the window losing the
+  // focus (a press released over another application sends nothing here), or a drag found stuck.
+  function finish() {
+    if (!gesture) return;
     const { last, moved } = gesture;
     gesture = null;
     dragging = false;
@@ -79,6 +92,8 @@
     set(to);
   }
 </script>
+
+<svelte:window onblur={finish} />
 
 <!-- A separator that takes the focus is a widget (the window splitter pattern): Svelte only knows the static one. -->
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->

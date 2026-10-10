@@ -1081,7 +1081,7 @@ describe('EditorView left column width', () => {
   const column = (container: HTMLElement) => container.querySelector('aside.editor-side') as HTMLElement;
   async function drag(from: number, to: number) {
     await fireEvent.pointerDown(handle(), { clientX: from, pointerId: 1, button: 0 });
-    await fireEvent.pointerMove(handle(), { clientX: to, pointerId: 1 });
+    await fireEvent.pointerMove(handle(), { clientX: to, pointerId: 1, buttons: 1 });
     await fireEvent.pointerUp(handle(), { pointerId: 1 });
   }
 
@@ -1116,7 +1116,7 @@ describe('EditorView left column width', () => {
     await app.openEditor({ source: 'project' });
     const { container } = render(EditorView, { project: project() });
     await fireEvent.pointerDown(handle(), { clientX: 300, pointerId: 1, button: 0 });
-    await fireEvent.pointerMove(handle(), { clientX: 340, pointerId: 1 });
+    await fireEvent.pointerMove(handle(), { clientX: 340, pointerId: 1, buttons: 1 });
     expect(column(container)).toHaveStyle({ width: '280px' });
     expect(localStorage.getItem('escouade.editor.treeWidth')).toBeNull();
     await fireEvent.pointerUp(handle(), { pointerId: 1 });
