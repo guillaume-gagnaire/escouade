@@ -6,7 +6,7 @@
   import { SHELL_GLYPH } from '../lib/term-actions';
   import { getXTerm, logKey, mountTerminal } from '../lib/terminals';
   import type { Project, RunCommand } from '../lib/types';
-  import { tildify } from '../lib/format';
+  import { joinPath, tildify } from '../lib/format';
 
   let { cmd, project }: { cmd: RunCommand; project: Project } = $props();
   let box = $state<HTMLDivElement>();
@@ -23,7 +23,8 @@
     const a = t ? app.agents[t.agentId] : undefined;
     return a ? (a.worktree?.path ?? a.cwd) : project.path;
   });
-  const where = $derived(tildify(cmd.cwd ? `${root}\\${cmd.cwd.replace(/\//g, '\\')}` : root));
+  // The folder is written as the system of its root does: `\` under a Windows folder, `/` on macOS.
+  const where = $derived(tildify(cmd.cwd ? joinPath(root, cmd.cwd) : root));
   const since = $derived(
     running && run ? new Date(run.startedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : null,
   );

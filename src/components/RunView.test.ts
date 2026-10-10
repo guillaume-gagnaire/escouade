@@ -47,6 +47,28 @@ describe('RunView', () => {
     expect(screen.getByText('Pas encore lancée.')).toBeInTheDocument();
   });
 
+  it('writes the folder with the separator of the system it is on', () => {
+    fakeBackend();
+    // A Windows project keeps the backslash, whatever the way the command spells its folder.
+    const win = project({ path: 'C:\\code\\demo-api', runCommands: [FRONT] });
+    const { unmount } = render(RunView, { cmd: { ...FRONT, cwd: 'web/admin' }, project: win });
+    expect(screen.getByText(/· C:\\code\\demo-api\\web\\admin$/)).toBeInTheDocument();
+    unmount();
+    // On macOS a backslash would make a name of its own: the folder is under the project with a slash.
+    const mac = project({ path: '/Users/guill/dev/demo-api', runCommands: [FRONT] });
+    render(RunView, { cmd: { ...FRONT, cwd: 'web/admin' }, project: mac });
+    expect(screen.getByText(/· \/Users\/guill\/dev\/demo-api\/web\/admin$/)).toBeInTheDocument();
+  });
+
+  it('writes the folder of a recipe step in an agent’s worktree on macOS with a slash too', () => {
+    const step: RunCommand = { id: 'test:a7:run:0', name: 'web', command: 'node serveur.js', shell: 'pwsh', cwd: 'web' };
+    const wt = { path: '/Users/guill/wt/dem-1', branch: 'ticket/dem-1', baseBranch: 'main' };
+    resetApp({ projects: [P], agents: [agent({ id: 'a7', worktree: wt })] });
+    fakeBackend();
+    render(RunView, { cmd: step, project: P });
+    expect(screen.getByText(/· \/Users\/guill\/wt\/dem-1\/web$/)).toBeInTheDocument();
+  });
+
   it('starts, then stops the command', async () => {
     const backend = fakeBackend({ run_start: () => ({ id: 't1', projectId: 'p1', name: 'Front', shell: 'pwsh' }) });
     render(RunView, { cmd: FRONT, project: P });
