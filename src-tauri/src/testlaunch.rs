@@ -220,6 +220,97 @@ pub async fn run_command(
     env: &[(String, String)],
     limit: Duration,
 ) -> Result<Option<TestRun>> {
+    run_streaming(shell, cwd, command, env, limit, &|_| {}).await
+}
+
+/// How many of its last lines a command run without a window keeps (`TestRun::tail`).
+const TAIL_LINES: usize = 80;
+
+/// A line of a command's output is cut after this many bytes: one that never ends (minified
+/// output, a progress bar drawn over itself) must not grow without bound in memory.
+const MAX_LINE: usize = 16 * 1024;
+
+/// A command's output cut into lines as it comes, each as it is shown (`shown_line`).
+#[derive(Default)]
+struct LineReader {
+    /// The start of a line not ended yet.
+    partial: Vec<u8>,
+}
+
+impl LineReader {
+    /// The lines `chunk` ends, with what the chunks before left of the first.
+    fn feed(&mut self, chunk: &[u8]) -> Vec<String> {
+        let mut lines = Vec::new();
+        for part in chunk.split_inclusive(|&b| b == b'\n') {
+            let ended = part.ends_with(b"\n");
+            self.partial
+                .extend_from_slice(part.strip_suffix(b"\n").unwrap_or(part));
+            while self.partial.len() > MAX_LINE {
+                let rest = self.partial.split_off(char_start(&self.partial, MAX_LINE));
+                lines.push(shown_line(&std::mem::replace(&mut self.partial, rest)));
+            }
+            if ended {
+                lines.push(shown_line(&self.partial));
+                self.partial.clear();
+            }
+        }
+        lines
+    }
+
+    /// The last line, when the output did not end with a line break.
+    fn finish(self) -> Option<String> {
+        (!self.partial.is_empty()).then(|| shown_line(&self.partial))
+    }
+}
+
+/// The start of the character at `at` in `bytes` (UTF-8), or `at` itself when none is found: a cut
+/// there leaves no half character on either side.
+fn char_start(bytes: &[u8], at: usize) -> usize {
+    (1..=at)
+        .rev()
+        .find(|&i| bytes[i] & 0xC0 != 0x80)
+        .unwrap_or(at)
+}
+
+/// A line of output as a terminal leaves it: what comes after its last carriage return (a progress
+/// bar draws over itself), without its ANSI codes. Read as UTF-8, whatever it is.
+fn shown_line(bytes: &[u8]) -> String {
+    let text = String::from_utf8_lossy(bytes);
+    let text = text.strip_suffix('\r').unwrap_or(&text);
+    crate::agent::strip_ansi(text.rsplit('\r').next().unwrap_or_default())
+}
+
+/// Reads `pipe` to its end, handing to `take` the lines each chunk read ends.
+async fn read_lines(
+    pipe: Option<impl tokio::io::AsyncRead + Unpin>,
+    take: &(impl Fn(Vec<String>) + Sync),
+) {
+    use tokio::io::AsyncReadExt;
+    let Some(mut pipe) = pipe else { return };
+    let mut reader = LineReader::default();
+    let mut chunk = vec![0; 8 * 1024];
+    while let Ok(n @ 1..) = pipe.read(&mut chunk).await {
+        let lines = reader.feed(&chunk[..n]);
+        if !lines.is_empty() {
+            take(lines);
+        }
+    }
+    if let Some(last) = reader.finish() {
+        take(vec![last]);
+    }
+}
+
+/// Runs `command` as `run_command` does, handing to `on_lines` what it writes as it comes: the
+/// lines of its output and of its errors in the order they are read, a few at a time, each as a
+/// terminal leaves it. Only its last lines are kept, whatever it writes.
+pub async fn run_streaming(
+    shell: &ShellInfo,
+    cwd: &str,
+    command: &str,
+    env: &[(String, String)],
+    limit: Duration,
+    on_lines: &(dyn Fn(&[String]) + Sync),
+) -> Result<Option<TestRun>> {
     let mut cmd = tokio::process::Command::new(&shell.path);
     cmd.args(shell_args(&shell.id, command))
         .current_dir(cwd)
@@ -235,20 +326,33 @@ pub async fn run_command(
     #[cfg(windows)]
     cmd.creation_flags(crate::claude::CREATE_NO_WINDOW);
     crate::job::isolate(&mut cmd);
-    let child = cmd.spawn()?;
+    let mut child = cmd.spawn()?;
     let job = crate::job::Job::for_child(&child);
-    match tokio::time::timeout(limit, child.wait_with_output()).await {
-        Ok(out) => {
-            let out = out?;
-            let text = format!(
-                "{}\n{}",
-                String::from_utf8_lossy(&out.stdout),
-                String::from_utf8_lossy(&out.stderr)
-            );
+    let (stdout, stderr) = (child.stdout.take(), child.stderr.take());
+    let tail = parking_lot::Mutex::new(std::collections::VecDeque::new());
+    let take = |lines: Vec<String>| {
+        {
+            let mut tail = tail.lock();
+            tail.extend(lines.iter().cloned());
+            let excess = tail.len().saturating_sub(TAIL_LINES);
+            tail.drain(..excess);
+        }
+        on_lines(&lines);
+    };
+    // Both pipes to their end (a process left running that holds them is waited for, as it was
+    // when the output was read whole), then the exit.
+    let run = async {
+        tokio::join!(read_lines(stdout, &take), read_lines(stderr, &take));
+        child.wait().await
+    };
+    match tokio::time::timeout(limit, run).await {
+        Ok(status) => {
+            let status = status?;
+            let tail = Vec::from(std::mem::take(&mut *tail.lock())).join("\n");
             Ok(Some(TestRun {
-                passed: out.status.success(),
-                code: out.status.code(),
-                tail: tail_lines(&crate::agent::strip_ansi(&text), 80),
+                passed: status.success(),
+                code: status.code(),
+                tail: tail.trim_end().to_string(),
             }))
         }
         Err(_) => {
@@ -584,6 +688,72 @@ mod tests {
         assert!(!ko.passed);
         assert_eq!(ko.tail.lines().count(), 80, "{}", ko.tail);
         assert!(ko.tail.trim_end().ends_with("ligne 100"), "{}", ko.tail);
+    }
+
+    #[test]
+    fn output_is_cut_into_lines_as_it_comes_and_each_is_shown_as_a_terminal_leaves_it() {
+        let mut r = LineReader::default();
+        // A line ended by the next chunk, Windows' line endings, colors.
+        assert_eq!(r.feed(b"un\r\nde"), ["un"]);
+        assert_eq!(r.feed(b"ux\n\x1b[32mtrois\x1b[0m\n"), ["deux", "trois"]);
+        // A progress bar drawn over itself: what it shows last.
+        assert_eq!(r.feed(b"10%\r50%\r100%\r\n"), ["100%"]);
+        assert_eq!(r.feed(b"\n"), [""]);
+        assert!(r.feed(b"").is_empty());
+        // Not UTF-8 (a console's code page): read all the same.
+        assert_eq!(r.feed(b"caf\xe9\n"), ["caf\u{fffd}"]);
+        // A line that never ends is cut, so that it does not grow without bound, between two
+        // characters.
+        let long = format!("a{}", "é".repeat(MAX_LINE));
+        let lines = r.feed(long.as_bytes());
+        assert!(!lines.is_empty());
+        assert!(lines
+            .iter()
+            .all(|l| l.len() <= MAX_LINE && !l.contains('\u{fffd}')));
+        // Its end comes once the output does.
+        let rest = r.finish().expect("the end of the line");
+        assert_eq!(format!("{}{rest}", lines.concat()), long);
+        assert_eq!(LineReader::default().finish(), None);
+    }
+
+    #[tokio::test]
+    async fn a_commands_lines_are_handed_over_as_it_writes_them_its_errors_too() {
+        let Some(shell) = default_shell() else { return };
+        let dir = test_dir("launch-stream");
+        // Two lines, a pause, then a line on stderr and the end.
+        std::fs::write(
+            dir.join("steps.cjs"),
+            "console.log('un'); console.log('deux'); setTimeout(() => { console.error('trois'); process.exit(3); }, 2000);",
+        )
+        .unwrap();
+        let seen = parking_lot::Mutex::new(Vec::new());
+        let started = std::time::Instant::now();
+        let run = run_streaming(
+            &shell,
+            &dir.to_string_lossy(),
+            "node steps.cjs",
+            &[],
+            Duration::from_secs(60),
+            &|lines: &[String]| seen.lock().push((started.elapsed(), lines.to_vec())),
+        )
+        .await
+        .unwrap()
+        .expect("ended");
+        let ended = started.elapsed();
+        let seen = seen.into_inner();
+        let lines: Vec<&str> = seen
+            .iter()
+            .flat_map(|(_, l)| l.iter().map(String::as_str))
+            .collect();
+        assert_eq!(lines, ["un", "deux", "trois"]);
+        // Handed over as it was written, not once the command ended.
+        let first = seen[0].0;
+        assert!(
+            ended.saturating_sub(first) >= Duration::from_millis(1000),
+            "first lines at {first:?}, end at {ended:?}"
+        );
+        assert_eq!((run.passed, run.code), (false, Some(3)));
+        assert_eq!(run.tail, "un\ndeux\ntrois");
     }
 
     #[tokio::test]

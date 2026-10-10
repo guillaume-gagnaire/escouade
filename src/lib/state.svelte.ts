@@ -25,6 +25,7 @@ import type {
   Project,
   Resources,
   Settings,
+  SetupOutput,
   ShellInfo,
   TermInfo,
   Ticket,
@@ -86,6 +87,9 @@ export interface ToastAction {
 /** Statuses that call for the user: a question, the end of a turn, an error. */
 const ALERT: ReadonlySet<AgentStatus> = new Set(['waiting', 'done', 'error']);
 
+/** How many of the last lines of the step running a worktree's setup the window keeps (as the backend does). */
+const SETUP_LINES = 500;
+
 export interface UpdateInfo {
   version: string;
   /** Its release notes (markdown). */
@@ -123,6 +127,11 @@ class AppState {
   shells = $state<ShellInfo[]>([]);
   terminals = $state<TermInfo[]>([]);
   exitedTerms = $state<Record<string, number | null>>({});
+  /**
+   * What the step running of each agent's worktree setup wrote, its last lines, by agent. Replaced whole at each
+   * change (a few hundred lines, often): not made deeply reactive.
+   */
+  setupOutput = $state.raw<Record<string, SetupOutput>>({});
   /** Launch commands' latest runs, by command id. */
   launches = $state<Record<string, LaunchState>>({});
   selectedLaunch = $state<Record<string, string | null>>({});
@@ -283,6 +292,7 @@ class AppState {
     this.agents = Object.fromEntries(s.agents.map((a) => [a.id, a]));
     this.tickets = Object.fromEntries((s.tickets ?? []).map((t) => [t.id, t]));
     this.boardIssues = { ...s.boardIssues };
+    this.setupOutput = { ...s.setupOutput };
     this.autopilotPause = s.autopilotPause ?? null;
     this.accounts = s.accounts ?? [];
     this.attention = {};
@@ -322,12 +332,15 @@ class AppState {
         this.agents[e.agent.id] = e.agent;
         this.noteAttention(prev, e.agent);
         if (newRecipe) this.runHooks(this.recipeHooks, e.agent.id);
+        // Its setup is over: what it wrote is in its log (and its failure in the conversation).
+        if (!e.agent.setup) this.dropSetupOutput(e.agent.id);
         break;
       }
       case 'agentRemoved':
         this.runHooks(this.removalHooks, e.id);
         delete this.agents[e.id];
         delete this.attention[e.id];
+        this.dropSetupOutput(e.id);
         dropConversation(e.id);
         this.forgetEditorSource(e.projectId, e.id);
         break;
@@ -360,6 +373,9 @@ class AppState {
         break;
       case 'autopilotPause':
         this.autopilotPause = e.pause;
+        break;
+      case 'setupOutput':
+        this.takeSetupOutput(e.agentId, e);
         break;
       case 'conv':
         applyConvOps(e.agentId, e.ops);
@@ -416,6 +432,31 @@ class AppState {
         }
         break;
     }
+  }
+
+  /**
+   * Lines the step `step` of an agent's worktree setup wrote, its `total` so far counting them. A new step, or one
+   * starting (no line yet), replaces what the window had; otherwise only the lines it does not have yet are taken (one
+   * written while the window opened comes in its first state and again in an event).
+   */
+  private takeSetupOutput(agentId: string, { step, total, lines }: SetupOutput) {
+    const had = this.setupOutput[agentId];
+    let next: SetupOutput;
+    if (!had || had.step !== step || total === 0) {
+      next = { step, total, lines: lines.slice(-SETUP_LINES) };
+    } else {
+      const fresh = Math.min(total - had.total, lines.length);
+      if (fresh <= 0) return;
+      next = { step, total, lines: [...had.lines, ...lines.slice(lines.length - fresh)].slice(-SETUP_LINES) };
+    }
+    this.setupOutput = { ...this.setupOutput, [agentId]: next };
+  }
+
+  private dropSetupOutput(agentId: string) {
+    if (!(agentId in this.setupOutput)) return;
+    const rest = { ...this.setupOutput };
+    delete rest[agentId];
+    this.setupOutput = rest;
   }
 
   /** True when the user can see `id`'s conversation: selected, shown, window in front. */

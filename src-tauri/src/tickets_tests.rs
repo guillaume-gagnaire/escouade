@@ -4619,6 +4619,9 @@ async fn a_tickets_agent_archived_or_deleted_during_its_setup_is_never_sent_the_
         if how == "archive" {
             assert_eq!(h.view(&first).setup, None);
             assert!(!h.alive(&first));
+            // Its output is no longer shown; its log stays with it, as it can be restored.
+            assert!(!h.core.setup_outputs().contains_key(&first));
+            assert!(h.core.data.setup_log(&first).is_file());
         }
         assert!(
             h.alerts().iter().all(|a| !a.contains("bloqué")),

@@ -715,6 +715,40 @@ pub struct AgentView {
     pub isola: bool,
 }
 
+/// How many of the last lines of the step running a worktree's setup keeps for the window.
+pub const SETUP_LINES: usize = 500;
+
+/// What the step of a worktree's setup under way wrote, as the window shows it (its whole output
+/// goes to the agent's setup log).
+#[derive(Debug, Clone, Serialize, Default, PartialEq)]
+pub struct SetupOutput {
+    /// The step's rank, from 0.
+    pub step: usize,
+    /// How many lines it wrote so far: the window takes the lines it is sent once.
+    pub total: usize,
+    /// Its last lines, `SETUP_LINES` at most.
+    pub lines: std::collections::VecDeque<String>,
+}
+
+impl SetupOutput {
+    /// Step `step`, before it wrote anything.
+    pub fn new(step: usize) -> Self {
+        Self {
+            step,
+            ..Self::default()
+        }
+    }
+
+    /// `lines`, just written: the oldest beyond `SETUP_LINES` go.
+    pub fn push(&mut self, lines: &[String]) {
+        self.total += lines.len();
+        let kept = &lines[lines.len().saturating_sub(SETUP_LINES)..];
+        self.lines.extend(kept.iter().cloned());
+        let excess = self.lines.len().saturating_sub(SETUP_LINES);
+        self.lines.drain(..excess);
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct UiState {
@@ -1002,6 +1036,16 @@ pub enum UiEvent {
     Toast {
         text: String,
     },
+    /// Lines the step `step` (from 0) of the setup of an agent's worktree just wrote, its `total`
+    /// lines so far counting them. A step starts with none: the window forgets the lines of the
+    /// step before.
+    #[serde(rename_all = "camelCase")]
+    SetupOutput {
+        agent_id: String,
+        step: usize,
+        total: usize,
+        lines: Vec<String>,
+    },
 }
 
 pub fn now_ms() -> i64 {
@@ -1172,6 +1216,39 @@ mod tests {
         assert_eq!(
             serde_json::to_value(&over).unwrap(),
             json!({ "type": "autopilotPause", "pause": null })
+        );
+    }
+
+    #[test]
+    fn a_setup_step_keeps_its_last_500_lines_and_counts_them_all() {
+        let mut out = SetupOutput::new(1);
+        assert_eq!((out.step, out.total, out.lines.len()), (1, 0, 0));
+        let lines: Vec<String> = (1..=600).map(|i| format!("ligne {i}")).collect();
+        out.push(&lines[..550]);
+        out.push(&lines[550..]);
+        assert_eq!(SETUP_LINES, 500);
+        assert_eq!(
+            (out.step, out.total, out.lines.len()),
+            (1, 600, SETUP_LINES)
+        );
+        assert_eq!(out.lines.front().map(String::as_str), Some("ligne 101"));
+        assert_eq!(out.lines.back().map(String::as_str), Some("ligne 600"));
+        // As the window reads it, and as the lines just written are sent to it.
+        let sent = serde_json::to_value(&out).unwrap();
+        assert_eq!(
+            (sent["step"].clone(), sent["total"].clone()),
+            (json!(1), json!(600))
+        );
+        assert_eq!(sent["lines"][0], "ligne 101");
+        let e = UiEvent::SetupOutput {
+            agent_id: "a1".into(),
+            step: 1,
+            total: 600,
+            lines: vec!["ligne 600".into()],
+        };
+        assert_eq!(
+            serde_json::to_value(&e).unwrap(),
+            json!({ "type": "setupOutput", "agentId": "a1", "step": 1, "total": 600, "lines": ["ligne 600"] })
         );
     }
 

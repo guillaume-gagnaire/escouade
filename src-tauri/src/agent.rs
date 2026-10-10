@@ -126,6 +126,9 @@ pub struct AgentRt {
     final_text: String,
     /// The setup of its new worktree under way: the step running ("npm ci (1/2)").
     pub setup: Option<String>,
+    /// What the step of that setup wrote, its last lines: sent to the window as it comes, apart
+    /// from its view (`UiEvent::SetupOutput`).
+    pub setup_output: Option<SetupOutput>,
     /// Why the setup of its worktree failed, until its ticket's first message tells it.
     pub setup_failure: Option<String>,
     blocks: HashMap<String, Vec<Block>>,
@@ -171,6 +174,7 @@ impl AgentRt {
             turn_text: String::new(),
             final_text: String::new(),
             setup: None,
+            setup_output: None,
             setup_failure: None,
             blocks: HashMap::new(),
             current_msg: HashMap::new(),

@@ -8,6 +8,8 @@ use crate::pty::ShellInfo;
 use crate::testlaunch;
 use serde::Serialize;
 use serde_json::Value;
+use std::fs::File;
+use std::io::Write;
 use std::path::Path;
 use std::time::Duration;
 
@@ -103,13 +105,15 @@ impl StepFailure {
 }
 
 /// Runs `step` in the worktree at `root` (in its folder there), with the shell it names or else
-/// the system's first one, `env` added, `limit` at most.
+/// the system's first one, `env` added, `limit` at most; what it writes goes to `on_lines` as it
+/// comes (`testlaunch::run_streaming`).
 pub async fn run_step(
     step: &WorktreeStep,
     shells: &[ShellInfo],
     root: &str,
     env: &[(String, String)],
     limit: Duration,
+    on_lines: &(dyn Fn(&[String]) + Sync),
 ) -> Result<(), StepFailure> {
     let command = step.command.trim();
     let fail = |reason: String, tail: String| StepFailure {
@@ -137,7 +141,7 @@ pub async fn run_step(
             Err(e) => return Err(fail(format!("{e:#}"), String::new())),
         }
     };
-    match testlaunch::run_command(shell, &cwd, command, env, limit).await {
+    match testlaunch::run_streaming(shell, &cwd, command, env, limit, on_lines).await {
         Ok(Some(run)) if run.passed => Ok(()),
         Ok(Some(run)) => Err(fail(
             run.code
@@ -150,6 +154,63 @@ pub async fn run_step(
             String::new(),
         )),
         Err(e) => Err(fail(format!("ne démarre pas : {e:#}"), String::new())),
+    }
+}
+
+/// The log of the setup of an agent's worktree: each step's whole output under its label, and how
+/// it ended. Written as it comes, a batch of lines at a time: it can be read while a step runs,
+/// and holds what came before the app stopped.
+pub struct SetupLog(parking_lot::Mutex<Option<File>>);
+
+impl SetupLog {
+    /// A new log at `path` (its folder made), in place of the one of an earlier setup. When it
+    /// cannot be written, the setup runs all the same, without one.
+    pub fn create(path: &Path) -> Self {
+        let file = path
+            .parent()
+            .map_or(Ok(()), std::fs::create_dir_all)
+            .and_then(|()| File::create(path));
+        let file = match file {
+            Ok(f) => Some(f),
+            Err(e) => {
+                log::warn!("setup log {}: {e}", path.display());
+                None
+            }
+        };
+        Self(parking_lot::Mutex::new(file))
+    }
+
+    /// It is written: what it holds can be pointed to.
+    pub fn written(&self) -> bool {
+        self.0.lock().is_some()
+    }
+
+    fn write(&self, text: &str) {
+        let mut file = self.0.lock();
+        if file
+            .as_mut()
+            .is_some_and(|f| f.write_all(text.as_bytes()).is_err())
+        {
+            // A disk full or gone: the setup goes on without its log.
+            *file = None;
+        }
+    }
+
+    /// The step `label` ("1/2 · npm ci") starts.
+    pub fn step(&self, label: &str) {
+        self.write(&format!("── {label}\n"));
+    }
+
+    /// Lines the step running wrote.
+    pub fn lines(&self, lines: &[String]) {
+        let mut text = lines.join("\n");
+        text.push('\n');
+        self.write(&text);
+    }
+
+    /// How the step ended ("terminée en 2 s", "échec : code 3").
+    pub fn end(&self, outcome: &str) {
+        self.write(&format!("── {outcome}\n\n"));
     }
 }
 
@@ -551,7 +612,9 @@ mod tests {
             "node -e \"require('fs').writeFileSync('out.txt', process.env.ESCOUADE_BRANCH)\"",
             "web",
         );
-        run_step(&write, &shells(), &r, &env, limit).await.unwrap();
+        run_step(&write, &shells(), &r, &env, limit, &|_| {})
+            .await
+            .unwrap();
         assert_eq!(
             std::fs::read_to_string(root.join("web").join("out.txt")).unwrap(),
             "feat"
@@ -560,7 +623,7 @@ mod tests {
             "node -e \"console.log('ligne utile'); process.exit(3)\"",
             "",
         );
-        let e = run_step(&fails, &shells(), &r, &env, limit)
+        let e = run_step(&fails, &shells(), &r, &env, limit, &|_| {})
             .await
             .unwrap_err();
         assert_eq!(e.reason, "code 3");
@@ -571,16 +634,24 @@ mod tests {
             "{described}"
         );
         assert!(described.contains("(code 3).\n\n```\n"), "{described}");
-        let missing = run_step(&step("npm ci", "absent"), &shells(), &r, &env, limit)
+        let none = |_: &[String]| {};
+        let missing = run_step(&step("npm ci", "absent"), &shells(), &r, &env, limit, &none)
             .await
             .unwrap_err();
         assert_eq!(
             missing.reason,
             "le dossier « absent » n'existe pas dans le worktree"
         );
-        let outside = run_step(&step("npm ci", "../ailleurs"), &shells(), &r, &env, limit)
-            .await
-            .unwrap_err();
+        let outside = run_step(
+            &step("npm ci", "../ailleurs"),
+            &shells(),
+            &r,
+            &env,
+            limit,
+            &none,
+        )
+        .await
+        .unwrap_err();
         assert!(outside.reason.contains("hors du dossier"), "{outside:?}");
     }
 
@@ -590,11 +661,83 @@ mod tests {
         let r = root.to_string_lossy().to_string();
         let slow = step("node -e \"setTimeout(() => {}, 30000)\"", "");
         let started = std::time::Instant::now();
-        let e = run_step(&slow, &shells(), &r, &[], Duration::from_secs(2))
+        let e = run_step(&slow, &shells(), &r, &[], Duration::from_secs(2), &|_| {})
             .await
             .unwrap_err();
         assert_eq!(e.reason, "pas finie en 1 min");
         assert!(started.elapsed() < Duration::from_secs(20));
+    }
+
+    #[tokio::test]
+    async fn a_steps_output_is_handed_over_line_by_line_and_its_failure_keeps_the_last_80() {
+        let root = test_dir("wt-step-stream");
+        let r = root.to_string_lossy().to_string();
+        let seen = parking_lot::Mutex::new(Vec::<String>::new());
+        let fails = step(
+            "node -e \"for (let i = 1; i <= 100; i++) console.log('ligne ' + i); process.exit(2)\"",
+            "",
+        );
+        let e = run_step(
+            &fails,
+            &shells(),
+            &r,
+            &[],
+            Duration::from_secs(60),
+            &|lines: &[String]| seen.lock().extend_from_slice(lines),
+        )
+        .await
+        .unwrap_err();
+        // Every line, in order.
+        let all = seen.into_inner();
+        let expected: Vec<String> = (1..=100).map(|i| format!("ligne {i}")).collect();
+        assert_eq!(all, expected);
+        // The failure keeps its last 80, as before the output was shown live.
+        assert_eq!(e.reason, "code 2");
+        let tail: Vec<&str> = e.tail.lines().collect();
+        assert_eq!(tail.len(), 80, "{}", e.tail);
+        assert_eq!((tail[0], tail[79]), ("ligne 21", "ligne 100"));
+        assert!(e
+            .describe("La préparation du worktree")
+            .ends_with("ligne 100\n```"));
+    }
+
+    #[test]
+    fn the_setup_log_keeps_each_steps_whole_output_under_its_label() {
+        let dir = test_dir("wt-setup-log");
+        // In a folder of its own, made with it, in place of the log of an earlier setup.
+        let path = dir.join("logs").join("a1-setup.log");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "une préparation d'avant\n").unwrap();
+        let log = SetupLog::create(&path);
+        assert!(log.written());
+        log.step("1/2 · npm ci");
+        log.lines(&["added 3 packages".into(), String::new()]);
+        log.end("terminée en 2 s");
+        // Readable while the setup runs.
+        assert!(std::fs::read_to_string(&path)
+            .unwrap()
+            .ends_with("── terminée en 2 s\n\n"));
+        log.step("2/2 · npm run gen (web)");
+        log.lines(&["boom".into()]);
+        log.end("échec : code 3");
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "── 1/2 · npm ci\nadded 3 packages\n\n── terminée en 2 s\n\n\
+             ── 2/2 · npm run gen (web)\nboom\n── échec : code 3\n\n"
+        );
+        // Made with its folder.
+        let fresh = dir.join("nouveau").join("a2-setup.log");
+        SetupLog::create(&fresh).step("1/1 · npm ci");
+        assert!(fresh.is_file());
+        // A log that cannot be written stops nothing, and is not pointed to.
+        let blocked = dir.join("dossier");
+        std::fs::create_dir_all(&blocked).unwrap();
+        let none = SetupLog::create(&blocked);
+        assert!(!none.written());
+        none.step("1/1 · npm ci");
+        none.lines(&["x".into()]);
+        none.end("terminée en 1 s");
+        assert!(blocked.is_dir());
     }
 
     #[test]

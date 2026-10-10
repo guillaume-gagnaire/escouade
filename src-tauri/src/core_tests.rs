@@ -2496,6 +2496,96 @@ async fn a_new_worktree_is_set_up_before_its_agent_takes_a_message() {
             .is_some_and(|s| s.starts_with("2/2 · "))));
 }
 
+/// The lines of the agent's setup the window was sent, step by step: (step, total, lines) of each.
+fn setup_events(h: &Harness, id: &str) -> Vec<(u64, u64, Vec<String>)> {
+    h.events
+        .lock()
+        .iter()
+        .filter(|e| e["type"] == "setupOutput" && e["agentId"] == id)
+        .map(|e| {
+            let lines = e["lines"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|l| l.as_str().unwrap().to_string())
+                .collect();
+            (
+                e["step"].as_u64().unwrap(),
+                e["total"].as_u64().unwrap(),
+                lines,
+            )
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn the_setup_shows_the_output_of_its_step_as_it_comes_and_logs_all_of_it() {
+    let h = harness("wt-setup-output");
+    let (p, _) = h.project(true).await;
+    // The first step writes, waits, then writes again; the second writes more than is kept.
+    let first = r#"node -e "console.log('un'); setTimeout(() => console.log('deux'), 2500)""#;
+    let second = r#"node -e "for (let i = 1; i <= 600; i++) console.log('ligne ' + i)""#;
+    h.set_worktree_steps(&p.id, vec![wt_step(first, ""), wt_step(second, "")], vec![]);
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let id = a.meta.id.clone();
+    // Under way: its first line is there before the step ends, as a window opened now gets it.
+    h.wait("the first line", |h| {
+        h.core
+            .setup_outputs()
+            .get(&id)
+            .is_some_and(|o| o.lines.iter().any(|l| l == "un"))
+    })
+    .await;
+    let now = h.core.setup_outputs()[&id].clone();
+    assert_eq!((now.step, now.total), (0, 1));
+    assert!(h.view(&id).setup.unwrap().starts_with("1/2 · "));
+    h.wait("set up", |h| h.view(&id).setup.is_none()).await;
+    // Over: nothing more is kept.
+    assert!(!h.core.setup_outputs().contains_key(&id));
+    // The window was sent each step's lines as they came, a step starting with none (the window
+    // forgets the lines of the step before), each batch counting the lines of its step so far.
+    let sent = setup_events(&h, &id);
+    for step in [0, 1] {
+        let batches: Vec<&(u64, u64, Vec<String>)> =
+            sent.iter().filter(|(s, _, _)| *s == step).collect();
+        assert_eq!(batches[0].1, 0, "{batches:?}");
+        assert!(batches[0].2.is_empty(), "{batches:?}");
+        let mut count = 0;
+        for (_, total, lines) in &batches {
+            count += lines.len() as u64;
+            assert_eq!(*total, count);
+        }
+    }
+    let lines = |step: u64| -> Vec<String> {
+        sent.iter()
+            .filter(|(s, _, _)| *s == step)
+            .flat_map(|(_, _, l)| l.clone())
+            .collect()
+    };
+    assert_eq!(lines(0), ["un", "deux"]);
+    let expected: Vec<String> = (1..=600).map(|i| format!("ligne {i}")).collect();
+    assert_eq!(lines(1), expected);
+    // The log has every line of every step, under its label.
+    let log = std::fs::read_to_string(h.core.data.setup_log(&id)).unwrap();
+    let label = |i: usize, c: &str| {
+        format!(
+            "── {}/2 · {}\n",
+            i,
+            crate::worktrees::label(&wt_step(c, ""))
+        )
+    };
+    assert!(log.starts_with(&label(1, first)), "{log}");
+    assert!(
+        log.contains(&format!("{}un\ndeux\n── terminée en ", label(1, first))),
+        "{log}"
+    );
+    assert!(
+        log.contains(&format!("{}ligne 1\nligne 2\n", label(2, second))),
+        "{log}"
+    );
+    assert!(log.contains("ligne 600\n── terminée en "), "{log}");
+}
+
 #[tokio::test]
 async fn a_failed_setup_is_said_and_stops_there_but_the_agent_still_works() {
     let h = harness("wt-setup-fail");
@@ -2527,8 +2617,21 @@ async fn a_failed_setup_is_said_and_stops_there_but_the_agent_still_works() {
         "{}",
         warns[0]
     );
+    // The conversation says where the whole output is; the log says how the step ended.
+    let log = h.core.data.setup_log(&id);
+    assert!(
+        warns[0].ends_with(&format!("\n\nSortie complète : {}", log.display())),
+        "{}",
+        warns[0]
+    );
+    let text = std::fs::read_to_string(&log).unwrap();
+    assert!(
+        text.contains("npm ERR! introuvable\n── échec : code 2\n"),
+        "{text}"
+    );
     assert!(!dir.join("never.txt").exists());
     assert_eq!(h.view(&id).setup, None);
+    assert!(!h.core.setup_outputs().contains_key(&id));
 }
 
 #[tokio::test]
@@ -2617,8 +2720,12 @@ async fn deleting_an_agent_stops_the_setup_of_its_worktree() {
     let wt = a.meta.worktree.clone().unwrap();
     // Under way (its process started).
     tokio::time::sleep(Duration::from_millis(800)).await;
+    let log = h.core.data.setup_log(&a.meta.id);
+    assert!(log.is_file());
     let started = std::time::Instant::now();
     assert_eq!(h.core.delete_agent(&a.meta.id, true).await.unwrap(), None);
+    // Its log goes with it.
+    assert!(!log.exists());
     assert!(
         started.elapsed() < Duration::from_secs(3),
         "{:?}",
@@ -2772,9 +2879,10 @@ async fn closing_a_project_stops_its_worktrees_setups_and_isolas_services() {
         crate::isola::tests::calls(&dir).last().map(String::as_str) == Some("down")
     })
     .await;
-    // Its setup was stopped with the project: it never ends its work.
+    // Its setup was stopped with the project: it never ends its work. Its log went with it.
     tokio::time::sleep(Duration::from_secs(5)).await;
     assert!(!r.join("late.txt").exists());
+    assert!(!h.core.data.setup_log(&a.meta.id).exists());
 }
 
 #[tokio::test]

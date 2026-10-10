@@ -2195,6 +2195,7 @@ impl<R: Runtime> Core<R> {
         let (id, ports) = {
             let mut rt = h.lock();
             rt.setup = Some(setup_label(&steps, 0));
+            rt.setup_output = Some(SetupOutput::new(0));
             rt.setup_failure = None;
             (rt.meta.id.clone(), rt.meta.port_base)
         };
@@ -2222,7 +2223,8 @@ impl<R: Runtime> Core<R> {
         true
     }
 
-    /// The setup's steps, one after the other, the agent showing the one running; the first that
+    /// The setup's steps, one after the other, the agent showing the one running and the window
+    /// what it writes as it comes, the whole of it going to the agent's setup log; the first that
     /// fails ends it, and the conversation says why (as does its ticket's first message).
     async fn run_setup(
         self: &Arc<Self>,
@@ -2240,35 +2242,68 @@ impl<R: Runtime> Core<R> {
             Vec::new()
         };
         env.extend(worktrees::step_env(project_dir, wt, ports));
+        let log_path = self.data.setup_log(id);
+        let setup_log = worktrees::SetupLog::create(&log_path);
         let started = Instant::now();
         for (i, step) in steps.iter().enumerate() {
-            if i > 0 {
-                let label = setup_label(steps, i);
-                // Gone meanwhile: nothing more to set up.
-                if self
-                    .with_agent(id, |rt, _| {
-                        rt.setup = Some(label);
-                        Ok(())
-                    })
-                    .is_err()
-                {
-                    return;
-                }
+            let label = setup_label(steps, i);
+            // Gone meanwhile: nothing more to set up.
+            if self
+                .with_agent(id, |rt, _| {
+                    rt.setup = Some(label.clone());
+                    rt.setup_output = Some(SetupOutput::new(i));
+                    Ok(())
+                })
+                .is_err()
+            {
+                return;
             }
-            let ran =
-                worktrees::run_step(step, &shells, &wt.path, &env, worktrees::SETUP_LIMIT).await;
+            // Nothing written yet: the window forgets the lines of the step before.
+            self.hub.emit(UiEvent::SetupOutput {
+                agent_id: id.to_string(),
+                step: i,
+                total: 0,
+                lines: Vec::new(),
+            });
+            setup_log.step(&label);
+            let step_started = Instant::now();
+            let on_lines = |lines: &[String]| {
+                setup_log.lines(lines);
+                self.take_setup_lines(id, i, lines);
+            };
+            let ran = worktrees::run_step(
+                step,
+                &shells,
+                &wt.path,
+                &env,
+                worktrees::SETUP_LIMIT,
+                &on_lines,
+            )
+            .await;
             if let Err(f) = ran {
+                setup_log.end(&format!("échec : {}", f.reason));
                 let text = f.describe("La préparation du worktree");
                 log::warn!("agent {id}: {text}");
+                // The conversation shows its last lines, and says where the others are.
+                let shown = if setup_log.written() {
+                    format!("{text}\n\nSortie complète : {}", log_path.display())
+                } else {
+                    text.clone()
+                };
                 let _ = self.with_agent(id, |rt, fx| {
                     rt.setup = None;
-                    rt.setup_failure = Some(text.clone());
-                    rt.notice("warn", text, fx);
+                    rt.setup_output = None;
+                    rt.setup_failure = Some(text);
+                    rt.notice("warn", shown, fx);
                     Ok(())
                 });
                 self.warm(id);
                 return;
             }
+            setup_log.end(&format!(
+                "terminée en {} s",
+                step_started.elapsed().as_secs()
+            ));
         }
         let n = steps.len();
         let text = format!(
@@ -2278,10 +2313,45 @@ impl<R: Runtime> Core<R> {
         );
         let _ = self.with_agent(id, |rt, fx| {
             rt.setup = None;
+            rt.setup_output = None;
             rt.notice("info", text, fx);
             Ok(())
         });
         self.warm(id);
+    }
+
+    /// Lines the step `step` of the agent's setup just wrote: kept for a window opened while it
+    /// runs (`setup_outputs`), and sent to the window, a batch of them in one event.
+    fn take_setup_lines(&self, id: &str, step: usize, lines: &[String]) {
+        let Ok(h) = self.agent(id) else { return };
+        let total = {
+            let mut rt = h.lock();
+            match rt.setup_output.as_mut() {
+                Some(out) if out.step == step => {
+                    out.push(lines);
+                    out.total
+                }
+                // Stopped meanwhile.
+                _ => return,
+            }
+        };
+        self.hub.emit(UiEvent::SetupOutput {
+            agent_id: id.to_string(),
+            step,
+            total,
+            // No more than the window keeps.
+            lines: lines[lines.len().saturating_sub(SETUP_LINES)..].to_vec(),
+        });
+    }
+
+    /// What the step running of each agent's worktree setup wrote, its last lines, by agent: for a
+    /// window opened while it runs.
+    pub fn setup_outputs(&self) -> HashMap<String, SetupOutput> {
+        self.agents
+            .read()
+            .iter()
+            .filter_map(|(id, h)| Some((id.clone(), h.lock().setup_output.clone()?)))
+            .collect()
     }
 
     /// Waits until the setup of the agent's new worktree is over, if one is under way.
@@ -2302,6 +2372,7 @@ impl<R: Runtime> Core<R> {
             let _ = s.task.await;
             let _ = self.with_agent(id, |rt, _| {
                 rt.setup = None;
+                rt.setup_output = None;
                 Ok(())
             });
         }
@@ -2331,9 +2402,16 @@ impl<R: Runtime> Core<R> {
             };
             env.extend(worktrees::step_env(&project.path, wt, ports));
             for step in &steps {
-                let ran =
-                    worktrees::run_step(step, &shells, &wt.path, &env, worktrees::TEARDOWN_LIMIT)
-                        .await;
+                // Its output is not shown: the agent is being removed, and its failure says why.
+                let ran = worktrees::run_step(
+                    step,
+                    &shells,
+                    &wt.path,
+                    &env,
+                    worktrees::TEARDOWN_LIMIT,
+                    &|_| {},
+                )
+                .await;
                 if let Err(f) = ran {
                     log::warn!("{}", f.describe("Le démontage du worktree"));
                     problems.push(f.summary("le démontage du worktree"));
@@ -2740,7 +2818,9 @@ impl<R: Runtime> Core<R> {
         self.spawn_locks.lock().remove(id);
         // The setup of its worktree stops, with what it started (which holds the worktree). Once it
         // is gone: what waited for that setup (its ticket's first message) finds no agent to send to.
+        // Its log goes with it.
         self.stop_setup(id).await;
+        let _ = std::fs::remove_file(self.data.setup_log(id));
         {
             let mut ui = self.ui.write();
             if ui.selected_agent.get(&pid).map(String::as_str) == Some(id) {
@@ -2951,10 +3031,11 @@ impl<R: Runtime> Core<R> {
                 rt.conv.delete_file();
                 worktree = rt.meta.worktree.clone();
             }
-            // The setup of its worktree stops, with what it started.
+            // The setup of its worktree stops, with what it started; its log goes.
             if let Some(s) = self.setups.lock().remove(&aid) {
                 s.task.abort();
             }
+            let _ = std::fs::remove_file(self.data.setup_log(&aid));
             // Its test launches are the project's terminals too (killed below all the same):
             // none is kept for it. isola's services of its worktree stop too.
             self.stop_test_runs(&aid);

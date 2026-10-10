@@ -51,6 +51,8 @@ pub struct InitialState {
     restart_at: Option<i64>,
     /// A version that did not install at the last try (the window offers to try again).
     failed_update: Option<String>,
+    /// What the step running of each worktree setup under way wrote, its last lines, by agent.
+    setup_output: HashMap<String, SetupOutput>,
 }
 
 #[tauri::command]
@@ -67,6 +69,7 @@ pub fn subscribe(
     let projects = core.projects.read().clone();
     let tickets = core.tickets.read().clone();
     let agents = core.agent_views();
+    let setup_output = core.setup_outputs();
     let ui = core.ui.read().clone();
     let usage = core.usage.lock().clone();
     let git = core.git_cache.read().clone();
@@ -96,6 +99,7 @@ pub fn subscribe(
         board_issues,
         autopilot_pause,
         accounts,
+        setup_output,
     }
 }
 

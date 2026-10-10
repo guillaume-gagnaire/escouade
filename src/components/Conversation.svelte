@@ -19,6 +19,7 @@
   import Notice from './conv/Notice.svelte';
   import PermissionCard from './conv/PermissionCard.svelte';
   import QuestionCard from './conv/QuestionCard.svelte';
+  import SetupProgress from './conv/SetupProgress.svelte';
   import Thinking from './conv/Thinking.svelte';
   import ToolRow from './conv/ToolRow.svelte';
   import TurnCard from './conv/TurnCard.svelte';
@@ -454,11 +455,7 @@
         </div>
       {/if}
       {#if agent.setup}
-        <div class="working" role="status">
-          <span class="dots"><span></span><span></span><span></span></span><span
-            >Préparation du worktree · <span class="mono">{agent.setup}</span> — tes messages partiront une fois terminée.</span
-          >
-        </div>
+        <SetupProgress {agent} />
       {/if}
     </div>
   </div>

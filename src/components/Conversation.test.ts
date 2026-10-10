@@ -62,6 +62,58 @@ describe('Conversation', () => {
     expect(screen.queryByText('Claude travaille…')).toBeNull();
   });
 
+  describe('the output of the worktree’s setup', () => {
+    it('unfolds on the live output of the step running, named with its rank', async () => {
+      const { a, rerender } = setup({ status: 'idle', setup: '2/3 · npm ci' });
+      app.setupOutput = { [a.id]: { step: 1, total: 2, lines: ['added 1 package', 'audited 2 packages'] } };
+      const see = screen.getByRole('button', { name: 'Voir la sortie' });
+      expect(see).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByRole('log')).toBeNull();
+      await userEvent.click(see);
+      expect(see).toHaveAttribute('aria-expanded', 'true');
+      const out = screen.getByRole('log', { name: 'Sortie de 2/3 · npm ci' });
+      expect(see).toHaveAttribute('aria-controls', out.id);
+      // Line by line, in a monospaced block.
+      expect(out.tagName).toBe('PRE');
+      expect(out.textContent).toBe('added 1 package\naudited 2 packages');
+      // As it comes, and the next step's in place of it.
+      app.setupOutput = { [a.id]: { step: 1, total: 3, lines: ['added 1 package', 'audited 2 packages', 'found 0 vulnerabilities'] } };
+      await tick();
+      expect(out.textContent).toBe('added 1 package\naudited 2 packages\nfound 0 vulnerabilities');
+      app.setupOutput = { [a.id]: { step: 2, total: 0, lines: [] } };
+      await rerender({ agent: { ...a, setup: '3/3 · npm run gen (web)' }, project: project() });
+      const next = screen.getByRole('log', { name: 'Sortie de 3/3 · npm run gen (web)' });
+      expect(next).toHaveTextContent('Pas encore de sortie.');
+      // Folded again.
+      await userEvent.click(see);
+      expect(see).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByRole('log')).toBeNull();
+      // The line saying the setup is under way is the same.
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Préparation du worktree · 3/3 · npm run gen (web) — tes messages partiront une fois terminée.',
+      );
+    });
+
+    it('follows what the step writes, unless the reader scrolled up in it', async () => {
+      const { a } = setup({ status: 'idle', setup: '1/1 · npm ci' });
+      app.setupOutput = { [a.id]: { step: 0, total: 1, lines: ['un'] } };
+      await userEvent.click(screen.getByRole('button', { name: 'Voir la sortie' }));
+      const out = screen.getByRole('log');
+      await waitFor(() => expect(out.scrollTop).toBe(2000));
+      // Scrolled up: left there.
+      out.scrollTop = 100;
+      out.dispatchEvent(new Event('scroll'));
+      app.setupOutput = { [a.id]: { step: 0, total: 2, lines: ['un', 'deux'] } };
+      await tick();
+      expect(out.scrollTop).toBe(100);
+      // Back at the bottom: followed again.
+      out.scrollTop = 1500;
+      out.dispatchEvent(new Event('scroll'));
+      app.setupOutput = { [a.id]: { step: 0, total: 3, lines: ['un', 'deux', 'trois'] } };
+      await waitFor(() => expect(out.scrollTop).toBe(2000));
+    });
+  });
+
   describe('a message sent while the worktree is being set up', () => {
     // The backend answers once the setup is over, and records the message then.
     function sendDuringSetup(setupLabel: string | null = '1/2 · npm ci') {

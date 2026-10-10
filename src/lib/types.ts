@@ -792,7 +792,16 @@ export type UiEvent =
   | { type: 'boardIssue'; projectId: string; issue: string | null }
   /** Why no ticket of any board starts for now, or null once they may. */
   | { type: 'autopilotPause'; pause: AutopilotPause | null }
-  | { type: 'toast'; text: string };
+  | { type: 'toast'; text: string }
+  /** Lines a step of the setup of an agent's worktree just wrote, `total` counting all it wrote; a step starts with none. */
+  | ({ type: 'setupOutput'; agentId: string } & SetupOutput);
+
+/** What the step running of a worktree's setup wrote: its rank (from 0), how many lines so far, and the last of them. */
+export interface SetupOutput {
+  step: number;
+  total: number;
+  lines: string[];
+}
 
 export interface InitialState {
   projects: Project[];
@@ -820,6 +829,8 @@ export interface InitialState {
   restartAt?: number | null;
   /** A version that did not install at the last try. */
   failedUpdate?: string | null;
+  /** What the step running of each worktree setup under way wrote, by agent. */
+  setupOutput?: Record<string, SetupOutput>;
 }
 
 /** An update installed: its version and its release notes (markdown). */

@@ -216,6 +216,7 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.tickets = Object.fromEntries((over.tickets ?? []).map((t) => [t.id, t]));
   app.board = {};
   app.boardIssues = {};
+  app.setupOutput = {};
   app.autopilotPause = null;
   app.editor = {};
   app.ui = { activeProject: projects[0]?.id ?? null, view: 'project', selectedAgent: {} };

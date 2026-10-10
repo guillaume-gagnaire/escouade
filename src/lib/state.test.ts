@@ -65,6 +65,47 @@ describe('AppState', () => {
     expect(app.resources).toEqual(resources);
   });
 
+  describe('the output of a worktree’s setup', () => {
+    const lines = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => `ligne ${from + i}`);
+
+    it('starts from what the backend kept, takes each line once, and keeps the last 500', async () => {
+      const { emit } = await start({
+        agents: [agent({ setup: '1/2 · npm ci' })],
+        setupOutput: { a1: { step: 0, total: 2, lines: ['ligne 1', 'ligne 2'] } },
+      });
+      expect(app.setupOutput.a1).toEqual({ step: 0, total: 2, lines: ['ligne 1', 'ligne 2'] });
+      // Sent again (written while the window opened), then new.
+      emit({ type: 'setupOutput', agentId: 'a1', step: 0, total: 2, lines: ['ligne 2'] });
+      emit({ type: 'setupOutput', agentId: 'a1', step: 0, total: 4, lines: ['ligne 2', 'ligne 3', 'ligne 4'] });
+      expect(app.setupOutput.a1).toEqual({ step: 0, total: 4, lines: lines(1, 4) });
+      emit({ type: 'setupOutput', agentId: 'a1', step: 0, total: 600, lines: lines(5, 600) });
+      expect(app.setupOutput.a1.lines).toEqual(lines(101, 600));
+      expect(app.setupOutput.a1.total).toBe(600);
+    });
+
+    it('forgets the lines of a step once the next starts, and all of them once the setup is over', async () => {
+      const { emit } = await start({ agents: [agent({ setup: '1/2 · npm ci' })] });
+      expect(app.setupOutput).toEqual({});
+      emit({ type: 'setupOutput', agentId: 'a1', step: 0, total: 1, lines: ['added 3 packages'] });
+      emit({ type: 'agent', agent: agent({ setup: '2/2 · npm run gen' }) });
+      emit({ type: 'setupOutput', agentId: 'a1', step: 1, total: 0, lines: [] });
+      expect(app.setupOutput.a1).toEqual({ step: 1, total: 0, lines: [] });
+      emit({ type: 'setupOutput', agentId: 'a1', step: 1, total: 1, lines: ['généré'] });
+      expect(app.setupOutput.a1.lines).toEqual(['généré']);
+      // Another update of the agent, its setup still under way: kept.
+      emit({ type: 'agent', agent: agent({ setup: '2/2 · npm run gen', status: 'idle' }) });
+      expect(app.setupOutput.a1.lines).toEqual(['généré']);
+      emit({ type: 'agent', agent: agent({ setup: null }) });
+      expect(app.setupOutput.a1).toBeUndefined();
+      // A setup started again begins from nothing.
+      emit({ type: 'setupOutput', agentId: 'a1', step: 0, total: 0, lines: [] });
+      emit({ type: 'setupOutput', agentId: 'a1', step: 0, total: 1, lines: ['encore'] });
+      expect(app.setupOutput.a1.lines).toEqual(['encore']);
+      emit({ type: 'agentRemoved', id: 'a1', projectId: 'p1' });
+      expect(app.setupOutput.a1).toBeUndefined();
+    });
+  });
+
   it('applies agent upserts and removals from the backend', async () => {
     const { emit } = await start();
     emit({ type: 'agent', agent: agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, status: 'waiting' }) });

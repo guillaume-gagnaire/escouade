@@ -189,6 +189,12 @@ impl DataDir {
         self.0.join("app.log")
     }
 
+    /// The whole output of the last setup of the agent's worktree, step after step: the window
+    /// only shows the last lines of the step running.
+    pub fn setup_log(&self, agent_id: &str) -> PathBuf {
+        self.0.join("logs").join(format!("{agent_id}-setup.log"))
+    }
+
     /// The update the app stopped to install, for the window of its next start.
     pub fn update_note_file(&self) -> PathBuf {
         self.0.join("update.json")
@@ -467,6 +473,10 @@ mod tests {
         let d = DataDir::new(PathBuf::from("C:/data"));
         assert_eq!(d.state_file(), PathBuf::from("C:/data/state.json"));
         assert_eq!(d.conversations(), PathBuf::from("C:/data/conversations"));
+        assert_eq!(
+            d.setup_log("a1"),
+            PathBuf::from("C:/data/logs/a1-setup.log")
+        );
     }
 
     fn rename(a: &Path, b: &Path) -> std::io::Result<()> {
