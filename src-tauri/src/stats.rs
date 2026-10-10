@@ -1,6 +1,7 @@
 //! Token / cost statistics of the agents launched by the app (SQLite).
 
 use crate::agent::TurnRow;
+use crate::i18n::Lang;
 use crate::model::now_ms;
 use chrono::{Datelike, Duration, Local, Months, NaiveDate, TimeZone};
 use parking_lot::Mutex;
@@ -179,7 +180,7 @@ impl Stats {
     }
 
     fn query_at(&self, range: &str, today: NaiveDate, names: &Labels) -> StatsView {
-        let (starts, labels, prev_start) = bucket_bounds(range, today);
+        let (starts, labels, prev_start) = bucket_bounds(range, today, crate::i18n::ui());
         let end = match range {
             "week" => local_ms(*starts.last().unwrap() + Duration::weeks(1)),
             "month" => local_ms(*starts.last().unwrap() + Months::new(1)),
@@ -321,13 +322,30 @@ fn local_ms(d: NaiveDate) -> i64 {
         .unwrap_or_else(|| naive.and_utc().timestamp_millis())
 }
 
-const MONTHS: [&str; 12] = [
+/// The short names of the months, as the chart writes them under its bars.
+const MONTHS_FR: [&str; 12] = [
     "janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.",
     "déc.",
 ];
+const MONTHS_EN: [&str; 12] = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
 
-/// Bucket start dates, labels and the start of the previous (comparison) period.
-fn bucket_bounds(range: &str, today: NaiveDate) -> (Vec<NaiveDate>, Vec<String>, NaiveDate) {
+fn month_name(lang: Lang, d: NaiveDate) -> &'static str {
+    let names = match lang {
+        Lang::Fr => &MONTHS_FR,
+        Lang::En => &MONTHS_EN,
+    };
+    names[d.month0() as usize]
+}
+
+/// Bucket start dates, labels in `lang` (« 27/09 », « S39 », « sept. » ; “Sep 27”, “W39”, “Sep”)
+/// and the start of the previous (comparison) period.
+fn bucket_bounds(
+    range: &str,
+    today: NaiveDate,
+    lang: Lang,
+) -> (Vec<NaiveDate>, Vec<String>, NaiveDate) {
     match range {
         "week" => {
             let monday = today - Duration::days(today.weekday().num_days_from_monday() as i64);
@@ -335,7 +353,7 @@ fn bucket_bounds(range: &str, today: NaiveDate) -> (Vec<NaiveDate>, Vec<String>,
                 (0..12).map(|i| monday - Duration::weeks(11 - i)).collect();
             let labels = starts
                 .iter()
-                .map(|d| format!("S{}", d.iso_week().week()))
+                .map(|d| tr_in!(lang, "S{w}", "W{w}", w = d.iso_week().week()))
                 .collect();
             let prev = starts[0] - Duration::weeks(12);
             (starts, labels, prev)
@@ -345,7 +363,7 @@ fn bucket_bounds(range: &str, today: NaiveDate) -> (Vec<NaiveDate>, Vec<String>,
             let starts: Vec<NaiveDate> = (0..12).map(|i| first - Months::new(11 - i)).collect();
             let labels = starts
                 .iter()
-                .map(|d| MONTHS[d.month0() as usize].to_string())
+                .map(|d| month_name(lang, *d).to_string())
                 .collect();
             let prev = starts[0] - Months::new(12);
             (starts, labels, prev)
@@ -354,7 +372,10 @@ fn bucket_bounds(range: &str, today: NaiveDate) -> (Vec<NaiveDate>, Vec<String>,
             let starts: Vec<NaiveDate> = (0..14).map(|i| today - Duration::days(13 - i)).collect();
             let labels = starts
                 .iter()
-                .map(|d| format!("{:02}/{:02}", d.day(), d.month()))
+                .map(|d| match lang {
+                    Lang::Fr => format!("{:02}/{:02}", d.day(), d.month()),
+                    Lang::En => format!("{} {}", month_name(lang, *d), d.day()),
+                })
                 .collect();
             let prev = starts[0] - Duration::days(14);
             (starts, labels, prev)
@@ -411,6 +432,25 @@ mod tests {
         assert_eq!(m.buckets[0].label, "oct.");
         let w = s.query_at("week", today, &Labels::default());
         assert_eq!(w.buckets.len(), 12);
+    }
+
+    #[test]
+    fn the_periods_are_named_in_the_language_asked_for() {
+        use crate::i18n::Lang::{En, Fr};
+        let today = NaiveDate::from_ymd_opt(2026, 9, 27).unwrap();
+        let labels = |range, lang| bucket_bounds(range, today, lang).1;
+        let days = labels("day", En);
+        assert_eq!((days[0].as_str(), days[13].as_str()), ("Sep 14", "Sep 27"));
+        assert_eq!(labels("day", Fr)[13], "27/09");
+        let months = labels("month", En);
+        assert_eq!(
+            months,
+            ["Oct", "Nov", "Dec", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep"]
+        );
+        assert_eq!(labels("month", Fr)[4], "févr.");
+        // ISO weeks: 2026-09-27 is a Sunday, in week 39.
+        assert_eq!(labels("week", En).last().unwrap(), "W39");
+        assert_eq!(labels("week", Fr).last().unwrap(), "S39");
     }
 
     /// The names of agents `(id, name, ticket id)` and tickets `(id, key, title, loops)`.

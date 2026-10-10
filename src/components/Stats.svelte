@@ -1,7 +1,7 @@
 <script lang="ts">
   import { readPref, writePref } from '../lib/prefs';
   import { fDate, fInt, fPct, fTok, fUsd } from '../lib/format';
-  import { t } from '../lib/i18n';
+  import { locale, t } from '../lib/i18n';
   import { api } from '../lib/ipc';
   import { displayModel } from '../lib/models';
   import { app } from '../lib/state.svelte';
@@ -29,6 +29,7 @@
   $effect(() => {
     const r = range;
     void app.usage.todayCost; // refresh when new turns are recorded
+    void locale.ui; // the backend names the steps of the period (« 27/09 », “Sep 27”) in the interface's language
     clearTimeout(loadTimer);
     loadTimer = setTimeout(
       () =>
