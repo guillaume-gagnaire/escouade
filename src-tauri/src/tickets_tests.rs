@@ -710,7 +710,7 @@ async fn a_ticket_gets_an_agent_on_its_own_branch_and_loops_until_its_criteria_a
     assert_eq!(a.name, "dem-1-ajouter-le-fichier");
     assert_eq!(a.ticket_id.as_deref(), Some(t.id.as_str()));
     let base = a.port_base.unwrap();
-    assert!(base >= 4100 && base % 10 == 0);
+    assert!(base >= 4100 && base.is_multiple_of(10));
     let wt = a.worktree.clone().unwrap();
     assert_eq!(
         (wt.branch.as_str(), wt.base_branch.as_str()),

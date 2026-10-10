@@ -402,14 +402,45 @@ pub(crate) fn mcp_token(
         Err(e) => log::warn!("mcp: the system keychain did not give the token: {e:#}"),
     }
     let token = make();
-    if let Err(e) = keep_secret(store, MCP_ENTRY, &token) {
+    keep_mcp_token(store, data, &token)?;
+    Ok(token)
+}
+
+/// A new MCP token (`make`) in place of the one kept: the old one leaves the keychain and the
+/// file, the new one is kept as `mcp_token` keeps one it makes.
+// Allowed unused until the window's switch (M5) renews the token (then drop the allow).
+#[allow(dead_code)]
+pub(crate) fn renew_mcp_token(
+    store: &dyn SecretStore,
+    data: &DataDir,
+    make: impl FnOnce() -> String,
+) -> Result<String> {
+    let path = data.mcp_token_file();
+    match std::fs::remove_file(&path) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => bail!("{}: {e}", path.display()),
+    }
+    // A keychain that refuses keeps the old entry: the new token's file is read before it.
+    if let Err(e) = store.delete(MCP_ENTRY) {
+        log::warn!("mcp: the system keychain did not forget the old token: {e:#}");
+    }
+    let token = make();
+    keep_mcp_token(store, data, &token)?;
+    Ok(token)
+}
+
+/// `token` kept in the keychain, or in `mcp-token.json` (readable by its owner only) when the
+/// keychain refuses it.
+fn keep_mcp_token(store: &dyn SecretStore, data: &DataDir, token: &str) -> Result<()> {
+    if let Err(e) = keep_secret(store, MCP_ENTRY, token) {
         log::warn!("mcp: token kept in its file, the system keychain refused it: {e:#}");
         let bytes = serde_json::to_vec(&TokenFile {
-            token: token.clone(),
+            token: token.to_string(),
         })?;
-        paths::write_private(&path, &bytes)?;
+        paths::write_private(&data.mcp_token_file(), &bytes)?;
     }
-    Ok(token)
+    Ok(())
 }
 
 /// `mcp-token.json`: the MCP server's token while the keychain refuses it. Never `Debug`.

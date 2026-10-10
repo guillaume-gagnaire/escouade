@@ -183,7 +183,7 @@ impl Harness {
         panic!("timed out waiting for {what}");
     }
 
-    async fn turn(&self, id: &str, text: &str) {
+    pub(crate) async fn turn(&self, id: &str, text: &str) {
         let before = self
             .items(id)
             .iter()

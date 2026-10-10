@@ -5,7 +5,7 @@ description = "Le poste de pilotage de tes agents Claude Code"
 authors = ["Guillaume Gagnaire"]
 license = "MIT"
 edition = "2021"
-rust-version = "1.82"
+rust-version = "1.88"
 
 [lib]
 name = "escouade_lib"
@@ -48,6 +48,8 @@ rmcp = { version = "3.5", default-features = false, features = ["server", "macro
 hyper = { version = "1", features = ["server", "http1"] }
 hyper-util = { version = "0.1", features = ["tokio", "server", "service"] }
 subtle = "2.6"
+# Its tokens: 32 bytes from the system's random generator.
+getrandom = "0.4"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.60", features = ["Win32_Media_Audio", "Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_JobObjects", "Win32_System_ProcessStatus", "Win32_System_Threading"] }
