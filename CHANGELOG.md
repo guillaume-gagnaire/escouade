@@ -98,6 +98,8 @@ Les changements visibles d'Escouade, version par version. Les notes de chaque re
 - Dans l'éditeur, un projet ou un agent introuvable n'est plus pris pour un fichier absent : l'onglet montre l'erreur au lieu de « Ce fichier n'existe pas (ou plus) ».
 - « L'agent a 2 fichiers non commités » au lieu de « 2 fichier(s) non commité(s) », « 1 tâche » au lieu de « 1 tâches », « … et 1 autre fichier » au lieu de « … et 1 autres fichiers ».
 - Sous macOS, les chemins de ton dossier personnel s'affichent raccourcis en `~`, comme sous Windows.
+- Les infobulles de recherche des terminaux et des lancements disent « Ctrl+Maj+F » en français.
+- Dans l'import de tickets, le nombre de tickets cochés est groupé par milliers (« 1 234 »), à l'écran et pour les lecteurs d'écran.
 - Sous macOS, quand tu refuses à Escouade l'accès au trousseau pour lire ta connexion à Claude Code, la demande ne revient plus toutes les minutes : Escouade attend 10 minutes avant de redemander.
 
 ## [1.6.0] — 2026-10-10
