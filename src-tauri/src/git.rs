@@ -399,9 +399,52 @@ fn flagged(file_diff: &str) -> String {
     header
 }
 
+/// Past this much diff text in one `diff` call, the untracked files left are listed without being read.
+const DIFF_BUDGET: usize = 4_000_000;
+
+/// How many of those are listed: a tree of 50,000 new files must not become 50,000 entries.
+const UNREAD_LISTED: usize = 500;
+
+/// A name as git writes it in a diff header: verbatim, or in C-style quotes when it holds a
+/// quote, a backslash or a control character. A name with a line break would otherwise write
+/// header lines of its own (`Diff too large`, `Binary files`…).
+fn header_name(name: &str) -> String {
+    let plain = |c: char| c >= ' ' && c != '"' && c != '\\' && c != '\x7f';
+    if name.chars().all(plain) {
+        return name.to_string();
+    }
+    let mut quoted = String::from('"');
+    for c in name.chars() {
+        match c {
+            '"' => quoted.push_str("\\\""),
+            '\\' => quoted.push_str("\\\\"),
+            '\x07' => quoted.push_str("\\a"),
+            '\x08' => quoted.push_str("\\b"),
+            '\t' => quoted.push_str("\\t"),
+            '\n' => quoted.push_str("\\n"),
+            '\x0b' => quoted.push_str("\\v"),
+            '\x0c' => quoted.push_str("\\f"),
+            '\r' => quoted.push_str("\\r"),
+            c if plain(c) => quoted.push(c),
+            c => quoted.push_str(&format!("\\{:03o}", c as u32)),
+        }
+    }
+    quoted.push('"');
+    quoted
+}
+
+/// The `a/` and `b/` names of `path` in the header git would write for it.
+fn header_names(path: &str) -> (String, String) {
+    (
+        header_name(&format!("a/{path}")),
+        header_name(&format!("b/{path}")),
+    )
+}
+
 /// The header git would write for the new file `path`.
 fn new_file_header(path: &str) -> String {
-    format!("diff --git a/{path} b/{path}\nnew file mode 100644\n--- /dev/null\n+++ b/{path}\n")
+    let (a, b) = header_names(path);
+    format!("diff --git {a} {b}\nnew file mode 100644\n--- /dev/null\n+++ {b}\n")
 }
 
 /// Unified diff of the given paths (all dirty files when empty), untracked files included.
@@ -437,8 +480,25 @@ pub async fn diff(root: &str, paths: &[String]) -> Result<String> {
             out.push_str(&cap_file_diffs(&String::from_utf8_lossy(&o), MAX_FILE_DIFF));
         }
     }
+    // The new files git's own diff already shows (those in the index).
+    let covered: HashSet<String> = out
+        .lines()
+        .filter(|l| l.starts_with("+++ "))
+        .map(str::to_string)
+        .collect();
+    let mut unread = 0;
     for path in untracked {
-        if out.contains(&format!("+++ b/{path}")) {
+        let (a, b) = header_names(&path);
+        if covered.contains(&format!("+++ {b}")) {
+            continue;
+        }
+        // Once the budget is spent the files left are listed, flagged, without being read; past
+        // `UNREAD_LISTED` of them they are only counted, in a last entry.
+        if out.len() > DIFF_BUDGET {
+            if unread < UNREAD_LISTED {
+                out.push_str(&flagged(&new_file_header(&path)));
+            }
+            unread += 1;
             continue;
         }
         let full = Path::new(root).join(&path);
@@ -454,7 +514,9 @@ pub async fn diff(root: &str, paths: &[String]) -> Result<String> {
             continue;
         };
         if bytes.contains(&0) {
-            out.push_str(&format!("diff --git a/{path} b/{path}\nnew file\nBinary files /dev/null and b/{path} differ\n"));
+            out.push_str(&format!(
+                "diff --git {a} {b}\nnew file\nBinary files /dev/null and {b} differ\n"
+            ));
             continue;
         }
         let content = String::from_utf8_lossy(&bytes);
@@ -472,9 +534,15 @@ pub async fn diff(root: &str, paths: &[String]) -> Result<String> {
         } else {
             file
         });
-        if out.len() > 4_000_000 {
-            break;
-        }
+    }
+    if unread > UNREAD_LISTED {
+        let left = unread - UNREAD_LISTED;
+        let entry = if left == 1 {
+            "… et 1 autre fichier".to_string()
+        } else {
+            format!("… et {left} autres fichiers")
+        };
+        out.push_str(&flagged(&new_file_header(&entry)));
     }
     Ok(out)
 }
@@ -1560,6 +1628,35 @@ mod tests {
     }
 
     #[test]
+    fn a_name_is_written_in_a_header_the_way_git_does() {
+        // Verbatim, accents and spaces included.
+        assert_eq!(
+            header_name("b/src/résumé final.md"),
+            "b/src/résumé final.md"
+        );
+        // C-style quotes for what could end the line or the name.
+        assert_eq!(header_name("b/a\nb"), r#""b/a\nb""#);
+        assert_eq!(header_name("b/a\"b"), r#""b/a\"b""#);
+        assert_eq!(header_name(r"b/a\b"), r#""b/a\\b""#);
+        assert_eq!(header_name("b/a\tb\r\x01\x7f"), r#""b/a\tb\r\001\177""#);
+    }
+
+    #[test]
+    fn a_path_with_a_line_break_cannot_write_header_lines_of_its_own() {
+        let header = new_file_header("x\nDiff too large\nnew file");
+        assert_eq!(header.lines().count(), 4, "{header}");
+        assert!(header.lines().all(|l| l != TOO_LARGE), "{header}");
+        let name = r#""b/x\nDiff too large\nnew file""#;
+        assert_eq!(
+            header,
+            format!(
+                "diff --git {} {name}\nnew file mode 100644\n--- /dev/null\n+++ {name}\n",
+                r#""a/x\nDiff too large\nnew file""#
+            )
+        );
+    }
+
+    #[test]
     fn a_flagged_file_keeps_what_the_header_says_of_it() {
         let rename = format!(
             "diff --git a/old.txt b/new.txt\nsimilarity index 90%\nrename from old.txt\nrename to new.txt\nindex 1..2 100644\n--- a/old.txt\n+++ b/new.txt\n@@ -1 +1,40 @@\n{}",
@@ -2064,6 +2161,81 @@ mod repo_tests {
         assert!(d.contains("+++ b/mid.log\n@@ -0,0 +1,15000 @@"), "{d:.300}");
         assert!(d.contains("Binary files /dev/null and b/tool.bin differ"));
         assert!(!d.contains(&format!("b/tool.bin\n{TOO_LARGE}")));
+    }
+
+    #[tokio::test]
+    async fn untracked_files_past_the_diff_budget_are_flagged_not_dropped() {
+        let r = repo("git-diff-budget-flags");
+        let root = Path::new(&r);
+        for name in ["a.log", "b.log", "c.log", "d.log"] {
+            std::fs::write(root.join(name), big_text(2_000_000)).unwrap();
+        }
+        let d = diff(&r, &[]).await.unwrap();
+        // The first two fill the budget; the others are listed, flagged, without being read.
+        for name in ["a.log", "b.log"] {
+            assert!(
+                d.contains(&format!("+++ b/{name}\n@@ -0,0 +1,20000 @@")),
+                "{name}"
+            );
+        }
+        for name in ["c.log", "d.log"] {
+            assert!(
+                d.contains(&format!(
+                    "diff --git a/{name} b/{name}\nnew file mode 100644\n--- /dev/null\n+++ b/{name}\n{TOO_LARGE}\n"
+                )),
+                "{name}"
+            );
+        }
+    }
+
+    /// A repository whose two untracked logs spend the diff budget, then `count` small new files.
+    fn spent_budget(name: &str, count: usize) -> String {
+        let r = repo(name);
+        let root = Path::new(&r);
+        for log in ["a1.log", "a2.log"] {
+            std::fs::write(root.join(log), big_text(3_000_000)).unwrap();
+        }
+        for i in 0..count {
+            std::fs::write(root.join(format!("n{i:04}.txt")), "x\n").unwrap();
+        }
+        r
+    }
+
+    #[tokio::test]
+    async fn only_so_many_untracked_files_are_listed_once_the_budget_is_spent() {
+        let r = spent_budget("git-diff-budget-listed", UNREAD_LISTED + 25);
+        let d = diff(&r, &[]).await.unwrap();
+        // The listed ones and the entry that counts the others.
+        assert_eq!(d.matches(TOO_LARGE).count(), UNREAD_LISTED + 1);
+        assert!(d.contains("diff --git a/n0000.txt b/n0000.txt\n"));
+        assert!(d.contains("+++ b/… et 25 autres fichiers\n"));
+        assert!(!d.contains("n0525.txt"));
+        // The two logs, and a few lines per listed file.
+        assert!(d.len() < 6_200_000 + 200_000, "{} bytes", d.len());
+    }
+
+    #[tokio::test]
+    async fn the_entry_counting_the_unlisted_files_is_singular_for_one() {
+        let r = spent_budget("git-diff-budget-singular", UNREAD_LISTED + 1);
+        let d = diff(&r, &[]).await.unwrap();
+        assert!(d.contains("+++ b/… et 1 autre fichier\n"));
+        assert_eq!(d.matches(TOO_LARGE).count(), UNREAD_LISTED + 1);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn an_untracked_file_named_with_a_line_break_writes_no_header_of_its_own() {
+        let r = repo("git-diff-newline-name");
+        let name = "x\nDiff too large\nnew file";
+        std::fs::write(Path::new(&r).join(name), "hello\n").unwrap();
+        let d = diff(&r, &[]).await.unwrap();
+        assert!(d.lines().all(|l| l != TOO_LARGE), "{d}");
+        assert_eq!(
+            d.lines().filter(|l| l.starts_with("diff --git ")).count(),
+            1,
+            "{d}"
+        );
+        assert!(d.contains("+hello\n"), "{d}");
     }
 
     #[tokio::test]
