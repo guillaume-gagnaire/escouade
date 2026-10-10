@@ -5436,6 +5436,36 @@ async fn a_tickets_agent_waits_for_its_own_account_when_the_move_is_turned_off()
 }
 
 #[tokio::test]
+async fn the_agent_of_a_blocked_ticket_stays_where_it_is_at_the_limit() {
+    let h = harness("tk-limit-stay-blocked");
+    let (p, _) = h.project(false).await;
+    pro_then_team_then_principal(&h);
+    // Waiting for Pro's reset first (the move is off), then on, with the ticket blocked meanwhile:
+    // a blocked ticket is left as it is, as the board reads the end of a turn at the limit.
+    h.set_settings(|s| s.switch_on_limit = false);
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Un [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.wait_resume_planned(&t.id).await;
+    h.set_settings(|s| s.switch_on_limit = true);
+    h.core
+        .edit_ticket(&t.id, |t| {
+            t.blocked = Some("à reprendre à la main".into());
+            Ok(())
+        })
+        .unwrap();
+    let agent = h.ticket(&t.id).agent_id.unwrap();
+    h.core.turn_ended(&agent, TurnEnd::Limited).await;
+    let a = h.agent(&agent);
+    assert_eq!((a.account.as_str(), a.moved_from.as_deref()), ("pro", None));
+    assert!(a.resume_at.is_some());
+    assert_eq!(config_dirs(&h, &h.worktree_of(&t.id)).len(), 1);
+    assert_eq!(h.core.hold.lock().of("pro").limit_until, None);
+}
+
+#[tokio::test]
 async fn a_tickets_agent_waits_when_no_other_account_is_usable() {
     let h = harness("tk-limit-stay-none");
     let (p, _) = h.project(false).await;

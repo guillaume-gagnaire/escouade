@@ -1254,7 +1254,12 @@ impl<R: Runtime> Core<R> {
     /// A project that prefers the agent's account keeps it there.
     fn account_to_switch_to(&self, agent_id: &str) -> Option<String> {
         let settings = self.settings.read().clone();
-        if !settings.switch_on_limit || self.doing_ticket_of(agent_id).is_none() {
+        let ticket = self
+            .doing_ticket_of(agent_id)
+            .and_then(|id| self.ticket(&id).ok())?;
+        // A blocked ticket stays as it is, as the board reads the end of a turn at the limit
+        // (`turn_ended`): its block tells why it does not move.
+        if !settings.switch_on_limit || ticket.blocked.is_some() {
             return None;
         }
         let (project, current) = {
