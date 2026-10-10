@@ -1,6 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { setLang } from '../lib/i18n';
 import type { AgentShare, StatsView, TicketShare } from '../lib/types';
 import { fakeBackend, project, resetApp } from '../test/ipc';
 import Stats from './Stats.svelte';
@@ -239,5 +240,106 @@ describe('Stats errors', () => {
     render(Stats);
     expect(await screen.findByText(/base verrouillée/)).toBeInTheDocument();
     expect(screen.queryByText('Chargement…')).not.toBeInTheDocument();
+  });
+});
+
+describe('Stats in English', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    resetApp({ projects: [project()] });
+    setLang('en');
+  });
+
+  const lines = (name: string) =>
+    within(screen.getByRole('table', { name }))
+      .getAllByRole('row')
+      .slice(1)
+      .map((r) =>
+        within(r)
+          .getAllByRole('cell')
+          .map((c) => c.textContent),
+      );
+
+  it('writes the title, the periods and the figures of the period in English', async () => {
+    fakeBackend({ stats: (a: any) => view(a.range) });
+    render(Stats);
+    await screen.findAllByText('74.5k');
+    expect(screen.getByText('Statistics')).toBeInTheDocument();
+    // No agent yet: « 0 agents », the plural of English for zero.
+    expect(screen.getByText('Agents started from the app · 1 project, 0 agents')).toBeInTheDocument();
+    for (const name of ['Day', 'Week', 'Month']) expect(screen.getByRole('button', { name })).toBeInTheDocument();
+    const kpi = (label: string) => within(screen.getByText(label).parentElement!);
+    expect(kpi('Tokens').getByText('Last 14 days · +49%')).toBeInTheDocument();
+    expect(kpi('Total cost').getByText('$2.00')).toBeInTheDocument();
+    expect(kpi('Total cost').getByText(/\$12\.40 since June 1, 2026/)).toBeInTheDocument();
+    expect(kpi('Average cost / prompt').getByText('$0.50')).toBeInTheDocument();
+    expect(kpi('Average cost / prompt').getByText(/≈ 18\.6k tokens \/ prompt/)).toBeInTheDocument();
+    expect(kpi('Prompts').getByText('2 per day on average')).toBeInTheDocument();
+  });
+
+  it('names the step of the period, the series and the table in English', async () => {
+    fakeBackend({ stats: (a: any) => view(a.range) });
+    render(Stats);
+    await screen.findAllByText('74.5k');
+    expect(screen.getByText('Tokens per day')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Tokens per day, stacked input, cache and output' })).toBeInTheDocument();
+    for (const series of ['Input', 'Cache', 'Output']) expect(screen.getByText(series)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Month' }));
+    expect(await screen.findByText('Tokens per month')).toBeInTheDocument();
+    expect(await screen.findByText('Last 12 months · +49%')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Table' }));
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual([
+      'Period',
+      'Input',
+      'Cache',
+      'Output',
+      'Total',
+      'Cost',
+      'Prompts',
+    ]);
+    expect(screen.getByRole('button', { name: 'Chart' })).toBeInTheDocument();
+  });
+
+  it('writes the shares, the lists and their counts in English', async () => {
+    fakeBackend({
+      stats: (a: any) => ({
+        ...view(a.range),
+        byAgent: Array.from({ length: 23 }, (_, i) => agentShare(i + 1)).concat([agentShare(30, { name: null, projectId: 'gone' })]),
+        byTicket: [ticketShare(4, { loops: 3, cost: 2.5 }), ticketShare(1, { loops: 1, cost: 0.4 })],
+      }),
+    });
+    render(Stats);
+    await screen.findByRole('table', { name: 'By agent' });
+    expect(screen.getByText('By project')).toBeInTheDocument();
+    expect(screen.getByText('By model')).toBeInTheDocument();
+    expect(screen.getByText('Closed project', { selector: '.sname' })).toBeInTheDocument();
+    expect(lines('By ticket')).toEqual([
+      ['DEM-4', 'Ticket 4', '3 loops', '$2.50'],
+      ['DEM-1', 'Ticket 1', '1 loop', '$0.40'],
+    ]);
+    expect(
+      within(screen.getByRole('table', { name: 'By ticket' })).getByRole('columnheader', { name: 'Cost over the period' }),
+    ).toBeInTheDocument();
+    expect(lines('By agent')).toHaveLength(20);
+    expect(screen.getByText('20 of 24')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Show all' }));
+    expect(lines('By agent')).toHaveLength(24);
+    expect(lines('By agent').at(-1)).toEqual(['Deleted agent', 'Closed project', '30.0k', '$3.00']);
+    expect(screen.getByRole('button', { name: 'Show less' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('says when a period holds nothing, and when the statistics cannot be read, in English', async () => {
+    fakeBackend({ stats: (a: any) => ({ ...view(a.range), byProject: [], byModel: [] }) });
+    const { unmount } = render(Stats);
+    await screen.findByText('No ticket in this period.');
+    expect(screen.getAllByText('No data for this period.')).toHaveLength(3);
+    unmount();
+    fakeBackend({
+      stats: () => {
+        throw new Error('database locked');
+      },
+    });
+    render(Stats);
+    expect(await screen.findByText(/Statistics unavailable: .*database locked/)).toBeInTheDocument();
   });
 });

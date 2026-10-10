@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { setLang } from './i18n';
 import { kpis, niceMax, shown } from './stats';
 import type { StatsView } from './types';
 
@@ -43,6 +44,12 @@ describe('kpis', () => {
 
   it('describes the span of the range', () => {
     expect(kpis(view({ range: 'week' })).span).toBe('12 dernières semaines');
+  });
+
+  it('describes the span of the range in English, and reads an unknown range as the days', () => {
+    setLang('en');
+    expect(kpis(view({ range: 'month' })).span).toBe('Last 12 months');
+    expect(kpis(view({ range: 'year' })).span).toBe('Last 14 days');
   });
 });
 

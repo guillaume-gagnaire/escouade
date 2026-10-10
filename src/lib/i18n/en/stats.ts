@@ -1,4 +1,74 @@
 import { defineZone } from '../types';
 
-// The statistics.
-export default defineZone('stats', {});
+// The statistics, and the overview of every agent.
+export default defineZone('stats', {
+  title: 'Statistics',
+  subtitle: 'Agents started from the app · {projects}, {agents}',
+  range: { day: 'Day', week: 'Week', month: 'Month' },
+  unit: { day: 'day', week: 'week', month: 'month' },
+  span: { day: 'Last 14 days', week: 'Last 12 weeks', month: 'Last 12 months' },
+  series: { input: 'Input', cache: 'Cache', output: 'Output' },
+
+  kpi: {
+    tokens: 'Tokens',
+    spanDelta: '{span} · {delta}',
+    totalCost: 'Total cost',
+    costSince: '{amount} since {date}',
+    costAllTime: '{amount} in total',
+    costPerPrompt: 'Average cost / prompt',
+    tokensPerPrompt: '≈ {tokens} tokens / prompt',
+    noPrompt: 'no prompt in this period',
+    prompts: 'Prompts',
+    perUnit: '{n} per {unit} on average',
+  },
+
+  chart: {
+    title: 'Tokens per {unit}',
+    label: 'Tokens per {unit}, stacked input, cache and output',
+    showTable: 'Table',
+    showChart: 'Chart',
+  },
+  table: { period: 'Period', total: 'Total', prompts: 'Prompts' },
+
+  noData: 'No data for this period.',
+  closedProject: 'Closed project',
+  byProject: { title: 'By project' },
+  byModel: { title: 'By model' },
+  byAgent: { title: 'By agent', tokens: 'Tokens', deleted: 'Deleted agent' },
+  byTicket: {
+    title: 'By ticket',
+    ticket: 'Ticket',
+    name: 'Title',
+    loops: 'Loops',
+    periodCost: 'Cost over the period',
+    none: 'No ticket in this period.',
+  },
+  showAll: 'Show all',
+  showLess: 'Show less',
+  shownOf: '{shown} of {total}',
+  unavailable: 'Statistics unavailable: {error}',
+
+  overview: {
+    sub: '{projects} · {agents} · {running} running',
+    hintChoose: '{keys} choose',
+    hintOpen: '{key} open',
+    hintBack: '{key} back',
+    activity: 'Activity',
+    context: 'Context',
+    since: 'Since',
+    contextUnknown: 'Context: not known yet',
+    lastChange: 'Last change {when}',
+    waitingGroup: 'Waiting for your answer',
+    empty: 'No agent for now.',
+    resumes: 'Resumes {when}',
+    settingUp: 'Setting up the worktree · {step}',
+    thinking: 'Thinking',
+    status: { running: 'Running', waiting: 'Question', idle: 'Ready', done: 'Done', error: 'Error' },
+    allow: 'Allow',
+    deny: 'Deny',
+    readInConversation: 'Read it in the conversation before answering.',
+    tooLong: 'Too long to read here: read it and answer in the conversation.',
+    proposesPlan: 'Claude suggests a plan',
+    waitsForAnswer: 'Claude is waiting for your answer',
+  },
+});
