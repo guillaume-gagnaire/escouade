@@ -1,4 +1,94 @@
 import { defineZone } from '../types';
 
 // The sidebar, the title bar, the side panel and the menus.
-export default defineZone('nav', {});
+export default defineZone('nav', {
+  sidebar: {
+    status: { running: 'Running', waiting: 'Question', idle: 'Ready', done: 'Done', error: 'Error' },
+    viewLabel: 'Project view',
+    toReview: '{count} to review',
+    newAgent: 'New agent',
+    newAgentTitle: 'New agent ({shortcut})',
+    empty: 'No agents.',
+    createAgent: 'Create an agent',
+    archived: 'Archived ({n})',
+    resumeTitle: 'Stopped by the usage limit: resumes automatically {when}',
+    resumes: 'Resumes {when}',
+    settingUp: 'Setting up…',
+    settingUpTitle: 'Setting up the worktree: {step}',
+    tokens: '{tokens} tok',
+    files: { one: '{count} file', other: '{count} files' },
+    remote: {
+      connected: 'Remote control: connected (reachable from claude.ai and the Claude app)',
+      connecting: 'Remote control: connecting… (reachable from claude.ai and the Claude app)',
+      waiting: 'Remote control: waiting for a connection (reachable from claude.ai and the Claude app)',
+    },
+    terminals: 'Terminals',
+    newTerminal: 'New terminal',
+    noTerminals: 'No open terminals',
+    exited: 'exited',
+    noShell: 'No shell found (PowerShell 7, Git Bash, WSL). Check the settings.',
+    modified: '~{n} modified',
+    added: '+{n} added',
+    deleted: '−{n} deleted',
+    noRepo: 'No git repository',
+    menu: {
+      duplicate: 'Duplicate the conversation',
+      waitTurn: 'Wait for its turn to end.',
+      restore: 'Restore',
+      archive: 'Archive',
+      archiveHint: 'keeps the conversation',
+      prepareLaunch: 'Prepare launch',
+      openTerminal: 'Open a terminal',
+      remoteOff: 'Turn off remote control',
+      remoteOn: 'Turn on remote control',
+      remoteOnHint: 'claude.ai, mobile',
+      openRemote: 'Open on claude.ai',
+      copyRemoteLink: 'Copy the claude.ai link',
+      delete: 'Delete…',
+    },
+    archiveTitle: 'Archive {name}?',
+    archiveBody: 'Its ticket {key} goes back to “To do”.',
+    archiveConfirm: 'Archive',
+    deleteTitle: 'Delete the agent “{name}”?',
+    deleteBody: 'The Claude process is stopped and the conversation is removed from the app (the Claude Code session stays on disk).',
+    deleteWorktree: 'Also delete the worktree and the branch {branch}',
+  },
+
+  titleBar: {
+    overviewTitle: 'All agents of all projects ({shortcut})',
+    attention: 'Needs a look: {names}',
+    delta: 'Uncommitted git changes',
+    waiting: 'Agents waiting for an answer',
+    addProject: 'Add a project',
+    openEditor: 'Open the project’s editor',
+    openEditorTitle: 'Browse and edit the project’s files',
+    stats: 'Stats',
+    minimize: 'Minimize',
+    maximize: 'Maximize',
+    restore: 'Restore',
+    closeWindow: 'Close (the app stays in the notification area)',
+    menu: {
+      rename: 'Rename…',
+      renameTitle: 'Rename the project',
+      worktreeOff: 'Turn off a worktree per agent',
+      worktreeOn: 'Turn on a worktree per agent',
+      worktreeHint: 'new agents',
+      settings: 'Project settings…',
+      openFolder: 'Open the folder',
+      close: 'Close the project…',
+    },
+  },
+
+  sidePanel: { uncommitted: 'Uncommitted', history: 'History' },
+
+  menu: { swatch: '{label} {n}' },
+
+  dropdown: { label: '{caption}: {shown}' },
+
+  project: {
+    closeTitle: 'Close “{name}”?',
+    closeBody:
+      'The project and its agents are removed from the app (conversations included). The files and worktrees on disk are not touched.',
+    closeConfirm: 'Close the project',
+  },
+});

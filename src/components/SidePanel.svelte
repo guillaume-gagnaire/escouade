@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../lib/i18n';
   import { app } from '../lib/state.svelte';
   import type { Agent, Project } from '../lib/types';
   import FilesPanel from './FilesPanel.svelte';
@@ -16,14 +17,14 @@
   <div class="head">
     <div class="tabs" role="tablist">
       <button role="tab" aria-selected={tab === 'files'} class:on={tab === 'files'} onclick={() => (app.panelTab = 'files')}>
-        Non commités <span class="count">{count}</span>
+        {t('nav.sidePanel.uncommitted')} <span class="count">{count}</span>
       </button>
       <button role="tab" aria-selected={tab === 'history'} class:on={tab === 'history'} onclick={() => (app.panelTab = 'history')}>
-        Historique
+        {t('nav.sidePanel.history')}
       </button>
     </div>
     <div style="flex:1"></div>
-    {#if !docked}<button class="icon-btn" title="Fermer" onclick={() => (app.filesOpen = false)}>×</button>{/if}
+    {#if !docked}<button class="icon-btn" title={t('common.close')} onclick={() => (app.filesOpen = false)}>×</button>{/if}
   </div>
   {#if tab === 'files'}
     <FilesPanel {project} {agent} {docked} bind:count />

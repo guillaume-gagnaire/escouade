@@ -9,6 +9,8 @@
 </script>
 
 <script lang="ts">
+  import { t } from '../lib/i18n';
+
   // A compact picker whose menu opens upwards (the composer sits at the bottom of the window).
   let {
     caption,
@@ -35,6 +37,7 @@
   } = $props();
 
   const shown = $derived(options.find((o) => o.value === value)?.label ?? (value || '—'));
+  const label = $derived(t('nav.dropdown.label', { caption, shown }));
 
   // Escape closes the menu first, before it can reach the composer (where it interrupts Claude).
   function onKeydownCapture(e: KeyboardEvent) {
@@ -53,8 +56,8 @@
     class:danger
     aria-haspopup="menu"
     aria-expanded={open}
-    aria-label="{caption} : {shown}"
-    title={title ?? `${caption} : ${shown}`}
+    aria-label={label}
+    title={title ?? label}
     {disabled}
     onclick={onToggle}
   >

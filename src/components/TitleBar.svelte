@@ -1,6 +1,7 @@
 <script lang="ts">
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { openPath } from '@tauri-apps/plugin-opener';
+  import { t } from '../lib/i18n';
   import { api } from '../lib/ipc';
   import { menu } from '../lib/menu.svelte';
   import { askCloseProject } from '../lib/project-actions';
@@ -41,39 +42,39 @@
       running: agents.some((a) => a.status === 'running'),
       changes: app.git[p.id]?.total ?? 0,
       alert,
-      alertTitle: seen.length ? `À voir : ${seen.map((a) => a.name).join(', ')}` : null,
+      alertTitle: seen.length ? t('nav.titleBar.attention', { names: seen.map((a) => a.name).join(', ') }) : null,
     };
   }
 
   function tabMenu(e: MouseEvent, p: Project) {
     menu.show(e, [
       {
-        label: 'Renommer…',
+        label: t('nav.titleBar.menu.rename'),
         onClick: () => {
           app.modal = {
             kind: 'rename',
-            title: 'Renommer le projet',
+            title: t('nav.titleBar.menu.renameTitle'),
             value: p.name,
             onSubmit: (name) => save({ ...p, name }),
           };
         },
       },
-      { label: 'Couleur', colors: { values: PROJECT_COLORS, selected: p.color, onPick: (color) => save({ ...p, color }) } },
+      { label: t('common.color'), colors: { values: PROJECT_COLORS, selected: p.color, onPick: (color) => save({ ...p, color }) } },
       { label: '', separator: true },
       {
-        label: p.worktreePerAgent ? 'Désactiver le worktree par agent' : 'Activer le worktree par agent',
-        hint: 'nouveaux agents',
+        label: p.worktreePerAgent ? t('nav.titleBar.menu.worktreeOff') : t('nav.titleBar.menu.worktreeOn'),
+        hint: t('nav.titleBar.menu.worktreeHint'),
         onClick: () => save({ ...p, worktreePerAgent: !p.worktreePerAgent }),
       },
       {
-        label: 'Réglages du projet…',
+        label: t('nav.titleBar.menu.settings'),
         onClick: () => {
           app.modal = { kind: 'settings', tab: 'projects', projectId: p.id };
         },
       },
-      { label: 'Ouvrir le dossier', onClick: () => openPath(p.path).catch((err) => app.toast(String(err), 'error')) },
+      { label: t('nav.titleBar.menu.openFolder'), onClick: () => openPath(p.path).catch((err) => app.toast(String(err), 'error')) },
       { label: '', separator: true },
-      { label: 'Fermer le projet…', danger: true, onClick: () => askCloseProject(p) },
+      { label: t('nav.titleBar.menu.close'), danger: true, onClick: () => askCloseProject(p) },
     ]);
   }
 
@@ -105,7 +106,7 @@
       class="tab stats"
       class:active={app.ui.view === 'overview'}
       aria-pressed={app.ui.view === 'overview'}
-      title={`Tous les agents de tous les projets (${keyLabel('Ctrl+Maj+A')})`}
+      title={t('nav.titleBar.overviewTitle', { shortcut: keyLabel('Ctrl+Shift+A') })}
       onclick={() => app.toggleOverview()}
     >
       <svg
@@ -125,7 +126,7 @@
           stroke="none"
         /><circle cx="1.75" cy="10" r="1.1" fill="currentColor" stroke="none" /></svg
       >
-      Vue d’ensemble
+      {t('common.overview')}
     </button>
   </div>
   <nav class="tabs" data-tauri-drag-region>
@@ -163,15 +164,15 @@
         <span class="name">{p.name}</span>
         {#if s.running && !s.waiting}<span class="dot" style="width:6px;height:6px;background:var(--ok)"></span>{/if}
         {#if s.changes > 0}
-          <span class="delta" title="Modifications git non commitées">Δ {s.changes}</span>
+          <span class="delta" title={t('nav.titleBar.delta')}>Δ {s.changes}</span>
         {/if}
-        {#if s.waiting > 0}<span class="pill" title="Agents en attente de réponse">{s.waiting}</span>{/if}
+        {#if s.waiting > 0}<span class="pill" title={t('nav.titleBar.waiting')}>{s.waiting}</span>{/if}
       </button>
     {/each}
     <button
       class="add"
-      title="Ajouter un projet"
-      aria-label="Ajouter un projet"
+      title={t('nav.titleBar.addProject')}
+      aria-label={t('nav.titleBar.addProject')}
       onclick={() => {
         app.modal = { kind: 'newProject' };
       }}>+</button
@@ -182,28 +183,33 @@
     {#if activeProject}
       <button
         class="tab stats"
-        aria-label="Ouvrir l’éditeur du projet"
-        title="Parcourir et éditer les fichiers du projet"
+        aria-label={t('nav.titleBar.openEditor')}
+        title={t('nav.titleBar.openEditorTitle')}
         onclick={() => app.openEditor({ projectId: activeProject.id, source: 'project' })}
       >
         <svg width="14" height="12" viewBox="0 0 14 12" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"
           ><path d="M4.5 2.5 1 6l3.5 3.5M9.5 2.5 13 6l-3.5 3.5" /></svg
         >
-        Éditeur
+        {t('common.editor')}
       </button>
     {/if}
     <button class="tab stats" class:active={app.ui.view === 'stats'} onclick={() => app.openStats()}>
       <span class="bars"><span style="height:6px"></span><span style="height:12px"></span><span style="height:9px"></span></span>
-      Stats
+      {t('nav.titleBar.stats')}
     </button>
   </div>
   <!-- macOS draws its own buttons (traffic lights) at the left of the bar. -->
   {#if !IS_MAC}
     <div class="controls">
-      <button class="ctl" title="Réduire" aria-label="Réduire" onclick={() => win.minimize()}>
+      <button class="ctl" title={t('nav.titleBar.minimize')} aria-label={t('nav.titleBar.minimize')} onclick={() => win.minimize()}>
         <svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 5h10" stroke="currentColor" stroke-width="1" /></svg>
       </button>
-      <button class="ctl" title={maximized ? 'Restaurer' : 'Agrandir'} aria-label="Agrandir" onclick={() => win.toggleMaximize()}>
+      <button
+        class="ctl"
+        title={maximized ? t('nav.titleBar.restore') : t('nav.titleBar.maximize')}
+        aria-label={t('nav.titleBar.maximize')}
+        onclick={() => win.toggleMaximize()}
+      >
         {#if maximized}
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1"
             ><path d="M2.5 2.5V.5h7v7h-2" /><rect x=".5" y="2.5" width="7" height="7" /></svg
@@ -214,7 +220,7 @@
           >
         {/if}
       </button>
-      <button class="ctl close" title="Fermer (l'app reste dans la zone de notification)" aria-label="Fermer" onclick={() => win.hide()}>
+      <button class="ctl close" title={t('nav.titleBar.closeWindow')} aria-label={t('common.close')} onclick={() => win.hide()}>
         <svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1" /></svg>
       </button>
     </div>

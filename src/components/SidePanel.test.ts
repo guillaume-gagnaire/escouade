@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { setLang } from '../lib/i18n';
 import { app } from '../lib/state.svelte';
 import { agent, fakeBackend, project, resetApp } from '../test/ipc';
 import SidePanel from './SidePanel.svelte';
@@ -43,5 +44,20 @@ describe('SidePanel', () => {
     fakeBackend({ git_files: () => [] });
     render(SidePanel, { project: project(), agent: app.agents.a1, docked: true });
     expect(screen.queryByTitle('Fermer')).not.toBeInTheDocument();
+  });
+});
+
+describe('SidePanel in English', () => {
+  beforeEach(() => {
+    resetApp({ projects: [project()], agents: [agent()] });
+    setLang('en');
+  });
+
+  it('names its two tabs and its close button in English', async () => {
+    fakeBackend({ git_files: () => [change('src/a.ts'), change('src/b.ts')], git_log: () => LOG });
+    render(SidePanel, { project: project(), agent: app.agents.a1 });
+    expect(await screen.findByRole('tab', { name: /Uncommitted\s*2/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'History' })).toBeInTheDocument();
+    expect(screen.getByTitle('Close')).toBeInTheDocument();
   });
 });

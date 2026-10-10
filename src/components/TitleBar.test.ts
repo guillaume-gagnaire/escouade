@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buffers } from '../lib/editor/buffers.svelte';
+import { setLang } from '../lib/i18n';
 import { menu } from '../lib/menu.svelte';
 import { PROJECT_COLORS } from '../lib/theme';
 import { app } from '../lib/state.svelte';
@@ -216,5 +217,48 @@ describe('TitleBar editor button', () => {
     fakeBackend();
     render(TitleBar);
     expect(screen.queryByRole('button', { name: 'Ouvrir l’éditeur du projet' })).not.toBeInTheDocument();
+  });
+});
+
+describe('TitleBar in English', () => {
+  beforeEach(() => {
+    resetApp({
+      projects: [project(), project({ id: 'p2', name: 'studio-web' })],
+      agents: [agent({ status: 'waiting' }), agent({ id: 'b1', projectId: 'p2', status: 'error' })],
+    });
+    setLang('en');
+  });
+
+  it('names its buttons, its tooltips and the shortcut of the overview in English', () => {
+    fakeBackend();
+    app.git = { p1: gitInfo({ total: 3 }) };
+    app.attention = { b1: true };
+    render(TitleBar);
+    expect(screen.getByRole('button', { name: 'Overview' })).toHaveAttribute('title', 'All agents of all projects (Ctrl+Shift+A)');
+    expect(screen.getByRole('button', { name: 'Stats' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add a project' })).toHaveAttribute('title', 'Add a project');
+    expect(screen.getByRole('button', { name: 'Open the project’s editor' })).toHaveAttribute(
+      'title',
+      'Browse and edit the project’s files',
+    );
+    expect(screen.getByTitle('Uncommitted git changes')).toHaveTextContent('Δ 3');
+    expect(screen.getByTitle('Agents waiting for an answer')).toHaveTextContent('1');
+    expect(screen.getByRole('button', { name: /studio-web/ })).toHaveAttribute(
+      'title',
+      expect.stringContaining('Needs a look: refacto-auth'),
+    );
+    expect(screen.getByRole('button', { name: 'Minimize' })).toHaveAttribute('title', 'Minimize');
+    expect(screen.getByRole('button', { name: 'Close' })).toHaveAttribute('title', 'Close (the app stays in the notification area)');
+  });
+
+  it('writes the menu of a project’s tab in English', async () => {
+    fakeBackend();
+    render(TitleBar);
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /demo-api/ }));
+    const labels = menu.open!.items.map((i) => i.label);
+    expect(labels).toEqual(expect.arrayContaining(['Rename…', 'Color', 'Project settings…', 'Open the folder', 'Close the project…']));
+    expect(labels.some((l) => /a worktree per agent$/.test(l))).toBe(true);
+    menu.open!.items.find((i) => i.label === 'Rename…')!.onClick!();
+    expect(app.modal).toMatchObject({ kind: 'rename', title: 'Rename the project' });
   });
 });

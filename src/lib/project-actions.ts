@@ -1,6 +1,7 @@
 // Closing a project: from its tab's menu or its settings.
 
 import { buffers, lossNotice } from './editor/buffers.svelte';
+import { t } from './i18n';
 import { api } from './ipc';
 import { expectStops, forgetLaunches, testLaunchIds } from './launch-actions';
 import { app } from './state.svelte';
@@ -14,11 +15,10 @@ import type { Project } from './types';
 export function askCloseProject(p: Project, back?: () => void) {
   app.modal = {
     kind: 'confirm',
-    title: `Fermer « ${p.name} » ?`,
-    body:
-      "Le projet et ses agents sont retirés de l'application (conversations comprises). Les fichiers et les worktrees sur le disque ne sont pas touchés." +
-      lossNotice(buffers.unsavedIn(p.id)),
-    confirm: 'Fermer le projet',
+    title: t('nav.project.closeTitle', { name: p.name }),
+    // The notice of unsaved files is a sentence of its own, added after the question's.
+    body: t('nav.project.closeBody') + lossNotice(buffers.unsavedIn(p.id)),
+    confirm: t('nav.project.closeConfirm'),
     danger: true,
     onCancel: back,
     onConfirm: async () => {
@@ -36,6 +36,6 @@ async function closeProject(p: Project) {
   const removed = await app.run(api.removeProject(p.id).then(() => true));
   if (!removed) return undo();
   forgetLaunches(runs);
-  for (const t of app.terminals.filter((x) => x.projectId === p.id)) closeTerminal(t.id);
+  for (const term of app.terminals.filter((x) => x.projectId === p.id)) closeTerminal(term.id);
   app.forgetProject(p.id);
 }

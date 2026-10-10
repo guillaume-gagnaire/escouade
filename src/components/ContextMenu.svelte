@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../lib/i18n';
   import { menu } from '../lib/menu.svelte';
 
   let el = $state<HTMLDivElement>();
@@ -35,7 +36,7 @@
                 class:on={c === colors.selected}
                 role="menuitemradio"
                 aria-checked={c === colors.selected}
-                aria-label="{item.label} {ci + 1}"
+                aria-label={t('nav.menu.swatch', { label: item.label, n: ci + 1 })}
                 style:background={c}
                 onclick={() => {
                   menu.close();

@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { setLang } from '../lib/i18n';
 import { menu } from '../lib/menu.svelte';
 import ContextMenu from './ContextMenu.svelte';
 
@@ -44,5 +45,23 @@ describe('ContextMenu', () => {
     expect(entry).toBeDisabled();
     expect(entry).toHaveAttribute('title', 'Attends la fin de son tour.');
     expect(screen.getByRole('menuitem', { name: 'Renommer' })).not.toHaveAttribute('title');
+  });
+});
+
+describe('ContextMenu in English', () => {
+  beforeEach(() => {
+    menu.close();
+    setLang('en');
+  });
+
+  it('numbers the swatches of a row of colors in English', async () => {
+    render(ContextMenu);
+    menu.open = {
+      x: 10,
+      y: 10,
+      items: [{ label: 'Color', colors: { values: ['red', 'green'], selected: 'red', onPick: () => {} } }],
+    };
+    const row = await screen.findByRole('group', { name: 'Color' });
+    expect([...row.querySelectorAll('button')].map((s) => s.getAttribute('aria-label'))).toEqual(['Color 1', 'Color 2']);
   });
 });
