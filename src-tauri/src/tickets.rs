@@ -721,6 +721,13 @@ impl<R: Runtime> Core<R> {
     /// No ticket of the project may start now: every account it may go to waits for its quota
     /// (an agent waiting for its reset, a window over the threshold, a usage limit with no resume).
     fn held(&self, project_id: &str) -> bool {
+        self.project_hold(project_id).is_some()
+    }
+
+    /// What holds back the tickets, and the new agents, of the project, if anything does
+    /// (`board::project_hold`): every account it may go to is held, and then until the first of
+    /// them is free again. The tools that act refuse by it.
+    pub(crate) fn project_hold(&self, project_id: &str) -> Option<board::Held> {
         let settings = self.settings.read().clone();
         let preferred = self
             .project(project_id)
@@ -731,12 +738,27 @@ impl<R: Runtime> Core<R> {
         let usage = self.usage.lock().accounts.clone();
         let hold = self.hold.lock().clone();
         let waiting = self.quota_paused();
-        let now = self.pause_now();
-        !accounts.is_empty()
-            && accounts.iter().all(|a| {
-                waiting.contains_key(a)
-                    || board::account_pause(&usage, a, threshold, &hold, now).is_some()
-            })
+        board::project_hold(
+            &usage,
+            &accounts,
+            threshold,
+            &hold,
+            &waiting,
+            self.pause_now(),
+        )
+    }
+
+    /// What holds back anything that spends the account's quota, a message to one of its agents
+    /// included, if anything does (`board::account_hold`). An account the settings do not know is
+    /// Principal, as for `quota_paused`.
+    pub(crate) fn account_hold(&self, account: &str) -> Option<board::Held> {
+        let settings = self.settings.read().clone();
+        let id = accounts::get(&settings, account).id;
+        let threshold = board::quota_threshold(settings.quota_pause);
+        let usage = self.usage.lock().accounts.clone();
+        let hold = self.hold.lock().clone();
+        let waiting = self.quota_paused();
+        board::account_hold(&usage, &id, threshold, &hold, &waiting, self.pause_now())
     }
 
     /// The autopilot's pauses looked at again, the window told when they changed (in order: looked

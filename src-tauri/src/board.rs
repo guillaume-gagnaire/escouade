@@ -616,6 +616,65 @@ fn limit_pause(until: i64) -> AutopilotPause {
     }
 }
 
+/// What holds an account back from anything that spends its quota (a ticket, an agent, a
+/// message), as the tools that act refuse it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Held {
+    /// The reason, and when it ends (`accounts` is not told).
+    pub pause: AutopilotPause,
+    /// By an agent of the account waiting for its usage limit to reset (its resume), rather than by
+    /// one of its windows or a pause after a usage limit.
+    pub by_agent: bool,
+}
+
+/// What holds the account `id` back at `now`, if anything does: `account_pause`, or an agent of it
+/// waiting for its usage limit to reset (`waiting`: its resume). When both hold, the one that ends
+/// last. An agent's resume counts even once past while the agent has not resumed yet, as the
+/// scheduler has it.
+pub fn account_hold(
+    usage: &[AccountUsage],
+    id: &str,
+    threshold: u32,
+    hold: &Hold,
+    waiting: &BTreeMap<String, i64>,
+    now: i64,
+) -> Option<Held> {
+    let window = account_pause(usage, id, threshold, hold, now);
+    let held = |pause, by_agent| Some(Held { pause, by_agent });
+    match (window, waiting.get(id).copied()) {
+        (None, None) => None,
+        (Some(pause), None) => held(pause, false),
+        (None, Some(until)) => held(limit_pause(until), true),
+        (Some(p), Some(until)) if until > p.until => held(limit_pause(until), true),
+        (Some(pause), Some(_)) => held(pause, false),
+    }
+}
+
+/// What holds back a ticket, or an agent, that may go to any of `accounts` (the ones a project
+/// allows, or all the active ones), if anything does: only when every one of them is held
+/// (`account_hold`), and then until the first of them is free again. None without any account.
+pub fn project_hold(
+    usage: &[AccountUsage],
+    accounts: &[String],
+    threshold: u32,
+    hold: &Hold,
+    waiting: &BTreeMap<String, i64>,
+    now: i64,
+) -> Option<Held> {
+    let mut soonest: Option<Held> = None;
+    for id in accounts {
+        // One that is free lets it start.
+        let held = account_hold(usage, id, threshold, hold, waiting, now)?;
+        if soonest
+            .as_ref()
+            .is_none_or(|s| held.pause.until < s.pause.until)
+        {
+            soonest = Some(held);
+        }
+    }
+    soonest
+}
+
 /// Why no ticket starts on the account `id` at `now`, if none does: one of its windows (5 h,
 /// weekly) used `threshold` percent or more until its end, unless "Reprendre maintenant" lifted
 /// it, or its pause after a usage limit with no resume planned. When several hold, the one that
@@ -2316,6 +2375,141 @@ mod tests {
         assert_eq!(
             super::autopilot_pause(&none, &accounts, 95, &free, &lone, NOW),
             None
+        );
+    }
+
+    #[test]
+    fn an_account_is_held_by_a_window_a_usage_limit_or_an_agent_waiting_for_its_reset() {
+        let free = Hold::default();
+        let usage = [
+            account("principal", 100.0, NOW + 9_000),
+            account("pro", 20.0, NOW + 9_000),
+        ];
+        let held = |id: &str, hold: &Hold, waiting: &BTreeMap<String, i64>| {
+            super::account_hold(&usage, id, 95, hold, waiting, NOW)
+        };
+        // A window over the threshold, until its end (and the margin): not by an agent.
+        let window = held("principal", &free, &no_waiting()).unwrap();
+        assert_eq!(
+            (window.pause.reason, window.pause.pct, window.pause.until),
+            (
+                PauseReason::FiveHour,
+                Some(100.0),
+                NOW + 9_000 + RESUME_MARGIN_MS
+            )
+        );
+        assert!(!window.by_agent);
+        assert!(window.pause.accounts.is_empty());
+        // Another account under it, and read: free.
+        assert_eq!(held("pro", &free, &no_waiting()), None);
+        // An account no reading is known of is free.
+        assert_eq!(held("team", &free, &no_waiting()), None);
+        // A usage limit with no resume planned, on the account alone.
+        let mut limit = Hold::default();
+        limit.limit("pro", NOW + LIMIT_PAUSE_MS);
+        let met = held("pro", &limit, &no_waiting()).unwrap();
+        assert_eq!(
+            (
+                met.pause.reason,
+                met.pause.pct,
+                met.pause.until,
+                met.by_agent
+            ),
+            (PauseReason::Limit, None, NOW + LIMIT_PAUSE_MS, false)
+        );
+        assert_eq!(
+            held("principal", &limit, &no_waiting()).map(|h| h.pause.reason),
+            Some(PauseReason::FiveHour)
+        );
+        // An agent of the account waiting for its reset holds it back, until it resumes.
+        let waiting = BTreeMap::from([("pro".to_string(), NOW + 7_000)]);
+        let agent = held("pro", &free, &waiting).unwrap();
+        assert_eq!(
+            (agent.pause.reason, agent.pause.until, agent.by_agent),
+            (PauseReason::Limit, NOW + 7_000, true)
+        );
+        // The agent of another account does not.
+        assert_eq!(held("team", &free, &waiting), None);
+        // Held by both: the later end says what is waited for.
+        let later = BTreeMap::from([("principal".to_string(), NOW + 50_000)]);
+        let both = held("principal", &free, &later).unwrap();
+        assert_eq!((both.pause.until, both.by_agent), (NOW + 50_000, true));
+        let sooner = BTreeMap::from([("principal".to_string(), NOW + 1_000)]);
+        let both = held("principal", &free, &sooner).unwrap();
+        assert_eq!(
+            (both.pause.until, both.by_agent),
+            (NOW + 9_000 + RESUME_MARGIN_MS, false)
+        );
+        // An agent's resume already past still holds, until it has resumed (as the scheduler has it).
+        let past = BTreeMap::from([("pro".to_string(), NOW - 1_000)]);
+        assert!(held("pro", &free, &past).is_some());
+    }
+
+    #[test]
+    fn a_ticket_is_held_only_when_every_account_it_may_go_to_is_and_until_the_first_is_free() {
+        let free = Hold::default();
+        let usage = [
+            account("principal", 100.0, NOW + 9_000),
+            account("pro", 97.0, NOW + 5_000),
+            account("team", 20.0, NOW + 5_000),
+        ];
+        let held = |accounts: &[&str], waiting: &BTreeMap<String, i64>| {
+            super::project_hold(&usage, &ids(accounts), 95, &free, waiting, NOW)
+        };
+        // One account is free: nothing holds, wherever the others stand.
+        assert_eq!(held(&["principal", "pro", "team"], &no_waiting()), None);
+        assert_eq!(held(&["team"], &no_waiting()), None);
+        // Every one held: the first to be free again says why.
+        let every = held(&["principal", "pro"], &no_waiting()).unwrap();
+        assert_eq!(
+            (every.pause.reason, every.pause.pct, every.pause.until),
+            (
+                PauseReason::FiveHour,
+                Some(97.0),
+                NOW + 5_000 + RESUME_MARGIN_MS
+            )
+        );
+        assert!(!every.by_agent);
+        // A project that prefers an account waits for it alone.
+        let only = held(&["principal"], &no_waiting()).unwrap();
+        assert_eq!(only.pause.until, NOW + 9_000 + RESUME_MARGIN_MS);
+        // An agent waiting for its reset holds its account too, with no window to tell.
+        let waiting = BTreeMap::from([("team".to_string(), NOW + 3_000)]);
+        let by_agent = held(&["pro", "team"], &waiting).unwrap();
+        assert_eq!(
+            (
+                by_agent.pause.reason,
+                by_agent.pause.until,
+                by_agent.by_agent
+            ),
+            (PauseReason::Limit, NOW + 3_000, true)
+        );
+        // The ones that are free are no more: the project is free as the first window ends.
+        assert_eq!(
+            super::project_hold(
+                &usage,
+                &ids(&["principal", "pro"]),
+                95,
+                &free,
+                &no_waiting(),
+                NOW + 5_000 + RESUME_MARGIN_MS
+            ),
+            None
+        );
+        // No account to go to, nothing to be held by.
+        assert_eq!(held(&[], &no_waiting()), None);
+        // The same as the autopilot's pause when a window holds every account.
+        assert_eq!(
+            held(&["principal", "pro"], &no_waiting()).map(|h| (h.pause.reason, h.pause.until)),
+            super::autopilot_pause(
+                &usage,
+                &ids(&["principal", "pro"]),
+                95,
+                &free,
+                &no_waiting(),
+                NOW
+            )
+            .map(|p| (p.reason, p.until))
         );
     }
 

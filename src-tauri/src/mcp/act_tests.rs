@@ -9,7 +9,8 @@ use super::tools_tests::{
 };
 use crate::accounts::PRINCIPAL;
 use crate::board::clock;
-use crate::core_tests::{harness, Harness};
+use crate::core::RESUME_MARGIN_MS;
+use crate::core_tests::{agent_on, harness, Harness};
 use crate::model::*;
 use crate::tickets::TicketDraft;
 use crate::usage::Reading;
@@ -1429,5 +1430,271 @@ async fn an_agent_acts_on_its_own_project_alone_and_reads_the_others() {
     )
     .await;
     outside.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+// ---------- the accounts: held per account, not for all ----------
+
+/// A second account, Pro, with a folder of its own (the fake `claude` is launched with it). Not
+/// through `save_settings`: it looks again at whether the server is wanted, as saving a project's
+/// settings (`prefer`) does: so the server is wanted.
+fn with_pro(h: &Harness) {
+    let dir = h.dir.join("claude-pro");
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut s = h.core.settings.write();
+    s.mcp_enabled = true;
+    s.accounts.push(Account {
+        id: "pro".into(),
+        name: "Pro".into(),
+        config_dir: dir.to_string_lossy().to_string(),
+        ..Default::default()
+    });
+}
+
+/// The account's 5-hour window used `pct` percent, until `end`.
+fn window_used(h: &Harness, account: &str, pct: f64, end: i64) {
+    h.core.record_usage(
+        account,
+        Reading::Windows((
+            Some(RateWindow {
+                pct,
+                resets_at: Some(end),
+            }),
+            None,
+        )),
+    );
+}
+
+/// The account's 5-hour window used up, until `end`: it holds back what spends its quota.
+fn used_up(h: &Harness, account: &str, end: i64) {
+    window_used(h, account, 100.0, end);
+}
+
+/// The project asks for `account` (empty: any).
+fn prefer(h: &Harness, p: &Project, account: &str) {
+    let mut project = h.core.project(&p.id).unwrap();
+    project.account = account.into();
+    h.core.update_project(project).unwrap();
+}
+
+#[tokio::test]
+async fn a_ticket_is_started_while_an_account_is_free_for_its_project_and_refused_when_none_is() {
+    let h = harness("mcp-act-start-accounts");
+    let p = project(&h).await;
+    with_pro(&h);
+    let a = made(&h, &p, "Un [ok]").await;
+    let b = made(&h, &p, "Deux [ok]").await;
+    let c = external(&h).await;
+    let end = h.core.pause_now() + 3_600_000;
+
+    // Principal is past the threshold, Pro is not: the ticket starts, and goes to Pro.
+    used_up(&h, "principal", end);
+    assert!(h.core.autopilot_pause().is_none());
+    let v = read(&c, "start_ticket", json!({ "ticket": a.key })).await;
+    assert_eq!(v["key"], "DEM-1");
+    h.wait("its agent to be made", |h| {
+        stored(h, &a.id).agent_id.is_some()
+    })
+    .await;
+    let agent = stored(&h, &a.id).agent_id.unwrap();
+    assert_eq!(h.agent(&agent).account, "pro");
+    h.wait("its turn to end", |h| {
+        stored(h, &a.id).column == Column::Review
+    })
+    .await;
+
+    // A project that prefers Principal has no other account to go to: refused, until Principal's
+    // window ends.
+    prefer(&h, &p, "principal");
+    let waits = refused(&c, "start_ticket", json!({ "ticket": b.key })).await;
+    assert!(
+        waits.contains("pause")
+            && waits.contains("5 h")
+            && waits.contains("100 %")
+            && waits.contains(&clock(end + RESUME_MARGIN_MS)),
+        "{waits}"
+    );
+    assert!(!stored(&h, &b.id).forced);
+    assert_eq!(entry(&h).outcome, "refused");
+    // The one that prefers Pro does not wait.
+    prefer(&h, &p, "pro");
+    assert!(h.core.project_hold(&p.id).is_none());
+    prefer(&h, &p, "");
+
+    // Pro past the threshold too, sooner: no account left, and the answer says when the first is
+    // free again.
+    used_up(&h, "pro", end - 600_000);
+    let none = refused(&c, "start_ticket", json!({ "ticket": b.key })).await;
+    assert!(
+        none.contains("pause")
+            && none.contains(&clock(end - 600_000 + RESUME_MARGIN_MS))
+            && !none.contains(&clock(end + RESUME_MARGIN_MS)),
+        "{none}"
+    );
+    assert!(!stored(&h, &b.id).forced);
+    let logged = entry(&h);
+    assert_eq!(
+        (
+            logged.tool.as_str(),
+            logged.outcome,
+            logged.message.as_deref()
+        ),
+        ("start_ticket", "refused", Some(none.as_str()))
+    );
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn an_agent_is_created_while_an_account_is_free_for_its_project_and_refused_when_none_is() {
+    let h = harness("mcp-act-create-agent-accounts");
+    let (p, _) = h.project(false).await;
+    with_pro(&h);
+    let c = external(&h).await;
+    let end = h.core.pause_now() + 3_600_000;
+
+    // Principal is past the threshold, Pro is not: the agent is made, on Pro.
+    used_up(&h, "principal", end);
+    let v = read(
+        &c,
+        "create_agent",
+        json!({ "project": "demo", "message": "Sur Pro" }),
+    )
+    .await;
+    let id = v["id"].as_str().unwrap().to_string();
+    assert_eq!(h.agent(&id).account, "pro");
+    turn_over(&h, &id).await;
+
+    // A project that prefers Principal has no other account to go to.
+    prefer(&h, &p, "principal");
+    let count = h.core.agents.read().len();
+    let waits = refused(
+        &c,
+        "create_agent",
+        json!({ "project": "demo", "message": "Sur Principal" }),
+    )
+    .await;
+    assert!(
+        waits.contains("pause")
+            && waits.contains("5 h")
+            && waits.contains(&clock(end + RESUME_MARGIN_MS)),
+        "{waits}"
+    );
+    assert_eq!(h.core.agents.read().len(), count);
+    assert_eq!(entry(&h).outcome, "refused");
+    prefer(&h, &p, "");
+
+    // Pro past the threshold too, sooner: no account left.
+    used_up(&h, "pro", end - 600_000);
+    let none = refused(
+        &c,
+        "create_agent",
+        json!({ "project": "demo", "message": "Nulle part" }),
+    )
+    .await;
+    assert!(
+        none.contains("pause") && none.contains(&clock(end - 600_000 + RESUME_MARGIN_MS)),
+        "{none}"
+    );
+    assert_eq!(h.core.agents.read().len(), count);
+
+    // An agent that waits for Pro's quota holds Pro back only: once Principal is free again, a new
+    // agent goes to it.
+    window_used(&h, "principal", 10.0, end);
+    h.core.agent(&id).unwrap().lock().meta.resume_at = Some(h.core.pause_now() + 7_200_000);
+    let v = read(
+        &c,
+        "create_agent",
+        json!({ "project": "demo", "message": "Sur Principal, libre" }),
+    )
+    .await;
+    let next = v["id"].as_str().unwrap().to_string();
+    assert_eq!(h.agent(&next).account, "principal");
+    turn_over(&h, &next).await;
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_message_is_refused_when_the_account_of_the_agent_it_goes_to_is_held_and_only_then() {
+    let h = harness("mcp-act-send-message-accounts");
+    let (p, _) = h.project(false).await;
+    with_pro(&h);
+    let main = agent_on(&h, &p, "principal").await;
+    let pro = agent_on(&h, &p, "pro").await;
+    let c = external(&h).await;
+    let end = h.core.pause_now() + 3_600_000;
+
+    // Principal is past the threshold: its agent takes no message, Pro's does.
+    used_up(&h, "principal", end);
+    let prompts = h.agent(&main.id).prompts;
+    let held = refused(
+        &c,
+        "send_message",
+        json!({ "agent": main.id, "text": "Sur Principal" }),
+    )
+    .await;
+    assert!(
+        held.contains("pause")
+            && held.contains("5 h")
+            && held.contains(&clock(end + RESUME_MARGIN_MS))
+            && held.contains("« Principal »")
+            && held.contains(&main.name),
+        "{held}"
+    );
+    assert_eq!(h.agent(&main.id).prompts, prompts);
+    assert_eq!(entry(&h).outcome, "refused");
+    let v = read(
+        &c,
+        "send_message",
+        json!({ "agent": pro.id, "text": "Sur Pro" }),
+    )
+    .await;
+    assert_eq!(v["id"], pro.id.as_str());
+    turn_over(&h, &pro.id).await;
+
+    // A usage limit met on Pro: its agent waits, Principal's goes on once it is free again.
+    window_used(&h, "principal", 10.0, end);
+    h.core.pause_after_limit("pro");
+    let limited = refused(
+        &c,
+        "send_message",
+        json!({ "agent": pro.id, "text": "Encore" }),
+    )
+    .await;
+    assert!(
+        limited.contains("limite d’usage") && limited.contains("« Pro »"),
+        "{limited}"
+    );
+    read(
+        &c,
+        "send_message",
+        json!({ "agent": main.id, "text": "Sur Principal, libre" }),
+    )
+    .await;
+    turn_over(&h, &main.id).await;
+    h.core.autopilot_resume();
+
+    // An agent that waits for its quota holds its own account back, not the other.
+    let resume = h.core.pause_now() + 7_200_000;
+    h.core.agent(&pro.id).unwrap().lock().meta.resume_at = Some(resume);
+    let waiting = refused(
+        &c,
+        "send_message",
+        json!({ "agent": pro.id, "text": "Attends" }),
+    )
+    .await;
+    assert!(
+        waiting.contains("quota") && waiting.contains(&clock(resume)),
+        "{waiting}"
+    );
+    read(
+        &c,
+        "send_message",
+        json!({ "agent": main.id, "text": "Toujours libre" }),
+    )
+    .await;
+    turn_over(&h, &main.id).await;
+    c.cancel().await.unwrap();
     h.core.mcp.stop();
 }
