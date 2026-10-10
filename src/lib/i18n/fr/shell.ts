@@ -97,12 +97,6 @@ export default {
     procs: '{instances} Claude · {memory} · {cpu} CPU',
     /** One line of the tooltip: `{name}`: the agent; `{memory}` and `{cpu}`: the amounts. */
     procRow: '{name} : {memory} · {cpu}',
-    session: 'Session 5 h',
-    week: 'Hebdo',
-    resetsAt: 'Réinitialisation : {date}',
-    sessionUnavailable: 'Quota de session indisponible',
-    weekUnavailable: 'Quota hebdomadaire indisponible',
-    reset: 'reset {countdown}',
     today: "Aujourd'hui",
     /** The branch against its remote. */
     sync: {

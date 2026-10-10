@@ -1031,7 +1031,7 @@ pub struct UsageSnapshot {
     /// The current account's windows: what the status bar shows and the autopilot goes by.
     pub five_hour: Option<RateWindow>,
     pub seven_day: Option<RateWindow>,
-    /// What the turns cost today, on every account.
+    /// What the turns cost today, on every account (also those the settings no longer list).
     pub today_cost: f64,
     /// When the current account's windows were last read, ms since epoch.
     pub updated_at: i64,
@@ -1052,7 +1052,7 @@ pub struct AccountUsage {
     pub connected: bool,
     /// Why its quota is not read (not signed in, sign-in expired), in the interface's language.
     pub reason: Option<String>,
-    /// What its turns cost today (0 until the statistics are kept by account).
+    /// What its turns cost today (`UsageSnapshot::set_today`).
     pub today_cost: f64,
     /// When its windows were last read, ms since epoch (0: not in this run).
     pub updated_at: i64,

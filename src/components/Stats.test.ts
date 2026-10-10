@@ -2,7 +2,8 @@ import { render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { setLang } from '../lib/i18n';
-import type { AgentShare, StatsView, TicketShare } from '../lib/types';
+import { app } from '../lib/state.svelte';
+import type { Account, AccountShare, AgentShare, StatsView, TicketShare } from '../lib/types';
 import { fakeBackend, project, resetApp } from '../test/ipc';
 import Stats from './Stats.svelte';
 
@@ -25,6 +26,8 @@ const view = (range: string): StatsView => ({
   byModel: [{ key: 'claude-opus-5-5', tokens: 74_500, cost: 2 }],
   byAgent: [],
   byTicket: [],
+  byAccount: [],
+  accounts: ['principal'],
 });
 
 const agentShare = (i: number, over: Partial<AgentShare> = {}): AgentShare => ({
@@ -243,6 +246,212 @@ describe('Stats by agent and by ticket', () => {
     lang = 'en';
     setLang('en');
     expect(await screen.findByText('Sep 27')).toBeInTheDocument();
+  });
+});
+
+const MAIN: Account = { id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true };
+const PRO: Account = { id: 'pro', name: 'Pro', configDir: 'C:\\claude\\pro', claudePath: '', active: true };
+
+const accountShare = (account: string, over: Partial<AccountShare> = {}): AccountShare => ({
+  account,
+  tokens: 1000,
+  cost: 1,
+  turns: 3,
+  agents: 2,
+  ...over,
+});
+
+describe('Stats by account', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    resetApp({ projects: [project()] });
+    app.settings.accounts = [MAIN, PRO];
+  });
+
+  /** Both accounts over the period: what the backend gives whichever one the view is for. */
+  const together = (a: any): StatsView => ({
+    ...view(a.range),
+    accounts: ['principal', 'pro'],
+    byAccount: [
+      accountShare('principal', { tokens: 60_000, cost: 1.5, turns: 12, agents: 3 }),
+      accountShare('pro', { tokens: 14_500, cost: 0.5, turns: 4, agents: 1 }),
+    ],
+  });
+
+  /** The figures of the account asked for, the accounts side by side as ever. */
+  const filtered = (a: any): StatsView =>
+    a.account === 'pro'
+      ? {
+          ...together(a),
+          tokens: 33_300,
+          cost: 0.5,
+          byProject: [{ key: 'p1', tokens: 33_300, cost: 0.5 }],
+          byModel: [{ key: 'claude-sonnet-5', tokens: 33_300, cost: 0.5 }],
+        }
+      : together(a);
+
+  const lines = (name: string) =>
+    within(screen.getByRole('table', { name }))
+      .getAllByRole('row')
+      .slice(1)
+      .map((r) =>
+        within(r)
+          .getAllByRole('cell')
+          .map((c) => c.textContent),
+      );
+
+  const picker = () => screen.findByRole('combobox', { name: 'Compte' });
+
+  it('offers every account and each one, every account being the choice until another is made', async () => {
+    const backend = fakeBackend({ stats: together });
+    render(Stats);
+    const select = await picker();
+    expect(
+      within(select)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual(['Tous les comptes', 'Principal', 'Pro']);
+    expect(select).toHaveValue('');
+    await screen.findAllByText('74,5 k');
+    expect(backend.called('stats').at(-1)?.args).toEqual({ range: 'day', account: null });
+  });
+
+  it('asks for the account chosen with the period, and for every account again when asked to', async () => {
+    const backend = fakeBackend({ stats: together });
+    render(Stats);
+    const select = await picker();
+    await userEvent.selectOptions(select, 'Pro');
+    await waitFor(() => expect(backend.called('stats').at(-1)?.args).toEqual({ range: 'day', account: 'pro' }));
+    // The period changes, the account stays.
+    await userEvent.click(screen.getByRole('button', { name: 'Mois' }));
+    await waitFor(() => expect(backend.called('stats').at(-1)?.args).toEqual({ range: 'month', account: 'pro' }));
+    await userEvent.selectOptions(select, 'Tous les comptes');
+    await waitFor(() => expect(backend.called('stats').at(-1)?.args).toEqual({ range: 'month', account: null }));
+  });
+
+  it('shows the figures of the account chosen', async () => {
+    fakeBackend({ stats: filtered });
+    render(Stats);
+    await userEvent.selectOptions(await picker(), 'Pro');
+    await screen.findAllByText('33,3 k');
+    const kpis = within(document.querySelector<HTMLElement>('.kpis')!);
+    expect(kpis.getByText('33,3 k')).toBeInTheDocument();
+    expect(within(screen.getByText('Coût global').parentElement!).getByText(/^0,50/)).toBeInTheDocument();
+    expect(screen.queryByText('74,5 k')).not.toBeInTheDocument();
+  });
+
+  it('puts the accounts side by side in « Par compte », cost, tokens, turns and agents, whichever account is chosen', async () => {
+    fakeBackend({ stats: filtered });
+    render(Stats);
+    await screen.findByRole('table', { name: 'Par compte' });
+    const head = within(screen.getByRole('table', { name: 'Par compte' }))
+      .getAllByRole('columnheader')
+      .map((h) => h.textContent);
+    expect(head).toEqual(['Compte', 'Tokens', 'Coût', 'Tours', 'Agents']);
+    const side = [
+      ['Principal', '60,0 k', '1,50\u00a0$', '12', '3'],
+      ['Pro', '14,5 k', '0,50\u00a0$', '4', '1'],
+    ];
+    expect(lines('Par compte')).toEqual(side);
+    await userEvent.selectOptions(await picker(), 'Pro');
+    await screen.findAllByText('33,3 k');
+    expect(lines('Par compte')).toEqual(side);
+    // The account the other views are for is marked.
+    const rows = within(screen.getByRole('table', { name: 'Par compte' }))
+      .getAllByRole('row')
+      .slice(1);
+    expect(rows.map((r) => r.getAttribute('aria-current'))).toEqual([null, 'true']);
+  });
+
+  it('says so when no account ran a turn in the period', async () => {
+    fakeBackend({ stats: (a: any) => ({ ...together(a), byAccount: [] }) });
+    render(Stats);
+    await screen.findAllByText('74,5 k');
+    expect(screen.queryByRole('table', { name: 'Par compte' })).not.toBeInTheDocument();
+    expect(screen.getByText('Par compte')).toBeInTheDocument();
+    // The agents' section, and now the accounts', hold nothing.
+    expect(screen.getAllByText('Aucune donnée sur la période.')).toHaveLength(2);
+  });
+
+  it('shows neither the choice nor « Par compte » with a single account', async () => {
+    app.settings.accounts = [MAIN];
+    fakeBackend({ stats: (a: any) => ({ ...view(a.range), accounts: ['principal'], byAccount: [accountShare('principal')] }) });
+    render(Stats);
+    await screen.findAllByText('74,5 k');
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    expect(screen.queryByText('Par compte')).not.toBeInTheDocument();
+    expect(screen.queryByText('Tous les comptes')).not.toBeInTheDocument();
+  });
+
+  it('shows them for the turns of several accounts when the settings list one, naming the one that is gone', async () => {
+    app.settings.accounts = [MAIN];
+    fakeBackend({
+      stats: (a: any) => ({
+        ...view(a.range),
+        accounts: ['ancien', 'principal'],
+        byAccount: [accountShare('principal', { cost: 2 }), accountShare('ancien', { cost: 1 })],
+      }),
+    });
+    render(Stats);
+    const select = await picker();
+    expect(
+      within(select)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual(['Tous les comptes', 'Principal', 'Compte supprimé (ancien)']);
+    await screen.findByRole('table', { name: 'Par compte' });
+    expect(lines('Par compte').map((l) => l[0])).toEqual(['Principal', 'Compte supprimé (ancien)']);
+  });
+
+  it('writes it in English, Principal being Main while it keeps its name', async () => {
+    fakeBackend({ stats: together });
+    setLang('en');
+    render(Stats);
+    const select = await screen.findByRole('combobox', { name: 'Account' });
+    expect(
+      within(select)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual(['All accounts', 'Main', 'Pro']);
+    await screen.findByRole('table', { name: 'By account' });
+    const head = within(screen.getByRole('table', { name: 'By account' })).getAllByRole('columnheader');
+    expect(head.map((h) => h.textContent)).toEqual(['Account', 'Tokens', 'Cost', 'Turns', 'Agents']);
+    expect(lines('By account')[0]).toEqual(['Main', '60.0k', '$1.50', '12', '3']);
+  });
+
+  it('reads every account again when the one chosen cannot be any more', async () => {
+    let gone = false;
+    const backend = fakeBackend({
+      stats: (a: any) => (gone ? { ...view(a.range), accounts: ['principal'], byAccount: [accountShare('principal')] } : together(a)),
+    });
+    render(Stats);
+    await userEvent.selectOptions(await picker(), 'Pro');
+    await waitFor(() => expect(backend.called('stats').at(-1)?.args.account).toBe('pro'));
+    // Pro is removed, its history with it; the statistics are read again at the next turn.
+    gone = true;
+    app.settings.accounts = [MAIN];
+    app.usage.todayCost = 5;
+    await waitFor(() => expect(backend.called('stats').at(-1)?.args.account).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('combobox')).not.toBeInTheDocument());
+  });
+
+  it('shows the answer to the last question only', async () => {
+    let answerPro: (v: StatsView) => void = () => {};
+    const backend = fakeBackend({
+      stats: (a: any) => (a.account === 'pro' ? new Promise<StatsView>((resolve) => (answerPro = resolve)) : together(a)),
+    });
+    render(Stats);
+    const select = await picker();
+    await screen.findAllByText('74,5 k');
+    await userEvent.selectOptions(select, 'Pro');
+    await waitFor(() => expect(backend.called('stats').at(-1)?.args.account).toBe('pro'));
+    // Pro's answer is late: every account was asked for in the meantime.
+    await userEvent.selectOptions(select, 'Tous les comptes');
+    await waitFor(() => expect(backend.called('stats').at(-1)?.args.account).toBeNull());
+    answerPro(filtered({ range: 'day', account: 'pro' }));
+    await new Promise((r) => setTimeout(r, 40));
+    expect(screen.queryByText('33,3 k')).not.toBeInTheDocument();
+    expect(screen.getAllByText('74,5 k').length).toBeGreaterThan(0);
   });
 });
 

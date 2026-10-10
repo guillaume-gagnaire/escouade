@@ -1,10 +1,11 @@
-import { render, screen, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { tick } from 'svelte';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { setLang } from '../lib/i18n';
 import { menu } from '../lib/menu.svelte';
 import { app } from '../lib/state.svelte';
+import type { Account, AccountUsage, RateWindow, Settings } from '../lib/types';
 import { agent, branchInfo, fakeBackend, gitInfo, resetApp } from '../test/ipc';
 import StatusBar from './StatusBar.svelte';
 
@@ -59,11 +60,12 @@ describe('StatusBar', () => {
       current: 'principal',
     };
     render(StatusBar);
-    const week = screen.getByText(/Hebdo/).closest('.it')!;
-    expect(week).toHaveTextContent('38 %');
-    expect(week).toHaveTextContent('reset 2j 5h');
-    // The date of the reset, in full, without seconds: the day depends on the time zone of the machine.
-    expect(week.getAttribute('title')).toMatch(/^Réinitialisation : (29|30) septembre 2026 à \d{2}:\d{2}$/);
+    expect(screen.getByText('7j')).toBeInTheDocument();
+    expect(screen.getByText('reset 2j 5h')).toBeInTheDocument();
+    // The value of the bar, and its tooltip: the day depends on the time zone of the machine.
+    const week = screen.getByRole('meter', { name: 'Quota sur 7 jours' });
+    expect(week).toHaveAttribute('aria-valuenow', '38');
+    expect(week.getAttribute('aria-valuetext')).toMatch(/^38 % · remise à zéro le (29|30)\/09 à \d{2}:\d{2}$/);
   });
 
   it('counts active, waiting and finished agents (archived excluded)', () => {
@@ -85,9 +87,13 @@ describe('StatusBar', () => {
       current: 'principal',
     };
     render(StatusBar);
-    expect(screen.getByText('62 %')).toBeInTheDocument();
+    expect(screen.getByText('5h')).toBeInTheDocument();
     expect(screen.getByText('reset 1h48')).toBeInTheDocument();
-    expect(screen.getByText('38 %')).toBeInTheDocument();
+    expect(screen.getByRole('meter', { name: 'Quota sur 5 heures' })).toHaveAttribute('aria-valuenow', '62');
+    expect(screen.getByRole('meter', { name: 'Quota sur 7 jours' })).toHaveAttribute('aria-valuenow', '38');
+    // The percentage is not written any more: the tooltip has it.
+    expect(screen.queryByText('62 %')).not.toBeInTheDocument();
+    expect(screen.queryByText('38 %')).not.toBeInTheDocument();
     expect(screen.getByText(/4,12/)).toBeInTheDocument();
   });
 
@@ -330,22 +336,23 @@ describe('StatusBar in English', () => {
       'Go to the next agent that is waiting or needs a look (Ctrl+J)',
     );
     expect(screen.getByText('1 done')).toBeInTheDocument();
-    const session = screen.getByText(/5-hour session/).closest('.it')!;
-    expect(session).toHaveTextContent('62%');
-    expect(session).toHaveTextContent('resets in 1h48');
+    expect(screen.getByText('5h')).toBeInTheDocument();
+    expect(screen.getByText('W')).toBeInTheDocument();
+    expect(screen.getByText('reset 1h48')).toBeInTheDocument();
+    expect(screen.getByText('reset 2d 5h')).toBeInTheDocument();
+    const session = screen.getByRole('meter', { name: '5-hour quota' });
+    expect(session).toHaveAttribute('aria-valuenow', '62');
     // A date, in the language: the day depends on the time zone of the machine.
-    expect(session.getAttribute('title')).toMatch(/^Resets: September 2[78], 2026 at \d{1,2}:\d{2}\s[AP]M$/);
-    const week = screen.getByText(/Weekly/).closest('.it')!;
-    expect(week).toHaveTextContent('38%');
-    expect(week).toHaveTextContent('resets in 2d 5h');
+    expect(session.getAttribute('aria-valuetext')).toMatch(/^62% · resets on 09\/2[78] at \d{1,2}:\d{2}\s[AP]M$/);
+    expect(screen.getByRole('meter', { name: '7-day quota' })).toHaveAttribute('aria-valuenow', '38');
     expect(screen.getByText(/Today/)).toHaveTextContent('Today $4.12');
   });
 
   it('says when a quota is unknown', () => {
     fakeBackend();
     render(StatusBar);
-    expect(screen.getByText(/5-hour session/).closest('.it')).toHaveAttribute('title', 'Session quota unavailable');
-    expect(screen.getByText(/Weekly/).closest('.it')).toHaveAttribute('title', 'Weekly quota unavailable');
+    expect(screen.getByRole('meter', { name: '5-hour quota' })).toHaveAttribute('aria-valuetext', 'Quota unavailable');
+    expect(screen.getByRole('meter', { name: '7-day quota' })).toHaveAttribute('aria-valuetext', 'Quota unavailable');
   });
 
   it('writes the Claude processes with their sizes in English, each agent in the tooltip', () => {
@@ -427,5 +434,237 @@ describe('StatusBar in English', () => {
     app.update = { version: '1.6.0', notes: '', ready: false };
     await tick();
     expect(screen.getByText('Update 1.6.0…')).toBeInTheDocument();
+  });
+});
+
+describe('StatusBar quotas of the accounts', () => {
+  const PRINCIPAL: Account = { id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true };
+  const PRO: Account = { id: 'pro', name: 'Pro', configDir: 'C:\\claude\\pro', claudePath: '', active: true };
+  const NOW = new Date(2026, 9, 10, 14, 59).getTime();
+  const win = (pct: number, hours: number): RateWindow => ({ pct, resetsAt: NOW + hours * 3_600_000 });
+  const read = (id: string, over: Partial<AccountUsage> = {}): AccountUsage => ({
+    id,
+    fiveHour: null,
+    sevenDay: null,
+    connected: true,
+    reason: null,
+    todayCost: 0,
+    updatedAt: 1,
+    ...over,
+  });
+  const two = () => {
+    app.settings.accounts = [PRINCIPAL, PRO];
+    app.settings.quotaPause = 90;
+    // Pro is the current account: the bars are its windows, whatever the other account's are.
+    app.usage = {
+      fiveHour: win(42, 3.0167),
+      sevenDay: win(12, 108),
+      todayCost: 4.12,
+      updatedAt: 1,
+      current: 'pro',
+      accounts: [
+        read('principal', { fiveHour: win(95, 1), sevenDay: win(30, 100) }),
+        read('pro', { fiveHour: win(42, 3.0167), sevenDay: win(12, 108) }),
+      ],
+    };
+  };
+  const group = () => screen.getByRole('button', { name: 'Quotas par compte (compte en cours : Pro)' });
+  const panel = () => screen.queryByRole('dialog', { name: 'Quotas des comptes Claude' });
+
+  beforeEach(() => {
+    resetApp();
+    fakeBackend();
+    menu.close();
+    app.now = NOW;
+    app.usage = { ...app.usage, fiveHour: win(42, 3.0167), sevenDay: win(12, 108), todayCost: 4.12 };
+  });
+
+  it('is not a button with a single account, and the account is not named: the bars are in the tab order', async () => {
+    render(StatusBar);
+    expect(screen.queryByRole('button', { name: /Quotas par compte/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('Principal')).not.toBeInTheDocument();
+    expect(screen.queryByText('·')).not.toBeInTheDocument();
+    const [five, week] = screen.getAllByRole('meter');
+    expect(five).toHaveAttribute('tabindex', '0');
+    expect(week).toHaveAttribute('tabindex', '0');
+    // Clicking it does nothing.
+    await userEvent.click(screen.getByText('reset 3h01'));
+    expect(panel()).not.toBeInTheDocument();
+  });
+
+  it('is there before the settings are, as the window is: no account to compare yet', () => {
+    app.settings = {} as Settings;
+    render(StatusBar);
+    expect(screen.getAllByRole('meter')).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: /Quotas par compte/ })).not.toBeInTheDocument();
+  });
+
+  it('shows the tooltip of a bar when it has the focus, with a single account', async () => {
+    render(StatusBar);
+    screen.getByRole('meter', { name: 'Quota sur 5 heures' }).focus();
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('42 % · remise à zéro le 10/10 à 18:00');
+  });
+
+  it('puts the name of the current account in front, and makes the whole group a button, with several accounts', () => {
+    two();
+    render(StatusBar);
+    expect(group()).toHaveTextContent(/^Pro\s*·\s*5h/);
+    expect(group()).toHaveTextContent('reset 3h01');
+    expect(group()).toHaveTextContent('7j');
+    expect(group()).toHaveTextContent('reset 4j 12h');
+    expect(group()).toHaveAttribute('aria-expanded', 'false');
+    expect(group()).toHaveAttribute('aria-haspopup', 'dialog');
+    expect(group().getAttribute('aria-controls')).toBeTruthy();
+    // The two bars are the current account's; a button around them takes the focus instead of them.
+    const meters = within(group()).getAllByRole('meter');
+    expect(meters.map((m) => m.getAttribute('aria-valuenow'))).toEqual(['42', '12']);
+    expect(meters.every((m) => !m.hasAttribute('tabindex'))).toBe(true);
+  });
+
+  it('shows the tooltip of a bar when the pointer is over it, in the button too', async () => {
+    two();
+    render(StatusBar);
+    await userEvent.hover(within(group()).getByRole('meter', { name: 'Quota sur 7 jours' }));
+    expect(screen.getByRole('tooltip')).toHaveTextContent(/^12 % · remise à zéro le \d{2}\/\d{2} à \d{2}:\d{2}$/);
+    await userEvent.unhover(within(group()).getByRole('meter', { name: 'Quota sur 7 jours' }));
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+  });
+
+  it('names the current account as it follows the quota: another account takes the front when it becomes the current one', async () => {
+    two();
+    render(StatusBar);
+    app.usage = { ...app.usage, current: 'principal', fiveHour: win(95, 1), sevenDay: win(30, 100) };
+    await tick();
+    const button = screen.getByRole('button', { name: 'Quotas par compte (compte en cours : Principal)' });
+    expect(button).toHaveTextContent(/^Principal\s*·\s*5h/);
+    expect(
+      within(button)
+        .getAllByRole('meter')
+        .map((m) => m.getAttribute('aria-valuenow')),
+    ).toEqual(['95', '30']);
+    expect(within(button).getAllByRole('meter')[0]).toHaveClass('warn');
+  });
+
+  it('opens the panel of the accounts over the bar on a click, with the focus in it', async () => {
+    two();
+    render(StatusBar);
+    expect(panel()).not.toBeInTheDocument();
+    await userEvent.click(group());
+    const dialog = panel()!;
+    expect(dialog).toBeInTheDocument();
+    expect(dialog).toHaveFocus();
+    expect(group()).toHaveAttribute('aria-expanded', 'true');
+    expect(group().getAttribute('aria-controls')).toBe(dialog.id);
+    expect(
+      within(dialog)
+        .getAllByRole('group')
+        .map((g) => g.getAttribute('aria-label')),
+    ).toEqual(['Pro', 'Principal']);
+    // Every account's windows, with the percentages written; the one past the threshold signalled.
+    expect(within(dialog).getByRole('group', { name: 'Principal' })).toHaveTextContent('95 %');
+    expect(within(dialog).getByRole('group', { name: 'Principal' })).toHaveTextContent('au-delà du seuil de pause');
+    expect(within(dialog).getByRole('group', { name: 'Pro' })).toHaveTextContent('en cours');
+  });
+
+  it('opens with the keyboard', async () => {
+    two();
+    render(StatusBar);
+    group().focus();
+    await userEvent.keyboard('{Enter}');
+    expect(panel()).toHaveFocus();
+  });
+
+  it('closes on Escape and puts the focus back on the button', async () => {
+    two();
+    render(StatusBar);
+    await userEvent.click(group());
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(panel()).not.toBeInTheDocument());
+    expect(group()).toHaveAttribute('aria-expanded', 'false');
+    expect(group()).toHaveFocus();
+  });
+
+  it('puts the focus back on the button even when the click that opened the panel did not focus it, as in Safari', async () => {
+    two();
+    render(StatusBar);
+    // A click that leaves the focus where it was: nothing for the panel to restore, the button is where it goes.
+    await fireEvent.click(group());
+    expect(group()).not.toHaveFocus();
+    expect(panel()).toHaveFocus();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(panel()).not.toBeInTheDocument());
+    expect(group()).toHaveFocus();
+  });
+
+  it('closes on a click outside it and puts the focus back on the button', async () => {
+    two();
+    const { baseElement } = render(StatusBar);
+    await userEvent.click(group());
+    // Over everything, what is under the pointer is the backdrop.
+    await userEvent.click(baseElement.querySelector('.backdrop')!);
+    await waitFor(() => expect(panel()).not.toBeInTheDocument());
+    expect(group()).toHaveAttribute('aria-expanded', 'false');
+    expect(group()).toHaveFocus();
+  });
+
+  it('closes on a new click on the group', async () => {
+    two();
+    render(StatusBar);
+    await userEvent.click(group());
+    expect(panel()).toBeInTheDocument();
+    await userEvent.click(group());
+    await waitFor(() => expect(panel()).not.toBeInTheDocument());
+    expect(group()).toHaveFocus();
+  });
+
+  it('does not let Escape reach the rest of the window while the panel is open', async () => {
+    two();
+    render(StatusBar);
+    const elsewhere = vi.fn();
+    document.addEventListener('keydown', elsewhere);
+    await userEvent.click(group());
+    await userEvent.keyboard('{Escape}');
+    document.removeEventListener('keydown', elsewhere);
+    expect(elsewhere).not.toHaveBeenCalled();
+  });
+
+  it('closes the panel when the accounts are down to one', async () => {
+    two();
+    render(StatusBar);
+    await userEvent.click(group());
+    app.settings.accounts = [PRINCIPAL];
+    await waitFor(() => expect(panel()).not.toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /Quotas par compte/ })).not.toBeInTheDocument();
+  });
+
+  it('leaves the cost of the day the total of every account', () => {
+    two();
+    render(StatusBar);
+    expect(screen.getByText(/Aujourd'hui/)).toHaveTextContent(/Aujourd'hui\s+4,12/);
+  });
+
+  it('leaves the branch button as it was', async () => {
+    two();
+    app.git = { p1: gitInfo({ upstream: 'origin/main', hasRemote: true }) };
+    render(StatusBar);
+    expect(screen.getByRole('button', { name: /⎇ main/ })).toBeInTheDocument();
+    await userEvent.click(group());
+    expect(panel()).toBeInTheDocument();
+  });
+
+  it('writes the group in English, Principal being Main', async () => {
+    setLang('en');
+    two();
+    app.usage = { ...app.usage, current: 'principal', fiveHour: win(95, 1), sevenDay: win(12, 108) };
+    render(StatusBar);
+    const button = screen.getByRole('button', { name: 'Quota by account (current account: Main)' });
+    expect(button).toHaveTextContent(/^Main\s*·\s*5h/);
+    expect(button).toHaveTextContent('W');
+    expect(button).toHaveTextContent('reset 4d 12h');
+    await userEvent.click(button);
+    const dialog = screen.getByRole('dialog', { name: 'Claude accounts quota' });
+    expect(within(dialog).getByRole('group', { name: 'Main' })).toHaveTextContent('current');
+    expect(within(dialog).getByRole('group', { name: 'Main' })).toHaveTextContent('past the pause threshold');
+    expect(within(dialog).getByRole('group', { name: 'Pro' })).not.toHaveTextContent('past the pause threshold');
   });
 });

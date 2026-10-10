@@ -135,7 +135,8 @@ export const api = {
   /** The diff from `a` to `b` (`git diff a b`), two branches or commits. */
   gitDiffRefs: (projectId: string, a: string, b: string) => invoke<string>('git_diff_refs', { projectId, a, b }),
   setRemoteControl: (id: string, enabled: boolean) => invoke<void>('set_remote_control', { id, enabled }),
-  stats: (range: string) => invoke<StatsView>('stats', { range }),
+  /** The statistics of a period: of every account (null) or of one. */
+  stats: (range: string, account: string | null = null) => invoke<StatsView>('stats', { range, account }),
   refreshUsage: () => invoke<void>('refresh_usage'),
   gitDiscard: (projectId: string, agentId: string | null, path: string) => invoke<void>('git_discard', { projectId, agentId, path }),
   /** What a direct commit of the agent's changes takes (null: the project's own checkout, its agents' worktrees apart). */

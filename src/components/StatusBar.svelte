@@ -1,13 +1,16 @@
 <script lang="ts">
   import { keyLabel } from '../lib/platform';
-  import { fAgo, fBytes, fCountdown, fDateTime, fPct } from '../lib/format';
+  import { accountName, newAgentAccount } from '../lib/accounts';
+  import { fAgo, fBytes, fPct } from '../lib/format';
   import { t } from '../lib/i18n';
   import Rich from '../lib/i18n/Rich.svelte';
   import { gitSync, syncInfo, type SyncOp } from '../lib/git-sync.svelte';
   import { api } from '../lib/ipc';
   import { estimateHint, fSpentUsd } from '../lib/spend';
   import { app } from '../lib/state.svelte';
+  import AccountsPanel from './AccountsPanel.svelte';
   import BranchPicker from './branches/BranchPicker.svelte';
+  import QuotaMeter from './QuotaMeter.svelte';
 
   const agents = $derived(Object.values(app.agents).filter((a) => !a.archived));
   const running = $derived(agents.filter((a) => a.status === 'running').length);
@@ -23,8 +26,16 @@
         .map((r) => t('shell.status.procRow', { name: app.agents[r.id]?.name ?? '?', memory: fBytes(r.memory), cpu: fPct(r.cpu) })),
     ].join('\n'),
   );
-  const five = $derived(app.usage.fiveHour);
-  const week = $derived(app.usage.sevenDay);
+  // The quota of the current account: with several, the name in front, and the whole group opens the panel of every account's.
+  // (The bar is there before the settings are: no accounts yet.)
+  const several = $derived((app.settings.accounts?.length ?? 0) > 1);
+  const current = $derived(several ? newAgentAccount(undefined) : undefined);
+  const currentName = $derived(current ? accountName(current) : '');
+  let panelOpen = $state(false);
+  // Down to one account: nothing left to compare.
+  $effect(() => {
+    if (!several) panelOpen = false;
+  });
 
   function toggleSound() {
     app.settings.sound = !app.settings.sound;
@@ -56,6 +67,7 @@
   /** The branch picker, open over the button. */
   let pickerOpen = $state(false);
   let branchButton = $state<HTMLButtonElement>();
+  let quotaButton = $state<HTMLButtonElement>();
   // Nothing to pick a branch of any more (another view, another folder): the picker goes.
   $effect(() => {
     if (!repo) pickerOpen = false;
@@ -74,6 +86,13 @@
     ].join('\n');
   });
 </script>
+
+{#snippet quotas(focusable: boolean)}
+  {#if several}<span class="v">{currentName}</span><span class="d">·</span>{/if}
+  <QuotaMeter kind="fiveHour" usage={app.usage.fiveHour} now={app.now} {focusable} />
+  <span class="vsep"></span>
+  <QuotaMeter kind="sevenDay" usage={app.usage.sevenDay} now={app.now} {focusable} />
+{/snippet}
 
 <footer class="bar mono">
   <span class="it"
@@ -102,30 +121,22 @@
     >
   {/if}
   <span class="vsep"></span>
-  <span
-    class="it"
-    title={five?.resetsAt ? t('shell.status.resetsAt', { date: fDateTime(five.resetsAt) }) : t('shell.status.sessionUnavailable')}
-  >
-    {t('shell.status.session')}
-    <span class="meter"
-      ><span style:width="{Math.min(100, five?.pct ?? 0)}%" style:background={(five?.pct ?? 0) > 80 ? 'var(--wait)' : 'var(--accent)'}
-      ></span></span
+  {#if several}
+    <!-- The panel's button: its bars are only seen here (their values are in the panel, which the keyboard opens). -->
+    <button
+      class="it link group"
+      bind:this={quotaButton}
+      aria-haspopup="dialog"
+      aria-expanded={panelOpen}
+      aria-controls="accounts-panel"
+      aria-label={t('accounts.panel.open', { name: currentName })}
+      onclick={() => (panelOpen = !panelOpen)}
     >
-    <span class="v">{five ? fPct(five.pct) : '—'}</span>
-    {#if five?.resetsAt}<span class="d">{t('shell.status.reset', { countdown: fCountdown(five.resetsAt, app.now) })}</span>{/if}
-  </span>
-  <span
-    class="it"
-    title={week?.resetsAt ? t('shell.status.resetsAt', { date: fDateTime(week.resetsAt) }) : t('shell.status.weekUnavailable')}
-  >
-    {t('shell.status.week')}
-    <span class="meter"
-      ><span style:width="{Math.min(100, week?.pct ?? 0)}%" style:background={(week?.pct ?? 0) > 80 ? 'var(--wait)' : 'var(--accent)'}
-      ></span></span
-    >
-    <span class="v">{week ? fPct(week.pct) : '—'}</span>
-    {#if week?.resetsAt}<span class="d">{t('shell.status.reset', { countdown: fCountdown(week.resetsAt, app.now) })}</span>{/if}
-  </span>
+      {@render quotas(false)}
+    </button>
+  {:else}
+    <span class="it group">{@render quotas(true)}</span>
+  {/if}
   <span class="vsep"></span>
   <span class="it" title={app.liveCost > 0 ? estimateHint() : undefined}
     >{t('shell.status.today')}
@@ -176,6 +187,10 @@
   >
 </footer>
 
+{#if panelOpen}
+  <AccountsPanel id="accounts-panel" anchor={quotaButton} onclose={() => (panelOpen = false)} />
+{/if}
+
 {#if pickerOpen && repo}
   {#key repo.projectId}
     <BranchPicker projectId={repo.projectId} anchor={branchButton} onclose={() => (pickerOpen = false)} />
@@ -221,18 +236,19 @@
     height: 14px;
     background: var(--line2);
   }
-  .meter {
-    width: 48px;
-    height: 5px;
-    border-radius: 3px;
-    background: var(--elev2);
-    overflow: hidden;
-    margin-left: 2px;
+  .group {
+    gap: 8px;
   }
-  .meter span {
-    display: block;
-    height: 100%;
-    transition: width 0.4s;
+  button.group {
+    color: inherit;
+    height: 22px;
+    padding: 0 6px;
+    margin: 0 -6px;
+    border-radius: var(--r-sm);
+  }
+  /* Lighter than the bars' track, which would otherwise melt into it. */
+  button.group:hover {
+    background: var(--elev);
   }
   .v {
     color: var(--text);

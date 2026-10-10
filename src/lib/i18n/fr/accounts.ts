@@ -84,4 +84,26 @@ export default {
   pause: {
     over: { one: 'Le compte {accounts} a passé le seuil.', other: 'Les comptes {accounts} ont passé le seuil.' },
   },
+
+  // The current account's quota in the status bar (the percentage is in a tooltip), and the panel of every account's.
+  quota: {
+    fiveHour: { label: '5h', name: 'Quota sur 5 heures' },
+    sevenDay: { label: '7j', name: 'Quota sur 7 jours' },
+    /** `{countdown}`: the time left, as `fCountdown` writes it. */
+    reset: 'reset {countdown}',
+    /** The value of a bar: `{pct}`: « 42 % »; `{date}`: « 10/10 »; `{time}`: « 18:00 ». */
+    tip: '{pct} · remise à zéro le {date} à {time}',
+    unavailable: 'Quota indisponible',
+  },
+
+  // The panel the quota group opens, above the status bar, when there are several accounts.
+  panel: {
+    /** The button that is the quota group; `{name}`: the current account. */
+    open: 'Quotas par compte (compte en cours : {name})',
+    title: 'Quotas des comptes Claude',
+    current: 'en cours',
+    over: 'au-delà du seuil de pause',
+    /** What the account's turns cost today; `{amount}`: « 1,20 $ » (« ≈ 1,20 $ » while a turn is running). */
+    today: "Aujourd'hui : {amount}",
+  },
 } as const satisfies Tree;

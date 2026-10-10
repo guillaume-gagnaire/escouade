@@ -96,12 +96,6 @@ export default defineZone('shell', {
     /** `{memory}` and `{cpu}`: the amounts, in code style. */
     procs: '{instances} Claude · {memory} · {cpu} CPU',
     procRow: '{name}: {memory} · {cpu}',
-    session: '5-hour session',
-    week: 'Weekly',
-    resetsAt: 'Resets: {date}',
-    sessionUnavailable: 'Session quota unavailable',
-    weekUnavailable: 'Weekly quota unavailable',
-    reset: 'resets in {countdown}',
     today: 'Today',
     /** The branch against its remote. */
     sync: {

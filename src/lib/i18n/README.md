@@ -83,6 +83,7 @@ Toujours `src/lib/format.ts`, jamais `toLocaleString('fr-FR')`, `> 1 ? 's' : ''`
 | `fSince(ts, now)` | 3 min, 2 h, 3 j | 3 min, 2 h, 3 days |
 | `fDate(ts)` / `fTime(ts)` | 2 octobre 2026 / 09:30 | October 2, 2026 / 9:30 AM |
 | `fDateTime(ts)` | 2 octobre 2026 à 09:30 | October 2, 2026 at 9:30 AM |
+| `fDayMonth(ts)` | 02/10 | 10/02 |
 | `fWhen(ts, now)` | à 15:00, le vendredi 2 octobre à 09:30 | at 3:00 PM, on Friday, October 2 at 9:30 AM |
 | `fBytes(n)` / `fBytes(n, 1)` | 312 Mo / 1,3 Mo | 312 MB / 1.3 MB |
 | `fList(items)` | a, b et c | a, b, and c |

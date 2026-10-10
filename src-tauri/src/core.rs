@@ -1158,7 +1158,7 @@ impl<R: Runtime> Core<R> {
             #[cfg(test)]
             clock_ahead: std::sync::atomic::AtomicI64::new(0),
         });
-        core.usage.lock().today_cost = core.stats.today_cost();
+        core.usage.lock().set_today(&core.stats.today_by_account());
         (core, rx)
     }
 
@@ -1434,7 +1434,7 @@ impl<R: Runtime> Core<R> {
     /// The statistics of a period, with the agents and tickets named. Every agent counts, archived
     /// ones too: they keep their ticket, so a ticket sent back and taken up by another agent adds
     /// up both.
-    pub fn stats_view(&self, range: &str) -> StatsView {
+    pub fn stats_view(&self, range: &str, account: Option<&str>) -> StatsView {
         let agents = self
             .agents
             .read()
@@ -1464,7 +1464,8 @@ impl<R: Runtime> Core<R> {
                 (t.id.clone(), label)
             })
             .collect();
-        self.stats.query(range, &Labels { agents, tickets })
+        self.stats
+            .query(range, account, &Labels { agents, tickets })
     }
 
     pub(crate) fn project_agents(&self, project_id: &str) -> Vec<AgentHandle> {
@@ -1559,9 +1560,10 @@ impl<R: Runtime> Core<R> {
             self.hub.emit(UiEvent::Agent { agent: v });
         }
         if !fx.turns.is_empty() {
-            self.stats.record_turns(id, project_id, &fx.turns);
+            self.stats
+                .record_turns(&self.account_of(id), id, project_id, &fx.turns);
             let mut u = self.usage.lock();
-            u.today_cost = self.stats.today_cost();
+            u.set_today(&self.stats.today_by_account());
             self.hub.emit(UiEvent::Usage { usage: u.clone() });
         }
         if let Some(windows) = fx.rate {
@@ -2276,7 +2278,7 @@ impl<R: Runtime> Core<R> {
                 first,
             )
         };
-        self.stats.record_prompt(id, &pid);
+        self.stats.record_prompt(&self.account_of(id), id, &pid);
         self.apply(id, &pid, &name, fx, Some(view));
         if first && !naming.trim().is_empty() && !naming.trim_start().starts_with('/') {
             let (c, id, naming) = (self.clone(), id.to_string(), naming.to_string());
@@ -4800,6 +4802,8 @@ impl<R: Runtime> Core<R> {
         change(&mut u);
         let now = now_ms();
         u.settle(&settings, now);
+        // The day's cost goes with every state of the quotas, for the accounts the settings now list.
+        u.set_today(&self.stats.today_by_account());
         // Told under the lock: two changes at once reach the window in the order they were made.
         self.hub.emit(UiEvent::Usage { usage: u.clone() });
         // The account new agents go to changed because the one before passed the threshold.
@@ -4842,12 +4846,10 @@ impl<R: Runtime> Core<R> {
         let read = readings
             .iter()
             .any(|(_, r)| matches!(r, usage::Reading::Windows(_)));
-        let today_cost = self.stats.today_cost();
         self.update_usage(|u| {
             for (account, reading) in readings {
                 u.record(&account, reading, now_ms());
             }
-            u.today_cost = today_cost;
         });
         if read {
             // Back under the threshold, the tickets go on at once.

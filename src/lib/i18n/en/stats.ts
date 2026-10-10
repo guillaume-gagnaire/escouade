@@ -43,6 +43,12 @@ export default defineZone('stats', {
     periodCost: 'Cost over the period',
     none: 'No tickets in this period.',
   },
+  account: {
+    label: 'Account',
+    all: 'All accounts',
+    removed: 'Deleted account ({id})',
+  },
+  byAccount: { title: 'By account', account: 'Account', tokens: 'Tokens', turns: 'Turns', agents: 'Agents' },
   showAll: 'Show all',
   showLess: 'Show less',
   shownOf: '{shown} of {total}',

@@ -694,7 +694,7 @@ export interface AccountUsage {
   connected: boolean;
   /** Why its quota is not read (not signed in, sign-in expired), in the interface's language. */
   reason: string | null;
-  /** What its turns cost today (0 until the statistics are kept by account). */
+  /** What its turns cost today. */
   todayCost: number;
   /** When its windows were last read (0: not since the app started). */
   updatedAt: number;
@@ -994,6 +994,16 @@ export interface TicketShare {
   cost: number;
 }
 
+/** What an account used over the period: its tokens and cost, the turns it ran and for how many agents. */
+export interface AccountShare {
+  /** The account's id: one the settings no longer list is possible (its turns remain). */
+  account: string;
+  tokens: number;
+  cost: number;
+  turns: number;
+  agents: number;
+}
+
 export interface StatsView {
   range: string;
   buckets: Bucket[];
@@ -1007,6 +1017,10 @@ export interface StatsView {
   byModel: Share[];
   byAgent: AgentShare[];
   byTicket: TicketShare[];
+  /** Every account side by side, dearest first, whichever account the other fields are for. */
+  byAccount: AccountShare[];
+  /** Every account that ever ran a turn (ids), whichever period or account the view is for. */
+  accounts: string[];
 }
 
 export interface FolderInfo {

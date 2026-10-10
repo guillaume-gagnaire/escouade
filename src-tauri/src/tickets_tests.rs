@@ -4959,13 +4959,13 @@ async fn the_statistics_add_up_the_agents_of_a_ticket_archived_ones_included() {
             output: 5,
             cost,
         };
-        h.core.stats.record_turns(id, &p.id, &[row]);
+        h.core.stats.record_turns("principal", id, &p.id, &[row]);
     };
     turn(&first, 1.0);
     turn(&second, 0.5);
     turn(&free, 4.0);
 
-    let v = h.core.stats_view("day");
+    let v = h.core.stats_view("day", None);
     let agents: Vec<_> = v
         .by_agent
         .iter()

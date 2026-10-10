@@ -4236,6 +4236,109 @@ async fn an_agent_on_a_second_account_goes_through_the_proxy_with_its_folder() {
     );
 }
 
+/// The turns of each account over the day, `(account, turns)`, by account.
+fn turns_by_account(h: &Harness, account: Option<&str>) -> Vec<(String, u64)> {
+    let mut turns: Vec<_> = h
+        .core
+        .stats_view("day", account)
+        .by_account
+        .into_iter()
+        .map(|a| (a.account, a.turns))
+        .collect();
+    turns.sort();
+    turns
+}
+
+#[tokio::test]
+async fn each_turn_and_prompt_is_recorded_with_the_account_the_agent_has_at_that_turn() {
+    let h = harness("accounts-stats-turns");
+    // Each agent in its worktree: its own log of launches.
+    let (p, _) = h.project(true).await;
+    second_account(&h);
+    let main = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    let pro = agent_on(&h, &p, "pro").await.id;
+    h.turn(&main, "Bonjour").await;
+    h.turn(&pro, "Bonjour").await;
+    assert_eq!(
+        turns_by_account(&h, None),
+        [("principal".to_string(), 1), ("pro".to_string(), 1)]
+    );
+    // A view for an account has its agent only, and its prompts.
+    let of_pro = h.core.stats_view("day", Some("pro"));
+    assert_eq!(
+        of_pro
+            .by_agent
+            .iter()
+            .map(|a| a.agent_id.as_str())
+            .collect::<Vec<_>>(),
+        [pro.as_str()]
+    );
+    assert_eq!(of_pro.prompts, 1);
+    assert_eq!(h.core.stats_view("day", Some("principal")).prompts, 1);
+    // Each turn counts for the account of that turn: the agent now on another one.
+    h.core.agent(&pro).unwrap().lock().meta.account = "principal".into();
+    h.turn(&pro, "Encore").await;
+    assert_eq!(
+        turns_by_account(&h, None),
+        [("principal".to_string(), 2), ("pro".to_string(), 1)]
+    );
+    assert_eq!(h.core.stats_view("day", Some("pro")).prompts, 1);
+    assert_eq!(h.core.stats_view("day", Some("principal")).prompts, 2);
+}
+
+#[tokio::test]
+async fn the_cost_of_the_day_is_told_for_each_account_and_in_total_and_kept_across_a_restart() {
+    let h = harness("accounts-stats-today");
+    let (p, _) = h.project(true).await;
+    second_account(&h);
+    let main = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    let pro = agent_on(&h, &p, "pro").await.id;
+    // Nothing spent yet: nothing told.
+    assert_eq!(h.core.usage.lock().today_cost, 0.0);
+    h.turn(&pro, "Bonjour").await;
+    {
+        let u = h.core.usage.lock();
+        assert!(u.account("pro").unwrap().today_cost > 0.0);
+        assert_eq!(u.account("principal").unwrap().today_cost, 0.0);
+    }
+    h.turn(&main, "Bonjour").await;
+    let u = h.core.usage.lock().clone();
+    let of = |id: &str| u.account(id).unwrap().today_cost;
+    assert!(of("principal") > 0.0 && of("pro") > 0.0);
+    // The total is every account's.
+    assert!((u.today_cost - of("principal") - of("pro")).abs() < 1e-9);
+    assert!((u.today_cost - h.core.stats.today_cost()).abs() < 1e-9);
+    // The window was told it.
+    let told = h
+        .events
+        .lock()
+        .iter()
+        .rev()
+        .find(|e| e["type"] == "usage")
+        .cloned()
+        .unwrap();
+    let told_of = |id: &str| {
+        told["usage"]["accounts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|a| a["id"] == id)
+            .unwrap()["todayCost"]
+            .as_f64()
+            .unwrap()
+    };
+    assert!((told_of("pro") - of("pro")).abs() < 1e-9);
+    assert!((told_of("principal") - of("principal")).abs() < 1e-9);
+    // After the app's restart, the day goes on from the statistics.
+    h.core.save_now();
+    let app = mock_app();
+    let (reloaded, _rx) = Core::load(app.handle().clone(), h.core.data.clone());
+    let r = reloaded.usage.lock().clone();
+    assert!((r.account("pro").unwrap().today_cost - of("pro")).abs() < 1e-9);
+    assert!((r.account("principal").unwrap().today_cost - of("principal")).abs() < 1e-9);
+    assert!((r.today_cost - u.today_cost).abs() < 1e-9);
+}
+
 /// The account's 5-hour window as last read, in whole percent.
 fn five_hour_pct(h: &Harness, account: &str) -> Option<f64> {
     h.core

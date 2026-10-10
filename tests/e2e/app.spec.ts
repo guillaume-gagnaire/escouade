@@ -13,8 +13,9 @@ test('a new project opens an agent that streams Claude’s reply', async ({ app 
   await expect(page.locator('footer')).toContainText('1 terminé');
   // Named from the first request (the fake CLI answers the naming call).
   await expect(page.locator('.card .name').first()).toHaveText('bonjour-fake');
-  await expect(page.locator('footer')).toContainText('Session 5 h');
-  await expect(page.locator('footer')).toContainText('12 %');
+  // The quota of the 5-hour window, as the fake CLI reports it: a meter, whose percentage is in its tooltip.
+  await expect(page.locator('footer')).toContainText('5h');
+  await expect(page.getByRole('meter', { name: 'Quota sur 5 heures' })).toHaveAttribute('aria-valuenow', '12');
 });
 
 test('the model picker names the version Claude Code runs for each model', async ({ app }) => {
