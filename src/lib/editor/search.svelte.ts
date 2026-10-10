@@ -222,9 +222,11 @@ export function pieces(m: Pick<SearchMatch, 'text' | 'offset' | 'ranges'>): Piec
     else joined.push([s, e]);
   }
   const indent = chars.findIndex((c) => !/\s/.test(c));
-  const first = joined[0]?.[0] ?? chars.length;
-  let start = Math.min(indent < 0 ? chars.length : indent, first);
-  const cut = first - start > LEAD;
+  let start = indent < 0 ? chars.length : indent;
+  // Without a match (none marked by git), there is nothing to bring into view: the line shows from its indentation.
+  const first = joined[0]?.[0];
+  if (first !== undefined) start = Math.min(start, first);
+  const cut = first !== undefined && first - start > LEAD;
   if (cut) start = first - LEAD;
   const out: Piece[] = m.offset > 0 || cut ? [{ text: '…', hit: false }] : [];
   const add = (from: number, to: number, hit: boolean) => to > from && out.push({ text: chars.slice(from, to).join(''), hit });

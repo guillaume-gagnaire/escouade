@@ -799,6 +799,17 @@ describe('EditorView search through the files', () => {
     expect(screen.queryByRole('textbox', { name: 'Rechercher' })).not.toBeInTheDocument();
   });
 
+  it('keeps both views in one column of its own, not taken for the sidebar’s (aside.side)', async () => {
+    searchBackend();
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    const { container } = render(EditorView, { project: project() });
+    await screen.findByRole('treeitem', { name: /app\.ts/ });
+    expect(container.querySelector('aside.side')).toBeNull();
+    const column = container.querySelector('aside.editor-side') as HTMLElement;
+    expect(within(column).getByRole('tree', { name: 'Fichiers' })).toBeInTheDocument();
+    expect(within(column).getByRole('textbox', { name: 'Rechercher', hidden: true })).toBeInTheDocument();
+  });
+
   it('opens the search with Ctrl+Shift+F, the selection of the code in its field when it holds on one line', async () => {
     const be = searchBackend();
     await app.openEditor({ source: 'project', path: 'src/app.ts' });
@@ -822,11 +833,16 @@ describe('EditorView search through the files', () => {
     expect(queries(be)).toHaveLength(1);
   });
 
-  it('finds the uses of the word at the cursor with Shift+F12, whole and in its case', async () => {
+  it('finds the uses of the word at the cursor with Shift+F12, whole and in its case, as written', async () => {
     const be = searchBackend();
     await app.openEditor({ source: 'project', path: 'src/app.ts' });
     const { container } = render(EditorView, { project: project() });
     const view = await shown(container, 'const');
+    // Read as an expression before: the word is then looked for as written all the same.
+    await userEvent.click(screen.getByRole('button', { name: 'Rechercher dans les fichiers' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Expression régulière' }));
+    expect(screen.getByRole('button', { name: 'Expression régulière' })).toHaveAttribute('aria-pressed', 'true');
+    view.focus();
     view.dispatch({ selection: { anchor: APP.indexOf('total') + 2 } });
     view.contentDOM.dispatchEvent(new KeyboardEvent('keydown', { key: 'F12', shiftKey: true, bubbles: true, cancelable: true }));
     await vi.waitFor(() => expect(field()).toHaveFocus());

@@ -230,12 +230,13 @@
       {/each}
     </div>
   </div>
-  {#if status}
-    <div class="foot" role="status">
+  <!-- Always there, only its words change: a screen reader tells a status's changes only once it knows it. -->
+  <div class="foot" class:idle={!status} role="status">
+    {#if status}
       <span>{status}</span>
       {#if limit}<span class="limit">{limit}</span>{/if}
-    </div>
-  {/if}
+    {/if}
+  </div>
 </div>
 
 <style>
@@ -427,6 +428,11 @@
     border-top: 1px solid var(--line);
     font-size: 11px;
     color: var(--dim);
+  }
+  /* Nothing to tell: no bar drawn, the status kept for what comes. */
+  .foot.idle {
+    padding: 0;
+    border-top: none;
   }
   .limit {
     color: var(--wait);

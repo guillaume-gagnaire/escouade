@@ -417,8 +417,9 @@
     >
   </header>
   <div class="body">
-    <!-- The left column: the files' tree or the search, both kept to find them again as they were. -->
-    <aside class="side">
+    <!-- The left column: the files' tree or the search, both kept to find them again as they were. Not `.side`, the
+         sidebar's class: one locator must not find both. -->
+    <aside class="editor-side">
       <div class="views">
         <div class="segmented" role="group" aria-label="Vue de la colonne">
           <button
@@ -622,7 +623,7 @@
     min-height: 0;
     display: flex;
   }
-  .side {
+  .editor-side {
     width: 240px;
     flex: none;
     display: flex;

@@ -277,8 +277,19 @@ describe('pieces', () => {
     expect(at('a😀b', [[1, 2]])).toBe('a[😀]b');
   });
 
-  it('shows the line without marks when git gave none', () => {
+  it('shows the line without marks when git gave none, all of it from its indentation', () => {
     expect(at('  foo()', [])).toBe('foo()');
+    // A coloured line, or an expression matching nothing but an empty string (`^`, `x*`): no match to bring into view.
+    expect(at('    const veryLongIdentifierName = computeSomething(argument);', [])).toBe(
+      'const veryLongIdentifierName = computeSomething(argument);',
+    );
+    expect(at('    const veryLongIdentifierName = computeSomething(argument);', [[4, 4]])).toBe(
+      'const veryLongIdentifierName = computeSomething(argument);',
+    );
+    // A stretch of a long line: it goes on before.
+    expect(at('  veryLongIdentifierName = computeSomething(argument);', [], 360)).toBe(
+      '…veryLongIdentifierName = computeSomething(argument);',
+    );
   });
 
   it('joins the ranges that overlap, in order, inside the text', () => {

@@ -184,12 +184,21 @@ describe('SearchPanel', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Expression régulière invalide.');
     expect(field).toHaveAttribute('aria-invalid', 'true');
     expect(field).toHaveAccessibleDescription('Expression régulière invalide.');
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
   });
 
-  it('says it is searching until the first answer comes', async () => {
+  it('says it is searching until the first answer comes, then what it found, in a status there from the start', async () => {
     const { search } = panel(null);
+    search.text = '';
+    // Always there, empty: a screen reader tells what comes in it only if it was there before.
+    const status = await vi.waitFor(() => screen.getByRole('status'));
+    expect(status).toBeEmptyDOMElement();
+    search.text = 'total';
     search.pending = true;
-    await vi.waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Recherche…'));
+    await vi.waitFor(() => expect(status).toHaveTextContent('Recherche…'));
+    search.result = FOUND;
+    search.pending = false;
+    await vi.waitFor(() => expect(status).toHaveTextContent('3 résultats dans 2 fichiers'));
+    expect(screen.getByRole('status')).toBe(status);
   });
 });
