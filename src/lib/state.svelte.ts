@@ -61,6 +61,8 @@ export type Modal =
       onCancel?: () => void;
     }
   | { kind: 'rename'; title: string; value: string; onSubmit: (v: string) => void | Promise<void> }
+  /** « Ajouter un compte… » (a new Claude account, then its sign-in), or « Se connecter… » for the account `accountId`. */
+  | { kind: 'account'; accountId?: string }
   | { kind: 'testLaunch'; agentId: string }
   | { kind: 'import'; projectId: string }
   /** The update downloaded (`app.update`), which a restart installs. */

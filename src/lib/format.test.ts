@@ -96,6 +96,14 @@ describe('paths', () => {
     expect(tildify('C:\\Users\\guill\\dev\\app')).toBe('~/dev/app');
     expect(tildify('D:\\work\\app')).toBe('D:\\work\\app');
   });
+  it('tildify shortens a home folder of macOS on macOS', () => {
+    expect(tildify('/Users/ada/.escouade/claude/pro', true)).toBe('~/.escouade/claude/pro');
+    expect(tildify('/Users/ada', true)).toBe('~');
+    expect(tildify('/Volumes/work/app', true)).toBe('/Volumes/work/app');
+    expect(tildify('C:\\Users\\ada\\app', true)).toBe('C:\\Users\\ada\\app');
+    // A folder of the drive's root on Windows.
+    expect(tildify('/Users/ada/app', false)).toBe('/Users/ada/app');
+  });
 });
 
 describe('plural', () => {

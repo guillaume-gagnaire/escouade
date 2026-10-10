@@ -344,6 +344,14 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 | connexion (d’un compte Claude) | sign-in | « Pas connecté » → “Not signed in” ; « Connexion expirée » → “Sign-in expired” |
 | relancer Claude Code (pour un compte) | run Claude Code again | « relance Claude Code pour ce compte » → “run Claude Code again for this account” |
 | compte en cours | current account | celui sur lequel partiraient les nouveaux agents |
+| Comptes Claude | Claude accounts | l’onglet des réglages |
+| Se connecter… / Connecté · … / Pas connecté | Sign in… / Signed in · … / Not signed in | un compte Claude ; « Connecté au compte ada@… » → “Signed in as ada@…” |
+| Actif / Inactif | Active / Inactive | un compte sur lequel les nouveaux agents peuvent partir, ou non |
+| Celui des réglages | The one in the settings | l’exécutable d’un compte qui n’a pas le sien |
+| Partager avec Principal | Share with Main | ce qu’un nouveau compte reprend du dossier de Principal |
+| Lier / Copier | Link / Copy | « Lier (un changement vaut pour les deux comptes) » → “Link (a change applies to both accounts)” |
+| styles de sortie | output styles | le dossier `output-styles` de Claude Code |
+| seuil de pause | pause threshold | « Pause au-delà du quota » |
 
 ## M — mcp
 

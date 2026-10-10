@@ -16,7 +16,8 @@ import type {
   WorktreeSuggestion,
 } from './types';
 
-export type SettingsTab = 'app' | 'claude' | 'notifications' | 'projects' | 'board' | 'integrations' | 'terminals' | 'network' | 'about';
+export type SettingsTab =
+  'app' | 'claude' | 'accounts' | 'notifications' | 'projects' | 'board' | 'integrations' | 'terminals' | 'network' | 'about';
 
 interface TabInfo {
   id: SettingsTab;
@@ -44,6 +45,8 @@ function tabInfo(id: SettingsTab, icon: string, scoped = false): TabInfo {
 export const SETTINGS_TABS: TabInfo[] = [
   tabInfo('app', 'Aa'),
   tabInfo('claude', '✳'),
+  // Saved at once, each change (not part of the draft).
+  tabInfo('accounts', '◎'),
   tabInfo('notifications', '♪'),
   tabInfo('projects', '▤', true),
   tabInfo('board', '▦', true),

@@ -50,6 +50,19 @@ export interface Account {
   active: boolean;
 }
 
+/** Whether a Claude account is signed in to claude.ai, as its tab shows it. */
+export interface AccountStatus {
+  /** Claude Code keeps a sign-in for it (an expired one too: it gets a new token when it runs). */
+  connected: boolean;
+  /** The email of the claude.ai account, when signed in. */
+  email: string | null;
+  /** Its configuration folder (Principal's: the app's `CLAUDE_CONFIG_DIR`, else `~/.claude`). */
+  dir: string;
+}
+
+/** How a new account shares Principal's items: linked (one change for both accounts) or copied. */
+export type ShareMode = 'link' | 'copy';
+
 /** The languages as the backend resolved them: the interface's, the system's, and that of the texts Claude writes. */
 export interface LangInfo {
   ui: Lang;

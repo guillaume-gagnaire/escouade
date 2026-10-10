@@ -1,6 +1,8 @@
 import { Channel, invoke } from '@tauri-apps/api/core';
 import type {
+  Account,
   AccountForm,
+  AccountStatus,
   AccountView,
   Agent,
   Attachment,
@@ -27,6 +29,7 @@ import type {
   SearchResult,
   Service,
   Settings,
+  ShareMode,
   ShellInfo,
   SlashCommand,
   StatesView,
@@ -47,7 +50,25 @@ export const api = {
     return invoke<InitialState>('subscribe', { channel });
   },
   setUi: (ui: UiState) => invoke<void>('set_ui', { ui }),
+  /** The settings, but for the Claude accounts (their tab changes them with the `account*` calls below). */
   saveSettings: (settings: Settings) => invoke<ShellInfo[]>('save_settings', { settings }),
+  /** The items of Principal's folder a new account may share (those it has), files first. */
+  accountShareable: () => invoke<string[]>('account_shareable'),
+  /** A new Claude account, its folder made with the items `share` of Principal's linked or copied, saved last. */
+  accountCreate: (name: string, share: string[], mode: ShareMode) => invoke<Account>('account_create', { name, share, mode }),
+  /** The account's name, `claude` and « Actif » (its folder stays its own); the accounts as they then are. */
+  accountUpdate: (account: Account) => invoke<Account[]>('account_update', { account }),
+  /** The accounts in the order of `ids`, as they then are. */
+  accountReorder: (ids: string[]) => invoke<Account[]>('account_reorder', { ids }),
+  /** The account removed, its folder left on the disk; refused while an agent not archived runs on it. */
+  accountRemove: (id: string) => invoke<Account[]>('account_remove', { id }),
+  accountStatus: (id: string) => invoke<AccountStatus>('account_status', { id }),
+  /** The account's `claude` in an interactive terminal, to sign in with (written to and killed as a terminal). */
+  accountLogin: (id: string, cols: number, rows: number, onData: (d: ArrayBuffer) => void) => {
+    const output = new Channel<ArrayBuffer>();
+    output.onmessage = onData;
+    return invoke<TermInfo>('account_login', { id, cols, rows, output });
+  },
   inspectFolder: (path: string) => invoke<FolderInfo>('inspect_folder', { path }),
   createProject: (a: { path: string; name: string; color: string; worktreePerAgent: boolean; firstAgent: string | null }) =>
     invoke<Project>('create_project', a),

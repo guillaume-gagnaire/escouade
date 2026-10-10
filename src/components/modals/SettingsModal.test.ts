@@ -52,6 +52,7 @@ describe('SettingsModal', () => {
     ).toEqual([
       'AaApplication',
       '✳Claude Code',
+      '◎Comptes Claude',
       '♪Notifications',
       '▤Projets',
       '▦Kanban',
@@ -812,6 +813,7 @@ describe('SettingsModal in English', () => {
     ).toEqual([
       'AaApplication',
       '✳Claude Code',
+      '◎Claude accounts',
       '♪Notifications',
       '▤Projects',
       '▦Kanban',
