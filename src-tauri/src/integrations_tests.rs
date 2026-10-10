@@ -408,8 +408,17 @@ async fn a_failed_sync_is_noted_on_the_ticket_until_one_succeeds_and_loops_can_b
         h.tk(&t.id).external.unwrap().error.as_deref(),
         Some("Trello refuse ces identifiants (401) — invalid token")
     );
-    // Its second loop was to be told, after the move: the summary waits behind it.
-    assert!(writes_to(&server, "/actions/comments").is_empty());
+    // Its second loop was to be told, after the move (tried again with it): the summary waited
+    // behind it until the ticket left « En cours », which took the move away, then was tried at
+    // once.
+    assert_eq!(
+        trace(&server),
+        [
+            "PUT /cards/c1 l2",
+            "PUT /cards/c1 l2",
+            "POST /cards/c1/actions/comments"
+        ]
+    );
     // Sent back, the card moves this time: the summary goes first, then the move, and the error
     // goes.
     server.on("PUT", "/cards/c1", 200, json!({}));
@@ -422,12 +431,13 @@ async fn a_failed_sync_is_noted_on_the_ticket_until_one_succeeds_and_loops_can_b
     .await;
     let comments = writes_to(&server, "/actions/comments");
     assert_eq!(
-        comments[0].json()["text"],
+        comments[1].json()["text"],
         "Escouade : DEM-1, boucle 2/5 — 1/2 critères atteints.\n\n✓ un — vérifié\n○ deux — reste le critère 2"
     );
-    let after = trace(&server);
-    let said = after.iter().position(|w| w.starts_with("POST")).unwrap();
-    assert_eq!(after[said + 1], "PUT /cards/c1 l2");
+    assert_eq!(
+        trace(&server)[3..5],
+        ["POST /cards/c1/actions/comments", "PUT /cards/c1 l2"]
+    );
 }
 
 #[tokio::test]
@@ -1445,6 +1455,51 @@ async fn a_failed_transition_gives_way_to_the_next_one() {
     h.retry_after(2 * 3_600_000).await;
     assert_eq!(trace(&server), ["PUT /cards/c1 l2", "PUT /cards/c1 l3"]);
     assert!(h.core.pending_syncs.lock().ops.is_empty());
+}
+
+#[tokio::test]
+async fn a_failed_transition_goes_when_its_ticket_comes_into_a_column_without_a_state() {
+    let h = harness("ig-retry-unmapped");
+    let server = FakeServer::start().await;
+    let p = h.trello_board(&server, &[]).await;
+    let t = h.import_card(&p.id, "c1").await;
+    server.on("PUT", "/cards/c1", 500, Value::Null);
+    h.move_to(&t.id, Column::Doing);
+    h.wait_synced().await;
+    assert_eq!(h.sync_error(&t.id).as_deref(), Some("Trello : erreur 500"));
+    // Its agent archived, the ticket is back in « À faire », which gives the card no list: the
+    // move to « En cours » would put the card where the ticket no longer is.
+    h.move_to(&t.id, Column::Todo);
+    h.wait_synced().await;
+    assert!(h.core.pending_syncs.lock().ops.is_empty());
+    assert_eq!(h.sync_error(&t.id), None);
+    let file = h.core.data.sync_queue_file();
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), "[]");
+    // Trello back: the card stays where it is, by itself, at a start or by « Resynchroniser ».
+    server.on("PUT", "/cards/c1", 200, json!({}));
+    h.retry_after(2 * 3_600_000).await;
+    h.core.retry_all_syncs();
+    h.wait_synced().await;
+    h.core.integration_resync(&t.id).await.unwrap();
+    assert_eq!(trace(&server), ["PUT /cards/c1 l2"]);
+
+    // Likewise for a move set aside (refused for good), kept for « Resynchroniser ».
+    server.on(
+        "PUT",
+        "/cards/c1",
+        404,
+        Value::String("card not found".into()),
+    );
+    h.move_to(&t.id, Column::Doing);
+    h.wait_synced().await;
+    assert!(h.core.pending_syncs.lock().ops[0].set_aside);
+    h.move_to(&t.id, Column::Todo);
+    h.wait_synced().await;
+    assert!(h.core.pending_syncs.lock().ops.is_empty());
+    assert_eq!(h.sync_error(&t.id), None);
+    server.on("PUT", "/cards/c1", 200, json!({}));
+    h.core.integration_resync(&t.id).await.unwrap();
+    assert_eq!(trace(&server), ["PUT /cards/c1 l2", "PUT /cards/c1 l2"]);
 }
 
 #[tokio::test]

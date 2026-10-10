@@ -147,6 +147,17 @@ impl SyncQueue {
         self.ops.extend(ops);
     }
 
+    /// The ticket changed column: its transition not through yet (set aside or not) goes, even
+    /// when the new column gives the external ticket no state in its place (« À faire », mostly):
+    /// sent later, it would put the external ticket where the ticket no longer is. True when one
+    /// went.
+    pub fn moved(&mut self, ticket_id: &str) -> bool {
+        let before = self.ops.len();
+        self.ops
+            .retain(|p| p.ticket_id != ticket_id || !matches!(p.op, SyncOp::State { .. }));
+        self.ops.len() != before
+    }
+
     /// Where the ticket's `k`th operation is in the queue.
     fn position(&self, ticket_id: &str, k: usize) -> Option<usize> {
         self.ops
@@ -745,13 +756,23 @@ impl<R: Runtime> Core<R> {
     async fn run_sync_job(self: &Arc<Self>, job: SyncJob) {
         match job {
             SyncJob::Change(t, change) => {
+                let moved =
+                    matches!(change, Change::Column(_)) && self.pending_syncs.lock().moved(&t.id);
                 let ops = self.ops_of(&t, change);
-                if ops.is_empty() {
+                if ops.is_empty() && !moved {
                     return;
                 }
                 self.pending_syncs.lock().push(ops);
-                // Those of the ticket still waiting go first, at once: the service may be back.
-                let _ = self.run_ticket_syncs(&t.id, false).await;
+                if self.pending_syncs.lock().head(&t.id).is_some() {
+                    // Those of the ticket still waiting go first, at once: the service may be
+                    // back. Those held behind a transition that went go now too.
+                    let _ = self.run_ticket_syncs(&t.id, false).await;
+                } else {
+                    // Only a transition went: the ⚠ says what is still set aside, if anything.
+                    self.save_pending_syncs();
+                    let error = self.pending_syncs.lock().error_of(&t.id);
+                    self.note_sync_error(&t.id, error);
+                }
             }
             SyncJob::Due => {
                 let due = self.pending_syncs.lock().due(self.sync_clock());
@@ -1146,6 +1167,26 @@ mod tests {
         q.push(vec![pending("t2", move_to("l3"))]);
         assert_eq!(q.nth("t2", 0).unwrap().op, move_to("l3"));
         assert_eq!(q.nth("t2", 1), None);
+    }
+
+    #[test]
+    fn a_column_change_takes_its_tickets_transitions_away_and_leaves_the_rest() {
+        let mut q = SyncQueue::new(Vec::new());
+        q.push(vec![
+            pending("t1", move_to("l2")),
+            pending("t1", say("pris")),
+        ]);
+        q.push(vec![pending("t2", move_to("l2"))]);
+        // Set aside or not.
+        q.failed("t1", 0, 0, "Trello : introuvable (404)", true);
+        assert!(q.moved("t1"));
+        let ops: Vec<(&str, &SyncOp)> = q
+            .ops
+            .iter()
+            .map(|p| (p.ticket_id.as_str(), &p.op))
+            .collect();
+        assert_eq!(ops, [("t1", &say("pris")), ("t2", &move_to("l2"))]);
+        assert!(!q.moved("t1"));
     }
 
     #[test]
