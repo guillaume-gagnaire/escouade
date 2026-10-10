@@ -361,7 +361,7 @@ pub(crate) fn save_accounts(data: &DataDir, accounts: &Accounts) -> Result<()> {
     }
     let bytes = serde_json::to_vec_pretty(&saved)?;
     paths::write_private(&data.integrations_file(), &bytes)
-        .context("enregistrement des comptes")?;
+        .with_context(|| tr!("enregistrement des comptes", "saving the accounts"))?;
     Ok(())
 }
 

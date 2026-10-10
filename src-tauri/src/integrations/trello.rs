@@ -201,10 +201,7 @@ impl Trello {
                 }
             })
             .collect();
-        let mut filters = vec![IssueFilter {
-            id: "mine".into(),
-            label: "Mes cartes".into(),
-        }];
+        let mut filters = vec![mine_filter(crate::i18n::ui())];
         filters.extend(lists.iter().map(|l| IssueFilter {
             id: format!("list:{}", l.id),
             label: l.name.clone(),
@@ -243,11 +240,24 @@ impl Trello {
     }
 }
 
+/// The filter of the cards the account is a member of.
+fn mine_filter(lang: crate::i18n::Lang) -> IssueFilter {
+    IssueFilter {
+        id: "mine".into(),
+        label: tr_in!(lang, "Mes cartes", "My cards"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::integrations::fake::FakeServer;
     use serde_json::json;
+
+    #[test]
+    fn the_filter_of_trello_reads_in_english() {
+        assert_eq!(mine_filter(crate::i18n::Lang::En).label, "My cards");
+    }
 
     async fn trello() -> (FakeServer, Trello) {
         let server = FakeServer::start().await;

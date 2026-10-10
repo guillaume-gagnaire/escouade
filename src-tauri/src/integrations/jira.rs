@@ -4,6 +4,7 @@ use super::text::{adf_to_markdown, criteria_of, markdown_to_adf};
 use super::{
     call, encode, Account, Container, ExternalIssue, IssueFilter, IssuePage, Query, Refused,
 };
+use crate::i18n::{self, Lang};
 use crate::model::{ExternalRef, ExternalState, Service};
 use anyhow::Result;
 use base64::Engine;
@@ -79,23 +80,50 @@ fn words(s: &str) -> String {
         .join(" ")
 }
 
-fn kind_fr(name: &str) -> String {
-    match name {
-        "Task" => "Tâche".into(),
-        "Sub-task" | "Subtask" => "Sous-tâche".into(),
-        other => other.into(),
+/// The kind of an issue as the import shows it: Jira's own English names in French, as they are in
+/// English (and the names of a Jira set up in another language as it writes them).
+fn kind_label(lang: Lang, name: &str) -> String {
+    match (lang, name) {
+        (Lang::Fr, "Task") => "Tâche".into(),
+        (Lang::Fr, "Sub-task" | "Subtask") => "Sous-tâche".into(),
+        (_, other) => other.into(),
     }
 }
 
-fn priority_fr(name: &str) -> String {
-    match name {
-        "Highest" => "Très haute".into(),
-        "High" => "Haute".into(),
-        "Medium" => "Moyenne".into(),
-        "Low" => "Basse".into(),
-        "Lowest" => "Très basse".into(),
-        other => other.into(),
+/// The priority of an issue as the import shows it (see `kind_label`).
+fn priority_label(lang: Lang, name: &str) -> String {
+    match (lang, name) {
+        (Lang::Fr, "Highest") => "Très haute".into(),
+        (Lang::Fr, "High") => "Haute".into(),
+        (Lang::Fr, "Medium") => "Moyenne".into(),
+        (Lang::Fr, "Low") => "Basse".into(),
+        (Lang::Fr, "Lowest") => "Très basse".into(),
+        (_, other) => other.into(),
     }
+}
+
+/// The filters the import offers on a Jira project.
+fn filters(lang: Lang) -> Vec<IssueFilter> {
+    [
+        ("mine", tr_in!(lang, "Assignés à moi", "Assigned to me")),
+        ("sprint", tr_in!(lang, "Sprint actif", "Active sprint")),
+        ("todo", tr_in!(lang, "À faire", "To do")),
+    ]
+    .into_iter()
+    .map(|(id, label)| IssueFilter {
+        id: id.to_string(),
+        label,
+    })
+    .collect()
+}
+
+/// Refused for good: the workflow of the issue `key` leads nowhere from `from` to `to`.
+fn no_transition(lang: Lang, from: &str, to: &str, key: &str) -> String {
+    tr_in!(
+        lang,
+        "Jira : aucune transition de « {from} » vers « {to} » pour {key}",
+        "Jira: no transition from “{from}” to “{to}” for {key}"
+    )
 }
 
 impl Jira {
@@ -237,17 +265,7 @@ impl Jira {
         };
         Ok(IssuePage {
             issues,
-            filters: [
-                ("mine", "Assignés à moi"),
-                ("sprint", "Sprint actif"),
-                ("todo", "À faire"),
-            ]
-            .iter()
-            .map(|(id, label)| IssueFilter {
-                id: id.to_string(),
-                label: label.to_string(),
-            })
-            .collect(),
+            filters: filters(i18n::ui()),
             next,
             total,
         })
@@ -275,13 +293,13 @@ impl Jira {
         };
         let mut meta = Vec::new();
         if let Some(p) = f["priority"]["name"].as_str() {
-            meta.push(priority_fr(p));
+            meta.push(priority_label(i18n::ui(), p));
         }
         meta.push(
             f["assignee"]["displayName"]
                 .as_str()
-                .unwrap_or("Non assigné")
-                .to_string(),
+                .map(str::to_string)
+                .unwrap_or_else(|| tr!("Non assigné", "Unassigned")),
         );
         if let Some(s) = f["status"]["name"].as_str() {
             meta.push(s.to_string());
@@ -297,7 +315,10 @@ impl Jira {
             url: format!("{}/browse/{key}", self.site),
             key,
             title: f["summary"].as_str().unwrap_or_default().to_string(),
-            kind: kind_fr(f["issuetype"]["name"].as_str().unwrap_or("Ticket")),
+            kind: kind_label(
+                i18n::ui(),
+                f["issuetype"]["name"].as_str().unwrap_or("Ticket"),
+            ),
             meta,
             criteria: criteria_of(&description),
             description,
@@ -332,11 +353,11 @@ impl Jira {
             .find(|t| same(t))
         else {
             // Its workflow will not lead there however often it is asked.
-            return Err(Refused(format!(
-                "Jira : aucune transition de « {} » vers « {} » pour {}",
+            return Err(Refused(no_transition(
+                i18n::ui(),
                 current["name"].as_str().unwrap_or("?"),
-                state.name,
-                r.key
+                &state.name,
+                &r.key,
             ))
             .into());
         };
@@ -368,6 +389,30 @@ impl Jira {
 mod tests {
     use super::*;
     use crate::integrations::fake::FakeServer;
+
+    #[test]
+    fn jiras_names_stay_as_jira_writes_them_in_english_and_the_filters_read_in_english() {
+        use crate::i18n::Lang::{En, Fr};
+        assert_eq!(
+            [kind_label(En, "Task"), priority_label(En, "Highest")],
+            ["Task", "Highest"]
+        );
+        assert_eq!(
+            [kind_label(Fr, "Task"), priority_label(Fr, "Highest")],
+            ["Tâche", "Très haute"]
+        );
+        assert_eq!(
+            filters(En)
+                .iter()
+                .map(|f| f.label.as_str())
+                .collect::<Vec<_>>(),
+            ["Assigned to me", "Active sprint", "To do"]
+        );
+        assert_eq!(
+            no_transition(En, "In Progress", "Done", "ATL-1"),
+            "Jira: no transition from “In Progress” to “Done” for ATL-1"
+        );
+    }
 
     async fn jira() -> (FakeServer, Jira) {
         let server = FakeServer::start().await;
