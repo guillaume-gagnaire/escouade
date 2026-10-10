@@ -132,6 +132,7 @@
     }
     stick = true;
     showJump = false;
+    slid = false;
     // Following the bottom draws the latest items only: those the reader had asked for go.
     from = null;
     remember();
@@ -224,25 +225,41 @@
 
   // The reader scrolling up leaves the bottom, however close to it: messages rendered as they come
   // into view (content-visibility) resize the content, which must not pull them back. Only the
-  // reader does: content shrinking under the view, or the message field shrinking back once a
-  // message is sent, moves the view up too, and the conversation must go on following.
+  // reader going up does (the wheel or a key up, or a drag, whose way is not told): content
+  // shrinking under the view, or the message field shrinking back once a message is sent, moves the
+  // view up too, even while the reader wheels down, and the conversation must go on following.
   let readerAt = 0;
   let dragging = false;
   const reading = () => dragging || performance.now() - readerAt < 500;
-  const byReader = () => {
-    readerAt = performance.now();
+  const UP_KEYS = new Set(['ArrowUp', 'PageUp', 'Home']);
+  const byReader = (e: WheelEvent | KeyboardEvent) => {
     settling = null;
+    const up = e instanceof WheelEvent ? e.deltaY < 0 : UP_KEYS.has(e.key) || (e.key === ' ' && e.shiftKey);
+    if (up) readerAt = performance.now();
   };
   const grab = () => {
     dragging = true;
     settling = null;
   };
 
+  // The latest items sliding under a view that follows the bottom take blocks away above it, and the browser lowers
+  // the view (scroll anchoring, or clamping): that is no reader leaving the bottom, even one dragging (a selection).
+  let slid = false;
+  let lastStart = 0;
+  $effect(() => {
+    const s = start;
+    untrack(() => {
+      if (s > lastStart && from === null) slid = true;
+      lastStart = s;
+    });
+  });
+
   function onScroll() {
     if (!scroller) return;
     const at = scroller.scrollTop;
-    if (at < lastTop - 1 && reading()) stick = false;
+    if (at < lastTop - 1 && reading() && !slid) stick = false;
     else if (atBottom()) stick = true;
+    slid = false;
     lastTop = at;
     if (stick) showJump = false;
     else if (placed) pin();

@@ -591,6 +591,13 @@ describe('Conversation', () => {
     });
 
     describe('a long conversation', () => {
+      /** The button once the view is in place (the frame after the load): as the reader first sees it. */
+      const olderButton = async (name: string) => {
+        const button = await screen.findByRole('button', { name });
+        await frame();
+        return button;
+      };
+
       it('draws only its last 80 items, with a button for the 80 before', async () => {
         const { container } = setup({ status: 'done' }, many(2000));
         await screen.findByText('Message 1999');
@@ -609,7 +616,7 @@ describe('Conversation', () => {
 
       it('draws the items before by slices of 80, down to the first', async () => {
         const { container } = setup({ status: 'done' }, many(201));
-        await userEvent.click(await screen.findByRole('button', { name: 'Afficher les 80 précédents' }));
+        await userEvent.click(await olderButton('Afficher les 80 précédents'));
         expect(drawnIds(container)).toHaveLength(160);
         expect(drawnIds(container)[0]).toBe('u41');
         await userEvent.click(screen.getByRole('button', { name: 'Afficher les 41 précédents' }));
@@ -625,7 +632,7 @@ describe('Conversation', () => {
 
       it('moves the focus on to the conversation once the last slice is drawn, not back to the page', async () => {
         const { scroller } = setup({ status: 'done' }, many(120));
-        const button = await screen.findByRole('button', { name: 'Afficher les 40 précédents' });
+        const button = await olderButton('Afficher les 40 précédents');
         button.focus();
         await userEvent.keyboard('{Enter}');
         await waitFor(() => expect(scroller).toHaveFocus());
@@ -685,6 +692,55 @@ describe('Conversation', () => {
         expect(scroller.scrollTop).toBe(2600);
         expect(drawnIds(container)).toHaveLength(80);
         expect(drawnIds(container)[0]).toBe('u121');
+      });
+
+      describe('while the latest 80 slide under a view at the bottom', () => {
+        // The first block goes as a new one comes: the browser lowers the view (scroll anchoring, or clamping).
+        async function slides(before: (scroller: HTMLElement) => void) {
+          const { a, container, scroller } = setup({ status: 'running' }, many(200));
+          await screen.findByText('Message 199');
+          await frame();
+          // The observer's first report is the size the view starts from.
+          resized.forEach((cb) => cb([]));
+          before(scroller);
+          applyConvOps(a.id, [{ op: 'append', item: user(200) }]);
+          await tick();
+          layoutMovesTo(scroller, 1940);
+          resized.forEach((cb) => cb([]));
+          return { container, scroller };
+        }
+        const following = async ({ container, scroller }: { container: HTMLElement; scroller: HTMLElement }) => {
+          expect(scroller.scrollTop).toBe(2000);
+          expect(drawnIds(container)).toHaveLength(80);
+          expect(drawnIds(container)[0]).toBe('u121');
+          await tick();
+          expect(screen.queryByRole('button', { name: /Nouveaux messages/ })).not.toBeInTheDocument();
+        };
+
+        it('keeps following just after the reader wheeled down', async () => {
+          await following(await slides((s) => s.dispatchEvent(new WheelEvent('wheel', { deltaY: 120 }))));
+        });
+
+        it('keeps following just after the reader pressed a key that scrolls down', async () => {
+          await following(await slides((s) => s.dispatchEvent(new KeyboardEvent('keydown', { key: 'PageDown', bubbles: true }))));
+        });
+
+        it('keeps following while the reader holds the pointer down (selecting text)', async () => {
+          await following(await slides((s) => s.dispatchEvent(new Event('pointerdown', { bubbles: true }))));
+        });
+      });
+
+      it('keeps following when the content shrinks under a view at the bottom, the reader wheeling down', async () => {
+        const { scroller } = setup({ status: 'running' }, many(20));
+        await screen.findByText('Message 19');
+        await frame();
+        const height = grows(scroller);
+        scroller.dispatchEvent(new WheelEvent('wheel', { deltaY: 120 }));
+        height(1800);
+        layoutMovesTo(scroller, 1300);
+        height(2400);
+        resized.forEach((cb) => cb([]));
+        expect(scroller.scrollTop).toBe(2400);
       });
 
       it('keeps what the reader scrolled up to when new messages come in', async () => {
