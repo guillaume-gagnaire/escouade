@@ -24,6 +24,10 @@ function click(view: EditorView, init: MouseEventInit) {
   view.contentDOM.dispatchEvent(new MouseEvent('mouseup', o));
 }
 
+/** The lines of the version compared with, drawn above the blocks that differ from it. */
+const removedLines = (c: HTMLElement) => [...c.querySelectorAll('.cm-deletedChunk .cm-deletedLine')].map((l) => l.textContent);
+const blockButtons = (c: HTMLElement) => [...c.querySelectorAll<HTMLButtonElement>('.cm-deletedChunk button')];
+
 const press = (el: EventTarget, key: string, init: KeyboardEventInit = {}) =>
   el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init }));
 
@@ -353,6 +357,59 @@ describe('CodeEditor', () => {
     expect(viewOf(container).state.facet(indentUnit)).toBe('    ');
     await rerender({ ...props, indent: { tabs: true, size: 4 } });
     expect(viewOf(container).state.facet(indentUnit)).toBe('\t');
+  });
+
+  it('shows the changes against the version given, reports a block put back as typed, and hides them', async () => {
+    const onchange = vi.fn();
+    const props = { ...base, docKey: 'k1', text: 'a\nB\nc\n', version: 0, onchange };
+    const { container, rerender } = render(CodeEditor, props);
+    await tick();
+    expect(container.querySelector('.cm-deletedChunk')).toBeNull();
+    await rerender({ ...props, compare: { original: 'a\nb\nc\n', against: 'reference' } });
+    expect(removedLines(container)).toEqual(['b']);
+    blockButtons(container)[0].click();
+    expect(onchange).toHaveBeenLastCalledWith('a\nb\nc\n');
+    undo(viewOf(container));
+    expect(onchange).toHaveBeenLastCalledWith('a\nB\nc\n');
+    await rerender({ ...props, compare: null });
+    expect(container.querySelector('.cm-deletedChunk')).toBeNull();
+  });
+
+  it('keeps the comparison across a text reloaded from disk, against the text reloaded', async () => {
+    const onchange = vi.fn();
+    const props = { ...base, docKey: 'k1', onchange, compare: { original: 'a\nb\nc\n', against: 'reference' as const } };
+    const { container, rerender } = render(CodeEditor, { ...props, text: 'a\nB\nc\n', version: 0 });
+    await tick();
+    await rerender({ ...props, text: 'a\nb\nC\n', version: 1 });
+    expect(viewOf(container).state.doc.toString()).toBe('a\nb\nC\n');
+    expect(removedLines(container)).toEqual(['c']);
+    expect(onchange).not.toHaveBeenCalled();
+  });
+
+  it('follows the version compared with when it changes', async () => {
+    const props = { ...base, docKey: 'k1', text: 'a\nB\nc\n', version: 0, onchange: () => {} };
+    const { container, rerender } = render(CodeEditor, { ...props, compare: { original: 'a\nb\nc\n', against: 'disk' } });
+    await tick();
+    expect(blockButtons(container).map((b) => b.textContent)).toEqual(['Prendre ce bloc']);
+    await rerender({ ...props, compare: { original: 'a\nB\nagent\n', against: 'disk' } });
+    expect(removedLines(container)).toEqual(['agent']);
+  });
+
+  it('shows the comparison of the file shown, another one coming with its own', async () => {
+    const props = { ...base, version: 0, onchange: () => {} };
+    const { container, rerender } = render(CodeEditor, {
+      ...props,
+      docKey: 'k1',
+      text: 'a\nB\n',
+      compare: { original: 'a\nb\n', against: 'reference' },
+    });
+    await tick();
+    expect(blockButtons(container).map((b) => b.textContent)).toEqual(['Annuler ce bloc']);
+    await rerender({ ...props, docKey: 'k2', text: 'x\nY\n', compare: { original: 'x\ny\n', against: 'disk' } });
+    expect(removedLines(container)).toEqual(['y']);
+    expect(blockButtons(container).map((b) => b.textContent)).toEqual(['Prendre ce bloc']);
+    await rerender({ ...props, docKey: 'k3', text: 'z\n', compare: null });
+    expect(container.querySelector('.cm-deletedChunk')).toBeNull();
   });
 
   it('measures its text again when the room it has changes width', async () => {

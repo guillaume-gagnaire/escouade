@@ -316,6 +316,123 @@ describe('buffers', () => {
     await expect.poll(() => backend.called('set_unsaved')).toHaveLength(2);
     expect(backend.called('set_unsaved').map((c) => c.args)).toEqual([{ count: 1 }, { count: 1 }]);
   });
+
+  describe('compared with the version on disk (« Comparer »)', () => {
+    /** The file on disk, null once deleted. */
+    let disk: ReturnType<typeof text> | null;
+
+    /** A file typed in (`mine`) that the agent changed on disk meanwhile (`agent`, h2): its banner is up. */
+    async function conflict() {
+      disk = text('a\n', 'h1');
+      const backend = fakeBackend({
+        fs_read: () => {
+          if (!disk) throw 'x.ts introuvable';
+          return disk;
+        },
+        fs_base: () => null,
+        // As the backend does: a write expecting another version than the one on disk is refused.
+        fs_write: (a: any) => (a.expectedHash === null || a.expectedHash === disk?.hash ? 'h9' : Promise.reject('changed')),
+        set_unsaved: () => null,
+      });
+      const k = (await buffers.open('p1', 'project', 'x.ts')).key;
+      buffers.edit(k, 'mine\n');
+      disk = text('agent\n', 'h2');
+      await buffers.refresh(k);
+      expect(buffers.all[k]).toMatchObject({ disk: 'changed', onDisk: null });
+      return { k, backend };
+    }
+
+    it('reads the version on disk without touching what was typed', async () => {
+      const { k } = await conflict();
+      await buffers.compare(k);
+      expect(buffers.all[k]).toMatchObject({
+        text: 'mine\n',
+        saved: 'a\n',
+        hash: 'h1',
+        disk: 'changed',
+        version: 0,
+        onDisk: { text: 'agent\n', hash: 'h2' },
+      });
+    });
+
+    it('follows the disk while compared: a version written since replaces the one compared, what was typed stays', async () => {
+      const { k } = await conflict();
+      await buffers.compare(k);
+      disk = text('agent2\n', 'h3');
+      await buffers.refresh(k);
+      expect(buffers.all[k]).toMatchObject({
+        text: 'mine\n',
+        hash: 'h1',
+        disk: 'changed',
+        version: 0,
+        onDisk: { text: 'agent2\n', hash: 'h3' },
+      });
+    });
+
+    it('keeps the text merged over the version compared', async () => {
+      const { k, backend } = await conflict();
+      await buffers.compare(k);
+      buffers.edit(k, 'mine\nagent\n');
+      expect(await buffers.keepMine(k)).toBe(true);
+      expect(backend.called('fs_write')[0].args).toMatchObject({ text: 'mine\nagent\n', expectedHash: 'h2' });
+      expect(buffers.all[k]).toMatchObject({ saved: 'mine\nagent\n', hash: 'h9', disk: 'ok', onDisk: null });
+    });
+
+    it('does not write over a version of the disk the comparison has not shown, and shows it instead', async () => {
+      const { k, backend } = await conflict();
+      await buffers.compare(k);
+      // Written by the agent once the comparison was read, before anything read the file again.
+      disk = text('agent2\n', 'h3');
+      expect(await buffers.keepMine(k)).toBe(false);
+      expect(backend.called('fs_write')[0].args.expectedHash).toBe('h2');
+      expect(buffers.all[k]).toMatchObject({
+        text: 'mine\n',
+        saved: 'a\n',
+        hash: 'h1',
+        disk: 'changed',
+        onDisk: { text: 'agent2\n', hash: 'h3' },
+      });
+    });
+
+    it('ends the comparison with a reload', async () => {
+      const { k } = await conflict();
+      await buffers.compare(k);
+      await buffers.reload(k);
+      expect(buffers.all[k]).toMatchObject({ text: 'agent\n', disk: 'ok', onDisk: null });
+    });
+
+    it('ends the comparison once the disk is back to the version read, or once the file is gone', async () => {
+      const { k } = await conflict();
+      await buffers.compare(k);
+      disk = text('a\n', 'h1');
+      await buffers.refresh(k);
+      expect(buffers.all[k]).toMatchObject({ text: 'mine\n', disk: 'ok', onDisk: null });
+      disk = text('agent\n', 'h2');
+      await buffers.refresh(k);
+      await buffers.compare(k);
+      disk = null;
+      await buffers.refresh(k);
+      expect(buffers.all[k]).toMatchObject({ text: 'mine\n', disk: 'deleted', onDisk: null });
+    });
+
+    it('refuses to compare with a version of the disk that is not text', async () => {
+      const { k } = await conflict();
+      disk = { kind: 'binary', text: null, size: 10, hash: 'h3', eol: 'lf', bom: false } as unknown as ReturnType<typeof text>;
+      await expect(buffers.compare(k)).rejects.toBe('la version du disque n’est pas du texte');
+      expect(buffers.all[k]).toMatchObject({ text: 'mine\n', disk: 'changed', onDisk: null });
+    });
+
+    it('does not take for a comparison an answer from the disk that comes after a save', async () => {
+      const { k } = await conflict();
+      const late = deferred<unknown>();
+      fakeBackend({ fs_read: () => late.promise, fs_base: () => null, fs_write: () => 'h9', set_unsaved: () => null });
+      const comparing = buffers.compare(k);
+      expect(await buffers.keepMine(k)).toBe(true);
+      late.resolve(text('agent\n', 'h2'));
+      await comparing;
+      expect(buffers.all[k]).toMatchObject({ text: 'mine\n', saved: 'mine\n', disk: 'ok', onDisk: null });
+    });
+  });
 });
 
 describe('trees', () => {

@@ -7,6 +7,7 @@
   import { drawSelection, EditorView, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view';
   import { onDestroy, onMount, untrack } from 'svelte';
   import type { LineChanges } from '../../lib/editor/changes';
+  import { comparison, showComparison, type Comparison } from '../../lib/editor/compare';
   import {
     charColumn,
     columnOffset,
@@ -30,6 +31,7 @@
     language = null,
     indent,
     changes,
+    compare = null,
     reveal = null,
     nav = null,
     onchange,
@@ -47,6 +49,8 @@
     language?: Extension | null;
     indent: { tabs: boolean; size: number };
     changes: LineChanges;
+    /** The version of the file the text is compared with, in the text itself; null for none. */
+    compare?: Comparison | null;
     /** A line to bring into view, the cursor on `col` (in characters) when given. */
     reveal?: { line: number; col?: number; seq: number } | null;
     /** What leads elsewhere in the file `path` of a source whose tree has `files` (resolvers read for each file shown). */
@@ -70,6 +74,7 @@
   let view: EditorView | undefined;
   const lang = new Compartment();
   const ind = new Compartment();
+  const compared = new Compartment();
   /** A text replaced from outside is not the user typing. */
   let applying = false;
   let shownKey = untrack(() => docKey);
@@ -118,6 +123,10 @@
         bracketMatching(),
         closeBrackets(),
         search({ top: true }),
+        comparison(
+          compared,
+          untrack(() => compare),
+        ),
         EditorState.phrases.of(PHRASES),
         keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...searchKeymap, ...historyKeymap, indentWithTab]),
         editorTheme,
@@ -163,6 +172,16 @@
           }
         }
       }
+    });
+  });
+
+  // A file shown in place of another comes with its comparison (`makeState`), which is then the one shown already. A
+  // text reloaded from disk is not another version to compare with: the blocks follow it as they follow what is typed.
+  $effect(() => {
+    const c = compare;
+    untrack(() => {
+      const tr = view && showComparison(view.state, compared, c);
+      if (tr) view!.dispatch(tr);
     });
   });
 

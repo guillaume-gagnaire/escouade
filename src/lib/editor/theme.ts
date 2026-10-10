@@ -68,6 +68,28 @@ export const editorTheme = [
         borderTop: '3px solid transparent',
         borderBottom: '3px solid transparent',
       },
+      // The changes shown in the text (« Voir les changements », « Comparer »), in the colors of the gutter's marks:
+      // the lines of the other version above each block, then the block. As specific as the merge view's own rules,
+      // or its colors win over ours.
+      '&.cm-merge-b .cm-changedLine': { backgroundColor: 'color-mix(in oklch, var(--add) 8%, transparent)' },
+      '&.cm-merge-b .cm-changedText': { background: 'color-mix(in oklch, var(--add) 24%, transparent)' },
+      '.cm-deletedChunk': { backgroundColor: 'color-mix(in oklch, var(--del) 8%, transparent)' },
+      '.cm-deletedChunk .cm-deletedText': { background: 'color-mix(in oklch, var(--del) 28%, transparent)' },
+      '.cm-deletedChunk .cm-blockAction': {
+        height: '20px',
+        margin: '0',
+        padding: '0 8px',
+        border: '1px solid var(--line2)',
+        borderRadius: 'var(--r-sm)',
+        backgroundColor: 'var(--elev)',
+        color: 'var(--text)',
+        fontFamily: 'var(--ui)',
+        fontSize: '11px',
+        fontWeight: '600',
+        lineHeight: '18px',
+        cursor: 'pointer',
+      },
+      '.cm-deletedChunk .cm-blockAction:hover': { borderColor: 'var(--accent)' },
       '.cm-panels': { backgroundColor: 'var(--elev)', color: 'var(--text)' },
       '.cm-panels.cm-panels-top': { borderBottom: '1px solid var(--line)' },
       '.cm-searchMatch': { backgroundColor: 'color-mix(in oklch, var(--wait) 30%, transparent)' },
@@ -78,8 +100,12 @@ export const editorTheme = [
   syntaxHighlighting(highlight),
 ];
 
-/** CodeMirror's texts (search panel…) in French. */
+/** CodeMirror's texts (search panel, merge view…) in French. */
 export const PHRASES: Record<string, string> = {
+  Accept: 'Accepter',
+  Reject: 'Rejeter',
+  'Revert this chunk': 'Annuler ce bloc',
+  '$ unchanged lines': '$ lignes inchangées',
   Find: 'Rechercher',
   Replace: 'Remplacer',
   next: 'suivant',

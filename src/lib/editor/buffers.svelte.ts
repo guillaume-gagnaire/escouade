@@ -26,6 +26,11 @@ export interface Buffer {
   base?: FileBase | null;
   /** The file on disk changed or vanished since it was read. */
   disk: 'ok' | 'changed' | 'deleted';
+  /**
+   * The file as it is on disk, read to compare what was typed with it (« Comparer »), until the user chooses: it
+   * follows what the agent writes meanwhile. Null when not compared.
+   */
+  onDisk: { text: string; hash: string } | null;
   error: string | null;
   /** Bumped when the text is replaced from disk, for the editor to take it. */
   version: number;
@@ -85,6 +90,7 @@ class Buffers {
       size: 0,
       base: undefined,
       disk: 'ok',
+      onDisk: null,
       error: null,
       version: 0,
     };
@@ -126,7 +132,16 @@ class Buffers {
     this.sync();
   }
 
-  /** Writes the file; false when it changed or vanished on disk meanwhile (see `disk`). */
+  /** Where the file on disk stands: a comparison with it lasts as long as it differs from the version read. */
+  private mark(b: Buffer, disk: Buffer['disk']) {
+    b.disk = disk;
+    if (disk !== 'changed') b.onDisk = null;
+  }
+
+  /**
+   * Writes the file; false when it changed or vanished on disk meanwhile (see `disk`). Forced, it writes over what
+   * the disk has, or over the version compared with only (`onDisk`).
+   */
   async save(key: string, force = false): Promise<boolean> {
     const b = this.all[key];
     if (!b || b.kind !== 'text') return false;
@@ -142,15 +157,16 @@ class Buffers {
         text,
         eol: b.eol,
         bom: b.bom,
-        expectedHash: force ? null : b.hash,
+        expectedHash: force ? (b.onDisk?.hash ?? null) : b.hash,
       });
-      Object.assign(b, { saved: text, hash, disk: 'ok' });
+      Object.assign(b, { saved: text, hash });
+      this.mark(b, 'ok');
       this.sync();
       return true;
     } catch (e) {
       const msg = String(e);
-      if (msg.startsWith('changed')) b.disk = 'changed';
-      else if (msg.startsWith('deleted')) b.disk = 'deleted';
+      if (msg.startsWith('changed')) this.mark(b, 'changed');
+      else if (msg.startsWith('deleted')) this.mark(b, 'deleted');
       else throw e;
       return false;
     } finally {
@@ -158,9 +174,29 @@ class Buffers {
     }
   }
 
-  /** Saves over what changed on disk (or creates the file again). */
-  keepMine(key: string): Promise<boolean> {
-    return this.save(key, true);
+  /**
+   * Saves over what changed on disk (or creates the file again). Compared with the disk, over the version compared
+   * only: one the agent wrote since is not lost unseen, it is read for the comparison instead (false then).
+   */
+  async keepMine(key: string): Promise<boolean> {
+    if (await this.save(key, true)) return true;
+    const b = this.all[key];
+    if (b?.onDisk && b.disk === 'changed') await this.compare(key);
+    return false;
+  }
+
+  /** Reads the file as it is on disk, to compare what was typed with it: what was typed is left alone. */
+  async compare(key: string) {
+    const b = this.all[key];
+    if (!b || b.kind !== 'text') return;
+    const f = await this.read(b);
+    if (f === undefined) return;
+    if (f === null) return this.mark(b, 'deleted');
+    if (f.kind !== 'text') throw 'la version du disque n’est pas du texte';
+    // Back to the version read: nothing to choose between.
+    if (f.hash === b.hash) return this.mark(b, 'ok');
+    b.disk = 'changed';
+    b.onDisk = { text: f.text ?? '', hash: f.hash };
   }
 
   /**
@@ -191,17 +227,19 @@ class Buffers {
     }
     if (f === undefined) return;
     if (f === null) {
-      b.disk = 'deleted';
+      this.mark(b, 'deleted');
       return;
     }
     if (f.kind === 'text') {
       if (f.hash === b.hash) {
-        b.disk = 'ok';
+        this.mark(b, 'ok');
       } else if (this.isDirty(b)) {
         b.disk = 'changed';
+        // Compared with the disk: the comparison shows what the agent wrote since.
+        if (b.onDisk && b.onDisk.hash !== f.hash) b.onDisk = { text: f.text ?? '', hash: f.hash };
       } else {
         this.take(b, f);
-        b.disk = 'ok';
+        this.mark(b, 'ok');
         b.version++;
       }
     }
@@ -220,11 +258,11 @@ class Buffers {
     const f = await this.read(b);
     if (f === undefined) return;
     if (f === null) {
-      b.disk = 'deleted';
+      this.mark(b, 'deleted');
       return;
     }
     this.take(b, f);
-    b.disk = 'ok';
+    this.mark(b, 'ok');
     b.version++;
     this.sync();
     this.loadBase(key);

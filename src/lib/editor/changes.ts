@@ -14,7 +14,7 @@ export interface LineChanges {
 const NONE = (): LineChanges => ({ changed: [], deleted: [], count: 0 });
 
 /** The longest the diff may run before it settles for a cruder answer, in ms. */
-const DIFF_TIMEOUT = 300;
+export const DIFF_TIMEOUT = 300;
 
 // The diff runs on lines, not on characters: a character-level diff of two big files takes seconds. Each
 // distinct line stands for one character (from U+0100, so never a line break or other control; surrogates

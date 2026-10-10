@@ -360,6 +360,203 @@ describe('EditorView', () => {
   });
 });
 
+describe('EditorView changes in the text, and comparison with the disk', () => {
+  beforeEach(() => {
+    resetApp({ agents: [agent()] });
+    app.git.p1 = gitInfo({ modified: 1 });
+  });
+
+  const REFERENCE = 'a\nb\nc\nd\ne\nf\n';
+  const SAVED = 'a\nB\nc\nd\ne\nf\n';
+  /** What the user typed on line 2, and what the agent wrote on line 6 meanwhile. */
+  const MINE = 'a\nmine\nc\nd\ne\nf\n';
+  const AGENT = 'a\nB\nc\nd\ne\nagent\n';
+
+  /** The lines of the other version drawn above the blocks that differ from it. */
+  const removed = (c: HTMLElement) => [...c.querySelectorAll('.cm-deletedChunk .cm-deletedLine')].map((l) => l.textContent);
+  const codeOf = (c: HTMLElement) => CodeMirror.findFromDOM(c.querySelector('.cm-editor') as HTMLElement)!;
+  /** Types MINE over SAVED in the editor: `mine` for `B` on line 2. */
+  const typeMine = (c: HTMLElement) => codeOf(c).dispatch({ changes: { from: 2, to: 3, insert: 'mine' }, userEvent: 'input.type' });
+
+  /** src/app.ts open, one line changed since HEAD; the disk as `disk` says, written to as the backend does. */
+  async function opened(base: { reference: string; text: string | null } | null = { reference: 'HEAD', text: REFERENCE }) {
+    const disk = { text: SAVED, hash: 'h1' };
+    let writes = 0;
+    const be = backend({
+      fs_read: (a) => text(a.path === 'README.md' ? '# demo\n' : disk.text, a.path === 'README.md' ? 'r1' : disk.hash),
+      fs_base: () => base,
+      fs_write: (a) => {
+        if (a.expectedHash !== null && a.expectedHash !== disk.hash) return Promise.reject('changed');
+        Object.assign(disk, { text: a.text, hash: `w${++writes}` });
+        return disk.hash;
+      },
+    });
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    const { container } = render(EditorView, { project: project() });
+    const key = buffers.key('p1', 'project', 'src/app.ts');
+    await expect.poll(() => buffers.all[key]?.base).toEqual(base);
+    return { be, disk, key, container };
+  }
+
+  /** The agent writes AGENT while the user typed MINE: the banner is up; then « Comparer ». */
+  async function comparing() {
+    const o = await opened();
+    await expect.poll(() => o.container.querySelector('.cm-content')?.textContent).toBe('aBcdef');
+    typeMine(o.container);
+    expect(buffers.all[o.key].text).toBe(MINE);
+    Object.assign(o.disk, { text: AGENT, hash: 'h2' });
+    await buffers.refresh(o.key);
+    await userEvent.click(within(await screen.findByRole('alert')).getByRole('button', { name: 'Comparer' }));
+    await expect.poll(() => screen.getByRole('alert').textContent).toContain('Comparaison avec la version du disque.');
+    return o;
+  }
+
+  it('shows the changes against the reference in the text, follows what is typed, and hides them', async () => {
+    const { key, container } = await opened();
+    await screen.findByText('1 ligne modifiée vs HEAD');
+    const toggle = screen.getByRole('button', { name: 'Voir les changements' });
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    expect(container.querySelector('.cm-deletedChunk')).toBeNull();
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(toggle).toHaveTextContent('Masquer les changements');
+    expect(removed(container)).toEqual(['b']);
+    // Still a text to type in.
+    codeOf(container).dispatch({ changes: { from: 0, to: 1, insert: 'A' }, userEvent: 'input.type' });
+    expect(buffers.all[key].text).toBe('A\nB\nc\nd\ne\nf\n');
+    expect(removed(container)).toEqual(['a', 'b']);
+    await userEvent.click(screen.getByRole('button', { name: 'Masquer les changements' }));
+    expect(container.querySelector('.cm-deletedChunk')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Voir les changements' })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('puts a block of the reference back with « Annuler ce bloc », unsaved, and Ctrl+Z takes it away again', async () => {
+    const { be, key } = await opened();
+    await userEvent.click(await screen.findByRole('button', { name: 'Voir les changements' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Annuler ce bloc' }));
+    expect(buffers.all[key].text).toBe(REFERENCE);
+    expect(await screen.findByText(/● Non enregistré/)).toBeInTheDocument();
+    expect(be.called('fs_write')).toHaveLength(0);
+    // The focus is in the text: Ctrl+Z goes to it.
+    await userEvent.keyboard('{Control>}z{/Control}');
+    expect(buffers.all[key].text).toBe(SAVED);
+    expect(await screen.findByText('Enregistré')).toBeInTheDocument();
+  });
+
+  it('has no « Voir les changements » for a file the reference does not have', async () => {
+    await opened({ reference: 'HEAD', text: null });
+    expect(await screen.findByText('Nouveau fichier · absent de HEAD')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Voir les changements' })).not.toBeInTheDocument();
+  });
+
+  it('has no « Voir les changements » outside a repository', async () => {
+    await opened(null);
+    expect(screen.getByText('Ln 1, Col 1')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Voir les changements' })).not.toBeInTheDocument();
+  });
+
+  it('follows a text reloaded from disk while the changes are shown', async () => {
+    const { disk, key, container } = await opened();
+    await userEvent.click(await screen.findByRole('button', { name: 'Voir les changements' }));
+    expect(removed(container)).toEqual(['b']);
+    Object.assign(disk, { text: 'a\nb\nc\nd\ne\nF\n', hash: 'h2' });
+    app.gitTick++;
+    await expect.poll(() => buffers.all[key].text).toBe('a\nb\nc\nd\ne\nF\n');
+    await expect.poll(() => removed(container)).toEqual(['f']);
+    expect(screen.getByRole('button', { name: 'Masquer les changements' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('keeps what was typed when the agent writes while the changes are shown, and shows them again once the choice is made', async () => {
+    const { disk, key, container } = await opened();
+    await userEvent.click(await screen.findByRole('button', { name: 'Voir les changements' }));
+    typeMine(container);
+    Object.assign(disk, { text: AGENT, hash: 'h2' });
+    app.gitTick++;
+    expect(await screen.findByRole('alert')).toHaveTextContent('Ce fichier a changé sur le disque.');
+    expect(buffers.all[key].text).toBe(MINE);
+    expect(removed(container)).toEqual(['b']);
+    await userEvent.click(screen.getByRole('button', { name: 'Comparer' }));
+    await expect.poll(() => removed(container)).toEqual(['B', 'agent']);
+    await userEvent.click(screen.getByRole('button', { name: 'Recharger' }));
+    await expect.poll(() => screen.queryByRole('alert')).toBeNull();
+    // Against the reference again, as the button still says.
+    expect(removed(container)).toEqual(['b', 'f']);
+    expect(screen.getByRole('button', { name: 'Masquer les changements' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('compares with the version on disk from its banner, takes a block of it and keeps the text merged', async () => {
+    const { be, disk, key, container } = await opened();
+    await expect.poll(() => container.querySelector('.cm-content')?.textContent).toBe('aBcdef');
+    typeMine(container);
+    Object.assign(disk, { text: AGENT, hash: 'h2' });
+    await buffers.refresh(key);
+    const banner = await screen.findByRole('alert');
+    expect(banner).toHaveTextContent('Ce fichier a changé sur le disque.');
+    expect(
+      within(banner)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['Recharger', 'Comparer', 'Garder ma version']);
+    await userEvent.click(within(banner).getByRole('button', { name: 'Comparer' }));
+    await expect.poll(() => screen.getByRole('alert').textContent).toContain('Comparaison avec la version du disque.');
+    expect(
+      within(screen.getByRole('alert'))
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['Recharger', 'Garder ma version']);
+    // What the disk has, block by block; the comparison with the reference gives way to it.
+    expect(removed(container)).toEqual(['B', 'agent']);
+    expect(screen.queryByRole('button', { name: 'Voir les changements' })).not.toBeInTheDocument();
+    expect(buffers.all[key].text).toBe(MINE);
+    const take = screen.getAllByRole('button', { name: 'Prendre ce bloc' });
+    expect(take).toHaveLength(2);
+    await userEvent.click(take[1]);
+    expect(buffers.all[key].text).toBe('a\nmine\nc\nd\ne\nagent\n');
+    // The banner stays until the user chooses.
+    expect(screen.getByRole('alert')).toHaveTextContent('Comparaison avec la version du disque.');
+    expect(be.called('fs_write')).toHaveLength(0);
+    await userEvent.click(screen.getByRole('button', { name: 'Garder ma version' }));
+    await expect.poll(() => be.called('fs_write').length).toBe(1);
+    expect(be.called('fs_write')[0].args).toMatchObject({ text: 'a\nmine\nc\nd\ne\nagent\n', expectedHash: 'h2' });
+    await expect.poll(() => screen.queryByRole('alert')).toBeNull();
+    expect(container.querySelector('.cm-deletedChunk')).toBeNull();
+    expect(await screen.findByText('Enregistré')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Voir les changements' })).toBeInTheDocument();
+  });
+
+  it('keeps what was typed while the agent writes again during the comparison, and shows its new version', async () => {
+    const { disk, key, container } = await comparing();
+    Object.assign(disk, { text: 'a\nB\nc\nd\ne\nagain\n', hash: 'h3' });
+    app.gitTick++;
+    await expect.poll(() => removed(container)).toEqual(['B', 'again']);
+    expect(buffers.all[key].text).toBe(MINE);
+    expect(screen.getByRole('alert')).toHaveTextContent('Comparaison avec la version du disque.');
+  });
+
+  it('does not write over a version of the disk the comparison has not shown, and shows it instead', async () => {
+    const { be, disk, key, container } = await comparing();
+    // Written once the comparison was read, before anything read the file again.
+    Object.assign(disk, { text: 'a\nB\nc\nd\ne\nagain\n', hash: 'h3' });
+    await userEvent.click(screen.getByRole('button', { name: 'Garder ma version' }));
+    await expect.poll(() => removed(container)).toEqual(['B', 'again']);
+    expect(be.called('fs_write')).toHaveLength(1);
+    expect(disk).toEqual({ text: 'a\nB\nc\nd\ne\nagain\n', hash: 'h3' });
+    expect(buffers.all[key].text).toBe(MINE);
+    expect(screen.getByRole('alert')).toHaveTextContent('Comparaison avec la version du disque.');
+    expect(app.toasts.map((t) => t.text)).toEqual([
+      'Le fichier a encore changé sur le disque : rien n’est enregistré, la comparaison montre sa nouvelle version.',
+    ]);
+  });
+
+  it('reloads from the comparison: the version on disk replaces what was typed, and the comparison is over', async () => {
+    const { key, container } = await comparing();
+    await userEvent.click(screen.getByRole('button', { name: 'Recharger' }));
+    expect(buffers.all[key].text).toBe(AGENT);
+    await expect.poll(() => screen.queryByRole('alert')).toBeNull();
+    expect(container.querySelector('.cm-deletedChunk')).toBeNull();
+  });
+});
+
 describe('EditorView tree, as VS Code’s explorer', () => {
   beforeEach(() => {
     resetApp({ agents: [agent()] });

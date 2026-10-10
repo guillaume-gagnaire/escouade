@@ -4,6 +4,7 @@
   import { saveActive, saveKey } from '../../lib/editor/actions';
   import { buffers, sourceAgent } from '../../lib/editor/buffers.svelte';
   import { lineChanges, type LineChanges } from '../../lib/editor/changes';
+  import type { Comparison } from '../../lib/editor/compare';
   import { newFileError, newFilePath } from '../../lib/editor/create';
   import { definitionResolver } from '../../lib/editor/definitions';
   import type { NavFollowed, NavFrom, NavTarget } from '../../lib/editor/goto';
@@ -297,6 +298,20 @@
       : `Identique à ${base.reference}`;
   });
 
+  /** The changes against the reference version shown in the text (« Voir les changements »), for each file that has one. */
+  let changesShown = $state(false);
+  /** The text of the reference version, null without one (a new file, or not a repository). */
+  const reference = $derived(buf?.kind === 'text' && typeof buf.base?.text === 'string' ? buf.base.text : null);
+  /** The file shown is compared with its version on disk (« Comparer »), until « Recharger » or « Garder ma version ». */
+  const onDisk = $derived(buf?.kind === 'text' && buf.disk === 'changed' ? buf.onDisk : null);
+  const compare = $derived<Comparison | null>(
+    onDisk
+      ? { original: onDisk.text, against: 'disk' }
+      : changesShown && reference !== null
+        ? { original: reference, against: 'reference' }
+        : null,
+  );
+
   const reveal = $derived(st?.reveal && st.reveal.path === activePath ? st.reveal : null);
   /** Done once: the tab shown again, or the view opened again, keeps the cursor where the user left it. */
   function revealed(seq: number) {
@@ -416,7 +431,20 @@
     };
   }
 
-  const keep = (key: string) => buffers.keepMine(key).catch((e) => app.toast(`Enregistrement impossible : ${e}`, 'error'));
+  /** Saves what was typed over the disk; compared with it, over the version compared only (else it shows the new one). */
+  async function keep(key: string) {
+    const seen = buffers.all[key]?.onDisk?.hash;
+    try {
+      await buffers.keepMine(key);
+    } catch (e) {
+      app.toast(`Enregistrement impossible : ${e}`, 'error');
+      return;
+    }
+    const now = buffers.all[key]?.onDisk?.hash;
+    if (seen && now && now !== seen)
+      app.toast('Le fichier a encore changé sur le disque : rien n’est enregistré, la comparaison montre sa nouvelle version.');
+  }
+  const compareDisk = (key: string) => buffers.compare(key).catch((e) => app.toast(`Comparaison impossible : ${e}`, 'error'));
   // A deleted file without changes can only be written by creating it again, as its banner offers.
   const save = () => (buf && !dirty && buf.disk === 'deleted' ? keep(buf.key) : saveActive());
   const reload = (key: string) => buffers.reload(key).catch((e) => app.toast(String(e), 'error'));
@@ -545,11 +573,20 @@
           <span class="path">{activePath.split('/').join('  /  ')}</span>
           <div style="flex:1"></div>
           <span class:add={!!diffLabel && !diffLabel.startsWith('Identique')}>{diffLabel}</span>
+          <!-- The comparison with the disk takes the text while it lasts: its banner tells what is shown. -->
+          {#if reference !== null && !onDisk}
+            <button class="changes" aria-pressed={changesShown} onclick={() => (changesShown = !changesShown)}
+              >{changesShown ? 'Masquer les changements' : 'Voir les changements'}</button
+            >
+          {/if}
         </div>
         {#if buf?.disk === 'changed'}
           <div class="banner" role="alert">
-            Ce fichier a changé sur le disque.
+            {onDisk ? 'Comparaison avec la version du disque.' : 'Ce fichier a changé sur le disque.'}
             <button class="btn small" onclick={() => reload(buf.key)}>Recharger</button>
+            {#if !onDisk}
+              <button class="btn small" onclick={() => compareDisk(buf.key)}>Comparer</button>
+            {/if}
             <button class="btn small" onclick={() => keep(buf.key)}>Garder ma version</button>
           </div>
         {:else if buf?.disk === 'deleted'}
@@ -578,6 +615,7 @@
             {language}
             {indent}
             {changes}
+            {compare}
             {reveal}
             nav={{ path: activePath, files: tree?.files ?? [], resolvers }}
             onrevealed={revealed}
@@ -779,6 +817,27 @@
   }
   .crumbs .add {
     color: var(--add);
+  }
+  .changes {
+    height: 22px;
+    flex: none;
+    padding: 0 8px;
+    border: 1px solid var(--line2);
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--muted);
+    font-family: var(--ui);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .changes:hover {
+    background: var(--elev2);
+    color: var(--text);
+  }
+  .changes[aria-pressed='true'] {
+    border-color: var(--accent);
+    color: var(--text);
   }
   .banner {
     flex: none;
