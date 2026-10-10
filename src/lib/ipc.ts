@@ -21,6 +21,7 @@ import type {
   FoundRelease,
   GitLog,
   InitialState,
+  Integration,
   OwnedDiff,
   IsolaService,
   IssuePage,
@@ -77,6 +78,8 @@ export const api = {
   reorderProjects: (ids: string[]) => invoke<void>('reorder_projects', { ids }),
   removeProject: (id: string) => invoke<void>('remove_project', { id }),
   createAgent: (projectId: string, model: string | null = null) => invoke<Agent>('create_agent', { projectId, model }),
+  createAgentOnBranch: (projectId: string, branch: string, model: string | null = null) =>
+    invoke<Agent>('create_agent_on_branch', { projectId, branch, model }),
   warmAgent: (id: string) => invoke<void>('warm_agent', { id }),
   getConversation: (id: string) => invoke<ConvItem[]>('get_conversation', { id }),
   /** Searches the conversations of a project's agents (all projects' with null), archived agents included or not. */
@@ -99,6 +102,7 @@ export const api = {
   deleteAgent: (id: string, removeWorktree: boolean) => invoke<string | null>('delete_agent', { id, removeWorktree }),
   /** Merges into the agent's base branch; `switchToBase`: the project's folder is switched to it first. */
   mergeAgent: (id: string, squash: boolean, switchToBase = false) => invoke<string>('merge_agent', { id, squash, switchToBase }),
+  integrateBase: (id: string) => invoke<Integration>('integrate_base', { id }),
   getCommands: (id: string) => invoke<SlashCommand[]>('get_commands', { id }),
   fileSuggestions: (id: string, query: string) => invoke<string[]>('file_suggestions', { id, query }),
   gitFiles: (projectId: string, agentId: string | null) => invoke<FileChange[]>('git_files', { projectId, agentId }),

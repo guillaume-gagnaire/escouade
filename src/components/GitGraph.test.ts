@@ -129,6 +129,7 @@ describe('GitGraph menu', () => {
     menu.close();
   });
 
+  let view: ReturnType<typeof render>;
   /** The graph on `MENU_LOG`, the repository having `branches` (an Error: they cannot be read). */
   async function setup(branches: unknown = BRANCHES, handlers: Record<string, (args: any) => unknown> = {}) {
     const backend = fakeBackend({
@@ -139,7 +140,7 @@ describe('GitGraph menu', () => {
       },
       ...handlers,
     });
-    render(GitGraph, { project: project(), agent: app.agents.a2 });
+    view = render(GitGraph, { project: project(), agent: app.agents.a2 });
     // The branches come with the history: the menu has them when the rows do.
     await screen.findByText('init');
     await waitFor(() => expect(backend.called('branch_list').length).toBeGreaterThan(0));
@@ -261,6 +262,31 @@ describe('GitGraph menu', () => {
     it('still offers to make a branch and to compare when the branches cannot be read', async () => {
       await setup(new Error('boom'));
       expect(screen.getByText('init')).toBeInTheDocument();
+      await rightClick('fix du header');
+      expect(entries()).toEqual(['Créer une branche ici…', '—', 'Comparer avec HEAD']);
+    });
+
+    it('keeps the last list it read when a later read fails, but not the list of another project', async () => {
+      let reads = 0;
+      const backend = await setup(BRANCHES, {
+        branch_list: () => {
+          if (reads++) throw new Error('transient');
+          return BRANCHES;
+        },
+      });
+      app.gitTick++;
+      await waitFor(() => expect(backend.called('branch_list').length).toBe(2));
+      await waitFor(() => expect(backend.called('git_log').length).toBe(2));
+      await settle();
+      await rightClick('fix du header');
+      expect(entries()).toContain('Passer sur hotfix');
+      // Another project: what was read for the first says nothing of it.
+      menu.close();
+      const other = project({ id: 'p2', name: 'other' });
+      app.projects.push(other);
+      view.rerender({ project: other, agent: null });
+      await waitFor(() => expect(backend.called('branch_list').length).toBe(3));
+      await settle();
       await rightClick('fix du header');
       expect(entries()).toEqual(['Créer une branche ici…', '—', 'Comparer avec HEAD']);
     });

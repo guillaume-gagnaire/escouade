@@ -1,9 +1,11 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
-  import { cycleRefusal } from '../../lib/board';
+  import { tick, untrack } from 'svelte';
+  import { cycleRefusal, ticketBranch } from '../../lib/board';
   import { t } from '../../lib/i18n';
+  import { menu } from '../../lib/menu.svelte';
   import { app } from '../../lib/state.svelte';
   import type { Ticket, TicketDraft } from '../../lib/types';
+  import BranchPicker from '../branches/BranchPicker.svelte';
 
   let {
     ticket,
@@ -19,7 +21,9 @@
     criteria: ticket?.criteria.map((c) => c.text).join('\n') ?? '',
     maxLoops: ticket?.maxLoops ?? 5,
     after: ticket?.after ?? [],
+    branch: ticket?.branch ?? '',
   }));
+  const uid = $props.id();
 
   let title = $state(start.title);
   let description = $state(start.description);
@@ -27,6 +31,10 @@
   let maxLoops = $state(start.maxLoops);
   /** The tickets it comes after, in the order they were checked; those done since stay, unlisted (they hold nothing back). */
   let after = $state([...start.after]);
+  /** The existing branch its agent takes up; empty: the ticket's own, made when it starts. */
+  let branch = $state(start.branch);
+  let branchButton = $state<HTMLButtonElement>();
+  let choosing = $state(false);
   let query = $state('');
   /** Why the last ticket checked was refused (it waits for this one already). */
   let refusal = $state<string | null>(null);
@@ -37,6 +45,7 @@
       description !== start.description ||
       criteria !== start.criteria ||
       maxLoops !== start.maxLoops ||
+      branch !== start.branch ||
       after.length !== start.after.length ||
       after.some((id) => !start.after.includes(id)),
   );
@@ -52,6 +61,26 @@
     const holds = (key: string | undefined) => !!key && key.toLowerCase().includes(q);
     return candidates.filter((x) => after.includes(x.id) || holds(x.key) || holds(x.external?.key));
   });
+
+  /** What the ticket does when there is no branch to take up: its own, named after its key once it has one. */
+  const own = $derived(ticket ? t('branches.ticket.own', { branch: ticketBranch(ticket.key) }) : t('branches.ticket.ownNew'));
+
+  function branchMenu() {
+    if (!branchButton) return;
+    menu.showAt(branchButton, [
+      { label: own, onClick: () => (branch = '') },
+      {
+        label: t('branches.ticket.existing'),
+        // The branch is the user's: validating the ticket never deletes it.
+        title: t('branches.ticket.existingKept'),
+        // Once the menu has given the focus back to its button: the picker gives it back there in turn.
+        onClick: async () => {
+          await tick();
+          choosing = true;
+        },
+      },
+    ]);
+  }
 
   /** A ticket checked that already waits for this one is refused: neither would ever start. */
   function toggle(x: Ticket, box: HTMLInputElement) {
@@ -104,6 +133,8 @@
         .filter(Boolean),
       maxLoops,
       after: [...after],
+      // Said only when it matters: a branch taken up, or the one of an edited ticket given up (empty).
+      ...(branch || start.branch ? { branch } : {}),
     });
     busy = false;
   }
@@ -129,6 +160,20 @@
     {#each [3, 5, 8] as n (n)}
       <button class:on={maxLoops === n} aria-pressed={maxLoops === n} onclick={() => (maxLoops = n)}>{n}</button>
     {/each}
+  </div>
+  <div class="branch" role="group" aria-label={t('branches.ticket.branch')}>
+    <span class="k" id="{uid}-branch">{t('branches.ticket.branch')}</span>
+    <button
+      class="pick mono"
+      bind:this={branchButton}
+      aria-haspopup="menu"
+      aria-labelledby="{uid}-branch {uid}-branch-value"
+      title={branch || own}
+      onclick={branchMenu}
+    >
+      <span id="{uid}-branch-value">{branch || own}</span>
+      <span aria-hidden="true">▾</span>
+    </button>
   </div>
   {#if candidates.length}
     <div class="after" role="group" aria-label={t('board.form.after')}>
@@ -165,6 +210,10 @@
     <button class="btn primary" disabled={!ready} onclick={submit}>{ticket ? t('common.save') : t('common.add')}</button>
   </div>
 </div>
+
+{#if choosing}
+  <BranchPicker {projectId} anchor={branchButton} mode="pick" onclose={() => (choosing = false)} onpick={(b) => (branch = b.name)} />
+{/if}
 
 <style>
   .form {
@@ -224,6 +273,35 @@
   .loops button.on {
     background: var(--elev2);
     color: var(--text);
+  }
+  .branch {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+  }
+  .pick {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    height: 24px;
+    padding: 0 8px;
+    border: 1px solid var(--line2);
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--muted);
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .pick:hover {
+    color: var(--text);
+    border-color: var(--accent);
+  }
+  .pick span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .after {
     display: flex;

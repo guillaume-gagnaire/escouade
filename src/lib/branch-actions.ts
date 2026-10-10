@@ -95,6 +95,25 @@ export function askStash(title: string, again: () => unknown, onCancel?: () => v
 }
 
 /**
+ * Starts an agent in a worktree on `branch`, which exists (a remote one: on the local branch that tracks it), and shows
+ * it at once like a new agent. The branch of the project's folder and a branch another worktree has are refused by the
+ * backend, and told in a toast.
+ */
+export async function startAgentOn(projectId: string, branch: string): Promise<boolean> {
+  try {
+    const a = await api.createAgentOnBranch(projectId, branch);
+    app.agents[a.id] = a;
+    // Its composer is what a new agent is for: closed first, the editor keeps the source it was on.
+    app.closeEditor(projectId);
+    app.selectAgent(a.id);
+    return true;
+  } catch (e) {
+    tellRefusal(e, branch);
+    return false;
+  }
+}
+
+/**
  * Why a local branch can be neither switched to nor deleted: a worktree other than the project's folder holds it (an
  * agent's, named, or any other, by its folder). Null for the branch of the folder, and for a branch nothing holds.
  */

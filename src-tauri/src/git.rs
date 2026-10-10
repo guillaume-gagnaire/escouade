@@ -872,6 +872,100 @@ pub async fn worktree_add_on(repo: &str, branch: &str, base: &str) -> Result<(St
     Ok((path, name))
 }
 
+/// Creates `<repo>/.claude/worktrees/<last part of the branch>` (`-2`… when that folder is taken) on
+/// a branch that exists already: a local one, or a remote one (`origin/feat`) through the local
+/// branch that tracks it, made, tracking it, when there is none (`local_of`). Nothing is made when
+/// the name is neither, or when git refuses (the branch is checked out elsewhere). Returns (path,
+/// local branch).
+pub async fn worktree_add_existing(repo: &str, name: &str) -> Result<(String, String)> {
+    // Refuses an option, an unknown name, a local branch of the name that tracks something else.
+    let local = local_of(repo, name).await?;
+    let branch = match &local {
+        Some(local) => local.clone(),
+        None => split_remote(repo, name)
+            .await
+            .map(|(_, short)| short)
+            .ok_or_else(|| no_branch(name))?,
+    };
+    ensure_excluded(repo, ".claude/worktrees/").await?;
+    let root = Path::new(repo).join(".claude").join("worktrees");
+    let last = branch.rsplit('/').next().unwrap_or(&branch);
+    let mut dir = root.join(last);
+    let mut n = 2;
+    while dir.exists() {
+        dir = root.join(format!("{last}-{n}"));
+        n += 1;
+    }
+    let path = dir.to_string_lossy().to_string();
+    // `--`: whatever the name is, git reads it as the commit-ish.
+    let made = match &local {
+        Some(local) => run(repo, &["worktree", "add", &path, "--", local]).await,
+        None => {
+            run(
+                repo,
+                &[
+                    "worktree", "add", "--track", "-b", &branch, &path, "--", name,
+                ],
+            )
+            .await
+        }
+    };
+    if let Err(e) = made {
+        // Git leaves what it made before it failed (a hook refusing the checkout): its folder,
+        // registered, which would hold the branch, and the local branch it made (none was there).
+        let _ = worktree_remove_dir(repo, &path).await;
+        if local.is_none() && branch_exists(repo, &branch).await {
+            let _ = run(repo, &["branch", "-D", "--", &branch]).await;
+        }
+        return Err(e);
+    }
+    Ok((path, branch))
+}
+
+/// How the base went into a branch (`update_branch`).
+#[derive(Debug, PartialEq)]
+pub enum Updated {
+    /// The branch had all of the base already: nothing was done.
+    UpToDate,
+    Done,
+    /// Stopped on conflicts: the files. A merge is left as it stopped, in the worktree; a rebase is
+    /// undone.
+    Conflict(Vec<String>),
+}
+
+/// Brings the branch `base` into the branch checked out in `dir`: a merge (git's own message), or
+/// a rebase of the branch onto it. A merge that conflicts is left in `dir` for whoever works
+/// there to resolve; a rebase that conflicts is undone. The branch is not touched when it has all
+/// of `base` already.
+pub async fn update_branch(dir: &str, base: &str, rebase: bool) -> Result<Updated> {
+    // A branch name never starts with `-`: this is an option that git would obey.
+    if base.is_empty() || base.starts_with('-') {
+        bail!(invalid_branch(base));
+    }
+    if !branch_exists(dir, base).await {
+        bail!(no_branch(base));
+    }
+    // The base's commits that the branch does not have.
+    if ahead_of(dir, "HEAD", base).await? == 0 {
+        return Ok(Updated::UpToDate);
+    }
+    let (merge, rebasing) = (["merge", "--no-edit", base], ["rebase", base]);
+    let args: &[&str] = if rebase { &rebasing } else { &merge };
+    let Err(e) = run(dir, args).await else {
+        return Ok(Updated::Done);
+    };
+    let files = unmerged(dir).await;
+    // A rebase stops halfway: it is undone, whether or not a file conflicts.
+    if rebase {
+        let _ = run(dir, &["rebase", "--abort"]).await;
+    }
+    if files.is_empty() {
+        Err(e)
+    } else {
+        Ok(Updated::Conflict(files))
+    }
+}
+
 /// Removes a worktree and its branch, tolerating a worktree folder that is already gone.
 pub async fn worktree_remove(repo: &str, path: &str, branch: &str) -> Result<()> {
     worktree_remove_dir(repo, path).await?;
@@ -4800,5 +4894,227 @@ mod repo_tests {
         assert!(e.to_string().contains("existe déjà"), "{e}");
         let e = check_new_branch(&l, "main~1").await;
         assert!(e.is_err(), "a revision is no name git takes");
+    }
+
+    #[tokio::test]
+    async fn a_worktree_is_added_on_an_existing_local_branch_without_making_or_renaming_any() {
+        let (local, _, _) = with_remote("git-g4-existing-local");
+        let l = s(&local);
+        git_in(&local, &["checkout", "-qb", "feat/login"]);
+        commit_file(&local, "login.txt", "login\n");
+        git_in(&local, &["checkout", "-q", "main"]);
+        let (path, branch) = worktree_add_existing(&l, "feat/login").await.unwrap();
+        assert_eq!(branch, "feat/login");
+        assert!(Path::new(&path).ends_with(".claude/worktrees/login"));
+        assert_eq!(
+            std::fs::read_to_string(Path::new(&path).join("login.txt")).unwrap(),
+            "login\n"
+        );
+        // That very branch is checked out there, and no other was made.
+        let held = checkout_of(&l, "feat/login").await.unwrap().unwrap();
+        assert!(crate::tickets::same_dir(&held, &path), "{held} {path}");
+        assert_eq!(branches(&l).await.unwrap(), ["main", "feat/login"]);
+        // The folder is kept out of the repository's own status.
+        assert!(dirty(&l).await.is_empty());
+        // Held by that worktree now: git refuses a second one, and no folder is left behind.
+        assert!(worktree_add_existing(&l, "feat/login").await.is_err());
+        assert_eq!(worktree_paths(&l).await.unwrap().len(), 2);
+        // The folder's name is taken by that worktree: the next branch gets a free one.
+        git_in(&local, &["branch", "other/login"]);
+        let (second, branch) = worktree_add_existing(&l, "other/login").await.unwrap();
+        assert_eq!(branch, "other/login");
+        assert!(Path::new(&second).ends_with(".claude/worktrees/login-2"));
+        // The project's own branch is the folder's: git refuses it, nothing is left behind.
+        assert!(worktree_add_existing(&l, "main").await.is_err());
+        assert_eq!(worktree_paths(&l).await.unwrap().len(), 3);
+    }
+
+    #[tokio::test]
+    async fn a_worktree_on_a_remote_branch_goes_through_the_local_branch_that_tracks_it() {
+        let (local, other, _) = with_remote("git-g4-existing-remote");
+        let l = s(&local);
+        git_in(&other, &["checkout", "-qb", "feat/r"]);
+        commit_file(&other, "r.txt", "r\n");
+        git_in(&other, &["push", "-q", "origin", "feat/r"]);
+        for b in ["theirs", "clash"] {
+            git_in(&other, &["push", "-q", "origin", &format!("main:{b}")]);
+        }
+        git_in(&local, &["fetch", "-q"]);
+        // None yet: one is made, which tracks it, with the remote branch's files.
+        let (path, branch) = worktree_add_existing(&l, "origin/feat/r").await.unwrap();
+        assert_eq!(branch, "feat/r");
+        assert!(Path::new(&path).ends_with(".claude/worktrees/r"));
+        assert!(Path::new(&path).join("r.txt").exists());
+        assert_eq!(
+            status(&path).await.unwrap().upstream.as_deref(),
+            Some("origin/feat/r")
+        );
+        // A local branch tracks it already, whatever its name: that one is used.
+        git_in(
+            &local,
+            &["branch", "-q", "--track", "mine", "origin/theirs"],
+        );
+        let (_, branch) = worktree_add_existing(&l, "origin/theirs").await.unwrap();
+        assert_eq!(branch, "mine");
+        assert!(!branch_exists(&l, "theirs").await);
+        // A local branch of its name that tracks something else: refused, nothing made.
+        git_in(&local, &["branch", "-q", "clash", "main"]);
+        let before = worktree_paths(&l).await.unwrap().len();
+        let e = worktree_add_existing(&l, "origin/clash").await.unwrap_err();
+        assert!(e.to_string().contains("« clash »"), "{e}");
+        // Neither a branch nor an option: refused before git is asked.
+        for bad in ["nowhere", "origin/nowhere", "--detach", "-b", "", "main~1"] {
+            assert!(
+                worktree_add_existing(&l, bad).await.is_err(),
+                "{bad:?} was taken"
+            );
+        }
+        assert_eq!(worktree_paths(&l).await.unwrap().len(), before);
+    }
+
+    /// A hook of the repository at `repo` that fails every checkout, a new worktree's included.
+    fn fail_checkouts(repo: &Path) {
+        let hook = repo.join(".git").join("hooks").join("post-checkout");
+        std::fs::write(&hook, "#!/bin/sh\necho 'refused' >&2\nexit 1\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn a_worktree_that_git_could_not_finish_leaves_neither_its_folder_nor_the_branch_it_made()
+    {
+        let (local, other, _) = with_remote("git-g4f-add-failed");
+        let l = s(&local);
+        git_in(&other, &["push", "-q", "origin", "main:feat/r"]);
+        git_in(&local, &["branch", "kept"]);
+        git_in(&local, &["fetch", "-q"]);
+        let before = worktree_paths(&l).await.unwrap().len();
+        let hook = local.join(".git").join("hooks").join("post-checkout");
+        fail_checkouts(&local);
+        // A remote branch: git made the local branch, then failed. It did not exist before: it goes.
+        let e = worktree_add_existing(&l, "origin/feat/r")
+            .await
+            .unwrap_err();
+        assert!(format!("{e:#}").contains("refused"), "{e:#}");
+        assert!(!branch_exists(&l, "feat/r").await);
+        assert_eq!(worktree_paths(&l).await.unwrap().len(), before);
+        assert!(!Path::new(&l).join(".claude/worktrees/r").exists());
+        // A branch that was there: it stays, and nothing holds it any more.
+        assert!(worktree_add_existing(&l, "kept").await.is_err());
+        assert!(branch_exists(&l, "kept").await);
+        assert_eq!(worktree_paths(&l).await.unwrap().len(), before);
+        assert!(!Path::new(&l).join(".claude/worktrees/kept").exists());
+        assert_eq!(checkout_of(&l, "kept").await.unwrap(), None);
+        // Once git can do it again, both are taken up.
+        std::fs::remove_file(&hook).unwrap();
+        assert_eq!(
+            worktree_add_existing(&l, "origin/feat/r").await.unwrap().1,
+            "feat/r"
+        );
+        assert_eq!(worktree_add_existing(&l, "kept").await.unwrap().1, "kept");
+    }
+
+    /// `feat` (own commit, on `b.txt` or on the file `main` changes since: `conflict`) in a
+    /// worktree of its own, `main` moved on.
+    async fn feat_behind_main(name: &str, conflict: bool) -> (String, String) {
+        let r = diverged(name, conflict);
+        let (path, _) = worktree_add_existing(&r, "feat").await.unwrap();
+        (r, path)
+    }
+
+    #[tokio::test]
+    async fn the_base_goes_into_a_branch_by_merge_or_by_rebase() {
+        // A merge: a merge commit on top of the branch's own commit.
+        let (_, wt) = feat_behind_main("git-g4-update-merge", false).await;
+        let dir = Path::new(&wt);
+        assert_eq!(
+            update_branch(&wt, "main", false).await.unwrap(),
+            Updated::Done
+        );
+        assert_eq!(
+            git_in(dir, &["rev-list", "--merges", "--count", "HEAD"]),
+            "1"
+        );
+        assert!(dir.join("b.txt").exists());
+        // (Trimmed: git may write the file with CRLF here.)
+        assert_eq!(
+            std::fs::read_to_string(dir.join("résumé.md"))
+                .unwrap()
+                .trim(),
+            "main"
+        );
+        // It has all of the base now: nothing more is done.
+        let head = git_in(dir, &["rev-parse", "HEAD"]);
+        assert_eq!(
+            update_branch(&wt, "main", false).await.unwrap(),
+            Updated::UpToDate
+        );
+        assert_eq!(
+            update_branch(&wt, "main", true).await.unwrap(),
+            Updated::UpToDate
+        );
+        assert_eq!(git_in(dir, &["rev-parse", "HEAD"]), head);
+
+        // A rebase: the branch's commit on top of the base's, nothing merged.
+        let (_, wt) = feat_behind_main("git-g4-update-rebase", false).await;
+        let dir = Path::new(&wt);
+        assert_eq!(
+            update_branch(&wt, "main", true).await.unwrap(),
+            Updated::Done
+        );
+        assert_eq!(
+            git_in(dir, &["rev-list", "--merges", "--count", "HEAD"]),
+            "0"
+        );
+        assert_eq!(
+            git_in(dir, &["log", "--format=%s", "-3"]),
+            "feat\nmain\ninit"
+        );
+        assert_eq!(git_in(dir, &["branch", "--show-current"]), "feat");
+    }
+
+    #[tokio::test]
+    async fn a_merge_that_conflicts_is_left_in_the_worktree_and_a_rebase_that_conflicts_is_undone()
+    {
+        let (_, wt) = feat_behind_main("git-g4-update-conflict-merge", true).await;
+        let dir = Path::new(&wt);
+        assert_eq!(
+            update_branch(&wt, "main", false).await.unwrap(),
+            Updated::Conflict(vec!["résumé.md".to_string()])
+        );
+        // Left as it stopped, for the agent to resolve.
+        assert_eq!(operation_in_progress(&wt).await, Some("merge"));
+        assert!(std::fs::read_to_string(dir.join("résumé.md"))
+            .unwrap()
+            .contains("<<<<<<<"));
+
+        let (_, wt) = feat_behind_main("git-g4-update-conflict-rebase", true).await;
+        let dir = Path::new(&wt);
+        let tip = git_in(dir, &["rev-parse", "HEAD"]);
+        assert_eq!(
+            update_branch(&wt, "main", true).await.unwrap(),
+            Updated::Conflict(vec!["résumé.md".to_string()])
+        );
+        // Undone: the branch is where it was, nothing is under way, the folder is clean.
+        assert_eq!(operation_in_progress(&wt).await, None);
+        assert_eq!(git_in(dir, &["rev-parse", "HEAD"]), tip);
+        assert_eq!(git_in(dir, &["branch", "--show-current"]), "feat");
+        assert!(dirty(&wt).await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_base_that_looks_like_an_option_or_is_no_branch_is_not_integrated() {
+        let (_, wt) = feat_behind_main("git-g4-update-refused", false).await;
+        let head = git_in(Path::new(&wt), &["rev-parse", "HEAD"]);
+        for base in ["-x", "--abort", "nowhere", ""] {
+            assert!(
+                update_branch(&wt, base, false).await.is_err(),
+                "{base:?} was taken"
+            );
+        }
+        assert_eq!(git_in(Path::new(&wt), &["rev-parse", "HEAD"]), head);
     }
 }

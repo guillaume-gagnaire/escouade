@@ -77,6 +77,26 @@ export function mergeAgent(agent: Agent) {
   };
 }
 
+/**
+ * « Intégrer <base> »: the agent's base branch goes into its branch, as the project's strategy says. A conflict is
+ * handed to the agent by the backend; the toast says so, and the refusals (the agent works, it has changes) are told as
+ * they come.
+ */
+export async function integrateBase(agent: Agent) {
+  const wt = agent.worktree;
+  if (!wt) return;
+  const [base, branch] = [wt.baseBranch, wt.branch];
+  try {
+    const done = await api.integrateBase(agent.id);
+    if (done.kind === 'done') app.toast(t('branches.integrate.done', { base, branch }), 'ok');
+    else if (done.kind === 'upToDate') app.toast(t('branches.integrate.upToDate', { base, branch }), 'info');
+    else if (done.rebase) app.toast(t('branches.integrate.conflictRebase', { base, agent: agent.name }), 'info');
+    else app.toast(t('branches.integrate.conflictMerge', { base, branch, agent: agent.name, count: done.files.length }), 'info');
+  } catch (e) {
+    app.toast(String(e), 'error');
+  }
+}
+
 /** Remote Control on / off: the agent becomes reachable from claude.ai and the Claude app. */
 export async function toggleRemote(agent: Agent) {
   const on = !agent.remoteControl;

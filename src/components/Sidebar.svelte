@@ -1,9 +1,11 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { keyLabel } from '../lib/platform';
   import { t } from '../lib/i18n';
   import { api } from '../lib/ipc';
   import { fDur, fTok, fUsd, fWhen, tildify } from '../lib/format';
-  import { copyRemoteLink, openRemote, toggleRemote } from '../lib/agent-actions';
+  import { copyRemoteLink, integrateBase, openRemote, toggleRemote } from '../lib/agent-actions';
+  import { startAgentOn } from '../lib/branch-actions';
   import { ticketTag } from '../lib/board';
   import { shortBranch } from '../lib/branches';
   import { buffers, lossNotice } from '../lib/editor/buffers.svelte';
@@ -16,6 +18,7 @@
   import type { Agent, AgentStatus, Project } from '../lib/types';
   import RunsSection from './RunsSection.svelte';
   import StatusDot from './StatusDot.svelte';
+  import BranchPicker from './branches/BranchPicker.svelte';
 
   let { project }: { project: Project } = $props();
 
@@ -30,6 +33,9 @@
   };
 
   let termMenuBtn = $state<HTMLButtonElement>();
+  let moreBtn = $state<HTMLButtonElement>();
+  /** The branch picker is open, to choose the branch of a new agent. */
+  let pickingBranch = $state(false);
   let renaming = $state<string | null>(null);
   let renameValue = $state('');
 
@@ -77,6 +83,10 @@
         ? { label: t('nav.sidebar.menu.restore'), onClick: () => app.run(api.archiveAgent(a.id, false)) }
         : { label: t('nav.sidebar.menu.archive'), hint: t('nav.sidebar.menu.archiveHint'), onClick: () => confirmArchive(a) },
       ...(canPrepare(a) ? [{ label: t('nav.sidebar.menu.prepareLaunch'), onClick: () => prepareLaunch(a) }] : []),
+      // Its base branch goes into its own, as the project's strategy says.
+      ...(a.worktree && !a.archived
+        ? [{ label: t('branches.integrate.menu', { base: a.worktree.baseBranch }), onClick: () => integrateBase(a) }]
+        : []),
       ...(a.archived
         ? []
         : [
@@ -151,13 +161,35 @@
         lossNotice(buffers.unsavedIn(a.projectId, a.id)),
       confirm: t('common.delete'),
       danger: true,
-      option: a.worktree ? { label: t('nav.sidebar.deleteWorktree', { branch: a.worktree.branch }), value: true } : undefined,
+      option: a.worktree
+        ? {
+            // A branch that was there before the agent stays, whatever becomes of its worktree.
+            label: a.worktree.existing
+              ? t('branches.agent.deleteWorktree', { branch: a.worktree.branch })
+              : t('nav.sidebar.deleteWorktree', { branch: a.worktree.branch }),
+            value: true,
+          }
+        : undefined,
       onConfirm: async (removeWorktree) => {
         stopTests(a.id);
         const warning = await app.run(api.deleteAgent(a.id, removeWorktree));
         if (warning) app.toast(warning, 'error');
       },
     };
+  }
+
+  function newAgentMenu() {
+    if (!moreBtn) return;
+    menu.showAt(moreBtn, [
+      {
+        label: t('branches.agent.onBranch'),
+        // Once the menu is gone and has given the focus back to its button: the picker gives it back there in turn.
+        onClick: async () => {
+          await tick();
+          pickingBranch = true;
+        },
+      },
+    ]);
   }
 
   function shellMenu() {
@@ -191,10 +223,20 @@
     <span class="section-label">{t('common.agents')}</span>
     <span class="count">{app.projectAgents.length}</span>
     <div style="flex:1"></div>
-    <button class="new" onclick={() => app.newAgent(project.id)} title={t('nav.sidebar.newAgentTitle', { shortcut: keyLabel('Ctrl+N') })}>
-      <span class="plus">+</span>
-      {t('nav.sidebar.newAgent')}
-    </button>
+    <div class="newgrp">
+      <button class="new" onclick={() => app.newAgent(project.id)} title={t('nav.sidebar.newAgentTitle', { shortcut: keyLabel('Ctrl+N') })}>
+        <span class="plus">+</span>
+        {t('nav.sidebar.newAgent')}
+      </button>
+      <button
+        class="more"
+        bind:this={moreBtn}
+        aria-haspopup="menu"
+        aria-label={t('branches.agent.moreWays')}
+        title={t('branches.agent.moreWays')}
+        onclick={newAgentMenu}>▾</button
+      >
+    </div>
   </div>
 
   <div class="list">
@@ -374,6 +416,16 @@
   </div>
 </aside>
 
+{#if pickingBranch}
+  <BranchPicker
+    projectId={project.id}
+    anchor={moreBtn}
+    mode="pick"
+    onclose={() => (pickingBranch = false)}
+    onpick={(b) => startAgentOn(project.id, b.name)}
+  />
+{/if}
+
 <style>
   .side {
     width: 300px;
@@ -457,8 +509,32 @@
     cursor: pointer;
   }
   .new:hover,
+  .more:hover,
   .plus-btn:hover {
     border-color: var(--accent);
+  }
+  /* « Nouvel agent » and the menu of the other ways to make one: one control in two parts. */
+  .newgrp {
+    display: flex;
+  }
+  .newgrp .new {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+  .more {
+    width: 24px;
+    height: 28px;
+    margin-left: -1px;
+    padding: 0;
+    border: 1px solid var(--line2);
+    border-radius: 0 var(--r-sm) var(--r-sm) 0;
+    background: var(--elev);
+    color: var(--muted);
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .more:hover {
+    color: var(--text);
   }
   .plus {
     font-size: 15px;

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { commitAgentPrompt } from '../lib/agent-actions';
@@ -553,5 +553,69 @@ describe('FilesPanel in English', () => {
     await settle();
     expect(backend.called('send_message')[0].args.text).toMatch(/^Commit the changes you made in this repository/);
     expect(app.toasts.at(-1)).toMatchObject({ text: 'Commit request sent to refacto-auth', kind: 'ok' });
+  });
+});
+
+describe('FilesPanel « Intégrer <base> »', () => {
+  beforeEach(() => resetApp({ projects: [project()], agents: [agent(), agent({ id: 'a2', name: 'tests-e2e' })] }));
+
+  const wt = { path: 'C:\\code\\demo-api\\.claude\\worktrees\\landing', branch: 'ccm/landing', baseBranch: 'develop' };
+  const integrate = () => screen.getByRole('button', { name: 'Intégrer develop' });
+
+  it('is beside the merge button of an agent with a worktree, and integrates the base of the agent', async () => {
+    resetApp({ agents: [agent({ id: 'a3', name: 'landing', worktree: wt })] });
+    const backend = fakeBackend({ git_files: () => [], integrate_base: () => ({ kind: 'done' }) });
+    render(FilesPanel, { project: project(), agent: app.agents.a3 });
+    expect(screen.getByRole('button', { name: 'Merger ccm/landing → develop…' })).toBeInTheDocument();
+    await userEvent.click(integrate());
+    expect(backend.called('integrate_base')[0].args).toEqual({ id: 'a3' });
+    await waitFor(() => expect(app.toasts.at(-1)).toMatchObject({ text: 'develop intégrée dans ccm/landing.', kind: 'ok' }));
+  });
+
+  it('tells the conflicts the agent was handed, and the refusal when it works', async () => {
+    resetApp({ agents: [agent({ id: 'a3', name: 'landing', worktree: wt })] });
+    let answer: unknown = { kind: 'conflict', files: ['a.ts', 'b.ts'], rebase: false };
+    fakeBackend({
+      git_files: () => [],
+      integrate_base: () => {
+        if (typeof answer === 'string') throw answer;
+        return answer;
+      },
+    });
+    render(FilesPanel, { project: project(), agent: app.agents.a3 });
+    await userEvent.click(integrate());
+    await waitFor(() =>
+      expect(app.toasts.at(-1)).toMatchObject({
+        text: 'develop a des conflits avec ccm/landing sur 2 fichiers : landing doit les résoudre.',
+        kind: 'info',
+      }),
+    );
+    answer = 'Attends la fin du tour de landing pour intégrer develop.';
+    await userEvent.click(integrate());
+    await waitFor(() =>
+      expect(app.toasts.at(-1)).toMatchObject({ text: 'Attends la fin du tour de landing pour intégrer develop.', kind: 'error' }),
+    );
+  });
+
+  it('is not there for an archived agent, as it is not in the sidebar’s menu, where the merge stays', async () => {
+    resetApp({ agents: [agent({ id: 'a3', name: 'landing', worktree: wt, archived: true })] });
+    fakeBackend({ git_files: () => [] });
+    render(FilesPanel, { project: project(), agent: app.agents.a3 });
+    expect(screen.getByRole('button', { name: 'Merger ccm/landing → develop…' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Intégrer/ })).toBeNull();
+  });
+
+  it('is not there for an agent without a worktree, nor for the whole project', async () => {
+    fakeBackend({ git_files: () => [] });
+    render(FilesPanel, { project: project(), agent: app.agents.a1 });
+    expect(screen.queryByRole('button', { name: /^Intégrer/ })).toBeNull();
+  });
+
+  it('is written in English', async () => {
+    setLang('en');
+    resetApp({ agents: [agent({ id: 'a3', name: 'landing', worktree: wt })] });
+    fakeBackend({ git_files: () => [] });
+    render(FilesPanel, { project: project(), agent: app.agents.a3 });
+    expect(screen.getByRole('button', { name: 'Integrate develop' })).toBeInTheDocument();
   });
 });

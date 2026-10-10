@@ -86,6 +86,28 @@ describe('MergedBranchesModal', () => {
     await waitFor(() => expect(backend.called('branches_merged')).toHaveLength(2));
   });
 
+  it('keeps the boxes as they were after a partial failure, a new branch being ticked', async () => {
+    let reads = 0;
+    setup({
+      branches_merged: () => (reads++ ? ['ticket/DEM-2', 'ticket/DEM-3', 'ticket/DEM-4'] : MERGED),
+      branch_delete: (args) => {
+        if (args.name === 'ticket/DEM-2') throw 'IN_WORKTREE:a1:refacto-auth';
+        return null;
+      },
+    });
+    await loaded();
+    // DEM-3 is left alone on purpose.
+    await userEvent.click(boxes()[2]);
+    await userEvent.click(remove());
+    await screen.findByRole('alert');
+    await waitFor(() =>
+      expect(boxes().map((b) => b.labels?.[0]?.textContent?.trim())).toEqual(['ticket/DEM-2', 'ticket/DEM-3', 'ticket/DEM-4']),
+    );
+    // Not ticked again for having been read again: what the user unticked stays so; a branch that came since is ticked.
+    expect(boxes().map((b) => b.checked)).toEqual([true, false, true]);
+    expect(remove()).toHaveTextContent('Supprimer 2 branches');
+  });
+
   it('does not delete twice while it runs', async () => {
     let finish!: (v: null) => void;
     const backend = setup({ branch_delete: () => new Promise((r) => (finish = r)), branches_merged: () => ['ticket/DEM-1'] });

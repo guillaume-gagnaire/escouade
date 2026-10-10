@@ -112,6 +112,47 @@ export default {
     compareTitle: '{from} ↔ {to}',
     delete: 'Supprimer la branche…',
   },
+  /** Un agent sur une branche qui existe déjà, ou un ticket qui la reprend. */
+  agent: {
+    /** The menu beside « Nouvel agent ». */
+    onBranch: 'Nouvel agent sur une branche…',
+    /** The label of the button beside « Nouvel agent » that opens that menu. */
+    moreWays: 'Autres façons de créer un agent',
+    /** The branch picker, when it is to choose the branch of an agent or of a ticket. */
+    pickTitle: 'Choisir une branche',
+    /** The entry of a branch’s menu in the picker. */
+    launchHere: 'Lancer un agent sur cette branche',
+    /** Why the branch of the project’s folder can’t be picked. */
+    isFolderBranch: 'C’est la branche du dossier du projet : un agent sans worktree y travaille déjà, ou change de branche d’abord.',
+    /** `{branch}`: the branch the agent works on, which stays whatever its worktree becomes. */
+    deleteWorktree: 'Supprimer aussi le worktree (la branche {branch} est conservée)',
+  },
+  /** « Intégrer <base> » : the base branch goes into the agent’s branch. */
+  integrate: {
+    /** `{base}`: the agent’s base branch. */
+    menu: 'Intégrer {base}',
+    /** `{base}`, `{branch}`: the agent’s base branch and its own. */
+    done: '{base} intégrée dans {branch}.',
+    upToDate: '{branch} a déjà tout ce qu’il y a dans {base}.',
+    /** The merge stopped on conflicts, left in the worktree: `{count}` files, which `{agent}` is asked to resolve. */
+    conflictMerge: {
+      one: '{base} a un conflit avec {branch} sur {count} fichier : {agent} doit le résoudre.',
+      other: '{base} a des conflits avec {branch} sur {count} fichiers : {agent} doit les résoudre.',
+    },
+    /** The rebase stopped on conflicts and was undone. */
+    conflictRebase: 'Le rebase sur {base} a des conflits et a été annulé : {agent} doit le refaire.',
+  },
+  /** The « Branche » field of a ticket’s form. */
+  ticket: {
+    branch: 'Branche',
+    /** The ticket’s own branch, made at its start: its key is not known yet. */
+    ownNew: 'Nouvelle branche ticket/<clé>',
+    /** `{branch}`: the ticket’s own branch (`ticket/dem-3`). */
+    own: 'Nouvelle branche {branch}',
+    existing: 'Reprendre une branche existante…',
+    /** The tooltip of that entry. */
+    existingKept: 'Escouade ne supprime jamais cette branche, même une fois le ticket validé.',
+  },
   /** « Branches mergées » : the clean-up. */
   merged: {
     title: 'Branches mergées',

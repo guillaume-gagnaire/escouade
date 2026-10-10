@@ -13,6 +13,9 @@ export const COLUMNS: { id: Column; color: string }[] = [
   { id: 'done', color: 'var(--ok)' },
 ];
 
+/** The branch a ticket gets when it names none: `ticket/dem-3`, as the backend makes it at its start. */
+export const ticketBranch = (key: string) => `ticket/${key.toLowerCase()}`;
+
 /** A column's tickets in order: "À faire" by priority, "Terminé" newest first, the others by arrival. */
 export function columnTickets(tickets: Ticket[], column: Column): Ticket[] {
   const list = tickets.filter((ticket) => ticket.column === column);

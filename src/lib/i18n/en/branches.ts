@@ -112,6 +112,48 @@ export default defineZone('branches', {
     compareTitle: '{from} ↔ {to}',
     delete: 'Delete branch…',
   },
+  /** An agent on a branch that exists already, or a ticket that takes one up. */
+  agent: {
+    /** The menu beside “New agent”. */
+    onBranch: 'New agent on a branch…',
+    /** The label of the button beside “New agent” that opens that menu. */
+    moreWays: 'Other ways to create an agent',
+    /** The branch picker, when it is to choose the branch of an agent or of a ticket. */
+    pickTitle: 'Choose a branch',
+    /** The entry of a branch’s menu in the picker. */
+    launchHere: 'Start an agent on this branch',
+    /** Why the branch of the project’s folder can’t be picked. */
+    isFolderBranch:
+      'This is the branch of the project’s folder: an agent without a worktree already works on it, or switch branches first.',
+    /** `{branch}`: the branch the agent works on, which stays whatever its worktree becomes. */
+    deleteWorktree: 'Also delete the worktree (the branch {branch} is kept)',
+  },
+  /** “Integrate <base>”: the base branch goes into the agent’s branch. */
+  integrate: {
+    /** `{base}`: the agent’s base branch. */
+    menu: 'Integrate {base}',
+    /** `{base}`, `{branch}`: the agent’s base branch and its own. */
+    done: '{base} integrated into {branch}.',
+    upToDate: '{branch} already has everything that is in {base}.',
+    /** The merge stopped on conflicts, left in the worktree: `{count}` files, which `{agent}` is asked to resolve. */
+    conflictMerge: {
+      one: '{base} conflicts with {branch} in {count} file: {agent} has to resolve it.',
+      other: '{base} conflicts with {branch} in {count} files: {agent} has to resolve them.',
+    },
+    /** The rebase stopped on conflicts and was undone. */
+    conflictRebase: 'The rebase onto {base} has conflicts and was undone: {agent} has to do it again.',
+  },
+  /** The “Branch” field of a ticket’s form. */
+  ticket: {
+    branch: 'Branch',
+    /** The ticket’s own branch, made at its start: its key is not known yet. */
+    ownNew: 'New branch ticket/<key>',
+    /** `{branch}`: the ticket’s own branch (`ticket/dem-3`). */
+    own: 'New branch {branch}',
+    existing: 'Take up an existing branch…',
+    /** The tooltip of that entry. */
+    existingKept: 'Escouade never deletes this branch, even once the ticket is approved.',
+  },
   /** “Merged branches”: the clean-up. */
   merged: {
     title: 'Merged branches',

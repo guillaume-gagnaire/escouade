@@ -414,4 +414,7 @@ Ce qu’Escouade dit à Claude ou lui fait écrire suit « Langue des textes ré
 | base (du projet) | base | la branche cible du Kanban, sinon la branche du dossier |
 | Supprimer quand même | Delete anyway | une branche pas mergée |
 | Passer sur une branche | Switch to a branch | le menu d’un commit du graphe ; « Basculer » reste pour le merge |
+| Nouvel agent sur une branche… / Lancer un agent sur cette branche | New agent on a branch… / Start an agent on this branch | un agent dont le worktree est sur une branche qui existe déjà |
+| Intégrer <base> | Integrate <base> | la base du projet entre dans la branche de l’agent (merge ou rebase, selon la stratégie du Kanban) ; « Merger » reste merge |
+| Reprendre une branche existante… | Take up an existing branch… | le champ « Branche » du formulaire d’un ticket → “Branch” |
 | Comparer avec la branche courante | Compare with the current branch | le menu d’un commit du graphe ; sur une HEAD détachée : « Comparer avec HEAD » → “Compare with HEAD” |

@@ -338,6 +338,8 @@ pub(super) async fn create_ticket<R: Runtime>(
         // The default number of loops, as the window's form starts with.
         max_loops: 0,
         after: after_ids(core, &project, a.after.as_deref().unwrap_or_default())?,
+        // Its own branch: the tools do not name an existing one.
+        branch: String::new(),
     };
     let made = core
         .ticket_create(&project.id, draft)
@@ -379,6 +381,8 @@ pub(super) fn update_ticket<R: Runtime>(
             Some(new) => after_ids(core, &project, new)?,
             None => t.after.clone(),
         },
+        // Not the tools' to change: the ticket keeps the branch the window gave it.
+        branch: t.branch.clone(),
     };
     let updated = core.ticket_update(&t.id, draft).map_err(refusal)?;
     json(&ticket_view(core, &updated))
@@ -702,6 +706,7 @@ fn sub_draft(sub: &SubTicket, after: Vec<String>) -> Result<TicketDraft, ToolErr
         criteria: criteria(sub.criteria.as_deref().unwrap_or_default())?,
         max_loops: 0,
         after,
+        branch: String::new(),
     })
 }
 

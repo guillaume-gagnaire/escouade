@@ -138,6 +138,28 @@ impl std::fmt::Display for Refusal {
 
 impl std::error::Error for Refusal {}
 
+/// The branch a ticket's form names, trimmed; empty for the ticket's own. Never an option.
+fn branch_name(branch: &str) -> Result<String> {
+    let branch = branch.trim();
+    if branch.starts_with('-') {
+        bail!(tr!(
+            "« {branch} » n'est pas un nom de branche valide",
+            "“{branch}” isn’t a valid branch name"
+        ));
+    }
+    Ok(branch.to_string())
+}
+
+/// Why a ticket cannot start again on the branch it took up: the agent it had, archived, holds it in
+/// its worktree, with changes that no start may throw away.
+fn archived_holds(lang: Lang, agent: &str, branch: &str) -> String {
+    tr_in!(
+        lang,
+        "L’agent {agent}, archivé, garde la branche « {branch} » dans son worktree avec des changements non commités : commite-les ou supprime l’agent, puis reprends le ticket.",
+        "The archived agent {agent} holds the branch “{branch}” in its worktree with uncommitted changes: commit them or delete the agent, then resume the ticket."
+    )
+}
+
 fn ticket_not_found() -> anyhow::Error {
     anyhow!(tr!("ticket introuvable", "ticket not found"))
 }
@@ -206,6 +228,8 @@ pub struct TicketDraft {
     pub max_loops: u32,
     /// The ids of the tickets it comes after ("Après"), the whole list.
     pub after: Vec<String>,
+    /// An existing branch for its agent to take up; empty: the ticket's own, `ticket/<key>`.
+    pub branch: String,
 }
 
 impl<R: Runtime> Core<R> {
@@ -289,6 +313,8 @@ impl<R: Runtime> Core<R> {
             return Err(title_missing());
         }
         let project = self.project(project_id)?;
+        // Refused before a key is used up.
+        let branch = self.ticket_branch(&project, &d.branch).await?;
         let current = git::head_branch(&project.path).await;
         let key = {
             let mut projects = self.projects.write();
@@ -319,6 +345,7 @@ impl<R: Runtime> Core<R> {
             max_loops: board::max_loops(d.max_loops),
             created_at: now_ms(),
             external,
+            branch,
             ..Default::default()
         };
         {
@@ -350,12 +377,27 @@ impl<R: Runtime> Core<R> {
         Ok(ticket)
     }
 
+    /// The branch a ticket's form names, trimmed: empty for the ticket's own, else one the
+    /// repository has (a local branch, or a remote one). It may be taken by then, or be the
+    /// folder's: the start refuses it, as an agent made on it is.
+    async fn ticket_branch(&self, project: &Project, branch: &str) -> Result<String> {
+        let branch = branch_name(branch)?;
+        if branch.is_empty() {
+            return Ok(branch);
+        }
+        let root = self.toplevel(&project.path).await.ok_or_else(not_a_repo)?;
+        git::local_of(&root, &branch).await?;
+        Ok(branch)
+    }
+
     /// Only a ticket "À faire" changes. It never comes after a ticket that waits for it already.
     pub fn ticket_update(self: &Arc<Self>, id: &str, d: TicketDraft) -> Result<Ticket> {
         let title = d.title.trim().to_string();
         if title.is_empty() {
             return Err(title_missing());
         }
+        // (Its existence is the start's to check: it needs git, this does not wait for it.)
+        let branch = branch_name(&d.branch)?;
         let ticket = self.edit_ticket_with(
             id,
             |all| {
@@ -381,6 +423,7 @@ impl<R: Runtime> Core<R> {
                 t.criteria = board::criteria_from(&d.criteria);
                 t.max_loops = board::max_loops(d.max_loops);
                 t.after = after;
+                t.branch = branch;
                 Ok(t.clone())
             },
         )?;
@@ -966,6 +1009,55 @@ impl<R: Runtime> Core<R> {
         }
     }
 
+    /// A ticket started again on a branch it took up: the agent it had, archived, still has that
+    /// branch in its worktree, which would keep the new agent from taking it up. That folder goes,
+    /// after the project's teardown (the branch is the user's and stays, and restoring the agent
+    /// makes the folder again, if the branch is free then). One that holds changes, new files
+    /// included, is left as it is, and the start is refused, saying what to do.
+    async fn release_archived_holder(&self, project: &Project, t: &Ticket) -> Result<()> {
+        let Some(root) = self.toplevel(&project.path).await else {
+            return Ok(());
+        };
+        let Ok(Some(local)) = git::local_of(&root, &t.branch).await else {
+            return Ok(());
+        };
+        let holders: Vec<(String, Worktree)> = self
+            .agents
+            .read()
+            .values()
+            .filter_map(|h| {
+                let rt = h.lock();
+                let m = &rt.meta;
+                let wt = m.worktree.clone()?;
+                (m.archived
+                    && m.ticket_id.as_deref() == Some(&t.id)
+                    && wt.existing
+                    && wt.branch == local)
+                    .then(|| (m.name.clone(), wt))
+            })
+            .collect();
+        for (name, wt) in holders {
+            if !Path::new(&wt.path).is_dir() {
+                continue;
+            }
+            // Whatever is not committed there (new files included) would be lost.
+            if !git::status(&wt.path)
+                .await
+                .is_ok_and(|s| s.entries.is_empty())
+            {
+                bail!(archived_holds(i18n::ui(), &name, &local));
+            }
+            if let Some(problem) = self.teardown_worktree(project, &wt, None).await {
+                log::warn!("ticket {}: {name}'s worktree: {problem}", t.key);
+            }
+            if let Err(e) = git::worktree_remove_dir(&project.path, &wt.path).await {
+                log::warn!("ticket {}: {name}'s worktree not released: {e:#}", t.key);
+            }
+        }
+        self.git.refresh(&project.id);
+        Ok(())
+    }
+
     /// The ticket's agent: its worktree on `ticket/<key>` from the target branch, its block of
     /// ports (none when isola runs the project's services), the protocol appended to its system
     /// prompt; then, its worktree set up, its first message.
@@ -976,8 +1068,18 @@ impl<R: Runtime> Core<R> {
         // What its Claude is told, from its protocol to its first message.
         let lang = self.lang().claude;
         let or = |v: &str, default: &str| Some(if v.is_empty() { default } else { v }.to_string());
-        // As its worktree will be: the target branch has isola's configuration.
-        let isola = isola::cli().is_some() && isola::configured_on(&project.path, &target).await;
+        // The branch it takes up may still be in the worktree of its earlier agent, archived.
+        if !t.branch.is_empty() {
+            self.release_archived_holder(project, t).await?;
+        }
+        // The ticket's own branch from the target, or one that exists, which the agent takes up.
+        let (new_branch, taken_up, base) = match t.branch.as_str() {
+            "" => (Some((board::branch_of(&t.key), target.clone())), None, None),
+            branch => (None, Some(branch.to_string()), Some(target.clone())),
+        };
+        // As its worktree will be: the branch it is on has isola's configuration.
+        let from = taken_up.as_deref().unwrap_or(&target);
+        let isola = isola::cli().is_some() && isola::configured_on(&project.path, from).await;
         // Reserved at once: no other start or launch preparation gets this block meanwhile.
         let ports = if isola { None } else { self.reserve_ports() };
         let made = self
@@ -988,7 +1090,7 @@ impl<R: Runtime> Core<R> {
                     effort: or(&s.effort, &settings.default_effort),
                     mode: or(&s.mode, &settings.default_mode),
                     name: Some(board::agent_name(&t.key, &t.title)),
-                    worktree: Some((board::branch_of(&t.key), target)),
+                    worktree: new_branch,
                     append_prompt: Some(board::protocol_prompt_for(lang, t, ports, isola)),
                     ticket_id: Some(t.id.clone()),
                     port_base: ports,
@@ -996,6 +1098,8 @@ impl<R: Runtime> Core<R> {
                     copy_of: None,
                     account: None,
                     isolated: None,
+                    branch: taken_up,
+                    base,
                 },
             )
             .await;
@@ -1610,7 +1714,7 @@ impl<R: Runtime> Core<R> {
             if s.cleanup {
                 // Merged, or with nothing on it, its branch goes too; pushed or proposed, it stays
                 // (and an agent restored gets its worktree back from it).
-                let keep_branch = !nothing && s.action != "merge";
+                let keep_branch = board::keeps_branch(wt.existing, nothing, &s.action);
                 let ports = meta.port_base;
                 self.remove_worktree_of(t, &project, &wt, proc, ports, keep_branch)
                     .await;
@@ -2348,7 +2452,7 @@ pub(crate) fn merge_lock_key(repo: &str) -> String {
 }
 
 /// `t` is still "À tester" with this agent, its validation under way.
-fn validating(t: &Ticket, agent_id: &str) -> bool {
+pub(crate) fn validating(t: &Ticket, agent_id: &str) -> bool {
     t.column == Column::Review && t.step.is_some() && t.agent_id.as_deref() == Some(agent_id)
 }
 

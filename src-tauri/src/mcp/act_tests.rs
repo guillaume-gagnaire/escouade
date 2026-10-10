@@ -323,6 +323,22 @@ async fn a_ticket_to_do_is_edited_a_field_at_a_time_and_never_into_a_loop() {
     assert!(ticket_events(&h, &b.id) >= seen + 2);
     assert_eq!(entry(&h).tool, "update_ticket");
 
+    // The branch the window gave the ticket (« Reprendre une branche existante… ») is not the
+    // tools' to change: editing another field keeps it.
+    h.core
+        .edit_ticket(&b.id, |t| {
+            t.branch = "feat/login".into();
+            Ok(())
+        })
+        .unwrap();
+    read(
+        &c,
+        "update_ticket",
+        json!({ "ticket": "DEM-2", "title": "Deuxième, encore revu" }),
+    )
+    .await;
+    assert_eq!(stored(&h, &b.id).branch, "feat/login");
+
     // DEM-1 after DEM-2, which waits for DEM-1: refused with the board's own words.
     let loop_ = refused(
         &c,

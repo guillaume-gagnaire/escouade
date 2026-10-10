@@ -104,8 +104,6 @@ export default defineZone('shell', {
       unpublished: 'Branch not published to the remote repository yet',
       lastFetch: 'Last fetch: {when}',
       never: 'never',
-      publish: 'Publish branch',
-      now: 'now',
       goneShort: 'remote deleted',
       unpublishedShort: 'not published',
     },

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { board, fakeBackend, project, ticket } from '../test/ipc';
+import { agent, board, fakeBackend, project, ticket } from '../test/ipc';
 import { api } from './ipc';
 import type { SearchResult } from './types';
 
@@ -46,6 +46,21 @@ describe('board commands', () => {
     expect(backend.calls).toEqual([
       { cmd: 'board_set', args: { projectId: 'p1', settings } },
       { cmd: 'git_branches', args: { projectId: 'p1' } },
+    ]);
+  });
+
+  it('starts an agent on an existing branch and integrates its base with the names its commands take', async () => {
+    const backend = fakeBackend({
+      create_agent_on_branch: () => agent({ id: 'a9' }),
+      integrate_base: () => ({ kind: 'conflict', files: ['src/a.ts'], rebase: false }),
+    });
+    expect((await api.createAgentOnBranch('p1', 'origin/feat', 'opus')).id).toBe('a9');
+    await api.createAgentOnBranch('p1', 'feat');
+    expect(await api.integrateBase('a1')).toEqual({ kind: 'conflict', files: ['src/a.ts'], rebase: false });
+    expect(backend.calls).toEqual([
+      { cmd: 'create_agent_on_branch', args: { projectId: 'p1', branch: 'origin/feat', model: 'opus' } },
+      { cmd: 'create_agent_on_branch', args: { projectId: 'p1', branch: 'feat', model: null } },
+      { cmd: 'integrate_base', args: { id: 'a1' } },
     ]);
   });
 });

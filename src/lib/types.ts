@@ -339,6 +339,8 @@ export interface Ticket {
   doneAt: number | null;
   /** Imported from an external ticket system: the ticket there, kept in step. */
   external: ExternalRef | null;
+  /** An existing branch its agent takes up; empty: its own, `ticket/<key>`, made at its start. */
+  branch: string;
 }
 
 export type BoardAction = 'merge' | 'pr' | 'push' | 'keep';
@@ -369,6 +371,8 @@ export interface TicketDraft {
   maxLoops: number;
   /** The ids of the tickets it comes after, the whole list. */
   after: string[];
+  /** An existing branch for its agent to take up; absent or empty: the ticket's own. Given again when editing, to keep it. */
+  branch?: string;
 }
 
 export interface RecipeStep {
@@ -417,7 +421,12 @@ export interface Worktree {
   path: string;
   branch: string;
   baseBranch: string;
+  /** The branch was there before the agent (« Nouvel agent sur une branche… »): deleting the worktree leaves it. */
+  existing?: boolean;
 }
+
+/** What « Intégrer <base> » did: the base was in the agent's branch already, went in, or stopped on conflicts the agent was asked to resolve (a rebase is undone). */
+export type Integration = { kind: 'upToDate' } | { kind: 'done' } | { kind: 'conflict'; files: string[]; rebase: boolean };
 
 /** A request waiting for the user, as the agent's view sums it up: each text capped, the card in the conversation has it whole. */
 export interface PendingRequest {

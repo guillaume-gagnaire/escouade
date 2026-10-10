@@ -1120,6 +1120,7 @@ mod tests {
                 path: root.clone(),
                 branch: "ticket/x".into(),
                 base_branch: "main".into(),
+                existing: false,
             }),
             port_base: Some(4100),
             recipe: Some(recipe.clone()),

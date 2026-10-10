@@ -68,6 +68,16 @@
   let pickerOpen = $state(false);
   let branchButton = $state<HTMLButtonElement>();
   let quotaButton = $state<HTMLButtonElement>();
+  // The button is disabled while a sync runs, and a browser takes the focus off a control that becomes disabled: the
+  // sync started from the picker, which gave the focus to the button, so the button gets it back when the sync ends (unless
+  // the user has put it somewhere since).
+  let wasBusy = false;
+  $effect(() => {
+    const now = !!busy;
+    const lost = !document.activeElement || document.activeElement === document.body;
+    if (wasBusy && !now && lost) branchButton?.focus();
+    wasBusy = now;
+  });
   // Nothing to pick a branch of any more (another view, another folder): the picker goes.
   $effect(() => {
     if (!repo) pickerOpen = false;

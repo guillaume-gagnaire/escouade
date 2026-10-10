@@ -25,7 +25,7 @@ use crate::usage;
 use crate::worktrees::{self, RunSuggestion, WorktreeSuggestion};
 use anyhow::{anyhow, bail, Context, Result};
 use parking_lot::{Mutex, RwLock};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -235,6 +235,91 @@ pub fn stash_message(lang: i18n::Lang, branch: &str) -> String {
     )
 }
 
+/// Refused: the branch an agent was asked to work on is the one the project's folder is on.
+pub(crate) fn folder_branch_refusal(lang: i18n::Lang) -> String {
+    tr_in!(
+        lang,
+        "C’est la branche du dossier du projet : un agent sans worktree y travaille déjà, ou change de branche d’abord.",
+        "That’s the branch of the project’s folder: an agent without a worktree already works on it, or switch to another branch first."
+    )
+}
+
+/// « Intégrer <base> » refused: the agent's worktree has changes of its own.
+pub(crate) fn integrate_dirty(lang: i18n::Lang) -> String {
+    tr_in!(
+        lang,
+        "Commite ou mets de côté les changements de l’agent d’abord.",
+        "Commit or stash the agent’s changes first."
+    )
+}
+
+/// « Intégrer <base> » refused during the turn of the agent `name`.
+pub(crate) fn integrate_busy(lang: i18n::Lang, name: &str, base: &str) -> String {
+    tr_in!(
+        lang,
+        "Attends la fin du tour de {name} pour intégrer {base}.",
+        "Wait for the end of {name}’s turn to integrate {base}."
+    )
+}
+
+/// « Intégrer <base> » refused for an archived agent.
+pub(crate) fn integrate_archived(lang: i18n::Lang, name: &str, base: &str) -> String {
+    tr_in!(
+        lang,
+        "{name} est archivé : restaure-le pour intégrer {base}.",
+        "{name} is archived: restore it to integrate {base}."
+    )
+}
+
+/// « Intégrer <base> » refused: the base branch is gone.
+pub(crate) fn integrate_base_gone(lang: i18n::Lang, base: &str) -> String {
+    tr_in!(
+        lang,
+        "La branche de base « {base} » n’existe plus.",
+        "The base branch “{base}” no longer exists."
+    )
+}
+
+/// « Intégrer <base> » refused: `operation` (a merge, a rebase…) is under way in the agent's
+/// worktree already, which it has to finish first.
+pub(crate) fn integrate_under_way(lang: i18n::Lang, name: &str, operation: &str) -> String {
+    tr_in!(
+        lang,
+        "Un {operation} est en cours dans le worktree de {name} : il doit le terminer d’abord.",
+        "A {operation} is under way in {name}’s worktree: it has to finish it first."
+    )
+}
+
+/// What an agent without a ticket is told when the merge of its base into its branch stopped on
+/// conflicts, left in its worktree (a ticket's agent is told `board::conflict_message`, which asks
+/// for the report its ticket's loop reads).
+pub(crate) fn integrate_conflict_message(lang: i18n::Lang, base: &str, files: &[String]) -> String {
+    tr_in!(
+        lang,
+        "Le merge de {base} dans ta branche a des conflits sur : {files}. Résous-les, puis commite le merge.",
+        "The merge of {base} into your branch has conflicts in: {files}. Resolve them, then commit the merge.",
+        files = files.join(", ")
+    )
+}
+
+/// What an agent without a ticket is told when the rebase of its branch onto its base stopped on
+/// conflicts (undone: it does the rebase itself).
+pub(crate) fn integrate_rebase_message(lang: i18n::Lang, base: &str) -> String {
+    tr_in!(
+        lang,
+        "Rebase ta branche sur {base} et résous ses conflits.",
+        "Rebase your branch onto {base} and resolve its conflicts."
+    )
+}
+
+/// Refused: the agent works in the project's folder, not in a worktree of its own.
+fn agent_without_worktree() -> anyhow::Error {
+    anyhow!(tr!(
+        "cet agent n'a pas de worktree",
+        "this agent has no worktree"
+    ))
+}
+
 /// A sync of a project's checkout with its remote, asked by the user.
 #[derive(Debug, Clone, Copy)]
 pub enum SyncOp {
@@ -407,6 +492,20 @@ fn attachment_block(a: &Attachment) -> Result<(Value, usize)> {
     Ok((block, size))
 }
 
+/// What « Intégrer <base> » did (`Core::integrate_base`).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum Integration {
+    /// The branch had all of the base already.
+    UpToDate,
+    Done,
+    /// Stopped on conflicts in `files`: the agent was asked to resolve them.
+    Conflict {
+        files: Vec<String>,
+        rebase: bool,
+    },
+}
+
 /// How a new agent differs from the default one (`create_agent_with`).
 #[derive(Debug, Clone, Default)]
 pub struct AgentOptions {
@@ -431,6 +530,14 @@ pub struct AgentOptions {
     /// A worktree of its own (true) or the project's folder (false), whatever the project does by
     /// default; None: as the project does. `worktree` and `copy_of` name theirs and win.
     pub isolated: Option<bool>,
+    /// A worktree on this branch, which exists already (a local one, or a remote one through the
+    /// local branch that tracks it), whatever the project's setting; the agent is not created
+    /// without it. Refused for the branch of the project's folder and for one another worktree
+    /// has. Wins over `worktree`, `isolated` and `copy_of`.
+    pub branch: Option<String>,
+    /// With `branch`: the branch it is merged into. None: the project's (the board's target while
+    /// it exists, else the branch the folder is on).
+    pub base: Option<String>,
 }
 
 /// What a copy takes of its original, read while no turn of the original ran.
@@ -2439,6 +2546,27 @@ impl<R: Runtime> Core<R> {
         .await
     }
 
+    /// A new agent in a worktree on the existing branch `branch` (a local one, or a remote one
+    /// such as `origin/feat`), selected in the sidebar. Refused for the branch of the project's
+    /// folder and for one another worktree has (`IN_WORKTREE` for an agent's).
+    pub async fn create_agent_on_branch(
+        self: &Arc<Self>,
+        project_id: &str,
+        branch: &str,
+        model: Option<String>,
+    ) -> Result<AgentView> {
+        self.create_agent_with(
+            project_id,
+            AgentOptions {
+                model,
+                select: true,
+                branch: Some(branch.to_string()),
+                ..Default::default()
+            },
+        )
+        .await
+    }
+
     /// A new agent of the project, as `o` says (see `AgentOptions`).
     pub async fn create_agent_with(
         self: &Arc<Self>,
@@ -2510,24 +2638,29 @@ impl<R: Runtime> Core<R> {
         }
         // The original's worktree, for a copy of an agent that has one.
         let copied_from = o.copy_of.as_ref().and_then(|c| c.worktree.as_ref());
-        let made = match (&o.worktree, &o.copy_of) {
-            (Some((branch, base)), _) => Some(
+        let made = match (&o.branch, &o.worktree, &o.copy_of) {
+            // A branch that exists: the agent works on it, whatever else is asked.
+            (Some(branch), _, _) => Some(
+                self.worktree_on_branch(&project, branch, o.base.as_deref())
+                    .await,
+            ),
+            (None, Some((branch, base)), _) => Some(
                 git::worktree_add_on(&project.path, branch, base)
                     .await
                     .map(|(path, branch)| (path, branch, base.clone())),
             ),
             // A copy works on its original's code: in a worktree of its own, or in the same folder.
-            (None, Some(c)) => match copied_from {
+            (None, None, Some(c)) => match copied_from {
                 Some(wt) => {
                     let branch = copy_branch(&c.name, &name);
                     Some(copy_worktree(&project.path, wt, &branch).await)
                 }
                 None => None,
             },
-            (None, None) if o.isolated.unwrap_or(project.worktree_per_agent) => {
+            (None, None, None) if o.isolated.unwrap_or(project.worktree_per_agent) => {
                 Some(git::worktree_add(&project.path, &name).await)
             }
-            (None, None) => None,
+            (None, None, None) => None,
         };
         let mut warning = None;
         match made {
@@ -2549,8 +2682,11 @@ impl<R: Runtime> Core<R> {
                     path,
                     branch,
                     base_branch: base,
+                    existing: o.branch.is_some(),
                 });
             }
+            // Refused as it is (a code the window reads, or a sentence): nothing was made.
+            Some(Err(e)) if o.branch.is_some() => return Err(e),
             // A ticket's agent works in its own worktree or not at all.
             Some(Err(e)) if o.worktree.is_some() => {
                 return Err(e.context(tr!(
@@ -3249,7 +3385,8 @@ impl<R: Runtime> Core<R> {
         };
         self.emit_agent(&h);
         self.request_save();
-        if let Some(wt) = worktree {
+        // (A branch that was there before the agent is the user's: it keeps its name.)
+        if let Some(wt) = worktree.filter(|wt| !wt.existing) {
             let project = self.project(&project_id)?;
             let branch = format!("{}{name}", paths::BRANCH_PREFIX);
             if !git::branch_exists(&project.path, &branch).await
@@ -3417,7 +3554,13 @@ impl<R: Runtime> Core<R> {
                 // Give the killed process tree a moment to release its handles on the worktree.
                 tokio::time::sleep(Duration::from_millis(300)).await;
                 problems.extend(self.teardown_worktree(&project, &wt, ports).await);
-                if let Err(e) = git::worktree_remove(&project.path, &wt.path, &wt.branch).await {
+                // A branch that was there before the agent is the user's: only its folder goes.
+                let removed = if wt.existing {
+                    git::worktree_remove_dir(&project.path, &wt.path).await
+                } else {
+                    git::worktree_remove(&project.path, &wt.path, &wt.branch).await
+                };
+                if let Err(e) = removed {
                     problems.push(tr!(
                         "le worktree n'a pas pu être nettoyé : {e:#}",
                         "the worktree couldn’t be cleaned up: {e:#}"
@@ -3437,6 +3580,119 @@ impl<R: Runtime> Core<R> {
         });
         self.git.refresh(&pid);
         Ok(warning)
+    }
+
+    /// Brings the agent's base branch into its branch, as the project's strategy says (a rebase for
+    /// « rebase », a merge for « merge » and « squash »: there is nothing to squash into a branch).
+    /// Refused during the agent's turn, with changes of its own in its worktree, with a merge or a
+    /// rebase under way there, and for an archived agent or one without a worktree. A merge that
+    /// conflicts is left in the worktree and a rebase that conflicts is undone: the agent is asked
+    /// to resolve it, in the words of the board for a ticket's agent.
+    pub async fn integrate_base(self: &Arc<Self>, id: &str) -> Result<Integration> {
+        // The app does not restart for an update in the middle of it.
+        let _working = self.working();
+        let lang = i18n::ui();
+        let h = self.agent(id)?;
+        let (pid, name, wt, archived, active, ticketed) = {
+            let rt = h.lock();
+            (
+                rt.meta.project_id.clone(),
+                rt.meta.name.clone(),
+                rt.meta.worktree.clone(),
+                rt.meta.archived,
+                rt.meta.status.is_active(),
+                rt.meta.ticket_id.is_some(),
+            )
+        };
+        let wt = wt.ok_or_else(agent_without_worktree)?;
+        let base = wt.base_branch.clone();
+        if archived {
+            bail!(integrate_archived(lang, &name, &base));
+        }
+        if active {
+            bail!(integrate_busy(lang, &name, &base));
+        }
+        // Its ticket's validation commits, merges and rebases in this very worktree.
+        if self
+            .tickets
+            .read()
+            .iter()
+            .any(|t| crate::tickets::validating(t, id))
+        {
+            bail!(crate::tickets::Refusal::ApprovingAlready);
+        }
+        let project = self.project(&pid)?;
+        if base.is_empty() || !git::branch_exists(&project.path, &base).await {
+            bail!(integrate_base_gone(lang, &base));
+        }
+        if let Some(operation) = git::operation_in_progress(&wt.path).await {
+            bail!(integrate_under_way(lang, &name, operation));
+        }
+        if git::has_tracked_changes(&wt.path).await? {
+            bail!(integrate_dirty(lang));
+        }
+        let rebase = project.board.strategy == "rebase";
+        let updated = git::update_branch(&wt.path, &base, rebase).await;
+        self.git.refresh(&pid);
+        let files = match updated? {
+            git::Updated::UpToDate => return Ok(Integration::UpToDate),
+            git::Updated::Done => return Ok(Integration::Done),
+            git::Updated::Conflict(files) => files,
+        };
+        let claude = self.lang().claude;
+        let text = match (ticketed, rebase) {
+            (true, true) => board::rebase_message(claude, &base),
+            (true, false) => board::conflict_message(claude, &base, &files),
+            (false, true) => integrate_rebase_message(claude, &base),
+            (false, false) => integrate_conflict_message(claude, &base, &files),
+        };
+        self.send_message(id, text, vec![]).await.map_err(|e| {
+            e.context(tr!(
+                "Les conflits de {base} sont dans le worktree, mais {name} n’a pas pu en être prévenu",
+                "The conflicts with {base} are in the worktree, but {name} could not be told",
+                base = base,
+                name = name
+            ))
+        })?;
+        Ok(Integration::Conflict { files, rebase })
+    }
+
+    /// The branch the project's work goes into: the board's target while that branch exists, else
+    /// the one the folder is on ("" on a detached HEAD). Read only, never fixed.
+    async fn base_of(&self, project: &Project, root: &str) -> String {
+        let target = project.board.target.trim();
+        if !target.is_empty() && git::branch_exists(root, target).await {
+            target.to_string()
+        } else {
+            git::head_branch(root).await
+        }
+    }
+
+    /// The worktree of an agent on the branch `name`, which exists (a local one, or a remote one
+    /// through the local branch that tracks it, made when there is none): (path, local branch,
+    /// base). Refused for the branch of the project's folder and for one another worktree has
+    /// (`IN_WORKTREE` for an agent's); nothing is made then.
+    async fn worktree_on_branch(
+        &self,
+        project: &Project,
+        name: &str,
+        base: Option<&str>,
+    ) -> Result<(String, String, String)> {
+        let root = self.toplevel(&project.path).await.ok_or_else(not_a_repo)?;
+        // Not while a switch or a pull moves the folder's branch.
+        let lock = self.sync_lock(&root);
+        let _guard = lock.lock().await;
+        if let Some(local) = git::local_of(&root, name).await? {
+            if self.checked_out_here(&root, &local).await? {
+                bail!(folder_branch_refusal(i18n::ui()));
+            }
+        }
+        let base = match base {
+            Some(base) => base.to_string(),
+            None => self.base_of(project, &root).await,
+        };
+        let (path, branch) = git::worktree_add_existing(&project.path, name).await?;
+        Ok((path, branch, base))
     }
 
     /// Merges the agent's branch into its base branch, in the project's folder. When the folder is
@@ -3459,12 +3715,7 @@ impl<R: Runtime> Core<R> {
                 rt.meta.worktree.clone(),
             )
         };
-        let wt = wt.ok_or_else(|| {
-            anyhow!(tr!(
-                "cet agent n'a pas de worktree",
-                "this agent has no worktree"
-            ))
-        })?;
+        let wt = wt.ok_or_else(agent_without_worktree)?;
         let project = self.project(&pid)?;
         if git::has_tracked_changes(&project.path).await? {
             bail!(tr!(
@@ -4392,12 +4643,7 @@ impl<R: Runtime> Core<R> {
     /// upstream (a pull request merged on the remote, fetched but not pulled yet). The base's
     /// target is only read here, never fixed.
     async fn merge_bases(&self, project: &Project, root: &str) -> Vec<String> {
-        let target = project.board.target.trim();
-        let base = if !target.is_empty() && git::branch_exists(root, target).await {
-            target.to_string()
-        } else {
-            git::head_branch(root).await
-        };
+        let base = self.base_of(project, root).await;
         if base.is_empty() || !git::branch_exists(root, &base).await {
             return vec!["HEAD".into()];
         }
