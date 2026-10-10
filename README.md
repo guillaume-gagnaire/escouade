@@ -23,7 +23,7 @@ Cette liste décrit la version 1.6, pas encore publiée : la dernière release e
   - « Voir les changements » montre dans le texte ce qui a changé depuis le dernier commit, et « Annuler ce bloc » le remet ;
   - au clic droit dans l'arborescence : renommer (`F2`), supprimer vers la corbeille (`Suppr`), créer un dossier, ouvrir un terminal ici ; les fichiers `.env*` copiés dans les worktrees y apparaissent en grisé.
 - **Terminaux** : vrais terminaux (ConPTY ou pty + xterm.js) PowerShell 7, Git Bash et WSL sous Windows, zsh, bash et fish sous macOS, avec l'autocomplétion native du shell. Un terminal s'ouvre aussi dans le worktree d'un agent ou dans un dossier de l'éditeur.
-- **Lancement du projet** : par projet, une liste de commandes (nom, ligne de commande, shell, sous-dossier) à lancer une par une ou toutes ensemble. Chacune tourne dans son propre terminal, en lecture seule, et garde son log d'un lancement à l'autre. Statut en direct (en cours, arrêté, terminé, planté avec le code de sortie et une notification) ; lancer, relancer, stopper. « ✦ Remplir automatiquement » laisse Claude lire le projet (sans rien modifier) et proposer ces commandes, à relire avant d'enregistrer.
+- **Lancement du projet** : par projet, une liste de commandes (nom, ligne de commande, shell, sous-dossier) à lancer une par une ou toutes ensemble. Chacune tourne dans son propre terminal, en lecture seule, et garde son log d'un lancement à l'autre. Statut en direct (en cours, arrêté, terminé, planté avec le code de sortie et une notification) ; lancer, relancer, stopper. « ✦ Remplir automatiquement » laisse Claude lire le projet (sans rien modifier) et proposer ces commandes, que tu lis en entier avant de les prendre.
 - **Kanban** : des tickets avec leurs critères d'acceptation, que des agents prennent seuls (pilote auto, de 1 à 6 en parallèle), chacun dans son worktree, en bouclant jusqu'à les atteindre ; un ticket peut en attendre d'autres, et le pilote auto se met en pause près de la limite de tes quotas. « ▶ Tester » lance la fonctionnalité sur des ports à part, après t'avoir montré la recette écrite par l'agent ; la validation commite, merge, ouvre une pull request ou pousse.
 - **Intégrations** : importe tes tickets Jira, Trello ou GitHub Issues dans le Kanban, avec leurs critères ; leur statut et des commentaires suivent, et une synchro ratée est retentée. Les jetons restent dans le trousseau du système.
 - **Barre de statut** : agents actifs, en attente et terminés, quota de session 5 h (avec délai avant réinitialisation), quota hebdomadaire, coût du jour. Tokens et coût montent en direct pendant que Claude travaille (estimation « ≈ » d'après les tarifs publics), puis prennent le chiffre exact de Claude Code à la fin du tour.
@@ -62,6 +62,7 @@ Tout est stocké dans `~/.escouade/` (anciennement `~/.claude-code-manager/`, d�
 | `sync-queue.json` | synchros avec Jira, Trello ou GitHub qui attendent d'être retentées |
 | `conversations/<agent>.jsonl` | journal de chaque conversation |
 | `logs/<agent>-setup.log` | sortie complète de la dernière préparation du worktree d'un agent |
+| `update.json` | mise à jour qui s'installe, notée pour le démarrage suivant (puis effacée) |
 | `stats.db` | statistiques (SQLite) |
 | `app.log` | journal de l'application |
 
@@ -80,14 +81,14 @@ Sous macOS, `Ctrl` devient `⌘` (sauf `Ctrl+Tab`, `⌘Tab` changeant d'applicat
 | `Ctrl+Shift+A` | vue d'ensemble de tous les agents (aussi depuis un terminal) |
 | `Ctrl+K` | rechercher dans les conversations (dans un terminal sous Windows, `Ctrl+K` reste au shell) |
 | `Ctrl+P` | ouvrir un fichier par son nom (`nom:42` pour la ligne 42 ; dans un terminal sous Windows, `Ctrl+P` reste au shell) |
-| `Ctrl+Entrée` / `Ctrl+Shift+Entrée` (dans la conversation) | autoriser / toujours autoriser la demande d'autorisation en attente (le texte tapé puis `Entrée` la refuse avec ce message) |
+| `Ctrl+Entrée` / `Ctrl+Shift+Entrée` (dans la conversation) | autoriser / toujours autoriser la demande d'autorisation en attente (le texte tapé puis `Entrée` la refuse avec ce message) ; une demande qui vient d'arriver ignore ces touches une demi-seconde, et celle que Claude Code refuserait par défaut ne s'autorise qu'avec son bouton |
 | `Alt+1` … `Alt+9` (dans la conversation) | choisir l'option n de la question en attente (coche ou décoche pour un choix multiple) ; `Ctrl+Entrée` valide quand la réponse est complète |
 | `Ctrl+T` | nouveau terminal |
 | `Ctrl+S` (dans l'éditeur) | enregistrer le fichier |
 | `Ctrl+Shift+F` (dans l'éditeur) | rechercher dans tous les fichiers de la source |
 | `Ctrl+clic` / `F12` (dans l'éditeur) | aller à ce que désigne le mot : fichier importé, lien, chemin, définition |
 | `Shift+F12` (dans l'éditeur) | trouver les références du nom sous le curseur |
-| `Alt+←` / `Alt+→` (dans l'éditeur ; sous macOS `Ctrl+-` / `Ctrl+Shift+-`) | revenir là où tu étais avant un saut / y retourner (aussi les boutons « précédent » et « suivant » de la souris) |
+| `Alt+←` / `Alt+→` (dans l'éditeur ; sous macOS `⌃-` / `⌃⇧-`, avec la touche Contrôle et non `⌘`) | revenir là où tu étais avant un saut / y retourner (aussi les boutons « précédent » et « suivant » de la souris) |
 | `Alt+clic` (dans l'éditeur) | ajouter un curseur |
 | `F2` / `Suppr` (dans l'arborescence ; sous macOS `⌘⌫` pour supprimer) | renommer / supprimer vers la corbeille |
 | `Ctrl+Shift+B` | panneau des fichiers non commités (disposition classique ; toujours affiché dans l'autre) |

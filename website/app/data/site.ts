@@ -67,7 +67,7 @@ export const FEATURES: Feature[] = [
   {
     id: 'editeur',
     title: 'Un éditeur, sans quitter l’app',
-    text: 'Retouche un fichier du projet ou du worktree d’un agent sans changer de fenêtre : arborescence, onglets, coloration, recherche, et les lignes modifiées depuis le dernier commit marquées dans la marge. Ctrl+clic va à une définition sans serveur de langage, Ctrl+P ouvre un fichier par son nom, Ctrl+Maj+F cherche dans tous.',
+    text: 'Retouche un fichier du projet ou du worktree d’un agent sans changer de fenêtre : arborescence, onglets, coloration, recherche, et les lignes modifiées depuis le dernier commit marquées dans la marge. Ctrl+clic va à une définition sans serveur de langage, Ctrl+P ouvre un fichier par son nom, Ctrl+Maj+F cherche dans tous les fichiers.',
     points: [
       'Voir les changements dans le texte, et annuler un bloc',
       'Compare avec ce que l’agent vient d’écrire avant de choisir',
