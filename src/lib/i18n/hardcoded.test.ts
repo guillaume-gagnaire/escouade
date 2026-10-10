@@ -1,4 +1,5 @@
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -8,6 +9,21 @@ import { notAllowed, scan, type Finding } from './hardcoded';
 /** What a finding says, as a failure shows it. */
 const said = (f: Finding) => `${f.file}:${f.line} ${f.kind} « ${f.text} »`;
 const texts = (file: string, source: string) => scan(file, source).map((f) => f.text);
+
+/**
+ * What is left, under `dir`, of the lists of files each extraction task had still to do (`pending/<lot>.txt`): a
+ * folder or a file whose name starts with « pending ». Every file is extracted: nothing may be left, and a list that
+ * comes back would hide the texts of the files it names from the scan.
+ */
+function pendingLeft(dir: string, base = dir): string[] {
+  const left: string[] = [];
+  for (const name of readdirSync(dir)) {
+    const path = join(dir, name);
+    if (/^pending/i.test(name)) left.push(relative(base, path).replace(/\\/g, '/'));
+    else if (statSync(path).isDirectory()) left.push(...pendingLeft(path, base));
+  }
+  return left.sort();
+}
 
 describe('the detector of texts written in the code', () => {
   it('finds a text in the markup, and leaves what holds no letter', () => {
@@ -101,6 +117,21 @@ describe('the detector of texts written in the code', () => {
     expect(texts('src/lib/board.ts', module)).toEqual(["plural(t.loops, 'boucle', 'boucles')"]);
   });
 
+  it('finds what is left of a list of files to extract, a folder or a file, wherever it is', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'l12-pending-'));
+    try {
+      mkdirSync(join(dir, 'fr'));
+      writeFileSync(join(dir, 'fr', 'board.ts'), '');
+      expect(pendingLeft(dir)).toEqual([]);
+      mkdirSync(join(dir, 'pending'));
+      writeFileSync(join(dir, 'pending', 'l6.txt'), 'src/A.svelte\n');
+      writeFileSync(join(dir, 'fr', 'pending-l7.txt'), '');
+      expect(pendingLeft(dir)).toEqual(['fr/pending-l7.txt', 'pending']);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('lets through the exceptions, for their file or for all', () => {
     const found = [
       ...scan('src/A.svelte', '<p>Escouade</p><p>Claude Code</p><p>Bonjour</p>'),
@@ -120,7 +151,6 @@ describe('the detector of texts written in the code', () => {
 // --- the real sources ------------------------------------------------------------------------------------------
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
-const pendingDir = join(root, 'src/lib/i18n/pending');
 
 /** The files of `src/` the detector reads: not the tests, nor their helpers, nor the catalogs. */
 function sources(dir = join(root, 'src'), out: string[] = []): string[] {
@@ -134,34 +164,22 @@ function sources(dir = join(root, 'src'), out: string[] = []): string[] {
   return out.sort();
 }
 
-/** The files each extraction task has still to do, from `pending/<task>.txt` (one path per line, `#` for comments). */
-function pending(): Map<string, string[]> {
-  const lists = new Map<string, string[]>();
-  if (!existsSync(pendingDir)) return lists;
-  for (const name of readdirSync(pendingDir).filter((n) => n.endsWith('.txt'))) {
-    const lines = readFileSync(join(pendingDir, name), 'utf8').split(/\r?\n/);
-    lists.set(
-      name,
-      lines.map((l) => l.trim()).filter((l) => l && !l.startsWith('#')),
-    );
-  }
-  return lists;
-}
-
 describe('the sources of the app', () => {
   const files = sources();
-  const lists = pending();
-  const listed = [...lists.values()].flat();
   const findings = files.flatMap((f) => scan(f, readFileSync(join(root, f), 'utf8')));
 
-  it('list each file still to extract once, and only files that exist', () => {
-    expect(listed.filter((f, i) => listed.indexOf(f) !== i)).toEqual([]);
-    expect(listed.filter((f) => !files.includes(f))).toEqual([]);
+  it('have no list of files still to extract: every file is', () => {
+    expect(pendingLeft(join(root, 'src/lib/i18n'))).toEqual([]);
   });
 
-  it('have no text written in the code, outside the files still to extract', () => {
-    const left = notAllowed(findings, ALLOWED).filter((f) => !listed.includes(f.file));
-    expect(left.map(said)).toEqual([]);
+  it('have no text written in the code, in any file', () => {
+    expect(notAllowed(findings, ALLOWED).map(said)).toEqual([]);
+  });
+
+  it('read the files of the app, so that a scan of nothing cannot pass', () => {
+    expect(files).toContain('src/components/StatusBar.svelte');
+    expect(files).toContain('src/lib/state.svelte.ts');
+    expect(files.length).toBeGreaterThan(100);
   });
 
   it('keep only exceptions that still let a text through, each with its reason', () => {

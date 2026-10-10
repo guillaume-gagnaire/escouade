@@ -299,7 +299,7 @@ describe('Board in English', () => {
     fakeBackend();
     render(Board, { project: app.projects[0] });
     expect(screen.getByText('demo-api · 1 ticket · 0 looping')).toBeInTheDocument();
-    expect(within(col('In progress')).getByText('No agent looping')).toBeInTheDocument();
+    expect(within(col('In progress')).getByText('No agents looping')).toBeInTheDocument();
   });
 
   it('writes the header in English: the missing Claude Code, the import and the autopilot', () => {
@@ -307,7 +307,7 @@ describe('Board in English', () => {
     app.claudeFound = false;
     render(Board, { project: app.projects[0] });
     expect(screen.getByText('Claude Code not found — no tickets will start')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Import' })).toHaveAttribute('title', 'Import tickets from Jira, Trello or GitHub Issues');
+    expect(screen.getByRole('button', { name: 'Import' })).toHaveAttribute('title', 'Import tickets from Jira, Trello, or GitHub Issues');
     expect(screen.getByRole('switch', { name: 'Autopilot' })).toBeChecked();
     expect(screen.getByText('After approval:')).toBeInTheDocument();
     expect(screen.getByText('Autopilot').closest('.auto')).toHaveAttribute(

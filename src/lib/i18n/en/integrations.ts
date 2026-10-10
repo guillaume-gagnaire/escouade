@@ -79,7 +79,7 @@ export default defineZone('integrations', {
     thisProject: 'this project',
     linkSource: 'Link a source',
     sources: 'Sources',
-    pickedCount: { one: '{count} selected', other: '{count} selected' },
+    pickedCount: { one: '{n} selected', other: '{n} selected' },
     manage: '⚙ Manage sources',
     filters: 'Filters',
     selectAll: 'Select all',

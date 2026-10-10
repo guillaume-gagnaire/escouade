@@ -101,6 +101,7 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 | redémarrer | restart | l’app |
 | compte | account | compte Claude |
 | serveur MCP | MCP server | |
+| statut d’un agent : En cours / Question / Prêt / Terminé / Erreur | Running / Question / Ready / Done / Error | « En cours » est « In progress » pour une colonne du Kanban, « Running » pour un agent (carte, en-tête de la conversation) |
 
 ## Colonnes du Kanban
 
@@ -227,7 +228,6 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 | Arrêter (les tests) | Stop | |
 | Abandonner (les modifications) | Discard | |
 | Abandonner les modifications ? | Discard your changes? | |
-| statut d’un agent : En cours / Question / Prêt / Terminé / Erreur | Running / Question / Ready / Done / Error | « En cours » est « In progress » pour une colonne du Kanban, « Running » pour un agent |
 | Entrée / Cache / Sortie | Input / Cache / Output | les séries de tokens |
 | prompt | prompt | |
 | Tout voir / Réduire | Show all / Show less | les listes des statistiques |
@@ -259,7 +259,6 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 |---|---|---|
 | sous-agent | subagent | |
 | tâche de fond | background task | |
-| En cours / Question / Prêt / Terminé / Erreur | Running / Question / Ready / Done / Error | état d’un agent (en-tête de la conversation) |
 | Bas / Moyen / Élevé / Très élevé / Max | Low / Medium / High / Very high / Max | niveaux d’effort |
 | Demander / Plan / Édits auto / Bypass | Ask / Plan / Accept edits / Bypass | modes de permission (« Auto » reste « Auto ») |
 | Approuver le plan | Approve the plan | carte de permission d’un plan |

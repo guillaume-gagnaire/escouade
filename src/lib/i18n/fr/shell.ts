@@ -95,6 +95,8 @@ export default {
     procsTitle: 'Processus Claude en cours (avec les outils et serveurs MCP qu’ils lancent)',
     /** `{memory}` and `{cpu}`: the amounts, in code style. */
     procs: '{instances} Claude · {memory} · {cpu} CPU',
+    /** One line of the tooltip: `{name}`: the agent; `{memory}` and `{cpu}`: the amounts. */
+    procRow: '{name} : {memory} · {cpu}',
     session: 'Session 5 h',
     week: 'Hebdo',
     resetsAt: 'Réinitialisation : {date}',

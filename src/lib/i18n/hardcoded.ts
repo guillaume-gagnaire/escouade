@@ -1,5 +1,5 @@
 // The guard against texts written in the code: what the interface shows passes through `t`, and a test fails on a
-// text left in a component or a module (outside the files still to extract, listed in `pending/`). Read by the
+// text left in a component or a module (any file of `src/`, the exceptions of `hardcoded-allow.ts` apart). Read by the
 // tests only, on the sources as written.
 //   - markup: a text node with a letter; an attribute read by people (`title`, `aria-label`, and the props of this
 //     app's components that are shown: `desc`, `hint`…) with a letter, any other attribute with an accented letter,
