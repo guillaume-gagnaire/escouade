@@ -302,6 +302,47 @@ pub fn rename(root: &Path, from: &str, to: &str, kept: &[Kept]) -> Result<()> {
     })
 }
 
+/// `rename` as the editor asks for it: refused first when it only changes the case of what git
+/// tracks (see `case_of_tracked`), then done off the async workers (a folder on a slow disk takes a
+/// moment).
+pub async fn rename_entry(root: String, from: String, to: String, kept: Vec<Kept>) -> Result<()> {
+    case_of_tracked(&root, &from, &to).await?;
+    tokio::task::spawn_blocking(move || rename(Path::new(&root), &from, &to, &kept)).await?
+}
+
+/// Refuses renaming `from` to `to` when only the case changes and git tracks `from` (a file, or
+/// files below a folder): on a disk that ignores case, git goes on listing them under their old
+/// names, and the tree would no longer show the file its tabs moved to. `git mv` renames them for
+/// git too. What git does not track (or outside a repository) changes case like any rename.
+async fn case_of_tracked(root: &str, from: &str, to: &str) -> Result<()> {
+    let slash = |s: &str| s.replace('\\', "/");
+    let (a, b) = (slash(from), slash(to));
+    if a == b || a.to_lowercase() != b.to_lowercase() {
+        return Ok(());
+    }
+    // Taken as written: a name holding `*` or `[` is no pattern.
+    let listed = git::run(
+        root,
+        &[
+            "--literal-pathspecs",
+            "ls-files",
+            "-z",
+            "--cached",
+            "--",
+            &a,
+        ],
+    )
+    .await;
+    // Git unable to list the index: the tree is the folder walked, which shows the new name.
+    if listed.is_ok_and(|out| !out.is_empty()) {
+        bail!(
+            "git suit « {from} » sous ce nom : pour n’en changer que la casse, passe par git mv \
+             dans un terminal."
+        );
+    }
+    Ok(())
+}
+
 /// Sends the file or folder `rel` (with all it holds) to the trash with `send` (`to_trash`, or
 /// what a test gives). Never the root, nor the agents' worktrees or a folder holding them; a link
 /// goes, not what it points to (which is never outside the root anyway).
@@ -1546,6 +1587,48 @@ mod tests {
         git(&r, &["add", "-A"]);
         git(&r, &["commit", "-qm", "init"]);
         r
+    }
+
+    #[tokio::test]
+    async fn changing_only_the_case_of_what_git_tracks_is_refused_and_moves_nothing() {
+        let r = repo("fsedit-rename-case-tracked");
+        std::fs::write(r.join("notes.md"), "n\n").unwrap();
+        std::fs::create_dir_all(r.join("docs")).unwrap();
+        std::fs::write(r.join("docs/a.md"), "a\n").unwrap();
+        let root = r.to_string_lossy().into_owned();
+        let rename = |from: &str, to: &str| {
+            rename_entry(root.clone(), from.to_string(), to.to_string(), Vec::new())
+        };
+        // A file git tracks, and a folder holding one: git would go on listing the old names.
+        for (from, to) in [("src/app.ts", "src/App.ts"), ("src", "Src")] {
+            let err = rename(from, to).await.unwrap_err().to_string();
+            assert_eq!(
+                err,
+                format!(
+                    "git suit « {from} » sous ce nom : pour n’en changer que la casse, passe par \
+                     git mv dans un terminal."
+                )
+            );
+        }
+        assert_eq!(names(&r.join("src")), vec!["app.ts"]);
+        assert!(names(&r).contains(&"src".to_string()));
+        // What git does not track changes case like any rename.
+        rename("notes.md", "Notes.md").await.unwrap();
+        rename("docs", "Docs").await.unwrap();
+        let top = names(&r);
+        assert!(top.contains(&"Notes.md".to_string()), "{top:?}");
+        assert!(top.contains(&"Docs".to_string()), "{top:?}");
+        // A tracked file given another name is a rename git sees as such.
+        rename("src/app.ts", "src/main.ts").await.unwrap();
+        assert_eq!(names(&r.join("src")), vec!["main.ts"]);
+        // Outside a repository nothing is tracked.
+        let plain = test_dir("fsedit-rename-case-plain");
+        std::fs::write(plain.join("a.ts"), "a\n").unwrap();
+        let root = plain.to_string_lossy().into_owned();
+        rename_entry(root, "a.ts".into(), "A.ts".into(), Vec::new())
+            .await
+            .unwrap();
+        assert_eq!(names(&plain), vec!["A.ts"]);
     }
 
     #[tokio::test]

@@ -511,7 +511,8 @@ pub async fn fs_create(
     Ok(())
 }
 
-/// Renames or moves a file or a folder of the source; refused when something else is at `to`.
+/// Renames or moves a file or a folder of the source; refused when something else is at `to`, or
+/// when only the case of what git tracks changes.
 #[tauri::command]
 pub async fn fs_rename(
     core: CoreState<'_>,
@@ -523,7 +524,9 @@ pub async fn fs_rename(
     let (root, kept) = core.edit_kept(&project_id, agent_id).await.map_err(err)?;
     // An update's restart waits: a folder on a slow disk can take a moment.
     let _working = core.working();
-    fsedit::rename(std::path::Path::new(&root), &from, &to, &kept).map_err(err)?;
+    fsedit::rename_entry(root, from, to, kept)
+        .await
+        .map_err(err)?;
     core.git.refresh(&project_id);
     Ok(())
 }
