@@ -2,6 +2,7 @@
   import { openPath } from '@tauri-apps/plugin-opener';
   import { tick, type Snippet } from 'svelte';
   import { t } from '../../lib/i18n';
+  import { accountName } from '../../lib/accounts';
   import { askCloseProject } from '../../lib/project-actions';
   import { revealHidden } from '../../lib/recipe';
   import { settingsForm } from '../../lib/settings.svelte';
@@ -19,6 +20,13 @@
   let { project }: { project: Project } = $props();
 
   const draft = $derived(settingsForm.project!);
+  /** « Compte préféré »: « Automatique », then each active account (the project's own, even switched off since). */
+  const ACCOUNTS = $derived([
+    { value: '', label: t('accounts.project.auto'), title: t('accounts.project.autoTitle') },
+    ...app.settings.accounts
+      .filter((a) => a.active || a.id === draft.account)
+      .map((a) => ({ value: a.id, label: a.active ? accountName(a) : t('accounts.project.inactive', { name: accountName(a) }) })),
+  ]);
   /** Who writes the commits of the files panel's « Commit… » and « Commit tout… ». */
   const COMMIT_MODES = $derived<{ value: CommitMode; label: string }[]>(
     (['agent', 'direct'] as const).map((value) => ({ value, label: t(`settings.project.commitModes.${value}`) })),
@@ -139,6 +147,11 @@
       {/each}
     </div>
   </Row>
+  {#if app.settings.accounts.length > 1}
+    <Row label={t('accounts.project.label')} desc={t('accounts.project.desc')}>
+      <Chips label={t('accounts.project.label')} options={ACCOUNTS} bind:value={draft.account} />
+    </Row>
+  {/if}
 </Group>
 
 <Group title="Git">

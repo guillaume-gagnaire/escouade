@@ -1,5 +1,6 @@
 <script lang="ts">
   import { openUrl } from '@tauri-apps/plugin-opener';
+  import { pauseOf } from '../../lib/accounts';
   import { APPROVE_LABEL, canStart, criteriaMet, doneMeta, launchAnyway, ticketSpent, waitingFor, waitLabel } from '../../lib/board';
   import { buffers, lossNotice } from '../../lib/editor/buffers.svelte';
   import { fWhen } from '../../lib/format';
@@ -30,6 +31,8 @@
   const s = $derived(project.board);
   /** Why no ticket of the board starts now (its target branch), if so. */
   const issue = $derived(app.boardIssues[project.id] ?? null);
+  /** Why none starts for now (a quota, a usage limit): that of the accounts the project goes to. */
+  const pause = $derived(pauseOf(project));
   const agent = $derived(ticket.agentId ? app.agents[ticket.agentId] : undefined);
   /** What every agent of the ticket used so far: the card of a finished ticket keeps the cost it was closed with. */
   const used = $derived(ticket.column === 'doing' || ticket.column === 'review' ? ticketSpent(ticket, app.agents) : null);
@@ -307,9 +310,9 @@
   {#if ticket.column === 'todo'}
     <span class="meta">{t('board.card.todoMeta', { count: total, max: ticket.maxLoops })}</span>
     <div class="row">
-      <span class="k">{waitLabel(ticket, queueIndex, s, busyCount, issue, app.autopilotPause, awaited)}</span>
+      <span class="k">{waitLabel(ticket, queueIndex, s, busyCount, issue, pause, awaited)}</span>
       <div style="flex:1"></div>
-      {#if canStart(ticket, s, busyCount, quota, issue, app.autopilotPause)}
+      {#if canStart(ticket, s, busyCount, quota, issue, pause)}
         <button class="small" onclick={(e) => act(e, launch)}>{t('board.card.launch')}</button>
       {/if}
     </div>

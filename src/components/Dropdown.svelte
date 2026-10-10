@@ -21,6 +21,7 @@
     onPick,
     showCaption = true,
     disabled = false,
+    readonly = false,
     danger = false,
     title,
   }: {
@@ -32,6 +33,8 @@
     onPick: (value: string) => void;
     showCaption?: boolean;
     disabled?: boolean;
+    /** Shown but not changeable (its title says why): it stays legible, where a disabled chip is dimmed. */
+    readonly?: boolean;
     danger?: boolean;
     title?: string;
   } = $props();
@@ -54,16 +57,18 @@
   <button
     class="trigger"
     class:danger
-    aria-haspopup="menu"
-    aria-expanded={open}
+    class:readonly
+    aria-haspopup={readonly ? undefined : 'menu'}
+    aria-expanded={readonly ? undefined : open}
+    aria-disabled={readonly ? 'true' : undefined}
     aria-label={label}
     title={title ?? label}
     {disabled}
-    onclick={onToggle}
+    onclick={readonly ? undefined : onToggle}
   >
-    {#if showCaption}<span class="cap">{caption}</span>{/if}<span class="val">{shown}</span><span class="chev">▾</span>
+    {#if showCaption}<span class="cap">{caption}</span>{/if}<span class="val">{shown}</span>{#if !readonly}<span class="chev">▾</span>{/if}
   </button>
-  {#if open}
+  {#if open && !readonly}
     <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
     <div class="backdrop" onclick={onToggle}></div>
     <div class="menu" role="menu" aria-label={caption}>
@@ -100,8 +105,11 @@
     white-space: nowrap;
     cursor: pointer;
   }
-  .trigger:hover:not(:disabled) {
+  .trigger:hover:not(:disabled, .readonly) {
     border-color: var(--line2);
+  }
+  .trigger.readonly {
+    cursor: default;
   }
   .trigger:disabled {
     opacity: 0.45;

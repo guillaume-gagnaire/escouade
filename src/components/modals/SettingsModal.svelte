@@ -4,6 +4,7 @@
   import { t } from '../../lib/i18n';
   import { SETTINGS_TABS, settingsForm, type SettingsTab } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
+  import AccountsTab from '../settings/AccountsTab.svelte';
   import AppTab from '../settings/AppTab.svelte';
   import ApplicationTab from '../settings/ApplicationTab.svelte';
   import BoardTab from '../settings/BoardTab.svelte';
@@ -146,6 +147,8 @@
           {/if}
         {:else if current.id === 'app'}
           <ApplicationTab />
+        {:else if current.id === 'accounts'}
+          <AccountsTab />
         {:else}
           <AppTab tab={current.id} />
         {/if}

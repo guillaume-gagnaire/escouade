@@ -3,6 +3,7 @@
 // and `intlLocale`), so a template that calls them follows a change of language.
 import { t } from './i18n';
 import { intlLocale, locale, type Lang } from './i18n/locale.svelte';
+import { IS_MAC } from './platform';
 
 const separators = new Map<string, string>();
 
@@ -140,9 +141,10 @@ export function isAbsPath(p: string): boolean {
   return /^([A-Za-z]:[\\/]|[\\/])/.test(p);
 }
 
-/** Shortens the user's home folder to "~" for display. */
-export function tildify(p: string): string {
-  const m = p.replace(/\\/g, '/').match(/^[A-Za-z]:\/Users\/[^/]+(\/.*)?$/);
+/** Shortens the user's home folder to "~" for display: `C:\Users\<name>` on Windows, `/Users/<name>` on macOS (`mac`). */
+export function tildify(p: string, mac = IS_MAC): string {
+  const home = mac ? /^\/Users\/[^/]+(\/.*)?$/ : /^[A-Za-z]:\/Users\/[^/]+(\/.*)?$/;
+  const m = p.replace(/\\/g, '/').match(home);
   return m ? '~' + (m[1] ?? '') : p;
 }
 

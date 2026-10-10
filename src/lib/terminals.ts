@@ -155,14 +155,22 @@ export interface TermPlace {
   subdir?: string;
 }
 
-export async function openTerminal(projectId: string, shell: string, name: string, place?: TermPlace): Promise<TermInfo> {
+export function openTerminal(projectId: string, shell: string, name: string, place?: TermPlace): Promise<TermInfo> {
+  return interactive((cols, rows, onData) => api.termSpawn({ projectId, shell, name, ...place, cols, rows }, onData));
+}
+
+/** « Se connecter… »: the Claude account's `claude` in a terminal of its own, where the user signs in. */
+export function openAccountLogin(accountId: string): Promise<TermInfo> {
+  return interactive((cols, rows, onData) => api.accountLogin(accountId, cols, rows, onData));
+}
+
+/** An interactive terminal that `spawn` starts at the size of a new xterm.js instance, which then shows it. */
+async function interactive(spawn: (cols: number, rows: number, onData: (d: ArrayBuffer) => void) => Promise<TermInfo>): Promise<TermInfo> {
   const x = createXTerm(false);
   const { term } = x;
   let info: TermInfo;
   try {
-    info = await api.termSpawn({ projectId, shell, name, ...place, cols: term.cols, rows: term.rows }, (buf) =>
-      term.write(new Uint8Array(buf)),
-    );
+    info = await spawn(term.cols, term.rows, (buf) => term.write(new Uint8Array(buf)));
   } catch (e) {
     // Nothing to attach to: free the xterm instance, its WebGL context and its host.
     free(x);

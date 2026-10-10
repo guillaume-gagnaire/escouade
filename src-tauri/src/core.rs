@@ -27,7 +27,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use parking_lot::{Mutex, RwLock};
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -254,8 +254,11 @@ struct Ask<'a> {
     system: &'a str,
     prompt: &'a str,
     limit: Duration,
-    /// The agent it is about: asked of its account (of Principal without one).
+    /// The agent it is about: asked of its account.
     agent: Option<&'a str>,
+    /// The project it is about, when no agent is: asked of the account a new agent of it would
+    /// go to (as one about neither is: of the first usable account).
+    project: Option<&'a str>,
 }
 
 /// "1/2 · npm ci": step `i` of a setup, as the agent shows it.
@@ -520,13 +523,17 @@ pub struct Core<R: Runtime = Wry> {
     /// limit with no resume planned), or no longer does ("Reprendre maintenant"). Saved with the
     /// quota windows last read (`SavedPause`).
     pub(crate) hold: Mutex<Hold>,
-    /// The autopilot's pause as the window was last told (`refresh_pause`).
-    pub(crate) pause_shown: Mutex<Option<AutopilotPause>>,
+    /// The autopilot's pauses as the window was last told (`refresh_pause`): the one of the
+    /// projects that go to any account, and those of the projects that prefer an account.
+    pub(crate) pause_shown: Mutex<(Option<AutopilotPause>, BTreeMap<String, AutopilotPause>)>,
     /// Blocks of ports reserved for agents being made, or being given one: taken until the agent
     /// holds its own.
     pub(crate) ports_reserved: Mutex<Vec<u16>>,
     /// One validation's merge at a time per repository (`merge_lock`).
     pub(crate) merge_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
+    /// One change of the Claude accounts' settings at a time (the accounts' tab, the window's
+    /// other settings): each reads the settings and saves them changed, without undoing another.
+    pub(crate) claude_accounts_lock: Mutex<()>,
     /// The accounts of the external ticket systems (`integrations.json`), with their secrets.
     pub accounts: RwLock<integrations::Accounts>,
     /// Where the accounts' secrets are kept: the system's keychain (memory in tests).
@@ -1128,6 +1135,7 @@ impl<R: Runtime> Core<R> {
             pause_shown: Mutex::default(),
             ports_reserved: Mutex::default(),
             merge_locks: Mutex::default(),
+            claude_accounts_lock: Mutex::default(),
             accounts: RwLock::new(accounts),
             secrets,
             bases: RwLock::new(integrations::Bases::from_env()),
@@ -1264,7 +1272,7 @@ impl<R: Runtime> Core<R> {
         let ui = self.ui.read().clone();
         let models = self.models.read().clone();
         let tickets = self.tickets.read().clone();
-        let hold = *self.hold.lock();
+        let hold = self.hold.lock().clone();
         let pause = self.usage.lock().saved(hold);
         PersistedState {
             projects,
@@ -1296,6 +1304,7 @@ impl<R: Runtime> Core<R> {
         // The MCP server's port is the backend's own (`sync_mcp`): the window's copy may be older.
         s.mcp_port = self.settings.read().mcp_port;
         accounts::normalize(&mut s);
+        accounts::check(&s)?;
         let bytes = serde_json::to_vec_pretty(&s)?;
         paths::write_atomic(&self.data.settings_file(), &bytes)?;
         let auto_resume = s.auto_resume;
@@ -2483,12 +2492,12 @@ impl<R: Runtime> Core<R> {
             ticket_id: o.ticket_id,
             append_prompt: o.append_prompt,
             port_base: o.port_base,
-            // One the settings know (Principal otherwise).
-            account: accounts::get(
-                &settings,
-                o.account.as_deref().unwrap_or(accounts::PRINCIPAL),
-            )
-            .id,
+            // The one asked for if the settings know it (Principal otherwise), else the project's,
+            // else the first usable one.
+            account: match &o.account {
+                Some(id) => accounts::get(&settings, id).id,
+                None => self.account_for_new(project_id),
+            },
             ..Default::default()
         };
         let conversations = self.data.conversations();
@@ -3047,6 +3056,7 @@ impl<R: Runtime> Core<R> {
             prompt,
             limit: worktrees::SUGGEST_LIMIT,
             agent: None,
+            project: Some(&project.id),
         })
         .await
     }
@@ -3095,13 +3105,14 @@ impl<R: Runtime> Core<R> {
             prompt,
             limit,
             agent,
+            project: None,
         })
         .await
     }
 
     /// The id of the account agent `id` runs on: Principal for an agent gone, or on an account
     /// the settings no longer know.
-    fn account_of(&self, id: &str) -> String {
+    pub(crate) fn account_of(&self, id: &str) -> String {
         let account = self
             .agent(id)
             .map(|h| h.lock().meta.account.clone())
@@ -3109,12 +3120,23 @@ impl<R: Runtime> Core<R> {
         accounts::get(&self.settings.read(), &account).id
     }
 
-    /// The account a question about `agent` is asked of: the agent's, Principal without one.
-    fn account_for(&self, settings: &Settings, agent: Option<&str>) -> Account {
-        let id = agent
+    /// The account a question is asked of: its `agent`'s; else, as a new agent of its `project`
+    /// (when it is about one) would go.
+    fn account_for(
+        &self,
+        settings: &Settings,
+        agent: Option<&str>,
+        project: Option<&str>,
+    ) -> Account {
+        let of_agent = agent
             .and_then(|id| self.agent(id).ok())
             .map(|h| h.lock().meta.account.clone());
-        accounts::get(settings, id.as_deref().unwrap_or(accounts::PRINCIPAL))
+        let id = match (of_agent, project) {
+            (Some(id), _) => id,
+            (None, Some(project)) => self.account_for_new(project),
+            (None, None) => self.pick_account(settings, None),
+        };
+        accounts::get(settings, &id)
     }
 
     /// One question to Claude (`claude -p`, no session, no settings, no MCP), as `ask` says: its
@@ -3130,9 +3152,10 @@ impl<R: Runtime> Core<R> {
             prompt,
             limit,
             agent,
+            project,
         } = ask;
         let settings = self.settings.read().clone();
-        let account = self.account_for(&settings, agent);
+        let account = self.account_for(&settings, agent, project);
         let program = accounts::program(&account, &settings)
             .with_context(|| tr!("claude introuvable", "claude not found"))?;
         let mut cmd = tokio::process::Command::new(program);
@@ -3540,6 +3563,7 @@ impl<R: Runtime> Core<R> {
             integrations: ProjectIntegrations::default(),
             commit_mode: CommitMode::default(),
             agents_use_escouade: false,
+            account: String::new(),
         };
         self.projects.write().push(project.clone());
         {
@@ -3555,12 +3579,24 @@ impl<R: Runtime> Core<R> {
         Ok(project)
     }
 
-    pub fn update_project(&self, p: Project) -> Result<()> {
+    pub fn update_project(self: &Arc<Self>, p: Project) -> Result<()> {
+        // Its preferred account is one there is (the window's copy may be older than the
+        // accounts' tab); an account switched off is kept, and ignored while it is.
+        let account = {
+            let settings = self.settings.read();
+            let known = settings.accounts.iter().any(|a| a.id == p.account);
+            if known {
+                p.account.clone()
+            } else {
+                String::new()
+            }
+        };
         let mut projects = self.projects.write();
         let cur = projects
             .iter_mut()
             .find(|x| x.id == p.id)
             .ok_or_else(project_not_found)?;
+        let account_changed = cur.account != account;
         cur.name = p.name;
         cur.color = p.color;
         cur.worktree_per_agent = p.worktree_per_agent;
@@ -3570,6 +3606,7 @@ impl<R: Runtime> Core<R> {
         cur.worktree_teardown = p.worktree_teardown;
         cur.commit_mode = p.commit_mode;
         cur.agents_use_escouade = p.agents_use_escouade;
+        cur.account = account;
         // What was imported is the backend's own: the window's copy may be older.
         let imported = std::mem::take(&mut cur.integrations.imported);
         cur.integrations = crate::integrations::checked_links(p.integrations);
@@ -3578,6 +3615,10 @@ impl<R: Runtime> Core<R> {
         self.request_save();
         // « Les agents peuvent utiliser Escouade » may have changed.
         self.sync_mcp();
+        // The account its tickets go to may have changed, and so what holds them back.
+        if account_changed {
+            self.schedule();
+        }
         Ok(())
     }
 
@@ -4755,10 +4796,26 @@ impl<R: Runtime> Core<R> {
     pub(crate) fn update_usage(&self, change: impl FnOnce(&mut UsageSnapshot)) {
         let settings = self.settings.read().clone();
         let mut u = self.usage.lock();
+        let before = u.current.clone();
         change(&mut u);
-        u.settle(&settings, now_ms());
+        let now = now_ms();
+        u.settle(&settings, now);
         // Told under the lock: two changes at once reach the window in the order they were made.
         self.hub.emit(UiEvent::Usage { usage: u.clone() });
+        // The account new agents go to changed because the one before passed the threshold.
+        let threshold = board::quota_threshold(settings.quota_pause);
+        let told = accounts::switch_notice(
+            i18n::ui(),
+            &settings,
+            &u.accounts,
+            threshold,
+            now,
+            &before,
+            &u.current,
+        );
+        if let Some(text) = told {
+            self.hub.emit(UiEvent::Toast { text });
+        }
     }
 
     /// Every account's quota read again: from a process of the account when one runs

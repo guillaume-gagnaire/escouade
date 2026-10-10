@@ -3,6 +3,7 @@
 
 use super::tests::{client, names, started, EXPOSED, READING};
 use crate::agent::AgentRt;
+use crate::core::RESUME_MARGIN_MS;
 use crate::core_tests::{harness, Harness};
 use crate::model::*;
 use crate::usage::Reading;
@@ -874,16 +875,37 @@ async fn the_usage_gives_each_account_its_windows_and_the_autopilots_pause() {
     assert_eq!(usage["accounts"][0]["fiveHour"]["pct"], 100.0);
     assert_eq!(usage["accounts"][0]["sevenDay"]["pct"], 10.5);
     assert_eq!(usage["autopilotPause"], Value::Null);
-    // Pro switched off: back to Principal, whose window holds the autopilot back until its end.
+    // Pro's too, and sooner: no account is left under the threshold, the first active one is
+    // the current again, and the autopilot waits for the nearest reset, Pro's.
+    h.core.record_usage(
+        "pro",
+        Reading::Windows((window(100.0, soon - 600_000), None)),
+    );
+    let usage = read(&c, "get_usage", json!({})).await;
+    assert_eq!(currents(&usage), (json!(true), json!(false)));
+    assert_eq!(
+        usage["autopilotPause"],
+        json!({ "reason": "fiveHour", "until": soon - 600_000 + RESUME_MARGIN_MS })
+    );
+    // Pro switched off: only Principal, whose window holds the autopilot back until its end.
+    // (Not saved: that would take the server down, which no project asks for.)
     h.core.settings.write().accounts[1].active = false;
     h.core.update_usage(|_| {});
     let until = h.core.autopilot_pause().unwrap().until;
+    assert_eq!(until, soon + RESUME_MARGIN_MS);
     let usage = read(&c, "get_usage", json!({})).await;
     assert_eq!(currents(&usage), (json!(true), json!(false)));
     assert_eq!(
         usage["autopilotPause"],
         json!({ "reason": "fiveHour", "until": until })
     );
+    assert_eq!(usage["accounts"][1]["fiveHour"]["pct"], 100.0);
+    // Pro back on and Principal switched off: only Pro is left to go to.
+    h.core.settings.write().accounts[1].active = true;
+    h.core.settings.write().accounts[0].active = false;
+    h.core.update_usage(|_| {});
+    let usage = read(&c, "get_usage", json!({})).await;
+    assert_eq!(currents(&usage), (json!(false), json!(true)));
     c.cancel().await.unwrap();
     h.core.mcp.stop();
 }

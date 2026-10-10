@@ -16,7 +16,8 @@ import type {
   WorktreeSuggestion,
 } from './types';
 
-export type SettingsTab = 'app' | 'claude' | 'notifications' | 'projects' | 'board' | 'integrations' | 'terminals' | 'network' | 'about';
+export type SettingsTab =
+  'app' | 'claude' | 'accounts' | 'notifications' | 'projects' | 'board' | 'integrations' | 'terminals' | 'network' | 'about';
 
 interface TabInfo {
   id: SettingsTab;
@@ -44,6 +45,8 @@ function tabInfo(id: SettingsTab, icon: string, scoped = false): TabInfo {
 export const SETTINGS_TABS: TabInfo[] = [
   tabInfo('app', 'Aa'),
   tabInfo('claude', '✳'),
+  // Saved at once, each change (not part of the draft).
+  tabInfo('accounts', '◎'),
   tabInfo('notifications', '♪'),
   tabInfo('projects', '▤', true),
   tabInfo('board', '▦', true),
@@ -77,6 +80,7 @@ type ProjectFields = Pick<
   | 'worktreeSetup'
   | 'worktreeTeardown'
   | 'commitMode'
+  | 'account'
   | 'agentsUseEscouade'
 >;
 
@@ -94,6 +98,8 @@ export interface ProjectDraft {
   worktreeTeardown: WorktreeStep[];
   /** « Commit »: the agent writes the commits, or the app commits with the message the user read. */
   commitMode: CommitMode;
+  /** « Compte préféré »: the Claude account its agents and tickets go to; empty is « Automatique ». */
+  account: string;
   /** « Les agents peuvent utiliser Escouade ». */
   agentsUseEscouade: boolean;
   board: BoardSettings;
@@ -111,6 +117,7 @@ function draftOf(p: Project): ProjectDraft {
     worktreeSetup,
     worktreeTeardown,
     commitMode,
+    account,
     agentsUseEscouade,
     board,
     integrations,
@@ -124,6 +131,7 @@ function draftOf(p: Project): ProjectDraft {
     worktreeSetup,
     worktreeTeardown,
     commitMode,
+    account,
     agentsUseEscouade,
     board,
     integrations,
@@ -153,6 +161,7 @@ function fieldsOf(d: ProjectDraft): ProjectFields {
     worktreeSetup: stepsOf(d.worktreeSetup),
     worktreeTeardown: stepsOf(d.worktreeTeardown),
     commitMode: d.commitMode,
+    account: d.account,
     agentsUseEscouade: d.agentsUseEscouade,
   };
 }

@@ -6,6 +6,7 @@ export default {
   tabs: {
     app: { label: 'Application', desc: 'Langue de l’interface et des textes rédigés par Claude' },
     claude: { label: 'Claude Code', desc: 'Exécutable, modèle et permissions par défaut' },
+    accounts: { label: 'Comptes Claude', desc: 'Les comptes sur lesquels partent les agents, enregistrés à chaque changement' },
     notifications: { label: 'Notifications', desc: 'Alertes visuelles et sonores' },
     projects: { label: 'Projets', desc: 'Réglages propres à chaque projet' },
     board: { label: 'Kanban', desc: 'Pilote auto et tickets validés' },

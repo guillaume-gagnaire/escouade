@@ -540,7 +540,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Launch a To do ticket now, as the Launch button does: its agent starts as soon as a place is free. Refused while the autopilot is paused (quota or usage limit: the answer says until when), when the project already has its most tickets in progress in parallel, when the ticket comes after tickets that are not done, and when the board cannot start anything. Answers once it is queued; follow it with get_ticket. It uses the quota.",
+        description = "Launch a To do ticket now, as the Launch button does: its agent starts as soon as a place is free. Refused while the autopilot is paused for the project (every Claude account it may use is past its quota threshold or at its usage limit: the answer says until when), when the project already has its most tickets in progress in parallel, when the ticket comes after tickets that are not done, and when the board cannot start anything. Answers once it is queued; follow it with get_ticket. It uses the quota.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,
@@ -558,7 +558,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Start a new Claude Code agent in a project and send it its first message, which it reads headed by your name (Message from <you>: …), as coming from you and not from the user. It works on its own from then on: follow it with get_agent_summary. Refused while the autopilot is paused (the answer says until when) and when the project already has its most agents working at once (its Kanban's In parallel setting). It uses the quota. Answers the agent's id and name.",
+        description = "Start a new Claude Code agent in a project and send it its first message, which it reads headed by your name (Message from <you>: …), as coming from you and not from the user. It works on its own from then on: follow it with get_agent_summary. Refused while the autopilot is paused for the project (every Claude account it may use is past its quota threshold or at its usage limit: the answer says until when) and when the project already has its most agents working at once (its Kanban's In parallel setting). It uses the quota. Answers the agent's id and name.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,
@@ -579,7 +579,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Send a message to an agent of Escouade. The agent reads it, and the conversation shows it, headed by your name (Message from <you>: …), as coming from you and not from the user; an agent at work reads it after its current turn. Refused while the autopilot is paused (the answer says until when), for an archived agent, and for yourself when you are an agent. It uses the quota. Answers the agent's id and name, and whether the message waits for the end of a turn.",
+        description = "Send a message to an agent of Escouade. The agent reads it, and the conversation shows it, headed by your name (Message from <you>: …), as coming from you and not from the user; an agent at work reads it after its current turn. Refused while the agent's own Claude account is held back (past its quota threshold, at its usage limit, or with an agent waiting for its quota: the answer says until when), for an archived agent, and for yourself when you are an agent. It uses the quota. Answers the agent's id and name, and whether the message waits for the end of a turn.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,

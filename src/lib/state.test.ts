@@ -1070,6 +1070,46 @@ describe('board', () => {
     expect(app.autopilotPause).toBeNull();
   });
 
+  it('knows why the projects that prefer an account wait for it, from the start and as the backend tells it', async () => {
+    const mine = { reason: 'fiveHour' as const, pct: 100, until: 7, accounts: ['pro'] };
+    const { emit } = await start({ projectPauses: { p1: mine } });
+    expect(app.projectPauses).toEqual({ p1: mine });
+    // Told with the other pause, each time: what it no longer names is over.
+    emit({ type: 'autopilotPause', pause: null, projects: { p2: mine } });
+    expect(app.projectPauses).toEqual({ p2: mine });
+    emit({ type: 'autopilotPause', pause: null });
+    expect(app.projectPauses).toEqual({});
+    // An older backend sends none.
+    app.projectPauses = { p1: mine };
+    await start();
+    expect(app.projectPauses).toEqual({});
+  });
+
+  it('forgets the exit of a terminal the window killed itself, whether it came before or comes after', async () => {
+    const { emit } = await start();
+    // Killed, its exit comes after.
+    app.dropExit('t1');
+    emit({ type: 'terminalExit', id: 't1', code: 1 });
+    expect('t1' in app.exitedTerms).toBe(false);
+    // The exit came first.
+    emit({ type: 'terminalExit', id: 't2', code: 0 });
+    expect(app.exitedTerms.t2).toBe(0);
+    app.dropExit('t2');
+    expect('t2' in app.exitedTerms).toBe(false);
+    // Only once, and only for it: the others are kept.
+    emit({ type: 'terminalExit', id: 't1', code: 1 });
+    emit({ type: 'terminalExit', id: 't3', code: null });
+    expect(app.exitedTerms).toEqual({ t1: 1, t3: null });
+  });
+
+  it('knows whether the settings’ path to Claude Code is found, apart from whether the current account’s Claude Code is', async () => {
+    await start({ claudeFound: true, claudePathFound: false });
+    expect([app.claudeFound, app.claudePathFound]).toEqual([true, false]);
+    // An older backend says one thing only.
+    await start({ claudeFound: false, claudePathFound: undefined });
+    expect([app.claudeFound, app.claudePathFound]).toEqual([false, false]);
+  });
+
   it('starts without tickets when the snapshot has none', async () => {
     resetApp({ tickets: [ticket()] });
     await start({ tickets: undefined });

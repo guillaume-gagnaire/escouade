@@ -256,6 +256,10 @@ pub struct Project {
     /// of its own. The server runs while a project lets them (`Core::mcp_wanted`).
     #[serde(default)]
     pub agents_use_escouade: bool,
+    /// « Compte préféré »: the Claude account its new agents and its tickets go to (an
+    /// `Account`'s id); empty is « Automatique » (`accounts::pick`).
+    #[serde(default)]
+    pub account: String,
 }
 
 /// Who writes a project's commits asked from the files panel.
@@ -954,16 +958,31 @@ pub enum PauseReason {
     Limit,
 }
 
-/// What holds the autopilot back besides the quota windows read, or no longer does
+/// What holds the autopilot back on one account besides the quota windows read, or no longer does
 /// (`board::autopilot_pause`).
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
-pub struct Hold {
+pub struct AccountHold {
     /// After a usage limit with no resume planned: until then.
     pub limit_until: Option<i64>,
     /// "Reprendre maintenant": the 5-hour and the weekly window hold nothing back until the end
     /// they had then (the next window holds again).
     pub lifted: [Option<i64>; 2],
+}
+
+/// What holds the autopilot back besides the quota windows read, or no longer does, account by
+/// account: a ticket may start on one account while another waits (`board::autopilot_pause`).
+/// Principal's is where the versions before the accounts kept the only one.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Hold {
+    /// Principal's: after a usage limit with no resume planned, until then.
+    pub limit_until: Option<i64>,
+    /// Principal's: "Reprendre maintenant" lifted its 5-hour and its weekly window until the end
+    /// they had then.
+    pub lifted: [Option<i64>; 2],
+    /// The other accounts', by account (only those that hold something).
+    pub accounts: BTreeMap<String, AccountHold>,
 }
 
 /// The autopilot's pause, kept across a restart: the quota windows last read on each account (a
@@ -989,7 +1008,7 @@ pub struct SavedWindows {
     pub seven_day: Option<RateWindow>,
 }
 
-/// Why no ticket of any board starts, and until when (`board::autopilot_pause`).
+/// Why no ticket starts, and until when (`board::autopilot_pause`).
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AutopilotPause {
@@ -998,6 +1017,11 @@ pub struct AutopilotPause {
     pub pct: Option<f64>,
     /// When the tickets start again: the window's end, or about then after a limit.
     pub until: i64,
+    /// The accounts a ticket could start on, all held back (the reason and the end are those of
+    /// the first to be free again); empty with a single account, which there is nothing to tell
+    /// from.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub accounts: Vec<String>,
 }
 
 /// The quotas of every Claude account, as the window is told them (`usage::settle`).
@@ -1013,7 +1037,7 @@ pub struct UsageSnapshot {
     pub updated_at: i64,
     /// Every account, in the settings' order.
     pub accounts: Vec<AccountUsage>,
-    /// The account new agents would go to (`accounts::current`).
+    /// The account new agents would go to (`accounts::pick`).
     pub current: String,
 }
 
@@ -1143,10 +1167,13 @@ pub enum UiEvent {
         project_id: String,
         issue: Option<String>,
     },
-    /// Why no ticket of any board starts for now (a quota, a usage limit), or None once they may
-    /// start again.
+    /// Why no ticket of a board starts for now (a quota, a usage limit), or None once they may
+    /// start again: `pause` for the projects that go to any account, `projects` for the paused
+    /// ones that prefer an account (each pauses on its own).
     AutopilotPause {
         pause: Option<AutopilotPause>,
+        #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+        projects: BTreeMap<String, AutopilotPause>,
     },
     /// An address to open in the default browser (a pull request to finish on GitHub).
     OpenUrl {
@@ -1356,6 +1383,7 @@ mod tests {
             hold: Hold {
                 limit_until: Some(5),
                 lifted: [None, Some(7)],
+                ..Default::default()
             },
             ..Default::default()
         };
@@ -1447,14 +1475,19 @@ mod tests {
                 reason: PauseReason::FiveHour,
                 pct: Some(100.0),
                 until: 5,
+                accounts: vec![],
             }),
+            projects: BTreeMap::new(),
         };
         assert_eq!(
             serde_json::to_value(&e).unwrap(),
             json!({ "type": "autopilotPause",
                     "pause": { "reason": "fiveHour", "pct": 100.0, "until": 5 } })
         );
-        let over = UiEvent::AutopilotPause { pause: None };
+        let over = UiEvent::AutopilotPause {
+            pause: None,
+            projects: BTreeMap::new(),
+        };
         assert_eq!(
             serde_json::to_value(&over).unwrap(),
             json!({ "type": "autopilotPause", "pause": null })
@@ -1631,6 +1664,81 @@ mod tests {
         assert_eq!(v["commitMode"], json!("direct"));
         let back: Project = serde_json::from_value(v).unwrap();
         assert_eq!(back.commit_mode, CommitMode::Direct);
+    }
+
+    #[test]
+    fn a_project_saved_before_the_preferred_account_goes_to_any_account() {
+        let p: Project = serde_json::from_value(
+            json!({ "id": "p1", "name": "demo", "path": "C:/demo", "color": "red" }),
+        )
+        .unwrap();
+        // Empty: « Automatique ».
+        assert_eq!(p.account, "");
+        let pro = Project {
+            account: "pro".into(),
+            ..p
+        };
+        let v = serde_json::to_value(&pro).unwrap();
+        assert_eq!(v["account"], json!("pro"));
+        let back: Project = serde_json::from_value(v).unwrap();
+        assert_eq!(back.account, "pro");
+    }
+
+    #[test]
+    fn what_holds_the_autopilot_back_is_kept_by_account_and_an_older_state_gives_it_to_principal() {
+        // Saved before the accounts: the pauses of the only account there was.
+        let old: Hold =
+            serde_json::from_value(json!({ "limitUntil": 5, "lifted": [null, 7] })).unwrap();
+        assert!(old.accounts.is_empty());
+        assert_eq!(
+            old.of("principal"),
+            AccountHold {
+                limit_until: Some(5),
+                lifted: [None, Some(7)]
+            }
+        );
+        assert_eq!(old.of("pro"), AccountHold::default());
+        // The other accounts' beside them, by id.
+        let mut hold = old.clone();
+        hold.accounts.insert(
+            "pro".into(),
+            AccountHold {
+                limit_until: Some(9),
+                lifted: [Some(3), None],
+            },
+        );
+        let v = serde_json::to_value(&hold).unwrap();
+        assert_eq!(v["limitUntil"], json!(5));
+        assert_eq!(
+            v["accounts"],
+            json!({ "pro": { "limitUntil": 9, "lifted": [3, null] } })
+        );
+        assert_eq!(serde_json::from_value::<Hold>(v).unwrap(), hold);
+        // Saved with only part of it.
+        let part: Hold = serde_json::from_value(json!({ "accounts": { "pro": {} } })).unwrap();
+        assert_eq!(part.of("pro"), AccountHold::default());
+    }
+
+    #[test]
+    fn the_pause_of_several_accounts_names_them_and_the_projects_that_wait_for_their_own() {
+        let pause = |accounts: &[&str]| AutopilotPause {
+            reason: PauseReason::Week,
+            pct: Some(97.0),
+            until: 5,
+            accounts: accounts.iter().map(|a| a.to_string()).collect(),
+        };
+        let e = UiEvent::AutopilotPause {
+            pause: Some(pause(&["principal", "pro"])),
+            projects: BTreeMap::from([("p1".to_string(), pause(&["pro"]))]),
+        };
+        assert_eq!(
+            serde_json::to_value(&e).unwrap(),
+            json!({ "type": "autopilotPause",
+                    "pause": { "reason": "week", "pct": 97.0, "until": 5,
+                               "accounts": ["principal", "pro"] },
+                    "projects": { "p1": { "reason": "week", "pct": 97.0, "until": 5,
+                                          "accounts": ["pro"] } } })
+        );
     }
 
     #[test]

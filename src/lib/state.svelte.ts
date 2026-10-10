@@ -73,6 +73,8 @@ export type Modal =
       onCancel?: () => void;
     }
   | { kind: 'rename'; title: string; value: string; onSubmit: (v: string) => void | Promise<void> }
+  /** « Ajouter un compte… » (a new Claude account, then its sign-in), or « Se connecter… » for the account `accountId`. */
+  | { kind: 'account'; accountId?: string }
   | { kind: 'testLaunch'; agentId: string }
   | { kind: 'import'; projectId: string }
   /** The update downloaded (`app.update`), which a restart installs. */
@@ -168,6 +170,8 @@ class AppState {
   shells = $state<ShellInfo[]>([]);
   terminals = $state<TermInfo[]>([]);
   exitedTerms = $state<Record<string, number | null>>({});
+  /** Terminals the window killed itself, whose exit is still to come: nobody reads it. */
+  private droppedTerms = new Set<string>();
   /**
    * What the step running of each agent's worktree setup wrote, its last lines, by agent. Replaced whole at each
    * change (a few hundred lines, often): not made deeply reactive.
@@ -178,6 +182,8 @@ class AppState {
   selectedLaunch = $state<Record<string, string | null>>({});
   selectedTerm = $state<Record<string, string | null>>({});
   claudeFound = $state(true);
+  /** The settings' own path to Claude Code leads to it (what its field's hint says, whatever the current account runs). */
+  claudePathFound = $state(true);
   /** Claude Code's models as it last reported them: the version each alias runs. */
   models = $state<ModelInfo[]>([]);
   version = $state('');
@@ -211,6 +217,8 @@ class AppState {
   boardIssues = $state<Record<string, string>>({});
   /** Why no ticket of any board starts for now (a quota window, a usage limit), as the backend says. */
   autopilotPause = $state<AutopilotPause | null>(null);
+  /** The same for the paused projects that prefer an account, by project (they wait for that account alone). */
+  projectPauses = $state<Record<string, AutopilotPause>>({});
   /** The external ticket systems' accounts (their secrets stay in the backend). */
   accounts = $state<AccountView[]>([]);
   editor = $state<Record<string, EditorState>>({});
@@ -376,6 +384,7 @@ class AppState {
     this.boardIssues = { ...s.boardIssues };
     this.setupOutput = { ...s.setupOutput };
     this.autopilotPause = s.autopilotPause ?? null;
+    this.projectPauses = s.projectPauses ?? {};
     this.accounts = s.accounts ?? [];
     this.attention = {};
     this.ui = { ...s.ui, view: s.ui.view || 'project', selectedAgent: s.ui.selectedAgent ?? {} };
@@ -388,6 +397,7 @@ class AppState {
     this.git = s.git;
     this.shells = s.shells;
     this.claudeFound = s.claudeFound;
+    this.claudePathFound = s.claudePathFound ?? s.claudeFound;
     this.version = s.version;
     this.models = s.models;
     this.restartAt = s.restartAt ?? null;
@@ -479,6 +489,7 @@ class AppState {
         break;
       case 'autopilotPause':
         this.autopilotPause = e.pause;
+        this.projectPauses = e.projects ?? {};
         break;
       case 'setupOutput':
         this.takeSetupOutput(e.agentId, e);
@@ -508,6 +519,7 @@ class AppState {
         }
         break;
       case 'terminalExit':
+        if (this.droppedTerms.delete(e.id)) break;
         this.exitedTerms[e.id] = e.code;
         this.onLaunchExit(e.id, e.code);
         break;
@@ -909,6 +921,12 @@ class AppState {
     recentFiles.closeProject(id);
     fileSearches.closeProject(id);
     this.persistUi();
+  }
+
+  /** A terminal the window kills (its sign-in terminal): its exit is not kept, whether it came already or comes after. */
+  dropExit(id: string) {
+    if (id in this.exitedTerms) delete this.exitedTerms[id];
+    else this.droppedTerms.add(id);
   }
 
   /** A launch command's process is up; it may have ended, or been stopped, in the meantime. */

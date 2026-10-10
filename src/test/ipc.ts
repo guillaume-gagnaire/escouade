@@ -79,6 +79,7 @@ export function project(over: Partial<Project> = {}): Project {
     worktreeTeardown: [],
     integrations: { links: [], comments: ['review', 'done'] },
     commitMode: 'agent',
+    account: '',
     agentsUseEscouade: false,
     ...over,
   };
@@ -244,6 +245,8 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.boardIssues = {};
   app.setupOutput = {};
   app.autopilotPause = null;
+  app.claudePathFound = true;
+  app.projectPauses = {};
   app.editor = {};
   app.ui = { activeProject: projects[0]?.id ?? null, view: 'project', selectedAgent: {} };
   app.settings = { ...SETTINGS };

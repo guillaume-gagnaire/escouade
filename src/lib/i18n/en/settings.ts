@@ -5,6 +5,7 @@ export default defineZone('settings', {
   tabs: {
     app: { label: 'Application', desc: 'Language of the interface and of texts written by Claude' },
     claude: { label: 'Claude Code', desc: 'Executable, model, and default permissions' },
+    accounts: { label: 'Claude accounts', desc: 'The accounts agents start on, saved as you change them' },
     notifications: { label: 'Notifications', desc: 'Visual and sound alerts' },
     projects: { label: 'Projects', desc: 'Settings specific to each project' },
     board: { label: 'Kanban', desc: 'Autopilot and approved tickets' },

@@ -39,4 +39,17 @@ describe('Dropdown', () => {
     await userEvent.click(screen.getByRole('menuitemradio', { name: 'Sonnet' }));
     expect(onPick).toHaveBeenCalledWith('sonnet');
   });
+
+  it('can be read and not changed: no menu, no click, and its title says why', async () => {
+    const onToggle = vi.fn();
+    render(Dropdown, props({ readonly: true, title: 'Ne change plus', onToggle }));
+    const trigger = screen.getByRole('button', { name: 'Modèle : Opus' });
+    // Not disabled: it stays readable, and reachable with the keyboard for its title.
+    expect(trigger).not.toBeDisabled();
+    expect(trigger).toHaveAttribute('aria-disabled', 'true');
+    expect(trigger).not.toHaveAttribute('aria-haspopup');
+    expect(trigger).toHaveAttribute('title', 'Ne change plus');
+    await userEvent.click(trigger);
+    expect(onToggle).not.toHaveBeenCalled();
+  });
 });

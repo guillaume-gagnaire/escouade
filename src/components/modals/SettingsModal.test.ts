@@ -52,6 +52,7 @@ describe('SettingsModal', () => {
     ).toEqual([
       'AaApplication',
       '✳Claude Code',
+      '◎Comptes Claude',
       '♪Notifications',
       '▤Projets',
       '▦Kanban',
@@ -382,6 +383,68 @@ describe('SettingsModal', () => {
     await save();
     expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p1', commitMode: 'direct' });
     expect(app.projects[0].commitMode).toBe('direct');
+  });
+
+  it('offers no preferred account with a single account', () => {
+    backendSaving();
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    expect(screen.queryByRole('group', { name: 'Compte préféré' })).not.toBeInTheDocument();
+  });
+
+  it('chooses the account a project’s agents and tickets go to, « Automatique » by default', async () => {
+    const backend = backendSaving();
+    app.settings.accounts = [
+      ...app.settings.accounts,
+      { id: 'pro', name: 'Pro', configDir: 'C:\\claude\\pro', claudePath: '', active: true },
+      { id: 'team', name: 'Équipe', configDir: 'C:\\claude\\team', claudePath: '', active: false },
+    ];
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    const choice = screen.getByRole('group', { name: 'Compte préféré' });
+    // The account switched off is not offered.
+    expect(
+      within(choice)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['Automatique', 'Principal', 'Pro']);
+    expect(within(choice).getByRole('button', { name: 'Automatique' })).toHaveAttribute('aria-pressed', 'true');
+    expect(choice.closest('.row')).toHaveTextContent('Le compte sur lequel partent les nouveaux agents et les tickets de ce projet.');
+    await userEvent.click(within(choice).getByRole('button', { name: 'Pro' }));
+    expect(within(choice).getByRole('button', { name: 'Pro' })).toHaveAttribute('aria-pressed', 'true');
+    await save();
+    expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p1', account: 'pro' });
+    expect(app.projects[0].account).toBe('pro');
+  });
+
+  it('goes back to « Automatique », and shows an account switched off since that the project still prefers', async () => {
+    const backend = backendSaving();
+    app.projects[0].account = 'team';
+    app.settings.accounts = [
+      ...app.settings.accounts,
+      { id: 'team', name: 'Équipe', configDir: 'C:\\claude\\team', claudePath: '', active: false },
+    ];
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    const choice = screen.getByRole('group', { name: 'Compte préféré' });
+    expect(within(choice).getByRole('button', { name: 'Équipe (inactif)' })).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(within(choice).getByRole('button', { name: 'Automatique' }));
+    await save();
+    expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p1', account: '' });
+  });
+
+  it('names the preferred account in English', async () => {
+    setLang('en');
+    backendSaving();
+    app.settings.accounts = [
+      ...app.settings.accounts,
+      { id: 'pro', name: 'Pro', configDir: 'C:\\claude\\pro', claudePath: '', active: true },
+    ];
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    const choice = screen.getByRole('group', { name: 'Preferred account' });
+    expect(
+      within(choice)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['Automatic', 'Main', 'Pro']);
+    expect(choice.closest('.row')).toHaveTextContent('The account this project’s new agents and tickets go to.');
   });
 
   it('saves the files copied into new worktrees', async () => {
@@ -812,6 +875,7 @@ describe('SettingsModal in English', () => {
     ).toEqual([
       'AaApplication',
       '✳Claude Code',
+      '◎Claude accounts',
       '♪Notifications',
       '▤Projects',
       '▦Kanban',
@@ -835,7 +899,7 @@ describe('SettingsModal in English', () => {
     ).toEqual(['Auto', 'Ask', 'Plan', 'Accept edits', 'Bypass']);
     const path = screen.getByRole('textbox', { name: 'Executable path' });
     expect(path).toHaveAttribute('placeholder', 'claude (found in PATH)');
-    app.claudeFound = false;
+    app.claudePathFound = false;
     flushSync();
     expect(path).toHaveAttribute('placeholder', 'not found — enter the path to claude.exe');
     expect(screen.getByRole('switch', { name: 'Auto-resume after the usage limit' })).toBeInTheDocument();
@@ -843,6 +907,20 @@ describe('SettingsModal in English', () => {
     await userEvent.type(screen.getByRole('spinbutton', { name: /Stop idle/ }), '0');
     expect(tab('Claude Code')).toHaveClass('changed');
     expect(tab('Claude Code')).toHaveAccessibleDescription('Modified, not saved yet');
+  });
+
+  it('says of the executable path whether it is found, not whether the current account’s Claude Code is', async () => {
+    fakeBackend();
+    // An account with a `claude` of its own is the current one: Claude Code is found, the settings' path is not.
+    app.claudeFound = true;
+    app.claudePathFound = false;
+    render(SettingsModal, { tab: 'claude' });
+    const path = screen.getByRole('textbox', { name: 'Executable path' });
+    expect(path).toHaveAttribute('placeholder', 'not found — enter the path to claude.exe');
+    app.claudePathFound = true;
+    app.claudeFound = false;
+    flushSync();
+    expect(path).toHaveAttribute('placeholder', 'claude (found in PATH)');
   });
 
   it('says the notifications, the network and the terminals in English', async () => {

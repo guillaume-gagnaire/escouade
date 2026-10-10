@@ -2,9 +2,11 @@
 //! core (so the window is told, the external tickets kept in step and the board scheduled as for
 //! an action made there), under the guardrails of the window and the autopilot:
 //!
-//! - while the autopilot is paused (a quota window over the threshold, the pause after a usage
-//!   limit, an agent waiting for its quota) nothing that spends quota is started: a ticket, an
-//!   agent, a message. The refusal says until when;
+//! - a ticket or an agent is not started while the autopilot has no account to start it on: every
+//!   account the project allows (the one it prefers, else any active one) is held back, by a quota
+//!   window over the threshold, the pause after a usage limit or an agent waiting for its quota.
+//!   One account free is enough. A message is not sent to an agent whose own account is held back.
+//!   The refusal says until when;
 //! - a project's most tickets in parallel (« En parallèle » in its Kanban settings) are not
 //!   exceeded by a ticket launched, nor its most agents working at once by an agent created;
 //! - a ticket that comes after tickets not done is launched by hand only once the user agreed in
@@ -27,9 +29,11 @@ use super::tools::{
     UpdateTicketArgs, SPLIT_MAX,
 };
 use super::Caller;
-use crate::board::MoveTo;
+use crate::accounts;
+use crate::board::{Held, MoveTo};
 use crate::core::{AgentOptions, Core};
-use crate::model::{Column, Project, PROGRESS_LINE_MAX};
+use crate::i18n;
+use crate::model::{Column, PauseReason, Project, PROGRESS_LINE_MAX};
 use crate::tickets::{title_missing, TicketDraft};
 use serde_json::json;
 use std::sync::Arc;
@@ -246,53 +250,75 @@ fn when<R: Runtime>(core: &Core<R>, ms: i64) -> String {
     }
 }
 
-/// Why nothing that spends quota is started now, and until when (`Core::held`): the autopilot's
-/// pause, else an agent waiting for its quota.
-fn hold<R: Runtime>(core: &Core<R>) -> Option<String> {
-    use crate::model::PauseReason;
-    if let Some(p) = core.autopilot_pause() {
-        let until = when(core, p.until);
-        let pct = p.pct.map_or(0, |pct| pct.round() as i64);
-        return Some(match p.reason {
-            PauseReason::Limit => tr!(
-                "Le pilote auto est en pause jusqu’à {until} : la limite d’usage est atteinte. Réessaie à ce moment-là.",
-                "The autopilot is paused until {until}: the usage limit is reached. Try again then."
-            ),
-            PauseReason::FiveHour => tr!(
-                "Le pilote auto est en pause jusqu’à {until} : la fenêtre de 5 h est utilisée à {pct} %. Réessaie à ce moment-là.",
-                "The autopilot is paused until {until}: the 5-hour window is {pct}% used. Try again then."
-            ),
-            PauseReason::Week => tr!(
-                "Le pilote auto est en pause jusqu’à {until} : la fenêtre hebdomadaire est utilisée à {pct} %. Réessaie à ce moment-là.",
-                "The autopilot is paused until {until}: the weekly window is {pct}% used. Try again then."
-            ),
-        });
-    }
-    if core.quota_paused() {
-        let resume = core
-            .agents
-            .read()
-            .values()
-            .filter_map(|h| {
-                let rt = h.lock();
-                rt.meta.resume_at.filter(|_| !rt.meta.archived)
-            })
-            .max()?;
-        let until = when(core, resume);
-        return Some(tr!(
+/// What `held` says, and until when: the pause of the account (or of the first account to be free
+/// again), else an agent waiting for its quota.
+fn why<R: Runtime>(core: &Core<R>, held: &Held) -> String {
+    let p = &held.pause;
+    let until = when(core, p.until);
+    let pct = p.pct.map_or(0, |pct| pct.round() as i64);
+    if held.by_agent {
+        return tr!(
             "Un agent attend son quota et reprend à {until} : rien ne démarre d’ici là. Réessaie à ce moment-là.",
             "An agent is waiting for its quota and resumes at {until}: nothing starts until then. Try again then."
-        ));
+        );
     }
-    None
+    match p.reason {
+        PauseReason::Limit => tr!(
+            "Le pilote auto est en pause jusqu’à {until} : la limite d’usage est atteinte. Réessaie à ce moment-là.",
+            "The autopilot is paused until {until}: the usage limit is reached. Try again then."
+        ),
+        PauseReason::FiveHour => tr!(
+            "Le pilote auto est en pause jusqu’à {until} : la fenêtre de 5 h est utilisée à {pct} %. Réessaie à ce moment-là.",
+            "The autopilot is paused until {until}: the 5-hour window is {pct}% used. Try again then."
+        ),
+        PauseReason::Week => tr!(
+            "Le pilote auto est en pause jusqu’à {until} : la fenêtre hebdomadaire est utilisée à {pct} %. Réessaie à ce moment-là.",
+            "The autopilot is paused until {until}: the weekly window is {pct}% used. Try again then."
+        ),
+    }
 }
 
-/// Held: a refusal that says why.
-fn not_held<R: Runtime>(core: &Core<R>) -> Result<(), ToolError> {
-    match hold(core) {
-        Some(why) => Err(ToolError::Refused(why)),
+/// A ticket, or a new agent, of the project does not start while every account it may go to is
+/// held back (`Core::project_hold`: the one the project prefers, else any active one): one that is
+/// free takes it, as the scheduler has it. The refusal says why, and until when.
+fn not_held<R: Runtime>(core: &Core<R>, project_id: &str) -> Result<(), ToolError> {
+    match core.project_hold(project_id) {
+        Some(held) => Err(ToolError::Refused(why(core, &held))),
         None => Ok(()),
     }
+}
+
+/// A message to an agent does not go out while the agent's own account is held back
+/// (`Core::account_hold`): it would spend that account's quota. An agent on another account is not
+/// held by it. The refusal says why, until when, and which account when there are several.
+fn account_not_held<R: Runtime>(
+    core: &Core<R>,
+    agent: &resolve::AgentRef,
+) -> Result<(), ToolError> {
+    let Some(account) = core
+        .agent(&agent.id)
+        .ok()
+        .map(|h| h.lock().meta.account.clone())
+    else {
+        return Ok(());
+    };
+    let Some(held) = core.account_hold(&account) else {
+        return Ok(());
+    };
+    let mut refusal = why(core, &held);
+    let settings = core.settings.read().clone();
+    if settings.accounts.len() > 1 {
+        let (name, account) = (
+            &agent.name,
+            accounts::name_in(i18n::ui(), &accounts::get(&settings, &account)),
+        );
+        refusal.push(' ');
+        refusal.push_str(&tr!(
+            "C’est le compte « {account} » de l’agent {name} ; un agent d’un autre compte peut encore recevoir un message.",
+            "The agent {name} is on the “{account}” account; an agent on another account can still take a message."
+        ));
+    }
+    Err(ToolError::Refused(refusal))
 }
 
 // ---------- tickets ----------
@@ -404,7 +430,7 @@ pub(super) fn start_ticket<R: Runtime>(
     own_project_only(core, caller, &t.project_id)?;
     // A ticket that left « À faire » is told so by the core.
     if t.column == Column::Todo {
-        not_held(core)?;
+        not_held(core, &t.project_id)?;
         let project = project_of(core, &t.project_id)?;
         let issue = core.board_issues.lock().get(&project.id).cloned();
         if let Some(issue) = issue {
@@ -508,7 +534,7 @@ pub(super) async fn create_agent<R: Runtime>(
         )));
     }
     let model = model(core, a.model.as_deref())?;
-    not_held(core)?;
+    not_held(core, &project.id)?;
     // One at a time from the count to the first message: two calls at once do not both find a
     // place free.
     let _one = core.mcp.acting.lock().await;
@@ -535,7 +561,8 @@ pub(super) async fn create_agent<R: Runtime>(
             AgentOptions {
                 model,
                 isolated: a.worktree,
-                // Its Claude account is the default one until accounts choose (K4).
+                // Its Claude account is the project's, else the first usable one: one of those
+                // `not_held` found free.
                 ..Default::default()
             },
         )
@@ -604,7 +631,7 @@ pub(super) async fn send_message<R: Runtime>(
             "Write the message to send."
         )));
     }
-    not_held(core)?;
+    account_not_held(core, &found)?;
     // A message sent to an agent at work waits for the end of its turn.
     let queued = core
         .agent(&found.id)

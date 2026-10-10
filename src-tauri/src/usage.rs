@@ -98,6 +98,29 @@ pub enum Credentials {
     Missing,
 }
 
+/// What Claude Code keeps of an account's sign-in, and which sign-in that is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Stored {
+    pub credentials: Credentials,
+    /// A fingerprint of the sign-in (a hash, never the token): another after a new sign-in, the
+    /// same while it is out of date. None when not signed in.
+    pub stamp: Option<String>,
+}
+
+/// `read_credentials`, with which sign-in it is.
+pub async fn read_stored(dir: &Path, keychain_service: &str) -> Result<Stored> {
+    stored_from(from_keychain(keychain_service).await?, dir).await
+}
+
+/// A short fingerprint of the sign-in in `oauth` (`claudeAiOauth`): a hash of its tokens, whose
+/// first bytes tell one sign-in from another without ever holding a token.
+fn stamp_of(oauth: &Value) -> Option<String> {
+    let token = oauth["accessToken"].as_str().filter(|t| !t.is_empty())?;
+    let refresh = oauth["refreshToken"].as_str().unwrap_or_default();
+    let hash = Sha256::digest(format!("{token}\n{refresh}").as_bytes());
+    Some(hash.iter().take(8).map(|b| format!("{b:02x}")).collect())
+}
+
 /// The account's sign-in, read-only, where Claude Code reads it: on macOS the keychain entry named
 /// `keychain_service`, `<dir>/.credentials.json` only without one (its « keychain with plaintext
 /// fallback »: a file left behind does not hide the entry); elsewhere the file.
@@ -107,41 +130,120 @@ pub async fn read_credentials(dir: &Path, keychain_service: &str) -> Result<Cred
 
 /// The sign-in the keychain entry holds (`keychain`), else the one of `<dir>/.credentials.json`.
 async fn credentials_from(keychain: Option<Value>, dir: &Path) -> Result<Credentials> {
+    Ok(stored_from(keychain, dir).await?.credentials)
+}
+
+/// `credentials_from`, with which sign-in it is.
+async fn stored_from(keychain: Option<Value>, dir: &Path) -> Result<Stored> {
+    let missing = Stored {
+        credentials: Credentials::Missing,
+        stamp: None,
+    };
     let creds: Value = match keychain {
         Some(creds) => creds,
         None => match tokio::fs::read_to_string(dir.join(".credentials.json")).await {
             Ok(text) => serde_json::from_str(&text)?,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Credentials::Missing),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(missing),
             Err(e) => return Err(e.into()),
         },
     };
     let oauth = &creds["claudeAiOauth"];
     let Some(token) = oauth["accessToken"].as_str().filter(|t| !t.is_empty()) else {
-        return Ok(Credentials::Missing);
+        return Ok(missing);
     };
-    if oauth["expiresAt"]
+    let expired = oauth["expiresAt"]
         .as_i64()
-        .is_some_and(|exp| exp < crate::model::now_ms())
-    {
-        return Ok(Credentials::Expired);
+        .is_some_and(|exp| exp < crate::model::now_ms());
+    Ok(Stored {
+        credentials: if expired {
+            Credentials::Expired
+        } else {
+            Credentials::Token(token.to_string())
+        },
+        stamp: stamp_of(oauth),
+    })
+}
+
+/// What `security find-generic-password -w` answered.
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+enum KeychainAnswer {
+    /// The entry's secret: Claude Code's sign-in.
+    Entry(Value),
+    /// No such entry.
+    None,
+    /// The entry not given: the user denied the access, or the keychain could not be asked.
+    Refused,
+}
+
+/// The answer of `security` from its exit code (`code`, none when a signal ended it) and its
+/// output: 0 the entry, 44 none (`errSecItemNotFound`, whose low byte the tool exits with), any
+/// other a refusal (`errSecAuthFailed` 51, `errSecUserCanceled` 128…).
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn keychain_answer(code: Option<i32>, stdout: &[u8]) -> Result<KeychainAnswer> {
+    Ok(match code {
+        Some(0) => KeychainAnswer::Entry(serde_json::from_slice(stdout)?),
+        Some(44) => KeychainAnswer::None,
+        _ => KeychainAnswer::Refused,
+    })
+}
+
+/// How long a keychain entry whose access was refused is left alone: reading it again would ask
+/// the user again, every minute while the account looks not signed in.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+const KEYCHAIN_REFUSED_MS: i64 = 10 * 60_000;
+
+/// The keychain entries whose access was refused, and when.
+#[derive(Default)]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+struct KeychainGate {
+    refused: std::collections::HashMap<String, i64>,
+}
+
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+impl KeychainGate {
+    /// The entry `service` may be asked for at `now`: not refused in the last ten minutes.
+    fn open(&self, service: &str, now: i64) -> bool {
+        self.refused
+            .get(service)
+            .is_none_or(|&at| now - at >= KEYCHAIN_REFUSED_MS)
     }
-    Ok(Credentials::Token(token.to_string()))
+
+    /// The entry `service` was refused at `now`.
+    fn refuse(&mut self, service: &str, now: i64) {
+        self.refused.insert(service.to_string(), now);
+    }
 }
 
 /// The keychain entry named `service`, where Claude Code keeps the sign-in on macOS; None when
-/// there is no such entry. Never in unit tests: the entry without a hash is the machine user's
-/// own (and reading it may ask them for their password).
+/// there is no such entry. An entry refused (`KeychainGate`) is an error for ten minutes, without
+/// asking again: the last values stand. Never in unit tests: the entry without a hash is the
+/// machine user's own (and reading it may ask them for their password).
 #[cfg(all(target_os = "macos", not(test)))]
 async fn from_keychain(service: &str) -> Result<Option<Value>> {
+    static GATE: std::sync::LazyLock<parking_lot::Mutex<KeychainGate>> =
+        std::sync::LazyLock::new(Default::default);
+    // The guard let go at once: never held across the wait below.
+    let open = GATE.lock().open(service, crate::model::now_ms());
+    if !open {
+        anyhow::bail!("keychain entry {service} refused a moment ago");
+    }
     let out = tokio::process::Command::new("/usr/bin/security")
         .args(["find-generic-password", "-s", service, "-w"])
         .stdin(std::process::Stdio::null())
         .output()
         .await?;
-    if !out.status.success() {
-        return Ok(None);
+    match keychain_answer(out.status.code(), &out.stdout)? {
+        KeychainAnswer::Entry(v) => Ok(Some(v)),
+        KeychainAnswer::None => Ok(None),
+        KeychainAnswer::Refused => {
+            GATE.lock().refuse(service, crate::model::now_ms());
+            anyhow::bail!(
+                "keychain entry {service} refused: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            )
+        }
     }
-    Ok(Some(serde_json::from_slice(&out.stdout)?))
 }
 
 /// Elsewhere Claude Code keeps it in the file only (and unit tests read no keychain).
@@ -325,7 +427,7 @@ impl UsageSnapshot {
             a.reason = a.problem.map(|p| reason(p, lang));
         }
         let threshold = board::quota_threshold(settings.quota_pause);
-        self.current = accounts::current(settings, &self.accounts, threshold, now);
+        self.current = accounts::pick(settings, &self.accounts, threshold, None, now);
         if let Some(current) = self.account(&self.current).cloned() {
             self.five_hour = current.five_hour;
             self.seven_day = current.seven_day;
@@ -335,7 +437,10 @@ impl UsageSnapshot {
 
     /// The windows to keep across a restart, with what else holds the autopilot back: Principal's
     /// where the versions before the accounts kept the only ones, the others' by account.
-    pub fn saved(&self, hold: Hold) -> SavedPause {
+    pub fn saved(&self, mut hold: Hold) -> SavedPause {
+        // Of an account gone from the settings, nothing is kept.
+        hold.accounts
+            .retain(|id, _| self.accounts.iter().any(|a| a.id == *id));
         let windows = |a: &AccountUsage| SavedWindows {
             five_hour: a.five_hour,
             seven_day: a.seven_day,
@@ -582,6 +687,46 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn one_sign_in_is_told_from_another_by_a_stamp_that_is_never_the_token() {
+        let dir = test_dir("usage-stamp");
+        let later = now_ms() + 3_600_000;
+        let sign_in = |token: &str, expires_at: i64| json!({ "claudeAiOauth": { "accessToken": token, "refreshToken": "ref", "expiresAt": expires_at } });
+        let stamp = |d: PathBuf| async move { read_stored(&d, NO_ENTRY).await.unwrap().stamp };
+        credentials(&dir, sign_in("tok-old", later));
+        let first = stamp(dir.clone()).await.expect("signed in: a stamp");
+        assert_eq!(first.len(), 16);
+        assert!(first.chars().all(|c| c.is_ascii_hexdigit()));
+        assert!(!first.contains("tok"));
+        // Read again, the same sign-in: the same stamp.
+        assert_eq!(stamp(dir.clone()).await.as_deref(), Some(first.as_str()));
+        // Out of date, it is still that sign-in: signed in, and told by the same stamp, which
+        // is how a window tells it from the one the user is about to make.
+        credentials(&dir, sign_in("tok-old", now_ms() - 1_000));
+        let stored = read_stored(&dir, NO_ENTRY).await.unwrap();
+        assert_eq!(stored.credentials, Credentials::Expired);
+        assert_eq!(stored.stamp.as_deref(), Some(first.as_str()));
+        // A new sign-in, another token: another stamp.
+        credentials(&dir, sign_in("tok-new", later));
+        let second = stamp(dir.clone()).await.unwrap();
+        assert_ne!(second, first);
+        // Not signed in (nothing there, or only the sign-ins of MCP servers): none.
+        let nothing = dir.join("nothing");
+        std::fs::create_dir_all(&nothing).unwrap();
+        assert_eq!(stamp(nothing).await, None);
+        let other = dir.join("other");
+        credentials(
+            &other,
+            json!({ "mcpOAuth": { "x": { "accessToken": "t" } } }),
+        );
+        assert_eq!(stamp(other).await, None);
+        // The keychain's entry, when there is one, is the sign-in the stamp is of.
+        let entry = sign_in("tok-keychain", later);
+        let kept = stored_from(Some(entry), &dir).await.unwrap();
+        assert_eq!(kept.credentials, Credentials::Token("tok-keychain".into()));
+        assert_ne!(kept.stamp.unwrap(), second);
+    }
+
+    #[tokio::test]
     async fn on_macos_the_keychain_entry_comes_before_a_file_left_in_the_folder() {
         let dir = test_dir("usage-keychain-first");
         // A file left behind, out of date.
@@ -599,6 +744,45 @@ mod tests {
             credentials_from(None, &dir).await.unwrap(),
             Credentials::Expired
         );
+    }
+
+    #[test]
+    fn the_keychain_tells_an_entry_none_or_a_refusal() {
+        let entry = br#"{"claudeAiOauth":{"accessToken":"tok"}}"#;
+        assert_eq!(
+            keychain_answer(Some(0), entry).unwrap(),
+            KeychainAnswer::Entry(json!({ "claudeAiOauth": { "accessToken": "tok" } }))
+        );
+        assert_eq!(
+            keychain_answer(Some(44), b"").unwrap(),
+            KeychainAnswer::None
+        );
+        // Denied by the user, not allowed to ask, ended by a signal.
+        for code in [Some(51), Some(128), Some(36), None] {
+            assert_eq!(
+                keychain_answer(code, b"").unwrap(),
+                KeychainAnswer::Refused,
+                "{code:?}"
+            );
+        }
+        // An entry that is not Claude Code's sign-in: an error, the last values standing.
+        assert!(keychain_answer(Some(0), b"pas du json").is_err());
+    }
+
+    #[test]
+    fn an_entry_refused_is_not_asked_for_again_for_ten_minutes() {
+        let mut gate = KeychainGate::default();
+        let (pro, perso) = (
+            "Claude Code-credentials-a2efd1c3",
+            "Claude Code-credentials",
+        );
+        assert!(gate.open(pro, 1_000));
+        gate.refuse(pro, 1_000);
+        assert!(!gate.open(pro, 1_001));
+        assert!(!gate.open(pro, 1_000 + 10 * 60_000 - 1));
+        assert!(gate.open(pro, 1_000 + 10 * 60_000));
+        // Another entry is asked for as usual.
+        assert!(gate.open(perso, 1_001));
     }
 
     #[tokio::test]
@@ -838,8 +1022,9 @@ mod tests {
         let hold = Hold {
             limit_until: Some(5),
             lifted: [None, None],
+            ..Default::default()
         };
-        let saved = u.saved(hold);
+        let saved = u.saved(hold.clone());
         // Principal's where the versions before the accounts read them.
         assert_eq!((saved.five_hour, saved.seven_day), (five, None));
         assert_eq!(saved.hold, hold);
@@ -875,5 +1060,26 @@ mod tests {
         let mut u = UsageSnapshot::default();
         u.settle(&s, now);
         assert!(u.saved(Hold::default()).accounts.is_empty());
+    }
+
+    #[test]
+    fn what_holds_the_autopilot_back_is_kept_for_the_accounts_there_are() {
+        let s = two_accounts();
+        let now = now_ms();
+        let mut u = UsageSnapshot::default();
+        u.settle(&s, now);
+        let held = crate::model::AccountHold {
+            limit_until: Some(9),
+            ..Default::default()
+        };
+        let mut hold = Hold::default();
+        hold.accounts.insert("pro".into(), held);
+        hold.accounts.insert("parti".into(), held);
+        // The pause of an account that is gone from the settings goes with it.
+        let saved = u.saved(hold);
+        assert_eq!(
+            saved.hold.accounts,
+            BTreeMap::from([("pro".to_string(), held)])
+        );
     }
 }

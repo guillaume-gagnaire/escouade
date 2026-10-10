@@ -17,6 +17,7 @@
   import EditorView from './components/editor/EditorView.svelte';
   import QuickOpen from './components/QuickOpen.svelte';
   import SidePanel from './components/SidePanel.svelte';
+  import AccountModal from './components/modals/AccountModal.svelte';
   import CommitModal from './components/modals/CommitModal.svelte';
   import ConfirmModal from './components/modals/ConfirmModal.svelte';
   import NewProjectModal from './components/modals/NewProjectModal.svelte';
@@ -150,6 +151,8 @@
   {/key}
 {:else if app.modal?.kind === 'rename'}
   <RenameModal title={app.modal.title} value={app.modal.value} onSubmit={app.modal.onSubmit} />
+{:else if app.modal?.kind === 'account'}
+  <AccountModal accountId={app.modal.accountId} />
 {:else if app.modal?.kind === 'testLaunch'}
   <TestLaunchModal agentId={app.modal.agentId} />
 {:else if app.modal?.kind === 'import'}

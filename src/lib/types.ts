@@ -50,6 +50,21 @@ export interface Account {
   active: boolean;
 }
 
+/** Whether a Claude account is signed in to claude.ai, as its tab shows it. */
+export interface AccountStatus {
+  /** Claude Code keeps a sign-in for it (an expired one too: it gets a new token when it runs). */
+  connected: boolean;
+  /** The email of the claude.ai account, when signed in. */
+  email: string | null;
+  /** Its configuration folder (Principal's: the app's `CLAUDE_CONFIG_DIR`, else `~/.claude`). */
+  dir: string;
+  /** Which sign-in it is (a fingerprint, never the token): the same while the sign-in is, even out of date, another once the user signs in again. */
+  stamp: string | null;
+}
+
+/** How a new account shares Principal's items: linked (one change for both accounts) or copied. */
+export type ShareMode = 'link' | 'copy';
+
 /** The languages as the backend resolved them: the interface's, the system's, and that of the texts Claude writes. */
 export interface LangInfo {
   ui: Lang;
@@ -211,6 +226,8 @@ export interface Project {
   integrations: ProjectIntegrations;
   /** « Commit »: who writes the commits of the files panel's « Commit… » and « Commit tout… ». */
   commitMode: CommitMode;
+  /** « Compte préféré »: the Claude account its new agents and tickets go to (an `Account`'s id); empty is « Automatique ». */
+  account: string;
   /** « Les agents peuvent utiliser Escouade »: its agents' next processes get Escouade's MCP server, as themselves. */
   agentsUseEscouade: boolean;
 }
@@ -690,6 +707,8 @@ export interface AutopilotPause {
   pct: number | null;
   /** When the tickets start again: the window's end, or about then after a limit. */
   until: number;
+  /** The accounts a ticket could start on, all held back (the reason and the end are those of the first to be free again); none with a single account. */
+  accounts?: string[];
 }
 
 /** What the running Claude processes use (each with what it started), per agent and in all. */
@@ -883,8 +902,8 @@ export type UiEvent =
   | { type: 'focusBoard'; projectId: string }
   /** Why no ticket of the project's board starts (its target branch), or null once they may. */
   | { type: 'boardIssue'; projectId: string; issue: string | null }
-  /** Why no ticket of any board starts for now, or null once they may. */
-  | { type: 'autopilotPause'; pause: AutopilotPause | null }
+  /** Why no ticket of a project that goes to any account starts for now, or null once they may; `projects`: the same for the paused projects that prefer an account. */
+  | { type: 'autopilotPause'; pause: AutopilotPause | null; projects?: Record<string, AutopilotPause> }
   | { type: 'toast'; text: string }
   /** The settings changed a language: the window switches to it at once. */
   | { type: 'language'; lang: LangInfo }
@@ -908,14 +927,19 @@ export interface InitialState {
   git: Record<string, GitInfo>;
   shells: ShellInfo[];
   terminals: TermInfo[];
+  /** Claude Code is found for the account new agents go to (its own `claude`, else the settings'). */
   claudeFound: boolean;
+  /** The settings' own path to Claude Code (empty: the PATH) leads to it: what the « Chemin de l'exécutable » field's hint says. */
+  claudePathFound?: boolean;
   version: string;
   /** Claude Code's models as it last reported them, empty until a process has started. */
   models: ModelInfo[];
   /** Why no ticket of a project's board starts, by project (none: they may). */
   boardIssues?: Record<string, string>;
-  /** Why no ticket of any board starts for now (none: they may). */
+  /** Why no ticket of a project that goes to any account starts for now (none: they may). */
   autopilotPause?: AutopilotPause | null;
+  /** The same for the paused projects that prefer an account, by project. */
+  projectPauses?: Record<string, AutopilotPause>;
   /** The external ticket systems' accounts. */
   accounts?: AccountView[];
   /** The update installed since the app's last start, told once. */

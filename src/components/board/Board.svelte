@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { busy, COLUMNS, columnTickets, pauseLabel, placesLabel, quotaUntil, settingsSummary } from '../../lib/board';
+  import { pausedAccounts, pauseOf, quotaOf } from '../../lib/accounts';
+  import { busy, COLUMNS, columnTickets, pauseLabel, placesLabel, settingsSummary } from '../../lib/board';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
@@ -14,16 +15,19 @@
   const tickets = $derived(Object.values(app.tickets).filter((x) => x.projectId === project.id));
   const busyCount = $derived(busy(tickets));
   const looping = $derived(tickets.filter((x) => x.column === 'doing').length);
-  const quota = $derived(quotaUntil(Object.values(app.agents)));
+  /** When the agents waiting for their quota resume, if every account this project could use waits for its own. */
+  const quota = $derived(quotaOf(project));
   const target = $derived(s.target || app.git[project.id]?.branch || 'main');
   const sub = $derived(t('board.header.sub', { name: project.name, count: tickets.length, looping }));
   const summary = $derived(settingsSummary(s, target));
   const places = $derived(placesLabel(busyCount, s.maxParallel, quota));
   /** Why no ticket starts from the target branch (no commit yet, or gone), as the backend says. */
   const issue = $derived(app.boardIssues[project.id] ?? null);
-  /** Why no ticket of any board starts for now (a quota window, a usage limit), as the backend says. */
-  const pause = $derived(app.autopilotPause);
+  /** Why no ticket of this project starts for now (a quota window, a usage limit), as the backend says. */
+  const pause = $derived(pauseOf(project));
   const paused = $derived(pause ? pauseLabel(pause, app.now) : '');
+  /** The accounts past the threshold, with several accounts. */
+  const over = $derived(pause ? pausedAccounts(pause) : '');
 
   async function toggleAutopilot() {
     // The project comes back through the backend's event, in order with any newer one: its answer is not written over it.
@@ -82,6 +86,7 @@
     <div class="pause" role="status">
       <span class="dot" aria-hidden="true"></span>
       <span class="why" title={paused}>{paused}</span>
+      {#if over}<span class="over" title={over}>{over}</span>{/if}
       <button class="resume" onclick={() => app.run(api.autopilotResume())}>{t('board.header.resumeNow')}</button>
     </div>
   {/if}
@@ -266,6 +271,15 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     font-weight: 600;
+  }
+  /* The accounts past the threshold keep their words, the line above gives way first. */
+  .over {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--muted);
   }
   .resume {
     flex: none;

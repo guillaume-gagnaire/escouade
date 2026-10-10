@@ -59,6 +59,15 @@ pub struct PtyManager {
     terms: Arc<Mutex<HashMap<String, Term>>>,
 }
 
+/// What a terminal starts.
+#[derive(Clone, Copy)]
+struct Started {
+    /// A launch command (or a step of a test launch), not an interactive terminal.
+    launch: bool,
+    /// What it starts, outside its console too, is killed with it (a `Job`).
+    job: bool,
+}
+
 /// Where shells are looked for; from the environment in the app, fake folders in tests.
 #[cfg(windows)]
 pub struct ShellRoots {
@@ -329,6 +338,31 @@ impl PtyManager {
         )
     }
 
+    /// An interactive terminal running `program` itself, with no shell around it (the sign-in of
+    /// a Claude account): it ends with the program, and what it starts goes with it.
+    #[allow(clippy::too_many_arguments)]
+    pub fn spawn_program(
+        &self,
+        info: TermInfo,
+        program: &Path,
+        cwd: &str,
+        size: (u16, u16),
+        env: Vec<(String, String)>,
+        on_data: impl Fn(Vec<u8>) + Send + 'static,
+        on_exit: impl FnOnce(Option<u32>) + Send + 'static,
+    ) -> Result<()> {
+        // A `.cmd` launcher (npm's claude.cmd) included: Windows runs it through cmd.exe.
+        let mut cmd = CommandBuilder::new(program);
+        if Path::new(cwd).is_dir() {
+            cmd.cwd(cwd);
+        }
+        let started = Started {
+            launch: false,
+            job: true,
+        };
+        self.start(info, cmd, size, env, started, on_data, on_exit)
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn spawn_inner(
         &self,
@@ -342,16 +376,6 @@ impl PtyManager {
         on_data: impl Fn(Vec<u8>) + Send + 'static,
         on_exit: impl FnOnce(Option<u32>) + Send + 'static,
     ) -> Result<()> {
-        let pty = native_pty_system();
-        let pair = pty
-            .openpty(PtySize {
-                rows: size.1.max(2),
-                cols: size.0.max(10),
-                pixel_width: 0,
-                pixel_height: 0,
-            })
-            .map_err(|e| anyhow!("{e}"))?;
-
         let mut cmd = CommandBuilder::new(&shell.path);
         match (shell.id.as_str(), command) {
             ("pwsh" | "powershell", None) => cmd.arg("-NoLogo"),
@@ -388,6 +412,35 @@ impl PtyManager {
         if Path::new(cwd).is_dir() {
             cmd.cwd(cwd);
         }
+        let started = Started {
+            launch: command.is_some(),
+            job: command.is_some(),
+        };
+        self.start(info, cmd, size, env, started, on_data, on_exit)
+    }
+
+    /// Starts `cmd` in a pseudo-console of `size`, with `env` added, streaming its output to
+    /// `on_data` until it ends (`on_exit`, with its exit code).
+    #[allow(clippy::too_many_arguments)]
+    fn start(
+        &self,
+        info: TermInfo,
+        mut cmd: CommandBuilder,
+        size: (u16, u16),
+        env: Vec<(String, String)>,
+        started: Started,
+        on_data: impl Fn(Vec<u8>) + Send + 'static,
+        on_exit: impl FnOnce(Option<u32>) + Send + 'static,
+    ) -> Result<()> {
+        let pty = native_pty_system();
+        let pair = pty
+            .openpty(PtySize {
+                rows: size.1.max(2),
+                cols: size.0.max(10),
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .map_err(|e| anyhow!("{e}"))?;
         cmd.env("TERM", "xterm-256color");
         cmd.env("COLORTERM", "truecolor");
         for (k, v) in env {
@@ -401,7 +454,7 @@ impl PtyManager {
             .with_context(|| tr!("lancement du shell", "starting the shell"))?;
         drop(pair.slave);
         let killer = child.clone_killer();
-        let job = command.and_then(|_| Job::for_pty(child.as_ref()));
+        let job = started.job.then(|| Job::for_pty(child.as_ref())).flatten();
         let mut reader = pair.master.try_clone_reader().map_err(|e| anyhow!("{e}"))?;
         let writer = pair.master.take_writer().map_err(|e| anyhow!("{e}"))?;
         let id = info.id.clone();
@@ -414,7 +467,7 @@ impl PtyManager {
                 writer,
                 killer,
                 _job: job,
-                launch: command.is_some(),
+                launch: started.launch,
                 io_at: io_at.clone(),
             },
         );
