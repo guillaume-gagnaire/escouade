@@ -190,6 +190,40 @@ describe('ImportModal', () => {
     await waitFor(() => expect(d.queryByRole('checkbox', { name: /ATL-1400/ })).not.toBeInTheDocument());
   });
 
+  it.each([
+    // GitHub's search stops at 1 000: its last page, short of its total.
+    [null, 2345, '3 affichés sur 2 345'],
+    ['p2', 312, '3 affichés sur 312'],
+    // An approximate count below what is listed: never « 3 affichés sur 2 ».
+    ['p2', 2, '3 affichés'],
+    ['p2', null, '3 affichés'],
+    [null, 1, '3 résultats'],
+    [null, null, '3 résultats'],
+  ])('counts a page whose next is %s and total %s as « %s »', async (next, total, label) => {
+    fakeBackend({ integration_issues: () => ({ ...JIRA, next, total }) });
+    render(ImportModal, { projectId: 'p1' });
+    await waitFor(() => expect(within(dialog()).getByText(label)).toBeInTheDocument());
+  });
+
+  it('keeps the focus on « Afficher plus » while the next page comes, and asks for it once', async () => {
+    let release: (p: IssuePage) => void = () => {};
+    const backend = fakeBackend({
+      integration_issues: (a: any) => (a.page ? new Promise<IssuePage>((r) => (release = r)) : { ...JIRA, next: 'p2', total: null }),
+    });
+    render(ImportModal, { projectId: 'p1' });
+    const d = within(dialog());
+    const more = await d.findByRole('button', { name: 'Afficher plus' });
+    await userEvent.click(more);
+    expect(more).toHaveAttribute('aria-disabled', 'true');
+    expect(more).toHaveFocus();
+    await userEvent.click(more);
+    expect(backend.called('integration_issues').filter((c) => c.args.page)).toHaveLength(1);
+    release({ ...JIRA, issues: [issue({ id: 'ATL-1400', key: 'ATL-1400' })], next: 'p3', total: null });
+    await waitFor(() => expect(row(/ATL-1400/)).toBeInTheDocument());
+    expect(more).not.toHaveAttribute('aria-disabled', 'true');
+    expect(more).toHaveFocus();
+  });
+
   it('says how many are shown when the service does not say how many there are', async () => {
     fakeBackend({ integration_issues: () => ({ ...JIRA, next: '2', total: null }) });
     render(ImportModal, { projectId: 'p1' });

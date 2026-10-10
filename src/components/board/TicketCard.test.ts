@@ -519,8 +519,32 @@ describe('TicketCard of an imported ticket', () => {
     await userEvent.click(screen.getByRole('button', { name: /Synchro avec Jira/ }));
     await userEvent.click(screen.getByRole('button', { name: 'Resynchroniser' }));
     expect(app.toasts.at(-1)).toMatchObject({ text: 'Jira refuse ces identifiants (401)', kind: 'error' });
-    expect(screen.getByRole('button', { name: 'Resynchroniser' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Resynchroniser' })).not.toHaveAttribute('aria-disabled', 'true');
   });
+
+  it('keeps the focus on « Resynchroniser » while it runs, and asks only once', async () => {
+    const backend = fakeBackend({ integration_resync: () => new Promise(() => {}) });
+    show(ticket({ external: failed }));
+    await userEvent.click(screen.getByRole('button', { name: /Synchro avec Jira/ }));
+    const again = screen.getByRole('button', { name: 'Resynchroniser' });
+    await userEvent.click(again);
+    expect(again).toHaveAttribute('aria-disabled', 'true');
+    expect(again).toHaveFocus();
+    await userEvent.click(again);
+    expect(backend.called('integration_resync')).toHaveLength(1);
+  });
+
+  it.each(['Resynchroniser', 'Synchro avec Jira : Jira refuse ces identifiants (401)'])(
+    'leaves the focus on the card when a retry goes through by itself while « %s » holds it',
+    async (name) => {
+      fakeBackend();
+      const { rerender } = show(ticket({ external: failed }));
+      await userEvent.click(screen.getByRole('button', { name: /Synchro avec Jira/ }));
+      screen.getByRole('button', { name }).focus();
+      await rerender({ ticket: ticket({ external: { ...failed, error: null } }) });
+      expect(screen.getByRole('button', { name: /DEM-1/ })).toHaveFocus();
+    },
+  );
 
   it('drops its ⚠ once a sync goes through', async () => {
     fakeBackend();

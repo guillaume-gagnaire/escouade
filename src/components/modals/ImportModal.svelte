@@ -72,12 +72,17 @@
   });
 
   const issues = $derived(page?.issues ?? []);
-  /** « 3 résultats »; when the service has more, « 50 affichés sur 312 » (or « 50 affichés » when it does not say how many). */
+  /**
+   * « 50 affichés sur 312 » whenever the service counts more than are listed (on its last page too: GitHub's search
+   * stops at 1 000); else « 50 affichés » while it has more, « 3 résultats » once all are there.
+   */
   const counted = $derived.by(() => {
     if (loading) return 'Recherche…';
-    if (!page?.next) return plural(issues.length, 'résultat', 'résultats');
-    const shown = plural(issues.length, 'affiché', 'affichés');
-    return page.total != null ? `${shown} sur ${fInt(page.total)}` : shown;
+    const shown = issues.length;
+    // Jira's count is approximate: never fewer than are listed.
+    const total = page?.total != null ? Math.max(shown, page.total) : null;
+    if (total != null && total > shown) return `${plural(shown, 'affiché', 'affichés')} sur ${fInt(total)}`;
+    return page?.next ? plural(shown, 'affiché', 'affichés') : plural(shown, 'résultat', 'résultats');
   });
   const selectable = $derived(issues.filter((i) => !i.imported));
   const allOn = $derived(selectable.length > 0 && selectable.every((i) => selected[issueKey(i)]));
@@ -117,7 +122,9 @@
         ...page,
         issues: [...page.issues, ...p.issues.filter((i) => !listed.has(issueKey(i)))],
         next: p.next,
-        total: p.total ?? page.total,
+        // That of the last page: Jira counts only while the list is cut (none on its last page,
+        // where they are all there), GitHub's search on every page.
+        total: p.total,
       };
       if (!p.next) {
         // Its button goes: the focus goes to the first ticket it brought, not to the window.
@@ -287,7 +294,8 @@
           </div>
         {/each}
         {#if page?.next && !loading && !failure}
-          <button class="btn ghost more" disabled={more} onclick={showMore}>Afficher plus</button>
+          <!-- Not disabled while the page comes: the focus stays on it (showMore asks once). -->
+          <button class="btn ghost more" aria-disabled={more} onclick={showMore}>Afficher plus</button>
         {/if}
       </div>
       <div class="foot">
@@ -650,6 +658,10 @@
     flex: none;
     align-self: center;
     margin: 8px 0 6px;
+  }
+  .more[aria-disabled='true'] {
+    opacity: 0.5;
+    cursor: default;
   }
   .already {
     flex: none;

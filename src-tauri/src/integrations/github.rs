@@ -3,7 +3,8 @@
 
 use super::text::criteria_of;
 use super::{
-    call, call_page, encode, Account, Container, ExternalIssue, IssueFilter, IssuePage, Query,
+    call, call_page, encode, Account, Container, ExternalIssue, HttpError, IssueFilter, IssuePage,
+    Query,
 };
 use crate::model::{ExternalRef, ExternalState, Service};
 use anyhow::Result;
@@ -126,7 +127,12 @@ impl Github {
             let items = match call(S, self.get(&format!("/repos/{repo}/issues/{text}"))).await {
                 Ok(i) if i["state"].as_str() == Some(OPEN) => vec![i],
                 Ok(_) => Vec::new(),
-                Err(e) if e.to_string().contains("(404)") => Vec::new(),
+                Err(e)
+                    if e.downcast_ref::<HttpError>()
+                        .is_some_and(|h| h.status == 404) =>
+                {
+                    Vec::new()
+                }
                 Err(e) => return Err(e),
             };
             (items, false, None)
@@ -190,7 +196,8 @@ impl Github {
             issues,
             filters,
             next: more.then(|| (page + 1).to_string()),
-            total,
+            // The search counts them before a label's chip keeps some here.
+            total: total.filter(|_| chosen.is_empty()),
         })
     }
 
@@ -534,6 +541,13 @@ mod tests {
             ),
             (Some("50"), Some("3"))
         );
+        // A label's chip keeps some of them here: the search's count is no longer theirs.
+        let q = Query {
+            filters: vec!["label:bug".into()],
+            ..q
+        };
+        let chipped = g.issues("acme/api", &q).await.unwrap();
+        assert_eq!((chipped.next.as_deref(), chipped.total), (Some("4"), None));
     }
 
     #[tokio::test]

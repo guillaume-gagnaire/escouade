@@ -45,9 +45,14 @@
   let syncOpen = $state(false);
   let resyncing = $state(false);
   let card = $state<HTMLDivElement>();
-  // A later failure starts closed again.
-  $effect(() => {
-    if (!t.external?.error) syncOpen = false;
+  let warn = $state<HTMLButtonElement>();
+  let panel = $state<HTMLDivElement>();
+  // The error gone (a retry went through, by itself or not), the ⚠ and its panel go: before they do, the focus they
+  // hold moves to the card, not to the window. A later failure starts closed again.
+  $effect.pre(() => {
+    if (t.external?.error) return;
+    if ([warn, panel].some((el) => el?.contains(document.activeElement))) card?.focus();
+    syncOpen = false;
   });
 
   /** « Resynchroniser »: the failed syncs go again at once; their success takes the ⚠ away (the ticket comes back without its error). */
@@ -203,6 +208,7 @@
         ></button
       >
       {#if t.external.error}<button
+          bind:this={warn}
           class="sync-err"
           aria-label={`Synchro avec ${svc.name} : ${t.external.error}`}
           aria-expanded={syncOpen}
@@ -216,10 +222,11 @@
     {#if t.partial && (t.column === 'review' || t.column === 'done')}<span class="partial">Objectif partiel</span>{/if}
   </div>
   {#if t.external?.error && syncOpen}
-    <div class="sync">
+    <div class="sync" bind:this={panel}>
       <span class="why">{t.external.error}</span>
       <div class="row">
-        <button class="small" disabled={resyncing} onclick={(e) => act(e, resync)}>Resynchroniser</button>
+        <!-- Not disabled while it runs: the focus stays on it (resync asks once). -->
+        <button class="small" aria-disabled={resyncing} onclick={(e) => act(e, resync)}>Resynchroniser</button>
       </div>
     </div>
   {/if}
@@ -436,7 +443,7 @@
   .sync .why {
     overflow-wrap: anywhere;
   }
-  .small:disabled {
+  .small[aria-disabled='true'] {
     opacity: 0.5;
     cursor: default;
   }

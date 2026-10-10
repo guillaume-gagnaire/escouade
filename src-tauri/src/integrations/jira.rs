@@ -1,9 +1,11 @@
 //! Jira Cloud (REST API v3), with an e-mail and an API token.
 
 use super::text::{adf_to_markdown, criteria_of, markdown_to_adf};
-use super::{call, encode, Account, Container, ExternalIssue, IssueFilter, IssuePage, Query};
+use super::{
+    call, encode, Account, Container, ExternalIssue, IssueFilter, IssuePage, Query, Refused,
+};
 use crate::model::{ExternalRef, ExternalState, Service};
-use anyhow::{bail, Result};
+use anyhow::Result;
 use base64::Engine;
 use serde_json::{json, Value};
 
@@ -329,12 +331,14 @@ impl Jira {
             .flatten()
             .find(|t| same(t))
         else {
-            bail!(
+            // Its workflow will not lead there however often it is asked.
+            return Err(Refused(format!(
                 "Jira : aucune transition de « {} » vers « {} » pour {}",
                 current["name"].as_str().unwrap_or("?"),
                 state.name,
                 r.key
-            );
+            ))
+            .into());
         };
         call(
             S,
@@ -690,13 +694,13 @@ mod tests {
             id: "5".into(),
             name: "Done".into(),
         };
+        let err = j.set_state(&r("ATL-1"), &done).await.unwrap_err();
         assert_eq!(
-            j.set_state(&r("ATL-1"), &done)
-                .await
-                .unwrap_err()
-                .to_string(),
+            err.to_string(),
             "Jira : aucune transition de « In Progress » vers « Done » pour ATL-1"
         );
+        // Asking again would not change it.
+        assert!(crate::integrations::lasting(&err));
     }
 
     #[tokio::test]

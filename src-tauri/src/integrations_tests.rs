@@ -1113,7 +1113,7 @@ async fn a_tickets_syncs_keep_their_order_behind_one_that_failed_and_the_others_
 }
 
 #[tokio::test]
-async fn a_failed_sync_is_given_up_a_day_later_and_resync_then_gives_the_column_again() {
+async fn a_failed_sync_is_set_aside_a_day_later_and_resync_tries_it_again() {
     let h = harness("ig-retry-day");
     let server = FakeServer::start().await;
     let p = h.trello_board(&server, &[]).await;
@@ -1131,15 +1131,107 @@ async fn a_failed_sync_is_given_up_a_day_later_and_resync_then_gives_the_column_
     assert_eq!(at[..5], [1, 6, 21, 81, 141]);
     assert_eq!(at.last(), Some(&1401));
     assert_eq!(trace(&server).len(), 27);
-    // Given up: the warning stays, nothing is tried by itself any more.
-    assert!(h.core.pending_syncs.lock().ops.is_empty());
+    // Set aside: the warning stays, nothing is tried by itself any more, not even at a start.
+    let aside = h.core.pending_syncs.lock().ops.clone();
+    assert_eq!(aside.len(), 1);
+    assert!(aside[0].set_aside && aside[0].retry_at.is_none());
     assert_eq!(h.sync_error(&t.id).as_deref(), Some("Trello : erreur 500"));
     h.retry_after(48 * 3_600_000).await;
+    h.core.retry_all_syncs();
+    h.wait_synced().await;
     assert_eq!(trace(&server).len(), 27);
-    // « Resynchroniser » gives the card its column's list again.
+    // Kept on disk with the others.
+    let kept = std::fs::read_to_string(h.core.data.sync_queue_file()).unwrap();
+    assert!(kept.contains("\"setAside\": true"), "{kept}");
+    // « Resynchroniser » tries it again: through, the warning goes with it.
     server.on("PUT", "/cards/c1", 200, json!({}));
     h.core.integration_resync(&t.id).await.unwrap();
     assert_eq!(trace(&server).len(), 28);
     assert_eq!(trace(&server)[27], "PUT /cards/c1 l2");
+    assert_eq!(h.sync_error(&t.id), None);
+    assert!(h.core.pending_syncs.lock().ops.is_empty());
+}
+
+#[tokio::test]
+async fn a_refused_comment_is_set_aside_at_once_and_does_not_hold_the_next_move_back() {
+    let h = harness("ig-refused");
+    let server = FakeServer::start().await;
+    let p = h.trello_board(&server, &[Column::Review]).await;
+    let t = h.import_card(&p.id, "c1").await;
+    server.on("PUT", "/cards/c1", 200, json!({}));
+    server.on(
+        "POST",
+        "/cards/c1/actions/comments",
+        404,
+        Value::String("model not found".into()),
+    );
+    h.move_to(&t.id, Column::Review);
+    h.wait_synced().await;
+    // Asking again would not change a 404: the next move goes at once.
+    h.move_to(&t.id, Column::Doing);
+    h.wait_synced().await;
+    assert_eq!(
+        trace(&server),
+        [
+            "PUT /cards/c1 l3",
+            "POST /cards/c1/actions/comments",
+            "PUT /cards/c1 l2"
+        ]
+    );
+    assert_eq!(
+        h.sync_error(&t.id).as_deref(),
+        Some("Trello : introuvable (404) — model not found")
+    );
+    // Never tried by itself: neither later nor at a start.
+    h.retry_after(48 * 3_600_000).await;
+    h.core.retry_all_syncs();
+    h.wait_synced().await;
+    assert_eq!(trace(&server).len(), 3);
+    // Still refused, « Resynchroniser » says why and the warning stays.
+    assert_eq!(
+        h.core
+            .integration_resync(&t.id)
+            .await
+            .unwrap_err()
+            .to_string(),
+        "Trello : introuvable (404) — model not found"
+    );
+    assert!(h.sync_error(&t.id).is_some());
+    // Through at last: the warning goes with it.
+    server.on("POST", "/cards/c1/actions/comments", 200, json!({}));
+    h.core.integration_resync(&t.id).await.unwrap();
+    assert_eq!(trace(&server)[4], "POST /cards/c1/actions/comments");
+    assert_eq!(h.sync_error(&t.id), None);
+    assert!(h.core.pending_syncs.lock().ops.is_empty());
+}
+
+#[tokio::test]
+async fn a_warning_left_without_its_operation_is_resynced_from_the_tickets_column() {
+    let h = harness("ig-resync-column");
+    let server = FakeServer::start().await;
+    let p = h.trello_board(&server, &[]).await;
+    let t = h.import_card(&p.id, "c1").await;
+    server.on("PUT", "/cards/c1", 200, json!({}));
+    h.move_to(&t.id, Column::Doing);
+    h.wait_synced().await;
+    // As an earlier version left it: the warning, and nothing kept to try again.
+    let warn = |h: &Harness| {
+        h.core
+            .edit_ticket(&t.id, |x| {
+                x.external.as_mut().unwrap().error = Some("Trello : erreur 500".into());
+                Ok(())
+            })
+            .unwrap()
+    };
+    warn(&h);
+    h.core.integration_resync(&t.id).await.unwrap();
+    assert_eq!(trace(&server), ["PUT /cards/c1 l2", "PUT /cards/c1 l2"]);
+    assert_eq!(h.sync_error(&t.id), None);
+    // « À faire » gives the card no list: nothing to send, the warning goes.
+    h.move_to(&t.id, Column::Todo);
+    h.wait_synced().await;
+    warn(&h);
+    h.core.integration_resync(&t.id).await.unwrap();
+    assert_eq!(trace(&server).len(), 2);
     assert_eq!(h.sync_error(&t.id), None);
 }

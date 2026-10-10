@@ -292,7 +292,11 @@ async fn send(service: Service, rb: reqwest::RequestBuilder) -> Result<(Value, H
     let headers = resp.headers().clone();
     let text = resp.text().await.unwrap_or_default();
     if !(200..300).contains(&status) {
-        bail!(http_error(service, status, &text));
+        return Err(HttpError {
+            status,
+            message: http_error(service, status, &text),
+        }
+        .into());
     }
     if text.trim().is_empty() {
         return Ok((Value::Null, headers));
@@ -300,6 +304,45 @@ async fn send(service: Service, rb: reqwest::RequestBuilder) -> Result<(Value, H
     let v = serde_json::from_str(&text)
         .map_err(|_| anyhow!("{} : réponse illisible", service.label()))?;
     Ok((v, headers))
+}
+
+/// A service's answer other than a success: its status, and what `http_error` says of it (the
+/// error's text).
+#[derive(Debug)]
+pub struct HttpError {
+    pub status: u16,
+    pub message: String,
+}
+
+impl std::fmt::Display for HttpError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for HttpError {}
+
+/// A refusal that asking again would not change (Jira: no transition leads from where the issue
+/// is to the state).
+#[derive(Debug)]
+pub struct Refused(pub String);
+
+impl std::fmt::Display for Refused {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for Refused {}
+
+/// The failure stays however often the call is made again: a request refused as it is (400, 422),
+/// a ticket gone (404, 410), no transition to the state. Tried again later, it would only hold
+/// back its ticket's next syncs. A service out of reach, too slow, down (5xx) or busy (429), and
+/// credentials refused (401, 403: they can be put right), may pass later.
+pub(crate) fn lasting(e: &anyhow::Error) -> bool {
+    e.downcast_ref::<Refused>().is_some()
+        || e.downcast_ref::<HttpError>()
+            .is_some_and(|h| matches!(h.status, 400 | 404 | 410 | 422))
 }
 
 /// An HTTP error of `service`, and what its body says.
@@ -367,6 +410,39 @@ pub fn checked_links(mut p: ProjectIntegrations) -> ProjectIntegrations {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn a_refusal_that_asking_again_would_not_change_is_told_apart() {
+        let server = fake::FakeServer::start().await;
+        let http = reqwest::Client::new();
+        for (status, lasts) in [
+            (400, true),
+            (404, true),
+            (410, true),
+            (422, true),
+            (401, false),
+            (403, false),
+            (429, false),
+            (500, false),
+            (503, false),
+        ] {
+            server.on("GET", "/x", status, Value::Null);
+            let e = call(Service::Github, http.get(format!("{}/x", server.url)))
+                .await
+                .unwrap_err();
+            assert_eq!(lasting(&e), lasts, "{status}");
+            // It still reads as before.
+            assert_eq!(e.to_string(), http_error(Service::Github, status, ""));
+        }
+        // Not reached: it may be, later.
+        let e = call(Service::Github, http.get("http://"))
+            .await
+            .unwrap_err();
+        assert!(e.to_string().starts_with("GitHub injoignable"), "{e}");
+        assert!(!lasting(&e));
+        assert!(lasting(&anyhow::Error::from(Refused("non".into()))));
+        assert!(!lasting(&anyhow!("Aucun compte GitHub connecté")));
+    }
 
     #[test]
     fn an_http_error_says_what_the_service_said() {

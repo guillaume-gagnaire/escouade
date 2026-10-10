@@ -55,9 +55,9 @@ pub(crate) enum SyncOp {
     },
 }
 
-/// An operation of an imported ticket not through yet: its turn has not come, or it failed and
-/// waits for its next try. It carries what it needs (the external ticket, the text as it was
-/// written then), so a restart tries it again as it was.
+/// An operation of an imported ticket not through yet: its turn has not come, it failed and waits
+/// for its next try, or it is set aside. It carries what it needs (the external ticket, the text
+/// as it was written then), so a restart tries it again as it was.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PendingSync {
@@ -73,6 +73,13 @@ pub(crate) struct PendingSync {
     /// When it is tried again by itself.
     #[serde(default)]
     pub retry_at: Option<i64>,
+    /// Refused for good, or failing for a day: no longer tried by itself nor holding its ticket's
+    /// next ones back, kept for « Resynchroniser ».
+    #[serde(default)]
+    pub set_aside: bool,
+    /// Why it last failed (the ticket's ⚠).
+    #[serde(default)]
+    pub error: Option<String>,
 }
 
 impl PendingSync {
@@ -88,6 +95,8 @@ impl PendingSync {
             tries: 0,
             failed_at: None,
             retry_at: None,
+            set_aside: false,
+            error: None,
         }
     }
 }
@@ -98,7 +107,7 @@ const RETRY_AFTER_MIN: [i64; 4] = [1, 5, 15, 60];
 const RETRY_FOR_MS: i64 = 24 * 60 * 60 * 1000;
 
 /// When an operation that has just failed for the `tries`th time (the first one at `failed_at`)
-/// is tried again; none once that would be more than a day after its first failure (given up).
+/// is tried again; none once that would be more than a day after its first failure (set aside).
 pub(crate) fn next_try(tries: u32, failed_at: i64, now: i64) -> Option<i64> {
     let i = (tries.max(1) as usize - 1).min(RETRY_AFTER_MIN.len() - 1);
     let at = now + RETRY_AFTER_MIN[i] * 60_000;
@@ -107,7 +116,7 @@ pub(crate) fn next_try(tries: u32, failed_at: i64, now: i64) -> Option<i64> {
 
 /// The operations of the imported tickets not through yet, in the order of their changes, kept in
 /// `sync-queue.json`. A ticket's go one after the other: one that failed holds the next ones back
-/// until it goes through (or is given up), so its external ticket hears of them in order; the
+/// until it goes through (or is set aside), so its external ticket hears of them in order; the
 /// other tickets' go on meanwhile.
 #[derive(Debug)]
 pub(crate) struct SyncQueue {
@@ -124,7 +133,8 @@ impl SyncQueue {
     }
 
     /// A ticket's new operations, after those of it still waiting. A transition takes the place
-    /// of the ticket's one not through yet: going there now would only undo it.
+    /// of the ticket's one not through yet (set aside or not): going there now would only undo
+    /// it.
     pub fn push(&mut self, ops: Vec<PendingSync>) {
         for op in &ops {
             if matches!(op.op, SyncOp::State { .. }) {
@@ -136,37 +146,70 @@ impl SyncQueue {
         self.ops.extend(ops);
     }
 
-    fn position(&self, ticket_id: &str) -> Option<usize> {
-        self.ops.iter().position(|p| p.ticket_id == ticket_id)
+    /// Where the ticket's `k`th operation is in the queue.
+    fn position(&self, ticket_id: &str, k: usize) -> Option<usize> {
+        self.ops
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| p.ticket_id == ticket_id)
+            .nth(k)
+            .map(|(i, _)| i)
     }
 
-    /// The ticket's next operation.
+    /// The ticket's `k`th operation, set aside or not.
+    pub fn nth(&self, ticket_id: &str, k: usize) -> Option<PendingSync> {
+        self.position(ticket_id, k).map(|i| self.ops[i].clone())
+    }
+
+    /// The ticket's next operation to go: its first one not set aside.
     pub fn head(&self, ticket_id: &str) -> Option<PendingSync> {
-        self.position(ticket_id).map(|i| self.ops[i].clone())
+        self.ops
+            .iter()
+            .find(|p| p.ticket_id == ticket_id && !p.set_aside)
+            .cloned()
     }
 
-    /// The ticket's next operation went through.
-    pub fn done(&mut self, ticket_id: &str) {
-        if let Some(i) = self.position(ticket_id) {
+    /// The ticket's `k`th operation went through.
+    pub fn done(&mut self, ticket_id: &str, k: usize) {
+        if let Some(i) = self.position(ticket_id, k) {
             self.ops.remove(i);
         }
     }
 
-    /// The ticket's next operation failed at `now`: it waits for its next try, or is given up
-    /// (true) a day after its first failure, its ticket's next ones going on.
-    pub fn failed(&mut self, ticket_id: &str, now: i64) -> bool {
-        let Some(i) = self.position(ticket_id) else {
+    /// The ticket's `k`th operation failed at `now`, for `why`. It waits for its next try, unless
+    /// it is set aside (true): its refusal is `lasting`, its first failure is a day old, or it
+    /// was set aside already (« Resynchroniser » tried it again). Set aside, it lets its ticket's
+    /// next ones go.
+    pub fn failed(
+        &mut self,
+        ticket_id: &str,
+        k: usize,
+        now: i64,
+        why: &str,
+        lasting: bool,
+    ) -> bool {
+        let Some(i) = self.position(ticket_id, k) else {
             return false;
         };
         let p = &mut self.ops[i];
         p.tries += 1;
+        p.error = Some(why.to_string());
         let first = *p.failed_at.get_or_insert(now);
-        p.retry_at = next_try(p.tries, first, now);
-        let given_up = p.retry_at.is_none();
-        if given_up {
-            self.ops.remove(i);
-        }
-        given_up
+        p.retry_at = if p.set_aside || lasting {
+            None
+        } else {
+            next_try(p.tries, first, now)
+        };
+        p.set_aside = p.retry_at.is_none();
+        p.set_aside
+    }
+
+    /// Why the ticket's first operation still here that failed did (the ⚠ it keeps).
+    pub fn error_of(&self, ticket_id: &str) -> Option<String> {
+        self.ops
+            .iter()
+            .filter(|p| p.ticket_id == ticket_id)
+            .find_map(|p| p.error.clone())
     }
 
     /// The ticket's operations go (its card is gone).
@@ -627,7 +670,8 @@ impl<R: Runtime> Core<R> {
         }
     }
 
-    /// At the app's start, every operation left waiting goes again: the service may be back.
+    /// At the app's start, every operation left waiting goes again (those set aside stay so): the
+    /// service may be back. Those of tickets deleted since go.
     pub(crate) fn retry_all_syncs(&self) {
         let any = !self.pending_syncs.lock().ops.is_empty();
         if any {
@@ -635,9 +679,9 @@ impl<R: Runtime> Core<R> {
         }
     }
 
-    /// "Resynchroniser": the ticket's operations not through yet go again at once; with none left
-    /// (given up, or failed before the app kept them), its external one is given its column's
-    /// state again. Err: why it still fails (its ticket says so too).
+    /// "Resynchroniser": the ticket's operations not through yet go again at once, those set
+    /// aside included; with none left (a ⚠ an earlier version left), its external one is given
+    /// its column's state again. Err: why one still fails (its ticket says so too).
     pub async fn integration_resync(&self, ticket_id: &str) -> Result<()> {
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.sync_job(SyncJob::Resync(ticket_id.to_string(), tx));
@@ -680,18 +724,18 @@ impl<R: Runtime> Core<R> {
                 }
                 self.pending_syncs.lock().push(ops);
                 // Those of the ticket still waiting go first, at once: the service may be back.
-                let _ = self.run_ticket_syncs(&t.id).await;
+                let _ = self.run_ticket_syncs(&t.id, false).await;
             }
             SyncJob::Due => {
                 let due = self.pending_syncs.lock().due(self.sync_clock());
                 for id in due {
-                    let _ = self.run_ticket_syncs(&id).await;
+                    let _ = self.run_ticket_syncs(&id, false).await;
                 }
             }
             SyncJob::All => {
                 let all = self.pending_syncs.lock().tickets();
                 for id in all {
-                    let _ = self.run_ticket_syncs(&id).await;
+                    let _ = self.run_ticket_syncs(&id, false).await;
                 }
             }
             SyncJob::Resync(id, reply) => {
@@ -748,10 +792,11 @@ impl<R: Runtime> Core<R> {
         })
     }
 
-    /// The ticket's operations in order, until one fails (it waits for its next try, the ones
-    /// after it with it) or all went through; one given up lets the next ones go. The ticket says
-    /// how the last one tried went (its ⚠). Err: the failure it is left with.
-    async fn run_ticket_syncs(self: &Arc<Self>, ticket_id: &str) -> Result<()> {
+    /// The ticket's operations in order, until one fails and waits for its next try (the ones
+    /// after it with it) or all went through; one set aside lets the next ones go, and is only
+    /// tried again with `set_aside` (« Resynchroniser »). The ticket's ⚠ says the last failure,
+    /// else that of an operation still set aside, else goes. Err: the last failure.
+    async fn run_ticket_syncs(self: &Arc<Self>, ticket_id: &str, set_aside: bool) -> Result<()> {
         let Ok(ticket) = self.ticket(ticket_id) else {
             // Its card is gone: nothing left to show them on, nor to try them again from.
             self.pending_syncs.lock().forget(ticket_id);
@@ -759,42 +804,55 @@ impl<R: Runtime> Core<R> {
             return Ok(());
         };
         let mut client = None;
-        let mut last = None;
+        let mut tried = false;
+        let mut failure = None;
+        // The ticket's operations are taken by their rank among its own: those that stay (set
+        // aside) are stepped over.
+        let mut k = 0;
         loop {
-            let next = self.pending_syncs.lock().head(ticket_id);
+            let next = self.pending_syncs.lock().nth(ticket_id, k);
             let Some(p) = next else { break };
-            let result = self.run_sync_op(&p, &mut client).await;
-            let held = match &result {
+            if p.set_aside && !set_aside {
+                k += 1;
+                continue;
+            }
+            tried = true;
+            let held = match self.run_sync_op(&p, &mut client).await {
                 Ok(()) => {
-                    self.pending_syncs.lock().done(ticket_id);
+                    self.pending_syncs.lock().done(ticket_id, k);
                     false
                 }
                 Err(e) => {
                     let (service, key) = (p.external.service.label(), &p.external.key);
                     log::warn!("sync of {} with {service} {key}: {e:#}", ticket.key);
+                    let why = board::first_line(&format!("{e:#}"));
                     let now = self.sync_clock();
-                    let given_up = self.pending_syncs.lock().failed(ticket_id, now);
-                    if given_up {
-                        log::warn!("sync of {} with {service} {key} given up", ticket.key);
+                    let aside =
+                        self.pending_syncs
+                            .lock()
+                            .failed(ticket_id, k, now, &why, lasting(&e));
+                    if aside {
+                        log::warn!("sync of {} with {service} {key} set aside", ticket.key);
+                        k += 1;
                     }
-                    !given_up
+                    failure = Some(e);
+                    !aside
                 }
             };
             self.save_pending_syncs();
-            last = Some(result);
             if held {
                 break;
             }
         }
-        let Some(last) = last else {
+        if !tried {
             return Ok(());
+        }
+        let error = match &failure {
+            Some(e) => Some(board::first_line(&format!("{e:#}"))),
+            None => self.pending_syncs.lock().error_of(ticket_id),
         };
-        let error = last
-            .as_ref()
-            .err()
-            .map(|e| board::first_line(&format!("{e:#}")));
         self.note_sync_error(ticket_id, error);
-        last
+        failure.map_or(Ok(()), Err)
     }
 
     /// One operation; the service's client made for the first one of the ticket.
@@ -815,8 +873,8 @@ impl<R: Runtime> Core<R> {
         let Some(ext) = t.external.as_ref() else {
             return Ok(());
         };
-        let waiting = self.pending_syncs.lock().head(ticket_id).is_some();
-        if !waiting {
+        let kept = self.pending_syncs.lock().nth(ticket_id, 0).is_some();
+        if !kept {
             let project = self.project(&t.project_id)?;
             let Some(op) = self.state_op(&project, ext, t.column) else {
                 // Nothing to give it again (a comment is not written twice): the ⚠ goes.
@@ -827,7 +885,7 @@ impl<R: Runtime> Core<R> {
                 .lock()
                 .push(vec![PendingSync::new(&t, ext, op)]);
         }
-        self.run_ticket_syncs(ticket_id).await
+        self.run_ticket_syncs(ticket_id, true).await
     }
 
     /// The ticket's ⚠ says `error` (none: it goes), against the ticket as it is now.
@@ -960,7 +1018,14 @@ mod tests {
             tries: 0,
             failed_at: None,
             retry_at: None,
+            set_aside: false,
+            error: None,
         }
+    }
+
+    /// The ticket's next operation failed at `now`, as a service down fails.
+    fn fail(q: &mut SyncQueue, ticket: &str, now: i64) -> bool {
+        q.failed(ticket, 0, now, "Trello : erreur 500", false)
     }
 
     fn move_to(list: &str) -> SyncOp {
@@ -1000,22 +1065,24 @@ mod tests {
         q.push(vec![pending("t2", say("deux"))]);
         assert_eq!(q.tickets(), ["t1", "t2"]);
         assert_eq!(q.head("t1").unwrap().op, move_to("l2"));
-        assert!(!q.failed("t1", 0));
+        assert!(!fail(&mut q, "t1", 0));
         // It holds its ticket's next ones back until its next try, not the other ticket's.
         let head = q.head("t1").unwrap();
         assert_eq!(
             (head.op, head.tries, head.failed_at, head.retry_at),
             (move_to("l2"), 1, Some(0), Some(MIN))
         );
+        assert_eq!(q.error_of("t1").as_deref(), Some("Trello : erreur 500"));
         assert_eq!(q.head("t2").unwrap().op, say("deux"));
         assert!(q.due(MIN - 1).is_empty());
         assert_eq!(q.due(MIN), ["t1"]);
-        q.done("t1");
+        q.done("t1", 0);
         assert_eq!(q.head("t1").unwrap().op, say("pris"));
+        assert_eq!(q.error_of("t1"), None);
         // Never tried: not due by itself (it goes as soon as its turn comes).
         assert!(q.due(i64::MAX).is_empty());
-        q.done("t1");
-        q.done("t2");
+        q.done("t1", 0);
+        q.done("t2", 0);
         assert!(q.ops.is_empty() && q.head("t1").is_none());
     }
 
@@ -1023,7 +1090,7 @@ mod tests {
     fn a_transition_takes_the_place_of_its_tickets_one_not_through_yet() {
         let mut q = SyncQueue::new(Vec::new());
         q.push(vec![pending("t1", move_to("l2"))]);
-        q.failed("t1", 0);
+        fail(&mut q, "t1", 0);
         q.push(vec![pending("t1", say("boucle 2"))]);
         q.push(vec![pending("t2", move_to("l2"))]);
         q.push(vec![
@@ -1047,21 +1114,58 @@ mod tests {
         // A comment never replaces another.
         q.push(vec![pending("t1", say("prêt"))]);
         assert_eq!(q.ops.len(), 5);
+        // A transition set aside is replaced as well.
+        q.failed("t2", 0, 0, "Trello : introuvable (404)", true);
+        q.push(vec![pending("t2", move_to("l3"))]);
+        assert_eq!(q.nth("t2", 0).unwrap().op, move_to("l3"));
+        assert_eq!(q.nth("t2", 1), None);
     }
 
     #[test]
-    fn an_operation_is_given_up_a_day_after_its_first_failure_and_the_next_ones_go_on() {
+    fn an_operation_failing_for_a_day_is_set_aside_and_the_next_ones_go_on() {
         let mut q = SyncQueue::new(Vec::new());
         q.push(vec![pending("t1", say("un")), pending("t1", say("deux"))]);
         let mut now = 0;
         let mut tries = 1;
-        while !q.failed("t1", now) {
+        while !fail(&mut q, "t1", now) {
             now = q.head("t1").unwrap().retry_at.unwrap();
             tries += 1;
         }
         assert_eq!((now, tries), (1401 * MIN, 27));
         let next = q.head("t1").unwrap();
         assert_eq!((next.op, next.tries), (say("deux"), 0));
+        // Kept for « Resynchroniser », never tried by itself.
+        let aside = q.nth("t1", 0).unwrap();
+        assert_eq!(
+            (aside.op, aside.set_aside, aside.retry_at),
+            (say("un"), true, None)
+        );
+        assert!(q.due(i64::MAX).is_empty());
+        assert_eq!(q.error_of("t1").as_deref(), Some("Trello : erreur 500"));
+    }
+
+    #[test]
+    fn a_refusal_that_would_not_change_is_set_aside_at_once_and_stays_so_until_it_goes() {
+        let mut q = SyncQueue::new(Vec::new());
+        q.push(vec![pending("t1", say("un")), pending("t1", move_to("l2"))]);
+        assert!(q.failed("t1", 0, 0, "Trello : introuvable (404)", true));
+        // It holds nothing back.
+        assert_eq!(q.head("t1").unwrap().op, move_to("l2"));
+        assert_eq!(
+            q.error_of("t1").as_deref(),
+            Some("Trello : introuvable (404)")
+        );
+        // Tried again by hand, even failing as a service down fails, it stays aside.
+        assert!(q.failed("t1", 0, MIN, "Trello : erreur 500", false));
+        let aside = q.nth("t1", 0).unwrap();
+        assert_eq!(
+            (aside.set_aside, aside.retry_at, aside.tries),
+            (true, None, 2)
+        );
+        assert_eq!(q.error_of("t1").as_deref(), Some("Trello : erreur 500"));
+        q.done("t1", 0);
+        assert_eq!(q.nth("t1", 0).unwrap().op, move_to("l2"));
+        assert_eq!(q.error_of("t1"), None);
     }
 
     #[test]
@@ -1072,7 +1176,7 @@ mod tests {
         // Nothing waits: no file for nothing.
         assert!(!path.exists());
         q.push(vec![pending("t1", say("un"))]);
-        q.failed("t1", 0);
+        fail(&mut q, "t1", 0);
         q.save(&path);
         let read: Vec<PendingSync> =
             serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
@@ -1089,6 +1193,7 @@ mod tests {
             (old[0].op.clone(), old[0].tries, old[0].retry_at),
             (say("un"), 0, None)
         );
+        assert_eq!((old[0].set_aside, &old[0].error), (false, &None));
     }
 
     #[test]
