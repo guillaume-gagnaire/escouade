@@ -902,11 +902,18 @@ fn writable(p: &Path) -> bool {
 
 /// At the app's end, an install under way (« Redémarrer maintenant », the automatic restart) is
 /// waited for, `limit` at most, rather than ended under it (on macOS, between the two renames of
-/// the bundle): until it fails with the app still running, or has the app leave. None when none
-/// is under way; else whether the app stopped for it, not to be stopped again.
+/// the bundle): until it fails with the app still running, or has the app leave. None when there
+/// is nothing to wait for: none under way, or one not `unattended` (`unattended()`), whose bundle
+/// the plugin only moves on the main thread, which the app's end holds. Else whether the app
+/// stopped for it, not to be stopped again.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn wait_install<R: Runtime>(core: &Core<R>, updates: &Updates, limit: Duration) -> Option<bool> {
-    if !updates.installing.load(Ordering::Acquire) {
+fn wait_install<R: Runtime>(
+    core: &Core<R>,
+    updates: &Updates,
+    unattended: bool,
+    limit: Duration,
+) -> Option<bool> {
+    if !unattended || !updates.installing.load(Ordering::Acquire) {
         return None;
     }
     let until = std::time::Instant::now() + limit;
@@ -925,19 +932,20 @@ fn wait_install<R: Runtime>(core: &Core<R>, updates: &Updates, limit: Duration) 
 /// macOS: Cmd+Q, the app menu's and the Dock's « Quitter » end the app with no request first,
 /// right at `RunEvent::Exit`: the update ready installs there, without the app starting again,
 /// when its bundle can be replaced without an administrator's password (the plugin would ask for
-/// it on the main thread, which waits here). One installing already is waited for
-/// (`wait_install`). True when the app stopped for it.
+/// it on the main thread, which waits here). One installing already is waited for, unless it
+/// needs an administrator (`wait_install`). True when the app stopped for it.
 #[cfg(target_os = "macos")]
 pub fn install_at_exit<R: Runtime>(app: &AppHandle<R>) -> bool {
     let updates = app.state::<Updates>();
     let core = app.state::<Arc<Core<R>>>().inner().clone();
-    if let Some(stopped) = wait_install(&core, &updates, EXIT_LIMIT) {
+    let unattended = unattended();
+    if let Some(stopped) = wait_install(&core, &updates, unattended, EXIT_LIMIT) {
         return stopped;
     }
     if updates.ready().is_none() {
         return false;
     }
-    if !unattended() {
+    if !unattended {
         log::info!("update left for a restart: replacing the app needs an administrator");
         return false;
     }
@@ -1602,12 +1610,24 @@ mod tests {
         let h = harness("upd-exit-installing");
         let u = Arc::new(Updates::default());
         // None under way: nothing to wait for.
-        assert_eq!(wait_install(&h.core, &u, Duration::from_secs(5)), None);
-        // « Redémarrer maintenant » under way, still after the wait: the app was not stopped for it.
+        assert_eq!(
+            wait_install(&h.core, &u, true, Duration::from_secs(5)),
+            None
+        );
+        // « Redémarrer maintenant » under way, the app's folder writable by an administrator only:
+        // the plugin moves the bundle on the main thread, which the app's end holds. Nothing moves
+        // under it, and waiting would only freeze it.
         u.installing.store(true, Ordering::Release);
         let started = std::time::Instant::now();
         assert_eq!(
-            wait_install(&h.core, &u, Duration::from_millis(100)),
+            wait_install(&h.core, &u, false, Duration::from_secs(5)),
+            None
+        );
+        assert!(started.elapsed() < Duration::from_secs(2));
+        // Under way, still after the wait: the app was not stopped for it.
+        let started = std::time::Instant::now();
+        assert_eq!(
+            wait_install(&h.core, &u, true, Duration::from_millis(100)),
             Some(false)
         );
         assert!(started.elapsed() >= Duration::from_millis(100));
@@ -1621,7 +1641,7 @@ mod tests {
         };
         let started = std::time::Instant::now();
         assert_eq!(
-            wait_install(&h.core, &u, Duration::from_secs(5)),
+            wait_install(&h.core, &u, true, Duration::from_secs(5)),
             Some(false)
         );
         assert!(started.elapsed() >= Duration::from_millis(150));
@@ -1643,7 +1663,7 @@ mod tests {
         left_rx.recv_timeout(Duration::from_secs(5)).unwrap();
         let started = std::time::Instant::now();
         assert_eq!(
-            wait_install(&h.core, &u, Duration::from_secs(5)),
+            wait_install(&h.core, &u, true, Duration::from_secs(5)),
             Some(true)
         );
         assert!(started.elapsed() < Duration::from_secs(2));
