@@ -159,7 +159,17 @@
   <label class="item"><input type="checkbox" name={n} bind:checked={checked[n]} /><span class="mono">{n}</span></label>
 {/snippet}
 
-<Modal {title} width={account ? 820 : 600} onclose={close}>
+{#snippet actions()}
+  {#if !account}
+    <button class="btn ghost" onclick={close}>{t('common.cancel')}</button>
+    <button class="btn primary" disabled={busy || !name.trim()} onclick={create}>{t('accounts.modal.create')}</button>
+  {:else}
+    <button class="btn primary" onclick={close}>{t('accounts.modal.done')}</button>
+  {/if}
+{/snippet}
+
+<!-- Signing in, only its × closes it: the account stays, not signed in. -->
+<Modal {title} width={account ? 820 : 600} onclose={close} footer={!account || signedIn ? actions : undefined}>
   {#if !account}
     <div class="field-row">
       <label class="k" for="account-name">{t('accounts.modal.name')}</label>
@@ -216,14 +226,6 @@
     {/if}
   {/if}
   {#if error}<p class="error" role="alert">{error}</p>{/if}
-  {#snippet footer()}
-    {#if !account}
-      <button class="btn ghost" onclick={close}>{t('common.cancel')}</button>
-      <button class="btn primary" disabled={busy || !name.trim()} onclick={create}>{t('accounts.modal.create')}</button>
-    {:else if signedIn}
-      <button class="btn primary" onclick={close}>{t('accounts.modal.done')}</button>
-    {/if}
-  {/snippet}
 </Modal>
 
 <style>

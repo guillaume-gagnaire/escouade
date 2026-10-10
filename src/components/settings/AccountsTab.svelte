@@ -257,9 +257,15 @@
     height: 28px;
     font-size: 12px;
   }
-  .icon-btn {
-    width: 26px;
-    height: 26px;
+  .icon-btn:disabled {
+    opacity: 0.35;
+    background: transparent;
+    cursor: default;
+  }
+  /* As `Switch` has it: the last account active stays on. */
+  .switch:disabled {
+    opacity: 0.4;
+    cursor: default;
   }
   .late,
   .refused {
