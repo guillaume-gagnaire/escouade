@@ -321,6 +321,8 @@ export interface Ticket {
   /** The validation step running ("Tests…"…). */
   step: string | null;
   outcome: string | null;
+  /** The same in the language of the texts for Claude (what the comment published for the team quotes); the window shows `outcome`. */
+  outcomeClaude: string | null;
   outcomeUrl: string | null;
   forced: boolean;
   reminded: boolean;

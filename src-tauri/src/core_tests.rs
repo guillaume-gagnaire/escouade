@@ -183,7 +183,7 @@ impl Harness {
         panic!("timed out waiting for {what}");
     }
 
-    async fn turn(&self, id: &str, text: &str) {
+    pub(crate) async fn turn(&self, id: &str, text: &str) {
         let before = self
             .items(id)
             .iter()
@@ -294,6 +294,19 @@ async fn a_message_runs_a_turn_and_records_the_cost() {
         .items(&a.meta.id)
         .iter()
         .any(|i| i["text"] == "Bonjour, tu as dit : Bonjour"));
+}
+
+#[tokio::test]
+async fn an_agent_is_named_from_a_question_in_the_language_of_the_texts_for_claude() {
+    let h = harness("name-en");
+    let (p, _) = h.project(false).await;
+    h.core.settings.write().claude_language = "en".into();
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.turn(&a, "Create the hello file").await;
+    // The fake Haiku found the task in the English question (its first two words) and says it was
+    // asked in English, role and question both.
+    h.wait("named", |h| h.agent(&a).named).await;
+    assert_eq!(h.agent(&a).name, "create-the-fake-en");
 }
 
 #[tokio::test]
@@ -1654,6 +1667,27 @@ async fn a_commit_proposal_follows_the_latest_subjects_of_the_repository() {
     assert_eq!(
         git(&r, &["log", "-1", "--format=%s"]),
         "fix(api): un second"
+    );
+}
+
+#[tokio::test]
+async fn a_commit_proposal_is_asked_for_in_the_language_of_the_texts_for_claude() {
+    let h = harness("commit-propose-en");
+    let (p, r) = h.project(false).await;
+    h.core.settings.write().claude_language = "en".into();
+    std::fs::write(r.join("src").join("app.ts"), "const a = 2;\n").unwrap();
+    let proposal = h
+        .core
+        .commit_propose(&p.id, None, strings(&["src/app.ts"]))
+        .await
+        .unwrap();
+    // The fake Haiku read the English question: the latest subject, the file whose diff it got,
+    // and it says it was asked in English, role and question both.
+    assert!(
+        proposal.starts_with("feat: proposé par le faux claude (en)\n")
+            && proposal.contains("D'après « init »")
+            && proposal.contains("Diff de : src/app.ts."),
+        "{proposal}"
     );
 }
 
@@ -3374,6 +3408,29 @@ async fn claude_reads_the_project_with_read_only_tools_to_suggest_its_worktree_c
 }
 
 #[tokio::test]
+async fn claude_is_asked_for_the_commands_of_a_project_in_the_language_of_the_texts_for_claude() {
+    use crate::i18n::Lang::En;
+    use crate::worktrees::{run_suggest_system, suggest_system};
+    let h = harness("suggest-en");
+    let (p, r) = h.project(false).await;
+    h.core.settings.write().claude_language = "en".into();
+    // Its role, as the last question asked in the project gave it.
+    let system = |h: &Harness| {
+        let argv = h.launches(&r).pop().expect("claude run in the project");
+        let at = argv.iter().position(|a| a == "--system-prompt").unwrap();
+        argv[at + 1].clone()
+    };
+    let steps = h.core.suggest_worktree_steps(&p.id).await.unwrap();
+    assert_eq!(system(&h), suggest_system(En));
+    assert_eq!((steps.setup.len(), steps.refused), (2, 1));
+    // The fake Claude read the English question as the French one.
+    let run = h.core.suggest_run_commands(&p.id).await.unwrap();
+    assert_eq!(system(&h), run_suggest_system(En));
+    let names: Vec<&str> = run.commands.iter().map(|c| c.name.as_str()).collect();
+    assert_eq!((names, run.refused), (vec!["Front", "API"], 1));
+}
+
+#[tokio::test]
 async fn worktree_commands_that_were_all_refused_are_told_so_and_not_as_nothing_found() {
     let h = harness("wt-suggest-all-refused");
     let (p, _) = h.project(false).await;
@@ -3764,6 +3821,32 @@ async fn a_copy_of_a_worktree_agent_has_its_own_from_the_current_commit_set_up_l
         "{:?}",
         h.items(&second.id)
     );
+}
+
+#[tokio::test]
+async fn a_copy_is_told_where_it_works_in_the_language_of_the_texts_for_claude() {
+    let h = harness("copy-worktree-en");
+    let (p, _) = h.project(true).await;
+    h.core.settings.write().claude_language = "en".into();
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    let copy = h.core.duplicate_agent(&a.id).await.unwrap().meta;
+    let (from, to) = (a.worktree.unwrap().path, copy.worktree.unwrap().path);
+    let moved = format!(
+        "This conversation was copied from an agent that worked in {from}. You now work in {to}: only read and write in it."
+    );
+    assert_eq!(copy.append_prompt.as_deref(), Some(moved.as_str()));
+    // Its Claude reads it as the French one: an ordinary agent, no ticket's.
+    h.turn(&copy.id, "Bonjour").await;
+    let argv = h.launches(Path::new(&to)).pop().unwrap();
+    assert!(
+        argv.windows(2)
+            .any(|w| w[0] == "--append-system-prompt" && w[1] == moved),
+        "{argv:?}"
+    );
+    assert!(h
+        .items(&copy.id)
+        .iter()
+        .any(|i| i["text"] == "Bonjour, tu as dit : Bonjour"));
 }
 
 #[tokio::test]

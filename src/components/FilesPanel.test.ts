@@ -528,6 +528,8 @@ describe('FilesPanel in English', () => {
   });
 
   it('sends the agent the commit request in English, and says so', async () => {
+    // The request follows the language of the texts for Claude, the toast the interface's.
+    app.lang = { ui: 'en', system: 'fr', claude: 'en' };
     const backend = fakeBackend({ git_files: () => [change('src/auth.ts', 'a1')] });
     render(FilesPanel, { project: project(), agent: app.agents.a1 });
     await screen.findByText('auth.ts');

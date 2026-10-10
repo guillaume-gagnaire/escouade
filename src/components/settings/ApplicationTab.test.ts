@@ -35,7 +35,7 @@ describe('the « Application » tab', () => {
     expect(choices(UI)).toEqual(['Système (Français)', 'English', 'Français']);
     expect(choices(CLAUDE)).toEqual(['Comme l’interface (par défaut)', 'English', 'Français']);
     expect(panel()).toHaveTextContent(
-      'Messages de commit et descriptions de pull request proposés, commentaires publiés dans Jira, Trello et GitHub, consignes données aux agents.',
+      'Messages de commit et descriptions de pull request proposés, commentaires publiés dans Jira, Trello et GitHub, consignes données aux agents (par défaut, le message de commit proposé reprend la langue des derniers commits du dépôt).',
     );
     // By default: the system's, and the interface's for Claude.
     expect(choice(UI, 'Système (Français)')).toHaveAttribute('aria-pressed', 'true');
@@ -82,7 +82,7 @@ describe('the « Application » tab', () => {
     expect(choices('Interface language')).toEqual(['System (French)', 'English', 'Français']);
     expect(choices('Language of texts written by Claude')).toEqual(['Same as the interface (default)', 'English', 'Français']);
     expect(panel()).toHaveTextContent(
-      'Proposed commit messages and pull request descriptions, comments posted to Jira, Trello, and GitHub, instructions given to agents.',
+      'Proposed commit messages and pull request descriptions, comments posted to Jira, Trello, and GitHub, instructions given to agents (by default, the proposed commit message follows the language of the repository’s latest commits).',
     );
   });
 });

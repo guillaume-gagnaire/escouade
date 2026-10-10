@@ -1,14 +1,14 @@
 import { openUrl } from '@tauri-apps/plugin-opener';
-import { t } from './i18n';
+import { t, tIn } from './i18n';
 import { api } from './ipc';
 import { app } from './state.svelte';
 import type { Agent, Project } from './types';
 
-// The messages asked of an agent show in its conversation: in the language of the interface (until a setting names
-// the language of the texts Claude writes).
-export const commitAgentPrompt = () => t('git.agent.commitPrompt');
+// The messages asked of an agent: in the language of the texts for Claude (« Langue des textes rédigés par Claude »),
+// whatever the interface's, as everything Escouade tells an agent.
+export const commitAgentPrompt = () => tIn(app.lang.claude, 'git.agent.commitPrompt');
 
-export const commitAllPrompt = () => t('git.agent.commitAllPrompt');
+export const commitAllPrompt = () => tIn(app.lang.claude, 'git.agent.commitAllPrompt');
 
 export async function commitViaAgent(agent: Agent, scope: 'agent' | 'project' = 'agent') {
   const ok = await app.run(api.sendMessage(agent.id, scope === 'agent' ? commitAgentPrompt() : commitAllPrompt()));

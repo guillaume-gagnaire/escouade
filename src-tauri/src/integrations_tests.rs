@@ -335,6 +335,39 @@ async fn a_jira_issue_is_imported_then_moved_and_commented_as_its_ticket_goes() 
 }
 
 #[tokio::test]
+async fn the_comment_of_a_ticket_done_is_all_in_the_language_of_the_texts_for_claude() {
+    let h = harness("ig-done-en");
+    let server = FakeServer::start().await;
+    let p = h.trello_board(&server, &[Column::Done]).await;
+    // The interface stays French (its tests always are), Claude writes English.
+    h.core.settings.write().claude_language = "en".into();
+    let t = h.import_card(&p.id, "c1").await;
+    server.on("PUT", "/cards/c1", 200, json!({}));
+    server.on("POST", "/cards/c1/actions/comments", 200, json!({}));
+    h.core.ticket_start(&t.id).unwrap();
+    h.wait("to test", |h| h.tk(&t.id).column == Column::Review)
+        .await;
+    h.core.ticket_approve(&t.id).await.unwrap();
+    h.wait_synced().await;
+    // The card says what became of it in the interface's language, the comment in Claude's: it
+    // never mixes the two.
+    let done = h.tk(&t.id);
+    assert_eq!(done.outcome.as_deref(), Some("⤵ Mergé dans main · squash"));
+    assert_eq!(
+        done.outcome_claude.as_deref(),
+        Some("⤵ Merged into main · squash")
+    );
+    let comments = writes_to(&server, "/actions/comments");
+    assert_eq!(comments.len(), 1);
+    let said = comments[0].json()["text"].as_str().unwrap().to_string();
+    assert_eq!(
+        said,
+        "Escouade: DEM-1 is done — ⤵ Merged into main · squash"
+    );
+    assert_eq!(crate::i18n::check::french_in(&said), None, "{said}");
+}
+
+#[tokio::test]
 async fn a_failed_sync_is_noted_on_the_ticket_until_one_succeeds_and_loops_can_be_told() {
     let h = harness("ig-trello");
     let server = FakeServer::start().await;

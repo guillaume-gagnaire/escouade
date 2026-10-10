@@ -151,6 +151,12 @@ impl Conv {
             .collect()
     }
 
+    /// The latest item `pred` takes, without copying the others.
+    pub fn last_where(&mut self, pred: impl Fn(&Value) -> bool) -> Option<&Value> {
+        self.ensure_loaded();
+        self.items.iter().rev().find(|v| pred(v))
+    }
+
     pub fn ids_where(&mut self, pred: impl Fn(&Value) -> bool) -> Vec<String> {
         self.ensure_loaded();
         self.items

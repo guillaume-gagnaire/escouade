@@ -470,6 +470,10 @@ pub struct Ticket {
     pub step: Option<String>,
     /// What its validation did ("⤵ Mergé dans main · squash"…), and its link.
     pub outcome: Option<String>,
+    /// The same, in the language of the texts for Claude: what the comment published for the team
+    /// quotes, for it not to mix two languages. None for a ticket done before 1.7 (its `outcome`
+    /// is quoted then).
+    pub outcome_claude: Option<String>,
     pub outcome_url: Option<String>,
     /// "Lancer" was clicked while the autopilot is off.
     pub forced: bool,
@@ -1856,6 +1860,37 @@ mod tests {
         })
         .unwrap();
         assert_eq!(v["loops"], json!(4));
+    }
+
+    #[test]
+    fn a_ticket_done_before_1_7_loads_with_the_outcome_of_its_card_only() {
+        // A state.json of 1.6: its done tickets have an `outcome` and no other language of it.
+        let s: PersistedState = serde_json::from_value(json!({
+            "projects": [],
+            "tickets": [{
+                "id": "t1", "projectId": "p1", "key": "DEM-1", "column": "done",
+                "outcome": "⤵ Mergé dans main · squash"
+            }]
+        }))
+        .unwrap();
+        let t = &s.tickets[0];
+        assert_eq!(
+            (t.outcome.as_deref(), t.outcome_claude.as_deref()),
+            (Some("⤵ Mergé dans main · squash"), None)
+        );
+        // Saved from now on with both, and read back.
+        let v = serde_json::to_value(Ticket {
+            outcome: Some("⤵ Mergé dans main · squash".into()),
+            outcome_claude: Some("⤵ Merged into main · squash".into()),
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(v["outcomeClaude"], json!("⤵ Merged into main · squash"));
+        let back: Ticket = serde_json::from_value(v).unwrap();
+        assert_eq!(
+            back.outcome_claude.as_deref(),
+            Some("⤵ Merged into main · squash")
+        );
     }
 
     #[test]

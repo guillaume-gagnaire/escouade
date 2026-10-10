@@ -12,11 +12,19 @@ use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig
 use rmcp::transport::StreamableHttpClientTransport;
 use rmcp::{RoleClient, ServiceExt};
 use serde_json::{json, Value};
+use std::sync::Arc;
 use tauri::test::{mock_app, MockRuntime};
 
-/// The tools the server offers, sorted: none yet. M2 and M4 add theirs here, knowingly. None may
-/// accept a permission, answer for the user, run a command or the tests, merge or delete.
-const EXPOSED: &[&str] = &[];
+/// The tools the server offers, sorted: those that read (M2). M4 adds its own here, knowingly.
+/// None may accept a permission, answer for the user, run a command or the tests, merge or delete.
+pub(super) const EXPOSED: &[&str] = &[
+    "get_agent_summary",
+    "get_ticket",
+    "get_usage",
+    "list_agents",
+    "list_projects",
+    "list_tickets",
+];
 
 /// The test's own tool, beside them in tests (`tools::Tools::test_router`).
 const TEST_TOOL: &str = "whoami";
@@ -49,13 +57,13 @@ fn url(port: u16) -> String {
 }
 
 /// The harness's server started: its port and the token of Claude outside Escouade.
-fn started(h: &Harness) -> (u16, String) {
+pub(super) fn started(h: &Harness) -> (u16, String) {
     let port = h.core.mcp.start(0).unwrap();
     (port, h.core.mcp.external_token().unwrap())
 }
 
 /// A real MCP client, initialized with `token`.
-async fn client(
+pub(super) async fn client(
     port: u16,
     token: &str,
 ) -> Result<RunningService<RoleClient, ()>, Box<rmcp::service::ClientInitializeError>> {
@@ -87,8 +95,45 @@ async fn post(port: u16, headers: &[(&str, &str)], body: &str) -> (u16, String) 
     (resp.status().as_u16(), resp.text().await.unwrap())
 }
 
-fn bearer(token: &str) -> String {
+pub(super) fn bearer(token: &str) -> String {
     format!("Bearer {token}")
+}
+
+/// `request` written as is on a connection of its own, and what the server answers until it
+/// closes it (5 s at most): for what reqwest would not send (no `Host`, an absolute URI).
+async fn raw(port: u16, request: &str) -> String {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut s = tokio::net::TcpStream::connect((Ipv4Addr::LOCALHOST, port))
+        .await
+        .unwrap();
+    s.write_all(request.as_bytes()).await.unwrap();
+    let mut out = Vec::new();
+    let _ = tokio::time::timeout(Duration::from_secs(5), s.read_to_end(&mut out)).await;
+    String::from_utf8_lossy(&out).to_string()
+}
+
+/// A raw `POST <target>` of `INITIALIZE` with `headers` (each a whole line), the connection closed
+/// after the answer.
+fn raw_post(target: &str, headers: &[String]) -> String {
+    let mut request = format!("POST {target} HTTP/1.1\r\n");
+    for h in headers {
+        request.push_str(h);
+        request.push_str("\r\n");
+    }
+    request.push_str(&format!(
+        "Content-Type: application/json\r\nAccept: application/json, text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{INITIALIZE}",
+        INITIALIZE.len()
+    ));
+    request
+}
+
+/// The status of a raw answer (its first line's code), 0 for none.
+fn raw_status(answer: &str) -> u16 {
+    answer
+        .split_whitespace()
+        .nth(1)
+        .and_then(|c| c.parse().ok())
+        .unwrap_or(0)
 }
 
 fn refusals(h: &Harness) -> Vec<ActivityEntry> {
@@ -109,7 +154,7 @@ fn answer_text(result: &rmcp::model::CallToolResult) -> String {
         .to_string()
 }
 
-fn names(tools: &[rmcp::model::Tool]) -> Vec<String> {
+pub(super) fn names(tools: &[rmcp::model::Tool]) -> Vec<String> {
     let mut names: Vec<String> = tools.iter().map(|t| t.name.to_string()).collect();
     names.sort();
     names
@@ -226,6 +271,26 @@ async fn a_request_without_a_token_or_with_an_unknown_one_is_refused_and_logged(
         .filter(|e| e["type"] == "mcpActivity" && e["entry"]["outcome"] == "refused")
         .count();
     assert_eq!(told, refused.len());
+    // Whatever the method: a GET (an SSE stream) or a DELETE (a session's end) without a token
+    // is refused by our guard too, before rmcp.
+    for method in [reqwest::Method::GET, reqwest::Method::DELETE] {
+        let before = refusals(&h).len();
+        let resp = http()
+            .request(method.clone(), url(port))
+            .header("accept", "application/json, text/event-stream")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status().as_u16(), 401, "{method}");
+        let refused = refusals(&h);
+        assert_eq!(refused.len(), before + 1, "{method}: {refused:?}");
+        let last = refused.last().unwrap();
+        assert_eq!(last.summary, format!("{method} /mcp"));
+        assert_eq!(
+            last.message.as_deref(),
+            Some("Requête refusée : pas de jeton")
+        );
+    }
     h.core.mcp.stop();
 }
 
@@ -239,12 +304,24 @@ async fn a_foreign_host_or_a_web_pages_origin_is_refused_whatever_the_token() {
     } else {
         port + 1
     };
+    // Each one refused by our own guard (rmcp's, behind it, logs nothing): its entry says so.
+    let refused_by_us = |h: &Harness, before: usize, message: &str| {
+        let refused = refusals(h);
+        assert_eq!(refused.len(), before + 1, "{message}: {refused:?}");
+        let last = refused.last().unwrap();
+        assert_eq!(last.message.as_deref(), Some(message));
+        assert_eq!(
+            (last.caller.as_str(), last.tool.as_str()),
+            ("Client inconnu", "")
+        );
+    };
     for host in [
         format!("evil.example:{port}"),
         format!("127.0.0.1:{other}"),
         "localhost".to_string(),
         format!("127.0.0.1.evil.example:{port}"),
     ] {
+        let before = refusals(&h).len();
         let (status, text) = post(
             port,
             &[("host", &host), ("authorization", &auth)],
@@ -252,7 +329,50 @@ async fn a_foreign_host_or_a_web_pages_origin_is_refused_whatever_the_token() {
         )
         .await;
         assert_eq!(status, 403, "{host}: {text}");
+        refused_by_us(
+            &h,
+            before,
+            &format!("Requête refusée : en-tête Host inattendu ({host})"),
+        );
     }
+    // No Host at all.
+    let before = refusals(&h).len();
+    let answer = raw(port, &raw_post("/mcp", &[format!("Authorization: {auth}")])).await;
+    assert_eq!(raw_status(&answer), 403, "{answer}");
+    refused_by_us(&h, before, "Requête refusée : pas d’en-tête Host");
+    // An absolute URI that names another host than its own header.
+    let before = refusals(&h).len();
+    let answer = raw(
+        port,
+        &raw_post(
+            &format!("http://evil.example:{port}/mcp"),
+            &[
+                format!("Host: 127.0.0.1:{port}"),
+                format!("Authorization: {auth}"),
+            ],
+        ),
+    )
+    .await;
+    assert_eq!(raw_status(&answer), 403, "{answer}");
+    refused_by_us(
+        &h,
+        before,
+        &format!("Requête refusée : en-tête Host inattendu (evil.example:{port})"),
+    );
+    // The same, naming this server: it passes.
+    let answer = raw(
+        port,
+        &raw_post(
+            &format!("http://127.0.0.1:{port}/mcp"),
+            &[
+                format!("Host: 127.0.0.1:{port}"),
+                format!("Authorization: {auth}"),
+            ],
+        ),
+    )
+    .await;
+    assert_eq!(raw_status(&answer), 200, "{answer}");
+    let before = refusals(&h).len();
     let (status, text) = post(
         port,
         &[("origin", "http://localhost"), ("authorization", &auth)],
@@ -260,6 +380,11 @@ async fn a_foreign_host_or_a_web_pages_origin_is_refused_whatever_the_token() {
     )
     .await;
     assert_eq!(status, 403, "{text}");
+    refused_by_us(
+        &h,
+        before,
+        "Requête refusée : en-tête Origin d’une page web (http://localhost)",
+    );
     // The server's own names pass.
     for host in [format!("localhost:{port}"), format!("127.0.0.1:{port}")] {
         let (status, text) = post(
@@ -270,22 +395,6 @@ async fn a_foreign_host_or_a_web_pages_origin_is_refused_whatever_the_token() {
         .await;
         assert_eq!(status, 200, "{host}: {text}");
     }
-    let messages: Vec<String> = refusals(&h)
-        .into_iter()
-        .map(|e| e.message.unwrap())
-        .collect();
-    assert!(
-        messages.contains(&format!(
-            "Requête refusée : en-tête Host inattendu (evil.example:{port})"
-        )),
-        "{messages:?}"
-    );
-    assert!(
-        messages.contains(
-            &"Requête refusée : en-tête Origin d’une page web (http://localhost)".to_string()
-        ),
-        "{messages:?}"
-    );
     // Another path than the endpoint's, with the token: refused too, the caller known.
     let resp = http()
         .post(format!("http://127.0.0.1:{port}/other"))
@@ -481,6 +590,241 @@ async fn a_stopped_server_refuses_connections_and_the_app_stops_it_when_it_quits
     assert!(err.is_connect(), "{err:?}");
     h.core.sync_mcp();
     assert!(!h.core.mcp.status().running);
+}
+
+#[tokio::test]
+async fn once_the_app_quits_a_start_under_way_does_not_run_the_server() {
+    // A sync that read « not quitting » just before the app quit, then starts: refused.
+    let h = harness("mcp-quit-race");
+    h.core.quitting.store(true, Ordering::Release);
+    assert!(h.core.mcp.start(0).is_err());
+    assert!(!h.core.mcp.status().running);
+}
+
+#[tokio::test]
+async fn a_start_or_a_stop_waits_for_the_sync_under_way() {
+    let h = harness("mcp-serialized");
+    started(&h);
+    // A sync under way (between the settings it read and the start or stop it does).
+    let sync = h.core.mcp.sync.lock();
+    let done = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let (core, flag) = (h.core.clone(), done.clone());
+    let stopping = std::thread::spawn(move || {
+        core.mcp.stop();
+        flag.store(true, Ordering::SeqCst);
+    });
+    std::thread::sleep(Duration::from_millis(300));
+    assert!(
+        !done.load(Ordering::SeqCst),
+        "stopped in the middle of a sync"
+    );
+    assert!(h.core.mcp.status().running);
+    drop(sync);
+    stopping.join().unwrap();
+    assert!(!h.core.mcp.status().running);
+}
+
+#[test]
+fn the_server_starts_and_stops_from_a_thread_an_async_worker_or_a_single_threaded_runtime() {
+    let h = {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        rt.block_on(async { harness("mcp-stop-contexts") })
+    };
+    // A plain thread (the app's main thread, `shutdown`).
+    started(&h);
+    h.core.mcp.stop();
+    assert!(!h.core.mcp.status().running);
+    // A worker of a multi-threaded runtime (a command, a tool): the wait leaves it to the others.
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .enable_all()
+        .build()
+        .unwrap();
+    let core = h.core.clone();
+    rt.block_on(async move {
+        tokio::spawn(async move {
+            let port = core.mcp.start(0).unwrap();
+            core.mcp.stop();
+            assert!(!core.mcp.status().running);
+            // Closed: a start right after takes the same port again.
+            assert_eq!(core.mcp.start(port).unwrap(), port);
+            core.mcp.stop();
+        })
+        .await
+        .unwrap();
+    });
+    // A single-threaded runtime (the tests' own).
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let core = h.core.clone();
+    rt.block_on(async move {
+        core.mcp.start(0).unwrap();
+        core.mcp.stop();
+        assert!(!core.mcp.status().running);
+    });
+}
+
+#[tokio::test]
+async fn a_connection_that_sends_no_headers_in_time_is_cut_off_even_after_an_answer() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let h = harness("mcp-slow-headers");
+    h.core.mcp.limits.lock().header_read = Duration::from_millis(300);
+    let (port, token) = started(&h);
+    let mut s = tokio::net::TcpStream::connect((Ipv4Addr::LOCALHOST, port))
+        .await
+        .unwrap();
+    s.write_all(format!("POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n").as_bytes())
+        .await
+        .unwrap();
+    let mut out = Vec::new();
+    let closed = tokio::time::timeout(Duration::from_secs(3), s.read_to_end(&mut out)).await;
+    assert!(closed.is_ok(), "the connection is still open");
+    // Answered (its body read whole), then kept open without a next request: closed the same.
+    let mut s = tokio::net::TcpStream::connect((Ipv4Addr::LOCALHOST, port))
+        .await
+        .unwrap();
+    let request = raw_post(
+        "/mcp",
+        &[
+            format!("Host: 127.0.0.1:{port}"),
+            format!("Authorization: {}", bearer(&token)),
+        ],
+    )
+    .replace("Connection: close\r\n", "");
+    s.write_all(request.as_bytes()).await.unwrap();
+    let mut out = Vec::new();
+    let closed = tokio::time::timeout(Duration::from_secs(3), s.read_to_end(&mut out)).await;
+    assert!(closed.is_ok(), "the idle connection is still open");
+    assert_eq!(raw_status(&String::from_utf8_lossy(&out)), 200);
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn connections_beyond_the_cap_wait_for_one_to_close() {
+    let h = harness("mcp-connection-cap");
+    h.core.mcp.limits.lock().connections = 3;
+    let (port, token) = started(&h);
+    let mut idle = Vec::new();
+    for _ in 0..3 {
+        idle.push(
+            tokio::net::TcpStream::connect((Ipv4Addr::LOCALHOST, port))
+                .await
+                .unwrap(),
+        );
+    }
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let asked = tokio::spawn(async move {
+        let auth = bearer(&token);
+        post(port, &[("authorization", &auth)], INITIALIZE).await.0
+    });
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert!(!asked.is_finished(), "answered beyond the cap");
+    drop(idle.pop());
+    let status = tokio::time::timeout(Duration::from_secs(5), asked)
+        .await
+        .expect("still waiting once a connection closed")
+        .unwrap();
+    assert_eq!(status, 200);
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn whether_the_server_is_wanted_is_read_one_lock_at_a_time() {
+    let h = harness("mcp-wanted-locks");
+    // Someone holds the projects: the question waits for them, the settings left free.
+    let projects = h.core.projects.write();
+    let core = h.core.clone();
+    let asking = std::thread::spawn(move || core.mcp_wanted());
+    std::thread::sleep(Duration::from_millis(200));
+    let settings_free = h
+        .core
+        .settings
+        .try_write_for(Duration::from_millis(500))
+        .is_some();
+    drop(projects);
+    assert!(!asking.join().unwrap());
+    assert!(
+        settings_free,
+        "the settings stayed read while the projects were awaited"
+    );
+}
+
+#[tokio::test]
+async fn the_external_token_renewed_replaces_the_old_one_everywhere() {
+    let h = harness("mcp-token-renew");
+    let (port, old) = started(&h);
+    let new = h.core.mcp.renew_external_token().unwrap();
+    assert_ne!(new, old);
+    assert_eq!(h.core.mcp.external_token().unwrap(), new);
+    let store = crate::integrations::secrets::memory_of(&h.core.data);
+    assert_eq!(
+        store.entry(crate::integrations::secrets::MCP_ENTRY),
+        Some(new.clone())
+    );
+    assert!(!h.core.data.mcp_token_file().exists());
+    // The old one is refused at once, the new one taken.
+    let (status, _) = post(port, &[("authorization", &bearer(&old))], INITIALIZE).await;
+    assert_eq!(status, 401);
+    let (status, _) = post(port, &[("authorization", &bearer(&new))], INITIALIZE).await;
+    assert_eq!(status, 200);
+    h.core.mcp.stop();
+    // The keychain out of reach: the new one waits in the file, which wins over the old entry
+    // at the next start.
+    store.refuse.store(true, Ordering::SeqCst);
+    let newer = h.core.mcp.renew_external_token().unwrap();
+    assert_ne!(newer, new);
+    assert!(std::fs::read_to_string(h.core.data.mcp_token_file())
+        .unwrap()
+        .contains(&newer));
+    store.refuse.store(false, Ordering::SeqCst);
+    let app = mock_app();
+    let (again, _rx) = Core::load(app.handle().clone(), h.core.data.clone());
+    assert_eq!(again.mcp.external_token().unwrap(), newer);
+}
+
+#[tokio::test]
+async fn two_first_needs_of_the_external_token_get_the_same_one() {
+    let h = harness("mcp-token-race");
+    let threads = 16;
+    let barrier = Arc::new(std::sync::Barrier::new(threads));
+    let asked: Vec<_> = (0..threads)
+        .map(|_| {
+            let (core, barrier) = (h.core.clone(), barrier.clone());
+            std::thread::spawn(move || {
+                barrier.wait();
+                core.mcp.external_token().unwrap()
+            })
+        })
+        .collect();
+    let tokens: Vec<String> = asked.into_iter().map(|t| t.join().unwrap()).collect();
+    let first = tokens[0].clone();
+    assert!(tokens.iter().all(|t| *t == first), "{tokens:?}");
+    let store = crate::integrations::secrets::memory_of(&h.core.data);
+    assert_eq!(
+        store.entry(crate::integrations::secrets::MCP_ENTRY),
+        Some(first.clone())
+    );
+    assert_eq!(h.core.mcp.external_token().unwrap(), first);
+}
+
+#[test]
+fn the_activity_log_is_cleared_on_demand() {
+    let log = activity::Activity::default();
+    log.push(ActivityEntry {
+        at: 1,
+        caller: "Claude (hors Escouade)".into(),
+        tool: "list_projects".into(),
+        summary: String::new(),
+        outcome: "ok",
+        message: None,
+    });
+    log.clear();
+    assert!(log.entries().is_empty());
 }
 
 #[tokio::test]
@@ -705,6 +1049,21 @@ fn a_token_is_32_random_bytes_in_base64url() {
         .chars()
         .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'));
     assert_ne!(a, b);
+    // Every bit random: none fixed, as a UUID's version and variant bits would be.
+    let tokens: Vec<Vec<u8>> = (0..64)
+        .map(|_| {
+            base64::engine::general_purpose::URL_SAFE_NO_PAD
+                .decode(new_token())
+                .unwrap()
+        })
+        .collect();
+    assert!(tokens.iter().all(|t| t.len() == 32));
+    for at in [6, 22] {
+        assert!(tokens.iter().any(|t| t[at] >> 4 != 4), "byte {at}");
+    }
+    for at in [8, 24] {
+        assert!(tokens.iter().any(|t| t[at] >> 6 != 0b10), "byte {at}");
+    }
 }
 
 #[tokio::test]

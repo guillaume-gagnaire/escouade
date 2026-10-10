@@ -130,7 +130,8 @@ pub struct AgentRt {
     /// What the step of that setup wrote, its last lines: sent to the window as it comes, apart
     /// from its view (`UiEvent::SetupOutput`).
     pub setup_output: Option<SetupOutput>,
-    /// Why the setup of its worktree failed, until its ticket's first message tells it.
+    /// Why the setup of its worktree failed, until its ticket's first message tells it (written in
+    /// the language of the texts for Claude, as that message).
     pub setup_failure: Option<String>,
     blocks: HashMap<String, Vec<Block>>,
     current_msg: HashMap<String, String>,
@@ -454,7 +455,7 @@ impl AgentRt {
             _ => json!({
                 "behavior": "deny", "toolUseID": p.tool_use_id,
                 "message": message.clone().filter(|m| !m.trim().is_empty())
-                    .unwrap_or_else(|| "L'utilisateur a refusé cette action.".into()),
+                    .unwrap_or_else(|| refused_action(i18n::claude())),
             }),
         };
         proc.respond(request_id, response)?;
@@ -1502,6 +1503,16 @@ fn pending_view(rid: &str, tool: &str, req: &Value, input: &Value, cwd: &str) ->
     }
 }
 
+/// What Claude is told of an action the user refused without saying why, in `lang` (the language
+/// of the texts for Claude).
+fn refused_action(lang: Lang) -> String {
+    tr_in!(
+        lang,
+        "L'utilisateur a refusé cette action.",
+        "The user refused this action."
+    )
+}
+
 /// Refused: the agent's process is gone, nothing can be answered.
 fn not_running() -> anyhow::Error {
     anyhow!(tr!(
@@ -2538,6 +2549,13 @@ mod tests {
         assert_eq!(act("Task", json!({})).as_deref(), Some("Délègue"));
         assert_eq!(act("Read", Value::Null).as_deref(), Some("Lit"));
         assert_eq!(act("WebSearch", json!({})), None);
+    }
+
+    #[test]
+    fn an_action_refused_without_a_word_is_told_to_claude_in_its_language() {
+        use crate::i18n::Lang::{En, Fr};
+        assert_eq!(refused_action(Fr), "L'utilisateur a refusé cette action.");
+        assert_eq!(refused_action(En), "The user refused this action.");
     }
 
     #[test]

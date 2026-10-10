@@ -179,6 +179,7 @@ export function ticket(over: Partial<Ticket> = {}): Ticket {
     conflict: false,
     step: null,
     outcome: null,
+    outcomeClaude: null,
     outcomeUrl: null,
     forced: false,
     reminded: false,
