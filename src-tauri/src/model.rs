@@ -637,6 +637,41 @@ pub struct IsolaApproval {
     pub open: String,
 }
 
+/// A request waiting for the user's answer, summed up as « Vue d'ensemble » shows it: each text
+/// capped (`MAX_PENDING_FIELD` characters), the card in the conversation has it whole.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingView {
+    /// The item's id in the conversation, which the answer names.
+    pub id: String,
+    /// "permission" or "question".
+    pub kind: String,
+    /// The tool asking for permission (AskUserQuestion for a question).
+    pub tool: String,
+    /// What the tool is asked to act on, as the conversation's card sums it up (the command,
+    /// the file from the agent's folder…), its line breaks kept.
+    pub arg: String,
+    pub description: Option<String>,
+    /// Why Claude Code asks (the permission rule it met).
+    pub reason: Option<String>,
+    /// A question's questions, with their options' labels.
+    pub questions: Vec<PendingQuestion>,
+    /// A text, a question or an option was cut: what is shown is not the whole request.
+    pub cut: bool,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingQuestion {
+    pub question: String,
+    pub options: Vec<String>,
+}
+
+/// The most characters a field of a `PendingView` carries.
+pub const MAX_PENDING_FIELD: usize = 2000;
+/// The most questions, and options of a question, a `PendingView` carries.
+pub const MAX_PENDING_ITEMS: usize = 10;
+
 /// Agent as shown by the UI: persisted metadata plus live runtime fields.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -645,8 +680,11 @@ pub struct AgentView {
     pub meta: AgentMeta,
     pub active_since: Option<i64>,
     pub alive: bool,
-    /// Ids of the question/permission items awaiting an answer.
+    /// Ids of the question/permission items awaiting an answer, in the order they were asked.
     pub pending: Vec<String>,
+    /// The same requests summed up, in the same order: what « Vue d'ensemble » shows of them
+    /// without loading the conversation.
+    pub requests: Vec<PendingView>,
     pub context_tokens: u64,
     /// Size of the context window of the conversation's model (0 until a turn told it).
     pub context_window: u64,

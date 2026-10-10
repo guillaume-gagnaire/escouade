@@ -102,6 +102,7 @@ export function agent(over: Partial<Agent> = {}): Agent {
     activeSince: null,
     alive: true,
     pending: [],
+    requests: [],
     contextTokens: 0,
     contextWindow: 0,
     liveTokens: 0,

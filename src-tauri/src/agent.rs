@@ -81,6 +81,8 @@ struct PendingReq {
     tool_use_id: String,
     input: Value,
     suggestions: Value,
+    /// What the agent's view says of it, worked out once when it comes.
+    view: PendingView,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -128,7 +130,8 @@ pub struct AgentRt {
     pub setup_failure: Option<String>,
     blocks: HashMap<String, Vec<Block>>,
     current_msg: HashMap<String, String>,
-    pending: HashMap<String, PendingReq>,
+    /// Requests waiting for an answer, in the order they came (an item's id is its request's).
+    pending: Vec<PendingReq>,
     last_usage: HashMap<String, Counters>,
     /// Usage of the running turn's API messages (by message id, with their model), until the
     /// turn's result brings the exact figures.
@@ -171,7 +174,7 @@ impl AgentRt {
             setup_failure: None,
             blocks: HashMap::new(),
             current_msg: HashMap::new(),
-            pending: HashMap::new(),
+            pending: Vec::new(),
             last_usage: HashMap::new(),
             live: HashMap::new(),
             queued: 0,
@@ -194,7 +197,8 @@ impl AgentRt {
             meta: self.meta.clone(),
             active_since: self.active_since,
             alive: self.proc.is_some(),
-            pending: self.pending.keys().cloned().collect(),
+            pending: self.pending.iter().map(|p| p.item_id.clone()).collect(),
+            requests: self.pending.iter().map(|p| p.view.clone()).collect(),
             context_tokens: self.context_tokens,
             context_window: self.context_window,
             live_tokens,
@@ -359,7 +363,7 @@ impl AgentRt {
     }
 
     pub fn clear_pending(&mut self, fx: &mut Effects) {
-        let ids: Vec<String> = self.pending.drain().map(|(_, p)| p.item_id).collect();
+        let ids: Vec<String> = self.pending.drain(..).map(|p| p.item_id).collect();
         for id in ids {
             self.patch(&id, json!({ "cancelled": true }), fx);
         }
@@ -382,9 +386,24 @@ impl AgentRt {
         }
     }
 
+    /// A request comes after those waiting already: the one asked first stays the one shown
+    /// first. Asked again, a request keeps its place.
+    fn add_pending(&mut self, req: PendingReq) {
+        match self.pending.iter_mut().find(|p| p.item_id == req.item_id) {
+            Some(p) => *p = req,
+            None => self.pending.push(req),
+        }
+    }
+
+    /// Takes the request `request_id` out of those waiting, the others keeping their order.
+    fn take_pending(&mut self, request_id: &str) -> Option<PendingReq> {
+        let i = self.pending.iter().position(|p| p.item_id == request_id)?;
+        Some(self.pending.remove(i))
+    }
+
     #[cfg(test)]
     pub fn has_pending(&self, request_id: &str) -> bool {
-        self.pending.contains_key(request_id)
+        self.pending.iter().any(|p| p.item_id == request_id)
     }
 
     pub fn answer_question(
@@ -398,8 +417,7 @@ impl AgentRt {
             .clone()
             .ok_or_else(|| anyhow!("Claude ne tourne plus pour cet agent"))?;
         let p = self
-            .pending
-            .remove(request_id)
+            .take_pending(request_id)
             .ok_or_else(|| anyhow!("question introuvable"))?;
         let mut input = p.input.clone();
         input["answers"] = answers.clone();
@@ -424,8 +442,7 @@ impl AgentRt {
             .clone()
             .ok_or_else(|| anyhow!("Claude ne tourne plus pour cet agent"))?;
         let p = self
-            .pending
-            .remove(request_id)
+            .take_pending(request_id)
             .ok_or_else(|| anyhow!("demande introuvable"))?;
         let response = match decision {
             "allow" => {
@@ -1156,15 +1173,14 @@ impl AgentRt {
                     })
                 };
                 self.append(item, fx);
-                self.pending.insert(
-                    rid.to_string(),
-                    PendingReq {
-                        item_id: rid.to_string(),
-                        tool_use_id,
-                        input,
-                        suggestions,
-                    },
-                );
+                let view = pending_view(rid, &tool, req, &input, &self.meta.cwd);
+                self.add_pending(PendingReq {
+                    item_id: rid.to_string(),
+                    tool_use_id,
+                    input,
+                    suggestions,
+                    view,
+                });
                 self.set_status(AgentStatus::Waiting, fx);
                 fx.notify = Some(AgentAlert::new(NotifyKind::Question, body));
                 fx.agent_changed = true;
@@ -1186,7 +1202,7 @@ impl AgentRt {
         let Some(rid) = f["request_id"].as_str() else {
             return;
         };
-        if let Some(p) = self.pending.remove(rid) {
+        if let Some(p) = self.take_pending(rid) {
             self.patch(&p.item_id, json!({ "cancelled": true }), fx);
             if self.pending.is_empty() && self.meta.status == AgentStatus::Waiting {
                 self.set_status(AgentStatus::Running, fx);
@@ -1306,6 +1322,111 @@ pub fn strip_ansi(s: &str) -> String {
         }
     }
     out
+}
+
+/// `text` in `MAX_PENDING_FIELD` characters at most; `cut` is set when it was longer.
+fn capped(text: &str, cut: &mut bool) -> String {
+    if text.chars().count() <= MAX_PENDING_FIELD {
+        return text.to_string();
+    }
+    *cut = true;
+    text.chars().take(MAX_PENDING_FIELD).collect()
+}
+
+/// What a tool is asked to act on, as the conversation's card sums it up (`toolArg` in
+/// `src/lib/tools.ts`): the command, the file from the agent's folder, the search…, its line
+/// breaks kept.
+fn tool_arg(tool: &str, input: &Value, cwd: &str) -> String {
+    let text = |key: &str| input[key].as_str().unwrap_or_default().to_string();
+    let path = |key: &str| {
+        input[key]
+            .as_str()
+            .map(|p| relative_slash(cwd, p))
+            .unwrap_or_default()
+    };
+    match tool {
+        "Bash" | "PowerShell" | "SlashCommand" => text("command"),
+        "Read" | "Edit" | "Write" | "MultiEdit" => path("file_path"),
+        "NotebookEdit" => path("notebook_path"),
+        "Grep" | "Glob" => match path("path") {
+            p if p.is_empty() => text("pattern"),
+            p => format!("{}  {p}", text("pattern")),
+        },
+        "WebFetch" => text("url"),
+        "WebSearch" => text("query"),
+        "Task" | "Agent" => input["description"]
+            .as_str()
+            .or(input["subagent_type"].as_str())
+            .unwrap_or_default()
+            .to_string(),
+        "TodoWrite" => input["todos"]
+            .as_array()
+            .map(|t| format!("{} tâches", t.len()))
+            .unwrap_or_default(),
+        "Skill" => input["skill"]
+            .as_str()
+            .or(input["command"].as_str())
+            .unwrap_or_default()
+            .to_string(),
+        // The first text of its input (the keys in their order, as the card reads them).
+        _ => input
+            .as_object()
+            .and_then(|o| o.values().find_map(Value::as_str))
+            .unwrap_or_default()
+            .to_string(),
+    }
+}
+
+/// The first `MAX_PENDING_ITEMS` of the list `list`; `cut` is set when it had more.
+fn few<'a>(list: &'a Value, cut: &mut bool) -> &'a [Value] {
+    let list = list.as_array().map(Vec::as_slice).unwrap_or_default();
+    *cut |= list.len() > MAX_PENDING_ITEMS;
+    &list[..list.len().min(MAX_PENDING_ITEMS)]
+}
+
+/// What the agent's view says of the request `rid` (`req`, Claude Code's `can_use_tool`) for
+/// « Vue d'ensemble », which shows it without the conversation: each text capped, `cut` set
+/// when one was longer.
+fn pending_view(rid: &str, tool: &str, req: &Value, input: &Value, cwd: &str) -> PendingView {
+    let mut cut = false;
+    let text = |v: &Value, cut: &mut bool| v.as_str().map(|s| capped(s, cut));
+    if tool == "AskUserQuestion" {
+        let questions = few(&input["questions"], &mut cut)
+            .iter()
+            .map(|q| PendingQuestion {
+                question: text(&q["question"], &mut cut).unwrap_or_default(),
+                options: few(&q["options"], &mut cut)
+                    .iter()
+                    .map(|o| text(&o["label"], &mut cut).unwrap_or_default())
+                    .collect(),
+            })
+            .collect();
+        return PendingView {
+            id: rid.to_string(),
+            kind: "question".into(),
+            tool: tool.to_string(),
+            arg: String::new(),
+            description: None,
+            reason: None,
+            questions,
+            cut,
+        };
+    }
+    let arg = capped(&tool_arg(tool, input, cwd), &mut cut);
+    let description = text(&req["description"], &mut cut);
+    let reason = req["decision_reason"]
+        .as_str()
+        .map(|r| capped(&strip_ansi(r), &mut cut));
+    PendingView {
+        id: rid.to_string(),
+        kind: "permission".into(),
+        tool: tool.to_string(),
+        arg,
+        description,
+        reason,
+        questions: vec![],
+        cut,
+    }
 }
 
 /// What the agent does, from the tool it runs: "Lit src/db.ts", "Lance npm test"… None for a tool
@@ -1465,6 +1586,124 @@ mod tests {
             fx.notify.map(|n| n.body),
             Some("Autoriser WebFetch : https://example.com/a ?".to_string())
         );
+    }
+
+    /// Claude Code asks `rid`: a permission, or a question for AskUserQuestion (`request` without its subtype).
+    fn asks(a: &mut AgentRt, rid: &str, mut request: Value) {
+        request["subtype"] = json!("can_use_tool");
+        a.handle_frame(
+            &json!({"type":"control_request","request_id":rid,"request":request}),
+            &mut Effects::default(),
+        );
+    }
+
+    #[test]
+    fn the_view_lists_the_pending_requests_in_the_order_they_came() {
+        let mut a = rt();
+        // Enough of them for any other order to show.
+        let ids: Vec<String> = (0..12).map(|i| format!("r{i}")).collect();
+        for id in &ids {
+            asks(
+                &mut a,
+                id,
+                json!({"tool_name":"Bash","tool_use_id":format!("t-{id}"),"input":{"command":"npm test"}}),
+            );
+        }
+        let v = a.view();
+        assert_eq!(v.pending, ids);
+        let shown: Vec<String> = v.requests.iter().map(|r| r.id.clone()).collect();
+        assert_eq!(shown, ids);
+        // One cancelled, the others keep their order.
+        a.handle_frame(
+            &json!({"type":"control_cancel_request","request_id":"r0"}),
+            &mut Effects::default(),
+        );
+        assert_eq!(a.view().pending, ids[1..]);
+    }
+
+    #[test]
+    fn the_view_sums_up_each_pending_request_without_the_conversation() {
+        let mut a = rt();
+        asks(
+            &mut a,
+            "r1",
+            json!({"tool_name":"Bash","tool_use_id":"t1","input":{"command":"npm ci\nnpm test"},
+                "description":"Installe et teste","decision_reason":"Commande hors de la liste"}),
+        );
+        asks(
+            &mut a,
+            "r2",
+            json!({"tool_name":"Edit","tool_use_id":"t2",
+                "input":{"file_path":"C:/p/src/db.ts","old_string":"a","new_string":"b"}}),
+        );
+        asks(
+            &mut a,
+            "r3",
+            json!({"tool_name":"AskUserQuestion","tool_use_id":"t3","input":{"questions":[
+                {"question":"Quelle base ?","options":[{"label":"SQLite"},{"label":"Postgres","description":"un serveur"}]}]}}),
+        );
+        let v = a.view();
+        assert_eq!(
+            v.requests[0],
+            PendingView {
+                id: "r1".into(),
+                kind: "permission".into(),
+                tool: "Bash".into(),
+                // Its lines kept: the overview shows them as they run.
+                arg: "npm ci\nnpm test".into(),
+                description: Some("Installe et teste".into()),
+                reason: Some("Commande hors de la liste".into()),
+                questions: vec![],
+                cut: false,
+            }
+        );
+        // A file from the agent's folder, as the conversation's card shows it.
+        assert_eq!(v.requests[1].arg, "src/db.ts");
+        assert_eq!(v.requests[2].kind, "question");
+        assert_eq!(
+            v.requests[2].questions,
+            vec![PendingQuestion {
+                question: "Quelle base ?".into(),
+                options: vec!["SQLite".into(), "Postgres".into()],
+            }]
+        );
+        let sent = serde_json::to_value(&v).unwrap();
+        assert_eq!(sent["requests"][0]["arg"], "npm ci\nnpm test");
+        assert_eq!(
+            sent["requests"][2]["questions"][0]["options"][1],
+            "Postgres"
+        );
+    }
+
+    #[test]
+    fn the_view_caps_what_a_pending_request_says_and_tells_it_was_cut() {
+        let mut a = rt();
+        let long = "é".repeat(MAX_PENDING_FIELD + 10);
+        asks(
+            &mut a,
+            "r1",
+            json!({"tool_name":"Bash","tool_use_id":"t1","input":{"command":long}}),
+        );
+        asks(
+            &mut a,
+            "r2",
+            json!({"tool_name":"AskUserQuestion","tool_use_id":"t2","input":{"questions":[{"question":long,"options":[]}]}}),
+        );
+        asks(
+            &mut a,
+            "r3",
+            json!({"tool_name":"Bash","tool_use_id":"t3","input":{"command":"ls"},"description":long}),
+        );
+        let v = a.view();
+        assert_eq!(v.requests[0].arg.chars().count(), MAX_PENDING_FIELD);
+        assert!(v.requests[0].cut);
+        assert_eq!(
+            v.requests[1].questions[0].question.chars().count(),
+            MAX_PENDING_FIELD
+        );
+        assert!(v.requests[1].cut);
+        assert!(v.requests[2].cut);
+        assert_eq!(v.requests[2].arg, "ls");
     }
 
     #[test]

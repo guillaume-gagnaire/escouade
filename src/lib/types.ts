@@ -349,6 +349,23 @@ export interface Worktree {
   baseBranch: string;
 }
 
+/** A request waiting for the user, as the agent's view sums it up: each text capped, the card in the conversation has it whole. */
+export interface PendingRequest {
+  /** The item's id in the conversation, which the answer names. */
+  id: string;
+  kind: 'permission' | 'question';
+  /** The tool asking (AskUserQuestion for a question). */
+  tool: string;
+  /** What the tool is asked to act on, as the card sums it up, its line breaks kept. */
+  arg: string;
+  description: string | null;
+  /** Why Claude Code asks. */
+  reason: string | null;
+  questions: { question: string; options: string[] }[];
+  /** A text was cut: what is shown is not the whole request. */
+  cut: boolean;
+}
+
 export interface Agent {
   id: string;
   projectId: string;
@@ -371,7 +388,10 @@ export interface Agent {
   prompts: number;
   activeSince: number | null;
   alive: boolean;
+  /** Ids of the question and permission items waiting for an answer, in the order they were asked. */
   pending: string[];
+  /** The same requests summed up, in the same order: what « Vue d’ensemble » shows without the conversation. */
+  requests: PendingRequest[];
   contextTokens: number;
   /** Size of the context window of the conversation's model (0 until a turn told it). */
   contextWindow: number;
