@@ -13,7 +13,7 @@ export default defineZone('common', {
   add: 'Add',
   create: 'Create',
   open: 'Open',
-  openInEditor: 'Open in the editor',
+  openInEditor: 'Open in editor',
   copy: 'Copy',
   copyPath: 'Copy path',
   retry: 'Retry',
