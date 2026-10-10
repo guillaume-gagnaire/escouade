@@ -383,18 +383,20 @@ pub(super) fn usage<R: Runtime>(core: &Core<R>) -> Result<String, ToolError> {
     if list.is_empty() {
         list.push(accounts::principal());
     }
+    // Each account's windows as last read, and the account new agents go to as the status bar
+    // and the autopilot have it (`UsageSnapshot::settle`: the first active one under the
+    // threshold, else the first active one).
     let usage = core.usage.lock().clone();
-    // The account new agents go to: the first active one. The windows read so far are the app's
-    // only ones (whichever process answered): they are its, until each account has its own.
-    let current = list.iter().position(|a| a.active).unwrap_or(0);
     let rows = list
         .into_iter()
-        .enumerate()
-        .map(|(i, a)| AccountUsage {
-            name: a.name,
-            current: i == current,
-            five_hour: usage.five_hour.filter(|_| i == current),
-            seven_day: usage.seven_day.filter(|_| i == current),
+        .map(|a| {
+            let read = usage.account(&a.id);
+            AccountUsage {
+                current: a.id == usage.current,
+                five_hour: read.and_then(|u| u.five_hour),
+                seven_day: read.and_then(|u| u.seven_day),
+                name: a.name,
+            }
         })
         .collect();
     json(&Usage {

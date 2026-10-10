@@ -5,6 +5,7 @@ use super::tests::{client, names, started, EXPOSED};
 use crate::agent::AgentRt;
 use crate::core_tests::{harness, Harness};
 use crate::model::*;
+use crate::usage::Reading;
 use rmcp::model::CallToolRequestParams;
 use rmcp::service::RunningService;
 use rmcp::RoleClient;
@@ -812,18 +813,20 @@ async fn the_usage_gives_each_account_its_windows_and_the_autopilots_pause() {
             ..Default::default()
         });
     }
+    // Each account's windows, as read from its own Claude Code.
     let soon = now_ms() + 3_600_000;
-    {
-        let mut u = h.core.usage.lock();
-        u.five_hour = Some(RateWindow {
-            pct: 42.0,
-            resets_at: Some(soon),
-        });
-        u.seven_day = Some(RateWindow {
-            pct: 10.5,
-            resets_at: Some(soon + 1),
-        });
-    }
+    let window = |pct: f64, at: i64| {
+        Some(RateWindow {
+            pct,
+            resets_at: Some(at),
+        })
+    };
+    h.core.record_usage(
+        crate::accounts::PRINCIPAL,
+        Reading::Windows((window(42.0, soon), window(10.5, soon + 1))),
+    );
+    h.core
+        .record_usage("pro", Reading::Windows((window(7.0, soon + 2), None)));
     let c = external(&h).await;
     assert_eq!(
         read(&c, "get_usage", json!({})).await,
@@ -835,7 +838,12 @@ async fn the_usage_gives_each_account_its_windows_and_the_autopilots_pause() {
                     "fiveHour": { "pct": 42.0, "resetsAt": soon },
                     "sevenDay": { "pct": 10.5, "resetsAt": soon + 1 },
                 },
-                { "name": "Pro", "current": false, "fiveHour": null, "sevenDay": null },
+                {
+                    "name": "Pro",
+                    "current": false,
+                    "fiveHour": { "pct": 7.0, "resetsAt": soon + 2 },
+                    "sevenDay": null,
+                },
             ],
             "autopilotPause": null,
         })
@@ -849,28 +857,33 @@ async fn the_usage_gives_each_account_its_windows_and_the_autopilots_pause() {
             "ok"
         )
     );
-    // The 5-hour window used up: the autopilot waits for its end.
-    h.core.usage.lock().five_hour = Some(RateWindow {
-        pct: 100.0,
-        resets_at: Some(soon),
-    });
+    let currents = |usage: &Value| {
+        (
+            usage["accounts"][0]["current"].clone(),
+            usage["accounts"][1]["current"].clone(),
+        )
+    };
+    // Principal's 5-hour window used up: new agents go to Pro, under the threshold, and the
+    // autopilot goes on with it.
+    h.core.record_usage(
+        crate::accounts::PRINCIPAL,
+        Reading::Windows((window(100.0, soon), None)),
+    );
+    let usage = read(&c, "get_usage", json!({})).await;
+    assert_eq!(currents(&usage), (json!(false), json!(true)));
+    assert_eq!(usage["accounts"][0]["fiveHour"]["pct"], 100.0);
+    assert_eq!(usage["accounts"][0]["sevenDay"]["pct"], 10.5);
+    assert_eq!(usage["autopilotPause"], Value::Null);
+    // Pro switched off: back to Principal, whose window holds the autopilot back until its end.
+    h.core.settings.write().accounts[1].active = false;
+    h.core.update_usage(|_| {});
     let until = h.core.autopilot_pause().unwrap().until;
     let usage = read(&c, "get_usage", json!({})).await;
+    assert_eq!(currents(&usage), (json!(true), json!(false)));
     assert_eq!(
         usage["autopilotPause"],
         json!({ "reason": "fiveHour", "until": until })
     );
-    // Principal switched off: new agents go to Pro.
-    h.core.settings.write().accounts[0].active = false;
-    let usage = read(&c, "get_usage", json!({})).await;
-    assert_eq!(
-        (
-            &usage["accounts"][0]["current"],
-            &usage["accounts"][1]["current"]
-        ),
-        (&json!(false), &json!(true))
-    );
-    assert_eq!(usage["accounts"][1]["fiveHour"]["pct"], 100.0);
     c.cancel().await.unwrap();
     h.core.mcp.stop();
 }

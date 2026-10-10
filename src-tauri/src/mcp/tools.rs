@@ -284,7 +284,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Read the Claude quota: for each Claude account, whether new agents go to it now (current), and how much of its 5-hour and weekly windows is used (pct, 0 to 100) with when each resets (resetsAt, epoch milliseconds), null when not read; and why the autopilot holds the tickets back, when it does (reason: fiveHour, week or limit), until when (epoch milliseconds).",
+        description = "Read the Claude quota: for each Claude account, whether new agents go to it now (current: the first active account whose windows are under the autopilot's threshold, else the first active one), and how much of its own 5-hour and weekly windows is used (pct, 0 to 100) with when each resets (resetsAt, epoch milliseconds), null when not read; and why the autopilot holds the tickets back, when it does (reason: fiveHour, week or limit), until when (epoch milliseconds).",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn get_usage(&self, ctx: ToolCtx<R>) -> CallToolResult {
