@@ -16,6 +16,8 @@ const view = (over: Partial<StatsView>): StatsView => ({
   byModel: [],
   byAgent: [],
   byTicket: [],
+  byAccount: [],
+  accounts: [],
   ...over,
 });
 

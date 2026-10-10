@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { accountName } from '../lib/accounts';
   import { readPref, writePref } from '../lib/prefs';
   import { fDate, fInt, fPct, fTok, fUsd } from '../lib/format';
   import { locale, t } from '../lib/i18n';
@@ -24,24 +25,44 @@
   /** « Tout voir » opened the whole list of agents, of tickets (20 lines each until then). */
   let allAgents = $state(false);
   let allTickets = $state(false);
+  /** The account chosen ('': every account). Not kept from one visit to the next: the totals are what the window opens on. */
+  let account = $state('');
   let loadTimer: ReturnType<typeof setTimeout> | undefined;
+  /** The last question asked: the answer to an earlier one (another period, another account) comes too late to be shown. */
+  let asked = 0;
+
+  const accounts = $derived(app.settings.accounts ?? []);
+  /** What to choose from: the accounts of the settings, then those only the statistics remember (removed, their turns remain). */
+  const choices = $derived([
+    ...accounts.map((a) => ({ id: a.id, name: accountName(a) })),
+    ...(view?.accounts ?? [])
+      .filter((id) => !accounts.some((a) => a.id === id))
+      .map((id) => ({ id, name: t('stats.account.removed', { id }) })),
+  ]);
+  /** The choice and « Par compte » only mean something with several accounts, or turns of several. */
+  const several = $derived(accounts.length > 1 || (view?.accounts.length ?? 0) > 1);
+  /** The account the views are for; none (every account) unless one is chosen that can be. */
+  const filter = $derived(several && choices.some((c) => c.id === account) ? account : null);
 
   $effect(() => {
     const r = range;
+    const a = filter;
     void app.usage.todayCost; // refresh when new turns are recorded
     void locale.ui; // the backend names the steps of the period (« 27/09 », “Sep 27”) in the interface's language
     clearTimeout(loadTimer);
-    loadTimer = setTimeout(
-      () =>
-        api
-          .stats(r)
-          .then((v) => {
-            view = v;
-            error = null;
-          })
-          .catch((e) => (error = String(e))),
-      50,
-    );
+    loadTimer = setTimeout(() => {
+      const n = ++asked;
+      api
+        .stats(r, a)
+        .then((v) => {
+          if (n !== asked) return;
+          view = v;
+          error = null;
+        })
+        .catch((e) => {
+          if (n === asked) error = String(e);
+        });
+    }, 50);
     writePref('statsRange', r);
   });
 
@@ -54,6 +75,10 @@
   function projectOf(key: string) {
     const p = app.projects.find((x) => x.id === key);
     return p ? { name: p.name, color: p.color } : { name: t('stats.closedProject'), color: 'var(--dim)' };
+  }
+
+  function accountLabel(id: string) {
+    return choices.find((c) => c.id === id)?.name ?? t('stats.account.removed', { id });
   }
 
   function total(b: Bucket) {
@@ -77,6 +102,17 @@
         >
       </div>
       <div style="flex:1"></div>
+      {#if several}
+        <select
+          class="field picker"
+          aria-label={t('stats.account.label')}
+          value={filter ?? ''}
+          onchange={(e) => (account = e.currentTarget.value)}
+        >
+          <option value="">{t('stats.account.all')}</option>
+          {#each choices as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
+        </select>
+      {/if}
       <div class="ranges">
         {#each RANGES as r (r)}
           <button class:on={range === r} onclick={() => (range = r)}>{t(`stats.range.${r}`)}</button>
@@ -231,6 +267,38 @@
         </section>
       </div>
 
+      {#if several}
+        <!-- The accounts side by side: the choice above does not narrow them, it marks its own line. -->
+        <section class="card">
+          <span class="ct" id="stats-accounts">{t('stats.byAccount.title')}</span>
+          {#if view.byAccount.length}
+            <table class="list" aria-labelledby="stats-accounts">
+              <thead>
+                <tr
+                  ><th class="w-name">{t('stats.byAccount.account')}</th><th class="num">{t('stats.byAccount.tokens')}</th><th class="num"
+                    >{t('common.cost')}</th
+                  ><th class="num">{t('stats.byAccount.turns')}</th><th class="num">{t('stats.byAccount.agents')}</th></tr
+                >
+              </thead>
+              <tbody>
+                {#each view.byAccount as a (a.account)}
+                  {@const name = accountLabel(a.account)}
+                  <tr class:on={a.account === filter} aria-current={a.account === filter ? 'true' : undefined}>
+                    <td class="cut strong" title={name}>{name}</td>
+                    <td class="num mono">{fTok(a.tokens)}</td>
+                    <td class="num mono">{fUsd(a.cost)}</td>
+                    <td class="num mono">{fInt(a.turns)}</td>
+                    <td class="num mono">{fInt(a.agents)}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          {:else}
+            <span class="none">{t('stats.noData')}</span>
+          {/if}
+        </section>
+      {/if}
+
       <section class="card">
         <span class="ct" id="stats-agents">{t('stats.byAgent.title')}</span>
         {#if view.byAgent.length}
@@ -340,6 +408,12 @@
   .s {
     font-size: 12.5px;
     color: var(--muted);
+  }
+  .picker {
+    height: 38px;
+    max-width: 220px;
+    background: var(--panel);
+    font-size: 13px;
   }
   .ranges {
     display: flex;
@@ -607,6 +681,10 @@
   }
   .list .strong {
     font-weight: 600;
+  }
+  /* The account the other views are for. */
+  .list tr.on .strong {
+    color: var(--accent);
   }
   .list .psw {
     display: inline-block;

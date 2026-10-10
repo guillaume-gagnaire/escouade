@@ -44,6 +44,14 @@ export default {
     periodCost: 'Coût sur la période',
     none: 'Aucun ticket sur la période.',
   },
+  // The accounts: the choice at the top (only with several), and « Par compte ».
+  account: {
+    label: 'Compte',
+    all: 'Tous les comptes',
+    /** An account the settings no longer list, whose turns remain; `{id}`: its id. */
+    removed: 'Compte supprimé ({id})',
+  },
+  byAccount: { title: 'Par compte', account: 'Compte', tokens: 'Tokens', turns: 'Tours', agents: 'Agents' },
   showAll: 'Tout voir',
   showLess: 'Réduire',
   shownOf: '{shown} sur {total}',

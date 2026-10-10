@@ -379,6 +379,9 @@ Ce qu’Escouade dit à Claude ou lui fait écrire suit « Langue des textes ré
 | Quotas par compte | Quota by account | le bouton de la barre d’état avec plusieurs comptes, qui ouvre le panneau des quotas de chaque compte |
 | en cours | current | le compte en cours, marqué dans le panneau des quotas |
 | au-delà du seuil de pause | past the pause threshold | un compte dont une fenêtre a passé « Pause au-delà du quota », dans le panneau des quotas |
+| Tous les comptes | All accounts | le choix en haut des statistiques (avec plusieurs comptes) : les totaux de tous les comptes, ou ceux d’un seul |
+| Par compte | By account | les statistiques des comptes côte à côte : « Tokens », « Coût », « Tours » → “Turns” (les réponses de Claude), « Agents » |
+| Compte supprimé (ancien) | Deleted account (ancien) | un compte que les réglages ne listent plus, dont les tours restent dans les statistiques ; l’identifiant entre parenthèses |
 
 ## M — mcp
 
