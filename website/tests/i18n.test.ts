@@ -69,6 +69,25 @@ describe('catalogs', () => {
     for (const [path, s] of enLeaves) expect(s, `en ${path}`).not.toMatch(/[«»]/);
   });
 
+  it('keep a non-breaking space inside the French guillemets, so that « Importer » never splits over two lines', () => {
+    for (const [path, s] of frLeaves) {
+      expect(s, `fr ${path}`).not.toMatch(/«(?!\u00a0)|(?<!\u00a0)»/);
+    }
+    expect(fr.features.items.integrations.text).toContain('«\u00a0Importer\u00a0»');
+    expect(fr.features.items.integrations.alt).toContain('«\u00a0Importer des tickets\u00a0»');
+  });
+
+  it('write the English with American spellings and the app’s English words', () => {
+    const said = [...enLeaves.values()].join('\n');
+    expect(said).not.toMatch(/\b(labell|colour|favour|behaviour|catalogue|licence\b)/i);
+    expect(said).not.toMatch(/macOS 11 and later/);
+    // The glossary of the app: « À tester » is “To review”, a ticket is approved, autopilot is one word.
+    expect(said).not.toMatch(/\bto test\b(?! it)|To test\b/);
+    expect(said).toContain('“To review”');
+    expect(said).not.toMatch(/\b(Validate|validate|validated|validating)\b/);
+    expect(said).not.toMatch(/\bauto-pilot\b|\bauto pilot\b/i);
+  });
+
   it('are found by language', () => {
     expect(CATALOGS.fr).toBe(fr);
     expect(CATALOGS.en).toBe(en);

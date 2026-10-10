@@ -28,7 +28,7 @@ export const en: Catalog = {
     lede: 'Escouade, the cockpit for your Claude Code agents: a Windows and macOS app to run several agents in parallel, with projects in tabs, a native chat, git, an editor, terminals, statistics, and a Kanban of tickets, written by you or imported from Jira, Trello or GitHub, that agents pick up and carry through to the end.',
     download: 'Download for Windows and macOS',
     github: 'View on GitHub',
-    meta: 'Version {version} · Windows 10 and 11, macOS 11 and later · Free and open source (MIT)',
+    meta: 'Version {version} · Windows 10 and 11, macOS 11 or later · Free and open source (MIT)',
     video: 'Watch the video',
   },
 
@@ -89,17 +89,17 @@ export const en: Catalog = {
       },
       tableau: {
         title: 'Tickets that agents pick up on their own',
-        text: 'Each project’s Kanban: to do, in progress, to test, done. Write a ticket with its acceptance criteria; in autopilot, agents pick it up, each in its own worktree with its own ports, and loop until every criterion is met.',
+        text: 'Each project’s Kanban: to do, in progress, to review, done. Write a ticket with its acceptance criteria; in autopilot, agents pick it up, each in its own worktree with its own ports, and loop until every criterion is met.',
         points: [
           'Autopilot, from 1 to 6 agents in parallel, paused near your quota limits',
           'Loop, criteria, progress and cost live on each card',
-          'Validate: tests, generated commit, merge, pull request or push; or send it back to the agent',
+          'Approve: tests, generated commit, merge, pull request or push; or send it back to the agent',
         ],
         alt: 'A project’s Kanban: two tickets in progress with their loop and criteria, and the finished tickets',
       },
       test: {
         title: 'Test each ticket in one click',
-        text: 'When a ticket moves to “To test”, “▶ Test” shows you the agent’s test plan, then prepares its worktree, starts its servers on their reserved ports, waits for them to answer and opens your browser straight on the feature that was built.',
+        text: 'When a ticket moves to “To review”, “▶ Test” shows you the agent’s test plan, then prepares its worktree, starts its servers on their reserved ports, waits for them to answer and opens your browser straight on the feature that was built.',
         points: [
           'The plan comes from the agent: you read it before it runs',
           'Logs stay in the Launch section, under its name',
@@ -109,11 +109,11 @@ export const en: Catalog = {
       },
       integrations: {
         title: 'Your Jira, Trello and GitHub tickets, in the Kanban',
-        text: 'Connect Jira, Trello or GitHub Issues and link a source to your project. “Import” searches and filters its tickets: tick them and they arrive in the Kanban with their acceptance criteria. Escouade then keeps their status up to date and comments on the original ticket when it is ready to test, then when it is done.',
+        text: 'Connect Jira, Trello or GitHub Issues and link a source to your project. “Import” searches and filters its tickets: tick them and they arrive in the Kanban with their acceptance criteria. Escouade then keeps their status up to date and comments on the original ticket when it is ready for review, then when it is done.',
         points: [
           'Acceptance criteria taken from the description or the checklist',
           'Status and comments synced column by column, and retried on failure',
-          'Automatic import, if you turn it on, of tickets labelled claude-ready',
+          'Automatic import, if you turn it on, of tickets labeled claude-ready',
         ],
         alt: 'The “Import tickets” window: three Jira tickets ticked, with their acceptance criteria detected',
       },
@@ -121,7 +121,7 @@ export const en: Catalog = {
         title: 'Launch your project in one click',
         text: 'Set up the commands that run your project (front end, API, worker…), each with its own shell and folder, or let Claude read the project and suggest them. Each command runs in its own terminal, with its live status.',
         points: [
-          'Start all, stop all, restart',
+          'Run all, stop all, restart',
           'A crash shows right away, with its exit code',
           'Stopping also kills what the command started',
         ],
@@ -129,7 +129,7 @@ export const en: Catalog = {
       },
       stats: {
         title: 'Tokens, cost, quotas: live',
-        text: 'The status bar tracks your 5-hour session quota, your weekly quota, when they reset, and the day’s cost, which climbs while Claude works. An agent stopped by its usage limit resumes on its own when the quota is back.',
+        text: 'The status bar tracks your quota for the 5-hour window, your weekly quota, when they reset, and the day’s cost, which climbs while Claude works. An agent stopped by its usage limit resumes on its own when the quota is back.',
         points: [
           'Input, cache and output tokens, by day, week or month',
           'Cost by project, by model, by agent and by ticket',
@@ -166,7 +166,7 @@ export const en: Catalog = {
     },
     {
       title: 'Automatic updates',
-      text: 'New versions, signed, download in the background and install without a window, when no agent is working.',
+      text: 'New versions are signed, download in the background and install without a window, when no agent is working.',
     },
     {
       title: 'From the keyboard',
@@ -217,11 +217,11 @@ export const en: Catalog = {
       },
       {
         q: 'Can autopilot use up my quota?',
-        a: 'You choose how many agents work in parallel (from 1 to 6), how many loops each ticket gets at most, and at what percentage of your quotas autopilot pauses. Nothing starts while an agent is waiting for its usage limit to end, and a ticket that reaches its last loop moves to “To test” with “Partial goal”.',
+        a: 'You choose how many agents work in parallel (from 1 to 6), how many loops each ticket gets at most, and at what percentage of your quotas autopilot pauses. Nothing starts while an agent is waiting for its usage limit to end, and a ticket that reaches its last loop moves to “To review” with “Partial goal”.',
       },
       {
         q: 'Do my .env files end up in commits?',
-        a: 'No. The project files that git ignores (.env* by default) are copied into each agent’s worktree so the app can run there; when you validate a ticket, Escouade refuses to commit, push or merge them.',
+        a: 'No. The project files that git ignores (.env* by default) are copied into each agent’s worktree so the app can run there; when you approve a ticket, Escouade refuses to commit, push or merge them.',
       },
       {
         q: 'How do updates work?',
@@ -243,7 +243,7 @@ export const en: Catalog = {
   notFound: { title: 'Page not found', text: 'There is nothing at this address.', home: 'Back to the home page' },
 
   demo: {
-    status: { ready: 'Ready', running: 'Running', question: 'Question', done: 'Done', totest: 'To test' },
+    status: { ready: 'Ready', running: 'Running', question: 'Question', done: 'Done', totest: 'To review' },
     agents: 'Agents',
     loop: 'loop {loop}/{max}',
     criteria: { one: '{count} of {total} criteria met', other: '{count} of {total} criteria met' },
@@ -255,7 +255,7 @@ export const en: Catalog = {
     pause: 'Pause the demonstration',
     caption: 'Animated demonstration · made-up data',
     description:
-      ': five Claude Code agents of the demo-api project work in parallel; one asks a question you can answer, and a ticket agent loops on its criteria until “To test”.',
+      ': five Claude Code agents of the demo-api project work in parallel; one asks a question you can answer, and a ticket agent loops on its criteria until “To review”.',
   },
 
   squad: {
@@ -265,7 +265,7 @@ export const en: Catalog = {
     results: {
       files: { one: '{count} file changed', other: '{count} files changed' },
       tests: { one: '{count} test passed', other: '{count} tests passed' },
-      met: 'Criteria met · ready to test',
+      met: 'Criteria met · ready for review',
     },
   },
 };

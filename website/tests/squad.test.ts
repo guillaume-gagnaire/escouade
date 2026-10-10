@@ -205,10 +205,10 @@ describe('squad demo in each language', () => {
     expect(asking(en)!.question).toEqual({ text: 'Run the whole e2e suite (38 tests)?', options: ['Yes', 'Auth only'] });
   });
 
-  it('names the finished runs and the tickets ready to test in English too', () => {
+  it('names the finished runs and the tickets ready for review in English too', () => {
     const results = (lang: 'fr' | 'en', answers: Answer[]) =>
       new Set(times(0, CYCLE, 1).flatMap((t) => story(lang, t, answers).agents.map((a) => a.result)));
-    expect(results('en', [])).toEqual(new Set([null, '2 files changed', '38 tests passed', 'Criteria met · ready to test']));
+    expect(results('en', [])).toEqual(new Set([null, '2 files changed', '38 tests passed', 'Criteria met · ready for review']));
     expect(results('en', [{ at: firstAsk + 0.5, option: 1 }])).toContain('12 tests passed');
     expect(results('fr', [])).toEqual(new Set([null, '2 fichiers modifiés', '38 tests passés', 'Critères atteints · à tester']));
   });

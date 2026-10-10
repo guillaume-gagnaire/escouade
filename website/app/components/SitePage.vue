@@ -3,7 +3,8 @@ import { CATALOGS, featuresFor } from '~/data/catalogs';
 import { LANGS } from '~/data/language';
 import { SITE, imageOf, pageUrl } from '~/data/site';
 
-// The whole page, in the language of its address.
+// The whole page, in the language of its address. A page never changes language (the other one is another
+// address), so these are read once.
 const { lang, text } = useLang();
 const features = featuresFor(lang.value);
 const { meta } = text.value;

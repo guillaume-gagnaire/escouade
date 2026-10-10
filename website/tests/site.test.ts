@@ -23,6 +23,8 @@ const PAGES: { lang: Lang; file: string; url: string; other: Lang }[] = [
 const SAYS = {
   fr: {
     autopilot: 'Pilote auto',
+    // A Trello board is still a « tableau »: only the Kanban has a name of its own.
+    board: /\b(le|un|du) tableau\b(?! Trello)/i,
     criteria: /critères d’acceptation/,
     status: /statut/,
     affiliation: 'non affilié à Anthropic',
@@ -30,6 +32,8 @@ const SAYS = {
   },
   en: {
     autopilot: 'Autopilot',
+    // A Trello board is still a “board”: only the Kanban has a name of its own.
+    board: /\b(the|a|your|each) board\b/i,
     criteria: /acceptance criteria/,
     status: /status/,
     affiliation: 'not affiliated with Anthropic',
@@ -56,6 +60,12 @@ describe('generated site', () => {
   it('generates one page per language, and keeps Jekyll away from them', () => {
     for (const p of PAGES) expect(existsSync(new URL(p.file, OUT)), p.file).toBe(true);
     expect(existsSync(new URL('.nojekyll', OUT))).toBe(true);
+  });
+
+  it('generates the page GitHub Pages shows for an unknown address', () => {
+    const page = new URL('404.html', OUT);
+    expect(existsSync(page)).toBe(true);
+    expect(readFileSync(page, 'utf8')).toContain('<div id="__nuxt">');
   });
 });
 
@@ -339,8 +349,8 @@ describe.each(PAGES)('generated site ($lang)', ({ lang, file, url, other }) => {
     expect(html).toContain('Kanban');
   });
 
-  it.runIf(lang === 'fr')('never calls the Kanban a « tableau », except for a Trello board', () => {
-    expect(html).not.toMatch(/\b(le|un|du) tableau\b(?! Trello)/i);
+  it('never calls the Kanban a board, except for a Trello board', () => {
+    expect(html).not.toMatch(says.board);
   });
 
   it('lets the visitor switch language with real links, and marks the language shown', () => {

@@ -99,23 +99,23 @@ export const fr: Catalog = {
       },
       test: {
         title: 'Teste chaque ticket en un clic',
-        text: 'Quand un ticket passe « À tester », « ▶ Tester » te montre la recette de l’agent, puis prépare son worktree, lance ses serveurs sur ses ports réservés, attend qu’ils répondent et ouvre ton navigateur directement sur la fonctionnalité développée.',
+        text: 'Quand un ticket passe « À tester », « ▶ Tester » te montre la recette de l’agent, puis prépare son worktree, lance ses serveurs sur ses ports réservés, attend qu’ils répondent et ouvre ton navigateur directement sur la fonctionnalité développée.',
         points: [
           'La recette vient de l’agent : tu la lis avant qu’elle tourne',
           'Les logs restent dans la section Lancement, sous son nom',
-          '« Préparer le lancement » pour tout agent à worktree',
+          '« Préparer le lancement » pour tout agent à worktree',
         ],
-        alt: 'La fenêtre « Tester DEM-6 » : préparation, serveurs prêts et adresse ouverte dans le navigateur',
+        alt: 'La fenêtre « Tester DEM-6 » : préparation, serveurs prêts et adresse ouverte dans le navigateur',
       },
       integrations: {
         title: 'Tes tickets Jira, Trello et GitHub, dans le Kanban',
-        text: 'Connecte Jira, Trello ou GitHub Issues et lie une source à ton projet. « Importer » cherche et filtre ses tickets : coche-les, ils arrivent dans le Kanban avec leurs critères d’acceptation. Escouade tient ensuite leur statut à jour et commente le ticket d’origine quand il est prêt à tester, puis terminé.',
+        text: 'Connecte Jira, Trello ou GitHub Issues et lie une source à ton projet. « Importer » cherche et filtre ses tickets : coche-les, ils arrivent dans le Kanban avec leurs critères d’acceptation. Escouade tient ensuite leur statut à jour et commente le ticket d’origine quand il est prêt à tester, puis terminé.',
         points: [
           'Critères d’acceptation repris de la description ou de la checklist',
           'Statut et commentaires synchronisés, colonne par colonne, et retentés en cas d’échec',
           'Import automatique, si tu l’actives, des tickets étiquetés claude-ready',
         ],
-        alt: 'La fenêtre « Importer des tickets » : trois tickets Jira cochés, avec leurs critères d’acceptation détectés',
+        alt: 'La fenêtre « Importer des tickets » : trois tickets Jira cochés, avec leurs critères d’acceptation détectés',
       },
       lancement: {
         title: 'Lance ton projet d’un clic',
@@ -217,7 +217,7 @@ export const fr: Catalog = {
       },
       {
         q: 'Le pilote auto peut-il épuiser mon quota ?',
-        a: 'Tu choisis combien d’agents travaillent en parallèle (de 1 à 6), combien de boucles chaque ticket a au plus, et à quel pourcentage de tes quotas le pilote auto se met en pause. Rien ne démarre tant qu’un agent attend la fin de sa limite d’usage, et un ticket arrivé à sa dernière boucle passe « À tester » avec « Objectif partiel ».',
+        a: 'Tu choisis combien d’agents travaillent en parallèle (de 1 à 6), combien de boucles chaque ticket a au plus, et à quel pourcentage de tes quotas le pilote auto se met en pause. Rien ne démarre tant qu’un agent attend la fin de sa limite d’usage, et un ticket arrivé à sa dernière boucle passe « À tester » avec « Objectif partiel ».',
       },
       {
         q: 'Mes fichiers .env partent-ils dans les commits ?',
@@ -255,7 +255,7 @@ export const fr: Catalog = {
     pause: 'Mettre la démonstration en pause',
     caption: 'Démonstration animée · données fictives',
     description:
-      ': cinq agents Claude Code du projet demo-api travaillent en parallèle ; l’un pose une question à laquelle tu peux répondre, un agent de ticket boucle sur ses critères jusqu’à « À tester ».',
+      ': cinq agents Claude Code du projet demo-api travaillent en parallèle ; l’un pose une question à laquelle tu peux répondre, un agent de ticket boucle sur ses critères jusqu’à « À tester ».',
   },
 
   squad: {
