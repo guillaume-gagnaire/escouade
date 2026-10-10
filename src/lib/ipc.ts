@@ -5,6 +5,7 @@ import type {
   Agent,
   Attachment,
   BoardSettings,
+  BranchInfo,
   CommitScope,
   Container,
   ConvItem,
@@ -86,6 +87,28 @@ export const api = {
   gitFetch: (projectId: string) => invoke<string>('git_fetch', { projectId }),
   gitPull: (projectId: string) => invoke<string>('git_pull', { projectId }),
   gitPush: (projectId: string) => invoke<string>('git_push', { projectId }),
+  /** The project's branches: the local ones (the folder's first), then the remote ones. */
+  branchList: (projectId: string) => invoke<BranchInfo[]>('branch_list', { projectId }),
+  /** Rejected with why `name` can't be a new branch (git's rules, a branch of that name already there). */
+  branchCheck: (projectId: string, name: string) => invoke<void>('branch_check', { projectId, name }),
+  /**
+   * Switches the project's folder to `name` (a remote branch "origin/x": the local one that tracks it, made if need be); the stash's name when
+   * `stash` put the uncommitted changes aside. Rejected with `DIRTY`, `IN_WORKTREE:<agent id>:<agent name>`, `AGENT_WORKING:<agent id>:<agent name>`.
+   */
+  branchSwitch: (projectId: string, name: string, stash = false) => invoke<string | null>('branch_switch', { projectId, name, stash }),
+  /** Creates `name` at `start` (a branch, a commit; HEAD when empty); `switchTo`: the folder goes there, rejected as `branchSwitch` is. */
+  branchCreate: (projectId: string, name: string, start: string, switchTo: boolean, stash = false) =>
+    invoke<string | null>('branch_create', { projectId, name, start, switch: switchTo, stash }),
+  /**
+   * Deletes a branch, its remote one too with `remote` (or a remote branch alone, "origin/x"). Rejected with `UNMERGED:<n>` (`n` commits in no
+   * other branch, maybe 0) unless `force`, `IN_WORKTREE:<agent id>:<agent name>`, or in words for the folder's own branch.
+   */
+  branchDelete: (projectId: string, name: string, remote: boolean, force = false) =>
+    invoke<void>('branch_delete', { projectId, name, remote, force }),
+  /** The local branches already in the project's base, but the base, the folder's branch and the worktrees' ones. */
+  branchesMerged: (projectId: string) => invoke<string[]>('branches_merged', { projectId }),
+  /** The diff from `a` to `b` (`git diff a b`), two branches or commits. */
+  gitDiffRefs: (projectId: string, a: string, b: string) => invoke<string>('git_diff_refs', { projectId, a, b }),
   setRemoteControl: (id: string, enabled: boolean) => invoke<void>('set_remote_control', { id, enabled }),
   stats: (range: string) => invoke<StatsView>('stats', { range }),
   refreshUsage: () => invoke<void>('refresh_usage'),

@@ -540,6 +540,29 @@ export interface GitLog {
   head: string | null;
 }
 
+/** A branch of the project's repository (`branchList`): a local one, or a remote one named with its remote ("origin/feat"). */
+export interface BranchInfo {
+  name: string;
+  remote: boolean;
+  /** Checked out in the project's folder. */
+  current: boolean;
+  /** The remote branch a local one tracks ("origin/feat"), null when it tracks none. */
+  upstream: string | null;
+  /** That upstream no longer exists on the remote (as of the last fetch). */
+  upstreamGone: boolean;
+  /** Commits to push / to pull, against the upstream as last fetched. */
+  ahead: number;
+  behind: number;
+  /** The folder of the worktree that has it checked out, the project's own folder included. */
+  worktree: string | null;
+  /** A remote one: the local branch that tracks it (switching to the remote one goes there). */
+  trackedBy: string | null;
+  /** The id of the agent whose worktree holds it: neither switched to nor deleted (« utilisée par l'agent X »). */
+  agent: string | null;
+  /** When its latest commit was made (ms epoch). */
+  lastCommitAt: number;
+}
+
 export interface FileChange {
   path: string;
   status: 'M' | 'A' | 'D';
