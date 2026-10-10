@@ -140,7 +140,7 @@ fn ticket_not_found() -> anyhow::Error {
     anyhow!(tr!("ticket introuvable", "ticket not found"))
 }
 
-fn title_missing() -> anyhow::Error {
+pub(crate) fn title_missing() -> anyhow::Error {
     anyhow!(tr!(
         "Un ticket a besoin d'un titre.",
         "A ticket needs a title."
@@ -407,6 +407,69 @@ impl<R: Runtime> Core<R> {
             t.rank = first - 1;
             Ok(())
         })?;
+        self.schedule();
+        Ok(())
+    }
+
+    /// Puts a ticket « À faire » at the top or the bottom of its project's column, or just before
+    /// another of them (`board::new_ranks`): only a ticket « À faire » has a place to change.
+    pub fn ticket_move(self: &Arc<Self>, id: &str, to: board::MoveTo<'_>) -> Result<()> {
+        let changed: Vec<Ticket> = {
+            let mut tickets = self.tickets.write();
+            let me = tickets
+                .iter()
+                .find(|t| t.id == id)
+                .ok_or_else(ticket_not_found)?;
+            if me.column != Column::Todo {
+                bail!(tr!(
+                    "Seul un ticket « À faire » se déplace.",
+                    "Only a ticket in “To do” can be moved."
+                ));
+            }
+            let project_id = me.project_id.clone();
+            if let board::MoveTo::Before(target) = to {
+                if target == id {
+                    bail!(tr!(
+                        "Un ticket ne se place pas avant lui-même.",
+                        "A ticket cannot be put before itself."
+                    ));
+                }
+                let target = tickets
+                    .iter()
+                    .find(|t| t.id == target)
+                    .ok_or_else(ticket_not_found)?;
+                if target.project_id != project_id {
+                    bail!(tr!(
+                        "{key} est dans un autre projet.",
+                        "{key} is in another project.",
+                        key = target.key
+                    ));
+                }
+                if target.column != Column::Todo {
+                    bail!(tr!(
+                        "{key} n’est pas « À faire » : un ticket ne se place qu’avant un ticket « À faire ».",
+                        "{key} isn’t in “To do”: a ticket can only be put before a ticket in “To do”.",
+                        key = target.key
+                    ));
+                }
+            }
+            let ranks = board::new_ranks(&tickets, id, to);
+            let mut changed = Vec::with_capacity(ranks.len());
+            for (ticket_id, rank) in ranks {
+                if let Some(t) = tickets.iter_mut().find(|t| t.id == ticket_id) {
+                    t.rank = rank;
+                    changed.push(t.clone());
+                }
+            }
+            changed
+        };
+        if changed.is_empty() {
+            return Ok(());
+        }
+        for ticket in changed {
+            self.hub.emit(UiEvent::Ticket { ticket });
+        }
+        self.request_save();
         self.schedule();
         Ok(())
     }
@@ -806,6 +869,7 @@ impl<R: Runtime> Core<R> {
                     select: false,
                     copy_of: None,
                     account: None,
+                    isolated: None,
                 },
             )
             .await;

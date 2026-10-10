@@ -25,7 +25,7 @@ pub(crate) const LAST_MESSAGE_START: usize = 500;
 pub(crate) const TOUCHED_MAX: usize = 100;
 
 /// `v` as the model reads it.
-fn json<T: Serialize>(v: &T) -> Result<String, ToolError> {
+pub(super) fn json<T: Serialize>(v: &T) -> Result<String, ToolError> {
     serde_json::to_string(v).map_err(|e| ToolError::Failed(e.to_string()))
 }
 
@@ -229,6 +229,18 @@ pub(super) fn tickets<R: Runtime>(
         })
         .collect();
     json(&rows)
+}
+
+/// The keys of the tickets « À faire » of the project, in the order the board shows them (the one
+/// the autopilot starts them in).
+pub(super) fn todo_keys<R: Runtime>(core: &Core<R>, project_id: &str) -> Vec<String> {
+    let all = core.tickets.read().clone();
+    let mut list: Vec<&Ticket> = all
+        .iter()
+        .filter(|t| t.project_id == project_id && t.column == Column::Todo)
+        .collect();
+    kanban_order(&mut list);
+    list.into_iter().map(|t| t.key.clone()).collect()
 }
 
 /// The board's order, as the window shows it: the columns from « À faire » to « Terminé »,

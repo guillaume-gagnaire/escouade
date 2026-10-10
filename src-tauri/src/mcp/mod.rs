@@ -6,6 +6,9 @@
 //! and in the config file its process is started with, both gone when it stops). It runs while
 //! the settings want it (`Core::sync_mcp`) and stops with the app.
 
+mod act;
+#[cfg(test)]
+mod act_tests;
 pub(crate) mod activity;
 #[cfg(test)]
 mod agents_tests;
@@ -159,6 +162,9 @@ pub struct McpServer<R: Runtime> {
     /// One write or removal of an agent's config at a time, with its token: a process that ends
     /// never removes the file the agent's next process is about to read (`release_agent`).
     agent_files: Mutex<()>,
+    /// One `create_agent` at a time, from counting the project's agents at work to sending the new
+    /// one its message: two calls at once do not both find a place free.
+    acting: tokio::sync::Mutex<()>,
     pub activity: activity::Activity,
     /// What a connection may take, read at each start (tests make them small).
     limits: Mutex<http::Limits>,
@@ -173,6 +179,7 @@ impl<R: Runtime> McpServer<R> {
             error: Mutex::new(None),
             tokens: Tokens::default(),
             agent_files: Mutex::new(()),
+            acting: tokio::sync::Mutex::new(()),
             activity: activity::Activity::default(),
             limits: Mutex::new(http::Limits::default()),
         }

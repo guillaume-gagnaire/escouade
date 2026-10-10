@@ -15,9 +15,30 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 use tauri::test::{mock_app, MockRuntime};
 
-/// The tools the server offers, sorted: those that read (M2). M4 adds its own here, knowingly.
-/// None may accept a permission, answer for the user, run a command or the tests, merge or delete.
+/// The tools the server offers, sorted: those that read (`READING`, M2), those that act
+/// (`ACTING`, M4) and those only an agent of Escouade may call (`AGENTS_ONLY`, M4). A tool is added
+/// here knowingly. None may accept a permission, answer for the user, run a command or the tests,
+/// merge or delete.
 pub(super) const EXPOSED: &[&str] = &[
+    "create_agent",
+    "create_ticket",
+    "get_agent_summary",
+    "get_ticket",
+    "get_usage",
+    "list_agents",
+    "list_projects",
+    "list_tickets",
+    "move_ticket",
+    "report_progress",
+    "send_message",
+    "split_ticket",
+    "start_ticket",
+    "stop_agent",
+    "update_ticket",
+];
+
+/// Those of `EXPOSED` that only read.
+pub(super) const READING: &[&str] = &[
     "get_agent_summary",
     "get_ticket",
     "get_usage",
@@ -25,6 +46,20 @@ pub(super) const EXPOSED: &[&str] = &[
     "list_projects",
     "list_tickets",
 ];
+
+/// Those that act, under the guardrails of the window and the autopilot.
+pub(super) const ACTING: &[&str] = &[
+    "create_agent",
+    "create_ticket",
+    "move_ticket",
+    "send_message",
+    "start_ticket",
+    "stop_agent",
+    "update_ticket",
+];
+
+/// Those an external Claude is refused.
+pub(super) const AGENTS_ONLY: &[&str] = &["report_progress", "split_ticket"];
 
 /// The test's own tool, beside them in tests (`tools::Tools::test_router`).
 pub(super) const TEST_TOOL: &str = "whoami";

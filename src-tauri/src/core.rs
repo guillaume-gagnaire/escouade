@@ -291,6 +291,9 @@ pub struct AgentOptions {
     pub copy_of: Option<CopyOf>,
     /// The Claude account it runs on (an `Account`'s id); None: Principal.
     pub account: Option<String>,
+    /// A worktree of its own (true) or the project's folder (false), whatever the project does by
+    /// default; None: as the project does. `worktree` and `copy_of` name theirs and win.
+    pub isolated: Option<bool>,
 }
 
 /// What a copy takes of its original, read while no turn of the original ran.
@@ -2284,7 +2287,7 @@ impl<R: Runtime> Core<R> {
                 }
                 None => None,
             },
-            (None, None) if project.worktree_per_agent => {
+            (None, None) if o.isolated.unwrap_or(project.worktree_per_agent) => {
                 Some(git::worktree_add(&project.path, &name).await)
             }
             (None, None) => None,
