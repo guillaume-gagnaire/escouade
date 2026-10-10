@@ -1,6 +1,7 @@
 //! Integrated terminals: real pseudo-consoles (ConPTY on Windows, a pty on macOS) streamed to
 //! xterm.js.
 
+use crate::i18n::{self, Lang};
 use crate::job::Job;
 use crate::model::{now_ms, Settings};
 use anyhow::{anyhow, Context, Result};
@@ -243,6 +244,20 @@ pub(crate) fn zsh_command_args(command: &str) -> [&str; 5] {
     ["-l", "-i", "+m", "-c", command]
 }
 
+/// Refused: the folder `sub` a launch command names is not in the project.
+fn missing_folder(lang: Lang, sub: &str) -> String {
+    tr_in!(
+        lang,
+        "Le dossier « {sub} » n'existe pas dans le projet",
+        "The folder “{sub}” doesn’t exist in the project"
+    )
+}
+
+/// Refused: the terminal written to or resized is gone (its shell ended, the tab closed).
+fn closed(lang: Lang) -> anyhow::Error {
+    anyhow!(tr_in!(lang, "terminal fermé", "terminal closed"))
+}
+
 /// Working folder of a launch command: the project's, or one of its folders.
 pub fn run_cwd(project: &str, sub: &str) -> Result<String> {
     let sub = sub.trim();
@@ -251,7 +266,7 @@ pub fn run_cwd(project: &str, sub: &str) -> Result<String> {
     }
     let dir = Path::new(project).join(sub);
     if !dir.is_dir() {
-        anyhow::bail!("Le dossier « {sub} » n'existe pas dans le projet");
+        anyhow::bail!(missing_folder(i18n::ui(), sub));
     }
     Ok(dir.to_string_lossy().into_owned())
 }
@@ -383,7 +398,7 @@ impl PtyManager {
             .slave
             .spawn_command(cmd)
             .map_err(|e| anyhow!("{e}"))
-            .context("lancement du shell")?;
+            .with_context(|| tr!("lancement du shell", "starting the shell"))?;
         drop(pair.slave);
         let killer = child.clone_killer();
         let job = command.and_then(|_| Job::for_pty(child.as_ref()));
@@ -431,7 +446,7 @@ impl PtyManager {
 
     pub fn write(&self, id: &str, data: &[u8]) -> Result<()> {
         let mut terms = self.terms.lock();
-        let t = terms.get_mut(id).ok_or_else(|| anyhow!("terminal fermé"))?;
+        let t = terms.get_mut(id).ok_or_else(|| closed(i18n::ui()))?;
         t.io_at.store(now_ms(), Ordering::Release);
         t.writer.write_all(data)?;
         t.writer.flush()?;
@@ -440,7 +455,7 @@ impl PtyManager {
 
     pub fn resize(&self, id: &str, cols: u16, rows: u16) -> Result<()> {
         let terms = self.terms.lock();
-        let t = terms.get(id).ok_or_else(|| anyhow!("terminal fermé"))?;
+        let t = terms.get(id).ok_or_else(|| closed(i18n::ui()))?;
         t.master
             .resize(PtySize {
                 rows: rows.max(2),
@@ -1181,6 +1196,16 @@ mod windows_powershell_tests {
 #[cfg(test)]
 mod run_cwd_tests {
     use super::*;
+
+    #[test]
+    fn a_missing_folder_and_a_closed_terminal_read_in_english() {
+        use crate::i18n::Lang::En;
+        assert_eq!(
+            missing_folder(En, "api"),
+            "The folder “api” doesn’t exist in the project"
+        );
+        assert_eq!(closed(En).to_string(), "terminal closed");
+    }
 
     #[test]
     fn a_launch_command_runs_in_the_project_or_one_of_its_folders() {

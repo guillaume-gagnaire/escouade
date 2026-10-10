@@ -4,12 +4,22 @@
 
 use crate::claude::truncate;
 use crate::core::{slugify, RESUME_MARGIN_MS};
+use crate::i18n::{self, Lang};
 use crate::model::*;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 
-/// A ticket's criteria when none was given.
-pub const DEFAULT_CRITERIA: [&str; 2] = ["Implémentation conforme au ticket", "Tests verts"];
+/// A ticket's criteria when none was given, in `lang`: they stay in the language they were made in.
+pub fn default_criteria(lang: Lang) -> [String; 2] {
+    [
+        tr_in!(
+            lang,
+            "Implémentation conforme au ticket",
+            "Implementation matches the ticket"
+        ),
+        tr_in!(lang, "Tests verts", "Tests pass"),
+    ]
+}
 /// Sent once when a turn ended without its report.
 pub const REMINDER: &str = "Termine par le bilan des critères (bloc escouade).";
 const FENCE: &str = "```escouade";
@@ -58,7 +68,7 @@ pub fn criteria_from(lines: &[String]) -> Vec<Criterion> {
         .filter(|l| !l.is_empty())
         .collect();
     if texts.is_empty() {
-        texts = DEFAULT_CRITERIA.iter().map(|s| s.to_string()).collect();
+        texts = default_criteria(i18n::ui()).into();
     }
     texts
         .into_iter()
@@ -204,8 +214,27 @@ pub(crate) fn first_line(e: &str) -> String {
         .lines()
         .map(str::trim)
         .find(|l| !l.is_empty())
-        .unwrap_or("erreur inconnue");
-    truncate(line, 200)
+        .map(str::to_string)
+        .unwrap_or_else(|| tr!("erreur inconnue", "unknown error"));
+    truncate(&line, 200)
+}
+
+/// Why a ticket is blocked, as its card shows it (kept in the language it was written in).
+pub(crate) fn interrupted(lang: Lang) -> String {
+    tr_in!(lang, "Interrompu", "Interrupted")
+}
+
+/// Blocked by an error: `why` is its first line.
+pub(crate) fn error_blocked(lang: Lang, why: &str) -> String {
+    tr_in!(lang, "Erreur : {why}", "Error: {why}")
+}
+
+pub(crate) fn report_missing(lang: Lang) -> String {
+    tr_in!(
+        lang,
+        "Bilan des critères manquant",
+        "Criteria report missing"
+    )
 }
 
 /// What the end of its agent's turn does to a ticket "En cours" (nothing to any other).
@@ -227,13 +256,13 @@ pub fn turn_end(t: &mut Ticket, end: &TurnEnd, report: Option<&Report>, now: i64
         // reminded again instead of blocking at once.
         TurnEnd::Interrupted => {
             t.reminded = false;
-            t.blocked = Some("Interrompu".into());
+            t.blocked = Some(interrupted(i18n::ui()));
             next.blocked = true;
         }
         TurnEnd::Limited => {}
         TurnEnd::Error(e) => {
             t.reminded = false;
-            t.blocked = Some(format!("Erreur : {}", first_line(e)));
+            t.blocked = Some(error_blocked(i18n::ui(), &first_line(e)));
             next.blocked = true;
         }
         TurnEnd::Finished(_) => match report.and_then(|r| r.criteria.as_ref()) {
@@ -243,7 +272,7 @@ pub fn turn_end(t: &mut Ticket, end: &TurnEnd, report: Option<&Report>, now: i64
             }
             None => {
                 t.reminded = false;
-                t.blocked = Some("Bilan des critères manquant".into());
+                t.blocked = Some(report_missing(i18n::ui()));
                 next.blocked = true;
             }
             Some(reported) => {
@@ -327,7 +356,7 @@ pub fn after_of(tickets: &[Ticket], project_id: &str, id: &str, wanted: &[String
 
 /// Why ticket `id` cannot come after `after`: one of them already waits for it, directly or
 /// through others, and neither would ever start by itself. None when none does.
-pub fn cycle_refusal(tickets: &[Ticket], id: &str, after: &[String]) -> Option<String> {
+pub fn cycle_refusal(lang: Lang, tickets: &[Ticket], id: &str, after: &[String]) -> Option<String> {
     let by_id: HashMap<&str, &Ticket> = tickets.iter().map(|t| (t.id.as_str(), t)).collect();
     let me = by_id.get(id)?;
     after.iter().find_map(|first| {
@@ -338,9 +367,12 @@ pub fn cycle_refusal(tickets: &[Ticket], id: &str, after: &[String]) -> Option<S
         let mut next: Vec<&str> = first.after.iter().map(String::as_str).collect();
         while let Some(x) = next.pop() {
             if x == id {
-                return Some(format!(
-                    "{} attend déjà {} (directement ou non).",
-                    first.key, me.key
+                return Some(tr_in!(
+                    lang,
+                    "{first} attend déjà {me} (directement ou non).",
+                    "{first} already waits for {me} (directly or not).",
+                    first = first.key,
+                    me = me.key
                 ));
             }
             if seen.insert(x) {
@@ -447,24 +479,33 @@ pub fn autopilot_pause(
 
 /// The refusal of a first ticket on a detached HEAD: there is no branch to start the tickets from
 /// (nor to merge them into) until one is chosen.
-pub const NO_BRANCH: &str =
-    "Le projet n'est sur aucune branche : choisis la branche cible dans les réglages du Kanban.";
+pub fn no_branch(lang: Lang) -> String {
+    tr_in!(
+        lang,
+        "Le projet n'est sur aucune branche : choisis la branche cible dans les réglages du Kanban.",
+        "The project isn’t on any branch: choose the target branch in the Kanban settings."
+    )
+}
 
 /// Why no ticket starts from `target`, if none can: no branch at all (a board saved without one,
 /// on a detached HEAD), a branch without any commit yet (a new repository: its first commit makes
 /// it), or one that is gone.
-pub fn target_issue(target: &str, exists: bool, unborn: bool) -> Option<String> {
+pub fn target_issue(lang: Lang, target: &str, exists: bool, unborn: bool) -> Option<String> {
     if target.is_empty() {
-        Some(NO_BRANCH.to_string())
+        Some(no_branch(lang))
     } else if exists {
         None
     } else if unborn {
-        Some(format!(
-            "{target} n'a encore aucun commit — aucun ticket ne démarre"
+        Some(tr_in!(
+            lang,
+            "{target} n'a encore aucun commit — aucun ticket ne démarre",
+            "{target} has no commit yet — no tickets will start"
         ))
     } else {
-        Some(format!(
-            "Branche cible {target} introuvable — aucun ticket ne démarre"
+        Some(tr_in!(
+            lang,
+            "Branche cible {target} introuvable — aucun ticket ne démarre",
+            "Target branch {target} not found — no tickets will start"
         ))
     }
 }
@@ -720,25 +761,32 @@ pub fn commit_from_answer(raw: &str, key: &str) -> Option<String> {
 /// Why a validation stops on files copied from the project that the ticket's branch carries:
 /// those in its tree (`in_tree`) first, else those only in its history, so that the user knows
 /// what to fix. None when there are none.
-pub fn copied_refusal(in_tree: &[String], in_history: &[String]) -> Option<String> {
-    let (files, singular, plural) = if !in_tree.is_empty() {
-        (
-            in_tree,
-            "est commité dans la branche",
-            "sont commités dans la branche",
+pub fn copied_refusal(lang: Lang, in_tree: &[String], in_history: &[String]) -> Option<String> {
+    let in_branch = !in_tree.is_empty();
+    let files = if in_branch { in_tree } else { in_history };
+    if files.is_empty() {
+        return None;
+    }
+    let (n, list) = (files.len(), files.join(", "));
+    Some(if in_branch {
+        tr_n_in!(
+            lang,
+            n,
+            "{list} copié du projet est commité dans la branche",
+            "{list} copiés du projet sont commités dans la branche",
+            "{list}, copied from the project, is committed in the branch",
+            "{list}, copied from the project, are committed in the branch"
         )
     } else {
-        (
-            in_history,
-            "est dans l'historique de la branche",
-            "sont dans l'historique de la branche",
+        tr_n_in!(
+            lang,
+            n,
+            "{list} copié du projet est dans l'historique de la branche",
+            "{list} copiés du projet sont dans l'historique de la branche",
+            "{list}, copied from the project, is in the branch’s history",
+            "{list}, copied from the project, are in the branch’s history"
         )
-    };
-    match files {
-        [] => None,
-        [one] => Some(format!("{one} copié du projet {singular}")),
-        many => Some(format!("{} copiés du projet {plural}", many.join(", "))),
-    }
+    })
 }
 
 /// When Haiku gave nothing usable.
@@ -761,8 +809,15 @@ fn strategy_label(strategy: &str) -> &'static str {
     }
 }
 
-pub fn merged_outcome(target: &str, strategy: &str) -> String {
-    format!("⤵ Mergé dans {target} · {}", strategy_label(strategy))
+// What became of a ticket approved, on its card: written once, in the language of that moment.
+
+pub fn merged_outcome(lang: Lang, target: &str, strategy: &str) -> String {
+    let how = strategy_label(strategy);
+    tr_in!(
+        lang,
+        "⤵ Mergé dans {target} · {how}",
+        "⤵ Merged into {target} · {how}"
+    )
 }
 
 pub fn pr_outcome(number: u32, target: &str) -> String {
@@ -770,26 +825,40 @@ pub fn pr_outcome(number: u32, target: &str) -> String {
 }
 
 /// Pushed to GitHub without `gh`: the PR is finished in the browser.
-pub fn pushed_for_pr_outcome(branch: &str) -> String {
-    format!("⇡ {branch} poussée · PR à finaliser")
+pub fn pushed_for_pr_outcome(lang: Lang, branch: &str) -> String {
+    tr_in!(
+        lang,
+        "⇡ {branch} poussée · PR à finaliser",
+        "⇡ {branch} pushed · PR to finish"
+    )
 }
 
 /// Pushed to another host than GitHub.
-pub fn pushed_elsewhere_outcome(branch: &str) -> String {
-    format!("⇡ {branch} poussée · PR à ouvrir sur ton hébergeur")
+pub fn pushed_elsewhere_outcome(lang: Lang, branch: &str) -> String {
+    tr_in!(
+        lang,
+        "⇡ {branch} poussée · PR à ouvrir sur ton hébergeur",
+        "⇡ {branch} pushed · PR to open on your host"
+    )
 }
 
-pub fn pushed_outcome(branch: &str) -> String {
-    format!("⇡ Poussé sur {branch}")
+pub fn pushed_outcome(lang: Lang, branch: &str) -> String {
+    tr_in!(lang, "⇡ Poussé sur {branch}", "⇡ Pushed to {branch}")
 }
 
-pub const KEPT_OUTCOME: &str = "◇ Laissé dans le worktree";
+pub fn kept_outcome(lang: Lang) -> String {
+    tr_in!(lang, "◇ Laissé dans le worktree", "◇ Left in the worktree")
+}
 
 /// Validated with nothing to merge, propose or push: its branch brings no change.
-pub const NOTHING_OUTCOME: &str = "∅ Aucune modification";
+pub fn nothing_outcome(lang: Lang) -> String {
+    tr_in!(lang, "∅ Aucune modification", "∅ No changes")
+}
 
 /// Added to a merge's outcome when its worktree and branch could not be removed after it.
-pub const WORKTREE_KEPT: &str = " · worktree gardé";
+pub fn worktree_kept(lang: Lang) -> String {
+    tr_in!(lang, " · worktree gardé", " · worktree kept")
+}
 
 // ---------- GitHub ----------
 
@@ -1062,7 +1131,10 @@ mod tests {
             texts(criteria_from(&["  a ".into(), "".into(), "b".into()])),
             ["a", "b"]
         );
-        assert_eq!(texts(criteria_from(&[])), DEFAULT_CRITERIA);
+        assert_eq!(
+            texts(criteria_from(&[])),
+            ["Implémentation conforme au ticket", "Tests verts"]
+        );
         assert_eq!(
             (max_loops(3), max_loops(8), max_loops(0), max_loops(7)),
             (3, 8, 5, 5)
@@ -1413,7 +1485,7 @@ mod tests {
         ];
         let refusal = |after: &[&str]| {
             let after: Vec<String> = after.iter().map(|a| a.to_string()).collect();
-            cycle_refusal(&list, "t5", &after)
+            cycle_refusal(Lang::Fr, &list, "t5", &after)
         };
         // Through DEM-4, then directly.
         assert_eq!(
@@ -1428,7 +1500,7 @@ mod tests {
         assert_eq!(refusal(&[]), None);
         // DEM-3 after DEM-5 as well is no loop: it waits for it already.
         let after = vec!["t5".to_string(), "t4".to_string()];
-        assert_eq!(cycle_refusal(&list, "t3", &after), None);
+        assert_eq!(cycle_refusal(Lang::Fr, &list, "t3", &after), None);
     }
 
     fn window(pct: f64, resets_at: Option<i64>) -> Option<RateWindow> {
@@ -1574,16 +1646,19 @@ mod tests {
 
     #[test]
     fn a_target_that_cannot_start_a_ticket_says_why() {
-        assert_eq!(target_issue("main", true, false), None);
+        assert_eq!(target_issue(Lang::Fr, "main", true, false), None);
         assert_eq!(
-            target_issue("main", false, true).as_deref(),
+            target_issue(Lang::Fr, "main", false, true).as_deref(),
             Some("main n'a encore aucun commit — aucun ticket ne démarre")
         );
         assert_eq!(
-            target_issue("release", false, false).as_deref(),
+            target_issue(Lang::Fr, "release", false, false).as_deref(),
             Some("Branche cible release introuvable — aucun ticket ne démarre")
         );
-        assert_eq!(target_issue("", false, false).as_deref(), Some(NO_BRANCH));
+        assert_eq!(
+            target_issue(Lang::Fr, "", false, false),
+            Some(no_branch(Lang::Fr))
+        );
     }
 
     #[test]
@@ -2253,22 +2328,107 @@ mod tests {
     #[test]
     fn a_copied_file_in_the_branch_is_told_apart_from_one_only_in_its_history() {
         let s = |l: &[&str]| l.iter().map(|x| x.to_string()).collect::<Vec<_>>();
-        assert_eq!(copied_refusal(&s(&[]), &s(&[])), None);
+        assert_eq!(copied_refusal(Lang::Fr, &s(&[]), &s(&[])), None);
         assert_eq!(
-            copied_refusal(&s(&[".env"]), &s(&[".env"])).as_deref(),
+            copied_refusal(Lang::Fr, &s(&[".env"]), &s(&[".env"])).as_deref(),
             Some(".env copié du projet est commité dans la branche")
         );
         assert_eq!(
-            copied_refusal(&s(&[".env", "web/.env"]), &s(&[".env.local"])).as_deref(),
+            copied_refusal(Lang::Fr, &s(&[".env", "web/.env"]), &s(&[".env.local"])).as_deref(),
             Some(".env, web/.env copiés du projet sont commités dans la branche")
         );
         assert_eq!(
-            copied_refusal(&s(&[]), &s(&[".env"])).as_deref(),
+            copied_refusal(Lang::Fr, &s(&[]), &s(&[".env"])).as_deref(),
             Some(".env copié du projet est dans l'historique de la branche")
         );
         assert_eq!(
-            copied_refusal(&s(&[]), &s(&[".env", ".env.local"])).as_deref(),
+            copied_refusal(Lang::Fr, &s(&[]), &s(&[".env", ".env.local"])).as_deref(),
             Some(".env, .env.local copiés du projet sont dans l'historique de la branche")
+        );
+    }
+
+    #[test]
+    fn says_in_english_why_a_board_or_a_ticket_stops_and_what_became_of_a_ticket() {
+        use crate::i18n::Lang::En;
+        let s = |l: &[&str]| l.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        assert_eq!(
+            default_criteria(En),
+            ["Implementation matches the ticket", "Tests pass"]
+        );
+        // What the board says when no ticket starts (`BoardIssue`).
+        assert_eq!(
+            target_issue(En, "main", false, true).as_deref(),
+            Some("main has no commit yet — no tickets will start")
+        );
+        assert_eq!(
+            target_issue(En, "release", false, false).as_deref(),
+            Some("Target branch release not found — no tickets will start")
+        );
+        assert_eq!(
+            target_issue(En, "", false, false).as_deref(),
+            Some(
+                "The project isn’t on any branch: choose the target branch in the Kanban settings."
+            )
+        );
+        // Why a ticket is blocked.
+        assert_eq!(
+            [
+                interrupted(En),
+                error_blocked(En, "boom"),
+                report_missing(En)
+            ],
+            ["Interrupted", "Error: boom", "Criteria report missing"]
+        );
+        let list = vec![
+            Ticket {
+                key: "DEM-3".into(),
+                after: s(&["t5"]),
+                ..todo("t3", 1)
+            },
+            Ticket {
+                key: "DEM-5".into(),
+                ..todo("t5", 1)
+            },
+        ];
+        assert_eq!(
+            cycle_refusal(En, &list, "t5", &s(&["t3"])).as_deref(),
+            Some("DEM-3 already waits for DEM-5 (directly or not).")
+        );
+        assert_eq!(
+            [
+                copied_refusal(En, &s(&[".env"]), &s(&[])),
+                copied_refusal(En, &s(&[".env", "web/.env"]), &s(&[])),
+                copied_refusal(En, &s(&[]), &s(&[".env"])),
+                copied_refusal(En, &s(&[]), &s(&[".env", ".env.local"])),
+            ]
+            .map(Option::unwrap_or_default),
+            [
+                ".env, copied from the project, is committed in the branch",
+                ".env, web/.env, copied from the project, are committed in the branch",
+                ".env, copied from the project, is in the branch’s history",
+                ".env, .env.local, copied from the project, are in the branch’s history",
+            ]
+        );
+        // What became of a ticket approved.
+        assert_eq!(
+            [
+                merged_outcome(En, "main", "squash"),
+                pushed_for_pr_outcome(En, "ticket/a"),
+                pushed_elsewhere_outcome(En, "ticket/a"),
+                pushed_outcome(En, "ticket/a"),
+                kept_outcome(En),
+                nothing_outcome(En),
+                worktree_kept(En),
+            ],
+            [
+                "⤵ Merged into main · squash",
+                "⇡ ticket/a pushed · PR to finish",
+                "⇡ ticket/a pushed · PR to open on your host",
+                "⇡ Pushed to ticket/a",
+                "◇ Left in the worktree",
+                "∅ No changes",
+                " · worktree kept",
+            ]
         );
     }
 
@@ -2290,31 +2450,31 @@ mod tests {
     #[test]
     fn outcomes_say_where_the_work_went() {
         assert_eq!(
-            merged_outcome("main", "squash"),
+            merged_outcome(Lang::Fr, "main", "squash"),
             "⤵ Mergé dans main · squash"
         );
         assert_eq!(
-            merged_outcome("release", "merge"),
+            merged_outcome(Lang::Fr, "release", "merge"),
             "⤵ Mergé dans release · merge commit"
         );
         assert_eq!(
-            merged_outcome("main", "rebase"),
+            merged_outcome(Lang::Fr, "main", "rebase"),
             "⤵ Mergé dans main · rebase"
         );
         assert_eq!(pr_outcome(12, "main"), "⇡ PR #12 → main");
         assert_eq!(
-            pushed_for_pr_outcome("ticket/atl-42"),
+            pushed_for_pr_outcome(Lang::Fr, "ticket/atl-42"),
             "⇡ ticket/atl-42 poussée · PR à finaliser"
         );
         assert_eq!(
-            pushed_elsewhere_outcome("ticket/atl-42"),
+            pushed_elsewhere_outcome(Lang::Fr, "ticket/atl-42"),
             "⇡ ticket/atl-42 poussée · PR à ouvrir sur ton hébergeur"
         );
         assert_eq!(
-            pushed_outcome("ticket/atl-42"),
+            pushed_outcome(Lang::Fr, "ticket/atl-42"),
             "⇡ Poussé sur ticket/atl-42"
         );
-        assert_eq!(KEPT_OUTCOME, "◇ Laissé dans le worktree");
+        assert_eq!(kept_outcome(Lang::Fr), "◇ Laissé dans le worktree");
     }
 
     #[test]

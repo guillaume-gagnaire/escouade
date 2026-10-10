@@ -2,6 +2,7 @@
 //! generated code…), its teardown before one is removed, and the commands Claude suggests for both
 //! from what it reads of the project; and the launch commands it suggests the same way.
 
+use crate::i18n::Lang;
 use crate::model::{RunCommand, Worktree, WorktreeStep};
 use crate::paths;
 use crate::pty::ShellInfo;
@@ -75,6 +76,13 @@ pub fn label(step: &WorktreeStep) -> String {
     }
 }
 
+/// What a step runs for: a worktree's setup, or its teardown.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Stage {
+    Setup,
+    Teardown,
+}
+
 /// A step that failed: which one, and why.
 #[derive(Debug, Clone, PartialEq)]
 pub struct StepFailure {
@@ -86,15 +94,29 @@ pub struct StepFailure {
 }
 
 impl StepFailure {
-    /// In a sentence: `what` ("le démontage du worktree") failed on which command, and how.
-    pub fn summary(&self, what: &str) -> String {
-        format!("{what} a échoué sur `{}` ({}).", self.command, self.reason)
+    /// In a sentence: the setup or the teardown failed on which command, and how. The setup's
+    /// starts what it says (« La préparation du worktree a échoué… »), the teardown's follows
+    /// « Agent supprimé, mais » (« le démontage du worktree a échoué… »).
+    pub fn summary(&self, lang: Lang, stage: Stage) -> String {
+        let (command, reason) = (&self.command, &self.reason);
+        match stage {
+            Stage::Setup => tr_in!(
+                lang,
+                "La préparation du worktree a échoué sur `{command}` ({reason}).",
+                "The worktree setup failed on `{command}` ({reason})."
+            ),
+            Stage::Teardown => tr_in!(
+                lang,
+                "le démontage du worktree a échoué sur `{command}` ({reason}).",
+                "the worktree teardown failed on `{command}` ({reason})."
+            ),
+        }
     }
 
-    /// As the conversation and the agent are told: `what` ("La préparation du worktree") failed,
-    /// with the last lines it wrote.
-    pub fn describe(&self, what: &str) -> String {
-        let head = self.summary(what);
+    /// As the conversation and the agent are told: the setup or the teardown failed, with the
+    /// last lines it wrote.
+    pub fn describe(&self, lang: Lang, stage: Stage) -> String {
+        let head = self.summary(lang, stage);
         let tail = testlaunch::tail_lines(self.tail.trim(), 30);
         if tail.trim().is_empty() {
             head
@@ -125,7 +147,7 @@ pub async fn run_step(
         .iter()
         .find(|s| s.id == step.shell)
         .or_else(|| shells.first())
-        .ok_or_else(|| fail("aucun shell détecté".into(), String::new()))?;
+        .ok_or_else(|| fail(tr!("aucun shell détecté", "no shell found"), String::new()))?;
     let dir = step.cwd.trim();
     let cwd = if dir.is_empty() || dir == "." {
         root.to_string()
@@ -134,7 +156,10 @@ pub async fn run_step(
             Ok(p) if p.is_dir() => p.to_string_lossy().into_owned(),
             Ok(_) => {
                 return Err(fail(
-                    format!("le dossier « {dir} » n'existe pas dans le worktree"),
+                    tr!(
+                        "le dossier « {dir} » n'existe pas dans le worktree",
+                        "the folder “{dir}” doesn’t exist in the worktree"
+                    ),
                     String::new(),
                 ))
             }
@@ -146,11 +171,15 @@ pub async fn run_step(
         Ok(Some(run)) => Err(fail(
             run.code
                 .map(|c| format!("code {c}"))
-                .unwrap_or_else(|| "arrêtée".into()),
+                .unwrap_or_else(|| tr!("arrêtée", "stopped")),
             run.tail,
         )),
         Ok(None) => Err(fail(
-            format!("pas finie en {} min", (limit.as_secs() / 60).max(1)),
+            tr!(
+                "pas finie en {m} min",
+                "not done in {m} min",
+                m = (limit.as_secs() / 60).max(1)
+            ),
             String::new(),
         )),
         Err(e) => Err(fail(run_error(&e), String::new())),
@@ -163,7 +192,7 @@ fn run_error(e: &anyhow::Error) -> String {
     if e.downcast_ref::<testlaunch::OutputLost>().is_some() {
         format!("{e:#}")
     } else {
-        format!("ne démarre pas : {e:#}")
+        tr!("ne démarre pas : {e:#}", "doesn’t start: {e:#}")
     }
 }
 
@@ -255,7 +284,13 @@ fn one_line_rule() -> String {
 
 /// What a suggestion fails with when it gave commands, none of which could be shown as they would
 /// run: not the same as having found nothing to launch.
-pub const ALL_REFUSED: &str = "Claude a proposé des commandes illisibles : aucune n'a été gardée.";
+pub fn all_refused(lang: Lang) -> String {
+    tr_in!(
+        lang,
+        "Claude a proposé des commandes illisibles : aucune n'a été gardée.",
+        "Claude proposed unreadable commands: none was kept."
+    )
+}
 
 /// Claude's role when it suggests a project's worktree commands.
 pub const SUGGEST_SYSTEM: &str = "Tu lis un projet pour préparer les commandes qu'Escouade lance dans ses worktrees git. Tu ne modifies rien et n'exécutes rien : tu lis les fichiers, puis tu réponds uniquement par le bloc JSON demandé.";
@@ -643,7 +678,7 @@ mod tests {
             .unwrap_err();
         assert_eq!(e.reason, "code 3");
         assert!(e.tail.contains("ligne utile"), "{e:?}");
-        let described = e.describe("La préparation du worktree");
+        let described = e.describe(Lang::Fr, Stage::Setup);
         assert!(
             described.starts_with("La préparation du worktree a échoué sur `node -e"),
             "{described}"
@@ -712,8 +747,33 @@ mod tests {
         assert_eq!(tail.len(), 80, "{}", e.tail);
         assert_eq!((tail[0], tail[79]), ("ligne 21", "ligne 100"));
         assert!(e
-            .describe("La préparation du worktree")
+            .describe(Lang::Fr, Stage::Setup)
             .ends_with("ligne 100\n```"));
+    }
+
+    #[test]
+    fn a_failed_step_is_told_in_english_as_a_whole_sentence() {
+        let failure = StepFailure {
+            command: "npm ci".into(),
+            reason: "code 1".into(),
+            tail: "npm ERR! missing\n".into(),
+        };
+        assert_eq!(
+            failure.describe(Lang::En, Stage::Setup),
+            "The worktree setup failed on `npm ci` (code 1).\n\n```\nnpm ERR! missing\n```"
+        );
+        assert_eq!(
+            failure.summary(Lang::En, Stage::Teardown),
+            "the worktree teardown failed on `npm ci` (code 1)."
+        );
+        assert_eq!(
+            failure.summary(Lang::Fr, Stage::Teardown),
+            "le démontage du worktree a échoué sur `npm ci` (code 1)."
+        );
+        assert_eq!(
+            all_refused(Lang::En),
+            "Claude proposed unreadable commands: none was kept."
+        );
     }
 
     #[test]

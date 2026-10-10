@@ -227,6 +227,23 @@ describe('Stats by agent and by ticket', () => {
     expect(await screen.findByText('agent-du-mois')).toBeInTheDocument();
     expect(screen.queryByText('agent-du-jour')).not.toBeInTheDocument();
   });
+
+  it('reads the period again when the language changes: the backend names its steps', async () => {
+    let lang = 'fr';
+    fakeBackend({
+      stats: (a: any) => {
+        const v = view(a.range);
+        if (lang === 'en') v.buckets[1].label = 'Sep 27';
+        return v;
+      },
+    });
+    render(Stats);
+    await userEvent.click(await screen.findByRole('button', { name: 'Tableau' }));
+    expect(await screen.findByText('27/09')).toBeInTheDocument();
+    lang = 'en';
+    setLang('en');
+    expect(await screen.findByText('Sep 27')).toBeInTheDocument();
+  });
 });
 
 describe('Stats errors', () => {

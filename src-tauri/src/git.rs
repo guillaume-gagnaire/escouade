@@ -77,11 +77,12 @@ async fn run_net(cwd: &str, args: &[&str], background: bool) -> Result<Vec<u8>> 
             if let Some(j) = &job {
                 j.terminate();
             }
-            bail!(
-                "git {} interrompu : toujours pas terminé après {} s",
-                args.first().unwrap_or(&""),
-                limit.as_secs()
-            )
+            bail!(tr!(
+                "git {cmd} interrompu : toujours pas terminé après {s} s",
+                "git {cmd} stopped: still not done after {s} s",
+                cmd = args.first().unwrap_or(&""),
+                s = limit.as_secs()
+            ))
         }
     }
 }
@@ -95,7 +96,7 @@ fn checked(out: std::process::Output, args: &[&str]) -> Result<Vec<u8>> {
             err
         };
         bail!(if msg.is_empty() {
-            format!("git {} a échoué", args.join(" "))
+            tr!("git {a} a échoué", "git {a} failed", a = args.join(" "))
         } else {
             msg
         });
@@ -538,14 +539,23 @@ pub async fn diff(root: &str, paths: &[String]) -> Result<String> {
     }
     if unread > UNREAD_LISTED {
         let left = unread - UNREAD_LISTED;
-        let entry = if left == 1 {
-            "… et 1 autre fichier".to_string()
-        } else {
-            format!("… et {left} autres fichiers")
-        };
+        let entry = more_files(crate::i18n::ui(), left);
         out.push_str(&flagged(&new_file_header(&entry)));
     }
     Ok(out)
+}
+
+/// The last entry of a diff that lists `left` more files without them: in the interface's language,
+/// the diff is shown (and the commit's message Claude proposes reads it too, past 4 MB only).
+fn more_files(lang: crate::i18n::Lang, left: usize) -> String {
+    tr_n_in!(
+        lang,
+        left,
+        "… et {left} autre fichier",
+        "… et {left} autres fichiers",
+        "… and {left} more file",
+        "… and {left} more files"
+    )
 }
 
 /// Puts one dirty file of `root` back as in HEAD: a tracked file loses its changes (staged ones
@@ -559,7 +569,10 @@ pub async fn discard(root: &str, path: &str) -> Result<()> {
         .filter(|e| e.path == path)
         .collect();
     if entries.is_empty() {
-        bail!("« {path} » n'a pas de modification à annuler");
+        bail!(tr!(
+            "« {path} » n'a pas de modification à annuler",
+            "“{path}” has no changes to discard"
+        ));
     }
     // The path is a file name, not a pattern (`a[b].txt` must not also match `ab.txt`).
     const LITERAL: &str = "--literal-pathspecs";
@@ -646,7 +659,7 @@ pub async fn log(repo: &str, limit: usize) -> Result<Vec<Commit>> {
 /// The patch of one commit (against its first parent for a merge).
 pub async fn show(repo: &str, hash: &str) -> Result<String> {
     if hash.len() < 4 || !hash.bytes().all(|b| b.is_ascii_hexdigit()) {
-        bail!("commit invalide : {hash}");
+        bail!(tr!("commit invalide : {hash}", "invalid commit: {hash}"));
     }
     let out = run(
         repo,
@@ -781,7 +794,10 @@ pub async fn branches(repo: &str) -> Result<Vec<String>> {
 pub async fn worktree_add(repo: &str, name: &str) -> Result<(String, String, String)> {
     let base = current_branch(repo).await;
     if base.is_empty() || base == "HEAD" {
-        bail!("le dépôt n'a pas encore de commit : impossible de créer un worktree");
+        bail!(tr!(
+            "le dépôt n'a pas encore de commit : impossible de créer un worktree",
+            "the repository has no commit yet: a worktree can’t be created"
+        ));
     }
     ensure_excluded(repo, ".claude/worktrees/").await?;
     let mut branch = format!("{}{name}", crate::paths::BRANCH_PREFIX);
@@ -807,7 +823,10 @@ pub async fn worktree_add(repo: &str, name: &str) -> Result<(String, String, Str
 pub async fn worktree_add_on(repo: &str, branch: &str, base: &str) -> Result<(String, String)> {
     // A branch name never starts with `-`: this is an option (`--lock`…) that git would obey.
     if base.starts_with('-') {
-        bail!("la branche de départ « {base} » n'est pas un nom de branche valide");
+        bail!(tr!(
+            "la branche de départ « {base} » n'est pas un nom de branche valide",
+            "the starting branch “{base}” isn’t a valid branch name"
+        ));
     }
     ensure_excluded(repo, ".claude/worktrees/").await?;
     let dir_of = |b: &str| {
@@ -844,7 +863,8 @@ pub async fn worktree_remove_dir(repo: &str, path: &str) -> Result<()> {
         .is_err()
         && Path::new(path).exists()
     {
-        std::fs::remove_dir_all(path).map_err(|e| anyhow::anyhow!("{path} : {e}"))?;
+        std::fs::remove_dir_all(path)
+            .map_err(|e| anyhow::anyhow!(tr!("{path} : {e}", "{path}: {e}")))?;
     }
     let _ = run(repo, &["worktree", "prune"]).await;
     Ok(())
@@ -853,7 +873,7 @@ pub async fn worktree_remove_dir(repo: &str, path: &str) -> Result<()> {
 /// Checks `branch` out again at `path`, a worktree folder that went (after `worktree_remove_dir`).
 pub async fn worktree_restore(repo: &str, path: &str, branch: &str) -> Result<()> {
     if branch.starts_with('-') {
-        bail!("« {branch} » n'est pas un nom de branche valide");
+        bail!(invalid_branch(branch));
     }
     ensure_excluded(repo, ".claude/worktrees/").await?;
     let _ = run(repo, &["worktree", "prune"]).await;
@@ -861,11 +881,18 @@ pub async fn worktree_restore(repo: &str, path: &str, branch: &str) -> Result<()
     Ok(())
 }
 
+fn invalid_branch(branch: &str) -> anyhow::Error {
+    anyhow::anyhow!(tr!(
+        "« {branch} » n'est pas un nom de branche valide",
+        "“{branch}” isn’t a valid branch name"
+    ))
+}
+
 /// Checks the existing local branch `branch` out in `repo`; git's refusal (untracked files in the
 /// way, the branch held by another worktree…) comes back as it is.
 pub async fn switch(repo: &str, branch: &str) -> Result<()> {
     if branch.starts_with('-') {
-        bail!("« {branch} » n'est pas un nom de branche valide");
+        bail!(invalid_branch(branch));
     }
     // `--no-guess`: a branch only the remote has is not made, the base is a local one.
     run(repo, &["switch", "--no-guess", branch])
@@ -876,9 +903,13 @@ pub async fn switch(repo: &str, branch: &str) -> Result<()> {
 /// Commits of `branch` that `base` does not have; an error when git cannot count them.
 pub async fn ahead_of(repo: &str, base: &str, branch: &str) -> Result<u32> {
     let n = text(repo, &["rev-list", "--count", &format!("{base}..{branch}")]).await?;
-    n.trim()
-        .parse()
-        .map_err(|_| anyhow::anyhow!("git rev-list a répondu « {} »", n.trim()))
+    n.trim().parse().map_err(|_| {
+        anyhow::anyhow!(tr!(
+            "git rev-list a répondu « {n} »",
+            "git rev-list answered “{n}”",
+            n = n.trim()
+        ))
+    })
 }
 
 /// The folders of the repository's worktrees, the main one included.
@@ -1011,10 +1042,13 @@ async fn run_input(cwd: &str, args: &[&str], input: &[u8]) -> Result<std::proces
     let mut cmd = command(cwd, args);
     cmd.stdin(Stdio::piped());
     let mut child = cmd.spawn()?;
-    let mut stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| anyhow::anyhow!("git {} : pas d'entrée", args.join(" ")))?;
+    let mut stdin = child.stdin.take().ok_or_else(|| {
+        anyhow::anyhow!(tr!(
+            "git {a} : pas d'entrée",
+            "git {a}: no input",
+            a = args.join(" ")
+        ))
+    })?;
     // Written while its output is read: a long list could otherwise fill both pipes.
     let write = async move {
         let written = stdin.write_all(input).await;
@@ -1244,7 +1278,13 @@ pub async fn rename_current_branch(worktree: &str, new_name: &str) -> Result<()>
     run(worktree, &["branch", "-m", new_name]).await.map(|_| ())
 }
 
-const NO_REMOTE: &str = "Aucun dépôt distant n'est configuré pour ce dépôt.";
+fn no_remote(lang: crate::i18n::Lang) -> String {
+    tr_in!(
+        lang,
+        "Aucun dépôt distant n'est configuré pour ce dépôt.",
+        "No remote is set up for this repository."
+    )
+}
 
 pub async fn remotes(repo: &str) -> Vec<String> {
     text(repo, &["remote"])
@@ -1287,23 +1327,40 @@ pub fn last_fetch(root: &str) -> Option<i64> {
     Some(at.duration_since(std::time::UNIX_EPOCH).ok()?.as_millis() as i64)
 }
 
-/// "1 commit", "3 commits".
-fn n_commits(n: u32) -> String {
-    format!("{n} commit{}", plural(n))
+/// What a pull brought in: « 1 commit tiré », « 3 commits tirés ».
+fn pulled(lang: crate::i18n::Lang, n: u32) -> String {
+    tr_n_in!(
+        lang,
+        n,
+        "{n} commit tiré",
+        "{n} commits tirés",
+        "{n} commit pulled",
+        "{n} commits pulled"
+    )
 }
 
-fn plural(n: u32) -> &'static str {
-    if n > 1 {
-        "s"
-    } else {
-        ""
+/// What a push sent: « Rien à pousser », « 1 commit poussé », « 3 commits poussés ».
+fn pushed(lang: crate::i18n::Lang, n: u32) -> String {
+    if n == 0 {
+        return tr_in!(lang, "Rien à pousser", "Nothing to push");
     }
+    tr_n_in!(
+        lang,
+        n,
+        "{n} commit poussé",
+        "{n} commits poussés",
+        "{n} commit pushed",
+        "{n} commits pushed"
+    )
 }
 
 /// The checked-out branch, which a detached HEAD does not have.
 fn sync_branch(st: &Status) -> Result<&str> {
     if st.branch.is_empty() || st.branch == "(detached)" {
-        bail!("HEAD détachée : aucune branche à synchroniser.");
+        bail!(tr!(
+            "HEAD détachée : aucune branche à synchroniser.",
+            "Detached HEAD: no branch to sync."
+        ));
     }
     Ok(&st.branch)
 }
@@ -1312,7 +1369,7 @@ fn sync_branch(st: &Status) -> Result<&str> {
 pub async fn fetch(repo: &str, background: bool) -> Result<()> {
     let (st, remotes) = tokio::join!(status(repo), remotes(repo));
     if remotes.is_empty() {
-        bail!(NO_REMOTE);
+        bail!(no_remote(crate::i18n::ui()));
     }
     let upstream = st.ok().and_then(|s| s.upstream);
     let target = sync_remote(&remotes, upstream.as_deref()).unwrap_or("--all");
@@ -1327,13 +1384,30 @@ pub async fn fetch(repo: &str, background: bool) -> Result<()> {
 
 /// What a fetch brought, for the user.
 pub fn fetch_summary(st: &Status) -> String {
+    fetch_summary_in(crate::i18n::ui(), st)
+}
+
+fn fetch_summary_in(lang: crate::i18n::Lang, st: &Status) -> String {
     match (&st.upstream, st.behind) {
-        (None, _) => "Fetch terminé".into(),
-        (Some(up), _) if st.upstream_gone => {
-            format!("Fetch terminé : la branche distante {up} n'existe plus")
-        }
-        (Some(_), 0) => "Fetch terminé : déjà à jour".into(),
-        (Some(_), n) => format!("Fetch terminé : {} à tirer", n_commits(n)),
+        (None, _) => tr_in!(lang, "Fetch terminé", "Fetch done"),
+        (Some(up), _) if st.upstream_gone => tr_in!(
+            lang,
+            "Fetch terminé : la branche distante {up} n'existe plus",
+            "Fetch done: the remote branch {up} no longer exists"
+        ),
+        (Some(_), 0) => tr_in!(
+            lang,
+            "Fetch terminé : déjà à jour",
+            "Fetch done: already up to date"
+        ),
+        (Some(_), n) => tr_n_in!(
+            lang,
+            n,
+            "Fetch terminé : {n} commit à tirer",
+            "Fetch terminé : {n} commits à tirer",
+            "Fetch done: {n} commit to pull",
+            "Fetch done: {n} commits to pull"
+        ),
     }
 }
 
@@ -1342,43 +1416,52 @@ pub async fn pull(repo: &str) -> Result<String> {
     let st = status(repo).await?;
     let branch = sync_branch(&st)?;
     let Some(upstream) = st.upstream.clone() else {
-        bail!("La branche {branch} ne suit aucune branche distante : rien à tirer.");
+        bail!(tr!(
+            "La branche {branch} ne suit aucune branche distante : rien à tirer.",
+            "The branch {branch} doesn’t track a remote branch: nothing to pull."
+        ));
     };
     fetch(repo, false).await?;
     let st = status(repo).await?;
     if st.upstream_gone {
-        bail!("La branche distante {upstream} n'existe plus : rien à tirer.");
+        bail!(tr!(
+            "La branche distante {upstream} n'existe plus : rien à tirer.",
+            "The remote branch {upstream} no longer exists: nothing to pull."
+        ));
     }
     if st.behind == 0 {
-        return Ok("Déjà à jour".into());
+        return Ok(tr!("Déjà à jour", "Already up to date"));
     }
     if st.ahead > 0 {
-        bail!(
+        bail!(tr!(
             "La branche locale et {upstream} ont divergé : pull impossible en avance rapide. \
-             Rebase ou merge à faire à la main (ou demande à un agent)."
-        );
+             Rebase ou merge à faire à la main (ou demande à un agent).",
+            "The local branch and {upstream} have diverged: a fast-forward pull isn’t possible. \
+             Rebase or merge by hand (or ask an agent)."
+        ));
     }
     if let Err(e) = run(repo, &["merge", "--ff-only", "--quiet", "@{upstream}"]).await {
         if e.to_string().contains("would be overwritten") {
-            bail!("Des modifications non commitées seraient écrasées par le pull : commite-les ou mets-les de côté d'abord.");
+            bail!(tr!(
+                "Des modifications non commitées seraient écrasées par le pull : commite-les ou mets-les de côté d'abord.",
+                "The pull would overwrite uncommitted changes: commit or stash them first."
+            ));
         }
         return Err(e);
     }
-    Ok(format!(
-        "{} tiré{}",
-        n_commits(st.behind),
-        plural(st.behind)
-    ))
+    Ok(pulled(crate::i18n::ui(), st.behind))
 }
 
 /// A push the remote refused because it has commits the branch lacks, told as such.
 fn rejected(e: anyhow::Error) -> anyhow::Error {
     let msg = e.to_string();
     if msg.contains("[rejected]") || msg.contains("fetch first") {
-        anyhow::anyhow!(
+        anyhow::anyhow!(tr!(
             "Le dépôt distant a des commits que tu n'as pas : récupère-les d'abord \
-             (pull, ou rebase si les branches ont divergé)."
-        )
+             (pull, ou rebase si les branches ont divergé).",
+            "The remote has commits you don’t have: get them first \
+             (pull, or rebase if the branches have diverged)."
+        ))
     } else {
         e
     }
@@ -1391,22 +1474,25 @@ pub async fn push(repo: &str) -> Result<String> {
     let branch = sync_branch(&st)?;
     if st.upstream.is_some() && !st.upstream_gone {
         run_net(repo, &["push"], false).await.map_err(rejected)?;
-        return Ok(match st.ahead {
-            0 => "Rien à pousser".into(),
-            n => format!("{} poussé{}", n_commits(n), plural(n)),
-        });
+        return Ok(pushed(crate::i18n::ui(), st.ahead));
     }
     let remotes = remotes(repo).await;
     let Some(remote) = sync_remote(&remotes, st.upstream.as_deref()) else {
         if remotes.is_empty() {
-            bail!(NO_REMOTE);
+            bail!(no_remote(crate::i18n::ui()));
         }
-        bail!("Plusieurs dépôts distants et aucun ne s'appelle origin : publie la branche à la main (git push -u <dépôt> {branch}).");
+        bail!(tr!(
+            "Plusieurs dépôts distants et aucun ne s'appelle origin : publie la branche à la main (git push -u <dépôt> {branch}).",
+            "Several remotes and none is called origin: publish the branch by hand (git push -u <remote> {branch})."
+        ));
     };
     run_net(repo, &["push", "-u", remote, branch], false)
         .await
         .map_err(rejected)?;
-    Ok(format!("Branche {branch} publiée sur {remote}"))
+    Ok(tr!(
+        "Branche {branch} publiée sur {remote}",
+        "Branch {branch} published on {remote}"
+    ))
 }
 
 /// Publishes `branch` from `cwd` on the repository's remote (`-u`): origin, else the only one.
@@ -1415,11 +1501,12 @@ pub async fn push_branch(cwd: &str, branch: &str) -> Result<String> {
     let remotes = remotes(cwd).await;
     let Some(remote) = sync_remote(&remotes, None).map(str::to_string) else {
         if remotes.is_empty() {
-            bail!(NO_REMOTE);
+            bail!(no_remote(crate::i18n::ui()));
         }
-        bail!(
-            "Plusieurs dépôts distants et aucun ne s'appelle origin : pousse {branch} à la main."
-        );
+        bail!(tr!(
+            "Plusieurs dépôts distants et aucun ne s'appelle origin : pousse {branch} à la main.",
+            "Several remotes and none is called origin: push {branch} by hand."
+        ));
     };
     run_net(cwd, &["push", "-u", &remote, branch], false)
         .await
@@ -1839,6 +1926,53 @@ mod repo_tests {
     use super::*;
     use std::path::PathBuf;
     use std::process::Command;
+
+    #[test]
+    fn tells_in_english_what_a_sync_did_with_the_plural_of_each_language() {
+        use crate::i18n::Lang::{En, Fr};
+        let st = |upstream: Option<&str>, upstream_gone: bool, behind: u32| Status {
+            branch: "main".into(),
+            upstream: upstream.map(str::to_string),
+            upstream_gone,
+            behind,
+            ..Status::default()
+        };
+        let main = Some("origin/main");
+        assert_eq!(
+            [
+                st(None, false, 0),
+                st(main, false, 0),
+                st(main, false, 1),
+                st(main, false, 3),
+                st(Some("origin/x"), true, 0),
+            ]
+            .map(|s| fetch_summary_in(En, &s)),
+            [
+                "Fetch done",
+                "Fetch done: already up to date",
+                "Fetch done: 1 commit to pull",
+                "Fetch done: 3 commits to pull",
+                "Fetch done: the remote branch origin/x no longer exists",
+            ]
+        );
+        assert_eq!(
+            [1, 2].map(|n| pulled(En, n)),
+            ["1 commit pulled", "2 commits pulled"]
+        );
+        assert_eq!(
+            [0, 1, 2].map(|n| pushed(En, n)),
+            ["Nothing to push", "1 commit pushed", "2 commits pushed"]
+        );
+        assert_eq!(
+            [0, 1, 2].map(|n| pushed(Fr, n)),
+            ["Rien à pousser", "1 commit poussé", "2 commits poussés"]
+        );
+        assert_eq!(no_remote(En), "No remote is set up for this repository.");
+        assert_eq!(
+            [1, 25].map(|n| more_files(En, n)),
+            ["… and 1 more file", "… and 25 more files"]
+        );
+    }
 
     fn repo(name: &str) -> String {
         let dir = crate::paths::test_dir(name);

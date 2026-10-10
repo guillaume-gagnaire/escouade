@@ -1,6 +1,7 @@
 // Files open in the editor: their text, as last read or saved, and the state of the file on disk.
 // A source is 'project' (the project's checkout) or the id of an agent (its worktree).
 
+import { notFoundPath } from '../errors';
 import { basename } from '../format';
 import { t } from '../i18n';
 import { api } from '../ipc';
@@ -58,7 +59,8 @@ export const sourceAgent = (source: string) => (source === 'project' ? null : so
 /** The sentence a confirmation adds when removing something loses `n` unsaved files ('' for none). */
 export const lossNotice = (n: number) => (n ? ` ${t('editor.lossNotice', { count: n })}` : '');
 
-const notFound = (e: unknown) => String(e).includes('introuvable');
+/** The backend found no file there (`NOT_FOUND:<path>`): shown as missing, not as an error. */
+const notFound = (e: unknown) => notFoundPath(e) !== null;
 
 /** The source and path of a key (a path may hold a `|` on macOS). */
 const parseKey = (k: string) => {

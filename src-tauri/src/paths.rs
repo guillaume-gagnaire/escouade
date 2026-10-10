@@ -179,6 +179,12 @@ impl DataDir {
         self.0.join("integrations.json")
     }
 
+    /// The MCP server's token for Claude outside Escouade, while the system's keychain refuses it
+    /// (`integrations::secrets::mcp_token`).
+    pub fn mcp_token_file(&self) -> PathBuf {
+        self.0.join("mcp-token.json")
+    }
+
     /// The syncs of imported tickets not through yet (`integrations::sync::SyncQueue`).
     pub fn sync_queue_file(&self) -> PathBuf {
         self.0.join("sync-queue.json")
@@ -246,11 +252,24 @@ pub fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     std::fs::rename(&tmp, path)
 }
 
+/// Refused: `rel` leads out of the folder it is asked inside of.
+pub fn outside(rel: &str) -> anyhow::Error {
+    outside_in(crate::i18n::ui(), rel)
+}
+
+fn outside_in(lang: crate::i18n::Lang, rel: &str) -> anyhow::Error {
+    anyhow::anyhow!(tr_in!(
+        lang,
+        "chemin hors du dossier : {rel}",
+        "path outside the folder: {rel}"
+    ))
+}
+
 /// `rel` inside `root`, refused when it could leave it: absolute or drive-prefixed paths, `..`,
 /// or a symbolic link on the way that points outside. `rel` may not exist yet (a file to create).
 pub fn contained(root: &Path, rel: &str) -> anyhow::Result<PathBuf> {
     use std::path::Component;
-    let out = || anyhow::anyhow!("chemin hors du dossier : {rel}");
+    let out = || outside(rel);
     if rel.trim().is_empty() {
         return Err(out());
     }
@@ -442,6 +461,19 @@ pub fn make_file_link(target: &Path, link: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_path_leaving_its_folder_is_refused_in_english() {
+        use crate::i18n::Lang::{En, Fr};
+        assert_eq!(
+            outside_in(En, "../x").to_string(),
+            "path outside the folder: ../x"
+        );
+        assert_eq!(
+            outside_in(Fr, "../x").to_string(),
+            "chemin hors du dossier : ../x"
+        );
+    }
 
     #[test]
     fn relative_paths() {

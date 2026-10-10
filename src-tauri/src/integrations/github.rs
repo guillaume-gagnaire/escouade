@@ -6,6 +6,7 @@ use super::{
     call, call_page, encode, Account, Container, ExternalIssue, HttpError, IssueFilter, IssuePage,
     Query,
 };
+use crate::i18n::{self, Lang};
 use crate::model::{ExternalRef, ExternalState, Service};
 use anyhow::Result;
 use serde_json::{json, Value};
@@ -80,16 +81,7 @@ impl Github {
 
     /// Open, closed, then a label of the repository.
     pub async fn states(&self, repo: &str) -> Result<Vec<ExternalState>> {
-        let mut out = vec![
-            ExternalState {
-                id: OPEN.into(),
-                name: "Ouverte".into(),
-            },
-            ExternalState {
-                id: CLOSED.into(),
-                name: "Fermée".into(),
-            },
-        ];
+        let mut out = fixed_states(i18n::ui()).to_vec();
         out.extend(
             self.labels(repo)
                 .await?
@@ -178,10 +170,7 @@ impl Github {
             })
             .map(|i| issue(repo, i))
             .collect();
-        let mut filters = vec![IssueFilter {
-            id: "mine".into(),
-            label: "Assignées à moi".into(),
-        }];
+        let mut filters = vec![mine_filter(i18n::ui())];
         filters.extend(
             self.labels(repo)
                 .await?
@@ -281,6 +270,32 @@ fn label_names(i: &Value) -> Vec<String> {
         .collect()
 }
 
+/// An issue's states that every repository has, before its labels: open, closed.
+fn fixed_states(lang: Lang) -> [ExternalState; 2] {
+    [
+        ExternalState {
+            id: OPEN.into(),
+            name: tr_in!(lang, "Ouverte", "Open"),
+        },
+        ExternalState {
+            id: CLOSED.into(),
+            name: tr_in!(lang, "Fermée", "Closed"),
+        },
+    ]
+}
+
+/// The filter of the issues assigned to the account.
+fn mine_filter(lang: Lang) -> IssueFilter {
+    IssueFilter {
+        id: "mine".into(),
+        label: tr_in!(lang, "Assignées à moi", "Assigned to me"),
+    }
+}
+
+fn unassigned(lang: Lang) -> String {
+    tr_in!(lang, "Non assignée", "Unassigned")
+}
+
 fn issue(repo: &str, i: &Value) -> ExternalIssue {
     let n = i["number"].as_u64().unwrap_or_default();
     let body = i["body"].as_str().unwrap_or_default().to_string();
@@ -289,7 +304,7 @@ fn issue(repo: &str, i: &Value) -> ExternalIssue {
         i["assignee"]["login"]
             .as_str()
             .map(|l| format!("@{l}"))
-            .unwrap_or_else(|| "Non assignée".into()),
+            .unwrap_or_else(|| unassigned(i18n::ui())),
     );
     ExternalIssue {
         service: S,
@@ -297,6 +312,7 @@ fn issue(repo: &str, i: &Value) -> ExternalIssue {
         key: format!("#{n}"),
         title: i["title"].as_str().unwrap_or_default().to_string(),
         kind: "Issue".into(),
+        kind_code: "issue".into(),
         meta,
         url: i["html_url"].as_str().unwrap_or_default().to_string(),
         criteria: criteria_of(&body),
@@ -310,6 +326,17 @@ fn issue(repo: &str, i: &Value) -> ExternalIssue {
 mod tests {
     use super::*;
     use crate::integrations::fake::FakeServer;
+
+    #[test]
+    fn the_states_and_the_filter_of_github_read_in_english() {
+        use crate::i18n::Lang::En;
+        assert_eq!(
+            fixed_states(En).map(|s| s.name),
+            ["Open".to_string(), "Closed".to_string()]
+        );
+        assert_eq!(mine_filter(En).label, "Assigned to me");
+        assert_eq!(unassigned(En), "Unassigned");
+    }
 
     async fn github() -> (FakeServer, Github) {
         let server = FakeServer::start().await;
@@ -404,6 +431,7 @@ mod tests {
             (i.id.as_str(), i.key.as_str(), i.kind.as_str()),
             ("42", "#42", "Issue")
         );
+        assert_eq!(i.kind_code, "issue");
         assert_eq!(i.meta, ["bug", "@ada"]);
         assert_eq!(i.criteria, ["Plus de crash", "Test e2e"]);
         assert_eq!(page.issues[1].meta, ["Non assignée"]);

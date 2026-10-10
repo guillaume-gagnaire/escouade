@@ -35,11 +35,6 @@ export const ALLOWED: Allowed[] = [
 
   // L5 — integrations, boardSettings
   {
-    file: 'src/components/modals/ImportModal.svelte',
-    text: 'Tâche',
-    why: 'le type de ticket que Jira nomme ainsi : une donnée d’un service externe, comparée telle quelle, pas un texte de l’interface',
-  },
-  {
     file: 'src/components/settings/IntegrationsTab.svelte',
     text: 'atlas.atlassian.net',
     why: 'un exemple de site Jira, le même dans toutes les langues',

@@ -181,8 +181,13 @@ pub struct ExternalIssue {
     /// As shown: ATL-1287, #142, #42.
     pub key: String,
     pub title: String,
-    /// Story, Bug, Tâche ; Carte ; Issue.
+    /// As shown, in the interface's language for the names Escouade knows: Story, Bug, Tâche ;
+    /// Carte ; Issue.
     pub kind: String,
+    /// What the window colours it by, the same in every language: `task`, `subtask`, `bug`,
+    /// `story`, `epic` (Jira), `card` (Trello), `issue` (GitHub); empty for a type it does not
+    /// know (one a Jira was set up with).
+    pub kind_code: String,
     /// Its priority, assignee and state, those it has.
     pub meta: Vec<String>,
     pub url: String,
@@ -329,11 +334,11 @@ pub(crate) async fn call_page(
 
 async fn send(service: Service, rb: reqwest::RequestBuilder) -> Result<(Value, HeaderMap)> {
     let resp = rb.send().await.map_err(|e| {
-        anyhow!(
-            "{} injoignable : {:#}",
-            service.label(),
-            anyhow::Error::from(e.without_url())
-        )
+        let (name, e) = (service.label(), anyhow::Error::from(e.without_url()));
+        anyhow!(tr!(
+            "{name} injoignable : {e:#}",
+            "{name} can’t be reached: {e:#}"
+        ))
     })?;
     let status = resp.status().as_u16();
     let headers = resp.headers().clone();
@@ -348,8 +353,13 @@ async fn send(service: Service, rb: reqwest::RequestBuilder) -> Result<(Value, H
     if text.trim().is_empty() {
         return Ok((Value::Null, headers));
     }
-    let v = serde_json::from_str(&text)
-        .map_err(|_| anyhow!("{} : réponse illisible", service.label()))?;
+    let v = serde_json::from_str(&text).map_err(|_| {
+        let name = service.label();
+        anyhow!(tr!(
+            "{name} : réponse illisible",
+            "{name}: unreadable answer"
+        ))
+    })?;
     Ok((v, headers))
 }
 
@@ -394,14 +404,38 @@ pub(crate) fn lasting(e: &anyhow::Error) -> bool {
 
 /// An HTTP error of `service`, and what its body says.
 pub fn http_error(service: Service, status: u16, body: &str) -> String {
+    http_error_in(crate::i18n::ui(), service, status, body)
+}
+
+fn http_error_in(lang: crate::i18n::Lang, service: Service, status: u16, body: &str) -> String {
     let name = service.label();
     let tail = said(body).map(|m| format!(" — {m}")).unwrap_or_default();
     match status {
-        401 => format!("{name} refuse ces identifiants (401){tail}"),
-        403 => format!("{name} refuse l'accès (403){tail}"),
-        404 => format!("{name} : introuvable (404){tail}"),
-        429 => format!("{name} limite les requêtes (429) : réessaie dans un moment"),
-        _ => format!("{name} : erreur {status}{tail}"),
+        401 => tr_in!(
+            lang,
+            "{name} refuse ces identifiants (401){tail}",
+            "{name} refuses these credentials (401){tail}"
+        ),
+        403 => tr_in!(
+            lang,
+            "{name} refuse l'accès (403){tail}",
+            "{name} denies access (403){tail}"
+        ),
+        404 => tr_in!(
+            lang,
+            "{name} : introuvable (404){tail}",
+            "{name}: not found (404){tail}"
+        ),
+        429 => tr_in!(
+            lang,
+            "{name} limite les requêtes (429) : réessaie dans un moment",
+            "{name} limits the requests (429): try again in a moment"
+        ),
+        _ => tr_in!(
+            lang,
+            "{name} : erreur {status}{tail}",
+            "{name}: error {status}{tail}"
+        ),
     }
 }
 
@@ -457,6 +491,27 @@ pub fn checked_links(mut p: ProjectIntegrations) -> ProjectIntegrations {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_service_refusing_says_so_in_english() {
+        use crate::i18n::Lang::En;
+        assert_eq!(
+            [
+                http_error_in(En, Service::Jira, 401, ""),
+                http_error_in(En, Service::Github, 403, r#"{"message":"Bad credentials"}"#),
+                http_error_in(En, Service::Trello, 404, "model not found\n"),
+                http_error_in(En, Service::Trello, 429, ""),
+                http_error_in(En, Service::Github, 502, "<html>Bad gateway</html>"),
+            ],
+            [
+                "Jira refuses these credentials (401)",
+                "GitHub denies access (403) — Bad credentials",
+                "Trello: not found (404) — model not found",
+                "Trello limits the requests (429): try again in a moment",
+                "GitHub: error 502",
+            ]
+        );
+    }
 
     #[tokio::test]
     async fn a_refusal_that_asking_again_would_not_change_is_told_apart() {

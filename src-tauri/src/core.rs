@@ -41,11 +41,29 @@ pub struct StartupFailure;
 
 impl std::fmt::Display for StartupFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Claude Code n'a pas pu démarrer : voir le détail dans la conversation.")
+        f.write_str(&tr!(
+            "Claude Code n'a pas pu démarrer : voir le détail dans la conversation.",
+            "Claude Code couldn’t start: see the details in the conversation."
+        ))
     }
 }
 
 impl std::error::Error for StartupFailure {}
+
+/// Refused: the agent asked for is gone (deleted meanwhile).
+pub(crate) fn agent_not_found() -> anyhow::Error {
+    anyhow!(tr!("agent introuvable", "agent not found"))
+}
+
+/// Refused: the project asked for is gone (removed meanwhile).
+pub(crate) fn project_not_found() -> anyhow::Error {
+    anyhow!(tr!("projet introuvable", "project not found"))
+}
+
+/// Refused: the folder is not (or no longer) in a git repository.
+pub(crate) fn not_a_repo() -> anyhow::Error {
+    anyhow!(tr!("pas un dépôt git", "not a git repository"))
+}
 
 /// The tag that opens `NotOnBase::wire`: the frontend recognizes the refusal by it.
 const NOT_ON_BASE: &str = "NOT_ON_BASE";
@@ -66,21 +84,29 @@ impl NotOnBase {
     }
 }
 
-impl std::fmt::Display for NotOnBase {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.current.is_empty() {
-            write!(
-                f,
-                "Le projet n'est sur aucune branche (HEAD détachée) : bascule sur « {} » avant de merger.",
-                self.base
+impl NotOnBase {
+    /// The refusal in words, where the window does not ask its question.
+    pub fn text(&self, lang: i18n::Lang) -> String {
+        let (current, base) = (&self.current, &self.base);
+        if current.is_empty() {
+            tr_in!(
+                lang,
+                "Le projet n'est sur aucune branche (HEAD détachée) : bascule sur « {base} » avant de merger.",
+                "The project isn’t on any branch (detached HEAD): switch to “{base}” before merging."
             )
         } else {
-            write!(
-                f,
-                "Le projet est sur la branche « {} » : bascule sur « {} » avant de merger.",
-                self.current, self.base
+            tr_in!(
+                lang,
+                "Le projet est sur la branche « {current} » : bascule sur « {base} » avant de merger.",
+                "The project is on the branch “{current}”: switch to “{base}” before merging."
             )
         }
+    }
+}
+
+impl std::fmt::Display for NotOnBase {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.text(i18n::ui()))
     }
 }
 
@@ -161,11 +187,11 @@ const MAX_TEXT: usize = 256 * KB;
 /// All the files of a message: sent in base64 (4/3 bigger), under the API's 32 MB a request.
 const MAX_TOTAL: usize = 18 * MB;
 
-fn size_label(bytes: usize) -> String {
+fn size_label(lang: i18n::Lang, bytes: usize) -> String {
     if bytes >= MB {
-        format!("{} Mo", bytes / MB)
+        tr_in!(lang, "{n} Mo", "{n} MB", n = bytes / MB)
     } else {
-        format!("{} Ko", bytes / KB)
+        tr_in!(lang, "{n} Ko", "{n} KB", n = bytes / KB)
     }
 }
 
@@ -182,10 +208,13 @@ pub fn user_content(text: &str, attachments: &[Attachment]) -> Result<Value> {
         .into_iter()
         .unzip();
     if sizes.iter().sum::<usize>() > MAX_TOTAL {
-        bail!(
-            "Les fichiers joints à un message sont limités à {} en tout.",
-            size_label(MAX_TOTAL)
-        );
+        let lang = i18n::ui();
+        bail!(tr_in!(
+            lang,
+            "Les fichiers joints à un message sont limités à {max} en tout.",
+            "The files attached to a message are limited to {max} in all.",
+            max = size_label(lang, MAX_TOTAL)
+        ));
     }
     if !text.is_empty() {
         blocks.push(json!({ "type": "text", "text": text }));
@@ -222,13 +251,21 @@ fn attachment_block(a: &Attachment) -> Result<(Value, usize)> {
             a.data.len(),
             MAX_TEXT,
         ),
-        t => bail!(
-            "« {} » ({t}) ne peut pas être joint : les fichiers acceptés sont les images (PNG, JPEG, GIF, WebP), les PDF et les fichiers texte.",
-            a.name
-        ),
+        t => bail!(tr!(
+            "« {name} » ({t}) ne peut pas être joint : les fichiers acceptés sont les images (PNG, JPEG, GIF, WebP), les PDF et les fichiers texte.",
+            "“{name}” ({t}) can’t be attached: the files accepted are images (PNG, JPEG, GIF, WebP), PDFs and text files.",
+            name = a.name
+        )),
     };
     if size > max {
-        bail!("{} dépasse {}", a.name, size_label(max));
+        let lang = i18n::ui();
+        bail!(tr_in!(
+            lang,
+            "{name} dépasse {max}",
+            "{name} is over {max}",
+            name = a.name,
+            max = size_label(lang, max)
+        ));
     }
     Ok((block, size))
 }
@@ -259,7 +296,8 @@ pub struct AgentOptions {
 /// What a copy takes of its original, read while no turn of the original ran.
 #[derive(Debug, Clone)]
 pub struct CopyOf {
-    /// The copy is « <name> (copie) » (`copy_name`), never renamed by Haiku.
+    /// The copy is « <name> (copie) », “<name> (copy)” in English (`copy_name`), never renamed by
+    /// Haiku.
     pub name: String,
     /// The original's session, which the copy's first start forks.
     pub session_id: Option<String>,
@@ -369,6 +407,8 @@ pub struct Core<R: Runtime = Wry> {
     pub(crate) import_lock: tokio::sync::Mutex<()>,
     /// The searches through the conversations the window started (Ctrl+K).
     searches: convsearch::Searches,
+    /// The MCP server (« Claude peut piloter Escouade »), running while `sync_mcp` wants it.
+    pub(crate) mcp: crate::mcp::McpServer<R>,
     /// Notifications sent, as "<title> | <text>" (tests only).
     #[cfg(test)]
     pub alerts: Mutex<Vec<String>>,
@@ -518,20 +558,21 @@ fn slug_within(s: &str, max: usize) -> String {
 }
 
 /// The name of a copy of the agent `original`: « <original> (copie) », then « (copie 2) »,
-/// « (copie 3) »… while the project has an agent of that name.
-pub(crate) fn copy_name(original: &str, taken: &[String]) -> String {
-    let mut name = format!("{original} (copie)");
+/// « (copie 3) »… while the project has an agent of that name; “(copy)”, “(copy 2)” in English.
+pub(crate) fn copy_name(lang: i18n::Lang, original: &str, taken: &[String]) -> String {
+    let mut name = tr_in!(lang, "{original} (copie)", "{original} (copy)");
     let mut n = 2;
     while taken.contains(&name) {
-        name = format!("{original} (copie {n})");
+        name = tr_in!(lang, "{original} (copie {n})", "{original} (copy {n})");
         n += 1;
     }
     name
 }
 
 /// The branch of `copy`, the copy of the agent `original` that `copy_name` named:
-/// `escouade/<original as a slug>-copie` (`-copie-2`…), the original's part shortened so that the
-/// marker always fits in a slug's 40 characters.
+/// `escouade/<original as a slug>-copie` (`-copie-2`…; `-copy`, `-copy-2` for a copy named in
+/// English), the original's part shortened so that the marker always fits in a slug's 40
+/// characters.
 fn copy_branch(original: &str, copy: &str) -> String {
     let marker = slugify(copy.strip_prefix(original).unwrap_or(copy));
     let base = slug_within(original, 40usize.saturating_sub(marker.len() + 1));
@@ -635,8 +676,58 @@ pub(crate) fn commit_proposal_prompt(
     )
 }
 
+/// The block of a ticket whose validation the app's stop cut, set as the app starts again.
+fn approval_interrupted(lang: i18n::Lang) -> String {
+    tr_in!(lang, "Validation interrompue", "Approval interrupted")
+}
+
 /// A direct commit asked for files that no longer have changes to commit.
-const NOTHING_TO_COMMIT: &str = "Plus rien à commiter : ces fichiers n'ont plus de modification.";
+fn nothing_to_commit() -> anyhow::Error {
+    anyhow!(tr!(
+        "Plus rien à commiter : ces fichiers n'ont plus de modification.",
+        "Nothing left to commit: these files no longer have changes."
+    ))
+}
+
+/// What the conversation of an agent whose worktree was set up says: how many commands, how long.
+fn setup_done(lang: i18n::Lang, n: usize, secs: u64) -> String {
+    tr_n_in!(
+        lang,
+        n,
+        "Worktree préparé ({n} commande, {secs} s).",
+        "Worktree préparé ({n} commandes, {secs} s).",
+        "Worktree set up ({n} command, {secs} s).",
+        "Worktree set up ({n} commands, {secs} s)."
+    )
+}
+
+/// The refusal of a merge while the agent's worktree has `n` files not committed.
+fn uncommitted_in_agent(lang: i18n::Lang, n: usize) -> String {
+    tr_n_in!(
+        lang,
+        n,
+        "L'agent a {n} fichier non commité : demande-lui de commiter avant de merger.",
+        "L'agent a {n} fichiers non commités : demande-lui de commiter avant de merger.",
+        "The agent has {n} uncommitted file: ask it to commit before merging.",
+        "The agent has {n} uncommitted files: ask it to commit before merging."
+    )
+}
+
+/// The files the project copies into its worktrees could not be copied: the agent works without.
+fn files_not_copied(e: &anyhow::Error) -> String {
+    tr!(
+        "Fichiers non copiés dans le worktree : {e:#}",
+        "Files not copied into the worktree: {e:#}"
+    )
+}
+
+/// Claude's answer held no list of commands to read.
+fn no_readable_commands() -> anyhow::Error {
+    anyhow!(tr!(
+        "Claude n'a pas proposé de commandes lisibles.",
+        "Claude proposed no readable commands."
+    ))
+}
 
 /// What a direct commit works on: its checkout, its files, and those of them Haiku never reads.
 struct DirectScope {
@@ -743,7 +834,7 @@ impl<R: Runtime> Core<R> {
         for t in &mut tickets {
             // A validation the app's stop cut: to run again by hand.
             if t.step.take().is_some() {
-                t.blocked = Some("Validation interrompue".into());
+                t.blocked = Some(approval_interrupted(lang.ui));
                 t.conflict = false;
             }
         }
@@ -837,6 +928,7 @@ impl<R: Runtime> Core<R> {
             pending_syncs: Mutex::new(integrations::sync::SyncQueue::new(pending_syncs)),
             import_lock: tokio::sync::Mutex::new(()),
             searches: convsearch::Searches::default(),
+            mcp: crate::mcp::McpServer::new(me.clone()),
             #[cfg(test)]
             alerts: Mutex::default(),
             #[cfg(test)]
@@ -945,6 +1037,7 @@ impl<R: Runtime> Core<R> {
         self.retry_all_syncs();
         self.recover_tickets();
         self.update_tray();
+        self.sync_mcp();
     }
 
     // ---------- persistence ----------
@@ -991,6 +1084,8 @@ impl<R: Runtime> Core<R> {
     }
 
     pub fn save_settings(self: &Arc<Self>, mut s: Settings) -> Result<()> {
+        // The MCP server's port is the backend's own (`sync_mcp`): the window's copy may be older.
+        s.mcp_port = self.settings.read().mcp_port;
         accounts::normalize(&mut s);
         let bytes = serde_json::to_vec_pretty(&s)?;
         paths::write_atomic(&self.data.settings_file(), &bytes)?;
@@ -1034,6 +1129,8 @@ impl<R: Runtime> Core<R> {
         }
         // Claude Code may be found now, or no agent waits for its quota any more: the board goes on.
         self.schedule();
+        // « Claude peut piloter Escouade » may have changed.
+        self.sync_mcp();
         Ok(())
     }
 
@@ -1056,7 +1153,7 @@ impl<R: Runtime> Core<R> {
             .read()
             .get(id)
             .cloned()
-            .ok_or_else(|| anyhow!("agent introuvable"))
+            .ok_or_else(agent_not_found)
     }
 
     pub fn project(&self, id: &str) -> Result<Project> {
@@ -1065,7 +1162,7 @@ impl<R: Runtime> Core<R> {
             .iter()
             .find(|p| p.id == id)
             .cloned()
-            .ok_or_else(|| anyhow!("projet introuvable"))
+            .ok_or_else(project_not_found)
     }
 
     pub fn agent_views(&self) -> Vec<AgentView> {
@@ -1445,7 +1542,10 @@ impl<R: Runtime> Core<R> {
         // Its account's Claude Code, where its session is kept.
         let account = accounts::get(&settings, &h.lock().meta.account);
         let program = accounts::program(&account, &settings).ok_or_else(|| {
-            anyhow!("Claude Code introuvable. Installe-le ou indique son chemin dans les réglages.")
+            anyhow!(tr!(
+                "Claude Code introuvable. Installe-le ou indique son chemin dans les réglages.",
+                "Claude Code not found. Install it or give its path in the settings."
+            ))
         })?;
         let (opts, gen) = {
             let mut rt = h.lock();
@@ -1459,7 +1559,11 @@ impl<R: Runtime> Core<R> {
             (opts, rt.gen)
         };
         if !Path::new(&opts.cwd).is_dir() {
-            bail!("Le dossier {} n'existe plus", opts.cwd);
+            bail!(tr!(
+                "Le dossier {dir} n'existe plus",
+                "The folder {dir} no longer exists",
+                dir = opts.cwd
+            ));
         }
         log::info!(
             "agent {id}: starting {} {} in {} (account {})",
@@ -1498,7 +1602,14 @@ impl<R: Runtime> Core<R> {
                     if let Err(e) = self.link_remote(&h, &proc).await {
                         log::warn!("agent {id}: remote control failed: {e:#}");
                         let _ = self.with_agent(id, |rt, fx| {
-                            rt.notice("warn", format!("Remote control indisponible : {e}"), fx);
+                            rt.notice(
+                                "warn",
+                                tr!(
+                                    "Remote control indisponible : {e}",
+                                    "Remote control unavailable: {e}"
+                                ),
+                                fx,
+                            );
                             Ok(())
                         });
                     }
@@ -1610,7 +1721,10 @@ impl<R: Runtime> Core<R> {
             if let Err(e) = linked {
                 h.lock().meta.remote_control = false;
                 self.emit_agent(&h);
-                return Err(e.context("Remote control indisponible"));
+                return Err(e.context(tr!(
+                    "Remote control indisponible",
+                    "Remote control unavailable"
+                )));
             }
         } else {
             let proc = {
@@ -1741,7 +1855,10 @@ impl<R: Runtime> Core<R> {
                 let _ = self.with_agent(&id, |rt, fx| {
                     rt.notice(
                         "warn",
-                        format!("Reprise automatique impossible : {e:#}"),
+                        tr!(
+                            "Reprise automatique impossible : {e:#}",
+                            "Automatic resume failed: {e:#}"
+                        ),
                         fx,
                     );
                     Ok(())
@@ -1825,6 +1942,7 @@ impl<R: Runtime> Core<R> {
 
     pub fn shutdown(&self) {
         self.quitting.store(true, Ordering::Release);
+        self.mcp.stop();
         // Setups under way stop, with what they started.
         for (_, s) in self.setups.lock().drain() {
             s.task.abort();
@@ -1861,7 +1979,10 @@ impl<R: Runtime> Core<R> {
             }
             log::warn!("message not delivered (attempt {attempt}): the process exited");
         }
-        bail!("Claude Code s'est arrêté pendant l'envoi du message : voir le détail dans la conversation.")
+        bail!(tr!(
+            "Claude Code s'est arrêté pendant l'envoi du message : voir le détail dans la conversation.",
+            "Claude Code stopped while the message was being sent: see the details in the conversation."
+        ))
     }
 
     /// Sends the message to `proc` if it is still the agent's live process, then records it.
@@ -2074,7 +2195,7 @@ impl<R: Runtime> Core<R> {
             .map(|h| h.lock().meta.name.clone())
             .collect();
         let name = match (&o.copy_of, &o.name) {
-            (Some(c), _) => copy_name(&c.name, &existing),
+            (Some(c), _) => copy_name(i18n::ui(), &c.name, &existing),
             (None, Some(base)) => {
                 let mut name = base.clone();
                 let mut n = 2;
@@ -2124,7 +2245,7 @@ impl<R: Runtime> Core<R> {
         // A copy's conversation is written first: when it cannot be, nothing was made for it.
         if let Some(c) = &o.copy_of {
             conv::write_log(&conversations, &meta.id, &c.items)
-                .context("conversation non copiée")?;
+                .with_context(|| tr!("conversation non copiée", "conversation not copied"))?;
         }
         // The original's worktree, for a copy of an agent that has one.
         let copied_from = o.copy_of.as_ref().and_then(|c| c.worktree.as_ref());
@@ -2154,7 +2275,7 @@ impl<R: Runtime> Core<R> {
                     testlaunch::copy_worktree_files(&project.path, &path, &project.worktree_copy)
                         .await
                 {
-                    warning = Some(format!("Fichiers non copiés dans le worktree : {e:#}"));
+                    warning = Some(files_not_copied(&e));
                 }
                 if let Some(from) = copied_from {
                     // Its conversation names the original's folder everywhere (its files' absolute
@@ -2173,16 +2294,23 @@ impl<R: Runtime> Core<R> {
             }
             // A ticket's agent works in its own worktree or not at all.
             Some(Err(e)) if o.worktree.is_some() => {
-                return Err(e.context("worktree du ticket non créé"))
+                return Err(e.context(tr!(
+                    "worktree du ticket non créé",
+                    "ticket’s worktree not created"
+                )))
             }
             // So does a copy of an agent that has one: the project's folder is not its code.
             Some(Err(e)) if o.copy_of.is_some() => {
                 let _ = std::fs::remove_file(conv::log_path(&conversations, &meta.id));
-                return Err(e.context("worktree de la copie non créé"));
+                return Err(e.context(tr!(
+                    "worktree de la copie non créé",
+                    "copy’s worktree not created"
+                )));
             }
             Some(Err(e)) => {
-                warning = Some(format!(
-                    "Worktree non créé, l'agent travaille dans le dossier du projet : {e}"
+                warning = Some(tr!(
+                    "Worktree non créé, l'agent travaille dans le dossier du projet : {e}",
+                    "Worktree not created, the agent works in the project’s folder: {e}"
                 ))
             }
             None => {}
@@ -2219,7 +2347,7 @@ impl<R: Runtime> Core<R> {
     }
 
     /// A copy of the agent (« Dupliquer la conversation »), refused during its turn: « <name>
-    /// (copie) » in the same project, with its model, effort and permission mode, its conversation
+    /// (copie) » (“(copy)” in English) in the same project, with its model, effort and permission mode, its conversation
     /// shown again, and its Claude Code session forked where the original is now (the turns it
     /// runs before the copy's first are not the copy's), the original's left as it is. It works in
     /// a worktree of its own from the commit the original's is on (what the original did not
@@ -2234,10 +2362,11 @@ impl<R: Runtime> Core<R> {
             let h = self.agent(id)?;
             let mut rt = h.lock();
             if rt.meta.status.is_active() {
-                bail!(
-                    "Attends la fin du tour de {} pour le dupliquer.",
-                    rt.meta.name
-                );
+                bail!(tr!(
+                    "Attends la fin du tour de {name} pour le dupliquer.",
+                    "Wait for the end of {name}’s turn to duplicate it.",
+                    name = rt.meta.name
+                ));
             }
             (rt.meta.clone(), rt.conv.items())
         };
@@ -2251,9 +2380,10 @@ impl<R: Runtime> Core<R> {
         if let Some(wt) = &original.worktree {
             match git::status(&wt.path).await {
                 Ok(s) if !s.entries.is_empty() => {
-                    notice = Some(format!(
-                        "Les modifications non commitées de {} ne sont pas dans cette copie.",
-                        original.name
+                    notice = Some(tr!(
+                        "Les modifications non commitées de {name} ne sont pas dans cette copie.",
+                        "The uncommitted changes of {name} aren’t in this copy.",
+                        name = original.name
                     ))
                 }
                 Ok(_) => {}
@@ -2401,12 +2531,16 @@ impl<R: Runtime> Core<R> {
             // Its last lines, before its end is told.
             self.send_setup_lines(id, i, &unsent);
             if let Err(f) = ran {
-                setup_log.end(&format!("échec : {}", f.reason));
-                let text = f.describe("La préparation du worktree");
+                setup_log.end(&tr!("échec : {r}", "failed: {r}", r = f.reason));
+                let text = f.describe(i18n::ui(), worktrees::Stage::Setup);
                 log::warn!("agent {id}: {text}");
                 // The conversation shows its last lines, and says where the others are.
                 let shown = if setup_log.written() {
-                    format!("{text}\n\nSortie complète : {}", log_path.display())
+                    tr!(
+                        "{text}\n\nSortie complète : {log}",
+                        "{text}\n\nFull output: {log}",
+                        log = log_path.display()
+                    )
                 } else {
                     text.clone()
                 };
@@ -2420,17 +2554,13 @@ impl<R: Runtime> Core<R> {
                 self.warm(id);
                 return;
             }
-            setup_log.end(&format!(
-                "terminée en {} s",
-                step_started.elapsed().as_secs()
+            setup_log.end(&tr!(
+                "terminée en {s} s",
+                "done in {s} s",
+                s = step_started.elapsed().as_secs()
             ));
         }
-        let n = steps.len();
-        let text = format!(
-            "Worktree préparé ({n} commande{}, {} s).",
-            if n > 1 { "s" } else { "" },
-            started.elapsed().as_secs()
-        );
+        let text = setup_done(i18n::ui(), steps.len(), started.elapsed().as_secs());
         let _ = self.with_agent(id, |rt, fx| {
             rt.setup = None;
             rt.setup_output = None;
@@ -2545,8 +2675,8 @@ impl<R: Runtime> Core<R> {
                 )
                 .await;
                 if let Err(f) = ran {
-                    log::warn!("{}", f.describe("Le démontage du worktree"));
-                    problems.push(f.summary("le démontage du worktree"));
+                    log::warn!("{}", f.describe(i18n::Lang::En, worktrees::Stage::Teardown));
+                    problems.push(f.summary(i18n::ui(), worktrees::Stage::Teardown));
                 }
             }
         }
@@ -2583,11 +2713,13 @@ impl<R: Runtime> Core<R> {
                 )
                 .await;
                 self.start_setup(&h, &project, &wt);
-                copied
-                    .err()
-                    .map(|e| format!("Fichiers non copiés dans le worktree : {e:#}"))
+                copied.err().map(|e| files_not_copied(&e))
             }
-            Err(e) => Some(format!("Worktree non recréé depuis {} : {e:#}", wt.branch)),
+            Err(e) => Some(tr!(
+                "Worktree non recréé depuis {b} : {e:#}",
+                "Worktree not recreated from {b}: {e:#}",
+                b = wt.branch
+            )),
         };
         let _ = self.with_agent(id, |rt, fx| {
             if let Some(p) = problem {
@@ -2612,11 +2744,11 @@ impl<R: Runtime> Core<R> {
             .read_project(&project, worktrees::SUGGEST_SYSTEM, &prompt)
             .await?;
         let suggestion = worktrees::parse_suggestion(&answer, Path::new(&project.path), &shell.id)
-            .ok_or_else(|| anyhow!("Claude n'a pas proposé de commandes lisibles."))?;
+            .ok_or_else(no_readable_commands)?;
         // Not the same as having found nothing to run: it gave some, none of which could be shown
         // as they would run.
         if suggestion.setup.is_empty() && suggestion.teardown.is_empty() && suggestion.refused > 0 {
-            bail!(worktrees::ALL_REFUSED);
+            bail!(worktrees::all_refused(i18n::ui()));
         }
         Ok(suggestion)
     }
@@ -2633,10 +2765,10 @@ impl<R: Runtime> Core<R> {
             .await?;
         let suggestion =
             worktrees::parse_run_suggestion(&answer, Path::new(&project.path), &shell.id)
-                .ok_or_else(|| anyhow!("Claude n'a pas proposé de commandes lisibles."))?;
+                .ok_or_else(no_readable_commands)?;
         // Not the same as having found nothing to launch (see `suggest_worktree_steps`).
         if suggestion.commands.is_empty() && suggestion.refused > 0 {
-            bail!(worktrees::ALL_REFUSED);
+            bail!(worktrees::all_refused(i18n::ui()));
         }
         Ok(suggestion)
     }
@@ -2647,7 +2779,7 @@ impl<R: Runtime> Core<R> {
         crate::pty::detect_shells(&settings)
             .into_iter()
             .next()
-            .ok_or_else(|| anyhow!("Aucun shell détecté."))
+            .ok_or_else(|| anyhow!(tr!("Aucun shell détecté.", "No shell found.")))
     }
 
     /// Claude's answer to `prompt` after it read the project, in its folder, with tools that only
@@ -2748,7 +2880,8 @@ impl<R: Runtime> Core<R> {
         } = ask;
         let settings = self.settings.read().clone();
         let account = self.account_for(&settings, agent);
-        let program = accounts::program(&account, &settings).context("claude introuvable")?;
+        let program = accounts::program(&account, &settings)
+            .with_context(|| tr!("claude introuvable", "claude not found"))?;
         let mut cmd = tokio::process::Command::new(program);
         cmd.args([
             "-p",
@@ -2788,9 +2921,13 @@ impl<R: Runtime> Core<R> {
             }
             anyhow::Ok(child.wait_with_output().await?)
         };
-        let out = tokio::time::timeout(limit, asked)
-            .await
-            .map_err(|_| anyhow!("pas de réponse de {who} en {} s", limit.as_secs()))??;
+        let out = tokio::time::timeout(limit, asked).await.map_err(|_| {
+            anyhow!(tr!(
+                "pas de réponse de {who} en {s} s",
+                "no answer from {who} in {s} s",
+                s = limit.as_secs()
+            ))
+        })??;
         let v: Value = serde_json::from_slice(&out.stdout)?;
         Ok(v["result"].as_str().unwrap_or("").to_string())
     }
@@ -2859,7 +2996,7 @@ impl<R: Runtime> Core<R> {
     pub async fn rename_agent(self: &Arc<Self>, id: &str, name: &str) -> Result<()> {
         let name = name.trim();
         if name.is_empty() {
-            bail!("nom vide");
+            bail!(tr!("nom vide", "empty name"));
         }
         let h = self.agent(id)?;
         let proc = {
@@ -2959,11 +3096,7 @@ impl<R: Runtime> Core<R> {
         // Wait for an in-flight start (warm-up) so that its process is killed too.
         let lock = self.spawn_lock(id);
         let _guard = lock.lock().await;
-        let h = self
-            .agents
-            .write()
-            .remove(id)
-            .ok_or_else(|| anyhow!("agent introuvable"))?;
+        let h = self.agents.write().remove(id).ok_or_else(agent_not_found)?;
         let (pid, worktree, ports) = {
             let mut rt = h.lock();
             rt.gen += 1;
@@ -3004,15 +3137,23 @@ impl<R: Runtime> Core<R> {
                 tokio::time::sleep(Duration::from_millis(300)).await;
                 problems.extend(self.teardown_worktree(&project, &wt, ports).await);
                 if let Err(e) = git::worktree_remove(&project.path, &wt.path, &wt.branch).await {
-                    problems.push(format!("le worktree n'a pas pu être nettoyé : {e:#}"));
+                    problems.push(tr!(
+                        "le worktree n'a pas pu être nettoyé : {e:#}",
+                        "the worktree couldn’t be cleaned up: {e:#}"
+                    ));
                 }
             }
             // Kept: isola's services of the worktree stop all the same.
             (false, Some(wt), _) if isola::manages(&wt.path) => isola::down_later(wt.path),
             _ => {}
         }
-        let warning = (!problems.is_empty())
-            .then(|| format!("Agent supprimé, mais {}", problems.join(" ; ")));
+        let warning = (!problems.is_empty()).then(|| {
+            let problems = problems.join(&tr!(" ; ", "; "));
+            tr!(
+                "Agent supprimé, mais {problems}",
+                "Agent deleted, but {problems}"
+            )
+        });
         self.git.refresh(&pid);
         Ok(warning)
     }
@@ -3037,28 +3178,38 @@ impl<R: Runtime> Core<R> {
                 rt.meta.worktree.clone(),
             )
         };
-        let wt = wt.ok_or_else(|| anyhow!("cet agent n'a pas de worktree"))?;
+        let wt = wt.ok_or_else(|| {
+            anyhow!(tr!(
+                "cet agent n'a pas de worktree",
+                "this agent has no worktree"
+            ))
+        })?;
         let project = self.project(&pid)?;
         if git::has_tracked_changes(&project.path).await? {
-            bail!("Le dépôt principal a des modifications non commitées : commite-les ou mets-les de côté avant de merger.");
+            bail!(tr!(
+                "Le dépôt principal a des modifications non commitées : commite-les ou mets-les de côté avant de merger.",
+                "The main repository has uncommitted changes: commit or stash them before merging."
+            ));
         }
         let dirty = git::status(&wt.path).await?.entries.len();
         if dirty > 0 {
-            bail!("L'agent a {dirty} fichier(s) non commité(s) : demande-lui de commiter avant de merger.");
+            bail!(uncommitted_in_agent(i18n::ui(), dirty));
         }
         if !git::branch_exists(&project.path, &wt.base_branch).await {
-            bail!(
-                "La branche de base « {} » n'existe plus : « {} » ne peut pas être mergée dedans.",
-                wt.base_branch,
-                wt.branch
-            );
+            bail!(tr!(
+                "La branche de base « {base} » n'existe plus : « {branch} » ne peut pas être mergée dedans.",
+                "The base branch “{base}” no longer exists: “{branch}” can’t be merged into it.",
+                base = wt.base_branch,
+                branch = wt.branch
+            ));
         }
         // Counted from the base, not from HEAD: the folder may be on another branch.
         if git::ahead_of(&project.path, &wt.base_branch, &wt.branch).await? == 0 {
-            bail!(
-                "Rien à merger : la branche {} n'a pas de nouveau commit.",
-                wt.branch
-            );
+            bail!(tr!(
+                "Rien à merger : la branche {b} n'a pas de nouveau commit.",
+                "Nothing to merge: the branch {b} has no new commit.",
+                b = wt.branch
+            ));
         }
         let current = git::head_branch(&project.path).await;
         if current != wt.base_branch {
@@ -3103,7 +3254,10 @@ impl<R: Runtime> Core<R> {
     ) -> Result<Project> {
         let path = path.trim().trim_end_matches(['\\', '/']).to_string();
         if !Path::new(&path).is_dir() {
-            bail!("Le dossier {path} n'existe pas");
+            bail!(tr!(
+                "Le dossier {path} n'existe pas",
+                "The folder {path} doesn’t exist"
+            ));
         }
         if git::toplevel(&path).await.is_none() {
             git::init_repo(&path).await.context("git init")?;
@@ -3114,7 +3268,7 @@ impl<R: Runtime> Core<R> {
                 Path::new(&path)
                     .file_name()
                     .map(|n| n.to_string_lossy().to_string())
-                    .unwrap_or_else(|| "projet".into())
+                    .unwrap_or_else(|| tr!("projet", "project"))
             } else {
                 name.trim().to_string()
             },
@@ -3129,6 +3283,7 @@ impl<R: Runtime> Core<R> {
             worktree_teardown: Vec::new(),
             integrations: ProjectIntegrations::default(),
             commit_mode: CommitMode::default(),
+            agents_use_escouade: false,
         };
         self.projects.write().push(project.clone());
         {
@@ -3149,7 +3304,7 @@ impl<R: Runtime> Core<R> {
         let cur = projects
             .iter_mut()
             .find(|x| x.id == p.id)
-            .ok_or_else(|| anyhow!("projet introuvable"))?;
+            .ok_or_else(project_not_found)?;
         cur.name = p.name;
         cur.color = p.color;
         cur.worktree_per_agent = p.worktree_per_agent;
@@ -3158,12 +3313,15 @@ impl<R: Runtime> Core<R> {
         cur.worktree_setup = p.worktree_setup;
         cur.worktree_teardown = p.worktree_teardown;
         cur.commit_mode = p.commit_mode;
+        cur.agents_use_escouade = p.agents_use_escouade;
         // What was imported is the backend's own: the window's copy may be older.
         let imported = std::mem::take(&mut cur.integrations.imported);
         cur.integrations = crate::integrations::checked_links(p.integrations);
         cur.integrations.imported = imported;
         drop(projects);
         self.request_save();
+        // « Les agents peuvent utiliser Escouade » may have changed.
+        self.sync_mcp();
         Ok(())
     }
 
@@ -3229,6 +3387,8 @@ impl<R: Runtime> Core<R> {
         self.update_tray();
         // Its agents are gone: one of them may have held the board waiting for its quota.
         self.schedule();
+        // It may have been the last whose agents use Escouade.
+        self.sync_mcp();
         Ok(())
     }
 
@@ -3360,10 +3520,7 @@ impl<R: Runtime> Core<R> {
         agent_id: Option<String>,
     ) -> Result<Vec<FileChange>> {
         let project = self.project(project_id)?;
-        let root = self
-            .toplevel(&project.path)
-            .await
-            .ok_or_else(|| anyhow!("pas un dépôt git"))?;
+        let root = self.toplevel(&project.path).await.ok_or_else(not_a_repo)?;
         let prefix = sub_prefix(&root, &project.path);
         let agents: Vec<(String, Option<Worktree>, Vec<String>)> = self
             .project_agents(project_id)
@@ -3423,10 +3580,7 @@ impl<R: Runtime> Core<R> {
         };
         match worktree {
             Some(wt) => Ok(wt.path),
-            None => self
-                .toplevel(&project.path)
-                .await
-                .ok_or_else(|| anyhow!("pas un dépôt git")),
+            None => self.toplevel(&project.path).await.ok_or_else(not_a_repo),
         }
     }
 
@@ -3447,14 +3601,20 @@ impl<R: Runtime> Core<R> {
             };
             // Its worktree is not this project's to edit, nor to open a shell in.
             if owner != project_id {
-                bail!("agent introuvable dans ce projet");
+                bail!(tr!(
+                    "agent introuvable dans ce projet",
+                    "agent not found in this project"
+                ));
             }
             if let Some(wt) = worktree {
                 // Removed after a pull request or a push: said so, not in the system's words for a
                 // missing folder (and a shell started there would open in the app's own folder, as
                 // if it were the agent's).
                 if !Path::new(&wt.path).is_dir() {
-                    bail!("Le worktree de l'agent n'existe plus");
+                    bail!(tr!(
+                        "Le worktree de l'agent n'existe plus",
+                        "The agent’s worktree no longer exists"
+                    ));
                 }
                 return Ok((wt.path, Some(wt.base_branch)));
             }
@@ -3477,7 +3637,7 @@ impl<R: Runtime> Core<R> {
         let mut kept: Vec<fsedit::Kept> =
             worktrees_kept(&root, &self.project(project_id)?.path, base.is_some())
                 .into_iter()
-                .map(kept_as(fsedit::WORKTREES_KEPT))
+                .map(kept_as(fsedit::Holds::Worktrees))
                 .collect();
         let mut worktrees = git::worktree_paths(&root).await.unwrap_or_default();
         worktrees.extend(self.agents.read().values().filter_map(|h| {
@@ -3491,8 +3651,8 @@ impl<R: Runtime> Core<R> {
             .map(|p| p.path.clone())
             .collect();
         for (paths, what) in [
-            (worktrees, fsedit::WORKTREE_KEPT),
-            (projects, fsedit::PROJECT_KEPT),
+            (worktrees, fsedit::Holds::Worktree),
+            (projects, fsedit::Holds::Project),
         ] {
             kept.extend(
                 paths
@@ -3551,7 +3711,10 @@ impl<R: Runtime> Core<R> {
             _ => None,
         }));
         if !dir.is_dir() {
-            bail!("Le dossier « {sub} » n'existe pas");
+            bail!(tr!(
+                "Le dossier « {sub} » n'existe pas",
+                "The folder “{sub}” doesn’t exist"
+            ));
         }
         Ok(dir.to_string_lossy().into_owned())
     }
@@ -3621,12 +3784,14 @@ impl<R: Runtime> Core<R> {
         if !Path::new(&worktree.path).is_dir() {
             return Ok(None);
         }
-        // Its group is all of the worktree's dirty files: no path to list. Said with the French
-        // space before the colon, which a context would not give.
-        git::diff(&worktree.path, &[])
-            .await
-            .map(Some)
-            .map_err(|e| anyhow!("Diff du worktree de « {name} » non lu : {e:#}"))
+        // Its group is all of the worktree's dirty files: no path to list. Said with the colon of
+        // each language (the French space before it), which a context would not give.
+        git::diff(&worktree.path, &[]).await.map(Some).map_err(|e| {
+            anyhow!(tr!(
+                "Diff du worktree de « {name} » non lu : {e:#}",
+                "Diff of the worktree of “{name}” not read: {e:#}"
+            ))
+        })
     }
 
     /// Reverts a file of the files panel to HEAD (a new file is deleted).
@@ -3736,7 +3901,7 @@ impl<R: Runtime> Core<R> {
         } = self.commit_scope(project_id, agent_id).await?;
         let files = committed(scope, &paths);
         if files.is_empty() {
-            bail!(NOTHING_TO_COMMIT);
+            return Err(nothing_to_commit());
         }
         let n = format!("-n{RECENT_SUBJECTS}");
         let subjects: Vec<String> = git::text(&root, &["log", &n, "--format=%s"])
@@ -3761,7 +3926,8 @@ impl<R: Runtime> Core<R> {
         let answer = self
             .one_shot(COMMIT_PROPOSAL_SYSTEM, &prompt, asker.as_deref())
             .await?;
-        proposal_from_answer(&answer).ok_or_else(|| anyhow!("Haiku n'a rien proposé"))
+        proposal_from_answer(&answer)
+            .ok_or_else(|| anyhow!(tr!("Haiku n'a rien proposé", "Haiku proposed nothing")))
     }
 
     /// Commits, with the user's `message`, the files of `paths` that a direct commit of
@@ -3775,7 +3941,10 @@ impl<R: Runtime> Core<R> {
     ) -> Result<String> {
         let message = message.trim();
         if message.is_empty() {
-            bail!("Écris le message du commit.");
+            bail!(tr!(
+                "Écris le message du commit.",
+                "Write the commit message."
+            ));
         }
         // The app does not restart for an update in the middle of it (a hook may take its time).
         let _working = self.working();
@@ -3785,7 +3954,7 @@ impl<R: Runtime> Core<R> {
             .map(|f| f.path)
             .collect();
         if files.is_empty() {
-            bail!(NOTHING_TO_COMMIT);
+            return Err(nothing_to_commit());
         }
         let done = git::commit_paths(&root, &files, message).await;
         // Even after a refusal: a hook may have changed files (a formatter) before saying no.
@@ -3802,10 +3971,7 @@ impl<R: Runtime> Core<R> {
         agent_id: Option<String>,
     ) -> Result<GitLog> {
         let project = self.project(project_id)?;
-        let root = self
-            .toplevel(&project.path)
-            .await
-            .ok_or_else(|| anyhow!("pas un dépôt git"))?;
+        let root = self.toplevel(&project.path).await.ok_or_else(not_a_repo)?;
         let worktree = match &agent_id {
             Some(a) => self.agent(a)?.lock().meta.worktree.clone(),
             None => None,
@@ -3822,10 +3988,7 @@ impl<R: Runtime> Core<R> {
 
     pub async fn git_show(self: &Arc<Self>, project_id: &str, hash: &str) -> Result<String> {
         let project = self.project(project_id)?;
-        let root = self
-            .toplevel(&project.path)
-            .await
-            .ok_or_else(|| anyhow!("pas un dépôt git"))?;
+        let root = self.toplevel(&project.path).await.ok_or_else(not_a_repo)?;
         git::show(&root, hash).await
     }
 
@@ -3888,10 +4051,7 @@ impl<R: Runtime> Core<R> {
     /// may be asked for). Returns a summary for the user.
     pub async fn git_sync(self: &Arc<Self>, project_id: &str, op: SyncOp) -> Result<String> {
         let project = self.project(project_id)?;
-        let root = self
-            .toplevel(&project.path)
-            .await
-            .ok_or_else(|| anyhow!("pas un dépôt git"))?;
+        let root = self.toplevel(&project.path).await.ok_or_else(not_a_repo)?;
         let lock = self.sync_lock(&root);
         let out = {
             let _guard = lock.lock().await;
@@ -4253,11 +4413,12 @@ mod tests {
     fn a_copy_is_named_after_its_original_and_numbered_once_taken() {
         let taken = |names: &[&str]| names.iter().map(|s| s.to_string()).collect::<Vec<_>>();
         assert_eq!(
-            copy_name("refacto-auth", &taken(&["refacto-auth"])),
+            copy_name(i18n::Lang::Fr, "refacto-auth", &taken(&["refacto-auth"])),
             "refacto-auth (copie)"
         );
         assert_eq!(
             copy_name(
+                i18n::Lang::Fr,
                 "refacto-auth",
                 &taken(&["refacto-auth", "refacto-auth (copie)"])
             ),
@@ -4265,6 +4426,7 @@ mod tests {
         );
         assert_eq!(
             copy_name(
+                i18n::Lang::Fr,
                 "refacto-auth",
                 &taken(&["refacto-auth (copie)", "refacto-auth (copie 2)"])
             ),
@@ -4518,6 +4680,55 @@ mod tests {
         let e = user_content("x", &three).unwrap_err();
         assert!(e.to_string().contains("18 Mo en tout"), "{e}");
         assert!(user_content("x", &three[..2]).is_ok());
+    }
+
+    #[test]
+    fn what_the_core_tells_the_window_reads_in_english() {
+        use crate::i18n::Lang::{En, Fr};
+        // A copy named in English has its branch named so too.
+        assert_eq!(
+            copy_branch("refacto-auth", "refacto-auth (copy 2)"),
+            "escouade/refacto-auth-copy-2"
+        );
+        // A validation the app's stop cut, told as the ticket's block when the app starts again.
+        assert_eq!(approval_interrupted(En), "Approval interrupted");
+        assert_eq!(approval_interrupted(Fr), "Validation interrompue");
+        assert_eq!(
+            [size_label(En, 18 * MB), size_label(En, 256 * KB)],
+            ["18 MB", "256 KB"]
+        );
+        assert_eq!(size_label(Fr, 5 * MB), "5 Mo");
+        let refused = |current: &str| NotOnBase {
+            current: current.into(),
+            base: "main".into(),
+        };
+        assert_eq!(
+            refused("feature/x").text(En),
+            "The project is on the branch “feature/x”: switch to “main” before merging."
+        );
+        assert_eq!(
+            refused("").text(En),
+            "The project isn’t on any branch (detached HEAD): switch to “main” before merging."
+        );
+        // The copy of an agent, named in the language of the moment it is made.
+        let taken = vec!["refacto (copy)".to_string()];
+        assert_eq!(copy_name(En, "refacto", &taken), "refacto (copy 2)");
+        assert_eq!(copy_name(Fr, "refacto", &[]), "refacto (copie)");
+        assert_eq!(
+            [setup_done(En, 1, 3), setup_done(En, 2, 12)],
+            [
+                "Worktree set up (1 command, 3 s).",
+                "Worktree set up (2 commands, 12 s)."
+            ]
+        );
+        assert_eq!(
+            setup_done(Fr, 2, 12),
+            "Worktree préparé (2 commandes, 12 s)."
+        );
+        assert_eq!(
+            uncommitted_in_agent(En, 1),
+            "The agent has 1 uncommitted file: ask it to commit before merging."
+        );
     }
 
     #[test]

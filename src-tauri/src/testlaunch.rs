@@ -3,6 +3,7 @@
 //! and what a step of its recipe runs.
 
 use crate::board::PORT_BLOCK;
+use crate::i18n::{self, Lang};
 use crate::model::AgentMeta;
 use crate::paths;
 use crate::pty::{self, ShellInfo};
@@ -204,11 +205,17 @@ pub async fn run_tests(
         .unwrap_or_else(|| TestRun {
             passed: false,
             code: None,
-            tail: format!(
-                "Les tests n'ont pas fini en {} min.",
-                (limit.as_secs() / 60).max(1)
-            ),
+            tail: unfinished_tests(i18n::ui(), (limit.as_secs() / 60).max(1)),
         }))
+}
+
+/// What stands for the output of tests stopped after `minutes`.
+fn unfinished_tests(lang: Lang, minutes: u64) -> String {
+    tr_in!(
+        lang,
+        "Les tests n'ont pas fini en {minutes} min.",
+        "The tests didn’t finish in {minutes} min."
+    )
 }
 
 /// Runs `command` in `cwd` with `shell`, `env` added, without a window: how it ended and its last
@@ -287,13 +294,20 @@ fn shown_line(bytes: &[u8]) -> String {
 #[derive(Debug)]
 pub struct OutputLost(pub std::io::Error);
 
+impl OutputLost {
+    pub fn text(&self, lang: Lang) -> String {
+        let e = &self.0;
+        tr_in!(
+            lang,
+            "la sortie de la commande n'a pas pu être lue : {e}",
+            "the command’s output couldn’t be read: {e}"
+        )
+    }
+}
+
 impl std::fmt::Display for OutputLost {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "la sortie de la commande n'a pas pu être lue : {}",
-            self.0
-        )
+        f.write_str(&self.text(i18n::ui()))
     }
 }
 
@@ -410,31 +424,54 @@ pub struct RunSpec {
 }
 
 /// Why a recipe the user has not read runs nothing.
-pub const NOT_APPROVED: &str =
-    "La recette n'a pas été approuvée : lance « ▶ Tester » pour la lire avant qu'elle tourne.";
+pub fn not_approved(lang: Lang) -> String {
+    tr_in!(
+        lang,
+        "La recette n'a pas été approuvée : lance « ▶ Tester » pour la lire avant qu'elle tourne.",
+        "The recipe hasn’t been approved: run “▶ Test” to read it before it runs."
+    )
+}
 
 /// Why an isola configuration the user has not read starts nothing.
-pub const ISOLA_NOT_APPROVED: &str = "La configuration d'isola (.isola.toml) n'a pas été approuvée : lance « ▶ Tester » pour la lire avant qu'elle tourne.";
+pub fn isola_not_approved(lang: Lang) -> String {
+    tr_in!(
+        lang,
+        "La configuration d'isola (.isola.toml) n'a pas été approuvée : lance « ▶ Tester » pour la lire avant qu'elle tourne.",
+        "isola’s configuration (.isola.toml) hasn’t been approved: run “▶ Test” to read it before it runs."
+    )
+}
+
+/// The name of the terminal of a step of a recipe that has none of its own: its preparation's
+/// (« Préparation 1 »), a process without a name (« processus 2 »).
+fn step_name(lang: Lang, kind: &str, index: usize) -> String {
+    let n = index + 1;
+    match kind {
+        "prep" => tr_in!(lang, "Préparation {n}", "Setup {n}"),
+        _ => tr_in!(lang, "processus {n}", "process {n}"),
+    }
+}
 
 /// `isola up` runs the services and setup commands of the worktree's `.isola.toml`, which the agent
 /// can write: it starts only when `config`, the file as it is now, is the content the user approved.
 pub fn check_isola_approved(meta: &AgentMeta, config: &str) -> Result<()> {
     match &meta.approved_isola {
         Some(approved) if approved.config == config => Ok(()),
-        _ => bail!(ISOLA_NOT_APPROVED),
+        _ => bail!(isola_not_approved(i18n::ui())),
     }
 }
 
 /// Step `index` of the agent's recipe: its preparation ("prep") or its processes ("run"). Its
 /// folder must stay inside the worktree; the reserved ports come first in its variables.
 pub fn run_spec(meta: &AgentMeta, kind: &str, index: usize) -> Result<RunSpec> {
-    let recipe = meta
-        .recipe
-        .as_ref()
-        .ok_or_else(|| anyhow!("Cet agent n'a pas de recette de lancement."))?;
+    let recipe = meta.recipe.as_ref().ok_or_else(|| {
+        anyhow!(tr!(
+            "Cet agent n'a pas de recette de lancement.",
+            "This agent has no launch recipe."
+        ))
+    })?;
     // Defense in depth: whatever the window did, a recipe the user did not read runs nothing.
     if meta.approved_recipe.as_ref() != Some(recipe) {
-        bail!(NOT_APPROVED);
+        bail!(not_approved(i18n::ui()));
     }
     let root = meta
         .worktree
@@ -443,12 +480,14 @@ pub fn run_spec(meta: &AgentMeta, kind: &str, index: usize) -> Result<RunSpec> {
         .unwrap_or_else(|| meta.cwd.clone());
     let (name, command, dir, extra): (String, String, String, Vec<(String, String)>) = match kind {
         "prep" => {
-            let s = recipe
-                .prepare
-                .get(index)
-                .ok_or_else(|| anyhow!("Étape de préparation introuvable."))?;
+            let s = recipe.prepare.get(index).ok_or_else(|| {
+                anyhow!(tr!(
+                    "Étape de préparation introuvable.",
+                    "Setup step not found."
+                ))
+            })?;
             (
-                format!("Préparation {}", index + 1),
+                step_name(i18n::ui(), kind, index),
                 s.command.clone(),
                 s.dir.clone(),
                 Vec::new(),
@@ -458,16 +497,19 @@ pub fn run_spec(meta: &AgentMeta, kind: &str, index: usize) -> Result<RunSpec> {
             let p = recipe
                 .processes
                 .get(index)
-                .ok_or_else(|| anyhow!("Processus introuvable."))?;
+                .ok_or_else(|| anyhow!(tr!("Processus introuvable.", "Process not found.")))?;
             let name = if p.name.trim().is_empty() {
-                format!("processus {}", index + 1)
+                step_name(i18n::ui(), kind, index)
             } else {
                 p.name.clone()
             };
             let env = p.env.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
             (name, p.command.clone(), p.dir.clone(), env)
         }
-        other => bail!("Type d'étape inconnu : « {other} »"),
+        other => bail!(tr!(
+            "Type d'étape inconnu : « {other} »",
+            "Unknown kind of step: “{other}”"
+        )),
     };
     let dir = dir.trim();
     let cwd = if dir.is_empty() || dir == "." {
@@ -478,7 +520,10 @@ pub fn run_spec(meta: &AgentMeta, kind: &str, index: usize) -> Result<RunSpec> {
             .into_owned()
     };
     if !Path::new(&cwd).is_dir() {
-        bail!("Le dossier « {dir} » n'existe pas dans le worktree");
+        bail!(tr!(
+            "Le dossier « {dir} » n'existe pas dans le worktree",
+            "The folder “{dir}” doesn’t exist in the worktree"
+        ));
     }
     let mut env = port_env(meta.port_base);
     env.extend(extra);
@@ -790,6 +835,31 @@ mod tests {
         assert!(lost.downcast_ref::<OutputLost>().is_some());
     }
 
+    #[test]
+    fn a_launch_refused_or_cut_short_says_why_in_english() {
+        use crate::i18n::Lang::En;
+        assert_eq!(
+            not_approved(En),
+            "The recipe hasn’t been approved: run “▶ Test” to read it before it runs."
+        );
+        assert_eq!(
+            isola_not_approved(En),
+            "isola’s configuration (.isola.toml) hasn’t been approved: run “▶ Test” to read it before it runs."
+        );
+        assert_eq!(
+            OutputLost(std::io::Error::other("broken pipe")).text(En),
+            "the command’s output couldn’t be read: broken pipe"
+        );
+        assert_eq!(
+            unfinished_tests(En, 20),
+            "The tests didn’t finish in 20 min."
+        );
+        assert_eq!(
+            [step_name(En, "prep", 0), step_name(En, "run", 1)],
+            ["Setup 1", "process 2"]
+        );
+    }
+
     #[tokio::test]
     async fn a_commands_lines_are_handed_over_as_it_writes_them_its_errors_too() {
         let Some(shell) = default_shell() else { return };
@@ -943,7 +1013,7 @@ mod tests {
         let refused = |meta: &AgentMeta, what: &str| {
             for (kind, index) in [("prep", 0), ("run", 0)] {
                 let e = run_spec(meta, kind, index).unwrap_err().to_string();
-                assert_eq!(e, NOT_APPROVED, "{what}: {kind}");
+                assert_eq!(e, not_approved(crate::i18n::Lang::Fr), "{what}: {kind}");
             }
         };
         // Written by the agent and never read by the user: nothing of it runs.
@@ -998,7 +1068,7 @@ mod tests {
         let config = "[services.web]\ncommand = \"npm run dev\"\n";
         let refused = |meta: &AgentMeta, config: &str| {
             let e = check_isola_approved(meta, config).unwrap_err();
-            assert_eq!(e.to_string(), ISOLA_NOT_APPROVED);
+            assert_eq!(e.to_string(), isola_not_approved(crate::i18n::Lang::Fr));
         };
         refused(&meta, config);
         meta.approved_isola = Some(IsolaApproval {

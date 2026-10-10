@@ -8,6 +8,7 @@ use super::secrets;
 use super::text::{column_comment, default_states, loop_comment};
 use super::*;
 use crate::core::Core;
+use crate::i18n::{self, Lang};
 use crate::paths;
 use crate::tickets::TicketDraft;
 use crate::{board, git};
@@ -284,7 +285,11 @@ const GH_TOKEN_LIMIT: Duration = Duration::from_secs(15);
 /// from, its criteria are those found (when asked for), else the defaults.
 pub(crate) fn draft_of(i: &ExternalIssue, max_loops: u32, extract: bool) -> TicketDraft {
     let mut description = i.description.trim().to_string();
-    let from = format!("Ticket {} {} : {}", i.service.label(), i.key, i.url);
+    let (service, key, url) = (i.service.label(), &i.key, &i.url);
+    let from = tr!(
+        "Ticket {service} {key} : {url}",
+        "{service} ticket {key}: {url}"
+    );
     if !description.is_empty() {
         description.push_str("\n\n");
     }
@@ -335,7 +340,28 @@ fn external_of(i: &ExternalIssue) -> ExternalRef {
 }
 
 /// "3 tickets importés depuis Jira et Trello".
-pub(crate) fn imported_label(tickets: &[Ticket]) -> String {
+pub(crate) fn imported_label(lang: Lang, tickets: &[Ticket]) -> String {
+    let (n, from) = (tickets.len(), sources(lang, tickets));
+    tr_n_in!(
+        lang,
+        n,
+        "{n} ticket importé depuis {from}",
+        "{n} tickets importés depuis {from}",
+        "{n} ticket imported from {from}",
+        "{n} tickets imported from {from}"
+    )
+}
+
+/// What an automatic import tells: « 3 tickets importés depuis Jira dans demo ». The label is a
+/// whole clause, followed by where the tickets went in both languages.
+pub(crate) fn imported_into(lang: Lang, tickets: &[Ticket], project: &str) -> String {
+    let label = imported_label(lang, tickets);
+    tr_in!(lang, "{label} dans {project}", "{label} into {project}")
+}
+
+/// The services the tickets come from, each once, as a list of `lang` (« Jira, GitHub et
+/// Trello », “Jira, GitHub, and Trello”, as the window's `fList`).
+fn sources(lang: Lang, tickets: &[Ticket]) -> String {
     let mut services: Vec<Service> = Vec::new();
     for t in tickets {
         if let Some(e) = &t.external {
@@ -345,20 +371,39 @@ pub(crate) fn imported_label(tickets: &[Ticket]) -> String {
         }
     }
     let names: Vec<&str> = services.iter().map(|s| s.label()).collect();
-    let n = tickets.len();
-    format!(
-        "{n} {} depuis {}",
-        if n > 1 {
-            "tickets importés"
-        } else {
-            "ticket importé"
-        },
-        match names.as_slice() {
-            [] => String::new(),
-            [one] => one.to_string(),
-            [rest @ .., last] => format!("{} et {last}", rest.join(", ")),
+    match names.as_slice() {
+        [] => String::new(),
+        [one] => one.to_string(),
+        [a, b] => tr_in!(lang, "{a} et {b}", "{a} and {b}"),
+        [rest @ .., last] => {
+            let rest = rest.join(", ");
+            tr_in!(lang, "{rest} et {last}", "{rest}, and {last}")
         }
-    )
+    }
+}
+
+/// What the form of a service's account lacks, in a sentence: Jira's site, its e-mail, the token,
+/// Trello's API key. None when nothing is missing (GitHub's token may be the CLI's).
+fn missing_field(lang: Lang, service: Service, account: &Account) -> Option<String> {
+    Some(match service {
+        Service::Jira if account.site.is_empty() => {
+            tr_in!(
+                lang,
+                "Indique l'adresse du site.",
+                "Give the site’s address."
+            )
+        }
+        Service::Jira if account.email.is_empty() => {
+            tr_in!(lang, "Indique l'e-mail.", "Give the email.")
+        }
+        Service::Jira | Service::Trello if account.token.is_empty() => {
+            tr_in!(lang, "Indique le jeton.", "Give the token.")
+        }
+        Service::Trello if account.key.is_empty() => {
+            tr_in!(lang, "Indique la clé d'API.", "Give the API key.")
+        }
+        _ => return None,
+    })
 }
 
 impl<R: Runtime> Core<R> {
@@ -382,19 +427,21 @@ impl<R: Runtime> Core<R> {
     }
 
     async fn client(&self, service: Service) -> Result<Client> {
-        let account = self
-            .accounts
-            .read()
-            .get(service)
-            .cloned()
-            .ok_or_else(|| anyhow!("Aucun compte {} connecté", service.label()))?;
+        let account = self.accounts.read().get(service).cloned().ok_or_else(|| {
+            let name = service.label();
+            anyhow!(tr!(
+                "Aucun compte {name} connecté",
+                "No {name} account connected"
+            ))
+        })?;
         // Without its secrets, a call would be refused, or for GitHub go out with the CLI's
         // token, as whoever it is logged in as.
         if account.unread {
-            bail!(
-                "Trousseau du système illisible : relance Escouade ou reconnecte le compte {}.",
-                service.label()
-            );
+            let name = service.label();
+            bail!(tr!(
+                "Trousseau du système illisible : relance Escouade ou reconnecte le compte {name}.",
+                "The system keychain can’t be read: restart Escouade or connect the {name} account again."
+            ));
         }
         self.client_for(service, &account).await
     }
@@ -404,7 +451,12 @@ impl<R: Runtime> Core<R> {
         if let Some(t) = self.gh_token.lock().clone() {
             return Ok(t);
         }
-        let none = || anyhow!("GitHub : donne un jeton, ou connecte la CLI gh (gh auth login)");
+        let none = || {
+            anyhow!(tr!(
+                "GitHub : donne un jeton, ou connecte la CLI gh (gh auth login)",
+                "GitHub: give a token, or log the gh CLI in (gh auth login)"
+            ))
+        };
         let gh = self.gh_cli().ok_or_else(none)?;
         let mut cmd = tokio::process::Command::new(gh);
         cmd.args(["auth", "token"])
@@ -445,18 +497,14 @@ impl<R: Runtime> Core<R> {
             token: form.token.trim().to_string(),
             ..Default::default()
         };
-        let missing = match service {
-            Service::Jira if account.site.is_empty() => Some("l'adresse du site"),
-            Service::Jira if account.email.is_empty() => Some("l'e-mail"),
-            Service::Jira | Service::Trello if account.token.is_empty() => Some("le jeton"),
-            Service::Trello if account.key.is_empty() => Some("la clé d'API"),
-            _ => None,
-        };
-        if let Some(what) = missing {
-            bail!("Indique {what}.");
+        if let Some(missing) = missing_field(i18n::ui(), service, &account) {
+            bail!(missing);
         }
         if service == Service::Jira && !jira::secure(&account.site) {
-            bail!("Le site Jira doit être en https (http seulement sur cette machine).");
+            bail!(tr!(
+                "Le site Jira doit être en https (http seulement sur cette machine).",
+                "The Jira site must use https (http only on this machine)."
+            ));
         }
         if service == Service::Github && account.token.is_empty() {
             // The CLI may have been logged in again since its token was read.
@@ -500,10 +548,11 @@ impl<R: Runtime> Core<R> {
             .is_some_and(|a| !secrets::through_gh(service, a) && !a.in_file);
         let forgotten = secrets::forget(&*self.secrets, service);
         if !forgotten && in_keychain {
+            let name = service.label();
             self.hub.emit(UiEvent::Toast {
-                text: format!(
-                    "Le jeton {} n'a pas pu être retiré du trousseau du système : Escouade réessaiera au prochain démarrage, ou retire-le à la main (son nom contient « escouade »).",
-                    service.label()
+                text: tr!(
+                    "Le jeton {name} n'a pas pu être retiré du trousseau du système : Escouade réessaiera au prochain démarrage, ou retire-le à la main (son nom contient « escouade »).",
+                    "The {name} token couldn’t be removed from the system keychain: Escouade will try again at its next start, or remove it by hand (its name holds “escouade”)."
                 ),
             });
         }
@@ -537,7 +586,10 @@ impl<R: Runtime> Core<R> {
                 list.insert(
                     0,
                     Container {
-                        name: format!("{repo} (dépôt du projet)"),
+                        name: tr!(
+                            "{repo} (dépôt du projet)",
+                            "{repo} (the project’s repository)"
+                        ),
                         id: repo,
                     },
                 );
@@ -575,10 +627,13 @@ impl<R: Runtime> Core<R> {
         q: Query,
     ) -> Result<IssuePage> {
         let project = self.project(project_id)?;
-        let link = project
-            .integrations
-            .link(service)
-            .ok_or_else(|| anyhow!("Aucune source {} liée à ce projet", service.label()))?;
+        let link = project.integrations.link(service).ok_or_else(|| {
+            let name = service.label();
+            anyhow!(tr!(
+                "Aucune source {name} liée à ce projet",
+                "No {name} source linked to this project"
+            ))
+        })?;
         let mut page = self
             .client(service)
             .await?
@@ -694,7 +749,7 @@ impl<R: Runtime> Core<R> {
             }
             match self.import(&p.id, found, 5, true).await {
                 Ok(made) if !made.is_empty() => {
-                    let text = format!("{} dans {}", imported_label(&made), p.name);
+                    let text = imported_into(i18n::ui(), &made, &p.name);
                     log::info!("automatic import: {text}");
                     self.hub.emit(UiEvent::Toast { text });
                 }
@@ -733,7 +788,8 @@ impl<R: Runtime> Core<R> {
     pub async fn integration_resync(&self, ticket_id: &str) -> Result<()> {
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.sync_job(SyncJob::Resync(ticket_id.to_string(), tx));
-        rx.await.map_err(|_| anyhow!("Synchro interrompue"))?
+        rx.await
+            .map_err(|_| anyhow!(tr!("Synchro interrompue", "Sync interrupted")))?
     }
 
     /// One worker takes the jobs one at a time, in the order they were asked for: an external
@@ -998,6 +1054,39 @@ impl<R: Runtime> Core<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_import_says_in_english_how_many_and_from_where() {
+        use crate::i18n::Lang::En;
+        let t = |s: Service| Ticket {
+            external: Some(ExternalRef {
+                service: s,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert_eq!(
+            imported_label(En, &[t(Service::Jira)]),
+            "1 ticket imported from Jira"
+        );
+        assert_eq!(
+            imported_label(En, &[t(Service::Jira), t(Service::Trello)]),
+            "2 tickets imported from Jira and Trello"
+        );
+        // As the window's list, with the comma of English before « and ».
+        assert_eq!(
+            imported_into(
+                En,
+                &[t(Service::Github), t(Service::Jira), t(Service::Trello)],
+                "demo"
+            ),
+            "3 tickets imported from GitHub, Jira, and Trello into demo"
+        );
+        assert_eq!(
+            missing_field(En, Service::Trello, &Account::default()).as_deref(),
+            Some("Give the token.")
+        );
+    }
 
     fn imported(column: Column, iteration: u32) -> Ticket {
         Ticket {
@@ -1325,15 +1414,21 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            imported_label(&[t(Service::Jira)]),
+            imported_label(crate::i18n::Lang::Fr, &[t(Service::Jira)]),
             "1 ticket importé depuis Jira"
         );
         assert_eq!(
-            imported_label(&[t(Service::Jira), t(Service::Trello), t(Service::Jira)]),
+            imported_label(
+                crate::i18n::Lang::Fr,
+                &[t(Service::Jira), t(Service::Trello), t(Service::Jira)]
+            ),
             "3 tickets importés depuis Jira et Trello"
         );
         assert_eq!(
-            imported_label(&[t(Service::Github), t(Service::Jira), t(Service::Trello)]),
+            imported_label(
+                crate::i18n::Lang::Fr,
+                &[t(Service::Github), t(Service::Jira), t(Service::Trello)]
+            ),
             "3 tickets importés depuis GitHub, Jira et Trello"
         );
     }
