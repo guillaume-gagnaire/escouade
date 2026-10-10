@@ -39,7 +39,7 @@ describe('SettingsModal', () => {
     app.modal = { kind: 'settings' };
   });
 
-  it('shows one tab at a time, Claude Code first, with the app’s version under them', async () => {
+  it('shows one tab at a time, Application first, opens on Claude Code, with the app’s version under them', async () => {
     fakeBackend();
     render(SettingsModal);
     const dialog = screen.getByRole('dialog', { name: 'Réglages' });
