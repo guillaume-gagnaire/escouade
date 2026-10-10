@@ -832,7 +832,7 @@ describe('SettingsModal in English', () => {
       within(screen.getByRole('group', { name: 'Default permission mode' }))
         .getAllByRole('button')
         .map((b) => b.textContent),
-    ).toEqual(['Auto', 'Ask', 'Plan', 'Auto edits', 'Bypass']);
+    ).toEqual(['Auto', 'Ask', 'Plan', 'Accept edits', 'Bypass']);
     const path = screen.getByRole('textbox', { name: 'Executable path' });
     expect(path).toHaveAttribute('placeholder', 'claude (found in PATH)');
     app.claudeFound = false;
