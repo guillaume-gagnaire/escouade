@@ -1,11 +1,26 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { setLang } from '../../lib/i18n';
-import { app } from '../../lib/state.svelte';
+import { app, type TicketFormDraft } from '../../lib/state.svelte';
 import { menu } from '../../lib/menu.svelte';
+import type { Ticket, TicketDraft } from '../../lib/types';
 import { branchInfo, fakeBackend, resetApp, ticket } from '../../test/ipc';
 import TicketForm from './TicketForm.svelte';
+
+interface Props {
+  ticket?: Ticket;
+  onsubmit?: (d: TicketDraft) => boolean | void | Promise<boolean | void>;
+  resume?: TicketFormDraft;
+}
+
+/** The form in its window, as App shows it: `app.modal` is the dialog it is, and closing it empties `app.modal`. */
+function show(props: Props = {}) {
+  const onsubmit = (props.onsubmit ?? vi.fn()) as Mock<(d: TicketDraft) => boolean | void | Promise<boolean | void>>;
+  app.modal = { kind: 'ticket', projectId: 'p1', ticket: props.ticket, onSubmit: onsubmit as never, resume: props.resume };
+  const view = render(TicketForm, { projectId: 'p1', ticket: props.ticket, onsubmit, resume: props.resume });
+  return { ...view, onsubmit };
+}
 
 const fields = () => [
   screen.getByRole('textbox', { name: 'Titre du ticket' }),
@@ -25,10 +40,9 @@ describe('TicketForm', () => {
     ];
     const field = () => screen.getByRole('button', { name: /^Branche/ });
     /** The form, the project having `LIST` for branches. */
-    const open = (props: Record<string, unknown> = {}) => {
+    const open = (props: Props = {}) => {
       const backend = fakeBackend({ branch_list: () => LIST });
-      const onsubmit = vi.fn();
-      render(TicketForm, { projectId: 'p1', onsubmit, oncancel: vi.fn(), ...props });
+      const { onsubmit } = show(props);
       return { backend, onsubmit };
     };
     /** Chooses a branch to take up, through the menu and the picker. */
@@ -126,16 +140,15 @@ describe('TicketForm', () => {
       expect(app.modal).toMatchObject({ kind: 'confirm', title: 'Abandonner les modifications ?' });
     });
 
-    it('leaves the form’s Escape to the picker while it is open', async () => {
-      const oncancel = vi.fn();
-      open({ oncancel });
+    it('leaves the window’s Escape to the picker while it is open', async () => {
+      open();
       await userEvent.click(field());
       menu.open!.items[1].onClick!();
       menu.close();
       await screen.findByRole('dialog', { name: 'Choisir une branche' });
       await fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' });
       await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Choisir une branche' })).toBeNull());
-      expect(oncancel).not.toHaveBeenCalled();
+      expect(app.modal).toMatchObject({ kind: 'ticket' });
     });
 
     it('is written in English', async () => {
@@ -149,29 +162,213 @@ describe('TicketForm', () => {
     });
   });
 
+  describe('in its window', () => {
+    const title = () => screen.getByRole('textbox', { name: 'Titre du ticket' });
+    const ctrlEnter = () => userEvent.keyboard('{Control>}{Enter}{/Control}');
+
+    it('is a large dialog named after what it does, over the whole window', () => {
+      show();
+      expect(screen.getByRole('dialog', { name: 'Nouveau ticket' })).toHaveAttribute('aria-modal', 'true');
+      // Wide enough for long text, tall enough for the description: the dialog's own size, not the column's.
+      expect(screen.getByRole('dialog')).toHaveStyle({ width: '760px' });
+      expect(screen.getByRole('dialog')).toHaveClass('tall');
+    });
+
+    it('names the ticket being edited by its key', () => {
+      show({ ticket: ticket() });
+      expect(screen.getByRole('dialog', { name: 'Modifier DEM-1' })).toBeInTheDocument();
+    });
+
+    it('puts the focus in the title when it opens', () => {
+      show();
+      expect(title()).toHaveFocus();
+    });
+
+    it('gives the description a large field and the criteria a smaller one, both resizable', () => {
+      show();
+      const [description, criteria] = [
+        screen.getByRole('textbox', { name: 'Description' }),
+        screen.getByRole('textbox', { name: "Critères d'acceptation" }),
+      ];
+      expect(description).toHaveAttribute('rows', '12');
+      expect(criteria).toHaveAttribute('rows', '6');
+      // The title is a field of one line, above the others.
+      expect(title().tagName).toBe('INPUT');
+    });
+
+    it('names its two big fields with a label of their own, besides the placeholder', () => {
+      show();
+      expect(screen.getByLabelText('Description')).toBe(screen.getByRole('textbox', { name: 'Description' }));
+      expect(screen.getByLabelText("Critères d'acceptation")).toBe(screen.getByRole('textbox', { name: "Critères d'acceptation" }));
+    });
+
+    it('keeps a long description whole, over many lines, and sends it', async () => {
+      const onsubmit = vi.fn();
+      show({ onsubmit });
+      const long = Array.from({ length: 80 }, (_, i) => `Ligne ${i + 1} : ` + 'du texte assez long pour passer à la ligne '.repeat(4)).join(
+        '\n',
+      );
+      await userEvent.type(title(), 'Long');
+      const field = screen.getByRole('textbox', { name: 'Description' });
+      // Typed key by key, 80 lines would take long: pasted, as a long text usually comes.
+      await userEvent.click(field);
+      await userEvent.paste(long);
+      expect(field).toHaveValue(long);
+      await userEvent.keyboard('{Control>}{Enter}{/Control}');
+      expect(onsubmit).toHaveBeenCalledTimes(1);
+      expect(onsubmit.mock.calls[0][0].description).toBe(long.trim());
+    });
+
+    it('grows the description with what is typed in it, never shrinks it under the user’s hand', async () => {
+      show();
+      const field = screen.getByRole('textbox', { name: 'Description' });
+      let content = 100;
+      Object.defineProperty(field, 'scrollHeight', { configurable: true, get: () => content });
+      Object.defineProperty(field, 'clientHeight', { configurable: true, get: () => 100 });
+      Object.defineProperty(field, 'offsetHeight', { configurable: true, get: () => 102 });
+      await userEvent.type(field, 'a');
+      // Fits: left as it is.
+      expect(field.style.height).toBe('');
+      content = 340;
+      await userEvent.type(field, 'b');
+      // Its content plus its borders (offset minus client).
+      expect(field.style.height).toBe('342px');
+    });
+
+    it.each([
+      ['the title', () => title()],
+      ['the description', () => screen.getByRole('textbox', { name: 'Description' })],
+      ['the criteria', () => screen.getByRole('textbox', { name: "Critères d'acceptation" })],
+      ['a number of loops', () => screen.getByRole('button', { name: '8' })],
+      ['the branch', () => screen.getByRole('button', { name: /^Branche/ })],
+    ])('adds the ticket with Ctrl+Enter from %s', async (_, from) => {
+      const onsubmit = vi.fn();
+      show({ onsubmit });
+      await userEvent.type(title(), 'Un ticket');
+      from().focus();
+      await ctrlEnter();
+      expect(onsubmit).toHaveBeenCalledTimes(1);
+      expect(onsubmit).toHaveBeenCalledWith(expect.objectContaining({ title: 'Un ticket' }));
+    });
+
+    it('adds the ticket with Ctrl+Enter from the dependencies too', async () => {
+      resetApp({ tickets: [ticket({ id: 't2', key: 'DEM-2', title: 'Deux', createdAt: 2 })] });
+      const onsubmit = vi.fn();
+      show({ onsubmit });
+      await userEvent.type(title(), 'Un ticket');
+      screen.getByRole('searchbox', { name: 'Rechercher une clé' }).focus();
+      await ctrlEnter();
+      expect(onsubmit).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not add a ticket without a title with Ctrl+Enter, and writes no new line in the description for it', async () => {
+      const onsubmit = vi.fn();
+      show({ onsubmit });
+      const description = screen.getByRole('textbox', { name: 'Description' });
+      await userEvent.click(description);
+      await ctrlEnter();
+      expect(onsubmit).not.toHaveBeenCalled();
+      expect(description).toHaveValue('');
+    });
+
+    it('does not add the ticket with Enter alone in a textarea, nor with Shift or Alt held besides Ctrl', async () => {
+      const onsubmit = vi.fn();
+      show({ onsubmit });
+      await userEvent.type(title(), 'Un ticket');
+      const description = screen.getByRole('textbox', { name: 'Description' });
+      await userEvent.click(description);
+      await userEvent.keyboard('{Enter}');
+      expect(description).toHaveValue('\n');
+      await userEvent.keyboard('{Control>}{Shift>}{Enter}{/Shift}{/Control}');
+      await userEvent.keyboard('{Alt>}{Control>}{Enter}{/Control}{/Alt}');
+      expect(onsubmit).not.toHaveBeenCalled();
+    });
+
+    it('is not submitted twice by a Ctrl+Enter pressed again while it saves', async () => {
+      let done!: (ok: boolean) => void;
+      const onsubmit = vi.fn(() => new Promise<boolean>((r) => (done = r)));
+      show({ onsubmit });
+      await userEvent.type(title(), 'Un ticket');
+      await ctrlEnter();
+      await ctrlEnter();
+      expect(onsubmit).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('button', { name: 'Ajouter' })).toBeDisabled();
+      done(false);
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Ajouter' })).toBeEnabled());
+    });
+
+    it('says which key adds the ticket, and which saves a ticket that is edited', () => {
+      const { unmount } = show();
+      expect(screen.getByText('Ctrl+Entrée pour ajouter')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Ajouter' })).toHaveAttribute('aria-keyshortcuts', 'Control+Enter');
+      unmount();
+      show({ ticket: ticket() });
+      expect(screen.getByText('Ctrl+Entrée pour enregistrer')).toBeInTheDocument();
+    });
+
+    it('closes once the ticket is saved, and stays open, what was typed in it, when it was not', async () => {
+      const onsubmit = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+      show({ onsubmit });
+      await userEvent.type(title(), 'Un ticket');
+      await userEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
+      expect(onsubmit).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Ajouter' })).toBeEnabled());
+      expect(app.modal).toMatchObject({ kind: 'ticket' });
+      expect(title()).toHaveValue('Un ticket');
+      await userEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
+      await waitFor(() => expect(app.modal).toBeNull());
+    });
+
+    it('does not close, once saved, a dialog that took its place meanwhile, nor comes back to be saved twice', async () => {
+      let done!: (ok: boolean) => void;
+      show({ onsubmit: () => new Promise<boolean>((r) => (done = r)) });
+      await userEvent.type(title(), 'Un ticket');
+      await userEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
+      // « Quitter Escouade ? » takes its place while it saves.
+      app.modal = { kind: 'confirm', title: 'Quitter', body: '', confirm: 'Quitter', onConfirm: () => {} };
+      done(true);
+      await new Promise((r) => setTimeout(r));
+      expect(app.modal).toMatchObject({ kind: 'confirm' });
+    });
+
+    it('gives the focus back to what had it before, once it is closed', async () => {
+      const trigger = document.createElement('button');
+      document.body.append(trigger);
+      trigger.focus();
+      const { unmount } = show();
+      expect(title()).toHaveFocus();
+      unmount();
+      expect(trigger).toHaveFocus();
+      trigger.remove();
+    });
+
+    it('leaves with its cross as « Annuler » does', async () => {
+      show();
+      await userEvent.click(screen.getByRole('button', { name: 'Fermer' }));
+      expect(app.modal).toBeNull();
+    });
+  });
+
   it('is left with Escape from every field, not only the title', async () => {
-    const oncancel = vi.fn();
-    render(TicketForm, { projectId: 'p1', onsubmit: vi.fn(), oncancel });
+    show();
     for (const [i, field] of fields().entries()) {
+      app.modal = { kind: 'ticket', projectId: 'p1', onSubmit: () => true };
       // Focused, not clicked: a click on a number of loops would be a change.
       field.focus();
       await userEvent.keyboard('{Escape}');
-      expect(oncancel, `Escape in field ${i}`).toHaveBeenCalledTimes(i + 1);
+      expect(app.modal, `Escape in field ${i}`).toBeNull();
     }
-    expect(app.modal).toBeNull();
   });
 
   it('is left at once with « Annuler » when nothing changed', async () => {
-    const oncancel = vi.fn();
-    render(TicketForm, { projectId: 'p1', ticket: ticket(), onsubmit: vi.fn(), oncancel });
+    show({ ticket: ticket() });
     await userEvent.click(screen.getByRole('button', { name: 'Annuler' }));
-    expect(oncancel).toHaveBeenCalledTimes(1);
     expect(app.modal).toBeNull();
   });
 
   it('keeps Enter in the title to submit, and in the textareas to add a line', async () => {
     const onsubmit = vi.fn();
-    render(TicketForm, { projectId: 'p1', ticket: ticket(), onsubmit, oncancel: vi.fn() });
+    show({ ticket: ticket(), onsubmit });
     await userEvent.type(screen.getByRole('textbox', { name: "Critères d'acceptation" }), '{Enter}Un de plus');
     expect(onsubmit).not.toHaveBeenCalled();
     await userEvent.type(screen.getByRole('textbox', { name: 'Titre du ticket' }), '{Enter}');
@@ -195,27 +392,58 @@ describe('TicketForm', () => {
       });
 
     it('asks before Escape leaves a new ticket in which something was typed, and leaves once confirmed', async () => {
-      const oncancel = vi.fn();
-      render(TicketForm, { projectId: 'p1', onsubmit: vi.fn(), oncancel });
+      show();
       await userEvent.type(screen.getByRole('textbox', { name: 'Titre du ticket' }), 'Un début');
       await userEvent.keyboard('{Escape}');
       asked();
-      expect(oncancel).not.toHaveBeenCalled();
-      await (app.modal as any).onConfirm(false);
-      expect(oncancel).toHaveBeenCalledTimes(1);
+      // Agreeing closes the window (App's test), cancelling brings the form back.
+      expect(app.modal).toMatchObject({ kind: 'confirm', onCancel: expect.any(Function) });
     });
 
-    it('asks before « Annuler » leaves the form, which stays as it was if the confirmation is dismissed', async () => {
-      const oncancel = vi.fn();
-      render(TicketForm, { projectId: 'p1', onsubmit: vi.fn(), oncancel });
+    it('asks before « Annuler » leaves the form, which comes back as it was if the confirmation is dismissed', async () => {
+      const self = (show(), app.modal);
       await userEvent.type(screen.getByRole('textbox', { name: 'Description' }), 'Pour plus tard');
       await userEvent.click(screen.getByRole('button', { name: 'Annuler' }));
       asked();
-      expect(oncancel).not.toHaveBeenCalled();
-      // The confirmation closes (« Annuler » there): the form and what was typed are still on screen.
-      app.modal = null;
+      // The confirmation takes the window's place: the form is gone, its draft kept in the dialog it was.
+      cleanup();
+      expect(self).toMatchObject({ kind: 'ticket', resume: { description: 'Pour plus tard' } });
+      (app.modal as any).onCancel();
+      expect(app.modal).toBe(self);
+    });
+
+    it('comes back with the draft it had, still asking before it is left', async () => {
+      const resume: TicketFormDraft = {
+        title: 'Un début',
+        description: 'Pour plus tard',
+        criteria: 'Un critère\nUn autre',
+        maxLoops: 8,
+        after: [],
+        branch: 'feat/x',
+      };
+      const onsubmit = vi.fn();
+      show({ onsubmit, resume });
+      expect(screen.getByRole('textbox', { name: 'Titre du ticket' })).toHaveValue('Un début');
       expect(screen.getByRole('textbox', { name: 'Description' })).toHaveValue('Pour plus tard');
-      expect(oncancel).not.toHaveBeenCalled();
+      expect(screen.getByRole('textbox', { name: "Critères d'acceptation" })).toHaveValue('Un critère\nUn autre');
+      expect(screen.getByRole('button', { name: '8' })).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByRole('button', { name: /^Branche/ })).toHaveTextContent('feat/x');
+      await userEvent.keyboard('{Escape}');
+      asked();
+    });
+
+    it('does not ask when the draft it comes back with is the ticket as it was', async () => {
+      const resume: TicketFormDraft = {
+        title: 'Ajouter le fichier',
+        description: '',
+        criteria: 'Le fichier existe\nTests verts',
+        maxLoops: 5,
+        after: [],
+        branch: '',
+      };
+      show({ ticket: ticket(), resume });
+      await userEvent.keyboard('{Escape}');
+      expect(app.modal).toBeNull();
     });
 
     it.each([
@@ -224,38 +452,27 @@ describe('TicketForm', () => {
       ['its criteria', () => userEvent.type(screen.getByRole('textbox', { name: "Critères d'acceptation" }), '{Enter}Un de plus')],
       ['its loops', () => userEvent.click(screen.getByRole('button', { name: '8' }))],
     ])('asks when %s of a ticket being edited changed', async (_, change) => {
-      const oncancel = vi.fn();
-      render(TicketForm, { projectId: 'p1', ticket: ticket(), onsubmit: vi.fn(), oncancel });
+      show({ ticket: ticket() });
       await change();
       await userEvent.keyboard('{Escape}');
       asked();
-      expect(oncancel).not.toHaveBeenCalled();
     });
 
     it('does not ask when what was changed is back to what it was', async () => {
-      const oncancel = vi.fn();
-      render(TicketForm, { projectId: 'p1', ticket: ticket(), onsubmit: vi.fn(), oncancel });
+      show({ ticket: ticket() });
       await userEvent.click(screen.getByRole('button', { name: '8' }));
       await userEvent.click(screen.getByRole('button', { name: '5' }));
       await userEvent.type(screen.getByRole('textbox', { name: 'Description' }), 'x{Backspace}');
       await userEvent.keyboard('{Escape}');
       expect(app.modal).toBeNull();
-      expect(oncancel).toHaveBeenCalledTimes(1);
     });
 
-    it('keeps the Escape that asked from reaching the window, whose listener would dismiss the confirmation at once', async () => {
-      const onkeydown = vi.fn();
-      window.addEventListener('keydown', onkeydown);
-      try {
-        render(TicketForm, { projectId: 'p1', onsubmit: vi.fn(), oncancel: vi.fn() });
-        await userEvent.type(screen.getByRole('textbox', { name: 'Titre du ticket' }), 'Un début');
-        onkeydown.mockClear();
-        await userEvent.keyboard('{Escape}');
-        asked();
-        expect(onkeydown).not.toHaveBeenCalled();
-      } finally {
-        window.removeEventListener('keydown', onkeydown);
-      }
+    it('does not leave while the ticket is being saved', async () => {
+      show({ onsubmit: () => new Promise<boolean>(() => {}) });
+      await userEvent.type(screen.getByRole('textbox', { name: 'Titre du ticket' }), 'Un début');
+      await userEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
+      await userEvent.keyboard('{Escape}');
+      expect(app.modal).toMatchObject({ kind: 'ticket' });
     });
   });
 });
@@ -283,7 +500,7 @@ describe('TicketForm « Après »', () => {
 
   it('lists the other tickets of the project not done yet, by key and title, and sends those checked in their order', async () => {
     const onsubmit = vi.fn();
-    render(TicketForm, { projectId: 'p1', onsubmit, oncancel: vi.fn() });
+    show({ onsubmit });
     expect(listed()).toEqual(['DEM-2 Deux', 'DEM-3 Trois', 'DEM-5 Cinq']);
     await userEvent.type(screen.getByRole('textbox', { name: 'Titre du ticket' }), 'Nouveau');
     await userEvent.click(box('DEM-5'));
@@ -298,7 +515,7 @@ describe('TicketForm « Après »', () => {
       ...app.tickets.t2,
       external: { service: 'jira', id: '1', key: 'ATL-1287', container: 'ATL', url: 'https://x', error: null },
     };
-    render(TicketForm, { projectId: 'p1', onsubmit: vi.fn(), oncancel: vi.fn() });
+    show();
     await userEvent.click(box('DEM-3'));
     await userEvent.type(search(), 'dem-5');
     expect(listed()).toEqual(['DEM-3 Trois', 'DEM-5 Cinq']);
@@ -314,7 +531,7 @@ describe('TicketForm « Après »', () => {
 
   it('refuses a ticket that already waits for this one, directly or not, and lists not the ticket itself', async () => {
     const onsubmit = vi.fn();
-    render(TicketForm, { projectId: 'p1', ticket: app.tickets.t5, onsubmit, oncancel: vi.fn() });
+    show({ ticket: app.tickets.t5, onsubmit });
     expect(listed()).toEqual(['DEM-2 Deux', 'DEM-3 Trois']);
     await userEvent.click(box('DEM-3'));
     expect(within(group()).getByRole('alert')).toHaveTextContent('DEM-3 attend déjà DEM-5 (directement ou non).');
@@ -329,15 +546,14 @@ describe('TicketForm « Après »', () => {
 
   it('keeps what an edited ticket comes after, those done included, and asks before leaving once that changed', async () => {
     const onsubmit = vi.fn();
-    const oncancel = vi.fn();
-    render(TicketForm, { projectId: 'p1', ticket: ticket({ after: ['t4', 't2'] }), onsubmit, oncancel });
+    show({ ticket: ticket({ after: ['t4', 't2'] }), onsubmit });
     expect(box('DEM-2')).toBeChecked();
     // Unchecked then checked again: nothing changed.
     await userEvent.click(box('DEM-2'));
     await userEvent.click(box('DEM-2'));
     await userEvent.keyboard('{Escape}');
     expect(app.modal).toBeNull();
-    expect(oncancel).toHaveBeenCalledTimes(1);
+    app.modal = { kind: 'ticket', projectId: 'p1', onSubmit: () => true };
     await userEvent.click(box('DEM-2'));
     await userEvent.keyboard('{Escape}');
     expect(app.modal).toMatchObject({ kind: 'confirm', title: 'Abandonner les modifications ?' });
@@ -348,7 +564,7 @@ describe('TicketForm « Après »', () => {
 
   it('shows no « Après » when no other ticket of the project is left to wait for', () => {
     resetApp({ tickets: [ticket({ id: 't4', column: 'done' }), ticket({ id: 'x1', projectId: 'p2' })] });
-    render(TicketForm, { projectId: 'p1', onsubmit: vi.fn(), oncancel: vi.fn() });
+    show();
     expect(screen.queryByRole('group', { name: 'Après' })).not.toBeInTheDocument();
   });
 });
@@ -362,7 +578,7 @@ describe('TicketForm in English', () => {
   });
 
   it('writes its fields, its loops and its dependencies in English', async () => {
-    render(TicketForm, { projectId: 'p1', onsubmit: vi.fn(), oncancel: vi.fn() });
+    show();
     expect(screen.getByRole('textbox', { name: 'Ticket title' })).toHaveAttribute('placeholder', 'Ticket title');
     expect(screen.getByRole('textbox', { name: 'Description' })).toHaveAttribute('placeholder', 'Description (optional)');
     expect(screen.getByRole('textbox', { name: 'Acceptance criteria' })).toHaveAttribute(
@@ -377,8 +593,19 @@ describe('TicketForm in English', () => {
     expect(screen.getByRole('button', { name: 'Add' })).toBeInTheDocument();
   });
 
+  it('names its window and says the key that adds the ticket in English', () => {
+    const { unmount } = show();
+    expect(screen.getByRole('dialog', { name: 'New ticket' })).toBeInTheDocument();
+    expect(screen.getByText('Ctrl+Enter to add')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+    unmount();
+    show({ ticket: ticket() });
+    expect(screen.getByRole('dialog', { name: 'Edit DEM-1' })).toBeInTheDocument();
+    expect(screen.getByText('Ctrl+Enter to save')).toBeInTheDocument();
+  });
+
   it('says Save for a ticket that is edited, and asks in English before throwing a change away', async () => {
-    render(TicketForm, { ticket: ticket(), projectId: 'p1', onsubmit: vi.fn(), oncancel: vi.fn() });
+    show({ ticket: ticket() });
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
     await userEvent.type(screen.getByRole('textbox', { name: 'Ticket title' }), '!');
     await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
@@ -394,7 +621,7 @@ describe('TicketForm in English', () => {
     resetApp({
       tickets: [ticket({ id: 't2', key: 'DEM-2', title: 'Deux', createdAt: 2, after: ['t1'] })],
     });
-    render(TicketForm, { ticket: ticket(), projectId: 'p1', onsubmit: vi.fn(), oncancel: vi.fn() });
+    show({ ticket: ticket() });
     await userEvent.click(within(screen.getByRole('group', { name: 'After' })).getByRole('checkbox', { name: /^DEM-2 / }));
     expect(screen.getByRole('alert')).toBeInTheDocument();
   });

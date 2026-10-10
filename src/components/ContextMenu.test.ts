@@ -106,6 +106,25 @@ describe('ContextMenu on the keyboard', () => {
     await waitFor(() => expect(opener).toHaveFocus());
   });
 
+  it('keeps its Escape to itself while the focus is in it: a dialog under it does not close with it', async () => {
+    const seen: string[] = [];
+    const listener = (e: KeyboardEvent) => seen.push(e.key);
+    render(ContextMenu);
+    menu.showAt(opener, entries());
+    await waitFor(() => expect(screen.getByRole('menuitem', { name: 'Premier' })).toHaveFocus());
+    window.addEventListener('keydown', listener);
+    try {
+      await userEvent.keyboard('{Escape}');
+      expect(menu.open).toBeNull();
+      expect(seen).toEqual([]);
+      // Once closed, the key goes on its way again.
+      await userEvent.keyboard('{Escape}');
+      expect(seen).toEqual(['Escape']);
+    } finally {
+      window.removeEventListener('keydown', listener);
+    }
+  });
+
   it('leaves the focus to the dialog an entry opens', async () => {
     render(ContextMenu);
     const dialog = document.createElement('div');

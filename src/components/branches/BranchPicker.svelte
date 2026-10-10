@@ -20,12 +20,15 @@
     onclose,
     mode = 'switch',
     onpick,
+    over = false,
   }: {
     projectId: string;
     anchor?: HTMLElement;
     onclose: () => void;
     mode?: 'switch' | 'pick';
     onpick?: (b: BranchInfo) => void;
+    /** Opened from a dialog: over it, not under its overlay. */
+    over?: boolean;
   } = $props();
   const picking = $derived(mode === 'pick');
 
@@ -275,9 +278,10 @@
 <svelte:window onkeydowncapture={onWindowKeydown} />
 
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-<div class="backdrop" onclick={onclose}></div>
+<div class="backdrop" class:over onclick={onclose}></div>
 <div
   class="picker"
+  class:over
   use:trapFocus
   role="dialog"
   tabindex="-1"
@@ -407,6 +411,13 @@
     position: fixed;
     inset: 0;
     z-index: 40;
+  }
+  /* Over the dialogs (z-index 50), under the menus (90). */
+  .backdrop.over {
+    z-index: 60;
+  }
+  .picker.over {
+    z-index: 61;
   }
   .picker {
     position: fixed;

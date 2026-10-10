@@ -83,3 +83,23 @@ test('the interface in English, then in French without a restart', async ({ app 
   // The menu and the tooltip of the icon in the notification area are native: Playwright cannot read them. Their words
   // in each language, and their being made again when the language changes, are tested in the backend (menus.rs).
 });
+
+test('the window of a new ticket is in English, its key hint included', async ({ app }) => {
+  const { page } = app;
+  await addProject(page, app.repo, { lang: 'en', firstAgent: false });
+  await page.getByRole('button', { name: /^Kanban/ }).click();
+  await page.getByRole('button', { name: 'New ticket' }).click();
+  const dialog = page.getByRole('dialog', { name: 'New ticket' });
+  await expect(dialog.getByRole('textbox', { name: 'Ticket title' })).toBeFocused();
+  await expect(dialog.getByRole('textbox', { name: 'Description' })).toHaveAttribute('placeholder', 'Description (optional)');
+  await expect(dialog.getByRole('textbox', { name: 'Acceptance criteria' })).toBeVisible();
+  await expect(dialog.getByRole('group', { name: 'Max loops' })).toBeVisible();
+  await expect(dialog.getByText('Ctrl+Enter to add')).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Add', exact: true })).toBeDisabled();
+  // Something typed: leaving asks, in English.
+  await dialog.getByRole('textbox', { name: 'Ticket title' }).fill('Started');
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Discard your changes?' })).toBeVisible();
+  await page.getByRole('dialog', { name: 'Discard your changes?' }).getByRole('button', { name: 'Discard' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});

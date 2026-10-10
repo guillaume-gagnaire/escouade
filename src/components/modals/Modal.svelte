@@ -6,10 +6,11 @@
   let {
     title,
     width = 540,
+    tall = false,
     onclose,
     children,
     footer,
-  }: { title: string; width?: number; onclose: () => void; children: Snippet; footer?: Snippet } = $props();
+  }: { title: string; width?: number; tall?: boolean; onclose: () => void; children: Snippet; footer?: Snippet } = $props();
 
   // Only a click on the overlay closes it: not the end of a selection dragged out of a field (what was typed there
   // would be lost).
@@ -26,6 +27,7 @@
 >
   <div
     class="modal"
+    class:tall
     use:trapFocus
     style:width="{width}px"
     onclick={(e) => e.stopPropagation()}
@@ -71,6 +73,10 @@
     border-radius: 14px;
     box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
     animation: ccFadeIn 0.15s ease-out;
+  }
+  /* A window to write in: its height does not follow its content, which would move it at every line typed. */
+  .modal.tall {
+    height: min(88vh, 860px);
   }
   .head {
     flex: none;

@@ -33,6 +33,7 @@ import type {
   ShellInfo,
   TermInfo,
   Ticket,
+  TicketDraft,
   UiEvent,
   UiState,
   Usage,
@@ -97,12 +98,34 @@ export type Modal =
    */
   | { kind: 'newBranch'; projectId: string; start?: string; resume?: NewBranchDraft }
   /** « Branches mergées » : the local branches already in the project's base, to delete together. */
-  | { kind: 'mergedBranches'; projectId: string };
+  | { kind: 'mergedBranches'; projectId: string }
+  /**
+   * The form of a ticket, new or (`ticket`) edited, in a large window. `onSubmit` saves it and tells whether it did (the
+   * window closes then, else it stays with what was typed); `resume`: what had been typed, back from a dialog that took
+   * its place (the confirmation of its closing).
+   */
+  | {
+      kind: 'ticket';
+      projectId: string;
+      ticket?: Ticket;
+      onSubmit: (d: TicketDraft) => boolean | Promise<boolean>;
+      resume?: TicketFormDraft;
+    };
 
 /** What a commit's window had written when another dialog took its place: its message, and Haiku's proposal as it came. */
 export interface CommitDraft {
   message: string;
   proposed: string;
+}
+
+/** What the form of a ticket had in its fields when another dialog took its place (the criteria as the text of their field). */
+export interface TicketFormDraft {
+  title: string;
+  description: string;
+  criteria: string;
+  maxLoops: number;
+  after: string[];
+  branch: string;
 }
 
 /** What the window of a new branch had written when the question of the stash took its place. */
