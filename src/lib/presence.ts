@@ -12,7 +12,17 @@ const INPUTS = ['keydown', 'pointerdown', 'pointermove', 'wheel'] as const;
 export function watchPresence(): () => void {
   let activeAt = Date.now();
   let sent = '';
-  const onInput = () => (activeAt = Date.now());
+  /** The restart whose countdown was told of the user's return already. */
+  let hurried: number | null = null;
+  const onInput = () => {
+    activeAt = Date.now();
+    // During a restart's countdown, the user back at the window is told at once: up to 5 s later, the restart could
+    // come right under their hands. Once per countdown: its first input calls it off.
+    if (app.restartAt !== null && app.restartAt !== hurried) {
+      hurried = app.restartAt;
+      report();
+    }
+  };
   // Caught on the way down: a component that stops an event still had the user's hand on it.
   for (const e of INPUTS) window.addEventListener(e, onInput, { capture: true, passive: true });
   const report = () => {
