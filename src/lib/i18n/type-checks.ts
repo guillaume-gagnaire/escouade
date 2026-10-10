@@ -63,6 +63,8 @@ defineSample({ a: 'A', g: { hi: 'Hello', bye: 'Bye' }, files });
 defineSample({ a: 'A', g: { hi: 'Hello {name}', bye: 'Bye' }, files: { one: 'one file', other: '{count} files in {d}' } });
 // @ts-expect-error a plural without its « one » form
 defineSample({ a: 'A', g: { hi: 'Hello {name}', bye: 'Bye' }, files: { other: '{count} files in {dir}' } });
+// @ts-expect-error a plural with a form French does not write
+defineSample({ a: 'A', g: { hi: 'Hello {name}', bye: 'Bye' }, files: { ...files, zero: 'no files in {dir}' } });
 // @ts-expect-error a plural written as a single text
 defineSample({ a: 'A', g: { hi: 'Hello {name}', bye: 'Bye' }, files: '{count} files in {dir}' });
 
