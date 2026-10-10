@@ -3510,18 +3510,13 @@ impl<R: Runtime> Core<R> {
         let mut out = Vec::new();
         for (agent_id, in_worktree, paths) in groups {
             let diff = if in_worktree {
-                // An agent deleted (or its worktree removed) since the list was made has no file
-                // left to show: the project's checkout must not be read in its place.
-                let worktree = agent_id
-                    .as_deref()
-                    .and_then(|a| self.agent(a).ok())
-                    .and_then(|h| h.lock().meta.worktree.clone());
-                let Some(worktree) = worktree else { continue };
-                // Its group is all of the worktree's dirty files: no path to list.
-                git::diff(&worktree.path, &[]).await.unwrap_or_default()
+                let Some(diff) = self.worktree_diff(agent_id.as_deref()).await? else {
+                    continue;
+                };
+                diff
             } else {
-                // Likewise for the checkout when no agent is credited with some of its files;
-                // else each group lists its own paths.
+                // As for a worktree, no path to list for the checkout when no agent is credited
+                // with some of its files; else each group lists its own paths.
                 let listed: &[String] = if checkout_groups == 1 { &[] } else { &paths };
                 git::diff(&self.files_root(project_id, None).await?, listed).await?
             };
@@ -3532,6 +3527,26 @@ impl<R: Runtime> Core<R> {
             });
         }
         Ok(out)
+    }
+
+    /// The diff of an agent's worktree group of `git_project_diff`: all of the worktree's dirty
+    /// files. None for an agent deleted (or its worktree removed) since the list was made: it has
+    /// no file left to show, and the project's checkout must not be read in its place. Err when
+    /// git cannot read the worktree: an empty diff would leave its files out without a word.
+    pub(crate) async fn worktree_diff(&self, agent_id: Option<&str>) -> Result<Option<String>> {
+        let worktree = agent_id.and_then(|a| self.agent(a).ok()).and_then(|h| {
+            let rt = h.lock();
+            let name = rt.meta.name.clone();
+            rt.meta.worktree.clone().map(|w| (name, w))
+        });
+        let Some((name, worktree)) = worktree else {
+            return Ok(None);
+        };
+        // Its group is all of the worktree's dirty files: no path to list.
+        git::diff(&worktree.path, &[])
+            .await
+            .map(Some)
+            .with_context(|| format!("Diff du worktree de « {name} » non lu"))
     }
 
     /// Reverts a file of the files panel to HEAD (a new file is deleted).

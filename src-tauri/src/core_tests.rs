@@ -1286,6 +1286,29 @@ async fn the_project_diff_of_a_checkout_split_between_owners_keeps_the_edits_amo
 }
 
 #[tokio::test]
+async fn the_project_diff_says_why_an_agents_worktree_could_not_be_read() {
+    let h = harness("core-project-diff-unreadable");
+    let (p, _r) = h.project(true).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let wt = PathBuf::from(a.meta.worktree.clone().unwrap().path);
+    std::fs::write(wt.join("new.ts"), "x\n").unwrap();
+    let id = a.meta.id.clone();
+    let diff = h.core.worktree_diff(Some(&id)).await.unwrap().unwrap();
+    assert!(diff.contains("+++ b/new.ts"), "{diff}");
+    // Listed, then broken before its diff is read: its files are not left out without a word.
+    std::fs::write(wt.join(".git"), "gitdir: nowhere\n").unwrap();
+    let e = h.core.worktree_diff(Some(&id)).await.unwrap_err();
+    let said = format!("{e:#}");
+    let name = h.core.agent(&id).unwrap().lock().meta.name.clone();
+    assert!(
+        said.starts_with(&format!("Diff du worktree de « {name} » non lu: ")),
+        "{said}"
+    );
+    // An agent deleted since the list was made has nothing left to show.
+    assert_eq!(h.core.worktree_diff(Some("gone")).await.unwrap(), None);
+}
+
+#[tokio::test]
 async fn the_project_diff_is_empty_when_nothing_is_listed() {
     let h = harness("core-project-diff-clean");
     let (p, _r) = h.project(true).await;
