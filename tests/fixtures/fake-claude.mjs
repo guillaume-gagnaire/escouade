@@ -362,7 +362,9 @@ function startSession() {
       await beat();
     };
     const bash = (id, command, content = 'ok') =>
-      tool(id, 'Bash', { command, description: command }, content, { tool_use_result: { stdout: content, stderr: '', interrupted: false } });
+      tool(id, 'Bash', { command, description: command }, content, {
+        tool_use_result: { stdout: content, stderr: '', interrupted: false },
+      });
     // A subagent in the foreground: its own calls, in its thread, then its result. False: the turn
     // was cut in the middle of it.
     const subagent = async (id, description, n, calls) => {
@@ -377,7 +379,14 @@ function startSession() {
         await beat();
       }
       const content = [{ type: 'text', text: `${description} : fait.` }];
-      const done = { status: 'completed', agentId: `agent-${id}`, content, totalToolUseCount: calls.length, totalDurationMs: 90, totalTokens: 1500 };
+      const done = {
+        status: 'completed',
+        agentId: `agent-${id}`,
+        content,
+        totalToolUseCount: calls.length,
+        totalDurationMs: 90,
+        totalTokens: 1500,
+      };
       toolResult(id, content, { tool_use_result: done });
       await beat();
       return true;
@@ -419,7 +428,13 @@ function startSession() {
       for (const [i, title] of titles.entries()) {
         const n = i + 1;
         if (withList) {
-          await tool(`toolu_sp_ts${n}`, 'TaskUpdate', { taskId: String(n), status: 'in_progress' }, `Updated task #${n} status`, status(n, 'pending', 'in_progress'));
+          await tool(
+            `toolu_sp_ts${n}`,
+            'TaskUpdate',
+            { taskId: String(n), status: 'in_progress' },
+            `Updated task #${n} status`,
+            status(n, 'pending', 'in_progress'),
+          );
         }
         put(`${space}/task-${n}-brief.md`, `### Task ${n}: ${title}\n\n- [ ] **Step 1: Écrire**\n`);
         await bash(`toolu_sp_st${n}`, `task-start ${planRel} ${n}`, `${space}/task-${n}-brief.md`);
@@ -438,10 +453,23 @@ function startSession() {
         await subagent(`toolu_sp_rv${n}`, `Relire la tâche ${n}`, n, [read, ['Bash', { command: 'git diff', description: 'git diff' }]]);
         if (n === 2) {
           // A subagent that goes on after the turn, and a workflow that ends within it.
-          const bg = { description: 'Surveiller la suite de tests', subagent_type: 'general-purpose', prompt: 'Surveille les tests.', run_in_background: true };
+          const bg = {
+            description: 'Surveiller la suite de tests',
+            subagent_type: 'general-purpose',
+            prompt: 'Surveille les tests.',
+            run_in_background: true,
+          };
           assistant({ type: 'tool_use', id: 'toolu_sp_bg', name: 'Agent', input: bg });
           await beat();
-          system({ subtype: 'task_started', task_id: 'fakebg-agent', tool_use_id: 'toolu_sp_bg', description: bg.description, subagent_type: bg.subagent_type, is_backgrounded: true, task_type: 'local_agent' });
+          system({
+            subtype: 'task_started',
+            task_id: 'fakebg-agent',
+            tool_use_id: 'toolu_sp_bg',
+            description: bg.description,
+            subagent_type: bg.subagent_type,
+            is_backgrounded: true,
+            task_type: 'local_agent',
+          });
           await beat();
           toolResult('toolu_sp_bg', 'Async agent launched successfully.\nagentId: fakebg-agent (internal ID)', {
             tool_use_result: { status: 'async_launched', agentId: 'fakebg-agent', description: bg.description },
@@ -449,21 +477,51 @@ function startSession() {
           await beat();
           assistant({ type: 'tool_use', id: 'toolu_sp_wf', name: 'Workflow', input: { workflow: 'revue-finale' } });
           await beat();
-          system({ subtype: 'task_started', task_id: 'fakewf1', tool_use_id: 'toolu_sp_wf', description: 'Revue finale', task_type: 'local_workflow', workflow_name: 'revue-finale' });
+          system({
+            subtype: 'task_started',
+            task_id: 'fakewf1',
+            tool_use_id: 'toolu_sp_wf',
+            description: 'Revue finale',
+            task_type: 'local_workflow',
+            workflow_name: 'revue-finale',
+          });
           await beat();
-          for (const [phase, tokens, uses] of [['Relecture : sécurité', 300, 2], ['Relecture : style', 640, 5]]) {
+          for (const [phase, tokens, uses] of [
+            ['Relecture : sécurité', 300, 2],
+            ['Relecture : style', 640, 5],
+          ]) {
             const usage = { total_tokens: tokens, tool_uses: uses, duration_ms: uses * 20 };
-            system({ subtype: 'task_progress', task_id: 'fakewf1', tool_use_id: 'toolu_sp_wf', description: phase, usage, last_tool_name: phase.split(' : ')[1] });
+            system({
+              subtype: 'task_progress',
+              task_id: 'fakewf1',
+              tool_use_id: 'toolu_sp_wf',
+              description: phase,
+              usage,
+              last_tool_name: phase.split(' : ')[1],
+            });
             await beat();
           }
-          system({ subtype: 'task_notification', task_id: 'fakewf1', tool_use_id: 'toolu_sp_wf', status: 'completed', summary: 'Workflow "revue-finale" completed', usage: { total_tokens: 640, tool_uses: 5, duration_ms: 100 } });
+          system({
+            subtype: 'task_notification',
+            task_id: 'fakewf1',
+            tool_use_id: 'toolu_sp_wf',
+            status: 'completed',
+            summary: 'Workflow "revue-finale" completed',
+            usage: { total_tokens: 640, tool_uses: 5, duration_ms: 100 },
+          });
           toolResult('toolu_sp_wf', 'Workflow revue-finale completed');
           await beat();
         }
         fs.appendFileSync(ledger, `Task ${n}: complete (commits a1b2c3${n}..d4e5f6${n}, tests: npm test → 12 passed, review clean)\n`);
         await bash(`toolu_sp_td${n}`, `task-done ${planRel} ${n} d4e5f6${n} -- npm test`, `recorded: Task ${n}`);
         if (withList) {
-          await tool(`toolu_sp_tu${n}`, 'TaskUpdate', { taskId: String(n), status: 'completed' }, `Updated task #${n} status`, status(n, 'in_progress', 'completed'));
+          await tool(
+            `toolu_sp_tu${n}`,
+            'TaskUpdate',
+            { taskId: String(n), status: 'completed' },
+            `Updated task #${n} status`,
+            status(n, 'in_progress', 'completed'),
+          );
         }
       }
     } catch (e) {
@@ -475,7 +533,15 @@ function startSession() {
     result();
     // The background subagent ends after the turn, and Claude Code tells it by itself.
     setTimeout(() => {
-      system({ subtype: 'task_notification', task_id: 'fakebg-agent', tool_use_id: 'toolu_sp_bg', status: 'completed', summary: 'Agent "Surveiller la suite de tests" completed', usage: { total_tokens: 2200, tool_uses: 6, duration_ms: 800 }, uuid: `bgagent-${msg}` });
+      system({
+        subtype: 'task_notification',
+        task_id: 'fakebg-agent',
+        tool_use_id: 'toolu_sp_bg',
+        status: 'completed',
+        summary: 'Agent "Surveiller la suite de tests" completed',
+        usage: { total_tokens: 2200, tool_uses: 6, duration_ms: 800 },
+        uuid: `bgagent-${msg}`,
+      });
     }, 400);
   }
 
