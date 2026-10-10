@@ -469,12 +469,13 @@ async fn searches_the_conversations_of_the_agents_archived_ones_included_when_as
     // Its log is being written by the agent, alive, as it is read.
     h.turn(&id, "Ajoute la pagination à l'événement").await;
     let found = h.core.search_conversations("EVENEMENT", Some(&p.id), true);
-    // Claude's answer (the fake one repeats the message), then the message.
+    // Claude's answer (the fake one repeats the message: "Bonjour, tu as dit : …", cut short
+    // before the match), then the message.
     let snippets: Vec<&str> = found.hits.iter().map(|x| x.snippet.as_str()).collect();
     assert_eq!(
         snippets,
         [
-            "Bonjour, tu as dit : Ajoute la pagination à l'événement",
+            "…: Ajoute la pagination à l'événement",
             "Ajoute la pagination à l'événement"
         ]
     );

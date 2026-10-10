@@ -12,9 +12,13 @@ use std::time::{Duration, Instant};
 pub const MAX_HITS: usize = 200;
 /// How long a search reads before it gives what it found.
 pub const TIME_LIMIT: Duration = Duration::from_secs(5);
-/// Characters of the snippet before the match, and in all (the label and the `…` aside).
-const BEFORE: usize = 60;
-const SNIPPET: usize = 180;
+/// Characters of the snippet before the match, a tool's label and the `…` included: the palette
+/// shows some 85 characters of a snippet on its line, the match must be among them.
+const LEAD: usize = 28;
+/// Characters of a tool's label shown (an MCP tool's can be some 50).
+const LABEL_MAX: usize = 16;
+/// Characters of the snippet in all (the last `…` aside): the line cuts what it cannot show.
+const SNIPPET: usize = 120;
 /// How much of each value of an unknown tool's input is searched.
 const INPUT_MAX: usize = 500;
 
@@ -356,28 +360,39 @@ fn locate(text: &str, needle: &str) -> Option<(usize, usize)> {
     Some((start, end))
 }
 
-/// The text around the match (`start..end`, in bytes), on one line: up to `BEFORE` characters
-/// before it and what the snippet holds after it, `…` where it is cut, after `label` (" · ")
-/// when there is one. With where the match is in it, in UTF-16 units.
+/// The text around the match (`start..end`, in bytes), on one line, after `label` (" · ", cut
+/// at `LABEL_MAX`) when there is one: what `LEAD` leaves of the text before the match, then what
+/// the snippet holds after it, `…` where it is cut. With where the match is in it, in UTF-16 units.
 fn snippet(label: &str, text: &str, start: usize, end: usize) -> (String, [usize; 2]) {
-    let from = text[..start]
-        .char_indices()
-        .rev()
-        .nth(BEFORE - 1)
-        .map_or(0, |(i, _)| i);
-    let used = text[from..end].chars().count();
+    let mut out = String::new();
+    if !label.is_empty() {
+        let mut chars = label.chars();
+        out.extend(chars.by_ref().take(LABEL_MAX));
+        if chars.next().is_some() {
+            out.push('…');
+        }
+        out.push_str(" · ");
+    }
+    let room = LEAD.saturating_sub(out.chars().count());
+    let before = &text[..start];
+    // Cut, the text before the match leaves one of its characters to the `…`.
+    let keep = if before.chars().count() <= room {
+        room
+    } else {
+        room.saturating_sub(1)
+    };
+    let from = match keep {
+        0 => start,
+        k => before.char_indices().rev().nth(k - 1).map_or(0, |(i, _)| i),
+    };
+    if from > 0 {
+        out.push('…');
+    }
+    let used = out.chars().count() + text[from..end].chars().count();
     let to = text[end..]
         .char_indices()
         .nth(SNIPPET.saturating_sub(used))
         .map_or(text.len(), |(i, _)| end + i);
-    let mut out = String::new();
-    if !label.is_empty() {
-        out.push_str(label);
-        out.push_str(" · ");
-    }
-    if from > 0 {
-        out.push('…');
-    }
     let units = |s: &str| s.encode_utf16().count();
     let mut mark = [0, 0];
     // Spaces at the start are dropped, runs of them become one.
@@ -492,6 +507,15 @@ mod tests {
         String::from_utf16(&units[h.mark[0]..h.mark[1]]).unwrap()
     }
 
+    /// The characters of the snippet before its match, as the palette's line shows them.
+    fn before_mark(h: &Hit) -> usize {
+        let units: Vec<u16> = h.snippet.encode_utf16().collect();
+        String::from_utf16(&units[..h.mark[0]])
+            .unwrap()
+            .chars()
+            .count()
+    }
+
     #[test]
     fn finds_the_words_of_the_user_and_of_claude_newest_first() {
         let dir = logs(
@@ -582,7 +606,7 @@ mod tests {
         assert!(failing.hits[0].snippet.starts_with("Bash · "));
         assert!(failing.hits[0]
             .snippet
-            .contains("PASS src/api.test.ts FAIL src/db.test.ts"));
+            .contains("src/api.test.ts FAIL src/db.test.ts"));
         assert_eq!(marked(&failing.hits[0]), "FAIL");
         // The file as the row shows it, from the agent's folder; either slash.
         let file = find(&dir, &a, r"src\db.ts");
@@ -664,8 +688,10 @@ mod tests {
         );
         let found = find(&dir, &[agent("a1", "p1")], "plan");
         assert_eq!(ids(&found), ["t1", "m1:0"]);
+        let output = &found.hits[0].snippet;
+        assert!(output.starts_with("Bash · ") && output.ends_with("error[E0425]: plan"));
         assert_eq!(
-            found.hits[0].snippet,
+            find(&dir, &[agent("a1", "p1")], "cargo build").hits[0].snippet,
             "Bash · cargo build error[E0425]: plan"
         );
     }
@@ -791,17 +817,49 @@ mod tests {
         );
         assert!(!h.snippet.contains("  "));
         assert_eq!(marked(h), "pagination casse");
-        let before = h.snippet[..h.snippet.find("pagination").unwrap()]
-            .chars()
-            .count();
+        // Early on the line: the palette shows some 85 characters of it.
+        let before = before_mark(h);
         assert!(
-            (55..=70).contains(&before),
+            (20..=LEAD).contains(&before),
             "{before} characters before the match"
         );
-        assert!(h.snippet.chars().count() <= 200);
+        assert!(h.snippet.chars().count() <= SNIPPET + 1);
         // Indices of the window's strings: an emoji is two.
         let emoji = &find(&dir, &[agent("a1", "p1")], "pagination !").hits[0];
         assert_eq!(emoji.mark, [3, 15]);
+    }
+
+    #[test]
+    fn keeps_the_match_early_on_the_line_behind_a_tool_s_label() {
+        let output = format!("{}la pagination casse ici", "ligne de résultat ".repeat(10));
+        let dir = logs(
+            "cs-label",
+            &[(
+                "a1",
+                vec![
+                    tool(
+                        "t1",
+                        "mcp__claude_ai_Atlassian__searchJiraIssuesUsingJql",
+                        json!({ "jql": "project = ESC" }),
+                        &output,
+                    ),
+                    tool("t2", "Bash", json!({ "command": "npm test" }), &output),
+                ],
+            )],
+        );
+        let found = find(&dir, &[agent("a1", "p1")], "pagination casse");
+        assert_eq!(ids(&found), ["t2", "t1"]);
+        for h in &found.hits {
+            assert_eq!(marked(h), "pagination casse");
+            assert!(before_mark(h) <= LEAD, "{}", h.snippet);
+        }
+        assert!(found.hits[0].snippet.starts_with("Bash · …"));
+        // A long label is shortened, the match still in sight.
+        assert!(
+            found.hits[1].snippet.starts_with("claude_ai_Atlass… · …"),
+            "{}",
+            found.hits[1].snippet
+        );
     }
 
     #[test]
