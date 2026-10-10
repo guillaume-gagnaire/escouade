@@ -31,6 +31,22 @@ const buttons = (view: EditorView) => [...view.dom.querySelectorAll<HTMLButtonEl
 const emptyBlocks = (state: EditorState) =>
   (getChunks(state)?.chunks ?? []).filter((c) => c.fromA === c.toA && c.fromB === c.toB).map((c) => [c.fromA, c.fromB]);
 
+/**
+ * Why the blocks do not line up with the two texts: the text before each block, and after the last, is not the same
+ * in both (a block one line off puts the wrong line back); null when they do.
+ */
+function misaligned(chunks: readonly { fromA: number; toA: number; fromB: number; toB: number }[], a: string, b: string): string | null {
+  let posA = 0;
+  let posB = 0;
+  for (const c of chunks) {
+    const at = JSON.stringify([c.fromA, c.toA, c.fromB, c.toB]);
+    if (a.slice(posA, c.fromA) !== b.slice(posB, c.fromB)) return `the text before ${at} differs`;
+    posA = c.toA;
+    posB = c.toB;
+  }
+  return a.slice(posA) === b.slice(posB) ? null : 'the text after the last block differs';
+}
+
 /** Why `changes` is not a diff from `a` to `b` (out of order, overlapping, empty, or not giving `b` once applied); null when it is. */
 function notADiff(changes: readonly Change[], a: string, b: string): string | null {
   let out = '';
@@ -191,19 +207,34 @@ describe('comparison', () => {
       // Blank lines added or removed within a run of lines rewritten (the line diff's heuristics leave the run
       // larger than it needs to be), where the character diff puts a line break added at the start of the same ones.
       ['\n\n{\n\n\n// c\n\n\n\n// c\n{\n\n', '// c\n\n\n// c\n{\nx'],
-      ['\n\n}\n// c\n// c\n\n\n\n\nx\n\n{\n\nx\n\n\n\n\n{\n}\nx\nx\n{\n', '\n\n}\n// c\n}\n// c\n\n\n\n\nx\n\n\n\n\n{\n'],
+      // A line break added that can only move past the same ones once the change after it has moved too (it is
+      // held back where that change was, on an empty line on both sides).
+      ['\n\n}\n// c\n// c\n\n\n\n\nx\n\n{\n\nx\n\n\n\n\n{\n}\nx\nx\n{\n', '\n\n}\n// c\n}\n// c\n\n\n\nx\n\n\n\n\n{\n'],
+      ['\n{\nx\n\n\n\n\n\n\n\nx\n\n}\n\n', '\nx\n\n\n\n\n\n\nx\n\n\n\n\n\nx\n\n}\n\n'],
+      ['}\nx\n\n\n\n\n\n}\nx\n// c\n{\nx\n}\n', 'x\n\n\n\n\n\n\n}\n\n\n\n}\nx\n// c\n{\nx\n}\n'],
+      // Two lines removed next to each other, found as two changes: moved into one another, the merge view joins
+      // them into one, which begins on an empty line on both sides and would put `{` back but not the blank line.
+      [
+        '```\nx\n  go();\nreturn x;\n\n  run();\n\n\n\nreturn x;\n\n# Titre\n  }\n// c\n',
+        '```\nx\n  );\nreturnx;\n\n x\n run();\n\n\n\n{\n\nreturn x;\n\n# Titre\n  }\n\n',
+      ],
     ];
     for (const [doc, original] of pairs) {
-      const { view } = editor(doc, { original, against: 'reference' });
-      expect(emptyBlocks(view.state), JSON.stringify([doc, original])).toEqual([]);
-      expect(notADiff(blockDiff(original, doc), original, doc), JSON.stringify([doc, original])).toBeNull();
-      for (let i = 0; i < 20 && buttons(view).length; i++) {
-        const before = view.state.doc.toString();
-        buttons(view)[0].click();
-        // Each block puts something back.
-        expect(view.state.doc.toString(), JSON.stringify([doc, original])).not.toBe(before);
+      const pair = JSON.stringify([doc, original]);
+      expect(notADiff(blockDiff(original, doc), original, doc), pair).toBeNull();
+      // « Annuler ce bloc » on every block, from the first one or from the last: each puts something back.
+      for (const fromLast of [false, true]) {
+        const { view } = editor(doc, { original, against: 'reference' });
+        expect(emptyBlocks(view.state), pair).toEqual([]);
+        expect(misaligned(getChunks(view.state)?.chunks ?? [], original, doc), pair).toBeNull();
+        for (let i = 0; i < 20 && buttons(view).length; i++) {
+          const before = view.state.doc.toString();
+          const all = buttons(view);
+          all[fromLast ? all.length - 1 : 0].click();
+          expect(view.state.doc.toString(), pair).not.toBe(before);
+        }
+        expect(view.state.doc.toString(), pair).toBe(original);
       }
-      expect(view.state.doc.toString(), JSON.stringify([doc, original])).toBe(original);
     }
   });
 
@@ -258,6 +289,8 @@ describe('comparison', () => {
       const why = notADiff(blockDiff(original, doc), original, doc);
       if (why) failures.push(`${why}: ${pair}`);
       if (emptyBlocks(state).length) failures.push(`empty block: ${pair}`);
+      const off = misaligned(getChunks(state)?.chunks ?? [], original, doc);
+      if (off) failures.push(`${off}: ${pair}`);
       // What « Annuler ce bloc » does, block after block: each one puts something back.
       const view = { state, dispatch: (spec: TransactionSpec) => (view.state = view.state.update(spec).state) };
       for (let i = 0; i < 50 && getChunks(view.state)?.chunks.length; i++) {

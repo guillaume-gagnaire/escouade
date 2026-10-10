@@ -125,6 +125,9 @@ function lineRuns(a: string, b: string): Change[] {
 const isHighSurrogate = (code: number) => code >= 0xd800 && code <= 0xdbff;
 const isLowSurrogate = (code: number) => code >= 0xdc00 && code <= 0xdfff;
 
+/** Whether `c` only adds text (`'b'`), only removes some (`'a'`), or does both (null). */
+const side = (c: Change) => (c.fromA === c.toA ? 'b' : c.fromB === c.toB ? 'a' : null);
+
 /**
  * The changes that only add (or only remove) text, each moved forward one character at a time while its first
  * character is the one just after it, as far as the text in common before the next change goes: where taking the
@@ -133,19 +136,38 @@ const isLowSurrogate = (code: number) => code >= 0xdc00 && code <= 0xdfff;
  * run); begun at an empty line on both sides, a line break added or removed there is taken by the merge view for the
  * end of the line above and drawn as an empty block, with nothing to put back. Moved forward, a change never begins
  * with the character that follows it, so never there. A move stops short of the middle of a surrogate pair.
+ *
+ * Taken from the last change to the first, so that each one is held back by where the next one is once moved, not
+ * where it was: held back short of that, a change can be left on the empty line the next one has just left. Moved up
+ * against the next change, both adding (or both removing) text, the two are one change, which the merge view would
+ * join anyway, and that one moves on past the text the next one could not pass; up against a change of the other
+ * kind, the merge view joins them into a change that replaces text, which it draws from the right line.
  */
 function slideForward(changes: readonly Change[], a: string, b: string): Change[] {
-  return changes.map((c, n) => {
-    const endA = n + 1 < changes.length ? changes[n + 1].fromA : a.length;
-    const endB = n + 1 < changes.length ? changes[n + 1].fromB : b.length;
-    // The text that has the change, and where the change is in it.
-    const [text, from, to] = c.fromA === c.toA ? [b, c.fromB, c.toB] : c.fromB === c.toB ? [a, c.fromA, c.toA] : [null, 0, 0];
-    if (!text) return c;
-    let by = 0;
-    while (c.toA + by < endA && c.toB + by < endB && text.charCodeAt(from + by) === text.charCodeAt(to + by)) by++;
-    if (by && isLowSurrogate(text.charCodeAt(from + by)) && isHighSurrogate(text.charCodeAt(from + by - 1))) by--;
-    return by ? new Change(c.fromA + by, c.toA + by, c.fromB + by, c.toB + by) : c;
-  });
+  // The changes done, the last first; the one done last bounds the move of the one before it.
+  const done: Change[] = [];
+  for (let n = changes.length - 1; n >= 0; n--) {
+    let c = changes[n];
+    const only = side(c);
+    if (only) {
+      for (;;) {
+        const next = done.length ? done[done.length - 1] : null;
+        const endA = next ? next.fromA : a.length;
+        const endB = next ? next.fromB : b.length;
+        // The text that has the change, and where the change is in it.
+        const [text, from, to] = only === 'b' ? [b, c.fromB, c.toB] : [a, c.fromA, c.toA];
+        let by = 0;
+        while (c.toA + by < endA && c.toB + by < endB && text.charCodeAt(from + by) === text.charCodeAt(to + by)) by++;
+        if (by && isLowSurrogate(text.charCodeAt(from + by)) && isHighSurrogate(text.charCodeAt(from + by - 1))) by--;
+        if (by) c = new Change(c.fromA + by, c.toA + by, c.fromB + by, c.toB + by);
+        if (!next || c.toA !== next.fromA || c.toB !== next.fromB || side(next) !== only) break;
+        done.pop();
+        c = new Change(c.fromA, next.toA, c.fromB, next.toB);
+      }
+    }
+    done.push(c);
+  }
+  return done.reverse();
 }
 
 /**
