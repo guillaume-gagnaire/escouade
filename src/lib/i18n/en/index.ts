@@ -15,6 +15,7 @@ import git from './git';
 import integrations from './integrations';
 import mcp from './mcp';
 import nav from './nav';
+import plan from './plan';
 import runs from './runs';
 import settings from './settings';
 import shell from './shell';
@@ -39,4 +40,5 @@ export const en = defineCatalog({
   accounts,
   mcp,
   branches,
+  plan,
 });

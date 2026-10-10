@@ -15,6 +15,7 @@
   import { canPrepare, canTest, prepareLaunch, testAgent } from '../lib/test-launch.svelte';
   import type { Agent, ConvItem, Project } from '../lib/types';
   import Composer from './Composer.svelte';
+  import PlanBanner from './PlanBanner.svelte';
   import CriteriaReport from './conv/CriteriaReport.svelte';
   import EventMessage from './conv/EventMessage.svelte';
   import Markdown from './conv/Markdown.svelte';
@@ -526,6 +527,9 @@
     </div>
   </header>
 
+  <!-- Where the agent is in its plan, when it follows one: it takes the room it needs, never the messages' last 160 px. -->
+  <PlanBanner {agent} />
+
   <!-- Focusable for the keyboard to go on reading once the last of the older items are drawn (showOlder). -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
@@ -784,8 +788,10 @@
     align-items: center;
     padding: 0 7px;
   }
+  /* The plan banner above shrinks before the messages go under 160 px. */
   .scroll {
-    flex: 1;
+    flex: 1 0 160px;
+    min-height: 160px;
     overflow: auto;
   }
   .scroll:focus-visible {

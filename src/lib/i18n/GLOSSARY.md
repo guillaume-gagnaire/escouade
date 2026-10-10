@@ -418,3 +418,16 @@ Ce qu’Escouade dit à Claude ou lui fait écrire suit « Langue des textes ré
 | Intégrer <base> | Integrate <base> | la base du projet entre dans la branche de l’agent (merge ou rebase, selon la stratégie du Kanban) ; « Merger » reste merge |
 | Reprendre une branche existante… | Take up an existing branch… | le champ « Branche » du formulaire d’un ticket → “Branch” |
 | Comparer avec la branche courante | Compare with the current branch | le menu d’un commit du graphe ; sur une HEAD détachée : « Comparer avec HEAD » → “Compare with HEAD” |
+
+## P — plan
+
+| Français | Anglais | Note |
+|---|---|---|
+| Plan | Plan | le bandeau de la conversation d’un agent et la ligne de sa carte ; comme le mode de permission « Plan » |
+| tâche (d’un plan) | task | « 2/7 tâches » → “2/7 tasks” ; les titres des tâches sont les mots de l’agent, jamais traduits |
+| liste de tâches | task list | l’outil de Claude Code que le réglage « Les agents tiennent une liste de tâches » donne aux agents |
+| sous-agents actifs | subagents running | « 3 sous-agents actifs » → “3 subagents running” ; « Sous-agents » → “Subagents” quand l’agent n’a pas de liste de tâches |
+| Terminé / En cours / À faire / Bloqué | Done / In progress / To do / Blocked | l’état d’une tâche du plan (« En cours » reste “In progress” comme pour une colonne du Kanban) |
+| En attente de ta réponse | Waiting for your answer | une tâche bloquée : l’agent a posé une question ou demande une autorisation |
+| après 03, 05 | after 03, 05 | les rangs des tâches qu’une tâche à faire attend |
+| étapes (d’une tâche) | steps | « 2/3 étapes » → “2/3 steps” : les cases cochées du plan |

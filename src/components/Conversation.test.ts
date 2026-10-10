@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { tick } from 'svelte';
@@ -1487,6 +1490,85 @@ describe('Conversation answers from the keyboard', () => {
       app.nextWaiting();
       await waitFor(() => expect(field()).toHaveFocus());
     });
+  });
+});
+
+describe('Conversation plan banner', () => {
+  const plan = (over: Record<string, unknown> = {}) => ({
+    source: 'tools' as const,
+    tasks: [
+      { id: '1', title: 'Auditer le hero', status: 'done' as const },
+      { id: '2', title: 'Écrire les tests', status: 'inProgress' as const },
+      { id: '3', title: 'Relire', status: 'pending' as const },
+    ],
+    agents: [],
+    launched: 0,
+    workflows: [],
+    ...over,
+  });
+
+  it('sits between the header and the messages when the agent has a plan', () => {
+    const { container, scroller } = setup({ plan: plan({ title: 'Refonte du hero' }) });
+    const banner = container.querySelector('.plan')!;
+    expect(banner).not.toBeNull();
+    const main = container.querySelector('main')!;
+    const parts = [...main.children];
+    expect(parts.indexOf(container.querySelector('header')!)).toBeLessThan(parts.indexOf(banner));
+    expect(parts.indexOf(banner)).toBeLessThan(parts.indexOf(scroller));
+    // The banner is the header's next sibling: nothing comes between.
+    expect(container.querySelector('header')!.nextElementSibling).toBe(banner);
+    expect(banner.nextElementSibling).toBe(scroller);
+    expect(screen.getByRole('button', { name: 'Plan : Refonte du hero' })).toBeInTheDocument();
+    expect(within(screen.getByRole('button', { name: 'Plan : Refonte du hero' })).getByText('1/3 tâches')).toBeInTheDocument();
+  });
+
+  it('is not there without a plan, nor for a plan with no task and no subagent running', () => {
+    const none = setup({});
+    expect(none.container.querySelector('.plan')).toBeNull();
+    none.unmount();
+    const empty = setup({ plan: plan({ tasks: [], source: 'plan', planFile: 'docs/p.md' }) });
+    expect(empty.container.querySelector('.plan')).toBeNull();
+  });
+
+  it('appears and goes with the plan of the agent', async () => {
+    const { a, rerender, container } = setup({});
+    expect(container.querySelector('.plan')).toBeNull();
+    await rerender({ agent: { ...a, plan: plan() }, project: project() });
+    expect(container.querySelector('.plan')).not.toBeNull();
+    await rerender({ agent: { ...a, plan: undefined }, project: project() });
+    expect(container.querySelector('.plan')).toBeNull();
+  });
+
+  it('shows the agent’s ticket as the title of a plan that has none', () => {
+    const a = agent({ id: 'v-ticket', status: 'running', plan: plan() });
+    resetApp({
+      projects: [project()],
+      agents: [a],
+      tickets: [ticket({ id: 't1', agentId: a.id, column: 'doing', title: 'Ajouter le fichier' })],
+    });
+    fakeBackend({ get_conversation: () => [] });
+    render(Conversation, { agent: a, project: project() });
+    expect(screen.getByRole('button', { name: 'Plan : Ajouter le fichier' })).toBeInTheDocument();
+  });
+
+  it('leaves the messages 160 px at least, whatever the plan takes', () => {
+    const source = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), 'Conversation.svelte'), 'utf8');
+    expect(source).toMatch(/\.scroll\s*\{[^}]*flex:\s*1 0 160px;[^}]*min-height:\s*160px/);
+  });
+
+  it('keeps its place above the messages while the conversation scrolls', async () => {
+    const { container, scroller } = setup({ plan: plan() }, many(30));
+    await frame();
+    expect(scroller.scrollTop).toBe(2000);
+    expect(container.querySelector('.plan')!.nextElementSibling).toBe(scroller);
+    expect(scroller.contains(container.querySelector('.plan'))).toBe(false);
+  });
+
+  it('says in English what it holds', () => {
+    setLang('en');
+    setup({ plan: plan({ title: 'Hero redesign' }) });
+    const head = screen.getByRole('button', { name: 'Plan: Hero redesign' });
+    expect(within(head).getByText('1/3 tasks')).toBeInTheDocument();
   });
 });
 

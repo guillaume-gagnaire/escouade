@@ -263,6 +263,7 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.selectedLaunch = {};
   app.selectedTerm = {};
   app.filesOpen = false;
+  app.planOpen = {};
   app.filesScope = 'agent';
   app.panelTab = 'files';
   app.diffSplit = false;

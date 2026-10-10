@@ -194,6 +194,8 @@ class AppState {
   /** Side-by-side diffs (else unified), shared by the diff dialog and the split layout. */
   diffSplit = $state(readPref('diffSplit') === '1');
   showArchived = $state(false);
+  /** The plan banner of an agent's conversation, open or folded, by agent (kept for the session; absent: open if the window is tall enough). */
+  planOpen = $state<Record<string, boolean>>({});
   modal = $state<Modal | null>(null);
   toasts = $state<Toast[]>([]);
   now = $state(Date.now());

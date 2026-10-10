@@ -14,6 +14,7 @@ import git from './git';
 import integrations from './integrations';
 import mcp from './mcp';
 import nav from './nav';
+import plan from './plan';
 import runs from './runs';
 import settings from './settings';
 import shell from './shell';
@@ -38,6 +39,7 @@ export const fr = {
   accounts,
   mcp,
   branches,
+  plan,
 } as const;
 
 export type Catalog = typeof fr;
