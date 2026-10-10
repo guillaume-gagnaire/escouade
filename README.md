@@ -8,7 +8,7 @@ Escouade s'appelait auparavant « Claude Code Manager » : la mise à jour rempl
 
 ## Fonctionnalités
 
-Cette liste décrit la version 1.6, pas encore publiée : la dernière release est la 1.5.4. Ce qui change d'une version à l'autre est dans le [journal des versions](CHANGELOG.md).
+Ce qui change d'une version à l'autre est dans le [journal des versions](CHANGELOG.md).
 
 - **Projets en onglets** : compteur de modifications git non commitées, pastille quand un agent attend une réponse, couleur par projet (qui teinte toute l'interface), réordonnables par glisser-déposer.
 - **Agents** : une conversation Claude Code par agent, nommée automatiquement d'après la première demande. Modèle (Fable, Opus, Sonnet, Haiku, toujours le plus récent que connaît Claude Code, affiché avec sa version : « Sonnet 5.5 »), effort (jusqu'à `max`) et mode de permission (Auto, Demander, Plan, Édits auto, Bypass) modifiables en cours de conversation. Archivage, suppression, renommage. « Dupliquer la conversation » crée une copie de l'agent qui reprend tout son contexte dans une nouvelle session (et son propre worktree), sans toucher à l'original.
