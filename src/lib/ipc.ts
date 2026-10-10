@@ -166,6 +166,10 @@ export const api = {
     output.onmessage = onData;
     return invoke<TermInfo>('test_run_start', { ...a, output });
   },
+  /** The worktree's .isola.toml, whole, as `isola up` will read it: what is shown before the services start. */
+  isolaConfig: (agentId: string) => invoke<string>('isola_config', { agentId }),
+  /** « Lancer » for isola: the user read `config` (the .isola.toml) and `open` (the address to open) and lets `isola up` run. */
+  isolaApprove: (agentId: string, config: string, open: string) => invoke<void>('isola_approve', { agentId, config, open }),
   /** The services isola runs for the agent's worktree, with their addresses. */
   isolaServices: (agentId: string) => invoke<IsolaService[]>('isola_services', { agentId }),
   /** Stops the services isola runs for the agent's worktree. */

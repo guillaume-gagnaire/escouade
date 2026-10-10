@@ -622,6 +622,19 @@ pub struct AgentMeta {
     /// hashed: a recipe that differs in anything, the agent's answer to a later request included,
     /// is asked again, with no collision to forge.
     pub approved_recipe: Option<TestRecipe>,
+    /// What the user read and let run for an agent whose services isola runs (`isola up` runs the
+    /// commands of its `.isola.toml`, which the agent can write): see `IsolaApproval`.
+    pub approved_isola: Option<IsolaApproval>,
+}
+
+/// What the user approved of an agent's isola launch: the content of the worktree's `.isola.toml`
+/// (the services and setup commands `isola up` runs in their shell) and the address the agent gave to
+/// open. Kept whole, like `approved_recipe`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct IsolaApproval {
+    pub config: String,
+    pub open: String,
 }
 
 /// Agent as shown by the UI: persisted metadata plus live runtime fields.
@@ -1264,6 +1277,7 @@ mod tests {
         .unwrap();
         assert!(s.agents[0].recipe.is_some());
         assert_eq!(s.agents[0].approved_recipe, None);
+        assert_eq!(s.agents[0].approved_isola, None);
     }
 
     #[test]

@@ -289,6 +289,8 @@ pub fn run() {
             commands::update_postpone,
             commands::update_presence,
             commands::update_close,
+            commands::isola_config,
+            commands::isola_approve,
             commands::isola_services,
             commands::isola_down,
             commands::suggest_worktree_steps,

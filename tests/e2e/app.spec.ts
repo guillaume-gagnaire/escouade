@@ -679,6 +679,11 @@ test('a ticket’s test launches leave the launch section, their processes stopp
   // The agent wrote this recipe: it is shown first, and nothing of it runs until « Lancer ».
   await expect(dialog.getByText(/Ces commandes ont été écrites par/)).toBeVisible();
   await expect(dialog.getByText('node serveur.js')).toBeVisible();
+  // What is read is in the order the shell reads it, whatever letters it holds.
+  for (const text of [dialog.locator('.cmd').first(), dialog.locator('.facts dd').first()]) {
+    await expect(text).toHaveCSS('unicode-bidi', 'bidi-override');
+    await expect(text).toHaveCSS('direction', 'ltr');
+  }
   expect(fs.existsSync(pidFile)).toBe(false);
   await dialog.getByRole('button', { name: 'Lancer' }).click();
   await expect(dialog.getByText(/en attente de localhost:\d+…/)).toBeVisible({ timeout: 30_000 });

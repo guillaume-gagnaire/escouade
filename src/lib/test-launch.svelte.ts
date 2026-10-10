@@ -2,12 +2,13 @@
 // answers over HTTP, then opens the browser on the address that shows the feature. When isola runs
 // the worktree's services: `isola up`, then the addresses it lists. A recipe is the agent's own text, run in
 // the user's shell outside Claude Code's permission mode: the modal shows it first, and nothing of it runs until
-// the user lets it (`approveAndTest`; the backend refuses a recipe that was not approved all the same).
+// the user lets it (`approveAndTest`; the backend refuses a recipe that was not approved all the same). With isola,
+// what runs is the commands of the worktree's .isola.toml, which the agent can write too: that file is what is shown.
 
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { api } from './ipc';
 import { startLaunch, stopAgentTests, stopLaunch } from './launch-actions';
-import { isolaCommand, openAddress, parseTestId, recipeApproved, recipeCommands } from './recipe';
+import { isolaApproved, isolaCommand, openAddress, parseTestId, recipeApproved, recipeCommands } from './recipe';
 import { app } from './state.svelte';
 import type { Agent, IsolaService, LaunchState, Project, RunCommand } from './types';
 
@@ -41,6 +42,8 @@ class TestFlows {
   all = $state<Record<string, TestFlow>>({});
   /** The preparation that succeeded, by agent (its recipe's steps as JSON). */
   prepared = $state<Record<string, string>>({});
+  /** The .isola.toml of an agent's worktree as the modal shows it (read when "▶ Tester" is pressed), by agent. */
+  isolaConfig = $state<Record<string, string>>({});
 }
 
 export const flows = new TestFlows();
@@ -51,6 +54,7 @@ app.onRecipeChanged((id) => delete flows.all[id]);
 app.onAgentRemoved((id) => {
   delete flows.all[id];
   delete flows.prepared[id];
+  delete flows.isolaConfig[id];
 });
 // So is the test of an agent whose ticket goes "Terminé", and its modal, whose lines had their logs.
 app.onTicketDone((id) => {
@@ -141,33 +145,68 @@ export function stopTests(agentId: string) {
 }
 
 /**
- * "▶ Tester" on `agent`: the modal shows each step as it goes. A recipe the user never read (or that changed since)
- * is only shown, with « Lancer » (`approveAndTest`) and « Annuler ». isola's test has no recipe to read: `isola up`
- * is fixed and the services are the project's, so nothing the agent wrote is run (only the address it gave is opened).
+ * The .isola.toml of the agent's worktree, read now: it is what `isola up` will run, and what the modal shows. Null
+ * when it cannot be read (said, and the modal closed).
+ */
+async function readIsolaConfig(agent: Agent): Promise<string | null> {
+  // Not the one of an earlier test: the modal waits for this one.
+  delete flows.isolaConfig[agent.id];
+  try {
+    const config = await api.isolaConfig(agent.id);
+    flows.isolaConfig[agent.id] = config;
+    return config;
+  } catch (e) {
+    app.toast(String(e), 'error');
+    if (app.modal?.kind === 'testLaunch' && app.modal.agentId === agent.id) app.modal = null;
+    return null;
+  }
+}
+
+/**
+ * "▶ Tester" on `agent`: the modal shows each step as it goes. What the agent wrote and would run in the user's shell,
+ * its recipe (or, with isola, the .isola.toml of its worktree and the address it gave), is only shown when the user
+ * never read it, or it changed since, with « Lancer » (`approveAndTest`) and « Annuler ».
  */
 export async function testAgent(agent: Agent, project: Project) {
   app.modal = { kind: 'testLaunch', agentId: agent.id };
-  if (!agent.isola && agent.recipe && !recipeApproved(agent)) return;
+  if (agent.isola) {
+    const config = await readIsolaConfig(agent);
+    if (config === null || !isolaApproved(agent, config)) return;
+  } else if (agent.recipe && !recipeApproved(agent)) return;
   await launchTest(agent, project);
 }
 
 /**
- * « Lancer » on a recipe shown: the backend is told which recipe was read (the one the modal showed, so that a
- * recipe the agent sent meanwhile is refused rather than approved unseen), then the test goes on.
+ * « Lancer » on what is shown: the backend is told what was read (the recipe, or the .isola.toml and the address, as the
+ * modal showed them, so that what the agent changed meanwhile is refused rather than approved unseen), then the test
+ * goes on.
  */
 export async function approveAndTest(agent: Agent, project: Project) {
-  const recipe = agent.recipe;
-  if (!recipe) return;
-  try {
-    await api.testRecipeApprove(agent.id, recipe);
-  } catch (e) {
-    app.toast(String(e), 'error');
-    return;
+  if (agent.isola) {
+    const config = flows.isolaConfig[agent.id];
+    if (config === undefined) return;
+    try {
+      await api.isolaApprove(agent.id, config, agent.recipe?.open ?? '');
+    } catch (e) {
+      app.toast(String(e), 'error');
+      // The file is not the one that was shown: the modal shows the one it is now.
+      await readIsolaConfig(agent);
+      return;
+    }
+  } else {
+    const recipe = agent.recipe;
+    if (!recipe) return;
+    try {
+      await api.testRecipeApprove(agent.id, recipe);
+    } catch (e) {
+      app.toast(String(e), 'error');
+      return;
+    }
   }
   await launchTest(agent, project);
 }
 
-/** The test itself, its recipe approved (or isola's, which has none to approve). */
+/** The test itself, what it runs approved. */
 async function launchTest(agent: Agent, project: Project) {
   const recipe = agent.recipe;
   if (!recipe && !agent.isola) return;

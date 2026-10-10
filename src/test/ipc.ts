@@ -115,6 +115,7 @@ export function agent(over: Partial<Agent> = {}): Agent {
     portBase: null,
     recipe: null,
     approvedRecipe: null,
+    approvedIsola: null,
     activity: null,
     setup: null,
     isola: false,

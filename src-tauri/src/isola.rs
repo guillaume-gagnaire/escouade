@@ -61,6 +61,23 @@ pub fn configured(dir: &str) -> bool {
     Path::new(dir).join(CONFIG).is_file()
 }
 
+/// The largest `.isola.toml` the user is asked to read: a bigger one is refused, never cut.
+const CONFIG_LIMIT: u64 = 256 * 1024;
+
+/// The content of the `.isola.toml` in `dir`, whole, as `isola up` reads it: what the user approves, and
+/// what is compared with it when the services start.
+pub fn read_config(dir: &str) -> Result<String> {
+    let path = Path::new(dir).join(CONFIG);
+    let len = std::fs::metadata(&path)
+        .map_err(|e| anyhow!("{CONFIG} illisible : {e}"))?
+        .len();
+    if len > CONFIG_LIMIT {
+        bail!("{CONFIG} est trop gros pour être relu avant le lancement ({len} octets).");
+    }
+    let bytes = std::fs::read(&path).map_err(|e| anyhow!("{CONFIG} illisible : {e}"))?;
+    String::from_utf8(bytes).map_err(|_| anyhow!("{CONFIG} n'est pas en UTF-8."))
+}
+
 /// `rev` of the repository at `repo` has isola's configuration (committed).
 pub async fn configured_on(repo: &str, rev: &str) -> bool {
     !rev.starts_with('-')
@@ -275,6 +292,24 @@ pub(crate) mod tests {
         assert!(!manages(&dir));
         std::fs::write(d.join(CONFIG), "setup = \"npm ci\"\n").unwrap();
         assert!(configured(&dir) && manages(&dir));
+    }
+
+    #[test]
+    fn the_configuration_is_read_whole_or_refused_never_cut() {
+        let d = test_dir("isola-read-config");
+        let dir = d.to_string_lossy().to_string();
+        assert!(read_config(&dir).is_err());
+        let text = "[services.web]\r\ncommand = \"npm run dev\"\r\n";
+        std::fs::write(d.join(CONFIG), text).unwrap();
+        // As it is on disk, line endings included: this is what is compared when the services start.
+        assert_eq!(read_config(&dir).unwrap(), text);
+        std::fs::write(d.join(CONFIG), b"setup = \"\xff\"").unwrap();
+        assert!(read_config(&dir).is_err());
+        std::fs::write(d.join(CONFIG), "#".repeat(CONFIG_LIMIT as usize + 1)).unwrap();
+        let e = read_config(&dir).unwrap_err().to_string();
+        assert!(e.contains("trop gros"), "{e}");
+        std::fs::write(d.join(CONFIG), "#".repeat(CONFIG_LIMIT as usize)).unwrap();
+        assert_eq!(read_config(&dir).unwrap().len(), CONFIG_LIMIT as usize);
     }
 
     #[tokio::test]

@@ -1659,6 +1659,36 @@ impl<R: Runtime> Core<R> {
         Ok(())
     }
 
+    /// The `.isola.toml` of the agent's worktree as isola will read it, to show before it runs.
+    pub fn isola_config(&self, agent_id: &str) -> Result<String> {
+        let meta = self.agent(agent_id)?.lock().meta.clone();
+        let wt = isola_worktree(&meta)?;
+        isola::read_config(&wt.path)
+    }
+
+    /// The user read `config` (the worktree's `.isola.toml`) and `open` (the address the agent gave) in
+    /// the test modal and lets `isola up` run. Refused when the file or the address is no longer what
+    /// they were shown. Kept with the agent, whole: any other content is asked again.
+    pub fn approve_isola(&self, agent_id: &str, config: String, open: String) -> Result<()> {
+        let h = self.agent(agent_id)?;
+        let meta = h.lock().meta.clone();
+        let wt = isola_worktree(&meta)?;
+        if isola::read_config(&wt.path)? != config {
+            bail!(ISOLA_CONFIG_CHANGED);
+        }
+        {
+            let mut rt = h.lock();
+            let current = rt.meta.recipe.as_ref().map_or("", |r| r.open.as_str());
+            if current != open {
+                bail!(RECIPE_CHANGED);
+            }
+            rt.meta.approved_isola = Some(IsolaApproval { config, open });
+        }
+        self.emit_agent(&h);
+        self.request_save();
+        Ok(())
+    }
+
     /// What step `index` of `kind` ("prep" or "run") of the agent's recipe runs, when it may run
     /// one (`launch_refusal`).
     pub fn test_run_spec(
@@ -1673,6 +1703,7 @@ impl<R: Runtime> Core<R> {
         }
         if kind == "isola" {
             let wt = isola_worktree(&meta)?;
+            testlaunch::check_isola_approved(&meta, &isola::read_config(&wt.path)?)?;
             return Ok(testlaunch::RunSpec {
                 name: "isola up".into(),
                 command: isola::UP.into(),
@@ -1871,6 +1902,10 @@ const ARCHIVED: &str = "Cet agent est archivé : il n'a pas de lancement de test
 
 /// Only an agent with a worktree has ports and a test launch.
 const NO_WORKTREE: &str = "Seul un agent à worktree a un lancement de test.";
+
+/// The `.isola.toml` changed between what the user read and their « Lancer ».
+pub const ISOLA_CONFIG_CHANGED: &str =
+    "Le .isola.toml a changé pendant que tu le lisais : relance « ▶ Tester » pour le relire.";
 
 /// The recipe changed between what the user read and their « Lancer ».
 pub const RECIPE_CHANGED: &str =

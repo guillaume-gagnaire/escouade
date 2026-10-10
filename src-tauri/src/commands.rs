@@ -865,6 +865,20 @@ pub fn test_run_start(
     Ok(info)
 }
 
+/// The `.isola.toml` of the agent's worktree, whole, as `isola up` will read it: what the test modal
+/// shows before the services start.
+#[tauri::command(async)]
+pub fn isola_config(core: CoreState, agent_id: String) -> Res<String> {
+    core.isola_config(&agent_id).map_err(err)
+}
+
+/// « Lancer » in the test modal of an agent whose services isola runs: the user read `config` and the
+/// address to open `open`. Refused when the file or the address is no longer what the modal showed.
+#[tauri::command(async)]
+pub fn isola_approve(core: CoreState, agent_id: String, config: String, open: String) -> Res<()> {
+    core.approve_isola(&agent_id, config, open).map_err(err)
+}
+
 /// The services isola runs for the agent's worktree, with their addresses.
 #[tauri::command]
 pub async fn isola_services(

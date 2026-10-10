@@ -323,6 +323,12 @@ export interface TestRecipe {
   open: string;
 }
 
+/** What the user read and let run of an isola launch: the worktree's .isola.toml and the address to open. */
+export interface IsolaApproval {
+  config: string;
+  open: string;
+}
+
 export type LaunchStatus = 'running' | 'stopped' | 'done' | 'crashed';
 
 /** A launch command's latest run (none before its first launch). */
@@ -392,6 +398,8 @@ export interface Agent {
   recipe: TestRecipe | null;
   /** The recipe the user read and let run: the same content as `recipe`, else it is asked again. */
   approvedRecipe: TestRecipe | null;
+  /** The .isola.toml (and the address to open) the user read before isola ran the worktree's services. */
+  approvedIsola: IsolaApproval | null;
   /** What it is doing right now ("Lit src/db.ts", "Lance npm test"…), during a turn. */
   activity: string | null;
   /** The setup of its new worktree under way: the step running ("1/2 · npm ci"). */

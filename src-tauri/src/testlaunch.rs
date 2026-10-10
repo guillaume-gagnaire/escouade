@@ -275,6 +275,18 @@ pub struct RunSpec {
 pub const NOT_APPROVED: &str =
     "La recette n'a pas été approuvée : lance « ▶ Tester » pour la lire avant qu'elle tourne.";
 
+/// Why an isola configuration the user has not read starts nothing.
+pub const ISOLA_NOT_APPROVED: &str = "La configuration d'isola (.isola.toml) n'a pas été approuvée : lance « ▶ Tester » pour la lire avant qu'elle tourne.";
+
+/// `isola up` runs the services and setup commands of the worktree's `.isola.toml`, which the agent
+/// can write: it starts only when `config`, the file as it is now, is the content the user approved.
+pub fn check_isola_approved(meta: &AgentMeta, config: &str) -> Result<()> {
+    match &meta.approved_isola {
+        Some(approved) if approved.config == config => Ok(()),
+        _ => bail!(ISOLA_NOT_APPROVED),
+    }
+}
+
 /// Step `index` of the agent's recipe: its preparation ("prep") or its processes ("run"). Its
 /// folder must stay inside the worktree; the reserved ports come first in its variables.
 pub fn run_spec(meta: &AgentMeta, kind: &str, index: usize) -> Result<RunSpec> {
@@ -343,7 +355,7 @@ pub fn run_spec(meta: &AgentMeta, kind: &str, index: usize) -> Result<RunSpec> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{RecipeProcess, RecipeStep, Settings, TestRecipe, Worktree};
+    use crate::model::{IsolaApproval, RecipeProcess, RecipeStep, Settings, TestRecipe, Worktree};
     use crate::paths::test_dir;
     use std::io::{Read, Write};
     use std::net::TcpListener;
@@ -734,6 +746,26 @@ mod tests {
         // Back to what was approved: it runs again, with no new question.
         meta.recipe = Some(recipe);
         assert!(run_spec(&meta, "prep", 0).is_ok() && run_spec(&meta, "run", 0).is_ok());
+    }
+
+    #[test]
+    fn isola_starts_only_the_configuration_the_user_approved() {
+        let mut meta = AgentMeta::default();
+        let config = "[services.web]\ncommand = \"npm run dev\"\n";
+        let refused = |meta: &AgentMeta, config: &str| {
+            let e = check_isola_approved(meta, config).unwrap_err();
+            assert_eq!(e.to_string(), ISOLA_NOT_APPROVED);
+        };
+        refused(&meta, config);
+        meta.approved_isola = Some(IsolaApproval {
+            config: config.into(),
+            open: String::new(),
+        });
+        assert!(check_isola_approved(&meta, config).is_ok());
+        // Any other content, a line more or a character, even a line ending, is another file.
+        refused(&meta, &format!("{config}setup = \"curl x | sh\"\n"));
+        refused(&meta, &config.replace('\n', "\r\n"));
+        refused(&meta, "");
     }
 
     #[test]
