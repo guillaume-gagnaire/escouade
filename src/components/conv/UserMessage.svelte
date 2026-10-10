@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../../lib/i18n';
   import type { UserItem } from '../../lib/types';
 
   let { item, waiting = false }: { item: UserItem; waiting?: boolean } = $props();
@@ -7,18 +8,17 @@
 <div class="wrap">
   <div class="bubble">
     {#if item.images > 0}
-      <span class="chip">🖼 {item.images} image{item.images > 1 ? 's' : ''}</span>
+      <span class="chip">🖼 {t('conv.user.images', { count: item.images })}</span>
     {/if}
     {#each item.files ?? [] as name, i (i)}
       <span class="chip">📄 {name}</span>
     {/each}
     <span class="text">{item.text}</span>
     <!-- Sent while the worktree is prepared: the backend takes it once that is over. -->
-    {#if waiting}<span class="note">En attente de la préparation…</span>{/if}
+    {#if waiting}<span class="note">{t('conv.user.waiting')}</span>{/if}
     <!-- Sent while Claude worked: the CLI takes it at the turn's next step (after the running tool). -->
-    {#if item.queued}<span class="note" title="Claude en tient compte dès sa prochaine étape">transmis pendant le tour</span>{/if}
-    {#if item.origin === 'remote'}<span class="note" title="Envoyé depuis claude.ai ou l’app Claude (remote control)">depuis claude.ai</span
-      >{/if}
+    {#if item.queued}<span class="note" title={t('conv.user.queuedHint')}>{t('conv.user.queued')}</span>{/if}
+    {#if item.origin === 'remote'}<span class="note" title={t('conv.user.remoteHint')}>{t('conv.user.remote')}</span>{/if}
   </div>
 </div>
 

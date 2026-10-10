@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { fDur, fTok, fUsd, fWhen, isAbsPath, plural } from '../../lib/format';
+  import { fDur, fTok, fUsd, fWhen, isAbsPath } from '../../lib/format';
+  import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
   import type { FileEdit } from '../../lib/tools';
@@ -20,30 +21,30 @@
 
 {#if item.isError}
   <div class="card error">
-    <div class="title"><span class="dot" style="width:8px;height:8px;background:var(--del)"></span>Le tour s'est terminé en erreur</div>
+    <div class="title"><span class="dot" style="width:8px;height:8px;background:var(--del)"></span>{t('conv.turn.failed')}</div>
     {#if item.error}<pre class="err">{item.error}</pre>{/if}
     {#if latest && agent.resumeAt}
       <div class="resume">
-        <span>Reprise automatique {fWhen(agent.resumeAt, app.now)}</span>
-        <button class="btn small" onclick={() => app.run(api.cancelResume(agent.id))}>Annuler la reprise</button>
+        <span>{t('conv.turn.resumeAt', { when: fWhen(agent.resumeAt, app.now) })}</span>
+        <button class="btn small" onclick={() => app.run(api.cancelResume(agent.id))}>{t('conv.turn.cancelResume')}</button>
       </div>
     {/if}
   </div>
 {:else if big}
   <div class="card done" data-testid="turn-done">
-    <div class="title ok"><span class="check">✓</span>Tâche terminée</div>
+    <div class="title ok"><span class="check">✓</span>{t('conv.turn.done')}</div>
     <div class="stats mono">
-      <span>{fDur(item.durationMs ?? 0)}</span><span>{fTok(item.tokens)} tokens</span><span>{fUsd(item.cost)}</span><span
-        >{plural(edits.length, 'fichier modifié', 'fichiers modifiés')}</span
-      >
+      <span>{fDur(item.durationMs ?? 0)}</span><span>{t('conv.turn.tokens', { tokens: fTok(item.tokens) })}</span><span
+        >{fUsd(item.cost)}</span
+      ><span>{t('conv.turn.filesEdited', { count: edits.length })}</span>
     </div>
     {#if edits.length}
-      <ul class="recap mono" aria-label="Fichiers modifiés">
+      <ul class="recap mono" aria-label={t('conv.turn.editedFiles')}>
         {#each edits as e (e.path)}
           <li>
             <button
               class="path link"
-              title="Ouvrir dans l’éditeur"
+              title={t('common.openInEditor')}
               onclick={() =>
                 app.openEditor({
                   projectId: agent.projectId,
@@ -60,7 +61,9 @@
 {:else}
   <div class="sep mono">
     <span class="line"></span>
-    {item.interrupted ? 'Interrompu' : fDur(item.durationMs ?? 0)} · {fTok(item.tokens)} tokens · {fUsd(item.cost)}
+    {item.interrupted ? t('conv.turn.interrupted') : fDur(item.durationMs ?? 0)} · {t('conv.turn.tokens', { tokens: fTok(item.tokens) })} · {fUsd(
+      item.cost,
+    )}
     <span class="line"></span>
   </div>
 {/if}

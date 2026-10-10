@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
+import { setLang } from '../../lib/i18n';
 import UserMessage from './UserMessage.svelte';
 
 const item = (queued: boolean) => ({ kind: 'user' as const, id: 'u1', text: 'Ajoute aussi les tests', images: 0, ts: 1, queued });
@@ -35,5 +36,19 @@ describe('UserMessage from claude.ai', () => {
   it('says the message was sent from claude.ai or the Claude app', () => {
     render(UserMessage, { item: { ...item(false), origin: 'remote' as const } });
     expect(screen.getByText('depuis claude.ai')).toBeInTheDocument();
+  });
+});
+
+describe('UserMessage in English', () => {
+  it('counts the images with a plural, and words the notes in English', () => {
+    setLang('en');
+    const { unmount } = render(UserMessage, { item: { ...item(true), images: 1, origin: 'remote' as const } });
+    expect(screen.getByText('🖼 1 image')).toBeInTheDocument();
+    expect(screen.getByText('sent during the turn')).toHaveAttribute('title', 'Claude takes it into account at its next step');
+    expect(screen.getByText('from claude.ai')).toBeInTheDocument();
+    unmount();
+    render(UserMessage, { item: { ...item(false), images: 2 }, waiting: true });
+    expect(screen.getByText('🖼 2 images')).toBeInTheDocument();
+    expect(screen.getByText('Waiting for the setup…')).toBeInTheDocument();
   });
 });

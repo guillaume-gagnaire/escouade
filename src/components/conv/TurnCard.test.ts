@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TurnItem } from '../../lib/types';
+import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
 import { agent, fakeBackend, resetApp } from '../../test/ipc';
 import TurnCard from './TurnCard.svelte';
@@ -107,5 +108,42 @@ describe('TurnCard', () => {
     render(TurnCard, { item: turn({ interrupted: true }), agent: agent({ status: 'done' }), last: true });
     expect(screen.queryByText('Tâche terminée')).not.toBeInTheDocument();
     expect(screen.getByText(/Interrompu/)).toBeInTheDocument();
+  });
+});
+
+describe('TurnCard in English', () => {
+  beforeEach(() => resetApp());
+
+  it('recaps a finished task in English, with the figures written as in English', () => {
+    setLang('en');
+    const edits = [
+      { path: 'src/auth.ts', add: 12, del: 3 },
+      { path: 'notes.md', add: 4, del: 0 },
+    ];
+    const { unmount } = render(TurnCard, { item: turn(), agent: agent({ status: 'done' }), last: true, edits });
+    expect(screen.getByText('Task done')).toBeInTheDocument();
+    expect(screen.getByText('182.4k tokens')).toBeInTheDocument();
+    expect(screen.getByText('$2.84')).toBeInTheDocument();
+    expect(screen.getByText('2 files edited')).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: 'Edited files' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'src/auth.ts' })).toHaveAttribute('title', 'Open in editor');
+    unmount();
+    render(TurnCard, { item: turn(), agent: agent({ status: 'done' }), last: true, edits: edits.slice(0, 1) });
+    expect(screen.getByText('1 file edited')).toBeInTheDocument();
+  });
+
+  it('says in English that a turn failed, can be resumed, or was interrupted', () => {
+    setLang('en');
+    const { unmount } = render(TurnCard, {
+      item: turn({ isError: true, error: 'Rate limit reached' }),
+      agent: agent({ status: 'error', resumeAt: Date.now() + 3600_000 }),
+      last: true,
+    });
+    expect(screen.getByText('The turn ended with an error')).toBeInTheDocument();
+    expect(screen.getByText(/^Auto-resume (at|on) /)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel auto-resume' })).toBeInTheDocument();
+    unmount();
+    render(TurnCard, { item: turn({ interrupted: true }), agent: agent({ status: 'done' }), last: true });
+    expect(screen.getByText(/Interrupted · 182\.4k tokens · \$2\.84/)).toBeInTheDocument();
   });
 });

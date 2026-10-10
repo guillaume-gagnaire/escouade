@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../../lib/i18n';
   import { firstChangedLine, patchLines } from '../../lib/diff';
   import { hasDiff, toolArg, toolLabel, toolResultSummary } from '../../lib/tools';
   import type { ConvItem, ToolItem } from '../../lib/types';
@@ -60,8 +61,8 @@
     {#if file}
       <button
         class="arg link"
-        aria-label={`Ouvrir ${arg} dans l’éditeur`}
-        title="Ouvrir dans l’éditeur"
+        aria-label={t('conv.tool.openFile', { path: arg })}
+        title={t('common.openInEditor')}
         onclick={(e) => {
           e.stopPropagation();
           onOpenFile?.(file, firstLine);
@@ -73,13 +74,13 @@
       <span class="arg">{arg}</span>
     {/if}
     {#if item.status === 'running'}
-      <span class="spin" aria-label="en cours"></span>
+      <span class="spin" aria-label={t('conv.tool.running')}></span>
     {:else if diff}
       <span class="add">+{item.result?.add}</span><span class="del">−{item.result?.del}</span>
     {:else if res}
       <span class="res">{res}</span>
     {/if}
-    {#if subTools.length}<span class="res">{subTools.length} outil{subTools.length > 1 ? 's' : ''}</span>{/if}
+    {#if subTools.length}<span class="res">{t('conv.tool.subTools', { count: subTools.length })}</span>{/if}
   </div>
   {#if open}
     <div class="detail">
@@ -87,10 +88,10 @@
         <PatchView lines={patchLines(item.result.patch)} />
       {:else if item.name === 'TodoWrite' && Array.isArray(item.input.todos)}
         <ul class="todos">
-          {#each item.input.todos as t, i (i)}
-            <li class={t.status}>
-              <span>{t.status === 'completed' ? '☑' : t.status === 'in_progress' ? '◐' : '☐'}</span>
-              {t.content ?? t.activeForm}
+          {#each item.input.todos as todo, i (i)}
+            <li class={todo.status}>
+              <span>{todo.status === 'completed' ? '☑' : todo.status === 'in_progress' ? '◐' : '☐'}</span>
+              {todo.content ?? todo.activeForm}
             </li>
           {/each}
         </ul>
