@@ -903,6 +903,15 @@ pub async fn suggest_worktree_steps(
     core.suggest_worktree_steps(&project_id).await.map_err(err)
 }
 
+/// The launch commands Claude suggests for the project, from what it reads of it (nothing is saved).
+#[tauri::command]
+pub async fn suggest_run_commands(
+    core: CoreState<'_>,
+    project_id: String,
+) -> Res<Vec<crate::model::RunCommand>> {
+    core.suggest_run_commands(&project_id).await.map_err(err)
+}
+
 /// Looks for a newer release, through the network settings as they are now.
 #[tauri::command]
 pub async fn update_check(

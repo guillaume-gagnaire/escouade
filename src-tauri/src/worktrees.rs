@@ -1,8 +1,8 @@
 //! What a project runs in its agents' worktrees: its setup once one is made (dependencies,
 //! generated code…), its teardown before one is removed, and the commands Claude suggests for both
-//! from what it reads of the project.
+//! from what it reads of the project; and the launch commands it suggests the same way.
 
-use crate::model::{Worktree, WorktreeStep};
+use crate::model::{RunCommand, Worktree, WorktreeStep};
 use crate::paths;
 use crate::pty::ShellInfo;
 use crate::testlaunch;
@@ -17,8 +17,10 @@ pub const SETUP_LIMIT: Duration = Duration::from_secs(20 * 60);
 pub const TEARDOWN_LIMIT: Duration = Duration::from_secs(5 * 60);
 /// How long Claude may read the project to suggest the commands.
 pub const SUGGEST_LIMIT: Duration = Duration::from_secs(4 * 60);
-/// At most this many steps of each kind are taken from a suggestion.
+/// At most this many steps of each kind (or launch commands) are taken from a suggestion.
 const MAX_SUGGESTED: usize = 8;
+/// A suggested launch command's name is cut at this many characters: it is shown in a row.
+const MAX_NAME: usize = 40;
 
 /// The variables a worktree's commands get: where the project and the worktree are, its branch,
 /// and its reserved ports when it has some.
@@ -41,20 +43,23 @@ pub fn runnable(steps: &[WorktreeStep]) -> Vec<WorktreeStep> {
         .collect()
 }
 
-/// A step as it is shown: its command's first line, with its folder.
-pub fn label(step: &WorktreeStep) -> String {
-    let line = step
-        .command
-        .trim()
-        .lines()
-        .next()
-        .unwrap_or_default()
-        .trim();
-    let line = if line.chars().count() > 80 {
-        format!("{}…", line.chars().take(79).collect::<String>())
+/// The first line of `text`, trimmed.
+fn first_line(text: &str) -> &str {
+    text.trim().lines().next().unwrap_or_default().trim()
+}
+
+/// `line` as it is shown: at most `max` characters, the last one an ellipsis when it was cut.
+fn clipped(line: &str, max: usize) -> String {
+    if line.chars().count() > max {
+        format!("{}…", line.chars().take(max - 1).collect::<String>())
     } else {
         line.to_string()
-    };
+    }
+}
+
+/// A step as it is shown: its command's first line, with its folder.
+pub fn label(step: &WorktreeStep) -> String {
+    let line = clipped(first_line(&step.command), 80);
     match step.cwd.trim() {
         "" | "." => line,
         dir => format!("{line} ({dir})"),
@@ -216,13 +221,22 @@ fn candidates(text: &str) -> Vec<&str> {
     blocks
 }
 
-/// The steps of a list of the answer, each run by `shell`: those with a command whose folder
-/// stays inside `root` (the project's folder: the worktree's is the same tree).
-fn steps_of(list: Option<&Value>, root: &Path, shell: &str) -> Vec<WorktreeStep> {
+/// What the answer says of one command: what it runs, in which folder, and the name it gives it.
+struct Entry {
+    command: String,
+    /// Relative to the project's folder, empty for the folder itself.
+    cwd: String,
+    /// Empty when it gives none.
+    name: String,
+}
+
+/// The entries of a list of the answer (a string alone is a command): those with a command whose
+/// folder stays inside `root` (the project's folder: the worktree's is the same tree).
+fn entries_of<'a>(list: Option<&'a Value>, root: &'a Path) -> impl Iterator<Item = Entry> + 'a {
     list.and_then(Value::as_array)
         .into_iter()
         .flatten()
-        .filter_map(|s| {
+        .filter_map(move |s| {
             let text = |keys: &[&str]| {
                 keys.iter()
                     .find_map(|k| s.get(*k).and_then(Value::as_str))
@@ -244,12 +258,22 @@ fn steps_of(list: Option<&Value>, root: &Path, shell: &str) -> Vec<WorktreeStep>
                 d if paths::contained(root, d).is_ok() => d.to_string(),
                 _ => return None,
             };
-            Some(WorktreeStep {
-                id: uuid::Uuid::new_v4().to_string(),
+            Some(Entry {
                 command,
-                shell: shell.to_string(),
                 cwd,
+                name: text(&["nom", "name"]),
             })
+        })
+}
+
+/// The steps of a list of the answer, each run by `shell`.
+fn steps_of(list: Option<&Value>, root: &Path, shell: &str) -> Vec<WorktreeStep> {
+    entries_of(list, root)
+        .map(|e| WorktreeStep {
+            id: uuid::Uuid::new_v4().to_string(),
+            command: e.command,
+            shell: shell.to_string(),
+            cwd: e.cwd,
         })
         .take(MAX_SUGGESTED)
         .collect()
@@ -273,6 +297,113 @@ pub fn parse_suggestion(
             steps_of(setup, root, shell),
             steps_of(teardown, root, shell),
         ))
+    })
+}
+
+// ---------- launch commands suggested by Claude ----------
+
+/// The characters that show nothing, or change the order of what is shown: zero-width and
+/// direction marks, variation selectors, tag characters, the blank that is not a space… (the
+/// controls are `char::is_control`'s). Ranges, as the window decides by property (`recipe.ts`):
+/// a list of single characters forgets the one that gets used.
+const HIDDEN: &[(u32, u32)] = &[
+    (0x00ad, 0x00ad),   // soft hyphen
+    (0x034f, 0x034f),   // combining grapheme joiner
+    (0x061c, 0x061c),   // Arabic letter mark
+    (0x115f, 0x1160),   // Hangul fillers
+    (0x17b4, 0x17b5),   // Khmer inherent vowels
+    (0x180b, 0x180f),   // Mongolian variation selectors
+    (0x200b, 0x200f),   // zero-width spaces and joiners, direction marks
+    (0x2028, 0x202e),   // line and paragraph separators, direction embeddings and overrides
+    (0x2060, 0x206f),   // word joiner, invisible operators, deprecated format characters
+    (0x2800, 0x2800),   // braille blank
+    (0x3164, 0x3164),   // Hangul filler
+    (0xfe00, 0xfe0f),   // variation selectors
+    (0xfeff, 0xfeff),   // zero-width no-break space
+    (0xffa0, 0xffa0),   // halfwidth Hangul filler
+    (0xfff0, 0xfffb),   // specials, interlinear annotations
+    (0x1bca0, 0x1bca3), // shorthand format controls
+    (0x1d173, 0x1d17a), // musical format controls
+    (0xe0000, 0xe0fff), // tag characters and the variation selectors supplement
+];
+
+/// Whether `text` is one plain line, as a field of the settings shows it: no line break nor
+/// control, and no character that shows nothing or shows another order. What is read there is
+/// then what runs.
+fn is_plain_line(text: &str) -> bool {
+    !text.chars().any(|c| {
+        c.is_control()
+            || HIDDEN
+                .iter()
+                .any(|&(from, to)| (from..=to).contains(&(c as u32)))
+    })
+}
+
+/// Claude's role when it suggests a project's launch commands.
+pub const RUN_SUGGEST_SYSTEM: &str = "Tu lis un projet pour préparer les commandes qu'Escouade lance pour le développer (serveurs de développement, watchers…). Tu ne modifies rien et n'exécutes rien : tu lis les fichiers, puis tu réponds uniquement par le bloc JSON demandé.";
+
+/// What Claude is asked: the commands that launch what the project needs while it is developed,
+/// for `shell` (the one they will run in).
+pub fn run_suggest_prompt(shell: &ShellInfo) -> String {
+    // The commands get none of Escouade's variables: a project's own go in front of the command,
+    // in the syntax of the shell that runs it.
+    let set_variable = if matches!(shell.id.as_str(), "pwsh" | "powershell") {
+        "$env:PORT = '3000'; npm run dev"
+    } else {
+        "PORT=3000 npm run dev"
+    };
+    let label = &shell.label;
+    format!(
+        "<lancement>\nL'utilisateur lance les processus dont il a besoin pour développer ce projet depuis la section « Lancement » d'Escouade : \
+         chaque commande tourne dans son propre terminal, qu'il garde ouvert pendant qu'il travaille.\n\n\
+         Lis le projet (manifestes et scripts : package.json, Makefile, Procfile, justfile, pyproject.toml…, docker-compose, README, CONTRIBUTING, \
+         à la racine et dans les sous-dossiers) et donne les commandes qui lancent ces processus : serveurs de développement (front, API…), \
+         watchers (compilation ou génération en continu), workers et files de tâches, base de données et services locaux (docker compose up db…). \
+         Une commande par processus, avec un nom court (« Front », « API », « Base »). Une commande qui rend la main aussitôt \
+         (docker compose up -d) ne se suit pas dans un terminal : donne-la au premier plan (docker compose up db).\n\
+         Jamais de commande d'installation ni de tests, ni de commande qui se termine d'elle-même (build, lint, migration). \
+         Au plus {MAX_SUGGESTED} commandes, aucune si le projet n'a rien à lancer.\n\n\
+         Les commandes tournent dans {label}, chacune dans le dossier « dossier » (relatif à la racine du projet, vide pour la racine). \
+         Aucune variable d'Escouade (ESCOUADE_…) n'est définie pour elles : si un processus exige une variable d'environnement qu'il ne lit pas \
+         lui-même dans un fichier .env, écris-la devant la commande, avec la syntaxe de {label} ({set_variable}).\n\n\
+         Réponds uniquement par :\n```json\n{{\"commandes\": [{{\"nom\": \"Front\", \"commande\": \"npm run dev\", \"dossier\": \"web\"}}, \
+         {{\"nom\": \"Base\", \"commande\": \"docker compose up db\", \"dossier\": \"\"}}]}}\n```\n</lancement>"
+    )
+}
+
+/// The launch commands in Claude's `answer` (its JSON object with "commandes"), each run by
+/// `shell`; None when no block of it reads as such. A command that gives no name is named after
+/// what it runs; one whose folder is none of the project's (outside it, or not there), or whose text
+/// is not one plain line (`is_plain_line`), is left out.
+pub fn parse_run_suggestion(answer: &str, root: &Path, shell: &str) -> Option<Vec<RunCommand>> {
+    candidates(answer).into_iter().find_map(|block| {
+        let v: Value = serde_json::from_str(block.trim()).ok()?;
+        let list = v.get("commandes").or_else(|| v.get("commands"))?;
+        Some(
+            entries_of(Some(list), root)
+                .filter(|e| {
+                    [&e.command, &e.name, &e.cwd]
+                        .into_iter()
+                        .all(|t| is_plain_line(t))
+                })
+                .filter(|e| e.cwd.is_empty() || root.join(&e.cwd).is_dir())
+                .take(MAX_SUGGESTED)
+                .map(|e| {
+                    let named = if e.name.is_empty() {
+                        &e.command
+                    } else {
+                        &e.name
+                    };
+                    RunCommand {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        name: clipped(named, MAX_NAME),
+                        command: e.command,
+                        shell: shell.to_string(),
+                        cwd: e.cwd,
+                    }
+                })
+                .collect(),
+        )
     })
 }
 
@@ -435,5 +566,179 @@ mod tests {
         assert!(!p.contains("isola"));
         assert!(suggest_prompt("bash", &[], true).contains(".isola.toml"));
         assert!(suggest_prompt("bash", &[], false).contains("aucun fichier ignoré par git"));
+    }
+
+    fn shell_of(id: &str, label: &str) -> ShellInfo {
+        ShellInfo {
+            id: id.into(),
+            label: label.into(),
+            path: String::new(),
+        }
+    }
+
+    #[test]
+    fn the_launch_question_names_the_shell_the_way_to_set_a_variable_in_it_and_what_not_to_give() {
+        let pwsh = run_suggest_prompt(&shell_of("pwsh", "PowerShell 7"));
+        assert!(pwsh.contains("PowerShell 7"), "{pwsh}");
+        // The commands get no variable of Escouade's, and a project's own go in front of them, in
+        // the shell's syntax.
+        assert!(pwsh.contains("ESCOUADE"), "{pwsh}");
+        assert!(pwsh.contains("$env:PORT = '3000'; npm run dev"), "{pwsh}");
+        assert!(!pwsh.contains("PORT=3000 npm"), "{pwsh}");
+        for id in ["bash", "wsl", "zsh"] {
+            let posix = run_suggest_prompt(&shell_of(id, "Git Bash"));
+            assert!(posix.contains("PORT=3000 npm run dev"), "{id}: {posix}");
+            assert!(!posix.contains("$env:"), "{id}: {posix}");
+        }
+        // What is asked for, and what never is.
+        assert!(
+            pwsh.contains("serveurs de développement")
+                && pwsh.contains("watchers")
+                && pwsh.contains("docker compose"),
+            "{pwsh}"
+        );
+        assert!(
+            pwsh.contains("Jamais de commande d'installation ni de tests"),
+            "{pwsh}"
+        );
+        // The shape of the answer, as the parser reads it.
+        assert!(
+            pwsh.contains("{\"commandes\": [{\"nom\": \"Front\""),
+            "{pwsh}"
+        );
+        assert!(pwsh.starts_with("<lancement>") && pwsh.ends_with("</lancement>"));
+        assert!(!pwsh.contains("<worktrees>"));
+    }
+
+    #[test]
+    fn the_launch_commands_are_read_from_the_answers_json_and_their_folders_stay_inside() {
+        let root = test_dir("run-suggest");
+        std::fs::create_dir_all(root.join("web")).unwrap();
+        // A file is no folder to run in.
+        std::fs::write(root.join("README.md"), "x").unwrap();
+        let answer = "J'ai lu le projet.\n\n```json\n{\"commandes\": [\
+            {\"nom\": \" Front \", \"commande\": \" npm run dev \", \"dossier\": \"./web/\"},\
+            {\"nom\": \"API\", \"commande\": \"cargo run\", \"dossier\": \"\"},\
+            {\"nom\": \"Piège\", \"commande\": \"rm -rf /\", \"dossier\": \"../dehors\"},\
+            {\"nom\": \"Fantôme\", \"commande\": \"npm start\", \"dossier\": \"absent\"},\
+            {\"nom\": \"Fichier\", \"commande\": \"npm start\", \"dossier\": \"README.md\"},\
+            {\"nom\": \"Vide\", \"commande\": \"  \", \"dossier\": \"web\"},\
+            {\"nom\": \"Base\", \"commande\": \"docker compose up db\", \"dossier\": null}]}\n```";
+        let got = parse_run_suggestion(answer, &root, "bash").unwrap();
+        let shown: Vec<(&str, &str, &str, &str)> = got
+            .iter()
+            .map(|c| {
+                (
+                    c.name.as_str(),
+                    c.command.as_str(),
+                    c.cwd.as_str(),
+                    c.shell.as_str(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            shown,
+            [
+                ("Front", "npm run dev", "web", "bash"),
+                ("API", "cargo run", "", "bash"),
+                ("Base", "docker compose up db", "", "bash"),
+            ]
+        );
+        assert!(got.iter().all(|c| !c.id.is_empty()) && got[0].id != got[1].id);
+    }
+
+    #[test]
+    fn a_launch_command_that_could_show_other_than_what_it_runs_is_left_out() {
+        let root = test_dir("run-suggest-hidden");
+        std::fs::create_dir_all(root.join("web")).unwrap();
+        // The settings show a command on one line: a line break would be cut out of what is
+        // read and still run, and a mark that draws nothing, or that reorders the text, would
+        // hide part of it.
+        let tricks = [
+            "echo ok\nrm -rf ~",
+            "echo ok\r\nrm -rf ~",
+            "echo ok\rrm -rf ~",
+            "echo ok\u{1b}[2K; rm -rf ~",
+            "npm run dev\u{202e}gnihton",
+            "npm\u{200b} start",
+            "npm start\u{feff}",
+            "npm start\u{fe0f}",
+            "npm start\u{e0041}",
+            "npm\u{2800}start",
+            "npm\tstart",
+        ];
+        let mut entries: Vec<serde_json::Value> = tricks
+            .iter()
+            .map(|c| serde_json::json!({ "nom": "Piège", "commande": c }))
+            .collect();
+        entries.push(serde_json::json!({ "nom": "Pi\u{202e}ège", "commande": "npm start" }));
+        entries.push(
+            serde_json::json!({ "nom": "Web", "commande": "npm start", "dossier": "web\u{200b}" }),
+        );
+        // What stands: accents and other scripts are not hidden, and neither are spaces.
+        entries.push(serde_json::json!({ "nom": "Éditeur 日本", "commande": "npm run dev -- --name \"é ü\"" }));
+        let answer = serde_json::json!({ "commandes": entries }).to_string();
+        let got = parse_run_suggestion(&answer, &root, "bash").unwrap();
+        let shown: Vec<(&str, &str)> = got
+            .iter()
+            .map(|c| (c.name.as_str(), c.command.as_str()))
+            .collect();
+        assert_eq!(shown, [("Éditeur 日本", "npm run dev -- --name \"é ü\"")]);
+    }
+
+    #[test]
+    fn a_launch_command_without_a_name_is_named_after_its_command() {
+        let root = test_dir("run-suggest-names");
+        let long = format!("npm run {}", "x".repeat(60));
+        let answer = serde_json::json!({ "commandes": [
+            { "commande": "docker compose up db" },
+            "cargo watch -x run",
+            { "nom": "  ", "commande": long },
+        ] })
+        .to_string();
+        let got = parse_run_suggestion(&answer, &root, "bash").unwrap();
+        assert_eq!(got[0].name, "docker compose up db");
+        assert_eq!(got[1].name, "cargo watch -x run");
+        assert_eq!(got[1].command, "cargo watch -x run");
+        assert_eq!(got[2].name.chars().count(), 40);
+        assert!(got[2].name.ends_with('…'));
+    }
+
+    #[test]
+    fn the_launch_suggestion_takes_the_last_answer_block_and_eight_commands_at_most() {
+        let root = test_dir("run-suggest-shapes");
+        // English keys, bare JSON.
+        let got = parse_run_suggestion(
+            "{\"commands\": [{\"name\": \"Web\", \"command\": \"npm start\", \"dir\": \".\"}]}",
+            &root,
+            "pwsh",
+        )
+        .unwrap();
+        assert_eq!(
+            (
+                got[0].name.as_str(),
+                got[0].cwd.as_str(),
+                got[0].shell.as_str()
+            ),
+            ("Web", "", "pwsh")
+        );
+        let two =
+            "```json\n{\"commandes\": [\"a\"]}\n```\npuis\n```json\n{\"commandes\": [\"b\"]}\n```";
+        assert_eq!(
+            parse_run_suggestion(two, &root, "bash").unwrap()[0].command,
+            "b"
+        );
+        let many: Vec<String> = (0..12).map(|i| format!("npm run s{i}")).collect();
+        let long = serde_json::json!({ "commandes": many }).to_string();
+        assert_eq!(parse_run_suggestion(&long, &root, "bash").unwrap().len(), 8);
+        // Nothing to launch is an answer too: an empty list.
+        assert_eq!(
+            parse_run_suggestion("{\"commandes\": []}", &root, "bash"),
+            Some(Vec::new())
+        );
+        // Not an answer: no block, none of this shape (the worktree commands' is another).
+        assert!(parse_run_suggestion("Je ne sais pas.", &root, "bash").is_none());
+        assert!(parse_run_suggestion("```json\n{\"autre\": 1}\n```", &root, "bash").is_none());
+        assert!(parse_run_suggestion("{\"preparation\": [\"npm ci\"]}", &root, "bash").is_none());
     }
 }

@@ -114,6 +114,20 @@
   anchor="launch"
   note="Chaque commande tourne dans son propre terminal, en lecture seule. Lance-les depuis la section « Lancement » de la barre latérale."
 >
+  <div class="fill">
+    <Row
+      label="Remplir automatiquement"
+      desc="Claude lit le projet (manifestes, scripts, docker-compose, README…) sans rien modifier et propose les commandes à lancer. Relis-les avant d'enregistrer."
+    >
+      <button
+        class="btn suggest"
+        disabled={settingsForm.suggestingLaunch[project.id]}
+        onclick={() => settingsForm.suggestLaunch(project.id)}
+      >
+        {settingsForm.suggestingLaunch[project.id] ? 'Claude lit le projet…' : '✦ Remplir automatiquement'}
+      </button>
+    </Row>
+  </div>
   {#each draft.runCommands as c, i (c.id)}
     <fieldset class="cmd">
       <legend class="sr">Commande {i + 1}</legend>
@@ -261,5 +275,9 @@
   }
   .suggest {
     flex-shrink: 0;
+  }
+  /* Its row stands apart from the commands below, whose boxes have no border above. */
+  .fill {
+    border-bottom: 1px solid var(--line);
   }
 </style>

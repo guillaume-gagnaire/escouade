@@ -22,7 +22,8 @@
 // [<KEY>]`, or a sentence out of form when the ticket's title says [message-libre]; with [sourd]
 // in its system prompt it never reads its input and answers nothing for 20 s. Asked for a project's
 // worktree commands (<worktrees>), it suggests a setup (one of whose folders leaves the project) and a
-// teardown. Asked for a direct commit's message (<fichiers>), it names the latest commit subject and
+// teardown. Asked for a project's launch commands (<lancement>), it suggests four (two of whose folders
+// are no folders of the project), or nothing readable in a folder named "unreadable". Asked for a direct commit's message (<fichiers>), it names the latest commit subject and
 // the files of the diff it read.
 
 import { execFileSync, spawn } from 'node:child_process';
@@ -61,6 +62,23 @@ if (argv.includes('-p') && argv.some((a) => a.includes('[sourd]'))) {
         demontage: [{ commande: 'docker compose down', dossier: '' }],
       };
       const result = `Voici les commandes.\n\n\`\`\`json\n${JSON.stringify(steps)}\n\`\`\``;
+      process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result }));
+      return;
+    }
+    // A project's launch commands: two that stand, one whose folder leaves the project and one
+    // whose folder is not there. Nothing readable when the project's folder is named "unreadable".
+    if (input.includes('<lancement>')) {
+      const commands = {
+        commandes: [
+          { nom: 'Front', commande: 'npm run dev', dossier: 'src' },
+          { nom: 'API', commande: 'cargo run', dossier: '' },
+          { nom: 'Piège', commande: 'rm -rf /', dossier: '../dehors' },
+          { nom: 'Fantôme', commande: 'npm start', dossier: 'absent' },
+        ],
+      };
+      const result = process.cwd().includes('unreadable')
+        ? 'Je ne vois rien à lancer ici.'
+        : `Voici les commandes.\n\n\`\`\`json\n${JSON.stringify(commands)}\n\`\`\``;
       process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result }));
       return;
     }

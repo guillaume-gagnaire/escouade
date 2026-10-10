@@ -294,6 +294,7 @@ pub fn run() {
             commands::isola_services,
             commands::isola_down,
             commands::suggest_worktree_steps,
+            commands::suggest_run_commands,
         ])
         .build(tauri::generate_context!())
         .expect("error while building the application")

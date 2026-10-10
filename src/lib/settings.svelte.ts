@@ -125,6 +125,13 @@ function changes<T extends object>(base: T, next: T): Partial<T> {
 
 const empty = (o: object) => Object.keys(o).length === 0;
 
+/** What « Remplir automatiquement » says when Claude read the project and found nothing to run. */
+const NOTHING_TO_RUN = "Claude n'a trouvé aucune commande à lancer pour ce projet.";
+
+/** What it says when `n` commands were put in the draft. */
+const proposed = (n: number) =>
+  n > 1 ? `${n} commandes proposées : relis-les avant d'enregistrer.` : "1 commande proposée : relis-la avant d'enregistrer.";
+
 class SettingsForm {
   tab = $state<SettingsTab>('claude');
   /** The project the "Projets" and "Kanban" tabs set. */
@@ -135,6 +142,8 @@ class SettingsForm {
   busy = $state(false);
   /** Claude reads the project to suggest its worktree steps, by project. */
   suggesting = $state<Record<string, boolean>>({});
+  /** Claude reads the project to suggest its launch commands, by project. */
+  suggestingLaunch = $state<Record<string, boolean>>({});
   /** As last opened or saved: what a change is measured against. */
   #base = $state.raw<{ settings: Settings; projects: Record<string, ProjectDraft> }>({ settings: {} as Settings, projects: {} });
 
@@ -203,18 +212,38 @@ class SettingsForm {
       const s = await api.suggestWorktreeSteps(projectId);
       const d = this.projects[projectId];
       const n = s.setup.length + s.teardown.length;
-      if (!n) return app.toast("Claude n'a trouvé aucune commande à lancer pour ce projet.");
+      if (!n) return app.toast(NOTHING_TO_RUN);
       // Closed and opened again meanwhile: a fresh draft, which takes it all the same.
       if (!d) return;
       d.worktreeSetup = s.setup;
       d.worktreeTeardown = s.teardown;
-      app.toast(
-        n > 1 ? `${n} commandes proposées : relis-les avant d'enregistrer.` : "1 commande proposée : relis-la avant d'enregistrer.",
-      );
+      app.toast(proposed(n));
     } catch (e) {
       app.toast(String(e), 'error');
     } finally {
       this.suggesting[projectId] = false;
+    }
+  }
+
+  /**
+   * « Remplir automatiquement » of the launch commands: Claude reads the project and its suggestion replaces the draft's
+   * commands (left as they are when it finds none, or fails).
+   */
+  async suggestLaunch(projectId: string) {
+    if (this.suggestingLaunch[projectId]) return;
+    this.suggestingLaunch[projectId] = true;
+    try {
+      const commands = await api.suggestRunCommands(projectId);
+      const d = this.projects[projectId];
+      if (!commands.length) return app.toast(NOTHING_TO_RUN);
+      // Closed and opened again meanwhile: a fresh draft, which takes it all the same.
+      if (!d) return;
+      d.runCommands = commands;
+      app.toast(proposed(commands.length));
+    } catch (e) {
+      app.toast(String(e), 'error');
+    } finally {
+      this.suggestingLaunch[projectId] = false;
     }
   }
 

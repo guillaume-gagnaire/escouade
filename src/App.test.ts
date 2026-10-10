@@ -135,6 +135,19 @@ describe('App layout', () => {
     expect(screen.getByRole('radio', { name: /Merger dans une branche/ })).toBeInTheDocument();
   });
 
+  it('proposes the launch commands from the empty Lancement section: the settings open on them and Claude reads the project', async () => {
+    let answer!: (v: unknown) => void;
+    const reading = new Promise((r) => (answer = r));
+    start('', { handlers: { suggest_run_commands: () => reading } });
+    await userEvent.click(await screen.findByRole('button', { name: '✦ Proposer des commandes' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Réglages' });
+    expect(within(dialog).getByRole('tab', { name: 'Projets' })).toHaveAttribute('aria-selected', 'true');
+    expect(await within(dialog).findByRole('button', { name: 'Claude lit le projet…' })).toBeDisabled();
+    answer([{ id: 's1', name: 'Front', command: 'npm run dev', shell: 'pwsh', cwd: '' }]);
+    expect(await within(dialog).findByDisplayValue('npm run dev')).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'Claude lit le projet…' })).not.toBeInTheDocument();
+  });
+
   it('comes back to the settings, unsaved changes kept, from closing a project there', async () => {
     start('');
     expect(await screen.findByRole('main')).toBeInTheDocument();

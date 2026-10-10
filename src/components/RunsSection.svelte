@@ -31,6 +31,10 @@
   function configure() {
     app.modal = { kind: 'settings', tab: 'projects', projectId: project.id, section: 'launch' };
   }
+  /** The same settings, where Claude reads the project at once to fill in the commands (to read before saving). */
+  function propose() {
+    app.modal = { kind: 'settings', tab: 'projects', projectId: project.id, section: 'launch', suggest: true };
+  }
   const isRunning = (c: RunCommand) => app.launches[c.id]?.status === 'running';
 </script>
 
@@ -82,7 +86,9 @@
       {@render runRow(c)}
     {:else}
       <div class="none">
-        Aucune commande. <button class="link" onclick={configure}>Configurer</button>
+        <span>Aucune commande.</span>
+        <button class="link" onclick={configure}>Configurer</button>
+        <button class="link" onclick={propose}>✦ Proposer des commandes</button>
       </div>
     {/each}
     {#each groups as g (g.agent.id)}
@@ -213,6 +219,9 @@
     color: var(--dim);
   }
   .none {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 10px;
     padding: 2px 8px 4px;
     font-size: 12px;
     color: var(--dim);

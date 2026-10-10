@@ -18,6 +18,8 @@ const SHELLS = [
 
 const tab = (name: string) => screen.getByRole('tab', { name });
 const panel = () => screen.getByRole('tabpanel');
+/** What is in a group of the settings, under its heading. */
+const group = (name: string) => within(within(panel()).getByRole('heading', { name }).closest('section')!);
 const save = () => userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
 /** The backend as it answers: a board saved comes back in its project. */
 const backendSaving = (over: Record<string, (a: any) => unknown> = {}) =>
@@ -390,22 +392,94 @@ describe('SettingsModal', () => {
     const down = screen.getByRole('group', { name: 'Commande de démontage 1' });
     expect(within(down).getByLabelText('Shell')).toHaveValue('pwsh');
     await userEvent.type(within(down).getByLabelText('Commande'), 'docker compose down');
-    await userEvent.click(screen.getByRole('button', { name: '✦ Remplir automatiquement' }));
-    expect(screen.getByRole('button', { name: 'Claude lit le projet…' })).toBeDisabled();
+    const worktrees = group('Worktrees');
+    await userEvent.click(worktrees.getByRole('button', { name: '✦ Remplir automatiquement' }));
+    expect(worktrees.getByRole('button', { name: 'Claude lit le projet…' })).toBeDisabled();
+    // The launch commands have their own button, which keeps its label.
+    expect(group('Lancement').getByRole('button', { name: '✦ Remplir automatiquement' })).toBeEnabled();
     expect(backend.called('suggest_worktree_steps')[0].args).toEqual({ projectId: 'p1' });
+    expect(backend.called('suggest_run_commands')).toHaveLength(0);
     answer({ setup: [{ id: 's1', command: 'npm ci', shell: 'bash', cwd: 'web' }], teardown: [] });
     const setup = await screen.findByRole('group', { name: 'Commande de préparation 1' });
     expect(within(setup).getByLabelText('Commande')).toHaveValue('npm ci');
     expect(within(setup).getByLabelText('Shell')).toHaveValue('bash');
     expect(within(setup).getByLabelText('Sous-dossier')).toHaveValue('web');
-    // The suggestion replaces both lists.
+    // The suggestion replaces both lists, and the launch commands stay.
     expect(screen.queryByRole('group', { name: 'Commande de démontage 1' })).toBeNull();
-    expect(screen.getByRole('button', { name: '✦ Remplir automatiquement' })).toBeEnabled();
+    expect(worktrees.getByRole('button', { name: '✦ Remplir automatiquement' })).toBeEnabled();
+    expect(screen.getByDisplayValue('Front')).toBeInTheDocument();
     await save();
     expect(backend.called('update_project')[0].args.project).toMatchObject({
       worktreeSetup: [{ id: 's1', command: 'npm ci', shell: 'bash', cwd: 'web' }],
       worktreeTeardown: [],
+      runCommands: [FRONT],
     });
+  });
+
+  it('sets the launch commands as Claude suggests them, in place of those of the draft', async () => {
+    let answer!: (v: unknown) => void;
+    const backend = backendSaving({ suggest_run_commands: () => new Promise((r) => (answer = r)) });
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    const launch = group('Lancement');
+    expect(
+      launch.getByText(
+        "Claude lit le projet (manifestes, scripts, docker-compose, README…) sans rien modifier et propose les commandes à lancer. Relis-les avant d'enregistrer.",
+      ),
+    ).toBeInTheDocument();
+    // Not before it is asked for.
+    expect(backend.called('suggest_run_commands')).toHaveLength(0);
+    await userEvent.click(launch.getByRole('button', { name: '✦ Remplir automatiquement' }));
+    expect(launch.getByRole('button', { name: 'Claude lit le projet…' })).toBeDisabled();
+    // The worktrees' button is another reading: it stays available.
+    expect(group('Worktrees').getByRole('button', { name: '✦ Remplir automatiquement' })).toBeEnabled();
+    expect(backend.called('suggest_run_commands')[0].args).toEqual({ projectId: 'p1' });
+    expect(backend.called('suggest_worktree_steps')).toHaveLength(0);
+    answer([
+      { id: 's1', name: 'API', command: 'cargo watch -x run', shell: 'bash', cwd: '' },
+      { id: 's2', name: 'Web', command: 'npm run dev', shell: 'bash', cwd: 'web' },
+    ]);
+    // In place of the draft's, FRONT.
+    await screen.findByDisplayValue('API');
+    expect(screen.queryByDisplayValue('Front')).toBeNull();
+    const first = screen.getByRole('group', { name: 'Commande 1' });
+    expect(within(first).getByLabelText('Nom')).toHaveValue('API');
+    expect(within(first).getByLabelText('Commande')).toHaveValue('cargo watch -x run');
+    expect(within(first).getByLabelText('Shell')).toHaveValue('bash');
+    expect(within(first).getByLabelText('Sous-dossier', { exact: false })).toHaveValue('');
+    const second = screen.getByRole('group', { name: 'Commande 2' });
+    expect(within(second).getByLabelText('Sous-dossier', { exact: false })).toHaveValue('web');
+    expect(screen.queryByRole('group', { name: 'Commande 3' })).toBeNull();
+    expect(launch.getByRole('button', { name: '✦ Remplir automatiquement' })).toBeEnabled();
+    expect(tab('Projets')).toHaveClass('changed');
+    await save();
+    expect(backend.called('update_project')[0].args.project.runCommands).toEqual([
+      { id: 's1', name: 'API', command: 'cargo watch -x run', shell: 'bash', cwd: '' },
+      { id: 's2', name: 'Web', command: 'npm run dev', shell: 'bash', cwd: 'web' },
+    ]);
+  });
+
+  it('keeps the launch commands when Claude proposes none readable, and says so', async () => {
+    backendSaving({ suggest_run_commands: () => Promise.reject("Claude n'a pas proposé de commandes lisibles.") });
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    await userEvent.click(group('Lancement').getByRole('button', { name: '✦ Remplir automatiquement' }));
+    await expect.poll(() => app.toasts.at(-1)).toMatchObject({ text: "Claude n'a pas proposé de commandes lisibles.", kind: 'error' });
+    expect(screen.getByDisplayValue('Front')).toBeInTheDocument();
+    expect(group('Lancement').getByRole('button', { name: '✦ Remplir automatiquement' })).toBeEnabled();
+  });
+
+  it('reads the project at once when it is opened to propose the launch commands, but not when it comes back', async () => {
+    let answer!: (v: unknown) => void;
+    const backend = backendSaving({ suggest_run_commands: () => new Promise((r) => (answer = r)) });
+    const { unmount } = render(SettingsModal, { tab: 'projects', projectId: 'p1', section: 'launch', suggest: true });
+    expect(backend.called('suggest_run_commands')[0].args).toEqual({ projectId: 'p1' });
+    expect(group('Lancement').getByRole('button', { name: 'Claude lit le projet…' })).toBeDisabled();
+    answer([{ id: 's1', name: 'Web', command: 'npm start', shell: 'bash', cwd: '' }]);
+    expect(await screen.findByDisplayValue('Web')).toBeInTheDocument();
+    unmount();
+    // Back from a modal it opened (the project's closing): the draft as it was, nothing asked again.
+    render(SettingsModal, { tab: 'projects', projectId: 'p1', section: 'launch', suggest: true, resume: true });
+    expect(backend.called('suggest_run_commands')).toHaveLength(1);
+    expect(screen.getByDisplayValue('Web')).toBeInTheDocument();
   });
 
   it('asks before closing the project', async () => {

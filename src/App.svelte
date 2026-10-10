@@ -122,7 +122,13 @@
 {#if app.modal?.kind === 'newProject'}
   <NewProjectModal />
 {:else if app.modal?.kind === 'settings'}
-  <SettingsModal tab={app.modal.tab} projectId={app.modal.projectId} section={app.modal.section} resume={app.modal.resume} />
+  <SettingsModal
+    tab={app.modal.tab}
+    projectId={app.modal.projectId}
+    section={app.modal.section}
+    resume={app.modal.resume}
+    suggest={app.modal.suggest}
+  />
 {:else if app.modal?.kind === 'diff'}
   <DiffModal
     projectId={app.modal.projectId}

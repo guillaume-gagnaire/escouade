@@ -12,7 +12,7 @@ use crate::job::JobUsage;
 use crate::model::*;
 use crate::notify;
 use crate::paths::{self, DataDir};
-use crate::pty::PtyManager;
+use crate::pty::{PtyManager, ShellInfo};
 use crate::resources;
 use crate::stats::Stats;
 use crate::testlaunch;
@@ -2176,31 +2176,57 @@ impl<R: Runtime> Core<R> {
     /// the project (in its folder, with tools that only read).
     pub async fn suggest_worktree_steps(&self, project_id: &str) -> Result<WorktreeSuggestion> {
         let project = self.project(project_id)?;
-        let settings = self.settings.read().clone();
-        let shell = crate::pty::detect_shells(&settings)
-            .into_iter()
-            .next()
-            .ok_or_else(|| anyhow!("Aucun shell détecté."))?;
+        let shell = self.default_shell()?;
         let prompt = worktrees::suggest_prompt(
             &shell.label,
             &project.worktree_copy,
             isola::configured(&project.path),
         );
         let answer = self
-            .ask_claude(Ask {
-                who: "Claude",
-                model: "sonnet",
-                tools: "Read,Glob,Grep",
-                cwd: Path::new(&project.path),
-                system: worktrees::SUGGEST_SYSTEM,
-                prompt: &prompt,
-                limit: worktrees::SUGGEST_LIMIT,
-            })
+            .read_project(&project, worktrees::SUGGEST_SYSTEM, &prompt)
             .await?;
         let (setup, teardown) =
             worktrees::parse_suggestion(&answer, Path::new(&project.path), &shell.id)
                 .ok_or_else(|| anyhow!("Claude n'a pas proposé de commandes lisibles."))?;
         Ok(WorktreeSuggestion { setup, teardown })
+    }
+
+    /// The launch commands Claude suggests for the project (the servers, watchers and services
+    /// its developer keeps running), from what it reads of it, each for the default shell. Only
+    /// a suggestion: the window shows it in the draft of the settings, nothing is saved here.
+    pub async fn suggest_run_commands(&self, project_id: &str) -> Result<Vec<RunCommand>> {
+        let project = self.project(project_id)?;
+        let shell = self.default_shell()?;
+        let prompt = worktrees::run_suggest_prompt(&shell);
+        let answer = self
+            .read_project(&project, worktrees::RUN_SUGGEST_SYSTEM, &prompt)
+            .await?;
+        worktrees::parse_run_suggestion(&answer, Path::new(&project.path), &shell.id)
+            .ok_or_else(|| anyhow!("Claude n'a pas proposé de commandes lisibles."))
+    }
+
+    /// The shell that runs what is not given another: the system's first.
+    fn default_shell(&self) -> Result<ShellInfo> {
+        let settings = self.settings.read().clone();
+        crate::pty::detect_shells(&settings)
+            .into_iter()
+            .next()
+            .ok_or_else(|| anyhow!("Aucun shell détecté."))
+    }
+
+    /// Claude's answer to `prompt` after it read the project, in its folder, with tools that only
+    /// read (never Bash nor Edit): it can neither change nor run anything.
+    async fn read_project(&self, project: &Project, system: &str, prompt: &str) -> Result<String> {
+        self.ask_claude(Ask {
+            who: "Claude",
+            model: "sonnet",
+            tools: "Read,Glob,Grep",
+            cwd: Path::new(&project.path),
+            system,
+            prompt,
+            limit: worktrees::SUGGEST_LIMIT,
+        })
+        .await
     }
 
     async fn auto_name(self: &Arc<Self>, id: &str, prompt: &str) {

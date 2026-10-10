@@ -172,6 +172,64 @@ describe('settingsForm', () => {
     expect(app.toasts.at(-1)).toMatchObject({ text: "Claude n'a pas proposé de commandes lisibles.", kind: 'error' });
   });
 
+  it("fills the launch commands with Claude's suggestion in place of the draft's, and says when it has none", async () => {
+    let answer!: (v: unknown) => void;
+    const backend = fakeBackend({ suggest_run_commands: () => new Promise((r) => (answer = r)) });
+    settingsForm.open({ tab: 'projects', projectId: 'p1' });
+    expect(settingsForm.changed('projects')).toBe(false);
+    const asked = settingsForm.suggestLaunch('p1');
+    expect(settingsForm.suggestingLaunch.p1).toBe(true);
+    // The worktree steps' reading is another one.
+    expect(settingsForm.suggesting.p1).toBeFalsy();
+    // Asked once at a time.
+    void settingsForm.suggestLaunch('p1');
+    expect(backend.called('suggest_run_commands')).toHaveLength(1);
+    expect(backend.called('suggest_run_commands')[0].args).toEqual({ projectId: 'p1' });
+    const web = { id: 's1', name: 'Front', command: 'npm run dev', shell: 'bash', cwd: 'web' };
+    const db = { id: 's2', name: 'Base', command: 'docker compose up db', shell: 'bash', cwd: '' };
+    answer([web, db]);
+    await asked;
+    expect(settingsForm.suggestingLaunch.p1).toBe(false);
+    // The suggestion replaces the draft's command, which was FRONT.
+    expect(settingsForm.projects.p1.runCommands).toEqual([web, db]);
+    expect(app.toasts.at(-1)?.text).toBe("2 commandes proposées : relis-les avant d'enregistrer.");
+    // A draft like another: it shows as a change, and cancelling drops it.
+    expect(settingsForm.changed('projects')).toBe(true);
+    expect(app.projects[0].runCommands).toEqual([FRONT]);
+    settingsForm.open({ tab: 'projects', projectId: 'p1' });
+    expect(settingsForm.projects.p1.runCommands).toEqual([FRONT]);
+
+    fakeBackend({ suggest_run_commands: () => [web] });
+    await settingsForm.suggestLaunch('p1');
+    expect(app.toasts.at(-1)?.text).toBe("1 commande proposée : relis-la avant d'enregistrer.");
+
+    fakeBackend({ suggest_run_commands: () => [] });
+    await settingsForm.suggestLaunch('p1');
+    // Nothing found: what was there stays.
+    expect(settingsForm.projects.p1.runCommands).toEqual([web]);
+    expect(app.toasts.at(-1)?.text).toBe("Claude n'a trouvé aucune commande à lancer pour ce projet.");
+
+    fakeBackend({ suggest_run_commands: () => Promise.reject("Claude n'a pas proposé de commandes lisibles.") });
+    await settingsForm.suggestLaunch('p1');
+    expect(settingsForm.suggestingLaunch.p1).toBe(false);
+    expect(settingsForm.projects.p1.runCommands).toEqual([web]);
+    expect(app.toasts.at(-1)).toMatchObject({ text: "Claude n'a pas proposé de commandes lisibles.", kind: 'error' });
+  });
+
+  it('saves the launch commands Claude suggested like those typed', async () => {
+    const backend = fakeBackend({
+      suggest_run_commands: () => [{ id: 's1', name: ' Front ', command: ' npm run dev ', shell: 'bash', cwd: 'web' }],
+    });
+    settingsForm.open({ tab: 'projects', projectId: 'p1' });
+    await settingsForm.suggestLaunch('p1');
+    expect(await settingsForm.save()).toBe(true);
+    expect(backend.called('update_project')[0].args.project.runCommands).toEqual([
+      { id: 's1', name: 'Front', command: 'npm run dev', shell: 'bash', cwd: 'web' },
+    ]);
+    // The command it replaced is gone for good, like one removed by hand.
+    expect(app.projects[0].runCommands.map((c) => c.id)).toEqual(['s1']);
+  });
+
   it('gives a new command the first shell found', () => {
     app.shells = [{ id: 'bash', label: 'Git Bash', path: 'bash.exe' }];
     settingsForm.open({ projectId: 'p2' });

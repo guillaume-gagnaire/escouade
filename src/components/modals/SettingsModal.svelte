@@ -14,10 +14,16 @@
     projectId,
     section,
     resume = false,
-  }: { tab?: SettingsTab; projectId?: string; section?: 'launch'; resume?: boolean } = $props();
+    suggest = false,
+  }: { tab?: SettingsTab; projectId?: string; section?: 'launch'; resume?: boolean; suggest?: boolean } = $props();
 
-  // A fresh draft each time the modal opens, unless it comes back from a modal it opened.
-  untrack(() => (resume ? settingsForm.resume({ tab, projectId }) : settingsForm.open({ tab, projectId })));
+  // A fresh draft each time the modal opens, unless it comes back from a modal it opened. Asked for it, Claude reads
+  // the project to fill the launch commands of the draft (only a fresh one: coming back is not asking again).
+  untrack(() => {
+    if (resume) return settingsForm.resume({ tab, projectId });
+    settingsForm.open({ tab, projectId });
+    if (suggest && settingsForm.projectId) void settingsForm.suggestLaunch(settingsForm.projectId);
+  });
 
   const current = $derived(SETTINGS_TABS.find((t) => t.id === settingsForm.tab) ?? SETTINGS_TABS[0]);
   const project = $derived(app.projects.find((p) => p.id === settingsForm.projectId));

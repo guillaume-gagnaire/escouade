@@ -2744,6 +2744,54 @@ async fn claude_reads_the_project_with_read_only_tools_to_suggest_its_worktree_c
 }
 
 #[tokio::test]
+async fn claude_reads_the_project_with_read_only_tools_to_suggest_its_launch_commands() {
+    let h = harness("run-suggest-claude");
+    let (p, r) = h.project(false).await;
+    let commands = h.core.suggest_run_commands(&p.id).await.unwrap();
+    let shown: Vec<(&str, &str, &str)> = commands
+        .iter()
+        .map(|c| (c.name.as_str(), c.command.as_str(), c.cwd.as_str()))
+        .collect();
+    // The commands whose folder leaves the project, or is not in it, are dropped.
+    assert_eq!(
+        shown,
+        [("Front", "npm run dev", "src"), ("API", "cargo run", "")]
+    );
+    let first = crate::pty::detect_shells(&h.core.settings.read())
+        .first()
+        .map(|s| s.id.clone())
+        .unwrap();
+    assert!(commands
+        .iter()
+        .all(|c| c.shell == first && !c.id.is_empty()));
+    // Run in the project, with nothing but tools that read.
+    let argv = h.launches(&r).pop().expect("claude run in the project");
+    let tools = argv.iter().position(|a| a == "--tools").unwrap();
+    assert_eq!(argv[tools + 1], "Read,Glob,Grep");
+    assert!(argv.contains(&"--strict-mcp-config".to_string()));
+    assert!(!argv
+        .iter()
+        .any(|a| a.contains("Bash") || a.contains("Edit")));
+    let sent = serde_json::to_value(&commands).unwrap();
+    assert_eq!(sent[0]["cwd"], "src");
+    // Only a suggestion: the project keeps its commands until the user saves.
+    assert!(h.core.project(&p.id).unwrap().run_commands.is_empty());
+}
+
+#[tokio::test]
+async fn an_answer_without_launch_commands_in_json_is_told_as_unreadable() {
+    let h = harness("run-suggest-unreadable");
+    let (p, _) = h.project(false).await;
+    let e = h
+        .core
+        .suggest_run_commands(&p.id)
+        .await
+        .unwrap_err()
+        .to_string();
+    assert_eq!(e, "Claude n'a pas proposé de commandes lisibles.");
+}
+
+#[tokio::test]
 async fn a_kind_of_notification_switched_off_is_not_sent_but_the_others_are() {
     let h = harness("notify-kinds");
     let kinds = [

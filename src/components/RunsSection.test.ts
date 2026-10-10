@@ -80,6 +80,21 @@ describe('RunsSection', () => {
     expect(app.modal).toEqual({ kind: 'settings', tab: 'projects', projectId: 'p1', section: 'launch' });
   });
 
+  it('offers Claude’s proposal when there is nothing to launch: the settings on the launch group, which read the project', async () => {
+    fakeBackend();
+    render(RunsSection, { project: project() });
+    expect(screen.getByText('Aucune commande.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '✦ Proposer des commandes' }));
+    expect(app.modal).toEqual({ kind: 'settings', tab: 'projects', projectId: 'p1', section: 'launch', suggest: true });
+  });
+
+  it('does not offer it once there are commands', () => {
+    fakeBackend();
+    render(RunsSection, { project: P });
+    expect(screen.queryByRole('button', { name: '✦ Proposer des commandes' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Configurer' })).not.toBeInTheDocument();
+  });
+
   it('edits the commands from the section header', async () => {
     fakeBackend();
     render(RunsSection, { project: P });

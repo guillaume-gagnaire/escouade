@@ -36,9 +36,10 @@ export type Modal =
   | { kind: 'newProject' }
   /**
    * On a tab (Claude Code by default) and, for a project's tabs, a project (the one on screen by default),
-   * scrolled to a section of it; `resume`: with the draft it had, back from a modal it opened.
+   * scrolled to a section of it; `resume`: with the draft it had, back from a modal it opened; `suggest`: Claude
+   * reads the project at once to suggest its launch commands.
    */
-  | { kind: 'settings'; tab?: SettingsTab; projectId?: string; section?: 'launch'; resume?: boolean }
+  | { kind: 'settings'; tab?: SettingsTab; projectId?: string; section?: 'launch'; resume?: boolean; suggest?: boolean }
   /** `wholeProject`: every uncommitted file the project's list shows, worktrees of the agents included. */
   | { kind: 'diff'; projectId: string; agentId: string | null; paths: string[]; title: string; commit?: string; wholeProject?: boolean }
   | {
