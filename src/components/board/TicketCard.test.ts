@@ -12,6 +12,7 @@ vi.mock('../../lib/terminals', () => ({
 
 import { buffers, lossNotice } from '../../lib/editor/buffers.svelte';
 import { menu } from '../../lib/menu.svelte';
+import { ESTIMATE_HINT } from '../../lib/spend';
 import { app } from '../../lib/state.svelte';
 import type { LaunchState, Project, TestRecipe, Ticket } from '../../lib/types';
 import { agent, board, fakeBackend, project, resetApp, ticket } from '../../test/ipc';
@@ -498,5 +499,58 @@ describe('TicketCard of an imported ticket', () => {
     fakeBackend();
     show(ticket());
     expect(screen.queryByRole('button', { name: /Ouvrir .* dans/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('TicketCard cost of a ticket under way', () => {
+  // A ticket sent back and taken up by another agent: the first one is archived, both worked on it.
+  const first = () => agent({ id: 'a0', ticketId: 't1', archived: true, tokens: 4000, cost: 1 });
+  const second = (over = {}) => agent({ id: 'a1', ticketId: 't1', status: 'running', tokens: 1000, cost: 0.5, ...over });
+
+  it('adds up the agents of a ticket under way, with the running turn as an estimate', () => {
+    resetApp({ agents: [first(), second({ liveTokens: 250, liveCost: 0.125 })] });
+    fakeBackend();
+    show(doing());
+    const cost = screen.getByText('≈ 1,63 $');
+    expect(cost).toHaveAttribute('title', ESTIMATE_HINT);
+  });
+
+  it('shows the exact cost of a ticket to test, next to its criteria', () => {
+    resetApp({ agents: [first(), second({ status: 'done' })] });
+    fakeBackend();
+    show(doing({ column: 'review' }));
+    const cost = screen.getByText('1,50 $');
+    expect(cost).not.toHaveAttribute('title');
+    expect(screen.getByText('1/2 critères')).toBeInTheDocument();
+  });
+
+  it('leaves out the agents of other tickets', () => {
+    resetApp({ agents: [second(), agent({ id: 'a9', ticketId: 't2', cost: 7 }), agent({ id: 'a8', ticketId: null, cost: 8 })] });
+    fakeBackend();
+    show(doing());
+    expect(screen.getByText('0,50 $')).toBeInTheDocument();
+    expect(screen.queryByText(/7,00|8,00/)).not.toBeInTheDocument();
+  });
+
+  it('says nothing until its agents used something', () => {
+    resetApp({ agents: [second({ tokens: 0, cost: 0 })] });
+    fakeBackend();
+    show(doing());
+    expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the cost of a finished ticket as it was, and adds no other', () => {
+    resetApp({ agents: [first(), second({ status: 'done', archived: true })] });
+    fakeBackend();
+    show(doing({ column: 'done', iteration: 2, cost: 0.5 }));
+    expect(screen.getByText('2 boucles · 0,50 $')).toBeInTheDocument();
+    expect(screen.queryByText('1,50 $')).not.toBeInTheDocument();
+  });
+
+  it('shows no cost on a ticket to do', () => {
+    resetApp({ agents: [first()] });
+    fakeBackend();
+    show(ticket({ column: 'todo' }));
+    expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
   });
 });

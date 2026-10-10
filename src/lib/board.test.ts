@@ -16,10 +16,12 @@ import {
   queueIndices,
   quotaUntil,
   settingsSummary,
+  ticketSpent,
   ticketTag,
   waitingFor,
   waitLabel,
 } from './board';
+import { fSpentUsd } from './spend';
 import type { Ticket } from './types';
 
 describe('board labels', () => {
@@ -186,5 +188,36 @@ describe('dependencies between tickets', () => {
     expect(cycleRefusal(t5, t6, list)).toBeNull();
     // DEM-3 after DEM-5 as well is no loop: it waits for it already.
     expect(cycleRefusal(t3, t5, list)).toBeNull();
+  });
+});
+
+describe('what a ticket under way cost', () => {
+  const t = ticket({ id: 't1', column: 'doing' });
+  const mine = (over = {}) => agent({ ticketId: 't1', ...over });
+  const by = (...list: ReturnType<typeof agent>[]) => Object.fromEntries(list.map((a) => [a.id, a]));
+
+  it('adds up the agents of the ticket, archived ones included, and no other', () => {
+    const agents = by(
+      mine({ id: 'a1', archived: true, tokens: 1000, cost: 1 }),
+      mine({ id: 'a2', tokens: 500, cost: 0.5 }),
+      agent({ id: 'a3', ticketId: 't2', tokens: 9000, cost: 9 }),
+      agent({ id: 'a4', ticketId: null, tokens: 9000, cost: 9 }),
+    );
+    expect(ticketSpent(t, agents)).toEqual({ tokens: 1500, cost: 1.5, estimated: false });
+  });
+
+  it('counts the running turn as an estimate, like the status bar', () => {
+    const agents = by(
+      mine({ id: 'a1', archived: true, tokens: 1000, cost: 1 }),
+      mine({ id: 'a2', tokens: 500, cost: 0.5, liveTokens: 250, liveCost: 0.125 }),
+    );
+    const s = ticketSpent(t, agents)!;
+    expect(s).toEqual({ tokens: 1750, cost: 1.625, estimated: true });
+    expect(fSpentUsd(s)).toBe('≈ 1,63 $');
+  });
+
+  it('says nothing until something was used', () => {
+    expect(ticketSpent(t, by(mine({ id: 'a1' })))).toBeNull();
+    expect(ticketSpent(t, {})).toBeNull();
   });
 });

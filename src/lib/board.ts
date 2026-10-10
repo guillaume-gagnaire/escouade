@@ -1,6 +1,7 @@
 // The board's labels and counts, without state: what its header, columns and cards say.
 
 import { fPct, fTime, fUsd, fWhen, plural } from './format';
+import { spent, type Spent } from './spend';
 import type { Agent, AutopilotPause, BoardAction, BoardSettings, Column, Ticket } from './types';
 
 export const COLUMNS: { id: Column; label: string; color: string; empty: string }[] = [
@@ -176,6 +177,22 @@ export function ticketTag(t: Ticket | undefined): string | null {
 
 export function criteriaMet(t: Ticket): number {
   return t.criteria.filter((c) => c.ok).length;
+}
+
+/**
+ * What a ticket's agents used so far: those archived too (a ticket taken up by another agent has several), exact for the
+ * finished turns and an estimate while one runs, as the status bar says it. Null until something was used.
+ */
+export function ticketSpent(t: Ticket, agents: Record<string, Agent>): Spent | null {
+  const sum: Spent = { tokens: 0, cost: 0, estimated: false };
+  for (const a of Object.values(agents)) {
+    if (a.ticketId !== t.id) continue;
+    const s = spent(a);
+    sum.tokens += s.tokens;
+    sum.cost += s.cost;
+    sum.estimated ||= s.estimated;
+  }
+  return sum.cost > 0 || sum.estimated ? sum : null;
 }
 
 /** "n boucles · coût" of a finished ticket: every loop, those of the rounds it was sent back for included (a ticket saved before they were counted: its last round's). */

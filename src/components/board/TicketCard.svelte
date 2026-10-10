@@ -1,12 +1,13 @@
 <script lang="ts">
   import { openUrl } from '@tauri-apps/plugin-opener';
-  import { APPROVE_LABEL, canStart, criteriaMet, doneMeta, launchAnyway, waitingFor, waitLabel } from '../../lib/board';
+  import { APPROVE_LABEL, canStart, criteriaMet, doneMeta, launchAnyway, ticketSpent, waitingFor, waitLabel } from '../../lib/board';
   import { buffers, lossNotice } from '../../lib/editor/buffers.svelte';
   import { fWhen, plural } from '../../lib/format';
   import { SERVICES, shortName } from '../../lib/integrations';
   import { api } from '../../lib/ipc';
   import { menu, type MenuItem } from '../../lib/menu.svelte';
   import { openAddress } from '../../lib/recipe';
+  import { ESTIMATE_HINT, fSpentUsd } from '../../lib/spend';
   import { app } from '../../lib/state.svelte';
   import { anyRunning, flows, stopTests, testAgent } from '../../lib/test-launch.svelte';
   import type { Project, Ticket } from '../../lib/types';
@@ -29,6 +30,8 @@
   /** Why no ticket of the board starts now (its target branch), if so. */
   const issue = $derived(app.boardIssues[project.id] ?? null);
   const agent = $derived(t.agentId ? app.agents[t.agentId] : undefined);
+  /** What every agent of the ticket used so far: the card of a finished ticket keeps the cost it was closed with. */
+  const used = $derived(t.column === 'doing' || t.column === 'review' ? ticketSpent(t, app.agents) : null);
   const met = $derived(criteriaMet(t));
   const total = $derived(t.criteria.length);
   const waiting = $derived(t.column === 'doing' && agent?.status === 'waiting');
@@ -294,6 +297,11 @@
           ><StatusDot status={agent.status} size={7} /><span class="name" title={agent.name}>{agent.name}</span></span
         >{/if}
       <div style="flex:1"></div>
+      {#if used}
+        <span class="k mono" title={used.estimated ? ESTIMATE_HINT : undefined}
+          ><span class="sr">Coût du ticket </span>{fSpentUsd(used)}</span
+        >
+      {/if}
       {#if t.column === 'review'}<span class="k mono">{met}/{total} critères</span>{/if}
       {#if t.column === 'done'}<span class="k mono">{doneMeta(t)}</span>{/if}
     </div>
@@ -538,6 +546,13 @@
   }
   .foot .k {
     flex: none;
+  }
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
   }
   .blocked {
     display: flex;
