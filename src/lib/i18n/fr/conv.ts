@@ -34,8 +34,8 @@ export default {
   },
   /** The button above the messages drawn, and what a screen reader hears once more are drawn. */
   older: {
-    show: { one: 'Afficher le précédent', other: 'Afficher les {count} précédents' },
-    drawn: { one: '{count} message précédent affiché', other: '{count} messages précédents affichés' },
+    show: { one: 'Afficher le précédent', other: 'Afficher les {n} précédents' },
+    drawn: { one: '{n} message précédent affiché', other: '{n} messages précédents affichés' },
   },
   working: 'Claude travaille…',
   newMessages: 'Nouveaux messages',

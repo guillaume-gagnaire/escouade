@@ -6,7 +6,7 @@
   import { api } from '../lib/ipc';
   import { conversationOf, type ReadingPlace } from '../lib/conversations.svelte';
   import { splitEscouade } from '../lib/escouade';
-  import { fDur, fNum, fTok } from '../lib/format';
+  import { fDur, fInt, fNum, fTok } from '../lib/format';
   import { modelLabel } from '../lib/models';
   import { contextUse, ESTIMATE_HINT, fSpentUsd, spent } from '../lib/spend';
   import { injectedSource, parseAgentMessage, subagentLabels } from '../lib/events';
@@ -236,7 +236,7 @@
     restore(at);
     if (!olderButton) scroller.focus({ preventScroll: true });
     drewOlder = {
-      text: t('conv.older.drawn', { count }),
+      text: t('conv.older.drawn', { count, n: fInt(count) }),
       seq: (drewOlder?.seq ?? 0) + 1,
     };
   }
@@ -555,7 +555,7 @@
       {/if}
       {#if older > 0}
         <button class="btn older" bind:this={olderButton} onclick={showOlder}>
-          {t('conv.older.show', { count: older })}
+          {t('conv.older.show', { count: older, n: fInt(older) })}
         </button>
       {/if}
       {#each drawn as item, j (item.id)}

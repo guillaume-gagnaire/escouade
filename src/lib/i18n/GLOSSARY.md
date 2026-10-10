@@ -241,7 +241,7 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 | tâche de fond | background task | |
 | En cours / Question / Prêt / Terminé / Erreur | Running / Question / Ready / Done / Error | état d’un agent (en-tête de la conversation) |
 | Bas / Moyen / Élevé / Très élevé / Max | Low / Medium / High / Very high / Max | niveaux d’effort |
-| Demander / Plan / Édits auto / Bypass | Ask / Plan / Auto edits / Bypass | modes de permission (« Auto » reste « Auto ») |
+| Demander / Plan / Édits auto / Bypass | Ask / Plan / Accept edits / Bypass | modes de permission (« Auto » reste « Auto ») |
 | Approuver le plan | Approve the plan | carte de permission d’un plan |
 | Continuer à planifier | Keep planning | refus d’un plan |
 | Valider (les réponses à une question) | Submit | carte de question |

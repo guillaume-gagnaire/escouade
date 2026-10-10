@@ -13,7 +13,7 @@ export default defineZone('composer', {
     auto: { label: 'Auto', title: 'A classifier approves safe actions and asks about the rest' },
     default: { label: 'Ask', title: 'Claude asks for your approval before each sensitive action' },
     plan: { label: 'Plan', title: 'Claude analyzes and proposes a plan without changing anything' },
-    acceptEdits: { label: 'Auto edits', title: 'File edits are accepted without asking' },
+    acceptEdits: { label: 'Accept edits', title: 'File edits are accepted without asking' },
     bypassPermissions: { label: 'Bypass', title: 'No permission requests (only for safe environments)' },
     autoUnavailableDetail: 'unavailable with Haiku',
     autoUnavailableTitle: 'Auto mode isn’t available with Haiku',
@@ -26,7 +26,7 @@ export default defineZone('composer', {
     unsupported: '“{name}” can’t be attached. Supported files are images (PNG, JPEG, GIF, WebP), PDFs and text files.',
     tooBig: '{name} is over {max}',
     notText: '{name} isn’t a text file, so it can’t be attached.',
-    totalTooBig: '{name} wasn’t attached: the files of a message are limited to {max} in all.',
+    totalTooBig: '{name} wasn’t attached: the files of a message are limited to {max} in total.',
     remove: 'Remove {name}',
   },
   attach: {

@@ -530,7 +530,7 @@ describe('Composer in English', () => {
     );
     // “Mode” alone: “Model” begins the same.
     await userEvent.click(screen.getByRole('button', { name: /^Mode\b/ }));
-    expect(screen.getByText('Auto edits')).toBeInTheDocument();
+    expect(screen.getByText('Accept edits')).toBeInTheDocument();
     expect(screen.getByText('Claude analyzes and proposes a plan without changing anything')).toBeInTheDocument();
   });
 
