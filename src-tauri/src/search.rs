@@ -4,6 +4,7 @@
 use crate::git;
 use anyhow::{anyhow, bail, Result};
 use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
 use tokio::sync::OnceCell;
@@ -87,37 +88,97 @@ static ENGINE: OnceCell<Engine> = OnceCell::const_new();
 
 /// The engine of this machine's git, found out at the first search for an expression.
 async fn engine() -> Engine {
-    *ENGINE.get_or_init(probe_engine).await
+    cached(&ENGINE, || async { probe_in(&std::env::temp_dir()).await }).await
 }
 
-/// What git's expressions find in a folder of its own holding `a x`.
-async fn probe_engine() -> Engine {
-    let dir = std::env::temp_dir().join(format!("escouade-grep-probe-{}", std::process::id()));
-    let ready =
-        std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(dir.join("p.txt"), "a x\n"));
-    let root = dir.to_string_lossy().to_string();
-    let finds = |flag: &'static str, pattern: &'static str| {
-        let root = root.clone();
-        async move {
-            let args = ["grep", "--no-index", "-q", flag, "-e", pattern];
-            matches!(git::command(&root, &args).output().await, Ok(o) if o.status.success())
+/// The engine `cell` holds, else the one `probe` finds. A sure answer is kept; without one (git or
+/// the temporary folder failing now), the default is used for this search and the next one tries
+/// again.
+async fn cached<F, Fut>(cell: &OnceCell<Engine>, probe: F) -> Engine
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = Option<Engine>>,
+{
+    cell.get_or_try_init(|| async { probe().await.ok_or(()) })
+        .await
+        .copied()
+        .unwrap_or_default()
+}
+
+/// A new folder of `parent`, made by this call under a name no one can guess: never one already
+/// there, which another user of a shared /tmp may have made with links in it.
+fn fresh_dir(parent: &Path) -> std::io::Result<PathBuf> {
+    use std::hash::{BuildHasher, Hasher};
+    for _ in 0..8 {
+        // The keys of a RandomState come from the system's random source.
+        let mut h = std::collections::hash_map::RandomState::new().build_hasher();
+        h.write_u32(std::process::id());
+        let dir = parent.join(format!("escouade-grep-probe-{:016x}", h.finish()));
+        match private_dir(&dir) {
+            Ok(()) => return Ok(dir),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
         }
-    };
-    let engine = match ready {
-        Err(_) => Engine::default(),
-        Ok(()) => Engine {
-            perl: finds("-P", r"\bx").await,
-            ere: if finds("-E", r"\bx").await {
-                Ere::Gnu
-            } else if finds("-E", "[[:<:]]x").await {
-                Ere::Bsd
-            } else {
-                Ere::Posix
-            },
-        },
-    };
+    }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::AlreadyExists,
+        "pas de dossier libre pour essayer git grep",
+    ))
+}
+
+/// Makes the folder `dir`, refused when something is there; on Unix, for its owner alone.
+fn private_dir(dir: &Path) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        std::fs::DirBuilder::new().mode(0o700).create(dir)
+    }
+    #[cfg(not(unix))]
+    std::fs::create_dir(dir)
+}
+
+/// What git's expressions find in a new folder of `parent` holding `a x`; None when that cannot
+/// be told (no folder, no git).
+async fn probe_in(parent: &Path) -> Option<Engine> {
+    let dir = fresh_dir(parent).ok()?;
+    let engine = probe_dir(&dir).await;
     let _ = std::fs::remove_dir_all(&dir);
     engine
+}
+
+async fn probe_dir(dir: &Path) -> Option<Engine> {
+    use std::io::Write;
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(dir.join("p.txt"))
+        .ok()?;
+    file.write_all(b"a x\n").ok()?;
+    drop(file);
+    let root = dir.to_string_lossy();
+    let ere = if finds(&root, "-E", r"\bx").await? {
+        Ere::Gnu
+    } else if finds(&root, "-E", "[[:<:]]x").await? {
+        Ere::Bsd
+    } else {
+        Ere::Posix
+    };
+    Some(Engine {
+        perl: finds(&root, "-P", r"\bx").await?,
+        ere,
+    })
+}
+
+/// Whether `pattern` (read as `flag` says) finds `x` in the folder `root`, by git's exit code alone
+/// (its messages may be translated): 128 is a pattern it cannot read. None for another answer.
+async fn finds(root: &str, flag: &str, pattern: &str) -> Option<bool> {
+    let args = ["grep", "--no-index", "-q", flag, "-e", pattern];
+    let out = git::command(root, &args).output().await.ok()?;
+    match out.status.code() {
+        Some(0) => Some(true),
+        Some(1 | 128) => Some(false),
+        _ => None,
+    }
 }
 
 fn unsupported(what: &str) -> anyhow::Error {
@@ -457,27 +518,70 @@ fn grep_args(query: &SearchQuery, pattern: &str, perl: bool, repo: bool) -> Vec<
     a
 }
 
-/// The text of a line git marked, and where each match is in it, in bytes.
-fn unmark(marked: &[u8]) -> (Vec<u8>, Vec<(usize, usize)>) {
+/// The text of a line git marked, where each match is in it (in bytes), and whether the marks can
+/// be taken: one that does not pair up is the line's own (a log's colors), and then the spans are
+/// not git's matches.
+fn unmark(marked: &[u8]) -> (Vec<u8>, Vec<(usize, usize)>, bool) {
     let mut text = Vec::with_capacity(marked.len());
     let mut spans = Vec::new();
     let mut open: Option<usize> = None;
+    let mut sound = true;
     let mut i = 0;
     while i < marked.len() {
         let rest = &marked[i..];
-        if open.is_none() && rest.starts_with(MARK_ON) {
-            open = Some(text.len());
-            i += MARK_ON.len();
-        } else if let (Some(start), true) = (open, rest.starts_with(MARK_OFF)) {
-            spans.push((start, text.len()));
-            open = None;
-            i += MARK_OFF.len();
-        } else {
-            text.push(marked[i]);
-            i += 1;
+        let mark = [MARK_ON, MARK_OFF]
+            .into_iter()
+            .find(|m| rest.starts_with(m));
+        match (mark, open) {
+            (Some(MARK_ON), None) => open = Some(text.len()),
+            (Some(MARK_OFF), Some(start)) => {
+                spans.push((start, text.len()));
+                open = None;
+            }
+            // Out of place: kept as text.
+            (Some(m), _) => {
+                sound = false;
+                text.extend_from_slice(m);
+            }
+            (None, _) => {
+                text.push(marked[i]);
+                i += 1;
+                continue;
+            }
         }
+        i += mark.map_or(0, <[u8]>::len);
     }
-    (text, spans)
+    (text, spans, sound && open.is_none())
+}
+
+/// `bytes` decoded (what is not UTF-8 replaced by U+FFFD), its length in characters, and the
+/// character index of each byte offset of `at`: an offset inside a character is that character's.
+fn decode(bytes: &[u8], at: &[usize]) -> (String, usize, Vec<usize>) {
+    let mut order: Vec<usize> = (0..at.len()).collect();
+    order.sort_by_key(|&k| at[k]);
+    let mut order = order.into_iter().peekable();
+    let mut index = vec![0; at.len()];
+    let mut text = String::with_capacity(bytes.len());
+    let (mut byte, mut chars) = (0, 0);
+    // Each character with how many bytes it takes: an invalid run makes one.
+    let pieces = bytes.utf8_chunks().flat_map(|chunk| {
+        let bad = chunk.invalid().len();
+        let bad = (bad > 0).then_some((char::REPLACEMENT_CHARACTER, bad));
+        chunk.valid().chars().map(|c| (c, c.len_utf8())).chain(bad)
+    });
+    for (c, len) in pieces {
+        while let Some(k) = order.next_if(|&k| at[k] < byte + len) {
+            index[k] = chars;
+        }
+        text.push(c);
+        byte += len;
+        chars += 1;
+    }
+    // At the end, or past it.
+    for k in order {
+        index[k] = chars;
+    }
+    (text, chars, index)
 }
 
 /// A line of `git grep -z -n --column --color=always`: `path NUL line NUL column NUL text`, the
@@ -489,7 +593,7 @@ fn parse_line(raw: &[u8]) -> Option<SearchMatch> {
     let number = |f: &[u8]| std::str::from_utf8(f).ok()?.parse::<usize>().ok();
     let line = number(fields.next()?)?;
     let byte_col = number(fields.next()?)?;
-    let (mut bytes, mut spans) = unmark(fields.next()?);
+    let (mut bytes, mut spans, sound) = unmark(fields.next()?);
     if bytes.last() == Some(&b'\r') {
         bytes.pop();
         let end = bytes.len();
@@ -497,27 +601,17 @@ fn parse_line(raw: &[u8]) -> Option<SearchMatch> {
             .iter_mut()
             .for_each(|s| *s = (s.0.min(end), s.1.min(end)));
     }
-    // Decoded piece by piece between the ends of the matches, which fall between characters, to
-    // count them in characters.
-    let mut text = String::with_capacity(bytes.len());
-    let mut chars = Vec::with_capacity(spans.len() * 2);
-    let (mut from, mut count) = (0, 0);
-    for cut in spans.iter().flat_map(|&(s, e)| [s, e]) {
-        let piece = String::from_utf8_lossy(&bytes[from..cut]);
-        count += piece.chars().count();
-        text.push_str(&piece);
-        chars.push(count);
-        from = cut;
-    }
-    let rest = String::from_utf8_lossy(&bytes[from..]);
-    let n = count + rest.chars().count();
-    text.push_str(&rest);
-    let spans: Vec<(usize, usize)> = chars.chunks(2).map(|c| (c[0], c[1])).collect();
-    let first = match spans.first() {
-        Some(s) => s.0,
-        None => String::from_utf8_lossy(&bytes[..byte_col.saturating_sub(1).min(bytes.len())])
-            .chars()
-            .count(),
+    // Decoded whole: a git comparing bytes may end or begin a match inside a character.
+    let mut at: Vec<usize> = spans.iter().flat_map(|&(s, e)| [s, e]).collect();
+    at.push(byte_col.saturating_sub(1).min(bytes.len()));
+    let (text, n, index) = decode(&bytes, &at);
+    let (&first, ends) = index.split_last()?;
+    let spans: Vec<(usize, usize)> = ends.chunks(2).map(|c| (c[0], c[1])).collect();
+    // The marks are taken when they agree with git's column; else the line is shown without them.
+    let spans = if sound && spans.first().is_some_and(|s| s.0 == first) {
+        spans
+    } else {
+        Vec::new()
     };
     // The whole line, or 300 characters of it from a little before its first match.
     let start = if n <= MAX_TEXT_CHARS {
@@ -924,6 +1018,113 @@ mod tests {
         write(&r, "cli.md", "run it with --help\n-e alone\n");
         assert_eq!(found(&r, &query("--help")).await, vec![at("cli.md", 1)]);
         assert_eq!(found(&r, &query("-e")).await, vec![at("cli.md", 2)]);
+    }
+
+    /// What `parse_line` reads of a line of git's, its marks around `match`: `before match after`.
+    fn marked(column: usize, before: &[u8], hit: &[u8], after: &[u8]) -> Vec<u8> {
+        let mut raw = format!("a.txt\x001\x00{column}\x00").into_bytes();
+        for part in [before, MARK_ON, hit, MARK_OFF, after, b"\n"] {
+            raw.extend_from_slice(part);
+        }
+        raw
+    }
+
+    #[test]
+    fn decodes_the_line_whole_when_git_marks_a_match_inside_a_character() {
+        // A git comparing bytes (no UTF-8 locale) ends `caf([^[:alnum:]_]|$)` in the middle of `é`.
+        let m = parse_line(&marked(10, b"function ", b"caf\xc3", b"\xa9bar() {}")).unwrap();
+        assert_eq!(
+            (m.text.as_str(), m.col, m.ranges.clone()),
+            ("function cafébar() {}", 10, vec![[9, 12]])
+        );
+        // Or begins it there: the match holds the whole character.
+        let m = parse_line(&marked(5, b"caf\xc3", b"\xa9bar", b"!")).unwrap();
+        assert_eq!(
+            (m.text.as_str(), m.col, m.ranges.clone()),
+            ("cafébar!", 4, vec![[3, 7]])
+        );
+    }
+
+    #[tokio::test]
+    async fn a_git_comparing_bytes_still_gives_the_line_unbroken() {
+        let r = javascript_repo("search-bytes");
+        write(&r, "d.txt", "function cafébar() {}\n");
+        let q = regex("caf([^[:alnum:]_]|$)");
+        let args = grep_args(&q, &q.pattern, false, true);
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        let out = git::command(&r.to_string_lossy(), &args)
+            .env("LC_ALL", "C")
+            .output()
+            .await
+            .unwrap();
+        let lines: Vec<_> = out
+            .stdout
+            .split_inclusive(|b| *b == b'\n')
+            .filter_map(parse_line)
+            .collect();
+        assert_eq!(lines.len(), 1, "{}", String::from_utf8_lossy(&out.stderr));
+        assert_eq!(lines[0].text, "function cafébar() {}");
+        assert_eq!(lines[0].ranges, vec![[9, 12]]);
+    }
+
+    #[test]
+    fn leaves_out_the_marks_of_a_line_that_holds_some_of_its_own() {
+        // A colored log: its `ESC[m` inside the match would end it too soon.
+        let m = parse_line(&marked(4, b"ab ", b"fo\x1b[mo", b" z")).unwrap();
+        assert_eq!((m.col, m.ranges.clone()), (4, vec![]));
+        // A mark of its own before the match: git's column is trusted, not the marks.
+        let m = parse_line(&marked(12, b"x\x1b[5;7;9my ", b"foo", b"")).unwrap();
+        assert_eq!((m.col, m.ranges.clone()), (12, vec![]));
+        // Its own marks paired up before the match: they do not begin where git's column says.
+        let m = parse_line(&marked(15, b"x\x1b[5;7;9my\x1b[m ", b"foo", b"")).unwrap();
+        assert_eq!(m.ranges, Vec::<[u32; 2]>::new());
+        // git's own marks alone are taken.
+        let m = parse_line(&marked(4, b"ab ", b"foo", b" z")).unwrap();
+        assert_eq!((m.col, m.ranges.clone()), (4, vec![[3, 6]]));
+    }
+
+    #[test]
+    fn makes_a_folder_no_one_can_guess_for_the_probe() {
+        let parent = test_dir("search-probe-dir");
+        let a = fresh_dir(&parent).unwrap();
+        let b = fresh_dir(&parent).unwrap();
+        assert_ne!(a, b);
+        assert!(a.is_dir() && b.is_dir());
+        let name = a.file_name().unwrap().to_string_lossy().to_string();
+        assert!(name.starts_with("escouade-grep-probe-"), "{name}");
+        assert_ne!(name, format!("escouade-grep-probe-{}", std::process::id()));
+        assert!(fresh_dir(&parent.join("missing")).is_err());
+    }
+
+    #[tokio::test]
+    async fn the_probe_never_writes_in_a_folder_it_did_not_make() {
+        let parent = test_dir("search-probe-planted");
+        // Another user's, made before: at the name the probe used to take.
+        let planted = parent.join(format!("escouade-grep-probe-{}", std::process::id()));
+        std::fs::create_dir_all(&planted).unwrap();
+        std::fs::write(planted.join("p.txt"), "keep\n").unwrap();
+        assert!(probe_in(&parent).await.is_some());
+        assert_eq!(
+            std::fs::read_to_string(planted.join("p.txt")).unwrap(),
+            "keep\n"
+        );
+        // Its own folder is gone after it.
+        assert_eq!(std::fs::read_dir(&parent).unwrap().count(), 1);
+        assert_eq!(probe_in(&parent.join("missing")).await, None);
+    }
+
+    #[tokio::test]
+    async fn keeps_only_a_sure_answer_of_the_probe() {
+        let cell = OnceCell::new();
+        let sure = Engine {
+            perl: true,
+            ere: Ere::Gnu,
+        };
+        assert_eq!(cached(&cell, || async { None }).await, Engine::default());
+        // Tried again at the next search.
+        assert!(cell.get().is_none());
+        assert_eq!(cached(&cell, || async { Some(sure) }).await, sure);
+        assert_eq!(cached(&cell, || async { None }).await, sure);
     }
 
     #[tokio::test]
