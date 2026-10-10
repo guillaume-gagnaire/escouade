@@ -2174,6 +2174,72 @@ async fn a_terminal_is_refused_for_an_agent_whose_worktree_vanished() {
 }
 
 #[tokio::test]
+async fn the_editor_says_so_when_the_worktree_of_its_agent_vanished() {
+    let h = harness("core-edit-root-gone");
+    let (p, _) = h.project(true).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let wt = a.meta.worktree.clone().unwrap();
+    h.wait("warm-up", |h| h.alive(&a.meta.id)).await;
+    if let Some(proc) = h.core.agent(&a.meta.id).unwrap().lock().detach() {
+        proc.kill();
+    }
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    std::fs::remove_dir_all(&wt.path).unwrap();
+
+    // The tree, the search, a file read or written, a rename: the same words, not the system's.
+    let id = Some(a.meta.id.clone());
+    let gone = "Le worktree de l'agent n'existe plus";
+    let e = h.core.edit_root(&p.id, id.clone()).await.unwrap_err();
+    assert_eq!(e.to_string(), gone);
+    let e = h.core.fs_tree(&p.id, id.clone()).await.unwrap_err();
+    assert_eq!(e.to_string(), gone);
+    let e = h.core.edit_kept(&p.id, id).await.unwrap_err();
+    assert_eq!(e.to_string(), gone);
+    // Nothing made again where the worktree was.
+    assert!(!Path::new(&wt.path).exists());
+    // The project's own files are still there to edit.
+    assert!(h.core.edit_root(&p.id, None).await.is_ok());
+}
+
+#[tokio::test]
+async fn the_editor_and_terminals_take_no_agent_of_another_project() {
+    let h = harness("core-edit-root-foreign");
+    let (p, _) = h.project(true).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let other_dir = h.dir.join("other");
+    std::fs::create_dir_all(&other_dir).unwrap();
+    let other = h
+        .core
+        .create_project(
+            &other_dir.to_string_lossy(),
+            "other",
+            "oklch(0.72 0.12 48)",
+            false,
+            None,
+        )
+        .await
+        .unwrap();
+    let id = Some(a.meta.id.clone());
+
+    // Its worktree is not the other project's folder to edit, nor to open a shell in.
+    let refused = "agent introuvable dans ce projet";
+    let e = h.core.edit_root(&other.id, id.clone()).await.unwrap_err();
+    assert_eq!(e.to_string(), refused);
+    let e = h.core.edit_kept(&other.id, id.clone()).await.unwrap_err();
+    assert_eq!(e.to_string(), refused);
+    let e = h
+        .core
+        .term_cwd(&other.id, id.clone(), None)
+        .await
+        .unwrap_err();
+    assert_eq!(e.to_string(), refused);
+    // In its own project, its worktree.
+    let (root, base) = h.core.edit_root(&p.id, id).await.unwrap();
+    assert!(same_dir(&root, Path::new(&a.meta.worktree.unwrap().path)));
+    assert_eq!(base.as_deref(), Some("main"));
+}
+
+#[tokio::test]
 async fn the_editor_tree_shows_the_files_the_project_copies_into_its_worktrees() {
     let h = harness("core-edit-tree-copied");
     let (p, r) = h.project(true).await;

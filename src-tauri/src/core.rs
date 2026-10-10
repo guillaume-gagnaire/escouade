@@ -3345,7 +3345,8 @@ impl<R: Runtime> Core<R> {
     }
 
     /// The folder the editor shows for `agent_id`: its worktree (with the branch it left), else
-    /// the project's repository, else the project's folder when it is not one.
+    /// the project's repository, else the project's folder when it is not one. Refused for an
+    /// agent of another project, and for a worktree that is no longer there.
     pub async fn edit_root(
         &self,
         project_id: &str,
@@ -3353,8 +3354,22 @@ impl<R: Runtime> Core<R> {
     ) -> Result<(String, Option<String>)> {
         let project = self.project(project_id)?;
         if let Some(a) = &agent_id {
-            let worktree = self.agent(a)?.lock().meta.worktree.clone();
+            let h = self.agent(a)?;
+            let (owner, worktree) = {
+                let rt = h.lock();
+                (rt.meta.project_id.clone(), rt.meta.worktree.clone())
+            };
+            // Its worktree is not this project's to edit, nor to open a shell in.
+            if owner != project_id {
+                bail!("agent introuvable dans ce projet");
+            }
             if let Some(wt) = worktree {
+                // Removed after a pull request or a push: said so, not in the system's words for a
+                // missing folder (and a shell started there would open in the app's own folder, as
+                // if it were the agent's).
+                if !Path::new(&wt.path).is_dir() {
+                    bail!("Le worktree de l'agent n'existe plus");
+                }
                 return Ok((wt.path, Some(wt.base_branch)));
             }
         }
@@ -3431,13 +3446,8 @@ impl<R: Runtime> Core<R> {
         agent_id: Option<String>,
         sub: Option<&str>,
     ) -> Result<String> {
-        // A base branch says the root is a worktree's.
+        // A base branch says the root is a worktree's (refused when it is gone).
         let (root, base) = self.edit_root(project_id, agent_id).await?;
-        // Removed after a pull request or a push: a shell started there would open in the app's
-        // own folder instead, as if it were the agent's.
-        if base.is_some() && !Path::new(&root).is_dir() {
-            bail!("Le worktree de l'agent n'existe plus");
-        }
         let Some(sub) = sub.map(str::trim).filter(|s| !s.is_empty()) else {
             // The project's folder itself, not the repository's the editor roots at, which holds
             // it when the project is one of its folders.
