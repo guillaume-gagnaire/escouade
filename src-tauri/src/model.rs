@@ -618,6 +618,10 @@ pub struct AgentMeta {
     pub port_base: Option<u16>,
     /// How to launch its worktree for a test, as it last wrote it.
     pub recipe: Option<TestRecipe>,
+    /// The recipe the user read and let run (« Lancer » in the test modal), kept whole rather than
+    /// hashed: a recipe that differs in anything, the agent's answer to a later request included,
+    /// is asked again, with no collision to forge.
+    pub approved_recipe: Option<TestRecipe>,
 }
 
 /// Agent as shown by the UI: persisted metadata plus live runtime fields.
@@ -1245,6 +1249,50 @@ mod tests {
         assert_eq!(v["commitMode"], json!("direct"));
         let back: Project = serde_json::from_value(v).unwrap();
         assert_eq!(back.commit_mode, CommitMode::Direct);
+    }
+
+    #[test]
+    fn an_agent_saved_before_recipes_were_approved_loads_with_nothing_approved() {
+        // A state.json of 1.5: the agent has a recipe, and no approval was ever asked.
+        let s: PersistedState = serde_json::from_value(json!({
+            "agents": [{
+                "id": "a1",
+                "name": "x",
+                "recipe": { "prepare": [], "processes": [{ "name": "web", "command": "node web.js" }], "open": "" }
+            }]
+        }))
+        .unwrap();
+        assert!(s.agents[0].recipe.is_some());
+        assert_eq!(s.agents[0].approved_recipe, None);
+    }
+
+    #[test]
+    fn the_approved_recipe_is_saved_with_the_agent_and_travels_in_camel_case() {
+        let recipe = TestRecipe {
+            prepare: vec![RecipeStep {
+                command: "npm install".into(),
+                dir: "web".into(),
+            }],
+            open: "http://localhost:4111".into(),
+            ..Default::default()
+        };
+        let state = PersistedState {
+            agents: vec![AgentMeta {
+                id: "a1".into(),
+                recipe: Some(recipe.clone()),
+                approved_recipe: Some(recipe.clone()),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let saved = serde_json::to_string_pretty(&state).unwrap();
+        let back: PersistedState = serde_json::from_str(&saved).unwrap();
+        assert_eq!(back.agents[0].approved_recipe, Some(recipe));
+        let sent = serde_json::to_value(&state.agents[0]).unwrap();
+        assert_eq!(
+            sent["approvedRecipe"]["prepare"][0]["command"],
+            "npm install"
+        );
     }
 
     #[test]

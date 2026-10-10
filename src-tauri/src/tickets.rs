@@ -1642,6 +1642,23 @@ impl<R: Runtime> Core<R> {
         }
     }
 
+    /// The user read `recipe` in the test modal and lets it run. Only the recipe the agent holds
+    /// right now is approved: one that changed since (the agent answered again while the user
+    /// read) is refused, so that what runs is always what was shown. Kept with the agent.
+    pub fn approve_recipe(&self, agent_id: &str, recipe: TestRecipe) -> Result<()> {
+        let h = self.agent(agent_id)?;
+        {
+            let mut rt = h.lock();
+            if rt.meta.recipe.as_ref() != Some(&recipe) {
+                bail!(RECIPE_CHANGED);
+            }
+            rt.meta.approved_recipe = Some(recipe);
+        }
+        self.emit_agent(&h);
+        self.request_save();
+        Ok(())
+    }
+
     /// What step `index` of `kind` ("prep" or "run") of the agent's recipe runs, when it may run
     /// one (`launch_refusal`).
     pub fn test_run_spec(
@@ -1854,6 +1871,10 @@ const ARCHIVED: &str = "Cet agent est archivé : il n'a pas de lancement de test
 
 /// Only an agent with a worktree has ports and a test launch.
 const NO_WORKTREE: &str = "Seul un agent à worktree a un lancement de test.";
+
+/// The recipe changed between what the user read and their « Lancer ».
+pub const RECIPE_CHANGED: &str =
+    "La recette a changé pendant que tu la lisais : relance « ▶ Tester » pour la relire.";
 
 /// No test launch while its ticket is validated: its servers would take the ports its tests use.
 const VALIDATING: &str = "Validation en cours : le lancement de test attendra sa fin.";

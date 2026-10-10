@@ -806,10 +806,17 @@ pub async fn agent_prepare_launch(core: CoreState<'_>, id: String) -> Res<()> {
     core.agent_prepare_launch(&id).await.map_err(err)
 }
 
+/// « Lancer » in the test modal: the user read `recipe`, the agent's recipe as the modal showed it,
+/// and lets it run. Refused when the agent's recipe is no longer that one.
+#[tauri::command(async)]
+pub fn test_recipe_approve(core: CoreState, agent_id: String, recipe: TestRecipe) -> Res<()> {
+    core.approve_recipe(&agent_id, recipe).map_err(err)
+}
+
 /// Runs a step of an agent's recipe ("prep" or "run", its index) in its own read-only terminal,
 /// like a launch command, with the system's default shell and the reserved ports exported. One
 /// whose agent was archived, deleted or put to validation meanwhile is stopped at once, and the
-/// error tells why.
+/// error tells why. A recipe the user did not approve (`test_recipe_approve`) runs nothing.
 #[tauri::command(async)]
 #[allow(clippy::too_many_arguments)]
 pub fn test_run_start(

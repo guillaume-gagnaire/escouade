@@ -81,4 +81,11 @@ describe('test launch commands', () => {
     expect(backend.calls[1].args.output).toBeDefined();
     expect(backend.calls[2].args).toEqual({ url: 'http://localhost:4101' });
   });
+
+  it('sends the recipe the user read to be approved', async () => {
+    const backend = fakeBackend({ test_recipe_approve: () => undefined });
+    const recipe = { prepare: [{ command: 'npm install', dir: 'web' }], processes: [], open: '' };
+    await api.testRecipeApprove('a1', recipe);
+    expect(backend.calls).toEqual([{ cmd: 'test_recipe_approve', args: { agentId: 'a1', recipe } }]);
+  });
 });

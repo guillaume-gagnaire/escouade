@@ -676,6 +676,11 @@ test('a ticket’s test launches leave the launch section, their processes stopp
 
   await review.getByRole('button', { name: '▶ Tester' }).click();
   const dialog = page.getByRole('dialog', { name: 'Tester DEM-1' });
+  // The agent wrote this recipe: it is shown first, and nothing of it runs until « Lancer ».
+  await expect(dialog.getByText(/Ces commandes ont été écrites par/)).toBeVisible();
+  await expect(dialog.getByText('node serveur.js')).toBeVisible();
+  expect(fs.existsSync(pidFile)).toBe(false);
+  await dialog.getByRole('button', { name: 'Lancer' }).click();
   await expect(dialog.getByText(/en attente de localhost:\d+…/)).toBeVisible({ timeout: 30_000 });
   await expect.poll(() => fs.existsSync(pidFile), { timeout: 30_000 }).toBe(true);
   const pid = Number(fs.readFileSync(pidFile, 'utf8'));

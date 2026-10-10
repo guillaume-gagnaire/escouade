@@ -56,3 +56,36 @@ export function openAddress(agent: Agent): string | null {
   if (!r) return null;
   return r.open.trim() || r.processes.map((p) => p.url.trim()).find(Boolean) || null;
 }
+
+/**
+ * The user read this recipe and let it run: the content they approved is the one the agent holds now. Anything that
+ * differs (a command, a variable, a folder, the address to open) is a recipe to read again. The backend decides
+ * the same way, from the same two fields; this only spares a launch it would refuse.
+ */
+export function recipeApproved(agent: Agent): boolean {
+  return !!agent.recipe && JSON.stringify(agent.recipe) === JSON.stringify(agent.approvedRecipe);
+}
+
+/** Characters that change how text looks without being seen: controls (but not line breaks and tabs), zero-width and direction marks. */
+function hidden(code: number): boolean {
+  return (
+    (code < 0x20 && code !== 0x09 && code !== 0x0a) ||
+    (code >= 0x7f && code <= 0x9f) ||
+    (code >= 0x200b && code <= 0x200f) ||
+    (code >= 0x2028 && code <= 0x202e) ||
+    (code >= 0x2060 && code <= 0x2069) ||
+    code === 0xfeff
+  );
+}
+
+/**
+ * A command, a folder or an address of a recipe as the user is shown it: the characters that would hide part of it (a
+ * carriage return that overwrites the line, an escape sequence, a zero-width space, a right-to-left override) are spelled
+ * out, so that what is read is what runs.
+ */
+export function revealHidden(text: string): string {
+  return Array.from(text, (ch) => {
+    const code = ch.codePointAt(0) ?? 0;
+    return hidden(code) ? `⟨U+${code.toString(16).toUpperCase().padStart(4, '0')}⟩` : ch;
+  }).join('');
+}

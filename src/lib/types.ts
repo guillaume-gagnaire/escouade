@@ -390,6 +390,8 @@ export interface Agent {
   portBase: number | null;
   /** How to launch its worktree for a test, as it last wrote it. */
   recipe: TestRecipe | null;
+  /** The recipe the user read and let run: the same content as `recipe`, else it is asked again. */
+  approvedRecipe: TestRecipe | null;
   /** What it is doing right now ("Lit src/db.ts", "Lance npm test"…), during a turn. */
   activity: string | null;
   /** The setup of its new worktree under way: the step running ("1/2 · npm ci"). */

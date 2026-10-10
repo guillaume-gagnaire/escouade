@@ -31,6 +31,7 @@ import type {
   StatesView,
   StatsView,
   TermInfo,
+  TestRecipe,
   Ticket,
   TicketDraft,
   UiEvent,
@@ -155,6 +156,8 @@ export const api = {
   },
   /** "Préparer le lancement": reserves the agent's ports and asks it for its recipe. */
   agentPrepareLaunch: (id: string) => invoke<void>('agent_prepare_launch', { id }),
+  /** « Lancer » in the test modal: the user read `recipe` (the agent's, as shown) and lets it run. */
+  testRecipeApprove: (agentId: string, recipe: TestRecipe) => invoke<void>('test_recipe_approve', { agentId, recipe }),
   testRunStart: (
     a: { agentId: string; kind: 'prep' | 'run' | 'isola'; index: number; cols: number; rows: number; cursorRow: number },
     onData: (d: ArrayBuffer) => void,

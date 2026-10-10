@@ -280,6 +280,7 @@ pub fn run() {
             commands::integration_import,
             commands::git_branches,
             commands::agent_prepare_launch,
+            commands::test_recipe_approve,
             commands::test_run_start,
             commands::http_ready,
             commands::update_check,

@@ -1,11 +1,13 @@
 // "▶ Tester": prepares the worktree (once per recipe), starts its processes, waits until each
 // answers over HTTP, then opens the browser on the address that shows the feature. When isola runs
-// the worktree's services: `isola up`, then the addresses it lists.
+// the worktree's services: `isola up`, then the addresses it lists. A recipe is the agent's own text, run in
+// the user's shell outside Claude Code's permission mode: the modal shows it first, and nothing of it runs until
+// the user lets it (`approveAndTest`; the backend refuses a recipe that was not approved all the same).
 
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { api } from './ipc';
 import { startLaunch, stopAgentTests, stopLaunch } from './launch-actions';
-import { isolaCommand, openAddress, parseTestId, recipeCommands } from './recipe';
+import { isolaCommand, openAddress, parseTestId, recipeApproved, recipeCommands } from './recipe';
 import { app } from './state.svelte';
 import type { Agent, IsolaService, LaunchState, Project, RunCommand } from './types';
 
@@ -138,9 +140,35 @@ export function stopTests(agentId: string) {
   flow.opened = null;
 }
 
-/** "▶ Tester" on `agent`: the modal shows each step as it goes. */
+/**
+ * "▶ Tester" on `agent`: the modal shows each step as it goes. A recipe the user never read (or that changed since)
+ * is only shown, with « Lancer » (`approveAndTest`) and « Annuler ». isola's test has no recipe to read: `isola up`
+ * is fixed and the services are the project's, so nothing the agent wrote is run (only the address it gave is opened).
+ */
 export async function testAgent(agent: Agent, project: Project) {
   app.modal = { kind: 'testLaunch', agentId: agent.id };
+  if (!agent.isola && agent.recipe && !recipeApproved(agent)) return;
+  await launchTest(agent, project);
+}
+
+/**
+ * « Lancer » on a recipe shown: the backend is told which recipe was read (the one the modal showed, so that a
+ * recipe the agent sent meanwhile is refused rather than approved unseen), then the test goes on.
+ */
+export async function approveAndTest(agent: Agent, project: Project) {
+  const recipe = agent.recipe;
+  if (!recipe) return;
+  try {
+    await api.testRecipeApprove(agent.id, recipe);
+  } catch (e) {
+    app.toast(String(e), 'error');
+    return;
+  }
+  await launchTest(agent, project);
+}
+
+/** The test itself, its recipe approved (or isola's, which has none to approve). */
+async function launchTest(agent: Agent, project: Project) {
   const recipe = agent.recipe;
   if (!recipe && !agent.isola) return;
   const current = flows.all[agent.id];

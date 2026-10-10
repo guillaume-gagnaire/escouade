@@ -10,7 +10,17 @@ vi.mock('./terminals', () => ({
 
 import { agent, fakeBackend, project, resetApp, SETTINGS, ticket } from '../test/ipc';
 import { app } from './state.svelte';
-import { allRunning, anyRunning, canPrepare, canTest, flows, READY_LIMIT_MS, stopTests, testAgent } from './test-launch.svelte';
+import {
+  allRunning,
+  anyRunning,
+  approveAndTest,
+  canPrepare,
+  canTest,
+  flows,
+  READY_LIMIT_MS,
+  stopTests,
+  testAgent,
+} from './test-launch.svelte';
 import type { Agent, InitialState, TestRecipe, UiEvent } from './types';
 
 const RECIPE: TestRecipe = {
@@ -45,12 +55,100 @@ describe('▶ Tester', () => {
       id: 'a7',
       worktree: { path: 'C:\\code\\demo-api\\.claude\\worktrees\\dem-1', branch: 'ticket/dem-1', baseBranch: 'main' },
       recipe: RECIPE,
+      // The user read it and let it run (« Lancer »): the tests below are about running it.
+      approvedRecipe: RECIPE,
     });
     resetApp({ agents: [A] });
     flows.all = {};
     flows.prepared = {};
   });
   afterEach(() => vi.useRealTimers());
+
+  describe('a recipe the user has not read', () => {
+    let U: Agent;
+    beforeEach(() => {
+      U = { ...A, approvedRecipe: null };
+      resetApp({ agents: [U] });
+    });
+
+    it('opens the modal on the recipe and runs nothing of it', async () => {
+      const b = backend(() => true);
+      await testAgent(U, project());
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(app.modal).toEqual({ kind: 'testLaunch', agentId: 'a7' });
+      expect(flows.all.a7).toBeUndefined();
+      expect(b.called('test_run_start')).toHaveLength(0);
+      expect(b.called('plugin:opener|open_url')).toHaveLength(0);
+    });
+
+    it('is approved as it was shown, and only then runs', async () => {
+      const b = backend(() => true);
+      const run = approveAndTest(U, project());
+      await vi.advanceTimersByTimeAsync(10);
+      exit('test:a7:prep:0', 0);
+      await vi.advanceTimersByTimeAsync(1000);
+      await run;
+      // The backend is told which recipe was read, before it is asked to run any step of it.
+      expect(b.calls.map((c) => c.cmd).slice(0, 2)).toEqual(['test_recipe_approve', 'test_run_start']);
+      expect(b.called('test_recipe_approve')[0].args).toEqual({ agentId: 'a7', recipe: RECIPE });
+      expect(flows.all.a7.phase).toBe('ready');
+      expect(b.called('plugin:opener|open_url').map((c) => c.args.url)).toEqual(['http://localhost:4111/connexion']);
+    });
+
+    it('runs nothing when the backend refuses the approval, and says why', async () => {
+      const why = 'La recette a changé pendant que tu la lisais : relance « ▶ Tester » pour la relire.';
+      const b = backend(() => true, {
+        test_recipe_approve: () => {
+          throw why;
+        },
+      });
+      await approveAndTest(U, project());
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(b.called('test_run_start')).toHaveLength(0);
+      expect(flows.all.a7).toBeUndefined();
+      expect(app.toasts.map((t) => [t.kind, t.text])).toEqual([['error', why]]);
+    });
+
+    it('is not asked about again once approved, and is asked again for another recipe', async () => {
+      const b = backend(() => true);
+      // Approved: the second test goes straight to the steps.
+      const run = testAgent(A, project());
+      await vi.advanceTimersByTimeAsync(10);
+      exit('test:a7:prep:0', 0);
+      await vi.advanceTimersByTimeAsync(1000);
+      await run;
+      expect(flows.all.a7.phase).toBe('ready');
+      stopTests('a7');
+      expect(b.called('test_recipe_approve')).toHaveLength(0);
+      // The agent answered another recipe (the window keeps the approval of the one it read).
+      const other: Agent = { ...A, recipe: { ...RECIPE, open: 'http://localhost:4111/ailleurs' } };
+      app.agents.a7 = other;
+      delete flows.all.a7;
+      const before = b.called('test_run_start').length;
+      await testAgent(other, project());
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(b.called('test_run_start')).toHaveLength(before);
+      expect(flows.all.a7).toBeUndefined();
+    });
+
+    it('does not apply to an agent whose services isola runs: the agent wrote no command to run', async () => {
+      const I = agent({
+        id: 'a7',
+        worktree: A.worktree,
+        isola: true,
+        recipe: { prepare: [], processes: [], open: 'http://localhost:8117/page' },
+      });
+      resetApp({ agents: [I] });
+      const b = backend(() => true, { isola_services: () => [] });
+      const run = testAgent(I, project());
+      await vi.advanceTimersByTimeAsync(10);
+      expect(b.called('test_run_start').map((c) => c.args.kind)).toEqual(['isola']);
+      exit('test:a7:isola:0', 0);
+      await vi.advanceTimersByTimeAsync(300);
+      await run;
+      expect(b.called('test_recipe_approve')).toHaveLength(0);
+    });
+  });
 
   it('prepares, starts the processes, waits for them, then opens the feature, and not before', async () => {
     let up = false;
@@ -436,7 +534,7 @@ describe('▶ Tester', () => {
       emit({ type: 'agent', agent: { ...A, recipe: structuredClone(RECIPE), tokens: 12 } });
       expect(app.launches['test:a7:run:0']).toBeDefined();
       expect(flows.all.a7).toBeDefined();
-      const A2 = { ...A, recipe: RECIPE2 };
+      const A2 = { ...A, recipe: RECIPE2, approvedRecipe: RECIPE2 };
       emit({ type: 'agent', agent: A2 });
       expect(b.called('term_kill').map((c) => c.args.id)).toEqual(['t1', 't2']);
       expect(Object.keys(app.launches)).toEqual([]);
@@ -461,7 +559,7 @@ describe('▶ Tester', () => {
       const b = await boot(() => true);
       const old = testAgent(A, project());
       await vi.advanceTimersByTimeAsync(10);
-      const A2 = { ...A, recipe: RECIPE2 };
+      const A2 = { ...A, recipe: RECIPE2, approvedRecipe: RECIPE2 };
       emit({ type: 'agent', agent: A2 });
       // The new test starts its own preparation at once, under the same id.
       const fresh = testAgent(A2, project());
@@ -492,6 +590,14 @@ describe('▶ Tester', () => {
       const A3 = {
         ...A,
         recipe: {
+          prepare: RECIPE.prepare,
+          processes: [
+            { name: 'api3', command: 'node api3.js', dir: '', env: {}, url: 'http://localhost:4120' },
+            { name: 'web3', command: 'node web3.js', dir: '', env: {}, url: 'http://localhost:4121' },
+          ],
+          open: 'http://localhost:4121/nouveau',
+        },
+        approvedRecipe: {
           prepare: RECIPE.prepare,
           processes: [
             { name: 'api3', command: 'node api3.js', dir: '', env: {}, url: 'http://localhost:4120' },
