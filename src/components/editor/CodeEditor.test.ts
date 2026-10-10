@@ -354,4 +354,27 @@ describe('CodeEditor', () => {
     await rerender({ ...props, indent: { tabs: true, size: 4 } });
     expect(viewOf(container).state.facet(indentUnit)).toBe('\t');
   });
+
+  it('measures its text again when the room it has changes width', async () => {
+    // A column dragged next to it changes its width without the window moving.
+    const Real = globalThis.ResizeObserver;
+    const reports: ResizeObserverCallback[] = [];
+    globalThis.ResizeObserver = class {
+      constructor(cb: ResizeObserverCallback) {
+        reports.push(cb);
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+    try {
+      const { container } = render(CodeEditor, { ...base, docKey: 'k1', text: 'abc\n', version: 0, onchange: () => {} });
+      await tick();
+      const measure = vi.spyOn(viewOf(container), 'requestMeasure');
+      for (const report of reports) report([{ contentRect: { width: 700 } } as ResizeObserverEntry], {} as ResizeObserver);
+      expect(measure).toHaveBeenCalled();
+    } finally {
+      globalThis.ResizeObserver = Real;
+    }
+  });
 });

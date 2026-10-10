@@ -10,6 +10,7 @@
   import { navHistory, type NavEntry } from '../../lib/editor/history';
   import { detectIndent } from '../../lib/editor/indent';
   import { languageLabel, loadLanguage } from '../../lib/editor/languages';
+  import { readTreeWidth, TREE_DEFAULT, TREE_MIN, treeMax, writeTreeWidth } from '../../lib/editor/layout';
   import { DEFAULT_ALIASES, fileSet, linkResolvers, parseAliases, type Aliases } from '../../lib/editor/links';
   import { setEditorJump } from '../../lib/editor/quick-open';
   import { fileSearches, setFindInFiles } from '../../lib/editor/search.svelte';
@@ -19,9 +20,11 @@
   import { api } from '../../lib/ipc';
   import { menu, type MenuItem } from '../../lib/menu.svelte';
   import { keyLabel } from '../../lib/platform';
+  import { clamp, observeWidth } from '../../lib/resize';
   import { app } from '../../lib/state.svelte';
   import { terminalIn } from '../../lib/term-actions';
   import type { Project } from '../../lib/types';
+  import Splitter from '../Splitter.svelte';
   import CodeEditor from './CodeEditor.svelte';
   import EditorTabs from './EditorTabs.svelte';
   import FileTree from './FileTree.svelte';
@@ -32,6 +35,14 @@
   let { project }: { project: Project } = $props();
 
   const NONE: LineChanges = { changed: [], deleted: [], count: 0 };
+
+  /** The width of the editor's area, which the left column takes at most half of: the window's until it is measured. */
+  let area = $state(window.innerWidth);
+  /** The width of the left column chosen with its handle, the same for all projects. */
+  let treeWidth = $state(readTreeWidth());
+  const treeLimit = $derived(treeMax(area));
+  /** What it is drawn at: too narrow an area for the width chosen draws it narrower, and the width chosen comes back with the room. */
+  const treeShown = $derived(clamp(treeWidth, TREE_MIN, treeLimit));
 
   const st = $derived(app.editor[project.id]);
   const source = $derived(st?.source ?? 'project');
@@ -430,10 +441,10 @@
       >Enregistrer</button
     >
   </header>
-  <div class="body">
+  <div class="body" use:observeWidth={(w) => (area = w)}>
     <!-- The left column: the files' tree or the search, both kept to find them again as they were. Not `.side`, the
          sidebar's class: one locator must not find both. -->
-    <aside class="editor-side">
+    <aside class="editor-side" style:width="{treeShown}px">
       <div class="views">
         <div class="segmented" role="group" aria-label="Vue de la colonne">
           <button
@@ -516,6 +527,15 @@
         <SearchPanel bind:this={panel} {search} onopen={(m) => jump({ path: m.path, line: m.line, col: m.col })} />
       </div>
     </aside>
+    <Splitter
+      value={treeShown}
+      min={TREE_MIN}
+      max={treeLimit}
+      reset={TREE_DEFAULT}
+      label="Largeur de la colonne des fichiers"
+      onresize={(w) => (treeWidth = w)}
+      oncommit={writeTreeWidth}
+    />
     <section class="pane">
       <EditorTabs {tabs} onselect={(p) => app.openEditor({ projectId: project.id, source, path: p })} onclose={closeTab} />
       {#if !activePath}
@@ -638,11 +658,9 @@
     display: flex;
   }
   .editor-side {
-    width: 240px;
     flex: none;
     display: flex;
     flex-direction: column;
-    border-right: 1px solid var(--line);
     background: var(--bg);
   }
   .views {

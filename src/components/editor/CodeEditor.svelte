@@ -19,6 +19,7 @@
   import { changeGutter, setChanges } from '../../lib/editor/gutter';
   import { reloadChange } from '../../lib/editor/reload';
   import { editorTheme, PHRASES } from '../../lib/editor/theme';
+  import { observeWidth } from '../../lib/resize';
 
   // `docKey` names the file shown: another one replaces the whole editor state. `version` changes
   // when the same file's text was replaced from disk.
@@ -194,7 +195,9 @@
   });
 </script>
 
-<div class="code" bind:this={host}></div>
+<!-- CodeMirror watches its scroller too, but ignores a resize within 75 ms of its own last update: the width changes a
+     step at a time while a column next to it is dragged, and the last step must be measured. -->
+<div class="code" bind:this={host} use:observeWidth={() => view?.requestMeasure()}></div>
 
 <style>
   .code {

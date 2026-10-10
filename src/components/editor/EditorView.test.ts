@@ -1,7 +1,7 @@
 import { EditorView as CodeMirror } from '@codemirror/view';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buffers } from '../../lib/editor/buffers.svelte';
 import { trees } from '../../lib/editor/trees.svelte';
 import { menu } from '../../lib/menu.svelte';
@@ -9,6 +9,7 @@ import { handleShortcut } from '../../lib/shortcuts';
 import { app } from '../../lib/state.svelte';
 import { openTerminal } from '../../lib/terminals';
 import { agent, fakeBackend, gitInfo, project, resetApp } from '../../test/ipc';
+import '../../test/pointer';
 import QuickOpen from '../QuickOpen.svelte';
 import EditorView from './EditorView.svelte';
 
@@ -1047,5 +1048,136 @@ describe('EditorView and « Ouvrir un fichier »', () => {
     await screen.findByRole('option', { name: /README/ });
     await userEvent.keyboard('{Enter}');
     await expect.poll(() => app.editor.p1.places.project.active).toBe('README.md');
+  });
+});
+
+describe('EditorView left column width', () => {
+  const Real = globalThis.ResizeObserver;
+  /** The editor area reports being `area` px wide, as the window's size gives it. */
+  function areaOf(area: number) {
+    globalThis.ResizeObserver = class {
+      constructor(private cb: ResizeObserverCallback) {}
+      observe() {
+        this.cb([{ contentRect: { width: area } } as ResizeObserverEntry], this as unknown as ResizeObserver);
+      }
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+  }
+  beforeEach(() => {
+    localStorage.clear();
+    // jsdom has no pointer capture.
+    Element.prototype.setPointerCapture = vi.fn();
+    resetApp({ agents: [agent()] });
+    app.git.p1 = gitInfo({ modified: 1 });
+    backend();
+  });
+  afterEach(() => {
+    globalThis.ResizeObserver = Real;
+    localStorage.clear();
+  });
+
+  const handle = () => screen.getByRole('separator', { name: 'Largeur de la colonne des fichiers' });
+  const column = (container: HTMLElement) => container.querySelector('aside.editor-side') as HTMLElement;
+  async function drag(from: number, to: number) {
+    await fireEvent.pointerDown(handle(), { clientX: from, pointerId: 1, button: 0 });
+    await fireEvent.pointerMove(handle(), { clientX: to, pointerId: 1 });
+    await fireEvent.pointerUp(handle(), { pointerId: 1 });
+  }
+
+  it('is 240 px wide until it is resized, with a handle between it and the code', async () => {
+    areaOf(1000);
+    await app.openEditor({ source: 'project' });
+    const { container } = render(EditorView, { project: project() });
+    expect(column(container)).toHaveStyle({ width: '240px' });
+    expect(handle()).toHaveAttribute('aria-orientation', 'vertical');
+    expect(handle()).toHaveAttribute('aria-valuenow', '240');
+    expect(handle()).toHaveAttribute('aria-valuemin', '160');
+    expect(handle()).toHaveAttribute('aria-valuemax', '500');
+    expect(column(container).nextElementSibling).toBe(handle());
+    expect(handle().nextElementSibling?.tagName).toBe('SECTION');
+  });
+
+  it('follows the handle when it is dragged, and keeps the width for the next time', async () => {
+    areaOf(1000);
+    await app.openEditor({ source: 'project' });
+    const first = render(EditorView, { project: project() });
+    await drag(300, 380);
+    expect(column(first.container)).toHaveStyle({ width: '320px' });
+    expect(handle()).toHaveAttribute('aria-valuenow', '320');
+    expect(localStorage.getItem('escouade.editor.treeWidth')).toBe('320');
+    first.unmount();
+    const again = render(EditorView, { project: project() });
+    expect(column(again.container)).toHaveStyle({ width: '320px' });
+  });
+
+  it('does not write the preference at every step of the drag, only where it is let go', async () => {
+    areaOf(1000);
+    await app.openEditor({ source: 'project' });
+    const { container } = render(EditorView, { project: project() });
+    await fireEvent.pointerDown(handle(), { clientX: 300, pointerId: 1, button: 0 });
+    await fireEvent.pointerMove(handle(), { clientX: 340, pointerId: 1 });
+    expect(column(container)).toHaveStyle({ width: '280px' });
+    expect(localStorage.getItem('escouade.editor.treeWidth')).toBeNull();
+    await fireEvent.pointerUp(handle(), { pointerId: 1 });
+    expect(localStorage.getItem('escouade.editor.treeWidth')).toBe('280');
+  });
+
+  it('stops at 160 px and at half of the editor area', async () => {
+    areaOf(800);
+    await app.openEditor({ source: 'project' });
+    const { container } = render(EditorView, { project: project() });
+    await drag(300, -600);
+    expect(column(container)).toHaveStyle({ width: '160px' });
+    await drag(300, 1500);
+    expect(column(container)).toHaveStyle({ width: '400px' });
+    expect(handle()).toHaveAttribute('aria-valuemax', '400');
+    expect(localStorage.getItem('escouade.editor.treeWidth')).toBe('400');
+  });
+
+  it('goes back to 240 px on a double click', async () => {
+    areaOf(1000);
+    localStorage.setItem('escouade.editor.treeWidth', '420');
+    await app.openEditor({ source: 'project' });
+    const { container } = render(EditorView, { project: project() });
+    expect(column(container)).toHaveStyle({ width: '420px' });
+    await fireEvent.dblClick(handle());
+    expect(column(container)).toHaveStyle({ width: '240px' });
+    expect(localStorage.getItem('escouade.editor.treeWidth')).toBe('240');
+  });
+
+  it('moves by 16 px with the arrow keys, and to the bounds with Home and End', async () => {
+    areaOf(1000);
+    await app.openEditor({ source: 'project' });
+    const { container } = render(EditorView, { project: project() });
+    handle().focus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(column(container)).toHaveStyle({ width: '256px' });
+    expect(localStorage.getItem('escouade.editor.treeWidth')).toBe('256');
+    await userEvent.keyboard('{ArrowLeft}{ArrowLeft}');
+    expect(column(container)).toHaveStyle({ width: '224px' });
+    await userEvent.keyboard('{End}');
+    expect(column(container)).toHaveStyle({ width: '500px' });
+    await userEvent.keyboard('{Home}');
+    expect(column(container)).toHaveStyle({ width: '160px' });
+    expect(handle()).toHaveFocus();
+  });
+
+  it('shows a width kept that is too wide for the area at the most the area gives, and keeps what was chosen', async () => {
+    areaOf(600);
+    localStorage.setItem('escouade.editor.treeWidth', '400');
+    await app.openEditor({ source: 'project' });
+    const { container } = render(EditorView, { project: project() });
+    expect(column(container)).toHaveStyle({ width: '300px' });
+    expect(handle()).toHaveAttribute('aria-valuenow', '300');
+    expect(localStorage.getItem('escouade.editor.treeWidth')).toBe('400');
+  });
+
+  it('takes the usual width for a preference that is not a width', async () => {
+    areaOf(1000);
+    localStorage.setItem('escouade.editor.treeWidth', 'large');
+    await app.openEditor({ source: 'project' });
+    const { container } = render(EditorView, { project: project() });
+    expect(column(container)).toHaveStyle({ width: '240px' });
   });
 });
