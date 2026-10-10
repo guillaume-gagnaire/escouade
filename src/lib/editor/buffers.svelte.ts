@@ -30,7 +30,15 @@ export interface Buffer {
    * The file as it is on disk, read to compare what was typed with it (« Comparer »), until the user chooses: it
    * follows what the agent writes meanwhile. Null when not compared.
    */
-  onDisk: { text: string; hash: string } | null;
+  onDisk: {
+    text: string;
+    hash: string;
+    /**
+     * A newer version took the place of the one shown, read again (`read`) or found by a save it refused (`save`):
+     * for the user to be told, until they type. Null for the version first compared.
+     */
+    replaced: 'read' | 'save' | null;
+  } | null;
   error: string | null;
   /** Bumped when the text is replaced from disk, for the editor to take it. */
   version: number;
@@ -129,6 +137,8 @@ class Buffers {
     const b = this.all[key];
     if (!b || b.kind !== 'text') return;
     b.text = text;
+    // Typed in the comparison: the user has seen the newer version they were told about.
+    if (b.onDisk?.replaced) b.onDisk.replaced = null;
     this.sync();
   }
 
@@ -136,6 +146,12 @@ class Buffers {
   private mark(b: Buffer, disk: Buffer['disk']) {
     b.disk = disk;
     if (disk !== 'changed') b.onDisk = null;
+  }
+
+  /** The disk's version `f` to compare with; one taking the place of the version shown says why (`replaced`). */
+  private compareWith(b: Buffer, f: FileText, why: 'read' | 'save') {
+    if (b.onDisk?.hash === f.hash) return;
+    b.onDisk = { text: f.text ?? '', hash: f.hash, replaced: b.onDisk ? why : null };
   }
 
   /**
@@ -181,12 +197,15 @@ class Buffers {
   async keepMine(key: string): Promise<boolean> {
     if (await this.save(key, true)) return true;
     const b = this.all[key];
-    if (b?.onDisk && b.disk === 'changed') await this.compare(key);
+    if (b?.onDisk && b.disk === 'changed') await this.compare(key, 'save');
     return false;
   }
 
-  /** Reads the file as it is on disk, to compare what was typed with it: what was typed is left alone. */
-  async compare(key: string) {
+  /**
+   * Reads the file as it is on disk, to compare what was typed with it: what was typed is left alone. Read again
+   * while compared already, a newer version found says `why` (see `onDisk.replaced`).
+   */
+  async compare(key: string, why: 'read' | 'save' = 'read') {
     const b = this.all[key];
     if (!b || b.kind !== 'text') return;
     const f = await this.read(b);
@@ -196,7 +215,7 @@ class Buffers {
     // Back to the version read: nothing to choose between.
     if (f.hash === b.hash) return this.mark(b, 'ok');
     b.disk = 'changed';
-    b.onDisk = { text: f.text ?? '', hash: f.hash };
+    this.compareWith(b, f, why);
   }
 
   /**
@@ -236,7 +255,7 @@ class Buffers {
       } else if (this.isDirty(b)) {
         b.disk = 'changed';
         // Compared with the disk: the comparison shows what the agent wrote since.
-        if (b.onDisk && b.onDisk.hash !== f.hash) b.onDisk = { text: f.text ?? '', hash: f.hash };
+        if (b.onDisk) this.compareWith(b, f, 'read');
       } else {
         this.take(b, f);
         this.mark(b, 'ok');

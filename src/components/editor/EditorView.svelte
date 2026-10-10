@@ -312,6 +312,36 @@
         : null,
   );
 
+  const NEWER_ON_DISK = 'Le fichier a encore changé sur le disque : la comparaison montre sa nouvelle version.';
+  /**
+   * The file whose « Garder ma version » waits a second, a newer version having just taken the place of the one
+   * compared on screen: a click aimed at the one shown before is not taken.
+   */
+  let settling = $state<string | null>(null);
+  let settleTimer: ReturnType<typeof setTimeout> | undefined;
+  /** The version compared last seen on screen, to tell when a newer one takes its place there. */
+  let seenOnDisk: { key: string; hash: string } | null = null;
+  $effect(() => {
+    const key = buf?.key ?? null;
+    const hash = onDisk?.hash ?? null;
+    const replaced = onDisk?.replaced ?? null;
+    untrack(() => {
+      const before = seenOnDisk;
+      seenOnDisk = key && hash ? { key, hash } : null;
+      // Replaced while another file was shown, it is told by the banner only.
+      if (!key || !replaced || before?.key !== key || before.hash === hash) return;
+      app.toast(
+        replaced === 'save'
+          ? 'Le fichier a encore changé sur le disque : rien n’est enregistré, la comparaison montre sa nouvelle version.'
+          : NEWER_ON_DISK,
+      );
+      settling = key;
+      clearTimeout(settleTimer);
+      settleTimer = setTimeout(() => (settling = null), 1000);
+    });
+  });
+  onDestroy(() => clearTimeout(settleTimer));
+
   const reveal = $derived(st?.reveal && st.reveal.path === activePath ? st.reveal : null);
   /** Done once: the tab shown again, or the view opened again, keeps the cursor where the user left it. */
   function revealed(seq: number) {
@@ -431,18 +461,19 @@
     };
   }
 
-  /** Saves what was typed over the disk; compared with it, over the version compared only (else it shows the new one). */
+  /** Saves what was typed over the disk; compared with it, over the version compared only (else it shows the newer one). */
   async function keep(key: string) {
-    const seen = buffers.all[key]?.onDisk?.hash;
+    const compared = !!buffers.all[key]?.onDisk;
+    let kept: boolean;
     try {
-      await buffers.keepMine(key);
+      kept = await buffers.keepMine(key);
     } catch (e) {
       app.toast(`Enregistrement impossible : ${e}`, 'error');
       return;
     }
-    const now = buffers.all[key]?.onDisk?.hash;
-    if (seen && now && now !== seen)
-      app.toast('Le fichier a encore changé sur le disque : rien n’est enregistré, la comparaison montre sa nouvelle version.');
+    // Refused, then found back at the version first read: the banner goes with nothing saved.
+    if (!kept && compared && buffers.all[key]?.disk === 'ok')
+      app.toast('Rien n’a été enregistré : le fichier est revenu à la version que tu avais ouverte.');
   }
   const compareDisk = (key: string) => buffers.compare(key).catch((e) => app.toast(`Comparaison impossible : ${e}`, 'error'));
   // A deleted file without changes can only be written by creating it again, as its banner offers.
@@ -575,19 +606,18 @@
           <span class:add={!!diffLabel && !diffLabel.startsWith('Identique')}>{diffLabel}</span>
           <!-- The comparison with the disk takes the text while it lasts: its banner tells what is shown. -->
           {#if reference !== null && !onDisk}
-            <button class="changes" aria-pressed={changesShown} onclick={() => (changesShown = !changesShown)}
-              >{changesShown ? 'Masquer les changements' : 'Voir les changements'}</button
-            >
+            <!-- A toggle keeps its name, `aria-pressed` and its look say whether it is on. -->
+            <button class="changes" aria-pressed={changesShown} onclick={() => (changesShown = !changesShown)}>Voir les changements</button>
           {/if}
         </div>
         {#if buf?.disk === 'changed'}
           <div class="banner" role="alert">
-            {onDisk ? 'Comparaison avec la version du disque.' : 'Ce fichier a changé sur le disque.'}
+            {onDisk ? (onDisk.replaced ? NEWER_ON_DISK : 'Comparaison avec la version du disque.') : 'Ce fichier a changé sur le disque.'}
             <button class="btn small" onclick={() => reload(buf.key)}>Recharger</button>
             {#if !onDisk}
               <button class="btn small" onclick={() => compareDisk(buf.key)}>Comparer</button>
             {/if}
-            <button class="btn small" onclick={() => keep(buf.key)}>Garder ma version</button>
+            <button class="btn small" disabled={settling === buf.key} onclick={() => keep(buf.key)}>Garder ma version</button>
           </div>
         {:else if buf?.disk === 'deleted'}
           <div class="banner" role="alert">
@@ -837,6 +867,7 @@
   }
   .changes[aria-pressed='true'] {
     border-color: var(--accent);
+    background: var(--elev2);
     color: var(--text);
   }
   .banner {

@@ -1,4 +1,5 @@
 import { history, undo } from '@codemirror/commands';
+import { getChunks } from '@codemirror/merge';
 import { Compartment, EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -93,6 +94,16 @@ describe('comparison', () => {
     const shown = view.dom.querySelector('.cm-deletedChunk');
     expect(show({ original: REFERENCE, against: 'reference' })).toBe(false);
     expect(view.dom.querySelector('.cm-deletedChunk')).toBe(shown);
+  });
+
+  it('finds each of the changes scattered through a big file, a lockfile’s, as a block of its own', () => {
+    const lines = Array.from({ length: 15000 }, (_, i) => `    "node_modules/package-${i}": { "version": "1.${i % 13}.${i % 7}" },`);
+    const bumped = lines.map((l, i) => (i % 300 === 150 ? l.replace('"1.', '"2.') : l));
+    const { view } = editor(bumped.join('\n') + '\n', { original: lines.join('\n') + '\n', against: 'reference' });
+    const chunks = getChunks(view.state)?.chunks ?? [];
+    expect(chunks.length).toBe(50);
+    // One line each: « Annuler ce bloc » puts that line back, not the whole file.
+    expect(chunks.every((c) => view.state.doc.lineAt(c.fromB).number === view.state.doc.lineAt(c.endB).number)).toBe(true);
   });
 
   it('compares a version with Windows line breaks line by line', () => {

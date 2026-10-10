@@ -432,6 +432,33 @@ describe('buffers', () => {
       await comparing;
       expect(buffers.all[k]).toMatchObject({ text: 'mine\n', saved: 'mine\n', disk: 'ok', onDisk: null });
     });
+
+    it('tells that a newer version took the place of the one compared, read again or found by a refused save, until the user types', async () => {
+      const { k } = await conflict();
+      await buffers.compare(k);
+      expect(buffers.all[k].onDisk).toMatchObject({ hash: 'h2', replaced: null });
+      disk = text('agent2\n', 'h3');
+      await buffers.refresh(k);
+      expect(buffers.all[k].onDisk).toMatchObject({ text: 'agent2\n', hash: 'h3', replaced: 'read' });
+      // Read again as it is: nothing new to tell.
+      await buffers.refresh(k);
+      expect(buffers.all[k].onDisk).toMatchObject({ hash: 'h3', replaced: 'read' });
+      buffers.edit(k, 'mine2\n');
+      expect(buffers.all[k].onDisk).toMatchObject({ hash: 'h3', replaced: null });
+      disk = text('agent3\n', 'h4');
+      expect(await buffers.keepMine(k)).toBe(false);
+      expect(buffers.all[k].onDisk).toMatchObject({ text: 'agent3\n', hash: 'h4', replaced: 'save' });
+    });
+
+    it('saves nothing, and has nothing left to choose, when a refused save finds the disk back at the version read', async () => {
+      const { k, backend } = await conflict();
+      await buffers.compare(k);
+      disk = text('a\n', 'h1');
+      expect(await buffers.keepMine(k)).toBe(false);
+      expect(backend.called('fs_write')[0].args.expectedHash).toBe('h2');
+      expect(buffers.all[k]).toMatchObject({ text: 'mine\n', saved: 'a\n', hash: 'h1', disk: 'ok', onDisk: null });
+      expect(buffers.isDirty(buffers.all[k])).toBe(true);
+    });
   });
 });
 

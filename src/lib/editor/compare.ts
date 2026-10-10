@@ -51,8 +51,9 @@ function compareView(c: Comparison): Extension {
       // The gutter has its own marks, of the lines changed since the reference version.
       gutter: false,
       mergeControls: blockButton(ACTION[c.against]),
-      // The merge view's own limit on the changes scanned, and the gutter's on the time a big file's diff takes.
-      diffConfig: { scanLimit: 500, timeout: DIFF_TIMEOUT },
+      // Bounded in time, as for the gutter's marks, not by the merge view's default limit on the changes scanned: past
+      // it, changes scattered through a big file (a lockfile) make one block of all the lines between them.
+      diffConfig: { timeout: DIFF_TIMEOUT },
     }),
   ];
 }
