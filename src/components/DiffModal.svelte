@@ -79,7 +79,8 @@
               <span class="st" class:a={f.status === 'A'} class:d={f.status === 'D'}>{f.status}</span>
               <span class="p mono">{f.path}</span>
               {#if f.agentId}<span class="tag mono">{agentName(f.agentId)}</span>{/if}
-              <span class="add mono">+{f.add}</span><span class="del mono">−{f.del}</span>
+              <!-- A file whose diff was not sent has no counts to show. -->
+              {#if !f.tooLarge}<span class="add mono">+{f.add}</span><span class="del mono">−{f.del}</span>{/if}
             </button>
           {/each}
         </nav>
@@ -95,12 +96,15 @@
           <div class="fhead mono">
             {file.path}
             {#if file.agentId}<span class="tag">{agentName(file.agentId)}</span>{/if}
-            <span class="add">+{file.add}</span> <span class="del">−{file.del}</span>
+            {#if !file.tooLarge}<span class="add">+{file.add}</span> <span class="del">−{file.del}</span>{/if}
           </div>
           {#if file.binary}
             <div class="msg">Fichier binaire.</div>
           {:else}
-            <DiffView lines={fileLines(file)} split={app.diffSplit} />
+            <!-- Another file starts folded again. -->
+            {#key file.key}
+              <DiffView lines={fileLines(file)} split={app.diffSplit} tooLarge={file.tooLarge} />
+            {/key}
           {/if}
         {/if}
       </div>

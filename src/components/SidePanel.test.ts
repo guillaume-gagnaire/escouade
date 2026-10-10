@@ -25,6 +25,12 @@ describe('SidePanel', () => {
     expect(app.panelTab).toBe('history');
   });
 
+  it('counts every uncommitted file in its tab, whatever the list shows', async () => {
+    fakeBackend({ git_files: () => Array.from({ length: 620 }, (_, i) => change(`src/f${i}.ts`)), git_log: () => LOG });
+    render(SidePanel, { project: project(), agent: app.agents.a1, docked: true });
+    expect(await screen.findByRole('tab', { name: /Non commités\s*620/ })).toBeInTheDocument();
+  });
+
   it('can be closed in the classic layout, where it is optional', async () => {
     fakeBackend({ git_files: () => [] });
     app.filesOpen = true;

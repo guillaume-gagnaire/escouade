@@ -269,6 +269,75 @@ describe('FilesPanel docked: the file being read stays put', () => {
   });
 });
 
+describe('FilesPanel with thousands of files', () => {
+  beforeEach(() => resetApp({ projects: [project()], agents: [agent()] }));
+  const many = (n: number) => Array.from({ length: n }, (_, i) => change(`src/f${i}.ts`, 'a1'));
+  const rowsOf = (container: HTMLElement) => container.querySelectorAll('.filerow').length;
+
+  it('lists 500 files at most, then says how many more there are', async () => {
+    fakeBackend({ git_files: () => many(620) });
+    const { container } = render(FilesPanel, { project: project(), agent: app.agents.a1 });
+    expect(await screen.findByText('f0.ts')).toBeInTheDocument();
+    expect(rowsOf(container)).toBe(500);
+    expect(screen.getByText('f499.ts')).toBeInTheDocument();
+    expect(screen.queryByText('f500.ts')).not.toBeInTheDocument();
+    expect(screen.getByText('… et 120 autres fichiers')).toBeInTheDocument();
+  });
+
+  it('lists 500 files without a remainder', async () => {
+    fakeBackend({ git_files: () => many(500) });
+    const { container } = render(FilesPanel, { project: project(), agent: app.agents.a1 });
+    await screen.findByText('f499.ts');
+    expect(rowsOf(container)).toBe(500);
+    expect(screen.queryByText(/autres? fichiers?/)).not.toBeInTheDocument();
+  });
+
+  it('still reads the diff of every file, not only the listed ones', async () => {
+    fakeBackend({ git_files: () => many(620) });
+    render(FilesPanel, { project: project(), agent: app.agents.a1 });
+    await screen.findByText('f0.ts');
+    await userEvent.click(screen.getByRole('button', { name: 'Voir le diff' }));
+    expect(app.modal).toMatchObject({ kind: 'diff', agentId: 'a1' });
+    expect((app.modal as Extract<typeof app.modal, { kind: 'diff' }>).paths).toHaveLength(620);
+  });
+});
+
+describe('FilesPanel docked with a large diff', () => {
+  beforeEach(() => resetApp({ projects: [project()], agents: [agent()] }));
+  const header =
+    'diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml\nindex 1111111..2222222 100644\n--- a/pnpm-lock.yaml\n+++ b/pnpm-lock.yaml\n';
+  const longDiff = (n: number) => `${header}@@ -0,0 +1,${n} @@\n${Array.from({ length: n }, (_, i) => `+ligne ${i + 1}`).join('\n')}\n`;
+
+  it('says a file too large to be sent cannot be shown', async () => {
+    fakeBackend({ git_files: () => [change('pnpm-lock.yaml', 'a1')], git_diff: () => `${header}Diff too large\n` });
+    render(FilesPanel, { project: project(), agent: app.agents.a1, docked: true });
+    expect(await screen.findByText('Diff trop volumineux pour être affiché.')).toBeInTheDocument();
+    // No counts to show: the list has the file’s own.
+    expect(screen.getByLabelText('Diff de pnpm-lock.yaml')).not.toHaveTextContent('+0');
+  });
+
+  it('folds a long diff, and keeps it open while the agent keeps editing', async () => {
+    fakeBackend({ git_files: () => [change('pnpm-lock.yaml', 'a1')], git_diff: () => longDiff(2000) });
+    const { container } = render(FilesPanel, { project: project(), agent: app.agents.a1, docked: true });
+    await userEvent.click(await screen.findByRole('button', { name: 'Afficher' }));
+    expect(container.querySelectorAll('.urow')).toHaveLength(500);
+    app.gitTick++;
+    await settle();
+    expect(container.querySelectorAll('.urow')).toHaveLength(500);
+    expect(screen.getByRole('button', { name: 'Afficher 500 lignes de plus' })).toBeInTheDocument();
+  });
+
+  it('folds a long diff again for another file', async () => {
+    fakeBackend({ git_files: () => [change('a.lock', 'a1'), change('b.lock', 'a1')], git_diff: () => longDiff(2000) });
+    const { container } = render(FilesPanel, { project: project(), agent: app.agents.a1, docked: true });
+    await userEvent.click(await screen.findByRole('button', { name: 'Afficher' }));
+    expect(container.querySelectorAll('.urow')).toHaveLength(500);
+    await userEvent.click(screen.getByRole('button', { name: row(/b\.lock/) }));
+    expect(await screen.findByText('Diff volumineux (2001 lignes)')).toBeInTheDocument();
+    expect(container.querySelectorAll('.urow')).toHaveLength(0);
+  });
+});
+
 describe('FilesPanel context menu', () => {
   beforeEach(() => {
     resetApp({

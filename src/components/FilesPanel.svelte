@@ -17,6 +17,10 @@
   }: { project: Project; agent: Agent | null; docked?: boolean; count?: number } = $props();
 
   let files = $state<FileChange[]>([]);
+  // Rows drawn: a build folder or a mass rename changes thousands of files, and a row is a few DOM
+  // nodes. The count, the diff and the commit still cover them all.
+  const SHOWN = 500;
+  const listed = $derived(files.slice(0, SHOWN));
   $effect(() => {
     count = files.length;
   });
@@ -180,7 +184,7 @@
     {:else if !files.length && !loading}
       <div class="empty">{scope === 'agent' ? 'Aucun fichier modifié par cet agent.' : 'Aucune modification non commitée.'}</div>
     {/if}
-    {#each files as f (keyOf(f))}
+    {#each listed as f (keyOf(f))}
       {@const on = current !== null && keyOf(current) === keyOf(f)}
       <div class="filerow" class:on>
         <button
@@ -211,6 +215,7 @@
         {/if}
       </div>
     {/each}
+    {#if files.length > SHOWN}<p class="more mono">… et {files.length - SHOWN} autres fichiers</p>{/if}
   </div>
   {#if docked}
     {#if currentPath !== null}
@@ -277,6 +282,12 @@
     text-align: center;
     font-size: 12.5px;
     color: var(--muted);
+  }
+  .more {
+    margin: 0;
+    padding: 8px 10px;
+    font-size: 11px;
+    color: var(--dim);
   }
   .filerow {
     position: relative;

@@ -55,6 +55,37 @@ describe('parseUnifiedDiff', () => {
     const f = parseUnifiedDiff(DIFF.replace(/\n/g, '\r\n'));
     expect(f[0].hunks[0].lines[1]).toMatchObject({ kind: 'del', text: 'const b = 2;' });
   });
+
+  it('flags a file whose diff the backend did not send, keeping its status', () => {
+    // What `git.rs` writes for a file over the diff cap: its header, then the marker line.
+    const flagged = parseUnifiedDiff(`diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
+index 1111111..2222222 100644
+--- a/pnpm-lock.yaml
++++ b/pnpm-lock.yaml
+Diff too large
+diff --git a/dump.sql b/dump.sql
+new file mode 100644
+--- /dev/null
++++ b/dump.sql
+Diff too large
+${DIFF}`);
+    expect(flagged.map((f) => [f.path, f.status, f.tooLarge, f.hunks.length])).toEqual([
+      ['pnpm-lock.yaml', 'M', true, 0],
+      ['dump.sql', 'A', true, 0],
+      ['src/auth.ts', 'M', false, 1],
+      ['new.txt', 'A', false, 1],
+      ['logo.png', 'M', false, 0],
+      ['old.ts', 'D', false, 1],
+    ]);
+  });
+
+  it('does not take a line of a file for the marker', () => {
+    const [file] = parseUnifiedDiff(
+      'diff --git a/a.md b/a.md\n--- a/a.md\n+++ b/a.md\n@@ -1,2 +1,2 @@\n-x\n+Diff too large\n Diff too large\n',
+    );
+    expect(file.tooLarge).toBe(false);
+    expect(file.hunks[0].lines.map((l) => l.text)).toEqual(['x', 'Diff too large', 'Diff too large']);
+  });
 });
 
 describe('fileLines', () => {

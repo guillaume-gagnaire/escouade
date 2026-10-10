@@ -1,0 +1,82 @@
+import { render, screen } from '@testing-library/svelte';
+import userEvent from '@testing-library/user-event';
+import { describe, expect, it } from 'vitest';
+import type { DiffLine } from '../lib/diff';
+import DiffView from './DiffView.svelte';
+
+const added = (n: number, from = 1): DiffLine[] =>
+  Array.from({ length: n }, (_, i) => ({ kind: 'add', text: `ligne ${from + i}`, oldNo: null, newNo: from + i }));
+const rows = (container: HTMLElement) => container.querySelectorAll('.urow').length;
+const more = (n: number) => screen.getByRole('button', { name: `Afficher ${n} lignes de plus` });
+
+describe('DiffView with a long diff', () => {
+  it('shows up to 1 500 lines in full', () => {
+    const { container } = render(DiffView, { lines: added(1500), split: false });
+    expect(rows(container)).toBe(1500);
+    expect(screen.queryByRole('button', { name: /Afficher/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Diff volumineux/)).not.toBeInTheDocument();
+  });
+
+  it('folds a longer one behind its line count, with nothing drawn yet', () => {
+    const { container } = render(DiffView, { lines: added(1501), split: false });
+    expect(screen.getByText('Diff volumineux (1501 lignes)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Afficher' })).toBeInTheDocument();
+    expect(rows(container)).toBe(0);
+  });
+
+  it('draws 500 lines when shown, then 500 more at each click, down to the last few', async () => {
+    const { container } = render(DiffView, { lines: added(1620), split: false });
+    await userEvent.click(screen.getByRole('button', { name: 'Afficher' }));
+    expect(rows(container)).toBe(500);
+    expect(screen.queryByText(/Diff volumineux/)).not.toBeInTheDocument();
+    expect(screen.getByText('ligne 500')).toBeInTheDocument();
+    expect(screen.queryByText('ligne 501')).not.toBeInTheDocument();
+    await userEvent.click(more(500));
+    expect(rows(container)).toBe(1000);
+    await userEvent.click(more(500));
+    expect(rows(container)).toBe(1500);
+    // The last slice says how many lines it brings, and ends the buttons.
+    await userEvent.click(more(120));
+    expect(rows(container)).toBe(1620);
+    expect(screen.getByText('ligne 1620')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Afficher/ })).not.toBeInTheDocument();
+  });
+
+  it('cuts side by side in rows, so that a deletion keeps its replacement across a slice', async () => {
+    const ctx = (n: number, from: number): DiffLine[] =>
+      Array.from({ length: n }, (_, i) => ({ kind: 'ctx', text: `contexte ${from + i}`, oldNo: from + i, newNo: from + i }));
+    // The 500th row pairs a deletion with the addition that follows it.
+    const lines: DiffLine[] = [
+      ...ctx(499, 1),
+      { kind: 'del', text: 'supprimée', oldNo: 500, newNo: null },
+      { kind: 'add', text: 'ajoutée', oldNo: null, newNo: 500 },
+      ...ctx(1100, 501),
+    ];
+    const { container } = render(DiffView, { lines, split: true });
+    await userEvent.click(screen.getByRole('button', { name: 'Afficher' }));
+    expect(container.querySelectorAll('.srow')).toHaveLength(500);
+    expect(screen.getByText('supprimée').closest('.srow')).toHaveTextContent('ajoutée');
+  });
+
+  it('stays unfolded while the diff is refreshed', async () => {
+    const { container, rerender } = render(DiffView, { lines: added(1600), split: false });
+    await userEvent.click(screen.getByRole('button', { name: 'Afficher' }));
+    await rerender({ lines: added(1700), split: false });
+    expect(rows(container)).toBe(500);
+    expect(screen.queryByText(/Diff volumineux/)).not.toBeInTheDocument();
+  });
+});
+
+describe('DiffView with a file too large to be sent', () => {
+  it('says so and draws nothing', () => {
+    const { container } = render(DiffView, { lines: [], split: false, tooLarge: true });
+    expect(screen.getByText('Diff trop volumineux pour être affiché.')).toBeInTheDocument();
+    expect(rows(container)).toBe(0);
+    expect(screen.queryByRole('button', { name: /Afficher/ })).not.toBeInTheDocument();
+  });
+
+  it('says so in side by side too', () => {
+    render(DiffView, { lines: [], split: true, tooLarge: true });
+    expect(screen.getByText('Diff trop volumineux pour être affiché.')).toBeInTheDocument();
+  });
+});

@@ -42,7 +42,7 @@
 <section class="fdiff" aria-label="Diff de {path}">
   <div class="bar">
     <span class="p mono" title={path}>{path}</span>
-    {#if file}<span class="add mono">+{file.add}</span><span class="del mono">−{file.del}</span>{/if}
+    {#if file && !file.tooLarge}<span class="add mono">+{file.add}</span><span class="del mono">−{file.del}</span>{/if}
     <div style="flex:1"></div>
     <div class="segmented">
       <button class:on={!app.diffSplit} onclick={() => app.setDiffSplit(false)}>Unifié</button>
@@ -59,7 +59,7 @@
     {:else if file.binary}
       <div class="msg">Fichier binaire.</div>
     {:else}
-      <DiffView lines={fileLines(file)} split={app.diffSplit} />
+      <DiffView lines={fileLines(file)} split={app.diffSplit} tooLarge={file.tooLarge} />
     {/if}
   </div>
 </section>

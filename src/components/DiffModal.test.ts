@@ -111,6 +111,47 @@ describe('DiffModal for the whole project', () => {
   });
 });
 
+describe('DiffModal with large diffs', () => {
+  beforeEach(() => resetApp({ projects: [project()] }));
+  const header = (path: string) => `diff --git a/${path} b/${path}\nindex 1111111..2222222 100644\n--- a/${path}\n+++ b/${path}\n`;
+  const flagged = (path: string) => `${header(path)}Diff too large\n`;
+  const long = (path: string, n: number) =>
+    `${header(path)}@@ -0,0 +1,${n} @@\n${Array.from({ length: n }, (_, i) => `+ligne ${i + 1}`).join('\n')}\n`;
+
+  it('says a file too large to be sent cannot be shown, and shows the others', async () => {
+    fakeBackend({ git_diff: () => flagged('pnpm-lock.yaml') + DIFF });
+    render(DiffModal, props);
+    expect(await screen.findByText('Diff trop volumineux pour être affiché.')).toBeInTheDocument();
+    // It has no counts, unlike the files whose diff came.
+    const rows = screen.getAllByRole('button', { name: /^M / });
+    expect(rows.map((r) => r.textContent)).toEqual([
+      expect.stringMatching(/^M pnpm-lock\.yaml\s*$/),
+      expect.stringMatching(/^M src\/auth\.ts\s*\+1−1$/),
+    ]);
+    expect(document.querySelector('.fhead')).not.toHaveTextContent('+0');
+    await userEvent.click(screen.getByRole('button', { name: /new\.txt/ }));
+    expect(screen.getByText('hello')).toBeInTheDocument();
+    expect(screen.queryByText('Diff trop volumineux pour être affiché.')).not.toBeInTheDocument();
+  });
+
+  it('says it too for a commit', async () => {
+    fakeBackend({ git_show: () => flagged('dump.sql') });
+    render(DiffModal, { projectId: 'p1', agentId: null, paths: [], title: 'a1b2c3d import', commit: 'a1b2c3d4' });
+    expect(await screen.findByText('Diff trop volumineux pour être affiché.')).toBeInTheDocument();
+  });
+
+  it('folds each long file on its own', async () => {
+    fakeBackend({ git_diff: () => long('a.lock', 2000) + long('b.lock', 1600) });
+    const { container } = render(DiffModal, props);
+    expect(await screen.findByText('Diff volumineux (2001 lignes)')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Afficher' }));
+    expect(container.querySelectorAll('.urow')).toHaveLength(500);
+    await userEvent.click(screen.getByRole('button', { name: /b\.lock/ }));
+    expect(screen.getByText('Diff volumineux (1601 lignes)')).toBeInTheDocument();
+    expect(container.querySelectorAll('.urow')).toHaveLength(0);
+  });
+});
+
 describe('DiffModal for a commit', () => {
   beforeEach(() => resetApp({ projects: [project()] }));
 

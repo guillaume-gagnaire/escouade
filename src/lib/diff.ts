@@ -16,10 +16,15 @@ export interface DiffFile {
   path: string;
   status: 'A' | 'M' | 'D';
   binary: boolean;
+  /** The backend did not send this file's diff: it is over the size it sends per file. */
+  tooLarge: boolean;
   add: number;
   del: number;
   hunks: DiffHunk[];
 }
+
+/** The line `git.rs` writes, after a file's header, instead of the diff it did not send (`TOO_LARGE` there). */
+const TOO_LARGE = 'Diff too large';
 
 export function parseUnifiedDiff(text: string): DiffFile[] {
   const files: DiffFile[] = [];
@@ -31,7 +36,7 @@ export function parseUnifiedDiff(text: string): DiffFile[] {
     const line = raw.replace(/\r$/, '');
     if (line.startsWith('diff --git ')) {
       const m = line.match(/ b\/(.*)$/);
-      file = { path: m ? m[1] : line.slice(11), status: 'M', binary: false, add: 0, del: 0, hunks: [] };
+      file = { path: m ? m[1] : line.slice(11), status: 'M', binary: false, tooLarge: false, add: 0, del: 0, hunks: [] };
       files.push(file);
       hunk = null;
       continue;
@@ -49,6 +54,10 @@ export function parseUnifiedDiff(text: string): DiffFile[] {
       }
       if (line.startsWith('Binary files')) {
         file.binary = true;
+        continue;
+      }
+      if (line === TOO_LARGE) {
+        file.tooLarge = true;
         continue;
       }
       if (/^(--- |\+\+\+ |index |similarity|rename |old mode|new mode)/.test(line)) continue;

@@ -1,14 +1,36 @@
 <script lang="ts">
   import { splitRows, type DiffLine } from '../lib/diff';
 
-  // Diff lines, unified (merged, red and green lines) or side by side.
-  let { lines, split }: { lines: DiffLine[]; split: boolean } = $props();
+  // Diff lines, unified (merged, red and green lines) or side by side. Each line is a DOM node, so a
+  // file of more than FOLD_AT lines stays folded until asked for, then is drawn SLICE lines at a time.
+  // `tooLarge`: the backend did not send this file's diff.
+  let { lines, split, tooLarge = false }: { lines: DiffLine[]; split: boolean; tooLarge?: boolean } = $props();
+
+  const FOLD_AT = 1500;
+  const SLICE = 500;
+
+  // How much of a long diff is drawn: nothing while it is folded. Kept when the diff is refreshed,
+  // so that a file being edited does not fold itself back under the reader.
+  let drawn = $state(0);
+  const long = $derived(lines.length > FOLD_AT);
+  // Side by side pairs a deletion with its addition: slicing rows, not lines, never tears a pair.
+  const rows = $derived(split && !tooLarge ? splitRows(lines) : []);
+  const total = $derived(split ? rows.length : lines.length);
+  const shown = $derived(long ? drawn : total);
+  const rest = $derived(total - shown);
 </script>
 
-{#if split}
+{#if tooLarge}
+  <p class="note">Diff trop volumineux pour être affiché.</p>
+{:else if long && drawn === 0}
+  <div class="note">
+    <span>Diff volumineux ({lines.length} lignes)</span>
+    <button class="btn" onclick={() => (drawn = SLICE)}>Afficher</button>
+  </div>
+{:else if split}
   <!-- Side by side wraps long lines so both columns stay aligned in narrow panes. -->
   <div class="rows">
-    {#each splitRows(lines) as r, i (i)}
+    {#each rows.slice(0, shown) as r, i (i)}
       <div class="srow">
         {#each [r.left, r.right] as l, side (side)}
           <div class="cell {l ? (l.kind === 'ctx' ? '' : l.kind) : 'void'}">
@@ -21,7 +43,7 @@
   </div>
 {:else}
   <div class="rows unified">
-    {#each lines as l, i (i)}
+    {#each lines.slice(0, shown) as l, i (i)}
       <div class="urow {l.kind}">
         <span class="no">{l.oldNo ?? ''}</span>
         <span class="no">{l.newNo ?? ''}</span>
@@ -31,8 +53,25 @@
     {/each}
   </div>
 {/if}
+{#if long && drawn > 0 && rest > 0}
+  <div class="note more">
+    <button class="btn" onclick={() => (drawn += SLICE)}>Afficher {Math.min(SLICE, rest)} lignes de plus</button>
+  </div>
+{/if}
 
 <style>
+  .note {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    margin: 0;
+    padding: 40px;
+    color: var(--muted);
+  }
+  .note.more {
+    padding: 14px;
+  }
   .rows {
     font-family: var(--mono);
     font-size: 12px;
