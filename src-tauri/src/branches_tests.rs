@@ -276,6 +276,41 @@ async fn changes_that_cannot_come_back_are_found_in_a_stash_the_error_names() {
 }
 
 #[tokio::test]
+async fn untracked_files_a_switch_would_overwrite_are_named_and_stay_where_they_are() {
+    let h = harness("g1f-switch-untracked");
+    let (p, r) = h.project(false).await;
+    git(&r, &["switch", "-qc", "side"]);
+    std::fs::write(r.join("notes.txt"), "theirs\n").unwrap();
+    git(&r, &["add", "notes.txt"]);
+    git(&r, &["commit", "-qm", "notes"]);
+    git(&r, &["switch", "-q", "main"]);
+    std::fs::write(r.join("notes.txt"), "mine\n").unwrap();
+    // No tracked change to stash, none refused as DIRTY: git's refusal is what comes, in words.
+    let e = h
+        .core
+        .branch_switch(&p.id, "side", false)
+        .await
+        .unwrap_err();
+    assert!(e.downcast_ref::<BranchRefusal>().is_none(), "{e:#}");
+    assert!(e.to_string().contains("notes.txt"), "{e}");
+    assert!(e.to_string().contains("écraserait"), "{e}");
+    assert_eq!(current(&r), "main");
+    assert_eq!(
+        std::fs::read_to_string(r.join("notes.txt")).unwrap(),
+        "mine\n"
+    );
+    // A new branch from another one is switched to the same way: refused, and not left made.
+    let e = h
+        .core
+        .branch_create(&p.id, "next", "side", true, true)
+        .await
+        .unwrap_err();
+    assert!(e.to_string().contains("écraserait"), "{e}");
+    assert!(!exists(&r, "next"));
+    assert_eq!(current(&r), "main");
+}
+
+#[tokio::test]
 async fn an_agent_at_work_in_the_project_folder_holds_off_a_switch() {
     let h = harness("g1-switch-agent");
     let (p, r) = h.project(false).await;

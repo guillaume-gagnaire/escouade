@@ -65,6 +65,12 @@ fn in_english(mut cmd: tokio::process::Command) -> tokio::process::Command {
     cmd
 }
 
+/// `run`, with git's messages in English (`in_english`).
+async fn run_english(cwd: &str, args: &[&str]) -> Result<Vec<u8>> {
+    let out = in_english(command(cwd, args)).output().await?;
+    checked(out, args)
+}
+
 /// `run_net`, with git's messages in English (`in_english`).
 async fn run_net_english(cwd: &str, args: &[&str], background: bool) -> Result<Vec<u8>> {
     run_net_command(in_english(command(cwd, args)), args, background).await
@@ -907,16 +913,55 @@ fn invalid_branch(branch: &str) -> anyhow::Error {
     ))
 }
 
-/// Checks the existing local branch `branch` out in `repo`; git's refusal (untracked files in the
-/// way, the branch held by another worktree…) comes back as it is.
+/// The untracked files of the folder that git says a checkout would overwrite (or remove), from
+/// its refusal in English:
+/// `error: The following untracked working tree files would be overwritten by checkout:`, the
+/// names on the lines that follow, one tab in.
+fn untracked_in_the_way(message: &str) -> Option<Vec<String>> {
+    let (_, rest) = message.split_once("untracked working tree files would be ")?;
+    let files: Vec<String> = rest
+        .lines()
+        .skip(1)
+        .take_while(|l| l.starts_with('\t'))
+        .map(|l| l.trim().to_string())
+        .collect();
+    (!files.is_empty()).then_some(files)
+}
+
+/// Refused: the switch would overwrite untracked `files` (the first ones when they are many).
+fn files_in_the_way(lang: crate::i18n::Lang, files: &[String]) -> String {
+    const SHOWN: usize = 10;
+    let mut list = files[..files.len().min(SHOWN)].join(", ");
+    if files.len() > SHOWN {
+        list.push_str(", …");
+    }
+    tr_in!(
+        lang,
+        "Ce changement de branche écraserait des fichiers non suivis du dossier : {list}. Déplace-les ou supprime-les, puis réessaie.",
+        "This switch would overwrite untracked files of the folder: {list}. Move or delete them, then try again."
+    )
+}
+
+/// The failure of a `git switch`, git's refusal over untracked files told in words and kept short;
+/// any other as it is.
+fn switch_failed(e: anyhow::Error) -> anyhow::Error {
+    match untracked_in_the_way(&e.to_string()) {
+        Some(files) => anyhow::anyhow!(files_in_the_way(crate::i18n::ui(), &files)),
+        None => e,
+    }
+}
+
+/// Checks the existing local branch `branch` out in `repo`; git's refusal (the branch held by
+/// another worktree…) comes back as it is, but for untracked files in the way: they are named.
 pub async fn switch(repo: &str, branch: &str) -> Result<()> {
     if branch.starts_with('-') {
         bail!(invalid_branch(branch));
     }
     // `--no-guess`: a branch only the remote has is not made, the base is a local one.
-    run(repo, &["switch", "--no-guess", branch])
+    run_english(repo, &["switch", "--no-guess", branch])
         .await
         .map(|_| ())
+        .map_err(switch_failed)
 }
 
 /// Commits of `branch` that `base` does not have; an error when git cannot count them.
@@ -1277,7 +1322,9 @@ pub async fn switch_to(repo: &str, name: &str) -> Result<String> {
             Ok(local)
         }
         None => {
-            run(repo, &["switch", "--track", name]).await?;
+            run_english(repo, &["switch", "--track", name])
+                .await
+                .map_err(switch_failed)?;
             Ok(head_branch(repo).await)
         }
     }
@@ -4014,6 +4061,91 @@ mod repo_tests {
             text(&r, &["stash", "list"]).await.unwrap().lines().count(),
             1
         );
+    }
+
+    #[tokio::test]
+    async fn a_switch_that_would_overwrite_untracked_files_says_which() {
+        let (local, other, _) = with_remote("git-g1f-untracked");
+        let l = s(&local);
+        // `feat` has notes.txt and sub/deep.txt, which the folder has too without tracking them.
+        git_in(&other, &["checkout", "-qb", "feat"]);
+        std::fs::create_dir_all(other.join("sub")).unwrap();
+        std::fs::write(other.join("sub").join("deep.txt"), "theirs\n").unwrap();
+        commit_file(&other, "notes.txt", "theirs\n");
+        git_in(&other, &["push", "-qu", "origin", "feat"]);
+        git_in(&local, &["fetch", "-q"]);
+        git_in(&local, &["branch", "-q", "feat", "origin/feat"]);
+        std::fs::create_dir_all(local.join("sub")).unwrap();
+        std::fs::write(local.join("sub").join("deep.txt"), "mine\n").unwrap();
+        std::fs::write(local.join("notes.txt"), "mine\n").unwrap();
+
+        // The local branch, through `switch`, and through `switch_to` for a remote one.
+        let local_branch = switch(&l, "feat").await.unwrap_err().to_string();
+        git_in(&local, &["branch", "-qD", "feat"]);
+        let remote_branch = switch_to(&l, "origin/feat").await.unwrap_err().to_string();
+        for e in [local_branch, remote_branch] {
+            assert!(e.contains("écraserait"), "{e}");
+            assert!(e.contains("notes.txt") && e.contains("sub/deep.txt"), "{e}");
+            assert!(!e.contains("Please move"), "git's own text: {e}");
+        }
+        // Nothing moved, nothing lost.
+        assert_eq!(head_branch(&l).await, "main");
+        assert_eq!(
+            std::fs::read_to_string(local.join("notes.txt")).unwrap(),
+            "mine\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(local.join("sub").join("deep.txt")).unwrap(),
+            "mine\n"
+        );
+    }
+
+    #[test]
+    fn the_untracked_files_in_the_way_are_read_from_gits_refusal_and_told_in_both_languages() {
+        use crate::i18n::Lang::{En, Fr};
+        let refusal = |verb: &str, files: &[&str]| {
+            let names: String = files.iter().map(|f| format!("\t{f}\n")).collect();
+            format!(
+                "error: The following untracked working tree files would be {verb} by checkout:\n{names}Please move or remove them before you switch branches.\nAborting"
+            )
+        };
+        assert_eq!(
+            untracked_in_the_way(&refusal("overwritten", &["a.txt", "dir/b c.txt"])),
+            Some(vec!["a.txt".to_string(), "dir/b c.txt".to_string()])
+        );
+        assert_eq!(
+            untracked_in_the_way(&refusal("removed", &["a.txt"])),
+            Some(vec!["a.txt".to_string()])
+        );
+        // CRLF line ends, as a Windows git may write them.
+        assert_eq!(
+            untracked_in_the_way(&refusal("overwritten", &["a.txt"]).replace('\n', "\r\n")),
+            Some(vec!["a.txt".to_string()])
+        );
+        // Any other refusal is not that one.
+        for other in [
+            "fatal: invalid reference: nowhere",
+            "error: Your local changes to the following files would be overwritten by checkout:\n\ta.txt\nPlease commit your changes or stash them before you switch branches.\nAborting",
+            "",
+        ] {
+            assert_eq!(untracked_in_the_way(other), None, "{other}");
+        }
+        let files: Vec<String> = (1..=12).map(|n| format!("f{n}.txt")).collect();
+        assert_eq!(
+            files_in_the_way(En, &files[..2]),
+            "This switch would overwrite untracked files of the folder: f1.txt, f2.txt. Move or delete them, then try again."
+        );
+        assert_eq!(
+            files_in_the_way(Fr, &files[..1]),
+            "Ce changement de branche écraserait des fichiers non suivis du dossier : f1.txt. Déplace-les ou supprime-les, puis réessaie."
+        );
+        // Many: the first ones.
+        assert!(
+            files_in_the_way(En, &files).contains("f10.txt, …."),
+            "{}",
+            files_in_the_way(En, &files)
+        );
+        assert!(!files_in_the_way(En, &files).contains("f11.txt"));
     }
 
     #[tokio::test]
