@@ -654,6 +654,7 @@ impl<R: Runtime> Core<R> {
                     port_base: ports,
                     select: false,
                     copy_of: None,
+                    account: None,
                 },
             )
             .await;
@@ -1265,8 +1266,10 @@ impl<R: Runtime> Core<R> {
             return board::plain_commit(t);
         }
         let stat = git::staged_stat(cwd, target).await;
+        // Asked of the account of the ticket's agent.
+        let agent = t.agent_id.as_deref();
         match self
-            .one_shot(board::COMMIT_SYSTEM, &board::commit_prompt(t, &stat))
+            .one_shot(board::COMMIT_SYSTEM, &board::commit_prompt(t, &stat), agent)
             .await
         {
             Ok(answer) => board::commit_from_answer(&answer, &t.key)

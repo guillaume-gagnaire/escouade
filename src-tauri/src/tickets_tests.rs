@@ -3203,7 +3203,7 @@ async fn a_haiku_that_never_reads_its_question_does_not_hold_up_the_validation()
     let answer = tokio::time::timeout(
         Duration::from_secs(20),
         h.core
-            .one_shot_within("[sourd]", &prompt, Duration::from_secs(2)),
+            .one_shot_within("[sourd]", &prompt, Duration::from_secs(2), None),
     )
     .await
     .expect("the question to Haiku was never given up");

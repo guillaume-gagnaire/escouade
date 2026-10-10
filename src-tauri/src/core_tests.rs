@@ -3949,3 +3949,192 @@ async fn no_copy_is_made_when_its_worktree_cannot_be() {
     // Neither an agent nor its conversation left behind.
     assert_eq!((h.core.agents.read().len(), logs()), (agents, before));
 }
+
+// ---------- Claude accounts ----------
+
+/// A second Claude account, its folder in the test's, put after Principal in the settings.
+fn second_account(h: &Harness) -> Account {
+    let pro = Account {
+        id: "pro".into(),
+        name: "Pro".into(),
+        config_dir: h.dir.join("claude-pro").to_string_lossy().into(),
+        ..Default::default()
+    };
+    let mut s = h.core.settings.read().clone();
+    s.accounts.push(pro.clone());
+    h.core.save_settings(s).unwrap();
+    pro
+}
+
+async fn agent_on(h: &Harness, project: &Project, account: &str) -> AgentMeta {
+    h.core
+        .create_agent_with(
+            &project.id,
+            AgentOptions {
+                account: Some(account.into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta
+}
+
+/// The `CLAUDE_CONFIG_DIR` of each launch of the fake CLI in `cwd`, in order (null: none).
+fn config_dirs(h: &Harness, cwd: &Path) -> Vec<Value> {
+    h.launch_log(cwd)
+        .iter()
+        .map(|l| l["configDir"].clone())
+        .collect()
+}
+
+/// The one-shot questions (`claude -p`, asked in the temporary folder) launched so far with
+/// `config_dir` as their `CLAUDE_CONFIG_DIR`. Other tests ask theirs there too, each with its
+/// own folder or none.
+fn one_shots_with(config_dir: &str) -> usize {
+    let tmp = std::env::temp_dir();
+    // As the process started there reports it (macOS: /private/var, not /var).
+    let tmp = if cfg!(windows) {
+        tmp
+    } else {
+        tmp.canonicalize().unwrap()
+    };
+    let key: String = tmp
+        .to_string_lossy()
+        .trim_end_matches(['\\', '/'])
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+        .collect();
+    let file = std::env::temp_dir().join(format!("fake-claude-{key}.jsonl"));
+    std::fs::read_to_string(file)
+        .unwrap_or_default()
+        .lines()
+        // A line another test's CLI is writing may be cut.
+        .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+        .filter(|l| {
+            l["configDir"] == config_dir
+                && l["argv"]
+                    .as_array()
+                    .is_some_and(|a| a.contains(&json!("-p")))
+        })
+        .count()
+}
+
+#[tokio::test]
+async fn settings_and_agents_saved_before_the_accounts_load_on_principal() {
+    let dir = test_dir("accounts-old-files");
+    let data = DataDir::new(dir.join("data"));
+    data.ensure().unwrap();
+    std::fs::write(data.settings_file(), r#"{"claudePath":"","sound":false}"#).unwrap();
+    let agent = json!({ "id": "a1", "projectId": "p1", "name": "ancien", "model": "sonnet",
+                        "effort": "medium", "mode": "auto", "cwd": dir.to_string_lossy(),
+                        "sessionId": "s1" });
+    std::fs::write(
+        data.state_file(),
+        json!({ "projects": [], "agents": [agent] }).to_string(),
+    )
+    .unwrap();
+    let app = mock_app();
+    let (core, _rx) = Core::load(app.handle().clone(), data);
+    assert_eq!(
+        core.settings.read().accounts,
+        vec![Account {
+            id: "principal".into(),
+            name: "Principal".into(),
+            config_dir: String::new(),
+            claude_path: String::new(),
+            active: true,
+        }]
+    );
+    assert_eq!(core.agent("a1").unwrap().lock().meta.account, "principal");
+    // Saved without Principal (a window that lost it): it is put back, first, in the file too.
+    let pro = Account {
+        id: "pro".into(),
+        name: "Pro".into(),
+        config_dir: dir.join("pro").to_string_lossy().into(),
+        ..Default::default()
+    };
+    let s = Settings {
+        accounts: vec![pro],
+        ..core.settings.read().clone()
+    };
+    core.save_settings(s).unwrap();
+    let ids = |accounts: &[Account]| accounts.iter().map(|a| a.id.clone()).collect::<Vec<_>>();
+    assert_eq!(ids(&core.settings.read().accounts), ["principal", "pro"]);
+    let saved: Settings =
+        serde_json::from_slice(&std::fs::read(core.data.settings_file()).unwrap()).unwrap();
+    assert_eq!(ids(&saved.accounts), ["principal", "pro"]);
+}
+
+#[tokio::test]
+async fn an_agent_on_a_second_account_runs_with_its_folder_and_one_on_principal_without() {
+    let h = harness("accounts-launch");
+    // Each agent in its worktree: each its own log of launches.
+    let (p, r) = h.project(true).await;
+    let pro = second_account(&h);
+    let principal = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    assert_eq!(principal.account, "principal");
+    h.turn(&principal.id, "Bonjour").await;
+    assert_eq!(config_dirs(&h, Path::new(&principal.cwd)), [Value::Null]);
+    let asked_before = one_shots_with(&pro.config_dir);
+    let a = agent_on(&h, &p, "pro").await;
+    assert_eq!(a.account, "pro");
+    h.turn(&a.id, "Bonjour").await;
+    assert_eq!(config_dirs(&h, Path::new(&a.cwd)), [json!(pro.config_dir)]);
+    // Its name is asked of its account too.
+    h.wait("its name", |h| h.agent(&a.id).named).await;
+    assert_eq!(one_shots_with(&pro.config_dir), asked_before + 1);
+    // So is the message of a direct commit of its changes.
+    std::fs::write(
+        Path::new(&a.cwd).join("src").join("app.ts"),
+        "const a = 2;\n",
+    )
+    .unwrap();
+    h.core
+        .commit_propose(&p.id, Some(a.id.clone()), vec!["src/app.ts".into()])
+        .await
+        .unwrap();
+    assert_eq!(one_shots_with(&pro.config_dir), asked_before + 2);
+    // A question about no agent goes to Principal (here, the worktree commands read in the project).
+    h.core.suggest_worktree_steps(&p.id).await.unwrap();
+    assert_eq!(config_dirs(&h, &r).last(), Some(&Value::Null));
+    // An account the settings do not know: Principal.
+    let lost = agent_on(&h, &p, "parti").await;
+    assert_eq!(lost.account, "principal");
+}
+
+#[tokio::test]
+async fn an_agent_resumes_its_session_on_its_account_after_its_process_restarts() {
+    let h = harness("accounts-resume");
+    let (p, r) = h.project(false).await;
+    let pro = second_account(&h);
+    let id = agent_on(&h, &p, "pro").await.id;
+    h.turn(&id, "Premier").await;
+    let session = h.agent(&id).session_id.unwrap();
+    // Idle-stopped, say: the next message starts it again.
+    let old = h.core.agent(&id).unwrap().lock().detach().unwrap();
+    old.close_input();
+    h.turn(&id, "Second").await;
+    let last = h.launch_log(&r).last().cloned().unwrap();
+    assert_eq!(last["configDir"], json!(pro.config_dir));
+    assert!(last["argv"]
+        .as_array()
+        .unwrap()
+        .contains(&json!(format!("--resume={session}"))));
+    // Found in its account's folder: the same session goes on.
+    assert_eq!(h.agent(&id).session_id, Some(session));
+    assert!(
+        h.error_notices(&id).is_empty(),
+        "{:?}",
+        h.error_notices(&id)
+    );
+    // A copy forks that session: on the same account, where it is kept.
+    let copy = h.core.duplicate_agent(&id).await.unwrap().meta;
+    assert_eq!(copy.account, "pro");
+    // And after the app's restart, the agent is still on it.
+    h.core.save_now();
+    let app = mock_app();
+    let (reloaded, _rx) = Core::load(app.handle().clone(), h.core.data.clone());
+    assert_eq!(reloaded.agent(&id).unwrap().lock().meta.account, "pro");
+    assert_eq!(reloaded.settings.read().accounts[1], pro);
+}

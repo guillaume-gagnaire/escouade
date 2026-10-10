@@ -34,6 +34,20 @@ export interface Settings {
   language: 'system' | Lang;
   /** « Langue des textes rédigés par Claude »: the interface's, or a language of its own. */
   claudeLanguage: 'ui' | Lang;
+  /** The Claude accounts, in the order new agents try them; Principal (id "principal") always among them. */
+  accounts: Account[];
+}
+
+/** A Claude account: Claude Code with a configuration folder of its own (its own sign-in, sessions and quota). */
+export interface Account {
+  id: string;
+  name: string;
+  /** Its `CLAUDE_CONFIG_DIR`; empty for Principal, launched without one. */
+  configDir: string;
+  /** Its own `claude`; empty: the settings' one. */
+  claudePath: string;
+  /** New agents may go to it. */
+  active: boolean;
 }
 
 /** The languages as the backend resolved them: the interface's, the system's, and that of the texts Claude writes. */
@@ -460,6 +474,8 @@ export interface Agent {
   approvedRecipe: TestRecipe | null;
   /** The .isola.toml (and the address to open) the user read before isola ran the worktree's services. */
   approvedIsola: IsolaApproval | null;
+  /** The Claude account it runs on (an `Account`'s id), where its session is kept. */
+  account: string;
   /** What it is doing right now ("Lit src/db.ts", "Lance npm test"…), during a turn. */
   activity: string | null;
   /** The setup of its new worktree under way: the step running ("1/2 · npm ci"). */
