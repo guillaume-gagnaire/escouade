@@ -1327,4 +1327,21 @@ describe('quitting with unsaved files', () => {
     emit({ type: 'quitRequested', unsaved: 1 });
     expect((app.modal as any).onCancel).toBeUndefined();
   });
+
+  it('brings back the update’s window only while an update is ready', async () => {
+    resetApp();
+    const { emit } = await start();
+    app.update = { version: '1.6.0', notes: '', ready: true };
+    app.modal = { kind: 'update' };
+    emit({ type: 'quitRequested', unsaved: 1 });
+    (app.modal as any).onCancel();
+    expect(app.modal).toEqual({ kind: 'update' });
+    emit({ type: 'quitRequested', unsaved: 1 });
+    // Withdrawn meanwhile: its window would be an empty dialog keeping every key.
+    app.update = null;
+    const cancel = (app.modal as any).onCancel;
+    app.modal = null;
+    cancel();
+    expect(app.modal).toBeNull();
+  });
 });

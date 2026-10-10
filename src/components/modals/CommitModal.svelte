@@ -82,12 +82,16 @@
     if (!message.trim() || committing || !paths.length) return;
     committing = true;
     refused = null;
+    // Replaced while it commits (« Quitter Escouade ? »), the window does not come back to commit twice; refused, it
+    // does, its message in it.
+    app.markAnswered(self);
     try {
       const hash = await api.commitDirect(projectId, agentId, paths, message);
       // Another modal may have taken its place meanwhile.
       if (!gone) app.modal = null;
       app.toast(`Commit ${hash} créé`, 'ok');
     } catch (e) {
+      app.markAnswered(self, false);
       // A refusal is never lost: in the window, or told once it is gone.
       if (gone) app.toast(String(e), 'error');
       else refused = String(e);

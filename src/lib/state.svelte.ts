@@ -291,6 +291,26 @@ class AppState {
     return true;
   }
 
+  /** Dialogs whose answer is given (a choice running or made, a commit under way or made), by identity. */
+  private answered = new WeakSet<Modal>();
+
+  /**
+   * `modal` has its answer (`yes`), or has it no more (a commit git refused): once another dialog that took its place
+   * is cancelled, an answered one does not come back to be answered twice.
+   */
+  markAnswered(modal: Modal | null, yes = true) {
+    if (!modal) return;
+    if (yes) this.answered.add(modal);
+    else this.answered.delete(modal);
+  }
+
+  /** Whether `modal` comes back once a dialog that took its place is cancelled. */
+  private comesBack(modal: Modal): boolean {
+    if (this.answered.has(modal)) return false;
+    // The update's window shows an update downloaded only: without one, an empty dialog keeping every key.
+    return modal.kind !== 'update' || !!this.update?.ready;
+  }
+
   /** `f` runs when the backend warns of an automatic restart, before the app stops. Returns what unregisters it. */
   onRestartWarned(f: () => void) {
     this.restartHooks.add(f);
@@ -451,8 +471,8 @@ class AppState {
         this.onLaunchExit(e.id, e.code);
         break;
       case 'quitRequested': {
-        // Cancelled, it goes back to the dialog it takes the place of (a commit's window keeps its message in it); asked
-        // again while it asks, back to that same one.
+        // Cancelled, it goes back to the dialog it takes the place of (a commit's window keeps its message in it), unless
+        // that one got its answer meanwhile; asked again while it asks, back to that same one.
         const open = this.modal;
         const again = open?.kind === 'confirm' && open.title === QUIT_TITLE;
         this.modal = {
@@ -462,7 +482,13 @@ class AppState {
           confirm: 'Quitter quand même',
           danger: true,
           onConfirm: () => api.quit(),
-          onCancel: again ? open.onCancel : open ? () => (this.modal = open) : undefined,
+          onCancel: again
+            ? open.onCancel
+            : open
+              ? () => {
+                  if (this.comesBack(open)) this.modal = open;
+                }
+              : undefined,
         };
         break;
       }

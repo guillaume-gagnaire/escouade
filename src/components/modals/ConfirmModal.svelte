@@ -30,6 +30,8 @@
   async function choose(run: () => void | Promise<void>) {
     const self = app.modal;
     busy = true;
+    // Replaced while the choice runs (« Quitter Escouade ? »), it is not asked again.
+    app.markAnswered(self);
     await run();
     busy = false;
     if (app.modal === self) app.modal = null;

@@ -133,6 +133,70 @@ describe('App layout', () => {
     await waitFor(() => expect(field()).toHaveValue('fix(auth): un jeton plus court (relu)'));
   });
 
+  it('does not bring back, once quitting is cancelled, a commit made while it asked, nor a choice already made', async () => {
+    let done: (hash: string) => void = () => {};
+    start('split', {
+      projects: [project({ commitMode: 'direct' })],
+      handlers: {
+        commit_preview: () => ({
+          files: [{ path: 'src/auth.ts', status: 'M', add: 1, del: 1, agentId: 'a1', inWorktree: false }],
+          leftOut: [],
+        }),
+        commit_propose: () => 'fix(auth): un jeton plus court',
+        commit_direct: () => new Promise<string>((r) => (done = r)),
+      },
+    });
+    await screen.findByText('const b = 3;');
+    await userEvent.click(screen.getByRole('button', { name: 'Commit…' }));
+    const commit = await screen.findByRole('dialog', { name: 'Commit' });
+    await waitFor(() => expect(within(commit).getByRole('textbox', { name: 'Message' })).toHaveValue('fix(auth): un jeton plus court'));
+    await userEvent.click(within(commit).getByRole('button', { name: 'Commiter' }));
+    emit({ type: 'quitRequested', unsaved: 1 });
+    let ask = await screen.findByRole('dialog', { name: 'Quitter Escouade ?' });
+    done('abc1234');
+    await waitFor(() => expect(app.toasts.at(-1)).toMatchObject({ text: 'Commit abc1234 créé' }));
+    await userEvent.click(within(ask).getByRole('button', { name: 'Annuler' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(app.modal).toBeNull();
+
+    // A confirmation whose choice is still running.
+    const onConfirm = vi.fn(() => new Promise<void>(() => {}));
+    app.modal = { kind: 'confirm', title: 'Supprimer « a.ts » ?', body: 'Il part dans la corbeille.', confirm: 'Supprimer', onConfirm };
+    await userEvent.click(await screen.findByRole('button', { name: 'Supprimer' }));
+    emit({ type: 'quitRequested', unsaved: 1 });
+    ask = await screen.findByRole('dialog', { name: 'Quitter Escouade ?' });
+    await userEvent.click(within(ask).getByRole('button', { name: 'Annuler' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(onConfirm).toHaveBeenCalledOnce();
+  });
+
+  it('brings back, once quitting is cancelled, a commit whose commit git refused while it asked, its message kept', async () => {
+    let refuse: (e: string) => void = () => {};
+    start('split', {
+      projects: [project({ commitMode: 'direct' })],
+      handlers: {
+        commit_preview: () => ({
+          files: [{ path: 'src/auth.ts', status: 'M', add: 1, del: 1, agentId: 'a1', inWorktree: false }],
+          leftOut: [],
+        }),
+        commit_propose: () => 'fix(auth): un jeton plus court',
+        commit_direct: () => new Promise<string>((_, reject) => (refuse = reject)),
+      },
+    });
+    await screen.findByText('const b = 3;');
+    await userEvent.click(screen.getByRole('button', { name: 'Commit…' }));
+    const field = () => within(screen.getByRole('dialog', { name: 'Commit' })).getByRole('textbox', { name: 'Message' });
+    await waitFor(() => expect(field()).toHaveValue('fix(auth): un jeton plus court'));
+    await userEvent.type(field(), ' (relu)');
+    await userEvent.click(screen.getByRole('button', { name: 'Commiter' }));
+    emit({ type: 'quitRequested', unsaved: 1 });
+    const ask = await screen.findByRole('dialog', { name: 'Quitter Escouade ?' });
+    refuse('lint en échec');
+    await waitFor(() => expect(app.toasts.at(-1)).toMatchObject({ text: 'lint en échec', kind: 'error' }));
+    await userEvent.click(within(ask).getByRole('button', { name: 'Annuler' }));
+    await waitFor(() => expect(field()).toHaveValue('fix(auth): un jeton plus court (relu)'));
+  });
+
   it('asks the next question of a confirmation in a dialog of its own, the focus in it', async () => {
     start('');
     await screen.findByRole('main');
