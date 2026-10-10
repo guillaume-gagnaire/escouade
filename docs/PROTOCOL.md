@@ -65,6 +65,56 @@ Compaction : la chaîne repart de l'entrée `compact_boundary` (`parentUuid: nul
 
 `~/.claude/projects/<cwd encodé>/<session_id>.jsonl` — pas de titre généré en mode `-p` ; l'app tient son propre journal de conversation normalisé.
 
+## Avancée : ce que le flux dit
+
+Escouade tient pour chaque agent une avancée (`AgentMeta.plan`, `src-tauri/src/plan.rs`) : sa liste de tâches, ses sous-agents, ses workflows. Elle est dérivée du flux, par un seul réducteur, que la fenêtre ne recalcule pas. Chaque forme ci-dessous est datée : « mesuré » (un vrai `claude`, sans appel à l'API : dossier de config jetable) ou « lu dans le binaire 2.1.296 » (schémas et code de Claude Code, pas de sa documentation : ils peuvent changer). **Rien de ce qui touche aux workflows n'a été vu sur un flux réel** : le support repose sur ces schémas et sur les scénarios du faux `claude` des tests.
+
+### Les outils de liste de tâches ne sont pas toujours là
+
+Deux familles, mesuré sur 2.1.296 avec les options de lancement ci-dessus (la liste `tools` de `system/init`) :
+
+- `TodoWrite` `{ todos: [{ content, status: pending|in_progress|completed, activeForm }] }` : la liste entière à chaque appel, elle remplace la précédente.
+- « Task v2 » : `TaskCreate { subject, description, activeForm?, metadata? }`, `TaskUpdate { taskId, status?: pending|in_progress|completed|deleted, subject?, activeForm?, addBlocks?, addBlockedBy?, owner?, metadata? }`, `TaskGet`, `TaskList` ; par défaut à la place de `TodoWrite`.
+
+Avec les modèles actuels (`opus`, `sonnet`, `fable`, `haiku` → ids 5.x ou `claude-haiku-4-5-20251001`), **aucune des deux familles n'est dans `tools`** : un agent d'aujourd'hui n'émet aucune liste de tâches, même quand un skill lui dit d'en tenir une. Elles y sont avec `--model claude-opus-4-6` ou `claude-haiku-4-5` (mesuré), et avec la variable d'environnement `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` (mesuré : `TaskCreate`, `TaskGet`, `TaskList`, `TaskUpdate` ; avec en plus `CLAUDE_CODE_ENABLE_TASKS=false`, `TodoWrite` à leur place ; variable lue dans le binaire, pas dans la documentation). Escouade la met au lancement de chaque agent (`Settings::agent_env`) tant que le réglage « Les agents tiennent une liste de tâches » est actif (`todoTools`, activé par défaut) ; désactivé, elle n'ajoute rien et ne force jamais la valeur contraire (l'environnement de l'utilisateur reste maître). Les autres lancements de `claude` (nom de l'agent, message de commit, connexion d'un compte) ne l'ont pas. Contrepartie : les outils entrent dans le prompt de chaque agent (quelques centaines de jetons).
+
+### La liste de tâches, comme Claude Code la reconstruit lui-même (lu dans le binaire 2.1.296)
+
+Son observateur interne ne lit que les frames `assistant` du fil principal (`parent_tool_use_id` nul). Escouade reprend ses règles :
+
+- `TodoWrite` remplace la liste (id de chaque tâche = son rang, à partir de 1).
+- `TaskCreate` ajoute une tâche en attente tout de suite ; son id n'est connu qu'au `tool_result`, dont le texte est `Task #<id> created successfully: <subject>` (regex `^Task #(\S+) created successfully`). Un `tool_result` en erreur retire la tâche.
+- `TaskUpdate` agit par `taskId` : `status`, `subject`, `activeForm`, `addBlockedBy` (les tâches qu'elle attend) ; `addBlocks` dit la même dépendance de l'autre côté ; `deleted` retire la tâche ; un id inconnu crée l'entrée.
+- `TaskGet` et `TaskList` ne changent rien.
+- Un même appel reçu deux fois (même `tool_use_id`) compte une fois ; un `TaskCreate` quand toutes les tâches sont faites ouvre une nouvelle liste.
+
+### Les sous-agents
+
+L'outil s'appelle `Task` dans la liste `tools` de 2.1.296 et `Agent` ailleurs (dans d'autres versions et dans le faux `claude`) : Escouade prend les deux. Entrée (lu dans le binaire) : `{ description (3-5 mots), prompt, subagent_type?, name?, run_in_background?, model?, isolation? }` ; le `prompt` n'est jamais conservé.
+
+- **Au premier plan** : les frames `assistant` et `stream_event` du sous-agent portent `parent_tool_use_id` = l'id du `tool_use` qui l'a lancé (même pour un sous-agent de sous-agent) ; le `tool_result` du parent porte `tool_use_result` `{ status: "completed", agentId, content, totalToolUseCount, totalDurationMs, totalTokens, usage }` (lu dans le binaire).
+- **En arrière-plan** (`run_in_background`) : le `tool_result` est tout de suite « Async agent launched successfully. agentId: … » (`tool_use_result.status` `async_launched`) ; la fin n'arrive que par `system/task_notification`, que Claude Code rejoue ensuite à Claude (voir `on_replay` dans `agent.rs`).
+
+### Frames `system` sur les tâches (lu dans le binaire 2.1.296)
+
+| Frame | Champs utiles | Usage |
+|---|---|---|
+| `task_started` | `task_id`, `tool_use_id`, `description`, `task_type`, `subagent_type?`, `is_backgrounded?`, `workflow_name?`, `prompt?`, `skip_transcript?`, `ambient?`, `spawn_depth?`, `parent_task_id?` | Une tâche commence, aussi pour un `Bash` en arrière-plan. `task_type` : `local_agent`, `local_bash`, `local_workflow`, `remote_agent`, `in_process_teammate`, `monitor_mcp`, `dream`. Escouade ne compte que `local_agent` (une rangée de sous-agent, reliée à l'appel par `tool_use_id`) et `local_workflow` (une exécution de workflow), jamais une tâche `ambient` ou `skip_transcript`. |
+| `task_updated` | `task_id`, `patch { status: pending\|running\|completed\|failed\|killed\|paused, description?, end_time?, error?, is_backgrounded? }` | `completed`, `failed`, `killed` closent la rangée ; `is_backgrounded` la passe en arrière-plan. |
+| `task_notification` | `task_id`, `tool_use_id`, `status: completed\|failed\|stopped`, `summary`, `usage? { total_tokens, tool_uses, duration_ms }` | La fin d'une tâche, dans n'importe quel ordre avec le `tool_result` du premier plan : une rangée déjà close ne rouvre pas. |
+| `task_progress` | `task_id`, `tool_use_id`, `description`, `usage`, `last_tool_name?`, `summary?` | Un workflow en envoie toujours (`description` = « <titre de phase> : <libellé de l'agent en cours> ») ; un sous-agent seulement avec l'option SDK `agentProgressSummaries`, qui coûte un appel de résumé : Escouade ne la demande pas. |
+| `background_tasks_changed` | `tasks: [...]` | Un niveau, pas des bords : ignoré. |
+
+Un `task_progress`, `task_updated` ou `task_notification` d'une tâche qu'aucune rangée ne porte est ignoré (pas de rangée fantôme).
+
+### Les workflows (lu dans le binaire, jamais vu sur un flux réel)
+
+Outil `Workflow` (dans `tools`) ; sa tâche a `task_type: "local_workflow"` et un `workflow_name`. Pendant l'exécution, des `task_progress` ; la fin par `task_notification`. Escouade en fait une exécution (`WorkflowRun`) : son titre, sa phase courante (`now`), ses totaux (`usage`), son état.
+
+### Ce qu'Escouade en garde
+
+`AgentMeta.plan` (`PlanState`, voir `src/lib/types.ts`) : `tasks` (100 au plus), `agents` (30 : toutes celles qui tournent, puis les dernières terminées), `launched` (tous les sous-agents lancés depuis la remise à zéro), `workflows` (10). Le sous-agent d'une tâche (`planTask`) est celle que son `prompt` ou sa `description` nomme (`task-<id>-brief.md` ou `task-<id>-report.md`, puis `Task <id>`) si la liste l'a, sinon la seule tâche en cours. Ce que fait un sous-agent (`doing`) vient de ses propres appels d'outils, dans les mêmes mots que `activity`. Remise à zéro : une nouvelle session Claude, ou le premier message d'un tour quand le plan est fini (toutes les tâches faites, ou aucune, et rien qui tourne). Quand le processus meurt, les rangées qui tournaient passent à `interrupted` ; une rangée au premier plan l'est aussi à la fin du tour.
+
 ## Serveur MCP d'Escouade
 
 Escouade sert ses outils à Claude Code (un terminal, un autre outil, ses propres agents) en MCP « Streamable HTTP », par le SDK officiel `rmcp` (3.5) derrière `hyper` (`src-tauri/src/mcp/`). Il tourne quand « Claude peut piloter Escouade » est activé ou qu'un projet laisse ses agents l'utiliser, et s'arrête avec l'app.
