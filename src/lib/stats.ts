@@ -29,6 +29,13 @@ export function kpis(v: StatsView): Kpis {
   };
 }
 
+/** Lines of the lists of agents and tickets before « Tout voir ». */
+export const ROWS = 20;
+
+export function shown<T>(list: T[], all: boolean): T[] {
+  return all ? list : list.slice(0, ROWS);
+}
+
 /** Rounds an axis maximum up to 1, 2, 2.5 or 5 × 10^n. */
 export function niceMax(max: number): number {
   if (max <= 0) return 1;

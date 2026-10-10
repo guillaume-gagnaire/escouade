@@ -47,6 +47,51 @@ pub struct Share {
     pub cost: f64,
 }
 
+/// What an agent used over the period, archived or not.
+#[derive(Debug, Clone, Serialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentShare {
+    pub agent_id: String,
+    /// None for an agent that is gone (deleted): only its turns remain.
+    pub name: Option<String>,
+    pub project_id: String,
+    pub tokens: u64,
+    pub cost: f64,
+}
+
+/// What the agents of a ticket used over the period, added up.
+#[derive(Debug, Clone, Serialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TicketShare {
+    pub id: String,
+    pub key: String,
+    pub title: String,
+    pub loops: u32,
+    pub cost: f64,
+}
+
+/// What the turns table does not keep of an agent: its name, and the ticket it works or worked on.
+#[derive(Debug, Clone, Default)]
+pub struct AgentLabel {
+    pub name: String,
+    pub ticket_id: Option<String>,
+}
+
+/// What a ticket is listed under in the statistics.
+#[derive(Debug, Clone, Default)]
+pub struct TicketLabel {
+    pub key: String,
+    pub title: String,
+    pub loops: u32,
+}
+
+/// The names the statistics read in the app's state, by id; the turns table only has ids.
+#[derive(Debug, Clone, Default)]
+pub struct Labels {
+    pub agents: HashMap<String, AgentLabel>,
+    pub tickets: HashMap<String, TicketLabel>,
+}
+
 #[derive(Debug, Clone, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct StatsView {
@@ -60,6 +105,8 @@ pub struct StatsView {
     pub prompts: u64,
     pub by_project: Vec<Share>,
     pub by_model: Vec<Share>,
+    pub by_agent: Vec<AgentShare>,
+    pub by_ticket: Vec<TicketShare>,
 }
 
 impl Stats {
@@ -127,11 +174,11 @@ impl Stats {
         .unwrap_or(0.0)
     }
 
-    pub fn query(&self, range: &str) -> StatsView {
-        self.query_at(range, Local::now().date_naive())
+    pub fn query(&self, range: &str, names: &Labels) -> StatsView {
+        self.query_at(range, Local::now().date_naive(), names)
     }
 
-    fn query_at(&self, range: &str, today: NaiveDate) -> StatsView {
+    fn query_at(&self, range: &str, today: NaiveDate, names: &Labels) -> StatsView {
         let (starts, labels, prev_start) = bucket_bounds(range, today);
         let end = match range {
             "week" => local_ms(*starts.last().unwrap() + Duration::weeks(1)),
@@ -159,11 +206,12 @@ impl Stats {
 
         let (mut by_project, mut by_model): (HashMap<String, Share>, HashMap<String, Share>) =
             Default::default();
-        if let Ok(mut stmt) = c.prepare("SELECT ts, project_id, model, input, cache, output, cost FROM turns WHERE ts >= ?1 AND ts < ?2") {
+        let mut by_agent: HashMap<String, AgentShare> = HashMap::new();
+        if let Ok(mut stmt) = c.prepare("SELECT ts, project_id, model, input, cache, output, cost, agent_id FROM turns WHERE ts >= ?1 AND ts < ?2") {
             let rows = stmt.query_map([prev, end], |r| {
-                Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, i64>(3)?, r.get::<_, i64>(4)?, r.get::<_, i64>(5)?, r.get::<_, f64>(6)?))
+                Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, i64>(3)?, r.get::<_, i64>(4)?, r.get::<_, i64>(5)?, r.get::<_, f64>(6)?, r.get::<_, String>(7)?))
             });
-            for (ts, project, model, input, cache, output, cost) in rows.into_iter().flatten().flatten() {
+            for (ts, project, model, input, cache, output, cost, agent) in rows.into_iter().flatten().flatten() {
                 let tokens = (input + cache + output) as u64;
                 if ts < first {
                     view.tokens_prev += tokens;
@@ -177,6 +225,13 @@ impl Stats {
                 b.cost += cost;
                 view.tokens += tokens;
                 view.cost += cost;
+                let a = by_agent.entry(agent.clone()).or_insert_with(|| AgentShare {
+                    agent_id: agent,
+                    project_id: project.clone(),
+                    ..Default::default()
+                });
+                a.tokens += tokens;
+                a.cost += cost;
                 for (map, key) in [(&mut by_project, project), (&mut by_model, model)] {
                     let s = map.entry(key.clone()).or_insert_with(|| Share { key, ..Default::default() });
                     s.tokens += tokens;
@@ -208,8 +263,53 @@ impl Stats {
         };
         view.by_project = sort(by_project);
         view.by_model = sort(by_model);
+        (view.by_agent, view.by_ticket) = agent_lists(by_agent, names);
         view
     }
+}
+
+/// The agents of the period and the tickets they worked on, dearest first. An agent the app no
+/// longer knows keeps its line (its turns remain) without a name nor a ticket; a ticket that is
+/// gone is no line either, its agents are listed on their own.
+fn agent_lists(
+    by_agent: HashMap<String, AgentShare>,
+    names: &Labels,
+) -> (Vec<AgentShare>, Vec<TicketShare>) {
+    let mut agents: Vec<AgentShare> = by_agent.into_values().collect();
+    // The id breaks ties, so that two agents of the same cost keep their place from one query to
+    // the next.
+    agents.sort_by(|a, b| {
+        b.cost
+            .total_cmp(&a.cost)
+            .then_with(|| a.agent_id.cmp(&b.agent_id))
+    });
+    let mut tickets: HashMap<&str, TicketShare> = HashMap::new();
+    for a in &mut agents {
+        let Some(label) = names.agents.get(&a.agent_id) else {
+            continue;
+        };
+        a.name = Some(label.name.clone());
+        let Some((id, t)) = label
+            .ticket_id
+            .as_deref()
+            .and_then(|id| names.tickets.get(id).map(|t| (id, t)))
+        else {
+            continue;
+        };
+        tickets
+            .entry(id)
+            .or_insert_with(|| TicketShare {
+                id: id.to_string(),
+                key: t.key.clone(),
+                title: t.title.clone(),
+                loops: t.loops,
+                cost: 0.0,
+            })
+            .cost += a.cost;
+    }
+    let mut tickets: Vec<TicketShare> = tickets.into_values().collect();
+    tickets.sort_by(|a, b| b.cost.total_cmp(&a.cost).then_with(|| a.key.cmp(&b.key)));
+    (agents, tickets)
 }
 
 fn local_ms(d: NaiveDate) -> i64 {
@@ -294,7 +394,7 @@ mod tests {
             "p2",
             &[row("claude-sonnet-5", 5, 0.1)],
         );
-        let v = s.query_at("day", today);
+        let v = s.query_at("day", today, &Labels::default());
         assert_eq!(v.buckets.len(), 14);
         assert_eq!(v.buckets[13].label, "27/09");
         assert_eq!(v.buckets[13].input, 50);
@@ -306,10 +406,170 @@ mod tests {
         assert_eq!(v.by_project[0].key, "p1");
         assert_eq!(v.by_model.len(), 2);
 
-        let m = s.query_at("month", today);
+        let m = s.query_at("month", today, &Labels::default());
         assert_eq!(m.buckets.last().unwrap().label, "sept.");
         assert_eq!(m.buckets[0].label, "oct.");
-        let w = s.query_at("week", today);
+        let w = s.query_at("week", today, &Labels::default());
         assert_eq!(w.buckets.len(), 12);
+    }
+
+    /// The names of agents `(id, name, ticket id)` and tickets `(id, key, title, loops)`.
+    fn labels(
+        agents: &[(&str, &str, Option<&str>)],
+        tickets: &[(&str, &str, &str, u32)],
+    ) -> Labels {
+        Labels {
+            agents: agents
+                .iter()
+                .map(|(id, name, ticket)| {
+                    (
+                        id.to_string(),
+                        AgentLabel {
+                            name: name.to_string(),
+                            ticket_id: ticket.map(str::to_string),
+                        },
+                    )
+                })
+                .collect(),
+            tickets: tickets
+                .iter()
+                .map(|(id, key, title, loops)| {
+                    (
+                        id.to_string(),
+                        TicketLabel {
+                            key: key.to_string(),
+                            title: title.to_string(),
+                            loops: *loops,
+                        },
+                    )
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn agents_of_the_period_are_listed_by_cost_with_their_name_and_project() {
+        let s = Stats::memory();
+        let today = NaiveDate::from_ymd_opt(2026, 9, 27).unwrap();
+        let noon = |d: NaiveDate| local_ms(d) + 12 * 3600 * 1000;
+        // Two turns for a1 add up; a2 is cheaper; a3 is gone from the app (no name) but its
+        // turns remain; a4 only worked in the previous period.
+        s.record_turns_at(noon(today), "a1", "p1", &[row("claude-opus-5-5", 50, 1.0)]);
+        s.record_turns_at(
+            noon(today - Duration::days(1)),
+            "a1",
+            "p1",
+            &[row("claude-opus-5-5", 10, 0.5)],
+        );
+        s.record_turns_at(
+            noon(today - Duration::days(2)),
+            "a2",
+            "p2",
+            &[row("claude-sonnet-5", 20, 0.25)],
+        );
+        s.record_turns_at(noon(today), "a3", "p2", &[row("claude-sonnet-5", 1, 3.0)]);
+        s.record_turns_at(
+            noon(today - Duration::days(20)),
+            "a4",
+            "p1",
+            &[row("claude-sonnet-5", 5, 9.0)],
+        );
+        let names = labels(
+            &[
+                ("a1", "refacto-auth", None),
+                ("a2", "api-docs", None),
+                ("a4", "vieux", None),
+            ],
+            &[],
+        );
+        let v = s.query_at("day", today, &names);
+        let share =
+            |id: &str, name: Option<&str>, project: &str, tokens: u64, cost: f64| AgentShare {
+                agent_id: id.into(),
+                name: name.map(str::to_string),
+                project_id: project.into(),
+                tokens,
+                cost,
+            };
+        assert_eq!(
+            v.by_agent,
+            vec![
+                share("a3", None, "p2", 111, 3.0),
+                share("a1", Some("refacto-auth"), "p1", 160 + 120, 1.5),
+                share("a2", Some("api-docs"), "p2", 130, 0.25),
+            ]
+        );
+    }
+
+    #[test]
+    fn tickets_add_up_the_cost_of_their_agents() {
+        let s = Stats::memory();
+        let today = NaiveDate::from_ymd_opt(2026, 9, 27).unwrap();
+        let noon = |d: NaiveDate| local_ms(d) + 12 * 3600 * 1000;
+        let turn = |agent: &str, days_ago: i64, cost: f64| {
+            s.record_turns_at(
+                noon(today - Duration::days(days_ago)),
+                agent,
+                "p1",
+                &[row("claude-sonnet-5", 10, cost)],
+            );
+        };
+        // DEM-1 was resumed by a second agent after the first was archived: both count.
+        turn("a1", 0, 1.0);
+        turn("a2", 0, 0.5);
+        turn("a3", 1, 2.0);
+        // Not on a ticket, or on one that is gone: listed as agents, not as tickets.
+        turn("a4", 0, 5.0);
+        turn("a5", 0, 4.0);
+        // DEM-3 only cost something in the previous period.
+        turn("a6", 20, 7.0);
+        let names = labels(
+            &[
+                ("a1", "premier", Some("t1")),
+                ("a2", "reprise", Some("t1")),
+                ("a3", "cache", Some("t2")),
+                ("a4", "libre", None),
+                ("a5", "orphelin", Some("deleted")),
+                ("a6", "ancien", Some("t3")),
+            ],
+            &[
+                ("t1", "DEM-1", "Ajouter le login", 3),
+                ("t2", "DEM-2", "Corriger le cache", 1),
+                ("t3", "DEM-3", "Écrire la doc", 2),
+            ],
+        );
+        let v = s.query_at("day", today, &names);
+        assert_eq!(
+            v.by_ticket,
+            vec![
+                TicketShare {
+                    id: "t2".into(),
+                    key: "DEM-2".into(),
+                    title: "Corriger le cache".into(),
+                    loops: 1,
+                    cost: 2.0
+                },
+                TicketShare {
+                    id: "t1".into(),
+                    key: "DEM-1".into(),
+                    title: "Ajouter le login".into(),
+                    loops: 3,
+                    cost: 1.5
+                },
+            ]
+        );
+        assert_eq!(v.by_agent.len(), 5);
+    }
+
+    #[test]
+    fn no_turns_means_no_agent_and_no_ticket() {
+        let s = Stats::memory();
+        let today = NaiveDate::from_ymd_opt(2026, 9, 27).unwrap();
+        let names = labels(
+            &[("a1", "refacto-auth", Some("t1"))],
+            &[("t1", "DEM-1", "x", 1)],
+        );
+        let v = s.query_at("day", today, &names);
+        assert!(v.by_agent.is_empty() && v.by_ticket.is_empty());
     }
 }

@@ -838,6 +838,24 @@ export interface Share {
   cost: number;
 }
 
+/** What an agent used over the period; `name` is null once the agent is gone. */
+export interface AgentShare {
+  agentId: string;
+  name: string | null;
+  projectId: string;
+  tokens: number;
+  cost: number;
+}
+
+/** What the agents of a ticket used over the period, added up. */
+export interface TicketShare {
+  id: string;
+  key: string;
+  title: string;
+  loops: number;
+  cost: number;
+}
+
 export interface StatsView {
   range: string;
   buckets: Bucket[];
@@ -849,6 +867,8 @@ export interface StatsView {
   prompts: number;
   byProject: Share[];
   byModel: Share[];
+  byAgent: AgentShare[];
+  byTicket: TicketShare[];
 }
 
 export interface FolderInfo {

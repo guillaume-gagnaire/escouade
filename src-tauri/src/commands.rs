@@ -381,7 +381,7 @@ pub async fn git_push(core: CoreState<'_>, project_id: String) -> Res<String> {
 
 #[tauri::command(async)]
 pub fn stats(core: CoreState, range: String) -> StatsView {
-    core.stats.query(&range)
+    core.stats_view(&range)
 }
 
 #[tauri::command]

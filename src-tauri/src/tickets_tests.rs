@@ -4704,3 +4704,75 @@ async fn a_validation_holds_off_a_restart_until_its_cleanup_is_over() {
         .count();
     assert_eq!(rest, 0, "at rest in {rest} of {} samples", cleaning.len());
 }
+
+#[tokio::test]
+async fn the_statistics_add_up_the_agents_of_a_ticket_archived_ones_included() {
+    let h = harness("tk-stats-cost");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Ajouter le login", &["Un"], 5))
+        .await
+        .unwrap();
+    let agent = |name: &str, ticket: Option<&Ticket>| {
+        let o = AgentOptions {
+            name: Some(name.into()),
+            ticket_id: ticket.map(|t| t.id.clone()),
+            ..Default::default()
+        };
+        h.core.create_agent_with(&p.id, o)
+    };
+    let first = agent("premier", Some(&t)).await.unwrap().meta.id;
+    let second = agent("reprise", Some(&t)).await.unwrap().meta.id;
+    let free = agent("libre", None).await.unwrap().meta.id;
+    // The first agent was archived when the ticket went on with another one.
+    h.core.archive_agent(&first, true).await.unwrap();
+    // Its loops: counted, else the one it is in (a ticket saved before they were counted).
+    h.core
+        .edit_ticket(&t.id, |t| {
+            t.loops = 0;
+            t.iteration = 2;
+            Ok(())
+        })
+        .unwrap();
+    let turn = |id: &str, cost: f64| {
+        let row = crate::agent::TurnRow {
+            model: "claude-sonnet-5".into(),
+            input: 10,
+            cache: 0,
+            output: 5,
+            cost,
+        };
+        h.core.stats.record_turns(id, &p.id, &[row]);
+    };
+    turn(&first, 1.0);
+    turn(&second, 0.5);
+    turn(&free, 4.0);
+
+    let v = h.core.stats_view("day");
+    let agents: Vec<_> = v
+        .by_agent
+        .iter()
+        .map(|a| (a.name.as_deref(), a.cost))
+        .collect();
+    assert_eq!(
+        agents,
+        [
+            (Some("libre"), 4.0),
+            (Some("premier"), 1.0),
+            (Some("reprise"), 0.5)
+        ]
+    );
+    assert_eq!(v.by_ticket.len(), 1);
+    let line = &v.by_ticket[0];
+    assert_eq!(
+        (
+            line.key.as_str(),
+            line.title.as_str(),
+            line.loops,
+            line.cost
+        ),
+        ("DEM-1", "Ajouter le login", 2, 1.5)
+    );
+}

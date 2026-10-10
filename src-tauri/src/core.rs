@@ -15,7 +15,7 @@ use crate::notify;
 use crate::paths::{self, DataDir};
 use crate::pty::{PtyManager, ShellInfo};
 use crate::resources;
-use crate::stats::Stats;
+use crate::stats::{AgentLabel, Labels, Stats, StatsView, TicketLabel};
 use crate::testlaunch;
 use crate::usage;
 use crate::worktrees::{self, RunSuggestion, WorktreeSuggestion};
@@ -946,6 +946,42 @@ impl<R: Runtime> Core<R> {
         };
         let deadline = Instant::now() + convsearch::TIME_LIMIT;
         convsearch::search(&self.data.conversations(), &agents, &q, deadline, &stale)
+    }
+
+    /// The statistics of a period, with the agents and tickets named. Every agent counts, archived
+    /// ones too: they keep their ticket, so a ticket sent back and taken up by another agent adds
+    /// up both.
+    pub fn stats_view(&self, range: &str) -> StatsView {
+        let agents = self
+            .agents
+            .read()
+            .values()
+            .map(|h| {
+                let rt = h.lock();
+                let m = &rt.meta;
+                let label = AgentLabel {
+                    name: m.name.clone(),
+                    ticket_id: m.ticket_id.clone(),
+                };
+                (m.id.clone(), label)
+            })
+            .collect();
+        // Taken after the agents are released: neither lock is held with the other.
+        let tickets = self
+            .tickets
+            .read()
+            .iter()
+            .map(|t| {
+                let label = TicketLabel {
+                    key: t.key.clone(),
+                    title: t.title.clone(),
+                    // As the card of a finished ticket counts them.
+                    loops: if t.loops > 0 { t.loops } else { t.iteration },
+                };
+                (t.id.clone(), label)
+            })
+            .collect();
+        self.stats.query(range, &Labels { agents, tickets })
     }
 
     pub(crate) fn project_agents(&self, project_id: &str) -> Vec<AgentHandle> {

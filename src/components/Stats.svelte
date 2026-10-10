@@ -1,10 +1,10 @@
 <script lang="ts">
   import { readPref, writePref } from '../lib/prefs';
-  import { fDate, fInt, fTok, fUsd } from '../lib/format';
+  import { fDate, fInt, fTok, fUsd, plural } from '../lib/format';
   import { api } from '../lib/ipc';
   import { displayModel } from '../lib/models';
   import { app } from '../lib/state.svelte';
-  import { kpis, niceMax, type Range } from '../lib/stats';
+  import { kpis, niceMax, ROWS, shown, type Range } from '../lib/stats';
   import type { Bucket, StatsView } from '../lib/types';
 
   // Categorical palette validated for the dark surface (dataviz validator: all checks pass).
@@ -19,6 +19,9 @@
   let table = $state(false);
   let hover = $state<number | null>(null);
   let error = $state<string | null>(null);
+  /** « Tout voir » opened the whole list of agents, of tickets (20 lines each until then). */
+  let allAgents = $state(false);
+  let allTickets = $state(false);
   let loadTimer: ReturnType<typeof setTimeout> | undefined;
 
   $effect(() => {
@@ -204,6 +207,65 @@
           {/each}
         </section>
       </div>
+
+      <section class="card">
+        <span class="ct" id="stats-agents">Par agent</span>
+        {#if view.byAgent.length}
+          <table class="list" aria-labelledby="stats-agents">
+            <thead>
+              <tr><th class="w-name">Agent</th><th class="w-proj">Projet</th><th class="num">Tokens</th><th class="num">Coût</th></tr>
+            </thead>
+            <tbody>
+              {#each shown(view.byAgent, allAgents) as a (a.agentId)}
+                {@const p = projectOf(a.projectId)}
+                <tr>
+                  <td class="cut strong" title={a.name ?? undefined}>{a.name ?? 'Agent supprimé'}</td>
+                  <td class="cut"><span class="psw" style:background={p.color}></span>{p.name}</td>
+                  <td class="num mono">{fTok(a.tokens)}</td>
+                  <td class="num mono">{fUsd(a.cost)}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+          {#if view.byAgent.length > ROWS}
+            <div class="more">
+              <button class="btn ghost small" onclick={() => (allAgents = !allAgents)}>{allAgents ? 'Réduire' : 'Tout voir'}</button>
+              {#if !allAgents}<span class="none">{ROWS} sur {view.byAgent.length}</span>{/if}
+            </div>
+          {/if}
+        {:else}
+          <span class="none">Aucune donnée sur la période.</span>
+        {/if}
+      </section>
+
+      <section class="card">
+        <span class="ct" id="stats-tickets">Par ticket</span>
+        {#if view.byTicket.length}
+          <table class="list" aria-labelledby="stats-tickets">
+            <thead>
+              <tr><th class="w-key">Ticket</th><th>Titre</th><th class="num w-loops">Boucles</th><th class="num">Coût</th></tr>
+            </thead>
+            <tbody>
+              {#each shown(view.byTicket, allTickets) as t (t.id)}
+                <tr>
+                  <td class="mono">{t.key}</td>
+                  <td class="cut strong" title={t.title}>{t.title}</td>
+                  <td class="num">{plural(t.loops, 'boucle', 'boucles')}</td>
+                  <td class="num mono">{fUsd(t.cost)}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+          {#if view.byTicket.length > ROWS}
+            <div class="more">
+              <button class="btn ghost small" onclick={() => (allTickets = !allTickets)}>{allTickets ? 'Réduire' : 'Tout voir'}</button>
+              {#if !allTickets}<span class="none">{ROWS} sur {view.byTicket.length}</span>{/if}
+            </div>
+          {/if}
+        {:else}
+          <span class="none">Aucun ticket sur la période.</span>
+        {/if}
+      </section>
     {:else if error}
       <div class="loading">Statistiques indisponibles : {error}</div>
     {:else}
@@ -462,6 +524,60 @@
   .tbl th {
     color: var(--muted);
     font-weight: 600;
+  }
+  /* The lists of agents and of tickets: names are cut, never wrapped, so that a line stays a line. */
+  .list {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 12.5px;
+  }
+  .list th,
+  .list td {
+    padding: 6px 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--line);
+  }
+  .list th {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  .list .num {
+    width: 90px;
+    text-align: right;
+  }
+  .list .w-name {
+    width: 34%;
+  }
+  .list .w-proj {
+    width: 26%;
+  }
+  .list .w-key {
+    width: 84px;
+  }
+  .list .w-loops {
+    width: 110px;
+  }
+  .list td.num {
+    font-size: 11.5px;
+  }
+  .list .cut {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .list .strong {
+    font-weight: 600;
+  }
+  .list .psw {
+    display: inline-block;
+    margin-right: 8px;
+  }
+  .more {
+    display: flex;
+    align-items: center;
+    gap: 12px;
   }
   .split {
     display: grid;

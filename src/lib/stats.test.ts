@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { kpis, niceMax } from './stats';
+import { kpis, niceMax, shown } from './stats';
 import type { StatsView } from './types';
 
 const view = (over: Partial<StatsView>): StatsView => ({
@@ -13,6 +13,8 @@ const view = (over: Partial<StatsView>): StatsView => ({
   prompts: 0,
   byProject: [],
   byModel: [],
+  byAgent: [],
+  byTicket: [],
   ...over,
 });
 
@@ -54,4 +56,18 @@ describe('niceMax', () => {
     [9.1e6, 1e7],
     [1e6, 1e6],
   ])('%d → %d', (max, want) => expect(niceMax(max)).toBe(want));
+});
+
+describe('shown', () => {
+  const list = Array.from({ length: 25 }, (_, i) => i);
+
+  it('keeps the first 20 lines until everything is asked for', () => {
+    expect(shown(list, false)).toEqual(list.slice(0, 20));
+    expect(shown(list, true)).toEqual(list);
+  });
+
+  it('keeps a short list whole', () => {
+    expect(shown(list.slice(0, 20), false)).toHaveLength(20);
+    expect(shown([], false)).toEqual([]);
+  });
 });
