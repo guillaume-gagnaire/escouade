@@ -872,19 +872,20 @@ impl<R: Runtime> Core<R> {
         let Ok(project) = self.project(&t.project_id) else {
             return Vec::new();
         };
+        let lang = self.lang().claude;
         let mut ops = Vec::new();
         match change {
             Change::Column(column) => {
                 ops.extend(self.state_op(&project, ext, column));
                 if project.integrations.comments.contains(&column) {
                     ops.push(SyncOp::Comment {
-                        text: column_comment(t, column, Some(&self.branch_of_ticket(t))),
+                        text: column_comment(lang, t, column, Some(&self.branch_of_ticket(t))),
                     });
                 }
             }
             Change::Loop if self.settings.read().integrations.loop_comments => {
                 ops.push(SyncOp::Comment {
-                    text: loop_comment(t),
+                    text: loop_comment(lang, t),
                 })
             }
             Change::Loop => {}

@@ -3,6 +3,7 @@
 //! writes.
 
 use crate::core::slugify;
+use crate::i18n::Lang;
 use crate::model::{Column, ExternalState, Ticket};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -333,31 +334,73 @@ fn criteria_lines(t: &Ticket) -> String {
 }
 
 /// What the sync writes on the external ticket when its ticket comes into `column` (`branch`: its
-/// agent's, once it has one).
-pub fn column_comment(t: &Ticket, column: Column, branch: Option<&str>) -> String {
+/// agent's, once it has one), in `lang` (the language of the texts for Claude: what is published
+/// for the team). The outcome of a ticket done is quoted as it was written.
+pub fn column_comment(lang: Lang, t: &Ticket, column: Column, branch: Option<&str>) -> String {
     let key = &t.key;
     match column {
-        Column::Todo => format!("Escouade : {key} est revenu « À faire »."),
+        Column::Todo => tr_in!(
+            lang,
+            "Escouade : {key} est revenu « À faire ».",
+            "Escouade: {key} is back in “To do”."
+        ),
         Column::Doing => match branch {
-            Some(b) => format!("Escouade : {key} est pris par un agent (branche {b})."),
-            None => format!("Escouade : {key} est pris par un agent."),
+            Some(b) => tr_in!(
+                lang,
+                "Escouade : {key} est pris par un agent (branche {b}).",
+                "Escouade: {key} is picked up by an agent (branch {b})."
+            ),
+            None => tr_in!(
+                lang,
+                "Escouade : {key} est pris par un agent.",
+                "Escouade: {key} is picked up by an agent."
+            ),
         },
         Column::Review => {
-            let partial = if t.partial { " (objectif partiel)" } else { "" };
-            let mut s = format!("Escouade : {key} est prêt à tester{partial}.");
+            let mut s = if t.partial {
+                tr_in!(
+                    lang,
+                    "Escouade : {key} est prêt à tester (objectif partiel).",
+                    "Escouade: {key} is ready to review (partial goal)."
+                )
+            } else {
+                tr_in!(
+                    lang,
+                    "Escouade : {key} est prêt à tester.",
+                    "Escouade: {key} is ready to review."
+                )
+            };
             if !t.criteria.is_empty() {
-                s.push_str(&format!("\n\nCritères :\n{}", criteria_lines(t)));
+                let lines = criteria_lines(t);
+                s.push_str(&tr_in!(
+                    lang,
+                    "\n\nCritères :\n{lines}",
+                    "\n\nCriteria:\n{lines}"
+                ));
             }
             if !t.progress.is_empty() {
                 let done: Vec<String> = t.progress.iter().map(|p| format!("- {p}")).collect();
-                s.push_str(&format!("\n\nCe qui a été fait :\n{}", done.join("\n")));
+                let done = done.join("\n");
+                s.push_str(&tr_in!(
+                    lang,
+                    "\n\nCe qui a été fait :\n{done}",
+                    "\n\nWhat was done:\n{done}"
+                ));
             }
             s
         }
         Column::Done => {
             let mut s = match t.outcome.as_deref().filter(|o| !o.is_empty()) {
-                Some(o) => format!("Escouade : {key} est terminé — {o}"),
-                None => format!("Escouade : {key} est terminé."),
+                Some(o) => tr_in!(
+                    lang,
+                    "Escouade : {key} est terminé — {o}",
+                    "Escouade: {key} is done — {o}"
+                ),
+                None => tr_in!(
+                    lang,
+                    "Escouade : {key} est terminé.",
+                    "Escouade: {key} is done."
+                ),
             };
             if let Some(url) = t.outcome_url.as_deref().filter(|u| !u.is_empty()) {
                 s.push_str(&format!("\n{url}"));
@@ -367,16 +410,18 @@ pub fn column_comment(t: &Ticket, column: Column, branch: Option<&str>) -> Strin
     }
 }
 
-/// What "Publier un résumé à chaque boucle" writes when the ticket begins a loop.
-pub fn loop_comment(t: &Ticket) -> String {
+/// What "Publier un résumé à chaque boucle" writes when the ticket begins a loop, in `lang`.
+pub fn loop_comment(lang: Lang, t: &Ticket) -> String {
     let met = t.criteria.iter().filter(|c| c.ok).count();
-    format!(
-        "Escouade : {}, boucle {}/{} — {met}/{} critères atteints.\n\n{}",
-        t.key,
-        t.iteration,
-        t.max_loops,
-        t.criteria.len(),
-        criteria_lines(t)
+    tr_in!(
+        lang,
+        "Escouade : {key}, boucle {i}/{max} — {met}/{n} critères atteints.\n\n{lines}",
+        "Escouade: {key}, loop {i}/{max} — {met}/{n} criteria met.\n\n{lines}",
+        key = t.key,
+        i = t.iteration,
+        max = t.max_loops,
+        n = t.criteria.len(),
+        lines = criteria_lines(t)
     )
 }
 
@@ -573,31 +618,31 @@ mod tests {
     fn each_column_has_its_comment() {
         let mut t = ticket();
         assert_eq!(
-            column_comment(&t, Column::Doing, Some("ticket/esc-12")),
+            column_comment(Lang::Fr, &t, Column::Doing, Some("ticket/esc-12")),
             "Escouade : ESC-12 est pris par un agent (branche ticket/esc-12)."
         );
         assert_eq!(
-            column_comment(&t, Column::Review, None),
+            column_comment(Lang::Fr, &t, Column::Review, None),
             "Escouade : ESC-12 est prêt à tester.\n\n\
              Critères :\n✓ Blocage après 5 essais\n○ Tests verts — reste un test\n\n\
              Ce qui a été fait :\n- Compteur en base\n- Message d'erreur"
         );
         t.partial = true;
-        assert!(column_comment(&t, Column::Review, None)
+        assert!(column_comment(Lang::Fr, &t, Column::Review, None)
             .starts_with("Escouade : ESC-12 est prêt à tester (objectif partiel)."));
         t.outcome = Some("⇡ PR #12 → main".into());
         t.outcome_url = Some("https://github.com/acme/api/pull/12".into());
         assert_eq!(
-            column_comment(&t, Column::Done, None),
+            column_comment(Lang::Fr, &t, Column::Done, None),
             "Escouade : ESC-12 est terminé — ⇡ PR #12 → main\nhttps://github.com/acme/api/pull/12"
         );
         t.outcome_url = None;
         assert_eq!(
-            column_comment(&t, Column::Done, None),
+            column_comment(Lang::Fr, &t, Column::Done, None),
             "Escouade : ESC-12 est terminé — ⇡ PR #12 → main"
         );
         assert_eq!(
-            column_comment(&t, Column::Todo, None),
+            column_comment(Lang::Fr, &t, Column::Todo, None),
             "Escouade : ESC-12 est revenu « À faire »."
         );
     }
@@ -605,9 +650,66 @@ mod tests {
     #[test]
     fn a_loop_summary_counts_the_criteria_met() {
         assert_eq!(
-            loop_comment(&ticket()),
+            loop_comment(Lang::Fr, &ticket()),
             "Escouade : ESC-12, boucle 2/5 — 1/2 critères atteints.\n\n\
              ✓ Blocage après 5 essais\n○ Tests verts — reste un test"
         );
+    }
+
+    #[test]
+    fn the_comments_published_read_in_english() {
+        use crate::i18n::check::french_in;
+        use Lang::En;
+        let mut t = Ticket {
+            title: "Limit the retries".into(),
+            criteria: vec![
+                Criterion {
+                    text: "Blocked after 5 tries".into(),
+                    ok: true,
+                    note: String::new(),
+                },
+                Criterion {
+                    text: "Tests pass".into(),
+                    ok: false,
+                    note: "one test left".into(),
+                },
+            ],
+            progress: vec!["Counter in the database".into(), "Error message".into()],
+            ..ticket()
+        };
+        let mut said = vec![
+            column_comment(En, &t, Column::Todo, None),
+            column_comment(En, &t, Column::Doing, Some("ticket/esc-12")),
+            column_comment(En, &t, Column::Doing, None),
+            column_comment(En, &t, Column::Review, None),
+        ];
+        t.partial = true;
+        said.push(column_comment(En, &t, Column::Review, None));
+        said.push(column_comment(En, &t, Column::Done, None));
+        t.outcome = Some("⇡ Pushed to ticket/esc-12".into());
+        t.outcome_url = Some("https://github.com/acme/api/pull/12".into());
+        said.push(column_comment(En, &t, Column::Done, None));
+        said.push(loop_comment(En, &t));
+        assert_eq!(
+            said,
+            [
+                "Escouade: ESC-12 is back in “To do”.",
+                "Escouade: ESC-12 is picked up by an agent (branch ticket/esc-12).",
+                "Escouade: ESC-12 is picked up by an agent.",
+                "Escouade: ESC-12 is ready to review.\n\n\
+                 Criteria:\n✓ Blocked after 5 tries\n○ Tests pass — one test left\n\n\
+                 What was done:\n- Counter in the database\n- Error message",
+                "Escouade: ESC-12 is ready to review (partial goal).\n\n\
+                 Criteria:\n✓ Blocked after 5 tries\n○ Tests pass — one test left\n\n\
+                 What was done:\n- Counter in the database\n- Error message",
+                "Escouade: ESC-12 is done.",
+                "Escouade: ESC-12 is done — ⇡ Pushed to ticket/esc-12\nhttps://github.com/acme/api/pull/12",
+                "Escouade: ESC-12, loop 2/5 — 1/2 criteria met.\n\n\
+                 ✓ Blocked after 5 tries\n○ Tests pass — one test left",
+            ]
+        );
+        for s in &said {
+            assert_eq!(french_in(s), None, "{s}");
+        }
     }
 }
