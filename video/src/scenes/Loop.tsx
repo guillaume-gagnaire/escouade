@@ -2,7 +2,8 @@ import type { FC } from 'react';
 import { useCurrentFrame, useVideoConfig } from 'remotion';
 import { pop, ramp } from '../anim';
 import { useCues } from '../cues';
-import { STATUS, TABS } from '../data';
+import { TABS, useDemo } from '../data';
+import { useFmt } from '../lang';
 import { C, MONO } from '../theme';
 import type { Ticket } from '../ui/Board';
 import { AssistantMsg, Conversation, ConvHeader, CriteriaReport, Diffstat, ToolCall, UserMsg, Working } from '../ui/Chat';
@@ -12,23 +13,24 @@ import { Shell } from '../ui/Shell';
 import { AgentsSidebar } from '../ui/Sidebar';
 import { AppWindow, camPath, Spotlight, Stage, Title } from '../ui/Stage';
 import { WinToast } from '../ui/Toast';
-import { AGENT_CSV, AGENT_LOGIN, boardAgents, BoardView, CRITERIA, CSV, DONE, LOGIN, PROGRESS } from './boardCommon';
-
-const BLOCKED = "Erreur : Claude Code s'est arrêté (code 1)";
-
-const FACTS: [string, string][] = [
-  ['agent', 'dem-6-limiter-les-tentatives-de'],
-  ['branche', 'ticket/dem-6'],
-  ['worktree', '.claude/worktrees/dem-6'],
-  ['copiés', '.env  .env.local'],
-  ['ports', '4100 → 4109'],
-];
+import { BoardView, placesText, useBoard } from './boardCommon';
 
 /** The ticket's own worktree and ports; its agent loops on its criteria; a blocked ticket resumes; its report in the conversation. */
 export const Loop: FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const c = useCues();
+  const { tr, tok, usd } = useFmt();
+  const { status: STATUS } = useDemo();
+  const { AGENT_CSV, AGENT_LOGIN, boardAgents, CRITERIA, CSV, DONE, LOGIN, PROGRESS } = useBoard();
+  const BLOCKED = tr("Erreur : Claude Code s'est arrêté (code 1)", 'Error: Claude Code stopped (code 1)');
+  const FACTS: [string, string][] = [
+    ['agent', AGENT_LOGIN],
+    [tr('branche', 'branch'), 'ticket/dem-6'],
+    ['worktree', '.claude/worktrees/dem-6'],
+    [tr('copiés', 'copied'), '.env  .env.local'],
+    ['ports', '4100 → 4109'],
+  ];
   const factAt = [
     c.word('setup', 'agent'),
     c.word('setup', 'branche'),
@@ -47,12 +49,12 @@ export const Loop: FC = () => {
   const progress = PROGRESS.slice(0, frame < loop2 ? 1 : frame < c.word('card', 'place') ? 2 : 4);
   const activity =
     frame < c.at('loop')
-      ? 'Lit src/auth/login.ts'
+      ? tr('Lit src/auth/login.ts', 'Reads src/auth/login.ts')
       : frame < loop2
-        ? 'Lance npm test'
+        ? tr('Lance npm test', 'Runs npm test')
         : frame < c.word('card', 'moment')
-          ? 'Modifie src/auth/limiter.ts'
-          : 'Lance npm test -- limiter';
+          ? tr('Modifie src/auth/limiter.ts', 'Edits src/auth/limiter.ts')
+          : tr('Lance npm test -- limiter', 'Runs npm test -- limiter');
   const login: Ticket = {
     ...LOGIN,
     column: 'doing',
@@ -69,7 +71,7 @@ export const Loop: FC = () => {
     loop: [1, 5],
     criteria: CSV.criteria!.map((x, i) => ({ ...x, ok: i === 0 })),
     progress: ['Route GET /invoices.csv'],
-    activity: frame >= resume ? 'Lance npm test' : 'Lit src/billing/invoices.ts',
+    activity: frame >= resume ? tr('Lance npm test', 'Runs npm test') : tr('Lit src/billing/invoices.ts', 'Reads src/billing/invoices.ts'),
     blocked: blocked ? BLOCKED : undefined,
     agent: { name: AGENT_CSV, status: blocked ? 'error' : 'running' },
     pressed: { resume: ramp(frame, resume - 3, 3) - ramp(frame, resume + 3, 4) },
@@ -92,8 +94,14 @@ export const Loop: FC = () => {
               badge={undefined}
               selected={report ? AGENT_LOGIN : undefined}
               agents={boardAgents([
-                { name: AGENT_CSV, tag: 'DEM-5 · boucle 1/5', status: blocked ? 'error' : 'running' },
-                { name: AGENT_LOGIN, tag: `DEM-6 · boucle ${frame >= c.word('report', 'latérale') ? 3 : frame < loop2 ? 1 : 2}/5` },
+                { name: AGENT_CSV, tag: tr('DEM-5 · boucle 1/5', 'DEM-5 · loop 1/5'), status: blocked ? 'error' : 'running' },
+                {
+                  name: AGENT_LOGIN,
+                  tag: tr(
+                    `DEM-6 · boucle ${frame >= c.word('report', 'latérale') ? 3 : frame < loop2 ? 1 : 2}/5`,
+                    `DEM-6 · loop ${frame >= c.word('report', 'latérale') ? 3 : frame < loop2 ? 1 : 2}/5`,
+                  ),
+                },
               ])}
             />
           }
@@ -159,38 +167,46 @@ export const Loop: FC = () => {
                 name={AGENT_LOGIN}
                 status="running"
                 sub="demo-api / ticket/dem-6"
-                metrics={{ model: 'Opus 5.5', tokens: '61 k', cost: '≈ 0,84 $', files: 4, duration: '6m 12s' }}
+                metrics={{ model: 'Opus 5.5', tokens: tok(61), cost: `≈ ${usd(0.84)}`, files: 4, duration: '6m 12s' }}
               />
               <Conversation>
                 <ToolCall tool="Edit" target="src/auth/limiter.ts" meta={<Diffstat add={64} del={0} />} />
                 <ToolCall tool="Bash" target="npm test -- limiter" meta={<span style={{ fontSize: 13, color: C.muted }}>9 tests</span>} />
-                <AssistantMsg text="Le limiteur bloque bien au sixième essai, avec un message qui dit quand réessayer.">
+                <AssistantMsg
+                  text={tr(
+                    'Le limiteur bloque bien au sixième essai, avec un message qui dit quand réessayer.',
+                    'The limiter does block on the sixth try, with a message that says when to retry.',
+                  )}
+                >
                   <CriteriaReport
                     criteria={[
-                      { text: CRITERIA[0], ok: true, note: 'vérifié par tests/limiter.test.ts' },
-                      { text: CRITERIA[1], ok: true, note: '« Réessaie dans 15 min »' },
-                      { text: CRITERIA[2], ok: false, note: 'un test d’intégration échoue encore' },
+                      { text: CRITERIA[0], ok: true, note: tr('vérifié par tests/limiter.test.ts', 'verified by tests/limiter.test.ts') },
+                      { text: CRITERIA[1], ok: true, note: tr('« Réessaie dans 15 min »', '“Try again in 15 min”') },
+                      { text: CRITERIA[2], ok: false, note: tr('un test d’intégration échoue encore', 'an integration test still fails') },
                     ]}
                     progress={PROGRESS}
                     enter={pop(frame, fps, c.word('report', 'bilan') - 6)}
                   />
                 </AssistantMsg>
                 <UserMsg
-                  text="Boucle 3/5. Critères non atteints : 3 (un test d'intégration échoue encore). Continue jusqu'à les atteindre, puis termine par le bilan."
+                  text={tr(
+                    "Boucle 3/5. Critères non atteints : 3 (un test d'intégration échoue encore). Continue jusqu'à les atteindre, puis termine par le bilan.",
+                    'Loop 3/5. Criteria not met: 3 (an integration test still fails). Keep going until you meet them, then finish with the report.',
+                  )}
                   enter={pop(frame, fps, c.word('report', 'latérale'))}
                 />
                 <Working />
               </Conversation>
-              <Composer placeholder={`Envoyer un message à ${AGENT_LOGIN}…`} busy />
+              <Composer placeholder={tr(`Envoyer un message à ${AGENT_LOGIN}…`, `Send a message to ${AGENT_LOGIN}…`)} busy />
             </>
           ) : (
-            <BoardView tickets={[csv, login, ...DONE]} autopilot places={free ? '1 place libre' : 'Toutes les places sont prises'} />
+            <BoardView tickets={[csv, login, ...DONE]} autopilot places={placesText(tr, free)} />
           )}
         </Shell>
       </AppWindow>
       <WinToast
         title="demo-api"
-        body={`DEM-5 bloqué : ${BLOCKED}`}
+        body={tr(`DEM-5 bloqué : ${BLOCKED}`, `DEM-5 blocked: ${BLOCKED}`)}
         enter={pop(frame, fps, c.word('blocked', 'prévient'), 16) - ramp(frame, resume, 10)}
       />
     </Stage>

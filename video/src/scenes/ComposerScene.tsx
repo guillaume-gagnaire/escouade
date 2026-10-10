@@ -2,7 +2,8 @@ import type { FC } from 'react';
 import { useCurrentFrame, useVideoConfig } from 'remotion';
 import { pop, ramp, typed } from '../anim';
 import { useCues } from '../cues';
-import { AGENTS, onSonnet, STATUS, TABS } from '../data';
+import { onSonnet, TABS, useDemo } from '../data';
+import { useFmt } from '../lang';
 import { C } from '../theme';
 import { AssistantMsg, Conversation, ConvHeader, Diffstat, ToolCall, TurnCard, UserMsg } from '../ui/Chat';
 import { Composer, Suggestions, type Attachment, type Menu } from '../ui/Composer';
@@ -22,6 +23,8 @@ export const ComposerScene: FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const c = useCues();
+  const { tr, tok, usd, pick } = useFmt();
+  const { agents: AGENTS, status: STATUS } = useDemo();
   const w = (word: string, nth = 0) => c.word('menus', word, nth);
   const fable = w('fable');
   const menu: { which: Menu; pick: number; current: number } | undefined =
@@ -43,11 +46,11 @@ export const ComposerScene: FC = () => {
   const picked = frame >= c.end('menus') + 4;
   const a = (word: string, nth = 0) => c.word('attach', word, nth);
   const attachments: Attachment[] = [
-    ...(frame >= a('image') ? [{ name: 'capture.png', kind: 'image' as const }] : []),
-    ...(frame >= a('pdf') ? [{ name: 'maquette.pdf', kind: 'pdf' as const }] : []),
+    ...(frame >= a('image') ? [{ name: tr('capture.png', 'screenshot.png'), kind: 'image' as const }] : []),
+    ...(frame >= a('pdf') ? [{ name: tr('maquette.pdf', 'mockup.pdf'), kind: 'pdf' as const }] : []),
     ...(frame >= a('fichier') ? [{ name: 'notes.md', kind: 'text' as const }] : []),
   ];
-  const mention = 'Reprends la maquette pour @src/rou';
+  const mention = tr('Reprends la maquette pour @src/rou', 'Rework the mockup for @src/rou');
   const text =
     frame >= a('slash') - 4
       ? typed('/rev', frame, fps, a('slash') - 4, 10)
@@ -63,10 +66,13 @@ export const ComposerScene: FC = () => {
     frame >= a('slash') ? (
       <Suggestions
         items={[
-          { label: '/review', detail: 'Relit les changements de la branche' },
-          { label: '/compact', detail: 'Résume la conversation pour libérer du contexte' },
-          { label: '/init', detail: 'Crée un CLAUDE.md pour le projet' },
-          { label: '/pr-comments', detail: 'Lit les commentaires d’une pull request' },
+          { label: '/review', detail: tr('Relit les changements de la branche', 'Reviews the branch’s changes') },
+          {
+            label: '/compact',
+            detail: tr('Résume la conversation pour libérer du contexte', 'Summarizes the conversation to free up context'),
+          },
+          { label: '/init', detail: tr('Crée un CLAUDE.md pour le projet', 'Creates a CLAUDE.md for the project') },
+          { label: '/pr-comments', detail: tr('Lit les commentaires d’une pull request', 'Reads a pull request’s comments') },
         ]}
       />
     ) : frame >= a('arobase') - 8 && frame < c.end('attach') + 10 ? (
@@ -105,8 +111,8 @@ export const ComposerScene: FC = () => {
               <PointerPath
                 keys={[
                   [c.word('done', 'clic') - 20, 700, 600],
-                  [c.word('done', 'revoir'), 458, 636, true],
-                  [c.word('done', 'commit') - 2, 574, 636, true],
+                  [c.word('done', 'revoir'), pick(458, 432), 636, true],
+                  [c.word('done', 'commit') - 2, pick(574, 533), 636, true],
                 ]}
               />
             </>
@@ -117,20 +123,23 @@ export const ComposerScene: FC = () => {
             status={frame >= done ? 'done' : 'running'}
             sub="demo-api / escouade/pagination-users"
             test="prepare"
-            metrics={{ model: picked ? 'Opus 5.5' : 'Sonnet 5.5', tokens: '24,8 k', cost: '0,27 $', files: 3, duration: '4m 02s' }}
+            metrics={{ model: picked ? 'Opus 5.5' : 'Sonnet 5.5', tokens: tok(24.8, 1), cost: usd(0.27), files: 3, duration: '4m 02s' }}
           />
           <Conversation>
-            <UserMsg text="Et ajoute un test pour la dernière page." />
+            <UserMsg text={tr('Et ajoute un test pour la dernière page.', 'And add a test for the last page.')} />
             <ToolCall tool="Edit" target="tests/users.test.ts" meta={<Diffstat add={37} del={2} />} />
             <ToolCall tool="Bash" target="npm test" meta={<span style={{ fontSize: 13, color: C.muted }}>43 tests</span>} />
             <AssistantMsg
-              text="C'est fait : la pagination de `/users` est en place, avec ses tests, et la doc de l'API est à jour."
+              text={tr(
+                "C'est fait : la pagination de `/users` est en place, avec ses tests, et la doc de l'API est à jour.",
+                'Done: pagination for `/users` is in place, with its tests, and the API docs are up to date.',
+              )}
               enter={frame >= done ? 1 : 1}
             />
             <TurnCard
               duration="4m 02s"
-              tokens="24,8 k"
-              cost="0,27 $"
+              tokens={tok(24.8, 1)}
+              cost={usd(0.27)}
               files={FILES}
               enter={pop(frame, fps, done)}
               pressed={{
@@ -141,7 +150,7 @@ export const ComposerScene: FC = () => {
           </Conversation>
           <Composer
             text={frame < done ? text : ''}
-            placeholder="Envoyer un message à pagination-users…"
+            placeholder={tr('Envoyer un message à pagination-users…', 'Send a message to pagination-users…')}
             model={picked ? 'Opus 5.5' : 'Sonnet 5.5'}
             menu={menu}
             flash={{ model: picked ? ramp(frame, c.end('menus') + 4, 4) - ramp(frame, c.end('menus') + 16, 10) : 0 }}

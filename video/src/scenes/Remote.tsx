@@ -2,7 +2,8 @@ import type { FC } from 'react';
 import { useCurrentFrame, useVideoConfig } from 'remotion';
 import { pop, ramp, typed } from '../anim';
 import { useCues } from '../cues';
-import { AGENTS, STATUS, TABS } from '../data';
+import { TABS, useDemo } from '../data';
+import { useFmt } from '../lang';
 import { C } from '../theme';
 import { AssistantMsg, Conversation, ConvHeader, UserMsg, Working } from '../ui/Chat';
 import { Composer } from '../ui/Composer';
@@ -13,15 +14,17 @@ import { Phone } from '../ui/Phone';
 import { Shell } from '../ui/Shell';
 import { AgentsSidebar } from '../ui/Sidebar';
 import { AppWindow, Stage, Title } from '../ui/Stage';
-
-const ASK = "J'ai fini la refacto de l'auth. Je lance les tests ?";
-const REPLY = 'Oui, et ajoute les tests Firefox';
+import { agentMenu } from './common';
 
 /** Remote control from the agent's menu; the same session on a phone; a message sent from it shows up in the app. */
 export const Remote: FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const c = useCues();
+  const { tr, tok, usd } = useFmt();
+  const { agents: AGENTS, status: STATUS, refactor } = useDemo();
+  const ASK = tr("J'ai fini la refacto de l'auth. Je lance les tests ?", 'I’ve finished the auth refactor. Shall I run the tests?');
+  const REPLY = tr('Oui, et ajoute les tests Firefox', 'Yes, and add the Firefox tests');
   const menuAt = c.at('enable') + 30;
   const enabled = c.word('enable', 'active') + 6;
   const slideAt = c.word('enable', 'session');
@@ -39,7 +42,7 @@ export const Remote: FC = () => {
           sidebar={
             <AgentsSidebar
               agents={AGENTS.slice(0, 4).map((a) =>
-                a.name === 'refacto-auth'
+                a.name === refactor
                   ? {
                       ...a,
                       status: frame >= arrived ? ('running' as const) : ('done' as const),
@@ -47,7 +50,7 @@ export const Remote: FC = () => {
                     }
                   : a,
               )}
-              selected="refacto-auth"
+              selected={refactor}
             />
           }
           overlay={
@@ -57,18 +60,13 @@ export const Remote: FC = () => {
                 y={200}
                 enter={frame >= menuAt && frame < enabled ? 1 : 0}
                 hover={frame >= enabled - 14 ? 4 : undefined}
-                items={[
-                  'Renommer',
-                  { label: 'Archiver', hint: 'garde la conversation' },
-                  'Ouvrir dans l’éditeur',
-                  null,
-                  { label: 'Activer le remote control', hint: 'claude.ai, mobile' },
-                  null,
-                  { label: 'Supprimer…', danger: true },
-                ]}
+                items={agentMenu(tr)}
               />
               <AppToast
-                text="refacto-auth est accessible depuis claude.ai et l’app Claude"
+                text={tr(
+                  `${refactor} est accessible depuis claude.ai et l’app Claude`,
+                  `${refactor} is reachable from claude.ai and the Claude app`,
+                )}
                 tone="ok"
                 enter={pop(frame, fps, enabled + 4, 14) - ramp(frame, enabled + 4 * fps, 12)}
               />
@@ -84,18 +82,23 @@ export const Remote: FC = () => {
           }
         >
           <ConvHeader
-            name="refacto-auth"
+            name={refactor}
             status={frame >= arrived ? 'running' : 'done'}
             sub="demo-api / main"
-            metrics={{ model: 'Opus 5.5', tokens: '214 k', cost: '2,86 $', files: 6, duration: '15m 02s' }}
+            metrics={{ model: 'Opus 5.5', tokens: tok(214), cost: usd(2.86), files: 6, duration: '15m 02s' }}
           />
           <Conversation>
-            <AssistantMsg text="La refacto est terminée : JWT en place, période de transition pour les sessions existantes." />
+            <AssistantMsg
+              text={tr(
+                'La refacto est terminée : JWT en place, période de transition pour les sessions existantes.',
+                'The refactor is done: JWT in place, with a transition period for existing sessions.',
+              )}
+            />
             <AssistantMsg text={ASK} avatar={false} />
-            <UserMsg text={REPLY} tag="depuis claude.ai" enter={pop(frame, fps, arrived)} />
+            <UserMsg text={REPLY} tag={tr('depuis claude.ai', 'from claude.ai')} enter={pop(frame, fps, arrived)} />
             {frame >= arrived ? <Working /> : null}
           </Conversation>
-          <Composer placeholder="Envoyer un message à refacto-auth…" busy={frame >= arrived} />
+          <Composer placeholder={tr(`Envoyer un message à ${refactor}…`, `Send a message to ${refactor}…`)} busy={frame >= arrived} />
         </Shell>
       </AppWindow>
       {frame >= sent && frame < arrived ? (

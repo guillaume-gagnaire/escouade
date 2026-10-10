@@ -2,7 +2,8 @@ import type { FC } from 'react';
 import { useCurrentFrame, useVideoConfig } from 'remotion';
 import { pop, ramp, typed } from '../anim';
 import { useCues } from '../cues';
-import { AGENTS, STATUS, TABS } from '../data';
+import { TABS, useDemo } from '../data';
+import { useFmt } from '../lang';
 import { C } from '../theme';
 import { AssistantMsg, Conversation, ConvHeader, QuestionCard, Working } from '../ui/Chat';
 import { Composer } from '../ui/Composer';
@@ -20,6 +21,8 @@ export const Notify: FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const c = useCues();
+  const { tr, tok, usd } = useFmt();
+  const { agents: AGENTS, status: STATUS, refactor } = useDemo();
   const asks = c.at('ask') + 10;
   const away = c.word('toast', 'arrière-plan') - 6;
   const toast = c.word('toast', 'notification');
@@ -58,7 +61,7 @@ export const Notify: FC = () => {
             sidebar={
               <AgentsSidebar
                 agents={agents}
-                selected={frame >= jumped ? 'tests-e2e' : 'refacto-auth'}
+                selected={frame >= jumped ? 'tests-e2e' : refactor}
                 alerts={waiting && frame < jumped ? { 'tests-e2e': C.wait } : undefined}
               />
             }
@@ -78,13 +81,13 @@ export const Notify: FC = () => {
                   name="tests-e2e"
                   status={waiting ? 'waiting' : 'running'}
                   sub="demo-api / main"
-                  metrics={{ model: 'Sonnet 5.5', tokens: '96 k', cost: '0,73 $', files: 3, duration: '8m 02s' }}
+                  metrics={{ model: 'Sonnet 5.5', tokens: tok(96), cost: usd(0.73), files: 3, duration: '8m 02s' }}
                 />
                 <Conversation>
-                  <AssistantMsg text="Les 18 scénarios passent sur Chrome." />
+                  <AssistantMsg text={tr('Les 18 scénarios passent sur Chrome.', 'All 18 scenarios pass on Chrome.')} />
                   <QuestionCard
-                    question="Je lance aussi les tests sur Firefox ?"
-                    options={['Oui', 'Non, Chrome suffit']}
+                    question={tr('Je lance aussi les tests sur Firefox ?', 'Shall I run the tests on Firefox too?')}
+                    options={[tr('Oui', 'Yes'), tr('Non, Chrome suffit', 'No, Chrome is enough')]}
                     picked={frame >= answered ? 0 : null}
                     cursor={
                       frame >= answered - 26 && frame < answered + 14
@@ -93,12 +96,23 @@ export const Notify: FC = () => {
                     }
                   />
                   {frame >= answered ? (
-                    <AssistantMsg text={typed('Je lance les 18 scénarios sur Firefox.', frame, fps, answered + 8)} />
+                    <AssistantMsg
+                      text={typed(
+                        tr('Je lance les 18 scénarios sur Firefox.', 'Running the 18 scenarios on Firefox.'),
+                        frame,
+                        fps,
+                        answered + 8,
+                      )}
+                    />
                   ) : null}
                   {frame >= answered ? <Working /> : null}
                 </Conversation>
                 <Composer
-                  placeholder={frame >= answered ? 'Envoyer un message à tests-e2e…' : 'Réponds à la question ou écris une réponse libre…'}
+                  placeholder={
+                    frame >= answered
+                      ? tr('Envoyer un message à tests-e2e…', 'Send a message to tests-e2e…')
+                      : tr('Réponds à la question ou écris une réponse libre…', 'Answer the question or write a free reply…')
+                  }
                   model="Sonnet 5.5"
                   waiting={waiting}
                   busy={!waiting}
@@ -107,16 +121,16 @@ export const Notify: FC = () => {
             ) : (
               <>
                 <ConvHeader
-                  name="refacto-auth"
+                  name={refactor}
                   status="running"
                   sub="demo-api / main"
-                  metrics={{ model: 'Opus 5.5', tokens: '184 k', cost: '2,41 $', files: 6, duration: '12m 40s' }}
+                  metrics={{ model: 'Opus 5.5', tokens: tok(184), cost: usd(2.41), files: 6, duration: '12m 40s' }}
                 />
                 <Conversation>
                   <RefactoConv />
                   <Working />
                 </Conversation>
-                <Composer placeholder="Envoyer un message à refacto-auth…" busy />
+                <Composer placeholder={tr(`Envoyer un message à ${refactor}…`, `Send a message to ${refactor}…`)} busy />
               </>
             )}
           </Shell>
@@ -148,7 +162,7 @@ export const Notify: FC = () => {
       />
       <WinToast
         title="demo-api · tests-e2e"
-        body="Claude attend ta réponse"
+        body={tr('Claude attend ta réponse', 'Claude is waiting for your answer')}
         enter={pop(frame, fps, toast, 16) - ramp(frame, back, 14)}
         bottom={72}
       />

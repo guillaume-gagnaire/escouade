@@ -2,7 +2,8 @@ import type { FC } from 'react';
 import { useCurrentFrame, useVideoConfig } from 'remotion';
 import { pop, ramp, typed } from '../anim';
 import { useCues } from '../cues';
-import { STATUS, TABS } from '../data';
+import { TABS, useDemo } from '../data';
+import { useFmt, type Tr } from '../lang';
 import type { Ticket } from '../ui/Board';
 import { PointerPath } from '../ui/Cursor';
 import { ImportModal, IntegrationsTab, JiraIssue, type Issue } from '../ui/Integrations';
@@ -11,76 +12,117 @@ import { Shell } from '../ui/Shell';
 import { AgentsSidebar } from '../ui/Sidebar';
 import { AppWindow, camPath, Stage, Title } from '../ui/Stage';
 import { AppToast } from '../ui/Toast';
-import { AGENT_CSV, AGENT_LOGIN, boardAgents, BoardView, CSV, DONE, LOGIN, SEARCH } from './boardCommon';
+import { BoardView, placesText, ticketAgent, useBoard } from './boardCommon';
 
-const ALL: Issue[] = [
-  { key: 'ATL-1312', title: "Limiter le débit de l'API publique", kind: 'Story', meta: ['Haute', 'Hugo R.', 'À faire'], criteria: 2 },
-  { key: 'ATL-1305', title: "Documenter l'API des factures", kind: 'Tâche', meta: ['Basse', 'Hugo R.', 'À faire'] },
-  { key: 'ATL-1294', title: 'Arrondi faux sur les factures en devises', kind: 'Bug', meta: ['Critique', 'Léa M.', 'À faire'], criteria: 2 },
-  {
-    key: 'ATL-1291',
-    title: 'Relancer les factures impayées par e-mail',
-    kind: 'Story',
-    meta: ['Moyenne', 'Léa M.', 'À faire'],
-    criteria: 3,
-  },
-  { key: 'ATL-1287', title: 'Exporter les factures en PDF', kind: 'Story', meta: ['Haute', 'Léa M.', 'À faire'], criteria: 3 },
-  {
-    key: 'ATL-1270',
-    title: 'Numérotation continue des factures',
-    kind: 'Story',
-    meta: ['Haute', 'Léa M.', 'En cours'],
-    criteria: 2,
-    imported: true,
-  },
-];
-const QUERY = 'factures';
-const SEARCHED = ALL.filter((i) => /factures/.test(i.title));
-const MINE = SEARCHED.filter((i) => i.meta.includes('Léa M.'));
-/** Ticked in this order; the one already imported cannot be. */
-const PICKS = MINE.filter((i) => !i.imported);
 const SOURCE = 'ATL — Atlas';
 
-const ROUNDING = ['Montants arrondis au centime, devise par devise', 'Tests verts'];
-const ROUNDING_DONE = ['Arrondi au centime par devise', 'Tests des devises'];
-/** The tickets imported from Jira, in the order of the list: they take the board's next keys. */
-const IMPORTED: Ticket[] = [
-  {
-    key: 'DEM-7',
-    title: 'Arrondi faux sur les factures en devises',
+/** The Jira issues and the tickets they become, in the language of the picture. */
+function dataOf(tr: Tr) {
+  const todo = tr('À faire', 'To Do');
+  const me = tr('Léa M.', 'Lea M.');
+  const [high, low, medium] = [tr('Haute', 'High'), tr('Basse', 'Low'), tr('Moyenne', 'Medium')];
+  const titles = {
+    rate: tr("Limiter le débit de l'API publique", 'Rate-limit the public API'),
+    docs: tr("Documenter l'API des factures", 'Document the invoices API'),
+    rounding: tr('Arrondi faux sur les factures en devises', 'Wrong rounding on foreign-currency invoices'),
+    remind: tr('Relancer les factures impayées par e-mail', 'Send email reminders for unpaid invoices'),
+    pdf: tr('Exporter les factures en PDF', 'Export invoices as PDF'),
+    numbering: tr('Numérotation continue des factures', 'Continuous invoice numbering'),
+    alert: tr('Alerte quand un paiement échoue', 'Alert when a payment fails'),
+  };
+  const ALL: Issue[] = [
+    { key: 'ATL-1312', title: titles.rate, kind: 'Story', meta: [high, 'Hugo R.', todo], criteria: 2 },
+    { key: 'ATL-1305', title: titles.docs, kind: tr('Tâche', 'Task') as Issue['kind'], meta: [low, 'Hugo R.', todo] },
+    { key: 'ATL-1294', title: titles.rounding, kind: 'Bug', meta: [tr('Critique', 'Critical'), me, todo], criteria: 2 },
+    { key: 'ATL-1291', title: titles.remind, kind: 'Story', meta: [medium, me, todo], criteria: 3 },
+    { key: 'ATL-1287', title: titles.pdf, kind: 'Story', meta: [high, me, todo], criteria: 3 },
+    {
+      key: 'ATL-1270',
+      title: titles.numbering,
+      kind: 'Story',
+      meta: [high, me, tr('En cours', 'In Progress')],
+      criteria: 2,
+      imported: true,
+    },
+  ];
+  const QUERY = tr('factures', 'invoice');
+  const SEARCHED = ALL.filter((i) => i.title.toLowerCase().includes(QUERY));
+  const MINE = SEARCHED.filter((i) => i.meta.includes(me));
+  /** Ticked in this order; the one already imported cannot be. */
+  const PICKS = MINE.filter((i) => !i.imported);
+
+  const ROUNDING = [
+    tr('Montants arrondis au centime, devise par devise', 'Amounts rounded to the cent, currency by currency'),
+    tr('Tests verts', 'Tests pass'),
+  ];
+  const ROUNDING_DONE = [
+    tr('Arrondi au centime par devise', 'Rounding to the cent per currency'),
+    tr('Tests des devises', 'Currency tests'),
+  ];
+  const asCriteria = (texts: string[]) => texts.map((text) => ({ text, ok: false }));
+  /** The tickets imported from Jira, in the order of the list: they take the board's next keys. */
+  const IMPORTED: Ticket[] = [
+    {
+      key: 'DEM-7',
+      title: titles.rounding,
+      column: 'todo',
+      loop: [1, 5],
+      criteria: asCriteria(ROUNDING),
+      external: { service: 'jira', key: 'ATL-1294' },
+    },
+    {
+      key: 'DEM-8',
+      title: titles.remind,
+      column: 'todo',
+      loop: [1, 5],
+      criteria: asCriteria([
+        tr('Relance à J+7, puis à J+15', 'Reminder at D+7, then at D+15'),
+        tr('Lien de paiement dans l’e-mail', 'Payment link in the email'),
+        tr('Tests verts', 'Tests pass'),
+      ]),
+      external: { service: 'jira', key: 'ATL-1291' },
+    },
+    {
+      key: 'DEM-9',
+      title: titles.pdf,
+      column: 'todo',
+      loop: [1, 5],
+      criteria: asCriteria([
+        tr('Mise en page de la facture', 'Invoice layout'),
+        tr('Lien de téléchargement', 'Download link'),
+        tr('Tests verts', 'Tests pass'),
+      ]),
+      external: { service: 'jira', key: 'ATL-1287' },
+    },
+  ];
+  const LABELLED: Ticket = {
+    key: 'DEM-10',
+    title: titles.alert,
     column: 'todo',
     loop: [1, 5],
-    criteria: ROUNDING.map((text) => ({ text, ok: false })),
-    external: { service: 'jira', key: 'ATL-1294' },
-  },
-  {
-    key: 'DEM-8',
-    title: 'Relancer les factures impayées par e-mail',
-    column: 'todo',
-    loop: [1, 5],
-    criteria: ['Relance à J+7, puis à J+15', 'Lien de paiement dans l’e-mail', 'Tests verts'].map((text) => ({ text, ok: false })),
-    external: { service: 'jira', key: 'ATL-1291' },
-  },
-  {
-    key: 'DEM-9',
-    title: 'Exporter les factures en PDF',
-    column: 'todo',
-    loop: [1, 5],
-    criteria: ['Mise en page de la facture', 'Lien de téléchargement', 'Tests verts'].map((text) => ({ text, ok: false })),
-    external: { service: 'jira', key: 'ATL-1287' },
-  },
-];
-const LABELLED: Ticket = {
-  key: 'DEM-10',
-  title: 'Alerte quand un paiement échoue',
-  column: 'todo',
-  loop: [1, 5],
-  criteria: ['Alerte dans la minute', 'Montant et client dans l’alerte', 'Tests verts'].map((text) => ({ text, ok: false })),
-  external: { service: 'jira', key: 'ATL-1318' },
-};
-/** As the app names them: key and title, cut at 40 characters on a word. */
-const AGENT_ROUNDING = 'dem-7-arrondi-faux-sur-les-factures-en';
-const AGENT_REMIND = 'dem-8-relancer-les-factures-impayees-par';
+    criteria: asCriteria([
+      tr('Alerte dans la minute', 'Alert within a minute'),
+      tr('Montant et client dans l’alerte', 'Amount and customer in the alert'),
+      tr('Tests verts', 'Tests pass'),
+    ]),
+    external: { service: 'jira', key: 'ATL-1318' },
+  };
+  return {
+    titles,
+    ALL,
+    QUERY,
+    SEARCHED,
+    MINE,
+    PICKS,
+    ROUNDING,
+    ROUNDING_DONE,
+    IMPORTED,
+    LABELLED,
+    // As the app names them: key and title, cut at 40 characters on a word.
+    AGENT_ROUNDING: ticketAgent('DEM-7', titles.rounding),
+    AGENT_REMIND: ticketAgent('DEM-8', titles.remind),
+  };
+}
 
 /** The settings' body moves up this far to show the sources and the status mapping. */
 const SCROLL = 236;
@@ -92,6 +134,12 @@ export const IntegrationsScene: FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const c = useCues();
+  const { tr, usd } = useFmt();
+  const { status: STATUS } = useDemo();
+  const { AGENT_CSV, AGENT_LOGIN, boardAgents, CSV, DONE, LOGIN, SEARCH } = useBoard();
+  const { titles, ALL, QUERY, SEARCHED, MINE, PICKS, ROUNDING, ROUNDING_DONE, IMPORTED, LABELLED, AGENT_ROUNDING, AGENT_REMIND } =
+    dataOf(tr);
+  const merged = tr('⤵ Mergé dans main · squash', '⤵ Merged into main · squash');
   const w = (line: string, word: string) => c.word(line, word);
   const press = (at: number) => ramp(frame, at - 3, 3) - ramp(frame, at + 3, 4);
   const flash = (at: number) => ramp(frame, at, 4) - ramp(frame, at + 10, 10);
@@ -138,8 +186,8 @@ export const IntegrationsScene: FC = () => {
         ...base,
         column: 'done',
         enter: pop(frame, fps, doneAt, 16),
-        outcome: '⤵ Mergé dans main · squash',
-        doneMeta: '1 boucle · 0,54 $',
+        outcome: merged,
+        doneMeta: tr(`1 boucle · ${usd(0.54)}`, `1 loop · ${usd(0.54)}`),
         agent: { name: AGENT_ROUNDING, status: 'done' },
       };
     if (frame >= reviewAt)
@@ -158,7 +206,7 @@ export const IntegrationsScene: FC = () => {
         ...base,
         column: 'doing',
         enter: pop(frame, fps, startAt, 16),
-        activity: 'Lit src/billing/currency.ts',
+        activity: tr('Lit src/billing/currency.ts', 'Reads src/billing/currency.ts'),
         agent: { name: AGENT_ROUNDING, status: 'running' },
       };
     return { ...base, enter: pop(frame, fps, imported + 2, 16) };
@@ -170,8 +218,8 @@ export const IntegrationsScene: FC = () => {
       column: 'doing',
       loop: [1, 5],
       criteria: CSV.criteria!.map((x, i) => ({ ...x, ok: i < 2 })),
-      progress: ['Route GET /invoices.csv', 'Séparateur point-virgule'],
-      activity: 'Lance npm test',
+      progress: ['Route GET /invoices.csv', tr('Séparateur point-virgule', 'Semicolon separator')],
+      activity: tr('Lance npm test', 'Runs npm test'),
       agent: { name: AGENT_CSV, status: 'running' },
     },
     {
@@ -179,14 +227,14 @@ export const IntegrationsScene: FC = () => {
       column: 'doing',
       partial: false,
       loop: [1, 5],
-      activity: 'Modifie src/search/index.ts',
+      activity: tr('Modifie src/search/index.ts', 'Edits src/search/index.ts'),
       agent: { name: SEARCH.agent!.name, status: 'running' },
     },
     {
       ...LOGIN,
       column: 'done',
-      outcome: '⤵ Mergé dans main · squash',
-      doneMeta: '3 boucles · 1,86 $',
+      outcome: merged,
+      doneMeta: tr(`3 boucles · ${usd(1.86)}`, `3 loops · ${usd(1.86)}`),
       agent: { name: AGENT_LOGIN, status: 'done' },
     },
     ...DONE,
@@ -200,7 +248,7 @@ export const IntegrationsScene: FC = () => {
                 ...remind,
                 column: 'doing' as const,
                 enter: pop(frame, fps, nextAt, 16),
-                activity: 'Réfléchit',
+                activity: tr('Réfléchit', 'Thinking'),
                 agent: { name: AGENT_REMIND, status: 'running' as const },
               }
             : { ...remind, enter: pop(frame, fps, imported + 6, 16) },
@@ -217,10 +265,16 @@ export const IntegrationsScene: FC = () => {
   const tickets = all.map((t) => {
     const i = queue.indexOf(t);
     if (i < 0) return t;
-    return { ...t, wait: i === 0 ? "Pris dès qu'une place se libère" : `En attente d'une place (${doing}/${PARALLEL})` };
+    return {
+      ...t,
+      wait:
+        i === 0
+          ? tr("Pris dès qu'une place se libère", 'Picked up as soon as a slot frees up')
+          : tr(`En attente d'une place (${doing}/${PARALLEL})`, `Waiting for a slot (${doing}/${PARALLEL})`),
+    };
   });
 
-  const status = frame >= doneAt ? 'À tester' : 'En cours';
+  const status = frame >= doneAt ? tr('À tester', 'To Review') : tr('En cours', 'In Progress');
   const cam = camPath(frame, [
     [c.at('arrive') - 4, 22, { x: 470, y: 360, zoom: 1.55 }],
     [c.end('arrive') + 2, 20, { x: 750, y: 422, zoom: 1 }],
@@ -237,18 +291,18 @@ export const IntegrationsScene: FC = () => {
               board
               archived={frame >= doneAt ? 2 : 1}
               agents={boardAgents([
-                { name: AGENT_CSV, tag: 'DEM-5 · boucle 1/5' },
-                { name: SEARCH.agent!.name, tag: 'DEM-4 · boucle 1/5' },
+                { name: AGENT_CSV, tag: tr('DEM-5 · boucle 1/5', 'DEM-5 · loop 1/5') },
+                { name: SEARCH.agent!.name, tag: tr('DEM-4 · boucle 1/5', 'DEM-4 · loop 1/5') },
                 ...(frame >= startAt && frame < doneAt
                   ? [
                       {
                         name: AGENT_ROUNDING,
-                        tag: frame >= reviewAt ? 'DEM-7 · à tester' : 'DEM-7 · boucle 1/5',
+                        tag: frame >= reviewAt ? tr('DEM-7 · à tester', 'DEM-7 · to review') : tr('DEM-7 · boucle 1/5', 'DEM-7 · loop 1/5'),
                         status: frame >= reviewAt ? ('done' as const) : ('running' as const),
                       },
                     ]
                   : []),
-                ...(frame >= nextAt ? [{ name: AGENT_REMIND, tag: 'DEM-8 · boucle 1/5' }] : []),
+                ...(frame >= nextAt ? [{ name: AGENT_REMIND, tag: tr('DEM-8 · boucle 1/5', 'DEM-8 · loop 1/5') }] : []),
               ])}
               enters={[1, 1, 1, 1, pop(frame, fps, startAt), pop(frame, fps, nextAt)]}
               badge={frame >= reviewAt && frame < doneAt ? 1 : undefined}
@@ -283,9 +337,9 @@ export const IntegrationsScene: FC = () => {
                   // The defaults a linked project gets: in progress until done, to test once done; comments on the last two.
                   mapping={[
                     { states: {}, comment: false },
-                    { states: { jira: 'En cours' }, comment: false },
-                    { states: { jira: 'En cours' }, comment: true },
-                    { states: { jira: 'À tester' }, comment: true },
+                    { states: { jira: tr('En cours', 'In Progress') }, comment: false },
+                    { states: { jira: tr('En cours', 'In Progress') }, comment: true },
+                    { states: { jira: tr('À tester', 'To Review') }, comment: true },
                   ]}
                   mappingEnter={frame >= linkAt ? pop(frame, fps, linkAt + 2, 18) : 0}
                   mappingGlow={ramp(frame, linkAt + 6, 6) - ramp(frame, saveAt - 6, 6)}
@@ -304,12 +358,12 @@ export const IntegrationsScene: FC = () => {
                 importPressed={press(importAt)}
               />
               <AppToast
-                text="3 tickets importés depuis Jira"
+                text={tr('3 tickets importés depuis Jira', '3 tickets imported from Jira')}
                 tone="ok"
                 enter={frame >= imported && frame < imported + 70 ? pop(frame, fps, imported, 16) : 0}
               />
               <AppToast
-                text="1 ticket importé depuis Jira dans demo-api"
+                text={tr('1 ticket importé depuis Jira dans demo-api', '1 ticket imported from Jira into demo-api')}
                 tone="ok"
                 enter={frame >= autoAt ? pop(frame, fps, autoAt, 16) : 0}
               />
@@ -317,31 +371,34 @@ export const IntegrationsScene: FC = () => {
                 enter={frame >= syncOut ? 0 : frame >= syncIn ? pop(frame, fps, syncIn, 18) : 0}
                 style={{ left: 22, top: 112 }}
                 issueKey="ATL-1294"
-                title="Arrondi faux sur les factures en devises"
+                title={titles.rounding}
                 status={status}
                 flash={Math.max(flash(syncIn + 10), flash(doneAt))}
                 comments={[
                   {
                     text: (
                       <>
-                        Escouade : DEM-7 est prêt à tester.
-                        <Para title="Critères :" lines={ROUNDING.map((r) => `✓ ${r}`)} />
-                        <Para title="Ce qui a été fait :" lines={ROUNDING_DONE.map((r) => `- ${r}`)} />
+                        {tr('Escouade : DEM-7 est prêt à tester.', 'Escouade: DEM-7 is ready for review.')}
+                        <Para title={tr('Critères :', 'Criteria:')} lines={ROUNDING.map((r) => `✓ ${r}`)} />
+                        <Para title={tr('Ce qui a été fait :', 'What was done:')} lines={ROUNDING_DONE.map((r) => `- ${r}`)} />
                       </>
                     ),
                     enter: pop(frame, fps, reviewAt + 4, 18),
                   },
-                  { text: 'Escouade : DEM-7 est terminé — ⤵ Mergé dans main · squash', enter: pop(frame, fps, doneAt + 4, 18) },
+                  {
+                    text: tr(`Escouade : DEM-7 est terminé — ${merged}`, `Escouade: DEM-7 is done — ${merged}`),
+                    enter: pop(frame, fps, doneAt + 4, 18),
+                  },
                 ]}
               />
               <JiraIssue
                 enter={frame >= syncOut ? pop(frame, fps, syncOut + 2, 18) : 0}
                 style={{ right: 22, top: 130 }}
                 issueKey="ATL-1318"
-                title="Alerte quand un paiement échoue"
-                status="À faire"
+                title={titles.alert}
+                status={tr('À faire', 'To Do')}
                 labels={[
-                  { name: 'paiements', enter: 1 },
+                  { name: tr('paiements', 'payments'), enter: 1 },
                   { name: 'claude-ready', enter: pop(frame, fps, labelAt - 2, 12) },
                 ]}
                 comments={[]}
@@ -382,12 +439,7 @@ export const IntegrationsScene: FC = () => {
             </>
           }
         >
-          <BoardView
-            tickets={tickets}
-            autopilot
-            places={free ? `${free} ${free > 1 ? 'places libres' : 'place libre'}` : 'Toutes les places sont prises'}
-            pressedImport={press(openImport)}
-          />
+          <BoardView tickets={tickets} autopilot places={placesText(tr, free)} pressedImport={press(openImport)} />
         </Shell>
       </AppWindow>
     </Stage>

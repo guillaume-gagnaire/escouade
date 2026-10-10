@@ -2,7 +2,8 @@ import type { FC } from 'react';
 import { useCurrentFrame, useVideoConfig } from 'remotion';
 import { pop, ramp, typed } from '../anim';
 import { useCues } from '../cues';
-import { AGENTS, onSonnet, STATUS, TABS } from '../data';
+import { onSonnet, TABS, useDemo } from '../data';
+import { useFmt } from '../lang';
 import { C, soft } from '../theme';
 import { Composer } from '../ui/Composer';
 import { Conversation, ConvHeader, UserMsg, Working } from '../ui/Chat';
@@ -11,15 +12,19 @@ import { ConfirmModal, ContextMenu } from '../ui/Modal';
 import { Shell } from '../ui/Shell';
 import { AgentsSidebar, type AgentInfo } from '../ui/Sidebar';
 import { AppWindow, camPath, Spotlight, Stage, Title } from '../ui/Stage';
-import { EmptyConv, RefactoConv } from './common';
-
-const ASK = 'Ajoute un export CSV des factures, avec les filtres de la liste.';
+import { agentMenu, EmptyConv, RefactoConv } from './common';
 
 /** Agents fill the sidebar; a card up close; a new agent named by Haiku; one archived. */
 export const Agents: FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const c = useCues();
+  const { tr, tok, usd } = useFmt();
+  const { agents: AGENTS, status: STATUS, refactor, csv } = useDemo();
+  const ASK = tr(
+    'Ajoute un export CSV des factures, avec les filtres de la liste.',
+    'Add a CSV export of invoices, with the list’s filters.',
+  );
   const newAt = c.at('name') - 4;
   const sent = c.word('name', 'demande') + 6;
   const named = c.word('name', 'nom');
@@ -27,12 +32,12 @@ export const Agents: FC = () => {
   const archived = c.word('archive', 'conversation');
   const isNew = frame >= newAt + 6;
   const fresh: AgentInfo = {
-    name: frame >= named ? 'export-csv-factures' : 'agent-6',
+    name: frame >= named ? csv : 'agent-6',
     status: frame >= sent ? 'running' : 'idle',
     model: 'Opus 5.5',
     time: frame >= sent ? '0m 04s' : '0m 00s',
-    tokens: frame >= sent ? '3 k' : '0',
-    cost: frame >= sent ? '≈ 0,04 $' : '0,00 $',
+    tokens: frame >= sent ? tok(3) : '0',
+    cost: frame >= sent ? `≈ ${usd(0.04)}` : usd(0),
     files: 0,
   };
   // fix-login renamed by a double-click, then deleted with its worktree.
@@ -64,7 +69,7 @@ export const Agents: FC = () => {
           sidebar={
             <AgentsSidebar
               agents={agents}
-              selected={isNew ? fresh.name : 'refacto-auth'}
+              selected={isNew ? fresh.name : refactor}
               enters={agents.map((a, i) => (a === fresh ? pop(frame, fps, newAt + 6) : pop(frame, fps, c.at('many') + i * 10)))}
               archived={frame >= archived ? 1 : undefined}
               pressedNew={ramp(frame, newAt - 3, 3) - ramp(frame, newAt, 3)}
@@ -110,37 +115,30 @@ export const Agents: FC = () => {
                 y={500}
                 enter={frame >= menuAt && frame < archived ? pop(frame, fps, menuAt, 20) : 0}
                 hover={frame >= c.word('archive', 'archive-le') - 8 ? 1 : undefined}
-                items={[
-                  'Renommer',
-                  { label: 'Archiver', hint: 'garde la conversation' },
-                  'Ouvrir dans l’éditeur',
-                  null,
-                  { label: 'Activer le remote control', hint: 'claude.ai, mobile' },
-                  null,
-                  { label: 'Supprimer…', danger: true },
-                ]}
+                items={agentMenu(tr)}
               />
               <ContextMenu
                 x={170}
                 y={470}
                 enter={frame >= delMenu && frame < confirmAt ? pop(frame, fps, delMenu, 20) : 0}
                 hover={frame >= delMenu + 8 ? 6 : undefined}
-                items={[
-                  'Renommer',
-                  { label: 'Archiver', hint: 'garde la conversation' },
-                  'Ouvrir dans l’éditeur',
-                  null,
-                  { label: 'Activer le remote control', hint: 'claude.ai, mobile' },
-                  null,
-                  { label: 'Supprimer…', danger: true },
-                ]}
+                items={agentMenu(tr)}
               />
               <ConfirmModal
-                title="Supprimer l'agent « fix-login-oauth » ?"
-                body="Le processus Claude est arrêté et la conversation est retirée de l’application (la session Claude Code reste sur le disque)."
-                confirm="Supprimer"
+                title={tr("Supprimer l'agent « fix-login-oauth » ?", 'Delete the agent “fix-login-oauth”?')}
+                body={tr(
+                  'Le processus Claude est arrêté et la conversation est retirée de l’application (la session Claude Code reste sur le disque).',
+                  'The Claude process is stopped and the conversation is removed from the app (the Claude Code session stays on disk).',
+                )}
+                confirm={tr('Supprimer', 'Delete')}
                 danger
-                option={{ label: 'Supprimer aussi le worktree et la branche escouade/fix-login', checked: true }}
+                option={{
+                  label: tr(
+                    'Supprimer aussi le worktree et la branche escouade/fix-login',
+                    'Also delete the worktree and the escouade/fix-login branch',
+                  ),
+                  checked: true,
+                }}
                 enter={frame >= confirmAt && frame < deleted ? pop(frame, fps, confirmAt, 18) : 0}
                 pressed={ramp(frame, deleted - 6, 3) - ramp(frame, deleted, 3)}
               />
@@ -178,18 +176,18 @@ export const Agents: FC = () => {
               )}
               <Composer
                 text={frame >= sent ? '' : typed(ASK, frame, fps, newAt + 10, 60)}
-                placeholder="Décris la tâche à confier à Claude…"
+                placeholder={tr('Décris la tâche à confier à Claude…', 'Describe the task to give Claude…')}
                 busy={frame >= sent}
               />
             </>
           ) : (
             <>
-              <ConvHeader name="refacto-auth" status="running" sub="demo-api / main" />
+              <ConvHeader name={refactor} status="running" sub="demo-api / main" />
               <Conversation>
                 <RefactoConv />
                 <Working />
               </Conversation>
-              <Composer placeholder="Envoyer un message à refacto-auth…" busy />
+              <Composer placeholder={tr(`Envoyer un message à ${refactor}…`, `Send a message to ${refactor}…`)} busy />
             </>
           )}
         </Shell>

@@ -1,4 +1,5 @@
 import type { FC } from 'react';
+import { useFmt, type Tr } from '../lang';
 import { C, MONO, UI } from '../theme';
 import { Dot } from './Shell';
 import { Button, SectionHead } from './Sidebar';
@@ -11,44 +12,47 @@ export interface Run {
   code?: number;
 }
 
-const LABEL = (r: Run) =>
+const labelOf = (tr: Tr, r: Run) =>
   r.status === 'ready'
-    ? 'prêt'
+    ? tr('prêt', 'ready')
     : r.status === 'running'
-      ? 'en cours'
+      ? tr('en cours', 'running')
       : r.status === 'stopped'
-        ? 'arrêté'
+        ? tr('arrêté', 'stopped')
         : r.status === 'done'
-          ? 'terminé'
-          : `planté (code ${r.code})`;
+          ? tr('terminé', 'done')
+          : tr(`planté (code ${r.code})`, `crashed (code ${r.code})`);
 const COLOR: Record<RunStatus, string> = { ready: C.dim, running: C.ok, crashed: C.del, stopped: C.dim, done: C.ok };
 
-const Row: FC<{ r: Run; selected: boolean }> = ({ r, selected }) => (
-  <div
-    style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: 9,
-      height: 34,
-      padding: '0 10px 0 12px',
-      borderRadius: 6,
-      background: selected ? C.elev : 'transparent',
-      border: `1px solid ${selected ? C.line2 : 'transparent'}`,
-    }}
-  >
-    <Dot color={COLOR[r.status]} size={7} pulse={r.status === 'running'} />
-    <span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>{r.name}</span>
-    <span style={{ fontFamily: MONO, fontSize: 11.5, color: COLOR[r.status] }}>{LABEL(r)}</span>
-    {r.status === 'running' ? (
-      <span style={{ display: 'flex', gap: 8, color: C.muted, fontSize: 11 }}>
-        <span>⟳</span>
-        <span>■</span>
-      </span>
-    ) : (
-      <span style={{ width: 16, color: C.ok, fontSize: 11 }}>▶</span>
-    )}
-  </div>
-);
+const Row: FC<{ r: Run; selected: boolean }> = ({ r, selected }) => {
+  const { tr } = useFmt();
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 9,
+        height: 34,
+        padding: '0 10px 0 12px',
+        borderRadius: 6,
+        background: selected ? C.elev : 'transparent',
+        border: `1px solid ${selected ? C.line2 : 'transparent'}`,
+      }}
+    >
+      <Dot color={COLOR[r.status]} size={7} pulse={r.status === 'running'} />
+      <span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>{r.name}</span>
+      <span style={{ fontFamily: MONO, fontSize: 11.5, color: COLOR[r.status] }}>{labelOf(tr, r)}</span>
+      {r.status === 'running' ? (
+        <span style={{ display: 'flex', gap: 8, color: C.muted, fontSize: 11 }}>
+          <span>⟳</span>
+          <span>■</span>
+        </span>
+      ) : (
+        <span style={{ width: 16, color: C.ok, fontSize: 11 }}>▶</span>
+      )}
+    </div>
+  );
+};
 
 /** The "Lancement" section: the project's commands, then each agent's test steps under its name. */
 export const RunsSection: FC<{
@@ -57,16 +61,17 @@ export const RunsSection: FC<{
   selected?: string;
   pressed?: number;
 }> = ({ runs, groups = [], selected, pressed = 0 }) => {
+  const { tr } = useFmt();
   const running = runs.filter((r) => r.status === 'running').length;
   return (
     <div style={{ flex: 'none', margin: '0 -10px', borderTop: `1px solid ${C.line}`, padding: '6px 10px 8px' }}>
       <SectionHead
-        label="Lancement"
+        label={tr('Lancement', 'Launch')}
         count={`${running}/${runs.length}`}
         action={
           <span style={{ display: 'flex', gap: 6 }}>
             <Button pressed={pressed} small>
-              {running ? 'Tout arrêter' : 'Tout lancer'}
+              {running ? tr('Tout arrêter', 'Stop all') : tr('Tout lancer', 'Run all')}
             </Button>
             <Button small>⚙</Button>
           </span>
@@ -101,102 +106,109 @@ export const LogView: FC<{
   command?: string;
   where?: string;
   since?: string;
-}> = ({ lines, title, status, state, statusColor, shell = 'PowerShell', command, where = '~\\dev\\demo-api', since = '14:02' }) => (
-  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-    <div
-      style={{
-        height: 64,
-        flex: 'none',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        padding: '0 28px',
-        borderBottom: `1px solid ${C.line}`,
-      }}
-    >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 17, fontWeight: 700 }}>{title}</span>
-          <span style={{ fontFamily: MONO, fontSize: 12, padding: '2px 7px', borderRadius: 4, background: C.elev2, color: C.info }}>
-            {shell}
+}> = ({ lines, title, status, state, statusColor, shell = 'PowerShell', command, where = '~\\dev\\demo-api', since }) => {
+  const { tr, trx } = useFmt();
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <div
+        style={{
+          height: 64,
+          flex: 'none',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          padding: '0 28px',
+          borderBottom: `1px solid ${C.line}`,
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 17, fontWeight: 700 }}>{title}</span>
+            <span style={{ fontFamily: MONO, fontSize: 12, padding: '2px 7px', borderRadius: 4, background: C.elev2, color: C.info }}>
+              {shell}
+            </span>
+            <span style={{ fontFamily: MONO, fontSize: 13, color: statusColor, fontWeight: 600 }}>{status}</span>
+            {state === 'running' ? (
+              <span style={{ fontFamily: MONO, fontSize: 12, color: C.dim }}>
+                {trx(<>depuis {since ?? '14:02'}</>, `since ${since ?? '2:02 PM'}`)}
+              </span>
+            ) : null}
           </span>
-          <span style={{ fontFamily: MONO, fontSize: 13, color: statusColor, fontWeight: 600 }}>{status}</span>
-          {state === 'running' ? <span style={{ fontFamily: MONO, fontSize: 12, color: C.dim }}>depuis {since}</span> : null}
-        </span>
-        {command ? (
-          <span style={{ fontFamily: MONO, fontSize: 12, color: C.dim }}>
-            <span style={{ color: C.muted }}>{command}</span> · {where}
-          </span>
-        ) : null}
-      </div>
-      <div style={{ flex: 1 }} />
-      <span style={{ display: 'flex', gap: 8, fontSize: 13 }}>
-        <Button small>⌕</Button>
-        <Button small>Effacer</Button>
-        {state === 'running' ? (
-          <>
-            <Button small>⟳ Relancer</Button>
-            <Button small>
-              <span style={{ color: C.del }}>■ Stopper</span>
+          {command ? (
+            <span style={{ fontFamily: MONO, fontSize: 12, color: C.dim }}>
+              <span style={{ color: C.muted }}>{command}</span> · {where}
+            </span>
+          ) : null}
+        </div>
+        <div style={{ flex: 1 }} />
+        <span style={{ display: 'flex', gap: 8, fontSize: 13 }}>
+          <Button small>⌕</Button>
+          <Button small>{tr('Effacer', 'Clear')}</Button>
+          {state === 'running' ? (
+            <>
+              <Button small>{tr('⟳ Relancer', '⟳ Restart')}</Button>
+              <Button small>
+                <span style={{ color: C.del }}>{tr('■ Stopper', '■ Stop')}</span>
+              </Button>
+            </>
+          ) : (
+            <Button small primary={C.spark}>
+              {state === 'ended' ? tr('⟳ Relancer', '⟳ Restart') : tr('▶ Lancer', '▶ Run')}
             </Button>
-          </>
-        ) : (
-          <Button small primary={C.spark}>
-            {state === 'ended' ? '⟳ Relancer' : '▶ Lancer'}
-          </Button>
-        )}
-      </span>
+          )}
+        </span>
+      </div>
+      <div
+        style={{
+          flex: 1,
+          background: C.term,
+          padding: '16px 22px',
+          fontFamily: MONO,
+          fontSize: 15,
+          lineHeight: 1.6,
+          color: '#d8d0c4',
+          whiteSpace: 'pre',
+          overflow: 'hidden',
+          position: 'relative',
+        }}
+      >
+        {/* Before its first run (RunView.svelte). */}
+        {state === 'never' ? (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 14,
+              fontFamily: UI,
+              color: C.dim,
+            }}
+          >
+            <span style={{ fontSize: 15 }}>{tr('Pas encore lancée.', 'Not run yet.')}</span>
+            <Button primary={C.spark}>{tr('▶ Lancer', '▶ Run')}</Button>
+          </div>
+        ) : null}
+        {lines.map((l, i) => (
+          <div
+            key={i}
+            style={{
+              color:
+                l.startsWith('$') || l.startsWith('──')
+                  ? C.dim
+                  : /ready|listening|prêt/i.test(l)
+                    ? '#9bd8a9'
+                    : /error|Error|code 1/.test(l)
+                      ? '#e8877a'
+                      : undefined,
+            }}
+          >
+            {l || ' '}
+          </div>
+        ))}
+      </div>
     </div>
-    <div
-      style={{
-        flex: 1,
-        background: C.term,
-        padding: '16px 22px',
-        fontFamily: MONO,
-        fontSize: 15,
-        lineHeight: 1.6,
-        color: '#d8d0c4',
-        whiteSpace: 'pre',
-        overflow: 'hidden',
-        position: 'relative',
-      }}
-    >
-      {/* Before its first run (RunView.svelte). */}
-      {state === 'never' ? (
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 14,
-            fontFamily: UI,
-            color: C.dim,
-          }}
-        >
-          <span style={{ fontSize: 15 }}>Pas encore lancée.</span>
-          <Button primary={C.spark}>▶ Lancer</Button>
-        </div>
-      ) : null}
-      {lines.map((l, i) => (
-        <div
-          key={i}
-          style={{
-            color:
-              l.startsWith('$') || l.startsWith('──')
-                ? C.dim
-                : /ready|listening|prêt/i.test(l)
-                  ? '#9bd8a9'
-                  : /error|Error|code 1/.test(l)
-                    ? '#e8877a'
-                    : undefined,
-          }}
-        >
-          {l || ' '}
-        </div>
-      ))}
-    </div>
-  </div>
-);
+  );
+};

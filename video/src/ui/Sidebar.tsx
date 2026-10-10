@@ -1,5 +1,6 @@
 import type { FC, ReactNode } from 'react';
 import { useCurrentFrame } from 'remotion';
+import { useFmt, type Tr } from '../lang';
 import { C, MONO, soft } from '../theme';
 import { blink, Dot } from './Shell';
 
@@ -22,7 +23,13 @@ export interface AgentInfo {
   resume?: string;
 }
 
-const LABEL: Record<AgentStatus, string> = { running: 'En cours', waiting: 'Question', idle: 'Prêt', done: 'Terminé', error: 'Erreur' };
+const labelOf = (tr: Tr): Record<AgentStatus, string> => ({
+  running: tr('En cours', 'Running'),
+  waiting: 'Question',
+  idle: tr('Prêt', 'Ready'),
+  done: tr('Terminé', 'Done'),
+  error: tr('Erreur', 'Error'),
+});
 export const STATUS_COLOR: Record<AgentStatus, string> = { running: C.ok, waiting: C.wait, idle: C.dim, done: C.ok, error: C.del };
 
 export const SectionHead: FC<{ label: string; count?: string; action?: ReactNode }> = ({ label, count, action }) => (
@@ -138,6 +145,7 @@ export const AgentCard: FC<
   nameOverride,
 }) => {
   const frame = useCurrentFrame();
+  const { tr, trx, plural } = useFmt();
   const a = alert ? blink(frame) : 0;
   if (enter <= 0) return null;
   return (
@@ -169,7 +177,7 @@ export const AgentCard: FC<
         ) : resume ? (
           <span style={{ fontSize: 12, color: C.wait }}>{resume}</span>
         ) : (
-          <span style={{ fontSize: 12, color: STATUS_COLOR[status] }}>{LABEL[status]}</span>
+          <span style={{ fontSize: 12, color: STATUS_COLOR[status] }}>{labelOf(tr)[status]}</span>
         )}
       </div>
       <div style={{ display: 'flex', gap: 9, paddingLeft: 17, fontFamily: MONO, fontSize: 12, color: C.muted, whiteSpace: 'nowrap' }}>
@@ -186,7 +194,7 @@ export const AgentCard: FC<
       <div style={{ display: 'flex', gap: 10, paddingLeft: 17, fontFamily: MONO, fontSize: 12, color: C.dim }}>
         <span>{tokens} tok</span>
         <span>{cost}</span>
-        <span>{files} fich.</span>
+        <span>{trx(<>{files} fich.</>, `${files} ${plural(files, '', '', 'file', 'files')}`)}</span>
       </div>
       {ticket ? (
         <span
@@ -213,34 +221,39 @@ export const SidebarFoot: FC<{ path?: string; branch?: string; counts?: [number,
   path = '~/dev/demo-api',
   branch = 'main',
   counts = [5, 2, 0],
-}) => (
-  <div
-    style={{
-      flex: 'none',
-      margin: '0 -10px',
-      borderTop: `1px solid ${C.line}`,
-      padding: '12px 18px 14px',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 7,
-      fontFamily: MONO,
-      fontSize: 12,
-    }}
-  >
-    <span style={{ color: C.muted }}>{path}</span>
-    <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-      <span style={{ width: 7, height: 7, borderRadius: '50%', border: `1.5px solid ${C.muted}` }} />
-      {branch}
-      <span style={{ flex: 1 }} />
-      <span style={{ fontSize: 11, padding: '1px 8px', border: `1px solid ${C.line2}`, borderRadius: 5, color: C.muted }}>Parcourir</span>
-    </span>
-    <span style={{ display: 'flex', gap: 12, fontSize: 11.5 }}>
-      <span style={{ color: C.wait }}>~{counts[0]} modifiés</span>
-      <span style={{ color: C.ok }}>+{counts[1]} ajoutés</span>
-      <span style={{ color: C.del }}>−{counts[2]} supprimés</span>
-    </span>
-  </div>
-);
+}) => {
+  const { tr, trx } = useFmt();
+  return (
+    <div
+      style={{
+        flex: 'none',
+        margin: '0 -10px',
+        borderTop: `1px solid ${C.line}`,
+        padding: '12px 18px 14px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 7,
+        fontFamily: MONO,
+        fontSize: 12,
+      }}
+    >
+      <span style={{ color: C.muted }}>{path}</span>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+        <span style={{ width: 7, height: 7, borderRadius: '50%', border: `1.5px solid ${C.muted}` }} />
+        {branch}
+        <span style={{ flex: 1 }} />
+        <span style={{ fontSize: 11, padding: '1px 8px', border: `1px solid ${C.line2}`, borderRadius: 5, color: C.muted }}>
+          {tr('Parcourir', 'Browse')}
+        </span>
+      </span>
+      <span style={{ display: 'flex', gap: 12, fontSize: 11.5 }}>
+        <span style={{ color: C.wait }}>{trx(<>~{counts[0]} modifiés</>, `~${counts[0]} modified`)}</span>
+        <span style={{ color: C.ok }}>{trx(<>+{counts[1]} ajoutés</>, `+${counts[1]} added`)}</span>
+        <span style={{ color: C.del }}>{trx(<>−{counts[2]} supprimés</>, `−${counts[2]} deleted`)}</span>
+      </span>
+    </div>
+  );
+};
 
 export interface Term {
   name: string;
@@ -248,44 +261,47 @@ export interface Term {
 }
 const GLYPH = { pwsh: { g: 'PS', c: C.info }, bash: { g: '$_', c: C.ok }, wsl: { g: 'λ', c: 'oklch(0.78 0.13 60)' } };
 
-export const TermsSection: FC<{ terms: Term[]; selected?: number }> = ({ terms, selected }) => (
-  <div style={{ flex: 'none', margin: '0 -10px', borderTop: `1px solid ${C.line}`, padding: '6px 10px 8px' }}>
-    <SectionHead label="Terminaux" count={String(terms.length)} action={<Button small>+</Button>} />
-    {terms.map((t, i) => (
-      <div
-        key={t.name}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          height: 34,
-          padding: '0 10px',
-          borderRadius: 6,
-          background: i === selected ? C.elev : 'transparent',
-          border: `1px solid ${i === selected ? C.line2 : 'transparent'}`,
-        }}
-      >
-        <span
+export const TermsSection: FC<{ terms: Term[]; selected?: number }> = ({ terms, selected }) => {
+  const { tr } = useFmt();
+  return (
+    <div style={{ flex: 'none', margin: '0 -10px', borderTop: `1px solid ${C.line}`, padding: '6px 10px 8px' }}>
+      <SectionHead label={tr('Terminaux', 'Terminals')} count={String(terms.length)} action={<Button small>+</Button>} />
+      {terms.map((t, i) => (
+        <div
+          key={t.name}
           style={{
-            fontFamily: MONO,
-            fontSize: 11,
-            fontWeight: 700,
-            padding: '2px 5px',
-            borderRadius: 3,
-            background: C.bg,
-            minWidth: 26,
-            textAlign: 'center',
-            color: GLYPH[t.shell].c,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            height: 34,
+            padding: '0 10px',
+            borderRadius: 6,
+            background: i === selected ? C.elev : 'transparent',
+            border: `1px solid ${i === selected ? C.line2 : 'transparent'}`,
           }}
         >
-          {GLYPH[t.shell].g}
-        </span>
-        <span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>{t.name}</span>
-        <span style={{ color: C.dim }}>×</span>
-      </div>
-    ))}
-  </div>
-);
+          <span
+            style={{
+              fontFamily: MONO,
+              fontSize: 11,
+              fontWeight: 700,
+              padding: '2px 5px',
+              borderRadius: 3,
+              background: C.bg,
+              minWidth: 26,
+              textAlign: 'center',
+              color: GLYPH[t.shell].c,
+            }}
+          >
+            {GLYPH[t.shell].g}
+          </span>
+          <span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>{t.name}</span>
+          <span style={{ color: C.dim }}>×</span>
+        </div>
+      ))}
+    </div>
+  );
+};
 
 /** The sidebar of a project: the switcher, the agents, then what follows them (launch, terminals, foot). */
 export const AgentsSidebar: FC<{
@@ -301,25 +317,36 @@ export const AgentsSidebar: FC<{
   pressedNew?: number;
   after?: ReactNode;
   foot?: boolean | { path?: string; branch?: string; counts?: [number, number, number] };
-}> = ({ agents, selected, enters, ring, alerts, board = false, badge, archived, names, pressedNew, after, foot = true }) => (
-  <>
-    <Switcher board={board} badge={badge} />
-    <SectionHead label="Agents" count={String(agents.length)} action={<Button pressed={pressedNew}>+ Nouvel agent</Button>} />
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 4, overflow: 'hidden' }}>
-      {agents.map((a, i) => (
-        <AgentCard
-          key={a.name + i}
-          {...a}
-          selected={a.name === selected}
-          enter={enters?.[i] ?? 1}
-          ring={a.name === ring}
-          alert={alerts?.[a.name]}
-          nameOverride={names?.[a.name]}
-        />
-      ))}
-      {archived ? <span style={{ padding: '8px 10px', fontSize: 13, color: C.dim }}>▸ Archivés ({archived})</span> : null}
-    </div>
-    {after}
-    {foot ? <SidebarFoot {...(foot === true ? {} : foot)} /> : null}
-  </>
-);
+}> = ({ agents, selected, enters, ring, alerts, board = false, badge, archived, names, pressedNew, after, foot = true }) => {
+  const { tr, trx } = useFmt();
+  return (
+    <>
+      <Switcher board={board} badge={badge} />
+      <SectionHead
+        label="Agents"
+        count={String(agents.length)}
+        action={<Button pressed={pressedNew}>{tr('+ Nouvel agent', '+ New agent')}</Button>}
+      />
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 4, overflow: 'hidden' }}>
+        {agents.map((a, i) => (
+          <AgentCard
+            key={a.name + i}
+            {...a}
+            selected={a.name === selected}
+            enter={enters?.[i] ?? 1}
+            ring={a.name === ring}
+            alert={alerts?.[a.name]}
+            nameOverride={names?.[a.name]}
+          />
+        ))}
+        {archived ? (
+          <span style={{ padding: '8px 10px', fontSize: 13, color: C.dim }}>
+            {trx(<>▸ Archivés ({archived})</>, `▸ Archived (${archived})`)}
+          </span>
+        ) : null}
+      </div>
+      {after}
+      {foot ? <SidebarFoot {...(foot === true ? {} : foot)} /> : null}
+    </>
+  );
+};

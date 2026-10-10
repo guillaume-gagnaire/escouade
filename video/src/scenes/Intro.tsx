@@ -1,8 +1,9 @@
 import type { FC } from 'react';
 import { useCurrentFrame, useVideoConfig } from 'remotion';
 import { pop } from '../anim';
-import { useCues, useScene } from '../cues';
+import { useCues, useTitle } from '../cues';
 import { C } from '../theme';
+import { useFmt } from '../lang';
 import { Logo } from '../ui/Logo';
 import { Caption, Stage } from '../ui/Stage';
 
@@ -11,6 +12,8 @@ export const Intro: FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const c = useCues();
+  const { tr } = useFmt();
+  const caption = useTitle();
   const title = pop(frame, fps, c.word('hello', 'escouade') - 4, 16);
   const sub = pop(frame, fps, c.word('hello', 'poste'), 16);
   return (
@@ -48,10 +51,10 @@ export const Intro: FC = () => {
         <div
           style={{ fontSize: 46, fontWeight: 500, color: C.muted, opacity: Math.min(1, sub), transform: `translateY(${(1 - sub) * 30}px)` }}
         >
-          Le poste de pilotage de tes agents Claude Code
+          {tr('Le poste de pilotage de tes agents Claude Code', 'The cockpit for your Claude Code agents')}
         </div>
       </div>
-      <Caption text={useScene().title} delay={c.word('hello', 'tous')} top={860} />
+      <Caption text={caption} delay={c.word('hello', 'tous')} top={860} />
     </Stage>
   );
 };

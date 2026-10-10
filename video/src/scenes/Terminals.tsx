@@ -2,7 +2,8 @@ import type { FC, ReactNode } from 'react';
 import { useCurrentFrame, useVideoConfig } from 'remotion';
 import { pop, ramp, typed } from '../anim';
 import { useCues } from '../cues';
-import { AGENTS, STATUS, TABS } from '../data';
+import { TABS, useDemo } from '../data';
+import { useFmt } from '../lang';
 import { C, MONO } from '../theme';
 import { PointerPath } from '../ui/Cursor';
 import { ContextMenu } from '../ui/Modal';
@@ -131,6 +132,8 @@ export const Terminals: FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const c = useCues();
+  const { tr } = useFmt();
+  const { agents: AGENTS, status: STATUS } = useDemo();
   const w = (word: string) => c.word('shells', word);
   const menu = w('terminal') - 4;
   const pick = w('autocomplétion') - 8;
@@ -176,8 +179,10 @@ export const Terminals: FC = () => {
           }
         >
           {!opened ? (
-            <Screen title="Terminaux" shell="—">
-              <span style={{ color: C.dim }}>Ouvre un terminal : PowerShell, Git Bash ou WSL.</span>
+            <Screen title={tr('Terminaux', 'Terminals')} shell="—">
+              <span style={{ color: C.dim }}>
+                {tr('Ouvre un terminal : PowerShell, Git Bash ou WSL.', 'Open a terminal: PowerShell, Git Bash or WSL.')}
+              </span>
             </Screen>
           ) : which === 0 ? (
             <Screen title="PowerShell 7" shell="pwsh">
@@ -202,7 +207,8 @@ export const Terminals: FC = () => {
           ) : which === 1 ? (
             <Screen title="Git Bash" shell="bash">
               <div style={{ color: G }}>
-                léa@poste <span style={{ color: Y }}>MINGW64</span> <span style={{ color: B }}>~/dev/demo-api</span> (main)
+                {tr('léa@poste ', 'lea@desktop ')}
+                <span style={{ color: Y }}>MINGW64</span> <span style={{ color: B }}>~/dev/demo-api</span> (main)
               </div>
               <div>
                 (reverse-i-search)`{typed('npm r', frame, fps, w('historique'), 8)}':{' '}
@@ -238,7 +244,9 @@ export const Terminals: FC = () => {
               ].map(([l]) => (
                 <div key={l}>{l}</div>
               ))}
-              <div style={{ marginTop: 10, color: C.dim }}>F1Aide F2Config F3Chercher F9Tuer F10Quitter</div>
+              <div style={{ marginTop: 10, color: C.dim }}>
+                {tr('F1Aide F2Config F3Chercher F9Tuer F10Quitter', 'F1Help F2Setup F3Search F9Kill F10Quit')}
+              </div>
             </Screen>
           )}
         </Shell>

@@ -2,7 +2,8 @@ import type { FC } from 'react';
 import { useCurrentFrame, useVideoConfig } from 'remotion';
 import { pop, ramp } from '../anim';
 import { useCues } from '../cues';
-import { AGENTS, STATUS, TABS } from '../data';
+import { TABS, useDemo } from '../data';
+import { useFmt, type Tr } from '../lang';
 import { C, MONO } from '../theme';
 import { PointerPath } from '../ui/Cursor';
 import { Field, Modal } from '../ui/Modal';
@@ -32,13 +33,13 @@ const FRONT = [
   '',
   '  12:04:31 [vite] page reload src/routes/users.ts',
 ];
-const WORKER = [
+const workerOf = (tr: Tr) => [
   '$ node worker.js',
-  'worker: connexion à la file « factures »…',
+  tr('worker: connexion à la file « factures »…', 'worker: connecting to the “invoices” queue…'),
   'Error: connect ECONNREFUSED 127.0.0.1:6379',
   '    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)',
   '',
-  '── terminé · code 1 ──',
+  tr('── terminé · code 1 ──', '── finished · code 1 ──'),
 ];
 
 /** The launch commands: configured, all started, one crashes and says so. */
@@ -46,6 +47,8 @@ export const LaunchScene: FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const c = useCues();
+  const { tr } = useFmt();
+  const { agents: AGENTS, status: STATUS } = useDemo();
   const close = c.end('config') + 4;
   const all = c.word('run', 'tout') + 2;
   const started = (i: number) => frame >= all + 6 + i * 6;
@@ -82,13 +85,13 @@ export const LaunchScene: FC = () => {
           overlay={
             <>
               <Modal
-                title="Commandes de lancement · demo-api"
+                title={tr('Commandes de lancement · demo-api', 'Launch commands · demo-api')}
                 width={720}
                 enter={frame >= close ? 0 : pop(frame, fps, 0, 18)}
                 footer={
                   <>
-                    <Button>Annuler</Button>
-                    <Button primary={C.spark}>Enregistrer</Button>
+                    <Button>{tr('Annuler', 'Cancel')}</Button>
+                    <Button primary={C.spark}>{tr('Enregistrer', 'Save')}</Button>
                   </>
                 }
               >
@@ -151,13 +154,17 @@ export const LaunchScene: FC = () => {
                   );
                 })}
                 <span style={{ alignSelf: 'flex-start' }}>
-                  <Button>+ Ajouter une commande</Button>
+                  <Button>{tr('+ Ajouter une commande', '+ Add a command')}</Button>
                 </span>
                 <span style={{ fontSize: 13, color: C.muted }}>
-                  Fichiers copiés dans les worktrees : <span style={{ fontFamily: MONO, color: C.text }}>.env*</span>
+                  {tr('Fichiers copiés dans les worktrees : ', 'Files copied into worktrees: ')}
+                  <span style={{ fontFamily: MONO, color: C.text }}>.env*</span>
                 </span>
               </Modal>
-              <AppToast text="« Worker » s'est arrêté en erreur (code 1)" enter={pop(frame, fps, crash + 2, 16)} />
+              <AppToast
+                text={tr("« Worker » s'est arrêté en erreur (code 1)", '“Worker” stopped with an error (code 1)')}
+                enter={pop(frame, fps, crash + 2, 16)}
+              />
               <PointerPath
                 keys={[
                   [all - 26, 700, 400],
@@ -170,10 +177,10 @@ export const LaunchScene: FC = () => {
           {showWorker ? (
             <LogView
               title="Worker"
-              status="planté (code 1)"
+              status={tr('planté (code 1)', 'crashed (code 1)')}
               state="ended"
               statusColor={C.del}
-              lines={WORKER}
+              lines={workerOf(tr)}
               shell="Git Bash"
               command="node worker.js"
               where={`${ROOT}\\api`}
@@ -181,7 +188,7 @@ export const LaunchScene: FC = () => {
           ) : (
             <LogView
               title="Front"
-              status={started(0) ? 'en cours' : 'prêt'}
+              status={started(0) ? tr('en cours', 'running') : tr('prêt', 'ready')}
               state={started(0) ? 'running' : 'never'}
               statusColor={started(0) ? C.ok : C.dim}
               lines={FRONT.slice(0, shownLines)}

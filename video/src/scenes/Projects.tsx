@@ -2,7 +2,8 @@ import type { FC } from 'react';
 import { useCurrentFrame, useVideoConfig } from 'remotion';
 import { pop, ramp, typed } from '../anim';
 import { useCues } from '../cues';
-import { AGENTS, onSonnet, STATUS, TABS } from '../data';
+import { onSonnet, TABS, useDemo } from '../data';
+import { useFmt } from '../lang';
 import { C } from '../theme';
 import { Composer } from '../ui/Composer';
 import { Conversation, ConvHeader } from '../ui/Chat';
@@ -14,14 +15,16 @@ import { AgentsSidebar, type AgentInfo } from '../ui/Sidebar';
 import { AppWindow, Spotlight, Stage, Title } from '../ui/Stage';
 import { EmptyConv, RefactoConv } from './common';
 
-const PATH = 'C:\\dev\\boutique';
-const FIRST: AgentInfo = { name: 'agent-1', status: 'idle', model: 'Opus 5.5', time: '0m 00s', tokens: '0', cost: '0,00 $', files: 0 };
-
 /** Project tabs, then a new project from its modal. */
 export const Projects: FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const c = useCues();
+  const { tr, usd } = useFmt();
+  const { agents: AGENTS, status: STATUS, refactor } = useDemo();
+  const shop = tr('boutique', 'shop');
+  const PATH = `C:\\dev\\${shop}`;
+  const FIRST: AgentInfo = { name: 'agent-1', status: 'idle', model: 'Opus 5.5', time: '0m 00s', tokens: '0', cost: usd(0), files: 0 };
   const open = c.word('add', 'nouveau') + 14;
   const create = c.end('options') + 6;
   const created = frame >= create + 8;
@@ -35,7 +38,7 @@ export const Projects: FC = () => {
     ...order
       .map((k) => TABS[k])
       .map((t, i) => ({ ...t, enter: pop(frame, fps, 4 + i * 10), delta: Math.round((t.delta ?? 0) * ramp(frame, 40, 50)) })),
-    { name: 'boutique', hue: 325, enter: created ? pop(frame, fps, create + 8) : 0 },
+    { name: shop, hue: 325, enter: created ? pop(frame, fps, create + 8) : 0 },
   ];
   return (
     <Stage>
@@ -49,7 +52,7 @@ export const Projects: FC = () => {
             created ? (
               <AgentsSidebar agents={[FIRST]} selected="agent-1" foot={{ path: PATH, counts: [0, 0, 0] }} />
             ) : (
-              <AgentsSidebar agents={onSonnet(AGENTS)} selected="refacto-auth" enters={AGENTS.map((_, i) => pop(frame, fps, 30 + i * 8))} />
+              <AgentsSidebar agents={onSonnet(AGENTS)} selected={refactor} enters={AGENTS.map((_, i) => pop(frame, fps, 30 + i * 8))} />
             )
           }
           overlay={
@@ -81,21 +84,24 @@ export const Projects: FC = () => {
                 enter={frame >= menuAt + 2 && frame < c.end('menu') + 8 ? pop(frame, fps, menuAt + 2, 20) : 0}
                 hover={frame >= w('ferme') - 4 ? 7 : frame >= w('recolore') - 4 ? 1 : frame >= w('renomme') - 4 ? 0 : undefined}
                 items={[
-                  'Renommer…',
-                  { label: 'Couleur', colors: COLORS, selected: 0 },
+                  tr('Renommer…', 'Rename…'),
+                  { label: tr('Couleur', 'Color'), colors: COLORS, selected: 0 },
                   null,
-                  { label: 'Désactiver le worktree par agent', hint: 'nouveaux agents' },
-                  'Commandes de lancement…',
-                  'Ouvrir le dossier',
+                  {
+                    label: tr('Désactiver le worktree par agent', 'Turn off worktree per agent'),
+                    hint: tr('nouveaux agents', 'new agents'),
+                  },
+                  tr('Commandes de lancement…', 'Launch commands…'),
+                  tr('Ouvrir le dossier', 'Open folder'),
                   null,
-                  { label: 'Fermer le projet…', danger: true },
+                  { label: tr('Fermer le projet…', 'Close project…'), danger: true },
                 ]}
               />
               <NewProjectModal
                 enter={pop(frame, fps, open + 6, 16) - (frame >= create ? 1 : 0)}
                 path={typed(PATH, frame, fps, c.word('add', 'choisis'), 26)}
                 git={ramp(frame, c.word('add', 'détecte'), 10)}
-                name={typed('boutique', frame, fps, c.at('options'), 20)}
+                name={typed(shop, frame, fps, c.at('options'), 20)}
                 color={frame >= c.word('options', 'couleur') ? 12 : 0}
                 firstAgent={frame >= c.word('options', 'premier')}
                 worktrees={frame >= c.word('options', 'worktree')}
@@ -125,17 +131,17 @@ export const Projects: FC = () => {
         >
           {created ? (
             <>
-              <ConvHeader name="agent-1" status="idle" sub="boutique / main" />
+              <ConvHeader name="agent-1" status="idle" sub={`${shop} / main`} />
               <EmptyConv cwd={PATH} />
-              <Composer placeholder="Décris la tâche à confier à Claude…" />
+              <Composer placeholder={tr('Décris la tâche à confier à Claude…', 'Describe the task to give Claude…')} />
             </>
           ) : (
             <>
-              <ConvHeader name="refacto-auth" status="running" sub="demo-api / main" />
+              <ConvHeader name={refactor} status="running" sub="demo-api / main" />
               <Conversation>
                 <RefactoConv />
               </Conversation>
-              <Composer placeholder="Envoyer un message à refacto-auth…" busy />
+              <Composer placeholder={tr(`Envoyer un message à ${refactor}…`, `Send a message to ${refactor}…`)} busy />
             </>
           )}
         </Shell>

@@ -1,5 +1,6 @@
 import type { FC, ReactNode } from 'react';
 import { useCurrentFrame } from 'remotion';
+import { useFmt } from '../lang';
 import { C, MONO, soft } from '../theme';
 import { Cursor } from './Cursor';
 import { Dot } from './Shell';
@@ -81,71 +82,80 @@ export const ConvHeader: FC<{
   split?: boolean;
   compact?: boolean;
   pressed?: { editor?: number; test?: number };
-}> = ({ name, status, sub, metrics, test, split = false, compact, pressed }) => (
-  <div
-    style={{
-      height: 64,
-      flex: 'none',
-      display: 'flex',
-      alignItems: 'center',
-      gap: 16,
-      padding: '0 24px',
-      borderBottom: `1px solid ${C.line}`,
-      whiteSpace: 'nowrap',
-    }}
-  >
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ fontSize: 17, fontWeight: 700 }}>{name}</span>
-        <span
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            fontSize: 13,
-            color: status === 'waiting' ? C.wait : status === 'idle' ? C.dim : C.ok,
-          }}
-        >
-          <Dot
-            color={status === 'waiting' ? C.wait : status === 'idle' ? C.dim : C.ok}
-            size={7}
-            pulse={status === 'running' || status === 'waiting'}
-          />
-          {status === 'running' ? 'En cours' : status === 'waiting' ? 'Question' : status === 'idle' ? 'Prêt' : 'Terminé'}
-        </span>
+}> = ({ name, status, sub, metrics, test, split = false, compact, pressed }) => {
+  const { tr, tok } = useFmt();
+  return (
+    <div
+      style={{
+        height: 64,
+        flex: 'none',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 16,
+        padding: '0 24px',
+        borderBottom: `1px solid ${C.line}`,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 17, fontWeight: 700 }}>{name}</span>
+          <span
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 13,
+              color: status === 'waiting' ? C.wait : status === 'idle' ? C.dim : C.ok,
+            }}
+          >
+            <Dot
+              color={status === 'waiting' ? C.wait : status === 'idle' ? C.dim : C.ok}
+              size={7}
+              pulse={status === 'running' || status === 'waiting'}
+            />
+            {status === 'running'
+              ? tr('En cours', 'Running')
+              : status === 'waiting'
+                ? 'Question'
+                : status === 'idle'
+                  ? tr('Prêt', 'Ready')
+                  : tr('Terminé', 'Done')}
+          </span>
+        </div>
+        <span style={{ fontFamily: MONO, fontSize: 12, color: C.dim }}>{sub}</span>
       </div>
-      <span style={{ fontFamily: MONO, fontSize: 12, color: C.dim }}>{sub}</span>
-    </div>
-    <div style={{ flex: 1 }} />
-    {metrics ? (
-      <>
-        <Button pressed={pressed?.editor}>
-          <span style={{ fontFamily: MONO, fontSize: 12, color: C.spark }}>{'</>'}</span>
-          {compact ? null : 'Éditeur'}
-        </Button>
-        {test ? (
-          <Button pressed={pressed?.test}>
-            <span style={{ fontSize: 11, color: C.spark }}>{test === 'test' ? '▶' : '▷'}</span>
-            {compact ? null : test === 'test' ? 'Tester' : 'Préparer le lancement'}
+      <div style={{ flex: 1 }} />
+      {metrics ? (
+        <>
+          <Button pressed={pressed?.editor}>
+            <span style={{ fontFamily: MONO, fontSize: 12, color: C.spark }}>{'</>'}</span>
+            {compact ? null : tr('Éditeur', 'Editor')}
           </Button>
-        ) : null}
-        <span style={{ fontFamily: MONO, fontSize: 12, padding: '4px 8px', borderRadius: 6, border: `1px solid ${C.line2}` }}>
-          {metrics.model}
-        </span>
-        {compact ? null : (
-          <>
-            <Metric k="Contexte" v={metrics.context ?? '76,2 k / 200 k'} />
-            <Metric k="Tokens" v={metrics.tokens} />
-          </>
-        )}
-        <Metric k="Coût" v={metrics.cost} />
-        <Metric k={split ? 'Fichiers' : 'Fichiers ▸'} v={metrics.files} />
-        {compact ? null : <Metric k="Durée" v={metrics.duration} />}
-        <Layout split={split} />
-      </>
-    ) : null}
-  </div>
-);
+          {test ? (
+            <Button pressed={pressed?.test}>
+              <span style={{ fontSize: 11, color: C.spark }}>{test === 'test' ? '▶' : '▷'}</span>
+              {compact ? null : test === 'test' ? tr('Tester', 'Test') : tr('Préparer le lancement', 'Prepare launch')}
+            </Button>
+          ) : null}
+          <span style={{ fontFamily: MONO, fontSize: 12, padding: '4px 8px', borderRadius: 6, border: `1px solid ${C.line2}` }}>
+            {metrics.model}
+          </span>
+          {compact ? null : (
+            <>
+              <Metric k={tr('Contexte', 'Context')} v={metrics.context ?? `${tok(76.2, 1)} / ${tok(200)}`} />
+              <Metric k="Tokens" v={metrics.tokens} />
+            </>
+          )}
+          <Metric k={tr('Coût', 'Cost')} v={metrics.cost} />
+          <Metric k={split ? tr('Fichiers', 'Files') : tr('Fichiers ▸', 'Files ▸')} v={metrics.files} />
+          {compact ? null : <Metric k={tr('Durée', 'Duration')} v={metrics.duration} />}
+          <Layout split={split} />
+        </>
+      ) : null}
+    </div>
+  );
+};
 
 export const Conversation: FC<{ children: ReactNode; gap?: number; offset?: number }> = ({ children, gap = 14, offset = 0 }) => (
   <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
@@ -335,12 +345,15 @@ export const Output: FC<{ lines: string[] }> = ({ lines }) => (
   </div>
 );
 
-export const Thinking: FC<{ seconds?: number; enter?: number }> = ({ enter = 1 }) =>
-  enter <= 0 ? null : (
+export const Thinking: FC<{ seconds?: number; enter?: number }> = ({ enter = 1 }) => {
+  const { tr } = useFmt();
+  return enter <= 0 ? null : (
     <div style={{ marginLeft: 36, fontSize: 14, color: C.dim, display: 'flex', gap: 6, ...enterStyle(enter) }}>
-      <span>▸</span> Réflexion
+      <span>▸</span>
+      {tr(' Réflexion', ' Thinking')}
     </div>
   );
+};
 
 const Pulse: FC = () => <Dot color={C.wait} size={8} pulse />;
 
@@ -412,11 +425,14 @@ export const QuestionCard: FC<{
   picked?: number | null;
   enter?: number;
   cursor?: { target: number; t: number; click: number };
-}> = ({ question, ...rest }) => (
-  <AskCard title="Claude attend ta réponse" {...rest}>
-    <span style={{ fontSize: 18, fontWeight: 600 }}>{question}</span>
-  </AskCard>
-);
+}> = ({ question, ...rest }) => {
+  const { tr } = useFmt();
+  return (
+    <AskCard title={tr('Claude attend ta réponse', 'Claude is waiting for your answer')} {...rest}>
+      <span style={{ fontSize: 18, fontWeight: 600 }}>{question}</span>
+    </AskCard>
+  );
+};
 
 export const PermissionCard: FC<{
   tool: string;
@@ -424,24 +440,34 @@ export const PermissionCard: FC<{
   picked?: number | null;
   enter?: number;
   cursor?: { target: number; t: number; click: number };
-}> = ({ tool, command, picked = null, ...rest }) => (
-  <AskCard
-    title="Claude demande une autorisation"
-    options={['Autoriser', 'Toujours autoriser', 'Refuser']}
-    picked={picked}
-    answered={picked === 2 ? '✕ Refusé' : picked === 1 ? '✓ Toujours autorisé' : '✓ Autorisé'}
-    {...rest}
-  >
-    <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-      <span style={{ padding: '2px 7px', borderRadius: 4, background: C.elev2, fontWeight: 600, fontSize: 12.5 }}>{tool}</span>
-      <span style={{ fontFamily: MONO, fontSize: 15 }}>{command}</span>
-    </span>
-  </AskCard>
-);
+}> = ({ tool, command, picked = null, ...rest }) => {
+  const { tr } = useFmt();
+  return (
+    <AskCard
+      title={tr('Claude demande une autorisation', 'Claude is asking for permission')}
+      options={[tr('Autoriser', 'Allow'), tr('Toujours autoriser', 'Always allow'), tr('Refuser', 'Deny')]}
+      picked={picked}
+      answered={
+        picked === 2
+          ? tr('✕ Refusé', '✕ Denied')
+          : picked === 1
+            ? tr('✓ Toujours autorisé', '✓ Always allowed')
+            : tr('✓ Autorisé', '✓ Allowed')
+      }
+      {...rest}
+    >
+      <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ padding: '2px 7px', borderRadius: 4, background: C.elev2, fontWeight: 600, fontSize: 12.5 }}>{tool}</span>
+        <span style={{ fontFamily: MONO, fontSize: 15 }}>{command}</span>
+      </span>
+    </AskCard>
+  );
+};
 
 /** « Claude travaille… » under the last message. */
-export const Working: FC<{ label?: string }> = ({ label = 'Claude travaille…' }) => {
+export const Working: FC<{ label?: string }> = ({ label }) => {
   const frame = useCurrentFrame();
+  const { tr } = useFmt();
   return (
     <div style={{ marginLeft: 36, display: 'flex', alignItems: 'center', gap: 10, fontSize: 15, color: C.muted }}>
       <span style={{ display: 'inline-flex', gap: 4 }}>
@@ -458,7 +484,7 @@ export const Working: FC<{ label?: string }> = ({ label = 'Claude travaille…' 
           />
         ))}
       </span>
-      {label}
+      {label ?? tr('Claude travaille…', 'Claude is working…')}
     </div>
   );
 };
@@ -471,8 +497,9 @@ export const TurnCard: FC<{
   files: { path: string; add: number; del: number }[];
   enter?: number;
   pressed?: { review?: number; commit?: number };
-}> = ({ duration, tokens, cost, files, enter = 1, pressed }) =>
-  enter <= 0 ? null : (
+}> = ({ duration, tokens, cost, files, enter = 1, pressed }) => {
+  const { tr, trx, plural } = useFmt();
+  return enter <= 0 ? null : (
     <div
       style={{
         marginLeft: 36,
@@ -486,13 +513,20 @@ export const TurnCard: FC<{
         ...enterStyle(enter),
       }}
     >
-      <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, fontWeight: 700, color: C.ok }}>✓ Tâche terminée</span>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, fontWeight: 700, color: C.ok }}>
+        {tr('✓ Tâche terminée', '✓ Task complete')}
+      </span>
       <span style={{ display: 'flex', gap: 18, fontFamily: MONO, fontSize: 13.5, color: C.muted }}>
         <span>{duration}</span>
         <span>{tokens} tokens</span>
         <span>{cost}</span>
         <span>
-          {files.length} fichier{files.length > 1 ? 's' : ''} modifié{files.length > 1 ? 's' : ''}
+          {trx(
+            <>
+              {files.length} fichier{files.length > 1 ? 's' : ''} modifié{files.length > 1 ? 's' : ''}
+            </>,
+            `${files.length} modified ${plural(files.length, '', '', 'file', 'files')}`,
+          )}
         </span>
       </span>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontFamily: MONO, fontSize: 13.5 }}>
@@ -505,11 +539,12 @@ export const TurnCard: FC<{
         ))}
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
-        <Button pressed={pressed?.review}>Revoir les fichiers</Button>
+        <Button pressed={pressed?.review}>{tr('Revoir les fichiers', 'Review files')}</Button>
         <Button pressed={pressed?.commit}>Commit…</Button>
       </div>
     </div>
   );
+};
 
 export interface Criterion {
   text: string;
@@ -524,6 +559,7 @@ export const CriteriaReport: FC<{
   recipe?: { prepare: string[]; processes: { name: string; command: string; url?: string }[] };
   enter?: number;
 }> = ({ criteria, progress, recipe, enter = 1 }) => {
+  const { tr } = useFmt();
   const met = criteria.filter((c) => c.ok).length;
   const head = (t: string, n?: string) => (
     <span style={{ display: 'flex', gap: 8, fontSize: 14, fontWeight: 700 }}>
@@ -544,7 +580,7 @@ export const CriteriaReport: FC<{
         ...enterStyle(enter),
       }}
     >
-      {head('Bilan des critères', `${met}/${criteria.length}`)}
+      {head(tr('Bilan des critères', 'Criteria report'), `${met}/${criteria.length}`)}
       {criteria.map((c) => (
         <span key={c.text} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, fontSize: 15, lineHeight: 1.45 }}>
           <span style={{ width: 14, color: c.ok ? C.ok : C.dim }}>{c.ok ? '✓' : '○'}</span>
@@ -554,7 +590,7 @@ export const CriteriaReport: FC<{
       ))}
       {progress ? (
         <>
-          {head('Ce qui a été fait')}
+          {head(tr('Ce qui a été fait', 'What was done'))}
           {progress.map((p) => (
             <span key={p} style={{ display: 'flex', gap: 8, fontSize: 15, color: C.muted }}>
               <span style={{ width: 14, textAlign: 'center', color: C.dim }}>·</span>
@@ -565,10 +601,10 @@ export const CriteriaReport: FC<{
       ) : null}
       {recipe ? (
         <>
-          {head('Lancement de test')}
+          {head(tr('Lancement de test', 'Test launch'))}
           {recipe.prepare.map((p) => (
             <span key={p} style={{ display: 'flex', gap: 10, fontFamily: MONO, fontSize: 13 }}>
-              <b style={{ fontWeight: 600 }}>Préparation</b>
+              <b style={{ fontWeight: 600 }}>{tr('Préparation', 'Setup')}</b>
               <span style={{ color: C.muted }}>{p}</span>
             </span>
           ))}
@@ -580,7 +616,7 @@ export const CriteriaReport: FC<{
             </span>
           ))}
           <span style={{ alignSelf: 'flex-start' }}>
-            <Button>▶ Tester</Button>
+            <Button>{tr('▶ Tester', '▶ Test')}</Button>
           </span>
         </>
       ) : null}

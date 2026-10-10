@@ -3,11 +3,13 @@ import { useCurrentFrame, useVideoConfig } from 'remotion';
 import { pop, ramp } from '../anim';
 import { useCues } from '../cues';
 import { EMPTY_STATUS, TABS } from '../data';
+import { useFmt } from '../lang';
 import { Shell } from '../ui/Shell';
 import { AppWindow, Stage, Title } from '../ui/Stage';
 import { TermWindow } from '../ui/TermWindow';
 
-const PROJECTS = ['demo-api', 'studio-web', 'mobile-app', 'infra', 'site-vitrine'];
+/** How many different projects the terminals say (their names are in the component, for the language). */
+const PROJECTS = 5;
 /** Pseudo-random but fixed positions. */
 const rnd = (i: number, k: number) => {
   const x = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453;
@@ -17,7 +19,7 @@ const WINDOWS = Array.from({ length: 30 }, (_, i) => ({
   x: 40 + rnd(i, 1) * 1420,
   y: 170 + rnd(i, 2) * 620,
   rot: (rnd(i, 3) - 0.5) * 8,
-  project: PROJECTS[i % PROJECTS.length],
+  project: i % PROJECTS,
 }));
 
 /** Terminals pile up while the voice counts them, then the app swallows them. */
@@ -25,6 +27,8 @@ export const Chaos: FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const c = useCues();
+  const { tr } = useFmt();
+  const projects = ['demo-api', 'studio-web', 'mobile-app', 'infra', tr('site-vitrine', 'marketing-site')];
   const pile = c.word('mess', 'ouverts') - 10;
   const suck = ramp(frame, c.word('one', 'réunit') - 6, 30);
   const app = pop(frame, fps, c.word('one', 'réunit') + 14, 18);
@@ -35,7 +39,7 @@ export const Chaos: FC = () => {
         return (
           <TermWindow
             key={i}
-            project={w.project}
+            project={projects[w.project]}
             style={{
               position: 'absolute',
               left: w.x + (730 - w.x) * suck,
