@@ -134,7 +134,7 @@ export const SCRIPT: SceneScript[] = [
         text: 'Sa carte dit tout : statut, modèle, temps de travail, tokens, coût, fichiers modifiés.',
         en: 'Its card says it all: status, model, working time, tokens, cost, modified files.',
       },
-      { id: 'name', text: 'Ta première demande ? Haiku lui trouve un nom.', en: 'Your first request? Haiku finds it a name.', hold: 0.4 },
+      { id: 'name', text: 'Ta première demande ? Haiku lui trouve un nom.', en: 'Your first request? Haiku names it.', hold: 0.4 },
       {
         id: 'archive',
         text: 'Il a fini ? Archive-le : sa conversation reste à un clic.',
@@ -190,7 +190,7 @@ export const SCRIPT: SceneScript[] = [
       {
         id: 'during',
         text: "Écris-lui pendant qu'il travaille : il en tient compte à l'étape suivante. Et Échap l'arrête net.",
-        en: 'Write to it while it works: it takes it into account at the next step. And Esc stops it cold.',
+        en: 'Write to it while it works: it factors your message in at the next step. And Esc stops it cold.',
       },
     ],
   },
@@ -400,7 +400,7 @@ export const SCRIPT: SceneScript[] = [
       {
         id: 'ready',
         text: 'Tous les critères sont atteints ? Le ticket passe à tester, et tu es prévenu. Dernière boucle sans tout atteindre ? Il y passe aussi, en « Objectif partiel ».',
-        en: 'All criteria met? The ticket moves to To review, and you’re notified. Last loop without meeting them all? It goes there too, as “Partial goal”.',
+        en: 'All criteria met? The ticket lands in To review, and you’re notified. Last loop without meeting them all? It goes there too, as “Partial goal”.',
         hold: 0.4,
       },
       {
@@ -505,7 +505,7 @@ export const SCRIPT: SceneScript[] = [
       {
         id: 'sync',
         text: 'Escouade tient leur statut à jour, et commente le ticket quand il est prêt à tester, puis validé.',
-        en: 'Escouade keeps their status up to date, and comments when it’s ready for review, then approved.',
+        en: 'Escouade syncs their status, and comments on the ticket when it’s ready for review, then approved.',
         hold: 0.5,
       },
       {

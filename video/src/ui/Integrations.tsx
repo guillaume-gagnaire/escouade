@@ -97,7 +97,7 @@ export const IntegrationsTab: FC<{
         title={tr('Comptes connectés', 'Connected accounts')}
         note={tr(
           "Les jetons restent sur cette machine, à part des réglages, et ne servent qu'aux appels de ces services.",
-          'Tokens stay on this machine, apart from the settings, and are only used for calls to these services.',
+          'Tokens stay on this machine, stored apart from the settings, and are only used for calls to these services.',
         )}
       >
         {accounts.map((a) => (

@@ -94,7 +94,7 @@ export function boardOf(fmt: Fmt): BoardData {
     loop: [1, 5],
     criteria: [
       { text: tr('Le CSV reprend les filtres de la liste', 'The CSV uses the list’s filters'), ok: false },
-      { text: tr('Montants au format français', 'Amounts in euros, two decimals'), ok: false },
+      { text: tr('Montants au format français', 'Amounts formatted as €1,234.56'), ok: false },
       { text: tr('Tests verts', 'Tests pass'), ok: false },
     ],
   };

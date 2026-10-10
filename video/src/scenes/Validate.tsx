@@ -71,7 +71,7 @@ export const Validate: FC = () => {
         criteria: CSV.criteria!.map((x) => ({ ...x, ok: true })),
         progress: [
           'Route GET /invoices.csv',
-          tr('Montants en 1 234,56 €', 'Amounts as 1,234.56 €'),
+          tr('Montants en 1 234,56 €', 'Amounts as €1,234.56'),
           tr('Filtres de la liste repris', 'List filters carried over'),
         ],
         agent: { name: AGENT_CSV, status: 'done' },
@@ -89,7 +89,7 @@ export const Validate: FC = () => {
         enter: frame >= sendBack ? pop(frame, fps, sendBack, 16) : 1,
         loop: [frame >= sendBack ? 1 : 2, 5],
         criteria: CSV.criteria!.map((x, i) => ({ ...x, ok: frame >= sendBack || i < 2 })),
-        progress: ['Route GET /invoices.csv', tr('Montants en 1 234,56 €', 'Amounts as 1,234.56 €')],
+        progress: ['Route GET /invoices.csv', tr('Montants en 1 234,56 €', 'Amounts as €1,234.56')],
         activity: frame >= sendBack ? tr('Réfléchit', 'Thinking') : tr('Lance npm test', 'Runs npm test'),
         agent: { name: AGENT_CSV, status: 'running' },
       };

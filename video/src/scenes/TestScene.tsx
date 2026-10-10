@@ -95,7 +95,7 @@ export const TestScene: FC = () => {
     column: 'doing',
     loop: [2, 5],
     criteria: CSV.criteria!.map((x, i) => ({ ...x, ok: i < 2 })),
-    progress: ['Route GET /invoices.csv', tr('Montants en 1 234,56 €', 'Amounts as 1,234.56 €')],
+    progress: ['Route GET /invoices.csv', tr('Montants en 1 234,56 €', 'Amounts as €1,234.56')],
     activity: tr('Lance npm test', 'Runs npm test'),
     agent: { name: AGENT_CSV, status: 'running' },
   };
