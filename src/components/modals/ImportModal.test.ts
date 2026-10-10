@@ -248,7 +248,7 @@ describe('ImportModal', () => {
     await userEvent.click(d.getByRole('checkbox', { name: 'Tout sélectionner' }));
     expect(d.getByText('1 234 tickets sélectionnés')).toBeInTheDocument();
     // The badge of the source says it too, to a screen reader, with the digits grouped.
-    expect(d.getByLabelText(/^1\s234 sélectionnés$/)).toBeInTheDocument();
+    expect(d.getByLabelText(/^1\s234 sélectionnés$/)).toHaveTextContent('1 234');
     expect(d.getByRole('button', { name: /^Importer 1\s234 tickets$/ })).toBeEnabled();
   });
 
@@ -330,6 +330,16 @@ describe('ImportModal in English', () => {
     expect(d.getByText('No ticket selected')).toBeInTheDocument();
     expect(d.getByText('Max loops')).toBeInTheDocument();
     expect(d.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+  });
+
+  it('groups the thousands of the selection the English way, in the badge of the source and to a screen reader', async () => {
+    const many = Array.from({ length: 1234 }, (_, i) => issue({ id: `ATL-${i}`, key: `ATL-${i}`, title: `Ticket ${i}`, criteria: [] }));
+    fakeBackend({ integration_issues: () => ({ ...JIRA, issues: many }) });
+    render(ImportModal, { projectId: 'p1' });
+    const d = within(dialogEn());
+    await waitFor(() => expect(d.getByText('1,234 results')).toBeInTheDocument());
+    await userEvent.click(d.getByRole('checkbox', { name: 'Select all' }));
+    expect(d.getByLabelText('1,234 selected')).toHaveTextContent('1,234');
   });
 
   it('counts the selection with the plural of English, and the toast says where the tickets came from', async () => {

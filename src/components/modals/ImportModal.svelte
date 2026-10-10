@@ -224,7 +224,7 @@
           <button class="src" class:on={id === current} role="tab" aria-selected={id === current} onclick={() => pickSource(id)}>
             {@render badge(id)}
             <span class="sn"><span class="n">{SERVICES[id].name}</span><span class="c mono">{l?.name}</span></span>
-            {#if n}<span class="count mono" aria-label={t('integrations.modal.pickedCount', { count: n, n: fInt(n) })}>{n}</span>{/if}
+            {#if n}<span class="count mono" aria-label={t('integrations.modal.pickedCount', { count: n, n: fInt(n) })}>{fInt(n)}</span>{/if}
           </button>
         {/each}
         <div style="flex:1"></div>

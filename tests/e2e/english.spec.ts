@@ -68,6 +68,9 @@ test('the interface in English, then in French without a restart', async ({ app 
 
   // Claude writes in French now too: the next agent is named in French (the fake CLI marks an English name with « -en »).
   await page.keyboard.press('Control+n');
+  // The new agent first: a message sent before its composer is there would go to the old one.
+  await expect(page.locator('.card')).toHaveCount(2);
+  await expect(page.getByText('Agent prêt')).toBeVisible();
   await send(page, 'Bonjour');
   await expect(page.locator('.card .name').filter({ hasText: /^bonjour-fake$/ })).toHaveCount(1);
 
