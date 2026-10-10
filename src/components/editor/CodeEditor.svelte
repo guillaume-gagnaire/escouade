@@ -7,7 +7,7 @@
   import { drawSelection, EditorView, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view';
   import { onDestroy, onMount, untrack } from 'svelte';
   import type { LineChanges } from '../../lib/editor/changes';
-  import { comparison, showComparison, type Comparison } from '../../lib/editor/compare';
+  import { comparison, relabelComparison, showComparison, type Comparison } from '../../lib/editor/compare';
   import {
     charColumn,
     columnOffset,
@@ -19,7 +19,8 @@
   } from '../../lib/editor/goto';
   import { changeGutter, setChanges } from '../../lib/editor/gutter';
   import { reloadChange } from '../../lib/editor/reload';
-  import { editorTheme, PHRASES } from '../../lib/editor/theme';
+  import { editorTheme, phrases } from '../../lib/editor/theme';
+  import { locale } from '../../lib/i18n';
   import { observeWidth } from '../../lib/resize';
 
   // `docKey` names the file shown: another one replaces the whole editor state. `version` changes
@@ -75,6 +76,7 @@
   const lang = new Compartment();
   const ind = new Compartment();
   const compared = new Compartment();
+  const words = new Compartment();
   /** A text replaced from outside is not the user typing. */
   let applying = false;
   let shownKey = untrack(() => docKey);
@@ -127,7 +129,7 @@
           compared,
           untrack(() => compare),
         ),
-        EditorState.phrases.of(PHRASES),
+        words.of(EditorState.phrases.of(phrases())),
         keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...searchKeymap, ...historyKeymap, indentWithTab]),
         editorTheme,
         lang.of(untrack(() => language) ?? []),
@@ -188,6 +190,24 @@
   $effect(() => {
     const l = language;
     untrack(() => view?.dispatch({ effects: lang.reconfigure(l ?? []) }));
+  });
+
+  // CodeMirror's own texts follow the language of the interface, and so do the buttons of the blocks compared. A panel
+  // already open keeps the words it was drawn with until it is opened again.
+  let shownLang = untrack(() => locale.ui);
+  $effect(() => {
+    const l = locale.ui;
+    if (l === shownLang) return;
+    shownLang = l;
+    untrack(() => {
+      if (!view) return;
+      const relabel = relabelComparison(view.state, compared);
+      view.dispatch({
+        effects: relabel
+          ? [words.reconfigure(EditorState.phrases.of(phrases())), relabel]
+          : words.reconfigure(EditorState.phrases.of(phrases())),
+      });
+    });
   });
 
   $effect(() => {

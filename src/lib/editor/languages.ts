@@ -1,6 +1,7 @@
 // The language of a file, by extension (or name), and its syntax for the editor, loaded on demand.
 
 import type { Extension } from '@codemirror/state';
+import { t } from '../i18n';
 
 interface Lang {
   label: string;
@@ -67,7 +68,7 @@ function langOf(path: string): Lang | null {
 }
 
 export function languageLabel(path: string): string {
-  return langOf(path)?.label ?? 'Texte';
+  return langOf(path)?.label ?? t('editor.language.text');
 }
 
 export async function loadLanguage(path: string): Promise<Extension | null> {

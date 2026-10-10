@@ -2,8 +2,9 @@
 // above each block that differs, the lines the other version has there, and a button that puts them in the text.
 
 import { Change, diff, unifiedMergeView } from '@codemirror/merge';
-import { Compartment, EditorState, Facet, type Extension, type TransactionSpec } from '@codemirror/state';
+import { Compartment, EditorState, Facet, type Extension, type StateEffect, type TransactionSpec } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
+import { t } from '../i18n';
 import { DIFF_TIMEOUT, lineTokens } from './changes';
 
 /** What the text is compared with: the reference version (HEAD, or where a worktree's branch left its base), or the file on disk. */
@@ -15,20 +16,20 @@ export interface Comparison {
   against: CompareWith;
 }
 
-/** What the button of a block does, said for the version it takes the block from. */
-const ACTION: Record<CompareWith, string> = { reference: 'Annuler ce bloc', disk: 'Prendre ce bloc' };
+/** What the button of a block says, for the version it takes the block from; read for each button drawn, in the language of the moment. */
+const blockLabel = (against: CompareWith) => t(against === 'reference' ? 'editor.compare.revertBlock' : 'editor.compare.takeBlock');
 
 /** The comparison an editor shows, null when it shows none. */
 const shown = Facet.define<Comparison, Comparison | null>({ combine: (values) => values[0] ?? null });
 
 /** The buttons of a block: only the one taking the other version's block, as keeping the text as it is needs none. */
-function blockButton(label: string) {
+function blockButton(against: CompareWith) {
   return (type: 'accept' | 'reject', action: (e: MouseEvent) => void): HTMLElement => {
     if (type === 'accept') return document.createElement('span');
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'cm-blockAction';
-    button.textContent = label;
+    button.textContent = blockLabel(against);
     // Pressed with the mouse, it leaves the focus in the text, where Ctrl+Z undoes what it did.
     button.onmousedown = (e) => e.preventDefault();
     // A click, or Enter or Space once it has the focus (Escape then Tab from the text): the button goes with its
@@ -203,7 +204,7 @@ function compareView(c: Comparison): Extension {
       original: c.original,
       // The gutter has its own marks, of the lines changed since the reference version.
       gutter: false,
-      mergeControls: blockButton(ACTION[c.against]),
+      mergeControls: blockButton(c.against),
       diffConfig: { override: blockDiff },
     }),
   ];
@@ -220,4 +221,13 @@ export function showComparison(state: EditorState, slot: Compartment, c: Compari
   const now = state.facet(shown);
   if (now === c || (now && c && now.against === c.against && now.original === c.original)) return null;
   return { effects: slot.reconfigure(c ? compareView(c) : []) };
+}
+
+/**
+ * The effect drawing the comparison shown again (null when there is none), for its buttons to say their
+ * labels in the language now in use: they are drawn once, with their block.
+ */
+export function relabelComparison(state: EditorState, slot: Compartment): StateEffect<unknown> | null {
+  const now = state.facet(shown);
+  return now ? slot.reconfigure(compareView(now)) : null;
 }

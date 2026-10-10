@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { setLang } from '../i18n';
 import { newFileError, newFilePath, renameError } from './create';
 
 const files = ['README.md', 'src/app.ts', 'src/lib/x.ts'];
@@ -110,5 +111,22 @@ describe('renameError', () => {
     expect(rename('LIB/inner', 'src/lib', 'dir')).toBe('Un dossier ne peut pas aller dans lui-même.');
     expect(rename('app.ts/b.ts', 'src/app.ts')).toBe('« app.ts » est un fichier.');
     expect(rename('README.md/b.ts', 'src', 'dir')).toBe('« README.md » est un fichier.');
+  });
+});
+
+describe('the refusals, in English', () => {
+  it('say why a name is refused, for a file and for a folder', () => {
+    setLang('en');
+    expect(error('/x.ts')).toBe('A name can’t start with a slash.');
+    expect(error('a/')).toBe('The name must end with a file name.');
+    expect(newFileError('a/', '', { files, windows: true }, 'dir')).toBe('The name must end with a folder name.');
+    expect(error('a.')).toBe('“a.” is not a valid file name.');
+    expect(newFileError('a.', '', { files, windows: true }, 'dir')).toBe('“a.” is not a valid folder name.');
+    expect(error('app.ts', 'src')).toBe('“app.ts” already exists here.');
+    expect(newFileError('.env', '', { files: [...files, '.env'], ignored: ['.env'], windows: true })).toBe(
+      '“.env” already exists here (ignored by git).',
+    );
+    expect(error('README.md/b.ts')).toBe('“README.md” is a file.');
+    expect(renameError('lib/inner', 'src/lib', 'dir', { files, windows: true })).toBe('A folder can’t go inside itself.');
   });
 });

@@ -1,6 +1,7 @@
 // Naming a file or a folder from the editor's tree, to create it or to rename one: where it goes and what keeps it
 // from going there.
 
+import { t } from '../i18n';
 import { IS_MAC } from '../platform';
 
 export type EntryKind = 'file' | 'dir';
@@ -15,8 +16,6 @@ export interface Names {
   /** Windows' rules on names: everywhere but on macOS by default. */
   windows?: boolean;
 }
-
-const WHAT: Record<EntryKind, string> = { file: 'fichier', dir: 'dossier' };
 
 /** The file `name` (folders to create included, `\` read as `/`) of the folder `dir` ('' for the root). */
 export function newFilePath(dir: string, name: string): string {
@@ -49,12 +48,12 @@ export function renameError(name: string, from: string, kind: EntryKind, names: 
 function nameError(name: string, dir: string, kind: EntryKind, names: Names, from: string | null): string | null {
   if (!name.trim()) return null;
   const rel = name.replaceAll('\\', '/');
-  if (rel.startsWith('/')) return 'Un nom ne peut pas commencer par une barre oblique.';
-  if (rel.endsWith('/')) return `Le nom doit finir par celui d’un ${WHAT[kind]}.`;
+  if (rel.startsWith('/')) return t('editor.name.startsWithSlash');
+  if (rel.endsWith('/')) return t(kind === 'dir' ? 'editor.name.endsWithDir' : 'editor.name.endsWithFile');
   const windows = names.windows ?? !IS_MAC;
   const parts = rel.split('/');
   if (parts.some((p) => p === '' || p === '.' || p === '..' || (windows && !windowsName(p)))) {
-    return `« ${name} » n’est pas un nom de ${WHAT[kind]} valide.`;
+    return t(kind === 'dir' ? 'editor.name.invalidDir' : 'editor.name.invalidFile', { name });
   }
   const base = dir ? `${dir}/` : '';
   const path = (base + rel).toLowerCase();
@@ -64,9 +63,7 @@ function nameError(name: string, dir: string, kind: EntryKind, names: Names, fro
   if (from !== null) {
     if (base + rel === from) return null;
     if (path.startsWith(own + '/')) {
-      return kind === 'dir'
-        ? 'Un dossier ne peut pas aller dans lui-même.'
-        : `« ${from.slice(from.lastIndexOf('/') + 1)} » est un fichier.`;
+      return kind === 'dir' ? t('editor.name.intoItself') : t('editor.name.isAFile', { name: from.slice(from.lastIndexOf('/') + 1) });
     }
     if (path === own) return null;
   }
@@ -74,12 +71,12 @@ function nameError(name: string, dir: string, kind: EntryKind, names: Names, fro
   const dirs = (names.dirs ?? []).map((d) => d.toLowerCase()).filter((d) => !away(d));
   const known = new Set(files);
   for (let i = 1; i < parts.length; i++) {
-    if (known.has((base + parts.slice(0, i).join('/')).toLowerCase())) return `« ${parts[i - 1]} » est un fichier.`;
+    if (known.has((base + parts.slice(0, i).join('/')).toLowerCase())) return t('editor.name.isAFile', { name: parts[i - 1] });
   }
   const below = (p: string) => p === path || p.startsWith(path + '/');
   if (known.has(path) || files.some(below) || dirs.some(below)) {
     const hidden = (names.ignored ?? []).some((f) => f.toLowerCase() === path);
-    return `« ${name} » existe déjà à cet endroit${hidden ? ' (ignoré par git)' : ''}.`;
+    return t(hidden ? 'editor.name.existsIgnored' : 'editor.name.exists', { name });
   }
   return null;
 }

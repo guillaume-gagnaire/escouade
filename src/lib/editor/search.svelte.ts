@@ -3,6 +3,7 @@
 // (the backend does not stop a search given up: its answer is dropped when it comes).
 
 import { escapeRegExp } from '../format';
+import { t } from '../i18n';
 import { api } from '../ipc';
 import type { SearchMatch, SearchQuery, SearchResult } from '../types';
 import { sourceAgent } from './buffers.svelte';
@@ -129,7 +130,7 @@ export class FileSearch {
     if (!q.pattern || (q.regex && !valid(q.pattern))) {
       this.result = null;
       this.answered = null;
-      this.error = q.pattern ? 'Expression régulière invalide.' : null;
+      this.error = q.pattern ? t('editor.search.invalidRegex') : null;
       this.pending = false;
       return;
     }
