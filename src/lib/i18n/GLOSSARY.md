@@ -264,6 +264,17 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 | en lecture seule | read-only | |
 | chemin hors du dossier | path outside the folder | |
 | racine (de la source) | root (of the source) | |
+| dépôt distant / branche distante | remote / remote branch | « Plusieurs dépôts distants » → “Several remotes” |
+| tirer (des commits) | pull | « 3 commits à tirer » → “3 commits to pull” |
+| Fetch terminé | Fetch done | |
+| Déjà à jour | Already up to date | |
+| mettre de côté (des modifications) | stash | |
+| HEAD détachée | detached HEAD | |
+| janv., févr. … / S12 / 27/09 | Jan, Feb … / W12 / Sep 27 | les étapes des statistiques, écrites par le backend |
+| Autoriser Bash : npm test ? | Allow Bash: npm test? | notification du système ; « Approuver le plan » → “Approve the plan” |
+| Tâche terminée | Task done | notification du système |
+| activité d’un agent : Lit, Cherche, Modifie, Écrit, Lance, Délègue, Rédige, Réfléchit | Reading, Searching, Editing, Writing, Running, Delegating, Replying, Thinking | le verbe seul est le début du verbe suivi de ce qu’il touche (« Lit src/a.ts » → “Reading src/a.ts”) |
+| Contexte compacté / Nouvelle conversation Claude (contexte vidé) | Context compacted / New Claude conversation (context cleared) | notices de la conversation |
 
 ## K — accounts
 
