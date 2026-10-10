@@ -2267,7 +2267,8 @@ pub async fn pull(repo: &str) -> Result<String> {
              Rebase or merge by hand (or ask an agent)."
         ));
     }
-    if let Err(e) = run(repo, &["merge", "--ff-only", "--quiet", "@{upstream}"]).await {
+    // In English: the refusal is told apart by git's own words.
+    if let Err(e) = run_english(repo, &["merge", "--ff-only", "--quiet", "@{upstream}"]).await {
         if e.to_string().contains("would be overwritten") {
             bail!(tr!(
                 "Des modifications non commitées seraient écrasées par le pull : commite-les ou mets-les de côté d'abord.",
@@ -2300,7 +2301,9 @@ pub async fn push(repo: &str) -> Result<String> {
     let st = status(repo).await?;
     let branch = sync_branch(&st)?;
     if st.upstream.is_some() && !st.upstream_gone {
-        run_net(repo, &["push"], false).await.map_err(rejected)?;
+        run_net_english(repo, &["push"], false)
+            .await
+            .map_err(rejected)?;
         return Ok(pushed(crate::i18n::ui(), st.ahead));
     }
     let remotes = remotes(repo).await;
@@ -2313,7 +2316,7 @@ pub async fn push(repo: &str) -> Result<String> {
             "Several remotes and none is called origin: publish the branch by hand (git push -u <remote> {branch})."
         ));
     };
-    run_net(repo, &["push", "-u", remote, branch], false)
+    run_net_english(repo, &["push", "-u", remote, branch], false)
         .await
         .map_err(rejected)?;
     Ok(tr!(
@@ -2335,7 +2338,7 @@ pub async fn push_branch(cwd: &str, branch: &str) -> Result<String> {
             "Several remotes and none is called origin: push {branch} by hand."
         ));
     };
-    run_net(cwd, &["push", "-u", &remote, branch], false)
+    run_net_english(cwd, &["push", "-u", &remote, branch], false)
         .await
         .map_err(rejected)?;
     Ok(remote)
@@ -3762,6 +3765,50 @@ mod repo_tests {
         assert_eq!(
             git_in(&bare, &["rev-parse", "main"]),
             git_in(&local, &["rev-parse", "HEAD"])
+        );
+    }
+
+    /// A hook of `repo` that writes, on a line of `out`, the language git runs in (`LC_ALL`).
+    fn note_locale_in_hook(repo: &Path, hook: &str, out: &Path) {
+        let file = repo.join(".git").join("hooks").join(hook);
+        let out = out.to_string_lossy().replace('\\', "/");
+        std::fs::write(
+            &file,
+            format!("#!/bin/sh\necho \"${{LC_ALL:-unset}}\" >> '{out}'\n"),
+        )
+        .unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    }
+
+    // `pull` and `push` tell a refusal from git's own words ("would be overwritten", "[rejected]"):
+    // git must write them in English, whatever the system's language is.
+    #[tokio::test]
+    async fn pull_and_push_run_git_in_english_since_they_read_its_refusals() {
+        let (local, other, _) = with_remote("g2-sync-english");
+        let seen = local.parent().unwrap().join("locale.txt");
+        note_locale_in_hook(&local, "post-merge", &seen);
+        note_locale_in_hook(&local, "pre-push", &seen);
+        commit_file(&other, "b.txt", "b\n");
+        git_in(&other, &["push", "-q"]);
+        pull(&s(&local)).await.unwrap();
+        commit_file(&local, "c.txt", "c\n");
+        push(&s(&local)).await.unwrap();
+        // A branch published: `push -u`, from the project's checkout and from a worktree's.
+        git_in(&local, &["checkout", "-qb", "feat/y"]);
+        commit_file(&local, "d.txt", "d\n");
+        push(&s(&local)).await.unwrap();
+        git_in(&local, &["checkout", "-qb", "feat/z"]);
+        commit_file(&local, "e.txt", "e\n");
+        push_branch(&s(&local), "feat/z").await.unwrap();
+        let lines = std::fs::read_to_string(&seen).unwrap();
+        assert_eq!(
+            lines.lines().collect::<Vec<_>>(),
+            ["C", "C", "C", "C"],
+            "one line for the pull and one for each push: {lines:?}"
         );
     }
 

@@ -4583,6 +4583,14 @@ impl<R: Runtime> Core<R> {
                 ));
             }
             if let Some((r, b)) = &split {
+                // `origin/HEAD` is a symbolic ref to the remote's default branch: deleting it as a
+                // branch would follow it and delete that branch's copy.
+                if b == "HEAD" {
+                    bail!(tr!(
+                        "« {name} » n’est pas une branche : c’est le renvoi vers la branche par défaut du dépôt distant.",
+                        "“{name}” isn’t a branch: it points to the remote repository’s default branch."
+                    ));
+                }
                 let tracking = format!("refs/remotes/{r}/{b}");
                 if let Some(why) = git::remote_guard(&root, r, &tracking, &bases).await {
                     bail!(why.refusal(i18n::ui(), name));
