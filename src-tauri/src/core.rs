@@ -3530,9 +3530,10 @@ impl<R: Runtime> Core<R> {
     }
 
     /// The diff of an agent's worktree group of `git_project_diff`: all of the worktree's dirty
-    /// files. None for an agent deleted (or its worktree removed) since the list was made: it has
-    /// no file left to show, and the project's checkout must not be read in its place. Err when
-    /// git cannot read the worktree: an empty diff would leave its files out without a word.
+    /// files. None for an agent deleted (or its worktree or its folder removed) since the list was
+    /// made: it has no file left to show, and the project's checkout must not be read in its
+    /// place. Err when git cannot read the worktree: an empty diff would leave its files out
+    /// without a word.
     pub(crate) async fn worktree_diff(&self, agent_id: Option<&str>) -> Result<Option<String>> {
         let worktree = agent_id.and_then(|a| self.agent(a).ok()).and_then(|h| {
             let rt = h.lock();
@@ -3542,11 +3543,16 @@ impl<R: Runtime> Core<R> {
         let Some((name, worktree)) = worktree else {
             return Ok(None);
         };
-        // Its group is all of the worktree's dirty files: no path to list.
+        // Its folder gone in the meantime (a validation, an archive): no file left to show either.
+        if !Path::new(&worktree.path).is_dir() {
+            return Ok(None);
+        }
+        // Its group is all of the worktree's dirty files: no path to list. Said with the French
+        // space before the colon, which a context would not give.
         git::diff(&worktree.path, &[])
             .await
             .map(Some)
-            .with_context(|| format!("Diff du worktree de « {name} » non lu"))
+            .map_err(|e| anyhow!("Diff du worktree de « {name} » non lu : {e:#}"))
     }
 
     /// Reverts a file of the files panel to HEAD (a new file is deleted).

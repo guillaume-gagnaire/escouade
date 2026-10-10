@@ -1301,11 +1301,19 @@ async fn the_project_diff_says_why_an_agents_worktree_could_not_be_read() {
     let said = format!("{e:#}");
     let name = h.core.agent(&id).unwrap().lock().meta.name.clone();
     assert!(
-        said.starts_with(&format!("Diff du worktree de « {name} » non lu: ")),
+        said.starts_with(&format!("Diff du worktree de « {name} » non lu : ")),
         "{said}"
     );
-    // An agent deleted since the list was made has nothing left to show.
+    // An agent deleted since the list was made has nothing left to show, nor one whose worktree
+    // folder went in the meantime (a validation, an archive).
     assert_eq!(h.core.worktree_diff(Some("gone")).await.unwrap(), None);
+    h.wait("warm-up", |h| h.alive(&id)).await;
+    if let Some(proc) = h.core.agent(&id).unwrap().lock().detach() {
+        proc.kill();
+    }
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    std::fs::remove_dir_all(&wt).unwrap();
+    assert_eq!(h.core.worktree_diff(Some(&id)).await.unwrap(), None);
 }
 
 #[tokio::test]
