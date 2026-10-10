@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { t } from './lib/i18n';
   import { api } from './lib/ipc';
   import { app } from './lib/state.svelte';
   import { handleShortcut, holdPrint } from './lib/shortcuts';
@@ -76,7 +77,7 @@
   <TitleBar />
   <div class="body">
     {#if initError}
-      <div class="fatal">Impossible de démarrer : {initError}</div>
+      <div class="fatal">{t('shell.app.cantStart', { error: initError })}</div>
     {:else if !app.ready}
       <div class="fatal"></div>
     {:else if app.ui.view === 'overview'}
@@ -109,8 +110,8 @@
         {/if}
       {:else}
         <div class="noagent">
-          <span>Aucun agent dans ce projet.</span>
-          <button class="btn primary" onclick={() => app.newAgent()}>+ Nouvel agent</button>
+          <span>{t('shell.app.noAgent')}</span>
+          <button class="btn primary" onclick={() => app.newAgent()}>+ {t('shell.app.newAgent')}</button>
         </div>
       {/if}
     {:else}

@@ -90,7 +90,7 @@ export default defineZone('boardSettings', {
     testsFirstDesc: 'Blocks the action if a test fails and sends the ticket back to the agent.',
     cleanup: 'Delete the worktree once approved',
     cleanupDesc:
-      'Frees disk space, after its teardown commands. After a merge, its branch goes too; if pushed or proposed as a PR, it stays.',
+      'Frees disk space once its teardown commands have run. After a merge, its branch goes too; if pushed or proposed as a PR, it stays.',
     commitMessage: 'Generated commit message',
     onConflict: 'On conflict',
     conflicts: { ask: 'Ask me', agent: 'Let the agent resolve', abort: 'Cancel' },

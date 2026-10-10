@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { EFFORTS, MODES, modelOptions } from '../../lib/models';
   import { IS_MAC } from '../../lib/platform';
@@ -20,7 +21,7 @@
     checking = true;
     const found = await checkForUpdate(true);
     checking = false;
-    if (!found) app.toast('Aucune mise à jour disponible.', 'info');
+    if (!found) app.toast(t('settings.about.noUpdate'), 'info');
   }
 </script>
 
@@ -38,117 +39,112 @@
 {/snippet}
 
 {#if tab === 'claude'}
-  <Group title="Exécutable">
+  <Group title={t('settings.claude.executable')}>
     {@render text(
-      "Chemin de l'exécutable",
-      'vide = détection automatique',
+      t('settings.claude.path'),
+      t('settings.claude.pathHint'),
       s.claudePath,
       (v) => (s.claudePath = v),
-      app.claudeFound ? 'claude (trouvé dans le PATH)' : 'introuvable — indique le chemin de claude.exe',
+      app.claudeFound ? t('settings.claude.pathFound') : t('settings.claude.pathMissing'),
     )}
   </Group>
-  <Group title="Nouveaux agents">
-    <Row label="Modèle par défaut">
-      <Chips label="Modèle par défaut" options={modelOptions(app.models)} bind:value={s.defaultModel} />
+  <Group title={t('settings.claude.newAgents')}>
+    <Row label={t('settings.claude.defaultModel')}>
+      <Chips label={t('settings.claude.defaultModel')} options={modelOptions(app.models)} bind:value={s.defaultModel} />
     </Row>
-    <Row label="Effort par défaut">
-      <Chips label="Effort par défaut" options={EFFORTS} bind:value={s.defaultEffort} />
+    <Row label={t('settings.claude.defaultEffort')}>
+      <Chips label={t('settings.claude.defaultEffort')} options={EFFORTS} bind:value={s.defaultEffort} />
     </Row>
-    <Row label="Mode de permission par défaut">
-      <Chips label="Mode de permission par défaut" options={MODES} bind:value={s.defaultMode} />
+    <Row label={t('settings.claude.defaultMode')}>
+      <Chips label={t('settings.claude.defaultMode')} options={MODES} bind:value={s.defaultMode} />
     </Row>
   </Group>
-  <Group title="Processus">
-    <Row label="Reprise automatique après la limite d’usage" desc="« continue » envoyé une fois le quota réinitialisé">
-      <Switch label="Reprise automatique après la limite d’usage" bind:on={s.autoResume} />
+  <Group title={t('settings.claude.processes')}>
+    <Row label={t('settings.claude.autoResume')} desc={t('settings.claude.autoResumeDesc')}>
+      <Switch label={t('settings.claude.autoResume')} bind:on={s.autoResume} />
     </Row>
-    <Row label="Arrêter les processus Claude inactifs après" hint="minutes, 0 = jamais">
+    <Row label={t('settings.claude.idleStop')} hint={t('settings.claude.idleStopHint')}>
       <input
         class="field mono input short"
         type="number"
         min="0"
-        aria-label="Arrêter les processus Claude inactifs après (minutes)"
+        aria-label={t('settings.claude.idleStopLabel')}
         bind:value={s.idleStopMinutes}
       />
     </Row>
   </Group>
 {:else if tab === 'notifications'}
   <Group
-    title="Me prévenir pour"
-    note="Désactivé : ni notification système ni carillon pour ce type ; l’onglet, la carte et {IS_MAC
-      ? 'le Dock'
-      : 'la barre des tâches'} signalent toujours l’agent."
+    title={t('settings.notifications.notifyFor')}
+    note={IS_MAC ? t('settings.notifications.noteMac') : t('settings.notifications.noteOther')}
   >
-    <Row label="Questions et autorisations">
-      <Switch label="Questions et autorisations" bind:on={s.notifyFor.questions} />
+    <Row label={t('settings.notifications.questions')}>
+      <Switch label={t('settings.notifications.questions')} bind:on={s.notifyFor.questions} />
     </Row>
-    <Row label="Tâches terminées">
-      <Switch label="Tâches terminées" bind:on={s.notifyFor.done} />
+    <Row label={t('settings.notifications.done')}>
+      <Switch label={t('settings.notifications.done')} bind:on={s.notifyFor.done} />
     </Row>
-    <Row label="Erreurs">
-      <Switch label="Erreurs" bind:on={s.notifyFor.errors} />
+    <Row label={t('settings.notifications.errors')}>
+      <Switch label={t('settings.notifications.errors')} bind:on={s.notifyFor.errors} />
     </Row>
-    <Row label="Tickets (prêt à tester, bloqué)">
-      <Switch label="Tickets (prêt à tester, bloqué)" bind:on={s.notifyFor.tickets} />
-    </Row>
-  </Group>
-  <Group title="Canaux">
-    <Row label="Notifications {IS_MAC ? 'macOS' : 'Windows'} quand l'app n'est pas au premier plan">
-      <Switch label="Notifications système" bind:on={s.osNotifications} />
+    <Row label={t('settings.notifications.tickets')}>
+      <Switch label={t('settings.notifications.tickets')} bind:on={s.notifyFor.tickets} />
     </Row>
   </Group>
-  <Group title="Son">
-    <Row label="Son activé" desc="Question de Claude, fin de tour">
-      <Switch label="Son activé" bind:on={s.sound} />
+  <Group title={t('settings.notifications.channels')}>
+    <Row label={t('settings.notifications.system', { os: IS_MAC ? 'macOS' : 'Windows' })}>
+      <Switch label={t('settings.notifications.systemLabel')} bind:on={s.osNotifications} />
     </Row>
-    <Row label="Tester le son">
-      <button class="btn" onclick={() => api.playChime()}>▶ Tester</button>
+  </Group>
+  <Group title={t('settings.notifications.sound')}>
+    <Row label={t('settings.notifications.soundOn')} desc={t('settings.notifications.soundOnDesc')}>
+      <Switch label={t('settings.notifications.soundOn')} bind:on={s.sound} />
+    </Row>
+    <Row label={t('settings.notifications.soundTest')}>
+      <button class="btn" onclick={() => api.playChime()}>{t('settings.notifications.soundTestButton')}</button>
     </Row>
   </Group>
 {:else if tab === 'terminals'}
-  <Group title="Chemins" note="Détectés : {app.shells.map((x) => x.label).join(', ') || 'aucun'}">
+  <Group
+    title={t('settings.terminals.paths')}
+    note={t('settings.terminals.detected', { list: app.shells.map((x) => x.label).join(', ') || t('settings.terminals.none') })}
+  >
     {#if IS_MAC}
-      {@render text('bash', 'vide = auto', s.bashPath, (v) => (s.bashPath = v))}
+      {@render text('bash', t('settings.terminals.auto'), s.bashPath, (v) => (s.bashPath = v))}
     {:else}
-      {@render text('PowerShell 7', 'vide = auto', s.pwshPath, (v) => (s.pwshPath = v))}
-      {@render text('Git Bash', 'vide = auto', s.bashPath, (v) => (s.bashPath = v))}
-      {@render text('Distribution WSL', 'vide = distribution par défaut', s.wslDistro, (v) => (s.wslDistro = v), 'Ubuntu')}
+      {@render text('PowerShell 7', t('settings.terminals.auto'), s.pwshPath, (v) => (s.pwshPath = v))}
+      {@render text('Git Bash', t('settings.terminals.auto'), s.bashPath, (v) => (s.bashPath = v))}
+      {@render text(t('settings.terminals.wsl'), t('settings.terminals.wslHint'), s.wslDistro, (v) => (s.wslDistro = v), 'Ubuntu')}
     {/if}
   </Group>
 {:else if tab === 'network'}
-  <Group
-    title="Proxy"
-    note="Le proxy est transmis aux processus Claude Code, à la lecture des quotas, aux intégrations et aux mises à jour. Il s'applique aux agents au prochain (re)démarrage de leur processus."
-  >
-    {@render text('Proxy HTTP(S)', 'ex. http://utilisateur:motdepasse@proxy:3128', s.proxyUrl, (v) => (s.proxyUrl = v), 'aucun')}
-    {@render text('Exclusions', 'NO_PROXY, séparées par des virgules', s.noProxy, (v) => (s.noProxy = v))}
-    <Row label="Appliquer aussi le proxy aux terminaux intégrés">
-      <Switch label="Appliquer aussi le proxy aux terminaux intégrés" bind:on={s.proxyTerminals} />
+  <Group title={t('settings.network.proxy')} note={t('settings.network.proxyNote')}>
+    {@render text(
+      t('settings.network.proxyUrl'),
+      t('settings.network.proxyUrlHint'),
+      s.proxyUrl,
+      (v) => (s.proxyUrl = v),
+      t('settings.network.proxyUrlNone'),
+    )}
+    {@render text(t('settings.network.exclusions'), t('settings.network.exclusionsHint'), s.noProxy, (v) => (s.noProxy = v))}
+    <Row label={t('settings.network.proxyTerminals')}>
+      <Switch label={t('settings.network.proxyTerminals')} bind:on={s.proxyTerminals} />
     </Row>
   </Group>
-  <Group
-    title="Certificats"
-    note="Les intégrations, les quotas et les mises à jour font confiance aux certificats reconnus et à ceux installés sur ce système (celui d'un proxy d'entreprise, le plus souvent). Claude Code, lui, a sa propre liste."
-  >
-    <Row
-      label="Ignorer la vérification des certificats TLS"
-      desc="Pour un proxy qui déchiffre le trafic avec un certificat non reconnu (erreur « UnknownIssuer »). S'applique aux intégrations, aux quotas, aux mises à jour, et aux processus Claude Code (au prochain démarrage de leur processus) avec les commandes que lancent les agents (npm, node…). À réserver à un réseau de confiance : une connexion interceptée, jetons compris, ne serait plus détectée."
-    >
-      <Switch label="Ignorer la vérification des certificats TLS" bind:on={s.insecureTls} />
+  <Group title={t('settings.network.certificates')} note={t('settings.network.certificatesNote')}>
+    <Row label={t('settings.network.insecureTls')} desc={t('settings.network.insecureTlsDesc')}>
+      <Switch label={t('settings.network.insecureTls')} bind:on={s.insecureTls} />
     </Row>
   </Group>
 {:else}
   <Group title="Escouade">
-    <Row label="Escouade {app.version}" desc={app.claudeFound ? 'Claude Code détecté' : 'Claude Code introuvable'}>
-      <button class="btn" disabled={checking} onclick={check}>{checking ? 'Recherche…' : 'Rechercher une mise à jour'}</button>
+    <Row label="Escouade {app.version}" desc={app.claudeFound ? t('settings.about.claudeFound') : t('settings.about.claudeMissing')}>
+      <button class="btn" disabled={checking} onclick={check}>{checking ? t('settings.about.checking') : t('settings.about.check')}</button>
     </Row>
-    <Row
-      label="Installer les mises à jour automatiquement"
-      desc="Escouade redémarre d’elle-même quand aucun agent ne travaille et que tout est enregistré."
-    >
-      <Switch label="Installer les mises à jour automatiquement" bind:on={s.autoUpdate} />
+    <Row label={t('settings.about.autoUpdate')} desc={t('settings.about.autoUpdateDesc')}>
+      <Switch label={t('settings.about.autoUpdate')} bind:on={s.autoUpdate} />
     </Row>
-    <Row label="Données locales" desc="~/.escouade/" />
+    <Row label={t('settings.about.localData')} desc="~/.escouade/" />
   </Group>
 {/if}
 

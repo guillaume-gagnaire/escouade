@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { trapFocus } from '../../lib/focus';
+  import { t } from '../../lib/i18n';
   import { SETTINGS_TABS, settingsForm, type SettingsTab } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
   import AppTab from '../settings/AppTab.svelte';
@@ -26,7 +27,7 @@
     if (suggest && settingsForm.projectId) void settingsForm.suggestLaunch(settingsForm.projectId);
   });
 
-  const current = $derived(SETTINGS_TABS.find((t) => t.id === settingsForm.tab) ?? SETTINGS_TABS[0]);
+  const current = $derived(SETTINGS_TABS.find((x) => x.id === settingsForm.tab) ?? SETTINGS_TABS[0]);
   const project = $derived(app.projects.find((p) => p.id === settingsForm.projectId));
   const draft = $derived(settingsForm.project);
   let body = $state<HTMLElement>();
@@ -52,7 +53,7 @@
   async function save() {
     if (!(await settingsForm.save())) return;
     close();
-    app.toast('Réglages enregistrés', 'ok');
+    app.toast(t('settings.modal.saved'), 'ok');
   }
 
   /** Up and down go from tab to tab, Home and End to the first and the last. */
@@ -75,32 +76,32 @@
   onmousedown={(e) => (downOnOverlay = e.target === e.currentTarget)}
   onclick={(e) => downOnOverlay && e.target === e.currentTarget && close()}
 >
-  <div class="modal" use:trapFocus role="dialog" tabindex="-1" aria-modal="true" aria-label="Réglages">
+  <div class="modal" use:trapFocus role="dialog" tabindex="-1" aria-modal="true" aria-label={t('common.settings')}>
     <nav>
-      <span class="title">Réglages</span>
-      <div class="tabs" role="tablist" aria-orientation="vertical" aria-label="Réglages">
-        {#each SETTINGS_TABS as t, i (t.id)}
-          {@const on = t.id === current.id}
-          {@const changed = settingsForm.changed(t.id)}
+      <span class="title">{t('common.settings')}</span>
+      <div class="tabs" role="tablist" aria-orientation="vertical" aria-label={t('common.settings')}>
+        {#each SETTINGS_TABS as tab, i (tab.id)}
+          {@const on = tab.id === current.id}
+          {@const changed = settingsForm.changed(tab.id)}
           <button
             class="tab"
             class:on
             class:changed
             aria-describedby={changed ? 'settings-changed' : undefined}
             role="tab"
-            id="settings-tab-{t.id}"
+            id="settings-tab-{tab.id}"
             aria-selected={on}
             aria-controls="settings-panel"
             tabindex={on ? 0 : -1}
-            onclick={() => (settingsForm.tab = t.id)}
+            onclick={() => (settingsForm.tab = tab.id)}
             onkeydown={(e) => onTabKey(e, i)}
           >
-            <span class="ic" aria-hidden="true">{t.icon}</span>{t.label}
-            <span class="mark" title="Modifié, pas encore enregistré" aria-hidden="true"></span>
+            <span class="ic" aria-hidden="true">{tab.icon}</span>{tab.label}
+            <span class="mark" title={t('settings.modal.changed')} aria-hidden="true"></span>
           </button>
         {/each}
       </div>
-      <span id="settings-changed" hidden>Modifié, pas encore enregistré</span>
+      <span id="settings-changed" hidden>{t('settings.modal.changed')}</span>
       <div style="flex:1"></div>
       <span class="version mono">Escouade {app.version}</span>
     </nav>
@@ -111,12 +112,12 @@
           <span class="desc">{current.desc}</span>
         </div>
         <div style="flex:1"></div>
-        <button class="icon-btn" style="width:28px;height:28px;font-size:16px" onclick={close} aria-label="Fermer">×</button>
+        <button class="icon-btn" style="width:28px;height:28px;font-size:16px" onclick={close} aria-label={t('common.close')}>×</button>
       </div>
       {#if current.scoped && app.projects.length}
         <div class="scope">
-          <span class="k">Projet</span>
-          <div class="projects" role="group" aria-label="Projet">
+          <span class="k">{t('common.project')}</span>
+          <div class="projects" role="group" aria-label={t('common.project')}>
             {#each app.projects as p (p.id)}
               {@const d = settingsForm.projects[p.id]}
               <button
@@ -141,7 +142,7 @@
               <IntegrationsTab {project} />
             {/if}
           {:else}
-            <p class="none">Aucun projet ouvert.</p>
+            <p class="none">{t('settings.modal.noProject')}</p>
           {/if}
         {:else if current.id === 'app'}
           <ApplicationTab />
@@ -152,8 +153,8 @@
       <div class="foot">
         {#if settingsForm.problem}<span class="problem">{settingsForm.problem}</span>{/if}
         <div style="flex:1"></div>
-        <button class="btn ghost" onclick={close}>Annuler</button>
-        <button class="btn primary" disabled={settingsForm.busy || !!settingsForm.problem} onclick={save}>Enregistrer</button>
+        <button class="btn ghost" onclick={close}>{t('common.cancel')}</button>
+        <button class="btn primary" disabled={settingsForm.busy || !!settingsForm.problem} onclick={save}>{t('common.save')}</button>
       </div>
     </div>
   </div>

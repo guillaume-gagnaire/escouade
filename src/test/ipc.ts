@@ -60,6 +60,7 @@ export const SETTINGS: Settings = {
   },
   language: 'system',
   claudeLanguage: 'ui',
+  accounts: [{ id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true }],
 };
 
 export function project(over: Partial<Project> = {}): Project {
@@ -124,6 +125,7 @@ export function agent(over: Partial<Agent> = {}): Agent {
     recipe: null,
     approvedRecipe: null,
     approvedIsola: null,
+    account: 'principal',
     activity: null,
     setup: null,
     isola: false,

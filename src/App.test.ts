@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/sve
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import App from './App.svelte';
+import { setLang } from './lib/i18n';
 import { app } from './lib/state.svelte';
 import type { Agent, InitialState, Project, UiEvent } from './lib/types';
 import { agent, fakeBackend, project, resetApp, SETTINGS } from './test/ipc';
@@ -493,5 +494,38 @@ describe('App layout', () => {
     app.closeBoard('p1');
     await expect.poll(() => app.attention.a1).toBeUndefined();
     focus.mockRestore();
+  });
+});
+
+describe('App frame', () => {
+  it('says why the app could not start', async () => {
+    start('', { handlers: { subscribe: () => Promise.reject('connexion perdue') } });
+    expect(await screen.findByText('Impossible de démarrer : connexion perdue')).toBeInTheDocument();
+  });
+
+  it('offers a new agent in a project that has none', async () => {
+    start('', { agents: [] });
+    expect(await screen.findByText('Aucun agent dans ce projet.')).toBeInTheDocument();
+    expect(
+      within(screen.getByText('Aucun agent dans ce projet.').parentElement!).getByRole('button', { name: '+ Nouvel agent' }),
+    ).toBeInTheDocument();
+  });
+
+  it('writes all of it in English: why it could not start, no agent, and the question asked on quitting', async () => {
+    setLang('en');
+    const { unmount } = start('', { handlers: { subscribe: () => Promise.reject('connection lost') } });
+    expect(await screen.findByText('Can’t start: connection lost')).toBeInTheDocument();
+    unmount();
+
+    start('', { agents: [] });
+    expect(await screen.findByText('No agents in this project.')).toBeInTheDocument();
+    expect(
+      within(screen.getByText('No agents in this project.').parentElement!).getByRole('button', { name: '+ New agent' }),
+    ).toBeInTheDocument();
+    emit({ type: 'quitRequested', unsaved: 2 });
+    const ask = await screen.findByRole('dialog', { name: 'Quit Escouade?' });
+    expect(within(ask).getByText('2 files in the editor aren’t saved: their changes will be lost.')).toBeInTheDocument();
+    expect(within(ask).getByRole('button', { name: 'Quit anyway' })).toBeInTheDocument();
+    expect(within(ask).getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
   });
 });

@@ -1,5 +1,6 @@
 //! Application core: projects, agents and their Claude processes, git, usage, persistence.
 
+use crate::accounts;
 use crate::agent::{AgentAlert, AgentHandle, AgentRt, Effects, NotifyKind};
 use crate::board;
 use crate::claude::{self, ClaudeProcess, SpawnOpts};
@@ -104,6 +105,8 @@ struct Ask<'a> {
     system: &'a str,
     prompt: &'a str,
     limit: Duration,
+    /// The agent it is about: asked of its account (of Principal without one).
+    agent: Option<&'a str>,
 }
 
 /// "1/2 · npm ci": step `i` of a setup, as the agent shows it.
@@ -249,6 +252,8 @@ pub struct AgentOptions {
     pub select: bool,
     /// A copy of this agent (`duplicate_agent`): named after it, and working where it does.
     pub copy_of: Option<CopyOf>,
+    /// The Claude account it runs on (an `Account`'s id); None: Principal.
+    pub account: Option<String>,
 }
 
 /// What a copy takes of its original, read while no turn of the original ran.
@@ -719,10 +724,12 @@ impl<R: Runtime> Core<R> {
         if let Err(e) = data.ensure() {
             log::error!("cannot create data dir: {e}");
         }
-        let settings: Settings = read_json(&data.settings_file()).unwrap_or_default();
+        let mut settings: Settings = read_json(&data.settings_file()).unwrap_or_default();
         // First: what the backend writes from now on (the menus, its texts) is in these languages.
         let lang = i18n::configure(&settings.language, &settings.claude_language);
         log::info!("languages: {lang:?}");
+        // Principal named in them, the first time.
+        accounts::normalize(&mut settings);
         let state: PersistedState = read_json(&data.state_file()).unwrap_or_default();
         // Read before the agents are made: a turn does not survive a restart (they come back done).
         let cut_turns: Vec<String> = state
@@ -997,6 +1004,7 @@ impl<R: Runtime> Core<R> {
     pub fn save_settings(self: &Arc<Self>, mut s: Settings) -> Result<()> {
         // The MCP server's port is the backend's own (`sync_mcp`): the window's copy may be older.
         s.mcp_port = self.settings.read().mcp_port;
+        accounts::normalize(&mut s);
         let bytes = serde_json::to_vec_pretty(&s)?;
         paths::write_atomic(&self.data.settings_file(), &bytes)?;
         let auto_resume = s.auto_resume;
@@ -1455,7 +1463,9 @@ impl<R: Runtime> Core<R> {
             }
         }
         let settings = self.settings.read().clone();
-        let program = claude::resolve_binary(&settings.claude_path).ok_or_else(|| {
+        // Its account's Claude Code, where its session is kept.
+        let account = accounts::get(&settings, &h.lock().meta.account);
+        let program = accounts::program(&account, &settings).ok_or_else(|| {
             anyhow!("Claude Code introuvable. Installe-le ou indique son chemin dans les réglages.")
         })?;
         let (opts, gen) = {
@@ -1465,7 +1475,7 @@ impl<R: Runtime> Core<R> {
                 program,
                 cwd: rt.meta.cwd.clone(),
                 args: claude_args(&rt.meta),
-                env: settings.claude_env(),
+                env: [settings.claude_env(), accounts::launch_env(&account)].concat(),
             };
             (opts, rt.gen)
         };
@@ -1473,10 +1483,11 @@ impl<R: Runtime> Core<R> {
             bail!("Le dossier {} n'existe plus", opts.cwd);
         }
         log::info!(
-            "agent {id}: starting {} {} in {}",
+            "agent {id}: starting {} {} in {} (account {})",
             opts.program.display(),
             args_for_log(&opts.args),
-            opts.cwd
+            opts.cwd,
+            account.id
         );
         let started = std::time::Instant::now();
         let (w1, w2) = (Arc::downgrade(self), Arc::downgrade(self));
@@ -2120,6 +2131,12 @@ impl<R: Runtime> Core<R> {
             ticket_id: o.ticket_id,
             append_prompt: o.append_prompt,
             port_base: o.port_base,
+            // One the settings know (Principal otherwise).
+            account: accounts::get(
+                &settings,
+                o.account.as_deref().unwrap_or(accounts::PRINCIPAL),
+            )
+            .id,
             ..Default::default()
         };
         let conversations = self.data.conversations();
@@ -2269,6 +2286,8 @@ impl<R: Runtime> Core<R> {
                 model: Some(original.model),
                 effort: Some(original.effort),
                 mode: Some(original.mode),
+                // Where the session it forks is kept.
+                account: Some(original.account),
                 select: true,
                 copy_of: Some(CopyOf {
                     name: original.name,
@@ -2661,12 +2680,13 @@ impl<R: Runtime> Core<R> {
             system,
             prompt,
             limit: worktrees::SUGGEST_LIMIT,
+            agent: None,
         })
         .await
     }
 
     async fn auto_name(self: &Arc<Self>, id: &str, prompt: &str) {
-        match self.generate_name(prompt).await {
+        match self.generate_name(id, prompt).await {
             Ok(Some(slug)) => {
                 if let Err(e) = self.apply_generated_name(id, &slug).await {
                     log::warn!("auto-naming failed: {e:#}");
@@ -2679,9 +2699,15 @@ impl<R: Runtime> Core<R> {
         }
     }
 
-    /// One question to Haiku (`claude -p`, no tools, no session, no MCP): its answer, within 90 s.
-    pub(crate) async fn one_shot(&self, system: &str, prompt: &str) -> Result<String> {
-        self.one_shot_within(system, prompt, Duration::from_secs(90))
+    /// One question to Haiku (`claude -p`, no tools, no session, no MCP) about `agent`, asked of
+    /// its account: its answer, within 90 s.
+    pub(crate) async fn one_shot(
+        &self,
+        system: &str,
+        prompt: &str,
+        agent: Option<&str>,
+    ) -> Result<String> {
+        self.one_shot_within(system, prompt, Duration::from_secs(90), agent)
             .await
     }
 
@@ -2692,6 +2718,7 @@ impl<R: Runtime> Core<R> {
         system: &str,
         prompt: &str,
         limit: Duration,
+        agent: Option<&str>,
     ) -> Result<String> {
         self.ask_claude(Ask {
             who: "Haiku",
@@ -2701,8 +2728,17 @@ impl<R: Runtime> Core<R> {
             system,
             prompt,
             limit,
+            agent,
         })
         .await
+    }
+
+    /// The account a question about `agent` is asked of: the agent's, Principal without one.
+    fn account_for(&self, settings: &Settings, agent: Option<&str>) -> Account {
+        let id = agent
+            .and_then(|id| self.agent(id).ok())
+            .map(|h| h.lock().meta.account.clone());
+        accounts::get(settings, id.as_deref().unwrap_or(accounts::PRINCIPAL))
     }
 
     /// One question to Claude (`claude -p`, no session, no settings, no MCP), as `ask` says: its
@@ -2717,10 +2753,11 @@ impl<R: Runtime> Core<R> {
             system,
             prompt,
             limit,
+            agent,
         } = ask;
         let settings = self.settings.read().clone();
-        let program =
-            claude::resolve_binary(&settings.claude_path).context("claude introuvable")?;
+        let account = self.account_for(&settings, agent);
+        let program = accounts::program(&account, &settings).context("claude introuvable")?;
         let mut cmd = tokio::process::Command::new(program);
         cmd.args([
             "-p",
@@ -2742,6 +2779,7 @@ impl<R: Runtime> Core<R> {
         // allowed.
         cmd.current_dir(cwd)
             .envs(settings.claude_env())
+            .envs(accounts::launch_env(&account))
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null())
@@ -2767,11 +2805,12 @@ impl<R: Runtime> Core<R> {
     }
 
     /// A short name for the task, or None when the model did not answer with one.
-    async fn generate_name(&self, prompt: &str) -> Result<Option<String>> {
+    async fn generate_name(&self, agent: &str, prompt: &str) -> Result<Option<String>> {
         let answer = self
             .one_shot(
                 "Tu nommes des tâches de développement sans jamais les réaliser. Tu réponds uniquement par un slug.",
                 &naming_prompt(prompt),
+                Some(agent),
             )
             .await?;
         Ok(name_from_answer(&answer))
@@ -3703,6 +3742,8 @@ impl<R: Runtime> Core<R> {
     ) -> Result<String> {
         // Haiku may take its 90 s: the app does not restart for an update meanwhile.
         let _working = self.working();
+        // Asked of the account of the agent whose changes these are.
+        let asker = agent_id.clone();
         let DirectScope {
             root,
             scope,
@@ -3732,7 +3773,9 @@ impl<R: Runtime> Core<R> {
             git::diff(&root, &read).await.unwrap_or_default()
         };
         let prompt = commit_proposal_prompt(&subjects, &files, &diff);
-        let answer = self.one_shot(COMMIT_PROPOSAL_SYSTEM, &prompt).await?;
+        let answer = self
+            .one_shot(COMMIT_PROPOSAL_SYSTEM, &prompt, asker.as_deref())
+            .await?;
         proposal_from_answer(&answer).ok_or_else(|| anyhow!("Haiku n'a rien proposé"))
     }
 

@@ -6,7 +6,7 @@ import { navHistory } from './editor/history';
 import { recentFiles } from './editor/quick-open';
 import { fileSearches } from './editor/search.svelte';
 import { trees } from './editor/trees.svelte';
-import { locale } from './i18n';
+import { locale, setLang } from './i18n';
 import { app } from './state.svelte';
 import type { InitialState, LaunchState, UiEvent } from './types';
 
@@ -1356,5 +1356,58 @@ describe('quitting with unsaved files', () => {
     app.modal = null;
     cancel();
     expect(app.modal).toBeNull();
+  });
+});
+
+describe('the window’s own messages in English', () => {
+  beforeEach(() => {
+    resetApp();
+    setLang('en');
+  });
+
+  it('tells of the update installed since the last start, its notes a click away', async () => {
+    await start({ installed: { version: '1.7.0', notes: '- Silent updates' } });
+    const toast = app.toasts.at(-1)!;
+    expect(toast).toMatchObject({ text: 'Escouade 1.7.0 is installed.', kind: 'ok' });
+    expect(toast.action?.label).toBe('See what’s new');
+  });
+
+  it('tells of an update that did not install, with a way to try again, and says when it is no longer ready', async () => {
+    const { emit } = await start();
+    app.update = { version: '1.7.0', notes: '', ready: true };
+    emit({ type: 'updateFailed', version: '1.7.0' });
+    const toast = app.toasts.at(-1)!;
+    expect(toast).toMatchObject({ text: 'The update to 1.7.0 couldn’t be installed.', kind: 'error' });
+    expect(toast.action?.label).toBe('Retry');
+    app.update = null;
+    toast.action!.onClick();
+    expect(app.toasts.at(-1)?.text).toBe('The update to 1.7.0 isn’t ready anymore: Escouade will offer it again once it’s downloaded.');
+  });
+
+  it('asks before quitting with files unsaved, one or several', async () => {
+    const { emit } = await start();
+    emit({ type: 'quitRequested', unsaved: 2 });
+    expect(app.modal).toMatchObject({ kind: 'confirm', title: 'Quit Escouade?', confirm: 'Quit anyway' });
+    expect((app.modal as any).body).toBe('2 files in the editor aren’t saved: their changes will be lost.');
+    // Asked again while it asks: the same dialog, found by its title in the language of the interface.
+    const first = app.modal as any;
+    emit({ type: 'quitRequested', unsaved: 1 });
+    expect((app.modal as any).body).toBe('1 file in the editor isn’t saved: its changes will be lost.');
+    expect(app.modal).not.toBe(first);
+  });
+
+  it('says a file is outside the folder it was asked from, the project’s or the agent’s', async () => {
+    fakeBackend({ fs_tree: () => ({ root: 'C:/code/demo-api', files: [], truncated: false }) });
+    await app.openEditor({ source: 'project', abs: 'C:\\code\\other\\x.ts' });
+    expect(app.toasts.at(-1)?.text).toBe('x.ts is outside the project folder.');
+    await app.openEditor({ source: 'a2', abs: 'C:\\code\\other\\y.ts' });
+    expect(app.toasts.at(-1)?.text).toBe('y.ts is outside this agent’s folder.');
+  });
+
+  it('says a launch command stopped with an error', async () => {
+    const { emit } = await start();
+    app.launches.c1 = { status: 'running', ptyId: 't1', name: 'Front', stopping: false, code: null, startedAt: 1 };
+    emit({ type: 'terminalExit', id: 't1', code: 3 });
+    expect(app.toasts.at(-1)).toMatchObject({ text: '“Front” stopped with an error (code 3)', kind: 'error' });
   });
 });

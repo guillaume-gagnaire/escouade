@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
 import { resetApp } from '../../test/ipc';
 import ConfirmModal from './ConfirmModal.svelte';
@@ -62,5 +63,16 @@ describe('ConfirmModal', () => {
     render(ConfirmModal, { ...(app.modal as any) });
     await userEvent.click(screen.getByRole('button', { name: 'Ne pas enregistrer' }));
     expect(app.modal).toEqual({ kind: 'settings', resume: true });
+  });
+});
+
+describe('ConfirmModal in English', () => {
+  it('names its cancel button in English and cancels', async () => {
+    setLang('en');
+    resetApp();
+    app.modal = { kind: 'confirm', title: 'Delete “a.ts”?', body: 'It goes to the trash.', confirm: 'Delete', onConfirm: vi.fn() };
+    render(ConfirmModal, { ...(app.modal as any) });
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(app.modal).toBeNull();
   });
 });

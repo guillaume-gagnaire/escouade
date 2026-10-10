@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
+import { flushSync } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { setLang } from '../../lib/i18n';
 import { settingsForm } from '../../lib/settings.svelte';
 import { app } from '../../lib/state.svelte';
 import { PROJECT_COLORS } from '../../lib/theme';
@@ -781,5 +783,174 @@ describe('SettingsModal', () => {
     render(SettingsModal);
     expect(screen.queryByRole('heading', { name: 'Éditeur' })).not.toBeInTheDocument();
     expect(screen.queryByRole('combobox', { name: /Éditeur par défaut/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('SettingsModal in English', () => {
+  beforeEach(() => {
+    resetApp({ projects: [project({ runCommands: [FRONT] }), project({ id: 'p2', name: 'site', board: board({ action: 'pr' }) })] });
+    app.shells = SHELLS;
+    app.git.p1 = gitInfo();
+    app.version = '1.3.1';
+    app.modal = { kind: 'settings' };
+    setLang('en');
+  });
+
+  it('names its tabs and what they set in English, and follows a change of language while it is open', async () => {
+    fakeBackend();
+    setLang('fr');
+    render(SettingsModal);
+    expect(screen.getByRole('dialog', { name: 'Réglages' })).toBeInTheDocument();
+    expect(screen.getByText('Exécutable, modèle et permissions par défaut')).toBeInTheDocument();
+    setLang('en');
+    flushSync();
+    const dialog = screen.getByRole('dialog', { name: 'Settings' });
+    expect(
+      within(dialog)
+        .getAllByRole('tab')
+        .map((x) => x.textContent?.trim()),
+    ).toEqual([
+      'AaApplication',
+      '✳Claude Code',
+      '♪Notifications',
+      '▤Projects',
+      '▦Kanban',
+      '⧉Integrations',
+      '$_Terminals',
+      '⇄Network',
+      'ⓘAbout',
+    ]);
+    expect(within(dialog).getByText('Executable, model, and default permissions')).toBeInTheDocument();
+    expect(within(dialog).getByText('Escouade 1.3.1')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Save' })).toBeInTheDocument();
+    // The choices of a setting are read at each render: their words follow too.
+    const effort = within(screen.getByRole('group', { name: 'Default effort' }));
+    expect(effort.getAllByRole('button').map((b) => b.textContent)).toEqual(['Low', 'Medium', 'High', 'Very high', 'Max']);
+    expect(effort.getByRole('button', { name: 'Low' })).toHaveAttribute('title', 'Quick answers, little thinking');
+    expect(
+      within(screen.getByRole('group', { name: 'Default permission mode' }))
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['Auto', 'Ask', 'Plan', 'Accept edits', 'Bypass']);
+    const path = screen.getByRole('textbox', { name: 'Executable path' });
+    expect(path).toHaveAttribute('placeholder', 'claude (found in PATH)');
+    app.claudeFound = false;
+    flushSync();
+    expect(path).toHaveAttribute('placeholder', 'not found — enter the path to claude.exe');
+    expect(screen.getByRole('switch', { name: 'Auto-resume after the usage limit' })).toBeInTheDocument();
+    expect(screen.getByRole('spinbutton', { name: 'Stop idle Claude processes after (minutes)' })).toBeInTheDocument();
+    await userEvent.type(screen.getByRole('spinbutton', { name: /Stop idle/ }), '0');
+    expect(tab('Claude Code')).toHaveClass('changed');
+    expect(tab('Claude Code')).toHaveAccessibleDescription('Modified, not saved yet');
+  });
+
+  it('says the notifications, the network and the terminals in English', async () => {
+    fakeBackend();
+    render(SettingsModal);
+    await userEvent.click(tab('Notifications'));
+    expect(
+      within(panel())
+        .getAllByRole('heading')
+        .map((h) => h.textContent),
+    ).toEqual(['Notify me about', 'Channels', 'Sound']);
+    expect(
+      group('Notify me about')
+        .getAllByRole('switch')
+        .map((s) => s.getAttribute('aria-label')),
+    ).toEqual(['Questions and permissions', 'Finished tasks', 'Errors', 'Tickets (ready to review, blocked)']);
+    expect(panel()).toHaveTextContent(
+      /Off: no system notification or chime for this type; the tab, the card, and the (taskbar|Dock) still flag the agent\./,
+    );
+    expect(panel()).toHaveTextContent(/(Windows|macOS) notifications when the app is not in the foreground/);
+    expect(screen.getByRole('button', { name: '▶ Test' })).toBeInTheDocument();
+
+    await userEvent.click(tab('Terminals'));
+    expect(panel()).toHaveTextContent('Detected: PowerShell 7, Git Bash');
+    expect(screen.getByRole('textbox', { name: /WSL distribution/ })).toHaveAccessibleName('WSL distribution');
+
+    await userEvent.click(tab('Network'));
+    expect(screen.getByPlaceholderText('none')).toBeInTheDocument();
+    expect(panel()).toHaveTextContent('NO_PROXY, separated by commas');
+    expect(screen.getByRole('switch', { name: 'Skip TLS certificate verification' })).toHaveAttribute('aria-checked', 'false');
+
+    await userEvent.click(tab('About'));
+    expect(screen.getByRole('button', { name: 'Check for updates' })).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Install updates automatically' })).toBeInTheDocument();
+    expect(screen.getByText('Local data')).toBeInTheDocument();
+  });
+
+  it('says a project’s settings in English, the worktree commands and the launch commands included', async () => {
+    app.projects = [project({ runCommands: [FRONT], worktreeSetup: [{ id: 'w1', command: 'npm ci', shell: 'ghost', cwd: '' }] })];
+    backendSaving({
+      suggest_run_commands: () => ({ commands: [{ id: 's1', name: 'API', command: 'cargo run', shell: 'bash', cwd: '' }], refused: 2 }),
+    });
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    expect(
+      within(panel())
+        .getAllByRole('heading', { level: 3 })
+        .map((h) => h.textContent),
+    ).toEqual(['Identity', 'Git', 'Worktrees', 'Launch', 'Danger zone']);
+    expect(screen.getByRole('textbox', { name: 'Project name' })).toHaveValue('demo-api');
+    expect(screen.getByRole('button', { name: 'Color 4' })).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'One worktree per agent' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Files copied into worktrees' })).toHaveAccessibleDescription(/^Only files git ignores/);
+    const commit = within(screen.getByRole('group', { name: 'Commit' }));
+    expect(commit.getAllByRole('button').map((b) => b.textContent)).toEqual(['Written by the agent', 'Direct, with a suggested message']);
+
+    // The steps of a worktree: their buttons name the command they move, and a shell this machine lacks is said so.
+    const setup = within(screen.getByRole('group', { name: 'Setup command 1' }));
+    expect(setup.getByRole('option', { name: 'ghost (not found)' })).toBeInTheDocument();
+    expect(setup.getByRole('button', { name: 'Move command 1 down' })).toBeDisabled();
+    expect(setup.getByRole('button', { name: 'Delete command 1' })).toBeInTheDocument();
+    expect(setup.getByLabelText('Subfolder')).toHaveAttribute('placeholder', 'subfolder');
+    await userEvent.click(screen.getByRole('button', { name: 'Add a teardown command' }));
+    expect(screen.getByRole('group', { name: 'Teardown command 1' })).toBeInTheDocument();
+
+    const launch = group('Launch');
+    expect(launch.getByText('Command 1', { selector: 'legend' })).toBeInTheDocument();
+    expect(launch.getByLabelText(/^Subfolder/)).toHaveValue('web');
+    expect(launch.getByText('(blank = project folder)')).toBeInTheDocument();
+    await userEvent.click(launch.getByRole('button', { name: '✦ Fill in automatically' }));
+    // A plural, and what was left out said in the singular and the plural of the count.
+    await expect
+      .poll(() => app.toasts.at(-1)?.text)
+      .toBe('1 command suggested, 2 left out (invisible characters or too long): review it before saving.');
+    const proposal = within(await launch.findByRole('region', { name: 'Suggested launch commands' }));
+    expect(proposal.getByText('the project folder')).toBeInTheDocument();
+    expect(proposal.getByRole('button', { name: 'Ignore' })).toBeInTheDocument();
+    expect(proposal.getByRole('button', { name: 'Replace the commands' })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close the project…' }));
+    expect(app.modal).toMatchObject({ kind: 'confirm', title: 'Close “demo-api”?' });
+  });
+
+  it('says what keeps the settings from being saved in English', async () => {
+    backendSaving();
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    await userEvent.clear(screen.getByRole('textbox', { name: 'Project name' }));
+    expect(screen.getByText('The project “demo-api” needs a name.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    await userEvent.type(screen.getByRole('textbox', { name: 'Project name' }), 'api');
+    await userEvent.clear(within(screen.getByRole('group', { name: 'Command 1' })).getByLabelText('Command'));
+    expect(screen.getByText('Every launch command in “api” needs a name and a command line.')).toBeInTheDocument();
+  });
+
+  it('says there is no project open in English', () => {
+    resetApp({ projects: [] });
+    fakeBackend();
+    render(SettingsModal, { tab: 'projects' });
+    expect(screen.getByText('No project open.')).toBeInTheDocument();
+  });
+
+  it('tells the update check and the saved settings in English', async () => {
+    const backend = fakeBackend({ save_settings: () => [] });
+    render(SettingsModal, { tab: 'about' });
+    await userEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
+    await expect.poll(() => app.toasts.at(-1)?.text).toBe('No update available.');
+    await userEvent.click(screen.getByRole('switch', { name: 'Install updates automatically' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(backend.called('save_settings')).toHaveLength(1);
+    expect(app.toasts.at(-1)?.text).toBe('Settings saved');
   });
 });

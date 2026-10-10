@@ -1,6 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { fInt } from '../../lib/format';
 import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
 import type { AccountView, ExternalIssue, IssuePage, ProjectIntegrations, Ticket } from '../../lib/types';
@@ -137,9 +138,12 @@ describe('ImportModal', () => {
     // « Tout sélectionner » takes those not imported yet.
     await userEvent.click(d.getByRole('checkbox', { name: 'Tout sélectionner' }));
     expect(d.getByText('2 tickets sélectionnés')).toBeInTheDocument();
+    // The tab of the source says it to a screen reader too, in the plural and in the singular.
+    expect(d.getByRole('tab', { name: /Jira/ })).toHaveAccessibleName(/2 sélectionnés$/);
     await userEvent.click(row(/ATL-1290/));
     await userEvent.click(row(/ATL-1301/));
     expect(d.getByText('1 ticket sélectionné')).toBeInTheDocument();
+    expect(d.getByRole('tab', { name: /Jira/ })).toHaveAccessibleName(/1 sélectionné$/);
     await userEvent.click(d.getByRole('tab', { name: /Trello/ }));
     await waitFor(() => expect(d.getByText('1 résultat')).toBeInTheDocument());
     row(/#151/).focus();
@@ -225,6 +229,24 @@ describe('ImportModal', () => {
     expect(more).toHaveFocus();
   });
 
+  it('groups the thousands the French way: the total, the results, the selection and the button', async () => {
+    // The grouping is the language's: a space whose width is Intl's (what the texts below are matched on is not).
+    expect(fInt(1234)).toMatch(/^1\s234$/);
+    fakeBackend({ integration_issues: () => ({ ...JIRA, next: 'p2', total: 2345 }) });
+    const { unmount } = render(ImportModal, { projectId: 'p1' });
+    await waitFor(() => expect(within(dialog()).getByText('3 affichés sur 2 345')).toBeInTheDocument());
+    unmount();
+
+    const many = Array.from({ length: 1234 }, (_, i) => issue({ id: `ATL-${i}`, key: `ATL-${i}`, title: `Ticket ${i}`, criteria: [] }));
+    fakeBackend({ integration_issues: () => ({ ...JIRA, issues: many }) });
+    render(ImportModal, { projectId: 'p1' });
+    const d = within(dialog());
+    await waitFor(() => expect(d.getByText('1 234 résultats')).toBeInTheDocument());
+    await userEvent.click(d.getByRole('checkbox', { name: 'Tout sélectionner' }));
+    expect(d.getByText('1 234 tickets sélectionnés')).toBeInTheDocument();
+    expect(d.getByRole('button', { name: /^Importer 1\s234 tickets$/ })).toBeEnabled();
+  });
+
   it('says how many are shown when the service does not say how many there are', async () => {
     fakeBackend({ integration_issues: () => ({ ...JIRA, next: '2', total: null }) });
     render(ImportModal, { projectId: 'p1' });
@@ -263,7 +285,7 @@ describe('ImportModal in English', () => {
     const d = within(dialogEn());
     expect(d.getByText('No source linked to this project')).toBeInTheDocument();
     expect(
-      d.getByText('Connect Jira, Trello or GitHub Issues, then choose the project, board or repository to link to demo-api.'),
+      d.getByText('Connect Jira, Trello, or GitHub Issues, then choose the project, board, or repository to link to demo-api.'),
     ).toBeInTheDocument();
     await userEvent.click(d.getByRole('button', { name: 'Link a source' }));
     expect(app.modal).toEqual({ kind: 'settings', tab: 'integrations', projectId: 'p1' });

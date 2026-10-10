@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { tick } from 'svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { setLang } from '../lib/i18n';
 import { menu } from '../lib/menu.svelte';
 import { app } from '../lib/state.svelte';
 import { agent, fakeBackend, gitInfo, resetApp } from '../test/ipc';
@@ -273,5 +274,131 @@ describe('StatusBar day cost', () => {
     fakeBackend();
     render(StatusBar);
     expect(screen.getByText('≈ 1,75 $')).toBeInTheDocument();
+  });
+});
+
+describe('StatusBar in English', () => {
+  beforeEach(() => {
+    resetApp({
+      agents: [
+        agent({ id: 'a1', status: 'running' }),
+        agent({ id: 'a2', status: 'waiting' }),
+        agent({ id: 'a3', status: 'waiting', archived: true }),
+        agent({ id: 'a4', status: 'done' }),
+      ],
+    });
+    app.now = Date.UTC(2026, 8, 27, 20, 0, 0);
+    menu.close();
+    setLang('en');
+  });
+
+  it('counts the agents, and writes the quotas, their reset and the day cost in English', () => {
+    fakeBackend();
+    app.usage = {
+      fiveHour: { pct: 62, resetsAt: app.now + (1 * 3600 + 48 * 60) * 1000 },
+      sevenDay: { pct: 38.4, resetsAt: app.now + (2 * 86400 + 5 * 3600) * 1000 },
+      todayCost: 4.12,
+      updatedAt: 1,
+    };
+    render(StatusBar);
+    expect(screen.getByText('1 active')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /1 waiting/ })).toHaveAttribute(
+      'title',
+      'Go to the next agent that is waiting or needs a look (Ctrl+J)',
+    );
+    expect(screen.getByText('1 done')).toBeInTheDocument();
+    const session = screen.getByText(/5-hour session/).closest('.it')!;
+    expect(session).toHaveTextContent('62%');
+    expect(session).toHaveTextContent('resets in 1h48');
+    // A date, in the language: the day depends on the time zone of the machine.
+    expect(session.getAttribute('title')).toMatch(/^Resets: September 2[78], 2026 at \d{1,2}:\d{2}\s[AP]M$/);
+    const week = screen.getByText(/Weekly/).closest('.it')!;
+    expect(week).toHaveTextContent('38%');
+    expect(week).toHaveTextContent('resets in 2d 5h');
+    expect(screen.getByText(/Today/)).toHaveTextContent('Today $4.12');
+  });
+
+  it('says when a quota is unknown', () => {
+    fakeBackend();
+    render(StatusBar);
+    expect(screen.getByText(/5-hour session/).closest('.it')).toHaveAttribute('title', 'Session quota unavailable');
+    expect(screen.getByText(/Weekly/).closest('.it')).toHaveAttribute('title', 'Weekly quota unavailable');
+  });
+
+  it('writes the Claude processes with their sizes in English, each agent in the tooltip', () => {
+    fakeBackend();
+    const GB = 1024 ** 3;
+    app.resources = {
+      instances: 2,
+      memory: 1.5 * GB,
+      cpu: 12.4,
+      agents: [{ id: 'a1', memory: 0.5 * GB, cpu: 2.4 }],
+    };
+    render(StatusBar);
+    const item = screen.getByText(/2 Claude/).closest('.it')!;
+    expect(item).toHaveTextContent('2 Claude · 1.5 GB · 12% CPU');
+    expect(item.getAttribute('title')!.split('\n')[0]).toBe('Running Claude processes (with the tools and MCP servers they start)');
+    expect(item.getAttribute('title')!.split('\n')[1]).toBe('refacto-auth : 512 MB · 2%');
+  });
+
+  it('marks the day cost as an estimate while a turn runs, and says why', () => {
+    app.agents.a1 = { ...app.agents.a1, liveCost: 0.5 };
+    fakeBackend();
+    render(StatusBar);
+    expect(screen.getByText(/Today/)).toHaveAttribute(
+      'title',
+      'Estimate (public prices) while Claude works; exact cost at the end of the turn',
+    );
+    expect(screen.getByText('≈ $0.50')).toBeInTheDocument();
+  });
+
+  it('writes the sync with the remote, its menu and its toast in English', async () => {
+    const backend = fakeBackend({ git_pull: () => '3 commits pulled' });
+    app.git = { p1: gitInfo({ upstream: 'origin/main', hasRemote: true, behind: 3, ahead: 1, lastFetch: app.now - 3 * 60_000 }) };
+    render(StatusBar);
+    const button = screen.getByRole('button', { name: /⎇ main/ });
+    expect(button.title).toBe('Tracking origin/main: 3 to pull, 1 to push\nLast fetch: 3 min ago');
+    await userEvent.click(button);
+    const labels = menu.open!.items.map((i) => i.label);
+    expect(labels).toEqual(['Pull', 'Push', '', 'Fetch']);
+    expect(menu.open!.items.find((i) => i.label === 'Fetch')).toMatchObject({ hint: 'now' });
+    menu.open!.items.find((i) => i.label === 'Pull')!.onClick!();
+    await waitFor(() => expect(app.toasts).toEqual([expect.objectContaining({ text: '3 commits pulled', kind: 'ok' })]));
+    expect(backend.called('git_pull')).toHaveLength(1);
+  });
+
+  it('says a branch is not published, or was deleted from the remote, and that it was never fetched', async () => {
+    fakeBackend();
+    app.git = { p1: gitInfo({ hasRemote: true, branch: 'feat/x' }) };
+    render(StatusBar);
+    const button = screen.getByRole('button', { name: /⎇ feat\/x/ });
+    expect(button).toHaveTextContent('not published');
+    expect(button.title).toBe('Branch not published to the remote repository yet\nLast fetch: never');
+    await userEvent.click(button);
+    expect(menu.open!.items.map((i) => i.label)).toContain('Publish branch');
+    menu.close();
+    app.git = { p1: gitInfo({ hasRemote: true, branch: 'feat/x', upstream: 'origin/feat/x', upstreamGone: true }) };
+    await tick();
+    expect(screen.getByRole('button', { name: /⎇ feat\/x/ })).toHaveTextContent('remote deleted');
+    expect(screen.getByRole('button', { name: /⎇ feat\/x/ }).title).toContain(
+      'The tracked branch origin/feat/x no longer exists on the remote repository',
+    );
+  });
+
+  it('writes the update, its countdown and the sound in English', async () => {
+    fakeBackend();
+    app.update = { version: '1.6.0', notes: '', ready: true };
+    app.restartAt = app.now + 25_000;
+    render(StatusBar);
+    expect(screen.getByText('Restarting in 25 s')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Later' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '♪ On' })).toHaveAttribute('title', 'Notification sound');
+    expect(screen.getByRole('button', { name: '⚙' })).toHaveAttribute('title', 'Settings (Ctrl+,)');
+    app.restartAt = null;
+    await tick();
+    expect(screen.getByRole('button', { name: 'Update 1.6.0 ready · Restart' })).toBeInTheDocument();
+    app.update = { version: '1.6.0', notes: '', ready: false };
+    await tick();
+    expect(screen.getByText('Update 1.6.0…')).toBeInTheDocument();
   });
 });

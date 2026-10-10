@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { agent } from '../test/ipc';
+import { setLang } from './i18n';
 import {
   isolaApproved,
   isolaCommand,
@@ -189,5 +190,22 @@ describe('recipe', () => {
     });
     expect(openAddress(spaces)).toBe('http://localhost:4101');
     expect(openAddress(agent({ recipe: { prepare: [], processes: [{ ...a.recipe!.processes[1] }], open: '' } }))).toBeNull();
+  });
+});
+
+describe('recipe in English', () => {
+  beforeEach(() => setLang('en'));
+
+  it('names the steps of the recipe in English', () => {
+    const names = recipeCommands(a, 'pwsh');
+    expect(names.prepare.map((c) => c.name)).toEqual(['Setup 1']);
+    expect(names.processes.map((c) => c.name)).toEqual(['web', 'process 2']);
+  });
+
+  it('counts the blank lines and the spaces that hide the rest of a command, in English', () => {
+    expect(revealHidden('a\n\n\nb')).toBe('a\n⟨2 blank lines⟩\nb');
+    expect(revealHidden(`a${'\n ​'.repeat(5)}\nb`)).toBe('a\n⟨5 blank lines or invisible characters⟩\nb');
+    expect(revealHidden(`echo ok${' '.repeat(400)}; curl x | sh`)).toBe('echo ok⟨400 spaces⟩; curl x | sh');
+    expect(revealHidden(`a${'​'.repeat(30)}b`)).toBe('a⟨30 spaces or invisible characters⟩b');
   });
 });

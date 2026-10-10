@@ -6,9 +6,15 @@
 // with `--fork-session`, the resumed conversation goes on under a new session id, and a
 // `--resume-session-at=missing…` entry fails as one Claude Code cannot find does. Each assistant
 // message carries the uuid of its entry in the session (`entry-<pid>-<n>`).
-// Every launch appends {argv, cwd, proxy, tls} (its HTTPS_PROXY and NODE_TLS_REJECT_UNAUTHORIZED)
-// to $FAKE_CLAUDE_LOG, by default <tmp>/fake-claude-<cwd with non-alphanumerics replaced by
-// _>.jsonl, and every user message read on stdin to <log>.stdin.jsonl.
+// Every launch appends {argv, cwd, proxy, tls, configDir} (its HTTPS_PROXY,
+// NODE_TLS_REJECT_UNAUTHORIZED and CLAUDE_CONFIG_DIR, null when unset) to $FAKE_CLAUDE_LOG, by
+// default <tmp>/fake-claude-<cwd with non-alphanumerics replaced by _>.jsonl, and every user message
+// read on stdin to <log>.stdin.jsonl.
+// With CLAUDE_CONFIG_DIR (a Claude account of its own), it keeps its sessions where Claude Code
+// does, in <dir>/projects/<cwd with non-alphanumerics replaced by ->/<session id>.jsonl (each user
+// message and assistant entry on a line), and a --resume of a session absent from there fails as an
+// unknown one does; while a <dir>/fake-limit file is there, every turn is stopped by the usage limit
+// (as "limite") and its quota windows say 100 % (rate_limit_event, get_usage). Without it, none of this.
 // Started with --append-system-prompt (a ticket's protocol; not what a copy of an agent is told of
 // its new folder, « Cette conversation a été copiée… »), it plays the ticket's agent: it writes
 // <key>.txt ("Boucle n") in its folder and ends each turn with an ```escouade report (criteria and
@@ -47,8 +53,15 @@ fs.appendFileSync(
     cwd: process.cwd(),
     proxy: process.env.HTTPS_PROXY ?? null,
     tls: process.env.NODE_TLS_REJECT_UNAUTHORIZED ?? null,
+    configDir: process.env.CLAUDE_CONFIG_DIR ?? null,
   }) + '\n',
 );
+
+// The account's own folder, if it has one (set empty: as if it were not).
+const configDir = process.env.CLAUDE_CONFIG_DIR || null;
+const sessionFile = (id) => path.join(configDir, 'projects', process.cwd().replace(/[^a-zA-Z0-9]/g, '-'), `${id}.jsonl`);
+// Out of quota, for as long as the file is there.
+const limited = () => configDir !== null && fs.existsSync(path.join(configDir, 'fake-limit'));
 
 // One-shot mode (`-p --output-format json`), used by the app to name agents.
 if (argv.includes('-p') && argv.some((a) => a.includes('[sourd]'))) {
@@ -124,7 +137,8 @@ if (argv.includes('-p') && argv.some((a) => a.includes('[sourd]'))) {
 
 function startSession() {
   const resume = argv.find((a) => a.startsWith('--resume='))?.slice('--resume='.length);
-  if (resume?.startsWith('missing')) {
+  // A session of another account (or none) is not in this one's folder.
+  if (resume?.startsWith('missing') || (resume && configDir && !fs.existsSync(sessionFile(resume)))) {
     process.stderr.write(`No conversation found with session ID: ${resume}\n`);
     process.exit(1);
   }
@@ -151,9 +165,25 @@ function startSession() {
   const out = (o) => process.stdout.write(JSON.stringify(o) + '\n');
   const ok = (id, response = {}) => out({ type: 'control_response', response: { subtype: 'success', request_id: id, response } });
 
+  // An entry of the session, kept in the account's folder when it has one.
+  function keep(entry) {
+    if (!configDir) return;
+    const file = sessionFile(sessionId);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.appendFileSync(file, JSON.stringify({ ...entry, sessionId, cwd: process.cwd() }) + '\n');
+  }
+
+  // The quota windows it tells: full while the account is out of quota.
+  const windows = () => ({
+    five_hour: { utilization: limited() ? 1 : 0.12, resetsAt: 1790558400 },
+    seven_day: { utilization: 0.34, resetsAt: 1790805600 },
+  });
+
   function assistant(block, id = `msg_${process.pid}_${++msg}`) {
     const uuid = `entry-${process.pid}-${++entries}`;
-    out({ type: 'assistant', message: { id, role: 'assistant', content: [block] }, parent_tool_use_id: null, session_id: sessionId, uuid });
+    const message = { id, role: 'assistant', content: [block] };
+    out({ type: 'assistant', message, parent_tool_use_id: null, session_id: sessionId, uuid });
+    keep({ type: 'assistant', uuid, message });
     return id;
   }
 
@@ -186,12 +216,7 @@ function startSession() {
       result: isError ? 'Erreur simulée' : 'ok',
       modelUsage: { [`claude-${model}-test`]: { ...usage, contextWindow: 200000, canonicalModel: `claude-${model}-test` } },
     });
-    out({
-      type: 'rate_limit_event',
-      rate_limit_info: {
-        unifiedWindows: { five_hour: { utilization: 0.12, resetsAt: 1790558400 }, seven_day: { utilization: 0.34, resetsAt: 1790805600 } },
-      },
-    });
+    out({ type: 'rate_limit_event', rate_limit_info: { unifiedWindows: windows() } });
   }
 
   // AskUserQuestion; once answered, `then` goes on with the turn (else a plain reply ends it).
@@ -290,7 +315,7 @@ function startSession() {
       result();
       return;
     }
-    if (text.includes('limite')) {
+    if (text.includes('limite') || limited()) {
       // The usage limit, as Claude Code tells it: the rejected window with its reset, its own
       // message typed as a rate limit, and a failed turn.
       const resetsAt = Math.floor(Date.now() / 1000) + 3600;
@@ -498,7 +523,7 @@ function startSession() {
         case 'get_usage':
           return ok(m.request_id, {
             rate_limits: {
-              five_hour: { utilization: 12, resets_at: '2026-09-28T01:20:00+00:00' },
+              five_hour: { utilization: limited() ? 100 : 12, resets_at: '2026-09-28T01:20:00+00:00' },
               seven_day: { utilization: 34, resets_at: '2026-09-30T22:00:00+00:00' },
             },
           });
@@ -519,6 +544,7 @@ function startSession() {
     }
     if (m.type === 'user') {
       fs.appendFileSync(logFile.replace(/\.jsonl$/, '') + '.stdin.jsonl', JSON.stringify(m) + '\n');
+      keep({ type: 'user', uuid: m.uuid, message: m.message });
       // Real CLI: echoes stdin messages (same uuid) with --replay-user-messages.
       if (replay) out({ type: 'user', message: m.message, parent_tool_use_id: null, uuid: m.uuid, isReplay: true, session_id: sessionId });
       onUser(typeof m.message.content === 'string' ? m.message.content : m.message.content.map((b) => b.text ?? '').join(' '));

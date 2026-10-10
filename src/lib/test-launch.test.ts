@@ -9,6 +9,7 @@ vi.mock('./terminals', () => ({
 }));
 
 import { agent, fakeBackend, project, resetApp, SETTINGS, ticket } from '../test/ipc';
+import { setLang } from './i18n';
 import { app } from './state.svelte';
 import {
   allRunning,
@@ -853,5 +854,82 @@ describe('▶ Tester with isola', () => {
     await run;
     expect(flows.all.a7).toMatchObject({ phase: 'failed', error: 'api ne tourne pas' });
     expect(flows.all.a7.lines[1]).toMatchObject({ label: 'api', state: 'failed', detail: 'stopped' });
+  });
+});
+
+describe('▶ Test in English', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    setLang('en');
+    A = agent({
+      id: 'a7',
+      worktree: { path: 'C:\\code\\demo-api\\.claude\\worktrees\\dem-1', branch: 'ticket/dem-1', baseBranch: 'main' },
+      recipe: RECIPE,
+      approvedRecipe: RECIPE,
+    });
+    resetApp({ agents: [A] });
+    flows.all = {};
+    flows.prepared = {};
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it('writes the lines of a test as it goes, and the time it took in the number format of the language', async () => {
+    let up = false;
+    backend(() => up);
+    const run = testAgent(A, project());
+    await vi.advanceTimersByTimeAsync(10);
+    expect(flows.all.a7.lines.map((l) => [l.label, l.detail])).toEqual([['Setup: npm install', 'running…']]);
+    exit('test:a7:prep:0', 0);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(flows.all.a7.lines.map((l) => l.detail)).toEqual(['done', 'waiting for localhost:4110…', 'waiting for localhost:4111…']);
+    up = true;
+    await vi.advanceTimersByTimeAsync(600);
+    await run;
+    expect(flows.all.a7.lines[1].detail).toMatch(/^ready · \d+(\.\d)? s$/);
+  });
+
+  it('says in English why a test failed', async () => {
+    backend(() => true);
+    const run = testAgent(A, project());
+    await vi.advanceTimersByTimeAsync(10);
+    exit('test:a7:prep:0', 2);
+    await vi.advanceTimersByTimeAsync(200);
+    await run;
+    expect(flows.all.a7).toMatchObject({ phase: 'failed', error: 'Setup failed (code 2)' });
+    expect(flows.all.a7.lines[0].detail).toBe('code 2');
+  });
+
+  it('says a process crashed, and that the one left was not waited for', async () => {
+    backend(() => false);
+    flows.prepared.a7 = JSON.stringify(RECIPE.prepare);
+    const run = testAgent(A, project());
+    await vi.advanceTimersByTimeAsync(10);
+    exit('test:a7:run:1', 1);
+    await vi.advanceTimersByTimeAsync(1000);
+    await run;
+    expect(flows.all.a7.error).toBe('web stopped');
+    expect(flows.all.a7.lines.find((l) => l.label === 'web')?.detail).toBe('crashed (code 1)');
+    expect(flows.all.a7.lines.find((l) => l.label === 'api')?.detail).toBe('skipped');
+  });
+
+  it('gives up on a silent server, in English', async () => {
+    backend((url) => !url.includes('4111'));
+    flows.prepared.a7 = JSON.stringify(RECIPE.prepare);
+    const run = testAgent(A, project());
+    await vi.advanceTimersByTimeAsync(READY_LIMIT_MS + 1000);
+    await run;
+    expect(flows.all.a7.lines.find((l) => l.label === 'web')?.detail).toBe('No response from http://localhost:4111 after 3 min');
+  });
+
+  it('says it was stopped on purpose, on the lines and as the error', async () => {
+    backend(() => false);
+    flows.prepared.a7 = JSON.stringify(RECIPE.prepare);
+    const run = testAgent(A, project());
+    await vi.advanceTimersByTimeAsync(10);
+    stopTests('a7');
+    await vi.advanceTimersByTimeAsync(1000);
+    await run;
+    expect(flows.all.a7.error).toBe('Stopped');
+    expect(flows.all.a7.lines.map((l) => l.detail)).toEqual(['stopped', 'stopped']);
   });
 });

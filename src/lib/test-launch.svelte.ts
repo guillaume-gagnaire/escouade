@@ -6,8 +6,10 @@
 // what runs is the commands of the worktree's .isola.toml, which the agent can write too: that file is what is shown.
 
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { fNum } from './format';
+import { t } from './i18n';
 import { api } from './ipc';
-import { startLaunch, stopAgentTests, stopLaunch } from './launch-actions';
+import { crashedLabel, startLaunch, stopAgentTests, stopLaunch } from './launch-actions';
 import { isolaApproved, isolaCommand, openAddress, parseTestId, recipeApproved, recipeCommands } from './recipe';
 import { app } from './state.svelte';
 import type { Agent, IsolaService, LaunchState, Project, RunCommand } from './types';
@@ -63,7 +65,7 @@ app.onTicketDone((id) => {
 });
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const seconds = (ms: number) => (ms / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 });
+const seconds = (ms: number) => fNum(ms / 1000, 1);
 const isPrep = (id: string) => parseTestId(id)?.kind === 'prep';
 /** A step that ends once done (a preparation, isola up), unlike a process. */
 const ends = (id: string) => isPrep(id) || parseTestId(id)?.kind === 'isola';
@@ -90,7 +92,7 @@ export function anyRunning(agentId: string): boolean {
 
 /** Its ticket is being validated: the backend refuses its test launches until it is done. */
 function validating(agentId: string): boolean {
-  return Object.values(app.tickets).some((t) => t.agentId === agentId && !!t.step);
+  return Object.values(app.tickets).some((ticket) => ticket.agentId === agentId && !!ticket.step);
 }
 
 /**
@@ -134,12 +136,12 @@ export function stopTests(agentId: string) {
     // What failed keeps its reason, a preparation step (or isola up) that finished stays so.
     if (l.state === 'failed' || l.state === 'stopped' || (l.state === 'ready' && ends(l.id))) continue;
     l.state = 'stopped';
-    l.detail = isPrep(l.id) ? 'arrêtée' : 'arrêté';
+    l.detail = isPrep(l.id) ? t('runs.flow.prepStopped') : t('runs.status.stopped');
   }
   // A failure keeps its reason too.
   if (flow.phase !== 'failed') {
     flow.phase = 'failed';
-    flow.error = 'Arrêté';
+    flow.error = t('runs.flow.stopped');
   }
   flow.opened = null;
 }
@@ -252,31 +254,31 @@ async function launchTest(agent: Agent, project: Project) {
     for (const l of flow.lines) {
       if (l.state !== 'running' && l.state !== 'waiting') continue;
       l.state = 'skipped';
-      l.detail = 'non attendu';
+      l.detail = t('runs.flow.notWaited');
     }
   };
   /** A step the backend refused to start: why, on its line, which has no log. */
   const refused = (line: FlowLine, cmd: RunCommand, why: string) => {
     line.state = 'failed';
     line.detail = why;
-    fail(`« ${cmd.name} » n'a pas pu démarrer`);
+    fail(t('runs.flow.couldNotStart', { name: cmd.name }));
   };
   /** A process that ended under the test: its line says how, and the test is over. */
   const exited = (line: FlowLine, cmd: RunCommand, run: LaunchState | undefined) => {
     if (!run || run.status === 'stopped') {
       line.state = 'stopped';
-      line.detail = 'arrêté';
-      return fail('Arrêté');
+      line.detail = t('runs.status.stopped');
+      return fail(t('runs.flow.stopped'));
     }
     line.state = 'failed';
-    line.detail = run.status === 'done' ? 'terminé' : run.code == null ? 'planté' : `planté (code ${run.code})`;
-    fail(`${cmd.name} s'est arrêté`);
+    line.detail = run.status === 'done' ? t('runs.status.done') : crashedLabel(run.code);
+    fail(t('runs.flow.exited', { name: cmd.name }));
   };
 
   // isola runs the worktree's services: `isola up`, then the addresses it lists, until each answers.
   if (agent.isola) {
     const cmd = isolaCommand(agent, app.shells[0]?.id ?? '');
-    const line = addLine(cmd, 'isola up', 'en cours…');
+    const line = addLine(cmd, 'isola up', t('runs.flow.running'));
     const why = await start(cmd);
     if (!live()) return;
     if (why !== null) return over() ? undefined : refused(line, cmd, why);
@@ -284,16 +286,16 @@ async function launchTest(agent: Agent, project: Project) {
     if (!live()) return;
     if (!end) {
       line.state = 'stopped';
-      line.detail = 'arrêté';
-      return fail('Arrêté');
+      line.detail = t('runs.status.stopped');
+      return fail(t('runs.flow.stopped'));
     }
     if (end.status !== 'done') {
       line.state = 'failed';
-      line.detail = `code ${end.code ?? '?'}`;
-      return fail(`isola up en échec (code ${end.code ?? '?'})`);
+      line.detail = t('runs.flow.code', { code: end.code ?? '?' });
+      return fail(t('runs.flow.isolaFailed', { code: end.code ?? '?' }));
     }
     line.state = 'ready';
-    line.detail = 'terminé';
+    line.detail = t('runs.status.done');
     let services: IsolaService[];
     try {
       services = await api.isolaServices(agent.id);
@@ -313,31 +315,31 @@ async function launchTest(agent: Agent, project: Project) {
         const line = lines[i];
         if (s.status !== 'running') {
           line.state = 'failed';
-          line.detail = s.status || 'arrêté';
-          fail(`${s.name} ne tourne pas`);
+          line.detail = s.status || t('runs.status.stopped');
+          fail(t('runs.flow.notRunning', { name: s.name }));
           return false;
         }
         // Its own port: the proxy answers (with an error page) before the service does.
         const probe = s.probe || s.url;
         if (!probe) {
           line.state = 'ready';
-          line.detail = 'démarré';
+          line.detail = t('runs.flow.started');
           return true;
         }
         line.state = 'waiting';
-        line.detail = `en attente de ${host(probe)}…`;
+        line.detail = t('runs.flow.waitingFor', { host: host(probe) });
         for (;;) {
           if (over()) return false;
           const up = await api.httpReady(probe).catch(() => false);
           if (over()) return false;
           if (up) {
             line.state = 'ready';
-            line.detail = `prêt · ${seconds(Date.now() - started)} s`;
+            line.detail = t('runs.flow.readyIn', { seconds: seconds(Date.now() - started) });
             return true;
           }
           if (Date.now() - started >= READY_LIMIT_MS) {
             line.state = 'failed';
-            line.detail = `Pas de réponse de ${probe} après 3 min`;
+            line.detail = t('runs.flow.noAnswer', { url: probe });
             fail(line.detail);
             return false;
           }
@@ -360,7 +362,7 @@ async function launchTest(agent: Agent, project: Project) {
   if (recipe.prepare.length && flows.prepared[agent.id] !== prepared) {
     for (const cmd of cmds.prepare) {
       if (over()) return;
-      const line = addLine(cmd, `Préparation : ${cmd.command}`, 'en cours…');
+      const line = addLine(cmd, t('runs.flow.prepare', { command: cmd.command }), t('runs.flow.running'));
       const why = await start(cmd);
       if (!live()) return;
       // Stopped while it was starting: its line already says so.
@@ -369,16 +371,16 @@ async function launchTest(agent: Agent, project: Project) {
       if (!live()) return;
       if (!end) {
         line.state = 'stopped';
-        line.detail = 'arrêtée';
-        return fail('Arrêté');
+        line.detail = t('runs.flow.prepStopped');
+        return fail(t('runs.flow.stopped'));
       }
       if (end.status !== 'done') {
         line.state = 'failed';
-        line.detail = `code ${end.code ?? '?'}`;
-        return fail(`Préparation en échec (code ${end.code ?? '?'})`);
+        line.detail = t('runs.flow.code', { code: end.code ?? '?' });
+        return fail(t('runs.flow.prepFailed', { code: end.code ?? '?' }));
       }
       line.state = 'ready';
-      line.detail = 'terminée';
+      line.detail = t('runs.flow.prepDone');
     }
     flows.prepared[agent.id] = prepared;
   }
@@ -386,7 +388,7 @@ async function launchTest(agent: Agent, project: Project) {
 
   // 2. Every process, each in its own terminal (one already running stays).
   const started = Date.now();
-  const lines = cmds.processes.map((cmd) => addLine(cmd, cmd.name, 'démarrage…'));
+  const lines = cmds.processes.map((cmd) => addLine(cmd, cmd.name, t('runs.flow.starting')));
   const refusals = await Promise.all(cmds.processes.map(start));
   // Stopped while they were starting: their lines already say so.
   if (over()) return;
@@ -402,11 +404,11 @@ async function launchTest(agent: Agent, project: Project) {
       const url = recipe.processes[i].url.trim();
       if (!url) {
         line.state = 'ready';
-        line.detail = 'démarré';
+        line.detail = t('runs.flow.started');
         return true;
       }
       line.state = 'waiting';
-      line.detail = `en attente de ${host(url)}…`;
+      line.detail = t('runs.flow.waitingFor', { host: host(url) });
       for (;;) {
         if (over()) return false;
         const run = app.launches[cmd.id];
@@ -418,12 +420,12 @@ async function launchTest(agent: Agent, project: Project) {
         if (over()) return false;
         if (up) {
           line.state = 'ready';
-          line.detail = `prêt · ${seconds(Date.now() - started)} s`;
+          line.detail = t('runs.flow.readyIn', { seconds: seconds(Date.now() - started) });
           return true;
         }
         if (Date.now() - started >= READY_LIMIT_MS) {
           line.state = 'failed';
-          line.detail = `Pas de réponse de ${url} après 3 min`;
+          line.detail = t('runs.flow.noAnswer', { url });
           fail(line.detail);
           return false;
         }

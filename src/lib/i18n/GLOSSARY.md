@@ -163,6 +163,22 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 
 | Français | Anglais | Note |
 |---|---|---|
+| Réseau / À propos | Network / About | onglets des réglages (les autres : Application, Claude Code, Notifications, Projets → Projects, Kanban, Intégrations → Integrations, Terminaux → Terminals) |
+| Identité | Identity | le groupe « Nom, dossier, couleur » d’un projet |
+| Zone sensible | Danger zone | « Fermer le projet » |
+| Lancement (section des commandes de lancement) | Launch | la section de la barre latérale et du projet ; « Lancement de test » reste Test launch |
+| Rédigé par l’agent / Direct, avec un message proposé | Written by the agent / Direct, with a suggested message | qui écrit les commits d’un projet |
+| Remplacer les commandes / Ignorer | Replace the commands / Ignore | la proposition de Claude, lue en entier avant d’être prise |
+| proposé, proposition (de Claude) | suggested, suggestion | « 2 commandes proposées » → “2 commands suggested” |
+| écarté (une commande refusée pour ce qu’elle cacherait) | left out | « 1 écartée » → “1 left out” |
+| vide = … | blank = … | ce que fait un champ laissé vide |
+| introuvable | not found | un shell, un exécutable |
+| Sous-dossier | Subfolder | le dossier, dans le worktree ou le projet, où une commande tourne |
+| Me prévenir pour / Canaux | Notify me about / Channels | notifications |
+| Processus (inactifs) | Processes (idle) | « Arrêter les processus Claude inactifs » → “Stop idle Claude processes” |
+| Ignorer la vérification des certificats TLS | Skip TLS certificate verification | |
+| Exclusions (du proxy) | Exclusions | la liste NO_PROXY |
+| Données locales | Local data | |
 
 ## L5 — integrations, boardSettings
 
@@ -187,6 +203,10 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 | Message de commit généré | Generated commit message | |
 | Pris dès qu’une place se libère | Picked up as soon as a slot is free | un ticket « À faire » |
 | attend (un ticket attend un autre) | waits for / is waiting for | « DEM-5 attend DEM-3 » |
+| Synchronisation | Sync | le groupe des réglages qui répercute le Kanban sur les tickets externes |
+| Import automatique | Automatic import | |
+| Vérifier toutes les | Check every | « Vérifier toutes les 15 min » → “Check every 15 min” |
+| PR en brouillon | Draft PR | |
 
 ## L6 — board, stats
 
@@ -241,7 +261,7 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 | tâche de fond | background task | |
 | En cours / Question / Prêt / Terminé / Erreur | Running / Question / Ready / Done / Error | état d’un agent (en-tête de la conversation) |
 | Bas / Moyen / Élevé / Très élevé / Max | Low / Medium / High / Very high / Max | niveaux d’effort |
-| Demander / Plan / Édits auto / Bypass | Ask / Plan / Auto edits / Bypass | modes de permission (« Auto » reste « Auto ») |
+| Demander / Plan / Édits auto / Bypass | Ask / Plan / Accept edits / Bypass | modes de permission (« Auto » reste « Auto ») |
 | Approuver le plan | Approve the plan | carte de permission d’un plan |
 | Continuer à planifier | Keep planning | refus d’un plan |
 | Valider (les réponses à une question) | Submit | carte de question |
@@ -254,6 +274,23 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 
 | Français | Anglais | Note |
 |---|---|---|
+| Lancement (la section des commandes) | Launch | comme dans les réglages : « Commandes de lancement… » → “Launch commands…” |
+| Tout lancer / Tout arrêter | Run all / Stop all | |
+| Proposer des commandes | Suggest commands | |
+| Configurer | Configure | |
+| prêt / en cours / arrêt… / arrêté / terminé / planté | ready / running / stopping… / stopped / done / crashed | l’état d’une commande de lancement, en minuscules (« planté (code 2) » → “crashed (code 2)”) |
+| recette | recipe | les commandes que l’agent propose pour tester son travail |
+| Préparation n / processus n | Setup n / process n | les noms donnés aux étapes d’une recette quand l’agent n’en a pas donné |
+| non attendu | skipped | une étape qu’un test en échec n’attend plus |
+| Rouvrir | Reopen | le navigateur d’un test |
+| Voir le log / Voir les logs | View log / View logs | |
+| racine du worktree | worktree root | |
+| Processus terminé | Process exited | un terminal dont le shell s’est arrêté |
+| Session 5 h / Hebdo / reset | 5-hour session / Weekly / resets in | barre d’état, telle qu’elle est aujourd’hui (la tâche K5 la refait) |
+| Aperçu de l’onglet | Tab preview | fenêtre d’un nouveau projet |
+| Nouveautés (d’une version) | What’s new | notes d’une mise à jour |
+| prête · Redémarrer (mise à jour) | ready · Restart | barre d’état |
+| Quitter quand même | Quit anyway | quand des fichiers ne sont pas enregistrés |
 
 ## L10 — errors, backend
 

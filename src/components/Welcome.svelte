@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { t } from '../lib/i18n';
+  import Rich from '../lib/i18n/Rich.svelte';
   import { app } from '../lib/state.svelte';
 </script>
 
@@ -6,18 +8,19 @@
   <div class="card">
     <span class="mark">C</span>
     <h1>Escouade</h1>
-    <p>Ajoute un projet pour y lancer des agents Claude Code, suivre leurs questions et ouvrir des terminaux.</p>
+    <p>{t('shell.welcome.intro')}</p>
     {#if !app.claudeFound}
       <p class="warn">
-        Claude Code est introuvable sur ce poste. Installe-le (<span class="mono">irm https://claude.ai/install.ps1 | iex</span>) ou indique
-        son chemin dans les réglages.
+        <Rich k="shell.welcome.claudeMissing"
+          >{#snippet command()}<span class="mono">irm https://claude.ai/install.ps1 | iex</span>{/snippet}</Rich
+        >
       </p>
     {/if}
     <button
       class="btn primary big"
       onclick={() => {
         app.modal = { kind: 'newProject' };
-      }}>+ Ajouter un projet</button
+      }}>+ {t('shell.welcome.addProject')}</button
     >
   </div>
 </div>

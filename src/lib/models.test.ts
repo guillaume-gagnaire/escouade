@@ -90,7 +90,7 @@ describe('EFFORTS and MODES', () => {
     setLang('en');
     expect(words(EFFORTS)[0]).toEqual(['Low', 'Quick answers, little thinking']);
     expect(EFFORTS.map((e) => e.label)).toEqual(['Low', 'Medium', 'High', 'Very high', 'Max']);
-    expect(MODES.map((m) => m.label)).toEqual(['Auto', 'Ask', 'Plan', 'Auto edits', 'Bypass']);
+    expect(MODES.map((m) => m.label)).toEqual(['Auto', 'Ask', 'Plan', 'Accept edits', 'Bypass']);
     expect(MODES.find((m) => m.value === 'default')?.title).toBe('Claude asks for your approval before each sensitive action');
   });
 

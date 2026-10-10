@@ -55,6 +55,36 @@ pub struct Settings {
     /// The MCP server's port on 127.0.0.1: 0 until its first start chooses a free one (47000 to
     /// 47999), kept from then on. The backend's own: a save from the window leaves it as it is.
     pub mcp_port: u16,
+    /// The Claude accounts, in the order new agents try them; Principal always among them
+    /// (`accounts::normalize`, at every load and save).
+    pub accounts: Vec<Account>,
+}
+
+/// A Claude account: Claude Code with a configuration folder of its own (`accounts`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Account {
+    /// `accounts::PRINCIPAL` for the user's own.
+    pub id: String,
+    pub name: String,
+    /// Its `CLAUDE_CONFIG_DIR`; empty for Principal, launched without one.
+    pub config_dir: String,
+    /// Its own `claude`; empty: the settings' one.
+    pub claude_path: String,
+    /// New agents may go to it.
+    pub active: bool,
+}
+
+impl Default for Account {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            name: String::new(),
+            config_dir: String::new(),
+            claude_path: String::new(),
+            active: true,
+        }
+    }
 }
 
 /// "Me prévenir pour": which kinds of event chime and show a system notification. A kind switched
@@ -184,6 +214,7 @@ impl Default for Settings {
             claude_language: "ui".into(),
             mcp_enabled: false,
             mcp_port: 0,
+            accounts: Vec::new(),
         }
     }
 }
@@ -656,6 +687,14 @@ pub struct AgentMeta {
     /// What the user read and let run for an agent whose services isola runs (`isola up` runs the
     /// commands of its `.isola.toml`, which the agent can write): see `IsolaApproval`.
     pub approved_isola: Option<IsolaApproval>,
+    /// The Claude account it runs on (an `Account`'s id), where its session is kept: Principal for
+    /// an agent saved before there were accounts.
+    #[serde(default = "principal_id")]
+    pub account: String,
+}
+
+fn principal_id() -> String {
+    crate::accounts::PRINCIPAL.into()
 }
 
 /// What the user approved of an agent's isola launch: the content of the worktree's `.isola.toml`
@@ -1211,6 +1250,22 @@ mod tests {
                 assert_eq!(n.allows(kind), kind != off, "{kind:?} with {off:?} off");
             }
         }
+    }
+
+    #[test]
+    fn an_agent_saved_before_the_accounts_runs_on_principal() {
+        let m: AgentMeta =
+            serde_json::from_value(json!({ "id": "a1", "sessionId": "s1" })).unwrap();
+        assert_eq!(m.account, "principal");
+        let v = serde_json::to_value(AgentMeta {
+            account: "pro".into(),
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(v["account"], json!("pro"));
+        // Settings saved before them have none: the load puts Principal in (`accounts::normalize`).
+        let s: Settings = serde_json::from_value(json!({ "sound": false })).unwrap();
+        assert!(s.accounts.is_empty());
     }
 
     #[test]

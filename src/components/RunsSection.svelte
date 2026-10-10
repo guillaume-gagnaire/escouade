@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../lib/i18n';
   import { launchStatus, restartLaunch, startAll, startLaunch, stopAll, stopLaunch } from '../lib/launch-actions';
   import { isolaCommand, recipeCommands } from '../lib/recipe';
   import { app } from '../lib/state.svelte';
@@ -53,27 +54,37 @@
     <span class="name">{c.name}</span>
     <span class="status" style:color={st.color}>{st.label}</span>
     {#if isRunning(c)}
-      <button class="ctl" title="Relancer" aria-label="Relancer" onclick={(e) => act(e, () => restartLaunch(project, c))}>⟳</button>
-      <button class="ctl" title="Stopper" aria-label="Stopper" onclick={(e) => act(e, () => stopLaunch(c.id))}>■</button>
+      <button
+        class="ctl"
+        title={t('runs.action.restart')}
+        aria-label={t('runs.action.restart')}
+        onclick={(e) => act(e, () => restartLaunch(project, c))}>⟳</button
+      >
+      <button class="ctl" title={t('common.stop')} aria-label={t('common.stop')} onclick={(e) => act(e, () => stopLaunch(c.id))}>■</button>
     {:else}
-      <button class="ctl go" title="Lancer" aria-label="Lancer" onclick={(e) => act(e, () => startLaunch(project, c))}>▶</button>
+      <button
+        class="ctl go"
+        title={t('runs.action.run')}
+        aria-label={t('runs.action.run')}
+        onclick={(e) => act(e, () => startLaunch(project, c))}>▶</button
+      >
     {/if}
   </div>
 {/snippet}
 
 <div class="runs">
   <div class="head">
-    <span class="section-label">Lancement</span>
+    <span class="section-label">{t('runs.section.title')}</span>
     {#if cmds.length}<span class="count">{running}/{cmds.length}</span>{/if}
     <div style="flex:1"></div>
     {#if cmds.length}
       {#if running}
-        <button class="all" onclick={() => stopAll(project)}>Tout arrêter</button>
+        <button class="all" onclick={() => stopAll(project)}>{t('common.stopAll')}</button>
       {:else}
-        <button class="all" onclick={() => startAll(project)}>Tout lancer</button>
+        <button class="all" onclick={() => startAll(project)}>{t('runs.action.runAll')}</button>
       {/if}
     {/if}
-    <button class="gear" title="Commandes de lancement…" aria-label="Commandes de lancement…" onclick={configure}>
+    <button class="gear" title={t('runs.section.configure')} aria-label={t('runs.section.configure')} onclick={configure}>
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"
         ><circle cx="12" cy="12" r="3" /><path
           d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"
@@ -86,9 +97,9 @@
       {@render runRow(c)}
     {:else}
       <div class="none">
-        <span>Aucune commande.</span>
-        <button class="link" onclick={configure}>Configurer</button>
-        <button class="link" onclick={propose}>✦ Proposer des commandes</button>
+        <span>{t('runs.section.none')}</span>
+        <button class="link" onclick={configure}>{t('runs.section.set')}</button>
+        <button class="link" onclick={propose}>✦ {t('runs.section.suggest')}</button>
       </div>
     {/each}
     {#each groups as g (g.agent.id)}
