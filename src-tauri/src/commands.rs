@@ -487,6 +487,26 @@ pub async fn git_diff_refs(
     core.diff_refs(&project_id, &a, &b).await.map_err(err)
 }
 
+/// A new agent in a worktree on an existing branch (a local one, or `origin/feat`). Refused for
+/// the folder's branch and for one a worktree has: `IN_WORKTREE:…` when an agent's.
+#[tauri::command]
+pub async fn create_agent_on_branch(
+    core: CoreState<'_>,
+    project_id: String,
+    branch: String,
+    model: Option<String>,
+) -> Res<AgentView> {
+    core.create_agent_on_branch(&project_id, &branch, model)
+        .await
+        .map_err(branch_err)
+}
+
+/// « Intégrer <base> » on an agent with a worktree: its base branch goes into its branch.
+#[tauri::command]
+pub async fn integrate_base(core: CoreState<'_>, id: String) -> Res<crate::core::Integration> {
+    core.integrate_base(&id).await.map_err(err)
+}
+
 #[tauri::command(async)]
 pub fn stats(core: CoreState, range: String) -> StatsView {
     core.stats_view(&range)

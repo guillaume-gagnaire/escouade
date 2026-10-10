@@ -695,6 +695,7 @@ mod tests {
             path: "/p/.claude/worktrees/dem-1".into(),
             branch: "ticket/dem-1".into(),
             base_branch: "main".into(),
+            existing: false,
         };
         let env = step_env("/p", &wt, Some(4110));
         let get = |k: &str| env.iter().find(|(n, _)| n == k).map(|(_, v)| v.as_str());

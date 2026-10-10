@@ -136,6 +136,18 @@ impl std::fmt::Display for Refusal {
 
 impl std::error::Error for Refusal {}
 
+/// The branch a ticket's form names, trimmed; empty for the ticket's own. Never an option.
+fn branch_name(branch: &str) -> Result<String> {
+    let branch = branch.trim();
+    if branch.starts_with('-') {
+        bail!(tr!(
+            "« {branch} » n'est pas un nom de branche valide",
+            "“{branch}” isn’t a valid branch name"
+        ));
+    }
+    Ok(branch.to_string())
+}
+
 fn ticket_not_found() -> anyhow::Error {
     anyhow!(tr!("ticket introuvable", "ticket not found"))
 }
@@ -204,6 +216,8 @@ pub struct TicketDraft {
     pub max_loops: u32,
     /// The ids of the tickets it comes after ("Après"), the whole list.
     pub after: Vec<String>,
+    /// An existing branch for its agent to take up; empty: the ticket's own, `ticket/<key>`.
+    pub branch: String,
 }
 
 impl<R: Runtime> Core<R> {
@@ -287,6 +301,8 @@ impl<R: Runtime> Core<R> {
             return Err(title_missing());
         }
         let project = self.project(project_id)?;
+        // Refused before a key is used up.
+        let branch = self.ticket_branch(&project, &d.branch).await?;
         let current = git::head_branch(&project.path).await;
         let key = {
             let mut projects = self.projects.write();
@@ -317,6 +333,7 @@ impl<R: Runtime> Core<R> {
             max_loops: board::max_loops(d.max_loops),
             created_at: now_ms(),
             external,
+            branch,
             ..Default::default()
         };
         {
@@ -348,12 +365,27 @@ impl<R: Runtime> Core<R> {
         Ok(ticket)
     }
 
+    /// The branch a ticket's form names, trimmed: empty for the ticket's own, else one the
+    /// repository has (a local branch, or a remote one). It may be taken by then, or be the
+    /// folder's: the start refuses it, as an agent made on it is.
+    async fn ticket_branch(&self, project: &Project, branch: &str) -> Result<String> {
+        let branch = branch_name(branch)?;
+        if branch.is_empty() {
+            return Ok(branch);
+        }
+        let root = self.toplevel(&project.path).await.ok_or_else(not_a_repo)?;
+        git::local_of(&root, &branch).await?;
+        Ok(branch)
+    }
+
     /// Only a ticket "À faire" changes. It never comes after a ticket that waits for it already.
     pub fn ticket_update(self: &Arc<Self>, id: &str, d: TicketDraft) -> Result<Ticket> {
         let title = d.title.trim().to_string();
         if title.is_empty() {
             return Err(title_missing());
         }
+        // (Its existence is the start's to check: it needs git, this does not wait for it.)
+        let branch = branch_name(&d.branch)?;
         let ticket = self.edit_ticket_with(
             id,
             |all| {
@@ -379,6 +411,7 @@ impl<R: Runtime> Core<R> {
                 t.criteria = board::criteria_from(&d.criteria);
                 t.max_loops = board::max_loops(d.max_loops);
                 t.after = after;
+                t.branch = branch;
                 Ok(t.clone())
             },
         )?;
@@ -852,8 +885,14 @@ impl<R: Runtime> Core<R> {
         // What its Claude is told, from its protocol to its first message.
         let lang = self.lang().claude;
         let or = |v: &str, default: &str| Some(if v.is_empty() { default } else { v }.to_string());
-        // As its worktree will be: the target branch has isola's configuration.
-        let isola = isola::cli().is_some() && isola::configured_on(&project.path, &target).await;
+        // The ticket's own branch from the target, or one that exists, which the agent takes up.
+        let (new_branch, taken_up, base) = match t.branch.as_str() {
+            "" => (Some((board::branch_of(&t.key), target.clone())), None, None),
+            branch => (None, Some(branch.to_string()), Some(target.clone())),
+        };
+        // As its worktree will be: the branch it is on has isola's configuration.
+        let from = taken_up.as_deref().unwrap_or(&target);
+        let isola = isola::cli().is_some() && isola::configured_on(&project.path, from).await;
         // Reserved at once: no other start or launch preparation gets this block meanwhile.
         let ports = if isola { None } else { self.reserve_ports() };
         let made = self
@@ -864,7 +903,7 @@ impl<R: Runtime> Core<R> {
                     effort: or(&s.effort, &settings.default_effort),
                     mode: or(&s.mode, &settings.default_mode),
                     name: Some(board::agent_name(&t.key, &t.title)),
-                    worktree: Some((board::branch_of(&t.key), target)),
+                    worktree: new_branch,
                     append_prompt: Some(board::protocol_prompt_for(lang, t, ports, isola)),
                     ticket_id: Some(t.id.clone()),
                     port_base: ports,
@@ -872,6 +911,8 @@ impl<R: Runtime> Core<R> {
                     copy_of: None,
                     account: None,
                     isolated: None,
+                    branch: taken_up,
+                    base,
                 },
             )
             .await;
@@ -1486,7 +1527,7 @@ impl<R: Runtime> Core<R> {
             if s.cleanup {
                 // Merged, or with nothing on it, its branch goes too; pushed or proposed, it stays
                 // (and an agent restored gets its worktree back from it).
-                let keep_branch = !nothing && s.action != "merge";
+                let keep_branch = board::keeps_branch(wt.existing, nothing, &s.action);
                 let ports = meta.port_base;
                 self.remove_worktree_of(t, &project, &wt, proc, ports, keep_branch)
                     .await;
@@ -2224,7 +2265,7 @@ pub(crate) fn merge_lock_key(repo: &str) -> String {
 }
 
 /// `t` is still "À tester" with this agent, its validation under way.
-fn validating(t: &Ticket, agent_id: &str) -> bool {
+pub(crate) fn validating(t: &Ticket, agent_id: &str) -> bool {
     t.column == Column::Review && t.step.is_some() && t.agent_id.as_deref() == Some(agent_id)
 }
 

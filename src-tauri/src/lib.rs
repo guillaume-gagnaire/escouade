@@ -267,6 +267,8 @@ pub fn run() {
             commands::branch_delete,
             commands::branches_merged,
             commands::git_diff_refs,
+            commands::create_agent_on_branch,
+            commands::integrate_base,
             commands::set_remote_control,
             commands::stats,
             commands::refresh_usage,

@@ -487,6 +487,10 @@ pub struct Ticket {
     pub done_at: Option<i64>,
     /// Imported from an external ticket system: the ticket there, kept in step.
     pub external: Option<ExternalRef>,
+    /// An existing branch the ticket's agent takes up (« Reprendre une branche existante… »), a
+    /// local one or a remote one (`origin/feat`); empty: its own branch, `ticket/<key>`, made at
+    /// its start.
+    pub branch: String,
 }
 
 /// A project's board: what validating a ticket does, and its agents.
@@ -633,6 +637,11 @@ pub struct Worktree {
     pub path: String,
     pub branch: String,
     pub base_branch: String,
+    /// The branch was there before the agent (« Nouvel agent sur une branche… », a ticket that takes
+    /// one up): it is the user's, so deleting the agent's worktree leaves it, and Haiku never
+    /// renames it after the agent.
+    #[serde(default)]
+    pub existing: bool,
 }
 
 /// The longest status line an agent reports (`AgentMeta::progress_line`), in characters.
@@ -1588,6 +1597,27 @@ mod tests {
         assert_eq!(serde_json::to_value(&ui).unwrap()["layout"], "split");
         let old: UiState = serde_json::from_value(json!({ "view": "project" })).unwrap();
         assert_eq!(serde_json::to_value(&old).unwrap()["layout"], "");
+    }
+
+    #[test]
+    fn tickets_and_worktrees_saved_before_existing_branches_still_load() {
+        let t: Ticket = serde_json::from_value(json!({ "id": "t1", "key": "DEM-1" })).unwrap();
+        assert_eq!(t.branch, "");
+        let t: Ticket =
+            serde_json::from_value(json!({ "id": "t1", "branch": "feat/login" })).unwrap();
+        assert_eq!(t.branch, "feat/login");
+        // An agent's worktree made before them has its own branch.
+        let wt: Worktree = serde_json::from_value(
+            json!({ "path": "C:/demo/.claude/worktrees/x", "branch": "escouade/x", "baseBranch": "main" }),
+        )
+        .unwrap();
+        assert!(!wt.existing);
+        let kept: Worktree = serde_json::from_value(json!({
+            "path": "C:/demo/.claude/worktrees/x", "branch": "feat/x", "baseBranch": "main", "existing": true
+        }))
+        .unwrap();
+        assert!(kept.existing);
+        assert_eq!(serde_json::to_value(&kept).unwrap()["existing"], true);
     }
 
     #[test]
