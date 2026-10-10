@@ -75,62 +75,92 @@ export function isolaApproved(agent: Agent, config: string): boolean {
   return !!approved && approved.config === config && approved.open === (agent.recipe?.open ?? '');
 }
 
-/** Code point ranges of the characters that change how text looks, or draw nothing, without being seen. */
-const HIDDEN: [number, number][] = [
-  [0x00, 0x08], // controls, but not the tab (0x09) and the line break (0x0a)
-  [0x0b, 0x1f], // including the carriage return that overwrites a line, and escape
-  [0x7f, 0x9f],
-  [0xad, 0xad], // soft hyphen
-  [0x34f, 0x34f], // combining grapheme joiner
-  [0x61c, 0x61c], // Arabic letter mark: reorders what follows it
-  [0x115f, 0x1160], // hangul fillers
-  [0x17b4, 0x17b5],
-  [0x180b, 0x180e], // Mongolian free variation selectors and separator
-  [0x200b, 0x200f], // zero-width spaces and joiners, left-to-right and right-to-left marks
-  [0x2028, 0x202e], // line and paragraph separators, direction embeddings and overrides
-  [0x2060, 0x2069], // word joiner, invisible operators, direction isolates
+/**
+ * Characters that change how text looks, or draw nothing, without being seen: the Unicode categories of controls, of
+ * format characters (zero-width marks, direction marks and overrides, the Arabic letter mark…) and of line and paragraph
+ * separators, and every character that is ignored when drawn (variation selectors, hangul fillers, tag characters…).
+ * Decided by property, not by a list that has to name each one: what a list forgets is what gets used.
+ */
+const HIDDEN = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}]/u;
+
+/** What the property tables of an older WebView may not know yet, and what draws a blank without being ignorable. */
+const ALSO_HIDDEN: [number, number][] = [
+  [0x180b, 0x180f], // Mongolian free variation selectors (the last one is Unicode 14)
   [0x2800, 0x2800], // braille blank
-  [0x3164, 0x3164], // hangul filler
-  [0xfeff, 0xfeff], // zero-width no-break space
-  [0xffa0, 0xffa0], // halfwidth hangul filler
-  [0xe0000, 0xe007f], // tag characters
+  [0xfe00, 0xfe0f], // variation selectors
+  [0xfff0, 0xfff8], // unassigned, ignorable
+  [0x1bca0, 0x1bca3], // shorthand format controls
+  [0x1d173, 0x1d17a], // musical format controls
+  [0xe0000, 0xe0fff], // tag characters and the variation selectors supplement
 ];
 
 /** Empty lines in a row from which they are counted instead of shown, and spaces in a row likewise. */
 const BLANK_LINES = 2;
 const SPACES = 24;
 
-/**
- * Text of a recipe as the user is shown it, so that what is read is what runs: the characters that would hide part of
- * it (a carriage return that overwrites the line, an escape sequence, a zero-width space, a right-to-left override) are
- * spelled out, and so are the runs of empty lines or of spaces that would push the rest of a command out of sight.
- */
-export function revealHidden(text: string): string {
-  const spelled = Array.from(text.split('\r\n').join('\n'), (ch) => {
-    const code = ch.codePointAt(0) ?? 0;
-    return HIDDEN.some(([from, to]) => code >= from && code <= to) ? `⟨U+${code.toString(16).toUpperCase().padStart(4, '0')}⟩` : ch;
-  }).join('');
-  return countBlanks(spelled);
+/** The character is not drawn, or is drawn as something else than itself: not the tab and the line break. */
+function hidden(ch: string): boolean {
+  if (ch === '\t' || ch === '\n') return false;
+  const code = ch.codePointAt(0) ?? 0;
+  return HIDDEN.test(ch) || ALSO_HIDDEN.some(([from, to]) => code >= from && code <= to);
 }
 
-/** Runs of empty lines (blank ones too) and of spaces long enough to hide something, as « ⟨12 lignes vides⟩ ». */
-function countBlanks(text: string): string {
-  // The last line break ends the last line: it does not start an empty one.
-  const ends = text.endsWith('\n');
-  const lines = (ends ? text.slice(0, -1) : text).split('\n');
+/** The character shows nothing: a space, or one that is not drawn. */
+const blank = (ch: string) => hidden(ch) || /\s/.test(ch);
+
+/** The code of a hidden character, as the user is shown it. */
+const spelled = (ch: string) => `⟨U+${(ch.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(4, '0')}⟩`;
+
+/** A stretch of blank characters as it is shown: as it is, with each hidden one spelled out, or counted when it is long. */
+function showBlanks(run: string[]): string {
+  if (run.length < SPACES) return run.map((ch) => (hidden(ch) ? spelled(ch) : ch)).join('');
+  return `⟨${run.length} espaces${run.some(hidden) ? ' ou invisibles' : ''}⟩`;
+}
+
+/** A line as it is shown: its hidden characters spelled out, its long stretches of blanks (hidden ones too) counted. */
+function showLine(line: string): string {
   const out: string[] = [];
-  let blank: string[] = [];
+  let run: string[] = [];
+  for (const ch of line) {
+    if (blank(ch)) {
+      run.push(ch);
+      continue;
+    }
+    out.push(showBlanks(run), ch);
+    run = [];
+  }
+  out.push(showBlanks(run));
+  return out.join('');
+}
+
+/**
+ * Text of a recipe as the user is shown it, so that what is read is what runs: the characters that would hide part of
+ * it (a carriage return that overwrites the line, an escape sequence, a zero-width space, a variation selector, a
+ * right-to-left override) are spelled out, and so are the runs of empty lines or of spaces, invisible characters
+ * among them, that would push the rest of a command out of sight.
+ */
+export function revealHidden(text: string): string {
+  // A Windows line ending is a line break; the last line break ends the last line, it does not start an empty one.
+  const unix = text.split('\r\n').join('\n');
+  const ends = unix.endsWith('\n');
+  const lines = (ends ? unix.slice(0, -1) : unix).split('\n');
+  const out: string[] = [];
+  let empty: string[] = [];
   const flush = () => {
-    out.push(...(blank.length >= BLANK_LINES ? [`⟨${blank.length} lignes vides⟩`] : blank));
-    blank = [];
+    if (empty.length >= BLANK_LINES) {
+      const invisible = empty.some((line) => Array.from(line).some(hidden));
+      out.push(`⟨${empty.length} lignes vides${invisible ? ' ou invisibles' : ''}⟩`);
+    } else out.push(...empty.map(showLine));
+    empty = [];
   };
   for (const line of lines) {
-    if (line.trim() === '') {
-      blank.push(line);
+    // A line that shows nothing is an empty one, whatever it holds.
+    if (Array.from(line).every(blank)) {
+      empty.push(line);
       continue;
     }
     flush();
-    out.push(line.replace(/[^\S\n]+/g, (run) => (run.length >= SPACES ? `⟨${run.length} espaces⟩` : run)));
+    out.push(showLine(line));
   }
   flush();
   return out.join('\n') + (ends ? '\n' : '');

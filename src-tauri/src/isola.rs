@@ -155,6 +155,11 @@ pub fn services_of(ls: &str, branch: &str) -> Result<Vec<Service>> {
 
 /// `isola <args>` in `dir`, `limit` at most: what it printed. Not in a job of the app's: the
 /// services `up` starts outlive it on purpose.
+///
+/// Only `up` runs the commands the `.isola.toml` declares (its services and their `setup`), and the user
+/// approves that file before it starts (`testlaunch::check_isola_approved`). `ls`, `down` and `destroy`,
+/// which this runs without such an approval, run no command the file declares: that holds for the current
+/// upstream isola, and is to be checked again when isola changes.
 pub async fn run(dir: &str, args: &[&str], limit: Duration) -> Result<String> {
     let cli = cli().ok_or_else(|| anyhow!("isola introuvable"))?;
     let mut cmd = tokio::process::Command::new(&cli);
