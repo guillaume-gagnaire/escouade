@@ -315,6 +315,49 @@ async fn an_agent_at_work_in_the_project_folder_holds_off_a_switch() {
 }
 
 #[tokio::test]
+async fn an_agent_at_work_in_the_folder_through_another_project_holds_off_a_switch_too() {
+    let h = harness("g1f-switch-agent-shared");
+    let (p, r) = h.project(false).await;
+    git(&r, &["branch", "side"]);
+    // Two projects on one checkout: the agent of the other one works in the same folder.
+    let twin = h
+        .core
+        .create_project(
+            &r.to_string_lossy(),
+            "twin",
+            "oklch(0.72 0.12 48)",
+            false,
+            None,
+        )
+        .await
+        .unwrap();
+    let a = h.core.create_agent(&twin.id, None).await.unwrap();
+    h.wait("warm-up", |h| h.alive(&a.meta.id)).await;
+    let set = |s: AgentStatus| h.core.agent(&a.meta.id).unwrap().lock().meta.status = s;
+    let busy = format!("AGENT_WORKING:{}:{}", a.meta.id, a.meta.name);
+    set(AgentStatus::Running);
+    for project in [&p.id, &twin.id] {
+        let e = h
+            .core
+            .branch_switch(project, "side", true)
+            .await
+            .unwrap_err();
+        assert_eq!(wire(&e), busy);
+        let e = h
+            .core
+            .branch_create(project, "next", "", true, true)
+            .await
+            .unwrap_err();
+        assert_eq!(wire(&e), busy);
+    }
+    assert_eq!(current(&r), "main");
+    assert!(!exists(&r, "next"));
+    set(AgentStatus::Idle);
+    h.core.branch_switch(&p.id, "side", false).await.unwrap();
+    assert_eq!(current(&r), "side");
+}
+
+#[tokio::test]
 async fn a_branch_an_agents_worktree_holds_is_neither_switched_to_nor_deleted() {
     let h = harness("g1-in-worktree");
     let (p, r) = h.project(true).await;

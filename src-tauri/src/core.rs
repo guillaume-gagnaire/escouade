@@ -4260,18 +4260,30 @@ impl<R: Runtime> Core<R> {
         ))
     }
 
-    /// Refused while an agent of the project without worktree has a turn under way (waiting for
-    /// an answer included): its folder is the project's.
-    fn no_agent_at_work(&self, project_id: &str) -> Result<()> {
-        let busy = self.project_agents(project_id).iter().find_map(|h| {
-            let rt = h.lock();
-            (rt.meta.worktree.is_none() && rt.meta.status.is_active())
-                .then(|| (rt.meta.id.clone(), rt.meta.name.clone()))
-        });
-        match busy {
-            Some((agent_id, agent)) => Err(BranchRefusal::AgentWorking { agent_id, agent }.into()),
-            None => Ok(()),
+    /// Refused while an agent without worktree has a turn under way (waiting for an answer
+    /// included) in the repository at `root`: its folder is the checkout's. Any project's, as
+    /// several may be open on one checkout (`refresh_repo` reads them the same way).
+    async fn no_agent_at_work(&self, root: &str) -> Result<()> {
+        let projects: Vec<(String, String)> = self
+            .projects
+            .read()
+            .iter()
+            .map(|p| (p.id.clone(), p.path.clone()))
+            .collect();
+        for (id, path) in projects {
+            if self.toplevel(&path).await.as_deref() != Some(root) {
+                continue;
+            }
+            let busy = self.project_agents(&id).iter().find_map(|h| {
+                let rt = h.lock();
+                (rt.meta.worktree.is_none() && rt.meta.status.is_active())
+                    .then(|| (rt.meta.id.clone(), rt.meta.name.clone()))
+            });
+            if let Some((agent_id, agent)) = busy {
+                return Err(BranchRefusal::AgentWorking { agent_id, agent }.into());
+            }
         }
+        Ok(())
     }
 
     /// Before the folder at `root` goes to `branch`: refused with uncommitted changes to tracked
@@ -4355,7 +4367,7 @@ impl<R: Runtime> Core<R> {
                 return Ok(None);
             }
         }
-        self.no_agent_at_work(project_id)?;
+        self.no_agent_at_work(&root).await?;
         let stashed = self.put_aside(&root, name, stash).await?;
         let switched = git::switch_to(&root, name).await;
         let mut restored = Ok(());
@@ -4395,7 +4407,7 @@ impl<R: Runtime> Core<R> {
         let commit = git::commit_of(&root, start).await?;
         let mut stashed = None;
         if switch {
-            self.no_agent_at_work(project_id)?;
+            self.no_agent_at_work(&root).await?;
             let head = git::commit_of(&root, "HEAD").await.ok();
             if head.as_deref() != Some(commit.as_str()) {
                 stashed = self.put_aside(&root, name, stash).await?;
