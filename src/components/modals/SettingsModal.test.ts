@@ -416,6 +416,46 @@ describe('SettingsModal', () => {
     });
   });
 
+  it('reorders the commands run in new worktrees with their buttons, or Alt+↑ and Alt+↓ on one of them', async () => {
+    const steps = ['npm ci', 'npm run gen', 'npm run db'].map((command, i) => ({ id: `s${i}`, command, shell: 'pwsh', cwd: '' }));
+    app.projects = [project({ worktreeSetup: steps })];
+    const backend = backendSaving();
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    const step = (n: number) => within(screen.getByRole('group', { name: `Commande de préparation ${n}` }));
+    const commands = () => [1, 2, 3].map((n) => (step(n).getByLabelText('Commande') as HTMLInputElement).value);
+    const button = (name: string) => screen.getByRole('button', { name });
+    // Nowhere to go past the ends.
+    expect(button('Monter la commande 1')).toBeDisabled();
+    expect(button('Descendre la commande 1')).toBeEnabled();
+    expect(button('Monter la commande 3')).toBeEnabled();
+    expect(button('Descendre la commande 3')).toBeDisabled();
+    expect(button('Monter la commande 2')).toHaveAttribute('aria-keyshortcuts', 'Alt+ArrowUp');
+    await userEvent.click(button('Descendre la commande 1'));
+    expect(commands()).toEqual(['npm run gen', 'npm ci', 'npm run db']);
+    await userEvent.click(button('Monter la commande 3'));
+    expect(commands()).toEqual(['npm run gen', 'npm run db', 'npm ci']);
+    // A button with no way left to go hands the focus to the other one.
+    await userEvent.click(button('Monter la commande 2'));
+    expect(commands()).toEqual(['npm run db', 'npm run gen', 'npm ci']);
+    expect(button('Descendre la commande 1')).toHaveFocus();
+    // From the keyboard, on any field of the step: the focus goes with it.
+    const field = step(3).getByLabelText('Commande');
+    await userEvent.click(field);
+    await userEvent.keyboard('{Alt>}{ArrowUp}{/Alt}');
+    expect(commands()).toEqual(['npm run db', 'npm ci', 'npm run gen']);
+    expect(field).toHaveFocus();
+    await userEvent.keyboard('{Alt>}{ArrowUp}{ArrowUp}{/Alt}');
+    expect(commands()).toEqual(['npm ci', 'npm run db', 'npm run gen']);
+    expect(field).toHaveFocus();
+    await userEvent.keyboard('{Alt>}{ArrowDown}{/Alt}');
+    expect(commands()).toEqual(['npm run db', 'npm ci', 'npm run gen']);
+    // Ctrl+Alt is AltGr on French keyboards: nothing moves.
+    await userEvent.keyboard('{Control>}{Alt>}{ArrowDown}{/Alt}{/Control}');
+    expect(commands()).toEqual(['npm run db', 'npm ci', 'npm run gen']);
+    await save();
+    expect(backend.called('update_project')[0].args.project.worktreeSetup.map((s: { id: string }) => s.id)).toEqual(['s2', 's0', 's1']);
+  });
+
   it('sets the launch commands as Claude suggests them, in place of those of the draft', async () => {
     let answer!: (v: unknown) => void;
     const backend = backendSaving({ suggest_run_commands: () => new Promise((r) => (answer = r)) });
