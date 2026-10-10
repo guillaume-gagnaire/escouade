@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { DiffLine } from '../../lib/diff';
+import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
 import { resetApp } from '../../test/ipc';
 import PatchView from './PatchView.svelte';
@@ -29,5 +30,24 @@ describe('PatchView', () => {
   it('says nothing when everything is shown', () => {
     render(PatchView, { lines: added(400) });
     expect(screen.queryByText(/de plus/)).not.toBeInTheDocument();
+  });
+});
+
+describe('PatchView in English', () => {
+  beforeEach(() => {
+    resetApp();
+    app.diffSplit = false;
+  });
+
+  it('says how many lines are left, in the plural of English and with its grouping', () => {
+    setLang('en');
+    const { unmount } = render(PatchView, { lines: added(401) });
+    expect(screen.getByText('… 1 more line')).toBeInTheDocument();
+    unmount();
+    const { unmount: next } = render(PatchView, { lines: added(403) });
+    expect(screen.getByText('… 3 more lines')).toBeInTheDocument();
+    next();
+    render(PatchView, { lines: added(1634) });
+    expect(screen.getByText('… 1,234 more lines')).toBeInTheDocument();
   });
 });

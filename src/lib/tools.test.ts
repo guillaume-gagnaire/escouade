@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { setLang } from './i18n';
 import { editsByTurn, hasDiff, toolArg, toolLabel, toolResultSummary } from './tools';
 import type { ConvItem, ToolItem, TurnItem } from './types';
 
@@ -108,5 +109,29 @@ describe('editsByTurn', () => {
       { path: 'src/a.ts', add: 2, del: 0 },
       { path: 'notes.md', add: 4, del: 0 },
     ]);
+  });
+});
+
+describe('the summaries of the tools in English', () => {
+  it('count lines, results and tasks with the plural of English, and group the thousands', () => {
+    setLang('en');
+    const read = (n: number) => tool('Read', {}, { result: { text: Array.from({ length: n }, () => 'x').join('\n'), isError: false } });
+    expect(toolResultSummary(read(1))).toBe('1 line');
+    expect(toolResultSummary(read(3))).toBe('3 lines');
+    expect(toolResultSummary(read(1234))).toBe('1,234 lines');
+    expect(toolResultSummary(tool('Grep', {}, { result: { text: 'a.ts', isError: false } }))).toBe('1 result');
+    expect(toolResultSummary(tool('Glob', {}, { result: { text: 'a.ts\nb.ts', isError: false } }))).toBe('2 results');
+    expect(toolResultSummary(tool('Grep', {}, { result: { text: '', isError: false } }))).toBe('no results');
+    expect(toolArg(tool('TodoWrite', { todos: [{}] }), CWD)).toBe('1 task');
+    expect(toolArg(tool('TodoWrite', { todos: [{}, {}, {}] }), CWD)).toBe('3 tasks');
+  });
+
+  it('say in English that a tool was interrupted, failed or is done, and keep the names of the tools', () => {
+    setLang('en');
+    expect(toolResultSummary(tool('Bash', {}, { status: 'interrupted' }))).toBe('interrupted');
+    expect(toolResultSummary(tool('Bash', {}, { status: 'error', result: { text: '', isError: true } }))).toBe('error');
+    expect(toolResultSummary(tool('Task', {}, { result: { text: 'x', isError: false } }))).toBe('done');
+    expect(toolLabel('Read')).toBe('Read');
+    expect(toolLabel('mcp__github__create_issue')).toBe('github·create_issue');
   });
 });

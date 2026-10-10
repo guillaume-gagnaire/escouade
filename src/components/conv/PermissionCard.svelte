@@ -1,5 +1,6 @@
 <script lang="ts">
   import { captureKeys } from '../../lib/answer-keys.svelte';
+  import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { keyLabel } from '../../lib/platform';
   import { answersHere, ariaEnter, enterAnswer } from '../../lib/shortcuts';
@@ -22,7 +23,7 @@
   const isPlan = $derived(item.toolName === 'ExitPlanMode');
   // A request Claude Code would refuse by default: the refusal is its main button, and only a click allows it.
   const keys = $derived(pending && current && !item.defaultNo);
-  const title = $derived(isPlan ? 'Claude propose un plan' : 'Claude demande une autorisation');
+  const title = $derived(isPlan ? t('composer.permission.titlePlan') : t('composer.permission.title'));
   const summary = $derived(
     toolArg({ kind: 'tool', id: item.id, name: item.toolName, input: item.input, status: 'running', ts: 0 } as ToolItem, cwd),
   );
@@ -31,7 +32,7 @@
     busy = true;
     // The card is about to go: the focus it holds would be lost with it.
     const held = !!card?.contains(document.activeElement);
-    const message = decision === 'deny' && isPlan ? 'Continue à planifier : le plan ne me convient pas encore.' : null;
+    const message = decision === 'deny' && isPlan ? t('composer.permission.keepPlanningMessage') : null;
     await app.run(api.answerPermission(agentId, item.id, decision, message));
     busy = false;
     if (held) app.focusComposer++;
@@ -75,25 +76,26 @@
         aria-keyshortcuts={keys ? ariaEnter() : undefined}
         onclick={() => decide('allow')}
       >
-        {isPlan ? 'Approuver le plan' : 'Autoriser'}
-        {#if keys}<kbd class="kbd" aria-hidden="true">{keyLabel('Ctrl+Entrée')}</kbd>{/if}
+        {isPlan ? t('composer.permission.approvePlan') : t('composer.permission.allow')}
+        {#if keys}<kbd class="kbd" aria-hidden="true">{keyLabel('Ctrl+Enter')}</kbd>{/if}
       </button>
       {#if item.canAlways}
         <button class="opt" disabled={busy} aria-keyshortcuts={keys ? ariaEnter(true) : undefined} onclick={() => decide('always')}>
-          {isPlan ? 'Approuver et accepter les édits' : 'Toujours autoriser'}
-          {#if keys}<kbd class="kbd" aria-hidden="true">{keyLabel('Ctrl+Maj+Entrée')}</kbd>{/if}
+          {isPlan ? t('composer.permission.approvePlanAndEdits') : t('composer.permission.always')}
+          {#if keys}<kbd class="kbd" aria-hidden="true">{keyLabel('Ctrl+Shift+Enter')}</kbd>{/if}
         </button>
       {/if}
       <button class="opt" class:primary={item.defaultNo} disabled={busy} onclick={() => decide('deny')}
-        >{isPlan ? 'Continuer à planifier' : 'Refuser'}</button
+        >{isPlan ? t('composer.permission.keepPlanning') : t('composer.permission.deny')}</button
       >
     </div>
-    <span class="hint">Pour refuser en expliquant quoi faire à la place, écris-le dans le champ ci-dessous.</span>
+    <span class="hint">{t('composer.permission.denyHint')}</span>
   </div>
 {:else}
   <div class="line mono" class:denied={item.decision === 'deny'}>
-    {#if item.decision === 'deny'}✕ Refusé{:else if item.decision}✓ {item.decision === 'always' ? 'Toujours autorisé' : 'Autorisé'}{:else}·
-      Demande annulée{/if}
+    {#if item.decision === 'deny'}✕ {t('composer.permission.denied')}{:else if item.decision}✓ {item.decision === 'always'
+        ? t('composer.permission.alwaysAllowed')
+        : t('composer.permission.allowed')}{:else}· {t('composer.permission.cancelled')}{/if}
     · {toolLabel(item.toolName)}
     {isPlan ? '' : summary}
     {#if item.message}<span class="msg">— {item.message}</span>{/if}

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Rich from '../../lib/i18n/Rich.svelte';
+  import { t } from '../../lib/i18n';
   import { app } from '../../lib/state.svelte';
   import type { Agent } from '../../lib/types';
 
@@ -32,9 +34,9 @@
 <div class="setup">
   <div class="line">
     <span class="dots" aria-hidden="true"><span></span><span></span><span></span></span>
-    <span role="status">Préparation du worktree · <span class="mono">{agent.setup}</span> — tes messages partiront une fois terminée.</span>
+    <span role="status"><Rich k="conv.setup.running">{#snippet step()}<span class="mono">{agent.setup}</span>{/snippet}</Rich></span>
     <button class="see" aria-expanded={open} aria-controls={open ? outId : undefined} onclick={toggle}>
-      <span class="chev" aria-hidden="true">{open ? '▾' : '▸'}</span>Voir la sortie
+      <span class="chev" aria-hidden="true">{open ? '▾' : '▸'}</span>{t('conv.setup.showOutput')}
     </button>
   </div>
   {#if open}
@@ -47,10 +49,10 @@
       class:empty={!lines.length}
       role="log"
       aria-live="off"
-      aria-label="Sortie de {agent.setup}"
+      aria-label={t('conv.setup.outputLabel', { step: agent.setup ?? '' })}
       tabindex="0"
       bind:this={out}
-      onscroll={onScroll}>{lines.length ? lines.join('\n') : 'Pas encore de sortie.'}</pre>
+      onscroll={onScroll}>{lines.length ? lines.join('\n') : t('conv.setup.noOutput')}</pre>
   {/if}
 </div>
 

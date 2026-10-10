@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
+import { setLang } from '../../lib/i18n';
 import EventMessage from './EventMessage.svelte';
 
 const NOTIFICATION =
@@ -54,5 +55,25 @@ describe('EventMessage', () => {
     render(EventMessage, { source: 'task', text: NOTIFICATION });
     const sum = screen.getByText('Background command "npm test" completed (exit code 0)');
     expect(sum).toHaveAttribute('title', 'Background command "npm test" completed (exit code 0)');
+  });
+});
+
+describe('EventMessage in English', () => {
+  it('words a background task and a subagent in English', () => {
+    setLang('en');
+    const { unmount } = render(EventMessage, { source: 'task', text: NOTIFICATION });
+    expect(screen.getByText('Background task completed')).toBeInTheDocument();
+    unmount();
+    const { unmount: failed } = render(EventMessage, {
+      source: 'task',
+      text: NOTIFICATION.replace('completed</status>', 'failed</status>'),
+    });
+    expect(screen.getByText('Background task failed')).toBeInTheDocument();
+    failed();
+    const { unmount: report } = render(EventMessage, { source: 'agent', text: REPORT, label: 'Investigate PDF upload bug' });
+    expect(screen.getByText('Report from the subagent “Investigate PDF upload bug”')).toBeInTheDocument();
+    report();
+    render(EventMessage, { source: 'channel', text: 'New ticket #42' });
+    expect(screen.getByText('Message from Claude Code (channel)')).toBeInTheDocument();
   });
 });

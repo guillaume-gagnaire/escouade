@@ -1,5 +1,6 @@
 // Model / effort / permission-mode catalogs used by the composer and the settings.
 
+import { t } from './i18n';
 import type { ModelInfo } from './types';
 
 /** The aliases offered: Claude Code runs the latest model of the family it knows. */
@@ -10,20 +11,73 @@ export const MODELS = [
   { value: 'haiku', label: 'Haiku' },
 ];
 
+/** A choice whose label and title are read when shown, so that they follow the language of the interface. */
+function choice(value: string, label: () => string, title: () => string): { value: string; label: string; title: string } {
+  return {
+    value,
+    get label() {
+      return label();
+    },
+    get title() {
+      return title();
+    },
+  };
+}
+
 export const EFFORTS = [
-  { value: 'low', label: 'Bas', title: 'Réponses rapides, peu de réflexion' },
-  { value: 'medium', label: 'Moyen', title: 'Équilibré' },
-  { value: 'high', label: 'Élevé', title: 'Réflexion approfondie' },
-  { value: 'xhigh', label: 'Très élevé', title: 'Réflexion très approfondie' },
-  { value: 'max', label: 'Max', title: 'Réflexion maximale, plus de tokens' },
+  choice(
+    'low',
+    () => t('composer.effort.low.label'),
+    () => t('composer.effort.low.title'),
+  ),
+  choice(
+    'medium',
+    () => t('composer.effort.medium.label'),
+    () => t('composer.effort.medium.title'),
+  ),
+  choice(
+    'high',
+    () => t('composer.effort.high.label'),
+    () => t('composer.effort.high.title'),
+  ),
+  choice(
+    'xhigh',
+    () => t('composer.effort.xhigh.label'),
+    () => t('composer.effort.xhigh.title'),
+  ),
+  choice(
+    'max',
+    () => t('composer.effort.max.label'),
+    () => t('composer.effort.max.title'),
+  ),
 ];
 
 export const MODES = [
-  { value: 'auto', label: 'Auto', title: 'Un classifieur approuve les actions sûres et demande pour le reste' },
-  { value: 'default', label: 'Demander', title: 'Claude demande ton accord avant chaque action sensible' },
-  { value: 'plan', label: 'Plan', title: 'Claude analyse et propose un plan sans rien modifier' },
-  { value: 'acceptEdits', label: 'Édits auto', title: 'Les modifications de fichiers sont acceptées sans demander' },
-  { value: 'bypassPermissions', label: 'Bypass', title: 'Aucune demande de permission (à réserver aux environnements sûrs)' },
+  choice(
+    'auto',
+    () => t('composer.mode.auto.label'),
+    () => t('composer.mode.auto.title'),
+  ),
+  choice(
+    'default',
+    () => t('composer.mode.default.label'),
+    () => t('composer.mode.default.title'),
+  ),
+  choice(
+    'plan',
+    () => t('composer.mode.plan.label'),
+    () => t('composer.mode.plan.title'),
+  ),
+  choice(
+    'acceptEdits',
+    () => t('composer.mode.acceptEdits.label'),
+    () => t('composer.mode.acceptEdits.title'),
+  ),
+  choice(
+    'bypassPermissions',
+    () => t('composer.mode.bypassPermissions.label'),
+    () => t('composer.mode.bypassPermissions.title'),
+  ),
 ];
 
 /**

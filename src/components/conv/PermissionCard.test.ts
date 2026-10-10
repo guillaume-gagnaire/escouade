@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
 import type { PermissionItem } from '../../lib/types';
 import { answerClock, conversationHost, settle } from '../../test/conversation';
@@ -287,5 +288,49 @@ describe('PermissionCard keyboard', () => {
     await waitFor(() => expect(backend.called('answer_permission')).toHaveLength(1));
     await new Promise((r) => setTimeout(r)); // lets the answer settle
     expect(app.focusComposer).toBe(focus);
+  });
+});
+
+describe('PermissionCard in English', () => {
+  beforeEach(() => resetApp());
+
+  it('asks in English, with the keys written as in English', () => {
+    setLang('en');
+    render(PermissionCard, { item: item(), agentId: 'a1', pending: true, cwd: 'C:\\code' });
+    expect(screen.getByRole('group', { name: 'Claude is asking for permission' })).toBeInTheDocument();
+    const allow = screen.getByRole('button', { name: 'Allow' });
+    expect(allow).toHaveTextContent('Ctrl+Enter');
+    expect(screen.getByRole('button', { name: 'Always allow' })).toHaveTextContent('Ctrl+Shift+Enter');
+    expect(screen.getByRole('button', { name: 'Deny' })).toBeInTheDocument();
+    expect(screen.getByText('To deny and explain what to do instead, write it in the field below.')).toBeInTheDocument();
+  });
+
+  it('proposes a plan in English, and tells Claude to keep planning in English when it is refused', async () => {
+    setLang('en');
+    const backend = fakeBackend();
+    render(PermissionCard, {
+      item: item({ toolName: 'ExitPlanMode', input: { plan: '## Plan\n\n1. Write the tests' } }),
+      agentId: 'a1',
+      pending: true,
+      cwd: 'C:\\code',
+    });
+    expect(screen.getByRole('group', { name: 'Claude proposes a plan' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Approve the plan' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Approve and accept edits' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Keep planning' }));
+    expect(backend.called('answer_permission')[0].args.message).toBe('Keep planning: the plan doesn’t work for me yet.');
+  });
+
+  it('summarizes the decision in English once answered', () => {
+    setLang('en');
+    const answered = (over: Partial<PermissionItem>) => ({ item: item(over), agentId: 'a1', pending: false, cwd: 'C:\\code' });
+    const { unmount } = render(PermissionCard, answered({ decision: 'deny', message: 'use npm run clean' }));
+    expect(screen.getByText(/✕ Denied/)).toBeInTheDocument();
+    unmount();
+    const { unmount: next } = render(PermissionCard, answered({ decision: 'always' }));
+    expect(screen.getByText(/✓ Always allowed/)).toBeInTheDocument();
+    next();
+    render(PermissionCard, answered({ decision: null }));
+    expect(screen.getByText(/Request canceled/)).toBeInTheDocument();
   });
 });

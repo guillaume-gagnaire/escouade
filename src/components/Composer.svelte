@@ -10,8 +10,10 @@
   import { getDraft, setDraft } from '../lib/drafts';
   import { injectedSource } from '../lib/events';
   import { basename, dirname } from '../lib/format';
+  import { t } from '../lib/i18n';
   import { api } from '../lib/ipc';
   import { EFFORTS, MODES, modelOptions, supportsAuto, supportsEffort } from '../lib/models';
+  import { keyLabel } from '../lib/platform';
   import { observeWidth } from '../lib/resize';
   import { app } from '../lib/state.svelte';
   import type { Agent, QuestionItem } from '../lib/types';
@@ -50,8 +52,8 @@
       return {
         value: md.value,
         label: md.label,
-        detail: unavailable ? 'indisponible avec Haiku' : md.title,
-        title: unavailable ? "Le mode Auto n'est pas disponible avec Haiku" : md.title,
+        detail: unavailable ? t('composer.mode.autoUnavailableDetail') : md.title,
+        title: unavailable ? t('composer.mode.autoUnavailableTitle') : md.title,
         disabled: unavailable,
       };
     }),
@@ -61,11 +63,11 @@
   const placeholder = $derived(
     pendingItem
       ? pendingItem.kind === 'permission'
-        ? 'Explique à Claude quoi faire à la place (refuse la demande)…'
-        : 'Réponds à la question ou écris une réponse libre…'
+        ? t('composer.placeholder.denyPermission')
+        : t('composer.placeholder.answerQuestion')
       : conv.items.length
-        ? `Envoyer un message à ${agent.name}…`
-        : 'Décris la tâche à confier à Claude…',
+        ? t('composer.placeholder.sendTo', { name: agent.name })
+        : t('composer.placeholder.describe'),
   );
 
   // Reused for another agent (the id itself changed): switch drafts.
@@ -113,14 +115,14 @@
   async function refreshSuggestions() {
     if (!ta) return;
     trigger = detectTrigger(text, ta.selectionStart);
-    const t = trigger;
-    if (!t) {
+    const trig = trigger;
+    if (!trig) {
       suggestions = [];
       return;
     }
     const seq = ++reqSeq;
-    if (t.kind === 'file') {
-      const files = await api.fileSuggestions(agent.id, t.query).catch(() => [] as string[]);
+    if (trig.kind === 'file') {
+      const files = await api.fileSuggestions(agent.id, trig.query).catch(() => [] as string[]);
       if (seq !== reqSeq) return;
       suggestions = files.slice(0, 12).map((f) => ({ label: basename(f), detail: dirname(f), value: f }));
     } else {
@@ -130,7 +132,7 @@
         if (cmds.length) commandCache.set(agent.id, cmds);
       }
       if (seq !== reqSeq) return;
-      suggestions = filterCommands(cmds, t.query).map((c) => ({
+      suggestions = filterCommands(cmds, trig.query).map((c) => ({
         label: '/' + c.name + (c.argumentHint ? ' ' + c.argumentHint : ''),
         detail: c.description,
         value: c.name,
@@ -220,7 +222,7 @@
           const a = await readAttachment(f);
           const target = owner === draftFor ? files : getDraft(owner).files;
           if (target.reduce((n, x) => n + x.size, a.size) > MAX_TOTAL) {
-            throw new Error(`${f.name} n'est pas joint : les fichiers d'un message sont limités à ${sizeLabel(MAX_TOTAL)} en tout.`);
+            throw new Error(t('composer.attachments.totalTooBig', { name: f.name, max: sizeLabel(MAX_TOTAL) }));
           }
           if (owner === draftFor) files.push(a);
           else setDraft(owner, { text: getDraft(owner).text, files: [...target, a] });
@@ -256,7 +258,7 @@
     if ((!body && !files.length) || reading) return;
     if (sending) {
       // The one before waits for the worktree, which can take minutes: this one is not dropped without a word.
-      if (heldFor === agent.id) app.toast('Un message attend déjà la fin de la préparation.');
+      if (heldFor === agent.id) app.toast(t('composer.send.alreadyWaiting'));
       return;
     }
     // Text typed while Claude waits answers the question / refuses the permission.
@@ -291,7 +293,7 @@
         );
       }
       if (answering && prevFiles.length) {
-        app.toast("Les fichiers joints n'accompagnent pas une réponse : ils restent prêts pour ton prochain message.");
+        app.toast(t('composer.send.filesKept'));
       }
     } catch (e) {
       // The files of an answer never left the field.
@@ -339,7 +341,7 @@
   function setOption(o: { model?: string; effort?: string; mode?: string }) {
     const a = app.agents[agent.id];
     if (a) Object.assign(a, o);
-    if (o.mode === 'bypassPermissions') app.toast('Mode Bypass : Claude agira sans aucune demande de permission.', 'info');
+    if (o.mode === 'bypassPermissions') app.toast(t('composer.mode.bypassToast'), 'info');
     app.run(api.setAgentOptions(agent.id, o));
   }
 </script>
@@ -385,13 +387,17 @@
           {#if f.url}
             <div class="img">
               <img src={f.url} alt={f.name} />
-              <button class="rm" aria-label="Retirer {f.name}" onclick={() => files.splice(i, 1)}>×</button>
+              <button class="rm" aria-label={t('composer.attachments.remove', { name: f.name })} onclick={() => files.splice(i, 1)}
+                >×</button
+              >
             </div>
           {:else}
             <div class="file" title={f.name}>
               <span aria-hidden="true">📄</span>
               <span class="fname">{f.name}</span>
-              <button class="rm" aria-label="Retirer {f.name}" onclick={() => files.splice(i, 1)}>×</button>
+              <button class="rm" aria-label={t('composer.attachments.remove', { name: f.name })} onclick={() => files.splice(i, 1)}
+                >×</button
+              >
             </div>
           {/if}
         {/each}
@@ -414,7 +420,7 @@
     ></textarea>
     <div class="bar" use:observeWidth={(w) => (width = w)}>
       <Dropdown
-        caption="Modèle"
+        caption={t('common.model')}
         value={agent.model}
         options={modelOptions(app.models)}
         open={menu === 'model'}
@@ -423,18 +429,18 @@
         onPick={(v) => pick({ model: v })}
       />
       <Dropdown
-        caption="Effort"
+        caption={t('composer.bar.effort')}
         value={effortOk ? agent.effort : ''}
         options={EFFORTS.map((ef) => ({ value: ef.value, label: ef.label, detail: ef.title }))}
         open={menu === 'effort'}
         showCaption={!tight}
         disabled={!effortOk}
-        title={effortOk ? 'Effort de réflexion' : "Haiku ne gère pas l'effort"}
+        title={effortOk ? t('composer.bar.effortTitle') : t('composer.bar.effortUnsupported')}
         onToggle={() => toggleMenu('effort')}
         onPick={(v) => pick({ effort: v })}
       />
       <Dropdown
-        caption="Mode"
+        caption={t('composer.bar.mode')}
         value={agent.mode}
         options={modeOptions}
         open={menu === 'mode'}
@@ -445,8 +451,12 @@
       />
       <div style="flex:1"></div>
       {#if busy}
-        <button class="btn ghost stop" class:icon={tight} onclick={stop} title="Interrompre (Échap)" aria-label="Stop"
-          >{tight ? '■' : '■ Stop'}</button
+        <button
+          class="btn ghost stop"
+          class:icon={tight}
+          onclick={stop}
+          title={t('composer.bar.interrupt', { key: keyLabel('Esc') })}
+          aria-label={t('composer.bar.stop')}>{tight ? '■' : `■ ${t('composer.bar.stop')}`}</button
         >
       {/if}
       <input
@@ -455,7 +465,7 @@
         accept={ACCEPT}
         multiple
         hidden
-        aria-label="Joindre un fichier"
+        aria-label={t('composer.attach.label')}
         onchange={(e) => {
           addFiles(e.currentTarget.files ?? []);
           e.currentTarget.value = '';
@@ -463,8 +473,8 @@
       />
       <button
         class="icon-btn attach"
-        title="Joindre une image, un PDF ou un fichier texte (ou colle / glisse-le)"
-        aria-label="Joindre un fichier"
+        title={t('composer.attach.title')}
+        aria-label={t('composer.attach.label')}
         onclick={() => fileInput?.click()}
       >
         <svg
@@ -482,12 +492,12 @@
       <button
         class="btn primary"
         title={busy && !pendingItem
-          ? 'Claude en tiendra compte dès sa prochaine étape · Entrée pour envoyer'
-          : 'Entrée pour envoyer · Maj+Entrée pour aller à la ligne'}
+          ? t('composer.send.titleQueued', { enter: keyLabel('Enter') })
+          : t('composer.send.title', { enter: keyLabel('Enter'), newline: keyLabel('Shift+Enter') })}
         disabled={sending || reading > 0 || (!text.trim() && !files.length)}
         onclick={send}
       >
-        Envoyer
+        {t('composer.send.label')}
       </button>
     </div>
   </div>

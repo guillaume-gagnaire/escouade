@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../../lib/i18n';
   import { parseAgentMessage, parseTaskNotification, plainText } from '../../lib/events';
   import Markdown from './Markdown.svelte';
 
@@ -6,20 +7,33 @@
   // (a subagent or another session), or another origin. `label`: the task a subagent was given.
   let { source, text, label = null }: { source: string; text: string; label?: string | null } = $props();
 
-  const STATUS: Record<string, string> = { completed: 'terminée', failed: 'en échec', killed: 'arrêtée', stopped: 'arrêtée' };
+  // How a background task ended, as a whole sentence (the status the CLI reports is shown as is when it is another).
+  function taskEnded(status: string): string {
+    switch (status) {
+      case 'completed':
+        return t('conv.event.taskCompleted');
+      case 'failed':
+        return t('conv.event.taskFailed');
+      case 'killed':
+      case 'stopped':
+        return t('conv.event.taskStopped');
+      default:
+        return t('conv.event.taskStatus', { status });
+    }
+  }
 
   const task = $derived(source === 'task' ? parseTaskNotification(text) : null);
   const message = $derived(source === 'agent' ? parseAgentMessage(text) : null);
   const line = $derived.by(() => {
-    if (task?.status) return { what: `Tâche de fond ${STATUS[task.status] ?? task.status}`, detail: task.summary };
+    if (task?.status) return { what: taskEnded(task.status), detail: task.summary };
     // A notification that does not say a task ended (a scheduled trigger, a check-in…).
-    if (task) return { what: 'Notification', detail: task.summary ?? plainText(text) };
-    return { what: `Message de Claude Code (${source})`, detail: plainText(text) };
+    if (task) return { what: t('conv.event.notification'), detail: task.summary ?? plainText(text) };
+    return { what: t('conv.event.fromClaudeCode', { source }), detail: plainText(text) };
   });
   const title = $derived.by(() => {
     if (!message) return '';
-    if (message.handback) return label ? `Rapport du sous-agent « ${label} »` : 'Rapport d’un sous-agent';
-    return label ? `Message de « ${label} »` : 'Message d’une autre session Claude';
+    if (message.handback) return label ? t('conv.event.handbackNamed', { label }) : t('conv.event.handback');
+    return label ? t('conv.event.messageNamed', { label }) : t('conv.event.message');
   });
 </script>
 

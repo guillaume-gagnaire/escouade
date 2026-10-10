@@ -3,6 +3,7 @@
 import DOMPurify from 'dompurify';
 import { Marked, type Tokens } from 'marked';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { locale, t } from './i18n';
 
 const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -17,8 +18,8 @@ const marked = new Marked({
     code({ text, lang }: Tokens.Code) {
       const l = (lang ?? '').trim().split(/\s+/)[0] ?? '';
       return (
-        `<pre data-lang="${escapeHtml(l)}"><div class="code-head"><span>${escapeHtml(l || 'texte')}</span>` +
-        `<button class="copy-btn" type="button">Copier</button></div><code>${escapeHtml(text)}</code></pre>`
+        `<pre data-lang="${escapeHtml(l)}"><div class="code-head"><span>${escapeHtml(l || t('conv.markdown.plainText'))}</span>` +
+        `<button class="copy-btn" type="button">${escapeHtml(t('common.copy'))}</button></div><code>${escapeHtml(text)}</code></pre>`
       );
     },
   },
@@ -33,17 +34,20 @@ const cached = new Map<string, string>();
 
 /** Renders sanitized HTML. `cache` is off for streaming text, whose intermediate states are never reused. */
 export function renderMarkdown(text: string, cache = true): string {
-  const hit = cached.get(text);
+  // The code blocks carry texts (« Copier »): a rendering is reused only in the language it was made in. Reading the
+  // language here also makes whoever renders follow a change of it.
+  const key = `${locale.ui}:${text}`;
+  const hit = cached.get(key);
   if (hit !== undefined) {
     // Least-recently-used order: a hit moves to the end.
-    cached.delete(text);
-    cached.set(text, hit);
+    cached.delete(key);
+    cached.set(key, hit);
     return hit;
   }
   const raw = marked.parse(text, { async: false }) as string;
   const html = DOMPurify.sanitize(raw, { ADD_ATTR: ['data-lang'], FORBID_TAGS: ['style', 'form', 'input'], FORBID_ATTR: ['style'] });
   if (cache && text.length < 50_000) {
-    cached.set(text, html);
+    cached.set(key, html);
     if (cached.size > CACHE_SIZE) cached.delete(cached.keys().next().value!);
   }
   return html;
@@ -158,8 +162,8 @@ export function handleMarkdownClick(e: MouseEvent) {
     const code = copy.closest('pre')?.querySelector('code');
     if (code) {
       navigator.clipboard.writeText(code.textContent ?? '');
-      copy.textContent = 'Copié ✓';
-      setTimeout(() => (copy.textContent = 'Copier'), 1200);
+      copy.textContent = t('conv.markdown.copied');
+      setTimeout(() => (copy.textContent = t('common.copy')), 1200);
     }
     e.preventDefault();
     return;

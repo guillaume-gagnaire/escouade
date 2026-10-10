@@ -1,7 +1,9 @@
 import { render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
+import { flushSync } from 'svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { conversationOf } from '../lib/conversations.svelte';
+import { setLang } from '../lib/i18n';
 import { app } from '../lib/state.svelte';
 import type { ConvHit, ConvSearchResult } from '../lib/types';
 import { agent, fakeBackend, project, resetApp } from '../test/ipc';
@@ -190,5 +192,54 @@ describe('ConvSearch', () => {
     answers[0](found(HITS));
     await new Promise((r) => setTimeout(r, 50));
     expect(screen.getAllByRole('option')).toHaveLength(1);
+  });
+});
+
+describe('ConvSearch in English', () => {
+  beforeEach(() => resetApp());
+
+  // The field is found by its French name by `setup`: the language changes once it is open, as it can while a dialog is.
+  const inEnglish = () => {
+    setLang('en');
+    flushSync();
+  };
+
+  it('speaks English from its hint to its results, dates and counts written as in English', async () => {
+    const { field } = setup();
+    inEnglish();
+    expect(screen.getByRole('dialog', { name: 'Search conversations' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'This project' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'All projects' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Archived agents' })).toBeChecked();
+    expect(screen.getByText('Search the messages, commands and files of your agents’ conversations.')).toBeInTheDocument();
+    await userEvent.type(field, 'pagination');
+    const second = await screen.findByRole('group', { name: 'vieux-chantier, studio, archived' });
+    expect(second).toHaveTextContent('archived');
+    const first = screen.getByRole('group', { name: 'refacto-auth, demo-api' });
+    const options = within(first).getAllByRole('option');
+    expect(options[0]).toHaveTextContent('2 h ago');
+    expect(options[1]).toHaveTextContent('just now');
+    expect(screen.getByText('3 results')).toBeInTheDocument();
+    expect(screen.getByRole('listbox', { name: 'Results' })).toBeInTheDocument();
+    expect(screen.getByText(/choose.*open.*close/)).toBeInTheDocument();
+  });
+
+  it('says in English when nothing matches, when the results stop short, and how many there are', async () => {
+    const answer = (args: { query: string }) =>
+      args.query === 'zzz'
+        ? found([])
+        : args.query === 'many'
+          ? found(HITS, { capped: true })
+          : found(HITS.slice(0, 1), { timedOut: true });
+    const { field } = setup(answer);
+    inEnglish();
+    await userEvent.type(field, 'zzz');
+    expect(await screen.findByText('No message matches.')).toBeInTheDocument();
+    await userEvent.clear(field);
+    await userEvent.type(field, 'many');
+    expect(await screen.findByText('The first 3 results: narrow your search.')).toBeInTheDocument();
+    await userEvent.clear(field);
+    await userEvent.type(field, 'slow');
+    expect(await screen.findByText('1 result, search stopped after 5 s: narrow your search.')).toBeInTheDocument();
   });
 });

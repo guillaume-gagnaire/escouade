@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { attachmentKind, guardFileDrops, readAttachment } from './attachments';
+import { attachmentKind, guardFileDrops, readAttachment, sizeLabel } from './attachments';
+import { setLang } from './i18n';
 
 const file = (name: string, type = '', body: BlobPart = 'x') => new File([body], name, { type });
 
@@ -127,5 +128,33 @@ describe('guardFileDrops', () => {
       stop();
       zone.remove();
     }
+  });
+});
+
+describe('the sizes and the refusals in English', () => {
+  const big = (name: string, kb: number) => {
+    const f = file(name);
+    Object.defineProperty(f, 'size', { value: kb * 1024 + 1 });
+    return f;
+  };
+
+  it('writes a size with the unit of each language', () => {
+    expect(sizeLabel(5 * 1024 * 1024)).toBe('5 Mo');
+    expect(sizeLabel(256 * 1024)).toBe('256 Ko');
+    setLang('en');
+    expect(sizeLabel(5 * 1024 * 1024)).toBe('5 MB');
+    expect(sizeLabel(256 * 1024)).toBe('256 KB');
+  });
+
+  it('says in English why a file cannot be attached', async () => {
+    setLang('en');
+    await expect(readAttachment(file('sources.zip', 'application/zip', 'PK'))).rejects.toThrow(
+      '“sources.zip” can’t be attached. Supported files are images (PNG, JPEG, GIF, WebP), PDFs and text files.',
+    );
+    await expect(readAttachment(big('capture.png', 5 * 1024))).rejects.toThrow('capture.png is over 5 MB');
+    await expect(readAttachment(big('notes.md', 256))).rejects.toThrow('notes.md is over 256 KB');
+    await expect(readAttachment(file('binary.log', '', new Uint8Array([0x61, 0, 0x62])))).rejects.toThrow(
+      'binary.log isn’t a text file, so it can’t be attached.',
+    );
   });
 });

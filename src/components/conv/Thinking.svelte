@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../../lib/i18n';
   import type { ThinkingItem } from '../../lib/types';
 
   let { item }: { item: ThinkingItem } = $props();
@@ -9,7 +10,7 @@
   <div class="think">
     <button class="head" onclick={() => (open = !open)} aria-expanded={open}>
       <span class="chev">{open ? '▾' : '▸'}</span>
-      Réflexion
+      {t('conv.thinking.title')}
       {#if item.streaming}<span class="live">…</span>{/if}
     </button>
     {#if open}

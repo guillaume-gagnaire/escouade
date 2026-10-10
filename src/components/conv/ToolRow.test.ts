@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
 import type { ToolItem } from '../../lib/types';
 import ToolRow from './ToolRow.svelte';
@@ -170,5 +171,38 @@ describe('ToolRow', () => {
   it('shows a plain path for a command', () => {
     render(ToolRow, { item: tool({ name: 'Bash', input: { command: 'npm test' } }), cwd: CWD, onOpenFile: () => {} });
     expect(screen.queryByRole('button', { name: /dans l’éditeur/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('ToolRow in English', () => {
+  it('names the file to open in English, and counts the tools of a subagent with a plural', () => {
+    setLang('en');
+    const edit = tool({ name: 'Edit', input: { file_path: 'C:\\code\\app\\src\\auth.ts' }, result: { isError: false, add: 2, del: 1 } });
+    const { unmount } = render(ToolRow, { item: edit, cwd: CWD, onOpenFile: () => {} });
+    expect(screen.getByRole('button', { name: 'Open src/auth.ts in the editor' })).toHaveAttribute('title', 'Open in editor');
+    unmount();
+    const task = tool({ id: 'task', name: 'Task', input: { description: 'Explore the code' }, status: 'ok' });
+    const sub = (id: string) => tool({ id, name: 'Read', input: { file_path: 'C:\\code\\app\\a.ts' }, parent: 'task' });
+    const kids = (n: number) => Array.from({ length: n }, (_, i) => sub(`s${i}`));
+    const { unmount: next } = render(ToolRow, { item: task, cwd: CWD, childrenOf: () => kids(1) });
+    expect(screen.getByText('1 tool')).toBeInTheDocument();
+    next();
+    render(ToolRow, { item: task, cwd: CWD, childrenOf: () => kids(3) });
+    expect(screen.getByText('3 tools')).toBeInTheDocument();
+  });
+
+  it('says in English that a tool is running, and sums up what it returned', () => {
+    setLang('en');
+    const { unmount } = render(ToolRow, { item: tool({ status: 'running', input: { command: 'npm test' } }), cwd: CWD });
+    expect(screen.getByLabelText('running')).toBeInTheDocument();
+    unmount();
+    const { unmount: next } = render(ToolRow, {
+      item: tool({ name: 'Read', input: { file_path: 'C:\\code\\app\\a.ts' }, result: { isError: false, text: 'a\nb\nc' } }),
+      cwd: CWD,
+    });
+    expect(screen.getByText('3 lines')).toBeInTheDocument();
+    next();
+    render(ToolRow, { item: tool({ name: 'Grep', input: { pattern: 'x' }, result: { isError: false, text: '' } }), cwd: CWD });
+    expect(screen.getByText('no results')).toBeInTheDocument();
   });
 });

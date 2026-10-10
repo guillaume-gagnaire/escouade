@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
 import type { QuestionItem } from '../../lib/types';
 import { answerClock, conversationHost, settle } from '../../test/conversation';
@@ -271,5 +272,37 @@ describe('QuestionCard keyboard', () => {
     const focus = app.focusComposer;
     await alt('1');
     await waitFor(() => expect(app.focusComposer).toBe(focus + 1));
+  });
+});
+
+describe('QuestionCard in English', () => {
+  beforeEach(() => resetApp());
+
+  it('waits for the answer in English, and validates several answers with a button of its own', async () => {
+    setLang('en');
+    const backend = fakeBackend();
+    const two = item({
+      questions: [
+        { question: 'Which database?', header: 'Database', multiSelect: false, options: [{ label: 'PG' }, { label: 'SQLite' }] },
+        { question: 'Which tools?', header: 'Tools', multiSelect: true, options: [{ label: 'ESLint' }, { label: 'Vitest' }] },
+      ],
+    });
+    render(QuestionCard, { item: two, agentId: 'a1', pending: true });
+    expect(screen.getByRole('group', { name: 'Claude is waiting for your answer' })).toBeInTheDocument();
+    expect(screen.getByText('or answer freely in the field below')).toBeInTheDocument();
+    const submit = screen.getByRole('button', { name: 'Submit' });
+    expect(submit).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: 'PG' }));
+    await userEvent.click(screen.getByRole('button', { name: /ESLint/ }));
+    expect(submit).toBeEnabled();
+    expect(submit).toHaveTextContent('Ctrl+Enter');
+    await userEvent.click(submit);
+    expect(backend.called('answer_question')[0].args.answers).toEqual({ 'Which database?': 'PG', 'Which tools?': 'ESLint' });
+  });
+
+  it('says in English that a question was left unanswered', () => {
+    setLang('en');
+    render(QuestionCard, { item: item(), agentId: 'a1', pending: false });
+    expect(screen.getByText('Question left unanswered')).toBeInTheDocument();
   });
 });

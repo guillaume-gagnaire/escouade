@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { displayModel, modelLabel, modelOptions, supportsAuto, supportsEffort } from './models';
+import { setLang } from './i18n';
+import { displayModel, EFFORTS, modelLabel, MODES, modelOptions, supportsAuto, supportsEffort } from './models';
 import type { ModelInfo } from './types';
 
 /** What Claude Code 2.1.284 answers to `initialize` (abridged): Fable only by its full id. */
@@ -75,5 +76,25 @@ describe('capabilities', () => {
     expect(supportsAuto('claude-haiku-4-5-20251001')).toBe(false);
     expect(supportsEffort('opus')).toBe(true);
     expect(supportsAuto('fable')).toBe(true);
+  });
+});
+
+describe('EFFORTS and MODES', () => {
+  const words = (list: { label: string; title: string }[]) => list.map((x) => [x.label, x.title]);
+
+  it('are read in the language of the interface each time they are shown', () => {
+    expect(EFFORTS.map((e) => e.value)).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
+    expect(words(EFFORTS)[0]).toEqual(['Bas', 'Réponses rapides, peu de réflexion']);
+    expect(EFFORTS.map((e) => e.label)).toEqual(['Bas', 'Moyen', 'Élevé', 'Très élevé', 'Max']);
+    expect(MODES.map((m) => m.label)).toEqual(['Auto', 'Demander', 'Plan', 'Édits auto', 'Bypass']);
+    setLang('en');
+    expect(words(EFFORTS)[0]).toEqual(['Low', 'Quick answers, little thinking']);
+    expect(EFFORTS.map((e) => e.label)).toEqual(['Low', 'Medium', 'High', 'Very high', 'Max']);
+    expect(MODES.map((m) => m.label)).toEqual(['Auto', 'Ask', 'Plan', 'Auto edits', 'Bypass']);
+    expect(MODES.find((m) => m.value === 'default')?.title).toBe('Claude asks for your approval before each sensitive action');
+  });
+
+  it('keep their values, which are the CLI’s', () => {
+    expect(MODES.map((m) => m.value)).toEqual(['auto', 'default', 'plan', 'acceptEdits', 'bypassPermissions']);
   });
 });
