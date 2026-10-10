@@ -383,6 +383,9 @@ Ce qu’Escouade dit à Claude ou lui fait écrire suit « Langue des textes ré
 | Par compte | By account | les statistiques des comptes côte à côte : « Tokens », « Coût », « Tours » → “Turns” (les réponses de Claude), « Agents » |
 | Compte supprimé (ancien) | Deleted account (ancien) | un compte que les réglages ne listent plus, dont les tours restent dans les statistiques ; l’identifiant entre parenthèses |
 | Aujourd'hui : 1,20 $ | Today: $1.20 | ce qu’un compte a dépensé aujourd’hui, dans le panneau des quotas (« ≈ » tant qu’un tour tourne) |
+| Reprendre sur Pro | Resume on Pro | le bouton de la carte d’un tour arrêté par la limite d’usage : l’agent repart avec sa session sur un autre compte ; « Reprendre sur un autre compte » → “Resume on another account” (le menu des autres comptes) |
+| La reprise sur Pro a échoué : … | Resuming on Pro failed: … | le tour qui suit la reprise a échoué sur le nouveau compte ; « Revenir sur Principal » → “Go back to Main” |
+| Reprendre sur un autre compte un agent de ticket arrêté par la limite | Resume a ticket’s agent stopped by the usage limit on another account | le réglage de l’onglet « Claude Code » (avec plusieurs comptes) ; « Sinon il attend la remise à zéro de son compte » → “Otherwise it waits for its account to reset” |
 
 ## M — mcp
 

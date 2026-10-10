@@ -84,6 +84,7 @@ export default defineZone('accounts', {
     reset: 'reset {countdown}',
     tip: '{pct} · resets on {date} at {time}',
     unavailable: 'Quota unavailable',
+    line: '{name}: {tip}',
   },
 
   panel: {
@@ -92,5 +93,17 @@ export default defineZone('accounts', {
     current: 'current',
     over: 'past the pause threshold',
     today: 'Today: {amount}',
+  },
+
+  resume: {
+    on: 'Resume on {account}',
+    another: 'Resume on another account',
+    failed: 'Resuming on {account} failed: {error}.',
+    back: 'Go back to {account}',
+  },
+
+  switchOnLimit: {
+    label: 'Resume a ticket’s agent stopped by the usage limit on another account',
+    desc: 'Otherwise it waits for its account to reset',
   },
 });

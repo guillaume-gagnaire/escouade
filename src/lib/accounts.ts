@@ -1,7 +1,7 @@
 // The Claude accounts as the window shows them.
 
 import { quotaUntil } from './board';
-import { fList } from './format';
+import { fDayMonth, fList, fPct, fTime } from './format';
 import { t, tIn } from './i18n';
 import { app } from './state.svelte';
 import type { Account, AccountUsage, Agent, AutopilotPause, Project, RateWindow } from './types';
@@ -48,7 +48,7 @@ export function pauseOf(project: Pick<Project, 'id' | 'account'>): AutopilotPaus
 }
 
 /** The agent's account as the backend takes it: one the window does not know is Principal's. */
-function accountOf(a: Agent): string {
+function accountOf(a: Pick<Agent, 'account'>): string {
   return app.settings.accounts.some((x) => x.id === a.account) ? a.account : PRINCIPAL;
 }
 
@@ -62,6 +62,35 @@ export function quotaOf(project: Pick<Project, 'account'>): number | null {
   const agents = Object.values(app.agents);
   const times = ids.map((id) => quotaUntil(agents.filter((a) => accountOf(a) === id)));
   return ids.length && times.every((x) => x !== null) ? Math.min(...(times as number[])) : null;
+}
+
+/**
+ * The accounts an agent stopped by the usage limit can go on on (« Reprendre sur <compte> »), in the order of the settings:
+ * the active ones other than its own that are signed in and under « Pause au-delà du quota ». One past the threshold is left
+ * out: the agent would meet the limit again there.
+ */
+export function resumeTargets(agent: Pick<Agent, 'account'>): Account[] {
+  const own = accountOf(agent);
+  const threshold = app.settings.quotaPause;
+  return app.settings.accounts.filter((a) => {
+    if (!a.active || a.id === own) return false;
+    const read = app.usage.accounts.find((u) => u.id === a.id);
+    // An account not read yet counts as signed in, as the backend has it.
+    if (read && !read.connected) return false;
+    return !overThreshold(read?.fiveHour ?? null, threshold, app.now) && !overThreshold(read?.sevenDay ?? null, threshold, app.now);
+  });
+}
+
+/** The name of a quota bar, for the screen readers: « Quota sur 5 heures ». */
+export function quotaName(kind: 'fiveHour' | 'sevenDay'): string {
+  return kind === 'fiveHour' ? t('accounts.quota.fiveHour.name') : t('accounts.quota.sevenDay.name');
+}
+
+/** A quota window as its tooltip says it: « 42 % · remise à zéro le 10/10 à 18:00 ». Also the value of its bar for a screen reader. */
+export function quotaTip(w: RateWindow | null): string {
+  if (!w) return t('accounts.quota.unavailable');
+  if (!w.resetsAt) return fPct(w.pct);
+  return t('accounts.quota.tip', { pct: fPct(w.pct), date: fDayMonth(w.resetsAt), time: fTime(w.resetsAt) });
 }
 
 /** « Les comptes Principal et Pro ont passé le seuil. », under the pause: nothing after a usage limit, nor with a single account. */

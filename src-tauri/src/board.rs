@@ -2406,6 +2406,45 @@ mod tests {
     }
 
     #[test]
+    fn with_a_single_account_an_agent_waiting_and_a_window_over_the_threshold_pause_until_the_later(
+    ) {
+        let free = Hold::default();
+        let alone = ids(&["principal"]);
+        let usage = [account("principal", 100.0, NOW + 30_000)];
+        let said = |waiting: &BTreeMap<String, i64>, now: i64| {
+            super::autopilot_pause(&usage, &alone, 95, &free, waiting, now).map(|p| {
+                let told = serde_json::to_value(&p).unwrap();
+                (p.reason, p.pct, p.until, told.get("accounts").cloned())
+            })
+        };
+        // The agent resumes after the window ends: the tickets wait for the agent, with no
+        // percentage to tell (the reason is the usage limit's).
+        let later = BTreeMap::from([("principal".to_string(), NOW + 100_000)]);
+        assert_eq!(
+            said(&later, NOW),
+            Some((PauseReason::Limit, None, NOW + 100_000, None))
+        );
+        // The window ends after the agent resumes: the window is the reason, with its use. With
+        // a single account there are no accounts to tell, and the JSON has no such field.
+        let sooner = BTreeMap::from([("principal".to_string(), NOW + 10_000)]);
+        assert_eq!(
+            said(&sooner, NOW),
+            Some((
+                PauseReason::FiveHour,
+                Some(100.0),
+                NOW + 30_000 + RESUME_MARGIN_MS,
+                None
+            ))
+        );
+        // The window is over, the agent still waits: nothing is paused, the places say « Quota
+        // atteint » (the agent holds its account back, not the autopilot).
+        let over = NOW + 30_000 + RESUME_MARGIN_MS;
+        assert_eq!(said(&later, over), None);
+        // Over its window, an agent past its resume holds nothing back.
+        assert_eq!(said(&BTreeMap::new(), over), None);
+    }
+
+    #[test]
     fn an_account_is_held_by_a_window_a_usage_limit_or_an_agent_waiting_for_its_reset() {
         let free = Hold::default();
         let usage = [

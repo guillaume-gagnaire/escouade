@@ -218,6 +218,19 @@ impl ClaudeProcess {
         self.tx.lock().take();
     }
 
+    /// Waits until the process is gone (its output read to the end and the process reaped), at
+    /// most `within`; false when it still runs.
+    pub async fn wait_exit(&self, within: Duration) -> bool {
+        let started = std::time::Instant::now();
+        while self.is_alive() {
+            if started.elapsed() >= within {
+                return false;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        true
+    }
+
     /// Kills the process and its whole tree.
     pub fn kill(&self) {
         self.tx.lock().take();

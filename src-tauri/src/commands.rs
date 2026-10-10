@@ -371,6 +371,21 @@ pub async fn set_agent_account(core: CoreState<'_>, id: String, account: String)
     core.set_agent_account(&id, &account).await.map_err(err)
 }
 
+/// « Reprendre sur <compte> »: the agent stopped by the usage limit goes on, with its session, on
+/// another account.
+#[tauri::command]
+pub async fn resume_on_account(core: CoreState<'_>, agent_id: String, account: String) -> Res<()> {
+    core.resume_on_account(&agent_id, &account)
+        .await
+        .map_err(err)
+}
+
+/// « Revenir sur <compte> »: a resume on another account failed; the agent goes back.
+#[tauri::command]
+pub async fn back_to_previous_account(core: CoreState<'_>, agent_id: String) -> Res<()> {
+    core.back_to_previous_account(&agent_id).await.map_err(err)
+}
+
 #[tauri::command]
 pub async fn rename_agent(core: CoreState<'_>, id: String, name: String) -> Res<()> {
     core.rename_agent(&id, &name).await.map_err(err)

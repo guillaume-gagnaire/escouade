@@ -58,6 +58,10 @@ pub struct Settings {
     /// The Claude accounts, in the order new agents try them; Principal always among them
     /// (`accounts::normalize`, at every load and save).
     pub accounts: Vec<Account>,
+    /// « Reprendre sur un autre compte un agent de ticket arrêté par la limite »: such an agent
+    /// goes on by itself on the account `accounts::pick` gives, when another is usable, rather than
+    /// wait for its own to reset.
+    pub switch_on_limit: bool,
 }
 
 /// A Claude account: Claude Code with a configuration folder of its own (`accounts`).
@@ -215,6 +219,7 @@ impl Default for Settings {
             mcp_enabled: false,
             mcp_port: 0,
             accounts: Vec::new(),
+            switch_on_limit: true,
         }
     }
 }
@@ -715,6 +720,12 @@ pub struct AgentMeta {
     /// an agent saved before there were accounts.
     #[serde(default = "principal_id")]
     pub account: String,
+    /// The account it ran on before « Reprendre sur <compte> » moved it, until a turn ends on the
+    /// new one: a turn that fails there is the resume's failure, and this is where it goes back to.
+    pub moved_from: Option<String>,
+    /// The resume it waited for on that account (`resume_at`), which the move dropped: where it waits
+    /// again when it goes back, if the account's windows no longer say when it resets.
+    pub moved_resume_at: Option<i64>,
 }
 
 fn principal_id() -> String {
@@ -1367,6 +1378,36 @@ mod tests {
         // Settings saved before them have none: the load puts Principal in (`accounts::normalize`).
         let s: Settings = serde_json::from_value(json!({ "sound": false })).unwrap();
         assert!(s.accounts.is_empty());
+    }
+
+    #[test]
+    fn a_tickets_agent_stopped_by_the_limit_goes_to_another_account_unless_old_settings_or_the_user_say_no(
+    ) {
+        // Settings saved before the setting have it on: the move is what they get.
+        let s: Settings = serde_json::from_value(json!({ "sound": false })).unwrap();
+        assert!(s.switch_on_limit);
+        assert!(Settings::default().switch_on_limit);
+        let off: Settings =
+            serde_json::from_value(json!({ "switchOnLimit": false, "autoResume": false })).unwrap();
+        assert!(!off.switch_on_limit);
+        let v = serde_json::to_value(Settings {
+            switch_on_limit: false,
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(v["switchOnLimit"], json!(false));
+        // An agent saved before it was ever moved has no account it came from.
+        let m: AgentMeta =
+            serde_json::from_value(json!({ "id": "a1", "sessionId": "s1" })).unwrap();
+        assert_eq!((m.moved_from, m.moved_resume_at), (None, None));
+        let v = serde_json::to_value(AgentMeta {
+            moved_from: Some("principal".into()),
+            moved_resume_at: Some(1_790_000_000_000),
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(v["movedFrom"], json!("principal"));
+        assert_eq!(v["movedResumeAt"], json!(1_790_000_000_000_i64));
     }
 
     #[test]

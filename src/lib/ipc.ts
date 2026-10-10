@@ -108,6 +108,10 @@ export const api = {
     invoke<void>('set_agent_options', { id, model: o.model ?? null, effort: o.effort ?? null, mode: o.mode ?? null }),
   /** The Claude account of an agent that has not started (empty: « Automatique », the backend chooses). */
   setAgentAccount: (id: string, account: string) => invoke<void>('set_agent_account', { id, account }),
+  /** « Reprendre sur <compte> »: the agent stopped by the usage limit goes on, with its session, on another account. */
+  resumeOnAccount: (agentId: string, account: string) => invoke<void>('resume_on_account', { agentId, account }),
+  /** « Revenir sur <compte> »: a resume on another account failed; the agent goes back to the account it came from. */
+  backToPreviousAccount: (agentId: string) => invoke<void>('back_to_previous_account', { agentId }),
   renameAgent: (id: string, name: string) => invoke<void>('rename_agent', { id, name }),
   /** A copy of the agent, « <nom> (copie) », whose Claude Code session forks the original’s (refused during its turn). */
   duplicateAgent: (id: string) => invoke<Agent>('duplicate_agent', { id }),

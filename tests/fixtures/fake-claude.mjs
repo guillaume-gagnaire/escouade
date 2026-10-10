@@ -15,7 +15,13 @@
 // message and assistant entry on a line), and a --resume of a session absent from every
 // <dir>/projects/* folder fails as an unknown one does; while a <dir>/fake-limit file is there, every
 // turn is stopped by the usage limit (as "limite") and its quota windows say 100 % (rate_limit_event,
-// get_usage). Without it, none of this.
+// get_usage). While a <dir>/fake-error file is there, every turn fails with an error of the API
+// ("Invalid API key", as an account the user is not signed in to gets), which is no usage limit.
+// While a <dir>/fake-exit file is there, the process ends before it starts (exit code 1), its stderr the text of the file
+// (« No conversation found with session ID: … », « Invalid API key · Please run /login »).
+// A user message with [ferme-lentement] makes the process take 800 ms to end once its input is
+// closed, and write {"type":"closed"} to its session just before it does (a resume that copies
+// the session before the process is gone misses that line). Without CLAUDE_CONFIG_DIR, none of this.
 // `claude mcp add|remove|get|list` keep the user scope's MCP servers in <folder>/.claude.json (see mcpCommand).
 // What Escouade tells it is read in French or in English (« Langue des textes rédigés par Claude »):
 // each scenario below is recognized in both, its answers stay the same.
@@ -76,6 +82,8 @@ const sessionKept = (id) => {
 };
 // Out of quota, for as long as the file is there.
 const limited = () => configDir !== null && fs.existsSync(path.join(configDir, 'fake-limit'));
+// Failing with an error of the API, for as long as the file is there.
+const failing = () => configDir !== null && fs.existsSync(path.join(configDir, 'fake-error'));
 
 // `claude mcp add|remove|get|list`: the MCP servers of the user scope, which Escouade declares in each
 // Claude account (« Claude peut piloter Escouade »). Kept where Claude Code keeps them, in the `mcpServers`
@@ -259,6 +267,10 @@ if (argv[0] === 'mcp') {
 }
 
 function startSession() {
+  if (configDir && fs.existsSync(path.join(configDir, 'fake-exit'))) {
+    process.stderr.write(fs.readFileSync(path.join(configDir, 'fake-exit'), 'utf8'));
+    process.exit(1);
+  }
   const resume = argv.find((a) => a.startsWith('--resume='))?.slice('--resume='.length);
   // A session of another account (or none) is not in this one's folder.
   if (resume?.startsWith('missing') || (resume && configDir && !sessionKept(resume))) {
@@ -285,6 +297,7 @@ function startSession() {
   const sys = copied.some((c) => appended.startsWith(c)) ? '' : appended;
   let remoteSent = false;
   let entries = 0;
+  let slowClose = false;
 
   const out = (o) => process.stdout.write(JSON.stringify(o) + '\n');
   const ok = (id, response = {}) => out({ type: 'control_response', response: { subtype: 'success', request_id: id, response } });
@@ -431,6 +444,7 @@ function startSession() {
 
   function onUser(text) {
     out({ type: 'system', subtype: 'init', session_id: sessionId, model, cwd: process.cwd(), permissionMode: 'default' });
+    if (text.includes('[ferme-lentement]')) slowClose = true;
     if (text.includes('crash')) process.exit(3);
     if (text.includes('grandchild')) {
       // Like a dev server started by the Bash tool: must die with the agent's process tree.
@@ -468,6 +482,19 @@ function startSession() {
         session_id: sessionId,
         result: "You've hit your limit · resets 3pm",
       });
+      return;
+    }
+    if (failing()) {
+      // An error of the API, as Claude Code tells it: a failed turn, no rate limit.
+      const said = 'Invalid API key · Please run /login';
+      out({
+        type: 'assistant',
+        error: 'authentication_failed',
+        message: { id: `msg_error${msg}`, role: 'assistant', content: [{ type: 'text', text: said }] },
+        parent_tool_use_id: null,
+        session_id: sessionId,
+      });
+      out({ type: 'result', subtype: 'success', is_error: true, duration_ms: 100, session_id: sessionId, result: said });
       return;
     }
     if (text.includes('Prépare le lancement') || text.includes('Prepare the test launch')) {
@@ -705,5 +732,14 @@ function startSession() {
     }
   }
   // [tenace]: like a CLI that takes its time to finish once its input is closed.
-  rl.on('close', () => (sys.includes('[tenace]') ? setTimeout(() => process.exit(0), 5000) : process.exit(0)));
+  rl.on('close', () => {
+    if (slowClose) {
+      // Still writing its session for a moment: copied too early, the copy misses the last line.
+      return setTimeout(() => {
+        keep({ type: 'closed' });
+        process.exit(0);
+      }, 800);
+    }
+    return sys.includes('[tenace]') ? setTimeout(() => process.exit(0), 5000) : process.exit(0);
+  });
 }

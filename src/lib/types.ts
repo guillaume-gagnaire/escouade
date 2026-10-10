@@ -24,6 +24,8 @@ export interface Settings {
   insecureTls: boolean;
   /** Send "continue" by itself to an agent stopped by the usage limit, once the quota resets. */
   autoResume: boolean;
+  /** « Reprendre sur un autre compte un agent de ticket arrêté par la limite »: such an agent goes on by itself on another usable account, rather than wait for its own to reset. */
+  switchOnLimit: boolean;
   /** « Pause au-delà du quota », in percent (80, 90, 95 or 100): no ticket of any board starts while the 5-hour or the weekly window is used this much. */
   quotaPause: number;
   /** « Installer les mises à jour automatiquement »: the app restarts by itself for an update once at rest. */
@@ -515,6 +517,8 @@ export interface Agent {
   approvedIsola: IsolaApproval | null;
   /** The Claude account it runs on (an `Account`'s id), where its session is kept. */
   account: string;
+  /** The account it ran on before « Reprendre sur <compte> » moved it, until a turn ends on the new one: a turn that fails there is the resume’s failure. */
+  movedFrom: string | null;
   /** What it is doing right now ("Lit src/db.ts", "Lance npm test"…), during a turn. */
   activity: string | null;
   /** The setup of its new worktree under way: the step running ("1/2 · npm ci"). */
@@ -841,6 +845,8 @@ export interface TurnItem extends Base {
   isError: boolean;
   interrupted: boolean;
   error: string | null;
+  /** Stopped by the usage limit (absent from turns saved before the accounts): the card offers to go on, on another account. */
+  limited?: boolean;
 }
 export interface NoticeItem extends Base {
   kind: 'notice';

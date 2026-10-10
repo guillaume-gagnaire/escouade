@@ -2167,6 +2167,16 @@ impl<R: Runtime> Core<R> {
         before
     }
 
+    /// "continue", as the agent stopped by the usage limit is sent it when it goes on. A ticket's
+    /// agent that cannot go on blocks its ticket, which would wait forever.
+    pub(crate) async fn send_continue(self: &Arc<Self>, id: &str) -> Result<()> {
+        let text = auto_resume(self.lang().claude);
+        match self.doing_ticket_of(id) {
+            Some(ticket_id) => self.send_or_block(&ticket_id, id, text).await,
+            None => self.send_message(id, text, vec![]).await,
+        }
+    }
+
     /// Sends "continue" to the agents whose planned resume is due.
     pub async fn resume_due(self: &Arc<Self>) {
         if !self.settings.read().auto_resume {
@@ -2194,13 +2204,7 @@ impl<R: Runtime> Core<R> {
         for (id, view) in due {
             self.hub.emit(UiEvent::Agent { agent: view });
             self.request_save();
-            let text = auto_resume(self.lang().claude);
-            // A ticket's agent that cannot go on blocks its ticket, which would wait forever.
-            let sent = match self.doing_ticket_of(&id) {
-                Some(ticket_id) => self.send_or_block(&ticket_id, &id, text).await,
-                None => self.send_message(&id, text, vec![]).await,
-            };
-            if let Err(e) = sent {
+            if let Err(e) = self.send_continue(&id).await {
                 log::warn!("agent {id}: resume after the usage limit failed: {e:#}");
                 let _ = self.with_agent(&id, |rt, fx| {
                     rt.notice(
@@ -2420,7 +2424,7 @@ impl<R: Runtime> Core<R> {
         Ok(())
     }
 
-    fn with_agent<T>(
+    pub(crate) fn with_agent<T>(
         self: &Arc<Self>,
         id: &str,
         f: impl FnOnce(&mut AgentRt, &mut Effects) -> Result<T>,
