@@ -2692,7 +2692,7 @@ impl<R: Runtime> Core<R> {
             }
             Err(e) => Some(tr!(
                 "Worktree non recréé depuis {b} : {e:#}",
-                "Worktree not made again from {b}: {e:#}",
+                "Worktree not recreated from {b}: {e:#}",
                 b = wt.branch
             )),
         };
