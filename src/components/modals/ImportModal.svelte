@@ -174,11 +174,11 @@
     else app.toast(t('integrations.modal.allKnown'), 'info');
   }
 
-  /** The color of a ticket's type. */
-  function kindColor(kind: string) {
-    if (kind === 'Bug') return 'var(--del)';
-    if (kind === 'Story') return 'var(--ok)';
-    if (kind === 'Tâche') return 'oklch(0.74 0.12 235)';
+  /** The color of a ticket's type, by its code: its name changes with the language. */
+  function kindColor(code: string) {
+    if (code === 'bug') return 'var(--del)';
+    if (code === 'story') return 'var(--ok)';
+    if (code === 'task') return 'oklch(0.74 0.12 235)';
     return 'var(--muted)';
   }
 
@@ -286,7 +286,7 @@
             <div class="main">
               <div class="line"><span class="key mono">{i.key}</span><span class="title">{i.title}</span></div>
               <div class="meta">
-                <span class="kind" style:color={kindColor(i.kind)}>{i.kind}</span>
+                <span class="kind" style:color={kindColor(i.kindCode)}>{i.kind}</span>
                 {#if i.meta.length}<span>{i.meta.join('  ·  ')}</span>{/if}
                 {#if extract && i.criteria.length}
                   <span class="crit" title={i.criteria.join(' · ')}

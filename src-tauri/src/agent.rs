@@ -4,6 +4,7 @@
 use crate::board::TurnEnd;
 use crate::claude::{truncate, ClaudeProcess};
 use crate::conv::Conv;
+use crate::i18n::{self, Lang};
 use crate::model::*;
 use crate::notify;
 use crate::paths::relative_slash;
@@ -416,13 +417,10 @@ impl AgentRt {
         answers: Value,
         fx: &mut Effects,
     ) -> Result<()> {
-        let proc = self
-            .proc
-            .clone()
-            .ok_or_else(|| anyhow!("Claude ne tourne plus pour cet agent"))?;
+        let proc = self.proc.clone().ok_or_else(not_running)?;
         let p = self
             .take_pending(request_id)
-            .ok_or_else(|| anyhow!("question introuvable"))?;
+            .ok_or_else(|| anyhow!(tr!("question introuvable", "question not found")))?;
         let mut input = p.input.clone();
         input["answers"] = answers.clone();
         proc.respond(
@@ -441,13 +439,10 @@ impl AgentRt {
         message: Option<String>,
         fx: &mut Effects,
     ) -> Result<()> {
-        let proc = self
-            .proc
-            .clone()
-            .ok_or_else(|| anyhow!("Claude ne tourne plus pour cet agent"))?;
+        let proc = self.proc.clone().ok_or_else(not_running)?;
         let p = self
             .take_pending(request_id)
-            .ok_or_else(|| anyhow!("demande introuvable"))?;
+            .ok_or_else(|| anyhow!(tr!("demande introuvable", "request not found")))?;
         let response = match decision {
             "allow" => {
                 json!({ "behavior": "allow", "updatedInput": p.input, "toolUseID": p.tool_use_id })
@@ -493,6 +488,7 @@ impl AgentRt {
         self.close_open_items(fx);
         let was_running = self.meta.status.is_active();
         // Gone before it started: what it was to resume could not be.
+        let [session_lost, fork_point_lost] = exit_notices(i18n::ui());
         let lost = if self.saw_init {
             None
         } else if stderr.contains("No conversation found") {
@@ -501,24 +497,24 @@ impl AgentRt {
             // A copy whose original's session is gone: the same, a new session.
             self.meta.fork_of = None;
             self.meta.fork_at = None;
-            Some("Session Claude introuvable : une nouvelle session sera démarrée au prochain message.")
+            Some(session_lost)
         } else if self.meta.fork_at.is_some()
             && stderr.contains("No message found with message.uuid")
         {
             // A copy whose point in its original's session is not there: still a copy of that
             // session, of all of it.
             self.meta.fork_at = None;
-            Some("Point de copie introuvable dans la session de l'original : Claude reprend toute sa conversation, jusqu'à maintenant.")
+            Some(fork_point_lost)
         } else {
             None
         };
         if let Some(lost) = lost {
-            self.notice("warn", lost, fx);
+            self.notice("warn", lost.clone(), fx);
             self.set_status(AgentStatus::Done, fx);
             // The message it was to carry never ran: that turn ends here, though not as a failure
             // of the agent.
             if was_running {
-                fx.turn_end = Some(TurnEnd::Error(lost.into()));
+                fx.turn_end = Some(TurnEnd::Error(lost));
             }
         } else if was_running || !self.saw_init {
             let detail = if stderr.trim().is_empty() {
@@ -527,13 +523,9 @@ impl AgentRt {
                 format!("\n\n{}", truncate(stderr.trim(), 2000))
             };
             let code = code.map(|c| c.to_string()).unwrap_or_else(|| "?".into());
-            self.notice(
-                "error",
-                format!("Claude Code s'est arrêté (code {code}).{detail}"),
-                fx,
-            );
+            let reason = stopped(i18n::ui(), &code);
+            self.notice("error", format!("{reason}.{detail}"), fx);
             self.set_status(AgentStatus::Error, fx);
-            let reason = format!("Claude Code s'est arrêté (code {code})");
             fx.notify = Some(AgentAlert::new(
                 NotifyKind::Error,
                 notify::error_body(&reason),
@@ -571,7 +563,14 @@ impl AgentRt {
                 if let Some(sid) = f["session_id"].as_str() {
                     if self.meta.session_id.as_deref() != Some(sid) {
                         if self.saw_init {
-                            self.notice("info", "Nouvelle conversation Claude (contexte vidé)", fx);
+                            self.notice(
+                                "info",
+                                tr!(
+                                    "Nouvelle conversation Claude (contexte vidé)",
+                                    "New Claude conversation (context cleared)"
+                                ),
+                                fx,
+                            );
                         }
                         self.meta.session_id = Some(sid.to_string());
                         // None of the entries of the session it leaves is one of this one's.
@@ -602,7 +601,7 @@ impl AgentRt {
                 // longer in it (a copy forking at one would be refused), and the next one to come
                 // is where a copy forks it.
                 self.set_last_entry(None, fx);
-                self.notice("info", "Contexte compacté", fx);
+                self.notice("info", tr!("Contexte compacté", "Context compacted"), fx);
             }
             "task_started" => {
                 if let (Some(id), false) = (f["task_id"].as_str(), f["is_backgrounded"] == true) {
@@ -716,15 +715,13 @@ impl AgentRt {
                     _ => return,
                 };
                 if parent.is_none() {
-                    let activity = match kind {
-                        "text" => Some("Rédige".to_string()),
-                        "thinking" => Some("Réfléchit".to_string()),
-                        _ => tool_activity(
+                    let activity = block_activity(i18n::ui(), kind).or_else(|| {
+                        tool_activity(
                             cb["name"].as_str().unwrap_or_default(),
                             &Value::Null,
                             &self.meta.cwd,
-                        ),
-                    };
+                        )
+                    });
                     self.set_activity(activity, fx);
                 }
                 let item_id = item["id"].as_str().unwrap_or_default().to_string();
@@ -1139,7 +1136,12 @@ impl AgentRt {
                         .filter(|s| !s.is_empty() && *s != "success")
                         .map(str::to_string)
                 })
-                .unwrap_or_else(|| "Claude Code a signalé une erreur".to_string())
+                .unwrap_or_else(|| {
+                    tr!(
+                        "Claude Code a signalé une erreur",
+                        "Claude Code reported an error"
+                    )
+                })
         });
         // The final reply: the text that no tool followed, else what Claude Code makes of it.
         let reply = match std::mem::take(&mut self.final_text) {
@@ -1399,6 +1401,10 @@ fn capped(text: &str, cut: &mut bool) -> String {
 /// breaks kept. `SUMMED_UP` there lists the tools whose summary says all a permission asks:
 /// only those are answered from « Vue d'ensemble ».
 fn tool_arg(tool: &str, input: &Value, cwd: &str) -> String {
+    tool_arg_in(i18n::ui(), tool, input, cwd)
+}
+
+fn tool_arg_in(lang: Lang, tool: &str, input: &Value, cwd: &str) -> String {
     let text = |key: &str| input[key].as_str().unwrap_or_default().to_string();
     let path = |key: &str| {
         input[key]
@@ -1423,7 +1429,10 @@ fn tool_arg(tool: &str, input: &Value, cwd: &str) -> String {
             .to_string(),
         "TodoWrite" => input["todos"]
             .as_array()
-            .map(|t| format!("{} tâches", t.len()))
+            .map(|t| {
+                let n = t.len();
+                tr_n_in!(lang, n, "{n} tâche", "{n} tâches", "{n} task", "{n} tasks")
+            })
             .unwrap_or_default(),
         "Skill" => input["skill"]
             .as_str()
@@ -1493,9 +1502,58 @@ fn pending_view(rid: &str, tool: &str, req: &Value, input: &Value, cwd: &str) ->
     }
 }
 
+/// Refused: the agent's process is gone, nothing can be answered.
+fn not_running() -> anyhow::Error {
+    anyhow!(tr!(
+        "Claude ne tourne plus pour cet agent",
+        "Claude is no longer running for this agent"
+    ))
+}
+
+/// What the agent's conversation is told when Claude Code went before it started: the session to
+/// resume is gone, the point of the original's session a copy starts from is gone.
+fn exit_notices(lang: Lang) -> [String; 2] {
+    [
+        tr_in!(
+            lang,
+            "Session Claude introuvable : une nouvelle session sera démarrée au prochain message.",
+            "Claude session not found: a new session will start with your next message."
+        ),
+        tr_in!(
+            lang,
+            "Point de copie introuvable dans la session de l'original : Claude reprend toute sa conversation, jusqu'à maintenant.",
+            "Copy point not found in the original’s session: Claude picks up its whole conversation, up to now."
+        ),
+    ]
+}
+
+/// Why the agent's turn ended in an error, when Claude Code stopped with `code`.
+fn stopped(lang: Lang, code: &str) -> String {
+    tr_in!(
+        lang,
+        "Claude Code s'est arrêté (code {code})",
+        "Claude Code stopped (code {code})"
+    )
+}
+
+/// What the agent does while it streams a block of text or of thinking; None for a tool's.
+fn block_activity(lang: Lang, kind: &str) -> Option<String> {
+    match kind {
+        "text" => Some(tr_in!(lang, "Rédige", "Replying")),
+        "thinking" => Some(tr_in!(lang, "Réfléchit", "Thinking")),
+        _ => None,
+    }
+}
+
 /// What the agent does, from the tool it runs: "Lit src/db.ts", "Lance npm test"… None for a tool
 /// without words of its own.
 pub fn tool_activity(name: &str, input: &Value, cwd: &str) -> Option<String> {
+    tool_activity_in(i18n::ui(), name, input, cwd)
+}
+
+/// `tool_activity` in `lang`. A verb alone is the start of the same verb followed by what it acts
+/// on ("Lit", "Lit src/a.ts"; “Reading”, “Reading src/a.ts”): `set_activity` relies on it.
+fn tool_activity_in(lang: Lang, name: &str, input: &Value, cwd: &str) -> Option<String> {
     let file = || {
         input["file_path"]
             .as_str()
@@ -1522,12 +1580,15 @@ pub fn tool_activity(name: &str, input: &Value, cwd: &str) -> Option<String> {
         truncate(first, 60)
     };
     Some(match name {
-        "Read" => with("Lit", file()),
-        "Grep" | "Glob" => with("Cherche", gist(&input["pattern"])),
-        "Edit" | "MultiEdit" | "NotebookEdit" => with("Modifie", file()),
-        "Write" => with("Écrit", file()),
-        "Bash" => with("Lance", gist(&input["command"])),
-        "Task" | "Agent" => "Délègue".to_string(),
+        "Read" => with(&tr_in!(lang, "Lit", "Reading"), file()),
+        "Grep" | "Glob" => with(
+            &tr_in!(lang, "Cherche", "Searching"),
+            gist(&input["pattern"]),
+        ),
+        "Edit" | "MultiEdit" | "NotebookEdit" => with(&tr_in!(lang, "Modifie", "Editing"), file()),
+        "Write" => with(&tr_in!(lang, "Écrit", "Writing"), file()),
+        "Bash" => with(&tr_in!(lang, "Lance", "Running"), gist(&input["command"])),
+        "Task" | "Agent" => tr_in!(lang, "Délègue", "Delegating"),
         _ => return None,
     })
 }
@@ -2477,6 +2538,47 @@ mod tests {
         assert_eq!(act("Task", json!({})).as_deref(), Some("Délègue"));
         assert_eq!(act("Read", Value::Null).as_deref(), Some("Lit"));
         assert_eq!(act("WebSearch", json!({})), None);
+    }
+
+    #[test]
+    fn what_the_agent_does_and_what_its_conversation_is_told_read_in_english() {
+        use crate::i18n::Lang::{En, Fr};
+        let act = |name: &str, input: Value| tool_activity_in(En, name, &input, "C:/p");
+        assert_eq!(
+            act("Read", json!({"file_path":"C:/p/src/db.ts"})).as_deref(),
+            Some("Reading src/db.ts")
+        );
+        assert_eq!(
+            act("Bash", json!({"command":"npm test"})).as_deref(),
+            Some("Running npm test")
+        );
+        // A bare verb is the start of the same verb with what it acts on, as in French.
+        assert_eq!(act("Read", Value::Null).as_deref(), Some("Reading"));
+        assert_eq!(act("Task", json!({})).as_deref(), Some("Delegating"));
+        assert_eq!(
+            [block_activity(En, "text"), block_activity(En, "thinking")],
+            [Some("Replying".to_string()), Some("Thinking".to_string())]
+        );
+        assert_eq!(
+            exit_notices(En),
+            [
+                "Claude session not found: a new session will start with your next message.",
+                "Copy point not found in the original’s session: Claude picks up its whole conversation, up to now.",
+            ]
+        );
+        assert_eq!(stopped(En, "3"), "Claude Code stopped (code 3)");
+        assert_eq!(stopped(Fr, "3"), "Claude Code s'est arrêté (code 3)");
+        // The count of a to-do list, as the conversation's card writes it (`conv.tools.tasks`).
+        let todos = |n: usize, lang| {
+            tool_arg_in(
+                lang,
+                "TodoWrite",
+                &json!({ "todos": vec![json!({}); n] }),
+                "C:/p",
+            )
+        };
+        assert_eq!([todos(1, En), todos(2, En)], ["1 task", "2 tasks"]);
+        assert_eq!([todos(1, Fr), todos(2, Fr)], ["1 tâche", "2 tâches"]);
     }
 
     #[test]

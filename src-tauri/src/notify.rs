@@ -1,6 +1,7 @@
 //! Visual and audible notifications: chime, system notification (Windows toast, macOS
 //! Notification Center), taskbar flash / Dock bounce, tray badge.
 
+use crate::i18n::{self, Lang};
 use crate::paths::relative_slash;
 use serde_json::Value;
 use std::f64::consts::PI;
@@ -63,22 +64,38 @@ fn tool_target(input: &Value, cwd: &str) -> String {
 /// shown from the agent's folder, the URL, the search…), the whole in 120 characters. A plan to
 /// approve is worded as the app words it: "Approuver le plan : <first line of the plan> ?".
 pub fn permission_body(tool: &str, input: &Value, cwd: &str) -> String {
+    permission_body_in(i18n::ui(), tool, input, cwd)
+}
+
+/// `permission_body` in `lang`: “Allow Bash: npm test?”, “Approve the plan: …?”.
+fn permission_body_in(lang: Lang, tool: &str, input: &Value, cwd: &str) -> String {
     let (head, target) = if tool == "ExitPlanMode" {
         let plan = input["plan"].as_str().and_then(first_plain_line);
-        ("Approuver le plan".to_string(), plan.unwrap_or_default())
+        (
+            tr_in!(lang, "Approuver le plan", "Approve the plan"),
+            plan.unwrap_or_default(),
+        )
     } else {
-        (format!("Autoriser {tool}"), tool_target(input, cwd))
+        (
+            tr_in!(lang, "Autoriser {tool}", "Allow {tool}"),
+            tool_target(input, cwd),
+        )
     };
+    let framed = |t: &str| tr_in!(lang, "{head} : {t} ?", "{head}: {t}?");
     if target.is_empty() {
-        return clip(&format!("{head} ?"), MAX_BODY);
+        return clip(&tr_in!(lang, "{head} ?", "{head}?"), MAX_BODY);
     }
-    // " : " before the target and " ?" after it are always shown.
-    let room = MAX_BODY.saturating_sub(head.chars().count() + 5).max(10);
-    format!("{head} : {} ?", clip(&target, room))
+    // What frames the target (« : » before it, « ? » after it) is always shown.
+    let room = MAX_BODY.saturating_sub(framed("").chars().count()).max(10);
+    framed(&clip(&target, room))
 }
 
 /// The text of the question Claude asks (the first, when it asks several), in 120 characters.
 pub fn question_body(input: &Value) -> String {
+    question_body_in(i18n::ui(), input)
+}
+
+fn question_body_in(lang: Lang, input: &Value) -> String {
     let text = input["questions"][0]["question"]
         .as_str()
         .map(|q| {
@@ -90,7 +107,11 @@ pub fn question_body(input: &Value) -> String {
         })
         .unwrap_or_default();
     if text.is_empty() {
-        "Claude attend ta réponse".to_string()
+        tr_in!(
+            lang,
+            "Claude attend ta réponse",
+            "Claude is waiting for your answer"
+        )
     } else {
         clip(&text, MAX_BODY)
     }
@@ -99,7 +120,14 @@ pub fn question_body(input: &Value) -> String {
 /// The first line of the agent's final reply, without Markdown, in 120 characters; "Tâche
 /// terminée" when it has no words.
 pub fn done_body(reply: &str) -> String {
-    first_plain_line(reply).map_or_else(|| "Tâche terminée".to_string(), |l| clip(&l, MAX_BODY))
+    done_body_in(i18n::ui(), reply)
+}
+
+fn done_body_in(lang: Lang, reply: &str) -> String {
+    first_plain_line(reply).map_or_else(
+        || tr_in!(lang, "Tâche terminée", "Task done"),
+        |l| clip(&l, MAX_BODY),
+    )
 }
 
 /// The first line of `text` that says something, as plain words: blank lines, rules and fenced
@@ -125,12 +153,19 @@ fn first_plain_line(text: &str) -> Option<String> {
 
 /// "Erreur : <reason>", the reason's first line, in 120 characters.
 pub fn error_body(reason: &str) -> String {
+    error_body_in(i18n::ui(), reason)
+}
+
+fn error_body_in(lang: Lang, reason: &str) -> String {
     let reason = reason
         .lines()
         .map(one_line)
         .find(|l| !l.is_empty())
-        .unwrap_or_else(|| "l'agent s'est arrêté".to_string());
-    clip(&format!("Erreur : {reason}"), MAX_BODY)
+        .unwrap_or_else(|| tr_in!(lang, "l'agent s'est arrêté", "the agent stopped"));
+    clip(
+        &tr_in!(lang, "Erreur : {reason}", "Error: {reason}"),
+        MAX_BODY,
+    )
 }
 
 /// One line of Markdown as plain words: without its heading, quote, list or checkbox marker, its
@@ -736,5 +771,41 @@ mod tests {
             long.starts_with("Erreur : xxx") && long.ends_with('…'),
             "{long}"
         );
+    }
+
+    #[test]
+    fn a_notification_says_it_in_english_with_the_punctuation_of_english() {
+        use crate::i18n::Lang::En;
+        assert_eq!(
+            permission_body_in(En, "Bash", &json!({ "command": "npm test" }), "C:/p"),
+            "Allow Bash: npm test?"
+        );
+        assert_eq!(
+            permission_body_in(En, "TodoWrite", &json!({ "todos": [] }), "C:/p"),
+            "Allow TodoWrite?"
+        );
+        assert_eq!(
+            permission_body_in(
+                En,
+                "ExitPlanMode",
+                &json!({ "plan": "# Fix the filter" }),
+                "C:/p"
+            ),
+            "Approve the plan: Fix the filter?"
+        );
+        // The room left for the target still ends the body with « ? », 120 characters in all.
+        let long = permission_body_in(En, "Bash", &json!({ "command": "x".repeat(400) }), "C:/p");
+        assert_eq!(long.chars().count(), 120);
+        assert!(
+            long.starts_with("Allow Bash: xxx") && long.ends_with("…?"),
+            "{long}"
+        );
+        assert_eq!(
+            question_body_in(En, &json!({})),
+            "Claude is waiting for your answer"
+        );
+        assert_eq!(done_body_in(En, "---"), "Task done");
+        assert_eq!(error_body_in(En, "API Error: 500"), "Error: API Error: 500");
+        assert_eq!(error_body_in(En, " "), "Error: the agent stopped");
     }
 }

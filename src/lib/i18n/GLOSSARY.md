@@ -296,6 +296,45 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 
 | Français | Anglais | Note |
 |---|---|---|
+| introuvable | not found | « {path} introuvable » → “{path} not found” ; une erreur du backend, en minuscules comme en français |
+| existe déjà | already exists | |
+| en lecture seule | read-only | |
+| chemin hors du dossier | path outside the folder | |
+| racine (de la source) | root (of the source) | |
+| dépôt distant / branche distante | remote / remote branch | « Plusieurs dépôts distants » → “Several remotes” |
+| tirer (des commits) | pull | « 3 commits à tirer » → “3 commits to pull” |
+| Fetch terminé | Fetch done | |
+| Déjà à jour | Already up to date | |
+| mettre de côté (des modifications) | stash | |
+| HEAD détachée | detached HEAD | |
+| janv., févr. … / S12 / 27/09 | Jan, Feb … / W12 / Sep 27 | les étapes des statistiques, écrites par le backend |
+| Autoriser Bash : npm test ? | Allow Bash: npm test? | notification du système ; « Approuver le plan » → “Approve the plan” |
+| Tâche terminée | Task done | notification du système |
+| activité d’un agent : Lit, Cherche, Modifie, Écrit, Lance, Délègue, Rédige, Réfléchit | Reading, Searching, Editing, Writing, Running, Delegating, Replying, Thinking | le verbe seul est le début du verbe suivi de ce qu’il touche (« Lit src/a.ts » → “Reading src/a.ts”) |
+| Contexte compacté / Nouvelle conversation Claude (contexte vidé) | Context compacted / New Claude conversation (context cleared) | notices de la conversation |
+| Implémentation conforme au ticket / Tests verts | Implementation matches the ticket / Tests pass | critères par défaut d’un ticket |
+| aucun ticket ne démarre | no tickets will start | ce que dit le Kanban (`BoardIssue`), comme `board.claudeMissing` |
+| Interrompu / Erreur : … / Bilan des critères manquant | Interrupted / Error: … / Criteria report missing | pourquoi un ticket est bloqué |
+| Validation… / Validation interrompue / Validation en cours | Approving… / Approval interrupted / Approval under way | l’étape d’un ticket « À tester » qu’on valide |
+| prêt à tester / bloqué | ready to review / blocked | notification d’un ticket |
+| ⤵ Mergé dans … / ⇡ Poussé sur … / ◇ Laissé dans le worktree / ∅ Aucune modification | ⤵ Merged into … / ⇡ Pushed to … / ◇ Left in the worktree / ∅ No changes | ce que devient un ticket validé |
+| recette (de lancement) | recipe | ce que l’agent propose pour lancer son worktree |
+| (copie), (copie 2) | (copy), (copy 2) | le nom d’un agent dupliqué |
+| La préparation / le démontage du worktree a échoué sur … | The worktree setup / the worktree teardown failed on … | |
+| Worktree préparé (3 commandes, 12 s). | Worktree set up (3 commands, 12 s). | |
+| Ko / Mo | KB / MB | tailles écrites par le backend |
+| Assignés à moi / Sprint actif / À faire / Mes cartes | Assigned to me / Active sprint / To do / My cards | filtres de l’import |
+| Ouverte / Fermée | Open / Closed | états d’une issue GitHub |
+| Carte | Card | type d’un ticket Trello dans l’import ; « Tâche », « Sous-tâche » de Jira restent “Task”, “Sub-task” |
+| Non assigné(e) | Unassigned | |
+| refuse ces identifiants / refuse l’accès / limite les requêtes | refuses these credentials / denies access / limits the requests | refus d’un service (401, 403, 429) |
+| injoignable / réponse illisible | can’t be reached / unreadable answer | |
+| trousseau du système illisible | the system keychain can’t be read | |
+| Synchro interrompue | Sync interrupted | |
+| Plus tard | Later | bouton de la notification d’un redémarrage pour une mise à jour |
+| Enregistre d’abord tes fichiers | Save your files first | |
+| shell « … » introuvable | shell “…” not found | |
+| terminal fermé | terminal closed | |
 
 ## K — accounts
 

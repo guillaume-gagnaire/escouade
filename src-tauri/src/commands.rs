@@ -2,6 +2,7 @@
 
 use crate::core::{Attachment, Core, NotOnBase, SyncOp};
 use crate::fsedit;
+use crate::i18n::{self, Lang};
 use crate::integrations::{
     Account, AccountView, Container, ExternalIssue, IssuePage, Query, StatesView,
 };
@@ -22,6 +23,15 @@ type CoreState<'a> = State<'a, Arc<Core>>;
 
 fn err(e: anyhow::Error) -> String {
     format!("{e:#}")
+}
+
+/// Refused: the shell `id` asked for is not one this system has.
+fn shell_not_found(lang: Lang, id: &str) -> String {
+    tr_in!(lang, "shell « {id} » introuvable", "shell “{id}” not found")
+}
+
+fn no_shell() -> String {
+    tr!("aucun shell détecté", "no shell found")
 }
 
 #[derive(Serialize)]
@@ -473,7 +483,13 @@ pub async fn fs_read(
     path: String,
 ) -> Res<fsedit::FileText> {
     let (root, _) = core.edit_root(&project_id, agent_id).await.map_err(err)?;
-    fsedit::read(std::path::Path::new(&root), &path).map_err(err)
+    fsedit::read(std::path::Path::new(&root), &path).map_err(|e| {
+        match e.downcast_ref::<fsedit::NotFound>() {
+            // The editor shows a missing file rather than an error: a code it tells apart.
+            Some(missing) => missing.wire(),
+            None => err(e),
+        }
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -624,7 +640,7 @@ pub async fn term_spawn(
     let sh = shells
         .iter()
         .find(|s| s.id == shell)
-        .ok_or_else(|| format!("shell « {shell} » introuvable"))?;
+        .ok_or_else(|| shell_not_found(i18n::ui(), &shell))?;
     let info = TermInfo {
         id: new_id(),
         project_id,
@@ -677,7 +693,12 @@ pub fn run_start(
         .run_commands
         .iter()
         .find(|c| c.id == command_id)
-        .ok_or("commande de lancement introuvable")?;
+        .ok_or_else(|| {
+            tr!(
+                "commande de lancement introuvable",
+                "launch command not found"
+            )
+        })?;
     let settings = core.settings.read().clone();
     let shells = pty::detect_shells(&settings);
     // A command set up on another system (PowerShell on Windows, zsh on macOS) runs in the
@@ -686,7 +707,7 @@ pub fn run_start(
         .iter()
         .find(|s| s.id == run.shell)
         .or_else(|| shells.first())
-        .ok_or_else(|| format!("shell « {} » introuvable", run.shell))?;
+        .ok_or_else(|| shell_not_found(i18n::ui(), &run.shell))?;
     let cwd = pty::run_cwd(&project.path, &run.cwd).map_err(err)?;
     let info = TermInfo {
         id: new_id(),
@@ -911,7 +932,7 @@ pub fn test_run_start(
         .clone();
     let settings = core.settings.read().clone();
     let shells = pty::detect_shells(&settings);
-    let sh = shells.first().ok_or("aucun shell détecté")?;
+    let sh = shells.first().ok_or_else(no_shell)?;
     let info = TermInfo {
         id: new_id(),
         project_id,
@@ -1128,4 +1149,16 @@ pub fn mcp_status(core: CoreState) -> crate::mcp::McpStatus {
 #[tauri::command]
 pub fn mcp_activity(core: CoreState) -> Vec<crate::mcp::activity::ActivityEntry> {
     core.mcp.activity.entries()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_refusals_of_a_terminal_read_in_english() {
+        use crate::i18n::Lang::{En, Fr};
+        assert_eq!(shell_not_found(En, "zsh"), "shell “zsh” not found");
+        assert_eq!(shell_not_found(Fr, "zsh"), "shell « zsh » introuvable");
+    }
 }

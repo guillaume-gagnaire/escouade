@@ -234,7 +234,7 @@ describe('EditorView', () => {
 
   it('closes the tab of a deleted file from its banner', async () => {
     let gone = false;
-    backend({ fs_read: () => (gone ? Promise.reject('fichier introuvable') : text('const a = 2;\n')) });
+    backend({ fs_read: () => (gone ? Promise.reject('NOT_FOUND:src/app.ts') : text('const a = 2;\n')) });
     await app.openEditor({ source: 'project', path: 'src/app.ts' });
     render(EditorView, { project: project() });
     const key = buffers.key('p1', 'project', 'src/app.ts');
@@ -250,7 +250,7 @@ describe('EditorView', () => {
   it('creates a deleted file again with "Enregistrer", even without a change', async () => {
     let gone = false;
     const be = backend({
-      fs_read: () => (gone ? Promise.reject('fichier introuvable') : text('const a = 2;\n')),
+      fs_read: () => (gone ? Promise.reject('NOT_FOUND:src/app.ts') : text('const a = 2;\n')),
       // As the backend does: a write expecting the file it read is refused once that file is gone.
       fs_write: (a) => {
         if (gone && a.expectedHash) return Promise.reject('deleted');
@@ -275,7 +275,7 @@ describe('EditorView', () => {
 
   it('reads a file again that was missing, when its tab is shown again', async () => {
     let there = false;
-    backend({ fs_read: (a) => (a.path === 'README.md' && !there ? Promise.reject('fichier introuvable') : text('# demo\n')) });
+    backend({ fs_read: (a) => (a.path === 'README.md' && !there ? Promise.reject('NOT_FOUND:README.md') : text('# demo\n')) });
     await app.openEditor({ source: 'project', path: 'README.md' });
     await app.openEditor({ source: 'project', path: 'src/app.ts' });
     render(EditorView, { project: project() });
@@ -1222,7 +1222,7 @@ describe('EditorView renaming, deleting and new folders', () => {
   it('keeps a file typed in while it was being deleted, the dialog closed meanwhile: its tab stays with what was typed', async () => {
     let finish!: () => void;
     fsBackend((files) => ({
-      fs_read: (a) => (files.includes(a.path) ? text(`// ${a.path}\n`) : Promise.reject(`${a.path} introuvable`)),
+      fs_read: (a) => (files.includes(a.path) ? text(`// ${a.path}\n`) : Promise.reject(`NOT_FOUND:${a.path}`)),
       fs_delete: (a) =>
         new Promise<null>((resolve) => {
           finish = () => {
@@ -1957,7 +1957,7 @@ describe('EditorView in English', () => {
       fs_read: (a) => {
         if (a.path === 'logo.png') return { kind: 'binary', text: null, size: 10, hash: '', eol: 'lf', bom: false };
         if (a.path === 'big.bin') return { kind: 'tooLarge', text: null, size: 1363149, hash: '', eol: 'lf', bom: false };
-        if (a.path === 'gone.ts') return Promise.reject('gone.ts introuvable');
+        if (a.path === 'gone.ts') return Promise.reject('NOT_FOUND:gone.ts');
         return text('x\n');
       },
     });

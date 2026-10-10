@@ -4,6 +4,7 @@
 //! the addresses `isola ls --json` gives, `isola down`) instead of a recipe on reserved ports, and
 //! it tears the worktree's services and databases down (`isola destroy`) before the worktree goes.
 
+use crate::i18n::{self, Lang};
 use anyhow::{anyhow, bail, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -68,14 +69,42 @@ const CONFIG_LIMIT: u64 = 256 * 1024;
 /// what is compared with it when the services start.
 pub fn read_config(dir: &str) -> Result<String> {
     let path = Path::new(dir).join(CONFIG);
-    let len = std::fs::metadata(&path)
-        .map_err(|e| anyhow!("{CONFIG} illisible : {e}"))?
-        .len();
+    let unreadable = |e: std::io::Error| {
+        anyhow!(tr!(
+            "{CONFIG} illisible : {e}",
+            "{CONFIG} can’t be read: {e}"
+        ))
+    };
+    let len = std::fs::metadata(&path).map_err(unreadable)?.len();
     if len > CONFIG_LIMIT {
-        bail!("{CONFIG} est trop gros pour être relu avant le lancement ({len} octets).");
+        bail!(too_large(i18n::ui(), len));
     }
-    let bytes = std::fs::read(&path).map_err(|e| anyhow!("{CONFIG} illisible : {e}"))?;
-    String::from_utf8(bytes).map_err(|_| anyhow!("{CONFIG} n'est pas en UTF-8."))
+    let bytes = std::fs::read(&path).map_err(unreadable)?;
+    String::from_utf8(bytes).map_err(|_| {
+        anyhow!(tr!(
+            "{CONFIG} n'est pas en UTF-8.",
+            "{CONFIG} isn’t in UTF-8."
+        ))
+    })
+}
+
+/// Refused: the `.isola.toml` is `len` bytes, too many for the user to read it first.
+fn too_large(lang: Lang, len: u64) -> String {
+    tr_in!(
+        lang,
+        "{CONFIG} est trop gros pour être relu avant le lancement ({len} octets).",
+        "{CONFIG} is too large to be read before the launch ({len} bytes)."
+    )
+}
+
+/// `isola <args>` failed, with the last line it wrote.
+fn failed(lang: Lang, args: &[&str], line: &str) -> String {
+    let args = args.join(" ");
+    tr_in!(
+        lang,
+        "isola {args} a échoué : {line}",
+        "isola {args} failed: {line}"
+    )
 }
 
 /// `rev` of the repository at `repo` has isola's configuration (committed).
@@ -127,7 +156,12 @@ pub fn services_of(ls: &str, branch: &str) -> Result<Vec<Service>> {
     let entries: Vec<Entry> = if ls.is_empty() || ls == "null" {
         Vec::new()
     } else {
-        serde_json::from_str(ls).map_err(|e| anyhow!("réponse d'isola illisible : {e}"))?
+        serde_json::from_str(ls).map_err(|e| {
+            anyhow!(tr!(
+                "réponse d'isola illisible : {e}",
+                "isola’s answer can’t be read: {e}"
+            ))
+        })?
     };
     Ok(entries
         .into_iter()
@@ -161,7 +195,7 @@ pub fn services_of(ls: &str, branch: &str) -> Result<Vec<Service>> {
 /// which this runs without such an approval, run no command the file declares: that holds for the current
 /// upstream isola, and is to be checked again when isola changes.
 pub async fn run(dir: &str, args: &[&str], limit: Duration) -> Result<String> {
-    let cli = cli().ok_or_else(|| anyhow!("isola introuvable"))?;
+    let cli = cli().ok_or_else(|| anyhow!(tr!("isola introuvable", "isola not found")))?;
     let mut cmd = tokio::process::Command::new(&cli);
     cmd.args(args)
         .current_dir(dir)
@@ -175,11 +209,12 @@ pub async fn run(dir: &str, args: &[&str], limit: Duration) -> Result<String> {
     let out = tokio::time::timeout(limit, cmd.output())
         .await
         .map_err(|_| {
-            anyhow!(
-                "isola {} n'a pas répondu en {} s",
-                args.join(" "),
-                limit.as_secs()
-            )
+            anyhow!(tr!(
+                "isola {a} n'a pas répondu en {s} s",
+                "isola {a} didn’t answer in {s} s",
+                a = args.join(" "),
+                s = limit.as_secs()
+            ))
         })??;
     if !out.status.success() {
         let err = String::from_utf8_lossy(&out.stderr);
@@ -188,7 +223,7 @@ pub async fn run(dir: &str, args: &[&str], limit: Duration) -> Result<String> {
             .rev()
             .find(|l| !l.trim().is_empty())
             .unwrap_or("");
-        bail!("isola {} a échoué : {}", args.join(" "), line.trim());
+        bail!(failed(i18n::ui(), args, line.trim()));
     }
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
@@ -212,6 +247,19 @@ pub async fn services(dir: &str, branch: &str) -> Result<Vec<Service>> {
 pub(crate) mod tests {
     use super::*;
     use crate::paths::test_dir;
+
+    #[test]
+    fn what_isola_refuses_reads_in_english() {
+        use crate::i18n::Lang::En;
+        assert_eq!(
+            failed(En, &["down"], "Error: no such worktree"),
+            "isola down failed: Error: no such worktree"
+        );
+        assert_eq!(
+            too_large(En, 300_000),
+            ".isola.toml is too large to be read before the launch (300000 bytes)."
+        );
+    }
 
     /// The fake isola (tests/fixtures/fake-isola.mjs), set as the CLI of every test: only a
     /// worktree with an `.isola.toml` is its.

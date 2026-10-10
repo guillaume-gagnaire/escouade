@@ -183,7 +183,8 @@ macro_rules! tr_n_in {
 
 /// A text that depends on a count, in the interface's language: `tr_n!(count, "fr singulier",
 /// "fr pluriel", "en singular", "en plural", args…)`.
-// Allowed unused until the backend's texts go through it (then drop the allow).
+// Allowed unused: the backend's counts are all written by functions that take the language
+// (`tr_n_in!`), for their English to be tested. Drop the allow once a text uses it.
 #[allow(unused_macros)]
 macro_rules! tr_n {
     ($($t:tt)+) => {
@@ -192,8 +193,6 @@ macro_rules! tr_n {
 }
 
 /// A text in the interface's language: `tr!("français", "English", args…)`.
-// Allowed unused until the backend's texts go through it, module by module (then drop the allow).
-#[allow(unused_macros)]
 macro_rules! tr {
     ($($t:tt)+) => {
         tr_in!($crate::i18n::ui(), $($t)+)
