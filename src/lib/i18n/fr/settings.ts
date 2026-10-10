@@ -68,7 +68,7 @@ export default {
     claudeLanguage: 'Langue des textes rédigés par Claude',
     sameAsUi: 'Comme l’interface (par défaut)',
     claudeLanguageHelp:
-      'Messages de commit et descriptions de pull request proposés, commentaires publiés dans Jira, Trello et GitHub, consignes données aux agents.',
+      'Messages de commit et descriptions de pull request proposés, commentaires publiés dans Jira, Trello et GitHub, consignes données aux agents (par défaut, le message de commit proposé reprend la langue des derniers commits du dépôt).',
     /** A language named in the interface's (the choices name each in itself: `LANG_NAMES`). */
     langName: { fr: 'Français', en: 'Anglais' },
   },

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ConfirmModal from '../components/modals/ConfirmModal.svelte';
 import { agent, fakeBackend, resetApp } from '../test/ipc';
-import { commitAgentPrompt, commitAllPrompt, copyRemoteLink, mergeAgent, toggleRemote } from './agent-actions';
+import { commitAgentPrompt, commitAllPrompt, commitViaAgent, copyRemoteLink, mergeAgent, toggleRemote } from './agent-actions';
 import { setLang } from './i18n';
 import { app } from './state.svelte';
 
@@ -201,11 +201,19 @@ describe('agent actions in English', () => {
     expect(app.toasts.at(-1)).toMatchObject({ text: 'claude.ai link copied', kind: 'ok' });
   });
 
-  it('asks the agent to commit in the language of the interface', () => {
-    expect(commitAgentPrompt()).toMatch(/^Commit the changes you made/);
-    expect(commitAllPrompt()).toMatch(/^Commit all the current changes/);
-    setLang('fr');
+  it('asks the agent to commit in the language of the texts for Claude, whatever the interface’s', async () => {
+    // The interface in English, the texts for Claude in French…
+    app.lang = { ui: 'en', system: 'fr', claude: 'fr' };
     expect(commitAgentPrompt()).toMatch(/^Commite les modifications/);
     expect(commitAllPrompt()).toMatch(/^Commite toutes les modifications/);
+    // …and the other way round, as the agent is sent it.
+    app.lang = { ui: 'fr', system: 'fr', claude: 'en' };
+    setLang('fr');
+    expect(commitAgentPrompt()).toMatch(/^Commit the changes you made/);
+    expect(commitAllPrompt()).toMatch(/^Commit all the current changes/);
+    const backend = fakeBackend({ send_message: () => null });
+    await commitViaAgent(app.agents.a2, 'project');
+    expect(backend.called('send_message')[0].args.text).toMatch(/^Commit all the current changes/);
+    expect(app.toasts.at(-1)).toMatchObject({ text: 'Demande de commit envoyée à landing', kind: 'ok' });
   });
 });

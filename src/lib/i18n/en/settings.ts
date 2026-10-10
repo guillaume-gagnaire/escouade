@@ -58,7 +58,7 @@ export default defineZone('settings', {
     claudeLanguage: 'Language of texts written by Claude',
     sameAsUi: 'Same as the interface (default)',
     claudeLanguageHelp:
-      'Proposed commit messages and pull request descriptions, comments posted to Jira, Trello, and GitHub, instructions given to agents.',
+      'Proposed commit messages and pull request descriptions, comments posted to Jira, Trello, and GitHub, instructions given to agents (by default, the proposed commit message follows the language of the repository’s latest commits).',
     langName: { fr: 'French', en: 'English' },
   },
 

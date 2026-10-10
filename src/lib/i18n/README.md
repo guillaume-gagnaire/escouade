@@ -94,7 +94,8 @@ Un raccourci : `keyLabel('Ctrl+Shift+F')` (« Ctrl+Maj+F », « Ctrl+Shift+F »,
 
 - La langue vient du backend (réglages « Langue de l’interface » et « Langue des textes rédigés par Claude ») : au démarrage et à chaque changement, `state.svelte.ts` reçoit `LangInfo` (`app.lang`) et appelle `setLang`.
 - Une langue proposée au choix s’écrit dans elle-même (`LANG_NAMES` : « English », « Français ») ; ailleurs, elle se nomme dans la langue de l’interface (`settings.app.langName`).
-- Côté Rust, un texte s’écrit dans les deux langues à l’endroit où il sert : `tr!("Texte", "Text")`, `tr_claude!` pour ce que Claude écrit, `tr_in!(lang, …)` pour une langue donnée (`src-tauri/src/i18n.rs`).
+- Côté Rust, un texte s’écrit dans les deux langues à l’endroit où il sert : `tr!("Texte", "Text")`, `tr_in!(lang, …)` pour une langue donnée (`src-tauri/src/i18n.rs`). Ce qu’Escouade dit à Claude ou lui fait écrire passe par une fonction qui prend la langue des textes pour Claude (`Core::lang().claude`, `i18n::claude()` hors du cœur), pour que son anglais soit testé.
+- Un texte que la fenêtre envoie à un agent (demande de commit, refus d’un plan) suit la même langue : `tIn(app.lang.claude, key)`, jamais `t(key)`.
 
 ## Tests
 

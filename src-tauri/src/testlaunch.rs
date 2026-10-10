@@ -193,23 +193,25 @@ fn shell_args(shell_id: &str, command: &str) -> Vec<String> {
 }
 
 /// Runs `command` in `cwd` with `shell`, `env` added; killed with what it started past `limit`.
+/// The tail of tests that did not finish says so in `lang`: it goes to the agent.
 pub async fn run_tests(
     shell: &ShellInfo,
     cwd: &str,
     command: &str,
     env: &[(String, String)],
     limit: Duration,
+    lang: Lang,
 ) -> Result<TestRun> {
     Ok(run_command(shell, cwd, command, env, limit)
         .await?
         .unwrap_or_else(|| TestRun {
             passed: false,
             code: None,
-            tail: unfinished_tests(i18n::ui(), (limit.as_secs() / 60).max(1)),
+            tail: unfinished_tests(lang, (limit.as_secs() / 60).max(1)),
         }))
 }
 
-/// What stands for the output of tests stopped after `minutes`.
+/// What stands for the output of tests stopped after `minutes`, told to the agent.
 fn unfinished_tests(lang: Lang, minutes: u64) -> String {
     tr_in!(
         lang,
@@ -751,6 +753,7 @@ mod tests {
             "node -e \"process.exit(process.env.ESCOUADE_PORT_END === '4139' ? 0 : 4)\"",
             &env,
             Duration::from_secs(120),
+            Lang::Fr,
         )
         .await
         .unwrap();
@@ -761,6 +764,7 @@ mod tests {
             "node -e \"for (let i = 1; i <= 100; i++) console.log('ligne ' + i); process.exit(2)\"",
             &env,
             Duration::from_secs(120),
+            Lang::Fr,
         )
         .await
         .unwrap();
@@ -967,6 +971,7 @@ mod tests {
             "node tests.cjs",
             &[],
             Duration::from_secs(8),
+            Lang::Fr,
         )
         .await
         .unwrap();

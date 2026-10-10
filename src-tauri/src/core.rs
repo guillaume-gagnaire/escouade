@@ -597,13 +597,42 @@ async fn copy_worktree(
     Ok((path, branch, wt.base_branch.clone()))
 }
 
+/// Haiku's role when it names an agent from its first message.
+pub(crate) fn naming_system(lang: i18n::Lang) -> String {
+    tr_in!(
+        lang,
+        "Tu nommes des tâches de développement sans jamais les réaliser. Tu réponds uniquement par un slug.",
+        "You name development tasks without ever carrying them out. You answer with a slug only."
+    )
+}
+
 /// Instructions + the task framed as text to name (so that the model does not try to do it).
-pub(crate) fn naming_prompt(task: &str) -> String {
-    format!(
+pub(crate) fn naming_prompt(lang: i18n::Lang, task: &str) -> String {
+    tr_in!(
+        lang,
         "Donne un nom court à la tâche de développement ci-dessous. Ne la réalise pas.\n\
          Réponds uniquement par un slug kebab-case de 2 ou 3 mots (minuscules ASCII, sans accents), \
-         par exemple refacto-auth ou tests-e2e.\n\n<tache>\n{}\n</tache>",
-        claude::truncate(task.trim(), 2000)
+         par exemple refacto-auth ou tests-e2e.\n\n<tache>\n{task}\n</tache>",
+        "Give a short name to the development task below. Don’t carry it out.\n\
+         Answer with a kebab-case slug of 2 or 3 words only (lowercase ASCII, no accents), \
+         for example auth-refactor or e2e-tests.\n\n<task>\n{task}\n</task>",
+        task = claude::truncate(task.trim(), 2000)
+    )
+}
+
+/// What an agent stopped by the usage limit is sent by itself once the quota resets: the same
+/// word in both languages.
+pub(crate) fn auto_resume(lang: i18n::Lang) -> String {
+    tr_in!(lang, "continue", "continue")
+}
+
+/// What the Claude of a copy of an agent is told at every start: its conversation names the
+/// original's folder (`from`) everywhere, it works in `path`.
+pub(crate) fn copied_conversation(lang: i18n::Lang, from: &str, path: &str) -> String {
+    tr_in!(
+        lang,
+        "Cette conversation a été copiée depuis un agent qui travaillait dans {from}. Tu travailles maintenant dans {path} : ne lis et n'écris que dedans.",
+        "This conversation was copied from an agent that worked in {from}. You now work in {path}: only read and write in it."
     )
 }
 
@@ -631,7 +660,13 @@ pub(crate) fn name_from_answer(raw: &str) -> Option<String> {
 }
 
 /// Haiku's role when it proposes the message of a direct commit.
-pub(crate) const COMMIT_PROPOSAL_SYSTEM: &str = "Tu écris des messages de commit, sans jamais réaliser de tâche. Tu réponds uniquement par le message de commit.";
+pub(crate) fn commit_proposal_system(lang: i18n::Lang) -> String {
+    tr_in!(
+        lang,
+        "Tu écris des messages de commit, sans jamais réaliser de tâche. Tu réponds uniquement par le message de commit.",
+        "You write commit messages, without ever carrying out a task. You answer with the commit message only."
+    )
+}
 
 /// How much of a direct commit's diff Haiku reads (bytes), and of its files (the diff covers
 /// those only): enough to tell what changed, within a quick answer.
@@ -641,21 +676,48 @@ pub(crate) const PROPOSAL_FILES: usize = 200;
 /// The latest commit subjects of the repository whose style a proposal imitates.
 const RECENT_SUBJECTS: usize = 10;
 
-/// What Haiku is asked for a direct commit's message: the changes, framed as text to describe, in
-/// the style of the repository's latest `subjects` (newest first).
+/// What Haiku is asked for a direct commit's message, in `lang`: the changes, framed as text to
+/// describe, in the style of the repository's latest `subjects` (newest first). When the settings
+/// name the language of the texts for Claude (`named`), the message is written in it; else in the
+/// language of those commits, as before that setting.
 pub(crate) fn commit_proposal_prompt(
+    lang: i18n::Lang,
+    named: bool,
     subjects: &[String],
     files: &[FileChange],
     diff: &str,
 ) -> String {
-    let style = if subjects.is_empty() {
-        "Le dépôt n'a pas encore de commit : suis le format Conventional Commits (« type(portée): description »).".to_string()
-    } else {
-        format!(
-            "Imite le style des derniers commits du dépôt ci-dessous : leur langue, leur format, leur longueur.\n\n\
-             <sujets-recents>\n{}\n</sujets-recents>",
-            subjects.join("\n")
+    let style = if subjects.is_empty() && named {
+        tr_in!(
+            lang,
+            "Le dépôt n'a pas encore de commit : suis le format Conventional Commits (« type(portée): description »). Écris-le en français.",
+            "The repository has no commit yet: follow the Conventional Commits format (“type(scope): description”). Write it in English."
         )
+    } else if subjects.is_empty() {
+        tr_in!(
+            lang,
+            "Le dépôt n'a pas encore de commit : suis le format Conventional Commits (« type(portée): description »).",
+            "The repository has no commit yet: follow the Conventional Commits format (“type(scope): description”)."
+        )
+    } else {
+        let subjects = subjects.join("\n");
+        if named {
+            tr_in!(
+                lang,
+                "Écris-le en français, dans le style des derniers commits du dépôt ci-dessous : leur format, leur longueur.\n\n\
+                 <sujets-recents>\n{subjects}\n</sujets-recents>",
+                "Write it in English, in the style of the repository’s latest commits below: their format, their length.\n\n\
+                 <recent-subjects>\n{subjects}\n</recent-subjects>"
+            )
+        } else {
+            tr_in!(
+                lang,
+                "Imite le style des derniers commits du dépôt ci-dessous : leur langue, leur format, leur longueur.\n\n\
+                 <sujets-recents>\n{subjects}\n</sujets-recents>",
+                "Imitate the style of the repository’s latest commits below: their language, their format, their length.\n\n\
+                 <recent-subjects>\n{subjects}\n</recent-subjects>"
+            )
+        }
     };
     let mut listed: String = files
         .iter()
@@ -663,16 +725,25 @@ pub(crate) fn commit_proposal_prompt(
         .map(|f| format!("{} {}\n", f.status, f.path))
         .collect();
     if files.len() > PROPOSAL_FILES {
-        listed.push_str(&format!(
-            "… et {} autres fichiers\n",
-            files.len() - PROPOSAL_FILES
+        let n = files.len() - PROPOSAL_FILES;
+        listed.push_str(&tr_n_in!(
+            lang,
+            n,
+            "… et {n} autre fichier\n",
+            "… et {n} autres fichiers\n",
+            "… and {n} more file\n",
+            "… and {n} more files\n"
         ));
     }
-    format!(
+    tr_in!(
+        lang,
         "Écris le message de commit des modifications ci-dessous. Ne les réalise pas, ne les commente pas. \
          Réponds uniquement par le message : un sujet d'une ligne, puis, seulement si c'est utile, une ligne vide et un corps court.\n\n\
-         {style}\n\n<fichiers>\n{listed}</fichiers>\n\n<diff>\n{}\n</diff>",
-        claude::truncate(diff.trim_end(), PROPOSAL_DIFF)
+         {style}\n\n<fichiers>\n{listed}</fichiers>\n\n<diff>\n{diff}\n</diff>",
+        "Write the commit message of the changes below. Don’t carry them out, don’t comment on them. \
+         Answer with the message only: a one-line subject, then, only if useful, a blank line and a short body.\n\n\
+         {style}\n\n<files>\n{listed}</files>\n\n<diff>\n{diff}\n</diff>",
+        diff = claude::truncate(diff.trim_end(), PROPOSAL_DIFF)
     )
 }
 
@@ -1844,7 +1915,7 @@ impl<R: Runtime> Core<R> {
         for (id, view) in due {
             self.hub.emit(UiEvent::Agent { agent: view });
             self.request_save();
-            let text = "continue".to_string();
+            let text = auto_resume(self.lang().claude);
             // A ticket's agent that cannot go on blocks its ticket, which would wait forever.
             let sent = match self.doing_ticket_of(&id) {
                 Some(ticket_id) => self.send_or_block(&ticket_id, &id, text).await,
@@ -2280,10 +2351,8 @@ impl<R: Runtime> Core<R> {
                 if let Some(from) = copied_from {
                     // Its conversation names the original's folder everywhere (its files' absolute
                     // paths): its Claude is told at every start where it works now.
-                    meta.append_prompt = Some(format!(
-                        "Cette conversation a été copiée depuis un agent qui travaillait dans {}. Tu travailles maintenant dans {path} : ne lis et n'écris que dedans.",
-                        from.path
-                    ));
+                    meta.append_prompt =
+                        Some(copied_conversation(self.lang().claude, &from.path, &path));
                 }
                 meta.cwd = path.clone();
                 meta.worktree = Some(Worktree {
@@ -2544,10 +2613,12 @@ impl<R: Runtime> Core<R> {
                 } else {
                     text.clone()
                 };
+                // Its first message tells its Claude too, in the language of the texts for Claude.
+                let told = f.describe(self.lang().claude, worktrees::Stage::Setup);
                 let _ = self.with_agent(id, |rt, fx| {
                     rt.setup = None;
                     rt.setup_output = None;
-                    rt.setup_failure = Some(text);
+                    rt.setup_failure = Some(told);
                     rt.notice("warn", shown, fx);
                     Ok(())
                 });
@@ -2735,13 +2806,15 @@ impl<R: Runtime> Core<R> {
     pub async fn suggest_worktree_steps(&self, project_id: &str) -> Result<WorktreeSuggestion> {
         let project = self.project(project_id)?;
         let shell = self.default_shell()?;
+        let lang = self.lang().claude;
         let prompt = worktrees::suggest_prompt(
+            lang,
             &shell.label,
             &project.worktree_copy,
             isola::configured(&project.path),
         );
         let answer = self
-            .read_project(&project, worktrees::SUGGEST_SYSTEM, &prompt)
+            .read_project(&project, &worktrees::suggest_system(lang), &prompt)
             .await?;
         let suggestion = worktrees::parse_suggestion(&answer, Path::new(&project.path), &shell.id)
             .ok_or_else(no_readable_commands)?;
@@ -2759,9 +2832,10 @@ impl<R: Runtime> Core<R> {
     pub async fn suggest_run_commands(&self, project_id: &str) -> Result<RunSuggestion> {
         let project = self.project(project_id)?;
         let shell = self.default_shell()?;
-        let prompt = worktrees::run_suggest_prompt(&shell);
+        let lang = self.lang().claude;
+        let prompt = worktrees::run_suggest_prompt(lang, &shell);
         let answer = self
-            .read_project(&project, worktrees::RUN_SUGGEST_SYSTEM, &prompt)
+            .read_project(&project, &worktrees::run_suggest_system(lang), &prompt)
             .await?;
         let suggestion =
             worktrees::parse_run_suggestion(&answer, Path::new(&project.path), &shell.id)
@@ -2934,10 +3008,11 @@ impl<R: Runtime> Core<R> {
 
     /// A short name for the task, or None when the model did not answer with one.
     async fn generate_name(&self, agent: &str, prompt: &str) -> Result<Option<String>> {
+        let lang = self.lang().claude;
         let answer = self
             .one_shot(
-                "Tu nommes des tâches de développement sans jamais les réaliser. Tu réponds uniquement par un slug.",
-                &naming_prompt(prompt),
+                &naming_system(lang),
+                &naming_prompt(lang, prompt),
                 Some(agent),
             )
             .await?;
@@ -3922,9 +3997,13 @@ impl<R: Runtime> Core<R> {
         } else {
             git::diff(&root, &read).await.unwrap_or_default()
         };
-        let prompt = commit_proposal_prompt(&subjects, &files, &diff);
+        let lang = self.lang().claude;
+        // « Comme l'interface » (the default) keeps imitating the language of the repository's
+        // commits; a language named in the settings is the one asked for.
+        let named = i18n::names_a_language(&self.settings.read().claude_language);
+        let prompt = commit_proposal_prompt(lang, named, &subjects, &files, &diff);
         let answer = self
-            .one_shot(COMMIT_PROPOSAL_SYSTEM, &prompt, asker.as_deref())
+            .one_shot(&commit_proposal_system(lang), &prompt, asker.as_deref())
             .await?;
         proposal_from_answer(&answer)
             .ok_or_else(|| anyhow!(tr!("Haiku n'a rien proposé", "Haiku proposed nothing")))
@@ -4241,6 +4320,8 @@ mod tests {
         .to_vec();
         let files = [change("src/app.ts", "M"), change("src/new.ts", "A")];
         let p = commit_proposal_prompt(
+            crate::i18n::Lang::Fr,
+            false,
             &subjects,
             &files,
             "diff --git a/src/app.ts b/src/app.ts\n+x\n",
@@ -4259,7 +4340,7 @@ mod tests {
             "{p}"
         );
         // A repository without a commit yet has no style to imitate.
-        let first = commit_proposal_prompt(&[], &files, "");
+        let first = commit_proposal_prompt(crate::i18n::Lang::Fr, false, &[], &files, "");
         assert!(!first.contains("<sujets-recents>"), "{first}");
         assert!(first.contains("Conventional Commits"), "{first}");
     }
@@ -4270,7 +4351,7 @@ mod tests {
         let files: Vec<FileChange> = (0..250)
             .map(|i| change(&format!("src/f{i}.ts"), "M"))
             .collect();
-        let p = commit_proposal_prompt(&[], &files, &diff);
+        let p = commit_proposal_prompt(crate::i18n::Lang::Fr, false, &[], &files, &diff);
         assert!(!p.contains("FIN-DU-DIFF"));
         assert!(p.len() < PROPOSAL_DIFF + 10_000, "{}", p.len());
         assert!(p.contains("M src/f199.ts\n") && !p.contains("src/f200.ts"));
@@ -4300,8 +4381,66 @@ mod tests {
     }
 
     #[test]
+    fn what_haiku_and_a_copy_are_told_reads_in_english() {
+        use crate::i18n::check::french_in;
+        use crate::i18n::Lang::{En, Fr};
+        let subjects: Vec<String> =
+            ["feat(board): ask before deleting a ticket".to_string()].into();
+        let files: Vec<FileChange> = (0..201)
+            .map(|i| change(&format!("src/f{i}.ts"), "M"))
+            .collect();
+        let diff = "diff --git a/src/f0.ts b/src/f0.ts\n+x\n";
+        // Named in the settings, the language is said; else the repository's is imitated.
+        let named = commit_proposal_prompt(En, true, &subjects, &files, diff);
+        let imitated = commit_proposal_prompt(En, false, &subjects, &files, diff);
+        let first = commit_proposal_prompt(En, true, &[], &files[..1], "");
+        for p in [&named, &imitated, &first] {
+            assert_eq!(french_in(p), None, "{p}");
+        }
+        assert!(
+            named.contains("Write it in English, in the style of the repository’s latest commits below: their format, their length.")
+                && named.contains("<recent-subjects>\nfeat(board): ask before deleting a ticket\n</recent-subjects>")
+                && named.contains("<files>\nM src/f0.ts\n")
+                && named.contains("… and 1 more file\n</files>")
+                && named.contains("<diff>\ndiff --git a/src/f0.ts b/src/f0.ts\n+x\n</diff>"),
+            "{named}"
+        );
+        assert!(
+            imitated.contains("their language, their format, their length"),
+            "{imitated}"
+        );
+        assert!(
+            first.contains("Conventional Commits") && !first.contains("<recent-subjects>"),
+            "{first}"
+        );
+        // A repository without a commit has no language to imitate: a language named is said all
+        // the same, and none is when the settings leave it to the interface.
+        let unnamed = commit_proposal_prompt(En, false, &[], &files[..1], "");
+        assert!(first.contains("(“type(scope): description”). Write it in English."));
+        assert!(!unnamed.contains("Write it in English"), "{unnamed}");
+        assert!(commit_proposal_prompt(Fr, true, &[], &files[..1], "")
+            .contains("(« type(portée): description »). Écris-le en français."));
+        // In French, the language named the same way.
+        assert!(commit_proposal_prompt(Fr, true, &subjects, &files, diff)
+            .contains("Écris-le en français, dans le style des derniers commits du dépôt ci-dessous : leur format, leur longueur."));
+        assert!(commit_proposal_prompt(Fr, false, &subjects, &files, diff)
+            .contains("… et 1 autre fichier\n</fichiers>"));
+        let p = naming_prompt(En, "Create a hello.txt file");
+        assert_eq!(french_in(&p), None, "{p}");
+        assert!(p.contains("<task>\nCreate a hello.txt file\n</task>") && p.contains("slug"));
+        for system in [naming_system(En), commit_proposal_system(En)] {
+            assert_eq!(french_in(&system), None, "{system}");
+        }
+        assert_eq!(
+            copied_conversation(En, "C:/code/a", "C:/code/b"),
+            "This conversation was copied from an agent that worked in C:/code/a. You now work in C:/code/b: only read and write in it."
+        );
+        assert_eq!(auto_resume(En), "continue");
+    }
+
+    #[test]
     fn the_task_is_framed_as_text_to_name() {
-        let p = naming_prompt("Crée un fichier hello.txt");
+        let p = naming_prompt(crate::i18n::Lang::Fr, "Crée un fichier hello.txt");
         assert!(p.contains("<tache>\nCrée un fichier hello.txt\n</tache>"));
         assert!(p.contains("slug"));
     }

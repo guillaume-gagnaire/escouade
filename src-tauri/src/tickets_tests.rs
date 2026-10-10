@@ -784,6 +784,68 @@ async fn a_ticket_gets_an_agent_on_its_own_branch_and_loops_until_its_criteria_a
 }
 
 #[tokio::test]
+async fn a_ticket_is_told_its_protocol_and_its_loops_in_the_language_of_the_texts_for_claude() {
+    let h = harness("tk-loop-en");
+    let (p, _) = h.project(false).await;
+    h.set_settings(|s| s.claude_language = "en".into());
+    let t = h
+        .core
+        .ticket_create(
+            &p.id,
+            draft("Add the file", &["The file exists", "It says its loop"], 5),
+        )
+        .await
+        .unwrap();
+    h.wait_ticket(&t.id, "ticket to test", |t| t.column == Column::Review)
+        .await;
+    // The fake agent read the English protocol and messages as it reads the French ones.
+    let t = h.ticket(&t.id);
+    assert_eq!((t.iteration, t.partial, t.loops), (2, false, 2));
+    let a = h.agent_of(&t.id);
+    let base = a.port_base.unwrap();
+    let dir = PathBuf::from(a.worktree.unwrap().path);
+    assert_eq!(
+        std::fs::read_to_string(dir.join("dem-1.txt")).unwrap(),
+        "Boucle 2\n"
+    );
+    let argv = h.launches(&dir).pop().unwrap();
+    let i = argv
+        .iter()
+        .position(|x| x == "--append-system-prompt")
+        .unwrap();
+    let protocol = &argv[i + 1];
+    assert!(
+        protocol
+            .starts_with("You are working autonomously on Escouade ticket DEM-1 “Add the file”.")
+            && protocol
+                .contains("Acceptance criteria (2): 1) The file exists; 2) It says its loop.")
+            && protocol.contains(&format!("Ports reserved for this worktree: {base} to")),
+        "{protocol}"
+    );
+    let sent: Vec<String> = h
+        .stdin_messages(&dir)
+        .iter()
+        .map(|m| {
+            m["message"]["content"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string()
+        })
+        .collect();
+    assert!(
+        sent[0].starts_with("Ticket DEM-1: Add the file\n")
+            && sent[0].ends_with(
+                "Loop 1/5. Work until every criterion is met, then end with the report."
+            ),
+        "{sent:?}"
+    );
+    assert!(
+        sent[1].starts_with("Loop 2/5. Criteria not met: 2 (reste le critère 2)"),
+        "{sent:?}"
+    );
+}
+
+#[tokio::test]
 async fn a_ticket_out_of_loops_goes_to_test_as_a_partial_goal() {
     let h = harness("tk-partial");
     let (p, _) = h.project(false).await;
@@ -2372,6 +2434,8 @@ async fn validating_squashes_the_ticket_into_the_projects_branch_with_a_generate
     assert_eq!(t.column, Column::Done, "{:?}", t.blocked);
     assert_eq!(t.outcome.as_deref(), Some("⤵ Mergé dans main · squash"));
     assert!(t.done_at.is_some() && t.cost > 0.0);
+    // Written in the language of the texts for Claude as well (French here, as the interface).
+    assert_eq!(t.outcome_claude, t.outcome);
     assert_eq!(t.step, None);
     assert_eq!(
         std::fs::read_to_string(r.join("dem-1.txt")).unwrap(),
@@ -2477,6 +2541,8 @@ async fn a_merged_tickets_worktree_that_cannot_be_removed_is_said_kept() {
         t.blocked
     );
     assert!(has_branch(&r, "ticket/dem-1"));
+    // Both languages of it say so (the same here).
+    assert_eq!(t.outcome_claude, t.outcome);
     assert!(h.events.lock().iter().any(|e| e["type"] == "ticket"
         && e["ticket"]["outcome"] == "⤵ Mergé dans main · squash · worktree gardé"));
 }
@@ -3541,6 +3607,42 @@ async fn with_gh_a_pull_request_is_opened_with_the_criteria() {
 }
 
 #[tokio::test]
+async fn a_pull_request_and_its_commit_are_written_in_the_language_of_the_texts_for_claude() {
+    let h = harness("tk-pr-gh-en");
+    let (p, r) = h.project(false).await;
+    github_remote(&h, &r);
+    *h.core.gh.write() = Some(fake_gh());
+    h.set_settings(|s| s.claude_language = "en".into());
+    h.set_board(&p.id, |s| s.action = "pr".into());
+    let (t, wt) = reviewed(&h, &p.id, "File [ok]").await;
+    h.core.ticket_approve(&t.id).await.unwrap();
+    let done = h.ticket(&t.id);
+    assert_eq!(
+        done.outcome.as_deref(),
+        Some("⇡ PR #12 → main"),
+        "{:?}",
+        done.blocked
+    );
+    let call = gh_calls(&wt).pop().expect("gh called in the worktree");
+    let argv: Vec<&str> = call["argv"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|a| a.as_str().unwrap())
+        .collect();
+    // The title is the commit message Haiku wrote when it was asked in English (the fake says it).
+    let title = argv.iter().position(|a| *a == "--title").unwrap() + 1;
+    assert_eq!(argv[title], "feat: work of the fake claude (en) [DEM-1]");
+    // The description: what was done, then the criteria, under English headings.
+    let body = call["body"].as_str().unwrap();
+    assert!(
+        body.starts_with("What was done:\n- ") && body.contains("\n\nCriteria:\n- [x] "),
+        "{body}"
+    );
+    assert!(!body.contains("Ce qui a été fait") && !body.contains("Critères"));
+}
+
+#[tokio::test]
 async fn a_gh_installed_while_the_app_runs_opens_the_pull_request() {
     let h = harness("tk-pr-gh-later");
     let (p, r) = h.project(false).await;
@@ -3926,6 +4028,25 @@ async fn a_rejected_ticket_goes_back_to_the_same_agent_with_the_comment() {
     );
 }
 
+#[tokio::test]
+async fn a_rejected_ticket_is_sent_back_with_the_comment_in_the_language_of_the_texts_for_claude() {
+    let h = harness("tk-reject-en");
+    let (p, _) = h.project(false).await;
+    h.set_settings(|s| s.claude_language = "en".into());
+    let (t, wt) = reviewed(&h, &p.id, "Rework [ok]").await;
+    h.core
+        .ticket_reject(&t.id, "the button is misplaced.")
+        .await
+        .unwrap();
+    let said = "Test feedback on DEM-1: the button is misplaced. Fix it, check every criterion again, then end with the report.";
+    h.wait_sent(&wt, said).await;
+    h.wait_ticket(&t.id, "to test again", |t| t.column == Column::Review)
+        .await;
+    // What the agent read last: the English message, whole, and no French one before it.
+    assert_eq!(h.last_sent(&wt), said);
+    assert!(!was_sent(&h, &wt, "Retour de test"));
+}
+
 /// The agent read a message starting with `start`.
 fn was_sent(h: &Harness, dir: &Path, start: &str) -> bool {
     h.stdin_messages(dir).iter().any(|m| {
@@ -4153,6 +4274,35 @@ async fn preparing_a_launch_reserves_ports_and_keeps_the_recipe_the_agent_answer
     let plain = h.core.create_agent(&p.id, None).await.unwrap().meta;
     assert!(h.core.agent_prepare_launch(&plain.id).await.is_err());
     assert_eq!(h.agent(&plain.id).port_base, None);
+}
+
+#[tokio::test]
+async fn an_agent_asked_in_english_to_prepare_its_launch_answers_with_its_recipe_all_the_same() {
+    let h = harness("tk-prepare-en");
+    let (p, _) = h.project(true).await;
+    h.set_settings(|s| s.claude_language = "en".into());
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    h.core.agent_prepare_launch(&a.id).await.unwrap();
+    let base = h.agent(&a.id).port_base.unwrap();
+    h.wait_sent(
+        Path::new(&a.cwd),
+        &format!(
+            "Prepare the test launch of this worktree. Ports reserved: {base} to {}",
+            base + 9
+        ),
+    )
+    .await;
+    h.wait("recipe", |h| h.agent(&a.id).recipe.is_some()).await;
+    // The fake agent's own answer (not the example of the request, which a reply quoting it
+    // would carry).
+    let recipe = h.agent(&a.id).recipe.unwrap();
+    assert_eq!(
+        (
+            recipe.processes[0].command.as_str(),
+            recipe.processes[0].url.clone()
+        ),
+        ("node serveur.js", format!("http://localhost:{}", base + 1))
+    );
 }
 
 /// What the user approves in the test modal: the recipe the agent holds right now.
