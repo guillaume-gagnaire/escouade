@@ -3435,6 +3435,38 @@ async fn a_ticket_agent_is_copied_as_an_ordinary_agent() {
 }
 
 #[tokio::test]
+async fn a_copy_of_a_copy_that_ran_no_turn_forks_where_the_first_was_made() {
+    let h = harness("copy-of-copy");
+    let (p, r) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.core.rename_agent(&id, "source").await.unwrap();
+    h.turn(&id, "Premier").await;
+    let original = h.agent(&id);
+    let (session, entry) = (original.session_id.unwrap(), original.last_entry.unwrap());
+    let copy = h.core.duplicate_agent(&id).await.unwrap().meta.id;
+    // The original goes on, the copy has run no turn: it has no session of its own yet.
+    h.turn(&id, "Ensuite").await;
+    let second = h.core.duplicate_agent(&copy).await.unwrap().meta;
+    assert_eq!(second.name, "source (copie) (copie)");
+    assert_eq!(
+        (second.fork_of.as_deref(), second.fork_at.as_deref()),
+        (Some(session.as_str()), Some(entry.as_str()))
+    );
+    assert_eq!(h.items(&second.id), h.items(&copy));
+    h.core.ensure_process(&second.id).await.unwrap();
+    let argv = h.launches(&r).pop().unwrap();
+    assert!(
+        argv.windows(3).any(|w| w
+            == [
+                format!("--resume={session}"),
+                "--fork-session".to_string(),
+                format!("--resume-session-at={entry}")
+            ]),
+        "{argv:?}"
+    );
+}
+
+#[tokio::test]
 async fn a_copy_whose_fork_point_is_not_in_the_session_forks_all_of_it() {
     let h = harness("copy-unpinned");
     let (p, r) = h.project(false).await;

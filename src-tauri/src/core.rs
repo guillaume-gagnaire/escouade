@@ -2141,6 +2141,12 @@ impl<R: Runtime> Core<R> {
             }
             (rt.meta.clone(), rt.conv.items())
         };
+        // What its next start would resume: its own session where it is now, or, for a copy that
+        // ran no turn yet, its original's where it was copied.
+        let (session_id, entry) = match original.session_id {
+            Some(own) => (Some(own), original.last_entry),
+            None => (original.fork_of, original.fork_at),
+        };
         let mut notice = None;
         if let Some(wt) = &original.worktree {
             match git::status(&wt.path).await {
@@ -2164,8 +2170,8 @@ impl<R: Runtime> Core<R> {
                 select: true,
                 copy_of: Some(CopyOf {
                     name: original.name,
-                    session_id: original.session_id,
-                    entry: original.last_entry,
+                    session_id,
+                    entry,
                     worktree: original.worktree,
                     items,
                     notice,

@@ -593,7 +593,13 @@ impl AgentRt {
                     }
                 }
             }
-            "compact_boundary" => self.notice("info", "Contexte compacté", fx),
+            "compact_boundary" => {
+                // Its session's chain starts again at the boundary: the entries before it are no
+                // longer in it (a copy forking at one would be refused), and the next one to come
+                // is where a copy forks it.
+                self.meta.last_entry = None;
+                self.notice("info", "Contexte compacté", fx);
+            }
             "task_started" => {
                 if let (Some(id), false) = (f["task_id"].as_str(), f["is_backgrounded"] == true) {
                     self.foreground_tasks.insert(id.to_string());
@@ -959,6 +965,13 @@ impl AgentRt {
         let Some(blocks) = content.as_array() else {
             return;
         };
+        // A tool's result in its main chain is an entry of its session too: the last one of a turn
+        // stopped (or failed) before any reply, which a copy must not lose.
+        if f["parent_tool_use_id"].is_null() && blocks.iter().any(|b| b["type"] == "tool_result") {
+            if let Some(uuid) = f["uuid"].as_str() {
+                self.meta.last_entry = Some(uuid.to_string());
+            }
+        }
         let tur = &f["tool_use_result"];
         for b in blocks.iter().filter(|b| b["type"] == "tool_result") {
             let Some(id) = b["tool_use_id"].as_str() else {
@@ -2580,6 +2593,60 @@ mod tests {
             &mut fx,
         );
         assert_eq!(a.meta.last_entry, None);
+    }
+
+    #[test]
+    fn a_tool_result_that_ends_a_turn_is_its_last_entry() {
+        let mut a = rt();
+        let mut fx = Effects::default();
+        let result = |uuid: &str, extra: Value| {
+            let mut f = json!({ "type": "user", "uuid": uuid, "parent_tool_use_id": null,
+                "message": { "role": "user", "content": [{ "type": "tool_result", "tool_use_id": "tu1", "content": "fait" }] } });
+            if let (Some(f), Some(extra)) = (f.as_object_mut(), extra.as_object()) {
+                f.extend(extra.clone());
+            }
+            f
+        };
+        a.handle_frame(
+            &json!({ "type": "assistant", "uuid": "e1", "parent_tool_use_id": null,
+                "message": { "id": "m1", "role": "assistant", "content": [{ "type": "tool_use", "id": "tu1", "name": "Bash", "input": {} }] } }),
+            &mut fx,
+        );
+        // Interrupted, or an API error, before any reply: the result of its tool ends the turn.
+        a.handle_frame(&result("e2", json!({})), &mut fx);
+        assert_eq!(a.meta.last_entry.as_deref(), Some("e2"));
+        // Not entries of its main chain: a subagent's result, a message sent again from claude.ai,
+        // a message with no tool result (a local command's output).
+        a.handle_frame(
+            &result("e3", json!({ "parent_tool_use_id": "tu0" })),
+            &mut fx,
+        );
+        a.handle_frame(&result("e4", json!({ "isReplay": true })), &mut fx);
+        a.handle_frame(
+            &json!({ "type": "user", "uuid": "e5", "parent_tool_use_id": null,
+                "message": { "role": "user", "content": [{ "type": "text", "text": "<local-command-stdout>ok</local-command-stdout>" }] } }),
+            &mut fx,
+        );
+        assert_eq!(a.meta.last_entry.as_deref(), Some("e2"));
+    }
+
+    #[test]
+    fn a_compaction_leaves_no_entry_to_fork_at_until_the_next_one() {
+        let mut a = rt();
+        let mut fx = Effects::default();
+        let reply = |uuid: &str| {
+            json!({ "type": "assistant", "uuid": uuid, "parent_tool_use_id": null,
+                "message": { "id": format!("m-{uuid}"), "role": "assistant", "content": [{ "type": "text", "text": "ok" }] } })
+        };
+        a.handle_frame(&reply("e1"), &mut fx);
+        // The chain starts again at the boundary: what came before is no longer in it.
+        a.handle_frame(
+            &json!({ "type": "system", "subtype": "compact_boundary", "uuid": "b1" }),
+            &mut fx,
+        );
+        assert_eq!(a.meta.last_entry, None);
+        a.handle_frame(&reply("e2"), &mut fx);
+        assert_eq!(a.meta.last_entry.as_deref(), Some("e2"));
     }
 
     #[test]
