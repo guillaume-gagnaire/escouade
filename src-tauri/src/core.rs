@@ -2997,9 +2997,16 @@ impl<R: Runtime> Core<R> {
         project_id: &str,
         agent_id: Option<String>,
     ) -> Result<fsedit::Tree> {
-        let (root, _) = self.edit_root(project_id, agent_id).await?;
-        let copied = self.project(project_id)?.worktree_copy;
-        Ok(fsedit::tree(&root, &copied).await)
+        let (root, base) = self.edit_root(project_id, agent_id).await?;
+        let project = self.project(project_id)?;
+        // The copy takes from the project's folder, which is below the checkout's root when the project
+        // is a subfolder of its repository; into a worktree it puts each file at the root.
+        let below = if base.is_some() {
+            String::new()
+        } else {
+            sub_prefix(&root, &project.path)
+        };
+        Ok(fsedit::tree(&root, &project.worktree_copy, &below).await)
     }
 
     pub async fn git_diff(

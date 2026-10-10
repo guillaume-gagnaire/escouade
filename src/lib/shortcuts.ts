@@ -70,12 +70,35 @@ export function isAppShortcut(e: KeyboardEvent, mac = IS_MAC): boolean {
   if (!primaryKey(e, mac)) return false;
   const k = e.key.toLowerCase();
   if (overviewKey(e)) return true;
-  if (mac) return digit(e) !== null || ['n', 't', 'j', ',', 'b', 'l', 'k', 'p'].includes(k);
+  if (mac) return digit(e) !== null || ['n', 't', 'j', ',', 'b', 'l', 'k'].includes(k) || isP(e);
   return digit(e) !== null || k === ',' || k === 'j';
 }
 
-/** Ctrl+P (Cmd+P on macOS): not with Shift, not with Alt (AltGr). */
-const quickOpenKey = (e: KeyboardEvent, mac: boolean) => primaryKey(e, mac) && !e.shiftKey && e.key.toLowerCase() === 'p';
+/**
+ * The letter P: by its character, else by its place on the keyboard when the layout types another alphabet (Cyrillic,
+ * Greek…), where the WebView still prints on that key. Not by its place alone: on Dvorak that key types an « l ».
+ */
+function isP(e: KeyboardEvent): boolean {
+  const k = e.key.toLowerCase();
+  return k === 'p' || (!/^[a-z]$/.test(k) && e.code === 'KeyP');
+}
+
+/** What prints the page in the WebView: Ctrl+P, and Ctrl+Shift+P (through the system dialog). Cmd on macOS; never AltGr. */
+const printKey = (e: KeyboardEvent, mac: boolean) => !e.altKey && primaryKey(e, mac) && isP(e);
+
+/** Ctrl+P (Cmd+P on macOS): « Ouvrir un fichier ». */
+const quickOpenKey = (e: KeyboardEvent, mac: boolean) => printKey(e, mac) && !e.shiftKey;
+
+/**
+ * The page is never printed: runs first, in the capture phase, before any field that keeps its keys to itself
+ * (`stopPropagation`) hides the key from the window's handler. It only prevents the default; `handleShortcut` opens the
+ * palette in the bubble phase. Returns true when the key was held back.
+ */
+export function holdPrint(e: KeyboardEvent, mac = IS_MAC): boolean {
+  if (!printKey(e, mac)) return false;
+  e.preventDefault();
+  return true;
+}
 
 /**
  * « Ouvrir un fichier » over the project on screen. Its source is the editor's when it is open, else the worktree of

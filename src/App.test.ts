@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import App from './App.svelte';
@@ -132,6 +132,75 @@ describe('App layout', () => {
     await userEvent.keyboard('{Enter}');
     expect(await screen.findByRole('tab', { name: /app\.ts/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByRole('dialog', { name: 'Ouvrir un fichier' })).not.toBeInTheDocument();
+  });
+
+  describe('Ctrl+P and the print dialog of the WebView', () => {
+    const FILES = {
+      fs_tree: () => ({ root: 'C:/code/demo-api', files: ['README.md', 'src/app.ts'], truncated: false, ignored: [] }),
+      fs_read: () => ({ kind: 'text', text: 'x', size: 1, hash: 'h', eol: 'lf', bom: false }),
+      fs_base: () => null,
+    };
+    /** Ctrl+P (or Ctrl+Shift+P) dispatched from `target`: whether the page may still print. */
+    function press(target: Element | Window, shift = false) {
+      const e = new KeyboardEvent('keydown', { key: shift ? 'P' : 'p', ctrlKey: true, shiftKey: shift, bubbles: true, cancelable: true });
+      target.dispatchEvent(e);
+      return e.defaultPrevented;
+    }
+
+    it('is held back from a field that keeps every key to itself', async () => {
+      start('');
+      expect(await screen.findByRole('main')).toBeInTheDocument();
+      const field = document.body.appendChild(document.createElement('input'));
+      field.addEventListener('keydown', (e) => e.stopPropagation());
+      expect(press(field)).toBe(true);
+      expect(press(field, true)).toBe(true);
+      // Ctrl+Shift+P is held back and opens nothing.
+      expect(app.modal).toBeNull();
+      field.remove();
+    });
+
+    it('is held back from the field naming a new file', async () => {
+      start('', { handlers: FILES });
+      expect(await screen.findByRole('main')).toBeInTheDocument();
+      await app.openEditor({ source: 'project', path: 'README.md' });
+      await userEvent.click(await screen.findByRole('button', { name: 'Nouveau fichier' }));
+      const field = await screen.findByRole('textbox', { name: 'Nom du nouveau fichier' });
+      expect(press(field)).toBe(true);
+      expect(press(field, true)).toBe(true);
+    });
+
+    it('is held back from the field renaming an agent', async () => {
+      const { container } = start('');
+      expect(await screen.findByRole('main')).toBeInTheDocument();
+      const card = container.querySelector('aside.side')!;
+      await userEvent.dblClick(within(card as HTMLElement).getByText('refacto-auth'));
+      const field = within(card as HTMLElement).getByDisplayValue('refacto-auth');
+      expect(press(field)).toBe(true);
+      expect(press(field, true)).toBe(true);
+    });
+
+    it('is held back from the code, where it also opens the palette', async () => {
+      const { container } = start('', { handlers: FILES });
+      expect(await screen.findByRole('main')).toBeInTheDocument();
+      await app.openEditor({ source: 'project', path: 'README.md' });
+      await waitFor(() => expect(container.querySelector('.cm-content')).not.toBeNull());
+      const code = container.querySelector('.cm-content')!;
+      expect(press(code, true)).toBe(true);
+      expect(app.modal).toBeNull();
+      expect(press(code)).toBe(true);
+      expect(await screen.findByRole('dialog', { name: 'Ouvrir un fichier' })).toBeInTheDocument();
+    });
+
+    it('is held back from the palette itself, from the window, and without a project', async () => {
+      start('');
+      expect(await screen.findByRole('main')).toBeInTheDocument();
+      expect(press(window)).toBe(true);
+      const dialog = await screen.findByRole('dialog', { name: 'Ouvrir un fichier' });
+      expect(press(within(dialog).getByRole('combobox'))).toBe(true);
+      await fireEvent.keyDown(window, { key: 'Escape' });
+      app.ui.activeProject = null;
+      expect(press(window)).toBe(true);
+    });
   });
 
   it('holds back the print dialog on Ctrl+P behind another dialog too, which stays', async () => {

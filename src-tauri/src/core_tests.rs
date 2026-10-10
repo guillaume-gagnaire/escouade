@@ -2084,6 +2084,48 @@ async fn the_editor_tree_shows_the_files_the_project_copies_into_its_worktrees()
 }
 
 #[tokio::test]
+async fn the_editor_tree_of_a_project_in_a_subfolder_shows_the_files_copied_from_that_folder() {
+    let h = harness("core-edit-tree-copied-below");
+    let (_, r) = h.project(false).await;
+    ignore(&r, ".env*");
+    let sub = r.join("packages").join("web");
+    std::fs::create_dir_all(&sub).unwrap();
+    std::fs::write(
+        sub.join("index.ts"),
+        "x
+",
+    )
+    .unwrap();
+    git(&r, &["add", "-A"]);
+    git(&r, &["commit", "-qm", "web"]);
+    std::fs::write(
+        sub.join(".env"),
+        "SECRET=1
+",
+    )
+    .unwrap();
+    let p = h
+        .core
+        .create_project(
+            &sub.to_string_lossy(),
+            "web",
+            "oklch(0.72 0.12 48)",
+            true,
+            None,
+        )
+        .await
+        .unwrap();
+    let t = h.core.fs_tree(&p.id, None).await.unwrap();
+    assert_eq!(t.ignored, ["packages/web/.env"]);
+    assert!(t.files.contains(&"packages/web/index.ts".to_string()));
+
+    // The agent's worktree is the checkout's root: the copy put `.env` where it is in the repository.
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let t = h.core.fs_tree(&p.id, Some(a.meta.id)).await.unwrap();
+    assert!(t.ignored.iter().all(|f| t.files.contains(f)));
+}
+
+#[tokio::test]
 async fn quitting_with_unsaved_files_asks_the_window_first() {
     use std::sync::atomic::Ordering;
     let h = harness("core-quit-unsaved");

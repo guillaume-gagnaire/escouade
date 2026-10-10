@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { agent, fakeBackend, project, resetApp } from '../test/ipc';
 import { buffers } from './editor/buffers.svelte';
 import { setFindInFiles } from './editor/search.svelte';
-import { answersHere, ariaEnter, enterAnswer, handleShortcut, isAppShortcut, optionAnswer } from './shortcuts';
+import { answersHere, ariaEnter, enterAnswer, handleShortcut, holdPrint, isAppShortcut, optionAnswer } from './shortcuts';
 import { app } from './state.svelte';
 
 const key = (k: string, mods: Partial<KeyboardEventInit> = {}) => new KeyboardEvent('keydown', { key: k, ctrlKey: true, ...mods });
@@ -115,7 +115,20 @@ describe('handleShortcut', () => {
     expect(app.modal).toMatchObject({ kind: 'quickOpen' });
   });
 
-  it('leaves Ctrl+Alt+P (AltGr) and Ctrl+Shift+P alone', () => {
+  it('opens it from the physical P key on a layout that types another alphabet, not from another letter on that key', () => {
+    fakeBackend();
+    // Cyrillic: Ctrl+P types « з » on the P key.
+    expect(handleShortcut(key('з', { code: 'KeyP' }), false)).toBe(true);
+    expect(app.modal).toMatchObject({ kind: 'quickOpen' });
+    app.modal = null;
+    // Dvorak: the P key types « l », and the P letter is on another key.
+    expect(handleShortcut(key('l', { code: 'KeyP' }), false)).toBe(false);
+    expect(app.modal).toBeNull();
+    expect(handleShortcut(key('p', { code: 'KeyR' }), false)).toBe(true);
+    expect(app.modal).toMatchObject({ kind: 'quickOpen' });
+  });
+
+  it('opens nothing with Ctrl+Shift+P, and leaves Ctrl+Alt+P (AltGr) alone', () => {
     fakeBackend();
     expect(handleShortcut(key('p', { altKey: true }), false)).toBe(false);
     expect(handleShortcut(key('P', { shiftKey: true }), false)).toBe(false);
@@ -229,6 +242,35 @@ describe('handleShortcut', () => {
   });
 });
 
+describe('holdPrint', () => {
+  const held = (e: KeyboardEvent, mac = false) => [holdPrint(e, mac), e.defaultPrevented];
+  const cancelable = (k: string, init: KeyboardEventInit) => new KeyboardEvent('keydown', { key: k, cancelable: true, ...init });
+
+  it('keeps the WebView from printing on Ctrl+P and on Ctrl+Shift+P, which prints through the system dialog', () => {
+    expect(held(cancelable('p', { ctrlKey: true }))).toEqual([true, true]);
+    expect(held(cancelable('P', { ctrlKey: true, shiftKey: true }))).toEqual([true, true]);
+    expect(held(cancelable('p', { ctrlKey: true, repeat: true }))).toEqual([true, true]);
+  });
+
+  it('knows the P key by its place on a layout whose character is not a Latin letter', () => {
+    expect(held(cancelable('з', { ctrlKey: true, code: 'KeyP' }))).toEqual([true, true]);
+    // The P key of a Dvorak keyboard types an « l »: Ctrl+L is not a print shortcut.
+    expect(held(cancelable('l', { ctrlKey: true, code: 'KeyP' }))).toEqual([false, false]);
+  });
+
+  it('takes Cmd on macOS, and Ctrl only elsewhere', () => {
+    expect(held(cancelable('p', { metaKey: true }), true)).toEqual([true, true]);
+    expect(held(cancelable('p', { ctrlKey: true }), true)).toEqual([false, false]);
+    expect(held(cancelable('p', { metaKey: true }), false)).toEqual([false, false]);
+  });
+
+  it('leaves the other keys, and Ctrl+Alt+P (AltGr), alone', () => {
+    expect(held(cancelable('p', {}))).toEqual([false, false]);
+    expect(held(cancelable('o', { ctrlKey: true }))).toEqual([false, false]);
+    expect(held(cancelable('p', { ctrlKey: true, altKey: true }))).toEqual([false, false]);
+  });
+});
+
 describe('isAppShortcut', () => {
   it('lets navigation shortcuts through the terminal but leaves shell keys to the shell', () => {
     expect(isAppShortcut(key('3'))).toBe(true);
@@ -255,6 +297,8 @@ describe('isAppShortcut', () => {
   it('hands every Cmd shortcut to the app on macOS but copy and paste, and leaves Ctrl keys to the shell', () => {
     const cmd = (k: string) => new KeyboardEvent('keydown', { key: k, metaKey: true });
     for (const k of ['3', 'n', 't', 'j', ',', 'k', 'p']) expect(isAppShortcut(cmd(k), true)).toBe(true);
+    // The P key of a layout with another alphabet too.
+    expect(isAppShortcut(new KeyboardEvent('keydown', { key: 'з', code: 'KeyP', metaKey: true }), true)).toBe(true);
     expect(isAppShortcut(cmd('c'), true)).toBe(false);
     expect(isAppShortcut(cmd('v'), true)).toBe(false);
     expect(isAppShortcut(key('j'), true)).toBe(false);
