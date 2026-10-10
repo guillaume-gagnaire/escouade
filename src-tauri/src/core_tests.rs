@@ -1293,6 +1293,220 @@ async fn the_project_diff_is_empty_when_nothing_is_listed() {
     assert!(h.core.git_project_diff(&p.id).await.unwrap().is_empty());
 }
 
+// ---------- direct commit ----------
+
+fn paths_of(scope: &CommitScope) -> Vec<String> {
+    let mut paths: Vec<String> = scope.files.iter().map(|f| f.path.clone()).collect();
+    paths.sort();
+    paths
+}
+
+fn strings(list: &[&str]) -> Vec<String> {
+    list.iter().map(|s| s.to_string()).collect()
+}
+
+#[tokio::test]
+async fn a_direct_commit_of_an_agent_takes_its_own_files_and_nothing_else() {
+    let h = harness("commit-direct-agent");
+    let (p, r) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.core.agent(&id).unwrap().lock().meta.touched_files = strings(&["src/app.ts", "src/b.ts"]);
+    std::fs::write(r.join("src").join("app.ts"), "const a = 2;\n").unwrap();
+    std::fs::write(r.join("src").join("b.ts"), "const b = 1;\n").unwrap();
+    // Not the agent's: left out, even when asked for.
+    std::fs::write(r.join("notes.md"), "x\n").unwrap();
+    let scope = h
+        .core
+        .commit_preview(&p.id, Some(id.clone()))
+        .await
+        .unwrap();
+    assert_eq!(paths_of(&scope), ["src/app.ts", "src/b.ts"]);
+    assert!(scope.left_out.is_empty());
+    let hash = h
+        .core
+        .commit_direct(
+            &p.id,
+            Some(id.clone()),
+            strings(&["src/app.ts", "src/b.ts", "notes.md"]),
+            "feat(api): les fichiers de l'agent\n\nRelu par moi.".into(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(hash, git(&r, &["rev-parse", "--short", "HEAD"]));
+    assert_eq!(
+        git(&r, &["log", "-1", "--format=%B"]),
+        "feat(api): les fichiers de l'agent\n\nRelu par moi."
+    );
+    assert_eq!(
+        git(&r, &["show", "--name-only", "--format=", "HEAD"]),
+        "src/app.ts\nsrc/b.ts"
+    );
+    assert_eq!(git(&r, &["status", "--porcelain"]), "?? notes.md");
+}
+
+#[tokio::test]
+async fn a_direct_commit_of_the_project_leaves_the_agents_worktrees_alone() {
+    let h = harness("commit-direct-project");
+    let (p, r) = h.project(true).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let wt = PathBuf::from(a.meta.worktree.unwrap().path);
+    std::fs::write(r.join("src").join("app.ts"), "const a = 2;\n").unwrap();
+    std::fs::write(wt.join("src").join("app.ts"), "const a = 3;\n").unwrap();
+    let scope = h.core.commit_preview(&p.id, None).await.unwrap();
+    assert_eq!(paths_of(&scope), ["src/app.ts"]);
+    assert!(scope.files.iter().all(|f| !f.in_worktree));
+    h.core
+        .commit_direct(&p.id, None, paths_of(&scope), "fix: le projet".into())
+        .await
+        .unwrap();
+    assert_eq!(git(&r, &["log", "-1", "--format=%s"]), "fix: le projet");
+    assert_eq!(git(&r, &["status", "--porcelain"]), "");
+    // The agent's worktree is committed from its own scope only.
+    assert_eq!(git(&wt, &["status", "--porcelain"]), "M src/app.ts");
+    let scope = h
+        .core
+        .commit_preview(&p.id, Some(a.meta.id.clone()))
+        .await
+        .unwrap();
+    h.core
+        .commit_direct(
+            &p.id,
+            Some(a.meta.id),
+            paths_of(&scope),
+            "feat: l'agent".into(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(git(&wt, &["log", "-1", "--format=%s"]), "feat: l'agent");
+    assert_eq!(git(&r, &["log", "-1", "--format=%s"]), "fix: le projet");
+}
+
+#[tokio::test]
+async fn a_direct_commit_never_takes_nor_shows_haiku_the_files_copied_into_the_worktree() {
+    let h = harness("commit-direct-env");
+    let (p, r) = h.project(true).await;
+    ignore(&r, ".env");
+    std::fs::write(r.join(".env"), "SECRET=1\n").unwrap();
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let wt = PathBuf::from(a.meta.worktree.unwrap().path);
+    let id = Some(a.meta.id.clone());
+    // The agent's own example file is committed; the copied one it forced into the index is not.
+    std::fs::write(wt.join(".env.example"), "SECRET=\n").unwrap();
+    git(&wt, &["add", "-f", ".env"]);
+    std::fs::write(wt.join("src").join("app.ts"), "const a = 2;\n").unwrap();
+    let scope = h.core.commit_preview(&p.id, id.clone()).await.unwrap();
+    assert_eq!(paths_of(&scope), [".env.example", "src/app.ts"]);
+    assert_eq!(scope.left_out, [".env"]);
+    // Even asked for (an older list), it stays out of the proposal's diff and of the commit.
+    let asked = strings(&[".env", ".env.example", "src/app.ts"]);
+    let proposal = h
+        .core
+        .commit_propose(&p.id, id.clone(), asked.clone())
+        .await
+        .unwrap();
+    // The changes first, then the new files.
+    assert!(
+        proposal.contains("Diff de : src/app.ts, .env.example."),
+        "{proposal}"
+    );
+    h.core
+        .commit_direct(&p.id, id, asked, "feat: l'exemple".into())
+        .await
+        .unwrap();
+    assert_eq!(
+        git(&wt, &["ls-tree", "-r", "--name-only", "HEAD"]),
+        ".env.example\nsrc/app.ts"
+    );
+    assert_eq!(
+        std::fs::read_to_string(wt.join(".env")).unwrap(),
+        "SECRET=1\n"
+    );
+}
+
+#[tokio::test]
+async fn a_commit_proposal_follows_the_latest_subjects_of_the_repository() {
+    let h = harness("commit-propose-style");
+    let (p, r) = h.project(false).await;
+    for (file, subject) in [
+        ("a.txt", "feat(api): un premier"),
+        ("b.txt", "fix(api): un second"),
+    ] {
+        std::fs::write(r.join(file), "x\n").unwrap();
+        git(&r, &["add", file]);
+        git(&r, &["commit", "-qm", subject]);
+    }
+    std::fs::write(r.join("src").join("app.ts"), "const a = 2;\n").unwrap();
+    let proposal = h
+        .core
+        .commit_propose(&p.id, None, strings(&["src/app.ts"]))
+        .await
+        .unwrap();
+    assert!(
+        proposal.contains("D'après « fix(api): un second »"),
+        "{proposal}"
+    );
+    assert!(proposal.contains("Diff de : src/app.ts."), "{proposal}");
+    // Proposed only: nothing is committed.
+    assert_eq!(
+        git(&r, &["log", "-1", "--format=%s"]),
+        "fix(api): un second"
+    );
+}
+
+#[tokio::test]
+async fn without_claude_code_there_is_no_proposal_and_its_reason_is_given() {
+    let h = harness("commit-propose-no-claude");
+    let (p, r) = h.project(false).await;
+    std::fs::write(r.join("src").join("app.ts"), "const a = 2;\n").unwrap();
+    h.core.settings.write().claude_path = h.dir.join("absent.cmd").to_string_lossy().to_string();
+    let e = h
+        .core
+        .commit_propose(&p.id, None, strings(&["src/app.ts"]))
+        .await
+        .unwrap_err();
+    assert_eq!(format!("{e:#}"), "claude introuvable");
+}
+
+#[tokio::test]
+async fn a_direct_commit_needs_a_message_and_something_to_commit() {
+    let h = harness("commit-direct-refused");
+    let (p, r) = h.project(false).await;
+    std::fs::write(r.join("src").join("app.ts"), "const a = 2;\n").unwrap();
+    let e = h
+        .core
+        .commit_direct(&p.id, None, strings(&["src/app.ts"]), " \n ".into())
+        .await
+        .unwrap_err();
+    assert_eq!(format!("{e:#}"), "Écris le message du commit.");
+    let e = h
+        .core
+        .commit_direct(&p.id, None, strings(&["absent.ts"]), "fix: x".into())
+        .await
+        .unwrap_err();
+    assert_eq!(
+        format!("{e:#}"),
+        "Plus rien à commiter : ces fichiers n'ont plus de modification."
+    );
+    assert_eq!(git(&r, &["log", "-1", "--format=%s"]), "init");
+    // Git's own refusal comes back as it is (a hook that says no).
+    let hooks = r.join(".git").join("hooks");
+    std::fs::create_dir_all(&hooks).unwrap();
+    let hook = hooks.join("pre-commit");
+    std::fs::write(&hook, "#!/bin/sh\necho 'lint en échec' >&2\nexit 1\n").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let e = h
+        .core
+        .commit_direct(&p.id, None, strings(&["src/app.ts"]), "fix: x".into())
+        .await
+        .unwrap_err();
+    assert!(format!("{e:#}").contains("lint en échec"), "{e:#}");
+    assert_eq!(git(&r, &["log", "-1", "--format=%s"]), "init");
+}
+
 #[tokio::test]
 async fn git_counts_attribute_files_to_the_agent_that_edited_them() {
     let h = harness("git-counts");

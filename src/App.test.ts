@@ -1,9 +1,9 @@
-import { render, screen, within } from '@testing-library/svelte';
+import { render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import App from './App.svelte';
 import { app } from './lib/state.svelte';
-import type { Agent, InitialState } from './lib/types';
+import type { Agent, InitialState, Project } from './lib/types';
 import { agent, fakeBackend, project, resetApp, SETTINGS } from './test/ipc';
 
 const DIFF = `diff --git a/src/auth.ts b/src/auth.ts
@@ -14,9 +14,12 @@ const DIFF = `diff --git a/src/auth.ts b/src/auth.ts
 +const b = 3;
 `;
 
-function start(layout: '' | 'split', over: { agents?: Agent[]; handlers?: Record<string, (args: any) => unknown> } = {}) {
+function start(
+  layout: '' | 'split',
+  over: { projects?: Project[]; agents?: Agent[]; handlers?: Record<string, (args: any) => unknown> } = {},
+) {
   const initial: InitialState = {
-    projects: [project()],
+    projects: over.projects ?? [project()],
     agents: over.agents ?? [agent()],
     ui: { activeProject: 'p1', view: 'project', selectedAgent: {}, layout },
     settings: SETTINGS,
@@ -48,6 +51,25 @@ describe('App layout', () => {
     start('split');
     expect(await screen.findByText('const b = 3;')).toBeInTheDocument();
     expect(screen.getByRole('main')).toBeInTheDocument();
+  });
+
+  it('opens the direct commit from the files panel when the project commits directly', async () => {
+    start('split', {
+      projects: [project({ commitMode: 'direct' })],
+      handlers: {
+        commit_preview: () => ({
+          files: [{ path: 'src/auth.ts', status: 'M', add: 1, del: 1, agentId: 'a1', inWorktree: false }],
+          leftOut: [],
+        }),
+        commit_propose: () => 'fix(auth): un jeton plus court',
+      },
+    });
+    await screen.findByText('const b = 3;');
+    await userEvent.click(screen.getByRole('button', { name: 'Commit…' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Commit' });
+    const field = within(dialog).getByRole('textbox', { name: 'Message' });
+    await waitFor(() => expect(field).toHaveValue('fix(auth): un jeton plus court'));
+    expect(field).toHaveFocus();
   });
 
   it('keeps the files panel closed in the classic layout until asked for', async () => {

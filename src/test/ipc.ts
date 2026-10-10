@@ -72,6 +72,7 @@ export function project(over: Partial<Project> = {}): Project {
     worktreeSetup: [],
     worktreeTeardown: [],
     integrations: { links: [], comments: ['review', 'done'] },
+    commitMode: 'agent',
     ...over,
   };
 }

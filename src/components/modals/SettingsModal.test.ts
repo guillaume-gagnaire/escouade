@@ -357,6 +357,19 @@ describe('SettingsModal', () => {
     expect(app.launches.c1).toBeUndefined();
   });
 
+  it('chooses who writes the commits, the agent by default', async () => {
+    const backend = backendSaving();
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    const choice = screen.getByRole('group', { name: 'Commit' });
+    expect(within(choice).getByRole('button', { name: "Rédigé par l'agent" })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('Direct : Escouade propose un message, tu le relis et tu commites toi-même.')).toBeInTheDocument();
+    await userEvent.click(within(choice).getByRole('button', { name: 'Direct, avec un message proposé' }));
+    expect(within(choice).getByRole('button', { name: 'Direct, avec un message proposé' })).toHaveAttribute('aria-pressed', 'true');
+    await save();
+    expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p1', commitMode: 'direct' });
+    expect(app.projects[0].commitMode).toBe('direct');
+  });
+
   it('saves the files copied into new worktrees', async () => {
     const backend = backendSaving();
     render(SettingsModal, { tab: 'projects', projectId: 'p1' });

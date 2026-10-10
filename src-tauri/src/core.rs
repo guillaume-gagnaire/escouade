@@ -489,6 +489,89 @@ pub(crate) fn name_from_answer(raw: &str) -> Option<String> {
     (!slug.is_empty()).then_some(slug)
 }
 
+/// Haiku's role when it proposes the message of a direct commit.
+pub(crate) const COMMIT_PROPOSAL_SYSTEM: &str = "Tu écris des messages de commit, sans jamais réaliser de tâche. Tu réponds uniquement par le message de commit.";
+
+/// How much of a direct commit's diff Haiku reads (bytes), and of its files (the diff covers
+/// those only): enough to tell what changed, within a quick answer.
+pub(crate) const PROPOSAL_DIFF: usize = 60_000;
+pub(crate) const PROPOSAL_FILES: usize = 200;
+
+/// The latest commit subjects of the repository whose style a proposal imitates.
+const RECENT_SUBJECTS: usize = 10;
+
+/// What Haiku is asked for a direct commit's message: the changes, framed as text to describe, in
+/// the style of the repository's latest `subjects` (newest first).
+pub(crate) fn commit_proposal_prompt(
+    subjects: &[String],
+    files: &[FileChange],
+    diff: &str,
+) -> String {
+    let style = if subjects.is_empty() {
+        "Le dépôt n'a pas encore de commit : suis le format Conventional Commits (« type(portée): description »).".to_string()
+    } else {
+        format!(
+            "Imite le style des derniers commits du dépôt ci-dessous : leur langue, leur format, leur longueur.\n\n\
+             <sujets-recents>\n{}\n</sujets-recents>",
+            subjects.join("\n")
+        )
+    };
+    let mut listed: String = files
+        .iter()
+        .take(PROPOSAL_FILES)
+        .map(|f| format!("{} {}\n", f.status, f.path))
+        .collect();
+    if files.len() > PROPOSAL_FILES {
+        listed.push_str(&format!(
+            "… et {} autres fichiers\n",
+            files.len() - PROPOSAL_FILES
+        ));
+    }
+    format!(
+        "Écris le message de commit des modifications ci-dessous. Ne les réalise pas, ne les commente pas. \
+         Réponds uniquement par le message : un sujet d'une ligne, puis, seulement si c'est utile, une ligne vide et un corps court.\n\n\
+         {style}\n\n<fichiers>\n{listed}</fichiers>\n\n<diff>\n{}\n</diff>",
+        claude::truncate(diff.trim_end(), PROPOSAL_DIFF)
+    )
+}
+
+/// A direct commit asked for files that no longer have changes to commit.
+const NOTHING_TO_COMMIT: &str = "Plus rien à commiter : ces fichiers n'ont plus de modification.";
+
+/// Of the files a direct commit takes, those of `paths`: a path from the window counts only when
+/// its checkout still lists it.
+fn committed(scope: CommitScope, paths: &[String]) -> Vec<FileChange> {
+    let asked: std::collections::HashSet<&str> = paths.iter().map(String::as_str).collect();
+    scope
+        .files
+        .into_iter()
+        .filter(|f| asked.contains(f.path.as_str()))
+        .collect()
+}
+
+/// Haiku's answer as a commit message: a fence around it (```, ```text) and quotes around a
+/// one-line answer taken off. None when nothing is left.
+pub(crate) fn proposal_from_answer(raw: &str) -> Option<String> {
+    let mut lines: Vec<&str> = raw.trim().lines().map(str::trim_end).collect();
+    if lines
+        .first()
+        .is_some_and(|l| l.trim_start().starts_with("```"))
+    {
+        lines.remove(0);
+        if lines.last().is_some_and(|l| l.trim() == "```") {
+            lines.pop();
+        }
+    }
+    let text = lines.join("\n");
+    let text = text.trim();
+    let text = if text.contains('\n') {
+        text
+    } else {
+        board::unquoted(text)
+    };
+    (!text.is_empty()).then(|| text.to_string())
+}
+
 fn sub_prefix(root: &str, sub: &str) -> String {
     let norm = |s: &str| s.replace('\\', "/").trim_end_matches('/').to_lowercase();
     if norm(root) == norm(sub) {
@@ -2542,6 +2625,7 @@ impl<R: Runtime> Core<R> {
             worktree_setup: Vec::new(),
             worktree_teardown: Vec::new(),
             integrations: ProjectIntegrations::default(),
+            commit_mode: CommitMode::default(),
         };
         self.projects.write().push(project.clone());
         {
@@ -2570,6 +2654,7 @@ impl<R: Runtime> Core<R> {
         cur.worktree_copy = p.worktree_copy;
         cur.worktree_setup = p.worktree_setup;
         cur.worktree_teardown = p.worktree_teardown;
+        cur.commit_mode = p.commit_mode;
         // What was imported is the backend's own: the window's copy may be older.
         let imported = std::mem::take(&mut cur.integrations.imported);
         cur.integrations = crate::integrations::checked_links(p.integrations);
@@ -2924,6 +3009,125 @@ impl<R: Runtime> Core<R> {
         Ok(())
     }
 
+    // ---------- direct commit ----------
+
+    /// What a direct commit of `agent_id`'s changes takes (of the project's own checkout, the
+    /// agents' worktrees apart, when None): the checkout it commits in, the files the files panel
+    /// lists for it, and among them the files copied into the worktrees, never committed.
+    async fn commit_scope(
+        self: &Arc<Self>,
+        project_id: &str,
+        agent_id: Option<String>,
+    ) -> Result<(String, CommitScope)> {
+        let project = self.project(project_id)?;
+        let in_worktree = match &agent_id {
+            Some(a) => self.agent(a)?.lock().meta.worktree.is_some(),
+            None => false,
+        };
+        let root = self.files_root(project_id, agent_id.clone()).await?;
+        let listed = match agent_id {
+            // The project's checkout, whoever edited its files.
+            None => git::file_changes(&root).await?,
+            // Its worktree, else the files it edited in the project's checkout.
+            Some(a) => self.git_files(project_id, Some(a)).await?,
+        };
+        // A copied file (`.env`…) matches one of the copy's patterns, from the project's folder
+        // (what the copy took) or the checkout's root (where it put it), and git ignores it. Git
+        // lists one only once forced into the index (an agent's `git add -f`): it still goes no
+        // further, as with a ticket's validation.
+        let prefix = if in_worktree {
+            String::new()
+        } else {
+            sub_prefix(&root, &project.path)
+        };
+        let copy_pattern = |path: &str| {
+            project.worktree_copy.iter().any(|pattern| {
+                testlaunch::glob_match(pattern, path)
+                    || path
+                        .strip_prefix(prefix.as_str())
+                        .is_some_and(|rel| testlaunch::glob_match(pattern, rel))
+            })
+        };
+        let candidates: Vec<String> = listed
+            .iter()
+            .filter(|f| copy_pattern(&f.path))
+            .map(|f| f.path.clone())
+            .collect();
+        let copied = git::ignored(&root, &candidates).await?;
+        let (left_out, files): (Vec<FileChange>, Vec<FileChange>) =
+            listed.into_iter().partition(|f| copied.contains(&f.path));
+        let left_out = left_out.into_iter().map(|f| f.path).collect();
+        Ok((root, CommitScope { files, left_out }))
+    }
+
+    /// What a direct commit of `agent_id`'s changes (the project's own checkout when None) takes.
+    pub async fn commit_preview(
+        self: &Arc<Self>,
+        project_id: &str,
+        agent_id: Option<String>,
+    ) -> Result<CommitScope> {
+        Ok(self.commit_scope(project_id, agent_id).await?.1)
+    }
+
+    /// Haiku's message for a direct commit of `paths`, in the style of the repository's latest
+    /// commits. Only proposed: the user reads it, and commits it or not.
+    pub async fn commit_propose(
+        self: &Arc<Self>,
+        project_id: &str,
+        agent_id: Option<String>,
+        paths: Vec<String>,
+    ) -> Result<String> {
+        let (root, scope) = self.commit_scope(project_id, agent_id).await?;
+        let files = committed(scope, &paths);
+        if files.is_empty() {
+            bail!(NOTHING_TO_COMMIT);
+        }
+        let n = format!("-n{RECENT_SUBJECTS}");
+        let subjects: Vec<String> = git::text(&root, &["log", &n, "--format=%s"])
+            .await
+            .map(|s| s.lines().map(str::to_string).collect())
+            .unwrap_or_default();
+        // The diff of the files the prompt lists, never more: without a path, git would read every
+        // change of the checkout, a copied `.env` included.
+        let read: Vec<String> = files
+            .iter()
+            .take(PROPOSAL_FILES)
+            .map(|f| f.path.clone())
+            .collect();
+        let diff = git::diff(&root, &read).await.unwrap_or_default();
+        let prompt = commit_proposal_prompt(&subjects, &files, &diff);
+        let answer = self.one_shot(COMMIT_PROPOSAL_SYSTEM, &prompt).await?;
+        proposal_from_answer(&answer).ok_or_else(|| anyhow!("Haiku n'a rien proposé"))
+    }
+
+    /// Commits, with the user's `message`, the files of `paths` that a direct commit of
+    /// `agent_id`'s changes takes (the copied files never). Returns the commit's short hash.
+    pub async fn commit_direct(
+        self: &Arc<Self>,
+        project_id: &str,
+        agent_id: Option<String>,
+        paths: Vec<String>,
+        message: String,
+    ) -> Result<String> {
+        let message = message.trim();
+        if message.is_empty() {
+            bail!("Écris le message du commit.");
+        }
+        let (root, scope) = self.commit_scope(project_id, agent_id).await?;
+        let files: Vec<String> = committed(scope, &paths)
+            .into_iter()
+            .map(|f| f.path)
+            .collect();
+        if files.is_empty() {
+            bail!(NOTHING_TO_COMMIT);
+        }
+        let done = git::commit_paths(&root, &files, message).await;
+        // Even after a refusal: git may have staged the new files, a hook may have changed some.
+        self.git.refresh(project_id);
+        done?;
+        git::text(&root, &["rev-parse", "--short", "HEAD"]).await
+    }
+
     /// The repository graph (every branch, agents' worktree branches included) and the branch
     /// the agent works on.
     pub async fn git_log(
@@ -3123,6 +3327,85 @@ mod tests {
         );
         assert_eq!(name_from_answer("Voici le slug : creation-fichier"), None);
         assert_eq!(name_from_answer(""), None);
+    }
+
+    fn change(path: &str, status: &str) -> FileChange {
+        FileChange {
+            path: path.into(),
+            status: status.into(),
+            add: 1,
+            del: 0,
+            agent_id: None,
+            in_worktree: false,
+        }
+    }
+
+    #[test]
+    fn a_commit_proposal_imitates_the_latest_subjects_of_the_repository() {
+        let subjects: Vec<String> = [
+            "feat(board): supprimer un ticket demande confirmation",
+            "fix(git): le merge garde la branche",
+        ]
+        .map(String::from)
+        .to_vec();
+        let files = [change("src/app.ts", "M"), change("src/new.ts", "A")];
+        let p = commit_proposal_prompt(
+            &subjects,
+            &files,
+            "diff --git a/src/app.ts b/src/app.ts\n+x\n",
+        );
+        assert!(
+            p.contains("<sujets-recents>\nfeat(board): supprimer un ticket demande confirmation\nfix(git): le merge garde la branche\n</sujets-recents>"),
+            "{p}"
+        );
+        assert!(p.contains("style"), "{p}");
+        assert!(
+            p.contains("<fichiers>\nM src/app.ts\nA src/new.ts\n</fichiers>"),
+            "{p}"
+        );
+        assert!(
+            p.contains("<diff>\ndiff --git a/src/app.ts b/src/app.ts\n+x\n</diff>"),
+            "{p}"
+        );
+        // A repository without a commit yet has no style to imitate.
+        let first = commit_proposal_prompt(&[], &files, "");
+        assert!(!first.contains("<sujets-recents>"), "{first}");
+        assert!(first.contains("Conventional Commits"), "{first}");
+    }
+
+    #[test]
+    fn a_commit_proposal_reads_a_capped_diff_and_list_of_files() {
+        let diff = format!("{}FIN-DU-DIFF", "+ligne\n".repeat(20_000));
+        let files: Vec<FileChange> = (0..250)
+            .map(|i| change(&format!("src/f{i}.ts"), "M"))
+            .collect();
+        let p = commit_proposal_prompt(&[], &files, &diff);
+        assert!(!p.contains("FIN-DU-DIFF"));
+        assert!(p.len() < PROPOSAL_DIFF + 10_000, "{}", p.len());
+        assert!(p.contains("M src/f199.ts\n") && !p.contains("src/f200.ts"));
+        assert!(p.contains("… et 50 autres fichiers"), "{p}");
+    }
+
+    #[test]
+    fn a_proposed_message_is_haikus_answer_without_fence_nor_quotes() {
+        assert_eq!(
+            proposal_from_answer("feat: ajoute le commit direct\n\nAvec un corps.\n").as_deref(),
+            Some("feat: ajoute le commit direct\n\nAvec un corps.")
+        );
+        assert_eq!(
+            proposal_from_answer("```text\nfix: un sujet\n\nUn corps.\n```").as_deref(),
+            Some("fix: un sujet\n\nUn corps.")
+        );
+        assert_eq!(
+            proposal_from_answer("  « docs: le README » ").as_deref(),
+            Some("docs: le README")
+        );
+        assert_eq!(
+            proposal_from_answer("`chore: rien`").as_deref(),
+            Some("chore: rien")
+        );
+        assert_eq!(proposal_from_answer(" \n```\n```\n"), None);
+        assert_eq!(proposal_from_answer(""), None);
     }
 
     #[test]

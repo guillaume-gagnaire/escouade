@@ -22,7 +22,8 @@
 // [<KEY>]`, or a sentence out of form when the ticket's title says [message-libre]; with [sourd]
 // in its system prompt it never reads its input and answers nothing for 20 s. Asked for a project's
 // worktree commands (<worktrees>), it suggests a setup (one of whose folders leaves the project) and a
-// teardown.
+// teardown. Asked for a direct commit's message (<fichiers>), it names the latest commit subject and
+// the files of the diff it read.
 
 import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -60,6 +61,14 @@ if (argv.includes('-p') && argv.some((a) => a.includes('[sourd]'))) {
         demontage: [{ commande: 'docker compose down', dossier: '' }],
       };
       const result = `Voici les commandes.\n\n\`\`\`json\n${JSON.stringify(steps)}\n\`\`\``;
+      process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result }));
+      return;
+    }
+    // A direct commit's message: it says the latest subject it read and the files whose diff it got.
+    if (input.includes('<fichiers>')) {
+      const latest = input.match(/<sujets-recents>\n([^\n]*)/)?.[1] ?? 'aucun';
+      const diffed = [...input.matchAll(/^\+\+\+ b\/(.+)$/gm)].map((m) => m[1]);
+      const result = `feat: proposé par le faux claude\n\nD'après « ${latest} ». Diff de : ${diffed.join(', ')}.`;
       process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result }));
       return;
     }

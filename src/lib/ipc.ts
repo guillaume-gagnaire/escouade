@@ -5,6 +5,7 @@ import type {
   Agent,
   Attachment,
   BoardSettings,
+  CommitScope,
   Container,
   ConvItem,
   ConvSearchResult,
@@ -85,6 +86,14 @@ export const api = {
   stats: (range: string) => invoke<StatsView>('stats', { range }),
   refreshUsage: () => invoke<void>('refresh_usage'),
   gitDiscard: (projectId: string, agentId: string | null, path: string) => invoke<void>('git_discard', { projectId, agentId, path }),
+  /** What a direct commit of the agent's changes takes (null: the project's own checkout, its agents' worktrees apart). */
+  commitPreview: (projectId: string, agentId: string | null) => invoke<CommitScope>('commit_preview', { projectId, agentId }),
+  /** Haiku's message for a direct commit of `paths`, in the style of the repository's latest commits: only proposed. */
+  commitPropose: (projectId: string, agentId: string | null, paths: string[]) =>
+    invoke<string>('commit_propose', { projectId, agentId, paths }),
+  /** Commits `paths` with the user's message; the commit's short hash. */
+  commitDirect: (projectId: string, agentId: string | null, paths: string[], message: string) =>
+    invoke<string>('commit_direct', { projectId, agentId, paths, message }),
   fsTree: (projectId: string, agentId: string | null) => invoke<FileTree>('fs_tree', { projectId, agentId }),
   fsRead: (projectId: string, agentId: string | null, path: string) => invoke<FileText>('fs_read', { projectId, agentId, path }),
   /** Refused with "changed" / "deleted" when the file is no longer the one read (`expectedHash`); null forces. */

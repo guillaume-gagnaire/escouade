@@ -61,7 +61,9 @@ export type Modal =
   /** The release notes of the update installed since the last start. */
   | { kind: 'notes'; version: string; notes: string }
   /** « Rechercher dans les conversations » (Ctrl+K). */
-  | { kind: 'convSearch' };
+  | { kind: 'convSearch' }
+  /** A direct commit of the agent's changes; `agentId` null: of the project's own checkout. */
+  | { kind: 'commit'; projectId: string; agentId: string | null };
 
 export interface Toast {
   id: number;

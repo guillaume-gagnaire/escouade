@@ -402,6 +402,45 @@ pub async fn git_discard(
         .map_err(err)
 }
 
+/// What a direct commit of the agent's changes (the project's own checkout without one) takes.
+#[tauri::command]
+pub async fn commit_preview(
+    core: CoreState<'_>,
+    project_id: String,
+    agent_id: Option<String>,
+) -> Res<CommitScope> {
+    core.commit_preview(&project_id, agent_id)
+        .await
+        .map_err(err)
+}
+
+/// Haiku's message for a direct commit of `paths`: only proposed.
+#[tauri::command]
+pub async fn commit_propose(
+    core: CoreState<'_>,
+    project_id: String,
+    agent_id: Option<String>,
+    paths: Vec<String>,
+) -> Res<String> {
+    core.commit_propose(&project_id, agent_id, paths)
+        .await
+        .map_err(err)
+}
+
+/// Commits `paths` with the user's message; the commit's short hash.
+#[tauri::command]
+pub async fn commit_direct(
+    core: CoreState<'_>,
+    project_id: String,
+    agent_id: Option<String>,
+    paths: Vec<String>,
+    message: String,
+) -> Res<String> {
+    core.commit_direct(&project_id, agent_id, paths, message)
+        .await
+        .map_err(err)
+}
+
 // ---------- embedded editor ----------
 
 #[tauri::command]

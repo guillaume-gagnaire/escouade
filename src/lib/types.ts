@@ -171,6 +171,17 @@ export interface Project {
   worktreeTeardown: WorktreeStep[];
   /** The external ticket systems its tickets come from, and what moving them does there. */
   integrations: ProjectIntegrations;
+  /** « Commit »: who writes the commits of the files panel's « Commit… » and « Commit tout… ». */
+  commitMode: CommitMode;
+}
+
+/** « Rédigé par l'agent » (the agent is asked to commit) or « Direct, avec un message proposé ». */
+export type CommitMode = 'agent' | 'direct';
+
+/** What a direct commit takes: the files it commits, and the files copied into the worktrees it never does. */
+export interface CommitScope {
+  files: FileChange[];
+  leftOut: string[];
 }
 
 export interface RunCommand {

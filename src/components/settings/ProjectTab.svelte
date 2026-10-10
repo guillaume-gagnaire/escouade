@@ -4,7 +4,8 @@
   import { settingsForm } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
   import { PROJECT_COLORS } from '../../lib/theme';
-  import type { Project } from '../../lib/types';
+  import type { CommitMode, Project } from '../../lib/types';
+  import Chips from './Chips.svelte';
   import Group from './Group.svelte';
   import Row from './Row.svelte';
   import StepList from './StepList.svelte';
@@ -15,6 +16,11 @@
   let { project }: { project: Project } = $props();
 
   const draft = $derived(settingsForm.project!);
+  /** Who writes the commits of the files panel's « Commit… » and « Commit tout… ». */
+  const COMMIT_MODES: { value: CommitMode; label: string }[] = [
+    { value: 'agent', label: "Rédigé par l'agent" },
+    { value: 'direct', label: 'Direct, avec un message proposé' },
+  ];
 
   /** Asks before closing it, then comes back to these settings, their draft as it was. */
   function askClose() {
@@ -68,6 +74,9 @@
       aria-describedby="copy-desc"
       bind:value={draft.copy}
     ></textarea>
+  </Row>
+  <Row label="Commit" desc="Direct : Escouade propose un message, tu le relis et tu commites toi-même.">
+    <Chips label="Commit" options={COMMIT_MODES} bind:value={draft.commitMode} />
   </Row>
 </Group>
 

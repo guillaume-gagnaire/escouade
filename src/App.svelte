@@ -13,6 +13,7 @@
   import DiffModal from './components/DiffModal.svelte';
   import EditorView from './components/editor/EditorView.svelte';
   import SidePanel from './components/SidePanel.svelte';
+  import CommitModal from './components/modals/CommitModal.svelte';
   import ConfirmModal from './components/modals/ConfirmModal.svelte';
   import NewProjectModal from './components/modals/NewProjectModal.svelte';
   import RenameModal from './components/modals/RenameModal.svelte';
@@ -142,6 +143,8 @@
   <UpdateModal version={app.modal.version} notes={app.modal.notes} installed />
 {:else if app.modal?.kind === 'convSearch'}
   <ConvSearch />
+{:else if app.modal?.kind === 'commit'}
+  <CommitModal projectId={app.modal.projectId} agentId={app.modal.agentId} />
 {/if}
 
 <ContextMenu />

@@ -1,7 +1,7 @@
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { api } from './ipc';
 import { app } from './state.svelte';
-import type { Agent } from './types';
+import type { Agent, Project } from './types';
 
 export const COMMIT_AGENT_PROMPT =
   'Commite les modifications que tu as faites dans ce dépôt, avec un message clair au format Conventional Commits. ' +
@@ -13,6 +13,24 @@ export const COMMIT_ALL_PROMPT =
 export async function commitViaAgent(agent: Agent, scope: 'agent' | 'project' = 'agent') {
   const ok = await app.run(api.sendMessage(agent.id, scope === 'agent' ? COMMIT_AGENT_PROMPT : COMMIT_ALL_PROMPT));
   if (ok !== undefined) app.toast(`Demande de commit envoyée à ${agent.name}`, 'ok');
+}
+
+/** « Commit… » (an agent's changes) needs its agent; « Commit tout… » needs one only for the agent to write it. */
+export function canCommit(project: Project, agent: Agent | null, scope: 'agent' | 'project'): boolean {
+  return !!agent || (scope === 'project' && project.commitMode === 'direct');
+}
+
+/**
+ * « Commit… » (the agent's changes) or « Commit tout… » (the project's), as the project's « Commit » setting says:
+ * the agent is asked to commit, or the direct commit opens, its message proposed, never committed unread.
+ */
+export function askCommit(project: Project, agent: Agent | null, scope: 'agent' | 'project') {
+  if (!canCommit(project, agent, scope)) return;
+  if (project.commitMode === 'direct') {
+    app.modal = { kind: 'commit', projectId: project.id, agentId: scope === 'agent' ? agent!.id : null };
+  } else if (agent) {
+    commitViaAgent(agent, scope);
+  }
 }
 
 /**

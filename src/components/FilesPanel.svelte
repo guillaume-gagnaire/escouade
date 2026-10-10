@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { commitViaAgent, mergeAgent } from '../lib/agent-actions';
+  import { askCommit, canCommit, mergeAgent } from '../lib/agent-actions';
   import { basename, dirname } from '../lib/format';
   import { api } from '../lib/ipc';
   import { menu, type MenuItem } from '../lib/menu.svelte';
@@ -223,7 +223,12 @@
   {/if}
   <div class="foot">
     <button class="btn" style="flex:1" disabled={!files.length} onclick={openListedDiff}>Voir le diff</button>
-    <button class="btn primary" style="flex:1" disabled={!agent || !files.length} onclick={() => agent && commitViaAgent(agent, scope)}>
+    <button
+      class="btn primary"
+      style="flex:1"
+      disabled={!canCommit(project, agent, scope) || !files.length}
+      onclick={() => askCommit(project, agent, scope)}
+    >
       {scope === 'agent' ? 'Commit…' : 'Commit tout…'}
     </button>
   </div>

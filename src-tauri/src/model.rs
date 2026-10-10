@@ -203,6 +203,30 @@ pub struct Project {
     /// The external ticket systems its tickets come from, and what moving them does there.
     #[serde(default)]
     pub integrations: ProjectIntegrations,
+    /// "Commit": who writes the commits of the files panel's « Commit… » and « Commit tout… ».
+    #[serde(default)]
+    pub commit_mode: CommitMode,
+}
+
+/// Who writes a project's commits asked from the files panel.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum CommitMode {
+    /// "Rédigé par l'agent": the agent is asked to commit its changes.
+    #[default]
+    Agent,
+    /// "Direct, avec un message proposé": the app commits, with the message the user read (Haiku
+    /// proposes one).
+    Direct,
+}
+
+/// What a direct commit takes: the files it commits, and the files copied into the worktrees
+/// (`.env`…) among the changes, which it never commits.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommitScope {
+    pub files: Vec<FileChange>,
+    pub left_out: Vec<String>,
 }
 
 /// An external ticket system.
@@ -1204,6 +1228,23 @@ mod tests {
         assert_eq!((a.ticket_id, a.port_base, a.recipe), (None, None, None));
         let s: PersistedState = serde_json::from_value(json!({ "projects": [] })).unwrap();
         assert!(s.tickets.is_empty());
+    }
+
+    #[test]
+    fn a_project_saved_before_the_commit_choice_has_its_agent_write_the_commits() {
+        let p: Project = serde_json::from_value(
+            json!({ "id": "p1", "name": "demo", "path": "C:/demo", "color": "red" }),
+        )
+        .unwrap();
+        assert_eq!(p.commit_mode, CommitMode::Agent);
+        let direct = Project {
+            commit_mode: CommitMode::Direct,
+            ..p
+        };
+        let v = serde_json::to_value(&direct).unwrap();
+        assert_eq!(v["commitMode"], json!("direct"));
+        let back: Project = serde_json::from_value(v).unwrap();
+        assert_eq!(back.commit_mode, CommitMode::Direct);
     }
 
     #[test]

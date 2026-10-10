@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { COMMIT_AGENT_PROMPT } from '../lib/agent-actions';
 import { menu } from '../lib/menu.svelte';
 import { app } from '../lib/state.svelte';
 import type { FileChange } from '../lib/types';
@@ -65,6 +66,46 @@ describe('FilesPanel', () => {
     await new Promise((r) => setTimeout(r, 600));
     expect(screen.getByText('new.ts')).toBeInTheDocument();
     expect(screen.queryByText('old.ts')).not.toBeInTheDocument();
+  });
+});
+
+describe('FilesPanel « Commit… »', () => {
+  beforeEach(() => resetApp({ projects: [project()], agents: [agent()] }));
+
+  it('asks the agent to commit by default, and needs one for it', async () => {
+    const backend = fakeBackend({ git_files: () => [change('src/auth.ts', 'a1')] });
+    const { unmount } = render(FilesPanel, { project: project(), agent: app.agents.a1 });
+    await screen.findByText('auth.ts');
+    await userEvent.click(screen.getByRole('button', { name: 'Commit…' }));
+    expect(backend.called('send_message')[0].args).toMatchObject({ id: 'a1', text: COMMIT_AGENT_PROMPT });
+    expect(app.modal).toBeNull();
+    unmount();
+
+    app.filesScope = 'project';
+    fakeBackend({ git_files: () => [change('README.md')] });
+    render(FilesPanel, { project: project(), agent: null });
+    await screen.findByText('README.md');
+    expect(screen.getByRole('button', { name: 'Commit tout…' })).toBeDisabled();
+  });
+
+  it('opens the direct commit when the project says so, even without an agent', async () => {
+    const direct = project({ commitMode: 'direct' });
+    let backend = fakeBackend({ git_files: () => [change('src/auth.ts', 'a1')] });
+    const { unmount } = render(FilesPanel, { project: direct, agent: app.agents.a1 });
+    await screen.findByText('auth.ts');
+    await userEvent.click(screen.getByRole('button', { name: 'Commit…' }));
+    expect(app.modal).toEqual({ kind: 'commit', projectId: 'p1', agentId: 'a1' });
+    expect(backend.called('send_message')).toHaveLength(0);
+    unmount();
+
+    app.modal = null;
+    app.filesScope = 'project';
+    backend = fakeBackend({ git_files: () => [change('README.md')] });
+    render(FilesPanel, { project: direct, agent: null });
+    await screen.findByText('README.md');
+    await userEvent.click(screen.getByRole('button', { name: 'Commit tout…' }));
+    expect(app.modal).toEqual({ kind: 'commit', projectId: 'p1', agentId: null });
+    expect(backend.called('send_message')).toHaveLength(0);
   });
 });
 

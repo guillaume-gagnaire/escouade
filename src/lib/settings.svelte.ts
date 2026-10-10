@@ -4,7 +4,7 @@
 import { api } from './ipc';
 import { forgetLaunches } from './launch-actions';
 import { app } from './state.svelte';
-import type { BoardSettings, Project, ProjectIntegrations, RunCommand, Settings, WorktreeStep } from './types';
+import type { BoardSettings, CommitMode, Project, ProjectIntegrations, RunCommand, Settings, WorktreeStep } from './types';
 
 export type SettingsTab = 'claude' | 'notifications' | 'projects' | 'board' | 'integrations' | 'terminals' | 'network' | 'about';
 
@@ -39,7 +39,7 @@ const SETTINGS_OF: Partial<Record<SettingsTab, (keyof Settings)[]>> = {
 /** What the modal sets of a project, as the backend's `update_project` takes it, its board apart. */
 type ProjectFields = Pick<
   Project,
-  'name' | 'color' | 'worktreePerAgent' | 'runCommands' | 'worktreeCopy' | 'worktreeSetup' | 'worktreeTeardown'
+  'name' | 'color' | 'worktreePerAgent' | 'runCommands' | 'worktreeCopy' | 'worktreeSetup' | 'worktreeTeardown' | 'commitMode'
 >;
 
 /** Which commands of a project's worktrees: run once one is made, or before one is removed. */
@@ -54,13 +54,15 @@ export interface ProjectDraft {
   copy: string;
   worktreeSetup: WorktreeStep[];
   worktreeTeardown: WorktreeStep[];
+  /** « Commit »: the agent writes the commits, or the app commits with the message the user read. */
+  commitMode: CommitMode;
   board: BoardSettings;
   /** Its sources in external ticket systems (the « Intégrations » tab). */
   integrations: ProjectIntegrations;
 }
 
 function draftOf(p: Project): ProjectDraft {
-  const { name, color, worktreePerAgent, runCommands, worktreeCopy, worktreeSetup, worktreeTeardown, board, integrations } =
+  const { name, color, worktreePerAgent, runCommands, worktreeCopy, worktreeSetup, worktreeTeardown, commitMode, board, integrations } =
     $state.snapshot(p);
   return {
     name,
@@ -70,6 +72,7 @@ function draftOf(p: Project): ProjectDraft {
     copy: worktreeCopy.join('\n'),
     worktreeSetup,
     worktreeTeardown,
+    commitMode,
     board,
     integrations,
   };
@@ -97,6 +100,7 @@ function fieldsOf(d: ProjectDraft): ProjectFields {
       .filter(Boolean),
     worktreeSetup: stepsOf(d.worktreeSetup),
     worktreeTeardown: stepsOf(d.worktreeTeardown),
+    commitMode: d.commitMode,
   };
 }
 

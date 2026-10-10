@@ -616,7 +616,7 @@ pub fn commit_prompt(t: &Ticket, stat: &str) -> String {
 }
 
 /// The line itself: backticks and surrounding quotes (`"`, `'`, « ») taken off, as many as wrap it.
-fn unquoted(line: &str) -> &str {
+pub(crate) fn unquoted(line: &str) -> &str {
     let mut s = line.trim();
     loop {
         let inner = s.trim_matches('`').trim();

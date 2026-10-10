@@ -838,6 +838,104 @@ pub async fn commit_staged(cwd: &str, message: &str) -> Result<()> {
     run(cwd, &["commit", "-q", "-m", message]).await.map(|_| ())
 }
 
+/// A command given `input` on its standard input (`--stdin`, `--pathspec-from-file=-`): a list of
+/// paths of any length, where a command line has a limit (see `command_line_chunks`).
+async fn run_input(cwd: &str, args: &[&str], input: &[u8]) -> Result<std::process::Output> {
+    use tokio::io::AsyncWriteExt;
+    let mut cmd = command(cwd, args);
+    cmd.stdin(Stdio::piped());
+    let mut child = cmd.spawn()?;
+    let mut stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| anyhow::anyhow!("git {} : pas d'entrée", args.join(" ")))?;
+    // Written while its output is read: a long list could otherwise fill both pipes.
+    let write = async move {
+        let written = stdin.write_all(input).await;
+        drop(stdin);
+        written
+    };
+    let (written, out) = tokio::join!(write, child.wait_with_output());
+    let out = out?;
+    // A command that stopped reading (it failed) says why better than the broken pipe.
+    if out.status.success() {
+        written?;
+    }
+    Ok(out)
+}
+
+/// `paths` as `--pathspec-file-nul` and `-z` read them.
+fn nul_separated<S: AsRef<str>>(paths: &[S]) -> Vec<u8> {
+    let mut out = Vec::new();
+    for p in paths {
+        out.extend_from_slice(p.as_ref().as_bytes());
+        out.push(0);
+    }
+    out
+}
+
+/// Of `paths` (relative to `cwd`), those that git's ignore rules ignore, even once forced into
+/// the index (where git no longer applies them).
+pub async fn ignored(cwd: &str, paths: &[String]) -> Result<Vec<String>> {
+    if paths.is_empty() {
+        return Ok(Vec::new());
+    }
+    // Each name is tested as it is against the rules (a `*` in it is no wildcard): git refuses
+    // `--literal-pathspecs` here, and needs none.
+    let args = ["check-ignore", "--no-index", "--stdin", "-z"];
+    let out = run_input(cwd, &args, &nul_separated(paths)).await?;
+    // 1: none of them is ignored; anything else but 0 is git failing, which must not pass for
+    // "none".
+    if out.status.code() == Some(1) && out.stderr.is_empty() {
+        return Ok(Vec::new());
+    }
+    Ok(String::from_utf8_lossy(&checked(out, &args)?)
+        .split('\0')
+        .filter(|p| !p.is_empty())
+        .map(str::to_string)
+        .collect())
+}
+
+/// Commits the changes of `paths` in `cwd`, and only them: new, changed and deleted files alike,
+/// a renamed file's former name with it. What else is staged stays staged, out of the commit.
+pub async fn commit_paths(cwd: &str, paths: &[String], message: &str) -> Result<()> {
+    const LITERAL: &str = "--literal-pathspecs";
+    const FROM_STDIN: [&str; 2] = ["--pathspec-from-file=-", "--pathspec-file-nul"];
+    let entries = status(cwd).await?.entries;
+    let mut all: Vec<&str> = Vec::new();
+    for p in paths {
+        all.push(p);
+        if let Some(orig) = entries
+            .iter()
+            .find(|e| e.path == *p)
+            .and_then(|e| e.orig.as_deref())
+        {
+            all.push(orig);
+        }
+    }
+    // A new file is unknown to the commit until added; a deleted one is not there to add (the
+    // commit takes its deletion by itself).
+    let on_disk: Vec<&str> = paths
+        .iter()
+        .filter(|p| Path::new(cwd).join(p).symlink_metadata().is_ok())
+        .map(String::as_str)
+        .collect();
+    if !on_disk.is_empty() {
+        let args = [&[LITERAL, "add", "-A"][..], &FROM_STDIN].concat();
+        checked(
+            run_input(cwd, &args, &nul_separated(&on_disk)).await?,
+            &args,
+        )?;
+    }
+    // `--only`: the listed paths as they are on disk, whatever the index holds for the others.
+    let args = [
+        &[LITERAL, "commit", "-q", "--only", "-m", message][..],
+        &FROM_STDIN,
+    ]
+    .concat();
+    checked(run_input(cwd, &args, &nul_separated(&all)).await?, &args).map(|_| ())
+}
+
 /// What the branch checked out in `cwd` changed since it left `target`, staged changes included.
 pub async fn staged_stat(cwd: &str, target: &str) -> String {
     let Ok(base) = text(cwd, &["merge-base", target, "HEAD"]).await else {
@@ -1635,6 +1733,92 @@ mod repo_tests {
             text(&r, &["status", "--porcelain"]).await.unwrap(),
             "?? .env"
         );
+    }
+
+    #[tokio::test]
+    async fn committing_paths_takes_those_and_nothing_else() {
+        let r = repo("git-commit-paths");
+        let root = Path::new(&r);
+        git(&r, &["config", "core.autocrlf", "false"]);
+        for f in ["a.txt", "b.txt", "gone.txt", "old.txt"] {
+            std::fs::write(root.join(f), format!("{f}\n")).unwrap();
+        }
+        git(&r, &["add", "-A"]);
+        git(&r, &["commit", "-qm", "files"]);
+        // Chosen: a change, a deletion, a rename (staged), a new file.
+        std::fs::write(root.join("a.txt"), "2\n").unwrap();
+        std::fs::remove_file(root.join("gone.txt")).unwrap();
+        git(&r, &["mv", "old.txt", "new.txt"]);
+        std::fs::write(root.join("n.txt"), "n\n").unwrap();
+        // Not chosen: a change the user staged, a new file.
+        std::fs::write(root.join("b.txt"), "2\n").unwrap();
+        git(&r, &["add", "b.txt"]);
+        std::fs::write(root.join("other.txt"), "o\n").unwrap();
+        let chosen: Vec<String> = ["a.txt", "gone.txt", "new.txt", "n.txt"]
+            .map(String::from)
+            .to_vec();
+        commit_paths(&r, &chosen, "feat: les fichiers choisis\n\nAvec un corps.")
+            .await
+            .unwrap();
+        assert_eq!(
+            text(&r, &["log", "-1", "--format=%B"]).await.unwrap(),
+            "feat: les fichiers choisis\n\nAvec un corps."
+        );
+        assert_eq!(
+            text(&r, &["show", "--name-status", "--format=", "-M", "HEAD"])
+                .await
+                .unwrap()
+                .replace('\t', " "),
+            "M a.txt\nD gone.txt\nA n.txt\nR100 old.txt new.txt"
+        );
+        // What was not chosen is as it was: staged, or new.
+        assert_eq!(
+            text(&r, &["status", "--porcelain"]).await.unwrap(),
+            "M  b.txt\n?? other.txt"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_list_of_paths_longer_than_a_command_line_is_committed_whole() {
+        let r = repo("git-commit-many");
+        // About 50,000 characters of paths: twice what one Windows command line takes.
+        let paths: Vec<String> = (0..700)
+            .map(|i| format!("generated/a-rather-long-file-name-for-the-command-line-{i:04}.txt"))
+            .collect();
+        std::fs::create_dir_all(Path::new(&r).join("generated")).unwrap();
+        for p in &paths {
+            std::fs::write(Path::new(&r).join(p), "x\n").unwrap();
+        }
+        assert!(paths.iter().map(|p| p.len() + 1).sum::<usize>() > 40_000);
+        commit_paths(&r, &paths, "chore: beaucoup de fichiers")
+            .await
+            .unwrap();
+        let committed = text(&r, &["show", "--name-only", "--format=", "HEAD"])
+            .await
+            .unwrap();
+        assert_eq!(committed.lines().count(), 700);
+        assert!(status(&r).await.unwrap().entries.is_empty());
+    }
+
+    #[tokio::test]
+    async fn the_paths_git_ignores_are_told_even_once_in_the_index() {
+        let r = repo("git-ignored");
+        let root = Path::new(&r);
+        git(&r, &["config", "core.autocrlf", "false"]);
+        std::fs::write(root.join(".git/info/exclude"), ".env\n").unwrap();
+        std::fs::write(root.join(".env"), "SECRET=1\n").unwrap();
+        std::fs::write(root.join(".env.example"), "SECRET=\n").unwrap();
+        // Forced into the index: git no longer says it is ignored, its rules still do.
+        git(&r, &["add", "-f", ".env"]);
+        let asked: Vec<String> = [".env", ".env.example", "résumé.md"]
+            .map(String::from)
+            .to_vec();
+        assert_eq!(ignored(&r, &asked).await.unwrap(), [".env"]);
+        assert!(ignored(&r, &asked[1..]).await.unwrap().is_empty());
+        assert!(ignored(&r, &[]).await.unwrap().is_empty());
+        // Not a repository: an error, never "nothing is ignored".
+        let elsewhere = crate::paths::test_dir("git-ignored-not-a-repo");
+        assert!(ignored(&elsewhere.to_string_lossy(), &asked).await.is_err());
     }
 
     /// `main` and a branch `feat` that changed the same file (`conflict`) or another one.
