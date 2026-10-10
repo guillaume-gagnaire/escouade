@@ -4,7 +4,7 @@
   import { api } from '../lib/ipc';
   import { conversationOf, type ReadingPlace } from '../lib/conversations.svelte';
   import { splitEscouade } from '../lib/escouade';
-  import { fDur, fTok } from '../lib/format';
+  import { fDur, fTok, plural } from '../lib/format';
   import { modelLabel } from '../lib/models';
   import { contextUse, ESTIMATE_HINT, fSpentUsd, spent } from '../lib/spend';
   import { injectedSource, parseAgentMessage, subagentLabels } from '../lib/events';
@@ -197,14 +197,19 @@
     return ranks.length ? top[Math.min(...ranks)].id : null;
   }
 
+  // What a slice drawn above says to a screen reader, the view staying on the reader's message. A new node each time
+  // (`seq`), for the same text to be read again.
+  let drewOlder = $state<{ text: string; seq: number } | null>(null);
+
   /**
    * Draws the slice before the items drawn. The reader stays on what they were reading: the first message in view keeps
-   * its place on screen, as a place put back does while the blocks drawn above it are measured. The button goes with
-   * the last slice: the focus moves on to the conversation, so that the keyboard neither falls back to the page nor
-   * starts over.
+   * its place on screen, as a place put back does while the blocks drawn above it are measured. The focus stays on the
+   * button, for the next slice; it goes with the last one: the focus moves on to the conversation, so that the keyboard
+   * neither falls back to the page nor starts over. A screen reader is told how many messages came.
    */
   async function showOlder() {
     if (!scroller) return;
+    const count = older;
     const at: ReadingPlace = { stick: false, top: scroller.scrollTop, anchor: anchorOf(scroller), from: null };
     stick = false;
     from = top[Math.max(0, start - SLICE)].id;
@@ -213,6 +218,10 @@
     settleEnd = performance.now() + SETTLE_MS;
     restore(at);
     if (!olderButton) scroller.focus({ preventScroll: true });
+    drewOlder = {
+      text: plural(count, 'message précédent affiché', 'messages précédents affichés'),
+      seq: (drewOlder?.seq ?? 0) + 1,
+    };
   }
 
   /** Draws the item `id`, with a few items before it, if it is older than the items drawn. */
@@ -580,6 +589,13 @@
     </div>
   </div>
 
+  <!-- Out of the list: its blocks are the conversation's. -->
+  <div class="sr" aria-live="polite" aria-atomic="true">
+    {#if drewOlder}
+      {#key drewOlder.seq}<span>{drewOlder.text}</span>{/key}
+    {/if}
+  </div>
+
   {#if showJump}
     <button class="jump" onclick={toBottom}>↓ Nouveaux messages</button>
   {/if}
@@ -736,6 +752,14 @@
   .scroll:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: -2px;
+  }
+  /* Read by screen readers only. */
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
   }
   /* Above the items drawn: the slice before them. */
   .older {

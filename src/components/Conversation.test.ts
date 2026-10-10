@@ -638,6 +638,42 @@ describe('Conversation', () => {
         await waitFor(() => expect(scroller).toHaveFocus());
       });
 
+      describe('told to a screen reader', () => {
+        /** The live region's text, once it says something. */
+        const said = (text: string) => {
+          const line = screen.getByText(text);
+          expect(line.closest('[aria-live="polite"]')).not.toBeNull();
+          return line;
+        };
+
+        it('says how many messages a slice drew, and keeps the focus on the button for the next one', async () => {
+          const { scroller } = setup({ status: 'done' }, many(200));
+          const button = await olderButton('Afficher les 80 précédents');
+          button.focus();
+          await userEvent.keyboard('{Enter}');
+          await waitFor(() => said('80 messages précédents affichés'));
+          expect(screen.getByRole('button', { name: 'Afficher les 40 précédents' })).toHaveFocus();
+          await userEvent.keyboard('{Enter}');
+          await waitFor(() => said('40 messages précédents affichés'));
+          expect(scroller).toHaveFocus();
+        });
+
+        it('says it of a single message too', async () => {
+          setup({ status: 'done' }, many(81));
+          await userEvent.click(await olderButton('Afficher le précédent'));
+          await waitFor(() => said('1 message précédent affiché'));
+        });
+
+        it('says it again for a slice of the same size', async () => {
+          setup({ status: 'done' }, many(400));
+          await userEvent.click(await olderButton('Afficher les 80 précédents'));
+          const first = await waitFor(() => said('80 messages précédents affichés'));
+          await userEvent.click(screen.getByRole('button', { name: 'Afficher les 80 précédents' }));
+          // A new node in the live region: the same text is read again.
+          await waitFor(() => expect(said('80 messages précédents affichés')).not.toBe(first));
+        });
+      });
+
       describe('laid out', () => {
         let height = 150;
         let spy: ReturnType<typeof vi.spyOn>;
