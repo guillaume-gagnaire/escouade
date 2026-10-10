@@ -100,6 +100,18 @@ export default defineZone('branches', {
     forceNoCommits: 'It isn’t merged into the project’s base, but its commits are in another branch.',
     forceConfirm: 'Delete anyway',
   },
+  /** The menu of a commit of the git graph. */
+  graph: {
+    createHere: 'Create a branch here…',
+    /** `{branch}`: a local branch on the commit. */
+    switchTo: 'Switch to {branch}',
+    compare: 'Compare with the current branch',
+    /** The folder is on no branch (detached HEAD): it is its commit that is compared. */
+    compareHead: 'Compare with HEAD',
+    /** The title of the diff window. `{from}`: the current branch (or HEAD); `{to}`: the branch, or the commit, compared with it. */
+    compareTitle: '{from} ↔ {to}',
+    delete: 'Delete branch…',
+  },
   /** “Merged branches”: the clean-up. */
   merged: {
     title: 'Merged branches',

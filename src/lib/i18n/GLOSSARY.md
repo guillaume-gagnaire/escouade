@@ -388,3 +388,5 @@ Ce qu’Escouade dit à Claude ou lui fait écrire suit « Langue des textes ré
 | Branches mergées | Merged branches | le nettoyage des branches déjà dans la base du projet |
 | base (du projet) | base | la branche cible du Kanban, sinon la branche du dossier |
 | Supprimer quand même | Delete anyway | une branche pas mergée |
+| Passer sur une branche | Switch to a branch | le menu d’un commit du graphe ; « Basculer » reste pour le merge |
+| Comparer avec la branche courante | Compare with the current branch | le menu d’un commit du graphe ; sur une HEAD détachée : « Comparer avec HEAD » → “Compare with HEAD” |

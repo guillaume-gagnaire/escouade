@@ -100,6 +100,18 @@ export default {
     forceNoCommits: 'Elle n’est pas mergée dans la base du projet, mais ses commits sont dans une autre branche.',
     forceConfirm: 'Supprimer quand même',
   },
+  /** The menu of a commit of the git graph. */
+  graph: {
+    createHere: 'Créer une branche ici…',
+    /** `{branch}`: a local branch on the commit. */
+    switchTo: 'Passer sur {branch}',
+    compare: 'Comparer avec la branche courante',
+    /** The folder is on no branch (detached HEAD): it is its commit that is compared. */
+    compareHead: 'Comparer avec HEAD',
+    /** The title of the diff window. `{from}`: the current branch (or HEAD); `{to}`: the branch, or the commit, compared with it. */
+    compareTitle: '{from} ↔ {to}',
+    delete: 'Supprimer la branche…',
+  },
   /** « Branches mergées » : the clean-up. */
   merged: {
     title: 'Branches mergées',
