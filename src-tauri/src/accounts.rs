@@ -37,11 +37,20 @@ pub fn normalize(settings: &mut Settings) {
         a.config_dir = a.config_dir.trim().to_string();
     }
     // An id given twice: the first keeps it, the others are told apart (their agents, if any,
-    // stay with the first).
-    let mut taken = HashSet::new();
+    // stay with the first). Every id given counts as taken from the start: one given once keeps
+    // it even when another is told apart before it comes.
+    let mut taken: HashSet<String> = accounts
+        .iter()
+        .filter(|a| !a.id.is_empty())
+        .map(|a| a.id.clone())
+        .collect();
+    let mut seen = HashSet::new();
     for a in accounts.iter_mut().filter(|a| !a.id.is_empty()) {
-        a.id = unique(&a.id, &taken);
-        taken.insert(a.id.clone());
+        if !seen.insert(a.id.clone()) {
+            a.id = unique(&a.id, &taken);
+            taken.insert(a.id.clone());
+            seen.insert(a.id.clone());
+        }
     }
     // None (written by hand): one after its name, never Principal's.
     taken.insert(PRINCIPAL.to_string());
@@ -259,6 +268,20 @@ mod tests {
         // The first one keeps the id; the others keep their folder.
         let dirs: Vec<&str> = s.accounts.iter().map(|a| a.config_dir.as_str()).collect();
         assert_eq!(dirs, ["", "/a", "/b", "/c", "/d", "/e"]);
+    }
+
+    #[test]
+    fn an_id_given_once_keeps_it_when_another_is_told_apart() {
+        // `x-2` is already some account's: the second `x` takes the next one free, and `x-2`
+        // stays as it is (its agents with it).
+        let mut s = Settings {
+            accounts: vec![account("x", "/a"), account("x", "/b"), account("x-2", "/c")],
+            ..Default::default()
+        };
+        normalize(&mut s);
+        assert_eq!(ids(&s), ["principal", "x", "x-3", "x-2"]);
+        let dirs: Vec<&str> = s.accounts.iter().map(|a| a.config_dir.as_str()).collect();
+        assert_eq!(dirs, ["", "/a", "/b", "/c"]);
     }
 
     #[test]
