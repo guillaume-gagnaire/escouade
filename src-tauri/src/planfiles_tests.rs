@@ -640,6 +640,86 @@ fn a_ledger_that_is_a_link_out_of_the_repository_is_not_read() {
 }
 
 #[test]
+fn a_plan_and_a_marker_are_read_only_when_they_are_plain_files_of_the_repository() {
+    let r = Repo::new("plain");
+    r.put(
+        "docs/superpowers/plans/demo.md",
+        "# Démo
+",
+    );
+    std::fs::create_dir_all(r.root.join("docs/superpowers/plans/folder.md")).unwrap();
+    // A file, there itself: read.
+    assert_eq!(
+        plain_file(&r.root, "docs/superpowers/plans/demo.md"),
+        Some(r.root.join("docs/superpowers/plans/demo.md"))
+    );
+    // A folder, a file that is not there, a path that leaves the repository: not.
+    for rel in [
+        "docs/superpowers/plans/folder.md",
+        "docs/superpowers/plans/none.md",
+        "docs/superpowers/plans/../../../../outside.md",
+        "../outside.md",
+        "",
+    ] {
+        assert_eq!(plain_file(&r.root, rel), None, "{rel:?}");
+    }
+    // The marker of a workspace is a folder: the workspace has no marker, and its ledger, which
+    // names a plan the repository does not have, leads nowhere.
+    r.put(
+        ".superpowers/sdd/x/progress.md",
+        "# SDD ledger — plan: ../elsewhere.md
+Task 1: complete
+",
+    );
+    std::fs::create_dir_all(r.root.join(".superpowers/sdd/x/plan-path")).unwrap();
+    assert!(discover(&r.root).is_none());
+}
+
+#[test]
+fn a_plan_or_a_marker_that_is_a_link_to_a_file_of_the_repository_is_not_read_either() {
+    let r = Repo::new("link-inside");
+    r.plan("docs/superpowers/plans/real.md");
+    // The plan is a link to a plan of the repository: not what a skill writes.
+    if !make_file_link(
+        &r.root.join("docs/superpowers/plans/real.md"),
+        &r.root.join("docs/superpowers/plans/link.md"),
+    ) {
+        eprintln!("no symbolic link here: skipped");
+        return;
+    }
+    r.workspace("link", "docs/superpowers/plans/link.md", &[]);
+    assert!(r.load().is_none());
+    assert!(fallback(&r.root, &["docs/superpowers/plans/link.md".into()]).is_none());
+    // The marker is a link to one, and the ledger's own line leads nowhere.
+    let r = Repo::new("link-marker");
+    r.plan("docs/superpowers/plans/demo.md");
+    r.put(
+        "elsewhere/marker.txt",
+        "docs/superpowers/plans/demo.md
+",
+    );
+    r.put(
+        ".superpowers/sdd/x/progress.md",
+        "# SDD ledger — plan: ../nowhere.md
+Task 1: complete
+",
+    );
+    assert!(make_file_link(
+        &r.root.join("elsewhere/marker.txt"),
+        &r.root.join(".superpowers/sdd/x/plan-path"),
+    ));
+    assert!(discover(&r.root).is_none());
+    // A marker that is a file is used all the same.
+    std::fs::remove_file(r.root.join(".superpowers/sdd/x/plan-path")).unwrap();
+    r.put(
+        ".superpowers/sdd/x/plan-path",
+        "docs/superpowers/plans/demo.md
+",
+    );
+    assert!(discover(&r.root).is_some());
+}
+
+#[test]
 fn a_workspace_folder_or_a_superpowers_folder_that_is_a_link_is_not_followed() {
     let r = Repo::new("link-dir");
     r.plan("docs/superpowers/plans/demo.md");

@@ -511,6 +511,27 @@ pub fn reroot(root: &Path, cwd: &Path, written: &[String]) -> Vec<String> {
         .collect()
 }
 
+/// `rel` inside `root` (`paths::contained`), as a path to read: a file that is there itself, not
+/// a link to one (a script writes a plan, a marker, a ledger as a file) nor a folder, a pipe or a
+/// device. Asked before anything resolves the path or opens it: a file that is not plain is never
+/// opened (a pipe would hold the look for good).
+pub(crate) fn plain_file(root: &Path, rel: &str) -> Option<PathBuf> {
+    use std::path::Component;
+    // The same words as `contained`'s, said first so that no disk is asked about a path that
+    // would leave the repository.
+    if !Path::new(rel)
+        .components()
+        .all(|c| matches!(c, Component::Normal(_) | Component::CurDir))
+    {
+        return None;
+    }
+    let kind = std::fs::symlink_metadata(root.join(rel)).ok()?;
+    if !kind.is_file() {
+        return None;
+    }
+    paths::contained(root, rel).ok()
+}
+
 /// The plan `raw` names, if it is a Markdown file inside `root` (`paths::contained`: no `..`, no
 /// link out of it) and, when `only_plans`, one of the plans folder.
 fn resolve_plan(root: &Path, raw: &str, only_plans: bool) -> Option<(PathBuf, String)> {
@@ -519,11 +540,8 @@ fn resolve_plan(root: &Path, raw: &str, only_plans: bool) -> Option<(PathBuf, St
     if !lower.ends_with(".md") || (only_plans && !lower.starts_with(PLANS)) {
         return None;
     }
-    let full = paths::contained(root, &rel).ok()?;
-    std::fs::metadata(&full)
-        .ok()?
-        .is_file()
-        .then_some((full, rel))
+    let full = plain_file(root, &rel)?;
+    Some((full, rel))
 }
 
 /// The id of a `task-<id>-brief.md` file.
@@ -563,9 +581,7 @@ fn open_workspace(root: &Path, name: &str) -> Option<Found> {
     let named = ledger_plan(&first_line(&ledger)?)?;
     // The marker `sdd-workspace` writes is repo-relative: it leads to the plan when the ledger's
     // path was written from another folder.
-    let marker = paths::contained(root, &format!("{rel}/plan-path"))
-        .ok()
-        .and_then(|p| first_line(&p));
+    let marker = plain_file(root, &format!("{rel}/plan-path")).and_then(|p| first_line(&p));
     let (plan, plan_rel) = [Some(named), marker]
         .into_iter()
         .flatten()
