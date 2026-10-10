@@ -766,18 +766,11 @@ pub async fn ensure_excluded(repo: &str, pattern: &str) -> Result<()> {
     Ok(())
 }
 
+/// True when `repo` has a local branch of exactly that name: `show-ref --verify` takes a ref and
+/// nothing else, where `rev-parse` would read `main~1` or `main@{1}` as `refs/heads/main~1` and say
+/// yes to a revision.
 pub async fn branch_exists(repo: &str, branch: &str) -> bool {
-    run(
-        repo,
-        &[
-            "rev-parse",
-            "--verify",
-            "--quiet",
-            &format!("refs/heads/{branch}"),
-        ],
-    )
-    .await
-    .is_ok()
+    ref_exists(repo, &format!("refs/heads/{branch}")).await
 }
 
 /// The local branches, the checked-out one first.
@@ -1104,6 +1097,27 @@ pub async fn check_ref_format(name: &str) -> Result<()> {
     Ok(())
 }
 
+/// Checks `name` for a new branch of `repo`: a name git takes, that no local branch has, and that
+/// does not start like a branch of a remote (`origin/feat`): the local one would hide it, and
+/// every `origin/feat` would then be read as the local branch.
+pub async fn check_new_branch(repo: &str, name: &str) -> Result<()> {
+    check_ref_format(name).await?;
+    if branch_exists(repo, name).await {
+        return Err(branch_taken(name));
+    }
+    if let Some(remote) = remotes(repo)
+        .await
+        .into_iter()
+        .find(|r| name.starts_with(&format!("{r}/")))
+    {
+        bail!(tr!(
+            "« {name} » commence comme une branche du dépôt distant « {remote} » : une branche locale de ce nom la cacherait. Choisis un autre nom.",
+            "“{name}” starts like a branch of the remote “{remote}”: a local branch of that name would hide it. Pick another name."
+        ));
+    }
+    Ok(())
+}
+
 /// The commit `rev` names (a branch, a remote branch, a tag, a hash); refused when it names none,
 /// or looks like an option.
 pub async fn commit_of(repo: &str, rev: &str) -> Result<String> {
@@ -1124,10 +1138,7 @@ pub async fn commit_of(repo: &str, rev: &str) -> Result<String> {
 /// Creates the branch `name` at `start` (a branch, a remote branch, a commit; HEAD when empty),
 /// tracking nothing: one made from `origin/main` must not push to main. Nothing is checked out.
 pub async fn branch_create(repo: &str, name: &str, start: &str) -> Result<()> {
-    check_ref_format(name).await?;
-    if branch_exists(repo, name).await {
-        return Err(branch_taken(name));
-    }
+    check_new_branch(repo, name).await?;
     let start = match start.trim() {
         "" => "HEAD",
         s => s,
@@ -1138,8 +1149,10 @@ pub async fn branch_create(repo: &str, name: &str, start: &str) -> Result<()> {
         .map(|_| ())
 }
 
+/// True when `refname` (a full name: `refs/heads/feat`, `refs/remotes/origin/feat`) is a ref
+/// of `repo`, and not a revision that starts with one.
 pub async fn ref_exists(repo: &str, refname: &str) -> bool {
-    run(repo, &["rev-parse", "--verify", "--quiet", refname])
+    run(repo, &["show-ref", "--verify", "--quiet", refname])
         .await
         .is_ok()
 }
@@ -3974,5 +3987,49 @@ mod repo_tests {
             assert!(diff_refs(&r, "main", bad).await.is_err(), "{bad}");
         }
         assert!(!Path::new(&r).join("x").exists());
+    }
+
+    #[tokio::test]
+    async fn a_branch_is_found_by_its_name_never_by_a_revision_that_starts_with_it() {
+        let r = repo("git-g1f-exact");
+        git(&r, &["commit", "-q", "--allow-empty", "-m", "second"]);
+        git(&r, &["branch", "side"]);
+        assert!(branch_exists(&r, "main").await);
+        assert!(branch_exists(&r, "side").await);
+        for revision in ["main~1", "main^", "main^{commit}", "main@{0}", "side~1", ""] {
+            assert!(!branch_exists(&r, revision).await, "{revision}");
+            assert!(
+                !ref_exists(&r, &format!("refs/heads/{revision}")).await,
+                "{revision}"
+            );
+        }
+        // So a revision is no branch to switch to: nothing moves.
+        let e = switch_to(&r, "main~1").await.unwrap_err();
+        assert!(e.to_string().contains("main~1"), "{e}");
+        assert_eq!(head_branch(&r).await, "main");
+        assert!(local_of(&r, "side^").await.is_err());
+    }
+
+    #[tokio::test]
+    async fn a_new_branch_cannot_take_the_name_of_a_remote_one() {
+        let (local, _, _) = with_remote("git-g1f-shadow");
+        let l = s(&local);
+        // `origin/feat` is how a branch of the remote reads: a local one of that name hides it.
+        let e = branch_create(&l, "origin/feat", "main").await.unwrap_err();
+        assert!(e.to_string().contains("origin"), "{e}");
+        assert!(!branch_exists(&l, "origin/feat").await);
+        let e = check_new_branch(&l, "origin/x").await.unwrap_err();
+        assert!(e.to_string().contains("origin"), "{e}");
+        // Names that only start like the remote's are fine.
+        for ok in ["origin-feat", "originals/x"] {
+            check_new_branch(&l, ok).await.unwrap();
+        }
+        branch_create(&l, "originals/x", "main").await.unwrap();
+        // A name git refuses or a branch has: told as before.
+        assert!(check_new_branch(&l, "a..b").await.is_err());
+        let e = check_new_branch(&l, "originals/x").await.unwrap_err();
+        assert!(e.to_string().contains("existe déjà"), "{e}");
+        let e = check_new_branch(&l, "main~1").await;
+        assert!(e.is_err(), "a revision is no name git takes");
     }
 }

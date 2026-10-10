@@ -4298,14 +4298,11 @@ impl<R: Runtime> Core<R> {
         Ok(list)
     }
 
-    /// Checks a name for a new branch of the project: as git does, and not taken already.
+    /// Checks a name for a new branch of the project: as git does, not taken already, and not one
+    /// that hides a branch of a remote.
     pub async fn branch_check(&self, project_id: &str, name: &str) -> Result<()> {
         let (_, root) = self.branch_repo(project_id).await?;
-        git::check_ref_format(name).await?;
-        if git::branch_exists(&root, name).await {
-            return Err(git::branch_taken(name));
-        }
-        Ok(())
+        git::check_new_branch(&root, name).await
     }
 
     /// Switches the project's folder to `name`: a local branch, or a remote one (`origin/feat`)
@@ -4359,10 +4356,7 @@ impl<R: Runtime> Core<R> {
         let lock = self.sync_lock(&root);
         let _guard = lock.lock().await;
         // Everything that can be refused is, before anything is put aside.
-        git::check_ref_format(name).await?;
-        if git::branch_exists(&root, name).await {
-            return Err(git::branch_taken(name));
-        }
+        git::check_new_branch(&root, name).await?;
         let start = match start.trim() {
             "" => "HEAD",
             s => s,

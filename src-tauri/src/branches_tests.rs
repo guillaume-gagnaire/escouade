@@ -384,6 +384,31 @@ async fn a_new_branch_name_is_checked_the_way_git_does_and_against_the_branches_
 }
 
 #[tokio::test]
+async fn a_new_branch_cannot_hide_a_remote_one_by_its_name() {
+    let h = harness("g1f-shadow");
+    let (p, r) = h.project(false).await;
+    remote(&h, &r);
+    let e = h.core.branch_check(&p.id, "origin/feat").await.unwrap_err();
+    assert!(e.to_string().contains("origin"), "{e}");
+    let e = h
+        .core
+        .branch_create(&p.id, "origin/feat", "", false, false)
+        .await
+        .unwrap_err();
+    assert!(e.to_string().contains("origin"), "{e}");
+    assert!(!exists(&r, "origin/feat"));
+    h.core.branch_check(&p.id, "originals/feat").await.unwrap();
+    // A revision is not a branch: it is not found, and nothing is deleted through it.
+    let e = h
+        .core
+        .branch_delete(&p.id, "main~0", false, true)
+        .await
+        .unwrap_err();
+    assert!(e.to_string().contains("introuvable"), "{e}");
+    assert_eq!(current(&r), "main");
+}
+
+#[tokio::test]
 async fn a_branch_merged_into_the_base_is_deleted_at_once_another_only_when_forced() {
     let h = harness("g1-delete");
     let (p, r) = h.project(false).await;
