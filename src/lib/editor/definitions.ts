@@ -8,7 +8,7 @@ import { getStyleTags, tags } from '@lezer/highlight';
 import type { SearchQuery, SearchResult } from '../types';
 import { charColumn, type NavContext, type NavResolver, type NavTarget } from './goto';
 import { loadLanguage } from './languages';
-import { fileSet, importTarget, pythonModule, type Aliases } from './links';
+import { dirOf, extOf, fileSet, importTarget, join, pythonModule, rustModuleHome, type Aliases } from './links';
 
 // The tree types of @lezer/common, which only comes with CodeMirror.
 type Tree = ReturnType<typeof syntaxTree>;
@@ -23,10 +23,6 @@ export interface DefinitionSource {
   /** The import aliases of the source (its tsconfig.json). */
   aliases: () => Aliases;
 }
-
-const extOf = (path: string) => /\.([^./]+)$/.exec(path)?.[1].toLowerCase() ?? '';
-const dirOf = (path: string) => path.slice(0, Math.max(0, path.lastIndexOf('/')));
-const join = (dir: string, rel: string) => (dir ? `${dir}/${rel}` : rel);
 
 /** Files whose words are prose, not names: nothing is looked for there (nor in a file without an extension). */
 const PROSE = new Set(['md', 'markdown', 'mdx', 'txt', 'rst', 'adoc']);
@@ -70,6 +66,15 @@ function gitPattern(template: string, name: string): string {
     .join('')
     .split('NAME')
     .join(escapeRegExp(name));
+}
+
+/** A character of a name, in most languages: none may come right before or after the one looked for. */
+const NAME_CHAR = String.raw`[\p{L}\p{N}_$]`;
+
+/** `template` with `name` in it, as JavaScript reads it, its boundaries around the name knowing every letter (`café`). */
+function exactPattern(template: string, name: string): RegExp {
+  const bounded = template.split('\\bNAME').join(`(?<!${NAME_CHAR})NAME`).split('NAME\\b').join(`NAME(?!${NAME_CHAR})`);
+  return new RegExp(bounded.split('NAME').join(escapeRegExp(name)), 'u');
 }
 
 /** An identifier, as most languages write them. */
@@ -324,12 +329,7 @@ interface RustModule {
   dir: string;
 }
 
-function rustModuleOf(file: string): RustModule {
-  const dir = dirOf(file);
-  const name = file.slice(dir ? dir.length + 1 : 0);
-  // A crate's root and a mod.rs hold their modules beside them; another file, in the folder of its own name.
-  return { file, dir: /^(mod|lib|main)\.rs$/.test(name) ? dir : join(dir, name.slice(0, -'.rs'.length)) };
-}
+const rustModuleOf = (file: string): RustModule => ({ file, dir: rustModuleHome(file) });
 
 /** The root of the crate of `file`: the nearest lib.rs or main.rs above it. */
 function crateRoot(file: string, files: ReadonlySet<string>): RustModule | null {
@@ -393,7 +393,7 @@ async function importedFrom(i: Imported, src: DefinitionSource, ctx: NavContext)
 async function searched(src: DefinitionSource, ctx: NavContext, name: string): Promise<NavTarget[]> {
   const family = familyOf(ctx.path);
   const template = DEFINES[family] ?? DEFINES_ELSE;
-  const exact = new RegExp(template.split('NAME').join(escapeRegExp(name)));
+  const exact = exactPattern(template, name);
   const line = ctx.state.doc.lineAt(ctx.pos).number;
   const { matches } = await src.search({
     pattern: gitPattern(template, name),

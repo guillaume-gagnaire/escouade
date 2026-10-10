@@ -197,6 +197,14 @@ describe('definitions searched for in the source', () => {
     expect(c?.targets.length).toBe(path.endsWith('.rs') ? 1 : 0);
   });
 
+  it('finds a name with letters beyond ASCII, but not a longer one', async () => {
+    const search = vi.fn(async (_: SearchQuery) =>
+      found(match('lib/x.ts', 3, 'export function café() {}'), match('lib/y.ts', 1, 'export const caféine = 1;')),
+    );
+    const c = await click('src/a.ts', '¦café();', source({ search }));
+    expect(c?.targets).toEqual([{ path: 'lib/x.ts', line: 3, col: 17, text: 'export function café() {}' }]);
+  });
+
   it('counts the column from the start of the line when git shows a stretch of a long one', async () => {
     const search = vi.fn(async (_: SearchQuery) => found(match('lib/min.js', 1, 'x;function render(){}', 360)));
     const c = await click('src/a.ts', '¦render();', source({ search }));

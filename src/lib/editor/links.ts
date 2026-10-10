@@ -86,9 +86,19 @@ export function normalize(path: string): string | null {
   return out.join('/');
 }
 
-const dirOf = (path: string) => path.slice(0, Math.max(0, path.lastIndexOf('/')));
-const join = (dir: string, rel: string) => (dir ? `${dir}/${rel}` : rel);
-const extOf = (path: string) => /\.([^./]+)$/.exec(path)?.[1].toLowerCase() ?? '';
+/** The folder of a path from the source's root ('' at the root). */
+export const dirOf = (path: string) => path.slice(0, Math.max(0, path.lastIndexOf('/')));
+export const join = (dir: string, rel: string) => (dir ? `${dir}/${rel}` : rel);
+/** The extension of a path, in lower case, without its dot ('' without one). */
+export const extOf = (path: string) => /\.([^./]+)$/.exec(path)?.[1].toLowerCase() ?? '';
+
+/** The folder of the modules the Rust file `path` declares. */
+export function rustModuleHome(path: string): string {
+  const dir = dirOf(path);
+  const name = path.slice(dir ? dir.length + 1 : 0);
+  // A crate's root and a mod.rs hold their modules beside them; another file, in the folder of its own name.
+  return /^(mod|lib|main)\.rs$/.test(name) ? dir : join(dir, name.slice(0, -'.rs'.length));
+}
 
 const sets = new WeakMap<readonly string[], ReadonlySet<string>>();
 
@@ -267,10 +277,7 @@ const rustResolver: NavResolver = ({ state, pos, path, files }) => {
   if (extOf(path) !== 'rs') return null;
   const h = hitAt(state, pos, MOD, 1);
   if (!h) return null;
-  const dir = dirOf(path);
-  const name = path.slice(dir ? dir.length + 1 : 0);
-  // A crate's root and a mod.rs hold their modules beside them; another file, in the folder of its own name.
-  const home = /^(mod|lib|main)\.rs$/.test(name) ? dir : join(dir, name.slice(0, -'.rs'.length));
+  const home = rustModuleHome(path);
   const candidates = [join(home, `${h.text}.rs`), join(home, `${h.text}/mod.rs`)];
   const set = fileSet(files);
   return spot(h, { path: candidates.find((f) => set.has(f)) ?? candidates[0] });
