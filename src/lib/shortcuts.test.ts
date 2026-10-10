@@ -72,6 +72,57 @@ describe('handleShortcut', () => {
     expect(app.ui.view).toBe('overview');
   });
 
+  it('opens « Ouvrir un fichier » with Ctrl+P, Cmd+P on macOS, over a source that depends on what is shown', async () => {
+    fakeBackend();
+    // The project's own checkout while the selected agent has no worktree.
+    expect(handleShortcut(key('p'), false)).toBe(true);
+    expect(app.modal).toEqual({ kind: 'quickOpen', projectId: 'p1', source: 'project' });
+    app.modal = null;
+    // The worktree of the agent selected.
+    app.agents.a1.worktree = { path: 'C:/wt/a1', branch: 'agent/a1', baseBranch: 'main' };
+    expect(handleShortcut(key('p'), false)).toBe(true);
+    expect(app.modal).toEqual({ kind: 'quickOpen', projectId: 'p1', source: 'a1' });
+    app.modal = null;
+    // The source of the editor, when it is open, whichever agent is selected.
+    await app.openEditor({ source: 'project' });
+    expect(handleShortcut(key('p'), false)).toBe(true);
+    expect(app.modal).toEqual({ kind: 'quickOpen', projectId: 'p1', source: 'project' });
+    app.modal = null;
+    // Cmd on macOS: Ctrl+P stays what it is there (CodeMirror’s “line up”).
+    expect(handleShortcut(key('p'), true)).toBe(false);
+    expect(app.modal).toBeNull();
+    expect(handleShortcut(new KeyboardEvent('keydown', { key: 'p', metaKey: true }), true)).toBe(true);
+    expect(app.modal).toMatchObject({ kind: 'quickOpen' });
+  });
+
+  it('keeps the key from the WebView whatever the app is showing: its print dialog never opens', () => {
+    fakeBackend();
+    // Behind a dialog: it stays, and the key is taken all the same.
+    app.modal = { kind: 'newProject' };
+    expect(handleShortcut(key('p'), false)).toBe(true);
+    expect(app.modal).toEqual({ kind: 'newProject' });
+    app.modal = null;
+    // With no project.
+    app.ui.activeProject = null;
+    expect(handleShortcut(key('p'), false)).toBe(true);
+    expect(app.modal).toBeNull();
+    // A key held down, and the palette already open.
+    app.selectProject('p1');
+    expect(handleShortcut(key('p', { repeat: true }), false)).toBe(true);
+    expect(handleShortcut(key('p'), false)).toBe(true);
+    expect(app.modal).toMatchObject({ kind: 'quickOpen' });
+    expect(handleShortcut(key('P'), false)).toBe(true);
+    expect(app.modal).toMatchObject({ kind: 'quickOpen' });
+  });
+
+  it('leaves Ctrl+Alt+P (AltGr) and Ctrl+Shift+P alone', () => {
+    fakeBackend();
+    expect(handleShortcut(key('p', { altKey: true }), false)).toBe(false);
+    expect(handleShortcut(key('P', { shiftKey: true }), false)).toBe(false);
+    expect(handleShortcut(new KeyboardEvent('keydown', { key: 'p' }), false)).toBe(false);
+    expect(app.modal).toBeNull();
+  });
+
   it('switches the screen layout with Ctrl+Shift+L', () => {
     fakeBackend();
     expect(handleShortcut(key('L', { shiftKey: true }))).toBe(true);
@@ -188,6 +239,7 @@ describe('isAppShortcut', () => {
     expect(isAppShortcut(key('c'))).toBe(false); // SIGINT
     expect(isAppShortcut(key('r'))).toBe(false); // reverse search
     expect(isAppShortcut(key('n'))).toBe(false); // readline: next history
+    expect(isAppShortcut(key('p'), false)).toBe(false); // readline: previous history
     expect(isAppShortcut(key('k'), false)).toBe(false); // readline: kill to the end of the line
     expect(isAppShortcut(new KeyboardEvent('keydown', { key: '3' }))).toBe(false);
   });
@@ -202,11 +254,12 @@ describe('isAppShortcut', () => {
 
   it('hands every Cmd shortcut to the app on macOS but copy and paste, and leaves Ctrl keys to the shell', () => {
     const cmd = (k: string) => new KeyboardEvent('keydown', { key: k, metaKey: true });
-    for (const k of ['3', 'n', 't', 'j', ',', 'k']) expect(isAppShortcut(cmd(k), true)).toBe(true);
+    for (const k of ['3', 'n', 't', 'j', ',', 'k', 'p']) expect(isAppShortcut(cmd(k), true)).toBe(true);
     expect(isAppShortcut(cmd('c'), true)).toBe(false);
     expect(isAppShortcut(cmd('v'), true)).toBe(false);
     expect(isAppShortcut(key('j'), true)).toBe(false);
     expect(isAppShortcut(key('k'), true)).toBe(false);
+    expect(isAppShortcut(key('p'), true)).toBe(false);
     expect(isAppShortcut(key('Tab'), true)).toBe(true);
   });
 

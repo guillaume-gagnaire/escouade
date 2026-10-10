@@ -11,6 +11,7 @@
   import { detectIndent } from '../../lib/editor/indent';
   import { languageLabel, loadLanguage } from '../../lib/editor/languages';
   import { DEFAULT_ALIASES, fileSet, linkResolvers, parseAliases, type Aliases } from '../../lib/editor/links';
+  import { setEditorJump } from '../../lib/editor/quick-open';
   import { fileSearches, setFindInFiles } from '../../lib/editor/search.svelte';
   import { ancestors, treeRows, type FileStatus, type TreeRow } from '../../lib/editor/tree';
   import { trees } from '../../lib/editor/trees.svelte';
@@ -290,6 +291,9 @@
     if (from) navHistory.push({ projectId: project.id, source, ...from });
     app.openEditor({ projectId: project.id, source, path: t.path, line: t.line ?? 1, col: t.col });
   }
+
+  // « Ouvrir un fichier » (Ctrl+P) opens its file through here, for Alt+← to come back to the place left.
+  onMount(() => setEditorJump((t) => jump(t)));
 
   /** The places a followed identifier may lead to, listed under it, and where it was followed from. */
   let picking = $state<{ targets: NavTarget[]; from: NavFrom; label: string; at: NavFollowed['rect'] } | null>(null);

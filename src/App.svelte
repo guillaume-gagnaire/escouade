@@ -12,6 +12,7 @@
   import ConvSearch from './components/ConvSearch.svelte';
   import DiffModal from './components/DiffModal.svelte';
   import EditorView from './components/editor/EditorView.svelte';
+  import QuickOpen from './components/QuickOpen.svelte';
   import SidePanel from './components/SidePanel.svelte';
   import CommitModal from './components/modals/CommitModal.svelte';
   import ConfirmModal from './components/modals/ConfirmModal.svelte';
@@ -152,6 +153,8 @@
   <UpdateModal version={app.modal.version} notes={app.modal.notes} installed />
 {:else if app.modal?.kind === 'convSearch'}
   <ConvSearch />
+{:else if app.modal?.kind === 'quickOpen'}
+  <QuickOpen projectId={app.modal.projectId} source={app.modal.source} />
 {:else if app.modal?.kind === 'commit'}
   <CommitModal projectId={app.modal.projectId} agentId={app.modal.agentId} />
 {/if}

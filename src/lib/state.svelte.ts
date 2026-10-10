@@ -4,6 +4,7 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 import { api } from './ipc';
 import { applyConvOps, dropConversation } from './conversations.svelte';
 import { buffers } from './editor/buffers.svelte';
+import { recentFiles } from './editor/quick-open';
 import { fileSearches } from './editor/search.svelte';
 import { ancestors } from './editor/tree';
 import { trees } from './editor/trees.svelte';
@@ -64,6 +65,8 @@ export type Modal =
   | { kind: 'notes'; version: string; notes: string }
   /** « Rechercher dans les conversations » (Ctrl+K). */
   | { kind: 'convSearch' }
+  /** « Ouvrir un fichier » (Ctrl+P): the files of `source` ('project' or an agent's id) in a project. */
+  | { kind: 'quickOpen'; projectId: string; source: string }
   /** A direct commit of the agent's changes; `agentId` null: of the project's own checkout. */
   | { kind: 'commit'; projectId: string; agentId: string | null };
 
@@ -611,6 +614,7 @@ class AppState {
     st.places[req.source] ??= { open: [], active: null, expanded: {} };
     const place = st.places[req.source];
     if (path) {
+      recentFiles.note(projectId, req.source, path);
       if (!place.open.includes(path)) place.open.push(path);
       place.active = path;
       this.expandEditorDir(projectId, req.source, ancestors(path).at(-1) ?? '');
@@ -688,6 +692,7 @@ class AppState {
   private forgetEditorSource(projectId: string, agentId: string) {
     buffers.closeSource(projectId, agentId);
     trees.closeSource(projectId, agentId);
+    recentFiles.closeSource(projectId, agentId);
     const st = this.editor[projectId];
     if (!st) return;
     delete st.places[agentId];
@@ -707,6 +712,7 @@ class AppState {
     delete this.boardIssues[id];
     buffers.closeProject(id);
     trees.closeProject(id);
+    recentFiles.closeProject(id);
     fileSearches.closeProject(id);
     this.persistUi();
   }

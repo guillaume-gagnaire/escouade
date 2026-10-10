@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { agent, board, fakeBackend, gitInfo, project, resetApp, SETTINGS, ticket } from '../test/ipc';
 import { conversationOf } from './conversations.svelte';
 import { buffers } from './editor/buffers.svelte';
+import { recentFiles } from './editor/quick-open';
 import { fileSearches } from './editor/search.svelte';
 import { trees } from './editor/trees.svelte';
 import { app } from './state.svelte';
@@ -774,6 +775,30 @@ describe('editor of a removed agent or project', () => {
     expect(buffers.all[mine]?.text).toBe('mine\n');
     expect(trees.get('p1', 'a2')).toBeDefined();
     expect(app.editor.p1).toMatchObject({ source: 'a2' });
+  });
+
+  it('remembers the files opened last in each source, for « Ouvrir un fichier »', async () => {
+    fakeBackend();
+    await app.openEditor({ source: 'project', path: 'a.ts' });
+    await app.openEditor({ source: 'project', path: 'b.ts', line: 3 });
+    await app.openEditor({ source: 'project', path: 'a.ts' });
+    await app.openEditor({ source: 'a2', path: 'c.ts' });
+    // No file: the editor opens, nothing is remembered.
+    await app.openEditor({ source: 'project' });
+    expect(recentFiles.list('p1', 'project')).toEqual(['a.ts', 'b.ts']);
+    expect(recentFiles.list('p1', 'a2')).toEqual(['c.ts']);
+  });
+
+  it('forgets them with the worktree of a deleted agent, and with a closed project', async () => {
+    const { emit } = await start({ agents: [agent(), agent({ id: 'a2', name: 'wt', createdAt: 2, worktree: wt })] }, files);
+    await app.openEditor({ source: 'a2', path: 'x.ts' });
+    await app.openEditor({ source: 'project', path: 'y.ts' });
+    await app.openEditor({ projectId: 'p2', source: 'project', path: 'z.ts' });
+    emit({ type: 'agentRemoved', id: 'a2', projectId: 'p1' });
+    expect(recentFiles.list('p1', 'a2')).toEqual([]);
+    expect(recentFiles.list('p1', 'project')).toEqual(['y.ts']);
+    app.forgetProject('p2');
+    expect(recentFiles.list('p2', 'project')).toEqual([]);
   });
 
   it('forgets the editor of a closed project, its unsaved files included', async () => {

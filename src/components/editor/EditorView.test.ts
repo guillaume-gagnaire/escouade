@@ -8,6 +8,7 @@ import { menu } from '../../lib/menu.svelte';
 import { handleShortcut } from '../../lib/shortcuts';
 import { app } from '../../lib/state.svelte';
 import { agent, fakeBackend, gitInfo, project, resetApp } from '../../test/ipc';
+import QuickOpen from '../QuickOpen.svelte';
 import EditorView from './EditorView.svelte';
 
 const text = (t: string, hash = 'h1') => ({ kind: 'text', text: t, size: t.length, hash, eol: 'lf', bom: false });
@@ -913,5 +914,45 @@ describe('EditorView search through the files', () => {
     expect(field()).toHaveValue('sum');
     expect(screen.getByRole('treeitem', { name: /util\.ts/ })).toBeInTheDocument();
     expect(queries(be)).toHaveLength(1);
+  });
+});
+
+describe('EditorView and « Ouvrir un fichier »', () => {
+  beforeEach(() => {
+    resetApp({ agents: [agent()] });
+    app.git.p1 = gitInfo({ modified: 1 });
+  });
+
+  it('opens the file picked, the place left kept in the history for Alt+← to come back to', async () => {
+    backend();
+    await app.openEditor({ source: 'project', path: 'src/app.ts', line: 1, col: 7 });
+    const { container } = render(EditorView, { project: project() });
+    expect(await screen.findByText('Ln 1, Col 7')).toBeInTheDocument();
+    expect(handleShortcut(new KeyboardEvent('keydown', { key: 'p', ctrlKey: true }), false)).toBe(true);
+    expect(app.modal).toEqual({ kind: 'quickOpen', projectId: 'p1', source: 'project' });
+    render(QuickOpen, { projectId: 'p1', source: 'project' });
+    await userEvent.type(await screen.findByRole('combobox', { name: 'Ouvrir un fichier' }), 'readme');
+    await screen.findByRole('option', { name: /README/ });
+    await userEvent.keyboard('{Enter}');
+    await expect.poll(() => app.editor.p1.places.project.active).toBe('README.md');
+    await expect.poll(() => container.querySelector('.cm-content')?.textContent?.startsWith('# demo')).toBe(true);
+    const view = CodeMirror.findFromDOM(container.querySelector('.cm-editor') as HTMLElement)!;
+    view.contentDOM.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', altKey: true, bubbles: true, cancelable: true }));
+    await expect.poll(() => app.editor.p1.places.project.active).toBe('src/app.ts');
+    expect(await screen.findByText('Ln 1, Col 7')).toBeInTheDocument();
+  });
+
+  it('is not answered by an editor that is gone: the palette opens the file itself', async () => {
+    backend();
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    const { unmount } = render(EditorView, { project: project() });
+    await screen.findByRole('tab', { name: /app\.ts/ });
+    unmount();
+    app.modal = { kind: 'quickOpen', projectId: 'p1', source: 'project' };
+    render(QuickOpen, { projectId: 'p1', source: 'project' });
+    await userEvent.type(await screen.findByRole('combobox', { name: 'Ouvrir un fichier' }), 'readme');
+    await screen.findByRole('option', { name: /README/ });
+    await userEvent.keyboard('{Enter}');
+    await expect.poll(() => app.editor.p1.places.project.active).toBe('README.md');
   });
 });

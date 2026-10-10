@@ -61,7 +61,8 @@ const overviewKey = (e: KeyboardEvent) => e.shiftKey && e.key.toLowerCase() === 
  * with the shell; Ctrl+J is only a line feed there, which Enter already sends, and the terminal
  * sends nothing at all for Ctrl+Shift+A. On macOS the app's shortcuts use Cmd, which the shell
  * never gets: they all go to the app, except copy, paste and select all (Cmd+A), handled by the
- * terminal. Ctrl+K stays with the shell (it cuts the end of the line).
+ * terminal. Ctrl+K stays with the shell (it cuts the end of the line), and so does Ctrl+P
+ * (previous command) on Windows: « Ouvrir un fichier » is Cmd+P there.
  */
 export function isAppShortcut(e: KeyboardEvent, mac = IS_MAC): boolean {
   if (e.altKey) return false;
@@ -69,14 +70,34 @@ export function isAppShortcut(e: KeyboardEvent, mac = IS_MAC): boolean {
   if (!primaryKey(e, mac)) return false;
   const k = e.key.toLowerCase();
   if (overviewKey(e)) return true;
-  if (mac) return digit(e) !== null || ['n', 't', 'j', ',', 'b', 'l', 'k'].includes(k);
+  if (mac) return digit(e) !== null || ['n', 't', 'j', ',', 'b', 'l', 'k', 'p'].includes(k);
   return digit(e) !== null || k === ',' || k === 'j';
+}
+
+/** Ctrl+P (Cmd+P on macOS): not with Shift, not with Alt (AltGr). */
+const quickOpenKey = (e: KeyboardEvent, mac: boolean) => primaryKey(e, mac) && !e.shiftKey && e.key.toLowerCase() === 'p';
+
+/**
+ * « Ouvrir un fichier » over the project on screen. Its source is the editor's when it is open, else the worktree of
+ * the agent selected, else the project's own checkout.
+ */
+function openQuickOpen() {
+  const project = app.project;
+  if (!project || app.modal) return;
+  const source = app.editorOn ? app.editor[project.id].source : app.agent?.worktree ? app.agent.id : 'project';
+  app.modal = { kind: 'quickOpen', projectId: project.id, source };
 }
 
 /** Runs the shortcut matching `e`. Returns true when the event was handled. */
 export function handleShortcut(e: KeyboardEvent, mac = IS_MAC): boolean {
   // Ctrl+Alt is AltGr on French keyboards (e.g. AltGr+2 = ~): never a shortcut.
-  if (e.altKey || app.modal) return false;
+  if (e.altKey) return false;
+  // Taken whatever the window shows (a dialog open, no project): a Ctrl+P left to the WebView prints the page.
+  if (quickOpenKey(e, mac)) {
+    openQuickOpen();
+    return true;
+  }
+  if (app.modal) return false;
   if (agentCycle(e) && app.project) {
     const list = app.projectAgents;
     if (!list.length) return false;

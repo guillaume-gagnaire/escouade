@@ -114,6 +114,36 @@ describe('App layout', () => {
     expect(within(dialog).getByText('dans le worktree')).toBeInTheDocument();
   });
 
+  it('opens « Ouvrir un fichier » with Ctrl+P, the WebView’s own key (printing) held back, and opens the file picked', async () => {
+    start('', {
+      handlers: {
+        fs_tree: () => ({ root: 'C:/code/demo-api', files: ['README.md', 'src/app.ts'], truncated: false, ignored: [] }),
+        fs_read: () => ({ kind: 'text', text: 'x\n', size: 2, hash: 'h', eol: 'lf', bom: false }),
+        fs_base: () => null,
+      },
+    });
+    expect(await screen.findByRole('main')).toBeInTheDocument();
+    const press = new KeyboardEvent('keydown', { key: 'p', ctrlKey: true, bubbles: true, cancelable: true });
+    window.dispatchEvent(press);
+    expect(press.defaultPrevented).toBe(true);
+    const dialog = await screen.findByRole('dialog', { name: 'Ouvrir un fichier' });
+    await userEvent.type(within(dialog).getByRole('combobox'), 'app');
+    await within(dialog).findByRole('option', { name: /app/ });
+    await userEvent.keyboard('{Enter}');
+    expect(await screen.findByRole('tab', { name: /app\.ts/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('dialog', { name: 'Ouvrir un fichier' })).not.toBeInTheDocument();
+  });
+
+  it('holds back the print dialog on Ctrl+P behind another dialog too, which stays', async () => {
+    start('');
+    expect(await screen.findByRole('main')).toBeInTheDocument();
+    app.modal = { kind: 'newProject' };
+    const press = new KeyboardEvent('keydown', { key: 'p', ctrlKey: true, bubbles: true, cancelable: true });
+    window.dispatchEvent(press);
+    expect(press.defaultPrevented).toBe(true);
+    expect(app.modal).toEqual({ kind: 'newProject' });
+  });
+
   it('shows the board of the project in place of its agent, and the agent again when asked for', async () => {
     start('');
     expect(await screen.findByRole('main')).toBeInTheDocument();
