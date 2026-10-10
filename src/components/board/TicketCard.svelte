@@ -34,6 +34,8 @@
   const used = $derived(t.column === 'doing' || t.column === 'review' ? ticketSpent(t, app.agents) : null);
   const met = $derived(criteriaMet(t));
   const total = $derived(t.criteria.length);
+  /** The foot's figures: what the ticket cost, the criteria met of a ticket to test, the loops of a finished one. */
+  const figures = $derived(!!used || t.column === 'review' || t.column === 'done');
   const waiting = $derived(t.column === 'doing' && agent?.status === 'waiting');
   // Under way, the last items; to test, all of them.
   const steps = $derived(t.column === 'doing' ? t.progress.slice(-SHOWN) : t.progress);
@@ -333,14 +335,17 @@
       {#if agent}<span class="who mono"
           ><StatusDot status={agent.status} size={7} /><span class="name" title={agent.name}>{agent.name}</span></span
         >{/if}
-      <div style="flex:1"></div>
-      {#if used}
-        <span class="k mono" title={used.estimated ? ESTIMATE_HINT : undefined}
-          ><span class="sr">Coût du ticket </span>{fSpentUsd(used)}</span
-        >
+      {#if figures}
+        <div class="figures">
+          {#if used}
+            <span class="k mono" title={used.estimated ? ESTIMATE_HINT : undefined}
+              ><span class="sr">Coût du ticket </span>{fSpentUsd(used)}</span
+            >
+          {/if}
+          {#if t.column === 'review'}<span class="k mono">{met}/{total} critères</span>{/if}
+          {#if t.column === 'done'}<span class="k mono">{doneMeta(t)}</span>{/if}
+        </div>
       {/if}
-      {#if t.column === 'review'}<span class="k mono">{met}/{total} critères</span>{/if}
-      {#if t.column === 'done'}<span class="k mono">{doneMeta(t)}</span>{/if}
     </div>
   {/if}
 
@@ -606,8 +611,24 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .foot .k {
-    flex: none;
+  /*
+   * The agent's name keeps at least a dozen characters: where the figures (cost, criteria met, loops) would squeeze it
+   * below that, they go under it, and break between them if they do not fit one line either. A column is a quarter of
+   * the board, and nothing may stick out of its card.
+   */
+  .foot {
+    flex-wrap: wrap;
+    row-gap: 3px;
+  }
+  .foot .who {
+    flex: 1 1 13ch;
+  }
+  .figures {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 3px 8px;
+    margin-left: auto;
   }
   .sr {
     position: absolute;

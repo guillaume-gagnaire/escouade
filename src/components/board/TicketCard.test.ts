@@ -633,3 +633,42 @@ describe('TicketCard cost of a ticket under way', () => {
     expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
   });
 });
+
+// jsdom lays nothing out: what keeps the foot inside a column a quarter of the board wide (the e2e test of the
+// ticket's loop measures it) is that its figures are one group beside the agent's name, which the CSS wraps under it.
+describe('TicketCard foot', () => {
+  const foot = (container: HTMLElement) => container.querySelector<HTMLElement>('.foot')!;
+  const figuresOf = (container: HTMLElement) => {
+    const group = foot(container).querySelector<HTMLElement>(':scope > .figures');
+    expect(group, 'the figures of the foot are one group').not.toBeNull();
+    return group!;
+  };
+
+  it('groups the cost and the criteria met of a ticket to test apart from its agent’s name', () => {
+    resetApp({ agents: [agent({ id: 'a1', ticketId: 't1', status: 'done', tokens: 1000, cost: 1.5 })] });
+    fakeBackend();
+    const { container } = show(doing({ column: 'review' }));
+    const figures = figuresOf(container);
+    expect(within(figures).getByText('1,50 $')).toBeInTheDocument();
+    expect(within(figures).getByText('1/2 critères')).toBeInTheDocument();
+    expect(within(figures).queryByText('refacto-auth')).not.toBeInTheDocument();
+    expect(foot(container)).toContainElement(screen.getByText('refacto-auth'));
+  });
+
+  it('groups the loops and the cost of a finished ticket apart from its agent’s name', () => {
+    resetApp({ agents: [agent({ id: 'a1', ticketId: 't1', status: 'done', archived: true })] });
+    fakeBackend();
+    const { container } = show(doing({ column: 'done', iteration: 2, cost: 0.5 }));
+    const figures = figuresOf(container);
+    expect(within(figures).getByText('2 boucles · 0,50 $')).toBeInTheDocument();
+    expect(within(figures).queryByText('refacto-auth')).not.toBeInTheDocument();
+  });
+
+  it('has no group of figures while there is nothing to say, which would add an empty line under the name', () => {
+    resetApp({ agents: [agent({ id: 'a1', ticketId: 't1', status: 'running', tokens: 0, cost: 0 })] });
+    fakeBackend();
+    const { container } = show(doing());
+    expect(foot(container)).toContainElement(screen.getByText('refacto-auth'));
+    expect(container.querySelector('.figures')).toBeNull();
+  });
+});

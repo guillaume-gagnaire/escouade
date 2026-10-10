@@ -632,6 +632,22 @@ test('a ticket is taken by an agent that loops until its criteria are met, then 
     'background-color',
     'rgba(0, 0, 0, 0)',
   );
+  // The card's foot keeps the agent's name readable and its figures (cost, criteria met) inside the card: at this
+  // width they go under the name, which they neither squeeze to nothing nor push out of the card.
+  const foot = () =>
+    review.locator('.foot').evaluate((e) => {
+      const card = e.closest('.card')!.getBoundingClientRect();
+      const box = (selector: string) => e.querySelector(selector)!.getBoundingClientRect();
+      const problems: string[] = [];
+      if (box('.name').width < 60) problems.push(`the agent's name is ${box('.name').width} px wide`);
+      for (const child of e.querySelectorAll('.who, .figures, .figures > .k')) {
+        const r = child.getBoundingClientRect();
+        if (r.left < card.left || r.right > card.right)
+          problems.push(`${child.className} lies ${r.left}..${r.right}, the card ${card.left}..${card.right}`);
+      }
+      return problems;
+    });
+  expect(await foot()).toEqual([]);
   expect(await sticksOut()).toEqual([]);
   await review.getByRole('button', { name: 'Valider et merger' }).click();
   const done = page.getByRole('region', { name: 'Terminé' });
