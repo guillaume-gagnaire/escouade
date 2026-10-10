@@ -302,9 +302,10 @@ async fn an_agent_is_named_from_a_question_in_the_language_of_the_texts_for_clau
     h.core.settings.write().claude_language = "en".into();
     let a = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
     h.turn(&a, "Create the hello file").await;
-    // The fake Haiku found the task in the English question (its first two words).
+    // The fake Haiku found the task in the English question (its first two words) and says it was
+    // asked in English, role and question both.
     h.wait("named", |h| h.agent(&a).named).await;
-    assert_eq!(h.agent(&a).name, "create-the-fake");
+    assert_eq!(h.agent(&a).name, "create-the-fake-en");
 }
 
 #[tokio::test]
@@ -1675,9 +1676,12 @@ async fn a_commit_proposal_is_asked_for_in_the_language_of_the_texts_for_claude(
         .commit_propose(&p.id, None, strings(&["src/app.ts"]))
         .await
         .unwrap();
-    // The fake Haiku read the English question: the latest subject, the file whose diff it got.
+    // The fake Haiku read the English question: the latest subject, the file whose diff it got,
+    // and it says it was asked in English, role and question both.
     assert!(
-        proposal.contains("D'après « init »") && proposal.contains("Diff de : src/app.ts."),
+        proposal.starts_with("feat: proposé par le faux claude (en)\n")
+            && proposal.contains("D'après « init »")
+            && proposal.contains("Diff de : src/app.ts."),
         "{proposal}"
     );
 }

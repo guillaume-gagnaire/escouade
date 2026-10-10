@@ -31,7 +31,7 @@
 // Asked to prepare a test launch (« Prépare le lancement… Ports réservés : <base> », “Prepare the test
 // launch… Ports reserved: <base>”), any agent answers with a recipe whose process listens on <base + 1>.
 // In one-shot mode, asked for a ticket's commit message, it answers `feat: travail du faux claude
-// [<KEY>]`, or a sentence out of form when the ticket's title says [message-libre]; with [sourd]
+// [<KEY>]` (`feat: work of the fake claude (en) [<KEY>]` when asked in English), or a sentence out of form when the ticket's title says [message-libre]; with [sourd]
 // in its system prompt it never reads its input and answers nothing for 20 s. Asked for a project's
 // worktree commands (<worktrees>), it suggests a setup (one of whose folders leaves the project, one
 // that holds a line break) and a teardown, or only refused ones in a folder named "all-refused". Asked
@@ -39,7 +39,9 @@
 // of the project, one that holds a line break), only refused ones in a folder named "all-refused", or
 // nothing readable in a folder named "unreadable". Asked for a direct commit's message (<fichiers>, <files>),
 // it names the latest commit subject (<sujets-recents>, <recent-subjects>) and the files of the diff it read.
-// Asked to name a task (<tache>, <task>), it answers with its first two words.
+// Asked to name a task (<tache>, <task>), it answers with its first two words. Asked in English (its
+// question and its role both), a name ends with "-en", a direct commit's message with " (en)"; with
+// a question and a role that disagree, "mixed" says so in the same places.
 
 import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -71,6 +73,12 @@ if (argv.includes('-p') && argv.some((a) => a.includes('[sourd]'))) {
   setTimeout(() => {}, 20_000);
 } else if (argv.includes('-p')) {
   let input = '';
+  // The role it is given (every one starts with « Tu » in French, "You" in English).
+  const role = argv[argv.indexOf('--system-prompt') + 1] ?? '';
+  // The language a question is asked in, as its frame (`english`) and its role say it: "mixed" when
+  // they disagree. The answers that are written text (an agent's name, a commit message) say it
+  // when it is not French, for a test to see which one Escouade asked in.
+  const tongue = (english) => (/^You /.test(role) === english ? (english ? 'en' : 'fr') : 'mixed');
   process.stdin.on('data', (d) => (input += d));
   process.stdin.on('end', () => {
     // A project's worktree commands: a setup of two that stand, one whose folder leaves the project and
@@ -119,20 +127,25 @@ if (argv.includes('-p') && argv.some((a) => a.includes('[sourd]'))) {
     if (input.includes('<fichiers>') || input.includes('<files>')) {
       const latest = input.match(/<(?:sujets-recents|recent-subjects)>\n([^\n]*)/)?.[1] ?? 'aucun';
       const diffed = [...input.matchAll(/^\+\+\+ b\/(.+)$/gm)].map((m) => m[1]);
-      const result = `feat: proposé par le faux claude\n\nD'après « ${latest} ». Diff de : ${diffed.join(', ')}.`;
+      const asked = tongue(input.includes('<files>'));
+      const result = `feat: proposé par le faux claude${asked === 'fr' ? '' : ` (${asked})`}\n\nD'après « ${latest} ». Diff de : ${diffed.join(', ')}.`;
       process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result }));
       return;
     }
     // A ticket's commit message.
     const ticket = input.match(/<ticket>\s*([A-Z]+-\d+)/)?.[1];
     if (ticket) {
-      const result = input.includes('[message-libre]') ? 'Voici le message : travail fait' : `feat: travail du faux claude [${ticket}]`;
+      const asked = tongue(input.startsWith('Write the commit message'));
+      const work = asked === 'fr' ? 'travail du faux claude' : `work of the fake claude (${asked})`;
+      const result = input.includes('[message-libre]') ? 'Voici le message : travail fait' : `feat: ${work} [${ticket}]`;
       process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result }));
       return;
     }
-    const task = input.match(/<(tache|task)>\s*([\s\S]*?)\s*<\/\1>/)?.[2] ?? '';
+    const [, frame, task = ''] = input.match(/<(tache|task)>\s*([\s\S]*?)\s*<\/\1>/) ?? [];
     const words = task.toLowerCase().match(/[a-z]+/g) ?? ['tache'];
-    process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result: `${words.slice(0, 2).join('-')}-fake` }));
+    const asked = tongue(frame === 'task');
+    const named = `${words.slice(0, 2).join('-')}-fake${asked === 'fr' ? '' : `-${asked}`}`;
+    process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result: named }));
   });
 } else {
   startSession();

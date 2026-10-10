@@ -3598,6 +3598,42 @@ async fn with_gh_a_pull_request_is_opened_with_the_criteria() {
 }
 
 #[tokio::test]
+#[tokio::test]
+async fn a_pull_request_and_its_commit_are_written_in_the_language_of_the_texts_for_claude() {
+    let h = harness("tk-pr-gh-en");
+    let (p, r) = h.project(false).await;
+    github_remote(&h, &r);
+    *h.core.gh.write() = Some(fake_gh());
+    h.set_settings(|s| s.claude_language = "en".into());
+    h.set_board(&p.id, |s| s.action = "pr".into());
+    let (t, wt) = reviewed(&h, &p.id, "File [ok]").await;
+    h.core.ticket_approve(&t.id).await.unwrap();
+    let done = h.ticket(&t.id);
+    assert_eq!(
+        done.outcome.as_deref(),
+        Some("⇡ PR #12 → main"),
+        "{:?}",
+        done.blocked
+    );
+    let call = gh_calls(&wt).pop().expect("gh called in the worktree");
+    let argv: Vec<&str> = call["argv"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|a| a.as_str().unwrap())
+        .collect();
+    // The title is the commit message Haiku wrote when it was asked in English (the fake says it).
+    let title = argv.iter().position(|a| *a == "--title").unwrap() + 1;
+    assert_eq!(argv[title], "feat: work of the fake claude (en) [DEM-1]");
+    // The description: what was done, then the criteria, under English headings.
+    let body = call["body"].as_str().unwrap();
+    assert!(
+        body.starts_with("What was done:\n- ") && body.contains("\n\nCriteria:\n- [x] "),
+        "{body}"
+    );
+    assert!(!body.contains("Ce qui a été fait") && !body.contains("Critères"));
+}
+
 async fn a_gh_installed_while_the_app_runs_opens_the_pull_request() {
     let h = harness("tk-pr-gh-later");
     let (p, r) = h.project(false).await;
@@ -3984,6 +4020,25 @@ async fn a_rejected_ticket_goes_back_to_the_same_agent_with_the_comment() {
 }
 
 /// The agent read a message starting with `start`.
+#[tokio::test]
+async fn a_rejected_ticket_is_sent_back_with_the_comment_in_the_language_of_the_texts_for_claude() {
+    let h = harness("tk-reject-en");
+    let (p, _) = h.project(false).await;
+    h.set_settings(|s| s.claude_language = "en".into());
+    let (t, wt) = reviewed(&h, &p.id, "Rework [ok]").await;
+    h.core
+        .ticket_reject(&t.id, "the button is misplaced.")
+        .await
+        .unwrap();
+    let said = "Test feedback on DEM-1: the button is misplaced. Fix it, check every criterion again, then end with the report.";
+    h.wait_sent(&wt, said).await;
+    h.wait_ticket(&t.id, "to test again", |t| t.column == Column::Review)
+        .await;
+    // What the agent read last: the English message, whole, and no French one before it.
+    assert_eq!(h.last_sent(&wt), said);
+    assert!(!was_sent(&h, &wt, "Retour de test"));
+}
+
 fn was_sent(h: &Harness, dir: &Path, start: &str) -> bool {
     h.stdin_messages(dir).iter().any(|m| {
         m["message"]["content"]
