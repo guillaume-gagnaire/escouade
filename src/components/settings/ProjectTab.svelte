@@ -1,6 +1,7 @@
 <script lang="ts">
   import { openPath } from '@tauri-apps/plugin-opener';
   import { tick, type Snippet } from 'svelte';
+  import { t } from '../../lib/i18n';
   import { askCloseProject } from '../../lib/project-actions';
   import { revealHidden } from '../../lib/recipe';
   import { settingsForm } from '../../lib/settings.svelte';
@@ -19,10 +20,9 @@
 
   const draft = $derived(settingsForm.project!);
   /** Who writes the commits of the files panel's « Commit… » and « Commit tout… ». */
-  const COMMIT_MODES: { value: CommitMode; label: string }[] = [
-    { value: 'agent', label: "Rédigé par l'agent" },
-    { value: 'direct', label: 'Direct, avec un message proposé' },
-  ];
+  const COMMIT_MODES = $derived<{ value: CommitMode; label: string }[]>(
+    (['agent', 'direct'] as const).map((value) => ({ value, label: t(`settings.project.commitModes.${value}`) })),
+  );
 
   /** Asks before closing it, then comes back to these settings, their draft as it was. */
   function askClose() {
@@ -40,7 +40,8 @@
   let launchButton = $state<HTMLButtonElement>();
 
   /** A shell by its name, or its id when this machine has none such. */
-  const shellName = (id: string) => app.shells.find((s) => s.id === id)?.label ?? `${revealHidden(id)} (introuvable)`;
+  const shellName = (id: string) =>
+    app.shells.find((s) => s.id === id)?.label ?? t('settings.fields.shellNotFound', { name: revealHidden(id) });
 
   /**
    * Asks Claude with `button`, then hands its proposal the focus, to be read from the keyboard: only when the focus is
@@ -63,9 +64,9 @@
 
 {#snippet facts(shell: string, dir: string)}
   <dl class="facts">
-    <dt>Shell</dt>
+    <dt>{t('settings.fields.shell')}</dt>
     <dd>{shellName(shell)}</dd>
-    <dt>Dossier</dt>
+    <dt>{t('common.folder')}</dt>
     <dd class="mono">{dir}</dd>
   </dl>
 {/snippet}
@@ -75,8 +76,8 @@
     <p class="notice">{notice}</p>
     {@render list()}
     <div class="actions">
-      <button class="btn ghost" onclick={ignore}>Ignorer</button>
-      <button class="btn primary" onclick={take}>Remplacer les commandes</button>
+      <button class="btn ghost" onclick={ignore}>{t('settings.project.ignore')}</button>
+      <button class="btn primary" onclick={take}>{t('settings.project.replace')}</button>
     </div>
   </div>
 {/snippet}
@@ -89,19 +90,19 @@
         {#each steps as s (s.id)}
           <li>
             <pre class="command mono">{revealHidden(s.command)}</pre>
-            {@render facts(s.shell, s.cwd.trim() && s.cwd.trim() !== '.' ? revealHidden(s.cwd) : 'la racine du worktree')}
+            {@render facts(s.shell, s.cwd.trim() && s.cwd.trim() !== '.' ? revealHidden(s.cwd) : t('settings.project.worktreeRoot'))}
           </li>
         {/each}
       </ol>
     {:else}
-      <p class="none">Aucune commande.</p>
+      <p class="none">{t('settings.project.noCommands')}</p>
     {/if}
   </section>
 {/snippet}
 
 {#snippet proposedSteps()}
-  {@render stepsOf("À l'ouverture d'un worktree", proposal!.setup)}
-  {@render stepsOf('Avant sa suppression', proposal!.teardown)}
+  {@render stepsOf(t('settings.project.setupTitle'), proposal!.setup)}
+  {@render stepsOf(t('settings.project.teardownTitle'), proposal!.teardown)}
 {/snippet}
 
 {#snippet proposedLaunch()}
@@ -110,26 +111,26 @@
       <li>
         <span class="name">{revealHidden(c.name.trim())}</span>
         <pre class="command mono">{revealHidden(c.command)}</pre>
-        {@render facts(c.shell, c.cwd.trim() ? revealHidden(c.cwd) : 'le dossier du projet')}
+        {@render facts(c.shell, c.cwd.trim() ? revealHidden(c.cwd) : t('settings.project.projectFolder'))}
       </li>
     {/each}
   </ul>
 {/snippet}
 
-<Group title="Identité">
-  <Row label="Nom">
-    <input class="field input" aria-label="Nom du projet" spellcheck="false" bind:value={draft.name} />
+<Group title={t('settings.project.identity')}>
+  <Row label={t('common.name')}>
+    <input class="field input" aria-label={t('settings.project.nameLabel')} spellcheck="false" bind:value={draft.name} />
   </Row>
-  <Row label="Dossier">
+  <Row label={t('common.folder')}>
     <span class="path mono" title={project.path}>{project.path}</span>
-    <button class="btn" onclick={() => openPath(project.path).catch((err) => app.toast(String(err), 'error'))}>Ouvrir</button>
+    <button class="btn" onclick={() => openPath(project.path).catch((err) => app.toast(String(err), 'error'))}>{t('common.open')}</button>
   </Row>
-  <Row label="Couleur">
-    <div class="colors" role="group" aria-label="Couleur">
+  <Row label={t('common.color')}>
+    <div class="colors" role="group" aria-label={t('common.color')}>
       {#each PROJECT_COLORS as c, i (c)}
         <button
           class="swatch"
-          aria-label="Couleur {i + 1}"
+          aria-label={t('settings.project.colorN', { n: i + 1 })}
           aria-pressed={draft.color === c}
           style:background={c}
           style:box-shadow={draft.color === c ? '0 0 0 2px var(--bg), 0 0 0 4px var(--text)' : 'none'}
@@ -141,39 +142,26 @@
 </Group>
 
 <Group title="Git">
-  <Row label="Un worktree par agent" desc="Isole les modifications de chaque nouvel agent dans sa propre branche.">
-    <Switch label="Un worktree par agent" bind:on={draft.worktreePerAgent} />
+  <Row label={t('settings.project.worktreePerAgent')} desc={t('settings.project.worktreePerAgentDesc')}>
+    <Switch label={t('settings.project.worktreePerAgent')} bind:on={draft.worktreePerAgent} />
   </Row>
-  <Row
-    label="Fichiers copiés dans les worktrees"
-    desc="Seuls ceux que git ignore, jamais commités ; un motif par ligne : .env* à la racine, **/.env* partout."
-    descId="copy-desc"
-    wide
-  >
+  <Row label={t('settings.project.copy')} desc={t('settings.project.copyDesc')} descId="copy-desc" wide>
     <textarea
       class="field mono copy"
       rows="3"
       placeholder=".env*"
-      aria-label="Fichiers copiés dans les worktrees"
+      aria-label={t('settings.project.copy')}
       aria-describedby="copy-desc"
       bind:value={draft.copy}
     ></textarea>
   </Row>
-  <Row label="Commit" desc="Direct : Escouade propose un message, tu le relis et tu commites toi-même.">
-    <Chips label="Commit" options={COMMIT_MODES} bind:value={draft.commitMode} />
+  <Row label={t('settings.project.commit')} desc={t('settings.project.commitDesc')}>
+    <Chips label={t('settings.project.commit')} options={COMMIT_MODES} bind:value={draft.commitMode} />
   </Row>
 </Group>
 
-<Group
-  title="Worktrees"
-  anchor="worktrees"
-  note="Variables disponibles : ESCOUADE_PROJECT_DIR (le projet), ESCOUADE_WORKTREE_DIR, ESCOUADE_BRANCH, et les ports réservés d'un ticket (ESCOUADE_PORT_BASE, ESCOUADE_PORT_END). Un échec est signalé dans la conversation de l'agent."
->
-  <Row
-    label="Remplir automatiquement"
-    desc="Claude lit le projet (manifestes, lockfiles, README…) sans rien modifier et propose les commandes. Relis-les avant d'enregistrer."
-    descId="worktrees-suggest-desc"
-  >
+<Group title={t('settings.project.worktrees')} anchor="worktrees" note={t('settings.project.worktreesNote')}>
+  <Row label={t('settings.project.fill')} desc={t('settings.project.fillWorktreesDesc')} descId="worktrees-suggest-desc">
     <!-- Two buttons of this tab read the same: what each row says of itself tells them apart. -->
     <button
       class="btn suggest"
@@ -182,46 +170,30 @@
       bind:this={suggestButton}
       onclick={() => ask(() => settingsForm.suggest(project.id), suggestButton, 'worktrees-proposal')}
     >
-      {settingsForm.suggesting[project.id] ? 'Claude lit le projet…' : '✦ Remplir automatiquement'}
+      {settingsForm.suggesting[project.id] ? t('settings.project.filling') : t('settings.project.fillButton')}
     </button>
   </Row>
   {#if proposal}
     {@render proposed(
       'worktrees-proposal',
-      'Commandes de worktree proposées',
-      "Proposition de Claude : relis chaque commande en entier. Elles remplacent les deux listes et, une fois enregistrées, tournent seules : la préparation à l'ouverture de chaque nouveau worktree, le démontage avant sa suppression.",
+      t('settings.project.proposedWorktrees'),
+      t('settings.project.proposedWorktreesNote'),
       proposedSteps,
       () => settle(() => settingsForm.takeProposal(project.id), suggestButton),
       () => settle(() => delete settingsForm.proposal[project.id], suggestButton),
     )}
   {/if}
-  <Row
-    label="À l'ouverture d'un worktree"
-    desc="Dans l'ordre, avant le premier message de son agent : dépendances, code généré… Les messages attendent la fin."
-    wide
-  >
-    <StepList bind:steps={draft.worktreeSetup} label="Commande de préparation" onadd={() => settingsForm.addStep('setup')} />
+  <Row label={t('settings.project.setupTitle')} desc={t('settings.project.setupDesc')} wide>
+    <StepList bind:steps={draft.worktreeSetup} kind="setup" onadd={() => settingsForm.addStep('setup')} />
   </Row>
-  <Row
-    label="Avant sa suppression"
-    desc="Ce que la préparation a créé hors du worktree (base de données, conteneurs…) ; souvent rien."
-    wide
-  >
-    <StepList bind:steps={draft.worktreeTeardown} label="Commande de démontage" onadd={() => settingsForm.addStep('teardown')} />
+  <Row label={t('settings.project.teardownTitle')} desc={t('settings.project.teardownDesc')} wide>
+    <StepList bind:steps={draft.worktreeTeardown} kind="teardown" onadd={() => settingsForm.addStep('teardown')} />
   </Row>
 </Group>
 
-<Group
-  title="Lancement"
-  anchor="launch"
-  note="Chaque commande tourne dans son propre terminal, en lecture seule. Lance-les depuis la section « Lancement » de la barre latérale."
->
+<Group title={t('settings.project.launch')} anchor="launch" note={t('settings.project.launchNote')}>
   <div class="fill">
-    <Row
-      label="Remplir automatiquement"
-      desc="Claude lit le projet (manifestes, scripts, docker-compose, README…) sans rien modifier et propose les commandes à lancer. Relis-les avant d'enregistrer."
-      descId="launch-suggest-desc"
-    >
+    <Row label={t('settings.project.fill')} desc={t('settings.project.fillLaunchDesc')} descId="launch-suggest-desc">
       <button
         class="btn suggest"
         aria-describedby="launch-suggest-desc"
@@ -229,14 +201,14 @@
         bind:this={launchButton}
         onclick={() => ask(() => settingsForm.suggestLaunch(project.id), launchButton, 'launch-proposal')}
       >
-        {settingsForm.suggestingLaunch[project.id] ? 'Claude lit le projet…' : '✦ Remplir automatiquement'}
+        {settingsForm.suggestingLaunch[project.id] ? t('settings.project.filling') : t('settings.project.fillButton')}
       </button>
     </Row>
     {#if launchProposal}
       {@render proposed(
         'launch-proposal',
-        'Commandes de lancement proposées',
-        'Proposition de Claude : relis chaque commande en entier. Elles remplacent celles de la liste.',
+        t('settings.project.proposedLaunch'),
+        t('settings.project.proposedLaunchNote'),
         proposedLaunch,
         () => settle(() => settingsForm.takeLaunchProposal(project.id), launchButton),
         () => settle(() => delete settingsForm.launchProposal[project.id], launchButton),
@@ -245,39 +217,52 @@
   </div>
   {#each draft.runCommands as c, i (c.id)}
     <fieldset class="cmd">
-      <legend class="sr">Commande {i + 1}</legend>
+      <legend class="sr">{t('settings.project.commandN', { n: i + 1 })}</legend>
       <div class="line">
-        <label class="f grow"><span>Nom</span><input class="field" bind:value={c.name} placeholder="ex. Front" /></label>
+        <label class="f grow"
+          ><span>{t('common.name')}</span><input
+            class="field"
+            bind:value={c.name}
+            placeholder={t('settings.project.namePlaceholder')}
+          /></label
+        >
         <label class="f"
-          ><span>Shell</span>
+          ><span>{t('settings.fields.shell')}</span>
           <select class="field" bind:value={c.shell}>
             {#each app.shells as s (s.id)}<option value={s.id}>{s.label}</option>{/each}
-            {#if !app.shells.some((s) => s.id === c.shell)}<option value={c.shell}>{c.shell} (introuvable)</option>{/if}
+            {#if !app.shells.some((s) => s.id === c.shell)}<option value={c.shell}
+                >{t('settings.fields.shellNotFound', { name: c.shell })}</option
+              >{/if}
           </select>
         </label>
-        <button class="del" title="Supprimer" aria-label="Supprimer" onclick={() => draft.runCommands.splice(i, 1)}>×</button>
+        <button class="del" title={t('common.delete')} aria-label={t('common.delete')} onclick={() => draft.runCommands.splice(i, 1)}
+          >×</button
+        >
       </div>
-      <label class="f"><span>Commande</span><input class="field mono" bind:value={c.command} placeholder="ex. npm run dev" /></label>
       <label class="f"
-        ><span>Sous-dossier <em>(vide = dossier du projet)</em></span><input
+        ><span>{t('common.command')}</span><input
+          class="field mono"
+          bind:value={c.command}
+          placeholder={t('settings.project.commandPlaceholder')}
+        /></label
+      >
+      <label class="f"
+        ><span>{t('settings.fields.subfolder')} <em>{t('settings.project.subfolderHint')}</em></span><input
           class="field mono"
           bind:value={c.cwd}
-          placeholder="ex. apps/web"
+          placeholder={t('settings.project.subfolderPlaceholder')}
         /></label
       >
     </fieldset>
   {:else}
-    <div class="empty">Aucune commande pour l'instant.</div>
+    <div class="empty">{t('settings.project.noCommandsYet')}</div>
   {/each}
-  <div class="add"><button class="btn" onclick={() => settingsForm.addCommand()}>+ Ajouter une commande</button></div>
+  <div class="add"><button class="btn" onclick={() => settingsForm.addCommand()}>{t('settings.fields.addCommand')}</button></div>
 </Group>
 
-<Group title="Zone sensible">
-  <Row
-    label="Fermer le projet"
-    desc="Le projet et ses agents sont retirés de l'application, conversations comprises. Les fichiers et les worktrees sur le disque ne sont pas touchés."
-  >
-    <button class="btn danger" onclick={askClose}>Fermer le projet…</button>
+<Group title={t('settings.project.danger')}>
+  <Row label={t('settings.project.close')} desc={t('settings.project.closeDesc')}>
+    <button class="btn danger" onclick={askClose}>{t('settings.project.closeButton')}</button>
   </Row>
 </Group>
 

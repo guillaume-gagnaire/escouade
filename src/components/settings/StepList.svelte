@@ -1,12 +1,13 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import { t } from '../../lib/i18n';
   import { IS_MAC } from '../../lib/platform';
   import { app } from '../../lib/state.svelte';
   import type { WorktreeStep } from '../../lib/types';
 
-  // The commands a project runs in its worktrees (their setup, or their teardown), in order: shell, command line,
-  // folder of the worktree.
-  let { steps = $bindable(), label, onadd }: { steps: WorktreeStep[]; label: string; onadd: () => void } = $props();
+  // The commands a project runs in its worktrees (their setup, or their teardown, `kind`), in order: shell, command
+  // line, folder of the worktree.
+  let { steps = $bindable(), kind, onadd }: { steps: WorktreeStep[]; kind: 'setup' | 'teardown'; onadd: () => void } = $props();
 
   /** Alt as the system writes it in a shortcut. */
   const ALT = IS_MAC ? '⌥' : 'Alt+';
@@ -42,41 +43,56 @@
   {#each steps as s, i (s.id)}
     <!-- The keys come from the step's fields and buttons, which keep their own. -->
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-    <div class="step" role="group" aria-label="{label} {i + 1}" onkeydown={(e) => onKeydown(e, i)}>
+    <div class="step" role="group" aria-label={t(`settings.steps.${kind}.group`, { n: i + 1 })} onkeydown={(e) => onKeydown(e, i)}>
       <span class="n mono" aria-hidden="true">{i + 1}</span>
-      <select class="field" aria-label="Shell" bind:value={s.shell}>
+      <select class="field" aria-label={t('settings.fields.shell')} bind:value={s.shell}>
         {#each app.shells as sh (sh.id)}<option value={sh.id}>{sh.label}</option>{/each}
-        {#if !app.shells.some((sh) => sh.id === s.shell)}<option value={s.shell}>{s.shell || 'Shell'} (introuvable)</option>{/if}
+        {#if !app.shells.some((sh) => sh.id === s.shell)}<option value={s.shell}
+            >{t('settings.fields.shellNotFound', { name: s.shell || t('settings.fields.shell') })}</option
+          >{/if}
       </select>
-      <input class="field mono cmd" aria-label="Commande" placeholder="ex. npm ci" spellcheck="false" bind:value={s.command} />
+      <input
+        class="field mono cmd"
+        aria-label={t('common.command')}
+        placeholder={t('settings.steps.commandPlaceholder')}
+        spellcheck="false"
+        bind:value={s.command}
+      />
       <input
         class="field mono dir"
-        aria-label="Sous-dossier"
-        title="Sous-dossier du worktree (vide : sa racine)"
-        placeholder="sous-dossier"
+        aria-label={t('settings.fields.subfolder')}
+        title={t('settings.steps.subfolderTitle')}
+        placeholder={t('settings.steps.subfolderPlaceholder')}
         spellcheck="false"
         bind:value={s.cwd}
       />
       <button
         class="icon up"
-        title="Monter ({ALT}↑)"
-        aria-label="Monter la commande {i + 1}"
+        title={t('settings.steps.up', { keys: `${ALT}↑` })}
+        aria-label={t('settings.steps.upN', { n: i + 1 })}
         aria-keyshortcuts="Alt+ArrowUp"
         disabled={i === 0}
         onclick={() => move(i, -1)}>↑</button
       >
       <button
         class="icon down"
-        title="Descendre ({ALT}↓)"
-        aria-label="Descendre la commande {i + 1}"
+        title={t('settings.steps.down', { keys: `${ALT}↓` })}
+        aria-label={t('settings.steps.downN', { n: i + 1 })}
         aria-keyshortcuts="Alt+ArrowDown"
         disabled={i === steps.length - 1}
         onclick={() => move(i, 1)}>↓</button
       >
-      <button class="icon del" title="Supprimer" aria-label="Supprimer la commande {i + 1}" onclick={() => steps.splice(i, 1)}>×</button>
+      <button
+        class="icon del"
+        title={t('common.delete')}
+        aria-label={t('settings.steps.deleteN', { n: i + 1 })}
+        onclick={() => steps.splice(i, 1)}>×</button
+      >
     </div>
   {/each}
-  <div><button class="btn" aria-label="Ajouter une {label.toLowerCase()}" onclick={onadd}>+ Ajouter une commande</button></div>
+  <div>
+    <button class="btn" aria-label={t(`settings.steps.${kind}.add`)} onclick={onadd}>{t('settings.fields.addCommand')}</button>
+  </div>
 </div>
 
 <style>

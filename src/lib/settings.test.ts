@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { flushSync } from 'svelte';
 import { board, fakeBackend, project, resetApp, SETTINGS } from '../test/ipc';
-import { settingsForm } from './settings.svelte';
+import { setLang } from './i18n';
+import { SETTINGS_TABS, settingsForm } from './settings.svelte';
 import { app } from './state.svelte';
 import type { RunCommand } from './types';
 
@@ -455,5 +457,56 @@ describe('settingsForm', () => {
     app.projects = app.projects.filter((p) => p.id !== 'p2');
     expect(await settingsForm.save()).toBe(true);
     expect(backend.called('update_project')).toHaveLength(0);
+  });
+
+  it('names its tabs in the language of the interface, read when asked', () => {
+    const names = () => SETTINGS_TABS.map((x) => `${x.label} / ${x.desc}`);
+    expect(names()[3]).toBe('Projets / Réglages propres à chaque projet');
+    setLang('en');
+    flushSync();
+    expect(names()).toEqual([
+      'Application / Language of the interface and of texts written by Claude',
+      'Claude Code / Executable, model, and default permissions',
+      'Notifications / Visual and sound alerts',
+      'Projects / Settings specific to each project',
+      'Kanban / Autopilot and approved tickets',
+      'Integrations / Jira, Trello, and GitHub Issues',
+      'Terminals / Shells available in the built-in terminals',
+      'Network / HTTP(S) proxy and TLS certificates for Claude Code, integrations, and updates',
+      'About / Version and local data',
+    ]);
+    // Those set for one project only.
+    expect(SETTINGS_TABS.filter((x) => x.scoped).map((x) => x.id)).toEqual(['projects', 'board', 'integrations']);
+  });
+
+  it('tells in English what Claude suggested, in the singular and the plural of what it proposed and what was left out', async () => {
+    setLang('en');
+    const ci = { id: 's1', name: 'Front', command: 'npm run dev', shell: 'bash', cwd: '' };
+    const db = { ...ci, id: 's2', name: 'Base' };
+    settingsForm.open({ tab: 'projects', projectId: 'p1' });
+    const said = async (commands: unknown[], refused: number) => {
+      fakeBackend({ suggest_run_commands: () => ({ commands, refused }) });
+      await settingsForm.suggestLaunch('p1');
+      return app.toasts.at(-1)?.text;
+    };
+    expect(await said([ci], 0)).toBe('1 command suggested: review it before saving.');
+    expect(await said([ci, db], 0)).toBe('2 commands suggested: review them before saving.');
+    expect(await said([ci], 1)).toBe('1 command suggested, 1 left out (invisible characters or too long): review it before saving.');
+    expect(await said([ci, db], 1)).toBe('2 commands suggested, 1 left out (invisible characters or too long): review them before saving.');
+    expect(await said([ci], 3)).toBe('1 command suggested, 3 left out (invisible characters or too long): review it before saving.');
+    expect(await said([ci, db], 3)).toBe('2 commands suggested, 3 left out (invisible characters or too long): review them before saving.');
+    expect(await said([], 0)).toBe('Claude found no command to run for this project.');
+  });
+
+  it('tells in English what keeps the settings from being saved, and follows a change of language', () => {
+    settingsForm.open({ projectId: 'p1' });
+    settingsForm.projects.p2.name = ' ';
+    expect(settingsForm.problem).toBe('Le projet « site » doit garder un nom.');
+    setLang('en');
+    flushSync();
+    expect(settingsForm.problem).toBe('The project “site” needs a name.');
+    settingsForm.projects.p2.name = 'site';
+    settingsForm.projects.p1.runCommands[0].command = '';
+    expect(settingsForm.problem).toBe('Every launch command in “demo-api” needs a name and a command line.');
   });
 });

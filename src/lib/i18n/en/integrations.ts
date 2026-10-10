@@ -12,7 +12,7 @@ export default defineZone('integrations', {
 
   accounts: {
     title: 'Connected accounts',
-    note: 'Tokens stay on this machine, apart from your settings, and are only used for calls to these services.',
+    note: 'Tokens stay on this machine, stored apart from your settings, and are only used for calls to these services.',
     connected: 'Connected · {label}',
     notConnected: 'Not connected',
     keychainUnavailable: 'System keychain unavailable: the token stays in ~/.escouade/integrations.json.',
@@ -75,7 +75,7 @@ export default defineZone('integrations', {
     title: 'Import tickets',
     sub: 'Into “To do” on the Kanban of {project}',
     noSource: 'No source linked to this project',
-    noSourceBody: 'Connect Jira, Trello or GitHub Issues, then choose the project, board or repository to link to {project}.',
+    noSourceBody: 'Connect Jira, Trello, or GitHub Issues, then choose the project, board, or repository to link to {project}.',
     thisProject: 'this project',
     linkSource: 'Link a source',
     sources: 'Sources',
