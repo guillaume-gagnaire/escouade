@@ -671,6 +671,24 @@ describe('App ticket window', () => {
     expect(screen.getByRole('button', { name: /DEM-1/ })).toHaveFocus();
   });
 
+  it('makes the ticket in the project it was opened from when another is selected while it is written', async () => {
+    const other = project({ id: 'p2', name: 'autre', path: 'C:\\code\\autre' });
+    const { backend } = start('', { projects: [project(), other], handlers: { ticket_create: () => ticket({ id: 't9', key: 'DEM-9' }) } });
+    expect(await screen.findByRole('main')).toBeInTheDocument();
+    app.openBoard('p1');
+    await userEvent.click(await screen.findByRole('button', { name: 'Nouveau ticket' }));
+    await screen.findByRole('dialog', { name: 'Nouveau ticket' });
+    await userEvent.type(title(), 'Dans le premier');
+    // A click on a notification of the other project: its board takes the place of this one, the window stays.
+    app.selectProject('p2');
+    await waitFor(() => expect(app.ui.activeProject).toBe('p2'));
+    expect(screen.getByRole('dialog', { name: 'Nouveau ticket' })).toBeInTheDocument();
+    expect(title()).toHaveValue('Dans le premier');
+    await userEvent.keyboard('{Control>}{Enter}{/Control}');
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Nouveau ticket' })).toBeNull());
+    expect(backend.called('ticket_create')[0].args.projectId).toBe('p1');
+  });
+
   it('asks before Escape drops what was typed, comes back to it on « Annuler », and closes on « Abandonner »', async () => {
     await onBoard({});
     await userEvent.click(plus());

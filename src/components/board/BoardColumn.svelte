@@ -24,20 +24,24 @@
   /** Each ticket's place in the queue: one that waits for others is passed over, as the autopilot does. */
   const queue = $derived(column.id === 'todo' ? queueIndices(tickets, app.tickets) : {});
 
-  /** The form of a new ticket, or (`ticket`) of one to do, in its window. */
+  /**
+   * The form of a new ticket, or (`ticket`) of one to do, in its window. The window outlives this board (another project
+   * selected meanwhile, by a click on a notification): the ticket is made in the project it was opened from.
+   */
   function openForm(ticket?: Ticket) {
+    const projectId = project.id;
     app.modal = {
       kind: 'ticket',
-      projectId: project.id,
+      projectId,
       ticket,
-      onSubmit: ticket ? (d) => save(ticket.id, d) : add,
+      onSubmit: ticket ? (d) => save(ticket.id, d) : (d) => add(projectId, d),
     };
   }
 
   // The command's ticket shows at once, unless the backend's event, which may come before its answer, already brought
   // it, maybe newer (started meanwhile); one coming after brings the same or newer. True once it is made: the window closes.
-  async function add(d: TicketDraft) {
-    const made = await app.run(api.ticketCreate(project.id, d));
+  async function add(projectId: string, d: TicketDraft) {
+    const made = await app.run(api.ticketCreate(projectId, d));
     if (!made) return false;
     app.tickets[made.id] ??= made;
     return true;

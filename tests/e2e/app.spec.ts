@@ -739,12 +739,27 @@ test('a ticket is written in a large window, a long description included, and ad
   // Nothing starts: the ticket stays "À faire", to be opened again.
   await page.getByRole('switch', { name: 'Pilote auto' }).click();
   const plus = page.getByRole('button', { name: 'Nouveau ticket' });
+  // A first ticket (DEM-1), for the new one to come after.
+  await plus.click();
+  await page.getByRole('textbox', { name: 'Titre du ticket' }).fill('Le premier');
+  await page.keyboard.press('Control+Enter');
+  await expect(page.getByRole('button', { name: /DEM-1/ })).toBeVisible();
   await plus.click();
   const dialog = page.getByRole('dialog', { name: 'Nouveau ticket' });
   const title = dialog.getByRole('textbox', { name: 'Titre du ticket' });
   const description = dialog.getByRole('textbox', { name: 'Description' });
   await expect(title).toBeFocused();
   await expect(dialog.getByText('Ctrl+Entrée pour ajouter')).toBeVisible();
+  // In a short window the loops, the branch and the dependencies show at once: the window's body has nothing to scroll.
+  for (const name of ['Boucles max', 'Branche', 'Après']) {
+    await expect(dialog.getByRole('group', { name })).toBeVisible();
+  }
+  expect(await dialog.locator('.body').evaluate((body) => body.scrollHeight - body.clientHeight)).toBeLessThanOrEqual(1);
+  // In a tall one the footer stays at the foot of the window, whatever the content leaves free.
+  await page.setViewportSize({ width: 1400, height: 1100 });
+  const [foot, whole] = await Promise.all([dialog.locator('.foot').boundingBox(), dialog.boundingBox()]);
+  expect(Math.abs(foot!.y + foot!.height - (whole!.y + whole!.height))).toBeLessThanOrEqual(2);
+  await page.setViewportSize({ width: 1028, height: 779 });
   // Large, and inside the window.
   const box = (await dialog.boundingBox())!;
   expect(box.width).toBeGreaterThanOrEqual(740);
@@ -785,13 +800,13 @@ test('a ticket is written in a large window, a long description included, and ad
   await expect(dialog).toBeHidden();
   await expect(plus).toBeFocused();
   // Opened again from its card: nothing was lost on the way.
-  await page.getByRole('button', { name: /DEM-1/ }).click();
-  const edit = page.getByRole('dialog', { name: 'Modifier DEM-1' });
+  await page.getByRole('button', { name: /DEM-2/ }).click();
+  const edit = page.getByRole('dialog', { name: 'Modifier DEM-2' });
   await expect(edit.getByRole('textbox', { name: 'Description' })).toHaveValue(long);
   await expect(edit.getByRole('button', { name: /^Branche/ })).toContainText('feat/e2e-ticket');
   await expect(edit.getByText('Ctrl+Entrée pour enregistrer')).toBeVisible();
   // Nothing changed: Escape leaves at once.
   await page.keyboard.press('Escape');
   await expect(edit).toBeHidden();
-  await expect(page.getByRole('button', { name: /DEM-1/ })).toBeFocused();
+  await expect(page.getByRole('button', { name: /DEM-2/ })).toBeFocused();
 });

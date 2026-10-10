@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { setLang } from '../../lib/i18n';
 import { app, type TicketFormDraft } from '../../lib/state.svelte';
 import { menu } from '../../lib/menu.svelte';
@@ -163,6 +163,13 @@ describe('TicketForm', () => {
   });
 
   describe('in its window', () => {
+    /** The window's height: jsdom's is 768, which is a short window for this form. */
+    const heightOf = (px: number) => {
+      window.innerHeight = px;
+      window.dispatchEvent(new Event('resize'));
+    };
+    beforeEach(() => heightOf(1000));
+    afterEach(() => heightOf(768));
     const title = () => screen.getByRole('textbox', { name: 'Titre du ticket' });
     const ctrlEnter = () => userEvent.keyboard('{Control>}{Enter}{/Control}');
 
@@ -194,6 +201,23 @@ describe('TicketForm', () => {
       expect(criteria).toHaveAttribute('rows', '6');
       // The title is a field of one line, above the others.
       expect(title().tagName).toBe('INPUT');
+    });
+
+    it('takes two rows less from each big field in a short window, so that loops, branch and dependencies show at once', () => {
+      heightOf(700);
+      show();
+      const [description, criteria] = [
+        screen.getByRole('textbox', { name: 'Description' }),
+        screen.getByRole('textbox', { name: "Critères d'acceptation" }),
+      ];
+      expect(description).toHaveAttribute('rows', '10');
+      expect(criteria).toHaveAttribute('rows', '5');
+      // Taller again with the window.
+      heightOf(900);
+      return waitFor(() => {
+        expect(description).toHaveAttribute('rows', '12');
+        expect(criteria).toHaveAttribute('rows', '6');
+      });
     });
 
     it('names its two big fields with a label of their own, besides the placeholder', () => {
@@ -282,6 +306,31 @@ describe('TicketForm', () => {
       await userEvent.keyboard('{Control>}{Shift>}{Enter}{/Shift}{/Control}');
       await userEvent.keyboard('{Alt>}{Control>}{Enter}{/Control}{/Alt}');
       expect(onsubmit).not.toHaveBeenCalled();
+    });
+
+    it('adds the ticket once for a Ctrl+Enter held down, whose repeats would add the next one', async () => {
+      const onsubmit = vi.fn();
+      show({ onsubmit });
+      await userEvent.type(title(), 'Un ticket');
+      const description = screen.getByRole('textbox', { name: 'Description' });
+      description.focus();
+      // A repeat is held back, and writes no line either.
+      const repeat = await fireEvent.keyDown(description, { key: 'Enter', ctrlKey: true, repeat: true });
+      expect(repeat).toBe(false);
+      expect(onsubmit).not.toHaveBeenCalled();
+      await fireEvent.keyDown(description, { key: 'Enter', ctrlKey: true });
+      expect(onsubmit).toHaveBeenCalledTimes(1);
+    });
+
+    it('adds the ticket from the title with Enter alone, not for a key held down nor one that confirms an input method', async () => {
+      const onsubmit = vi.fn();
+      show({ onsubmit });
+      await userEvent.type(title(), 'Un ticket');
+      await fireEvent.keyDown(title(), { key: 'Enter', repeat: true });
+      await fireEvent.keyDown(title(), { key: 'Enter', isComposing: true });
+      expect(onsubmit).not.toHaveBeenCalled();
+      await fireEvent.keyDown(title(), { key: 'Enter' });
+      expect(onsubmit).toHaveBeenCalledTimes(1);
     });
 
     it('is not submitted twice by a Ctrl+Enter pressed again while it saves', async () => {

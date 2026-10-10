@@ -115,6 +115,17 @@ describe('Board', () => {
     expect(await within(col('À faire')).findByText('DEM-9')).toBeInTheDocument();
   });
 
+  it('makes the ticket in the project the window was opened from, whichever is on screen when it is sent', async () => {
+    const backend = fakeBackend({ ticket_create: () => ticket({ id: 't9', key: 'DEM-9' }) });
+    const { rerender } = render(Board, { project: app.projects[0] });
+    await userEvent.click(screen.getByRole('button', { name: 'Nouveau ticket' }));
+    expect(app.modal).toMatchObject({ kind: 'ticket', projectId: 'p1' });
+    // Another project is selected meanwhile (a click on a notification): the window stays, and so does its project.
+    await rerender({ project: project({ id: 'p2', name: 'autre' }) });
+    expect(await (app.modal as any).onSubmit({ title: 'Vite', description: '', criteria: [], maxLoops: 5, after: [] })).toBe(true);
+    expect(backend.called('ticket_create')[0].args.projectId).toBe('p1');
+  });
+
   it('keeps the window of a new ticket open, what was typed in it, when the ticket could not be made', async () => {
     fakeBackend({
       ticket_create: () => {

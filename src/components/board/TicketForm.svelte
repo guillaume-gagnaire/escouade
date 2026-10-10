@@ -166,12 +166,19 @@
     else if (app.modal === self) app.modal = null;
   }
 
-  /** Ctrl+Enter (Cmd+Enter on macOS) adds the ticket from any field; Enter alone only from the title, the textareas take it as a new line. */
+  /**
+   * Ctrl+Enter (Cmd+Enter on macOS) adds the ticket from any field; Enter alone only from the title, the textareas take it as
+   * a new line. Not a key held down: its repeats would go on to the next window, or write lines.
+   */
   function chord(e: KeyboardEvent) {
     if (e.key !== 'Enter' || e.isComposing || !primaryKey(e) || e.shiftKey || e.altKey) return;
     e.preventDefault();
-    void submit();
+    if (!e.repeat) void submit();
   }
+
+  /** The height of the window of the app: a short one gets two rows less in each big field, for the rest of the form to show. */
+  let viewHeight = $state(window.innerHeight);
+  const short = $derived(viewHeight < 820);
 
   /** The textarea grows with what is typed in it (up to its `max-height`), and keeps a height the user dragged it to. */
   function grow(node: HTMLTextAreaElement, _text: string) {
@@ -183,8 +190,10 @@
   }
 </script>
 
+<svelte:window bind:innerHeight={viewHeight} />
+
 <Modal title={ticket ? t('board.form.editTitle', { key: ticket.key }) : t('board.form.newTitle')} width={760} tall onclose={leave}>
-  <div class="form" role="presentation" onkeydown={chord}>
+  <div class="form" class:short role="presentation" onkeydown={chord}>
     <!-- svelte-ignore a11y_autofocus -->
     <input
       class="title"
@@ -192,14 +201,14 @@
       aria-label={t('board.form.title')}
       bind:value={title}
       autofocus
-      onkeydown={(e) => e.key === 'Enter' && !primaryKey(e) && submit()}
+      onkeydown={(e) => e.key === 'Enter' && !e.isComposing && !e.repeat && !primaryKey(e) && submit()}
     />
     <div class="grp">
       <label class="lab" for="{uid}-description">{t('board.form.description')}</label>
       <textarea
         id="{uid}-description"
         class="description"
-        rows="12"
+        rows={short ? 10 : 12}
         placeholder={t('board.form.descriptionPlaceholder')}
         bind:value={description}
         use:grow={description}
@@ -207,7 +216,7 @@
     </div>
     <div class="grp">
       <label class="lab" for="{uid}-criteria">{t('board.form.criteria')}</label>
-      <textarea id="{uid}-criteria" rows="6" placeholder={t('board.form.criteriaPlaceholder')} bind:value={criteria}></textarea>
+      <textarea id="{uid}-criteria" rows={short ? 5 : 6} placeholder={t('board.form.criteriaPlaceholder')} bind:value={criteria}></textarea>
     </div>
     <div class="meta" class:single={!candidates.length}>
       <div class="side">
@@ -234,16 +243,18 @@
       </div>
       {#if candidates.length}
         <div class="after" role="group" aria-label={t('board.form.after')}>
-          <span class="k">{t('board.form.after')}</span>
-          <input
-            class="search"
-            role="searchbox"
-            placeholder={t('board.form.searchKey')}
-            aria-label={t('board.form.searchKey')}
-            spellcheck="false"
-            autocomplete="off"
-            bind:value={query}
-          />
+          <div class="find">
+            <span class="k">{t('board.form.after')}</span>
+            <input
+              class="search"
+              role="searchbox"
+              placeholder={t('board.form.searchKey')}
+              aria-label={t('board.form.searchKey')}
+              spellcheck="false"
+              autocomplete="off"
+              bind:value={query}
+            />
+          </div>
           {#if shown.length}
             <ul class="deps">
               {#each shown as x (x.id)}
@@ -318,6 +329,25 @@
     padding: 10px 12px;
     font-size: 13px;
     line-height: 1.55;
+  }
+  /* A short window: tighter, for the loops, the branch and the dependencies to show without scrolling. */
+  .form.short {
+    gap: 12px;
+  }
+  .form.short .title {
+    height: 36px;
+  }
+  .form.short .grp {
+    gap: 4px;
+  }
+  .form.short textarea {
+    padding-block: 8px;
+  }
+  .form.short .meta {
+    padding-top: 10px;
+  }
+  .form.short .side {
+    gap: 10px;
   }
   /* Grows with its text up to this, then scrolls in itself. */
   .description {
@@ -404,7 +434,15 @@
     gap: 6px;
     min-width: 0;
   }
+  /* The label and the search on one line, as the loops and the branch have theirs: less height for the list under them. */
+  .find {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
   .search {
+    flex: 1;
+    min-width: 0;
     height: 30px;
     padding: 0 10px;
     border-radius: var(--r-sm);

@@ -78,6 +78,11 @@
   .modal.tall {
     height: min(88vh, 860px);
   }
+  /* The footer stays at the foot of the window, whatever the content leaves free. */
+  .modal.tall .body {
+    flex: 1 1 auto;
+    padding-block: 16px 18px;
+  }
   .head {
     flex: none;
     display: flex;
