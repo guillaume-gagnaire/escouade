@@ -863,6 +863,20 @@ mod tests {
     }
 
     #[test]
+    fn reads_on_past_a_line_that_is_not_utf8() {
+        let dir = test_dir("cs-utf8");
+        let mut bytes = user("u1", "pagination", 1).into_bytes();
+        bytes.extend_from_slice(b"\n{\"op\":\"append\",\"item\":{\"text\":\"\xff\xfe\"}}\n");
+        bytes.extend_from_slice(user("u2", "pagination encore", 2).as_bytes());
+        bytes.push(b'\n');
+        std::fs::write(dir.join("a1.jsonl"), bytes).unwrap();
+        assert_eq!(
+            ids(&find(&dir, &[agent("a1", "p1")], "pagination")),
+            ["u2", "u1"]
+        );
+    }
+
+    #[test]
     fn finds_a_file_of_an_agent_whose_folder_changes_length_in_lowercase() {
         // The Kelvin sign is three bytes, its lowercase `k` one.
         let dir = logs(

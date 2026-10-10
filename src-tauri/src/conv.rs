@@ -175,7 +175,8 @@ pub struct Replayed {
 
 /// Reads a log back, without writing anything: the search reads the logs of agents that are
 /// writing theirs. A line that is no operation (cut short as the app stopped while writing it,
-/// damaged) is skipped. None when there is no log.
+/// damaged, not even UTF-8) is skipped and the reading goes on: the log is compacted from what is
+/// read. None when there is no log.
 pub fn replay(path: &Path) -> Option<Replayed> {
     let file = File::open(path).ok()?;
     let mut log = Replayed {
@@ -183,8 +184,9 @@ pub fn replay(path: &Path) -> Option<Replayed> {
         index: HashMap::new(),
         ops: 0,
     };
-    for line in BufReader::new(file).lines().map_while(Result::ok) {
-        let Ok(v) = serde_json::from_str::<Value>(&line) else {
+    // Lines as bytes: reading them as text would stop at the first one that is not UTF-8.
+    for line in BufReader::new(file).split(b'\n').map_while(Result::ok) {
+        let Ok(v) = serde_json::from_slice::<Value>(&line) else {
             continue;
         };
         log.ops += 1;
@@ -220,5 +222,45 @@ fn patch_item(items: &mut [Value], index: &HashMap<String, usize>, id: &str, pat
         for (k, v) in fields {
             target.insert(k.clone(), v.clone());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::paths::test_dir;
+
+    #[test]
+    fn reads_on_past_a_line_that_is_not_utf8_and_compacts_without_losing_what_follows() {
+        let dir = test_dir("conv-utf8");
+        let op = |v: Value| format!("{v}\n").into_bytes();
+        let mut bytes = op(
+            json!({ "op": "append", "item": { "kind": "text", "id": "m1", "text": "", "streaming": true } }),
+        );
+        // Enough operations for the log to be compacted once read.
+        for i in 0..70 {
+            bytes.extend(op(
+                json!({ "op": "patch", "id": "m1", "patch": { "text": format!("v{i}") } }),
+            ));
+        }
+        bytes
+            .extend_from_slice(b"{\"op\":\"patch\",\"id\":\"m1\",\"patch\":{\"text\":\"\xff\"}}\n");
+        bytes.extend(op(
+            json!({ "op": "append", "item": { "kind": "user", "id": "u2", "text": "après" } }),
+        ));
+        std::fs::write(log_path(&dir, "a1"), bytes).unwrap();
+        let ids = |items: &[Value]| -> Vec<String> {
+            items
+                .iter()
+                .map(|i| i["id"].as_str().unwrap().to_string())
+                .collect()
+        };
+        let mut conv = Conv::new(&dir, "a1");
+        assert_eq!(ids(&conv.items()), ["m1", "u2"]);
+        assert_eq!(conv.get("m1").unwrap()["text"], "v69");
+        // Compacted: one append per item, the one after the bad line included.
+        let log = replay(&log_path(&dir, "a1")).unwrap();
+        assert_eq!(log.ops, 2);
+        assert_eq!(ids(&log.items), ["m1", "u2"]);
     }
 }
