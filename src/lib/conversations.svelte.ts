@@ -21,6 +21,9 @@ export interface ReadingPlace {
 
 let held = 0;
 
+/** How long a conversation no view shows stays in the window's memory, its agent at rest (releaseIdle). */
+export const RELEASE_AFTER_MS = 10 * 60_000;
+
 export class Conversation {
   items = $state<ConvItem[]>([]);
   loaded = $state(false);
@@ -36,8 +39,48 @@ export class Conversation {
   jump = $state<string | null>(null);
   private index = new Map<string, number>();
   private buffer: ConvOp[] | null = null;
+  /** Views showing the conversation now. */
+  private views = 0;
+  /** When the last view went, or when the conversation was made. */
+  private hiddenSince = Date.now();
+  /** Its items were let go of (releaseIdle): the next view reads them again. */
+  private released = false;
 
   constructor(public agentId: string) {}
+
+  /**
+   * A view shows the conversation: it stays in memory while shown, and its items are read again if they were let go
+   * of. Returns what tells that the view went.
+   */
+  show(): () => void {
+    this.views++;
+    if (this.released) {
+      this.released = false;
+      this.load();
+    }
+    let gone = false;
+    return () => {
+      if (gone) return;
+      gone = true;
+      this.views--;
+      this.hiddenSince = Date.now();
+    };
+  }
+
+  /**
+   * Lets go of the items when no view has shown them for RELEASE_AFTER_MS and nothing is on its way: a read, a message
+   * waiting for the worktree (its bubble is here). The place the reader left and the message asked for stay: they are
+   * told by item ids, which the next read has again.
+   */
+  releaseIfIdle(now: number) {
+    if (this.released || this.views > 0 || !this.loaded || this.buffer || this.waiting.length) return;
+    if (now - this.hiddenSince < RELEASE_AFTER_MS) return;
+    this.items = [];
+    this.index = new Map();
+    this.error = null;
+    this.loaded = false;
+    this.released = true;
+  }
 
   async load() {
     this.buffer = [];
@@ -88,6 +131,8 @@ export class Conversation {
   }
 
   apply(op: ConvOp) {
+    // Items let go of: the next read has what comes meanwhile, which the backend records.
+    if (this.released) return;
     if (this.buffer) {
       this.buffer.push(op);
       return;
@@ -138,4 +183,13 @@ export function applyConvOps(agentId: string, ops: ConvOp[]) {
 
 export function dropConversation(agentId: string) {
   conversations.delete(agentId);
+}
+
+/**
+ * Lets go of the items of the conversations no view has shown for RELEASE_AFTER_MS, but those of the agents `busy`
+ * tells (at work, waiting for an answer), whose view the reader is likely back to soon: the window's memory is that
+ * of the agents in use, however long the others' conversations. Their next view reads them again.
+ */
+export function releaseIdle(now: number, busy: (agentId: string) => boolean) {
+  for (const c of conversations.values()) if (!busy(c.agentId)) c.releaseIfIdle(now);
 }

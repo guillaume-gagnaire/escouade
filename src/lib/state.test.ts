@@ -240,6 +240,31 @@ describe('AppState', () => {
     expect(c.items.map((i) => i.id)).toEqual(['u1']);
   });
 
+  it('lets go of the conversations out of sight for 10 minutes, never those of the agents at work or waiting', async () => {
+    vi.useFakeTimers();
+    try {
+      await start({
+        agents: [
+          agent({ id: 'out-done' }),
+          agent({ id: 'out-running', status: 'running' }),
+          agent({ id: 'out-waiting', status: 'waiting', pending: ['q1'] }),
+        ],
+      });
+      const convs = ['out-done', 'out-running', 'out-waiting'].map((id) => conversationOf(id));
+      // Each shown, then left.
+      for (const c of convs) c.show()();
+      await vi.waitFor(() => expect(convs.every((c) => c.loaded)).toBe(true));
+      vi.advanceTimersByTime(9 * 60_000);
+      expect(convs.map((c) => c.loaded)).toEqual([true, true, true]);
+      vi.advanceTimersByTime(2 * 60_000);
+      expect(convs.map((c) => c.loaded)).toEqual([false, true, true]);
+      vi.advanceTimersByTime(60 * 60_000);
+      expect(convs.map((c) => c.loaded)).toEqual([false, true, true]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('only bumps the files refresh tick for the active project', async () => {
     const { emit } = await start();
     const before = app.gitTick;

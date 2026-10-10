@@ -12,7 +12,7 @@ vi.mock('../lib/terminals', () => ({
   disposeLog() {},
 }));
 
-import { applyConvOps, conversationOf } from '../lib/conversations.svelte';
+import { applyConvOps, conversationOf, releaseIdle } from '../lib/conversations.svelte';
 import { app } from '../lib/state.svelte';
 import type { Agent } from '../lib/types';
 import { agent, fakeBackend, project, resetApp, ticket } from '../test/ipc';
@@ -424,6 +424,29 @@ describe('Conversation', () => {
           height = REAL;
           resized.forEach((cb) => cb([]));
           expect(view.scrollTop).toBe(350);
+        });
+
+        it('reads the conversation again once it left the memory, then puts the reader back on their message', async () => {
+          const { a, scroller, unmount } = setup({}, items);
+          await frame();
+          readerScrollsTo(scroller, 350);
+          unmount();
+          // 10 minutes out of sight, the agent idle.
+          releaseIdle(Date.now() + 10 * 60_000, (id) => id !== a.id);
+          expect(conversationOf(a.id).items).toEqual([]);
+          let read: (items: unknown[]) => void = () => {};
+          const backend = fakeBackend({ get_conversation: () => new Promise((r) => (read = r)) });
+          height = ESTIMATE;
+          const view = await reopen(a);
+          expect(backend.called('get_conversation')).toHaveLength(1);
+          // Nothing to put back while it is read: the place stays the reader's, even if the empty view scrolls.
+          await frame();
+          view.dispatchEvent(new Event('scroll'));
+          expect(conversationOf(a.id).place?.anchor?.item).toBe('u2');
+          read(items);
+          await frame();
+          await frame();
+          expect(view.scrollTop).toBe(170);
         });
 
         it('leaves the reader alone once they scroll, however the messages are drawn', async () => {

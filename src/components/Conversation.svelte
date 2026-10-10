@@ -274,6 +274,8 @@
   onMount(() => {
     // The view does not follow the bottom on its way to another place.
     if (conv.jump || (conv.place && !conv.place.stick)) stick = false;
+    // Shown, the conversation stays in memory (read again if it had left it).
+    return conv.show();
   });
 
   // Once the conversation is loaded, the view opens where the reader left it, unless a message is asked for (a search

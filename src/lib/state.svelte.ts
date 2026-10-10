@@ -2,7 +2,7 @@
 
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { api } from './ipc';
-import { applyConvOps, dropConversation } from './conversations.svelte';
+import { applyConvOps, dropConversation, releaseIdle } from './conversations.svelte';
 import { buffers } from './editor/buffers.svelte';
 import { recentFiles } from './editor/quick-open';
 import { fileSearches } from './editor/search.svelte';
@@ -322,6 +322,14 @@ class AppState {
     for (const e of early) this.onEvent(e);
     this.ready = true;
     setInterval(() => (this.now = Date.now()), 1000);
+    // The conversations out of sight leave the window's memory after a while, read again when shown.
+    setInterval(() => releaseIdle(Date.now(), (id) => this.atWork(id)), 60_000);
+  }
+
+  /** An agent working, or waiting for an answer: its conversation stays in the window's memory, out of sight too. */
+  private atWork(id: string): boolean {
+    const a = this.agents[id];
+    return !!a && (a.status === 'running' || a.status === 'waiting' || a.pending.length > 0);
   }
 
   private onEvent(e: UiEvent) {
