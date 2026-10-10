@@ -58,6 +58,8 @@ export const SETTINGS: Settings = {
     importLabel: 'claude-ready',
     importEvery: 15,
   },
+  language: 'system',
+  claudeLanguage: 'ui',
 };
 
 export function project(over: Partial<Project> = {}): Project {
@@ -241,6 +243,8 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.failedUpdate = null;
   app.models = [];
   app.accounts = [];
+  // French all along, as the tests (the language itself is put back by the setup).
+  app.lang = { ui: 'fr', system: 'fr', claude: 'fr' };
   app.ready = true;
   buffers.reset();
   trees.reset();

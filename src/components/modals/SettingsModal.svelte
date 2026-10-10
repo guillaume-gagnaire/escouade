@@ -4,6 +4,7 @@
   import { SETTINGS_TABS, settingsForm, type SettingsTab } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
   import AppTab from '../settings/AppTab.svelte';
+  import ApplicationTab from '../settings/ApplicationTab.svelte';
   import BoardTab from '../settings/BoardTab.svelte';
   import IntegrationsTab from '../settings/IntegrationsTab.svelte';
   import ProjectTab from '../settings/ProjectTab.svelte';
@@ -142,6 +143,8 @@
           {:else}
             <p class="none">Aucun projet ouvert.</p>
           {/if}
+        {:else if current.id === 'app'}
+          <ApplicationTab />
         {:else}
           <AppTab tab={current.id} />
         {/if}

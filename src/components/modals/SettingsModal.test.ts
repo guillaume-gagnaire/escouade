@@ -47,7 +47,17 @@ describe('SettingsModal', () => {
       within(dialog)
         .getAllByRole('tab')
         .map((t) => t.textContent?.trim()),
-    ).toEqual(['✳Claude Code', '♪Notifications', '▤Projets', '▦Kanban', '⧉Intégrations', '$_Terminaux', '⇄Réseau', 'ⓘÀ propos']);
+    ).toEqual([
+      'AaApplication',
+      '✳Claude Code',
+      '♪Notifications',
+      '▤Projets',
+      '▦Kanban',
+      '⧉Intégrations',
+      '$_Terminaux',
+      '⇄Réseau',
+      'ⓘÀ propos',
+    ]);
     expect(tab('Claude Code')).toHaveAttribute('aria-selected', 'true');
     expect(within(dialog).getByText('Exécutable, modèle et permissions par défaut')).toBeInTheDocument();
     expect(within(panel()).getByRole('textbox', { name: /Chemin de l'exécutable/ })).toBeInTheDocument();
@@ -711,8 +721,8 @@ describe('SettingsModal', () => {
     render(SettingsModal, { tab: 'network' });
     tab('Réseau').focus();
     await userEvent.keyboard('{Home}');
-    expect(tab('Claude Code')).toHaveAttribute('aria-selected', 'true');
-    expect(tab('Claude Code')).toHaveFocus();
+    expect(tab('Application')).toHaveAttribute('aria-selected', 'true');
+    expect(tab('Application')).toHaveFocus();
     await userEvent.keyboard('{End}');
     expect(tab('À propos')).toHaveAttribute('aria-selected', 'true');
   });

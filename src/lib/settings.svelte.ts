@@ -1,6 +1,7 @@
 // The settings modal: one draft of all it sets (the app's settings, each project's own and its
 // board's), saved at once by « Enregistrer » and dropped by « Annuler ».
 
+import { t } from './i18n';
 import { api } from './ipc';
 import { forgetLaunches } from './launch-actions';
 import { app } from './state.svelte';
@@ -15,9 +16,20 @@ import type {
   WorktreeSuggestion,
 } from './types';
 
-export type SettingsTab = 'claude' | 'notifications' | 'projects' | 'board' | 'integrations' | 'terminals' | 'network' | 'about';
+export type SettingsTab = 'app' | 'claude' | 'notifications' | 'projects' | 'board' | 'integrations' | 'terminals' | 'network' | 'about';
 
 export const SETTINGS_TABS: { id: SettingsTab; label: string; icon: string; desc: string; scoped?: boolean }[] = [
+  {
+    id: 'app',
+    // Read where shown: they follow a change of language.
+    get label() {
+      return t('settings.tabs.app.label');
+    },
+    icon: 'Aa',
+    get desc() {
+      return t('settings.tabs.app.desc');
+    },
+  },
   { id: 'claude', label: 'Claude Code', icon: '✳', desc: 'Exécutable, modèle et permissions par défaut' },
   { id: 'notifications', label: 'Notifications', icon: '♪', desc: 'Alertes visuelles et sonores' },
   { id: 'projects', label: 'Projets', icon: '▤', desc: 'Réglages propres à chaque projet', scoped: true },
@@ -35,6 +47,7 @@ export const SETTINGS_TABS: { id: SettingsTab; label: string; icon: string; desc
 
 /** The app's settings each tab sets. */
 const SETTINGS_OF: Partial<Record<SettingsTab, (keyof Settings)[]>> = {
+  app: ['language', 'claudeLanguage'],
   claude: ['claudePath', 'defaultModel', 'defaultEffort', 'defaultMode', 'autoResume', 'idleStopMinutes'],
   notifications: ['sound', 'osNotifications', 'notifyFor'],
   terminals: ['pwshPath', 'bashPath', 'wslDistro'],

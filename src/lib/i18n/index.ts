@@ -6,7 +6,7 @@ import { fr } from './fr';
 import { locale, type Lang } from './locale.svelte';
 import type { Args, Key, PluralLeaf, Tree } from './types';
 
-export { intlLocale, locale, setLang, type Lang } from './locale.svelte';
+export { intlLocale, LANG_NAMES, locale, setLang, type Lang } from './locale.svelte';
 export type { Key, RichPart, RichProps } from './types';
 
 type Leaf = string | PluralLeaf;

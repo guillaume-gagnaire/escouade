@@ -15,5 +15,8 @@ export function setLang(lang: Lang) {
   if (typeof document !== 'undefined') document.documentElement.lang = lang;
 }
 
+/** Each language named in itself, as a choice of language shows it whatever the interface's: the same in every catalog. */
+export const LANG_NAMES: Record<Lang, string> = { fr: 'Français', en: 'English' };
+
 /** The locale `Intl` formats a language with. */
 export const intlLocale = (lang: Lang = locale.ui) => (lang === 'fr' ? 'fr-FR' : 'en-US');
