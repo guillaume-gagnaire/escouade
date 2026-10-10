@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { setLang } from './i18n';
-import { editsByTurn, escouadeArgs, hasDiff, isEscouadeTool, toolArg, toolLabel, toolResultSummary } from './tools';
+import { editsByTurn, escouadeArgs, hasDiff, isEscouadeTool, isQuietTool, toolArg, toolLabel, toolResultSummary } from './tools';
 import type { ConvItem, ToolItem, TurnItem } from './types';
 
 const CWD = 'C:\\code\\app';
@@ -26,6 +26,66 @@ describe('toolArg', () => {
     ['TodoWrite', { todos: [{}, {}, {}] }, '3 tâches'],
     ['mcp__github__create_issue', { title: 'Bug' }, 'Bug'],
   ])('%s', (name, input, want) => expect(toolArg(tool(name, input), CWD)).toBe(want));
+});
+
+describe('the task tools of Claude Code', () => {
+  const arg = (name: string, input: Record<string, unknown>) => toolArg(tool(name, input), CWD);
+
+  it('sum up a task made by its subject', () => {
+    expect(arg('TaskCreate', { subject: 'Écrire les tests', description: 'Long texte', activeForm: 'Écrit les tests' })).toBe(
+      'Tâche : Écrire les tests',
+    );
+    expect(arg('TaskCreate', {})).toBe('');
+  });
+
+  it('sum up a task changed by its id and what became of it, in words', () => {
+    expect(arg('TaskUpdate', { taskId: '3', status: 'completed' })).toBe('Tâche #3 : terminée');
+    expect(arg('TaskUpdate', { taskId: '3', status: 'in_progress' })).toBe('Tâche #3 : en cours');
+    expect(arg('TaskUpdate', { taskId: '3', status: 'pending' })).toBe('Tâche #3 : à faire');
+    expect(arg('TaskUpdate', { taskId: '3', status: 'deleted' })).toBe('Tâche #3 : supprimée');
+    // The id may be a number; a change that is no status (a subject, what it waits for) is a change.
+    expect(arg('TaskUpdate', { taskId: 12, status: 'completed' })).toBe('Tâche #12 : terminée');
+    expect(arg('TaskUpdate', { taskId: '3', subject: 'Autre titre' })).toBe('Tâche #3 : modifiée');
+    expect(arg('TaskUpdate', { taskId: '3', addBlockedBy: ['1'] })).toBe('Tâche #3 : modifiée');
+    expect(arg('TaskUpdate', { status: 'completed' })).toBe('');
+  });
+
+  it('keep the words the agent wrote as they are', () => {
+    expect(arg('TaskCreate', { subject: '<b>gras</b> {id}' })).toBe('Tâche : <b>gras</b> {id}');
+  });
+
+  it('say nothing of a result: the line says it all, and a list or a task read is long', () => {
+    for (const name of ['TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet']) {
+      expect(toolResultSummary(tool(name, {}, { result: { text: 'Task #1 created successfully: x\n- #2 y', isError: false } }))).toBe('');
+    }
+    // A failure is still said.
+    expect(toolResultSummary(tool('TaskUpdate', {}, { status: 'error', result: { text: 'No such task', isError: true } }))).toBe(
+      'No such task',
+    );
+  });
+
+  it('keep the reading of the tasks in the background of the conversation', () => {
+    expect(isQuietTool('TaskList')).toBe(true);
+    expect(isQuietTool('TaskGet')).toBe(true);
+    expect(isQuietTool('TaskCreate')).toBe(false);
+    expect(isQuietTool('TaskUpdate')).toBe(false);
+    expect(isQuietTool('TodoWrite')).toBe(false);
+  });
+
+  it('read in English', () => {
+    setLang('en');
+    expect(arg('TaskCreate', { subject: 'Write the tests' })).toBe('Task: Write the tests');
+    expect(arg('TaskUpdate', { taskId: '3', status: 'in_progress' })).toBe('Task #3: in progress');
+    expect(arg('TaskUpdate', { taskId: '3', status: 'completed' })).toBe('Task #3: done');
+    expect(arg('TaskUpdate', { taskId: '3', subject: 'x' })).toBe('Task #3: updated');
+  });
+
+  it('leave the list of a TodoWrite and the row of a subagent as they were', () => {
+    expect(arg('TodoWrite', { todos: [{}, {}] })).toBe('2 tâches');
+    expect(arg('Agent', { description: 'Explorer', subagent_type: 'Explore' })).toBe('Explorer');
+    expect(toolLabel('Agent')).toBe('Agent');
+    expect(toolResultSummary(tool('Agent', {}, { result: { text: 'x', isError: false } }))).toBe('terminé');
+  });
 });
 
 describe('toolLabel', () => {

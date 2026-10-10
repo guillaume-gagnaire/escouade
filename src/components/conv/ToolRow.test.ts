@@ -174,6 +174,94 @@ describe('ToolRow', () => {
   });
 });
 
+describe('ToolRow for the task tools', () => {
+  it('says a task made by its subject, and a task changed by what became of it', () => {
+    const { unmount } = render(ToolRow, {
+      item: tool({
+        name: 'TaskCreate',
+        input: { subject: 'Écrire les tests', description: 'Les tests du parseur' },
+        result: { isError: false, text: 'Task #1 created successfully: Écrire les tests' },
+      }),
+      cwd: CWD,
+    });
+    expect(screen.getByText('TaskCreate')).toBeInTheDocument();
+    expect(screen.getByText('Tâche : Écrire les tests')).toBeInTheDocument();
+    // The result repeats the line: nothing more on the row.
+    expect(screen.queryByText(/created successfully/)).not.toBeInTheDocument();
+    unmount();
+    render(ToolRow, {
+      item: tool({
+        name: 'TaskUpdate',
+        input: { taskId: '1', status: 'completed' },
+        result: { isError: false, text: 'Updated task #1 status' },
+      }),
+      cwd: CWD,
+    });
+    expect(screen.getByText('Tâche #1 : terminée')).toBeInTheDocument();
+    expect(screen.queryByText(/Updated task/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the reading of the tasks in the background, and a task made or changed in front', () => {
+    const { container, unmount } = render(ToolRow, {
+      item: tool({ name: 'TaskList', input: {}, result: { isError: false, text: '#1 a\n#2 b' } }),
+      cwd: CWD,
+    });
+    expect(container.querySelector('.tool')).toHaveClass('quiet');
+    unmount();
+    const get = render(ToolRow, { item: tool({ name: 'TaskGet', input: { taskId: '2' } }), cwd: CWD });
+    expect(get.container.querySelector('.tool')).toHaveClass('quiet');
+    get.unmount();
+    for (const name of ['TaskCreate', 'TaskUpdate', 'TodoWrite', 'Agent']) {
+      const r = render(ToolRow, { item: tool({ name, input: {} }), cwd: CWD });
+      expect(r.container.querySelector('.tool')).not.toHaveClass('quiet');
+      r.unmount();
+    }
+  });
+
+  it('shows the words of the agent as text, whatever they look like', () => {
+    const { container } = render(ToolRow, {
+      item: tool({ name: 'TaskCreate', input: { subject: '<img src=x onerror=alert(1)>' } }),
+      cwd: CWD,
+    });
+    expect(screen.getByText('Tâche : <img src=x onerror=alert(1)>')).toBeInTheDocument();
+    expect(container.querySelector('img')).toBeNull();
+  });
+
+  it('keeps the list of a TodoWrite and the row of a subagent as they were', async () => {
+    const todo = render(ToolRow, {
+      item: tool({
+        name: 'TodoWrite',
+        input: {
+          todos: [
+            { content: 'Un', status: 'completed' },
+            { content: 'Deux', status: 'pending' },
+          ],
+        },
+      }),
+      cwd: CWD,
+    });
+    expect(screen.getByText('2 tâches')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { expanded: false }));
+    expect(screen.getByText('Deux')).toBeInTheDocument();
+    todo.unmount();
+    render(ToolRow, {
+      item: tool({ name: 'Agent', input: { description: 'Explorer le code' }, result: { isError: false, text: 'x' } }),
+      cwd: CWD,
+    });
+    expect(screen.getByText('Explorer le code')).toBeInTheDocument();
+    expect(screen.getByText('terminé')).toBeInTheDocument();
+  });
+
+  it('reads in English', () => {
+    setLang('en');
+    const { unmount } = render(ToolRow, { item: tool({ name: 'TaskCreate', input: { subject: 'Write the tests' } }), cwd: CWD });
+    expect(screen.getByText('Task: Write the tests')).toBeInTheDocument();
+    unmount();
+    render(ToolRow, { item: tool({ name: 'TaskUpdate', input: { taskId: '4', status: 'in_progress' } }), cwd: CWD });
+    expect(screen.getByText('Task #4: in progress')).toBeInTheDocument();
+  });
+});
+
 describe('ToolRow in English', () => {
   it('names the file to open in English, and counts the tools of a subagent with a plural', () => {
     setLang('en');

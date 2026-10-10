@@ -1,7 +1,7 @@
 <script lang="ts">
   import { t } from '../../lib/i18n';
   import { firstChangedLine, patchLines } from '../../lib/diff';
-  import { hasDiff, toolArg, toolLabel, toolResultSummary } from '../../lib/tools';
+  import { hasDiff, isQuietTool, toolArg, toolLabel, toolResultSummary } from '../../lib/tools';
   import type { ConvItem, ToolItem } from '../../lib/types';
   import Markdown from './Markdown.svelte';
   import PatchView from './PatchView.svelte';
@@ -39,7 +39,8 @@
   const toggle = () => expandable && (open = !open);
 </script>
 
-<div class="tool" class:err={item.status === 'error'}>
+<!-- Reading the list of tasks is no change to the plan: a step back, in softer colours. -->
+<div class="tool" class:err={item.status === 'error'} class:quiet={isQuietTool(item.name)}>
   <!-- Not a <button>: the edited file's path inside it is one. -->
   <div
     class="row"
@@ -128,6 +129,14 @@
   }
   .tool.err {
     border-color: color-mix(in oklch, var(--del) 45%, transparent);
+  }
+  .tool.quiet {
+    margin-left: 52px;
+    color: var(--muted);
+  }
+  .quiet .badge {
+    background: transparent;
+    color: var(--muted);
   }
   .row {
     width: 100%;

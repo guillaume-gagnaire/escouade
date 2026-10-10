@@ -43,6 +43,20 @@ const ESCOUADE_MAIN_ARGS = ['title', 'ticket', 'agent', 'message', 'line', 'proj
 /** The most characters of a value the permission card of a tool of Escouade shows. */
 export const ARG_MAX = 2000;
 
+/**
+ * The task tools of Claude Code that only read: the list or one task. They are not what the agent does to its plan, only a
+ * look at it; the conversation keeps them in the background.
+ */
+export const isQuietTool = (name: string) => name === 'TaskList' || name === 'TaskGet';
+
+/** What became of a task a `TaskUpdate` changes, in words (keys only: the text is read where it is shown). */
+const TASK_STATUS: Record<string, Key> = {
+  pending: 'conv.tools.taskStatus.pending',
+  in_progress: 'conv.tools.taskStatus.inProgress',
+  completed: 'conv.tools.taskStatus.completed',
+  deleted: 'conv.tools.taskStatus.deleted',
+};
+
 /** A tool of Escouade's own MCP server. */
 export const isEscouadeTool = (name: string) => name.startsWith(ESCOUADE);
 
@@ -140,6 +154,15 @@ export function toolArg(tool: ToolItem, cwd: string): string {
       return i.description ?? i.subagent_type ?? '';
     case 'TodoWrite':
       return Array.isArray(i.todos) ? t('conv.tools.tasks', { count: i.todos.length }) : '';
+    case 'TaskCreate':
+      return typeof i.subject === 'string' && i.subject ? t('conv.tools.taskCreate', { subject: i.subject }) : '';
+    case 'TaskUpdate': {
+      // The id is a number as text for Claude Code, a number for some callers.
+      if (typeof i.taskId !== 'string' && typeof i.taskId !== 'number') return '';
+      const status =
+        typeof i.status === 'string' && Object.hasOwn(TASK_STATUS, i.status) ? TASK_STATUS[i.status] : 'conv.tools.taskStatus.changed';
+      return t('conv.tools.taskUpdate', { id: String(i.taskId), status: t(status) });
+    }
     case 'Skill':
       return i.skill ?? i.command ?? '';
     case 'SlashCommand':
@@ -174,6 +197,11 @@ export function toolResultSummary(tool: ToolItem): string {
     case 'Agent':
       return t('conv.tools.done');
     case 'TodoWrite':
+    // The line says what was done; what a list or a task read says is long, and the banner shows it better.
+    case 'TaskCreate':
+    case 'TaskUpdate':
+    case 'TaskList':
+    case 'TaskGet':
       return '';
     default:
       return lastLine(r.text) ? lastLine(r.text).slice(0, 80) : '✓';

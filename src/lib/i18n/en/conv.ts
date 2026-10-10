@@ -98,6 +98,9 @@ export default defineZone('conv', {
     results: { one: '{n} result', other: '{n} results' },
     noResults: 'no results',
     done: 'done',
+    taskCreate: 'Task: {subject}',
+    taskUpdate: 'Task #{id}: {status}',
+    taskStatus: { pending: 'to do', inProgress: 'in progress', completed: 'done', deleted: 'deleted', changed: 'updated' },
   },
   patch: { more: { one: '… {n} more line', other: '… {n} more lines' } },
 

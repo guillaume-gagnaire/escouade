@@ -106,6 +106,10 @@ export default {
     results: { one: '{n} résultat', other: '{n} résultats' },
     noResults: 'aucun résultat',
     done: 'terminé',
+    /** The task tools of Claude Code: the line of a task made, and of one changed (`status`: below). */
+    taskCreate: 'Tâche : {subject}',
+    taskUpdate: 'Tâche #{id} : {status}',
+    taskStatus: { pending: 'à faire', inProgress: 'en cours', completed: 'terminée', deleted: 'supprimée', changed: 'modifiée' },
   },
   patch: { more: { one: '… {n} ligne de plus', other: '… {n} lignes de plus' } },
 
