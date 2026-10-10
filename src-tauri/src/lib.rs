@@ -1,3 +1,6 @@
+// First: its macros (`tr!`, `tr_claude!`, `tr_in!`) are then in scope in every module below.
+#[macro_use]
+mod i18n;
 mod agent;
 mod board;
 mod claude;

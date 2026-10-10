@@ -8,6 +8,7 @@ use crate::convsearch;
 use crate::fsedit;
 use crate::git::{self, GitService};
 use crate::hub::Hub;
+use crate::i18n::{self, LangInfo};
 use crate::integrations;
 use crate::isola;
 use crate::job::JobUsage;
@@ -713,6 +714,9 @@ impl<R: Runtime> Core<R> {
             log::error!("cannot create data dir: {e}");
         }
         let settings: Settings = read_json(&data.settings_file()).unwrap_or_default();
+        // First: what the backend writes from now on (the menus, its texts) is in these languages.
+        let lang = i18n::configure(&settings.language, &settings.claude_language);
+        log::info!("languages: {lang:?}");
         let state: PersistedState = read_json(&data.state_file()).unwrap_or_default();
         // Read before the agents are made: a turn does not survive a restart (they come back done).
         let cut_turns: Vec<String> = state
@@ -984,7 +988,14 @@ impl<R: Runtime> Core<R> {
         let bytes = serde_json::to_vec_pretty(&s)?;
         paths::write_atomic(&self.data.settings_file(), &bytes)?;
         let auto_resume = s.auto_resume;
+        let before = self.lang();
         *self.settings.write() = s;
+        let lang = self.lang();
+        if lang != before {
+            // At once, without a restart: what the backend writes from now on, and the window.
+            i18n::set(lang);
+            self.hub.emit(UiEvent::Language { lang });
+        }
         if !auto_resume {
             // Turned off: the resumes already planned go too.
             let dropped: Vec<AgentView> = self
@@ -1013,6 +1024,13 @@ impl<R: Runtime> Core<R> {
     }
 
     // ---------- lookups ----------
+
+    /// The languages its settings stand for, as the window is told them. The ones the backend
+    /// writes in (`i18n::ui()`) are these, except in tests: there they stay French.
+    pub fn lang(&self) -> LangInfo {
+        let s = self.settings.read();
+        i18n::resolve(&s.language, &s.claude_language)
+    }
 
     /// Itself, without keeping it alive (for a worker that lives as long as it does).
     pub(crate) fn weak(&self) -> std::sync::Weak<Self> {
