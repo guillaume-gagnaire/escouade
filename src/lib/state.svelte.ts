@@ -45,8 +45,20 @@ export type Modal =
    * reads the project at once to suggest its launch commands.
    */
   | { kind: 'settings'; tab?: SettingsTab; projectId?: string; section?: 'launch'; resume?: boolean; suggest?: boolean }
-  /** `wholeProject`: every uncommitted file the project's list shows, worktrees of the agents included. */
-  | { kind: 'diff'; projectId: string; agentId: string | null; paths: string[]; title: string; commit?: string; wholeProject?: boolean }
+  /**
+   * `commit`: what it changed; `refs`: what changes from `from` to `to` (branches, or commits); `wholeProject`: every
+   * uncommitted file the project's list shows, worktrees of the agents included.
+   */
+  | {
+      kind: 'diff';
+      projectId: string;
+      agentId: string | null;
+      paths: string[];
+      title: string;
+      commit?: string;
+      refs?: { from: string; to: string };
+      wholeProject?: boolean;
+    }
   | {
       kind: 'confirm';
       title: string;

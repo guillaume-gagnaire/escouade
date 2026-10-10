@@ -140,6 +140,7 @@
     paths={app.modal.paths}
     title={app.modal.title}
     commit={app.modal.commit}
+    refs={app.modal.refs}
     wholeProject={app.modal.wholeProject}
   />
 {:else if app.modal?.kind === 'confirm'}

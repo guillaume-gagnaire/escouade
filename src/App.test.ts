@@ -272,6 +272,21 @@ describe('App layout', () => {
     expect(within(dialog).getByText('dans le worktree')).toBeInTheDocument();
   });
 
+  it('opens the comparison of two branches in the diff window, as the git graph asks for it', async () => {
+    start('', { handlers: { git_diff_refs: () => DIFF.replace('const b = 3;', 'const b = 4;') } });
+    expect(await screen.findByRole('main')).toBeInTheDocument();
+    app.modal = {
+      kind: 'diff',
+      projectId: 'p1',
+      agentId: null,
+      paths: [],
+      title: 'main ↔ feat/login',
+      refs: { from: 'main', to: 'feat/login' },
+    };
+    const dialog = await screen.findByRole('dialog', { name: 'main ↔ feat/login' });
+    expect(await within(dialog).findByText('const b = 4;')).toBeInTheDocument();
+  });
+
   it('opens « Ouvrir un fichier » with Ctrl+P, the WebView’s own key (printing) held back, and opens the file picked', async () => {
     start('', {
       handlers: {

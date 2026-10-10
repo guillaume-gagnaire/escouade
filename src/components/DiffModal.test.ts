@@ -176,6 +176,50 @@ describe('DiffModal for a commit', () => {
   });
 });
 
+describe('DiffModal comparing two refs', () => {
+  beforeEach(() => resetApp({ projects: [project()] }));
+  const compare = { projectId: 'p1', agentId: null, paths: [], title: 'main ↔ feat/login', refs: { from: 'main', to: 'feat/login' } };
+
+  it('shows what changes from the first ref to the second, under the title it was given', async () => {
+    const backend = fakeBackend({ git_diff_refs: () => DIFF });
+    render(DiffModal, compare);
+    expect(await screen.findByText('const b = 3;')).toBeInTheDocument();
+    expect(backend.called('git_diff_refs')).toHaveLength(1);
+    expect(backend.called('git_diff_refs')[0].args).toEqual({ projectId: 'p1', a: 'main', b: 'feat/login' });
+    expect(backend.called('git_diff')).toHaveLength(0);
+    expect(backend.called('git_show')).toHaveLength(0);
+    expect(screen.getByRole('dialog', { name: 'main ↔ feat/login' })).toBeInTheDocument();
+    expect(screen.getByText('2 fichiers')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /new\.txt/ }));
+    expect(screen.getByText('hello')).toBeInTheDocument();
+  });
+
+  it('says it when the two refs do not differ', async () => {
+    fakeBackend({ git_diff_refs: () => '' });
+    render(DiffModal, compare);
+    expect(await screen.findByText('Aucune différence.')).toBeInTheDocument();
+  });
+
+  it('says why the refs could not be compared', async () => {
+    fakeBackend({
+      git_diff_refs: () => {
+        throw '« feat/login » ne désigne aucun commit.';
+      },
+    });
+    render(DiffModal, compare);
+    expect(await screen.findByText('« feat/login » ne désigne aucun commit.')).toBeInTheDocument();
+  });
+
+  it('says a file too large to be sent cannot be shown, as for a commit', async () => {
+    fakeBackend({
+      git_diff_refs: () =>
+        'diff --git a/dump.sql b/dump.sql\nindex 1111111..2222222 100644\n--- a/dump.sql\n+++ b/dump.sql\nDiff too large\n',
+    });
+    render(DiffModal, compare);
+    expect(await screen.findByText('Diff trop volumineux pour être affiché.')).toBeInTheDocument();
+  });
+});
+
 describe('DiffModal in English', () => {
   beforeEach(() => {
     resetApp({ projects: [project()] });
