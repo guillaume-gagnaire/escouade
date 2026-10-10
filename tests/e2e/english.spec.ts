@@ -83,3 +83,44 @@ test('the interface in English, then in French without a restart', async ({ app 
   // The menu and the tooltip of the icon in the notification area are native: Playwright cannot read them. Their words
   // in each language, and their being made again when the language changes, are tested in the backend (menus.rs).
 });
+
+test('a superpowers plan run reads in English, and in French as soon as the language changes', async ({ app }) => {
+  const { page } = app;
+  await addProject(page, app.repo, { lang: 'en' });
+  await send(page, 'plan superpowers');
+
+  // The third task waits for an answer: the banner, its list and the agent's card, in English.
+  const card = page.getByTestId('question-pending');
+  await expect(card).toContainText('Quelle base de données ?');
+  const plan = page.locator('main.conv .plan');
+  const head = plan.getByRole('button', { name: 'Plan: Démo' });
+  await expect(head).toBeVisible();
+  await expect(plan).toContainText('2/3 tasks');
+  await expect(plan).toContainText('67%');
+  await expect(plan).toContainText('1 subagent running');
+  if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click();
+  const third = plan.locator('li[data-plan-task="03"]');
+  await expect(plan.getByRole('list', { name: 'Plan tasks' })).toBeVisible();
+  await expect(third).toContainText('Blocked');
+  await expect(third).toContainText('Waiting for your answer');
+  await expect(plan.getByRole('separator', { name: 'Height of the task list' })).toBeVisible();
+  await expect(plan.locator('li[data-plan-task="01"]')).toContainText('Done');
+  await expect(page.locator('.card .plan-mini .plan-text').first()).toHaveText('Plan 2/3 · 1 subagent');
+
+  // Switched to French while the banner is open: its words change at once, nothing is read again.
+  await page.getByTitle('Settings (Ctrl+,)').click();
+  const dialog = page.getByRole('dialog', { name: 'Settings' });
+  await dialog.getByRole('tab', { name: 'Application' }).click();
+  await dialog.getByRole('group', { name: 'Interface language' }).getByRole('button', { name: 'Français', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(plan).toContainText('2/3 tâches');
+  await expect(plan).toContainText('1 sous-agent actif');
+  await expect(third).toContainText('En attente de ta réponse');
+  await expect(page.locator('.card .plan-mini .plan-text').first()).toHaveText('Plan 2/3 · 1 sous-agent');
+
+  await card.getByRole('button', { name: 'SQLite' }).click();
+  await expect(page.getByText('Plan terminé')).toBeVisible();
+  await expect(plan).toContainText('3/3 tâches');
+  await expect(plan).toContainText('100 %');
+});

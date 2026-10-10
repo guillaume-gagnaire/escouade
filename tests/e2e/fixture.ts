@@ -17,8 +17,8 @@ export interface App {
   /** A git repository with one commit, ready to be added as a project. */
   repo: string;
   data: string;
-  /** Launches of the fake CLI: argv, cwd and the proxy it received. */
-  launches: () => { argv: string[]; cwd: string; proxy: string | null }[];
+  /** Launches of the fake CLI: argv, cwd, the proxy and the task list variable it received (null when unset). */
+  launches: () => { argv: string[]; cwd: string; proxy: string | null; todoTools: string | null }[];
 }
 
 function git(cwd: string, ...args: string[]) {
