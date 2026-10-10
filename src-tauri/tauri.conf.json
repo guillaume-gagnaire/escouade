@@ -47,7 +47,9 @@
     "windows": {
       "nsis": {
         "installMode": "currentUser",
-        "installerHooks": "windows/installer-hooks.nsh"
+        "installerHooks": "windows/installer-hooks.nsh",
+        "languages": ["English", "French"],
+        "displayLanguageSelector": false
       }
     }
   },

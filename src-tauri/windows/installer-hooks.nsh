@@ -2,6 +2,10 @@
 ; its uninstall entry and its shortcuts after the product: installed over it (the update from
 ; 0.1.2), Escouade removes that install first, keeping the user's data, then creates its own
 ; shortcuts, which an update does not create.
+;
+; The installer speaks the system's language (English or French, `languages` in tauri.conf.json).
+; These hooks show no text of their own: what `CheckIfAppIsRunning` asks comes from Tauri's
+; strings, in both languages. A message added here needs a `LangString` for each.
 
 !ifndef OLD_PRODUCTNAME
   !define OLD_PRODUCTNAME "Claude Code Manager"
