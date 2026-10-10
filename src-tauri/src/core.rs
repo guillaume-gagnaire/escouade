@@ -112,6 +112,112 @@ impl std::fmt::Display for NotOnBase {
 
 impl std::error::Error for NotOnBase {}
 
+/// A branch operation on a project's folder refused for a reason the window tells apart by its
+/// code (`wire`), as it does `NotOnBase`; `text` says it where it does not.
+#[derive(Debug)]
+pub enum BranchRefusal {
+    /// Uncommitted changes in the project's folder: a switch would carry them over or fail on them.
+    Dirty,
+    /// The branch is checked out in an agent's worktree.
+    InWorktree {
+        branch: String,
+        agent_id: String,
+        agent: String,
+    },
+    /// An agent without worktree is in the middle of a turn in the project's folder.
+    AgentWorking { agent_id: String, agent: String },
+    /// Not merged into the project's base: `commits` of it are in no other branch.
+    Unmerged {
+        branch: String,
+        base: String,
+        commits: u32,
+    },
+}
+
+impl BranchRefusal {
+    /// What the window gets: `DIRTY`, `IN_WORKTREE:<agent id>:<agent name>`,
+    /// `AGENT_WORKING:<agent id>:<agent name>`, `UNMERGED:<commits>`. An agent's id holds no `:`;
+    /// its name, last, may.
+    pub fn wire(&self) -> String {
+        match self {
+            BranchRefusal::Dirty => "DIRTY".into(),
+            BranchRefusal::InWorktree {
+                agent_id, agent, ..
+            } => format!("IN_WORKTREE:{agent_id}:{agent}"),
+            BranchRefusal::AgentWorking { agent_id, agent } => {
+                format!("AGENT_WORKING:{agent_id}:{agent}")
+            }
+            BranchRefusal::Unmerged { commits, .. } => format!("UNMERGED:{commits}"),
+        }
+    }
+
+    /// The refusal in words, where the window does not tell it by its code.
+    pub fn text(&self, lang: i18n::Lang) -> String {
+        match self {
+            BranchRefusal::Dirty => tr_in!(
+                lang,
+                "Il reste des changements non commités dans le dossier du projet : commite-les ou mets-les de côté (stash) avant de changer de branche.",
+                "There are uncommitted changes in the project’s folder: commit or stash them before switching branches."
+            ),
+            BranchRefusal::InWorktree { branch, agent, .. } => tr_in!(
+                lang,
+                "La branche « {branch} » est utilisée par l’agent {agent}, dans son worktree.",
+                "The branch “{branch}” is used by agent {agent}, in its worktree."
+            ),
+            BranchRefusal::AgentWorking { agent, .. } => tr_in!(
+                lang,
+                "L’agent {agent} travaille dans le dossier du projet : attends la fin de son tour.",
+                "Agent {agent} is working in the project’s folder: wait for the end of its turn."
+            ),
+            BranchRefusal::Unmerged {
+                branch,
+                base,
+                commits,
+            } => tr_n_in!(
+                lang,
+                *commits,
+                "« {branch} » n’est pas mergée dans « {base} » : {n} commit n’est dans aucune autre branche.",
+                "« {branch} » n’est pas mergée dans « {base} » : {n} commits ne sont dans aucune autre branche.",
+                "“{branch}” isn’t merged into “{base}”: {n} commit is in no other branch.",
+                "“{branch}” isn’t merged into “{base}”: {n} commits are in no other branch.",
+                n = commits
+            ),
+        }
+    }
+}
+
+impl std::fmt::Display for BranchRefusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.text(i18n::ui()))
+    }
+}
+
+impl std::error::Error for BranchRefusal {}
+
+/// True when the work of `refname` is in one of `bases` (`Core::merge_bases`), none of which it is:
+/// the base is never merged "into itself", its own commits may be in it alone.
+async fn merged_into_any(root: &str, refname: &str, bases: &[String]) -> bool {
+    if bases.iter().any(|b| b == refname) {
+        return false;
+    }
+    for base in bases {
+        if git::is_merged(root, refname, base).await {
+            return true;
+        }
+    }
+    false
+}
+
+/// The name of the stash a switch to `branch` puts the folder's changes in: what `git stash list`
+/// shows, to find them again.
+pub fn stash_message(lang: i18n::Lang, branch: &str) -> String {
+    tr_in!(
+        lang,
+        "escouade: avant de passer sur {branch}",
+        "escouade: before switching to {branch}"
+    )
+}
+
 /// A sync of a project's checkout with its remote, asked by the user.
 #[derive(Debug, Clone, Copy)]
 pub enum SyncOp {
@@ -4067,6 +4173,331 @@ impl<R: Runtime> Core<R> {
         // Even after a failure: a pull that could not fast-forward has fetched.
         self.refresh_repo(&root).await;
         out
+    }
+
+    // ---------- branches ----------
+
+    /// The project and the repository its folder is in.
+    async fn branch_repo(&self, project_id: &str) -> Result<(Project, String)> {
+        let project = self.project(project_id)?;
+        let root = self.toplevel(&project.path).await.ok_or_else(not_a_repo)?;
+        Ok((project, root))
+    }
+
+    /// The refs a branch's work counts as merged into: the project's base (the board's target
+    /// while it exists, else the branch the folder is on, HEAD when detached), and that base's
+    /// upstream (a pull request merged on the remote, fetched but not pulled yet). The base's
+    /// target is only read here, never fixed.
+    async fn merge_bases(&self, project: &Project, root: &str) -> Vec<String> {
+        let target = project.board.target.trim();
+        let base = if !target.is_empty() && git::branch_exists(root, target).await {
+            target.to_string()
+        } else {
+            git::head_branch(root).await
+        };
+        if base.is_empty() || !git::branch_exists(root, &base).await {
+            return vec!["HEAD".into()];
+        }
+        let mut bases = vec![format!("refs/heads/{base}")];
+        bases.extend(git::upstream_of(root, &base).await.map(|u| u.tracking));
+        bases
+    }
+
+    /// The agents' worktrees, any project's: (agent id, agent name, folder).
+    fn agent_worktrees(&self) -> Vec<(String, String, String)> {
+        self.agents
+            .read()
+            .values()
+            .filter_map(|h| {
+                let rt = h.lock();
+                let wt = rt.meta.worktree.as_ref()?;
+                Some((rt.meta.id.clone(), rt.meta.name.clone(), wt.path.clone()))
+            })
+            .collect()
+    }
+
+    /// True when the folder `root` itself has `branch` checked out; refused when another worktree
+    /// has it: an agent's (`IN_WORKTREE`), or one of no agent (said in words).
+    async fn checked_out_here(&self, root: &str, branch: &str) -> Result<bool> {
+        let Some(path) = git::checkout_of(root, branch).await? else {
+            return Ok(false);
+        };
+        if crate::tickets::same_dir(&path, root) {
+            return Ok(true);
+        }
+        let agent = self
+            .agent_worktrees()
+            .into_iter()
+            .find(|(_, _, wt)| crate::tickets::same_dir(wt, &path));
+        if let Some((agent_id, agent, _)) = agent {
+            return Err(BranchRefusal::InWorktree {
+                branch: branch.to_string(),
+                agent_id,
+                agent,
+            }
+            .into());
+        }
+        bail!(tr!(
+            "La branche « {branch} » est prise par le worktree {path}.",
+            "The branch “{branch}” is checked out in the worktree {path}."
+        ))
+    }
+
+    /// Refused while an agent of the project without worktree has a turn under way (waiting for
+    /// an answer included): its folder is the project's.
+    fn no_agent_at_work(&self, project_id: &str) -> Result<()> {
+        let busy = self.project_agents(project_id).iter().find_map(|h| {
+            let rt = h.lock();
+            (rt.meta.worktree.is_none() && rt.meta.status.is_active())
+                .then(|| (rt.meta.id.clone(), rt.meta.name.clone()))
+        });
+        match busy {
+            Some((agent_id, agent)) => Err(BranchRefusal::AgentWorking { agent_id, agent }.into()),
+            None => Ok(()),
+        }
+    }
+
+    /// Before the folder at `root` goes to `branch`: refused with uncommitted changes to tracked
+    /// files (`DIRTY`), unless `stash`: then they are put aside in a stash named for `branch`,
+    /// whose name is returned. Untracked files stay, as git carries them over (refusing what they
+    /// would overwrite).
+    async fn put_aside(&self, root: &str, branch: &str, stash: bool) -> Result<Option<String>> {
+        if !git::has_tracked_changes(root).await? {
+            return Ok(None);
+        }
+        if !stash {
+            return Err(BranchRefusal::Dirty.into());
+        }
+        let message = stash_message(i18n::ui(), branch);
+        git::stash_push(root, &message).await?;
+        Ok(Some(message))
+    }
+
+    /// After a switch that failed (HEAD did not move): the changes put aside come back.
+    async fn take_back(&self, root: &str, stashed: &Option<String>) {
+        if stashed.is_some() {
+            if let Err(e) = git::stash_pop(root).await {
+                log::warn!("{root}: the changes put aside stay in the stash: {e:#}");
+            }
+        }
+    }
+
+    /// The project's branches, local then remote, each one an agent's worktree holds with that
+    /// agent.
+    pub async fn branches(&self, project_id: &str) -> Result<Vec<git::BranchInfo>> {
+        let (_, root) = self.branch_repo(project_id).await?;
+        let mut list = git::branch_list(&root).await?;
+        let worktrees = self.agent_worktrees();
+        for b in &mut list {
+            let Some(path) = &b.worktree else { continue };
+            b.agent = worktrees
+                .iter()
+                .find(|(_, _, wt)| crate::tickets::same_dir(wt, path))
+                .map(|(id, _, _)| id.clone());
+        }
+        Ok(list)
+    }
+
+    /// Checks a name for a new branch of the project: as git does, and not taken already.
+    pub async fn branch_check(&self, project_id: &str, name: &str) -> Result<()> {
+        let (_, root) = self.branch_repo(project_id).await?;
+        git::check_ref_format(name).await?;
+        if git::branch_exists(&root, name).await {
+            return Err(git::branch_taken(name));
+        }
+        Ok(())
+    }
+
+    /// Switches the project's folder to `name`: a local branch, or a remote one (`origin/feat`)
+    /// through the local branch that tracks it (made when there is none). Refused for a branch an
+    /// agent's worktree holds (`IN_WORKTREE`), while an agent without worktree works in the folder
+    /// (`AGENT_WORKING`), and with uncommitted changes (`DIRTY`) unless `stash`: they are put aside
+    /// first, and back if the switch fails. Returns the stash's name when one was made.
+    pub async fn branch_switch(
+        self: &Arc<Self>,
+        project_id: &str,
+        name: &str,
+        stash: bool,
+    ) -> Result<Option<String>> {
+        // The app does not restart for an update in the middle of it.
+        let _working = self.working();
+        let (_, root) = self.branch_repo(project_id).await?;
+        // Not under a pull or a push of the same checkout.
+        let lock = self.sync_lock(&root);
+        let _guard = lock.lock().await;
+        if let Some(local) = git::local_of(&root, name).await? {
+            if self.checked_out_here(&root, &local).await? {
+                return Ok(None);
+            }
+        }
+        self.no_agent_at_work(project_id)?;
+        let stashed = self.put_aside(&root, name, stash).await?;
+        let switched = git::switch_to(&root, name).await;
+        if switched.is_err() {
+            self.take_back(&root, &stashed).await;
+        }
+        // Every project of the repository: the branch is the checkout's.
+        self.refresh_repo(&root).await;
+        switched?;
+        Ok(stashed)
+    }
+
+    /// Creates the branch `name` at `start` (a branch, a remote branch, a commit; the folder's
+    /// HEAD when empty), tracking nothing, and with `switch` switches the project's folder to it
+    /// under the refusals of `branch_switch` (stash included). A start at HEAD changes no file of
+    /// the folder: its uncommitted changes go along. Returns the stash's name when one was made.
+    pub async fn branch_create(
+        self: &Arc<Self>,
+        project_id: &str,
+        name: &str,
+        start: &str,
+        switch: bool,
+        stash: bool,
+    ) -> Result<Option<String>> {
+        let _working = self.working();
+        let (_, root) = self.branch_repo(project_id).await?;
+        let lock = self.sync_lock(&root);
+        let _guard = lock.lock().await;
+        // Everything that can be refused is, before anything is put aside.
+        git::check_ref_format(name).await?;
+        if git::branch_exists(&root, name).await {
+            return Err(git::branch_taken(name));
+        }
+        let start = match start.trim() {
+            "" => "HEAD",
+            s => s,
+        };
+        let commit = git::commit_of(&root, start).await?;
+        let mut stashed = None;
+        if switch {
+            self.no_agent_at_work(project_id)?;
+            let head = git::commit_of(&root, "HEAD").await.ok();
+            if head.as_deref() != Some(commit.as_str()) {
+                stashed = self.put_aside(&root, name, stash).await?;
+            }
+        }
+        let mut done = git::branch_create(&root, name, &commit).await;
+        if done.is_ok() && switch {
+            done = git::switch(&root, name).await;
+            if done.is_err() {
+                // Not left behind half made: it has nothing of its own yet.
+                let _ = git::branch_delete(&root, name, true).await;
+            }
+        }
+        if done.is_err() {
+            self.take_back(&root, &stashed).await;
+        }
+        self.refresh_repo(&root).await;
+        done.map(|_| stashed)
+    }
+
+    /// Deletes the project's branch `name`, its remote branch too with `remote` (its upstream,
+    /// when the remote still has it); `name` may also be a remote branch alone (`origin/feat`),
+    /// deleted on its remote. Never the folder's own branch nor one another worktree holds
+    /// (`IN_WORKTREE` for an agent's). A branch whose work the project's base has (contained or
+    /// squash-merged) goes at once; another is refused (`UNMERGED:<n>`, its commits no other
+    /// branch has) unless `force`.
+    pub async fn branch_delete(
+        self: &Arc<Self>,
+        project_id: &str,
+        name: &str,
+        remote: bool,
+        force: bool,
+    ) -> Result<()> {
+        let _working = self.working();
+        let (project, root) = self.branch_repo(project_id).await?;
+        let lock = self.sync_lock(&root);
+        let _guard = lock.lock().await;
+        let local = !name.starts_with('-') && git::branch_exists(&root, name).await;
+        // What goes: the local branch, and the remote one as (remote, its name there).
+        let on_remote = if local {
+            if self.checked_out_here(&root, name).await? {
+                bail!(tr!(
+                    "« {name} » est la branche du dossier du projet : passe sur une autre branche avant de la supprimer.",
+                    "“{name}” is the branch of the project’s folder: switch to another branch before deleting it."
+                ));
+            }
+            match remote {
+                true => git::upstream_of(&root, name)
+                    .await
+                    .map(|u| (u.remote, u.branch)),
+                false => None,
+            }
+        } else {
+            let split = git::split_remote(&root, name).await;
+            if !git::ref_exists(&root, &format!("refs/remotes/{name}")).await || split.is_none() {
+                bail!(tr!(
+                    "La branche « {name} » est introuvable.",
+                    "The branch “{name}” wasn’t found."
+                ));
+            }
+            split
+        };
+        let mut refs: Vec<String> = Vec::new();
+        if local {
+            refs.push(format!("refs/heads/{name}"));
+        }
+        if let Some((r, b)) = &on_remote {
+            refs.push(format!("refs/remotes/{r}/{b}"));
+        }
+        if !force {
+            let bases = self.merge_bases(&project, &root).await;
+            let mut merged = true;
+            for r in &refs {
+                merged = merged && merged_into_any(&root, r, &bases).await;
+            }
+            if !merged {
+                let commits = git::unique_commits(&root, &refs).await?;
+                let base = bases[0].trim_start_matches("refs/heads/").to_string();
+                return Err(BranchRefusal::Unmerged {
+                    branch: name.to_string(),
+                    base,
+                    commits,
+                }
+                .into());
+            }
+        }
+        // The remote first: refused there (rights, network), nothing is deleted.
+        let mut done = Ok(());
+        if let Some((r, b)) = &on_remote {
+            done = git::branch_delete_remote(&root, r, b).await;
+        }
+        if done.is_ok() && local {
+            done = git::branch_delete(&root, name, true).await;
+        }
+        self.refresh_repo(&root).await;
+        done
+    }
+
+    /// The project's local branches whose work its base has (contained or squash-merged), but the
+    /// base, the folder's own branch and those a worktree holds: what « Branches mergées » offers
+    /// to delete. By name.
+    pub async fn branches_merged(&self, project_id: &str) -> Result<Vec<String>> {
+        let (project, root) = self.branch_repo(project_id).await?;
+        let bases = self.merge_bases(&project, &root).await;
+        let mut merged: Vec<String> = Vec::new();
+        for b in &bases {
+            for name in git::merged_into(&root, b).await? {
+                if !merged.contains(&name) {
+                    merged.push(name);
+                }
+            }
+        }
+        let held: Vec<String> = git::branch_list(&root)
+            .await?
+            .into_iter()
+            .filter(|b| !b.remote && b.worktree.is_some())
+            .map(|b| b.name)
+            .collect();
+        merged.retain(|n| !held.contains(n) && format!("refs/heads/{n}") != bases[0]);
+        merged.sort();
+        Ok(merged)
+    }
+
+    /// What changes from `a` to `b` in the project's repository (`git diff a b`).
+    pub async fn diff_refs(&self, project_id: &str, a: &str, b: &str) -> Result<String> {
+        let (_, root) = self.branch_repo(project_id).await?;
+        git::diff_refs(&root, a, b).await
     }
 
     pub async fn file_suggestions(

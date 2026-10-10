@@ -402,6 +402,90 @@ pub async fn git_push(core: CoreState<'_>, project_id: String) -> Res<String> {
     core.git_sync(&project_id, SyncOp::Push).await.map_err(err)
 }
 
+/// A branch operation's error: the refusals the window turns into a question or a message of its
+/// own by their code (`BranchRefusal::wire`: `DIRTY`, `IN_WORKTREE:…`, `AGENT_WORKING:…`,
+/// `UNMERGED:…`), any other in words.
+fn branch_err(e: anyhow::Error) -> String {
+    match e.downcast_ref::<crate::core::BranchRefusal>() {
+        Some(refused) => refused.wire(),
+        None => err(e),
+    }
+}
+
+/// The project's branches: local ones (the folder's first), then remote ones.
+#[tauri::command]
+pub async fn branch_list(
+    core: CoreState<'_>,
+    project_id: String,
+) -> Res<Vec<crate::git::BranchInfo>> {
+    core.branches(&project_id).await.map_err(err)
+}
+
+/// Checks a name for a new branch: as git does, and not taken already.
+#[tauri::command]
+pub async fn branch_check(core: CoreState<'_>, project_id: String, name: String) -> Res<()> {
+    core.branch_check(&project_id, &name).await.map_err(err)
+}
+
+/// Switches the project's folder to a branch; the stash's name when its changes were put aside.
+#[tauri::command]
+pub async fn branch_switch(
+    core: CoreState<'_>,
+    project_id: String,
+    name: String,
+    stash: bool,
+) -> Res<Option<String>> {
+    core.branch_switch(&project_id, &name, stash)
+        .await
+        .map_err(branch_err)
+}
+
+/// Creates a branch at `start` (HEAD when empty), and switches the folder to it with `switch`.
+#[tauri::command]
+pub async fn branch_create(
+    core: CoreState<'_>,
+    project_id: String,
+    name: String,
+    start: String,
+    switch: bool,
+    stash: bool,
+) -> Res<Option<String>> {
+    core.branch_create(&project_id, &name, &start, switch, stash)
+        .await
+        .map_err(branch_err)
+}
+
+/// Deletes a branch (its remote one too with `remote`); unmerged, only with `force`.
+#[tauri::command]
+pub async fn branch_delete(
+    core: CoreState<'_>,
+    project_id: String,
+    name: String,
+    remote: bool,
+    force: bool,
+) -> Res<()> {
+    core.branch_delete(&project_id, &name, remote, force)
+        .await
+        .map_err(branch_err)
+}
+
+/// The local branches « Branches mergées » offers to delete.
+#[tauri::command]
+pub async fn branches_merged(core: CoreState<'_>, project_id: String) -> Res<Vec<String>> {
+    core.branches_merged(&project_id).await.map_err(err)
+}
+
+/// The diff from `a` to `b`, two branches or commits of the project's repository.
+#[tauri::command]
+pub async fn git_diff_refs(
+    core: CoreState<'_>,
+    project_id: String,
+    a: String,
+    b: String,
+) -> Res<String> {
+    core.diff_refs(&project_id, &a, &b).await.map_err(err)
+}
+
 #[tauri::command(async)]
 pub fn stats(core: CoreState, range: String) -> StatsView {
     core.stats_view(&range)

@@ -2155,7 +2155,7 @@ async fn drop_worktree(repo: &str, path: &Path) {
 }
 
 /// The same folder, however git and Windows spell it (short 8.3 names, slashes, case).
-fn same_dir(a: &str, b: &str) -> bool {
+pub(crate) fn same_dir(a: &str, b: &str) -> bool {
     match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
         (Ok(x), Ok(y)) => x == y,
         _ => {
