@@ -180,7 +180,8 @@ describe('SettingsModal', () => {
     await userEvent.type(screen.getByRole('textbox', { name: /Git Bash/ }), 'C:\\Git\\bin\\bash.exe');
     await userEvent.click(screen.getByRole('button', { name: 'Annuler' }));
     expect(app.modal).toBeNull();
-    expect(backend.calls).toEqual([]);
+    // Nothing saved; the « Claude Code » tab it opened on only read what the MCP server is doing.
+    expect(backend.calls.filter((c) => !['mcp_status', 'mcp_declare_status', 'mcp_activity'].includes(c.cmd))).toEqual([]);
     expect(app.settings.bashPath).toBe('');
   });
 

@@ -67,8 +67,6 @@ impl Activity {
     }
 
     /// « Effacer »: no entry left.
-    // Allowed unused until the window's activity section (M5) calls it (then drop the allow).
-    #[allow(dead_code)]
     pub fn clear(&self) {
         self.entries.lock().clear();
     }

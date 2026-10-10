@@ -17,6 +17,8 @@ export interface App {
   /** A git repository with one commit, ready to be added as a project. */
   repo: string;
   data: string;
+  /** Principal's `.claude.json`: where the fake `claude mcp add` declares Escouade's server (the app's `CLAUDE_CONFIG_DIR` is a test folder). */
+  claudeJson: string;
   /** Launches of the fake CLI: argv, cwd and the proxy it received. */
   launches: () => { argv: string[]; cwd: string; proxy: string | null }[];
 }
@@ -162,6 +164,8 @@ export const test = base.extend<{ app: App; appEnv: Record<string, string>; lang
         // Never the machine user's own sign-in nor Anthropic's endpoint: Principal's Claude Code
         // folder is a test one (with no sign-in in it), and the quota is asked of nobody.
         CLAUDE_CONFIG_DIR: path.join(root, 'claude'),
+        // The fake `claude mcp …` keeps its servers in a folder of the test's, never in the user's home.
+        FAKE_CLAUDE_HOME: path.join(root, 'home'),
         CLAUDE_SECURESTORAGE_CONFIG_DIR: undefined,
         ESCOUADE_USAGE_API: NO_USAGE_API,
         ...appEnv,
@@ -214,7 +218,7 @@ export const test = base.extend<{ app: App; appEnv: Record<string, string>; lang
               .filter(Boolean)
               .map((l) => JSON.parse(l))
           : [];
-      await use({ page, repo, data, launches });
+      await use({ page, repo, data, claudeJson: path.join(root, 'claude', '.claude.json'), launches });
       if (testInfo.status !== testInfo.expectedStatus) throw new Error(`the app after the failure\n${await state()}`);
     } finally {
       await browser?.close().catch(() => {});

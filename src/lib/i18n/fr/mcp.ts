@@ -8,6 +8,32 @@ export default {
     agentsUseDesc:
       'Ils lisent les tickets et les agents, et peuvent créer des tickets ou lancer d’autres agents, ce qui dépense du quota. S’applique au prochain démarrage de leur process.',
   },
+  // The « Claude Code » tab of the settings: the server declared in Claude Code, and what it was asked.
+  section: {
+    title: 'Escouade dans Claude',
+    enable: 'Claude peut piloter Escouade',
+    enableDesc:
+      'Claude Code (dans un terminal, un autre outil ou un agent d’Escouade) lit tes projets, agents et tickets, et peut créer des tickets ou lancer des agents.',
+    /** `{accounts}`: the accounts it is declared in, each as « compte … » (below), joined by commas. */
+    declared: 'Déclaré dans Claude · {accounts}',
+    account: 'compte {name}',
+    working: 'Déclaration dans Claude…',
+    notDeclared: 'Pas déclaré pour le compte {name} : {error}',
+    serverFailed: 'Le serveur n’a pas démarré : {error}',
+    /** `{shell}`: the shell the command is written for, PowerShell or sh. */
+    command: 'À lancer à la main dans {shell} :',
+    copy: 'Copier la commande',
+    copied: 'Commande copiée',
+    copyFailed: 'Copie impossible : {error}',
+    note: 'Le jeton est écrit en clair dans la config de Claude Code (~/.claude.json pour le compte Principal). Désactiver change le jeton.',
+  },
+  activity: {
+    title: 'Activité MCP',
+    list: 'Appels au serveur MCP, les plus récents en tête',
+    empty: 'Aucun appel pour l’instant.',
+    /** The result of a call (a request refused before it reached a tool has none). */
+    outcome: { ok: 'Fait', refused: 'Refusé', error: 'Erreur' },
+  },
   tools: {
     /** The badge of one of its tools: `tool` is its name in words (below), or as Claude names it. */
     named: 'Escouade · {tool}',

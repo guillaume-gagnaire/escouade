@@ -151,6 +151,41 @@ fn criteria(asked: &[String]) -> Result<Vec<String>, ToolError> {
     Ok(lines)
 }
 
+/// The line that ends the description of a ticket made through the server, « Créé par <origin> via
+/// Escouade »: the card shows it, and so does the protocol its agent is given, so that nobody
+/// takes the ticket for the user's own. `origin` is the caller as the activity log names it.
+pub(super) fn made_by(lang: i18n::Lang, origin: &str) -> String {
+    let origin = one_line(origin);
+    tr_in!(
+        lang,
+        "Créé par {origin} via Escouade",
+        "Created by {origin} through Escouade"
+    )
+}
+
+/// `description` followed, after a blank line, by the line `line` (alone when it has no text).
+pub(super) fn with_origin(description: &str, line: &str) -> String {
+    if description.is_empty() {
+        line.to_string()
+    } else {
+        format!("{description}\n\n{line}")
+    }
+}
+
+/// The description of a ticket made through the server: what the caller wrote, then who made it.
+/// The limit of `description` is on what was written, not on this line.
+fn described<R: Runtime>(
+    core: &Core<R>,
+    caller: &Caller,
+    written: &str,
+) -> Result<String, ToolError> {
+    let origin = activity::caller_name(core, Some(caller));
+    Ok(with_origin(
+        &description(written)?,
+        &made_by(i18n::ui(), &origin),
+    ))
+}
+
 /// `text` on one line: breaks, tabs and runs of spaces are single spaces.
 fn one_line(text: &str) -> String {
     let spaced: String = text
@@ -333,7 +368,7 @@ pub(super) async fn create_ticket<R: Runtime>(
     own_project_only(core, caller, &project.id)?;
     let draft = TicketDraft {
         title: title(&a.title)?,
-        description: description(a.description.as_deref().unwrap_or_default())?,
+        description: described(core, caller, a.description.as_deref().unwrap_or_default())?,
         criteria: criteria(a.criteria.as_deref().unwrap_or_default())?,
         // The default number of loops, as the window's form starts with.
         max_loops: 0,
@@ -605,7 +640,8 @@ fn other_agent<R: Runtime>(
     Ok(found)
 }
 
-/// `send_message`: a message to an agent, as typed in its conversation.
+/// `send_message`: a message to an agent, delivered under its author's name (« Message de
+/// <author> : »), never as the user's own words.
 pub(super) async fn send_message<R: Runtime>(
     core: &Arc<Core<R>>,
     caller: &Caller,
@@ -699,10 +735,15 @@ pub(super) fn report_progress<R: Runtime>(
 }
 
 /// One of `split_ticket`'s tickets, checked: its draft.
-fn sub_draft(sub: &SubTicket, after: Vec<String>) -> Result<TicketDraft, ToolError> {
+fn sub_draft<R: Runtime>(
+    core: &Core<R>,
+    caller: &Caller,
+    sub: &SubTicket,
+    after: Vec<String>,
+) -> Result<TicketDraft, ToolError> {
     Ok(TicketDraft {
         title: title(&sub.title)?,
-        description: description(sub.description.as_deref().unwrap_or_default())?,
+        description: described(core, caller, sub.description.as_deref().unwrap_or_default())?,
         criteria: criteria(sub.criteria.as_deref().unwrap_or_default())?,
         max_loops: 0,
         after,
@@ -749,12 +790,14 @@ pub(super) async fn split_ticket<R: Runtime>(
     let mut drafts = Vec::with_capacity(count);
     for (i, sub) in a.tickets.iter().enumerate() {
         let n = i + 1;
-        drafts.push(sub_draft(sub, Vec::new()).map_err(|e| match e {
-            ToolError::Failed(why) | ToolError::Refused(why) => ToolError::Failed(tr!(
-                "Ticket {n} de la liste : {why}",
-                "Ticket {n} of the list: {why}"
-            )),
-        })?);
+        drafts.push(
+            sub_draft(core, caller, sub, Vec::new()).map_err(|e| match e {
+                ToolError::Failed(why) | ToolError::Refused(why) => ToolError::Failed(tr!(
+                    "Ticket {n} de la liste : {why}",
+                    "Ticket {n} of the list: {why}"
+                )),
+            })?,
+        );
     }
     let chain = a.chain.unwrap_or(true);
     let mut previous = own.id.clone();

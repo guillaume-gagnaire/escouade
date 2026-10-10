@@ -1338,6 +1338,34 @@ pub fn mcp_activity(core: CoreState) -> Vec<crate::mcp::activity::ActivityEntry>
     core.mcp.activity.entries()
 }
 
+/// « Effacer » of the MCP activity log.
+#[tauri::command]
+pub fn mcp_clear_activity(core: CoreState) {
+    core.mcp.activity.clear();
+}
+
+/// « Claude peut piloter Escouade » turned on or off: saved at once, not through the settings
+/// modal's draft (it writes into the Claude Code config of each account, which « Annuler » could
+/// not take back). The declaration follows by itself (`mcp_declare_status`, `mcpDeclared`).
+#[tauri::command(async)]
+pub fn mcp_set_enabled(core: CoreState, enabled: bool) -> Res<()> {
+    core.set_mcp_enabled(enabled).map_err(err)
+}
+
+/// Where the server stands in each active account's Claude Code: declared, or why not and the
+/// command to run by hand, its token hidden.
+#[tauri::command]
+pub fn mcp_declare_status(core: CoreState) -> Vec<crate::mcp::install::Declaration> {
+    core.mcp.declared()
+}
+
+/// The command that declares the server by hand in the account, with the real token: asked for
+/// when the user copies it, never sent with the state.
+#[tauri::command]
+pub fn mcp_manual_command(core: CoreState, account: String) -> Res<String> {
+    core.mcp_manual_command(&account).map_err(err)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

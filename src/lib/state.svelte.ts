@@ -11,6 +11,7 @@ import { ancestors, movedPath } from './editor/tree';
 import { trees } from './editor/trees.svelte';
 import { basename, isAbsPath, relPath } from './format';
 import { setLang, t } from './i18n';
+import { mcp } from './mcp.svelte';
 import { readPref, writePref } from './prefs';
 import { testCommand } from './recipe';
 import type { SettingsTab } from './settings.svelte';
@@ -482,6 +483,11 @@ class AppState {
         break;
       case 'language':
         this.takeLang(e.lang);
+        break;
+      case 'mcpStatus':
+      case 'mcpDeclared':
+      case 'mcpActivity':
+        mcp.take(e);
         break;
       case 'boardIssue':
         if (e.issue) this.boardIssues[e.projectId] = e.issue;

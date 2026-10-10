@@ -16,6 +16,7 @@
 // <dir>/projects/* folder fails as an unknown one does; while a <dir>/fake-limit file is there, every
 // turn is stopped by the usage limit (as "limite") and its quota windows say 100 % (rate_limit_event,
 // get_usage). Without it, none of this.
+// `claude mcp add|remove|get|list` keep the user scope's MCP servers in <folder>/.claude.json (see mcpCommand).
 // What Escouade tells it is read in French or in English (« Langue des textes rédigés par Claude »):
 // each scenario below is recognized in both, its answers stay the same.
 // Started with --append-system-prompt (a ticket's protocol; not what a copy of an agent is told of
@@ -76,8 +77,106 @@ const sessionKept = (id) => {
 // Out of quota, for as long as the file is there.
 const limited = () => configDir !== null && fs.existsSync(path.join(configDir, 'fake-limit'));
 
-// One-shot mode (`-p --output-format json`), used by the app to name agents.
-if (argv.includes('-p') && argv.some((a) => a.includes('[sourd]'))) {
+// `claude mcp add|remove|get|list`: the MCP servers of the user scope, which Escouade declares in each
+// Claude account (« Claude peut piloter Escouade »). Kept where Claude Code keeps them, in the `mcpServers`
+// of <CLAUDE_CONFIG_DIR>/.claude.json (an account's own folder, or the app's when it has one), else of
+// <FAKE_CLAUDE_HOME>/.claude.json (Principal, whose real file is ~/.claude.json). It refuses to run with
+// neither variable set: it never touches the real home. Like Claude Code: `add` of a name already there
+// fails (exit 1, "already exists"), `remove` and `get` of one that is absent too; `--header` takes every
+// argument that follows it (so Escouade puts it last). While a <folder>/fake-mcp-fail file is there, `add`
+// and `remove` fail with its text; while a <folder>/fake-mcp-hang file is there, they never answer; while a
+// <folder>/fake-mcp-raced file is there, the entry is removed behind their back; while a <folder>/fake-mcp-slow
+// file is there, they wait as many milliseconds as it says. Every call is in the launch log above (its argv).
+async function mcpCommand(args) {
+  const dir = process.env.CLAUDE_CONFIG_DIR || process.env.FAKE_CLAUDE_HOME;
+  if (!dir) {
+    process.stderr.write('fake claude: set FAKE_CLAUDE_HOME or CLAUDE_CONFIG_DIR, `claude mcp` never touches the real home\n');
+    process.exit(2);
+  }
+  const file = path.join(dir, '.claude.json');
+  const fail = (text, code = 1) => {
+    process.stderr.write(`${text}\n`);
+    process.exit(code);
+  };
+  const read = () => {
+    if (!fs.existsSync(file)) return {};
+    try {
+      return JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch {
+      return fail(`fake claude: ${file} is not JSON`);
+    }
+  };
+  const [sub, ...rest] = args;
+  const options = {};
+  const positional = [];
+  for (let i = 0; i < rest.length; i++) {
+    const a = rest[i];
+    if (!a.startsWith('-')) {
+      positional.push(a);
+      continue;
+    }
+    const name = { '-s': '--scope', '-t': '--transport', '-H': '--header', '-e': '--env' }[a] ?? a;
+    // One value, but for the two options Claude Code makes variadic: everything up to the next option.
+    const values = [rest[++i]];
+    if (name === '--header' || name === '--env') while (i + 1 < rest.length && !rest[i + 1].startsWith('-')) values.push(rest[++i]);
+    options[name] = [...(options[name] ?? []), ...values];
+  }
+  const scope = options['--scope']?.[0] ?? 'local';
+  if ((sub === 'add' || sub === 'remove') && scope !== 'user') fail(`fake claude: only the user scope is kept (got ${scope})`);
+  const [name, url] = positional;
+  const slow = path.join(dir, 'fake-mcp-slow');
+  if ((sub === 'add' || sub === 'remove') && fs.existsSync(slow))
+    await new Promise((r) => setTimeout(r, Number(fs.readFileSync(slow, 'utf8')) || 1000));
+  // While a <folder>/fake-mcp-raced file is there, someone else removes the entry just before `add` and
+  // `remove` look at it.
+  if ((sub === 'add' || sub === 'remove') && fs.existsSync(path.join(dir, 'fake-mcp-raced')) && read().mcpServers?.[name]) {
+    const json = read();
+    delete json.mcpServers[name];
+    fs.writeFileSync(file, JSON.stringify(json, null, 2));
+  }
+  const servers = read().mcpServers ?? {};
+  const refused = path.join(dir, 'fake-mcp-fail');
+  if ((sub === 'add' || sub === 'remove') && fs.existsSync(path.join(dir, 'fake-mcp-hang'))) setInterval(() => {}, 1000);
+  else if ((sub === 'add' || sub === 'remove') && fs.existsSync(refused))
+    fail(fs.readFileSync(refused, 'utf8').trim() || 'fake claude: refused');
+  else if (sub === 'add') {
+    if (!name || !url) fail('error: missing required argument');
+    if (name in servers) fail(`MCP server ${name} already exists in user config`);
+    const headers = Object.fromEntries(
+      (options['--header'] ?? []).map((h) => [h.slice(0, h.indexOf(':')).trim(), h.slice(h.indexOf(':') + 1).trim()]),
+    );
+    const json = read();
+    json.mcpServers = {
+      ...servers,
+      [name]: { type: options['--transport']?.[0] ?? 'stdio', url, ...(Object.keys(headers).length ? { headers } : {}) },
+    };
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(file, JSON.stringify(json, null, 2));
+    process.stdout.write(`Added HTTP MCP server ${name} with URL: ${url} to user config\nFile modified: ${file}\n`);
+  } else if (sub === 'remove') {
+    if (!(name in servers)) fail(`No MCP server found with name: ${name}`);
+    const json = read();
+    delete json.mcpServers[name];
+    fs.writeFileSync(file, JSON.stringify(json, null, 2));
+    process.stdout.write(`Removed MCP server ${name} from user config\nFile modified: ${file}\n`);
+  } else if (sub === 'get') {
+    if (!(name in servers)) fail(`No MCP server found with name: ${name}`);
+    const s = servers[name];
+    process.stdout.write(`${name}:\n  Scope: User config\n  Status: ✔ Connected\n  Type: ${s.type}\n  URL: ${s.url}\n`);
+  } else if (sub === 'list') {
+    const lines = Object.entries(servers).map(([n, s]) => `${n}: ${s.url} (${s.type.toUpperCase()}) - ✔ Connected`);
+    process.stdout.write(
+      lines.length
+        ? `Checking MCP server health...\n\n${lines.join('\n')}\n`
+        : 'No MCP servers configured. Use `claude mcp add` to add a server.\n',
+    );
+  } else fail(`fake claude: unknown mcp command ${sub}`, 2);
+}
+
+if (argv[0] === 'mcp') {
+  mcpCommand(argv.slice(1));
+} else if (argv.includes('-p') && argv.some((a) => a.includes('[sourd]'))) {
+  // One-shot mode (`-p --output-format json`), used by the app to name agents.
   setTimeout(() => {}, 20_000);
 } else if (argv.includes('-p')) {
   let input = '';

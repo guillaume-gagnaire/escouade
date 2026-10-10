@@ -618,11 +618,13 @@ fn name_taken(name: &str) -> anyhow::Error {
 // The accounts' tab: each change saved at once, through `save_settings` (normalized, checked, the
 // quotas settled again), one at a time (`claude_accounts_lock`).
 impl<R: Runtime> Core<R> {
-    /// The settings the window saves, but for the accounts: those are the backend's, which the
-    /// accounts' tab changes on its own (the window's copy may be older).
+    /// The settings the window saves, but for the accounts and for « Claude peut piloter
+    /// Escouade »: those are the backend's, which their tabs change on their own (the window's copy
+    /// may be older).
     pub fn save_window_settings(self: &Arc<Self>, mut s: Settings) -> Result<()> {
         let _one = self.claude_accounts_lock.lock();
         s.accounts = self.settings.read().accounts.clone();
+        s.mcp_enabled = self.settings.read().mcp_enabled;
         self.save_settings(s)
     }
 
@@ -724,7 +726,8 @@ impl<R: Runtime> Core<R> {
     }
 
     /// The account removed from the settings, its folder left on the disk (its sign-in and its
-    /// sessions with it). Never Principal, nor an account an agent not archived still runs on.
+    /// sessions with it), but for the MCP server's entry in its `.claude.json` (`withdraw_removed`).
+    /// Never Principal, nor an account an agent not archived still runs on.
     pub fn remove_claude_account(self: &Arc<Self>, id: &str) -> Result<Vec<Account>> {
         if id == PRINCIPAL {
             bail!(tr!(
@@ -732,7 +735,7 @@ impl<R: Runtime> Core<R> {
                 "The Main account can’t be removed."
             ));
         }
-        let (_, accounts) = self.change_claude_accounts(|s| {
+        let (gone, accounts) = self.change_claude_accounts(|s| {
             let at = s
                 .accounts
                 .iter()
@@ -758,8 +761,8 @@ impl<R: Runtime> Core<R> {
                     n = n
                 ));
             }
-            s.accounts.remove(at);
-            Ok(())
+            let gone = s.accounts.remove(at);
+            Ok(gone)
         })?;
         // No project prefers it any more.
         let changed: Vec<crate::model::Project> = self
@@ -780,6 +783,8 @@ impl<R: Runtime> Core<R> {
             // What held their tickets back is theirs no more.
             self.schedule();
         }
+        // Its folder stays on the disk, and with it the entry that holds the server's token.
+        self.withdraw_removed(gone);
         Ok(accounts)
     }
 

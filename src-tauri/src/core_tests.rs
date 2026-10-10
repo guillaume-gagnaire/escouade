@@ -30,7 +30,7 @@ pub(crate) struct Harness {
     _app: tauri::App<MockRuntime>,
 }
 
-fn fake_cli() -> String {
+pub(crate) fn fake_cli() -> String {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("..")
         .join("tests")

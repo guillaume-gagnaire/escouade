@@ -22,6 +22,9 @@ import type {
   GitLog,
   InitialState,
   Integration,
+  McpActivityEntry,
+  McpDeclaration,
+  McpStatus,
   OwnedDiff,
   IsolaService,
   IssuePage,
@@ -52,6 +55,16 @@ export const api = {
     return invoke<InitialState>('subscribe', { channel });
   },
   setUi: (ui: UiState) => invoke<void>('set_ui', { ui }),
+  mcpStatus: () => invoke<McpStatus>('mcp_status'),
+  /** The MCP server's activity log, oldest first (the last 200). */
+  mcpActivity: () => invoke<McpActivityEntry[]>('mcp_activity'),
+  mcpClearActivity: () => invoke<void>('mcp_clear_activity'),
+  /** « Claude peut piloter Escouade »: saved at once; the declaration in each account follows (`mcpDeclared`). */
+  mcpSetEnabled: (enabled: boolean) => invoke<void>('mcp_set_enabled', { enabled }),
+  /** Where the server stands in each active account's Claude Code (the command to run by hand has its token hidden). */
+  mcpDeclareStatus: () => invoke<McpDeclaration[]>('mcp_declare_status'),
+  /** The command that declares the server by hand in the account, with the real token: asked for when it is copied. */
+  mcpManualCommand: (account: string) => invoke<string>('mcp_manual_command', { account }),
   /** The settings, but for the Claude accounts (their tab changes them with the `account*` calls below). */
   saveSettings: (settings: Settings) => invoke<ShellInfo[]>('save_settings', { settings }),
   /** The items of Principal's folder a new account may share (those it has), files first. */
