@@ -300,13 +300,37 @@ pub fn rename(root: &Path, from: &str, to: &str, kept: &[Kept]) -> Result<()> {
         }
         return std::fs::rename(&src, &dst).map_err(|e| anyhow!("{from} : {e}"));
     }
+    // Refused, the move takes back the folders it made for itself.
+    let made = dst.parent().map(missing_dirs).unwrap_or_default();
     if let Some(parent) = dst.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| anyhow!("{to} : {e}"))?;
+        std::fs::create_dir_all(parent).map_err(|e| {
+            unmake(&made);
+            anyhow!("{to} : {e}")
+        })?;
     }
-    move_new(&src, &dst).map_err(|e| match e.kind() {
-        std::io::ErrorKind::AlreadyExists => anyhow!("{to} existe déjà"),
-        _ => anyhow!("{from} : {e}"),
+    move_new(&src, &dst).map_err(|e| {
+        unmake(&made);
+        match e.kind() {
+            std::io::ErrorKind::AlreadyExists => anyhow!("{to} existe déjà"),
+            _ => anyhow!("{from} : {e}"),
+        }
     })
+}
+
+/// The folders missing on the way to `dir`, it included, deepest first: those `create_dir_all`
+/// makes.
+fn missing_dirs(dir: &Path) -> Vec<std::path::PathBuf> {
+    dir.ancestors()
+        .take_while(|d| std::fs::symlink_metadata(d).is_err())
+        .map(Path::to_path_buf)
+        .collect()
+}
+
+/// Removes the folders `made` (deepest first) still empty: one an agent wrote in meanwhile stays.
+fn unmake(made: &[std::path::PathBuf]) {
+    for d in made {
+        let _ = std::fs::remove_dir(d);
+    }
 }
 
 /// `rename` as the editor asks for it: refused first when it only changes the case of what git
@@ -1045,6 +1069,60 @@ mod tests {
         assert!(root.join("a.ts").is_file());
         assert!(!root.join("s.txt").exists());
         assert_eq!(names(&base), vec!["outside", "root"]);
+    }
+
+    /// What keeps `file` from being moved while it lives (None where nothing can): the file open
+    /// without letting it go on Windows, its folder read-only elsewhere.
+    fn held(file: &Path) -> Option<Box<dyn std::any::Any>> {
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+            // FILE_SHARE_READ only: no FILE_SHARE_DELETE, which a move needs.
+            let f = std::fs::OpenOptions::new()
+                .read(true)
+                .share_mode(1)
+                .open(file)
+                .ok()?;
+            Some(Box::new(f))
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            struct ReadOnly(std::path::PathBuf);
+            impl Drop for ReadOnly {
+                fn drop(&mut self) {
+                    let _ =
+                        std::fs::set_permissions(&self.0, std::fs::Permissions::from_mode(0o755));
+                }
+            }
+            if unsafe { libc::geteuid() } == 0 {
+                return None;
+            }
+            let dir = file.parent()?.to_path_buf();
+            std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o555)).ok()?;
+            Some(Box::new(ReadOnly(dir)))
+        }
+    }
+
+    #[test]
+    fn a_move_that_fails_leaves_none_of_the_folders_it_made() {
+        let dir = test_dir("fsedit-rename-fails");
+        std::fs::create_dir_all(dir.join("lib")).unwrap();
+        std::fs::create_dir_all(dir.join("docs")).unwrap();
+        std::fs::write(dir.join("lib/a.ts"), "a\n").unwrap();
+        let Some(hold) = held(&dir.join("lib/a.ts")) else {
+            eprintln!("skipped: nothing keeps a file from moving here");
+            return;
+        };
+        assert!(rename(&dir, "lib/a.ts", "new/deep/a.ts", &[]).is_err());
+        assert_eq!(names(&dir), vec!["docs", "lib"]);
+        // Only those it made: a folder that was there stays.
+        assert!(rename(&dir, "lib/a.ts", "docs/deep/a.ts", &[]).is_err());
+        assert_eq!(names(&dir.join("docs")), Vec::<String>::new());
+        assert_eq!(names(&dir), vec!["docs", "lib"]);
+        drop(hold);
+        rename(&dir, "lib/a.ts", "new/deep/a.ts", &[]).unwrap();
+        assert!(dir.join("new/deep/a.ts").is_file());
     }
 
     #[test]
