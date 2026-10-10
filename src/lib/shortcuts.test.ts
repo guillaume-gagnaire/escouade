@@ -128,6 +128,14 @@ describe('handleShortcut', () => {
     expect(app.modal).toMatchObject({ kind: 'quickOpen' });
   });
 
+  it('does not take for a P a key whose character is no letter: Colemak and Workman type « ; » on that key', () => {
+    fakeBackend();
+    expect(handleShortcut(key(';', { code: 'KeyP' }), false)).toBe(false);
+    expect(handleShortcut(key(';', { code: 'KeyP', shiftKey: true }), false)).toBe(false);
+    expect(handleShortcut(key(';', { code: 'KeyP', metaKey: true, ctrlKey: false }), true)).toBe(false);
+    expect(app.modal).toBeNull();
+  });
+
   it('opens nothing with Ctrl+Shift+P, and leaves Ctrl+Alt+P (AltGr) alone', () => {
     fakeBackend();
     expect(handleShortcut(key('p', { altKey: true }), false)).toBe(false);
@@ -256,6 +264,9 @@ describe('holdPrint', () => {
     expect(held(cancelable('з', { ctrlKey: true, code: 'KeyP' }))).toEqual([true, true]);
     // The P key of a Dvorak keyboard types an « l »: Ctrl+L is not a print shortcut.
     expect(held(cancelable('l', { ctrlKey: true, code: 'KeyP' }))).toEqual([false, false]);
+    // The P key of Colemak and Workman types « ; », which is no print shortcut either.
+    expect(held(cancelable(';', { ctrlKey: true, code: 'KeyP' }))).toEqual([false, false]);
+    expect(held(cancelable(':', { ctrlKey: true, shiftKey: true, code: 'KeyP' }))).toEqual([false, false]);
   });
 
   it('takes Cmd on macOS, and Ctrl only elsewhere', () => {

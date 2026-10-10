@@ -76,11 +76,12 @@ export function isAppShortcut(e: KeyboardEvent, mac = IS_MAC): boolean {
 
 /**
  * The letter P: by its character, else by its place on the keyboard when the layout types another alphabet (Cyrillic,
- * Greek…), where the WebView still prints on that key. Not by its place alone: on Dvorak that key types an « l ».
+ * Greek…), where the WebView still prints on that key. Not by its place alone: on Dvorak that key types an « l », and
+ * on Colemak or Workman a « ; », which is no letter at all.
  */
 function isP(e: KeyboardEvent): boolean {
   const k = e.key.toLowerCase();
-  return k === 'p' || (!/^[a-z]$/.test(k) && e.code === 'KeyP');
+  return k === 'p' || (/^\p{L}$/u.test(k) && !/^[a-z]$/.test(k) && e.code === 'KeyP');
 }
 
 /** What prints the page in the WebView: Ctrl+P, and Ctrl+Shift+P (through the system dialog). Cmd on macOS; never AltGr. */
