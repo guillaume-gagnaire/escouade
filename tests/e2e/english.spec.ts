@@ -29,8 +29,13 @@ test('the interface in English, then in French without a restart', async ({ app 
   await expect(page.getByRole('textbox').last()).toHaveAttribute('placeholder', 'Send a message to hello-fake-en…');
   await expect(page.getByRole('button', { name: 'Send' })).toBeVisible();
   await expect(footer).toContainText('1 done');
-  await expect(footer).toContainText('5-hour session');
-  await expect(footer).toContainText('12%');
+  await expect(footer).toContainText('5h');
+  const quota = page.getByRole('meter', { name: '5-hour quota' });
+  await expect(quota).toHaveAttribute('aria-valuenow', '12');
+  await expect(page.getByRole('meter', { name: '7-day quota' })).toBeVisible();
+  // The percentage is in a tooltip over the bar.
+  await quota.hover();
+  await expect(page.getByRole('tooltip')).toContainText(/^12%/);
 
   // The settings, in English, on the tab of the languages.
   await page.getByTitle('Settings (Ctrl+,)').click();
@@ -51,8 +56,9 @@ test('the interface in English, then in French without a restart', async ({ app 
   await expect(page.getByRole('textbox').last()).toHaveAttribute('placeholder', 'Envoyer un message à hello-fake-en…');
   await expect(page.getByRole('button', { name: 'Envoyer' })).toBeVisible();
   await expect(footer).toContainText('1 terminé');
-  await expect(footer).toContainText('Session 5 h');
-  await expect(footer).toContainText('12 %');
+  await expect(footer).toContainText('5h');
+  await expect(page.getByRole('meter', { name: 'Quota sur 5 heures' })).toHaveAttribute('aria-valuenow', '12');
+  await expect(page.getByRole('meter', { name: 'Quota sur 7 jours' })).toBeVisible();
   expect(JSON.parse(fs.readFileSync(path.join(app.data, 'settings.json'), 'utf8')).language).toBe('fr');
 
   // What Claude said stays what it was; the settings are French too.

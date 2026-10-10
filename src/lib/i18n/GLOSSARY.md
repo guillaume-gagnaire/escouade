@@ -285,7 +285,6 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 | Voir le log / Voir les logs | View log / View logs | |
 | racine du worktree | worktree root | |
 | Processus terminé | Process exited | un terminal dont le shell s’est arrêté |
-| Session 5 h / Hebdo / reset | 5-hour session / Weekly / resets in | barre d’état, telle qu’elle est aujourd’hui (la tâche K5 la refait) |
 | Aperçu de l’onglet | Tab preview | fenêtre d’un nouveau projet |
 | Nouveautés (d’une version) | What’s new | notes d’une mise à jour |
 | prête · Redémarrer (mise à jour) | ready · Restart | barre d’état |
@@ -374,6 +373,12 @@ Ce qu’Escouade dit à Claude ou lui fait écrire suit « Langue des textes ré
 | Compte préféré | Preferred account | le réglage d’un projet ; « Automatique » → “Automatic” |
 | Automatique (Pro) | Automatic (Pro) | le choix du Composer qui laisse Escouade choisir, avec le compte qu’elle choisirait |
 | a passé le seuil | is past the threshold | un compte dont une fenêtre de quota atteint « Pause au-delà du quota » |
+| 5h … reset 3h01 · 7j … reset 4j 12h | 5h … reset 3h01 · W … reset 4d 12h | les quotas du compte en cours dans la barre d’état : « reset » est le même mot dans les deux langues, le pourcentage est dans l’infobulle |
+| Quota sur 5 heures / Quota sur 7 jours | 5-hour quota / 7-day quota | le nom de la barre d’un quota (pour les lecteurs d’écran) |
+| 42 % · remise à zéro le 10/10 à 18:00 | 42% · resets on 10/10 at 6:00 PM | l’infobulle d’une barre de quota ; jour et mois en chiffres (`fDayMonth`) |
+| Quotas par compte | Quota by account | le bouton de la barre d’état avec plusieurs comptes, qui ouvre le panneau des quotas de chaque compte |
+| en cours | current | le compte en cours, marqué dans le panneau des quotas |
+| au-delà du seuil de pause | past the pause threshold | un compte dont une fenêtre a passé « Pause au-delà du quota », dans le panneau des quotas |
 
 ## M — mcp
 
