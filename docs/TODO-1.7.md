@@ -1,6 +1,6 @@
 # Escouade 1.7 — à faire
 
-Trois chantiers : un serveur MCP pour piloter Escouade depuis Claude, plusieurs comptes Claude avec bascule automatique, et une meilleure gestion des branches. Les deux premiers se touchent : chaque compte a son propre `~/.claude.json`, donc le serveur MCP doit être déclaré dans chacun.
+Quatre chantiers : un serveur MCP pour piloter Escouade depuis Claude, plusieurs comptes Claude avec bascule automatique, une meilleure gestion des branches, et l'interface en plusieurs langues (langue du système par défaut, anglais, français). Les deux premiers se touchent : chaque compte a son propre `~/.claude.json`, donc le serveur MCP doit être déclaré dans chacun.
 
 ## 0. À vérifier avant de concevoir (essais jetables)
 
@@ -72,7 +72,7 @@ But : plusieurs comptes Claude (perso, pro…) dans la même app ; chaque agent 
 
 ### Quota et bascule
 - [ ] `usage.rs` par compte : identifiants lus dans le dossier de chaque compte (sous macOS, selon l'essai du trousseau) ; un appel par compte toutes les 5 min, comme aujourd'hui.
-- [ ] **Barre d'état, compacte** : seulement les quotas du compte en cours d'utilisation, sous la forme `5h <barre> reset 3h01 | W <barre> reset 4j 12h` (aujourd'hui : « Session 5 h <barre> 42 % reset 3h01 » et « Hebdo <barre> 12 % reset 4j 12h »). Le libellé « W » est à trancher face à « 7 j », plus cohérent avec une interface en français.
+- [ ] **Barre d'état, compacte** : seulement les quotas du compte en cours d'utilisation, sous la forme `5h <barre> reset 3h01 | W <barre> reset 4j 12h` (aujourd'hui : « Session 5 h <barre> 42 % reset 3h01 » et « Hebdo <barre> 12 % reset 4j 12h »). Les libellés suivent la langue de l'interface (chantier 4) : en anglais `5h … reset 3h01 | W … reset 4d 12h`, en français `5h … reset 3h01 | 7j … reset 4j 12h` (« 7j » plutôt que « W », à valider), et de même pour l'infobulle et le panneau.
   - Le pourcentage n'est plus écrit : il s'affiche au survol de la barre, dans une infobulle (« 42 % · remise à zéro le 10/10 à 18:00 »). Pour le clavier et les lecteurs d'écran, la barre reste un `role="meter"` avec sa valeur, et l'infobulle s'affiche aussi au focus.
   - La barre passe à la couleur d'alerte au-delà de 80 %, comme aujourd'hui.
   - Le nom du compte en cours apparaît devant les quotas dès qu'il y a plusieurs comptes (« Pro · 5h <barre> … »), pour savoir de qui sont ces quotas.
@@ -113,12 +113,54 @@ But : gérer les branches depuis Escouade sans passer par un terminal.
 - [ ] Tests : dépôts git réels dans les tests Rust (changer avec et sans changements, branche prise par un worktree, création depuis un commit, suppression refusée, intégration de la base avec et sans conflit) ; composants (sélecteur, confirmations) ; un e2e : créer une branche, y passer, la voir dans le graphe.
 - [ ] Docs : SPEC (section Git), README, CHANGELOG.
 
+## 4. Langues : système par défaut, anglais, français
+
+But : toute l'interface en anglais ou en français ; par défaut, la langue du système (français si elle commence par « fr », anglais sinon).
+
+### Ampleur
+- Environ 1 500 textes côté fenêtre (Svelte et TypeScript) et quelques centaines côté Rust (erreurs montrées telles quelles, toasts, notifications du système, menus de la barre des tâches et de l'app macOS, commentaires publiés dans Jira, Trello et GitHub). À compter précisément au début du chantier.
+- Une dizaine d'endroits formatent en dur à la française (`toLocaleString('fr-FR')`, montants « 0,10 $ », durées « 4j 12h »).
+
+### Réglage
+- [ ] Réglages › Application : « Langue » avec « Système (par défaut) », « English », « Français ». Le changement s'applique tout de suite, sans redémarrer, fenêtre et menus compris.
+- [ ] La langue du système est lue par Rust (crate `sys-locale` ou équivalent, à vérifier) et envoyée à la fenêtre, pour que les deux côtés soient d'accord.
+
+### Mécanique
+- [ ] Fenêtre : un catalogue par langue, aux clés typées (une clé absente ou des paramètres qui diffèrent d'une langue à l'autre ne compilent pas), avec interpolation et pluriels (`Intl.PluralRules` : « 1 fichier », « 2 fichiers » ; « 1 file », « 2 files »). Choisir entre un petit module maison et une bibliothèque compilée (Paraglide…) au début du chantier.
+- [ ] Rust : les textes qui arrivent à l'écran passent par un catalogue de même forme côté Rust ; quand c'est simple, le backend envoie un code et ses paramètres, et c'est la fenêtre qui rédige.
+- [ ] Formats selon la langue, en un seul endroit (`format.ts` et son pendant Rust) : nombres, montants (« 0,10 $ » / « $0.10 »), dates, durées et comptes à rebours (« 4j 12h » / « 4d 12h »), tailles de fichiers.
+- [ ] Quotas : les libellés compacts de la barre d'état, les infobulles et le panneau des comptes (chantier 2) dans la langue choisie.
+- [ ] Menus natifs (barre des tâches, menu de l'app sous macOS) reconstruits au changement de langue.
+- [ ] Installateur Windows (NSIS) en anglais et en français (configuration du bundle Tauri, à vérifier).
+
+### Textes rédigés par Claude
+- [ ] Les textes qu'Escouade fait écrire à Claude (message de commit proposé, description de PR, commentaires publiés dans Jira, Trello et GitHub, commandes de lancement suggérées et leurs noms) : réglage « Langue des textes rédigés par Claude », avec « Comme l'interface (par défaut) », « English » et « Français », car beaucoup d'équipes commitent en anglais même avec une interface en français.
+- [ ] Les consignes qu'Escouade ajoute aux agents (message système ajouté, invites du pilote auto) dans cette langue aussi.
+
+### Tests
+- [ ] Un test vérifie que les deux catalogues ont les mêmes clés et les mêmes paramètres.
+- [ ] Un test (ou une règle de lint) repère un texte écrit en dur dans un composant, hors catalogue.
+- [ ] Les tests existants tournent en français (leurs attentes ne changent pas) ; une série de tests en anglais couvre les formats, les pluriels et quelques écrans ; un e2e de bout en bout en anglais.
+
+### Site (GitHub Pages)
+Le site est une page Nuxt générée en statique (`website/`, preset `github_pages`), dont les textes sont dans `website/app/data/site.ts`.
+- [ ] Deux versions générées : le français à la racine (les liens existants restent bons) et l'anglais sous `/en/` ; `<html lang>`, titre, description et balises de partage (Open Graph) dans la langue de la page ; balises `hreflang` entre les deux.
+- [ ] Les textes de `site.ts` en deux catalogues de mêmes clés (un test le vérifie, comme pour l'app) ; liens de téléchargement, version et captures communs.
+- [ ] Sélecteur « FR / EN » dans l'en-tête ; le choix est gardé (stockage local). GitHub Pages ne lit pas la langue du navigateur côté serveur : à la première visite de la racine, un petit script envoie vers `/en/` un navigateur qui n'est pas en français, sauf choix gardé ou lien explicite vers la version française.
+- [ ] Captures d'écran : celles de l'app en anglais pour la version anglaise, une fois l'app traduite.
+- [ ] Vidéo : sa voix est en français. Pour la version anglaise, des sous-titres anglais d'abord ; une voix anglaise est à décider (nouvelle piste ElevenLabs, même montage).
+- [ ] Les tests du site (`website/tests`) tournent sur les deux langues ; `nuxt generate` produit les deux pages.
+
+### Docs
+- [ ] SPEC : la règle des langues et des formats. README et CHANGELOG restent en français ; un README en anglais (`README.en.md`) est à décider.
+
 ## Ordre proposé
 
-1. Les essais du point 0 : ils décident de la forme de la bascule et du support macOS.
-2. Comptes multiples sans bascule (liste, ajout, compte par agent, quota par compte).
-3. Serveur MCP en lecture seule, avec l'installation automatique dans chaque compte.
-4. Bascule automatique (nouveaux agents, puis reprise sur un autre compte si l'essai l'a permis).
-5. Outils MCP qui agissent, puis les outils réservés aux agents d'Escouade.
+1. Langues, la mécanique et l'extraction des textes existants (app, puis site) : sinon chaque texte des autres chantiers serait écrit en dur puis repris. Les textes nouveaux s'écrivent ensuite directement dans les deux langues.
+2. Les essais du point 0 : ils décident de la forme de la bascule et du support macOS.
+3. Comptes multiples sans bascule (liste, ajout, compte par agent, quota par compte, barre d'état compacte, statistiques par compte).
+4. Serveur MCP en lecture seule, avec l'installation automatique dans chaque compte.
+5. Bascule automatique (nouveaux agents, puis reprise sur un autre compte si l'essai l'a permis).
+6. Outils MCP qui agissent, puis les outils réservés aux agents d'Escouade.
 
-Les branches (chantier 3) ne dépendent pas des deux autres : elles peuvent avancer en parallèle dès le début. Les outils MCP pourront ensuite s'en servir (créer une branche, lancer un agent dessus).
+Les branches (chantier 3) ne dépendent pas des autres : elles peuvent avancer en parallèle dès que la mécanique des langues est en place. Les outils MCP pourront ensuite s'en servir (créer une branche, lancer un agent dessus).
