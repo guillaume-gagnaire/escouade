@@ -1323,3 +1323,304 @@ fn a_saved_plan_is_read_back() {
     let none: PlanState = serde_json::from_value(json!({})).unwrap();
     assert!(none.is_empty());
 }
+
+// ---------- the plan of a file ----------
+
+use crate::planfiles::FileList;
+
+fn file_task(id: &str, title: &str, status: TaskStatus) -> PlanTask {
+    PlanTask {
+        id: id.into(),
+        title: title.into(),
+        status,
+        ..PlanTask::default()
+    }
+}
+
+fn files(file: &str, title: Option<&str>, tasks: Vec<PlanTask>) -> Option<FileList> {
+    Some(FileList {
+        plan_file: file.into(),
+        title: title.map(String::from),
+        tasks,
+    })
+}
+
+fn demo_files() -> Option<FileList> {
+    files(
+        "docs/superpowers/plans/demo.md",
+        Some("Démo"),
+        vec![
+            file_task("1", "Un", TaskStatus::Done),
+            file_task("2", "Deux", TaskStatus::InProgress),
+            file_task("3", "Trois", TaskStatus::Pending),
+        ],
+    )
+}
+
+#[test]
+fn the_tasks_of_a_plan_file_fill_a_plan_that_has_none() {
+    let mut p = PlanState::default();
+    assert_eq!(p.set_files(demo_files()), Change::Saved);
+    assert_eq!(p.source, Some(PlanSource::Plan));
+    assert_eq!(
+        p.plan_file.as_deref(),
+        Some("docs/superpowers/plans/demo.md")
+    );
+    assert_eq!(p.title.as_deref(), Some("Démo"));
+    assert_eq!(ids(&p), ["1", "2", "3"]);
+    assert_eq!(task(&p, "2").status, TaskStatus::InProgress);
+    assert!(!p.is_empty());
+    // The same files again: nothing to tell.
+    assert_eq!(p.set_files(demo_files()), Change::None);
+    // A change of status or of steps is told.
+    let mut list = demo_files().unwrap();
+    list.tasks[2].status = TaskStatus::InProgress;
+    assert_eq!(p.set_files(Some(list.clone())), Change::Saved);
+    list.tasks[2].steps = Some((1, 4));
+    assert_eq!(p.set_files(Some(list)), Change::Saved);
+    assert_eq!(task(&p, "3").steps, Some((1, 4)));
+}
+
+#[test]
+fn nothing_read_changes_nothing() {
+    let mut p = PlanState::default();
+    assert_eq!(p.set_files(None), Change::None);
+    assert!(p.is_empty());
+    p.set_files(demo_files());
+    // A read that failed, or found nothing: what was known stays.
+    assert_eq!(p.set_files(None), Change::None);
+    assert_eq!(ids(&p), ["1", "2", "3"]);
+    assert_eq!(p.source, Some(PlanSource::Plan));
+}
+
+#[test]
+fn the_list_of_the_agent_comes_before_the_one_of_the_files() {
+    let mut p = PlanState::default();
+    listed(&mut p, &["Lire", "Écrire"]);
+    assert_eq!(p.source, Some(PlanSource::Tools));
+    // The files tell the plan's name and title, not its tasks: the window gets one list.
+    assert_eq!(p.set_files(demo_files()), Change::Saved);
+    assert_eq!(p.source, Some(PlanSource::Tools));
+    assert_eq!(ids(&p), ["1", "2"]);
+    assert_eq!(task(&p, "1").title, "Lire");
+    assert_eq!(task(&p, "1").status, TaskStatus::Pending);
+    assert_eq!(
+        p.plan_file.as_deref(),
+        Some("docs/superpowers/plans/demo.md")
+    );
+    assert_eq!(p.title.as_deref(), Some("Démo"));
+    assert_eq!(p.set_files(demo_files()), Change::None);
+}
+
+#[test]
+fn an_agent_whose_list_is_empty_gets_the_one_of_the_files() {
+    let mut p = PlanState::default();
+    // A subagent was launched, no task was listed.
+    launch(&mut p, "a1", json!({ "description": "Aide", "prompt": "" }));
+    assert!(p.tasks.is_empty());
+    assert_eq!(p.set_files(demo_files()), Change::Saved);
+    assert_eq!(p.source, Some(PlanSource::Plan));
+    assert_eq!(ids(&p), ["1", "2", "3"]);
+    assert_eq!(p.agents.len(), 1, "the subagents are the stream's");
+    assert_eq!(p.launched, 1);
+}
+
+#[test]
+fn a_task_done_is_never_pending_again() {
+    let mut p = PlanState::default();
+    p.set_files(demo_files());
+    // The ledger lost its lines (cut, rewritten): the plan says the tasks are to do again.
+    let again = files(
+        "docs/superpowers/plans/demo.md",
+        Some("Démo"),
+        vec![
+            file_task("1", "Un", TaskStatus::Pending),
+            file_task("2", "Deux", TaskStatus::Pending),
+            file_task("3", "Trois", TaskStatus::Pending),
+        ],
+    );
+    assert_eq!(p.set_files(again), Change::Saved);
+    assert_eq!(task(&p, "1").status, TaskStatus::Done);
+    // What was only in progress is not held to it.
+    assert_eq!(task(&p, "2").status, TaskStatus::Pending);
+    // The ledger itself can say a task is at work again (a fix round after its complete).
+    let mut list = demo_files().unwrap();
+    list.tasks[0].status = TaskStatus::InProgress;
+    assert_eq!(p.set_files(Some(list)), Change::Saved);
+    assert_eq!(task(&p, "1").status, TaskStatus::InProgress);
+}
+
+#[test]
+fn another_plan_starts_afresh() {
+    let mut p = PlanState::default();
+    p.set_files(demo_files());
+    let other = files(
+        "docs/superpowers/plans/other.md",
+        Some("Autre"),
+        vec![
+            file_task("1", "Un autre", TaskStatus::Pending),
+            file_task("9", "Neuf", TaskStatus::Pending),
+        ],
+    );
+    assert_eq!(p.set_files(other), Change::Saved);
+    // Task 1 of this plan is not the first plan's task 1: it is not done.
+    assert_eq!(task(&p, "1").status, TaskStatus::Pending);
+    assert_eq!(ids(&p), ["1", "9"]);
+    assert_eq!(p.title.as_deref(), Some("Autre"));
+    assert_eq!(
+        p.plan_file.as_deref(),
+        Some("docs/superpowers/plans/other.md")
+    );
+}
+
+#[test]
+fn a_plan_without_tasks_is_no_plan() {
+    let mut p = PlanState::default();
+    let empty = files("docs/superpowers/plans/empty.md", Some("Rien"), vec![]);
+    assert_eq!(p.set_files(empty.clone()), Change::None);
+    assert!(p.is_empty() && p.title.is_none() && p.plan_file.is_none());
+    assert_eq!(p.source, None);
+    // The plan was edited and lost its tasks: what was read of it goes.
+    p.set_files(demo_files());
+    assert_eq!(p.set_files(empty.clone()), Change::Saved);
+    assert!(p.tasks.is_empty() && p.title.is_none() && p.plan_file.is_none());
+    assert_eq!(p.source, None);
+    // The agent's own list does not go for it.
+    let mut q = PlanState::default();
+    listed(&mut q, &["Lire"]);
+    q.set_files(empty);
+    assert_eq!(ids(&q), ["1"]);
+    assert_eq!(q.source, Some(PlanSource::Tools));
+}
+
+#[test]
+fn a_subagent_is_linked_to_a_task_of_the_files_by_its_brief() {
+    let mut p = PlanState::default();
+    p.set_files(files(
+        "docs/superpowers/plans/big.md",
+        None,
+        vec![
+            file_task("L1", "Langues", TaskStatus::Done),
+            file_task("K4", "Comptes", TaskStatus::InProgress),
+            file_task("K5", "Barre", TaskStatus::Pending),
+        ],
+    ));
+    launch(
+        &mut p,
+        "a1",
+        json!({ "description": "Implémente K5", "prompt": "Read .superpowers/sdd/big/task-K5-brief.md" }),
+    );
+    assert_eq!(row(&p, "a1").plan_task.as_deref(), Some("K5"));
+    // Without a name, the one task in progress.
+    launch(
+        &mut p,
+        "a2",
+        json!({ "description": "Aide", "prompt": "x" }),
+    );
+    assert_eq!(row(&p, "a2").plan_task.as_deref(), Some("K4"));
+    // The plan changes: a link to a task it no longer has goes.
+    p.set_files(files(
+        "docs/superpowers/plans/big.md",
+        None,
+        vec![file_task("L1", "Langues", TaskStatus::Done)],
+    ));
+    assert_eq!(row(&p, "a1").plan_task, None);
+    assert_eq!(row(&p, "a2").plan_task, None);
+}
+
+#[test]
+fn the_task_tools_take_the_list_over_from_the_files() {
+    // A task made: the list of the files makes room, the plan keeps its name and title.
+    let mut p = PlanState::default();
+    p.set_files(demo_files());
+    assert_eq!(
+        tool(&mut p, "c1", "TaskCreate", json!({ "subject": "Mienne" })),
+        Change::Saved
+    );
+    assert_eq!(p.source, Some(PlanSource::Tools));
+    assert_eq!(p.tasks.len(), 1);
+    assert_eq!(p.tasks[0].title, "Mienne");
+    assert_eq!(p.title.as_deref(), Some("Démo"));
+    // The files go on being read, and no longer change the list.
+    assert_eq!(p.set_files(demo_files()), Change::None);
+    assert_eq!(p.tasks.len(), 1);
+
+    // A todo list does too.
+    let mut p = PlanState::default();
+    p.set_files(demo_files());
+    tool(
+        &mut p,
+        "t1",
+        "TodoWrite",
+        json!({ "todos": [{ "content": "Lire", "status": "pending", "activeForm": "Lit" }] }),
+    );
+    assert_eq!(p.source, Some(PlanSource::Tools));
+    assert_eq!(ids(&p), ["1"]);
+    assert_eq!(task(&p, "1").title, "Lire");
+
+    // An update of a task it does not know makes it, as ever: the files' tasks are not its own.
+    let mut p = PlanState::default();
+    p.set_files(demo_files());
+    update(
+        &mut p,
+        "u1",
+        json!({ "taskId": "2", "status": "completed" }),
+    );
+    assert_eq!(p.source, Some(PlanSource::Tools));
+    assert_eq!(ids(&p), ["2"]);
+    assert_eq!(task(&p, "2").title, "#2");
+    assert_eq!(task(&p, "2").status, TaskStatus::Done);
+}
+
+#[test]
+fn what_the_task_tools_do_nothing_with_leaves_the_files_alone() {
+    let mut p = PlanState::default();
+    p.set_files(demo_files());
+    // An empty todo list, a deletion of a task it does not have, a read.
+    assert_eq!(
+        tool(&mut p, "t1", "TodoWrite", json!({ "todos": [] })),
+        Change::None
+    );
+    assert_eq!(
+        update(&mut p, "u1", json!({ "taskId": "2", "status": "deleted" })),
+        Change::None
+    );
+    tool(&mut p, "g1", "TaskList", json!({}));
+    assert_eq!(p.source, Some(PlanSource::Plan));
+    assert_eq!(ids(&p), ["1", "2", "3"]);
+}
+
+#[test]
+fn a_new_plan_forgets_the_files_too() {
+    let mut p = PlanState::default();
+    p.set_files(demo_files());
+    assert_eq!(p.reset(), Change::Saved);
+    assert!(p.is_empty() && p.title.is_none() && p.plan_file.is_none() && p.source.is_none());
+}
+
+#[test]
+fn a_plan_of_the_files_goes_to_the_window_with_its_steps() {
+    let mut p = PlanState::default();
+    let mut list = demo_files().unwrap();
+    list.tasks[1].steps = Some((2, 5));
+    p.set_files(Some(list));
+    assert_eq!(
+        serde_json::to_value(&p).unwrap(),
+        json!({
+            "source": "plan",
+            "planFile": "docs/superpowers/plans/demo.md",
+            "title": "Démo",
+            "tasks": [
+                { "id": "1", "title": "Un", "status": "done" },
+                { "id": "2", "title": "Deux", "status": "inProgress", "steps": [2, 5] },
+                { "id": "3", "title": "Trois", "status": "pending" },
+            ],
+            "agents": [],
+            "launched": 0,
+            "workflows": [],
+        })
+    );
+    let back: PlanState = serde_json::from_value(serde_json::to_value(&p).unwrap()).unwrap();
+    assert_eq!(back.source, Some(PlanSource::Plan));
+    assert_eq!(task(&back, "2").steps, Some((2, 5)));
+}

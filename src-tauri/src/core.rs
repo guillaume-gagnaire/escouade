@@ -17,6 +17,7 @@ use crate::menus;
 use crate::model::*;
 use crate::notify;
 use crate::paths::{self, DataDir};
+use crate::planfiles;
 use crate::pty::{PtyManager, ShellInfo};
 use crate::resources;
 use crate::stats::{AgentLabel, Labels, Stats, StatsView, TicketLabel};
@@ -29,6 +30,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
+#[cfg(test)]
+use std::sync::atomic::AtomicU64;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -603,6 +606,8 @@ pub struct Core<R: Runtime = Wry> {
     /// One fetch, pull or push at a time per repository.
     sync_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
     toplevels: Mutex<HashMap<String, Option<String>>>,
+    /// How the look at the files of each agent's plan stands, by agent (`ask_plan_scan`).
+    plan_scans: Mutex<HashMap<String, PlanScan>>,
     dirty: AtomicBool,
     waiting: AtomicUsize,
     pub quitting: AtomicBool,
@@ -660,6 +665,14 @@ pub struct Core<R: Runtime = Wry> {
     searches: convsearch::Searches,
     /// The MCP server (« Claude peut piloter Escouade »), running while `sync_mcp` wants it.
     pub(crate) mcp: crate::mcp::McpServer<R>,
+    /// Times the files of an agent's plan were read, not counting the looks that found them as
+    /// before (tests only).
+    #[cfg(test)]
+    pub(crate) plan_reads: AtomicUsize,
+    /// The least time between two looks at the files of a plan, in milliseconds (tests only: the
+    /// interval is `PLAN_SCAN_EVERY`).
+    #[cfg(test)]
+    pub(crate) plan_scan_ms: AtomicU64,
     /// Notifications sent, as "<title> | <text>" (tests only).
     #[cfg(test)]
     pub alerts: Mutex<Vec<String>>,
@@ -680,6 +693,19 @@ pub struct Core<R: Runtime = Wry> {
     /// it).
     #[cfg(test)]
     pub(crate) clock_ahead: std::sync::atomic::AtomicI64,
+}
+
+/// The least time between two looks at the files of an agent's plan (`planfiles`).
+pub(crate) const PLAN_SCAN_EVERY: Duration = Duration::from_secs(2);
+
+/// The look at the files of one agent's plan: under way (or waiting for its turn), asked for again
+/// meanwhile, when it last began, what it saw.
+#[derive(Default)]
+struct PlanScan {
+    running: bool,
+    again: bool,
+    last: Option<Instant>,
+    stamp: Option<planfiles::Stamp>,
 }
 
 /// The GitHub CLI on the PATH. Tests never see the machine's own: there it is absent, unless a
@@ -1226,6 +1252,7 @@ impl<R: Runtime> Core<R> {
             git_inflight: Mutex::default(),
             sync_locks: Mutex::default(),
             toplevels: Mutex::default(),
+            plan_scans: Mutex::default(),
             dirty: AtomicBool::new(false),
             waiting: AtomicUsize::new(usize::MAX),
             quitting: AtomicBool::new(false),
@@ -1252,6 +1279,10 @@ impl<R: Runtime> Core<R> {
             import_lock: tokio::sync::Mutex::new(()),
             searches: convsearch::Searches::default(),
             mcp: crate::mcp::McpServer::new(me.clone()),
+            #[cfg(test)]
+            plan_reads: AtomicUsize::new(0),
+            #[cfg(test)]
+            plan_scan_ms: AtomicU64::new(PLAN_SCAN_EVERY.as_millis() as u64),
             #[cfg(test)]
             alerts: Mutex::default(),
             #[cfg(test)]
@@ -1688,6 +1719,9 @@ impl<R: Runtime> Core<R> {
         if fx.save {
             self.request_save();
         }
+        if fx.plan_files {
+            self.ask_plan_scan(id);
+        }
         if changed {
             self.update_tray();
         }
@@ -1703,7 +1737,7 @@ impl<R: Runtime> Core<R> {
         }
     }
 
-    fn on_frame(self: &Arc<Self>, h: &AgentHandle, gen: u64, frame: Value) {
+    pub(crate) fn on_frame(self: &Arc<Self>, h: &AgentHandle, gen: u64, frame: Value) {
         let mut fx = Effects::default();
         let (id, pid, name, view) = {
             let mut rt = h.lock();
@@ -1720,6 +1754,108 @@ impl<R: Runtime> Core<R> {
             )
         };
         self.apply(&id, &pid, &name, fx, view);
+    }
+
+    /// The least time between two looks at the files of an agent's plan.
+    fn plan_scan_every(&self) -> Duration {
+        #[cfg(test)]
+        return Duration::from_millis(self.plan_scan_ms.load(Ordering::Acquire));
+        #[cfg(not(test))]
+        PLAN_SCAN_EVERY
+    }
+
+    /// The files of the agent's plan may have moved (a command ended, a subagent came back, the
+    /// turn ended): they are looked at, off the agent's lock, once per `PLAN_SCAN_EVERY` at the
+    /// most. Asked again while a look is under way or waiting for its turn, one more follows it,
+    /// so that the last thing a burst of commands did is seen.
+    fn ask_plan_scan(self: &Arc<Self>, id: &str) {
+        {
+            let mut scans = self.plan_scans.lock();
+            let scan = scans.entry(id.to_string()).or_default();
+            if scan.running {
+                scan.again = true;
+                return;
+            }
+            scan.running = true;
+        }
+        let (core, id) = (self.clone(), id.to_string());
+        tauri::async_runtime::spawn(async move { core.plan_scan_loop(&id).await });
+    }
+
+    async fn plan_scan_loop(self: Arc<Self>, id: &str) {
+        loop {
+            let last = self.plan_scans.lock().get(id).and_then(|s| s.last);
+            let wait = last.map_or(Duration::ZERO, |at| {
+                self.plan_scan_every().saturating_sub(at.elapsed())
+            });
+            if !wait.is_zero() {
+                tokio::time::sleep(wait).await;
+            }
+            if let Some(scan) = self.plan_scans.lock().get_mut(id) {
+                scan.last = Some(Instant::now());
+                scan.again = false;
+            }
+            let alive = self.scan_plan(id).await;
+            let mut scans = self.plan_scans.lock();
+            match scans.get_mut(id) {
+                Some(scan) if alive && scan.again => {}
+                Some(scan) if alive => {
+                    scan.running = false;
+                    return;
+                }
+                _ => {
+                    scans.remove(id);
+                    return;
+                }
+            }
+        }
+    }
+
+    /// One look at the folder of the agent `id`: its plan and its ledger, read when they are not
+    /// as the last look saw them, then handed to its plan. A read that fails changes nothing and
+    /// says nothing. False: the agent is gone.
+    async fn scan_plan(self: &Arc<Self>, id: &str) -> bool {
+        let Ok(agent) = self.agent(id) else {
+            return false;
+        };
+        let (cwd, written, since) = {
+            let rt = agent.lock();
+            (rt.meta.cwd.clone(), rt.plan_written.clone(), rt.plan_since)
+        };
+        let root = self.toplevel(&cwd).await.unwrap_or(cwd);
+        let last = self.plan_scans.lock().get(id).and_then(|s| s.stamp.clone());
+        let scanned = tokio::task::spawn_blocking(move || {
+            planfiles::scan(Path::new(&root), &written, since, last.as_ref())
+        })
+        .await;
+        let stamp = match scanned {
+            Ok(planfiles::Scan::Read(stamp, list)) => {
+                #[cfg(test)]
+                self.plan_reads.fetch_add(1, Ordering::AcqRel);
+                // Read for the conversation it was asked in: if that ended meanwhile, what was
+                // read is not its plan, and the next look reads it again.
+                let mut fx = Effects::default();
+                let (pid, name, view, applied) = {
+                    let mut rt = agent.lock();
+                    let applied = rt.plan_from_files(since, Some(list), &mut fx);
+                    let view = fx.agent_changed.then(|| rt.view());
+                    (
+                        rt.meta.project_id.clone(),
+                        rt.meta.name.clone(),
+                        view,
+                        applied,
+                    )
+                };
+                self.apply(id, &pid, &name, fx, view);
+                applied.then_some(stamp)
+            }
+            Ok(planfiles::Scan::Unchanged) => return true,
+            Ok(planfiles::Scan::Nothing) | Err(_) => None,
+        };
+        if let Some(scan) = self.plan_scans.lock().get_mut(id) {
+            scan.stamp = stamp;
+        }
+        true
     }
 
     fn on_exit(self: &Arc<Self>, h: &AgentHandle, gen: u64, code: Option<i32>, stderr: String) {

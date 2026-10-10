@@ -5,6 +5,7 @@
 //! docs/PROTOCOL.md (« Avancée : ce que le flux dit »).
 
 use crate::mcp::visible_line;
+use crate::planfiles::FileList;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::VecDeque;
@@ -163,7 +164,7 @@ const SEEN: usize = 512;
 const MAX_BLOCKERS: usize = 20;
 
 /// `text` as a title is kept: one visible line (`visible_line`), `MAX_TITLE` characters at most.
-fn clean(text: &str) -> String {
+pub(crate) fn clean(text: &str) -> String {
     let line = visible_line(text);
     if line.chars().count() <= MAX_TITLE {
         return line;
@@ -325,6 +326,91 @@ impl PlanState {
         } else {
             Change::None
         }
+    }
+
+    /// What the plan file and the ledger of the agent's folder say (`planfiles`), or none when
+    /// they could not be read (what was known stays).
+    ///
+    /// The agent's own task list, when it has one, is the list: the files then only name the plan
+    /// and give its title. Without one, the tasks are the files'. A task the ledger said done is
+    /// not pending again (the ledger was cut or rewritten); the ledger itself can reopen it.
+    pub fn set_files(&mut self, list: Option<FileList>) -> Change {
+        let Some(list) = list else {
+            return Change::None;
+        };
+        let (file, title) = (Some(list.plan_file.clone()), list.title.clone());
+        if self.source == Some(PlanSource::Tools) && !self.tasks.is_empty() {
+            if self.plan_file == file && self.title == title {
+                return Change::None;
+            }
+            self.plan_file = file;
+            self.title = title;
+            return Change::Saved;
+        }
+        if list.tasks.is_empty() {
+            // A plan without tasks has nothing to show; what was read of an earlier one goes.
+            return self.forget_files();
+        }
+        let same_plan = self.source == Some(PlanSource::Plan) && self.plan_file == file;
+        let tasks: Vec<PlanTask> = list
+            .tasks
+            .into_iter()
+            .map(|mut task| {
+                let was_done = same_plan
+                    && self
+                        .tasks
+                        .iter()
+                        .any(|t| t.id == task.id && t.status == TaskStatus::Done);
+                if was_done && task.status == TaskStatus::Pending {
+                    task.status = TaskStatus::Done;
+                }
+                task
+            })
+            .collect();
+        if self.source == Some(PlanSource::Plan)
+            && self.tasks == tasks
+            && self.plan_file == file
+            && self.title == title
+        {
+            return Change::None;
+        }
+        self.source = Some(PlanSource::Plan);
+        self.tasks = tasks;
+        self.plan_file = file;
+        self.title = title;
+        self.drop_links();
+        Change::Saved
+    }
+
+    /// Nothing of the files is shown: the tasks they gave, the plan's name and title.
+    fn forget_files(&mut self) -> Change {
+        let had = self.source == Some(PlanSource::Plan)
+            || self.plan_file.is_some()
+            || self.title.is_some();
+        if self.source == Some(PlanSource::Plan) {
+            self.tasks.clear();
+            self.source = None;
+            self.drop_links();
+        }
+        self.plan_file = None;
+        self.title = None;
+        if had {
+            Change::Saved
+        } else {
+            Change::None
+        }
+    }
+
+    /// The agent has a list of its own now: the one read from the files makes room (the plan
+    /// keeps its name and title).
+    fn take_over(&mut self) -> Change {
+        if self.source != Some(PlanSource::Plan) {
+            return Change::None;
+        }
+        self.tasks.clear();
+        self.source = None;
+        self.drop_links();
+        Change::Saved
     }
 
     /// The process that ran what is running is gone: those rows are interrupted. The tasks keep
@@ -528,6 +614,13 @@ impl PlanState {
                 ..task
             })
             .collect();
+        if self.source == Some(PlanSource::Plan) {
+            // An empty list says nothing the files do not.
+            if tasks.is_empty() {
+                return Change::None;
+            }
+            self.take_over();
+        }
         if tasks == self.tasks {
             return Change::None;
         }
@@ -544,7 +637,7 @@ impl PlanState {
         let Some(title) = words(&input["subject"]) else {
             return Change::None;
         };
-        let mut change = Change::None;
+        let mut change = self.take_over();
         // The list was finished: this is another one.
         if !self.tasks.is_empty() && self.tasks.iter().all(|t| t.status == TaskStatus::Done) {
             self.tasks.clear();
@@ -570,6 +663,14 @@ impl PlanState {
         let Some(id) = task_id(&input["taskId"]) else {
             return Change::None;
         };
+        // The tasks of the files are not the ones this call is about.
+        let mut taken = Change::None;
+        if self.source == Some(PlanSource::Plan) {
+            if input["status"] == "deleted" {
+                return Change::None;
+            }
+            taken = self.take_over();
+        }
         let at = self.tasks.iter().position(|t| t.id == id);
         if input["status"] == "deleted" {
             let Some(i) = at else {
@@ -632,7 +733,7 @@ impl PlanState {
         if changed {
             Change::Saved
         } else {
-            Change::None
+            taken
         }
     }
 

@@ -9,6 +9,7 @@ use crate::model::*;
 use crate::notify;
 use crate::paths::relative_slash;
 use crate::plan::{Change, PlanState};
+use crate::planfiles::FileList;
 use crate::pricing::{self, Usage};
 use anyhow::{anyhow, Result};
 use serde_json::{json, Map, Value};
@@ -69,6 +70,9 @@ pub struct Effects {
     pub files_changed: bool,
     /// A turn ended (or the process died during one): how, with the assistant's text.
     pub turn_end: Option<TurnEnd>,
+    /// What the agent just did may have changed the files of its plan (a command ended, a
+    /// subagent came back, the turn ended): the core has them looked at.
+    pub plan_files: bool,
 }
 
 struct Block {
@@ -121,6 +125,14 @@ pub struct AgentRt {
     pub remote_linked: bool,
     /// What the agent does now, from its latest tool, thinking or text (main thread only).
     pub activity: Option<String>,
+    /// The plans it wrote (docs/superpowers/plans/*.md, as absolute paths), oldest first, five at
+    /// most: the plan of its folder when no ledger names one (`planfiles`).
+    pub(crate) plan_written: Vec<String>,
+    /// The calls of its main thread whose result calls for a look at the files of its plan.
+    plan_calls: HashSet<String>,
+    /// When its conversation began, in milliseconds: the files of a plan that were last touched
+    /// before are not its own.
+    pub(crate) plan_since: i64,
     /// The assistant's text of the running turn (main thread), for the board's report.
     turn_text: String,
     /// The latest text of the running turn's main thread that no tool followed: its final reply,
@@ -146,6 +158,9 @@ pub struct AgentRt {
 }
 
 const MAX_TEXT: usize = 8000;
+/// The plans of the plans folder an agent wrote that are remembered, and the calls waited for.
+const MAX_PLANS_WRITTEN: usize = 5;
+const MAX_PLAN_CALLS: usize = 64;
 const MAX_INPUT_STR: usize = 4000;
 const MAX_PATCH_LINES: usize = 800;
 
@@ -178,6 +193,9 @@ impl AgentRt {
             remote_state: None,
             remote_linked: false,
             activity: None,
+            plan_written: Vec::new(),
+            plan_calls: HashSet::new(),
+            plan_since: now_ms(),
             turn_text: String::new(),
             final_text: String::new(),
             setup: None,
@@ -271,6 +289,29 @@ impl AgentRt {
             .plan
             .as_mut()
             .map_or(Change::None, |plan| plan.close_running(now))
+    }
+
+    /// A new plan: what the last forgets, and the files it will read are those touched from now on.
+    fn reset_plan(&mut self, fx: &mut Effects) {
+        self.plan_apply(fx, PlanState::reset);
+        self.plan_since = now_ms();
+        self.plan_written.clear();
+        self.plan_calls.clear();
+    }
+
+    /// What a look at the agent's folder read (`planfiles`, off its lock), unless its conversation
+    /// is not the one the look was made for any more: then nothing is applied (false).
+    pub fn plan_from_files(
+        &mut self,
+        since: i64,
+        list: Option<FileList>,
+        fx: &mut Effects,
+    ) -> bool {
+        if since != self.plan_since {
+            return false;
+        }
+        self.plan_apply(fx, |plan| plan.set_files(list));
+        true
     }
 
     fn push(&mut self, op: ConvOp, fx: &mut Effects) {
@@ -387,7 +428,7 @@ impl AgentRt {
             // A new turn after a plan that is over (or that was none) starts a plan of its own; one
             // that is under way goes on, and so does a message queued behind a turn.
             if self.meta.plan.as_ref().is_some_and(PlanState::is_finished) {
-                self.plan_apply(fx, PlanState::reset);
+                self.reset_plan(fx);
             }
         }
         self.meta.prompts += 1;
@@ -614,7 +655,7 @@ impl AgentRt {
                 if let Some(sid) = f["session_id"].as_str() {
                     if self.meta.session_id.as_deref() != Some(sid) {
                         // Another conversation: what the plan was about is not in its context.
-                        self.plan_apply(fx, PlanState::reset);
+                        self.reset_plan(fx);
                         if self.saw_init {
                             self.notice(
                                 "info",
@@ -946,6 +987,9 @@ impl AgentRt {
             return;
         };
         let input = &block["input"];
+        if parent.is_none() {
+            self.watch_plan_files(id, name, input);
+        }
         let doing = parent.and_then(|_| tool_activity(name, input, &self.meta.cwd));
         let now = now_ms();
         self.plan_apply(fx, |plan| {
@@ -955,6 +999,47 @@ impl AgentRt {
                 None => change,
             }
         });
+    }
+
+    /// A call of the main thread after which the files of the plan may have moved: a command (the
+    /// ledger is written by scripts and commands), a subagent, the write of a plan. Its result
+    /// has them looked at (`Effects::plan_files`); a plan it writes is remembered.
+    fn watch_plan_files(&mut self, id: &str, name: &str, input: &Value) {
+        let wrote = matches!(name, "Write" | "Edit" | "MultiEdit")
+            && input["file_path"]
+                .as_str()
+                .is_some_and(|path| self.note_written_plan(path));
+        if wrote || matches!(name, "Bash" | "Task" | "Agent") {
+            if self.plan_calls.len() >= MAX_PLAN_CALLS {
+                self.plan_calls.clear();
+            }
+            self.plan_calls.insert(id.to_string());
+        }
+    }
+
+    /// `path`, as a tool was given it, is a plan of the plans folder: kept (absolute) as the
+    /// latest the agent wrote, five at most. Whether it is inside the repository, and there, is
+    /// for `planfiles` to say when it reads it.
+    fn note_written_plan(&mut self, path: &str) -> bool {
+        const PLANS: &str = "docs/superpowers/plans/";
+        // Behind a slash, or at the start of a path relative to its folder.
+        let slashed = path.replace('\\', "/").to_ascii_lowercase();
+        let in_plans = slashed.starts_with(PLANS) || slashed.contains(&format!("/{PLANS}"));
+        if !slashed.ends_with(".md") || !in_plans {
+            return false;
+        }
+        let absolute = slashed.starts_with('/') || slashed.chars().nth(1) == Some(':');
+        let path = if absolute {
+            path.to_string()
+        } else {
+            format!("{}/{}", self.meta.cwd.trim_end_matches(['/', '\\']), path)
+        };
+        self.plan_written.retain(|p| *p != path);
+        self.plan_written.push(path);
+        if self.plan_written.len() > MAX_PLANS_WRITTEN {
+            self.plan_written.remove(0);
+        }
+        true
     }
 
     /// A user message re-emitted by Claude Code (`--replay-user-messages`): the echo of one sent
@@ -1053,6 +1138,9 @@ impl AgentRt {
                 continue;
             };
             let is_error = b["is_error"].as_bool().unwrap_or(false);
+            if self.plan_calls.remove(id) {
+                fx.plan_files = true;
+            }
             let mut text = tool_result_text(&b["content"]);
             self.plan_apply(fx, |plan| {
                 plan.on_tool_result(id, is_error, &text, tur, now_ms())
@@ -1243,6 +1331,8 @@ impl AgentRt {
         self.close_open_items(fx);
         // A subagent in the foreground did not outlive the turn: it was stopped.
         self.plan_apply(fx, |plan| plan.end_turn(now_ms()));
+        // The turn's last commands may have written the ledger.
+        fx.plan_files = true;
         let item = json!({
             "kind": "turn", "id": f["uuid"].as_str().map(str::to_string).unwrap_or_else(new_id), "ts": now_ms(),
             "durationMs": f["duration_ms"], "cost": cost, "tokens": tokens,
@@ -3544,6 +3634,277 @@ mod tests {
             b.view().meta.plan.unwrap().agents[0].status,
             RunStatus::Interrupted
         );
+    }
+
+    // ---------- the plan of the folder ----------
+
+    /// The result of the call `id`, in the thread of `parent`.
+    fn returns_in(a: &mut AgentRt, parent: Option<&str>, id: &str) -> Effects {
+        let mut fx = Effects::default();
+        a.handle_frame(
+            &json!({"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":id,"content":"ok"}]},"tool_use_result":null,"parent_tool_use_id":parent}),
+            &mut fx,
+        );
+        fx
+    }
+
+    fn turn_result(a: &mut AgentRt) -> Effects {
+        let mut fx = Effects::default();
+        a.handle_frame(
+            &json!({"type":"result","subtype":"success","is_error":false,"duration_ms":1}),
+            &mut fx,
+        );
+        fx
+    }
+
+    #[test]
+    fn a_command_a_subagent_or_the_end_of_a_turn_calls_for_a_look_at_the_plans_files() {
+        let mut a = rt();
+        // The call itself does not: what it did is known with its result.
+        assert!(!call(&mut a, None, "b1", "Bash", json!({"command":"task-done"})).plan_files);
+        assert!(returns(&mut a, "b1", "ledger: Task 1: complete", Value::Null).plan_files);
+        // Once: the same result again says nothing new.
+        assert!(!returns(&mut a, "b1", "again", Value::Null).plan_files);
+        for (id, name) in [("s1", "Agent"), ("s2", "Task")] {
+            call(
+                &mut a,
+                None,
+                id,
+                name,
+                json!({"description":"Aide","prompt":"x"}),
+            );
+            assert!(
+                returns(&mut a, id, "done", Value::Null).plan_files,
+                "{name}"
+            );
+        }
+        // Reading, searching, editing source: not what the files of a plan move with.
+        for (id, name, input) in [
+            ("r1", "Read", json!({"file_path":"C:/p/src/a.ts"})),
+            ("g1", "Grep", json!({"pattern":"x"})),
+            ("e1", "Edit", json!({"file_path":"C:/p/src/a.ts"})),
+            ("w1", "Write", json!({"file_path":"C:/p/docs/notes.md"})),
+        ] {
+            call(&mut a, None, id, name, input);
+            assert!(!returns(&mut a, id, "ok", Value::Null).plan_files, "{name}");
+        }
+        // A command of a subagent is its own: the ledger is the main thread's.
+        call(
+            &mut a,
+            None,
+            "s3",
+            "Agent",
+            json!({"description":"Aide","prompt":"x"}),
+        );
+        call(
+            &mut a,
+            Some("s3"),
+            "k1",
+            "Bash",
+            json!({"command":"npm test"}),
+        );
+        assert!(!returns_in(&mut a, Some("s3"), "k1").plan_files);
+        // The end of the turn.
+        assert!(turn_result(&mut a).plan_files);
+    }
+
+    #[test]
+    fn a_plan_the_agent_writes_is_remembered_for_the_look_and_its_write_calls_for_one() {
+        let mut a = rt();
+        let abs = "C:/p/docs/superpowers/plans/2026-10-10-demo.md";
+        call(&mut a, None, "w1", "Write", json!({"file_path":abs}));
+        assert_eq!(a.plan_written, [abs]);
+        assert!(returns(&mut a, "w1", "ok", Value::Null).plan_files);
+        // Relative to its folder, with either slash, edited or written: as an absolute path.
+        call(
+            &mut a,
+            None,
+            "w2",
+            "Edit",
+            json!({"file_path":"docs/superpowers/plans/other.md"}),
+        );
+        call(
+            &mut a,
+            None,
+            "w3",
+            "MultiEdit",
+            json!({"file_path":"C:\\p\\docs\\superpowers\\plans\\third.md"}),
+        );
+        assert_eq!(
+            a.plan_written,
+            [
+                abs,
+                "C:/p/docs/superpowers/plans/other.md",
+                "C:\\p\\docs\\superpowers\\plans\\third.md"
+            ]
+        );
+        // Written again: it is the latest, once.
+        call(&mut a, None, "w4", "Write", json!({"file_path":abs}));
+        assert_eq!(a.plan_written.last().map(String::as_str), Some(abs));
+        assert_eq!(a.plan_written.len(), 3);
+        // What is no plan of the plans folder, a subagent's writes, a Write without a path.
+        for (parent, input) in [
+            (None, json!({"file_path":"C:/p/src/a.ts"})),
+            (
+                None,
+                json!({"file_path":"C:/p/docs/superpowers/specs/s.md"}),
+            ),
+            (
+                None,
+                json!({"file_path":"C:/p/docs/superpowers/plans/notes.txt"}),
+            ),
+            (None, json!({"content":"x"})),
+            (
+                Some("s1"),
+                json!({"file_path":"C:/p/docs/superpowers/plans/sub.md"}),
+            ),
+        ] {
+            call(&mut a, parent, "wx", "Write", input);
+        }
+        assert_eq!(a.plan_written.len(), 3);
+        // Five at most: the oldest go.
+        for i in 0..4 {
+            call(
+                &mut a,
+                None,
+                &format!("n{i}"),
+                "Write",
+                json!({"file_path": format!("C:/p/docs/superpowers/plans/n{i}.md")}),
+            );
+        }
+        assert_eq!(a.plan_written.len(), 5);
+        assert!(!a.plan_written.iter().any(|p| p.ends_with("/demo.md")));
+        assert!(a.plan_written[4].ends_with("/n3.md"));
+    }
+
+    #[test]
+    fn a_new_conversation_forgets_the_plans_it_wrote_and_dates_what_it_will_read() {
+        let mut a = rt();
+        let born = a.plan_since;
+        assert!(born > now_ms() - 60_000 && born <= now_ms());
+        session(&mut a, "s1");
+        call(
+            &mut a,
+            None,
+            "w1",
+            "Write",
+            json!({"file_path":"C:/p/docs/superpowers/plans/a.md"}),
+        );
+        call(&mut a, None, "b1", "Bash", json!({"command":"ls"}));
+        assert_eq!(a.plan_written.len(), 1);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        // The same conversation again (the process restarted): nothing changes.
+        session(&mut a, "s1");
+        assert_eq!(a.plan_written.len(), 1);
+        // Another one.
+        session(&mut a, "s2");
+        assert!(a.plan_written.is_empty());
+        assert!(a.plan_since > born);
+        // A result of a call of the one before does not look at the files of this one.
+        assert!(!returns(&mut a, "b1", "ok", Value::Null).plan_files);
+    }
+
+    #[test]
+    fn a_message_after_a_finished_plan_forgets_what_it_wrote_and_dates_what_it_reads() {
+        let mut a = rt();
+        a.push_user("h1", "Fais ceci", 0, &[], &mut Effects::default());
+        creates(&mut a, "c0", "Lire", 1);
+        call(
+            &mut a,
+            None,
+            "w1",
+            "Write",
+            json!({"file_path":"C:/p/docs/superpowers/plans/a.md"}),
+        );
+        call(
+            &mut a,
+            None,
+            "u1",
+            "TaskUpdate",
+            json!({"taskId":"1","status":"completed"}),
+        );
+        turn_ends(&mut a);
+        // A plan under way keeps what it has: here the plan is over.
+        let before = a.plan_since;
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        a.push_user("h2", "Autre chose", 0, &[], &mut Effects::default());
+        assert!(a.plan_written.is_empty());
+        assert!(a.plan_since > before);
+
+        let mut b = rt();
+        b.push_user("h1", "Fais ceci", 0, &[], &mut Effects::default());
+        creates(&mut b, "c0", "Lire", 1);
+        call(
+            &mut b,
+            None,
+            "w1",
+            "Write",
+            json!({"file_path":"C:/p/docs/superpowers/plans/a.md"}),
+        );
+        turn_ends(&mut b);
+        b.push_user("h2", "Continue", 0, &[], &mut Effects::default());
+        assert_eq!(b.plan_written.len(), 1);
+    }
+
+    fn demo_list() -> Option<FileList> {
+        Some(FileList {
+            plan_file: "docs/superpowers/plans/demo.md".into(),
+            title: Some("Démo".into()),
+            tasks: vec![crate::plan::PlanTask {
+                id: "1".into(),
+                title: "Un".into(),
+                status: TaskStatus::InProgress,
+                ..Default::default()
+            }],
+        })
+    }
+
+    #[test]
+    fn the_files_read_come_in_if_the_conversation_is_still_the_one_they_were_read_for() {
+        let mut a = rt();
+        session(&mut a, "s1");
+        let since = a.plan_since;
+        let mut fx = Effects::default();
+        assert!(a.plan_from_files(since, demo_list(), &mut fx));
+        assert!(fx.agent_changed && fx.save);
+        let p = plan(&a);
+        assert_eq!(p.tasks[0].status, TaskStatus::InProgress);
+        assert_eq!(p.title.as_deref(), Some("Démo"));
+        assert_eq!(
+            serde_json::to_value(a.view()).unwrap()["plan"]["planFile"],
+            "docs/superpowers/plans/demo.md"
+        );
+        // Again: nothing to tell.
+        let mut fx = Effects::default();
+        assert!(a.plan_from_files(since, demo_list(), &mut fx));
+        assert!(!fx.agent_changed && !fx.save);
+        // Read for a conversation that has ended since: not applied.
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        session(&mut a, "s2");
+        assert!(a.view().meta.plan.is_none());
+        let mut fx = Effects::default();
+        assert!(!a.plan_from_files(since, demo_list(), &mut fx));
+        assert!(a.view().meta.plan.is_none());
+        assert!(!fx.agent_changed && !fx.save);
+        // Nothing read: nothing done.
+        assert!(a.plan_from_files(a.plan_since, None, &mut Effects::default()));
+        assert!(a.view().meta.plan.is_none());
+    }
+
+    #[test]
+    fn the_tasks_of_the_files_give_way_to_the_ones_the_agent_lists() {
+        let mut a = rt();
+        let since = a.plan_since;
+        a.plan_from_files(since, demo_list(), &mut Effects::default());
+        assert_eq!(plan(&a).tasks[0].title, "Un");
+        creates(&mut a, "c0", "Ma tâche", 1);
+        let p = plan(&a);
+        assert_eq!(p.tasks.len(), 1);
+        assert_eq!(p.tasks[0].title, "Ma tâche");
+        // The files go on being read: the plan is still named and titled, its list is the agent's.
+        a.plan_from_files(since, demo_list(), &mut Effects::default());
+        assert_eq!(plan(&a).tasks[0].title, "Ma tâche");
+        assert_eq!(plan(&a).title.as_deref(), Some("Démo"));
     }
 
     #[test]

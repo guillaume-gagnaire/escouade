@@ -29,6 +29,9 @@ mod paths;
 mod plan;
 #[cfg(test)]
 mod plan_tests;
+mod planfiles;
+#[cfg(test)]
+mod planfiles_tests;
 mod pricing;
 #[cfg(test)]
 mod process_tests;

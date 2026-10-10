@@ -416,6 +416,344 @@ async fn files_saved_before_the_plan_load_and_a_plan_saved_while_running_comes_b
     assert_eq!(sent["plan"]["agents"][0]["planTask"], "1");
 }
 
+// ---------- the plan of the agent's folder ----------
+
+/// A plan of three tasks and the workspace of its execution, as the superpowers scripts leave
+/// them in `repo`; the ledger's path.
+fn plan_workspace(repo: &Path) -> PathBuf {
+    let plans = repo.join("docs").join("superpowers").join("plans");
+    std::fs::create_dir_all(&plans).unwrap();
+    std::fs::write(
+        plans.join("demo.md"),
+        "# Démo Implementation Plan\n\n### Task 1: Un\n\n- [ ] a\n\n### Task 2: Deux\n\n- [ ] b\n\n### Task 3: Trois\n\n- [ ] c\n",
+    )
+    .unwrap();
+    let space = repo.join(".superpowers").join("sdd").join("demo");
+    std::fs::create_dir_all(&space).unwrap();
+    std::fs::write(space.join("plan-path"), "docs/superpowers/plans/demo.md\n").unwrap();
+    let ledger = space.join("progress.md");
+    std::fs::write(
+        &ledger,
+        "# SDD ledger — plan: docs/superpowers/plans/demo.md\n",
+    )
+    .unwrap();
+    ledger
+}
+
+fn append(path: &Path, text: &str) {
+    use std::io::Write;
+    std::fs::OpenOptions::new()
+        .append(true)
+        .open(path)
+        .unwrap()
+        .write_all(text.as_bytes())
+        .unwrap();
+}
+
+impl Harness {
+    /// A frame of the agent's process, as `claude` writes it.
+    fn feed(&self, id: &str, frame: Value) {
+        let agent = self.core.agent(id).unwrap();
+        let gen = agent.lock().gen;
+        self.core.on_frame(&agent, gen, frame);
+    }
+
+    /// The main thread runs a command, which has ended.
+    fn command(&self, id: &str, call: &str, command: &str) {
+        self.feed(
+            id,
+            json!({"type":"assistant","message":{"id":format!("m-{call}"),"content":[{"type":"tool_use","id":call,"name":"Bash","input":{"command":command}}]},"parent_tool_use_id":null}),
+        );
+        self.feed(
+            id,
+            json!({"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":call,"content":"ok"}]},"parent_tool_use_id":null}),
+        );
+    }
+
+    fn plan_statuses(&self, id: &str) -> Vec<(String, crate::plan::TaskStatus)> {
+        self.agent(id)
+            .plan
+            .map(|p| p.tasks.into_iter().map(|t| (t.id, t.status)).collect())
+            .unwrap_or_default()
+    }
+
+    fn plan_reads(&self) -> usize {
+        self.core.plan_reads.load(Ordering::Acquire)
+    }
+}
+
+/// An agent that has had its first turn (so its conversation has begun), in a repository.
+async fn plan_agent(name: &str) -> (Harness, String, PathBuf) {
+    let h = harness(name);
+    let (p, repo) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.turn(&id, "Bonjour").await;
+    (h, id, repo)
+}
+
+#[tokio::test]
+async fn a_command_that_wrote_the_ledger_moves_the_plan_without_any_other_event() {
+    use crate::plan::TaskStatus::{Done, InProgress, Pending};
+    let (h, id, repo) = plan_agent("p2-ledger").await;
+    assert!(h.agent(&id).plan.is_none());
+    let ledger = plan_workspace(&repo);
+    // The script that made the workspace has ended: the plan is there, nothing done.
+    h.command(&id, "b1", "sdd-workspace docs/superpowers/plans/demo.md");
+    h.wait("the plan", |h| h.plan_statuses(&id).len() == 3)
+        .await;
+    let plan = h.agent(&id).plan.unwrap();
+    assert_eq!(plan.source, Some(crate::plan::PlanSource::Plan));
+    assert_eq!(plan.title.as_deref(), Some("Démo"));
+    assert_eq!(
+        plan.plan_file.as_deref(),
+        Some("docs/superpowers/plans/demo.md")
+    );
+    assert!(h
+        .plan_statuses(&id)
+        .iter()
+        .all(|(_, status)| *status == Pending));
+
+    // `task-done` appends its line; the command ends. No other event: the next look sees it.
+    append(
+        &ledger,
+        "Task 1: complete (commits a..b, tests: npm test → ok)\n",
+    );
+    h.core.plan_scan_ms.store(0, Ordering::Relaxed);
+    h.command(
+        &id,
+        "b2",
+        "task-done docs/superpowers/plans/demo.md 1 abc -- npm test",
+    );
+    h.wait("task 1 done", |h| {
+        h.plan_statuses(&id).first().map(|(_, s)| *s) == Some(Done)
+    })
+    .await;
+    // The window got it, in its own words.
+    let sent = h
+        .events
+        .lock()
+        .iter()
+        .rev()
+        .find(|e| e["type"] == "agent" && e["agent"]["id"] == id.as_str())
+        .cloned()
+        .unwrap();
+    assert_eq!(sent["agent"]["plan"]["source"], "plan");
+    assert_eq!(sent["agent"]["plan"]["tasks"][0]["status"], "done");
+    assert_eq!(
+        sent["agent"]["plan"]["planFile"],
+        "docs/superpowers/plans/demo.md"
+    );
+
+    // The next task's brief is written: it is under way.
+    std::fs::write(
+        repo.join(".superpowers/sdd/demo/task-2-brief.md"),
+        "### Task 2: Deux\n",
+    )
+    .unwrap();
+    h.command(&id, "b3", "task-start docs/superpowers/plans/demo.md 2");
+    h.wait("task 2 under way", |h| {
+        h.plan_statuses(&id)
+            == [
+                ("1".into(), Done),
+                ("2".into(), InProgress),
+                ("3".into(), Pending),
+            ]
+    })
+    .await;
+    // And what the agent saved says so: the plan is part of its state.
+    assert!(h.core.agent(&id).unwrap().lock().meta.plan.is_some());
+}
+
+#[tokio::test]
+async fn the_end_of_a_turn_looks_at_the_files_too() {
+    let (h, id, repo) = plan_agent("p2-turn-end").await;
+    let ledger = plan_workspace(&repo);
+    append(
+        &ledger,
+        "Task 1: complete (x)\nTask 2: dispatched (sonnet)\n",
+    );
+    // Nothing ran a command: the turn ends, and that is the look.
+    h.feed(
+        &id,
+        json!({"type":"result","subtype":"success","is_error":false,"duration_ms":1,"result":"ok"}),
+    );
+    h.wait("the plan", |h| h.plan_statuses(&id).len() == 3)
+        .await;
+    let statuses = h.plan_statuses(&id);
+    assert_eq!(statuses[0].1, crate::plan::TaskStatus::Done);
+    assert_eq!(statuses[1].1, crate::plan::TaskStatus::InProgress);
+}
+
+#[tokio::test]
+async fn the_files_are_read_once_per_interval_however_many_commands_end() {
+    let (h, id, repo) = plan_agent("p2-throttle").await;
+    let ledger = plan_workspace(&repo);
+    h.core.plan_scan_ms.store(800, Ordering::Relaxed);
+    h.command(&id, "b0", "sdd-workspace docs/superpowers/plans/demo.md");
+    h.wait("the first look", |h| h.plan_reads() == 1).await;
+    // A burst of commands, each of which moved the ledger.
+    for n in 1..=6 {
+        append(&ledger, &format!("Task {n}: review dispatched\n"));
+        h.command(&id, &format!("b{n}"), "echo ledger");
+    }
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(h.plan_reads(), 1, "not again within the interval");
+    // One look follows, and it sees all of the burst.
+    h.wait("the look that was owed", |h| h.plan_reads() == 2)
+        .await;
+    h.wait("its result", |h| {
+        h.plan_statuses(&id)
+            .iter()
+            .all(|(_, s)| *s == crate::plan::TaskStatus::InProgress)
+    })
+    .await;
+    // Nothing moved since: the look after that reads nothing, and nothing is owed.
+    h.command(&id, "late", "echo nothing");
+    tokio::time::sleep(Duration::from_millis(1200)).await;
+    assert_eq!(h.plan_reads(), 2);
+    // The default interval is the one of the spec.
+    assert_eq!(crate::core::PLAN_SCAN_EVERY, Duration::from_secs(2));
+}
+
+#[tokio::test]
+async fn a_plan_untouched_since_the_conversation_began_is_not_the_agents() {
+    let h = harness("p2-stale");
+    let (p, repo) = h.project(false).await;
+    // A workspace left by someone else, an hour ago.
+    let ledger = plan_workspace(&repo);
+    append(&ledger, "Task 1: complete (x)\n");
+    let hour_ago = std::time::SystemTime::now() - Duration::from_secs(3600);
+    std::fs::File::options()
+        .write(true)
+        .open(&ledger)
+        .unwrap()
+        .set_modified(hour_ago)
+        .unwrap();
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.turn(&id, "Bonjour").await;
+    h.command(&id, "b1", "ls");
+    h.feed(
+        &id,
+        json!({"type":"result","subtype":"success","is_error":false,"duration_ms":1}),
+    );
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    assert!(h.agent(&id).plan.is_none(), "an old plan of the folder");
+    // The agent works on it: it is its own now.
+    append(&ledger, "Task 2: dispatched (sonnet)\n");
+    h.core.plan_scan_ms.store(0, Ordering::Relaxed);
+    h.command(&id, "b2", "echo ledger");
+    h.wait("the plan", |h| h.plan_statuses(&id).len() == 3)
+        .await;
+    assert_eq!(h.plan_statuses(&id)[0].1, crate::plan::TaskStatus::Done);
+}
+
+#[tokio::test]
+async fn a_plan_the_agent_wrote_is_shown_without_a_ledger_and_the_ones_outside_are_not_read() {
+    let (h, id, repo) = plan_agent("p2-written").await;
+    plan_workspace(&repo);
+    std::fs::remove_dir_all(repo.join(".superpowers")).unwrap();
+    let plan = repo.join("docs/superpowers/plans/demo.md");
+    let outside = repo.parent().unwrap().join("outside.md");
+    std::fs::write(&outside, "# Dehors\n\n### Task 1: Secret\n").unwrap();
+    for (call, path) in [("w0", outside.clone()), ("w1", plan.clone())] {
+        h.feed(
+            &id,
+            json!({"type":"assistant","message":{"id":format!("m-{call}"),"content":[{"type":"tool_use","id":call,"name":"Write","input":{"file_path":path.to_string_lossy(),"content":"x"}}]},"parent_tool_use_id":null}),
+        );
+        h.feed(
+            &id,
+            json!({"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":call,"content":"ok"}]},"parent_tool_use_id":null}),
+        );
+    }
+    h.wait("the plan", |h| h.plan_statuses(&id).len() == 3)
+        .await;
+    let plan = h.agent(&id).plan.unwrap();
+    assert_eq!(plan.title.as_deref(), Some("Démo"));
+    assert!(plan.tasks.iter().all(|t| t.title != "Secret"));
+    assert!(plan
+        .tasks
+        .iter()
+        .all(|t| t.status == crate::plan::TaskStatus::Pending));
+}
+
+#[tokio::test]
+async fn a_plan_that_cannot_be_read_any_more_is_no_notice_and_leaves_the_last_state() {
+    let (h, id, repo) = plan_agent("p2-unreadable").await;
+    let ledger = plan_workspace(&repo);
+    append(&ledger, "Task 1: complete (x)\n");
+    h.core.plan_scan_ms.store(0, Ordering::Relaxed);
+    h.command(&id, "b1", "echo ledger");
+    h.wait("the plan", |h| h.plan_statuses(&id).len() == 3)
+        .await;
+    let notices = || {
+        h.items(&id)
+            .iter()
+            .filter(|i| i["kind"] == "notice")
+            .count()
+    };
+    let before = notices();
+    // The plan is deleted, then the whole workspace; commands end.
+    std::fs::remove_file(repo.join("docs/superpowers/plans/demo.md")).unwrap();
+    append(&ledger, "Task 2: complete (x)\n");
+    h.command(&id, "b2", "echo gone");
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    std::fs::remove_dir_all(repo.join(".superpowers")).unwrap();
+    h.command(&id, "b3", "echo gone");
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(h.plan_statuses(&id).len(), 3);
+    assert_eq!(h.plan_statuses(&id)[0].1, crate::plan::TaskStatus::Done);
+    assert_eq!(notices(), before, "no notice, no toast");
+    assert!(h.agent(&id).status != AgentStatus::Error);
+}
+
+#[tokio::test]
+async fn an_agent_saved_with_the_plan_of_a_file_gets_it_back() {
+    let dir = test_dir("p2-old-plan");
+    let data = DataDir::new(dir.join("data"));
+    data.ensure().unwrap();
+    std::fs::write(data.settings_file(), r#"{"claudePath":"","sound":false}"#).unwrap();
+    // As the app writes it (the window's shape), and as an earlier 1.7 build wrote a plan:
+    // without a plan file or a title.
+    let agent = |id: &str, plan: Value| {
+        json!({ "id": id, "projectId": "p1", "name": id, "model": "sonnet", "effort": "medium",
+                "mode": "auto", "cwd": dir.to_string_lossy(), "plan": plan })
+    };
+    std::fs::write(
+        data.state_file(),
+        json!({ "projects": [], "agents": [
+            agent("from-file", json!({ "source": "plan", "planFile": "docs/superpowers/plans/demo.md",
+                "title": "Démo", "tasks": [
+                    { "id": "1", "title": "Un", "status": "done" },
+                    { "id": "2", "title": "Deux", "status": "inProgress", "steps": [1, 3] }] })),
+            agent("older", json!({ "source": "tools", "tasks": [{ "id": "1", "title": "Lire", "status": "pending" }] })),
+        ] })
+        .to_string(),
+    )
+    .unwrap();
+    let app = mock_app();
+    let (core, _rx) = Core::load(app.handle().clone(), data);
+    let plan = core
+        .agent("from-file")
+        .unwrap()
+        .lock()
+        .view()
+        .meta
+        .plan
+        .unwrap();
+    assert_eq!(plan.source, Some(crate::plan::PlanSource::Plan));
+    assert_eq!(plan.title.as_deref(), Some("Démo"));
+    assert_eq!(plan.tasks[1].steps, Some((1, 3)));
+    let older = core
+        .agent("older")
+        .unwrap()
+        .lock()
+        .view()
+        .meta
+        .plan
+        .unwrap();
+    assert_eq!((older.title, older.plan_file), (None, None));
+}
+
 #[tokio::test]
 async fn attached_files_reach_claude_as_content_blocks() {
     let h = harness("attach");
