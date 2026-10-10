@@ -3130,7 +3130,7 @@ async fn a_merge_leftover_of_another_ticket_does_not_hold_the_target() {
 
 #[tokio::test]
 async fn a_worktree_no_longer_on_its_branch_is_not_committed() {
-    let h = harness("tk-detached");
+    let h = harness("tk-worktree-detached");
     let (p, r) = h.project(false).await;
     let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
     git(&wt, &["checkout", "-q", "--detach"]);
@@ -4824,4 +4824,20 @@ async fn the_statistics_add_up_the_agents_of_a_ticket_archived_ones_included() {
         ),
         ("DEM-1", "Ajouter le login", 2, 1.5)
     );
+}
+
+/// A harness lives in a folder named after it, which `test_dir` wipes when a test asks for it: two tests that
+/// share a name delete each other's repositories when they run together.
+#[test]
+fn every_test_of_the_board_has_a_folder_of_its_own() {
+    let mut seen = std::collections::HashSet::new();
+    let mut shared = Vec::new();
+    for rest in include_str!("tickets_tests.rs").split("harness(\"").skip(1) {
+        let name = rest.split('"').next().unwrap();
+        if !seen.insert(name) && !shared.contains(&name) {
+            shared.push(name);
+        }
+    }
+    assert!(seen.len() > 100, "the names were not read: {seen:?}");
+    assert_eq!(shared, Vec::<&str>::new());
 }
