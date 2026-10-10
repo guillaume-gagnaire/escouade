@@ -298,6 +298,9 @@ pub struct Updates {
     downloads: AtomicU64,
     /// An install under way: none other starts.
     installing: AtomicBool,
+    /// The install under way has had the app leave (`leave`): the app's end waits for it no more
+    /// (`wait_install`).
+    left: AtomicBool,
     presence: Mutex<Presence>,
     plan: Mutex<Plan>,
     /// The update installed since the last start, for the window (told once).
@@ -313,6 +316,7 @@ impl Default for Updates {
             ready: Mutex::default(),
             downloads: AtomicU64::new(0),
             installing: AtomicBool::new(false),
+            left: AtomicBool::new(false),
             // Started, the window has just been seen.
             presence: Mutex::new(Presence {
                 active_at: now_ms(),
@@ -670,7 +674,12 @@ pub fn install_ready<R: Runtime>(
         "installing Escouade {} (relaunch: {relaunch})",
         ready.version
     );
-    let installed = apply(&*ready.package, relaunch, stop, STOP_LIMIT, leave);
+    let installed = apply(&*ready.package, relaunch, stop, STOP_LIMIT, |relaunch| {
+        // Leaving may never return (macOS: restarting from another thread waits for the app's
+        // end): told first.
+        updates.left.store(true, Ordering::Release);
+        leave(relaunch)
+    });
     if installed.is_err() {
         // The app still runs: it is tried again by hand (« Réessayer »), or when the app closes,
         // never by itself again.
@@ -891,21 +900,47 @@ fn writable(p: &Path) -> bool {
     unsafe { libc::access(c.as_ptr(), libc::W_OK) == 0 }
 }
 
+/// At the app's end, an install under way (« Redémarrer maintenant », the automatic restart) is
+/// waited for, `limit` at most, rather than ended under it (on macOS, between the two renames of
+/// the bundle): until it fails with the app still running, or has the app leave. None when none
+/// is under way; else whether the app stopped for it, not to be stopped again.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn wait_install<R: Runtime>(core: &Core<R>, updates: &Updates, limit: Duration) -> Option<bool> {
+    if !updates.installing.load(Ordering::Acquire) {
+        return None;
+    }
+    let until = std::time::Instant::now() + limit;
+    while updates.installing.load(Ordering::Acquire) && !updates.left.load(Ordering::Acquire) {
+        if std::time::Instant::now() >= until {
+            log::warn!(
+                "the update under way took over {limit:?} to install: the app ends all the same"
+            );
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    Some(core.quitting.load(Ordering::Acquire))
+}
+
 /// macOS: Cmd+Q, the app menu's and the Dock's « Quitter » end the app with no request first,
 /// right at `RunEvent::Exit`: the update ready installs there, without the app starting again,
 /// when its bundle can be replaced without an administrator's password (the plugin would ask for
-/// it on the main thread, which waits here). True when the app stopped for it.
+/// it on the main thread, which waits here). One installing already is waited for
+/// (`wait_install`). True when the app stopped for it.
 #[cfg(target_os = "macos")]
 pub fn install_at_exit<R: Runtime>(app: &AppHandle<R>) -> bool {
     let updates = app.state::<Updates>();
-    if updates.ready().is_none() || updates.installing.load(Ordering::Acquire) {
+    let core = app.state::<Arc<Core<R>>>().inner().clone();
+    if let Some(stopped) = wait_install(&core, &updates, EXIT_LIMIT) {
+        return stopped;
+    }
+    if updates.ready().is_none() {
         return false;
     }
     if !unattended() {
         log::info!("update left for a restart: replacing the app needs an administrator");
         return false;
     }
-    let core = app.state::<Arc<Core<R>>>().inner().clone();
     let (a, c) = (app.clone(), core.clone());
     bounded(
         move || {
@@ -1560,6 +1595,61 @@ mod tests {
         // Nothing installed by the closing itself, nor stopped under the install.
         assert!(log.lock().is_empty());
         assert!(!h.core.quitting.load(Ordering::Acquire));
+    }
+
+    #[tokio::test]
+    async fn the_end_of_the_app_waits_for_an_install_under_way_never_ending_under_it() {
+        let h = harness("upd-exit-installing");
+        let u = Arc::new(Updates::default());
+        // None under way: nothing to wait for.
+        assert_eq!(wait_install(&h.core, &u, Duration::from_secs(5)), None);
+        // « Redémarrer maintenant » under way, still after the wait: the app was not stopped for it.
+        u.installing.store(true, Ordering::Release);
+        let started = std::time::Instant::now();
+        assert_eq!(
+            wait_install(&h.core, &u, Duration::from_millis(100)),
+            Some(false)
+        );
+        assert!(started.elapsed() >= Duration::from_millis(100));
+        // It fails with the app still running: the app's end stops it as usual.
+        let failing = {
+            let u = u.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(200));
+                u.installing.store(false, Ordering::Release);
+            })
+        };
+        let started = std::time::Instant::now();
+        assert_eq!(
+            wait_install(&h.core, &u, Duration::from_secs(5)),
+            Some(false)
+        );
+        assert!(started.elapsed() >= Duration::from_millis(150));
+        failing.join().unwrap();
+        // It installs and has the app leave, which never returns (macOS: `AppHandle::restart` from
+        // another thread waits for the app's end): over, the app stopped for it.
+        let log = ready(&u, Install::Ok).await;
+        let (left_tx, left_rx) = std::sync::mpsc::channel();
+        let (end_tx, end_rx) = std::sync::mpsc::channel::<()>();
+        let installing = {
+            let (core, u) = (h.core.clone(), u.clone());
+            std::thread::spawn(move || {
+                install_ready(&core, &u, true, Window::Front, move |_| {
+                    left_tx.send(()).unwrap();
+                    let _ = end_rx.recv();
+                })
+            })
+        };
+        left_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        let started = std::time::Instant::now();
+        assert_eq!(
+            wait_install(&h.core, &u, Duration::from_secs(5)),
+            Some(true)
+        );
+        assert!(started.elapsed() < Duration::from_secs(2));
+        assert_eq!(*log.lock(), ["installer (relaunch: true)"]);
+        end_tx.send(()).unwrap();
+        assert!(installing.join().unwrap().unwrap());
     }
 
     #[tokio::test]
