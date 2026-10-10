@@ -364,6 +364,9 @@ pub struct Core<R: Runtime = Wry> {
     /// Notifications sent, as "<title> | <text>" (tests only).
     #[cfg(test)]
     pub alerts: Mutex<Vec<String>>,
+    /// The languages the native menus were written again in (tests only: they have none).
+    #[cfg(test)]
+    pub(crate) relabels: Mutex<Vec<i18n::Lang>>,
     /// Syncs of external tickets queued and not over yet (tests only).
     #[cfg(test)]
     pub(crate) syncs_queued: AtomicUsize,
@@ -830,6 +833,8 @@ impl<R: Runtime> Core<R> {
             #[cfg(test)]
             alerts: Mutex::default(),
             #[cfg(test)]
+            relabels: Mutex::default(),
+            #[cfg(test)]
             syncs_queued: AtomicUsize::new(0),
             #[cfg(test)]
             gh_on_path: RwLock::default(),
@@ -993,10 +998,12 @@ impl<R: Runtime> Core<R> {
         *self.settings.write() = s;
         let lang = self.lang();
         if lang != before {
-            // At once, without a restart: what the backend writes from now on, the native menus,
-            // and the window.
+            // At once, without a restart: what the backend writes from now on, the native menus
+            // (when the interface's language is the one that changed), and the window.
             i18n::set(lang);
-            self.relabel_menus(lang.ui);
+            if lang.ui != before.ui {
+                self.relabel_menus(lang.ui);
+            }
             self.hub.emit(UiEvent::Language { lang });
         }
         if !auto_resume {
@@ -1406,6 +1413,8 @@ impl<R: Runtime> Core<R> {
             usize::MAX => 0,
             n => n,
         };
+        #[cfg(test)]
+        self.relabels.lock().push(lang);
         menus::relabel(&self.app, lang, waiting);
     }
 

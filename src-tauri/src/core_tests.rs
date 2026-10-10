@@ -803,6 +803,8 @@ async fn a_change_of_language_is_told_to_the_window_and_another_setting_is_not()
         json!({ "type": "language", "lang": { "ui": "fr", "system": "fr", "claude": "fr" } });
     assert_eq!(told(&h), vec![english, mixed, french_again]);
     assert_eq!(h.core.lang(), french);
+    // The native menus are written again when the interface's language changes, not for Claude's.
+    assert_eq!(*h.core.relabels.lock(), [En, Fr]);
     // The tests beside this one still write French.
     assert_eq!(crate::i18n::ui(), Fr);
 }
