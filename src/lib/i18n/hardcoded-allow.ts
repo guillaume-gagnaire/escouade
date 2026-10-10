@@ -23,5 +23,11 @@ export const ALLOWED: Allowed[] = [
 
   // L9 — runs, shell
 
-  // K, M, G — accounts, mcp, branches
+  // L10 — errors, backend
+
+  // K — accounts
+
+  // M — mcp
+
+  // G — branches
 ];

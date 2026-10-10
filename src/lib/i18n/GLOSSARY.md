@@ -76,7 +76,7 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 | quota | quota | |
 | fenêtre de 5 h | 5-hour window | quota |
 | hebdomadaire, Hebdo | weekly, Weekly | quota |
-| 5 h / 7j | 5h / W | libellés compacts des quotas |
+| 5h / 7j | 5h / W | libellés compacts des quotas |
 | remise à zéro, réinitialisation | reset | quota, compteur |
 | limite d’usage | usage limit | |
 | reprise, reprise automatique | resume, auto-resume | après la limite d’usage |
@@ -122,6 +122,22 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 | Alt | Alt |
 
 `keyLabel` (`src/lib/platform.ts`) écrit les touches d’un raccourci dans la langue de l’interface : on peut lui donner `Ctrl+Shift+F` ou `Ctrl+Maj+F`, `Ctrl+Enter` ou `Ctrl+Entrée` (écrire les nouveaux en anglais).
+
+## L2 — langues, menus natifs
+
+| Français | Anglais | Note |
+|---|---|---|
+| Application | Application | onglet des réglages |
+| Langue de l’interface | Interface language | |
+| Langue des textes rédigés par Claude | Language of texts written by Claude | |
+| Système (Français) | System (French) | la langue du système, nommée dans celle de l’interface |
+| Comme l’interface | Same as the interface | |
+| Français, English | Français, English | une langue proposée est écrite dans elle-même (`LANG_NAMES`) |
+| Afficher / Quitter | Show / Quit | menu de l’icône de la barre des tâches |
+| agent en attente | agent waiting | infobulle de l’icône |
+| À propos d’Escouade, Masquer Escouade, Masquer les autres, Tout afficher, Quitter Escouade | About Escouade, Hide Escouade, Hide Others, Show All, Quit Escouade | menu de l’app sous macOS : les mots et les majuscules de macOS |
+| Édition : Annuler, Rétablir, Couper, Copier, Coller, Tout sélectionner | Edit: Undo, Redo, Cut, Copy, Paste, Select All | idem |
+| Fenêtre : Placer dans le Dock, Réduire/Agrandir, Fermer | Window: Minimize, Zoom, Close | idem |
 
 ## L3 — editor
 
