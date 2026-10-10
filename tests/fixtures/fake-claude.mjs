@@ -17,6 +17,8 @@
 // turn is stopped by the usage limit (as "limite") and its quota windows say 100 % (rate_limit_event,
 // get_usage). While a <dir>/fake-error file is there, every turn fails with an error of the API
 // ("Invalid API key", as an account the user is not signed in to gets), which is no usage limit.
+// While a <dir>/fake-exit file is there, the process ends before it starts (exit code 1), its stderr the text of the file
+// (« No conversation found with session ID: … », « Invalid API key · Please run /login »).
 // A user message with [ferme-lentement] makes the process take 800 ms to end once its input is
 // closed, and write {"type":"closed"} to its session just before it does (a resume that copies
 // the session before the process is gone misses that line). Without CLAUDE_CONFIG_DIR, none of this.
@@ -166,6 +168,10 @@ if (argv.includes('-p') && argv.some((a) => a.includes('[sourd]'))) {
 }
 
 function startSession() {
+  if (configDir && fs.existsSync(path.join(configDir, 'fake-exit'))) {
+    process.stderr.write(fs.readFileSync(path.join(configDir, 'fake-exit'), 'utf8'));
+    process.exit(1);
+  }
   const resume = argv.find((a) => a.startsWith('--resume='))?.slice('--resume='.length);
   // A session of another account (or none) is not in this one's folder.
   if (resume?.startsWith('missing') || (resume && configDir && !sessionKept(resume))) {

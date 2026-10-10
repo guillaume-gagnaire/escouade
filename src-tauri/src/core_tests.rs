@@ -5535,10 +5535,13 @@ async fn a_resume_that_fails_on_the_new_account_says_so_and_can_go_back_to_the_a
     h.wait("its resume planned", |h| h.agent(&id).resume_at.is_some())
         .await;
     let session = h.agent(&id).session_id.unwrap();
+    let planned = h.agent(&id).resume_at.unwrap();
     let turns = |h: &Harness| h.items(&id).iter().filter(|i| i["kind"] == "turn").count();
     assert_eq!(turns(&h), 1);
 
     h.core.resume_on_account(&id, "equipe").await.unwrap();
+    // The reset it waited for is kept with where it came from, the move having dropped it.
+    assert_eq!(h.agent(&id).moved_resume_at, Some(planned));
     h.wait("the failed turn", |h| {
         turns(h) == 2 && !h.agent(&id).status.is_active()
     })
@@ -5558,13 +5561,21 @@ async fn a_resume_that_fails_on_the_new_account_says_so_and_can_go_back_to_the_a
         ("equipe", Some("pro"))
     );
 
+    // Pro's windows are no longer read (its quota could not be asked meanwhile): they would not
+    // say when it resets.
+    h.core.update_usage(|u| {
+        let pro = u.account_mut("pro");
+        pro.five_hour = None;
+        pro.seven_day = None;
+    });
     // Back to Pro: the session goes back with what the failed turn added, the agent waits for
-    // Pro's reset as before, and it no longer says it came from anywhere.
+    // the reset it waited for as before, and it no longer says it came from anywhere.
     h.core.back_to_previous_account(&id).await.unwrap();
     let m = h.agent(&id);
     assert_eq!((m.account.as_str(), m.moved_from), ("pro", None));
-    let at = m.resume_at.expect("it waits for Pro's reset again");
-    assert!(at > now_ms(), "{at}");
+    assert_eq!(m.resume_at, Some(planned));
+    assert!(planned > now_ms(), "{planned}");
+    assert_eq!(m.moved_resume_at, None);
     assert!(!h.alive(&id));
     let back = std::fs::read_to_string(&kept_session(&pro.config_dir, &session)[0]).unwrap();
     let there = std::fs::read_to_string(&kept_session(&team.config_dir, &session)[0]).unwrap();
@@ -5594,8 +5605,149 @@ async fn the_account_an_agent_came_from_is_forgotten_once_a_turn_of_the_resume_e
     })
     .await;
     assert_eq!(h.agent(&id).account, "equipe");
+    assert_eq!(h.agent(&id).moved_resume_at, None);
     let last = h.items(&id).into_iter().rfind(|i| i["kind"] == "turn");
     assert_eq!(last.unwrap()["isError"], false);
+}
+
+/// A resume whose process on the new account ends before it starts, with `said` on its stderr: the
+/// session is not orphaned (what a start that cannot find it would clear), the failure is the
+/// resume's, and the way back is open.
+async fn a_resume_that_exits_before_starting(name: &str, said: &str) {
+    let h = harness(name);
+    let (p, _) = h.project(true).await;
+    let (pro, team) = pro_out_of_quota_and_team(&h);
+    let id = agent_on(&h, &p, "pro").await.id;
+    turn_over(&h, &id, "la limite").await;
+    h.wait("its resume planned", |h| h.agent(&id).resume_at.is_some())
+        .await;
+    let before = h.agent(&id);
+    let session = before.session_id.clone().unwrap();
+    let planned = before.resume_at.unwrap();
+    h.core.agent(&id).unwrap().lock().meta.last_entry = Some("entry-9".into());
+    // Équipe's Claude Code ends at once.
+    std::fs::create_dir_all(&team.config_dir).unwrap();
+    std::fs::write(Path::new(&team.config_dir).join("fake-exit"), said).unwrap();
+
+    // The message could not be sent: the process ended while starting.
+    assert!(h.core.resume_on_account(&id, "equipe").await.is_err());
+    h.wait("the failure", |h| !h.agent(&id).status.is_active())
+        .await;
+    let m = h.agent(&id);
+    assert_eq!(
+        (m.session_id.as_deref(), m.last_entry.as_deref()),
+        (Some(session.as_str()), Some("entry-9"))
+    );
+    assert_eq!(
+        (m.account.as_str(), m.moved_from.as_deref()),
+        ("equipe", Some("pro"))
+    );
+    assert_eq!(m.status, AgentStatus::Error);
+    // The card's turn: the failure of the resume, with what the process said.
+    let last = h.items(&id).into_iter().last().unwrap();
+    assert_eq!(last["kind"], "turn");
+    assert_eq!(last["isError"], true);
+    assert_eq!(last["limited"], false);
+    assert_eq!(last["error"], said.trim());
+    // Back to Pro: the session is there to go back with, and Pro's reset is waited for again.
+    std::fs::remove_file(Path::new(&team.config_dir).join("fake-exit")).unwrap();
+    h.core.back_to_previous_account(&id).await.unwrap();
+    let m = h.agent(&id);
+    assert_eq!((m.account.as_str(), m.moved_from), ("pro", None));
+    assert_eq!(m.resume_at, Some(planned));
+    assert_eq!(m.session_id.as_deref(), Some(session.as_str()));
+    assert_eq!(kept_session(&pro.config_dir, &session).len(), 1);
+}
+
+#[tokio::test]
+async fn a_resume_whose_session_the_new_account_cannot_find_keeps_it_and_tells_the_failure() {
+    a_resume_that_exits_before_starting(
+        "accounts-resume-exit-lost",
+        "No conversation found with session ID: sess-1\n",
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn a_resume_whose_process_stops_on_a_sign_in_error_tells_the_failure_as_a_card() {
+    a_resume_that_exits_before_starting(
+        "accounts-resume-exit-auth",
+        "Invalid API key · Please run /login\n",
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn going_back_waits_for_no_reset_when_the_automatic_resume_was_turned_off_meanwhile() {
+    let h = harness("accounts-resume-back-off");
+    let (p, _) = h.project(true).await;
+    let (_, team) = pro_out_of_quota_and_team(&h);
+    let id = agent_on(&h, &p, "pro").await.id;
+    turn_over(&h, &id, "la limite").await;
+    h.wait("its resume planned", |h| h.agent(&id).resume_at.is_some())
+        .await;
+    std::fs::create_dir_all(&team.config_dir).unwrap();
+    std::fs::write(
+        Path::new(&team.config_dir).join("fake-exit"),
+        "Invalid API key\n",
+    )
+    .unwrap();
+    assert!(h.core.resume_on_account(&id, "equipe").await.is_err());
+    h.wait("the failure", |h| !h.agent(&id).status.is_active())
+        .await;
+    assert!(h.agent(&id).moved_resume_at.is_some());
+    // Turned off: no resume waits any more, and none is brought back.
+    let mut s = h.core.settings.read().clone();
+    s.auto_resume = false;
+    h.core.save_settings(s).unwrap();
+    h.core.back_to_previous_account(&id).await.unwrap();
+    let m = h.agent(&id);
+    assert_eq!((m.account.as_str(), m.resume_at), ("pro", None));
+}
+
+#[tokio::test]
+async fn a_message_sent_while_the_agent_moves_waits_for_the_move_and_goes_out_on_the_new_account() {
+    let h = harness("accounts-resume-lock");
+    let (p, _) = h.project(true).await;
+    let (pro, team) = pro_out_of_quota_and_team(&h);
+    let id = agent_on(&h, &p, "pro").await.id;
+    // Its process takes 800 ms to end once its input is closed, and writes its session to the last.
+    turn_over(&h, &id, "Bonjour [ferme-lentement] la limite").await;
+    h.wait("its resume planned", |h| h.agent(&id).resume_at.is_some())
+        .await;
+    let session = h.agent(&id).session_id.unwrap();
+    let cwd = PathBuf::from(h.agent(&id).cwd);
+    let mover = {
+        let (core, id) = (h.core.clone(), id.clone());
+        tokio::spawn(async move { core.resume_on_account(&id, "equipe").await })
+    };
+    // The move has the agent: its old process is detached, and closing.
+    h.wait("the move under way", |h| !h.alive(&id)).await;
+    // A message now must not start a process on the old account, which still is the agent's: it
+    // waits for the move, and goes out on the new one.
+    h.core
+        .send_message(&id, "Pendant".to_string(), vec![])
+        .await
+        .unwrap();
+    mover.await.unwrap().unwrap();
+    h.wait("both messages answered", |h| {
+        h.stdin_messages(&cwd).len() == 3 && !h.agent(&id).status.is_active()
+    })
+    .await;
+    let sent: Vec<Value> = h
+        .stdin_messages(&cwd)
+        .iter()
+        .map(|m| m["message"]["content"].clone())
+        .collect();
+    assert!(sent.contains(&json!("Pendant")) && sent.contains(&json!("continue")));
+    // Two processes in all: Pro's, then Équipe's, which has both.
+    assert_eq!(
+        config_dirs(&h, &cwd),
+        [json!(pro.config_dir), json!(team.config_dir)]
+    );
+    // And the session it resumed has what the old process wrote as it ended.
+    let text = std::fs::read_to_string(&kept_session(&team.config_dir, &session)[0]).unwrap();
+    assert!(text.contains("\"closed\""), "{text}");
 }
 
 #[tokio::test]

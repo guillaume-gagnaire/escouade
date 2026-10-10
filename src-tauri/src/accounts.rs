@@ -719,6 +719,13 @@ fn unknown(id: &str) -> anyhow::Error {
     ))
 }
 
+/// What a move of an agent's session left behind: the account it left, and the resume it waited
+/// for there, which the move dropped.
+struct Moved {
+    from: Account,
+    resume_at: Option<i64>,
+}
+
 /// Refused: the account is switched off, nothing goes to it.
 fn switched_off(account: &Account) -> anyhow::Error {
     anyhow::anyhow!(tr!(
@@ -982,10 +989,12 @@ impl<R: Runtime> Core<R> {
     /// automatic resume sends it. The resume it waited for is dropped. If the turn that follows
     /// fails there, the agent remembers where it came from (`back_to_previous_account`).
     pub async fn resume_on_account(self: &Arc<Self>, id: &str, account: &str) -> Result<()> {
-        let from = self.move_session(id, account).await?;
+        let Moved { from, resume_at } = self.move_session(id, account).await?;
         let to = get(&self.settings.read(), account);
         self.with_agent(id, |rt, fx| {
             rt.meta.moved_from = Some(from.id.clone());
+            // Where it waits again if it goes back (the move dropped it).
+            rt.meta.moved_resume_at = resume_at;
             let lang = crate::i18n::ui();
             rt.notice(
                 "info",
@@ -1016,8 +1025,12 @@ impl<R: Runtime> Core<R> {
         };
         self.move_session(id, &previous).await?;
         let to = get(&self.settings.read(), &previous);
+        // The reset it waited for, as it was: the account's windows may no longer say when it is.
+        let waited = h.lock().meta.moved_resume_at.take();
+        let waited = waited.filter(|_| self.settings.read().auto_resume);
         self.with_agent(id, |rt, fx| {
             rt.meta.moved_from = None;
+            rt.meta.resume_at = waited;
             rt.notice(
                 "info",
                 tr!(
@@ -1029,7 +1042,10 @@ impl<R: Runtime> Core<R> {
             );
             Ok(())
         })?;
-        self.plan_resume(id, None);
+        // Not remembered (the automatic resume was off, the reset unknown): as the windows say.
+        if waited.is_none() {
+            self.plan_resume(id, None);
+        }
         // No reset to wait for (turned off, none known): a ticket would wait for ever.
         if h.lock().meta.resume_at.is_none() {
             self.resume_lost(id);
@@ -1040,8 +1056,9 @@ impl<R: Runtime> Core<R> {
     /// The agent's session moved to the account `target`, an active one other than its own: its
     /// process is stopped, and gone (never two on one session), then the session is copied into
     /// the folder of `target` (`copy_session`), then the agent's account is changed and the resume
-    /// it planned dropped. Nothing is changed when it fails before. The account it left.
-    async fn move_session(self: &Arc<Self>, id: &str, target: &str) -> Result<Account> {
+    /// it planned dropped. Nothing is changed when it fails before. The account it left, and the
+    /// resume it dropped.
+    async fn move_session(self: &Arc<Self>, id: &str, target: &str) -> Result<Moved> {
         let h = self.agent(id)?;
         // Its process is not started again meanwhile (a message, a warm-up wait for the lock).
         let lock = self.spawn_lock(id);
@@ -1086,15 +1103,15 @@ impl<R: Runtime> Core<R> {
         tokio::task::spawn_blocking(move || copy_session(&from_dir, &to_dir, &session))
             .await
             .map_err(|e| anyhow::anyhow!(e))??;
-        {
+        let resume_at = {
             let mut rt = h.lock();
             rt.meta.account = to.id.clone();
             // It goes on now: nothing left to wait for.
-            rt.meta.resume_at = None;
-        }
+            rt.meta.resume_at.take()
+        };
         self.emit_agent(&h);
         self.request_save();
-        Ok(from)
+        Ok(Moved { from, resume_at })
     }
 
     /// Whether Claude Code is found for the account new agents would go to (the current one): its

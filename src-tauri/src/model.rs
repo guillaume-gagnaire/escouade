@@ -723,6 +723,9 @@ pub struct AgentMeta {
     /// The account it ran on before « Reprendre sur <compte> » moved it, until a turn ends on the
     /// new one: a turn that fails there is the resume's failure, and this is where it goes back to.
     pub moved_from: Option<String>,
+    /// The resume it waited for on that account (`resume_at`), which the move dropped: where it waits
+    /// again when it goes back, if the account's windows no longer say when it resets.
+    pub moved_resume_at: Option<i64>,
 }
 
 fn principal_id() -> String {
@@ -1392,13 +1395,15 @@ mod tests {
         // An agent saved before it was ever moved has no account it came from.
         let m: AgentMeta =
             serde_json::from_value(json!({ "id": "a1", "sessionId": "s1" })).unwrap();
-        assert_eq!(m.moved_from, None);
+        assert_eq!((m.moved_from, m.moved_resume_at), (None, None));
         let v = serde_json::to_value(AgentMeta {
             moved_from: Some("principal".into()),
+            moved_resume_at: Some(1_790_000_000_000),
             ..Default::default()
         })
         .unwrap();
         assert_eq!(v["movedFrom"], json!("principal"));
+        assert_eq!(v["movedResumeAt"], json!(1_790_000_000_000_i64));
     }
 
     #[test]
