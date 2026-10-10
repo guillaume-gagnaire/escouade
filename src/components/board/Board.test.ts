@@ -100,24 +100,45 @@ describe('Board', () => {
     await expect.poll(() => within(col('À faire')).queryAllByRole('button', { name: 'Lancer' }).length).toBe(2);
   });
 
-  it('adds a ticket from the form at the top of "À faire"', async () => {
+  it('opens the form of a new ticket in its window from « + », and adds what it sends at the top of "À faire"', async () => {
     const backend = fakeBackend({ ticket_create: (a: any) => ticket({ id: 't9', key: 'DEM-9', title: a.draft.title }) });
     render(Board, { project: app.projects[0] });
+    // Nothing is opened inside the column: the form is a window of its own (App shows it).
     await userEvent.click(screen.getByRole('button', { name: 'Nouveau ticket' }));
-    const add = screen.getByRole('button', { name: 'Ajouter' });
-    expect(add).toBeDisabled();
-    await userEvent.type(screen.getByRole('textbox', { name: 'Titre du ticket' }), 'Limiter les tentatives');
-    await userEvent.type(screen.getByRole('textbox', { name: "Critères d'acceptation" }), '5 essais{Enter}Réponse 429');
-    await userEvent.click(screen.getByRole('button', { name: '8' }));
-    // After the ticket under way, one of the project's.
-    await userEvent.click(within(screen.getByRole('group', { name: 'Après' })).getByRole('checkbox', { name: /^DEM-3 / }));
-    await userEvent.click(add);
-    expect(backend.called('ticket_create')[0].args).toEqual({
-      projectId: 'p1',
-      draft: { title: 'Limiter les tentatives', description: '', criteria: ['5 essais', 'Réponse 429'], maxLoops: 8, after: ['t3'] },
-    });
-    expect(await within(col('À faire')).findByText('DEM-9')).toBeInTheDocument();
+    expect(app.modal).toMatchObject({ kind: 'ticket', projectId: 'p1', ticket: undefined });
     expect(screen.queryByRole('textbox', { name: 'Titre du ticket' })).not.toBeInTheDocument();
+    // After the ticket under way, one of the project's.
+    const draft = { title: 'Limiter les tentatives', description: '', criteria: ['5 essais', 'Réponse 429'], maxLoops: 8, after: ['t3'] };
+    const saved = await (app.modal as any).onSubmit(draft);
+    expect(saved).toBe(true);
+    expect(backend.called('ticket_create')[0].args).toEqual({ projectId: 'p1', draft });
+    expect(await within(col('À faire')).findByText('DEM-9')).toBeInTheDocument();
+  });
+
+  it('makes the ticket in the project the window was opened from, whichever is on screen when it is sent', async () => {
+    const backend = fakeBackend({ ticket_create: () => ticket({ id: 't9', key: 'DEM-9' }) });
+    const { rerender } = render(Board, { project: app.projects[0] });
+    await userEvent.click(screen.getByRole('button', { name: 'Nouveau ticket' }));
+    expect(app.modal).toMatchObject({ kind: 'ticket', projectId: 'p1' });
+    // Another project is selected meanwhile (a click on a notification): the window stays, and so does its project.
+    await rerender({ project: project({ id: 'p2', name: 'autre' }) });
+    expect(await (app.modal as any).onSubmit({ title: 'Vite', description: '', criteria: [], maxLoops: 5, after: [] })).toBe(true);
+    expect(backend.called('ticket_create')[0].args.projectId).toBe('p1');
+  });
+
+  it('keeps the window of a new ticket open, what was typed in it, when the ticket could not be made', async () => {
+    fakeBackend({
+      ticket_create: () => {
+        throw 'Le dépôt est verrouillé';
+      },
+    });
+    render(Board, { project: app.projects[0] });
+    await userEvent.click(screen.getByRole('button', { name: 'Nouveau ticket' }));
+    const saved = await (app.modal as any).onSubmit({ title: 'Vite', description: '', criteria: [], maxLoops: 5, after: [] });
+    expect(saved).toBe(false);
+    expect(app.toasts.at(-1)).toMatchObject({ kind: 'error', text: expect.stringContaining('Le dépôt est verrouillé') });
+    expect(app.modal).toMatchObject({ kind: 'ticket' });
+    expect(app.tickets.t9).toBeUndefined();
   });
 
   it('tells each ticket to do when it will start', () => {
@@ -150,8 +171,7 @@ describe('Board', () => {
     });
     render(Board, { project: app.projects[0] });
     await userEvent.click(screen.getByRole('button', { name: 'Nouveau ticket' }));
-    await userEvent.type(screen.getByRole('textbox', { name: 'Titre du ticket' }), 'Vite parti');
-    await userEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
+    await (app.modal as any).onSubmit({ title: 'Vite parti', description: '', criteria: [], maxLoops: 5, after: [] });
     expect(await within(col('En cours')).findByText('DEM-9')).toBeInTheDocument();
     expect(app.tickets.t9.column).toBe('doing');
     expect(within(col('À faire')).queryByText('DEM-9')).not.toBeInTheDocument();
@@ -205,16 +225,16 @@ describe('Board', () => {
     expect(backend.called('ticket_start')).toEqual([{ cmd: 'ticket_start', args: { id: 't1' } }]);
   });
 
-  it('edits a ticket to do from a click, and moves or deletes it from its menu', async () => {
+  it('edits a ticket to do from a click, in the window of its form, and moves or deletes it from its menu', async () => {
     const backend = fakeBackend({ ticket_update: (a: any) => ticket({ title: a.draft.title }) });
     render(Board, { project: app.projects[0] });
     await userEvent.click(screen.getByRole('button', { name: /DEM-1/ }));
-    const title = screen.getByRole('textbox', { name: 'Titre du ticket' });
-    expect(title).toHaveValue('Ajouter le fichier');
-    await userEvent.clear(title);
-    await userEvent.type(title, 'Ajouter le fichier du ticket');
-    await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
-    expect(backend.called('ticket_update')[0].args.draft.title).toBe('Ajouter le fichier du ticket');
+    // The card stays in its column: the form is a window of its own.
+    expect(app.modal).toMatchObject({ kind: 'ticket', projectId: 'p1', ticket: { id: 't1', title: 'Ajouter le fichier' } });
+    expect(screen.getByRole('button', { name: /DEM-1/ })).toBeInTheDocument();
+    const draft = { title: 'Ajouter le fichier du ticket', description: '', criteria: [], maxLoops: 5, after: [] };
+    expect(await (app.modal as any).onSubmit(draft)).toBe(true);
+    expect(backend.called('ticket_update')[0].args).toEqual({ id: 't1', draft });
     expect(await screen.findByText('Ajouter le fichier du ticket')).toBeInTheDocument();
     await fireEvent.contextMenu(screen.getByRole('button', { name: /DEM-2/ }));
     expect(menu.open!.items.map((i) => i.label)).toEqual(['Modifier', 'Passer en tête', '', 'Supprimer']);
@@ -229,21 +249,30 @@ describe('Board', () => {
     await expect.poll(() => app.tickets.t2).toBeUndefined();
   });
 
-  it('closes the form of a new ticket at once when nothing was typed, and after a confirmation when something was', async () => {
+  it('opens the same window from « Modifier » in the menu of a card', async () => {
+    fakeBackend();
+    render(Board, { project: app.projects[0] });
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /DEM-2/ }));
+    menu.open!.items.find((i) => i.label === 'Modifier')!.onClick!();
+    expect(app.modal).toMatchObject({ kind: 'ticket', ticket: { id: 't2' } });
+  });
+
+  it('does not put a ticket back in "À faire" that an event took away while its form was open', async () => {
+    fakeBackend({ ticket_update: (a: any) => ticket({ title: a.draft.title }) });
+    render(Board, { project: app.projects[0] });
+    await userEvent.click(screen.getByRole('button', { name: /DEM-1/ }));
+    // Started meanwhile.
+    app.tickets.t1 = { ...app.tickets.t1, column: 'doing', agentId: 'a1', iteration: 1, startedAt: 2 };
+    expect(await (app.modal as any).onSubmit({ title: 'Trop tard', description: '', criteria: [], maxLoops: 5, after: [] })).toBe(true);
+    expect(app.tickets.t1).toMatchObject({ column: 'doing', title: 'Ajouter le fichier' });
+  });
+
+  it('holds no form in the column itself, whichever way one is opened', async () => {
     fakeBackend();
     render(Board, { project: app.projects[0] });
     await userEvent.click(screen.getByRole('button', { name: 'Nouveau ticket' }));
-    await userEvent.click(screen.getByRole('textbox', { name: 'Titre du ticket' }));
-    await userEvent.keyboard('{Escape}');
-    expect(screen.queryByRole('textbox', { name: 'Titre du ticket' })).not.toBeInTheDocument();
-    expect(app.modal).toBeNull();
-    await userEvent.click(screen.getByRole('button', { name: 'Nouveau ticket' }));
-    await userEvent.type(screen.getByRole('textbox', { name: 'Titre du ticket' }), 'Un début');
-    await userEvent.keyboard('{Escape}');
-    expect(app.modal).toMatchObject({ kind: 'confirm', title: 'Abandonner les modifications ?', confirm: 'Abandonner' });
-    expect(screen.getByRole('textbox', { name: 'Titre du ticket' })).toHaveValue('Un début');
-    await (app.modal as any).onConfirm(false);
-    expect(screen.queryByRole('textbox', { name: 'Titre du ticket' })).not.toBeInTheDocument();
+    expect(within(col('À faire')).getAllByRole('button', { name: /DEM-/ })).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: 'Ajouter' })).not.toBeInTheDocument();
   });
 
   it('opens the agent of a ticket under way', async () => {
@@ -326,16 +355,10 @@ describe('Board in English', () => {
     expect(backend.called('autopilot_resume')).toHaveLength(1);
   });
 
-  it('opens the form of a new ticket with its fields in English', async () => {
+  it('opens the window of a new ticket from its button in English', async () => {
     fakeBackend();
     render(Board, { project: app.projects[0] });
     await userEvent.click(screen.getByRole('button', { name: 'New ticket' }));
-    expect(screen.getByRole('textbox', { name: 'Ticket title' })).toHaveAttribute('placeholder', 'Ticket title');
-    expect(screen.getByRole('textbox', { name: 'Acceptance criteria' })).toHaveAttribute(
-      'placeholder',
-      'Acceptance criteria, one per line',
-    );
-    expect(screen.getByRole('group', { name: 'Max loops' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
+    expect(app.modal).toMatchObject({ kind: 'ticket', projectId: 'p1' });
   });
 });

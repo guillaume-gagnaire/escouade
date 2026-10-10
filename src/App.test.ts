@@ -4,8 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 import App from './App.svelte';
 import { setLang } from './lib/i18n';
 import { app } from './lib/state.svelte';
-import type { Agent, InitialState, Project, UiEvent } from './lib/types';
-import { agent, branchInfo, fakeBackend, gitInfo, project, resetApp, SETTINGS } from './test/ipc';
+import type { Agent, InitialState, Project, Ticket, UiEvent } from './lib/types';
+import { agent, branchInfo, fakeBackend, gitInfo, project, resetApp, SETTINGS, ticket } from './test/ipc';
 
 const DIFF = `diff --git a/src/auth.ts b/src/auth.ts
 --- a/src/auth.ts
@@ -21,7 +21,7 @@ const emit = (e: UiEvent) => channel!.onmessage(e);
 
 function start(
   layout: '' | 'split',
-  over: { projects?: Project[]; agents?: Agent[]; handlers?: Record<string, (args: any) => unknown> } = {},
+  over: { projects?: Project[]; agents?: Agent[]; tickets?: Ticket[]; handlers?: Record<string, (args: any) => unknown> } = {},
 ) {
   const initial: InitialState = {
     projects: over.projects ?? [project()],
@@ -32,12 +32,12 @@ function start(
     git: {},
     shells: [],
     terminals: [],
-    tickets: [],
+    tickets: over.tickets ?? [],
     claudeFound: true,
     version: '0.1.0',
     models: [],
   };
-  fakeBackend({
+  const backend = fakeBackend({
     subscribe: (args: any) => {
       channel = args.channel;
       return initial;
@@ -51,7 +51,7 @@ function start(
   // Nothing rendered from a previous test's state until the snapshot is in.
   resetApp();
   app.ready = false;
-  return render(App);
+  return Object.assign(render(App), { backend });
 }
 
 describe('App layout', () => {
@@ -614,5 +614,150 @@ describe('App branches', () => {
     app.modal = { kind: 'mergedBranches', projectId: 'p1' };
     const cleaning = await screen.findByRole('dialog', { name: 'Branches mergées' });
     expect(await within(cleaning).findByRole('button', { name: 'Supprimer 1 branche' })).toBeInTheDocument();
+  });
+});
+
+describe('App ticket window', () => {
+  const THE_TICKET = ticket({ id: 't1', key: 'DEM-1', title: 'Ajouter le fichier', description: 'Un fichier', createdAt: 1 });
+
+  /** The board of the project on screen; `handlers`: the fake backend's besides the usual ones. */
+  async function onBoard(handlers: Record<string, (args: any) => unknown> = {}, tickets: Ticket[] = []) {
+    const { backend } = start('', { tickets, handlers });
+    expect(await screen.findByRole('main')).toBeInTheDocument();
+    app.openBoard('p1');
+    await screen.findByRole('button', { name: /^(Nouveau|New) ticket$/ });
+    return backend;
+  }
+  const plus = () => screen.getByRole('button', { name: 'Nouveau ticket' });
+  const title = () => screen.getByRole('textbox', { name: 'Titre du ticket' });
+
+  it('adds a ticket in a large window: long description pasted, Ctrl+Enter adds it, the focus goes back to « + »', async () => {
+    const made = ticket({ id: 't9', key: 'DEM-9', title: 'Un long ticket' });
+    const backend = await onBoard({ ticket_create: () => made });
+    await userEvent.click(plus());
+    const dialog = await screen.findByRole('dialog', { name: 'Nouveau ticket' });
+    expect(dialog).toHaveStyle({ width: '760px' });
+    expect(title()).toHaveFocus();
+    // The column holds no form of its own.
+    expect(within(screen.getByRole('region', { name: 'À faire' })).queryByRole('textbox')).toBeNull();
+    const long = Array.from(
+      { length: 60 },
+      (_, i) => `Étape ${i + 1} : une phrase assez longue pour remplir la ligne et obliger à défiler`,
+    ).join('\n');
+    await userEvent.type(title(), 'Un long ticket');
+    await userEvent.click(screen.getByRole('textbox', { name: 'Description' }));
+    await userEvent.paste(long);
+    await userEvent.keyboard('{Control>}{Enter}{/Control}');
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Nouveau ticket' })).toBeNull());
+    expect(backend.called('ticket_create')[0].args.draft).toMatchObject({ title: 'Un long ticket', description: long });
+    expect(await screen.findByText('DEM-9')).toBeInTheDocument();
+    expect(app.modal).toBeNull();
+    expect(plus()).toHaveFocus();
+  });
+
+  it('edits a ticket from its card in the same window, its fields filled, and gives the focus back to the card', async () => {
+    const backend = await onBoard({ ticket_update: (a: any) => ({ ...THE_TICKET, title: a.draft.title }) }, [THE_TICKET]);
+    const card = screen.getByRole('button', { name: /DEM-1/ });
+    await userEvent.click(card);
+    const dialog = await screen.findByRole('dialog', { name: 'Modifier DEM-1' });
+    expect(title()).toHaveValue('Ajouter le fichier');
+    expect(within(dialog).getByRole('textbox', { name: 'Description' })).toHaveValue('Un fichier');
+    expect(within(dialog).getByText('Ctrl+Entrée pour enregistrer')).toBeInTheDocument();
+    await userEvent.type(title(), ' du ticket');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Modifier DEM-1' })).toBeNull());
+    expect(backend.called('ticket_update')[0].args.draft.title).toBe('Ajouter le fichier du ticket');
+    expect(await screen.findByText('Ajouter le fichier du ticket')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /DEM-1/ })).toHaveFocus();
+  });
+
+  it('makes the ticket in the project it was opened from when another is selected while it is written', async () => {
+    const other = project({ id: 'p2', name: 'autre', path: 'C:\\code\\autre' });
+    const { backend } = start('', { projects: [project(), other], handlers: { ticket_create: () => ticket({ id: 't9', key: 'DEM-9' }) } });
+    expect(await screen.findByRole('main')).toBeInTheDocument();
+    app.openBoard('p1');
+    await userEvent.click(await screen.findByRole('button', { name: 'Nouveau ticket' }));
+    await screen.findByRole('dialog', { name: 'Nouveau ticket' });
+    await userEvent.type(title(), 'Dans le premier');
+    // A click on a notification of the other project: its board takes the place of this one, the window stays.
+    app.selectProject('p2');
+    await waitFor(() => expect(app.ui.activeProject).toBe('p2'));
+    expect(screen.getByRole('dialog', { name: 'Nouveau ticket' })).toBeInTheDocument();
+    expect(title()).toHaveValue('Dans le premier');
+    await userEvent.keyboard('{Control>}{Enter}{/Control}');
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Nouveau ticket' })).toBeNull());
+    expect(backend.called('ticket_create')[0].args.projectId).toBe('p1');
+  });
+
+  it('asks before Escape drops what was typed, comes back to it on « Annuler », and closes on « Abandonner »', async () => {
+    await onBoard({});
+    await userEvent.click(plus());
+    await screen.findByRole('dialog', { name: 'Nouveau ticket' });
+    await userEvent.type(title(), 'Un début');
+    await userEvent.click(screen.getByRole('textbox', { name: 'Description' }));
+    await userEvent.paste('Le fond du sujet');
+    await userEvent.keyboard('{Escape}');
+    const ask = await screen.findByRole('dialog', { name: 'Abandonner les modifications ?' });
+    // The confirmation is on its own: the window is back once it is dismissed, with everything it had.
+    expect(screen.queryByRole('dialog', { name: 'Nouveau ticket' })).toBeNull();
+    await userEvent.click(within(ask).getByRole('button', { name: 'Annuler' }));
+    await screen.findByRole('dialog', { name: 'Nouveau ticket' });
+    expect(title()).toHaveValue('Un début');
+    expect(screen.getByRole('textbox', { name: 'Description' })).toHaveValue('Le fond du sujet');
+    expect(title()).toHaveFocus();
+    // Agreed to: gone, and the focus where it came from.
+    await userEvent.keyboard('{Escape}');
+    await userEvent.click(
+      within(await screen.findByRole('dialog', { name: 'Abandonner les modifications ?' })).getByRole('button', { name: 'Abandonner' }),
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(app.modal).toBeNull();
+    expect(plus()).toHaveFocus();
+  });
+
+  it('closes at once on Escape when nothing was typed', async () => {
+    await onBoard({});
+    await userEvent.click(plus());
+    await screen.findByRole('dialog', { name: 'Nouveau ticket' });
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(plus()).toHaveFocus();
+  });
+
+  it('comes back to the ticket being written, all its fields kept, once quitting is cancelled', async () => {
+    await onBoard({});
+    await userEvent.click(plus());
+    await screen.findByRole('dialog', { name: 'Nouveau ticket' });
+    await userEvent.type(title(), 'Un début');
+    await userEvent.click(screen.getByRole('textbox', { name: "Critères d'acceptation" }));
+    await userEvent.paste('Premier\nSecond');
+    await userEvent.click(screen.getByRole('button', { name: '8' }));
+    emit({ type: 'quitRequested', unsaved: 1 });
+    const ask = await screen.findByRole('dialog', { name: 'Quitter Escouade ?' });
+    await userEvent.click(within(ask).getByRole('button', { name: 'Annuler' }));
+    await screen.findByRole('dialog', { name: 'Nouveau ticket' });
+    expect(title()).toHaveValue('Un début');
+    expect(screen.getByRole('textbox', { name: "Critères d'acceptation" })).toHaveValue('Premier\nSecond');
+    expect(screen.getByRole('button', { name: '8' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('keeps the shortcuts of the app out of the window', async () => {
+    await onBoard({});
+    await userEvent.click(plus());
+    await screen.findByRole('dialog', { name: 'Nouveau ticket' });
+    // Ctrl+K would open the search of the conversations over what is being written.
+    await userEvent.keyboard('{Control>}k{/Control}');
+    expect(app.modal).toMatchObject({ kind: 'ticket' });
+  });
+
+  it('is written in English, hint included', async () => {
+    setLang('en');
+    await onBoard({});
+    await userEvent.click(screen.getByRole('button', { name: 'New ticket' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New ticket' });
+    expect(within(dialog).getByRole('textbox', { name: 'Ticket title' })).toHaveFocus();
+    expect(within(dialog).getByText('Ctrl+Enter to add')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Add' })).toBeDisabled();
+    expect(within(dialog).getByRole('textbox', { name: 'Acceptance criteria' })).toBeInTheDocument();
   });
 });

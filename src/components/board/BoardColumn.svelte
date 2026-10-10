@@ -5,7 +5,6 @@
   import { app } from '../../lib/state.svelte';
   import type { Column, Project, Ticket, TicketDraft } from '../../lib/types';
   import TicketCard from './TicketCard.svelte';
-  import TicketForm from './TicketForm.svelte';
 
   let {
     column,
@@ -22,26 +21,38 @@
     quota: number | null;
   } = $props();
 
-  let adding = $state(false);
-  let editing = $state<string | null>(null);
   /** Each ticket's place in the queue: one that waits for others is passed over, as the autopilot does. */
   const queue = $derived(column.id === 'todo' ? queueIndices(tickets, app.tickets) : {});
 
+  /**
+   * The form of a new ticket, or (`ticket`) of one to do, in its window. The window outlives this board (another project
+   * selected meanwhile, by a click on a notification): the ticket is made in the project it was opened from.
+   */
+  function openForm(ticket?: Ticket) {
+    const projectId = project.id;
+    app.modal = {
+      kind: 'ticket',
+      projectId,
+      ticket,
+      onSubmit: ticket ? (d) => save(ticket.id, d) : (d) => add(projectId, d),
+    };
+  }
+
   // The command's ticket shows at once, unless the backend's event, which may come before its answer, already brought
-  // it, maybe newer (started meanwhile); one coming after brings the same or newer.
-  async function add(d: TicketDraft) {
-    const made = await app.run(api.ticketCreate(project.id, d));
-    if (!made) return;
+  // it, maybe newer (started meanwhile); one coming after brings the same or newer. True once it is made: the window closes.
+  async function add(projectId: string, d: TicketDraft) {
+    const made = await app.run(api.ticketCreate(projectId, d));
+    if (!made) return false;
     app.tickets[made.id] ??= made;
-    adding = false;
+    return true;
   }
 
   async function save(id: string, d: TicketDraft) {
     const saved = await app.run(api.ticketUpdate(id, d));
-    if (!saved) return;
+    if (!saved) return false;
     // Only a ticket "À faire" is edited: one gone or under way since is newer than this.
     if (app.tickets[saved.id]?.column === 'todo') app.tickets[saved.id] = saved;
-    editing = null;
+    return true;
   }
 </script>
 
@@ -52,23 +63,15 @@
     <span class="count mono">{tickets.length}</span>
     <div style="flex:1"></div>
     {#if column.id === 'todo'}
-      <button class="plus" title={t('board.column.newTicket')} aria-label={t('board.column.newTicket')} onclick={() => (adding = true)}
-        >+</button
+      <button class="plus" title={t('board.column.newTicket')} aria-label={t('board.column.newTicket')} onclick={() => openForm()}>+</button
       >
     {/if}
   </div>
   <div class="cards">
-    {#if adding}
-      <TicketForm projectId={project.id} onsubmit={add} oncancel={() => (adding = false)} />
-    {/if}
     {#each tickets as x, i (x.id)}
-      {#if editing === x.id}
-        <TicketForm ticket={x} projectId={project.id} onsubmit={(d) => save(x.id, d)} oncancel={() => (editing = null)} />
-      {:else}
-        <TicketCard ticket={x} {project} queueIndex={queue[x.id] ?? i} {busyCount} {quota} onedit={() => (editing = x.id)} />
-      {/if}
+      <TicketCard ticket={x} {project} queueIndex={queue[x.id] ?? i} {busyCount} {quota} onedit={() => openForm(x)} />
     {/each}
-    {#if !tickets.length && !adding}
+    {#if !tickets.length}
       <div class="empty">{t(`board.empty.${column.id}`)}</div>
     {/if}
   </div>

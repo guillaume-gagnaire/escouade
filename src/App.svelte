@@ -8,6 +8,7 @@
   import { watchPresence } from './lib/presence';
   import { createWarmer } from './lib/warm';
   import Board from './components/board/Board.svelte';
+  import TicketForm from './components/board/TicketForm.svelte';
   import MergedBranchesModal from './components/branches/MergedBranchesModal.svelte';
   import NewBranchModal from './components/branches/NewBranchModal.svelte';
   import ContextMenu from './components/ContextMenu.svelte';
@@ -171,6 +172,8 @@
   <NewBranchModal projectId={app.modal.projectId} start={app.modal.start} resume={app.modal.resume} />
 {:else if app.modal?.kind === 'mergedBranches'}
   <MergedBranchesModal projectId={app.modal.projectId} />
+{:else if app.modal?.kind === 'ticket'}
+  <TicketForm projectId={app.modal.projectId} ticket={app.modal.ticket} onsubmit={app.modal.onSubmit} resume={app.modal.resume} />
 {/if}
 
 <ContextMenu />

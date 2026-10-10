@@ -65,6 +65,10 @@ export default defineZone('board', {
   },
 
   form: {
+    newTitle: 'New ticket',
+    editTitle: 'Edit {key}',
+    addHint: '{key} to add',
+    saveHint: '{key} to save',
     discardTitle: 'Discard your changes?',
     discardBody: 'What you typed in this ticket will not be saved.',
     discard: 'Discard',

@@ -67,8 +67,12 @@ export default {
     approveBody: 'Le worktree de son agent est supprimé après le merge.',
   },
 
-  // The form of a ticket, new or edited.
+  // The form of a ticket, new or edited, in its window.
   form: {
+    newTitle: 'Nouveau ticket',
+    editTitle: 'Modifier {key}',
+    addHint: '{key} pour ajouter',
+    saveHint: '{key} pour enregistrer',
     discardTitle: 'Abandonner les modifications ?',
     discardBody: 'Ce que tu as saisi dans ce ticket ne sera pas enregistré.',
     discard: 'Abandonner',

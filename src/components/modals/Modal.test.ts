@@ -20,6 +20,16 @@ describe('Modal', () => {
     outside.remove();
   });
 
+  it('is as tall as its content unless it is asked to be tall', () => {
+    const { unmount } = render(Modal, { title: 'Commit', onclose: () => {}, children: body });
+    expect(screen.getByRole('dialog', { name: 'Commit' })).not.toHaveClass('tall');
+    unmount();
+    render(Modal, { title: 'Nouveau ticket', width: 760, tall: true, onclose: () => {}, children: body });
+    const dialog = screen.getByRole('dialog', { name: 'Nouveau ticket' });
+    expect(dialog).toHaveClass('tall');
+    expect(dialog).toHaveStyle({ width: '760px' });
+  });
+
   it('closes on Escape and keeps Tab inside the dialog', async () => {
     const onclose = vi.fn();
     render(Modal, { title: 'Réglages', onclose, children: body });

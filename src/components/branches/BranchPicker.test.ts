@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { setLang } from '../../lib/i18n';
@@ -126,6 +126,18 @@ describe('BranchPicker', () => {
     expect(onclose).toHaveBeenCalledTimes(1);
     await userEvent.click(document.querySelector('.backdrop')!);
     expect(onclose).toHaveBeenCalledTimes(2);
+  });
+
+  it('is over the dialogs when it is opened from one, under them else', async () => {
+    setup();
+    await loaded();
+    expect(screen.getByRole('dialog')).not.toHaveClass('over');
+    cleanup();
+    fakeBackend({ branch_list: () => LIST });
+    render(BranchPicker, { projectId: 'p1', onclose: vi.fn(), mode: 'pick', onpick: vi.fn(), over: true });
+    await loaded();
+    expect(screen.getByRole('dialog')).toHaveClass('over');
+    expect(document.querySelector('.backdrop')).toHaveClass('over');
   });
 
   it('leaves Escape to the context menu while one is open', async () => {
