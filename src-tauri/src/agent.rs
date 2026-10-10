@@ -9,7 +9,7 @@ use crate::model::*;
 use crate::notify;
 use crate::paths::relative_slash;
 use crate::plan::{Change, PlanState};
-use crate::planfiles::FileList;
+use crate::planfiles::{self, FileList};
 use crate::pricing::{self, Usage};
 use anyhow::{anyhow, Result};
 use serde_json::{json, Map, Value};
@@ -130,6 +130,9 @@ pub struct AgentRt {
     pub(crate) plan_written: Vec<String>,
     /// The calls of its main thread whose result calls for a look at the files of its plan.
     plan_calls: HashSet<String>,
+    /// The commands of its main thread that remove the workspace of the plan it follows: the run
+    /// ends with their result (the skills delete the workspace once the final review is clean).
+    plan_removals: HashSet<String>,
     /// When its conversation began, in milliseconds: the files of a plan that were last touched
     /// before are not its own.
     pub(crate) plan_since: i64,
@@ -176,6 +179,29 @@ fn in_sdd_workspace(path: &str) -> bool {
     slashed.starts_with(SDD) || slashed.contains(&format!("/{SDD}"))
 }
 
+/// The plans of the plans folder (`docs/superpowers/plans/*.md`) that a command names, as it
+/// spells them: how a run writes its plan when it does not use a write tool (`cat > … <<'EOF'`,
+/// `tee`, `git add`). A pattern or a variable is no name.
+fn plans_named_by(command: &str) -> impl Iterator<Item = &str> {
+    let said = command.to_ascii_lowercase().contains("superpowers");
+    command
+        .split(|c: char| {
+            c.is_whitespace()
+                || matches!(
+                    c,
+                    ';' | '&' | '|' | '<' | '>' | '(' | ')' | '"' | '\'' | '`' | '='
+                )
+        })
+        .filter(move |token| {
+            said && {
+                let token = token.replace('\\', "/").to_ascii_lowercase();
+                token.ends_with(".md")
+                    && token.contains("docs/superpowers/plans/")
+                    && !token.contains(['*', '?', '$', '{'])
+            }
+        })
+}
+
 impl AgentRt {
     pub fn new(mut meta: AgentMeta, conv_dir: &std::path::Path) -> Self {
         // A turn cannot survive an app restart.
@@ -207,6 +233,7 @@ impl AgentRt {
             activity: None,
             plan_written: Vec::new(),
             plan_calls: HashSet::new(),
+            plan_removals: HashSet::new(),
             plan_since: now_ms(),
             plan_list: None,
             turn_text: String::new(),
@@ -310,6 +337,7 @@ impl AgentRt {
         self.plan_since = now_ms();
         self.plan_written.clear();
         self.plan_calls.clear();
+        self.plan_removals.clear();
         self.plan_list = None;
     }
 
@@ -1036,6 +1064,22 @@ impl AgentRt {
                 let plan = self.note_written_plan(path);
                 plan || in_sdd_workspace(path)
             });
+        if name == "Bash" {
+            for plan in input["command"]
+                .as_str()
+                .into_iter()
+                .flat_map(plans_named_by)
+            {
+                self.note_written_plan(plan);
+            }
+            let followed = self.meta.plan.as_ref().and_then(|p| p.plan_file.as_deref());
+            let removing = followed
+                .zip(input["command"].as_str())
+                .is_some_and(|(plan, command)| planfiles::removes_workspace(command, plan));
+            if removing && self.plan_removals.len() < MAX_PLAN_CALLS {
+                self.plan_removals.insert(id.to_string());
+            }
+        }
         if wrote || matches!(name, "Bash" | "Task" | "Agent") {
             if self.plan_calls.len() >= MAX_PLAN_CALLS {
                 self.plan_calls.clear();
@@ -1061,7 +1105,9 @@ impl AgentRt {
         } else {
             format!("{}/{}", self.meta.cwd.trim_end_matches(['/', '\\']), path)
         };
-        self.plan_written.retain(|p| *p != path);
+        // The same file is the same whatever the slashes and the case it is spelled with.
+        let same = |p: &str| p.replace('\\', "/").to_lowercase();
+        self.plan_written.retain(|p| same(p) != same(&path));
         self.plan_written.push(path);
         if self.plan_written.len() > MAX_PLANS_WRITTEN {
             self.plan_written.remove(0);
@@ -1167,6 +1213,9 @@ impl AgentRt {
             let is_error = b["is_error"].as_bool().unwrap_or(false);
             if self.plan_calls.remove(id) {
                 fx.plan_files = true;
+            }
+            if self.plan_removals.remove(id) && !is_error {
+                self.plan_apply(fx, PlanState::finish_files);
             }
             let mut text = tool_result_text(&b["content"]);
             self.plan_apply(fx, |plan| {
@@ -1772,6 +1821,31 @@ pub fn tool_activity(name: &str, input: &Value, cwd: &str) -> Option<String> {
     tool_activity_in(i18n::ui(), name, input, cwd)
 }
 
+/// A command that begins by changing folder (`cd "C:/p/worktree" && npm test`: how an agent works
+/// in its worktree, on every command) is told by what it runs after: the rest. A `cd` alone, or
+/// with nothing after it, stays as it is.
+fn after_cd(command: &str) -> &str {
+    let mut rest = command.trim_start();
+    while let Some(arg) = rest.strip_prefix("cd ") {
+        let arg = arg.trim_start();
+        let len = match arg.chars().next() {
+            Some(quote @ ('"' | '\'')) => arg[1..].find(quote).map(|i| i + 2),
+            Some(_) => Some(arg.find(char::is_whitespace).unwrap_or(arg.len())),
+            None => None,
+        };
+        let after = len.map(|len| arg[len..].trim_start());
+        let next = after
+            .and_then(|a| a.strip_prefix("&&").or_else(|| a.strip_prefix(';')))
+            .map(str::trim_start)
+            .filter(|n| !n.is_empty());
+        match next {
+            Some(next) => rest = next,
+            None => break,
+        }
+    }
+    rest
+}
+
 /// `tool_activity` in `lang`. A verb alone is the start of the same verb followed by what it acts
 /// on ("Lit", "Lit src/a.ts"; “Reading”, “Reading src/a.ts”): `set_activity` relies on it.
 fn tool_activity_in(lang: Lang, name: &str, input: &Value, cwd: &str) -> Option<String> {
@@ -1808,7 +1882,12 @@ fn tool_activity_in(lang: Lang, name: &str, input: &Value, cwd: &str) -> Option<
         ),
         "Edit" | "MultiEdit" | "NotebookEdit" => with(&tr_in!(lang, "Modifie", "Editing"), file()),
         "Write" => with(&tr_in!(lang, "Écrit", "Writing"), file()),
-        "Bash" => with(&tr_in!(lang, "Lance", "Running"), gist(&input["command"])),
+        "Bash" => with(
+            &tr_in!(lang, "Lance", "Running"),
+            gist(&Value::String(
+                after_cd(input["command"].as_str().unwrap_or_default()).to_string(),
+            )),
+        ),
         "Task" | "Agent" => tr_in!(lang, "Délègue", "Delegating"),
         _ => return None,
     })
@@ -3233,6 +3312,37 @@ mod tests {
     }
 
     #[test]
+    fn a_command_that_begins_by_changing_folder_is_told_by_what_it_runs() {
+        let act = |command: &str| tool_activity("Bash", &json!({ "command": command }), "C:/p");
+        // How agents and subagents work in a worktree (seen on every command of two real runs).
+        assert_eq!(
+            act("cd \"C:/Users/dev/AppData/Local/Temp/p4-trial/repo/.claude/worktrees/agent-1\" && npx tsx --test slugify.test.ts 2>&1 | tail -12").as_deref(),
+            Some("Lance npx tsx --test slugify.test.ts 2>&1 | tail -12")
+        );
+        assert_eq!(
+            act("cd /p/repo && git status --short").as_deref(),
+            Some("Lance git status --short")
+        );
+        assert_eq!(
+            act("cd 'C:/a b' ; cd src && npm test").as_deref(),
+            Some("Lance npm test")
+        );
+        // Alone, or with nothing after it: it is what it is.
+        assert_eq!(act("cd /p/repo").as_deref(), Some("Lance cd /p/repo"));
+        assert_eq!(act("cd /p/repo &&").as_deref(), Some("Lance cd /p/repo &&"));
+        assert_eq!(
+            act("cd /p/repo
+npm test")
+            .as_deref(),
+            Some("Lance cd /p/repo")
+        );
+        assert_eq!(
+            act("cdk deploy && cd x").as_deref(),
+            Some("Lance cdk deploy && cd x")
+        );
+    }
+
+    #[test]
     fn a_tool_starting_to_stream_does_not_blur_the_activity_of_the_same_tool() {
         let mut a = rt();
         let mut fx = Effects::default();
@@ -3804,6 +3914,176 @@ mod tests {
         assert!(a.plan_written[4].ends_with("/n3.md"));
     }
 
+    /// Every frame of a recording, in order, through the agent: what they asked for, all told.
+    fn replay(a: &mut AgentRt, recording: &str) -> Effects {
+        let mut all = Effects::default();
+        for line in recording.lines().filter(|l| !l.trim().is_empty()) {
+            let frame: Value = serde_json::from_str(line).expect("a frame");
+            let mut fx = Effects::default();
+            a.handle_frame(&frame, &mut fx);
+            all.plan_files |= fx.plan_files;
+            all.save |= fx.save;
+            all.agent_changed |= fx.agent_changed;
+        }
+        all
+    }
+
+    /// What Claude Code 2.1.296 wrote on stdout in two real runs of superpowers 6.4.1 (see
+    /// tests/fixtures/superpowers-run.md): the frames the plan is made of, as they came.
+    const REAL_SUBAGENTS: &str = include_str!("../../tests/fixtures/real-run-subagents.jsonl");
+    const REAL_INLINE: &str = include_str!("../../tests/fixtures/real-run-inline.jsonl");
+
+    #[test]
+    fn the_frames_of_a_real_run_with_subagents_in_the_background_and_task_tools_make_the_plan() {
+        let mut a = rt();
+        // The recording is two stretches: the run of the plan, then a message of the user's that
+        // asks for the task tools (a plan that ended starts over with that message).
+        let lines: Vec<&str> = REAL_SUBAGENTS.lines().collect();
+        let asked = lines
+            .iter()
+            .position(|l| l.contains("sans rien faire d’autre"))
+            .expect("the message that asks for the task tools");
+        let all = replay(&mut a, &lines[..asked].join("\n"));
+        let p = plan(&a);
+        // Two implementers, launched without `run_in_background` and run in the background all the
+        // same (`async_launched`), ended by their notification; a foreground `Bash` (a
+        // `local_bash` task) is no subagent.
+        assert_eq!(p.launched, 2);
+        let titles: Vec<_> = p.agents.iter().map(|r| r.title.as_str()).collect();
+        assert_eq!(
+            titles,
+            ["Implement Task 1 slugify", "Implement Task 2 slugify tests"]
+        );
+        for row in &p.agents {
+            assert_eq!(row.status, RunStatus::Done, "{}", row.title);
+            assert!(row.background, "{}", row.title);
+            assert_eq!(row.model.as_deref(), Some("haiku"));
+            assert_eq!(row.kind.as_deref(), Some("general-purpose"));
+            // What it did, told at its end: the tools it used and its tokens.
+            assert_eq!(row.tools, 5, "{}", row.title);
+            assert!(row.tokens.is_some_and(|t| t > 20_000), "{}", row.title);
+            assert!(row.ended_at.is_some() && row.doing.is_none());
+        }
+        // The commands and subagents of the main thread called for a look at the files.
+        assert!(all.plan_files && all.save && all.agent_changed);
+        assert!(p.workflows.is_empty());
+        assert!(p.tasks.is_empty(), "the agent kept no list");
+
+        // The task tools it is then asked for: `TaskCreate` ×2, `TaskUpdate` ×3 (after a
+        // `ToolSearch`, which loads them).
+        replay(&mut a, &lines[asked..].join("\n"));
+        let p = plan(&a);
+        assert_eq!(p.source, Some(crate::plan::PlanSource::Tools));
+        let tasks: Vec<_> = p
+            .tasks
+            .iter()
+            .map(|t| (t.id.as_str(), t.title.as_str(), t.status))
+            .collect();
+        assert_eq!(
+            tasks,
+            [
+                ("1", "Alpha", TaskStatus::Done),
+                ("2", "Beta", TaskStatus::InProgress)
+            ]
+        );
+        // What the window gets is the plan as it is.
+        let sent = serde_json::to_value(a.view()).unwrap();
+        assert_eq!(sent["plan"]["tasks"][0]["status"], "done");
+        assert_eq!(sent["plan"]["tasks"][1]["status"], "inProgress");
+    }
+
+    #[test]
+    fn the_frames_of_a_real_inline_run_say_where_its_plan_is_and_how_it_ends() {
+        let mut a = rt();
+        // Its folder, as the recording spells it, and its conversation: the recording goes on with
+        // it (the first conversation of an agent starts its plan over).
+        a.meta.cwd =
+            r"C:\Users\dev\AppData\Local\Temp\p4-trial\repo\.claude\worktrees\agent-1".into();
+        let init: Value = serde_json::from_str(REAL_INLINE.lines().next().unwrap()).unwrap();
+        a.meta.session_id = init["session_id"].as_str().map(str::to_string);
+        // The plan was read from its files by the look the first command called for.
+        let file = "docs/superpowers/plans/2026-10-11-slugify.md";
+        let list = FileList {
+            plan_file: file.into(),
+            title: Some("slugify".into()),
+            tasks: vec![
+                crate::plan::PlanTask {
+                    id: "1".into(),
+                    title: "Fonction slugify".into(),
+                    ..Default::default()
+                },
+                crate::plan::PlanTask {
+                    id: "2".into(),
+                    title: "Test de slugify".into(),
+                    status: TaskStatus::InProgress,
+                    ..Default::default()
+                },
+            ],
+        };
+        a.plan_from_files(a.plan_since, Some(list), &mut Effects::default());
+        let all = replay(&mut a, REAL_INLINE);
+        // The plan it wrote with the Write tool is the one to look for, as the tool spelled it.
+        assert_eq!(a.plan_written.len(), 1);
+        assert!(a.plan_written[0].ends_with("2026-10-11-slugify.md"));
+        assert!(all.plan_files);
+        // The run ended as the skills end one: the workspace removed after the last task. Nothing
+        // else of the plan was said, and every task is done.
+        let p = plan(&a);
+        assert_eq!(p.source, Some(crate::plan::PlanSource::Plan));
+        assert!(p.tasks.iter().all(|t| t.status == TaskStatus::Done));
+        assert_eq!(p.launched, 0);
+        // No task tool in the list the agent was given (the setting was off): none was called.
+        assert!(!REAL_INLINE.contains("\"TaskCreate\""));
+    }
+
+    #[test]
+    fn a_plan_a_command_names_is_remembered_like_one_a_write_makes() {
+        // How a real run wrote its plan: a command, with the plan in its text (seen on two of two).
+        let mut a = rt();
+        let command = "mkdir -p docs/superpowers/plans && cat > docs/superpowers/plans/2026-10-11-slugify.md <<'EOF'
+# slugify Implementation Plan
+
+### Task 1: Un
+EOF
+git add docs/superpowers/plans/2026-10-11-slugify.md && git commit -qm plan";
+        call(&mut a, None, "b1", "Bash", json!({ "command": command }));
+        assert_eq!(
+            a.plan_written,
+            ["C:/p/docs/superpowers/plans/2026-10-11-slugify.md"]
+        );
+        assert!(returns(&mut a, "b1", "ok", Value::Null).plan_files);
+        // Spelled with backslashes, in quotes, or absolute: as a write would be.
+        call(
+            &mut a,
+            None,
+            "b2",
+            "Bash",
+            json!({"command": r#"copy x "docs\superpowers\plans\other.md"; tee C:/p/docs/superpowers/plans/third.md"#}),
+        );
+        assert_eq!(
+            a.plan_written[1..],
+            [
+                r"C:/p/docs\superpowers\plans\other.md",
+                "C:/p/docs/superpowers/plans/third.md"
+            ]
+        );
+        // A pattern, a variable, a folder, another kind of file, a command of a subagent: no plan.
+        let before = a.plan_written.clone();
+        for (parent, command) in [
+            (None, "ls docs/superpowers/plans/*.md"),
+            (None, "cat docs/superpowers/plans/$NAME.md"),
+            (None, "ls docs/superpowers/plans/"),
+            (
+                None,
+                "cat docs/superpowers/specs/s.md docs/superpowers/plans/n.txt",
+            ),
+            (Some("s1"), "cat > docs/superpowers/plans/sub.md"),
+        ] {
+            call(&mut a, parent, "bx", "Bash", json!({ "command": command }));
+        }
+        assert_eq!(a.plan_written, before);
+    }
+
     #[test]
     fn a_new_conversation_forgets_the_plans_it_wrote_and_dates_what_it_will_read() {
         let mut a = rt();
@@ -4002,6 +4282,104 @@ mod tests {
         session(&mut a, "s9");
         creates(&mut a, "c9", "Task 1: Un", 1);
         assert_eq!(plan(&a).title, None);
+    }
+
+    #[test]
+    fn removing_the_workspace_of_the_plan_it_follows_ends_its_run() {
+        let mut a = rt();
+        a.plan_from_files(a.plan_since, demo_list(), &mut Effects::default());
+        assert_eq!(plan(&a).tasks[0].status, TaskStatus::InProgress);
+        let status = |a: &AgentRt| plan(a).tasks[0].status;
+        // Not the end: another plan's workspace, a file of this one, a failed command, a command
+        // of a subagent.
+        call(
+            &mut a,
+            None,
+            "x1",
+            "Bash",
+            json!({"command":"rm -rf .superpowers/sdd/other"}),
+        );
+        returns(&mut a, "x1", "", Value::Null);
+        call(
+            &mut a,
+            None,
+            "x2",
+            "Bash",
+            json!({"command":"rm .superpowers/sdd/demo/task-1-brief.md"}),
+        );
+        returns(&mut a, "x2", "", Value::Null);
+        call(
+            &mut a,
+            None,
+            "x3",
+            "Bash",
+            json!({"command":"rm -rf .superpowers/sdd/demo"}),
+        );
+        let mut fx = Effects::default();
+        a.handle_frame(
+            &json!({"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x3","content":"rm: cannot remove: Permission denied","is_error":true}]},"parent_tool_use_id":null}),
+            &mut fx,
+        );
+        call(
+            &mut a,
+            None,
+            "s1",
+            "Agent",
+            json!({"description":"Aide","prompt":"x"}),
+        );
+        call(
+            &mut a,
+            Some("s1"),
+            "x4",
+            "Bash",
+            json!({"command":"rm -rf .superpowers/sdd/demo"}),
+        );
+        returns_in(&mut a, Some("s1"), "x4");
+        assert_eq!(status(&a), TaskStatus::InProgress);
+
+        // The agent removes it, as the skills end a run: the plan is done.
+        call(
+            &mut a,
+            None,
+            "x5",
+            "Bash",
+            json!({"command":"echo \"Task 1: complete\" >> .superpowers/sdd/demo/progress.md; rm -rf .superpowers/sdd/demo"}),
+        );
+        let fx = returns(&mut a, "x5", "", Value::Null);
+        assert_eq!(status(&a), TaskStatus::Done);
+        assert!(fx.save && fx.agent_changed && fx.plan_files);
+        // Once only: its result again says nothing new.
+        assert!(!returns(&mut a, "x5", "", Value::Null).save);
+        // The look that follows finds no workspace: nothing reopens it.
+        a.plan_from_files(a.plan_since, None, &mut Effects::default());
+        assert_eq!(status(&a), TaskStatus::Done);
+
+        // The list the agent holds is its own: a workspace removed changes nothing of it.
+        let mut b = rt();
+        b.plan_from_files(b.plan_since, demo_list(), &mut Effects::default());
+        creates(&mut b, "c0", "Task 1: Un", 1);
+        call(
+            &mut b,
+            None,
+            "y1",
+            "Bash",
+            json!({"command":"rm -rf .superpowers/sdd/demo"}),
+        );
+        returns(&mut b, "y1", "", Value::Null);
+        assert_eq!(plan(&b).tasks[0].status, TaskStatus::Pending);
+        // A new conversation forgets the calls it was waiting for.
+        let mut c = rt();
+        c.plan_from_files(c.plan_since, demo_list(), &mut Effects::default());
+        call(
+            &mut c,
+            None,
+            "z1",
+            "Bash",
+            json!({"command":"rm -rf .superpowers/sdd/demo"}),
+        );
+        session(&mut c, "s9");
+        returns(&mut c, "z1", "", Value::Null);
+        assert!(c.view().meta.plan.is_none());
     }
 
     #[test]

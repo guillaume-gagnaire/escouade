@@ -515,6 +515,43 @@ fn a_brief_alone_is_work_under_way_and_a_complete_line_ends_it() {
 }
 
 #[test]
+fn briefs_written_all_at_once_make_one_task_under_way_the_first_without_a_complete() {
+    use TaskStatus::*;
+    // A controller that makes every brief before it dispatches anything (seen on a real run of
+    // subagent-driven-development): one task is under way at a time, not all of them.
+    let r = Repo::new("briefs-up-front");
+    r.plan("docs/superpowers/plans/demo.md");
+    r.workspace("demo", "docs/superpowers/plans/demo.md", &[]);
+    for id in ["1", "2", "3"] {
+        r.brief("demo", id);
+    }
+    assert_eq!(
+        statuses(&r.load().unwrap()),
+        [("1", InProgress), ("2", Pending), ("3", Pending)]
+    );
+    // The first one ends: the next is the one.
+    r.workspace(
+        "demo",
+        "docs/superpowers/plans/demo.md",
+        &["Task 1: complete (a..b)"],
+    );
+    assert_eq!(
+        statuses(&r.load().unwrap()),
+        [("1", Done), ("2", InProgress), ("3", Pending)]
+    );
+    // The ledger says which one when it says anything: a line of work is stronger than a brief.
+    r.workspace(
+        "demo",
+        "docs/superpowers/plans/demo.md",
+        &["Task 3: dispatched (sonnet)"],
+    );
+    assert_eq!(
+        statuses(&r.load().unwrap()),
+        [("1", Pending), ("2", Pending), ("3", InProgress)]
+    );
+}
+
+#[test]
 fn tasks_of_the_l1_style_ids_are_followed_the_same_way() {
     let r = Repo::new("l-ids");
     r.put(
@@ -1340,4 +1377,46 @@ fn the_newest_workspaces_are_kept_not_the_first_the_disk_lists() {
     age(&good, 5);
     let found = discover(&r.root).expect("the newest, past the 256th");
     assert_eq!(found.plan_rel, "docs/superpowers/plans/demo.md");
+}
+
+#[test]
+fn a_command_that_removes_the_workspace_of_the_plan_is_how_a_run_ends() {
+    let plan = "docs/superpowers/plans/2026-10-11-slugify.md";
+    for command in [
+        // What a real run of subagent-driven-development ended with.
+        "echo \"Task 2: complete (commits f7e9e69..3b68d85, review clean)\" >> .superpowers/sdd/2026-10-11-slugify/progress.md; rm -rf .superpowers/sdd/2026-10-11-slugify; git status --short",
+        "rm -rf .superpowers/sdd/2026-10-11-slugify",
+        "rm -rf .superpowers/sdd/2026-10-11-slugify/",
+        "rm -rf '.superpowers/sdd/2026-10-11-slugify'",
+        "rm -r -f \"C:/p/repo/.superpowers/sdd/2026-10-11-slugify\"",
+        "cd C:/p/repo && rm -rf .superpowers/sdd/2026-10-11-slugify && git status",
+        "W=.superpowers/sdd/2026-10-11-slugify\nrm -rf $W\n",
+        "W=.superpowers/sdd/2026-10-11-slugify; rm -rf \"$W\"",
+        r"rmdir /s /q .superpowers\sdd\2026-10-11-slugify",
+        r"Remove-Item -Recurse -Force .superpowers\sdd\2026-10-11-slugify",
+        "RM -RF .SUPERPOWERS/SDD/2026-10-11-SLUGIFY",
+        "ls && rm -rf .superpowers/sdd/2026-10-11-slugify/*",
+    ] {
+        assert!(removes_workspace(command, plan), "{command}");
+    }
+    for command in [
+        // Another plan's workspace, a file in it, the folder of them all.
+        "rm -rf .superpowers/sdd/other-plan",
+        "rm .superpowers/sdd/2026-10-11-slugify/task-1-brief.md",
+        "rm -rf .superpowers/sdd",
+        "rm -rf .superpowers/sdd/2026-10-11-slugify-2",
+        // Said, not done; looked at, not removed; another statement removes something else.
+        "echo rm -rf .superpowers/sdd/2026-10-11-slugify",
+        "ls .superpowers/sdd/2026-10-11-slugify",
+        "cat .superpowers/sdd/2026-10-11-slugify/progress.md; rm notes.txt",
+        "rm -rf node_modules # .superpowers/sdd/2026-10-11-slugify",
+        "git clean -fdx",
+        "rm -rf $W",
+        "",
+    ] {
+        assert!(!removes_workspace(command, plan), "{command}");
+    }
+    // A plan with no name leaves none to remove.
+    assert!(!removes_workspace("rm -rf .superpowers/sdd/x", ""));
+    assert!(!removes_workspace("rm -rf .superpowers/sdd/", "docs/.md"));
 }

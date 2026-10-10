@@ -628,6 +628,47 @@ async fn the_plans_name_stays_with_the_agents_own_list_while_the_files_do_not_mo
 }
 
 #[tokio::test]
+async fn the_agent_removing_the_workspace_of_its_plan_ends_the_run_and_the_plan_stays_done() {
+    use crate::plan::TaskStatus::{Done, InProgress, Pending};
+    let (h, id, repo) = plan_agent("p4-workspace-removed").await;
+    let ledger = plan_workspace(&repo);
+    append(&ledger, "Task 1: complete (x)\n");
+    h.command(&id, "b1", "echo ledger");
+    h.wait("task 1 done", |h| {
+        h.statuses_of(&id) == [Done, Pending, Pending]
+    })
+    .await;
+    std::fs::write(
+        repo.join(".superpowers/sdd/demo/task-2-brief.md"),
+        "### Task 2: Deux\n",
+    )
+    .unwrap();
+    h.command(&id, "b2", "task-start docs/superpowers/plans/demo.md 2");
+    h.wait("task 2 under way", |h| {
+        h.statuses_of(&id) == [Done, InProgress, Pending]
+    })
+    .await;
+    // As a real run ended: the last lines of the ledger, and the workspace removed, in one
+    // command. No look can see them: the command says it.
+    let command = "echo 'Task 2: complete (x)' >> .superpowers/sdd/demo/progress.md; echo 'Task 3: complete (x)' >> .superpowers/sdd/demo/progress.md; rm -rf .superpowers/sdd/demo";
+    std::fs::remove_dir_all(repo.join(".superpowers/sdd/demo")).unwrap();
+    h.command(&id, "b3", command);
+    h.wait("the plan done", |h| {
+        h.statuses_of(&id) == [Done, Done, Done]
+    })
+    .await;
+    // The looks that follow find nothing, and say nothing: it stays as it ended.
+    let looks = h.plan_looks();
+    h.command(&id, "b4", "git status");
+    h.wait("a look after", |h| h.plan_looks() > looks).await;
+    assert_eq!(h.statuses_of(&id), [Done, Done, Done]);
+    let plan = h.agent(&id).plan.unwrap();
+    assert_eq!(plan.source, Some(crate::plan::PlanSource::Plan));
+    assert_eq!(plan.title.as_deref(), Some("Démo"));
+    assert!(plan.is_finished());
+}
+
+#[tokio::test]
 async fn the_end_of_a_turn_looks_at_the_files_too() {
     let (h, id, repo) = plan_agent("p2-turn-end").await;
     let ledger = plan_workspace(&repo);
@@ -770,6 +811,31 @@ async fn a_plan_the_agent_wrote_is_shown_without_a_ledger_and_the_ones_outside_a
     let plan = h.agent(&id).plan.unwrap();
     assert_eq!(plan.title.as_deref(), Some("Démo"));
     assert!(plan.tasks.iter().all(|t| t.title != "Secret"));
+    assert!(plan
+        .tasks
+        .iter()
+        .all(|t| t.status == crate::plan::TaskStatus::Pending));
+}
+
+#[tokio::test]
+async fn a_plan_written_by_a_command_is_shown_without_a_ledger_like_one_written_by_a_tool() {
+    // How a real run of the skills wrote its plan, and then ran it without a workspace.
+    let (h, id, repo) = plan_agent("p4-written-by-command").await;
+    plan_workspace(&repo);
+    std::fs::remove_dir_all(repo.join(".superpowers")).unwrap();
+    h.command(
+        &id,
+        "b1",
+        "mkdir -p docs/superpowers/plans && cat > docs/superpowers/plans/demo.md <<'EOF'
+# Démo Implementation Plan
+EOF
+git add docs/superpowers/plans/demo.md",
+    );
+    h.wait("the plan", |h| h.plan_statuses(&id).len() == 3)
+        .await;
+    let plan = h.agent(&id).plan.unwrap();
+    assert_eq!(plan.source, Some(crate::plan::PlanSource::Plan));
+    assert_eq!(plan.title.as_deref(), Some("Démo"));
     assert!(plan
         .tasks
         .iter()
@@ -1082,6 +1148,9 @@ async fn a_superpowers_run_without_a_task_list_is_read_from_the_plan_and_the_led
         h.statuses_of(&id) == [Done, Done, Done]
     })
     .await;
+    // The run ended as the skills end one: its workspace is removed, and the plan stays as it ended
+    // (the files it reads are gone, and say nothing).
+    assert!(!r.join(".superpowers/sdd/2026-10-10-demo").exists());
     h.wait("the end of the background subagent", |h| {
         h.agent(&id)
             .plan

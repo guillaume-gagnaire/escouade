@@ -666,13 +666,26 @@ fn read_list(found: &Found) -> Option<FileList> {
         Some(path) => parse_ledger(&read_ledger(path).ok()?),
         None => Ledger::default(),
     };
+    // A line of work says which task is under way. Without one, a brief does (written when a task
+    // begins): the first task with a brief and no `complete`, for a controller that makes every
+    // brief before it dispatches anything must not have every task under way at once.
+    let working = |id: &String| ledger.active.contains(id) && !ledger.done.contains(id);
+    let by_line = plan.tasks.iter().any(|t| working(&t.id));
+    let by_brief = (!by_line)
+        .then(|| {
+            plan.tasks
+                .iter()
+                .find(|t| !ledger.done.contains(&t.id) && found.briefs.contains(&t.id))
+                .map(|t| t.id.clone())
+        })
+        .flatten();
     let tasks = plan
         .tasks
         .into_iter()
         .map(|mut task| {
             task.status = if ledger.done.contains(&task.id) {
                 TaskStatus::Done
-            } else if ledger.active.contains(&task.id) || found.briefs.contains(&task.id) {
+            } else if ledger.active.contains(&task.id) || by_brief.as_ref() == Some(&task.id) {
                 TaskStatus::InProgress
             } else {
                 TaskStatus::Pending
@@ -708,4 +721,48 @@ pub fn scan(root: &Path, written: &[String], since: i64, last: Option<&Stamp>) -
         Some(list) => Scan::Read(found.stamp, list),
         None => Scan::Nothing,
     }
+}
+
+/// A command of the agent's that removes the workspace of the plan `plan_file`
+/// (`.superpowers/sdd/<plan's name>`, the folder `sdd-workspace` makes): how superpowers' skills
+/// end a run, once the final review is clean. Only a statement that is itself a removal counts
+/// (`rm`, `rmdir`, `rd`, `del`, `Remove-Item`), aimed at that folder and not at a file in it, nor at
+/// another plan's, nor said by an `echo`.
+pub fn removes_workspace(command: &str, plan_file: &str) -> bool {
+    let name = plan_file.rsplit(['/', '\\']).next().unwrap_or_default();
+    let name = name.strip_suffix(".md").unwrap_or(name).to_lowercase();
+    if name.is_empty() {
+        return false;
+    }
+    let target = format!(".superpowers/sdd/{name}");
+    let said = command.replace('\\', "/").to_lowercase();
+    let aimed = |arg: &str| {
+        let arg = arg.trim_end_matches('*').trim_end_matches('/');
+        // A variable stands for what the command says of the folder before.
+        arg == target
+            || arg.ends_with(&format!("/{target}"))
+            || (arg.starts_with('$') && said.contains(&target))
+    };
+    said.split([';', '&', '|', '\n']).any(|statement| {
+        let words = statement
+            .split_whitespace()
+            .take_while(|w| !w.starts_with('#'))
+            .map(|w| w.trim_matches(['"', '\'']));
+        let mut words = words.skip_while(|w| {
+            // VAR=value before the command.
+            w.split_once('=').is_some_and(|(var, _)| {
+                !var.is_empty() && var.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+            })
+        });
+        let removal = words
+            .next()
+            .and_then(|verb| verb.rsplit('/').next())
+            .is_some_and(|verb| {
+                matches!(
+                    verb,
+                    "rm" | "rmdir" | "rd" | "del" | "erase" | "remove-item" | "ri"
+                )
+            });
+        removal && words.any(aimed)
+    })
 }

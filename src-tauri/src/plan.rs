@@ -470,6 +470,24 @@ impl PlanState {
         Change::Saved
     }
 
+    /// The run of the plan the files gave ended (the agent removed its workspace, as the skills
+    /// do once the final review is clean): every task is done.
+    pub fn finish_files(&mut self) -> Change {
+        if self.source != Some(PlanSource::Plan) {
+            return Change::None;
+        }
+        let mut change = Change::None;
+        for task in self
+            .tasks
+            .iter_mut()
+            .filter(|t| t.status != TaskStatus::Done)
+        {
+            task.status = TaskStatus::Done;
+            change = Change::Saved;
+        }
+        change
+    }
+
     /// Nothing of the files is shown: the tasks they gave, the plan's name and title.
     fn forget_files(&mut self) -> Change {
         let had = self.source == Some(PlanSource::Plan)

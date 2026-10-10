@@ -1382,6 +1382,34 @@ fn the_tasks_of_a_plan_file_fill_a_plan_that_has_none() {
 }
 
 #[test]
+fn a_run_that_ended_leaves_every_task_of_the_files_done() {
+    let mut p = PlanState::default();
+    p.set_files(demo_files());
+    assert_eq!(p.finish_files(), Change::Saved);
+    assert!(p.tasks.iter().all(|t| t.status == TaskStatus::Done));
+    assert_eq!(p.source, Some(PlanSource::Plan));
+    // The plan keeps its name and title, and is the same plan: nothing to tell again.
+    assert_eq!(p.title.as_deref(), Some("Démo"));
+    assert_eq!(p.finish_files(), Change::None);
+    assert!(p.is_finished());
+    // The files, read again without their workspace (the plan alone), do not reopen what was done.
+    let mut list = demo_files().unwrap();
+    for task in &mut list.tasks {
+        task.status = TaskStatus::Pending;
+    }
+    assert_eq!(p.set_files(Some(list)), Change::None);
+    assert!(p.tasks.iter().all(|t| t.status == TaskStatus::Done));
+
+    // The agent's own list is its own: it says when a task is done.
+    let mut p = PlanState::default();
+    listed(&mut p, &["Lire", "Deux"]);
+    assert_eq!(p.finish_files(), Change::None);
+    assert!(p.tasks.iter().all(|t| t.status == TaskStatus::Pending));
+    // And nothing at all is nothing to finish.
+    assert_eq!(PlanState::default().finish_files(), Change::None);
+}
+
+#[test]
 fn nothing_read_changes_nothing() {
     let mut p = PlanState::default();
     assert_eq!(p.set_files(None), Change::None);
