@@ -22,7 +22,7 @@ import type {
   IsolaService,
   IssuePage,
   Project,
-  RunCommand,
+  RunSuggestion,
   SearchQuery,
   SearchResult,
   Service,
@@ -177,8 +177,8 @@ export const api = {
   isolaDown: (agentId: string) => invoke<void>('isola_down', { agentId }),
   /** The setup and teardown Claude suggests for the project's worktrees, from what it reads of it. */
   suggestWorktreeSteps: (projectId: string) => invoke<WorktreeSuggestion>('suggest_worktree_steps', { projectId }),
-  /** The launch commands Claude suggests for the project, from what it reads of it; nothing is saved. */
-  suggestRunCommands: (projectId: string) => invoke<RunCommand[]>('suggest_run_commands', { projectId }),
+  /** The launch commands Claude suggests for the project, from what it reads of it, with how many it gave that were refused; nothing is saved. */
+  suggestRunCommands: (projectId: string) => invoke<RunSuggestion>('suggest_run_commands', { projectId }),
   /** A newer release, through the network settings (proxy, TLS verification), kept by the backend for its download. */
   updateCheck: () => invoke<FoundRelease | null>('update_check'),
   /** Downloads the release found, its signature checked, kept by the backend until it installs: true once it is the one ready. */

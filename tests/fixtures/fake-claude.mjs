@@ -22,9 +22,10 @@
 // [<KEY>]`, or a sentence out of form when the ticket's title says [message-libre]; with [sourd]
 // in its system prompt it never reads its input and answers nothing for 20 s. Asked for a project's
 // worktree commands (<worktrees>), it suggests a setup (one of whose folders leaves the project) and a
-// teardown. Asked for a project's launch commands (<lancement>), it suggests four (two of whose folders
-// are no folders of the project), or nothing readable in a folder named "unreadable". Asked for a direct commit's message (<fichiers>), it names the latest commit subject and
-// the files of the diff it read.
+// teardown. Asked for a project's launch commands (<lancement>), it suggests five (two of whose folders
+// are no folders of the project, one that holds a line break), only such ones in a folder named
+// "refused", or nothing readable in a folder named "unreadable". Asked for a direct commit's message
+// (<fichiers>), it names the latest commit subject and the files of the diff it read.
 
 import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -65,17 +66,22 @@ if (argv.includes('-p') && argv.some((a) => a.includes('[sourd]'))) {
       process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result }));
       return;
     }
-    // A project's launch commands: two that stand, one whose folder leaves the project and one
-    // whose folder is not there. Nothing readable when the project's folder is named "unreadable".
+    // A project's launch commands: two that stand, one whose folder leaves the project, one whose
+    // folder is not there and one on two lines. Only such ones when the project's folder is named
+    // "refused", nothing readable when it is named "unreadable".
     if (input.includes('<lancement>')) {
-      const commands = {
-        commandes: [
-          { nom: 'Front', commande: 'npm run dev', dossier: 'src' },
-          { nom: 'API', commande: 'cargo run', dossier: '' },
-          { nom: 'Piège', commande: 'rm -rf /', dossier: '../dehors' },
-          { nom: 'Fantôme', commande: 'npm start', dossier: 'absent' },
-        ],
-      };
+      const multiline = { nom: 'Deux lignes', commande: 'npm start\nrm -rf ~' };
+      const commands = process.cwd().includes('refused')
+        ? { commandes: [multiline, { nom: 'Large', commande: `npm start${' '.repeat(40)}; rm -rf ~` }] }
+        : {
+            commandes: [
+              { nom: 'Front', commande: 'npm run dev', dossier: 'src' },
+              { nom: 'API', commande: 'cargo run', dossier: '' },
+              { nom: 'Piège', commande: 'rm -rf /', dossier: '../dehors' },
+              { nom: 'Fantôme', commande: 'npm start', dossier: 'absent' },
+              multiline,
+            ],
+          };
       const result = process.cwd().includes('unreadable')
         ? 'Je ne vois rien à lancer ici.'
         : `Voici les commandes.\n\n\`\`\`json\n${JSON.stringify(commands)}\n\`\`\``;

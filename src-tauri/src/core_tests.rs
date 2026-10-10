@@ -2712,6 +2712,42 @@ async fn a_worktree_that_isola_does_not_run_has_nothing_to_approve_for_it() {
 
 // ---------- suggested by Claude ----------
 
+/// How Claude must have been started to read a project, whichever suggestion asked: tools that
+/// only read, nothing allowed beyond them (so its reading stays in the project's folder), no
+/// permission asked for or skipped, no settings of the user's, no MCP server.
+fn assert_reads_only(argv: &[String]) {
+    let after = |flag: &str| {
+        let at = argv
+            .iter()
+            .position(|a| a == flag)
+            .unwrap_or_else(|| panic!("{flag} missing in {argv:?}"));
+        argv[at + 1].clone()
+    };
+    assert_eq!(after("--tools"), "Read,Glob,Grep");
+    assert_eq!(after("--setting-sources"), "");
+    assert!(
+        argv.contains(&"--strict-mcp-config".to_string()),
+        "{argv:?}"
+    );
+    for flag in [
+        "--allowedTools",
+        "--allowed-tools",
+        "--permission-mode",
+        "--dangerously-skip-permissions",
+        "--allow-dangerously-skip-permissions",
+        "--add-dir",
+        "--mcp-config",
+    ] {
+        assert!(!argv.iter().any(|a| a == flag), "{flag} in {argv:?}");
+    }
+    assert!(
+        !argv
+            .iter()
+            .any(|a| a.contains("Bash") || a.contains("Edit")),
+        "{argv:?}"
+    );
+}
+
 #[tokio::test]
 async fn claude_reads_the_project_with_read_only_tools_to_suggest_its_worktree_commands() {
     let h = harness("wt-suggest-claude");
@@ -2732,13 +2768,7 @@ async fn claude_reads_the_project_with_read_only_tools_to_suggest_its_worktree_c
         .unwrap();
     assert!(s.setup.iter().chain(&s.teardown).all(|x| x.shell == first));
     // Run in the project, with nothing but tools that read.
-    let argv = h.launches(&r).pop().expect("claude run in the project");
-    let tools = argv.iter().position(|a| a == "--tools").unwrap();
-    assert_eq!(argv[tools + 1], "Read,Glob,Grep");
-    assert!(argv.contains(&"--strict-mcp-config".to_string()));
-    assert!(!argv
-        .iter()
-        .any(|a| a.contains("Bash") || a.contains("Edit")));
+    assert_reads_only(&h.launches(&r).pop().expect("claude run in the project"));
     let sent = serde_json::to_value(&s).unwrap();
     assert_eq!(sent["setup"][1]["cwd"], "src");
 }
@@ -2747,35 +2777,50 @@ async fn claude_reads_the_project_with_read_only_tools_to_suggest_its_worktree_c
 async fn claude_reads_the_project_with_read_only_tools_to_suggest_its_launch_commands() {
     let h = harness("run-suggest-claude");
     let (p, r) = h.project(false).await;
-    let commands = h.core.suggest_run_commands(&p.id).await.unwrap();
-    let shown: Vec<(&str, &str, &str)> = commands
+    let suggestion = h.core.suggest_run_commands(&p.id).await.unwrap();
+    let shown: Vec<(&str, &str, &str)> = suggestion
+        .commands
         .iter()
         .map(|c| (c.name.as_str(), c.command.as_str(), c.cwd.as_str()))
         .collect();
-    // The commands whose folder leaves the project, or is not in it, are dropped.
+    // The commands whose folder leaves the project, or is not in it, are dropped; the one that
+    // holds a line break is refused, and counted.
     assert_eq!(
         shown,
         [("Front", "npm run dev", "src"), ("API", "cargo run", "")]
     );
+    assert_eq!(suggestion.refused, 1);
     let first = crate::pty::detect_shells(&h.core.settings.read())
         .first()
         .map(|s| s.id.clone())
         .unwrap();
-    assert!(commands
+    assert!(suggestion
+        .commands
         .iter()
         .all(|c| c.shell == first && !c.id.is_empty()));
     // Run in the project, with nothing but tools that read.
-    let argv = h.launches(&r).pop().expect("claude run in the project");
-    let tools = argv.iter().position(|a| a == "--tools").unwrap();
-    assert_eq!(argv[tools + 1], "Read,Glob,Grep");
-    assert!(argv.contains(&"--strict-mcp-config".to_string()));
-    assert!(!argv
-        .iter()
-        .any(|a| a.contains("Bash") || a.contains("Edit")));
-    let sent = serde_json::to_value(&commands).unwrap();
-    assert_eq!(sent[0]["cwd"], "src");
+    assert_reads_only(&h.launches(&r).pop().expect("claude run in the project"));
+    let sent = serde_json::to_value(&suggestion).unwrap();
+    assert_eq!(sent["commands"][0]["cwd"], "src");
+    assert_eq!(sent["refused"], 1);
     // Only a suggestion: the project keeps its commands until the user saves.
     assert!(h.core.project(&p.id).unwrap().run_commands.is_empty());
+}
+
+#[tokio::test]
+async fn launch_commands_that_were_all_refused_are_told_so_and_not_as_nothing_found() {
+    let h = harness("run-suggest-refused");
+    let (p, _) = h.project(false).await;
+    let e = h
+        .core
+        .suggest_run_commands(&p.id)
+        .await
+        .unwrap_err()
+        .to_string();
+    assert_eq!(
+        e,
+        "Claude a proposé des commandes illisibles : aucune n'a été gardée."
+    );
 }
 
 #[tokio::test]

@@ -434,10 +434,13 @@ describe('SettingsModal', () => {
     expect(group('Worktrees').getByRole('button', { name: '✦ Remplir automatiquement' })).toBeEnabled();
     expect(backend.called('suggest_run_commands')[0].args).toEqual({ projectId: 'p1' });
     expect(backend.called('suggest_worktree_steps')).toHaveLength(0);
-    answer([
-      { id: 's1', name: 'API', command: 'cargo watch -x run', shell: 'bash', cwd: '' },
-      { id: 's2', name: 'Web', command: 'npm run dev', shell: 'bash', cwd: 'web' },
-    ]);
+    answer({
+      commands: [
+        { id: 's1', name: 'API', command: 'cargo watch -x run', shell: 'bash', cwd: '' },
+        { id: 's2', name: 'Web', command: 'npm run dev', shell: 'bash', cwd: 'web' },
+      ],
+      refused: 1,
+    });
     // In place of the draft's, FRONT.
     await screen.findByDisplayValue('API');
     expect(screen.queryByDisplayValue('Front')).toBeNull();
@@ -451,11 +454,23 @@ describe('SettingsModal', () => {
     expect(screen.queryByRole('group', { name: 'Commande 3' })).toBeNull();
     expect(launch.getByRole('button', { name: '✦ Remplir automatiquement' })).toBeEnabled();
     expect(tab('Projets')).toHaveClass('changed');
+    // What was left out is said, not lost in silence.
+    expect(app.toasts.at(-1)?.text).toBe(
+      "2 commandes proposées, 1 écartée (caractères invisibles ou trop longue) : relis-les avant d'enregistrer.",
+    );
     await save();
     expect(backend.called('update_project')[0].args.project.runCommands).toEqual([
       { id: 's1', name: 'API', command: 'cargo watch -x run', shell: 'bash', cwd: '' },
       { id: 's2', name: 'Web', command: 'npm run dev', shell: 'bash', cwd: 'web' },
     ]);
+  });
+
+  it('tells the two « ✦ Remplir automatiquement » buttons apart by the text of their own row', () => {
+    backendSaving();
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    const button = { name: '✦ Remplir automatiquement' };
+    expect(group('Worktrees').getByRole('button', button)).toHaveAccessibleDescription(/lockfiles.*propose les commandes\. Relis-les/);
+    expect(group('Lancement').getByRole('button', button)).toHaveAccessibleDescription(/docker-compose.*commandes à lancer\. Relis-les/);
   });
 
   it('keeps the launch commands when Claude proposes none readable, and says so', async () => {
@@ -473,7 +488,7 @@ describe('SettingsModal', () => {
     const { unmount } = render(SettingsModal, { tab: 'projects', projectId: 'p1', section: 'launch', suggest: true });
     expect(backend.called('suggest_run_commands')[0].args).toEqual({ projectId: 'p1' });
     expect(group('Lancement').getByRole('button', { name: 'Claude lit le projet…' })).toBeDisabled();
-    answer([{ id: 's1', name: 'Web', command: 'npm start', shell: 'bash', cwd: '' }]);
+    answer({ commands: [{ id: 's1', name: 'Web', command: 'npm start', shell: 'bash', cwd: '' }], refused: 0 });
     expect(await screen.findByDisplayValue('Web')).toBeInTheDocument();
     unmount();
     // Back from a modal it opened (the project's closing): the draft as it was, nothing asked again.

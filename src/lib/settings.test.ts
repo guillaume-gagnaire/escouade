@@ -187,7 +187,7 @@ describe('settingsForm', () => {
     expect(backend.called('suggest_run_commands')[0].args).toEqual({ projectId: 'p1' });
     const web = { id: 's1', name: 'Front', command: 'npm run dev', shell: 'bash', cwd: 'web' };
     const db = { id: 's2', name: 'Base', command: 'docker compose up db', shell: 'bash', cwd: '' };
-    answer([web, db]);
+    answer({ commands: [web, db], refused: 0 });
     await asked;
     expect(settingsForm.suggestingLaunch.p1).toBe(false);
     // The suggestion replaces the draft's command, which was FRONT.
@@ -199,15 +199,34 @@ describe('settingsForm', () => {
     settingsForm.open({ tab: 'projects', projectId: 'p1' });
     expect(settingsForm.projects.p1.runCommands).toEqual([FRONT]);
 
-    fakeBackend({ suggest_run_commands: () => [web] });
+    fakeBackend({ suggest_run_commands: () => ({ commands: [web], refused: 0 }) });
     await settingsForm.suggestLaunch('p1');
     expect(app.toasts.at(-1)?.text).toBe("1 commande proposée : relis-la avant d'enregistrer.");
 
-    fakeBackend({ suggest_run_commands: () => [] });
+    // Some were refused (a line break, invisible characters, a long run of blanks, too long): said, in the singular and the plural.
+    fakeBackend({ suggest_run_commands: () => ({ commands: [web, db], refused: 1 }) });
+    await settingsForm.suggestLaunch('p1');
+    expect(settingsForm.projects.p1.runCommands).toEqual([web, db]);
+    expect(app.toasts.at(-1)?.text).toBe(
+      "2 commandes proposées, 1 écartée (caractères invisibles ou trop longue) : relis-les avant d'enregistrer.",
+    );
+    fakeBackend({ suggest_run_commands: () => ({ commands: [web], refused: 3 }) });
+    await settingsForm.suggestLaunch('p1');
+    expect(app.toasts.at(-1)?.text).toBe(
+      "1 commande proposée, 3 écartées (caractères invisibles ou trop longues) : relis-la avant d'enregistrer.",
+    );
+
+    fakeBackend({ suggest_run_commands: () => ({ commands: [], refused: 0 }) });
     await settingsForm.suggestLaunch('p1');
     // Nothing found: what was there stays.
     expect(settingsForm.projects.p1.runCommands).toEqual([web]);
     expect(app.toasts.at(-1)?.text).toBe("Claude n'a trouvé aucune commande à lancer pour ce projet.");
+
+    // All refused is told by the backend, as a failure and not as nothing found.
+    fakeBackend({ suggest_run_commands: () => Promise.reject("Claude a proposé des commandes illisibles : aucune n'a été gardée.") });
+    await settingsForm.suggestLaunch('p1');
+    expect(settingsForm.projects.p1.runCommands).toEqual([web]);
+    expect(app.toasts.at(-1)).toMatchObject({ text: "Claude a proposé des commandes illisibles : aucune n'a été gardée.", kind: 'error' });
 
     fakeBackend({ suggest_run_commands: () => Promise.reject("Claude n'a pas proposé de commandes lisibles.") });
     await settingsForm.suggestLaunch('p1');
@@ -218,7 +237,10 @@ describe('settingsForm', () => {
 
   it('saves the launch commands Claude suggested like those typed', async () => {
     const backend = fakeBackend({
-      suggest_run_commands: () => [{ id: 's1', name: ' Front ', command: ' npm run dev ', shell: 'bash', cwd: 'web' }],
+      suggest_run_commands: () => ({
+        commands: [{ id: 's1', name: ' Front ', command: ' npm run dev ', shell: 'bash', cwd: 'web' }],
+        refused: 0,
+      }),
     });
     settingsForm.open({ tab: 'projects', projectId: 'p1' });
     await settingsForm.suggestLaunch('p1');

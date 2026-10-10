@@ -143,7 +143,7 @@ describe('App layout', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Réglages' });
     expect(within(dialog).getByRole('tab', { name: 'Projets' })).toHaveAttribute('aria-selected', 'true');
     expect(await within(dialog).findByRole('button', { name: 'Claude lit le projet…' })).toBeDisabled();
-    answer([{ id: 's1', name: 'Front', command: 'npm run dev', shell: 'pwsh', cwd: '' }]);
+    answer({ commands: [{ id: 's1', name: 'Front', command: 'npm run dev', shell: 'pwsh', cwd: '' }], refused: 0 });
     expect(await within(dialog).findByDisplayValue('npm run dev')).toBeInTheDocument();
     expect(within(dialog).queryByRole('button', { name: 'Claude lit le projet…' })).not.toBeInTheDocument();
   });

@@ -194,6 +194,12 @@ export interface RunCommand {
   cwd: string;
 }
 
+/** The launch commands Claude suggests for a project, and how many it gave that were refused (not one plain line, or too long). */
+export interface RunSuggestion {
+  commands: RunCommand[];
+  refused: number;
+}
+
 /** A newer release found by the backend, kept there for its install. */
 export interface FoundRelease {
   id: number;

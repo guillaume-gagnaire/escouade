@@ -17,7 +17,7 @@ use crate::resources;
 use crate::stats::Stats;
 use crate::testlaunch;
 use crate::usage;
-use crate::worktrees::{self, WorktreeSuggestion};
+use crate::worktrees::{self, RunSuggestion, WorktreeSuggestion};
 use anyhow::{anyhow, bail, Context, Result};
 use parking_lot::{Mutex, RwLock};
 use serde::Deserialize;
@@ -2194,15 +2194,22 @@ impl<R: Runtime> Core<R> {
     /// The launch commands Claude suggests for the project (the servers, watchers and services
     /// its developer keeps running), from what it reads of it, each for the default shell. Only
     /// a suggestion: the window shows it in the draft of the settings, nothing is saved here.
-    pub async fn suggest_run_commands(&self, project_id: &str) -> Result<Vec<RunCommand>> {
+    pub async fn suggest_run_commands(&self, project_id: &str) -> Result<RunSuggestion> {
         let project = self.project(project_id)?;
         let shell = self.default_shell()?;
         let prompt = worktrees::run_suggest_prompt(&shell);
         let answer = self
             .read_project(&project, worktrees::RUN_SUGGEST_SYSTEM, &prompt)
             .await?;
-        worktrees::parse_run_suggestion(&answer, Path::new(&project.path), &shell.id)
-            .ok_or_else(|| anyhow!("Claude n'a pas proposé de commandes lisibles."))
+        let suggestion =
+            worktrees::parse_run_suggestion(&answer, Path::new(&project.path), &shell.id)
+                .ok_or_else(|| anyhow!("Claude n'a pas proposé de commandes lisibles."))?;
+        // Not the same as having found nothing to launch: it gave some, none of which could be
+        // shown as they would run.
+        if suggestion.commands.is_empty() && suggestion.refused > 0 {
+            bail!("Claude a proposé des commandes illisibles : aucune n'a été gardée.");
+        }
+        Ok(suggestion)
     }
 
     /// The shell that runs what is not given another: the system's first.

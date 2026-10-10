@@ -128,9 +128,14 @@ const empty = (o: object) => Object.keys(o).length === 0;
 /** What « Remplir automatiquement » says when Claude read the project and found nothing to run. */
 const NOTHING_TO_RUN = "Claude n'a trouvé aucune commande à lancer pour ce projet.";
 
-/** What it says when `n` commands were put in the draft. */
-const proposed = (n: number) =>
-  n > 1 ? `${n} commandes proposées : relis-les avant d'enregistrer.` : "1 commande proposée : relis-la avant d'enregistrer.";
+/** What it says when `n` commands were put in the draft, `refused` others having been left out for what they would hide. */
+const proposed = (n: number, refused = 0) => {
+  const plural = refused > 1 ? 's' : '';
+  const left = refused ? `, ${refused} écartée${plural} (caractères invisibles ou trop longue${plural})` : '';
+  return n > 1
+    ? `${n} commandes proposées${left} : relis-les avant d'enregistrer.`
+    : `1 commande proposée${left} : relis-la avant d'enregistrer.`;
+};
 
 class SettingsForm {
   tab = $state<SettingsTab>('claude');
@@ -227,19 +232,19 @@ class SettingsForm {
 
   /**
    * « Remplir automatiquement » of the launch commands: Claude reads the project and its suggestion replaces the draft's
-   * commands (left as they are when it finds none, or fails).
+   * commands (left as they are when it finds none, or fails). The commands the backend refused are counted in what is said.
    */
   async suggestLaunch(projectId: string) {
     if (this.suggestingLaunch[projectId]) return;
     this.suggestingLaunch[projectId] = true;
     try {
-      const commands = await api.suggestRunCommands(projectId);
+      const { commands, refused } = await api.suggestRunCommands(projectId);
       const d = this.projects[projectId];
       if (!commands.length) return app.toast(NOTHING_TO_RUN);
       // Closed and opened again meanwhile: a fresh draft, which takes it all the same.
       if (!d) return;
       d.runCommands = commands;
-      app.toast(proposed(commands.length));
+      app.toast(proposed(commands.length, refused));
     } catch (e) {
       app.toast(String(e), 'error');
     } finally {

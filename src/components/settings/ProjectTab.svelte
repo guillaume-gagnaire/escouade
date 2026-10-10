@@ -88,8 +88,15 @@
   <Row
     label="Remplir automatiquement"
     desc="Claude lit le projet (manifestes, lockfiles, README…) sans rien modifier et propose les commandes. Relis-les avant d'enregistrer."
+    descId="worktrees-suggest-desc"
   >
-    <button class="btn suggest" disabled={settingsForm.suggesting[project.id]} onclick={() => settingsForm.suggest(project.id)}>
+    <!-- Two buttons of this tab read the same: what each row says of itself tells them apart. -->
+    <button
+      class="btn suggest"
+      aria-describedby="worktrees-suggest-desc"
+      disabled={settingsForm.suggesting[project.id]}
+      onclick={() => settingsForm.suggest(project.id)}
+    >
       {settingsForm.suggesting[project.id] ? 'Claude lit le projet…' : '✦ Remplir automatiquement'}
     </button>
   </Row>
@@ -118,9 +125,11 @@
     <Row
       label="Remplir automatiquement"
       desc="Claude lit le projet (manifestes, scripts, docker-compose, README…) sans rien modifier et propose les commandes à lancer. Relis-les avant d'enregistrer."
+      descId="launch-suggest-desc"
     >
       <button
         class="btn suggest"
+        aria-describedby="launch-suggest-desc"
         disabled={settingsForm.suggestingLaunch[project.id]}
         onclick={() => settingsForm.suggestLaunch(project.id)}
       >

@@ -903,12 +903,12 @@ pub async fn suggest_worktree_steps(
     core.suggest_worktree_steps(&project_id).await.map_err(err)
 }
 
-/// The launch commands Claude suggests for the project, from what it reads of it (nothing is saved).
+/// The launch commands Claude suggests for the project, from what it reads of it (nothing is saved), with how many it gave that were refused.
 #[tauri::command]
 pub async fn suggest_run_commands(
     core: CoreState<'_>,
     project_id: String,
-) -> Res<Vec<crate::model::RunCommand>> {
+) -> Res<crate::worktrees::RunSuggestion> {
     core.suggest_run_commands(&project_id).await.map_err(err)
 }
 
