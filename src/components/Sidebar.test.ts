@@ -1,11 +1,18 @@
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buffers } from '../lib/editor/buffers.svelte';
 import { menu } from '../lib/menu.svelte';
 import { app } from '../lib/state.svelte';
+import { openTerminal } from '../lib/terminals';
 import { agent, fakeBackend, gitInfo, project, resetApp, ticket } from '../test/ipc';
 import Sidebar from './Sidebar.svelte';
+
+// The xterm.js instance a terminal draws on is not one of jsdom's: only what is asked of the backend is looked at.
+vi.mock('../lib/terminals', async (original) => ({
+  ...(await original<typeof import('../lib/terminals')>()),
+  openTerminal: vi.fn((projectId: string, shell: string, name: string) => Promise.resolve({ id: 't1', projectId, name, shell })),
+}));
 
 describe('Sidebar', () => {
   beforeEach(() =>
@@ -249,6 +256,50 @@ describe('Sidebar remote control', () => {
     fakeBackend();
     render(Sidebar, { project: project() });
     expect(screen.getByTitle(/Remote control : en attente de connexion/)).toBeInTheDocument();
+  });
+});
+
+describe('Sidebar terminal entry', () => {
+  const WT = { path: 'C:\\code\\demo-api\\.claude\\worktrees\\a2', branch: 'escouade/a2', baseBranch: 'main' };
+
+  beforeEach(() => {
+    vi.mocked(openTerminal).mockClear();
+    resetApp({
+      agents: [agent(), agent({ id: 'a2', name: 'wt-agent', worktree: WT }), agent({ id: 'a3', name: 'vieux', archived: true })],
+    });
+    app.shells = [{ id: 'pwsh', label: 'PowerShell 7', path: 'pwsh.exe' }];
+    fakeBackend();
+  });
+  // The list of archived agents, opened by one test, is not closed by the reset.
+  afterEach(() => (app.showArchived = false));
+
+  const menuOf = async (name: RegExp) => {
+    await fireEvent.contextMenu(screen.getByRole('button', { name }));
+    return menu.open!.items.map((i) => i.label);
+  };
+  const click = (label: string) => menu.open!.items.find((i) => i.label === label)!.onClick!();
+
+  it('opens a terminal in the worktree of an agent from its menu, named after both', async () => {
+    render(Sidebar, { project: project() });
+    await menuOf(/wt-agent/);
+    click('Ouvrir un terminal');
+    expect(openTerminal).toHaveBeenCalledWith('p1', 'pwsh', 'pwsh · wt-agent', { agentId: 'a2' });
+    await expect.poll(() => app.term?.name).toBe('pwsh · wt-agent');
+  });
+
+  it('asks it for an agent without a worktree too: the backend gives it the project’s folder', async () => {
+    render(Sidebar, { project: project() });
+    await menuOf(/refacto-auth/);
+    click('Ouvrir un terminal');
+    expect(openTerminal).toHaveBeenCalledWith('p1', 'pwsh', 'pwsh · refacto-auth', { agentId: 'a1' });
+  });
+
+  it('keeps it by the editor entry, and offers none for an archived agent', async () => {
+    render(Sidebar, { project: project() });
+    const labels = await menuOf(/wt-agent/);
+    expect(labels.indexOf('Ouvrir un terminal')).toBe(labels.indexOf('Ouvrir dans l’éditeur') + 1);
+    await userEvent.click(screen.getByText(/Archivés/));
+    expect(await menuOf(/vieux/)).not.toContain('Ouvrir un terminal');
   });
 });
 

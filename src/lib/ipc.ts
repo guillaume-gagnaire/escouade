@@ -142,7 +142,11 @@ export const api = {
     invoke<IssuePage>('integration_issues', { projectId, service, text, filters }),
   integrationImport: (projectId: string, issues: ExternalIssue[], maxLoops: number) =>
     invoke<Ticket[]>('integration_import', { projectId, issues, maxLoops }),
-  termSpawn: (a: { projectId: string; shell: string; name: string; cols: number; rows: number }, onData: (d: ArrayBuffer) => void) => {
+  /** `agentId` and `subdir` say where it opens: the agent's worktree, a folder of it (see `TermPlace`). */
+  termSpawn: (
+    a: { projectId: string; agentId?: string | null; subdir?: string; shell: string; name: string; cols: number; rows: number },
+    onData: (d: ArrayBuffer) => void,
+  ) => {
     const output = new Channel<ArrayBuffer>();
     output.onmessage = onData;
     return invoke<TermInfo>('term_spawn', { ...a, output });

@@ -7,9 +7,16 @@ import { trees } from '../../lib/editor/trees.svelte';
 import { menu } from '../../lib/menu.svelte';
 import { handleShortcut } from '../../lib/shortcuts';
 import { app } from '../../lib/state.svelte';
+import { openTerminal } from '../../lib/terminals';
 import { agent, fakeBackend, gitInfo, project, resetApp } from '../../test/ipc';
 import QuickOpen from '../QuickOpen.svelte';
 import EditorView from './EditorView.svelte';
+
+// The xterm.js instance a terminal draws on is not one of jsdom's: only where it is asked to open is looked at.
+vi.mock('../../lib/terminals', () => ({
+  openTerminal: vi.fn((projectId: string, shell: string, name: string) => Promise.resolve({ id: 't1', projectId, name, shell })),
+  disposeTerminal() {},
+}));
 
 const text = (t: string, hash = 'h1') => ({ kind: 'text', text: t, size: t.length, hash, eol: 'lf', bom: false });
 
@@ -408,6 +415,78 @@ describe('EditorView tree, as VS Code’s explorer', () => {
     await userEvent.keyboard('{Escape}');
     await pick(screen.getByRole('tree'), 'Nouveau fichier…');
     expect(screen.getByRole('tree').firstElementChild).toContainElement(await field());
+  });
+
+  describe('terminal here', () => {
+    beforeEach(() => {
+      vi.mocked(openTerminal).mockClear();
+      app.shells = [{ id: 'pwsh', label: 'PowerShell 7', path: 'pwsh.exe' }];
+    });
+
+    const pick = async (target: Element) => {
+      await fireEvent.contextMenu(target);
+      menu.open!.items.find((i) => i.label === 'Ouvrir un terminal ici')!.onClick!();
+      menu.close();
+    };
+
+    it('opens one in a folder from its menu, in the folder of a file from its menu, at the root from the free space', async () => {
+      creating();
+      await app.openEditor({ source: 'project', path: 'src/app.ts' });
+      render(EditorView, { project: project() });
+      await screen.findByRole('treeitem', { name: /app\.ts/ });
+      await pick(item(/src/));
+      expect(openTerminal).toHaveBeenLastCalledWith('p1', 'pwsh', 'pwsh · src', { agentId: null, subdir: 'src' });
+      await pick(item(/app\.ts/));
+      expect(openTerminal).toHaveBeenLastCalledWith('p1', 'pwsh', 'pwsh · src', { agentId: null, subdir: 'src' });
+      // A file at the root, and the free space: the project itself.
+      await pick(item(/README/));
+      expect(openTerminal).toHaveBeenLastCalledWith('p1', 'pwsh', 'pwsh · demo-api', { agentId: null });
+      await pick(screen.getByRole('tree'));
+      expect(openTerminal).toHaveBeenLastCalledWith('p1', 'pwsh', 'pwsh · demo-api', { agentId: null });
+      expect(openTerminal).toHaveBeenCalledTimes(4);
+    });
+
+    it('names the folder by its own name, from deep in the tree', async () => {
+      backend({ fs_tree: () => ({ root: 'C:/code/demo-api', files: ['src/lib/ui/button.ts'], truncated: false }) });
+      await app.openEditor({ source: 'project', path: 'src/lib/ui/button.ts' });
+      render(EditorView, { project: project() });
+      await screen.findByRole('treeitem', { name: /button\.ts/ });
+      await pick(item(/ui/));
+      expect(openTerminal).toHaveBeenLastCalledWith('p1', 'pwsh', 'pwsh · ui', { agentId: null, subdir: 'src/lib/ui' });
+    });
+
+    it('opens it in the source shown: the worktree of the agent being browsed', async () => {
+      const wt = { path: 'C:/code/demo-api/.claude/worktrees/wt', branch: 'escouade/wt', baseBranch: 'main' };
+      resetApp({ agents: [agent(), agent({ id: 'a2', name: 'wt-agent', worktree: wt })] });
+      app.shells = [{ id: 'pwsh', label: 'PowerShell 7', path: 'pwsh.exe' }];
+      creating();
+      await app.openEditor({ source: 'a2', path: 'src/app.ts' });
+      render(EditorView, { project: project() });
+      await screen.findByRole('treeitem', { name: /app\.ts/ });
+      await pick(item(/src/));
+      expect(openTerminal).toHaveBeenLastCalledWith('p1', 'pwsh', 'pwsh · src', { agentId: 'a2', subdir: 'src' });
+      // At the root of its worktree, it is named after the agent.
+      await pick(screen.getByRole('tree'));
+      expect(openTerminal).toHaveBeenLastCalledWith('p1', 'pwsh', 'pwsh · wt-agent', { agentId: 'a2' });
+    });
+
+    it('keeps the entry before the copies, apart from them', async () => {
+      creating();
+      await app.openEditor({ source: 'project', path: 'src/app.ts' });
+      render(EditorView, { project: project() });
+      const row = await screen.findByRole('treeitem', { name: /app\.ts/ });
+      await fireEvent.contextMenu(row);
+      const items = menu.open!.items;
+      expect(items.map((i) => i.label)).toEqual([
+        'Nouveau fichier…',
+        'Ouvrir un terminal ici',
+        '',
+        'Copier le chemin',
+        'Copier le chemin relatif',
+      ]);
+      expect(items[2].separator).toBe(true);
+      menu.close();
+    });
   });
 
   it('tells why a name is refused, by the tree or by the disk', async () => {

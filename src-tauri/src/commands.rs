@@ -534,18 +534,25 @@ pub fn cancel_resume(core: CoreState, id: String) -> Res<()> {
 
 // ---------- terminals ----------
 
-#[tauri::command(async)]
+/// An interactive terminal in the project's folder; in the agent's worktree when `agent_id` has
+/// one, and in the folder `subdir` of that (a path of the editor's tree) when it is given.
+#[tauri::command]
 #[allow(clippy::too_many_arguments)]
-pub fn term_spawn(
-    core: CoreState,
+pub async fn term_spawn(
+    core: CoreState<'_>,
     project_id: String,
+    agent_id: Option<String>,
+    subdir: Option<String>,
     shell: String,
     name: String,
     cols: u16,
     rows: u16,
     output: Channel<InvokeResponseBody>,
 ) -> Res<TermInfo> {
-    let project = core.project(&project_id).map_err(err)?;
+    let cwd = core
+        .term_cwd(&project_id, agent_id, subdir.as_deref())
+        .await
+        .map_err(err)?;
     let settings = core.settings.read().clone();
     let shells = pty::detect_shells(&settings);
     let sh = shells
@@ -570,7 +577,7 @@ pub fn term_spawn(
             info.clone(),
             sh,
             &settings.wsl_distro,
-            &project.path,
+            &cwd,
             (cols, rows),
             env,
             move |bytes| {

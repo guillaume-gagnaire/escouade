@@ -20,6 +20,7 @@
   import { menu, type MenuItem } from '../../lib/menu.svelte';
   import { keyLabel } from '../../lib/platform';
   import { app } from '../../lib/state.svelte';
+  import { terminalIn } from '../../lib/term-actions';
   import type { Project } from '../../lib/types';
   import CodeEditor from './CodeEditor.svelte';
   import EditorTabs from './EditorTabs.svelte';
@@ -240,9 +241,18 @@
 
   const copy = (text: string) => navigator.clipboard.writeText(text).catch((e) => app.toast(`Copie impossible : ${e}`, 'error'));
 
+  /** A terminal in the folder `dir` of the source shown ('' for its root, named after the agent or the project). */
+  function terminalHere(dir: string) {
+    const agentId = sourceAgent(source);
+    terminalIn(project.id, dir ? { agentId, subdir: dir } : { agentId }, dir ? basename(dir) : (srcAgent?.name ?? project.name));
+  }
+
   function treeMenu(e: MouseEvent, r: TreeRow | null) {
     const dir = !r ? '' : r.kind === 'dir' ? r.path : parentOf(r.path);
-    const items: MenuItem[] = [{ label: 'Nouveau fichier…', onClick: () => startNew(dir) }];
+    const items: MenuItem[] = [
+      { label: 'Nouveau fichier…', onClick: () => startNew(dir) },
+      { label: 'Ouvrir un terminal ici', onClick: () => terminalHere(dir) },
+    ];
     const root = tree?.root;
     if (r && root) {
       items.push(

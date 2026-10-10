@@ -146,12 +146,23 @@ function free(x: XTerm) {
   x.host.remove();
 }
 
-export async function openTerminal(projectId: string, shell: string, name: string): Promise<TermInfo> {
+/**
+ * Where a terminal opens when not in the project's folder: the worktree of an agent (the project's
+ * folder for one without), or the folder `subdir` of it (a path of the editor's tree).
+ */
+export interface TermPlace {
+  agentId?: string | null;
+  subdir?: string;
+}
+
+export async function openTerminal(projectId: string, shell: string, name: string, place?: TermPlace): Promise<TermInfo> {
   const x = createXTerm(false);
   const { term } = x;
   let info: TermInfo;
   try {
-    info = await api.termSpawn({ projectId, shell, name, cols: term.cols, rows: term.rows }, (buf) => term.write(new Uint8Array(buf)));
+    info = await api.termSpawn({ projectId, shell, name, ...place, cols: term.cols, rows: term.rows }, (buf) =>
+      term.write(new Uint8Array(buf)),
+    );
   } catch (e) {
     // Nothing to attach to: free the xterm instance, its WebGL context and its host.
     free(x);

@@ -3009,6 +3009,44 @@ impl<R: Runtime> Core<R> {
         Ok(fsedit::tree(&root, &project.worktree_copy, &below).await)
     }
 
+    /// Where a terminal opens: the agent's worktree, else the project's folder, or the folder
+    /// `sub` of it (a path of the editor's tree, so relative to the same root, and refused when
+    /// it leaves it).
+    pub async fn term_cwd(
+        &self,
+        project_id: &str,
+        agent_id: Option<String>,
+        sub: Option<&str>,
+    ) -> Result<String> {
+        // A base branch says the root is a worktree's.
+        let (root, base) = self.edit_root(project_id, agent_id).await?;
+        // Removed after a pull request or a push: a shell started there would open in the app's
+        // own folder instead, as if it were the agent's.
+        if base.is_some() && !Path::new(&root).is_dir() {
+            bail!("Le worktree de l'agent n'existe plus");
+        }
+        let Some(sub) = sub.map(str::trim).filter(|s| !s.is_empty()) else {
+            // The project's folder itself, not the repository's the editor roots at, which holds
+            // it when the project is one of its folders.
+            return match base {
+                Some(_) => Ok(root),
+                None => Ok(self.project(project_id)?.path),
+            };
+        };
+        paths::contained(Path::new(&root), sub)?;
+        // Joined by components: the tree's paths use `/`, which a Windows path does not mix
+        // with its `\` for the shells to follow (WSL's `--cd` takes it as given).
+        let mut dir = PathBuf::from(&root);
+        dir.extend(Path::new(sub).components().filter_map(|c| match c {
+            std::path::Component::Normal(name) => Some(name),
+            _ => None,
+        }));
+        if !dir.is_dir() {
+            bail!("Le dossier « {sub} » n'existe pas");
+        }
+        Ok(dir.to_string_lossy().into_owned())
+    }
+
     pub async fn git_diff(
         self: &Arc<Self>,
         project_id: &str,

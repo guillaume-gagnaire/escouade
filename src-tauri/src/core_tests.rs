@@ -2052,6 +2052,127 @@ async fn the_editor_reads_and_writes_the_checkout_of_its_source() {
     assert_eq!(t.text.as_deref(), Some("const a = 1;\n"));
 }
 
+/// The folder `term_cwd` gave, as the disk spells it (Windows adds `\\?\` to a canonical path).
+fn same_dir(cwd: &str, expected: &Path) -> bool {
+    Path::new(cwd).canonicalize().unwrap() == expected.canonicalize().unwrap()
+}
+
+#[tokio::test]
+async fn a_terminal_opens_in_the_worktree_of_an_agent_or_the_project_and_in_a_folder_of_it() {
+    let h = harness("core-term-cwd-worktree");
+    let (p, r) = h.project(true).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let wt = PathBuf::from(a.meta.worktree.clone().unwrap().path);
+    let id = Some(a.meta.id.clone());
+
+    // No agent: the project's folder, as every terminal opened before this did.
+    assert_eq!(
+        h.core.term_cwd(&p.id, None, None).await.unwrap(),
+        p.path.as_str()
+    );
+    // An agent with a worktree: its worktree, not the project's checkout.
+    let cwd = h.core.term_cwd(&p.id, id.clone(), None).await.unwrap();
+    assert!(same_dir(&cwd, &wt), "{cwd}");
+    // A folder of the source: in the worktree for the agent, in the project otherwise.
+    let cwd = h
+        .core
+        .term_cwd(&p.id, id.clone(), Some("src"))
+        .await
+        .unwrap();
+    assert!(same_dir(&cwd, &wt.join("src")), "{cwd}");
+    let cwd = h.core.term_cwd(&p.id, None, Some("src")).await.unwrap();
+    assert!(same_dir(&cwd, &r.join("src")), "{cwd}");
+    // The tree's `/` does not end up mixed with a Windows path's `\`.
+    std::fs::create_dir_all(wt.join("src").join("deep")).unwrap();
+    let cwd = h
+        .core
+        .term_cwd(&p.id, id.clone(), Some("src/deep"))
+        .await
+        .unwrap();
+    assert_eq!(cwd, wt.join("src").join("deep").to_string_lossy());
+    // An empty folder is no folder.
+    let cwd = h.core.term_cwd(&p.id, id, Some("  ")).await.unwrap();
+    assert!(same_dir(&cwd, &wt), "{cwd}");
+}
+
+#[tokio::test]
+async fn a_terminal_for_an_agent_without_a_worktree_opens_in_the_project() {
+    let h = harness("core-term-cwd-no-worktree");
+    let (p, r) = h.project(false).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    assert!(a.meta.worktree.is_none());
+    let id = Some(a.meta.id.clone());
+
+    assert_eq!(
+        h.core.term_cwd(&p.id, id.clone(), None).await.unwrap(),
+        p.path.as_str()
+    );
+    let cwd = h.core.term_cwd(&p.id, id, Some("src")).await.unwrap();
+    assert!(same_dir(&cwd, &r.join("src")), "{cwd}");
+}
+
+#[tokio::test]
+async fn a_terminal_stays_in_the_source_it_is_asked_for() {
+    let h = harness("core-term-cwd-confined");
+    let (p, r) = h.project(true).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let id = Some(a.meta.id.clone());
+    let outside = r.parent().unwrap().to_string_lossy().to_string();
+
+    for source in [None, id.clone()] {
+        for sub in ["..", "../..", "src/../..", outside.as_str()] {
+            let err = h
+                .core
+                .term_cwd(&p.id, source.clone(), Some(sub))
+                .await
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains("hors du dossier"), "{sub}: {err}");
+        }
+        // A folder that is not one, or not there.
+        for sub in ["src/app.ts", "nope"] {
+            let err = h
+                .core
+                .term_cwd(&p.id, source.clone(), Some(sub))
+                .await
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains(sub), "{sub}: {err}");
+        }
+    }
+    // An agent the app does not know opens nothing in the project instead.
+    assert!(h
+        .core
+        .term_cwd(&p.id, Some("ghost".into()), None)
+        .await
+        .is_err());
+}
+
+#[tokio::test]
+async fn a_terminal_is_refused_for_an_agent_whose_worktree_vanished() {
+    let h = harness("core-term-cwd-gone");
+    let (p, _) = h.project(true).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let wt = a.meta.worktree.clone().unwrap();
+    h.wait("warm-up", |h| h.alive(&a.meta.id)).await;
+    if let Some(proc) = h.core.agent(&a.meta.id).unwrap().lock().detach() {
+        proc.kill();
+    }
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    std::fs::remove_dir_all(&wt.path).unwrap();
+
+    // Not a shell opened elsewhere, in the app's own folder, as if it were the worktree.
+    for sub in [None, Some("src")] {
+        let err = h
+            .core
+            .term_cwd(&p.id, Some(a.meta.id.clone()), sub)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("worktree"), "{sub:?}: {err}");
+    }
+}
+
 #[tokio::test]
 async fn the_editor_tree_shows_the_files_the_project_copies_into_its_worktrees() {
     let h = harness("core-edit-tree-copied");

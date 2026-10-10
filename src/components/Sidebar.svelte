@@ -10,7 +10,7 @@
   import { modelLabel } from '../lib/models';
   import { ESTIMATE_HINT, fSpentUsd, spent } from '../lib/spend';
   import { app } from '../lib/state.svelte';
-  import { closeTerminal, newTerminal, SHELL_GLYPH } from '../lib/term-actions';
+  import { closeTerminal, newTerminal, SHELL_GLYPH, terminalIn } from '../lib/term-actions';
   import { canPrepare, prepareLaunch, stopTests } from '../lib/test-launch.svelte';
   import type { Agent, Project } from '../lib/types';
   import RunsSection from './RunsSection.svelte';
@@ -70,6 +70,8 @@
               label: 'Ouvrir dans l’éditeur',
               onClick: () => app.openEditor({ projectId: a.projectId, source: a.worktree ? a.id : 'project' }),
             },
+            // In its worktree, else in the project's folder (the backend knows which).
+            { label: 'Ouvrir un terminal', onClick: () => terminalIn(a.projectId, { agentId: a.id }, a.name) },
           ]),
       ...remoteItems(a),
       { label: '', separator: true },

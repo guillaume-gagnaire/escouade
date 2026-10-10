@@ -1,6 +1,6 @@
 import { IS_MAC } from './platform';
 import { app } from './state.svelte';
-import { disposeTerminal, openTerminal } from './terminals';
+import { disposeTerminal, openTerminal, type TermPlace } from './terminals';
 
 export const SHELL_GLYPH: Record<string, { glyph: string; c: string }> = {
   pwsh: { glyph: 'PS', c: 'var(--info)' },
@@ -12,20 +12,35 @@ export const SHELL_GLYPH: Record<string, { glyph: string; c: string }> = {
   sh: { glyph: '$_', c: 'var(--ok)' },
 };
 
-export async function newTerminal(projectId: string, shell = app.shells[0]?.id) {
+/** Shows a terminal just opened in place of whatever the project's main area shows. */
+async function show(projectId: string, shell: string | undefined, name: (shell: string) => string, place?: TermPlace) {
   if (!shell) {
     const expected = IS_MAC ? 'zsh, bash' : 'PowerShell 7, Git Bash, WSL';
     app.toast(`Aucun shell détecté (${expected}). Vérifie les réglages.`, 'error');
     return;
   }
-  const n = app.terminals.filter((t) => t.projectId === projectId && t.shell === shell).length + 1;
-  const info = await app.run(openTerminal(projectId, shell, `${shell}-${n}`));
+  const info = await app.run(openTerminal(projectId, shell, name(shell), place));
   if (!info) return;
   app.terminals.push(info);
   app.selectedTerm[projectId] = info.id;
   app.selectedLaunch[projectId] = null;
   app.closeEditor(projectId);
   app.closeBoard(projectId);
+}
+
+export function newTerminal(projectId: string, shell = app.shells[0]?.id) {
+  return show(projectId, shell, (s) => {
+    const n = app.terminals.filter((t) => t.projectId === projectId && t.shell === s).length + 1;
+    return `${s}-${n}`;
+  });
+}
+
+/**
+ * A terminal, with the first shell, in the worktree of an agent (the project's folder for one
+ * without) or in a folder of its source: named after it, by `label` (the agent's or the folder's name).
+ */
+export function terminalIn(projectId: string, place: TermPlace, label: string) {
+  return show(projectId, app.shells[0]?.id, (s) => `${s} · ${label}`, place);
 }
 
 export function closeTerminal(id: string) {
