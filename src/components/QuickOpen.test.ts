@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { recentFiles, setEditorJump } from '../lib/editor/quick-open';
 import { trees } from '../lib/editor/trees.svelte';
+import { setLang } from '../lib/i18n';
 import { app } from '../lib/state.svelte';
 import { agent, fakeBackend, project, resetApp } from '../test/ipc';
 import QuickOpen from './QuickOpen.svelte';
@@ -10,7 +11,7 @@ import QuickOpen from './QuickOpen.svelte';
 const FILES = ['.env', '.gitignore', 'README.md', 'src/app.ts', 'src/components/ConvSearch.svelte', 'src/lib/format.ts'];
 
 /** The palette over the files of `source`, whose tree the fake backend answers with. */
-function setup(over: { files?: string[]; ignored?: string[]; source?: string; fsTree?: () => unknown } = {}) {
+function setup(over: { files?: string[]; ignored?: string[]; source?: string; fsTree?: () => unknown; label?: string } = {}) {
   const source = over.source ?? 'project';
   app.modal = { kind: 'quickOpen', projectId: 'p1', source };
   const backend = fakeBackend({
@@ -21,7 +22,7 @@ function setup(over: { files?: string[]; ignored?: string[]; source?: string; fs
     fs_base: () => null,
   });
   render(QuickOpen, { projectId: 'p1', source });
-  return { backend, field: screen.getByRole('combobox', { name: 'Ouvrir un fichier' }) };
+  return { backend, field: screen.getByRole('combobox', { name: over.label ?? 'Ouvrir un fichier' }) };
 }
 
 const names = () => screen.queryAllByRole('option').map((o) => o.querySelector('.name')?.textContent);
@@ -247,5 +248,38 @@ describe('QuickOpen', () => {
     expect(names()).toEqual(['old.ts']);
     expect(await screen.findByRole('alert')).toHaveTextContent('git est introuvable');
     expect(names()).toEqual(['old.ts']);
+  });
+});
+
+describe('QuickOpen in English', () => {
+  beforeEach(() => {
+    resetApp({
+      projects: [project()],
+      agents: [agent({ worktree: { path: 'C:/wt/a1', branch: 'agent/a1', baseBranch: 'main' } })],
+    });
+    setLang('en');
+  });
+
+  it('names its field, its place and its hints in English, and counts the files', async () => {
+    const files = Array.from({ length: 1234 }, (_, i) => `src/file${i}.ts`);
+    const { field } = setup({ files, ignored: ['src/file1.ts'], source: 'a1', label: 'Open a file' });
+    expect(screen.getByRole('dialog', { name: 'Open a file' })).toBeInTheDocument();
+    expect(field).toHaveAttribute('placeholder', 'File name, or name:42 for a line');
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+    expect(screen.getByText('worktree · refacto-auth')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('1,234 files'));
+    expect(screen.getByRole('listbox', { name: 'Files' })).toBeInTheDocument();
+    expect(document.querySelector('.keys')).toHaveTextContent('choose · Enter open · Esc close');
+    await userEvent.type(field, 'file1.ts:42');
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent('The first 50 results: narrow down your search. · opens at line 42'),
+    );
+    expect(screen.getByText('ignored by git')).toBeInTheDocument();
+    await userEvent.clear(field);
+    await userEvent.type(field, 'file1233');
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('1 result'));
+    await userEvent.clear(field);
+    await userEvent.type(field, 'zzz');
+    expect(screen.getByRole('status')).toHaveTextContent('No file matches.');
   });
 });

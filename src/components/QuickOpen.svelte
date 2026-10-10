@@ -3,7 +3,9 @@
   import { editorJump, parseQuickQuery, QUICK_OPEN_MAX, rankFiles, recentFiles } from '../lib/editor/quick-open';
   import { trees } from '../lib/editor/trees.svelte';
   import { trapFocus } from '../lib/focus';
-  import { basename, plural } from '../lib/format';
+  import { basename, fInt } from '../lib/format';
+  import { t } from '../lib/i18n';
+  import { keyLabel } from '../lib/platform';
   import { app } from '../lib/state.svelte';
   import FileIcon from './editor/FileIcon.svelte';
 
@@ -35,19 +37,23 @@
 
   /** Where the files come from: the project, or the worktree of an agent. */
   const place = $derived(
-    source === 'project' ? (app.projects.find((p) => p.id === projectId)?.name ?? '') : `worktree · ${app.agents[source]?.name ?? ''}`,
+    source === 'project'
+      ? (app.projects.find((p) => p.id === projectId)?.name ?? '')
+      : t('editor.source.worktree', { name: app.agents[source]?.name ?? '' }),
   );
 
+  /** The statements of the line below the list, one after the other: each is a whole phrase of its own. */
+  const joined = (...parts: (string | false)[]) => parts.filter(Boolean).join(' · ');
   const status = $derived.by(() => {
-    if (!tree) return 'Chargement des fichiers…';
-    const cut = tree.truncated ? ' · liste tronquée' : '';
-    if (!query.name) return plural(tree.files.length, 'fichier', 'fichiers') + cut;
-    if (!shown.length) return 'Aucun fichier ne correspond.' + cut;
+    if (!tree) return t('editor.quickOpen.loading');
+    const cut = tree.truncated && t('editor.quickOpen.listTruncated');
+    if (!query.name) return joined(t('editor.count.files', { count: tree.files.length, n: fInt(tree.files.length) }), cut);
+    if (!shown.length) return joined(t('editor.quickOpen.noMatch'), cut);
     const n =
       shown.length >= QUICK_OPEN_MAX
-        ? `Les ${QUICK_OPEN_MAX} premiers résultats : précise ta recherche.`
-        : plural(shown.length, 'résultat', 'résultats');
-    return n + (query.line ? ` · ouvre à la ligne ${query.line}` : '') + cut;
+        ? t('editor.quickOpen.firstResults', { max: QUICK_OPEN_MAX })
+        : t('editor.count.results', { count: shown.length, n: fInt(shown.length) });
+    return joined(n, query.line ? t('editor.quickOpen.opensAtLine', { line: query.line }) : false, cut);
   });
 
   // The tree is read again each time: the agents may have created files since it was last read. The one known is shown
@@ -114,7 +120,7 @@
     role="dialog"
     tabindex="-1"
     aria-modal="true"
-    aria-label="Ouvrir un fichier"
+    aria-label={t('editor.quickOpen.title')}
   >
     <div class="search">
       <span class="ic" aria-hidden="true">⌕</span>
@@ -123,9 +129,9 @@
         bind:value={text}
         autofocus
         spellcheck="false"
-        placeholder="Nom du fichier, ou nom:42 pour une ligne"
+        placeholder={t('editor.quickOpen.placeholder')}
         role="combobox"
-        aria-label="Ouvrir un fichier"
+        aria-label={t('editor.quickOpen.title')}
         aria-expanded={shown.length > 0}
         aria-controls="quick-open-files"
         aria-autocomplete="list"
@@ -134,9 +140,9 @@
         onkeydown={onKeydown}
       />
       <span class="where" title={place}>{place}</span>
-      <button class="icon-btn" style="width:28px;height:28px;font-size:16px" onclick={close} aria-label="Fermer">×</button>
+      <button class="icon-btn" style="width:28px;height:28px;font-size:16px" onclick={close} aria-label={t('common.close')}>×</button>
     </div>
-    <div class="list" id="quick-open-files" role="listbox" aria-label="Fichiers" bind:this={list}>
+    <div class="list" id="quick-open-files" role="listbox" aria-label={t('common.files')} bind:this={list}>
       {#each shown as path, rank (path)}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <div
@@ -152,7 +158,7 @@
           <FileIcon {path} />
           <span class="name">{basename(path)}</span>
           {#if folder(path)}<span class="dir">{folder(path)}</span>{/if}
-          {#if ignored.has(path)}<span class="tag">ignoré par git</span>{/if}
+          {#if ignored.has(path)}<span class="tag">{t('editor.quickOpen.ignored')}</span>{/if}
         </div>
       {/each}
     </div>
@@ -164,8 +170,11 @@
       {/if}
       <div style="flex:1"></div>
       <span class="keys" aria-hidden="true"
-        ><kbd>↑</kbd><kbd>↓</kbd> choisir <span class="sep">·</span> <kbd>Entrée</kbd> ouvrir <span class="sep">·</span>
-        <kbd>Échap</kbd> fermer</span
+        ><kbd>↑</kbd><kbd>↓</kbd>
+        {t('editor.quickOpen.keyChoose')} <span class="sep">·</span> <kbd>{keyLabel('Enter')}</kbd>
+        {t('editor.quickOpen.keyOpen')} <span class="sep">·</span>
+        <kbd>{keyLabel('Esc')}</kbd>
+        {t('editor.quickOpen.keyClose')}</span
       >
     </div>
   </div>

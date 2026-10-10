@@ -3,6 +3,7 @@
   import { dirOf } from '../../lib/editor/links';
   import { pieces, SEARCH_MAX, type FileSearch, type Piece, type SearchOption } from '../../lib/editor/search.svelte';
   import { basename, fInt } from '../../lib/format';
+  import { t, type Key } from '../../lib/i18n';
   import type { SearchMatch } from '../../lib/types';
   import FileIcon from './FileIcon.svelte';
 
@@ -20,11 +21,11 @@
     field?.select();
   }
 
-  const OPTIONS: { key: SearchOption; label: string; glyph: string }[] = [
-    { key: 'caseSensitive', label: 'Respecter la casse', glyph: 'Aa' },
-    { key: 'wholeWord', label: 'Mot entier', glyph: 'ab' },
-    { key: 'regex', label: 'Expression régulière', glyph: '.*' },
-  ];
+  const OPTIONS = [
+    { key: 'caseSensitive', label: 'editor.search.caseSensitive', glyph: 'Aa' },
+    { key: 'wholeWord', label: 'editor.search.wholeWord', glyph: 'ab' },
+    { key: 'regex', label: 'editor.search.regex', glyph: '.*' },
+  ] as const satisfies { key: SearchOption; label: Key; glyph: string }[];
 
   interface Line {
     m: SearchMatch;
@@ -76,19 +77,20 @@
   );
   const stop = $derived(focused && rows.some((r) => r.key === focused) ? focused : (rows[0]?.key ?? null));
 
-  const count = (n: number, one: string, many: string) => `${fInt(n)} ${n > 1 ? many : one}`;
+  const results = (n: number) => t('editor.count.results', { count: n, n: fInt(n) });
   const status = $derived.by(() => {
     if (search.error || !search.text) return null;
-    if (!result) return search.pending ? 'Recherche…' : null;
+    if (!result) return search.pending ? t('editor.search.searching') : null;
     const n = result.matches.length;
-    return n ? `${count(n, 'résultat', 'résultats')} dans ${count(files.length, 'fichier', 'fichiers')}` : 'Aucun résultat.';
+    return n
+      ? t('editor.search.found', {
+          results: results(n),
+          files: t('editor.count.files', { count: files.length, n: fInt(files.length) }),
+        })
+      : t('editor.search.none');
   });
   const limit = $derived(
-    result?.timedOut
-      ? 'Recherche arrêtée après 10 s : résultats partiels.'
-      : result?.truncated
-        ? `Résultats limités aux ${fInt(SEARCH_MAX)} premiers.`
-        : null,
+    result?.timedOut ? t('editor.search.timedOut') : result?.truncated ? t('editor.search.truncated', { max: fInt(SEARCH_MAX) }) : null,
   );
 
   const focusRow = (i: number) => scroller?.querySelector<HTMLElement>(`[data-index="${i}"]`)?.focus();
@@ -132,15 +134,15 @@
 </script>
 
 <div class="search">
-  <div class="title"><span class="label">Recherche</span></div>
+  <div class="title"><span class="label">{t('editor.search.title')}</span></div>
   <div class="box" class:invalid={!!search.error}>
     <input
       bind:this={field}
       value={search.text}
       oninput={(e) => search.type(e.currentTarget.value)}
       onkeydown={onfieldkey}
-      placeholder="Rechercher"
-      aria-label="Rechercher"
+      placeholder={t('common.search')}
+      aria-label={t('common.search')}
       aria-invalid={!!search.error}
       aria-describedby={search.error ? `${uid}-error` : undefined}
       spellcheck="false"
@@ -152,8 +154,8 @@
         class="opt mono"
         class:on={search[o.key]}
         aria-pressed={search[o.key]}
-        aria-label={o.label}
-        title={o.label}
+        aria-label={t(o.label)}
+        title={t(o.label)}
         onmousedown={(e) => e.preventDefault()}
         onclick={() => search.toggle(o.key)}>{o.glyph}</button
       >
@@ -168,7 +170,7 @@
       class="results"
       class:stale={search.pending && !!result}
       role="tree"
-      aria-label="Résultats"
+      aria-label={t('editor.search.results')}
       aria-busy={search.pending}
       tabindex="-1"
       {onkeydown}
@@ -184,7 +186,9 @@
             role="treeitem"
             aria-level={1}
             aria-expanded={r.open}
-            aria-label="{basename(r.path)}{dir ? `, ${dir}` : ''}, {count(r.count, 'résultat', 'résultats')}"
+            aria-label={dir
+              ? t('editor.search.fileRowIn', { name: basename(r.path), dir, results: results(r.count) })
+              : t('editor.search.fileRow', { name: basename(r.path), results: results(r.count) })}
             aria-selected={r.key === stop}
             tabindex={r.key === stop ? 0 : -1}
             title={r.path}
@@ -215,7 +219,7 @@
             class="row line"
             role="treeitem"
             aria-level={2}
-            aria-label="Ligne {m.line} : {ps.map((p) => p.text).join('')}"
+            aria-label={t('editor.search.lineRow', { line: m.line, text: ps.map((p) => p.text).join('') })}
             aria-selected={r.key === stop}
             tabindex={r.key === stop ? 0 : -1}
             data-index={i}

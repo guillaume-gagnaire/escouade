@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { basename } from '../../lib/format';
+  import { basename, fInt } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import type { Agent, GitInfo, Project } from '../../lib/types';
   import StatusDot from '../StatusDot.svelte';
@@ -65,7 +65,9 @@
               >.claude/worktrees/{a.worktree ? basename(a.worktree.path) : a.name} · {a.model}</span
             ></span
           >
-          <span class="count mono" class:some={n > 0}>{n ? t('editor.source.changes', { count: n }) : t('editor.source.clean')}</span>
+          <span class="count mono" class:some={n > 0}
+            >{n ? t('editor.count.changes', { count: n, n: fInt(n) }) : t('editor.source.clean')}</span
+          >
           <span class="check">{source === a.id ? '✓' : ''}</span>
         </button>
       {/each}

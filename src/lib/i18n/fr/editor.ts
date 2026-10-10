@@ -36,7 +36,16 @@ export default {
     projectBranch: 'Branche du projet · {path}',
     delta: 'Δ {count}',
     clean: 'propre',
-    changes: { one: '{count} modif.', other: '{count} modif.' },
+    worktree: 'worktree · {name}',
+    branch: 'branche · {name}',
+  },
+
+  /** Counts of the tree and of the searches; `n` is `count` written with its thousands apart. */
+  count: {
+    files: { one: '{n} fichier', other: '{n} fichiers' },
+    results: { one: '{n} résultat', other: '{n} résultats' },
+    changes: { one: '{n} modif.', other: '{n} modif.' },
+    listTruncated: 'liste tronquée',
   },
 
   /** The places a followed identifier may lead to. */
@@ -83,8 +92,38 @@ export default {
     text: 'Texte',
   },
 
+  /** « Rechercher dans les fichiers », in the left column. */
   search: {
     invalidRegex: 'Expression régulière invalide.',
+    title: 'Recherche',
+    caseSensitive: 'Respecter la casse',
+    wholeWord: 'Mot entier',
+    regex: 'Expression régulière',
+    results: 'Résultats',
+    searching: 'Recherche…',
+    /** `results` and `files` are counts written out (« 3 résultats », « 2 fichiers »). */
+    found: '{results} dans {files}',
+    none: 'Aucun résultat.',
+    timedOut: 'Recherche arrêtée après 10 s : résultats partiels.',
+    truncated: 'Résultats limités aux {max} premiers.',
+    fileRow: '{name}, {results}',
+    fileRowIn: '{name}, {dir}, {results}',
+    lineRow: 'Ligne {line} : {text}',
+  },
+
+  /** « Ouvrir un fichier » (Ctrl+P). */
+  quickOpen: {
+    title: 'Ouvrir un fichier',
+    placeholder: 'Nom du fichier, ou nom:42 pour une ligne',
+    loading: 'Chargement des fichiers…',
+    noMatch: 'Aucun fichier ne correspond.',
+    firstResults: 'Les {max} premiers résultats : précise ta recherche.',
+    opensAtLine: 'ouvre à la ligne {line}',
+    listTruncated: 'liste tronquée',
+    ignored: 'ignoré par git',
+    keyChoose: 'choisir',
+    keyOpen: 'ouvrir',
+    keyClose: 'fermer',
   },
 
   /** CodeMirror's own texts (search panel, merge view), by the English phrase it asks with. */

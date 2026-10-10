@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { FileSearch } from '../../lib/editor/search.svelte';
+import { setLang } from '../../lib/i18n';
 import type { SearchMatch, SearchResult } from '../../lib/types';
 import SearchPanel from './SearchPanel.svelte';
 
@@ -200,5 +201,33 @@ describe('SearchPanel', () => {
     search.pending = false;
     await vi.waitFor(() => expect(status).toHaveTextContent('3 résultats dans 2 fichiers'));
     expect(screen.getByRole('status')).toBe(status);
+  });
+});
+
+describe('SearchPanel in English', () => {
+  it('titles the panel and the options, counts the results and names the rows in English', async () => {
+    setLang('en');
+    const search = new FileSearch(vi.fn(async () => FOUND), 0);
+    search.text = 'total';
+    search.result = FOUND;
+    render(SearchPanel, { search, onopen: vi.fn() });
+    expect(screen.getByRole('textbox', { name: 'Search' })).toHaveAttribute('placeholder', 'Search');
+    expect(screen.getByText('Search', { selector: '.label' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Match case' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: 'Whole word' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Regular expression' })).toBeInTheDocument();
+    expect(screen.getByRole('tree', { name: 'Results' })).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('3 results in 2 files');
+    expect(rows().map((r) => r.getAttribute('aria-label'))).toEqual([
+      'app.ts, src/lib, 2 results',
+      'Line 3: const total = sum(a);',
+      'Line 9: return total * total;',
+      'README.md, 1 result',
+      'Line 12: The total 😀 total.',
+    ]);
+    search.result = { ...FOUND, truncated: true };
+    await vi.waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Results limited to the first 2,000.'));
+    search.result = { matches: [], truncated: false, timedOut: false };
+    await vi.waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('No results.'));
   });
 });
