@@ -4385,24 +4385,28 @@ impl<R: Runtime> Core<R> {
         done.map(|_| stashed)
     }
 
-    /// Deletes the project's branch `name`, its remote branch too with `remote` (its upstream,
-    /// when the remote still has it); `name` may also be a remote branch alone (`origin/feat`),
-    /// deleted on its remote. Never the folder's own branch nor one another worktree holds
-    /// (`IN_WORKTREE` for an agent's). A branch whose work the project's base has (contained or
-    /// squash-merged) goes at once; another is refused (`UNMERGED:<n>`, its commits no other
-    /// branch has) unless `force`.
+    /// Deletes the project's branch `name`, its remote copy too with `remote`: its upstream when
+    /// that is the branch of the same name that no other local branch tracks, and neither the
+    /// remote's default branch nor the base's upstream; otherwise only the local branch goes and
+    /// the sentence returned says why. `name` may also be a remote branch alone (`origin/feat`),
+    /// deleted on its remote, but for those two. Never the folder's own branch nor one another
+    /// worktree holds (`IN_WORKTREE` for an agent's). A branch whose work the project's base has
+    /// (contained or squash-merged) goes at once; another is refused (`UNMERGED:<n>`, its commits
+    /// no other branch has) unless `force`.
     pub async fn branch_delete(
         self: &Arc<Self>,
         project_id: &str,
         name: &str,
         remote: bool,
         force: bool,
-    ) -> Result<()> {
+    ) -> Result<Option<String>> {
         let _working = self.working();
         let (project, root) = self.branch_repo(project_id).await?;
         let lock = self.sync_lock(&root);
         let _guard = lock.lock().await;
         let local = !name.starts_with('-') && git::branch_exists(&root, name).await;
+        let bases = self.merge_bases(&project, &root).await;
+        let mut note = None;
         // What goes: the local branch, and the remote one as (remote, its name there).
         let on_remote = if local {
             if self.checked_out_here(&root, name).await? {
@@ -4412,9 +4416,13 @@ impl<R: Runtime> Core<R> {
                 ));
             }
             match remote {
-                true => git::upstream_of(&root, name)
-                    .await
-                    .map(|u| (u.remote, u.branch)),
+                true => match git::remote_copy(&root, name, &bases).await? {
+                    git::RemoteCopy::Delete { remote, branch } => Some((remote, branch)),
+                    kept => {
+                        note = kept.note(i18n::ui());
+                        None
+                    }
+                },
                 false => None,
             }
         } else {
@@ -4424,6 +4432,12 @@ impl<R: Runtime> Core<R> {
                     "La branche « {name} » est introuvable.",
                     "The branch “{name}” wasn’t found."
                 ));
+            }
+            if let Some((r, b)) = &split {
+                let tracking = format!("refs/remotes/{r}/{b}");
+                if let Some(why) = git::remote_guard(&root, r, &tracking, &bases).await {
+                    bail!(why.refusal(i18n::ui(), name));
+                }
             }
             split
         };
@@ -4435,7 +4449,6 @@ impl<R: Runtime> Core<R> {
             refs.push(format!("refs/remotes/{r}/{b}"));
         }
         if !force {
-            let bases = self.merge_bases(&project, &root).await;
             let mut merged = true;
             for r in &refs {
                 merged = merged && merged_into_any(&root, r, &bases).await;
@@ -4460,7 +4473,7 @@ impl<R: Runtime> Core<R> {
             done = git::branch_delete(&root, name, true).await;
         }
         self.refresh_repo(&root).await;
-        done
+        done.map(|_| note)
     }
 
     /// The project's local branches whose work its base has (contained or squash-merged), but the

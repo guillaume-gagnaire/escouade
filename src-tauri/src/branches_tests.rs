@@ -567,6 +567,130 @@ async fn a_branch_is_deleted_with_its_remote_one_when_asked() {
 }
 
 #[tokio::test]
+async fn the_remote_copy_goes_with_a_branch_only_when_it_is_its_own() {
+    let h = harness("g1f-remote-copy");
+    let (p, r) = h.project(false).await;
+    let bare = remote(&h, &r);
+    let on_remote =
+        |b: &str| !git(&bare, &["branch", "--list", b, "--format=%(refname:short)"]).is_empty();
+    // `feature` tracks origin/main: that is not a copy of it, and main (the folder's branch, so
+    // the project's base) must stay.
+    git(&r, &["branch", "-q", "feature", "main"]);
+    git(
+        &r,
+        &["branch", "-q", "--set-upstream-to=origin/main", "feature"],
+    );
+    let note = h
+        .core
+        .branch_delete(&p.id, "feature", true, true)
+        .await
+        .unwrap()
+        .expect("it tells why the remote branch stays");
+    assert!(
+        note.contains("origin/main") && note.contains("base"),
+        "{note}"
+    );
+    assert!(!exists(&r, "feature") && on_remote("main"));
+    // Any other branch that is called otherwise there is no copy either.
+    git(&r, &["push", "-q", "origin", "main:elsewhere"]);
+    git(
+        &r,
+        &["branch", "-q", "--track", "renamed", "origin/elsewhere"],
+    );
+    let note = h
+        .core
+        .branch_delete(&p.id, "renamed", true, true)
+        .await
+        .unwrap()
+        .expect("it tells why");
+    assert!(
+        note.contains("origin/elsewhere") && note.contains("nom"),
+        "{note}"
+    );
+    assert!(!exists(&r, "renamed") && on_remote("elsewhere"));
+    // The remote's default branch is never deleted, whatever tracks it.
+    git(&r, &["remote", "set-head", "origin", "main"]);
+    git(&r, &["branch", "-q", "--track", "dflt", "origin/main"]);
+    let note = h
+        .core
+        .branch_delete(&p.id, "dflt", true, true)
+        .await
+        .unwrap()
+        .expect("it tells why");
+    assert!(
+        note.contains("origin/main") && note.contains("défaut"),
+        "{note}"
+    );
+    assert!(!exists(&r, "dflt") && on_remote("main"));
+    // Two local branches on the same remote copy: the other one still needs it.
+    git(&r, &["push", "-q", "origin", "main:shared"]);
+    git(&r, &["branch", "-q", "--track", "shared", "origin/shared"]);
+    git(&r, &["branch", "-q", "--track", "twin", "origin/shared"]);
+    let note = h
+        .core
+        .branch_delete(&p.id, "shared", true, true)
+        .await
+        .unwrap()
+        .expect("it tells why");
+    assert!(note.contains("« twin »"), "{note}");
+    assert!(!exists(&r, "shared") && exists(&r, "twin") && on_remote("shared"));
+    // The upstream of the project's base: its copy is the project's, not the branch's alone.
+    git(&r, &["switch", "-qc", "develop", "main"]);
+    git(&r, &["push", "-qu", "origin", "develop"]);
+    git(&r, &["switch", "-q", "main"]);
+    let board = BoardSettings {
+        target: "develop".into(),
+        ..p.board.clone()
+    };
+    h.core.board_set(&p.id, board).unwrap();
+    let e = h
+        .core
+        .branch_delete(&p.id, "origin/develop", false, true)
+        .await
+        .unwrap_err();
+    assert!(e.to_string().contains("origin/develop"), "{e}");
+    assert!(on_remote("develop"));
+    let note = h
+        .core
+        .branch_delete(&p.id, "develop", true, true)
+        .await
+        .unwrap()
+        .expect("it tells why");
+    assert!(
+        note.contains("origin/develop") && note.contains("base"),
+        "{note}"
+    );
+    assert!(!exists(&r, "develop") && on_remote("develop"));
+    // The default branch cannot be deleted from the list of remote branches either.
+    let e = h
+        .core
+        .branch_delete(&p.id, "origin/main", false, true)
+        .await
+        .unwrap_err();
+    assert!(e.to_string().contains("origin/main"), "{e}");
+    assert!(on_remote("main"));
+    // Its own copy (same name, nobody else on it) goes, and there is nothing to tell.
+    git(&r, &["branch", "-q", "own", "main"]);
+    git(&r, &["push", "-qu", "origin", "own"]);
+    let note = h
+        .core
+        .branch_delete(&p.id, "own", true, true)
+        .await
+        .unwrap();
+    assert_eq!(note, None);
+    assert!(!exists(&r, "own") && !on_remote("own"));
+    // No copy to delete: nothing to tell either.
+    git(&r, &["branch", "-q", "alone", "main"]);
+    assert_eq!(
+        h.core
+            .branch_delete(&p.id, "alone", true, true)
+            .await
+            .unwrap(),
+        None
+    );
+}
+
+#[tokio::test]
 async fn two_branches_of_a_project_are_compared() {
     let h = harness("g1-diff-refs");
     let (p, r) = h.project(false).await;

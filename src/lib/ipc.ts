@@ -101,10 +101,12 @@ export const api = {
     invoke<string | null>('branch_create', { projectId, name, start, switch: switchTo, stash }),
   /**
    * Deletes a branch, its remote one too with `remote` (or a remote branch alone, "origin/x"). Rejected with `UNMERGED:<n>` (`n` commits in no
-   * other branch, maybe 0) unless `force`, `IN_WORKTREE:<agent id>:<agent name>`, or in words for the folder's own branch.
+   * other branch, maybe 0) unless `force`, `IN_WORKTREE:<agent id>:<agent name>`, or in words for the folder's own branch. Resolves with a
+   * sentence to show when `remote` was asked but only the local branch went (its remote copy is the default branch, the base's, named
+   * otherwise, or tracked by another branch), else null.
    */
   branchDelete: (projectId: string, name: string, remote: boolean, force = false) =>
-    invoke<void>('branch_delete', { projectId, name, remote, force }),
+    invoke<string | null>('branch_delete', { projectId, name, remote, force }),
   /** The local branches already in the project's base, but the base, the folder's branch and the worktrees' ones. */
   branchesMerged: (projectId: string) => invoke<string[]>('branches_merged', { projectId }),
   /** The diff from `a` to `b` (`git diff a b`), two branches or commits. */

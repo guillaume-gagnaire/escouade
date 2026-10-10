@@ -1374,6 +1374,148 @@ pub async fn branch_delete_remote(repo: &str, remote: &str, name: &str) -> Resul
     Ok(())
 }
 
+/// Why a remote branch stays when the local branch that tracks it is deleted with its remote copy.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RemoteKept {
+    /// The remote's default branch (its HEAD).
+    Default,
+    /// The upstream of the project's base branch.
+    Base,
+    /// It is called otherwise there: `feature` tracking `origin/main` has no copy of its own.
+    OtherName,
+    /// Another local branch tracks it too.
+    TrackedBy(String),
+}
+
+impl RemoteKept {
+    /// Said after the local branch alone went; `shown` is the remote branch (`origin/main`).
+    pub fn text(&self, lang: crate::i18n::Lang, shown: &str) -> String {
+        match self {
+            RemoteKept::Default => tr_in!(
+                lang,
+                "« {shown} » est la branche par défaut du dépôt distant : seule la branche locale est supprimée.",
+                "“{shown}” is the remote’s default branch: only the local branch is deleted."
+            ),
+            RemoteKept::Base => tr_in!(
+                lang,
+                "« {shown} » est la branche distante de la base du projet : seule la branche locale est supprimée.",
+                "“{shown}” is the remote branch of the project’s base: only the local branch is deleted."
+            ),
+            RemoteKept::OtherName => tr_in!(
+                lang,
+                "La branche locale suit « {shown} », qui ne porte pas son nom : seule la branche locale est supprimée.",
+                "The local branch tracks “{shown}”, which isn’t named like it: only the local branch is deleted."
+            ),
+            RemoteKept::TrackedBy(other) => tr_in!(
+                lang,
+                "La branche « {other} » suit aussi « {shown} » : seule la branche locale est supprimée.",
+                "The branch “{other}” also tracks “{shown}”: only the local branch is deleted."
+            ),
+        }
+    }
+
+    /// Said when asked to delete that remote branch itself (the two that may never go).
+    pub fn refusal(&self, lang: crate::i18n::Lang, shown: &str) -> String {
+        match self {
+            RemoteKept::Default => tr_in!(
+                lang,
+                "« {shown} » est la branche par défaut du dépôt distant : elle n’est pas supprimée d’ici.",
+                "“{shown}” is the remote’s default branch: it isn’t deleted from here."
+            ),
+            _ => tr_in!(
+                lang,
+                "« {shown} » est la branche distante de la base du projet : elle n’est pas supprimée d’ici.",
+                "“{shown}” is the remote branch of the project’s base: it isn’t deleted from here."
+            ),
+        }
+    }
+}
+
+/// What goes on the remote with a local branch deleted along with its remote copy.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RemoteCopy {
+    /// Nothing: the branch has no upstream, or the remote no longer has it.
+    Absent,
+    /// Its own copy: the branch `branch` of `remote`.
+    Delete { remote: String, branch: String },
+    /// Not its own, left alone.
+    Keep { shown: String, why: RemoteKept },
+}
+
+impl RemoteCopy {
+    /// What to tell the user of a copy that stays.
+    pub fn note(&self, lang: crate::i18n::Lang) -> Option<String> {
+        match self {
+            RemoteCopy::Keep { shown, why } => Some(why.text(lang, shown)),
+            _ => None,
+        }
+    }
+}
+
+/// Of the remote branch `tracking` (`refs/remotes/origin/main`) of `remote`, why it may never be
+/// deleted: it is the remote's default branch (`refs/remotes/<remote>/HEAD`), or one of `bases`, the
+/// project's base and its upstream (full names).
+pub async fn remote_guard(
+    repo: &str,
+    remote: &str,
+    tracking: &str,
+    bases: &[String],
+) -> Option<RemoteKept> {
+    let head = format!("refs/remotes/{remote}/HEAD");
+    if text(repo, &["symbolic-ref", "-q", &head])
+        .await
+        .ok()
+        .as_deref()
+        == Some(tracking)
+    {
+        return Some(RemoteKept::Default);
+    }
+    bases
+        .iter()
+        .any(|b| b == tracking)
+        .then_some(RemoteKept::Base)
+}
+
+/// The remote copy of the local branch `name` to delete along with it: its upstream, when that is
+/// the branch of the same name, no other local branch tracks and `remote_guard` allows: a branch
+/// tracking `origin/main` is no copy of it.
+pub async fn remote_copy(repo: &str, name: &str, bases: &[String]) -> Result<RemoteCopy> {
+    let Some(up) = upstream_of(repo, name).await else {
+        return Ok(RemoteCopy::Absent);
+    };
+    let shown = format!("{}/{}", up.remote, up.branch);
+    let keep = |why| RemoteCopy::Keep {
+        shown: shown.clone(),
+        why,
+    };
+    if let Some(why) = remote_guard(repo, &up.remote, &up.tracking, bases).await {
+        return Ok(keep(why));
+    }
+    if up.branch != name {
+        return Ok(keep(RemoteKept::OtherName));
+    }
+    let tracks = text(
+        repo,
+        &[
+            "for-each-ref",
+            "--format=%(refname)%00%(upstream)",
+            "refs/heads",
+        ],
+    )
+    .await?;
+    let other = tracks.lines().find_map(|l| {
+        let (local, upstream) = l.split_once('\0')?;
+        (upstream == up.tracking && short_ref(local) != name).then(|| short_ref(local).to_string())
+    });
+    Ok(match other {
+        Some(other) => keep(RemoteKept::TrackedBy(other)),
+        None => RemoteCopy::Delete {
+            remote: up.remote,
+            branch: up.branch,
+        },
+    })
+}
+
 /// The tree of the commit `rev` names; refused like `commit_of`.
 async fn tree_of(repo: &str, rev: &str) -> Result<String> {
     let commit = commit_of(repo, rev).await?;
@@ -4015,6 +4157,96 @@ mod repo_tests {
                 "The remote branch has moved: fetch first."
             ]
         );
+    }
+
+    #[test]
+    fn a_remote_branch_that_stays_is_told_in_both_languages() {
+        use crate::i18n::Lang::{En, Fr};
+        let all = [
+            RemoteKept::Default,
+            RemoteKept::Base,
+            RemoteKept::OtherName,
+            RemoteKept::TrackedBy("twin".into()),
+        ];
+        assert_eq!(
+            all.clone().map(|k| k.text(En, "origin/main")),
+            [
+                "“origin/main” is the remote’s default branch: only the local branch is deleted.",
+                "“origin/main” is the remote branch of the project’s base: only the local branch is deleted.",
+                "The local branch tracks “origin/main”, which isn’t named like it: only the local branch is deleted.",
+                "The branch “twin” also tracks “origin/main”: only the local branch is deleted."
+            ]
+        );
+        assert_eq!(
+            all[3].text(Fr, "origin/main"),
+            "La branche « twin » suit aussi « origin/main » : seule la branche locale est supprimée."
+        );
+        assert_eq!(
+            [&all[0], &all[1]].map(|k| k.refusal(En, "origin/main")),
+            [
+                "“origin/main” is the remote’s default branch: it isn’t deleted from here.",
+                "“origin/main” is the remote branch of the project’s base: it isn’t deleted from here."
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn the_remote_copy_of_a_branch_is_an_upstream_of_its_name_that_nothing_else_needs() {
+        let (local, _, _) = with_remote("git-g1f-copy");
+        let l = s(&local);
+        let track = |branch: &str, upstream: &str| {
+            git_in(&local, &["branch", "-q", branch, "main"]);
+            git_in(&local, &["branch", "-q", "-u", upstream, branch]);
+        };
+        git_in(&local, &["push", "-q", "origin", "main:own"]);
+        git_in(&local, &["branch", "-q", "--track", "own", "origin/own"]);
+        git_in(&local, &["branch", "-q", "plain", "main"]);
+        track("renamed", "origin/own");
+        let copy = |name: &str, bases: &[&str]| {
+            let (l, name) = (l.clone(), name.to_string());
+            let bases: Vec<String> = bases.iter().map(|b| b.to_string()).collect();
+            async move { remote_copy(&l, &name, &bases).await.unwrap() }
+        };
+        let keep = |shown: &str, why| RemoteCopy::Keep {
+            shown: shown.to_string(),
+            why,
+        };
+        // No upstream: nothing. Another branch on the same copy keeps it for itself.
+        assert_eq!(copy("plain", &[]).await, RemoteCopy::Absent);
+        assert_eq!(
+            copy("own", &[]).await,
+            keep("origin/own", RemoteKept::TrackedBy("renamed".into()))
+        );
+        assert_eq!(
+            copy("renamed", &[]).await,
+            keep("origin/own", RemoteKept::OtherName)
+        );
+        git_in(&local, &["branch", "-qD", "renamed"]);
+        assert_eq!(
+            copy("own", &[]).await,
+            RemoteCopy::Delete {
+                remote: "origin".into(),
+                branch: "own".into()
+            }
+        );
+        // A base's upstream is kept; so is the remote's default branch (its HEAD).
+        assert_eq!(
+            copy("own", &["refs/remotes/origin/own"]).await,
+            keep("origin/own", RemoteKept::Base)
+        );
+        git_in(&local, &["remote", "set-head", "origin", "own"]);
+        assert_eq!(
+            copy("own", &[]).await,
+            keep("origin/own", RemoteKept::Default)
+        );
+        assert_eq!(
+            copy("main", &[]).await,
+            RemoteCopy::Delete {
+                remote: "origin".into(),
+                branch: "main".into()
+            }
+        );
+        assert_eq!(RemoteCopy::Absent.note(crate::i18n::Lang::En), None);
     }
 
     #[tokio::test]

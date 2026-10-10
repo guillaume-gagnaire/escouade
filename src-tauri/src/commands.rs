@@ -455,7 +455,8 @@ pub async fn branch_create(
         .map_err(branch_err)
 }
 
-/// Deletes a branch (its remote one too with `remote`); unmerged, only with `force`.
+/// Deletes a branch (its remote one too with `remote`); unmerged, only with `force`. Returns what
+/// is left to tell the user: why a remote branch was kept.
 #[tauri::command]
 pub async fn branch_delete(
     core: CoreState<'_>,
@@ -463,7 +464,7 @@ pub async fn branch_delete(
     name: String,
     remote: bool,
     force: bool,
-) -> Res<()> {
+) -> Res<Option<String>> {
     core.branch_delete(&project_id, &name, remote, force)
         .await
         .map_err(branch_err)
