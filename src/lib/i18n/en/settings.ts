@@ -93,7 +93,7 @@ export default defineZone('settings', {
     systemLabel: 'System notifications',
     sound: 'Sound',
     soundOn: 'Sound on',
-    soundOnDesc: 'A question from Claude, the end of a turn',
+    soundOnDesc: 'When Claude asks a question or a turn ends',
     soundTest: 'Test the sound',
     soundTestButton: '▶ Test',
   },
@@ -110,7 +110,7 @@ export default defineZone('settings', {
   network: {
     proxy: 'Proxy',
     proxyNote:
-      'The proxy is passed to Claude Code processes, quota reading, integrations, and updates. It applies to agents the next time their process (re)starts.',
+      'Claude Code processes, quota reads, integrations, and updates all go through the proxy. It applies to agents the next time their process (re)starts.',
     proxyUrl: 'HTTP(S) proxy',
     proxyUrlHint: 'e.g. http://user:password@proxy:3128',
     proxyUrlNone: 'none',
@@ -171,7 +171,7 @@ export default defineZone('settings', {
     worktreeRoot: 'the worktree root',
     projectFolder: 'the project folder',
     setupTitle: 'When a worktree opens',
-    setupDesc: 'In order, before its agent’s first message: dependencies, generated code… Messages wait until they finish.',
+    setupDesc: 'In order, before its agent’s first message: dependencies, generated code… Messages wait for them to finish.',
     teardownTitle: 'Before it is removed',
     teardownDesc: 'What the setup created outside the worktree (database, containers…); often nothing.',
     launch: 'Launch',
