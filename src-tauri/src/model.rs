@@ -955,14 +955,27 @@ pub struct Hold {
     pub lifted: [Option<i64>; 2],
 }
 
-/// The autopilot's pause, kept across a restart: the quota windows last read (a reading holds
-/// until its window's end, and with an API key none comes again) and what else holds it.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq)]
+/// The autopilot's pause, kept across a restart: the quota windows last read on each account (a
+/// reading holds until its window's end, and with an API key none comes again) and what else
+/// holds it.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct SavedPause {
+    /// Principal's windows, where the versions before the accounts kept the only ones: a state
+    /// they saved gives them to Principal, and a version rolled back still reads them.
     pub five_hour: Option<RateWindow>,
     pub seven_day: Option<RateWindow>,
     pub hold: Hold,
+    /// The other accounts' windows, by account.
+    pub accounts: BTreeMap<String, SavedWindows>,
+}
+
+/// An account's quota windows, as last read.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SavedWindows {
+    pub five_hour: Option<RateWindow>,
+    pub seven_day: Option<RateWindow>,
 }
 
 /// Why no ticket of any board starts, and until when (`board::autopilot_pause`).
@@ -976,13 +989,50 @@ pub struct AutopilotPause {
     pub until: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Default)]
+/// The quotas of every Claude account, as the window is told them (`usage::settle`).
+#[derive(Debug, Clone, Serialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct UsageSnapshot {
+    /// The current account's windows: what the status bar shows and the autopilot goes by.
     pub five_hour: Option<RateWindow>,
     pub seven_day: Option<RateWindow>,
+    /// What the turns cost today, on every account.
     pub today_cost: f64,
+    /// When the current account's windows were last read, ms since epoch.
     pub updated_at: i64,
+    /// Every account, in the settings' order.
+    pub accounts: Vec<AccountUsage>,
+    /// The account new agents would go to (`accounts::current`).
+    pub current: String,
+}
+
+/// One Claude account's quota, as last read.
+#[derive(Debug, Clone, Serialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountUsage {
+    pub id: String,
+    pub five_hour: Option<RateWindow>,
+    pub seven_day: Option<RateWindow>,
+    /// Signed in, as the last reading tells (an account not read yet is taken as signed in).
+    pub connected: bool,
+    /// Why its quota is not read (not signed in, sign-in expired), in the interface's language.
+    pub reason: Option<String>,
+    /// What its turns cost today (0 until the statistics are kept by account).
+    pub today_cost: f64,
+    /// When its windows were last read, ms since epoch (0: not in this run).
+    pub updated_at: i64,
+    /// What `connected` and `reason` tell, kept to write them again in another language.
+    #[serde(skip)]
+    pub problem: Option<SignInProblem>,
+}
+
+/// Why an account's quota cannot be read from the usage endpoint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SignInProblem {
+    /// No sign-in to claude.ai in its folder (an API key, or never signed in).
+    NotSignedIn,
+    /// Its sign-in is out of date: Claude Code renews it when it runs.
+    Expired,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1296,9 +1346,10 @@ mod tests {
                 limit_until: Some(5),
                 lifted: [None, Some(7)],
             },
+            ..Default::default()
         };
         let v = serde_json::to_value(PersistedState {
-            pause: saved,
+            pause: saved.clone(),
             ..Default::default()
         })
         .unwrap();
@@ -1309,6 +1360,73 @@ mod tests {
         // Saved with only part of it.
         let part: SavedPause = serde_json::from_value(json!({ "hold": {} })).unwrap();
         assert_eq!(part, SavedPause::default());
+    }
+
+    #[test]
+    fn the_quota_windows_are_saved_by_account_and_an_older_state_keeps_principals() {
+        let full = RateWindow {
+            pct: 100.0,
+            resets_at: Some(9),
+        };
+        // Saved before the accounts: the windows of the only account there was.
+        let old: SavedPause =
+            serde_json::from_value(json!({ "fiveHour": { "pct": 100.0, "resetsAt": 9 },
+                                           "hold": {} }))
+            .unwrap();
+        assert_eq!(old.five_hour, Some(full));
+        assert!(old.accounts.is_empty());
+        // The other accounts' beside them, by id.
+        let saved = SavedPause {
+            seven_day: Some(full),
+            accounts: BTreeMap::from([(
+                "pro".to_string(),
+                SavedWindows {
+                    five_hour: Some(full),
+                    seven_day: None,
+                },
+            )]),
+            ..Default::default()
+        };
+        let v = serde_json::to_value(&saved).unwrap();
+        assert_eq!(v["sevenDay"]["resetsAt"], json!(9));
+        assert_eq!(
+            v["accounts"],
+            json!({ "pro": { "fiveHour": { "pct": 100.0, "resetsAt": 9 }, "sevenDay": null } })
+        );
+        assert_eq!(serde_json::from_value::<SavedPause>(v).unwrap(), saved);
+    }
+
+    #[test]
+    fn the_quotas_of_every_account_travel_in_camel_case() {
+        let w = RateWindow {
+            pct: 12.0,
+            resets_at: Some(5),
+        };
+        let usage = UsageSnapshot {
+            five_hour: Some(w),
+            today_cost: 1.5,
+            updated_at: 3,
+            accounts: vec![AccountUsage {
+                id: "pro".into(),
+                five_hour: Some(w),
+                connected: false,
+                reason: Some("Pas connecté".into()),
+                updated_at: 3,
+                problem: Some(SignInProblem::NotSignedIn),
+                ..Default::default()
+            }],
+            current: "pro".into(),
+            ..Default::default()
+        };
+        assert_eq!(
+            serde_json::to_value(&usage).unwrap(),
+            json!({ "fiveHour": { "pct": 12.0, "resetsAt": 5 }, "sevenDay": null,
+                    "todayCost": 1.5, "updatedAt": 3, "current": "pro",
+                    "accounts": [{ "id": "pro", "fiveHour": { "pct": 12.0, "resetsAt": 5 },
+                                   "sevenDay": null, "connected": false,
+                                   "reason": "Pas connecté", "todayCost": 0.0,
+                                   "updatedAt": 3 }] })
+        );
     }
 
     #[test]

@@ -5,8 +5,9 @@
 //!
 //! The order of `Settings::accounts` is their priority: new agents go to the first one usable.
 
+use crate::board;
 use crate::claude;
-use crate::model::{Account, Settings};
+use crate::model::{Account, AccountUsage, Settings};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
@@ -37,11 +38,20 @@ pub fn normalize(settings: &mut Settings) {
         a.config_dir = a.config_dir.trim().to_string();
     }
     // An id given twice: the first keeps it, the others are told apart (their agents, if any,
-    // stay with the first).
-    let mut taken = HashSet::new();
+    // stay with the first). Every id given counts as taken from the start: one given once keeps
+    // it even when another is told apart before it comes.
+    let mut taken: HashSet<String> = accounts
+        .iter()
+        .filter(|a| !a.id.is_empty())
+        .map(|a| a.id.clone())
+        .collect();
+    let mut seen = HashSet::new();
     for a in accounts.iter_mut().filter(|a| !a.id.is_empty()) {
-        a.id = unique(&a.id, &taken);
-        taken.insert(a.id.clone());
+        if !seen.insert(a.id.clone()) {
+            a.id = unique(&a.id, &taken);
+            taken.insert(a.id.clone());
+            seen.insert(a.id.clone());
+        }
     }
     // None (written by hand): one after its name, never Principal's.
     taken.insert(PRINCIPAL.to_string());
@@ -102,9 +112,30 @@ pub fn get(settings: &Settings, id: &str) -> Account {
     find(settings, id).cloned().unwrap_or_else(principal)
 }
 
+/// The account new agents would go to, as the status bar shows it: the first active one, in the
+/// settings' order, none of whose quota windows (`usage`) is used `threshold` percent or more at
+/// `now` (as the autopilot counts it), else the first active one.
+pub fn current(settings: &Settings, usage: &[AccountUsage], threshold: u32, now: i64) -> String {
+    let over = |id: &str| {
+        usage.iter().find(|u| u.id == id).is_some_and(|u| {
+            [u.five_hour, u.seven_day]
+                .iter()
+                .flatten()
+                .any(|w| board::over_threshold(w, threshold, now))
+        })
+    };
+    let mut active = settings.accounts.iter().filter(|a| a.active);
+    let first = active.clone().next();
+    active
+        .find(|a| !over(&a.id))
+        .or(first)
+        .map_or_else(|| PRINCIPAL.to_string(), |a| a.id.clone())
+}
+
 /// The configuration folder the account's Claude Code reads: its own, or for Principal (no folder)
 /// the app's `CLAUDE_CONFIG_DIR` when it has one, which its processes inherit, else `~/.claude`.
-// Allowed unused until the quota and the sign-in read each account's folder (then drop the allow).
+// Allowed unused until the accounts' settings read each one's folder (then drop the allow): the
+// quota goes by `usage::sign_in`, which takes the app's environment as `config_dir_with` does.
 #[allow(dead_code)]
 pub fn config_dir(account: &Account) -> PathBuf {
     let env = std::env::var(CONFIG_DIR_VAR).ok();
@@ -123,8 +154,9 @@ pub fn config_dir_with(account: &Account, env: Option<&str>, home: &Path) -> Pat
     }
 }
 
-/// The account's own folder: none for Principal, whatever its settings say.
-fn own_dir(account: &Account) -> Option<&str> {
+/// The account's own folder, the `CLAUDE_CONFIG_DIR` its processes get: none for Principal,
+/// whatever its settings say.
+pub(crate) fn own_dir(account: &Account) -> Option<&str> {
     let dir = account.config_dir.trim();
     (account.id != PRINCIPAL && !dir.is_empty()).then_some(dir)
 }
@@ -259,6 +291,20 @@ mod tests {
         // The first one keeps the id; the others keep their folder.
         let dirs: Vec<&str> = s.accounts.iter().map(|a| a.config_dir.as_str()).collect();
         assert_eq!(dirs, ["", "/a", "/b", "/c", "/d", "/e"]);
+    }
+
+    #[test]
+    fn an_id_given_once_keeps_it_when_another_is_told_apart() {
+        // `x-2` is already some account's: the second `x` takes the next one free, and `x-2`
+        // stays as it is (its agents with it).
+        let mut s = Settings {
+            accounts: vec![account("x", "/a"), account("x", "/b"), account("x-2", "/c")],
+            ..Default::default()
+        };
+        normalize(&mut s);
+        assert_eq!(ids(&s), ["principal", "x", "x-3", "x-2"]);
+        let dirs: Vec<&str> = s.accounts.iter().map(|a| a.config_dir.as_str()).collect();
+        assert_eq!(dirs, ["", "/a", "/b", "/c"]);
     }
 
     #[test]

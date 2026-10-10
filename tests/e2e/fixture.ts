@@ -97,8 +97,14 @@ function webviewDiagnostics(root: string): string {
   return out.join('\n');
 }
 
-export const test = base.extend<{ app: App }>({
-  app: async ({}, use, testInfo) => {
+/** The usage endpoint the app asks: a closed port, unless a test gives its own (`appEnv`). */
+const NO_USAGE_API = 'http://127.0.0.1:9/api/oauth/usage';
+
+export const test = base.extend<{ app: App; appEnv: Record<string, string> }>({
+  // Variables for the app on top of the fixture's, which they replace (`test.use({ appEnv: … })`):
+  // a fake usage endpoint, Principal's folder with a fake-limit in it.
+  appEnv: [{}, { option: true }],
+  app: async ({ appEnv }, use, testInfo) => {
     if (!fs.existsSync(EXE)) throw new Error(`build the app first: npx tauri build --debug --no-bundle (missing ${EXE})`);
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ccm-e2e-'));
     const data = path.join(root, 'data');
@@ -126,6 +132,12 @@ export const test = base.extend<{ app: App }>({
         FAKE_CLAUDE_REMOTE_MESSAGE: 'Message depuis le téléphone',
         WEBVIEW2_USER_DATA_FOLDER: path.join(root, 'webview'),
         WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}`,
+        // Never the machine user's own sign-in nor Anthropic's endpoint: Principal's Claude Code
+        // folder is a test one (with no sign-in in it), and the quota is asked of nobody.
+        CLAUDE_CONFIG_DIR: path.join(root, 'claude'),
+        CLAUDE_SECURESTORAGE_CONFIG_DIR: undefined,
+        ESCOUADE_USAGE_API: NO_USAGE_API,
+        ...appEnv,
       },
       stdio: ['ignore', 'ignore', errFd],
     });

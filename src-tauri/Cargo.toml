@@ -39,6 +39,9 @@ log = "0.4"
 trash = "5"
 # The system's language, for the interface's default one.
 sys-locale = "0.3"
+# The name of a Claude account's macOS keychain entry: Claude Code's own hash of its folder, in NFC.
+sha2 = "0.10"
+unicode-normalization = "0.1"
 # The MCP server (« Claude peut piloter Escouade »): the official SDK, its Streamable HTTP
 # transport served by hyper on the loopback, the bearer tokens compared in constant time.
 rmcp = { version = "3.5", default-features = false, features = ["server", "macros", "transport-streamable-http-server"] }

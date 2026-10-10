@@ -340,6 +340,10 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 
 | Français | Anglais | Note |
 |---|---|---|
+| Principal | Main | le compte Claude habituel de l’utilisateur |
+| connexion (d’un compte Claude) | sign-in | « Pas connecté » → “Not signed in” ; « Connexion expirée » → “Sign-in expired” |
+| relancer Claude Code (pour un compte) | run Claude Code again | « relance Claude Code pour ce compte » → “run Claude Code again for this account” |
+| compte en cours | current account | celui sur lequel partiraient les nouveaux agents |
 
 ## M — mcp
 

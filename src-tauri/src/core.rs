@@ -347,7 +347,10 @@ pub struct Core<R: Runtime = Wry> {
     create_lock: tokio::sync::Mutex<()>,
     conv_buffer: Mutex<HashMap<String, Vec<ConvOp>>>,
     conv_flush: tokio::sync::Notify,
-    last_oauth_call: Mutex<Option<i64>>,
+    /// When the usage endpoint was last asked, by account.
+    pub(crate) last_oauth_call: Mutex<HashMap<String, i64>>,
+    /// Where the usage endpoint is (`usage::api_from_env`; a fake one in tests).
+    pub(crate) usage_api: RwLock<String>,
     resources: Mutex<resources::Sampler>,
     git_inflight: Mutex<std::collections::HashSet<String>>,
     /// One fetch, pull or push at a time per repository.
@@ -867,17 +870,13 @@ impl<R: Runtime> Core<R> {
             .collect();
         // The autopilot's pause as the app stopped, for the first pass (before any new reading of
         // the quotas, which with an API key never comes): a window read holds until its end, an
-        // ended one is dropped (the status bar would show it).
+        // ended one is dropped (the status bar would show it). Each account's own.
         let saved = state.pause;
         let now = now_ms();
         let ongoing = |w: Option<RateWindow>| {
             w.filter(|w| w.resets_at.is_some_and(|end| end + RESUME_MARGIN_MS > now))
         };
-        let usage = UsageSnapshot {
-            five_hour: ongoing(saved.five_hour),
-            seven_day: ongoing(saved.seven_day),
-            ..Default::default()
-        };
+        let usage = UsageSnapshot::restored(&saved, &settings, ongoing, now);
         let (git, rx) = GitService::new();
         let core = Arc::new_cyclic(|me| Self {
             me: me.clone(),
@@ -899,7 +898,8 @@ impl<R: Runtime> Core<R> {
             create_lock: tokio::sync::Mutex::new(()),
             conv_buffer: Mutex::default(),
             conv_flush: tokio::sync::Notify::new(),
-            last_oauth_call: Mutex::new(None),
+            last_oauth_call: Mutex::default(),
+            usage_api: RwLock::new(usage::api_from_env()),
             resources: Mutex::default(),
             git_inflight: Mutex::default(),
             sync_locks: Mutex::default(),
@@ -1055,22 +1055,15 @@ impl<R: Runtime> Core<R> {
         let ui = self.ui.read().clone();
         let models = self.models.read().clone();
         let tickets = self.tickets.read().clone();
-        let (five_hour, seven_day) = {
-            let u = self.usage.lock();
-            (u.five_hour, u.seven_day)
-        };
         let hold = *self.hold.lock();
+        let pause = self.usage.lock().saved(hold);
         PersistedState {
             projects,
             agents,
             ui,
             models,
             tickets,
-            pause: SavedPause {
-                five_hour,
-                seven_day,
-                hold,
-            },
+            pause,
         }
     }
 
@@ -1109,6 +1102,9 @@ impl<R: Runtime> Core<R> {
             }
             self.hub.emit(UiEvent::Language { lang });
         }
+        // Accounts added, removed, put in another order, a threshold or a language changed: the
+        // quotas as the window shows them.
+        self.settle_usage();
         if !auto_resume {
             // Turned off: the resumes already planned go too.
             let dropped: Vec<AgentView> = self
@@ -1350,18 +1346,9 @@ impl<R: Runtime> Core<R> {
             u.today_cost = self.stats.today_cost();
             self.hub.emit(UiEvent::Usage { usage: u.clone() });
         }
-        if let Some((five, week)) = fx.rate {
-            {
-                let mut u = self.usage.lock();
-                if five.is_some() {
-                    u.five_hour = five;
-                }
-                if week.is_some() {
-                    u.seven_day = week;
-                }
-                u.updated_at = now_ms();
-                self.hub.emit(UiEvent::Usage { usage: u.clone() });
-            }
+        if let Some(windows) = fx.rate {
+            // The quota of the account the agent's process runs on.
+            self.record_usage(&self.account_of(id), usage::Reading::Windows(windows));
             // The autopilot pauses (or goes on) as the quotas just read say.
             self.pause_tick();
         }
@@ -1782,7 +1769,8 @@ impl<R: Runtime> Core<R> {
     }
 
     /// Stopped by the usage limit: plans to send the agent "continue" once the limit resets (as
-    /// Claude Code told, else the saturated window's), unless turned off in the settings.
+    /// Claude Code told, else the saturated window's of its account), unless turned off in the
+    /// settings.
     pub fn plan_resume(self: &Arc<Self>, id: &str, resets_at: Option<i64>) {
         if !self.settings.read().auto_resume {
             return;
@@ -1790,8 +1778,10 @@ impl<R: Runtime> Core<R> {
         // Only a reset still to come: past one, retrying would only meet the limit again.
         let now = now_ms();
         let when = resets_at.filter(|t| *t > now).or_else(|| {
+            let account = self.account_of(id);
             let u = self.usage.lock();
-            [u.five_hour.as_ref(), u.seven_day.as_ref()]
+            let a = u.account(&account)?;
+            [a.five_hour.as_ref(), a.seven_day.as_ref()]
                 .into_iter()
                 .flatten()
                 .filter(|w| w.pct >= 100.0)
@@ -2854,6 +2844,16 @@ impl<R: Runtime> Core<R> {
             agent,
         })
         .await
+    }
+
+    /// The id of the account agent `id` runs on: Principal for an agent gone, or on an account
+    /// the settings no longer know.
+    fn account_of(&self, id: &str) -> String {
+        let account = self
+            .agent(id)
+            .map(|h| h.lock().meta.account.clone())
+            .unwrap_or_default();
+        accounts::get(&self.settings.read(), &account).id
     }
 
     /// The account a question about `agent` is asked of: the agent's, Principal without one.
@@ -4081,49 +4081,114 @@ impl<R: Runtime> Core<R> {
 
     // ---------- usage ----------
 
+    /// What a reading of the account's quota found (a process of the account told it, or the
+    /// endpoint did), the quotas settled again (`UsageSnapshot::settle`) and told to the window.
+    pub(crate) fn record_usage(&self, account: &str, reading: usage::Reading) {
+        self.update_usage(|u| u.record(account, reading, now_ms()));
+    }
+
+    /// The quotas settled again as the settings now are, and told to the window.
+    fn settle_usage(&self) {
+        self.update_usage(|_| {});
+    }
+
+    /// `change` made to the quotas, which are then settled and told to the window.
+    pub(crate) fn update_usage(&self, change: impl FnOnce(&mut UsageSnapshot)) {
+        let settings = self.settings.read().clone();
+        let mut u = self.usage.lock();
+        change(&mut u);
+        u.settle(&settings, now_ms());
+        // Told under the lock: two changes at once reach the window in the order they were made.
+        self.hub.emit(UiEvent::Usage { usage: u.clone() });
+    }
+
+    /// Every account's quota read again: from a process of the account when one runs
+    /// (`get_usage`), else, for an active account, from the usage endpoint with its own sign-in,
+    /// at most every five minutes (`usage::OAUTH_POLL_MS`).
     pub async fn refresh_usage(self: &Arc<Self>) {
-        let proc = self
-            .agents
-            .read()
-            .values()
-            .find_map(|h| h.lock().proc.clone());
-        let mut windows = None;
+        let settings = self.settings.read().clone();
+        // One running process per account, its first.
+        let mut procs: HashMap<String, Arc<ClaudeProcess>> = HashMap::new();
+        for h in self.agents.read().values() {
+            let rt = h.lock();
+            if let Some(p) = rt.proc.clone() {
+                let account = accounts::get(&settings, &rt.meta.account).id;
+                procs.entry(account).or_insert(p);
+            }
+        }
+        let mut readings = Vec::new();
+        for account in &settings.accounts {
+            let proc = procs.get(&account.id).cloned();
+            if let Some(r) = self.read_quota(&settings, account, proc).await {
+                readings.push((account.id.clone(), r));
+            }
+        }
+        let read = readings
+            .iter()
+            .any(|(_, r)| matches!(r, usage::Reading::Windows(_)));
+        let today_cost = self.stats.today_cost();
+        self.update_usage(|u| {
+            for (account, reading) in readings {
+                u.record(&account, reading, now_ms());
+            }
+            u.today_cost = today_cost;
+        });
+        if read {
+            // Back under the threshold, the tickets go on at once.
+            self.pause_tick();
+        }
+    }
+
+    /// One reading of the account's quota, if one is to be had: its process's, else the
+    /// endpoint's when the account is active and was not asked in the last five minutes. None
+    /// also for an error of the network or of the server: the last values stand.
+    async fn read_quota(
+        &self,
+        settings: &Settings,
+        account: &Account,
+        proc: Option<Arc<ClaudeProcess>>,
+    ) -> Option<usage::Reading> {
         if let Some(p) = proc {
-            if let Ok(v) = p
+            let asked = p
                 .control(
                     json!({ "subtype": "get_usage", "skip_behaviors": true }),
                     Duration::from_secs(20),
                 )
-                .await
-            {
-                if v["rate_limits"].is_object() {
-                    windows = Some(usage::parse_windows(&v["rate_limits"]));
+                .await;
+            if let Ok(v) = asked.as_ref().map(|v| &v["rate_limits"]) {
+                if v.is_object() {
+                    return Some(usage::Reading::Windows(usage::parse_windows(v)));
                 }
             }
         }
-        if windows.is_none() && usage::oauth_due(*self.last_oauth_call.lock(), now_ms()) {
-            *self.last_oauth_call.lock() = Some(now_ms());
-            let settings = self.settings.read().clone();
-            match usage::fetch_oauth(&settings).await {
-                Ok(w) => windows = Some(w),
-                Err(e) => log::debug!("usage endpoint: {e:#}"),
-            }
+        if !account.active {
+            return None;
         }
-        let read = windows.is_some();
-        let snapshot = {
-            let mut u = self.usage.lock();
-            if let Some((five, week)) = windows {
-                u.five_hour = five.or(u.five_hour);
-                u.seven_day = week.or(u.seven_day);
-                u.updated_at = now_ms();
+        // Noted before asking: two readings at once ask the endpoint once.
+        let before = {
+            let mut last = self.last_oauth_call.lock();
+            if !usage::oauth_due(last.get(&account.id).copied(), now_ms()) {
+                return None;
             }
-            u.today_cost = self.stats.today_cost();
-            u.clone()
+            last.insert(account.id.clone(), now_ms())
         };
-        self.hub.emit(UiEvent::Usage { usage: snapshot });
-        if read {
-            // Back under the threshold, the tickets go on at once.
-            self.pause_tick();
+        let api = self.usage_api.read().clone();
+        match usage::read_oauth(settings, &api, &usage::sign_in(account)).await {
+            Ok(usage::Reading::NotSignedIn) => {
+                // The endpoint was not asked: the next reading looks again, so that a sign-in
+                // shows within a minute rather than five.
+                let mut last = self.last_oauth_call.lock();
+                match before {
+                    Some(t) => last.insert(account.id.clone(), t),
+                    None => last.remove(&account.id),
+                };
+                Some(usage::Reading::NotSignedIn)
+            }
+            Ok(reading) => Some(reading),
+            Err(e) => {
+                log::debug!("usage endpoint, account {}: {e:#}", account.id);
+                None
+            }
         }
     }
 }

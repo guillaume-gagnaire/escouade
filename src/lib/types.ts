@@ -626,9 +626,31 @@ export interface RateWindow {
 }
 
 export interface Usage {
+  /** The current account's windows: what the status bar shows and the autopilot goes by. */
   fiveHour: RateWindow | null;
   sevenDay: RateWindow | null;
+  /** What the turns cost today, on every account. */
   todayCost: number;
+  /** When the current account's windows were last read. */
+  updatedAt: number;
+  /** Every Claude account, in the settings' order. */
+  accounts: AccountUsage[];
+  /** The account new agents would go to: the first active one under the pause threshold, else the first active one. */
+  current: string;
+}
+
+/** One Claude account's quota, as last read. */
+export interface AccountUsage {
+  id: string;
+  fiveHour: RateWindow | null;
+  sevenDay: RateWindow | null;
+  /** Signed in, as the last reading tells (an account not read yet counts as signed in). */
+  connected: boolean;
+  /** Why its quota is not read (not signed in, sign-in expired), in the interface's language. */
+  reason: string | null;
+  /** What its turns cost today (0 until the statistics are kept by account). */
+  todayCost: number;
+  /** When its windows were last read (0: not since the app started). */
   updatedAt: number;
 }
 

@@ -6,6 +6,7 @@ use crate::agent::NotifyKind;
 use crate::core::{AgentOptions, Attachment, Core, NotOnBase, SyncOp};
 use crate::model::*;
 use crate::paths::{test_dir, DataDir};
+use crate::usage::Reading;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -706,10 +707,12 @@ async fn nothing_is_planned_without_a_reset_still_to_come() {
     // A reset already passed (an old reading): retrying would only meet the limit again.
     h.core.plan_resume(&id, Some(now_ms() - 60_000));
     assert_eq!(h.agent(&id).resume_at, None);
-    h.core.usage.lock().five_hour = Some(RateWindow {
+    let full_before = Some(RateWindow {
         pct: 100.0,
         resets_at: Some(now_ms() - 60_000),
     });
+    h.core
+        .record_usage("principal", Reading::Windows((full_before, None)));
     h.core.plan_resume(&id, None);
     assert_eq!(h.agent(&id).resume_at, None);
 }
@@ -832,12 +835,14 @@ async fn a_resume_takes_the_saturated_window_s_reset_and_can_be_turned_off_or_ca
     let h = harness("auto-resume-plan");
     let (p, _) = h.project(false).await;
     let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
-    // Claude Code did not tell the reset: the full window's.
+    // Claude Code did not tell the reset: the full window's (of its account).
     let reset = now_ms() + 7_200_000;
-    h.core.usage.lock().five_hour = Some(RateWindow {
+    let full = Some(RateWindow {
         pct: 100.0,
         resets_at: Some(reset),
     });
+    h.core
+        .record_usage("principal", Reading::Windows((full, None)));
     h.core.plan_resume(&id, None);
     let at = h.agent(&id).resume_at.expect("planned from the window");
     assert!(at > reset && at < reset + 120_000, "{at} vs {reset}");
@@ -4130,6 +4135,338 @@ async fn an_agent_on_a_second_account_runs_with_its_folder_and_one_on_principal_
     // An account the settings do not know: Principal.
     let lost = agent_on(&h, &p, "parti").await;
     assert_eq!(lost.account, "principal");
+}
+
+#[tokio::test]
+async fn an_agent_on_a_second_account_goes_through_the_proxy_with_its_folder() {
+    let h = harness("accounts-proxy");
+    let (p, r) = h.project(false).await;
+    let pro = second_account(&h);
+    h.core.settings.write().proxy_url = "http://proxy.corp:3128".into();
+    let id = agent_on(&h, &p, "pro").await.id;
+    h.turn(&id, "Bonjour").await;
+    // Its folder is added to the network settings, neither taking the other's place.
+    let last = h.launch_log(&r).last().cloned().unwrap();
+    assert_eq!(
+        (&last["proxy"], &last["configDir"]),
+        (&json!("http://proxy.corp:3128"), &json!(pro.config_dir))
+    );
+}
+
+/// The account's 5-hour window as last read, in whole percent.
+fn five_hour_pct(h: &Harness, account: &str) -> Option<f64> {
+    h.core
+        .usage
+        .lock()
+        .account(account)
+        .and_then(|a| a.five_hour)
+        .map(|w| w.pct.round())
+}
+
+/// Sends `text` and waits for the turn to be over, however it ends (the usage limit too).
+async fn turn_over(h: &Harness, id: &str, text: &str) {
+    h.core
+        .send_message(id, text.to_string(), vec![])
+        .await
+        .unwrap();
+    h.wait("turn started", |h| {
+        h.stdin_messages(Path::new(&h.agent(id).cwd))
+            .iter()
+            .any(|m| m["message"]["content"] == text)
+    })
+    .await;
+    h.wait("turn over", |h| !h.agent(id).status.is_active())
+        .await;
+}
+
+#[tokio::test]
+async fn a_rate_limit_event_of_an_agent_on_the_second_account_only_touches_its_quota() {
+    let h = harness("accounts-quota-event");
+    // Each agent in its worktree: each its own log of messages.
+    let (p, _) = h.project(true).await;
+    let pro = second_account(&h);
+    // A turn on Principal: its windows only.
+    let main = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    turn_over(&h, &main, "Bonjour").await;
+    h.wait("Principal's quota", |h| {
+        five_hour_pct(h, "principal") == Some(12.0)
+    })
+    .await;
+    assert_eq!(five_hour_pct(&h, "pro"), None);
+    // Pro out of quota: its agent's turn stops at the limit, Pro alone at 100 %.
+    std::fs::create_dir_all(&pro.config_dir).unwrap();
+    let limit = Path::new(&pro.config_dir).join("fake-limit");
+    std::fs::write(&limit, "").unwrap();
+    let id = agent_on(&h, &p, "pro").await.id;
+    turn_over(&h, &id, "Bonjour").await;
+    h.wait("Pro's quota", |h| five_hour_pct(h, "pro") == Some(100.0))
+        .await;
+    assert_eq!(five_hour_pct(&h, "principal"), Some(12.0));
+    // Principal stays the current account: its windows are the status bar's.
+    let u = h.core.usage.lock().clone();
+    assert_eq!(u.current, "principal");
+    assert_eq!(u.five_hour.map(|w| w.pct.round()), Some(12.0));
+    // Principal at the limit too: every account past the threshold, the first active one.
+    turn_over(&h, &main, "la limite").await;
+    h.wait("Principal at the limit", |h| {
+        five_hour_pct(h, "principal") == Some(100.0)
+    })
+    .await;
+    assert_eq!(h.core.usage.lock().current, "principal");
+    // Pro has quota again: it is the first one under the threshold, its windows first.
+    std::fs::remove_file(&limit).unwrap();
+    turn_over(&h, &id, "Encore").await;
+    h.wait("Pro under the threshold", |h| {
+        five_hour_pct(h, "pro") == Some(12.0)
+    })
+    .await;
+    let u = h.core.usage.lock().clone();
+    assert_eq!(u.current, "pro");
+    assert_eq!(u.five_hour.map(|w| w.pct.round()), Some(12.0));
+    assert_eq!(five_hour_pct(&h, "principal"), Some(100.0));
+    // As the window was told.
+    let told = h
+        .events
+        .lock()
+        .iter()
+        .rev()
+        .find(|e| e["type"] == "usage")
+        .cloned()
+        .unwrap();
+    assert_eq!(told["usage"]["current"], "pro");
+    let ids: Vec<&Value> = told["usage"]["accounts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|a| &a["id"])
+        .collect();
+    assert_eq!(ids, [&json!("principal"), &json!("pro")]);
+    assert_eq!(told["usage"]["accounts"][1]["connected"], true);
+}
+
+#[tokio::test]
+async fn an_agent_waits_for_the_windows_of_its_own_account() {
+    let h = harness("accounts-quota-resume");
+    let (p, _) = h.project(false).await;
+    second_account(&h);
+    let reset = now_ms() + 7_200_000;
+    let full = Some(RateWindow {
+        pct: 100.0,
+        resets_at: Some(reset),
+    });
+    h.core.record_usage("pro", Reading::Windows((full, None)));
+    // Pro's full window is none of Principal's agents'.
+    let main = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.core.plan_resume(&main, None);
+    assert_eq!(h.agent(&main).resume_at, None);
+    let id = agent_on(&h, &p, "pro").await.id;
+    h.core.plan_resume(&id, None);
+    let at = h
+        .agent(&id)
+        .resume_at
+        .expect("planned from its account's window");
+    assert!(at > reset && at < reset + 120_000, "{at} vs {reset}");
+}
+
+#[tokio::test]
+async fn each_active_account_is_read_with_its_own_sign_in_at_most_every_five_minutes() {
+    use crate::integrations::fake::FakeServer;
+    let h = harness("accounts-quota-endpoint");
+    let server = FakeServer::start().await;
+    server.on(
+        "GET",
+        "/api/oauth/usage",
+        200,
+        json!({ "five_hour": { "utilization": 40.0, "resets_at": "2099-01-01T00:00:00+00:00" },
+                "seven_day": { "utilization": 7.0, "resets_at": null } }),
+    );
+    *h.core.usage_api.write() = format!("{}/api/oauth/usage", server.url);
+    let account = |id: &str, active: bool| {
+        let dir = h.dir.join(format!("claude-{id}"));
+        std::fs::create_dir_all(&dir).unwrap();
+        Account {
+            id: id.into(),
+            name: id.into(),
+            config_dir: dir.to_string_lossy().into(),
+            active,
+            ..Default::default()
+        }
+    };
+    let sign_in = |a: &Account, token: &str, expires_at: i64| {
+        let creds = json!({ "claudeAiOauth": { "accessToken": token, "expiresAt": expires_at } });
+        std::fs::write(
+            Path::new(&a.config_dir).join(".credentials.json"),
+            creds.to_string(),
+        )
+        .unwrap();
+    };
+    let (pro, vide, vieux, off) = (
+        account("pro", true),
+        account("vide", true),
+        account("vieux", true),
+        account("off", false),
+    );
+    let later = now_ms() + 3_600_000;
+    sign_in(&pro, "tok-pro", later);
+    sign_in(&vieux, "tok-vieux", now_ms() - 1_000);
+    sign_in(&off, "tok-off", later);
+    let mut s = h.core.settings.read().clone();
+    // Principal at rest: its sign-in would be the machine user's own.
+    s.accounts[0].active = false;
+    s.accounts.extend([pro, vide, vieux, off]);
+    h.core.save_settings(s).unwrap();
+    let tokens = |server: &FakeServer| -> Vec<String> {
+        server
+            .requests()
+            .iter()
+            .map(|r| r.headers["authorization"].clone())
+            .collect()
+    };
+    let get = |h: &Harness, id: &str| h.core.usage.lock().account(id).cloned().unwrap();
+    h.core.refresh_usage().await;
+    // One call, for the only account signed in and active.
+    assert_eq!(tokens(&server), ["Bearer tok-pro"]);
+    let read = get(&h, "pro");
+    assert_eq!(read.five_hour.map(|w| w.pct), Some(40.0));
+    assert_eq!(read.seven_day.map(|w| w.pct), Some(7.0));
+    assert_eq!((read.connected, read.reason.as_deref()), (true, None));
+    let none = get(&h, "vide");
+    assert_eq!(
+        (none.connected, none.reason.as_deref()),
+        (false, Some("Pas connecté"))
+    );
+    let old = get(&h, "vieux");
+    assert_eq!(
+        (old.connected, old.reason.as_deref(), old.five_hour),
+        (
+            true,
+            Some("Connexion expirée : relance Claude Code pour ce compte."),
+            None
+        )
+    );
+    // At rest: neither asked nor read.
+    assert_eq!(get(&h, "off").five_hour, None);
+    assert_eq!(get(&h, "principal").five_hour, None);
+    // The first active one, under the threshold: the current account.
+    let u = h.core.usage.lock().clone();
+    assert_eq!(
+        (u.current.as_str(), u.five_hour.map(|w| w.pct)),
+        ("pro", Some(40.0))
+    );
+    // Again within the five minutes: not asked again.
+    h.core.refresh_usage().await;
+    assert_eq!(tokens(&server).len(), 1);
+    // Signed in meanwhile: the account that had no sign-in is read at the next reading, not five
+    // minutes later.
+    let creds = json!({ "claudeAiOauth": { "accessToken": "tok-vide", "expiresAt": later } });
+    std::fs::write(
+        h.dir.join("claude-vide").join(".credentials.json"),
+        creds.to_string(),
+    )
+    .unwrap();
+    h.core.refresh_usage().await;
+    assert_eq!(tokens(&server), ["Bearer tok-pro", "Bearer tok-vide"]);
+    let signed = get(&h, "vide");
+    assert_eq!(
+        (
+            signed.connected,
+            signed.reason,
+            signed.five_hour.map(|w| w.pct)
+        ),
+        (true, None, Some(40.0))
+    );
+    // Five minutes later, the network down: the last values stay.
+    h.core.last_oauth_call.lock().clear();
+    *h.core.usage_api.write() = crate::usage::api_from_env();
+    h.core.refresh_usage().await;
+    let kept = get(&h, "pro");
+    assert_eq!(
+        (kept.five_hour.map(|w| w.pct), kept.connected),
+        (Some(40.0), true)
+    );
+    assert_eq!(kept.updated_at, read.updated_at);
+}
+
+#[tokio::test]
+async fn each_account_with_a_running_agent_is_asked_its_quota_by_a_process_of_its_own() {
+    use crate::integrations::fake::FakeServer;
+    let h = harness("accounts-quota-get-usage");
+    let server = FakeServer::start().await;
+    *h.core.usage_api.write() = format!("{}/api/oauth/usage", server.url);
+    let (p, _) = h.project(false).await;
+    let pro = second_account(&h);
+    // Pro out of quota: its processes say 100 %, Principal's 12 %.
+    std::fs::create_dir_all(&pro.config_dir).unwrap();
+    std::fs::write(Path::new(&pro.config_dir).join("fake-limit"), "").unwrap();
+    let main = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    let id = agent_on(&h, &p, "pro").await.id;
+    h.wait("both processes", |h| h.alive(&main) && h.alive(&id))
+        .await;
+    h.core.refresh_usage().await;
+    assert_eq!(five_hour_pct(&h, "pro"), Some(100.0));
+    assert_eq!(five_hour_pct(&h, "principal"), Some(12.0));
+    // Both read from their processes: the endpoint was asked nothing.
+    assert!(server.requests().is_empty(), "{:?}", server.requests());
+}
+
+#[tokio::test]
+async fn quota_windows_saved_before_the_accounts_are_principals_and_each_account_keeps_its_own() {
+    let dir = test_dir("accounts-quota-saved");
+    let data = DataDir::new(dir.join("data"));
+    data.ensure().unwrap();
+    let pro = Account {
+        id: "pro".into(),
+        name: "Pro".into(),
+        config_dir: dir.join("pro").to_string_lossy().into(),
+        ..Default::default()
+    };
+    let settings = Settings {
+        sound: false,
+        accounts: vec![pro],
+        ..Default::default()
+    };
+    std::fs::write(data.settings_file(), serde_json::to_vec(&settings).unwrap()).unwrap();
+    // As the versions before the accounts saved them: the windows of the only account.
+    let end = now_ms() + 3_600_000;
+    let pause = json!({ "fiveHour": { "pct": 96.0, "resetsAt": end },
+                        "sevenDay": { "pct": 30.0, "resetsAt": end }, "hold": {} });
+    std::fs::write(
+        data.state_file(),
+        json!({ "projects": [], "pause": pause }).to_string(),
+    )
+    .unwrap();
+    let app = mock_app();
+    let (core, _rx) = Core::load(app.handle().clone(), data.clone());
+    let pct = |core: &Core<MockRuntime>, id: &str| {
+        core.usage
+            .lock()
+            .account(id)
+            .and_then(|a| a.five_hour)
+            .map(|w| w.pct)
+    };
+    assert_eq!(pct(&core, "principal"), Some(96.0));
+    assert_eq!(pct(&core, "pro"), None);
+    let u = core.usage.lock().clone();
+    assert_eq!(
+        (u.current.as_str(), u.five_hour.map(|w| w.pct)),
+        ("principal", Some(96.0))
+    );
+    // Pro's own, read since: kept for it across a restart, Principal's where they were.
+    let half = Some(RateWindow {
+        pct: 50.0,
+        resets_at: Some(end),
+    });
+    core.record_usage("pro", Reading::Windows((half, None)));
+    core.save_now();
+    let saved: Value = serde_json::from_slice(&std::fs::read(data.state_file()).unwrap()).unwrap();
+    assert_eq!(saved["pause"]["fiveHour"]["pct"], json!(96.0));
+    assert_eq!(
+        saved["pause"]["accounts"]["pro"]["fiveHour"]["pct"],
+        json!(50.0)
+    );
+    let (again, _rx) = Core::load(app.handle().clone(), data);
+    assert_eq!(pct(&again, "principal"), Some(96.0));
+    assert_eq!(pct(&again, "pro"), Some(50.0));
 }
 
 #[tokio::test]
