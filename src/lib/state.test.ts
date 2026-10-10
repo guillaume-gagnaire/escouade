@@ -490,6 +490,54 @@ describe('AppState start-up', () => {
     expect(app.toasts).toEqual([]);
   });
 
+  it('opens no update’s window over another dialog from « Réessayer »: what is typed there stays, the offer comes back', async () => {
+    resetApp();
+    const { emit } = await start();
+    app.update = { version: '1.6.0', notes: '', ready: true };
+    emit({ type: 'updateFailed', version: '1.6.0' });
+    const commit = { kind: 'commit', projectId: 'p1', agentId: null } as const;
+    app.modal = commit;
+    app.toasts.at(-1)!.action!.onClick();
+    expect(app.modal).toEqual(commit);
+    const again = app.toasts.at(-1)!;
+    expect(again).toMatchObject({ text: 'La mise à jour vers 1.6.0 n’a pas pu s’installer.', kind: 'error' });
+    expect(again.action?.label).toBe('Réessayer');
+    app.modal = null;
+    again.action!.onClick();
+    expect(app.modal).toEqual({ kind: 'update' });
+  });
+
+  it('opens no empty dialog from « Réessayer » once the update is no longer ready, and says so', async () => {
+    resetApp();
+    const { emit } = await start();
+    app.update = { version: '1.6.0', notes: '', ready: true };
+    emit({ type: 'updateFailed', version: '1.6.0' });
+    const toast = app.toasts.at(-1)!;
+    // Withdrawn, or its download failed again: the window has nothing to show.
+    app.update = null;
+    toast.action!.onClick();
+    expect(app.modal).toBeNull();
+    expect(app.toasts.at(-1)).toMatchObject({
+      text: 'La mise à jour vers 1.6.0 n’est plus prête : Escouade te la proposera de nouveau une fois téléchargée.',
+      kind: 'info',
+    });
+    expect(app.toasts.at(-1)?.action).toBeUndefined();
+  });
+
+  it('shows the notes of the update installed over no other dialog', async () => {
+    resetApp();
+    await start({ installed: { version: '1.6.0', notes: '- Mises à jour silencieuses' } });
+    const commit = { kind: 'commit', projectId: 'p1', agentId: null } as const;
+    app.modal = commit;
+    app.toasts.at(-1)!.action!.onClick();
+    expect(app.modal).toEqual(commit);
+    const again = app.toasts.at(-1)!;
+    expect(again).toMatchObject({ text: 'Escouade 1.6.0 est installée.', kind: 'ok' });
+    app.modal = null;
+    again.action!.onClick();
+    expect(app.modal).toEqual({ kind: 'notes', version: '1.6.0', notes: '- Mises à jour silencieuses' });
+  });
+
   it('follows the automatic restart the backend plans, and calls off', async () => {
     resetApp();
     const { emit } = await start({ restartAt: 1_000 });

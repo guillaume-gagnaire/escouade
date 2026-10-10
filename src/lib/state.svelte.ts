@@ -258,8 +258,25 @@ class AppState {
     if (this.modal?.kind === 'update') return;
     this.toast(`La mise à jour vers ${version} n’a pas pu s’installer.`, 'error', {
       label: 'Réessayer',
-      onClick: () => (this.modal = { kind: 'update' }),
+      onClick: () => {
+        // Its window shows an update downloaded only: without one, it would be an empty dialog keeping every key.
+        if (!this.update?.ready) {
+          this.toast(`La mise à jour vers ${version} n’est plus prête : Escouade te la proposera de nouveau une fois téléchargée.`);
+        } else if (!this.openFromToast({ kind: 'update' })) {
+          this.tellFailedUpdate(version);
+        }
+      },
     });
+  }
+
+  /**
+   * Opens `modal` from a toast's button, unless a dialog is open: the toasts are above the dialogs, and what is typed in
+   * the one open (a commit's message) would be lost. False when it did not, the toast to be shown again for later.
+   */
+  private openFromToast(modal: Modal): boolean {
+    if (this.modal) return false;
+    this.modal = modal;
+    return true;
   }
 
   /** `f` runs when the backend warns of an automatic restart, before the app stops. Returns what unregisters it. */
@@ -313,10 +330,14 @@ class AppState {
     this.failedUpdate = s.failedUpdate ?? null;
     if (s.installed) {
       const { version, notes } = s.installed;
-      this.toast(`Escouade ${version} est installée.`, 'ok', {
-        label: 'Voir les nouveautés',
-        onClick: () => (this.modal = { kind: 'notes', version, notes }),
-      });
+      const tell = () =>
+        this.toast(`Escouade ${version} est installée.`, 'ok', {
+          label: 'Voir les nouveautés',
+          onClick: () => {
+            if (!this.openFromToast({ kind: 'notes', version, notes })) tell();
+          },
+        });
+      tell();
     }
     const early = this.early;
     this.early = null;
