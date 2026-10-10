@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetApp } from '../test/ipc';
+import { setLang } from './i18n';
 import { app } from './state.svelte';
 
 // What the update server announces on the next check.
@@ -228,5 +229,21 @@ describe('checkForUpdate', () => {
     expect(await checkForUpdate(true)).toBe(false);
     expect(app.toasts).toHaveLength(1);
     expect(app.toasts[0]).toMatchObject({ kind: 'error' });
+  });
+});
+
+describe('the messages of the updater in English', () => {
+  it('tells in English that a download or a check failed, to the user who asked', async () => {
+    setLang('en');
+    server.check.mockRejectedValue(new Error('offline'));
+    expect(await checkForUpdate(true)).toBe(false);
+    expect(app.toasts.at(-1)).toMatchObject({ text: 'Couldn’t check for updates: Error: offline', kind: 'error' });
+
+    server.check.mockReset();
+    const asked = release('1.7.0', { held: true });
+    server.check.mockResolvedValueOnce(asked);
+    await checkForUpdate(true);
+    asked.finish(new Error('502'));
+    await expect.poll(() => app.toasts.at(-1)?.text).toBe('Couldn’t download the update: Error: 502');
   });
 });

@@ -8,7 +8,7 @@
   import { menu } from '../lib/menu.svelte';
   import { modelLabel } from '../lib/models';
   import { keyLabel } from '../lib/platform';
-  import { contextUse, ESTIMATE_HINT, fSpentUsd, spent } from '../lib/spend';
+  import { contextUse, estimateHint, fSpentUsd, spent } from '../lib/spend';
   import { app } from '../lib/state.svelte';
   import { revealHidden } from '../lib/recipe';
   import { SUMMED_UP, toolLabel } from '../lib/tools';
@@ -300,7 +300,7 @@
         {/if}
       </span>
       <span class="model mono"><span class="sr">{t('common.model')}{' '}</span>{modelLabel(a.model, app.models)}</span>
-      <span class="num" title={used.estimated ? ESTIMATE_HINT : undefined}
+      <span class="num" title={used.estimated ? estimateHint() : undefined}
         ><span class="sr">{t('common.cost')}{' '}</span>{fSpentUsd(used)}</span
       >
       <span class="num ctx" class:full={ctx?.full} title={ctx?.title ?? t('stats.overview.contextUnknown')}

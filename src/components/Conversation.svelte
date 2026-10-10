@@ -8,7 +8,7 @@
   import { splitEscouade } from '../lib/escouade';
   import { fDur, fInt, fNum, fTok } from '../lib/format';
   import { modelLabel } from '../lib/models';
-  import { contextUse, ESTIMATE_HINT, fSpentUsd, spent } from '../lib/spend';
+  import { contextUse, estimateHint, fSpentUsd, spent } from '../lib/spend';
   import { injectedSource, parseAgentMessage, subagentLabels } from '../lib/events';
   import { editsByTurn } from '../lib/tools';
   import { app } from '../lib/state.svelte';
@@ -469,7 +469,7 @@
         <span class="k">{t('conv.header.context')}</span><span class="v mono" class:full={context.full}>{context.shown}</span>
       </div>
       <div class="m opt"><span class="k">{t('conv.header.tokens')}</span><span class="v mono">{fTok(used.tokens)}</span></div>
-      <div class="m opt2" title={used.estimated ? ESTIMATE_HINT : undefined}>
+      <div class="m opt2" title={used.estimated ? estimateHint() : undefined}>
         <span class="k">{t('common.cost')}</span><span class="v mono">{fSpentUsd(used)}</span>
       </div>
       {#if app.split}

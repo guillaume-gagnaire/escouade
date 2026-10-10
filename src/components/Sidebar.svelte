@@ -9,7 +9,7 @@
   import { buffers, lossNotice } from '../lib/editor/buffers.svelte';
   import { menu, type MenuItem } from '../lib/menu.svelte';
   import { modelLabel } from '../lib/models';
-  import { ESTIMATE_HINT, fSpentUsd, spent } from '../lib/spend';
+  import { estimateHint, fSpentUsd, spent } from '../lib/spend';
   import { app } from '../lib/state.svelte';
   import { closeTerminal, newTerminal, SHELL_GLYPH, terminalIn } from '../lib/term-actions';
   import { canPrepare, prepareLaunch, stopTests } from '../lib/test-launch.svelte';
@@ -266,7 +266,7 @@
           {#if a.worktree}<span class="sep">·</span><span class="wt" title={a.worktree.branch}>⎇ {shortBranch(a.worktree.branch)}</span
             >{/if}
         </div>
-        <div class="meta dim" title={s.estimated ? ESTIMATE_HINT : undefined}>
+        <div class="meta dim" title={s.estimated ? estimateHint() : undefined}>
           <span>{t('nav.sidebar.tokens', { tokens: fTok(s.tokens) })}</span><span>{fSpentUsd(s)}</span><span
             >{t('nav.sidebar.files', { count: git?.agents[a.id] ?? 0 })}</span
           >

@@ -9,8 +9,8 @@ import { recentFiles } from './editor/quick-open';
 import { fileSearches } from './editor/search.svelte';
 import { ancestors, movedPath } from './editor/tree';
 import { trees } from './editor/trees.svelte';
-import { basename, isAbsPath, plural, relPath } from './format';
-import { setLang } from './i18n';
+import { basename, isAbsPath, relPath } from './format';
+import { setLang, t } from './i18n';
 import { readPref, writePref } from './prefs';
 import { testCommand } from './recipe';
 import type { SettingsTab } from './settings.svelte';
@@ -103,7 +103,8 @@ const ALERT: ReadonlySet<AgentStatus> = new Set(['waiting', 'done', 'error']);
 const SETUP_LINES = 500;
 
 /** The title of the confirmation of quitting with files not saved. */
-const QUIT_TITLE = 'Quitter Escouade ?';
+/** The title of the question asked on quitting, in the language of the interface (the open dialog is told by it). */
+const quitTitle = () => t('shell.quit.title');
 
 export interface UpdateInfo {
   version: string;
@@ -272,12 +273,12 @@ class AppState {
   tellFailedUpdate(version: string) {
     // The update's window, open, already says why its restart failed.
     if (this.modal?.kind === 'update') return;
-    this.toast(`La mise à jour vers ${version} n’a pas pu s’installer.`, 'error', {
-      label: 'Réessayer',
+    this.toast(t('shell.update.failed', { version }), 'error', {
+      label: t('common.retry'),
       onClick: () => {
         // Its window shows an update downloaded only: without one, it would be an empty dialog keeping every key.
         if (!this.update?.ready) {
-          this.toast(`La mise à jour vers ${version} n’est plus prête : Escouade te la proposera de nouveau une fois téléchargée.`);
+          this.toast(t('shell.update.notReady', { version }));
         } else if (!this.openFromToast({ kind: 'update' })) {
           this.tellFailedUpdate(version);
         }
@@ -369,8 +370,8 @@ class AppState {
     if (s.installed) {
       const { version, notes } = s.installed;
       const tell = () =>
-        this.toast(`Escouade ${version} est installée.`, 'ok', {
-          label: 'Voir les nouveautés',
+        this.toast(t('shell.update.installed', { version }), 'ok', {
+          label: t('shell.update.seeNotes'),
           onClick: () => {
             if (!this.openFromToast({ kind: 'notes', version, notes })) tell();
           },
@@ -489,12 +490,12 @@ class AppState {
         // Cancelled, it goes back to the dialog it takes the place of (a commit's window keeps its message in it), unless
         // that one got its answer meanwhile; asked again while it asks, back to that same one.
         const open = this.modal;
-        const again = open?.kind === 'confirm' && open.title === QUIT_TITLE;
+        const again = open?.kind === 'confirm' && open.title === quitTitle();
         this.modal = {
           kind: 'confirm',
-          title: QUIT_TITLE,
-          body: `${plural(e.unsaved, 'fichier n’est pas enregistré', 'fichiers ne sont pas enregistrés')} dans l’éditeur : leurs modifications seront perdues.`,
-          confirm: 'Quitter quand même',
+          title: quitTitle(),
+          body: t('shell.quit.unsaved', { count: e.unsaved }),
+          confirm: t('shell.quit.confirm'),
           danger: true,
           onConfirm: () => api.quit(),
           onCancel: again
@@ -723,11 +724,13 @@ class AppState {
     // The file comes first: one outside the source's folder opens nothing, the editor stays as it was.
     let path = req.path;
     if (!path && req.abs) {
-      const t = trees.get(projectId, req.source) ?? (await trees.load(projectId, req.source).catch(() => undefined));
-      if (t) {
-        const found = this.sourcePath(projectId, req.source, t, req.abs);
+      const tree = trees.get(projectId, req.source) ?? (await trees.load(projectId, req.source).catch(() => undefined));
+      if (tree) {
+        const found = this.sourcePath(projectId, req.source, tree, req.abs);
         if (found === null) {
-          this.toast(`${basename(req.abs)} est en dehors du dossier ${req.source === 'project' ? 'du projet' : 'de cet agent'}.`);
+          this.toast(
+            t(req.source === 'project' ? 'shell.openFile.outsideProject' : 'shell.openFile.outsideAgent', { name: basename(req.abs) }),
+          );
           return;
         }
         path = found;
@@ -902,7 +905,7 @@ class AppState {
     delete this.exitedTerms[ptyId];
     const status = l.stopping ? 'stopped' : code === 0 ? 'done' : 'crashed';
     Object.assign(l, { status, code, ptyId: null, stopping: false });
-    if (status === 'crashed') this.toast(`« ${l.name} » s'est arrêté en erreur (code ${code ?? '?'})`, 'error');
+    if (status === 'crashed') this.toast(t('runs.launch.crashed', { name: l.name, code: code ?? '?' }), 'error');
   }
 
   async newAgent(projectId = this.ui.activeProject) {
