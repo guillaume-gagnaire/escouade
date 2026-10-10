@@ -57,7 +57,7 @@ export function fSince(since: number, now: number): string {
   if (s < 60) return t('format.since.underMinute');
   if (s < 3600) return t('format.since.minutes', { n: Math.floor(s / 60) });
   if (s < 86400) return t('format.since.hours', { n: Math.floor(s / 3600) });
-  return t('format.since.days', { n: Math.floor(s / 86400) });
+  return t('format.since.days', { count: Math.floor(s / 86400) });
 }
 
 /** "1h48" style countdown until a timestamp. */
@@ -79,6 +79,11 @@ export function fInt(n: number): string {
   return Math.round(n).toLocaleString(intlLocale());
 }
 
+/** A number with at most `maxDecimals` decimals, grouped: « 1,3 », « 1 235 » in French, « 1.3 », « 1,235 » in English. */
+export function fNum(n: number, maxDecimals = 0): string {
+  return n.toLocaleString(intlLocale(), { maximumFractionDigits: maxDecimals });
+}
+
 export function fDate(ts: number): string {
   return new Date(ts).toLocaleDateString(intlLocale(), { day: 'numeric', month: 'long', year: 'numeric' });
 }
@@ -88,6 +93,11 @@ const HOUR: Record<Lang, '2-digit' | 'numeric'> = { fr: '2-digit', en: 'numeric'
 
 export function fTime(ts: number): string {
   return new Date(ts).toLocaleTimeString(intlLocale(), { hour: HOUR[locale.ui], minute: '2-digit' });
+}
+
+/** A day and its time: « 2 octobre 2026 à 09:30 », « October 2, 2026 at 9:30 AM ». */
+export function fDateTime(ts: number): string {
+  return t('format.dateTime', { date: fDate(ts), time: fTime(ts) });
 }
 
 /** `s` as an expression of JavaScript that matches it as written. */
@@ -136,16 +146,25 @@ export function tildify(p: string): string {
   return m ? '~' + (m[1] ?? '') : p;
 }
 
-/** A memory size: "312 Mo", "1,3 Go". */
-export function fBytes(n: number): string {
+/**
+ * A size: "312 Mo", "1,3 Go" (a memory), or with `decimals` for the megabytes, "1,3 Mo" (a file). The megabytes
+ * are not grouped: "1023 Mo".
+ */
+export function fBytes(n: number, decimals = 0): string {
   const MB = 1024 * 1024;
-  if (n < 1024 * MB) return t('format.bytes.megabytes', { n: Math.round(n / MB) });
-  return t('format.bytes.gigabytes', { n: (n / (1024 * MB)).toLocaleString(intlLocale(), { maximumFractionDigits: 1 }) });
+  const mb = (n / MB).toLocaleString(intlLocale(), { maximumFractionDigits: decimals, useGrouping: false });
+  if (n < 1024 * MB) return t('format.bytes.megabytes', { n: mb });
+  return t('format.bytes.gigabytes', { n: fNum(n / (1024 * MB), Math.max(1, decimals)) });
 }
+
+const lists = new Map<string, Intl.ListFormat>();
 
 /** Items joined as a sentence does: « a, b et c », « a, b, and c ». */
 export function fList(items: string[]): string {
-  return new Intl.ListFormat(intlLocale(), { style: 'long', type: 'conjunction' }).format(items);
+  const tag = intlLocale();
+  let list = lists.get(tag);
+  if (!list) lists.set(tag, (list = new Intl.ListFormat(tag, { style: 'long', type: 'conjunction' })));
+  return list.format(items);
 }
 
 /** When something happens: "à 15:00" today, "le vendredi 2 octobre à 09:30" another day. */

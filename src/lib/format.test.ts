@@ -6,8 +6,11 @@ import {
   fBytes,
   fCountdown,
   fDate,
+  fDateTime,
   fDur,
   fInt,
+  fList,
+  fNum,
   fPct,
   fSince,
   fTime,
@@ -152,13 +155,38 @@ describe('fWhen', () => {
   });
 });
 
-describe('fPct, fInt, fDate, fTime', () => {
+describe('fPct, fInt, fNum, fDate, fTime, fDateTime', () => {
   const day = new Date(2026, 9, 2, 9, 30).getTime();
   it('write a percentage, an integer, a date and a time the French way', () => {
     expect(fPct(41.6)).toBe('42 %');
     expect(spaces(fInt(1_234_567.4))).toBe('1 234 567');
     expect(fDate(day)).toBe('2 octobre 2026');
     expect(fTime(day)).toBe('09:30');
+    expect(fDateTime(day)).toBe('2 octobre 2026 à 09:30');
+  });
+
+  it('write a number with as many decimals as asked, at most', () => {
+    expect(fNum(1.26, 1)).toBe('1,3');
+    expect(fNum(1.8, 1)).toBe('1,8');
+    expect(fNum(2, 1)).toBe('2');
+    expect(spaces(fNum(1234.5))).toBe('1 235');
+  });
+});
+
+describe('fBytes with decimals', () => {
+  const MB = 1024 * 1024;
+  it('gives the megabytes to a decimal when asked, as a file size', () => {
+    expect(fBytes(1.26 * MB, 1)).toBe('1,3 Mo');
+    expect(fBytes(1023 * MB, 1)).toBe('1023 Mo');
+    expect(fBytes(1.26 * 1024 * MB, 1)).toBe('1,3 Go');
+  });
+});
+
+describe('fSince over days', () => {
+  const now = Date.UTC(2026, 9, 10, 12, 0, 0);
+  it('says « j » for one day as for several', () => {
+    expect(fSince(now - 86400e3, now)).toBe('1 j');
+    expect(fSince(now - 3 * 86400e3, now)).toBe('3 j');
   });
 });
 
@@ -189,26 +217,40 @@ describe('in English', () => {
     expect(fCountdown(null, now)).toBe('—');
   });
 
-  it('says how long ago', () => {
+  it('says how long ago, its units spaced from the number as « 5 min ago »', () => {
     const ago = (s: number) => fAgo(now / 1000 - s, now);
-    expect([20, 5 * 60, 3 * 3600, 30 * 3600, 4 * 86400].map(ago)).toEqual(['just now', '5 min ago', '3h ago', 'yesterday', '4d ago']);
+    expect([20, 5 * 60, 3 * 3600, 30 * 3600, 4 * 86400].map(ago)).toEqual(['just now', '5 min ago', '3 h ago', 'yesterday', '4 days ago']);
     expect(ago(40 * 86400)).toBe(new Date(now - 40 * 86400e3).toLocaleDateString('en-US'));
   });
 
-  it('says for how long', () => {
+  it('says for how long, days written out with their plural', () => {
     const since = (s: number) => fSince(now - s * 1000, now);
-    expect([20, 3 * 60 + 40, 2 * 3600 + 59 * 60, 3 * 86400].map(since)).toEqual(['< 1 min', '3 min', '2h', '3d']);
+    expect([20, 3 * 60 + 40, 2 * 3600 + 59 * 60, 86400, 3 * 86400].map(since)).toEqual(['< 1 min', '3 min', '2 h', '1 day', '3 days']);
   });
 
   it('writes sizes in MB and GB', () => {
     const MB = 1024 * 1024;
-    expect([0, 312.4 * MB, 1024 * MB, 1.26 * 1024 * MB].map(fBytes)).toEqual(['0 MB', '312 MB', '1 GB', '1.3 GB']);
+    expect([0, 312.4 * MB, 1024 * MB, 1.26 * 1024 * MB].map((n) => fBytes(n))).toEqual(['0 MB', '312 MB', '1 GB', '1.3 GB']);
+    expect(fBytes(1.26 * MB, 1)).toBe('1.3 MB');
+  });
+
+  it('writes numbers with a dot and commas', () => {
+    expect(fNum(1.26, 1)).toBe('1.3');
+    expect(fNum(1234.5)).toBe('1,235');
   });
 
   it('writes dates and times the American way', () => {
     const day = new Date(2026, 9, 2, 9, 30).getTime();
     expect(fDate(day)).toBe('October 2, 2026');
     expect(spaces(fTime(day))).toBe('9:30 AM');
+    expect(spaces(fDateTime(day))).toBe('October 2, 2026 at 9:30 AM');
+  });
+
+  it('joins a list with « and » and the serial comma', () => {
+    expect(fList(['a', 'b', 'c'])).toBe('a, b, and c');
+    setLang('fr');
+    // Switched back: the list follows at once.
+    expect(fList(['a', 'b', 'c'])).toBe('a, b et c');
   });
 
   it('says when something happens', () => {
