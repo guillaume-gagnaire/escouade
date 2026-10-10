@@ -33,7 +33,7 @@ useHead({
   htmlAttrs: { lang: lang.value },
   link: [
     { rel: 'canonical', href: pageUrl(lang.value) },
-    ...LANGS.map((l) => ({ rel: 'alternate', hreflang: l.code, href: pageUrl(l.code) })),
+    ...LANGS.map((l) => ({ rel: 'alternate' as const, hreflang: l.code, href: pageUrl(l.code) })),
     { rel: 'alternate', hreflang: 'x-default', href: pageUrl('fr') },
   ],
 });
