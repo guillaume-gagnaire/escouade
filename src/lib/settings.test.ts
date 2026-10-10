@@ -151,14 +151,21 @@ describe('settingsForm', () => {
     answer({ setup: [ci], teardown: [], refused: 0 });
     await asked;
     expect(settingsForm.suggesting.p1).toBe(false);
+    expect(app.toasts.at(-1)?.text).toBe("1 commande proposée : relis-la avant d'enregistrer.");
+    // Shown apart, to be read in full: the draft is left as it is until it is taken.
+    expect(settingsForm.proposal.p1).toEqual({ setup: [ci], teardown: [], refused: 0 });
+    expect(settingsForm.projects.p1.worktreeSetup).toEqual([]);
+    expect(settingsForm.projects.p1.worktreeTeardown).toHaveLength(1);
+    settingsForm.takeProposal('p1');
+    expect(settingsForm.proposal.p1).toBeUndefined();
     expect(settingsForm.projects.p1.worktreeSetup).toEqual([ci]);
     expect(settingsForm.projects.p1.worktreeTeardown).toEqual([]);
-    expect(app.toasts.at(-1)?.text).toBe("1 commande proposée : relis-la avant d'enregistrer.");
 
     // Some were refused (a line break, invisible characters, a long run of blanks, too long): said, as for the launch commands.
     const down = { id: 's2', command: 'docker compose down', shell: 'pwsh', cwd: '' };
     fakeBackend({ suggest_worktree_steps: () => ({ setup: [ci], teardown: [down], refused: 1 }) });
     await settingsForm.suggest('p1');
+    settingsForm.takeProposal('p1');
     expect(settingsForm.projects.p1.worktreeTeardown).toEqual([down]);
     expect(app.toasts.at(-1)?.text).toBe(
       "2 commandes proposées, 1 écartée (caractères invisibles ou trop longue) : relis-les avant d'enregistrer.",
@@ -169,10 +176,13 @@ describe('settingsForm', () => {
       "1 commande proposée, 2 écartées (caractères invisibles ou trop longues) : relis-la avant d'enregistrer.",
     );
 
+    settingsForm.takeProposal('p1');
+
     fakeBackend({ suggest_worktree_steps: () => ({ setup: [], teardown: [], refused: 0 }) });
     await settingsForm.suggest('p1');
-    // Nothing found: what was there stays.
+    // Nothing found: what was there stays, and nothing is proposed.
     expect(settingsForm.projects.p1.worktreeSetup).toEqual([ci]);
+    expect(settingsForm.proposal.p1).toBeUndefined();
     expect(app.toasts.at(-1)?.text).toBe("Claude n'a trouvé aucune commande à lancer pour ce projet.");
 
     // All refused is told by the backend, as a failure and not as nothing found.
@@ -210,9 +220,15 @@ describe('settingsForm', () => {
     answer({ commands: [web, db], refused: 0 });
     await asked;
     expect(settingsForm.suggestingLaunch.p1).toBe(false);
-    // The suggestion replaces the draft's command, which was FRONT.
-    expect(settingsForm.projects.p1.runCommands).toEqual([web, db]);
     expect(app.toasts.at(-1)?.text).toBe("2 commandes proposées : relis-les avant d'enregistrer.");
+    // Shown apart, to be read in full: the draft keeps FRONT until it is taken.
+    expect(settingsForm.launchProposal.p1).toEqual([web, db]);
+    expect(settingsForm.projects.p1.runCommands).toEqual([FRONT]);
+    expect(settingsForm.changed('projects')).toBe(false);
+    // Taken, it replaces the draft's command.
+    settingsForm.takeLaunchProposal('p1');
+    expect(settingsForm.launchProposal.p1).toBeUndefined();
+    expect(settingsForm.projects.p1.runCommands).toEqual([web, db]);
     // A draft like another: it shows as a change, and cancelling drops it.
     expect(settingsForm.changed('projects')).toBe(true);
     expect(app.projects[0].runCommands).toEqual([FRONT]);
@@ -222,10 +238,14 @@ describe('settingsForm', () => {
     fakeBackend({ suggest_run_commands: () => ({ commands: [web], refused: 0 }) });
     await settingsForm.suggestLaunch('p1');
     expect(app.toasts.at(-1)?.text).toBe("1 commande proposée : relis-la avant d'enregistrer.");
+    // A proposal not taken goes with the draft too.
+    settingsForm.open({ tab: 'projects', projectId: 'p1' });
+    expect(settingsForm.launchProposal.p1).toBeUndefined();
 
     // Some were refused (a line break, invisible characters, a long run of blanks, too long): said, in the singular and the plural.
     fakeBackend({ suggest_run_commands: () => ({ commands: [web, db], refused: 1 }) });
     await settingsForm.suggestLaunch('p1');
+    settingsForm.takeLaunchProposal('p1');
     expect(settingsForm.projects.p1.runCommands).toEqual([web, db]);
     expect(app.toasts.at(-1)?.text).toBe(
       "2 commandes proposées, 1 écartée (caractères invisibles ou trop longue) : relis-les avant d'enregistrer.",
@@ -235,6 +255,7 @@ describe('settingsForm', () => {
     expect(app.toasts.at(-1)?.text).toBe(
       "1 commande proposée, 3 écartées (caractères invisibles ou trop longues) : relis-la avant d'enregistrer.",
     );
+    settingsForm.takeLaunchProposal('p1');
 
     fakeBackend({ suggest_run_commands: () => ({ commands: [], refused: 0 }) });
     await settingsForm.suggestLaunch('p1');
@@ -264,6 +285,7 @@ describe('settingsForm', () => {
     });
     settingsForm.open({ tab: 'projects', projectId: 'p1' });
     await settingsForm.suggestLaunch('p1');
+    settingsForm.takeLaunchProposal('p1');
     expect(await settingsForm.save()).toBe(true);
     expect(backend.called('update_project')[0].args.project.runCommands).toEqual([
       { id: 's1', name: 'Front', command: 'npm run dev', shell: 'bash', cwd: 'web' },

@@ -24,8 +24,8 @@ const MAX_SUGGESTED: usize = 8;
 /// A suggested launch command's name is cut at this many characters: it is shown in a row.
 const MAX_NAME: usize = 40;
 /// A suggested command (a launch command, a worktree step) is at most this many characters long: it
-/// is read in a field of the settings a little wider than 70, and a long one would push its end out
-/// of sight.
+/// is read in full before it is taken (the settings show Claude's proposal apart), then edited in a
+/// field a little wider than 70, where a long one has its end out of sight.
 const MAX_COMMAND: usize = 300;
 /// A suggested command has no run of this many blanks or more (the window's own threshold in
 /// `recipe.ts`): the rest of the line would sit out of the field.

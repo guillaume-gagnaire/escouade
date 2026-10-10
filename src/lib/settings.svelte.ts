@@ -4,7 +4,16 @@
 import { api } from './ipc';
 import { forgetLaunches } from './launch-actions';
 import { app } from './state.svelte';
-import type { BoardSettings, CommitMode, Project, ProjectIntegrations, RunCommand, Settings, WorktreeStep } from './types';
+import type {
+  BoardSettings,
+  CommitMode,
+  Project,
+  ProjectIntegrations,
+  RunCommand,
+  Settings,
+  WorktreeStep,
+  WorktreeSuggestion,
+} from './types';
 
 export type SettingsTab = 'claude' | 'notifications' | 'projects' | 'board' | 'integrations' | 'terminals' | 'network' | 'about';
 
@@ -149,6 +158,14 @@ class SettingsForm {
   suggesting = $state<Record<string, boolean>>({});
   /** Claude reads the project to suggest its launch commands, by project. */
   suggestingLaunch = $state<Record<string, boolean>>({});
+  /**
+   * Claude's suggestion of worktree steps, shown in full until it is taken in place of the draft's or ignored, by
+   * project: a command longer than its field would only be read by scrolling it, and the setup runs by itself in each
+   * new worktree.
+   */
+  proposal = $state<Record<string, WorktreeSuggestion>>({});
+  /** Claude's suggestion of launch commands, shown the same way, by project. */
+  launchProposal = $state<Record<string, RunCommand[]>>({});
   /** As last opened or saved: what a change is measured against. */
   #base = $state.raw<{ settings: Settings; projects: Record<string, ProjectDraft> }>({ settings: {} as Settings, projects: {} });
 
@@ -175,6 +192,9 @@ class SettingsForm {
     this.#base = { settings, projects };
     this.settings = structuredClone(settings);
     this.projects = structuredClone(projects);
+    // What was proposed to the draft dropped goes with it.
+    this.proposal = {};
+    this.launchProposal = {};
   }
 
   /** The draft as it is, on `tab` and the project given (else the one on screen). */
@@ -207,21 +227,20 @@ class SettingsForm {
   }
 
   /**
-   * « Remplir automatiquement »: Claude reads the project and its suggestion replaces the draft's worktree steps
-   * (left as they are when it finds none, or fails). The steps the backend refused are counted in what is said.
+   * « Remplir automatiquement »: Claude reads the project and its suggestion is proposed (`proposal`), to replace the
+   * draft's worktree steps once read (nothing is proposed when it finds none, or fails). The steps the backend refused
+   * are counted in what is said.
    */
   async suggest(projectId: string) {
     if (this.suggesting[projectId]) return;
     this.suggesting[projectId] = true;
     try {
       const s = await api.suggestWorktreeSteps(projectId);
-      const d = this.projects[projectId];
       const n = s.setup.length + s.teardown.length;
       if (!n) return app.toast(NOTHING_TO_RUN);
-      // Closed and opened again meanwhile: a fresh draft, which takes it all the same.
-      if (!d) return;
-      d.worktreeSetup = s.setup;
-      d.worktreeTeardown = s.teardown;
+      // Closed and opened again meanwhile: proposed to the fresh draft all the same.
+      if (!this.projects[projectId]) return;
+      this.proposal[projectId] = s;
       app.toast(proposed(n, s.refused));
     } catch (e) {
       app.toast(String(e), 'error');
@@ -230,26 +249,44 @@ class SettingsForm {
     }
   }
 
+  /** Claude's worktree steps, read, in place of both lists of the draft. */
+  takeProposal(projectId: string) {
+    const s = this.proposal[projectId];
+    const d = this.projects[projectId];
+    delete this.proposal[projectId];
+    if (!s || !d) return;
+    d.worktreeSetup = s.setup;
+    d.worktreeTeardown = s.teardown;
+  }
+
   /**
-   * « Remplir automatiquement » of the launch commands: Claude reads the project and its suggestion replaces the draft's
-   * commands (left as they are when it finds none, or fails). The commands the backend refused are counted in what is said.
+   * « Remplir automatiquement » of the launch commands: Claude reads the project and its suggestion is proposed
+   * (`launchProposal`), to replace the draft's commands once read (nothing is proposed when it finds none, or fails).
+   * The commands the backend refused are counted in what is said.
    */
   async suggestLaunch(projectId: string) {
     if (this.suggestingLaunch[projectId]) return;
     this.suggestingLaunch[projectId] = true;
     try {
       const { commands, refused } = await api.suggestRunCommands(projectId);
-      const d = this.projects[projectId];
       if (!commands.length) return app.toast(NOTHING_TO_RUN);
-      // Closed and opened again meanwhile: a fresh draft, which takes it all the same.
-      if (!d) return;
-      d.runCommands = commands;
+      // Closed and opened again meanwhile: proposed to the fresh draft all the same.
+      if (!this.projects[projectId]) return;
+      this.launchProposal[projectId] = commands;
       app.toast(proposed(commands.length, refused));
     } catch (e) {
       app.toast(String(e), 'error');
     } finally {
       this.suggestingLaunch[projectId] = false;
     }
+  }
+
+  /** Claude's launch commands, read, in place of the draft's. */
+  takeLaunchProposal(projectId: string) {
+    const commands = this.launchProposal[projectId];
+    const d = this.projects[projectId];
+    delete this.launchProposal[projectId];
+    if (commands && d) d.runCommands = commands;
   }
 
   #projectChanges(id: string): Partial<ProjectFields> {

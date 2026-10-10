@@ -275,6 +275,10 @@ describe('App layout', () => {
     expect(within(dialog).getByRole('tab', { name: 'Projets' })).toHaveAttribute('aria-selected', 'true');
     expect(await within(dialog).findByRole('button', { name: 'Claude lit le projet…' })).toBeDisabled();
     answer({ commands: [{ id: 's1', name: 'Front', command: 'npm run dev', shell: 'pwsh', cwd: '' }], refused: 0 });
+    // Read in full, then taken.
+    const proposal = within(await within(dialog).findByRole('region', { name: 'Commandes de lancement proposées' }));
+    expect(proposal.getByText('npm run dev')).toBeInTheDocument();
+    await userEvent.click(proposal.getByRole('button', { name: 'Remplacer les commandes' }));
     expect(await within(dialog).findByDisplayValue('npm run dev')).toBeInTheDocument();
     expect(within(dialog).queryByRole('button', { name: 'Claude lit le projet…' })).not.toBeInTheDocument();
   });

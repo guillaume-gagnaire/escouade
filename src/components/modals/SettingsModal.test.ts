@@ -399,7 +399,29 @@ describe('SettingsModal', () => {
     expect(group('Lancement').getByRole('button', { name: '✦ Remplir automatiquement' })).toBeEnabled();
     expect(backend.called('suggest_worktree_steps')[0].args).toEqual({ projectId: 'p1' });
     expect(backend.called('suggest_run_commands')).toHaveLength(0);
-    answer({ setup: [{ id: 's1', command: 'npm ci', shell: 'bash', cwd: 'web' }], teardown: [], refused: 0 });
+    // Longer than its field: its end would only be seen by scrolling it, and it runs by itself in each new worktree.
+    const long = 'npm ci && npx prisma generate --schema ./prisma/schema.prisma && npm run build:workers -- --filter web';
+    answer({
+      setup: [
+        { id: 's1', command: 'npm ci', shell: 'bash', cwd: 'web' },
+        { id: 's2', command: long, shell: 'pwsh', cwd: '' },
+      ],
+      teardown: [],
+      refused: 0,
+    });
+    // Read in full first: the draft is left as it is until the proposal is taken.
+    const proposal = within(await worktrees.findByRole('region', { name: 'Commandes de worktree proposées' }));
+    expect(proposal.getByText(long)).toBeInTheDocument();
+    expect(proposal.getByText('npm ci')).toBeInTheDocument();
+    expect(proposal.getByText('web')).toBeInTheDocument();
+    expect(proposal.getByText('la racine du worktree')).toBeInTheDocument();
+    expect(proposal.getByText('Git Bash')).toBeInTheDocument();
+    // The steps of the draft it would remove are said too.
+    expect(proposal.getByText('Aucune commande.')).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Commande de préparation 1' })).toBeNull();
+    expect(within(down).getByLabelText('Commande')).toHaveValue('docker compose down');
+    await userEvent.click(proposal.getByRole('button', { name: 'Remplacer les commandes' }));
+    expect(worktrees.queryByRole('region', { name: 'Commandes de worktree proposées' })).toBeNull();
     const setup = await screen.findByRole('group', { name: 'Commande de préparation 1' });
     expect(within(setup).getByLabelText('Commande')).toHaveValue('npm ci');
     expect(within(setup).getByLabelText('Shell')).toHaveValue('bash');
@@ -410,10 +432,38 @@ describe('SettingsModal', () => {
     expect(screen.getByDisplayValue('Front')).toBeInTheDocument();
     await save();
     expect(backend.called('update_project')[0].args.project).toMatchObject({
-      worktreeSetup: [{ id: 's1', command: 'npm ci', shell: 'bash', cwd: 'web' }],
+      worktreeSetup: [
+        { id: 's1', command: 'npm ci', shell: 'bash', cwd: 'web' },
+        { id: 's2', command: long, shell: 'pwsh', cwd: '' },
+      ],
       worktreeTeardown: [],
       runCommands: [FRONT],
     });
+  });
+
+  it('leaves the draft as it was when Claude’s proposal is ignored', async () => {
+    const backend = backendSaving({
+      suggest_worktree_steps: () => ({ setup: [{ id: 's1', command: 'npm ci', shell: 'bash', cwd: '' }], teardown: [], refused: 0 }),
+    });
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    await userEvent.click(group('Worktrees').getByRole('button', { name: '✦ Remplir automatiquement' }));
+    const proposal = await group('Worktrees').findByRole('region', { name: 'Commandes de worktree proposées' });
+    // The reading's button was given up: the proposal takes the focus, to be read from the keyboard.
+    expect(proposal).toHaveFocus();
+    // Still there when coming back to the tab, which keeps the focus.
+    await userEvent.click(tab('Réseau'));
+    await userEvent.click(tab('Projets'));
+    expect(tab('Projets')).toHaveFocus();
+    const worktrees = group('Worktrees');
+    const back = within(worktrees.getByRole('region', { name: 'Commandes de worktree proposées' }));
+    expect(back.getByText('npm ci')).toBeInTheDocument();
+    await userEvent.click(back.getByRole('button', { name: 'Ignorer' }));
+    expect(worktrees.getByRole('button', { name: '✦ Remplir automatiquement' })).toHaveFocus();
+    expect(worktrees.queryByRole('region', { name: 'Commandes de worktree proposées' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Commande de préparation 1' })).toBeNull();
+    expect(tab('Projets')).not.toHaveClass('changed');
+    await save();
+    expect(backend.called('update_project')).toHaveLength(0);
   });
 
   it('reorders the commands run in new worktrees with their buttons, or Alt+↑ and Alt+↓ on one of them', async () => {
@@ -481,7 +531,21 @@ describe('SettingsModal', () => {
       ],
       refused: 1,
     });
+    // What was left out is said, not lost in silence.
+    await expect
+      .poll(() => app.toasts.at(-1)?.text)
+      .toBe("2 commandes proposées, 1 écartée (caractères invisibles ou trop longue) : relis-les avant d'enregistrer.");
+    // Read in full first, in place of nothing yet.
+    const proposal = within(await launch.findByRole('region', { name: 'Commandes de lancement proposées' }));
+    expect(proposal.getByText('API')).toBeInTheDocument();
+    expect(proposal.getByText('cargo watch -x run')).toBeInTheDocument();
+    expect(proposal.getByText('le dossier du projet')).toBeInTheDocument();
+    expect(proposal.getByText('npm run dev')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Front')).toBeInTheDocument();
+    expect(tab('Projets')).not.toHaveClass('changed');
     // In place of the draft's, FRONT.
+    await userEvent.click(proposal.getByRole('button', { name: 'Remplacer les commandes' }));
+    expect(launch.queryByRole('region', { name: 'Commandes de lancement proposées' })).toBeNull();
     await screen.findByDisplayValue('API');
     expect(screen.queryByDisplayValue('Front')).toBeNull();
     const first = screen.getByRole('group', { name: 'Commande 1' });
@@ -494,15 +558,28 @@ describe('SettingsModal', () => {
     expect(screen.queryByRole('group', { name: 'Commande 3' })).toBeNull();
     expect(launch.getByRole('button', { name: '✦ Remplir automatiquement' })).toBeEnabled();
     expect(tab('Projets')).toHaveClass('changed');
-    // What was left out is said, not lost in silence.
-    expect(app.toasts.at(-1)?.text).toBe(
-      "2 commandes proposées, 1 écartée (caractères invisibles ou trop longue) : relis-les avant d'enregistrer.",
-    );
     await save();
     expect(backend.called('update_project')[0].args.project.runCommands).toEqual([
       { id: 's1', name: 'API', command: 'cargo watch -x run', shell: 'bash', cwd: '' },
       { id: 's2', name: 'Web', command: 'npm run dev', shell: 'bash', cwd: 'web' },
     ]);
+  });
+
+  it('spells out in Claude’s proposal what a command would hide', async () => {
+    backendSaving({
+      suggest_run_commands: () => ({
+        commands: [{ id: 's1', name: 'We​b', command: 'npm‮ run dev', shell: 'zsh', cwd: 'a​pp' }],
+        refused: 0,
+      }),
+    });
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    await userEvent.click(group('Lancement').getByRole('button', { name: '✦ Remplir automatiquement' }));
+    const proposal = within(await screen.findByRole('region', { name: 'Commandes de lancement proposées' }));
+    expect(proposal.getByText('We⟨U+200B⟩b')).toBeInTheDocument();
+    expect(proposal.getByText('npm⟨U+202E⟩ run dev')).toBeInTheDocument();
+    expect(proposal.getByText('a⟨U+200B⟩pp')).toBeInTheDocument();
+    // A shell this machine does not have.
+    expect(proposal.getByText('zsh (introuvable)')).toBeInTheDocument();
   });
 
   it('tells the two « ✦ Remplir automatiquement » buttons apart by the text of their own row', () => {
@@ -529,6 +606,8 @@ describe('SettingsModal', () => {
     expect(backend.called('suggest_run_commands')[0].args).toEqual({ projectId: 'p1' });
     expect(group('Lancement').getByRole('button', { name: 'Claude lit le projet…' })).toBeDisabled();
     answer({ commands: [{ id: 's1', name: 'Web', command: 'npm start', shell: 'bash', cwd: '' }], refused: 0 });
+    const proposal = await group('Lancement').findByRole('region', { name: 'Commandes de lancement proposées' });
+    await userEvent.click(within(proposal).getByRole('button', { name: 'Remplacer les commandes' }));
     expect(await screen.findByDisplayValue('Web')).toBeInTheDocument();
     unmount();
     // Back from a modal it opened (the project's closing): the draft as it was, nothing asked again.
