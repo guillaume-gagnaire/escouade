@@ -1,4 +1,4 @@
-// « Rechercher dans les fichiers » (Ctrl+Maj+F) in the editor's left column: what is looked for in the files
+// « Rechercher dans les fichiers » (Ctrl+Maj+F, Maj+F12) in the editor's left column: what is looked for in the files
 // of the source shown, sent to `code_search` 250 ms after the last change, and the answer of the last search only
 // (the backend does not stop a search given up: its answer is dropped when it comes).
 
@@ -67,7 +67,7 @@ export class FileSearch {
     this.changed();
   }
 
-  /** Looks for `text` with these options right away (a selection). */
+  /** Looks for `text` with these options right away (Maj+F12, a selection). */
   ask(q: Partial<Pick<FileSearch, 'text' | SearchOption>>) {
     if (q.text !== undefined) this.text = q.text;
     if (q.caseSensitive !== undefined) this.caseSensitive = q.caseSensitive;

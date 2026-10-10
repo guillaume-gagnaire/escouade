@@ -7,7 +7,7 @@ import { EditorState } from '@codemirror/state';
 import { getStyleTags, tags } from '@lezer/highlight';
 import { escapeRegExp } from '../format';
 import type { SearchQuery, SearchResult } from '../types';
-import { charColumn, type NavContext, type NavResolver, type NavTarget } from './goto';
+import { charColumn, nameAt, type NavContext, type NavResolver, type NavTarget } from './goto';
 import { loadLanguage } from './languages';
 import { dirOf, extOf, fileSet, importTarget, join, pythonModule, rustModuleHome, type Aliases } from './links';
 
@@ -76,8 +76,6 @@ function exactPattern(template: string, name: string): RegExp {
   return new RegExp(bounded.split('NAME').join(escapeRegExp(name)), 'u');
 }
 
-/** An identifier, as most languages write them. */
-const IDENTIFIER = /^[\p{L}_$][\p{L}\p{N}_$]*$/u;
 /** What is not a name: comments, strings, numbers and other literals, keywords. */
 const INERT = [tags.comment, tags.literal, tags.keyword];
 
@@ -92,11 +90,8 @@ function inert(node: SyntaxNode | null): boolean {
 
 /** The identifier at `pos`, as the language cuts words, unless it is in a comment, a string or a keyword. */
 function identifierAt(state: EditorState, pos: number): { from: number; to: number; name: string } | null {
-  const w = state.wordAt(pos);
-  if (!w) return null;
-  const name = state.sliceDoc(w.from, w.to);
-  if (!IDENTIFIER.test(name) || inert(syntaxTree(state).resolveInner(w.from, 1))) return null;
-  return { from: w.from, to: w.to, name };
+  const id = nameAt(state, pos);
+  return id && !inert(syntaxTree(state).resolveInner(id.from, 1)) ? id : null;
 }
 
 interface Span {

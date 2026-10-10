@@ -38,6 +38,7 @@
     onnaverror,
     onback,
     onforward,
+    onreferences,
   }: {
     docKey: string;
     text: string;
@@ -60,6 +61,8 @@
     onnaverror?: (e: unknown) => void;
     onback?: () => void;
     onforward?: () => void;
+    /** Maj+F12 on an identifier: its uses are looked for. */
+    onreferences?: (name: string) => void;
   } = $props();
 
   let host: HTMLDivElement;
@@ -102,6 +105,7 @@
           onError: (e) => onnaverror?.(e),
           onBack: () => onback?.(),
           onForward: () => onforward?.(),
+          onReferences: (name) => onreferences?.(name),
         }),
         changeGutter(),
         lineNumbers(),

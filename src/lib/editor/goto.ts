@@ -53,6 +53,19 @@ export function columnOffset(text: string, col: number): number {
   return Math.min(offset, text.length);
 }
 
+/** An identifier, as most languages write them. */
+const IDENTIFIER = /^[\p{L}_$][\p{L}\p{N}_$]*$/u;
+
+/**
+ * The identifier at `pos`, as the language cuts words; null on anything else (a space, an operator, a number). What
+ * Ctrl+click looks a definition for, and Maj+F12 the uses of.
+ */
+export function nameAt(state: EditorState, pos: number): { from: number; to: number; name: string } | null {
+  const w = state.wordAt(pos);
+  const name = w ? state.sliceDoc(w.from, w.to) : '';
+  return w && IDENTIFIER.test(name) ? { from: w.from, to: w.to, name } : null;
+}
+
 /** What a resolver looks at: a position in the file `path` of a source, whose tree has `files`. */
 export interface NavContext {
   state: EditorState;
@@ -86,6 +99,8 @@ export interface GotoOptions {
   /** Alt+← / Alt+→ (Ctrl+- / Ctrl+Maj+- on macOS) and the back and forward buttons of the mouse. */
   onBack?: () => void;
   onForward?: () => void;
+  /** Maj+F12: the identifier at the cursor, whose uses are looked for (by their text: in a comment too). */
+  onReferences?: (name: string) => void;
   mac?: boolean;
 }
 
@@ -232,6 +247,14 @@ export function gotoExtension(o: GotoOptions): Extension {
             const s = spot(view, pos);
             if (s) follow(view, s, pos);
             return true;
+          },
+        },
+        {
+          key: 'Shift-F12',
+          run: (view) => {
+            const id = nameAt(view.state, view.state.selection.main.head);
+            if (id) o.onReferences?.(id.name);
+            return !!o.onReferences;
           },
         },
         { key: mac ? 'Ctrl--' : 'Alt-ArrowLeft', run: run(o.onBack) },

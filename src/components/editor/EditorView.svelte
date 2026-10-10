@@ -360,6 +360,12 @@
   }
   onMount(() => setFindInFiles(findInFiles));
 
+  /** Maj+F12: where `name` is used in the source's files, the whole word in its case (« Trouver les références »). */
+  function references(name: string) {
+    search.ask({ text: name, wholeWord: true, caseSensitive: true, regex: false });
+    showSearch();
+  }
+
   const sizeMb = (n: number) => (n / (1024 * 1024)).toLocaleString('fr-FR', { maximumFractionDigits: 1 });
 
   function closeTab(path: string) {
@@ -546,6 +552,7 @@
             onnaverror={(e) => alive && app.toast(`Navigation impossible : ${e}`, 'error')}
             onback={() => travel(true)}
             onforward={() => travel(false)}
+            onreferences={references}
           />
           {#if picking}
             <TargetPicker targets={picking.targets} label={picking.label} at={picking.at} onpick={pick} onclose={() => (picking = null)} />

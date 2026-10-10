@@ -1,7 +1,7 @@
 import { EditorState, type Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { charColumn, columnOffset, gotoExtension, spotAt, type GotoOptions, type NavResolver, type NavTarget } from './goto';
+import { charColumn, columnOffset, gotoExtension, nameAt, spotAt, type GotoOptions, type NavResolver, type NavTarget } from './goto';
 
 /** `def` (4 to 7 in `abc def`) leads to b.ts. */
 const def: NavResolver = ({ pos }) => (pos >= 4 && pos <= 7 ? { from: 4, to: 7, resolve: async () => [{ path: 'b.ts' }] } : null);
@@ -99,6 +99,27 @@ describe('gotoExtension', () => {
     expect(onBack).toHaveBeenCalledTimes(1);
     press({ key: '_', keyCode: 189, ctrlKey: true, shiftKey: true });
     expect(onForward).toHaveBeenCalledTimes(1);
+  });
+
+  it('looks for the uses of the identifier at the cursor with Shift+F12, whatever it is in', () => {
+    const onReferences = vi.fn();
+    const v = editor({ onReferences }, 5, 'const café = 1; // café');
+    const shiftF12 = () =>
+      v.contentDOM.dispatchEvent(new KeyboardEvent('keydown', { key: 'F12', shiftKey: true, bubbles: true, cancelable: true }));
+    v.dispatch({ selection: { anchor: 8 } });
+    shiftF12();
+    expect(onReferences).toHaveBeenLastCalledWith('café');
+    // A comment's word too: its uses are found by their text.
+    v.dispatch({ selection: { anchor: 23 } });
+    shiftF12();
+    expect(onReferences).toHaveBeenCalledTimes(2);
+    // Neither an operator nor a number names anything.
+    for (const anchor of [11, 13]) {
+      v.dispatch({ selection: { anchor } });
+      shiftF12();
+    }
+    expect(onReferences).toHaveBeenCalledTimes(2);
+    expect(nameAt(v.state, 8)).toEqual({ from: 6, to: 10, name: 'café' });
   });
 
   it('stops listening to the window once the editor is gone', () => {

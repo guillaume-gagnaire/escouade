@@ -822,6 +822,22 @@ describe('EditorView search through the files', () => {
     expect(queries(be)).toHaveLength(1);
   });
 
+  it('finds the uses of the word at the cursor with Shift+F12, whole and in its case', async () => {
+    const be = searchBackend();
+    await app.openEditor({ source: 'project', path: 'src/app.ts' });
+    const { container } = render(EditorView, { project: project() });
+    const view = await shown(container, 'const');
+    view.dispatch({ selection: { anchor: APP.indexOf('total') + 2 } });
+    view.contentDOM.dispatchEvent(new KeyboardEvent('keydown', { key: 'F12', shiftKey: true, bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(field()).toHaveFocus());
+    expect(field()).toHaveValue('total');
+    const pressed = (name: string) => screen.getByRole('button', { name }).getAttribute('aria-pressed');
+    expect(['Mot entier', 'Respecter la casse', 'Expression régulière'].map(pressed)).toEqual(['true', 'true', 'false']);
+    await expect
+      .poll(() => queries(be))
+      .toEqual([{ projectId: 'p1', agentId: null, query: query('total', { caseSensitive: true, wholeWord: true }) }]);
+  });
+
   it('opens a line found at its line and column, and comes back with Alt+←', async () => {
     searchBackend();
     await app.openEditor({ source: 'project', path: 'src/app.ts', line: 2, col: 9 });
