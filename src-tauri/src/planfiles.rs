@@ -428,6 +428,11 @@ fn relative_to(root: &Path, raw: &str) -> Option<String> {
     if let Some(rel) = paths::strip_base(&root_text, raw) {
         return Some(rel);
     }
+    // A path on another machine is not looked at (it could be slow, and it is not inside `root`).
+    let network = |p: &str| p.starts_with("//") || p.starts_with("\\\\");
+    if network(raw) && !network(&root_text) {
+        return None;
+    }
     // Spelled another way (a short Windows name, a link on the way): both read as the system does.
     let real = |p: &str| {
         std::fs::canonicalize(p)

@@ -669,6 +669,9 @@ pub struct Core<R: Runtime = Wry> {
     /// before (tests only).
     #[cfg(test)]
     pub(crate) plan_reads: AtomicUsize,
+    /// Looks at the files of an agent's plan that ended, whatever they found (tests only).
+    #[cfg(test)]
+    pub(crate) plan_looks: AtomicUsize,
     /// The least time between two looks at the files of a plan, in milliseconds (tests only: the
     /// interval is `PLAN_SCAN_EVERY`).
     #[cfg(test)]
@@ -706,6 +709,39 @@ struct PlanScan {
     again: bool,
     last: Option<Instant>,
     stamp: Option<planfiles::Stamp>,
+}
+
+impl PlanScan {
+    /// A look is asked for: true when none is under way or waiting, and the caller starts one.
+    /// Else the one there is will be followed by another.
+    fn ask(&mut self) -> bool {
+        if self.running {
+            self.again = true;
+            return false;
+        }
+        self.running = true;
+        true
+    }
+
+    /// How long the look must wait for its turn, `every` being the least time between two.
+    fn wait(&self, every: Duration) -> Duration {
+        self.last
+            .map_or(Duration::ZERO, |at| every.saturating_sub(at.elapsed()))
+    }
+
+    /// The look is about to read the files: what is asked from here on is for the next look.
+    fn begin(&mut self) {
+        self.last = Some(Instant::now());
+        self.again = false;
+    }
+
+    /// The look ended: true when another is owed (the loop goes on), else none is under way.
+    fn end(&mut self) -> bool {
+        if !self.again {
+            self.running = false;
+        }
+        self.again
+    }
 }
 
 /// The GitHub CLI on the PATH. Tests never see the machine's own: there it is absent, unless a
@@ -1282,6 +1318,8 @@ impl<R: Runtime> Core<R> {
             #[cfg(test)]
             plan_reads: AtomicUsize::new(0),
             #[cfg(test)]
+            plan_looks: AtomicUsize::new(0),
+            #[cfg(test)]
             plan_scan_ms: AtomicU64::new(PLAN_SCAN_EVERY.as_millis() as u64),
             #[cfg(test)]
             alerts: Mutex::default(),
@@ -1769,14 +1807,14 @@ impl<R: Runtime> Core<R> {
     /// most. Asked again while a look is under way or waiting for its turn, one more follows it,
     /// so that the last thing a burst of commands did is seen.
     fn ask_plan_scan(self: &Arc<Self>, id: &str) {
+        if !self
+            .plan_scans
+            .lock()
+            .entry(id.to_string())
+            .or_default()
+            .ask()
         {
-            let mut scans = self.plan_scans.lock();
-            let scan = scans.entry(id.to_string()).or_default();
-            if scan.running {
-                scan.again = true;
-                return;
-            }
-            scan.running = true;
+            return;
         }
         let (core, id) = (self.clone(), id.to_string());
         tauri::async_runtime::spawn(async move { core.plan_scan_loop(&id).await });
@@ -1784,24 +1822,26 @@ impl<R: Runtime> Core<R> {
 
     async fn plan_scan_loop(self: Arc<Self>, id: &str) {
         loop {
-            let last = self.plan_scans.lock().get(id).and_then(|s| s.last);
-            let wait = last.map_or(Duration::ZERO, |at| {
-                self.plan_scan_every().saturating_sub(at.elapsed())
-            });
-            if !wait.is_zero() {
+            let owed = self
+                .plan_scans
+                .lock()
+                .get(id)
+                .map(|s| s.wait(self.plan_scan_every()));
+            if let Some(wait) = owed.filter(|w| !w.is_zero()) {
                 tokio::time::sleep(wait).await;
             }
             if let Some(scan) = self.plan_scans.lock().get_mut(id) {
-                scan.last = Some(Instant::now());
-                scan.again = false;
+                scan.begin();
             }
             let alive = self.scan_plan(id).await;
+            #[cfg(test)]
+            self.plan_looks.fetch_add(1, Ordering::AcqRel);
             let mut scans = self.plan_scans.lock();
             match scans.get_mut(id) {
-                Some(scan) if alive && scan.again => {}
                 Some(scan) if alive => {
-                    scan.running = false;
-                    return;
+                    if !scan.end() {
+                        return;
+                    }
                 }
                 _ => {
                     scans.remove(id);
@@ -5898,6 +5938,44 @@ mod tests {
             uncommitted_in_agent(En, 1),
             "The agent has 1 uncommitted file: ask it to commit before merging."
         );
+    }
+
+    #[test]
+    fn a_look_at_the_plan_files_is_asked_once_and_followed_by_one_more_if_asked_again() {
+        let mut scan = PlanScan::default();
+        assert!(scan.ask(), "none under way: the caller starts one");
+        // Asked while it waits for its turn, and again: one more look is owed, not two.
+        assert!(!scan.ask());
+        assert!(!scan.ask());
+        scan.begin();
+        assert!(
+            !scan.again,
+            "the look that begins answers what was asked before"
+        );
+        // Asked while the files are being read: they may have moved after the read.
+        assert!(!scan.ask());
+        assert!(scan.end(), "another look is owed");
+        assert!(scan.running);
+        scan.begin();
+        assert!(!scan.end(), "nothing asked since: it ends");
+        assert!(!scan.running);
+        assert!(scan.ask(), "the next ask starts a look again");
+    }
+
+    #[test]
+    fn a_look_at_the_plan_files_waits_for_the_interval_since_the_last_began() {
+        let mut scan = PlanScan::default();
+        let every = Duration::from_secs(2);
+        assert_eq!(scan.wait(every), Duration::ZERO, "the first is at once");
+        scan.begin();
+        let wait = scan.wait(every);
+        assert!(
+            wait > Duration::from_millis(1500) && wait <= every,
+            "{wait:?}"
+        );
+        scan.last = Some(Instant::now() - Duration::from_secs(3));
+        assert_eq!(scan.wait(every), Duration::ZERO);
+        assert_eq!(PLAN_SCAN_EVERY, Duration::from_secs(2));
     }
 
     #[test]

@@ -477,8 +477,22 @@ impl Harness {
             .unwrap_or_default()
     }
 
+    /// Times the files of a plan were read.
     fn plan_reads(&self) -> usize {
         self.core.plan_reads.load(Ordering::Acquire)
+    }
+
+    /// Looks at the files of a plan that ended, whatever they found.
+    fn plan_looks(&self) -> usize {
+        self.core.plan_looks.load(Ordering::Acquire)
+    }
+
+    /// The look that the end of the first turn asks for is over, and the least time between two
+    /// is none: what follows is not held back by it.
+    async fn plan_looks_at_once(&self) {
+        self.wait("the look of the first turn", |h| h.plan_looks() >= 1)
+            .await;
+        self.core.plan_scan_ms.store(0, Ordering::Release);
     }
 }
 
@@ -488,6 +502,7 @@ async fn plan_agent(name: &str) -> (Harness, String, PathBuf) {
     let (p, repo) = h.project(false).await;
     let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
     h.turn(&id, "Bonjour").await;
+    h.plan_looks_at_once().await;
     (h, id, repo)
 }
 
@@ -518,7 +533,6 @@ async fn a_command_that_wrote_the_ledger_moves_the_plan_without_any_other_event(
         &ledger,
         "Task 1: complete (commits a..b, tests: npm test → ok)\n",
     );
-    h.core.plan_scan_ms.store(0, Ordering::Relaxed);
     h.command(
         &id,
         "b2",
@@ -588,31 +602,36 @@ async fn the_end_of_a_turn_looks_at_the_files_too() {
 async fn the_files_are_read_once_per_interval_however_many_commands_end() {
     let (h, id, repo) = plan_agent("p2-throttle").await;
     let ledger = plan_workspace(&repo);
-    h.core.plan_scan_ms.store(800, Ordering::Relaxed);
+    h.core.plan_scan_ms.store(1200, Ordering::Release);
+    // (The first look waits for the interval, counted from the look the end of the turn made.)
     h.command(&id, "b0", "sdd-workspace docs/superpowers/plans/demo.md");
-    h.wait("the first look", |h| h.plan_reads() == 1).await;
+    h.wait("the first look", |h| h.plan_looks() == 2).await;
+    assert_eq!(h.plan_reads(), 1);
     // A burst of commands, each of which moved the ledger.
     for n in 1..=6 {
         append(&ledger, &format!("Task {n}: review dispatched\n"));
         h.command(&id, &format!("b{n}"), "echo ledger");
     }
     tokio::time::sleep(Duration::from_millis(300)).await;
-    assert_eq!(h.plan_reads(), 1, "not again within the interval");
+    assert_eq!(
+        (h.plan_looks(), h.plan_reads()),
+        (2, 1),
+        "not again within the interval"
+    );
     // One look follows, and it sees all of the burst.
-    h.wait("the look that was owed", |h| h.plan_reads() == 2)
+    h.wait("the look that was owed", |h| h.plan_looks() == 3)
         .await;
-    h.wait("its result", |h| {
-        h.plan_statuses(&id)
-            .iter()
-            .all(|(_, s)| *s == crate::plan::TaskStatus::InProgress)
-    })
-    .await;
-    // Nothing moved since: the look after that reads nothing, and nothing is owed.
-    h.command(&id, "late", "echo nothing");
-    tokio::time::sleep(Duration::from_millis(1200)).await;
     assert_eq!(h.plan_reads(), 2);
-    // The default interval is the one of the spec.
-    assert_eq!(crate::core::PLAN_SCAN_EVERY, Duration::from_secs(2));
+    assert!(h
+        .plan_statuses(&id)
+        .iter()
+        .all(|(_, s)| *s == crate::plan::TaskStatus::InProgress));
+    // Nothing moved since: the look after that reads nothing, and nothing more is owed.
+    h.command(&id, "late", "echo nothing");
+    h.wait("the look after", |h| h.plan_looks() == 4).await;
+    assert_eq!(h.plan_reads(), 2);
+    tokio::time::sleep(Duration::from_millis(1500)).await;
+    assert_eq!(h.plan_looks(), 4);
 }
 
 #[tokio::test]
@@ -631,16 +650,17 @@ async fn a_plan_untouched_since_the_conversation_began_is_not_the_agents() {
         .unwrap();
     let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
     h.turn(&id, "Bonjour").await;
+    h.plan_looks_at_once().await;
     h.command(&id, "b1", "ls");
     h.feed(
         &id,
         json!({"type":"result","subtype":"success","is_error":false,"duration_ms":1}),
     );
-    tokio::time::sleep(Duration::from_millis(400)).await;
+    h.wait("looks", |h| h.plan_looks() >= 2).await;
+    assert_eq!(h.plan_reads(), 0);
     assert!(h.agent(&id).plan.is_none(), "an old plan of the folder");
     // The agent works on it: it is its own now.
     append(&ledger, "Task 2: dispatched (sonnet)\n");
-    h.core.plan_scan_ms.store(0, Ordering::Relaxed);
     h.command(&id, "b2", "echo ledger");
     h.wait("the plan", |h| h.plan_statuses(&id).len() == 3)
         .await;
@@ -681,7 +701,6 @@ async fn a_plan_that_cannot_be_read_any_more_is_no_notice_and_leaves_the_last_st
     let (h, id, repo) = plan_agent("p2-unreadable").await;
     let ledger = plan_workspace(&repo);
     append(&ledger, "Task 1: complete (x)\n");
-    h.core.plan_scan_ms.store(0, Ordering::Relaxed);
     h.command(&id, "b1", "echo ledger");
     h.wait("the plan", |h| h.plan_statuses(&id).len() == 3)
         .await;
@@ -695,11 +714,15 @@ async fn a_plan_that_cannot_be_read_any_more_is_no_notice_and_leaves_the_last_st
     // The plan is deleted, then the whole workspace; commands end.
     std::fs::remove_file(repo.join("docs/superpowers/plans/demo.md")).unwrap();
     append(&ledger, "Task 2: complete (x)\n");
+    let looks = h.plan_looks();
     h.command(&id, "b2", "echo gone");
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    h.wait("a look at the plan gone", |h| h.plan_looks() > looks)
+        .await;
     std::fs::remove_dir_all(repo.join(".superpowers")).unwrap();
+    let looks = h.plan_looks();
     h.command(&id, "b3", "echo gone");
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    h.wait("a look at the workspace gone", |h| h.plan_looks() > looks)
+        .await;
     assert_eq!(h.plan_statuses(&id).len(), 3);
     assert_eq!(h.plan_statuses(&id)[0].1, crate::plan::TaskStatus::Done);
     assert_eq!(notices(), before, "no notice, no toast");

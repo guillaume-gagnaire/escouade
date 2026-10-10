@@ -569,6 +569,9 @@ fn a_plan_outside_the_repository_is_refused() {
         "docs/../../elsewhere.md".into(),
         "/etc/passwd".into(),
         "C:\\Windows\\win.ini".into(),
+        // Another machine's: refused without asking the network.
+        "\\\\p2-no-such-server\\share\\plan.md".into(),
+        "//p2-no-such-server/share/plan.md".into(),
     ] {
         // The marker names it too: the two are refused.
         r.put(".superpowers/sdd/x/plan-path", &format!("{named}\n"));
