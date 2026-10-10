@@ -107,11 +107,9 @@ test('a superpowers plan run shows the “Plan” banner between the header and 
   // It stays as it was left.
   await expect(head).toHaveAttribute('aria-expanded', 'true');
 
-  // The files were written for real, in the agent's folder (the repository).
-  const ledger = fs.readFileSync(path.join(app.repo, '.superpowers', 'sdd', '2026-10-10-demo', 'progress.md'), 'utf8');
-  expect(ledger).toContain(`# SDD ledger — plan: ${PLAN}`);
-  expect(ledger.match(/^Task \d: complete/gm)).toHaveLength(3);
+  // The files were written for real, in the agent's folder (the repository); the run ended by removing its workspace.
   expect(fs.readFileSync(path.join(app.repo, ...PLAN.split('/')), 'utf8')).toContain('# Démo Implementation Plan');
+  expect(fs.existsSync(path.join(app.repo, '.superpowers', 'sdd', '2026-10-10-demo'))).toBe(false);
   // The agent was started with the task list tools (the setting is on by default), the question that names it was not.
   const [agent, ...asked] = app.launches().filter((l) => !l.argv.includes('-p'));
   expect(agent).toMatchObject({ todoTools: '1' });

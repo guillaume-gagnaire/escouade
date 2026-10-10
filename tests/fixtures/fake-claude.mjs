@@ -33,7 +33,7 @@
 // (see tests/fixtures/superpowers-run.md): the plan and its ledger written for real in the agent's
 // folder, a task list (TaskCreate/TaskUpdate), a foreground implementer and reviewer subagent per
 // task, a background subagent and a workflow on the second one, a question in the middle of the third,
-// then "Plan terminé". "plan superpowers sans liste": the same without any task tool, so that the
+// its workspace removed, then "Plan terminé". "plan superpowers sans liste": the same without any task tool, so that the
 // plan file and the ledger are all there is to read; "interrompu" in the message cuts the turn in
 // the middle of the first implementer.
 // Asked to prepare a test launch (« Prépare le lancement… Ports réservés : <base> », “Prepare the test
@@ -369,7 +369,8 @@ function startSession() {
     // was cut in the middle of it.
     const subagent = async (id, description, n, calls) => {
       const prompt = `Lis ${space}/task-${n}-brief.md et fais ce qu'il demande.`;
-      assistant({ type: 'tool_use', id, name: 'Agent', input: { description, subagent_type: 'general-purpose', prompt } });
+      const model = description.startsWith('Relire') ? 'sonnet' : 'haiku';
+      assistant({ type: 'tool_use', id, name: 'Agent', input: { description, subagent_type: 'general-purpose', model, prompt } });
       await beat();
       for (const [i, [name, input]] of calls.entries()) {
         assistant({ type: 'tool_use', id: `${id}_${i}`, name, input }, undefined, id);
@@ -452,12 +453,14 @@ function startSession() {
         }
         await subagent(`toolu_sp_rv${n}`, `Relire la tâche ${n}`, n, [read, ['Bash', { command: 'git diff', description: 'git diff' }]]);
         if (n === 2) {
-          // A subagent that goes on after the turn, and a workflow that ends within it.
+          // A subagent that goes on after the turn, as Claude Code 2.1.296 launches every subagent (measured):
+          // no `run_in_background` in the call, `async_launched` in its result, `task_started` between the two.
+          // And a workflow that ends within the turn.
           const bg = {
             description: 'Surveiller la suite de tests',
             subagent_type: 'general-purpose',
+            model: 'haiku',
             prompt: 'Surveille les tests.',
-            run_in_background: true,
           };
           assistant({ type: 'tool_use', id: 'toolu_sp_bg', name: 'Agent', input: bg });
           await beat();
@@ -468,11 +471,35 @@ function startSession() {
             description: bg.description,
             subagent_type: bg.subagent_type,
             is_backgrounded: true,
+            spawn_depth: 1,
             task_type: 'local_agent',
+            prompt: bg.prompt,
+            run_id: 'fakerun-bg',
           });
           await beat();
           toolResult('toolu_sp_bg', 'Async agent launched successfully.\nagentId: fakebg-agent (internal ID)', {
-            tool_use_result: { status: 'async_launched', agentId: 'fakebg-agent', description: bg.description },
+            tool_use_result: {
+              isAsync: true,
+              status: 'async_launched',
+              agentId: 'fakebg-agent',
+              description: bg.description,
+              resolvedModel: 'claude-haiku-5-5',
+              prompt: bg.prompt,
+              outputFile: 'fakebg-agent.output',
+              canReadOutputFile: true,
+              canContinueAgent: true,
+            },
+          });
+          await beat();
+          // What it does, told as it goes (measured: one `task_progress` per tool it uses).
+          system({
+            subtype: 'task_progress',
+            task_id: 'fakebg-agent',
+            tool_use_id: 'toolu_sp_bg',
+            description: 'Running npm test',
+            subagent_type: bg.subagent_type,
+            usage: { total_tokens: 1200, tool_uses: 2, duration_ms: 300 },
+            last_tool_name: 'Bash',
           });
           await beat();
           assistant({ type: 'tool_use', id: 'toolu_sp_wf', name: 'Workflow', input: { workflow: 'revue-finale' } });
@@ -529,15 +556,26 @@ function startSession() {
       if (e.message === 'interrupted') return;
       throw e;
     }
+    // The skills end a run by removing the plan's workspace, once the final review is clean.
+    fs.rmSync(file(space), { recursive: true, force: true });
+    await bash('toolu_sp_rm', `rm -rf ${space}`, '');
     streamText('Plan terminé');
     result();
     // The background subagent ends after the turn, and Claude Code tells it by itself.
     setTimeout(() => {
       system({
+        subtype: 'task_updated',
+        task_id: 'fakebg-agent',
+        run_id: 'fakerun-bg',
+        patch: { status: 'completed', end_time: Date.now() },
+      });
+      system({
         subtype: 'task_notification',
         task_id: 'fakebg-agent',
+        run_id: 'fakerun-bg',
         tool_use_id: 'toolu_sp_bg',
         status: 'completed',
+        output_file: 'fakebg-agent.output',
         summary: 'Agent "Surveiller la suite de tests" completed',
         usage: { total_tokens: 2200, tool_uses: 6, duration_ms: 800 },
         uuid: `bgagent-${msg}`,
