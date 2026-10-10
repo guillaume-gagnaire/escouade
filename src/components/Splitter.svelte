@@ -3,13 +3,17 @@
 
   // The handle between a column and what follows it, on the column's right: dragged right, the column grows. It
   // only reports widths, the column's owner sets them and keeps the one chosen. `value` is the width shown, held
-  // between `min` and `max` already.
+  // between `min` and `max` already. On the vertical axis (`axis: 'y'`) it is the handle under a block: dragged down,
+  // the block grows, and what it reports and keeps are heights.
   let {
     value,
     min,
     max,
     reset,
+    onreset,
     label,
+    title,
+    axis = 'x',
     step = 16,
     onresize,
     oncommit,
@@ -17,19 +21,26 @@
     value: number;
     min: number;
     max: number;
-    /** The width a double click goes back to. */
-    reset: number;
+    /** The size a double click goes back to. */
+    reset?: number;
+    /** What going back is, when the owner keeps no size to go back to (the block is of its natural size): instead of `reset`. */
+    onreset?: () => void;
     label: string;
+    /** Its tooltip. */
+    title?: string;
+    /** 'x': the right edge of a column, sized in width. 'y': the bottom edge of a block, sized in height. */
+    axis?: 'x' | 'y';
     /** What an arrow key moves by. */
     step?: number;
-    /** The width the column has now, for every move of the handle. */
-    onresize: (width: number) => void;
-    /** The width the column keeps: once the handle is let go, or after a key or a double click. */
-    oncommit: (width: number) => void;
+    /** The size the block has now, for every move of the handle. */
+    onresize: (size: number) => void;
+    /** The size the block keeps: once the handle is let go, or after a key or a double click. */
+    oncommit: (size: number) => void;
   } = $props();
+  const vertical = $derived(axis === 'y');
 
   // The drag in progress: not reactive, a move must not cost more than the column's own width changing.
-  let gesture: { id: number; x: number; from: number; last: number; moved: boolean } | null = null;
+  let gesture: { id: number; at: number; from: number; last: number; moved: boolean } | null = null;
   let dragging = $state(false);
 
   function down(e: PointerEvent) {
@@ -42,7 +53,7 @@
     } catch {
       // Refused (the pointer is gone already): the drag follows the events that still reach the handle.
     }
-    gesture = { id: e.pointerId, x: e.clientX, from: value, last: value, moved: false };
+    gesture = { id: e.pointerId, at: vertical ? e.clientY : e.clientX, from: value, last: value, moved: false };
     dragging = true;
   }
 
@@ -54,7 +65,7 @@
       return;
     }
     // Whole pixels: a scaled screen gives the pointer fractions.
-    const width = clamp(Math.round(gesture.from + e.clientX - gesture.x), min, max);
+    const width = clamp(Math.round(gesture.from + (vertical ? e.clientY : e.clientX) - gesture.at), min, max);
     if (width === gesture.last) return;
     gesture.last = width;
     gesture.moved = true;
@@ -83,10 +94,25 @@
     oncommit(next);
   }
 
+  /** Back to the usual size: the owner's way if it has one, else the size it gave. */
+  function back() {
+    if (onreset) onreset();
+    else if (reset !== undefined) set(reset);
+  }
+
   function key(e: KeyboardEvent) {
     // The shortcuts with a modifier are the app's.
     if (e.ctrlKey || e.altKey || e.metaKey) return;
-    const to = { ArrowLeft: value - step, ArrowRight: value + step, Home: min, End: max }[e.key];
+    // Under a block, Enter and Escape go back to the usual size, as a double click does.
+    if (vertical && (e.key === 'Enter' || e.key === 'Escape')) {
+      e.preventDefault();
+      back();
+      return;
+    }
+    const keys: Record<string, number> = vertical
+      ? { ArrowUp: value - step, ArrowDown: value + step, Home: min, End: max }
+      : { ArrowLeft: value - step, ArrowRight: value + step, Home: min, End: max };
+    const to = keys[e.key];
     if (to === undefined) return;
     e.preventDefault();
     set(to);
@@ -99,10 +125,12 @@
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 <div
   class="splitter"
+  class:row={vertical}
   class:dragging
   role="separator"
-  aria-orientation="vertical"
+  aria-orientation={vertical ? 'horizontal' : 'vertical'}
   aria-label={label}
+  {title}
   aria-valuenow={value}
   aria-valuemin={min}
   aria-valuemax={max}
@@ -112,7 +140,7 @@
   onpointerup={end}
   onpointercancel={end}
   onlostpointercapture={end}
-  ondblclick={() => set(reset)}
+  ondblclick={back}
   onkeydown={key}
 ></div>
 
@@ -158,5 +186,39 @@
     .splitter::after {
       transition: opacity 0.12s;
     }
+  }
+  /* Under a block (the plan of a conversation): a band across it, with a grip of 36 x 3 px in its middle. Half of it
+     overlaps what follows, so the block keeps its size. */
+  .splitter.row {
+    width: auto;
+    height: 10px;
+    margin-bottom: -5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    cursor: row-resize;
+  }
+  .splitter.row::before {
+    inset: 0;
+  }
+  .splitter.row::after {
+    position: static;
+    width: 36px;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--line2);
+    opacity: 1;
+  }
+  .splitter.row:hover {
+    background: color-mix(in oklch, var(--accent) 12%, transparent);
+  }
+  .splitter.row:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+  .splitter.row:focus-visible::after,
+  .splitter.row.dragging::after {
+    background: var(--accent);
   }
 </style>

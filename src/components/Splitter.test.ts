@@ -286,3 +286,122 @@ describe('Splitter', () => {
     });
   });
 });
+
+describe('Splitter on the vertical axis', () => {
+  beforeEach(() => {
+    Element.prototype.setPointerCapture = vi.fn();
+  });
+  const col = { value: 120, min: 60, max: 400, reset: 120, label: 'Hauteur de la liste', axis: 'y' as const };
+  function setupY(over: Record<string, unknown> = {}) {
+    const onresize = vi.fn();
+    const oncommit = vi.fn();
+    const view = render(Splitter, { ...col, onresize, oncommit, ...over });
+    return { onresize, oncommit, handle: screen.getByRole('separator'), ...view };
+  }
+  const downY = (el: Element, clientY: number, pointerId = 1) => fireEvent.pointerDown(el, { clientY, pointerId, button: 0 });
+  const moveY = (el: Element, clientY: number, pointerId = 1, buttons = 1) => fireEvent.pointerMove(el, { clientY, pointerId, buttons });
+
+  it('is a focusable horizontal separator that tells its height and bounds, and can carry a tooltip', () => {
+    const { handle } = setupY({ title: 'Glisser pour redimensionner' });
+    expect(handle).toHaveAccessibleName('Hauteur de la liste');
+    expect(handle).toHaveAttribute('aria-orientation', 'horizontal');
+    expect(handle).toHaveAttribute('aria-valuenow', '120');
+    expect(handle).toHaveAttribute('aria-valuemin', '60');
+    expect(handle).toHaveAttribute('aria-valuemax', '400');
+    expect(handle).toHaveAttribute('tabindex', '0');
+    expect(handle).toHaveAttribute('title', 'Glisser pour redimensionner');
+    expect(handle).toHaveClass('row');
+  });
+
+  it('stays a vertical separator on the horizontal axis, with no tooltip unless it is given one', () => {
+    const { handle } = setup();
+    expect(handle).toHaveAttribute('aria-orientation', 'vertical');
+    expect(handle).not.toHaveAttribute('title');
+    expect(handle).not.toHaveClass('row');
+  });
+
+  it('grows as the pointer goes down and shrinks as it goes up, from the height it started at', async () => {
+    const { handle, onresize, oncommit } = setupY();
+    await downY(handle, 300);
+    await moveY(handle, 340);
+    expect(onresize).toHaveBeenLastCalledWith(160);
+    await moveY(handle, 280);
+    expect(onresize).toHaveBeenLastCalledWith(100);
+    // Sideways moves change nothing.
+    await fireEvent.pointerMove(handle, { clientX: 900, clientY: 280, pointerId: 1, buttons: 1 });
+    expect(onresize).toHaveBeenCalledTimes(2);
+    expect(oncommit).not.toHaveBeenCalled();
+    await up(handle);
+    expect(oncommit).toHaveBeenCalledWith(100);
+    expect(handle).not.toHaveClass('dragging');
+  });
+
+  it('stops at the smallest and at the largest height', async () => {
+    const { handle, onresize, oncommit } = setupY();
+    await downY(handle, 300);
+    await moveY(handle, -900);
+    expect(onresize).toHaveBeenLastCalledWith(60);
+    await moveY(handle, 5000);
+    expect(onresize).toHaveBeenLastCalledWith(400);
+    await up(handle);
+    expect(oncommit).toHaveBeenCalledWith(400);
+  });
+
+  it('moves by 16 px with the up and down arrows, and goes to the bounds with Home and End', async () => {
+    const { handle, onresize, oncommit, rerender } = setupY();
+    handle.focus();
+    await userEvent.keyboard('{ArrowDown}');
+    expect(onresize).toHaveBeenLastCalledWith(136);
+    expect(oncommit).toHaveBeenLastCalledWith(136);
+    await rerender({ value: 136 });
+    await userEvent.keyboard('{ArrowUp}{ArrowUp}');
+    expect(onresize).toHaveBeenLastCalledWith(120);
+    await userEvent.keyboard('{Home}');
+    expect(oncommit).toHaveBeenLastCalledWith(60);
+    await userEvent.keyboard('{End}');
+    expect(oncommit).toHaveBeenLastCalledWith(400);
+  });
+
+  it('leaves the arrows of the other axis alone', async () => {
+    const { handle, onresize, unmount } = setupY();
+    handle.focus();
+    await userEvent.keyboard('{ArrowLeft}{ArrowRight}');
+    expect(onresize).not.toHaveBeenCalled();
+    unmount();
+    const flat = setup();
+    flat.handle.focus();
+    await userEvent.keyboard('{ArrowUp}{ArrowDown}{Enter}{Escape}');
+    expect(flat.onresize).not.toHaveBeenCalled();
+  });
+
+  it('goes back to the usual height with a double click, Enter or Escape', async () => {
+    const { handle, onresize, oncommit } = setupY({ value: 300 });
+    await fireEvent.dblClick(handle);
+    expect(oncommit).toHaveBeenLastCalledWith(120);
+    handle.focus();
+    await userEvent.keyboard('{Enter}');
+    expect(oncommit).toHaveBeenCalledTimes(2);
+    await userEvent.keyboard('{Escape}');
+    expect(oncommit).toHaveBeenCalledTimes(3);
+    expect(onresize).toHaveBeenCalledTimes(3);
+  });
+
+  it('leaves going back to its owner when it is told how: the owner may keep no height at all', async () => {
+    const onreset = vi.fn();
+    const { handle, onresize, oncommit } = setupY({ onreset, value: 300 });
+    await fireEvent.dblClick(handle);
+    expect(onreset).toHaveBeenCalledTimes(1);
+    handle.focus();
+    await userEvent.keyboard('{Enter}{Escape}');
+    expect(onreset).toHaveBeenCalledTimes(3);
+    expect(onresize).not.toHaveBeenCalled();
+    expect(oncommit).not.toHaveBeenCalled();
+  });
+
+  it('leaves the shortcuts with a modifier to the app', async () => {
+    const { handle, onresize } = setupY();
+    handle.focus();
+    await userEvent.keyboard('{Control>}{ArrowDown}{/Control}{Alt>}{ArrowUp}{/Alt}{Meta>}{End}{/Meta}');
+    expect(onresize).not.toHaveBeenCalled();
+  });
+});
