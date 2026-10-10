@@ -16,9 +16,16 @@ function windowsName(part: string): boolean {
 
 /**
  * Why the file `name` cannot be created in `dir` among the source's `files`, or null when it can (or nothing is typed
- * yet). On a disk that ignores case, as on Windows and macOS, `APP.TS` is the `app.ts` already there.
+ * yet). On a disk that ignores case, as on Windows and macOS, `APP.TS` is the `app.ts` already there. A file of
+ * `ignored` (git ignores it, the tree shows it greyed) is told as such.
  */
-export function newFileError(name: string, dir: string, files: string[], windows = !IS_MAC): string | null {
+export function newFileError(
+  name: string,
+  dir: string,
+  files: string[],
+  windows = !IS_MAC,
+  ignored: readonly string[] = [],
+): string | null {
   if (!name.trim()) return null;
   const rel = name.replaceAll('\\', '/');
   if (rel.startsWith('/')) return 'Un nom ne peut pas commencer par une barre oblique.';
@@ -33,6 +40,9 @@ export function newFileError(name: string, dir: string, files: string[], windows
     if (known.has((base + parts.slice(0, i).join('/')).toLowerCase())) return `« ${parts[i - 1]} » est un fichier.`;
   }
   const path = (base + rel).toLowerCase();
-  if (known.has(path) || files.some((f) => f.toLowerCase().startsWith(path + '/'))) return `« ${name} » existe déjà à cet endroit.`;
+  if (known.has(path) || files.some((f) => f.toLowerCase().startsWith(path + '/'))) {
+    const hidden = ignored.some((f) => f.toLowerCase() === path);
+    return `« ${name} » existe déjà à cet endroit${hidden ? ' (ignoré par git)' : ''}.`;
+  }
   return null;
 }

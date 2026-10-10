@@ -4,6 +4,7 @@ use crate::agent::{AgentAlert, AgentHandle, AgentRt, Effects, NotifyKind};
 use crate::board;
 use crate::claude::{self, ClaudeProcess, SpawnOpts};
 use crate::convsearch;
+use crate::fsedit;
 use crate::git::{self, GitService};
 use crate::hub::Hub;
 use crate::integrations;
@@ -2987,6 +2988,18 @@ impl<R: Runtime> Core<R> {
         }
         let root = self.toplevel(&project.path).await.unwrap_or(project.path);
         Ok((root, None))
+    }
+
+    /// The files of an editor source (the agent's worktree, else the project's checkout), with the
+    /// ignored ones the project's « Fichiers copiés dans les worktrees » patterns name.
+    pub async fn fs_tree(
+        &self,
+        project_id: &str,
+        agent_id: Option<String>,
+    ) -> Result<fsedit::Tree> {
+        let (root, _) = self.edit_root(project_id, agent_id).await?;
+        let copied = self.project(project_id)?.worktree_copy;
+        Ok(fsedit::tree(&root, &copied).await)
     }
 
     pub async fn git_diff(

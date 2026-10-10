@@ -71,6 +71,28 @@ describe('treeRows with a file being named', () => {
   });
 });
 
+describe('treeRows of the files git ignores', () => {
+  const rows = treeRows(['.env', 'api/.env', 'api/index.ts', 'README.md'], { api: true }, {}, null, ['.env', 'api/.env']);
+
+  it('marks the ignored files, and no folder, whatever they hold', () => {
+    expect(rows.filter((r) => r.ignored).map((r) => r.path)).toEqual(['api/.env', '.env']);
+    expect(rows.find((r) => r.name === 'api')).toMatchObject({ kind: 'dir', ignored: false });
+  });
+
+  it('marks none without the list the backend gives', () => {
+    expect(treeRows(['.env'], {}, {}).every((r) => !r.ignored)).toBe(true);
+  });
+
+  it('marks a file by its path, not by its name', () => {
+    const named = treeRows(['.env', 'api/.env'], { api: true }, {}, null, ['api/.env']);
+    expect(named.map((r) => [r.path, r.ignored])).toEqual([
+      ['api', false],
+      ['api/.env', true],
+      ['.env', false],
+    ]);
+  });
+});
+
 describe('treeRows with names that Object has too', () => {
   it('keeps a folder named like an Object member closed and a file named so unchanged', () => {
     const rows = treeRows(['constructor/x.ts', 'toString'], {}, {});

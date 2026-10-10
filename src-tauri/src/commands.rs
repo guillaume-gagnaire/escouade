@@ -449,8 +449,7 @@ pub async fn fs_tree(
     project_id: String,
     agent_id: Option<String>,
 ) -> Res<fsedit::Tree> {
-    let (root, _) = core.edit_root(&project_id, agent_id).await.map_err(err)?;
-    Ok(fsedit::tree(&root).await)
+    core.fs_tree(&project_id, agent_id).await.map_err(err)
 }
 
 #[tauri::command]

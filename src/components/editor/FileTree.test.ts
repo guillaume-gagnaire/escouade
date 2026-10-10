@@ -40,6 +40,27 @@ describe('FileTree', () => {
   });
 });
 
+describe('FileTree ignored files', () => {
+  const rows = treeRows(['.env', 'README.md'], {}, {}, null, ['.env']);
+
+  it('greys out a file git ignores and says so in its title, the others keeping their path', () => {
+    render(FileTree, { ...base, rows });
+    const env = screen.getByRole('treeitem', { name: /\.env/ });
+    expect(env).toHaveAttribute('title', 'Ignoré par git');
+    expect(env).toHaveClass('ignored');
+    const readme = screen.getByRole('treeitem', { name: /README\.md/ });
+    expect(readme).toHaveAttribute('title', 'README.md');
+    expect(readme).not.toHaveClass('ignored');
+  });
+
+  it('opens it like any other', async () => {
+    const onopen = vi.fn();
+    render(FileTree, { ...base, rows, onopen });
+    await userEvent.click(screen.getByRole('treeitem', { name: /\.env/ }));
+    expect(onopen).toHaveBeenCalledWith('.env');
+  });
+});
+
 describe('FileTree from the keyboard', () => {
   const rows = treeRows(['src/a/x.ts', 'src/app.ts', 'README.md'], { src: true }, {});
   const item = (name: RegExp) => screen.getByRole('treeitem', { name });

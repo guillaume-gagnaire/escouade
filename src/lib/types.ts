@@ -514,6 +514,8 @@ export interface FileTree {
   root: string;
   files: string[];
   truncated: boolean;
+  /** The files of `files` that git ignores: the ones the project copies into its worktrees (« Fichiers copiés dans les worktrees »). */
+  ignored: string[];
 }
 
 /** A file as the editor reads it: its text with LF line endings, and how to write it back. */

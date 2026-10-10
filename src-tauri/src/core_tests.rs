@@ -2053,6 +2053,37 @@ async fn the_editor_reads_and_writes_the_checkout_of_its_source() {
 }
 
 #[tokio::test]
+async fn the_editor_tree_shows_the_files_the_project_copies_into_its_worktrees() {
+    let h = harness("core-edit-tree-copied");
+    let (p, r) = h.project(true).await;
+    ignore(&r, ".env*");
+    ignore(&r, "node_modules/");
+    std::fs::write(r.join(".env"), "SECRET=1\n").unwrap();
+    std::fs::create_dir_all(r.join("node_modules")).unwrap();
+    std::fs::write(r.join("node_modules").join("x.js"), "x\n").unwrap();
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+
+    // The project's checkout and the agent's worktree, where the copy put it: the copied file is
+    // listed and marked ignored, the dependencies are not there.
+    for source in [None, Some(a.meta.id.clone())] {
+        let t = h.core.fs_tree(&p.id, source.clone()).await.unwrap();
+        assert_eq!(t.ignored, [".env"], "{source:?}");
+        assert!(t.files.contains(&".env".to_string()), "{source:?}");
+        assert!(!t.files.iter().any(|f| f.starts_with("node_modules")));
+    }
+
+    // The patterns are the project's own: none, nothing more than git lists.
+    h.core
+        .update_project(Project {
+            worktree_copy: Vec::new(),
+            ..p.clone()
+        })
+        .unwrap();
+    let t = h.core.fs_tree(&p.id, None).await.unwrap();
+    assert!(t.ignored.is_empty() && !t.files.contains(&".env".to_string()));
+}
+
+#[tokio::test]
 async fn quitting_with_unsaved_files_asks_the_window_first() {
     use std::sync::atomic::Ordering;
     let h = harness("core-quit-unsaved");

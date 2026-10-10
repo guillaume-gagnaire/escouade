@@ -435,6 +435,24 @@ describe('EditorView tree, as VS Code’s explorer', () => {
     expect(app.toasts.map((t) => t.text)).toEqual(['.env est ignoré par git : l’arborescence ne le montre pas.']);
   });
 
+  it('shows the ignored files the project copies into its worktrees greyed, opens them, and knows them when naming a file', async () => {
+    const be = creating({
+      fs_tree: () => ({ root: 'C:/code/demo-api', files: ['.env', 'README.md', 'src/app.ts'], truncated: false, ignored: ['.env'] }),
+      fs_read: (a) => text(a.path === '.env' ? 'SECRET=1\n' : '# demo\n'),
+    });
+    await app.openEditor({ source: 'project', path: 'README.md' });
+    render(EditorView, { project: project() });
+    const env = await screen.findByRole('treeitem', { name: /\.env/ });
+    expect(env).toHaveAttribute('title', 'Ignoré par git');
+    expect(item(/README/)).toHaveAttribute('title', 'README.md');
+    await userEvent.click(env);
+    expect(await screen.findByRole('tab', { name: /\.env/ })).toHaveAttribute('aria-selected', 'true');
+    expect(be.called('fs_read').map((c) => c.args.path)).toContain('.env');
+    await userEvent.click(screen.getByRole('button', { name: 'Nouveau fichier' }));
+    await userEvent.type(await field(), '.env');
+    expect(screen.getByRole('alert')).toHaveTextContent('« .env » existe déjà à cet endroit (ignoré par git).');
+  });
+
   it('copies the path of a file, from the root of its source or whole', async () => {
     creating();
     const writeText = vi.fn(async () => {});
@@ -734,7 +752,7 @@ describe('EditorView navigation', () => {
     const { container } = render(EditorView, { project: project() });
     ctrlClick(await shown(container, 'import'), APP.indexOf('util'));
     await expect.poll(active).toBe('src/util.ts');
-    trees.all['p1|project'] = { root: 'C:/code/demo-api', files: ['src/util.ts'], truncated: false };
+    trees.all['p1|project'] = { root: 'C:/code/demo-api', files: ['src/util.ts'], truncated: false, ignored: [] };
     press(await shown(container, 'export'), 'ArrowLeft', { altKey: true });
     await new Promise((r) => setTimeout(r, 30));
     expect(active()).toBe('src/util.ts');

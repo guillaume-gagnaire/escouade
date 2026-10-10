@@ -120,12 +120,13 @@
       <button
         class="row"
         class:on={r.kind === 'file' && r.path === active}
+        class:ignored={r.ignored}
         role="treeitem"
         aria-level={r.depth + 1}
         aria-expanded={r.kind === 'dir' ? r.open : undefined}
         aria-selected={r.kind === 'file' && r.path === active}
         tabindex={keyOf(r) === stop ? 0 : -1}
-        title={r.path}
+        title={r.ignored ? 'Ignoré par git' : r.path}
         data-index={i}
         style:padding-left="{pad(r.depth)}px"
         onfocus={() => (focused = keyOf(r))}
@@ -191,6 +192,13 @@
   }
   .row:hover {
     background: var(--elev);
+  }
+  /* A file git ignores, shown because the project copies it into its worktrees: faded as in VS Code's explorer. */
+  .row.ignored {
+    color: var(--dim);
+  }
+  .row.ignored :global(.ficon) {
+    opacity: 0.55;
   }
   .row.on {
     background: var(--elev2);

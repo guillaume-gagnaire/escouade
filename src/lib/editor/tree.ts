@@ -15,6 +15,8 @@ export interface TreeRow {
   status: FileStatus | null;
   /** A folder holding changed files: the strongest change among them. */
   inside: FileStatus | null;
+  /** A file git ignores that the tree shows nonetheless: one the project copies into its worktrees. */
+  ignored: boolean;
 }
 
 interface Node {
@@ -27,13 +29,18 @@ const collator = new Intl.Collator(undefined, { sensitivity: 'base' });
 const byName = (a: string, b: string) => collator.compare(a, b) || (a < b ? -1 : a > b ? 1 : 0);
 const STRENGTH: FileStatus[] = ['M', 'A', 'D'];
 
-/** The rows shown, `adding` the folder getting a new file ('' for the root), its field first among what it holds. */
+/**
+ * The rows shown, `adding` the folder getting a new file ('' for the root), its field first among what it holds.
+ * `ignored` lists the files git ignores, which the tree draws apart.
+ */
 export function treeRows(
   files: string[],
   expanded: Record<string, boolean>,
   status: Record<string, FileStatus>,
   adding: string | null = null,
+  ignored: readonly string[] = [],
 ): TreeRow[] {
+  const ignoredSet = new Set(ignored);
   const root: Node = { dirs: new Map(), files: [] };
   for (const f of files) {
     let n = root;
@@ -54,7 +61,16 @@ export function treeRows(
   }
   const inside = (dir: string) => held.get(dir) ?? null;
   const isOpen = (path: string) => Object.hasOwn(expanded, path) && !!expanded[path];
-  const field = (path: string, depth: number): TreeRow => ({ kind: 'new', path, name: '', depth, open: false, status: null, inside: null });
+  const field = (path: string, depth: number): TreeRow => ({
+    kind: 'new',
+    path,
+    name: '',
+    depth,
+    open: false,
+    status: null,
+    inside: null,
+    ignored: false,
+  });
   const rows: TreeRow[] = [];
   const walk = (n: Node, depth: number, prefix: string) => {
     for (const first of [...n.dirs.keys()].sort(byName)) {
@@ -69,7 +85,7 @@ export function treeRows(
         node = next;
       }
       const open = isOpen(path);
-      rows.push({ kind: 'dir', path, name, depth, open, status: null, inside: inside(path) });
+      rows.push({ kind: 'dir', path, name, depth, open, status: null, inside: inside(path), ignored: false });
       if (!open) continue;
       if (path === adding) rows.push(field(path, depth + 1));
       walk(node, depth + 1, path + '/');
@@ -83,6 +99,7 @@ export function treeRows(
         open: false,
         status: Object.hasOwn(status, path) ? status[path] : null,
         inside: null,
+        ignored: ignoredSet.has(path),
       });
     }
   };

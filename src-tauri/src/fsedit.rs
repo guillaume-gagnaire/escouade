@@ -3,6 +3,7 @@
 
 use crate::git;
 use crate::paths::contained;
+use crate::testlaunch;
 use anyhow::{anyhow, bail, Result};
 use serde::Serialize;
 use std::path::{Component, Path};
@@ -289,31 +290,55 @@ pub struct Tree {
     pub root: String,
     pub files: Vec<String>,
     pub truncated: bool,
+    /// The files of `files` that git ignores: the ones the project copies into its worktrees.
+    pub ignored: Vec<String>,
 }
 
-/// What git lists and is still on disk (tracked and untracked, ignored files and the agents'
-/// worktrees left out), or the folder walked when it is not a repository or git cannot list it.
-pub async fn tree(root: &str) -> Tree {
-    tree_up_to(root, MAX_TREE_FILES).await
+/// What git lists and is still on disk (tracked and untracked, the agents' worktrees left out),
+/// or the folder walked when it is not a repository or git cannot list it. Ignored files are not
+/// there, but those matching one of the `copied` patterns (the project's « Fichiers copiés dans les
+/// worktrees »): the editor shows what the agents get beside the code. A file git tracks is never
+/// one of them, and nothing here lets one into a commit.
+pub async fn tree(root: &str, copied: &[String]) -> Tree {
+    tree_up_to(root, MAX_TREE_FILES, copied).await
 }
 
 /// `tree`, cut at `max` files (a smaller `max` lets the cut be tested).
-async fn tree_up_to(root: &str, max: usize) -> Tree {
+async fn tree_up_to(root: &str, max: usize, copied: &[String]) -> Tree {
+    let mut ignored = Vec::new();
     let listed = match git::toplevel(root).await {
-        Some(_) => git_files(root).await.ok(),
+        Some(_) => {
+            // Both read the working tree: asked together.
+            let (listed, shown) =
+                tokio::join!(git_files(root), testlaunch::matching_ignored(root, copied));
+            if listed.is_ok() {
+                ignored = shown;
+            }
+            listed.ok()
+        }
         None => None,
     };
-    // Not a repository, or git cannot list it: the folder is walked.
+    // Not a repository, or git cannot list it: the folder is walked, and it has no ignored file.
     let mut files = match listed {
         Some(f) => f,
         None => walk(root, max).await,
     };
-    let truncated = files.len() > max;
+    let mut truncated = files.len() > max;
     files.truncate(max);
+    // The copied files are cut apart from the others: a repository full of ignored logs matching a
+    // wide pattern must not push the files of the code out of the tree.
+    truncated |= ignored.len() > max;
+    ignored.truncate(max);
+    if !ignored.is_empty() {
+        files.extend(ignored.iter().cloned());
+        files.sort();
+        files.dedup();
+    }
     Tree {
         root: root.to_string(),
         files,
         truncated,
+        ignored,
     }
 }
 
@@ -718,7 +743,7 @@ mod tests {
         std::fs::create_dir_all(r.join("dist")).unwrap();
         std::fs::write(r.join("dist/out.js"), "x").unwrap();
         std::fs::write(r.join("notes.md"), "n").unwrap();
-        let t = tree(&r.to_string_lossy()).await;
+        let t = tree(&r.to_string_lossy(), &[]).await;
         assert_eq!(t.files, vec![".gitignore", "notes.md", "src/app.ts"]);
         assert!(!t.truncated);
         assert_eq!(t.root, r.to_string_lossy());
@@ -730,7 +755,7 @@ mod tests {
         std::fs::create_dir_all(d.join("node_modules/x")).unwrap();
         std::fs::write(d.join("node_modules/x/i.js"), "").unwrap();
         std::fs::write(d.join("a.txt"), "").unwrap();
-        assert_eq!(tree(&d.to_string_lossy()).await.files, vec!["a.txt"]);
+        assert_eq!(tree(&d.to_string_lossy(), &[]).await.files, vec!["a.txt"]);
     }
 
     #[tokio::test]
@@ -792,18 +817,18 @@ mod tests {
         }
         let root = r.to_string_lossy();
         // .gitignore, f0..f2 and src/app.ts: five files.
-        let t = tree_up_to(&root, 4).await;
+        let t = tree_up_to(&root, 4, &[]).await;
         assert_eq!((t.files.len(), t.truncated), (4, true));
-        let t = tree_up_to(&root, 5).await;
+        let t = tree_up_to(&root, 5, &[]).await;
         assert_eq!((t.files.len(), t.truncated), (5, false));
 
         let d = test_dir("fsedit-tree-cut-plain");
         for n in 0..3 {
             std::fs::write(d.join(format!("p{n}.txt")), "").unwrap();
         }
-        let t = tree_up_to(&d.to_string_lossy(), 2).await;
+        let t = tree_up_to(&d.to_string_lossy(), 2, &[]).await;
         assert_eq!((t.files.len(), t.truncated), (2, true));
-        let t = tree_up_to(&d.to_string_lossy(), 3).await;
+        let t = tree_up_to(&d.to_string_lossy(), 3, &[]).await;
         assert_eq!((t.files.len(), t.truncated), (3, false));
     }
 
@@ -820,7 +845,7 @@ mod tests {
         std::fs::write(r.join("staged.md"), "s").unwrap();
         git(&r, &["add", "staged.md"]);
         std::fs::write(r.join("untracked.md"), "u").unwrap();
-        let t = tree(&r.to_string_lossy()).await;
+        let t = tree(&r.to_string_lossy(), &[]).await;
         assert_eq!(t.files, vec![".gitignore", "staged.md", "untracked.md"]);
     }
 
@@ -830,7 +855,109 @@ mod tests {
         std::fs::write(r.join("notes.md"), "n").unwrap();
         // A repository whose index is unreadable: git answers for the folder, not for the files.
         std::fs::write(r.join(".git/index"), "not an index").unwrap();
-        let t = tree(&r.to_string_lossy()).await;
+        let t = tree(&r.to_string_lossy(), &[]).await;
         assert_eq!(t.files, vec![".gitignore", "notes.md", "src/app.ts"]);
+    }
+
+    fn patterns(p: &[&str]) -> Vec<String> {
+        p.iter().map(|s| s.to_string()).collect()
+    }
+
+    /// A repository ignoring `.env`, `.env.local`, `dist/` and `node_modules/`, with those files
+    /// (and a `.env.example` it does not ignore) on disk.
+    fn repo_with_env(name: &str) -> std::path::PathBuf {
+        let r = repo(name);
+        std::fs::write(
+            r.join(".gitignore"),
+            "dist/\nnode_modules/\n.env\n.env.local\n",
+        )
+        .unwrap();
+        for f in [".env", ".env.local", ".env.example", "node_modules/x.js"] {
+            let p = r.join(f);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, "x").unwrap();
+        }
+        r
+    }
+
+    #[tokio::test]
+    async fn the_tree_shows_the_ignored_files_the_copy_patterns_name_and_no_other() {
+        let r = repo_with_env("fsedit-tree-copied");
+        let t = tree(&r.to_string_lossy(), &patterns(&[".env*"])).await;
+        assert_eq!(t.ignored, vec![".env", ".env.local"]);
+        // In the list too, in its order; node_modules stays out, and `.env.example`, which git does
+        // not ignore, is a file like any other.
+        assert_eq!(
+            t.files,
+            vec![
+                ".env",
+                ".env.example",
+                ".env.local",
+                ".gitignore",
+                "src/app.ts"
+            ]
+        );
+        assert!(!t.truncated);
+    }
+
+    #[tokio::test]
+    async fn the_tree_marks_nothing_without_patterns_or_in_a_plain_folder() {
+        let r = repo_with_env("fsedit-tree-copied-none");
+        let t = tree(&r.to_string_lossy(), &[]).await;
+        assert!(t.ignored.is_empty());
+        assert!(!t.files.contains(&".env".to_string()));
+        let t = tree(&r.to_string_lossy(), &patterns(&["", "  "])).await;
+        assert!(t.ignored.is_empty());
+
+        // Not a repository: nothing is ignored, the walk lists `.env` like any file.
+        let d = test_dir("fsedit-tree-copied-plain");
+        std::fs::write(d.join(".env"), "x").unwrap();
+        let t = tree(&d.to_string_lossy(), &patterns(&[".env*"])).await;
+        assert_eq!(t.files, vec![".env"]);
+        assert!(t.ignored.is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_pattern_with_double_stars_reaches_the_copied_files_of_the_folders() {
+        let r = repo_with_env("fsedit-tree-copied-deep");
+        // A folder git tracks something in: one holding nothing but ignored files is listed whole by
+        // git, as the copy sees it.
+        std::fs::create_dir_all(r.join("api")).unwrap();
+        std::fs::write(r.join("api/index.ts"), "x").unwrap();
+        git(&r, &["add", "api/index.ts"]);
+        std::fs::write(r.join("api/.env"), "x").unwrap();
+        // The gitignore's `.env` ignores it at any depth; the pattern `.env*` names the root only.
+        let root = r.to_string_lossy();
+        let t = tree(&root, &patterns(&[".env*"])).await;
+        assert_eq!(t.ignored, vec![".env", ".env.local"]);
+        assert!(!t.files.contains(&"api/.env".to_string()));
+        let t = tree(&root, &patterns(&["**/.env*"])).await;
+        assert_eq!(t.ignored, vec![".env", ".env.local", "api/.env"]);
+        assert!(t.files.contains(&"api/.env".to_string()));
+    }
+
+    #[tokio::test]
+    async fn a_file_git_tracks_is_not_marked_ignored_even_when_a_pattern_names_it() {
+        let r = repo_with_env("fsedit-tree-copied-tracked");
+        git(&r, &["add", "-f", ".env"]);
+        let t = tree(&r.to_string_lossy(), &patterns(&[".env*"])).await;
+        assert_eq!(t.ignored, vec![".env.local"]);
+        assert!(t.files.contains(&".env".to_string()));
+    }
+
+    #[tokio::test]
+    async fn the_ignored_files_shown_are_cut_too_and_the_tree_says_so() {
+        let r = repo("fsedit-tree-copied-cut");
+        std::fs::write(r.join(".gitignore"), "*.log\n").unwrap();
+        for n in 0..4 {
+            std::fs::write(r.join(format!("{n}.log")), "").unwrap();
+        }
+        // .gitignore and src/app.ts are listed whole; four ignored files, three allowed.
+        let t = tree_up_to(&r.to_string_lossy(), 3, &patterns(&["*.log"])).await;
+        assert_eq!(t.ignored.len(), 3);
+        assert!(t.truncated);
+        assert!(t.ignored.iter().all(|f| t.files.contains(f)));
+        let t = tree_up_to(&r.to_string_lossy(), 4, &patterns(&["*.log"])).await;
+        assert_eq!((t.ignored.len(), t.truncated), (4, false));
     }
 }

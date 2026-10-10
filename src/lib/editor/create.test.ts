@@ -30,6 +30,14 @@ describe('newFileError', () => {
     expect(error('src/lib/x.ts')).toBe('« src/lib/x.ts » existe déjà à cet endroit.');
   });
 
+  it('says that git ignores the file already there when the tree shows it as such', () => {
+    const ignored = ['.env'];
+    const other = newFileError('.env', '', [...files, '.env'], true, ignored);
+    expect(other).toBe('« .env » existe déjà à cet endroit (ignoré par git).');
+    expect(newFileError('.ENV', '', [...files, '.env'], true, ignored)).toBe('« .ENV » existe déjà à cet endroit (ignoré par git).');
+    expect(newFileError('app.ts', 'src', [...files, '.env'], true, ignored)).toBe('« app.ts » existe déjà à cet endroit.');
+  });
+
   it('refuses a folder where a file is', () => {
     expect(error('README.md/a.ts')).toBe('« README.md » est un fichier.');
     expect(error('app.ts/b/c.ts', 'src')).toBe('« app.ts » est un fichier.');

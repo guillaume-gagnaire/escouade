@@ -253,7 +253,7 @@
     menu.show(e, items);
   }
 
-  const rows = $derived(tree ? treeRows(tree.files, place?.expanded ?? {}, status, addingDir) : []);
+  const rows = $derived(tree ? treeRows(tree.files, place?.expanded ?? {}, status, addingDir, tree.ignored) : []);
   const changedCount = $derived(Object.keys(status).length);
   const tabs = $derived(
     (place?.open ?? []).map((p) => ({
@@ -492,7 +492,7 @@
               app.openEditor({ projectId: project.id, source, path: p });
             }}
             onmenu={treeMenu}
-            check={(name) => newFileError(name, addingDir ?? '', tree?.files ?? [])}
+            check={(name) => newFileError(name, addingDir ?? '', tree?.files ?? [], undefined, tree?.ignored)}
             oncreate={(name) => create(adding, name)}
             oncancel={() => (adding = null)}
           />
