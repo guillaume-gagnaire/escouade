@@ -30,6 +30,8 @@
   let suggestions = $state<{ label: string; detail: string; value: string }[]>([]);
   let sel = $state(0);
   let sending = $state(false);
+  /** The agent whose message being sent the backend holds until its worktree is prepared. */
+  let heldFor: string | null = null;
   /** Files being read, not attached yet. */
   let reading = $state(0);
   let dragOver = $state(false);
@@ -251,7 +253,12 @@
 
   async function send() {
     const body = text.trim();
-    if ((!body && !files.length) || sending || reading) return;
+    if ((!body && !files.length) || reading) return;
+    if (sending) {
+      // The one before waits for the worktree, which can take minutes: this one is not dropped without a word.
+      if (heldFor === agent.id) app.toast('Un message attend déjà la fin de la préparation.');
+      return;
+    }
     // Text typed while Claude waits answers the question / refuses the permission.
     const answering = body ? pendingItem : undefined;
     sending = true;
@@ -266,6 +273,7 @@
             files: prevFiles.filter((f) => !f.mediaType.startsWith('image/')).map((f) => f.name),
           })
         : undefined;
+    if (unhold) heldFor = agent.id;
     text = '';
     if (!answering) files = [];
     try {
@@ -291,6 +299,7 @@
     }
     // Recorded by now, or given back to the field above.
     unhold?.();
+    heldFor = null;
     sending = false;
   }
 

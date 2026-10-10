@@ -173,6 +173,21 @@ describe('Conversation', () => {
       expect(textarea).toHaveValue('Ajoute des tests');
     });
 
+    it('says why another message sent meanwhile does not go, and leaves it in the field', async () => {
+      const { backend, textarea } = sendDuringSetup();
+      await userEvent.type(textarea, 'Ajoute des tests{Enter}');
+      await screen.findByText('En attente de la préparation…');
+      await userEvent.type(textarea, 'Et la doc{Enter}');
+      expect(app.toasts.at(-1)).toMatchObject({ text: 'Un message attend déjà la fin de la préparation.', kind: 'info' });
+      expect(backend.called('send_message')).toHaveLength(1);
+      expect(textarea).toHaveValue('Et la doc');
+      // Nothing typed: nothing to say.
+      await userEvent.clear(textarea);
+      app.toasts = [];
+      await userEvent.type(textarea, '{Enter}');
+      expect(app.toasts).toEqual([]);
+    });
+
     it('shows the files it carries', async () => {
       const { textarea } = sendDuringSetup();
       await userEvent.upload(
