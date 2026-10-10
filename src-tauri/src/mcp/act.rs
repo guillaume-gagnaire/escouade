@@ -9,12 +9,16 @@
 //!   exceeded by a ticket launched, nor its most agents working at once by an agent created;
 //! - a ticket that comes after tickets not done is launched by hand only once the user agreed in
 //!   the window (a confirmation): here it is refused, and the refusal says which tickets;
-//! - an agent never writes to nor stops itself.
+//! - an agent never writes to nor stops itself, and acts on its own project alone (it reads the
+//!   others: the tools that read are open);
+//! - a message sent to an agent, and the first one of an agent created, reach it under its author's
+//!   name (« Message de <author> : »): never as the user's own words.
 //!
 //! A refusal (`ToolError::Refused`) is a guard saying no; a failure (`ToolError::Failed`) is
 //! something asked that does not fit (a name, an empty title…). `report_progress` and
 //! `split_ticket` are for the agents of Escouade alone.
 
+use super::activity;
 use super::read::{json, ticket_view, todo_keys};
 use super::resolve;
 use super::tools::{
@@ -57,6 +61,34 @@ fn agent_only(caller: &Caller) -> Result<&str, ToolError> {
             "This tool is reserved to Escouade’s own agents: Claude outside Escouade cannot call it."
         ))),
     }
+}
+
+/// An agent of Escouade acts on its own project alone (it may read the others); Claude outside
+/// Escouade acts on any.
+fn own_project_only<R: Runtime>(
+    core: &Core<R>,
+    caller: &Caller,
+    project_id: &str,
+) -> Result<(), ToolError> {
+    let Caller::Agent(id) = caller else {
+        return Ok(());
+    };
+    let (name, own) = match core.agent(id) {
+        Ok(h) => {
+            let rt = h.lock();
+            (rt.meta.name.clone(), rt.meta.project_id.clone())
+        }
+        Err(_) => (id.clone(), String::new()),
+    };
+    if own == project_id {
+        return Ok(());
+    }
+    let project_name = |id: &str| core.project(id).map_or_else(|_| id.to_string(), |p| p.name);
+    let (own_name, other) = (project_name(&own), project_name(project_id));
+    Err(ToolError::Refused(tr!(
+        "L’agent {name} n’agit que dans son propre projet ({own_name}) : le projet {other} n’est pas le sien.",
+        "The agent {name} only acts in its own project ({own_name}): the project {other} is not its own."
+    )))
 }
 
 // ---------- what is asked ----------
@@ -120,6 +152,61 @@ fn one_line(text: &str) -> String {
     let spaced: String = text
         .chars()
         .map(|c| if c.is_control() { ' ' } else { c })
+        .collect();
+    spaced.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// A character that is not drawn, or drawn as something else than itself: the controls, the
+/// format characters (zero-width marks, direction marks and overrides…), the line and paragraph
+/// separators and the ones ignored when drawn (variation selectors, tag characters…). Written as
+/// ranges as the window's `revealHidden` has them (it decides by Unicode property, which `std`
+/// does not know).
+fn is_hidden(c: char) -> bool {
+    const RANGES: &[(u32, u32)] = &[
+        (0x00AD, 0x00AD),   // soft hyphen
+        (0x034F, 0x034F),   // combining grapheme joiner
+        (0x0600, 0x0605),   // Arabic number signs
+        (0x061C, 0x061C),   // Arabic letter mark
+        (0x06DD, 0x06DD),   // Arabic end of ayah
+        (0x070F, 0x070F),   // Syriac abbreviation mark
+        (0x0890, 0x0891),   // Arabic pound and piastre marks
+        (0x08E2, 0x08E2),   // Arabic disputed end of ayah
+        (0x115F, 0x1160),   // hangul fillers
+        (0x17B4, 0x17B5),   // Khmer inherent vowels
+        (0x180B, 0x180F),   // Mongolian free variation selectors
+        (0x200B, 0x200F),   // zero-width marks, direction marks
+        (0x2028, 0x202E),   // separators, direction embeddings and overrides
+        (0x2060, 0x206F),   // word joiner, invisible operators, deprecated format characters
+        (0x2800, 0x2800),   // braille blank
+        (0x3164, 0x3164),   // hangul filler
+        (0xFE00, 0xFE0F),   // variation selectors
+        (0xFEFF, 0xFEFF),   // zero-width no-break space
+        (0xFFA0, 0xFFA0),   // halfwidth hangul filler
+        (0xFFF0, 0xFFFB),   // unassigned, interlinear annotation
+        (0x110BD, 0x110BD), // Kaithi number sign
+        (0x110CD, 0x110CD), // Kaithi number sign above
+        (0x13430, 0x1343F), // Egyptian hieroglyph format controls
+        (0x1BCA0, 0x1BCA3), // shorthand format controls
+        (0x1D173, 0x1D17A), // musical format controls
+        (0xE0000, 0xE0FFF), // tag characters, variation selectors supplement
+    ];
+    c.is_control()
+        || RANGES
+            .iter()
+            .any(|&(from, to)| (from..=to).contains(&(c as u32)))
+}
+
+/// `text` as a status line is kept: on one line (breaks, tabs and runs of spaces are single
+/// spaces) and with none of the characters that are not drawn (`is_hidden`), which could hide
+/// part of it or reverse its reading (U+202E).
+fn visible_line(text: &str) -> String {
+    let spaced: String = text
+        .chars()
+        .filter_map(|c| match c {
+            c if c.is_whitespace() || c.is_control() => Some(' '),
+            c if is_hidden(c) => None,
+            c => Some(c),
+        })
         .collect();
     spaced.split_whitespace().collect::<Vec<_>>().join(" ")
 }
@@ -213,9 +300,11 @@ fn not_held<R: Runtime>(core: &Core<R>) -> Result<(), ToolError> {
 /// `create_ticket`: a ticket « À faire » at the end of the project's column.
 pub(super) async fn create_ticket<R: Runtime>(
     core: &Arc<Core<R>>,
+    caller: &Caller,
     a: CreateTicketArgs,
 ) -> Result<String, ToolError> {
     let project = resolve::project(core, &a.project)?;
+    own_project_only(core, caller, &project.id)?;
     let draft = TicketDraft {
         title: title(&a.title)?,
         description: description(a.description.as_deref().unwrap_or_default())?,
@@ -234,9 +323,11 @@ pub(super) async fn create_ticket<R: Runtime>(
 /// `update_ticket`: the fields given replace the ticket's; the others stay.
 pub(super) fn update_ticket<R: Runtime>(
     core: &Arc<Core<R>>,
+    caller: &Caller,
     a: UpdateTicketArgs,
 ) -> Result<String, ToolError> {
     let t = resolve::ticket(core, &a.ticket)?;
+    own_project_only(core, caller, &t.project_id)?;
     if a.title.is_none() && a.description.is_none() && a.criteria.is_none() && a.after.is_none() {
         return Err(ToolError::Failed(tr!(
             "Rien à modifier : donne au moins un des champs title, description, criteria ou after.",
@@ -270,9 +361,11 @@ pub(super) fn update_ticket<R: Runtime>(
 /// `move_ticket`: the ticket's place in « À faire »; answers the column's keys in their order.
 pub(super) fn move_ticket<R: Runtime>(
     core: &Arc<Core<R>>,
+    caller: &Caller,
     a: MoveTicketArgs,
 ) -> Result<String, ToolError> {
     let t = resolve::ticket(core, &a.ticket)?;
+    own_project_only(core, caller, &t.project_id)?;
     let before = a.before.as_deref().map(str::trim).filter(|b| !b.is_empty());
     let target;
     let to = match (a.position, before) {
@@ -304,9 +397,11 @@ pub(super) fn move_ticket<R: Runtime>(
 /// the user first.
 pub(super) fn start_ticket<R: Runtime>(
     core: &Arc<Core<R>>,
+    caller: &Caller,
     a: StartTicketArgs,
 ) -> Result<String, ToolError> {
     let t = resolve::ticket(core, &a.ticket)?;
+    own_project_only(core, caller, &t.project_id)?;
     // A ticket that left « À faire » is told so by the core.
     if t.column == Column::Todo {
         not_held(core)?;
@@ -400,9 +495,11 @@ fn model<R: Runtime>(core: &Core<R>, asked: Option<&str>) -> Result<Option<Strin
 /// the user's: the agent is not selected.
 pub(super) async fn create_agent<R: Runtime>(
     core: &Arc<Core<R>>,
+    caller: &Caller,
     a: CreateAgentArgs,
 ) -> Result<String, ToolError> {
     let project = resolve::project(core, &a.project)?;
+    own_project_only(core, caller, &project.id)?;
     let message = a.message.trim();
     if message.is_empty() {
         return Err(ToolError::Failed(tr!(
@@ -445,7 +542,12 @@ pub(super) async fn create_agent<R: Runtime>(
         .await
         .map_err(failure)?;
     let (id, name) = (view.meta.id, view.meta.name);
-    if let Err(e) = core.send_message(&id, message.to_string(), vec![]).await {
+    // Under its author's name, as every message from the server: not taken for the user's words.
+    let origin = activity::caller_name(core, Some(caller));
+    if let Err(e) = core
+        .send_message_from(&id, Some(&origin), message.to_string(), vec![])
+        .await
+    {
         return Err(ToolError::Failed(tr!(
             "L’agent {name} (id {id}) est créé, mais son message n’a pas pu être envoyé : {e:#}",
             "The agent {name} (id {id}) is created, but its message could not be sent: {e:#}"
@@ -454,7 +556,8 @@ pub(super) async fn create_agent<R: Runtime>(
     json(&json!({ "id": id, "name": name }))
 }
 
-/// The agent `asked` names (in the project `project` when given), who is not the caller.
+/// The agent `asked` names (in the project `project` when given), who is not the caller and,
+/// for an agent calling, is of its project.
 fn other_agent<R: Runtime>(
     core: &Core<R>,
     caller: &Caller,
@@ -467,6 +570,7 @@ fn other_agent<R: Runtime>(
     if matches!(caller, Caller::Agent(id) if *id == found.id) {
         return Err(ToolError::Refused(itself));
     }
+    own_project_only(core, caller, &found.project_id)?;
     Ok(found)
 }
 
@@ -505,7 +609,9 @@ pub(super) async fn send_message<R: Runtime>(
     let queued = core
         .agent(&found.id)
         .is_ok_and(|h| h.lock().meta.status.is_active());
-    core.send_message(&found.id, text.to_string(), vec![])
+    // Under its author's name: the agent and the conversation tell it from the user's words.
+    let origin = activity::caller_name(core, Some(caller));
+    core.send_message_from(&found.id, Some(&origin), text.to_string(), vec![])
         .await
         .map_err(failure)?;
     json(&json!({ "id": found.id, "name": found.name, "queued": queued }))
@@ -543,7 +649,9 @@ pub(super) fn report_progress<R: Runtime>(
     a: ReportProgressArgs,
 ) -> Result<String, ToolError> {
     let id = agent_only(caller)?;
-    let line = one_line(&a.line);
+    // As the window would show it, nothing hidden in it: a direction override could reverse how
+    // a line reads on the cards, a zero-width mark hide part of it.
+    let line = visible_line(&a.line);
     let n = line.chars().count();
     if n > PROGRESS_LINE_MAX {
         return Err(ToolError::Failed(tr!(
@@ -591,6 +699,7 @@ pub(super) async fn split_ticket<R: Runtime>(
                 "The agent {name} has no ticket: it has nothing to split."
             ))
         })?;
+    own_project_only(core, caller, &own.project_id)?;
     let count = a.tickets.len();
     if count == 0 {
         return Err(ToolError::Failed(tr!(

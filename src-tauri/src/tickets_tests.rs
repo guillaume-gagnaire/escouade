@@ -430,7 +430,7 @@ async fn closing_a_project_drops_its_tickets() {
         .ticket_create(&p.id, draft("Un", &[], 5))
         .await
         .unwrap();
-    h.core.remove_project(&p.id).unwrap();
+    h.core.remove_project(&p.id).await.unwrap();
     assert!(h.core.ticket(&t.id).is_err());
     assert!(h
         .events
@@ -4514,7 +4514,7 @@ async fn closing_a_project_forgets_its_agents_test_launches() {
     if !test_run(&h, &a, "tk-run-close") {
         return;
     }
-    h.core.remove_project(&p.id).unwrap();
+    h.core.remove_project(&p.id).await.unwrap();
     assert!(!term_running(&h, "tk-run-close"));
     assert!(!tracks_runs_of(&h, &a.id));
 }

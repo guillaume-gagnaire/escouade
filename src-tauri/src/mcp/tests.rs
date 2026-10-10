@@ -972,7 +972,7 @@ async fn the_server_runs_while_claude_may_drive_escouade_or_a_project_lets_its_a
         })
         .unwrap();
     assert!(h.core.mcp.status().running);
-    h.core.remove_project(&p.id).unwrap();
+    h.core.remove_project(&p.id).await.unwrap();
     assert!(!h.core.mcp.status().running);
 }
 

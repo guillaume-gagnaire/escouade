@@ -3157,7 +3157,7 @@ async fn closing_a_project_stops_its_worktrees_setups_and_isolas_services() {
     let a = h.core.create_agent(&p.id, None).await.unwrap();
     let dir = PathBuf::from(a.meta.worktree.clone().unwrap().path);
     tokio::time::sleep(Duration::from_millis(800)).await;
-    h.core.remove_project(&p.id).unwrap();
+    h.core.remove_project(&p.id).await.unwrap();
     h.wait("isola down", |_| {
         crate::isola::tests::calls(&dir).last().map(String::as_str) == Some("down")
     })

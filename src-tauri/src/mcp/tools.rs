@@ -315,7 +315,9 @@ pub struct StartTicketArgs {
 pub struct CreateAgentArgs {
     #[schemars(description = "The project: its id, or its name in any case.")]
     pub project: String,
-    #[schemars(description = "The agent's first message: what it should do.")]
+    #[schemars(
+        description = "The agent's first message: what it should do. The agent reads it headed by your name (Message from <you>: …), as coming from you and not from the user."
+    )]
     pub message: String,
     #[schemars(
         description = "true: the agent works in a worktree of its own; false: in the project's folder. Leave it out to do as the project does by default."
@@ -335,7 +337,9 @@ pub struct SendMessageArgs {
         description = "The project to look for its name in (two projects may each have an agent of that name): its id, or its name in any case."
     )]
     pub project: Option<String>,
-    #[schemars(description = "The message, as if typed in the agent's conversation.")]
+    #[schemars(
+        description = "The message. The agent reads it, and the conversation shows it, headed by your name (Message from <you>: …), as coming from you and not from the user."
+    )]
     pub text: String,
 }
 
@@ -486,7 +490,7 @@ impl<R: Runtime> Tools<R> {
             ("title", Some(&args.title)),
             ("after", after.as_deref()),
         ]);
-        let result = act::create_ticket(&ctx.core, args).await;
+        let result = act::create_ticket(&ctx.core, &ctx.caller, args).await;
         ctx.reply("create_ticket", &asked, result)
     }
 
@@ -509,7 +513,7 @@ impl<R: Runtime> Tools<R> {
             ("title", args.title.as_deref()),
             ("after", after.as_deref()),
         ]);
-        let result = act::update_ticket(&ctx.core, args);
+        let result = act::update_ticket(&ctx.core, &ctx.caller, args);
         ctx.reply("update_ticket", &asked, result)
     }
 
@@ -531,7 +535,7 @@ impl<R: Runtime> Tools<R> {
             ("position", Some(args.position.name())),
             ("before", args.before.as_deref()),
         ]);
-        let result = act::move_ticket(&ctx.core, args);
+        let result = act::move_ticket(&ctx.core, &ctx.caller, args);
         ctx.reply("move_ticket", &asked, result)
     }
 
@@ -549,12 +553,12 @@ impl<R: Runtime> Tools<R> {
         Parameters(args): Parameters<StartTicketArgs>,
     ) -> CallToolResult {
         let asked = summary(&[("ticket", Some(&args.ticket))]);
-        let result = act::start_ticket(&ctx.core, args);
+        let result = act::start_ticket(&ctx.core, &ctx.caller, args);
         ctx.reply("start_ticket", &asked, result)
     }
 
     #[tool(
-        description = "Start a new Claude Code agent in a project and send it its first message, as a user would. It works on its own from then on: follow it with get_agent_summary. Refused while the autopilot is paused (the answer says until when) and when the project already has its most agents working at once (its Kanban's In parallel setting). It uses the quota. Answers the agent's id and name.",
+        description = "Start a new Claude Code agent in a project and send it its first message, which it reads headed by your name (Message from <you>: …), as coming from you and not from the user. It works on its own from then on: follow it with get_agent_summary. Refused while the autopilot is paused (the answer says until when) and when the project already has its most agents working at once (its Kanban's In parallel setting). It uses the quota. Answers the agent's id and name.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,
@@ -570,12 +574,12 @@ impl<R: Runtime> Tools<R> {
             ("project", Some(&args.project)),
             ("message", Some(&args.message)),
         ]);
-        let result = act::create_agent(&ctx.core, args).await;
+        let result = act::create_agent(&ctx.core, &ctx.caller, args).await;
         ctx.reply("create_agent", &asked, result)
     }
 
     #[tool(
-        description = "Send a message to an agent of Escouade, as if typed in its conversation; an agent at work reads it after its current turn. Refused while the autopilot is paused (the answer says until when), for an archived agent, and for yourself when you are an agent. It uses the quota. Answers the agent's id and name, and whether the message waits for the end of a turn.",
+        description = "Send a message to an agent of Escouade. The agent reads it, and the conversation shows it, headed by your name (Message from <you>: …), as coming from you and not from the user; an agent at work reads it after its current turn. Refused while the autopilot is paused (the answer says until when), for an archived agent, and for yourself when you are an agent. It uses the quota. Answers the agent's id and name, and whether the message waits for the end of a turn.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,

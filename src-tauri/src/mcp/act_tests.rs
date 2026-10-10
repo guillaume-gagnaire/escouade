@@ -670,10 +670,11 @@ async fn an_agent_is_created_in_a_project_with_its_first_message_and_the_user_s_
         .any(|e| e["type"] == "agent" && e["agent"]["id"] == id.as_str()));
     // Its first message is sent: Claude answers it.
     turn_over(&h, &id).await;
-    assert!(h
-        .items(&id)
-        .iter()
-        .any(|i| i["text"] == "Bonjour, tu as dit : Bonjour l’équipe"));
+    assert!(h.items(&id).iter().any(|i| i["text"]
+        == "Bonjour, tu as dit : Message de Claude (hors Escouade) : Bonjour l’équipe"));
+    // The conversation shows who wrote it: it is not the user's own message.
+    assert!(h.items(&id).iter().any(|i| i["kind"] == "user"
+        && i["text"] == "Message de Claude (hors Escouade) : Bonjour l’équipe"));
     let logged = entry(&h);
     assert_eq!(
         (logged.tool.as_str(), logged.outcome),
@@ -856,10 +857,15 @@ async fn a_message_reaches_an_agent_unless_the_autopilot_is_paused_it_is_oneself
         (Some(a.id.as_str()), Some("agent-1"))
     );
     turn_over(&h, &a.id).await;
+    // The agent is told who writes, and the conversation shows it.
     assert!(h
         .items(&a.id)
         .iter()
-        .any(|i| i["text"] == "Bonjour, tu as dit : Salut"));
+        .any(|i| i["text"] == "Bonjour, tu as dit : Message de Claude (hors Escouade) : Salut"));
+    assert!(h
+        .items(&a.id)
+        .iter()
+        .any(|i| i["kind"] == "user" && i["text"] == "Message de Claude (hors Escouade) : Salut"));
     let logged = entry(&h);
     assert_eq!(
         (logged.tool.as_str(), logged.outcome),
@@ -879,7 +885,11 @@ async fn a_message_reaches_an_agent_unless_the_autopilot_is_paused_it_is_oneself
     assert!(h
         .items(&a.id)
         .iter()
-        .any(|i| i["text"] == "Bonjour, tu as dit : De la part de B"));
+        .any(|i| i["text"] == "Bonjour, tu as dit : Message de agent-2 : De la part de B"));
+    assert!(h
+        .items(&a.id)
+        .iter()
+        .any(|i| i["kind"] == "user" && i["text"] == "Message de agent-2 : De la part de B"));
     let prompts = h.agent(&b.id).prompts;
     let itself = refused(
         &from_b,
@@ -1041,6 +1051,16 @@ async fn an_agent_reports_what_it_does_on_one_line_and_a_new_report_replaces_it(
     );
     assert_eq!(line().as_deref(), Some(longest.as_str()));
     assert_eq!(entry(&h).outcome, "error");
+    // Nothing hidden is kept: a direction override would reverse how the line reads on the cards,
+    // a zero-width mark hide part of it.
+    let sneaky = "Lit le code\u{202E}reverse\u{200B}d\u{FEFF} \u{2066}x\u{2069}\u{0007} é日本😀";
+    let v = read(&c, "report_progress", json!({ "line": sneaky })).await;
+    assert_eq!(v, json!({ "line": "Lit le codereversed x é日本😀" }));
+    assert_eq!(line().as_deref(), Some("Lit le codereversed x é日本😀"));
+    // Only a line that is nothing but such marks is empty.
+    let v = read(&c, "report_progress", json!({ "line": "\u{202E}\u{200B}" })).await;
+    assert_eq!(v, json!({ "line": null }));
+    assert_eq!(line(), None);
     // Nothing on the line takes the old one off the cards.
     let v = read(&c, "report_progress", json!({ "line": "  " })).await;
     assert_eq!(v, json!({ "line": null }));
@@ -1225,5 +1245,181 @@ async fn a_ticket_is_split_into_tickets_after_it_in_a_chain_or_all_after_it_alon
     assert_eq!(entry(&h).outcome, "refused");
     assert_eq!(h.core.tickets.read().len(), count);
     c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn the_first_message_of_an_agent_created_by_an_agent_says_who_wrote_it_and_the_name_ignores_that(
+) {
+    let h = harness("mcp-act-origin");
+    let (p, _) = h.project(false).await;
+    let boss = put_agent(&h, &p, "chef", 1);
+    let c = as_agent(&h, &boss.id).await;
+    let v = read(
+        &c,
+        "create_agent",
+        json!({ "project": "demo", "message": "Write the docs" }),
+    )
+    .await;
+    let id = v["id"].as_str().unwrap().to_string();
+    turn_over(&h, &id).await;
+    assert!(h
+        .items(&id)
+        .iter()
+        .any(|i| i["kind"] == "user" && i["text"] == "Message de chef : Write the docs"));
+    assert!(h
+        .items(&id)
+        .iter()
+        .any(|i| i["text"] == "Bonjour, tu as dit : Message de chef : Write the docs"));
+    // Named after the task: the fake Claude names it after the first two words it is given, and
+    // « Message de » is no part of the task.
+    h.wait("its name", |h| h.agent(&id).named).await;
+    assert_eq!(h.agent(&id).name, "write-the-fake");
+    // A message to an existing agent from outside: the same, and a slash command is no command.
+    let v = read(
+        &c,
+        "send_message",
+        json!({ "agent": "write-the-fake", "text": "/compact" }),
+    )
+    .await;
+    assert_eq!(v["id"], id.as_str());
+    h.wait("the message", |h| {
+        h.items(&id)
+            .iter()
+            .any(|i| i["kind"] == "user" && i["text"] == "Message de chef : /compact")
+    })
+    .await;
+    turn_over(&h, &id).await;
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[test]
+fn a_message_from_the_server_is_headed_by_its_author_in_the_language_of_the_interface() {
+    use crate::core::from_origin;
+    use crate::i18n::Lang::{En, Fr};
+    assert_eq!(
+        from_origin(Fr, "Claude (hors Escouade)", "Salut"),
+        "Message de Claude (hors Escouade) : Salut"
+    );
+    assert_eq!(
+        from_origin(En, "Claude (outside Escouade)", "Hi"),
+        "Message from Claude (outside Escouade): Hi"
+    );
+    // The author is one line, whatever its name holds; the text is kept as it is.
+    assert_eq!(
+        from_origin(En, "agent\n1  b", "a\n\nb"),
+        "Message from agent 1 b: a\n\nb"
+    );
+}
+
+#[tokio::test]
+async fn an_agent_acts_on_its_own_project_alone_and_reads_the_others() {
+    let h = harness("mcp-act-own-project");
+    let p = project(&h).await;
+    let other = other_project(&h, "autre").await;
+    let mine = put_agent(&h, &p, "mon-agent", 1);
+    let theirs = put_agent(&h, &other, "leur-agent", 2);
+    let t_mine = made(&h, &p, "Chez moi").await;
+    let t_other = made(&h, &other, "Chez l’autre").await;
+    let c = as_agent(&h, &mine.id).await;
+    let (tickets, agents) = (h.core.tickets.read().len(), h.core.agents.read().len());
+
+    for (tool, args) in [
+        ("create_ticket", json!({ "project": "autre", "title": "x" })),
+        (
+            "update_ticket",
+            json!({ "ticket": t_other.key, "title": "x" }),
+        ),
+        (
+            "move_ticket",
+            json!({ "ticket": t_other.key, "position": "top" }),
+        ),
+        ("start_ticket", json!({ "ticket": t_other.key })),
+        (
+            "create_agent",
+            json!({ "project": other.id, "message": "x" }),
+        ),
+        ("send_message", json!({ "agent": theirs.id, "text": "x" })),
+        ("stop_agent", json!({ "agent": theirs.id })),
+    ] {
+        let why = refused(&c, tool, args).await;
+        assert!(
+            why.contains("mon-agent")
+                && why.contains("propre projet (demo)")
+                && why.contains("le projet autre"),
+            "{tool}: {why}"
+        );
+        let logged = entry(&h);
+        assert_eq!(
+            (logged.caller.as_str(), logged.tool.as_str(), logged.outcome),
+            ("mon-agent", tool, "refused")
+        );
+    }
+    // A ticket of another project is no ticket of its own to split: its agent's ticket is
+    // another project's by mistake.
+    let stray = put_agent(&h, &p, "egare", 3);
+    h.core.agent(&stray.id).unwrap().lock().meta.ticket_id = Some(t_other.id.clone());
+    let from_stray = as_agent(&h, &stray.id).await;
+    let why = refused(
+        &from_stray,
+        "split_ticket",
+        json!({ "tickets": [{ "title": "Un" }] }),
+    )
+    .await;
+    assert!(why.contains("propre projet"), "{why}");
+    from_stray.cancel().await.unwrap();
+    // Nothing happened over there.
+    assert_eq!(
+        (h.core.tickets.read().len(), h.core.agents.read().len()),
+        (tickets, agents + 1)
+    );
+    assert_eq!(stored(&h, &t_other.id).title, "Chez l’autre");
+    assert!(!stored(&h, &t_other.id).forced);
+    assert_eq!(h.agent(&theirs.id).prompts, 0);
+
+    // It reads them all the same.
+    let listed = read(&c, "list_tickets", json!({ "project": "autre" })).await;
+    assert_eq!(keys(&listed), [t_other.key.as_str()]);
+    let summary = read(&c, "get_agent_summary", json!({ "agent": theirs.id })).await;
+    assert_eq!(summary["name"], "leur-agent");
+    assert_eq!(
+        read(&c, "get_ticket", json!({ "ticket": t_other.key })).await["title"],
+        "Chez l’autre"
+    );
+
+    // And acts on its own.
+    let made_here = read(
+        &c,
+        "create_ticket",
+        json!({ "project": "demo", "title": "Pour moi" }),
+    )
+    .await;
+    assert_eq!(made_here["column"], "todo");
+    read(
+        &c,
+        "update_ticket",
+        json!({ "ticket": t_mine.key, "title": "Chez moi, revu" }),
+    )
+    .await;
+    assert_eq!(stored(&h, &t_mine.id).title, "Chez moi, revu");
+    c.cancel().await.unwrap();
+
+    // Claude outside Escouade is the user's: it acts on any project.
+    let outside = external(&h).await;
+    read(
+        &outside,
+        "update_ticket",
+        json!({ "ticket": t_other.key, "title": "Revu de l’extérieur" }),
+    )
+    .await;
+    assert_eq!(stored(&h, &t_other.id).title, "Revu de l’extérieur");
+    read(
+        &outside,
+        "create_ticket",
+        json!({ "project": "autre", "title": "Aussi" }),
+    )
+    .await;
+    outside.cancel().await.unwrap();
     h.core.mcp.stop();
 }

@@ -61,6 +61,18 @@ async fn stop(h: &Harness, id: &str) {
     gone(h, &p).await;
 }
 
+/// The agent's process stopped, if one is up, with no start in flight (the warm-up of a new agent
+/// can come late under load): whatever starts next postdates what the test set before this.
+async fn settled(h: &Harness, id: &str) {
+    let lock = h.core.spawn_lock(id);
+    let _no_start = lock.lock().await;
+    let live = h.core.agent(id).unwrap().lock().detach();
+    if let Some(p) = live {
+        p.close_input();
+        gone(h, &p).await;
+    }
+}
+
 fn read_json(file: &Path) -> Value {
     serde_json::from_slice(&std::fs::read(file).unwrap()).unwrap()
 }
@@ -110,6 +122,7 @@ async fn an_agent_reaches_escouade_with_a_token_of_its_own_only_where_its_projec
     // Its project lets its agents use Escouade: the server runs, and the agent's next process
     // reaches it with a token of its own, in a private file.
     lets_agents(&h, &p, true);
+    settled(&h, &id).await;
     let port = h.core.mcp.status().port;
     h.turn(&id, "Bonjour").await;
     let argv = h.launches(&r).pop().unwrap();
@@ -156,6 +169,7 @@ async fn an_agent_reaches_escouade_with_a_token_of_its_own_only_where_its_projec
     // The server stopped though the project lets its agents (it failed, say): nothing to reach,
     // started as it always was.
     h.core.mcp.stop();
+    settled(&h, &id).await;
     h.turn(&id, "Toujours là ?").await;
     assert_eq!(
         escouade_flags(&h.launches(&r).pop().unwrap()),
@@ -169,6 +183,7 @@ async fn an_agent_reaches_escouade_with_a_token_of_its_own_only_where_its_projec
     // drove Escouade), which the agent would inherit: its tools are refused all the same.
     lets_agents(&h, &p, false);
     assert!(!h.core.mcp.status().running);
+    settled(&h, &id).await;
     h.turn(&id, "Sans serveur").await;
     assert_eq!(escouade_flags(&h.launches(&r).pop().unwrap()), (None, true));
     stop(&h, &id).await;
@@ -179,6 +194,7 @@ async fn an_agent_reaches_escouade_with_a_token_of_its_own_only_where_its_projec
     h.core.settings.write().mcp_enabled = true;
     lets_agents(&h, &p, false);
     assert!(h.core.mcp.status().running);
+    settled(&h, &id).await;
     h.turn(&id, "Encore").await;
     assert_eq!(escouade_flags(&h.launches(&r).pop().unwrap()), (None, true));
     assert!(!config.exists());
@@ -231,7 +247,7 @@ async fn an_agents_token_and_file_go_at_once_when_it_is_deleted_or_its_project_c
     assert!(!ca.exists());
     assert!(!admitted(port, &ta).await);
     assert!(admitted(port, &tb).await);
-    h.core.remove_project(&p.id).unwrap();
+    h.core.remove_project(&p.id).await.unwrap();
     assert!(!cb.exists());
     assert!(!admitted(port, &tb).await);
     h.core.mcp.stop();
@@ -254,4 +270,46 @@ async fn no_agent_config_outlives_the_app() {
     std::fs::write(&left, "{}").unwrap();
     h.core.start_mcp();
     assert!(!left.exists());
+}
+
+#[tokio::test]
+async fn a_project_closed_while_an_agents_process_starts_leaves_neither_that_process_nor_its_token()
+{
+    let h = harness("mcp-agents-closing");
+    let (p, _) = h.project(false).await;
+    // The server stays up when the project goes.
+    h.core.settings.write().mcp_enabled = true;
+    lets_agents(&h, &p, true);
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    let agent = h.core.agent(&id).unwrap();
+    let config = h.core.data.mcp_agent_config(&id);
+    // A start is under way (the warm-up of a new agent is one): it holds the agent's start lock.
+    let lock = h.core.spawn_lock(&id);
+    let guard = lock.lock().await;
+    let live = agent.lock().detach();
+    if let Some(p) = live {
+        p.close_input();
+        gone(&h, &p).await;
+    }
+    let start = tokio::spawn({
+        let (core, id) = (h.core.clone(), id.clone());
+        async move { core.ensure_process(&id).await }
+    });
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let closing = tokio::spawn({
+        let (core, pid) = (h.core.clone(), p.id.clone());
+        async move { core.remove_project(&pid).await }
+    });
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    // The close waits for the start, as the deletion of an agent does: the agent is still there.
+    assert!(h.core.agent(&id).is_ok());
+    drop(guard);
+    start.await.unwrap().unwrap();
+    closing.await.unwrap().unwrap();
+    // The process the start made went with the agent, so did its token and its file.
+    assert!(h.core.agent(&id).is_err());
+    assert!(agent.lock().proc.is_none());
+    assert!(!h.core.mcp.tokens.agents.read().contains_key(&id));
+    assert!(!config.exists());
+    h.core.mcp.stop();
 }
