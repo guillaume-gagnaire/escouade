@@ -37,3 +37,35 @@ export function rememberLanguage(lang: Lang, storage: () => Pick<Storage, 'setIt
     // The choice just won’t be kept.
   }
 }
+
+/**
+ * The language a visit to the French root should end up in. What the visitor asked for comes first: the
+ * address (`?lang=`, which the switch’s French link adds), then the choice kept from an earlier visit. Failing
+ * that, the browser’s languages: French if any of them is, English if there are some and none is. This runs
+ * inline in the page’s head (see `redirectScript`), so it may refer to nothing but its parameters.
+ */
+export function pickLanguage(browser: readonly string[], stored: string | null, asked: string | null): Lang {
+  for (const choice of [asked, stored]) {
+    if (choice === 'fr' || choice === 'en') return choice;
+  }
+  const french = browser.some((l) => /^fr(?:[-_]|$)/i.test(l));
+  return browser.length === 0 || french ? 'fr' : 'en';
+}
+
+/**
+ * The script the French root runs before anything is drawn, so that a visitor who has no French is sent to
+ * `target` (the English page) without seeing the French one first. GitHub Pages cannot look at the browser’s
+ * languages itself. Without JavaScript, nothing moves. A browser that cannot keep or give back the choice
+ * just decides again each time.
+ */
+export function redirectScript(target: string): string {
+  const key = JSON.stringify(LANG_KEY);
+  return (
+    `(function(){try{var pick=${pickLanguage.toString()};` +
+    `var asked=new URLSearchParams(location.search).get('lang');var stored=null;` +
+    `try{stored=localStorage.getItem(${key})}catch(e){}` +
+    `var langs=navigator.languages&&navigator.languages.length?navigator.languages:navigator.language?[navigator.language]:[];` +
+    `if(asked==='fr'||asked==='en'){try{localStorage.setItem(${key},asked)}catch(e){}}` +
+    `if(pick(langs,stored,asked)==='en')location.replace(${JSON.stringify(target)})}catch(e){}})()`
+  );
+}

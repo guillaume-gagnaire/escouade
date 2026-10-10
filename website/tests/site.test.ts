@@ -1,8 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { CATALOGS, featuresFor } from '../app/data/catalogs';
 import { fmt } from '../app/data/catalog';
-import type { Lang } from '../app/data/language';
+import { LANG_KEY, type Lang } from '../app/data/language';
 import { SITE, VIDEO, imageOf } from '../app/data/site';
 import { SNAPSHOT, squadAt } from '../app/data/squad';
 import { escapeText, headOf, leaves, tags } from './helpers';
@@ -55,6 +56,92 @@ describe('generated site', () => {
   it('generates one page per language, and keeps Jekyll away from them', () => {
     for (const p of PAGES) expect(existsSync(new URL(p.file, OUT)), p.file).toBe(true);
     expect(existsSync(new URL('.nojekyll', OUT))).toBe(true);
+  });
+});
+
+/** What the browser makes of the French root’s inline script, on a visit with these languages, kept choice and address. */
+function visit(script: string, v: { languages?: string[]; language?: string; stored?: string; search?: string; storageThrows?: boolean }) {
+  const kept = new Map<string, string>(v.stored === undefined ? [] : [[LANG_KEY, v.stored]]);
+  const moved: string[] = [];
+  const context = {
+    URLSearchParams,
+    navigator: { languages: v.languages, language: v.language },
+    location: { search: v.search ?? '', replace: (to: string) => void moved.push(to) },
+    localStorage: {
+      getItem: (k: string) => {
+        if (v.storageThrows) throw new DOMException('The operation is insecure.', 'SecurityError');
+        return kept.get(k) ?? null;
+      },
+      setItem: (k: string, value: string) => {
+        if (v.storageThrows) throw new DOMException('The operation is insecure.', 'SecurityError');
+        kept.set(k, value);
+      },
+    },
+  };
+  runInNewContext(script, context);
+  return { moved, kept: kept.get(LANG_KEY) };
+}
+
+describe('the French root’s first visit', () => {
+  let html = '';
+  let english = '';
+  beforeAll(() => {
+    html = readFileSync(new URL('index.html', OUT), 'utf8');
+    english = readFileSync(new URL('en/index.html', OUT), 'utf8');
+  });
+  /** The inline scripts (those without a `src`) of the page’s head. */
+  const inline = (page: string) =>
+    [...headOf(page).matchAll(/<script(?![^>]*\ssrc=)(?![^>]*type="(?:importmap|application\/json)")[^>]*>([\s\S]*?)<\/script>/g)].map(
+      (m) => m[1],
+    );
+  const script = () => inline(html).find((s) => s.includes(LANG_KEY)) ?? '';
+
+  it('is a small script in the French page’s head, and only there', () => {
+    expect(script().length).toBeGreaterThan(100);
+    expect(script().length).toBeLessThan(2000);
+    expect(inline(english).filter((s) => s.includes(LANG_KEY))).toEqual([]);
+    expect(english).not.toContain(LANG_KEY);
+  });
+
+  it('sends a browser with no French among its languages to the English page, under the base URL', () => {
+    expect(visit(script(), { languages: ['en-US', 'en'] }).moved).toEqual([`${BASE}en/`]);
+    expect(visit(script(), { languages: ['de-DE', 'es'] }).moved).toEqual([`${BASE}en/`]);
+  });
+
+  it('leaves a browser that has French among its languages where it is', () => {
+    expect(visit(script(), { languages: ['fr-FR', 'en-US'] }).moved).toEqual([]);
+    expect(visit(script(), { languages: ['en-US', 'fr'] }).moved).toEqual([]);
+  });
+
+  it('respects the language the visitor kept', () => {
+    expect(visit(script(), { languages: ['en-US'], stored: 'fr' }).moved).toEqual([]);
+    expect(visit(script(), { languages: ['fr-FR'], stored: 'en' }).moved).toEqual([`${BASE}en/`]);
+    expect(visit(script(), { languages: ['en-US'], stored: 'klingon' }).moved).toEqual([`${BASE}en/`]);
+  });
+
+  it('respects ?lang=fr, and keeps it as the visitor’s choice', () => {
+    const v = visit(script(), { languages: ['en-US'], search: '?lang=fr' });
+    expect(v.moved).toEqual([]);
+    expect(v.kept).toBe('fr');
+    expect(visit(script(), { languages: ['en-US'], stored: 'en', search: '?utm=x&lang=fr' }).moved).toEqual([]);
+  });
+
+  it('goes to English, and remembers it, when ?lang=en asks for it', () => {
+    const v = visit(script(), { languages: ['fr-FR'], search: '?lang=en' });
+    expect(v.moved).toEqual([`${BASE}en/`]);
+    expect(v.kept).toBe('en');
+  });
+
+  it('does not keep what the browser says as if the visitor had chosen it', () => {
+    expect(visit(script(), { languages: ['en-US'] }).kept).toBeUndefined();
+  });
+
+  it('still works with a browser that only has its one language, or none, or no usable storage', () => {
+    expect(visit(script(), { language: 'en-GB' }).moved).toEqual([`${BASE}en/`]);
+    expect(visit(script(), { language: 'fr-FR' }).moved).toEqual([]);
+    expect(visit(script(), {}).moved).toEqual([]);
+    expect(visit(script(), { languages: ['en-US'], storageThrows: true }).moved).toEqual([`${BASE}en/`]);
+    expect(visit(script(), { languages: ['en-US'], storageThrows: true, search: '?lang=fr' }).moved).toEqual([]);
   });
 });
 

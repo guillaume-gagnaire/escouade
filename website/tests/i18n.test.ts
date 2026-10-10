@@ -5,7 +5,7 @@ import { fmt, plural } from '../app/data/catalog';
 import { en } from '../app/data/en';
 import { fr } from '../app/data/fr';
 import { FEATURE_SHOTS, IMAGE_DIR, VIDEO, imageOf } from '../app/data/site';
-import { LANGS, LANG_KEY, langOfPath, rememberLanguage } from '../app/data/language';
+import { LANGS, LANG_KEY, langOfPath, pickLanguage, rememberLanguage } from '../app/data/language';
 import { leaves } from './helpers';
 
 const PUBLIC = new URL('../public/', import.meta.url);
@@ -181,5 +181,49 @@ describe('the language the visitor chose', () => {
         throw new DOMException('The operation is insecure.', 'SecurityError');
       }),
     ).not.toThrow();
+  });
+});
+
+describe('which language a visit to the French root should end up in', () => {
+  it('stays in French for a browser that prefers French, wherever it sits in its list', () => {
+    expect(pickLanguage(['fr-FR', 'en-US', 'en'], null, null)).toBe('fr');
+    expect(pickLanguage(['fr'], null, null)).toBe('fr');
+    expect(pickLanguage(['FR-ca'], null, null)).toBe('fr');
+    expect(pickLanguage(['de-DE', 'fr-BE'], null, null)).toBe('fr');
+  });
+
+  it('goes to English for a browser that has no French among its languages', () => {
+    expect(pickLanguage(['en-US', 'en'], null, null)).toBe('en');
+    expect(pickLanguage(['de-DE', 'es'], null, null)).toBe('en');
+    expect(pickLanguage(['ja'], null, null)).toBe('en');
+  });
+
+  it('does not take a language that merely starts like French for French', () => {
+    expect(pickLanguage(['fro', 'frr-DE'], null, null)).toBe('en');
+  });
+
+  it('stays where it is when it does not know the browser’s languages', () => {
+    expect(pickLanguage([], null, null)).toBe('fr');
+  });
+
+  it('goes where the visitor said they wanted to be, whatever the browser says', () => {
+    expect(pickLanguage(['en-US'], 'fr', null)).toBe('fr');
+    expect(pickLanguage(['fr-FR'], 'en', null)).toBe('en');
+    expect(pickLanguage([], 'en', null)).toBe('en');
+  });
+
+  it('ignores a kept choice that is not one of the site’s languages', () => {
+    expect(pickLanguage(['en-US'], 'de', null)).toBe('en');
+    expect(pickLanguage(['fr-FR'], '', null)).toBe('fr');
+    expect(pickLanguage(['en-US'], '__proto__', null)).toBe('en');
+  });
+
+  it('obeys the address first: ?lang=fr asks for French, over a kept choice and over the browser', () => {
+    expect(pickLanguage(['en-US'], null, 'fr')).toBe('fr');
+    expect(pickLanguage(['en-US'], 'en', 'fr')).toBe('fr');
+    expect(pickLanguage(['fr-FR'], 'fr', 'en')).toBe('en');
+    // An address that asks for something else is not an answer.
+    expect(pickLanguage(['en-US'], null, 'de')).toBe('en');
+    expect(pickLanguage(['en-US'], null, '')).toBe('en');
   });
 });
