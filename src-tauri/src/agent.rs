@@ -1053,12 +1053,11 @@ impl AgentRt {
                 continue;
             };
             let is_error = b["is_error"].as_bool().unwrap_or(false);
-            let said = tool_result_text(&b["content"]);
+            let mut text = tool_result_text(&b["content"]);
             self.plan_apply(fx, |plan| {
-                plan.on_tool_result(id, is_error, &said, tur, now_ms())
+                plan.on_tool_result(id, is_error, &text, tur, now_ms())
             });
             let mut result = json!({ "isError": is_error });
-            let mut text = tool_result_text(&b["content"]);
             if let Some(stdout) = tur["stdout"].as_str() {
                 text = stdout.to_string();
                 if let Some(stderr) = tur["stderr"].as_str().filter(|s| !s.is_empty()) {
