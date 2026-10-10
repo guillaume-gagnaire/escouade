@@ -55,7 +55,26 @@ fn never_prompt(cmd: &mut tokio::process::Command) {
 /// user's may ask: Git Credential Manager can then start a browser, which must outlive the
 /// command, so no job object for those.
 async fn run_net(cwd: &str, args: &[&str], background: bool) -> Result<Vec<u8>> {
-    let mut cmd = command(cwd, args);
+    run_net_command(command(cwd, args), args, background).await
+}
+
+/// `cmd` with git's messages in English, whatever the system's language: for the commands whose
+/// refusals are told apart by their text.
+fn in_english(mut cmd: tokio::process::Command) -> tokio::process::Command {
+    cmd.env("LC_ALL", "C");
+    cmd
+}
+
+/// `run_net`, with git's messages in English (`in_english`).
+async fn run_net_english(cwd: &str, args: &[&str], background: bool) -> Result<Vec<u8>> {
+    run_net_command(in_english(command(cwd, args)), args, background).await
+}
+
+async fn run_net_command(
+    mut cmd: tokio::process::Command,
+    args: &[&str],
+    background: bool,
+) -> Result<Vec<u8>> {
     cmd.kill_on_drop(true);
     if background {
         never_prompt(&mut cmd);
@@ -1298,8 +1317,19 @@ pub async fn branch_delete(repo: &str, name: &str, force: bool) -> Result<()> {
     run(repo, &["branch", flag, "--", name]).await.map(|_| ())
 }
 
+/// A remote branch to delete is no longer where the last fetch saw it.
+fn remote_moved(lang: crate::i18n::Lang) -> String {
+    tr_in!(
+        lang,
+        "La branche distante a bougé : récupère d’abord (fetch).",
+        "The remote branch has moved: fetch first."
+    )
+}
+
 /// Deletes the branch `name` of `remote` (`git push <remote> :refs/heads/<name>`), and its tracking
-/// branch here; one the remote no longer has is no error. The user's: credentials may be asked.
+/// branch here, but only while the remote still has it where the last fetch saw it: a commit
+/// someone pushed since is not deleted unseen (`--force-with-lease`). A branch the remote no longer
+/// has is no error. The user's: credentials may be asked.
 pub async fn branch_delete_remote(repo: &str, remote: &str, name: &str) -> Result<()> {
     if name.is_empty() || name.starts_with('-') {
         bail!(invalid_branch(name));
@@ -1310,16 +1340,37 @@ pub async fn branch_delete_remote(repo: &str, remote: &str, name: &str) -> Resul
             "The remote “{remote}” wasn’t found."
         ));
     }
-    let refspec = format!(":refs/heads/{name}");
-    if let Err(e) = run_net(repo, &["push", remote, &refspec], false).await {
-        // Deleted there already: by someone else, or with the merge of a pull request.
-        if !e.to_string().contains("remote ref does not exist") {
+    // What the lease holds the remote to; without a fetch of it there is nothing to compare.
+    let tracking = format!("refs/remotes/{remote}/{name}");
+    let seen = match ref_exists(repo, &tracking).await {
+        true => text(repo, &["rev-parse", "--verify", &tracking]).await.ok(),
+        false => None,
+    };
+    let Some(seen) = seen else {
+        bail!(tr!(
+            "La branche distante {remote}/{name} n’a pas été récupérée ici : récupère d’abord (fetch).",
+            "The remote branch {remote}/{name} wasn’t fetched here: fetch first."
+        ));
+    };
+    let full = format!("refs/heads/{name}");
+    let lease = format!("--force-with-lease={full}:{seen}");
+    let refspec = format!(":{full}");
+    let pushed = run_net_english(repo, &["push", &lease, remote, &refspec], false).await;
+    if let Err(e) = pushed {
+        if !e.to_string().contains("stale info") {
             return Err(e);
+        }
+        // Refused for it not being where it was seen: gone altogether (deleted by someone else,
+        // or with the merge of a pull request) is nothing left to delete, anywhere else is a
+        // branch that moved.
+        let there = run_net(repo, &["ls-remote", remote, &full], false).await?;
+        let there = String::from_utf8_lossy(&there);
+        if there.lines().any(|l| l.ends_with(&format!("\t{full}"))) {
+            bail!(remote_moved(crate::i18n::ui()));
         }
     }
     // A push that deleted it took its tracking branch along; one that found nothing did not.
-    let tracking = format!("refs/remotes/{remote}/{name}");
-    let _ = run(repo, &["update-ref", "-d", &tracking]).await;
+    let _ = run(repo, &["update-ref", "-d", &tracking, &seen]).await;
     Ok(())
 }
 
@@ -3895,6 +3946,93 @@ mod repo_tests {
             git_in(&bare, &["branch", "--format=%(refname:short)"]),
             "main"
         );
+    }
+
+    #[tokio::test]
+    async fn a_remote_branch_someone_pushed_to_since_the_last_fetch_is_not_deleted() {
+        let (local, other, bare) = with_remote("git-g1f-lease");
+        let l = s(&local);
+        let tracking = |b: &str| {
+            let (l, b) = (l.clone(), format!("refs/remotes/origin/{b}"));
+            async move { ref_exists(&l, &b).await }
+        };
+        git_in(&local, &["push", "-q", "origin", "main:feat"]);
+        git_in(&local, &["push", "-q", "origin", "main:calm"]);
+        assert!(tracking("feat").await);
+        // Someone else adds a commit to feat; here nothing is fetched yet.
+        git_in(&other, &["fetch", "-q"]);
+        git_in(&other, &["checkout", "-q", "-b", "feat", "origin/feat"]);
+        commit_file(&other, "theirs.txt", "theirs\n");
+        git_in(&other, &["push", "-q", "origin", "feat"]);
+        let theirs = git_in(&bare, &["rev-parse", "feat"]);
+
+        let e = branch_delete_remote(&l, "origin", "feat")
+            .await
+            .unwrap_err();
+        assert_eq!(
+            e.to_string(),
+            "La branche distante a bougé : récupère d’abord (fetch)."
+        );
+        // Nothing went: their commit is on the remote, the tracking branch is as it was.
+        assert_eq!(git_in(&bare, &["rev-parse", "feat"]), theirs);
+        assert!(tracking("feat").await);
+        // Fetched, the user has seen where it stands: it goes.
+        git_in(&local, &["fetch", "-q"]);
+        branch_delete_remote(&l, "origin", "feat").await.unwrap();
+        assert_eq!(git_in(&bare, &["branch", "--list", "feat"]), "");
+        assert!(!tracking("feat").await);
+        // One nobody touched goes at once; one that was never fetched here cannot be checked.
+        branch_delete_remote(&l, "origin", "calm").await.unwrap();
+        assert_eq!(git_in(&bare, &["branch", "--list", "calm"]), "");
+        let e = branch_delete_remote(&l, "origin", "never")
+            .await
+            .unwrap_err();
+        assert!(e.to_string().contains("origin/never"), "{e}");
+    }
+
+    #[test]
+    fn a_command_told_apart_by_its_text_runs_git_in_english() {
+        let locale = |cmd: &tokio::process::Command| {
+            cmd.as_std()
+                .get_envs()
+                .find(|(k, _)| *k == "LC_ALL")
+                .and_then(|(_, v)| v.map(|v| v.to_string_lossy().to_string()))
+        };
+        assert_eq!(locale(&command("x", &["push"])), None);
+        assert_eq!(
+            locale(&in_english(command("x", &["push"]))).as_deref(),
+            Some("C")
+        );
+    }
+
+    #[test]
+    fn a_remote_branch_that_moved_is_told_in_both_languages() {
+        use crate::i18n::Lang::{En, Fr};
+        assert_eq!(
+            [remote_moved(Fr), remote_moved(En)],
+            [
+                "La branche distante a bougé : récupère d’abord (fetch).",
+                "The remote branch has moved: fetch first."
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_remote_branch_deleted_and_made_again_by_someone_else_is_not_taken_for_gone() {
+        let (local, other, bare) = with_remote("git-g1f-lease-again");
+        let l = s(&local);
+        git_in(&local, &["push", "-q", "origin", "main:feat"]);
+        // Deleted, then published again with another commit: not the branch the user saw.
+        git_in(&other, &["push", "-q", "origin", "--delete", "feat"]);
+        git_in(&other, &["checkout", "-q", "-b", "feat"]);
+        commit_file(&other, "again.txt", "again\n");
+        git_in(&other, &["push", "-q", "origin", "feat"]);
+        let again = git_in(&bare, &["rev-parse", "feat"]);
+        let e = branch_delete_remote(&l, "origin", "feat")
+            .await
+            .unwrap_err();
+        assert!(e.to_string().contains("bougé"), "{e}");
+        assert_eq!(git_in(&bare, &["rev-parse", "feat"]), again);
     }
 
     #[tokio::test]
