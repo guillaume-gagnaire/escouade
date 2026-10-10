@@ -1,6 +1,7 @@
 <script lang="ts">
   import { commitPreview } from '../../lib/board';
   import { fPct } from '../../lib/format';
+  import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { EFFORTS, MODES, modelLabel, modelOptions } from '../../lib/models';
   import { settingsForm } from '../../lib/settings.svelte';
@@ -32,30 +33,27 @@
       .catch(() => {});
   });
 
-  const ACTIONS: { id: BoardAction; label: string; desc: string }[] = [
-    { id: 'merge', label: 'Merger dans une branche', desc: "Fusionne le worktree de l'agent dans la branche cible, puis libère l'agent." },
-    { id: 'pr', label: 'Ouvrir une pull request', desc: 'Pousse ticket/<clé> et ouvre une PR vers la branche cible pour relecture.' },
-    { id: 'push', label: 'Pousser la branche du ticket', desc: 'Commit et push sur ticket/<clé>, sans merge ni PR.' },
-    { id: 'keep', label: "Laisser en l'état", desc: 'Les modifications restent non commitées dans le worktree.' },
-  ];
-  const STRATEGIES: { value: BoardSettings['strategy']; label: string }[] = [
-    { value: 'merge', label: 'Merge commit' },
-    { value: 'squash', label: 'Squash' },
-    { value: 'rebase', label: 'Rebase' },
-  ];
-  const CONFLICTS: { value: BoardSettings['conflict']; label: string }[] = [
-    { value: 'ask', label: 'Me demander' },
-    { value: 'agent', label: "L'agent résout" },
-    { value: 'abort', label: 'Annuler' },
-  ];
+  // The choices below are texts: derived, so that they follow the language of the interface.
+  const ACTION_IDS: BoardAction[] = ['merge', 'pr', 'push', 'keep'];
+  const actions = $derived(
+    ACTION_IDS.map((id) => ({
+      id,
+      label: t(`boardSettings.tab.actions.${id}.label`),
+      desc: t(`boardSettings.tab.actions.${id}.desc`),
+    })),
+  );
+  const STRATEGY_IDS: BoardSettings['strategy'][] = ['merge', 'squash', 'rebase'];
+  const strategies = $derived(STRATEGY_IDS.map((value) => ({ value, label: t(`boardSettings.tab.strategies.${value}`) })));
+  const CONFLICT_IDS: BoardSettings['conflict'][] = ['ask', 'agent', 'abort'];
+  const conflicts = $derived(CONFLICT_IDS.map((value) => ({ value, label: t(`boardSettings.tab.conflicts.${value}`) })));
   const PARALLEL = [1, 2, 3, 4, 5, 6].map((n) => ({ value: n, label: String(n) }));
   /** As the backend offers them (`board::QUOTA_PAUSES`). */
-  const QUOTA_PAUSES = [80, 90, 95, 100].map((n) => ({ value: n, label: fPct(n) }));
+  const quotaPauses = $derived([80, 90, 95, 100].map((n) => ({ value: n, label: fPct(n) })));
 </script>
 
-<Group title="Quand je valide un ticket « À tester »" plain>
-  <div class="actions" role="radiogroup" aria-label="Quand je valide un ticket « À tester »">
-    {#each ACTIONS as a (a.id)}
+<Group title={t('boardSettings.tab.actionsTitle')} plain>
+  <div class="actions" role="radiogroup" aria-label={t('boardSettings.tab.actionsTitle')}>
+    {#each actions as a (a.id)}
       <button class="action" class:on={b.action === a.id} role="radio" aria-checked={b.action === a.id} onclick={() => (b.action = a.id)}>
         <span class="ring"><span class="dot"></span></span>
         <span class="txt"><span class="l">{a.label}</span><span class="d">{a.desc}</span></span>
@@ -65,15 +63,15 @@
   {#if b.action === 'merge' || b.action === 'pr'}
     <div class="box">
       <div class="line">
-        <span class="k">Branche cible</span>
+        <span class="k">{t('boardSettings.tab.targetBranch')}</span>
         {#each branches[project.id]?.length ? branches[project.id] : [target] as br (br)}
           <button class="chip mono" class:on={target === br} aria-pressed={target === br} onclick={() => (b.target = br)}>⎇ {br}</button>
         {/each}
       </div>
       {#if b.action === 'merge'}
         <div class="line">
-          <span class="k">Stratégie</span>
-          {#each STRATEGIES as st (st.value)}
+          <span class="k">{t('boardSettings.tab.strategy')}</span>
+          {#each strategies as st (st.value)}
             <button
               class="chip"
               class:on={b.strategy === st.value}
@@ -84,78 +82,71 @@
         </div>
       {:else}
         <div class="line">
-          <span class="k">PR en brouillon</span>
-          <Switch label="PR en brouillon" bind:on={b.draft} />
+          <span class="k">{t('boardSettings.tab.draftPr')}</span>
+          <Switch label={t('boardSettings.tab.draftPr')} bind:on={b.draft} />
         </div>
       {/if}
     </div>
   {/if}
 </Group>
 
-<Group title="Avant et après">
-  <Row label="Commande de tests" hint="lancée dans le worktree du ticket">
+<Group title={t('boardSettings.tab.beforeAfter')}>
+  <Row label={t('boardSettings.tab.testCommand')} hint={t('boardSettings.tab.testCommandHint')}>
     <input
       class="field mono input"
-      placeholder="ex. npm test"
-      aria-label="Commande de tests"
+      placeholder={t('boardSettings.tab.testCommandPlaceholder')}
+      aria-label={t('boardSettings.tab.testCommand')}
       spellcheck="false"
       bind:value={b.testCommand}
     />
   </Row>
-  <Row label="Relancer les tests avant" desc="Bloque l'action si un test échoue et renvoie le ticket à l'agent.">
+  <Row label={t('boardSettings.tab.testsFirst')} desc={t('boardSettings.tab.testsFirstDesc')}>
     <Switch
-      label="Relancer les tests avant"
+      label={t('boardSettings.tab.testsFirst')}
       disabled={!b.testCommand.trim()}
       bind:on={() => b.testsFirst && !!b.testCommand.trim(), (v) => (b.testsFirst = v)}
     />
   </Row>
-  <Row
-    label="Supprimer le worktree une fois validé"
-    desc="Libère l'espace disque, après ses commandes de démontage. Après un merge, sa branche part aussi ; poussée ou proposée en PR, elle reste."
-  >
-    <Switch label="Supprimer le worktree une fois validé" bind:on={b.cleanup} />
+  <Row label={t('boardSettings.tab.cleanup')} desc={t('boardSettings.tab.cleanupDesc')}>
+    <Switch label={t('boardSettings.tab.cleanup')} bind:on={b.cleanup} />
   </Row>
-  <Row label="Message de commit généré" desc={commitPreview(b, draft.name.trim() || project.name)}>
-    <Switch label="Message de commit généré" bind:on={b.conventional} />
+  <Row label={t('boardSettings.tab.commitMessage')} desc={commitPreview(b, draft.name.trim() || project.name)}>
+    <Switch label={t('boardSettings.tab.commitMessage')} bind:on={b.conventional} />
   </Row>
-  <Row label="En cas de conflit">
-    <Chips label="En cas de conflit" options={CONFLICTS} bind:value={b.conflict} />
+  <Row label={t('boardSettings.tab.onConflict')}>
+    <Chips label={t('boardSettings.tab.onConflict')} options={conflicts} bind:value={b.conflict} />
   </Row>
 </Group>
 
-<Group title="Pilote auto">
-  <Row label="Attribuer les tickets automatiquement" desc="Un agent libre prend le prochain ticket « À faire »">
-    <Switch label="Attribuer les tickets automatiquement" bind:on={b.autopilot} />
+<Group title={t('boardSettings.tab.autopilot')}>
+  <Row label={t('boardSettings.tab.autoAssign')} desc={t('boardSettings.tab.autoAssignDesc')}>
+    <Switch label={t('boardSettings.tab.autoAssign')} bind:on={b.autopilot} />
   </Row>
   <!-- The quotas are the account's: an app setting, shown with each project's autopilot. -->
-  <Row
-    label="Pause au-delà du quota"
-    hint="pour tous les projets"
-    desc="Aucun ticket ne démarre tant que la fenêtre de 5 h ou la fenêtre hebdomadaire dépasse ce seuil."
-  >
-    <Chips label="Pause au-delà du quota" options={QUOTA_PAUSES} mono bind:value={settingsForm.settings.quotaPause} />
+  <Row label={t('boardSettings.tab.quotaPause')} hint={t('boardSettings.tab.quotaPauseHint')} desc={t('boardSettings.tab.quotaPauseDesc')}>
+    <Chips label={t('boardSettings.tab.quotaPause')} options={quotaPauses} mono bind:value={settingsForm.settings.quotaPause} />
   </Row>
 </Group>
 
-<Group title="Agents">
-  <Row label="En parallèle" desc="Au-delà, les tickets « À faire » attendent une place libre">
-    <Chips label="En parallèle" options={PARALLEL} mono bind:value={b.maxParallel} />
+<Group title={t('common.agents')}>
+  <Row label={t('boardSettings.tab.parallel')} desc={t('boardSettings.tab.parallelDesc')}>
+    <Chips label={t('boardSettings.tab.parallel')} options={PARALLEL} mono bind:value={b.maxParallel} />
   </Row>
-  <Row label="Modèle">
-    <select class="field select" aria-label="Modèle" bind:value={b.model}>
-      <option value="">Par défaut ({modelLabel(settingsForm.settings.defaultModel, app.models)})</option>
+  <Row label={t('common.model')}>
+    <select class="field select" aria-label={t('common.model')} bind:value={b.model}>
+      <option value="">{t('boardSettings.tab.defaultModel', { model: modelLabel(settingsForm.settings.defaultModel, app.models) })}</option>
       {#each modelOptions(app.models) as m (m.value)}<option value={m.value}>{m.label}</option>{/each}
     </select>
   </Row>
-  <Row label="Effort">
-    <select class="field select" aria-label="Effort" bind:value={b.effort}>
-      <option value="">Par défaut</option>
+  <Row label={t('boardSettings.tab.effort')}>
+    <select class="field select" aria-label={t('boardSettings.tab.effort')} bind:value={b.effort}>
+      <option value="">{t('boardSettings.tab.default')}</option>
       {#each EFFORTS as e (e.value)}<option value={e.value}>{e.label}</option>{/each}
     </select>
   </Row>
-  <Row label="Mode">
-    <select class="field select" aria-label="Mode" bind:value={b.mode}>
-      <option value="">Par défaut</option>
+  <Row label={t('boardSettings.tab.mode')}>
+    <select class="field select" aria-label={t('boardSettings.tab.mode')} bind:value={b.mode}>
+      <option value="">{t('boardSettings.tab.default')}</option>
       {#each MODES as m (m.value)}<option value={m.value}>{m.label}</option>{/each}
     </select>
   </Row>

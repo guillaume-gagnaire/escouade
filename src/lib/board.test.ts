@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { agent, board, ticket } from '../test/ipc';
 import source from './board.ts?raw';
 import {
@@ -21,6 +21,7 @@ import {
   waitingFor,
   waitLabel,
 } from './board';
+import { setLang } from './i18n';
 import { fSpentUsd } from './spend';
 import type { Ticket } from './types';
 
@@ -219,5 +220,79 @@ describe('what a ticket under way cost', () => {
   it('says nothing until something was used', () => {
     expect(ticketSpent(t, by(mine({ id: 'a1' })))).toBeNull();
     expect(ticketSpent(t, {})).toBeNull();
+  });
+});
+
+describe('board labels in English', () => {
+  beforeEach(() => setLang('en'));
+
+  it('counts the free places, or tells the quota, with the times of English', () => {
+    expect(placesLabel(0, 2, null)).toBe('2 free slots');
+    expect(placesLabel(1, 2, null)).toBe('1 free slot');
+    expect(placesLabel(2, 2, null)).toBe('All slots are taken');
+    const at = new Date(2026, 9, 3, 15, 0).getTime();
+    expect(placesLabel(0, 2, at)).toBe('Quota reached — resumes at 3:00 PM');
+  });
+
+  it('tells why the autopilot is paused, and until when', () => {
+    const now = new Date(2026, 9, 3, 13, 30).getTime();
+    const at = new Date(2026, 9, 3, 14, 0).getTime();
+    expect(pauseLabel({ reason: 'week', pct: 96, until: at }, now)).toBe('Autopilot paused: weekly quota at 96% (resumes at 2:00 PM)');
+    expect(pauseLabel({ reason: 'fiveHour', pct: 100, until: at }, now)).toBe(
+      'Autopilot paused: 5-hour quota at 100% (resumes at 2:00 PM)',
+    );
+    const about = new Date(2026, 9, 3, 14, 30).getTime();
+    expect(pauseLabel({ reason: 'limit', pct: null, until: about }, now)).toBe(
+      'Autopilot paused: usage limit reached (resumes around 2:30 PM)',
+    );
+    const monday = new Date(2026, 9, 5, 9, 0).getTime();
+    expect(pauseLabel({ reason: 'week', pct: 95.6, until: monday }, now)).toBe(
+      'Autopilot paused: weekly quota at 96% (resumes on Monday, October 5 at 9:00 AM)',
+    );
+  });
+
+  it('sums up what validating does, and names the button, following the language', () => {
+    expect(settingsSummary(board(), 'main')).toBe('merge squash → main');
+    expect(settingsSummary(board({ action: 'keep' }), 'main')).toBe('leave as is');
+    expect(APPROVE_LABEL).toEqual({ merge: 'Approve and merge', pr: 'Approve + PR', push: 'Approve and push', keep: 'Approve' });
+    setLang('fr');
+    expect(APPROVE_LABEL.merge).toBe('Valider et merger');
+  });
+
+  it('tells a ticket to do when it will start, and what it waits for', () => {
+    expect(waitLabel(ticket(), 0, board(), 2)).toBe('Picked up as soon as a slot is free');
+    expect(waitLabel(ticket(), 1, board(), 2)).toBe('Waiting for a slot (2/2)');
+    expect(waitLabel(ticket(), 0, board({ autopilot: false }), 0)).toBe('Autopilot is off');
+    expect(waitLabel(ticket({ forced: true }), 0, board({ autopilot: false }), 0)).toBe('Start requested…');
+    expect(waitLabel(ticket(), 0, board(), 0, 'x')).toBe('Waiting for the target branch');
+    expect(waitLabel(ticket(), 0, board(), 0, null, { reason: 'limit', pct: null, until: 1 })).toBe('Waiting: autopilot paused');
+    expect(waitLabel(ticket(), 1, board(), 2, null, null, ['DEM-3', 'DEM-4'])).toBe('⏸ after DEM-3 and DEM-4');
+  });
+
+  it('lists keys as a sentence does, and asks before a ticket that waits is launched by hand', () => {
+    expect(keyList(['DEM-3'])).toBe('DEM-3');
+    expect(keyList(['DEM-3', 'DEM-4'])).toBe('DEM-3 and DEM-4');
+    expect(keyList(['DEM-3', 'DEM-4', 'DEM-6'])).toBe('DEM-3, DEM-4, and DEM-6');
+    expect(launchAnyway('DEM-5', ['DEM-3'])).toBe('DEM-5 is waiting for DEM-3, which is not done yet. Start it anyway?');
+    expect(launchAnyway('DEM-5', ['DEM-3', 'DEM-4'])).toBe(
+      'DEM-5 is waiting for DEM-3 and DEM-4, which are not done yet. Start it anyway?',
+    );
+  });
+
+  it('refuses a dependency that already waits for the ticket', () => {
+    const t3 = ticket({ id: 't3', key: 'DEM-3', after: ['t4'] });
+    const t4 = ticket({ id: 't4', key: 'DEM-4', after: ['t5'] });
+    const t5 = ticket({ id: 't5', key: 'DEM-5' });
+    const list = Object.fromEntries([t3, t4, t5].map((x) => [x.id, x]));
+    expect(cycleRefusal(t5, t3, list)).toBe('DEM-3 already waits for DEM-5 (directly or indirectly).');
+  });
+
+  it('previews the commit message, tags the agent of a ticket and sums a finished one up', () => {
+    expect(commitPreview(board(), 'atlas')).toBe('feat: limit login attempts [ATL-42]');
+    expect(commitPreview(board({ conventional: false, prefix: 'ZZZ' }), 'atlas')).toBe('ZZZ-42 Limit login attempts');
+    expect(ticketTag(ticket({ column: 'doing', iteration: 2 }))).toBe('DEM-1 · loop 2/5');
+    expect(ticketTag(ticket({ column: 'review' }))).toBe('DEM-1 · to review');
+    expect(doneMeta(ticket({ iteration: 1, cost: 0.42 }))).toBe('1 loop · $0.42');
+    expect(doneMeta(ticket({ column: 'done', iteration: 1, loops: 3, cost: 1.5 }))).toBe('3 loops · $1.50');
   });
 });

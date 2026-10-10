@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { setLang } from './i18n';
 import { importedLabel, linkSource, SERVICE_IDS, SERVICES, setColumnState, toggleComment, trelloTokenPage } from './integrations';
 import type { ExternalIssue, ProjectIntegrations } from './types';
 
@@ -72,5 +73,26 @@ describe('integrations', () => {
     expect(p.comments).toEqual(['review', 'done', 'doing']);
     p = toggleComment(p, 'review');
     expect(p.comments).toEqual(['done', 'doing']);
+  });
+});
+
+describe('integrations in English', () => {
+  beforeEach(() => setLang('en'));
+
+  it('names what each service calls the place of its tickets, and what its search says', () => {
+    expect(SERVICES.jira).toMatchObject({ name: 'Jira', container: 'Project', placeholder: 'Search by key or text…' });
+    expect(SERVICES.trello).toMatchObject({ name: 'Trello', container: 'Board', placeholder: 'Search for a card…' });
+    expect(SERVICES.github).toMatchObject({ name: 'GitHub Issues', container: 'Repository', placeholder: 'Search for an issue…' });
+    // Read when shown: back to French, the same object says it in French.
+    setLang('fr');
+    expect(SERVICES.trello.container).toBe('Tableau');
+  });
+
+  it('says how many tickets came and from where', () => {
+    expect(importedLabel([issue()])).toBe('1 ticket imported from Jira');
+    expect(importedLabel([issue(), issue({ service: 'trello' }), issue()])).toBe('3 tickets imported from Jira and Trello');
+    expect(importedLabel([issue({ service: 'github' }), issue(), issue({ service: 'trello' })])).toBe(
+      '3 tickets imported from GitHub, Jira, and Trello',
+    );
   });
 });

@@ -1,7 +1,8 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { trapFocus } from '../../lib/focus';
-  import { fInt, plural } from '../../lib/format';
+  import { fInt } from '../../lib/format';
+  import { t } from '../../lib/i18n';
   import { importedLabel, issueKey, SERVICE_IDS, SERVICES } from '../../lib/integrations';
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
@@ -42,8 +43,8 @@
   let asked = 0;
 
   $effect(() => {
-    const t = text;
-    const timer = setTimeout(() => (query = t.trim()), 300);
+    const typed = text;
+    const timer = setTimeout(() => (query = typed.trim()), 300);
     return () => clearTimeout(timer);
   });
 
@@ -77,12 +78,14 @@
    * stops at 1 000); else « 50 affichés » while it has more, « 3 résultats » once all are there.
    */
   const counted = $derived.by(() => {
-    if (loading) return 'Recherche…';
+    if (loading) return t('integrations.modal.searching');
     const shown = issues.length;
     // Jira's count is approximate: never fewer than are listed.
     const total = page?.total != null ? Math.max(shown, page.total) : null;
-    if (total != null && total > shown) return `${plural(shown, 'affiché', 'affichés')} sur ${fInt(total)}`;
-    return page?.next ? plural(shown, 'affiché', 'affichés') : plural(shown, 'résultat', 'résultats');
+    if (total != null && total > shown) return t('integrations.modal.shownOf', { count: shown, n: fInt(shown), total: fInt(total) });
+    return page?.next
+      ? t('integrations.modal.shown', { count: shown, n: fInt(shown) })
+      : t('integrations.modal.results', { count: shown, n: fInt(shown) });
   });
   const selectable = $derived(issues.filter((i) => !i.imported));
   const allOn = $derived(selectable.length > 0 && selectable.every((i) => selected[issueKey(i)]));
@@ -165,10 +168,10 @@
     const made = await app.run(api.integrationImport(projectId, $state.snapshot(picked), maxLoops));
     importing = false;
     if (!made) return;
-    for (const t of made) app.tickets[t.id] = t;
+    for (const ticket of made) app.tickets[ticket.id] = ticket;
     close();
-    if (made.length) app.toast(importedLabel(made.map((t) => ({ service: t.external?.service ?? 'jira' }))), 'ok');
-    else app.toast('Ces tickets sont déjà dans le Kanban.', 'info');
+    if (made.length) app.toast(importedLabel(made.map((ticket) => ({ service: ticket.external?.service ?? 'jira' }))), 'ok');
+    else app.toast(t('integrations.modal.allKnown'), 'info');
   }
 
   /** The color of a ticket's type. */
@@ -197,46 +200,43 @@
     role="dialog"
     tabindex="-1"
     aria-modal="true"
-    aria-label="Importer des tickets"
+    aria-label={t('integrations.modal.title')}
   >
     <div class="head">
       <div class="hd">
-        <span class="t">Importer des tickets</span>
-        <span class="sub">Dans « À faire » du Kanban de {project?.name ?? ''}</span>
+        <span class="t">{t('integrations.modal.title')}</span>
+        <span class="sub">{t('integrations.modal.sub', { project: project?.name ?? '' })}</span>
       </div>
       <div style="flex:1"></div>
-      <button class="icon-btn" style="width:28px;height:28px;font-size:16px" onclick={close} aria-label="Fermer">×</button>
+      <button class="icon-btn" style="width:28px;height:28px;font-size:16px" onclick={close} aria-label={t('common.close')}>×</button>
     </div>
     {#if !current || !link}
       <div class="none">
-        <span class="nt">Aucune source liée à ce projet</span>
-        <span class="nd"
-          >Connecte Jira, Trello ou GitHub Issues, puis choisis le projet, le tableau ou le dépôt à associer à {project?.name ??
-            'ce projet'}.</span
-        >
-        <button class="btn primary" onclick={manage}>Lier une source</button>
+        <span class="nt">{t('integrations.modal.noSource')}</span>
+        <span class="nd">{t('integrations.modal.noSourceBody', { project: project?.name ?? t('integrations.modal.thisProject') })}</span>
+        <button class="btn primary" onclick={manage}>{t('integrations.modal.linkSource')}</button>
       </div>
     {:else}
-      <div class="sources" role="tablist" aria-label="Sources">
+      <div class="sources" role="tablist" aria-label={t('integrations.modal.sources')}>
         {#each sources as id (id)}
           {@const l = project?.integrations.links.find((x) => x.service === id)}
           {@const n = countOf(id)}
           <button class="src" class:on={id === current} role="tab" aria-selected={id === current} onclick={() => pickSource(id)}>
             {@render badge(id)}
             <span class="sn"><span class="n">{SERVICES[id].name}</span><span class="c mono">{l?.name}</span></span>
-            {#if n}<span class="count mono" aria-label="{n} sélectionnés">{n}</span>{/if}
+            {#if n}<span class="count mono" aria-label={t('integrations.modal.pickedCount', { count: n })}>{n}</span>{/if}
           </button>
         {/each}
         <div style="flex:1"></div>
-        <button class="manage" onclick={manage}>⚙ Gérer les sources</button>
+        <button class="manage" onclick={manage}>{t('integrations.modal.manage')}</button>
       </div>
       <div class="search">
         <div class="box">
           <span class="ic" aria-hidden="true">⌕</span>
-          <input bind:value={text} placeholder={SERVICES[current].placeholder} spellcheck="false" aria-label="Rechercher" />
+          <input bind:value={text} placeholder={SERVICES[current].placeholder} spellcheck="false" aria-label={t('common.search')} />
         </div>
         {#if page?.filters.length}
-          <div class="filters" role="group" aria-label="Filtres">
+          <div class="filters" role="group" aria-label={t('integrations.modal.filters')}>
             {#each page.filters as f (f.id)}
               {@const on = (filters[current] ?? []).includes(f.id)}
               <button class="chip" class:on aria-pressed={on} onclick={() => toggleFilter(f.id)}>{f.label}</button>
@@ -245,8 +245,13 @@
         {/if}
       </div>
       <div class="bar">
-        <button class="cb" class:on={allOn} role="checkbox" aria-checked={allOn} aria-label="Tout sélectionner" onclick={toggleAll}
-          >{allOn ? '✓' : ''}</button
+        <button
+          class="cb"
+          class:on={allOn}
+          role="checkbox"
+          aria-checked={allOn}
+          aria-label={t('integrations.modal.selectAll')}
+          onclick={toggleAll}>{allOn ? '✓' : ''}</button
         >
         <span class="count-l">{counted}</span>
         <div style="flex:1"></div>
@@ -256,7 +261,7 @@
         {#if failure}
           <p class="empty error" role="alert">{failure}</p>
         {:else if !loading && !issues.length}
-          <p class="empty">Aucun ticket ne correspond à la recherche.</p>
+          <p class="empty">{t('integrations.modal.noMatch')}</p>
         {/if}
         {#each issues as i (issueKey(i))}
           {@const on = !!selected[issueKey(i)] || i.imported}
@@ -285,33 +290,37 @@
                 {#if i.meta.length}<span>{i.meta.join('  ·  ')}</span>{/if}
                 {#if extract && i.criteria.length}
                   <span class="crit" title={i.criteria.join(' · ')}
-                    >✓ {plural(i.criteria.length, 'critère détecté', 'critères détectés')}</span
+                    >{t('integrations.modal.criteriaFound', { count: i.criteria.length })}</span
                   >
                 {/if}
               </div>
             </div>
-            {#if i.imported}<span class="already">Déjà dans le Kanban</span>{/if}
+            {#if i.imported}<span class="already">{t('integrations.modal.alreadyImported')}</span>{/if}
           </div>
         {/each}
         {#if page?.next && !loading && !failure}
           <!-- Not disabled while the page comes: the focus stays on it (showMore asks once). -->
-          <button class="btn ghost more" aria-disabled={more} onclick={showMore}>Afficher plus</button>
+          <button class="btn ghost more" aria-disabled={more} onclick={showMore}>{t('integrations.modal.showMore')}</button>
         {/if}
       </div>
       <div class="foot">
         <span class="sel"
-          >{picked.length ? plural(picked.length, 'ticket sélectionné', 'tickets sélectionnés') : 'Aucun ticket sélectionné'}</span
+          >{picked.length
+            ? t('integrations.modal.picked', { count: picked.length, n: fInt(picked.length) })
+            : t('integrations.modal.nonePicked')}</span
         >
         <div style="flex:1"></div>
-        <span class="ml">Boucles max</span>
-        <div class="loops" role="group" aria-label="Boucles max">
+        <span class="ml">{t('integrations.modal.maxLoops')}</span>
+        <div class="loops" role="group" aria-label={t('integrations.modal.maxLoops')}>
           {#each [3, 5, 8] as n (n)}
             <button class="mono" class:on={maxLoops === n} aria-pressed={maxLoops === n} onclick={() => (maxLoops = n)}>{n}</button>
           {/each}
         </div>
-        <button class="btn ghost" onclick={close}>Annuler</button>
+        <button class="btn ghost" onclick={close}>{t('common.cancel')}</button>
         <button class="btn primary" disabled={!picked.length || importing} onclick={doImport}
-          >{picked.length ? `Importer ${plural(picked.length, 'ticket', 'tickets')}` : 'Importer'}</button
+          >{picked.length
+            ? t('integrations.modal.importCount', { count: picked.length, n: fInt(picked.length) })
+            : t('common.import')}</button
         >
       </div>
     {/if}

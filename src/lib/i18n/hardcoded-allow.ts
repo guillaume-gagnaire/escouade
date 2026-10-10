@@ -19,6 +19,31 @@ export const ALLOWED: Allowed[] = [
   // L4 — settings
 
   // L5 — integrations, boardSettings
+  {
+    file: 'src/components/modals/ImportModal.svelte',
+    text: 'Tâche',
+    why: 'le type de ticket que Jira nomme ainsi : une donnée d’un service externe, comparée telle quelle, pas un texte de l’interface',
+  },
+  {
+    file: 'src/components/settings/IntegrationsTab.svelte',
+    text: 'atlas.atlassian.net',
+    why: 'un exemple de site Jira, le même dans toutes les langues',
+  },
+  {
+    file: 'src/components/settings/IntegrationsTab.svelte',
+    text: 'ada@atlas.dev',
+    why: 'un exemple d’adresse, la même dans toutes les langues',
+  },
+  {
+    file: 'src/components/settings/IntegrationsTab.svelte',
+    text: 'gh auth login',
+    why: 'la commande de GitHub CLI, la même dans toutes les langues',
+  },
+  {
+    file: 'src/components/settings/IntegrationsTab.svelte',
+    text: 'claude-ready',
+    why: 'un exemple d’étiquette, la même dans toutes les langues',
+  },
 
   // L6 — board, stats
 

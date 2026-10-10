@@ -98,7 +98,7 @@
    * while the agent works.
    */
   async function refresh(pid: string, src: string, pick: boolean) {
-    const [t, files] = await Promise.all([
+    const [loaded, files] = await Promise.all([
       trees.load(pid, src).catch((e) => {
         if (pick) app.toast(String(e), 'error');
         return undefined;
@@ -106,10 +106,10 @@
       api.gitFiles(pid, sourceAgent(src)).catch(() => []),
     ]);
     if (!current(pid, src)) return;
-    if (pick && t) readAliases(pid, src, t.files);
-    if (t && madeDirs.length) {
+    if (pick && loaded) readAliases(pid, src, loaded.files);
+    if (loaded && madeDirs.length) {
       // A folder made empty that a file is in now is in the tree with it.
-      const held = t.files.map((f) => f.toLowerCase());
+      const held = loaded.files.map((f) => f.toLowerCase());
       madeDirs = madeDirs.filter((d) => !held.some((f) => f.startsWith(d.toLowerCase() + '/')));
     }
     status = Object.fromEntries(
@@ -118,8 +118,8 @@
     await buffers.refreshAll(pid, src);
     if (!pick || !current(pid, src)) return;
     const p = app.editor[pid]?.places[src];
-    if (t && p && !p.active && !p.open.length) {
-      const first = t.files.find((f) => status[f]) ?? (t.files.includes('README.md') ? 'README.md' : null);
+    if (loaded && p && !p.active && !p.open.length) {
+      const first = loaded.files.find((f) => status[f]) ?? (loaded.files.includes('README.md') ? 'README.md' : null);
       if (first) await app.openEditor({ projectId: pid, source: src, path: first });
     }
   }
@@ -153,9 +153,9 @@
     clearTimeout(gitTimer);
   });
   $effect(() => {
-    const t = app.gitTick;
-    if (t === tick) return;
-    tick = t;
+    const seen = app.gitTick;
+    if (seen === tick) return;
+    tick = seen;
     clearTimeout(gitTimer);
     gitTimer = setTimeout(() => refresh(project.id, source, false), 300);
   });
@@ -576,14 +576,14 @@
   /** Where the cursor is (its column in characters): what a jump keeps in the history, to come back to. */
   const here = (): NavFrom | null => (activePath ? { path: activePath, line: cursor.line, col: cursor.col } : null);
 
-  /** Opens `t` in the source shown (at its top without a line), the place left kept in the history: `from`, else the cursor. */
-  function jump(t: NavTarget, from: NavFrom | null = here()) {
+  /** Opens `target` in the source shown (at its top without a line), the place left kept in the history: `from`, else the cursor. */
+  function jump(target: NavTarget, from: NavFrom | null = here()) {
     if (from) navHistory.push({ projectId: project.id, source, ...from });
-    app.openEditor({ projectId: project.id, source, path: t.path, line: t.line ?? 1, col: t.col });
+    app.openEditor({ projectId: project.id, source, path: target.path, line: target.line ?? 1, col: target.col });
   }
 
   // « Ouvrir un fichier » (Ctrl+P) opens its file through here, for Alt+← to come back to the place left.
-  onMount(() => setEditorJump((t) => jump(t)));
+  onMount(() => setEditorJump((target) => jump(target)));
 
   /** The places a followed identifier may lead to, listed under it, and where it was followed from. */
   let picking = $state<{ targets: NavTarget[]; from: NavFrom; label: string; at: NavFollowed['rect'] } | null>(null);
@@ -605,10 +605,10 @@
   }
 
   /** The place picked from the list: a jump from where the identifier was followed. */
-  function pick(t: NavTarget) {
+  function pick(target: NavTarget) {
     const p = picking;
     picking = null;
-    if (p) jump(t, p.from);
+    if (p) jump(target, p.from);
   }
 
   // The list goes with the file or the source it was made in.
@@ -915,7 +915,7 @@
             {reveal}
             nav={{ path: activePath, files: tree?.files ?? [], resolvers }}
             onrevealed={revealed}
-            onchange={(t) => buffers.edit(buf.key, t)}
+            onchange={(text) => buffers.edit(buf.key, text)}
             oncursor={(c) => (cursor = c)}
             ontargets={follow}
             onnaverror={(e) => alive && app.toast(t('editor.toast.navigateFailed', { error: String(e) }), 'error')}

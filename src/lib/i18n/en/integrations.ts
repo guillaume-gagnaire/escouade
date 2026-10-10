@@ -1,4 +1,100 @@
 import { defineZone } from '../types';
 
 // Jira, Trello and GitHub: the integrations tab and the import of tickets.
-export default defineZone('integrations', {});
+export default defineZone('integrations', {
+  container: { jira: 'Project', trello: 'Board', github: 'Repository' },
+  searchHint: {
+    jira: 'Search by key or text…',
+    trello: 'Search for a card…',
+    github: 'Search for an issue…',
+  },
+  imported: { one: '{count} ticket imported from {from}', other: '{count} tickets imported from {from}' },
+
+  accounts: {
+    title: 'Connected accounts',
+    note: 'Tokens stay on this machine, apart from your settings, and are only used for calls to these services.',
+    connected: 'Connected · {label}',
+    notConnected: 'Not connected',
+    keychainUnavailable: 'System keychain unavailable: the token stays in ~/.escouade/integrations.json.',
+    keychainUnreadable: 'System keychain unreadable: restart Escouade or reconnect the account.',
+    disconnect: 'Disconnect',
+    connectEllipsis: 'Connect…',
+    connect: 'Connect',
+    checking: 'Checking…',
+    formLabel: 'Connect to {service}',
+    site: 'Site',
+    email: 'Email',
+    apiToken: 'API token',
+    createAtlassianToken: 'Create an Atlassian API token',
+    apiKey: 'API key',
+    token: 'Token',
+    getApiKey: 'Get an API key',
+    getTokenForKey: 'Get a token for this key',
+    githubToken: 'Token {hint}',
+    githubTokenHint: '(empty: the one from gh)',
+    createGithubToken: 'Create a GitHub token',
+  },
+
+  sources: {
+    title: 'Sources linked to {project}',
+    connectFirst: 'Connect an account above to link a source to this project.',
+    none: 'None',
+    pick: { jira: 'Jira project', trello: 'Trello board', github: 'GitHub Issues repository' },
+  },
+
+  mapping: {
+    title: 'Status mapping',
+    note: 'The status the external ticket takes when its ticket reaches the column; “Comment” adds a comment there (criteria, outcome of the approval…).',
+    comment: 'Comment',
+    unchanged: '— unchanged',
+    commentOnArrival: 'Comment when a ticket reaches “{column}”',
+    cell: '{service} — {column}',
+  },
+
+  sync: {
+    title: 'Sync',
+    updateStatus: 'Update the external status',
+    updateStatusDesc: 'When an imported ticket changes column in the Kanban',
+    loopSummary: 'Post a summary on every loop',
+    loopSummaryDesc: 'Criteria met and the agent’s notes, on the external ticket',
+    extractCriteria: 'Extract the acceptance criteria',
+    extractCriteriaDesc: 'From the description (Jira, GitHub) or the checklist (Trello) of the imported ticket',
+  },
+
+  autoImport: {
+    title: 'Automatic import',
+    enable: 'Import labeled tickets',
+    enableDesc: 'Open tickets from linked sources that carry the label arrive in “To do”',
+    label: 'Label',
+    labelHint: 'Jira label, Trello or GitHub label',
+    every: 'Check every',
+    minutes: '{n} min',
+  },
+
+  modal: {
+    title: 'Import tickets',
+    sub: 'Into “To do” on the Kanban of {project}',
+    noSource: 'No source linked to this project',
+    noSourceBody: 'Connect Jira, Trello or GitHub Issues, then choose the project, board or repository to link to {project}.',
+    thisProject: 'this project',
+    linkSource: 'Link a source',
+    sources: 'Sources',
+    pickedCount: { one: '{count} selected', other: '{count} selected' },
+    manage: '⚙ Manage sources',
+    filters: 'Filters',
+    selectAll: 'Select all',
+    searching: 'Searching…',
+    results: { one: '{n} result', other: '{n} results' },
+    shown: { one: '{n} shown', other: '{n} shown' },
+    shownOf: { one: '{n} shown of {total}', other: '{n} shown of {total}' },
+    noMatch: 'No ticket matches your search.',
+    criteriaFound: { one: '✓ {count} criterion detected', other: '✓ {count} criteria detected' },
+    alreadyImported: 'Already in the Kanban',
+    showMore: 'Show more',
+    nonePicked: 'No ticket selected',
+    picked: { one: '{n} ticket selected', other: '{n} tickets selected' },
+    maxLoops: 'Max loops',
+    importCount: { one: 'Import {n} ticket', other: 'Import {n} tickets' },
+    allKnown: 'These tickets are already in the Kanban.',
+  },
+});

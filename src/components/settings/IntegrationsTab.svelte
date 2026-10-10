@@ -1,6 +1,8 @@
 <script lang="ts">
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { COLUMNS } from '../../lib/board';
+  import { t } from '../../lib/i18n';
+  import Rich from '../../lib/i18n/Rich.svelte';
   import { linkSource, SERVICE_IDS, SERVICES, setColumnState, toggleComment, trelloTokenPage } from '../../lib/integrations';
   import { api } from '../../lib/ipc';
   import { settingsForm } from '../../lib/settings.svelte';
@@ -145,7 +147,7 @@
 
   const open = (url: string) => app.run(openUrl(url));
 
-  const EVERY = [5, 15, 60].map((n) => ({ value: n, label: `${n} min` }));
+  const every = $derived([5, 15, 60].map((n) => ({ value: n, label: t('integrations.autoImport.minutes', { n }) })));
   const blank = (): AccountForm => ({ site: '', email: '', key: '', token: '' });
 </script>
 
@@ -155,10 +157,7 @@
   >
 {/snippet}
 
-<Group
-  title="Comptes connectés"
-  note="Les jetons restent sur cette machine, à part des réglages, et ne servent qu'aux appels de ces services."
->
+<Group title={t('integrations.accounts.title')} note={t('integrations.accounts.note')}>
   {#each SERVICE_IDS as id (id)}
     {@const a = account(id)}
     {@const form = forms[id]}
@@ -166,24 +165,26 @@
       {@render badge(id)}
       <div class="txt">
         <span class="l">{SERVICES[id].name}</span>
-        <span class="d" class:on={a?.connected}>{a?.connected ? `Connecté · ${a.label}` : 'Non connecté'}</span>
+        <span class="d" class:on={a?.connected}
+          >{a?.connected ? t('integrations.accounts.connected', { label: a.label }) : t('integrations.accounts.notConnected')}</span
+        >
         {#if a?.connected && a.inFile}
-          <span class="d warn">Trousseau du système indisponible : le jeton reste dans ~/.escouade/integrations.json.</span>
+          <span class="d warn">{t('integrations.accounts.keychainUnavailable')}</span>
         {/if}
         {#if a?.connected && a.unread}
-          <span class="d warn">Trousseau du système illisible : relance Escouade ou reconnecte le compte.</span>
+          <span class="d warn">{t('integrations.accounts.keychainUnreadable')}</span>
         {/if}
       </div>
       {#if a?.connected}
-        <button class="btn small ghost" onclick={() => disconnect(id)}>Déconnecter</button>
+        <button class="btn small ghost" onclick={() => disconnect(id)}>{t('integrations.accounts.disconnect')}</button>
       {:else if !form}
-        <button class="btn small" onclick={() => (forms[id] = blank())}>Connecter…</button>
+        <button class="btn small" onclick={() => (forms[id] = blank())}>{t('integrations.accounts.connectEllipsis')}</button>
       {/if}
     </div>
     {#if form && !a?.connected}
       <form
         class="connect"
-        aria-label="Connexion à {SERVICES[id].name}"
+        aria-label={t('integrations.accounts.formLabel', { service: SERVICES[id].name })}
         onsubmit={(e) => {
           e.preventDefault();
           connect(id);
@@ -191,44 +192,69 @@
       >
         {#if id === 'jira'}
           <label
-            ><span>Site</span><input
+            ><span>{t('integrations.accounts.site')}</span><input
               class="field mono"
               bind:value={form.site}
               placeholder="atlas.atlassian.net"
               spellcheck="false"
             /></label
           >
-          <label><span>E-mail</span><input class="field" bind:value={form.email} placeholder="ada@atlas.dev" spellcheck="false" /></label>
-          <label><span>Jeton d'API</span><input class="field mono" type="password" bind:value={form.token} autocomplete="off" /></label>
+          <label
+            ><span>{t('integrations.accounts.email')}</span><input
+              class="field"
+              bind:value={form.email}
+              placeholder="ada@atlas.dev"
+              spellcheck="false"
+            /></label
+          >
+          <label
+            ><span>{t('integrations.accounts.apiToken')}</span><input
+              class="field mono"
+              type="password"
+              bind:value={form.token}
+              autocomplete="off"
+            /></label
+          >
           <button type="button" class="link" onclick={() => open('https://id.atlassian.com/manage-profile/security/api-tokens')}
-            >Créer un jeton d'API Atlassian</button
+            >{t('integrations.accounts.createAtlassianToken')}</button
           >
         {:else if id === 'trello'}
-          <label><span>Clé d'API</span><input class="field mono" bind:value={form.key} spellcheck="false" /></label>
-          <label><span>Jeton</span><input class="field mono" type="password" bind:value={form.token} autocomplete="off" /></label>
+          <label
+            ><span>{t('integrations.accounts.apiKey')}</span><input class="field mono" bind:value={form.key} spellcheck="false" /></label
+          >
+          <label
+            ><span>{t('integrations.accounts.token')}</span><input
+              class="field mono"
+              type="password"
+              bind:value={form.token}
+              autocomplete="off"
+            /></label
+          >
           <div class="links">
-            <button type="button" class="link" onclick={() => open('https://trello.com/power-ups/admin')}>Obtenir une clé d'API</button>
+            <button type="button" class="link" onclick={() => open('https://trello.com/power-ups/admin')}
+              >{t('integrations.accounts.getApiKey')}</button
+            >
             <button type="button" class="link" disabled={!form.key.trim()} onclick={() => open(trelloTokenPage(form.key))}
-              >Obtenir un jeton pour cette clé</button
+              >{t('integrations.accounts.getTokenForKey')}</button
             >
           </div>
         {:else}
           <label
-            ><span>Jeton <em>(vide : celui de gh)</em></span><input
-              class="field mono"
-              type="password"
-              bind:value={form.token}
-              placeholder="gh auth login"
-              autocomplete="off"
-            /></label
+            ><span
+              ><Rich k="integrations.accounts.githubToken"
+                >{#snippet hint()}<em>{t('integrations.accounts.githubTokenHint')}</em>{/snippet}</Rich
+              ></span
+            ><input class="field mono" type="password" bind:value={form.token} placeholder="gh auth login" autocomplete="off" /></label
           >
-          <button type="button" class="link" onclick={() => open('https://github.com/settings/tokens')}>Créer un jeton GitHub</button>
+          <button type="button" class="link" onclick={() => open('https://github.com/settings/tokens')}
+            >{t('integrations.accounts.createGithubToken')}</button
+          >
         {/if}
         {#if refused[id]}<p class="error" role="alert">{refused[id]}</p>{/if}
         <div class="actions">
-          <button type="button" class="btn small ghost" onclick={() => delete forms[id]}>Annuler</button>
+          <button type="button" class="btn small ghost" onclick={() => delete forms[id]}>{t('common.cancel')}</button>
           <button type="submit" class="btn small primary" disabled={checking === id}
-            >{checking === id ? 'Vérification…' : 'Connecter'}</button
+            >{checking === id ? t('integrations.accounts.checking') : t('integrations.accounts.connect')}</button
           >
         </div>
       </form>
@@ -236,9 +262,9 @@
   {/each}
 </Group>
 
-<Group title="Sources liées à {draft.name.trim() || project.name}">
+<Group title={t('integrations.sources.title', { project: draft.name.trim() || project.name })}>
   {#if !connected.length}
-    <p class="empty">Connecte un compte ci-dessus pour lier une source à ce projet.</p>
+    <p class="empty">{t('integrations.sources.connectFirst')}</p>
   {/if}
   {#each connected as id (id)}
     {@const list = containers[containersKey(id)] ?? []}
@@ -250,12 +276,12 @@
         <span class="k">{SERVICES[id].container}</span>
         <select
           class="field select"
-          aria-label="{SERVICES[id].container} {SERVICES[id].name}"
+          aria-label={t(`integrations.sources.pick.${id}`)}
           value={linking[containersKey(id)] ?? current?.container ?? ''}
           disabled={!!linking[containersKey(id)]}
           onchange={(e) => pick(id, e.currentTarget.value)}
         >
-          <option value="">Aucun</option>
+          <option value="">{t('integrations.sources.none')}</option>
           {#if current && !list.some((c) => c.id === current.container)}<option value={current.container}>{current.name}</option>{/if}
           {#each list as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
         </select>
@@ -266,38 +292,36 @@
 </Group>
 
 {#if linked.length}
-  <Group
-    title="Correspondance des statuts"
-    note="L'état que prend le ticket externe quand son ticket arrive dans la colonne ; « Commenter » y ajoute un commentaire (critères, issue de la validation…)."
-  >
+  <Group title={t('integrations.mapping.title')} note={t('integrations.mapping.note')}>
     <div class="map" style:--n={linked.length}>
       <div class="mrow head">
         <span class="col">Kanban</span>
         {#each linked as id (id)}<span class="svc">{@render badge(id, true)}{SERVICES[id].name}</span>{/each}
-        <span class="cm">Commenter</span>
+        <span class="cm">{t('integrations.mapping.comment')}</span>
       </div>
       {#each COLUMNS as c (c.id)}
+        {@const column = t(`board.columns.${c.id}`)}
         <div class="mrow">
-          <span class="col"><span class="dot" style:background={c.color}></span>{c.label}</span>
+          <span class="col"><span class="dot" style:background={c.color}></span>{column}</span>
           {#each linked as id (id)}
             {@const link = linkOf(id)}
             {@const why = link ? failed[statesKey(id, link.container)] : undefined}
             <span class="svc">
               <select
                 class="field select"
-                aria-label="{SERVICES[id].name} — {c.label}"
+                aria-label={t('integrations.mapping.cell', { service: SERVICES[id].name, column })}
                 title={why}
                 value={link?.states[c.id]?.id ?? ''}
                 onchange={(e) => setState(id, c.id, e.currentTarget.value)}
               >
-                <option value="">— inchangé</option>
+                <option value="">{t('integrations.mapping.unchanged')}</option>
                 {#each options(id, c.id) as st (st.id)}<option value={st.id}>{stateLabel(st)}</option>{/each}
               </select>
             </span>
           {/each}
           <span class="cm">
             <Switch
-              label="Commenter à l'arrivée dans « {c.label} »"
+              label={t('integrations.mapping.commentOnArrival', { column })}
               bind:on={() => integ.comments.includes(c.id), () => (draft.integrations = toggleComment(integ, c.id))}
             />
           </span>
@@ -307,30 +331,33 @@
   </Group>
 {/if}
 
-<Group title="Synchronisation">
-  <Row label="Mettre à jour le statut externe" desc="Quand un ticket importé change de colonne dans le Kanban">
-    <Switch label="Mettre à jour le statut externe" bind:on={s.syncStates} />
+<Group title={t('integrations.sync.title')}>
+  <Row label={t('integrations.sync.updateStatus')} desc={t('integrations.sync.updateStatusDesc')}>
+    <Switch label={t('integrations.sync.updateStatus')} bind:on={s.syncStates} />
   </Row>
-  <Row label="Publier un résumé à chaque boucle" desc="Critères atteints et notes de l'agent, sur le ticket externe">
-    <Switch label="Publier un résumé à chaque boucle" bind:on={s.loopComments} />
+  <Row label={t('integrations.sync.loopSummary')} desc={t('integrations.sync.loopSummaryDesc')}>
+    <Switch label={t('integrations.sync.loopSummary')} bind:on={s.loopComments} />
   </Row>
-  <Row label="Extraire les critères d'acceptation" desc="Depuis la description (Jira, GitHub) ou la checklist (Trello) du ticket importé">
-    <Switch label="Extraire les critères d'acceptation" bind:on={s.extractCriteria} />
+  <Row label={t('integrations.sync.extractCriteria')} desc={t('integrations.sync.extractCriteriaDesc')}>
+    <Switch label={t('integrations.sync.extractCriteria')} bind:on={s.extractCriteria} />
   </Row>
 </Group>
 
-<Group title="Import automatique">
-  <Row
-    label="Importer les tickets étiquetés"
-    desc="Les tickets ouverts des sources liées qui portent l'étiquette arrivent dans « À faire »"
-  >
-    <Switch label="Importer les tickets étiquetés" bind:on={s.autoImport} />
+<Group title={t('integrations.autoImport.title')}>
+  <Row label={t('integrations.autoImport.enable')} desc={t('integrations.autoImport.enableDesc')}>
+    <Switch label={t('integrations.autoImport.enable')} bind:on={s.autoImport} />
   </Row>
-  <Row label="Étiquette" hint="label Jira, étiquette Trello ou GitHub">
-    <input class="field mono input" aria-label="Étiquette" spellcheck="false" placeholder="claude-ready" bind:value={s.importLabel} />
+  <Row label={t('integrations.autoImport.label')} hint={t('integrations.autoImport.labelHint')}>
+    <input
+      class="field mono input"
+      aria-label={t('integrations.autoImport.label')}
+      spellcheck="false"
+      placeholder="claude-ready"
+      bind:value={s.importLabel}
+    />
   </Row>
-  <Row label="Vérifier toutes les">
-    <Chips label="Vérifier toutes les" options={EVERY} mono bind:value={s.importEvery} />
+  <Row label={t('integrations.autoImport.every')}>
+    <Chips label={t('integrations.autoImport.every')} options={every} mono bind:value={s.importEvery} />
   </Row>
 </Group>
 

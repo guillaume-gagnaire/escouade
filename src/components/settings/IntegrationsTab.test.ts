@@ -1,10 +1,13 @@
 import { render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { setLang } from '../../lib/i18n';
+import { settingsForm } from '../../lib/settings.svelte';
 import { app } from '../../lib/state.svelte';
 import type { AccountView } from '../../lib/types';
 import { fakeBackend, project, resetApp } from '../../test/ipc';
 import SettingsModal from '../modals/SettingsModal.svelte';
+import IntegrationsTab from './IntegrationsTab.svelte';
 
 vi.mock('../../lib/terminals', () => ({ launchLog: () => ({}), disposeLog() {} }));
 const opened = vi.hoisted(() => [] as string[]);
@@ -208,5 +211,89 @@ describe('IntegrationsTab', () => {
       importEvery: 60,
     });
     expect(b.called('update_project')).toHaveLength(0);
+  });
+});
+
+// The tab alone, in English (the window around it is tested above, in French).
+describe('IntegrationsTab in English', () => {
+  /** The project, linked to a Jira source or not, as the settings open on it. */
+  const open = (links = false) => {
+    const integrations = {
+      links: links ? [{ service: 'jira' as const, container: 'ATL', name: 'ATL — Atlas', states: {} }] : [],
+      comments: ['review' as const],
+    };
+    resetApp({ projects: [project({ integrations })] });
+    settingsForm.open({ tab: 'integrations', projectId: 'p1' });
+  };
+
+  beforeEach(() => setLang('en'));
+
+  it('writes the accounts, what each one says, and the form of one to connect', async () => {
+    backend();
+    open();
+    app.accounts = [{ ...ACCOUNTS[0], inFile: true }, off('trello'), { service: 'github', connected: true, label: '@work', unread: true }];
+    render(IntegrationsTab, { project: app.projects[0] });
+    const p = within(document.body);
+    expect(p.getByRole('heading', { name: 'Connected accounts' })).toBeInTheDocument();
+    expect(p.getByText('Connected · ada@atlas.dev · atlas.atlassian.net')).toBeInTheDocument();
+    expect(p.getByText('Not connected')).toBeInTheDocument();
+    expect(p.getByText('System keychain unavailable: the token stays in ~/.escouade/integrations.json.')).toBeInTheDocument();
+    expect(p.getByText('System keychain unreadable: restart Escouade or reconnect the account.')).toBeInTheDocument();
+    expect(p.getAllByRole('button', { name: 'Disconnect' })).toHaveLength(2);
+    await userEvent.click(p.getByRole('button', { name: 'Connect…' }));
+    const form = p.getByRole('form', { name: 'Connect to Trello' });
+    expect(within(form).getByLabelText('API key')).toBeInTheDocument();
+    expect(within(form).getByLabelText('Token')).toBeInTheDocument();
+    expect(within(form).getByRole('button', { name: 'Get a token for this key' })).toBeDisabled();
+    expect(within(form).getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+  });
+
+  it('writes the token of GitHub with its hint inside the sentence', async () => {
+    backend();
+    open();
+    app.accounts = [off('jira'), off('trello'), off('github')];
+    render(IntegrationsTab, { project: app.projects[0] });
+    await userEvent.click(screen.getAllByRole('button', { name: 'Connect…' })[2]);
+    const form = screen.getByRole('form', { name: 'Connect to GitHub Issues' });
+    expect(within(form).getByLabelText('Token (empty: the one from gh)')).toBeInTheDocument();
+    expect(within(form).getByRole('button', { name: 'Create a GitHub token' })).toBeInTheDocument();
+  });
+
+  it('writes the sources, the mapping of the statuses with the columns of the Kanban, and the sync', async () => {
+    open(true);
+    app.accounts = ACCOUNTS;
+    backend();
+    render(IntegrationsTab, { project: app.projects[0] });
+    const p = within(document.body);
+    expect(p.getByRole('heading', { name: 'Sources linked to demo-api' })).toBeInTheDocument();
+    expect(p.getByText('Project')).toBeInTheDocument();
+    const source = p.getByRole('combobox', { name: 'Jira project' });
+    expect(within(source).getByRole('option', { name: 'None' })).toBeInTheDocument();
+    expect(p.getByRole('heading', { name: 'Status mapping' })).toBeInTheDocument();
+    expect(p.getByText('Comment')).toBeInTheDocument();
+    const review = p.getByRole('combobox', { name: 'Jira — To review' });
+    expect(within(review).getByRole('option', { name: '— unchanged' })).toBeInTheDocument();
+    expect(p.getByRole('combobox', { name: 'Jira — Done' })).toBeInTheDocument();
+    expect(p.getByRole('switch', { name: 'Comment when a ticket reaches “To review”' })).toHaveAttribute('aria-checked', 'true');
+    expect(p.getByRole('heading', { name: 'Sync' })).toBeInTheDocument();
+    expect(p.getByRole('switch', { name: 'Post a summary on every loop' })).toBeInTheDocument();
+    expect(p.getByRole('switch', { name: 'Extract the acceptance criteria' })).toBeInTheDocument();
+  });
+
+  it('writes the automatic import', () => {
+    backend();
+    open();
+    app.accounts = [off('jira'), off('trello'), off('github')];
+    render(IntegrationsTab, { project: app.projects[0] });
+    const p = within(document.body);
+    expect(p.getByText('Connect an account above to link a source to this project.')).toBeInTheDocument();
+    expect(p.getByRole('heading', { name: 'Automatic import' })).toBeInTheDocument();
+    expect(p.getByRole('switch', { name: 'Import labeled tickets' })).toBeInTheDocument();
+    expect(p.getByRole('textbox', { name: 'Label' })).toHaveValue('claude-ready');
+    expect(
+      within(p.getByRole('group', { name: 'Check every' }))
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['5 min', '15 min', '60 min']);
   });
 });
