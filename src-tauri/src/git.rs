@@ -4,6 +4,7 @@ use crate::model::{Commit, FileChange};
 use anyhow::{bail, Result};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use parking_lot::Mutex;
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::process::Stdio;
@@ -343,6 +344,66 @@ fn command_line_chunks(paths: &[String]) -> Vec<&[String]> {
     chunks
 }
 
+/// The most diff text one file sends to the interface; past it the file is only flagged.
+const MAX_FILE_DIFF: usize = 4_000_000;
+
+/// The line that stands, in a file's header, for the diff that was not sent. The interface shows
+/// « Diff trop volumineux pour être affiché. » for a file carrying it (`TOO_LARGE` in `diff.ts`).
+const TOO_LARGE: &str = "Diff too large";
+
+/// `diff`, with the file diffs over `limit` bytes cut down to their header and the `TOO_LARGE` line.
+fn cap_file_diffs(diff: &str, limit: usize) -> Cow<'_, str> {
+    // No file can pass the cap when the whole text does not.
+    if diff.len() <= limit {
+        return Cow::Borrowed(diff);
+    }
+    // A hunk line starts with its sign (+, -, space or \), so a line starting "diff --git " is
+    // always the header of a file.
+    let mut starts: Vec<usize> = diff
+        .match_indices("\ndiff --git ")
+        .map(|(at, _)| at + 1)
+        .collect();
+    if diff.starts_with("diff --git ") {
+        starts.insert(0, 0);
+    }
+    let mut out = String::new();
+    let mut from = 0;
+    for (i, &start) in starts.iter().enumerate() {
+        out.push_str(&diff[from..start]);
+        let end = starts.get(i + 1).copied().unwrap_or(diff.len());
+        let file = &diff[start..end];
+        if file.len() > limit {
+            out.push_str(&flagged(file));
+        } else {
+            out.push_str(file);
+        }
+        from = end;
+    }
+    out.push_str(&diff[from..]);
+    Cow::Owned(out)
+}
+
+/// What stands for the diff of a file that is too large: its header (name, mode, rename,
+/// `---`/`+++` lines: what comes before the first hunk) and the `TOO_LARGE` line. The header lets
+/// the interface tell a new file from a deleted one, and `diff` that the file is covered.
+fn flagged(file_diff: &str) -> String {
+    // Git writes about ten header lines at most; the bound keeps a diff without any hunk from
+    // being sent whole.
+    let mut header: String = file_diff
+        .split_inclusive('\n')
+        .take(12)
+        .take_while(|line| !line.starts_with("@@"))
+        .collect();
+    header.push_str(TOO_LARGE);
+    header.push('\n');
+    header
+}
+
+/// The header git would write for the new file `path`.
+fn new_file_header(path: &str) -> String {
+    format!("diff --git a/{path} b/{path}\nnew file mode 100644\n--- /dev/null\n+++ b/{path}\n")
+}
+
 /// Unified diff of the given paths (all dirty files when empty), untracked files included.
 pub async fn diff(root: &str, paths: &[String]) -> Result<String> {
     let st = status(root).await?;
@@ -373,7 +434,7 @@ pub async fn diff(root: &str, paths: &[String]) -> Result<String> {
         ];
         args.extend(run_paths.iter().map(String::as_str));
         if let Ok(o) = run(root, &args).await {
-            out.push_str(&String::from_utf8_lossy(&o));
+            out.push_str(&cap_file_diffs(&String::from_utf8_lossy(&o), MAX_FILE_DIFF));
         }
     }
     for path in untracked {
@@ -381,21 +442,36 @@ pub async fn diff(root: &str, paths: &[String]) -> Result<String> {
             continue;
         }
         let full = Path::new(root).join(&path);
+        // A file this large is not even read: it would be flagged all the same.
+        let Ok(size) = std::fs::metadata(&full).map(|m| m.len()) else {
+            continue;
+        };
+        if size > MAX_FILE_DIFF as u64 {
+            out.push_str(&flagged(&new_file_header(&path)));
+            continue;
+        }
         let Ok(bytes) = std::fs::read(&full) else {
             continue;
         };
-        if bytes.len() > 1_000_000 || bytes.contains(&0) {
+        if bytes.contains(&0) {
             out.push_str(&format!("diff --git a/{path} b/{path}\nnew file\nBinary files /dev/null and b/{path} differ\n"));
             continue;
         }
         let content = String::from_utf8_lossy(&bytes);
         let lines: Vec<&str> = content.lines().collect();
-        out.push_str(&format!("diff --git a/{path} b/{path}\nnew file mode 100644\n--- /dev/null\n+++ b/{path}\n@@ -0,0 +1,{} @@\n", lines.len()));
+        let mut file = new_file_header(&path);
+        file.push_str(&format!("@@ -0,0 +1,{} @@\n", lines.len()));
         for l in lines {
-            out.push('+');
-            out.push_str(l);
-            out.push('\n');
+            file.push('+');
+            file.push_str(l);
+            file.push('\n');
         }
+        // The signs and line ends added to its text can take it past the cap.
+        out.push_str(&if file.len() > MAX_FILE_DIFF {
+            flagged(&file)
+        } else {
+            file
+        });
         if out.len() > 4_000_000 {
             break;
         }
@@ -516,7 +592,7 @@ pub async fn show(repo: &str, hash: &str) -> Result<String> {
         ],
     )
     .await?;
-    Ok(String::from_utf8_lossy(&out).into_owned())
+    Ok(cap_file_diffs(&String::from_utf8_lossy(&out), MAX_FILE_DIFF).into_owned())
 }
 
 pub async fn list_files(cwd: &str) -> Result<Vec<String>> {
@@ -1429,6 +1505,75 @@ pub fn fuzzy_files(files: &[String], query: &str, limit: usize) -> Vec<String> {
 mod tests {
     use super::*;
 
+    /// The diff of a file named `name` with `lines` added lines.
+    fn file_diff(name: &str, lines: usize) -> String {
+        format!(
+            "diff --git a/{name} b/{name}\nnew file mode 100644\n--- /dev/null\n+++ b/{name}\n@@ -0,0 +1,{lines} @@\n{}",
+            "+x\n".repeat(lines)
+        )
+    }
+
+    fn flagged_file(name: &str) -> String {
+        format!(
+            "diff --git a/{name} b/{name}\nnew file mode 100644\n--- /dev/null\n+++ b/{name}\n{TOO_LARGE}\n"
+        )
+    }
+
+    #[test]
+    fn a_file_diff_past_the_cap_is_flagged_and_its_neighbours_are_untouched() {
+        let (before, big, after) = (
+            file_diff("before.txt", 3),
+            file_diff("big.txt", 50),
+            file_diff("after.txt", 3),
+        );
+        let all = format!("{before}{big}{after}");
+        assert!(before.len() < 200 && big.len() > 200, "{}", big.len());
+        assert_eq!(
+            cap_file_diffs(&all, 200),
+            format!("{before}{}{after}", flagged_file("big.txt"))
+        );
+    }
+
+    #[test]
+    fn a_diff_within_the_cap_is_sent_as_it_is() {
+        let all = format!("{}{}", file_diff("a.txt", 3), file_diff("b.txt", 4));
+        assert_eq!(cap_file_diffs(&all, all.len()), all);
+        // The cap is on one file's diff, not on the whole text, and a diff of exactly the cap passes.
+        let longest = file_diff("b.txt", 4).len();
+        assert!(all.len() > longest);
+        assert_eq!(cap_file_diffs(&all, longest), all);
+        assert_eq!(cap_file_diffs("", 10), "");
+    }
+
+    #[test]
+    fn a_line_quoting_a_file_header_does_not_split_the_diff() {
+        // Inside a hunk the line starts with its +/-/space sign: only a real header starts a file.
+        let quoted = "+diff --git a/x b/x\n".repeat(20);
+        let one = format!(
+            "diff --git a/doc.md b/doc.md\n--- /dev/null\n+++ b/doc.md\n@@ -0,0 +1,20 @@\n{quoted}"
+        );
+        let capped = cap_file_diffs(&one, 100);
+        assert_eq!(
+            capped,
+            format!("diff --git a/doc.md b/doc.md\n--- /dev/null\n+++ b/doc.md\n{TOO_LARGE}\n")
+        );
+    }
+
+    #[test]
+    fn a_flagged_file_keeps_what_the_header_says_of_it() {
+        let rename = format!(
+            "diff --git a/old.txt b/new.txt\nsimilarity index 90%\nrename from old.txt\nrename to new.txt\nindex 1..2 100644\n--- a/old.txt\n+++ b/new.txt\n@@ -1 +1,40 @@\n{}",
+            "+x\n".repeat(40)
+        );
+        let capped = cap_file_diffs(&rename, 100);
+        assert!(capped.contains("rename from old.txt"), "{capped}");
+        assert!(
+            capped.ends_with(&format!("+++ b/new.txt\n{TOO_LARGE}\n")),
+            "{capped}"
+        );
+        assert!(!capped.contains("@@") && !capped.contains("+x"), "{capped}");
+    }
+
     #[test]
     fn parses_porcelain_v2() {
         let raw = b"# branch.oid abc\0# branch.head feat/x\x001 .M N... 100644 100644 100644 a b src/app.ts\x001 A. N... 0 100644 100644 0 b new file.ts\x002 R. N... 100644 100644 100644 a b R100 renamed.ts\0old.ts\0? notes.txt\x001 .D N... 100644 100644 0 a 0 gone.ts\0";
@@ -1864,6 +2009,80 @@ mod repo_tests {
         let d = diff(&r, &["[.]env".to_string()]).await.unwrap();
         assert!(d.contains("+++ b/[.]env"), "{d}");
         assert!(!d.contains("SECRET"), "{d}");
+    }
+
+    /// A text of `len` bytes, in lines of 100.
+    fn big_text(len: usize) -> String {
+        format!("{}\n", "x".repeat(99)).repeat(len / 100)
+    }
+
+    #[tokio::test]
+    async fn a_tracked_file_whose_diff_passes_the_cap_is_flagged_instead_of_sent() {
+        let r = repo("git-diff-cap-tracked");
+        let root = Path::new(&r);
+        git(&r, &["config", "core.autocrlf", "false"]);
+        std::fs::write(root.join("lock.json"), "{}\n").unwrap();
+        std::fs::write(root.join("small.txt"), "1\n").unwrap();
+        git(&r, &["add", "-A"]);
+        git(&r, &["commit", "-qm", "lock"]);
+        std::fs::write(root.join("lock.json"), big_text(MAX_FILE_DIFF + 100_000)).unwrap();
+        std::fs::write(root.join("small.txt"), "2\n").unwrap();
+        // A new file already in the index: git lists it, the untracked pass must not add it again.
+        std::fs::write(root.join("staged.txt"), big_text(MAX_FILE_DIFF + 100_000)).unwrap();
+        git(&r, &["add", "staged.txt"]);
+
+        let d = diff(&r, &[]).await.unwrap();
+        assert!(d.len() < 10_000, "{} bytes", d.len());
+        assert!(
+            d.contains(&format!("+++ b/lock.json\n{TOO_LARGE}\n")),
+            "{d}"
+        );
+        assert!(
+            d.contains(&format!("+++ b/staged.txt\n{TOO_LARGE}\n")),
+            "{d}"
+        );
+        assert_eq!(d.matches("diff --git a/staged.txt").count(), 1, "{d}");
+        assert!(d.contains("+2\n"), "{d}");
+        // Named on its own, it is flagged just the same.
+        let one = diff(&r, &["lock.json".to_string()]).await.unwrap();
+        assert!(one.len() < 1_000 && one.contains(TOO_LARGE), "{one}");
+    }
+
+    #[tokio::test]
+    async fn an_untracked_file_is_flagged_past_the_cap_and_binary_only_when_it_is() {
+        let r = repo("git-diff-cap-untracked");
+        let root = Path::new(&r);
+        std::fs::write(root.join("huge.log"), big_text(MAX_FILE_DIFF + 100_000)).unwrap();
+        // Over the old 1 MB limit, under the cap: shown, not taken for a binary file.
+        std::fs::write(root.join("mid.log"), big_text(1_500_000)).unwrap();
+        std::fs::write(root.join("tool.bin"), [0u8, 1, 2]).unwrap();
+        let d = diff(&r, &[]).await.unwrap();
+        assert!(
+            d.contains(&format!("+++ b/huge.log\n{TOO_LARGE}\n")),
+            "{d:.300}"
+        );
+        assert!(d.contains("+++ b/mid.log\n@@ -0,0 +1,15000 @@"), "{d:.300}");
+        assert!(d.contains("Binary files /dev/null and b/tool.bin differ"));
+        assert!(!d.contains(&format!("b/tool.bin\n{TOO_LARGE}")));
+    }
+
+    #[tokio::test]
+    async fn a_commit_patch_past_the_cap_is_flagged_instead_of_sent() {
+        let r = repo("git-show-cap");
+        let root = Path::new(&r);
+        git(&r, &["config", "core.autocrlf", "false"]);
+        std::fs::write(root.join("lock.json"), big_text(MAX_FILE_DIFF + 100_000)).unwrap();
+        std::fs::write(root.join("small.txt"), "kept\n").unwrap();
+        git(&r, &["add", "-A"]);
+        git(&r, &["commit", "-qm", "lockfile"]);
+        let hash = text(&r, &["rev-parse", "HEAD"]).await.unwrap();
+        let shown = show(&r, &hash).await.unwrap();
+        assert!(shown.len() < 10_000, "{} bytes", shown.len());
+        assert!(
+            shown.contains(&format!("+++ b/lock.json\n{TOO_LARGE}\n")),
+            "{shown}"
+        );
+        assert!(shown.contains("+kept\n"), "{shown}");
     }
 
     /// A pre-commit hook in the repository at `r` that refuses every commit.
