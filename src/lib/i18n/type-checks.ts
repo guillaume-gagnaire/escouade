@@ -1,7 +1,9 @@
 // Checked by `npm run check`, never run: each `@ts-expect-error` below must meet the error it announces
 // (an unused one fails the check), so the types of `t` and of the English catalog keep refusing these mistakes.
+import type { ComponentProps, Snippet } from 'svelte';
 import { en } from './en';
-import { t, tIn, tRich } from '.';
+import { t, tIn, tRaw, type Key } from '.';
+import Rich from './Rich.svelte';
 import { catalogChecker, defineCatalog } from './types';
 
 // --- t: the keys and their parameters --------------------------------------------------------------------------
@@ -30,13 +32,29 @@ t('common.count.files', { count: '2' });
 // @ts-expect-error the language is French or English
 tIn('de', 'common.cancel');
 
-// tRich leaves to its snippets the placeholders it is not given, but still knows the key and its parameters.
-tRich('format.when.day');
-tRich('format.when.day', { date: 'demain' });
-// @ts-expect-error a parameter the text does not have
-tRich('format.when.day', { place: 'ici' });
-// @ts-expect-error a plural still needs its count
-tRich('common.count.files');
+// --- Rich: a prop for each placeholder of its key (the props of the component itself) ----------------------------
+
+type Props<K extends Key> = ComponentProps<typeof Rich<K>>;
+const snippet = (() => {}) as unknown as Snippet;
+
+const rich: Props<'format.when.day'>[] = [
+  { k: 'format.when.day', date: 'demain', time: snippet },
+  { k: 'format.when.day', date: snippet, time: 9 },
+];
+const plural: Props<'common.count.files'> = { k: 'common.count.files', count: 2 };
+// @ts-expect-error a placeholder given neither a snippet nor a text
+const richMissing: Props<'format.when.day'> = { k: 'format.when.day', date: 'demain' };
+// @ts-expect-error a prop the text has no placeholder for
+const richExtra: Props<'format.when.today'> = { k: 'format.when.today', time: snippet, date: 'demain' };
+// @ts-expect-error the count of a plural is a number, not a snippet
+const richCount: Props<'common.count.files'> = { k: 'common.count.files', count: snippet };
+// @ts-expect-error the key is one of the catalog
+const richKey: Props<'common.nope'> = { k: 'common.nope' };
+// tRaw: the text with its placeholders as written, the count choosing the form of a plural.
+tRaw('format.when.day');
+tRaw('common.count.files', 2);
+// @ts-expect-error a key of the catalog only
+tRaw('common.nope');
 
 // --- the English catalog: the same keys, the same placeholders as the French one ----------------------------------
 
@@ -63,14 +81,21 @@ defineSample({ a: 'A', g: { hi: 'Hello', bye: 'Bye' }, files });
 defineSample({ a: 'A', g: { hi: 'Hello {name}', bye: 'Bye' }, files: { one: 'one file', other: '{count} files in {d}' } });
 // @ts-expect-error a plural without its « one » form
 defineSample({ a: 'A', g: { hi: 'Hello {name}', bye: 'Bye' }, files: { other: '{count} files in {dir}' } });
+// @ts-expect-error a plural without its « other » form
+defineSample({ a: 'A', g: { hi: 'Hello {name}', bye: 'Bye' }, files: { one: 'one file in {dir}' } });
 // @ts-expect-error a plural with a form French does not write
 defineSample({ a: 'A', g: { hi: 'Hello {name}', bye: 'Bye' }, files: { ...files, zero: 'no files in {dir}' } });
 // @ts-expect-error a plural written as a single text
 defineSample({ a: 'A', g: { hi: 'Hello {name}', bye: 'Bye' }, files: '{count} files in {dir}' });
 
-// The real catalog, with a key less and with a placeholder renamed.
+// The real catalog, with a key less, a placeholder renamed, a zone less and a zone in excess.
 const { cancel: _cancel, ...commonWithoutCancel } = en.common;
 // @ts-expect-error « common.cancel » is missing
 defineCatalog({ ...en, common: commonWithoutCancel });
 // @ts-expect-error « {n} » renamed
 defineCatalog({ ...en, format: { ...en.format, ago: { ...en.format.ago, minutes: '{x} min ago' } } });
+const { mcp: _mcp, ...withoutMcp } = en;
+// @ts-expect-error the zone « mcp » is missing
+defineCatalog(withoutMcp);
+// @ts-expect-error a zone the French catalog does not have
+defineCatalog({ ...en, extra: {} });

@@ -1,8 +1,8 @@
 import { render, screen } from '@testing-library/svelte';
-import { createRawSnippet, flushSync } from 'svelte';
+import { createRawSnippet, flushSync, type Component } from 'svelte';
 import { describe, expect, it } from 'vitest';
 import { fList } from '../format';
-import { locale, setLang, t, tIn, tRich } from '.';
+import { locale, setLang, t, tIn, tRaw, type Key, type RichProps } from '.';
 import LangProbe from './LangProbe.test.svelte';
 import Rich from './Rich.svelte';
 
@@ -61,42 +61,59 @@ describe('setLang', () => {
     render(LangProbe, { props: { count: 2 } });
     expect(screen.getByRole('button')).toHaveTextContent('Annuler');
     expect(screen.getByTestId('derived')).toHaveTextContent('2 fichiers');
+    expect(screen.getByTestId('rich').textContent).toBe('le vendredi à 09:30');
 
     setLang('en');
     flushSync();
     expect(screen.getByRole('button')).toHaveTextContent('Cancel');
     expect(screen.getByTestId('derived')).toHaveTextContent('2 files');
+    expect(screen.getByTestId('rich').textContent).toBe('on vendredi at 09:30');
   });
 });
 
 describe('Rich', () => {
-  const kbd = createRawSnippet(() => ({ render: () => '<kbd>Ctrl+Entrée</kbd>' }));
+  const kbd = createRawSnippet(() => ({ render: () => '<kbd>09:30</kbd>' }));
+  // Rendered from a script, a generic component is not inferred from its props: its key is, here.
+  const rich = <K extends Key>(props: RichProps<K>) => render(Rich as unknown as Component<object>, { props });
 
   it('renders the snippet a placeholder names, and a text parameter', () => {
-    const { container } = render(Rich, { props: { text: 'Appuie sur {key} pour {action}.', key: kbd, action: 'envoyer' } });
-    expect(container.querySelector('kbd')).toHaveTextContent('Ctrl+Entrée');
+    const { container } = rich({ k: 'format.when.day', date: 'vendredi', time: kbd });
+    expect(container.querySelector('kbd')).toHaveTextContent('09:30');
     // Exactly: no space added around the pieces.
-    expect(container.textContent).toBe('Appuie sur Ctrl+Entrée pour envoyer.');
+    expect(container.textContent).toBe('le vendredi à 09:30');
   });
 
   it('writes a text parameter as text, never as markup', () => {
-    const { container } = render(Rich, { props: { text: 'Fichier {name}', name: '<b>x</b>' } });
+    const { container } = rich({ k: 'format.when.today', time: '<b>x</b>' });
     expect(container.querySelector('b')).toBeNull();
-    expect(container.textContent).toBe('Fichier <b>x</b>');
+    expect(container.textContent).toBe('à <b>x</b>');
   });
 
-  it('leaves a placeholder it is given nothing for as written', () => {
-    const { container } = render(Rich, { props: { text: 'à {time}' } });
+  it('chooses the form of a plural by its count, and writes the count', () => {
+    const { container } = rich({ k: 'common.count.files', count: 2 });
+    expect(container.textContent).toBe('2 fichiers');
+  });
+
+  it('leaves a placeholder it is given nothing for as written (the types require them all)', () => {
+    const { container } = rich({ k: 'format.when.today' } as never);
     expect(container.textContent).toBe('à {time}');
   });
 
-  it('takes its text from tRich, which keeps the placeholders left to the snippets', () => {
-    expect(tRich('format.when.today')).toBe('à {time}');
-    expect(tRich('format.when.day', { date: 'demain' })).toBe('le demain à {time}');
-    expect(tRich('common.count.files', { count: 2 })).toBe('2 fichiers');
+  it('follows the language of the interface', () => {
+    const { container } = rich({ k: 'format.when.today', time: kbd });
+    expect(container.textContent).toBe('à 09:30');
     setLang('en');
-    const { container } = render(Rich, { props: { text: tRich('format.when.today'), time: kbd } });
-    expect(container).toHaveTextContent('at Ctrl+Entrée');
+    flushSync();
+    expect(container.textContent).toBe('at 09:30');
+  });
+});
+
+describe('tRaw', () => {
+  it('gives the text of a key with its placeholders as written, its plural chosen by the count', () => {
+    expect(tRaw('format.when.day')).toBe('le {date} à {time}');
+    expect(tRaw('common.count.files', 1)).toBe('1 fichier');
+    setLang('en');
+    expect(tRaw('format.when.today')).toBe('at {time}');
   });
 });
 

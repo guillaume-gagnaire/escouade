@@ -4,10 +4,10 @@
 import { en } from './en';
 import { fr } from './fr';
 import { locale, type Lang } from './locale.svelte';
-import type { Args, Key, PluralLeaf, RichArgs, Tree } from './types';
+import type { Args, Key, PluralLeaf, Tree } from './types';
 
 export { intlLocale, locale, setLang, type Lang } from './locale.svelte';
-export type { Key } from './types';
+export type { Key, RichPart, RichProps } from './types';
 
 type Leaf = string | PluralLeaf;
 type Values = Record<string, string | number | undefined>;
@@ -70,9 +70,9 @@ export function tIn<K extends Key>(lang: Lang, key: K, ...params: Args<K>): stri
 }
 
 /**
- * The text of `key` for `Rich`: the placeholders it is not given stay `{name}`, for `Rich` to render with its
- * snippets (a plural still needs its count, to choose its form).
+ * The text of `key` with its placeholders as written, for `Rich` to fill (with snippets, which are no text): the
+ * form of a plural chosen by `count`, and `{count}` written.
  */
-export function tRich<K extends Key>(key: K, ...params: RichArgs<K>): string {
-  return translate(locale.ui, key, params[0] as Values | undefined);
+export function tRaw(key: Key, count?: number): string {
+  return translate(locale.ui, key, count === undefined ? undefined : { count });
 }

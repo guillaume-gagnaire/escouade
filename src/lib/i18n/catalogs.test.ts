@@ -64,6 +64,11 @@ describe('catalogs', () => {
     }
   });
 
+  it('leave the name « k » to the key of Rich', () => {
+    // `<Rich k="…">` takes its key in `k`, and a prop per placeholder: a `{k}` would be both.
+    for (const [key, leaf] of frLeaves) expect({ key, k: placeholders(leaf as Leaf).includes('k') }).toEqual({ key, k: false });
+  });
+
   it('name their keys in camelCase', () => {
     for (const key of frLeaves.keys()) for (const part of key.split('.')) expect({ key, part }).toEqual({ key, part: camel(part) });
   });

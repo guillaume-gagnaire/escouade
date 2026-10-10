@@ -1,5 +1,6 @@
 // The types of the catalogs. The French catalog is the source: its texts, written `as const`, give the keys `t`
 // accepts and the parameters each one needs; the English catalog is checked against it, key by key.
+import type { Snippet } from 'svelte';
 import type { Catalog } from './fr';
 
 /** A text that depends on a count, chosen by `Intl.PluralRules`: French says « 0 fichier », English « 0 files ». */
@@ -41,14 +42,16 @@ export type Params<V> = { [P in LeafVars<V>]: P extends 'count' ? (V extends Plu
  */
 export type Args<K extends Key> = K extends Key ? ([LeafVars<FrFlat[K]>] extends [never] ? [] : [params: Params<FrFlat[K]>]) : never;
 
-/** The parameters `tRich` takes: the count of a plural, and any of the others (the rest is left to `Rich`). */
-export type RichArgs<K extends Key> = K extends Key
-  ? FrFlat[K] extends PluralLeaf
-    ? [params: { count: number } & Partial<Params<FrFlat[K]>>]
-    : [LeafVars<FrFlat[K]>] extends [never]
-      ? []
-      : [params?: Partial<Params<FrFlat[K]>>]
-  : never;
+/** What `Rich` puts in a placeholder: a snippet it renders (a key, a link, a bold word), or a text it writes. */
+export type RichPart = Snippet | string | number;
+
+/**
+ * The props of `<Rich k={key}>`: the key, and one prop for each of its placeholders, required (a forgotten snippet
+ * fails to compile rather than showing `{name}`); the count of a plural is a number.
+ */
+export type RichProps<K extends Key> = { k: K } & {
+  [P in LeafVars<FrFlat[K]>]: P extends 'count' ? (FrFlat[K] extends PluralLeaf ? number : RichPart) : RichPart;
+};
 
 // --- the English catalog, checked against the French one -------------------------------------------------------
 
