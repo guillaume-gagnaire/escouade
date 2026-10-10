@@ -1,7 +1,11 @@
 import '@testing-library/jest-dom/vitest';
 import { clearMocks } from '@tauri-apps/api/mocks';
 import { cleanup } from '@testing-library/svelte';
-import { afterEach } from 'vitest';
+import { afterEach, beforeEach } from 'vitest';
+import { setLang } from '../lib/i18n';
+
+// The tests are written in French: each starts in French, whatever language the one before it switched to.
+beforeEach(() => setLang('fr'));
 
 // jsdom lacks these browser APIs used by the UI.
 class RO {

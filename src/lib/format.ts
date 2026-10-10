@@ -1,4 +1,5 @@
 // French number / duration formatting, same conventions as the design.
+import { intlLocale } from './i18n/locale.svelte';
 
 export function fTok(n: number): string {
   if (n >= 1e9) return (n / 1e9).toFixed(2).replace('.', ',') + ' Md';
@@ -116,6 +117,11 @@ export function fBytes(n: number): string {
   const MB = 1024 * 1024;
   if (n < 1024 * MB) return `${Math.round(n / MB)} Mo`;
   return `${(n / (1024 * MB)).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} Go`;
+}
+
+/** Items joined as a sentence does: « a, b et c », « a, b, and c ». */
+export function fList(items: string[]): string {
+  return new Intl.ListFormat(intlLocale(), { style: 'long', type: 'conjunction' }).format(items);
 }
 
 /** When something happens: "à 15:00" today, "le vendredi 2 octobre à 09:30" another day. */
