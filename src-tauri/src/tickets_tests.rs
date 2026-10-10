@@ -814,7 +814,8 @@ async fn a_ticket_is_told_its_protocol_and_its_loops_in_the_language_of_the_text
         .unwrap();
     let protocol = &argv[i + 1];
     assert!(
-        protocol.starts_with("You work on your own on Escouade ticket DEM-1 “Add the file”.")
+        protocol
+            .starts_with("You are working autonomously on Escouade ticket DEM-1 “Add the file”.")
             && protocol
                 .contains("Acceptance criteria (2): 1) The file exists; 2) It says its loop.")
             && protocol.contains(&format!("Ports reserved for this worktree: {base} to")),
@@ -3598,7 +3599,6 @@ async fn with_gh_a_pull_request_is_opened_with_the_criteria() {
 }
 
 #[tokio::test]
-#[tokio::test]
 async fn a_pull_request_and_its_commit_are_written_in_the_language_of_the_texts_for_claude() {
     let h = harness("tk-pr-gh-en");
     let (p, r) = h.project(false).await;
@@ -3634,6 +3634,7 @@ async fn a_pull_request_and_its_commit_are_written_in_the_language_of_the_texts_
     assert!(!body.contains("Ce qui a été fait") && !body.contains("Critères"));
 }
 
+#[tokio::test]
 async fn a_gh_installed_while_the_app_runs_opens_the_pull_request() {
     let h = harness("tk-pr-gh-later");
     let (p, r) = h.project(false).await;
@@ -4019,7 +4020,6 @@ async fn a_rejected_ticket_goes_back_to_the_same_agent_with_the_comment() {
     );
 }
 
-/// The agent read a message starting with `start`.
 #[tokio::test]
 async fn a_rejected_ticket_is_sent_back_with_the_comment_in_the_language_of_the_texts_for_claude() {
     let h = harness("tk-reject-en");
@@ -4039,6 +4039,7 @@ async fn a_rejected_ticket_is_sent_back_with_the_comment_in_the_language_of_the_
     assert!(!was_sent(&h, &wt, "Retour de test"));
 }
 
+/// The agent read a message starting with `start`.
 fn was_sent(h: &Harness, dir: &Path, start: &str) -> bool {
     h.stdin_messages(dir).iter().any(|m| {
         m["message"]["content"]

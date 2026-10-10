@@ -342,7 +342,7 @@ Ce qu’Escouade dit à Claude ou lui fait écrire suit « Langue des textes ré
 
 | Français | Anglais | Note |
 |---|---|---|
-| Tu travailles en autonomie sur le ticket … | You work on your own on Escouade ticket … | protocole d’un ticket |
+| Tu travailles en autonomie sur le ticket … | You are working autonomously on Escouade ticket … | protocole d’un ticket |
 | bilan (des critères), termine par le bilan | (criteria) report, end with the report | |
 | Boucle 2/5 / Critères non atteints | Loop 2/5 / Criteria not met | |
 | Reprends … là où tu en étais | Pick up … where you left off | |

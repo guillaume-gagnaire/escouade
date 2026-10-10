@@ -356,7 +356,7 @@ pub fn suggest_prompt(lang: Lang, shell: &str, copied: &[String], isola: bool) -
          Variables disponibles : ESCOUADE_PROJECT_DIR (dossier du projet principal), ESCOUADE_WORKTREE_DIR, ESCOUADE_BRANCH.\n\n\
          Réponds uniquement par :\n```json\n{{\"preparation\": [{{\"commande\": \"npm ci\", \"dossier\": \"\"}}], \"demontage\": []}}\n```\n</worktrees>",
         "<worktrees>\nEach Escouade agent works in a new git worktree of this project: a fresh checkout of the branch, \
-         with no dependencies installed and nothing generated, with {copied}.{isola}\n\n\
+         with no dependencies installed, nothing generated, and {copied}.{isola}\n\n\
          Read the project (manifests and lockfiles, README, CONTRIBUTING, Makefile, scripts, docker-compose… at the root and in the subfolders) \
          and give:\n\
          - “preparation”: the commands that make a fresh worktree ready to develop and test, in order: install the dependencies \

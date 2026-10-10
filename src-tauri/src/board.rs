@@ -639,7 +639,7 @@ pub fn loop_message(lang: Lang, t: &Ticket) -> String {
     tr_in!(
         lang,
         "Boucle {i}/{max}. Critères non atteints : {missing}. Continue jusqu'à les atteindre, puis termine par le bilan.",
-        "Loop {i}/{max}. Criteria not met: {missing}. Go on until they are, then end with the report.",
+        "Loop {i}/{max}. Criteria not met: {missing}. Keep going until they are met, then end with the report.",
         i = t.iteration,
         max = t.max_loops,
         missing = missing.join(", ")
@@ -766,10 +766,10 @@ pub fn commit_prompt(lang: Lang, t: &Ticket, stat: &str) -> String {
     tr_in!(
         lang,
         "Écris le message de commit des modifications ci-dessous, au format Conventional Commits : \
-         une ligne « type(portée facultative): description courte en minuscules, en français » suivie de « [{key}] ». \
+         une ligne « type(portée facultative): description courte en minuscules » suivie de « [{key}] ». Écris-la en français. \
          Réponds uniquement par cette ligne.\n\n<ticket>\n{key} · {title}\n{desc}\n{progress}</ticket>\n\n<diffstat>\n{stat}\n</diffstat>",
         "Write the commit message of the changes below, in the Conventional Commits format: \
-         one line “type(optional scope): short lowercase description, in English” followed by “[{key}]”. \
+         one line “type(optional scope): short lowercase description” followed by “[{key}]”. Write it in English. \
          Answer with this line only.\n\n<ticket>\n{key} · {title}\n{desc}\n{progress}</ticket>\n\n<diffstat>\n{stat}\n</diffstat>",
         key = t.key,
         title = t.title.trim(),
@@ -1130,7 +1130,7 @@ fn protocol(lang: Lang, t: &Ticket, criteria: &str, ports: Option<u16>, isola: b
          \"avancement\": [\"Tokens d'accès signés\", \"Middleware réécrit\", \"Adaptateur des sessions\"]}} \
          avec un élément par critère dans \"criteres\" (n à partir de 1). \
          Ajoute au bilan « avancement » : la liste succincte (3 à 8 éléments courts) des fonctionnalités en place jusque-là.",
-        "You work on your own on Escouade ticket {key} “{title}”. \
+        "You are working autonomously on Escouade ticket {key} “{title}”. \
          Acceptance criteria ({n}): {criteria}. \
          Check each criterion yourself (tests, runs) before declaring it met. \
          Don’t commit the files copied from the project (.env…). \
@@ -2013,7 +2013,7 @@ mod tests {
         );
         assert_eq!(
             turn_end(En, &mut t, &end, r.as_ref(), 1).send.as_deref(),
-            Some("Loop 2/5. Criteria not met: 2 (what is missing). Go on until they are, then end with the report.")
+            Some("Loop 2/5. Criteria not met: 2 (what is missing). Keep going until they are met, then end with the report.")
         );
         let end = TurnEnd::Finished("Done.".into());
         assert_eq!(turn_end(En, &mut t, &end, None, 2).send, Some(reminder(En)));
@@ -2072,7 +2072,7 @@ mod tests {
         let p = commit_prompt(En, &t, " src/a.ts | 3 ++-");
         assert_eq!(french_in(&p), None, "{p}");
         assert!(
-            p.contains("in English")
+            p.contains("“type(optional scope): short lowercase description” followed by “[ATL-42]”. Write it in English.")
                 && p.contains("[ATL-42]")
                 && p.contains("<ticket>\nATL-42 · Limit the retries")
                 && p.contains("Progress:\n- Signed tokens\n- Middleware rewritten\n")
@@ -2622,6 +2622,11 @@ mod tests {
             "{p}"
         );
         assert!(!commit_prompt(Lang::Fr, &ticket_of_progress(&[]), "").contains("Avancement"));
+        // The language is asked for apart from the format, which Haiku could echo with it.
+        assert!(
+            p.contains("« type(portée facultative): description courte en minuscules » suivie de « [ATL-42] ». Écris-la en français."),
+            "{p}"
+        );
     }
 
     fn ticket_of_progress(items: &[&str]) -> Ticket {
