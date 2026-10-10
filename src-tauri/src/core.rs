@@ -361,6 +361,8 @@ pub struct Core<R: Runtime = Wry> {
     pub(crate) import_lock: tokio::sync::Mutex<()>,
     /// The searches through the conversations the window started (Ctrl+K).
     searches: convsearch::Searches,
+    /// The MCP server (« Claude peut piloter Escouade »), running while `sync_mcp` wants it.
+    pub(crate) mcp: crate::mcp::McpServer<R>,
     /// Notifications sent, as "<title> | <text>" (tests only).
     #[cfg(test)]
     pub alerts: Mutex<Vec<String>>,
@@ -830,6 +832,7 @@ impl<R: Runtime> Core<R> {
             pending_syncs: Mutex::new(integrations::sync::SyncQueue::new(pending_syncs)),
             import_lock: tokio::sync::Mutex::new(()),
             searches: convsearch::Searches::default(),
+            mcp: crate::mcp::McpServer::new(me.clone()),
             #[cfg(test)]
             alerts: Mutex::default(),
             #[cfg(test)]
@@ -938,6 +941,7 @@ impl<R: Runtime> Core<R> {
         self.retry_all_syncs();
         self.recover_tickets();
         self.update_tray();
+        self.sync_mcp();
     }
 
     // ---------- persistence ----------
@@ -990,7 +994,9 @@ impl<R: Runtime> Core<R> {
         self.dirty.store(true, Ordering::Release);
     }
 
-    pub fn save_settings(self: &Arc<Self>, s: Settings) -> Result<()> {
+    pub fn save_settings(self: &Arc<Self>, mut s: Settings) -> Result<()> {
+        // The MCP server's port is the backend's own (`sync_mcp`): the window's copy may be older.
+        s.mcp_port = self.settings.read().mcp_port;
         let bytes = serde_json::to_vec_pretty(&s)?;
         paths::write_atomic(&self.data.settings_file(), &bytes)?;
         let auto_resume = s.auto_resume;
@@ -1030,6 +1036,8 @@ impl<R: Runtime> Core<R> {
         }
         // Claude Code may be found now, or no agent waits for its quota any more: the board goes on.
         self.schedule();
+        // « Claude peut piloter Escouade » may have changed.
+        self.sync_mcp();
         Ok(())
     }
 
@@ -1824,6 +1832,7 @@ impl<R: Runtime> Core<R> {
 
     pub fn shutdown(&self) {
         self.quitting.store(true, Ordering::Release);
+        self.mcp.stop();
         // Setups under way stop, with what they started.
         for (_, s) in self.setups.lock().drain() {
             s.task.abort();
@@ -3090,6 +3099,7 @@ impl<R: Runtime> Core<R> {
             worktree_teardown: Vec::new(),
             integrations: ProjectIntegrations::default(),
             commit_mode: CommitMode::default(),
+            agents_use_escouade: false,
         };
         self.projects.write().push(project.clone());
         {
@@ -3119,12 +3129,15 @@ impl<R: Runtime> Core<R> {
         cur.worktree_setup = p.worktree_setup;
         cur.worktree_teardown = p.worktree_teardown;
         cur.commit_mode = p.commit_mode;
+        cur.agents_use_escouade = p.agents_use_escouade;
         // What was imported is the backend's own: the window's copy may be older.
         let imported = std::mem::take(&mut cur.integrations.imported);
         cur.integrations = crate::integrations::checked_links(p.integrations);
         cur.integrations.imported = imported;
         drop(projects);
         self.request_save();
+        // « Les agents peuvent utiliser Escouade » may have changed.
+        self.sync_mcp();
         Ok(())
     }
 
@@ -3190,6 +3203,8 @@ impl<R: Runtime> Core<R> {
         self.update_tray();
         // Its agents are gone: one of them may have held the board waiting for its quota.
         self.schedule();
+        // It may have been the last whose agents use Escouade.
+        self.sync_mcp();
         Ok(())
     }
 

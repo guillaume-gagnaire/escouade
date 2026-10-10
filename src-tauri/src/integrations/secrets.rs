@@ -365,6 +365,68 @@ pub(crate) fn save_accounts(data: &DataDir, accounts: &Accounts) -> Result<()> {
     Ok(())
 }
 
+/// The keychain's entry of the MCP server's token for Claude outside Escouade (« Claude peut
+/// piloter Escouade »), beside the integrations' ones.
+pub(crate) const MCP_ENTRY: &str = "mcp";
+
+/// The MCP server's token for Claude outside Escouade: the one left in `mcp-token.json` when the
+/// keychain refused it (moved into the keychain once it takes it), else the keychain's, else a
+/// new one (`make`) kept in the keychain, or in the file (readable by its owner only) when it
+/// refuses it.
+pub(crate) fn mcp_token(
+    store: &dyn SecretStore,
+    data: &DataDir,
+    make: impl FnOnce() -> String,
+) -> Result<String> {
+    let path = data.mcp_token_file();
+    // Left by a start the keychain refused: newer than any entry, it takes its place.
+    let left = std::fs::read(&path)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<TokenFile>(&bytes).ok())
+        .map(|f| f.token)
+        .filter(|t| !t.is_empty());
+    if let Some(token) = left {
+        match keep_secret(store, MCP_ENTRY, &token) {
+            Ok(()) => {
+                let _ = std::fs::remove_file(&path);
+            }
+            Err(e) => {
+                log::warn!("mcp: token left in its file, the system keychain refused it: {e:#}")
+            }
+        }
+        return Ok(token);
+    }
+    match store.get(MCP_ENTRY) {
+        Ok(Some(token)) if !token.is_empty() => return Ok(token),
+        Ok(_) => {}
+        Err(e) => log::warn!("mcp: the system keychain did not give the token: {e:#}"),
+    }
+    let token = make();
+    if let Err(e) = keep_secret(store, MCP_ENTRY, &token) {
+        log::warn!("mcp: token kept in its file, the system keychain refused it: {e:#}");
+        let bytes = serde_json::to_vec(&TokenFile {
+            token: token.clone(),
+        })?;
+        paths::write_private(&path, &bytes)?;
+    }
+    Ok(token)
+}
+
+/// `mcp-token.json`: the MCP server's token while the keychain refuses it. Never `Debug`.
+#[derive(Serialize, Deserialize)]
+struct TokenFile {
+    token: String,
+}
+
+/// Puts `secret` under `name`, then reads it back: Ok once the store gives it as it was given.
+fn keep_secret(store: &dyn SecretStore, name: &str, secret: &str) -> Result<()> {
+    store.set(name, secret)?;
+    if store.get(name)?.as_deref() != Some(secret) {
+        bail!("it does not give it back as it was given");
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -684,6 +746,69 @@ mod tests {
         for s in SECRETS {
             assert!(!text.contains(s), "{text}");
         }
+    }
+
+    #[test]
+    fn the_mcp_token_is_made_at_the_first_need_and_kept_in_its_keychain_entry() {
+        let d = DataDir::new(test_dir("secrets-mcp-token"));
+        let store = MemoryStore::default();
+        let token = mcp_token(&store, &d, || "token-1".into()).unwrap();
+        assert_eq!(token, "token-1");
+        assert_eq!(MCP_ENTRY, "mcp");
+        assert_eq!(store.entry("mcp").as_deref(), Some("token-1"));
+        // Found there from then on: never made again, and no file.
+        assert_eq!(
+            mcp_token(&store, &d, || unreachable!("made again")).unwrap(),
+            "token-1"
+        );
+        assert!(!d.mcp_token_file().exists());
+        // The integrations' entries are left as they are.
+        assert_eq!(store.entry("jira"), None);
+    }
+
+    #[test]
+    fn an_mcp_token_the_keychain_refuses_waits_in_a_private_file_until_it_takes_it() {
+        let d = DataDir::new(test_dir("secrets-mcp-refused"));
+        let store = MemoryStore::default();
+        store.refuse.store(true, Ordering::SeqCst);
+        let token = mcp_token(&store, &d, || "token-2".into()).unwrap();
+        assert_eq!(token, "token-2");
+        let file = std::fs::read_to_string(d.mcp_token_file()).unwrap();
+        assert!(file.contains("token-2"), "{file}");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(d.mcp_token_file())
+                .unwrap()
+                .permissions()
+                .mode();
+            assert_eq!(mode & 0o777, 0o600);
+        }
+        // Still refused: the file's, not a new one.
+        assert_eq!(
+            mcp_token(&store, &d, || unreachable!("made again")).unwrap(),
+            "token-2"
+        );
+        // Back: it moves into the keychain and leaves the file, even over an older entry.
+        store.refuse.store(false, Ordering::SeqCst);
+        store.set("mcp", "older").unwrap();
+        assert_eq!(
+            mcp_token(&store, &d, || unreachable!("made again")).unwrap(),
+            "token-2"
+        );
+        assert_eq!(store.entry("mcp").as_deref(), Some("token-2"));
+        assert!(!d.mcp_token_file().exists());
+        // A keychain that says it kept it and does not: the file keeps it.
+        let d = DataDir::new(test_dir("secrets-mcp-lost"));
+        let store = MemoryStore::default();
+        store.lose.store(true, Ordering::SeqCst);
+        assert_eq!(
+            mcp_token(&store, &d, || "token-3".into()).unwrap(),
+            "token-3"
+        );
+        assert!(std::fs::read_to_string(d.mcp_token_file())
+            .unwrap()
+            .contains("token-3"));
     }
 
     #[cfg(unix)]

@@ -179,6 +179,12 @@ impl DataDir {
         self.0.join("integrations.json")
     }
 
+    /// The MCP server's token for Claude outside Escouade, while the system's keychain refuses it
+    /// (`integrations::secrets::mcp_token`).
+    pub fn mcp_token_file(&self) -> PathBuf {
+        self.0.join("mcp-token.json")
+    }
+
     /// The syncs of imported tickets not through yet (`integrations::sync::SyncQueue`).
     pub fn sync_queue_file(&self) -> PathBuf {
         self.0.join("sync-queue.json")

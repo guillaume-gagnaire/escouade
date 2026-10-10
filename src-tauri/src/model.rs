@@ -50,6 +50,11 @@ pub struct Settings {
     /// "Langue des textes rédigés par Claude": "ui" (the interface's), "fr" or "en". Many teams
     /// commit in English with an interface in French.
     pub claude_language: String,
+    /// « Claude peut piloter Escouade »: the MCP server runs (`mcp`), declared in Claude Code.
+    pub mcp_enabled: bool,
+    /// The MCP server's port on 127.0.0.1: 0 until its first start chooses a free one (47000 to
+    /// 47999), kept from then on. The backend's own: a save from the window leaves it as it is.
+    pub mcp_port: u16,
 }
 
 /// "Me prévenir pour": which kinds of event chime and show a system notification. A kind switched
@@ -177,6 +182,8 @@ impl Default for Settings {
             integrations: IntegrationSettings::default(),
             language: "system".into(),
             claude_language: "ui".into(),
+            mcp_enabled: false,
+            mcp_port: 0,
         }
     }
 }
@@ -214,6 +221,10 @@ pub struct Project {
     /// "Commit": who writes the commits of the files panel's « Commit… » and « Commit tout… ».
     #[serde(default)]
     pub commit_mode: CommitMode,
+    /// « Les agents peuvent utiliser Escouade »: its agents get the MCP server, each with a token
+    /// of its own. The server runs while a project lets them (`Core::mcp_wanted`).
+    #[serde(default)]
+    pub agents_use_escouade: bool,
 }
 
 /// Who writes a project's commits asked from the files panel.
@@ -1060,6 +1071,14 @@ pub enum UiEvent {
         step: usize,
         total: usize,
         lines: Vec<String>,
+    },
+    /// The MCP server started, stopped, could not start, or listens on another port now.
+    McpStatus {
+        status: crate::mcp::McpStatus,
+    },
+    /// What the MCP server was asked, or refused, as its activity log keeps it.
+    McpActivity {
+        entry: crate::mcp::activity::ActivityEntry,
     },
 }
 

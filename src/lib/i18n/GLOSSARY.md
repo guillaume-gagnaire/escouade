@@ -269,6 +269,11 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 
 | Français | Anglais | Note |
 |---|---|---|
+| Claude (hors Escouade) | Claude (outside Escouade) | qui appelle le serveur MCP sans être un agent d’Escouade |
+| client inconnu | unknown client | une requête refusée avant que son jeton dise d’où elle vient |
+| journal d’activité | activity log | ce que le serveur MCP a reçu et répondu |
+| requête refusée | request refused | « Requête refusée : jeton inconnu » → “Request refused: unknown token” |
+| en-tête (HTTP) | (HTTP) header | « en-tête Host », “Host header” |
 
 ## G — branches
 

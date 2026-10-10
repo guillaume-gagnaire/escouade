@@ -1117,3 +1117,15 @@ pub async fn integration_import(
 pub async fn integration_resync(core: CoreState<'_>, ticket_id: String) -> Res<()> {
     core.integration_resync(&ticket_id).await.map_err(err)
 }
+
+/// The MCP server (« Claude peut piloter Escouade »): running or not, its port, why it failed.
+#[tauri::command]
+pub fn mcp_status(core: CoreState) -> crate::mcp::McpStatus {
+    core.mcp.status()
+}
+
+/// The MCP server's activity log, oldest first (the last 200 entries).
+#[tauri::command]
+pub fn mcp_activity(core: CoreState) -> Vec<crate::mcp::activity::ActivityEntry> {
+    core.mcp.activity.entries()
+}
