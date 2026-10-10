@@ -84,4 +84,15 @@ export default {
   pause: {
     over: { one: 'Le compte {accounts} a passé le seuil.', other: 'Les comptes {accounts} ont passé le seuil.' },
   },
+
+  // The current account's quota in the status bar (the percentage is in a tooltip), and the panel of every account's.
+  quota: {
+    fiveHour: { label: '5h', name: 'Quota sur 5 heures' },
+    sevenDay: { label: '7j', name: 'Quota sur 7 jours' },
+    /** `{countdown}`: the time left, as `fCountdown` writes it. */
+    reset: 'reset {countdown}',
+    /** The value of a bar: `{pct}`: « 42 % »; `{date}`: « 10/10 »; `{time}`: « 18:00 ». */
+    tip: '{pct} · remise à zéro le {date} à {time}',
+    unavailable: 'Quota indisponible',
+  },
 } as const satisfies Tree;

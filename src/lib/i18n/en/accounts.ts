@@ -77,4 +77,12 @@ export default defineZone('accounts', {
   pause: {
     over: { one: 'The {accounts} account is past the threshold.', other: 'The {accounts} accounts are past the threshold.' },
   },
+
+  quota: {
+    fiveHour: { label: '5h', name: '5-hour quota' },
+    sevenDay: { label: 'W', name: '7-day quota' },
+    reset: 'reset {countdown}',
+    tip: '{pct} · resets on {date} at {time}',
+    unavailable: 'Quota unavailable',
+  },
 });

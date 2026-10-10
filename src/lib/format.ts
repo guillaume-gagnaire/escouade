@@ -89,6 +89,11 @@ export function fDate(ts: number): string {
   return new Date(ts).toLocaleDateString(intlLocale(), { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
+/** A day and its month in figures, for a date close enough to need no year: « 10/10 » (« 02/10 » in French, « 10/02 » in English). */
+export function fDayMonth(ts: number): string {
+  return new Date(ts).toLocaleDateString(intlLocale(), { day: '2-digit', month: '2-digit' });
+}
+
 /** The hour of a time of day: French writes « 09:30 », English « 9:30 AM ». */
 const HOUR: Record<Lang, '2-digit' | 'numeric'> = { fr: '2-digit', en: 'numeric' };
 

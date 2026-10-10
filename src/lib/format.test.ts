@@ -7,6 +7,7 @@ import {
   fCountdown,
   fDate,
   fDateTime,
+  fDayMonth,
   fDur,
   fInt,
   fList,
@@ -171,6 +172,14 @@ describe('fPct, fInt, fNum, fDate, fTime, fDateTime', () => {
     expect(fDate(day)).toBe('2 octobre 2026');
     expect(fTime(day)).toBe('09:30');
     expect(fDateTime(day)).toBe('2 octobre 2026 à 09:30');
+  });
+
+  it('write a day and a month in figures, the day first in French, the month first in English', () => {
+    const day = new Date(2026, 9, 2, 9, 30).getTime();
+    expect(fDayMonth(day)).toBe('02/10');
+    expect(fDayMonth(new Date(2026, 9, 10, 18, 0).getTime())).toBe('10/10');
+    setLang('en');
+    expect(fDayMonth(day)).toBe('10/02');
   });
 
   it('write a number with as many decimals as asked, at most', () => {
