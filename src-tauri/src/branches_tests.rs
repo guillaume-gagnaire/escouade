@@ -210,6 +210,72 @@ async fn a_switch_that_fails_after_the_stash_puts_the_changes_back() {
 }
 
 #[tokio::test]
+async fn the_changes_put_aside_come_back_from_their_own_stash_whatever_was_stashed_since() {
+    let h = harness("g1f-stash-by-hash");
+    let (_, r) = h.project(false).await;
+    let root = r.to_string_lossy().to_string();
+    std::fs::write(r.join("src").join("app.ts"), "const a = 99; // wip\n").unwrap();
+    let mine = h
+        .core
+        .put_aside(&root, "side", true)
+        .await
+        .unwrap()
+        .expect("put aside");
+    assert_eq!(app_ts(&r), "const a = 1;\n");
+    // An agent of the folder stashes its own work on top, before the switch has failed.
+    std::fs::write(r.join("src").join("app.ts"), "const a = 5; // agent\n").unwrap();
+    git(&r, &["stash", "push", "-q", "-m", "agent"]);
+    h.core.take_back(&root, &mine).await.unwrap();
+    // Theirs is the one left, untouched; mine is back.
+    assert_eq!(app_ts(&r), "const a = 99; // wip\n");
+    assert_eq!(
+        git(&r, &["stash", "list", "--format=%gs"]),
+        "On main: agent"
+    );
+    assert!(git(&r, &["stash", "show", "-p"]).contains("+const a = 5; // agent"));
+}
+
+#[tokio::test]
+async fn changes_that_cannot_come_back_are_found_in_a_stash_the_error_names() {
+    let h = harness("g1f-stash-kept");
+    let (_, r) = h.project(false).await;
+    let root = r.to_string_lossy().to_string();
+    std::fs::write(r.join("src").join("app.ts"), "const a = 99; // wip\n").unwrap();
+    let mine = h
+        .core
+        .put_aside(&root, "side", true)
+        .await
+        .unwrap()
+        .expect("put aside");
+    // The folder was written to meanwhile: git will not put the changes over that.
+    std::fs::write(r.join("src").join("app.ts"), "const a = 7; // since\n").unwrap();
+    let e = h
+        .core
+        .take_back(&root, &mine)
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(e.contains(&mine.message) && e.contains(&mine.hash), "{e}");
+    assert!(e.contains(&format!("git stash apply {}", mine.hash)), "{e}");
+    // Nothing is lost: the stash is still there, and the folder as it was.
+    assert_eq!(
+        git(&r, &["stash", "list", "--format=%H"]),
+        mine.hash.as_str()
+    );
+    assert_eq!(app_ts(&r), "const a = 7; // since\n");
+    // Dropped by someone meanwhile: told the same way.
+    git(&r, &["checkout", "--", "src/app.ts"]);
+    git(&r, &["stash", "drop", "-q"]);
+    let e = h
+        .core
+        .take_back(&root, &mine)
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(e.contains(&mine.message) && e.contains(&mine.hash), "{e}");
+}
+
+#[tokio::test]
 async fn an_agent_at_work_in_the_project_folder_holds_off_a_switch() {
     let h = harness("g1-switch-agent");
     let (p, r) = h.project(false).await;

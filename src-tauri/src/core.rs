@@ -208,6 +208,23 @@ async fn merged_into_any(root: &str, refname: &str, bases: &[String]) -> bool {
     false
 }
 
+/// The changes of the project's folder put aside before a switch: the stash's name, and its commit
+/// (the stash is found again by it, whatever was stashed since).
+#[derive(Debug, Clone)]
+pub(crate) struct Stash {
+    pub message: String,
+    pub hash: String,
+}
+
+/// The error of a switch that failed, and when the changes put aside could not come back either,
+/// where they are (`take_back`'s error) after it.
+fn failed_with(failed: anyhow::Error, restore: Result<()>) -> anyhow::Error {
+    match restore {
+        Ok(()) => failed,
+        Err(kept) => anyhow::anyhow!("{failed:#}\n{kept:#}"),
+    }
+}
+
 /// The name of the stash a switch to `branch` puts the folder's changes in: what `git stash list`
 /// shows, to find them again.
 pub fn stash_message(lang: i18n::Lang, branch: &str) -> String {
@@ -4261,7 +4278,12 @@ impl<R: Runtime> Core<R> {
     /// files (`DIRTY`), unless `stash`: then they are put aside in a stash named for `branch`,
     /// whose name is returned. Untracked files stay, as git carries them over (refusing what they
     /// would overwrite).
-    async fn put_aside(&self, root: &str, branch: &str, stash: bool) -> Result<Option<String>> {
+    pub(crate) async fn put_aside(
+        &self,
+        root: &str,
+        branch: &str,
+        stash: bool,
+    ) -> Result<Option<Stash>> {
         if !git::has_tracked_changes(root).await? {
             return Ok(None);
         }
@@ -4269,17 +4291,23 @@ impl<R: Runtime> Core<R> {
             return Err(BranchRefusal::Dirty.into());
         }
         let message = stash_message(i18n::ui(), branch);
-        git::stash_push(root, &message).await?;
-        Ok(Some(message))
+        let hash = git::stash_push(root, &message).await?;
+        Ok(Some(Stash { message, hash }))
     }
 
-    /// After a switch that failed (HEAD did not move): the changes put aside come back.
-    async fn take_back(&self, root: &str, stashed: &Option<String>) {
-        if stashed.is_some() {
-            if let Err(e) = git::stash_pop(root).await {
-                log::warn!("{root}: the changes put aside stay in the stash: {e:#}");
-            }
-        }
+    /// After a switch that failed (HEAD did not move): the changes put aside come back, from their
+    /// own stash. When they cannot (the folder was written to meanwhile, the stash is gone), the
+    /// error says where they are: the stash stays whenever git could not pop it.
+    pub(crate) async fn take_back(&self, root: &str, stash: &Stash) -> Result<()> {
+        git::stash_pop(root, &stash.hash).await.map_err(|cause| {
+            anyhow::anyhow!(tr!(
+                "Tes changements n’ont pas pu être remis en place. Ils sont dans le stash « {message} » : reprends-les avec « git stash apply {hash} ». ({cause})",
+                "Your changes couldn’t be put back. They’re in the stash “{message}”: get them back with “git stash apply {hash}”. ({cause})",
+                message = stash.message,
+                hash = stash.hash,
+                cause = format!("{cause:#}").trim()
+            ))
+        })
     }
 
     /// The project's branches, local then remote, each one an agent's worktree holds with that
@@ -4330,13 +4358,16 @@ impl<R: Runtime> Core<R> {
         self.no_agent_at_work(project_id)?;
         let stashed = self.put_aside(&root, name, stash).await?;
         let switched = git::switch_to(&root, name).await;
-        if switched.is_err() {
-            self.take_back(&root, &stashed).await;
+        let mut restored = Ok(());
+        if let (Err(_), Some(s)) = (&switched, &stashed) {
+            restored = self.take_back(&root, s).await;
         }
         // Every project of the repository: the branch is the checkout's.
         self.refresh_repo(&root).await;
-        switched?;
-        Ok(stashed)
+        match switched {
+            Ok(_) => Ok(stashed.map(|s| s.message)),
+            Err(e) => Err(failed_with(e, restored)),
+        }
     }
 
     /// Creates the branch `name` at `start` (a branch, a remote branch, a commit; the folder's
@@ -4378,11 +4409,15 @@ impl<R: Runtime> Core<R> {
                 let _ = git::branch_delete(&root, name, true).await;
             }
         }
-        if done.is_err() {
-            self.take_back(&root, &stashed).await;
+        let mut restored = Ok(());
+        if let (Err(_), Some(s)) = (&done, &stashed) {
+            restored = self.take_back(&root, s).await;
         }
         self.refresh_repo(&root).await;
-        done.map(|_| stashed)
+        match done {
+            Ok(()) => Ok(stashed.map(|s| s.message)),
+            Err(e) => Err(failed_with(e, restored)),
+        }
     }
 
     /// Deletes the project's branch `name`, its remote copy too with `remote`: its upstream when

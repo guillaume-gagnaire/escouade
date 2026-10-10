@@ -1300,9 +1300,20 @@ pub async fn stash_push(repo: &str, message: &str) -> Result<String> {
     }
 }
 
-/// Puts the latest stash back (what was staged staged again) and drops it.
-pub async fn stash_pop(repo: &str) -> Result<()> {
-    run(repo, &["stash", "pop", "--index", "--quiet"])
+/// Puts the stash whose commit is `hash` back (what was staged staged again) and drops it. Found
+/// by its commit in the stash list: others may have been stashed on top of it since, and the
+/// latest one is not necessarily the one asked for. Refused when it is not in the list any more,
+/// and what `git stash pop` refuses (the stash then stays) comes back as it is.
+pub async fn stash_pop(repo: &str, hash: &str) -> Result<()> {
+    let listed = text(repo, &["stash", "list", "--format=%H"]).await?;
+    let Some(n) = listed.lines().position(|l| l == hash) else {
+        bail!(tr!(
+            "Le stash {hash} n’est plus dans la liste : quelqu’un l’a repris ou supprimé.",
+            "The stash {hash} is no longer in the list: someone applied or dropped it."
+        ));
+    };
+    let entry = format!("stash@{{{n}}}");
+    run(repo, &["stash", "pop", "--index", "--quiet", &entry])
         .await
         .map(|_| ())
 }
@@ -3999,6 +4010,43 @@ mod repo_tests {
         // Nothing left to put aside (the untracked file stays out): an error, no new stash.
         let e = stash_push(&r, "again").await.unwrap_err();
         assert!(e.to_string().contains("Rien à mettre de côté"), "{e}");
+        assert_eq!(
+            text(&r, &["stash", "list"]).await.unwrap().lines().count(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn a_stash_is_put_back_by_its_commit_not_as_the_latest_one() {
+        let r = repo("git-g1f-stash-pop");
+        let root = Path::new(&r);
+        git(&r, &["config", "core.autocrlf", "false"]);
+        std::fs::write(root.join("résumé.md"), "mine\n").unwrap();
+        std::fs::write(root.join("staged.txt"), "staged\n").unwrap();
+        git(&r, &["add", "staged.txt"]);
+        let mine = stash_push(&r, "mine").await.unwrap();
+        // Another stash comes on top of it.
+        std::fs::write(root.join("résumé.md"), "theirs\n").unwrap();
+        git(&r, &["stash", "push", "-q", "-m", "theirs"]);
+
+        stash_pop(&r, &mine).await.unwrap();
+        assert_eq!(
+            std::fs::read_to_string(root.join("résumé.md")).unwrap(),
+            "mine\n"
+        );
+        // What was staged is staged again; the other stash is the one left.
+        assert_eq!(
+            text(&r, &["status", "--porcelain"]).await.unwrap(),
+            // (Trimmed: the first line is ` M`.)
+            "M résumé.md\nA  staged.txt"
+        );
+        assert_eq!(
+            text(&r, &["stash", "list", "--format=%gs"]).await.unwrap(),
+            "On main: theirs"
+        );
+        // Taken already: not found, and nothing else is taken in its place.
+        let e = stash_pop(&r, &mine).await.unwrap_err();
+        assert!(e.to_string().contains(&mine), "{e}");
         assert_eq!(
             text(&r, &["stash", "list"]).await.unwrap().lines().count(),
             1
