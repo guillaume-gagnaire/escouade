@@ -348,9 +348,11 @@ pub struct Core<R: Runtime = Wry> {
     pub bases: RwLock<integrations::Bases>,
     /// The GitHub CLI's token, once asked for.
     pub(crate) gh_token: Mutex<Option<String>>,
-    /// The changes of imported tickets their external ones are told of, one at a time and in
-    /// order, by a single worker (made at the first one).
+    /// What the sync of imported tickets is asked to do (a change to tell, failed operations to
+    /// try again), one at a time and in order, by a single worker (made at the first one).
     pub(crate) sync_queue: Mutex<Option<integrations::sync::SyncSender>>,
+    /// The operations of imported tickets not through yet (`sync-queue.json`).
+    pub(crate) pending_syncs: Mutex<integrations::sync::SyncQueue>,
     /// One import at a time (by hand or by label): a ticket comes in once.
     pub(crate) import_lock: tokio::sync::Mutex<()>,
     /// The searches through the conversations the window started (Ctrl+K).
@@ -367,8 +369,9 @@ pub struct Core<R: Runtime = Wry> {
     /// Scheduling passes asked for (`schedule`) and not over yet (tests only).
     #[cfg(test)]
     pub(crate) passes_queued: AtomicUsize,
-    /// How far ahead of the real clock the autopilot's pauses go by, in milliseconds (tests only:
-    /// the end of a pause without waiting for it).
+    /// How far ahead of the real clock the autopilot's pauses and the retries of the syncs go by,
+    /// in milliseconds (tests only: the end of a pause, or a retry's time, without waiting for
+    /// it).
     #[cfg(test)]
     pub(crate) clock_ahead: std::sync::atomic::AtomicI64,
 }
@@ -711,6 +714,7 @@ impl<R: Runtime> Core<R> {
             })
             .collect();
         let accounts = integrations::sync::load_accounts(&data);
+        let pending_syncs = read_json(&data.sync_queue_file()).unwrap_or_default();
         // The autopilot's pause as the app stopped, for the first pass (before any new reading of
         // the quotas, which with an API key never comes): a window read holds until its end, an
         // ended one is dropped (the status bar would show it).
@@ -770,6 +774,7 @@ impl<R: Runtime> Core<R> {
             bases: RwLock::new(integrations::Bases::from_env()),
             gh_token: Mutex::default(),
             sync_queue: Mutex::default(),
+            pending_syncs: Mutex::new(integrations::sync::SyncQueue::new(pending_syncs)),
             import_lock: tokio::sync::Mutex::new(()),
             searches: convsearch::Searches::default(),
             #[cfg(test)]
@@ -832,6 +837,8 @@ impl<R: Runtime> Core<R> {
                 c.resume_due().await;
                 // The autopilot's pause ends by itself: a window's end, its 30 minutes after a limit.
                 c.pause_tick();
+                // A failed sync of an imported ticket, once its wait is over.
+                c.retry_due_syncs();
             }
         });
         let c = self.clone();
@@ -871,6 +878,9 @@ impl<R: Runtime> Core<R> {
             }
         });
         self.start_remote_agents();
+        // The syncs the app's last run left waiting go again now, before those of the tickets
+        // that go on.
+        self.retry_all_syncs();
         self.recover_tickets();
         self.update_tray();
     }

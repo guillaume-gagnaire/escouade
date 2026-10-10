@@ -41,6 +41,26 @@
   /** The keys of the tickets it comes after that are not done yet: the autopilot leaves it until they are. */
   const awaited = $derived(t.column === 'todo' ? waitingFor(t, app.tickets) : []);
   let rejecting = $state(false);
+  /** The ⚠ of a failed sync shows its reason and « Resynchroniser ». */
+  let syncOpen = $state(false);
+  let resyncing = $state(false);
+  let card = $state<HTMLDivElement>();
+  // A later failure starts closed again.
+  $effect(() => {
+    if (!t.external?.error) syncOpen = false;
+  });
+
+  /** « Resynchroniser »: the failed syncs go again at once; their success takes the ⚠ away (the ticket comes back without its error). */
+  async function resync() {
+    if (resyncing) return;
+    resyncing = true;
+    const ok = await app.run(api.integrationResync(t.id).then(() => true));
+    resyncing = false;
+    if (!ok) return;
+    syncOpen = false;
+    // Its button goes with the ⚠: the focus stays on the card.
+    card?.focus();
+  }
 
   /** "Lancer": a ticket that waits for others starts without them only once the user agrees. */
   function launch() {
@@ -159,6 +179,7 @@
 </script>
 
 <div
+  bind:this={card}
   class="card"
   class:done={t.column === 'done'}
   class:waiting
@@ -181,11 +202,12 @@
           >{t.external.key}</span
         ></button
       >
-      {#if t.external.error}<span
+      {#if t.external.error}<button
           class="sync-err"
-          role="img"
           aria-label={`Synchro avec ${svc.name} : ${t.external.error}`}
-          title={t.external.error}>⚠</span
+          aria-expanded={syncOpen}
+          title={t.external.error}
+          onclick={(e) => act(e, () => (syncOpen = !syncOpen))}>⚠</button
         >{/if}
     {/if}
     <span class="key mono">{t.key}</span>
@@ -193,6 +215,14 @@
     {#if t.column === 'doing'}<span class="loop mono">Boucle {t.iteration}/{t.maxLoops}</span>{/if}
     {#if t.partial && (t.column === 'review' || t.column === 'done')}<span class="partial">Objectif partiel</span>{/if}
   </div>
+  {#if t.external?.error && syncOpen}
+    <div class="sync">
+      <span class="why">{t.external.error}</span>
+      <div class="row">
+        <button class="small" disabled={resyncing} onclick={(e) => act(e, resync)}>Resynchroniser</button>
+      </div>
+    </div>
+  {/if}
   <span class="title">{t.title}</span>
 
   {#if t.column === 'done' && t.outcome}
@@ -381,9 +411,34 @@
     justify-content: center;
   }
   .sync-err {
+    padding: 0 2px;
+    border: none;
+    border-radius: 3px;
+    background: none;
+    font: inherit;
     font-size: 11px;
     color: var(--wait);
-    cursor: help;
+    cursor: pointer;
+  }
+  .sync-err[aria-expanded='true'] {
+    background: var(--wait-soft);
+  }
+  .sync {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 7px 9px;
+    border-radius: var(--r-sm);
+    background: var(--wait-soft);
+    color: var(--wait);
+    font-size: 11.5px;
+  }
+  .sync .why {
+    overflow-wrap: anywhere;
+  }
+  .small:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
   .loop {
     font-size: 10.5px;

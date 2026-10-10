@@ -279,6 +279,7 @@ pub fn run() {
             commands::integration_states,
             commands::integration_issues,
             commands::integration_import,
+            commands::integration_resync,
             commands::git_branches,
             commands::agent_prepare_launch,
             commands::test_recipe_approve,

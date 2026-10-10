@@ -1,6 +1,7 @@
 //! The integrations on the core: the accounts saved apart, what the window asks of the services
 //! (containers, states, tickets), the import (by hand or by label), and the sync of an imported
-//! ticket's external one when it changes column or begins a loop.
+//! ticket's external one when it changes column or begins a loop: its operations kept until they
+//! go through, tried again later when one fails.
 
 use super::text::{column_comment, default_states, loop_comment};
 use super::*;
@@ -9,6 +10,7 @@ use crate::paths::{self, DataDir};
 use crate::tickets::TicketDraft;
 use crate::{board, git};
 use anyhow::Context;
+use std::path::Path;
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
@@ -35,6 +37,178 @@ pub(crate) fn change_of(before: &Ticket, after: &Ticket) -> Option<Change> {
         Some(Change::Loop)
     } else {
         None
+    }
+}
+
+/// What an external ticket is told: one call (or a few) to its service.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub(crate) enum SyncOp {
+    /// It is given `state`; `mapped`: every state the link gives a column (GitHub takes the labels
+    /// of the others off).
+    State {
+        state: ExternalState,
+        mapped: Vec<ExternalState>,
+    },
+    Comment {
+        text: String,
+    },
+}
+
+/// An operation of an imported ticket not through yet: its turn has not come, or it failed and
+/// waits for its next try. It carries what it needs (the external ticket, the text as it was
+/// written then), so a restart tries it again as it was.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PendingSync {
+    pub ticket_id: String,
+    pub external: ExternalRef,
+    pub op: SyncOp,
+    /// How many times it failed.
+    #[serde(default)]
+    pub tries: u32,
+    /// When it first failed (ms): it is tried by itself for a day from then.
+    #[serde(default)]
+    pub failed_at: Option<i64>,
+    /// When it is tried again by itself.
+    #[serde(default)]
+    pub retry_at: Option<i64>,
+}
+
+impl PendingSync {
+    /// `op` of the ticket `t`, whose external one is `ext`, not tried yet.
+    fn new(t: &Ticket, ext: &ExternalRef, op: SyncOp) -> Self {
+        Self {
+            ticket_id: t.id.clone(),
+            external: ExternalRef {
+                error: None,
+                ..ext.clone()
+            },
+            op,
+            tries: 0,
+            failed_at: None,
+            retry_at: None,
+        }
+    }
+}
+
+/// The waits after each failure of an operation, in minutes; the last one is kept from then on.
+const RETRY_AFTER_MIN: [i64; 4] = [1, 5, 15, 60];
+/// How long after its first failure an operation is still tried by itself.
+const RETRY_FOR_MS: i64 = 24 * 60 * 60 * 1000;
+
+/// When an operation that has just failed for the `tries`th time (the first one at `failed_at`)
+/// is tried again; none once that would be more than a day after its first failure (given up).
+pub(crate) fn next_try(tries: u32, failed_at: i64, now: i64) -> Option<i64> {
+    let i = (tries.max(1) as usize - 1).min(RETRY_AFTER_MIN.len() - 1);
+    let at = now + RETRY_AFTER_MIN[i] * 60_000;
+    (at <= failed_at + RETRY_FOR_MS).then_some(at)
+}
+
+/// The operations of the imported tickets not through yet, in the order of their changes, kept in
+/// `sync-queue.json`. A ticket's go one after the other: one that failed holds the next ones back
+/// until it goes through (or is given up), so its external ticket hears of them in order; the
+/// other tickets' go on meanwhile.
+#[derive(Debug)]
+pub(crate) struct SyncQueue {
+    pub ops: Vec<PendingSync>,
+    /// What the file holds, so that it is not written again for nothing.
+    saved: Vec<u8>,
+}
+
+impl SyncQueue {
+    /// The operations as read from the file.
+    pub fn new(ops: Vec<PendingSync>) -> Self {
+        let saved = serde_json::to_vec_pretty(&ops).unwrap_or_default();
+        Self { ops, saved }
+    }
+
+    /// A ticket's new operations, after those of it still waiting. A transition takes the place
+    /// of the ticket's one not through yet: going there now would only undo it.
+    pub fn push(&mut self, ops: Vec<PendingSync>) {
+        for op in &ops {
+            if matches!(op.op, SyncOp::State { .. }) {
+                self.ops.retain(|p| {
+                    p.ticket_id != op.ticket_id || !matches!(p.op, SyncOp::State { .. })
+                });
+            }
+        }
+        self.ops.extend(ops);
+    }
+
+    fn position(&self, ticket_id: &str) -> Option<usize> {
+        self.ops.iter().position(|p| p.ticket_id == ticket_id)
+    }
+
+    /// The ticket's next operation.
+    pub fn head(&self, ticket_id: &str) -> Option<PendingSync> {
+        self.position(ticket_id).map(|i| self.ops[i].clone())
+    }
+
+    /// The ticket's next operation went through.
+    pub fn done(&mut self, ticket_id: &str) {
+        if let Some(i) = self.position(ticket_id) {
+            self.ops.remove(i);
+        }
+    }
+
+    /// The ticket's next operation failed at `now`: it waits for its next try, or is given up
+    /// (true) a day after its first failure, its ticket's next ones going on.
+    pub fn failed(&mut self, ticket_id: &str, now: i64) -> bool {
+        let Some(i) = self.position(ticket_id) else {
+            return false;
+        };
+        let p = &mut self.ops[i];
+        p.tries += 1;
+        let first = *p.failed_at.get_or_insert(now);
+        p.retry_at = next_try(p.tries, first, now);
+        let given_up = p.retry_at.is_none();
+        if given_up {
+            self.ops.remove(i);
+        }
+        given_up
+    }
+
+    /// The ticket's operations go (its card is gone).
+    pub fn forget(&mut self, ticket_id: &str) {
+        self.ops.retain(|p| p.ticket_id != ticket_id);
+    }
+
+    /// The tickets with operations waiting, in the order of their first one.
+    pub fn tickets(&self) -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        for p in &self.ops {
+            if !out.contains(&p.ticket_id) {
+                out.push(p.ticket_id.clone());
+            }
+        }
+        out
+    }
+
+    /// The tickets whose next operation, which failed, is to be tried again by `now`.
+    pub fn due(&self, now: i64) -> Vec<String> {
+        self.tickets()
+            .into_iter()
+            .filter(|id| {
+                self.head(id)
+                    .and_then(|p| p.retry_at)
+                    .is_some_and(|at| at <= now)
+            })
+            .collect()
+    }
+
+    /// Writes the operations to `path` when they changed since the file was last written.
+    pub fn save(&mut self, path: &Path) {
+        let Ok(bytes) = serde_json::to_vec_pretty(&self.ops) else {
+            return;
+        };
+        if bytes == self.saved {
+            return;
+        }
+        match paths::write_atomic(path, &bytes) {
+            Ok(()) => self.saved = bytes,
+            Err(e) => log::error!("cannot save {}: {e}", path.display()),
+        }
     }
 }
 
@@ -81,8 +255,21 @@ fn imported_key(i: &ExternalIssue) -> String {
     format!("{}|{}", i.service.label().to_lowercase(), i.id)
 }
 
+/// What the sync's worker is asked to do.
+pub(crate) enum SyncJob {
+    /// Tell an imported ticket's external one of a change, after the ticket's operations still
+    /// waiting.
+    Change(Box<Ticket>, Change),
+    /// Try again the operations whose next try has come (the app's timer).
+    Due,
+    /// Try again every operation left waiting (the app starts).
+    All,
+    /// "Resynchroniser": try again a ticket's operations at once, and say how it went.
+    Resync(String, tokio::sync::oneshot::Sender<Result<()>>),
+}
+
 /// The sending side of the sync's worker.
-pub(crate) type SyncSender = tokio::sync::mpsc::UnboundedSender<(Ticket, Change)>;
+pub(crate) type SyncSender = tokio::sync::mpsc::UnboundedSender<SyncJob>;
 
 fn external_of(i: &ExternalIssue) -> ExternalRef {
     ExternalRef {
@@ -426,18 +613,49 @@ impl<R: Runtime> Core<R> {
         }
     }
 
-    /// Tells the ticket's external one of `change`, in the background: one worker takes the
-    /// changes one at a time, in the order they were made.
+    /// Tells the ticket's external one of `change`, in the background.
     pub(crate) fn sync_external(&self, ticket: Ticket, change: Change) {
+        self.sync_job(SyncJob::Change(Box::new(ticket), change));
+    }
+
+    /// The failed operations whose next try has come go again (the app's timer looks every so
+    /// often: the waits are minutes long).
+    pub(crate) fn retry_due_syncs(&self) {
+        let due = !self.pending_syncs.lock().due(self.sync_clock()).is_empty();
+        if due {
+            self.sync_job(SyncJob::Due);
+        }
+    }
+
+    /// At the app's start, every operation left waiting goes again: the service may be back.
+    pub(crate) fn retry_all_syncs(&self) {
+        let any = !self.pending_syncs.lock().ops.is_empty();
+        if any {
+            self.sync_job(SyncJob::All);
+        }
+    }
+
+    /// "Resynchroniser": the ticket's operations not through yet go again at once; with none left
+    /// (given up, or failed before the app kept them), its external one is given its column's
+    /// state again. Err: why it still fails (its ticket says so too).
+    pub async fn integration_resync(&self, ticket_id: &str) -> Result<()> {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.sync_job(SyncJob::Resync(ticket_id.to_string(), tx));
+        rx.await.map_err(|_| anyhow!("Synchro interrompue"))?
+    }
+
+    /// One worker takes the jobs one at a time, in the order they were asked for: an external
+    /// ticket hears of its ticket's changes in the order they were made.
+    fn sync_job(&self, job: SyncJob) {
         let mut queue = self.sync_queue.lock();
         if queue.as_ref().is_none_or(|q| q.is_closed()) {
-            let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<(Ticket, Change)>();
+            let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<SyncJob>();
             // The worker does not keep the core alive: it ends with it.
             let me = self.weak();
             tauri::async_runtime::spawn(async move {
-                while let Some((ticket, change)) = rx.recv().await {
+                while let Some(job) = rx.recv().await {
                     let Some(c) = me.upgrade() else { break };
-                    c.sync_now(&ticket, change).await;
+                    c.run_sync_job(job).await;
                     #[cfg(test)]
                     c.syncs_queued
                         .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
@@ -449,86 +667,196 @@ impl<R: Runtime> Core<R> {
         self.syncs_queued
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         if let Some(q) = queue.as_ref() {
-            let _ = q.send((ticket, change));
+            let _ = q.send(job);
         }
     }
 
-    async fn sync_now(self: &Arc<Self>, t: &Ticket, change: Change) {
-        let Some(ext) = t.external.clone() else {
-            return;
+    async fn run_sync_job(self: &Arc<Self>, job: SyncJob) {
+        match job {
+            SyncJob::Change(t, change) => {
+                let ops = self.ops_of(&t, change);
+                if ops.is_empty() {
+                    return;
+                }
+                self.pending_syncs.lock().push(ops);
+                // Those of the ticket still waiting go first, at once: the service may be back.
+                let _ = self.run_ticket_syncs(&t.id).await;
+            }
+            SyncJob::Due => {
+                let due = self.pending_syncs.lock().due(self.sync_clock());
+                for id in due {
+                    let _ = self.run_ticket_syncs(&id).await;
+                }
+            }
+            SyncJob::All => {
+                let all = self.pending_syncs.lock().tickets();
+                for id in all {
+                    let _ = self.run_ticket_syncs(&id).await;
+                }
+            }
+            SyncJob::Resync(id, reply) => {
+                let _ = reply.send(self.resync(&id).await);
+            }
+        }
+    }
+
+    /// What an imported ticket's external one is told of `change`: its column's state, then the
+    /// comment the project asks for in that column; or the loop's summary. Written now, as the
+    /// ticket is: a later try sends the same.
+    fn ops_of(&self, t: &Ticket, change: Change) -> Vec<PendingSync> {
+        let Some(ext) = t.external.as_ref() else {
+            return Vec::new();
         };
         let Ok(project) = self.project(&t.project_id) else {
-            return;
+            return Vec::new();
         };
-        let s = self.settings.read().integrations.clone();
+        let mut ops = Vec::new();
+        match change {
+            Change::Column(column) => {
+                ops.extend(self.state_op(&project, ext, column));
+                if project.integrations.comments.contains(&column) {
+                    ops.push(SyncOp::Comment {
+                        text: column_comment(t, column, Some(&self.branch_of_ticket(t))),
+                    });
+                }
+            }
+            Change::Loop if self.settings.read().integrations.loop_comments => {
+                ops.push(SyncOp::Comment {
+                    text: loop_comment(t),
+                })
+            }
+            Change::Loop => {}
+        }
+        ops.into_iter()
+            .map(|op| PendingSync::new(t, ext, op))
+            .collect()
+    }
+
+    /// The state the project's link gives `column`, when the states are synced.
+    fn state_op(&self, project: &Project, ext: &ExternalRef, column: Column) -> Option<SyncOp> {
+        if !self.settings.read().integrations.sync_states {
+            return None;
+        }
         let link = project
             .integrations
             .link(ext.service)
-            .filter(|l| l.container == ext.container);
-        let mut actions: Vec<(Option<ExternalState>, Option<String>)> = Vec::new();
-        match change {
-            Change::Column(column) => {
-                let state = link
-                    .filter(|_| s.sync_states)
-                    .and_then(|l| l.states.get(&column))
-                    .filter(|st| !st.id.is_empty())
-                    .cloned();
-                let comment = project
-                    .integrations
-                    .comments
-                    .contains(&column)
-                    .then(|| column_comment(t, column, Some(&self.branch_of_ticket(t))));
-                actions.push((state, comment));
-            }
-            Change::Loop if s.loop_comments => actions.push((None, Some(loop_comment(t)))),
-            Change::Loop => {}
-        }
-        if actions.iter().all(|(st, c)| st.is_none() && c.is_none()) {
-            return;
-        }
-        let mapped: Vec<ExternalState> = link
-            .map(|l| l.states.values().cloned().collect())
-            .unwrap_or_default();
-        let result = async {
-            let client = self.client(ext.service).await?;
-            for (state, comment) in &actions {
-                if let Some(st) = state {
-                    client.set_state(&ext, st, &mapped).await?;
-                }
-                if let Some(text) = comment {
-                    client.comment(&ext, text).await?;
-                }
-            }
-            anyhow::Ok(())
-        }
-        .await;
-        let error = match result {
-            Ok(()) => None,
-            Err(e) => {
-                log::warn!(
-                    "sync of {} with {} {}: {e:#}",
-                    t.key,
-                    ext.service.label(),
-                    ext.key
-                );
-                Some(board::first_line(&format!("{e:#}")))
-            }
+            .filter(|l| l.container == ext.container)?;
+        let state = link.states.get(&column).filter(|st| !st.id.is_empty())?;
+        Some(SyncOp::State {
+            state: state.clone(),
+            mapped: link.states.values().cloned().collect(),
+        })
+    }
+
+    /// The ticket's operations in order, until one fails (it waits for its next try, the ones
+    /// after it with it) or all went through; one given up lets the next ones go. The ticket says
+    /// how the last one tried went (its ⚠). Err: the failure it is left with.
+    async fn run_ticket_syncs(self: &Arc<Self>, ticket_id: &str) -> Result<()> {
+        let Ok(ticket) = self.ticket(ticket_id) else {
+            // Its card is gone: nothing left to show them on, nor to try them again from.
+            self.pending_syncs.lock().forget(ticket_id);
+            self.save_pending_syncs();
+            return Ok(());
         };
-        // Against the ticket as it is now: an earlier sync may have changed its error since the
-        // change was queued (syncs run one at a time, so nothing else does meanwhile).
+        let mut client = None;
+        let mut last = None;
+        loop {
+            let next = self.pending_syncs.lock().head(ticket_id);
+            let Some(p) = next else { break };
+            let result = self.run_sync_op(&p, &mut client).await;
+            let held = match &result {
+                Ok(()) => {
+                    self.pending_syncs.lock().done(ticket_id);
+                    false
+                }
+                Err(e) => {
+                    let (service, key) = (p.external.service.label(), &p.external.key);
+                    log::warn!("sync of {} with {service} {key}: {e:#}", ticket.key);
+                    let now = self.sync_clock();
+                    let given_up = self.pending_syncs.lock().failed(ticket_id, now);
+                    if given_up {
+                        log::warn!("sync of {} with {service} {key} given up", ticket.key);
+                    }
+                    !given_up
+                }
+            };
+            self.save_pending_syncs();
+            last = Some(result);
+            if held {
+                break;
+            }
+        }
+        let Some(last) = last else {
+            return Ok(());
+        };
+        let error = last
+            .as_ref()
+            .err()
+            .map(|e| board::first_line(&format!("{e:#}")));
+        self.note_sync_error(ticket_id, error);
+        last
+    }
+
+    /// One operation; the service's client made for the first one of the ticket.
+    async fn run_sync_op(&self, p: &PendingSync, client: &mut Option<Client>) -> Result<()> {
+        if client.is_none() {
+            *client = Some(self.client(p.external.service).await?);
+        }
+        let c = client.as_ref().expect("made above");
+        match &p.op {
+            SyncOp::State { state, mapped } => c.set_state(&p.external, state, mapped).await,
+            SyncOp::Comment { text } => c.comment(&p.external, text).await,
+        }
+    }
+
+    /// See `integration_resync`.
+    async fn resync(self: &Arc<Self>, ticket_id: &str) -> Result<()> {
+        let t = self.ticket(ticket_id)?;
+        let Some(ext) = t.external.as_ref() else {
+            return Ok(());
+        };
+        let waiting = self.pending_syncs.lock().head(ticket_id).is_some();
+        if !waiting {
+            let project = self.project(&t.project_id)?;
+            let Some(op) = self.state_op(&project, ext, t.column) else {
+                // Nothing to give it again (a comment is not written twice): the ⚠ goes.
+                self.note_sync_error(ticket_id, None);
+                return Ok(());
+            };
+            self.pending_syncs
+                .lock()
+                .push(vec![PendingSync::new(&t, ext, op)]);
+        }
+        self.run_ticket_syncs(ticket_id).await
+    }
+
+    /// The ticket's ⚠ says `error` (none: it goes), against the ticket as it is now.
+    fn note_sync_error(&self, ticket_id: &str, error: Option<String>) {
         let now = self
-            .ticket(&t.id)
+            .ticket(ticket_id)
             .ok()
             .and_then(|x| x.external)
             .map(|e| e.error);
         if now.is_some_and(|now| now != error) {
-            let _ = self.edit_ticket(&t.id, |x| {
+            let _ = self.edit_ticket(ticket_id, |x| {
                 if let Some(e) = x.external.as_mut() {
                     e.error = error;
                 }
                 Ok(())
             });
         }
+    }
+
+    fn save_pending_syncs(&self) {
+        self.pending_syncs.lock().save(&self.data.sync_queue_file());
+    }
+
+    /// The time the retries go by: the real one (ahead by `clock_ahead` in tests).
+    fn sync_clock(&self) -> i64 {
+        #[cfg(test)]
+        return now_ms() + self.clock_ahead.load(std::sync::atomic::Ordering::SeqCst);
+        #[cfg(not(test))]
+        now_ms()
     }
 
     /// The branch of the ticket's agent's worktree; while it starts (no agent yet), the one it is
@@ -619,6 +947,147 @@ mod tests {
         assert_eq!(
             draft_of(&bare, 5, true).description,
             "Ticket Jira ATL-7 : https://x.atlassian.net/browse/ATL-7"
+        );
+    }
+
+    const MIN: i64 = 60_000;
+
+    fn pending(ticket: &str, op: SyncOp) -> PendingSync {
+        PendingSync {
+            ticket_id: ticket.into(),
+            external: ExternalRef::default(),
+            op,
+            tries: 0,
+            failed_at: None,
+            retry_at: None,
+        }
+    }
+
+    fn move_to(list: &str) -> SyncOp {
+        SyncOp::State {
+            state: ExternalState {
+                id: list.into(),
+                name: list.into(),
+            },
+            mapped: Vec::new(),
+        }
+    }
+
+    fn say(text: &str) -> SyncOp {
+        SyncOp::Comment { text: text.into() }
+    }
+
+    #[test]
+    fn a_failed_operation_is_tried_again_after_1_5_15_then_60_minutes_for_a_day() {
+        assert_eq!(next_try(1, 0, 0), Some(MIN));
+        assert_eq!(next_try(2, 0, MIN), Some(6 * MIN));
+        assert_eq!(next_try(3, 0, 6 * MIN), Some(21 * MIN));
+        assert_eq!(next_try(4, 0, 21 * MIN), Some(81 * MIN));
+        assert_eq!(next_try(12, 0, 561 * MIN), Some(621 * MIN));
+        // The day counts from its first failure, not from the last.
+        assert_eq!(next_try(2, 10 * MIN, 11 * MIN), Some(16 * MIN));
+        assert_eq!(next_try(27, 0, 1380 * MIN), Some(1440 * MIN));
+        assert_eq!(next_try(27, 0, 1401 * MIN), None);
+    }
+
+    #[test]
+    fn a_tickets_operations_go_in_order_and_wait_behind_one_that_failed() {
+        let mut q = SyncQueue::new(Vec::new());
+        q.push(vec![
+            pending("t1", move_to("l2")),
+            pending("t1", say("pris")),
+        ]);
+        q.push(vec![pending("t2", say("deux"))]);
+        assert_eq!(q.tickets(), ["t1", "t2"]);
+        assert_eq!(q.head("t1").unwrap().op, move_to("l2"));
+        assert!(!q.failed("t1", 0));
+        // It holds its ticket's next ones back until its next try, not the other ticket's.
+        let head = q.head("t1").unwrap();
+        assert_eq!(
+            (head.op, head.tries, head.failed_at, head.retry_at),
+            (move_to("l2"), 1, Some(0), Some(MIN))
+        );
+        assert_eq!(q.head("t2").unwrap().op, say("deux"));
+        assert!(q.due(MIN - 1).is_empty());
+        assert_eq!(q.due(MIN), ["t1"]);
+        q.done("t1");
+        assert_eq!(q.head("t1").unwrap().op, say("pris"));
+        // Never tried: not due by itself (it goes as soon as its turn comes).
+        assert!(q.due(i64::MAX).is_empty());
+        q.done("t1");
+        q.done("t2");
+        assert!(q.ops.is_empty() && q.head("t1").is_none());
+    }
+
+    #[test]
+    fn a_transition_takes_the_place_of_its_tickets_one_not_through_yet() {
+        let mut q = SyncQueue::new(Vec::new());
+        q.push(vec![pending("t1", move_to("l2"))]);
+        q.failed("t1", 0);
+        q.push(vec![pending("t1", say("boucle 2"))]);
+        q.push(vec![pending("t2", move_to("l2"))]);
+        q.push(vec![
+            pending("t1", move_to("l3")),
+            pending("t1", say("prêt")),
+        ]);
+        let ops: Vec<(&str, &SyncOp)> = q
+            .ops
+            .iter()
+            .map(|p| (p.ticket_id.as_str(), &p.op))
+            .collect();
+        assert_eq!(
+            ops,
+            [
+                ("t1", &say("boucle 2")),
+                ("t2", &move_to("l2")),
+                ("t1", &move_to("l3")),
+                ("t1", &say("prêt"))
+            ]
+        );
+        // A comment never replaces another.
+        q.push(vec![pending("t1", say("prêt"))]);
+        assert_eq!(q.ops.len(), 5);
+    }
+
+    #[test]
+    fn an_operation_is_given_up_a_day_after_its_first_failure_and_the_next_ones_go_on() {
+        let mut q = SyncQueue::new(Vec::new());
+        q.push(vec![pending("t1", say("un")), pending("t1", say("deux"))]);
+        let mut now = 0;
+        let mut tries = 1;
+        while !q.failed("t1", now) {
+            now = q.head("t1").unwrap().retry_at.unwrap();
+            tries += 1;
+        }
+        assert_eq!((now, tries), (1401 * MIN, 27));
+        let next = q.head("t1").unwrap();
+        assert_eq!((next.op, next.tries), (say("deux"), 0));
+    }
+
+    #[test]
+    fn the_queue_is_written_when_it_changes_and_read_back_from_a_file_without_its_tries() {
+        let path = crate::paths::test_dir("sync-queue-file").join("sync-queue.json");
+        let mut q = SyncQueue::new(Vec::new());
+        q.save(&path);
+        // Nothing waits: no file for nothing.
+        assert!(!path.exists());
+        q.push(vec![pending("t1", say("un"))]);
+        q.failed("t1", 0);
+        q.save(&path);
+        let read: Vec<PendingSync> =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(read, q.ops);
+        // As it was: not written again.
+        std::fs::remove_file(&path).unwrap();
+        q.save(&path);
+        assert!(!path.exists());
+        let old: Vec<PendingSync> = serde_json::from_str(
+            r#"[{ "ticketId": "t1", "external": { "service": "jira", "id": "ATL-7" }, "op": { "kind": "comment", "text": "un" } }]"#,
+        )
+        .unwrap();
+        assert_eq!(
+            (old[0].op.clone(), old[0].tries, old[0].retry_at),
+            (say("un"), 0, None)
         );
     }
 

@@ -1052,3 +1052,9 @@ pub async fn integration_import(
         .await
         .map_err(err)
 }
+
+/// « Resynchroniser » (the ⚠ of an imported ticket's card): its failed syncs go again at once.
+#[tauri::command]
+pub async fn integration_resync(core: CoreState<'_>, ticket_id: String) -> Res<()> {
+    core.integration_resync(&ticket_id).await.map_err(err)
+}

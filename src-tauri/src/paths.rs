@@ -177,6 +177,11 @@ impl DataDir {
         self.0.join("integrations.json")
     }
 
+    /// The syncs of imported tickets not through yet (`integrations::sync::SyncQueue`).
+    pub fn sync_queue_file(&self) -> PathBuf {
+        self.0.join("sync-queue.json")
+    }
+
     pub fn conversations(&self) -> PathBuf {
         self.0.join("conversations")
     }
@@ -476,6 +481,10 @@ mod tests {
         assert_eq!(
             d.setup_log("a1"),
             PathBuf::from("C:/data/logs/a1-setup.log")
+        );
+        assert_eq!(
+            d.sync_queue_file(),
+            PathBuf::from("C:/data/sync-queue.json")
         );
     }
 

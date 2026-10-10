@@ -144,6 +144,8 @@ export const api = {
     invoke<IssuePage>('integration_issues', { projectId, service, text, filters }),
   integrationImport: (projectId: string, issues: ExternalIssue[], maxLoops: number) =>
     invoke<Ticket[]>('integration_import', { projectId, issues, maxLoops }),
+  /** « Resynchroniser »: the ticket's failed syncs go again at once; rejected with why they still fail. */
+  integrationResync: (ticketId: string) => invoke<void>('integration_resync', { ticketId }),
   /** `agentId` and `subdir` say where it opens: the agent's worktree, a folder of it (see `TermPlace`). */
   termSpawn: (
     a: { projectId: string; agentId?: string | null; subdir?: string; shell: string; name: string; cols: number; rows: number },

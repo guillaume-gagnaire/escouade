@@ -67,6 +67,101 @@ impl Harness {
         f(&mut s.integrations);
         self.core.save_settings(s).unwrap();
     }
+
+    /// Trello connected to `server`, and a project without its autopilot whose board b1 is
+    /// linked (« En cours » → l2, « À tester » → l3), commenting `comments`.
+    async fn trello_board(&self, server: &FakeServer, comments: &[Column]) -> Project {
+        self.serve(server);
+        server.on(
+            "GET",
+            "/members/me",
+            200,
+            json!({ "id": "m1", "username": "ada" }),
+        );
+        self.core
+            .integration_connect(
+                Service::Trello,
+                Account {
+                    key: "k".into(),
+                    token: "t".into(),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        let (p, _) = self.project(false).await;
+        self.set_autopilot(&p.id, false);
+        let mut states = BTreeMap::new();
+        states.insert(Column::Doing, state("l2", "En cours"));
+        states.insert(Column::Review, state("l3", "À tester"));
+        self.link(
+            &p.id,
+            SourceLink {
+                service: Service::Trello,
+                container: "b1".into(),
+                name: "Atlas".into(),
+                states,
+            },
+            comments,
+        );
+        p
+    }
+
+    /// The card `id` of the board b1 imported into the project.
+    async fn import_card(&self, project_id: &str, id: &str) -> Ticket {
+        let card = ExternalIssue {
+            service: Service::Trello,
+            id: id.into(),
+            key: format!("#{id}"),
+            title: format!("Carte {id}"),
+            container: "b1".into(),
+            ..Default::default()
+        };
+        self.core
+            .integration_import(project_id, vec![card], 5)
+            .await
+            .unwrap()
+            .remove(0)
+    }
+
+    /// The ticket comes into `column`, as the board moves it: its external one hears of it.
+    fn move_to(&self, id: &str, column: Column) {
+        self.core
+            .edit_ticket(id, |t| {
+                t.column = column;
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    fn sync_error(&self, id: &str) -> Option<String> {
+        self.tk(id).external.unwrap().error
+    }
+
+    /// The app's timer looks at the failed syncs `ms` after now.
+    async fn retry_after(&self, ms: i64) {
+        self.core.clock_ahead.store(ms, Ordering::SeqCst);
+        self.core.retry_due_syncs();
+        self.wait_synced().await;
+    }
+
+    /// When the ticket's next sync is tried again by itself, after now (ms), if it is.
+    fn next_retry(&self, id: &str) -> Option<i64> {
+        let at = self.core.pending_syncs.lock().head(id)?.retry_at?;
+        Some(at - crate::model::now_ms())
+    }
+}
+
+/// The writes sent to `server` as « PUT /cards/c1 l3 » (with the list a card goes to).
+fn trace(server: &FakeServer) -> Vec<String> {
+    server
+        .writes()
+        .iter()
+        .map(|r| {
+            let list = r.query("idList").map(|l| format!(" {l}"));
+            format!("{} {}{}", r.method, r.path(), list.unwrap_or_default())
+        })
+        .collect()
 }
 
 /// The writes sent to `server` whose path ends with `end`.
@@ -312,14 +407,10 @@ async fn a_failed_sync_is_noted_on_the_ticket_until_one_succeeds_and_loops_can_b
         h.tk(&t.id).external.unwrap().error.as_deref(),
         Some("Trello refuse ces identifiants (401) — invalid token")
     );
-    // Its second loop was to be told.
-    let comments = writes_to(&server, "/actions/comments");
-    assert_eq!(comments.len(), 1);
-    assert_eq!(
-        comments[0].json()["text"],
-        "Escouade : DEM-1, boucle 2/5 — 1/2 critères atteints.\n\n✓ un — vérifié\n○ deux — reste le critère 2"
-    );
-    // Sent back, the card moves this time: the error goes.
+    // Its second loop was to be told, after the move: the summary waits behind it.
+    assert!(writes_to(&server, "/actions/comments").is_empty());
+    // Sent back, the card moves this time: the summary goes first, then the move, and the error
+    // goes.
     server.on("PUT", "/cards/c1", 200, json!({}));
     server.on("POST", "/cards/c1/actions/comments", 200, json!({}));
     h.core.ticket_reject(&t.id, "encore").await.unwrap();
@@ -328,8 +419,14 @@ async fn a_failed_sync_is_noted_on_the_ticket_until_one_succeeds_and_loops_can_b
         h.tk(&t.id).external.unwrap().error.is_none()
     })
     .await;
-    let moved = writes_to(&server, "/cards/c1");
-    assert_eq!(moved.last().unwrap().query("idList").as_deref(), Some("l2"));
+    let comments = writes_to(&server, "/actions/comments");
+    assert_eq!(
+        comments[0].json()["text"],
+        "Escouade : DEM-1, boucle 2/5 — 1/2 critères atteints.\n\n✓ un — vérifié\n○ deux — reste le critère 2"
+    );
+    let after = trace(&server);
+    let said = after.iter().position(|w| w.starts_with("POST")).unwrap();
+    assert_eq!(after[said + 1], "PUT /cards/c1 l2");
 }
 
 #[tokio::test]
@@ -840,4 +937,209 @@ async fn syncs_reach_the_service_in_the_order_of_the_changes_and_the_last_one_sa
         h.tk(&t.id).external.unwrap().error.as_deref(),
         Some("Trello : erreur 500")
     );
+}
+
+#[tokio::test]
+async fn a_failed_sync_is_tried_again_a_minute_later_and_its_success_clears_the_warning() {
+    let h = harness("ig-retry");
+    let server = FakeServer::start().await;
+    let p = h.trello_board(&server, &[]).await;
+    let t = h.import_card(&p.id, "c1").await;
+    server.on("PUT", "/cards/c1", 500, Value::Null);
+    h.move_to(&t.id, Column::Doing);
+    h.wait_synced().await;
+    assert_eq!(h.sync_error(&t.id).as_deref(), Some("Trello : erreur 500"));
+    // Kept on disk, for a restart.
+    let file = h.core.data.sync_queue_file();
+    let kept = std::fs::read_to_string(&file).unwrap();
+    assert!(kept.contains("\"l2\"") && !kept.contains("\"t\""), "{kept}");
+    // Not before its minute.
+    h.retry_after(30_000).await;
+    assert_eq!(trace(&server), ["PUT /cards/c1 l2"]);
+    server.on("PUT", "/cards/c1", 200, json!({}));
+    h.retry_after(60_000).await;
+    assert_eq!(trace(&server), ["PUT /cards/c1 l2", "PUT /cards/c1 l2"]);
+    assert_eq!(h.sync_error(&t.id), None);
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), "[]");
+    // Through: never sent again.
+    h.retry_after(3_600_000).await;
+    assert_eq!(trace(&server).len(), 2);
+}
+
+#[tokio::test]
+async fn resync_tries_again_at_once_and_says_how_it_went() {
+    let h = harness("ig-resync");
+    let server = FakeServer::start().await;
+    let p = h.trello_board(&server, &[]).await;
+    let t = h.import_card(&p.id, "c1").await;
+    server.on(
+        "PUT",
+        "/cards/c1",
+        401,
+        Value::String("invalid token".into()),
+    );
+    h.move_to(&t.id, Column::Doing);
+    h.wait_synced().await;
+    assert_eq!(
+        h.core
+            .integration_resync(&t.id)
+            .await
+            .unwrap_err()
+            .to_string(),
+        "Trello refuse ces identifiants (401) — invalid token"
+    );
+    assert_eq!(trace(&server).len(), 2);
+    assert!(h.sync_error(&t.id).is_some());
+    server.on("PUT", "/cards/c1", 200, json!({}));
+    h.core.integration_resync(&t.id).await.unwrap();
+    assert_eq!(trace(&server).len(), 3);
+    assert_eq!(h.sync_error(&t.id), None);
+    assert!(h.core.pending_syncs.lock().ops.is_empty());
+}
+
+#[tokio::test]
+async fn the_syncs_left_waiting_are_tried_again_when_the_app_starts() {
+    let h = harness("ig-retry-start");
+    let server = FakeServer::start().await;
+    let p = h.trello_board(&server, &[Column::Doing]).await;
+    let t = h.import_card(&p.id, "c1").await;
+    server.on("PUT", "/cards/c1", 500, Value::Null);
+    h.move_to(&t.id, Column::Doing);
+    h.wait_synced().await;
+    // The move failed: its comment waits behind it.
+    assert_eq!(trace(&server), ["PUT /cards/c1 l2"]);
+    h.core.save_now();
+    // The app stops, the service comes back, the app starts again.
+    server.on("PUT", "/cards/c1", 200, json!({}));
+    server.on("POST", "/cards/c1/actions/comments", 200, json!({}));
+    let app = mock_app();
+    let (again, _rx) = Core::load(app.handle().clone(), h.core.data.clone());
+    *again.bases.write() = h.core.bases.read().clone();
+    assert_eq!(again.pending_syncs.lock().ops.len(), 2);
+    assert!(again
+        .ticket(&t.id)
+        .unwrap()
+        .external
+        .unwrap()
+        .error
+        .is_some());
+    again.retry_all_syncs();
+    for _ in 0..750 {
+        if again.syncs_queued.load(Ordering::SeqCst) == 0 {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    assert_eq!(
+        trace(&server),
+        [
+            "PUT /cards/c1 l2",
+            "PUT /cards/c1 l2",
+            "POST /cards/c1/actions/comments"
+        ]
+    );
+    assert!(writes_to(&server, "/actions/comments")[0].json()["text"]
+        .as_str()
+        .unwrap()
+        .starts_with("Escouade : DEM-1 est pris par un agent"));
+    assert_eq!(again.ticket(&t.id).unwrap().external.unwrap().error, None);
+    assert!(again.pending_syncs.lock().ops.is_empty());
+}
+
+#[tokio::test]
+async fn a_failed_transition_gives_way_to_the_next_one() {
+    let h = harness("ig-retry-stale");
+    let server = FakeServer::start().await;
+    let p = h.trello_board(&server, &[]).await;
+    let t = h.import_card(&p.id, "c1").await;
+    server.on("PUT", "/cards/c1?idList=l2&key=k&token=t", 500, Value::Null);
+    server.on("PUT", "/cards/c1?idList=l3&key=k&token=t", 200, json!({}));
+    h.move_to(&t.id, Column::Doing);
+    h.wait_synced().await;
+    assert!(h.sync_error(&t.id).is_some());
+    h.move_to(&t.id, Column::Review);
+    h.wait_synced().await;
+    assert_eq!(h.sync_error(&t.id), None);
+    // « En cours » would only undo « À tester »: never tried again, even once it could be.
+    server.on("PUT", "/cards/c1?idList=l2&key=k&token=t", 200, json!({}));
+    h.retry_after(2 * 3_600_000).await;
+    assert_eq!(trace(&server), ["PUT /cards/c1 l2", "PUT /cards/c1 l3"]);
+    assert!(h.core.pending_syncs.lock().ops.is_empty());
+}
+
+#[tokio::test]
+async fn a_tickets_syncs_keep_their_order_behind_one_that_failed_and_the_others_go_on() {
+    let h = harness("ig-retry-order");
+    let server = FakeServer::start().await;
+    let p = h.trello_board(&server, &[Column::Review]).await;
+    let t = h.import_card(&p.id, "c1").await;
+    let other = h.import_card(&p.id, "c2").await;
+    server.on("PUT", "/cards/c1", 200, json!({}));
+    server.on("PUT", "/cards/c2", 200, json!({}));
+    server.on("POST", "/cards/c1/actions/comments", 500, Value::Null);
+    h.move_to(&t.id, Column::Review);
+    h.wait_synced().await;
+    // Sent back: its move waits behind the comment, tried again at once with it; the other
+    // ticket's goes on.
+    h.move_to(&t.id, Column::Doing);
+    h.move_to(&other.id, Column::Doing);
+    h.wait_synced().await;
+    assert_eq!(
+        trace(&server),
+        [
+            "PUT /cards/c1 l3",
+            "POST /cards/c1/actions/comments",
+            "POST /cards/c1/actions/comments",
+            "PUT /cards/c2 l2"
+        ]
+    );
+    assert_eq!(h.sync_error(&t.id).as_deref(), Some("Trello : erreur 500"));
+    assert_eq!(h.sync_error(&other.id), None);
+    // Its second failure: five minutes until the next try.
+    let next = h.next_retry(&t.id).unwrap();
+    assert!((4 * 60_000..=5 * 60_000).contains(&next), "{next}");
+    server.on("POST", "/cards/c1/actions/comments", 200, json!({}));
+    h.retry_after(next + 1_000).await;
+    assert_eq!(
+        trace(&server)[4..],
+        ["POST /cards/c1/actions/comments", "PUT /cards/c1 l2"]
+    );
+    let said = writes_to(&server, "/actions/comments")[2].json();
+    assert!(said["text"]
+        .as_str()
+        .unwrap()
+        .starts_with("Escouade : DEM-1 est prêt à tester."));
+    assert_eq!(h.sync_error(&t.id), None);
+}
+
+#[tokio::test]
+async fn a_failed_sync_is_given_up_a_day_later_and_resync_then_gives_the_column_again() {
+    let h = harness("ig-retry-day");
+    let server = FakeServer::start().await;
+    let p = h.trello_board(&server, &[]).await;
+    let t = h.import_card(&p.id, "c1").await;
+    server.on("PUT", "/cards/c1", 500, Value::Null);
+    h.move_to(&t.id, Column::Doing);
+    h.wait_synced().await;
+    // Each try when its time comes, as the clock goes: 1, 5, 15 minutes, then every hour.
+    let mut at = Vec::new();
+    while let Some(next) = h.next_retry(&t.id) {
+        let ahead = next + 10;
+        h.retry_after(ahead).await;
+        at.push((ahead as f64 / 60_000.0).round() as i64);
+    }
+    assert_eq!(at[..5], [1, 6, 21, 81, 141]);
+    assert_eq!(at.last(), Some(&1401));
+    assert_eq!(trace(&server).len(), 27);
+    // Given up: the warning stays, nothing is tried by itself any more.
+    assert!(h.core.pending_syncs.lock().ops.is_empty());
+    assert_eq!(h.sync_error(&t.id).as_deref(), Some("Trello : erreur 500"));
+    h.retry_after(48 * 3_600_000).await;
+    assert_eq!(trace(&server).len(), 27);
+    // « Resynchroniser » gives the card its column's list again.
+    server.on("PUT", "/cards/c1", 200, json!({}));
+    h.core.integration_resync(&t.id).await.unwrap();
+    assert_eq!(trace(&server).len(), 28);
+    assert_eq!(trace(&server)[27], "PUT /cards/c1 l2");
+    assert_eq!(h.sync_error(&t.id), None);
 }

@@ -466,14 +466,69 @@ describe('TicketCard of an imported ticket', () => {
     const link = screen.getByRole('button', { name: 'Ouvrir ATL-1287 dans Jira' });
     expect(link).toHaveTextContent('JATL-1287');
     expect(screen.getByText('DEM-1')).toBeInTheDocument();
-    expect(screen.queryByRole('img', { name: /Synchro/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Synchro/ })).not.toBeInTheDocument();
     await userEvent.click(link);
     expect(backend.called('plugin:opener|open_url')[0].args.url).toBe('https://atlas.atlassian.net/browse/ATL-1287');
     // The click opens the ticket there, not the card's form.
     expect(app.modal).toBeNull();
     unmount();
     show(ticket({ external: { ...external, error: 'Jira refuse ces identifiants (401)' } }));
-    expect(screen.getByRole('img', { name: 'Synchro avec Jira : Jira refuse ces identifiants (401)' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Synchro avec Jira : Jira refuse ces identifiants (401)' })).toBeInTheDocument();
+  });
+
+  const failed = {
+    service: 'jira' as const,
+    id: 'ATL-7',
+    key: 'ATL-7',
+    container: 'ATL',
+    url: 'https://atlas.atlassian.net/browse/ATL-7',
+    error: 'Jira refuse ces identifiants (401)',
+  };
+
+  it('offers « Resynchroniser » from its ⚠, which tries again at once', async () => {
+    const backend = fakeBackend();
+    const onedit = vi.fn();
+    render(TicketCard, { ticket: ticket({ external: failed }), project: project(), queueIndex: 0, busyCount: 1, quota: null, onedit });
+    const warn = screen.getByRole('button', { name: 'Synchro avec Jira : Jira refuse ces identifiants (401)' });
+    expect(warn).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('button', { name: 'Resynchroniser' })).not.toBeInTheDocument();
+    await userEvent.click(warn);
+    expect(warn).toHaveAttribute('aria-expanded', 'true');
+    // Its reason in full, without hovering, and what to do about it.
+    expect(screen.getByText('Jira refuse ces identifiants (401)')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Resynchroniser' }));
+    expect(backend.called('integration_resync')).toEqual([{ cmd: 'integration_resync', args: { ticketId: 't1' } }]);
+    // Its buttons act: the card's form does not open.
+    expect(onedit).not.toHaveBeenCalled();
+    // Through: it closes, the focus left on the card (the ticket comes back without its ⚠).
+    expect(screen.queryByRole('button', { name: 'Resynchroniser' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /DEM-1/ })).toHaveFocus();
+    // From the keyboard too.
+    warn.focus();
+    await userEvent.keyboard('{Enter}');
+    expect(screen.getByRole('button', { name: 'Resynchroniser' })).toBeInTheDocument();
+  });
+
+  it('says why « Resynchroniser » failed again', async () => {
+    fakeBackend({
+      integration_resync: () => {
+        throw 'Jira refuse ces identifiants (401)';
+      },
+    });
+    show(ticket({ external: failed }));
+    await userEvent.click(screen.getByRole('button', { name: /Synchro avec Jira/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Resynchroniser' }));
+    expect(app.toasts.at(-1)).toMatchObject({ text: 'Jira refuse ces identifiants (401)', kind: 'error' });
+    expect(screen.getByRole('button', { name: 'Resynchroniser' })).toBeEnabled();
+  });
+
+  it('drops its ⚠ once a sync goes through', async () => {
+    fakeBackend();
+    const { rerender } = show(ticket({ external: failed }));
+    await userEvent.click(screen.getByRole('button', { name: /Synchro avec Jira/ }));
+    await rerender({ ticket: ticket({ external: { ...failed, error: null } }) });
+    expect(screen.queryByRole('button', { name: /Synchro/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Resynchroniser' })).not.toBeInTheDocument();
   });
 
   it.each([
