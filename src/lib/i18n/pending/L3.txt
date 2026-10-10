@@ -1,0 +1,19 @@
+# L3 — zone `editor`. Files whose texts are still to extract; delete this file once they all are.
+# The other files of src/lib/editor/ held no text when this list was written.
+src/components/editor/CodeEditor.svelte
+src/components/editor/EditorTabs.svelte
+src/components/editor/EditorView.svelte
+src/components/editor/FileIcon.svelte
+src/components/editor/FileTree.svelte
+src/components/editor/NewFileField.svelte
+src/components/editor/SearchPanel.svelte
+src/components/editor/SourcePicker.svelte
+src/components/editor/TargetPicker.svelte
+src/components/QuickOpen.svelte
+src/lib/editor/actions.ts
+src/lib/editor/buffers.svelte.ts
+src/lib/editor/compare.ts
+src/lib/editor/create.ts
+src/lib/editor/languages.ts
+src/lib/editor/search.svelte.ts
+src/lib/editor/theme.ts

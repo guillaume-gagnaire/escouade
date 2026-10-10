@@ -1,0 +1,10 @@
+# L4 — zone `settings`. Files whose texts are still to extract; delete this file once they all are.
+src/components/modals/SettingsModal.svelte
+src/components/settings/AppTab.svelte
+src/components/settings/Chips.svelte
+src/components/settings/Group.svelte
+src/components/settings/ProjectTab.svelte
+src/components/settings/Row.svelte
+src/components/settings/StepList.svelte
+src/components/settings/Switch.svelte
+src/lib/settings.svelte.ts

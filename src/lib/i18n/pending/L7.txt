@@ -1,0 +1,15 @@
+# L7 — zones `nav`, `git`. Files whose texts are still to extract; delete this file once they all are.
+src/components/ContextMenu.svelte
+src/components/DiffModal.svelte
+src/components/DiffView.svelte
+src/components/Dropdown.svelte
+src/components/FileDiff.svelte
+src/components/FilesPanel.svelte
+src/components/GitGraph.svelte
+src/components/modals/CommitModal.svelte
+src/components/modals/RenameModal.svelte
+src/components/SidePanel.svelte
+src/components/Sidebar.svelte
+src/components/TitleBar.svelte
+src/lib/agent-actions.ts
+src/lib/project-actions.ts

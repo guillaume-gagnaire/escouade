@@ -1,0 +1,6 @@
+# L5 — zones `integrations`, `boardSettings`. Files whose texts are still to extract; delete this file once they all are.
+src/components/modals/ImportModal.svelte
+src/components/settings/BoardTab.svelte
+src/components/settings/IntegrationsTab.svelte
+src/lib/board.ts
+src/lib/integrations.ts

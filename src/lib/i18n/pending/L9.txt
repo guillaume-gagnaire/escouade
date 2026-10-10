@@ -1,0 +1,26 @@
+# L9 — zones `runs`, `shell`, and every file the other lists left out. Files whose texts are still to extract;
+# delete this file once they all are.
+src/App.svelte
+src/components/modals/ConfirmModal.svelte
+src/components/modals/Modal.svelte
+src/components/modals/NewProjectModal.svelte
+src/components/modals/TestLaunchModal.svelte
+src/components/modals/UpdateModal.svelte
+src/components/RunsSection.svelte
+src/components/RunView.svelte
+src/components/Splitter.svelte
+src/components/StatusBar.svelte
+src/components/StatusDot.svelte
+src/components/TerminalView.svelte
+src/components/Toasts.svelte
+src/components/Welcome.svelte
+src/lib/escouade.ts
+src/lib/ipc.ts
+src/lib/launch-actions.ts
+src/lib/recipe.ts
+src/lib/spend.ts
+src/lib/state.svelte.ts
+src/lib/term-actions.ts
+src/lib/test-launch.svelte.ts
+src/lib/updater.ts
+src/main.ts
