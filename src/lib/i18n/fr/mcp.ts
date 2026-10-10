@@ -35,5 +35,10 @@ export default {
     /** What a permission card lists: each argument the tool is given, by its name. */
     args: 'Ce que Claude donne à l’outil',
     argName: '{name} :',
+    /** A value shown cut: how many characters are not, and where the whole request is. */
+    cut: {
+      one: '{n} caractère de plus n’est pas montré : lis la demande entière dans la conversation.',
+      other: '{n} caractères de plus ne sont pas montrés : lis la demande entière dans la conversation.',
+    },
   },
 } as const satisfies Tree;

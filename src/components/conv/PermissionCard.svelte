@@ -1,5 +1,6 @@
 <script lang="ts">
   import { captureKeys } from '../../lib/answer-keys.svelte';
+  import { fInt } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { keyLabel } from '../../lib/platform';
@@ -73,6 +74,8 @@
             <div class="arg-line">
               <dt class="mono">{t('mcp.permission.argName', { name: revealHidden(a.name) })}</dt>
               <dd class="mono">{revealHidden(a.value)}</dd>
+              <!-- What is not shown is told, and where the whole request is: the conversation. -->
+              {#if a.hidden}<dd class="cut">{t('mcp.permission.cut', { count: a.hidden, n: fInt(a.hidden) })}</dd>{/if}
             </div>
           {/each}
         </dl>
@@ -199,6 +202,13 @@
     margin: 0;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
+  }
+  /* Under its value, in the value's column. */
+  .args dd.cut {
+    grid-column: 2;
+    color: var(--wait);
+    font-size: 11.5px;
+    white-space: normal;
   }
   .opts {
     display: flex;

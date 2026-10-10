@@ -32,5 +32,9 @@ export default defineZone('mcp', {
   permission: {
     args: 'What Claude gives the tool',
     argName: '{name}:',
+    cut: {
+      one: '{n} more character is not shown: read the whole request in the conversation.',
+      other: '{n} more characters are not shown: read the whole request in the conversation.',
+    },
   },
 });

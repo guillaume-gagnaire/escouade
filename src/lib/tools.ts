@@ -76,12 +76,17 @@ function inClear(v: unknown): string {
 
 /**
  * Each argument a tool of Escouade is given, in its order, as its permission card lists them: its name and its value
- * in clear (`inClear`), `ARG_MAX` characters at most. An argument left out (null) is not listed.
+ * in clear (`inClear`), `ARG_MAX` characters at most, and `hidden`, how many more there were, when the value was cut.
+ * An argument left out (null) is not listed.
  */
-export function escouadeArgs(input: Record<string, unknown>): { name: string; value: string }[] {
+export function escouadeArgs(input: Record<string, unknown>): { name: string; value: string; hidden?: number }[] {
   return Object.entries(input ?? {})
     .filter(([, v]) => v !== null && v !== undefined)
-    .map(([name, v]) => ({ name, value: capped(inClear(v)) }));
+    .map(([name, v]) => {
+      const text = inClear(v);
+      const hidden = [...text].length - ARG_MAX;
+      return { name, value: capped(text), ...(hidden > 0 ? { hidden } : {}) };
+    });
 }
 
 /**

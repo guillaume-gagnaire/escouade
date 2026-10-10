@@ -98,6 +98,14 @@ describe('the tools of Escouade’s own server', () => {
     expect(cut.value.endsWith('😀…')).toBe(true);
   });
 
+  it('count the characters a cut value hides, and say nothing of one that fits', () => {
+    expect(escouadeArgs({ description: 'x'.repeat(2000) })).toEqual([{ name: 'description', value: 'x'.repeat(2000) }]);
+    const [cut] = escouadeArgs({ description: '😀'.repeat(2500), title: 'court' });
+    expect(cut.hidden).toBe(500);
+    expect(escouadeArgs({ description: 'a'.repeat(2001) })[0].hidden).toBe(1);
+    expect(escouadeArgs({ description: 'court' })[0]).not.toHaveProperty('hidden');
+  });
+
   it('are named in English', () => {
     setLang('en');
     expect(toolLabel('mcp__escouade__create_ticket')).toBe('Escouade · Create a ticket');

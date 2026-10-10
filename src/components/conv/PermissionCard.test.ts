@@ -137,6 +137,24 @@ describe('PermissionCard of a tool of Escouade', () => {
     expect(value).toBe(`${'a'.repeat(2000)}…`);
   });
 
+  it('says how many characters a cut value hides, and to read the whole request in the conversation', () => {
+    fakeBackend();
+    const { unmount } = render(PermissionCard, {
+      item: escouade({ title: 'court', description: 'a'.repeat(2400) }),
+      agentId: 'a1',
+      pending: true,
+      cwd: 'C:\\code',
+    });
+    expect(
+      screen.getByText('400 caractères de plus ne sont pas montrés : lis la demande entière dans la conversation.'),
+    ).toBeInTheDocument();
+    // Only the value that was cut says it.
+    expect(screen.getAllByText(/de plus/)).toHaveLength(1);
+    unmount();
+    render(PermissionCard, { item: escouade({ description: 'a'.repeat(2001) }), agentId: 'a1', pending: true, cwd: 'C:\\code' });
+    expect(screen.getByText('1 caractère de plus n’est pas montré : lis la demande entière dans la conversation.')).toBeInTheDocument();
+  });
+
   it('sums up its decision with the tool in words and what it acted on', () => {
     render(PermissionCard, {
       item: escouade({ project: 'demo', title: 'Corriger la connexion' }, { decision: 'allow' }),
@@ -159,6 +177,13 @@ describe('PermissionCard of a tool of Escouade', () => {
     expect(screen.getByText('Escouade · Start an agent')).toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'What Claude gives the tool' })).toBeInTheDocument();
     expect(terms()).toEqual(['project:', 'message:']);
+  });
+
+  it('says what a cut value hides in English, its count grouped', () => {
+    setLang('en');
+    fakeBackend();
+    render(PermissionCard, { item: escouade({ description: 'a'.repeat(3500) }), agentId: 'a1', pending: true, cwd: 'C:\\code' });
+    expect(screen.getByText('1,500 more characters are not shown: read the whole request in the conversation.')).toBeInTheDocument();
   });
 });
 
