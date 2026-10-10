@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { askCommit, canCommit, mergeAgent } from '../lib/agent-actions';
+  import { askCommit, canCommit, integrateBase, mergeAgent } from '../lib/agent-actions';
   import { basename, dirname, fInt } from '../lib/format';
   import { t } from '../lib/i18n';
   import { api } from '../lib/ipc';
@@ -252,6 +252,11 @@
     <div class="foot merge">
       <button class="btn" style="flex:1" onclick={() => agent && mergeAgent(agent)}
         >{t('git.files.merge', { branch: agent.worktree.branch, base: agent.worktree.baseBranch })}</button
+      >
+    </div>
+    <div class="foot merge">
+      <button class="btn" style="flex:1" onclick={() => agent && integrateBase(agent)}
+        >{t('branches.integrate.menu', { base: agent.worktree.baseBranch })}</button
       >
     </div>
   {/if}

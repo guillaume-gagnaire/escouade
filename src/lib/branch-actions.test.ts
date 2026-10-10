@@ -9,6 +9,7 @@ import {
   deleteBranch,
   refusalText,
   remoteCopy,
+  startAgentOn,
   switchBranch,
   tellRefusal,
   worktreeReason,
@@ -357,5 +358,37 @@ describe('deleteBranch', () => {
       confirm: 'Delete',
       option: { label: 'Also delete origin/feat/x', value: false },
     });
+  });
+});
+
+describe('startAgentOn', () => {
+  beforeEach(() => resetApp({ agents: [] }));
+
+  it('starts an agent on the branch and shows it at once, like a new agent', async () => {
+    const backend = fakeBackend({ create_agent_on_branch: (a: any) => agent({ id: 'a9', name: 'agent-9', projectId: a.projectId }) });
+    app.editor = { p1: { open: true } } as any;
+    expect(await startAgentOn('p1', 'origin/feat/login')).toBe(true);
+    expect(backend.called('create_agent_on_branch')[0].args).toEqual({ projectId: 'p1', branch: 'origin/feat/login', model: null });
+    expect(app.agents.a9.name).toBe('agent-9');
+    expect(app.ui.selectedAgent.p1).toBe('a9');
+    expect(app.toasts).toEqual([]);
+  });
+
+  it('tells in a toast why the branch was refused, in words or by its code, and starts nothing', async () => {
+    const refusals = [
+      ['C’est la branche du dossier du projet : un agent sans worktree y travaille déjà, ou change de branche d’abord.'],
+      ['IN_WORKTREE:a1:refacto-auth', 'La branche « feat/login » est utilisée par l’agent refacto-auth, dans son worktree.'],
+    ];
+    for (const [refusal, text = refusal] of refusals) {
+      resetApp({ agents: [] });
+      fakeBackend({
+        create_agent_on_branch: () => {
+          throw refusal;
+        },
+      });
+      expect(await startAgentOn('p1', 'feat/login')).toBe(false);
+      expect(app.toasts).toEqual([expect.objectContaining({ text, kind: 'error' })]);
+      expect(Object.keys(app.agents)).toEqual([]);
+    }
   });
 });

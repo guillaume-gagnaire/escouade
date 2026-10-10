@@ -1,9 +1,10 @@
-import { render, screen, within } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
-import { resetApp, ticket } from '../../test/ipc';
+import { menu } from '../../lib/menu.svelte';
+import { branchInfo, fakeBackend, resetApp, ticket } from '../../test/ipc';
 import TicketForm from './TicketForm.svelte';
 
 const fields = () => [
@@ -15,6 +16,128 @@ const fields = () => [
 
 describe('TicketForm', () => {
   beforeEach(() => resetApp());
+
+  describe('its branch', () => {
+    const LIST = [
+      branchInfo({ name: 'main', current: true, worktree: 'C:\\code\\demo-api' }),
+      branchInfo({ name: 'feat/login' }),
+      branchInfo({ name: 'origin/hotfix', remote: true }),
+    ];
+    const field = () => screen.getByRole('button', { name: /^Branche/ });
+    /** The form, the project having `LIST` for branches. */
+    const open = (props: Record<string, unknown> = {}) => {
+      const backend = fakeBackend({ branch_list: () => LIST });
+      const onsubmit = vi.fn();
+      render(TicketForm, { projectId: 'p1', onsubmit, oncancel: vi.fn(), ...props });
+      return { backend, onsubmit };
+    };
+    /** Chooses a branch to take up, through the menu and the picker. */
+    async function takeUp(name: string) {
+      await userEvent.click(field());
+      menu.open!.items.find((i) => i.label === 'Reprendre une branche existante…')!.onClick!();
+      menu.close();
+      const picker = await screen.findByRole('dialog', { name: 'Choisir une branche' });
+      await userEvent.click(await within(picker).findByText(name));
+    }
+
+    it('says a new ticket gets a branch of its own, named after its key, which it has not got yet', () => {
+      open();
+      expect(field()).toHaveTextContent('Nouvelle branche ticket/<clé>');
+    });
+
+    it('names the branch of a ticket that exists by its key', () => {
+      open({ ticket: ticket({ key: 'DEM-12' }) });
+      expect(field()).toHaveTextContent('Nouvelle branche ticket/dem-12');
+    });
+
+    it('offers to make the ticket’s own branch or to take up one that exists', async () => {
+      open();
+      await userEvent.click(field());
+      expect(field()).toHaveAttribute('aria-haspopup', 'menu');
+      expect(menu.open!.items.map((i) => i.label)).toEqual(['Nouvelle branche ticket/<clé>', 'Reprendre une branche existante…']);
+    });
+
+    it('sends the branch chosen in the picker with the ticket, and shows it', async () => {
+      const { onsubmit } = open();
+      await takeUp('feat/login');
+      await waitFor(() => expect(field()).toHaveTextContent('feat/login'));
+      expect(screen.queryByRole('dialog', { name: 'Choisir une branche' })).toBeNull();
+      await userEvent.type(screen.getByRole('textbox', { name: 'Titre du ticket' }), 'Reprendre{Enter}');
+      expect(onsubmit).toHaveBeenCalledWith({
+        title: 'Reprendre',
+        description: '',
+        criteria: [],
+        maxLoops: 5,
+        after: [],
+        branch: 'feat/login',
+      });
+    });
+
+    it('takes a remote branch under its own name', async () => {
+      const { onsubmit } = open();
+      await takeUp('origin/hotfix');
+      await userEvent.type(screen.getByRole('textbox', { name: 'Titre du ticket' }), 'Reprendre{Enter}');
+      expect(onsubmit.mock.calls[0][0].branch).toBe('origin/hotfix');
+    });
+
+    it('cannot take up the branch of the project’s folder, which the picker says', async () => {
+      open();
+      await userEvent.click(field());
+      menu.open!.items[1].onClick!();
+      menu.close();
+      const picker = await screen.findByRole('dialog', { name: 'Choisir une branche' });
+      const main = (await within(picker).findByText('main')).closest('[role="option"]')!;
+      expect(main).toHaveAttribute('aria-disabled', 'true');
+    });
+
+    it('sends nothing about the branch of a ticket that keeps its own, but gives it up when it had another', async () => {
+      const { onsubmit } = open();
+      await userEvent.type(screen.getByRole('textbox', { name: 'Titre du ticket' }), 'Seul{Enter}');
+      expect(onsubmit.mock.calls[0][0]).not.toHaveProperty('branch');
+    });
+
+    it('shows the branch an edited ticket takes up, and sends the ticket’s own again when it is given up', async () => {
+      const { onsubmit } = open({ ticket: ticket({ branch: 'feat/login' }) });
+      expect(field()).toHaveTextContent('feat/login');
+      // Kept: sent again as it is.
+      await userEvent.type(screen.getByRole('textbox', { name: 'Titre du ticket' }), '{Enter}');
+      expect(onsubmit.mock.calls[0][0].branch).toBe('feat/login');
+      await userEvent.click(field());
+      menu.open!.items[0].onClick!();
+      menu.close();
+      await waitFor(() => expect(field()).toHaveTextContent('Nouvelle branche ticket/dem-1'));
+      await userEvent.type(screen.getByRole('textbox', { name: 'Titre du ticket' }), '{Enter}');
+      expect(onsubmit.mock.calls[1][0].branch).toBe('');
+    });
+
+    it('asks before leaving when only the branch changed', async () => {
+      open();
+      await takeUp('feat/login');
+      await userEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+      expect(app.modal).toMatchObject({ kind: 'confirm', title: 'Abandonner les modifications ?' });
+    });
+
+    it('leaves the form’s Escape to the picker while it is open', async () => {
+      const oncancel = vi.fn();
+      open({ oncancel });
+      await userEvent.click(field());
+      menu.open!.items[1].onClick!();
+      menu.close();
+      await screen.findByRole('dialog', { name: 'Choisir une branche' });
+      await fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' });
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Choisir une branche' })).toBeNull());
+      expect(oncancel).not.toHaveBeenCalled();
+    });
+
+    it('is written in English', async () => {
+      setLang('en');
+      open();
+      const english = screen.getByRole('button', { name: /^Branch/ });
+      expect(english).toHaveTextContent('New branch ticket/<key>');
+      await userEvent.click(english);
+      expect(menu.open!.items.map((i) => i.label)).toEqual(['New branch ticket/<key>', 'Take up an existing branch…']);
+    });
+  });
 
   it('is left with Escape from every field, not only the title', async () => {
     const oncancel = vi.fn();

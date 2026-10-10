@@ -3,7 +3,15 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ConfirmModal from '../components/modals/ConfirmModal.svelte';
 import { agent, fakeBackend, resetApp } from '../test/ipc';
-import { commitAgentPrompt, commitAllPrompt, commitViaAgent, copyRemoteLink, mergeAgent, toggleRemote } from './agent-actions';
+import {
+  commitAgentPrompt,
+  commitAllPrompt,
+  commitViaAgent,
+  copyRemoteLink,
+  integrateBase,
+  mergeAgent,
+  toggleRemote,
+} from './agent-actions';
 import { setLang } from './i18n';
 import { app } from './state.svelte';
 
@@ -215,5 +223,65 @@ describe('agent actions in English', () => {
     await commitViaAgent(app.agents.a2, 'project');
     expect(backend.called('send_message')[0].args.text).toMatch(/^Commit all the current changes/);
     expect(app.toasts.at(-1)).toMatchObject({ text: 'Demande de commit envoyée à landing', kind: 'ok' });
+  });
+});
+
+describe('integrateBase', () => {
+  beforeEach(() => resetApp({ agents: [landing()] }));
+
+  it('tells the base went into the branch', async () => {
+    const backend = fakeBackend({ integrate_base: () => ({ kind: 'done' }) });
+    await integrateBase(app.agents.a2);
+    expect(backend.called('integrate_base')[0].args).toEqual({ id: 'a2' });
+    expect(app.toasts).toEqual([expect.objectContaining({ text: 'main intégrée dans ccm/landing.', kind: 'ok' })]);
+  });
+
+  it('says the branch had everything already', async () => {
+    fakeBackend({ integrate_base: () => ({ kind: 'upToDate' }) });
+    await integrateBase(app.agents.a2);
+    expect(app.toasts).toEqual([expect.objectContaining({ text: 'ccm/landing a déjà tout ce qu’il y a dans main.', kind: 'info' })]);
+  });
+
+  it('tells who has the conflicts to resolve, a merge left in the worktree or a rebase undone', async () => {
+    fakeBackend({ integrate_base: () => ({ kind: 'conflict', files: ['src/a.ts'], rebase: false }) });
+    await integrateBase(app.agents.a2);
+    fakeBackend({ integrate_base: () => ({ kind: 'conflict', files: ['src/a.ts', 'src/b.ts'], rebase: false }) });
+    await integrateBase(app.agents.a2);
+    fakeBackend({ integrate_base: () => ({ kind: 'conflict', files: ['src/a.ts'], rebase: true }) });
+    await integrateBase(app.agents.a2);
+    expect(app.toasts.map((t) => [t.text, t.kind])).toEqual([
+      ['main a un conflit avec ccm/landing sur 1 fichier : landing doit le résoudre.', 'info'],
+      ['main a des conflits avec ccm/landing sur 2 fichiers : landing doit les résoudre.', 'info'],
+      ['Le rebase sur main a des conflits et a été annulé : landing doit le refaire.', 'info'],
+    ]);
+  });
+
+  it('tells the refusal of the backend as it is', async () => {
+    fakeBackend({
+      integrate_base: () => {
+        throw "Commite ou mets de côté les changements de l'agent d'abord.";
+      },
+    });
+    await integrateBase(app.agents.a2);
+    expect(app.toasts).toEqual([
+      expect.objectContaining({ text: "Commite ou mets de côté les changements de l'agent d'abord.", kind: 'error' }),
+    ]);
+  });
+
+  it('does nothing for an agent without a worktree', async () => {
+    const backend = fakeBackend({ integrate_base: () => ({ kind: 'done' }) });
+    await integrateBase(agent({ id: 'a1' }));
+    expect(backend.called('integrate_base')).toEqual([]);
+    expect(app.toasts).toEqual([]);
+  });
+
+  it('writes its toasts in English', async () => {
+    setLang('en');
+    fakeBackend({ integrate_base: () => ({ kind: 'done' }) });
+    await integrateBase(app.agents.a2);
+    expect(app.toasts.at(-1)).toMatchObject({ text: 'main integrated into ccm/landing.', kind: 'ok' });
+    fakeBackend({ integrate_base: () => ({ kind: 'conflict', files: ['a', 'b'], rebase: false }) });
+    await integrateBase(app.agents.a2);
+    expect(app.toasts.at(-1)?.text).toBe('main conflicts with ccm/landing in 2 files: landing has to resolve them.');
   });
 });

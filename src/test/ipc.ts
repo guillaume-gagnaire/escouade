@@ -192,6 +192,7 @@ export function ticket(over: Partial<Ticket> = {}): Ticket {
     reviewAt: null,
     doneAt: null,
     external: null,
+    branch: '',
     ...over,
   };
 }

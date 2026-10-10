@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { deletable, deleteBranch, switchBranch, worktreeReason } from '../../lib/branch-actions';
+  import { deletable, deleteBranch, startAgentOn, switchBranch, worktreeReason } from '../../lib/branch-actions';
   import { rankFiles } from '../../lib/editor/quick-open';
   import { trapFocus } from '../../lib/focus';
   import { gitSync, syncInfo, type SyncOp } from '../../lib/git-sync.svelte';
@@ -11,8 +11,23 @@
   import type { BranchInfo } from '../../lib/types';
 
   // The picker the status bar's branch button opens, above it: the branches of the project's repository, searched, and
-  // under them what is done to branches (create one, clean up, sync). `anchor`: the button, to open over it.
-  let { projectId, anchor, onclose }: { projectId: string; anchor?: HTMLElement; onclose: () => void } = $props();
+  // under them what is done to branches (create one, clean up, sync). `anchor`: the button, to open over it (under it
+  // when there is more room there). In `pick` mode it only chooses a branch for an agent or a ticket, `onpick` being
+  // given it: the branch of the project's folder and those a worktree has can't be chosen, and nothing else is offered.
+  let {
+    projectId,
+    anchor,
+    onclose,
+    mode = 'switch',
+    onpick,
+  }: {
+    projectId: string;
+    anchor?: HTMLElement;
+    onclose: () => void;
+    mode?: 'switch' | 'pick';
+    onpick?: (b: BranchInfo) => void;
+  } = $props();
+  const picking = $derived(mode === 'pick');
 
   /** Branches shown per group: a repository can have thousands of remote ones, which the search finds. */
   const SHOWN = 300;
@@ -27,18 +42,19 @@
   let active = $state<string | null>(null);
   let switching = $state(false);
   let list = $state<HTMLDivElement>();
-  let place = $state({ left: 16, bottom: 38, maxHeight: 560 });
+  let place = $state<{ left: number; bottom?: number; top?: number; maxHeight: number }>({ left: 16, bottom: 38, maxHeight: 560 });
 
   const sync = $derived(syncInfo(app.git[projectId]));
 
   onMount(() => {
     if (!anchor) return;
     const r = anchor.getBoundingClientRect();
-    place = {
-      left: Math.max(8, Math.min(r.left, window.innerWidth - WIDTH - 8)),
-      bottom: Math.max(8, window.innerHeight - r.top + 6),
-      maxHeight: Math.max(240, Math.min(560, r.top - 22)),
-    };
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - WIDTH - 8));
+    // Over the button, as the status bar's is at the foot of the window; under it when it is in the upper half.
+    place =
+      r.top >= window.innerHeight - r.bottom
+        ? { left, bottom: Math.max(8, window.innerHeight - r.top + 6), maxHeight: Math.max(240, Math.min(560, r.top - 22)) }
+        : { left, top: r.bottom + 6, maxHeight: Math.max(240, Math.min(560, window.innerHeight - r.bottom - 22)) };
   });
 
   /** Reads the branches; a read that comes after a later one is dropped. */
@@ -72,8 +88,12 @@
     return own && !own.current && own.worktree ? own : null;
   }
 
-  /** Why `b` can't be picked: an agent's worktree (or another one) has its branch. */
+  /** The branch the project's folder is on, or the remote branch of the local one that is. */
+  const isFolder = (b: BranchInfo) => b.current || (b.remote && !!b.trackedBy && !!localByName.get(b.trackedBy)?.current);
+
+  /** Why `b` can't be picked: an agent's worktree (or another one) has its branch, or, to pick one for an agent, the folder does. */
   function reasonOf(b: BranchInfo): string | null {
+    if (picking && isFolder(b)) return t('branches.agent.isFolderBranch');
     const h = held(b);
     return h && worktreeReason(h);
   }
@@ -157,8 +177,14 @@
   async function pick(row: Row | undefined) {
     if (!row || row.why || switching) return;
     const b = row.b;
+    // For an agent or a ticket: the branch is given back once the picker is gone.
+    if (picking) {
+      await release();
+      onpick?.(b);
+      return;
+    }
     // Already on it (a remote branch: on the local one that tracks it).
-    if (b.current || (b.remote && b.trackedBy && localByName.get(b.trackedBy)?.current)) {
+    if (isFolder(b)) {
       onclose();
       return;
     }
@@ -170,19 +196,34 @@
     else onclose();
   }
 
-  /** What can be done to a branch other than switching to it. Nothing for the one the folder is on, nor for a worktree's. */
+  /**
+   * What can be done to a branch other than switching to it: start an agent on it, and delete it. Nothing for the one
+   * the folder is on, nor for a worktree's (an agent there, or its branch to delete).
+   */
   function itemsOf(b: BranchInfo): MenuItem[] {
-    if (!deletable(b)) return [];
-    return [
-      {
+    if (picking) return [];
+    const items: MenuItem[] = [];
+    if (!isFolder(b) && !held(b)) {
+      items.push({
+        label: t('branches.agent.launchHere'),
+        onClick: async () => {
+          await release();
+          void startAgentOn(projectId, b.name);
+        },
+      });
+    }
+    if (deletable(b)) {
+      if (items.length) items.push({ label: '', separator: true });
+      items.push({
         label: b.remote ? t('branches.picker.deleteRemote') : t('branches.picker.deleteLocal'),
         danger: true,
         onClick: async () => {
           await release();
           deleteBranch(projectId, b);
         },
-      },
-    ];
+      });
+    }
+    return items;
   }
 
   function onContextMenu(e: MouseEvent, b: BranchInfo) {
@@ -241,9 +282,10 @@
   role="dialog"
   tabindex="-1"
   aria-modal="true"
-  aria-label={t('branches.picker.title')}
+  aria-label={picking ? t('branches.agent.pickTitle') : t('branches.picker.title')}
   style:left="{place.left}px"
-  style:bottom="{place.bottom}px"
+  style:bottom={place.bottom === undefined ? undefined : `${place.bottom}px`}
+  style:top={place.top === undefined ? undefined : `${place.top}px`}
   style:width="{WIDTH}px"
   style:max-height="{place.maxHeight}px"
 >
@@ -271,7 +313,7 @@
     id="branch-list"
     role="listbox"
     tabindex="-1"
-    aria-label={t('branches.picker.title')}
+    aria-label={picking ? t('branches.agent.pickTitle') : t('branches.picker.title')}
     bind:this={list}
     onmousedown={(e) => e.preventDefault()}
   >
@@ -333,29 +375,31 @@
       <p id="branch-description">{description}</p>
     {/if}
   </div>
-  <div class="foot">
-    <div class="acts">
-      <button class="act" onclick={newBranch}>{t('branches.picker.newBranch')}</button>
-      <button class="act" onclick={mergedBranches}>{t('branches.picker.mergedBranches')}</button>
-    </div>
-    {#if sync}
+  {#if !picking}
+    <div class="foot">
       <div class="acts">
-        <button class="act" disabled={!sync.tracked || sync.behind === 0} onclick={() => runSync('pull')}
-          >{t('branches.sync.pull')} <span class="hint">↓{sync.behind}</span></button
-        >
-        {#if sync.tracked}
-          <button class="act" disabled={sync.ahead === 0} onclick={() => runSync('push')}
-            >{t('branches.sync.push')} <span class="hint">↑{sync.ahead}</span></button
-          >
-        {:else}
-          <button class="act" onclick={() => runSync('push')}>{t('branches.sync.publish')}</button>
-        {/if}
-        <button class="act" onclick={() => runSync('fetch')}
-          >{t('branches.sync.fetch')} <span class="hint">{t('branches.sync.now')}</span></button
-        >
+        <button class="act" onclick={newBranch}>{t('branches.picker.newBranch')}</button>
+        <button class="act" onclick={mergedBranches}>{t('branches.picker.mergedBranches')}</button>
       </div>
-    {/if}
-  </div>
+      {#if sync}
+        <div class="acts">
+          <button class="act" disabled={!sync.tracked || sync.behind === 0} onclick={() => runSync('pull')}
+            >{t('branches.sync.pull')} <span class="hint">↓{sync.behind}</span></button
+          >
+          {#if sync.tracked}
+            <button class="act" disabled={sync.ahead === 0} onclick={() => runSync('push')}
+              >{t('branches.sync.push')} <span class="hint">↑{sync.ahead}</span></button
+            >
+          {:else}
+            <button class="act" onclick={() => runSync('push')}>{t('branches.sync.publish')}</button>
+          {/if}
+          <button class="act" onclick={() => runSync('fetch')}
+            >{t('branches.sync.fetch')} <span class="hint">{t('branches.sync.now')}</span></button
+          >
+        </div>
+      {/if}
+    </div>
+  {/if}
 </div>
 
 <style>

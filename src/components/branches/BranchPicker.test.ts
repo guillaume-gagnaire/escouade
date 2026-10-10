@@ -349,8 +349,12 @@ describe('BranchPicker', () => {
       const { onclose } = setup();
       await loaded();
       await fireEvent.contextMenu(option('feat/login'));
-      expect(menu.open!.items.map((i) => [i.label, i.danger])).toEqual([['Supprimer la branche…', true]]);
-      menu.open!.items[0].onClick!();
+      expect(menu.open!.items.map((i) => [i.label, i.danger])).toEqual([
+        ['Lancer un agent sur cette branche', undefined],
+        ['', undefined],
+        ['Supprimer la branche…', true],
+      ]);
+      menu.open!.items[2].onClick!();
       expect(onclose).toHaveBeenCalled();
       await waitFor(() => expect(app.modal).toMatchObject({ kind: 'confirm', title: 'Supprimer la branche « feat/login » ?' }));
     });
@@ -360,10 +364,10 @@ describe('BranchPicker', () => {
       await loaded();
       await userEvent.keyboard('{ArrowDown}');
       await fireEvent.keyDown(field, { key: 'ContextMenu' });
-      expect(menu.open!.items.map((i) => i.label)).toEqual(['Supprimer la branche…']);
+      expect(menu.open!.items.map((i) => i.label)).toEqual(['Lancer un agent sur cette branche', '', 'Supprimer la branche…']);
       menu.close();
       await fireEvent.keyDown(field, { key: 'F10', shiftKey: true });
-      expect(menu.open!.items.map((i) => i.label)).toEqual(['Supprimer la branche…']);
+      expect(menu.open!.items.map((i) => i.label)).toEqual(['Lancer un agent sur cette branche', '', 'Supprimer la branche…']);
       menu.close();
       await fireEvent.keyDown(field, { key: 'F10' });
       expect(menu.open).toBeNull();
@@ -373,7 +377,41 @@ describe('BranchPicker', () => {
       setup();
       await loaded();
       await fireEvent.contextMenu(option('origin/hotfix'));
-      expect(menu.open!.items.map((i) => i.label)).toEqual(['Supprimer la branche distante…']);
+      expect(menu.open!.items.map((i) => i.label)).toEqual(['Lancer un agent sur cette branche', '', 'Supprimer la branche distante…']);
+    });
+
+    it('starts an agent on the branch from the menu, the picker gone first', async () => {
+      const { backend, onclose } = setup({
+        handlers: { create_agent_on_branch: (a: any) => agent({ id: 'a9', name: 'agent-9', projectId: a.projectId }) },
+      });
+      await loaded();
+      await fireEvent.contextMenu(option('origin/hotfix'));
+      menu.open!.items[0].onClick!();
+      expect(onclose).toHaveBeenCalled();
+      await waitFor(() => expect(backend.called('create_agent_on_branch')).toHaveLength(1));
+      expect(backend.called('create_agent_on_branch')[0].args).toEqual({ projectId: 'p1', branch: 'origin/hotfix', model: null });
+      await waitFor(() => expect(app.ui.selectedAgent.p1).toBe('a9'));
+    });
+
+    it('tells in a toast why an agent could not be started there', async () => {
+      setup({
+        handlers: {
+          create_agent_on_branch: () => {
+            throw 'IN_WORKTREE:a1:refacto-auth';
+          },
+        },
+      });
+      await loaded();
+      await fireEvent.contextMenu(option('feat/login'));
+      menu.open!.items[0].onClick!();
+      await waitFor(() =>
+        expect(app.toasts).toEqual([
+          expect.objectContaining({
+            text: 'La branche « feat/login » est utilisée par l’agent refacto-auth, dans son worktree.',
+            kind: 'error',
+          }),
+        ]),
+      );
     });
 
     it('never offers it for the current branch, nor for one a worktree holds', async () => {
@@ -435,6 +473,97 @@ describe('BranchPicker', () => {
   });
 });
 
+/** The picker to choose the branch of an agent or of a ticket. */
+function pick(over: { list?: BranchInfo[] } = {}) {
+  const backend = fakeBackend({ branch_list: () => over.list ?? LIST, branch_switch: () => null });
+  app.git = { p1: gitInfo(tracked) };
+  const [onclose, onpick] = [vi.fn(), vi.fn()];
+  render(BranchPicker, { projectId: 'p1', onclose, mode: 'pick', onpick });
+  return { backend, onclose, onpick, field: screen.getByRole('combobox') };
+}
+
+describe('BranchPicker to pick a branch', () => {
+  beforeEach(() => {
+    resetApp({ agents: [agent({ id: 'a1', name: 'refacto-auth' })] });
+    menu.close();
+  });
+
+  it('lists the branches under a title of its own, with none of what is done to branches', async () => {
+    const { field } = pick();
+    await loaded();
+    expect(screen.getByRole('dialog', { name: 'Choisir une branche' })).toBeInTheDocument();
+    expect(field).toHaveFocus();
+    expect(names()).toEqual(['main', 'feat/login', 'escouade/refacto-auth', 'origin/feat/login', 'origin/hotfix']);
+    for (const label of [/Nouvelle branche/, /Branches mergées/, /Récupérer/, /Pousser/, /Fetch/]) {
+      expect(screen.queryByRole('button', { name: label })).toBeNull();
+    }
+  });
+
+  it('gives the branch clicked, a remote one under its own name, and does not switch to it', async () => {
+    const { backend, onclose, onpick } = pick();
+    await loaded();
+    await userEvent.click(option('feat/login'));
+    expect(onpick).toHaveBeenCalledWith(FEAT);
+    expect(onclose).toHaveBeenCalled();
+    onpick.mockClear();
+    await userEvent.click(option('origin/hotfix'));
+    expect(onpick).toHaveBeenCalledWith(REMOTE_HOTFIX);
+    expect(backend.called('branch_switch')).toHaveLength(0);
+  });
+
+  it('picks with the keyboard too: the arrows, then Enter', async () => {
+    const { onpick } = pick();
+    await loaded();
+    await userEvent.keyboard('{ArrowDown}{Enter}');
+    expect(onpick).toHaveBeenCalledWith(FEAT);
+  });
+
+  it('cannot pick the branch of the project’s folder, which says why, nor the remote branch it tracks', async () => {
+    const list = [MAIN, FEAT, branchInfo({ name: 'origin/main', remote: true, trackedBy: 'main' })];
+    const { onpick, onclose } = pick({ list });
+    await loaded(3);
+    const why = 'C’est la branche du dossier du projet : un agent sans worktree y travaille déjà, ou change de branche d’abord.';
+    for (const name of ['main', 'origin/main']) {
+      expect(option(name)).toHaveAttribute('aria-disabled', 'true');
+      expect(option(name)).toHaveAttribute('title', why);
+      await userEvent.click(option(name));
+    }
+    expect(onpick).not.toHaveBeenCalled();
+    expect(onclose).not.toHaveBeenCalled();
+    // The cursor on it: the reason is under the list, and Enter does nothing.
+    await userEvent.hover(option('main'));
+    expect(screen.getByText(why, { selector: 'p' })).toBeInTheDocument();
+    await userEvent.keyboard('{Enter}');
+    expect(onpick).not.toHaveBeenCalled();
+  });
+
+  it('cannot pick a branch a worktree holds either', async () => {
+    const { onpick } = pick();
+    await loaded();
+    expect(option('escouade/refacto-auth')).toHaveAttribute('aria-disabled', 'true');
+    await userEvent.click(option('escouade/refacto-auth'));
+    expect(onpick).not.toHaveBeenCalled();
+  });
+
+  it('opens no menu on a right click', async () => {
+    pick();
+    await loaded();
+    await fireEvent.contextMenu(option('feat/login'));
+    expect(menu.open).toBeNull();
+  });
+
+  it('writes its title and its reason in English', async () => {
+    setLang('en');
+    pick();
+    await loaded();
+    expect(screen.getByRole('dialog', { name: 'Choose a branch' })).toBeInTheDocument();
+    expect(option('main')).toHaveAttribute(
+      'title',
+      'This is the branch of the project’s folder: an agent without a worktree already works on it, or switch branches first.',
+    );
+  });
+});
+
 describe('BranchPicker in English', () => {
   beforeEach(() => {
     resetApp({ agents: [agent({ id: 'a1', name: 'refacto-auth' })] });
@@ -469,6 +598,6 @@ describe('BranchPicker in English', () => {
     setup();
     await loaded();
     await fireEvent.contextMenu(option('feat/login'));
-    expect(menu.open!.items.map((i) => i.label)).toEqual(['Delete branch…']);
+    expect(menu.open!.items.map((i) => i.label)).toEqual(['Start an agent on this branch', '', 'Delete branch…']);
   });
 });

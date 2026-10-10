@@ -6,7 +6,8 @@ import { setLang } from '../lib/i18n';
 import { menu } from '../lib/menu.svelte';
 import { app } from '../lib/state.svelte';
 import { openTerminal } from '../lib/terminals';
-import { agent, fakeBackend, gitInfo, project, resetApp, ticket } from '../test/ipc';
+import { agent, branchInfo, fakeBackend, gitInfo, project, resetApp, ticket } from '../test/ipc';
+import ContextMenu from './ContextMenu.svelte';
 import Sidebar from './Sidebar.svelte';
 
 // The xterm.js instance a terminal draws on is not one of jsdom's: only what is asked of the backend is looked at.
@@ -111,6 +112,129 @@ describe('Sidebar', () => {
     await userEvent.click(screen.getByRole('button', { name: /Nouvel agent/ }));
     expect(backend.called('create_agent')[0].args).toEqual({ projectId: 'p1', model: null });
     expect(app.agent?.id).toBe('a4');
+  });
+
+  describe('a new agent on a branch', () => {
+    const FOLDER = branchInfo({ name: 'main', current: true, worktree: 'C:\\code\\demo-api' });
+    const LIST = [FOLDER, branchInfo({ name: 'feat/login' }), branchInfo({ name: 'origin/hotfix', remote: true })];
+    const more = () => screen.getByRole('button', { name: 'Autres façons de créer un agent' });
+    const handlers = () => ({
+      branch_list: () => LIST,
+      create_agent_on_branch: (a: any) => agent({ id: 'a9', name: 'agent-9', projectId: a.projectId, createdAt: 9 }),
+    });
+
+    it('offers it in a menu beside « Nouvel agent »', async () => {
+      fakeBackend(handlers());
+      render(Sidebar, { project: project() });
+      expect(more()).toHaveAttribute('aria-haspopup', 'menu');
+      await userEvent.click(more());
+      expect(menu.open!.items.map((i) => i.label)).toEqual(['Nouvel agent sur une branche…']);
+      // The button itself still makes an agent at once.
+      expect(screen.getByRole('button', { name: /^\+?\s*Nouvel agent$/ })).toBeInTheDocument();
+    });
+
+    it('opens the branch picker, which gives the agent its branch', async () => {
+      const backend = fakeBackend(handlers());
+      render(Sidebar, { project: project() });
+      await userEvent.click(more());
+      menu.open!.items[0].onClick!();
+      menu.close();
+      const picker = await screen.findByRole('dialog', { name: 'Choisir une branche' });
+      expect(within(picker).queryByRole('button', { name: /Nouvelle branche/ })).toBeNull();
+      await userEvent.click(await within(picker).findByText('origin/hotfix'));
+      expect(backend.called('create_agent_on_branch')[0].args).toEqual({ projectId: 'p1', branch: 'origin/hotfix', model: null });
+      await vi.waitFor(() => expect(app.agent?.id).toBe('a9'));
+      expect(screen.queryByRole('dialog', { name: 'Choisir une branche' })).toBeNull();
+    });
+
+    it('cannot give it the branch of the project’s folder', async () => {
+      const backend = fakeBackend(handlers());
+      render(Sidebar, { project: project() });
+      await userEvent.click(more());
+      menu.open!.items[0].onClick!();
+      menu.close();
+      const picker = await screen.findByRole('dialog', { name: 'Choisir une branche' });
+      const main = (await within(picker).findByText('main')).closest('[role="option"]')!;
+      expect(main).toHaveAttribute('aria-disabled', 'true');
+      await userEvent.click(main);
+      expect(backend.called('create_agent_on_branch')).toHaveLength(0);
+    });
+
+    it('works from the keyboard, and gives the focus back to the button once the picker is closed', async () => {
+      fakeBackend(handlers());
+      render(Sidebar, { project: project() });
+      render(ContextMenu);
+      more().focus();
+      await userEvent.keyboard('{Enter}');
+      const entry = await screen.findByRole('menuitem', { name: 'Nouvel agent sur une branche…' });
+      expect(entry).toHaveFocus();
+      await userEvent.keyboard('{Enter}');
+      await screen.findByRole('dialog', { name: 'Choisir une branche' });
+      expect(screen.getByRole('combobox')).toHaveFocus();
+      await userEvent.keyboard('{Escape}');
+      await vi.waitFor(() => expect(screen.queryByRole('dialog', { name: 'Choisir une branche' })).toBeNull());
+      expect(more()).toHaveFocus();
+    });
+
+    it('is written in English', async () => {
+      setLang('en');
+      fakeBackend(handlers());
+      render(Sidebar, { project: project() });
+      await userEvent.click(screen.getByRole('button', { name: 'Other ways to create an agent' }));
+      expect(menu.open!.items.map((i) => i.label)).toEqual(['New agent on a branch…']);
+      menu.open!.items[0].onClick!();
+      menu.close();
+      expect(await screen.findByRole('dialog', { name: 'Choose a branch' })).toBeInTheDocument();
+    });
+  });
+
+  describe('« Intégrer <base> »', () => {
+    const wt = { path: 'C:\\code\\demo-api\\.claude\\worktrees\\a1', branch: 'escouade/a1', baseBranch: 'develop' };
+
+    it('is in the menu of an agent with a worktree, and integrates its base', async () => {
+      resetApp({ agents: [agent({ worktree: wt })] });
+      const backend = fakeBackend({ integrate_base: () => ({ kind: 'done' }) });
+      render(Sidebar, { project: project() });
+      await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
+      const labels = menu.open!.items.map((i) => i.label);
+      expect(labels).toContain('Intégrer develop');
+      expect(labels.indexOf('Intégrer develop')).toBeGreaterThan(labels.indexOf('Archiver'));
+      menu.open!.items.find((i) => i.label === 'Intégrer develop')!.onClick!();
+      await vi.waitFor(() => expect(backend.called('integrate_base')).toHaveLength(1));
+      expect(backend.called('integrate_base')[0].args).toEqual({ id: 'a1' });
+      await vi.waitFor(() => expect(app.toasts.at(-1)).toMatchObject({ text: 'develop intégrée dans escouade/a1.', kind: 'ok' }));
+    });
+
+    it('is not offered for an agent in the project’s folder, nor for an archived one', async () => {
+      resetApp({ agents: [agent(), agent({ id: 'a3', name: 'vieux', archived: true, worktree: wt })] });
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
+      expect(menu.open!.items.map((i) => i.label).join()).not.toContain('Intégrer');
+      await userEvent.click(screen.getByText(/Archivés/));
+      await fireEvent.contextMenu(screen.getByRole('button', { name: /vieux/ }));
+      expect(menu.open!.items.map((i) => i.label).join()).not.toContain('Intégrer');
+    });
+  });
+
+  describe('deleting the agent of an existing branch', () => {
+    it('says the branch is kept, where an ordinary agent’s goes with its worktree', async () => {
+      const own = { path: 'C:\\code\\demo-api\\.claude\\worktrees\\a1', branch: 'escouade/a1', baseBranch: 'main' };
+      const taken = { path: 'C:\\code\\demo-api\\.claude\\worktrees\\login', branch: 'feat/login', baseBranch: 'main', existing: true };
+      resetApp({ agents: [agent({ worktree: own }), agent({ id: 'a2', name: 'login', worktree: taken, createdAt: 2 })] });
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      const option = async (name: RegExp) => {
+        await fireEvent.contextMenu(screen.getByRole('button', { name }));
+        // The last entry, whatever the language: it deletes.
+        menu.open!.items.find((i) => i.danger)!.onClick!();
+        return (app.modal as any).option.label as string;
+      };
+      expect(await option(/refacto-auth/)).toBe('Supprimer aussi le worktree et la branche escouade/a1');
+      expect(await option(/login/)).toBe('Supprimer aussi le worktree (la branche feat/login est conservée)');
+      setLang('en');
+      expect(await option(/login/)).toBe('Also delete the worktree (the branch feat/login is kept)');
+    });
   });
 
   it('tells when an agent stopped by the usage limit resumes', () => {
@@ -579,6 +703,7 @@ describe('Sidebar in English', () => {
       'Duplicate the conversation',
       'Archive',
       'Prepare launch',
+      'Integrate main',
       'Open in editor',
       'Open a terminal',
       '',
