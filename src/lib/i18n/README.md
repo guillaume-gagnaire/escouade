@@ -8,7 +8,6 @@ Tout texte qu’une personne lit dans la fenêtre (texte, `title`, `aria-label`,
 src/lib/i18n/
   fr/<zone>.ts    export default { … } as const satisfies Tree;
   en/<zone>.ts    export default defineZone('<zone>', { … });
-  pending/<lot>.txt   les fichiers que chaque lot doit encore extraire
 ```
 
 Une zone appartient à une seule tâche à la fois : `editor` (L3), `settings` (L4 ; L2 y a déjà écrit `tabs.app` et `app`, l’onglet « Application »), `integrations` et `boardSettings` (L5), `board` et `stats` (L6), `nav` et `git` (L7), `conv` et `composer` (L8), `runs` et `shell` (L9), `errors` (L10), `accounts` (K), `mcp` (M), `branches` (G). `common` et `format` sont remplis (L1) et ne bougent plus : ce qui te manque va dans ta zone, même un mot déjà dans `common` avec un autre sens.
@@ -102,11 +101,10 @@ Un raccourci : `keyLabel('Ctrl+Shift+F')` (« Ctrl+Maj+F », « Ctrl+Shift+F »,
 - Les tests existants restent en français et leurs attentes ne changent pas : `src/test/setup.ts` remet le français avant chaque test.
 - Pour chaque composant principal, un test qui le rend en anglais : `setLang('en')` au début du test (avant le rendu, ou suivi de `flushSync()` après), quelques libellés et un format.
 
-## Le garde-fou et ton fichier `pending`
+## Le garde-fou
 
-`hardcoded.test.ts` échoue sur un texte écrit en dur dans un fichier de `src/` qui n’est dans aucune liste de `pending/`. Il signale : un texte avec une lettre dans le balisage ; un attribut lu (`title`, `aria-*`, `placeholder`, `alt`, `label`, `desc`, `note`, `hint`, `caption`) avec une lettre ; une prop de composant de deux mots ; un attribut accentué ; une chaîne qu’une expression du balisage affiche (`{ok ? 'Oui' : 'Non'}`) ; une chaîne accentuée d’un script ; chaque appel à `plural()`.
+`hardcoded.test.ts` échoue sur un texte écrit en dur dans un fichier de `src/` (tout est extrait : plus aucune liste `pending/`, et le test échoue si un dossier ou un fichier de ce nom revient). Il signale : un texte avec une lettre dans le balisage ; un attribut lu (`title`, `aria-*`, `placeholder`, `alt`, `label`, `desc`, `note`, `hint`, `caption`) avec une lettre ; une prop de composant de deux mots ; un attribut accentué ; une chaîne qu’une expression du balisage affiche (`{ok ? 'Oui' : 'Non'}`) ; une chaîne accentuée d’un script ; chaque appel à `plural()`.
 
-1. Extrais tes fichiers un par un (tests existants verts après chacun).
-2. Supprime `pending/<ton lot>.txt`, puis `npx vitest run src/lib/i18n` : le scan doit passer sur tes fichiers. Ce qu’il voit encore est un texte à extraire.
-3. Une exception (`hardcoded-allow.ts`) seulement pour un texte identique dans toutes les langues (nom propre, symbole, unité comme « CPU ») : texte exact, fichier (ou `'*'`), raison (`why`), **dans le bloc de ton lot**. Une exception qui ne sert plus fait échouer le test.
-4. Ajoute tes mots à ta section de `GLOSSARY.md`.
+1. Un texte nouveau s’écrit directement dans les deux catalogues, puis se lit par `t`.
+2. Une exception (`hardcoded-allow.ts`) seulement pour un texte identique dans toutes les langues (nom propre, symbole, unité comme « CPU ») : texte exact, fichier (ou `'*'`), raison (`why`), dans le bloc de ta tâche. Une exception sans raison, ou qui ne sert plus, fait échouer le test.
+3. Ajoute tes mots à ta section de `GLOSSARY.md`.
