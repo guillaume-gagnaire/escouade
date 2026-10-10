@@ -11,6 +11,7 @@ vi.mock('../../lib/terminals', () => ({
   disposeLog() {},
 }));
 
+import { setLang } from '../../lib/i18n';
 import { menu } from '../../lib/menu.svelte';
 import { app } from '../../lib/state.svelte';
 import { agent, fakeBackend, project, resetApp, ticket } from '../../test/ipc';
@@ -264,5 +265,77 @@ describe('Board import', () => {
     render(Board, { project: app.projects[0] });
     await userEvent.click(screen.getByRole('button', { name: 'Importer' }));
     expect(app.modal).toEqual({ kind: 'import', projectId: 'p1' });
+  });
+});
+
+// The window in English. What `lib/board.ts` says (the places, the summary of the settings, why a ticket waits) is
+// written by its own task: only the texts of the board itself are looked at here.
+describe('Board in English', () => {
+  beforeEach(() => {
+    resetApp({
+      tickets: [
+        ticket(),
+        ticket({ id: 't2', key: 'DEM-2', title: 'Deuxième', rank: 2 }),
+        ticket({ id: 't3', key: 'DEM-3', title: 'En route', column: 'doing', agentId: 'a1', iteration: 1, startedAt: 1 }),
+      ],
+    });
+    app.claudeFound = true;
+    setLang('en');
+  });
+
+  it('names the four columns, says when one is empty, and counts the tickets with the plural of English', () => {
+    fakeBackend();
+    render(Board, { project: app.projects[0] });
+    expect(within(col('To do')).getByText('2', { selector: '.count' })).toBeInTheDocument();
+    expect(within(col('In progress')).getByText('DEM-3')).toBeInTheDocument();
+    expect(within(col('To review')).getByText('Nothing to review')).toBeInTheDocument();
+    expect(within(col('Done')).getByText('No finished tickets')).toBeInTheDocument();
+    expect(screen.getByText('demo-api · 3 tickets · 1 looping')).toBeInTheDocument();
+  });
+
+  it('counts one ticket in the singular', () => {
+    resetApp({ tickets: [ticket()] });
+    app.claudeFound = true;
+    fakeBackend();
+    render(Board, { project: app.projects[0] });
+    expect(screen.getByText('demo-api · 1 ticket · 0 looping')).toBeInTheDocument();
+    expect(within(col('In progress')).getByText('No agent looping')).toBeInTheDocument();
+  });
+
+  it('writes the header in English: the missing Claude Code, the import and the autopilot', () => {
+    fakeBackend();
+    app.claudeFound = false;
+    render(Board, { project: app.projects[0] });
+    expect(screen.getByText('Claude Code not found — no ticket will start')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Import' })).toHaveAttribute('title', 'Import tickets from Jira, Trello or GitHub Issues');
+    expect(screen.getByRole('switch', { name: 'Autopilot' })).toBeChecked();
+    expect(screen.getByText('After approval:')).toBeInTheDocument();
+    expect(screen.getByText('Autopilot').closest('.auto')).toHaveAttribute(
+      'title',
+      'Tickets in “To do” start on their own as soon as a slot is free',
+    );
+  });
+
+  it('says the autopilot is off, and resumes it on demand while it is paused', async () => {
+    const backend = fakeBackend();
+    app.projects[0].board = { ...app.projects[0].board, autopilot: false };
+    app.autopilotPause = { reason: 'limit', pct: null, until: Date.now() + 1_800_000 };
+    render(Board, { project: app.projects[0] });
+    expect(screen.getByText('Autopilot · off')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Resume now' }));
+    expect(backend.called('autopilot_resume')).toHaveLength(1);
+  });
+
+  it('opens the form of a new ticket with its fields in English', async () => {
+    fakeBackend();
+    render(Board, { project: app.projects[0] });
+    await userEvent.click(screen.getByRole('button', { name: 'New ticket' }));
+    expect(screen.getByRole('textbox', { name: 'Ticket title' })).toHaveAttribute('placeholder', 'Ticket title');
+    expect(screen.getByRole('textbox', { name: 'Acceptance criteria' })).toHaveAttribute(
+      'placeholder',
+      'Acceptance criteria, one per line',
+    );
+    expect(screen.getByRole('group', { name: 'Max loops' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
   });
 });

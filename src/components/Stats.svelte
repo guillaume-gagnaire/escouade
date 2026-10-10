@@ -1,6 +1,7 @@
 <script lang="ts">
   import { readPref, writePref } from '../lib/prefs';
-  import { fDate, fInt, fTok, fUsd, plural } from '../lib/format';
+  import { fDate, fInt, fPct, fTok, fUsd } from '../lib/format';
+  import { t } from '../lib/i18n';
   import { api } from '../lib/ipc';
   import { displayModel } from '../lib/models';
   import { app } from '../lib/state.svelte';
@@ -9,10 +10,11 @@
 
   // Categorical palette validated for the dark surface (dataviz validator: all checks pass).
   const SERIES = [
-    { key: 'input', label: 'Entrée', color: '#3987e5' },
-    { key: 'cache', label: 'Cache', color: '#199e70' },
-    { key: 'output', label: 'Sortie', color: '#d95926' },
+    { key: 'input', color: '#3987e5' },
+    { key: 'cache', color: '#199e70' },
+    { key: 'output', color: '#d95926' },
   ] as const;
+  const RANGES = ['day', 'week', 'month'] as const satisfies readonly Range[];
 
   let range = $state<Range>((readPref('statsRange') as Range) || 'day');
   let view = $state<StatsView | null>(null);
@@ -44,35 +46,39 @@
 
   const k = $derived(view ? kpis(view) : null);
   const max = $derived(view ? niceMax(Math.max(1, ...view.buckets.map((b) => b.input + b.cache + b.output))) : 1);
-  const unit = $derived({ day: 'jour', week: 'semaine', month: 'mois' }[range]);
+  const unit = $derived(t(`stats.unit.${range}`));
   const projectCount = $derived(app.projects.length);
   const agentCount = $derived(Object.keys(app.agents).length);
 
   function projectOf(key: string) {
     const p = app.projects.find((x) => x.id === key);
-    return p ? { name: p.name, color: p.color } : { name: 'Projet fermé', color: 'var(--dim)' };
+    return p ? { name: p.name, color: p.color } : { name: t('stats.closedProject'), color: 'var(--dim)' };
   }
 
   function total(b: Bucket) {
     return b.input + b.cache + b.output;
   }
+
+  /** A change of the tokens as the header says it: the sign of a rise is written (« +49 % », « -50 % »). */
+  const signed = (percent: number) => `${percent >= 0 ? '+' : ''}${fPct(percent)}`;
 </script>
 
 <div class="stats">
   <div class="inner">
     <div class="top">
       <div class="title">
-        <span class="h">Statistiques</span>
+        <span class="h">{t('stats.title')}</span>
         <span class="s"
-          >Agents lancés depuis l'app · {projectCount} projet{projectCount > 1 ? 's' : ''}, {agentCount} agent{agentCount > 1
-            ? 's'
-            : ''}</span
+          >{t('stats.subtitle', {
+            projects: t('common.count.projects', { count: projectCount }),
+            agents: t('common.count.agents', { count: agentCount }),
+          })}</span
         >
       </div>
       <div style="flex:1"></div>
       <div class="ranges">
-        {#each [['day', 'Jour'], ['week', 'Semaine'], ['month', 'Mois']] as [r, l] (r)}
-          <button class:on={range === r} onclick={() => (range = r as Range)}>{l}</button>
+        {#each RANGES as r (r)}
+          <button class:on={range === r} onclick={() => (range = r)}>{t(`stats.range.${r}`)}</button>
         {/each}
       </div>
     </div>
@@ -80,41 +86,55 @@
     {#if view && k}
       <div class="kpis">
         <div class="kpi">
-          <span class="kl">Tokens</span>
+          <span class="kl">{t('stats.kpi.tokens')}</span>
           <span class="kv mono">{fTok(view.tokens)}</span>
-          <span class="ks">{k.span}{k.delta !== null ? ` · ${k.delta >= 0 ? '+' : ''}${k.delta} %` : ''}</span>
+          <span class="ks">{k.delta !== null ? t('stats.kpi.spanDelta', { span: k.span, delta: signed(k.delta) }) : k.span}</span>
         </div>
         <div class="kpi">
-          <span class="kl">Coût global</span>
+          <span class="kl">{t('stats.kpi.totalCost')}</span>
           <span class="kv mono">{fUsd(view.cost)}</span>
-          <span class="ks">{fUsd(view.costAll)} {view.firstTs ? `depuis le ${fDate(view.firstTs)}` : 'au total'}</span>
-        </div>
-        <div class="kpi">
-          <span class="kl">Coût moyen / prompt</span>
-          <span class="kv mono">{k.costPerPrompt !== null ? fUsd(k.costPerPrompt) : '—'}</span>
           <span class="ks"
-            >{k.tokensPerPrompt !== null ? `≈ ${fTok(k.tokensPerPrompt)} tokens / prompt` : 'aucun prompt sur la période'}</span
+            >{view.firstTs
+              ? t('stats.kpi.costSince', { amount: fUsd(view.costAll), date: fDate(view.firstTs) })
+              : t('stats.kpi.costAllTime', { amount: fUsd(view.costAll) })}</span
           >
         </div>
         <div class="kpi">
-          <span class="kl">Prompts</span>
+          <span class="kl">{t('stats.kpi.costPerPrompt')}</span>
+          <span class="kv mono">{k.costPerPrompt !== null ? fUsd(k.costPerPrompt) : '—'}</span>
+          <span class="ks"
+            >{k.tokensPerPrompt !== null
+              ? t('stats.kpi.tokensPerPrompt', { tokens: fTok(k.tokensPerPrompt) })
+              : t('stats.kpi.noPrompt')}</span
+          >
+        </div>
+        <div class="kpi">
+          <span class="kl">{t('stats.kpi.prompts')}</span>
           <span class="kv mono">{fInt(view.prompts)}</span>
-          <span class="ks">{fInt(k.promptsPerBucket)} par {unit} en moyenne</span>
+          <span class="ks">{t('stats.kpi.perUnit', { n: fInt(k.promptsPerBucket), unit })}</span>
         </div>
       </div>
 
       <section class="card">
         <div class="chead">
-          <span class="ct">Tokens par {unit}</span>
+          <span class="ct">{t('stats.chart.title', { unit })}</span>
           <div style="flex:1"></div>
           {#each SERIES as s (s.key)}
-            <span class="legend"><span class="sw" style:background={s.color}></span>{s.label}</span>
+            <span class="legend"><span class="sw" style:background={s.color}></span>{t(`stats.series.${s.key}`)}</span>
           {/each}
-          <button class="btn ghost small" onclick={() => (table = !table)}>{table ? 'Graphique' : 'Tableau'}</button>
+          <button class="btn ghost small" onclick={() => (table = !table)}
+            >{table ? t('stats.chart.showChart') : t('stats.chart.showTable')}</button
+          >
         </div>
         {#if table}
           <table class="tbl mono">
-            <thead><tr><th>Période</th><th>Entrée</th><th>Cache</th><th>Sortie</th><th>Total</th><th>Coût</th><th>Prompts</th></tr></thead>
+            <thead
+              ><tr
+                ><th>{t('stats.table.period')}</th><th>{t('stats.series.input')}</th><th>{t('stats.series.cache')}</th><th
+                  >{t('stats.series.output')}</th
+                ><th>{t('stats.table.total')}</th><th>{t('common.cost')}</th><th>{t('stats.table.prompts')}</th></tr
+              ></thead
+            >
             <tbody>
               {#each view.buckets as b (b.start)}
                 <tr>
@@ -126,7 +146,7 @@
             </tbody>
           </table>
         {:else}
-          <div class="chart" role="img" aria-label="Tokens par {unit}, empilés entrée, cache et sortie">
+          <div class="chart" role="img" aria-label={t('stats.chart.label', { unit })}>
             <div class="grid">
               <div class="gl" style="top:0"><span>{fTok(max)}</span></div>
               <div class="gl" style="top:50%"><span>{fTok(max / 2)}</span></div>
@@ -154,12 +174,14 @@
                       <div class="tt">{b.label}</div>
                       {#each SERIES as s (s.key)}
                         <div class="tr">
-                          <span class="sw" style:background={s.color}></span>{s.label}<span class="tv mono">{fTok(b[s.key])}</span>
+                          <span class="sw" style:background={s.color}></span>{t(`stats.series.${s.key}`)}<span class="tv mono"
+                            >{fTok(b[s.key])}</span
+                          >
                         </div>
                       {/each}
-                      <div class="tr total">Total<span class="tv mono">{fTok(total(b))}</span></div>
-                      <div class="tr">Coût<span class="tv mono">{fUsd(b.cost)}</span></div>
-                      <div class="tr">Prompts<span class="tv mono">{b.prompts}</span></div>
+                      <div class="tr total">{t('stats.table.total')}<span class="tv mono">{fTok(total(b))}</span></div>
+                      <div class="tr">{t('common.cost')}<span class="tv mono">{fUsd(b.cost)}</span></div>
+                      <div class="tr">{t('stats.table.prompts')}<span class="tv mono">{b.prompts}</span></div>
                     </div>
                   {/if}
                 </div>
@@ -174,7 +196,7 @@
 
       <div class="split">
         <section class="card">
-          <span class="ct">Par projet</span>
+          <span class="ct">{t('stats.byProject.title')}</span>
           {#each view.byProject as s (s.key)}
             {@const p = projectOf(s.key)}
             <div class="share">
@@ -190,11 +212,11 @@
               <span class="scost mono">{fUsd(s.cost)}</span>
             </div>
           {:else}
-            <span class="none">Aucune donnée sur la période.</span>
+            <span class="none">{t('stats.noData')}</span>
           {/each}
         </section>
         <section class="card">
-          <span class="ct">Par modèle</span>
+          <span class="ct">{t('stats.byModel.title')}</span>
           {#each view.byModel as s (s.key)}
             <div class="share">
               <span class="sname">{displayModel(s.key)}</span>
@@ -203,23 +225,27 @@
               <span class="scost mono">{fUsd(s.cost)}</span>
             </div>
           {:else}
-            <span class="none">Aucune donnée sur la période.</span>
+            <span class="none">{t('stats.noData')}</span>
           {/each}
         </section>
       </div>
 
       <section class="card">
-        <span class="ct" id="stats-agents">Par agent</span>
+        <span class="ct" id="stats-agents">{t('stats.byAgent.title')}</span>
         {#if view.byAgent.length}
           <table class="list" aria-labelledby="stats-agents">
             <thead>
-              <tr><th class="w-name">Agent</th><th class="w-proj">Projet</th><th class="num">Tokens</th><th class="num">Coût</th></tr>
+              <tr
+                ><th class="w-name">{t('common.agent')}</th><th class="w-proj">{t('common.project')}</th><th class="num"
+                  >{t('stats.byAgent.tokens')}</th
+                ><th class="num">{t('common.cost')}</th></tr
+              >
             </thead>
             <tbody>
               {#each shown(view.byAgent, allAgents) as a (a.agentId)}
                 {@const p = projectOf(a.projectId)}
                 <tr>
-                  <td class="cut strong" title={a.name ?? undefined}>{a.name ?? 'Agent supprimé'}</td>
+                  <td class="cut strong" title={a.name ?? undefined}>{a.name ?? t('stats.byAgent.deleted')}</td>
                   <td class="cut"><span class="psw" style:background={p.color}></span>{p.name}</td>
                   <td class="num mono">{fTok(a.tokens)}</td>
                   <td class="num mono">{fUsd(a.cost)}</td>
@@ -230,34 +256,34 @@
           {#if view.byAgent.length > ROWS}
             <div class="more">
               <button class="btn ghost small" aria-expanded={allAgents} onclick={() => (allAgents = !allAgents)}
-                >{allAgents ? 'Réduire' : 'Tout voir'}</button
+                >{allAgents ? t('stats.showLess') : t('stats.showAll')}</button
               >
-              {#if !allAgents}<span class="none">{ROWS} sur {view.byAgent.length}</span>{/if}
+              {#if !allAgents}<span class="none">{t('stats.shownOf', { shown: ROWS, total: fInt(view.byAgent.length) })}</span>{/if}
             </div>
           {/if}
         {:else}
-          <span class="none">Aucune donnée sur la période.</span>
+          <span class="none">{t('stats.noData')}</span>
         {/if}
       </section>
 
       <section class="card">
-        <span class="ct" id="stats-tickets">Par ticket</span>
+        <span class="ct" id="stats-tickets">{t('stats.byTicket.title')}</span>
         {#if view.byTicket.length}
           <table class="list" aria-labelledby="stats-tickets">
             <thead>
               <tr
-                ><th class="w-key">Ticket</th><th>Titre</th><th class="num w-loops">Boucles</th><th class="num w-period"
-                  >Coût sur la période</th
-                ></tr
+                ><th class="w-key">{t('stats.byTicket.ticket')}</th><th>{t('stats.byTicket.name')}</th><th class="num w-loops"
+                  >{t('stats.byTicket.loops')}</th
+                ><th class="num w-period">{t('stats.byTicket.periodCost')}</th></tr
               >
             </thead>
             <tbody>
-              {#each shown(view.byTicket, allTickets) as t (t.id)}
+              {#each shown(view.byTicket, allTickets) as x (x.id)}
                 <tr>
-                  <td class="mono">{t.key}</td>
-                  <td class="cut strong" title={t.title}>{t.title}</td>
-                  <td class="num">{plural(t.loops, 'boucle', 'boucles')}</td>
-                  <td class="num mono">{fUsd(t.cost)}</td>
+                  <td class="mono">{x.key}</td>
+                  <td class="cut strong" title={x.title}>{x.title}</td>
+                  <td class="num">{t('common.count.loops', { count: x.loops })}</td>
+                  <td class="num mono">{fUsd(x.cost)}</td>
                 </tr>
               {/each}
             </tbody>
@@ -265,19 +291,19 @@
           {#if view.byTicket.length > ROWS}
             <div class="more">
               <button class="btn ghost small" aria-expanded={allTickets} onclick={() => (allTickets = !allTickets)}
-                >{allTickets ? 'Réduire' : 'Tout voir'}</button
+                >{allTickets ? t('stats.showLess') : t('stats.showAll')}</button
               >
-              {#if !allTickets}<span class="none">{ROWS} sur {view.byTicket.length}</span>{/if}
+              {#if !allTickets}<span class="none">{t('stats.shownOf', { shown: ROWS, total: fInt(view.byTicket.length) })}</span>{/if}
             </div>
           {/if}
         {:else}
-          <span class="none">Aucun ticket sur la période.</span>
+          <span class="none">{t('stats.byTicket.none')}</span>
         {/if}
       </section>
     {:else if error}
-      <div class="loading">Statistiques indisponibles : {error}</div>
+      <div class="loading">{t('stats.unavailable', { error })}</div>
     {:else}
-      <div class="loading">Chargement…</div>
+      <div class="loading">{t('common.loading')}</div>
     {/if}
   </div>
 </div>

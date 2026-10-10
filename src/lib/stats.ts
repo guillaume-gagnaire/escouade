@@ -1,14 +1,9 @@
 // Derived KPIs of the Stats tab.
 
+import { t } from './i18n';
 import type { StatsView } from './types';
 
 export type Range = 'day' | 'week' | 'month';
-
-export const SPANS: Record<Range, string> = {
-  day: '14 derniers jours',
-  week: '12 dernières semaines',
-  month: '12 derniers mois',
-};
 
 export interface Kpis {
   span: string;
@@ -20,8 +15,10 @@ export interface Kpis {
 }
 
 export function kpis(v: StatsView): Kpis {
+  // A range the backend does not know is read as the default one, the days.
+  const range: Range = v.range === 'week' || v.range === 'month' ? v.range : 'day';
   return {
-    span: SPANS[(v.range as Range) in SPANS ? (v.range as Range) : 'day'],
+    span: t(`stats.span.${range}`),
     delta: v.tokensPrev > 0 ? Math.round(((v.tokens - v.tokensPrev) / v.tokensPrev) * 100) : null,
     costPerPrompt: v.prompts > 0 ? v.cost / v.prompts : null,
     tokensPerPrompt: v.prompts > 0 ? v.tokens / v.prompts : null,

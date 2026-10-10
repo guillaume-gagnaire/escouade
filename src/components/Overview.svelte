@@ -1,10 +1,13 @@
 <script lang="ts">
   import { onMount, tick, untrack } from 'svelte';
   import { ticketTag } from '../lib/board';
-  import { fPct, fSince, fWhen, plural } from '../lib/format';
+  import { fPct, fSince, fWhen } from '../lib/format';
+  import { t } from '../lib/i18n';
+  import Rich from '../lib/i18n/Rich.svelte';
   import { api } from '../lib/ipc';
   import { menu } from '../lib/menu.svelte';
   import { modelLabel } from '../lib/models';
+  import { keyLabel } from '../lib/platform';
   import { contextUse, ESTIMATE_HINT, fSpentUsd, spent } from '../lib/spend';
   import { app } from '../lib/state.svelte';
   import { revealHidden } from '../lib/recipe';
@@ -15,7 +18,6 @@
   // « Vue d’ensemble » (Ctrl+Shift+A): every agent of every project in one list, the ones waiting for an answer first,
   // whose permissions are answered on the spot; a line opens its agent.
 
-  const SL: Record<string, string> = { running: 'En cours', waiting: 'Question', idle: 'Prêt', done: 'Terminé', error: 'Erreur' };
   // As in the sidebar, but "Prêt" in a gray that reads on the page's background.
   const SC: Record<string, string> = {
     running: 'var(--ok)',
@@ -55,11 +57,11 @@
   /** The lines in the order the arrows go through them. */
   const order = $derived(groups.flatMap((g) => g.agents.map((a) => a.id)));
   const sub = $derived(
-    [
-      plural(app.projects.length, 'projet', 'projets'),
-      plural(live.length, 'agent', 'agents'),
-      `${live.filter((a) => a.status === 'running').length} en cours`,
-    ].join(' · '),
+    t('stats.overview.sub', {
+      projects: t('common.count.projects', { count: app.projects.length }),
+      agents: t('common.count.agents', { count: live.length }),
+      running: live.filter((a) => a.status === 'running').length,
+    }),
   );
 
   let root = $state<HTMLElement>();
@@ -115,9 +117,9 @@
    * argument as drawn, its hidden characters spelled out); and so is a request Claude Code would refuse by default.
    */
   function notHere(req: PendingRequest, shown: string): string | null {
-    if (req.defaultNo || !SUMMED_UP.has(req.tool) || !shown.trim()) return 'À lire dans la conversation avant de répondre.';
+    if (req.defaultNo || !SUMMED_UP.has(req.tool) || !shown.trim()) return t('stats.overview.readInConversation');
     if (req.cut || shown.split('\n').length > ARG_LINES || overflows[req.id]) {
-      return 'Trop long pour être lu ici : lis-la et réponds dans la conversation.';
+      return t('stats.overview.tooLong');
     }
     return null;
   }
@@ -282,28 +284,30 @@
       </span>
       <span class="act">
         {#if a.status === 'waiting'}
-          <span class="txt" style:color={SC.waiting}>{SL.waiting}</span>
+          <span class="txt" style:color={SC.waiting}>{t('stats.overview.status.waiting')}</span>
         {:else if a.resumeAt}
-          <span class="txt" style:color="var(--wait)">Reprise {fWhen(a.resumeAt, app.now)}</span>
+          <span class="txt" style:color="var(--wait)">{t('stats.overview.resumes', { when: fWhen(a.resumeAt, app.now) })}</span>
         {:else if a.setup}
           <span class="dots" aria-hidden="true"><span></span><span></span><span></span></span><span class="txt" title={a.setup}
-            >Prépare le worktree · {a.setup}</span
+            >{t('stats.overview.settingUp', { step: a.setup })}</span
           >
         {:else if a.status === 'running'}
           <span class="dots" aria-hidden="true"><span></span><span></span><span></span></span><span class="txt"
-            >{a.activity ?? 'Réfléchit'}</span
+            >{a.activity ?? t('stats.overview.thinking')}</span
           >
         {:else}
-          <span class="txt" style:color={SC[a.status]}>{SL[a.status]}</span>
+          <span class="txt" style:color={SC[a.status]}>{t(`stats.overview.status.${a.status}`)}</span>
         {/if}
       </span>
-      <span class="model mono"><span class="sr">Modèle </span>{modelLabel(a.model, app.models)}</span>
-      <span class="num" title={used.estimated ? ESTIMATE_HINT : undefined}><span class="sr">Coût </span>{fSpentUsd(used)}</span>
-      <span class="num ctx" class:full={ctx?.full} title={ctx?.title ?? 'Contexte : pas encore connu'}
-        ><span class="sr">Contexte </span>{ctx ? fPct(ctx.pct) : '—'}</span
+      <span class="model mono"><span class="sr">{t('common.model')}{' '}</span>{modelLabel(a.model, app.models)}</span>
+      <span class="num" title={used.estimated ? ESTIMATE_HINT : undefined}
+        ><span class="sr">{t('common.cost')}{' '}</span>{fSpentUsd(used)}</span
       >
-      <span class="num" title={`Dernier changement ${fWhen(a.lastActivity, app.now)}`}
-        ><span class="sr">Depuis </span>{fSince(a.lastActivity, app.now)}</span
+      <span class="num ctx" class:full={ctx?.full} title={ctx?.title ?? t('stats.overview.contextUnknown')}
+        ><span class="sr">{t('stats.overview.context')}{' '}</span>{ctx ? fPct(ctx.pct) : '—'}</span
+      >
+      <span class="num" title={t('stats.overview.lastChange', { when: fWhen(a.lastActivity, app.now) })}
+        ><span class="sr">{t('stats.overview.since')}{' '}</span>{fSince(a.lastActivity, app.now)}</span
       >
     </div>
     {#if asks}
@@ -327,11 +331,13 @@
             <span class="acts">
               {#if !note}
                 <button class="opt primary" disabled={busy[a.id] || held[a.id]} onclick={(e) => decide(e, a, req, 'allow')}
-                  >Autoriser</button
+                  >{t('stats.overview.allow')}</button
                 >
-                <button class="opt" disabled={busy[a.id] || held[a.id]} onclick={(e) => decide(e, a, req, 'deny')}>Refuser</button>
+                <button class="opt" disabled={busy[a.id] || held[a.id]} onclick={(e) => decide(e, a, req, 'deny')}
+                  >{t('stats.overview.deny')}</button
+                >
               {:else}
-                <button class="opt primary" onclick={(e) => answer(e, a)}>Répondre</button>
+                <button class="opt primary" onclick={(e) => answer(e, a)}>{t('common.reply')}</button>
               {/if}
             </span>
           {:else}
@@ -340,10 +346,10 @@
               req?.kind === 'question'
                 ? req.questions.map((q) => q.question).join(' · ')
                 : req
-                  ? 'Claude propose un plan'
-                  : 'Claude attend ta réponse'}
+                  ? t('stats.overview.proposesPlan')
+                  : t('stats.overview.waitsForAnswer')}
             <span class="ask" title={text}>{text}</span>
-            <span class="acts"><button class="opt primary" onclick={(e) => answer(e, a)}>Répondre</button></span>
+            <span class="acts"><button class="opt primary" onclick={(e) => answer(e, a)}>{t('common.reply')}</button></span>
           {/if}
         </div>
       {/key}
@@ -354,24 +360,28 @@
 <main class="overview" bind:this={root} onfocusin={onFocusIn} aria-labelledby="ov-title">
   <header class="head">
     <div class="who">
-      <h1 class="t" id="ov-title">Vue d’ensemble</h1>
+      <h1 class="t" id="ov-title">{t('common.overview')}</h1>
       <span class="sub mono" title={sub}>{sub}</span>
     </div>
     <div style="flex:1"></div>
-    <span class="keys" aria-hidden="true"
-      >{#if order.length}<kbd>↑</kbd><kbd>↓</kbd> choisir <span class="sep">·</span> <kbd>Entrée</kbd> ouvrir
+    <span class="keys" aria-hidden="true">
+      {#if order.length}
+        <Rich k="stats.overview.hintChoose">{#snippet keys()}<kbd>↑</kbd><kbd>↓</kbd>{/snippet}</Rich>
         <span class="sep">·</span>
-      {/if}<kbd>Échap</kbd> revenir</span
-    >
+        <Rich k="stats.overview.hintOpen">{#snippet key()}<kbd>{keyLabel('Enter')}</kbd>{/snippet}</Rich>
+        <span class="sep">·</span>
+      {/if}
+      <Rich k="stats.overview.hintBack">{#snippet key()}<kbd>{keyLabel('Esc')}</kbd>{/snippet}</Rich>
+    </span>
   </header>
   <div class="scroll">
     {#if groups.length}
       <div class="list">
         <!-- Each value says what it is to assistive technologies (`.sr`): the headings are for the eyes. -->
         <div class="cols" aria-hidden="true">
-          <span>Agent</span><span>Activité</span><span>Modèle</span><span class="num">Coût</span><span class="num">Contexte</span><span
-            class="num">Depuis</span
-          >
+          <span>{t('common.agent')}</span><span>{t('stats.overview.activity')}</span><span>{t('common.model')}</span><span class="num"
+            >{t('common.cost')}</span
+          ><span class="num">{t('stats.overview.context')}</span><span class="num">{t('stats.overview.since')}</span>
         </div>
         {#each groups as g (g.key)}
           <section class="group" class:waiting={!g.project} aria-labelledby={`ov-${g.key}`}>
@@ -381,7 +391,7 @@
               {:else}
                 <span class="pulse" style="width:8px;height:8px"></span>
               {/if}
-              <span id={`ov-${g.key}`}>{g.project ? g.project.name : 'Attend ta réponse'}</span>
+              <span id={`ov-${g.key}`}>{g.project ? g.project.name : t('stats.overview.waitingGroup')}</span>
               <span class="count">{g.agents.length}</span>
             </h2>
             <ul>
@@ -393,7 +403,7 @@
         {/each}
       </div>
     {:else}
-      <div class="empty">Aucun agent pour l’instant.</div>
+      <div class="empty">{t('stats.overview.empty')}</div>
     {/if}
   </div>
 </main>

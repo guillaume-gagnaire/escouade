@@ -1,5 +1,6 @@
 <script lang="ts">
   import { queueIndices } from '../../lib/board';
+  import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
   import type { Column, Project, Ticket, TicketDraft } from '../../lib/types';
@@ -13,7 +14,8 @@
     busyCount,
     quota,
   }: {
-    column: { id: Column; label: string; color: string; empty: string };
+    // Its name and its empty text are in the catalogs, by `id`: the column of `COLUMNS` is only given for its color.
+    column: { id: Column; color: string };
     tickets: Ticket[];
     project: Project;
     busyCount: number;
@@ -28,44 +30,46 @@
   // The command's ticket shows at once, unless the backend's event, which may come before its answer, already brought
   // it, maybe newer (started meanwhile); one coming after brings the same or newer.
   async function add(d: TicketDraft) {
-    const t = await app.run(api.ticketCreate(project.id, d));
-    if (!t) return;
-    app.tickets[t.id] ??= t;
+    const made = await app.run(api.ticketCreate(project.id, d));
+    if (!made) return;
+    app.tickets[made.id] ??= made;
     adding = false;
   }
 
   async function save(id: string, d: TicketDraft) {
-    const t = await app.run(api.ticketUpdate(id, d));
-    if (!t) return;
+    const saved = await app.run(api.ticketUpdate(id, d));
+    if (!saved) return;
     // Only a ticket "À faire" is edited: one gone or under way since is newer than this.
-    if (app.tickets[t.id]?.column === 'todo') app.tickets[t.id] = t;
+    if (app.tickets[saved.id]?.column === 'todo') app.tickets[saved.id] = saved;
     editing = null;
   }
 </script>
 
-<section class="col" aria-label={column.label}>
+<section class="col" aria-label={t(`board.columns.${column.id}`)}>
   <div class="head">
     <span class="dot" style:background={column.color}></span>
-    <span class="label">{column.label}</span>
+    <span class="label">{t(`board.columns.${column.id}`)}</span>
     <span class="count mono">{tickets.length}</span>
     <div style="flex:1"></div>
     {#if column.id === 'todo'}
-      <button class="plus" title="Nouveau ticket" aria-label="Nouveau ticket" onclick={() => (adding = true)}>+</button>
+      <button class="plus" title={t('board.column.newTicket')} aria-label={t('board.column.newTicket')} onclick={() => (adding = true)}
+        >+</button
+      >
     {/if}
   </div>
   <div class="cards">
     {#if adding}
       <TicketForm projectId={project.id} onsubmit={add} oncancel={() => (adding = false)} />
     {/if}
-    {#each tickets as t, i (t.id)}
-      {#if editing === t.id}
-        <TicketForm ticket={t} projectId={project.id} onsubmit={(d) => save(t.id, d)} oncancel={() => (editing = null)} />
+    {#each tickets as x, i (x.id)}
+      {#if editing === x.id}
+        <TicketForm ticket={x} projectId={project.id} onsubmit={(d) => save(x.id, d)} oncancel={() => (editing = null)} />
       {:else}
-        <TicketCard ticket={t} {project} queueIndex={queue[t.id] ?? i} {busyCount} {quota} onedit={() => (editing = t.id)} />
+        <TicketCard ticket={x} {project} queueIndex={queue[x.id] ?? i} {busyCount} {quota} onedit={() => (editing = x.id)} />
       {/if}
     {/each}
     {#if !tickets.length && !adding}
-      <div class="empty">{column.empty}</div>
+      <div class="empty">{t(`board.empty.${column.id}`)}</div>
     {/if}
   </div>
 </section>

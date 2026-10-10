@@ -1,4 +1,94 @@
 import { defineZone } from '../types';
 
 // The Kanban: its columns, tickets and criteria.
-export default defineZone('board', {});
+export default defineZone('board', {
+  columns: { todo: 'To do', doing: 'In progress', review: 'To review', done: 'Done' },
+  empty: {
+    todo: 'Add a ticket: an agent will pick it up as soon as a slot is free.',
+    doing: 'No agent looping',
+    review: 'Nothing to review',
+    done: 'No finished tickets',
+  },
+
+  column: { newTicket: 'New ticket' },
+
+  header: {
+    sub: {
+      one: '{name} · {count} ticket · {looping} looping',
+      other: '{name} · {count} tickets · {looping} looping',
+    },
+    claudeMissing: 'Claude Code not found — no ticket will start',
+    importTitle: 'Import tickets from Jira, Trello or GitHub Issues',
+    settingsTitle: 'Kanban settings — {summary}',
+    afterApproval: 'After approval:',
+    autopilotTitle: 'Tickets in “To do” start on their own as soon as a slot is free',
+    autopilot: 'Autopilot',
+    autopilotOff: 'Autopilot · off',
+    resumeNow: 'Resume now',
+  },
+
+  card: {
+    openExternal: 'Open {key} in {service}',
+    syncError: 'Sync with {service}: {error}',
+    resync: 'Resync',
+    loop: 'Loop {iteration}/{max}',
+    partial: 'Partial goal',
+    doneHeading: 'What was done',
+    progressLabel: 'Progress',
+    moreSteps: { one: '{count} more item', other: '{count} more items' },
+    criteriaLabel: 'Criteria',
+    criteriaMetLabel: 'Criteria met',
+    criteriaMet: { one: '{met}/{total} criterion', other: '{met}/{total} criteria' },
+    todoMeta: { one: '{count} criterion · max {max} loops', other: '{count} criteria · max {max} loops' },
+    questionWaiting: 'Question waiting for your answer',
+    resumes: 'Resumes {when}',
+    settingUp: 'Setting up the worktree · {step}',
+    thinking: 'Thinking',
+    costLabel: 'Ticket cost',
+    launch: 'Start',
+    launchTitle: 'Start {key}?',
+    launchAnyway: 'Start anyway',
+    stopTests: 'Stop',
+    test: 'Test',
+    resume: 'Resume',
+    agentResolves: 'Let the agent resolve',
+    sendBack: 'Send back',
+    prioritize: 'Move to top',
+    openAgent: 'Open agent',
+    removeTitle: 'Delete {key}?',
+    removeBody: 'The ticket and its description are deleted.',
+    removeBodyImported: 'The ticket and its description are deleted. It will no longer be imported from {service}.',
+    removeRunningTitle: 'Delete ticket {key}?',
+    removeRunningBody: 'Its agent is archived, along with its worktree.',
+    approveTitle: 'Approve {key}?',
+    approveBody: 'The worktree of its agent is deleted after the merge.',
+  },
+
+  form: {
+    discardTitle: 'Discard your changes?',
+    discardBody: 'What you typed in this ticket will not be saved.',
+    discard: 'Discard',
+    title: 'Ticket title',
+    descriptionPlaceholder: 'Description (optional)',
+    description: 'Description',
+    criteriaPlaceholder: 'Acceptance criteria, one per line',
+    criteria: 'Acceptance criteria',
+    maxLoops: 'Max loops',
+    after: 'After',
+    searchKey: 'Search for a key',
+    noMatch: 'No ticket for this key',
+  },
+
+  reject: { comment: 'What is wrong', submit: 'Send back' },
+
+  report: {
+    title: 'Criteria report',
+    criterion: 'Criterion {n}',
+    doneHeading: 'What was done',
+    progressLabel: 'Progress',
+    testLaunch: 'Test launch',
+    prepare: 'Setup',
+    process: 'process {n}',
+    test: 'Test',
+  },
+});

@@ -1,6 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { setLang } from '../lib/i18n';
 import { app } from '../lib/state.svelte';
 import type { Agent, PendingRequest } from '../lib/types';
 import { agent, fakeBackend, project, resetApp, ticket } from '../test/ipc';
@@ -459,5 +460,114 @@ describe('Overview', () => {
     render(Overview);
     expect(screen.getByText('Aucun agent pour l’instant.')).toBeInTheDocument();
     expect(screen.queryByRole('region')).not.toBeInTheDocument();
+  });
+});
+
+describe('Overview in English', () => {
+  beforeEach(() => {
+    resetApp({
+      projects: [project(), project({ id: 'p2', name: 'studio-web' })],
+    });
+    app.now = NOW;
+    setLang('en');
+  });
+
+  it('writes the title, the count of agents, the keys, the headings and an empty list in English', () => {
+    backend();
+    resetApp({ agents: [agent({ archived: true })] });
+    const { container } = render(Overview);
+    expect(screen.getByRole('heading', { level: 1, name: 'Overview' })).toBeInTheDocument();
+    expect(screen.getByText('No agent for now.')).toBeInTheDocument();
+    // No agent to choose or to open: only the way back.
+    expect(container.querySelector('.keys')).toHaveTextContent('Esc back');
+    expect(container.querySelector('.keys')).not.toHaveTextContent('choose');
+  });
+
+  it('groups the agents, counts them with the plural of English and names each status', () => {
+    backend();
+    resetApp({
+      projects: [project(), project({ id: 'p2', name: 'studio-web' })],
+      agents: [
+        agent({
+          id: 'a1',
+          status: 'running',
+          activity: 'Lit src/db.ts',
+          cost: 1.2,
+          contextTokens: 68_000,
+          contextWindow: 200_000,
+          lastActivity: NOW - 3 * MIN,
+        }),
+        agent({ id: 'a2', name: 'tests-e2e', status: 'done', cost: 0.5, createdAt: 2, lastActivity: NOW - 2 * 3600_000 }),
+        agent({ id: 'a3', name: 'lint', status: 'idle', createdAt: 3 }),
+        agent({ id: 'a4', name: 'oops', status: 'error', createdAt: 4 }),
+        agent({ id: 'a5', name: 'thinker', status: 'running', createdAt: 5 }),
+        asking([permission()], { id: 'b1', projectId: 'p2', name: 'api-docs', lastActivity: NOW - 9 * MIN }),
+      ],
+    });
+    const { container } = render(Overview);
+    expect(screen.getByText('2 projects · 6 agents · 2 running')).toBeInTheDocument();
+    expect(container.querySelector('.keys')).toHaveTextContent('↑↓ choose · Enter open · Esc back');
+    expect(container.querySelector('.cols')).toHaveTextContent('AgentActivityModelCostContextSince');
+    expect(screen.getByRole('region', { name: 'Waiting for your answer' })).toBeInTheDocument();
+    const row = (name: RegExp) => screen.getByRole('listitem', { name });
+    expect(row(/refacto-auth/)).toHaveTextContent('Lit src/db.ts');
+    expect(row(/refacto-auth/)).toHaveTextContent('$1.20');
+    expect(row(/refacto-auth/)).toHaveTextContent('34%');
+    expect(row(/refacto-auth/)).toHaveTextContent('3 min');
+    expect(row(/tests-e2e/)).toHaveTextContent('Done');
+    expect(row(/tests-e2e/)).toHaveTextContent('2 h');
+    expect(row(/lint/)).toHaveTextContent('Ready');
+    expect(row(/oops/)).toHaveTextContent('Error');
+    expect(row(/thinker/)).toHaveTextContent('Thinking');
+    expect(row(/api-docs/)).toHaveTextContent('Question');
+    // Said to a screen reader, apart from the value.
+    expect(row(/refacto-auth/).querySelector('.model')).toHaveTextContent('Model Opus');
+    expect(row(/refacto-auth/).querySelector('.ctx')?.textContent).toBe('Context 34%');
+    expect(row(/refacto-auth/).querySelector('.num[title^="Last change"]')).toBeInTheDocument();
+  });
+
+  it('writes the time a limited agent resumes at the way English does', () => {
+    backend();
+    const at = new Date(NOW);
+    at.setHours(15, 0, 0, 0);
+    resetApp({ agents: [agent({ id: 'a1', status: 'idle', resumeAt: at.getTime() })] });
+    app.now = at.getTime() - 1000;
+    render(Overview);
+    expect(screen.getByText('Resumes at 3:00 PM')).toBeInTheDocument();
+  });
+
+  it('writes the buttons that answer a permission, and what it asks to read in the conversation', async () => {
+    const be = backend();
+    resetApp({
+      agents: [
+        asking([permission()], { id: 'a1' }),
+        asking([permission({ id: 'req-8', tool: 'mcp__github__create_issue', arg: 'Bug' })], {
+          id: 'a2',
+          name: 'api-docs',
+          lastActivity: 5,
+        }),
+        asking([permission({ id: 'req-7', tool: 'ExitPlanMode', arg: '## Plan' })], { id: 'a3', name: 'planner', lastActivity: 6 }),
+        asking([question()], { id: 'a4', name: 'asker', lastActivity: 7 }),
+      ],
+    });
+    render(Overview);
+    const first = screen.getByRole('listitem', { name: /refacto-auth/ });
+    await userEvent.click(within(first).getByRole('button', { name: 'Allow' }));
+    expect(be.called('answer_permission')[0].args).toMatchObject({ requestId: 'req-1', decision: 'allow' });
+    expect(within(first).getByRole('button', { name: 'Deny' })).toBeInTheDocument();
+    const other = screen.getByRole('listitem', { name: /api-docs/ });
+    expect(other).toHaveTextContent('Read it in the conversation before answering.');
+    expect(within(other).getByRole('button', { name: 'Reply' })).toBeInTheDocument();
+    expect(screen.getByRole('listitem', { name: /planner/ })).toHaveTextContent('Claude suggests a plan');
+    expect(screen.getByRole('listitem', { name: /asker/ })).toHaveTextContent('Quelle base de données ?');
+  });
+
+  it('writes what a request too long to read here says', () => {
+    backend();
+    resetApp({ agents: [asking([permission({ arg: 'a\nb\nc\nd\ne' })], { id: 'a1' })] });
+    render(Overview);
+    expect(screen.getByRole('listitem', { name: /refacto-auth/ })).toHaveTextContent(
+      'Too long to read here: read it and answer in the conversation.',
+    );
   });
 });

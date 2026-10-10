@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { cycleRefusal } from '../../lib/board';
+  import { t } from '../../lib/i18n';
   import { app } from '../../lib/state.svelte';
   import type { Ticket, TicketDraft } from '../../lib/types';
 
@@ -76,9 +77,9 @@
     }
     app.modal = {
       kind: 'confirm',
-      title: 'Abandonner les modifications ?',
-      body: 'Ce que tu as saisi dans ce ticket ne sera pas enregistré.',
-      confirm: 'Abandonner',
+      title: t('board.form.discardTitle'),
+      body: t('board.form.discardBody'),
+      confirm: t('board.form.discard'),
       danger: true,
       onConfirm: oncancel,
     };
@@ -113,29 +114,30 @@
   <!-- svelte-ignore a11y_autofocus -->
   <input
     class="title"
-    placeholder="Titre du ticket"
-    aria-label="Titre du ticket"
+    placeholder={t('board.form.title')}
+    aria-label={t('board.form.title')}
     bind:value={title}
     autofocus
     onkeydown={(e) => e.key === 'Enter' && submit()}
   />
-  <textarea rows="2" placeholder="Description (facultative)" aria-label="Description" bind:value={description}></textarea>
-  <textarea rows="4" placeholder="Critères d'acceptation, un par ligne" aria-label="Critères d'acceptation" bind:value={criteria}
+  <textarea rows="2" placeholder={t('board.form.descriptionPlaceholder')} aria-label={t('board.form.description')} bind:value={description}
   ></textarea>
-  <div class="loops" role="group" aria-label="Boucles max">
-    <span class="k">Boucles max</span>
+  <textarea rows="4" placeholder={t('board.form.criteriaPlaceholder')} aria-label={t('board.form.criteria')} bind:value={criteria}
+  ></textarea>
+  <div class="loops" role="group" aria-label={t('board.form.maxLoops')}>
+    <span class="k">{t('board.form.maxLoops')}</span>
     {#each [3, 5, 8] as n (n)}
       <button class:on={maxLoops === n} aria-pressed={maxLoops === n} onclick={() => (maxLoops = n)}>{n}</button>
     {/each}
   </div>
   {#if candidates.length}
-    <div class="after" role="group" aria-label="Après">
-      <span class="k">Après</span>
+    <div class="after" role="group" aria-label={t('board.form.after')}>
+      <span class="k">{t('board.form.after')}</span>
       <input
         class="search"
         role="searchbox"
-        placeholder="Rechercher une clé"
-        aria-label="Rechercher une clé"
+        placeholder={t('board.form.searchKey')}
+        aria-label={t('board.form.searchKey')}
         spellcheck="false"
         autocomplete="off"
         bind:value={query}
@@ -153,14 +155,14 @@
           {/each}
         </ul>
       {:else}
-        <span class="none">Aucun ticket pour cette clé</span>
+        <span class="none">{t('board.form.noMatch')}</span>
       {/if}
       {#if refusal}<span class="refusal" role="alert">{refusal}</span>{/if}
     </div>
   {/if}
   <div class="actions">
-    <button class="btn ghost" onclick={leave}>Annuler</button>
-    <button class="btn primary" disabled={!ready} onclick={submit}>{ticket ? 'Enregistrer' : 'Ajouter'}</button>
+    <button class="btn ghost" onclick={leave}>{t('common.cancel')}</button>
+    <button class="btn primary" disabled={!ready} onclick={submit}>{ticket ? t('common.save') : t('common.add')}</button>
   </div>
 </div>
 

@@ -1,6 +1,7 @@
 import { render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
 import { resetApp, ticket } from '../../test/ipc';
 import TicketForm from './TicketForm.svelte';
@@ -216,5 +217,52 @@ describe('TicketForm « Après »', () => {
     resetApp({ tickets: [ticket({ id: 't4', column: 'done' }), ticket({ id: 'x1', projectId: 'p2' })] });
     render(TicketForm, { projectId: 'p1', onsubmit: vi.fn(), oncancel: vi.fn() });
     expect(screen.queryByRole('group', { name: 'Après' })).not.toBeInTheDocument();
+  });
+});
+
+describe('TicketForm in English', () => {
+  beforeEach(() => {
+    resetApp({
+      tickets: [ticket({ id: 't2', key: 'DEM-2', title: 'Deux', column: 'doing', createdAt: 2 })],
+    });
+    setLang('en');
+  });
+
+  it('writes its fields, its loops and its dependencies in English', async () => {
+    render(TicketForm, { projectId: 'p1', onsubmit: vi.fn(), oncancel: vi.fn() });
+    expect(screen.getByRole('textbox', { name: 'Ticket title' })).toHaveAttribute('placeholder', 'Ticket title');
+    expect(screen.getByRole('textbox', { name: 'Description' })).toHaveAttribute('placeholder', 'Description (optional)');
+    expect(screen.getByRole('textbox', { name: 'Acceptance criteria' })).toHaveAttribute(
+      'placeholder',
+      'Acceptance criteria, one per line',
+    );
+    expect(screen.getByRole('group', { name: 'Max loops' })).toBeInTheDocument();
+    const after = screen.getByRole('group', { name: 'After' });
+    await userEvent.type(within(after).getByRole('searchbox', { name: 'Search for a key' }), 'ZZZ');
+    expect(within(after).getByText('No ticket for this key')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add' })).toBeInTheDocument();
+  });
+
+  it('says Save for a ticket that is edited, and asks in English before throwing a change away', async () => {
+    render(TicketForm, { ticket: ticket(), projectId: 'p1', onsubmit: vi.fn(), oncancel: vi.fn() });
+    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+    await userEvent.type(screen.getByRole('textbox', { name: 'Ticket title' }), '!');
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(app.modal).toMatchObject({
+      kind: 'confirm',
+      title: 'Discard your changes?',
+      body: 'What you typed in this ticket will not be saved.',
+      confirm: 'Discard',
+    });
+  });
+
+  it('refuses a ticket that already waits for this one, in English', async () => {
+    resetApp({
+      tickets: [ticket({ id: 't2', key: 'DEM-2', title: 'Deux', createdAt: 2, after: ['t1'] })],
+    });
+    render(TicketForm, { ticket: ticket(), projectId: 'p1', onsubmit: vi.fn(), oncancel: vi.fn() });
+    await userEvent.click(within(screen.getByRole('group', { name: 'After' })).getByRole('checkbox', { name: /^DEM-2 / }));
+    expect(screen.getByRole('alert')).toBeInTheDocument();
   });
 });
