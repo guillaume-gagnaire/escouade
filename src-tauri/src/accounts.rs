@@ -5,8 +5,9 @@
 //!
 //! The order of `Settings::accounts` is their priority: new agents go to the first one usable.
 
+use crate::board;
 use crate::claude;
-use crate::model::{Account, Settings};
+use crate::model::{Account, AccountUsage, Settings};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
@@ -111,9 +112,30 @@ pub fn get(settings: &Settings, id: &str) -> Account {
     find(settings, id).cloned().unwrap_or_else(principal)
 }
 
+/// The account new agents would go to, as the status bar shows it: the first active one, in the
+/// settings' order, none of whose quota windows (`usage`) is used `threshold` percent or more at
+/// `now` (as the autopilot counts it), else the first active one.
+pub fn current(settings: &Settings, usage: &[AccountUsage], threshold: u32, now: i64) -> String {
+    let over = |id: &str| {
+        usage.iter().find(|u| u.id == id).is_some_and(|u| {
+            [u.five_hour, u.seven_day]
+                .iter()
+                .flatten()
+                .any(|w| board::over_threshold(w, threshold, now))
+        })
+    };
+    let mut active = settings.accounts.iter().filter(|a| a.active);
+    let first = active.clone().next();
+    active
+        .find(|a| !over(&a.id))
+        .or(first)
+        .map_or_else(|| PRINCIPAL.to_string(), |a| a.id.clone())
+}
+
 /// The configuration folder the account's Claude Code reads: its own, or for Principal (no folder)
 /// the app's `CLAUDE_CONFIG_DIR` when it has one, which its processes inherit, else `~/.claude`.
-// Allowed unused until the quota and the sign-in read each account's folder (then drop the allow).
+// Allowed unused until the accounts' settings read each one's folder (then drop the allow): the
+// quota goes by `usage::sign_in`, which takes the app's environment as `config_dir_with` does.
 #[allow(dead_code)]
 pub fn config_dir(account: &Account) -> PathBuf {
     let env = std::env::var(CONFIG_DIR_VAR).ok();

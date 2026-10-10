@@ -399,6 +399,12 @@ fn over_until(w: &RateWindow, threshold: u32, now: i64) -> Option<i64> {
         .filter(|until| over && *until > now)
 }
 
+/// The window is used `threshold` percent or more at `now`, until an end still to come (and its
+/// margin): it holds the tickets back, as `autopilot_pause` has it.
+pub fn over_threshold(w: &RateWindow, threshold: u32, now: i64) -> bool {
+    over_until(w, threshold, now).is_some()
+}
+
 /// Why no ticket of any board starts at `now`, if none does: a window (5 h, weekly) used
 /// `threshold` percent or more until its end, unless "Reprendre maintenant" lifted it, or the
 /// pause after a usage limit with no resume planned. When several hold, the one that ends last:

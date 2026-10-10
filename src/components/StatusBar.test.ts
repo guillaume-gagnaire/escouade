@@ -55,6 +55,8 @@ describe('StatusBar', () => {
       sevenDay: { pct: 38.4, resetsAt: app.now + (2 * 86400 + 5 * 3600) * 1000 },
       todayCost: 0,
       updatedAt: 1,
+      accounts: [],
+      current: 'principal',
     };
     render(StatusBar);
     const week = screen.getByText(/Hebdo/).closest('.it')!;
@@ -77,6 +79,8 @@ describe('StatusBar', () => {
       sevenDay: { pct: 38.4, resetsAt: null },
       todayCost: 4.12,
       updatedAt: 1,
+      accounts: [],
+      current: 'principal',
     };
     render(StatusBar);
     expect(screen.getByText('62 %')).toBeInTheDocument();
@@ -270,7 +274,7 @@ describe('StatusBar update', () => {
 describe('StatusBar day cost', () => {
   it('includes what running turns cost so far, marked as an estimate', () => {
     resetApp({ agents: [agent({ id: 'a1', status: 'running', liveCost: 0.5 }), agent({ id: 'a2', liveCost: 0.25 })] });
-    app.usage = { fiveHour: null, sevenDay: null, todayCost: 1, updatedAt: 1 };
+    app.usage = { fiveHour: null, sevenDay: null, todayCost: 1, updatedAt: 1, accounts: [], current: 'principal' };
     fakeBackend();
     render(StatusBar);
     expect(screen.getByText('≈ 1,75 $')).toBeInTheDocument();
@@ -299,6 +303,8 @@ describe('StatusBar in English', () => {
       sevenDay: { pct: 38.4, resetsAt: app.now + (2 * 86400 + 5 * 3600) * 1000 },
       todayCost: 4.12,
       updatedAt: 1,
+      accounts: [],
+      current: 'principal',
     };
     render(StatusBar);
     expect(screen.getByText('1 active')).toBeInTheDocument();

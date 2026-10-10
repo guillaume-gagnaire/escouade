@@ -1403,17 +1403,16 @@ async fn a_quota_window_read_before_a_restart_still_holds_the_tickets_back_until
     // Used up until tomorrow, as last read (with an API key, no reading comes again); an ended
     // window is not kept.
     let end = now_ms() + 86_400_000;
-    {
-        let mut u = h.core.usage.lock();
-        u.seven_day = Some(RateWindow {
-            pct: 100.0,
-            resets_at: Some(end),
-        });
-        u.five_hour = Some(RateWindow {
-            pct: 100.0,
-            resets_at: Some(now_ms() - RESUME_MARGIN_MS - 1_000),
-        });
-    }
+    let week = Some(RateWindow {
+        pct: 100.0,
+        resets_at: Some(end),
+    });
+    let ended = Some(RateWindow {
+        pct: 100.0,
+        resets_at: Some(now_ms() - RESUME_MARGIN_MS - 1_000),
+    });
+    h.core
+        .record_usage("principal", crate::usage::Reading::Windows((ended, week)));
     let t = h
         .core
         .ticket_create(&p.id, draft("Patienter [ok]", &[], 5))

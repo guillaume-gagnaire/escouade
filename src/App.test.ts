@@ -28,7 +28,7 @@ function start(
     agents: over.agents ?? [agent()],
     ui: { activeProject: 'p1', view: 'project', selectedAgent: {}, layout },
     settings: SETTINGS,
-    usage: { fiveHour: null, sevenDay: null, todayCost: 0, updatedAt: 0 },
+    usage: { fiveHour: null, sevenDay: null, todayCost: 0, updatedAt: 0, accounts: [], current: 'principal' },
     git: {},
     shells: [],
     terminals: [],
