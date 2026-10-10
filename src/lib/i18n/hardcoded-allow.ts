@@ -23,6 +23,11 @@ export const ALLOWED: Allowed[] = [
   // L6 — board, stats
 
   // L7 — nav, git
+  {
+    file: 'src/components/TitleBar.svelte',
+    text: 'Δ',
+    why: 'le symbole de la différence, avant le nombre de modifications git : le même dans toutes les langues',
+  },
 
   // L8 — conv, composer
   { file: 'src/components/Conversation.svelte', text: 'C', why: 'l’initiale de Claude dans l’avatar de ses messages : un nom propre' },

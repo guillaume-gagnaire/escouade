@@ -182,6 +182,21 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 
 | Français | Anglais | Note |
 |---|---|---|
+| Cet agent / Tout le projet | This agent / Whole project | les deux portées du panneau des fichiers non commités |
+| Voir le diff | Show diff | bouton du panneau des fichiers |
+| Commit… / Commit tout… | Commit… / Commit all… | « Commiter » (le bouton de la fenêtre de commit) → “Commit” |
+| Régénérer | Regenerate | le message de commit proposé par Haiku |
+| Unifié / Côte à côte | Unified / Side by side | les deux présentations d’un diff |
+| Jamais commité | Never committed | les fichiers copiés dans les worktrees que le commit laisse de côté |
+| Abandonner les modifications | Discard changes | menu d’un fichier non commité et sa confirmation |
+| Basculer (sur la branche de base) | Switch (to the base branch) | avant un merge : « Basculer et merger » → “Switch and merge” |
+| Squash (un seul commit) | Squash (a single commit) | option du merge |
+| Archiver / Restaurer / Archivés | Archive / Restore / Archived | un agent |
+| Dupliquer la conversation | Duplicate the conversation | menu d’un agent |
+| remote control | remote control | écrit en minuscules, comme dans la conversation |
+| Terminaux / terminal terminé | Terminals / exited | un terminal dont le shell s’est arrêté |
+| À voir (un agent à regarder) | Needs a look | l’info-bulle d’un onglet de projet qui clignote |
+| Réduire / Agrandir / Restaurer (la fenêtre) | Minimize / Maximize / Restore | boutons de la barre de titre |
 
 ## L8 — conv, composer
 
