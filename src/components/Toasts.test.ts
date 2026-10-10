@@ -21,6 +21,24 @@ describe('Toasts', () => {
     expect(screen.queryByText('Escouade 1.6.0 est installée.')).toBeNull();
   });
 
+  it('leaves the focus where it was when its button is clicked, and its button still works from the keyboard', async () => {
+    const onClick = vi.fn();
+    render(Toasts);
+    // A dialog's field, which the toast's button closing with its toast must not leave without the focus.
+    document.body.insertAdjacentHTML('beforeend', '<textarea aria-label="Message"></textarea>');
+    const field = screen.getByLabelText('Message');
+    field.focus();
+    app.toast('La mise à jour vers 1.6.0 n’a pas pu s’installer.', 'error', { label: 'Réessayer', onClick });
+    await userEvent.click(await screen.findByRole('button', { name: 'Réessayer' }));
+    expect(onClick).toHaveBeenCalledOnce();
+    expect(field).toHaveFocus();
+    app.toast('La mise à jour vers 1.6.0 n’a pas pu s’installer.', 'error', { label: 'Réessayer', onClick });
+    (await screen.findByRole('button', { name: 'Réessayer' })).focus();
+    await userEvent.keyboard('{Enter}');
+    expect(onClick).toHaveBeenCalledTimes(2);
+    field.remove();
+  });
+
   it('keeps a toast with a button long enough to reach it', async () => {
     vi.useFakeTimers();
     app.toast('Pris en compte');

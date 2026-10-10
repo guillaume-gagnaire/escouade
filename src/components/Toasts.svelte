@@ -10,7 +10,10 @@
 <div class="toasts" role="status" aria-live="polite">
   {#each app.toasts as t (t.id)}
     <div class="toast {t.kind}">
-      {t.text}{#if t.action}<button class="act" onclick={() => act(t)}>{t.action.label}</button>{/if}
+      <!-- A click leaves the focus where it was (a dialog's field): the button goes with its toast, which would leave the
+           focus to the page behind the dialog. The keyboard still reaches it and presses it. -->
+      {t.text}{#if t.action}<button class="act" onmousedown={(e) => e.preventDefault()} onclick={() => act(t)}>{t.action.label}</button
+        >{/if}
     </div>
   {/each}
 </div>
