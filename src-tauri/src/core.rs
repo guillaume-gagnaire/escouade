@@ -318,6 +318,17 @@ fn size_label(lang: i18n::Lang, bytes: usize) -> String {
     }
 }
 
+/// `text`, written by `origin` (a caller of the MCP server) and not by the user: « Message de
+/// <origin> : <text> ». The author is one line (an agent's name, « Claude (hors Escouade) »).
+pub(crate) fn from_origin(lang: i18n::Lang, origin: &str, text: &str) -> String {
+    let origin = origin.split_whitespace().collect::<Vec<_>>().join(" ");
+    tr_in!(
+        lang,
+        "Message de {origin} : {text}",
+        "Message from {origin}: {text}"
+    )
+}
+
 /// Content of a user message: its text alone, or the attached files as content blocks
 /// followed by the text.
 pub fn user_content(text: &str, attachments: &[Attachment]) -> Result<Value> {
@@ -414,6 +425,9 @@ pub struct AgentOptions {
     pub copy_of: Option<CopyOf>,
     /// The Claude account it runs on (an `Account`'s id); None: Principal.
     pub account: Option<String>,
+    /// A worktree of its own (true) or the project's folder (false), whatever the project does by
+    /// default; None: as the project does. `worktree` and `copy_of` name theirs and win.
+    pub isolated: Option<bool>,
 }
 
 /// What a copy takes of its original, read while no turn of the original ran.
@@ -1225,13 +1239,14 @@ impl<R: Runtime> Core<R> {
                 }
             }
         });
+        // The MCP server first: the agents started below reach it.
+        self.start_mcp();
         self.start_remote_agents();
         // The syncs the app's last run left waiting go again now, before those of the tickets
         // that go on.
         self.retry_all_syncs();
         self.recover_tickets();
         self.update_tray();
-        self.sync_mcp();
     }
 
     // ---------- persistence ----------
@@ -1466,7 +1481,7 @@ impl<R: Runtime> Core<R> {
         self.update_tray();
     }
 
-    fn spawn_lock(&self, id: &str) -> Arc<tokio::sync::Mutex<()>> {
+    pub(crate) fn spawn_lock(&self, id: &str) -> Arc<tokio::sync::Mutex<()>> {
         self.spawn_locks
             .lock()
             .entry(id.to_string())
@@ -1741,7 +1756,7 @@ impl<R: Runtime> Core<R> {
                 "Claude Code not found. Install it or give its path in the settings."
             ))
         })?;
-        let (opts, gen) = {
+        let (mut opts, gen, project_id) = {
             let mut rt = h.lock();
             rt.gen += 1;
             let opts = SpawnOpts {
@@ -1750,7 +1765,7 @@ impl<R: Runtime> Core<R> {
                 args: claude_args(&rt.meta),
                 env: [settings.claude_env(), accounts::launch_env(&account)].concat(),
             };
-            (opts, rt.gen)
+            (opts, rt.gen, rt.meta.project_id.clone())
         };
         if !Path::new(&opts.cwd).is_dir() {
             bail!(tr!(
@@ -1759,6 +1774,11 @@ impl<R: Runtime> Core<R> {
                 dir = opts.cwd
             ));
         }
+        // Escouade's MCP server, as this agent (a token of its own) or refused to it.
+        let access = self.agent_access(id, &project_id);
+        opts.args.extend(access.args());
+        // Given back when this process ends, unless a newer one of the agent has its own.
+        let token = access.token().map(str::to_string);
         log::info!(
             "agent {id}: starting {} {} in {} (account {})",
             opts.program.display(),
@@ -1769,7 +1789,8 @@ impl<R: Runtime> Core<R> {
         let started = std::time::Instant::now();
         let (w1, w2) = (Arc::downgrade(self), Arc::downgrade(self));
         let (h1, h2) = (h.clone(), h.clone());
-        let proc = ClaudeProcess::spawn(
+        let (agent_id, granted) = (id.to_string(), token.clone());
+        let spawned = ClaudeProcess::spawn(
             opts,
             move |frame| {
                 if let Some(c) = w1.upgrade() {
@@ -1778,10 +1799,22 @@ impl<R: Runtime> Core<R> {
             },
             move |code, stderr| {
                 if let Some(c) = w2.upgrade() {
+                    if let Some(t) = &granted {
+                        c.mcp.release_agent(&agent_id, t);
+                    }
                     c.on_exit(&h2, gen, code, stderr);
                 }
             },
-        )?;
+        );
+        let proc = match spawned {
+            Ok(p) => p,
+            Err(e) => {
+                if let Some(t) = &token {
+                    self.mcp.release_agent(id, t);
+                }
+                return Err(e);
+            }
+        };
         h.lock().attach(proc.clone());
         self.emit_agent(&h);
         match proc
@@ -2148,6 +2181,8 @@ impl<R: Runtime> Core<R> {
                 p.kill();
             }
         }
+        // Their tokens go with the app: their MCP configs too.
+        self.mcp.clear_agent_configs();
         self.pty.kill_all();
         self.save_now();
     }
@@ -2158,17 +2193,35 @@ impl<R: Runtime> Core<R> {
         text: String,
         attachments: Vec<Attachment>,
     ) -> Result<()> {
+        self.send_message_from(id, None, text, attachments).await
+    }
+
+    /// `send_message` of a text someone else wrote than the user at the window: the author's name
+    /// is `origin` (a caller of the MCP server). The agent reads it, and the conversation shows
+    /// it, under « Message de <origin> : » (`from_origin`), so that it is never taken for the
+    /// user's own words. The agent is named after the text alone.
+    pub(crate) async fn send_message_from(
+        self: &Arc<Self>,
+        id: &str,
+        origin: Option<&str>,
+        text: String,
+        attachments: Vec<Attachment>,
+    ) -> Result<()> {
         // Until its turn runs (its process started, the message delivered), it is under way.
         let _working = self.working();
+        let delivered = match origin {
+            Some(origin) => from_origin(i18n::ui(), origin, &text),
+            None => text.clone(),
+        };
         // Refused before starting Claude: the composer keeps the message.
-        let content = user_content(&text, &attachments)?;
+        let content = user_content(&delivered, &attachments)?;
         // Its new worktree is set up first: Claude would work in it meanwhile (an install running
         // twice, files half written).
         self.wait_setup(id).await;
         // Two attempts: the process may die between being started and receiving the message.
         for attempt in 0..2 {
             let proc = self.ensure_process(id).await?;
-            if self.deliver(id, &proc, &text, &content, &attachments)? {
+            if self.deliver(id, &proc, &delivered, &text, &content, &attachments)? {
                 return Ok(());
             }
             log::warn!("message not delivered (attempt {attempt}): the process exited");
@@ -2180,11 +2233,14 @@ impl<R: Runtime> Core<R> {
     }
 
     /// Sends the message to `proc` if it is still the agent's live process, then records it.
+    /// `text` is what the agent is sent, `naming` what its name is made from when this is its
+    /// first message (the same, unless the text is headed by its author's name).
     fn deliver(
         self: &Arc<Self>,
         id: &str,
         proc: &Arc<ClaudeProcess>,
         text: &str,
+        naming: &str,
         content: &Value,
         attachments: &[Attachment],
     ) -> Result<bool> {
@@ -2213,9 +2269,9 @@ impl<R: Runtime> Core<R> {
         };
         self.stats.record_prompt(id, &pid);
         self.apply(id, &pid, &name, fx, Some(view));
-        if first && !text.trim().is_empty() && !text.trim_start().starts_with('/') {
-            let (c, id, text) = (self.clone(), id.to_string(), text.to_string());
-            tauri::async_runtime::spawn(async move { c.auto_name(&id, &text).await });
+        if first && !naming.trim().is_empty() && !naming.trim_start().starts_with('/') {
+            let (c, id, naming) = (self.clone(), id.to_string(), naming.to_string());
+            tauri::async_runtime::spawn(async move { c.auto_name(&id, &naming).await });
         }
         Ok(true)
     }
@@ -2457,7 +2513,7 @@ impl<R: Runtime> Core<R> {
                 }
                 None => None,
             },
-            (None, None) if project.worktree_per_agent => {
+            (None, None) if o.isolated.unwrap_or(project.worktree_per_agent) => {
                 Some(git::worktree_add(&project.path, &name).await)
             }
             (None, None) => None,
@@ -3308,6 +3364,8 @@ impl<R: Runtime> Core<R> {
                 rt.meta.port_base,
             )
         };
+        // Refused at once, without waiting for its process to end.
+        self.mcp.forget_agent(id);
         self.spawn_locks.lock().remove(id);
         // The setup of its worktree stops, with what it started (which holds the worktree). Once it
         // is gone: what waited for that setup (its ticket's first message) finds no agent to send to.
@@ -3530,13 +3588,17 @@ impl<R: Runtime> Core<R> {
         self.request_save();
     }
 
-    pub fn remove_project(self: &Arc<Self>, id: &str) -> Result<()> {
+    pub async fn remove_project(self: &Arc<Self>, id: &str) -> Result<()> {
         let agents: Vec<String> = self
             .project_agents(id)
             .iter()
             .map(|h| h.lock().meta.id.clone())
             .collect();
         for aid in agents {
+            // Wait for an in-flight start (a warm-up), as the deletion of an agent does: it would
+            // otherwise start a process, with a token, for an agent that is gone.
+            let lock = self.spawn_lock(&aid);
+            let _guard = lock.lock().await;
             // Bound first: the map guard must not live across the agent lock and the I/O below.
             let removed = self.agents.write().remove(&aid);
             let mut worktree = None;
@@ -3549,6 +3611,8 @@ impl<R: Runtime> Core<R> {
                 rt.conv.delete_file();
                 worktree = rt.meta.worktree.clone();
             }
+            self.mcp.forget_agent(&aid);
+            self.spawn_locks.lock().remove(&aid);
             // The setup of its worktree stops, with what it started; its log goes.
             if let Some(s) = self.setups.lock().remove(&aid) {
                 s.task.abort();

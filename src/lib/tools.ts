@@ -1,7 +1,7 @@
 // One-line summaries of tool calls for the compact rows of the conversation.
 
 import { fInt, relPath } from './format';
-import { t } from './i18n';
+import { t, type Key } from './i18n';
 import type { ConvItem, ToolItem } from './types';
 
 const lines = (s: string | undefined) => (s ? s.split('\n').length : 0);
@@ -11,13 +11,82 @@ function lastLine(s: string | undefined): string {
   return l.length ? l[l.length - 1].slice(0, 120) : '';
 }
 
+/** How Claude Code names the tools of Escouade's own MCP server: `mcp__escouade__<tool>`. */
+const ESCOUADE = 'mcp__escouade__';
+
+/** The name in words of each tool of Escouade's server (keys only: the text is read where it is shown). */
+const ESCOUADE_TOOLS: Record<string, Key> = {
+  list_projects: 'mcp.tools.listProjects',
+  list_agents: 'mcp.tools.listAgents',
+  list_tickets: 'mcp.tools.listTickets',
+  get_ticket: 'mcp.tools.getTicket',
+  get_usage: 'mcp.tools.getUsage',
+  get_agent_summary: 'mcp.tools.getAgentSummary',
+  create_ticket: 'mcp.tools.createTicket',
+  update_ticket: 'mcp.tools.updateTicket',
+  move_ticket: 'mcp.tools.moveTicket',
+  start_ticket: 'mcp.tools.startTicket',
+  create_agent: 'mcp.tools.createAgent',
+  send_message: 'mcp.tools.sendMessage',
+  stop_agent: 'mcp.tools.stopAgent',
+  report_progress: 'mcp.tools.reportProgress',
+  split_ticket: 'mcp.tools.splitTicket',
+};
+
+/**
+ * What a tool of Escouade is about, first found first (`ESCOUADE_MAIN_ARGS` of the backend's `tool_arg` reads them in
+ * the same order): the ticket it makes, the ticket or the agent it acts on, what an agent it starts is told, the line an
+ * agent reports, the project it reads.
+ */
+const ESCOUADE_MAIN_ARGS = ['title', 'ticket', 'agent', 'message', 'line', 'project'];
+
+/** The most characters of a value the permission card of a tool of Escouade shows. */
+export const ARG_MAX = 2000;
+
+/** A tool of Escouade's own MCP server. */
+export const isEscouadeTool = (name: string) => name.startsWith(ESCOUADE);
+
 export function toolLabel(name: string): string {
+  if (isEscouadeTool(name)) {
+    const tool = name.slice(ESCOUADE.length);
+    const key = Object.hasOwn(ESCOUADE_TOOLS, tool) ? ESCOUADE_TOOLS[tool] : null;
+    return t('mcp.tools.named', { tool: key ? t(key) : tool });
+  }
   if (name.startsWith('mcp__')) {
     const [, server, tool] = name.split('__');
     return `${server}·${tool ?? ''}`;
   }
   if (name === 'Task' || name === 'Agent') return 'Agent';
   return name;
+}
+
+/** `text` in `ARG_MAX` characters at most (as they are read: an emoji is one), « … » after it when it was longer. */
+function capped(text: string): string {
+  const chars = [...text];
+  return chars.length > ARG_MAX ? `${chars.slice(0, ARG_MAX).join('')}…` : text;
+}
+
+/** A value as the permission card reads it: a text as written, a list of texts one per line, anything else as JSON. */
+function inClear(v: unknown): string {
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  if (Array.isArray(v) && v.every((x) => typeof x === 'string' || typeof x === 'number')) return v.join('\n');
+  return JSON.stringify(v, null, 2);
+}
+
+/**
+ * Each argument a tool of Escouade is given, in its order, as its permission card lists them: its name and its value
+ * in clear (`inClear`), `ARG_MAX` characters at most, and `hidden`, how many more there were, when the value was cut.
+ * An argument left out (null) is not listed.
+ */
+export function escouadeArgs(input: Record<string, unknown>): { name: string; value: string; hidden?: number }[] {
+  return Object.entries(input ?? {})
+    .filter(([, v]) => v !== null && v !== undefined)
+    .map(([name, v]) => {
+      const text = inClear(v);
+      const hidden = [...text].length - ARG_MAX;
+      return { name, value: capped(text), ...(hidden > 0 ? { hidden } : {}) };
+    });
 }
 
 /**
@@ -43,6 +112,10 @@ export const SUMMED_UP: ReadonlySet<string> = new Set([
 export function toolArg(tool: ToolItem, cwd: string): string {
   const i = tool.input ?? {};
   const p = (x: unknown) => (typeof x === 'string' ? relPath(cwd, x) : '');
+  if (isEscouadeTool(tool.name)) {
+    const main = ESCOUADE_MAIN_ARGS.map((k) => i[k]).find((v) => typeof v === 'string');
+    return typeof main === 'string' ? main.slice(0, 160) : '';
+  }
   switch (tool.name) {
     case 'Bash':
     case 'PowerShell':

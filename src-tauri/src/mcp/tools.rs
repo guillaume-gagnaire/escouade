@@ -17,11 +17,12 @@
 //!
 //! A call the router refuses before its tool (unknown, arguments that do not fit the schema) is
 //! logged by `call_tool`. What a tool's arguments name is found by `resolve`; what the reading
-//! ones answer is built by `read`.
+//! ones answer is built by `read`, and what the ones that act do is in `act`.
 //!
 //! None accepts a permission, answers for the user, runs a command or the tests, merges or
 //! deletes: `tests::EXPOSED` lists exactly what the router holds, so a tool is added knowingly.
 
+use super::act;
 use super::activity::{self, Outcome};
 use super::read;
 use super::Caller;
@@ -197,6 +198,16 @@ impl From<ColumnArg> for Column {
     }
 }
 
+impl PositionArg {
+    pub(super) fn name(self) -> &'static str {
+        match self {
+            PositionArg::Top => "top",
+            PositionArg::Bottom => "bottom",
+            PositionArg::Before => "before",
+        }
+    }
+}
+
 impl ColumnArg {
     fn name(self) -> &'static str {
         match self {
@@ -226,7 +237,158 @@ pub struct GetAgentSummaryArgs {
     pub project: Option<String>,
 }
 
-// The tools: those that read (M2); M4 adds those that act.
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct CreateTicketArgs {
+    #[schemars(description = "The project: its id, or its name in any case.")]
+    pub project: String,
+    #[schemars(description = "The ticket's title, on one line (200 characters at most).")]
+    pub title: String,
+    #[schemars(
+        description = "What to do, in a few sentences or paragraphs (10,000 characters at most). Leave it out for none."
+    )]
+    pub description: Option<String>,
+    #[schemars(
+        description = "The acceptance criteria, one per item (30 at most, 500 characters each): the ticket's agent checks each one in its report. Leave them out for two default ones."
+    )]
+    pub criteria: Option<Vec<String>>,
+    #[schemars(
+        description = "The tickets of the same project this one comes after, by key (like ATL-12, in any case) or id: it starts once all are done. Leave it out for none."
+    )]
+    pub after: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct UpdateTicketArgs {
+    #[schemars(description = "The ticket: its key (like ATL-12, in any case) or its id.")]
+    pub ticket: String,
+    #[schemars(
+        description = "The new title, on one line (200 characters at most). Leave it out to keep the current one."
+    )]
+    pub title: Option<String>,
+    #[schemars(
+        description = "The new description (10,000 characters at most). Leave it out to keep the current one."
+    )]
+    pub description: Option<String>,
+    #[schemars(
+        description = "The new acceptance criteria, one per item, replacing all the current ones (an empty list gives the two default ones). Leave it out to keep the current ones."
+    )]
+    pub criteria: Option<Vec<String>>,
+    #[schemars(
+        description = "The tickets of the same project it now comes after, by key or id, replacing all the current ones (an empty list takes them all away). Leave it out to keep the current ones."
+    )]
+    pub after: Option<Vec<String>>,
+}
+
+/// Where `move_ticket` puts a ticket.
+#[derive(Debug, Clone, Copy, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "lowercase")]
+#[schemars(inline)]
+pub enum PositionArg {
+    Top,
+    Bottom,
+    Before,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct MoveTicketArgs {
+    #[schemars(description = "The ticket to move: its key (like ATL-12, in any case) or its id.")]
+    pub ticket: String,
+    #[schemars(
+        description = "Where it goes in the To do column: top (first), bottom (last) or before (just before the ticket named by before)."
+    )]
+    pub position: PositionArg,
+    #[schemars(
+        description = "Only with position before: the To do ticket of the same project to put this one just before, by key or id."
+    )]
+    pub before: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct StartTicketArgs {
+    #[schemars(
+        description = "The ticket to launch: its key (like ATL-12, in any case) or its id."
+    )]
+    pub ticket: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct CreateAgentArgs {
+    #[schemars(description = "The project: its id, or its name in any case.")]
+    pub project: String,
+    #[schemars(
+        description = "The agent's first message: what it should do. The agent reads it headed by your name (Message from <you>: …), as coming from you and not from the user."
+    )]
+    pub message: String,
+    #[schemars(
+        description = "true: the agent works in a worktree of its own; false: in the project's folder. Leave it out to do as the project does by default."
+    )]
+    pub worktree: Option<bool>,
+    #[schemars(
+        description = "The model, as Claude Code names it (sonnet, opus, haiku…). Leave it out for the default model."
+    )]
+    pub model: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct SendMessageArgs {
+    #[schemars(description = "The agent: its id, or its name in any case.")]
+    pub agent: String,
+    #[schemars(
+        description = "The project to look for its name in (two projects may each have an agent of that name): its id, or its name in any case."
+    )]
+    pub project: Option<String>,
+    #[schemars(
+        description = "The message. The agent reads it, and the conversation shows it, headed by your name (Message from <you>: …), as coming from you and not from the user."
+    )]
+    pub text: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct StopAgentArgs {
+    #[schemars(description = "The agent: its id, or its name in any case.")]
+    pub agent: String,
+    #[schemars(
+        description = "The project to look for its name in (two projects may each have an agent of that name): its id, or its name in any case."
+    )]
+    pub project: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ReportProgressArgs {
+    #[schemars(
+        description = "What you are doing, in one line of 120 characters at most. An empty line takes the previous one off."
+    )]
+    pub line: String,
+}
+
+/// The most tickets one `split_ticket` makes.
+pub const SPLIT_MAX: usize = 10;
+
+/// One of the tickets `split_ticket` makes.
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[schemars(inline)]
+pub struct SubTicket {
+    #[schemars(description = "The ticket's title, on one line (200 characters at most).")]
+    pub title: String,
+    #[schemars(description = "What to do in this ticket (10,000 characters at most).")]
+    pub description: Option<String>,
+    #[schemars(
+        description = "Its acceptance criteria, one per item. Leave them out for two default ones."
+    )]
+    pub criteria: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct SplitTicketArgs {
+    #[schemars(description = "The tickets to make (10 at most), each with a title.")]
+    pub tickets: Vec<SubTicket>,
+    #[schemars(
+        description = "true (the default): each ticket comes after the one before it, the first after yours; false: all come after yours alone and may run in parallel."
+    )]
+    pub chain: Option<bool>,
+}
+
+// The tools: those that read, those that act, those for the agents of Escouade alone.
 #[tool_router(vis = "pub(crate)")]
 impl<R: Runtime> Tools<R> {
     #[tool(
@@ -284,7 +446,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Read the Claude quota: for each Claude account, whether new agents go to it now (current), and how much of its 5-hour and weekly windows is used (pct, 0 to 100) with when each resets (resetsAt, epoch milliseconds), null when not read; and why the autopilot holds the tickets back, when it does (reason: fiveHour, week or limit), until when (epoch milliseconds).",
+        description = "Read the Claude quota: for each Claude account, whether new agents go to it now (current: the first active account whose windows are under the autopilot's threshold, else the first active one), and how much of its own 5-hour and weekly windows is used (pct, 0 to 100) with when each resets (resetsAt, epoch milliseconds), null when not read; and why the autopilot holds the tickets back, when it does (reason: fiveHour, week or limit), until when (epoch milliseconds).",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn get_usage(&self, ctx: ToolCtx<R>) -> CallToolResult {
@@ -307,6 +469,198 @@ impl<R: Runtime> Tools<R> {
             ("project", args.project.as_deref()),
         ]);
         ctx.reply("get_agent_summary", &asked, result)
+    }
+
+    #[tool(
+        description = "Create a ticket in the To do column of a project's Kanban board, at the end of the column. When the project's autopilot is on, it starts by itself as soon as a place is free and the tickets it comes after are done. Answers the ticket as get_ticket does.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn create_ticket(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<CreateTicketArgs>,
+    ) -> CallToolResult {
+        let after = args.after.as_ref().map(|a| a.join(", "));
+        let asked = summary(&[
+            ("project", Some(&args.project)),
+            ("title", Some(&args.title)),
+            ("after", after.as_deref()),
+        ]);
+        let result = act::create_ticket(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("create_ticket", &asked, result)
+    }
+
+    #[tool(
+        description = "Edit a ticket of the To do column: the fields you leave out stay as they are. A ticket that has started cannot be edited, and a dependency that would make two tickets wait for each other is refused. Answers the ticket as get_ticket does.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn update_ticket(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<UpdateTicketArgs>,
+    ) -> CallToolResult {
+        let after = args.after.as_ref().map(|a| a.join(", "));
+        let asked = summary(&[
+            ("ticket", Some(&args.ticket)),
+            ("title", args.title.as_deref()),
+            ("after", after.as_deref()),
+        ]);
+        let result = act::update_ticket(&ctx.core, &ctx.caller, args);
+        ctx.reply("update_ticket", &asked, result)
+    }
+
+    #[tool(
+        description = "Change the place of a ticket in the To do column of its project, which is the order the autopilot starts them in: to the top, to the bottom, or just before another To do ticket. A ticket that has started does not move. Answers the keys of the To do column in their new order.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn move_ticket(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<MoveTicketArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("ticket", Some(&args.ticket)),
+            ("position", Some(args.position.name())),
+            ("before", args.before.as_deref()),
+        ]);
+        let result = act::move_ticket(&ctx.core, &ctx.caller, args);
+        ctx.reply("move_ticket", &asked, result)
+    }
+
+    #[tool(
+        description = "Launch a To do ticket now, as the Launch button does: its agent starts as soon as a place is free. Refused while the autopilot is paused (quota or usage limit: the answer says until when), when the project already has its most tickets in progress in parallel, when the ticket comes after tickets that are not done, and when the board cannot start anything. Answers once it is queued; follow it with get_ticket. It uses the quota.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn start_ticket(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<StartTicketArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[("ticket", Some(&args.ticket))]);
+        let result = act::start_ticket(&ctx.core, &ctx.caller, args);
+        ctx.reply("start_ticket", &asked, result)
+    }
+
+    #[tool(
+        description = "Start a new Claude Code agent in a project and send it its first message, which it reads headed by your name (Message from <you>: …), as coming from you and not from the user. It works on its own from then on: follow it with get_agent_summary. Refused while the autopilot is paused (the answer says until when) and when the project already has its most agents working at once (its Kanban's In parallel setting). It uses the quota. Answers the agent's id and name.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn create_agent(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<CreateAgentArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("project", Some(&args.project)),
+            ("message", Some(&args.message)),
+        ]);
+        let result = act::create_agent(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("create_agent", &asked, result)
+    }
+
+    #[tool(
+        description = "Send a message to an agent of Escouade. The agent reads it, and the conversation shows it, headed by your name (Message from <you>: …), as coming from you and not from the user; an agent at work reads it after its current turn. Refused while the autopilot is paused (the answer says until when), for an archived agent, and for yourself when you are an agent. It uses the quota. Answers the agent's id and name, and whether the message waits for the end of a turn.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn send_message(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<SendMessageArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("agent", Some(&args.agent)),
+            ("project", args.project.as_deref()),
+            ("text", Some(&args.text)),
+        ]);
+        let result = act::send_message(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("send_message", &asked, result)
+    }
+
+    #[tool(
+        description = "Interrupt an agent's current turn, as the stop button of its conversation does: the agent stays, and can be sent a message after. Refused for yourself when you are an agent. Answers the agent's id and name, and whether a turn was running.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn stop_agent(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<StopAgentArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("agent", Some(&args.agent)),
+            ("project", args.project.as_deref()),
+        ]);
+        let result = act::stop_agent(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("stop_agent", &asked, result)
+    }
+
+    #[tool(
+        description = "Only for Escouade's own agents (refused to any other client). Report in one short line what you are doing: it shows on your card and on your ticket's card until your next report (120 characters at most; an empty line takes it off). Answers the line as kept.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn report_progress(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<ReportProgressArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[("line", Some(args.line.trim()))]);
+        let result = act::report_progress(&ctx.core, &ctx.caller, args);
+        ctx.reply("report_progress", &asked, result)
+    }
+
+    #[tool(
+        description = "Only for Escouade's own agents (refused to any other client, and to an agent without a ticket). Split the work that remains of your ticket into new To do tickets (10 at most per call), made after it: with chain true (the default) each comes after the one before it, the first after yours; with chain false all come after yours alone and may run in parallel. They start once the tickets they come after are done. Answers the keys of the tickets made.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn split_ticket(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<SplitTicketArgs>,
+    ) -> CallToolResult {
+        let titles = args
+            .tickets
+            .iter()
+            .map(|t| t.title.as_str())
+            .collect::<Vec<_>>()
+            .join(" | ");
+        let asked = summary(&[("tickets", Some(&titles))]);
+        let result = act::split_ticket(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("split_ticket", &asked, result)
     }
 }
 

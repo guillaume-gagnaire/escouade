@@ -201,9 +201,9 @@ pub fn reorder_projects(core: CoreState, ids: Vec<String>) {
     core.reorder_projects(&ids);
 }
 
-#[tauri::command(async)]
-pub fn remove_project(core: CoreState, id: String) -> Res<()> {
-    core.remove_project(&id).map_err(err)
+#[tauri::command]
+pub async fn remove_project(core: CoreState<'_>, id: String) -> Res<()> {
+    core.remove_project(&id).await.map_err(err)
 }
 
 #[tauri::command]

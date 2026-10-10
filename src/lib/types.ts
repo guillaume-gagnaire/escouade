@@ -211,6 +211,8 @@ export interface Project {
   integrations: ProjectIntegrations;
   /** « Commit »: who writes the commits of the files panel's « Commit… » and « Commit tout… ». */
   commitMode: CommitMode;
+  /** « Les agents peuvent utiliser Escouade »: its agents' next processes get Escouade's MCP server, as themselves. */
+  agentsUseEscouade: boolean;
 }
 
 /** « Rédigé par l'agent » (the agent is asked to commit) or « Direct, avec un message proposé ». */
@@ -469,6 +471,8 @@ export interface Agent {
   resumeAt: number | null;
   /** The board's ticket it works on. */
   ticketId: string | null;
+  /** What the agent last reported of its work through Escouade's MCP server (120 characters at most), until its next report. */
+  progressLine: string | null;
   /** The ticket's protocol, appended to Claude Code's system prompt. */
   appendPrompt: string | null;
   /** First of the 10 ports reserved for its test launches. */

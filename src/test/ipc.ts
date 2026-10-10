@@ -78,6 +78,7 @@ export function project(over: Partial<Project> = {}): Project {
     worktreeTeardown: [],
     integrations: { links: [], comments: ['review', 'done'] },
     commitMode: 'agent',
+    agentsUseEscouade: false,
     ...over,
   };
 }
@@ -120,6 +121,7 @@ export function agent(over: Partial<Agent> = {}): Agent {
     remoteState: null,
     resumeAt: null,
     ticketId: null,
+    progressLine: null,
     appendPrompt: null,
     portBase: null,
     recipe: null,

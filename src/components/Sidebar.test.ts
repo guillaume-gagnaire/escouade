@@ -37,6 +37,28 @@ describe('Sidebar', () => {
     expect(screen.getByText(/Archivés \(1\)/)).toBeInTheDocument();
   });
 
+  it('says on an agent’s card what it reported doing, until it reports something else', async () => {
+    fakeBackend();
+    app.agents.a1 = { ...app.agents.a1, progressLine: 'Écrit les tests du parseur' };
+    render(Sidebar, { project: project() });
+    const card = screen.getByRole('button', { name: /refacto-auth/ });
+    const line = within(card).getByText('Écrit les tests du parseur');
+    expect(line).toHaveAttribute('title', 'Écrit les tests du parseur');
+    // Assistive technologies are told what the line is.
+    expect(card).toHaveTextContent('Ce que l’agent dit faire Écrit les tests du parseur');
+    // The other agent said nothing: no line, no label.
+    expect(within(screen.getByRole('button', { name: /tests-e2e/ })).queryByText('Ce que l’agent dit faire')).not.toBeInTheDocument();
+    // A new report replaces it; an empty one takes it off.
+    app.agents.a1 = { ...app.agents.a1, progressLine: 'Relit le diff' };
+    await Promise.resolve();
+    expect(within(card).getByText('Relit le diff')).toBeInTheDocument();
+    expect(within(card).queryByText('Écrit les tests du parseur')).not.toBeInTheDocument();
+    app.agents.a1 = { ...app.agents.a1, progressLine: null };
+    await Promise.resolve();
+    expect(card).not.toHaveTextContent('Relit le diff');
+    expect(card).not.toHaveTextContent('Ce que l’agent dit faire');
+  });
+
   it('says an agent sets its new worktree up', () => {
     fakeBackend();
     app.agents.a1 = { ...app.agents.a1, status: 'idle', setup: '2/3 · npm run gen (web)' };
@@ -482,6 +504,15 @@ describe('Sidebar copies of an agent', () => {
 });
 
 describe('Sidebar in English', () => {
+  it('labels the line an agent reported in English', () => {
+    fakeBackend();
+    app.agents.a1 = { ...app.agents.a1, progressLine: 'Writes the parser tests' };
+    render(Sidebar, { project: project() });
+    expect(screen.getByRole('button', { name: /refacto-auth/ })).toHaveTextContent(
+      'What the agent says it is doing Writes the parser tests',
+    );
+  });
+
   beforeEach(() => {
     resetApp({
       projects: [project()],

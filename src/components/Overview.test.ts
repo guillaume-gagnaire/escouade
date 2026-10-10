@@ -131,6 +131,29 @@ describe('Overview', () => {
     expect(idle.querySelector('.ctx')).toHaveTextContent('—');
   });
 
+  it('shows under an agent’s line what it reported doing, whatever its status, until it reports something else', () => {
+    backend();
+    resetApp({
+      agents: [
+        agent({ id: 'a1', status: 'running', activity: 'Lit src/db.ts', progressLine: 'Écrit les tests du parseur' }),
+        agent({ id: 'a2', name: 'tests-e2e', status: 'done', createdAt: 2, progressLine: 'Tout est vérifié' }),
+        agent({ id: 'a3', name: 'lint', status: 'idle', createdAt: 3 }),
+      ],
+    });
+    app.now = NOW;
+    render(Overview);
+    const busy = screen.getByRole('listitem', { name: /refacto-auth/ });
+    const said = within(busy).getByText('Écrit les tests du parseur');
+    expect(said).toHaveAttribute('title', 'Écrit les tests du parseur');
+    expect(busy).toHaveTextContent('Ce que l’agent dit faire Écrit les tests du parseur');
+    // What it does right now stays on its line.
+    expect(busy).toHaveTextContent('Lit src/db.ts');
+    expect(screen.getByRole('listitem', { name: /tests-e2e/ })).toHaveTextContent('Tout est vérifié');
+    expect(screen.getByRole('listitem', { name: /lint/ })).not.toHaveTextContent('Ce que l’agent dit faire');
+    // The line is no stop of the keyboard: the agent's line alone is, as before.
+    expect(said.closest('[role="button"]')).toBeNull();
+  });
+
   it('allows or denies a pending permission on the spot, with its tool and its argument, from the agents’ view alone', async () => {
     const be = backend();
     resetApp({
@@ -231,6 +254,19 @@ describe('Overview', () => {
       expect(within(row).queryByRole('button', { name: 'Refuser' })).not.toBeInTheDocument();
       expect(within(row).getByRole('button', { name: 'Répondre' })).toBeInTheDocument();
     }
+    expect(be.called('answer_permission')).toHaveLength(0);
+  });
+
+  it('names a tool of Escouade in words, and sends its request to the conversation, where all it is given is read', () => {
+    const be = backend();
+    resetApp({ agents: [asking([permission({ tool: 'mcp__escouade__create_ticket', arg: 'Corriger la connexion' })], { id: 'a1' })] });
+    render(Overview);
+    const row = screen.getByRole('listitem', { name: /refacto-auth/ });
+    expect(row).toHaveTextContent('Escouade · Créer un ticket');
+    expect(row).toHaveTextContent('Corriger la connexion');
+    expect(row).toHaveTextContent('À lire dans la conversation avant de répondre.');
+    expect(within(row).queryByRole('button', { name: 'Autoriser' })).not.toBeInTheDocument();
+    expect(within(row).getByRole('button', { name: 'Répondre' })).toBeInTheDocument();
     expect(be.called('answer_permission')).toHaveLength(0);
   });
 
@@ -464,6 +500,16 @@ describe('Overview', () => {
 });
 
 describe('Overview in English', () => {
+  it('labels the line an agent reported in English', () => {
+    backend();
+    resetApp({ agents: [agent({ id: 'a1', status: 'running', progressLine: 'Writes the parser tests' })] });
+    app.now = NOW;
+    render(Overview);
+    expect(screen.getByRole('listitem', { name: /refacto-auth/ })).toHaveTextContent(
+      'What the agent says it is doing Writes the parser tests',
+    );
+  });
+
   beforeEach(() => {
     resetApp({
       projects: [project(), project({ id: 'p2', name: 'studio-web' })],
