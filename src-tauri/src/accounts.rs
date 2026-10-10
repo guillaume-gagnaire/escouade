@@ -7,15 +7,47 @@
 
 use crate::board;
 use crate::claude;
+use crate::core::Core;
 use crate::model::{Account, AccountUsage, Settings};
+use crate::pty::TermInfo;
+use anyhow::{bail, Result};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use tauri::Runtime;
 
 /// The id of the user's own account.
 pub const PRINCIPAL: &str = "principal";
 
 /// The variable that gives Claude Code its configuration folder.
 const CONFIG_DIR_VAR: &str = "CLAUDE_CONFIG_DIR";
+
+/// What a new account may share of Principal's folder: its settings and instructions (files),
+/// then what extends Claude Code (folders). Never its sign-in (`.credentials.json`) nor its
+/// `.claude.json` (the account's own state: its email, its MCP servers, its projects).
+pub const SHARED_FILES: [&str; 2] = ["settings.json", "CLAUDE.md"];
+pub const SHARED_DIRS: [&str; 6] = [
+    "skills",
+    "agents",
+    "commands",
+    "plugins",
+    "hooks",
+    "output-styles",
+];
+
+/// How a new account shares Principal's items.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ShareMode {
+    /// One item for both accounts: a folder linked (a junction on Windows, which needs no
+    /// administrator rights; a symbolic link elsewhere), a file too except on Windows, where it is
+    /// copied (a link to a file there needs administrator rights).
+    Link,
+    /// A copy of Principal's, each account then changing its own.
+    Copy,
+}
 
 /// Principal as it is made the first time: the user's own Claude Code, active.
 pub fn principal() -> Account {
@@ -132,14 +164,24 @@ pub fn current(settings: &Settings, usage: &[AccountUsage], threshold: u32, now:
         .map_or_else(|| PRINCIPAL.to_string(), |a| a.id.clone())
 }
 
+/// The app's `CLAUDE_CONFIG_DIR` (which Principal's processes inherit) and the home folder. In
+/// unit tests, neither the variable nor the machine user's home: a folder that does not exist, so
+/// that no test ever reads or writes the user's own Claude Code (tests may run inside a Claude
+/// Code session, with its CLAUDE_CONFIG_DIR).
+pub(crate) fn app_env() -> (Option<String>, PathBuf) {
+    if cfg!(test) {
+        return (None, std::env::temp_dir().join("escouade-tests-no-home"));
+    }
+    (
+        std::env::var(CONFIG_DIR_VAR).ok(),
+        dirs::home_dir().unwrap_or_default(),
+    )
+}
+
 /// The configuration folder the account's Claude Code reads: its own, or for Principal (no folder)
 /// the app's `CLAUDE_CONFIG_DIR` when it has one, which its processes inherit, else `~/.claude`.
-// Allowed unused until the accounts' settings read each one's folder (then drop the allow): the
-// quota goes by `usage::sign_in`, which takes the app's environment as `config_dir_with` does.
-#[allow(dead_code)]
 pub fn config_dir(account: &Account) -> PathBuf {
-    let env = std::env::var(CONFIG_DIR_VAR).ok();
-    let home = dirs::home_dir().unwrap_or_default();
+    let (env, home) = app_env();
     config_dir_with(account, env.as_deref(), &home)
 }
 
@@ -180,6 +222,490 @@ pub fn program(account: &Account, settings: &Settings) -> Option<PathBuf> {
     } else {
         own
     })
+}
+
+/// The file Claude Code keeps the account's own state in (its email, its MCP servers): in its
+/// folder; for Principal (no folder) in the app's `CLAUDE_CONFIG_DIR` (`env`) when it has one, else
+/// in the home folder, beside `.claude` and not in it.
+pub fn claude_json_with(account: &Account, env: Option<&str>, home: &Path) -> PathBuf {
+    match own_dir(account).or(env.filter(|v| !v.is_empty())) {
+        Some(dir) => Path::new(dir).join(".claude.json"),
+        None => home.join(".claude.json"),
+    }
+}
+
+/// `claude_json_with` in the app's environment (`app_env`).
+pub fn claude_json(account: &Account) -> PathBuf {
+    let (env, home) = app_env();
+    claude_json_with(account, env.as_deref(), &home)
+}
+
+/// The email of the claude.ai account Claude Code signed in with, as its `.claude.json` (`file`)
+/// keeps it (`oauthAccount.emailAddress`); None without one, or a file that cannot be read.
+pub fn email_in(file: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(file).ok()?;
+    let v: Value = serde_json::from_str(&text).ok()?;
+    v["oauthAccount"]["emailAddress"]
+        .as_str()
+        .filter(|e| !e.is_empty())
+        .map(str::to_string)
+}
+
+/// The items of `SHARED_FILES` and `SHARED_DIRS` that Principal's folder `dir` has, files first.
+pub fn shareable(dir: &Path) -> Vec<String> {
+    let files = SHARED_FILES.iter().filter(|n| dir.join(n).is_file());
+    let dirs = SHARED_DIRS.iter().filter(|n| dir.join(n).is_dir());
+    files.chain(dirs).map(|n| n.to_string()).collect()
+}
+
+/// What keeps the accounts from being saved: an account other than Principal needs a folder of
+/// its own written in full (relative, its processes would each read another one, under the
+/// folder they run in; empty, it would run as Principal).
+pub fn check(settings: &Settings) -> Result<()> {
+    for a in settings.accounts.iter().filter(|a| a.id != PRINCIPAL) {
+        let dir = a.config_dir.trim();
+        if dir.is_empty() {
+            bail!(tr!(
+                "Le compte « {name} » n’a pas de dossier de configuration.",
+                "The account “{name}” has no configuration folder.",
+                name = a.name
+            ));
+        }
+        if !Path::new(dir).is_absolute() {
+            bail!(tr!(
+                "Le dossier du compte « {name} » doit être un chemin complet : {dir}",
+                "The folder of the account “{name}” must be a full path: {dir}",
+                name = a.name
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// The names an account goes by: its own, and for Principal still named by default, its default
+/// name in either language (the one it was first saved in is not the one the window shows).
+fn names_of(a: &Account) -> Vec<String> {
+    let name = a.name.trim().to_lowercase();
+    let defaults = [
+        tr_in!(crate::i18n::Lang::Fr, "Principal", "Main"),
+        tr_in!(crate::i18n::Lang::En, "Principal", "Main"),
+    ]
+    .map(|n| n.to_lowercase());
+    if a.id == PRINCIPAL && defaults.contains(&name) {
+        defaults.to_vec()
+    } else {
+        vec![name]
+    }
+}
+
+/// A new account named `name`: its folder made under `root` (`<data folder>/claude`), named after
+/// it and taken by no account (`settings`) nor folder there, with the items `share` of Principal's
+/// folder (`principal_dir`) linked or copied into it (`mode`). Its sign-in and `.claude.json`
+/// are its own: Claude Code makes them when it signs in.
+pub fn create(
+    settings: &Settings,
+    root: &Path,
+    principal_dir: &Path,
+    name: &str,
+    share: &[String],
+    mode: ShareMode,
+) -> Result<Account> {
+    let name = name.trim();
+    if name.is_empty() {
+        bail!(tr!("Donne un nom au compte.", "Give the account a name."));
+    }
+    let lower = name.to_lowercase();
+    if settings
+        .accounts
+        .iter()
+        .any(|a| names_of(a).contains(&lower))
+    {
+        return Err(name_taken(name));
+    }
+    // Every item checked before anything is made: never the sign-in, nor a path out of the folder.
+    if let Some(n) = share
+        .iter()
+        .find(|n| !SHARED_FILES.contains(&n.as_str()) && !SHARED_DIRS.contains(&n.as_str()))
+    {
+        bail!(tr!(
+            "« {n} » ne se partage pas entre comptes.",
+            "“{n}” isn’t shared between accounts."
+        ));
+    }
+    let base = match crate::core::slugify(name) {
+        s if s.is_empty() => "account".to_string(),
+        s => s,
+    };
+    let mut taken: HashSet<String> = settings.accounts.iter().map(|a| a.id.clone()).collect();
+    taken.insert(PRINCIPAL.to_string());
+    // A folder an account removed left behind keeps its sign-in and its sessions: a new account
+    // never takes it over. Named without regard to case, as the file systems of Windows and macOS.
+    if let Ok(entries) = std::fs::read_dir(root) {
+        taken.extend(
+            entries
+                .flatten()
+                .map(|e| e.file_name().to_string_lossy().to_lowercase()),
+        );
+    }
+    let id = unique(&base, &taken);
+    std::fs::create_dir_all(root)?;
+    let dir = std::path::absolute(root.join(&id))?;
+    std::fs::create_dir(&dir)?;
+    if let Err(e) = share_items(principal_dir, &dir, share, mode) {
+        // Its links go with it, never what they lead to.
+        let _ = std::fs::remove_dir_all(&dir);
+        return Err(e);
+    }
+    Ok(Account {
+        id,
+        name: name.to_string(),
+        config_dir: dir.to_string_lossy().into_owned(),
+        claude_path: String::new(),
+        active: true,
+    })
+}
+
+/// The items `names` of `from` (Principal's folder) linked or copied into `to`: those it has.
+fn share_items(from: &Path, to: &Path, names: &[String], mode: ShareMode) -> Result<()> {
+    for name in names {
+        let (src, dst) = (from.join(name), to.join(name));
+        let done = if SHARED_DIRS.contains(&name.as_str()) {
+            if !src.is_dir() {
+                continue;
+            }
+            match mode {
+                ShareMode::Link => link_dir(&src, &dst),
+                ShareMode::Copy => copy_dir(&src, &dst, 0),
+            }
+        } else {
+            if !src.is_file() {
+                continue;
+            }
+            match mode {
+                ShareMode::Link => link_file(&src, &dst),
+                ShareMode::Copy => std::fs::copy(&src, &dst).map(|_| ()).map_err(Into::into),
+            }
+        };
+        if let Err(e) = done {
+            bail!(tr!(
+                "« {name} » n’a pas pu être partagé : {e:#}",
+                "“{name}” couldn’t be shared: {e:#}"
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// `dst` made a symbolic link to the folder `src`.
+#[cfg(unix)]
+fn link_dir(src: &Path, dst: &Path) -> Result<()> {
+    std::os::unix::fs::symlink(std::path::absolute(src)?, dst)?;
+    Ok(())
+}
+
+/// `dst` made a junction to the folder `src`: unlike a symbolic link, it needs no administrator
+/// rights (nor the developer mode).
+#[cfg(windows)]
+fn link_dir(src: &Path, dst: &Path) -> Result<()> {
+    use std::os::windows::process::CommandExt;
+    let cmd = std::env::var_os("ComSpec").unwrap_or_else(|| "cmd.exe".into());
+    let out = std::process::Command::new(cmd)
+        .args(["/d", "/c", "mklink", "/J"])
+        .arg(dst)
+        .arg(std::path::absolute(src)?)
+        .creation_flags(claude::CREATE_NO_WINDOW)
+        .output()?;
+    if !out.status.success() {
+        let said = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        let said = if said.is_empty() {
+            String::from_utf8_lossy(&out.stdout).trim().to_string()
+        } else {
+            said
+        };
+        bail!("mklink /J: {said}");
+    }
+    Ok(())
+}
+
+/// `dst` made a symbolic link to the file `src`.
+#[cfg(unix)]
+fn link_file(src: &Path, dst: &Path) -> Result<()> {
+    std::os::unix::fs::symlink(std::path::absolute(src)?, dst)?;
+    Ok(())
+}
+
+/// A copy: on Windows, a link to a file needs administrator rights (or the developer mode).
+#[cfg(windows)]
+fn link_file(src: &Path, dst: &Path) -> Result<()> {
+    std::fs::copy(src, dst)?;
+    Ok(())
+}
+
+/// A copy of the folder `src` at `dst`, what its links lead to copied in their place (a link gone
+/// nowhere left out); `depth` keeps a link that leads back up from going on for ever.
+fn copy_dir(src: &Path, dst: &Path, depth: u32) -> Result<()> {
+    if depth > 32 {
+        bail!("{}: too deep", src.display());
+    }
+    std::fs::create_dir(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let (from, to) = (entry.path(), dst.join(entry.file_name()));
+        match std::fs::metadata(&from) {
+            Ok(m) if m.is_dir() => copy_dir(&from, &to, depth + 1)?,
+            Ok(_) => {
+                std::fs::copy(&from, &to)?;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.into()),
+        }
+    }
+    Ok(())
+}
+
+/// Whether an account is signed in to claude.ai, as its tab shows it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountStatus {
+    /// Claude Code keeps a sign-in for it (an expired one too: it gets a new token when it runs).
+    pub connected: bool,
+    /// The email of the claude.ai account, when signed in.
+    pub email: Option<String>,
+    /// Its configuration folder (Principal's: the app's `CLAUDE_CONFIG_DIR`, else `~/.claude`).
+    pub dir: String,
+}
+
+/// Refused: no account has the id the window gave (removed meanwhile).
+fn unknown(id: &str) -> anyhow::Error {
+    anyhow::anyhow!(tr!(
+        "compte Claude « {id} » introuvable",
+        "Claude account “{id}” not found"
+    ))
+}
+
+/// Refused: an account named as another one.
+fn name_taken(name: &str) -> anyhow::Error {
+    anyhow::anyhow!(tr!(
+        "Un compte s’appelle déjà « {name} ».",
+        "An account is already named “{name}”."
+    ))
+}
+
+// The accounts' tab: each change saved at once, through `save_settings` (normalized, checked, the
+// quotas settled again), one at a time (`claude_accounts_lock`).
+impl<R: Runtime> Core<R> {
+    /// The settings the window saves, but for the accounts: those are the backend's, which the
+    /// accounts' tab changes on its own (the window's copy may be older).
+    pub fn save_window_settings(self: &Arc<Self>, mut s: Settings) -> Result<()> {
+        let _one = self.claude_accounts_lock.lock();
+        s.accounts = self.settings.read().accounts.clone();
+        self.save_settings(s)
+    }
+
+    /// The settings changed by `change` and saved, with the accounts as they then are.
+    fn change_claude_accounts<T>(
+        self: &Arc<Self>,
+        change: impl FnOnce(&mut Settings) -> Result<T>,
+    ) -> Result<(T, Vec<Account>)> {
+        let _one = self.claude_accounts_lock.lock();
+        let mut s = self.settings.read().clone();
+        let out = change(&mut s)?;
+        self.save_settings(s)?;
+        let accounts = self.settings.read().accounts.clone();
+        Ok((out, accounts))
+    }
+
+    /// The account `id` names, as the settings now have it.
+    fn claude_account(&self, id: &str) -> Result<Account> {
+        let settings = self.settings.read();
+        let found = settings.accounts.iter().find(|a| a.id == id).cloned();
+        found.ok_or_else(|| unknown(id))
+    }
+
+    /// The items of Principal's folder a new account may share.
+    pub fn claude_shareable(&self) -> Vec<String> {
+        let principal = get(&self.settings.read(), PRINCIPAL);
+        shareable(&config_dir(&principal))
+    }
+
+    /// « Créer et se connecter »: a new account (`create`), its folder in the data folder, last in
+    /// the order and active.
+    pub fn create_claude_account(
+        self: &Arc<Self>,
+        name: &str,
+        share: &[String],
+        mode: ShareMode,
+    ) -> Result<Account> {
+        let root = self.data.claude_accounts();
+        let (made, _) = self.change_claude_accounts(|s| {
+            let from = config_dir(&get(s, PRINCIPAL));
+            let made = create(s, &root, &from, name, share, mode)?;
+            s.accounts.push(made.clone());
+            Ok(made)
+        })?;
+        Ok(made)
+    }
+
+    /// The account's name, `claude` and whether new agents may go to it, as the tab gives them
+    /// (its folder stays its own); the accounts as they then are.
+    pub fn update_claude_account(self: &Arc<Self>, account: Account) -> Result<Vec<Account>> {
+        let (_, accounts) = self.change_claude_accounts(|s| {
+            if !s.accounts.iter().any(|a| a.id == account.id) {
+                return Err(unknown(&account.id));
+            }
+            let name = account.name.trim();
+            if name.is_empty() {
+                bail!(tr!("Donne un nom au compte.", "Give the account a name."));
+            }
+            let lower = name.to_lowercase();
+            let others = || s.accounts.iter().filter(|a| a.id != account.id);
+            if others().any(|a| names_of(a).contains(&lower)) {
+                return Err(name_taken(name));
+            }
+            if !account.active && !others().any(|a| a.active) {
+                bail!(tr!(
+                    "Il faut au moins un compte actif.",
+                    "At least one account must be active."
+                ));
+            }
+            let Some(a) = s.accounts.iter_mut().find(|a| a.id == account.id) else {
+                return Err(unknown(&account.id));
+            };
+            a.name = name.to_string();
+            a.claude_path = account.claude_path.trim().to_string();
+            a.active = account.active;
+            Ok(())
+        })?;
+        Ok(accounts)
+    }
+
+    /// The accounts put in the order of `ids` (each account's once).
+    pub fn reorder_claude_accounts(self: &Arc<Self>, ids: &[String]) -> Result<Vec<Account>> {
+        let (_, accounts) = self.change_claude_accounts(|s| {
+            let mut given: Vec<&str> = ids.iter().map(String::as_str).collect();
+            let mut have: Vec<&str> = s.accounts.iter().map(|a| a.id.as_str()).collect();
+            given.sort_unstable();
+            have.sort_unstable();
+            if given != have {
+                bail!(tr!(
+                    "La liste des comptes a changé : ferme les réglages et rouvre-les.",
+                    "The list of accounts changed: close the settings and open them again."
+                ));
+            }
+            s.accounts
+                .sort_by_key(|a| ids.iter().position(|id| *id == a.id));
+            Ok(())
+        })?;
+        Ok(accounts)
+    }
+
+    /// The account removed from the settings, its folder left on the disk (its sign-in and its
+    /// sessions with it). Never Principal, nor an account an agent not archived still runs on.
+    pub fn remove_claude_account(self: &Arc<Self>, id: &str) -> Result<Vec<Account>> {
+        if id == PRINCIPAL {
+            bail!(tr!(
+                "Le compte Principal ne se supprime pas.",
+                "The Main account can’t be removed."
+            ));
+        }
+        let (_, accounts) = self.change_claude_accounts(|s| {
+            let at = s
+                .accounts
+                .iter()
+                .position(|a| a.id == id)
+                .ok_or_else(|| unknown(id))?;
+            // An archived agent restored later runs on Principal (`find`).
+            let n = self
+                .agents
+                .read()
+                .values()
+                .filter(|h| {
+                    let rt = h.lock();
+                    rt.meta.account == id && !rt.meta.archived
+                })
+                .count();
+            if n > 0 {
+                bail!(tr_n!(
+                    n,
+                    "Le compte sert encore à {n} agent.",
+                    "Le compte sert encore à {n} agents.",
+                    "The account is still used by {n} agent.",
+                    "The account is still used by {n} agents.",
+                    n = n
+                ));
+            }
+            s.accounts.remove(at);
+            Ok(())
+        })?;
+        Ok(accounts)
+    }
+
+    /// Whether the account is signed in, and with which email.
+    pub async fn claude_account_status(&self, id: &str) -> Result<AccountStatus> {
+        let account = self.claude_account(id)?;
+        let sign_in = crate::usage::sign_in(&account);
+        let connected = match crate::usage::read_credentials(&sign_in.dir, &sign_in.service).await {
+            Ok(crate::usage::Credentials::Missing) => false,
+            Ok(_) => true,
+            // A file being written, the keychain refused: not signed in as far as can be told.
+            Err(e) => {
+                log::debug!("sign-in of account {id}: {e:#}");
+                false
+            }
+        };
+        Ok(AccountStatus {
+            connected,
+            email: connected
+                .then(|| email_in(&claude_json(&account)))
+                .flatten(),
+            dir: config_dir(&account).to_string_lossy().into_owned(),
+        })
+    }
+
+    /// « Se connecter… »: the account's `claude`, in an interactive terminal of `size`, with its
+    /// folder (`launch_env`): the user signs in there. Its output goes to `on_data`; its end is
+    /// told to the window (`TerminalExit`). Killed like any terminal (`term_kill`).
+    pub fn claude_login(
+        self: &Arc<Self>,
+        id: &str,
+        size: (u16, u16),
+        on_data: impl Fn(Vec<u8>) + Send + 'static,
+    ) -> Result<TermInfo> {
+        let account = self.claude_account(id)?;
+        let settings = self.settings.read().clone();
+        let program = program(&account, &settings).ok_or_else(|| {
+            anyhow::anyhow!(tr!(
+                "Claude Code introuvable. Installe-le ou indique son chemin dans les réglages.",
+                "Claude Code not found. Install it or give its path in the settings."
+            ))
+        })?;
+        let info = TermInfo {
+            id: crate::model::new_id(),
+            // No project's: the window lists it nowhere.
+            project_id: String::new(),
+            name: account.name.clone(),
+            shell: "claude".into(),
+        };
+        // Run from the home folder, as the user would.
+        let (_, home) = app_env();
+        let env = [settings.claude_env(), launch_env(&account)].concat();
+        let (me, term) = (Arc::downgrade(self), info.id.clone());
+        self.pty.spawn_program(
+            info.clone(),
+            &program,
+            &home.to_string_lossy(),
+            size,
+            env,
+            on_data,
+            move |code| {
+                if let Some(core) = me.upgrade() {
+                    core.hub
+                        .emit(crate::model::UiEvent::TerminalExit { id: term, code });
+                }
+            },
+        )?;
+        Ok(info)
+    }
 }
 
 #[cfg(test)]
@@ -416,6 +942,292 @@ mod tests {
         // Its own named and not there: not found, rather than another one.
         let gone = path(&dir.join("absent.cmd"));
         assert_eq!(program(&with(gone), &settings), None);
+    }
+
+    /// A Principal folder as Claude Code leaves it: what may be shared, and what never is.
+    fn principal_folder(dir: &Path) -> PathBuf {
+        let p = dir.join("principal");
+        std::fs::create_dir_all(p.join("skills").join("revue")).unwrap();
+        std::fs::write(p.join("skills").join("revue").join("SKILL.md"), "revue").unwrap();
+        std::fs::create_dir_all(p.join("agents")).unwrap();
+        std::fs::write(p.join("agents").join("testeur.md"), "testeur").unwrap();
+        std::fs::create_dir_all(p.join("projects").join("x")).unwrap();
+        std::fs::write(p.join("settings.json"), r#"{"model":"opus"}"#).unwrap();
+        std::fs::write(p.join("CLAUDE.md"), "Réponds en français.").unwrap();
+        std::fs::write(p.join(".credentials.json"), r#"{"claudeAiOauth":{}}"#).unwrap();
+        std::fs::write(p.join(".claude.json"), r#"{"oauthAccount":{}}"#).unwrap();
+        p
+    }
+
+    fn all_items() -> Vec<String> {
+        SHARED_FILES
+            .iter()
+            .chain(SHARED_DIRS.iter())
+            .map(|n| n.to_string())
+            .collect()
+    }
+
+    fn names_in(dir: &Path) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
+            .collect();
+        names.sort();
+        names
+    }
+
+    fn is_link(p: &Path) -> bool {
+        std::fs::symlink_metadata(p)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    }
+
+    #[test]
+    fn the_items_principal_has_are_offered_files_first() {
+        let dir = test_dir("accounts-shareable");
+        let p = principal_folder(&dir);
+        assert_eq!(
+            shareable(&p),
+            ["settings.json", "CLAUDE.md", "skills", "agents"]
+        );
+        std::fs::create_dir_all(p.join("output-styles")).unwrap();
+        // A file where a folder is expected is not one.
+        std::fs::write(p.join("hooks"), "").unwrap();
+        assert_eq!(
+            shareable(&p),
+            [
+                "settings.json",
+                "CLAUDE.md",
+                "skills",
+                "agents",
+                "output-styles"
+            ]
+        );
+        assert!(shareable(&dir.join("absent")).is_empty());
+    }
+
+    #[test]
+    fn a_new_account_gets_a_folder_of_its_own_named_after_it_and_free() {
+        let dir = test_dir("accounts-create");
+        let root = dir.join("claude");
+        let p = principal_folder(&dir);
+        let mut s = Settings {
+            accounts: vec![Account {
+                name: "Boulot".into(),
+                ..account("travail", "/a")
+            }],
+            ..Default::default()
+        };
+        normalize(&mut s);
+        let made = create(&s, &root, &p, "  Équipe Pro ", &[], ShareMode::Link).unwrap();
+        assert_eq!(
+            made,
+            Account {
+                id: "equipe-pro".into(),
+                name: "Équipe Pro".into(),
+                config_dir: root.join("equipe-pro").to_string_lossy().into(),
+                claude_path: String::new(),
+                active: true,
+            }
+        );
+        assert!(Path::new(&made.config_dir).is_absolute());
+        // Made empty: nothing asked to be shared.
+        assert!(names_in(&root.join("equipe-pro")).is_empty());
+        // An id another account has, a folder an account removed left: taken.
+        let made = create(&s, &root, &p, "Travail", &[], ShareMode::Copy).unwrap();
+        assert_eq!(made.id, "travail-2");
+        std::fs::create_dir_all(root.join("perso")).unwrap();
+        std::fs::write(root.join("perso").join(".credentials.json"), "{}").unwrap();
+        let made = create(&s, &root, &p, "Perso", &[], ShareMode::Copy).unwrap();
+        assert_eq!(made.id, "perso-2");
+        // The folder left keeps its sign-in.
+        assert_eq!(names_in(&root.join("perso")), [".credentials.json"]);
+        // Never Principal's id; a name without a letter for a slug.
+        assert_eq!(
+            create(&s, &root, &p, "principal 2", &[], ShareMode::Copy)
+                .unwrap()
+                .id,
+            "principal-2"
+        );
+        assert_eq!(
+            create(&s, &root, &p, "!!", &[], ShareMode::Copy)
+                .unwrap()
+                .id,
+            "account"
+        );
+    }
+
+    #[test]
+    fn a_new_account_needs_a_name_no_other_has_and_shares_only_what_may_be() {
+        let dir = test_dir("accounts-create-refused");
+        let root = dir.join("claude");
+        let p = principal_folder(&dir);
+        let mut s = Settings {
+            accounts: vec![Account {
+                name: "Pro".into(),
+                ..account("pro", "/a")
+            }],
+            ..Default::default()
+        };
+        normalize(&mut s);
+        let refused = |name: &str, share: &[&str]| {
+            let share: Vec<String> = share.iter().map(|n| n.to_string()).collect();
+            create(&s, &root, &p, name, &share, ShareMode::Link)
+                .unwrap_err()
+                .to_string()
+        };
+        assert_eq!(refused("  ", &[]), "Donne un nom au compte.");
+        assert_eq!(refused("pro", &[]), "Un compte s’appelle déjà « pro ».");
+        // Principal's name, in either language.
+        assert_eq!(refused("Main", &[]), "Un compte s’appelle déjà « Main ».");
+        assert_eq!(
+            refused("Perso", &[".credentials.json"]),
+            "« .credentials.json » ne se partage pas entre comptes."
+        );
+        assert_eq!(
+            refused("Perso", &["skills", "../.claude.json"]),
+            "« ../.claude.json » ne se partage pas entre comptes."
+        );
+        // Nothing made for an account refused.
+        assert!(!root.join("perso").exists());
+    }
+
+    #[test]
+    fn principals_items_are_linked_one_change_for_both_accounts() {
+        let dir = test_dir("accounts-share-link");
+        let root = dir.join("claude");
+        let p = principal_folder(&dir);
+        let mut s = Settings::default();
+        normalize(&mut s);
+        let made = create(&s, &root, &p, "Pro", &all_items(), ShareMode::Link).unwrap();
+        let own = PathBuf::from(&made.config_dir);
+        // Only what Principal has; never its sign-in, its .claude.json nor its sessions.
+        assert_eq!(
+            names_in(&own),
+            ["CLAUDE.md", "agents", "settings.json", "skills"]
+        );
+        // The folders are Principal's own: a skill added there is the account's too.
+        assert!(is_link(&own.join("skills")));
+        assert!(is_link(&own.join("agents")));
+        std::fs::write(p.join("skills").join("nouveau.md"), "x").unwrap();
+        assert!(own.join("skills").join("nouveau.md").is_file());
+        assert_eq!(
+            std::fs::read_to_string(own.join("skills").join("revue").join("SKILL.md")).unwrap(),
+            "revue"
+        );
+        // The files: linked too, except on Windows, where a link to a file needs administrator
+        // rights: copied.
+        std::fs::write(p.join("CLAUDE.md"), "Réponds en anglais.").unwrap();
+        let text = std::fs::read_to_string(own.join("CLAUDE.md")).unwrap();
+        if cfg!(windows) {
+            assert!(!is_link(&own.join("settings.json")));
+            assert_eq!(text, "Réponds en français.");
+        } else {
+            assert!(is_link(&own.join("settings.json")));
+            assert_eq!(text, "Réponds en anglais.");
+        }
+        // Principal's folder is as it was.
+        assert_eq!(
+            names_in(&p),
+            [
+                ".claude.json",
+                ".credentials.json",
+                "CLAUDE.md",
+                "agents",
+                "projects",
+                "settings.json",
+                "skills"
+            ]
+        );
+    }
+
+    #[test]
+    fn principals_items_are_copied_each_account_then_changes_its_own() {
+        let dir = test_dir("accounts-share-copy");
+        let root = dir.join("claude");
+        let p = principal_folder(&dir);
+        let mut s = Settings::default();
+        normalize(&mut s);
+        let share = vec!["skills".to_string(), "settings.json".to_string()];
+        let made = create(&s, &root, &p, "Pro", &share, ShareMode::Copy).unwrap();
+        let own = PathBuf::from(&made.config_dir);
+        assert_eq!(names_in(&own), ["settings.json", "skills"]);
+        assert!(!is_link(&own.join("skills")));
+        assert_eq!(
+            std::fs::read_to_string(own.join("skills").join("revue").join("SKILL.md")).unwrap(),
+            "revue"
+        );
+        assert_eq!(
+            std::fs::read_to_string(own.join("settings.json")).unwrap(),
+            r#"{"model":"opus"}"#
+        );
+        // Changed on one side only.
+        std::fs::write(p.join("skills").join("nouveau.md"), "x").unwrap();
+        assert!(!own.join("skills").join("nouveau.md").exists());
+    }
+
+    #[test]
+    fn claude_code_keeps_an_accounts_email_in_its_claude_json() {
+        let home = Path::new("/Users/x");
+        let principal = principal();
+        assert_eq!(
+            claude_json_with(&principal, None, home),
+            home.join(".claude.json")
+        );
+        assert_eq!(
+            claude_json_with(&principal, Some(""), home),
+            home.join(".claude.json")
+        );
+        assert_eq!(
+            claude_json_with(&principal, Some("/tmp/claude-e2e"), home),
+            Path::new("/tmp/claude-e2e").join(".claude.json")
+        );
+        let pro = account("pro", "/Users/x/.escouade/claude/pro");
+        assert_eq!(
+            claude_json_with(&pro, Some("/tmp/claude-e2e"), home),
+            Path::new("/Users/x/.escouade/claude/pro").join(".claude.json")
+        );
+        let dir = test_dir("accounts-email");
+        let file = dir.join(".claude.json");
+        assert_eq!(email_in(&file), None);
+        std::fs::write(
+            &file,
+            r#"{"numStartups":3,"oauthAccount":{"emailAddress":"ada@atlas.dev","organizationName":"Atlas"}}"#,
+        )
+        .unwrap();
+        assert_eq!(email_in(&file).as_deref(), Some("ada@atlas.dev"));
+        std::fs::write(&file, r#"{"numStartups":3}"#).unwrap();
+        assert_eq!(email_in(&file), None);
+        std::fs::write(&file, "{ pas du json").unwrap();
+        assert_eq!(email_in(&file), None);
+    }
+
+    #[test]
+    fn an_account_other_than_principal_needs_a_folder_written_in_full() {
+        let dir = test_dir("accounts-check");
+        let full = dir.join("claude").join("pro").to_string_lossy().to_string();
+        let with = |config_dir: &str| {
+            let mut s = Settings {
+                accounts: vec![account("pro", config_dir)],
+                ..Default::default()
+            };
+            normalize(&mut s);
+            check(&s).map_err(|e| e.to_string())
+        };
+        assert_eq!(with(&full), Ok(()));
+        assert_eq!(
+            with(""),
+            Err("Le compte « PRO » n’a pas de dossier de configuration.".into())
+        );
+        assert_eq!(
+            with("claude/pro"),
+            Err("Le dossier du compte « PRO » doit être un chemin complet : claude/pro".into())
+        );
+        // Principal has none, by design.
+        let mut s = Settings::default();
+        normalize(&mut s);
+        assert!(check(&s).is_ok());
     }
 
     #[test]

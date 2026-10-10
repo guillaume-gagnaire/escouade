@@ -194,6 +194,12 @@ impl DataDir {
         self.0.join("conversations")
     }
 
+    /// The configuration folders of the Claude accounts made in the settings (all but Principal's),
+    /// one per account: each its `CLAUDE_CONFIG_DIR`.
+    pub fn claude_accounts(&self) -> PathBuf {
+        self.0.join("claude")
+    }
+
     pub fn stats_db(&self) -> PathBuf {
         self.0.join("stats.db")
     }

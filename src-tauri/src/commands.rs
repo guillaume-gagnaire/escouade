@@ -1,11 +1,13 @@
 //! Tauri commands invoked by the frontend.
 
+use crate::accounts::{AccountStatus, ShareMode};
 use crate::core::{Attachment, Core, NotOnBase, SyncOp};
 use crate::fsedit;
 use crate::i18n::{self, Lang};
 use crate::integrations::{
     Account, AccountView, Container, ExternalIssue, IssuePage, Query, StatesView,
 };
+use crate::model::Account as ClaudeAccount;
 use crate::model::*;
 use crate::pty::{self, ShellInfo, TermInfo};
 use crate::search;
@@ -123,10 +125,72 @@ pub fn set_ui(core: CoreState, ui: UiState) {
     core.request_save();
 }
 
+/// The settings as the window saves them; the Claude accounts are left as they are (their tab
+/// changes them with the `account_*` commands).
 #[tauri::command(async)]
 pub fn save_settings(core: CoreState, settings: Settings) -> Res<Vec<ShellInfo>> {
-    core.save_settings(settings.clone()).map_err(err)?;
+    core.save_window_settings(settings.clone()).map_err(err)?;
     Ok(pty::detect_shells(&settings))
+}
+
+// ---------- Claude accounts ----------
+
+/// The items of Principal's folder a new account may share (those it has).
+#[tauri::command(async)]
+pub fn account_shareable(core: CoreState) -> Vec<String> {
+    core.claude_shareable()
+}
+
+/// « Créer et se connecter »: a new account, its folder made and the items `share` of Principal's
+/// linked or copied into it (`mode`), saved last in the settings.
+#[tauri::command(async)]
+pub fn account_create(
+    core: CoreState,
+    name: String,
+    share: Vec<String>,
+    mode: ShareMode,
+) -> Res<ClaudeAccount> {
+    core.create_claude_account(&name, &share, mode).map_err(err)
+}
+
+/// The account's name, `claude` and « Actif »; the accounts as they then are.
+#[tauri::command(async)]
+pub fn account_update(core: CoreState, account: ClaudeAccount) -> Res<Vec<ClaudeAccount>> {
+    core.update_claude_account(account).map_err(err)
+}
+
+/// The accounts in the order of `ids`, as they then are.
+#[tauri::command(async)]
+pub fn account_reorder(core: CoreState, ids: Vec<String>) -> Res<Vec<ClaudeAccount>> {
+    core.reorder_claude_accounts(&ids).map_err(err)
+}
+
+/// The account removed (its folder stays on the disk); the accounts as they then are.
+#[tauri::command(async)]
+pub fn account_remove(core: CoreState, id: String) -> Res<Vec<ClaudeAccount>> {
+    core.remove_claude_account(&id).map_err(err)
+}
+
+/// Whether the account is signed in, with which email, and its folder.
+#[tauri::command]
+pub async fn account_status(core: CoreState<'_>, id: String) -> Res<AccountStatus> {
+    core.claude_account_status(&id).await.map_err(err)
+}
+
+/// « Se connecter… »: the account's `claude` in an interactive terminal (written to, resized and
+/// killed as the others: `term_write`, `term_resize`, `term_kill`).
+#[tauri::command(async)]
+pub fn account_login(
+    core: CoreState,
+    id: String,
+    cols: u16,
+    rows: u16,
+    output: Channel<InvokeResponseBody>,
+) -> Res<TermInfo> {
+    core.claude_login(&id, (cols, rows), move |bytes| {
+        let _ = output.send(InvokeResponseBody::Raw(bytes));
+    })
+    .map_err(err)
 }
 
 #[derive(Serialize)]

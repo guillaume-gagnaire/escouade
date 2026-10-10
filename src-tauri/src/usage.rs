@@ -128,20 +128,86 @@ async fn credentials_from(keychain: Option<Value>, dir: &Path) -> Result<Credent
     Ok(Credentials::Token(token.to_string()))
 }
 
+/// What `security find-generic-password -w` answered.
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+enum KeychainAnswer {
+    /// The entry's secret: Claude Code's sign-in.
+    Entry(Value),
+    /// No such entry.
+    None,
+    /// The entry not given: the user denied the access, or the keychain could not be asked.
+    Refused,
+}
+
+/// The answer of `security` from its exit code (`code`, none when a signal ended it) and its
+/// output: 0 the entry, 44 none (`errSecItemNotFound`, whose low byte the tool exits with), any
+/// other a refusal (`errSecAuthFailed` 51, `errSecUserCanceled` 128…).
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn keychain_answer(code: Option<i32>, stdout: &[u8]) -> Result<KeychainAnswer> {
+    Ok(match code {
+        Some(0) => KeychainAnswer::Entry(serde_json::from_slice(stdout)?),
+        Some(44) => KeychainAnswer::None,
+        _ => KeychainAnswer::Refused,
+    })
+}
+
+/// How long a keychain entry whose access was refused is left alone: reading it again would ask
+/// the user again, every minute while the account looks not signed in.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+const KEYCHAIN_REFUSED_MS: i64 = 10 * 60_000;
+
+/// The keychain entries whose access was refused, and when.
+#[derive(Default)]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+struct KeychainGate {
+    refused: std::collections::HashMap<String, i64>,
+}
+
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+impl KeychainGate {
+    /// The entry `service` may be asked for at `now`: not refused in the last ten minutes.
+    fn open(&self, service: &str, now: i64) -> bool {
+        self.refused
+            .get(service)
+            .is_none_or(|&at| now - at >= KEYCHAIN_REFUSED_MS)
+    }
+
+    /// The entry `service` was refused at `now`.
+    fn refuse(&mut self, service: &str, now: i64) {
+        self.refused.insert(service.to_string(), now);
+    }
+}
+
 /// The keychain entry named `service`, where Claude Code keeps the sign-in on macOS; None when
-/// there is no such entry. Never in unit tests: the entry without a hash is the machine user's
-/// own (and reading it may ask them for their password).
+/// there is no such entry. An entry refused (`KeychainGate`) is an error for ten minutes, without
+/// asking again: the last values stand. Never in unit tests: the entry without a hash is the
+/// machine user's own (and reading it may ask them for their password).
 #[cfg(all(target_os = "macos", not(test)))]
 async fn from_keychain(service: &str) -> Result<Option<Value>> {
+    static GATE: std::sync::LazyLock<parking_lot::Mutex<KeychainGate>> =
+        std::sync::LazyLock::new(Default::default);
+    // The guard let go at once: never held across the wait below.
+    let open = GATE.lock().open(service, crate::model::now_ms());
+    if !open {
+        anyhow::bail!("keychain entry {service} refused a moment ago");
+    }
     let out = tokio::process::Command::new("/usr/bin/security")
         .args(["find-generic-password", "-s", service, "-w"])
         .stdin(std::process::Stdio::null())
         .output()
         .await?;
-    if !out.status.success() {
-        return Ok(None);
+    match keychain_answer(out.status.code(), &out.stdout)? {
+        KeychainAnswer::Entry(v) => Ok(Some(v)),
+        KeychainAnswer::None => Ok(None),
+        KeychainAnswer::Refused => {
+            GATE.lock().refuse(service, crate::model::now_ms());
+            anyhow::bail!(
+                "keychain entry {service} refused: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            )
+        }
     }
-    Ok(Some(serde_json::from_slice(&out.stdout)?))
 }
 
 /// Elsewhere Claude Code keeps it in the file only (and unit tests read no keychain).
@@ -599,6 +665,45 @@ mod tests {
             credentials_from(None, &dir).await.unwrap(),
             Credentials::Expired
         );
+    }
+
+    #[test]
+    fn the_keychain_tells_an_entry_none_or_a_refusal() {
+        let entry = br#"{"claudeAiOauth":{"accessToken":"tok"}}"#;
+        assert_eq!(
+            keychain_answer(Some(0), entry).unwrap(),
+            KeychainAnswer::Entry(json!({ "claudeAiOauth": { "accessToken": "tok" } }))
+        );
+        assert_eq!(
+            keychain_answer(Some(44), b"").unwrap(),
+            KeychainAnswer::None
+        );
+        // Denied by the user, not allowed to ask, ended by a signal.
+        for code in [Some(51), Some(128), Some(36), None] {
+            assert_eq!(
+                keychain_answer(code, b"").unwrap(),
+                KeychainAnswer::Refused,
+                "{code:?}"
+            );
+        }
+        // An entry that is not Claude Code's sign-in: an error, the last values standing.
+        assert!(keychain_answer(Some(0), b"pas du json").is_err());
+    }
+
+    #[test]
+    fn an_entry_refused_is_not_asked_for_again_for_ten_minutes() {
+        let mut gate = KeychainGate::default();
+        let (pro, perso) = (
+            "Claude Code-credentials-a2efd1c3",
+            "Claude Code-credentials",
+        );
+        assert!(gate.open(pro, 1_000));
+        gate.refuse(pro, 1_000);
+        assert!(!gate.open(pro, 1_001));
+        assert!(!gate.open(pro, 1_000 + 10 * 60_000 - 1));
+        assert!(gate.open(pro, 1_000 + 10 * 60_000));
+        // Another entry is asked for as usual.
+        assert!(gate.open(perso, 1_001));
     }
 
     #[tokio::test]

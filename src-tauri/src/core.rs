@@ -390,6 +390,9 @@ pub struct Core<R: Runtime = Wry> {
     pub(crate) ports_reserved: Mutex<Vec<u16>>,
     /// One validation's merge at a time per repository (`merge_lock`).
     pub(crate) merge_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
+    /// One change of the Claude accounts' settings at a time (the accounts' tab, the window's
+    /// other settings): each reads the settings and saves them changed, without undoing another.
+    pub(crate) claude_accounts_lock: Mutex<()>,
     /// The accounts of the external ticket systems (`integrations.json`), with their secrets.
     pub accounts: RwLock<integrations::Accounts>,
     /// Where the accounts' secrets are kept: the system's keychain (memory in tests).
@@ -920,6 +923,7 @@ impl<R: Runtime> Core<R> {
             pause_shown: Mutex::default(),
             ports_reserved: Mutex::default(),
             merge_locks: Mutex::default(),
+            claude_accounts_lock: Mutex::default(),
             accounts: RwLock::new(accounts),
             secrets,
             bases: RwLock::new(integrations::Bases::from_env()),
@@ -1087,6 +1091,7 @@ impl<R: Runtime> Core<R> {
         // The MCP server's port is the backend's own (`sync_mcp`): the window's copy may be older.
         s.mcp_port = self.settings.read().mcp_port;
         accounts::normalize(&mut s);
+        accounts::check(&s)?;
         let bytes = serde_json::to_vec_pretty(&s)?;
         paths::write_atomic(&self.data.settings_file(), &bytes)?;
         let auto_resume = s.auto_resume;
