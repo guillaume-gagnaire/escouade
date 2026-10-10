@@ -331,7 +331,7 @@ describe('Stats in English', () => {
   it('says when a period holds nothing, and when the statistics cannot be read, in English', async () => {
     fakeBackend({ stats: (a: any) => ({ ...view(a.range), byProject: [], byModel: [] }) });
     const { unmount } = render(Stats);
-    await screen.findByText('No ticket in this period.');
+    await screen.findByText('No tickets in this period.');
     expect(screen.getAllByText('No data for this period.')).toHaveLength(3);
     unmount();
     fakeBackend({

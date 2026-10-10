@@ -17,7 +17,7 @@ export default defineZone('board', {
       one: '{name} · {count} ticket · {looping} looping',
       other: '{name} · {count} tickets · {looping} looping',
     },
-    claudeMissing: 'Claude Code not found — no ticket will start',
+    claudeMissing: 'Claude Code not found — no tickets will start',
     importTitle: 'Import tickets from Jira, Trello or GitHub Issues',
     settingsTitle: 'Kanban settings — {summary}',
     afterApproval: 'After approval:',
@@ -76,7 +76,7 @@ export default defineZone('board', {
     maxLoops: 'Max loops',
     after: 'After',
     searchKey: 'Search for a key',
-    noMatch: 'No ticket for this key',
+    noMatch: 'No tickets for this key',
   },
 
   reject: { comment: 'What is wrong', submit: 'Send back' },

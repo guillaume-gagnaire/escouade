@@ -306,7 +306,7 @@ describe('Board in English', () => {
     fakeBackend();
     app.claudeFound = false;
     render(Board, { project: app.projects[0] });
-    expect(screen.getByText('Claude Code not found — no ticket will start')).toBeInTheDocument();
+    expect(screen.getByText('Claude Code not found — no tickets will start')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Import' })).toHaveAttribute('title', 'Import tickets from Jira, Trello or GitHub Issues');
     expect(screen.getByRole('switch', { name: 'Autopilot' })).toBeChecked();
     expect(screen.getByText('After approval:')).toBeInTheDocument();

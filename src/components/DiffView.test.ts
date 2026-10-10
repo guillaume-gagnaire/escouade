@@ -1,7 +1,8 @@
 import { render, screen, waitFor } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import type { DiffLine } from '../lib/diff';
+import { setLang } from '../lib/i18n';
 import DiffView from './DiffView.svelte';
 
 const added = (n: number, from = 1): DiffLine[] =>
@@ -112,5 +113,33 @@ describe('DiffView with a file too large to be sent', () => {
   it('says so in side by side too', () => {
     render(DiffView, { lines: [], split: true, tooLarge: true });
     expect(screen.getByText('Diff trop volumineux pour être affiché.')).toBeInTheDocument();
+  });
+});
+
+describe('DiffView in English', () => {
+  beforeEach(() => setLang('en'));
+
+  it('folds a long diff behind its line count, then shows it a slice at a time, in English', async () => {
+    const { container } = render(DiffView, { lines: added(1520), split: false });
+    expect(screen.getByText('Large diff (1520 lines)')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Show' }));
+    expect(rows(container)).toBe(500);
+    await userEvent.click(screen.getByRole('button', { name: 'Show 500 more lines' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Show 500 more lines' }));
+    expect(rows(container)).toBe(1500);
+    expect(screen.getByRole('button', { name: 'Show 20 more lines' })).toBeInTheDocument();
+  });
+
+  it('says a diff is too large to be displayed, in English', () => {
+    render(DiffView, { lines: [], split: false, tooLarge: true });
+    expect(screen.getByText('This diff is too large to display.')).toBeInTheDocument();
+  });
+
+  it('says one more line in the singular', async () => {
+    render(DiffView, { lines: added(1501), split: false });
+    await userEvent.click(screen.getByRole('button', { name: 'Show' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Show 500 more lines' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Show 500 more lines' }));
+    expect(screen.getByRole('button', { name: 'Show 1 more line' })).toBeInTheDocument();
   });
 });

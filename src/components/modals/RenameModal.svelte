@@ -1,5 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
+  import { t } from '../../lib/i18n';
   import { app } from '../../lib/state.svelte';
   import Modal from './Modal.svelte';
 
@@ -17,7 +18,7 @@
   <!-- svelte-ignore a11y_autofocus -->
   <input class="field" bind:value={v} autofocus onkeydown={(e) => e.key === 'Enter' && go()} />
   {#snippet footer()}
-    <button class="btn ghost" onclick={() => (app.modal = null)}>Annuler</button>
-    <button class="btn primary" disabled={!v.trim()} onclick={go}>Renommer</button>
+    <button class="btn ghost" onclick={() => (app.modal = null)}>{t('common.cancel')}</button>
+    <button class="btn primary" disabled={!v.trim()} onclick={go}>{t('common.rename')}</button>
   {/snippet}
 </Modal>

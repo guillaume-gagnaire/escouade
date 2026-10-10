@@ -1,18 +1,18 @@
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { t } from './i18n';
 import { api } from './ipc';
 import { app } from './state.svelte';
 import type { Agent, Project } from './types';
 
-export const COMMIT_AGENT_PROMPT =
-  'Commite les modifications que tu as faites dans ce dépôt, avec un message clair au format Conventional Commits. ' +
-  "N'inclus que les fichiers que tu as modifiés ; s'il y a plusieurs sujets distincts, fais plusieurs commits.";
+// The messages asked of an agent show in its conversation: in the language of the interface (until a setting names
+// the language of the texts Claude writes).
+export const commitAgentPrompt = () => t('git.agent.commitPrompt');
 
-export const COMMIT_ALL_PROMPT =
-  'Commite toutes les modifications en cours du dépôt, regroupées en commits cohérents, avec des messages clairs au format Conventional Commits.';
+export const commitAllPrompt = () => t('git.agent.commitAllPrompt');
 
 export async function commitViaAgent(agent: Agent, scope: 'agent' | 'project' = 'agent') {
-  const ok = await app.run(api.sendMessage(agent.id, scope === 'agent' ? COMMIT_AGENT_PROMPT : COMMIT_ALL_PROMPT));
-  if (ok !== undefined) app.toast(`Demande de commit envoyée à ${agent.name}`, 'ok');
+  const ok = await app.run(api.sendMessage(agent.id, scope === 'agent' ? commitAgentPrompt() : commitAllPrompt()));
+  if (ok !== undefined) app.toast(t('git.agent.commitRequested', { name: agent.name }), 'ok');
 }
 
 /** « Commit… » (an agent's changes) needs its agent; « Commit tout… » needs one only for the agent to write it. */
@@ -47,7 +47,7 @@ export function mergeAgent(agent: Agent) {
   const merge = async (squash: boolean, switchToBase: boolean) => {
     try {
       const out = await api.mergeAgent(agent.id, squash, switchToBase);
-      app.toast(out || 'Merge effectué', 'ok');
+      app.toast(out || t('git.agent.merged'), 'ok');
     } catch (e) {
       const current = branchInTheWay(e);
       // Asked once: a refusal of the switch itself (git's) is an error like any other.
@@ -57,21 +57,22 @@ export function mergeAgent(agent: Agent) {
       }
       app.modal = {
         kind: 'confirm',
-        title: `Basculer sur « ${wt.baseBranch} » ?`,
-        body:
-          (current ? `Le projet est sur la branche « ${current} ».` : 'Le projet n’est sur aucune branche (HEAD détachée).') +
-          ` Escouade bascule sur « ${wt.baseBranch} » puis merge « ${wt.branch} ».`,
-        confirm: 'Basculer et merger',
+        title: t('git.agent.switchTitle', { base: wt.baseBranch }),
+        // The branch the project is on, or none: each told in a whole sentence.
+        body: current
+          ? t('git.agent.switchBodyOnBranch', { current, base: wt.baseBranch, branch: wt.branch })
+          : t('git.agent.switchBodyDetached', { base: wt.baseBranch, branch: wt.branch }),
+        confirm: t('git.agent.switchConfirm'),
         onConfirm: () => merge(squash, true),
       };
     }
   };
   app.modal = {
     kind: 'confirm',
-    title: `Merger ${wt.branch} dans ${wt.baseBranch} ?`,
-    body: `Les commits de l'agent « ${agent.name} » sont intégrés dans la branche « ${wt.baseBranch} » du projet.`,
-    confirm: 'Merger',
-    option: { label: 'Squash (un seul commit)', value: false },
+    title: t('git.agent.mergeTitle', { branch: wt.branch, base: wt.baseBranch }),
+    body: t('git.agent.mergeBody', { name: agent.name, base: wt.baseBranch }),
+    confirm: t('git.agent.mergeConfirm'),
+    option: { label: t('git.agent.squash'), value: false },
     onConfirm: (squash) => merge(squash, false),
   };
 }
@@ -80,7 +81,7 @@ export function mergeAgent(agent: Agent) {
 export async function toggleRemote(agent: Agent) {
   const on = !agent.remoteControl;
   const ok = await app.run(api.setRemoteControl(agent.id, on));
-  if (ok !== undefined && on) app.toast(`${agent.name} est accessible depuis claude.ai et l’app Claude`, 'ok');
+  if (ok !== undefined && on) app.toast(t('git.agent.remoteOn', { name: agent.name }), 'ok');
 }
 
 export function openRemote(agent: Agent) {
@@ -91,7 +92,7 @@ export async function copyRemoteLink(agent: Agent) {
   if (!agent.remoteUrl) return;
   try {
     await navigator.clipboard.writeText(agent.remoteUrl);
-    app.toast('Lien claude.ai copié', 'ok');
+    app.toast(t('git.agent.linkCopied'), 'ok');
   } catch (e) {
     app.toast(String(e), 'error');
   }

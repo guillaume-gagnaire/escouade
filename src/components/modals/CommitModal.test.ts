@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { setLang } from '../../lib/i18n';
 import { app, type Modal } from '../../lib/state.svelte';
 import type { CommitScope, FileChange } from '../../lib/types';
 import { agent, fakeBackend, resetApp } from '../../test/ipc';
@@ -255,5 +256,71 @@ describe('CommitModal', () => {
     expect(backend.called('commit_propose')).toHaveLength(0);
     expect(commitButton()).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Régénérer' })).toBeDisabled();
+  });
+});
+
+describe('CommitModal in English', () => {
+  beforeEach(() => {
+    resetApp({ agents: [agent()] });
+    app.modal = { kind: 'commit', projectId: 'p1', agentId: 'a1' };
+    setLang('en');
+  });
+
+  it('writes the window, its files and its buttons in English', async () => {
+    const backend = fakeBackend({
+      commit_preview: () => SCOPE,
+      commit_propose: () => 'feat(auth): token sign-in',
+      commit_direct: () => 'abc1234',
+    });
+    render(CommitModal, { projectId: 'p1', agentId: 'a1' });
+    expect(screen.getByRole('dialog', { name: 'Commit' })).toBeInTheDocument();
+    expect(screen.getByText('Changes in refacto-auth')).toBeInTheDocument();
+    expect(await screen.findByText('Haiku is writing the message…')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Message' })).toHaveValue('feat(auth): token sign-in'));
+    expect(screen.getByRole('list', { name: 'Files in the commit' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Regenerate' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Commit' }));
+    expect(backend.called('commit_direct')).toHaveLength(1);
+    expect(app.toasts.at(-1)).toMatchObject({ text: 'Commit abc1234 created', kind: 'ok' });
+  });
+
+  it('counts the rest of the files with the plural and the digits of English', async () => {
+    fakeBackend({
+      commit_preview: () => ({ files: Array.from({ length: 1501 }, (_, i) => change(`src/f${i}.ts`)), leftOut: [] }),
+      commit_propose: () => 'feat: all',
+    });
+    render(CommitModal, { projectId: 'p1', agentId: 'a1' });
+    expect(await screen.findByText('… and 1,001 more files')).toBeInTheDocument();
+  });
+
+  it('says what it leaves out, why there is no proposal and what it asks before giving the message up', async () => {
+    fakeBackend({
+      commit_preview: () => ({ files: [change('README.md')], leftOut: ['.env', 'local.json'] }),
+      commit_propose: () => {
+        throw 'claude not found.';
+      },
+    });
+    render(CommitModal, { projectId: 'p1', agentId: 'a1' });
+    expect(await screen.findByText('Never committed: .env, local.json (copied into the worktrees).')).toBeInTheDocument();
+    expect(await screen.findByText('No suggestion: claude not found.')).toBeInTheDocument();
+    await userEvent.type(screen.getByRole('textbox', { name: 'Message' }), 'fix: typed by hand');
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(app.modal).toMatchObject({
+      kind: 'confirm',
+      title: 'Discard the message?',
+      body: 'The message you wrote for this commit will be lost.',
+      confirm: 'Discard',
+    });
+  });
+
+  it('says there is nothing to commit, for an agent and for the project', async () => {
+    fakeBackend({ commit_preview: () => ({ files: [], leftOut: [] }) });
+    const { unmount } = render(CommitModal, { projectId: 'p1', agentId: 'a1' });
+    expect(await screen.findByText('No files to commit for this agent.')).toBeInTheDocument();
+    unmount();
+    app.modal = { kind: 'commit', projectId: 'p1', agentId: null };
+    render(CommitModal, { projectId: 'p1', agentId: null });
+    expect(await screen.findByText('No changes in the project folder: commit an agent’s worktree from “This agent”.')).toBeInTheDocument();
   });
 });

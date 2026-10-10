@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buffers } from '../lib/editor/buffers.svelte';
+import { setLang } from '../lib/i18n';
 import { menu } from '../lib/menu.svelte';
 import { app } from '../lib/state.svelte';
 import { openTerminal } from '../lib/terminals';
@@ -477,5 +478,122 @@ describe('Sidebar copies of an agent', () => {
     copyItem()!.onClick!();
     await expect.poll(() => app.toasts.map((t) => [t.text, t.kind])).toEqual([['worktree de la copie non créé', 'error']]);
     expect(app.agent?.id).toBe('a1');
+  });
+});
+
+describe('Sidebar in English', () => {
+  beforeEach(() => {
+    resetApp({
+      projects: [project()],
+      agents: [
+        agent({ status: 'running', tokens: 1500, cost: 0.2 }),
+        agent({ id: 'a2', name: 'tests-e2e', status: 'waiting', createdAt: 2 }),
+        agent({ id: 'a3', name: 'vieux', archived: true }),
+      ],
+      tickets: [ticket({ id: 't9', key: 'DEM-9', column: 'review', agentId: 'a2' })],
+    });
+    setLang('en');
+  });
+  const items = () => menu.open?.items.map((i) => i.label) ?? [];
+
+  it('names the statuses, the counts and the footer in English', () => {
+    fakeBackend();
+    app.git.p1 = gitInfo({ modified: 2, added: 1, deleted: 3 });
+    app.git.p1.agents = { a1: 1, a2: 4 };
+    render(Sidebar, { project: project() });
+    const cards = screen.getAllByRole('button', { name: /refacto-auth|tests-e2e/ });
+    expect(within(cards[0]).getByText('Running')).toBeInTheDocument();
+    expect(within(cards[0]).getByText('1.5k tok')).toBeInTheDocument();
+    expect(within(cards[0]).getByText('1 file')).toBeInTheDocument();
+    expect(within(cards[1]).getByText('Question')).toBeInTheDocument();
+    expect(within(cards[1]).getByText('4 files')).toBeInTheDocument();
+    expect(screen.getByText(/Archived \(1\)/)).toBeInTheDocument();
+    expect(screen.getByText('Terminals')).toBeInTheDocument();
+    expect(screen.getByText('No open terminals')).toBeInTheDocument();
+    expect(screen.getByText('~2 modified')).toBeInTheDocument();
+    expect(screen.getByText('+1 added')).toBeInTheDocument();
+    expect(screen.getByText('−3 deleted')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Browse' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Project view' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /New agent/ })).toHaveAttribute('title', 'New agent (Ctrl+N)');
+    expect(screen.getByTitle('1 to review')).toBeInTheDocument();
+  });
+
+  it('says when an agent stopped by the usage limit resumes, and when its worktree is set up', () => {
+    fakeBackend();
+    app.now = new Date(2026, 8, 30, 12, 0).getTime();
+    app.agents.a1 = { ...app.agents.a1, status: 'error', resumeAt: new Date(2026, 8, 30, 15, 0).getTime() };
+    app.agents.a2 = { ...app.agents.a2, status: 'idle', setup: '2/3 · npm run gen (web)' };
+    render(Sidebar, { project: project() });
+    expect(screen.getByText('Resumes at 3:00 PM')).toHaveAttribute('title', 'Stopped by the usage limit: resumes automatically at 3:00 PM');
+    expect(screen.getByText('Setting up…')).toHaveAttribute('title', 'Setting up the worktree: 2/3 · npm run gen (web)');
+  });
+
+  it('writes the remote control states and the menu of an agent in English', async () => {
+    const wt = { path: 'C:\\code\\demo-api\\.claude\\worktrees\\a1', branch: 'escouade/a1', baseBranch: 'main' };
+    app.agents.a1 = {
+      ...app.agents.a1,
+      worktree: wt,
+      remoteControl: true,
+      remoteUrl: 'https://claude.ai/code/session_abc',
+      remoteState: 'ready',
+    };
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    const card = screen.getByRole('button', { name: /refacto-auth/ });
+    expect(within(card).getByTitle('Remote control: connecting… (reachable from claude.ai and the Claude app)')).toBeInTheDocument();
+    await fireEvent.contextMenu(card);
+    expect(items()).toEqual([
+      'Rename',
+      'Duplicate the conversation',
+      'Archive',
+      'Prepare launch',
+      'Open in editor',
+      'Open a terminal',
+      '',
+      'Turn off remote control',
+      'Open on claude.ai',
+      'Copy the claude.ai link',
+      '',
+      'Delete…',
+    ]);
+    expect(menu.open!.items.find((i) => i.label === 'Archive')).toMatchObject({ hint: 'keeps the conversation' });
+  });
+
+  it('asks in English before archiving and deleting', async () => {
+    const wt = { path: 'C:\\code\\demo-api\\.claude\\worktrees\\a2', branch: 'escouade/a2', baseBranch: 'main' };
+    app.agents.a2 = { ...app.agents.a2, worktree: wt };
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /tests-e2e/ }));
+    menu.open!.items.find((i) => i.label === 'Archive')!.onClick!();
+    expect(app.modal).toMatchObject({
+      title: 'Archive tests-e2e?',
+      body: 'Its ticket DEM-9 goes back to “To do”.',
+      confirm: 'Archive',
+    });
+    app.modal = null;
+    menu.open!.items.find((i) => i.label === 'Delete…')!.onClick!();
+    expect(app.modal).toMatchObject({
+      title: 'Delete the agent “tests-e2e”?',
+      confirm: 'Delete',
+      option: { label: 'Also delete the worktree and the branch escouade/a2' },
+    });
+    expect((app.modal as any).body).toBe(
+      'The Claude process is stopped and the conversation is removed from the app (the Claude Code session stays on disk).',
+    );
+  });
+
+  it('tells in English why a copy waits, and when there is no shell', async () => {
+    fakeBackend();
+    app.shells = [];
+    render(Sidebar, { project: project() });
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /tests-e2e/ }));
+    expect(menu.open!.items.find((i) => i.label === 'Duplicate the conversation')).toMatchObject({
+      disabled: true,
+      title: 'Wait for its turn to end.',
+    });
+    await userEvent.click(screen.getByTitle('New terminal'));
+    expect(app.toasts.at(-1)).toMatchObject({ text: 'No shell found (PowerShell 7, Git Bash, WSL). Check the settings.', kind: 'error' });
   });
 });

@@ -477,7 +477,7 @@ describe('Overview in English', () => {
     resetApp({ agents: [agent({ archived: true })] });
     const { container } = render(Overview);
     expect(screen.getByRole('heading', { level: 1, name: 'Overview' })).toBeInTheDocument();
-    expect(screen.getByText('No agent for now.')).toBeInTheDocument();
+    expect(screen.getByText('No agents yet.')).toBeInTheDocument();
     // No agent to choose or to open: only the way back.
     expect(container.querySelector('.keys')).toHaveTextContent('Esc back');
     expect(container.querySelector('.keys')).not.toHaveTextContent('choose');

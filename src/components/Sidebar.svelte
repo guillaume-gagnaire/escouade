@@ -1,5 +1,6 @@
 <script lang="ts">
   import { keyLabel } from '../lib/platform';
+  import { t } from '../lib/i18n';
   import { api } from '../lib/ipc';
   import { fDur, fTok, fUsd, fWhen, tildify } from '../lib/format';
   import { copyRemoteLink, openRemote, toggleRemote } from '../lib/agent-actions';
@@ -12,13 +13,14 @@
   import { app } from '../lib/state.svelte';
   import { closeTerminal, newTerminal, SHELL_GLYPH, terminalIn } from '../lib/term-actions';
   import { canPrepare, prepareLaunch, stopTests } from '../lib/test-launch.svelte';
-  import type { Agent, Project } from '../lib/types';
+  import type { Agent, AgentStatus, Project } from '../lib/types';
   import RunsSection from './RunsSection.svelte';
   import StatusDot from './StatusDot.svelte';
 
   let { project }: { project: Project } = $props();
 
-  const SL: Record<string, string> = { running: 'En cours', waiting: 'Question', idle: 'Prêt', done: 'Terminé', error: 'Erreur' };
+  /** What an agent is doing, read when shown (the language of the interface can change). */
+  const statusLabel = (status: AgentStatus) => t(`nav.sidebar.status.${status}`);
   const SC: Record<string, string> = {
     running: 'var(--ok)',
     waiting: 'var(--wait)',
@@ -32,7 +34,7 @@
   let renameValue = $state('');
 
   const git = $derived(app.git[project.id]);
-  const terms = $derived(app.terminals.filter((t) => t.projectId === project.id));
+  const terms = $derived(app.terminals.filter((x) => x.projectId === project.id));
   const selectedAgentId = $derived(app.agent?.id);
   const termSelected = $derived(app.selectedTerm[project.id] ?? null);
   /** Another view (terminal, launch log, board) fills the main area: no agent is highlighted. */
@@ -60,34 +62,34 @@
     // A copy is made from a conversation at rest: during a turn, the original's session moves on.
     const turn = a.status === 'running' || a.status === 'waiting';
     menu.show(e, [
-      { label: 'Renommer', onClick: () => startRename(a) },
+      { label: t('common.rename'), onClick: () => startRename(a) },
       ...(a.archived
         ? []
         : [
             {
-              label: 'Dupliquer la conversation',
+              label: t('nav.sidebar.menu.duplicate'),
               disabled: turn,
-              title: turn ? 'Attends la fin de son tour.' : undefined,
+              title: turn ? t('nav.sidebar.menu.waitTurn') : undefined,
               onClick: () => app.duplicateAgent(a.id),
             },
           ]),
       a.archived
-        ? { label: 'Restaurer', onClick: () => app.run(api.archiveAgent(a.id, false)) }
-        : { label: 'Archiver', hint: 'garde la conversation', onClick: () => confirmArchive(a) },
-      ...(canPrepare(a) ? [{ label: 'Préparer le lancement', onClick: () => prepareLaunch(a) }] : []),
+        ? { label: t('nav.sidebar.menu.restore'), onClick: () => app.run(api.archiveAgent(a.id, false)) }
+        : { label: t('nav.sidebar.menu.archive'), hint: t('nav.sidebar.menu.archiveHint'), onClick: () => confirmArchive(a) },
+      ...(canPrepare(a) ? [{ label: t('nav.sidebar.menu.prepareLaunch'), onClick: () => prepareLaunch(a) }] : []),
       ...(a.archived
         ? []
         : [
             {
-              label: 'Ouvrir dans l’éditeur',
+              label: t('common.openInEditor'),
               onClick: () => app.openEditor({ projectId: a.projectId, source: a.worktree ? a.id : 'project' }),
             },
             // In its worktree, else in the project's folder (the backend knows which).
-            { label: 'Ouvrir un terminal', onClick: () => terminalIn(a.projectId, { agentId: a.id }, a.name) },
+            { label: t('nav.sidebar.menu.openTerminal'), onClick: () => terminalIn(a.projectId, { agentId: a.id }, a.name) },
           ]),
       ...remoteItems(a),
       { label: '', separator: true },
-      { label: 'Supprimer…', danger: true, onClick: () => confirmDelete(a) },
+      { label: t('nav.sidebar.menu.delete'), danger: true, onClick: () => confirmDelete(a) },
     ]);
   }
 
@@ -96,21 +98,26 @@
     const items: MenuItem[] = [
       { label: '', separator: true },
       a.remoteControl
-        ? { label: 'Désactiver le remote control', onClick: () => toggleRemote(a) }
-        : { label: 'Activer le remote control', hint: 'claude.ai, mobile', onClick: () => toggleRemote(a) },
+        ? { label: t('nav.sidebar.menu.remoteOff'), onClick: () => toggleRemote(a) }
+        : { label: t('nav.sidebar.menu.remoteOn'), hint: t('nav.sidebar.menu.remoteOnHint'), onClick: () => toggleRemote(a) },
     ];
     if (a.remoteControl && a.remoteUrl) {
       items.push(
-        { label: 'Ouvrir sur claude.ai', onClick: () => openRemote(a) },
-        { label: 'Copier le lien claude.ai', onClick: () => copyRemoteLink(a) },
+        { label: t('nav.sidebar.menu.openRemote'), onClick: () => openRemote(a) },
+        { label: t('nav.sidebar.menu.copyRemoteLink'), onClick: () => copyRemoteLink(a) },
       );
     }
     return items;
   }
 
   function remoteTitle(a: Agent) {
-    const state = a.remoteState === 'connected' ? 'connecté' : a.remoteState === 'ready' ? 'connexion…' : 'en attente de connexion';
-    return `Remote control : ${state} (accessible depuis claude.ai et l’app Claude)`;
+    return t(
+      a.remoteState === 'connected'
+        ? 'nav.sidebar.remote.connected'
+        : a.remoteState === 'ready'
+          ? 'nav.sidebar.remote.connecting'
+          : 'nav.sidebar.remote.waiting',
+    );
   }
 
   /** Archives the agent; one whose ticket is under way or to test asks first: its ticket starts over from "À faire". */
@@ -120,16 +127,16 @@
       stopTests(a.id);
       return app.run(api.archiveAgent(a.id, true));
     };
-    const t = app.ticketOf(a.id);
-    if (t?.column !== 'doing' && t?.column !== 'review') {
+    const ticket = app.ticketOf(a.id);
+    if (ticket?.column !== 'doing' && ticket?.column !== 'review') {
       archive();
       return;
     }
     app.modal = {
       kind: 'confirm',
-      title: `Archiver ${a.name} ?`,
-      body: `Son ticket ${t.key} repartira « À faire ».`,
-      confirm: 'Archiver',
+      title: t('nav.sidebar.archiveTitle', { name: a.name }),
+      body: t('nav.sidebar.archiveBody', { key: ticket.key }),
+      confirm: t('nav.sidebar.archiveConfirm'),
       onConfirm: archive,
     };
   }
@@ -137,14 +144,14 @@
   function confirmDelete(a: Agent) {
     app.modal = {
       kind: 'confirm',
-      title: `Supprimer l'agent « ${a.name} » ?`,
+      title: t('nav.sidebar.deleteTitle', { name: a.name }),
       body:
-        'Le processus Claude est arrêté et la conversation est retirée de l’application (la session Claude Code reste sur le disque).' +
+        t('nav.sidebar.deleteBody') +
         // The files of its worktree, open in the editor: an agent without one edits the project's, which stay.
         lossNotice(buffers.unsavedIn(a.projectId, a.id)),
-      confirm: 'Supprimer',
+      confirm: t('common.delete'),
       danger: true,
-      option: a.worktree ? { label: `Supprimer aussi le worktree et la branche ${a.worktree.branch}`, value: true } : undefined,
+      option: a.worktree ? { label: t('nav.sidebar.deleteWorktree', { branch: a.worktree.branch }), value: true } : undefined,
       onConfirm: async (removeWorktree) => {
         stopTests(a.id);
         const warning = await app.run(api.deleteAgent(a.id, removeWorktree));
@@ -156,7 +163,7 @@
   function shellMenu() {
     if (!termMenuBtn) return;
     if (!app.shells.length) {
-      app.toast('Aucun shell détecté (PowerShell 7, Git Bash, WSL). Vérifie les réglages.', 'error');
+      app.toast(t('nav.sidebar.noShell'), 'error');
       return;
     }
     menu.showAt(
@@ -167,25 +174,26 @@
 </script>
 
 {#snippet browse()}
-  <button class="browse" onclick={() => app.openEditor({ projectId: project.id, source: 'project' })}>Parcourir</button>
+  <button class="browse" onclick={() => app.openEditor({ projectId: project.id, source: 'project' })}>{t('common.browse')}</button>
 {/snippet}
 
 <aside class="side">
   <div class="views">
-    <div class="switcher" role="group" aria-label="Vue du projet">
-      <button class:on={!app.boardOn} aria-pressed={!app.boardOn} onclick={() => app.closeBoard(project.id)}>Agents</button>
+    <div class="switcher" role="group" aria-label={t('nav.sidebar.viewLabel')}>
+      <button class:on={!app.boardOn} aria-pressed={!app.boardOn} onclick={() => app.closeBoard(project.id)}>{t('common.agents')}</button>
       <button class:on={app.boardOn} aria-pressed={app.boardOn} onclick={() => app.openBoard(project.id)}
-        >Kanban{#if review}<span class="badge" title={`${review} à tester`}>{review}</span>{/if}</button
+        >Kanban{#if review}<span class="badge" title={t('nav.sidebar.toReview', { count: review })}>{review}</span>{/if}</button
       >
     </div>
   </div>
 
   <div class="head">
-    <span class="section-label">Agents</span>
+    <span class="section-label">{t('common.agents')}</span>
     <span class="count">{app.projectAgents.length}</span>
     <div style="flex:1"></div>
-    <button class="new" onclick={() => app.newAgent(project.id)} title={`Nouvel agent (${keyLabel('Ctrl+N')})`}>
-      <span class="plus">+</span> Nouvel agent
+    <button class="new" onclick={() => app.newAgent(project.id)} title={t('nav.sidebar.newAgentTitle', { shortcut: keyLabel('Ctrl+N') })}>
+      <span class="plus">+</span>
+      {t('nav.sidebar.newAgent')}
     </button>
   </div>
 
@@ -240,18 +248,17 @@
             </span>
           {/if}
           {#if a.status === 'waiting'}
-            <span class="pill">Question</span>
+            <span class="pill">{statusLabel('waiting')}</span>
           {:else if a.resumeAt}
-            <span
-              class="status"
-              style:color="var(--wait)"
-              title="Arrêté par la limite d’usage : reprise automatique {fWhen(a.resumeAt, app.now)}"
-              >Reprise {fWhen(a.resumeAt, app.now)}</span
+            <span class="status" style:color="var(--wait)" title={t('nav.sidebar.resumeTitle', { when: fWhen(a.resumeAt, app.now) })}
+              >{t('nav.sidebar.resumes', { when: fWhen(a.resumeAt, app.now) })}</span
             >
           {:else if a.setup}
-            <span class="status" style:color="var(--wait)" title="Préparation du worktree : {a.setup}">Préparation…</span>
+            <span class="status" style:color="var(--wait)" title={t('nav.sidebar.settingUpTitle', { step: a.setup })}
+              >{t('nav.sidebar.settingUp')}</span
+            >
           {:else}
-            <span class="status" style:color={SC[a.status]}>{SL[a.status]}</span>
+            <span class="status" style:color={SC[a.status]}>{statusLabel(a.status)}</span>
           {/if}
         </div>
         <div class="meta">
@@ -260,7 +267,9 @@
             >{/if}
         </div>
         <div class="meta dim" title={s.estimated ? ESTIMATE_HINT : undefined}>
-          <span>{fTok(s.tokens)} tok</span><span>{fSpentUsd(s)}</span><span>{git?.agents[a.id] ?? 0} fich.</span>
+          <span>{t('nav.sidebar.tokens', { tokens: fTok(s.tokens) })}</span><span>{fSpentUsd(s)}</span><span
+            >{t('nav.sidebar.files', { count: git?.agents[a.id] ?? 0 })}</span
+          >
         </div>
         {#if tag}
           <div class="ticket-tag mono">▸ {tag}</div>
@@ -268,14 +277,15 @@
       </div>
     {:else}
       <div class="empty">
-        Aucun agent.<br />
-        <button class="btn" style="margin-top:10px" onclick={() => app.newAgent(project.id)}>Créer un agent</button>
+        {t('nav.sidebar.empty')}<br />
+        <button class="btn" style="margin-top:10px" onclick={() => app.newAgent(project.id)}>{t('nav.sidebar.createAgent')}</button>
       </div>
     {/each}
 
     {#if app.archivedAgents.length}
       <button class="archived-toggle" onclick={() => (app.showArchived = !app.showArchived)}>
-        {app.showArchived ? '▾' : '▸'} Archivés ({app.archivedAgents.length})
+        {app.showArchived ? '▾' : '▸'}
+        {t('nav.sidebar.archived', { n: app.archivedAgents.length })}
       </button>
       {#if app.showArchived}
         {#each app.archivedAgents as a (a.id)}
@@ -302,36 +312,36 @@
 
   <div class="terms">
     <div class="head small">
-      <span class="section-label">Terminaux</span>
+      <span class="section-label">{t('nav.sidebar.terminals')}</span>
       <span class="count">{terms.length}</span>
       <div style="flex:1"></div>
-      <button class="plus-btn" bind:this={termMenuBtn} title="Nouveau terminal" onclick={shellMenu}>+</button>
+      <button class="plus-btn" bind:this={termMenuBtn} title={t('nav.sidebar.newTerminal')} onclick={shellMenu}>+</button>
     </div>
     <div class="term-list">
-      {#each terms as t (t.id)}
-        {@const g = SHELL_GLYPH[t.shell] ?? { glyph: '>_', c: 'var(--muted)' }}
+      {#each terms as term (term.id)}
+        {@const g = SHELL_GLYPH[term.shell] ?? { glyph: '>_', c: 'var(--muted)' }}
         <div
           class="term"
-          class:sel={termSelected === t.id}
+          class:sel={termSelected === term.id}
           role="button"
           tabindex="0"
-          onclick={() => app.selectTerm(t.id)}
-          onkeydown={(e) => e.key === 'Enter' && app.selectTerm(t.id)}
+          onclick={() => app.selectTerm(term.id)}
+          onkeydown={(e) => e.key === 'Enter' && app.selectTerm(term.id)}
         >
           <span class="glyph" style:color={g.c}>{g.glyph}</span>
-          <span class="tname">{t.name}</span>
-          {#if app.exitedTerms[t.id] !== undefined}<span class="shell">terminé</span>{/if}
+          <span class="tname">{term.name}</span>
+          {#if app.exitedTerms[term.id] !== undefined}<span class="shell">{t('nav.sidebar.exited')}</span>{/if}
           <button
             class="x"
-            title="Fermer"
+            title={t('common.close')}
             onclick={(e) => {
               e.stopPropagation();
-              closeTerminal(t.id);
+              closeTerminal(term.id);
             }}>×</button
           >
         </div>
       {:else}
-        <span class="none">Aucun terminal ouvert</span>
+        <span class="none">{t('nav.sidebar.noTerminals')}</span>
       {/each}
     </div>
   </div>
@@ -345,14 +355,14 @@
         {@render browse()}
       </div>
       <div class="gitc mono">
-        <span style="color:var(--wait)">~{git.modified} modifiés</span>
-        <span style="color:var(--add)">+{git.added} ajoutés</span>
-        <span style="color:var(--del)">−{git.deleted} supprimés</span>
+        <span style="color:var(--wait)">{t('nav.sidebar.modified', { n: git.modified })}</span>
+        <span style="color:var(--add)">{t('nav.sidebar.added', { n: git.added })}</span>
+        <span style="color:var(--del)">{t('nav.sidebar.deleted', { n: git.deleted })}</span>
       </div>
     {:else}
       <!-- No git information yet, or no repository: the project's folder can be browsed all the same. -->
       <div class="branch mono">
-        {#if git}<span style="color:var(--dim)">Pas de dépôt git</span>{/if}
+        {#if git}<span style="color:var(--dim)">{t('nav.sidebar.noRepo')}</span>{/if}
         <div style="flex:1"></div>
         {@render browse()}
       </div>

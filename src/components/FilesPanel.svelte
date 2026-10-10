@@ -1,6 +1,7 @@
 <script lang="ts">
   import { askCommit, canCommit, mergeAgent } from '../lib/agent-actions';
-  import { basename, dirname, plural } from '../lib/format';
+  import { basename, dirname, fInt } from '../lib/format';
+  import { t } from '../lib/i18n';
   import { api } from '../lib/ipc';
   import { menu, type MenuItem } from '../lib/menu.svelte';
   import { app } from '../lib/state.svelte';
@@ -78,12 +79,18 @@
     if (!list.some((f) => keyOf(f) === picked)) picked = list[0] ? keyOf(list[0]) : null;
   }
 
+  /** A worktree under the project's `.claude` folder by its path from there, else by its whole path. */
+  function worktreeName(path: string) {
+    const inside = path.replace(/\\/g, '/').split('/.claude/')[1];
+    return inside ? '.claude/' + inside : path;
+  }
+
   const hint = $derived(
     scope === 'agent'
       ? agent?.worktree
-        ? `worktree ${agent.worktree.path.replace(/\\/g, '/').split('/.claude/')[1] ? '.claude/' + agent.worktree.path.replace(/\\/g, '/').split('/.claude/')[1] : agent.worktree.path} · isolé des autres agents`
-        : 'Fichiers modifiés par cet agent (d’après ses éditions)'
-      : 'Tous les agents du projet · attribution par worktree',
+        ? t('git.files.hintWorktree', { path: worktreeName(agent.worktree.path) })
+        : t('git.files.hintAgent')
+      : t('git.files.hintProject'),
   );
 
   function agentName(id: string | null) {
@@ -103,11 +110,15 @@
         projectId: project.id,
         agentId: null,
         paths: [],
-        title: `Modifications de ${project.name}`,
+        title: t('git.files.changesOf', { name: project.name }),
         wholeProject: true,
       };
     } else {
-      openDiff(agent && !agent.worktree ? files.map((f) => f.path) : [], agent?.id ?? null, `Modifications de ${agent?.name}`);
+      openDiff(
+        agent && !agent.worktree ? files.map((f) => f.path) : [],
+        agent?.id ?? null,
+        t('git.files.changesOf', { name: agent?.name ?? '' }),
+      );
     }
   }
 
@@ -127,7 +138,7 @@
   function fileMenu(e: MouseEvent, f: FileChange) {
     menu.show(e, [
       // A deleted file has nothing to open.
-      { label: 'Ouvrir dans l’éditeur', onClick: () => openInEditor(f), disabled: f.status === 'D' },
+      { label: t('common.openInEditor'), onClick: () => openInEditor(f), disabled: f.status === 'D' },
       { label: '', separator: true },
       discardItem(f, diffOwner(f)),
     ]);
@@ -135,20 +146,18 @@
 
   function discardItem(f: FileChange, owner: string | null): MenuItem {
     const discard = () => app.run(api.gitDiscard(project.id, owner, f.path));
-    if (f.status === 'D') return { label: 'Restaurer le fichier', onClick: discard };
+    if (f.status === 'D') return { label: t('git.files.restore'), onClick: discard };
     const isNew = f.status === 'A';
     const name = basename(f.path);
     return {
-      label: isNew ? 'Supprimer le fichier…' : 'Abandonner les modifications…',
+      label: isNew ? t('git.files.deleteFile') : t('git.files.discardChanges'),
       danger: true,
       onClick: () => {
         app.modal = {
           kind: 'confirm',
-          title: isNew ? `Supprimer « ${name} » ?` : `Abandonner les modifications de « ${name} » ?`,
-          body: isNew
-            ? `${f.path} n’a jamais été commité : il est supprimé du disque, sans retour possible.`
-            : `${f.path} revient à son état du dernier commit : ses modifications non commitées sont perdues.`,
-          confirm: isNew ? 'Supprimer' : 'Abandonner les modifications',
+          title: isNew ? t('git.files.deleteTitle', { name }) : t('git.files.discardTitle', { name }),
+          body: isNew ? t('git.files.deleteBody', { path: f.path }) : t('git.files.discardBody', { path: f.path }),
+          confirm: isNew ? t('common.delete') : t('git.files.discardConfirm'),
           danger: true,
           onConfirm: discard,
         };
@@ -168,12 +177,12 @@
   <div class="scope">
     <div class="segmented" style="width:100%">
       <button style="flex:1;font-family:var(--ui);font-size:12px" class:on={scope === 'agent'} onclick={() => (app.filesScope = 'agent')}
-        >Cet agent</button
+        >{t('git.files.scopeAgent')}</button
       >
       <button
         style="flex:1;font-family:var(--ui);font-size:12px"
         class:on={scope === 'project'}
-        onclick={() => (app.filesScope = 'project')}>Tout le projet</button
+        onclick={() => (app.filesScope = 'project')}>{t('git.files.scopeProject')}</button
       >
     </div>
   </div>
@@ -182,7 +191,7 @@
     {#if error}
       <div class="empty">{error}</div>
     {:else if !files.length && !loading}
-      <div class="empty">{scope === 'agent' ? 'Aucun fichier modifié par cet agent.' : 'Aucune modification non commitée.'}</div>
+      <div class="empty">{scope === 'agent' ? t('git.files.emptyAgent') : t('git.files.emptyProject')}</div>
     {/if}
     {#each listed as f (keyOf(f))}
       {@const on = current !== null && keyOf(current) === keyOf(f)}
@@ -207,15 +216,17 @@
         {#if f.status !== 'D'}
           <button
             class="edit"
-            aria-label={`Ouvrir ${basename(f.path)} dans l’éditeur`}
-            title="Ouvrir dans l’éditeur"
+            aria-label={t('git.files.openNamed', { name: basename(f.path) })}
+            title={t('common.openInEditor')}
             onclick={() => openInEditor(f)}
             oncontextmenu={(e) => fileMenu(e, f)}>&lt;/&gt;</button
           >
         {/if}
       </div>
     {/each}
-    {#if files.length > SHOWN}<p class="more mono">… et {plural(files.length - SHOWN, 'autre fichier', 'autres fichiers')}</p>{/if}
+    {#if files.length > SHOWN}<p class="more mono">
+        {t('git.files.more', { count: files.length - SHOWN, n: fInt(files.length - SHOWN) })}
+      </p>{/if}
   </div>
   {#if docked}
     {#if currentPath !== null}
@@ -227,20 +238,20 @@
     {/if}
   {/if}
   <div class="foot">
-    <button class="btn" style="flex:1" disabled={!files.length} onclick={openListedDiff}>Voir le diff</button>
+    <button class="btn" style="flex:1" disabled={!files.length} onclick={openListedDiff}>{t('git.files.showDiff')}</button>
     <button
       class="btn primary"
       style="flex:1"
       disabled={!canCommit(project, agent, scope) || !files.length}
       onclick={() => askCommit(project, agent, scope)}
     >
-      {scope === 'agent' ? 'Commit…' : 'Commit tout…'}
+      {scope === 'agent' ? t('git.files.commitAgent') : t('git.files.commitAll')}
     </button>
   </div>
   {#if scope === 'agent' && agent?.worktree}
     <div class="foot merge">
       <button class="btn" style="flex:1" onclick={() => agent && mergeAgent(agent)}
-        >Merger {agent.worktree.branch} → {agent.worktree.baseBranch}…</button
+        >{t('git.files.merge', { branch: agent.worktree.branch, base: agent.worktree.baseBranch })}</button
       >
     </div>
   {/if}
