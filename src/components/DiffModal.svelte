@@ -1,7 +1,9 @@
 <script lang="ts">
   import { fileLines, parseUnifiedDiff, type DiffFile } from '../lib/diff';
+  import { t } from '../lib/i18n';
   import { api } from '../lib/ipc';
   import { trapFocus } from '../lib/focus';
+  import { keyLabel } from '../lib/platform';
   import { app } from '../lib/state.svelte';
   import DiffView from './DiffView.svelte';
 
@@ -63,13 +65,13 @@
   <div class="win" use:trapFocus onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1" aria-label={title}>
     <div class="head">
       <span class="t">{title}</span>
-      <span class="n mono">{files.length} fichier{files.length > 1 ? 's' : ''}</span>
+      <span class="n mono">{t('common.count.files', { count: files.length })}</span>
       <div style="flex:1"></div>
       <div class="segmented">
-        <button class:on={!app.diffSplit} onclick={() => app.setDiffSplit(false)}>Unifié</button>
-        <button class:on={app.diffSplit} onclick={() => app.setDiffSplit(true)}>Côte à côte</button>
+        <button class:on={!app.diffSplit} onclick={() => app.setDiffSplit(false)}>{t('git.diff.unified')}</button>
+        <button class:on={app.diffSplit} onclick={() => app.setDiffSplit(true)}>{t('git.diff.split')}</button>
       </div>
-      <button class="icon-btn" title="Fermer (Échap)" onclick={() => (app.modal = null)}>×</button>
+      <button class="icon-btn" title={t('git.diff.closeTitle', { key: keyLabel('Esc') })} onclick={() => (app.modal = null)}>×</button>
     </div>
     <div class="body">
       {#if files.length > 1}
@@ -87,11 +89,11 @@
       {/if}
       <div class="diff">
         {#if loading}
-          <div class="msg">Chargement…</div>
+          <div class="msg">{t('common.loading')}</div>
         {:else if error}
           <div class="msg">{error}</div>
         {:else if !file}
-          <div class="msg">Aucune différence.</div>
+          <div class="msg">{t('git.diff.none')}</div>
         {:else}
           <div class="fhead mono">
             {file.path}
@@ -99,7 +101,7 @@
             {#if !file.tooLarge}<span class="add">+{file.add}</span> <span class="del">−{file.del}</span>{/if}
           </div>
           {#if file.binary}
-            <div class="msg">Fichier binaire.</div>
+            <div class="msg">{t('git.diff.binary')}</div>
           {:else}
             <!-- Another file starts folded again. -->
             {#key file.key}

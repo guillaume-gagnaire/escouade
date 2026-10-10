@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount, untrack } from 'svelte';
-  import { plural } from '../../lib/format';
+  import { fInt } from '../../lib/format';
+  import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { app, type CommitDraft } from '../../lib/state.svelte';
   import type { CommitScope } from '../../lib/types';
@@ -23,6 +24,7 @@
   /** Haiku's proposal as it was put in the field: leaving the window on it loses nothing. */
   let proposed = untrack(() => resume?.proposed ?? '');
   let proposing = $state(false);
+  /** Why no message was proposed (shown as a sentence, in the language of the interface). */
   let noProposal = $state<string | null>(null);
   let committing = $state(false);
   /** Git's refusal of the commit (a hook, nothing left to commit…). */
@@ -46,9 +48,7 @@
   const leftOut = $derived.by(() => {
     const files = scope?.leftOut ?? [];
     if (!files.length) return null;
-    return files.length === 1
-      ? `Jamais commité : ${files[0]} (copié dans les worktrees).`
-      : `Jamais commités : ${files.join(', ')} (copiés dans les worktrees).`;
+    return t('git.commit.leftOut', { count: files.length, files: files.join(', ') });
   });
 
   onMount(async () => {
@@ -72,7 +72,7 @@
       const proposal = await api.commitPropose(projectId, agentId, paths);
       if (mine === asked && !typed) message = proposed = proposal;
     } catch (e) {
-      if (mine === asked) noProposal = `Pas de proposition : ${String(e).trim().replace(/\.$/, '')}.`;
+      if (mine === asked) noProposal = String(e).trim().replace(/\.$/, '');
     } finally {
       if (mine === asked) proposing = false;
     }
@@ -89,7 +89,7 @@
       const hash = await api.commitDirect(projectId, agentId, paths, message);
       // Another modal may have taken its place meanwhile.
       if (!gone) app.modal = null;
-      app.toast(`Commit ${hash} créé`, 'ok');
+      app.toast(t('git.commit.created', { hash }), 'ok');
     } catch (e) {
       app.markAnswered(self, false);
       // A refusal is never lost: in the window, or told once it is gone.
@@ -112,9 +112,9 @@
     }
     app.modal = {
       kind: 'confirm',
-      title: 'Abandonner le message ?',
-      body: 'Le message que tu as écrit pour ce commit sera perdu.',
-      confirm: 'Abandonner',
+      title: t('git.commit.discardTitle'),
+      body: t('git.commit.discardBody'),
+      confirm: t('git.commit.discardConfirm'),
       danger: true,
       onConfirm: () => {},
       onCancel: () => (app.modal = self),
@@ -122,40 +122,42 @@
   }
 </script>
 
-<Modal title="Commit" width={600} onclose={close}>
-  <p class="scope">Modifications de {owner}</p>
+<Modal title={t('git.commit.title')} width={600} onclose={close}>
+  <p class="scope">{t('git.commit.scope', { owner })}</p>
   {#if failure}
     <p class="error" role="alert">{failure}</p>
   {:else if scope}
     {#if scope.files.length}
-      <ul class="files" aria-label="Fichiers du commit">
+      <ul class="files" aria-label={t('git.commit.filesLabel')}>
         {#each scope.files.slice(0, SHOWN) as f (f.path)}
           <li><span class="st mono" style:color={SC[f.status]}>{f.status}</span> <span class="path mono">{f.path}</span></li>
         {/each}
       </ul>
-      {#if scope.files.length > SHOWN}<p class="note">… et {plural(scope.files.length - SHOWN, 'autre fichier', 'autres fichiers')}</p>{/if}
+      {#if scope.files.length > SHOWN}<p class="note">
+          {t('git.files.more', { count: scope.files.length - SHOWN, n: fInt(scope.files.length - SHOWN) })}
+        </p>{/if}
     {:else}
       <p class="note">
-        {agentId
-          ? 'Aucun fichier à commiter pour cet agent.'
-          : 'Aucune modification dans le dossier du projet : le worktree d’un agent se commite depuis « Cet agent ».'}
+        {agentId ? t('git.commit.noneForAgent') : t('git.commit.noneForProject')}
       </p>
     {/if}
     {#if leftOut}<p class="note">{leftOut}</p>{/if}
   {/if}
   <div class="grp">
-    <label class="lab" for="commit-message">Message</label>
+    <label class="lab" for="commit-message">{t('git.commit.message')}</label>
     <!-- svelte-ignore a11y_autofocus -->
     <textarea id="commit-message" class="field mono message" rows="6" bind:value={message} oninput={() => (typed = true)} autofocus
     ></textarea>
-    <p class="note" aria-live="polite">{proposing ? 'Haiku rédige le message…' : (noProposal ?? '')}</p>
+    <p class="note" aria-live="polite">
+      {proposing ? t('git.commit.proposing') : noProposal !== null ? t('git.commit.noProposal', { reason: noProposal }) : ''}
+    </p>
     {#if refused}<p class="error" role="alert">{refused}</p>{/if}
   </div>
   {#snippet footer()}
-    <button class="btn ghost" disabled={committing} onclick={close}>Annuler</button>
-    <button class="btn" disabled={proposing || committing || !paths.length} onclick={propose}>Régénérer</button>
+    <button class="btn ghost" disabled={committing} onclick={close}>{t('common.cancel')}</button>
+    <button class="btn" disabled={proposing || committing || !paths.length} onclick={propose}>{t('git.commit.regenerate')}</button>
     <button class="btn primary" disabled={!message.trim() || committing || !paths.length} onclick={commit}
-      >{committing ? 'Commit…' : 'Commiter'}</button
+      >{committing ? t('git.commit.committing') : t('git.commit.commit')}</button
     >
   {/snippet}
 </Modal>

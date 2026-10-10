@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { splitRows, type DiffLine } from '../lib/diff';
-  import { plural } from '../lib/format';
+  import { t } from '../lib/i18n';
 
   // Diff lines, unified (merged, red and green lines) or side by side. Each line is a DOM node, so a
   // file of more than FOLD_AT lines stays folded until asked for, then is drawn SLICE lines at a time.
@@ -35,11 +35,11 @@
 </script>
 
 {#if tooLarge}
-  <p class="note">Diff trop volumineux pour être affiché.</p>
+  <p class="note">{t('git.diff.tooLarge')}</p>
 {:else if long && drawn === 0}
   <div class="note">
-    <span>Diff volumineux ({lines.length} lignes)</span>
-    <button class="btn" onclick={() => draw(SLICE)}>Afficher</button>
+    <span>{t('git.diff.large', { n: lines.length })}</span>
+    <button class="btn" onclick={() => draw(SLICE)}>{t('common.show')}</button>
   </div>
 {:else if split}
   <!-- Side by side wraps long lines so both columns stay aligned in narrow panes. -->
@@ -70,7 +70,7 @@
 {#if long && drawn > 0 && rest > 0}
   <div class="note more">
     <button class="btn" bind:this={moreButton} onclick={() => draw(drawn + SLICE)}
-      >Afficher {plural(Math.min(SLICE, rest), 'ligne', 'lignes')} de plus</button
+      >{t('git.diff.showMore', { count: Math.min(SLICE, rest) })}</button
     >
   </div>
 {/if}

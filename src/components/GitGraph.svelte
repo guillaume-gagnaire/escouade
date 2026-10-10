@@ -1,6 +1,7 @@
 <script lang="ts">
   import { isAgentBranch } from '../lib/branches';
   import { fAgo } from '../lib/format';
+  import { t } from '../lib/i18n';
   import { branchCommits, layout, type Segment } from '../lib/graph';
   import { api } from '../lib/ipc';
   import { app } from '../lib/state.svelte';
@@ -87,10 +88,10 @@
     return c.refs
       .filter((r) => r !== 'HEAD' && !r.endsWith('/HEAD'))
       .map((r) => {
-        if (r.startsWith('tag: ')) return { text: r.slice(5), title: `tag ${r.slice(5)}`, kind: 'tag' };
+        if (r.startsWith('tag: ')) return { text: r.slice(5), title: t('git.graph.tag', { name: r.slice(5) }), kind: 'tag' };
         const owner = Object.values(app.agents).find((a) => a.projectId === project.id && a.worktree?.branch === r);
         const kind = r === log?.head ? 'head' : owner ? 'agent' : r.includes('/') && !isAgentBranch(r) ? 'remote' : 'branch';
-        return { text: owner ? owner.name : r, title: owner ? `branche ${r} de l’agent ${owner.name}` : r, kind };
+        return { text: owner ? owner.name : r, title: owner ? t('git.graph.agentBranch', { branch: r, agent: owner.name }) : r, kind };
       });
   }
 
@@ -110,9 +111,9 @@
   {#if error}
     <div class="msg">{error}</div>
   {:else if !log}
-    <div class="msg">Chargement…</div>
+    <div class="msg">{t('common.loading')}</div>
   {:else if !commits.length}
-    <div class="msg">Aucun commit.</div>
+    <div class="msg">{t('git.graph.empty')}</div>
   {/if}
   {#each commits as c, i (c.hash)}
     {@const r = rows[i]}

@@ -1,7 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { COMMIT_AGENT_PROMPT } from '../lib/agent-actions';
+import { commitAgentPrompt } from '../lib/agent-actions';
+import { setLang } from '../lib/i18n';
 import { menu } from '../lib/menu.svelte';
 import { app } from '../lib/state.svelte';
 import type { FileChange } from '../lib/types';
@@ -77,7 +78,7 @@ describe('FilesPanel « Commit… »', () => {
     const { unmount } = render(FilesPanel, { project: project(), agent: app.agents.a1 });
     await screen.findByText('auth.ts');
     await userEvent.click(screen.getByRole('button', { name: 'Commit…' }));
-    expect(backend.called('send_message')[0].args).toMatchObject({ id: 'a1', text: COMMIT_AGENT_PROMPT });
+    expect(backend.called('send_message')[0].args).toMatchObject({ id: 'a1', text: commitAgentPrompt() });
     expect(app.modal).toBeNull();
     unmount();
 
@@ -448,5 +449,91 @@ describe('FilesPanel editor entry', () => {
       'Ouvrir dans l’éditeur',
       'Abandonner les modifications…',
     ]);
+  });
+});
+
+describe('FilesPanel in English', () => {
+  beforeEach(() => {
+    resetApp({ projects: [project()], agents: [agent(), agent({ id: 'a2', name: 'tests-e2e' })] });
+    menu.close();
+    setLang('en');
+  });
+  const many = (n: number) => Array.from({ length: n }, (_, i) => change(`src/f${i}.ts`, 'a1'));
+
+  it('writes its scopes, its hints and its buttons in English', async () => {
+    fakeBackend({ git_files: () => [change('src/auth.ts', 'a1')] });
+    render(FilesPanel, { project: project(), agent: app.agents.a1 });
+    expect(await screen.findByText('auth.ts')).toBeInTheDocument();
+    expect(screen.getByText('Files changed by this agent (from its edits)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show diff' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Commit…' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open auth.ts in editor' })).toHaveAttribute('title', 'Open in editor');
+    await userEvent.click(screen.getByRole('button', { name: 'Whole project' }));
+    expect(screen.getByText('All the project’s agents · attributed by worktree')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Commit all…' })).toBeInTheDocument();
+  });
+
+  it('says it is empty, in English', async () => {
+    fakeBackend({ git_files: () => [] });
+    render(FilesPanel, { project: project(), agent: app.agents.a1 });
+    expect(await screen.findByText('No files changed by this agent.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Whole project' }));
+    expect(await screen.findByText('No uncommitted changes.')).toBeInTheDocument();
+  });
+
+  it('counts the files it does not list with the plural and the digits of English', async () => {
+    fakeBackend({ git_files: () => many(1502) });
+    const { unmount } = render(FilesPanel, { project: project(), agent: app.agents.a1 });
+    expect(await screen.findByText('… and 1,002 more files')).toBeInTheDocument();
+    unmount();
+    fakeBackend({ git_files: () => many(501) });
+    render(FilesPanel, { project: project(), agent: app.agents.a1 });
+    expect(await screen.findByText('… and 1 more file')).toBeInTheDocument();
+  });
+
+  it('names the worktree of an agent, and the merge, in English', async () => {
+    const wt = { path: 'C:\\code\\demo-api\\.claude\\worktrees\\landing', branch: 'ccm/landing', baseBranch: 'main' };
+    resetApp({ agents: [agent({ id: 'a3', name: 'landing', worktree: wt })] });
+    fakeBackend({ git_files: () => [change('src/auth.ts', 'a3', true)] });
+    render(FilesPanel, { project: project(), agent: app.agents.a3 });
+    expect(await screen.findByText('worktree .claude/worktrees/landing · isolated from the other agents')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Merge ccm/landing → main…' })).toBeInTheDocument();
+  });
+
+  it('asks in English before discarding the changes of a file, deleting a new one', async () => {
+    fakeBackend({
+      git_files: () => [
+        change('src/auth.ts', 'a1'),
+        { ...change('new.txt', 'a1'), status: 'A' },
+        { ...change('gone.ts', 'a1'), status: 'D' },
+      ],
+    });
+    render(FilesPanel, { project: project(), agent: app.agents.a1 });
+    const entries = () => menu.open!.items.filter((i) => !i.separator);
+    const rightClick = async (file: RegExp) => fireEvent.contextMenu(await screen.findByRole('button', { name: row(file) }));
+    await rightClick(/auth\.ts/);
+    expect(entries().map((i) => i.label)).toEqual(['Open in editor', 'Discard changes…']);
+    entries()[1].onClick!();
+    expect(app.modal).toMatchObject({
+      title: 'Discard the changes to “auth.ts”?',
+      body: 'src/auth.ts goes back to its state at the last commit: its uncommitted changes are lost.',
+      confirm: 'Discard changes',
+    });
+    await rightClick(/new\.txt/);
+    expect(entries()[1].label).toBe('Delete the file…');
+    entries()[1].onClick!();
+    expect(app.modal).toMatchObject({ title: 'Delete “new.txt”?', confirm: 'Delete' });
+    await rightClick(/gone\.ts/);
+    expect(entries()[1].label).toBe('Restore the file');
+  });
+
+  it('sends the agent the commit request in English, and says so', async () => {
+    const backend = fakeBackend({ git_files: () => [change('src/auth.ts', 'a1')] });
+    render(FilesPanel, { project: project(), agent: app.agents.a1 });
+    await screen.findByText('auth.ts');
+    await userEvent.click(screen.getByRole('button', { name: 'Commit…' }));
+    await settle();
+    expect(backend.called('send_message')[0].args.text).toMatch(/^Commit the changes you made in this repository/);
+    expect(app.toasts.at(-1)).toMatchObject({ text: 'Commit request sent to refacto-auth', kind: 'ok' });
   });
 });

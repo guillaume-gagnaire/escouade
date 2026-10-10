@@ -1,9 +1,10 @@
 import { render, screen } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ConfirmModal from '../components/modals/ConfirmModal.svelte';
 import { agent, fakeBackend, resetApp } from '../test/ipc';
-import { mergeAgent } from './agent-actions';
+import { commitAgentPrompt, commitAllPrompt, copyRemoteLink, mergeAgent, toggleRemote } from './agent-actions';
+import { setLang } from './i18n';
 import { app } from './state.svelte';
 
 const WORKTREE = { path: 'C:\\code\\demo-api\\.claude\\worktrees\\landing', branch: 'ccm/landing', baseBranch: 'main' };
@@ -137,5 +138,74 @@ describe('mergeAgent', () => {
     fakeBackend();
     mergeAgent(agent());
     expect(app.modal).toBeNull();
+  });
+});
+
+describe('agent actions in English', () => {
+  beforeEach(() => {
+    shown = null;
+    resetApp({ agents: [landing()] });
+    setLang('en');
+  });
+
+  it('asks to merge in English, with the squash option, and tells it is done', async () => {
+    const backend = fakeBackend({ merge_agent: () => '' });
+    mergeAgent(app.agents.a2);
+    expect(app.modal).toMatchObject({
+      kind: 'confirm',
+      title: 'Merge ccm/landing into main?',
+      body: 'The commits of agent “landing” are merged into the project’s “main” branch.',
+      confirm: 'Merge',
+    });
+    asked();
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Squash (a single commit)' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Merge' }));
+    expect(backend.called('merge_agent').map((c) => c.args)).toEqual([{ id: 'a2', squash: true, switchToBase: false }]);
+    expect(app.toasts.at(-1)).toMatchObject({ text: 'Merge completed', kind: 'ok' });
+  });
+
+  it('asks to switch to the base in English, on a branch or on none', async () => {
+    let refusal = 'NOT_ON_BASE:feature/login:main';
+    fakeBackend({
+      merge_agent: () => {
+        throw refusal;
+      },
+    });
+    mergeAgent(app.agents.a2);
+    asked();
+    await userEvent.click(screen.getByRole('button', { name: 'Merge' }));
+    expect(app.modal).toMatchObject({
+      title: 'Switch to “main”?',
+      body: 'The project is on the branch “feature/login”. Escouade switches to “main” and then merges “ccm/landing”.',
+      confirm: 'Switch and merge',
+    });
+    refusal = 'NOT_ON_BASE::main';
+    mergeAgent(app.agents.a2);
+    asked();
+    await userEvent.click(screen.getByRole('button', { name: 'Merge' }));
+    expect(app.modal).toMatchObject({
+      body: 'The project is on no branch (detached HEAD). Escouade switches to “main” and then merges “ccm/landing”.',
+      confirm: 'Switch and merge',
+    });
+  });
+
+  it('tells in English that a remote agent is reachable, and that its link is copied', async () => {
+    const url = 'https://claude.ai/code/session_abc';
+    const write = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: write }, configurable: true });
+    fakeBackend({ set_remote_control: () => null });
+    await toggleRemote(app.agents.a2);
+    expect(app.toasts.at(-1)).toMatchObject({ text: 'landing is reachable from claude.ai and the Claude app', kind: 'ok' });
+    await copyRemoteLink({ ...app.agents.a2, remoteUrl: url });
+    expect(write).toHaveBeenCalledWith(url);
+    expect(app.toasts.at(-1)).toMatchObject({ text: 'claude.ai link copied', kind: 'ok' });
+  });
+
+  it('asks the agent to commit in the language of the interface', () => {
+    expect(commitAgentPrompt()).toMatch(/^Commit the changes you made/);
+    expect(commitAllPrompt()).toMatch(/^Commit all the current changes/);
+    setLang('fr');
+    expect(commitAgentPrompt()).toMatch(/^Commite les modifications/);
+    expect(commitAllPrompt()).toMatch(/^Commite toutes les modifications/);
   });
 });

@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { setLang } from '../lib/i18n';
 import { app } from '../lib/state.svelte';
 import { agent, fakeBackend, project, resetApp } from '../test/ipc';
 import DiffModal from './DiffModal.svelte';
@@ -172,5 +173,34 @@ describe('DiffModal for a commit', () => {
     expect(await screen.findByText('const b = 3;')).toBeInTheDocument();
     expect(backend.called('git_show')[0].args).toEqual({ projectId: 'p1', hash: 'a1b2c3d4' });
     expect(backend.called('git_diff')).toHaveLength(0);
+  });
+});
+
+describe('DiffModal in English', () => {
+  beforeEach(() => {
+    resetApp({ projects: [project()] });
+    localStorage.removeItem('escouade.diffSplit');
+    app.diffSplit = false;
+    setLang('en');
+  });
+
+  it('writes its head, its switch and its close button in English', async () => {
+    fakeBackend({ git_diff: () => DIFF });
+    render(DiffModal, props);
+    expect(await screen.findByText('const b = 3;')).toBeInTheDocument();
+    expect(screen.getByText('2 files')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Unified' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Side by side' })).toBeInTheDocument();
+    expect(screen.getByTitle('Close (Esc)')).toBeInTheDocument();
+  });
+
+  it('says a diff is empty, binary or too large, in English', async () => {
+    fakeBackend({ git_diff: () => '' });
+    const { unmount } = render(DiffModal, props);
+    expect(await screen.findByText('No differences.')).toBeInTheDocument();
+    unmount();
+    fakeBackend({ git_diff: () => 'diff --git a/logo.png b/logo.png\nBinary files a/logo.png and b/logo.png differ\n' });
+    render(DiffModal, props);
+    expect(await screen.findByText('Binary file.')).toBeInTheDocument();
   });
 });
