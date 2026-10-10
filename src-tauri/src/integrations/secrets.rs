@@ -635,6 +635,30 @@ mod tests {
     }
 
     #[test]
+    fn a_service_a_later_version_left_to_forget_does_not_cost_the_accounts_their_place() {
+        let d = DataDir::new(test_dir("secrets-later-service"));
+        let store = MemoryStore::default();
+        let trello = r#"{"key":"trello-key","token":"trello-secret"}"#;
+        store
+            .set("jira", r#"{"key":"","token":"jira-secret"}"#)
+            .unwrap();
+        store.set("trello", trello).unwrap();
+        // Written by a later version (then rolled back): a service this one does not know.
+        let text =
+            r#"{ "trello": { "label": "@ada", "user": "m1" }, "toForget": ["linear", "jira"] }"#;
+        std::fs::write(d.integrations_file(), text).unwrap();
+        let a = load_accounts(&d, &store, false);
+        assert_eq!(a.trello.as_ref().unwrap().token, "trello-secret");
+        assert!(!d.integrations_file().with_extension("broken.json").exists());
+        // The ones it knows go as before; the unknown one is left out.
+        assert_eq!(store.entry("jira"), None);
+        assert_eq!(store.entry("trello").as_deref(), Some(trello));
+        assert!(a.to_forget.is_empty());
+        let saved: Accounts = serde_json::from_str(&file(&d)).unwrap();
+        assert_eq!(saved.trello.as_ref().unwrap().label, "@ada");
+    }
+
+    #[test]
     fn a_development_build_leaves_the_file_a_copy_of_the_secrets() {
         let d = older("secrets-dev-copy");
         let store = MemoryStore::default();

@@ -746,7 +746,19 @@ impl<R: Runtime> Core<R> {
             &*secrets,
             integrations::secrets::file_keeps_copy(),
         );
-        let pending_syncs = read_json(&data.sync_queue_file()).unwrap_or_default();
+        // Read one operation at a time: one a later version added (the app rolled back) is left
+        // out, rather than the whole queue with it.
+        let pending_syncs = read_json::<Vec<Value>>(&data.sync_queue_file())
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|op| match serde_json::from_value(op) {
+                Ok(op) => Some(op),
+                Err(e) => {
+                    log::warn!("sync left out of {}: {e}", data.sync_queue_file().display());
+                    None
+                }
+            })
+            .collect();
         // The autopilot's pause as the app stopped, for the first pass (before any new reading of
         // the quotas, which with an API key never comes): a window read holds until its end, an
         // ended one is dropped (the status bar would show it).

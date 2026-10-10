@@ -28,6 +28,7 @@ pub struct Accounts {
     /// The services whose entry in the system's keychain a « Déconnecter » (or a switch to the
     /// GitHub CLI's token) could not delete: deleted at the next start, unless the service has a
     /// token of its own again. Their names only, never a secret.
+    #[serde(deserialize_with = "known_services")]
     pub to_forget: Vec<Service>,
     /// The file keeps a copy of the secrets the keychain holds (`secrets::file_keeps_copy`).
     /// Known while the app runs, never saved.
@@ -76,6 +77,16 @@ impl Accounts {
             })
             .collect()
     }
+}
+
+/// The services of the list this version knows: one a later version added (the app rolled back)
+/// is left out, rather than the whole file and every account with it.
+fn known_services<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<Service>, D::Error> {
+    let names: Vec<Value> = Vec::deserialize(d)?;
+    Ok(names
+        .into_iter()
+        .filter_map(|n| serde_json::from_value(n).ok())
+        .collect())
 }
 
 /// An account: what its form gave ("Connecter…"), then what its check found.

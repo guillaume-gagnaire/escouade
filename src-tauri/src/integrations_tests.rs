@@ -1437,6 +1437,30 @@ async fn the_syncs_left_waiting_are_tried_again_when_the_app_starts() {
 }
 
 #[tokio::test]
+async fn a_kind_of_sync_a_later_version_left_waiting_does_not_cost_the_others_their_place() {
+    let h = harness("ig-queue-later-kind");
+    h.core.save_now();
+    // Written by a later version (then rolled back): a kind of operation this one does not know.
+    let file = h.core.data.sync_queue_file();
+    let text = r#"[
+  { "ticketId": "t1", "external": { "service": "trello", "id": "c1" }, "op": { "kind": "label", "name": "urgent" } },
+  { "ticketId": "t1", "external": { "service": "trello", "id": "c1" }, "op": { "kind": "comment", "text": "pris" } }
+]"#;
+    std::fs::write(&file, text).unwrap();
+    let app = mock_app();
+    let (again, _rx) = Core::load(app.handle().clone(), h.core.data.clone());
+    let ops = again.pending_syncs.lock().ops.clone();
+    assert_eq!(ops.len(), 1, "{ops:?}");
+    assert_eq!(
+        ops[0].op,
+        crate::integrations::sync::SyncOp::Comment {
+            text: "pris".into()
+        }
+    );
+    assert!(!file.with_extension("broken.json").exists());
+}
+
+#[tokio::test]
 async fn a_failed_transition_gives_way_to_the_next_one() {
     let h = harness("ig-retry-stale");
     let server = FakeServer::start().await;
