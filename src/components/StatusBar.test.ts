@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
-import { tick } from 'svelte';
+import { flushSync, tick } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { setLang } from '../lib/i18n';
 import { menu } from '../lib/menu.svelte';
@@ -561,6 +561,67 @@ describe('StatusBar quotas of the accounts', () => {
     expect(screen.getByRole('tooltip')).toHaveTextContent(/^12 % · remise à zéro le \d{2}\/\d{2} à \d{2}:\d{2}$/);
     await userEvent.unhover(within(group()).getByRole('meter', { name: 'Quota sur 7 jours' }));
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+  });
+
+  it('gives a screen reader the two windows’ values on the group button, which its bars no longer do one by one', () => {
+    two();
+    render(StatusBar);
+    const said =
+      /^Quota sur 5 heures : 42 % · remise à zéro le \d{2}\/\d{2} à \d{2}:\d{2}\. Quota sur 7 jours : 12 % · remise à zéro le \d{2}\/\d{2} à \d{2}:\d{2}$/;
+    expect(group()).toHaveAccessibleDescription(said);
+    // What the bars read is told as it follows the quota; a window not read is said so.
+    app.usage = { ...app.usage, fiveHour: null, sevenDay: win(80, 100) };
+    flushSync();
+    expect(group()).toHaveAccessibleDescription(/^Quota sur 5 heures : Quota indisponible\. Quota sur 7 jours : 80 % · remise à zéro le /);
+  });
+
+  it('shows both values in a tooltip when the group button gets the keyboard focus, until it loses it or Escape is pressed', async () => {
+    two();
+    render(StatusBar);
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    group().focus();
+    const tip = await screen.findByRole('tooltip');
+    expect(tip).toHaveTextContent(/Quota sur 5 heures : 42 % · remise à zéro le \d{2}\/\d{2} à \d{2}:\d{2}/);
+    expect(tip).toHaveTextContent(/Quota sur 7 jours : 12 % · remise à zéro le \d{2}\/\d{2} à \d{2}:\d{2}/);
+    // Escape puts it away without moving the focus (WCAG 1.4.13), and the panel is not opened.
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    expect(group()).toHaveFocus();
+    expect(panel()).not.toBeInTheDocument();
+    // It comes back with the next focus.
+    group().blur();
+    group().focus();
+    expect(await screen.findByRole('tooltip')).toBeInTheDocument();
+    group().blur();
+    await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
+  });
+
+  it('shows no tooltip on a click, which opens the panel instead', async () => {
+    two();
+    render(StatusBar);
+    await userEvent.click(group());
+    expect(panel()).toBeInTheDocument();
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    // Enter on the focused button opens the panel too, and the tooltip it showed goes.
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(panel()).not.toBeInTheDocument());
+    group().blur();
+    group().focus();
+    expect(await screen.findByRole('tooltip')).toBeInTheDocument();
+    await userEvent.keyboard('{Enter}');
+    expect(panel()).toBeInTheDocument();
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+  });
+
+  it('cuts a long name of the current account short, whole in its tooltip', () => {
+    two();
+    const name = 'Équipe de développement de la plateforme de paiement (compte partagé)';
+    app.settings.accounts = [PRINCIPAL, { ...PRO, name }];
+    render(StatusBar);
+    const label = within(screen.getByRole('button', { name: `Quotas par compte (compte en cours : ${name})` })).getByText(name);
+    expect(label).toHaveAttribute('title', name);
+    // Cut short by the style of that class (the layout is the browser's: the e2e of the two accounts reads it).
+    expect(label).toHaveClass('acct');
   });
 
   it('names the current account as it follows the quota: another account takes the front when it becomes the current one', async () => {

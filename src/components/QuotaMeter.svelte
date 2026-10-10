@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { fCountdown, fDayMonth, fPct, fTime } from '../lib/format';
+  import { quotaName, quotaTip } from '../lib/accounts';
+  import { fCountdown, fPct } from '../lib/format';
   import { t } from '../lib/i18n';
   import type { RateWindow } from '../lib/types';
 
@@ -25,14 +26,10 @@
   } = $props();
 
   const label = $derived(kind === 'fiveHour' ? t('accounts.quota.fiveHour.label') : t('accounts.quota.sevenDay.label'));
-  const name = $derived(kind === 'fiveHour' ? t('accounts.quota.fiveHour.name') : t('accounts.quota.sevenDay.name'));
+  const name = $derived(quotaName(kind));
   const pct = $derived(usage ? Math.min(100, Math.max(0, usage.pct)) : 0);
   /** « 42 % · remise à zéro le 10/10 à 18:00 »: the tooltip and the bar's value as the screen reader reads it. */
-  const text = $derived.by(() => {
-    if (!usage) return t('accounts.quota.unavailable');
-    if (!usage.resetsAt) return fPct(usage.pct);
-    return t('accounts.quota.tip', { pct: fPct(usage.pct), date: fDayMonth(usage.resetsAt), time: fTime(usage.resetsAt) });
-  });
+  const text = $derived(quotaTip(usage));
 
   let hover = $state(false);
   let focused = $state(false);

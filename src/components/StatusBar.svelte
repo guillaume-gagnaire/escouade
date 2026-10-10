@@ -1,6 +1,6 @@
 <script lang="ts">
   import { keyLabel } from '../lib/platform';
-  import { accountName, newAgentAccount } from '../lib/accounts';
+  import { accountName, newAgentAccount, quotaName, quotaTip } from '../lib/accounts';
   import { fAgo, fBytes, fPct } from '../lib/format';
   import { t } from '../lib/i18n';
   import Rich from '../lib/i18n/Rich.svelte';
@@ -36,6 +36,31 @@
   $effect(() => {
     if (!several) panelOpen = false;
   });
+  // The two windows as their bars say them. Under the button the bars are not reached one by one, so the button says them
+  // (to a screen reader as its description, `aria-describedby` rather than `aria-description`, which not every engine reads;
+  // to the keyboard as a tooltip when it gets the focus).
+  const quotaLines = $derived([
+    t('accounts.quota.line', { name: quotaName('fiveHour'), tip: quotaTip(app.usage.fiveHour) }),
+    t('accounts.quota.line', { name: quotaName('sevenDay'), tip: quotaTip(app.usage.sevenDay) }),
+  ]);
+  let quotaTipShown = $state(false);
+  let quotaTipSpot = $state({ left: 8, bottom: 38 });
+  /** A pointer pressed the button: its focus is no keyboard's, and the click opens the panel, not a tooltip. */
+  let pointerOnGroup = false;
+
+  function showQuotaTip(button: HTMLElement) {
+    if (pointerOnGroup || panelOpen) return;
+    const r = button.getBoundingClientRect();
+    quotaTipSpot = { left: Math.max(8, r.left), bottom: Math.max(8, window.innerHeight - r.top + 8) };
+    quotaTipShown = true;
+  }
+
+  function onGroupKeydown(e: KeyboardEvent) {
+    if (e.key !== 'Escape' || !quotaTipShown) return;
+    // Away without the focus moving (the panel is not what Escape closes here, nor the composer's turn).
+    e.stopPropagation();
+    quotaTipShown = false;
+  }
 
   function toggleSound() {
     app.settings.sound = !app.settings.sound;
@@ -98,7 +123,7 @@
 </script>
 
 {#snippet quotas(focusable: boolean)}
-  {#if several}<span class="v">{currentName}</span><span class="d">·</span>{/if}
+  {#if several}<span class="v acct" title={currentName}>{currentName}</span><span class="d">·</span>{/if}
   <QuotaMeter kind="fiveHour" usage={app.usage.fiveHour} now={app.now} {focusable} />
   <span class="vsep"></span>
   <QuotaMeter kind="sevenDay" usage={app.usage.sevenDay} now={app.now} {focusable} />
@@ -140,10 +165,22 @@
       aria-expanded={panelOpen}
       aria-controls="accounts-panel"
       aria-label={t('accounts.panel.open', { name: currentName })}
-      onclick={() => (panelOpen = !panelOpen)}
+      aria-describedby="quota-description"
+      onpointerdown={() => (pointerOnGroup = true)}
+      onfocus={(e) => showQuotaTip(e.currentTarget)}
+      onblur={() => {
+        quotaTipShown = false;
+        pointerOnGroup = false;
+      }}
+      onkeydown={onGroupKeydown}
+      onclick={() => {
+        quotaTipShown = false;
+        panelOpen = !panelOpen;
+      }}
     >
       {@render quotas(false)}
     </button>
+    <span id="quota-description" hidden>{quotaLines.join('. ')}</span>
   {:else}
     <span class="it group">{@render quotas(true)}</span>
   {/if}
@@ -196,6 +233,12 @@
     title={t('shell.status.settings', { key: keyLabel('Ctrl+,') })}>⚙</button
   >
 </footer>
+
+{#if quotaTipShown && !panelOpen}
+  <div class="tip" role="tooltip" style:left="{quotaTipSpot.left}px" style:bottom="{quotaTipSpot.bottom}px">
+    {#each quotaLines as line (line)}<div>{line}</div>{/each}
+  </div>
+{/if}
 
 {#if panelOpen}
   <AccountsPanel id="accounts-panel" anchor={quotaButton} onclose={() => (panelOpen = false)} />
@@ -262,6 +305,26 @@
   }
   .v {
     color: var(--text);
+  }
+  /* A long name is cut short (it is whole in its title), not the bars after it. */
+  .acct {
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .tip {
+    position: fixed;
+    z-index: 60;
+    padding: 4px 8px;
+    background: var(--elev);
+    border: 1px solid var(--line2);
+    border-radius: var(--r-sm);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+    color: var(--text);
+    font-size: 11.5px;
+    line-height: 1.4;
+    white-space: nowrap;
+    pointer-events: none;
   }
   .strong {
     font-weight: 600;
