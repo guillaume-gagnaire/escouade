@@ -286,6 +286,17 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 | La préparation / le démontage du worktree a échoué sur … | The worktree setup / the worktree teardown failed on … | |
 | Worktree préparé (3 commandes, 12 s). | Worktree set up (3 commands, 12 s). | |
 | Ko / Mo | KB / MB | tailles écrites par le backend |
+| Assignés à moi / Sprint actif / À faire / Mes cartes | Assigned to me / Active sprint / To do / My cards | filtres de l’import |
+| Ouverte / Fermée | Open / Closed | états d’une issue GitHub |
+| Non assigné(e) | Unassigned | |
+| refuse ces identifiants / refuse l’accès / limite les requêtes | refuses these credentials / denies access / limits the requests | refus d’un service (401, 403, 429) |
+| injoignable / réponse illisible | can’t be reached / unreadable answer | |
+| trousseau du système illisible | the system keychain can’t be read | |
+| Synchro interrompue | Sync interrupted | |
+| Plus tard | Later | bouton de la notification d’un redémarrage pour une mise à jour |
+| Enregistre d’abord tes fichiers | Save your files first | |
+| shell « … » introuvable | shell “…” not found | |
+| terminal fermé | terminal closed | |
 
 ## K — accounts
 
