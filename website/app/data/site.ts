@@ -1,11 +1,14 @@
 // What the site says in every language: its links, its version, its screenshots and its video.
 // Its texts are in fr.ts and en.ts.
-import type { Lang } from './language';
+import { LANGS, type Lang } from './language';
 
 export const REPO = 'https://github.com/guillaume-gagnaire/escouade';
 export const DOWNLOAD = `${REPO}/releases/latest`;
 /** Public address of the site, for links shared on social networks. */
 export const SITE = 'https://guillaume-gagnaire.github.io/escouade/';
+
+/** Public address of the page of `lang`. */
+export const pageUrl = (lang: Lang) => `${SITE}${LANGS.find((l) => l.code === lang)!.path}`;
 
 /** The features, in the order of the page, with the screenshot (a file of the images folder) that shows each. */
 export const FEATURE_SHOTS = [

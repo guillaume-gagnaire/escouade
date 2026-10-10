@@ -6,19 +6,9 @@ import { en } from '../app/data/en';
 import { fr } from '../app/data/fr';
 import { FEATURE_SHOTS, IMAGE_DIR, VIDEO, imageOf } from '../app/data/site';
 import { LANGS, langOfPath } from '../app/data/language';
+import { leaves } from './helpers';
 
 const PUBLIC = new URL('../public/', import.meta.url);
-
-/** Every text of a catalog by its path: `hero.line1`, `faq.items[2].q`… */
-function leaves(value: unknown, path = ''): Map<string, string> {
-  const out = new Map<string, string>();
-  if (typeof value === 'string') out.set(path, value);
-  else if (Array.isArray(value)) value.forEach((v, i) => leaves(v, `${path}[${i}]`).forEach((s, p) => out.set(p, s)));
-  else if (value && typeof value === 'object') {
-    for (const [k, v] of Object.entries(value)) leaves(v, path ? `${path}.${k}` : k).forEach((s, p) => out.set(p, s));
-  } else throw new Error(`${path}: neither a text, a list nor an object`);
-  return out;
-}
 
 const frLeaves = leaves(fr);
 const enLeaves = leaves(en);
