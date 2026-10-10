@@ -4,6 +4,91 @@ import { defineZone } from '../types';
 export default defineZone('editor', {
   toast: {
     saveFailed: 'Could not save: {error}',
+    createFailed: 'Could not create: {error}',
+    copyFailed: 'Could not copy: {error}',
+    renameFailed: 'Could not rename: {error}',
+    deleteFailed: 'Could not delete: {error}',
+    compareFailed: 'Could not compare: {error}',
+    navigateFailed: 'Could not navigate: {error}',
+    tabsKeepOldName: 'The tabs keep the old name: {error}',
+    ignoredByGit: '{name} is ignored by git: the file tree doesn’t show it.',
+    noLongerIgnored: '{name} is no longer ignored by git: it can be committed.',
+    fileNotFound: 'File not found: {path}',
+    noDefinition: 'No definition found for “{name}”.',
+    newerOnDiskUnsaved: 'The file changed on disk again: nothing was saved, and the comparison shows its new version.',
+    nothingSaved: 'Nothing was saved: the file went back to the version you opened.',
+    changedAgainKept: 'The file changed on disk again: nothing was saved, and your changes are still here.',
+  },
+
+  head: {
+    back: '← Conversation',
+    unsaved: '● Unsaved · {key}',
+    saved: 'Saved',
+  },
+
+  side: {
+    viewLabel: 'Column view',
+    searchFiles: 'Search in files',
+    searchFilesKey: 'Search in files ({key})',
+    newFile: 'New file',
+    newFolder: 'New folder',
+    widthLabel: 'Width of the files column',
+  },
+
+  menu: {
+    newFile: 'New file…',
+    newFolder: 'New folder…',
+    openTerminal: 'Open a terminal here',
+    rename: 'Rename…',
+    deleteKey: 'Del',
+    copyRelativePath: 'Copy relative path',
+  },
+
+  diff: {
+    newFile: 'New file · not in {reference}',
+    changedLines: { one: '{n} line changed vs {reference}', other: '{n} lines changed vs {reference}' },
+    same: 'Same as {reference}',
+    show: 'Show changes',
+  },
+
+  banner: {
+    newerOnDisk: 'The file changed on disk again: the comparison shows its new version.',
+    comparing: 'Comparing with the version on disk.',
+    changed: 'This file changed on disk.',
+    reload: 'Reload',
+    compare: 'Compare',
+    keepMine: 'Keep my version',
+    deleted: 'This file was deleted.',
+    recreate: 'Save to recreate it',
+  },
+
+  save: {
+    title: 'Save “{name}”?',
+    body: 'Its changes will be lost if you don’t save them.',
+    dontSave: 'Don’t save',
+  },
+
+  remove: {
+    title: 'Delete “{name}”?',
+    bodyFile: 'It goes to the trash.',
+    bodyFolderFiles: {
+      one: 'The folder and its file go to the trash.',
+      other: 'The folder and its {n} files go to the trash.',
+    },
+    bodyFolderEmpty: 'The folder goes to the trash.',
+  },
+
+  empty: {
+    selectFile: 'Select a file in the file tree.',
+    binary: 'Binary file: no preview.',
+    tooLarge: 'File too large for the editor ({size}).',
+    missing: 'This file doesn’t exist (or no longer exists).',
+  },
+
+  status: {
+    position: 'Ln {line}, Col {col}',
+    tabs: 'Tabs',
+    spaces: 'Spaces: {size}',
   },
 
   tabs: {

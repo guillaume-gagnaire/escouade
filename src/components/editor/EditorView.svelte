@@ -17,7 +17,8 @@
   import { fileSearches, setFindInFiles } from '../../lib/editor/search.svelte';
   import { ancestors, movedPath, treeRows, type FileStatus, type TreeRow } from '../../lib/editor/tree';
   import { trees } from '../../lib/editor/trees.svelte';
-  import { basename, joinPath, plural, tildify } from '../../lib/format';
+  import { basename, fBytes, fInt, joinPath, tildify } from '../../lib/format';
+  import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { menu, type MenuItem } from '../../lib/menu.svelte';
   import { IS_MAC, keyLabel } from '../../lib/platform';
@@ -259,7 +260,7 @@
       await (mine.kind === 'dir' ? api.fsMkdir : api.fsCreate)(pid, sourceAgent(src), path);
     } catch (e) {
       // Its field gone meanwhile (the source changed), the refusal is told otherwise.
-      if (adding !== mine) app.toast(`Création impossible : ${e}`, 'error');
+      if (adding !== mine) app.toast(t('editor.toast.createFailed', { error: String(e) }), 'error');
       return String(e);
     } finally {
       busy = false;
@@ -279,18 +280,19 @@
     await refresh(pid, src, false);
     if (!alive || pid !== project.id || src !== source) return null;
     // As the disk names it: `SRC/x.ts` typed is the `src/x.ts` the tree shows on Windows and macOS, not a second tab.
-    const t = trees.get(pid, src);
-    const fresh = t && t !== before && !t.truncated ? t : null;
+    const after = trees.get(pid, src);
+    const fresh = after && after !== before && !after.truncated ? after : null;
     const lower = path.toLowerCase();
-    const real = t?.files.includes(path) ? path : (t?.files.find((f) => f.toLowerCase() === lower) ?? path);
+    const real = after?.files.includes(path) ? path : (after?.files.find((f) => f.toLowerCase() === lower) ?? path);
     lastDir = { source: src, dir: parentOf(real) };
     // Line 1 asked for: the cursor goes in the file, to type in it right away.
     await app.openEditor({ projectId: pid, source: src, path: real, line: 1 });
-    if (fresh && !fresh.files.includes(real)) app.toast(`${basename(real)} est ignoré par git : l’arborescence ne le montre pas.`);
+    if (fresh && !fresh.files.includes(real)) app.toast(t('editor.toast.ignoredByGit', { name: basename(real) }));
     return null;
   }
 
-  const copy = (text: string) => navigator.clipboard.writeText(text).catch((e) => app.toast(`Copie impossible : ${e}`, 'error'));
+  const copy = (text: string) =>
+    navigator.clipboard.writeText(text).catch((e) => app.toast(t('editor.toast.copyFailed', { error: String(e) }), 'error'));
 
   /** A terminal in the folder `dir` of the source shown ('' for its root, named after the agent or the project). */
   function terminalHere(dir: string) {
@@ -313,7 +315,7 @@
     if (problem || !name.trim()) return problem;
     // A tab whose file is gone from the disk can hold changes at the new path: they would be taken over.
     const left = buffers.inTheWay(project.id, r.source, r.path, newFilePath(parentOf(r.path), name));
-    return left ? `« ${basename(left.path)} » est ouvert avec des modifications non enregistrées.` : null;
+    return left ? t('editor.rename.openUnsaved', { name: basename(left.path) }) : null;
   }
 
   /** Renames the file or folder of the field `mine` to `name`, its tabs following; what refused it, for the field to show. */
@@ -330,7 +332,7 @@
     try {
       await api.fsRename(pid, sourceAgent(src), mine.path, to);
     } catch (e) {
-      if (renaming !== mine) app.toast(`Renommage impossible : ${e}`, 'error');
+      if (renaming !== mine) app.toast(t('editor.toast.renameFailed', { error: String(e) }), 'error');
       return String(e);
     } finally {
       busy = false;
@@ -342,7 +344,7 @@
     try {
       app.renameEditorPath(pid, src, mine.path, real);
     } catch (e) {
-      app.toast(`Les onglets restent à l’ancien nom : ${(e as Error).message}`, 'error');
+      app.toast(t('editor.toast.tabsKeepOldName', { error: (e as Error).message }), 'error');
     }
     if (current(pid, src)) {
       madeDirs = madeDirs.map((d) => movedPath(d, mine.path, real) ?? d);
@@ -354,11 +356,11 @@
     if (!current(pid, src)) return null;
     fileTree?.focusPath(mine.kind, real);
     // What git makes of the new name, as a file created is told: out of the tree, or no longer kept out of a commit.
-    const t = trees.get(pid, src);
-    const fresh = mine.kind === 'file' && t && t !== before && !t.truncated ? t : null;
-    if (fresh && !fresh.files.includes(real)) app.toast(`${basename(real)} est ignoré par git : l’arborescence ne le montre pas.`);
+    const after = trees.get(pid, src);
+    const fresh = mine.kind === 'file' && after && after !== before && !after.truncated ? after : null;
+    if (fresh && !fresh.files.includes(real)) app.toast(t('editor.toast.ignoredByGit', { name: basename(real) }));
     else if (fresh && before?.ignored?.includes(mine.path) && !fresh.ignored?.includes(real))
-      app.toast(`${basename(real)} n’est plus ignoré par git : il peut être commité.`);
+      app.toast(t('editor.toast.noLongerIgnored', { name: basename(real) }));
     return null;
   }
 
@@ -389,11 +391,11 @@
     const next = () => askToSave(pid, src, rest, then, discarded);
     app.modal = {
       kind: 'confirm',
-      title: `Enregistrer « ${basename(path)} » ?`,
-      body: 'Ses modifications seront perdues si tu ne les enregistres pas.',
-      confirm: 'Enregistrer',
+      title: t('editor.save.title', { name: basename(path) }),
+      body: t('editor.save.body'),
+      confirm: t('common.save'),
       alt: {
-        label: 'Ne pas enregistrer',
+        label: t('editor.save.dontSave'),
         onClick: () => {
           const b = buffers.all[key];
           if (b) discarded.set(key, b.text);
@@ -422,24 +424,22 @@
     const n = (tree?.files ?? []).filter(gone).length;
     const body =
       kind === 'file'
-        ? 'Il part dans la corbeille.'
-        : n > 1
-          ? `Le dossier et ses ${n} fichiers partent dans la corbeille.`
-          : n
-            ? 'Le dossier et son fichier partent dans la corbeille.'
-            : 'Le dossier part dans la corbeille.';
+        ? t('editor.remove.bodyFile')
+        : n
+          ? t('editor.remove.bodyFolderFiles', { count: n, n: fInt(n) })
+          : t('editor.remove.bodyFolderEmpty');
     askToSave(pid, src, unsaved, (discarded) => {
       app.modal = {
         kind: 'confirm',
-        title: `Supprimer « ${basename(r.path)} » ?`,
+        title: t('editor.remove.title', { name: basename(r.path) }),
         body,
-        confirm: 'Supprimer',
+        confirm: t('common.delete'),
         danger: true,
         onConfirm: async () => {
           try {
             await api.fsDelete(pid, sourceAgent(src), r.path);
           } catch (e) {
-            app.toast(`Suppression impossible : ${e}`, 'error');
+            app.toast(t('editor.toast.deleteFailed', { error: String(e) }), 'error');
             return;
           }
           // The dialog can be closed while the trash works: a file typed in meanwhile keeps its tab and its text.
@@ -461,24 +461,24 @@
   function treeMenu(e: MouseEvent, r: TreeRow | null) {
     const dir = !r ? '' : r.kind === 'dir' ? r.path : parentOf(r.path);
     const items: MenuItem[] = [
-      { label: 'Nouveau fichier…', onClick: () => startNew(dir) },
-      { label: 'Nouveau dossier…', onClick: () => startNew(dir, 'dir') },
-      { label: 'Ouvrir un terminal ici', onClick: () => terminalHere(dir) },
+      { label: t('editor.menu.newFile'), onClick: () => startNew(dir) },
+      { label: t('editor.menu.newFolder'), onClick: () => startNew(dir, 'dir') },
+      { label: t('editor.menu.openTerminal'), onClick: () => terminalHere(dir) },
     ];
     // The root of the source is neither renamed nor deleted.
     if (r) {
       items.push(
         { label: '', separator: true },
-        { label: 'Renommer…', hint: 'F2', onClick: () => startRename(r) },
-        { label: 'Supprimer', hint: IS_MAC ? '⌘⌫' : 'Suppr', danger: true, onClick: () => remove(r) },
+        { label: t('editor.menu.rename'), hint: 'F2', onClick: () => startRename(r) },
+        { label: t('common.delete'), hint: IS_MAC ? '⌘⌫' : t('editor.menu.deleteKey'), danger: true, onClick: () => remove(r) },
       );
     }
     const root = tree?.root;
     if (r && root) {
       items.push(
         { label: '', separator: true },
-        { label: 'Copier le chemin', onClick: () => copy(joinPath(root, r.path)) },
-        { label: 'Copier le chemin relatif', onClick: () => copy(r.path) },
+        { label: t('common.copyPath'), onClick: () => copy(joinPath(root, r.path)) },
+        { label: t('editor.menu.copyRelativePath'), onClick: () => copy(r.path) },
       );
     }
     menu.show(e, items);
@@ -496,15 +496,28 @@
     })),
   );
 
-  const diffLabel = $derived.by(() => {
+  /** What the file differs by from its reference version; `same` when it does not differ (nothing to flag). */
+  const diff = $derived.by((): { label: string; same: boolean } => {
     const base = buf?.base;
-    if (!buf || buf.kind !== 'text' || !base) return '';
-    if (base.text === null) return `Nouveau fichier · absent de ${base.reference}`;
-    if (changesKey !== buf.key) return '';
+    if (!buf || buf.kind !== 'text' || !base) return { label: '', same: false };
+    if (base.text === null) return { label: t('editor.diff.newFile', { reference: base.reference }), same: false };
+    if (changesKey !== buf.key) return { label: '', same: false };
     return changes.count
-      ? `${plural(changes.count, 'ligne modifiée', 'lignes modifiées')} vs ${base.reference}`
-      : `Identique à ${base.reference}`;
+      ? { label: t('editor.diff.changedLines', { count: changes.count, n: fInt(changes.count), reference: base.reference }), same: false }
+      : { label: t('editor.diff.same', { reference: base.reference }), same: true };
   });
+  /** The tree's count of files and of changes, as one line. */
+  const summary = $derived(
+    tree
+      ? [
+          t('editor.count.files', { count: tree.files.length, n: fInt(tree.files.length) }),
+          t('editor.count.changes', { count: changedCount, n: fInt(changedCount) }),
+          tree.truncated ? t('editor.count.listTruncated') : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : '',
+  );
 
   /** The changes against the reference version shown in the text (« Voir les changements »), for each file that has one. */
   let changesShown = $state(false);
@@ -520,7 +533,6 @@
         : null,
   );
 
-  const NEWER_ON_DISK = 'Le fichier a encore changé sur le disque : la comparaison montre sa nouvelle version.';
   /**
    * The file (its buffer's id, which a rename keeps) whose « Garder ma version » waits a second, a newer version having
    * just taken the place of the one compared on screen: a click aimed at the one shown before is not taken.
@@ -542,11 +554,7 @@
       if (hash) seenOnDisk.set(id, hash);
       else seenOnDisk.delete(id);
       if (!replaced || !before || before === hash) return;
-      app.toast(
-        replaced === 'save'
-          ? 'Le fichier a encore changé sur le disque : rien n’est enregistré, la comparaison montre sa nouvelle version.'
-          : NEWER_ON_DISK,
-      );
+      app.toast(replaced === 'save' ? t('editor.toast.newerOnDiskUnsaved') : t('editor.banner.newerOnDisk'));
       hold(id);
     });
   });
@@ -592,8 +600,8 @@
     picking = null;
     if (found.length === 1) jump(found[0], from);
     else if (found.length) picking = { targets: found, from, label: spot.label, at: spot.rect };
-    else if (targets.length) app.toast(`Fichier introuvable : ${targets[0].path}`);
-    else app.toast(`Aucune définition trouvée pour « ${spot.label} ».`);
+    else if (targets.length) app.toast(t('editor.toast.fileNotFound', { path: targets[0].path }));
+    else app.toast(t('editor.toast.noDefinition', { name: spot.label }));
   }
 
   /** The place picked from the list: a jump from where the identifier was followed. */
@@ -652,8 +660,6 @@
     showSearch();
   }
 
-  const sizeMb = (n: number) => (n / (1024 * 1024)).toLocaleString('fr-FR', { maximumFractionDigits: 1 });
-
   function closeTab(path: string) {
     // The source now: the prompt may stay up while the view moves to another one.
     const src = source;
@@ -679,23 +685,23 @@
     try {
       kept = await buffers.keepMine(key);
     } catch (e) {
-      app.toast(`Enregistrement impossible : ${e}`, 'error');
+      app.toast(t('editor.toast.saveFailed', { error: String(e) }), 'error');
       return;
     }
     if (kept) return;
     const now = buffers.all[key];
     // Refused, then found back at the version first read: the banner goes with nothing saved (what was typed is
     // still there: not a save of a click before it that landed meanwhile).
-    if (now?.disk === 'ok' && buffers.isDirty(now))
-      app.toast('Rien n’a été enregistré : le fichier est revenu à la version que tu avais ouverte.');
+    if (now?.disk === 'ok' && buffers.isDirty(now)) app.toast(t('editor.toast.nothingSaved'));
     // Refused for a version written since the banner came up (a comparison shows it its own way): the banner stays,
     // and a click aimed at it before it was about that version is not taken.
     else if (!compared && now?.disk === 'changed' && now.diskHash !== seen) {
-      app.toast('Le fichier a encore changé sur le disque : rien n’est enregistré, tes modifications sont toujours là.');
+      app.toast(t('editor.toast.changedAgainKept'));
       hold(now.id);
     }
   }
-  const compareDisk = (key: string) => buffers.compare(key).catch((e) => app.toast(`Comparaison impossible : ${e}`, 'error'));
+  const compareDisk = (key: string) =>
+    buffers.compare(key).catch((e) => app.toast(t('editor.toast.compareFailed', { error: String(e) }), 'error'));
   // A deleted file without changes can only be written by creating it again, as its banner offers.
   const save = () => (buf && !dirty && buf.disk === 'deleted' ? keep(buf.key) : saveActive());
   const reload = (key: string) => buffers.reload(key).catch((e) => app.toast(String(e), 'error'));
@@ -703,7 +709,7 @@
 
 <main class="editor">
   <header class="head">
-    <button class="back" onclick={() => app.closeEditor(project.id)}>← Conversation</button>
+    <button class="back" onclick={() => app.closeEditor(project.id)}>{t('editor.head.back')}</button>
     <span class="sep"></span>
     <SourcePicker
       {project}
@@ -714,10 +720,10 @@
     />
     <div style="flex:1"></div>
     {#if buf?.kind === 'text'}
-      <span class="hint mono" class:dirty>{dirty ? `● Non enregistré · ${keyLabel('Ctrl+S')}` : 'Enregistré'}</span>
+      <span class="hint mono" class:dirty>{dirty ? t('editor.head.unsaved', { key: keyLabel('Ctrl+S') }) : t('editor.head.saved')}</span>
     {/if}
     <button class="btn" class:primary={dirty} disabled={buf?.kind !== 'text' || (!dirty && buf.disk === 'ok')} onclick={save}
-      >Enregistrer</button
+      >{t('common.save')}</button
     >
   </header>
   <div class="body" use:observeWidth={(w) => (area = w)}>
@@ -725,12 +731,12 @@
          sidebar's class: one locator must not find both. -->
     <aside class="editor-side" style:width="{treeShown}px">
       <div class="views">
-        <div class="segmented" role="group" aria-label="Vue de la colonne">
+        <div class="segmented" role="group" aria-label={t('editor.side.viewLabel')}>
           <button
             class:on={!search.shown}
             aria-pressed={!search.shown}
-            aria-label="Fichiers"
-            title="Fichiers"
+            aria-label={t('common.files')}
+            title={t('common.files')}
             onclick={() => (search.shown = false)}
           >
             <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"
@@ -740,8 +746,8 @@
           <button
             class:on={search.shown}
             aria-pressed={search.shown}
-            aria-label="Rechercher dans les fichiers"
-            title={`Rechercher dans les fichiers (${keyLabel('Ctrl+Maj+F')})`}
+            aria-label={t('editor.side.searchFiles')}
+            title={t('editor.side.searchFilesKey', { key: keyLabel('Ctrl+Shift+F') })}
             onclick={showSearch}
           >
             <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"
@@ -753,26 +759,48 @@
       <div class="view" hidden={search.shown}>
         <div class="ftitle">
           <div class="row">
-            <span class="label">Fichiers</span>
+            <span class="label">{t('common.files')}</span>
             <div class="actions">
-              <button class="act" aria-label="Nouveau fichier" title="Nouveau fichier" disabled={!tree} onclick={() => newHere('file')}>
+              <button
+                class="act"
+                aria-label={t('editor.side.newFile')}
+                title={t('editor.side.newFile')}
+                disabled={!tree}
+                onclick={() => newHere('file')}
+              >
                 <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"
                   ><path
                     d="M8.5 2H4.5A1.5 1.5 0 0 0 3 3.5v9A1.5 1.5 0 0 0 4.5 14H8M8.5 2 13 6.5M8.5 2v4.5H13M13 6.5V9M12 10.5v4M10 12.5h4"
                   /></svg
                 >
               </button>
-              <button class="act" aria-label="Nouveau dossier" title="Nouveau dossier" disabled={!tree} onclick={() => newHere('dir')}>
+              <button
+                class="act"
+                aria-label={t('editor.side.newFolder')}
+                title={t('editor.side.newFolder')}
+                disabled={!tree}
+                onclick={() => newHere('dir')}
+              >
                 <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"
                   ><path
                     d="M8 13H3.5A1.5 1.5 0 0 1 2 11.5v-7A1.5 1.5 0 0 1 3.5 3h2.6l1.5 1.5h4.9A1.5 1.5 0 0 1 14 6v2.5M12 10.5v4M10 12.5h4"
                   /></svg
                 >
               </button>
-              <button class="act" aria-label="Actualiser" title="Actualiser" onclick={() => refresh(project.id, source, false)}>
+              <button
+                class="act"
+                aria-label={t('common.refresh')}
+                title={t('common.refresh')}
+                onclick={() => refresh(project.id, source, false)}
+              >
                 <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5V5h-2.5" /></svg>
               </button>
-              <button class="act" aria-label="Tout réduire" title="Tout réduire" onclick={() => app.collapseEditorDirs(project.id, source)}>
+              <button
+                class="act"
+                aria-label={t('common.collapseAll')}
+                title={t('common.collapseAll')}
+                onclick={() => app.collapseEditorDirs(project.id, source)}
+              >
                 <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"
                   ><rect x="5.5" y="5.5" width="8" height="8" rx="1" /><path d="M3 10.5V3.8a.8.8 0 0 1 .8-.8h6.7M7.5 9.5h4" /></svg
                 >
@@ -785,9 +813,7 @@
               : tildify(project.path)}</span
           >
           {#if tree}
-            <span class="mono dim count"
-              >{plural(tree.files.length, 'fichier', 'fichiers')} · {changedCount} modif.{tree.truncated ? ' · liste tronquée' : ''}</span
-            >
+            <span class="mono dim count">{summary}</span>
           {/if}
         </div>
         <div class="scroll">
@@ -826,50 +852,54 @@
       min={TREE_MIN}
       max={treeLimit}
       reset={TREE_DEFAULT}
-      label="Largeur de la colonne des fichiers"
+      label={t('editor.side.widthLabel')}
       onresize={(w) => (treeWidth = w)}
       oncommit={writeTreeWidth}
     />
     <section class="pane">
       <EditorTabs {tabs} onselect={(p) => app.openEditor({ projectId: project.id, source, path: p })} onclose={closeTab} />
       {#if !activePath}
-        <div class="empty">Sélectionne un fichier dans l’arborescence.</div>
+        <div class="empty">{t('editor.empty.selectFile')}</div>
       {:else}
         <div class="crumbs mono">
           <span class="path">{activePath.split('/').join('  /  ')}</span>
           <div style="flex:1"></div>
-          <span class:add={!!diffLabel && !diffLabel.startsWith('Identique')}>{diffLabel}</span>
+          <span class:add={!!diff.label && !diff.same}>{diff.label}</span>
           <!-- The comparison with the disk takes the text while it lasts: its banner tells what is shown. -->
           {#if reference !== null && !onDisk}
             <!-- A toggle keeps its name, `aria-pressed` and its look say whether it is on. -->
-            <button class="changes" aria-pressed={changesShown} onclick={() => (changesShown = !changesShown)}>Voir les changements</button>
+            <button class="changes" aria-pressed={changesShown} onclick={() => (changesShown = !changesShown)}
+              >{t('editor.diff.show')}</button
+            >
           {/if}
         </div>
         {#if buf?.disk === 'changed'}
           <div class="banner" role="alert">
-            {onDisk ? (onDisk.replaced ? NEWER_ON_DISK : 'Comparaison avec la version du disque.') : 'Ce fichier a changé sur le disque.'}
-            <button class="btn small" onclick={() => reload(buf.key)}>Recharger</button>
+            {onDisk ? (onDisk.replaced ? t('editor.banner.newerOnDisk') : t('editor.banner.comparing')) : t('editor.banner.changed')}
+            <button class="btn small" onclick={() => reload(buf.key)}>{t('editor.banner.reload')}</button>
             {#if !onDisk}
-              <button class="btn small" onclick={() => compareDisk(buf.key)}>Comparer</button>
+              <button class="btn small" onclick={() => compareDisk(buf.key)}>{t('editor.banner.compare')}</button>
             {/if}
             <!-- Held back, not disabled: a disabled button would lose the focus it has. -->
-            <button class="btn small" aria-disabled={settling === buf.id} onclick={() => keep(buf.key)}>Garder ma version</button>
+            <button class="btn small" aria-disabled={settling === buf.id} onclick={() => keep(buf.key)}
+              >{t('editor.banner.keepMine')}</button
+            >
           </div>
         {:else if buf?.disk === 'deleted'}
           <div class="banner" role="alert">
-            Ce fichier a été supprimé.
-            <button class="btn small" onclick={() => closeTab(buf.path)}>Fermer</button>
-            <button class="btn small" onclick={() => keep(buf.key)}>Le recréer en enregistrant</button>
+            {t('editor.banner.deleted')}
+            <button class="btn small" onclick={() => closeTab(buf.path)}>{t('common.close')}</button>
+            <button class="btn small" onclick={() => keep(buf.key)}>{t('editor.banner.recreate')}</button>
           </div>
         {/if}
         {#if !buf}
           <div class="empty"></div>
         {:else if buf.kind === 'binary'}
-          <div class="empty">Fichier binaire : pas d’aperçu.</div>
+          <div class="empty">{t('editor.empty.binary')}</div>
         {:else if buf.kind === 'tooLarge'}
-          <div class="empty">Fichier trop volumineux pour l’éditeur ({sizeMb(buf.size)} Mo).</div>
+          <div class="empty">{t('editor.empty.tooLarge', { size: fBytes(buf.size, 1) })}</div>
         {:else if buf.kind === 'missing'}
-          <div class="empty">Ce fichier n’existe pas (ou plus).</div>
+          <div class="empty">{t('editor.empty.missing')}</div>
         {:else if buf.kind === 'error'}
           <div class="empty">{buf.error}</div>
         {:else}
@@ -888,7 +918,7 @@
             onchange={(t) => buffers.edit(buf.key, t)}
             oncursor={(c) => (cursor = c)}
             ontargets={follow}
-            onnaverror={(e) => alive && app.toast(`Navigation impossible : ${e}`, 'error')}
+            onnaverror={(e) => alive && app.toast(t('editor.toast.navigateFailed', { error: String(e) }), 'error')}
             onback={() => travel(true)}
             onforward={() => travel(false)}
             onreferences={references}
@@ -897,13 +927,17 @@
             <TargetPicker targets={picking.targets} label={picking.label} at={picking.at} onpick={pick} onclose={() => (picking = null)} />
           {/if}
           <div class="status mono">
-            <span>Ln {cursor.line}, Col {cursor.col}</span>
+            <span>{t('editor.status.position', { line: cursor.line, col: cursor.col })}</span>
             <span>{languageLabel(activePath)}</span>
             <span>UTF-8</span>
             <span>{buf.eol === 'crlf' ? 'CRLF' : 'LF'}</span>
-            <span>{indent.tabs ? 'Tabulations' : `Espaces : ${indent.size}`}</span>
+            <span>{indent.tabs ? t('editor.status.tabs') : t('editor.status.spaces', { size: indent.size })}</span>
             <div style="flex:1"></div>
-            <span>{srcAgent ? `worktree · ${srcAgent.name}` : `branche · ${app.git[project.id]?.branch || 'projet'}`}</span>
+            <span
+              >{srcAgent
+                ? t('editor.source.worktree', { name: srcAgent.name })
+                : t('editor.source.branch', { name: app.git[project.id]?.branch || t('editor.source.noBranch') })}</span
+            >
           </div>
         {/if}
       {/if}

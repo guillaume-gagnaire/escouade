@@ -5,6 +5,102 @@ export default {
   /** What a refused action says in a toast. */
   toast: {
     saveFailed: 'Enregistrement impossible : {error}',
+    createFailed: 'Création impossible : {error}',
+    copyFailed: 'Copie impossible : {error}',
+    renameFailed: 'Renommage impossible : {error}',
+    deleteFailed: 'Suppression impossible : {error}',
+    compareFailed: 'Comparaison impossible : {error}',
+    navigateFailed: 'Navigation impossible : {error}',
+    tabsKeepOldName: 'Les onglets restent à l’ancien nom : {error}',
+    ignoredByGit: '{name} est ignoré par git : l’arborescence ne le montre pas.',
+    noLongerIgnored: '{name} n’est plus ignoré par git : il peut être commité.',
+    fileNotFound: 'Fichier introuvable : {path}',
+    noDefinition: 'Aucune définition trouvée pour « {name} ».',
+    newerOnDiskUnsaved: 'Le fichier a encore changé sur le disque : rien n’est enregistré, la comparaison montre sa nouvelle version.',
+    nothingSaved: 'Rien n’a été enregistré : le fichier est revenu à la version que tu avais ouverte.',
+    changedAgainKept: 'Le fichier a encore changé sur le disque : rien n’est enregistré, tes modifications sont toujours là.',
+  },
+
+  /** The bar above the editor. */
+  head: {
+    back: '← Conversation',
+    unsaved: '● Non enregistré · {key}',
+    saved: 'Enregistré',
+  },
+
+  /** The left column: the files and the search. */
+  side: {
+    viewLabel: 'Vue de la colonne',
+    searchFiles: 'Rechercher dans les fichiers',
+    searchFilesKey: 'Rechercher dans les fichiers ({key})',
+    newFile: 'Nouveau fichier',
+    newFolder: 'Nouveau dossier',
+    widthLabel: 'Largeur de la colonne des fichiers',
+  },
+
+  /** The right-click menu of the tree. */
+  menu: {
+    newFile: 'Nouveau fichier…',
+    newFolder: 'Nouveau dossier…',
+    openTerminal: 'Ouvrir un terminal ici',
+    rename: 'Renommer…',
+    /** The Delete key, as written on the keyboard (shown in the menu). */
+    deleteKey: 'Suppr',
+    copyRelativePath: 'Copier le chemin relatif',
+  },
+
+  /** The line above the text: how the file differs from its reference version (`reference`: « main », « HEAD »…). */
+  diff: {
+    newFile: 'Nouveau fichier · absent de {reference}',
+    changedLines: { one: '{n} ligne modifiée vs {reference}', other: '{n} lignes modifiées vs {reference}' },
+    same: 'Identique à {reference}',
+    show: 'Voir les changements',
+  },
+
+  /** The banner when the file changed on the disk or was deleted. */
+  banner: {
+    newerOnDisk: 'Le fichier a encore changé sur le disque : la comparaison montre sa nouvelle version.',
+    comparing: 'Comparaison avec la version du disque.',
+    changed: 'Ce fichier a changé sur le disque.',
+    reload: 'Recharger',
+    compare: 'Comparer',
+    keepMine: 'Garder ma version',
+    deleted: 'Ce fichier a été supprimé.',
+    recreate: 'Le recréer en enregistrant',
+  },
+
+  /** What is asked before a tab with unsaved changes closes. */
+  save: {
+    title: 'Enregistrer « {name} » ?',
+    body: 'Ses modifications seront perdues si tu ne les enregistres pas.',
+    dontSave: 'Ne pas enregistrer',
+  },
+
+  /** What is asked before a file or a folder of the tree goes to the trash. */
+  remove: {
+    title: 'Supprimer « {name} » ?',
+    bodyFile: 'Il part dans la corbeille.',
+    /** `n`: the files the folder holds. */
+    bodyFolderFiles: {
+      one: 'Le dossier et son fichier partent dans la corbeille.',
+      other: 'Le dossier et ses {n} fichiers partent dans la corbeille.',
+    },
+    bodyFolderEmpty: 'Le dossier part dans la corbeille.',
+  },
+
+  /** What the pane says in place of the text. */
+  empty: {
+    selectFile: 'Sélectionne un fichier dans l’arborescence.',
+    binary: 'Fichier binaire : pas d’aperçu.',
+    tooLarge: 'Fichier trop volumineux pour l’éditeur ({size}).',
+    missing: 'Ce fichier n’existe pas (ou plus).',
+  },
+
+  /** The status bar under the text (the encoding and the end of lines are written the same in every language). */
+  status: {
+    position: 'Ln {line}, Col {col}',
+    tabs: 'Tabulations',
+    spaces: 'Espaces : {size}',
   },
 
   tabs: {

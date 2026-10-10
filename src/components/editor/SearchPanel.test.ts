@@ -207,7 +207,10 @@ describe('SearchPanel', () => {
 describe('SearchPanel in English', () => {
   it('titles the panel and the options, counts the results and names the rows in English', async () => {
     setLang('en');
-    const search = new FileSearch(vi.fn(async () => FOUND), 0);
+    const search = new FileSearch(
+      vi.fn(async () => FOUND),
+      0,
+    );
     search.text = 'total';
     search.result = FOUND;
     render(SearchPanel, { search, onopen: vi.fn() });
