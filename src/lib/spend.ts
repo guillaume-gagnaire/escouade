@@ -1,7 +1,7 @@
 // What an agent has used, including its running turn: the CLI reports a turn's exact cost only
 // when it ends, until then the backend estimates it from list prices.
 
-import { fUsd } from './format';
+import { fInt, fUsd } from './format';
 import type { Agent } from './types';
 
 export interface Spent {
@@ -21,3 +21,19 @@ export function fSpentUsd(s: { cost: number; estimated: boolean }): string {
 }
 
 export const ESTIMATE_HINT = 'Estimation (tarifs publics) pendant que Claude travaille ; coût exact à la fin du tour';
+
+export interface ContextUse {
+  /** Percent of the model's window. */
+  pct: number;
+  title: string;
+  /** Nearly full: Claude Code compacts it soon. */
+  full: boolean;
+}
+
+/** How full an agent's context is, out of the window of its conversation's model: null until a turn told the window. */
+export function contextUse(a: Pick<Agent, 'contextTokens' | 'contextWindow'>): ContextUse | null {
+  const size = a.contextWindow;
+  if (!size) return null;
+  const pct = Math.round((a.contextTokens / size) * 100);
+  return { pct, title: `Contexte : ${pct} % de la fenêtre du modèle (${fInt(a.contextTokens)} tokens sur ${fInt(size)})`, full: pct >= 80 };
+}

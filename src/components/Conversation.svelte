@@ -4,9 +4,9 @@
   import { api } from '../lib/ipc';
   import { conversationOf, type ReadingPlace } from '../lib/conversations.svelte';
   import { splitEscouade } from '../lib/escouade';
-  import { fDur, fInt, fTok } from '../lib/format';
+  import { fDur, fTok } from '../lib/format';
   import { modelLabel } from '../lib/models';
-  import { ESTIMATE_HINT, fSpentUsd, spent } from '../lib/spend';
+  import { contextUse, ESTIMATE_HINT, fSpentUsd, spent } from '../lib/spend';
   import { injectedSource, parseAgentMessage, subagentLabels } from '../lib/events';
   import { editsByTurn } from '../lib/tools';
   import { app } from '../lib/state.svelte';
@@ -75,14 +75,10 @@
   const context = $derived.by(() => {
     const used = agent.contextTokens;
     const size = agent.contextWindow;
-    if (!size) return { shown: used ? fTok(used) : '—', title: 'Contexte actuel', full: false };
-    const pct = Math.round((used / size) * 100);
+    const use = contextUse(agent);
+    if (!use) return { shown: used ? fTok(used) : '—', title: 'Contexte actuel', full: false };
     const window = size >= 1e6 ? `${size / 1e6} M` : `${Math.round(size / 1e3)} k`;
-    return {
-      shown: `${fTok(used)} / ${window}`,
-      title: `Contexte : ${pct} % de la fenêtre du modèle (${fInt(used)} tokens sur ${fInt(size)})`,
-      full: pct >= 80,
-    };
+    return { shown: `${fTok(used)} / ${window}`, title: use.title, full: use.full };
   });
   // The editor shows the agent's own checkout: its worktree, else the project's.
   const editorSource = $derived(agent.worktree ? agent.id : 'project');
