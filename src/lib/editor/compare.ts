@@ -4,7 +4,7 @@
 import { Change, diff, unifiedMergeView } from '@codemirror/merge';
 import { Compartment, EditorState, Facet, type Extension, type TransactionSpec } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
-import { lineTokens } from './changes';
+import { DIFF_TIMEOUT, lineTokens } from './changes';
 
 /** What the text is compared with: the reference version (HEAD, or where a worktree's branch left its base), or the file on disk. */
 export type CompareWith = 'reference' | 'disk';
@@ -53,8 +53,11 @@ function starts(pieces: readonly string[]): number[] {
   return at;
 }
 
-/** The merge view's own limit on the changes scanned: past it, a diff gives a cruder answer, at once. */
-const BOUNDED = { scanLimit: 500 };
+/**
+ * The merge view's own limit on the changes scanned, past which a diff gives a cruder answer at once, and the
+ * gutter's limit on the time it takes, a bound whatever the lines (the same few over and over give no anchor).
+ */
+const BOUNDED = { scanLimit: 500, timeout: DIFF_TIMEOUT };
 
 /** The diff of `a` and `b` within the limit, its changes moved to where the two strings start in a longer one. */
 function boundedDiff(a: string, b: string, fromA: number, fromB: number, out: Change[]) {
@@ -111,6 +114,26 @@ function lineRuns(a: string, b: string): Change[] {
 }
 
 /**
+ * The runs of lines only added (or only removed) moved down past the same lines that follow them, as far as the
+ * lines in common before the next run go: where a diff of the characters puts them. The line diff puts one at the
+ * start of the same lines instead; begun at an empty line on both sides (a blank line added next to another), it is
+ * taken by the merge view for the end of the line above and drawn as an empty block, with nothing to put back.
+ */
+function slideDown(runs: readonly Change[], a: string, b: string): Change[] {
+  return runs.map((r, n) => {
+    const endA = n + 1 < runs.length ? runs[n + 1].fromA : a.length;
+    const endB = n + 1 < runs.length ? runs[n + 1].fromB : b.length;
+    let { fromA, toA, fromB, toB } = r;
+    if (fromA === toA) {
+      while (toB < endB && fromA < endA && b[fromB] === b[toB]) [fromA, toA, fromB, toB] = [fromA + 1, toA + 1, fromB + 1, toB + 1];
+    } else if (fromB === toB) {
+      while (toA < endA && fromB < endB && a[fromA] === a[toA]) [fromA, toA, fromB, toB] = [fromA + 1, toA + 1, fromB + 1, toB + 1];
+    }
+    return new Change(fromA, toA, fromB, toB);
+  });
+}
+
+/**
  * The diff of the merge view: line by line, then character by character within each run of lines that differ. A
  * character diff of the whole text either gives up on a big file (one block from its first change to its last: a
  * lockfile's scattered changes) or, unbounded, takes its whole timeout at each key typed in a big block rewritten,
@@ -128,7 +151,7 @@ function blockDiff(a: string, b: string): readonly Change[] {
   }
   const atA = starts(linesA);
   const atB = starts(linesB);
-  for (const run of lineRuns(tokens[0], tokens[1])) {
+  for (const run of slideDown(lineRuns(tokens[0], tokens[1]), tokens[0], tokens[1])) {
     const fromA = atA[run.fromA];
     const fromB = atB[run.fromB];
     boundedDiff(a.slice(fromA, atA[run.toA]), b.slice(fromB, atB[run.toB]), fromA, fromB, out);

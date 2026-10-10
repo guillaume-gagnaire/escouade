@@ -1,6 +1,6 @@
 import { history, undo } from '@codemirror/commands';
-import { getChunks } from '@codemirror/merge';
-import { Compartment, EditorState } from '@codemirror/state';
+import { getChunks, rejectChunk } from '@codemirror/merge';
+import { Compartment, EditorState, type TransactionSpec } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { afterEach, describe, expect, it } from 'vitest';
 import { comparison, showComparison, type Comparison } from './compare';
@@ -26,6 +26,23 @@ function editor(doc: string, c: Comparison | null) {
 const removed = (view: EditorView) =>
   [...view.dom.querySelectorAll('.cm-deletedChunk')].map((c) => [...c.querySelectorAll('.cm-deletedLine')].map((l) => l.textContent));
 const buttons = (view: EditorView) => [...view.dom.querySelectorAll<HTMLButtonElement>('.cm-deletedChunk button')];
+
+/** The blocks with no line on either side: nothing drawn, and nothing for their button to put back. */
+const emptyBlocks = (state: EditorState) =>
+  (getChunks(state)?.chunks ?? []).filter((c) => c.fromA === c.toA && c.fromB === c.toB).map((c) => [c.fromA, c.fromB]);
+
+/** Numbers between 0 and 1, the same ones each run (mulberry32). */
+function seeded(seed: number) {
+  return () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const BRACES = ['function a() {', '  run();', '', '}', '', 'function b() {', '  go();', '}', ''].join('\n');
+const FENCE = ['# Titre', '', '```js', 'run();', '```', '', 'Fin.', ''].join('\n');
 
 const REFERENCE = 'a\nb\nc\nd\ne\nf\n';
 const TYPED = 'a\nB\nc\nd\ne\nF\n';
@@ -147,12 +164,62 @@ describe('comparison', () => {
       // Lines moved, and lines found more than once.
       ['a\nb\nc\nd\n', 'd\nc\nb\na\n'],
       ['x\nx\ny\nx\n', 'x\ny\nx\nx\nz\n'],
+      // A blank line added, or removed, next to another one: before a brace, around a Markdown code fence.
+      [BRACES.replace('\n\n}', '\n\n\n}'), BRACES],
+      [BRACES, BRACES.replace('\n\n}', '\n\n\n}')],
+      [FENCE.replace('\n\n```', '\n\n\n```'), FENCE],
+      [FENCE, FENCE.replace('```\n\n', '```\n\n\n')],
     ];
     for (const [doc, original] of pairs) {
       const { view } = editor(doc, { original, against: 'reference' });
+      expect(emptyBlocks(view.state), JSON.stringify([doc, original])).toEqual([]);
       for (let i = 0; i < 20 && buttons(view).length; i++) buttons(view)[0].click();
       expect(view.state.doc.toString(), JSON.stringify([doc, original])).toBe(original);
     }
+  });
+
+  it('puts the other version back block by block, a block never empty, for thousands of texts and of keys typed in them', () => {
+    const random = seeded(20261010);
+    const LINES = ['', '', '', '}', '{', '  run();', '  go();', '```', '# Titre', 'function a() {', 'x', 'y'];
+    const pick = () => LINES[Math.floor(random() * LINES.length)];
+    /** A few lines added, removed or replaced, and the last line break sometimes taken away or added. */
+    const edit = (lines: string[]) => {
+      const out = [...lines];
+      for (let n = 1 + Math.floor(random() * 3); n > 0; n--) {
+        const at = Math.floor(random() * (out.length + 1));
+        const what = random();
+        if (what < 0.4) out.splice(at, 0, pick());
+        else if (what < 0.7) out.splice(at, 1);
+        else out.splice(at, 1, pick());
+      }
+      return out;
+    };
+    const text = (lines: string[]) => lines.join('\n') + (random() < 0.8 ? '\n' : '');
+    const failures: string[] = [];
+    for (let n = 0; n < 3000; n++) {
+      const lines = Array.from({ length: Math.floor(random() * 25) }, pick);
+      const original = text(lines);
+      let state = EditorState.create({
+        doc: text(edit(lines)),
+        extensions: comparison(new Compartment(), { original, against: 'reference' }),
+      });
+      // Half of the time, a key typed: the merge view diffs again only around it.
+      if (random() < 0.5) {
+        const at = Math.floor(random() * (state.doc.length + 1));
+        state = state.update({
+          changes: random() < 0.5 ? { from: at, insert: random() < 0.5 ? '\n' : 'q' } : { from: Math.max(0, at - 1), to: at },
+        }).state;
+      }
+      const doc = state.doc.toString();
+      if (emptyBlocks(state).length) failures.push(`empty block: ${JSON.stringify([doc, original])}`);
+      // What « Annuler ce bloc » does, block after block.
+      const view = { state, dispatch: (spec: TransactionSpec) => (view.state = view.state.update(spec).state) };
+      for (let i = 0; i < 50 && getChunks(view.state)?.chunks.length; i++) {
+        rejectChunk(view as unknown as EditorView, getChunks(view.state)!.chunks[0].fromB);
+      }
+      if (view.state.doc.toString() !== original) failures.push(`not put back: ${JSON.stringify([doc, original])}`);
+    }
+    expect({ failures: failures.length, first: failures.slice(0, 3) }).toEqual({ failures: 0, first: [] });
   });
 
   it('compares a version with Windows line breaks line by line', () => {
