@@ -11,7 +11,7 @@ src/lib/i18n/
   pending/<lot>.txt   les fichiers que chaque lot doit encore extraire
 ```
 
-Une zone appartient à une seule tâche à la fois : `editor` (L3), `settings` (L4), `integrations` et `boardSettings` (L5), `board` et `stats` (L6), `nav` et `git` (L7), `conv` et `composer` (L8), `runs` et `shell` (L9), `errors` (L10), `accounts` (K), `mcp` (M), `branches` (G). `common` et `format` sont remplis (L1) et ne bougent plus : ce qui te manque va dans ta zone, même un mot déjà dans `common` avec un autre sens.
+Une zone appartient à une seule tâche à la fois : `editor` (L3), `settings` (L4 ; L2 y a déjà écrit `tabs.app` et `app`, l’onglet « Application »), `integrations` et `boardSettings` (L5), `board` et `stats` (L6), `nav` et `git` (L7), `conv` et `composer` (L8), `runs` et `shell` (L9), `errors` (L10), `accounts` (K), `mcp` (M), `branches` (G). `common` et `format` sont remplis (L1) et ne bougent plus : ce qui te manque va dans ta zone, même un mot déjà dans `common` avec un autre sens.
 
 ## Ajouter un texte
 
@@ -26,7 +26,7 @@ Une zone appartient à une seule tâche à la fois : `editor` (L3), `settings` (
    ```
 
 2. Clés en camelCase, `zone.composant.sens` (`editor.tabs.closeOthers`) ; une phrase entière par clé, jamais deux morceaux recollés.
-3. Paramètres `{nom}` (lettres, chiffres, `_`). Les accolades ne servent qu’à ça (`catalogs.test` refuse une `{` seule) ; `{k}` est interdit (la clé de `Rich`) ; `one` et `other` sont réservés aux pluriels.
+3. Paramètres `{nom}` (lettres, chiffres, `_`). Les accolades ne servent qu’à ça (`catalogs.test` refuse une `{` seule) ; `{k}` est interdit (la clé de `Rich`) ; `one` et `other` sont réservés aux pluriels. Un nom de paramètre devient un nom de prop et d’extrait de `Rich` (`{#snippet nom()}`) : jamais un mot réservé de JavaScript (`class`, `new`, `default`, `for`, `in`…), écris `{className}`, `{target}`.
 4. Pluriel : une feuille `{ one, other }`, choisie par `Intl.PluralRules` sur `count`. En français, 0 et 1 sont au singulier : écris `{count}` dans le `one` français ; l’anglais peut l’omettre (« one file »). Les deux langues ont les mêmes paramètres (toutes formes confondues, `count` à part).
 5. L’anglais doit avoir exactement les mêmes clés et les mêmes `{paramètres}` : sinon `npm run check` échoue à la ligne fautive du fichier anglais (`placeholdersMustBe`, `notInFrenchCatalog`, `notAPluralForm`, `Property '…' is missing`).
 
@@ -89,6 +89,12 @@ Toujours `src/lib/format.ts`, jamais `toLocaleString('fr-FR')`, `> 1 ? 's' : ''`
 | `fList(items)` | a, b et c | a, b, and c |
 
 Un raccourci : `keyLabel('Ctrl+Shift+F')` (« Ctrl+Maj+F », « Ctrl+Shift+F », « ⇧⌘F » sous macOS) ; écris les touches en anglais (`Shift`, `Enter`, `Esc`).
+
+## La langue et les textes du backend
+
+- La langue vient du backend (réglages « Langue de l’interface » et « Langue des textes rédigés par Claude ») : au démarrage et à chaque changement, `state.svelte.ts` reçoit `LangInfo` (`app.lang`) et appelle `setLang`.
+- Une langue proposée au choix s’écrit dans elle-même (`LANG_NAMES` : « English », « Français ») ; ailleurs, elle se nomme dans la langue de l’interface (`settings.app.langName`).
+- Côté Rust, un texte s’écrit dans les deux langues à l’endroit où il sert : `tr!("Texte", "Text")`, `tr_claude!` pour ce que Claude écrit, `tr_in!(lang, …)` pour une langue donnée (`src-tauri/src/i18n.rs`).
 
 ## Tests
 

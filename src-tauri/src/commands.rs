@@ -53,6 +53,8 @@ pub struct InitialState {
     failed_update: Option<String>,
     /// What the step running of each worktree setup under way wrote, its last lines, by agent.
     setup_output: HashMap<String, SetupOutput>,
+    /// The languages of the interface, of the system and of the texts Claude writes.
+    lang: crate::i18n::LangInfo,
 }
 
 #[tauri::command]
@@ -80,7 +82,9 @@ pub fn subscribe(
     let autopilot_pause = core.autopilot_pause();
     let accounts = core.integration_accounts();
     let version = core.app.package_info().version.to_string();
+    let lang = core.lang();
     InitialState {
+        lang,
         projects,
         tickets,
         agents,

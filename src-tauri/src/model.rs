@@ -44,6 +44,12 @@ pub struct Settings {
     /// What the external ticket systems' links do (their accounts are kept apart, with their
     /// secrets: `integrations::Accounts`).
     pub integrations: IntegrationSettings,
+    /// "Langue de l'interface": "system" (French when the system is, English otherwise), "fr" or
+    /// "en" (`i18n::resolve`).
+    pub language: String,
+    /// "Langue des textes rédigés par Claude": "ui" (the interface's), "fr" or "en". Many teams
+    /// commit in English with an interface in French.
+    pub claude_language: String,
 }
 
 /// "Me prévenir pour": which kinds of event chime and show a system notification. A kind switched
@@ -169,6 +175,8 @@ impl Default for Settings {
             quota_pause: 100,
             auto_update: true,
             integrations: IntegrationSettings::default(),
+            language: "system".into(),
+            claude_language: "ui".into(),
         }
     }
 }
@@ -1038,6 +1046,11 @@ pub enum UiEvent {
     Toast {
         text: String,
     },
+    /// The settings changed the language of the interface or of the texts Claude writes: the
+    /// window switches to it at once.
+    Language {
+        lang: crate::i18n::LangInfo,
+    },
     /// Lines the step `step` (from 0) of the setup of an agent's worktree wrote since the window
     /// was last sent some (50 ms apart at most), its `total` lines so far counting them. A step
     /// starts with none: the window forgets the lines of the step before.
@@ -1101,6 +1114,30 @@ mod tests {
         assert!(!serde_json::to_string(&s).unwrap().contains("editorCommand"));
         // Saved before the TLS setting: certificates are checked.
         assert!(!s.insecure_tls);
+    }
+
+    #[test]
+    fn settings_saved_before_the_languages_follow_the_system_and_the_interface() {
+        let s: Settings = serde_json::from_value(json!({ "sound": false })).unwrap();
+        assert_eq!(
+            (s.language.as_str(), s.claude_language.as_str()),
+            ("system", "ui")
+        );
+        let d = Settings::default();
+        assert_eq!(
+            (d.language.as_str(), d.claude_language.as_str()),
+            ("system", "ui")
+        );
+        let v = serde_json::to_value(Settings {
+            language: "en".into(),
+            claude_language: "fr".into(),
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(
+            (&v["language"], &v["claudeLanguage"]),
+            (&json!("en"), &json!("fr"))
+        );
     }
 
     #[test]

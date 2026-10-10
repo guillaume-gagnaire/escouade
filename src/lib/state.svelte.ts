@@ -10,6 +10,7 @@ import { fileSearches } from './editor/search.svelte';
 import { ancestors, movedPath } from './editor/tree';
 import { trees } from './editor/trees.svelte';
 import { basename, isAbsPath, plural, relPath } from './format';
+import { setLang } from './i18n';
 import { readPref, writePref } from './prefs';
 import { testCommand } from './recipe';
 import type { SettingsTab } from './settings.svelte';
@@ -21,6 +22,7 @@ import type {
   AutopilotPause,
   FileTree,
   GitInfo,
+  LangInfo,
   LaunchState,
   ModelInfo,
   Project,
@@ -186,6 +188,8 @@ class AppState {
   /** The external ticket systems' accounts (their secrets stay in the backend). */
   accounts = $state<AccountView[]>([]);
   editor = $state<Record<string, EditorState>>({});
+  /** The languages as the backend resolved them from the settings (the system's is named in « Réglages »). */
+  lang = $state<LangInfo>({ ui: 'fr', system: 'fr', claude: 'fr' });
 
   project = $derived(this.projects.find((p) => p.id === this.ui.activeProject) ?? null);
   /** The board of the project on screen is shown. */
@@ -338,6 +342,8 @@ class AppState {
   async init() {
     this.early = [];
     const s = await api.subscribe((e) => (this.early ? this.early.push(e) : this.onEvent(e)));
+    // First: what is shown from here on is written in it.
+    if (s.lang) this.takeLang(s.lang);
     this.projects = s.projects;
     this.agents = Object.fromEntries(s.agents.map((a) => [a.id, a]));
     this.tickets = Object.fromEntries((s.tickets ?? []).map((t) => [t.id, t]));
@@ -378,6 +384,12 @@ class AppState {
     setInterval(() => (this.now = Date.now()), 1000);
     // The conversations out of sight leave the window's memory after a while, read again when shown.
     setInterval(() => releaseIdle(Date.now(), (id) => this.atWork(id)), 60_000);
+  }
+
+  /** The languages the backend resolved: the interface switches to its own at once, without reloading. */
+  private takeLang(lang: LangInfo) {
+    this.lang = lang;
+    setLang(lang.ui);
   }
 
   /**
@@ -431,6 +443,9 @@ class AppState {
         break;
       case 'toast':
         this.toast(e.text, 'info');
+        break;
+      case 'language':
+        this.takeLang(e.lang);
         break;
       case 'boardIssue':
         if (e.issue) this.boardIssues[e.projectId] = e.issue;

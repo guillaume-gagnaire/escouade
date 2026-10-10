@@ -1,11 +1,12 @@
 <script lang="ts" generics="T extends string | number">
-  // One choice among a few, each a chip.
+  // One choice among a few, each a chip; `lang`: the language a choice is written in, when not the interface's (a
+  // language named in itself), for screen readers.
   let {
     value = $bindable(),
     options,
     label,
     mono = false,
-  }: { value: T; options: { value: T; label: string; title?: string }[]; label: string; mono?: boolean } = $props();
+  }: { value: T; options: { value: T; label: string; title?: string; lang?: string }[]; label: string; mono?: boolean } = $props();
 </script>
 
 <div class="chips" role="group" aria-label={label}>
@@ -15,6 +16,7 @@
       class:mono
       class:on={value === o.value}
       aria-pressed={value === o.value}
+      lang={o.lang}
       title={o.title}
       onclick={() => (value = o.value)}>{o.label}</button
     >

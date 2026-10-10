@@ -6,6 +6,7 @@ import { navHistory } from './editor/history';
 import { recentFiles } from './editor/quick-open';
 import { fileSearches } from './editor/search.svelte';
 import { trees } from './editor/trees.svelte';
+import { locale } from './i18n';
 import { app } from './state.svelte';
 import type { InitialState, LaunchState, UiEvent } from './types';
 
@@ -57,6 +58,18 @@ describe('AppState', () => {
     expect(app.models).toEqual([{ value: 'sonnet', resolvedModel: 'claude-sonnet-5' }]);
     emit({ type: 'models', models: [{ value: 'sonnet', resolvedModel: 'claude-sonnet-5-5' }] });
     expect(app.models).toEqual([{ value: 'sonnet', resolvedModel: 'claude-sonnet-5-5' }]);
+  });
+
+  it('writes the interface in the language the backend says, from the start and as it changes', async () => {
+    const { emit } = await start({ lang: { ui: 'en', system: 'fr', claude: 'fr' } });
+    expect(locale.ui).toBe('en');
+    expect(document.documentElement.lang).toBe('en');
+    expect(app.lang).toEqual({ ui: 'en', system: 'fr', claude: 'fr' });
+    // Saved in the settings: the window follows at once, without reloading.
+    emit({ type: 'language', lang: { ui: 'fr', system: 'fr', claude: 'en' } });
+    expect(locale.ui).toBe('fr');
+    expect(document.documentElement.lang).toBe('fr');
+    expect(app.lang).toEqual({ ui: 'fr', system: 'fr', claude: 'en' });
   });
 
   it('keeps what the running Claude processes use', async () => {

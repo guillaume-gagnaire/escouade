@@ -1,5 +1,7 @@
 // Mirrors the Rust types in src-tauri/src/model.rs.
 
+import type { Lang } from './i18n/locale.svelte';
+
 export type AgentStatus = 'idle' | 'running' | 'waiting' | 'done' | 'error';
 
 export interface Settings {
@@ -28,6 +30,17 @@ export interface Settings {
   autoUpdate: boolean;
   /** What the external ticket systems' links do (their accounts are kept apart, with their secrets). */
   integrations: IntegrationSettings;
+  /** « Langue de l’interface »: the system's (French when it is, English otherwise), or a language of its own. */
+  language: 'system' | Lang;
+  /** « Langue des textes rédigés par Claude »: the interface's, or a language of its own. */
+  claudeLanguage: 'ui' | Lang;
+}
+
+/** The languages as the backend resolved them: the interface's, the system's, and that of the texts Claude writes. */
+export interface LangInfo {
+  ui: Lang;
+  system: Lang;
+  claude: Lang;
 }
 
 /**
@@ -803,6 +816,8 @@ export type UiEvent =
   /** Why no ticket of any board starts for now, or null once they may. */
   | { type: 'autopilotPause'; pause: AutopilotPause | null }
   | { type: 'toast'; text: string }
+  /** The settings changed a language: the window switches to it at once. */
+  | { type: 'language'; lang: LangInfo }
   /** Lines a step of the setup of an agent's worktree wrote since the last event, `total` counting all it wrote; a step starts with none. */
   | ({ type: 'setupOutput'; agentId: string } & SetupOutput);
 
@@ -841,6 +856,8 @@ export interface InitialState {
   failedUpdate?: string | null;
   /** What the step running of each worktree setup under way wrote, by agent. */
   setupOutput?: Record<string, SetupOutput>;
+  /** The languages of the interface, of the system and of the texts Claude writes. */
+  lang?: LangInfo;
 }
 
 /** An update installed: its version and its release notes (markdown). */

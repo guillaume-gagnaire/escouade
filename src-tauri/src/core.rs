@@ -8,9 +8,11 @@ use crate::convsearch;
 use crate::fsedit;
 use crate::git::{self, GitService};
 use crate::hub::Hub;
+use crate::i18n::{self, LangInfo};
 use crate::integrations;
 use crate::isola;
 use crate::job::JobUsage;
+use crate::menus;
 use crate::model::*;
 use crate::notify;
 use crate::paths::{self, DataDir};
@@ -362,6 +364,9 @@ pub struct Core<R: Runtime = Wry> {
     /// Notifications sent, as "<title> | <text>" (tests only).
     #[cfg(test)]
     pub alerts: Mutex<Vec<String>>,
+    /// The languages the native menus were written again in (tests only: they have none).
+    #[cfg(test)]
+    pub(crate) relabels: Mutex<Vec<i18n::Lang>>,
     /// Syncs of external tickets queued and not over yet (tests only).
     #[cfg(test)]
     pub(crate) syncs_queued: AtomicUsize,
@@ -713,6 +718,9 @@ impl<R: Runtime> Core<R> {
             log::error!("cannot create data dir: {e}");
         }
         let settings: Settings = read_json(&data.settings_file()).unwrap_or_default();
+        // First: what the backend writes from now on (the menus, its texts) is in these languages.
+        let lang = i18n::configure(&settings.language, &settings.claude_language);
+        log::info!("languages: {lang:?}");
         let state: PersistedState = read_json(&data.state_file()).unwrap_or_default();
         // Read before the agents are made: a turn does not survive a restart (they come back done).
         let cut_turns: Vec<String> = state
@@ -824,6 +832,8 @@ impl<R: Runtime> Core<R> {
             searches: convsearch::Searches::default(),
             #[cfg(test)]
             alerts: Mutex::default(),
+            #[cfg(test)]
+            relabels: Mutex::default(),
             #[cfg(test)]
             syncs_queued: AtomicUsize::new(0),
             #[cfg(test)]
@@ -984,7 +994,18 @@ impl<R: Runtime> Core<R> {
         let bytes = serde_json::to_vec_pretty(&s)?;
         paths::write_atomic(&self.data.settings_file(), &bytes)?;
         let auto_resume = s.auto_resume;
+        let before = self.lang();
         *self.settings.write() = s;
+        let lang = self.lang();
+        if lang != before {
+            // At once, without a restart: what the backend writes from now on, the native menus
+            // (when the interface's language is the one that changed), and the window.
+            i18n::set(lang);
+            if lang.ui != before.ui {
+                self.relabel_menus(lang.ui);
+            }
+            self.hub.emit(UiEvent::Language { lang });
+        }
         if !auto_resume {
             // Turned off: the resumes already planned go too.
             let dropped: Vec<AgentView> = self
@@ -1013,6 +1034,13 @@ impl<R: Runtime> Core<R> {
     }
 
     // ---------- lookups ----------
+
+    /// The languages its settings stand for, as the window is told them. The ones the backend
+    /// writes in (`i18n::ui()`) are these, except in tests: there they stay French.
+    pub fn lang(&self) -> LangInfo {
+        let s = self.settings.read();
+        i18n::resolve(&s.language, &s.claude_language)
+    }
 
     /// Itself, without keeping it alive (for a worker that lives as long as it does).
     pub(crate) fn weak(&self) -> std::sync::Weak<Self> {
@@ -1372,15 +1400,22 @@ impl<R: Runtime> Core<R> {
         if self.waiting.swap(n, Ordering::AcqRel) == n {
             return;
         }
-        if let Some(tray) = self.app.tray_by_id("main") {
+        if let Some(tray) = self.app.tray_by_id(menus::TRAY_ID) {
             let _ = tray.set_icon(notify::tray_icon(&self.app, n));
-            let tip = match n {
-                0 => "Escouade".to_string(),
-                1 => "Escouade — 1 agent en attente".to_string(),
-                n => format!("Escouade — {n} agents en attente"),
-            };
-            let _ = tray.set_tooltip(Some(tip));
+            let _ = tray.set_tooltip(Some(menus::tray_tooltip(i18n::ui(), n)));
         }
+    }
+
+    /// The native menus and the tray icon's tooltip in `lang`, after a change of language.
+    fn relabel_menus(&self, lang: i18n::Lang) {
+        // Before the first count (`start`), no agent is counted as waiting.
+        let waiting = match self.waiting.load(Ordering::Acquire) {
+            usize::MAX => 0,
+            n => n,
+        };
+        #[cfg(test)]
+        self.relabels.lock().push(lang);
+        menus::relabel(&self.app, lang, waiting);
     }
 
     // ---------- claude processes ----------

@@ -3,6 +3,7 @@ import { createRawSnippet, flushSync, type Component } from 'svelte';
 import { describe, expect, it } from 'vitest';
 import { fList } from '../format';
 import { locale, setLang, t, tIn, tRaw, type Key, type RichProps } from '.';
+import { langOfTag } from './locale.svelte';
 import LangProbe from './LangProbe.test.svelte';
 import Rich from './Rich.svelte';
 
@@ -68,6 +69,15 @@ describe('setLang', () => {
     expect(screen.getByRole('button')).toHaveTextContent('Cancel');
     expect(screen.getByTestId('derived')).toHaveTextContent('2 files');
     expect(screen.getByTestId('rich').textContent).toBe('on vendredi at 09:30');
+  });
+});
+
+describe('langOfTag', () => {
+  // The language the window starts in, before the backend says the one of the settings: the browser's, which is the
+  // system's (the default setting). The same rule as the backend's.
+  it('reads French when the language subtag is, English otherwise', () => {
+    expect(['fr-FR', 'fr', 'FR', 'fr-CA'].map(langOfTag)).toEqual(['fr', 'fr', 'fr', 'fr']);
+    expect(['en-US', 'en', 'de-DE', 'frr', ''].map(langOfTag)).toEqual(['en', 'en', 'en', 'en', 'en']);
   });
 });
 

@@ -1,3 +1,6 @@
+// First: its macros (`tr!`, `tr_claude!`, `tr_in!`) are then in scope in every module below.
+#[macro_use]
+mod i18n;
 mod agent;
 mod board;
 mod claude;
@@ -15,6 +18,7 @@ mod integrations;
 mod integrations_tests;
 mod isola;
 mod job;
+mod menus;
 mod model;
 mod notify;
 mod paths;
@@ -40,7 +44,6 @@ use crate::core::Core;
 use std::io::Write;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{Manager, WindowEvent};
 use tauri_plugin_window_state::StateFlags;
@@ -93,12 +96,13 @@ fn init_logging() {
     }
 }
 
+/// The tray icon, its menu in the interface's language (written again when it changes:
+/// `menus::relabel`).
 fn build_tray(app: &tauri::App) -> tauri::Result<()> {
-    let show = MenuItem::with_id(app, "show", "Afficher", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "Quitter", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&show, &quit])?;
-    let mut builder = TrayIconBuilder::with_id("main")
-        .tooltip("Escouade")
+    let lang = i18n::ui();
+    let menu = menus::tray_menu(app.handle(), lang)?;
+    let mut builder = TrayIconBuilder::with_id(menus::TRAY_ID)
+        .tooltip(menus::tray_tooltip(lang, 0))
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
@@ -180,6 +184,13 @@ pub fn run() {
             app.manage(core.clone());
             app.manage(updates::Updates::started(after_update));
             build_tray(app)?;
+            // In place of Tauri's default, in English. Should it fail, the default stays: its Edit
+            // menu keeps copy and paste working in the WebView.
+            #[cfg(target_os = "macos")]
+            if let Err(e) = menus::app_menu(app.handle(), i18n::ui()).and_then(|m| app.set_menu(m))
+            {
+                log::error!("app menu not set: {e}");
+            }
             core.start(git_rx);
             updates::watch(app.handle().clone());
             if let Some(w) = app.get_webview_window("main") {
@@ -313,8 +324,9 @@ pub fn run() {
             tauri::RunEvent::Exit => {
                 if let Some(core) = app.try_state::<Arc<Core>>() {
                     if !core.quitting.load(Ordering::Acquire) {
-                        // macOS: Cmd+Q, the app menu's and the Dock's « Quitter » come here
-                        // straight, with no exit request first: the update ready installs now.
+                        // macOS: Cmd+Q, the app menu's « Quitter Escouade » (`menus::app_menu`)
+                        // and the Dock's « Quitter » come here straight, with no exit request
+                        // first: the update ready installs now.
                         #[cfg(target_os = "macos")]
                         {
                             if updates::install_at_exit(app) {

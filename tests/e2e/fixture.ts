@@ -103,9 +103,10 @@ export const test = base.extend<{ app: App }>({
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ccm-e2e-'));
     const data = path.join(root, 'data');
     fs.mkdirSync(data);
+    // French whatever the machine's language (CI runners are English): the tests read the French interface.
     fs.writeFileSync(
       path.join(data, 'settings.json'),
-      JSON.stringify({ claudePath: FAKE, sound: false, osNotifications: false, idleStopMinutes: 0 }),
+      JSON.stringify({ claudePath: FAKE, sound: false, osNotifications: false, idleStopMinutes: 0, language: 'fr' }),
     );
     const repo = makeRepo(root);
     const log = path.join(root, 'fake-claude.jsonl');

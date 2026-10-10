@@ -750,6 +750,66 @@ async fn a_planned_resume_skips_archived_or_busy_agents_and_stops_when_turned_of
 }
 
 #[tokio::test]
+async fn a_change_of_language_is_told_to_the_window_and_another_setting_is_not() {
+    use crate::i18n::{Lang::*, LangInfo};
+    let h = harness("settings-language-event");
+    let told = |h: &Harness| -> Vec<Value> {
+        h.events
+            .lock()
+            .iter()
+            .filter(|e| e["type"] == "language")
+            .cloned()
+            .collect()
+    };
+    let save = |change: &dyn Fn(&mut Settings)| {
+        let mut s = h.core.settings.read().clone();
+        change(&mut s);
+        h.core.save_settings(s).unwrap();
+    };
+    // Saved before the languages: the system's (French in tests), Claude's that of the interface.
+    let french = LangInfo {
+        ui: Fr,
+        system: Fr,
+        claude: Fr,
+    };
+    assert_eq!(h.core.lang(), french);
+    save(&|s| s.sound = true);
+    assert!(told(&h).is_empty());
+    // The interface in English: the texts for Claude follow it.
+    save(&|s| s.language = "en".into());
+    let english =
+        json!({ "type": "language", "lang": { "ui": "en", "system": "fr", "claude": "en" } });
+    assert_eq!(told(&h), vec![english.clone()]);
+    assert_eq!(
+        h.core.lang(),
+        LangInfo {
+            ui: En,
+            system: Fr,
+            claude: En
+        }
+    );
+    // Claude's texts in French, the interface staying English.
+    save(&|s| s.claude_language = "fr".into());
+    let mixed =
+        json!({ "type": "language", "lang": { "ui": "en", "system": "fr", "claude": "fr" } });
+    assert_eq!(told(&h), vec![english.clone(), mixed.clone()]);
+    // Back to the system's, which is French, then French by name: only the first changes anything.
+    save(&|s| {
+        s.language = "system".into();
+        s.claude_language = "ui".into();
+    });
+    save(&|s| s.language = "fr".into());
+    let french_again =
+        json!({ "type": "language", "lang": { "ui": "fr", "system": "fr", "claude": "fr" } });
+    assert_eq!(told(&h), vec![english, mixed, french_again]);
+    assert_eq!(h.core.lang(), french);
+    // The native menus are written again when the interface's language changes, not for Claude's.
+    assert_eq!(*h.core.relabels.lock(), [En, Fr]);
+    // The tests beside this one still write French.
+    assert_eq!(crate::i18n::ui(), Fr);
+}
+
+#[tokio::test]
 async fn a_turn_stopped_by_the_usage_limit_plans_the_resume_at_its_reset() {
     let h = harness("auto-resume-limit");
     let (p, _) = h.project(false).await;
