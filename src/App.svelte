@@ -8,6 +8,8 @@
   import { watchPresence } from './lib/presence';
   import { createWarmer } from './lib/warm';
   import Board from './components/board/Board.svelte';
+  import MergedBranchesModal from './components/branches/MergedBranchesModal.svelte';
+  import NewBranchModal from './components/branches/NewBranchModal.svelte';
   import ContextMenu from './components/ContextMenu.svelte';
   import Conversation from './components/Conversation.svelte';
   import ConvSearch from './components/ConvSearch.svelte';
@@ -161,6 +163,10 @@
   <QuickOpen projectId={app.modal.projectId} source={app.modal.source} />
 {:else if app.modal?.kind === 'commit'}
   <CommitModal projectId={app.modal.projectId} agentId={app.modal.agentId} resume={app.modal.resume} />
+{:else if app.modal?.kind === 'newBranch'}
+  <NewBranchModal projectId={app.modal.projectId} start={app.modal.start} resume={app.modal.resume} />
+{:else if app.modal?.kind === 'mergedBranches'}
+  <MergedBranchesModal projectId={app.modal.projectId} />
 {/if}
 
 <ContextMenu />
