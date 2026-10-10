@@ -1,9 +1,15 @@
 // The external ticket systems as the window shows them, and the changes of a project's links.
 
+import { fList } from './format';
+import { t } from './i18n';
 import type { Column, Container, ExternalIssue, ExternalState, ProjectIntegrations, Service } from './types';
 
 export const SERVICE_IDS: Service[] = ['jira', 'trello', 'github'];
 
+/**
+ * How the window shows each service. `container` (what the service calls the place its tickets are in) and
+ * `placeholder` (the hint of the search field) are texts: getters, read when shown, so that they follow the language.
+ */
 export const SERVICES: Record<
   Service,
   { name: string; letter: string; color: string; ink: string; container: string; placeholder: string }
@@ -13,24 +19,36 @@ export const SERVICES: Record<
     letter: 'J',
     color: 'oklch(0.62 0.17 255)',
     ink: '#fff',
-    container: 'Projet',
-    placeholder: 'Rechercher par clé ou par texte…',
+    get container() {
+      return t('integrations.container.jira');
+    },
+    get placeholder() {
+      return t('integrations.searchHint.jira');
+    },
   },
   trello: {
     name: 'Trello',
     letter: 'T',
     color: 'oklch(0.66 0.12 230)',
     ink: '#fff',
-    container: 'Tableau',
-    placeholder: 'Rechercher une carte…',
+    get container() {
+      return t('integrations.container.trello');
+    },
+    get placeholder() {
+      return t('integrations.searchHint.trello');
+    },
   },
   github: {
     name: 'GitHub Issues',
     letter: 'GH',
     color: '#e8e3dc',
     ink: '#1b1917',
-    container: 'Dépôt',
-    placeholder: 'Rechercher une issue…',
+    get container() {
+      return t('integrations.container.github');
+    },
+    get placeholder() {
+      return t('integrations.searchHint.github');
+    },
   },
 };
 
@@ -46,10 +64,8 @@ export function trelloTokenPage(key: string): string {
 
 /** « 3 tickets importés depuis Jira et Trello ». */
 export function importedLabel(issues: { service: Service }[]): string {
-  const names = [...new Set(issues.map((i) => i.service))].map((s) => SHORT[s]);
-  const from = names.length > 1 ? `${names.slice(0, -1).join(', ')} et ${names[names.length - 1]}` : (names[0] ?? '');
-  const n = issues.length;
-  return `${n} ${n > 1 ? 'tickets importés' : 'ticket importé'} depuis ${from}`;
+  const from = fList([...new Set(issues.map((i) => i.service))].map((s) => SHORT[s]));
+  return t('integrations.imported', { count: issues.length, from });
 }
 
 /** An external ticket's key in a selection. */

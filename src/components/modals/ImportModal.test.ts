@@ -1,6 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
 import type { AccountView, ExternalIssue, IssuePage, ProjectIntegrations, Ticket } from '../../lib/types';
 import { fakeBackend, project, resetApp, ticket } from '../../test/ipc';
@@ -240,5 +241,92 @@ describe('ImportModal', () => {
     });
     render(ImportModal, { projectId: 'p1' });
     expect(await within(dialog()).findByRole('alert')).toHaveTextContent('Jira refuse ces identifiants (401)');
+  });
+});
+
+describe('ImportModal in English', () => {
+  const dialogEn = () => screen.getByRole('dialog', { name: 'Import tickets' });
+  const rowEn = (name: RegExp) => within(dialogEn()).getByRole('checkbox', { name });
+
+  beforeEach(() => {
+    resetApp({ projects: [project({ integrations: LINKED })] });
+    app.accounts = ACCOUNTS;
+    app.modal = { kind: 'import', projectId: 'p1' };
+    setLang('en');
+  });
+
+  it('says there is no source to import from', async () => {
+    resetApp({ projects: [project()] });
+    app.accounts = ACCOUNTS;
+    fakeBackend();
+    render(ImportModal, { projectId: 'p1' });
+    const d = within(dialogEn());
+    expect(d.getByText('No source linked to this project')).toBeInTheDocument();
+    expect(
+      d.getByText('Connect Jira, Trello or GitHub Issues, then choose the project, board or repository to link to demo-api.'),
+    ).toBeInTheDocument();
+    await userEvent.click(d.getByRole('button', { name: 'Link a source' }));
+    expect(app.modal).toEqual({ kind: 'settings', tab: 'integrations', projectId: 'p1' });
+  });
+
+  it('lists the tickets with the counts, the criteria and the ones already there in English', async () => {
+    fakeBackend({ integration_issues: () => JIRA });
+    render(ImportModal, { projectId: 'p1' });
+    const d = within(dialogEn());
+    expect(d.getByText('Into “To do” on the Kanban of demo-api')).toBeInTheDocument();
+    expect(d.getByRole('tablist', { name: 'Sources' })).toBeInTheDocument();
+    expect(d.getByRole('button', { name: '⚙ Manage sources' })).toBeInTheDocument();
+    expect(d.getByRole('textbox', { name: 'Search' })).toHaveAttribute('placeholder', 'Search by key or text…');
+    await waitFor(() => expect(d.getByText('3 results')).toBeInTheDocument());
+    expect(d.getByRole('group', { name: 'Filters' })).toBeInTheDocument();
+    expect(within(rowEn(/ATL-1287/)).getByText('✓ 2 criteria detected')).toBeInTheDocument();
+    expect(within(rowEn(/ATL-1301/)).getByText('Already in the Kanban')).toBeInTheDocument();
+    expect(d.getByText('No ticket selected')).toBeInTheDocument();
+    expect(d.getByText('Max loops')).toBeInTheDocument();
+    expect(d.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+  });
+
+  it('counts the selection with the plural of English, and the toast says where the tickets came from', async () => {
+    const made: Ticket[] = [
+      ticket({
+        id: 'n1',
+        key: 'DEM-4',
+        external: { service: 'jira', id: 'ATL-1287', key: 'ATL-1287', container: 'ATL', url: '', error: null },
+      }),
+      ticket({ id: 'n2', key: 'DEM-5', external: { service: 'trello', id: 'c1', key: '#151', container: 'b1', url: '', error: null } }),
+    ];
+    fakeBackend({ integration_issues: (a: any) => (a.service === 'jira' ? JIRA : TRELLO), integration_import: () => made });
+    render(ImportModal, { projectId: 'p1' });
+    const d = within(dialogEn());
+    await waitFor(() => expect(d.getByText('3 results')).toBeInTheDocument());
+    await userEvent.click(d.getByRole('checkbox', { name: 'Select all' }));
+    expect(d.getByText('2 tickets selected')).toBeInTheDocument();
+    expect(d.getByRole('tab', { name: /Jira/ })).toHaveAccessibleName(/2 selected/);
+    await userEvent.click(rowEn(/ATL-1290/));
+    expect(d.getByText('1 ticket selected')).toBeInTheDocument();
+    await userEvent.click(rowEn(/ATL-1287/));
+    await userEvent.click(d.getByRole('tab', { name: /Trello/ }));
+    await waitFor(() => expect(d.getByText('1 result')).toBeInTheDocument());
+    await userEvent.click(rowEn(/#151/));
+    await userEvent.click(d.getByRole('button', { name: 'Import 1 ticket' }));
+    expect(app.toasts.at(-1)?.text).toBe('2 tickets imported from Jira and Trello');
+  });
+
+  it('writes a page cut short with the grouping of English, and the button for the next one', async () => {
+    fakeBackend({ integration_issues: () => ({ ...JIRA, next: 'p2', total: 2345 }) });
+    render(ImportModal, { projectId: 'p1' });
+    const d = within(dialogEn());
+    await waitFor(() => expect(d.getByText('3 shown of 2,345')).toBeInTheDocument());
+    expect(d.getByRole('button', { name: 'Show more' })).toBeInTheDocument();
+  });
+
+  it('tells when the tickets are all in the Kanban already', async () => {
+    fakeBackend({ integration_issues: () => JIRA, integration_import: () => [] });
+    render(ImportModal, { projectId: 'p1' });
+    const d = within(dialogEn());
+    await waitFor(() => expect(d.getByText('3 results')).toBeInTheDocument());
+    await userEvent.click(rowEn(/ATL-1287/));
+    await userEvent.click(d.getByRole('button', { name: 'Import 1 ticket' }));
+    expect(app.toasts.at(-1)?.text).toBe('These tickets are already in the Kanban.');
   });
 });
