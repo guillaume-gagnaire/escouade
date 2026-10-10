@@ -1,15 +1,14 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { ticketTag } from '../lib/board';
-  import { conversationOf } from '../lib/conversations.svelte';
   import { fPct, fSince, fWhen, plural } from '../lib/format';
   import { api } from '../lib/ipc';
   import { menu } from '../lib/menu.svelte';
   import { modelLabel } from '../lib/models';
   import { contextUse, ESTIMATE_HINT, fSpentUsd, spent } from '../lib/spend';
   import { app } from '../lib/state.svelte';
-  import { toolArg, toolLabel } from '../lib/tools';
-  import type { Agent, PermissionItem, Project, QuestionItem, ToolItem } from '../lib/types';
+  import { toolLabel } from '../lib/tools';
+  import type { Agent, PendingRequest, Project } from '../lib/types';
   import StatusDot from './StatusDot.svelte';
 
   // « Vue d’ensemble » (Ctrl+Shift+A): every agent of every project in one list, the ones waiting for an answer first,
@@ -25,6 +24,10 @@
     error: 'var(--del)',
   };
   const MOVES = new Set(['ArrowDown', 'ArrowUp', 'Home', 'End']);
+  /** How long the buttons of a request that just took a row's place wait: a click meant for the one before misses. */
+  const HOLD_MS = 500;
+  /** The lines of a permission's argument shown: one longer is answered in the conversation, where it is whole. */
+  const ARG_LINES = 4;
 
   /** A group of lines: the agents waiting for an answer (no project: they come from all of them), or a project's. */
   interface Group {
@@ -36,11 +39,6 @@
   const live = $derived(Object.values(app.agents).filter((a) => !a.archived));
   /** The agents waiting for an answer, the longest waiting first (as Ctrl+J goes through them). */
   const waiting = $derived(live.filter((a) => a.status === 'waiting').sort((a, b) => a.lastActivity - b.lastActivity));
-  /**
-   * Their conversations, which hold what they wait on: loaded once, then kept up to date. Made here, not where their
-   * items are read: what a reaction creates is no dependency of it, it would not see them load.
-   */
-  const convs = $derived(new Map(waiting.map((a) => [a.id, conversationOf(a.id)])));
   /**
    * The agents waiting first, then each project's others in the order of its tabs and of its sidebar. An agent is on
    * one line only: the arrows meet it once.
@@ -69,6 +67,63 @@
   const current = $derived(chosen && order.includes(chosen) ? chosen : (order[0] ?? null));
   /** Answers on their way, by agent: its buttons wait for the backend. */
   let busy = $state<Record<string, boolean>>({});
+  /** Rows whose request just changed, by agent: their buttons wait `HOLD_MS`. */
+  let held = $state<Record<string, boolean>>({});
+  const holdTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  /** The request each waiting row shows, by agent, as last drawn (null before the first drawing). */
+  let shown: Record<string, string> | null = null;
+  /** Arguments taller than their four lines, by request: shown cut, they are answered in the conversation. */
+  let overflows = $state<Record<string, boolean>>({});
+
+  // A row whose request changes (the next one after an answer, one that comes) holds its buttons a moment: the click
+  // meant for what was there must not answer what is there now. Not the rows drawn when the view opens.
+  $effect.pre(() => {
+    const now = Object.fromEntries(waiting.flatMap((a) => (requestOf(a) ? [[a.id, requestOf(a)!.id]] : [])));
+    const before = shown;
+    shown = now;
+    if (!before) return;
+    untrack(() => {
+      for (const [agentId, id] of Object.entries(now)) if (before[agentId] !== id) hold(agentId);
+    });
+  });
+  $effect(() => () => holdTimers.forEach(clearTimeout));
+
+  function hold(agentId: string) {
+    held[agentId] = true;
+    clearTimeout(holdTimers.get(agentId));
+    holdTimers.set(
+      agentId,
+      setTimeout(() => {
+        delete held[agentId];
+        holdTimers.delete(agentId);
+      }, HOLD_MS),
+    );
+  }
+
+  /**
+   * Whether a permission's argument is shown whole: not cut by the backend, within its four lines, and none of them
+   * wrapping past them. Only then is it answered on the spot.
+   */
+  function whole(req: PendingRequest): boolean {
+    return !req.cut && req.arg.split('\n').length <= ARG_LINES && !overflows[req.id];
+  }
+
+  /** Tells, as its size changes, whether the argument of `id` runs past its four lines. */
+  function measure(node: HTMLElement, id: string) {
+    const check = () => {
+      const over = node.scrollHeight > node.clientHeight + 1;
+      if (!!overflows[id] !== over) overflows[id] = over;
+    };
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(node);
+    return {
+      destroy: () => {
+        ro.disconnect();
+        delete overflows[id];
+      },
+    };
+  }
   /** The agent whose line takes the focus back once its answered request, and the button that held the focus, are gone. */
   let refocus = $state<string | null>(null);
 
@@ -144,27 +199,22 @@
     app.closeOverview();
   }
 
-  /** The request the agent waits on first (the one its message field answers), once its conversation is loaded. */
-  function requestOf(a: Agent): PermissionItem | QuestionItem | undefined {
-    const id = a.pending[0];
-    if (!id) return undefined;
-    const item = convs.get(a.id)?.items.find((i) => i.id === id);
-    return item?.kind === 'permission' || item?.kind === 'question' ? item : undefined;
+  /**
+   * The request the agent asked first, as its view sums it up: the backend keeps them in the order they came, so
+   * another one coming does not take its place.
+   */
+  function requestOf(a: Agent): PendingRequest | undefined {
+    return a.requests?.[0];
   }
 
-  /** What a permission is asked for: the tool's argument, as the conversation's card sums it up. */
-  function argOf(a: Agent, item: PermissionItem): string {
-    const call = { kind: 'tool', id: item.id, name: item.toolName, input: item.input, status: 'running', ts: 0 } as ToolItem;
-    return toolArg(call, a.cwd) || item.title || '';
-  }
-
-  async function decide(e: Event, a: Agent, item: PermissionItem, decision: 'allow' | 'deny') {
+  /** Answers the request the row shows, by its id: the one the user read, whatever came since. */
+  async function decide(e: Event, a: Agent, req: PendingRequest, decision: 'allow' | 'deny') {
     // The row opens its agent on a click: its buttons only answer.
     e.stopPropagation();
-    if (busy[a.id]) return;
+    if (busy[a.id] || held[a.id]) return;
     busy[a.id] = true;
     if (root?.contains(document.activeElement)) refocus = a.id;
-    await app.run(api.answerPermission(a.id, item.id, decision));
+    await app.run(api.answerPermission(a.id, req.id, decision));
     delete busy[a.id];
   }
 
@@ -226,27 +276,44 @@
       >
     </div>
     {#if asks}
-      <div class="req">
-        {#if req?.kind === 'permission' && req.toolName !== 'ExitPlanMode'}
-          {@const arg = argOf(a, req)}
-          <span class="badge mono">{toolLabel(req.toolName)}</span>
-          <span class="arg mono" title={arg}>{arg}</span>
-          <span class="acts">
-            <button class="opt primary" disabled={busy[a.id]} onclick={(e) => decide(e, a, req, 'allow')}>Autoriser</button>
-            <button class="opt" disabled={busy[a.id]} onclick={(e) => decide(e, a, req, 'deny')}>Refuser</button>
-          </span>
-        {:else}
-          <!-- A question, a plan to read, or a request not loaded yet: answered in the conversation. -->
-          {@const text =
-            req?.kind === 'question'
-              ? req.questions.map((q) => q.question).join(' · ')
-              : req
-                ? 'Claude propose un plan'
-                : 'Claude attend ta réponse'}
-          <span class="ask" title={text}>{text}</span>
-          <span class="acts"><button class="opt primary" onclick={(e) => answer(e, a)}>Répondre</button></span>
-        {/if}
-      </div>
+      <!-- Drawn anew for each request: its argument is measured for itself. -->
+      {#key req?.id}
+        <div class="req">
+          {#if req?.kind === 'permission' && req.tool !== 'ExitPlanMode'}
+            {@const ok = whole(req)}
+            <div class="what">
+              <div class="cmd">
+                <span class="badge mono">{toolLabel(req.tool)}</span>
+                <span class="arg mono" use:measure={req.id}>{req.arg}</span>
+              </div>
+              {#if req.description}<span class="why">{req.description}</span>{/if}
+              {#if req.reason}<span class="why">{req.reason}</span>{/if}
+              {#if !ok}<span class="why more">La suite se lit dans la conversation.</span>{/if}
+            </div>
+            <!-- Allowed on the spot only what is read whole here. -->
+            <span class="acts">
+              {#if ok}
+                <button class="opt primary" disabled={busy[a.id] || held[a.id]} onclick={(e) => decide(e, a, req, 'allow')}
+                  >Autoriser</button
+                >
+                <button class="opt" disabled={busy[a.id] || held[a.id]} onclick={(e) => decide(e, a, req, 'deny')}>Refuser</button>
+              {:else}
+                <button class="opt primary" onclick={(e) => answer(e, a)}>Répondre</button>
+              {/if}
+            </span>
+          {:else}
+            <!-- A question, a plan to read, or a request not told yet: answered in the conversation. -->
+            {@const text =
+              req?.kind === 'question'
+                ? req.questions.map((q) => q.question).join(' · ')
+                : req
+                  ? 'Claude propose un plan'
+                  : 'Claude attend ta réponse'}
+            <span class="ask" title={text}>{text}</span>
+            <span class="acts"><button class="opt primary" onclick={(e) => answer(e, a)}>Répondre</button></span>
+          {/if}
+        </div>
+      {/key}
     {/if}
   </li>
 {/snippet}
@@ -539,6 +606,19 @@
     min-width: 0;
     padding: 0 12px 10px 29px;
   }
+  .what {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .cmd {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-width: 0;
+  }
   .badge {
     flex: none;
     padding: 2px 6px;
@@ -547,13 +627,28 @@
     font-size: 11px;
     font-weight: 600;
   }
+  /* The command as it runs, its lines kept, over four lines at most (one taller is answered in the conversation). */
   .arg {
     flex: 1;
     min-width: 0;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
     font-size: 12px;
+    line-height: 1.5;
+  }
+  .why {
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--muted);
+    text-wrap: pretty;
+  }
+  .why.more {
+    color: var(--wait);
   }
   .ask {
     flex: 1;
@@ -567,9 +662,12 @@
     line-height: 1.45;
     text-wrap: pretty;
   }
+  /* One width whatever its buttons: the argument beside it wraps the same with « Répondre » as with the two others. */
   .acts {
     flex: none;
+    width: 172px;
     display: flex;
+    justify-content: flex-end;
     gap: 8px;
   }
   .opt {
