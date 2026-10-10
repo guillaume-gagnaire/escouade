@@ -44,6 +44,9 @@ test('a permission can be refused with an explanation typed in the composer', as
   await addProject(page, app.repo);
   await send(page, 'permission');
   await expect(page.getByTestId('permission-pending')).toContainText('rm -rf build');
+  // For 500 ms after a request appears, Entrée in the composer answers nothing (HOLD_MS): a press
+  // meant for a message would answer a request not read yet.
+  await page.waitForTimeout(600);
   await send(page, 'utilise npm run clean');
   await expect(page.getByText('Compris : utilise npm run clean')).toBeVisible();
   await expect(page.getByText('✕ Refusé · Bash rm -rf build')).toBeVisible();
