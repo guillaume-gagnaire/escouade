@@ -152,6 +152,25 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 
 | Français | Anglais | Note |
 |---|---|---|
+| Comptes connectés | Connected accounts | Jira, Trello, GitHub |
+| Connecter / Déconnecter | Connect / Disconnect | un compte |
+| trousseau (du système) | system keychain | là où le système garde les jetons |
+| source (liée) | (linked) source | le projet Jira, le tableau Trello ou le dépôt GitHub associé à un projet d’Escouade |
+| Projet / Tableau / Dépôt | Project / Board / Repository | ce que chaque service appelle l’endroit de ses tickets |
+| Correspondance des statuts | Status mapping | l’état que prend le ticket externe selon la colonne |
+| statut (d’un ticket externe) | status | |
+| Commenter | Comment | un commentaire écrit sur le ticket externe |
+| étiqueté | labeled | tickets importés par leur étiquette |
+| Valider et merger / Valider + PR / Valider et pousser | Approve and merge / Approve + PR / Approve and push | le bouton d’un ticket « À tester » |
+| Laisser en l’état | Leave as is | ce que fait « Valider » quand rien n’est fusionné ni poussé |
+| Stratégie (de merge) | Strategy | Merge commit / Squash / Rebase restent tels quels |
+| En cas de conflit | On conflict | Me demander / L’agent résout / Annuler → Ask me / Let the agent resolve / Cancel |
+| En parallèle | In parallel | le nombre d’agents qui prennent des tickets en même temps |
+| Relancer les tests avant | Re-run the tests first | |
+| Commande de tests | Test command | |
+| Message de commit généré | Generated commit message | |
+| Pris dès qu’une place se libère | Picked up as soon as a slot is free | un ticket « À faire » |
+| attend (un ticket attend un autre) | waits for / is waiting for | « DEM-5 attend DEM-3 » |
 
 ## L6 — board, stats
 
