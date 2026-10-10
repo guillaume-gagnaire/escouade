@@ -78,6 +78,8 @@ export interface Catalog {
   install: { eyebrow: string; title: string; steps: Step[] };
   faq: { eyebrow: string; title: string; items: Question[] };
   footer: { github: string; license: string; note: string };
+  /** For an address that leads nowhere. */
+  notFound: { title: string; text: string; home: string };
   /** The windows of the hero. */
   demo: {
     status: Record<Status, string>;

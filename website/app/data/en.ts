@@ -240,6 +240,8 @@ export const en: Catalog = {
     note: 'Independent project, not affiliated with Anthropic. Claude and Claude Code are trademarks of Anthropic.',
   },
 
+  notFound: { title: 'Page not found', text: 'There is nothing at this address.', home: 'Back to the home page' },
+
   demo: {
     status: { ready: 'Ready', running: 'Running', question: 'Question', done: 'Done', totest: 'To test' },
     agents: 'Agents',

@@ -240,6 +240,8 @@ export const fr: Catalog = {
     note: 'Projet indépendant, non affilié à Anthropic. Claude et Claude Code sont des marques d’Anthropic.',
   },
 
+  notFound: { title: 'Page introuvable', text: 'Cette adresse ne mène nulle part.', home: 'Retour à l’accueil' },
+
   demo: {
     status: { ready: 'Prêt', running: 'En cours', question: 'Question', done: 'Terminé', totest: 'À tester' },
     agents: 'Agents',
