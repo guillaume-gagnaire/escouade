@@ -1,7 +1,14 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { CARDS, FAQ, FEATURES, STEPS } from '../app/data/site';
+import { CATALOGS, featuresFor } from '../app/data/catalogs';
 import { SNAPSHOT, squadAt } from '../app/data/squad';
+
+const {
+  cards: CARDS,
+  faq: { items: FAQ },
+  install: { steps: STEPS },
+} = CATALOGS.fr;
+const FEATURES = featuresFor('fr');
 
 const OUT = new URL('../.output/public/', import.meta.url);
 const BASE = '/escouade/';

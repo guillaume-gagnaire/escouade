@@ -1,18 +1,20 @@
 <script setup lang="ts">
 import { REPO } from '~/data/site';
+
+const { text } = useLang();
 </script>
 
 <template>
   <header class="top">
     <div class="wrap bar">
       <a class="brand" href="#top"><LogoMark :size="28" /><span>Escouade</span></a>
-      <nav class="nav" aria-label="Sections">
-        <a href="#video">Vidéo</a>
-        <a href="#fonctionnalites">Fonctionnalités</a>
-        <a href="#installer">Installer</a>
-        <a href="#faq">FAQ</a>
+      <nav class="nav" :aria-label="text.header.sections">
+        <a href="#video">{{ text.header.video }}</a>
+        <a :href="`#${text.anchors.features}`">{{ text.header.features }}</a>
+        <a :href="`#${text.anchors.install}`">{{ text.header.install }}</a>
+        <a href="#faq">{{ text.header.faq }}</a>
       </nav>
-      <a class="gh" :href="REPO">GitHub</a>
+      <a class="gh" :href="REPO">{{ text.header.github }}</a>
     </div>
   </header>
 </template>

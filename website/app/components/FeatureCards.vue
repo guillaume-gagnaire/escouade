@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { CARDS } from '~/data/site';
+const { text } = useLang();
 </script>
 
 <template>
   <div class="cards">
-    <div v-for="c in CARDS" :key="c.title" class="card">
+    <div v-for="c in text.cards" :key="c.title" class="card">
       <h3>{{ c.title }}</h3>
       <p>{{ c.text }}</p>
     </div>

@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { fmt } from '~/data/catalog';
 import { DOWNLOAD, REPO } from '~/data/site';
 
+const { text } = useLang();
 const { version } = useRuntimeConfig().public;
 </script>
 
@@ -9,24 +11,20 @@ const { version } = useRuntimeConfig().public;
     <div class="stage">
       <div class="copy">
         <h1>
-          <span class="line">Une escouade de Claude.</span>
-          <span class="line accent">Une seule fenêtre.</span>
+          <span class="line">{{ text.hero.line1 }}</span>
+          <span class="line accent">{{ text.hero.line2 }}</span>
         </h1>
-        <p class="lede">
-          Escouade, le poste de pilotage de tes agents Claude Code : une app Windows et macOS pour piloter plusieurs agents en parallèle,
-          avec projets en onglets, chat natif, git, éditeur, terminaux, statistiques, et un Kanban de tickets, écrits par toi ou importés de
-          Jira, Trello ou GitHub, que des agents prennent seuls jusqu’au but.
-        </p>
+        <p class="lede">{{ text.hero.lede }}</p>
         <div class="cta">
-          <a class="btn primary" :href="DOWNLOAD">Télécharger pour Windows et macOS</a>
-          <a class="btn" :href="REPO">Voir sur GitHub</a>
+          <a class="btn primary" :href="DOWNLOAD">{{ text.hero.download }}</a>
+          <a class="btn" :href="REPO">{{ text.hero.github }}</a>
         </div>
-        <p class="meta">Version {{ version }} · Windows 10 et 11, macOS 11 et plus · Gratuit et open source (MIT)</p>
+        <p class="meta">{{ fmt(text.hero.meta, { version }) }}</p>
       </div>
       <SquadWindows class="squad" />
     </div>
     <a class="next" href="#video">
-      Voir la vidéo
+      {{ text.hero.video }}
       <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
         <path
           d="M3.5 6l4.5 4.5L12.5 6"

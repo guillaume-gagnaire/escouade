@@ -1,6 +1,10 @@
 // The hero's demonstration: five agents of one project working at once, as the app shows them.
 // Every name, file and number here is made up. Time runs in beats; the statuses repeat every
-// cycle, while tokens, durations and spend only ever grow.
+// cycle, while tokens, durations and spend only ever grow. What is said (names, question, results)
+// comes from the catalog of the page's language.
+import { CATALOGS } from './catalogs';
+import { plural, type SquadText } from './catalog';
+import type { Lang } from './language';
 
 export const BEAT_MS = 1200;
 export const CYCLE = 24;
@@ -69,11 +73,14 @@ export interface Answer {
   option: number;
 }
 
+/** What a finished agent ended on, before it is put into words. */
+type Result = { kind: 'files' | 'tests'; count: number } | { kind: 'met' };
+
 interface Step {
   at: number;
   status: Status;
   activity?: Activity;
-  result?: string;
+  result?: Result;
   /** For the ticket agent: its loop, its criteria, and which of its ticket's files the activity touches. */
   loop?: number;
   met?: boolean[];
@@ -106,8 +113,8 @@ const onTicket = (at: number, tool: Activity['tool'], file: number, loop: number
 });
 
 interface Slot {
-  /** Empty for the ticket agent, named after its ticket. */
-  name: string;
+  /** Its name in the catalog; none for the ticket agent, named after its ticket. */
+  name: keyof SquadText['names'] | null;
   model: Model;
   tokens: number;
   ms: number;
@@ -116,7 +123,7 @@ interface Slot {
 
 const SLOTS: Slot[] = [
   {
-    name: 'refacto-auth',
+    name: 'auth',
     model: 'Opus',
     tokens: 184_000,
     ms: 760_000,
@@ -131,7 +138,7 @@ const SLOTS: Slot[] = [
     ],
   },
   {
-    name: 'tests-e2e',
+    name: 'e2e',
     model: 'Sonnet',
     tokens: 96_000,
     ms: 482_000,
@@ -139,7 +146,7 @@ const SLOTS: Slot[] = [
     steps: [run(0, 'Bash', 'npx playwright test --list')],
   },
   {
-    name: '',
+    name: null,
     model: 'Sonnet',
     tokens: 41_000,
     ms: 195_000,
@@ -148,24 +155,24 @@ const SLOTS: Slot[] = [
       onTicket(3, 'Edit', 1, 1, [false, false], [34, 6]),
       onTicket(6, 'Edit', 2, 2, [true, false], [18, 2]),
       { ...run(10, 'Bash', 'npm test'), loop: 2, met: [true, false] },
-      { at: 13, status: 'totest', result: 'Critères atteints · à tester', loop: 2, met: [true, true] },
+      { at: 13, status: 'totest', result: { kind: 'met' }, loop: 2, met: [true, true] },
       onTicket(18, 'Read', 0, 1, [false, false]),
     ],
   },
   {
-    name: 'docs-api',
+    name: 'docs',
     model: 'Haiku',
     tokens: 12_000,
     ms: 110_000,
     steps: [
-      { at: 0, status: 'done', result: '2 fichiers modifiés' },
+      { at: 0, status: 'done', result: { kind: 'files', count: 2 } },
       run(8, 'Write', 'docs/api/auth.md'),
       run(11, 'Edit', 'README.md', [6, 1]),
-      { at: 13, status: 'done', result: '2 fichiers modifiés' },
+      { at: 13, status: 'done', result: { kind: 'files', count: 2 } },
     ],
   },
   {
-    name: 'fix-login',
+    name: 'login',
     model: 'Fable',
     tokens: 22_000,
     ms: 125_000,
@@ -179,33 +186,28 @@ const SLOTS: Slot[] = [
   },
 ];
 
-/** The question tests-e2e asks, from `from` until it is answered (by default at `until`, with the first option). */
-const ASK = {
-  slot: 1,
-  from: 2,
-  until: 9,
-  question: { text: 'Lancer toute la suite e2e (38 tests) ?', options: ['Oui', 'Seulement auth'] },
-};
+/** When tests-e2e asks its question, from `from` until it is answered (by default at `until`, with the first option). */
+const ASK = { slot: 1, from: 2, until: 9 };
 
 /** What tests-e2e does after each answer; the first step starts with the answer. */
 const AFTER: Step[][] = [
   [
     run(ASK.until, 'Bash', 'npx playwright test'),
-    { at: 13, status: 'done', result: '38 tests passés' },
+    { at: 13, status: 'done', result: { kind: 'tests', count: 38 } },
     run(19, 'Read', 'e2e/checkout.spec.ts'),
   ],
   [
     run(ASK.until, 'Bash', 'npx playwright test e2e/auth'),
-    { at: 13, status: 'done', result: '12 tests passés' },
+    { at: 13, status: 'done', result: { kind: 'tests', count: 12 } },
     run(19, 'Read', 'e2e/checkout.spec.ts'),
   ],
 ];
 
-/** The tickets the ticket agent takes, in turn, from DEM-4 on. */
+/** The files of the tickets the ticket agent takes, in turn, from DEM-4 on (their slugs are in the catalog). */
 const TICKETS = [
-  { slug: 'paginer-les-users', files: ['src/db/users.ts', 'src/routes/users.ts', 'src/routes/users.test.ts'] },
-  { slug: 'filtrer-par-role', files: ['src/db/roles.ts', 'src/routes/users.ts', 'src/routes/roles.test.ts'] },
-  { slug: 'exporter-en-csv', files: ['src/export/csv.ts', 'src/routes/export.ts', 'src/export/csv.test.ts'] },
+  { files: ['src/db/users.ts', 'src/routes/users.ts', 'src/routes/users.test.ts'] },
+  { files: ['src/db/roles.ts', 'src/routes/users.ts', 'src/routes/roles.test.ts'] },
+  { files: ['src/export/csv.ts', 'src/routes/export.ts', 'src/export/csv.test.ts'] },
 ];
 const FIRST_TICKET = 4;
 /** When, in a cycle, the ticket agent takes the next ticket. */
@@ -291,7 +293,15 @@ function runningUntil(slot: number, t: number, answers: Answer[]): number {
 
 const ticketKey = (n: number) => `DEM-${FIRST_TICKET + n}`;
 
-export function squadAt(t: number, answers: Answer[] = []): Squad {
+/** A result in words, in the language of the page. */
+function resultText(result: Result, lang: Lang): string {
+  const { results } = CATALOGS[lang].squad;
+  return result.kind === 'met' ? results.met : plural(lang, results[result.kind], result.count);
+}
+
+/** The squad at `t` beats, speaking `lang`. */
+export function squadAt(t: number, answers: Answer[] = [], lang: Lang = 'fr'): Squad {
+  const text = CATALOGS[lang].squad;
   const c = Math.floor(t / CYCLE);
   const b = t - c * CYCLE;
   let today = TODAY_BASE;
@@ -302,7 +312,7 @@ export function squadAt(t: number, answers: Answer[] = []): Squad {
     const ran = runningUntil(i, t, answers);
     today += ((slot.tokens + rate.tps * ran * (BEAT_MS / 1000)) * rate.usd) / 1e6;
 
-    let name = slot.name;
+    let name = slot.name ? text.names[slot.name] : '';
     let ticket: Ticket | null = null;
     let activity = step.activity ?? null;
     let since = 0;
@@ -311,7 +321,7 @@ export function squadAt(t: number, answers: Answer[] = []): Squad {
       // A new ticket is a new agent: it starts from nothing.
       const n = c + (b >= NEXT_TICKET ? 1 : 0);
       const def = TICKETS[n % TICKETS.length];
-      name = `${ticketKey(n).toLowerCase()}-${def.slug}`;
+      name = `${ticketKey(n).toLowerCase()}-${text.ticketSlugs[n % TICKETS.length]}`;
       ticket = { key: ticketKey(n), loop: step.loop, max: MAX_LOOPS, met: step.met ?? Array(CRITERIA).fill(false) };
       if (activity && step.file !== undefined) activity = { ...activity, target: def.files[step.file] };
       if (n > 0) {
@@ -328,8 +338,8 @@ export function squadAt(t: number, answers: Answer[] = []): Squad {
       status: step.status,
       ticket,
       activity,
-      question: step.status === 'question' ? ASK.question : null,
-      result: step.result ?? null,
+      question: step.status === 'question' ? text.question : null,
+      result: step.result ? resultText(step.result, lang) : null,
       tokens,
       cost: (tokens * rate.usd) / 1e6,
       ms: Math.round(base.ms + beats * BEAT_MS),
@@ -351,18 +361,34 @@ export function squadAt(t: number, answers: Answer[] = []): Squad {
   };
 }
 
-// French number and duration formatting, as the app's src/lib/format.ts writes them.
+// Number and duration formatting, as the app's src/lib/format.ts writes them in French; the English
+// way is the same figures with a point, a suffix without a space and the dollar sign in front.
 
-export function fTok(n: number): string {
-  if (n >= 1e9) return (n / 1e9).toFixed(2).replace('.', ',') + ' Md';
-  if (n >= 1e6) return (n / 1e6).toFixed(2).replace('.', ',') + ' M';
-  if (n >= 1e3) return (n / 1e3).toFixed(1).replace('.', ',') + ' k';
-  return String(Math.round(n));
+/** Each language's units, largest first: where it starts, its decimals, its suffix. */
+const TOKEN_UNITS: Record<Lang, [number, number, string][]> = {
+  fr: [
+    [1e9, 2, ' Md'],
+    [1e6, 2, ' M'],
+    [1e3, 1, ' k'],
+  ],
+  en: [
+    [1e9, 2, 'B'],
+    [1e6, 2, 'M'],
+    [1e3, 1, 'k'],
+  ],
+};
+
+export function fTok(n: number, lang: Lang = 'fr'): string {
+  const unit = TOKEN_UNITS[lang].find(([from]) => n >= from);
+  if (!unit) return String(Math.round(n));
+  const num = (n / unit[0]).toFixed(unit[1]);
+  return (lang === 'fr' ? num.replace('.', ',') : num) + unit[2];
 }
 
-export function fUsd(x: number): string {
+export function fUsd(x: number, lang: Lang = 'fr'): string {
   const digits = x > 0 && x < 0.1 ? 3 : 2;
-  return x.toLocaleString('fr-FR', { minimumFractionDigits: digits, maximumFractionDigits: digits }) + ' $';
+  const num = x.toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  return lang === 'fr' ? num + ' $' : '$' + num;
 }
 
 export function fDur(ms: number): string {

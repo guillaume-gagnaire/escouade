@@ -150,3 +150,79 @@ describe('formatting, as in the app', () => {
     expect(fDur(3_900_000)).toBe('1h 05m');
   });
 });
+
+describe('formatting in English', () => {
+  it('writes tokens, dollars and durations the English way', () => {
+    expect(fTok(184_210, 'en')).toBe('184.2k');
+    expect(fTok(999, 'en')).toBe('999');
+    expect(fTok(1_250_000, 'en')).toBe('1.25M');
+    expect(fTok(2_500_000_000, 'en')).toBe('2.50B');
+    expect(fUsd(2.414, 'en')).toBe('$2.41');
+    expect(fUsd(0.02, 'en')).toBe('$0.020');
+    expect(fUsd(1234.5, 'en')).toBe('$1,234.50');
+    expect(fDur(760_000, 'en')).toBe('12m 40s');
+    expect(fDur(3_900_000, 'en')).toBe('1h 05m');
+  });
+
+  it('keeps writing French by default', () => {
+    expect(fTok(184_210, 'fr')).toBe(fTok(184_210));
+    expect(fUsd(2.414, 'fr')).toBe(fUsd(2.414));
+  });
+});
+
+describe('squad demo in each language', () => {
+  const LANGS = ['fr', 'en'] as const;
+  const story = (lang: 'fr' | 'en', t: number, answers: Answer[] = []) => squadAt(t, answers, lang);
+
+  it('tells the same story whatever the language: same statuses, same numbers, same questions', () => {
+    const answers: Answer[] = [{ at: firstAsk + 0.5, option: 1 }];
+    for (const t of times(0, 2 * CYCLE, 0.5)) {
+      const fr = story('fr', t, answers);
+      const en = story('en', t, answers);
+      expect(
+        en.agents.map((a) => [a.status, a.model, a.tokens, a.cost, a.ms, a.ticket?.loop]),
+        `t=${t}`,
+      ).toEqual(fr.agents.map((a) => [a.status, a.model, a.tokens, a.cost, a.ms, a.ticket?.loop]));
+      expect(en.counts).toEqual(fr.counts);
+      expect(en.today).toBe(fr.today);
+      expect(en.projects).toEqual(fr.projects);
+    }
+  });
+
+  it('speaks French when the language is not given', () => {
+    for (const t of times(0, CYCLE, 1)) expect(squadAt(t)).toEqual(story('fr', t));
+  });
+
+  it('names the agents, the tickets and the results in the language of the page', () => {
+    const fr = story('fr', SNAPSHOT);
+    const en = story('en', SNAPSHOT);
+    expect(fr.agents.map((a) => a.name)).toEqual(['refacto-auth', 'tests-e2e', 'dem-4-paginer-les-users', 'docs-api', 'fix-login']);
+    expect(en.agents.map((a) => a.name)).toEqual(['refactor-auth', 'e2e-tests', 'dem-4-paginate-users', 'docs-api', 'fix-login']);
+    expect(fr.agents[3].result).toBe('2 fichiers modifiés');
+    expect(en.agents[3].result).toBe('2 files changed');
+    expect(asking(fr)!.question).toEqual({ text: 'Lancer toute la suite e2e (38 tests) ?', options: ['Oui', 'Seulement auth'] });
+    expect(asking(en)!.question).toEqual({ text: 'Run the whole e2e suite (38 tests)?', options: ['Yes', 'Auth only'] });
+  });
+
+  it('names the finished runs and the tickets ready to test in English too', () => {
+    const results = (lang: 'fr' | 'en', answers: Answer[]) =>
+      new Set(times(0, CYCLE, 1).flatMap((t) => story(lang, t, answers).agents.map((a) => a.result)));
+    expect(results('en', [])).toEqual(new Set([null, '2 files changed', '38 tests passed', 'Criteria met · ready to test']));
+    expect(results('en', [{ at: firstAsk + 0.5, option: 1 }])).toContain('12 tests passed');
+    expect(results('fr', [])).toEqual(new Set([null, '2 fichiers modifiés', '38 tests passés', 'Critères atteints · à tester']));
+  });
+
+  it('takes the next tickets in the language of the page', () => {
+    const names = (lang: 'fr' | 'en') => [...new Set(times(0, 3 * CYCLE, 1).map((t) => ticketAgent(story(lang, t)).name))];
+    expect(names('en')).toEqual(['dem-4-paginate-users', 'dem-5-filter-by-role', 'dem-6-export-to-csv', 'dem-7-paginate-users']);
+    expect(names('fr')).toEqual(['dem-4-paginer-les-users', 'dem-5-filtrer-par-role', 'dem-6-exporter-en-csv', 'dem-7-paginer-les-users']);
+  });
+
+  it('keeps tokens and cost growing in English as well', () => {
+    for (const lang of LANGS) {
+      const before = story(lang, 0);
+      const after = story(lang, CYCLE / 2);
+      expect(after.today).toBeGreaterThan(before.today);
+    }
+  });
+});

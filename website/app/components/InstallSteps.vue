@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import { STEPS } from '~/data/site';
+const { text } = useLang();
 </script>
 
 <template>
-  <section id="installer" class="section install">
+  <section :id="text.anchors.install" class="section install">
     <div class="wrap">
-      <p class="eyebrow">Installer</p>
-      <h2>Prêt en trois étapes</h2>
+      <p class="eyebrow">{{ text.install.eyebrow }}</p>
+      <h2>{{ text.install.title }}</h2>
       <ol class="steps">
-        <li v-for="(s, i) in STEPS" :key="s.title" class="step">
+        <li v-for="(s, i) in text.install.steps" :key="s.title" class="step">
           <span class="n">{{ i + 1 }}</span>
           <h3>{{ s.title }}</h3>
           <p>{{ s.text }}</p>
