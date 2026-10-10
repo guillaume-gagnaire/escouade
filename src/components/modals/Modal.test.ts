@@ -30,4 +30,17 @@ describe('Modal', () => {
     await fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
     expect(onclose).toHaveBeenCalledTimes(1);
   });
+
+  it('closes on a click outside, not at the end of a selection dragged out of a field', async () => {
+    const onclose = vi.fn();
+    render(Modal, { title: 'Commit', onclose, children: body });
+    const overlay = screen.getByRole('dialog', { name: 'Commit' }).parentElement!;
+    await fireEvent.mouseDown(screen.getByRole('textbox', { name: 'Nom' }));
+    await fireEvent.mouseUp(overlay);
+    await fireEvent.click(overlay);
+    expect(onclose).not.toHaveBeenCalled();
+    await fireEvent.mouseDown(overlay);
+    await fireEvent.click(overlay);
+    expect(onclose).toHaveBeenCalledTimes(1);
+  });
 });

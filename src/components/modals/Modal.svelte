@@ -9,12 +9,20 @@
     children,
     footer,
   }: { title: string; width?: number; onclose: () => void; children: Snippet; footer?: Snippet } = $props();
+
+  // Only a click on the overlay closes it: not the end of a selection dragged out of a field (what was typed there
+  // would be lost).
+  let downOnOverlay = false;
 </script>
 
 <svelte:window onkeydown={(e) => e.key === 'Escape' && onclose()} />
 
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-<div class="overlay" onclick={onclose}>
+<div
+  class="overlay"
+  onmousedown={(e) => (downOnOverlay = e.target === e.currentTarget)}
+  onclick={(e) => downOnOverlay && e.target === e.currentTarget && onclose()}
+>
   <div
     class="modal"
     use:trapFocus
