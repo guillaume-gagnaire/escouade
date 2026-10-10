@@ -288,6 +288,7 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 | Ko / Mo | KB / MB | tailles écrites par le backend |
 | Assignés à moi / Sprint actif / À faire / Mes cartes | Assigned to me / Active sprint / To do / My cards | filtres de l’import |
 | Ouverte / Fermée | Open / Closed | états d’une issue GitHub |
+| Carte | Card | type d’un ticket Trello dans l’import ; « Tâche », « Sous-tâche » de Jira restent “Task”, “Sub-task” |
 | Non assigné(e) | Unassigned | |
 | refuse ces identifiants / refuse l’accès / limite les requêtes | refuses these credentials / denies access / limits the requests | refus d’un service (401, 403, 429) |
 | injoignable / réponse illisible | can’t be reached / unreadable answer | |

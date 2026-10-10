@@ -191,7 +191,8 @@ impl Trello {
                     id: id.to_string(),
                     key: format!("#{}", c["idShort"]),
                     title: c["name"].as_str().unwrap_or_default().to_string(),
-                    kind: "Carte".into(),
+                    kind: card(crate::i18n::ui()),
+                    kind_code: "card".into(),
                     meta: meta.into_iter().filter(|m| !m.is_empty()).collect(),
                     url: c["shortUrl"].as_str().unwrap_or_default().to_string(),
                     criteria: card_criteria(&mine, &desc),
@@ -240,6 +241,11 @@ impl Trello {
     }
 }
 
+/// What a Trello card is called in the import's list.
+fn card(lang: crate::i18n::Lang) -> String {
+    tr_in!(lang, "Carte", "Card")
+}
+
 /// The filter of the cards the account is a member of.
 fn mine_filter(lang: crate::i18n::Lang) -> IssueFilter {
     IssueFilter {
@@ -257,6 +263,7 @@ mod tests {
     #[test]
     fn the_filter_of_trello_reads_in_english() {
         assert_eq!(mine_filter(crate::i18n::Lang::En).label, "My cards");
+        assert_eq!(card(crate::i18n::Lang::En), "Card");
     }
 
     async fn trello() -> (FakeServer, Trello) {
@@ -366,6 +373,7 @@ mod tests {
             (c1.key.as_str(), c1.kind.as_str(), c1.id.as_str()),
             ("#151", "Carte", "c1")
         );
+        assert_eq!(c1.kind_code, "card");
         assert_eq!(c1.meta, ["Prêt pour Claude", "claude-ready"]);
         assert_eq!(c1.criteria, ["Filtre par date", "Colonnes IP"]);
         assert_eq!(c1.url, "https://trello.com/c/abc");

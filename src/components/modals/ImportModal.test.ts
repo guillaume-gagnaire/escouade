@@ -32,6 +32,7 @@ function issue(over: Partial<ExternalIssue> = {}): ExternalIssue {
     key: 'ATL-1287',
     title: 'Rafraîchir le token',
     kind: 'Story',
+    kindCode: 'story',
     meta: ['Haute', 'Ada L.', 'To Do'],
     url: 'https://atlas.atlassian.net/browse/ATL-1287',
     description: '',
@@ -45,7 +46,7 @@ function issue(over: Partial<ExternalIssue> = {}): ExternalIssue {
 const JIRA: IssuePage = {
   issues: [
     issue(),
-    issue({ id: 'ATL-1290', key: 'ATL-1290', title: 'Erreur 500 avec un +', kind: 'Bug', criteria: [] }),
+    issue({ id: 'ATL-1290', key: 'ATL-1290', title: 'Erreur 500 avec un +', kind: 'Bug', kindCode: 'bug', criteria: [] }),
     issue({ id: 'ATL-1301', key: 'ATL-1301', title: 'Masquer les tokens', imported: true }),
   ],
   filters: [
@@ -56,7 +57,9 @@ const JIRA: IssuePage = {
   total: null,
 };
 const TRELLO: IssuePage = {
-  issues: [issue({ service: 'trello', id: 'c1', key: '#151', title: 'Exporter le journal', kind: 'Carte', container: 'b1' })],
+  issues: [
+    issue({ service: 'trello', id: 'c1', key: '#151', title: 'Exporter le journal', kind: 'Carte', kindCode: 'card', container: 'b1' }),
+  ],
   filters: [{ id: 'mine', label: 'Mes cartes' }],
   next: null,
   total: null,
@@ -267,6 +270,25 @@ describe('ImportModal in English', () => {
     ).toBeInTheDocument();
     await userEvent.click(d.getByRole('button', { name: 'Link a source' }));
     expect(app.modal).toEqual({ kind: 'settings', tab: 'integrations', projectId: 'p1' });
+  });
+
+  it('colours a type by its code, whatever its name in English or French', async () => {
+    fakeBackend({
+      integration_issues: () => ({
+        ...JIRA,
+        issues: [
+          issue({ id: 'ATL-1', key: 'ATL-1', kind: 'Task', kindCode: 'task' }),
+          issue({ id: 'ATL-2', key: 'ATL-2', kind: 'Bug', kindCode: 'bug' }),
+          issue({ id: 'ATL-3', key: 'ATL-3', kind: 'Spike', kindCode: '' }),
+        ],
+      }),
+    });
+    render(ImportModal, { projectId: 'p1' });
+    await waitFor(() => expect(rowEn(/ATL-1/)).toBeInTheDocument());
+    const kind = (key: RegExp, name: string) => within(rowEn(key)).getByText(name).style.color;
+    expect(kind(/ATL-1/, 'Task')).toBe('oklch(0.74 0.12 235)');
+    expect(kind(/ATL-2/, 'Bug')).toBe('var(--del)');
+    expect(kind(/ATL-3/, 'Spike')).toBe('var(--muted)');
   });
 
   it('lists the tickets with the counts, the criteria and the ones already there in English', async () => {

@@ -154,7 +154,10 @@ export interface ExternalIssue {
   id: string;
   key: string;
   title: string;
+  /** As shown: Story, Bug, Tâche ; Carte ; Issue (in the interface's language for the names Escouade knows). */
   kind: string;
+  /** What the type is coloured by, the same in every language: task, subtask, bug, story, epic, card, issue; '' unknown. */
+  kindCode: string;
   meta: string[];
   url: string;
   description: string;

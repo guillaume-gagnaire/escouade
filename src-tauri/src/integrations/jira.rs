@@ -90,6 +90,19 @@ fn kind_label(lang: Lang, name: &str) -> String {
     }
 }
 
+/// The code of an issue's type (`ExternalIssue::kind_code`): Jira's names in English, and those of
+/// a Jira set up in French.
+fn kind_code(name: &str) -> &'static str {
+    match name {
+        "Task" | "Tâche" => "task",
+        "Sub-task" | "Subtask" | "Sous-tâche" => "subtask",
+        "Bug" => "bug",
+        "Story" => "story",
+        "Epic" | "Épopée" => "epic",
+        _ => "",
+    }
+}
+
 /// The priority of an issue as the import shows it (see `kind_label`).
 fn priority_label(lang: Lang, name: &str) -> String {
     match (lang, name) {
@@ -304,6 +317,7 @@ impl Jira {
         if let Some(s) = f["status"]["name"].as_str() {
             meta.push(s.to_string());
         }
+        let kind_name = f["issuetype"]["name"].as_str().unwrap_or("Ticket");
         ExternalIssue {
             service: S,
             // Its id stays when it moves to another project (its key changes).
@@ -315,10 +329,8 @@ impl Jira {
             url: format!("{}/browse/{key}", self.site),
             key,
             title: f["summary"].as_str().unwrap_or_default().to_string(),
-            kind: kind_label(
-                i18n::ui(),
-                f["issuetype"]["name"].as_str().unwrap_or("Ticket"),
-            ),
+            kind: kind_label(i18n::ui(), kind_name),
+            kind_code: kind_code(kind_name).to_string(),
             meta,
             criteria: criteria_of(&description),
             description,
@@ -411,6 +423,21 @@ mod tests {
         assert_eq!(
             no_transition(En, "In Progress", "Done", "ATL-1"),
             "Jira: no transition from “In Progress” to “Done” for ATL-1"
+        );
+        // The window colours a type by its code, the same whatever its name says.
+        assert_eq!(
+            [
+                "Task",
+                "Tâche",
+                "Sub-task",
+                "Sous-tâche",
+                "Bug",
+                "Story",
+                "Epic",
+                "Spike"
+            ]
+            .map(kind_code),
+            ["task", "task", "subtask", "subtask", "bug", "story", "epic", ""]
         );
     }
 
@@ -562,6 +589,7 @@ mod tests {
             (i.id.as_str(), i.key.as_str(), i.kind.as_str()),
             ("10001", "ATL-1287", "Tâche")
         );
+        assert_eq!(i.kind_code, "task");
         assert_eq!(i.meta, ["Haute", "Non assigné", "To Do"]);
         assert_eq!(i.url, format!("{}/browse/ATL-1287", server.url));
         assert_eq!(i.criteria, ["Refresh avant expiration", "Tests unitaires"]);

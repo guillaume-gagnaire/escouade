@@ -181,8 +181,13 @@ pub struct ExternalIssue {
     /// As shown: ATL-1287, #142, #42.
     pub key: String,
     pub title: String,
-    /// Story, Bug, Tâche ; Carte ; Issue.
+    /// As shown, in the interface's language for the names Escouade knows: Story, Bug, Tâche ;
+    /// Carte ; Issue.
     pub kind: String,
+    /// What the window colours it by, the same in every language: `task`, `subtask`, `bug`,
+    /// `story`, `epic` (Jira), `card` (Trello), `issue` (GitHub); empty for a type it does not
+    /// know (one a Jira was set up with).
+    pub kind_code: String,
     /// Its priority, assignee and state, those it has.
     pub meta: Vec<String>,
     pub url: String,

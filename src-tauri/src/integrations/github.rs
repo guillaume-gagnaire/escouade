@@ -312,6 +312,7 @@ fn issue(repo: &str, i: &Value) -> ExternalIssue {
         key: format!("#{n}"),
         title: i["title"].as_str().unwrap_or_default().to_string(),
         kind: "Issue".into(),
+        kind_code: "issue".into(),
         meta,
         url: i["html_url"].as_str().unwrap_or_default().to_string(),
         criteria: criteria_of(&body),
@@ -430,6 +431,7 @@ mod tests {
             (i.id.as_str(), i.key.as_str(), i.kind.as_str()),
             ("42", "#42", "Issue")
         );
+        assert_eq!(i.kind_code, "issue");
         assert_eq!(i.meta, ["bug", "@ada"]);
         assert_eq!(i.criteria, ["Plus de crash", "Test e2e"]);
         assert_eq!(page.issues[1].meta, ["Non assignée"]);

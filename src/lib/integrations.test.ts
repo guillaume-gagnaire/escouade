@@ -12,6 +12,7 @@ function issue(over: Partial<ExternalIssue> = {}): ExternalIssue {
     key: 'ATL-1',
     title: 'Un ticket',
     kind: 'Story',
+    kindCode: 'story',
     meta: [],
     url: '',
     description: '',
