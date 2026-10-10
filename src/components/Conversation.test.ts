@@ -13,6 +13,7 @@ vi.mock('../lib/terminals', () => ({
 }));
 
 import { applyConvOps, conversationOf, releaseIdle } from '../lib/conversations.svelte';
+import { setLang } from '../lib/i18n';
 import { app } from '../lib/state.svelte';
 import type { Agent } from '../lib/types';
 import { answerClock, settle } from '../test/conversation';
@@ -1486,5 +1487,63 @@ describe('Conversation answers from the keyboard', () => {
       app.nextWaiting();
       await waitFor(() => expect(field()).toHaveFocus());
     });
+  });
+});
+
+describe('Conversation in English', () => {
+  it('words the header, with the figures written as in English', async () => {
+    setLang('en');
+    setup({ status: 'running', contextTokens: 120_000, contextWindow: 200_000, activeMs: 151_000 });
+    expect(screen.getByText('In progress')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Editor' })).toHaveAttribute('title', 'Browse and edit the files of this agent');
+    expect(screen.getByText('Context').nextElementSibling).toHaveTextContent('120.0k / 200k');
+    expect(screen.getByText('Cost')).toBeInTheDocument();
+    expect(screen.getByText('Duration').nextElementSibling).toHaveTextContent('2m 31s');
+    expect(screen.getByText('Files ▸')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: /^Layout \(Ctrl\+Shift\+L\)$/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Classic layout' })).toBeInTheDocument();
+    expect(screen.getByText('Claude is working…')).toBeInTheDocument();
+  });
+
+  it('says in English that an agent is ready, archived or stopped', async () => {
+    setLang('en');
+    const ready = setup({ status: 'idle' });
+    expect(await screen.findByText('Agent ready')).toBeInTheDocument();
+    expect(screen.getByText(/^Describe the task to give to Claude\. The agent works in/)).toBeInTheDocument();
+    ready.unmount();
+    const stopped = setup({ status: 'error' });
+    expect(screen.getByText('The agent stopped. Send a message to restart Claude on the same session.')).toBeInTheDocument();
+    stopped.unmount();
+    setup({ archived: true });
+    expect(screen.getByText('Agent archived.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Restore' })).toBeInTheDocument();
+  });
+
+  it('says in English that the worktree is being set up', async () => {
+    setLang('en');
+    setup({ status: 'idle', setup: '1/2 · npm ci' });
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Setting up the worktree · 1/2 · npm ci — your messages will be sent once it’s done.',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Show output' }));
+    expect(screen.getByRole('log', { name: 'Output of 1/2 · npm ci' })).toHaveTextContent('No output yet.');
+  });
+
+  it('offers the older messages with the plural of English', async () => {
+    setLang('en');
+    const first = setup({ status: 'idle' }, many(100));
+    expect(await screen.findByRole('button', { name: 'Show the previous 20 messages' })).toBeInTheDocument();
+    first.unmount();
+    setup({ status: 'idle' }, many(81));
+    expect(await screen.findByRole('button', { name: 'Show the previous message' })).toBeInTheDocument();
+  });
+
+  it('follows a change of language while it is open', async () => {
+    setup({ status: 'running' });
+    expect(screen.getByText('Claude travaille…')).toBeInTheDocument();
+    setLang('en');
+    await tick();
+    expect(screen.getByText('Claude is working…')).toBeInTheDocument();
+    expect(screen.queryByText('Claude travaille…')).not.toBeInTheDocument();
   });
 });

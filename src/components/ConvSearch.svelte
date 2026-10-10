@@ -1,8 +1,10 @@
 <script lang="ts">
   import { conversationOf } from '../lib/conversations.svelte';
   import { trapFocus } from '../lib/focus';
-  import { fAgo, plural } from '../lib/format';
+  import { fAgo, fInt } from '../lib/format';
+  import { t } from '../lib/i18n';
   import { api } from '../lib/ipc';
+  import { keyLabel } from '../lib/platform';
   import { app } from '../lib/state.svelte';
   import type { ConvHit, ConvSearchResult } from '../lib/types';
 
@@ -53,13 +55,14 @@
   });
 
   const status = $derived.by(() => {
-    if (short) return 'Cherche dans les messages, les commandes et les fichiers des conversations de tes agents.';
-    if (loading && !result) return 'Recherche…';
-    if (!hits.length) return 'Aucun message ne correspond.';
-    const n = plural(hits.length, 'résultat', 'résultats');
-    if (result?.capped) return `Les ${hits.length} premiers résultats : précise ta recherche.`;
-    if (result?.timedOut) return `${n}, recherche arrêtée au bout de 5 s : précise ta recherche.`;
-    return n;
+    if (short) return t('conv.search.hint');
+    if (loading && !result) return t('conv.search.searching');
+    if (!hits.length) return t('conv.search.none');
+    const count = hits.length;
+    const n = fInt(count);
+    if (result?.capped) return t('conv.search.capped', { n });
+    if (result?.timedOut) return t('conv.search.timedOut', { count, n });
+    return t('conv.search.results', { count, n });
   });
 
   $effect(() => {
@@ -130,7 +133,7 @@
     close();
     const a = app.agents[hit.agentId];
     if (!a) {
-      app.toast('Cet agent n’existe plus.');
+      app.toast(t('conv.search.agentGone'));
       return;
     }
     if (a.archived) app.showArchived = true;
@@ -151,7 +154,7 @@
     role="dialog"
     tabindex="-1"
     aria-modal="true"
-    aria-label="Rechercher dans les conversations"
+    aria-label={t('conv.search.title')}
   >
     <div class="search">
       <span class="ic" aria-hidden="true">⌕</span>
@@ -161,33 +164,37 @@
         bind:value={text}
         autofocus
         spellcheck="false"
-        placeholder="Rechercher dans les conversations"
+        placeholder={t('conv.search.title')}
         role="combobox"
-        aria-label="Rechercher dans les conversations"
+        aria-label={t('conv.search.title')}
         aria-expanded={hits.length > 0}
         aria-controls="conv-hits"
         aria-autocomplete="list"
         aria-activedescendant={hits.length ? optionId(active) : undefined}
         onkeydown={onKeydown}
       />
-      <button class="icon-btn" style="width:28px;height:28px;font-size:16px" onclick={close} aria-label="Fermer">×</button>
+      <button class="icon-btn" style="width:28px;height:28px;font-size:16px" onclick={close} aria-label={t('common.close')}>×</button>
     </div>
     <div class="scope">
-      <div class="segmented" role="group" aria-label="Où chercher">
+      <div class="segmented" role="group" aria-label={t('conv.search.scope')}>
         <button class:on={!everywhere} aria-pressed={!everywhere} disabled={!app.project} onclick={() => (everywhere = false)}
-          >Ce projet</button
+          >{t('conv.search.thisProject')}</button
         >
-        <button class:on={everywhere} aria-pressed={everywhere} onclick={() => (everywhere = true)}>Tous les projets</button>
+        <button class:on={everywhere} aria-pressed={everywhere} onclick={() => (everywhere = true)}>{t('conv.search.allProjects')}</button>
       </div>
-      <label class="check"><input type="checkbox" bind:checked={archived} />Agents archivés</label>
+      <label class="check"><input type="checkbox" bind:checked={archived} />{t('conv.search.archivedAgents')}</label>
     </div>
-    <div class="list" id="conv-hits" role="listbox" aria-label="Résultats" aria-busy={loading} bind:this={list}>
+    <div class="list" id="conv-hits" role="listbox" aria-label={t('conv.search.resultsLabel')} aria-busy={loading} bind:this={list}>
       {#each groups as g (g.agentId)}
-        <div class="group" role="group" aria-label={[g.name, g.project, g.archived ? 'archivé' : ''].filter(Boolean).join(', ')}>
+        <div
+          class="group"
+          role="group"
+          aria-label={[g.name, g.project, g.archived ? t('conv.search.archived') : ''].filter(Boolean).join(', ')}
+        >
           <div class="who" aria-hidden="true">
             <span class="name">{g.name}</span>
             {#if g.project}<span class="proj">{g.project}</span>{/if}
-            {#if g.archived}<span class="tag">archivé</span>{/if}
+            {#if g.archived}<span class="tag">{t('conv.search.archived')}</span>{/if}
           </div>
           {#each g.hits as { hit, rank } (rank)}
             <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -220,8 +227,11 @@
       {/if}
       <div style="flex:1"></div>
       <span class="keys" aria-hidden="true"
-        ><kbd>↑</kbd><kbd>↓</kbd> choisir <span class="sep">·</span> <kbd>Entrée</kbd> ouvrir <span class="sep">·</span>
-        <kbd>Échap</kbd> fermer</span
+        ><kbd>↑</kbd><kbd>↓</kbd>
+        {t('conv.search.keyChoose')} <span class="sep">·</span> <kbd>{keyLabel('Enter')}</kbd>
+        {t('conv.search.keyOpen')} <span class="sep">·</span>
+        <kbd>{keyLabel('Esc')}</kbd>
+        {t('conv.search.keyClose')}</span
       >
     </div>
   </div>

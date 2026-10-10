@@ -2,6 +2,7 @@ import { createEvent, fireEvent, render, screen, waitFor } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { conversationOf } from '../lib/conversations.svelte';
+import { setLang } from '../lib/i18n';
 import { readPref, writePref } from '../lib/prefs';
 import { app } from '../lib/state.svelte';
 import { agent, fakeBackend, resetApp } from '../test/ipc';
@@ -512,5 +513,56 @@ describe('Composer in a narrow column (split layout)', () => {
     expect(stop).not.toHaveTextContent('Stop');
     // Claude takes a message sent during a turn at its next step: it is sent, not queued.
     expect(screen.getByRole('button', { name: 'Envoyer' })).toBeInTheDocument();
+  });
+});
+
+describe('Composer in English', () => {
+  beforeEach(() => resetApp());
+
+  it('speaks English in the field, the bar and the menus, and keeps the shortcuts of the keyboard', async () => {
+    setLang('en');
+    const { textarea } = setup({ model: 'opus', effort: 'high', mode: 'plan' });
+    expect(textarea).toHaveAttribute('placeholder', 'Describe the task to give to Claude…');
+    expect(screen.getByRole('button', { name: 'Send' })).toHaveAttribute('title', 'Enter to send · Shift+Enter for a new line');
+    expect(screen.getByRole('button', { name: 'Attach a file' })).toHaveAttribute(
+      'title',
+      'Attach an image, a PDF or a text file (or paste / drop it)',
+    );
+    // “Mode” alone: “Model” begins the same.
+    await userEvent.click(screen.getByRole('button', { name: /^Mode\b/ }));
+    expect(screen.getByText('Auto edits')).toBeInTheDocument();
+    expect(screen.getByText('Claude analyzes and proposes a plan without changing anything')).toBeInTheDocument();
+  });
+
+  it('says in English that Haiku has no effort or Auto mode, and what to do while Claude works', async () => {
+    setLang('en');
+    setup({ model: 'haiku', status: 'running' });
+    expect(screen.getByRole('button', { name: /^Effort/ })).toHaveAttribute('title', 'Haiku doesn’t support effort');
+    expect(screen.getByRole('button', { name: 'Stop' })).toHaveAttribute('title', 'Interrupt (Esc)');
+    expect(screen.getByRole('button', { name: 'Send' })).toHaveAttribute(
+      'title',
+      'Claude takes it into account at its next step · Enter to send',
+    );
+    await userEvent.click(screen.getByRole('button', { name: /^Mode\b/ }));
+    expect(screen.getByText('unavailable with Haiku')).toBeInTheDocument();
+  });
+
+  it('refuses a file in English, naming the size it is over', async () => {
+    setLang('en');
+    setup();
+    const user = userEvent.setup({ applyAccept: false });
+    const input = screen.getByLabelText('Attach a file', { selector: 'input' });
+    await user.upload(input, new File([new Uint8Array([80, 75, 3, 4])], 'sources.zip', { type: 'application/zip' }));
+    await waitFor(() => expect(app.toasts.at(-1)).toMatchObject({ kind: 'error' }));
+    expect(app.toasts.at(-1)?.text).toBe(
+      '“sources.zip” can’t be attached. Supported files are images (PNG, JPEG, GIF, WebP), PDFs and text files.',
+    );
+    const big = new File(['%PDF-1.4'], 'rapport.pdf', { type: 'application/pdf' });
+    Object.defineProperty(big, 'size', { value: 18 * 1024 * 1024 + 1 });
+    await user.upload(input, big);
+    await waitFor(() => expect(app.toasts.at(-1)?.text).toBe('rapport.pdf is over 18 MB'));
+    const small = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
+    await user.upload(input, small);
+    expect(await screen.findByRole('button', { name: 'Remove a.pdf' })).toBeInTheDocument();
   });
 });

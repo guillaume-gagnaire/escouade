@@ -1,10 +1,12 @@
 <script lang="ts">
   import { keyLabel } from '../lib/platform';
   import { onMount, tick, untrack } from 'svelte';
+  import { t } from '../lib/i18n';
+  import Rich from '../lib/i18n/Rich.svelte';
   import { api } from '../lib/ipc';
   import { conversationOf, type ReadingPlace } from '../lib/conversations.svelte';
   import { splitEscouade } from '../lib/escouade';
-  import { fDur, fTok, plural } from '../lib/format';
+  import { fDur, fNum, fTok } from '../lib/format';
   import { modelLabel } from '../lib/models';
   import { contextUse, ESTIMATE_HINT, fSpentUsd, spent } from '../lib/spend';
   import { injectedSource, parseAgentMessage, subagentLabels } from '../lib/events';
@@ -28,7 +30,21 @@
 
   let { agent, project }: { agent: Agent; project: Project } = $props();
 
-  const SL: Record<string, string> = { running: 'En cours', waiting: 'Question', idle: 'Prêt', done: 'Terminé', error: 'Erreur' };
+  /** The words that tell what an agent is doing, read when shown (the language of the interface can change). */
+  function statusLabel(status: string): string {
+    switch (status) {
+      case 'running':
+        return t('conv.status.running');
+      case 'waiting':
+        return t('conv.status.waiting');
+      case 'idle':
+        return t('conv.status.idle');
+      case 'done':
+        return t('conv.status.done');
+      default:
+        return t('conv.status.error');
+    }
+  }
   const SC: Record<string, string> = {
     running: 'var(--ok)',
     waiting: 'var(--wait)',
@@ -94,8 +110,9 @@
     const used = agent.contextTokens;
     const size = agent.contextWindow;
     const use = contextUse(agent);
-    if (!use) return { shown: used ? fTok(used) : '—', title: 'Contexte actuel', full: false };
-    const window = size >= 1e6 ? `${size / 1e6} M` : `${Math.round(size / 1e3)} k`;
+    if (!use) return { shown: used ? fTok(used) : '—', title: t('conv.header.contextNow'), full: false };
+    const window =
+      size >= 1e6 ? t('format.tokens.million', { n: fNum(size / 1e6, 2) }) : t('format.tokens.thousand', { n: Math.round(size / 1e3) });
     return { shown: `${fTok(used)} / ${window}`, title: use.title, full: use.full };
   });
   // The editor shows the agent's own checkout: its worktree, else the project's.
@@ -219,7 +236,7 @@
     restore(at);
     if (!olderButton) scroller.focus({ preventScroll: true });
     drewOlder = {
-      text: plural(count, 'message précédent affiché', 'messages précédents affichés'),
+      text: t('conv.older.drawn', { count }),
       seq: (drewOlder?.seq ?? 0) + 1,
     };
   }
@@ -385,7 +402,7 @@
   function rename() {
     app.modal = {
       kind: 'rename',
-      title: "Renommer l'agent",
+      title: t('conv.header.renameTitle'),
       value: agent.name,
       onSubmit: (name) => app.run(api.renameAgent(agent.id, name)),
     };
@@ -411,72 +428,70 @@
   <header class="head">
     <div class="who">
       <div class="line1">
-        <span class="name" ondblclick={rename} role="presentation" title="Double-clic pour renommer">{agent.name}</span>
-        <span class="st" style:color={SC[agent.status]}><StatusDot status={agent.status} size={7} />{SL[agent.status]}</span>
+        <span class="name" ondblclick={rename} role="presentation" title={t('conv.header.renameHint')}>{agent.name}</span>
+        <span class="st" style:color={SC[agent.status]}><StatusDot status={agent.status} size={7} />{statusLabel(agent.status)}</span>
       </div>
       <span class="sub mono">{project.name} / {branch || '—'}</span>
     </div>
     <div style="flex:1"></div>
     <button
       class="btn edit"
-      aria-label="Éditeur"
-      title="Parcourir et éditer les fichiers de cet agent"
+      aria-label={t('common.editor')}
+      title={t('conv.header.editorHint')}
       onclick={() => app.openEditor({ projectId: project.id, source: editorSource })}
     >
-      <span class="mono glyph">&lt;/&gt;</span><span class="lbl">Éditeur</span>
+      <span class="mono glyph">&lt;/&gt;</span><span class="lbl">{t('common.editor')}</span>
     </button>
     {#if agent.recipe || agent.isola}
       {#if canTest(agent)}
         <button
           class="btn test"
-          aria-label="▶ Tester"
-          title={agent.isola
-            ? 'Lance les services isola de ce worktree et ouvre la fonctionnalité dans le navigateur'
-            : 'Lance le worktree de cet agent et ouvre la fonctionnalité dans le navigateur'}
+          aria-label={`▶ ${t('conv.header.test')}`}
+          title={agent.isola ? t('conv.header.testIsolaHint') : t('conv.header.testHint')}
           onclick={() => testAgent(agent, project)}
         >
-          <span class="glyph">▶</span><span class="lbl">Tester</span>
+          <span class="glyph">▶</span><span class="lbl">{t('conv.header.test')}</span>
         </button>
       {/if}
     {:else if canPrepare(agent)}
       <button
         class="btn test"
-        aria-label="Préparer le lancement"
-        title="Demande à l'agent comment lancer son worktree, sur ses propres ports"
+        aria-label={t('conv.header.prepare')}
+        title={t('conv.header.prepareHint')}
         onclick={() => prepareLaunch(agent)}
       >
-        <span class="glyph">▷</span><span class="lbl">Préparer le lancement</span>
+        <span class="glyph">▷</span><span class="lbl">{t('conv.header.prepare')}</span>
       </button>
     {/if}
     <div class="metrics">
       <span class="model mono">{modelLabel(agent.model, app.models)}</span>
       <div class="m" title={context.title}>
-        <span class="k">Contexte</span><span class="v mono" class:full={context.full}>{context.shown}</span>
+        <span class="k">{t('conv.header.context')}</span><span class="v mono" class:full={context.full}>{context.shown}</span>
       </div>
-      <div class="m opt"><span class="k">Tokens</span><span class="v mono">{fTok(used.tokens)}</span></div>
+      <div class="m opt"><span class="k">{t('conv.header.tokens')}</span><span class="v mono">{fTok(used.tokens)}</span></div>
       <div class="m opt2" title={used.estimated ? ESTIMATE_HINT : undefined}>
-        <span class="k">Coût</span><span class="v mono">{fSpentUsd(used)}</span>
+        <span class="k">{t('common.cost')}</span><span class="v mono">{fSpentUsd(used)}</span>
       </div>
       {#if app.split}
-        <div class="m opt2"><span class="k">Fichiers</span><span class="v mono">{files}</span></div>
+        <div class="m opt2"><span class="k">{t('common.files')}</span><span class="v mono">{files}</span></div>
       {:else}
         <button
           class="m files opt2"
           class:open={app.filesOpen}
-          title="Voir les fichiers non commités"
+          title={t('conv.header.filesHint')}
           onclick={() => (app.filesOpen = !app.filesOpen)}
         >
-          <span class="k">Fichiers ▸</span><span class="v mono">{files}</span>
+          <span class="k">{t('common.files')} ▸</span><span class="v mono">{files}</span>
         </button>
       {/if}
-      <div class="m opt"><span class="k">Durée</span><span class="v mono">{duration}</span></div>
+      <div class="m opt"><span class="k">{t('conv.header.duration')}</span><span class="v mono">{duration}</span></div>
     </div>
-    <div class="segmented layout" role="group" aria-label={`Disposition (${keyLabel('Ctrl+Maj+L')})`}>
+    <div class="segmented layout" role="group" aria-label={t('conv.header.layout', { key: keyLabel('Ctrl+Shift+L') })}>
       <button
         class:on={!app.split}
         aria-pressed={!app.split}
-        aria-label="Disposition classique"
-        title="Disposition classique"
+        aria-label={t('conv.header.layoutClassic')}
+        title={t('conv.header.layoutClassic')}
         onclick={() => app.split && app.toggleLayout()}
       >
         <svg width="16" height="12" viewBox="0 0 16 12" aria-hidden="true"
@@ -493,8 +508,8 @@
       <button
         class:on={app.split}
         aria-pressed={app.split}
-        aria-label="Conversation et fichiers côte à côte"
-        title="Conversation et fichiers côte à côte"
+        aria-label={t('conv.header.layoutSplit')}
+        title={t('conv.header.layoutSplit')}
         onclick={() => !app.split && app.toggleLayout()}
       >
         <svg width="16" height="12" viewBox="0 0 16 12" aria-hidden="true"
@@ -526,21 +541,21 @@
     <div class="msgs" bind:this={content}>
       {#if conv.error}
         <div class="load-error">
-          Impossible de charger la conversation : {conv.error}
-          <button class="btn" onclick={() => conv.load()}>Réessayer</button>
+          {t('conv.loadError', { error: conv.error })}
+          <button class="btn" onclick={() => conv.load()}>{t('common.retry')}</button>
         </div>
       {:else if conv.loaded && top.length === 0 && !conv.waiting.length}
         <div class="empty">
-          <span class="t">Agent prêt</span>
-          <span class="s">Décris la tâche à confier à Claude. L'agent travaille dans <span class="mono">{agent.cwd}</span>.</span>
+          <span class="t">{t('conv.empty.title')}</span>
+          <span class="s"><Rich k="conv.empty.hint">{#snippet cwd()}<span class="mono">{agent.cwd}</span>{/snippet}</Rich></span>
           {#if !app.claudeFound}
-            <span class="warn">Claude Code est introuvable sur ce poste : installe-le ou indique son chemin dans les réglages (⚙).</span>
+            <span class="warn">{t('conv.empty.claudeMissing')}</span>
           {/if}
         </div>
       {/if}
       {#if older > 0}
         <button class="btn older" bind:this={olderButton} onclick={showOlder}>
-          {older === 1 ? 'Afficher le précédent' : `Afficher les ${older} précédents`}
+          {t('conv.older.show', { count: older })}
         </button>
       {/if}
       {#each drawn as item, j (item.id)}
@@ -604,7 +619,7 @@
       {/each}
       {#if running}
         <div class="working">
-          <span class="dots"><span></span><span></span><span></span></span>Claude travaille…
+          <span class="dots"><span></span><span></span><span></span></span>{t('conv.working')}
         </div>
       {/if}
       {#if agent.setup}
@@ -621,17 +636,17 @@
   </div>
 
   {#if showJump}
-    <button class="jump" onclick={toBottom}>↓ Nouveaux messages</button>
+    <button class="jump" onclick={toBottom}>↓ {t('conv.newMessages')}</button>
   {/if}
 
   {#if agent.archived}
     <div class="banner">
-      Agent archivé.
-      <button class="btn" onclick={() => app.run(api.archiveAgent(agent.id, false))}>Restaurer</button>
+      {t('conv.archived.text')}
+      <button class="btn" onclick={() => app.run(api.archiveAgent(agent.id, false))}>{t('conv.archived.restore')}</button>
     </div>
   {:else}
     {#if agent.status === 'error'}
-      <div class="banner err">L'agent s'est arrêté. Envoie un message pour relancer Claude sur la même session.</div>
+      <div class="banner err">{t('conv.stopped')}</div>
     {/if}
     <Composer {agent} />
   {/if}

@@ -20,6 +20,7 @@ export const ALLOWED: Allowed[] = [
   // L7 — nav, git
 
   // L8 — conv, composer
+  { file: 'src/components/Conversation.svelte', text: 'C', why: 'l’initiale de Claude dans l’avatar de ses messages : un nom propre' },
 
   // L9 — runs, shell
 
