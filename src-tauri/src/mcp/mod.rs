@@ -80,13 +80,12 @@ pub struct McpStatus {
 const ALL_TOOLS: &str = "mcp__escouade";
 
 /// What an agent's process is started with of Escouade (`Core::agent_access`).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum AgentAccess {
-    /// Its project lets its agents use Escouade, but the server is not running: nothing to reach,
-    /// the process is started as it always was.
-    None,
-    /// Its project does not let its agents use Escouade: its tools are refused to it, those of an
-    /// entry of the user's config of Claude Code included (the agent would inherit it).
+    /// Its tools are refused to it, those of an entry of the user's config of Claude Code included
+    /// (the agent would inherit it, and act as Claude outside Escouade, out of the rule of its own
+    /// project only): its project does not let its agents use Escouade, or it does and the server
+    /// is not running (nothing to reach), or no token could be given.
     Denied,
     /// The server, as the agent itself: `config` (`--mcp-config`) names it with `token`, the
     /// agent's own, valid until the process stops (`McpServer::release_agent`).
@@ -99,7 +98,6 @@ impl AgentAccess {
     /// Both options take several values: given last, nothing after them is read as one.
     pub fn args(&self) -> Vec<String> {
         match self {
-            AgentAccess::None => Vec::new(),
             AgentAccess::Denied => vec!["--disallowedTools".into(), ALL_TOOLS.into()],
             AgentAccess::Granted { config, .. } => {
                 vec!["--mcp-config".into(), config.to_string_lossy().into_owned()]
@@ -111,7 +109,21 @@ impl AgentAccess {
     pub fn token(&self) -> Option<&str> {
         match self {
             AgentAccess::Granted { token, .. } => Some(token),
-            _ => None,
+            AgentAccess::Denied => None,
+        }
+    }
+}
+
+/// Written by hand: the token is a secret, and a log or a failed assertion prints a `{:?}`.
+impl std::fmt::Debug for AgentAccess {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AgentAccess::Denied => f.write_str("Denied"),
+            AgentAccess::Granted { config, .. } => f
+                .debug_struct("Granted")
+                .field("config", config)
+                .field("token", &"<masked>")
+                .finish(),
         }
     }
 }
@@ -579,7 +591,8 @@ impl<R: Runtime> Core<R> {
     /// - its project not letting its agents use Escouade, its tools refused, those of an entry of
     ///   that name in the user's config of Claude Code included, the server running or not (the
     ///   entry may be declared while it is stopped: it was while Claude drove Escouade);
-    /// - letting them, with the server not running, nothing (none to reach);
+    /// - letting them, with the server not running, the same (none to reach, and an entry of the
+    ///   user's would be inherited as Claude outside Escouade's);
     /// - letting them, the server as the agent itself.
     pub(crate) fn agent_access(&self, agent_id: &str, project_id: &str) -> AgentAccess {
         let allowed = self
@@ -592,7 +605,7 @@ impl<R: Runtime> Core<R> {
         }
         let status = self.mcp.status();
         if !status.running {
-            return AgentAccess::None;
+            return AgentAccess::Denied;
         }
         match self.mcp.grant_agent(agent_id, status.port) {
             Ok(access) => access,
