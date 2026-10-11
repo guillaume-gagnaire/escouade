@@ -8,7 +8,7 @@ Escouade s'appelait auparavant « Claude Code Manager » : la mise à jour rempl
 
 ## Fonctionnalités
 
-Cette liste décrit la version 1.7, pas encore publiée : la dernière release est la 1.6.0. Ce qui change d'une version à l'autre est dans le [journal des versions](CHANGELOG.md).
+Ce qui change d'une version à l'autre est dans le [journal des versions](CHANGELOG.md).
 
 - **Français et anglais** : l'interface existe dans les deux langues, celle du système par défaut, au choix dans Réglages › Application, sans redémarrer ; nombres, montants, dates et pluriels suivent la langue. Une langue à part pour les textes que Claude rédige (messages de commit, descriptions de pull request, commentaires publiés dans Jira, Trello et GitHub, consignes aux agents), car beaucoup d'équipes commitent en anglais avec une interface en français. Le site existe aussi en deux langues.
 - **Plusieurs comptes Claude** : un compte par dossier de configuration (perso, pro…), chacun connecté depuis Escouade (« Ajouter un compte… » partage, par lien ou par copie, tes réglages, skills, agents et plugins, jamais la connexion). Chaque agent reste sur son compte ; un nouvel agent ou un ticket part sur le premier compte sous le seuil de « Pause au-delà du quota » (ou le « Compte préféré » du projet), et le pilote auto ne se met en pause que quand tous sont au seuil. Un agent arrêté par la limite d'usage peut reprendre, avec sa conversation, sur un autre compte (« Reprendre sur Pro », ou tout seul pour un agent de ticket si tu l'actives). Les statistiques se filtrent par compte. Ton compte habituel devient « Principal » et se lance comme avant.

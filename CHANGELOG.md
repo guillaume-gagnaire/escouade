@@ -2,7 +2,7 @@
 
 Les changements visibles d'Escouade, version par version. Les notes de chaque release GitHub (et de la mise à jour intégrée) reprennent la section de sa version.
 
-## [1.7.0] — à venir
+## [1.7.0] — 2026-10-11
 
 ### Ajouts
 
