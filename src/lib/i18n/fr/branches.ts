@@ -124,6 +124,8 @@ export default {
     launchHere: 'Lancer un agent sur cette branche',
     /** Why the branch of the project’s folder can’t be picked. */
     isFolderBranch: 'C’est la branche du dossier du projet : un agent sans worktree y travaille déjà, ou change de branche d’abord.',
+    /** Why the board’s target branch can’t be picked (the tickets are merged into it). */
+    isTargetBranch: 'C’est la branche cible du Kanban : un agent n’y travaille pas directement.',
     /** `{branch}`: the branch the agent works on, which stays whatever its worktree becomes. */
     deleteWorktree: 'Supprimer aussi le worktree (la branche {branch} est conservée)',
   },

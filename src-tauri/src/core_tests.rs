@@ -5149,6 +5149,52 @@ fn one_shots_with(config_dir: &str) -> usize {
 }
 
 #[tokio::test]
+async fn settings_saved_before_the_languages_stay_in_french_and_a_new_install_follows_the_system() {
+    let load = |name: &str, settings: Option<&str>| {
+        let dir = test_dir(name);
+        let data = DataDir::new(dir.join("data"));
+        data.ensure().unwrap();
+        if let Some(text) = settings {
+            std::fs::write(data.settings_file(), text).unwrap();
+        }
+        let app = mock_app();
+        let (core, _rx) = Core::load(app.handle().clone(), data);
+        let s = core.settings.read().clone();
+        (s.language, s.claude_language)
+    };
+    let pair = |a: &str, b: &str| (a.to_string(), b.to_string());
+    // A settings.json of 1.6, or older: no `language` key. The app was in French only, and the
+    // user's system may be English: they must not find it turned English by the update.
+    assert_eq!(
+        load("fw-lang-old", Some(r#"{"claudePath":"","sound":false}"#)),
+        pair("fr", "ui")
+    );
+    assert_eq!(load("fw-lang-old-empty", Some("{}")), pair("fr", "ui"));
+    // Once the key is there, it is the user's: "system" included, and whatever Claude writes in.
+    assert_eq!(
+        load(
+            "fw-lang-system",
+            Some(r#"{"language":"system","claudeLanguage":"en"}"#)
+        ),
+        pair("system", "en")
+    );
+    assert_eq!(
+        load(
+            "fw-lang-en",
+            Some(r#"{"language":"en","claudeLanguage":"ui"}"#)
+        ),
+        pair("en", "ui")
+    );
+    // A new install has no file: it follows the system.
+    assert_eq!(load("fw-lang-new", None), pair("system", "ui"));
+    // An unreadable one is a new install's (a copy of it is kept).
+    assert_eq!(
+        load("fw-lang-broken", Some("{ not json")),
+        pair("system", "ui")
+    );
+}
+
+#[tokio::test]
 async fn settings_and_agents_saved_before_the_accounts_load_on_principal() {
     let dir = test_dir("accounts-old-files");
     let data = DataDir::new(dir.join("data"));
@@ -6766,7 +6812,8 @@ async fn an_agent_that_is_no_tickets_stays_on_its_account_at_the_limit_and_waits
     let h = harness("accounts-limit-no-ticket");
     let (p, _) = h.project(true).await;
     pro_out_of_quota_and_team(&h);
-    assert!(h.core.settings.read().switch_on_limit);
+    // The move is switched on (it is off by default): it is still for the tickets' agents alone.
+    h.core.settings.write().switch_on_limit = true;
     let id = agent_on(&h, &p, "pro").await.id;
     turn_over(&h, &id, "Bonjour").await;
     h.wait("its resume planned", |h| h.agent(&id).resume_at.is_some())

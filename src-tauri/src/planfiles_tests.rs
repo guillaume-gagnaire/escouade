@@ -1295,6 +1295,10 @@ fn a_stream_or_a_device_name_is_not_a_plan() {
         "docs/superpowers/plans/nul.md",
         "docs/superpowers/plans/Com1.md",
         "docs/superpowers/plans/lpt9.sub.md",
+        // The superscript digits are devices too (`COM¹`, `LPT²`…), as Windows reserves them.
+        "docs/superpowers/plans/COM¹.md",
+        "docs/superpowers/plans/com².md",
+        "docs/superpowers/plans/Lpt³.sub.md",
         "docs/superpowers/aux/demo.md",
         "C:demo.md",
     ] {
@@ -1306,6 +1310,8 @@ fn a_stream_or_a_device_name_is_not_a_plan() {
         "docs/superpowers/plans/com0.md",
         "docs/superpowers/plans/com10.md",
         "docs/superpowers/plans/nullable.md",
+        "docs/superpowers/plans/com⁴.md",
+        "docs/superpowers/plans/com¹¹.md",
     ] {
         assert!(relative_to(&r.root, named).is_some(), "{named}");
     }

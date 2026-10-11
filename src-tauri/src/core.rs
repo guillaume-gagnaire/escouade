@@ -255,6 +255,16 @@ pub(crate) fn folder_branch_refusal(lang: i18n::Lang) -> String {
     )
 }
 
+/// Refused: the branch an agent (or a ticket's) was asked to work on is the board's target branch,
+/// which the tickets are merged into (the Kanban's, not an agent's to work on directly).
+pub(crate) fn target_branch_refusal(lang: i18n::Lang) -> String {
+    tr_in!(
+        lang,
+        "C’est la branche cible du Kanban : un agent n’y travaille pas directement.",
+        "It’s the board’s target branch: an agent doesn’t work on it directly."
+    )
+}
+
 /// « Intégrer <base> » refused: the agent's worktree has changes of its own.
 pub(crate) fn integrate_dirty(lang: i18n::Lang) -> String {
     tr_in!(
@@ -774,6 +784,26 @@ fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Option<T> {
     }
 }
 
+/// The settings file, the defaults when there is none (a new install follows the system's language)
+/// or when it is unreadable (a copy is kept). A file written before the interface had languages
+/// (before 1.7: no `language` key) was shown in French, and stays so: it must not turn English on
+/// an English system the day the app is updated. Whatever `language` says, when the key is there,
+/// is the user's.
+fn read_settings(path: &Path) -> Settings {
+    let Some(mut settings) = read_json::<Settings>(path) else {
+        return Settings::default();
+    };
+    let has_language = std::fs::read_to_string(path)
+        .ok()
+        .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+        .is_some_and(|v| v.get("language").is_some());
+    if !has_language {
+        settings.language = "fr".into();
+        settings.claude_language = "ui".into();
+    }
+    settings
+}
+
 const CLAUDE_BASE_ARGS: &[&str] = &[
     "--output-format",
     "stream-json",
@@ -1208,7 +1238,7 @@ impl<R: Runtime> Core<R> {
         if let Err(e) = data.ensure() {
             log::error!("cannot create data dir: {e}");
         }
-        let mut settings: Settings = read_json(&data.settings_file()).unwrap_or_default();
+        let mut settings = read_settings(&data.settings_file());
         // First: what the backend writes from now on (the menus, its texts) is in these languages.
         let lang = i18n::configure(&settings.language, &settings.claude_language);
         log::info!("languages: {lang:?}");
@@ -1495,9 +1525,9 @@ impl<R: Runtime> Core<R> {
         let (mcp_enabled, before) = (s.mcp_enabled, self.lang());
         let mcp_was_enabled = std::mem::replace(&mut *self.settings.write(), s).mcp_enabled;
         if mcp_was_enabled && !mcp_enabled {
-            // « Claude peut piloter Escouade » turned off: its entry leaves every account and the
-            // token changes (`declare_now`), once the server is stopped or kept by a project.
-            self.mcp.ask_renewal();
+            // « Claude peut piloter Escouade » turned off: the token changes at once, and its entry
+            // leaves every account (`declare_now`, on its own task).
+            self.mcp.turned_off();
         }
         let lang = self.lang();
         if lang != before {
@@ -3892,8 +3922,9 @@ impl<R: Runtime> Core<R> {
 
     /// The worktree of an agent on the branch `name`, which exists (a local one, or a remote one
     /// through the local branch that tracks it, made when there is none): (path, local branch,
-    /// base). Refused for the branch of the project's folder and for one another worktree has
-    /// (`IN_WORKTREE` for an agent's); nothing is made then.
+    /// base). Refused for the board's target branch (the tickets are merged into it), for the
+    /// branch of the project's folder and for one another worktree has (`IN_WORKTREE` for an
+    /// agent's); nothing is made then.
     async fn worktree_on_branch(
         &self,
         project: &Project,
@@ -3904,6 +3935,11 @@ impl<R: Runtime> Core<R> {
         // Not while a switch or a pull moves the folder's branch.
         let lock = self.sync_lock(&root);
         let _guard = lock.lock().await;
+        // First: when the folder is on the target, that is the reason, not the folder.
+        let target = project.board.target.trim();
+        if !target.is_empty() && git::local_name(&root, name).await? == target {
+            bail!(target_branch_refusal(i18n::ui()));
+        }
         if let Some(local) = git::local_of(&root, name).await? {
             if self.checked_out_here(&root, &local).await? {
                 bail!(folder_branch_refusal(i18n::ui()));

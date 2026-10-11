@@ -266,7 +266,7 @@ pub struct UpdateTicketArgs {
     )]
     pub title: Option<String>,
     #[schemars(
-        description = "The new description (10,000 characters at most). Leave it out to keep the current one."
+        description = "The new description (10,000 characters at most, not counting the line saying who edited it, which is added after it). Leave it out to keep the current one."
     )]
     pub description: Option<String>,
     #[schemars(
@@ -495,7 +495,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Edit a ticket of the To do column: the fields you leave out stay as they are. A ticket that has started cannot be edited, and a dependency that would make two tickets wait for each other is refused. Answers the ticket as get_ticket does.",
+        description = "Edit a ticket of the To do column: the fields you leave out stay as they are. A ticket that has started cannot be edited, and a dependency that would make two tickets wait for each other is refused. When you change the title, the description or the criteria, the description ends with a line saying who edited the ticket, in the place of the one that said who created it. Answers the ticket as get_ticket does.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,

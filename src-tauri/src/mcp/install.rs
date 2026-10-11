@@ -476,7 +476,7 @@ impl<R: Runtime> Core<R> {
     /// The declaration in Claude Code is to be brought in step with the settings: on its own task
     /// (the commands are slow), unless nothing is to be done (off, and nothing declared to take out).
     pub(crate) fn declare_in_claude(&self) {
-        if !self.settings.read().mcp_enabled && !self.mcp.renew.load(Ordering::Acquire) {
+        if !self.settings.read().mcp_enabled && !self.mcp.withdraw.load(Ordering::Acquire) {
             return;
         }
         let Some(core) = self.weak().upgrade() else {
@@ -520,9 +520,10 @@ impl<R: Runtime> Core<R> {
     /// - on, with the server running: the server declared in every active account (left alone when
     ///   it is there as wanted, replaced when it is another, added when it is absent), each account's
     ///   result told to the window;
-    /// - off, after it was on: the token changed first, so that an entry that stays (a refusal, a
-    ///   `claude` that is gone, a crash) opens nothing, then taken out of every account, whether
-    ///   active or not.
+    /// - off, after it was on: taken out of every account, whether active or not (the token was
+    ///   changed when it was turned off, `McpServer::turned_off`, so that an entry that stays — a
+    ///   refusal, a `claude` that is gone, a crash, the app quitting before this run — opens
+    ///   nothing).
     pub(crate) async fn declare_now(&self) {
         self.declare_run().await;
         #[cfg(test)]
@@ -531,18 +532,13 @@ impl<R: Runtime> Core<R> {
 
     async fn declare_run(&self) {
         let _one = self.mcp.declaring.lock().await;
-        let renew = self.mcp.renew.swap(false, Ordering::AcqRel);
+        let withdrawing = self.mcp.withdraw.swap(false, Ordering::AcqRel);
         if self.quitting.load(Ordering::Acquire) {
             return;
         }
         let settings = self.settings.read().clone();
         if !settings.mcp_enabled {
-            if renew {
-                // The token first: from then on the old one opens nothing, whatever the commands
-                // below do (a slow one, a refusal, a crash of the app).
-                if let Err(e) = self.mcp.renew_external_token() {
-                    log::error!("mcp: token not changed: {e:#}");
-                }
+            if withdrawing {
                 for account in &settings.accounts {
                     let Ok(target) = self.install_target(&settings, account) else {
                         continue;
@@ -555,13 +551,8 @@ impl<R: Runtime> Core<R> {
             self.mcp.tell_declared(Vec::new());
             return;
         }
-        // Turned off and on again before the run: the entries are replaced below, with the new
-        // token.
-        if renew {
-            if let Err(e) = self.mcp.renew_external_token() {
-                log::error!("mcp: token not changed: {e:#}");
-            }
-        }
+        // Turned off and on again before the run: the token changed when it was turned off, and the
+        // entries are replaced below, with the new one.
         let status = self.mcp.status();
         let token = self.mcp.external_token();
         let (true, Ok(token)) = (status.running, token) else {

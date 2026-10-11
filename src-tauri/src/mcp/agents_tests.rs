@@ -94,7 +94,6 @@ async fn admitted(port: u16, token: &str) -> bool {
 
 #[test]
 fn what_an_agents_process_is_given_of_escouade_never_holds_its_token() {
-    assert!(AgentAccess::None.args().is_empty());
     assert_eq!(
         AgentAccess::Denied.args(),
         ["--disallowedTools", "mcp__escouade"]
@@ -105,6 +104,23 @@ fn what_an_agents_process_is_given_of_escouade_never_holds_its_token() {
     };
     // A path, not the JSON itself: a `.cmd` launcher takes 8,191 characters at most.
     assert_eq!(granted.args(), ["--mcp-config", "C:/data/mcp/a1.json"]);
+}
+
+#[test]
+fn an_agents_access_never_prints_its_token() {
+    let granted = AgentAccess::Granted {
+        config: PathBuf::from("C:/data/mcp/a1.json"),
+        token: "s3cr3t".into(),
+    };
+    // The pretty form too (`{:#?}`): a log or a failed assertion writes either.
+    for shown in [format!("{granted:?}"), format!("{granted:#?}")] {
+        assert!(!shown.contains("s3cr3t"), "{shown}");
+        assert!(
+            shown.contains("Granted") && shown.contains("a1.json"),
+            "{shown}"
+        );
+    }
+    assert_eq!(format!("{:?}", AgentAccess::Denied), "Denied");
 }
 
 #[tokio::test]
@@ -167,14 +183,14 @@ async fn an_agent_reaches_escouade_with_a_token_of_its_own_only_where_its_projec
     assert!(!admitted(port, &token).await);
 
     // The server stopped though the project lets its agents (it failed, say): nothing to reach,
-    // started as it always was.
+    // and Escouade's tools refused all the same. An entry of the same name in the user's config of
+    // Claude Code would be inherited, and the agent would act as « Claude (hors Escouade) », out of
+    // the rule of its own project only.
     h.core.mcp.stop();
     settled(&h, &id).await;
+    assert_eq!(h.core.agent_access(&id, &p.id), AgentAccess::Denied);
     h.turn(&id, "Toujours là ?").await;
-    assert_eq!(
-        escouade_flags(&h.launches(&r).pop().unwrap()),
-        (None, false)
-    );
+    assert_eq!(escouade_flags(&h.launches(&r).pop().unwrap()), (None, true));
     assert!(!config.exists());
     stop(&h, &id).await;
 

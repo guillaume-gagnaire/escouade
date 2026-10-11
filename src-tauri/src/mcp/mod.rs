@@ -80,13 +80,12 @@ pub struct McpStatus {
 const ALL_TOOLS: &str = "mcp__escouade";
 
 /// What an agent's process is started with of Escouade (`Core::agent_access`).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum AgentAccess {
-    /// Its project lets its agents use Escouade, but the server is not running: nothing to reach,
-    /// the process is started as it always was.
-    None,
-    /// Its project does not let its agents use Escouade: its tools are refused to it, those of an
-    /// entry of the user's config of Claude Code included (the agent would inherit it).
+    /// Its tools are refused to it, those of an entry of the user's config of Claude Code included
+    /// (the agent would inherit it, and act as Claude outside Escouade, out of the rule of its own
+    /// project only): its project does not let its agents use Escouade, or it does and the server
+    /// is not running (nothing to reach), or no token could be given.
     Denied,
     /// The server, as the agent itself: `config` (`--mcp-config`) names it with `token`, the
     /// agent's own, valid until the process stops (`McpServer::release_agent`).
@@ -99,7 +98,6 @@ impl AgentAccess {
     /// Both options take several values: given last, nothing after them is read as one.
     pub fn args(&self) -> Vec<String> {
         match self {
-            AgentAccess::None => Vec::new(),
             AgentAccess::Denied => vec!["--disallowedTools".into(), ALL_TOOLS.into()],
             AgentAccess::Granted { config, .. } => {
                 vec!["--mcp-config".into(), config.to_string_lossy().into_owned()]
@@ -111,7 +109,21 @@ impl AgentAccess {
     pub fn token(&self) -> Option<&str> {
         match self {
             AgentAccess::Granted { token, .. } => Some(token),
-            _ => None,
+            AgentAccess::Denied => None,
+        }
+    }
+}
+
+/// Written by hand: the token is a secret, and a log or a failed assertion prints a `{:?}`.
+impl std::fmt::Debug for AgentAccess {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AgentAccess::Denied => f.write_str("Denied"),
+            AgentAccess::Granted { config, .. } => f
+                .debug_struct("Granted")
+                .field("config", config)
+                .field("token", &"<masked>")
+                .finish(),
         }
     }
 }
@@ -175,8 +187,9 @@ pub struct McpServer<R: Runtime> {
     /// One declaration in Claude Code at a time (`Core::declare_now`).
     declaring: tokio::sync::Mutex<()>,
     /// « Claude peut piloter Escouade » was turned off since the last declaration run: that run
-    /// takes the entry out of every account and changes the token.
-    renew: AtomicBool,
+    /// takes the entry out of every account (the token was changed when it was turned off,
+    /// `turned_off`).
+    withdraw: AtomicBool,
     /// Where the server stands in each active account's Claude Code, as the last run left it.
     declared: Mutex<Vec<install::Declaration>>,
     /// How many declaration runs are over (tests wait for the one they cause).
@@ -198,7 +211,7 @@ impl<R: Runtime> McpServer<R> {
             agent_files: Mutex::new(()),
             acting: tokio::sync::Mutex::new(()),
             declaring: tokio::sync::Mutex::new(()),
-            renew: AtomicBool::new(false),
+            withdraw: AtomicBool::new(false),
             declared: Mutex::new(Vec::new()),
             #[cfg(test)]
             runs: std::sync::atomic::AtomicUsize::new(0),
@@ -310,10 +323,14 @@ impl<R: Runtime> McpServer<R> {
         }
     }
 
-    /// « Claude peut piloter Escouade » was turned off: the next declaration run takes the entry
-    /// out of every account and changes the token.
-    pub(crate) fn ask_renewal(&self) {
-        self.renew.store(true, Ordering::Release);
+    /// « Claude peut piloter Escouade » was turned off: the token changes now, in the save itself
+    /// (the old one opens nothing from this instant, though the app quits before any run, or a
+    /// command of it hangs), and the next declaration run takes the entry out of every account.
+    pub(crate) fn turned_off(&self) {
+        if let Err(e) = self.renew_external_token() {
+            log::error!("mcp: token not changed: {e:#}");
+        }
+        self.withdraw.store(true, Ordering::Release);
     }
 
     /// Where the server stands in each active account's Claude Code, as the last declaration left
@@ -574,7 +591,8 @@ impl<R: Runtime> Core<R> {
     /// - its project not letting its agents use Escouade, its tools refused, those of an entry of
     ///   that name in the user's config of Claude Code included, the server running or not (the
     ///   entry may be declared while it is stopped: it was while Claude drove Escouade);
-    /// - letting them, with the server not running, nothing (none to reach);
+    /// - letting them, with the server not running, the same (none to reach, and an entry of the
+    ///   user's would be inherited as Claude outside Escouade's);
     /// - letting them, the server as the agent itself.
     pub(crate) fn agent_access(&self, agent_id: &str, project_id: &str) -> AgentAccess {
         let allowed = self
@@ -587,7 +605,7 @@ impl<R: Runtime> Core<R> {
         }
         let status = self.mcp.status();
         if !status.running {
-            return AgentAccess::None;
+            return AgentAccess::Denied;
         }
         match self.mcp.grant_agent(agent_id, status.port) {
             Ok(access) => access,

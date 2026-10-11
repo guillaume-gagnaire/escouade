@@ -94,8 +94,15 @@
   /** The branch the project's folder is on, or the remote branch of the local one that is. */
   const isFolder = (b: BranchInfo) => b.current || (b.remote && !!b.trackedBy && !!localByName.get(b.trackedBy)?.current);
 
-  /** Why `b` can't be picked: an agent's worktree (or another one) has its branch, or, to pick one for an agent, the folder does. */
+  /** The board's target branch, which the tickets are merged into: the local branch, or the remote one that tracks it. */
+  const target = $derived(app.projects.find((p) => p.id === projectId)?.board.target.trim() ?? '');
+  const isTarget = (b: BranchInfo) =>
+    !!target && (b.remote ? (b.trackedBy ?? b.name.slice(b.name.indexOf('/') + 1)) === target : b.name === target);
+
+  /** Why `b` can't be picked: an agent's worktree (or another one) has its branch, or, to pick one for an agent, the folder does, or the board's target. */
   function reasonOf(b: BranchInfo): string | null {
+    // The target first: when the folder is on it, that is the reason.
+    if (picking && isTarget(b)) return t('branches.agent.isTargetBranch');
     if (picking && isFolder(b)) return t('branches.agent.isFolderBranch');
     const h = held(b);
     return h && worktreeReason(h);

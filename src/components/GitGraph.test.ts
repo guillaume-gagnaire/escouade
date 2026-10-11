@@ -8,6 +8,7 @@ import type { Commit, GitLog } from '../lib/types';
 import { agent, branchInfo, fakeBackend, project, resetApp } from '../test/ipc';
 import ContextMenu from './ContextMenu.svelte';
 import GitGraph from './GitGraph.svelte';
+import GitHost from './GitGraph.host.test.svelte';
 
 const c = (hash: string, subject: string, parents: string[] = [], refs: string[] = []): Commit => ({
   hash,
@@ -302,7 +303,7 @@ describe('GitGraph menu', () => {
     it('opens the window of a new branch that starts at the commit', async () => {
       await setup();
       await rightClick('fix du header');
-      entry('Créer une branche ici…').onClick!();
+      await entry('Créer une branche ici…').onClick!();
       expect(app.modal).toEqual({ kind: 'newBranch', projectId: 'p1', start: 'bbbb2222' });
     });
 
@@ -335,14 +336,14 @@ describe('GitGraph menu', () => {
     it('asks before deleting the branch', async () => {
       await setup();
       await rightClick('fix du header');
-      entry('Supprimer la branche…', 1).onClick!();
+      await entry('Supprimer la branche…', 1).onClick!();
       expect(app.modal).toMatchObject({ kind: 'confirm', title: 'Supprimer la branche « hotfix » ?', confirm: 'Supprimer' });
     });
 
     it('opens the diff window on what differs between the current branch and the branch of the commit', async () => {
       await setup();
       await rightClick('fix du header');
-      entry('Comparer avec la branche courante').onClick!();
+      await entry('Comparer avec la branche courante').onClick!();
       expect(app.modal).toEqual({
         kind: 'diff',
         projectId: 'p1',
@@ -356,7 +357,7 @@ describe('GitGraph menu', () => {
     it('compares with the commit when no branch is on it, titled with its short hash', async () => {
       await setup();
       await rightClick('sans branche');
-      entry('Comparer avec la branche courante').onClick!();
+      await entry('Comparer avec la branche courante').onClick!();
       expect(app.modal).toEqual({
         kind: 'diff',
         projectId: 'p1',
@@ -370,21 +371,21 @@ describe('GitGraph menu', () => {
     it('compares with the commit that only a tag is on', async () => {
       await setup();
       await rightClick('init');
-      entry('Comparer avec la branche courante').onClick!();
+      await entry('Comparer avec la branche courante').onClick!();
       expect(app.modal).toMatchObject({ title: 'main ↔ dddd444', refs: { from: 'main', to: 'dddd4444' } });
     });
 
     it('compares with a remote branch when only one is on the commit', async () => {
       await setup();
       await rightClick('distante seule');
-      entry('Comparer avec la branche courante').onClick!();
+      await entry('Comparer avec la branche courante').onClick!();
       expect(app.modal).toMatchObject({ title: 'main ↔ origin/only', refs: { from: 'main', to: 'origin/only' } });
     });
 
     it('compares HEAD with the commit when the folder is on no branch', async () => {
       await setup(DETACHED);
       await rightClick('fix du header');
-      entry('Comparer avec HEAD').onClick!();
+      await entry('Comparer avec HEAD').onClick!();
       expect(app.modal).toMatchObject({ title: 'HEAD ↔ feat/login', refs: { from: 'HEAD', to: 'feat/login' } });
     });
   });
@@ -444,6 +445,31 @@ describe('GitGraph menu', () => {
     });
   });
 
+  describe('the dialogs its entries open', () => {
+    // The row is where the focus goes back once the dialog is closed: the dialog opens once the menu is gone and has
+    // given the focus back to it, so that the dialog's focus trap takes the row as what had the focus before.
+    it.each([
+      ['makes a branch', 'Créer une branche ici…', 'Nouvelle branche'],
+      ['asks before deleting a branch', 'Supprimer la branche…', 'Supprimer la branche « release » ?'],
+      ['compares with the current branch', 'Comparer avec la branche courante', 'main ↔ release'],
+    ])('gives the focus back to the row of the commit once the dialog of the entry that %s is closed', async (_, entryName, dialogName) => {
+      fakeBackend({ git_log: () => MENU_LOG, branch_list: () => BRANCHES, git_diff_refs: () => '' });
+      render(GitHost, { project: project(), agent: app.agents.a2 });
+      await screen.findByText('init');
+      const button = row('une seule branche');
+      button.focus();
+      await userEvent.keyboard('{Shift>}{F10}{/Shift}');
+      screen.getByRole('menuitem', { name: entryName }).focus();
+      await userEvent.keyboard('{Enter}');
+      const dialog = await screen.findByRole('dialog', { name: dialogName });
+      expect(button).not.toHaveFocus();
+      expect(dialog.contains(document.activeElement)).toBe(true);
+      app.modal = null;
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(button).toHaveFocus();
+    });
+  });
+
   describe('in English', () => {
     beforeEach(() => setLang('en'));
 
@@ -460,7 +486,7 @@ describe('GitGraph menu', () => {
         'Delete branch…',
         'Delete branch…',
       ]);
-      entry('Compare with the current branch').onClick!();
+      await entry('Compare with the current branch').onClick!();
       expect(app.modal).toMatchObject({ title: 'main ↔ feat/login' });
       menu.close();
       await rightClick('nouvelle page');

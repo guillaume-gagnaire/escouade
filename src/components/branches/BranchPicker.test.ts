@@ -5,7 +5,7 @@ import { setLang } from '../../lib/i18n';
 import { menu } from '../../lib/menu.svelte';
 import { app } from '../../lib/state.svelte';
 import type { BranchInfo } from '../../lib/types';
-import { agent, branchInfo, fakeBackend, gitInfo, resetApp } from '../../test/ipc';
+import { agent, board, branchInfo, fakeBackend, gitInfo, project, resetApp } from '../../test/ipc';
 import BranchPicker from './BranchPicker.svelte';
 
 const MAIN = branchInfo({ name: 'main', current: true, worktree: 'C:\\code\\demo-api', upstream: 'origin/main', ahead: 2, behind: 5 });
@@ -549,6 +549,41 @@ describe('BranchPicker to pick a branch', () => {
     expect(onpick).not.toHaveBeenCalled();
   });
 
+  it('cannot pick the board’s target branch, nor the remote branch that tracks it, which says why', async () => {
+    app.projects = [project({ board: board({ target: 'feat/login' }) })];
+    const { onpick, onclose } = pick();
+    await loaded();
+    const why = 'C’est la branche cible du Kanban : un agent n’y travaille pas directement.';
+    for (const name of ['feat/login', 'origin/feat/login']) {
+      expect(option(name)).toHaveAttribute('aria-disabled', 'true');
+      expect(option(name)).toHaveAttribute('title', why);
+      await userEvent.click(option(name));
+    }
+    expect(onpick).not.toHaveBeenCalled();
+    expect(onclose).not.toHaveBeenCalled();
+    // The others are still there to pick, a remote branch no local one tracks included.
+    await userEvent.click(option('origin/hotfix'));
+    expect(onpick).toHaveBeenCalledWith(REMOTE_HOTFIX);
+  });
+
+  it('says it is the target, not the folder’s branch, when the folder is on it', async () => {
+    app.projects = [project({ board: board({ target: 'main' }) })];
+    const { onpick } = pick();
+    await loaded();
+    expect(option('main')).toHaveAttribute('aria-disabled', 'true');
+    expect(option('main')).toHaveAttribute('title', 'C’est la branche cible du Kanban : un agent n’y travaille pas directement.');
+    await userEvent.click(option('main'));
+    expect(onpick).not.toHaveBeenCalled();
+  });
+
+  it('keeps the target branch for the other picker: only the choice of an agent’s branch refuses it', async () => {
+    app.projects = [project({ board: board({ target: 'feat/login' }) })];
+    setup();
+    await loaded();
+    expect(option('feat/login')).not.toHaveAttribute('aria-disabled', 'true');
+    expect(option('feat/login')).not.toHaveAttribute('title');
+  });
+
   it('cannot pick a branch a worktree holds either', async () => {
     const { onpick } = pick();
     await loaded();
@@ -573,6 +608,14 @@ describe('BranchPicker to pick a branch', () => {
       'title',
       'This is the branch of the project’s folder: an agent without a worktree already works on it, or switch branches first.',
     );
+  });
+
+  it('writes the reason of the target branch in English', async () => {
+    setLang('en');
+    app.projects = [project({ board: board({ target: 'feat/login' }) })];
+    pick();
+    await loaded();
+    expect(option('feat/login')).toHaveAttribute('title', 'It’s the board’s target branch: an agent doesn’t work on it directly.');
   });
 });
 

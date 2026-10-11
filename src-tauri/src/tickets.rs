@@ -6,7 +6,7 @@ use crate::accounts;
 use crate::agent::NotifyKind;
 use crate::board::{self, TurnEnd};
 use crate::claude::ClaudeProcess;
-use crate::core::{not_a_repo, project_not_found, AgentOptions, Core};
+use crate::core::{not_a_repo, project_not_found, target_branch_refusal, AgentOptions, Core};
 use crate::git;
 use crate::i18n::{self, Lang};
 use crate::integrations;
@@ -378,15 +378,19 @@ impl<R: Runtime> Core<R> {
     }
 
     /// The branch a ticket's form names, trimmed: empty for the ticket's own, else one the
-    /// repository has (a local branch, or a remote one). It may be taken by then, or be the
-    /// folder's: the start refuses it, as an agent made on it is.
+    /// repository has (a local branch, or a remote one), and not the board's target. It may be
+    /// taken by then, or be the folder's: the start refuses it, as an agent made on it is.
     async fn ticket_branch(&self, project: &Project, branch: &str) -> Result<String> {
         let branch = branch_name(branch)?;
         if branch.is_empty() {
             return Ok(branch);
         }
         let root = self.toplevel(&project.path).await.ok_or_else(not_a_repo)?;
-        git::local_of(&root, &branch).await?;
+        let local = git::local_name(&root, &branch).await?;
+        let target = project.board.target.trim();
+        if !target.is_empty() && local == target {
+            bail!(target_branch_refusal(i18n::ui()));
+        }
         Ok(branch)
     }
 
@@ -396,8 +400,17 @@ impl<R: Runtime> Core<R> {
         if title.is_empty() {
             return Err(title_missing());
         }
-        // (Its existence is the start's to check: it needs git, this does not wait for it.)
+        // (Its existence is the start's to check: it needs git, this does not wait for it. So is a
+        // remote branch that would make the target's local one.)
         let branch = branch_name(&d.branch)?;
+        let target = self
+            .ticket(id)
+            .and_then(|t| self.project(&t.project_id))
+            .map(|p| p.board.target)
+            .unwrap_or_default();
+        if !branch.is_empty() && branch == target.trim() {
+            bail!(target_branch_refusal(i18n::ui()));
+        }
         let ticket = self.edit_ticket_with(
             id,
             |all| {
