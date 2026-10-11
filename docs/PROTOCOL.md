@@ -1,6 +1,6 @@
 # Protocole Claude Code (stream-json) — notes d'implémentation
 
-Validé empiriquement sur Claude Code 2.1.283 (types de référence : `@anthropic-ai/claude-agent-sdk` 0.3.283, `sdk.d.ts` / `sdk-tools.d.ts`).
+Le protocole de base est validé empiriquement sur Claude Code 2.1.283 (types de référence : `@anthropic-ai/claude-agent-sdk` 0.3.283, `sdk.d.ts` / `sdk-tools.d.ts`). Les ajouts de la 1.7 l'ont été sur des versions plus récentes, dites à chaque section : 2.1.289 pour les comptes et la copie d'un agent, 2.1.296 pour le serveur MCP et l'avancée d'un plan.
 
 ## Lancement d'un agent
 
@@ -83,7 +83,7 @@ Escouade tient pour chaque agent une avancée (`AgentMeta.plan`, `src-tauri/src/
 
 ### Les outils de liste de tâches ne sont pas toujours là
 
-Deux familles, mesuré sur 2.1.296 avec les options de lancement ci-dessus (la liste `tools` de `system/init`) :
+Deux familles. Ce qui est **mesuré** sur 2.1.296, avec les options de lancement ci-dessus : lesquelles sont dans la liste `tools` de `system/init`, selon le modèle et la variable d'environnement (plus bas). Ce qui est **lu dans le binaire 2.1.296** (pas dans sa documentation) : la forme de leurs entrées, ci-dessous, sauf `TaskCreate { subject, description }` et `TaskUpdate { taskId, status }`, que les flux réels ont confirmés (« Ce que les flux réels ont montré ») :
 
 - `TodoWrite` `{ todos: [{ content, status: pending|in_progress|completed, activeForm }] }` : la liste entière à chaque appel, elle remplace la précédente.
 - « Task v2 » : `TaskCreate { subject, description, activeForm?, metadata? }`, `TaskUpdate { taskId, status?: pending|in_progress|completed|deleted, subject?, activeForm?, addBlocks?, addBlockedBy?, owner?, metadata? }`, `TaskGet`, `TaskList` ; par défaut à la place de `TodoWrite`.
@@ -255,7 +255,7 @@ Garde-fous, ceux de la fenêtre et du pilote auto ; un refus est un résultat d'
 
 **L'auteur d'un message est toujours dit.** Un texte qui vient du serveur n'est pas pris pour les mots de l'utilisateur : `send_message`, et le premier message de `create_agent`, sont remis à l'agent, et montrés dans sa conversation, précédés de « Message de <auteur> : » (« Message from <author>: » en anglais, dans la langue de l'interface), l'auteur étant le nom de l'agent qui appelle ou « Claude (hors Escouade) » (« Claude (outside Escouade) ») pour Claude hors Escouade, comme le journal d'activité le nomme. L'en-tête ne compte pas pour le nom que Haiku donne à un agent d'après son premier message, et un texte qui commence par `/` n'est plus une commande (il suit l'en-tête).
 
-**L'origine d'un ticket aussi.** La description d'un ticket créé par `create_ticket` ou `split_ticket` se termine, après une ligne vide, par « Créé par <auteur> via Escouade » (« Created by <author> through Escouade », dans la langue de l'interface), l'auteur étant celui du journal d'activité (le nom de l'agent qui appelle, ou « Claude (hors Escouade) »). La ligne fait partie de la description : la carte du ticket la montre, et le protocole que reçoit son agent la contient. La limite de 10 000 caractères porte sur ce que l'appelant écrit, pas sur cette ligne ; `update_ticket` ne la rajoute pas (la description donnée remplace l'ancienne).
+**L'origine d'un ticket aussi.** La description d'un ticket créé par `create_ticket` ou `split_ticket` se termine, après une ligne vide, par « Créé par <auteur> via Escouade » (« Created by <author> through Escouade », dans la langue de l'interface), l'auteur étant celui du journal d'activité (le nom de l'agent qui appelle, ou « Claude (hors Escouade) »). La ligne fait partie de la description : la carte du ticket la montre, et le protocole que reçoit son agent la contient. La limite de 10 000 caractères porte sur ce que l'appelant écrit, pas sur cette ligne ; Un ticket modifié par `update_ticket` se termine de même, après une ligne vide, par « Modifié par <auteur> via Escouade » (dans la langue de l'interface, comme « Créé par ») : la description donnée remplace l'ancienne, et si elle se termine déjà par une ligne d'origine (« Créé par … » ou « Modifié par … », que `get_ticket` renvoie avec la description), celle-ci est remplacée, jamais empilée.
 
 Ce qui ne colle pas à ce qui est demandé (titre vide, nom inconnu ou ambigu, modèle inconnu, `before` sans `position: "before"`) est une erreur, pas un refus. Un `create_agent` dont le message n'a pas pu partir dit que l'agent existe (son id) mais pas son message.
 

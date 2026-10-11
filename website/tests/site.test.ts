@@ -326,22 +326,25 @@ describe.each(PAGES)('generated site ($lang)', ({ lang, file, url, other }) => {
   });
 
   it('turns on the subtitles of the language of the page, which the English page still offers in French', () => {
+    // The French ones write the voice as it is said (captions); the English ones translate it (subtitles).
     const expected = {
-      fr: [['fr', 'Français', false]],
+      fr: [['captions', 'fr', 'Français', false]],
       en: [
-        ['en', 'English', true],
-        ['fr', 'Français', false],
+        ['subtitles', 'en', 'English', true],
+        ['captions', 'fr', 'Français', false],
       ],
     }[lang];
     const raw = html.match(/<track[^>]*>/g) ?? [];
-    expect(raw.map((t) => [tags(t, 'track')[0].srclang, tags(t, 'track')[0].label, /\sdefault[\s>=/]/.test(t)])).toEqual(expected);
+    expect(
+      raw.map((t) => [tags(t, 'track')[0].kind, tags(t, 'track')[0].srclang, tags(t, 'track')[0].label, /\sdefault[\s>=/]/.test(t)]),
+    ).toEqual(expected);
     if (lang === 'en') expect(tags(html, 'track').map((t) => t.src)).toEqual([`${BASE}escouade.en.vtt`, `${BASE}escouade.vtt`]);
   });
 
   it('offers the subtitle tracks of its video, turned on from the player unless one is the default', () => {
     const tracks = tags(html, 'track');
     expect(tracks.map((t) => [t.kind, t.srclang, t.label, t.src])).toEqual(
-      video.tracks.map((t) => ['captions', t.srclang, t.label, `${BASE}${t.src}`]),
+      video.tracks.map((t) => [t.kind, t.srclang, t.label, `${BASE}${t.src}`]),
     );
     const raw = html.match(/<track[^>]*>/g) ?? [];
     expect(raw.map((t) => /\sdefault[\s>=/]/.test(t))).toEqual(video.tracks.map((t) => !!t.default));

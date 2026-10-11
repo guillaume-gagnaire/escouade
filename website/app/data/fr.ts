@@ -241,6 +241,7 @@ export const fr: Catalog = {
   },
 
   notFound: { title: 'Page introuvable', text: 'Cette adresse ne mène nulle part.', home: 'Retour à l’accueil' },
+  failure: { title: 'Une erreur est survenue', home: 'Retour à l’accueil' },
 
   demo: {
     status: { ready: 'Prêt', running: 'En cours', question: 'Question', done: 'Terminé', totest: 'À tester' },

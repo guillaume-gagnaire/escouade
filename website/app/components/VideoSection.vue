@@ -17,7 +17,7 @@ const video = computed(() => VIDEO[lang.value]);
         <track
           v-for="t in video.tracks"
           :key="t.src"
-          kind="captions"
+          :kind="t.kind"
           :srclang="t.srclang"
           :label="t.label"
           :src="asset(t.src)"
