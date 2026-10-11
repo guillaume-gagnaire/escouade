@@ -441,7 +441,8 @@ pub(crate) fn is_remote_path(path: &str, root: &str) -> bool {
     remote(path) && !remote(root)
 }
 
-/// A name that is a device on Windows whatever its extension (`CON`, `NUL.md`, `COM1.x.md`).
+/// A name that is a device on Windows whatever its extension (`CON`, `NUL.md`, `COM1.x.md`), the
+/// superscript digits ¹ ² ³ taken for digits too (`COM¹`, `LPT²`).
 fn is_device_name(component: &str) -> bool {
     let stem = component
         .split('.')
@@ -449,9 +450,11 @@ fn is_device_name(component: &str) -> bool {
         .unwrap_or_default()
         .trim_end()
         .to_ascii_uppercase();
-    match stem.as_bytes() {
-        b"CON" | b"PRN" | b"AUX" | b"NUL" => true,
-        [b'C', b'O', b'M', n] | [b'L', b'P', b'T', n] => matches!(n, b'1'..=b'9'),
+    match stem.chars().collect::<Vec<_>>().as_slice() {
+        ['C', 'O', 'N'] | ['P', 'R', 'N'] | ['A', 'U', 'X'] | ['N', 'U', 'L'] => true,
+        ['C', 'O', 'M', n] | ['L', 'P', 'T', n] => {
+            matches!(n, '1'..='9' | '¹' | '²' | '³')
+        }
         _ => false,
     }
 }
