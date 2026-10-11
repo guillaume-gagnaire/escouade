@@ -134,6 +134,8 @@ test('a superpowers plan run without a task list takes its tasks from the plan f
   await expect(plan.root.locator('.title')).toHaveAttribute('title', `Démo\nPlan : ${PLAN}`);
   await expect(plan.root).toContainText('2/3 tâches');
   await expect(plan.root).toContainText('1 sous-agent actif');
+  // A window under 800 px (a CI runner's screen) shows the list folded.
+  if ((await plan.head.getAttribute('aria-expanded')) !== 'true') await plan.head.click();
   await expect(plan.row(1)).toContainText('Écrire la fonction');
   await expect(plan.row(1)).toContainText('Terminé');
   await expect(plan.row(2)).toContainText('Terminé');
