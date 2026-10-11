@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { isAgentBranch } from '../lib/branches';
   import { deleteBranch, switchBranch, worktreeReason } from '../lib/branch-actions';
   import { fAgo } from '../lib/format';
@@ -113,6 +114,12 @@
 
   const byName = $derived(new Map((branches ?? []).map((b) => [b.name, b])));
 
+  /**
+   * Waits until the menu is gone and has given the focus back to the row it came from (keyboard), before a dialog opens:
+   * the dialog's focus trap then takes the row as what had the focus, and gives it back there once closed.
+   */
+  const afterMenu = () => tick();
+
   /** What can be done from a commit: groups of entries (start a branch, move or compare, delete), one separator apart. */
   function entriesOf(c: Commit): MenuItem[] {
     const pid = project.id;
@@ -125,7 +132,8 @@
       [
         {
           label: t('branches.graph.createHere'),
-          onClick: () => {
+          onClick: async () => {
+            await afterMenu();
             app.modal = { kind: 'newBranch', projectId: pid, start: c.hash };
           },
         },
@@ -148,7 +156,10 @@
           danger: true,
           disabled: !!why,
           title: why ?? undefined,
-          onClick: () => deleteBranch(pid, b),
+          onClick: async () => {
+            await afterMenu();
+            deleteBranch(pid, b);
+          },
         };
       }),
     ];
@@ -159,7 +170,10 @@
       const to = (here.find((b) => !b.remote) ?? here[0])?.name ?? c.hash;
       groups[1].push({
         label: current ? t('branches.graph.compare') : t('branches.graph.compareHead'),
-        onClick: () => compare(from, to, to === c.hash ? c.hash.slice(0, 7) : to),
+        onClick: async () => {
+          await afterMenu();
+          compare(from, to, to === c.hash ? c.hash.slice(0, 7) : to);
+        },
       });
     }
     return groups.filter((g) => g.length).flatMap((g, i) => (i ? [{ label: '', separator: true }, ...g] : g));
