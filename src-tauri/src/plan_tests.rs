@@ -527,6 +527,49 @@ fn a_subagent_in_the_background_runs_until_its_notification() {
 }
 
 #[test]
+fn the_totals_a_subagent_reports_are_kept_without_a_word_as_the_window_shows_neither_tools_nor_tokens(
+) {
+    let mut p = PlanState::default();
+    launch(
+        &mut p,
+        "a1",
+        json!({ "description": "Tests", "prompt": "", "run_in_background": true }),
+    );
+    let launched = json!({ "status": "async_launched", "agentId": "bg1" });
+    p.on_tool_result("a1", false, "Async agent launched", &launched, T0);
+    sys(&mut p, started("bg1", "a1"));
+    let progress = |tools: u64, tokens: u64| {
+        json!({ "subtype": "task_progress", "task_id": "bg1", "tool_use_id": "a1",
+            "description": "Tests", "usage": { "total_tokens": tokens, "tool_uses": tools, "duration_ms": 10 } })
+    };
+    // Each progress frame of a subagent brings new totals; none is worth sending the window the
+    // whole agent for (a tool call of a subagent would send it every time).
+    assert_eq!(sys(&mut p, progress(2, 500)), Change::None);
+    assert_eq!((row(&p, "a1").tools, row(&p, "a1").tokens), (2, Some(500)));
+    assert_eq!(sys(&mut p, progress(3, 900)), Change::None);
+    assert_eq!((row(&p, "a1").tools, row(&p, "a1").tokens), (3, Some(900)));
+    // The totals of an ended row only complete it, nothing to tell either.
+    let end = json!({ "type": "system", "subtype": "task_notification", "task_id": "bg1",
+        "tool_use_id": "a1", "status": "completed", "summary": "fini" });
+    assert_eq!(p.on_system(&end, 6_000), Change::Saved);
+    assert_eq!(
+        p.on_tool_result("a1", false, "ok", &finished(5, 1, 1_500), T0),
+        Change::None
+    );
+    assert_eq!(
+        (row(&p, "a1").tools, row(&p, "a1").tokens),
+        (5, Some(1_500))
+    );
+    // A workflow's phase is shown: its totals ride along with it.
+    let start = json!({ "subtype": "task_started", "task_id": "w1", "tool_use_id": "tw",
+        "description": "Revue", "task_type": "local_workflow", "workflow_name": "review" });
+    p.on_system(&start, 2_000);
+    let wf = json!({ "subtype": "task_progress", "task_id": "w1", "tool_use_id": "tw",
+        "description": "Phase 1", "usage": { "total_tokens": 10, "tool_uses": 1, "duration_ms": 10 } });
+    assert_eq!(sys(&mut p, wf), Change::View);
+}
+
+#[test]
 fn a_launch_result_in_words_alone_is_a_background_launch_too() {
     let mut p = PlanState::default();
     launch(

@@ -27,7 +27,7 @@ pub enum Change {
     /// Nothing the window shows.
     #[default]
     None,
-    /// A live detail (what a subagent does now, its tool count): the view goes out, nothing is
+    /// A live detail (what a subagent does now, a workflow's phase): the view goes out, nothing is
     /// saved for it.
     View,
     /// The structure changed (a task, a row opened or closed): the view goes out and is saved.
@@ -355,22 +355,17 @@ fn end_workflow(run: &mut WorkflowRun, status: RunStatus, at: i64) -> bool {
     true
 }
 
-/// The totals Claude Code gives of a subagent's work replace the count made on the way.
-fn set_totals(row: &mut SubAgent, tools: Option<u64>, tokens: Option<u64>) -> Change {
-    let mut change = Change::None;
+/// The totals Claude Code gives of a subagent's work replace the count made on the way. Kept
+/// without a word: the window shows neither the tools nor the tokens of a subagent, and each
+/// progress frame would send it the whole agent for nothing (they go out with the next change of
+/// what it shows).
+fn set_totals(row: &mut SubAgent, tools: Option<u64>, tokens: Option<u64>) {
     if let Some(n) = tools.map(|n| n.min(u32::MAX as u64) as u32) {
-        if row.tools != n {
-            row.tools = n;
-            change = Change::View;
-        }
+        row.tools = n;
     }
     if let Some(t) = tokens {
-        if row.tokens != Some(t) {
-            row.tokens = Some(t);
-            change = Change::View;
-        }
+        row.tokens = Some(t);
     }
-    change
 }
 
 impl PlanState {
@@ -643,20 +638,20 @@ impl PlanState {
             return Change::None;
         };
         let tur = tool_use_result;
-        let totals = set_totals(
+        set_totals(
             row,
             tur["totalToolUseCount"].as_u64(),
             tur["totalTokens"].as_u64(),
         );
         if row.status != RunStatus::Running {
             // Ended already (its task said): the totals only complete it.
-            return totals;
+            return Change::None;
         }
         // In the background, the result only says it started; its end comes as a notification.
         if tur["status"] == "async_launched"
             || text.trim_start().starts_with("Async agent launched")
         {
-            let mut change = totals;
+            let mut change = Change::None;
             if !row.background {
                 row.background = true;
                 change = Change::Saved;
@@ -1084,7 +1079,7 @@ impl PlanState {
                 row.task_id.get_or_insert_with(|| task.to_string());
             }
             let usage = &f["usage"];
-            let totals = set_totals(
+            set_totals(
                 row,
                 usage["tool_uses"].as_u64(),
                 usage["total_tokens"].as_u64(),
@@ -1092,7 +1087,7 @@ impl PlanState {
             return if end_agent(row, status, now) {
                 Change::Saved
             } else {
-                totals
+                Change::None
             };
         }
         match self.workflows.iter_mut().find(|w| w.id == task) {
@@ -1146,7 +1141,10 @@ impl PlanState {
             .iter_mut()
             .find(|a| a.task_id.as_deref() == Some(task) && a.status == RunStatus::Running)
         {
-            Some(row) => set_totals(row, tools, tokens),
+            Some(row) => {
+                set_totals(row, tools, tokens);
+                Change::None
+            }
             None => Change::None,
         }
     }
