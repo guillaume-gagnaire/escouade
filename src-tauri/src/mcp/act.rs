@@ -439,8 +439,10 @@ pub(super) fn update_ticket<R: Runtime>(
     // The words of the ticket changed (not its dependencies alone): the description ends with who
     // changed them, in the place of the line that was there (« Créé par… », or an earlier edit's).
     let edited = a.title.is_some() || a.description.is_some() || a.criteria.is_some();
+    // A description given back as `get_ticket` answered it ends with that line too: it goes, and
+    // the limit counts what is left.
     let written = match &a.description {
-        Some(new) => description(new)?,
+        Some(new) => description(without_origin(new))?,
         None if edited => without_origin(&t.description).to_string(),
         None => t.description.clone(),
     };

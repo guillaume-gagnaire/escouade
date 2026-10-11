@@ -1528,6 +1528,21 @@ async fn a_ticket_edited_through_the_server_says_who_edited_it_without_stacking_
         again["description"],
         "Une page.\n\nModifié par Claude (hors Escouade) via Escouade"
     );
+    // A description given back as `get_ticket` answered it, its line included: the line is
+    // replaced, not kept under the new one.
+    let echoed = read(
+        &c,
+        "update_ticket",
+        json!({
+            "ticket": first["key"],
+            "description": "Une page revue.\n\nModifié par Claude (hors Escouade) via Escouade"
+        }),
+    )
+    .await;
+    assert_eq!(
+        echoed["description"],
+        "Une page revue.\n\nModifié par chef via Escouade"
+    );
     // Only the dependencies: no edit of the words, so the line stays as it was.
     let other = read(
         &outside,
