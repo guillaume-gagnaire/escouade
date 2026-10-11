@@ -6766,7 +6766,8 @@ async fn an_agent_that_is_no_tickets_stays_on_its_account_at_the_limit_and_waits
     let h = harness("accounts-limit-no-ticket");
     let (p, _) = h.project(true).await;
     pro_out_of_quota_and_team(&h);
-    assert!(h.core.settings.read().switch_on_limit);
+    // The move is switched on (it is off by default): it is still for the tickets' agents alone.
+    h.core.settings.write().switch_on_limit = true;
     let id = agent_on(&h, &p, "pro").await.id;
     turn_over(&h, &id, "Bonjour").await;
     h.wait("its resume planned", |h| h.agent(&id).resume_at.is_some())

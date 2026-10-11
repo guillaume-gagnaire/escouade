@@ -65,7 +65,8 @@ pub struct Settings {
     pub todo_tools: bool,
     /// « Reprendre sur un autre compte un agent de ticket arrêté par la limite »: such an agent
     /// goes on by itself on the account `accounts::pick` gives, when another is usable, rather than
-    /// wait for its own to reset.
+    /// wait for its own to reset. Off unless the user switches it on (not verified with a second
+    /// real account): settings saved before it have it off too.
     pub switch_on_limit: bool,
 }
 
@@ -241,7 +242,7 @@ impl Default for Settings {
             mcp_port: 0,
             accounts: Vec::new(),
             todo_tools: true,
-            switch_on_limit: true,
+            switch_on_limit: false,
         }
     }
 }
@@ -1407,21 +1408,21 @@ mod tests {
     }
 
     #[test]
-    fn a_tickets_agent_stopped_by_the_limit_goes_to_another_account_unless_old_settings_or_the_user_say_no(
-    ) {
-        // Settings saved before the setting have it on: the move is what they get.
+    fn a_tickets_agent_stopped_by_the_limit_goes_to_another_account_only_when_the_user_says_yes() {
+        // Off unless the user asks (not verified with a second real account): settings saved
+        // before the setting, and a new install, have it off.
         let s: Settings = serde_json::from_value(json!({ "sound": false })).unwrap();
-        assert!(s.switch_on_limit);
-        assert!(Settings::default().switch_on_limit);
-        let off: Settings =
-            serde_json::from_value(json!({ "switchOnLimit": false, "autoResume": false })).unwrap();
-        assert!(!off.switch_on_limit);
+        assert!(!s.switch_on_limit);
+        assert!(!Settings::default().switch_on_limit);
+        let on: Settings =
+            serde_json::from_value(json!({ "switchOnLimit": true, "autoResume": false })).unwrap();
+        assert!(on.switch_on_limit);
         let v = serde_json::to_value(Settings {
-            switch_on_limit: false,
+            switch_on_limit: true,
             ..Default::default()
         })
         .unwrap();
-        assert_eq!(v["switchOnLimit"], json!(false));
+        assert_eq!(v["switchOnLimit"], json!(true));
         // An agent saved before it was ever moved has no account it came from.
         let m: AgentMeta =
             serde_json::from_value(json!({ "id": "a1", "sessionId": "s1" })).unwrap();

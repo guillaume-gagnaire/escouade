@@ -5314,8 +5314,10 @@ async fn a_project_that_prefers_an_account_waits_for_it_alone() {
 }
 
 /// Pro first and out of quota for good, then Équipe, then Principal: an agent that meets the
-/// usage limit on Pro has two accounts to go on on (« Reprendre sur un autre compte… » is on).
+/// usage limit on Pro has two accounts to go on on (« Reprendre sur un autre compte… » is switched on
+/// here: it is off unless the user asks).
 fn pro_then_team_then_principal(h: &Harness) -> (Account, Account) {
+    h.set_settings(|s| s.switch_on_limit = true);
     let pro = second_account(h);
     let team = extra_account(h, "equipe", "Équipe");
     let order = ["pro", "equipe", "principal"].map(String::from);
@@ -5424,6 +5426,17 @@ async fn a_limited_ticket_stays_on_pro(h: &Harness, p: &Project) {
     assert_eq!(h.ticket(&t.id).column, Column::Doing);
     assert_eq!(h.ticket(&t.id).blocked, None);
     assert_eq!(config_dirs(h, &h.worktree_of(&t.id)).len(), 1);
+}
+
+#[tokio::test]
+async fn a_tickets_agent_waits_for_its_own_account_unless_the_user_switched_the_move_on() {
+    let h = harness("tk-limit-stay-default");
+    let (p, _) = h.project(false).await;
+    pro_then_team_then_principal(&h);
+    // The setting as a fresh install has it (the helper switched it on): nothing moves.
+    h.set_settings(|s| s.switch_on_limit = Settings::default().switch_on_limit);
+    assert!(!h.core.settings.read().switch_on_limit);
+    a_limited_ticket_stays_on_pro(&h, &p).await;
 }
 
 #[tokio::test]

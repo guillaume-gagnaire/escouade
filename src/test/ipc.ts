@@ -50,7 +50,7 @@ export const SETTINGS: Settings = {
   proxyTerminals: false,
   insecureTls: false,
   autoResume: true,
-  switchOnLimit: true,
+  switchOnLimit: false,
   quotaPause: 100,
   autoUpdate: true,
   integrations: {

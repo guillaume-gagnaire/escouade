@@ -207,7 +207,7 @@ describe('SettingsModal', () => {
     expect(backend.called('save_settings')).toHaveLength(0);
   });
 
-  it('lets a ticket’s agent stopped by the limit go on on another account, unless told not to', async () => {
+  it('lets a ticket’s agent stopped by the limit go on on another account, off until the user switches it on', async () => {
     const backend = backendSaving();
     app.settings.accounts = [
       { id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true },
@@ -215,13 +215,13 @@ describe('SettingsModal', () => {
     ];
     render(SettingsModal);
     const move = screen.getByRole('switch', { name: 'Reprendre sur un autre compte un agent de ticket arrêté par la limite' });
-    // On by default, beside the automatic resume it is the alternative to.
-    expect(move).toHaveAttribute('aria-checked', 'true');
+    // Off by default (not verified with a second real account), beside the automatic resume it is the alternative to.
+    expect(move).toHaveAttribute('aria-checked', 'false');
     expect(screen.getByText('Sinon il attend la remise à zéro de son compte')).toBeInTheDocument();
     await userEvent.click(move);
     expect(tab('Claude Code')).toHaveClass('changed');
     await save();
-    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ switchOnLimit: false });
+    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ switchOnLimit: true });
   });
 
   it('has no such switch with a single account, nothing to go on on', () => {

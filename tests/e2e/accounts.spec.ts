@@ -13,7 +13,7 @@ const SIGNED_IN = JSON.stringify({ claudeAiOauth: { accessToken: 'tok', refreshT
 const principalDir = (root: string) => path.join(root, 'claude');
 const proDir = (root: string) => path.join(root, 'claude-pro');
 
-/** Both accounts signed in, Principal out of quota for good, and the second account in the settings the app starts with. */
+/** Both accounts signed in, Principal out of quota for good, and the second account in the settings the app starts with, with the move to another account at the limit switched on (it is off by default). */
 function twoAccounts(name: string) {
   return (root: string) => {
     for (const dir of [principalDir(root), proDir(root)]) {
@@ -21,7 +21,7 @@ function twoAccounts(name: string) {
       fs.writeFileSync(path.join(dir, '.credentials.json'), SIGNED_IN);
     }
     fs.writeFileSync(path.join(principalDir(root), 'fake-limit'), '');
-    return { accounts: [{ id: 'pro', name, configDir: proDir(root), claudePath: '', active: true }] };
+    return { switchOnLimit: true, accounts: [{ id: 'pro', name, configDir: proDir(root), claudePath: '', active: true }] };
   };
 }
 
