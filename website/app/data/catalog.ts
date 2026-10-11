@@ -80,6 +80,8 @@ export interface Catalog {
   footer: { github: string; license: string; note: string };
   /** For an address that leads nowhere. */
   notFound: { title: string; text: string; home: string };
+  /** For any other error the page itself runs into. */
+  failure: { title: string; home: string };
   /** The windows of the hero. */
   demo: {
     status: Record<Status, string>;

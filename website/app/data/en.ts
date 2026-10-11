@@ -241,6 +241,7 @@ export const en: Catalog = {
   },
 
   notFound: { title: 'Page not found', text: 'There is nothing at this address.', home: 'Back to the home page' },
+  failure: { title: 'Something went wrong', home: 'Back to the home page' },
 
   demo: {
     status: { ready: 'Ready', running: 'Running', question: 'Question', done: 'Done', totest: 'To review' },

@@ -37,6 +37,8 @@ export const IMAGE_DIR: Record<Lang, string> = { fr: 'images/', en: 'images/en/'
 export const imageOf = (lang: Lang, file: string) => `${IMAGE_DIR[lang]}${file}`;
 
 export interface Track {
+  /** `captions` write the voice in its own language, `subtitles` translate it. */
+  kind: 'captions' | 'subtitles';
   srclang: string;
   label: string;
   /** In public/. */
@@ -50,12 +52,12 @@ export interface Track {
  * on the English subtitles (same moments, translated) and still offers the French ones.
  */
 export const VIDEO: Record<Lang, { src: string; tracks: Track[] }> = {
-  fr: { src: 'escouade.mp4', tracks: [{ srclang: 'fr', label: 'Français', src: 'escouade.vtt' }] },
+  fr: { src: 'escouade.mp4', tracks: [{ kind: 'captions', srclang: 'fr', label: 'Français', src: 'escouade.vtt' }] },
   en: {
     src: 'escouade.mp4',
     tracks: [
-      { srclang: 'en', label: 'English', src: 'escouade.en.vtt', default: true },
-      { srclang: 'fr', label: 'Français', src: 'escouade.vtt' },
+      { kind: 'subtitles', srclang: 'en', label: 'English', src: 'escouade.en.vtt', default: true },
+      { kind: 'captions', srclang: 'fr', label: 'Français', src: 'escouade.vtt' },
     ],
   },
 };

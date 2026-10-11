@@ -185,13 +185,13 @@ describe('what the two pages share', () => {
       expect(VIDEO[lang].tracks.length).toBeGreaterThan(0);
       for (const t of VIDEO[lang].tracks) expect(existsSync(new URL(t.src, PUBLIC)), t.src).toBe(true);
     }
-    expect(VIDEO.fr.tracks).toEqual([{ srclang: 'fr', label: 'Français', src: 'escouade.vtt' }]);
+    expect(VIDEO.fr.tracks).toEqual([{ kind: 'captions', srclang: 'fr', label: 'Français', src: 'escouade.vtt' }]);
   });
 
   it('turns the English subtitles on by default for the English page, and still offers the French ones', () => {
     expect(VIDEO.en.tracks).toEqual([
-      { srclang: 'en', label: 'English', src: 'escouade.en.vtt', default: true },
-      { srclang: 'fr', label: 'Français', src: 'escouade.vtt' },
+      { kind: 'subtitles', srclang: 'en', label: 'English', src: 'escouade.en.vtt', default: true },
+      { kind: 'captions', srclang: 'fr', label: 'Français', src: 'escouade.vtt' },
     ]);
   });
 
