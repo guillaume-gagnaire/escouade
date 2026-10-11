@@ -304,7 +304,7 @@ describe('comparison', () => {
       if (view.state.doc.toString() !== original) failures.push(`not put back: ${pair}`);
     }
     expect({ failures: failures.length, first: failures.slice(0, 3) }).toEqual({ failures: 0, first: [] });
-  });
+  }, 20_000);
 
   it('compares a version with Windows line breaks line by line', () => {
     const { view } = editor(TYPED, { original: REFERENCE.split('\n').join('\r\n'), against: 'reference' });

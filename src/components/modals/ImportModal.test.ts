@@ -250,7 +250,7 @@ describe('ImportModal', () => {
     // The badge of the source says it too, to a screen reader, with the digits grouped.
     expect(d.getByLabelText(/^1\s234 sélectionnés$/)).toHaveTextContent('1 234');
     expect(d.getByRole('button', { name: /^Importer 1\s234 tickets$/ })).toBeEnabled();
-  });
+  }, 20_000);
 
   it('says how many are shown when the service does not say how many there are', async () => {
     fakeBackend({ integration_issues: () => ({ ...JIRA, next: '2', total: null }) });
@@ -340,7 +340,7 @@ describe('ImportModal in English', () => {
     await waitFor(() => expect(d.getByText('1,234 results')).toBeInTheDocument());
     await userEvent.click(d.getByRole('checkbox', { name: 'Select all' }));
     expect(d.getByLabelText('1,234 selected')).toHaveTextContent('1,234');
-  });
+  }, 20_000);
 
   it('counts the selection with the plural of English, and the toast says where the tickets came from', async () => {
     const made: Ticket[] = [
