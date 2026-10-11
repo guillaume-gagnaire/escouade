@@ -1495,9 +1495,9 @@ impl<R: Runtime> Core<R> {
         let (mcp_enabled, before) = (s.mcp_enabled, self.lang());
         let mcp_was_enabled = std::mem::replace(&mut *self.settings.write(), s).mcp_enabled;
         if mcp_was_enabled && !mcp_enabled {
-            // « Claude peut piloter Escouade » turned off: its entry leaves every account and the
-            // token changes (`declare_now`), once the server is stopped or kept by a project.
-            self.mcp.ask_renewal();
+            // « Claude peut piloter Escouade » turned off: the token changes at once, and its entry
+            // leaves every account (`declare_now`, on its own task).
+            self.mcp.turned_off();
         }
         let lang = self.lang();
         if lang != before {

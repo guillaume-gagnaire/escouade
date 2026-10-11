@@ -175,8 +175,9 @@ pub struct McpServer<R: Runtime> {
     /// One declaration in Claude Code at a time (`Core::declare_now`).
     declaring: tokio::sync::Mutex<()>,
     /// « Claude peut piloter Escouade » was turned off since the last declaration run: that run
-    /// takes the entry out of every account and changes the token.
-    renew: AtomicBool,
+    /// takes the entry out of every account (the token was changed when it was turned off,
+    /// `turned_off`).
+    withdraw: AtomicBool,
     /// Where the server stands in each active account's Claude Code, as the last run left it.
     declared: Mutex<Vec<install::Declaration>>,
     /// How many declaration runs are over (tests wait for the one they cause).
@@ -198,7 +199,7 @@ impl<R: Runtime> McpServer<R> {
             agent_files: Mutex::new(()),
             acting: tokio::sync::Mutex::new(()),
             declaring: tokio::sync::Mutex::new(()),
-            renew: AtomicBool::new(false),
+            withdraw: AtomicBool::new(false),
             declared: Mutex::new(Vec::new()),
             #[cfg(test)]
             runs: std::sync::atomic::AtomicUsize::new(0),
@@ -310,10 +311,14 @@ impl<R: Runtime> McpServer<R> {
         }
     }
 
-    /// « Claude peut piloter Escouade » was turned off: the next declaration run takes the entry
-    /// out of every account and changes the token.
-    pub(crate) fn ask_renewal(&self) {
-        self.renew.store(true, Ordering::Release);
+    /// « Claude peut piloter Escouade » was turned off: the token changes now, in the save itself
+    /// (the old one opens nothing from this instant, though the app quits before any run, or a
+    /// command of it hangs), and the next declaration run takes the entry out of every account.
+    pub(crate) fn turned_off(&self) {
+        if let Err(e) = self.renew_external_token() {
+            log::error!("mcp: token not changed: {e:#}");
+        }
+        self.withdraw.store(true, Ordering::Release);
     }
 
     /// Where the server stands in each active account's Claude Code, as the last declaration left

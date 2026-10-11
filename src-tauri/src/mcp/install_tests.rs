@@ -803,6 +803,43 @@ async fn turning_it_off_changes_the_token_before_the_commands_that_take_the_entr
 }
 
 #[tokio::test]
+async fn turning_it_off_changes_the_token_at_once_so_that_quitting_right_after_leaves_the_old_one_dead(
+) {
+    let h = harness("mcp-install-off-at-once");
+    let before = runs(&h);
+    h.core.set_mcp_enabled(true).unwrap();
+    run_after(&h, before).await;
+    let old = h.core.mcp.external_token().unwrap();
+    assert!(h.core.mcp.caller(&old).is_some());
+    // The declaration run, on its own task, cannot start: whatever happens next is the save's own.
+    let held = h.core.mcp.declaring.lock().await;
+    h.core.set_mcp_enabled(false).unwrap();
+    // The old token is refused and forgotten by the keychain as the switch is turned off...
+    assert_eq!(h.core.mcp.caller(&old), None);
+    let new = h.core.mcp.external_token().unwrap();
+    assert_ne!(new, old);
+    assert_eq!(
+        h.core
+            .secrets
+            .get(crate::integrations::secrets::MCP_ENTRY)
+            .unwrap(),
+        Some(new.clone())
+    );
+    // ...so the app quitting before the run ever starts leaves the entry in Claude Code with a
+    // token that opens nothing at the next start.
+    h.core.shutdown();
+    drop(held);
+    assert_eq!(h.core.mcp.caller(&old), None);
+    assert_eq!(
+        h.core
+            .secrets
+            .get(crate::integrations::secrets::MCP_ENTRY)
+            .unwrap(),
+        Some(new)
+    );
+}
+
+#[tokio::test]
 async fn removing_an_account_takes_the_server_out_of_its_folder_and_leaves_the_token_to_the_others()
 {
     let h = harness("mcp-install-remove-on");
