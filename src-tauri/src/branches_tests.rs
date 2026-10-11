@@ -1140,6 +1140,68 @@ async fn an_agent_is_refused_the_branch_of_the_folder_or_of_another_worktree_and
     );
 }
 
+/// The board's target branch of the project, set as its Kanban settings do.
+fn target_is(h: &Harness, project_id: &str, branch: &str) {
+    let mut board = h.core.project(project_id).unwrap().board;
+    board.target = branch.into();
+    h.core.board_set(project_id, board).unwrap();
+}
+
+#[tokio::test]
+async fn an_agent_is_refused_the_boards_target_branch_wherever_it_comes_from_and_nothing_is_made() {
+    use crate::core::target_branch_refusal;
+    use crate::i18n::Lang::Fr;
+    let h = harness("fw-agent-target-branch");
+    let (p, r) = h.project(false).await;
+    remote(&h, &r);
+    branch_adding(&r, "release", "release.txt");
+    branch_adding(&r, "feat/ok", "ok.txt");
+    // A remote branch no local one tracks yet: an agent on it would make the local `develop`.
+    git(&r, &["push", "-q", "origin", "main:develop"]);
+    assert!(!exists(&r, "develop"));
+    let said = "C’est la branche cible du Kanban : un agent n’y travaille pas directement.";
+    assert_eq!(target_branch_refusal(Fr), said);
+    let (agents, worktrees) = (h.core.agents.read().len(), worktrees_of(&r));
+    let refused = |name: &'static str| {
+        let (core, id) = (h.core.clone(), p.id.clone());
+        async move {
+            core.create_agent_on_branch(&id, name, None)
+                .await
+                .unwrap_err()
+                .to_string()
+        }
+    };
+    // A local branch, then a remote one without a local branch, then the folder's own branch
+    // that is the target too (its words, not the folder's).
+    for (target, name) in [
+        ("release", "release"),
+        ("develop", "origin/develop"),
+        ("main", "main"),
+        ("main", "origin/main"),
+    ] {
+        target_is(&h, &p.id, target);
+        assert_eq!(refused(name).await, said, "{target} {name}");
+    }
+    assert!(!exists(&r, "develop"));
+    assert_eq!(
+        (h.core.agents.read().len(), worktrees_of(&r)),
+        (agents, worktrees)
+    );
+    // Any other branch is still taken up.
+    target_is(&h, &p.id, "release");
+    let a = h
+        .core
+        .create_agent_on_branch(&p.id, "feat/ok", None)
+        .await
+        .unwrap();
+    assert_eq!(a.meta.worktree.unwrap().branch, "feat/ok");
+    // The folder's branch is the folder's, when it is not the target.
+    assert_eq!(
+        refused("main").await,
+        "C’est la branche du dossier du projet : un agent sans worktree y travaille déjà, ou change de branche d’abord."
+    );
+}
+
 #[tokio::test]
 async fn deleting_the_agent_of_an_existing_branch_removes_its_worktree_and_keeps_the_branch() {
     let h = harness("g4-agent-branch-delete");
@@ -1203,7 +1265,7 @@ async fn naming_the_agent_of_an_existing_branch_never_renames_the_branch() {
 fn what_an_agent_on_a_branch_is_told_reads_in_both_languages() {
     use crate::core::{
         folder_branch_refusal, integrate_conflict_message, integrate_dirty,
-        integrate_rebase_message,
+        integrate_rebase_message, target_branch_refusal,
     };
     use crate::i18n::Lang::{En, Fr};
     assert_eq!(
@@ -1213,6 +1275,14 @@ fn what_an_agent_on_a_branch_is_told_reads_in_both_languages() {
     assert_eq!(
         folder_branch_refusal(En),
         "That’s the branch of the project’s folder: an agent without a worktree already works on it, or switch to another branch first."
+    );
+    assert_eq!(
+        target_branch_refusal(Fr),
+        "C’est la branche cible du Kanban : un agent n’y travaille pas directement."
+    );
+    assert_eq!(
+        target_branch_refusal(En),
+        "It’s the board’s target branch: an agent doesn’t work on it directly."
     );
     assert_eq!(
         integrate_dirty(Fr),

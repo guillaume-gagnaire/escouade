@@ -255,6 +255,16 @@ pub(crate) fn folder_branch_refusal(lang: i18n::Lang) -> String {
     )
 }
 
+/// Refused: the branch an agent (or a ticket's) was asked to work on is the board's target branch,
+/// which the tickets are merged into (the Kanban's, not an agent's to work on directly).
+pub(crate) fn target_branch_refusal(lang: i18n::Lang) -> String {
+    tr_in!(
+        lang,
+        "C’est la branche cible du Kanban : un agent n’y travaille pas directement.",
+        "It’s the board’s target branch: an agent doesn’t work on it directly."
+    )
+}
+
 /// « Intégrer <base> » refused: the agent's worktree has changes of its own.
 pub(crate) fn integrate_dirty(lang: i18n::Lang) -> String {
     tr_in!(
@@ -3892,8 +3902,9 @@ impl<R: Runtime> Core<R> {
 
     /// The worktree of an agent on the branch `name`, which exists (a local one, or a remote one
     /// through the local branch that tracks it, made when there is none): (path, local branch,
-    /// base). Refused for the branch of the project's folder and for one another worktree has
-    /// (`IN_WORKTREE` for an agent's); nothing is made then.
+    /// base). Refused for the board's target branch (the tickets are merged into it), for the
+    /// branch of the project's folder and for one another worktree has (`IN_WORKTREE` for an
+    /// agent's); nothing is made then.
     async fn worktree_on_branch(
         &self,
         project: &Project,
@@ -3904,6 +3915,11 @@ impl<R: Runtime> Core<R> {
         // Not while a switch or a pull moves the folder's branch.
         let lock = self.sync_lock(&root);
         let _guard = lock.lock().await;
+        // First: when the folder is on the target, that is the reason, not the folder.
+        let target = project.board.target.trim();
+        if !target.is_empty() && git::local_name(&root, name).await? == target {
+            bail!(target_branch_refusal(i18n::ui()));
+        }
         if let Some(local) = git::local_of(&root, name).await? {
             if self.checked_out_here(&root, &local).await? {
                 bail!(folder_branch_refusal(i18n::ui()));

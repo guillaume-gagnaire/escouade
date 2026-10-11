@@ -5597,6 +5597,49 @@ async fn a_ticket_names_an_existing_branch_to_take_up_or_gets_its_own() {
 }
 
 #[tokio::test]
+async fn a_ticket_cannot_take_up_the_boards_target_branch_made_edited_or_started() {
+    let h = harness("fw-ticket-target-branch");
+    let (p, r) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    git(&r, &["branch", "feat/login"]);
+    // The first ticket fixes the target: the branch the project is on.
+    let own = h
+        .core
+        .ticket_create(&p.id, draft("Sans branche", &[], 5))
+        .await
+        .unwrap();
+    assert_eq!(h.core.project(&p.id).unwrap().board.target, "main");
+    let said = "C’est la branche cible du Kanban : un agent n’y travaille pas directement.";
+    let on = |branch: &str| TicketDraft {
+        branch: branch.into(),
+        ..draft("Sur la cible", &[], 5)
+    };
+    // Made on it: refused, and the key is not used up.
+    let e = h.core.ticket_create(&p.id, on("main")).await.unwrap_err();
+    assert_eq!(e.to_string(), said);
+    assert_eq!(h.core.project(&p.id).unwrap().board.next_number, 2);
+    // Edited onto it: refused, and the ticket stays as it was.
+    let e = h.core.ticket_update(&own.id, on("main")).unwrap_err();
+    assert_eq!(e.to_string(), said);
+    assert_eq!(h.ticket(&own.id).branch, "");
+    // Any other branch is taken up.
+    assert_eq!(
+        h.core
+            .ticket_update(&own.id, on("feat/login"))
+            .unwrap()
+            .branch,
+        "feat/login"
+    );
+    // The target moved onto the branch the ticket takes up: its start says so.
+    h.set_board(&p.id, |s| s.target = "feat/login".into());
+    h.core.ticket_start(&own.id).unwrap();
+    h.wait_ticket(&own.id, "blocked", |t| t.blocked.is_some())
+        .await;
+    assert_eq!(h.ticket(&own.id).blocked, Some(format!("Erreur : {said}")));
+    assert_eq!(git(&r, &["branch", "--list", "ticket/*"]), "");
+}
+
+#[tokio::test]
 async fn a_ticket_on_an_existing_branch_works_there_and_its_validation_merges_it_like_any() {
     let h = harness("g4-ticket-branch-run");
     let (p, r) = h.project(false).await;
@@ -5666,7 +5709,12 @@ async fn without_the_boards_cleanup_the_worktree_and_the_branch_of_a_validated_t
 async fn a_ticket_on_a_branch_the_folder_or_an_agent_has_is_blocked_with_the_reason() {
     let h = harness("g4-ticket-branch-taken");
     let (p, r) = h.project(false).await;
-    h.set_board(&p.id, |s| s.max_parallel = 3);
+    // The target is another branch: the folder's own is the folder's, not the board's.
+    git(&r, &["branch", "release"]);
+    h.set_board(&p.id, |s| {
+        s.max_parallel = 3;
+        s.target = "release".into();
+    });
     branch_with_file(&r, "taken", "taken.txt");
     let holder = h
         .core

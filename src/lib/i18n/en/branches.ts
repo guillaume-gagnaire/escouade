@@ -125,6 +125,8 @@ export default defineZone('branches', {
     /** Why the branch of the project’s folder can’t be picked. */
     isFolderBranch:
       'This is the branch of the project’s folder: an agent without a worktree already works on it, or switch branches first.',
+    /** Why the board’s target branch can’t be picked (the tickets are merged into it). */
+    isTargetBranch: 'It’s the board’s target branch: an agent doesn’t work on it directly.',
     /** `{branch}`: the branch the agent works on, which stays whatever its worktree becomes. */
     deleteWorktree: 'Also delete the worktree (the branch {branch} is kept)',
   },

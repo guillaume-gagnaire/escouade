@@ -1407,6 +1407,18 @@ pub async fn local_of(repo: &str, name: &str) -> Result<Option<String>> {
     Ok(None)
 }
 
+/// The local branch `name` stands for, or would be made as: `local_of`, else the remote's branch
+/// under its short name (`origin/feat` gives `feat`).
+pub async fn local_name(repo: &str, name: &str) -> Result<String> {
+    match local_of(repo, name).await? {
+        Some(local) => Ok(local),
+        None => split_remote(repo, name)
+            .await
+            .map(|(_, short)| short)
+            .ok_or_else(|| no_branch(name)),
+    }
+}
+
 /// Checks `name` out in `repo`: a local branch, or a remote one through the local branch that
 /// tracks it, made (`switch --track`) when there is none. Returns the local branch.
 pub async fn switch_to(repo: &str, name: &str) -> Result<String> {
