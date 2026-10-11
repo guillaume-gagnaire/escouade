@@ -163,12 +163,50 @@ pub(super) fn made_by(lang: i18n::Lang, origin: &str) -> String {
     )
 }
 
+/// The line that ends the description of a ticket edited through the server, « Modifié par
+/// <origin> via Escouade »: it takes the place of the one that was there (`without_origin`).
+pub(super) fn changed_by(lang: i18n::Lang, origin: &str) -> String {
+    let origin = one_line(origin);
+    tr_in!(
+        lang,
+        "Modifié par {origin} via Escouade",
+        "Modified by {origin} through Escouade"
+    )
+}
+
 /// `description` followed, after a blank line, by the line `line` (alone when it has no text).
 pub(super) fn with_origin(description: &str, line: &str) -> String {
     if description.is_empty() {
         line.to_string()
     } else {
         format!("{description}\n\n{line}")
+    }
+}
+
+/// `description` without the line `with_origin` put at its end (« Créé par … via Escouade » or
+/// « Modifié par … via Escouade », in either language: the interface's may have changed since) and
+/// the blank line before it. Only a line set apart by a blank line, or alone, is one: the user's
+/// own last line that looks like it stays.
+pub(super) fn without_origin(description: &str) -> &str {
+    const LINES: [(&str, &str); 4] = [
+        ("Créé par ", " via Escouade"),
+        ("Modifié par ", " via Escouade"),
+        ("Created by ", " through Escouade"),
+        ("Modified by ", " through Escouade"),
+    ];
+    let text = description.trim_end();
+    let (before, last) = match text.rfind('\n') {
+        Some(at) => (&text[..at], &text[at + 1..]),
+        None => ("", text),
+    };
+    let is_origin = LINES.iter().any(|(start, end)| {
+        last.len() > start.len() + end.len() && last.starts_with(start) && last.ends_with(end)
+    });
+    // `before` ends with the newline of the blank line, or is empty when the line is alone.
+    if is_origin && ((before.is_empty() && text == last) || before.ends_with('\n')) {
+        before.trim_end()
+    } else {
+        description
     }
 }
 
@@ -398,14 +436,24 @@ pub(super) fn update_ticket<R: Runtime>(
         )));
     }
     let project = project_of(core, &t.project_id)?;
+    // The words of the ticket changed (not its dependencies alone): the description ends with who
+    // changed them, in the place of the line that was there (« Créé par… », or an earlier edit's).
+    let edited = a.title.is_some() || a.description.is_some() || a.criteria.is_some();
+    let written = match &a.description {
+        Some(new) => description(new)?,
+        None if edited => without_origin(&t.description).to_string(),
+        None => t.description.clone(),
+    };
     let draft = TicketDraft {
         title: match &a.title {
             Some(new) => title(new)?,
             None => t.title.clone(),
         },
-        description: match &a.description {
-            Some(new) => description(new)?,
-            None => t.description.clone(),
+        description: if edited {
+            let origin = activity::caller_name(core, Some(caller));
+            with_origin(&written, &changed_by(i18n::ui(), &origin))
+        } else {
+            written
         },
         criteria: match &a.criteria {
             Some(new) => criteria(new)?,

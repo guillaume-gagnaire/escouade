@@ -405,6 +405,7 @@ Ce qu’Escouade dit à Claude ou lui fait écrire suit « Langue des textes ré
 | Déclaré dans Claude · compte Principal, compte Pro | Declared in Claude · Main account, Pro account | l’état du serveur MCP dans la config de Claude Code de chaque compte actif ; « Pas déclaré pour le compte Pro : … » → “Not declared for the Pro account: …” |
 | Activité MCP | MCP activity | le journal des appels au serveur ; résultat « Fait / Refusé / Erreur » → “Done / Refused / Error” |
 | Créé par <auteur> via Escouade | Created by <author> through Escouade | dernière ligne de la description d’un ticket créé ou découpé par le serveur MCP |
+| Modifié par <auteur> via Escouade | Modified by <author> through Escouade | dernière ligne de la description d’un ticket modifié par le serveur MCP (titre, description ou critères), à la place de « Créé par… » |
 | Message de <auteur> : … | Message from <author>: … | en-tête d’un message qui vient du serveur MCP (`send_message`, premier message de `create_agent`), l’auteur étant un agent ou « Claude (hors Escouade) » → “Claude (outside Escouade)” |
 
 ## G — branches

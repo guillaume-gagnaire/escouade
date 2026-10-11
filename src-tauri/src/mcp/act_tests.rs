@@ -302,7 +302,10 @@ async fn a_ticket_to_do_is_edited_a_field_at_a_time_and_never_into_a_loop() {
         json!({ "ticket": b.id, "description": "Plus de détails", "criteria": ["Un seul critère"] }),
     )
     .await;
-    assert_eq!(v["description"], "Plus de détails");
+    assert_eq!(
+        v["description"],
+        "Plus de détails\n\nModifié par Claude (hors Escouade) via Escouade"
+    );
     assert_eq!(v["title"], "Deuxième, revu");
     assert_eq!(
         v["criteria"],
@@ -1405,14 +1408,161 @@ async fn a_ticket_made_by_an_agent_names_it_and_the_line_is_no_part_of_the_descr
         too_long.contains("10000") || too_long.contains("10 000"),
         "{too_long}"
     );
-    // Editing a description is the caller's own words: the line is not added again.
+    // Editing the description: the caller's new words, then who edited it (the limit is on the
+    // words alone).
     let edited = read(
         &c,
         "update_ticket",
         json!({ "ticket": made["key"], "description": "Autre" }),
     )
     .await;
-    assert_eq!(edited["description"], "Autre");
+    assert_eq!(
+        edited["description"],
+        "Autre\n\nModifié par chef via Escouade"
+    );
+    let at_limit = read(
+        &c,
+        "update_ticket",
+        json!({ "ticket": made["key"], "description": "b".repeat(10_000) }),
+    )
+    .await;
+    assert!(
+        at_limit["description"]
+            == format!("{}\n\nModifié par chef via Escouade", "b".repeat(10_000)),
+        "the edited description does not end with the origin line"
+    );
+    let too_long = refused(
+        &c,
+        "update_ticket",
+        json!({ "ticket": made["key"], "description": "b".repeat(10_001) }),
+    )
+    .await;
+    assert!(
+        too_long.contains("10000") || too_long.contains("10 000"),
+        "{too_long}"
+    );
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[test]
+fn an_edit_line_replaces_the_origin_line_of_the_description_in_either_language() {
+    use super::act::{changed_by, without_origin};
+    use crate::i18n::Lang::{En, Fr};
+    assert_eq!(changed_by(Fr, "chef"), "Modifié par chef via Escouade");
+    assert_eq!(
+        changed_by(En, "Claude (outside Escouade)"),
+        "Modified by Claude (outside Escouade) through Escouade"
+    );
+    assert_eq!(
+        changed_by(En, "agent\n1  b"),
+        "Modified by agent 1 b through Escouade"
+    );
+    // The line, and the blank line before it, go: whoever made or edited it, in either language.
+    assert_eq!(without_origin("D\nE\n\nCréé par chef via Escouade"), "D\nE");
+    assert_eq!(without_origin("D\n\nModifié par chef via Escouade"), "D");
+    assert_eq!(without_origin("D\n\nCreated by a b through Escouade"), "D");
+    assert_eq!(without_origin("D\n\nModified by a through Escouade\n"), "D");
+    assert_eq!(without_origin("Créé par chef via Escouade"), "");
+    // Only the line the server adds: a sentence of the user's that looks like it, or a line not
+    // set apart by a blank line, stays.
+    assert_eq!(
+        without_origin("D\nCréé par chef via Escouade"),
+        "D\nCréé par chef via Escouade"
+    );
+    assert_eq!(
+        without_origin("D\n\nCréé par chef via Escouade, puis revu"),
+        "D\n\nCréé par chef via Escouade, puis revu"
+    );
+    assert_eq!(without_origin("Du texte"), "Du texte");
+    assert_eq!(without_origin(""), "");
+}
+
+#[tokio::test]
+async fn a_ticket_edited_through_the_server_says_who_edited_it_without_stacking_the_lines() {
+    let h = harness("mcp-act-edit-origin");
+    let p = project(&h).await;
+    let a = put_agent(&h, &p, "chef", 1);
+    let c = as_agent(&h, &a.id).await;
+    let first = read(
+        &c,
+        "create_ticket",
+        json!({ "project": "demo", "title": "Page", "description": "Une page." }),
+    )
+    .await;
+    assert_eq!(
+        first["description"],
+        "Une page.\n\nCréé par chef via Escouade"
+    );
+    // A new title alone: the description is kept, the « Créé par » line becomes the edit's.
+    let titled = read(
+        &c,
+        "update_ticket",
+        json!({ "ticket": first["key"], "title": "Page d’accueil" }),
+    )
+    .await;
+    assert_eq!(
+        titled["description"],
+        "Une page.\n\nModifié par chef via Escouade"
+    );
+    // New criteria alone, then another title: the same line, never two.
+    let criteria = read(
+        &c,
+        "update_ticket",
+        json!({ "ticket": first["key"], "criteria": ["Un seul"] }),
+    )
+    .await;
+    assert_eq!(
+        criteria["description"],
+        "Une page.\n\nModifié par chef via Escouade"
+    );
+    // The edit by someone else is theirs: Claude outside Escouade takes the line over.
+    let outside = external(&h).await;
+    let again = read(
+        &outside,
+        "update_ticket",
+        json!({ "ticket": first["key"], "title": "Encore" }),
+    )
+    .await;
+    assert_eq!(
+        again["description"],
+        "Une page.\n\nModifié par Claude (hors Escouade) via Escouade"
+    );
+    // Only the dependencies: no edit of the words, so the line stays as it was.
+    let other = read(
+        &outside,
+        "create_ticket",
+        json!({ "project": "demo", "title": "Autre" }),
+    )
+    .await;
+    let after = read(
+        &outside,
+        "update_ticket",
+        json!({ "ticket": other["key"], "after": [first["key"]] }),
+    )
+    .await;
+    assert_eq!(
+        after["description"],
+        "Créé par Claude (hors Escouade) via Escouade"
+    );
+    // A ticket the window made has no line yet: an edit through the server adds one.
+    let mine = made(&h, &p, "De la fenêtre").await;
+    let edited = read(
+        &outside,
+        "update_ticket",
+        json!({ "ticket": mine.key, "title": "Revu" }),
+    )
+    .await;
+    assert_eq!(
+        edited["description"],
+        "Modifié par Claude (hors Escouade) via Escouade"
+    );
+    // What is stored is what was answered.
+    assert_eq!(
+        stored(&h, &mine.id).description,
+        "Modifié par Claude (hors Escouade) via Escouade"
+    );
+    outside.cancel().await.unwrap();
     c.cancel().await.unwrap();
     h.core.mcp.stop();
 }
