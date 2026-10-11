@@ -784,6 +784,26 @@ fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Option<T> {
     }
 }
 
+/// The settings file, the defaults when there is none (a new install follows the system's language)
+/// or when it is unreadable (a copy is kept). A file written before the interface had languages
+/// (before 1.7: no `language` key) was shown in French, and stays so: it must not turn English on
+/// an English system the day the app is updated. Whatever `language` says, when the key is there,
+/// is the user's.
+fn read_settings(path: &Path) -> Settings {
+    let Some(mut settings) = read_json::<Settings>(path) else {
+        return Settings::default();
+    };
+    let has_language = std::fs::read_to_string(path)
+        .ok()
+        .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+        .is_some_and(|v| v.get("language").is_some());
+    if !has_language {
+        settings.language = "fr".into();
+        settings.claude_language = "ui".into();
+    }
+    settings
+}
+
 const CLAUDE_BASE_ARGS: &[&str] = &[
     "--output-format",
     "stream-json",
@@ -1218,7 +1238,7 @@ impl<R: Runtime> Core<R> {
         if let Err(e) = data.ensure() {
             log::error!("cannot create data dir: {e}");
         }
-        let mut settings: Settings = read_json(&data.settings_file()).unwrap_or_default();
+        let mut settings = read_settings(&data.settings_file());
         // First: what the backend writes from now on (the menus, its texts) is in these languages.
         let lang = i18n::configure(&settings.language, &settings.claude_language);
         log::info!("languages: {lang:?}");

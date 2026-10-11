@@ -1314,7 +1314,9 @@ mod tests {
     }
 
     #[test]
-    fn settings_saved_before_the_languages_follow_the_system_and_the_interface() {
+    fn settings_without_the_languages_are_the_defaults_and_the_load_decides_for_an_old_file() {
+        // (A file of before 1.7 is read as French when the app loads it, `Core::load`: here it is
+        // only the fields that are not there.)
         let s: Settings = serde_json::from_value(json!({ "sound": false })).unwrap();
         assert_eq!(
             (s.language.as_str(), s.claude_language.as_str()),
