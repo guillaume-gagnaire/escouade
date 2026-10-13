@@ -982,10 +982,11 @@ class AppState {
     if (status === 'crashed') this.toast(t('runs.launch.crashed', { name: l.name, code: code ?? '?' }), 'error');
   }
 
-  async newAgent(projectId = this.ui.activeProject) {
+  /** A new agent of the project; `isolated`: with a worktree of its own (true) or without (false), whatever the project does by default. */
+  async newAgent(projectId = this.ui.activeProject, isolated: boolean | null = null) {
     if (!projectId) return;
     try {
-      const a = await api.createAgent(projectId);
+      const a = await api.createAgent(projectId, null, isolated);
       this.agents[a.id] = a;
       // Its composer is what a new agent is for: closed first, the editor keeps the source it was on.
       this.closeEditor(projectId);

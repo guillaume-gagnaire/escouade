@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/svelte';
+import { render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { setLang } from '../../lib/i18n';
@@ -101,6 +101,69 @@ describe('ProjectTab', () => {
     expect(saveButton).toBeDisabled();
     await userEvent.click(saveButton);
     expect(backend.called('update_project')).toHaveLength(0);
+  });
+
+  describe('« Branche de départ des nouveaux agents »', () => {
+    const branches = () => screen.getByRole('group', { name: 'Branche de départ des nouveaux agents' });
+    const chip = (name: string) => within(branches()).getByRole('button', { name });
+
+    it('is the branch the folder is on until one is chosen, which may then be fetched first', async () => {
+      const backend = fakeBackend({ git_branches: () => ['feat/login', 'main', 'release'] });
+      render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+      expect(await within(branches()).findByRole('button', { name: '⎇ main' })).toHaveAttribute('aria-pressed', 'false');
+      expect(chip('Branche courante')).toHaveAttribute('aria-pressed', 'true');
+      // Fetching is of a branch chosen: the folder's own starts from the folder's commit.
+      expect(screen.queryByRole('switch', { name: 'Récupérer avant de créer' })).toBeNull();
+      await userEvent.click(chip('⎇ main'));
+      expect(chip('⎇ main')).toHaveAttribute('aria-pressed', 'true');
+      expect(chip('Branche courante')).toHaveAttribute('aria-pressed', 'false');
+      const fetch = screen.getByRole('switch', { name: 'Récupérer avant de créer' });
+      expect(fetch).toHaveAttribute('aria-checked', 'false');
+      expect(screen.getByText(/^git fetch de main avant chaque nouvel agent/)).toBeInTheDocument();
+      await userEvent.click(fetch);
+      await save();
+      expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p1', agentBaseBranch: 'main', agentBaseFetch: true });
+      expect(app.projects[0].agentBaseBranch).toBe('main');
+    });
+
+    it('goes back to the branch the folder is on', async () => {
+      resetApp({ projects: [project({ agentBaseBranch: 'release', agentBaseFetch: true })] });
+      app.modal = { kind: 'settings' };
+      const backend = fakeBackend({ git_branches: () => ['main', 'release'] });
+      render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+      // Shown as chosen before the branches are read.
+      expect(chip('⎇ release')).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByRole('switch', { name: 'Récupérer avant de créer' })).toHaveAttribute('aria-checked', 'true');
+      await userEvent.click(chip('Branche courante'));
+      expect(screen.queryByRole('switch', { name: 'Récupérer avant de créer' })).toBeNull();
+      await save();
+      expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p1', agentBaseBranch: '' });
+    });
+
+    it('keeps among the choices a branch that is gone, which the next agent will tell', async () => {
+      resetApp({ projects: [project({ agentBaseBranch: 'gone' })] });
+      app.modal = { kind: 'settings' };
+      fakeBackend({ git_branches: () => ['main'] });
+      render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+      await within(branches()).findByRole('button', { name: '⎇ main' });
+      expect(
+        within(branches())
+          .getAllByRole('button')
+          .map((b) => b.textContent),
+      ).toEqual(['Branche courante', '⎇ gone', '⎇ main']);
+      expect(chip('⎇ gone')).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('is written in English', async () => {
+      setLang('en');
+      fakeBackend({ git_branches: () => ['main'] });
+      render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+      const group = screen.getByRole('group', { name: 'New agents’ starting branch' });
+      expect(within(group).getByRole('button', { name: 'Current branch' })).toHaveAttribute('aria-pressed', 'true');
+      await userEvent.click(await within(group).findByRole('button', { name: '⎇ main' }));
+      expect(screen.getByRole('switch', { name: 'Fetch before creating' })).toBeInTheDocument();
+      expect(screen.getByText(/^Runs git fetch on main before each new agent/)).toBeInTheDocument();
+    });
   });
 
   it('says it in English', () => {

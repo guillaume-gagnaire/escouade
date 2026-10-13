@@ -116,6 +116,10 @@ export default {
   agent: {
     /** The menu beside « Nouvel agent ». */
     onBranch: 'Nouvel agent sur une branche…',
+    /** In that menu, for a project that gives each agent a worktree: one in the project’s folder. */
+    withoutWorktree: 'Nouvel agent sans worktree',
+    /** In that menu, for a project whose agents work in its folder: one in a worktree of its own. */
+    withWorktree: 'Nouvel agent dans un worktree',
     /** The label of the button beside « Nouvel agent » that opens that menu. */
     moreWays: 'Autres façons de créer un agent',
     /** The branch picker, when it is to choose the branch of an agent or of a ticket. */

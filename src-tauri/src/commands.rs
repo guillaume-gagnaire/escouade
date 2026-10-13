@@ -338,13 +338,18 @@ pub async fn remove_project(core: CoreState<'_>, id: String) -> Res<()> {
     core.remove_project(&id).await.map_err(err)
 }
 
+/// `isolated`: in a worktree of its own (true) or in the project's folder (false), whatever the
+/// project does by default; None: as the project does.
 #[tauri::command]
 pub async fn create_agent(
     core: CoreState<'_>,
     project_id: String,
     model: Option<String>,
+    isolated: Option<bool>,
 ) -> Res<AgentView> {
-    core.create_agent(&project_id, model).await.map_err(err)
+    core.create_agent_as(&project_id, model, isolated)
+        .await
+        .map_err(err)
 }
 
 #[tauri::command]

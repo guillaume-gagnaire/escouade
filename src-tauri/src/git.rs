@@ -1038,6 +1038,37 @@ pub async fn worktree_add(
             "the repository has no commit yet: a worktree can’t be created"
         ));
     }
+    let (path, branch) = worktree_add_named(repo, root, held, prefix, name, "HEAD").await?;
+    Ok((path, branch, base))
+}
+
+/// `worktree_add`, from the commit `start` names rather than from HEAD: the branch a project's
+/// agents start from (« Branche de départ des nouveaux agents »), or what was just fetched of it
+/// (`fetched_start`). Returns (path, branch).
+pub async fn worktree_add_at(
+    repo: &str,
+    root: &Path,
+    held: &[PathBuf],
+    prefix: &str,
+    name: &str,
+    start: &str,
+) -> Result<(String, String)> {
+    // Its commit rather than its name: the new branch then never tracks where it starts from,
+    // whatever `branch.autoSetupMerge` says (a push would go to the remote's own branch).
+    let start = commit_of(repo, start).await?;
+    worktree_add_named(repo, root, held, prefix, name, &start).await
+}
+
+/// The worktree `<root>/<name>` (`-2`… when its branch or its folder is taken, `free_folder`) on a
+/// new branch `<prefix><name>` from `start` (HEAD, or a commit). Returns (path, branch).
+async fn worktree_add_named(
+    repo: &str,
+    root: &Path,
+    held: &[PathBuf],
+    prefix: &str,
+    name: &str,
+    start: &str,
+) -> Result<(String, String)> {
     exclude_worktrees(repo, root).await?;
     let mut dir_name = name.to_string();
     let mut n = 2;
@@ -1050,8 +1081,8 @@ pub async fn worktree_add(
     }
     let branch = format!("{prefix}{dir_name}");
     let path_s = root.join(&dir_name).to_string_lossy().to_string();
-    run_hooks(repo, &["worktree", "add", "-b", &branch, &path_s, "HEAD"]).await?;
-    Ok((path_s, branch, base))
+    run_hooks(repo, &["worktree", "add", "-b", &branch, &path_s, start]).await?;
+    Ok((path_s, branch))
 }
 
 /// Creates `<root>/<last part of branch>` (`-2`… when that folder is taken, `free_folder`) on a new
@@ -2658,6 +2689,32 @@ pub async fn fetch(repo: &str, background: bool) -> Result<()> {
     }
     args.push(target);
     run_net(repo, &args, background).await.map(|_| ())
+}
+
+/// Fetches the local branch `base` from the remote branch it tracks, without ever asking for
+/// credentials, and tells where a new branch from it starts: its remote branch when that one has
+/// all of `base` (the local one is behind, or at the same commit), `base` itself when it has
+/// commits its remote lacks (never left behind). None when `base` tracks no remote branch:
+/// nothing to fetch. An error when the fetch fails (no network, a remote that asks who is
+/// there): whoever asked starts from `base` as it is here.
+pub async fn fetched_start(repo: &str, base: &str) -> Result<Option<String>> {
+    let Some(up) = upstream_of(repo, base).await else {
+        return Ok(None);
+    };
+    // That branch alone, into its tracking branch whatever the remote's own refspec is.
+    let refspec = format!("+refs/heads/{}:{}", up.branch, up.tracking);
+    // Windows cannot run the maintenance detached: it would count against the time limit.
+    let args = [
+        "fetch",
+        "--quiet",
+        "--no-auto-maintenance",
+        &up.remote,
+        &refspec,
+    ];
+    run_net(repo, &args, true).await?;
+    let local = format!("refs/heads/{base}");
+    let unpushed = ahead_of(repo, &up.tracking, &local).await?;
+    Ok(Some(if unpushed == 0 { up.tracking } else { local }))
 }
 
 /// What a fetch brought, for the user.
@@ -4460,6 +4517,55 @@ sleep {seconds}
         assert_eq!((st.ahead, st.behind), (0, 0));
         assert_eq!(std::fs::read_to_string(local.join("b.txt")).unwrap(), "b\n");
         assert_eq!(pull(&s(&local)).await.unwrap(), "Déjà à jour");
+    }
+
+    #[tokio::test]
+    async fn a_branch_fetched_to_start_from_gives_its_remote_branch_unless_it_has_commits_of_its_own(
+    ) {
+        let (local, other, _) = with_remote("git-fetched-start");
+        let repo = s(&local);
+        let rev = |dir: &Path, rev: &str| git_in(dir, &["rev-parse", rev]);
+        // Behind its remote, which nothing fetched yet: what the remote has, the local one left.
+        commit_file(&other, "b.txt", "b\n");
+        git_in(&other, &["push", "-q"]);
+        let was = rev(&local, "main");
+        let start = fetched_start(&repo, "main").await.unwrap();
+        assert_eq!(start.as_deref(), Some("refs/remotes/origin/main"));
+        assert_eq!(rev(&local, "refs/remotes/origin/main"), rev(&other, "main"));
+        assert_eq!(rev(&local, "main"), was);
+        // A worktree from there: on the remote's commit, its branch tracking nothing.
+        let root = local.join(".claude").join("worktrees");
+        let (path, branch) = worktree_add_at(
+            &repo,
+            &root,
+            &[],
+            "escouade/",
+            "a",
+            "refs/remotes/origin/main",
+        )
+        .await
+        .unwrap();
+        assert_eq!(branch, "escouade/a");
+        assert_eq!(rev(Path::new(&path), "HEAD"), rev(&other, "main"));
+        assert_eq!(upstream_of(&repo, &branch).await, None);
+        // With a commit its remote lacks: the local one, never left behind.
+        commit_file(&local, "c.txt", "c\n");
+        let start = fetched_start(&repo, "main").await.unwrap();
+        assert_eq!(start.as_deref(), Some("refs/heads/main"));
+        // A branch that tracks nothing has nothing to fetch.
+        git_in(&local, &["branch", "alone"]);
+        assert_eq!(fetched_start(&repo, "alone").await.unwrap(), None);
+        // A remote that is not there: an error, for whoever asked to start from the local one.
+        git_in(
+            &local,
+            &[
+                "remote",
+                "set-url",
+                "origin",
+                &s(&local.join("nowhere.git")),
+            ],
+        );
+        assert!(fetched_start(&repo, "main").await.is_err());
     }
 
     #[tokio::test]

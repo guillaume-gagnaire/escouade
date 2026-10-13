@@ -315,6 +315,14 @@ pub struct Project {
     /// « Préfixe des branches des tickets »: a ticket's own branch is `<prefix><key>`.
     #[serde(default = "default_ticket_branch_prefix")]
     pub ticket_branch_prefix: String,
+    /// « Branche de départ des nouveaux agents »: the local branch a new agent's worktree starts
+    /// from, and its base (where it is merged); empty is the branch the folder is on then.
+    #[serde(default)]
+    pub agent_base_branch: String,
+    /// « Récupérer avant de créer », with a branch to start from: it is fetched before each new
+    /// worktree, which starts from its remote branch when that one is ahead (`git::fetched_start`).
+    #[serde(default)]
+    pub agent_base_fetch: bool,
 }
 
 impl Project {
@@ -1915,6 +1923,33 @@ mod tests {
         assert_eq!(
             back.worktrees_root(),
             std::path::Path::new("C:/demo-worktrees")
+        );
+    }
+
+    #[test]
+    fn a_project_saved_before_the_starting_branch_starts_its_agents_from_the_folders_branch() {
+        let p: Project = serde_json::from_value(
+            json!({ "id": "p1", "name": "demo", "path": "C:/demo", "color": "red" }),
+        )
+        .unwrap();
+        assert_eq!(
+            (p.agent_base_branch.as_str(), p.agent_base_fetch),
+            ("", false)
+        );
+        let own = Project {
+            agent_base_branch: "main".into(),
+            agent_base_fetch: true,
+            ..p
+        };
+        let v = serde_json::to_value(&own).unwrap();
+        assert_eq!(
+            (&v["agentBaseBranch"], &v["agentBaseFetch"]),
+            (&json!("main"), &json!(true))
+        );
+        let back: Project = serde_json::from_value(v).unwrap();
+        assert_eq!(
+            (back.agent_base_branch.as_str(), back.agent_base_fetch),
+            ("main", true)
         );
     }
 

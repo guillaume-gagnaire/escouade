@@ -10,6 +10,7 @@
   import { app } from '../../lib/state.svelte';
   import { PROJECT_COLORS } from '../../lib/theme';
   import type { CommitMode, Project, WorktreeStep } from '../../lib/types';
+  import BranchChips from './BranchChips.svelte';
   import Chips from './Chips.svelte';
   import Group from './Group.svelte';
   import Row from './Row.svelte';
@@ -189,6 +190,21 @@
   <Row label={t('settings.project.worktreePerAgent')} desc={t('settings.project.worktreePerAgentDesc')}>
     <Switch label={t('settings.project.worktreePerAgent')} bind:on={draft.worktreePerAgent} />
   </Row>
+  <Row label={t('settings.project.agentBase')} desc={t('settings.project.agentBaseDesc')} wide>
+    <BranchChips
+      projectId={project.id}
+      value={draft.agentBaseBranch}
+      label={t('settings.project.agentBase')}
+      first={t('settings.project.agentBaseCurrent')}
+      onpick={(br) => (draft.agentBaseBranch = br)}
+    />
+  </Row>
+  <!-- Of a branch chosen only: the one the folder is on starts from the folder's own commit. -->
+  {#if draft.agentBaseBranch}
+    <Row label={t('settings.project.agentBaseFetch')} desc={t('settings.project.agentBaseFetchDesc', { branch: draft.agentBaseBranch })}>
+      <Switch label={t('settings.project.agentBaseFetch')} bind:on={draft.agentBaseFetch} />
+    </Row>
+  {/if}
   <Row label={t('settings.project.worktreeDir')} desc={t('settings.project.worktreeDirDesc')} descId="worktree-dir-desc" wide>
     <input
       class="field input mono setting"

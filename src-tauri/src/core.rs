@@ -1262,6 +1262,25 @@ fn files_not_copied(e: &anyhow::Error) -> String {
     )
 }
 
+/// The branch the project's agents start from is gone: the new agent starts from the folder's.
+fn starting_branch_gone(lang: i18n::Lang, base: &str) -> String {
+    tr_in!(
+        lang,
+        "La branche de départ « {base} » n'existe plus : l'agent part de la branche du dossier du projet. Choisis-en une autre dans Réglages › Projets › Git.",
+        "The starting branch “{base}” is gone: the agent starts from the branch of the project’s folder. Pick another one in Settings › Projects › Git."
+    )
+}
+
+/// The branch the project's agents start from could not be fetched: the new agent starts from it
+/// as it is here.
+fn starting_branch_not_fetched(lang: i18n::Lang, base: &str, e: &anyhow::Error) -> String {
+    tr_in!(
+        lang,
+        "{base} n'a pas pu être récupérée, l'agent part de la branche telle qu'elle est ici : {e}",
+        "{base} couldn’t be fetched, the agent starts from the branch as it is here: {e}"
+    )
+}
+
 /// An agent restored: its worktree, gone, made again at `to`, as another worktree took its folder
 /// `from` meanwhile.
 fn worktree_moved(lang: i18n::Lang, from: &str, to: &str) -> String {
@@ -3055,11 +3074,24 @@ impl<R: Runtime> Core<R> {
         project_id: &str,
         model: Option<String>,
     ) -> Result<AgentView> {
+        self.create_agent_as(project_id, model, None).await
+    }
+
+    /// `create_agent`, in a worktree of its own (`isolated`: true) or in the project's folder
+    /// (false), whatever the project does by default: the entry beside « Nouvel agent ». None: as
+    /// the project does.
+    pub async fn create_agent_as(
+        self: &Arc<Self>,
+        project_id: &str,
+        model: Option<String>,
+        isolated: Option<bool>,
+    ) -> Result<AgentView> {
         self.create_agent_with(
             project_id,
             AgentOptions {
                 model,
                 select: true,
+                isolated,
                 ..Default::default()
             },
         )
@@ -3161,6 +3193,8 @@ impl<R: Runtime> Core<R> {
         let copied_from = o.copy_of.as_ref().and_then(|c| c.worktree.as_ref());
         // The folders of the app's agents' worktrees: a new one never takes one of them.
         let held = self.held_worktrees();
+        // What its worktree could not start from as the project asks, told in its conversation.
+        let mut base_notices = Vec::new();
         let made = match (&o.branch, &o.worktree, &o.copy_of) {
             // A branch that exists: the agent works on it, whatever else is asked.
             (Some(branch), _, _) => Some(
@@ -3187,14 +3221,8 @@ impl<R: Runtime> Core<R> {
                 None => None,
             },
             (None, None, None) if o.isolated.unwrap_or(project.worktree_per_agent) => Some(
-                git::worktree_add(
-                    &project.path,
-                    &project.worktrees_root(),
-                    &held,
-                    &project.agent_branch_prefix,
-                    &name,
-                )
-                .await,
+                self.agent_worktree(&project, &held, &name, &mut base_notices)
+                    .await,
             ),
             (None, None, None) => None,
         };
@@ -3264,7 +3292,11 @@ impl<R: Runtime> Core<R> {
         let fresh = meta.worktree.clone();
         let h = Arc::new(Mutex::new(AgentRt::new(meta, &conversations)));
         // After the conversation a copy starts with.
-        for text in warning.into_iter().chain(o.copy_of.and_then(|c| c.notice)) {
+        for text in base_notices
+            .into_iter()
+            .chain(warning)
+            .chain(o.copy_of.and_then(|c| c.notice))
+        {
             let mut fx = Effects::default();
             h.lock().notice("warn", text, &mut fx);
         }
@@ -4363,12 +4395,72 @@ impl<R: Runtime> Core<R> {
         }
         let base = match base {
             Some(base) => base.to_string(),
-            None => self.base_of(project, &root).await,
+            None => self.agent_base_of(project, &root, name).await,
         };
         let (path, branch) =
             git::worktree_add_existing(&project.path, &project.worktrees_root(), held, name)
                 .await?;
         Ok((path, branch, base))
+    }
+
+    /// The base of an agent the user starts on the branch `name`, which exists: the branch the
+    /// project's agents start from (« Branche de départ des nouveaux agents ») while it exists and
+    /// is another one, else the project's (`base_of`).
+    async fn agent_base_of(&self, project: &Project, root: &str, name: &str) -> String {
+        let own = project.agent_base_branch.trim();
+        if !own.is_empty()
+            && git::branch_exists(root, own).await
+            && git::local_name(root, name).await.ok().as_deref() != Some(own)
+        {
+            return own.to_string();
+        }
+        self.base_of(project, root).await
+    }
+
+    /// A new agent's worktree, on a branch of its own. From the project's « Branche de départ des
+    /// nouveaux agents » when it names one, which is then its base; fetched first when the project
+    /// says so (« Récupérer avant de créer »), the worktree starting from its remote branch when
+    /// that one is ahead (`git::fetched_start`). Else from the branch the folder is on, as when
+    /// the branch named is gone. `notices`: what could not be done as asked (the branch gone, a
+    /// fetch that failed), for the agent's conversation. Returns (path, branch, base branch).
+    async fn agent_worktree(
+        &self,
+        project: &Project,
+        held: &[PathBuf],
+        name: &str,
+        notices: &mut Vec<String>,
+    ) -> Result<(String, String, String)> {
+        let root = project.worktrees_root();
+        let prefix = &project.agent_branch_prefix;
+        let base = project.agent_base_branch.trim();
+        if base.is_empty() {
+            return git::worktree_add(&project.path, &root, held, prefix, name).await;
+        }
+        if !git::branch_exists(&project.path, base).await {
+            notices.push(starting_branch_gone(i18n::ui(), base));
+            return git::worktree_add(&project.path, &root, held, prefix, name).await;
+        }
+        let mut start = format!("refs/heads/{base}");
+        if project.agent_base_fetch {
+            // Not while the user's own fetch, pull or push runs in the repository.
+            let lock = self
+                .toplevel(&project.path)
+                .await
+                .map(|top| self.sync_lock(&top));
+            let _guard = match &lock {
+                Some(lock) => Some(lock.lock().await),
+                None => None,
+            };
+            match git::fetched_start(&project.path, base).await {
+                Ok(Some(fetched)) => start = fetched,
+                // It tracks no remote branch: there is nothing to fetch.
+                Ok(None) => {}
+                Err(e) => notices.push(starting_branch_not_fetched(i18n::ui(), base, &e)),
+            }
+        }
+        let (path, branch) =
+            git::worktree_add_at(&project.path, &root, held, prefix, name, &start).await?;
+        Ok((path, branch, base.to_string()))
     }
 
     /// Merges the agent's branch into its base branch, in the project's folder. When the folder is
@@ -4496,6 +4588,8 @@ impl<R: Runtime> Core<R> {
             worktree_dir: String::new(),
             agent_branch_prefix: crate::model::default_agent_branch_prefix(),
             ticket_branch_prefix: crate::model::default_ticket_branch_prefix(),
+            agent_base_branch: String::new(),
+            agent_base_fetch: false,
         };
         self.projects.write().push(project.clone());
         {
@@ -4561,6 +4655,8 @@ impl<R: Runtime> Core<R> {
         cur.worktree_dir = worktree_dir;
         cur.agent_branch_prefix = agent_prefix;
         cur.ticket_branch_prefix = ticket_prefix;
+        cur.agent_base_branch = p.agent_base_branch.trim().to_string();
+        cur.agent_base_fetch = p.agent_base_fetch;
         // What was imported is the backend's own: the window's copy may be older.
         let imported = std::mem::take(&mut cur.integrations.imported);
         cur.integrations = crate::integrations::checked_links(p.integrations);

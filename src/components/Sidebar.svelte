@@ -192,6 +192,10 @@
           pickingBranch = true;
         },
       },
+      // The other way round from what « Nouvel agent » does in this project (« Un worktree par agent »).
+      project.worktreePerAgent
+        ? { label: t('branches.agent.withoutWorktree'), onClick: () => app.newAgent(project.id, false) }
+        : { label: t('branches.agent.withWorktree'), onClick: () => app.newAgent(project.id, true) },
     ]);
   }
 

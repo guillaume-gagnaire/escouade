@@ -111,8 +111,49 @@ describe('Sidebar', () => {
     const backend = fakeBackend({ create_agent: () => agent({ id: 'a4', name: 'agent-3', createdAt: 4 }) });
     render(Sidebar, { project: project() });
     await userEvent.click(screen.getByRole('button', { name: /Nouvel agent/ }));
-    expect(backend.called('create_agent')[0].args).toEqual({ projectId: 'p1', model: null });
+    // As the project does: with a worktree or without, by its « Un worktree par agent ».
+    expect(backend.called('create_agent')[0].args).toEqual({ projectId: 'p1', model: null, isolated: null });
     expect(app.agent?.id).toBe('a4');
+  });
+
+  describe('a new agent the other way round from « Un worktree par agent »', () => {
+    const more = () => screen.getByRole('button', { name: 'Autres façons de créer un agent' });
+    const made = () => fakeBackend({ create_agent: () => agent({ id: 'a4', name: 'agent-3', createdAt: 4 }) });
+
+    it('is offered in a worktree by a project whose agents work in its folder', async () => {
+      const backend = made();
+      render(Sidebar, { project: project({ worktreePerAgent: false }) });
+      render(ContextMenu);
+      await userEvent.click(more());
+      expect(screen.queryByRole('menuitem', { name: 'Nouvel agent sans worktree' })).toBeNull();
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Nouvel agent dans un worktree' }));
+      expect(backend.called('create_agent')[0].args).toEqual({ projectId: 'p1', model: null, isolated: true });
+      await vi.waitFor(() => expect(app.agent?.id).toBe('a4'));
+    });
+
+    it('is offered without a worktree by a project that gives each agent one', async () => {
+      const backend = made();
+      render(Sidebar, { project: project({ worktreePerAgent: true }) });
+      render(ContextMenu);
+      await userEvent.click(more());
+      expect(screen.queryByRole('menuitem', { name: 'Nouvel agent dans un worktree' })).toBeNull();
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Nouvel agent sans worktree' }));
+      expect(backend.called('create_agent')[0].args).toEqual({ projectId: 'p1', model: null, isolated: false });
+      await vi.waitFor(() => expect(app.agent?.id).toBe('a4'));
+    });
+
+    it('is written in English', async () => {
+      setLang('en');
+      made();
+      const { unmount } = render(Sidebar, { project: project({ worktreePerAgent: true }) });
+      await userEvent.click(screen.getByRole('button', { name: 'Other ways to create an agent' }));
+      expect(menu.open!.items.map((i) => i.label)).toEqual(['New agent on a branch…', 'New agent without a worktree']);
+      menu.close();
+      unmount();
+      render(Sidebar, { project: project({ worktreePerAgent: false }) });
+      await userEvent.click(screen.getByRole('button', { name: 'Other ways to create an agent' }));
+      expect(menu.open!.items.map((i) => i.label)).toEqual(['New agent on a branch…', 'New agent in a worktree']);
+    });
   });
 
   describe('a new agent on a branch', () => {
@@ -129,7 +170,7 @@ describe('Sidebar', () => {
       render(Sidebar, { project: project() });
       expect(more()).toHaveAttribute('aria-haspopup', 'menu');
       await userEvent.click(more());
-      expect(menu.open!.items.map((i) => i.label)).toEqual(['Nouvel agent sur une branche…']);
+      expect(menu.open!.items[0].label).toBe('Nouvel agent sur une branche…');
       // The button itself still makes an agent at once.
       expect(screen.getByRole('button', { name: /^\+?\s*Nouvel agent$/ })).toBeInTheDocument();
     });
@@ -182,7 +223,7 @@ describe('Sidebar', () => {
       fakeBackend(handlers());
       render(Sidebar, { project: project() });
       await userEvent.click(screen.getByRole('button', { name: 'Other ways to create an agent' }));
-      expect(menu.open!.items.map((i) => i.label)).toEqual(['New agent on a branch…']);
+      expect(menu.open!.items[0].label).toBe('New agent on a branch…');
       menu.open!.items[0].onClick!();
       menu.close();
       expect(await screen.findByRole('dialog', { name: 'Choose a branch' })).toBeInTheDocument();

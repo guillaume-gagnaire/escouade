@@ -116,6 +116,10 @@ export default defineZone('branches', {
   agent: {
     /** The menu beside “New agent”. */
     onBranch: 'New agent on a branch…',
+    /** In that menu, for a project that gives each agent a worktree: one in the project’s folder. */
+    withoutWorktree: 'New agent without a worktree',
+    /** In that menu, for a project whose agents work in its folder: one in a worktree of its own. */
+    withWorktree: 'New agent in a worktree',
     /** The label of the button beside “New agent” that opens that menu. */
     moreWays: 'Other ways to create an agent',
     /** The branch picker, when it is to choose the branch of an agent or of a ticket. */

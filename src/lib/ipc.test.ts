@@ -49,6 +49,18 @@ describe('board commands', () => {
     ]);
   });
 
+  it('creates an agent as its project does, or with a worktree or without when told', async () => {
+    const backend = fakeBackend({ create_agent: () => agent({ id: 'a9' }) });
+    expect((await api.createAgent('p1')).id).toBe('a9');
+    await api.createAgent('p1', 'opus', true);
+    await api.createAgent('p1', null, false);
+    expect(backend.calls).toEqual([
+      { cmd: 'create_agent', args: { projectId: 'p1', model: null, isolated: null } },
+      { cmd: 'create_agent', args: { projectId: 'p1', model: 'opus', isolated: true } },
+      { cmd: 'create_agent', args: { projectId: 'p1', model: null, isolated: false } },
+    ]);
+  });
+
   it('starts an agent on an existing branch and integrates its base with the names its commands take', async () => {
     const backend = fakeBackend({
       create_agent_on_branch: () => agent({ id: 'a9' }),

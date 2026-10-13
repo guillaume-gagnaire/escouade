@@ -86,6 +86,8 @@ type ProjectFields = Pick<
   | 'worktreeDir'
   | 'agentBranchPrefix'
   | 'ticketBranchPrefix'
+  | 'agentBaseBranch'
+  | 'agentBaseFetch'
 >;
 
 /** Which commands of a project's worktrees: run once one is made, or before one is removed. */
@@ -112,6 +114,10 @@ export interface ProjectDraft {
   agentBranchPrefix: string;
   /** « Préfixe des branches des tickets ». */
   ticketBranchPrefix: string;
+  /** « Branche de départ des nouveaux agents »: empty is the branch the folder is on. */
+  agentBaseBranch: string;
+  /** « Récupérer avant de créer », kept while no branch is chosen: it comes back with one. */
+  agentBaseFetch: boolean;
   board: BoardSettings;
   /** Its sources in external ticket systems (the « Intégrations » tab). */
   integrations: ProjectIntegrations;
@@ -132,6 +138,8 @@ function draftOf(p: Project): ProjectDraft {
     worktreeDir,
     agentBranchPrefix,
     ticketBranchPrefix,
+    agentBaseBranch,
+    agentBaseFetch,
     board,
     integrations,
   } = $state.snapshot(p);
@@ -149,6 +157,8 @@ function draftOf(p: Project): ProjectDraft {
     worktreeDir,
     agentBranchPrefix,
     ticketBranchPrefix,
+    agentBaseBranch,
+    agentBaseFetch,
     board,
     integrations,
   };
@@ -196,6 +206,8 @@ function fieldsOf(d: ProjectDraft): ProjectFields {
     worktreeDir: d.worktreeDir.trim(),
     agentBranchPrefix: d.agentBranchPrefix.trim(),
     ticketBranchPrefix: d.ticketBranchPrefix.trim(),
+    agentBaseBranch: d.agentBaseBranch,
+    agentBaseFetch: d.agentBaseFetch,
   };
 }
 

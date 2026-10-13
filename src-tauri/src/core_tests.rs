@@ -577,6 +577,202 @@ async fn a_worktrees_folder_or_a_branch_prefix_that_cannot_be_is_refused_and_not
     }
 }
 
+/// The warnings told in an agent's conversation.
+fn warn_notices(h: &Harness, id: &str) -> Vec<String> {
+    h.items(id)
+        .iter()
+        .filter(|i| i["kind"] == "notice" && i["level"] == "warn")
+        .map(|i| i["text"].as_str().unwrap().to_string())
+        .collect()
+}
+
+#[tokio::test]
+async fn an_agent_of_a_project_that_names_its_starting_branch_starts_from_it_whatever_the_folder_is_on(
+) {
+    let h = harness("starting-branch");
+    let (p, r) = h.project(true).await;
+    // The folder is on a branch of its own, one commit past main.
+    git(&r, &["switch", "-qc", "feat"]);
+    commit_change(&r, "const a = 2;\n", "feat");
+    let (main, feat) = (
+        git(&r, &["rev-parse", "main"]),
+        git(&r, &["rev-parse", "feat"]),
+    );
+    let head = |path: &str| git(Path::new(path), &["rev-parse", "HEAD"]);
+    // Fetched first, as asked: main tracks no remote branch, there is nothing to fetch.
+    h.core
+        .update_project(Project {
+            agent_base_branch: " main ".into(),
+            agent_base_fetch: true,
+            ..p.clone()
+        })
+        .unwrap();
+    assert_eq!(h.core.project(&p.id).unwrap().agent_base_branch, "main");
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    let wt = a.worktree.clone().expect("worktree created");
+    assert_eq!(
+        (wt.branch.as_str(), wt.base_branch.as_str()),
+        ("escouade/agent-1", "main")
+    );
+    assert_eq!(head(&wt.path), main);
+    assert_eq!(warn_notices(&h, &a.id), Vec::<String>::new());
+    // The folder stays on its branch.
+    assert_eq!(git(&r, &["branch", "--show-current"]), "feat");
+    // An agent on a branch that exists is merged into the same base…
+    git(&r, &["branch", "fix", "main"]);
+    let on = h
+        .core
+        .create_agent_on_branch(&p.id, "fix", None)
+        .await
+        .unwrap()
+        .meta;
+    assert_eq!(on.worktree.unwrap().base_branch, "main");
+    // …unless it is on that very branch: the project's base, as before.
+    let itself = h
+        .core
+        .create_agent_on_branch(&p.id, "main", None)
+        .await
+        .unwrap()
+        .meta;
+    assert_eq!(itself.worktree.unwrap().base_branch, "feat");
+    // Back to the branch the folder is on.
+    h.core
+        .update_project(Project {
+            agent_base_branch: String::new(),
+            ..h.core.project(&p.id).unwrap()
+        })
+        .unwrap();
+    let b = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    let wt = b.worktree.expect("worktree created");
+    assert_eq!(wt.base_branch, "feat");
+    assert_eq!(head(&wt.path), feat);
+}
+
+#[tokio::test]
+async fn a_starting_branch_that_is_gone_is_told_and_the_agent_starts_from_the_folders_branch() {
+    let h = harness("starting-branch-gone");
+    let (p, r) = h.project(true).await;
+    h.core
+        .update_project(Project {
+            agent_base_branch: "release".into(),
+            ..p.clone()
+        })
+        .unwrap();
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    // In a worktree all the same: the folder's files are not its agent's to change.
+    let wt = a.worktree.clone().expect("worktree created");
+    assert_eq!(wt.base_branch, "main");
+    assert_eq!(
+        git(Path::new(&wt.path), &["rev-parse", "HEAD"]),
+        git(&r, &["rev-parse", "main"])
+    );
+    assert_eq!(
+        warn_notices(&h, &a.id),
+        ["La branche de départ « release » n'existe plus : l'agent part de la branche du dossier du projet. Choisis-en une autre dans Réglages › Projets › Git."]
+    );
+}
+
+#[tokio::test]
+async fn a_starting_branch_fetched_first_starts_the_agent_from_what_its_remote_has() {
+    let h = harness("starting-branch-fetch");
+    let (p, r) = h.project(true).await;
+    let other = add_remote(&h.dir, &r);
+    // Someone pushed to main; the folder, on another branch, has not fetched it.
+    commit_change(&other, "const a = 2;\n", "theirs");
+    git(&other, &["push", "-q"]);
+    let theirs = git(&other, &["rev-parse", "HEAD"]);
+    git(&r, &["switch", "-qc", "feat"]);
+    let behind = git(&r, &["rev-parse", "main"]);
+    let head = |path: &str| git(Path::new(path), &["rev-parse", "HEAD"]);
+    let fetching = |on: bool| {
+        h.core
+            .update_project(Project {
+                agent_base_branch: "main".into(),
+                agent_base_fetch: on,
+                ..h.core.project(&p.id).unwrap()
+            })
+            .unwrap()
+    };
+    fetching(true);
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    let wt = a.worktree.clone().expect("worktree created");
+    assert_eq!(head(&wt.path), theirs);
+    assert_eq!(wt.base_branch, "main");
+    assert_eq!(warn_notices(&h, &a.id), Vec::<String>::new());
+    // The local branch is left where it was, and the agent's tracks nothing: a push of it never
+    // goes to main.
+    assert_eq!(git(&r, &["rev-parse", "main"]), behind);
+    let upstream = git(
+        &r,
+        &[
+            "for-each-ref",
+            "--format=%(upstream)",
+            &format!("refs/heads/{}", wt.branch),
+        ],
+    );
+    assert_eq!(upstream, "");
+    // Without the fetch: from the local branch, behind as it is.
+    fetching(false);
+    let b = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    assert_eq!(head(&b.worktree.unwrap().path), behind);
+    // A local branch with a commit its remote lacks is never left behind.
+    fetching(true);
+    git(&r, &["switch", "-q", "main"]);
+    commit_change(&r, "const a = 3;\n", "mine");
+    let mine = git(&r, &["rev-parse", "main"]);
+    git(&r, &["switch", "-q", "feat"]);
+    let c = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    assert_eq!(head(&c.worktree.unwrap().path), mine);
+    // A remote that does not answer: said, and the agent starts from the branch as it is here.
+    let nowhere = h.dir.join("nowhere.git").to_string_lossy().to_string();
+    git(&r, &["remote", "set-url", "origin", &nowhere]);
+    let d = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    assert_eq!(head(&d.worktree.clone().unwrap().path), mine);
+    let told = warn_notices(&h, &d.id);
+    assert_eq!(told.len(), 1, "{told:?}");
+    assert!(
+        told[0].starts_with(
+            "main n'a pas pu être récupérée, l'agent part de la branche telle qu'elle est ici : "
+        ),
+        "{told:?}"
+    );
+}
+
+#[tokio::test]
+async fn an_agent_is_made_without_a_worktree_or_with_one_whatever_the_project_does_when_asked() {
+    let h = harness("agent-against-the-setting");
+    let (p, _r) = h.project(true).await;
+    let a = h
+        .core
+        .create_agent_as(&p.id, None, Some(false))
+        .await
+        .unwrap()
+        .meta;
+    assert!(a.worktree.is_none());
+    assert_eq!(a.cwd, p.path);
+    h.core
+        .update_project(Project {
+            worktree_per_agent: false,
+            ..p.clone()
+        })
+        .unwrap();
+    let b = h
+        .core
+        .create_agent_as(&p.id, None, Some(true))
+        .await
+        .unwrap()
+        .meta;
+    assert_eq!(b.worktree.expect("worktree created").base_branch, "main");
+    // As the project does when nothing is asked.
+    let c = h
+        .core
+        .create_agent_as(&p.id, None, None)
+        .await
+        .unwrap()
+        .meta;
+    assert!(c.worktree.is_none());
+}
+
 #[tokio::test]
 async fn claude_code_goes_through_the_proxy_and_skips_tls_verification_when_set() {
     let h = harness("network");

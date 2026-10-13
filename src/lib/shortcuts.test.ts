@@ -31,7 +31,7 @@ describe('handleShortcut', () => {
   it('creates an agent with Ctrl+N', () => {
     const backend = fakeBackend({ create_agent: () => agent({ id: 'a3', createdAt: 3 }) });
     expect(handleShortcut(key('n'))).toBe(true);
-    expect(backend.called('create_agent')).toEqual([{ cmd: 'create_agent', args: { projectId: 'p1', model: null } }]);
+    expect(backend.called('create_agent')).toEqual([{ cmd: 'create_agent', args: { projectId: 'p1', model: null, isolated: null } }]);
   });
 
   it('cycles agents with Ctrl+Tab and Ctrl+Shift+Tab', () => {

@@ -157,6 +157,13 @@ export default defineZone('settings', {
     colorN: 'Color {n}',
     worktreePerAgent: 'One worktree per agent',
     worktreePerAgentDesc: 'Keeps each new agent’s changes in its own branch.',
+    agentBase: 'New agents’ starting branch',
+    agentBaseDesc:
+      'Where a new agent’s worktree starts from, and where its work is merged. Current branch: the one the project’s folder is on when the agent is created.',
+    agentBaseCurrent: 'Current branch',
+    agentBaseFetch: 'Fetch before creating',
+    agentBaseFetchDesc:
+      'Runs git fetch on {branch} before each new agent: its worktree starts from the remote branch when it is ahead of yours. Offline, it starts from yours.',
     worktreeDir: 'Worktrees folder',
     worktreeDirDesc:
       'Relative to the project’s folder (../app-worktrees, .worktrees), to your home folder (~/worktrees/app), or full. Empty: .claude/worktrees, as claude --worktree does. Worktrees made already stay where they are; out of the project, the Claude Code view first asks you to trust each of them.',

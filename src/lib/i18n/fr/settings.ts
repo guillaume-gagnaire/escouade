@@ -177,6 +177,15 @@ export default {
     colorN: 'Couleur {n}',
     worktreePerAgent: 'Un worktree par agent',
     worktreePerAgentDesc: 'Isole les modifications de chaque nouvel agent dans sa propre branche.',
+    agentBase: 'Branche de départ des nouveaux agents',
+    agentBaseDesc:
+      'D’où part le worktree d’un nouvel agent, et où son travail est mergé. Branche courante : celle du dossier du projet au moment où l’agent est créé.',
+    /** The choice ahead of the branches: no branch is named. */
+    agentBaseCurrent: 'Branche courante',
+    agentBaseFetch: 'Récupérer avant de créer',
+    /** `{branch}`: the branch the new agents start from. */
+    agentBaseFetchDesc:
+      'git fetch de {branch} avant chaque nouvel agent : son worktree part de la branche distante quand elle est en avance sur la tienne. Sans réseau, il part de la tienne.',
     worktreeDir: 'Dossier des worktrees',
     worktreeDirDesc:
       'Relatif au dossier du projet (../app-worktrees, .worktrees), à ton dossier personnel (~/worktrees/app) ou complet. Vide : .claude/worktrees, comme claude --worktree. Les worktrees déjà créés restent où ils sont ; hors du projet, la vue Claude Code demande d’abord ta confiance pour chacun.',

@@ -260,6 +260,10 @@ export interface Project {
   agentBranchPrefix: string;
   /** « Préfixe des branches des tickets »: a ticket's own branch is `<prefix><key>`. */
   ticketBranchPrefix: string;
+  /** « Branche de départ des nouveaux agents »: the local branch a new agent's worktree starts from; empty is the one the folder is on. */
+  agentBaseBranch: string;
+  /** « Récupérer avant de créer »: that branch is fetched before each new worktree, which starts from its remote branch when ahead. */
+  agentBaseFetch: boolean;
 }
 
 /** « Rédigé par l'agent » (the agent is asked to commit) or « Direct, avec un message proposé ». */

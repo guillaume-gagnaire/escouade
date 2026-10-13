@@ -2,11 +2,11 @@
   import { commitPreview } from '../../lib/board';
   import { fPct } from '../../lib/format';
   import { t } from '../../lib/i18n';
-  import { api } from '../../lib/ipc';
   import { EFFORTS, MODES, modelLabel, modelOptions } from '../../lib/models';
   import { settingsForm } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
   import type { BoardAction, BoardSettings, Project } from '../../lib/types';
+  import BranchChips from './BranchChips.svelte';
   import Chips from './Chips.svelte';
   import Group from './Group.svelte';
   import Row from './Row.svelte';
@@ -19,19 +19,6 @@
   const draft = $derived(settingsForm.project!);
   const b = $derived(draft.board);
   const target = $derived(b.target || app.git[project.id]?.branch || 'main');
-  /** The local branches, by project. */
-  let branches = $state<Record<string, string[]>>({});
-
-  $effect(() => {
-    const id = project.id;
-    if (branches[id]) return;
-    api
-      .gitBranches(id)
-      .then((list) => {
-        branches[id] = list;
-      })
-      .catch(() => {});
-  });
 
   // The choices below are texts: derived, so that they follow the language of the interface.
   const ACTION_IDS: BoardAction[] = ['merge', 'pr', 'push', 'keep'];
@@ -65,11 +52,9 @@
   </div>
   {#if b.action === 'merge' || b.action === 'pr'}
     <div class="box">
-      <div class="line">
+      <div class="line top">
         <span class="k">{t('boardSettings.tab.targetBranch')}</span>
-        {#each branches[project.id]?.length ? branches[project.id] : [target] as br (br)}
-          <button class="chip mono" class:on={target === br} aria-pressed={target === br} onclick={() => (b.target = br)}>⎇ {br}</button>
-        {/each}
+        <BranchChips projectId={project.id} value={target} label={t('boardSettings.tab.targetBranch')} onpick={(br) => (b.target = br)} />
       </div>
       {#if b.action === 'merge'}
         <div class="line">
@@ -230,6 +215,15 @@
     gap: 8px;
     flex-wrap: wrap;
   }
+  /* The branches: a list of several rows, its label by the first one. */
+  .line.top {
+    align-items: flex-start;
+    flex-wrap: nowrap;
+  }
+  .line.top .k {
+    flex: none;
+    line-height: 32px;
+  }
   .k {
     width: 110px;
     font-size: 12px;
@@ -245,10 +239,6 @@
     font-size: 12px;
     font-weight: 600;
     cursor: pointer;
-  }
-  .chip.mono {
-    font-family: var(--mono);
-    font-size: 11.5px;
   }
   .chip.on {
     border-color: var(--accent);

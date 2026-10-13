@@ -90,6 +90,8 @@ export function project(over: Partial<Project> = {}): Project {
     worktreeDir: '',
     agentBranchPrefix: 'escouade/',
     ticketBranchPrefix: 'ticket/',
+    agentBaseBranch: '',
+    agentBaseFetch: false,
     ...over,
   };
 }

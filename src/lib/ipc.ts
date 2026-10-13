@@ -95,7 +95,9 @@ export const api = {
   updateProject: (project: Project) => invoke<void>('update_project', { project }),
   reorderProjects: (ids: string[]) => invoke<void>('reorder_projects', { ids }),
   removeProject: (id: string) => invoke<void>('remove_project', { id }),
-  createAgent: (projectId: string, model: string | null = null) => invoke<Agent>('create_agent', { projectId, model }),
+  /** `isolated`: in a worktree of its own (true) or in the project's folder (false) whatever the project does; null: as the project does. */
+  createAgent: (projectId: string, model: string | null = null, isolated: boolean | null = null) =>
+    invoke<Agent>('create_agent', { projectId, model, isolated }),
   createAgentOnBranch: (projectId: string, branch: string, model: string | null = null) =>
     invoke<Agent>('create_agent_on_branch', { projectId, branch, model }),
   warmAgent: (id: string) => invoke<void>('warm_agent', { id }),
