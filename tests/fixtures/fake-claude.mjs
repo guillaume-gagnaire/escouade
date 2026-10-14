@@ -4,7 +4,8 @@
 // scenario: "question", "permission", "edit", "slow", "crash", "grandchild"; anything else is a
 // plain reply ("grandchild" starts a program that lasts a minute in its folder, and says its pid; with
 // [detached] too, that program outlives the process). A `--resume=missing…` session fails like an
-// unknown session does, forked or not; with `--fork-session`, the resumed conversation goes on under a new session id, and a
+// unknown session does, forked or not; "[pull-request]" opens a pull request with a `gh pr create` command, whose result
+// prints its address (https://github.com/acme/demo/pull/12); with `--fork-session`, the resumed conversation goes on under a new session id, and a
 // `--resume-session-at=missing…` entry fails as one Claude Code cannot find does. Each assistant
 // message carries the uuid of its entry in the session (`entry-<pid>-<n>`).
 // Every launch appends {argv, cwd, proxy, tls, configDir, todoTools} (its HTTPS_PROXY,
@@ -976,6 +977,15 @@ function startSession() {
           ],
         },
       });
+      return;
+    }
+    if (text.includes('[pull-request]')) {
+      const tuid = `toolu_pr${msg}`;
+      const url = 'https://github.com/acme/demo/pull/12';
+      assistant({ type: 'tool_use', id: tuid, name: 'Bash', input: { command: 'git push -u origin HEAD && gh pr create --fill' } });
+      toolResult(tuid, url, { tool_use_result: { stdout: `${url}\n`, stderr: '', interrupted: false } });
+      streamText(`Pull request ouverte : ${url}`);
+      result();
       return;
     }
     if (text.includes('edit')) {

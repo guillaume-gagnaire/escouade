@@ -372,6 +372,14 @@ pub fn warm_agent(core: CoreState, id: String) {
     core.warm(&id);
 }
 
+/// The agent was selected: GitHub is asked what became of its pull requests, and which ones its
+/// branch has. The agent is sent again when anything changed.
+#[tauri::command]
+pub async fn refresh_pull_requests(core: CoreState<'_>, id: String) -> Res<()> {
+    core.refresh_pull_requests(&id, false).await;
+    Ok(())
+}
+
 #[tauri::command(async)]
 pub fn get_conversation(core: CoreState, id: String) -> Res<Vec<Value>> {
     // Buffered deltas are already in the snapshot: send them before it, not after.

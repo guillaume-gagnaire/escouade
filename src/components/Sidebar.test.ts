@@ -1,11 +1,13 @@
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
+import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buffers } from '../lib/editor/buffers.svelte';
 import { setLang } from '../lib/i18n';
 import { menu } from '../lib/menu.svelte';
 import { app } from '../lib/state.svelte';
 import { openTerminal } from '../lib/terminals';
+import type { PullRequestLink } from '../lib/types';
 import { agent, branchInfo, fakeBackend, gitInfo, project, resetApp, ticket } from '../test/ipc';
 import ContextMenu from './ContextMenu.svelte';
 import Sidebar from './Sidebar.svelte';
@@ -276,6 +278,83 @@ describe('Sidebar agent card', () => {
     const card = screen.getByRole('button', { name: /refacto-auth/ });
     expect(within(card).getByText('1,5 k tok')).toBeInTheDocument();
     expect(within(card).getByText('≈ 0,30 $')).toBeInTheDocument();
+  });
+});
+
+describe('Sidebar agent card pull requests', () => {
+  const pull = (number: number, over: Partial<PullRequestLink> = {}): PullRequestLink => ({
+    url: `https://github.com/acme/demo/pull/${number}`,
+    number,
+    title: '',
+    state: 'open',
+    checks: '',
+    review: '',
+    checkedAt: 1,
+    ...over,
+  });
+  const card = (name: RegExp) => screen.getByRole('button', { name });
+
+  beforeEach(() =>
+    resetApp({
+      projects: [project()],
+      agents: [
+        agent({ pullRequests: [pull(128, { state: 'merged' }), pull(131, { checks: 'passing', review: 'approved' })] }),
+        agent({ id: 'a2', name: 'tests-e2e', createdAt: 2 }),
+      ],
+    }),
+  );
+
+  it('tells on the card of an agent what became of its pull requests, and nothing on the card of one without any', () => {
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    const list = within(card(/refacto-auth/)).getByRole('list', { name: 'Pull requests' });
+    expect(
+      within(list)
+        .getAllByRole('listitem')
+        .map((li) => li.getAttribute('data-state')),
+    ).toEqual(['open', 'merged']);
+    expect(list).toHaveTextContent('#131');
+    expect(list).toHaveTextContent('ouverte');
+    expect(list).toHaveTextContent('approuvée');
+    expect(list).toHaveTextContent('mergée');
+    expect(within(card(/tests-e2e/)).queryByRole('list', { name: 'Pull requests' })).toBeNull();
+  });
+
+  it('opens a pull request from its number without selecting the agent, with the mouse and from the keyboard', async () => {
+    const backend = fakeBackend();
+    app.selectAgent('a2');
+    render(Sidebar, { project: project() });
+    const number = within(card(/refacto-auth/)).getByRole('button', { name: 'Ouvrir la pull request #128 dans le navigateur' });
+    await userEvent.click(number);
+    expect(backend.called('plugin:opener|open_url').map((c) => c.args.url)).toEqual(['https://github.com/acme/demo/pull/128']);
+    number.focus();
+    await userEvent.keyboard('{Enter}');
+    expect(backend.called('plugin:opener|open_url')).toHaveLength(2);
+    expect(app.agent?.id).toBe('a2');
+  });
+
+  it('asks what became of an agent’s pull requests when its card is clicked', async () => {
+    const backend = fakeBackend();
+    render(Sidebar, { project: project() });
+    await userEvent.click(card(/refacto-auth/));
+    expect(app.agent?.id).toBe('a1');
+    expect(backend.called('refresh_pull_requests').map((c) => c.args)).toEqual([{ id: 'a1' }]);
+    // Clicked again: asked again (the backend skips a reading that follows another).
+    await userEvent.click(card(/refacto-auth/));
+    expect(backend.called('refresh_pull_requests')).toHaveLength(2);
+  });
+
+  it('follows what GitHub tells of them', async () => {
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    app.agents.a1 = { ...app.agents.a1, pullRequests: [pull(131, { state: 'merged' })] };
+    await tick();
+    const list = within(card(/refacto-auth/)).getByRole('list', { name: 'Pull requests' });
+    expect(
+      within(list)
+        .getAllByRole('listitem')
+        .map((li) => li.getAttribute('data-state')),
+    ).toEqual(['merged']);
   });
 });
 

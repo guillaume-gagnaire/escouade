@@ -11,6 +11,7 @@ use crate::paths::relative_slash;
 use crate::plan::{Change, PlanState};
 use crate::planfiles::{self, FileList};
 use crate::pricing::{self, Usage};
+use crate::pulls;
 use anyhow::{anyhow, Result};
 use serde_json::{json, Map, Value};
 use std::collections::{HashMap, HashSet};
@@ -75,6 +76,8 @@ pub struct Effects {
     /// What the agent just did may have changed the files of its plan (a command ended, a
     /// subagent came back, the turn ended): the core has them looked at.
     pub plan_files: bool,
+    /// The agent just opened a pull request, now linked to it: the core asks GitHub its state.
+    pub pull_requests: bool,
 }
 
 struct Block {
@@ -135,6 +138,9 @@ pub struct AgentRt {
     /// The commands of its main thread that remove the workspace of the plan it follows: the run
     /// ends with their result (the skills delete the workspace once the final review is clean).
     plan_removals: HashSet<String>,
+    /// The calls, its subagents' too, that open a pull request (`gh pr create`, an MCP server's
+    /// tool): their result gives its address, and the pull request is linked to the agent.
+    pr_calls: HashSet<String>,
     /// When its conversation began, in milliseconds: the files of a plan that were last touched
     /// before are not its own.
     pub(crate) plan_since: i64,
@@ -303,6 +309,7 @@ impl AgentRt {
             plan_written: Vec::new(),
             plan_calls: HashSet::new(),
             plan_removals: HashSet::new(),
+            pr_calls: HashSet::new(),
             plan_since: now_ms(),
             plan_list: None,
             turn_text: String::new(),
@@ -1091,6 +1098,7 @@ impl AgentRt {
             }
             if kind == "tool" {
                 self.plan_tool_use(parent.as_deref(), block, fx);
+                self.watch_pull_request(block);
             }
             let streamed = self
                 .blocks
@@ -1168,6 +1176,38 @@ impl AgentRt {
                 (None, _) => change,
             }
         });
+    }
+
+    /// A call that opens a pull request: a command that runs `gh pr create`, or the tool of an MCP
+    /// server that creates one. Its result is read for the pull request's address (`on_user`).
+    fn watch_pull_request(&mut self, block: &Value) {
+        let (Some(id), Some(name)) = (block["id"].as_str(), block["name"].as_str()) else {
+            return;
+        };
+        // Whatever the shell's tool is named (Bash, PowerShell).
+        let opens = pulls::is_create_tool(name)
+            || block["input"]["command"]
+                .as_str()
+                .is_some_and(pulls::opens_pull_request);
+        if opens {
+            if self.pr_calls.len() >= MAX_PLAN_CALLS {
+                self.pr_calls.clear();
+            }
+            self.pr_calls.insert(id.to_string());
+        }
+    }
+
+    /// Links the pull request at `url` to the agent, once. True when it was not linked yet.
+    pub fn link_pull_request(&mut self, number: u32, url: String) -> bool {
+        if self.meta.pull_requests.iter().any(|p| p.url == url) {
+            return false;
+        }
+        self.meta.pull_requests.push(PullRequestLink {
+            url,
+            number,
+            ..Default::default()
+        });
+        true
     }
 
     /// A call of the main thread after which the files of the plan may have moved: a command (the
@@ -1342,6 +1382,18 @@ impl AgentRt {
                 text = stdout.to_string();
                 if let Some(stderr) = tur["stderr"].as_str().filter(|s| !s.is_empty()) {
                     text = format!("{text}\n{stderr}");
+                }
+            }
+            // Whether it failed or not: `gh pr create` fails on a branch that has its pull request
+            // already, and names it.
+            if self.pr_calls.remove(id) {
+                if let Some((number, url)) = pulls::opened(tur["stdout"].as_str(), &text) {
+                    if self.link_pull_request(number, url) {
+                        fx.agent_changed = true;
+                        fx.save = true;
+                    }
+                    // Linked already or not: what it is now is asked.
+                    fx.pull_requests = true;
                 }
             }
             result["text"] = Value::String(truncate(text.trim_end(), MAX_TEXT));
@@ -4642,5 +4694,247 @@ git add docs/superpowers/plans/2026-10-11-slugify.md && git commit -qm plan";
             serde_json::to_value(a.view()).unwrap()["plan"]["tasks"][0]["status"],
             "pending"
         );
+    }
+
+    // ---------- pull requests ----------
+
+    /// The pull requests linked to the agent, as (number, address).
+    fn linked(a: &AgentRt) -> Vec<(u32, &str)> {
+        a.meta
+            .pull_requests
+            .iter()
+            .map(|p| (p.number, p.url.as_str()))
+            .collect()
+    }
+
+    #[test]
+    fn a_pull_request_the_agent_opens_with_gh_is_linked_to_it_and_its_state_is_asked() {
+        let mut a = rt();
+        let created = json!({
+            "stdout": "https://github.com/acme/demo/pull/12\n",
+            "stderr": "Creating pull request for escouade/login into main in acme/demo",
+        });
+        call(
+            &mut a,
+            None,
+            "t1",
+            "Bash",
+            json!({ "command": "git push -u origin HEAD && gh pr create --fill" }),
+        );
+        assert_eq!(linked(&a), []);
+        let fx = returns(
+            &mut a,
+            "t1",
+            "https://github.com/acme/demo/pull/12",
+            created.clone(),
+        );
+        assert_eq!(linked(&a), [(12, "https://github.com/acme/demo/pull/12")]);
+        assert!(fx.pull_requests && fx.save && fx.agent_changed);
+        // Not read yet: GitHub tells its state.
+        assert_eq!(a.meta.pull_requests[0].state, "");
+        assert_eq!(
+            serde_json::to_value(a.view()).unwrap()["pullRequests"][0],
+            json!({
+                "url": "https://github.com/acme/demo/pull/12", "number": 12, "title": "",
+                "state": "", "checks": "", "review": "", "checkedAt": 0,
+            })
+        );
+        // A second one of the same agent comes after it.
+        call(
+            &mut a,
+            None,
+            "t2",
+            "Bash",
+            json!({ "command": "gh pr create --base release --fill" }),
+        );
+        returns(
+            &mut a,
+            "t2",
+            "",
+            json!({ "stdout": "https://github.com/acme/demo/pull/14\n", "stderr": "" }),
+        );
+        assert_eq!(
+            linked(&a),
+            [
+                (12, "https://github.com/acme/demo/pull/12"),
+                (14, "https://github.com/acme/demo/pull/14")
+            ]
+        );
+    }
+
+    #[test]
+    fn a_pull_request_that_exists_already_is_linked_once_and_asked_again() {
+        let mut a = rt();
+        call(
+            &mut a,
+            None,
+            "t1",
+            "Bash",
+            json!({ "command": "gh pr create --fill" }),
+        );
+        returns(
+            &mut a,
+            "t1",
+            "",
+            json!({ "stdout": "https://github.com/acme/demo/pull/12\n", "stderr": "" }),
+        );
+        // `gh` fails on a branch that has its pull request, and names it.
+        call(
+            &mut a,
+            None,
+            "t2",
+            "Bash",
+            json!({ "command": "gh pr create --fill" }),
+        );
+        let mut fx = Effects::default();
+        a.handle_frame(
+            &json!({"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t2","is_error":true,
+                "content":"a pull request for branch \"escouade/login\" into branch \"main\" already exists:\nhttps://github.com/acme/demo/pull/12"}]},
+                "tool_use_result":"Error: Exit code 1","parent_tool_use_id":null}),
+            &mut fx,
+        );
+        assert_eq!(linked(&a), [(12, "https://github.com/acme/demo/pull/12")]);
+        assert!(fx.pull_requests && !fx.save);
+    }
+
+    #[test]
+    fn a_pull_request_a_subagent_or_an_mcp_tool_opens_is_linked_too() {
+        let mut a = rt();
+        call(
+            &mut a,
+            None,
+            "task1",
+            "Task",
+            json!({ "description": "Ouvre la PR", "prompt": "…" }),
+        );
+        call(
+            &mut a,
+            Some("task1"),
+            "s1",
+            "Bash",
+            json!({ "command": "gh pr create --draft --fill" }),
+        );
+        let mut fx = Effects::default();
+        a.handle_frame(
+            &json!({"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"s1",
+                "content":"https://github.com/acme/demo/pull/21"}]},"parent_tool_use_id":"task1"}),
+            &mut fx,
+        );
+        assert!(fx.pull_requests);
+        call(
+            &mut a,
+            None,
+            "m1",
+            "mcp__github__create_pull_request",
+            json!({ "owner": "acme", "repo": "demo", "head": "feat", "base": "main" }),
+        );
+        returns(
+            &mut a,
+            "m1",
+            r#"{"number":22,"url":"https://api.github.com/repos/acme/demo/pulls/22","html_url":"https://github.com/acme/demo/pull/22"}"#,
+            Value::Null,
+        );
+        assert_eq!(
+            linked(&a),
+            [
+                (21, "https://github.com/acme/demo/pull/21"),
+                (22, "https://github.com/acme/demo/pull/22")
+            ]
+        );
+    }
+
+    #[test]
+    fn the_pull_request_linked_is_the_one_the_command_opened_not_one_it_names_before() {
+        let mut a = rt();
+        // The comment's address is printed first, the new pull request's last.
+        call(
+            &mut a,
+            None,
+            "t1",
+            "Bash",
+            json!({ "command": "gh pr comment 9 --body superseded; gh pr create --fill" }),
+        );
+        let out = "https://github.com/acme/demo/pull/9#issuecomment-1\nhttps://github.com/acme/demo/pull/14\n";
+        returns(&mut a, "t1", "", json!({ "stdout": out, "stderr": "" }));
+        assert_eq!(linked(&a), [(14, "https://github.com/acme/demo/pull/14")]);
+        // Its address kept in a variable and printed by another command of the line.
+        call(
+            &mut a,
+            None,
+            "t2",
+            "Bash",
+            json!({ "command": "PR_URL=$(gh pr create --fill) && echo \"opened $PR_URL\"" }),
+        );
+        returns(
+            &mut a,
+            "t2",
+            "",
+            json!({ "stdout": "opened https://github.com/acme/demo/pull/15\n", "stderr": "" }),
+        );
+        assert_eq!(a.meta.pull_requests.len(), 2);
+        assert_eq!(a.meta.pull_requests[1].number, 15);
+    }
+
+    #[test]
+    fn a_pull_request_opened_in_claude_codes_own_interface_is_linked_from_its_transcript() {
+        let mut a = rt();
+        a.start_tui();
+        let mut fx = Effects::default();
+        a.on_transcript(
+            &json!({"type":"assistant","uuid":"e1","message":{"id":"m1","model":"claude-opus-4-8","role":"assistant","usage":{},
+                "content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"gh pr create --fill"}}]}}),
+            &mut fx,
+        );
+        a.on_transcript(
+            &json!({"type":"user","uuid":"e2","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1",
+                "content":"https://github.com/acme/demo/pull/12"}]},
+                "toolUseResult":{"stdout":"https://github.com/acme/demo/pull/12\n","stderr":"","interrupted":false}}),
+            &mut fx,
+        );
+        assert!(fx.pull_requests);
+        assert_eq!(linked(&a), [(12, "https://github.com/acme/demo/pull/12")]);
+    }
+
+    #[test]
+    fn a_pull_request_only_named_by_a_command_is_not_the_agents() {
+        let mut a = rt();
+        // Listing, viewing, or a text that names one: nothing was opened.
+        for (id, command, out) in [
+            (
+                "t1",
+                "gh pr list",
+                "12\tFix\tfeat\thttps://github.com/acme/demo/pull/12",
+            ),
+            (
+                "t2",
+                "gh pr view 9 --json url",
+                "{\"url\":\"https://github.com/acme/demo/pull/9\"}",
+            ),
+            (
+                "t3",
+                "git log -1",
+                "Merge pull request https://github.com/acme/demo/pull/3",
+            ),
+        ] {
+            call(&mut a, None, id, "Bash", json!({ "command": command }));
+            let fx = returns(&mut a, id, "", json!({ "stdout": out, "stderr": "" }));
+            assert!(!fx.pull_requests, "{command}");
+        }
+        // Opened in the browser, or refused: no address, nothing linked.
+        call(
+            &mut a,
+            None,
+            "t4",
+            "Bash",
+            json!({ "command": "gh pr create --web" }),
+        );
+        let fx = returns(
+            &mut a,
+            "t4",
+            "",
+            json!({ "stdout": "Opening github.com/acme/demo/compare/main...feat in your browser.", "stderr": "" }),
+        );
+        assert!(!fx.pull_requests);
+        assert_eq!(linked(&a), []);
     }
 }

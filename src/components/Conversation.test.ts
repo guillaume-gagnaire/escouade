@@ -71,6 +71,36 @@ describe('Conversation', () => {
     expect(scroller.scrollTop).toBe(2000);
   });
 
+  it('names the agent’s pull requests under its name, each number opening its page', async () => {
+    const pr = { url: 'https://github.com/acme/demo/pull/128', number: 128, title: 'Fix', checks: '', review: '', checkedAt: 1 } as const;
+    const a = agent({
+      worktree: WT,
+      pullRequests: [
+        { ...pr, state: 'merged' },
+        { ...pr, url: 'https://github.com/acme/demo/pull/131', number: 131, state: 'open' },
+      ],
+    });
+    resetApp({ projects: [project()], agents: [a] });
+    const backend = fakeBackend({ get_conversation: () => [] });
+    render(Conversation, { agent: a, project: project() });
+    const header = screen.getByRole('banner');
+    expect(header).toHaveTextContent('demo-api / escouade/w1');
+    const list = within(header).getByRole('list', { name: 'Pull requests' });
+    // Every one of them, the one still to merge first.
+    expect(
+      within(list)
+        .getAllByRole('listitem')
+        .map((li) => li.getAttribute('data-state')),
+    ).toEqual(['open', 'merged']);
+    await userEvent.click(within(list).getByRole('button', { name: 'Ouvrir la pull request #131 dans le navigateur' }));
+    expect(backend.called('plugin:opener|open_url').map((c) => c.args.url)).toEqual(['https://github.com/acme/demo/pull/131']);
+  });
+
+  it('shows no list of pull requests in the header of an agent without any', () => {
+    setup();
+    expect(within(screen.getByRole('banner')).queryByRole('list', { name: 'Pull requests' })).toBeNull();
+  });
+
   it('says the worktree is being set up, and that messages wait for it', () => {
     setup({ status: 'idle', setup: '1/2 · npm ci' });
     const line = screen.getByRole('status');

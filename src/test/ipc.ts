@@ -117,6 +117,7 @@ export function agent(over: Partial<Agent> = {}): Agent {
     cost: 0,
     activeMs: 0,
     touchedFiles: [],
+    pullRequests: [],
     lastActivity: 1,
     prompts: 0,
     activeSince: null,

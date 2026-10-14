@@ -49,6 +49,12 @@ describe('board commands', () => {
     ]);
   });
 
+  it('asks what became of an agent’s pull requests with the name its command takes', async () => {
+    const backend = fakeBackend();
+    await api.refreshPullRequests('a1');
+    expect(backend.calls).toEqual([{ cmd: 'refresh_pull_requests', args: { id: 'a1' } }]);
+  });
+
   it('starts an agent on an existing branch and integrates its base with the names its commands take', async () => {
     const backend = fakeBackend({
       create_agent_on_branch: () => agent({ id: 'a9' }),

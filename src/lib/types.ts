@@ -479,6 +479,22 @@ export interface PendingRequest {
   defaultNo: boolean;
 }
 
+/** A pull request linked to an agent: one it opened, or one of its own branch that GitHub has. */
+export interface PullRequestLink {
+  /** Its page: `https://<host>/<owner>/<repo>/pull/<number>`. */
+  url: string;
+  number: number;
+  title: string;
+  /** Empty until GitHub told (no `gh`, not signed in). */
+  state: '' | 'open' | 'draft' | 'merged' | 'closed';
+  /** What its checks say while it is open or a draft; empty without any. */
+  checks: '' | 'pending' | 'passing' | 'failing';
+  /** What its reviews say while it is open or a draft; empty without any. */
+  review: '' | 'approved' | 'changes' | 'required';
+  /** When GitHub last told its state (ms since epoch); 0: never. */
+  checkedAt: number;
+}
+
 export interface Agent {
   id: string;
   projectId: string;
@@ -503,6 +519,8 @@ export interface Agent {
   cost: number;
   activeMs: number;
   touchedFiles: string[];
+  /** The pull requests linked to it, in the order they were; their state as GitHub last told it. */
+  pullRequests: PullRequestLink[];
   lastActivity: number;
   prompts: number;
   activeSince: number | null;

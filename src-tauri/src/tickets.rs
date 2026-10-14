@@ -2116,6 +2116,10 @@ impl<R: Runtime> Core<R> {
             match gh_pr_create(&gh, &wt.path, &pr).await {
                 Ok(out) => {
                     if let Some((n, url)) = board::pr_number(&out) {
+                        // On its agent's card too, with what becomes of it.
+                        if let Some(agent) = &t.agent_id {
+                            self.link_opened(agent, (n, url.clone()), &title, s.draft);
+                        }
                         let outcome = board::Outcome::of(lang, |_| board::pr_outcome(n, target));
                         return Ok(outcome.with_url(url));
                     }

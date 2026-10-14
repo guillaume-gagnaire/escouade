@@ -724,6 +724,8 @@ class AppState {
     }
     this.persistUi();
     this.focusComposer++;
+    // What became of its pull requests since they were last read (the backend skips a click that follows another).
+    void api.refreshPullRequests(id).catch(() => {});
   }
 
   selectTerm(id: string | null) {

@@ -729,6 +729,27 @@ pub struct Worktree {
     pub existing: bool,
 }
 
+/// A pull request linked to an agent: one it opened (its address read in what `gh pr create`
+/// printed in its conversation), or one of its own branch that GitHub has (`pulls`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct PullRequestLink {
+    /// Its page: `https://<host>/<owner>/<repo>/pull/<number>`.
+    pub url: String,
+    pub number: u32,
+    pub title: String,
+    /// "open", "draft", "merged" or "closed"; empty until GitHub told (no `gh`, not signed in).
+    pub state: String,
+    /// What its checks say while it is open or a draft: "pending", "passing" or "failing"; empty
+    /// without any.
+    pub checks: String,
+    /// What its reviews say while it is open or a draft: "approved", "changes" (requested) or
+    /// "required"; empty without any.
+    pub review: String,
+    /// When GitHub last told its state (ms since epoch); 0: never.
+    pub checked_at: i64,
+}
+
 /// The longest status line an agent reports (`AgentMeta::progress_line`), in characters.
 pub const PROGRESS_LINE_MAX: usize = 120;
 
@@ -763,6 +784,9 @@ pub struct AgentMeta {
     pub active_ms: u64,
     /// Files edited by the agent, relative to its cwd with forward slashes.
     pub touched_files: Vec<String>,
+    /// The pull requests linked to it, in the order they were: those it opened, those of its
+    /// branch (`pulls`). Their state is as GitHub last told it.
+    pub pull_requests: Vec<PullRequestLink>,
     pub last_activity: i64,
     pub prompts: u32,
     /// Remote Control on: the session is also reachable from claude.ai / the Claude app, so the

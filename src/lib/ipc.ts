@@ -101,6 +101,8 @@ export const api = {
   createAgentOnBranch: (projectId: string, branch: string, model: string | null = null) =>
     invoke<Agent>('create_agent_on_branch', { projectId, branch, model }),
   warmAgent: (id: string) => invoke<void>('warm_agent', { id }),
+  /** Has GitHub asked what became of the agent's pull requests, and which ones its branch has; the agent is sent again when anything changed. */
+  refreshPullRequests: (id: string) => invoke<void>('refresh_pull_requests', { id }),
   getConversation: (id: string) => invoke<ConvItem[]>('get_conversation', { id }),
   /** Searches the conversations of a project's agents (all projects' with null), archived agents included or not. */
   searchConversations: (query: string, projectId: string | null, archived: boolean) =>

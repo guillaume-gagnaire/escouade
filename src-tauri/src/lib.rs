@@ -38,6 +38,9 @@ mod proc;
 #[cfg(test)]
 mod process_tests;
 mod pty;
+mod pulls;
+#[cfg(test)]
+mod pulls_tests;
 mod resources;
 mod search;
 #[cfg(unix)]
@@ -266,6 +269,7 @@ pub fn run() {
             commands::remove_project,
             commands::create_agent,
             commands::warm_agent,
+            commands::refresh_pull_requests,
             commands::get_conversation,
             commands::search_conversations,
             commands::send_message,

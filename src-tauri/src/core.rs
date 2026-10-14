@@ -651,6 +651,8 @@ pub struct Core<R: Runtime = Wry> {
     toplevels: Mutex<HashMap<String, Option<String>>>,
     /// How the look at the files of each agent's plan stands, by agent (`ask_plan_scan`).
     plan_scans: Mutex<HashMap<String, PlanScan>>,
+    /// Where the reading of each agent's pull requests stands, by agent (`pulls`).
+    pub(crate) pr_reads: Mutex<HashMap<String, crate::pulls::Reading>>,
     dirty: AtomicBool,
     waiting: AtomicUsize,
     pub quitting: AtomicBool,
@@ -1473,6 +1475,7 @@ impl<R: Runtime> Core<R> {
             sync_locks: Mutex::default(),
             toplevels: Mutex::default(),
             plan_scans: Mutex::default(),
+            pr_reads: Mutex::default(),
             dirty: AtomicBool::new(false),
             waiting: AtomicUsize::new(usize::MAX),
             quitting: AtomicBool::new(false),
@@ -1600,6 +1603,13 @@ impl<R: Runtime> Core<R> {
                 c.fetch_all().await;
                 tokio::time::sleep(FETCH_EVERY).await;
             }
+        });
+        let c = self.clone();
+        tauri::async_runtime::spawn(async move {
+            // Once, shortly after startup: the cards tell what became of the agents' pull requests
+            // while the app was closed. After that, an agent's are read when it is selected.
+            tokio::time::sleep(Duration::from_secs(10)).await;
+            c.refresh_all_pull_requests().await;
         });
         let c = self.clone();
         tauri::async_runtime::spawn(async move {
@@ -1996,6 +2006,9 @@ impl<R: Runtime> Core<R> {
         }
         if fx.plan_files {
             self.ask_plan_scan(id);
+        }
+        if fx.pull_requests {
+            self.ask_pull_requests(id, true);
         }
         if changed {
             self.update_tray();
@@ -4226,6 +4239,7 @@ impl<R: Runtime> Core<R> {
         self.mcp.forget_agent(id);
         self.hooks.revoke(id);
         self.spawn_locks.lock().remove(id);
+        self.pr_reads.lock().remove(id);
         // The setup of its worktree stops, with what it started (which holds the worktree). Once it
         // is gone: what waited for that setup (its ticket's first message) finds no agent to send to.
         // Its log goes with it.
@@ -4671,6 +4685,7 @@ impl<R: Runtime> Core<R> {
             }
             self.mcp.forget_agent(&aid);
             self.spawn_locks.lock().remove(&aid);
+            self.pr_reads.lock().remove(&aid);
             // The setup of its worktree stops, with what it started; its log goes.
             if let Some(s) = self.setups.lock().remove(&aid) {
                 s.task.abort();

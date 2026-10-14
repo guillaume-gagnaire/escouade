@@ -3811,6 +3811,21 @@ async fn with_gh_a_pull_request_is_opened_with_the_criteria() {
     );
     // The page is not opened as well.
     assert!(!h.events.lock().iter().any(|e| e["type"] == "openUrl"));
+    // The pull request is linked to the ticket's agent too, as the draft it was just opened as.
+    let agent = h.agent(t.agent_id.as_deref().expect("the ticket's agent"));
+    assert_eq!(
+        agent.pull_requests,
+        [PullRequestLink {
+            url: "https://github.com/acme/demo/pull/12".into(),
+            number: 12,
+            title: "feat: travail du faux claude [DEM-1]".into(),
+            state: "draft".into(),
+            checks: String::new(),
+            review: String::new(),
+            checked_at: agent.pull_requests[0].checked_at,
+        }]
+    );
+    assert!(agent.pull_requests[0].checked_at > 0);
 }
 
 #[tokio::test]

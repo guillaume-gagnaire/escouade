@@ -1253,10 +1253,7 @@ pub fn compare_url(
 
 /// The number and address of the PR `gh pr create` printed.
 pub fn pr_number(gh_output: &str) -> Option<(u32, String)> {
-    gh_output.split_whitespace().find_map(|w| {
-        let (_, n) = w.rsplit_once("/pull/")?;
-        Some((n.trim_end_matches('/').parse().ok()?, w.to_string()))
-    })
+    crate::pulls::last(gh_output)
 }
 
 /// A PR's description, in `lang`: the ticket's, what its agent says it did (when it said), then

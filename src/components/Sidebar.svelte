@@ -18,6 +18,7 @@
   import { canPrepare, prepareLaunch, stopTests } from '../lib/test-launch.svelte';
   import type { Agent, AgentStatus, Project } from '../lib/types';
   import RunsSection from './RunsSection.svelte';
+  import PullRequests from './PullRequests.svelte';
   import StatusDot from './StatusDot.svelte';
   import BranchPicker from './branches/BranchPicker.svelte';
   import { tip } from '../lib/tip';
@@ -338,6 +339,10 @@
                 : t('plan.mini', { done: plan.done, total: plan.total })}</span
             >
           </div>
+        {/if}
+        {#if a.pullRequests.length}
+          <!-- What it opened, or what its branch has on GitHub: three at most, the header of its conversation has them all. -->
+          <div class="pulls"><PullRequests pulls={a.pullRequests} max={3} /></div>
         {/if}
         {#if tag}
           <div class="ticket-tag mono">▸ {tag}</div>
@@ -711,6 +716,11 @@
     font-size: 10.5px;
     color: var(--muted);
     white-space: nowrap;
+  }
+  .pulls {
+    padding-left: 17px;
+    min-width: 0;
+    overflow: hidden;
   }
   .ticket-tag {
     margin-left: 17px;
