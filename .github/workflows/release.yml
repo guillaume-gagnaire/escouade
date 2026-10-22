@@ -130,6 +130,14 @@ jobs:
         with:
           workspaces: src-tauri
 
+      # whisper.cpp built again each time, as src-tauri/.cargo/whisper.cmake has it (its optimizations, which MSVC
+      # lost, ESC-135): cargo would not see a change to that file, and the cache, restored from an older key when
+      # Cargo.lock or config.toml changed, could hold a build of before (~1 min).
+      - name: whisper.cpp from scratch (Windows)
+        if: runner.os == 'Windows'
+        working-directory: src-tauri
+        run: cargo clean --release -p whisper-rs-sys
+
       - name: Install dependencies
         run: npm ci
 
