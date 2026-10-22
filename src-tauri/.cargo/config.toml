@@ -1,5 +1,7 @@
-# whisper.cpp (`voice`, built by whisper-rs-sys, which hands every GGML_* variable to its cmake):
+# whisper.cpp (`voice`, built by whisper-rs-sys, which hands every GGML_* and CMAKE_* variable to its cmake):
 # built for any x86-64 with AVX2 (2013 on) and any Apple Silicon, not for the CPU of the machine
 # that builds it, which would make a release crash on an older one.
 [env]
 GGML_NATIVE = "OFF"
+# Its optimizations, which the cmake crate takes away with MSVC (ESC-135): see the file.
+CMAKE_PROJECT_INCLUDE = { value = ".cargo/whisper.cmake", relative = true }

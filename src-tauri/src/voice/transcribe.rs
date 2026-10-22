@@ -47,7 +47,12 @@ impl Whisper {
             .ok_or_else(|| anyhow!("model path not UTF-8"))?;
         let ctx = whisper_rs::WhisperContext::new_with_params(
             path,
-            whisper_rs::WhisperContextParameters::default(),
+            // Flash attention, whisper.cpp's default that whisper-rs turns off: an encoder ~10 % faster on the CPU.
+            {
+                let mut p = whisper_rs::WhisperContextParameters::default();
+                p.flash_attn(true);
+                p
+            },
         )
         .map_err(|e| anyhow!("model not loaded: {e}"))?;
         log::info!(
@@ -98,6 +103,26 @@ pub fn clean(segments: &[String]) -> String {
     out
 }
 
+/// The encoder's window, in its frames (50 a second), for `samples` of sound: as long as them and a second more,
+/// rather than the 30 s it is trained on, which it pads a short sentence to and encodes the whole of (ESC-135: a
+/// sentence 4 to 6 times faster, its text the same in the bench). 0, whisper's own 30 s, from 29 s of sound on.
+fn audio_ctx(samples: usize) -> i32 {
+    let frames = samples.div_ceil(16_000 / 50) + 50;
+    if frames >= 1500 {
+        0
+    } else {
+        frames as i32
+    }
+}
+
+/// The threads whisper.cpp computes on.
+fn threads() -> usize {
+    std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4)
+        .clamp(1, 8)
+}
+
 impl Transcriber for Whisper {
     fn transcribe(
         &self,
@@ -113,10 +138,7 @@ impl Transcriber for Whisper {
             .map_err(|e| anyhow!("whisper state: {e}"))?;
         let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
         params.set_language(Some(language));
-        let threads = std::thread::available_parallelism()
-            .map(|n| n.get())
-            .unwrap_or(4)
-            .clamp(1, 8);
+        let threads = threads();
         params.set_n_threads(threads as i32);
         params.set_print_special(false);
         params.set_print_progress(false);
@@ -133,6 +155,7 @@ impl Transcriber for Whisper {
         } else {
             samples
         };
+        params.set_audio_ctx(audio_ctx(samples.len()));
         // The raw callback: whisper-rs 0.16's `set_abort_callback_safe` hands its closure a
         // pointer of another type, which reads garbage and stops every encoding at once.
         unsafe extern "C" fn aborted(data: *mut std::ffi::c_void) -> bool {
@@ -246,6 +269,17 @@ mod tests {
     }
 
     #[test]
+    fn the_encoder_window_is_the_sound_and_a_second_more_up_to_whispers_own() {
+        assert_eq!(audio_ctx(16_000), 100);
+        assert_eq!(audio_ctx(8 * 16_000), 450);
+        // Rounded up: the last samples are in it.
+        assert_eq!(audio_ctx(16_001), 101);
+        assert_eq!(audio_ctx(28 * 16_000), 1450);
+        assert_eq!(audio_ctx(29 * 16_000), 0);
+        assert_eq!(audio_ctx(60 * 16_000), 0);
+    }
+
+    #[test]
     fn the_segments_join_into_one_line_without_the_markers_of_no_speech() {
         assert_eq!(
             clean(&v(&[" Bonjour,", "  ajoute un test ", "[BLANK_AUDIO]"])),
@@ -258,5 +292,78 @@ mod tests {
             clean(&v(&[" Lance les tests (tous) puis commite."])),
             "Lance les tests (tous) puis commite."
         );
+    }
+
+    /// The bench of ESC-135: `testdata/question-fr.wav` transcribed by each model, the encoder (one window of 30 s)
+    /// timed alone, then the whole of what the app does. In release, whisper.cpp built as it ships:
+    /// `cargo test --release --lib whisper_bench -- --ignored --nocapture`. The models: `ESCOUADE_VOICE_BENCH_MODELS`
+    /// (paths, separated by `;`), by default base and large-v3-turbo where the app downloads them; the encoder's
+    /// threads: `ESCOUADE_VOICE_BENCH_THREADS` (`4;8;16`…, by default the app's).
+    #[test]
+    #[ignore]
+    fn whisper_bench() {
+        let models: Vec<PathBuf> = match std::env::var("ESCOUADE_VOICE_BENCH_MODELS") {
+            Ok(v) => v.split(';').map(PathBuf::from).collect(),
+            Err(_) => ["ggml-base.bin", "ggml-large-v3-turbo.bin"]
+                .iter()
+                .map(|m| {
+                    dirs::home_dir()
+                        .unwrap()
+                        .join(".escouade/voice/models")
+                        .join(m)
+                })
+                .collect(),
+        };
+        let counts: Vec<usize> = std::env::var("ESCOUADE_VOICE_BENCH_THREADS")
+            .map(|v| v.split(';').map(|t| t.parse().unwrap()).collect())
+            .unwrap_or_else(|_| vec![threads()]);
+        let wav = std::env::var("ESCOUADE_VOICE_BENCH_WAV")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| {
+                Path::new(env!("CARGO_MANIFEST_DIR")).join("src/voice/testdata/question-fr.wav")
+            });
+        let (samples, rate) = crate::voice::source::read_wav(&wav).unwrap();
+        let samples = crate::voice::audio::resample(&samples, rate, 16_000);
+        println!("whisper.cpp: {}", whisper_rs::print_system_info());
+        // Three runs after a first one (the model's pages read from the disk), their median.
+        let timed = |f: &mut dyn FnMut()| {
+            let mut runs: Vec<u128> = (0..4)
+                .map(|_| {
+                    let started = std::time::Instant::now();
+                    f();
+                    started.elapsed().as_millis()
+                })
+                .skip(1)
+                .collect();
+            runs.sort();
+            (runs[1], runs)
+        };
+        let language = std::env::var("ESCOUADE_VOICE_BENCH_LANGUAGE").unwrap_or("fr".into());
+        for model in &models {
+            assert!(model.exists(), "no model at {}", model.display());
+            let whisper = Whisper::default();
+            let ctx = whisper.context(model).unwrap();
+            let name = model.file_name().unwrap().to_string_lossy();
+            for &n in &counts {
+                let mut state = ctx.create_state().unwrap();
+                let (ms, runs) = timed(&mut || {
+                    state.pcm_to_mel(&samples, n).unwrap();
+                    state.encode(0, n).unwrap();
+                });
+                println!("{name}: encoder in {ms} ms ({n} threads, {runs:?})");
+            }
+            let cancel = Arc::new(AtomicBool::new(false));
+            let mut text = String::new();
+            let (ms, runs) = timed(&mut || {
+                text = whisper
+                    .transcribe(model, &samples, &language, &cancel)
+                    .unwrap();
+            });
+            println!(
+                "{name}: {:.1} s of sound transcribed in {ms} ms ({} threads, {runs:?}): {text}",
+                samples.len() as f32 / 16_000.0,
+                threads()
+            );
+        }
     }
 }
