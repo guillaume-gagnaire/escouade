@@ -9,7 +9,7 @@ One group per harness, under its name:
 | Line | What it says |
 |---|---|
 | “Executable path” | The harness’s program (see below for Claude Code). |
-| “Version” | The version found, and whether Escouade was tested with it: an older one is refused, with its reason and the command that updates it; a newer one is used, with a warning. When no account of this harness is signed in, the line adds “No account signed in: add or sign in an account of this harness in the Accounts tab.” |
+| “Version” | The version found, alone: one older than the tested ones is refused, with its reason and the command that updates it; a newer one is used, without a warning. When no account of this harness is signed in, the line adds “No account signed in: add or sign in an account of this harness in the Accounts tab.” |
 | “Models” (OpenCode) | The models of the providers connected to OpenCode, with a search: the favorites first, then one group per provider. A model’s star makes it a favorite, which comes first in its agents’ model menu. |
 | “Installation” | For a harness that isn’t found: the command that installs it (Claude Code: `irm https://claude.ai/install.ps1 \| iex` on Windows, `curl -fsSL https://claude.ai/install.sh \| bash` on macOS and Linux). For Claude Code, the line also says whether an npm installation was interrupted, with the command that repairs it (see [Troubleshooting](troubleshooting)). |
 

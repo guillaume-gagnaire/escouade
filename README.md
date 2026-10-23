@@ -85,7 +85,7 @@ Escouade lance le harness de ta machine, avec ton propre compte : installe-en au
 | [OpenCode](https://opencode.ai) | `npm install -g opencode-ai` (OpenCode 1 ; OpenCode 2 n'est pas encore pris en charge) | `opencode auth login` (un fournisseur ; les modèles locaux d'Ollama marchent aussi) | 1.19.3 |
 | [GitHub Copilot CLI](https://github.com/github/copilot-cli) | `npm install -g @github/copilot` | `copilot login` (compte GitHub avec Copilot, Free compris) | 1.0.98 |
 
-Une version plus ancienne que celle testée est refusée, avec la commande qui la met à jour ; une plus récente est utilisée, avec un avertissement. Sous Windows, Escouade lance le binaire natif que le paquet npm installe, pas son lanceur. Les différences entre les quatre (modes et ce qui protège, coût et quota, vue terminal, ce qui n'est pas pris en charge) sont décrites dans docs/SPEC.md, « Harness », et sur la page [Harness](https://escouade.dev/docs/harness/) du site ; Cursor CLI est reporté.
+Une version plus ancienne que celle testée est refusée, avec la commande qui la met à jour ; une plus récente est utilisée, sans avertissement. Sous Windows, Escouade lance le binaire natif que le paquet npm installe, pas son lanceur. Les différences entre les quatre (modes et ce qui protège, coût et quota, vue terminal, ce qui n'est pas pris en charge) sont décrites dans docs/SPEC.md, « Harness », et sur la page [Harness](https://escouade.dev/docs/harness/) du site ; Cursor CLI est reporté.
 
 ## Installation
 

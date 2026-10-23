@@ -1490,12 +1490,14 @@ describe('SettingsModal, the version of Claude Code', () => {
     ...over,
   });
 
-  it('says that the version found was tested with Escouade, or what keeps it from running', async () => {
+  it('shows the version found alone, or what keeps it from running', async () => {
     let answer = info({});
     fakeBackend({ claude_locate: () => located, engines: () => [answer] });
     render(SettingsModal, { tab: 'claude' });
-    expect(await screen.findByText('Testée avec Escouade (de la 2.1.283 à la 2.1.301).')).toBeInTheDocument();
-    expect(screen.getByText('2.1.301')).toHaveAttribute('data-state', 'ready');
+    expect(await screen.findByText('2.1.301')).toHaveAttribute('data-state', 'ready');
+    // No word of the tested versions under it (ESC-159).
+    expect(screen.queryByText(/testé/i)).toBeNull();
+    expect(screen.getByText('2.1.301')).not.toHaveAttribute('aria-describedby');
     cleanup();
     // Older than the tested ones: refused, its reason as the backend writes it.
     const refusal =
@@ -1511,10 +1513,19 @@ describe('SettingsModal, the version of Claude Code', () => {
     fakeBackend({ claude_locate: () => located, engines: () => [answer] });
     render(SettingsModal, { tab: 'claude' });
     expect(
-      await screen.findByText(
-        'Testée avec Escouade (de la 2.1.283 à la 2.1.301). Aucun compte connecté : ajoute ou connecte un compte de ce harness dans l’onglet Comptes.',
-      ),
+      await screen.findByText('Aucun compte connecté : ajoute ou connecte un compte de ce harness dans l’onglet Comptes.'),
     ).toBeInTheDocument();
+  });
+
+  it('shows a version newer than the tested ones as ready, with no warning (ESC-159)', async () => {
+    fakeBackend({ claude_locate: () => located, engines: () => [info({ version: '2.1.999' })] });
+    render(SettingsModal, { tab: 'claude' });
+    const version = await screen.findByText('2.1.999');
+    expect(version).toHaveAttribute('data-state', 'ready');
+    expect(version).not.toHaveClass('warn');
+    expect(version).not.toHaveClass('bad');
+    expect(version).not.toHaveAttribute('aria-describedby');
+    expect(screen.queryByText(/testé|tested/i)).toBeNull();
   });
 
   it('shows no version while the path typed is not the saved one, nor for a claude not found', async () => {
@@ -1531,14 +1542,12 @@ describe('SettingsModal, the version of Claude Code', () => {
     fakeBackend({ claude_locate: () => located, engines: () => [info({ state: 'notConnected' })] });
     render(SettingsModal, { tab: 'claude' });
     expect(
-      await screen.findByText(
-        'Tested with Escouade (from 2.1.283 to 2.1.301). No account signed in: add or sign in an account of this harness in the Accounts tab.',
-      ),
+      await screen.findByText('No account signed in: add or sign in an account of this harness in the Accounts tab.'),
     ).toBeInTheDocument();
     cleanup();
-    fakeBackend({ claude_locate: () => located, engines: () => [info({})] });
+    fakeBackend({ claude_locate: () => located, engines: () => [info({ version: null })] });
     render(SettingsModal, { tab: 'claude' });
-    expect(await screen.findByText('Tested with Escouade (from 2.1.283 to 2.1.301).')).toBeInTheDocument();
+    expect(await screen.findByText('Unknown version: claude didn’t tell it.')).toBeInTheDocument();
   });
 
   it('hides the settings of what no harness does', () => {

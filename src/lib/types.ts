@@ -650,9 +650,9 @@ export interface EngineInfo extends EngineDecl {
   located: ClaudeLocated;
   /** Its version as it tells it, null when not found or not told. */
   version: string | null;
-  /** absent, refused for a version older than the tested ones, no account signed in, newer than the tested ones (taken with a warning), ready. */
-  state: 'absent' | 'tooOld' | 'unsupported' | 'notConnected' | 'untested' | 'ready';
-  /** What its state means: the refusal and its reason, the warning. */
+  /** absent, refused for a version older than the tested ones, no account signed in, ready (a newer version too, ESC-159). */
+  state: 'absent' | 'tooOld' | 'unsupported' | 'notConnected' | 'ready';
+  /** What its state means: the refusal and its reason. */
   note: string | null;
 }
 

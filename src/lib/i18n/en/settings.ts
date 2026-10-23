@@ -109,9 +109,8 @@ export default defineZone('settings', {
     notLocated:
       'Not found. Give the path to claude.exe, or to Claude Code installed in WSL: ~/.local/bin/claude, /home/<user>/…, or \\\\wsl.localhost\\<distribution>\\….',
     notLocatedHere: 'Not found. Give the path to claude.',
-    /** The version found of the saved path, and where it stands against the versions Escouade was tested with. */
+    /** The version found of the saved path, alone: no word of the tested versions (ESC-159). */
     version: 'Version',
-    versionTested: 'Tested with Escouade (from {oldest} to {newest}).',
     versionUnknown: 'Unknown version: claude didn’t tell it.',
     versionNotConnected: 'No account signed in: add or sign in an account of this harness in the Accounts tab.',
     processes: 'Processes',

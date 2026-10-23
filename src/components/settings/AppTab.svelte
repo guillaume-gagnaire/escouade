@@ -118,15 +118,11 @@
   /** The command that installs a harness on this system. */
   const installOf = (d: EngineDecl) => (OS === 'windows' ? d.install.windows : d.install.unix);
 
-  /** Under the version: where it stands against the tested ones, or what keeps it from running. */
+  /** Under the version: what keeps it from running, or that it did not tell it; nothing of the tested ones (ESC-159). */
   function versionText(e: EngineInfo): string {
-    // The refusal or the warning (told signed in or not), else where the version stands.
-    const version =
-      e.note ??
-      (e.version
-        ? t('settings.claude.versionTested', { oldest: e.tested.oldest, newest: e.tested.newest })
-        : t('settings.claude.versionUnknown'));
-    return e.state === 'notConnected' ? `${version} ${t('settings.claude.versionNotConnected')}` : version;
+    const version = e.note ?? (e.version ? '' : t('settings.claude.versionUnknown'));
+    const said = e.state === 'notConnected' ? [version, t('settings.claude.versionNotConnected')] : [version];
+    return said.filter(Boolean).join(' ');
   }
 
   /** The line under the path: where its `claude` was found, or how to name one. */
@@ -173,13 +169,14 @@
           />
         {/if}
         {#if shown && shown.state !== 'absent'}
-          <Row label={t('settings.claude.version')} desc={versionText(shown)} descId="engine-version-{decl.id}">
+          {@const versionSaid = versionText(shown)}
+          <Row label={t('settings.claude.version')} desc={versionSaid} descId="engine-version-{decl.id}">
             <span
               class="mono version"
-              class:warn={shown.state === 'untested' || shown.state === 'notConnected'}
+              class:warn={shown.state === 'notConnected'}
               class:bad={shown.state === 'tooOld' || shown.state === 'unsupported'}
               data-state={shown.state}
-              aria-describedby="engine-version-{decl.id}">{shown.version ?? '—'}</span
+              aria-describedby={versionSaid ? `engine-version-${decl.id}` : undefined}>{shown.version ?? '—'}</span
             >
           </Row>
           <!-- Accounts are signed in from Réglages › Comptes (ESC-128): the version's line says when none of its is. -->

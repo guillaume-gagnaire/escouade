@@ -132,9 +132,8 @@ export default {
     notLocated:
       'Introuvable. Indique le chemin de claude.exe, ou de Claude Code installé dans WSL : ~/.local/bin/claude, /home/<utilisateur>/…, ou \\\\wsl.localhost\\<distribution>\\….',
     notLocatedHere: 'Introuvable. Indique le chemin de claude.',
-    /** The version found of the saved path, and where it stands against the versions Escouade was tested with. */
+    /** The version found of the saved path, alone: no word of the tested versions (ESC-159). */
     version: 'Version',
-    versionTested: 'Testée avec Escouade (de la {oldest} à la {newest}).',
     versionUnknown: 'Version inconnue : claude ne l’a pas donnée.',
     versionNotConnected: 'Aucun compte connecté : ajoute ou connecte un compte de ce harness dans l’onglet Comptes.',
     processes: 'Processus',

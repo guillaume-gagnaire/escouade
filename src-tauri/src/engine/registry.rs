@@ -279,8 +279,7 @@ pub enum EngineState {
     Unsupported,
     /// Found, but no account is signed in.
     NotConnected,
-    /// Newer than the tested ones: taken, with a warning.
-    Untested,
+    /// Taken: a version newer than the tested ones too, without a warning (ESC-159).
     Ready,
 }
 
@@ -296,8 +295,7 @@ pub struct EngineInfo {
     pub version: Option<String>,
     pub tested: Tested,
     pub state: EngineState,
-    /// What its state means for the user: the refusal of an older version and its reason, the
-    /// warning of a newer one.
+    /// What its state means for the user: the refusal of an older version and its reason.
     pub note: Option<String>,
     pub caps: EngineCaps,
 }
@@ -361,23 +359,18 @@ pub fn state_of(
     {
         return (EngineState::Unsupported, Some(why));
     }
-    let range = version
-        .and_then(Version::find)
-        .map(|v| engine.tested().place(&v));
-    // The warning of a newer version is told whether an account is signed in or not.
-    let warning = match (range, version) {
-        (Some(Range::Older), Some(v)) => {
-            return (EngineState::TooOld, Some(too_old(lang, engine, v)))
-        }
-        (Some(Range::Newer), Some(v)) => Some(untested(lang, engine, v)),
-        _ => None,
+    // Only an older version is refused: a newer one is taken as a tested one is.
+    if let Some(v) = version
+        .filter(|v| Version::find(v).is_some_and(|v| engine.tested().place(&v) == Range::Older))
+    {
+        return (EngineState::TooOld, Some(too_old(lang, engine, v)));
+    }
+    let state = if connected {
+        EngineState::Ready
+    } else {
+        EngineState::NotConnected
     };
-    let state = match (connected, &warning) {
-        (false, _) => EngineState::NotConnected,
-        (true, Some(_)) => EngineState::Untested,
-        (true, None) => EngineState::Ready,
-    };
-    (state, warning)
+    (state, None)
 }
 
 /// Refused, in `lang`: the version `found` of `engine` is older than the tested ones.
@@ -390,17 +383,6 @@ pub fn too_old(lang: Lang, engine: &dyn Engine, found: &str) -> String {
         lang,
         "{name} {found} est trop ancien pour Escouade, qui demande au moins la version {oldest} : {why}. Mets-le à jour ({update}).",
         "{name} {found} is too old for Escouade, which needs version {oldest} or later: {why}. Update it ({update})."
-    )
-}
-
-/// The warning, in `lang`: the version `found` of `engine` is newer than the tested ones.
-pub fn untested(lang: Lang, engine: &dyn Engine, found: &str) -> String {
-    let (name, newest) = (engine.name(), engine.tested().newest);
-    let found = Version::parse(found);
-    tr_in!(
-        lang,
-        "{name} {found} n’a pas été testé avec Escouade (testé jusqu’à la {newest}) : il est utilisé quand même, et ce qu’Escouade ne reconnaît pas de lui est ignoré.",
-        "{name} {found} hasn’t been tested with Escouade (tested up to {newest}): it’s used anyway, and whatever Escouade doesn’t recognize from it is ignored."
     )
 }
 

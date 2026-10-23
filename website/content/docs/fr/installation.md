@@ -43,7 +43,7 @@ Claude Code n’est pas obligatoire : Escouade fait aussi tourner ses agents sur
 | OpenCode | `npm install -g opencode-ai` | `opencode auth login` (un fournisseur, ou les modèles locaux d’Ollama) | 1.19.3 |
 | Copilot CLI | `npm install -g @github/copilot` | `copilot login` (compte GitHub avec Copilot) | 1.0.98 |
 
-Escouade lance le binaire natif que le paquet npm installe (sous Windows, pas son lanceur). Une version plus ancienne que celle testée est refusée, avec la commande qui la met à jour ; une plus récente est utilisée avec un avertissement. L’app de bureau de Codex installe souvent une version plus ancienne, que le `PATH` peut trouver d’abord : installe alors celle de npm. OpenCode 2 n’est pas encore pris en charge.
+Escouade lance le binaire natif que le paquet npm installe (sous Windows, pas son lanceur). Une version plus ancienne que celle testée est refusée, avec la commande qui la met à jour ; une plus récente est utilisée, sans avertissement. L’app de bureau de Codex installe souvent une version plus ancienne, que le `PATH` peut trouver d’abord : installe alors celle de npm. OpenCode 2 n’est pas encore pris en charge.
 
 Ce que chacun fait, ses modes et ce qui le protège, son coût et son quota : voir [les harness](harness).
 

@@ -1,8 +1,8 @@
 import type { Page } from '@playwright/test';
 import { addProject, expect, send, test } from './fixture';
 
-// The registry of the harnesses (ESC-28): the version of Claude Code found, placed against the ones Escouade was tested
-// with. The fake `claude` prints FAKE_CLAUDE_VERSION for `--version` (2.1.301 by default, the newest tested).
+// The registry of the harnesses (ESC-28): the version of Claude Code found, an older one than the tested ones refused, a
+// newer one taken with no warning (ESC-159). The fake `claude` prints FAKE_CLAUDE_VERSION for `--version` (2.1.301 by default, the newest tested).
 
 async function claudeSettings(page: Page) {
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
@@ -11,7 +11,7 @@ async function claudeSettings(page: Page) {
   return dialog;
 }
 
-test('the settings tell the version of Claude Code found, one Escouade was tested with', async ({ app }) => {
+test('the settings tell the version of Claude Code found, alone', async ({ app }) => {
   const { page } = app;
   await addProject(page, app.repo);
   const dialog = await claudeSettings(page);
@@ -19,11 +19,8 @@ test('the settings tell the version of Claude Code found, one Escouade was teste
   await expect(version).toHaveText('2.1.301');
   // The test's Claude Code folder has no sign-in: that is what keeps it from being ready.
   await expect(version).toHaveAttribute('data-state', 'notConnected');
-  await expect(
-    dialog.getByText(
-      'Testée avec Escouade (de la 2.1.283 à la 2.1.301). Aucun compte connecté : ajoute ou connecte un compte de ce harness dans l’onglet Comptes.',
-    ),
-  ).toBeVisible();
+  await expect(dialog.getByText('Aucun compte connecté : ajoute ou connecte un compte de ce harness dans l’onglet Comptes.')).toBeVisible();
+  await expect(dialog.getByText(/Testée avec Escouade/)).toHaveCount(0);
 });
 
 test.describe('a Claude Code older than the tested ones', () => {
@@ -48,17 +45,18 @@ test.describe('a Claude Code older than the tested ones', () => {
 test.describe('a Claude Code newer than the tested ones', () => {
   test.use({ appEnv: { FAKE_CLAUDE_VERSION: '2.1.999' } });
 
-  test('runs the agent, and the settings warn that it was not tested', async ({ app }) => {
+  test('runs the agent, and the settings show it with no warning', async ({ app }) => {
     const { page } = app;
     await addProject(page, app.repo);
     await send(page, 'Bonjour');
     await expect(page.getByText('Bonjour, tu as dit : Bonjour')).toBeVisible();
     const dialog = await claudeSettings(page);
     await expect(dialog.locator('[data-state]')).toHaveText('2.1.999');
+    // No sign-in in the test's Claude Code folder: that alone is told, nothing of the tested versions.
+    await expect(dialog.locator('[data-state]')).toHaveAttribute('data-state', 'notConnected');
     await expect(
-      dialog.getByText(
-        'Claude Code 2.1.999 n’a pas été testé avec Escouade (testé jusqu’à la 2.1.301) : il est utilisé quand même, et ce qu’Escouade ne reconnaît pas de lui est ignoré. Aucun compte connecté : ajoute ou connecte un compte de ce harness dans l’onglet Comptes.',
-      ),
+      dialog.getByText('Aucun compte connecté : ajoute ou connecte un compte de ce harness dans l’onglet Comptes.'),
     ).toBeVisible();
+    await expect(dialog.getByText(/testé/)).toHaveCount(0);
   });
 });

@@ -9,7 +9,7 @@ Un groupe par harness, sous son nom :
 | Ligne | Ce qu’elle dit |
 |---|---|
 | « Chemin de l’exécutable » | Le programme du harness (voir ci-dessous pour Claude Code). |
-| « Version » | La version trouvée, et si Escouade a été testé avec elle : une version plus ancienne est refusée, avec sa raison et la commande qui la met à jour ; une plus récente est utilisée, avec un avertissement. Quand aucun compte de ce harness n’est connecté, la ligne ajoute « Aucun compte connecté : ajoute ou connecte un compte de ce harness dans l’onglet Comptes. » |
+| « Version » | La version trouvée, seule : une version plus ancienne que celles testées est refusée, avec sa raison et la commande qui la met à jour ; une plus récente est utilisée, sans avertissement. Quand aucun compte de ce harness n’est connecté, la ligne ajoute « Aucun compte connecté : ajoute ou connecte un compte de ce harness dans l’onglet Comptes. » |
 | « Modèles » (OpenCode) | Les modèles des fournisseurs connectés à OpenCode, avec une recherche : les favoris d’abord, puis un groupe par fournisseur. L’étoile d’un modèle en fait un favori, qui vient en premier dans le menu des modèles de ses agents. |
 | « Installation » | Pour un harness introuvable : la commande qui l’installe (Claude Code : `irm https://claude.ai/install.ps1 \| iex` sous Windows, `curl -fsSL https://claude.ai/install.sh \| bash` sous macOS et Linux). Pour Claude Code, la ligne dit aussi si une installation par npm a été interrompue, avec la commande qui la répare (voir le [dépannage](troubleshooting)). |
 

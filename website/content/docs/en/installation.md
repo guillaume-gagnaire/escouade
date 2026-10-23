@@ -43,7 +43,7 @@ Claude Code isn’t required: Escouade also runs its agents on Codex, OpenCode a
 | OpenCode | `npm install -g opencode-ai` | `opencode auth login` (a provider, or Ollama’s local models) | 1.19.3 |
 | Copilot CLI | `npm install -g @github/copilot` | `copilot login` (GitHub account with Copilot) | 1.0.98 |
 
-Escouade starts the native binary the npm package installs (on Windows, not its launcher). A version older than the tested one is refused, with the command that updates it; a newer one is used with a warning. The Codex desktop app often installs an older version, which the `PATH` may find first: install npm’s then. OpenCode 2 isn’t supported yet.
+Escouade starts the native binary the npm package installs (on Windows, not its launcher). A version older than the tested one is refused, with the command that updates it; a newer one is used, without a warning. The Codex desktop app often installs an older version, which the `PATH` may find first: install npm’s then. OpenCode 2 isn’t supported yet.
 
 What each one does, its modes and what protects it, its cost and quota: see [the harnesses](harness).
 

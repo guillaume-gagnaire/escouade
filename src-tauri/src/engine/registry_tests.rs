@@ -66,27 +66,28 @@ fn the_state_of_a_harness_says_what_keeps_it_from_running_and_why() {
         note.unwrap(),
         "Claude Code 2.0.14 est trop ancien pour Escouade, qui demande au moins la version 2.1.283 : son flux JSON n’a été vérifié qu’à partir de celle-ci (docs/PROTOCOL.md). Mets-le à jour (claude update)."
     );
-    let (s, note) = state(true, Some("2.1.400 (Claude Code)"), true);
-    assert_eq!(s, EngineState::Untested);
-    assert_eq!(
-        note.unwrap(),
-        "Claude Code 2.1.400 n’a pas été testé avec Escouade (testé jusqu’à la 2.1.301) : il est utilisé quand même, et ce qu’Escouade ne reconnaît pas de lui est ignoré."
-    );
-    // Not signed in: that is its state, and the warning is still told.
-    let (s, note) = state(true, Some("2.1.400"), false);
-    assert_eq!(s, EngineState::NotConnected);
-    assert_eq!(note.unwrap(), "Claude Code 2.1.400 n’a pas été testé avec Escouade (testé jusqu’à la 2.1.301) : il est utilisé quand même, et ce qu’Escouade ne reconnaît pas de lui est ignoré.");
+}
+
+/// Newer than the tested ones: ready, with no warning nor text of the tested versions (ESC-159).
+#[test]
+fn a_harness_newer_than_the_tested_ones_is_ready_without_a_warning() {
+    for lang in [Fr, En] {
+        assert_eq!(
+            state_of(lang, &CLAUDE, true, Some("2.1.400 (Claude Code)"), true),
+            (EngineState::Ready, None)
+        );
+        assert_eq!(
+            state_of(lang, &CLAUDE, true, Some("3.0.0"), false),
+            (EngineState::NotConnected, None)
+        );
+    }
 }
 
 #[test]
-fn the_refusal_and_the_warning_are_written_in_english_too() {
+fn the_refusal_is_written_in_english_too() {
     assert_eq!(
         too_old(En, &CLAUDE, "2.0.14"),
         "Claude Code 2.0.14 is too old for Escouade, which needs version 2.1.283 or later: its JSON stream was only checked from that one on (docs/PROTOCOL.md). Update it (claude update)."
-    );
-    assert_eq!(
-        untested(En, &CLAUDE, "2.1.400"),
-        "Claude Code 2.1.400 hasn’t been tested with Escouade (tested up to 2.1.301): it’s used anyway, and whatever Escouade doesn’t recognize from it is ignored."
     );
 }
 
