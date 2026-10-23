@@ -172,6 +172,8 @@ Plutôt que de merger toi-même, tu peux proposer le travail d’un agent en pul
 
 La carte de l’agent montre ensuite ses PR sous ses lignes, trois au plus, celles à merger d’abord : leur numéro ouvre la PR dans le navigateur, et son infobulle dit son état, sa CI et ses relectures. Escouade les relit quand tu affiches l’agent, puis chaque minute tant qu’il est affiché, et plus du tout une fois mergées. Une PR ouverte par quelqu’un d’autre sur la même branche compte aussi.
 
+Un agent sans worktree d’Escouade qui travaille dans un worktree à lui, créé par Claude Code ou où il est allé par un `cd`, a aussi ses PR : Escouade suit la branche du dossier où sa session travaille, et son en-tête la dit. Jamais celle du dossier du projet, ni le worktree d’un autre agent.
+
 Quand la CI échoue, « L’agent corrige » envoie à l’agent les checks en échec avec la fin de leurs journaux. Quand une relecture demande des changements ou laisse des fils ouverts, « L’agent corrige les retours » lui envoie les demandes et les commentaires, chacun avec son fichier et sa ligne. Ces messages ne partent que quand tu cliques : l’agent corrige, commite et pousse, et la PR se met à jour. Il ne répond pas sous les fils à ta place.
 
 Une fois une PR ouverte, la branche de l’agent garde son nom, même s’il est renommé ensuite.

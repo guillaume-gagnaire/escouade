@@ -11,7 +11,7 @@ use crate::forge::{
 };
 use crate::git;
 use crate::i18n::Lang;
-use crate::model::{AgentMeta, Project};
+use crate::model::{AgentMeta, EngineId, FoundWorktree, Project};
 use crate::text::truncate;
 use anyhow::{anyhow, bail, Result};
 use serde::{Deserialize, Serialize};
@@ -86,6 +86,8 @@ pub enum PrFix {
 /// account's client there.
 struct Target {
     meta: AgentMeta,
+    /// The folder of its branch: its worktree.
+    path: String,
     branch: String,
     base: String,
     remote: Remote,
@@ -334,6 +336,52 @@ pub fn reviews_message(
     truncate(&out, FIX_MAX)
 }
 
+/// The branch the agent's pull requests are read on: its worktree's, else the one of the worktree it
+/// went into by itself (ESC-161). None in the project's folder.
+pub fn own_branch(meta: &AgentMeta) -> Option<&str> {
+    match (&meta.worktree, &meta.found_worktree) {
+        (Some(wt), _) => Some(wt.branch.as_str()),
+        (None, Some(f)) => Some(f.branch.as_str()),
+        (None, None) => None,
+    }
+}
+
+/// How much of the end of a session's transcript is read for the folder it was last in.
+const TRANSCRIPT_TAIL: u64 = 256 * 1024;
+
+/// The folder Claude Code was in at the latest entry of the session `session_id` kept in the
+/// account's folder `config` (`projects/*/<id>.jsonl`, the one written last): each entry says it
+/// (`cwd`), and it follows `EnterWorktree` and the `cd` of its commands. None without one.
+pub fn last_cwd(config: &std::path::Path, session_id: &str) -> Option<String> {
+    use std::io::{Read, Seek, SeekFrom};
+    if !crate::accounts::valid_session_id(session_id) {
+        return None;
+    }
+    let file = format!("{session_id}.jsonl");
+    let (_, path) = std::fs::read_dir(config.join("projects"))
+        .ok()?
+        .flatten()
+        .map(|d| d.path().join(&file))
+        .filter_map(|p| Some((std::fs::metadata(&p).ok()?.modified().ok()?, p)))
+        .max_by_key(|(at, _)| *at)?;
+    let mut f = std::fs::File::open(path).ok()?;
+    let len = f.metadata().ok()?.len();
+    f.seek(SeekFrom::Start(len.saturating_sub(TRANSCRIPT_TAIL)))
+        .ok()?;
+    let mut bytes = Vec::new();
+    f.read_to_end(&mut bytes).ok()?;
+    String::from_utf8_lossy(&bytes)
+        .lines()
+        .rev()
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .find_map(|v| {
+            v["cwd"]
+                .as_str()
+                .filter(|c| !c.is_empty())
+                .map(str::to_string)
+        })
+}
+
 fn no_branch() -> anyhow::Error {
     anyhow!(tr!(
         "Cet agent n'a pas de branche à lui : une PR s'ouvre sur la branche du worktree d'un agent.",
@@ -342,6 +390,82 @@ fn no_branch() -> anyhow::Error {
 }
 
 impl<R: Runtime> Core<R> {
+    /// The worktree of the project's repository the agent went into by itself, by the folder its
+    /// session was last in (ESC-161): an ordinary agent of Claude Code without a worktree of its
+    /// own. None in the project's folder, in a folder of no worktree of the repository, in another
+    /// agent's worktree, or on a detached HEAD.
+    async fn found_worktree(&self, meta: &AgentMeta) -> Option<FoundWorktree> {
+        if meta.worktree.is_some()
+            || meta.ticket_id.is_some()
+            || meta.archived
+            || meta.engine != EngineId::Claude
+        {
+            return None;
+        }
+        let session = meta.session_id.clone()?;
+        let config = {
+            let settings = self.settings.read();
+            crate::accounts::config_dir(&crate::accounts::get(&settings, &meta.account), &settings)
+        };
+        let cwd = tokio::task::spawn_blocking(move || last_cwd(&config, &session))
+            .await
+            .ok()
+            .flatten()?;
+        if !std::path::Path::new(&cwd).is_dir() {
+            return None;
+        }
+        let project = self.project(&meta.project_id).ok()?;
+        let top = git::text(&cwd, &["rev-parse", "--show-toplevel"])
+            .await
+            .ok()?;
+        if top.is_empty() || crate::paths::same_folder(&top, &project.path) {
+            return None;
+        }
+        let path = git::worktree_paths(&project.path)
+            .await
+            .ok()?
+            .into_iter()
+            .find(|w| crate::paths::same_folder(w, &top))?;
+        let others: Vec<String> = self
+            .agents
+            .read()
+            .values()
+            .filter_map(|h| {
+                let rt = h.lock();
+                let wt = rt.meta.worktree.as_ref().filter(|_| rt.meta.id != meta.id);
+                wt.map(|w| w.path.clone())
+            })
+            .collect();
+        if others.iter().any(|o| crate::paths::same_folder(o, &path)) {
+            return None;
+        }
+        let branch = git::head_branch(&path).await;
+        (!branch.is_empty()).then_some(FoundWorktree { path, branch })
+    }
+
+    /// Keeps the agent's `found_worktree` as its session says it now: its pull requests go with
+    /// its branch (another branch's are not kept), and its view is sent when it changed.
+    async fn follow_found_worktree(&self, h: &crate::agent::AgentHandle) {
+        let meta = h.lock().meta.clone();
+        let found = self.found_worktree(&meta).await;
+        let changed = {
+            let mut rt = h.lock();
+            let changed = rt.meta.found_worktree != found;
+            if changed {
+                let branch = |f: &Option<FoundWorktree>| f.as_ref().map(|f| f.branch.clone());
+                if rt.meta.worktree.is_none() && branch(&rt.meta.found_worktree) != branch(&found) {
+                    rt.meta.prs.clear();
+                }
+                rt.meta.found_worktree = found;
+            }
+            changed
+        };
+        if changed {
+            self.emit_agent(h);
+            self.request_save();
+        }
+    }
+
     /// The agent's branch, its project's code host and its client; refused for a ticket's agent
     /// (its board opens its PR), an archived one, one without a worktree, a project without a
     /// remote, a host unknown, without an account or whose client does not read pull requests yet.
@@ -356,7 +480,13 @@ impl<R: Runtime> Core<R> {
         if meta.archived {
             bail!(tr!("Cet agent est archivé.", "This agent is archived."));
         }
-        let wt = meta.worktree.clone().ok_or_else(no_branch)?;
+        // Its own worktree, else the one it went into by itself (ESC-161), which merges into the
+        // board's target.
+        let (path, branch, base) = match (&meta.worktree, &meta.found_worktree) {
+            (Some(wt), _) => (wt.path.clone(), wt.branch.clone(), wt.base_branch.clone()),
+            (None, Some(f)) => (f.path.clone(), f.branch.clone(), String::new()),
+            (None, None) => return Err(no_branch()),
+        };
         let project: Project = self.project(&meta.project_id)?;
         let remote = self.project_forge(&project.id).await.ok_or_else(|| {
             anyhow!(tr!(
@@ -384,14 +514,17 @@ impl<R: Runtime> Core<R> {
             ));
         }
         let (client, _) = self.forge_client(&host).await?;
-        let base = if wt.base_branch.is_empty() {
-            project.board.target.clone()
-        } else {
-            wt.base_branch.clone()
+        let base = match (base.is_empty(), project.board.target.is_empty()) {
+            (false, _) => base,
+            (true, false) => project.board.target.clone(),
+            // A worktree it went into by itself, the board without a target yet: where a new
+            // agent's worktree would start, the project's folder's branch.
+            (true, true) => git::head_branch(&project.path).await,
         };
         Ok(Target {
             meta,
-            branch: wt.branch,
+            path,
+            branch,
             base,
             remote,
             provider,
@@ -407,12 +540,7 @@ impl<R: Runtime> Core<R> {
         let _working = self.working();
         let t = self.pr_target(id).await?;
         let word = t.provider.request_word().to_string();
-        let cwd = t
-            .meta
-            .worktree
-            .as_ref()
-            .map(|w| w.path.clone())
-            .unwrap_or_default();
+        let cwd = t.path.clone();
         if let Some(open) = t.meta.prs.iter().find(|p| p.state == PrState::Open) {
             let n = open.number;
             bail!(tr!(
@@ -490,12 +618,7 @@ impl<R: Runtime> Core<R> {
             "" => t.base.clone(),
             b => b.to_string(),
         };
-        let cwd = t
-            .meta
-            .worktree
-            .as_ref()
-            .map(|w| w.path.clone())
-            .unwrap_or_default();
+        let cwd = t.path.clone();
         git::push_branch(&cwd, &t.branch).await?;
         let draft = PullRequestDraft {
             title,
@@ -526,11 +649,12 @@ impl<R: Runtime> Core<R> {
     /// ticket's, no worktree, no host, no account, no client yet): nothing shows.
     pub async fn agent_prs_refresh(self: &Arc<Self>, id: &str, now: bool) -> Result<()> {
         let h = self.agent(id)?;
+        self.follow_found_worktree(&h).await;
         {
             let rt = h.lock();
             if rt.meta.ticket_id.is_some()
                 || rt.meta.archived
-                || rt.meta.worktree.is_none()
+                || own_branch(&rt.meta).is_none()
                 || settled(&rt.meta.prs)
             {
                 return Ok(());
@@ -569,7 +693,7 @@ impl<R: Runtime> Core<R> {
         let changed = {
             let mut rt = h.lock();
             // The branch moved meanwhile (renamed after the agent): its own are read next time.
-            if rt.meta.worktree.as_ref().map(|w| w.branch.as_str()) != Some(t.branch.as_str()) {
+            if own_branch(&rt.meta) != Some(t.branch.as_str()) {
                 return Ok(());
             }
             let changed = rt.meta.prs != prs || rt.meta.pr_word.as_deref() != Some(&word);

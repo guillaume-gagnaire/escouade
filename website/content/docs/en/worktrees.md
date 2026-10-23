@@ -172,6 +172,8 @@ Rather than merging yourself, you can offer an agent’s work as a pull request,
 
 The agent’s card then shows its pull requests under its lines, three at most, the ones to merge first: their number opens the pull request in the browser, and its tooltip tells its state, its CI and its reviews. Escouade reads them again when you show the agent, then every minute while it is shown, and no more once merged. A pull request someone else opened on the same branch counts too.
 
+An agent without an Escouade worktree that works in a worktree of its own, made by Claude Code or one it went into with a `cd`, has its pull requests too: Escouade follows the branch of the folder its session works in, and its header shows it. Never the one of the project’s folder, nor another agent’s worktree.
+
 When the CI fails, “Agent fixes it” sends the agent the failed checks with the end of their logs. When a review asks for changes or leaves open threads, “Agent addresses the feedback” sends it the requests and the comments, each with its file and line. These messages only go when you click: the agent fixes, commits and pushes, and the pull request updates. It doesn’t reply under the threads for you.
 
 Once a pull request is open, the agent’s branch keeps its name, even if the agent is renamed later.

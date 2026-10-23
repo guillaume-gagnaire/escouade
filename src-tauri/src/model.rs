@@ -1104,6 +1104,17 @@ pub struct Worktree {
     pub named_branch: bool,
 }
 
+/// A worktree of the project's repository that an agent without one of Escouade's went into by
+/// itself (ESC-161: `EnterWorktree`, a `cd`), as its session's latest entry says: its branch is the
+/// one its pull requests are read on, and its header shows. Never the project's folder, nor
+/// another agent's worktree.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct FoundWorktree {
+    pub path: String,
+    pub branch: String,
+}
+
 /// A harness that runs agents (`engine::Engine`), as the data keeps it: an agent's
 /// (`AgentMeta::engine`), a ticket's (`Ticket::engine`), a project's default (`Project::engine`),
 /// a turn's (`TurnRow::engine`, the `engine` column of the statistics). Claude Code for what was
@@ -1193,6 +1204,9 @@ pub struct AgentMeta {
     /// its setup, and its first turn goes. It works nowhere until then (`cwd` is the project’s).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub worktree_pending: bool,
+    /// Without a worktree of its own: the one it went into by itself, if any (ESC-161).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub found_worktree: Option<FoundWorktree>,
     pub created_at: i64,
     pub archived: bool,
     /// Why its worktree, its ticket over, was kept (`leftovers`): work nothing else keeps. None once

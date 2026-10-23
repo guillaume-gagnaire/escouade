@@ -6,8 +6,8 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { Page } from '@playwright/test';
-import { addProject, expect, test } from './fixture';
+import type { Locator, Page } from '@playwright/test';
+import { addProject, expect, send, test } from './fixture';
 import { startFakeTrackers } from '../fixtures/fake-trackers.mjs';
 
 let github: { url: string; close: () => Promise<void> };
@@ -195,4 +195,61 @@ test('no « Ouvrir une PR » in a project whose remote is on no code host Escoua
   await page.getByRole('button', { name: '+ Nouvel agent' }).first().click();
   await expect(cards).toHaveCount(3);
   await expect(page.getByRole('button', { name: 'Ouvrir une PR' })).toBeVisible();
+});
+
+test('each agent follows the pull requests of the worktree it went into by itself, never the project’s folder’s (ESC-161)', async ({
+  app,
+}) => {
+  const { page } = app;
+  const bare = path.join(app.root, 'origin.git');
+  git(app.root, 'init', '-q', '--bare', bare);
+  const url = 'https://github.com/acme/demo.git';
+  git(app.repo, 'remote', 'add', 'origin', url);
+  git(app.repo, 'config', `url.${bare.replace(/\\/g, '/')}.insteadOf`, url);
+  git(app.repo, 'push', '-q', 'origin', 'main');
+  // No worktree per agent: two agents that go into worktrees of their own, as Claude Code's EnterWorktree makes them.
+  await addProject(page, app.repo, { firstAgent: false });
+  await connectGithub(page);
+  const cards = page.locator('.side .card');
+  await page.getByRole('button', { name: '+ Nouvel agent' }).first().click();
+  await expect(cards).toHaveCount(1, { timeout: 60_000 });
+  await send(page, '[worktree feat/a] au travail');
+  await expect(page.locator('.conv').getByText('Bonjour, tu as dit : [worktree feat/a] au travail')).toBeVisible({ timeout: 30_000 });
+  await page.getByRole('button', { name: '+ Nouvel agent' }).first().click();
+  await expect(cards).toHaveCount(2);
+  await send(page, '[worktree feat/b] au travail');
+  await expect(page.locator('.conv').getByText('Bonjour, tu as dit : [worktree feat/b] au travail')).toBeVisible({ timeout: 30_000 });
+
+  // The project's folder on a third branch; a pull request on each of the three.
+  git(app.repo, 'checkout', '-q', '-b', 'dev');
+  for (const head of ['feat/a', 'feat/b', 'dev'])
+    await fetch(`${github.url}/github/repos/acme/demo/pulls`, {
+      method: 'POST',
+      body: JSON.stringify({ title: `Le travail de ${head}`, body: '', head, base: 'main' }),
+    });
+  const chip = (scope: Page | Locator, n: number) => scope.getByRole('button', { name: `Ouvrir la PR #${n} dans le navigateur (ouverte)` });
+  const anyChip = (scope: Locator) => scope.getByRole('button', { name: /^Ouvrir la PR #/ });
+
+  // Each one shown again reads its own: the group under its card has its pull request alone.
+  for (const i of [0, 1]) await cards.nth(i).click();
+  const groups = page.getByRole('group', { name: /^Pull requests de / });
+  await expect(groups).toHaveCount(2);
+  const header = page.locator('.conv .head');
+  for (const [n, branch] of [
+    [101, 'feat/a'],
+    [102, 'feat/b'],
+  ] as const) {
+    const group = groups.filter({ has: chip(page, n) });
+    await expect(group).toHaveCount(1);
+    await expect(anyChip(group)).toHaveCount(1);
+    const name = (await group.getAttribute('aria-label'))!.replace('Pull requests de ', '');
+    await cards.filter({ has: page.getByText(name, { exact: true }) }).click();
+    // Its header says its branch, not the project's folder's, and its pull request alone.
+    await expect(header.getByText(` / ${branch}`)).toBeVisible();
+    await expect(anyChip(header)).toHaveCount(1);
+    await expect(chip(header, n)).toHaveCount(1);
+  }
+  // None of dev's, the project's folder's branch, anywhere.
+  await expect(chip(page, 103)).toHaveCount(0);
+  expect(git(app.repo, 'branch', '--show-current')).toBe('dev');
 });

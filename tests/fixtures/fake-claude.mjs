@@ -44,6 +44,9 @@
 // in), [retire-env] then .env taken out of git again in a second commit (still in the branch's
 // history), [tenace] a process that lasts 5 s once its input is closed, [rien] no file written (nothing
 // to merge); by default criterion n is met from loop n on.
+// "[worktree <branch>]" in a message goes into a worktree of its own as Claude Code's EnterWorktree does (ESC-161): made
+// under <repository>/.claude/worktrees/<branch with non-alphanumerics replaced by -> on the new branch <branch> (or
+// gone into again), the session goes on there (the `cwd` of its entries), kept in its first folder's project folder.
 // "plan superpowers" in the message plays a plan run as superpowers:subagent-driven-development does it
 // (see tests/fixtures/superpowers-run.md): the plan and its ledger written for real in the agent's
 // folder, a task list (TaskCreate/TaskUpdate), a foreground implementer and reviewer subagent per
@@ -126,7 +129,9 @@ fs.appendFileSync(
 
 // The account's own folder, if it has one (set empty: as if it were not).
 const configDir = process.env.CLAUDE_CONFIG_DIR || null;
-const sessionFile = (id) => path.join(configDir, 'projects', process.cwd().replace(/[^a-zA-Z0-9]/g, '-'), `${id}.jsonl`);
+// Under the folder it started in, wherever it goes then (a worktree it went into).
+const startCwd = process.cwd();
+const sessionFile = (id) => path.join(configDir, 'projects', startCwd.replace(/[^a-zA-Z0-9]/g, '-'), `${id}.jsonl`);
 // Claude Code finds a session to resume in any project folder of the account (a copy made in a
 // worktree of its own resumes the original's from another one).
 const sessionKept = (id) => {
@@ -2009,6 +2014,14 @@ function startSession() {
     answer();
   }
 
+  // As EnterWorktree: a worktree of the repository on a new branch, made once, where it works from now on.
+  function enterWorktree(branch) {
+    const top = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
+    const dir = path.join(top, '.claude', 'worktrees', branch.replace(/[^a-zA-Z0-9]/g, '-'));
+    if (!fs.existsSync(dir)) execFileSync('git', ['worktree', 'add', '-q', '-b', branch, dir], { cwd: top, stdio: 'ignore' });
+    process.chdir(dir);
+  }
+
   function onUser(text) {
     out({ type: 'system', subtype: 'init', session_id: sessionId, model, cwd: process.cwd(), permissionMode: 'default' });
     const attached = [...text.matchAll(/^(?:Fichier joint : |Attached file: )(.+), (.+)$/gm)].map((m) => ({
@@ -2019,6 +2032,8 @@ function startSession() {
     if (text.includes('<escouade-voice>')) return voiceTurn(text);
     if (text.includes('[ferme-lentement]')) slowClose = true;
     if (text.includes('[quota-rythme]')) paced = true;
+    const entering = text.match(/\[worktree ([\w./-]+)\]/);
+    if (entering) enterWorktree(entering[1]);
     if (text.includes('crash')) process.exit(3);
     if (text.startsWith('/cost')) return localCommand(text);
     if (text.startsWith('/loop')) return loopTurn(text);

@@ -227,6 +227,23 @@ fn the_reviews_requests_and_the_open_comments_go_to_the_agent() {
 /// A project on github.com/acme/demo whose pushes go to a local bare repository, github.com's
 /// account connected on the fake server, and an ordinary agent with a commit in its worktree.
 async fn github_agent(h: &Harness, server: &FakeServer) -> (String, PathBuf, String) {
+    let (p, _, bare) = github_project(h, server, true).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    let wt = h.agent(&id).worktree.expect("a worktree");
+    let dir = PathBuf::from(&wt.path);
+    std::fs::write(dir.join("login.ts"), "export const login = 1;\n").unwrap();
+    git(&dir, &["add", "-A"]);
+    git(&dir, &["commit", "-qm", "feat: connexion par jeton"]);
+    (id, bare, wt.branch)
+}
+
+/// A project on github.com/acme/demo whose pushes go to a local bare repository, github.com's
+/// account connected on the fake server: the project, its folder and the bare repository.
+async fn github_project(
+    h: &Harness,
+    server: &FakeServer,
+    worktrees: bool,
+) -> (crate::model::Project, PathBuf, PathBuf) {
     h.core.bases.write().github = server.url.clone();
     server.on_with(
         "GET",
@@ -243,7 +260,7 @@ async fn github_agent(h: &Harness, server: &FakeServer) -> (String, PathBuf, Str
         })
         .await
         .unwrap();
-    let (p, r) = h.project(true).await;
+    let (p, r) = h.project(worktrees).await;
     let bare = h.dir.join("origin.git");
     git(&h.dir, &["init", "-q", "--bare", &bare.to_string_lossy()]);
     let url = "https://github.com/acme/demo.git";
@@ -254,13 +271,7 @@ async fn github_agent(h: &Harness, server: &FakeServer) -> (String, PathBuf, Str
     );
     git(&r, &["config", &rewrite, url]);
     git(&r, &["push", "-q", "origin", "main"]);
-    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
-    let wt = h.agent(&id).worktree.expect("a worktree");
-    let dir = PathBuf::from(&wt.path);
-    std::fs::write(dir.join("login.ts"), "export const login = 1;\n").unwrap();
-    git(&dir, &["add", "-A"]);
-    git(&dir, &["commit", "-qm", "feat: connexion par jeton"]);
-    (id, bare, wt.branch)
+    (p, r, bare)
 }
 
 fn node(number: u64, head: &str, rollup: &str, fork: bool) -> Value {
@@ -593,4 +604,172 @@ async fn a_host_without_a_client_yet_shows_nothing_and_says_so_when_asked() {
             .starts_with("Cet agent n'a pas de branche à lui"),
         "{e}"
     );
+}
+
+// ---------- Agents in worktrees Escouade did not make (ESC-161) ----------
+
+/// The agent's Claude Code session, its latest entry in the folder `cwd`, as Claude Code keeps it
+/// once the agent went into a worktree of its own (`EnterWorktree`, a `cd`).
+fn session_in(h: &Harness, id: &str, session: &str, cwd: &std::path::Path) {
+    let meta = h.agent(id);
+    let settings = h.core.settings.read().clone();
+    let account = crate::accounts::get(&settings, &meta.account);
+    let dir = crate::accounts::config_dir(&account, &settings)
+        .join("projects")
+        .join("C--demo");
+    std::fs::create_dir_all(&dir).unwrap();
+    let first = json!({ "type": "user", "sessionId": session, "cwd": h.dir.to_string_lossy() });
+    let last = json!({ "type": "assistant", "sessionId": session, "cwd": cwd.to_string_lossy() });
+    std::fs::write(
+        dir.join(format!("{session}.jsonl")),
+        format!("{first}\n{last}\n{{\"type\":\"last-prompt\"}}\n"),
+    )
+    .unwrap();
+    h.core.agent(id).unwrap().lock().meta.session_id = Some(session.into());
+}
+
+/// The branches the fake GitHub was asked the pull requests of.
+fn branches_asked(server: &FakeServer) -> Vec<String> {
+    server
+        .requests()
+        .iter()
+        .filter(|r| r.path() == "/graphql")
+        .filter(|r| r.json()["operationName"] == "PullsOfBranch")
+        .map(|r| {
+            r.json()["variables"]["branch"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string()
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn each_agent_follows_the_pull_requests_of_the_worktree_it_works_in_never_the_project_folders(
+) {
+    let h = harness("agent-pr-found");
+    let server = FakeServer::start().await;
+    // No worktree per agent: the agents went into worktrees of their own, as Claude Code makes them.
+    let (p, r, _) = github_project(&h, &server, false).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    let b = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    let c = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    let wt_a = r.join(".claude").join("worktrees").join("a");
+    let wt_b = r.join(".claude").join("worktrees").join("b");
+    git(
+        &r,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "feat/a",
+            &wt_a.to_string_lossy(),
+        ],
+    );
+    git(
+        &r,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "feat/b",
+            &wt_b.to_string_lossy(),
+        ],
+    );
+    std::fs::create_dir_all(wt_a.join("src")).unwrap();
+    // The project's folder on a third branch, which has a pull request too.
+    git(&r, &["checkout", "-q", "-b", "dev"]);
+    session_in(&h, &a, "s-161-a", &wt_a.join("src"));
+    session_in(&h, &b, "s-161-b", &wt_b);
+    session_in(&h, &c, "s-161-c", &r);
+
+    for (id, n, branch) in [(&a, 11, "feat/a"), (&b, 12, "feat/b"), (&c, 13, "dev")] {
+        server.on(
+            "POST",
+            "/graphql#PullsOfBranch",
+            200,
+            json!({ "data": { "repository": { "pullRequests": { "nodes": [node(n, branch, "SUCCESS", false)] } } } }),
+        );
+        h.core.agent_prs_refresh(id, true).await.unwrap();
+    }
+    let numbers = |id: &str| h.agent(id).prs.iter().map(|p| p.number).collect::<Vec<_>>();
+    assert_eq!(numbers(&a), [11], "a: feat/a's");
+    assert_eq!(numbers(&b), [12], "b: feat/b's");
+    assert!(
+        numbers(&c).is_empty(),
+        "c works in the project's folder: none of dev's"
+    );
+    assert_eq!(branches_asked(&server), ["feat/a", "feat/b"]);
+    // Their headers say the branch they work on, the project's folder's for c.
+    let found = |id: &str| h.agent(id).found_worktree.map(|f| f.branch);
+    assert_eq!(found(&a).as_deref(), Some("feat/a"));
+    assert_eq!(found(&b).as_deref(), Some("feat/b"));
+    assert_eq!(found(&c), None);
+    // « Ouvrir une PR » goes from a's worktree into where a new worktree would start (the board
+    // has no target yet): the project's folder's branch.
+    git(&wt_a, &["commit", "-q", "--allow-empty", "-m", "feat: a"]);
+    server.on(
+        "POST",
+        "/graphql#PullsOfBranch",
+        200,
+        json!({ "data": { "repository": { "pullRequests": { "nodes": [] } } } }),
+    );
+    h.core.agent_prs_refresh(&a, true).await.unwrap();
+    let proposal = h.core.agent_pr_propose(&a).await.unwrap();
+    assert_eq!(
+        (proposal.head.as_str(), proposal.base.as_str()),
+        ("feat/a", "dev")
+    );
+
+    // b goes back to the project's folder: feat/b's are no longer its own.
+    session_in(&h, &b, "s-161-b", &r);
+    h.core.agent_prs_refresh(&b, true).await.unwrap();
+    assert!(numbers(&b).is_empty());
+    assert_eq!(found(&b), None);
+    // Into another agent's worktree: that agent's, never b's.
+    let d = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    let wt_d = r.join(".claude").join("worktrees").join("d");
+    git(
+        &r,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "feat/d",
+            &wt_d.to_string_lossy(),
+        ],
+    );
+    h.core.agent(&d).unwrap().lock().meta.worktree = Some(crate::model::Worktree {
+        path: wt_d.to_string_lossy().into(),
+        branch: "feat/d".into(),
+        base_branch: "main".into(),
+        existing: false,
+        named_branch: false,
+    });
+    session_in(&h, &b, "s-161-b", &wt_d);
+    h.core.agent_prs_refresh(&b, true).await.unwrap();
+    assert_eq!(found(&b), None);
+    assert_eq!(branches_asked(&server), ["feat/a", "feat/b", "feat/a"]);
+}
+
+#[test]
+fn the_folder_of_a_session_is_its_latest_entrys() {
+    let dir = crate::paths::test_dir("esc161-last-cwd");
+    let config = dir.join("claude");
+    assert_eq!(last_cwd(&config, "s-1"), None);
+    let folder = config.join("projects").join("C--repo");
+    std::fs::create_dir_all(&folder).unwrap();
+    std::fs::write(
+        folder.join("s-1.jsonl"),
+        "{\"cwd\":\"C:\\\\repo\"}\nnot json\n{\"cwd\":\"C:\\\\repo\\\\.claude\\\\worktrees\\\\a\"}\n{\"type\":\"summary\"}\n",
+    )
+    .unwrap();
+    assert_eq!(
+        last_cwd(&config, "s-1").as_deref(),
+        Some(r"C:\repo\.claude\worktrees\a")
+    );
+    assert_eq!(last_cwd(&config, "../s-1"), None, "a session id only");
 }

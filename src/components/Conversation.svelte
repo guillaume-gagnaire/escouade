@@ -12,6 +12,7 @@
     cardPrs,
     openPr,
     openPrOf,
+    ownBranch,
     prGlyph,
     prTip,
     prTone,
@@ -133,7 +134,8 @@
   // The local commands conversations saved before kept with their tags (ESC-154).
   const commands = $derived(localCommandViews(conv.items));
   // Its worktree waits for its first message (ESC-156): on no branch yet, not on the project's folder's.
-  const branch = $derived(agent.worktree?.branch ?? (agent.worktreePending ? '' : (app.git[project.id]?.branch ?? '')));
+  // Without one, the worktree it went into by itself (ESC-161), else the project's folder's.
+  const branch = $derived(ownBranch(agent) ?? (agent.worktreePending ? '' : (app.git[project.id]?.branch ?? '')));
   const files = $derived(app.git[project.id]?.agents[agent.id] ?? 0);
   // Its pull requests (ESC-64): read when it is shown, then every minute while it is (the backend asks its host at most
   // every 20 s, and no more once they are merged).
@@ -605,7 +607,7 @@
       <button
         class="btn openpr"
         aria-label={t('prs.openButton', { word })}
-        use:tip={t('prs.openHint', { word, branch: agent.worktree?.branch ?? '' })}
+        use:tip={t('prs.openHint', { word, branch: ownBranch(agent) ?? '' })}
         onclick={() => askOpenPr(agent)}
       >
         <span class="mono glyph">⇡</span><span class="lbl">{t('prs.openButton', { word })}</span>

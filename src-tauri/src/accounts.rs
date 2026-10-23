@@ -1108,7 +1108,7 @@ fn copy_dir(src: &Path, dst: &Path, depth: u32) -> Result<()> {
 
 /// A session id as Claude Code makes them (a UUID): letters, digits, `-` and `_`, so that it
 /// names a file and nothing else.
-fn valid_session_id(id: &str) -> bool {
+pub(crate) fn valid_session_id(id: &str) -> bool {
     !id.is_empty()
         && id
             .chars()

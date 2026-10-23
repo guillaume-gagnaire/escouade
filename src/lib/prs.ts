@@ -17,8 +17,17 @@ export const PRS_EVERY_MS = 60_000;
 /** The code host's word: « PR », « MR » on GitLab. */
 export const prWord = (a: Agent) => a.prWord ?? 'PR';
 
-/** An ordinary agent (not a ticket's, which its board opens) with a branch of its own: its worktree's. Its pull requests are read. */
-export const hasOwnBranch = (a: Agent) => !a.ticketId && !a.archived && !!a.worktree;
+/** The branch it works on, other than the project's folder's: its worktree's, else the one of the worktree it went into by itself (ESC-161). */
+export const ownBranch = (a: Agent) => a.worktree?.branch ?? a.foundWorktree?.branch ?? null;
+
+/** An ordinary agent (not a ticket's, which its board opens) with a branch of its own (`ownBranch`). Its pull requests are read. */
+export const hasOwnBranch = (a: Agent) => !a.ticketId && !a.archived && !!ownBranch(a);
+
+/**
+ * Whether its pull requests are to be read: such an agent, or one without a worktree of its own, which may have gone into
+ * one by itself since it was last read (ESC-161: the backend finds it from its session).
+ */
+export const mayHavePrs = (a: Agent) => !a.ticketId && !a.archived;
 
 /**
  * Such an agent whose project's code host opens pull requests (`prWord`, set by the backend once the project has a remote
@@ -101,6 +110,6 @@ export async function fixPr(a: Agent, p: PullRequest, fix: PrFix) {
 
 /** Reads the agent's pull requests again, quietly: a host that does not answer shows what was last read. */
 export function refreshPrs(a: Agent | null | undefined, now = false) {
-  if (!a || !hasOwnBranch(a)) return;
+  if (!a || !mayHavePrs(a)) return;
   api.agentPrsRefresh(a.id, now).catch(() => {});
 }

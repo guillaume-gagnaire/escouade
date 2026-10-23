@@ -34,7 +34,7 @@ import { setLang } from '../lib/i18n';
 import { app } from '../lib/state.svelte';
 import type { Agent } from '../lib/types';
 import { answerClock, settle } from '../test/conversation';
-import { agent, BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, project, pullRequest, resetApp, ticket } from '../test/ipc';
+import { agent, BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, gitInfo, project, pullRequest, resetApp, ticket } from '../test/ipc';
 import { openTerminal } from '../lib/terminals';
 import Conversation from './Conversation.svelte';
 import ContextMenu from './ContextMenu.svelte';
@@ -94,6 +94,23 @@ describe('Conversation', () => {
     expect(screen.getByText('Le worktree sera créé au premier message, au nom de l’agent.')).toBeInTheDocument();
     // Not on the project's branch: on none yet.
     expect(screen.getByText('demo-api / —')).toBeInTheDocument();
+  });
+
+  it('says the branch of the worktree the agent went into by itself, not the project’s folder’s (ESC-161)', () => {
+    const a = agent({
+      id: 'found1',
+      status: 'idle',
+      worktree: null,
+      foundWorktree: { path: 'C:\\code\\demo-api\\.claude\\worktrees\\a', branch: 'feat/a' },
+      prWord: 'PR',
+    });
+    resetApp({ projects: [project()], agents: [a] });
+    app.git[project().id] = gitInfo({ branch: 'dev' });
+    const b = fakeBackend({ get_conversation: () => [] });
+    render(Conversation, { agent: a, project: project() });
+    expect(screen.getByText('demo-api / feat/a')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ouvrir une PR' })).toBeInTheDocument();
+    expect(b.called('agent_prs_refresh').map((c) => c.args)).toEqual([{ id: 'found1', now: false }]);
   });
 
   it('shows the steps of the first message: the name, the worktree, then its setup (ESC-156)', async () => {

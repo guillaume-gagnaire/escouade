@@ -1014,6 +1014,12 @@ export interface Worktree {
   namedBranch?: boolean;
 }
 
+/** A worktree of the project's repository an agent without one of its own went into by itself (ESC-161: `EnterWorktree`, a `cd`), as its session last said. */
+export interface FoundWorktree {
+  path: string;
+  branch: string;
+}
+
 /** What « Intégrer <base> » did: the base was in the agent's branch already, went in, or stopped on conflicts the agent was asked to resolve (a rebase is undone). */
 export type Integration = { kind: 'upToDate' } | { kind: 'done' } | { kind: 'conflict'; files: string[]; rebase: boolean };
 
@@ -1060,6 +1066,8 @@ export interface Agent {
   worktree: Worktree | null;
   /** Its worktree waits for its first message (ESC-156): named first, it gets its branch and its folder under that name. Absent once made, or never waited for. */
   worktreePending?: boolean;
+  /** Without a worktree of its own: the one it went into by itself (ESC-161), whose pull requests it follows. */
+  foundWorktree?: FoundWorktree;
   createdAt: number;
   archived: boolean;
   /** Why its worktree, its ticket over, was kept: work nothing else keeps (ESC-143). */

@@ -7,7 +7,9 @@ import {
   canOpenPr,
   cardPrs,
   fixPr,
+  hasOwnBranch,
   openPrOf,
+  ownBranch,
   prGlyph,
   prMenuItem,
   prTip,
@@ -121,11 +123,27 @@ describe('the pull requests of an agent', () => {
 
   it('reads them again only for an agent that can have some', () => {
     const backend = fakeBackend();
-    refreshPrs(agent());
     refreshPrs(agent({ worktree: WT, ticketId: 't1' }));
+    refreshPrs(agent({ worktree: WT, archived: true }));
     refreshPrs(null);
     expect(backend.called('agent_prs_refresh')).toHaveLength(0);
     refreshPrs(agent({ worktree: WT }), true);
-    expect(backend.called('agent_prs_refresh').map((c) => c.args)).toEqual([{ id: 'a1', now: true }]);
+    // Without a worktree of its own: it may have gone into one by itself since (ESC-161), which the backend finds.
+    refreshPrs(agent({ id: 'a2' }));
+    expect(backend.called('agent_prs_refresh').map((c) => c.args)).toEqual([
+      { id: 'a1', now: true },
+      { id: 'a2', now: false },
+    ]);
+  });
+
+  it('follows the branch of the worktree an agent went into by itself, never the project’s folder’s (ESC-161)', () => {
+    const found = { path: 'C:/p/.claude/worktrees/a', branch: 'feat/a' };
+    expect(ownBranch(agent())).toBeNull();
+    expect(hasOwnBranch(agent())).toBe(false);
+    expect(ownBranch(agent({ foundWorktree: found }))).toBe('feat/a');
+    expect(hasOwnBranch(agent({ foundWorktree: found }))).toBe(true);
+    expect(canOpenPr(agent({ foundWorktree: found, prWord: 'PR' }))).toBe(true);
+    // Its own worktree first.
+    expect(ownBranch(agent({ worktree: WT, foundWorktree: found }))).toBe(WT.branch);
   });
 });
