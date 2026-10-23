@@ -158,6 +158,10 @@ export default {
     failed: "Le tour s'est terminé en erreur",
     resumeAt: 'Reprise automatique {when}',
     cancelResume: 'Annuler la reprise',
+    signInTitle: 'Connexion à refaire',
+    signIn:
+      'Le compte {account} doit se reconnecter : Claude Code n’a pas pu rafraîchir sa session. L’agent reprendra seul après la connexion.',
+    signInAction: 'Se reconnecter',
     done: 'Tâche terminée',
     tokens: '{tokens} tokens',
     filesEdited: { one: '{count} fichier modifié', other: '{count} fichiers modifiés' },

@@ -84,6 +84,9 @@ mod search;
 mod selfupdate;
 #[cfg(unix)]
 mod shellenv;
+mod signin;
+#[cfg(test)]
+mod signin_tests;
 mod stats;
 mod switching;
 #[cfg(test)]

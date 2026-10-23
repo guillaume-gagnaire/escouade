@@ -88,6 +88,9 @@ pub struct Effects {
     pub overage: Option<bool>,
     /// The turn was stopped by the usage limit, which resets then (if Claude Code told).
     pub limited: Option<Option<i64>>,
+    /// The turn was stopped by a sign-in of its account that could not be refreshed (ESC-162):
+    /// the core looks at the account's sign-in, and starts the process again or waits (`signin`).
+    pub sign_in_lost: bool,
     pub files_changed: bool,
     /// A turn ended (or the process died during one): how, with the assistant's text.
     pub turn_end: Option<TurnEnd>,
@@ -148,6 +151,11 @@ pub struct AgentRt {
     /// This turn met the usage limit, and when the limit resets.
     rate_limited: bool,
     limit_resets_at: Option<i64>,
+    /// The sign-in of its account when its process started (`usage::Stored::stamp`, ESC-162).
+    pub(crate) launch_stamp: Option<String>,
+    /// The restarts of its process since its turn stopped on a sign-in that could not be
+    /// refreshed (`signin`): two at most, then it waits for a new one.
+    pub(crate) sign_in_retries: u8,
     /// Tasks run in the foreground: their tool rows show them end.
     foreground_tasks: HashSet<String>,
     /// Background tasks whose end was shown, until Claude Code also replays it to Claude.
@@ -485,6 +493,8 @@ impl AgentRt {
             main_model: String::new(),
             rate_limited: false,
             limit_resets_at: None,
+            launch_stamp: None,
+            sign_in_retries: 0,
             foreground_tasks: HashSet::new(),
             announced_tasks: HashMap::new(),
             commands: Vec::new(),
@@ -995,8 +1005,9 @@ impl AgentRt {
         if let Some(o) = origin {
             item["origin"] = json!(o);
         }
-        // Someone took over: no resume by itself after the usage limit.
+        // Someone took over: no resume by itself after the usage limit, nor after a sign-in.
         self.meta.resume_at = None;
+        self.meta.sign_in = None;
         self.append(item, fx);
         if queued {
             self.queued += 1;

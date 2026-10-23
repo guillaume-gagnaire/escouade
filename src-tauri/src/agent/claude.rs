@@ -277,6 +277,10 @@ impl AgentRt {
                 .as_str()
                 .unwrap_or(err)
                 .to_string();
+            // Its turn says it, and is taken up by itself (`signin`): no error in red before.
+            if parent.is_none() && crate::signin::lost(&text) {
+                return;
+            }
             self.notice("error", text, fx);
             return;
         }
@@ -791,6 +795,13 @@ impl AgentRt {
             None
         };
         let failed = is_error && !interrupted;
+        // A sign-in that could not be refreshed: the core looks at the account's (ESC-162).
+        let sign_in = failed && !limited && error.as_deref().is_some_and(crate::signin::lost);
+        if sign_in {
+            fx.sign_in_lost = true;
+        } else {
+            self.sign_in_retries = 0;
+        }
         // Always with words: the frame's, else the kind of result it is, else a generic one.
         let failure = failed.then(|| {
             error
@@ -818,6 +829,8 @@ impl AgentRt {
             TurnEnd::Interrupted
         } else if limited && is_error {
             TurnEnd::Limited
+        } else if sign_in {
+            TurnEnd::SignIn
         } else if let Some(reason) = failure.clone() {
             TurnEnd::Error(reason)
         } else {
@@ -848,7 +861,7 @@ impl AgentRt {
             "kind": "turn", "id": f["uuid"].as_str().map(str::to_string).unwrap_or_else(new_id), "ts": now_ms(),
             "durationMs": f["duration_ms"], "cost": cost, "tokens": tokens,
             "isError": is_error && !interrupted, "interrupted": interrupted, "error": error,
-            "limited": at_limit, "engine": self.meta.engine,
+            "limited": at_limit, "signIn": sign_in, "engine": self.meta.engine,
         });
         self.append(item, fx);
         if !self.pending.is_empty() {
@@ -872,7 +885,8 @@ impl AgentRt {
             },
             fx,
         );
-        if !interrupted && !had_queue {
+        // Told once the core knows whether it goes on or waits for a sign-in (`signin`).
+        if !interrupted && !had_queue && !sign_in {
             fx.notify = Some(match &failure {
                 Some(reason) => AgentAlert::new(NotifyKind::Error, notify::error_body(reason)),
                 None => AgentAlert::new(NotifyKind::Done, notify::done_body(&reply)),

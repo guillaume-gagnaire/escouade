@@ -23,6 +23,10 @@
 // turn is stopped by the usage limit (as "limite") and its quota windows say 100 % (rate_limit_event,
 // get_usage). While a <dir>/fake-error file is there, every turn fails with an error of the API
 // ("Invalid API key", as an account the user is not signed in to gets), which is no usage limit.
+// While a <dir>/fake-oauth-lost file is there, a turn fails as a sign-in Claude Code could not refresh does
+// (« OAuth session expired and could not be refreshed », ESC-162), and the process that failed so fails every turn after
+// (its refresh token dead in its memory, as Claude Code keeps it): a number in the file is how many turns fail so,
+// the file gone once they have; empty, every one.
 // While a <dir>/fake-exit file is there, the process ends before it starts (exit code 1), its stderr the text of the file
 // (« No conversation found with session ID: … », « Invalid API key · Please run /login »).
 // A user message with [ferme-lentement] makes the process take 800 ms to end once its input is
@@ -129,6 +133,33 @@ fs.appendFileSync(
 
 // The account's own folder, if it has one (set empty: as if it were not).
 const configDir = process.env.CLAUDE_CONFIG_DIR || null;
+// The refresh of an out-of-date sign-in (ESC-162), while a <dir>/fake-refresh file is there: each process tells
+// <dir>/fake-refresh.jsonl whether the sign-in of <dir>/.credentials.json was out of date as it started, and one that
+// found it so writes a new one in date, the number of ms the file says later (300 by default), before it answers
+// anything, as Claude Code refreshes it.
+// A process that talks to the API alone: not `--version`, `mcp` or `update`.
+const session = argv.includes('--input-format') || argv.includes('-p');
+if (session && configDir !== null && fs.existsSync(path.join(configDir, 'fake-refresh'))) {
+  const credsFile = path.join(configDir, '.credentials.json');
+  let oauth = null;
+  try {
+    oauth = JSON.parse(fs.readFileSync(credsFile, 'utf8')).claudeAiOauth ?? null;
+  } catch {}
+  const expired = !!oauth?.accessToken && typeof oauth.expiresAt === 'number' && oauth.expiresAt < Date.now();
+  fs.appendFileSync(path.join(configDir, 'fake-refresh.jsonl'), JSON.stringify({ pid: process.pid, expired, at: Date.now(), argv }) + '\n');
+  if (expired) {
+    const ms = Number(fs.readFileSync(path.join(configDir, 'fake-refresh'), 'utf8').trim() || '300');
+    const renewed = {
+      ...oauth,
+      accessToken: `${oauth.accessToken}-r`,
+      refreshToken: `${oauth.refreshToken ?? ''}-r`,
+      expiresAt: Date.now() + 3_600_000,
+    };
+    // Before anything is answered, as Claude Code does (an `initialize` waits for it).
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+    fs.writeFileSync(credsFile, JSON.stringify({ claudeAiOauth: renewed }));
+  }
+}
 // Under the folder it started in, wherever it goes then (a worktree it went into).
 const startCwd = process.cwd();
 const sessionFile = (id) => path.join(configDir, 'projects', startCwd.replace(/[^a-zA-Z0-9]/g, '-'), `${id}.jsonl`);
@@ -141,6 +172,18 @@ const sessionKept = (id) => {
 };
 // Out of quota, for as long as the file is there.
 const limited = () => configDir !== null && fs.existsSync(path.join(configDir, 'fake-limit'));
+// The sign-in no longer refreshed (ESC-162): by the file, then for good in this process.
+let oauthDead = false;
+const oauthLost = () => {
+  if (oauthDead) return true;
+  const file = configDir === null ? null : path.join(configDir, 'fake-oauth-lost');
+  if (file === null || !fs.existsSync(file)) return false;
+  const left = Number(fs.readFileSync(file, 'utf8').trim() || 'NaN');
+  if (left <= 1) fs.rmSync(file, { force: true });
+  else if (!Number.isNaN(left)) fs.writeFileSync(file, String(left - 1));
+  oauthDead = true;
+  return true;
+};
 // Failing with an error of the API, for as long as the file is there.
 const failing = () => configDir !== null && fs.existsSync(path.join(configDir, 'fake-error'));
 // The alias haiku as `initialize` lists it, when <dir>/fake-haiku says which: « 5-5 » as from 2.1.293 on (Haiku 5.5, with
@@ -2078,6 +2121,19 @@ function startSession() {
         session_id: sessionId,
         result: "You've hit your limit · resets 3pm",
       });
+      return;
+    }
+    if (oauthLost()) {
+      // As Claude Code 2.1.309 tells it (its `authentication_failed`): a failed turn, no rate limit.
+      const said = 'Failed to authenticate: OAuth session expired and could not be refreshed';
+      out({
+        type: 'assistant',
+        error: 'authentication_failed',
+        message: { id: `msg_oauth${msg}`, role: 'assistant', content: [{ type: 'text', text: said }] },
+        parent_tool_use_id: null,
+        session_id: sessionId,
+      });
+      out({ type: 'result', subtype: 'success', is_error: true, duration_ms: 100, session_id: sessionId, result: said });
       return;
     }
     if (failing()) {

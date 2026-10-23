@@ -1141,6 +1141,8 @@ export interface Agent {
   movedFrom: string | null;
   /** The harness it left by a handover (« Continuer sur <harness> »): set aside until `until` (the reset of its quota; null: left with quota to spare), then offered back, never gone back to by itself. */
   handedFrom: HandedFrom | null;
+  /** Stopped by a sign-in of its account that Claude Code could not refresh (ESC-162): the account is to sign in again, and the agent goes on by itself once it has. */
+  signIn: SignInWait | null;
   /** What it is doing right now ("Lit src/db.ts", "Lance npm test"…), during a turn. */
   activity: string | null;
   /** The setup of its new worktree under way: the step running ("1/2 · npm ci"). */
@@ -1727,6 +1729,8 @@ export interface TurnItem extends Base {
   error: string | null;
   /** Stopped by the usage limit (absent from turns saved before the accounts): the card offers to go on, on another account. */
   limited?: boolean;
+  /** Stopped by a sign-in Claude Code could not refresh (ESC-162): its process started again, or the card asks for a new sign-in. */
+  signIn?: boolean;
   /** The harness that ran it (absent from turns saved before 1.8, all Claude Code's). */
   engine?: EngineId;
 }
@@ -1740,6 +1744,11 @@ export interface HandoverItem extends Base {
   limited: boolean;
   /** When that quota resets (ms), if known. */
   until: number | null;
+}
+/** The sign-in an agent waits for (`Agent.signIn`): its account's, another than `stamp`. */
+export interface SignInWait {
+  account: string;
+  stamp: string | null;
 }
 /** The harness an agent left by a handover (`Agent.handedFrom`). */
 export interface HandedFrom {

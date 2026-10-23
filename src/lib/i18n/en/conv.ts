@@ -136,6 +136,10 @@ export default defineZone('conv', {
     failed: 'The turn ended with an error',
     resumeAt: 'Auto-resume {when}',
     cancelResume: 'Cancel auto-resume',
+    signInTitle: 'Sign in again',
+    signIn:
+      'The {account} account must sign in again: Claude Code couldn’t refresh its session. The agent will go on by itself once you’re signed in.',
+    signInAction: 'Sign in again',
     done: 'Task done',
     tokens: '{tokens} tokens',
     filesEdited: { one: '{count} file edited', other: '{count} files edited' },

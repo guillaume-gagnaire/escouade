@@ -135,6 +135,19 @@ Then, in a Windows terminal, run `wsl --shutdown` and restart Escouade.
 
 To avoid reaching the limit, the [autopilot](autopilot) pauses before, at the “Pause above quota” threshold.
 
+### An agent stops on “OAuth session expired and could not be refreshed”
+
+**Symptom.** A turn stops on “Failed to authenticate: OAuth session expired and could not be refreshed”, even though the account is signed in (`/login` works).
+
+**Cause.** The Claude Code processes of an account share its sign-in. When the token expires, one of them refreshes it, under a lock in the account’s folder. If the server refuses the refresh token, for instance because another process already used it, Claude Code keeps it as dead in memory. That process then fails every turn, for up to 30 seconds, even if a good sign-in has reached the disk meanwhile.
+
+**Fix.** Escouade handles it. When such a turn ends, it reads the account’s sign-in again:
+
+- **It’s good**, or it isn’t the one the process started with: Escouade restarts the agent’s process on its session and sends it “continue”, twice at most (after 3, then 10 seconds). The conversation says so in one line: “Account session refreshed: the agent goes on.”
+- **It expired without being refreshed, or it’s gone** (Claude Code empties the sign-in when its refresh token is refused), or both restarts failed: the “Sign in again” card names the account. Its “Sign in again” button opens the account, with “Sign in…”. Once you’re signed in, the agent goes on by itself within 20 seconds: “Main account signed in again: the agent goes on.”
+
+A ticket’s agent goes on the same way: its ticket isn’t blocked. To make these refusals rarer, the launches of an account whose token expired go one after the other: the first refreshes the token, the others wait for the new one, 20 seconds at most.
+
 ## Agents
 
 ### An agent stopped

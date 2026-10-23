@@ -42,6 +42,9 @@ pub enum TurnEnd {
     Interrupted,
     /// Stopped by the usage limit: the automatic resume takes it up.
     Limited,
+    /// Stopped by a sign-in of its account that could not be refreshed (ESC-162): its process
+    /// started again, or the agent waits for the account to sign in again (`signin`), and goes on.
+    SignIn,
     Error(String),
     /// The assistant's text of the turn.
     Finished(String),
@@ -296,7 +299,8 @@ pub fn turn_end(
             t.blocked = Some(interrupted(i18n::ui()));
             next.blocked = true;
         }
-        TurnEnd::Limited => {}
+        // Taken up by itself: the resume, or the next sign-in (`signin`).
+        TurnEnd::Limited | TurnEnd::SignIn => {}
         TurnEnd::Error(e) => {
             t.reminded = false;
             t.blocked = Some(error_blocked(i18n::ui(), &first_line(e)));
@@ -1844,6 +1848,13 @@ mod tests {
         let mut t = ticket(1, 5);
         assert_eq!(
             turn_end(Lang::Fr, &mut t, &TurnEnd::Limited, None, 1),
+            Next::default()
+        );
+        assert_eq!((t.column, t.blocked.clone()), (Column::Doing, None));
+        // A sign-in that could not be refreshed: taken up by itself too (ESC-162).
+        let mut t = ticket(1, 5);
+        assert_eq!(
+            turn_end(Lang::Fr, &mut t, &TurnEnd::SignIn, None, 1),
             Next::default()
         );
         assert_eq!((t.column, t.blocked.clone()), (Column::Doing, None));

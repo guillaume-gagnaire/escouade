@@ -1336,6 +1336,9 @@ pub struct AgentMeta {
     /// aside until its quota resets, then offered back (« Revenir sur <harness> »), never gone
     /// back to by itself.
     pub handed_from: Option<HandedFrom>,
+    /// Stopped because its account's sign-in could not be refreshed (ESC-162): the account is to
+    /// sign in again, and the agent goes on by itself once its sign-in changes.
+    pub sign_in: Option<SignInWait>,
     /// « Vue Claude Code »: it runs in Claude Code's own interface, in a terminal (`tui`), not
     /// over the stream that Escouade's conversation view drives. Never a ticket's agent.
     pub terminal: bool,
@@ -1350,6 +1353,15 @@ pub struct AgentMeta {
     /// them: the only files outside its folders that its `Read` is allowed without asking
     /// (`attachfiles::granted`). The `MAX_GRANTED_FILES` last.
     pub granted_files: Vec<String>,
+}
+
+/// The sign-in an agent waits for (`AgentMeta::sign_in`): its account's, another than `stamp`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SignInWait {
+    pub account: String,
+    /// The sign-in it stopped with (`usage::Stored::stamp`): None when there was none.
+    pub stamp: Option<String>,
 }
 
 /// The harness an agent left by a handover (`AgentMeta::handed_from`).

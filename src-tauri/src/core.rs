@@ -1881,6 +1881,8 @@ impl<R: Runtime> Core<R> {
             loop {
                 tokio::time::sleep(Duration::from_secs(20)).await;
                 c.resume_due().await;
+                // An account signed in again: the agents that waited for it go on (ESC-162).
+                c.sign_in_due().await;
                 // The autopilot's pause ends by itself: a window's end, its 30 minutes after a limit.
                 c.pause_tick();
                 // A failed sync of an imported ticket, once its wait is over.
@@ -2384,6 +2386,9 @@ impl<R: Runtime> Core<R> {
         if let Some(resets_at) = fx.limited {
             self.plan_resume(id, resets_at);
         }
+        if fx.sign_in_lost {
+            self.sign_in_lost_soon(id);
+        }
         if fx.files_changed {
             self.git.refresh(project_id);
         }
@@ -2869,6 +2874,8 @@ impl<R: Runtime> Core<R> {
         // Given back when this process ends, unless a newer one of the agent has its own.
         let token = spawn.escouade.token().map(str::to_string);
         let fence = spawn.fence.clone();
+        // Its account's token out of date: after the launch that refreshes it (ESC-162).
+        let stamp = self.before_claude(&account).await;
         let started = std::time::Instant::now();
         let (w1, w2) = (Arc::downgrade(self), Arc::downgrade(self));
         let (h1, h2) = (h.clone(), h.clone());
@@ -2901,6 +2908,7 @@ impl<R: Runtime> Core<R> {
         {
             let mut rt = h.lock();
             rt.attach(proc.clone());
+            rt.launch_stamp = stamp;
             rt.fence = fence;
             rt.privacy = privacy;
             // Read under its lock: a `mark_escouade_next` (or a switch turned off) that comes after
@@ -3175,6 +3183,7 @@ impl<R: Runtime> Core<R> {
             .unwrap_or_default();
         let env = [settings.agent_env(), accounts::launch_env(&account)].concat();
         let dir = std::env::temp_dir();
+        self.before_claude(&account).await;
         match crate::engine::claude_read_models(program, env, &dir).await {
             Ok(models) if !models.is_null() => {
                 self.set_account_models(&account.id, version, &models);
@@ -6224,6 +6233,7 @@ impl<R: Runtime> Core<R> {
             anyhow!(tr!("{name} introuvable", "{name} not found"))
         })?;
         let env = [settings.claude_env(), accounts::launch_env(&account)].concat();
+        self.before_claude(&account).await;
         let model = if engine.writer_takes_model() {
             self.writer_model(engine, &program, env.clone()).await
         } else {

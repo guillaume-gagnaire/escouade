@@ -1923,7 +1923,8 @@ impl<R: Runtime> Core<R> {
         let limited = end == TurnEnd::Limited;
         // Its account past « Changer de compte à »: its next turn goes to another one (ESC-148),
         // before the board sends it one. At the limit, `switch_on_limit` decides.
-        if !limited {
+        // Stopped by a sign-in not refreshed: its process starts again there (`signin`).
+        if !limited && end != TurnEnd::SignIn {
             self.switch_if_over(agent_id).await;
         }
         let Some(ticket_id) = ticket_id else {

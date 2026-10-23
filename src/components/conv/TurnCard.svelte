@@ -44,6 +44,12 @@
   const estimated = $derived(estimatedBy(item.engine ?? agent.engine));
   const cost = $derived(estimated ? `≈ ${fUsd(item.cost)} ${t('stats.cost.estimated')}` : fUsd(item.cost));
 
+  // Stopped by a sign-in Claude Code could not refresh (ESC-162): the account it waits for, while it does. Its process started
+  // again instead, the turn is a line like any other: it goes on.
+  const signIn = $derived(item.signIn && latest && !working && !agent.archived && agent.signIn ? agent.signIn : null);
+  const signInAccount = $derived(signIn ? accountById(signIn.account) : undefined);
+  const signInName = $derived(signInAccount ? accountName(signInAccount) : (signIn?.account ?? ''));
+
   function continueOn(engine: EngineId) {
     app.run(api.continueOnEngine(agent.id, engine));
   }
@@ -69,7 +75,20 @@
   }
 </script>
 
-{#if item.isError}
+{#if signIn}
+  <div class="card signin" data-testid="turn-sign-in">
+    <div class="title warn">
+      <span class="dot" style="width:8px;height:8px;background:var(--wait)"></span>{t('conv.turn.signInTitle')}
+    </div>
+    <p class="say">{t('conv.turn.signIn', { account: signInName })}</p>
+    {#if item.error}<pre class="err">{item.error}</pre>{/if}
+    <div class="resume">
+      <button class="btn small" onclick={() => (app.modal = { kind: 'account', accountId: signIn.account })}
+        >{t('conv.turn.signInAction')}</button
+      >
+    </div>
+  </div>
+{:else if item.isError && !item.signIn}
   <div class="card error">
     <div class="title"><span class="dot" style="width:8px;height:8px;background:var(--del)"></span>{t('conv.turn.failed')}</div>
     {#if resumeFailed}
@@ -183,6 +202,18 @@
   }
   .card.error {
     border-color: color-mix(in oklch, var(--del) 55%, transparent);
+  }
+  .card.signin {
+    border-color: color-mix(in oklch, var(--wait) 55%, transparent);
+  }
+  .title.warn {
+    color: var(--wait);
+  }
+  .say {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text);
   }
   .title {
     display: flex;

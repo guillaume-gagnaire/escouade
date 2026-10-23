@@ -135,6 +135,19 @@ Puis, dans un terminal Windows, lance `wsl --shutdown` et relance Escouade.
 
 Pour ne pas arriver à la limite, le [pilote auto](autopilot) se met en pause avant, au seuil « Pause au-delà du quota ».
 
+### Un agent s’arrête sur « OAuth session expired and could not be refreshed »
+
+**Symptôme.** Un tour s’arrête sur « Failed to authenticate: OAuth session expired and could not be refreshed », alors que le compte est bien connecté (`/login` passe).
+
+**Cause.** Les processus Claude Code d’un même compte partagent sa connexion. Quand le jeton expire, l’un d’eux le rafraîchit, sous un verrou du dossier du compte. Si le serveur refuse le jeton de rafraîchissement, par exemple parce qu’un autre processus l’a déjà utilisé, Claude Code le garde pour mort en mémoire. Ce processus échoue alors à chaque tour, jusqu’à 30 secondes, même si une bonne connexion est arrivée sur le disque entre-temps.
+
+**Solution.** Escouade s’en occupe. À la fin d’un tel tour, il relit la connexion du compte :
+
+- **Elle est bonne**, ou ce n’est plus celle avec laquelle le processus a démarré : Escouade relance le processus de l’agent sur sa session et lui envoie « continue », au plus deux fois (après 3 puis 10 secondes). La conversation le dit en une ligne : « Session du compte rafraîchie : l’agent reprend. »
+- **Elle a expiré sans être rafraîchie, ou elle est absente** (Claude Code vide la connexion quand son jeton de rafraîchissement est refusé), ou les deux relances ont échoué : la carte « Connexion à refaire » nomme le compte. Son bouton « Se reconnecter » ouvre le compte, avec « Se connecter… ». Une fois connecté, l’agent reprend tout seul en moins de 20 secondes : « Compte Principal reconnecté : l’agent reprend. »
+
+Un agent de ticket reprend de la même façon : son ticket n’est pas bloqué. Pour limiter ces refus, les lancements d’un compte dont le jeton a expiré partent l’un après l’autre : le premier rafraîchit le jeton, les autres attendent le nouveau, 20 secondes au plus.
+
 ## Agents
 
 ### Un agent s’est arrêté

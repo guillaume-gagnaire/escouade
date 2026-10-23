@@ -80,6 +80,8 @@ If Claude Code stops before the sign-in, the window says “Claude Code stopped 
 
 “Sign in…” also reconnects an account whose sign-in has expired. When the account is signed in and up to date, the button reads “Sign in again…”: handy to switch to another claude.ai account.
 
+When Claude Code can’t refresh an account’s sign-in, the agent that stops goes on by itself if the sign-in on disk is good; otherwise the “Sign in again” card offers “Sign in again” and the agent goes on once you’re signed in. See [troubleshooting](troubleshooting).
+
 ## Codex accounts
 
 A Codex account is Codex started with a folder of its own (the `CODEX_HOME` variable): its ChatGPT sign-in, its sessions and its quota. They are managed in the “Codex accounts” group of the tab, as Claude Code’s are.

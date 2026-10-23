@@ -80,6 +80,8 @@ Si Claude Code s’arrête avant la connexion, la fenêtre écrit « Claude Cod
 
 « Se connecter… » sert aussi à reconnecter un compte dont la connexion a expiré. Quand le compte est connecté et à jour, le bouton devient « Se reconnecter… » : utile pour passer à un autre compte claude.ai.
 
+Quand Claude Code n’arrive pas à rafraîchir la connexion d’un compte, l’agent qui s’arrête reprend tout seul si la connexion sur le disque est bonne, sinon la carte « Connexion à refaire » propose « Se reconnecter » et l’agent reprend une fois connecté. Voir [le dépannage](troubleshooting).
+
 ## Comptes Codex
 
 Un compte Codex, c’est Codex lancé avec son propre dossier (la variable `CODEX_HOME`) : sa connexion à ChatGPT, ses sessions et son quota. Ils se gèrent dans le groupe « Comptes Codex » de l’onglet, comme ceux de Claude Code.
