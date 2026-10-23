@@ -1704,6 +1704,30 @@ pub async fn branch_create(repo: &str, name: &str, start: &str) -> Result<()> {
         .map(|_| ())
 }
 
+/// Makes the local branch that tracks the remote branch `name` (`origin/feat` gives `feat`), as
+/// `switch --track` names it, nothing checked out; refused as `local_of` refuses (a local branch
+/// of that name that tracks something else). Returns the local branch.
+pub async fn branch_track(repo: &str, name: &str) -> Result<String> {
+    if let Some(local) = local_of(repo, name).await? {
+        return Ok(local);
+    }
+    let (_, short) = split_remote(repo, name)
+        .await
+        .ok_or_else(|| no_branch(name))?;
+    run(
+        repo,
+        &[
+            "branch",
+            "--track",
+            "--",
+            &short,
+            &format!("refs/remotes/{name}"),
+        ],
+    )
+    .await?;
+    Ok(short)
+}
+
 /// True when `refname` (a full name: `refs/heads/feat`, `refs/remotes/origin/feat`) is a ref
 /// of `repo`, and not a revision that starts with one.
 pub async fn ref_exists(repo: &str, refname: &str) -> bool {

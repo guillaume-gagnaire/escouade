@@ -16,6 +16,7 @@ agents:
 worktrees:
   per_agent: true
   at_first_message: true
+  base: target
   dir: ../app-worktrees
   copy:
     - '.env*'
@@ -42,7 +43,6 @@ git:
 board:
   on_approve: merge
   target_branch: main
-  agents_from_target: false
   merge_strategy: squash
   draft_pr: false
   test_command: npm test
@@ -122,6 +122,7 @@ Le harness des nouveaux agents et des tickets du projet qui n’en choisissent p
 |---|---|---|---|---|
 | `worktrees.per_agent` | Booléen | `true`, `false` | `false` | `per_agent: true` |
 | `worktrees.at_first_message` | Booléen | `true`, `false` | `true` | `at_first_message: false` |
+| `worktrees.base` | Texte | `head`, `target` ou un nom de branche | `head` | `base: origin/release` |
 | `worktrees.dir` | Chemin relatif | Un dossier relatif au dépôt | vide : `.claude/worktrees` | `dir: .worktrees` |
 | `worktrees.copy` | Liste de textes | Des motifs de fichiers (`*`, `**`) | `['.env*']` | `copy: ['.env*', config/local.json]` |
 | `worktrees.setup` | Liste d’étapes | Voir [les étapes de worktree](#les-etapes-de-worktree) | aucune | `setup: npm ci` |
@@ -129,6 +130,7 @@ Le harness des nouveaux agents et des tickets du projet qui n’en choisissent p
 
 - `per_agent` : « Un worktree par agent », chaque nouvel agent dans un worktree à lui (voir [les worktrees](worktrees)).
 - `at_first_message` : « Créer le worktree au premier message, au nom de l’agent ». Le worktree d’un nouvel agent attend son premier message, qui le nomme : sa branche et son dossier prennent ce nom (voir [au premier message](worktrees#au-premier-message)). `false` le crée tout de suite, en `agent-N`.
+- `base` : « Branche de départ des nouveaux worktrees », la branche dont part le worktree d’un nouvel agent, sa base : `head` (la branche du dossier), `target` (la branche cible du Kanban) ou le nom d’une branche, locale ou distante (`origin/release`). Une branche qui s’appelle `head` ou `target` s’écrit `refs/heads/target`. Voir [la branche de départ](worktrees#la-branche-de-depart).
 - `dir` : « Dossier des worktrees ». Il ne peut pas être le dossier du projet, un dossier qui le contient, ni un dossier dans `.git` : un tel chemin est signalé et ignoré.
 - `copy` : « Fichiers copiés dans les worktrees », les fichiers non suivis par git copiés dans chaque nouveau worktree.
 - `setup` : « À l’ouverture d’un worktree », lancées l’une après l’autre dans chaque nouveau worktree, avant le premier message de son agent. Des commandes : elles attendent ton accord.
@@ -162,7 +164,6 @@ Les commandes de « Lancement » du projet (serveurs de développement, watche
 |---|---|---|---|---|
 | `board.on_approve` | Valeur parmi une liste | `merge`, `pr`, `push`, `keep` | `merge` | `on_approve: pr` |
 | `board.target_branch` | Texte | Un nom de branche | vide : la branche du dossier au premier ticket | `target_branch: develop` |
-| `board.agents_from_target` | Booléen | `true`, `false` | `false` | `agents_from_target: true` |
 | `board.merge_strategy` | Valeur parmi une liste | `merge`, `squash`, `rebase` | `squash` | `merge_strategy: rebase` |
 | `board.draft_pr` | Booléen | `true`, `false` | `false` | `draft_pr: true` |
 | `board.test_command` | Texte | Une commande | vide : aucune | `test_command: npm test` |
@@ -172,7 +173,7 @@ Les commandes de « Lancement » du projet (serveurs de développement, watche
 
 - `on_approve` : « Quand je valide un ticket « À tester » » : merger sa branche dans la branche cible (`merge`), ouvrir une pull request (`pr`), pousser sa branche (`push`), ou la garder telle quelle (`keep`) (voir [le Kanban](board)).
 - `target_branch` : « Branche cible », où les tickets se mergent, et la base de leur branche et de leur pull request.
-- `agents_from_target` : « Les agents partent de la branche cible » : le worktree d’un nouvel agent part d’elle, quelle que soit la branche du dossier.
+- `agents_from_target` : l’ancienne clé de `worktrees.base`, encore lue quand le fichier n’a pas `worktrees.base` (`true` vaut `target`, `false` vaut `head`), avec un avertissement. « Exporter vers .escouade.yml » la remplace par `worktrees.base`.
 - `merge_strategy` : « Stratégie » du merge : commit de merge, squash ou rebase.
 - `draft_pr` : « PR en brouillon ».
 - `test_command` : « Commande de tests ». Une commande : elle attend ton accord.

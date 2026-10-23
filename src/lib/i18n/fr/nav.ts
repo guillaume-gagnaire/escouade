@@ -15,6 +15,8 @@ export default {
     /** The same menu: an agent the other way round from « Un worktree par agent ». */
     newAgentNoWorktree: 'Nouvel agent sans worktree',
     newAgentInWorktree: 'Nouvel agent dans un worktree',
+    /** The same menu (ESC-160): an agent whose worktree starts from a branch chosen in the picker. */
+    newAgentFrom: 'Nouvel agent depuis une autre branche…',
     /** The brand of an agent's harness (its card, the overview, its header), once agents run on two. */
     engineMark: 'Harness : {engine}',
     empty: 'Aucun agent.',

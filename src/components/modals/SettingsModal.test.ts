@@ -457,15 +457,11 @@ describe('SettingsModal', () => {
     expect(within(picker).getAllByRole('option')).toHaveLength(1);
   });
 
-  it('lets the agents start from the target branch, off until turned on (ESC-144)', async () => {
-    const backend = backendSaving();
+  it('no longer says where the agents start: the project’s settings do (ESC-160)', async () => {
+    backendSaving();
     render(SettingsModal, { tab: 'board', projectId: 'p1' });
-    const on = screen.getByRole('switch', { name: 'Les agents partent de la branche cible' });
-    expect(on).toHaveAttribute('aria-checked', 'false');
-    expect(screen.getByText(/^Chaque nouvel agent à worktree part de main,/)).toBeInTheDocument();
-    await userEvent.click(on);
-    await save();
-    expect(backend.called('board_set')[0].args.settings).toMatchObject({ agentsFromTarget: true });
+    expect(screen.queryByRole('switch', { name: 'Les agents partent de la branche cible' })).toBeNull();
+    expect(screen.queryByText(/^Chaque nouvel agent à worktree part de/)).toBeNull();
   });
 
   it('hides the target branch when the work is only pushed or kept', async () => {

@@ -18,7 +18,9 @@
   // given it: the branch of the project's folder and those a worktree has can't be chosen, and nothing else is offered.
   // In `target` mode it chooses the Kanban's target branch: any local one, but those of the agents and the tickets.
   // With `oncreate` (« Nouvel agent sur une branche… », ESC-155), a name typed that no branch has is offered last, to be
-  // created where a new agent starts: the name is checked as git does, and where it starts is said.
+  // created where a new agent starts: the name is checked as git does, and where it starts is said; with `oncreatefrom`
+  // too, a second row offers to choose the branch it starts from first (ESC-160). In `base` mode it chooses where an
+  // agent's worktree starts, or the project's new worktrees (ESC-160): any branch, local or remote.
   let {
     projectId,
     anchor,
@@ -26,25 +28,41 @@
     mode = 'switch',
     onpick,
     oncreate,
+    oncreatefrom,
     over = false,
     chosen,
+    forBranch,
   }: {
     projectId: string;
     anchor?: HTMLElement;
     onclose: () => void;
-    mode?: 'switch' | 'pick' | 'target';
+    mode?: 'switch' | 'pick' | 'target' | 'base';
     onpick?: (b: BranchInfo) => void;
     /** In `pick` mode, the new branch typed, once the picker is gone. */
     oncreate?: (name: string) => void;
+    /** In `pick` mode, the new branch typed, to be made from a branch chosen next. */
+    oncreatefrom?: (name: string) => void;
     /** Opened from a dialog: over it, not under its overlay. */
     over?: boolean;
-    /** In `target` mode, the target as it is now (the settings' draft), checked in the list. */
+    /** In `target` and `base` modes, the branch as it is now (the settings' draft), checked in the list. */
     chosen?: string;
+    /** In `base` mode, the new branch whose start is chosen, in the title. */
+    forBranch?: string;
   } = $props();
   const picking = $derived(mode !== 'switch');
   const targeting = $derived(mode === 'target');
+  /** Choosing where a worktree starts: any branch, none refused. */
+  const basing = $derived(mode === 'base');
   const title = $derived(
-    targeting ? t('boardSettings.tab.targetBranch') : picking ? t('branches.agent.pickTitle') : t('branches.picker.title'),
+    targeting
+      ? t('boardSettings.tab.targetBranch')
+      : basing
+        ? forBranch
+          ? t('branches.agent.baseTitleFor', { branch: forBranch })
+          : t('branches.agent.baseTitle')
+        : picking
+          ? t('branches.agent.pickTitle')
+          : t('branches.picker.title'),
   );
 
   /** Branches shown per group: a repository can have thousands of remote ones, which the search finds. */
@@ -122,7 +140,7 @@
 
   /** Why `b` can't be picked: an agent's worktree (or another one) has its branch, or, to pick one for an agent, the folder does, or the board's target. */
   function reasonOf(b: BranchInfo): string | null {
-    if (targeting) return null;
+    if (targeting || basing) return null;
     // The target first: when the folder is on it, that is the reason.
     if (picking && isTarget(b)) return t('branches.agent.isTargetBranch');
     if (picking && isFolder(b)) return t('branches.agent.isFolderBranch');
@@ -132,7 +150,7 @@
 
   /** The short word after a branch's name. */
   function tagOf(b: BranchInfo): string | null {
-    if (targeting) return b.current ? t('branches.picker.folder') : null;
+    if (targeting || basing) return b.current ? t('branches.picker.folder') : null;
     const h = held(b);
     if (h) return h.agent ? t('branches.picker.usedBy', { agent: app.agents[h.agent]?.name ?? '?' }) : t('branches.picker.otherWorktree');
     if (b.remote) return b.trackedBy ? t('branches.picker.trackedBy', { branch: b.trackedBy }) : null;
@@ -176,10 +194,22 @@
   const CREATE = '\u0000create';
   const wanted = $derived(text.trim());
   /** The branch typed can be created: `oncreate` is given, and no branch, local or remote, has that name. */
-  const creatable = $derived(picking && !targeting && !!oncreate && !!branches && !!wanted && !all.some((b) => b.name === wanted));
-  /** Where a new branch starts, as a new agent does: the board's target when the agents start from it and it is here, else the folder's branch. */
-  const fromTarget = $derived(!!project?.board.agentsFromTarget && !!target && locals.some((b) => b.name === target));
-  const startsFrom = $derived(fromTarget ? target : (locals.find((b) => b.current)?.name ?? ''));
+  const creatable = $derived(mode === 'pick' && !!oncreate && !!branches && !!wanted && !all.some((b) => b.name === wanted));
+  /** The cursor's `active` on the row that creates it from a branch chosen next (ESC-160). */
+  const CREATE_FROM = '\u0000from';
+  const creatableFrom = $derived(creatable && !!oncreatefrom);
+  /**
+   * Where a new branch starts, as a new agent does (« Branche de départ des nouveaux worktrees »): the board's target or
+   * the branch named while it is here, else the folder's branch.
+   */
+  const base = $derived(project?.worktreeBase ?? { kind: 'head' as const });
+  const startsAt = $derived.by((): { kind: 'target' | 'branch' | 'head'; name: string } => {
+    const folder = locals.find((b) => b.current)?.name ?? '';
+    if (base.kind === 'target' && !!target && locals.some((b) => b.name === target)) return { kind: 'target', name: target };
+    if (base.kind === 'branch' && all.some((b) => b.name === base.branch)) return { kind: 'branch', name: base.branch };
+    return { kind: 'head', name: folder };
+  });
+  const startsFrom = $derived(startsAt.name);
   /** Why git refuses the name typed, once checked. */
   let problem = $state<string | null>(null);
   let checks = 0;
@@ -200,15 +230,17 @@
   });
 
   /** The rows, the one that creates the branch typed being last. */
-  const count = $derived(rows.length + (creatable ? 1 : 0));
+  const count = $derived(rows.length + (creatable ? 1 : 0) + (creatableFrom ? 1 : 0));
   const cursor = $derived.by(() => {
     if (active === CREATE && creatable) return rows.length;
+    if (active === CREATE_FROM && creatableFrom) return rows.length + 1;
     return Math.max(
       0,
       rows.findIndex((r) => r.b.name === active),
     );
   });
   const onCreate = $derived(creatable && cursor === rows.length);
+  const onCreateFrom = $derived(creatableFrom && cursor === rows.length + 1);
   const optionId = (index: number) => `branch-option-${index}`;
 
   /** What the row under the cursor says about itself: why it can't be picked, or what it tracks. */
@@ -216,13 +248,15 @@
     if (onCreate) {
       if (problem) return problem;
       if (!startsFrom) return '';
-      return fromTarget
-        ? t('branches.agent.createFromTarget', { base: startsFrom })
-        : t('branches.agent.createFromFolder', { base: startsFrom });
+      if (startsAt.kind === 'target') return t('branches.agent.createFromTarget', { base: startsFrom });
+      if (startsAt.kind === 'branch') return t('branches.agent.createFromBranch', { base: startsFrom });
+      return t('branches.agent.createFromFolder', { base: startsFrom });
     }
+    if (onCreateFrom) return problem ?? t('branches.agent.createFromOtherDesc');
     const r = rows[cursor];
     if (!r) return '';
     if (r.why) return r.why;
+    if (basing) return t('branches.agent.baseHint');
     const b = r.b;
     if (b.remote) return b.trackedBy ? t('branches.picker.trackedByWhy', { branch: b.trackedBy }) : '';
     if (b.upstreamGone) return t('branches.picker.goneWhy', { upstream: b.upstream ?? '' });
@@ -239,15 +273,16 @@
     const n = count;
     if (!n) return;
     const next = (cursor + by + n) % n;
-    active = next < rows.length ? rows[next].b.name : CREATE;
+    active = next < rows.length ? rows[next].b.name : next === rows.length ? CREATE : CREATE_FROM;
   }
 
   /** Creates the branch typed for a new agent, once the picker is gone; a name git refuses is not. */
-  async function create() {
+  async function create(from = false) {
     if (!creatable || problem) return;
     const name = wanted;
     await release();
-    oncreate?.(name);
+    if (from) oncreatefrom?.(name);
+    else oncreate?.(name);
   }
 
   /** Closes the picker and waits for it to be gone. */
@@ -325,6 +360,7 @@
     } else if (e.key === 'Enter' && !e.isComposing) {
       e.preventDefault();
       if (onCreate) void create();
+      else if (onCreateFrom) void create(true);
       else void pick(rows[cursor]);
     } else if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) {
       e.preventDefault();
@@ -411,7 +447,7 @@
           <div class="grp" id="branch-group-{g.id}">{g.label}</div>
           {#each g.rows as r (r.b.name)}
             {@const b = r.b}
-            {@const checked = targeting ? b.name === (chosen ?? target) : b.current}
+            {@const checked = targeting ? b.name === (chosen ?? target) : basing ? b.name === chosen : b.current}
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <div
               class="row"
@@ -431,7 +467,7 @@
             >
               <span class="chk" aria-hidden="true">{checked ? '✓' : ''}</span>
               <span class="name">{b.name}</span>
-              {#if checked}<span class="sr">{targeting ? t('branches.picker.chosen') : t('branches.picker.current')}</span>{/if}
+              {#if checked}<span class="sr">{targeting || basing ? t('branches.picker.chosen') : t('branches.picker.current')}</span>{/if}
               {#if r.tag}<span class="tag">{r.tag}</span>{/if}
               {#if b.ahead || b.behind}
                 <span class="ab">
@@ -463,13 +499,32 @@
           aria-disabled={problem ? 'true' : undefined}
           aria-describedby={onCreate ? 'branch-description' : undefined}
           use:tip={problem ?? undefined}
-          onclick={create}
+          onclick={() => create()}
           onmousemove={() => (active = CREATE)}
         >
           <span class="chk" aria-hidden="true">+</span>
           <span class="label">{t('branches.agent.create', { branch: wanted })}</span>
           {#if startsFrom}<span class="tag">{t('branches.agent.createFrom', { base: startsFrom })}</span>{/if}
         </div>
+        {#if creatableFrom}
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <div
+            class="row"
+            class:on={onCreateFrom}
+            class:blocked={!!problem}
+            id={optionId(rows.length + 1)}
+            role="option"
+            tabindex="-1"
+            aria-selected={onCreateFrom}
+            aria-disabled={problem ? 'true' : undefined}
+            aria-describedby={onCreateFrom ? 'branch-description' : undefined}
+            onclick={() => create(true)}
+            onmousemove={() => (active = CREATE_FROM)}
+          >
+            <span class="chk" aria-hidden="true">⎇</span>
+            <span class="label">{t('branches.agent.createFromOther', { branch: wanted })}</span>
+          </div>
+        {/if}
       </div>
     {/if}
     {#if failure}

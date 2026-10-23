@@ -382,20 +382,80 @@ pub fn branch_kept(lang: i18n::Lang, branch: &str, why: &BranchKept) -> String {
     }
 }
 
-/// Where a new agent starts when « Les agents partent de la branche cible » is on: the local
-/// `target`, moved first to its upstream as fetched last (no fetch: the agent is made at once)
-/// when it is only behind it, so that what it starts from is its base too. When it can't be moved
-/// (checked out, commits not pushed) the agent starts from it as it is, and the sentence says so;
-/// with no such local branch, from HEAD (None).
-async fn agent_start(root: &str, target: &str) -> (Option<String>, Option<String>) {
+/// Where a new agent's worktree starts (ESC-160): `over`, the branch chosen for it at its making,
+/// else the project's « Branche de départ des nouveaux worktrees ». None: HEAD of the project's
+/// folder, with the reason when it was to start elsewhere (a branch gone: `start_from`). A branch
+/// named that is a remote one alone (`origin/x`) starts through the local branch made to track it
+/// (`x`), as « Nouvel agent sur une branche… » takes one up: its base is a local branch, which
+/// « Intégrer », its merge and its pull request go to. No fetch: the agent is made at once.
+async fn start_point(
+    project: &Project,
+    root: &str,
+    over: Option<&str>,
+) -> (Option<String>, Option<String>) {
+    let base = match over.map(str::trim).filter(|b| !b.is_empty()) {
+        Some(b) => WorktreeBase::Branch(b.to_string()),
+        None => project.worktree_base.clone(),
+    };
+    match base {
+        WorktreeBase::Head => (None, None),
+        WorktreeBase::Target => match project.board.target.trim() {
+            "" => (None, None),
+            target => {
+                let gone = tr!(
+                    "La branche cible « {target} » n’existe pas : l’agent part de la branche du dossier du projet.",
+                    "The target branch “{target}” doesn’t exist: the agent starts from the branch of the project’s folder."
+                );
+                start_from(root, target, gone).await
+            }
+        },
+        WorktreeBase::Branch(name) => {
+            let gone = tr!(
+                "La branche de départ « {name} » n’existe plus : l’agent part de la branche du dossier du projet.",
+                "The starting branch “{name}” no longer exists: the agent starts from the branch of the project’s folder."
+            );
+            let local = match git::local_of(root, &name).await {
+                Ok(Some(local)) => local,
+                // A remote branch no local one tracks: the local one made to track it.
+                Ok(None) => match git::branch_track(root, &name).await {
+                    Ok(local) => local,
+                    Err(e) => {
+                        return (
+                            None,
+                            Some(tr!(
+                                "La branche locale qui suivrait « {name} » n’a pas pu être créée ({e:#}) : l’agent part de la branche du dossier du projet.",
+                                "The local branch that would track “{name}” couldn’t be made ({e:#}): the agent starts from the branch of the project’s folder."
+                            )),
+                        )
+                    }
+                },
+                // Neither a local branch nor a remote one any more.
+                Err(_) if !git::ref_exists(root, &format!("refs/remotes/{name}")).await => {
+                    return (None, Some(gone))
+                }
+                Err(e) => {
+                    return (
+                        None,
+                        Some(tr!(
+                            "{e:#} L’agent part de la branche du dossier du projet.",
+                            "{e:#} The agent starts from the branch of the project’s folder."
+                        )),
+                    )
+                }
+            };
+            start_from(root, &local, gone).await
+        }
+    }
+}
+
+/// A new agent starts from the local branch `branch`, moved first to its upstream as fetched
+/// last (no fetch: the agent is made at once) when it is only behind it, so that what it starts
+/// from is its base too. When it can't be moved (checked out, commits not pushed) the agent starts
+/// from it as it is, and the sentence says so; with no such local branch, from HEAD (None), `gone`
+/// said.
+async fn start_from(root: &str, target: &str, gone: String) -> (Option<String>, Option<String>) {
     if !git::branch_exists(root, target).await {
-        return (
-            None,
-            Some(tr!(
-                "La branche cible « {target} » n’existe pas : l’agent part de la branche du dossier du projet.",
-                "The target branch “{target}” doesn’t exist: the agent starts from the branch of the project’s folder."
-            )),
-        );
+        return (None, Some(gone));
     }
     let from = Some(target.to_string());
     let Some(up) = git::upstream_of(root, target).await else {
@@ -678,7 +738,10 @@ pub struct AgentOptions {
     /// has. Wins over `worktree`, `isolated` and `copy_of`.
     pub branch: Option<String>,
     /// With `branch`: the branch it is merged into. None: the project's (the board's target while
-    /// it exists, else the branch the folder is on).
+    /// it exists, else the branch the folder is on). With `new_branch`, or for an agent of its own
+    /// worktree (which it then asks for, made at once or at its first message): the branch it
+    /// starts from, and so its base, a local or a remote one (ESC-160). None: where the project's
+    /// new worktrees start (`Project::worktree_base`).
     pub base: Option<String>,
     /// With `branch`: a new branch of that name, made first (checked as git does, refused when it
     /// exists) from where a new agent starts (`agent_worktree`), and the agent's own.
@@ -1425,6 +1488,7 @@ pub(crate) fn blank_project(path: &str) -> Project {
         account: String::new(),
         worktree_dir: String::new(),
         worktree_at_first_message: true,
+        worktree_base: WorktreeBase::Head,
         agent_branch_prefix: crate::model::default_agent_branch_prefix(),
         ticket_branch_prefix: crate::model::default_ticket_branch_prefix(),
         remote_control: false,
@@ -1557,6 +1621,10 @@ impl<R: Runtime> Core<R> {
         accounts::normalize(&mut settings);
         settings.normalize_display();
         let mut state: PersistedState = read_json(&data.state_file()).unwrap_or_default();
+        // « Les agents partent de la branche cible » kept as their branch to start from (ESC-160).
+        for p in &mut state.projects {
+            p.settle_legacy();
+        }
         // The histories whose file could not be removed at the last run are not read: removed, if
         // they can be now.
         let mut leftover = std::mem::take(&mut state.leftover_histories);
@@ -5180,13 +5248,21 @@ impl<R: Runtime> Core<R> {
         let copied_from = o.copy_of.as_ref().and_then(|c| c.worktree.as_ref());
         // The folders of the app's agents' worktrees: a new one never takes one of them.
         let held = self.held_worktrees();
-        // Why it does not start from the board's target, when it was to (`agent_start`).
+        // Why it does not start from the branch it was to (`start_point`).
         let mut start_notice = None;
+        // A branch to start from asks for a worktree.
+        let isolated = o.isolated.unwrap_or(project.worktree_per_agent) || o.base.is_some();
         let made = match (&o.branch, &o.worktree, &o.copy_of) {
             // A new branch, named by the user, then the agent on it as on one that exists.
             (Some(branch), _, _) if o.new_branch => Some(
-                self.worktree_on_new_branch(&project, &held, branch, &mut start_notice)
-                    .await,
+                self.worktree_on_new_branch(
+                    &project,
+                    &held,
+                    branch,
+                    o.base.as_deref(),
+                    &mut start_notice,
+                )
+                .await,
             ),
             // A branch that exists: the agent works on it, whatever else is asked.
             (Some(branch), _, _) => Some(
@@ -5214,17 +5290,19 @@ impl<R: Runtime> Core<R> {
             },
             // Its worktree waits for its first message, which names it (ESC-156): unless the user
             // named it, or its harness's interface runs from the start (the Claude Code view).
+            // Its base kept until then (ESC-160).
             (None, None, None)
-                if o.isolated.unwrap_or(project.worktree_per_agent)
+                if isolated
                     && project.worktree_at_first_message
                     && o.name.is_none()
                     && !meta.terminal =>
             {
                 meta.worktree_pending = true;
+                meta.worktree_from = o.base.clone();
                 None
             }
-            (None, None, None) if o.isolated.unwrap_or(project.worktree_per_agent) => Some(
-                self.agent_worktree(&project, &held, &name, &mut start_notice)
+            (None, None, None) if isolated => Some(
+                self.agent_worktree(&project, &held, &name, o.base.as_deref(), &mut start_notice)
                     .await,
             ),
             (None, None, None) => None,
@@ -5668,8 +5746,10 @@ impl<R: Runtime> Core<R> {
                 );
                 let held = self.held_worktrees();
                 let mut notice = None;
+                // The branch chosen at its making, if one was.
+                let from = h.lock().meta.worktree_from.clone();
                 let made = self
-                    .agent_worktree(&project, &held, &slug, &mut notice)
+                    .agent_worktree(&project, &held, &slug, from.as_deref(), &mut notice)
                     .await;
                 Some((project, made, notice))
             }
@@ -5717,6 +5797,7 @@ impl<R: Runtime> Core<R> {
         }
         let kept = self.with_agent(id, |rt, fx| {
             rt.meta.worktree_pending = false;
+            rt.meta.worktree_from = None;
             rt.setup = None;
             if let Some((_, wt)) = &setup {
                 rt.meta.cwd = wt.path.clone();
@@ -6679,19 +6760,21 @@ impl<R: Runtime> Core<R> {
         }
     }
 
-    /// A new agent's own worktree, on a new branch: from HEAD of the project's folder, or from the
-    /// board's target when « Les agents partent de la branche cible » is on (`agent_start`, which
-    /// may say in `notice` why it starts from the local target as it is, or from HEAD).
+    /// A new agent's own worktree, on a new branch: from where its project's new worktrees start
+    /// (« Branche de départ des nouveaux worktrees »), or from `over`, the branch chosen for it
+    /// (`start_point`, which may say in `notice` why it starts from a branch as it is, or from
+    /// HEAD).
     async fn agent_worktree(
         &self,
         project: &Project,
         held: &[PathBuf],
         name: &str,
+        over: Option<&str>,
         notice: &mut Option<String>,
     ) -> Result<(String, String, String)> {
-        let target = project.board.target.trim();
+        let from_head = over.is_none() && project.worktree_base == WorktreeBase::Head;
         let root = match self.toplevel(&project.path).await {
-            Some(root) if project.board.agents_from_target && !target.is_empty() => root,
+            Some(root) if !from_head => root,
             _ => {
                 return git::worktree_add(
                     &project.path,
@@ -6706,7 +6789,7 @@ impl<R: Runtime> Core<R> {
         // Not while a switch or a pull moves the branches.
         let lock = self.sync_lock(&root);
         let _guard = lock.lock().await;
-        let (from, why) = agent_start(&root, target).await;
+        let (from, why) = start_point(project, &root, over).await;
         *notice = why;
         git::worktree_add_from(
             &project.path,
@@ -6756,8 +6839,8 @@ impl<R: Runtime> Core<R> {
     }
 
     /// The worktree of an agent on the new branch `name` (ESC-155): made from where a new agent
-    /// starts (`agent_worktree`: the board's target when « Les agents partent de la branche cible »
-    /// is on, else HEAD of the project's folder), its folder named as for a branch that exists
+    /// starts (`start_point`: `over`, the branch chosen for it, else the project's « Branche de
+    /// départ des nouveaux worktrees »), its folder named as for a branch that exists
     /// (`worktree_add_existing`). A name git refuses, or that a branch has, makes nothing; nor does
     /// a worktree that fails (the branch made for it is deleted). (path, branch, base).
     async fn worktree_on_new_branch(
@@ -6765,6 +6848,7 @@ impl<R: Runtime> Core<R> {
         project: &Project,
         held: &[PathBuf],
         name: &str,
+        over: Option<&str>,
         notice: &mut Option<String>,
     ) -> Result<(String, String, String)> {
         let root = self.toplevel(&project.path).await.ok_or_else(not_a_repo)?;
@@ -6772,14 +6856,8 @@ impl<R: Runtime> Core<R> {
         // Not while a switch or a pull moves the branches.
         let lock = self.sync_lock(&root);
         let _guard = lock.lock().await;
-        let target = project.board.target.trim();
-        let from = if project.board.agents_from_target && !target.is_empty() {
-            let (from, why) = agent_start(&root, target).await;
-            *notice = why;
-            from
-        } else {
-            None
-        };
+        let (from, why) = start_point(project, &root, over).await;
+        *notice = why;
         let base = match &from {
             Some(b) => b.clone(),
             None => git::head_branch(&root).await,
@@ -7090,6 +7168,7 @@ impl<R: Runtime> Core<R> {
         cur.color = p.color;
         cur.worktree_per_agent = p.worktree_per_agent;
         cur.worktree_at_first_message = p.worktree_at_first_message;
+        cur.worktree_base = p.worktree_base;
         cur.run_commands = p.run_commands;
         cur.worktree_copy = p.worktree_copy;
         cur.worktree_setup = p.worktree_setup;

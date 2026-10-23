@@ -1183,17 +1183,17 @@ async fn an_agent_on_a_new_branch_starts_where_a_new_agent_does_in_a_folder_name
         .await
         .unwrap();
     assert!(Path::new(&c.meta.worktree.unwrap().path).ends_with(".claude/worktrees/signup-3"));
-    // « Les agents partent de la branche cible »: from the board's target, its base.
+    // « Branche de départ des nouveaux worktrees » on the board's target: from it, its base.
     h.core
         .board_set(
             &p.id,
             BoardSettings {
                 target: "main".into(),
-                agents_from_target: true,
                 ..p.board.clone()
             },
         )
         .unwrap();
+    set_base(&h, &p.id, WorktreeBase::Target);
     let d = h
         .core
         .create_agent_on_new_branch(&p.id, "feat/from-target", None)
@@ -1908,7 +1908,7 @@ async fn the_base_is_not_integrated_while_the_agent_works_or_has_changes_or_cann
 
 /// A project with a worktree per agent whose folder is on `work` (a commit of its own), main
 /// tracking origin, and origin's main one commit ahead of the local one (fetched, not pulled),
-/// « Les agents partent de la branche cible » on, main the target. Returns the commit origin's main
+/// its new worktrees starting from the board's target, main. Returns the commit origin's main
 /// is on.
 async fn from_target(h: &Harness) -> (Project, PathBuf, String) {
     let (p, r) = h.project(true).await;
@@ -1923,11 +1923,18 @@ async fn from_target(h: &Harness) -> (Project, PathBuf, String) {
     git(&r, &["commit", "-qm", "work"]);
     let board = BoardSettings {
         target: "main".into(),
-        agents_from_target: true,
         ..p.board.clone()
     };
     h.core.board_set(&p.id, board).unwrap();
+    set_base(h, &p.id, WorktreeBase::Target);
     (h.core.project(&p.id).unwrap(), r, ahead)
+}
+
+/// « Branche de départ des nouveaux worktrees », saved as the project's window does.
+fn set_base(h: &Harness, id: &str, base: WorktreeBase) {
+    let mut p = h.core.project(id).unwrap();
+    p.worktree_base = base;
+    h.core.update_project(p).unwrap();
 }
 
 fn warnings(h: &Harness, id: &str) -> Vec<String> {
@@ -2026,11 +2033,7 @@ async fn without_the_setting_or_a_target_a_new_agent_starts_from_the_folders_bra
     let (p, r, _) = from_target(&h).await;
     let work = git(&r, &["rev-parse", "work"]);
     let main = git(&r, &["rev-parse", "main"]);
-    let off = BoardSettings {
-        agents_from_target: false,
-        ..p.board.clone()
-    };
-    h.core.board_set(&p.id, off).unwrap();
+    set_base(&h, &p.id, WorktreeBase::Head);
     let a = h.core.create_agent(&p.id, None).await.unwrap();
     let wt = a.meta.worktree.clone().unwrap();
     assert_eq!(wt.base_branch, "work");
@@ -2038,9 +2041,9 @@ async fn without_the_setting_or_a_target_a_new_agent_starts_from_the_folders_bra
     // Nothing moved.
     assert_eq!(git(&r, &["rev-parse", "main"]), main);
     // A target that is no branch: from the folder's, as the agent says.
+    set_base(&h, &p.id, WorktreeBase::Target);
     let gone = BoardSettings {
         target: "release".into(),
-        agents_from_target: true,
         ..p.board.clone()
     };
     h.core.board_set(&p.id, gone).unwrap();
@@ -2064,4 +2067,184 @@ async fn without_the_setting_or_a_target_a_new_agent_starts_from_the_folders_bra
         .unwrap();
     assert!(c.meta.worktree.is_none());
     assert!(warnings(&h, &c.meta.id).is_empty());
+}
+
+// ---------- ESC-160: « Branche de départ des nouveaux worktrees », and an agent's own ----------
+
+/// A project with a worktree per agent on main, and `release` and `hotfix` from main, each with a
+/// commit of its own (the folder stays on main).
+async fn with_bases(h: &Harness) -> (Project, PathBuf) {
+    let (p, r) = h.project(true).await;
+    branch_adding(&r, "release", "release.txt");
+    branch_adding(&r, "hotfix", "hotfix.txt");
+    (p, r)
+}
+
+#[tokio::test]
+async fn a_new_agent_starts_from_the_branch_its_project_names_which_is_its_base() {
+    let h = harness("esc160-named");
+    let (p, r) = with_bases(&h).await;
+    set_base(&h, &p.id, WorktreeBase::Branch("release".into()));
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let wt = a.meta.worktree.clone().unwrap();
+    assert_eq!(wt.base_branch, "release");
+    assert_eq!(
+        git(Path::new(&wt.path), &["rev-parse", "HEAD"]),
+        git(&r, &["rev-parse", "release"])
+    );
+    assert!(Path::new(&wt.path).join("release.txt").exists());
+    assert!(warnings(&h, &a.meta.id).is_empty());
+    // The folder did not move.
+    assert_eq!(current(&r), "main");
+    // Its base is what « Intégrer » brings in.
+    commit_file(&r, "x.txt", "x\n");
+    git(&r, &["switch", "-q", "release"]);
+    commit_file(&r, "later.txt", "later\n");
+    git(&r, &["switch", "-q", "main"]);
+    assert_eq!(
+        h.core.integrate_base(&a.meta.id).await.unwrap(),
+        Integration::Done
+    );
+    assert!(Path::new(&wt.path).join("later.txt").exists());
+    assert!(!Path::new(&wt.path).join("x.txt").exists());
+    // A new branch typed in « Nouvel agent sur une branche… » starts from it too.
+    let b = h
+        .core
+        .create_agent_on_new_branch(&p.id, "feat/on-release", None)
+        .await
+        .unwrap();
+    assert_eq!(b.meta.worktree.unwrap().base_branch, "release");
+    assert_eq!(
+        git(&r, &["rev-parse", "feat/on-release"]),
+        git(&r, &["rev-parse", "release"])
+    );
+}
+
+#[tokio::test]
+async fn a_branch_to_start_from_that_is_gone_starts_from_the_folders_and_says_why() {
+    let h = harness("esc160-gone");
+    let (p, r) = with_bases(&h).await;
+    set_base(&h, &p.id, WorktreeBase::Branch("old".into()));
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let wt = a.meta.worktree.clone().unwrap();
+    assert_eq!(wt.base_branch, "main");
+    assert_eq!(
+        git(Path::new(&wt.path), &["rev-parse", "HEAD"]),
+        git(&r, &["rev-parse", "main"])
+    );
+    assert_eq!(
+        warnings(&h, &a.meta.id),
+        ["La branche de départ « old » n’existe plus : l’agent part de la branche du dossier du projet."]
+    );
+    // The same for a new branch typed from a branch chosen for it.
+    let b = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                branch: Some("feat/x".into()),
+                new_branch: true,
+                base: Some("gone/too".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(b.meta.worktree.unwrap().base_branch, "main");
+    assert_eq!(
+        warnings(&h, &b.meta.id),
+        ["La branche de départ « gone/too » n’existe plus : l’agent part de la branche du dossier du projet."]
+    );
+}
+
+#[tokio::test]
+async fn a_remote_branch_to_start_from_starts_through_the_local_branch_made_to_track_it() {
+    let h = harness("esc160-remote");
+    let (p, r) = h.project(true).await;
+    remote(&h, &r);
+    branch_adding(&r, "feature", "feature.txt");
+    git(&r, &["push", "-q", "origin", "feature"]);
+    let pushed = git(&r, &["rev-parse", "feature"]);
+    git(&r, &["branch", "-qD", "feature"]);
+    set_base(&h, &p.id, WorktreeBase::Branch("origin/feature".into()));
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let wt = a.meta.worktree.clone().unwrap();
+    // A local base, which « Intégrer », its merge and its pull request go to.
+    assert_eq!(wt.base_branch, "feature");
+    assert_eq!(git(&r, &["rev-parse", "feature"]), pushed);
+    assert_eq!(
+        git(&r, &["rev-parse", "--abbrev-ref", "feature@{upstream}"]),
+        "origin/feature"
+    );
+    assert_eq!(git(Path::new(&wt.path), &["rev-parse", "HEAD"]), pushed);
+    assert!(warnings(&h, &a.meta.id).is_empty());
+    // Once made, the next agent finds it.
+    let b = h.core.create_agent(&p.id, None).await.unwrap();
+    assert_eq!(b.meta.worktree.unwrap().base_branch, "feature");
+}
+
+#[tokio::test]
+async fn an_agent_can_start_from_another_branch_than_its_projects() {
+    let h = harness("esc160-over");
+    let (p, r) = with_bases(&h).await;
+    set_base(&h, &p.id, WorktreeBase::Branch("release".into()));
+    let a = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                base: Some("hotfix".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let wt = a.meta.worktree.clone().unwrap();
+    assert_eq!(wt.base_branch, "hotfix");
+    assert!(Path::new(&wt.path).join("hotfix.txt").exists());
+    assert!(!Path::new(&wt.path).join("release.txt").exists());
+    // A new branch typed, from the branch chosen for it.
+    let b = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                branch: Some("fix/urgent".into()),
+                new_branch: true,
+                base: Some("hotfix".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let wt = b.meta.worktree.unwrap();
+    assert_eq!(
+        (wt.branch.as_str(), wt.base_branch.as_str()),
+        ("fix/urgent", "hotfix")
+    );
+    assert_eq!(
+        git(&r, &["rev-parse", "fix/urgent"]),
+        git(&r, &["rev-parse", "hotfix"])
+    );
+    // A branch to start from asks for a worktree, even in a project without one per agent.
+    let mut q = h.core.project(&p.id).unwrap();
+    q.worktree_per_agent = false;
+    h.core.update_project(q).unwrap();
+    let c = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                base: Some("hotfix".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(c.meta.worktree.unwrap().base_branch, "hotfix");
+    // The project's own setting did not move.
+    assert_eq!(
+        h.core.project(&p.id).unwrap().worktree_base,
+        WorktreeBase::Branch("release".into())
+    );
 }

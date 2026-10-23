@@ -61,7 +61,12 @@ test('the agents start from the target branch, brought up to date from the remot
   const picker = page.getByRole('dialog', { name: 'Branche cible' });
   await picker.getByRole('option', { name: /^main/ }).click();
   await expect(picker).toBeHidden();
-  await settings.getByRole('switch', { name: 'Les agents partent de la branche cible' }).click();
+  // « Branche de départ des nouveaux worktrees », in the project's settings (ESC-160).
+  await settings.getByRole('tab', { name: 'Projets' }).click();
+  await settings
+    .getByRole('group', { name: 'Branche de départ des nouveaux worktrees' })
+    .getByRole('button', { name: 'Branche cible du Kanban' })
+    .click();
   await settings.getByRole('button', { name: 'Enregistrer' }).click();
   await expect(settings).toHaveCount(0);
 
@@ -122,4 +127,73 @@ test('« Nouvel agent sur une branche… » creates the branch typed, and the ag
   await expect(picker.getByRole('option', { name: /Créer la branche « bad name »/ })).toHaveAttribute('aria-disabled', 'true');
   await expect(picker.getByText('« bad name » n’est pas un nom de branche valide', { exact: false })).toBeVisible();
   expect(git(app.repo, 'worktree', 'list').split('\n')).toHaveLength(3);
+});
+
+test('the new worktrees start from the branch the project names, and an agent from another one chosen in « + Nouvel agent » (ESC-160)', async ({
+  app,
+}) => {
+  const { page } = app;
+  await addProject(page, app.repo, { worktrees: true, firstAgent: false });
+  // Two branches from main with a commit each; the folder stays on main.
+  for (const branch of ['release', 'hotfix']) {
+    git(app.repo, 'switch', '-q', '-c', branch, 'main');
+    git(app.repo, 'commit', '-q', '--allow-empty', '-m', `on ${branch}`);
+    git(app.repo, 'switch', '-q', 'main');
+  }
+  const release = git(app.repo, 'rev-parse', 'release');
+  const hotfix = git(app.repo, 'rev-parse', 'hotfix');
+
+  // « Branche de départ des nouveaux worktrees »: a branch, chosen in the picker.
+  await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+  const settings = page.getByRole('dialog', { name: 'Réglages' });
+  await settings.getByRole('tab', { name: 'Projets' }).click();
+  const choice = settings.getByRole('group', { name: 'Branche de départ des nouveaux worktrees' });
+  await expect(choice.getByRole('button', { name: 'Branche actuelle du dossier' })).toHaveAttribute('aria-pressed', 'true');
+  await choice.getByRole('button', { name: 'Une branche…' }).click();
+  const base = page.getByRole('dialog', { name: 'Branche de départ' });
+  await base.getByRole('combobox').fill('release');
+  await base.getByRole('option', { name: /^release/ }).click();
+  await expect(base).toBeHidden();
+  await expect(choice.getByRole('button', { name: 'Branche de départ : release. Choisir une autre branche' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await settings.getByRole('button', { name: 'Enregistrer' }).click();
+  await expect(settings).toHaveCount(0);
+
+  // A new agent: its worktree starts from release, the folder left on main.
+  await page.getByRole('button', { name: '+ Nouvel agent' }).first().click();
+  await expect.poll(() => git(app.repo, 'branch', '--list', 'escouade/agent-1')).toContain('escouade/agent-1');
+  expect(git(app.repo, 'rev-parse', 'escouade/agent-1')).toBe(release);
+  expect(git(app.repo, 'branch', '--show-current')).toBe('main');
+
+  // « Nouvel agent depuis une autre branche… »: another agent, from hotfix this time.
+  await page.getByRole('button', { name: 'Autres façons de créer un agent' }).click();
+  await page.getByRole('menuitem', { name: 'Nouvel agent depuis une autre branche…' }).click();
+  const other = page.getByRole('dialog', { name: 'Branche de départ' });
+  await other.getByRole('combobox').fill('hotfix');
+  await other.getByRole('option', { name: /^hotfix/ }).click();
+  await expect(other).toBeHidden();
+  await expect.poll(() => git(app.repo, 'branch', '--list', 'escouade/agent-2')).toContain('escouade/agent-2');
+  expect(git(app.repo, 'rev-parse', 'escouade/agent-2')).toBe(hotfix);
+
+  // « Nouvel agent sur une branche… »: a new branch, from hotfix too, chosen after its name.
+  await page.getByRole('button', { name: 'Autres façons de créer un agent' }).click();
+  await page.getByRole('menuitem', { name: 'Nouvel agent sur une branche…' }).click();
+  const picker = page.getByRole('dialog', { name: 'Choisir une branche' });
+  await picker.getByRole('combobox').fill('fix/urgent');
+  // Where the project's new worktrees start, said on the row that creates it at once.
+  await expect(picker.getByRole('option', { name: /Créer la branche « fix\/urgent » et y lancer un agent/ })).toContainText(
+    'depuis release',
+  );
+  await picker.getByRole('option', { name: /Créer « fix\/urgent » depuis une autre branche…/ }).click();
+  const from = page.getByRole('dialog', { name: 'Branche de départ de « fix/urgent »' });
+  await from.getByRole('combobox').fill('hotfix');
+  await from.getByRole('option', { name: /^hotfix/ }).click();
+  await expect.poll(() => git(app.repo, 'branch', '--list', 'fix/urgent')).toContain('fix/urgent');
+  expect(git(app.repo, 'rev-parse', 'fix/urgent')).toBe(hotfix);
+  // The project's own start did not move.
+  await page.getByRole('button', { name: '+ Nouvel agent' }).first().click();
+  await expect.poll(() => git(app.repo, 'branch', '--list', 'escouade/agent-4')).toContain('escouade/agent-4');
+  expect(git(app.repo, 'rev-parse', 'escouade/agent-4')).toBe(release);
 });

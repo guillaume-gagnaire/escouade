@@ -57,11 +57,19 @@ describe('board commands', () => {
     expect((await api.createAgentOnBranch('p1', 'origin/feat', 'opus')).id).toBe('a9');
     await api.createAgentOnBranch('p1', 'feat');
     await api.createAgentOnNewBranch('p1', 'feat/signup');
+    await api.createAgentOnNewBranch('p1', 'fix/urgent', 'origin/hotfix');
     expect(await api.integrateBase('a1')).toEqual({ kind: 'conflict', files: ['src/a.ts'], rebase: false });
     expect(backend.calls).toEqual([
       { cmd: 'create_agent_on_branch', args: { projectId: 'p1', branch: 'origin/feat', model: 'opus', engine: null } },
       { cmd: 'create_agent_on_branch', args: { projectId: 'p1', branch: 'feat', model: null, engine: null } },
-      { cmd: 'create_agent_on_branch', args: { projectId: 'p1', branch: 'feat/signup', model: null, engine: null, create: true } },
+      {
+        cmd: 'create_agent_on_branch',
+        args: { projectId: 'p1', branch: 'feat/signup', model: null, engine: null, create: true, base: null },
+      },
+      {
+        cmd: 'create_agent_on_branch',
+        args: { projectId: 'p1', branch: 'fix/urgent', model: null, engine: null, create: true, base: 'origin/hotfix' },
+      },
       { cmd: 'integrate_base', args: { id: 'a1' } },
     ]);
   });

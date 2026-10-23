@@ -99,6 +99,26 @@ describe('the assistant’s steps and starting points', () => {
     expect(applyCopy(blankConfig(), off, new Set(), null).worktreeAtFirstMessage).toBe(true);
   });
 
+  it('starts the worktrees from the folder’s branch by default, keeps a project’s start, and copies it with them (ESC-160)', () => {
+    expect(blankConfig().worktreeBase).toEqual({ kind: 'head' });
+    expect(recommendedConfig().worktreeBase).toEqual({ kind: 'head' });
+    expect(blankConfig().board).not.toHaveProperty('agentsFromTarget');
+    const named = project({ worktreeBase: { kind: 'branch', branch: 'release' } });
+    expect(configOf(named).worktreeBase).toEqual({ kind: 'branch', branch: 'release' });
+    // A project of before ESC-160 says nothing: the folder's branch.
+    expect(configOf(project()).worktreeBase).toEqual({ kind: 'head' });
+    expect(withConfig(project(), { ...blankConfig(), worktreeBase: { kind: 'target' } }).worktreeBase).toEqual({ kind: 'target' });
+    // « Une branche… » with none chosen yet saves the folder's.
+    expect(withConfig(project(), { ...blankConfig(), worktreeBase: { kind: 'branch', branch: ' ' } }).worktreeBase).toEqual({
+      kind: 'head',
+    });
+    expect(applyCopy(blankConfig(), named, new Set(['worktreePerAgent']), null).worktreeBase).toEqual({
+      kind: 'branch',
+      branch: 'release',
+    });
+    expect(applyCopy(blankConfig(), named, new Set(), null).worktreeBase).toEqual({ kind: 'head' });
+  });
+
   it('recommends a worktree per agent, a squash merge into the current branch, cleanup, conventional commits, the agent on conflicts', () => {
     const c = recommendedConfig();
     expect(c.worktreePerAgent).toBe(true);

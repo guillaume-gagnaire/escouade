@@ -137,9 +137,18 @@ export default {
     create: 'Créer la branche « {branch} » et y lancer un agent',
     /** After it: where the branch starts. */
     createFrom: 'depuis {base}',
-    /** Under the list, the cursor on it: « Les agents partent de la branche cible » is on. */
-    createFromTarget: 'Elle part de {base}, la branche cible du Kanban (« Les agents partent de la branche cible »).',
+    /** Under the list, the cursor on it: where the project’s new worktrees start (« Branche de départ des nouveaux worktrees »). */
+    createFromTarget: 'Elle part de {base}, la branche cible du Kanban.',
     createFromFolder: 'Elle part de {base}, la branche du dossier du projet.',
+    createFromBranch: 'Elle part de {base}, la branche de départ du projet.',
+    /** The second row of a new branch (ESC-160): its base chosen in the picker next. */
+    createFromOther: 'Créer « {branch} » depuis une autre branche…',
+    createFromOtherDesc: 'Choisis ensuite la branche dont elle part : ce sera la base de l’agent.',
+    /** The picker, to choose where an agent’s worktree (or its new branch `{branch}`) starts. */
+    baseTitle: 'Branche de départ',
+    baseTitleFor: 'Branche de départ de « {branch} »',
+    /** Under the list in that picker: what choosing a branch does. */
+    baseHint: 'Le worktree de l’agent part de cette branche, et sa PR s’ouvrira vers elle.',
   },
   /** « Intégrer <base> » : the base branch goes into the agent’s branch. */
   integrate: {

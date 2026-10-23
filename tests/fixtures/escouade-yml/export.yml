@@ -6,6 +6,7 @@ agents:
 worktrees:
   per_agent: true
   at_first_message: false
+  base: origin/release
   dir: ../app-worktrees
   copy:
     - .env*
@@ -28,7 +29,6 @@ git:
 board:
   on_approve: pr
   target_branch: develop
-  agents_from_target: true
   merge_strategy: rebase
   draft_pr: true
   test_command: "npm test -- --grep 'a b' # all"

@@ -155,7 +155,7 @@ describe('Sidebar', () => {
     const backend = fakeBackend({ create_agent: () => agent({ id: 'a4', name: 'agent-3', createdAt: 4 }) });
     render(Sidebar, { project: project() });
     await userEvent.click(screen.getByRole('button', { name: /Nouvel agent/ }));
-    expect(backend.called('create_agent')[0].args).toEqual({ projectId: 'p1', model: null, engine: null, isolated: null });
+    expect(backend.called('create_agent')[0].args).toEqual({ projectId: 'p1', model: null, engine: null, isolated: null, base: null });
     expect(app.agent?.id).toBe('a4');
   });
 
@@ -173,7 +173,11 @@ describe('Sidebar', () => {
       render(Sidebar, { project: project() });
       expect(more()).toHaveAttribute('aria-haspopup', 'menu');
       await userEvent.click(more());
-      expect(menu.open!.items.map((i) => i.label)).toEqual(['Nouvel agent sur une branche…', 'Nouvel agent dans un worktree']);
+      expect(menu.open!.items.map((i) => i.label)).toEqual([
+        'Nouvel agent sur une branche…',
+        'Nouvel agent dans un worktree',
+        'Nouvel agent depuis une autre branche…',
+      ]);
       // The button itself still makes an agent at once.
       expect(screen.getByRole('button', { name: /^\+?\s*Nouvel agent$/ })).toBeInTheDocument();
     });
@@ -213,6 +217,7 @@ describe('Sidebar', () => {
         model: null,
         engine: null,
         create: true,
+        base: null,
       });
       await vi.waitFor(() => expect(app.agent?.id).toBe('a9'));
     });
@@ -251,10 +256,84 @@ describe('Sidebar', () => {
       fakeBackend(handlers());
       render(Sidebar, { project: project() });
       await userEvent.click(screen.getByRole('button', { name: 'Other ways to create an agent' }));
-      expect(menu.open!.items.map((i) => i.label)).toEqual(['New agent on a branch…', 'New agent in a worktree']);
+      expect(menu.open!.items.map((i) => i.label)).toEqual([
+        'New agent on a branch…',
+        'New agent in a worktree',
+        'New agent from another branch…',
+      ]);
       menu.open!.items[0].onClick!();
       menu.close();
       expect(await screen.findByRole('dialog', { name: 'Choose a branch' })).toBeInTheDocument();
+    });
+  });
+
+  describe('a new agent from another branch (ESC-160)', () => {
+    const LIST = [
+      branchInfo({ name: 'main', current: true, worktree: 'C:\\code\\demo-api' }),
+      branchInfo({ name: 'release' }),
+      branchInfo({ name: 'origin/hotfix', remote: true }),
+    ];
+    const more = () => screen.getByRole('button', { name: 'Autres façons de créer un agent' });
+    const made = (a: any) => agent({ id: 'a9', name: 'agent-9', projectId: a.projectId, createdAt: 9 });
+    const entry = (label: string) => menu.open!.items.find((i) => i.label === label)!;
+
+    it('opens the picker of the starting branch, any branch, and makes the agent in a worktree from the one picked', async () => {
+      const backend = fakeBackend({ branch_list: () => LIST, create_agent: made });
+      render(Sidebar, { project: project({ worktreePerAgent: false }) });
+      await userEvent.click(more());
+      entry('Nouvel agent depuis une autre branche…').onClick!();
+      menu.close();
+      const picker = await screen.findByRole('dialog', { name: 'Branche de départ' });
+      // The folder's branch too: it is only where the worktree starts.
+      const main = (await within(picker).findByText('main')).closest('[role="option"]')!;
+      expect(main).not.toHaveAttribute('aria-disabled');
+      await userEvent.click(within(picker).getByText('release'));
+      await waitFor(() => expect(backend.called('create_agent')).toHaveLength(1));
+      expect(backend.called('create_agent')[0].args).toEqual({
+        projectId: 'p1',
+        model: null,
+        engine: null,
+        isolated: true,
+        base: 'release',
+      });
+      await vi.waitFor(() => expect(app.agent?.id).toBe('a9'));
+      expect(screen.queryByRole('dialog', { name: 'Branche de départ' })).toBeNull();
+    });
+
+    it('creates the branch typed from another branch, chosen next', async () => {
+      const backend = fakeBackend({ branch_list: () => LIST, branch_check: () => null, create_agent_on_branch: made });
+      render(Sidebar, { project: project() });
+      await userEvent.click(more());
+      entry('Nouvel agent sur une branche…').onClick!();
+      menu.close();
+      const picker = await screen.findByRole('dialog', { name: 'Choisir une branche' });
+      await within(picker).findByText('release');
+      await userEvent.keyboard('feat/signup');
+      await userEvent.click(await within(picker).findByRole('option', { name: /Créer « feat\/signup » depuis une autre branche…/ }));
+      const base = await screen.findByRole('dialog', { name: 'Branche de départ de « feat/signup »' });
+      await userEvent.click(await within(base).findByText('origin/hotfix'));
+      await waitFor(() => expect(backend.called('create_agent_on_branch')).toHaveLength(1));
+      expect(backend.called('create_agent_on_branch')[0].args).toEqual({
+        projectId: 'p1',
+        branch: 'feat/signup',
+        model: null,
+        engine: null,
+        create: true,
+        base: 'origin/hotfix',
+      });
+      await vi.waitFor(() => expect(app.agent?.id).toBe('a9'));
+    });
+
+    it('makes nothing when the picker is closed', async () => {
+      const backend = fakeBackend({ branch_list: () => LIST, create_agent: made });
+      render(Sidebar, { project: project() });
+      await userEvent.click(more());
+      entry('Nouvel agent depuis une autre branche…').onClick!();
+      menu.close();
+      await screen.findByRole('dialog', { name: 'Branche de départ' });
+      await userEvent.keyboard('{Escape}');
+      await vi.waitFor(() => expect(screen.queryByRole('dialog', { name: 'Branche de départ' })).toBeNull());
+      expect(backend.called('create_agent')).toHaveLength(0);
     });
   });
 
@@ -270,7 +349,7 @@ describe('Sidebar', () => {
       without.onClick!();
       menu.close();
       await waitFor(() => expect(backend.called('create_agent')).toHaveLength(1));
-      expect(backend.called('create_agent')[0].args).toEqual({ projectId: 'p1', model: null, engine: null, isolated: false });
+      expect(backend.called('create_agent')[0].args).toEqual({ projectId: 'p1', model: null, engine: null, isolated: false, base: null });
       await vi.waitFor(() => expect(app.agent?.id).toBe('a8'));
       unmount();
       render(Sidebar, { project: project({ worktreePerAgent: false }) });
@@ -278,7 +357,7 @@ describe('Sidebar', () => {
       menu.open!.items.find((i) => i.label === 'Nouvel agent dans un worktree')!.onClick!();
       menu.close();
       await waitFor(() => expect(backend.called('create_agent')).toHaveLength(2));
-      expect(backend.called('create_agent')[1].args).toEqual({ projectId: 'p1', model: null, engine: null, isolated: true });
+      expect(backend.called('create_agent')[1].args).toEqual({ projectId: 'p1', model: null, engine: null, isolated: true, base: null });
     });
 
     it('is written in English', async () => {
@@ -2375,7 +2454,11 @@ describe('Sidebar: choosing the harness and its brand (ESC-29)', () => {
     render(Sidebar, { project: project({ engine: 'codex' }) });
     // One harness found: as before.
     await userEvent.click(more());
-    expect(menu.open!.items.map((i) => i.label)).toEqual(['Nouvel agent sur une branche…', 'Nouvel agent dans un worktree']);
+    expect(menu.open!.items.map((i) => i.label)).toEqual([
+      'Nouvel agent sur une branche…',
+      'Nouvel agent dans un worktree',
+      'Nouvel agent depuis une autre branche…',
+    ]);
     menu.close();
     app.enginesFound = ['claude', 'codex'];
     await userEvent.click(more());
@@ -2385,11 +2468,12 @@ describe('Sidebar: choosing the harness and its brand (ESC-29)', () => {
       '',
       'Nouvel agent sur une branche…',
       'Nouvel agent dans un worktree',
+      'Nouvel agent depuis une autre branche…',
     ]);
     menu.open!.items[1].onClick!();
     menu.close();
     await waitFor(() => expect(backend.called('create_agent')).toHaveLength(1));
-    expect(backend.called('create_agent')[0].args).toEqual({ projectId: 'p1', model: null, engine: 'claude', isolated: null });
+    expect(backend.called('create_agent')[0].args).toEqual({ projectId: 'p1', model: null, engine: 'claude', isolated: null, base: null });
   });
 
   it('shows the brand of each agent’s harness only once agents run on two', () => {

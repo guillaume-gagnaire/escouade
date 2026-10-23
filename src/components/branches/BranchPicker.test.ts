@@ -563,31 +563,74 @@ describe('BranchPicker to pick or create the branch of a new agent', () => {
     expect(screen.queryByRole('option', { name: /Créer la branche/ })).toBeNull();
   });
 
-  it('starts from the board’s target when the agents start from it, as long as that branch is here', async () => {
+  it('starts from the board’s target when the project’s new worktrees do, as long as that branch is here', async () => {
     const release = branchInfo({ name: 'release' });
-    app.projects = [project({ board: board({ target: 'release', agentsFromTarget: true }) })];
+    app.projects = [project({ board: board({ target: 'release' }), worktreeBase: { kind: 'target' } })];
     pickOrCreate({ list: [...LIST, release] });
     await loaded(LIST.length + 1);
     await userEvent.keyboard('feat/signup');
     await waitFor(() => expect(creating('feat/signup')).toHaveTextContent('depuis release'));
     await userEvent.hover(creating('feat/signup')!);
-    expect(
-      screen.getByText('Elle part de release, la branche cible du Kanban (« Les agents partent de la branche cible »).', { selector: 'p' }),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Elle part de release, la branche cible du Kanban.', { selector: 'p' })).toBeInTheDocument();
   });
 
-  it('starts from the folder’s branch when the agents do not start from the target, or it is not here', async () => {
-    app.projects = [project({ board: board({ target: 'release', agentsFromTarget: false }) })];
+  it('starts from the project’s starting branch when it names one, a remote one too (ESC-160)', async () => {
+    app.projects = [project({ worktreeBase: { kind: 'branch', branch: 'origin/hotfix' } })];
+    pickOrCreate();
+    await loaded();
+    await userEvent.keyboard('feat/signup');
+    await waitFor(() => expect(creating('feat/signup')).toHaveTextContent('depuis origin/hotfix'));
+    await userEvent.hover(creating('feat/signup')!);
+    expect(screen.getByText('Elle part de origin/hotfix, la branche de départ du projet.', { selector: 'p' })).toBeInTheDocument();
+  });
+
+  it('starts from the folder’s branch when the project’s start is it, or a branch that is not here', async () => {
+    app.projects = [project({ board: board({ target: 'release' }) })];
     pickOrCreate();
     await loaded();
     await userEvent.keyboard('feat/signup');
     await waitFor(() => expect(creating('feat/signup')).toHaveTextContent('depuis main'));
-    cleanup();
-    app.projects = [project({ board: board({ target: 'release', agentsFromTarget: true }) })];
+    for (const worktreeBase of [{ kind: 'target' as const }, { kind: 'branch' as const, branch: 'gone' }]) {
+      cleanup();
+      app.projects = [project({ board: board({ target: 'release' }), worktreeBase })];
+      pickOrCreate();
+      await loaded();
+      await userEvent.keyboard('feat/signup');
+      await waitFor(() => expect(creating('feat/signup')).toHaveTextContent('depuis main'));
+    }
+  });
+
+  it('offers to create the branch typed from another branch, chosen next (ESC-160)', async () => {
+    const backend = fakeBackend({ branch_list: () => LIST, branch_check: () => null });
+    app.git = { p1: gitInfo(tracked) };
+    const [onclose, onpick, oncreate, oncreatefrom] = [vi.fn(), vi.fn(), vi.fn(), vi.fn()];
+    render(BranchPicker, { projectId: 'p1', onclose, mode: 'pick', onpick, oncreate, oncreatefrom });
+    await loaded();
+    await userEvent.keyboard('feat/signup');
+    const from = () => screen.queryByRole('option', { name: /Créer « feat\/signup » depuis une autre branche…/ });
+    await waitFor(() => expect(from()).toBeInTheDocument());
+    // Last, after the row that creates it where a new agent starts; the arrows reach it.
+    const options = screen.getAllByRole('option');
+    expect(options.at(-1)).toBe(from());
+    expect(options.at(-2)).toBe(creating('feat/signup'));
+    await userEvent.keyboard('{ArrowUp}');
+    expect(from()).toHaveAttribute('aria-selected', 'true');
+    expect(
+      screen.getByText('Choisis ensuite la branche dont elle part : ce sera la base de l’agent.', { selector: 'p' }),
+    ).toBeInTheDocument();
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(oncreatefrom).toHaveBeenCalledWith('feat/signup'));
+    expect(onclose).toHaveBeenCalled();
+    expect(oncreate).not.toHaveBeenCalled();
+    expect(backend.called('create_agent_on_branch')).toHaveLength(0);
+  });
+
+  it('has no such row where nothing would choose the branch it starts from', async () => {
     pickOrCreate();
     await loaded();
     await userEvent.keyboard('feat/signup');
-    await waitFor(() => expect(creating('feat/signup')).toHaveTextContent('depuis main'));
+    await waitFor(() => expect(creating('feat/signup')).toBeInTheDocument());
+    expect(screen.queryByRole('option', { name: /depuis une autre branche/ })).toBeNull();
   });
 
   it('checks the name as git does, and says the one it refuses without creating anything', async () => {
@@ -803,5 +846,50 @@ describe('BranchPicker — the pull request of an agent’s branch (ESC-64)', ()
     await loaded();
     await fireEvent.contextMenu(option('escouade/refacto-auth'));
     expect(menu.open).toBeNull();
+  });
+});
+
+/** The picker of where an agent's worktree starts (ESC-160): any branch, local or remote. */
+function pickBase(over: { chosen?: string; forBranch?: string } = {}) {
+  const backend = fakeBackend({ branch_list: () => LIST });
+  app.git = { p1: gitInfo(tracked) };
+  const [onclose, onpick] = [vi.fn(), vi.fn()];
+  render(BranchPicker, { projectId: 'p1', onclose, mode: 'base', onpick, ...over });
+  return { backend, onclose, onpick, field: screen.getByRole('combobox') };
+}
+
+describe('BranchPicker to choose where a worktree starts', () => {
+  beforeEach(() => {
+    resetApp({ agents: [agent({ id: 'a1', name: 'refacto-auth' })] });
+    app.projects = [project({ board: board({ target: 'main' }) })];
+    menu.close();
+  });
+
+  it('offers every branch, the folder’s, the target and the remote ones too, and gives back the one picked', async () => {
+    const { onpick, onclose } = pickBase();
+    expect(screen.getByRole('dialog', { name: 'Branche de départ' })).toBeInTheDocument();
+    await loaded();
+    for (const o of screen.getAllByRole('option')) expect(o).not.toHaveAttribute('aria-disabled');
+    // Nothing else than choosing: no sync, no new branch, no creation of the name typed.
+    expect(screen.queryByRole('button', { name: 'Nouvelle branche…' })).toBeNull();
+    expect(option('main')).toHaveTextContent('dossier du projet');
+    await userEvent.hover(option('origin/hotfix'));
+    expect(
+      screen.getByText('Le worktree de l’agent part de cette branche, et sa PR s’ouvrira vers elle.', { selector: 'p' }),
+    ).toBeInTheDocument();
+    await userEvent.click(option('origin/hotfix'));
+    await waitFor(() => expect(onpick).toHaveBeenCalledWith(REMOTE_HOTFIX));
+    expect(onclose).toHaveBeenCalled();
+  });
+
+  it('ticks the branch chosen so far, and names in its title the new branch it is for', async () => {
+    pickBase({ chosen: 'feat/login', forBranch: 'feat/signup' });
+    expect(screen.getByRole('dialog', { name: 'Branche de départ de « feat/signup »' })).toBeInTheDocument();
+    await loaded();
+    expect(option('feat/login')).toHaveAttribute('aria-current', 'true');
+    expect(option('main')).not.toHaveAttribute('aria-current');
+    await userEvent.keyboard('nothing-like-it');
+    await waitFor(() => expect(screen.getByText('Aucune branche ne correspond.')).toBeInTheDocument());
+    expect(screen.queryByRole('option', { name: /Créer la branche/ })).toBeNull();
   });
 });

@@ -579,6 +579,10 @@ pub struct Project {
     /// before it too.
     #[serde(default = "crate::model::yes")]
     pub worktree_at_first_message: bool,
+    /// « Branche de départ des nouveaux worktrees » (ESC-160): where a new agent's worktree starts.
+    /// It took the place of `BoardSettings::agents_from_target` (`settle_legacy`).
+    #[serde(default)]
+    pub worktree_base: WorktreeBase,
     /// « Dossier des worktrees »: where its new worktrees go, from its folder when relative
     /// (`../app-worktrees`, `.worktrees`) or absolute; empty is `.claude/worktrees`
     /// (`paths::worktrees_root`). Those made already stay where they are.
@@ -623,6 +627,53 @@ impl Project {
     /// The folder its new worktrees go to.
     pub fn worktrees_root(&self) -> std::path::PathBuf {
         crate::paths::worktrees_root(&self.path, &self.worktree_dir)
+    }
+
+    /// A project saved before ESC-160 with « Les agents partent de la branche cible » on starts its
+    /// new worktrees from the board's target: the choice is kept as « Branche de départ des
+    /// nouveaux worktrees », the old switch never saved again.
+    pub fn settle_legacy(&mut self) {
+        if std::mem::take(&mut self.board.agents_from_target)
+            && self.worktree_base == WorktreeBase::Head
+        {
+            self.worktree_base = WorktreeBase::Target;
+        }
+    }
+}
+
+/// « Branche de départ des nouveaux worktrees » (ESC-160): where a new agent's worktree starts,
+/// and so its base (what « Intégrer », its merge and its pull request go to).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(tag = "kind", content = "branch", rename_all = "lowercase")]
+pub enum WorktreeBase {
+    /// « Branche actuelle du dossier »: the branch the project's folder is on (HEAD).
+    #[default]
+    Head,
+    /// « Branche cible du Kanban ».
+    Target,
+    /// A branch named: a local one, or a remote one (`origin/x`).
+    Branch(String),
+}
+
+impl WorktreeBase {
+    /// As `.escouade.yml` writes it: `head`, `target`, or the branch's name (`refs/heads/<name>`
+    /// for a branch named `head` or `target`).
+    pub fn to_text(&self) -> String {
+        match self {
+            Self::Head => "head".into(),
+            Self::Target => "target".into(),
+            Self::Branch(b) if b == "head" || b == "target" => format!("refs/heads/{b}"),
+            Self::Branch(b) => b.clone(),
+        }
+    }
+
+    /// From what `to_text` writes; empty is `head`.
+    pub fn from_text(text: &str) -> Self {
+        match text.trim() {
+            "" | "head" => Self::Head,
+            "target" => Self::Target,
+            b => Self::Branch(b.strip_prefix("refs/heads/").unwrap_or(b).to_string()),
+        }
     }
 }
 
@@ -945,8 +996,9 @@ pub struct BoardSettings {
     /// Where tickets merge, the base of their PR and of their branch. Empty until the first
     /// ticket, which sets the project's current branch.
     pub target: String,
-    /// « Les agents partent de la branche cible »: a new agent's worktree starts from `target`,
-    /// its base, whatever branch the project's folder is on (`Core::agent_start`).
+    /// « Les agents partent de la branche cible », before ESC-160: read from the projects saved
+    /// then, never written (`Project::settle_legacy` makes it `Project::worktree_base`).
+    #[serde(skip_serializing)]
     pub agents_from_target: bool,
     /// "merge" (merge commit), "squash" or "rebase".
     pub strategy: String,
@@ -1207,6 +1259,10 @@ pub struct AgentMeta {
     /// Without a worktree of its own: the one it went into by itself, if any (ESC-161).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub found_worktree: Option<FoundWorktree>,
+    /// With `worktree_pending`: the branch its worktree is to start from, chosen at its making
+    /// (« Nouvel agent depuis une autre branche… », ESC-160). None: the project's.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub worktree_from: Option<String>,
     pub created_at: i64,
     pub archived: bool,
     /// Why its worktree, its ticket over, was kept (`leftovers`): work nothing else keeps. None once

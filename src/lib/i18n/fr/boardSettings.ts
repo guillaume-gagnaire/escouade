@@ -100,9 +100,6 @@ export default {
     },
     targetBranch: 'Branche cible',
     targetBranchChoose: 'Branche cible : {branch}. Choisir une autre branche',
-    agentsFromTarget: 'Les agents partent de la branche cible',
-    agentsFromTargetDesc:
-      'Chaque nouvel agent à worktree part de {branch}, mise à jour depuis le distant si elle n’est qu’en retard, et y merge, quelle que soit la branche du dossier.',
     strategy: 'Stratégie',
     strategies: { merge: 'Merge commit', squash: 'Squash', rebase: 'Rebase' },
     draftPr: 'PR en brouillon',

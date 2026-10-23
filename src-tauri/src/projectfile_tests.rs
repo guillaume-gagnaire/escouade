@@ -6,7 +6,9 @@ use std::collections::BTreeMap;
 
 use serde_json::{json, Value};
 
-use crate::model::{BoardSettings, CommitMode, EngineId, Project, RunCommand, WorktreeStep};
+use crate::model::{
+    BoardSettings, CommitMode, EngineId, Project, RunCommand, WorktreeBase, WorktreeStep,
+};
 use crate::projectfile::{self as pf, Node, Warning, N};
 
 fn project() -> Project {
@@ -22,6 +24,7 @@ agents:
 worktrees:
   per_agent: true
   at_first_message: false
+  base: origin/release
   dir: ../app-worktrees # next to the repository
   copy: [.env*, config/local.json]
   setup:
@@ -43,7 +46,6 @@ git:
 board:
   on_approve: pr
   target_branch: develop
-  agents_from_target: true
   merge_strategy: rebase
   draft_pr: true
   test_command: npm test
@@ -74,6 +76,7 @@ fn every_key_of_version_1_is_read() {
     assert_eq!(v("agents.engine"), json!("codex"));
     assert_eq!(v("worktrees.per_agent"), json!(true));
     assert_eq!(v("worktrees.at_first_message"), json!(false));
+    assert_eq!(v("worktrees.base"), json!("origin/release"));
     assert_eq!(v("worktrees.dir"), json!("../app-worktrees"));
     assert_eq!(v("worktrees.copy"), json!([".env*", "config/local.json"]));
     assert_eq!(
@@ -97,13 +100,121 @@ fn every_key_of_version_1_is_read() {
     assert_eq!(v("git.conventional_commits"), json!(false));
     assert_eq!(v("board.on_approve"), json!("pr"));
     assert_eq!(v("board.target_branch"), json!("develop"));
-    assert_eq!(v("board.agents_from_target"), json!(true));
     assert_eq!(v("board.merge_strategy"), json!("rebase"));
     assert_eq!(v("board.draft_pr"), json!(true));
     assert_eq!(v("board.test_command"), json!("npm test"));
     assert_eq!(v("board.tests_before_approve"), json!(true));
     assert_eq!(v("board.on_conflict"), json!("agent"));
     assert_eq!(v("board.remove_worktree"), json!(false));
+}
+
+/// « Branche de départ des nouveaux worktrees » (ESC-160): `head`, `target` or a branch's name, read
+/// and written; a branch named as one of the words goes through `refs/heads/`.
+#[test]
+fn the_branch_new_worktrees_start_from_is_a_key_of_the_file() {
+    let k = pf::key_of("worktrees.base").unwrap();
+    assert_eq!(k.kind, pf::Kind::Text);
+    let mut p = project();
+    assert_eq!(p.worktree_base, WorktreeBase::Head);
+    assert_eq!(pf::get(&p, "worktrees.base"), json!("head"));
+    for (text, base) in [
+        ("target", WorktreeBase::Target),
+        ("release/2.0", WorktreeBase::Branch("release/2.0".into())),
+        ("origin/main", WorktreeBase::Branch("origin/main".into())),
+        ("refs/heads/target", WorktreeBase::Branch("target".into())),
+        ("refs/heads/head", WorktreeBase::Branch("head".into())),
+        ("head", WorktreeBase::Head),
+    ] {
+        pf::set(&mut p, "worktrees.base", &json!(text));
+        assert_eq!(p.worktree_base, base, "{text}");
+        assert_eq!(pf::get(&p, "worktrees.base"), json!(text));
+    }
+    // Written right after « Créer le worktree au premier message ».
+    let paths: Vec<&str> = pf::KEYS.iter().map(|k| k.path).collect();
+    let at = paths
+        .iter()
+        .position(|p| *p == "worktrees.at_first_message")
+        .unwrap();
+    assert_eq!(paths[at + 1], "worktrees.base");
+    let text = pf::write(None, &[("worktrees.base", json!("origin/main"))]).unwrap();
+    assert!(text.contains("worktrees:\n  base: origin/main\n"), "{text}");
+    assert_eq!(read(&text).values["worktrees.base"], json!("origin/main"));
+}
+
+/// The key it took the place of, `board.agents_from_target`, is still read when the file has no
+/// `worktrees.base` (said, with its line), never written, and gone once `worktrees.base` is.
+#[test]
+fn the_former_agents_from_target_key_is_read_as_the_base() {
+    let old = "version: 1\nboard:\n  target_branch: develop\n  agents_from_target: true\n";
+    let r = read(old);
+    assert_eq!(r.values["worktrees.base"], json!("target"));
+    assert!(!r.values.contains_key("board.agents_from_target"));
+    assert_eq!(lines(&r.warnings), [Some(4)]);
+    assert!(
+        r.warnings[0].text.contains("worktrees.base: target"),
+        "{:?}",
+        r.warnings
+    );
+    let mut p = project();
+    pf::apply(&mut p, &r);
+    assert_eq!(p.worktree_base, WorktreeBase::Target);
+    // Off: from the folder's branch.
+    let r = read(&old.replace("true", "false"));
+    assert_eq!(r.values["worktrees.base"], json!("head"));
+    // The new key wins, whatever their order.
+    let both = format!("{old}worktrees:\n  base: release\n");
+    let r = read(&both);
+    assert_eq!(r.values["worktrees.base"], json!("release"));
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    // A value that is no boolean: told, nothing read.
+    let r = read(&old.replace("true", "maybe"));
+    assert!(!r.values.contains_key("worktrees.base"));
+    assert_eq!(lines(&r.warnings), [Some(4)]);
+    // Written, the new key takes the place of the old one, the rest kept.
+    let text = pf::write(Some(old), &[("worktrees.base", json!("target"))]).unwrap();
+    assert!(!text.contains("agents_from_target"), "{text}");
+    assert!(text.contains("  target_branch: develop\n"), "{text}");
+    let r = read(&text);
+    assert_eq!(r.values["worktrees.base"], json!("target"));
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    // The schema still takes it, as deprecated.
+    let s = pf::schema();
+    let key = &s["properties"]["board"]["properties"]["agents_from_target"];
+    assert_eq!(key["type"], "boolean");
+    assert_eq!(key["deprecated"], true);
+}
+
+/// A project saved before ESC-160 with « Les agents partent de la branche cible » on starts its
+/// worktrees from the target; the old switch is never saved again.
+#[test]
+fn a_project_saved_with_agents_from_target_keeps_it_as_its_base() {
+    let saved = |on: bool| {
+        let mut p: Project = serde_json::from_value(json!({
+            "id": "p", "name": "app", "path": "/repo/app", "color": "",
+            "board": { "target": "develop", "agentsFromTarget": on },
+        }))
+        .unwrap();
+        p.settle_legacy();
+        p
+    };
+    let p = saved(true);
+    assert_eq!(p.worktree_base, WorktreeBase::Target);
+    assert!(!p.board.agents_from_target);
+    let json = serde_json::to_value(&p).unwrap();
+    assert!(json["board"].get("agentsFromTarget").is_none(), "{json}");
+    assert_eq!(json["worktreeBase"], json!({ "kind": "target" }));
+    assert_eq!(saved(false).worktree_base, WorktreeBase::Head);
+    // A base chosen since is never replaced.
+    let mut p: Project = serde_json::from_value(json!({
+        "id": "p", "name": "app", "path": "/repo/app", "color": "",
+        "worktreeBase": { "kind": "branch", "branch": "release" },
+        "board": { "agentsFromTarget": true },
+    }))
+    .unwrap();
+    p.settle_legacy();
+    assert_eq!(p.worktree_base, WorktreeBase::Branch("release".into()));
+    let back: Project = serde_json::from_value(serde_json::to_value(&p).unwrap()).unwrap();
+    assert_eq!(back.worktree_base, p.worktree_base);
 }
 
 /// « Créer le worktree au premier message, au nom de l’agent » (ESC-156): shared as the other
@@ -299,7 +410,10 @@ fn applied_settings_change_the_project_commands_wait_for_trust() {
     assert!(!p.board.conventional);
     assert_eq!(p.board.action, "pr");
     assert_eq!(p.board.target, "develop");
-    assert!(p.board.agents_from_target);
+    assert_eq!(
+        p.worktree_base,
+        WorktreeBase::Branch("origin/release".into())
+    );
     assert_eq!(p.board.strategy, "rebase");
     assert!(p.board.draft);
     assert!(p.board.tests_first);

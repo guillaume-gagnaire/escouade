@@ -616,6 +616,8 @@ pub async fn create_agent(
     model: Option<String>,
     engine: Option<crate::model::EngineId>,
     isolated: Option<bool>,
+    // « Nouvel agent depuis une autre branche… » (ESC-160): its worktree starts from it.
+    base: Option<String>,
 ) -> Res<AgentView> {
     let agent = core
         .create_agent_with(
@@ -624,6 +626,7 @@ pub async fn create_agent(
                 model,
                 engine,
                 isolated,
+                base: base.filter(|b| !b.trim().is_empty()),
                 select: true,
                 ..Default::default()
             },
@@ -1089,7 +1092,10 @@ pub async fn create_agent_on_branch(
     model: Option<String>,
     engine: Option<crate::model::EngineId>,
     create: Option<bool>,
+    // With `create`: the branch the new one starts from (ESC-160); None: the project's.
+    base: Option<String>,
 ) -> Res<AgentView> {
+    let create = create.unwrap_or(false);
     let agent = core
         .create_agent_with(
             &project_id,
@@ -1098,7 +1104,8 @@ pub async fn create_agent_on_branch(
                 engine,
                 select: true,
                 branch: Some(branch),
-                new_branch: create.unwrap_or(false),
+                new_branch: create,
+                base: base.filter(|b| create && !b.trim().is_empty()),
                 ..Default::default()
             },
         )

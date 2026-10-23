@@ -57,6 +57,7 @@ Un garde-fou est une règle du harness, qu’une commande peut contourner ; une 
 |---|---|---|
 | « Un worktree par agent » | Isole les modifications de chaque nouvel agent dans sa propre branche. | Choisi à la création du projet (désactivé tant que tu ne le coches pas) |
 | « Créer le worktree au premier message, au nom de l’agent » | Le premier message nomme l’agent, puis sa branche et son dossier prennent ce nom avant la préparation (voir [au premier message](worktrees#au-premier-message)). Éteint, le worktree est créé tout de suite, en agent-N. | Activé |
+| « Branche de départ des nouveaux worktrees » | La branche dont part le worktree d’un nouvel agent, qui est aussi sa base (merge, « Intégrer », pull request) : « Branche actuelle du dossier », « Branche cible du Kanban », ou une branche choisie dans le sélecteur, locale ou distante (voir [la branche de départ](worktrees#la-branche-de-depart)). « Nouvel agent depuis une autre branche… » en choisit une autre pour un agent seul. | « Branche actuelle du dossier » |
 | « Dossier des worktrees » | Où vont les worktrees des agents du projet. | Vide : `.claude/worktrees` |
 | « Préfixe des branches des agents » | Début du nom de la branche d’un nouvel agent : le préfixe suivi du nom de l’agent. Vide, la branche prend le nom de l’agent seul. | `escouade/` |
 | « Préfixe des branches des tickets » | Début du nom de la branche d’un ticket, celle de sa pull request : le préfixe suivi de la clé du ticket. Vide, la branche prend la clé seule. | `ticket/` |

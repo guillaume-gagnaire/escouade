@@ -308,6 +308,24 @@ export default {
     worktreeAtFirstMessage: 'Créer le worktree au premier message, au nom de l’agent',
     worktreeAtFirstMessageDesc:
       'Le premier message nomme l’agent, puis sa branche et son dossier prennent ce nom avant la préparation. Éteint, le worktree est créé tout de suite, en agent-N.',
+    /** « Branche de départ des nouveaux worktrees » (ESC-160): where a new agent’s worktree starts, its base. */
+    worktreeBase: 'Branche de départ des nouveaux worktrees',
+    worktreeBaseDesc:
+      'Le worktree d’un nouvel agent part de cette branche, qui est aussi sa base : « Intégrer », son merge et sa PR vont vers elle. « + Nouvel agent » peut en choisir une autre pour un agent.',
+    worktreeBases: {
+      head: 'Branche actuelle du dossier',
+      target: 'Branche cible du Kanban',
+      /** Before a branch is chosen. */
+      branch: 'Une branche…',
+    },
+    /** The chip of the branch named, `{branch}`: it opens the picker again. */
+    worktreeBaseBranch: '⎇ {branch} ▾',
+    worktreeBaseChoose: 'Branche de départ : {branch}. Choisir une autre branche',
+    /** What each choice means, under the chips. `{branch}`: the board’s target or the branch named. */
+    worktreeBaseHeadAt: 'Ils partent de la branche sur laquelle est le dossier du projet au moment de leur création.',
+    worktreeBaseTargetAt: 'Ils partent de {branch}, mise à jour depuis le distant si elle n’est qu’en retard.',
+    worktreeBaseBranchAt:
+      'Ils partent de {branch}, mise à jour depuis le distant si elle n’est qu’en retard. Une branche distante seule passe par la branche locale créée pour la suivre ; une branche disparue fait partir de la branche du dossier, l’agent le dit.',
     worktreeDir: 'Dossier des worktrees',
     worktreeDirDesc:
       'Relatif au dossier du projet (../app-worktrees, .worktrees), à ton dossier personnel (~/worktrees/app) ou complet. Vide : .claude/worktrees, comme claude --worktree. Les worktrees déjà créés restent où ils sont ; hors du projet, la vue Claude Code demande d’abord ta confiance pour chacun.',

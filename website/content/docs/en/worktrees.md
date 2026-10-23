@@ -46,7 +46,23 @@ Meanwhile, the conversation shows the current step: “Naming the agent”, “C
 
 These are not concerned, and get their worktree at once as before: tickets’ agents, an agent you give a name when you create it, an agent created with “New agent on a branch…”, a copy of an agent, and an agent in the Claude Code view (its interface runs from its creation). Turn the setting off for a project whose setup is long, if you’d rather have it run while you write the first message.
 
-The worktree starts from the commit the project folder is on at that moment. That folder’s branch becomes the agent’s **base branch**: it is the one that the merge and “Integrate” aim at.
+### The starting branch
+
+By default, the worktree starts from the commit the project folder is on at that moment. That folder’s branch becomes the agent’s **base branch**: it is the one that the merge, “Integrate” and its pull request aim at.
+
+The “Starting branch of new worktrees” setting (Settings › Projects, “Git” group, and the assistant’s “Worktrees” step) chooses another branch for all the project’s new agents:
+
+- “Current branch of the folder”: the default, described above.
+- “Board’s target branch”: useful when your folder stays on a work branch while the agents should start from `main`.
+- “A branch…”: opens the branch picker, with its search, to choose any branch, local or remote (`origin/release`).
+
+The agent is made at once, without waiting for the network: Escouade starts from what the last fetch (every 5 minutes) brought. When the remote branch is ahead and the local branch is only behind, the local one first moves up to it. When the local one is checked out in a folder or has commits not pushed, the agent starts from it as it is, and its conversation tells you. A remote branch with no local branch tracking it goes through the local branch made to track it (`origin/release` gives `release`): the merge, “Integrate” and the pull request need a local base. A branch that no longer exists makes the agent start from the folder’s branch, and its conversation says so: “The starting branch “old” no longer exists: the agent starts from the branch of the project’s folder.”
+
+This setting replaced “Agents start from the target branch” of the Kanban settings: a project where it was on starts from the target branch.
+
+### Another branch for one agent
+
+The menu beside “New agent” offers “New agent from another branch…”: the picker opens, and the agent gets a worktree that starts from the branch chosen, even in a project without a worktree per agent. That branch becomes its base, and its pull request opens to it. The project’s setting doesn’t change. With the worktree at the first message, the branch chosen is kept until that message, even if you restart Escouade in between.
 
 When the worktrees folder is inside the repository (the default), Escouade adds it to the repository’s `.git/info/exclude` file: the worktrees don’t show up in the project’s changes. A folder that already holds files git tracks is refused: “The worktrees folder … holds files git tracks: pick another one in the project’s settings.”
 
@@ -126,7 +142,7 @@ The worktree’s folder is named after the branch, its last part: `feat/login` g
 
 ### Creating the branch from the picker
 
-Type the new branch’s name in the picker of “New agent on a branch…”. If no branch, local or remote, has that name, the last row offers “Create the branch “feat/signup” and start an agent on it”, followed by where it starts (“from main”). The branch starts where a new agent does: from the Kanban’s target branch if “Agents start from the target branch” is on (see [the Kanban settings](settings-board)), otherwise from the project folder’s branch. The line under the list says so when the cursor is on the entry.
+Type the new branch’s name in the picker of “New agent on a branch…”. If no branch, local or remote, has that name, the last row offers “Create the branch “feat/signup” and start an agent on it”, followed by where it starts (“from main”). The branch starts where a new agent does, from the project’s [starting branch](#the-starting-branch) (the folder’s when its own isn’t there); the line under the list says so when the cursor is on the entry. To start it elsewhere, choose the next row, “Create “feat/signup” from another branch…”: a second picker, “Starting branch of “feat/signup””, has you choose the branch it starts from, which will be the agent’s base. Closing that picker creates nothing.
 
 The name is checked the way git does. A name git refuses greys the entry out, with the reason, and nothing is created. A name that starts like a branch of a remote (`origin/…`) is refused too.
 

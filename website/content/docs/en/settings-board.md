@@ -29,11 +29,7 @@ Shown with “Merge into a branch” and “Open a pull request”. The ⎇ butt
 
 The merge happens in the project’s folder when the target branch is checked out there (it’s refused if tracked files have uncommitted changes), otherwise in a temporary worktree. It’s refused if the target branch is checked out in an agent’s worktree. See [worktrees](worktrees).
 
-### Agents start from the target branch
-
-Off by default. On, every new agent that gets a worktree starts from the target branch, and merges into it, even when the project’s folder is on another branch. It helps when your folder stays on a work branch while the agents should start from `main`.
-
-The agent is made at once, without waiting for the network: Escouade starts from what the last fetch (every 5 minutes) brought. When the remote branch is ahead and your local branch is only behind, the local one first moves up to it. When the local one is checked out in a folder or has commits not pushed, the agent starts from the local one as it is, and its conversation tells you.
+For the new agents to start from the target branch, set “Starting branch of new worktrees” to “Board’s target branch” in [the project settings](settings-projects): that setting replaced this tab’s “Agents start from the target branch” (see [the starting branch](worktrees#the-starting-branch)).
 
 ### Strategy
 

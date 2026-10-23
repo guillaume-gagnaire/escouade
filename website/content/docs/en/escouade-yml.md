@@ -16,6 +16,7 @@ agents:
 worktrees:
   per_agent: true
   at_first_message: true
+  base: target
   dir: ../app-worktrees
   copy:
     - '.env*'
@@ -42,7 +43,6 @@ git:
 board:
   on_approve: merge
   target_branch: main
-  agents_from_target: false
   merge_strategy: squash
   draft_pr: false
   test_command: npm test
@@ -122,6 +122,7 @@ The harness of the project’s new agents and tickets that don’t choose anothe
 |---|---|---|---|---|
 | `worktrees.per_agent` | Boolean | `true`, `false` | `false` | `per_agent: true` |
 | `worktrees.at_first_message` | Boolean | `true`, `false` | `true` | `at_first_message: false` |
+| `worktrees.base` | Text | `head`, `target` or a branch name | `head` | `base: origin/release` |
 | `worktrees.dir` | Relative path | A folder relative to the repository | empty: `.claude/worktrees` | `dir: .worktrees` |
 | `worktrees.copy` | List of texts | File patterns (`*`, `**`) | `['.env*']` | `copy: ['.env*', config/local.json]` |
 | `worktrees.setup` | List of steps | See [worktree steps](#worktree-steps) | none | `setup: npm ci` |
@@ -129,6 +130,7 @@ The harness of the project’s new agents and tickets that don’t choose anothe
 
 - `per_agent`: “One worktree per agent”, each new agent in a worktree of its own (see [worktrees](worktrees)).
 - `at_first_message`: “Create the worktree at the first message, under the agent’s name”. A new agent’s worktree waits for its first message, which names it: its branch and its folder take that name (see [at the first message](worktrees#at-the-first-message)). `false` creates it at once, as `agent-N`.
+- `base`: “Starting branch of new worktrees”, the branch a new agent’s worktree starts from, its base: `head` (the folder’s branch), `target` (the board’s target branch) or a branch’s name, local or remote (`origin/release`). A branch named `head` or `target` is written `refs/heads/target`. See [the starting branch](worktrees#the-starting-branch).
 - `dir`: “Worktrees folder”. It can’t be the project’s folder, a folder holding it, or a folder in `.git`: such a path is told and ignored.
 - `copy`: “Files copied into worktrees”, the files git doesn’t track copied into every new worktree.
 - `setup`: “When a worktree opens”, run one after the other in every new worktree, before its agent’s first message. Commands: they wait for your approval.
@@ -162,7 +164,6 @@ The project’s “Launch” commands (dev servers, watchers), each in its own t
 |---|---|---|---|---|
 | `board.on_approve` | One of a list | `merge`, `pr`, `push`, `keep` | `merge` | `on_approve: pr` |
 | `board.target_branch` | Text | A branch name | empty: the folder’s branch at the first ticket | `target_branch: develop` |
-| `board.agents_from_target` | Boolean | `true`, `false` | `false` | `agents_from_target: true` |
 | `board.merge_strategy` | One of a list | `merge`, `squash`, `rebase` | `squash` | `merge_strategy: rebase` |
 | `board.draft_pr` | Boolean | `true`, `false` | `false` | `draft_pr: true` |
 | `board.test_command` | Text | A command | empty: none | `test_command: npm test` |
@@ -172,7 +173,7 @@ The project’s “Launch” commands (dev servers, watchers), each in its own t
 
 - `on_approve`: “When I approve a ticket in “To review””: merge its branch into the target branch (`merge`), open a pull request (`pr`), push its branch (`push`), or keep it as it is (`keep`) (see [the Kanban](board)).
 - `target_branch`: “Target branch”, where tickets merge, and the base of their branch and pull request.
-- `agents_from_target`: “Agents start from the target branch”: a new agent’s worktree starts from it, whatever branch the folder is on.
+- `agents_from_target`: the former key of `worktrees.base`, still read when the file has no `worktrees.base` (`true` reads as `target`, `false` as `head`), with a warning. “Export to .escouade.yml” replaces it with `worktrees.base`.
 - `merge_strategy`: the merge’s “Strategy”: merge commit, squash or rebase.
 - `draft_pr`: “Draft PR”.
 - `test_command`: “Test command”. A command: it waits for your approval.

@@ -8,6 +8,7 @@
   import Row from '../settings/Row.svelte';
   import StepList from '../settings/StepList.svelte';
   import Switch from '../settings/Switch.svelte';
+  import WorktreeBaseField from '../settings/WorktreeBaseField.svelte';
   import Checks from './Checks.svelte';
 
   // « Worktrees »: one per agent, their folder and branches, the files copied into them, what prepares and removes
@@ -43,6 +44,15 @@
   {#if form.config.worktreePerAgent}
     <Row label={t('settings.project.worktreeAtFirstMessage')} desc={t('settings.project.worktreeAtFirstMessageDesc')}>
       <Switch label={t('settings.project.worktreeAtFirstMessage')} bind:on={form.config.worktreeAtFirstMessage} />
+    </Row>
+    <!-- Its branches searched once the project is added; before, among the folder's. -->
+    <Row label={t('settings.project.worktreeBase')} desc={t('settings.project.worktreeBaseDesc')} wide>
+      <WorktreeBaseField
+        bind:value={form.config.worktreeBase}
+        projectId={form.project?.id}
+        branches={form.setup?.branches ?? []}
+        target={form.config.board.target || form.setup?.branches[0] || 'main'}
+      />
     </Row>
   {/if}
   <Row label={t('settings.project.worktreeDir')} desc={t('settings.project.worktreeDirDesc')} wide>

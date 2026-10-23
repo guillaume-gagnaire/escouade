@@ -32,7 +32,7 @@ describe('handleShortcut', () => {
     const backend = fakeBackend({ create_agent: () => agent({ id: 'a3', createdAt: 3 }) });
     expect(handleShortcut(key('n'))).toBe(true);
     expect(backend.called('create_agent')).toEqual([
-      { cmd: 'create_agent', args: { projectId: 'p1', model: null, engine: null, isolated: null } },
+      { cmd: 'create_agent', args: { projectId: 'p1', model: null, engine: null, isolated: null, base: null } },
     ]);
   });
 

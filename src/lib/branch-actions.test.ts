@@ -388,6 +388,7 @@ describe('startAgentOn', () => {
       model: null,
       engine: null,
       create: true,
+      base: null,
     });
     resetApp({ agents: [] });
     const refused = '« bad name » n’est pas un nom de branche valide.';

@@ -224,14 +224,26 @@ export const api = {
   closedProjects: () => invoke<ClosedProject[]>('closed_projects'),
   /** The history of a closed project, erased for good (an entry the app cannot read: its one file). */
   eraseClosedProject: (id: string) => invoke<void>('erase_closed_project', { id }),
-  /** `isolated`: in a worktree of its own or not, whatever « Un worktree par agent » says; null: as it says. */
-  createAgent: (projectId: string, model: string | null = null, engine: EngineId | null = null, isolated: boolean | null = null) =>
-    invoke<Agent>('create_agent', { projectId, model, engine, isolated }),
+  /**
+   * `isolated`: in a worktree of its own or not, whatever « Un worktree par agent » says; null: as it says. `base`: the
+   * branch its worktree starts from (« Nouvel agent depuis une autre branche… », ESC-160), which asks for one; null: the
+   * project's.
+   */
+  createAgent: (
+    projectId: string,
+    model: string | null = null,
+    engine: EngineId | null = null,
+    isolated: boolean | null = null,
+    base: string | null = null,
+  ) => invoke<Agent>('create_agent', { projectId, model, engine, isolated, base }),
   createAgentOnBranch: (projectId: string, branch: string, model: string | null = null, engine: EngineId | null = null) =>
     invoke<Agent>('create_agent_on_branch', { projectId, branch, model, engine }),
-  /** An agent on the new branch `branch`, made first from where a new agent starts; refused for a name git refuses (ESC-155). */
-  createAgentOnNewBranch: (projectId: string, branch: string) =>
-    invoke<Agent>('create_agent_on_branch', { projectId, branch, model: null, engine: null, create: true }),
+  /**
+   * An agent on the new branch `branch`, made first from `base` (ESC-160), else from where a new agent starts; refused
+   * for a name git refuses (ESC-155).
+   */
+  createAgentOnNewBranch: (projectId: string, branch: string, base: string | null = null) =>
+    invoke<Agent>('create_agent_on_branch', { projectId, branch, model: null, engine: null, create: true, base }),
   warmAgent: (id: string) => invoke<void>('warm_agent', { id }),
   /** « Relancer »: the agent's process, at rest, started again on the same session (« Outils d'Escouade au prochain démarrage »). */
   restartAgentProcess: (id: string) => invoke<void>('restart_agent_process', { id }),

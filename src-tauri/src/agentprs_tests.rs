@@ -773,3 +773,45 @@ fn the_folder_of_a_session_is_its_latest_entrys() {
     );
     assert_eq!(last_cwd(&config, "../s-1"), None, "a session id only");
 }
+
+/// ESC-160: an agent's pull request goes to the branch its worktree started from, the project's
+/// « Branche de départ des nouveaux worktrees » or the one chosen for it.
+#[tokio::test]
+async fn an_agents_pull_request_goes_to_the_branch_its_worktree_started_from() {
+    use crate::core::AgentOptions;
+    use crate::model::WorktreeBase;
+    let h = harness("esc160-agent-pr-base");
+    let server = FakeServer::start().await;
+    let (first, _, _) = github_agent(&h, &server).await;
+    let pid = h.agent(&first).project_id.clone();
+    let r = PathBuf::from(h.core.project(&pid).unwrap().path);
+    git(&r, &["branch", "release"]);
+    git(&r, &["branch", "hotfix"]);
+    let mut p = h.core.project(&pid).unwrap();
+    p.worktree_base = WorktreeBase::Branch("release".into());
+    h.core.update_project(p).unwrap();
+    for (over, base) in [(None, "release"), (Some("hotfix"), "hotfix")] {
+        let a = h
+            .core
+            .create_agent_with(
+                &pid,
+                AgentOptions {
+                    base: over.map(String::from),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        let wt = a.meta.worktree.clone().unwrap();
+        assert_eq!(wt.base_branch, base);
+        let dir = PathBuf::from(&wt.path);
+        std::fs::write(dir.join("fix.ts"), "export const fix = 1;\n").unwrap();
+        git(&dir, &["add", "-A"]);
+        git(&dir, &["commit", "-qm", "fix: un correctif"]);
+        let proposal = h.core.agent_pr_propose(&a.meta.id).await.unwrap();
+        assert_eq!(
+            (proposal.head.as_str(), proposal.base.as_str()),
+            (wt.branch.as_str(), base)
+        );
+    }
+}

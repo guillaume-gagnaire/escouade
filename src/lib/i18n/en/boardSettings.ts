@@ -86,9 +86,6 @@ export default defineZone('boardSettings', {
     },
     targetBranch: 'Target branch',
     targetBranchChoose: 'Target branch: {branch}. Choose another branch',
-    agentsFromTarget: 'Agents start from the target branch',
-    agentsFromTargetDesc:
-      'Every new agent with a worktree starts from {branch}, brought up to date from the remote when it is only behind, and merges into it, whatever branch the folder is on.',
     strategy: 'Strategy',
     strategies: { merge: 'Merge commit', squash: 'Squash', rebase: 'Rebase' },
     draftPr: 'Draft PR',

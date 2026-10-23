@@ -401,6 +401,8 @@ impl ClosedProject {
         accounts: &[String],
     ) -> Project {
         let mut project = self.project.clone();
+        // Closed before ESC-160: its « Les agents partent de la branche cible » kept.
+        project.settle_legacy();
         let name = name.trim();
         if !name.is_empty() {
             project.name = name.to_string();

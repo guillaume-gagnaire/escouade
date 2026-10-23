@@ -29,11 +29,7 @@ Affichée avec « Merger dans une branche » et « Ouvrir une pull request �
 
 Le merge se fait dans le dossier du projet quand la branche cible y est ouverte (il est alors refusé s’il y a des modifications non commitées sur des fichiers suivis), sinon dans un worktree temporaire. Il est refusé si la branche cible est ouverte dans le worktree d’un agent. Voir [les worktrees](worktrees).
 
-### Les agents partent de la branche cible
-
-Désactivé par défaut. Activé, chaque nouvel agent qui reçoit un worktree part de la branche cible, et y merge, même si le dossier du projet est sur une autre branche. C’est utile quand ton dossier reste sur une branche de travail alors que les agents doivent partir de `main`.
-
-L’agent est créé tout de suite, sans attendre le réseau : Escouade part de ce que le dernier fetch (toutes les 5 minutes) a récupéré. Si la branche distante est en avance et que ta branche locale n’est qu’en retard, la locale avance d’abord jusqu’à elle. Si la locale est ouverte dans un dossier ou a des commits non poussés, l’agent part de la locale telle qu’elle est, et sa conversation te le dit.
+Pour que les nouveaux agents partent de la branche cible, règle « Branche de départ des nouveaux worktrees » sur « Branche cible du Kanban » dans [les réglages du projet](settings-projects) : ce réglage a remplacé « Les agents partent de la branche cible » de cet onglet (voir [la branche de départ](worktrees#la-branche-de-depart)).
 
 ### Stratégie
 

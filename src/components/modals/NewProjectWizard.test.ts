@@ -172,7 +172,7 @@ describe('the new project’s assistant', () => {
         prefix: 'ATL',
       },
     });
-    expect(be.called('create_agent')[0].args).toEqual({ projectId: 'new', model: 'sonnet', engine: null, isolated: null });
+    expect(be.called('create_agent')[0].args).toEqual({ projectId: 'new', model: 'sonnet', engine: null, isolated: null, base: null });
     expect(app.projects.find((p) => p.id === 'new')?.worktreeDir).toBe('../wt');
     expect(app.ui.activeProject).toBe('new');
   });

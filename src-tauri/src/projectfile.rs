@@ -24,7 +24,7 @@ use yaml_edit::{
     CoreScalarType, Document, Mapping, ScalarStyle, ScalarType, ScalarValue, Sequence, YamlNode,
 };
 
-use crate::model::{CommitMode, EngineId, Project, RunCommand, WorktreeStep};
+use crate::model::{CommitMode, EngineId, Project, RunCommand, WorktreeBase, WorktreeStep};
 
 pub const FILE: &str = ".escouade.yml";
 /// The version this app writes, and reads without migrating.
@@ -101,6 +101,11 @@ pub const KEYS: &[Key] = &[
         "A new agent's worktree is made at its first message, its branch and its folder under the name it is given then (true when absent).",
     ),
     key(
+        "worktrees.base",
+        Kind::Text,
+        "The branch a new agent's worktree starts from, its base: head (the branch the project's folder is on, when absent), target (the board's target branch) or a branch's name (local, or remote such as origin/main: through the local branch that tracks it). A branch named head or target is written refs/heads/<name>.",
+    ),
+    key(
         "worktrees.dir",
         Kind::Dir,
         "Where the worktrees go, relative to the repository (empty: .claude/worktrees).",
@@ -154,11 +159,6 @@ pub const KEYS: &[Key] = &[
         "board.target_branch",
         Kind::Text,
         "Where tickets merge: the base of their branch and of their pull request.",
-    ),
-    key(
-        "board.agents_from_target",
-        Kind::Bool,
-        "A new agent's worktree starts from the target branch.",
     ),
     key(
         "board.merge_strategy",
@@ -393,6 +393,7 @@ pub fn read(text: &str) -> Result<Read, Warning> {
 fn read_v1(t: &Node, values: &mut BTreeMap<String, Value>, warnings: &mut Vec<Warning>) {
     let N::Map(entries) = &t.v else { return };
     let top: Vec<&str> = groups();
+    let mut legacy = None;
     for (name, line, node) in entries {
         if name == "version" {
             continue;
@@ -425,11 +426,34 @@ fn read_v1(t: &Node, values: &mut BTreeMap<String, Value>, warnings: &mut Vec<Wa
             let path = format!("{name}.{sub}");
             match key_of(&path) {
                 Some(k) => take(k, node, values, warnings),
+                None if path == FROM_TARGET => legacy = Some(node),
                 None => warnings.push(unknown(&path, *line, &names)),
             }
         }
     }
+    // The key `worktrees.base` took the place of, read when the file has no `worktrees.base`.
+    if let Some(node) = legacy.filter(|_| !values.contains_key(BASE)) {
+        let k = key(FROM_TARGET, Kind::Bool, "");
+        let mut read = BTreeMap::new();
+        take(&k, node, &mut read, warnings);
+        if let Some(on) = read.get(FROM_TARGET).and_then(Value::as_bool) {
+            let base = if on { "target" } else { "head" };
+            values.insert(BASE.to_string(), json!(base));
+            warnings.push(warn(
+                Some(node.line),
+                tr!(
+                    "{FROM_TARGET} est l’ancienne clé de {BASE} : lue comme « {BASE}: {base} »",
+                    "{FROM_TARGET} is the former key of {BASE}: read as “{BASE}: {base}”"
+                ),
+            ));
+        }
+    }
 }
+
+/// « Branche de départ des nouveaux worktrees » (ESC-160).
+const BASE: &str = "worktrees.base";
+/// The key it took the place of: `true` is `target`, `false` is `head`. Still read, never written.
+const FROM_TARGET: &str = "board.agents_from_target";
 
 fn take(k: &Key, node: &Node, values: &mut BTreeMap<String, Value>, warnings: &mut Vec<Warning>) {
     match value_of(k, node, warnings) {
@@ -696,6 +720,7 @@ pub fn get(p: &Project, key: &str) -> Value {
         "agents.engine" => json!(p.engine().as_str()),
         "worktrees.per_agent" => json!(p.worktree_per_agent),
         "worktrees.at_first_message" => json!(p.worktree_at_first_message),
+        "worktrees.base" => json!(p.worktree_base.to_text()),
         "worktrees.dir" => json!(p.worktree_dir),
         "worktrees.copy" => json!(p.worktree_copy),
         "worktrees.setup" => steps_value(&p.worktree_setup),
@@ -710,7 +735,6 @@ pub fn get(p: &Project, key: &str) -> Value {
         "git.conventional_commits" => json!(b.conventional),
         "board.on_approve" => json!(b.action),
         "board.target_branch" => json!(b.target),
-        "board.agents_from_target" => json!(b.agents_from_target),
         "board.merge_strategy" => json!(b.strategy),
         "board.draft_pr" => json!(b.draft),
         "board.test_command" => json!(b.test_command),
@@ -779,6 +803,7 @@ pub fn set(p: &mut Project, key: &str, v: &Value) {
         }
         "worktrees.per_agent" => p.worktree_per_agent = flag,
         "worktrees.at_first_message" => p.worktree_at_first_message = flag,
+        "worktrees.base" => p.worktree_base = WorktreeBase::from_text(&str_of(v)),
         "worktrees.dir" => p.worktree_dir = str_of(v),
         "worktrees.copy" => {
             p.worktree_copy = serde_json::from_value(v.clone()).unwrap_or_default();
@@ -798,7 +823,6 @@ pub fn set(p: &mut Project, key: &str, v: &Value) {
         "git.conventional_commits" => b.conventional = flag,
         "board.on_approve" => b.action = str_of(v),
         "board.target_branch" => b.target = str_of(v),
-        "board.agents_from_target" => b.agents_from_target = flag,
         "board.merge_strategy" => b.strategy = str_of(v),
         "board.draft_pr" => b.draft = flag,
         "board.test_command" => b.test_command = str_of(v),
@@ -1107,6 +1131,13 @@ pub fn write(existing: Option<&str>, values: &[(&str, Value)]) -> Result<String>
                 }
             }
         }
+        // Written, the key it took the place of goes (read only while it was the file's).
+        if *path == BASE {
+            let (group, name) = FROM_TARGET.split_once('.').unwrap_or_default();
+            if let Some(g) = root.get_mapping(group) {
+                g.remove(name);
+            }
+        }
     }
     let mut out = doc.to_string();
     if !out.ends_with('\n') {
@@ -1189,6 +1220,13 @@ pub fn schema() -> Value {
                     if let Some(name) = k.path.strip_prefix(&format!("{g}.")) {
                         inner.insert(name.into(), schema_of(k));
                     }
+                }
+                // The former key, still read: the files that have it stay valid.
+                if let Some(name) = FROM_TARGET.strip_prefix(&format!("{g}.")) {
+                    inner.insert(
+                        name.into(),
+                        json!({ "type": "boolean", "deprecated": true, "description": format!("Replaced by {BASE}: true reads as target, false as head.") }),
+                    );
                 }
                 props.insert(
                     g.into(),

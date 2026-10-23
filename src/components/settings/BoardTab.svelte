@@ -69,15 +69,6 @@
         >
       </div>
       <SharedMark keys="board.target_branch" />
-      <div class="line wide">
-        <span class="txt"
-          ><span class="l">{t('boardSettings.tab.agentsFromTarget')}</span><span class="d"
-            >{t('boardSettings.tab.agentsFromTargetDesc', { branch: target })}</span
-          ></span
-        >
-        <Switch label={t('boardSettings.tab.agentsFromTarget')} bind:on={b.agentsFromTarget} />
-      </div>
-      <SharedMark keys="board.agents_from_target" />
       {#if b.action === 'merge'}
         <div class="line">
           <span class="k">{t('boardSettings.tab.strategy')}</span>
@@ -254,10 +245,6 @@
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
-  }
-  .line.wide {
-    flex-wrap: nowrap;
-    gap: 16px;
   }
   .k {
     width: 110px;

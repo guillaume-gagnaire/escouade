@@ -3,7 +3,7 @@
 
 import { serves } from './accounts';
 import { t } from './i18n';
-import type { Account, BoardSettings, CommitMode, EngineId, Project, RunCommand, SetupInfo, WorktreeStep } from './types';
+import type { Account, BoardSettings, CommitMode, EngineId, Project, RunCommand, SetupInfo, WorktreeBase, WorktreeStep } from './types';
 import { DEFAULT_AGENT_PREFIX, DEFAULT_TICKET_PREFIX } from './worktrees';
 
 export type { SetupInfo };
@@ -28,6 +28,8 @@ export interface WizardConfig {
   worktreePerAgent: boolean;
   /** « Créer le worktree au premier message, au nom de l’agent » (ESC-156). */
   worktreeAtFirstMessage: boolean;
+  /** « Branche de départ des nouveaux worktrees » (ESC-160). */
+  worktreeBase: WorktreeBase;
   worktreeDir: string;
   agentBranchPrefix: string;
   ticketBranchPrefix: string;
@@ -49,7 +51,6 @@ export interface WizardConfig {
 const DEFAULT_BOARD: WizardConfig['board'] = {
   action: 'merge',
   target: '',
-  agentsFromTarget: false,
   strategy: 'squash',
   draft: false,
   testsFirst: false,
@@ -69,6 +70,7 @@ export function blankConfig(): WizardConfig {
   return {
     worktreePerAgent: false,
     worktreeAtFirstMessage: true,
+    worktreeBase: { kind: 'head' },
     worktreeDir: '',
     agentBranchPrefix: DEFAULT_AGENT_PREFIX,
     ticketBranchPrefix: DEFAULT_TICKET_PREFIX,
@@ -106,6 +108,8 @@ export function configOf(p: Project): WizardConfig {
     worktreePerAgent: p.worktreePerAgent,
     // Absent from a project of the window's tests made before ESC-156: on, as the backend reads it.
     worktreeAtFirstMessage: p.worktreeAtFirstMessage ?? true,
+    // Absent from a project of the window's tests made before ESC-160: the folder's branch.
+    worktreeBase: p.worktreeBase ?? { kind: 'head' },
     worktreeDir: p.worktreeDir,
     agentBranchPrefix: p.agentBranchPrefix,
     ticketBranchPrefix: p.ticketBranchPrefix,
@@ -130,6 +134,7 @@ export function withConfig(p: Project, c: WizardConfig): Project {
     ...p,
     worktreePerAgent: c.worktreePerAgent,
     worktreeAtFirstMessage: c.worktreeAtFirstMessage,
+    worktreeBase: c.worktreeBase.kind === 'branch' && !c.worktreeBase.branch.trim() ? { kind: 'head' } : c.worktreeBase,
     worktreeDir: c.worktreeDir.trim(),
     agentBranchPrefix: c.agentBranchPrefix.trim(),
     ticketBranchPrefix: c.ticketBranchPrefix.trim(),
@@ -349,10 +354,12 @@ const fresh = <T extends { id: string }>(x: T): T => ({ ...structuredClone(x), i
 export function applyCopy(base: WizardConfig, src: Project, checked: Set<string>, info: SetupInfo | null): WizardConfig {
   const c = structuredClone(base);
   const on = (id: string) => checked.has(id);
-  // When its worktree is made goes with it (ESC-156).
+  // When its worktree is made goes with it (ESC-156), and where it starts (ESC-160): a branch the new folder does not
+  // have makes its agents start from the folder's, as they say.
   if (on('worktreePerAgent')) {
     c.worktreePerAgent = src.worktreePerAgent;
     c.worktreeAtFirstMessage = src.worktreeAtFirstMessage ?? true;
+    c.worktreeBase = structuredClone(src.worktreeBase ?? { kind: 'head' });
   }
   if (on('worktreeDir')) c.worktreeDir = src.worktreeDir;
   if (on('prefixes')) {

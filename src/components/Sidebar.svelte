@@ -23,7 +23,7 @@
   import { closeTerminal, newTerminal, SHELL_GLYPH, terminalIn } from '../lib/term-actions';
   import { canPrepare, prepareLaunch, stopTests } from '../lib/test-launch.svelte';
   import { backTarget, forwardTargets } from '../lib/handover';
-  import type { Agent, AgentStatus, EngineId, Project } from '../lib/types';
+  import type { Agent, AgentStatus, BranchInfo, EngineId, Project } from '../lib/types';
   import RunsSection from './RunsSection.svelte';
   import EngineMark from './EngineMark.svelte';
   import StatusDot from './StatusDot.svelte';
@@ -46,6 +46,21 @@
   let moreBtn = $state<HTMLButtonElement>();
   /** The branch picker is open, to choose the branch of a new agent. */
   let pickingBranch = $state(false);
+  /**
+   * The branch picker is open to choose where a new agent's worktree starts (ESC-160): `branch`, the new branch typed in
+   * « Nouvel agent sur une branche… » that starts there; null, an agent of a worktree of its own.
+   */
+  let pickingBase = $state<{ branch: string | null } | null>(null);
+  /** The new branch the picker of the starting branch was opened for: read once it is closed, as it gives its pick then. */
+  let baseFor: string | null = null;
+  function pickBase(branch: string | null) {
+    baseFor = branch;
+    pickingBase = { branch };
+  }
+  function startFrom(b: BranchInfo) {
+    if (baseFor) void startAgentOn(project.id, baseFor, true, b.name);
+    else void app.newAgent(project.id, null, true, b.name);
+  }
   let renaming = $state<string | null>(null);
   /** The finished subagents of an agent, unfolded by the reader (folded by default: there can be many). */
   let finishedOpen = $state<Record<string, boolean>>({});
@@ -315,6 +330,14 @@
       {
         label: project.worktreePerAgent ? t('nav.sidebar.newAgentNoWorktree') : t('nav.sidebar.newAgentInWorktree'),
         onClick: () => app.newAgent(project.id, null, !project.worktreePerAgent),
+      },
+      // In a worktree that starts from a branch chosen next, whatever the project's starting branch (ESC-160).
+      {
+        label: t('nav.sidebar.newAgentFrom'),
+        onClick: async () => {
+          await tick();
+          pickBase(null);
+        },
       },
     ]);
   }
@@ -855,6 +878,18 @@
     onclose={() => (pickingBranch = false)}
     onpick={(b) => startAgentOn(project.id, b.name)}
     oncreate={(name) => startAgentOn(project.id, name, true)}
+    oncreatefrom={(name) => pickBase(name)}
+  />
+{/if}
+
+{#if pickingBase}
+  <BranchPicker
+    projectId={project.id}
+    anchor={moreBtn}
+    mode="base"
+    forBranch={pickingBase.branch ?? undefined}
+    onclose={() => (pickingBase = null)}
+    onpick={startFrom}
   />
 {/if}
 

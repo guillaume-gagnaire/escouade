@@ -134,8 +134,14 @@ export default defineZone('branches', {
     createGroup: 'New branch',
     create: 'Create the branch “{branch}” and start an agent on it',
     createFrom: 'from {base}',
-    createFromTarget: 'It starts from {base}, the board’s target branch (“Agents start from the target branch”).',
+    createFromTarget: 'It starts from {base}, the board’s target branch.',
     createFromFolder: 'It starts from {base}, the branch of the project’s folder.',
+    createFromBranch: 'It starts from {base}, the project’s starting branch.',
+    createFromOther: 'Create “{branch}” from another branch…',
+    createFromOtherDesc: 'Then choose the branch it starts from: it will be the agent’s base.',
+    baseTitle: 'Starting branch',
+    baseTitleFor: 'Starting branch of “{branch}”',
+    baseHint: 'The agent’s worktree starts from this branch, and its PR will open to it.',
   },
   /** “Integrate <base>”: the base branch goes into the agent’s branch. */
   integrate: {

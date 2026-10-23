@@ -386,3 +386,56 @@ async fn a_pending_worktree_waits_again_after_a_restart_of_the_app() {
     assert_eq!(state["projects"][0]["worktreeAtFirstMessage"], true);
     h.core.stop_for_good();
 }
+
+/// ESC-160: the branch chosen at an agent's making is kept until its first message, its worktree
+/// made from it then; the others start from the project's.
+#[tokio::test]
+async fn the_branch_chosen_at_its_making_is_where_its_worktree_starts_at_its_first_message() {
+    let h = harness("esc160-first");
+    let (p, r) = lazy_project(&h).await;
+    for (branch, file) in [("release", "release.txt"), ("hotfix", "hotfix.txt")] {
+        git(&r, &["switch", "-qc", branch, "main"]);
+        std::fs::write(r.join(file), "x\n").unwrap();
+        git(&r, &["add", "-A"]);
+        git(&r, &["commit", "-qm", file]);
+        git(&r, &["switch", "-q", "main"]);
+    }
+    let mut q = h.core.project(&p.id).unwrap();
+    q.worktree_base = WorktreeBase::Branch("release".into());
+    h.core.update_project(q).unwrap();
+    let a = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                base: Some("hotfix".into()),
+                select: true,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let id = a.meta.id.clone();
+    assert!(a.meta.worktree_pending);
+    assert_eq!(a.meta.worktree_from.as_deref(), Some("hotfix"));
+    // Saved with the agent: kept through a restart of the app.
+    let saved = serde_json::to_value(&a.meta).unwrap();
+    assert_eq!(saved["worktreeFrom"], "hotfix");
+    h.turn(&id, "Corrige le bug").await;
+    let m = h.agent(&id);
+    assert!(!m.worktree_pending);
+    assert_eq!(m.worktree_from, None);
+    let wt = m.worktree.clone().unwrap();
+    assert_eq!(wt.base_branch, "hotfix");
+    assert_eq!(
+        git(Path::new(&wt.path), &["rev-parse", "HEAD"]),
+        git(&r, &["rev-parse", "hotfix"])
+    );
+    // Another, with nothing chosen: from the project's.
+    let b = h.core.create_agent(&p.id, None).await.unwrap();
+    assert_eq!(b.meta.worktree_from, None);
+    h.turn(&b.meta.id, "Ajoute un test").await;
+    let wt = h.agent(&b.meta.id).worktree.unwrap();
+    assert_eq!(wt.base_branch, "release");
+    assert!(Path::new(&wt.path).join("release.txt").exists());
+}

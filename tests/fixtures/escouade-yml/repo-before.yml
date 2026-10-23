@@ -5,6 +5,7 @@ agents:
   engine: claude
 worktrees:
   per_agent: false
+  base: head
   dir: ''
   copy:
     - '.env*'
@@ -41,7 +42,6 @@ git:
 board:
   on_approve: merge
   target_branch: main
-  agents_from_target: false
   merge_strategy: squash
   draft_pr: false
   test_command: ''

@@ -57,6 +57,7 @@ A guard is a rule of the harness, which a command can get around; a barrier hold
 |---|---|---|
 | “One worktree per agent” | Keeps each new agent’s changes in its own branch. | Chosen when the project is created (off until you tick it) |
 | “Create the worktree at the first message, under the agent’s name” | The first message names the agent, then its branch and its folder take that name before the setup (see [at the first message](worktrees#at-the-first-message)). Off, the worktree is created at once, as agent-N. | On |
+| “Starting branch of new worktrees” | The branch a new agent’s worktree starts from, which is also its base (merge, “Integrate”, pull request): “Current branch of the folder”, “Board’s target branch”, or a branch chosen in the picker, local or remote (see [the starting branch](worktrees#the-starting-branch)). “New agent from another branch…” chooses another one for a single agent. | “Current branch of the folder” |
 | “Worktrees folder” | Where the project’s agent worktrees go. | Blank: `.claude/worktrees` |
 | “Agents’ branch prefix” | The start of a new agent’s branch name: the prefix followed by the agent’s name. Blank, the branch takes the agent’s name alone. | `escouade/` |
 | “Tickets’ branch prefix” | The start of a ticket’s branch name, the one its pull request comes from: the prefix followed by the ticket’s key. Blank, the branch takes the key alone. | `ticket/` |

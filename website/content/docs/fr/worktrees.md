@@ -46,7 +46,23 @@ Pendant ce temps, la conversation montre l’étape en cours : « Nom de l’a
 
 Ne sont pas concernés, et reçoivent leur worktree tout de suite comme avant : les agents des tickets, un agent auquel tu donnes un nom à sa création, un agent créé avec « Nouvel agent sur une branche… », une copie d’agent, et un agent en vue Claude Code (son interface tourne dès sa création). Éteins le réglage pour un projet dont la préparation est longue, si tu préfères qu’elle tourne pendant que tu écris le premier message.
 
-Le worktree part du commit où se trouve le dossier du projet à ce moment-là. La branche de ce dossier devient la **branche de base** de l’agent : c’est elle que le merge et « Intégrer » visent.
+### La branche de départ
+
+Par défaut, le worktree part du commit où se trouve le dossier du projet à ce moment-là. La branche de ce dossier devient la **branche de base** de l’agent : c’est elle que le merge, « Intégrer » et sa pull request visent.
+
+Le réglage « Branche de départ des nouveaux worktrees » (Réglages › Projets, groupe « Git », et l’étape « Worktrees » de l’assistant) choisit une autre branche pour tous les nouveaux agents du projet :
+
+- « Branche actuelle du dossier » : le défaut, décrit plus haut.
+- « Branche cible du Kanban » : utile quand ton dossier reste sur une branche de travail alors que les agents doivent partir de `main`.
+- « Une branche… » : ouvre le sélecteur de branches, avec sa recherche, pour choisir n’importe quelle branche, locale ou distante (`origin/release`).
+
+L’agent est créé tout de suite, sans attendre le réseau : Escouade part de ce que le dernier fetch (toutes les 5 minutes) a récupéré. Si la branche distante est en avance et que la branche locale n’est qu’en retard, la locale avance d’abord jusqu’à elle. Si la locale est ouverte dans un dossier ou a des commits non poussés, l’agent part d’elle telle qu’elle est, et sa conversation te le dit. Une branche distante sans branche locale qui la suive passe par la branche locale créée pour la suivre (`origin/release` donne `release`) : le merge, « Intégrer » et la pull request ont besoin d’une base locale. Une branche qui n’existe plus fait partir l’agent de la branche du dossier, et sa conversation le dit : « La branche de départ « old » n’existe plus : l’agent part de la branche du dossier du projet. »
+
+Ce réglage a remplacé « Les agents partent de la branche cible » des réglages du Kanban : un projet où il était coché part de la branche cible.
+
+### Une autre branche pour un agent
+
+Le menu à côté de « Nouvel agent » propose « Nouvel agent depuis une autre branche… » : le sélecteur s’ouvre, et l’agent reçoit un worktree qui part de la branche choisie, même dans un projet sans worktree par agent. Cette branche devient sa base, et sa pull request s’ouvre vers elle. Le réglage du projet ne change pas. Avec le worktree au premier message, la branche choisie est gardée jusqu’à ce message, même si tu redémarres Escouade entre-temps.
 
 Quand le dossier des worktrees est dans le dépôt (le cas par défaut), Escouade l’ajoute au fichier `.git/info/exclude` du dépôt : les worktrees n’apparaissent pas dans les changements du projet. Un dossier qui contient déjà des fichiers suivis par git est refusé : « Le dossier des worktrees … contient des fichiers suivis par git : choisis-en un autre dans les réglages du projet. »
 
@@ -126,7 +142,7 @@ Le dossier du worktree porte le nom de la branche, sa dernière partie : `feat/l
 
 ### Créer la branche depuis le sélecteur
 
-Tape le nom de la nouvelle branche dans le sélecteur de « Nouvel agent sur une branche… ». Si aucune branche, locale ou distante, ne porte ce nom, la dernière ligne propose « Créer la branche « feat/signup » et y lancer un agent », suivie de son point de départ (« depuis main »). La branche part du même endroit qu’un nouvel agent : la branche cible du Kanban si « Les agents partent de la branche cible » est coché (voir [les réglages du Kanban](settings-board)), sinon la branche du dossier du projet. La ligne sous la liste le dit quand le curseur est sur l’entrée.
+Tape le nom de la nouvelle branche dans le sélecteur de « Nouvel agent sur une branche… ». Si aucune branche, locale ou distante, ne porte ce nom, la dernière ligne propose « Créer la branche « feat/signup » et y lancer un agent », suivie de son point de départ (« depuis main »). La branche part du même endroit qu’un nouvel agent, la [branche de départ](#la-branche-de-depart) du projet (celle du dossier si la sienne n’est pas là) ; la ligne sous la liste le dit quand le curseur est sur l’entrée. Pour la faire partir d’ailleurs, choisis la ligne suivante, « Créer « feat/signup » depuis une autre branche… » : un second sélecteur, « Branche de départ de « feat/signup » », te fait choisir la branche dont elle part, qui sera la base de l’agent. Fermer ce sélecteur ne crée rien.
 
 Le nom est vérifié comme git le fait. Un nom refusé grise l’entrée, avec la raison, et rien n’est créé. Un nom qui commence comme une branche d’un dépôt distant (`origin/…`) est refusé aussi.
 

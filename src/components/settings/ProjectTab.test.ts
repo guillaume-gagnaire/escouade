@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
-import { BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, project, resetApp } from '../../test/ipc';
+import { BARE_ENGINE, CLAUDE_ENGINE, branchInfo, fakeBackend, gitInfo, project, resetApp } from '../../test/ipc';
 import SettingsModal from '../modals/SettingsModal.svelte';
 
 vi.mock('../../lib/terminals', () => ({ launchLog: () => ({}), disposeLog() {} }));
@@ -42,6 +42,55 @@ describe('ProjectTab', () => {
     await userEvent.click(toggle);
     await save();
     expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p1', worktreeAtFirstMessage: false });
+  });
+
+  it('starts the new worktrees from the folder’s branch, the board’s target or a branch chosen (ESC-160)', async () => {
+    const backend = fakeBackend({
+      branch_list: () => [
+        branchInfo({ name: 'main', current: true }),
+        branchInfo({ name: 'release' }),
+        branchInfo({ name: 'origin/hotfix', remote: true }),
+      ],
+    });
+    app.git = { p1: gitInfo({ branch: 'main' }) };
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    const group = screen.getByRole('group', { name: 'Branche de départ des nouveaux worktrees' });
+    const chip = (name: RegExp | string) => within(group).getByRole('button', { name });
+    // The folder's branch for a project that does not say (saved before it).
+    expect(chip('Branche actuelle du dossier')).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      screen.getByText('Ils partent de la branche sur laquelle est le dossier du projet au moment de leur création.'),
+    ).toBeInTheDocument();
+    await userEvent.click(chip('Branche cible du Kanban'));
+    expect(chip('Branche cible du Kanban')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText(/^Ils partent de main, mise à jour depuis le distant/)).toBeInTheDocument();
+    // A branch, chosen in the picker: any, a remote one too.
+    await userEvent.click(chip('Une branche…'));
+    const picker = await screen.findByRole('dialog', { name: 'Branche de départ' });
+    await within(picker).findByText('origin/hotfix');
+    await userEvent.click(within(picker).getByText('origin/hotfix'));
+    expect(screen.queryByRole('dialog', { name: 'Branche de départ' })).toBeNull();
+    const named = chip('Branche de départ : origin/hotfix. Choisir une autre branche');
+    expect(named).toHaveAttribute('aria-pressed', 'true');
+    expect(named).toHaveTextContent('⎇ origin/hotfix ▾');
+    expect(screen.getByText(/^Ils partent de origin\/hotfix,/)).toBeInTheDocument();
+    await save();
+    expect(backend.called('update_project')[0].args.project).toMatchObject({
+      id: 'p1',
+      worktreeBase: { kind: 'branch', branch: 'origin/hotfix' },
+    });
+  });
+
+  it('shows the branch the project starts from, and saves the folder’s again when chosen', async () => {
+    resetApp({ projects: [project({ worktreeBase: { kind: 'branch', branch: 'release' } })] });
+    app.modal = { kind: 'settings' };
+    const backend = fakeBackend();
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    const group = screen.getByRole('group', { name: 'Branche de départ des nouveaux worktrees' });
+    expect(within(group).getByRole('button', { name: /release/ })).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(within(group).getByRole('button', { name: 'Branche actuelle du dossier' }));
+    await save();
+    expect(backend.called('update_project')[0].args.project).toMatchObject({ worktreeBase: { kind: 'head' } });
   });
 
   it('opens the setup assistant again on the project (ESC-94)', async () => {

@@ -19,7 +19,8 @@
       "additionalProperties": false,
       "properties": {
         "agents_from_target": {
-          "description": "A new agent's worktree starts from the target branch.",
+          "deprecated": true,
+          "description": "Replaced by worktrees.base: true reads as target, false as head.",
           "type": "boolean"
         },
         "draft_pr": {
@@ -146,6 +147,10 @@
         "at_first_message": {
           "description": "A new agent's worktree is made at its first message, its branch and its folder under the name it is given then (true when absent).",
           "type": "boolean"
+        },
+        "base": {
+          "description": "The branch a new agent's worktree starts from, its base: head (the branch the project's folder is on, when absent), target (the board's target branch) or a branch's name (local, or remote such as origin/main: through the local branch that tracks it). A branch named head or target is written refs/heads/<name>.",
+          "type": "string"
         },
         "copy": {
           "description": "Untracked files copied into every new worktree (glob patterns).",

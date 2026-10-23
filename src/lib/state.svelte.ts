@@ -1174,12 +1174,18 @@ class AppState {
 
   /**
    * A new agent of the project, on `engine` (« Nouvel agent sur … »), else on the project's harness; `isolated`: in a
-   * worktree of its own or not (« Nouvel agent dans un worktree », « sans worktree »), else as the project says.
+   * worktree of its own or not (« Nouvel agent dans un worktree », « sans worktree »), else as the project says; `base`:
+   * the branch its worktree starts from (« Nouvel agent depuis une autre branche… », ESC-160), else the project's.
    */
-  async newAgent(projectId = this.ui.activeProject, engine: EngineId | null = null, isolated: boolean | null = null) {
+  async newAgent(
+    projectId = this.ui.activeProject,
+    engine: EngineId | null = null,
+    isolated: boolean | null = null,
+    base: string | null = null,
+  ) {
     if (!projectId) return;
     try {
-      const a = await api.createAgent(projectId, null, engine, isolated);
+      const a = await api.createAgent(projectId, null, engine, isolated, base);
       this.agents[a.id] = a;
       // Its composer is what a new agent is for: closed first, the editor keeps the source it was on.
       this.closeEditor(projectId);

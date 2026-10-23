@@ -271,6 +271,20 @@ export default defineZone('settings', {
     worktreeAtFirstMessage: 'Create the worktree at the first message, under the agent’s name',
     worktreeAtFirstMessageDesc:
       'The first message names the agent, then its branch and its folder take that name before the setup. Off, the worktree is created at once, as agent-N.',
+    worktreeBase: 'Starting branch of new worktrees',
+    worktreeBaseDesc:
+      'A new agent’s worktree starts from this branch, which is also its base: “Integrate”, its merge and its PR go to it. “+ New agent” can choose another one for an agent.',
+    worktreeBases: {
+      head: 'Current branch of the folder',
+      target: 'Board’s target branch',
+      branch: 'A branch…',
+    },
+    worktreeBaseBranch: '⎇ {branch} ▾',
+    worktreeBaseChoose: 'Starting branch: {branch}. Choose another branch',
+    worktreeBaseHeadAt: 'They start from the branch the project’s folder is on when they are created.',
+    worktreeBaseTargetAt: 'They start from {branch}, brought up to date from the remote when it is only behind.',
+    worktreeBaseBranchAt:
+      'They start from {branch}, brought up to date from the remote when it is only behind. A remote branch alone goes through the local branch made to track it; a branch that is gone makes them start from the folder’s branch, as the agent says.',
     worktreeDir: 'Worktrees folder',
     worktreeDirDesc:
       'Relative to the project’s folder (../app-worktrees, .worktrees), to your home folder (~/worktrees/app), or full. Empty: .claude/worktrees, as claude --worktree does. Worktrees made already stay where they are; out of the project, the Claude Code view first asks you to trust each of them.',

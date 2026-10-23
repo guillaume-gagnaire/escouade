@@ -664,6 +664,8 @@ export interface Project {
   worktreePerAgent: boolean;
   /** « Créer le worktree au premier message, au nom de l’agent » (ESC-156): on unless switched off. Absent from a project of the window’s tests made before it. */
   worktreeAtFirstMessage?: boolean;
+  /** « Branche de départ des nouveaux worktrees » (ESC-160). Absent from a project of the window’s tests made before it: the folder’s branch. */
+  worktreeBase?: WorktreeBase;
   createdAt: number;
   /** Commands that launch the project, each in its own read-only terminal. */
   runCommands: RunCommand[];
@@ -918,13 +920,14 @@ export interface DraftImage {
   data: string;
 }
 
+/** Where a new agent's worktree starts, its base: the folder's branch (HEAD), the board's target, or a branch named (local, or remote such as `origin/x`). */
+export type WorktreeBase = { kind: 'head' } | { kind: 'target' } | { kind: 'branch'; branch: string };
+
 export type BoardAction = 'merge' | 'pr' | 'push' | 'keep';
 
 export interface BoardSettings {
   action: BoardAction;
   target: string;
-  /** « Les agents partent de la branche cible »: a new agent's worktree starts from `target`, its base. */
-  agentsFromTarget: boolean;
   strategy: 'merge' | 'squash' | 'rebase';
   draft: boolean;
   testsFirst: boolean;

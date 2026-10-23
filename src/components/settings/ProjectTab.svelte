@@ -20,6 +20,7 @@
   import SharedSection from './SharedSection.svelte';
   import StepList from './StepList.svelte';
   import Switch from './Switch.svelte';
+  import WorktreeBaseField from './WorktreeBaseField.svelte';
   import { tip } from '../../lib/tip';
   import { DEFAULT_WORKTREES, worktreesRoot, type WorktreesProblem } from '../../lib/worktrees';
 
@@ -333,6 +334,13 @@
     shared="worktrees.at_first_message"
   >
     <Switch label={t('settings.project.worktreeAtFirstMessage')} bind:on={draft.worktreeAtFirstMessage} />
+  </Row>
+  <Row label={t('settings.project.worktreeBase')} desc={t('settings.project.worktreeBaseDesc')} wide shared="worktrees.base">
+    <WorktreeBaseField
+      bind:value={draft.worktreeBase}
+      projectId={project.id}
+      target={draft.board.target || app.git[project.id]?.branch || 'main'}
+    />
   </Row>
   <Row
     label={t('settings.project.worktreeDir')}
