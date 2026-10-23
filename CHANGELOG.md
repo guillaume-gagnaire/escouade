@@ -4,6 +4,18 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
+## [1.8.12] — 2026-10-23
+
+### Nouveautés
+
+- Chaque projet choisit la branche d’où partent les worktrees de ses nouveaux agents : celle du dossier, la branche cible du Kanban ou une branche de ton choix, qui devient leur base et celle de leur PR. « + Nouvel agent » peut en choisir une autre pour un agent, y compris pour une branche que tu crées. Merci à Metalzoid sur Discord.
+
+### Corrections
+
+- Réglages › Harness ne parle plus des versions testées : une version plus récente d’un harness s’affiche comme les autres, sans avertissement. Seul ce qui l’empêche de démarrer est dit, comme une version trop ancienne et la commande qui la met à jour.
+- Un agent sans worktree d’Escouade qui travaille dans un worktree à lui (créé par Claude Code, ou où il est allé par un `cd`) suit maintenant les PR de cette branche : son en-tête dit sa branche et « Ouvrir une PR » part de là, jamais de la branche du dossier du projet ni de celle d’un autre agent. Merci à Metalzoid sur Discord.
+- Un agent arrêté par « OAuth session expired and could not be refreshed » alors que le compte est bien connecté reprend seul. Si le compte doit vraiment se reconnecter, sa carte le dit et l’agent repart une fois connecté.
+
 ## [1.8.11] — 2026-10-23
 
 ### Nouveautés

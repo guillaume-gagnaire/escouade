@@ -4,6 +4,18 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
+## [1.8.12] — 2026-10-23
+
+### New
+
+- Each project chooses the branch its new agents’ worktrees start from: the folder’s, the board’s target branch or a branch of your choice, which becomes their base and that of their PR. “+ New agent” can choose another one for an agent, including for a branch you create. Thanks to Metalzoid on Discord.
+
+### Fixes
+
+- Settings › Harness no longer talks about the tested versions: a newer version of a harness shows like the others, with no warning. Only what keeps it from starting is told, like a version too old and the command that updates it.
+- An agent without an Escouade worktree that works in a worktree of its own (made by Claude Code, or one it went into with a `cd`) now follows the pull requests of that branch: its header shows its branch and “Open a PR” starts from there, never from the branch of the project’s folder nor from another agent’s. Thanks to Metalzoid on Discord.
+- An agent stopped by “OAuth session expired and could not be refreshed” while its account is signed in goes on by itself. If the account really must sign in again, its card says so and the agent goes on once signed in.
+
 ## [1.8.11] — 2026-10-23
 
 ### New
