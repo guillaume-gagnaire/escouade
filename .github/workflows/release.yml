@@ -173,6 +173,21 @@ jobs:
             fi
           done
 
+      # Optional: with the Azure Artifact Signing account in the repository secrets (AZURE_*: an app registration that
+      # has the Certificate Profile Signer role), Tauri signs escouade.exe, escouade-hook.exe, the uninstaller and the
+      # installer (Authenticode), before the updater's signature: SmartScreen then weighs the publisher's reputation
+      # rather than each new file's. The script fetches Microsoft's dlib for signtool and gives the build a
+      # configuration that signs through it; the dlib authenticates with the AZURE_* variables of the build step.
+      # Without the secrets, a warning, and the build is not signed.
+      - name: Windows signing (when configured)
+        id: windows-signing
+        if: runner.os == 'Windows'
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        run: node scripts/windows-signing.mjs setup "$env:RUNNER_TEMP\windows-signing"
+
       # The conversation's voice on Intel Macs and Linux: Microsoft's ONNX Runtime, in the bundle (the Frameworks of the
       # app, the .deb and the AppImage: tauri.ort-<os>.conf.json, in the args of the matrix), its checksum checked.
       - name: ONNX Runtime for Intel Macs and Linux
@@ -195,11 +210,24 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # What signtool's dlib signs with (Windows signing, above), on Windows only.
+          AZURE_CLIENT_ID: ${{ runner.os == 'Windows' && secrets.AZURE_CLIENT_ID || '' }}
+          AZURE_CLIENT_SECRET: ${{ runner.os == 'Windows' && secrets.AZURE_CLIENT_SECRET || '' }}
+          AZURE_TENANT_ID: ${{ runner.os == 'Windows' && secrets.AZURE_TENANT_ID || '' }}
         with:
           releaseId: ${{ needs.create.outputs.release-id }}
           tagName: ${{ github.ref_name }}
           includeUpdaterJson: true
-          args: ${{ matrix.args }}
+          args: ${{ matrix.args }} ${{ steps.windows-signing.outputs.args }}
+
+      # Once signed, the installer and the binaries of the app in it: one publisher, and a timestamp (Artifact Signing's
+      # certificates last three days; the timestamp keeps the signature valid after). A failure keeps the release a
+      # draft, as a failed build does.
+      - name: Check the Windows signatures
+        if: runner.os == 'Windows' && steps.windows-signing.outputs.args != ''
+        run: |
+          $setup = Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe | Sort-Object LastWriteTime | Select-Object -Last 1
+          node scripts/windows-signing.mjs verify $setup.FullName "$env:RUNNER_TEMP\signed-binaries"
 
   # Runs only when the three builds succeeded. The updater reads the latest release, so the draft
   # is published once its latest.json holds every system and each file it names is in: the three
