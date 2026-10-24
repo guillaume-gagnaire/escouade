@@ -4,6 +4,12 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
+## [1.8.13] — 2026-10-24
+
+### Fixes
+
+- The “New project” assistant now sets everything a project has at its creation: default harness, “Private project” with the accounts to reserve to it, and the whole Kanban. .escouade.yml also shares “Private project” and the model, effort and mode of the ticket agents; what belongs to each person (accounts, remote control, tickets in parallel, autopilot) stays on their machine.
+
 ## [1.8.12] — 2026-10-23
 
 ### New

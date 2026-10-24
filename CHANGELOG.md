@@ -4,6 +4,12 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
+## [1.8.13] — 2026-10-24
+
+### Corrections
+
+- L’assistant « Nouveau projet » règle maintenant tout ce qu’un projet a à sa création : harness par défaut, « Projet privé » avec les comptes à lui réserver, et le Kanban complet. .escouade.yml partage aussi « Projet privé » et le modèle, l’effort et le mode des agents des tickets ; ce qui est propre à chacun (comptes, remote control, tickets en parallèle, pilote auto) reste sur sa machine.
+
 ## [1.8.12] — 2026-10-23
 
 ### Nouveautés
