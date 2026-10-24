@@ -4,6 +4,12 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
+## [1.8.14] — 2026-10-24
+
+### Nouveautés
+
+- Sous Windows, l’installeur et l’app sont signés au nom de GAGNAIRE DEVELOPPEMENT : Windows dit qui les publie, et l’avertissement de SmartScreen s’efface à mesure que cette signature gagne en réputation.
+
 ## [1.8.13] — 2026-10-24
 
 ### Corrections

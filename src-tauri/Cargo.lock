@@ -1162,7 +1162,7 @@ dependencies = [
 
 [[package]]
 name = "escouade"
-version = "1.8.13"
+version = "1.8.14"
 dependencies = [
  "anyhow",
  "base64 0.22.1",

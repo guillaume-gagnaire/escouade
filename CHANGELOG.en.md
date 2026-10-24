@@ -4,6 +4,12 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
+## [1.8.14] — 2026-10-24
+
+### New
+
+- On Windows, the installer and the app are signed by GAGNAIRE DEVELOPPEMENT: Windows says who publishes them, and the SmartScreen warning fades as this signature builds its reputation.
+
 ## [1.8.13] — 2026-10-24
 
 ### Fixes
