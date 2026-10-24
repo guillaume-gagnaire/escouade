@@ -142,11 +142,16 @@ export function signatureProblems(results) {
   const found = [];
   const first = results.find((r) => r.status === 'Valid');
   for (const r of results) {
-    if (r.status !== 'Valid') found.push(`${r.file}: ${r.status}, not a valid signature`);
+    if (r.status !== 'Valid') found.push(`${r.file}: ${r.status || 'signature not read'}, not a valid signature`);
     else if (r.subject !== first.subject) found.push(`${r.file}: signed by ${r.subject}, not by ${first.subject} like ${first.file}`);
     else if (!r.timestamper) found.push(`${r.file}: not timestamped`);
   }
   return found;
+}
+
+/** `env` for Windows PowerShell, without PSModulePath (in any case): started from pwsh, the shell of the runner's steps, powershell.exe would inherit the modules' path of PowerShell 7, and the module of Get-AuthenticodeSignature would not load. */
+export function powershellEnv(env) {
+  return Object.fromEntries(Object.entries(env).filter(([name]) => name.toLowerCase() !== 'psmodulepath'));
 }
 
 function signtool() {
@@ -218,8 +223,10 @@ function verify(installer, dir) {
   const files = [installer, ...INSIDE.map((name) => path.join(dir, name))];
   const absent = files.filter((file) => !fs.existsSync(file));
   if (absent.length) return absent.map((file) => `${file}: not found (not in the installer?)`);
-  // One PowerShell for every file: the list goes in by a variable, the results out as JSON.
+  // One PowerShell for every file: the list goes in by a variable, the results out as JSON. An error stops it, with
+  // its exit code: a file it could not read is not taken for an unsigned one.
   const script = `
+    $ErrorActionPreference = 'Stop'
     $results = foreach ($file in ($env:ESCOUADE_SIGNED_FILES | ConvertFrom-Json)) {
       $s = Get-AuthenticodeSignature -LiteralPath $file
       [pscustomobject]@{ file = $file; status = "$($s.Status)"; subject = "$($s.SignerCertificate.Subject)"; timestamper = "$($s.TimeStamperCertificate.Subject)" }
@@ -227,7 +234,7 @@ function verify(installer, dir) {
     ConvertTo-Json -InputObject @($results) -Compress`;
   const json = execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
     encoding: 'utf8',
-    env: { ...process.env, ESCOUADE_SIGNED_FILES: JSON.stringify(files) },
+    env: { ...powershellEnv(process.env), ESCOUADE_SIGNED_FILES: JSON.stringify(files) },
   });
   const results = JSON.parse(json);
   const found = signatureProblems(results);

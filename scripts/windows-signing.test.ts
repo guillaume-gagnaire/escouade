@@ -14,6 +14,7 @@ import {
   metadata,
   missingSecrets,
   pickSdk,
+  powershellEnv,
   signConfig,
   signatureProblems,
 } from './windows-signing.mjs';
@@ -144,6 +145,19 @@ describe('Windows signing', () => {
       'other.exe: signed by CN=Other, not by CN=Publisher, O=Publisher like setup.exe',
     ]);
     expect(signatureProblems([])).toEqual(['no file to check']);
+    // A status PowerShell could not read is not taken for a signature.
+    expect(signatureProblems([{ file: 'setup.exe', status: '', subject: '', timestamper: '' }])).toEqual([
+      'setup.exe: signature not read, not a valid signature',
+    ]);
+  });
+
+  it('starts Windows PowerShell without the PSModulePath of PowerShell 7', () => {
+    // Started from pwsh (the shell of the runner's steps), powershell.exe inherits its modules'
+    // path, and the module of Get-AuthenticodeSignature no longer loads (the 1.8.14 Release).
+    const env = { Path: 'C:\\Windows', PSModulePath: 'C:\\Program Files\\PowerShell\\7\\Modules', OTHER: '1' };
+    expect(powershellEnv(env)).toEqual({ Path: 'C:\\Windows', OTHER: '1' });
+    expect(powershellEnv({ PSMODULEPATH: 'x', psmodulepath: 'y', Path: 'C:\\Windows' })).toEqual({ Path: 'C:\\Windows' });
+    expect(env.PSModulePath).toBe('C:\\Program Files\\PowerShell\\7\\Modules');
   });
 
   describe('setup', () => {
