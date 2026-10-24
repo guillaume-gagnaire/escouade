@@ -21,6 +21,7 @@ const FULL: &str = "\
 version: 1
 agents:
   engine: codex
+private: true
 worktrees:
   per_agent: true
   at_first_message: false
@@ -52,6 +53,9 @@ board:
   tests_before_approve: true
   on_conflict: agent
   remove_worktree: false
+  model: opus
+  effort: high
+  mode: plan
 ";
 
 fn read(text: &str) -> pf::Read {
@@ -106,6 +110,10 @@ fn every_key_of_version_1_is_read() {
     assert_eq!(v("board.tests_before_approve"), json!(true));
     assert_eq!(v("board.on_conflict"), json!("agent"));
     assert_eq!(v("board.remove_worktree"), json!(false));
+    assert_eq!(v("private"), json!(true));
+    assert_eq!(v("board.model"), json!("opus"));
+    assert_eq!(v("board.effort"), json!("high"));
+    assert_eq!(v("board.mode"), json!("plan"));
 }
 
 /// « Branche de départ des nouveaux worktrees » (ESC-160): `head`, `target` or a branch's name, read
@@ -419,6 +427,10 @@ fn applied_settings_change_the_project_commands_wait_for_trust() {
     assert!(p.board.tests_first);
     assert_eq!(p.board.conflict, "agent");
     assert!(!p.board.cleanup);
+    assert!(p.private);
+    assert_eq!(p.board.model, "opus");
+    assert_eq!(p.board.effort, "high");
+    assert_eq!(p.board.mode, "plan");
     // Its commands do not: the project keeps its own until they are trusted.
     assert_eq!(p.worktree_setup[0].command, "make");
     assert!(p.worktree_teardown.is_empty());
@@ -738,6 +750,172 @@ fn a_file_of_a_newer_version_or_unreadable_is_not_written_over() {
     assert!(pf::write(Some("a: [\n"), &[("board.draft_pr", json!(true))]).is_err());
 }
 
+/// « Projet privé » (ESC-163): read, applied, written; a file may make a project private, never
+/// public again on a machine where it is: `private: false` is then kept apart, and said.
+#[test]
+fn private_is_a_key_the_file_may_turn_on_never_off() {
+    let k = pf::key_of("private").unwrap();
+    assert_eq!(k.kind, pf::Kind::Bool);
+    let mut p = project();
+    pf::apply(&mut p, &read("version: 1\nprivate: true\n"));
+    assert!(p.private);
+    assert_eq!(pf::get(&p, "private"), json!(true));
+    let text = pf::write(None, &[("private", json!(true))]).unwrap();
+    assert!(text.ends_with("version: 1\nprivate: true\n"), "{text}");
+
+    // The file says false while the project is private here: it stays private, the key local.
+    let r = read("version: 1\nprivate: false\nboard:\n  draft_pr: true\n");
+    pf::apply(&mut p, &r);
+    assert!(p.private);
+    assert!(p.board.draft, "the rest of the file applies");
+    assert_eq!(p.shared.local, ["private"]);
+    let file = p.shared.file.clone().unwrap();
+    assert!(
+        file.warnings
+            .iter()
+            .any(|w| w.text.contains("private: false")),
+        "{:?}",
+        file.warnings
+    );
+    // Unticked by hand, then given back to the file: it applies, public as the file says.
+    p.private = false;
+    p.shared.local.clear();
+    pf::apply(&mut p, &r);
+    assert!(!p.private);
+    assert!(p.shared.local.is_empty());
+    // A project not private takes `false` as it is, and `true` makes it private.
+    pf::apply(&mut p, &read("version: 1\nprivate: true\n"));
+    assert!(p.private);
+}
+
+/// The model, effort and mode of the tickets' agents (ESC-163): read, applied, written; an effort
+/// it does not know is told, and `bypassPermissions` never comes from the file nor goes into it.
+#[test]
+fn the_tickets_agents_model_effort_and_mode_are_keys_of_the_file() {
+    let mut p = project();
+    let r = read("version: 1\nboard:\n  model: sonnet\n  effort: xhigh\n  mode: acceptEdits\n");
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    pf::apply(&mut p, &r);
+    assert_eq!(
+        (&*p.board.model, &*p.board.effort, &*p.board.mode),
+        ("sonnet", "xhigh", "acceptEdits")
+    );
+    // Empty is the account's, read and written as such.
+    let r = read("version: 1\nboard:\n  model: ''\n  effort:\n  mode: ''\n");
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    pf::apply(&mut p, &r);
+    assert_eq!(
+        (&*p.board.model, &*p.board.effort, &*p.board.mode),
+        ("", "", "")
+    );
+
+    let r = read("version: 1\nboard:\n  effort: huge\n  mode: bypassPermissions\n");
+    assert!(r.values.is_empty(), "{:?}", r.values);
+    assert_eq!(lines(&r.warnings), [Some(3), Some(4)]);
+    assert!(
+        r.warnings[0]
+            .text
+            .contains("low, medium, high, xhigh, max)"),
+        "{}",
+        r.warnings[0].text
+    );
+    assert!(
+        r.warnings[1]
+            .text
+            .contains("bypassPermissions ne se partage pas"),
+        "{}",
+        r.warnings[1].text
+    );
+
+    // Exported: the mode `bypassPermissions` stays on this machine, the rest is written.
+    p.board.model = "opus".into();
+    p.board.mode = "bypassPermissions".into();
+    let values = pf::export_values(&p);
+    assert!(values.iter().all(|(k, _)| *k != "board.mode"));
+    let text = pf::write(None, &values).unwrap();
+    assert!(text.contains("  model: opus\n  effort: ''\n"), "{text}");
+    assert!(!text.contains("mode: bypassPermissions"), "{text}");
+}
+
+/// What is a person's or a machine's never goes into the file (ESC-163): the account, the accounts
+/// reserved to a private project, Remote Control, the agents in parallel, the autopilot, the
+/// tickets' key and number, the name, the color.
+#[test]
+fn nothing_of_one_machine_or_person_is_exported() {
+    let mut p = full_project();
+    p.account = "acc-1".into();
+    p.remote_control = true;
+    p.shared_on_limit = true;
+    p.board.max_parallel = 5;
+    p.board.autopilot = false;
+    p.board.prefix = "ZED".into();
+    p.board.next_number = 42;
+    p.color = "#ff0000".into();
+    let text = pf::write(None, &pf::export_values(&p)).unwrap();
+    for local in [
+        "account",
+        "remote",
+        "shared_on_limit",
+        "parallel",
+        "autopilot",
+        "ZED",
+        "42",
+        "next_number",
+        "#ff0000",
+        "name: app",
+    ] {
+        assert!(!text.contains(local), "{local} in\n{text}");
+    }
+    // The shared ones are.
+    for shared in [
+        "private: true",
+        "  model: opus",
+        "  effort: high",
+        "  mode: plan",
+    ] {
+        assert!(text.contains(shared), "{shared} not in\n{text}");
+    }
+    // No key of `KEYS` names a field of one machine.
+    for k in pf::KEYS {
+        assert!(
+            k.path != "board.prefix"
+                && ![
+                    "account",
+                    "remote",
+                    "parallel",
+                    "autopilot",
+                    "number",
+                    "shared_on_limit"
+                ]
+                .iter()
+                .any(|l| k.path.contains(l)),
+            "{}",
+            k.path
+        );
+    }
+}
+
+/// The new keys set in the window are kept on this machine, as the others (« Réglage local »).
+#[test]
+fn the_new_keys_set_in_the_window_are_kept_on_this_machine() {
+    let mut p = project();
+    pf::apply(
+        &mut p,
+        &read("version: 1\nprivate: true\nboard:\n  model: opus\n  effort: high\n  mode: plan\n"),
+    );
+    let before = p.clone();
+    p.board.model = "sonnet".into();
+    p.board.effort = "low".into();
+    p.board.mode = "bypassPermissions".into();
+    let mut kept = pf::keep_local(&before, &mut p);
+    kept.sort();
+    assert_eq!(kept, ["board.effort", "board.mode", "board.model"]);
+    // Unticked in the window: kept too.
+    let before = p.clone();
+    p.private = false;
+    assert_eq!(pf::keep_local(&before, &mut p), ["private"]);
+}
+
 #[test]
 fn the_fingerprint_follows_the_commands() {
     let a: BTreeMap<String, Value> = [("launch".to_string(), json!([{ "command": "a" }]))].into();
@@ -957,6 +1135,48 @@ async fn a_setting_set_in_the_window_goes_before_the_file_until_written_into_it(
         .unwrap();
     assert!(p.shared.local.is_empty());
     assert_eq!(p.agent_branch_prefix, "crew/");
+}
+
+/// The tickets' agents set in the window over the file's (ESC-163): kept on this machine, written
+/// into the file but `bypassPermissions`, which stays this machine's; the agents in parallel and
+/// the autopilot are no business of the file.
+#[tokio::test]
+async fn the_tickets_agents_set_in_the_window_are_written_but_bypass_permissions() {
+    let h = harness("pf-agents");
+    let (p, r) = shared_project(
+        &h,
+        "version: 1\nprivate: true\nboard:\n  model: opus\n  mode: plan\n",
+    )
+    .await;
+    assert!(p.private);
+    assert_eq!((&*p.board.model, &*p.board.mode), ("opus", "plan"));
+    let board = BoardSettings {
+        model: "sonnet".into(),
+        mode: "bypassPermissions".into(),
+        max_parallel: 4,
+        autopilot: false,
+        ..p.board.clone()
+    };
+    let p = h.core.board_set(&p.id, board).unwrap();
+    let mut local = p.shared.local.clone();
+    local.sort();
+    assert_eq!(local, ["board.mode", "board.model"]);
+    let p = h.core.write_shared(&p.id, Some(local.clone())).unwrap();
+    assert_eq!(p.shared.local, ["board.mode"]);
+    assert_eq!(p.board.mode, "bypassPermissions");
+    let text = std::fs::read_to_string(r.join(pf::FILE)).unwrap();
+    assert!(text.contains("model: sonnet"), "{text}");
+    assert!(text.contains("mode: plan"), "{text}");
+    // Exported whole: the same.
+    let p = h.core.write_shared(&p.id, None).unwrap();
+    assert_eq!(p.board.mode, "bypassPermissions");
+    let text = std::fs::read_to_string(r.join(pf::FILE)).unwrap();
+    assert!(!text.contains("bypass"), "{text}");
+    assert!(
+        !text.contains("parallel") && !text.contains("autopilot"),
+        "{text}"
+    );
+    assert!(text.contains("private: true"), "{text}");
 }
 
 #[tokio::test]

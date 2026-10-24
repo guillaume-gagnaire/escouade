@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { engineName } from '../../lib/engines';
   import { t } from '../../lib/i18n';
   import { modelOptions } from '../../lib/models';
   import { app } from '../../lib/state.svelte';
@@ -34,7 +35,27 @@
     [t('wizard.summary.rows.conflicts'), t(`boardSettings.tab.conflicts.${b.conflict}`)],
     [
       t('wizard.summary.rows.agents'),
-      [t('wizard.summary.agentsValue', { count: b.maxParallel }), b.model, b.effort].filter(Boolean).join(' · '),
+      [
+        t('wizard.summary.agentsValue', { count: b.maxParallel }),
+        b.model,
+        b.effort,
+        b.mode,
+        b.autopilot ? t('wizard.summary.autopilot') : '',
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    ],
+    [t('wizard.summary.rows.harness'), engineName(c.engine ?? 'claude')],
+    [
+      t('wizard.summary.rows.private'),
+      c.private
+        ? [
+            c.reserved.length ? t('wizard.summary.privateValue', { count: c.reserved.length }) : t('wizard.summary.privateNoAccount'),
+            c.sharedOnLimit ? t('wizard.summary.sharedOnLimit') : '',
+          ]
+            .filter(Boolean)
+            .join(' · ')
+        : t('wizard.no'),
     ],
     [t('wizard.summary.rows.commit'), t(`settings.project.commitModes.${c.commitMode}`)],
     [t('wizard.summary.rows.integrations'), form.integrations.links.map((l) => l.name).join(', ') || t('wizard.summary.noneValue')],

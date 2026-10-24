@@ -125,3 +125,62 @@ test('a project made by copying another one’s settings runs its ticket with th
   // Nothing of the first project's integrations or tickets came with it.
   await expect(done.getByText(/DEM-/)).toHaveCount(0);
 });
+
+test('a private project with its Kanban set, made by the assistant, exports its shared settings and none of this machine’s (ESC-163)', async ({
+  app,
+}) => {
+  const { page } = app;
+  const vault = repoNamed(app.root, 'vault');
+  await page
+    .getByRole('button', { name: /Ajouter un projet/ })
+    .first()
+    .click();
+  const dialog = page.getByRole('dialog', { name: 'Nouveau projet' });
+  await dialog.getByPlaceholder('C:\\chemin\\vers\\le\\projet').fill(vault);
+  await expect(dialog.getByText(/Dépôt git détecté/)).toBeVisible();
+
+  // Kanban: its tickets' agents in full.
+  await dialog.getByRole('button', { name: /Kanban/ }).click();
+  await dialog.getByRole('group', { name: 'En parallèle' }).getByRole('button', { name: '4' }).click();
+  await dialog.getByRole('switch', { name: 'Attribuer les tickets automatiquement' }).click();
+  await dialog.getByRole('combobox', { name: 'Effort' }).selectOption('xhigh');
+  await dialog.getByRole('combobox', { name: 'Mode' }).selectOption('plan');
+  await dialog.getByRole('button', { name: 'Suivant', exact: true }).click();
+
+  // « Projet privé », the machine's account reserved to it, and shared ones at the limit.
+  await dialog.getByRole('switch', { name: 'Projet privé' }).click();
+  await dialog.getByRole('list', { name: 'Comptes réservés à ce projet' }).getByRole('checkbox', { name: 'Principal' }).check();
+  await dialog.getByRole('switch', { name: 'Comptes partagés à la limite' }).click();
+  await dialog.getByRole('button', { name: /Récapitulatif/ }).click();
+  await expect(dialog.getByText('oui · 1 compte réservé · comptes partagés à la limite')).toBeVisible();
+  await dialog.getByRole('switch', { name: 'Créer un premier agent' }).click();
+  await dialog.getByRole('button', { name: 'Créer le projet' }).click();
+  await expect(dialog).toBeHidden();
+
+  // Réglages › Projets: private, its account its own; then « Exporter vers .escouade.yml ».
+  await page.keyboard.press('Control+,');
+  const settings = page.getByRole('dialog', { name: 'Réglages' });
+  await settings.getByRole('tab', { name: 'Projets' }).click();
+  await expect(settings.getByRole('switch', { name: 'Projet privé' })).toHaveAttribute('aria-checked', 'true');
+  await expect(settings.getByText(/^Compte réservé à ce projet : « Principal »/)).toBeVisible();
+  await settings.getByRole('button', { name: 'Exporter vers .escouade.yml' }).click();
+  const file = path.join(vault, '.escouade.yml');
+  await expect.poll(() => fs.existsSync(file)).toBe(true);
+  const text = fs.readFileSync(file, 'utf8');
+  // What the team shares.
+  expect(text).toMatch(/^private: true$/m);
+  expect(text).toMatch(/^ {2}effort: xhigh$/m);
+  expect(text).toMatch(/^ {2}mode: plan$/m);
+  expect(text).toMatch(/^ {2}model: ''$/m);
+  // Nothing of this machine or person: the accounts, the agents in parallel, the autopilot, Remote Control, the key of
+  // its tickets.
+  for (const local of ['principal', 'Principal', 'parallel', 'autopilot', 'shared_on_limit', 'remote', 'account', 'VAU'])
+    expect(text, local).not.toContain(local);
+  // The settings mark them as the file's from now on.
+  await expect(
+    settings
+      .locator('.row')
+      .filter({ has: page.getByRole('switch', { name: 'Projet privé' }) })
+      .getByText('Défini par .escouade.yml'),
+  ).toBeVisible();
+});

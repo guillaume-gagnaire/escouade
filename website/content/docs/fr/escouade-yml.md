@@ -13,6 +13,7 @@ Le fichier se commite avec le code. Chaque personne qui ajoute le dépôt dans E
 version: 1
 agents:
   engine: claude
+private: false
 worktrees:
   per_agent: true
   at_first_message: true
@@ -49,6 +50,9 @@ board:
   tests_before_approve: true
   on_conflict: agent
   remove_worktree: true
+  model: sonnet
+  effort: medium
+  mode: auto
 ```
 
 Un fichier minimal ne dit que ce qu’il veut régler :
@@ -116,6 +120,16 @@ Un fichier qui n’est pas du YAML lisible (un crochet non fermé, une indentati
 
 Le harness des nouveaux agents et des tickets du projet qui n’en choisissent pas un autre (« Harness par défaut »).
 
+### private
+
+| Clé | Type | Valeurs | Absente | Exemple |
+|---|---|---|---|---|
+| `private` | Booléen | `true`, `false` | le réglage de chaque machine | `private: true` |
+
+« Projet privé » : les agents des autres projets ne le voient pas par le serveur MCP d’Escouade et ne lisent pas ses fichiers (voir [Réglages › Projets](settings-projects)). Le dépôt est sensible pour toute l’équipe, d’où sa place dans le fichier ; les comptes réservés au projet, eux, restent ceux de chaque machine.
+
+Le fichier peut rendre un projet privé, jamais le rendre public : sur une machine où le projet est privé, `private: false` n’est pas appliqué, le réglage devient un réglage local de cette machine et un avertissement le dit (« private: false ignoré : ce projet est privé sur cette machine, décoche « Projet privé » pour le rendre public »). Pour le rendre public, décoche « Projet privé » toi-même.
+
 ### worktrees
 
 | Clé | Type | Valeurs | Absente | Exemple |
@@ -170,6 +184,9 @@ Les commandes de « Lancement » du projet (serveurs de développement, watche
 | `board.tests_before_approve` | Booléen | `true`, `false` | `false` | `tests_before_approve: true` |
 | `board.on_conflict` | Valeur parmi une liste | `ask`, `agent`, `abort` | `ask` | `on_conflict: agent` |
 | `board.remove_worktree` | Booléen | `true`, `false` | `true` | `remove_worktree: false` |
+| `board.model` | Texte | Un modèle, tel que le harness le nomme | vide : celui du compte | `model: opus` |
+| `board.effort` | Valeur parmi une liste | `low`, `medium`, `high`, `xhigh`, `max` | vide : celui du compte | `effort: high` |
+| `board.mode` | Valeur parmi une liste | `auto`, `default`, `plan`, `acceptEdits` | vide : celui du compte | `mode: plan` |
 
 - `on_approve` : « Quand je valide un ticket « À tester » » : merger sa branche dans la branche cible (`merge`), ouvrir une pull request (`pr`), pousser sa branche (`push`), ou la garder telle quelle (`keep`) (voir [le Kanban](board)).
 - `target_branch` : « Branche cible », où les tickets se mergent, et la base de leur branche et de leur pull request.
@@ -180,6 +197,7 @@ Les commandes de « Lancement » du projet (serveurs de développement, watche
 - `tests_before_approve` : « Relancer les tests avant » la validation d’un ticket ; sans commande de tests, rien ne se relance.
 - `on_conflict` : « En cas de conflit » au merge : te demander (`ask`), laisser l’agent le résoudre (`agent`), ou abandonner (`abort`).
 - `remove_worktree` : « Supprimer le worktree d’un ticket terminé ou supprimé ».
+- `model`, `effort`, `mode` : le modèle, l’effort et le mode des agents des tickets (Réglages › Kanban, groupe « Agents »). Une valeur vide (`model: ''`) laisse ceux du compte. `bypassPermissions` n’est jamais dans le fichier : un dépôt ne lève pas les autorisations de qui l’ouvre. Lu, il est refusé (« bypassPermissions ne se partage pas : il se règle sur chaque machine ») ; réglé dans la fenêtre, il reste un réglage local, que l’export n’écrit pas.
 
 ## Les étapes de worktree
 
@@ -254,11 +272,12 @@ Les éditeurs qui lisent les schémas YAML (VS Code avec l’extension YAML de R
 Le fichier est commité et lu par toute l’équipe, et un dépôt public le montre à n’importe qui. Il ne porte donc que ce qui vaut pour tout le monde, jamais ce qui est propre à une personne, à une machine, ou secret :
 
 - le nom et la couleur du projet : un choix d’affichage de chacun, dans sa propre barre d’onglets ;
-- le compte préféré et les comptes réservés : chacun a les siens ;
-- le remote control : un choix personnel, qui rend ses agents accessibles depuis claude.ai ;
-- « Projet privé » : ce que les agents des autres projets de ta machine voient de celui-ci ;
-- le pilote auto, le nombre de tickets en parallèle, le modèle, l’effort et le mode des agents des tickets : ils dépendent de ton quota et de ta machine ;
-- la clé des tickets et les intégrations (Jira, Trello, GitHub, Linear) : elles tiennent aux tickets de ton app et à tes comptes ;
+- le compte préféré, les comptes réservés à un projet privé et « Comptes partagés à la limite » : chacun a ses comptes ;
+- le remote control : un choix personnel, qui rend ses agents accessibles depuis ton claude.ai ;
+- « En parallèle » et le pilote auto : ils dépensent ton quota ; une personne qui ne fait que relire ne veut pas que des tickets démarrent seuls chez elle ;
+- le mode `bypassPermissions` des agents des tickets : un dépôt ne lève pas les autorisations de qui l’ouvre ;
+- la clé des tickets : chaque machine a son Kanban et numérote ses propres tickets, et la clé est fixée par le premier ticket ;
+- les intégrations (Jira, Trello, GitHub, Linear) : elles tiennent à tes comptes connectés ;
 - les chemins complets : ils ne valent que sur une machine (d’où le refus d’un `dir` ou d’un `cwd` complet) ;
 - les jetons et mots de passe : aucune clé n’en prend, et « Exporter vers .escouade.yml » n’en écrit jamais.
 
@@ -283,4 +302,4 @@ Dans Réglages › Projets et Réglages › Kanban, un réglage défini par le f
 
 ## Exporter les réglages d’un projet
 
-Pour partager un projet déjà réglé, Réglages › Projets › « Exporter vers .escouade.yml » écrit le fichier à la racine du dépôt depuis les réglages enregistrés du projet : toutes les clés, dans l’ordre de l’exemple complet (une branche cible encore vide est omise). Un fichier existant garde ses commentaires, l’ordre de ses clés et les clés qu’Escouade ne connaît pas ; un nouveau fichier commence par la ligne du schéma et `version: 1`. Les commandes exportées sont celles du projet : elles n’ont pas besoin de ton accord. Il reste à commiter le fichier.
+Pour partager un projet déjà réglé, Réglages › Projets › « Exporter vers .escouade.yml » écrit le fichier à la racine du dépôt depuis les réglages enregistrés du projet : toutes les clés, dans l’ordre de l’exemple complet (une branche cible encore vide est omise, le mode `bypassPermissions` aussi). Un fichier existant garde ses commentaires, l’ordre de ses clés et les clés qu’Escouade ne connaît pas ; un nouveau fichier commence par la ligne du schéma et `version: 1`. Les commandes exportées sont celles du projet : elles n’ont pas besoin de ton accord. Il reste à commiter le fichier.

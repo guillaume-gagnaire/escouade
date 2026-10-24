@@ -27,9 +27,23 @@
           "description": "Pull requests open as drafts.",
           "type": "boolean"
         },
+        "effort": {
+          "description": "The effort of the tickets' agents (empty: the account's).",
+          "enum": ["", "low", "medium", "high", "xhigh", "max"],
+          "type": "string"
+        },
         "merge_strategy": {
           "description": "How a ticket's branch merges.",
           "enum": ["merge", "squash", "rebase"],
+          "type": "string"
+        },
+        "mode": {
+          "description": "The permission mode of the tickets' agents (empty: the account's). Never bypassPermissions: that one is set on each machine.",
+          "enum": ["", "auto", "default", "plan", "acceptEdits"],
+          "type": "string"
+        },
+        "model": {
+          "description": "The model of the tickets' agents, as the harness names it (empty: the account's).",
           "type": "string"
         },
         "on_approve": {
@@ -135,6 +149,10 @@
           "type": "object"
         }
       ]
+    },
+    "private": {
+      "description": "« Projet privé »: the agents of the other projects do not know it, nor read its files. The accounts reserved to it stay each machine's. A project private on a machine stays so when the file says false.",
+      "type": "boolean"
     },
     "version": {
       "description": "The version of this file's format (1 today).",

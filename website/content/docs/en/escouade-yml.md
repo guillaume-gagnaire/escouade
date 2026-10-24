@@ -13,6 +13,7 @@ The file is committed with the code. Everyone who adds the repository to Escouad
 version: 1
 agents:
   engine: claude
+private: false
 worktrees:
   per_agent: true
   at_first_message: true
@@ -49,6 +50,9 @@ board:
   tests_before_approve: true
   on_conflict: agent
   remove_worktree: true
+  model: sonnet
+  effort: medium
+  mode: auto
 ```
 
 A minimal file only says what it wants to set:
@@ -116,6 +120,16 @@ A file that isn’t readable YAML (an unclosed bracket, broken indentation), or 
 
 The harness of the project’s new agents and tickets that don’t choose another (“Default harness”).
 
+### private
+
+| Key | Type | Values | Missing | Example |
+|---|---|---|---|---|
+| `private` | Boolean | `true`, `false` | each machine’s setting | `private: true` |
+
+“Private project”: the agents of the other projects don’t see it through Escouade’s MCP server and don’t read its files (see [Settings › Projects](settings-projects)). The repository is sensitive for the whole team, hence its place in the file; the accounts reserved to the project stay each machine’s own.
+
+The file can make a project private, never public again: on a machine where the project is private, `private: false` isn’t applied, the setting becomes a local setting of this machine and a warning says so (“private: false ignored: this project is private on this machine, untick “Private project” to make it public”). To make it public, untick “Private project” yourself.
+
 ### worktrees
 
 | Key | Type | Values | Missing | Example |
@@ -170,6 +184,9 @@ The project’s “Launch” commands (dev servers, watchers), each in its own t
 | `board.tests_before_approve` | Boolean | `true`, `false` | `false` | `tests_before_approve: true` |
 | `board.on_conflict` | One of a list | `ask`, `agent`, `abort` | `ask` | `on_conflict: agent` |
 | `board.remove_worktree` | Boolean | `true`, `false` | `true` | `remove_worktree: false` |
+| `board.model` | Text | A model, as the harness names it | empty: the account’s | `model: opus` |
+| `board.effort` | One of a list | `low`, `medium`, `high`, `xhigh`, `max` | empty: the account’s | `effort: high` |
+| `board.mode` | One of a list | `auto`, `default`, `plan`, `acceptEdits` | empty: the account’s | `mode: plan` |
 
 - `on_approve`: “When I approve a ticket in “To review””: merge its branch into the target branch (`merge`), open a pull request (`pr`), push its branch (`push`), or keep it as it is (`keep`) (see [the Kanban](board)).
 - `target_branch`: “Target branch”, where tickets merge, and the base of their branch and pull request.
@@ -180,6 +197,7 @@ The project’s “Launch” commands (dev servers, watchers), each in its own t
 - `tests_before_approve`: “Re-run the tests first” before a ticket is approved; without a test command, nothing runs again.
 - `on_conflict`: “On conflict” at the merge: ask you (`ask`), let the agent resolve it (`agent`), or give up (`abort`).
 - `remove_worktree`: “Delete the worktree of a done or deleted ticket”.
+- `model`, `effort`, `mode`: the model, effort and mode of the ticket agents (Settings › Kanban, group “Agents”). An empty value (`model: ''`) leaves the account’s. `bypassPermissions` is never in the file: a repository doesn’t lift the permissions of whoever opens it. Read, it is refused (“bypassPermissions is not shared: it is set on each machine”); set in the window, it stays a local setting, which the export doesn’t write.
 
 ## Worktree steps
 
@@ -254,11 +272,12 @@ Editors that read YAML schemas (VS Code with Red Hat’s YAML extension, JetBrai
 The file is committed and read by the whole team, and a public repository shows it to anyone. So it only holds what is true for everyone, never what belongs to one person, one machine, or is secret:
 
 - the project’s name and color: each person’s display choice, in their own tab bar;
-- the preferred account and the reserved accounts: everyone has their own;
-- remote control: a personal choice, which makes one’s agents reachable from claude.ai;
-- “Private project”: what the agents of your machine’s other projects see of this one;
-- autopilot, the number of tickets in parallel, the model, effort and mode of ticket agents: they depend on your quota and your machine;
-- the tickets’ key and the integrations (Jira, Trello, GitHub, Linear): they belong to your app’s tickets and your accounts;
+- the preferred account, the accounts reserved to a private project and “Shared accounts at the limit”: everyone has their own accounts;
+- remote control: a personal choice, which makes one’s agents reachable from one’s own claude.ai;
+- “In parallel” and autopilot: they spend your quota; someone who only reviews doesn’t want tickets to start by themselves on their machine;
+- the `bypassPermissions` mode of ticket agents: a repository doesn’t lift the permissions of whoever opens it;
+- the tickets’ key: each machine has its own Kanban and numbers its own tickets, and the key is fixed by the first ticket;
+- the integrations (Jira, Trello, GitHub, Linear): they belong to your connected accounts;
 - full paths: they only hold on one machine (hence a full `dir` or `cwd` is refused);
 - tokens and passwords: no key takes one, and “Export to .escouade.yml” never writes one.
 
@@ -283,4 +302,4 @@ In Settings › Projects and Settings › Kanban, a setting the file defines say
 
 ## Export a project’s settings
 
-To share a project that is already set up, Settings › Projects › “Export to .escouade.yml” writes the file at the root of the repository from the project’s saved settings: every key, in the order of the complete example (a target branch still empty is left out). An existing file keeps its comments, the order of its keys and the keys Escouade doesn’t know; a new file starts with the schema line and `version: 1`. The exported commands are the project’s own: they need no approval. Then commit the file.
+To share a project that is already set up, Settings › Projects › “Export to .escouade.yml” writes the file at the root of the repository from the project’s saved settings: every key, in the order of the complete example (a target branch still empty is left out, and so is the `bypassPermissions` mode). An existing file keeps its comments, the order of its keys and the keys Escouade doesn’t know; a new file starts with the schema line and `version: 1`. The exported commands are the project’s own: they need no approval. Then commit the file.

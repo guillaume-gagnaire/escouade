@@ -3,6 +3,7 @@
 version: 1
 agents:
   engine: codex
+private: true
 worktrees:
   per_agent: true
   at_first_message: false
@@ -35,3 +36,6 @@ board:
   tests_before_approve: true
   on_conflict: agent
   remove_worktree: false
+  model: opus
+  effort: high
+  mode: plan

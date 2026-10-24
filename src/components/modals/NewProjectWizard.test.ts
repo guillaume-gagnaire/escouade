@@ -427,6 +427,157 @@ describe('the new project’s assistant', () => {
   });
 });
 
+describe('the assistant’s private project and Kanban (ESC-163)', () => {
+  const WORK = { id: 'work', name: 'Travail', configDir: 'C:\\w', claudePath: '', active: true };
+  const THEIRS = { id: 'theirs', name: 'Autre', configDir: 'C:\\o', claudePath: '', active: true, projects: ['p1'] };
+
+  beforeEach(() => {
+    setLang('fr');
+    resetApp({ projects: [project(), webShop] });
+    app.settings.accounts = [...app.settings.accounts, WORK, THEIRS];
+    app.modal = { kind: 'newProject' };
+  });
+
+  function backend() {
+    return fakeBackend({
+      inspect_folder: () => folder(),
+      inspect_setup: () => setup(),
+      create_project: () => made,
+      update_project: () => null,
+      board_set: ({ settings }) => ({ ...made, board: settings }),
+      account_update: ({ account }) => app.settings.accounts.map((a) => (a.id === account.id ? account : a)),
+    });
+  }
+
+  it('makes a private project with an account reserved to it, its Kanban as set, and says so in the summary', async () => {
+    const be = backend();
+    render(NewProjectModal);
+    await typePath();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Suivant' })).toBeEnabled());
+
+    // Kanban: its tickets' agents in full.
+    await userEvent.click(screen.getByRole('button', { name: /Kanban/ }));
+    expect(step()).toBe('kanban');
+    await userEvent.click(within(screen.getByRole('group', { name: 'En parallèle' })).getByRole('button', { name: '4' }));
+    await userEvent.click(screen.getByRole('switch', { name: 'Attribuer les tickets automatiquement' }));
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Effort' }), 'xhigh');
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Mode' }), 'plan');
+    await next();
+
+    // Account: « Projet privé », then the accounts it may have to itself (not one reserved to another project).
+    expect(step()).toBe('account');
+    expect(screen.queryByRole('list', { name: 'Comptes réservés à ce projet' })).toBeNull();
+    await userEvent.click(screen.getByRole('switch', { name: 'Projet privé' }));
+    const list = screen.getByRole('list', { name: 'Comptes réservés à ce projet' });
+    expect(
+      within(list)
+        .getAllByRole('checkbox')
+        .map((c) => c.closest('label')?.textContent?.trim()),
+    ).toEqual(['Principal', 'Travail']);
+    await userEvent.click(within(list).getByRole('checkbox', { name: 'Travail' }));
+    await userEvent.click(screen.getByRole('switch', { name: 'Comptes partagés à la limite' }));
+
+    await userEvent.click(screen.getByRole('button', { name: /Récapitulatif/ }));
+    const row = (k: string) => screen.getByText(k, { selector: 'dt' }).nextElementSibling?.textContent;
+    expect(row('Projet privé')).toBe('oui · 1 compte réservé · comptes partagés à la limite');
+    expect(row('Agents des tickets')).toBe('4 en parallèle · xhigh · plan');
+    expect(row('Harness')).toBe('Claude Code');
+    await userEvent.click(screen.getByRole('switch', { name: 'Créer un premier agent' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Créer le projet' }));
+    await waitFor(() => expect(app.modal).toBeNull());
+
+    expect(be.called('update_project')[0].args.project).toMatchObject({ id: 'new', private: true, sharedOnLimit: true });
+    expect(be.called('account_update').map((c) => c.args.account)).toEqual([expect.objectContaining({ id: 'work', projects: ['new'] })]);
+    expect(app.settings.accounts.find((a) => a.id === 'work')?.projects).toEqual(['new']);
+    expect(be.called('board_set')[0].args.settings).toMatchObject({ maxParallel: 4, autopilot: false, effort: 'xhigh', mode: 'plan' });
+  });
+
+  it('reserves nothing for a project made public again before it is created', async () => {
+    const be = backend();
+    render(NewProjectModal);
+    await typePath();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Suivant' })).toBeEnabled());
+    await userEvent.click(screen.getByRole('button', { name: /Compte et commit/ }));
+    await userEvent.click(screen.getByRole('switch', { name: 'Projet privé' }));
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Travail' }));
+    await userEvent.click(screen.getByRole('switch', { name: 'Projet privé' }));
+    await userEvent.click(screen.getByRole('button', { name: /Récapitulatif/ }));
+    await userEvent.click(screen.getByRole('switch', { name: 'Créer un premier agent' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Créer le projet' }));
+    await waitFor(() => expect(app.modal).toBeNull());
+    expect(be.called('update_project')[0].args.project).toMatchObject({ private: false, sharedOnLimit: false });
+    expect(be.called('account_update')).toHaveLength(0);
+  });
+
+  it('starts private when « Nouveaux projets privés » says so, from the recommended setup, from scratch and from a copy', async () => {
+    app.settings.privateProjects = true;
+    backend();
+    render(NewProjectModal);
+    await typePath();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Suivant' })).toBeEnabled());
+    for (const start of [/^Configuration recommandée/, /^Partir de zéro/, /^Copier la configuration/]) {
+      await userEvent.click(screen.getByRole('radio', { name: start }));
+      await waitFor(() => expect(screen.getByRole('button', { name: /Compte et commit/ })).toBeEnabled());
+      await userEvent.click(screen.getByRole('button', { name: /Compte et commit/ }));
+      expect(screen.getByRole('switch', { name: 'Projet privé' })).toHaveAttribute('aria-checked', 'true');
+      await userEvent.click(screen.getByRole('button', { name: /Départ/ }));
+    }
+  });
+
+  it('takes « Projet privé » and the Kanban from the folder’s .escouade.yml, never public when new projects are private', async () => {
+    const preview = (priv: boolean) =>
+      project({
+        id: '',
+        path: 'C:\\code\\atlas',
+        private: priv,
+        board: board({ model: 'opus', effort: 'high', mode: 'plan' }),
+        shared: {
+          local: [],
+          trusted: '',
+          file: { keys: ['private', 'board.model'], values: {}, warnings: [], error: null, version: 1, pending: null },
+        },
+      });
+    for (const [priv, byDefault] of [
+      [true, false],
+      [false, true],
+      [false, false],
+    ] as const) {
+      app.settings.privateProjects = byDefault;
+      fakeBackend({ inspect_folder: () => folder(), inspect_setup: () => setup(), shared_preview: () => preview(priv) });
+      const { unmount } = render(NewProjectModal);
+      await typePath();
+      await waitFor(() =>
+        expect(screen.getByRole('radio', { name: /^Réglages de .escouade.yml/ })).toHaveAttribute('aria-checked', 'true'),
+      );
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Suivant' })).toBeEnabled());
+      await userEvent.click(screen.getByRole('button', { name: /Kanban/ }));
+      expect(screen.getByRole('combobox', { name: 'Mode' })).toHaveValue('plan');
+      await userEvent.click(screen.getByRole('button', { name: /Compte et commit/ }));
+      expect(screen.getByRole('switch', { name: 'Projet privé' })).toHaveAttribute('aria-checked', String(priv || byDefault));
+      unmount();
+    }
+  });
+
+  it('shows an existing private project’s own accounts as reserved already, and reserves only the new ones', async () => {
+    resetApp({ projects: [project({ private: true }), webShop] });
+    app.settings.accounts = [...app.settings.accounts, WORK, THEIRS];
+    app.modal = { kind: 'newProject', projectId: 'p1' };
+    const be = backend();
+    render(NewProjectModal);
+    await userEvent.click(screen.getByRole('button', { name: /Compte et commit/ }));
+    expect(screen.getByRole('switch', { name: 'Projet privé' })).toHaveAttribute('aria-checked', 'true');
+    const list = screen.getByRole('list', { name: 'Comptes réservés à ce projet' });
+    expect(within(list).getByRole('checkbox', { name: /Autre/ })).toBeChecked();
+    expect(within(list).getByRole('checkbox', { name: /Autre/ })).toBeDisabled();
+    expect(within(list).getByText('déjà réservé')).toBeInTheDocument();
+    await userEvent.click(within(list).getByRole('checkbox', { name: 'Travail' }));
+    await userEvent.click(screen.getByRole('button', { name: /Récapitulatif/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(app.modal).toBeNull());
+    expect(be.called('account_update').map((c) => c.args.account.id)).toEqual(['work']);
+  });
+});
+
 describe('the assistant opened again on an existing project', () => {
   beforeEach(() => {
     setLang('fr');

@@ -117,6 +117,22 @@ describe('.escouade.yml in the settings (ESC-146)', () => {
     expect(within(row('Message de commit généré')).queryByText(/\.escouade\.yml/)).toBeNull();
   });
 
+  it('marks « Projet privé » and the tickets’ agents, kept on this machine or not, never what stays local (ESC-163)', () => {
+    resetApp({
+      projects: [shared({ keys: ['private', 'board.model', 'board.effort', 'board.mode'] }, ['board.mode'])],
+    });
+    fakeBackend();
+    const { unmount } = render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    expect(within(row('Projet privé')).getByText('Défini par .escouade.yml')).toBeInTheDocument();
+    unmount();
+    render(SettingsModal, { tab: 'board', projectId: 'p1' });
+    expect(within(row('Modèle')).getByText('Défini par .escouade.yml')).toBeInTheDocument();
+    expect(within(row('Effort')).getByText('Défini par .escouade.yml')).toBeInTheDocument();
+    expect(within(row('Mode')).getByText('Réglage local de cette machine : il passe devant .escouade.yml.')).toBeInTheDocument();
+    expect(within(row('En parallèle')).queryByText(/\.escouade\.yml/)).toBeNull();
+    expect(within(row('Attribuer les tickets automatiquement')).queryByText(/\.escouade\.yml/)).toBeNull();
+  });
+
   it('says why a file that cannot be read sets nothing', () => {
     resetApp({ projects: [shared({ error: { line: 3, text: '.escouade.yml illisible : crochet non fermé' } })] });
     fakeBackend();

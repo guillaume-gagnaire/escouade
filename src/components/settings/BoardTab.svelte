@@ -151,19 +151,19 @@
   <Row label={t('boardSettings.tab.parallel')} desc={t('boardSettings.tab.parallelDesc')}>
     <Chips label={t('boardSettings.tab.parallel')} options={PARALLEL} mono bind:value={b.maxParallel} />
   </Row>
-  <Row label={t('common.model')}>
+  <Row label={t('common.model')} shared="board.model">
     <select class="field select" aria-label={t('common.model')} bind:value={b.model}>
       <option value="">{t('boardSettings.tab.defaultModel', { model: modelLabel(newAgentDefaults(project).model, app.models) })}</option>
       {#each modelOptions(app.models) as m (m.value)}<option value={m.value}>{m.label}</option>{/each}
     </select>
   </Row>
-  <Row label={t('boardSettings.tab.effort')}>
+  <Row label={t('boardSettings.tab.effort')} shared="board.effort">
     <select class="field select" aria-label={t('boardSettings.tab.effort')} bind:value={b.effort}>
       <option value="">{t('boardSettings.tab.default')}</option>
       {#each EFFORTS as e (e.value)}<option value={e.value}>{e.label}</option>{/each}
     </select>
   </Row>
-  <Row label={t('boardSettings.tab.mode')}>
+  <Row label={t('boardSettings.tab.mode')} shared="board.mode">
     <select class="field select" aria-label={t('boardSettings.tab.mode')} bind:value={b.mode}>
       <option value="">{t('boardSettings.tab.default')}</option>
       {#each MODES as m (m.value)}<option value={m.value}>{m.label}</option>{/each}

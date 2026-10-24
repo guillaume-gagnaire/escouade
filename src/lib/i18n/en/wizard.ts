@@ -33,7 +33,7 @@ export default defineZone('wizard', {
     worktrees: 'Where the agents work, and what sets up each worktree.',
     launch: 'The commands that launch the project, each in its own terminal.',
     kanban: 'What approving a ticket does, and how its agents work.',
-    account: 'The account of this project’s agents, and who writes the commits.',
+    account: 'The harness and account of this project’s agents, who writes the commits, and whether it’s private.',
     integrations: 'Tickets can come from Jira, Trello, GitHub or Linear. None of it is required.',
     summary: 'What would keep the way of working from working, then what will be set.',
   },
@@ -92,7 +92,7 @@ export default defineZone('wizard', {
     validation: 'Approval',
     parallel: 'In parallel · autopilot',
     parallelValue: { one: '{count} agent · autopilot {autopilot}', other: '{count} agents · autopilot {autopilot}' },
-    agents: 'Model · effort · mode',
+    agents: 'Harness · model · effort · mode',
     dirRelative: 'relative to the project',
     dirAbsolute: 'full path of another project: not taken',
     dirFound: 'folder “{dir}” found',
@@ -112,6 +112,11 @@ export default defineZone('wizard', {
   account: {
     remoteAll: 'Already on for all agents (Settings › Harness).',
     noAccount: 'No {harness} account: this project’s agents and tickets won’t start until one is added.',
+    reserved: 'Accounts reserved to this project',
+    reservedDesc:
+      'Ticked, they serve it alone: the other projects no longer go to them, and {harness} sessions, memory and history there are shared with no other project.',
+    reservedAlready: 'already reserved',
+    reservedNone: 'No free {harness} account: add a reserved account in Settings › Projects once the project is created.',
   },
   integrations: {
     none: 'No Jira, Trello, GitHub or Linear account is connected: connect one in Settings › Integrations, after creating the project.',
@@ -129,6 +134,8 @@ export default defineZone('wizard', {
       validation: 'Approval',
       conflicts: 'Conflicts',
       agents: 'Ticket agents',
+      harness: 'Harness',
+      private: 'Private project',
       commit: 'Commits',
       integrations: 'Integrations',
     },
@@ -137,6 +144,10 @@ export default defineZone('wizard', {
     commands: { one: '{count} command', other: '{count} commands' },
     agentsValue: { one: '{count} in parallel', other: '{count} in parallel' },
     noneValue: 'none',
+    autopilot: 'autopilot',
+    privateValue: { one: 'yes · {count} reserved account', other: 'yes · {count} reserved accounts' },
+    privateNoAccount: 'yes · no reserved account',
+    sharedOnLimit: 'shared accounts at the limit',
   },
   checks: {
     noCommit: {

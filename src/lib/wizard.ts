@@ -1,7 +1,8 @@
 // The new project's assistant (« Nouveau projet » in steps): the settings it starts from, those it copies from another
 // project and checks in the new folder, and what it tells would keep the way of working from working.
 
-import { serves } from './accounts';
+import { dedicated, serves } from './accounts';
+import { engineName } from './engines';
 import { t } from './i18n';
 import type { Account, BoardSettings, CommitMode, EngineId, Project, RunCommand, SetupInfo, WorktreeBase, WorktreeStep } from './types';
 import { DEFAULT_AGENT_PREFIX, DEFAULT_TICKET_PREFIX } from './worktrees';
@@ -23,7 +24,10 @@ export function stepsFor(start: Start): StepId[] {
   return start === 'copy' ? all : all.filter((s) => s !== 'copied');
 }
 
-/** The settings the assistant sets: a project's, but its name, color, folder, integrations and tickets' key. */
+/**
+ * The settings the assistant sets: a project's, but its name, color, folder, integrations and tickets' key (fixed by its
+ * first ticket); and the accounts to reserve to it, which are the accounts' own.
+ */
 export interface WizardConfig {
   worktreePerAgent: boolean;
   /** « Créer le worktree au premier message, au nom de l’agent » (ESC-156). */
@@ -45,6 +49,20 @@ export interface WizardConfig {
   remoteControl: boolean;
   /** Its default harness, copied with its agents' settings. */
   engine: EngineId | null;
+  /** « Projet privé » (ESC-140). */
+  private: boolean;
+  /** « Comptes partagés à la limite » (a private project, ESC-141). */
+  sharedOnLimit: boolean;
+  /**
+   * The accounts reserved to it alone once saved (ESC-163; a private project's, « Réserver <compte> à ce projet »): those
+   * it has already, and those to reserve. Never copied from another project.
+   */
+  reserved: string[];
+}
+
+/** What a new project starts with besides the assistant's settings: « Nouveaux projets privés » (Réglages › Projets). */
+export interface NewProjectDefaults {
+  private?: boolean;
 }
 
 /** A Kanban as a new project has it (`BoardSettings::default`). */
@@ -66,7 +84,7 @@ const DEFAULT_BOARD: WizardConfig['board'] = {
 };
 
 /** « Partir de zéro »: Escouade's defaults, those of a project made without the assistant. */
-export function blankConfig(): WizardConfig {
+export function blankConfig(defaults: NewProjectDefaults = {}): WizardConfig {
   return {
     worktreePerAgent: false,
     worktreeAtFirstMessage: true,
@@ -83,6 +101,9 @@ export function blankConfig(): WizardConfig {
     account: '',
     remoteControl: false,
     engine: null,
+    private: !!defaults.private,
+    sharedOnLimit: false,
+    reserved: [],
   };
 }
 
@@ -91,8 +112,8 @@ export function blankConfig(): WizardConfig {
  * (an empty target), its worktree removed once validated, conventional commits, conflicts resolved by the agent,
  * commits written by the agent; the rest as by default.
  */
-export function recommendedConfig(): WizardConfig {
-  const c = blankConfig();
+export function recommendedConfig(defaults: NewProjectDefaults = {}): WizardConfig {
+  const c = blankConfig(defaults);
   return {
     ...c,
     worktreePerAgent: true,
@@ -101,8 +122,11 @@ export function recommendedConfig(): WizardConfig {
   };
 }
 
-/** The settings of an existing project, as the assistant edits them (« Garder la configuration actuelle »). */
-export function configOf(p: Project): WizardConfig {
+/**
+ * The settings of an existing project, as the assistant edits them (« Garder la configuration actuelle »), with the
+ * accounts reserved to it alone among `accounts`.
+ */
+export function configOf(p: Project, accounts: Account[] = []): WizardConfig {
   const { prefix: _prefix, nextNumber: _next, ...board } = p.board;
   return structuredClone({
     worktreePerAgent: p.worktreePerAgent,
@@ -122,6 +146,9 @@ export function configOf(p: Project): WizardConfig {
     account: p.account,
     remoteControl: p.remoteControl,
     engine: p.engine ?? null,
+    private: !!p.private,
+    sharedOnLimit: !!p.sharedOnLimit,
+    reserved: accounts.filter((a) => dedicated(a, p.id)).map((a) => a.id),
   });
 }
 
@@ -151,6 +178,9 @@ export function withConfig(p: Project, c: WizardConfig): Project {
     account: c.account,
     remoteControl: c.remoteControl,
     engine: c.engine,
+    private: c.private,
+    // Only a private project's: off for one that is not.
+    sharedOnLimit: c.private && c.sharedOnLimit,
     board: { ...p.board, ...c.board, testCommand, testsFirst: c.board.testsFirst && !!testCommand },
   };
 }
@@ -311,7 +341,9 @@ export function copyItems(
     id: 'agents',
     group: 'kanban',
     label: t('wizard.copy.agents'),
-    value: [b.model, b.effort, b.mode].filter(Boolean).join(' · ') || t('boardSettings.tab.default'),
+    // Its harness goes with them: the models are its own.
+    value:
+      [src.engine ? engineName(src.engine) : '', b.model, b.effort, b.mode].filter(Boolean).join(' · ') || t('boardSettings.tab.default'),
   });
 
   add({

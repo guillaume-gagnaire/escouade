@@ -1,7 +1,7 @@
 // The state of the new project's assistant: where it starts from, the step on screen, the settings as they are set
 // so far, what the folder was found to hold, and what « Créer » (or « Enregistrer », for an existing project) does.
 
-import { accountName, CLAUDE_DEFAULT_MODEL, newAgentDefaults } from './accounts';
+import { accountName, CLAUDE_DEFAULT_MODEL, dedicated, newAgentDefaults } from './accounts';
 import { t } from './i18n';
 import { api } from './ipc';
 import { app } from './state.svelte';
@@ -18,6 +18,7 @@ import {
   withConfig,
   type ControlId,
   type CopyItem,
+  type NewProjectDefaults,
   type Start,
   type StepId,
   type WizardConfig,
@@ -34,7 +35,7 @@ export class WizardForm {
   sourceId = $state('');
   /** The ids of the copied settings taken (`CopyItem.id`). */
   checked = $state<string[]>([]);
-  config = $state<WizardConfig>(recommendedConfig());
+  config = $state<WizardConfig>(recommendedConfig(this.#defaults()));
   integrations = $state<ProjectIntegrations>({ links: [], comments: [] });
   step = $state<StepId>('start');
   /** The steps left with « Passer ». */
@@ -63,7 +64,7 @@ export class WizardForm {
     if (project) {
       this.path = project.path;
       this.start = 'current';
-      this.config = configOf(project);
+      this.config = configOf(project, app.settings.accounts ?? []);
       this.integrations = $state.snapshot(project.integrations);
       this.firstAgent = false;
       this.#madeFrom = this.#signature();
@@ -146,6 +147,11 @@ export class WizardForm {
     return [...c.runCommands, ...c.worktreeSetup, ...c.worktreeTeardown].map((x) => x.cwd.trim()).filter((d) => d && d !== '.');
   }
 
+  /** What a new project starts with: private when « Nouveaux projets privés » says so. */
+  #defaults(): NewProjectDefaults {
+    return { private: !!app.settings?.privateProjects };
+  }
+
   #signature() {
     return JSON.stringify([this.start, this.sourceId, [...this.checked].sort(), this.start === 'file' ? this.path.trim() : '']);
   }
@@ -155,11 +161,15 @@ export class WizardForm {
     const sig = this.#signature();
     if (sig === this.#madeFrom) return;
     this.#madeFrom = sig;
-    if (this.start === 'current' && this.project) this.config = configOf(this.project);
-    else if (this.start === 'blank') this.config = blankConfig();
-    else if (this.start === 'recommended') this.config = recommendedConfig();
-    else if (this.start === 'file' && this.shared) this.config = configOf($state.snapshot(this.shared));
-    else if (this.source) this.config = applyCopy(blankConfig(), $state.snapshot(this.source), new Set(this.checked), this.setup);
+    const defaults = this.#defaults();
+    if (this.start === 'current' && this.project) this.config = configOf(this.project, app.settings.accounts ?? []);
+    else if (this.start === 'blank') this.config = blankConfig(defaults);
+    else if (this.start === 'recommended') this.config = recommendedConfig(defaults);
+    else if (this.start === 'file' && this.shared) {
+      // The file may make it private, never public (as when it is read into a project).
+      const c = configOf($state.snapshot(this.shared));
+      this.config = { ...c, private: c.private || !!defaults.private };
+    } else if (this.source) this.config = applyCopy(blankConfig(defaults), $state.snapshot(this.source), new Set(this.checked), this.setup);
   }
 
   /** Goes to a step: the settings made first when leaving the start or the copy. */
@@ -241,7 +251,22 @@ export class WizardForm {
     const next = { ...withConfig(base, $state.snapshot(this.config)), integrations };
     const saved = await app.run(api.updateProject(next).then(() => true));
     if (!saved) return null;
+    await this.#reserve(made.id);
     const p = await app.run(api.boardSet(made.id, next.board));
     return p ? { ...next, board: p.board } : next;
+  }
+
+  /**
+   * The accounts chosen to be reserved to the project alone, as « Réserver <compte> à ce projet » does (ESC-163): a private
+   * project's only, where the step offers them.
+   */
+  async #reserve(projectId: string) {
+    if (!this.config.private) return;
+    for (const id of this.config.reserved) {
+      const a = app.settings.accounts.find((x) => x.id === id);
+      if (!a || dedicated(a, projectId)) continue;
+      const list = await app.run(api.accountUpdate({ ...$state.snapshot(a), projects: [projectId] }));
+      if (list) app.settings.accounts = list;
+    }
   }
 }

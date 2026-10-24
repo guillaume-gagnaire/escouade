@@ -273,7 +273,7 @@
 <!-- « Projet privé »: what the agents of the other projects see of it through the MCP server, what keeps its files
      from them, harness by harness (a guard or a barrier, said as it is), then, for a private one, its accounts. -->
 <Group title={t('settings.project.privateTitle')}>
-  <Row label={t('settings.project.private')} desc={t('settings.project.privateDesc')}>
+  <Row label={t('settings.project.private')} desc={t('settings.project.privateDesc')} shared="private">
     <Switch label={t('settings.project.private')} bind:on={draft.private} />
   </Row>
   <Row label={t('settings.project.fenceTitle')} desc={t('settings.project.fenceDesc')} wide>

@@ -36,7 +36,7 @@ export default {
     worktrees: 'Où travaillent les agents et ce qui prépare chaque worktree.',
     launch: 'Les commandes qui lancent le projet, chacune dans son terminal.',
     kanban: 'Ce que fait la validation d’un ticket, et comment ses agents travaillent.',
-    account: 'Le compte des agents de ce projet, et qui écrit les commits.',
+    account: 'Le harness et le compte des agents de ce projet, qui écrit les commits, et s’il est privé.',
     integrations: 'Les tickets peuvent venir de Jira, Trello, GitHub ou Linear. Rien n’est obligatoire.',
     summary: 'Ce qui empêcherait la méthode de travail de marcher, puis ce qui sera réglé.',
   },
@@ -98,7 +98,7 @@ export default {
     parallel: 'En parallèle · pilote auto',
     /** `{autopilot}`: « oui » or « non ». */
     parallelValue: { one: '{count} agent · pilote auto {autopilot}', other: '{count} agents · pilote auto {autopilot}' },
-    agents: 'Modèle · effort · mode',
+    agents: 'Harness · modèle · effort · mode',
     dirRelative: 'relatif au projet',
     dirAbsolute: 'chemin complet d’un autre projet : non repris',
     dirFound: 'dossier « {dir} » présent',
@@ -119,6 +119,12 @@ export default {
     remoteAll: 'Déjà allumé pour tous les agents (Réglages › Harness).',
     /** ESC-128: its harness has no account yet. */
     noAccount: 'Aucun compte {harness} : les agents et les tickets de ce projet ne démarreront qu’une fois un compte ajouté.',
+    /** A private project's accounts (ESC-163): reserved to it alone once it is made. */
+    reserved: 'Comptes réservés à ce projet',
+    reservedDesc:
+      'Cochés, ils ne servent plus que lui : les autres projets ne partent plus dessus, et sessions, mémoire et historique de {harness} n’y sont partagés avec aucun autre projet.',
+    reservedAlready: 'déjà réservé',
+    reservedNone: 'Aucun compte {harness} libre : ajoute un compte réservé dans Réglages › Projets, une fois le projet créé.',
   },
   integrations: {
     none: 'Aucun compte Jira, Trello, GitHub ou Linear n’est connecté : connecte-en un dans Réglages › Intégrations, après la création.',
@@ -136,6 +142,8 @@ export default {
       validation: 'Validation',
       conflicts: 'Conflits',
       agents: 'Agents des tickets',
+      harness: 'Harness',
+      private: 'Projet privé',
       commit: 'Commit',
       integrations: 'Intégrations',
     },
@@ -144,6 +152,11 @@ export default {
     commands: { one: '{count} commande', other: '{count} commandes' },
     agentsValue: { one: '{count} en parallèle', other: '{count} en parallèle' },
     noneValue: 'aucune',
+    autopilot: 'pilote auto',
+    /** « Projet privé »: its accounts reserved, and whether it goes on shared ones at the limit. */
+    privateValue: { one: 'oui · {count} compte réservé', other: 'oui · {count} comptes réservés' },
+    privateNoAccount: 'oui · aucun compte réservé',
+    sharedOnLimit: 'comptes partagés à la limite',
   },
   /** The checks: what would keep the way of working from working, and its correction. */
   checks: {

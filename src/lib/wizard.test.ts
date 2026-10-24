@@ -367,3 +367,65 @@ describe('the checks of the way of working', () => {
     expect(controls(info(), recommendedConfig(), { ...ctx, claudeFound: false })).toEqual(['noClaude']);
   });
 });
+
+describe('every setting a project has at its creation (ESC-163)', () => {
+  beforeEach(() => setLang('fr'));
+
+  it('starts a project not private, but when « Nouveaux projets privés » says so, without accounts reserved', () => {
+    for (const make of [blankConfig, recommendedConfig]) {
+      expect(make()).toMatchObject({ private: false, sharedOnLimit: false, reserved: [] });
+      expect(make({ private: true })).toMatchObject({ private: true, sharedOnLimit: false, reserved: [] });
+    }
+  });
+
+  it('keeps a private project’s settings and the accounts reserved to it alone, as the assistant edits them again', () => {
+    const p = source({ private: true, sharedOnLimit: true });
+    const accounts: Account[] = [
+      PRINCIPAL,
+      { ...WORK, projects: ['src'] },
+      { ...WORK, id: 'both', projects: ['src', 'other'] },
+      { ...WORK, id: 'theirs', projects: ['other'] },
+    ];
+    const c = configOf(p, accounts);
+    expect(c).toMatchObject({ private: true, sharedOnLimit: true, reserved: ['work'] });
+    // Without the accounts, none: the assistant of a new project has none to show.
+    expect(configOf(p).reserved).toEqual([]);
+    // A project of before ESC-140 says nothing: not private.
+    expect(configOf(project())).toMatchObject({ private: false, sharedOnLimit: false });
+  });
+
+  it('saves « Projet privé », and « Comptes partagés à la limite » only for a private project', () => {
+    const c = { ...blankConfig(), private: true, sharedOnLimit: true, reserved: ['work'] };
+    expect(withConfig(project(), c)).toMatchObject({ private: true, sharedOnLimit: true });
+    expect(withConfig(project(), { ...c, private: false })).toMatchObject({ private: false, sharedOnLimit: false });
+    // The accounts are no setting of the project: the assistant reserves them apart.
+    expect(withConfig(project(), c)).not.toHaveProperty('reserved');
+  });
+
+  it('keeps the whole Kanban of its tickets’ agents: in parallel, model, effort, mode, autopilot', () => {
+    const c = recommendedConfig();
+    expect(c.board).toMatchObject({ maxParallel: 2, model: '', effort: '', mode: '', autopilot: true });
+    c.board = { ...c.board, maxParallel: 5, model: 'opus', effort: 'xhigh', mode: 'plan', autopilot: false };
+    const saved = withConfig(project(), c);
+    expect(saved.board).toMatchObject({ maxParallel: 5, model: 'opus', effort: 'xhigh', mode: 'plan', autopilot: false });
+    expect(configOf(saved).board).toMatchObject({ maxParallel: 5, model: 'opus', effort: 'xhigh', mode: 'plan', autopilot: false });
+  });
+
+  it('copies neither « Projet privé » nor its accounts: the projects copied are never private, the new one keeps its own', () => {
+    // As if the other project were private (the assistant never offers one): nothing of it comes.
+    const src = source({ private: true, sharedOnLimit: true });
+    const all = new Set(copyItems(src, info(), [PRINCIPAL, WORK]).map((i) => i.id));
+    expect([...all].some((id) => /private|shared|reserved/i.test(id))).toBe(false);
+    expect(applyCopy(blankConfig(), src, all, info())).toMatchObject({ private: false, sharedOnLimit: false, reserved: [] });
+    // A new project private by default stays so.
+    expect(applyCopy(blankConfig({ private: true }), src, all, info())).toMatchObject({ private: true, reserved: [] });
+  });
+
+  it('lists the harness with the agents’ settings it goes with', () => {
+    const agents = (p: Project) => copyItems(p, info(), [PRINCIPAL]).find((i) => i.id === 'agents')!;
+    expect(agents(source({ engine: 'codex' })).value).toBe('Codex · opus · high · auto');
+    expect(agents(source()).value).toBe('opus · high · auto');
+    expect(agents(source({ board: board({}) })).value).toBe('Par défaut');
+    expect(copyItems(source(), info(), [PRINCIPAL]).find((i) => i.id === 'agents')!.label).toBe('Harness · modèle · effort · mode');
+  });
+});

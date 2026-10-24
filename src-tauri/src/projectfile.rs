@@ -8,10 +8,12 @@
 //! left out, the rest of the file read all the same. `KEYS` is the one list of what it holds: the
 //! reader, the writer, what applies it to a project and the JSON schema (`schema`) all go by it.
 //!
-//! Nothing personal and nothing of one machine is in it: no name, color, account, Remote Control,
-//! « Projet privé », absolute path or token. Its commands (`Key::command`) run nowhere until the
-//! user trusts them, their fingerprint kept (`ProjectShared::trusted`) and asked for again when
-//! they change.
+//! Nothing personal and nothing of one machine is in it: no name, color, account (nor the accounts
+//! reserved to a private project), Remote Control, agents in parallel, autopilot, ticket key, absolute
+//! path or token (ESC-163). « Projet privé » is (`private`): the repository is sensitive for all;
+//! but the file may make a project private, never public again. Its commands (`Key::command`) run
+//! nowhere until the user trusts them, their fingerprint kept (`ProjectShared::trusted`) and asked
+//! for again when they change.
 
 use std::collections::BTreeMap;
 use std::str::FromStr;
@@ -82,6 +84,16 @@ const fn command(path: &'static str, kind: Kind, about: &'static str) -> Key {
 }
 
 pub const ENGINES: &[&str] = &["claude", "codex", "copilot", "opencode"];
+/// The efforts of the tickets' agents (the window's `EFFORTS`); empty: the account's.
+pub const EFFORTS: &[&str] = &["", "low", "medium", "high", "xhigh", "max"];
+/// The modes of the tickets' agents the file may set; empty: the account's. Not
+/// `bypassPermissions`: a repository does not lift the permissions of whoever opens it.
+pub const MODES: &[&str] = &["", "auto", "default", "plan", "acceptEdits"];
+/// The mode the file never carries.
+const BYPASS: &str = "bypassPermissions";
+/// « Projet privé »: the file may turn it on, never off.
+pub const PRIVATE: &str = "private";
+const MODE: &str = "board.mode";
 
 /// Every setting of version 1, in the order the file is written.
 pub const KEYS: &[Key] = &[
@@ -89,6 +101,11 @@ pub const KEYS: &[Key] = &[
         "agents.engine",
         Kind::Enum(ENGINES),
         "The harness the project's new agents and tickets run on.",
+    ),
+    key(
+        PRIVATE,
+        Kind::Bool,
+        "« Projet privé »: the agents of the other projects do not know it, nor read its files. The accounts reserved to it stay each machine's. A project private on a machine stays so when the file says false.",
     ),
     key(
         "worktrees.per_agent",
@@ -185,6 +202,21 @@ pub const KEYS: &[Key] = &[
         "board.remove_worktree",
         Kind::Bool,
         "A ticket's worktree is removed once it is done.",
+    ),
+    key(
+        "board.model",
+        Kind::Text,
+        "The model of the tickets' agents, as the harness names it (empty: the account's).",
+    ),
+    key(
+        "board.effort",
+        Kind::Enum(EFFORTS),
+        "The effort of the tickets' agents (empty: the account's).",
+    ),
+    key(
+        MODE,
+        Kind::Enum(MODES),
+        "The permission mode of the tickets' agents (empty: the account's). Never bypassPermissions: that one is set on each machine.",
     ),
 ];
 
@@ -652,8 +684,22 @@ fn value_of(k: &Key, node: &Node, warnings: &mut Vec<Warning>) -> Result<Value, 
             let v = text_of(node)?;
             if allowed.contains(&v.as_str()) {
                 Ok(json!(v))
+            } else if k.path == MODE && v == BYPASS {
+                Err((
+                    node.line,
+                    tr!(
+                        "{BYPASS} ne se partage pas : il se règle sur chaque machine",
+                        "{BYPASS} is not shared: it is set on each machine"
+                    ),
+                ))
             } else {
-                let list = allowed.join(", ");
+                // Empty (the account's) goes without saying.
+                let list = allowed
+                    .iter()
+                    .filter(|a| !a.is_empty())
+                    .copied()
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 Err((
                     node.line,
                     tr!("« {v} » (attendu : {list})", "“{v}” (expected: {list})"),
@@ -718,6 +764,7 @@ pub fn get(p: &Project, key: &str) -> Value {
     let b = &p.board;
     match key {
         "agents.engine" => json!(p.engine().as_str()),
+        PRIVATE => json!(p.private),
         "worktrees.per_agent" => json!(p.worktree_per_agent),
         "worktrees.at_first_message" => json!(p.worktree_at_first_message),
         "worktrees.base" => json!(p.worktree_base.to_text()),
@@ -741,6 +788,9 @@ pub fn get(p: &Project, key: &str) -> Value {
         "board.tests_before_approve" => json!(b.tests_first),
         "board.on_conflict" => json!(b.conflict),
         "board.remove_worktree" => json!(b.cleanup),
+        "board.model" => json!(b.model),
+        "board.effort" => json!(b.effort),
+        MODE => json!(b.mode),
         _ => Value::Null,
     }
 }
@@ -801,6 +851,7 @@ pub fn set(p: &mut Project, key: &str, v: &Value) {
                 .ok()
                 .filter(|e| *e != EngineId::Claude)
         }
+        PRIVATE => p.private = flag,
         "worktrees.per_agent" => p.worktree_per_agent = flag,
         "worktrees.at_first_message" => p.worktree_at_first_message = flag,
         "worktrees.base" => p.worktree_base = WorktreeBase::from_text(&str_of(v)),
@@ -829,6 +880,9 @@ pub fn set(p: &mut Project, key: &str, v: &Value) {
         "board.tests_before_approve" => b.tests_first = flag,
         "board.on_conflict" => b.conflict = str_of(v),
         "board.remove_worktree" => b.cleanup = flag,
+        "board.model" => b.model = str_of(v),
+        "board.effort" => b.effort = str_of(v),
+        MODE => b.mode = str_of(v),
         _ => {}
     }
 }
@@ -903,6 +957,20 @@ pub fn apply(p: &mut Project, read: &Read) -> Applied {
         }
         if key_of(k).is_some_and(|k| k.command) {
             commands.insert(k.clone(), v.clone());
+            continue;
+        }
+        // A project private on this machine stays so: the file may make it private, never public
+        // (its agents and files would be seen by the other projects' agents here). Kept on this
+        // machine, said.
+        if k == PRIVATE && p.private && v == &json!(false) {
+            p.shared.local.push(k.clone());
+            warnings.push(warn(
+                None,
+                tr!(
+                    "{PRIVATE}: false ignoré : ce projet est privé sur cette machine, décoche « Projet privé » pour le rendre public",
+                    "{PRIVATE}: false ignored: this project is private on this machine, untick “Private project” to make it public"
+                ),
+            ));
             continue;
         }
         if k == "worktrees.dir" {
@@ -1146,12 +1214,18 @@ pub fn write(existing: Option<&str>, values: &[(&str, Value)]) -> Result<String>
     Ok(out)
 }
 
-/// Every key, as the project has them: what « Exporter vers .escouade.yml » writes (an empty target
-/// branch, set by the first ticket, is left out).
+/// Whether the project's value of a key goes into the file: not an empty target branch (set by the
+/// first ticket), nor `bypassPermissions` (`MODES`).
+fn writable(k: &str, v: &Value) -> bool {
+    !(k == "board.target_branch" && v.as_str() == Some("")) && !(k == MODE && v == &json!(BYPASS))
+}
+
+/// Every key, as the project has them: what « Exporter vers .escouade.yml » writes (but what is not
+/// `writable`).
 pub fn export_values(p: &Project) -> Vec<(&'static str, Value)> {
     KEYS.iter()
         .map(|k| (k.path, get(p, k.path)))
-        .filter(|(k, v)| !(*k == "board.target_branch" && v.as_str() == Some("")))
+        .filter(|(k, v)| writable(k, v))
         .collect()
 }
 
@@ -1431,6 +1505,8 @@ impl<R: Runtime> Core<R> {
                 .iter()
                 .filter_map(|k| key_of(k))
                 .map(|k| (k.path, get(&p, k.path)))
+                // What is not written stays kept on this machine (`forget_kept` below).
+                .filter(|(k, v)| writable(k, v))
                 .collect(),
         };
         let text = write(file_text(&p.path).as_deref(), &values)?;
