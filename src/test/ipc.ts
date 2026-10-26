@@ -104,7 +104,7 @@ export const SETTINGS: Settings = {
   privateProjects: false,
   theme: 'system',
   uiZoom: 100,
-  quotaProjection: true,
+  quotaProjection: 'alert',
   terminalFontSize: 12.5,
   editorFontSize: 12.5,
   railWidth: 0,

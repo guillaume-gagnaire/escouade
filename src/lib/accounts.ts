@@ -8,7 +8,7 @@ import { estimatedBy } from './spend';
 import { t, tIn } from './i18n';
 import { app } from './state.svelte';
 import type { SettingsTab } from './settings.svelte';
-import type { Account, AccountUsage, Agent, AutopilotPause, EngineId, Project, QuotaMeter, RateWindow } from './types';
+import type { Account, AccountUsage, Agent, AutopilotPause, EngineId, Project, QuotaMeter, QuotaProjection, RateWindow } from './types';
 
 /** The id of the user's own Claude Code account. */
 export const PRINCIPAL = 'principal';
@@ -408,6 +408,28 @@ export function projectionLevel(pct: number): 'ok' | 'warn' | 'over' {
   if (p > 100) return 'over';
   if (p > 80) return 'warn';
   return 'ok';
+}
+
+/** « Projection des quotas » as the settings have it; the switch of before 2.0.2 too (on: `alert`, off: `off`). */
+export function projectionMode(): QuotaProjection {
+  const v: unknown = app.settings.quotaProjection;
+  if (v === false || v === 'off') return 'off';
+  return v === 'always' ? 'always' : 'alert';
+}
+
+/**
+ * A projection of this level is written in the status bar itself: past 80 % (choice 21 of the 2.0 design), or every one
+ * when « Toujours » is chosen. The panel and the tooltips write every one; under 1240 pixels the bar writes none, the
+ * tooltips still do.
+ */
+export function projectionInBar(level: 'ok' | 'warn' | 'over'): boolean {
+  return projectionMode() === 'always' || level !== 'ok';
+}
+
+/** « · projection à la remise à zéro : 64 % », after a window's tooltip: nothing when none is known or « Jamais ». */
+export function projectionTip(minutes: number | null, w: RateWindow | null, now: number): string {
+  const p = projectionMode() === 'off' ? null : projectedPct(minutes, w, now);
+  return p === null ? '' : ` · ${t('accounts.quota.projectedTip', { pct: fProjection(p) })}`;
 }
 
 /** A projection as it is written: « 112 % », « 999+ % » past that (early in a window, a few turns go far). */

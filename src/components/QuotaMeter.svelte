@@ -1,5 +1,15 @@
 <script lang="ts">
-  import { fProjection, meterLabel, meterName, projectedPct, projectionLevel, quotaTip } from '../lib/accounts';
+  import {
+    fProjection,
+    meterLabel,
+    meterName,
+    projectedPct,
+    projectionInBar,
+    projectionLevel,
+    projectionMode,
+    projectionTip,
+    quotaTip,
+  } from '../lib/accounts';
   import { fCountdown, fPct } from '../lib/format';
   import { t } from '../lib/i18n';
   import { app } from '../lib/state.svelte';
@@ -33,13 +43,16 @@
   const label = $derived(meterLabel(minutes));
   const name = $derived(meterName(minutes));
   const pct = $derived(usage ? Math.min(100, Math.max(0, usage.pct)) : 0);
-  /** Where the window would end at the pace used so far (`projectedPct`); null when too early, or « Projection des quotas » off. */
-  const projected = $derived(app.settings.quotaProjection === false ? null : projectedPct(minutes, usage, now));
+  /** Where the window would end at the pace used so far (`projectedPct`); null when too early, or « Projection des quotas » on « Jamais ». */
+  const projected = $derived(projectionMode() === 'off' ? null : projectedPct(minutes, usage, now));
   const level = $derived(projected === null ? null : projectionLevel(projected));
-  /** In the bar, a projection that asks for nothing (80 % or less) is left to the panel. */
-  const shownProjection = $derived(level !== null && (detail || level !== 'ok'));
-  /** « 42 % · remise à zéro le 10/10 à 18:00 »: the tooltip and the bar's value as the screen reader reads it. */
-  const text = $derived(quotaTip(usage));
+  /** In the bar, past 80 % or always, as « Projection des quotas » says (`projectionInBar`); in the panel, every one. */
+  const shownProjection = $derived(level !== null && (detail || projectionInBar(level)));
+  /**
+   * « 42 % · remise à zéro le 10/10 à 18:00 · projection à la remise à zéro : 64 % »: the tooltip and the bar's value as
+   * the screen reader reads it, the projection in it whatever the bar shows (under 1240 pixels, it shows none).
+   */
+  const text = $derived(quotaTip(usage) + projectionTip(minutes, usage, now));
 </script>
 
 {#snippet bar()}

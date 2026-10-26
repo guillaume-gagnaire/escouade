@@ -153,15 +153,49 @@ pub struct Settings {
     /// `RAIL_WIDTH_RANGE`, the same for all projects; 0 is its usual width (52 px, 72 with a
     /// label under a tile), until the edge is dragged.
     pub rail_width: u32,
-    /// « Projection des quotas »: the status bar writes, after each quota, where it would end at
-    /// the pace used so far (« → 64 % »), and the day's cost where it would end the day.
-    pub quota_projection: bool,
+    /// « Projection des quotas »: where each quota would end at the pace used so far (« → 64 % »),
+    /// and the day's cost where it would end the day, in the status bar past 80 % or always, or
+    /// nowhere (`QuotaProjection`).
+    pub quota_projection: QuotaProjection,
     /// « Voix »: the dictation (`voice`).
     pub voice: VoiceSettings,
 }
 
 /// The widths the projects' rail is dragged to (ESC-168): its tiles alone, up to a list of names.
 pub const RAIL_WIDTH_RANGE: (u32, u32) = (52, 300);
+
+/// « Projection des quotas »: where the status bar writes the projection of each quota (the
+/// panel of the accounts and the tooltips always do, unless `Off`). Read from the switch of
+/// before 2.0.2 too: `true` was `Alert`, `false` is `Off`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum QuotaProjection {
+    /// Past 80 % only (orange, red past 100 %): a green one asks for nothing.
+    #[default]
+    Alert,
+    /// Every one, green ones too.
+    Always,
+    /// None anywhere.
+    Off,
+}
+
+impl<'de> Deserialize<'de> for QuotaProjection {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Raw {
+            Switch(bool),
+            Name(String),
+        }
+        Ok(match Raw::deserialize(d)? {
+            Raw::Switch(false) => Self::Off,
+            Raw::Name(n) if n == "always" => Self::Always,
+            Raw::Name(n) if n == "off" => Self::Off,
+            // `true`, "alert", or a value of a later version: the default.
+            _ => Self::Alert,
+        })
+    }
+}
 
 /// The steps of « Zoom de l’interface », in percent: the window's own (`Settings::normalize_display`).
 pub const ZOOM_LEVELS: [u32; 8] = [80, 90, 100, 110, 125, 150, 175, 200];
@@ -559,7 +593,7 @@ impl Default for Settings {
             terminal_font_size: DEFAULT_FONT_SIZE,
             editor_font_size: DEFAULT_FONT_SIZE,
             rail_width: 0,
-            quota_projection: true,
+            quota_projection: QuotaProjection::Alert,
             voice: VoiceSettings::default(),
         }
     }
@@ -2623,17 +2657,32 @@ mod tests {
     }
 
     #[test]
-    fn the_quota_projection_is_on_unless_turned_off() {
-        let old: Settings = serde_json::from_value(json!({ "sound": false })).unwrap();
-        assert!(old.quota_projection && Settings::default().quota_projection);
-        let off = serde_json::to_value(Settings {
-            quota_projection: false,
+    fn the_quota_projection_shows_past_80_percent_unless_chosen_otherwise() {
+        let read = |v: Value| {
+            serde_json::from_value::<Settings>(json!({ "quotaProjection": v }))
+                .unwrap()
+                .quota_projection
+        };
+        let missing: Settings = serde_json::from_value(json!({ "sound": false })).unwrap();
+        assert_eq!(missing.quota_projection, QuotaProjection::Alert);
+        assert_eq!(Settings::default().quota_projection, QuotaProjection::Alert);
+        // The switch of before: on, its default; off, none.
+        assert_eq!(read(json!(true)), QuotaProjection::Alert);
+        assert_eq!(read(json!(false)), QuotaProjection::Off);
+        assert_eq!(read(json!("always")), QuotaProjection::Always);
+        assert_eq!(read(json!("off")), QuotaProjection::Off);
+        // A value of a later version is read as the default, not as an error that loses the settings.
+        assert_eq!(read(json!("later")), QuotaProjection::Alert);
+        let saved = serde_json::to_value(Settings {
+            quota_projection: QuotaProjection::Always,
             ..Default::default()
         })
         .unwrap();
-        assert_eq!(off["quotaProjection"], json!(false));
-        let read: Settings = serde_json::from_value(off).unwrap();
-        assert!(!read.quota_projection);
+        assert_eq!(saved["quotaProjection"], json!("always"));
+        assert_eq!(
+            read(saved["quotaProjection"].clone()),
+            QuotaProjection::Always
+        );
     }
 
     #[test]

@@ -67,7 +67,9 @@ describe('StatusBar', () => {
     expect(screen.queryByText(/^reset/)).not.toBeInTheDocument();
     const week = screen.getByRole('meter', { name: 'Quota sur 7 jours' });
     expect(week).toHaveAttribute('aria-valuenow', '38');
-    expect(week.getAttribute('aria-valuetext')).toMatch(/^38 % · remise à zéro le (29|30)\/09 à \d{2}:\d{2}$/);
+    expect(week.getAttribute('aria-valuetext')).toMatch(
+      /^38 % · remise à zéro le (29|30)\/09 à \d{2}:\d{2} · projection à la remise à zéro : 56 %$/,
+    );
   });
 
   it('counts active, waiting and finished agents (archived excluded)', () => {
@@ -386,7 +388,9 @@ describe('StatusBar in English', () => {
     const session = screen.getByRole('meter', { name: '5-hour quota' });
     expect(session).toHaveAttribute('aria-valuenow', '62');
     // A date, in the language: the day depends on the time zone of the machine.
-    expect(session.getAttribute('aria-valuetext')).toMatch(/^62% · resets on 09\/2[78] at \d{1,2}:\d{2}\s[AP]M$/);
+    expect(session.getAttribute('aria-valuetext')).toMatch(
+      /^62% · resets on 09\/2[78] at \d{1,2}:\d{2}\s[AP]M · projected at the reset: 97%$/,
+    );
     expect(screen.getByRole('meter', { name: '7-day quota' })).toHaveAttribute('aria-valuenow', '38');
     expect(screen.getByText(/Today/)).toHaveTextContent('Today $4.12');
   });
@@ -590,7 +594,9 @@ describe('StatusBar quotas of the accounts', () => {
     two();
     render(StatusBar);
     await userEvent.hover(within(group()).getByRole('meter', { name: 'Quota sur 7 jours' }));
-    expect(await screen.findByRole('tooltip')).toHaveTextContent(/^12 % · remise à zéro le \d{2}\/\d{2} à \d{2}:\d{2}$/);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      /^12 % · remise à zéro le \d{2}\/\d{2} à \d{2}:\d{2}( · projection à la remise à zéro : \d+ %)?$/,
+    );
     await userEvent.unhover(within(group()).getByRole('meter', { name: 'Quota sur 7 jours' }));
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
   });
@@ -599,13 +605,15 @@ describe('StatusBar quotas of the accounts', () => {
     two();
     render(StatusBar);
     const said =
-      /^Quota sur 5 heures : 42 % · remise à zéro le \d{2}\/\d{2} à \d{2}:\d{2}\. Quota sur 7 jours : 12 % · remise à zéro le \d{2}\/\d{2} à \d{2}:\d{2}$/;
+      /^Quota sur 5 heures : 42 % · remise à zéro le \d{2}\/\d{2} à \d{2}:\d{2}( · projection à la remise à zéro : \d+ %)?\. Quota sur 7 jours : 12 % · remise à zéro le \d{2}\/\d{2} à \d{2}:\d{2}( · projection à la remise à zéro : \d+ %)?$/;
     expect(group()).toHaveAccessibleDescription(said);
     // What the bars read is told as it follows the quota: a reading with a single window has a single bar (Codex's free
     // plan has one).
     app.usage = usageWith({ ...app.usage, fiveHour: null, sevenDay: win(80, 100) });
     flushSync();
-    expect(group()).toHaveAccessibleDescription(/^Quota sur 7 jours : 80 % · remise à zéro le \d{2}\/\d{2} à \d{2}:\d{2}$/);
+    expect(group()).toHaveAccessibleDescription(
+      /^Quota sur 7 jours : 80 % · remise à zéro le \d{2}\/\d{2} à \d{2}:\d{2}( · projection à la remise à zéro : \d+ %)?$/,
+    );
     // Not read yet: the windows its harness declares, each said unavailable.
     app.usage = usageWith({ ...app.usage, fiveHour: null, sevenDay: null });
     flushSync();
@@ -884,14 +892,22 @@ describe('StatusBar quotas of the harness shown (ESC-30)', () => {
     // 18:00 on the machine's clock: three quarters of the day gone.
     app.now = new Date(2026, 8, 27, 18).getTime();
     render(StatusBar);
-    // 1,00 $ at midnight, half the budget: nothing to say in the bar (choice 21), the panel says it.
+    // 1,00 $ at midnight, half the budget: nothing to say in the bar (choice 21), the panel and the tooltip say it.
     expect(screen.queryByText(/→/)).not.toBeInTheDocument();
+    const tip = () => screen.getByRole('button', { name: 'Quotas par compte' }).getAttribute('data-tip')?.replace(/\s+/g, ' ');
+    expect(tip()).toContain('Projection à minuit : 1,00 $.');
+    // « Toujours »: in the bar too, green.
+    app.settings.quotaProjection = 'always';
+    flushSync();
+    expect(screen.getByText('→ 1,00 $')).toHaveClass('ok');
+    app.settings.quotaProjection = 'alert';
     app.usage = { ...app.usage, accounts: [usageOf('work', { engine: 'codex', todayCost: 1.8, dailyBudget: 2 })] };
     flushSync();
     expect(screen.getByText('→ 2,40 $')).toHaveClass('over');
-    app.settings.quotaProjection = false;
+    app.settings.quotaProjection = 'off';
     flushSync();
     expect(screen.queryByText(/→/)).not.toBeInTheDocument();
+    expect(tip()).not.toContain('Projection à minuit');
   });
 
   it('names the harness beside its cost of the day with a single account, and no budget', () => {
@@ -923,7 +939,7 @@ describe('StatusBar groups of gauges, harness by harness (lot 0 of the 2.0 desig
     app.engines = [CLAUDE_ENGINE, MONTHLY];
     app.settings.accounts = [PRINCIPAL, WORK];
     // No projection to read past the percentages.
-    app.settings.quotaProjection = false;
+    app.settings.quotaProjection = 'off';
     app.usage = {
       todayCost: 1,
       current: { claude: 'principal', codex: 'work' },

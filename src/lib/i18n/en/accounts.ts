@@ -199,6 +199,7 @@ export default defineZone('accounts', {
     projected: '→ {pct}',
     projectedSr: 'projected at the reset: ',
     projectedCost: '→ {amount}',
+    projectedTip: 'projected at the reset: {pct}',
     tip: '{pct} · resets on {date} at {time}',
     unavailable: 'Quota unavailable',
     line: '{name}: {tip}',
@@ -215,6 +216,7 @@ export default defineZone('accounts', {
     budgetReset: 'Reset at midnight.',
     projectionNote:
       'After each quota, where it will be at its reset at the current pace: green, orange past 80%, red past 100%. The status bar only shows those past 80%.',
+    projectionNoteAlways: 'After each quota, where it will be at its reset at the current pace: green, orange past 80%, red past 100%.',
     current: 'current',
     over: 'past the pause or switch threshold',
     today: 'Today: {amount}',
@@ -238,7 +240,10 @@ export default defineZone('accounts', {
       'When the 5-hour or weekly window of its account reaches this threshold, an agent goes on on another account of its harness at the end of its turn, and new agents go there. “At the limit”: nothing moves before it, then “Resume a ticket’s agent stopped by the usage limit on another account”, below, decides. “Pause above quota” (Kanban) also holds the tickets back once every account has passed it.',
     projection: 'Quota projection',
     projectionDesc:
-      'In the status bar, after each quota, where it will stand at its reset at the current pace (“→ 64%”): green, amber past 80%, red past 100%. For a harness without a quota, the day’s cost projected to midnight, against its budget.',
+      'After each quota, where it will stand at its reset at the current pace (“→ 64%”): green, amber past 80%, red past 100%; for a harness without a quota, the day’s cost projected to midnight, against its budget. The quota panel and the tooltips show them all; the status bar, those past 80% or all of them, except under 1240 px wide, where they stay in the tooltips.',
+    projectionAlert: 'Past 80%',
+    projectionAlways: 'Always',
+    projectionOff: 'Never',
   },
 
   engineOrder: {

@@ -237,6 +237,8 @@ export default {
     projectedSr: 'projection à la remise à zéro : ',
     /** After the day's cost of a harness without a quota: where it would end at midnight; `{amount}`: « 3,40 $ ». */
     projectedCost: '→ {amount}',
+    /** After a window's tooltip, whatever the status bar shows; `{pct}`: « 64 % ». */
+    projectedTip: 'projection à la remise à zéro : {pct}',
     /** The value of a bar: `{pct}`: « 42 % »; `{date}`: « 10/10 »; `{time}`: « 18:00 ». */
     tip: '{pct} · remise à zéro le {date} à {time}',
     unavailable: 'Quota indisponible',
@@ -260,6 +262,9 @@ export default {
     budgetReset: 'Remise à zéro à minuit.',
     projectionNote:
       'Après chaque quota, où il en sera à sa remise à zéro au rythme actuel : vert, orange au-delà de 80 %, rouge au-delà de 100 %. La barre d’état ne montre que celles qui passent 80 %.',
+    /** The same with « Projection des quotas » on « Toujours ». */
+    projectionNoteAlways:
+      'Après chaque quota, où il en sera à sa remise à zéro au rythme actuel : vert, orange au-delà de 80 %, rouge au-delà de 100 %.',
     current: 'en cours',
     over: 'au-delà du seuil de pause ou de changement de compte',
     /** What the account's turns cost today; `{amount}`: « 1,20 $ » (« ≈ 1,20 $ » while a turn is running). */
@@ -292,7 +297,11 @@ export default {
       'Quand la fenêtre de 5 h ou la fenêtre hebdomadaire de son compte atteint ce seuil, un agent passe sur un autre compte de son harness à la fin de son tour, et les nouveaux agents y partent. « À la limite » : rien ne bouge avant, puis « Reprendre sur un autre compte… », ci-dessous, décide. « Pause au-delà du quota » (Kanban) retient en plus les tickets quand tous les comptes l’ont passée.',
     projection: 'Projection des quotas',
     projectionDesc:
-      'Dans la barre d’état, après chaque quota, où il en sera à sa remise à zéro au rythme actuel (« → 64 % ») : vert, orange au-delà de 80 %, rouge au-delà de 100 %. Pour un harness sans quota, le coût du jour projeté à minuit, rapporté au budget.',
+      'Après chaque quota, où il en sera à sa remise à zéro au rythme actuel (« → 64 % ») : vert, orange au-delà de 80 %, rouge au-delà de 100 % ; pour un harness sans quota, le coût du jour projeté à minuit, rapporté au budget. Le panneau des quotas et les infobulles les montrent toutes ; la barre d’état, celles qui passent 80 % ou toutes, sauf sous 1240 px de large, où elles restent dans les infobulles.',
+    /** The choices of « Projection des quotas ». */
+    projectionAlert: 'Au-delà de 80 %',
+    projectionAlways: 'Toujours',
+    projectionOff: 'Jamais',
   },
 
   // « Ordre des harness », in the « Comptes » tab once there are two harnesses.

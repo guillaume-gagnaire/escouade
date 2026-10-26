@@ -135,6 +135,7 @@ export default defineZone('shell', {
     dayCostTip: '{harness} has no quota: its account cost {cost} today, with no daily budget.',
     dayBudgetTip:
       '{harness} has no quota: its account cost {cost} today, out of a daily budget of {budget} (once reached, the autopilot waits for midnight).',
+    dayProjectedTip: 'Projected at midnight: {amount}.',
     /** The branch against its remote. */
     sync: {
       tracked: 'Tracking {upstream}: {behind} to pull, {ahead} to push',

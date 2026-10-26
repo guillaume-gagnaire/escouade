@@ -14,6 +14,7 @@
     metersShown,
     PRINCIPAL,
     privateSharing,
+    projectionMode,
     projectsWithoutAccount,
   } from '../../lib/accounts';
   import {
@@ -33,7 +34,7 @@
   import { api } from '../../lib/ipc';
   import { settingsForm } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
-  import type { Account, AccountStatus, ClosedProject, EngineId } from '../../lib/types';
+  import type { Account, AccountStatus, ClosedProject, EngineId, QuotaProjection } from '../../lib/types';
   import Chips from './Chips.svelte';
   import Group from './Group.svelte';
   import Row from './Row.svelte';
@@ -136,9 +137,16 @@
     app.run(api.saveSettings($state.snapshot(app.settings)));
   }
 
-  /** « Projection des quotas »: shown at once, saved with the rest of the app's settings as they are, like the accounts. */
-  function setProjection(on: boolean) {
-    app.settings.quotaProjection = on;
+  /** « Projection des quotas »: in the status bar past 80 % (the default), always, or nowhere. */
+  const projectionChoices = $derived([
+    { value: 'alert' as const, label: t('accounts.quotas.projectionAlert') },
+    { value: 'always' as const, label: t('accounts.quotas.projectionAlways') },
+    { value: 'off' as const, label: t('accounts.quotas.projectionOff') },
+  ]);
+
+  /** Shown at once, saved with the rest of the app's settings as they are, like the accounts. */
+  function setProjection(mode: QuotaProjection) {
+    app.settings.quotaProjection = mode;
     app.run(api.saveSettings($state.snapshot(app.settings)));
   }
 
@@ -559,7 +567,7 @@
 </Group>
 <Group title={t('accounts.quotas.title')}>
   <Row label={t('accounts.quotas.projection')} desc={t('accounts.quotas.projectionDesc')}>
-    <Switch label={t('accounts.quotas.projection')} bind:on={() => app.settings.quotaProjection !== false, setProjection} />
+    <Chips label={t('accounts.quotas.projection')} options={projectionChoices} bind:value={projectionMode, setProjection} />
   </Row>
 </Group>
 

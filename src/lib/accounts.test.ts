@@ -9,7 +9,10 @@ import {
   pauseOf,
   projectedDayCost,
   projectedPct,
+  projectionInBar,
   projectionLevel,
+  projectionMode,
+  projectionTip,
   projectsWithoutAccount,
   quotaOf,
   pickThreshold,
@@ -355,5 +358,39 @@ describe('the projection of the day’s cost at midnight', () => {
   it('says nothing in the first tenth of the day (2 h 24)', () => {
     expect(projectedDayCost(0.2, at(2, 20))).toBeNull();
     expect(projectedDayCost(0.2, at(2, 30))).not.toBeNull();
+  });
+});
+
+describe('« Projection des quotas »', () => {
+  beforeEach(() => resetApp());
+
+  it('shows past 80 % by default, always, or never, and reads the switch of before 2.0.2', () => {
+    const mode = (v: unknown) => {
+      (app.settings as { quotaProjection: unknown }).quotaProjection = v;
+      return projectionMode();
+    };
+    expect(mode('alert')).toBe('alert');
+    expect(mode('always')).toBe('always');
+    expect(mode('off')).toBe('off');
+    expect(mode(true)).toBe('alert');
+    expect(mode(false)).toBe('off');
+    expect(mode(undefined)).toBe('alert');
+  });
+
+  it('puts in the status bar the projections past 80 %, or every one when always', () => {
+    app.settings.quotaProjection = 'alert';
+    expect([projectionInBar('ok'), projectionInBar('warn'), projectionInBar('over')]).toEqual([false, true, true]);
+    app.settings.quotaProjection = 'always';
+    expect(projectionInBar('ok')).toBe(true);
+  });
+
+  it('says the projection after a tooltip, unless never or unknown', () => {
+    setLang('fr');
+    const H = 3600_000;
+    const w = { pct: 20, resetsAt: 10 * H };
+    expect(projectionTip(300, w, 8 * H)).toBe(' · projection à la remise à zéro : 33 %');
+    expect(projectionTip(300, { pct: 20, resetsAt: null }, 8 * H)).toBe('');
+    app.settings.quotaProjection = 'off';
+    expect(projectionTip(300, w, 8 * H)).toBe('');
   });
 });

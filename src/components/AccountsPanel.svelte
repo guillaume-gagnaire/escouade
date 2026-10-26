@@ -1,7 +1,7 @@
 <script lang="ts">
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { onMount } from 'svelte';
-  import { accountName, metersShown, projectedDayCost, projectionLevel, quotaGroups } from '../lib/accounts';
+  import { accountName, metersShown, projectedDayCost, projectionLevel, projectionMode, quotaGroups } from '../lib/accounts';
   import { capsOf, usagePage } from '../lib/engines';
   import { trapFocus } from '../lib/focus';
   import { fUsd } from '../lib/format';
@@ -59,7 +59,7 @@
 
   /** A harness without a quota (OpenCode): its cost of the day out of its budget, and where it would end at midnight. */
   function budgetOf(cost: number, budget: number) {
-    const end = app.settings.quotaProjection === false ? null : projectedDayCost(cost, app.now);
+    const end = projectionMode() === 'off' ? null : projectedDayCost(cost, app.now);
     return { pct: Math.min(100, (cost / budget) * 100), end, level: end === null ? null : projectionLevel((end / budget) * 100) };
   }
 </script>
@@ -148,7 +148,9 @@
     </section>
   {/each}
   {#if estimated}<p class="note">{t('stats.cost.estimatedHint')}</p>{/if}
-  {#if app.settings.quotaProjection !== false}<p class="note">{t('accounts.panel.projectionNote')}</p>{/if}
+  {#if projectionMode() !== 'off'}<p class="note">
+      {t(projectionMode() === 'always' ? 'accounts.panel.projectionNoteAlways' : 'accounts.panel.projectionNote')}
+    </p>{/if}
 </div>
 
 <style>

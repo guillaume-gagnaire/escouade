@@ -148,6 +148,8 @@ export default {
     dayCostTip: '{harness} n’a pas de quota : son compte a coûté {cost} aujourd’hui, sans budget par jour.',
     dayBudgetTip:
       '{harness} n’a pas de quota : son compte a coûté {cost} aujourd’hui, sur un budget de {budget} par jour (atteint, le pilote auto attend minuit).',
+    /** After it, the day's cost at midnight at the pace since midnight; `{amount}`: « 3,40 $ ». */
+    dayProjectedTip: 'Projection à minuit : {amount}.',
     /** The branch against its remote. */
     sync: {
       tracked: 'Suit {upstream} : {behind} à tirer, {ahead} à pousser',

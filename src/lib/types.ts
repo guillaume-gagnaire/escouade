@@ -86,8 +86,12 @@ export interface Settings {
   uiZoom: number;
   /** « Taille du texte des terminaux », in CSS pixels before the zoom. */
   terminalFontSize: number;
-  /** « Projection des quotas »: after each quota, where it would end at the pace used so far (« → 64 % »). */
-  quotaProjection: boolean;
+  /**
+   * « Projection des quotas »: after each quota, where it would end at the pace used so far (« → 64 % »), in the status
+   * bar past 80 % (`alert`) or always, or nowhere (`off`). Read through `projectionMode`, which takes the switch of before
+   * 2.0.2 (a boolean) too.
+   */
+  quotaProjection: QuotaProjection;
   /** « Taille du texte de l’éditeur », in CSS pixels before the zoom. */
   editorFontSize: number;
   /** The width of the projects’ rail chosen by its edge (ESC-168), in CSS pixels; 0 (or absent) is its usual width. */
@@ -1598,6 +1602,9 @@ export interface FileBase {
   reference: string;
   text: string | null;
 }
+
+/** « Projection des quotas » (`Settings.quotaProjection`). */
+export type QuotaProjection = 'alert' | 'always' | 'off';
 
 export interface RateWindow {
   pct: number;

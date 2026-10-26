@@ -26,7 +26,8 @@ describe('QuotaMeter in the status bar', () => {
     expect(meter).toHaveAttribute('aria-valuemin', '0');
     expect(meter).toHaveAttribute('aria-valuemax', '100');
     expect(meter).toHaveAttribute('aria-valuenow', '42');
-    expect(meter).toHaveAttribute('aria-valuetext', '42 % · remise à zéro le 10/10 à 18:00');
+    // The projection too, whatever the bar shows of it (under 1240 pixels, nothing).
+    expect(meter).toHaveAttribute('aria-valuetext', '42 % · remise à zéro le 10/10 à 18:00 · projection à la remise à zéro : 106 %');
   });
 
   it('rounds the value of the meter', () => {
@@ -130,6 +131,24 @@ describe('QuotaMeter projection', () => {
     expect(container).not.toHaveTextContent('→');
   });
 
+  it('writes every one in the status bar, green ones too, with « Projection des quotas » on « Toujours »', () => {
+    app.settings.quotaProjection = 'always';
+    try {
+      render(QuotaMeter, fiveHour(20));
+      expect(screen.getByText('→ 50 %')).toHaveClass('ok');
+    } finally {
+      app.settings.quotaProjection = 'alert';
+    }
+  });
+
+  it('says a green one in its tooltip, which the bar leaves out past 80 % only', async () => {
+    render(QuotaMeter, fiveHour(20));
+    const meter = screen.getByRole('meter');
+    expect(meter.getAttribute('aria-valuetext')).toMatch(/ · projection à la remise à zéro : 50 %$/);
+    await userEvent.hover(meter);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(/projection à la remise à zéro : 50 %$/);
+  });
+
   it('writes where the window ends at this pace past 80 %, amber, and red past 100 %', async () => {
     const { container, rerender } = render(QuotaMeter, fiveHour(34));
     // Read « projection à la remise à zéro : → 85 % » (the words for screen readers only).
@@ -160,14 +179,15 @@ describe('QuotaMeter projection', () => {
     expect(screen.getByText('→ 62 %')).toHaveClass('ok');
   });
 
-  it('writes none when « Projection des quotas » is off', () => {
-    app.settings.quotaProjection = false;
+  it('writes none when « Projection des quotas » is off, nor says one', () => {
+    app.settings.quotaProjection = 'off';
     try {
       const { container } = render(QuotaMeter, { ...fiveHour(48), detail: true });
       expect(container).toHaveTextContent('reset 3h00');
       expect(container).not.toHaveTextContent('→');
+      expect(screen.getByRole('meter').getAttribute('aria-valuetext')).not.toMatch(/projection/);
     } finally {
-      app.settings.quotaProjection = true;
+      app.settings.quotaProjection = 'alert';
     }
   });
 
@@ -186,7 +206,8 @@ describe('QuotaMeter in the panel', () => {
     expect(container).toHaveTextContent('reset 3h01');
     const meter = screen.getByRole('meter', { name: 'Quota sur 5 heures' });
     expect(meter).toHaveAttribute('aria-valuenow', '42');
-    expect(meter).toHaveAttribute('aria-valuetext', '42 % · remise à zéro le 10/10 à 18:00');
+    // The projection too, whatever the bar shows of it (under 1240 pixels, nothing).
+    expect(meter).toHaveAttribute('aria-valuetext', '42 % · remise à zéro le 10/10 à 18:00 · projection à la remise à zéro : 106 %');
     expect(meter).not.toHaveAttribute('tabindex');
     await userEvent.hover(meter);
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
@@ -221,9 +242,9 @@ describe('QuotaMeter in English', () => {
     const end = new Date(LATER);
     const time = spaces(end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }));
     const date = end.toLocaleDateString('en-US', { day: '2-digit', month: '2-digit' });
-    expect(spaces(meter.getAttribute('aria-valuetext'))).toBe(`42% · resets on ${date} at ${time}`);
+    expect(spaces(meter.getAttribute('aria-valuetext'))).toBe(`42% · resets on ${date} at ${time} · projected at the reset: 118%`);
     await userEvent.hover(meter);
-    expect(spaces(screen.getByRole('tooltip').textContent)).toBe(`42% · resets on ${date} at ${time}`);
+    expect(spaces(screen.getByRole('tooltip').textContent)).toBe(`42% · resets on ${date} at ${time} · projected at the reset: 118%`);
   });
 
   it('writes the 5-hour window as « 5h », its reset in the panel, and the tooltip’s example the way the design has it', () => {
@@ -232,7 +253,9 @@ describe('QuotaMeter in English', () => {
     expect(screen.getByRole('meter', { name: '5-hour quota' })).toBeInTheDocument();
     expect(screen.getByText('5h')).toBeInTheDocument();
     expect(screen.getByText('reset 3h01')).toBeInTheDocument();
-    expect(spaces(screen.getByRole('meter').getAttribute('aria-valuetext'))).toBe('42% · resets on 10/10 at 6:00 PM');
+    expect(spaces(screen.getByRole('meter').getAttribute('aria-valuetext'))).toBe(
+      '42% · resets on 10/10 at 6:00 PM · projected at the reset: 106%',
+    );
   });
 
   it('follows a change of language without a new render', async () => {

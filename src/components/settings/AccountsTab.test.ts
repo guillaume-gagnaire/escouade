@@ -39,18 +39,34 @@ describe('AccountsTab', () => {
     app.modal = { kind: 'settings', tab: 'accounts' };
   });
 
-  it('turns « Projection des quotas » off at once, with the app’s other settings as they are, the draft left as it is', async () => {
+  it('sets « Projection des quotas » at once, past 80 % by default, with the app’s other settings as they are, the draft left as it is', async () => {
     const b = backend();
     render(SettingsModal, { tab: 'accounts' });
     expect(screen.getByRole('heading', { name: 'Quotas' })).toBeInTheDocument();
-    const projection = screen.getByRole('switch', { name: 'Projection des quotas' });
-    expect(projection).toHaveAttribute('aria-checked', 'true');
-    await userEvent.click(projection);
-    expect(projection).toHaveAttribute('aria-checked', 'false');
-    expect(app.settings.quotaProjection).toBe(false);
+    const projection = screen.getByRole('group', { name: 'Projection des quotas' });
+    const choice = (name: string) => within(projection).getByRole('button', { name });
+    expect(
+      within(projection)
+        .getAllByRole('button')
+        .map((c) => c.textContent?.trim()),
+    ).toEqual(['Au-delà de 80 %', 'Toujours', 'Jamais']);
+    expect(choice('Au-delà de 80 %')).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(choice('Toujours'));
+    expect(choice('Toujours')).toHaveAttribute('aria-pressed', 'true');
+    expect(app.settings.quotaProjection).toBe('always');
     expect(b.called('save_settings')).toHaveLength(1);
-    expect(b.called('save_settings')[0].args.settings).toMatchObject({ quotaProjection: false, accounts: [PRINCIPAL, PRO] });
+    expect(b.called('save_settings')[0].args.settings).toMatchObject({ quotaProjection: 'always', accounts: [PRINCIPAL, PRO] });
+    await userEvent.click(choice('Jamais'));
+    expect(b.called('save_settings')[1].args.settings).toMatchObject({ quotaProjection: 'off' });
     expect(screen.getByRole('tab', { name: 'Comptes' })).not.toHaveClass('changed');
+  });
+
+  it('reads « Projection des quotas » saved before 2.0.2 as a switch: off is « Jamais »', () => {
+    backend();
+    (app.settings as { quotaProjection: unknown }).quotaProjection = false;
+    render(SettingsModal, { tab: 'accounts' });
+    const projection = screen.getByRole('group', { name: 'Projection des quotas' });
+    expect(within(projection).getByRole('button', { name: 'Jamais' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('sets « Changer de compte à » at once, « À la limite » by default, and says what it changes', async () => {

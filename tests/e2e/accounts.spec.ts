@@ -405,7 +405,7 @@ test.describe('two accounts whose claude does not list the same models (ESC-124)
   });
 });
 
-test('the status bar projects a window to its reset past 80 %, unless « Projection des quotas » is off', async ({ app }) => {
+test('the status bar projects a window to its reset past 80 %, every one on « Toujours », none on « Jamais »', async ({ app }) => {
   const { page } = app;
   await addProject(page, app.repo);
   // From this turn on, the 5 h window is at 50 % with 3 h left, the week's at 34 % half way through. The clock goes on
@@ -418,14 +418,23 @@ test('the status bar projects a window to its reset past 80 %, unless « Project
   // The week's, at 6x %, asks for nothing: only the panel writes it (choice 21 of the 2.0 design).
   await expect(bar.locator('.q', { hasText: '7 j' }).locator('.p')).toHaveCount(0);
 
-  // Off in Réglages › Comptes › « Quotas »: gone at once, and kept.
+  // Its tooltip says it all the same.
+  await expect(bar.locator('.q', { hasText: '7 j' })).toHaveAttribute('data-tip', /projection à la remise à zéro : 6\d %$/);
+
+  // « Toujours » in Réglages › Comptes › « Quotas »: the green one in the bar too, at once, and kept.
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
   await dialog.getByRole('tab', { name: 'Comptes' }).click();
-  await dialog.getByRole('switch', { name: 'Projection des quotas' }).click();
-  await expect(bar.locator('.p')).toHaveCount(0);
+  const projection = dialog.getByRole('group', { name: 'Projection des quotas' });
   const settings = () => JSON.parse(fs.readFileSync(path.join(app.root, 'data', 'settings.json'), 'utf8'));
-  await expect.poll(() => settings().quotaProjection).toBe(false);
+  await projection.getByRole('button', { name: 'Toujours' }).click();
+  await expect(bar.locator('.q', { hasText: '7 j' }).locator('.p')).toHaveText(/→ 6\d %$/);
+  await expect(bar.locator('.q', { hasText: '7 j' }).locator('.p')).toHaveClass(/ok/);
+  await expect.poll(() => settings().quotaProjection).toBe('always');
+  // « Jamais »: none.
+  await projection.getByRole('button', { name: 'Jamais' }).click();
+  await expect(bar.locator('.p')).toHaveCount(0);
+  await expect.poll(() => settings().quotaProjection).toBe('off');
 });
 
 // « Compte », « Modèle » and « Effort » of a ticket (ESC-153): its agent starts on what its form chose.

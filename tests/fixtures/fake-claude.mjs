@@ -33,7 +33,8 @@
 // closed, and write {"type":"closed"} to its session just before it does (a resume that copies
 // the session before the process is gone misses that line). Without CLAUDE_CONFIG_DIR, none of this.
 // [quota-rythme] in a message makes the quota windows it tells from then on end a little later than now, as a window
-// half way through does: 5 h at 50 % with 3 h left (→ 125 % at its reset), 7 days at 34 % with 3 days and a half left.
+// half way through does: 5 h at 50 % with 3 h left (→ 125 % at its reset), 7 days at 34 % with 3 days and a half left;
+// with CLAUDE_CONFIG_DIR, for every process of the account from then on (<dir>/fake-paced: a reading of its quota too).
 // `claude mcp add|remove|get|list` keep the user scope's MCP servers in <folder>/.claude.json (see mcpCommand).
 // What Escouade tells it is read in French or in English (« Langue des textes rédigés par Claude »):
 // each scenario below is recognized in both, its answers stay the same.
@@ -896,8 +897,16 @@ function startSession() {
     fs.appendFileSync(file, JSON.stringify({ ...entry, sessionId, cwd: process.cwd() }) + '\n');
   }
 
-  // The quota windows it tells: full while the account is out of quota; ending from now once [quota-rythme] was asked.
-  let paced = false;
+  // The quota windows it tells: full while the account is out of quota; ending from now once [quota-rythme] was asked,
+  // by this process or, through <dir>/fake-paced, by another one of the account (a reading of its quota is a process of
+  // its own).
+  let pacedHere = false;
+  const pacedFile = () => (configDir === null ? null : path.join(configDir, 'fake-paced'));
+  const isPaced = () => pacedHere || (pacedFile() !== null && fs.existsSync(pacedFile()));
+  const pace = () => {
+    pacedHere = true;
+    if (pacedFile()) fs.writeFileSync(pacedFile(), '');
+  };
   // While a <dir>/fake-overage file is there, the account answers as extra usage (ESC-147), its 5-hour window full.
   const overageOn = () => configDir !== null && fs.existsSync(path.join(configDir, 'fake-overage'));
   // While a <dir>/fake-pct file is there, the 5-hour window says the percentage it holds, until in an hour (ESC-148);
@@ -914,11 +923,11 @@ function startSession() {
         ? { utilization: 1, resetsAt: now + 3600 }
         : pct !== null
           ? { utilization: pct, resetsAt: now + 3600 }
-          : { utilization: limited() ? 1 : paced ? 0.5 : 0.12, resetsAt: paced ? now + 3 * 3600 : 1790558400 },
+          : { utilization: limited() ? 1 : isPaced() ? 0.5 : 0.12, resetsAt: isPaced() ? now + 3 * 3600 : 1790558400 },
       seven_day:
         pctOf('fake-week-pct') !== null
           ? { utilization: pctOf('fake-week-pct'), resetsAt: now + 24 * 3600 }
-          : { utilization: 0.34, resetsAt: paced ? now + 84 * 3600 : 1790805600 },
+          : { utilization: 0.34, resetsAt: isPaced() ? now + 84 * 3600 : 1790805600 },
     };
   };
 
@@ -2147,7 +2156,7 @@ function startSession() {
     if (attached.length) return readAttached(attached);
     if (text.includes('<escouade-voice>')) return voiceTurn(text);
     if (text.includes('[ferme-lentement]')) slowClose = true;
-    if (text.includes('[quota-rythme]')) paced = true;
+    if (text.includes('[quota-rythme]')) pace();
     const entering = text.match(/\[worktree ([\w./-]+)\]/);
     if (entering) enterWorktree(entering[1]);
     if (text.includes('crash')) process.exit(3);
@@ -2540,6 +2549,12 @@ function startSession() {
             }),
           );
         case 'get_usage':
+          // Once [quota-rythme] was asked, the windows it tells, read again as the endpoint writes them.
+          if (isPaced()) {
+            const w = windows();
+            const said = (x) => ({ utilization: x.utilization * 100, resets_at: new Date(x.resetsAt * 1000).toISOString() });
+            return ok(m.request_id, { rate_limits: { five_hour: said(w.five_hour), seven_day: said(w.seven_day) } });
+          }
           return ok(m.request_id, {
             rate_limits: {
               five_hour: { utilization: limited() ? 100 : 12, resets_at: '2026-09-28T01:20:00+00:00' },

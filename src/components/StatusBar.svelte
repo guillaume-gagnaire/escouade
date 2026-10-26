@@ -8,7 +8,10 @@
     newAgentAccount,
     principalId,
     projectedDayCost,
+    projectionInBar,
     projectionLevel,
+    projectionMode,
+    projectionTip,
     quotaTip,
     statusEngine,
   } from '../lib/accounts';
@@ -89,15 +92,16 @@
       const dayTip = budget
         ? t('shell.status.dayBudgetTip', { harness, cost: fUsd(cost), budget: fUsd(budget) })
         : t('shell.status.dayCostTip', { harness, cost: fUsd(cost) });
-      // Where the day's cost would end at midnight, against the budget: written past 80 %, as the quotas' projections.
-      const end = budget && app.settings.quotaProjection !== false ? projectedDayCost(cost, app.now) : null;
+      // Where the day's cost would end at midnight, against the budget: in the bar as the quotas' projections are
+      // (`projectionInBar`), in its tooltip always.
+      const end = budget && projectionMode() !== 'off' ? projectedDayCost(cost, app.now) : null;
       const level = end === null ? null : projectionLevel((end / budget!) * 100);
       day = {
         cost,
         budget,
         over: !!budget && cost >= budget,
-        tip: dayTip,
-        projection: end === null || level === 'ok' ? null : { text: fUsd(end), level: level! },
+        tip: end === null ? dayTip : `${dayTip} ${t('shell.status.dayProjectedTip', { amount: fUsd(end) })}`,
+        projection: end === null || !projectionInBar(level!) ? null : { text: fUsd(end), level: level! },
       };
     }
     // The accounts of the harness whose agents go on answering as extra usage, billed apart (choice 22).
@@ -123,7 +127,9 @@
     const name = several && shown ? t('shell.status.harnessAccount', { harness, account: accountName(shown) }) : harness;
     const lines = [
       ...(overage ? [overage] : []),
-      ...meters.map((m) => t('accounts.quota.line', { name: meterName(m.minutes), tip: quotaTip(m.usage) })),
+      ...meters.map((m) =>
+        t('accounts.quota.line', { name: meterName(m.minutes), tip: quotaTip(m.usage) + projectionTip(m.minutes, m.usage, app.now) }),
+      ),
       ...(day ? [day.tip] : []),
     ];
     return { engine, short: harness.split(' ')[0], name, account: shown, meters, day, overage: !!overage, lines };
