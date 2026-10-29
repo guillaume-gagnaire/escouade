@@ -2460,11 +2460,13 @@ impl<R: Runtime> Core<R> {
                 let rt = h.lock();
                 crate::facts::About::agent(id, &rt.meta.name, &rt.meta.project_id)
             }
+            // Gone: its project unknown, the fact goes to no plugin that could not see it.
             Err(_) => crate::facts::About {
                 agent: Some(crate::facts::Named {
                     id: id.to_string(),
                     name: String::new(),
                 }),
+                private: Some(true),
                 ..Default::default()
             },
         }

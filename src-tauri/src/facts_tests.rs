@@ -187,6 +187,8 @@ async fn an_agents_facts_reach_the_plugin_with_their_names_never_the_conversatio
         .unwrap();
     h.wait("the turn over", |h| !h.agent(&id).status.is_active())
         .await;
+    // Named after its first message (ESC-156), then archived: the last fact says its new name.
+    h.wait("its name", |h| h.agent(&id).named).await;
     h.core.archive_agent(&id, true).await.unwrap();
 
     let facts = l
@@ -594,6 +596,10 @@ async fn a_private_projects_facts_go_only_to_a_plugin_turned_on_for_it() {
         .ticket_create(&vault.id, draft("Le plan secret", &[], 5))
         .await
         .unwrap();
+    // A fact of an agent gone, whose project no one knows: kept from every plugin.
+    h.core
+        .facts
+        .emit(Body::LaunchStopped {}, h.core.about_agent("parti"));
     let public = h
         .core
         .ticket_create(&open.id, draft("Le plan public", &[], 5))
@@ -641,6 +647,12 @@ async fn a_private_projects_facts_go_only_to_a_plugin_turned_on_for_it() {
     assert!(body.contains(&public.id));
     tokio::time::sleep(Duration::from_millis(500)).await;
     let alls_after = told(&h, "dev.test.all").await;
+    for facts in [&alls, &alls_after, &vaults] {
+        assert!(
+            of(facts, "launch.stopped").is_empty(),
+            "a fact of no known project went out"
+        );
+    }
     for facts in [&alls, &alls_after] {
         let all = serde_json::to_string(facts).unwrap();
         assert!(

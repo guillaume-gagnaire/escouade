@@ -434,7 +434,8 @@ impl Plugins {
             return false;
         }
         match project {
-            None => true,
+            // A fact of the app; one kept private without its project goes nowhere.
+            None => !private,
             Some(p) => l.installed.projects.get(p).copied().unwrap_or(!private),
         }
     }
