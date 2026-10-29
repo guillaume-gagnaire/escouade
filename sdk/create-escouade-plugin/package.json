@@ -1,0 +1,29 @@
+{
+  "name": "create-escouade-plugin",
+  "version": "0.1.0",
+  "description": "npm create escouade-plugin: a new plugin of Escouade, a TypeScript program with its tests or a declarative theme.",
+  "license": "MIT",
+  "type": "module",
+  "homepage": "https://escouade.dev/en/docs/plugins/sdk",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/guillaume-gagnaire/escouade.git",
+    "directory": "sdk/create-escouade-plugin"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "create-escouade-plugin": "./bin.mjs"
+  },
+  "exports": {
+    ".": "./index.mjs"
+  },
+  "files": [
+    "bin.mjs",
+    "index.mjs",
+    "templates",
+    "README.md",
+    "LICENSE"
+  ]
+}
