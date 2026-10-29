@@ -1,0 +1,54 @@
+# The plugins' SDK on npm (PLG-9, ESC-181): @escouade-dev/plugin and create-escouade-plugin, each published when the
+# version of its package.json is not on npm yet. Raising a version on main publishes it; « Run workflow » publishes
+# what is missing.
+#
+# Trusted publishing (OIDC): no npm token in the repository, no 2FA code. Each package trusts this workflow on
+# npmjs.com (Settings › Trusted publisher: GitHub Actions, guillaume-gagnaire/escouade, sdk-publish.yml, environment
+# npm). A package's very first version is published by hand, as npm asks: the trust is set on an existing package.
+# Each version carries its provenance (the commit and this workflow), as npm makes it for a trusted publisher.
+name: SDK on npm
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'sdk/plugin/package.json'
+      - 'sdk/create-escouade-plugin/package.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: sdk-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - uses: actions/checkout@v7
+
+      # npm 11.5.1 or later speaks trusted publishing: Node 24's.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - run: npm ci
+
+      # The SDK first: a new plugin's template depends on its version. `prepack` checks the generated types against
+      # the schemas and builds dist/ before anything leaves.
+      - name: Publish the versions not on npm yet
+        run: |
+          for dir in sdk/plugin sdk/create-escouade-plugin; do
+            name=$(node -p "require('./$dir/package.json').name")
+            version=$(node -p "require('./$dir/package.json').version")
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "$name@$version is on npm already"
+            else
+              (cd "$dir" && npm publish --access public)
+            fi
+          done
