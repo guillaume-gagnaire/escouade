@@ -366,7 +366,7 @@ impl<R: Runtime> Core<R> {
                     isolated: Some(false),
                     cwd: Some(dir),
                     // The code index's rule too, as any agent without a ticket gets it.
-                    append_prompt: Some(match project.code_index {
+                    append_prompt: Some(match self.code_index_on(&project) {
                         true => format!(
                             "{} {}",
                             instructions(lang, start.kind, &project.name),

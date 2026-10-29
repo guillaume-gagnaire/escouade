@@ -596,7 +596,7 @@ fn manifest_of(b: &mut Bench) -> Option<Manifest> {
             return None;
         }
     };
-    let m = match manifest::read(&text, b.o.builtin).manifest {
+    let m = match manifest::read_in(&text, b.o.builtin, &b.folder).manifest {
         Ok(m) => m,
         Err(problems) => {
             let said: Vec<String> = problems.iter().map(|p| p.message(lang)).collect();

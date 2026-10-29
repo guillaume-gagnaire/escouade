@@ -757,7 +757,7 @@ impl<R: Runtime> Core<R> {
         pages: &[Page],
         decisions: &[Decision],
     ) -> Vec<String> {
-        if !project.code_index {
+        if !self.code_index_on(project) {
             return Vec::new();
         }
         let Ok(reader) = self.code_index(&project.id, None).await else {

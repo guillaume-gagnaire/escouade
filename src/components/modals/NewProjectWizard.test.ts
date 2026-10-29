@@ -353,6 +353,35 @@ describe('the new project’s assistant', () => {
     expect(be.called('set_code_index')).toHaveLength(0);
   });
 
+  it('starts the code index from « Index du code sur tous les projets », the project following it unless changed (ESC-293)', async () => {
+    app.settings.codeIndexAll = true;
+    const be = backend({ set_code_index: () => ({ enabled: false, chosen: true, status: { files: 0 }, excluded: [] }) });
+    const { unmount } = render(NewProjectModal);
+    await typePath();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Suivant' })).toBeEnabled());
+    await userEvent.click(screen.getByRole('button', { name: /Récapitulatif/ }));
+    const offer = () => document.querySelector('[data-wizard-code-index]') as HTMLElement;
+    expect(within(offer()).getByRole('switch', { name: 'Indexer le code' })).toHaveAttribute('aria-checked', 'true');
+    await userEvent.click(screen.getByRole('switch', { name: 'Créer un premier agent' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Créer le projet' }));
+    await waitFor(() => expect(app.modal).toBeNull());
+    // Left as the app says: no choice of its own, it follows (the backend reads it).
+    expect(be.called('set_code_index')).toHaveLength(0);
+    unmount();
+
+    // Turned off here: a choice of the project's.
+    app.modal = { kind: 'newProject' };
+    render(NewProjectModal);
+    await typePath();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Suivant' })).toBeEnabled());
+    await userEvent.click(screen.getByRole('button', { name: /Récapitulatif/ }));
+    await userEvent.click(within(offer()).getByRole('switch', { name: 'Indexer le code' }));
+    await userEvent.click(screen.getByRole('switch', { name: 'Créer un premier agent' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Créer le projet' }));
+    await waitFor(() => expect(app.modal).toBeNull());
+    await waitFor(() => expect(be.called('set_code_index')[0]?.args).toEqual({ id: 'new', enabled: false }));
+  });
+
   it('says a repository without commit, and makes its first commit', async () => {
     let commits = 0;
     const be = backend({

@@ -8,6 +8,8 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Nouveautés
 
+- L’index du code s’allume d’un coup sur tous les projets, depuis Réglages › Projets : chaque projet le suit tant qu’il n’a pas fait son propre choix, et sa section dit d’où vient son état. Les projets sont lus un par un sans bloquer la fenêtre, et couper la case demande avant d’effacer leurs index.
+- Un plugin peut avoir son logo : un PNG carré de 256 px au moins, déclaré dans son manifeste, que le store montre à la place de ses deux lettres et qu’Escouade lit dans le plugin installé. Les plugins livrés avec Escouade ont le logo de leur marque quand elle le permet, sinon celui de leur catégorie.
 - Le programme d’un plugin tourne à part, démarré seulement quand il sert, et Escouade le tient : un plugin qui ne répond pas à temps n’est plus attendu, celui qui plante redémarre (trois fois, puis s’arrête), celui qui prend trop de mémoire est arrêté, et chacun n’obtient que ses propres secrets. Son journal garde ce qu’il a fait et dit, et le protocole est décrit dans la documentation des plugins.
 - Les auteurs de plugins ont une commande livrée avec Escouade, `escouade-plugin` : `test` passe un plugin au banc de conformité et dit ce qui lui manque, `dev` lui envoie des faits et des demandes à la main, sans l’app.
 - Un plugin peut réagir à ce qui se passe dans Escouade : un agent qui attend, un tour fini, un ticket à tester ou mergé, un lancement prêt… Il reçoit ces événements dans son programme, ou les envoie à une adresse (un webhook vers Discord, Slack ou n8n) ou lance une commande sans une ligne de code ; un projet privé ne lui dit rien tant qu’il n’y est pas activé.

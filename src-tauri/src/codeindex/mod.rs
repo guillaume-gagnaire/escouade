@@ -93,6 +93,11 @@ pub struct Service {
     data: Option<DataDir>,
     gaps: Mutex<HashMap<String, Instant>>,
     locks: Mutex<HashMap<String, Arc<Mutex<()>>>>,
+    /// The projects « Index du code sur tous les projets » has yet to read (ESC-293), one at a
+    /// time: the first is being read, it leaves the list once read.
+    pub(crate) queue: Mutex<Vec<String>>,
+    /// A task reads the list.
+    pub(crate) draining: std::sync::atomic::AtomicBool,
 }
 
 impl Service {
@@ -116,6 +121,12 @@ impl Service {
             .entry(project_id.to_string())
             .or_default()
             .clone()
+    }
+
+    /// The project's lock, for a test to hold its reading.
+    #[cfg(test)]
+    pub(crate) fn lock_for_tests(&self, project_id: &str) -> Arc<Mutex<()>> {
+        self.lock(project_id)
     }
 
     /// Brings the index of the target up to date: the project's folder, then the worktree's delta.

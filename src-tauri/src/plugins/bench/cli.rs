@@ -142,7 +142,7 @@ fn read_manifest(folder: &Path, lang: Lang, builtin: bool) -> Option<Manifest> {
             return None;
         }
     };
-    let read = manifest::read(&text, builtin);
+    let read = manifest::read_in(&text, builtin, folder);
     for f in &read.ignored {
         eprintln!(
             "{}",

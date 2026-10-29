@@ -28,6 +28,27 @@ fn sorted(mut v: Vec<String>) -> Vec<String> {
     v
 }
 
+/// The bytes of a case's file: a PNG's header of its width and height, padded to its size; or
+/// its text.
+fn bytes_of(f: &Value) -> Vec<u8> {
+    if let Some(t) = f["text"].as_str() {
+        return t.chars().map(|c| c as u8).collect();
+    }
+    let size = f["size"].as_u64().unwrap_or(64).max(33) as usize;
+    let side = |i: usize| f["png"][i].as_u64().unwrap() as u32;
+    png_header(side(0), side(1), size)
+}
+
+/// A PNG's header of `width` × `height`, padded to `size` bytes: what the readers look at.
+fn png_header(width: u32, height: u32, size: usize) -> Vec<u8> {
+    let mut b = vec![0u8; size.max(33)];
+    b[..16].copy_from_slice(b"\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR");
+    b[16..20].copy_from_slice(&width.to_be_bytes());
+    b[20..24].copy_from_slice(&height.to_be_bytes());
+    b[24..29].copy_from_slice(&[8, 6, 0, 0, 0]);
+    b
+}
+
 /// Every case of tests/fixtures/plugins/manifests.json, read as the store's library reads it.
 #[test]
 fn the_reader_says_of_each_shared_case_what_the_store_says() {
@@ -39,7 +60,13 @@ fn the_reader_says_of_each_shared_case_what_the_store_says() {
     for case in cases {
         let name = case["name"].as_str().unwrap();
         let builtin = case["builtin"].as_bool().unwrap_or(false);
-        let read = manifest::check(&case["manifest"], builtin);
+        let files = case["files"].as_object();
+        let file = |p: &str| files.and_then(|f| f.get(p)).map(bytes_of);
+        let read = manifest::check_with(
+            &case["manifest"],
+            builtin,
+            files.map(|_| &file as manifest::FileOf),
+        );
         let errors: Vec<String> = match &read.manifest {
             Ok(_) => Vec::new(),
             Err(p) => p
@@ -465,4 +492,96 @@ fn a_folder_in_development_is_loaded_in_place_and_read_again_when_it_changes() {
     // Uninstalled, the folder stays.
     assert!(again.remove("dev.exemple.dev").unwrap());
     assert!(src.join(manifest::FILE).is_file());
+}
+
+/// PLG-13: the icon of an installed plugin, by its id alone, read in its folder and never out of
+/// it; none for a plugin without one; an id that is not installed is refused.
+#[test]
+fn the_icon_of_a_plugin_is_given_by_its_id_and_never_read_out_of_its_folder() {
+    use base64::Engine as _;
+    let base = temp_dir("icon");
+    let data = DataDir::new(base.join("data"));
+    let src = base.join("src");
+    let mut m = declarative("dev.exemple.logo", "1.0.0");
+    m["icon"] = json!("./assets/icon.png");
+    plugin_folder(&src, &m);
+    std::fs::create_dir_all(src.join("assets")).unwrap();
+    let png = png_header(512, 512, 600);
+    std::fs::write(src.join("assets/icon.png"), &png).unwrap();
+    let plugins = Plugins::load(data.clone(), "2.1.0");
+    let view = plugins.install_folder(&src, Lang::Fr).unwrap();
+    assert_eq!(view.state, State::Ready);
+    assert_eq!(
+        view.manifest.unwrap().icon.as_deref(),
+        Some("./assets/icon.png")
+    );
+    let url = plugins.icon("dev.exemple.logo").unwrap().unwrap();
+    let b64 = url.strip_prefix("data:image/png;base64,").unwrap();
+    assert_eq!(
+        base64::engine::general_purpose::STANDARD
+            .decode(b64)
+            .unwrap(),
+        png
+    );
+
+    // An id that is not installed, or a path given as an id: refused, nothing read.
+    assert!(plugins.icon("dev.exemple.absent").is_err());
+    assert!(plugins.icon("../../src/assets/icon.png").is_err());
+
+    // Without an icon: none, the window draws its letters.
+    let plain = base.join("plain");
+    plugin_folder(&plain, &declarative("dev.exemple.plain", "1.0.0"));
+    plugins.install_folder(&plain, Lang::Fr).unwrap();
+    assert_eq!(plugins.icon("dev.exemple.plain").unwrap(), None);
+
+    // An icon that does not hold refuses the plugin, field by field.
+    let bad = base.join("bad");
+    let mut m = declarative("dev.exemple.bad", "1.0.0");
+    m["icon"] = json!("icon.png");
+    plugin_folder(&bad, &m);
+    std::fs::write(bad.join("icon.png"), png_header(300, 256, 600)).unwrap();
+    let refusal = plugins.install_folder(&bad, Lang::En).unwrap_err();
+    assert!(
+        refusal
+            .message
+            .ends_with("- `icon` is not square (a square PNG of 256 px at least, 512 advised)."),
+        "{}",
+        refusal.message
+    );
+    std::fs::write(bad.join("icon.png"), "<svg/>").unwrap();
+    let refusal = plugins.install_folder(&bad, Lang::Fr).unwrap_err();
+    assert_eq!(refusal.problems[0].problem.code, Code::Png);
+
+    // The folder's reader never leaves it: no `..`, no absolute path, no drive.
+    let outside = base.join("outside.png");
+    std::fs::write(&outside, &png).unwrap();
+    assert!(manifest::icon_file(&src, "assets/icon.png").is_some());
+    assert!(manifest::icon_file(&src, "../outside.png").is_none());
+    assert!(manifest::icon_file(&src, "assets/../../outside.png").is_none());
+    assert!(manifest::icon_file(&src, &outside.display().to_string()).is_none());
+    assert!(manifest::icon_file(&src, "assets").is_none());
+    // Nor does a link of the folder to a file out of it (when the system lets the test make one).
+    #[cfg(unix)]
+    let linked = std::os::unix::fs::symlink(&outside, src.join("link.png")).is_ok();
+    #[cfg(windows)]
+    let linked = std::os::windows::fs::symlink_file(&outside, src.join("link.png")).is_ok();
+    if linked {
+        assert!(manifest::icon_file(&src, "link.png").is_none());
+    }
+    // A file too heavy is read one byte past the limit, no further.
+    std::fs::write(src.join("big.png"), png_header(512, 512, 3 << 20)).unwrap();
+    let big = manifest::icon_file(&src, "big.png").unwrap();
+    assert_eq!(big.len() as u64, manifest::ICON_BYTES + 1);
+    assert_eq!(manifest::icon_problems(&big), [Code::Heavy]);
+
+    // A folder in development whose icon became too heavy: none, until it holds again.
+    let dev = base.join("dev");
+    let mut m = declarative("dev.exemple.devlogo", "0.1.0");
+    m["icon"] = json!("icon.png");
+    plugin_folder(&dev, &m);
+    std::fs::write(dev.join("icon.png"), &png).unwrap();
+    plugins.load_dev(&dev, Lang::Fr).unwrap();
+    assert!(plugins.icon("dev.exemple.devlogo").unwrap().is_some());
+    std::fs::write(dev.join("icon.png"), png_header(512, 512, 2 << 20)).unwrap();
+    assert_eq!(plugins.icon("dev.exemple.devlogo").unwrap(), None);
 }

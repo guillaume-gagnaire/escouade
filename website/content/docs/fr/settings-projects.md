@@ -185,6 +185,12 @@ Fermer le projet agit tout de suite, sans attendre « Enregistrer », et ramè
 
 Fermer est refusé tant que la validation d’un ticket du projet tourne : « La validation du ticket DEM-3 est en cours : attends sa fin pour fermer le projet. » Attends qu’elle se termine, puis ferme le projet.
 
+## Tous les projets
+
+| Réglage | Effet | Défaut |
+| --- | --- | --- |
+| « Index du code sur tous les projets » | Allume l’[index du code](code-index#sur-tous-les-projets) de chaque projet qui n’a pas fait son propre choix : ils sont lus un par un, en arrière-plan. La couper efface leur index, après une confirmation qui dit combien de projets le perdent. Enregistré tout de suite, sans **Enregistrer**. | Désactivé |
+
 ## Nouveaux projets
 
 Ce groupe vaut pour tous les projets : il est là même sans projet ouvert.
@@ -224,7 +230,7 @@ L’interrupteur « Partir d’un projet vierge » (« L’historique reste d
 
 ## Index du code
 
-Le groupe « Index du code » allume l’[index du code](code-index) du projet (**Indexer ce projet**, coupé par défaut) : il dit ce que l’index fait gagner, que tout reste sur la machine, et ce qu’il contient. Pour un projet privé, il dit ce qui reste hors de l’index. **Recherche par le sens** télécharge le modèle des vecteurs, avec sa progression et **Annuler**.
+Le groupe « Index du code » allume l’[index du code](code-index) du projet (**Indexer ce projet**) : il dit ce que l’index fait gagner, que tout reste sur la machine, et ce qu’il contient. Tant que le projet n’a pas fait son propre choix, il suit **Index du code sur tous les projets** (voir plus bas) et le dit ; un choix fait ici est gardé, et **Suivre le réglage de l’app** y revient. Pour un projet privé, il dit ce qui reste hors de l’index. **Recherche par le sens** télécharge le modèle des vecteurs, avec sa progression et **Annuler**.
 
 ## Mémoire partagée
 

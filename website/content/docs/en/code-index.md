@@ -19,10 +19,21 @@ The languages read: Rust, TypeScript, JavaScript, Svelte, Python, Go, Java, C#, 
 
 The index is **off by default**. Escouade offers it:
 
-- when a project is added, at the last step of the “New project” assistant (**Index the code**);
-- in **Settings › Projects › Code index** (**Index this project**), at any time.
+- for every project at once, in **Settings › Projects › Every project** (**Code index on every project**);
+- when a project is added, at the last step of the “New project” assistant (**Index the code**), which starts from that setting;
+- in **Settings › Projects › Code index** (**Index this project**), project by project, at any time.
 
 Once on, the project is read once, then kept up to date without a file watcher: at each question of the agents (every 3 seconds at most), on commits, branch changes and the ends of turns. The setting says what it holds: its files, its symbols, its size and when it was read. Turning it off erases the index.
+
+### On every project
+
+Each project follows **Code index on every project** until it makes its own choice. A project turned on or off in its settings keeps its choice, whatever the app’s switch says; its section says where its state comes from (“Follows the app’s setting” or “Chosen for this project”) and **Follow the app’s setting** gives it back.
+
+- **Turning the switch on** reads the projects that follow it one by one, never all at once, without blocking the window. A message says how many will be read; each one’s section says whether it waits for its turn, is being read, then what it holds.
+- **Turning it off** erases the index of the projects that follow it. Escouade asks first, saying how many projects lose their index; those that made their own choice keep theirs.
+- The model of the [search by meaning](#search-by-meaning) is never downloaded for this switch: it is still downloaded by hand.
+
+A project turned on before this switch keeps its index, as a choice of its own; a project that was off now follows the switch.
 
 The agents’ worktrees are not indexed whole: the index of the base branch serves them all, and each worktree only adds what differs from it.
 

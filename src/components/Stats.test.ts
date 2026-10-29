@@ -62,7 +62,7 @@ describe('Stats', () => {
   });
 
   it('shows what the code index saved per project, in tokens and estimated dollars (ESC-254)', async () => {
-    resetApp({ projects: [project({ codeIndex: true })] });
+    resetApp({ projects: [project({ codeIndexChoice: true })] });
     fakeBackend({
       stats: (a: any) => ({
         ...view(a.range),
@@ -84,7 +84,7 @@ describe('Stats', () => {
   });
 
   it('says the index answered nothing over the period, and shows nothing of it when no project has turned it on', async () => {
-    resetApp({ projects: [project({ codeIndex: true })] });
+    resetApp({ projects: [project({ codeIndexChoice: true })] });
     fakeBackend({ stats: (a: any) => view(a.range) });
     const { unmount } = render(Stats);
     await loaded();

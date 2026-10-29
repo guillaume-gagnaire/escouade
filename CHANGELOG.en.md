@@ -8,6 +8,8 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### New
 
+- The code index turns on for every project at once, from Settings › Projects: each project follows it until it makes its own choice, and its section says where its state comes from. Projects are read one by one without blocking the window, and turning the switch off asks before erasing their indexes.
+- A plugin can have its logo: a square PNG of 256 px at least, declared in its manifest, which the store shows in place of its two letters and Escouade reads from the installed plugin. The plugins shipped with Escouade show their brand’s logo where the brand allows it, else their category’s.
 - A plugin’s program runs apart, started only when it is needed, and Escouade keeps it in check: a plugin that does not answer in time is no longer waited for, one that crashes restarts (three times, then stops), one that takes too much memory is stopped, and each gets only its own secrets. Its journal keeps what it did and said, and the protocol is described in the plugins’ documentation.
 - Plugin authors get a command that ships with Escouade, `escouade-plugin`: `test` puts a plugin through the conformance bench and says what it lacks, `dev` sends it facts and requests by hand, without the app.
 - A plugin can react to what happens in Escouade: an agent waiting, a turn over, a ticket to test or merged, a launch ready… It receives these events in its program, or sends them to an address (a webhook to Discord, Slack or n8n) or runs a command without a line of code; a private project tells it nothing until it is turned on there.

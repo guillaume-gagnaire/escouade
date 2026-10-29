@@ -19,10 +19,21 @@ Les langages lus : Rust, TypeScript, JavaScript, Svelte, Python, Go, Java, C#, P
 
 L’index est **coupé par défaut**. Escouade le propose :
 
-- à l’ajout d’un projet, à la dernière étape de l’assistant « Nouveau projet » (**Indexer le code**) ;
-- dans **Réglages › Projets › Index du code** (**Indexer ce projet**), à tout moment.
+- pour tous les projets d’un coup, dans **Réglages › Projets › Tous les projets** (**Index du code sur tous les projets**) ;
+- à l’ajout d’un projet, à la dernière étape de l’assistant « Nouveau projet » (**Indexer le code**), qui part de ce réglage ;
+- dans **Réglages › Projets › Index du code** (**Indexer ce projet**), projet par projet, à tout moment.
 
 Allumé, le projet est lu une fois, puis tenu à jour sans guetteur de fichiers : à chaque question des agents (au plus toutes les 3 secondes), aux commits, aux changements de branche et aux fins de tour. Le réglage dit ce qu’il contient : ses fichiers, ses symboles, sa taille et quand il a été lu. Le couper efface l’index.
+
+### Sur tous les projets
+
+Chaque projet suit **Index du code sur tous les projets** tant qu’il n’a pas fait son propre choix. Un projet allumé ou coupé dans ses réglages garde son choix, quoi que dise la case de l’app ; sa section dit d’où vient son état (« Suit le réglage de l’app » ou « Choisi pour ce projet ») et **Suivre le réglage de l’app** le lui rend.
+
+- **Allumer la case** lit les projets qui la suivent un par un, jamais tous à la fois, sans bloquer la fenêtre. Un message dit combien seront lus ; la section de chacun dit s’il attend son tour, s’il est en lecture, puis ce qu’il contient.
+- **La couper** efface l’index des projets qui la suivent. Escouade demande d’abord, en disant combien de projets perdent leur index ; ceux qui ont fait leur propre choix gardent le leur.
+- Le modèle de la [recherche par le sens](#la-recherche-par-le-sens) ne se télécharge jamais pour cette case : il reste à télécharger à la main.
+
+Un projet allumé avant cette case garde son index, comme un choix à lui ; un projet qui était coupé suit désormais la case.
 
 Les worktrees des agents ne sont pas indexés en entier : l’index de la branche de base sert à tous, et chaque worktree n’ajoute que ce qui en diffère.
 

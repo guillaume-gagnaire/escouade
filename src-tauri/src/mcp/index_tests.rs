@@ -21,7 +21,7 @@ async fn indexed(h: &Harness, p: &Project) {
         "mod shop;\nfn main() { shop::place_order(1); }\n",
     )
     .unwrap();
-    h.core.set_code_index(&p.id, true).await.unwrap();
+    h.core.set_code_index(&p.id, Some(true)).await.unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -159,7 +159,7 @@ async fn an_agent_is_answered_for_its_worktree_and_a_private_project_stays_hidde
     )
     .unwrap();
     indexed(&h, &open).await;
-    h.core.set_code_index(&vault.id, true).await.unwrap();
+    h.core.set_code_index(&vault.id, Some(true)).await.unwrap();
     let vault = make_private(&h, &vault);
     let a = put_agent(&h, &open, "alpha", 1);
     let v = put_agent(&h, &vault, "keeper", 2);
