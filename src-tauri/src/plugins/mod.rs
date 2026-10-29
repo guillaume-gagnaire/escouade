@@ -18,6 +18,8 @@ pub mod bench;
 pub mod manifest;
 #[cfg_attr(not(test), allow(dead_code))]
 pub mod runtime;
+// The seal of a version from the store, checked with the keys the app embeds (STORE-8; STORE-9 shows it).
+pub mod store_keys;
 
 use crate::i18n::Lang;
 use crate::paths::DataDir;

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ACCOUNT_TEXTS } from '~/data/account';
 import { pathIn } from '~/data/language';
+import { REVIEW_TEXTS } from '~/data/review';
 
 // The header of the documentation of the site, as the preview draws it (design/store/): the brand and « Store »,
 // then the tools on the right: the sign-in with GitHub for a visitor, « Mes plugins » and the author's initials once
@@ -52,6 +53,9 @@ onBeforeUnmount(() => removeEventListener('keydown', slash));
           ><StoreIcon name="search"
         /></NuxtLink>
         <template v-if="me.account">
+          <NuxtLink v-if="me.account.admin" class="link wide" :to="pathIn(lang, '/review')"
+            >{{ REVIEW_TEXTS[lang].title }} <span class="n">{{ me.account.queue }}</span></NuxtLink
+          >
           <NuxtLink class="link" :to="account">{{ words.mine }}</NuxtLink>
           <NuxtLink class="btn sm primary" :to="pathIn(lang, '/submit')">{{ text.header.submit }}</NuxtLink>
           <NuxtLink class="me" :to="account"
@@ -179,6 +183,10 @@ kbd {
 }
 .link:hover {
   color: var(--text);
+}
+.link .n {
+  color: var(--dim);
+  font: 12px var(--mono);
 }
 .me {
   display: flex;

@@ -1,4 +1,4 @@
-import { createHash, generateKeyPairSync, randomBytes, sign } from 'node:crypto';
+import { createHash, createPrivateKey, generateKeyPairSync, randomBytes, sign } from 'node:crypto';
 
 // A minisign key made for a test (never a file of the repository): its `.pub` text and a signer that writes
 // `.minisig` files as minisign does (prehashed, `ED`). The real key of the store lives on the user's machine alone.
@@ -13,6 +13,8 @@ export function testKey() {
   return {
     pub,
     id: hex,
+    /** What tests/fake/fake-minisign.mjs reads in place of minisign's encrypted secret key (a test file, never the real one). */
+    secret: JSON.stringify({ id: id.toString('hex'), pkcs8: privateKey.export({ format: 'pem', type: 'pkcs8' }) }),
     /** @param {Buffer | string} data @param {string} trusted */
     sign(data, trusted, { legacy = false } = {}) {
       const bytes = Buffer.from(data);
@@ -23,4 +25,19 @@ export function testKey() {
       return `untrusted comment: signature from minisign secret key\n${line}\ntrusted comment: ${trusted}\n${global.toString('base64')}\n`;
     },
   };
+}
+
+/**
+ * Signs `data` as minisign does (prehashed, `ED`) with a key's `secret` (testKey().secret, a test file): what
+ * fake-minisign.mjs and the end-to-end tests use in place of the store's key.
+ * @param {string} secret @param {Buffer | string} data @param {string} trusted
+ */
+export function signWithSecret(secret, data, trusted) {
+  const s = JSON.parse(secret);
+  const key = createPrivateKey(s.pkcs8);
+  const id = Buffer.from(s.id, 'hex');
+  const sig = sign(null, createHash('blake2b512').update(Buffer.from(data)).digest(), key);
+  const global = sign(null, Buffer.concat([sig, Buffer.from(trusted, 'utf8')]), key);
+  const line = Buffer.concat([Buffer.from('ED'), id, sig]).toString('base64');
+  return `untrusted comment: signature from minisign secret key\n${line}\ntrusted comment: ${trusted}\n${global.toString('base64')}\n`;
 }

@@ -241,6 +241,11 @@ Une page `/review`, visible du seul administrateur (son identifiant GitHub dans 
 
 L'API de la file (`/api/v1/review/*`) demande un **jeton d'administration** que l'utilisateur crée dans son compte et garde dans le trousseau du système ; il permet de lire la file, de poser un rapport et de déposer une signature ; il ne permet ni de publier ni de supprimer un plugin.
 
+**Fait le 2026-10-29** (ESC-235, STORE-8) : `/review` et `/en/review` (`app/components/StoreReview.vue`), pour les seuls comptes de `STORE_ADMINS` (une page « n'existe pas » pour les autres) ; le lien « File de revue » et son nombre dans l'en-tête ; comparée à l'aperçu `#review` dans les deux thèmes et à 1440, 1028 et 390 px (`tests/e2e/review.spec.ts`). Ce qui a été tranché en la construisant :
+- **les onglets** : « À relire » (les versions publiées dont l'auteur a demandé la revue, ni signées, ni déjà répondues, ni retirées ; les plus installées d'abord, puis les plus anciennes), « Signalements », « Noms proches » (les versions `held` de §3.3), « Faites » (les 50 dernières réponses) ; chaque ligne est un lien, chaque action un formulaire : la page marche sans script, sous la politique de sécurité stricte ;
+- **le détail** : la commande à copier (avec `--since` si la dernière vérifiée n'est pas la précédente), `/review-plugin`, ce que la version demande et ce qui est nouveau depuis la dernière vérifiée (en ambre), la taille du diff calculée sur les archives gardées (fichiers, lignes en plus et en moins), le rapport déposé par le script (lu comme du texte, jamais rendu en HTML : il cite le code d'un tiers), « Demander des changements » et « Refuser » avec un message à l'auteur (10 à 4 000 caractères, par e-mail et dans son compte : la version reste publiée, non vérifiée), et la commande `sign`. Pas de bouton « Vérifier » ;
+- **le jeton d'administration** : créé dans le compte (« Jetons d'administration », visible des seuls administrateurs), `esc_admin_` puis 32 octets aléatoires, montré une fois par la réponse de la requête qui le crée (jamais dans une adresse, un cookie ou un journal), gardé haché (SHA-256), cinq au plus, révocable ; il n'agit que tant que son compte est dans `STORE_ADMINS`. Il ouvre `/api/v1/review/queue`, `report`, `signature` et `revocations`, qui ne lisent aucun cookie (le contrôle de l'`Origin` ne s'y applique donc pas) ; il ne publie ni ne supprime rien. Le script le lit dans `ESCOUADE_STORE_TOKEN` ou le trousseau du système (`npm run plugin-review -- token`), jamais dans un argument.
+
 ### 4.2 Côté poste : un agent dans ce dépôt
 
 Deux portes, la même mécanique :
@@ -292,6 +297,32 @@ Le temps de revue est le vrai coût du store : la file trie par installations ; 
 - **Envoyer** : le script signe en local (le mot de passe demandé dans le terminal), puis dépose la signature au store par l'API de la file. Le store la vérifie avec les clés publiques avant de l'accepter (une erreur de manipulation ne se publie pas), puis la sert à côté de la version.
 - **Dans l'app** : la signature vérifiée avec les clés publiques embarquées, contre le `version.json` téléchargé, dont les empreintes sont comparées aux octets reçus. Tout concorde : « Vérifié par Escouade ». Le store ne peut pas fabriquer un badge : il n'a pas la clé.
 
+**Les deux paires de clés : la procédure pour l'utilisateur** (STORE-8). Personne d'autre ne les crée : ni le chef d'escouade, ni un agent, ni la CI. Une fois, sur ton poste, dans un terminal (PowerShell sous Windows, le terminal ailleurs) :
+
+1. **Installer minisign** (0.11 ou plus) : `winget install jedisct1.minisign` sous Windows, `brew install minisign` sous macOS, `sudo apt install minisign` sous Debian ou Ubuntu. `minisign -v` doit répondre.
+2. **Créer la paire de tous les jours**, chiffrée par un mot de passe que minisign demande deux fois (un mot de passe long, neuf, gardé dans ton gestionnaire de mots de passe) :
+   ```sh
+   mkdir ~/.escouade-signing
+   minisign -G -p ~/.escouade-signing/store.pub -s ~/.escouade-signing/store.key
+   ```
+   Sous Windows, `~` est `$HOME` (`C:\Users\<toi>`). minisign chiffre la clé secrète par ce mot de passe (scrypt) ; sans lui, le fichier ne signe rien.
+3. **Créer la paire de secours**, avec un autre mot de passe, directement sur une clé USB (`E:` sous Windows, `/Volumes/<nom>` sous macOS, `/media/<toi>/<nom>` sous Linux) : elle ne passe jamais par le disque du poste.
+   ```sh
+   minisign -G -p <clé USB>/escouade-backup.pub -s <clé USB>/escouade-backup.key
+   ```
+4. **Sauvegarder hors ligne** : copie `store.key` sur la même clé USB, puis range-la (un tiroir fermé, pas avec l'ordinateur) ; mets les deux mots de passe et les deux fichiers `.key` en pièce jointe d'une entrée de ton gestionnaire de mots de passe. La clé de secours ne revient sur un poste que le jour où la première est perdue ou volée (§7).
+5. **Donner les deux clés publiques** au chef d'escouade : le contenu de `store.pub` et de `escouade-backup.pub` (deux lignes chacun, publiques, rien de secret). Il les met dans `store/keys/store.pub` et `store/keys/backup.pub` (le store les lit, et la copie de la liste de révocation sur escouade.dev) et dans `STORE_PUBLIC_KEYS` de l'app (`src-tauri/src/plugins/store_keys.rs`, dans le même ordre ; un test vérifie qu'elles sont les mêmes que celles de `store/keys/`). **Tant qu'elles n'y sont pas, l'app embarque une place vide qui refuse tout badge**, le store ne prend ni signature ni liste de révocation (la page `/review` le dit en tête) et la copie sur escouade.dev ne copie rien.
+6. **Garder le jeton d'administration** : sur le store, connecté, ton compte › « Jetons d'administration » › « Créer un jeton » ; il est montré une fois. Puis `npm run plugin-review -- token` et colle-le : il va dans le trousseau du système (Gestionnaire d'identification de Windows par `PasswordVault`, Trousseau de macOS, Secret Service sous Linux), jamais dans un fichier du dépôt. À défaut, `ESCOUADE_STORE_TOKEN` dans l'environnement du terminal.
+
+Signer une version, une fois la revue lue et la décision « Vérifier » prise :
+```sh
+npm run plugin-review -- report <id>@<version>   # le rapport dans la file (facultatif)
+npm run plugin-review -- sign <id>@<version>     # minisign demande le mot de passe de store.key
+```
+`sign` refuse si la revue n'est pas faite, si elle a relevé un bloqueur (intégrité, étiquette, entrées refusées, binaire sans attestation, banc qui échoue) ou si le `version.json` servi n'est plus celui qu'elle a lu ; minisign signe avec le commentaire `escouade-verified-v1 <id>@<version> <date>` ; la signature est vérifiée sur le poste avec les clés de `store/keys/`, puis déposée avec le résumé public (`<version>.public.md` et `.public.en.md`). `ESCOUADE_SIGNING_KEY` nomme une autre clé (celle de secours), `ESCOUADE_MINISIGN` un autre minisign.
+
+**Fait le 2026-10-29** (ESC-235, STORE-8) : la table `signatures` (à part de `versions`, sans clé étrangère : la purge d'un plugin supprimé ne l'emporte pas) ; `POST /api/v1/review/signature` (`server/utils/review.ts`, `acceptSignature`) vérifie la signature contre les octets de `version.json` avec les clés de `store/keys/`, moins celles que la liste de révocation retire (`keys_revoked`), le commentaire de confiance nommant cet identifiant et ce numéro (`server/utils/signature.ts`, que le script reprend), et refuse une version dont un binaire n'a pas d'attestation, ou que la liste désactive ; acceptée, la version est `verified` au catalogue (avec `review.summary` et `files.signature`), sa signature servie à `plugins/<id>/<version>/version.json.minisig`, le sceau et « Relu par Escouade le … » sur sa page, « Vérifiée » dans le compte de l'auteur, qui est prévenu par e-mail. Une entrée `unverify` de la liste retire le sceau partout. Le vérificateur de l'app (`store_keys.rs`, `minisign-verify`) lit les mêmes signatures : un test le joue sur une signature faite comme le store les fait ; il servira à STORE-9.
+
 ### 4.6 La révocation, le retrait d'urgence et les signalements
 
 - **La liste de révocation** : `revocations.json`, signée par la même clé, servie par le store et copiée sur escouade.dev (un second chemin si le store tombe) : `{ serial, issued_at, entries: [{ id, versions: "*" | ["1.2.0"], action: "unverify" | "disable", reason: { fr, en }, date }] }`.
@@ -301,6 +332,11 @@ Le temps de revue est le vrai coût du store : la file trie par installations ; 
 - **Lue par l'app** au démarrage puis toutes les 6 heures ; gardée en cache ; un `serial` plus petit que le dernier vu est refusé (personne ne rejoue une vieille liste pour lever une révocation).
 - **Le store** retire de la liste, d'office, une version désactivée ; l'auteur est prévenu (sauf si le prévenir aiderait un attaquant).
 - **Les signalements** : « Signaler » sur la page d'un plugin, ouvert à tous par un formulaire avec une adresse e-mail, sans compte GitHub (le DSA ; décidé à la revue du 2026-10-29, §8.1, fait par STORE-4 : une déclaration de bonne foi, 5 par adresse et par heure, un accusé de réception par e-mail) et dans l'app (qui ouvre cette page) : malveillant, ne fait pas ce qu'il dit, permissions trompeuses, licence, autre. Ils vont dans la file de revue, avec le nombre par plugin ; l'auteur voit qu'un signalement est ouvert, pas qui l'a fait. Un plugin « malveillant » signalé par plusieurs comptes remonte en tête ; la décision reste humaine.
+
+**Fait le 2026-10-29** (ESC-235, STORE-8) :
+- **la liste signée sur le poste** : `npm run plugin-review -- revoke <id>[@<version>] --disable|--unverify --fr "…" --en "…" [--quiet]` lit la liste que sert le store, la vérifie avec les clés de `store/keys/` (une liste qui ne passe pas arrête tout), y ajoute l'entrée, prend le `serial` suivant (au-dessus du store et des listes gardées dans `~/.escouade-review/revocations/`), la fait signer par minisign (`escouade-revocations-v1 <serial> <date>`), la vérifie de nouveau, puis la dépose par `POST /api/v1/review/revocations` ; `lift` retire une entrée, `revoke-key <id de clé>` ajoute une clé à `keys_revoked` (à signer avec la clé de secours, §7). `--quiet` ne prévient pas l'auteur (quand le prévenir aiderait un attaquant) ;
+- **le retrait d'urgence** : une entrée `disable` fait sortir la version du catalogue dès son dépôt (le catalogue est refait), ses fichiers répondent 410, sa page dit « Retirée » ; l'auteur reçoit la raison par e-mail. `unverify` retire le sceau et le dit ;
+- **les signalements** dans la file : par plugin, ceux que plusieurs disent « malveillant » en tête, le nombre d'ouverts, la commande du retrait d'urgence à copier, jamais l'adresse de qui a signalé ; « Retenu » ou « Classer sans suite » avec une réponse facultative, envoyée à qui a signalé (le DSA : il est informé de la décision).
 
 ## 5. Dans l'app
 

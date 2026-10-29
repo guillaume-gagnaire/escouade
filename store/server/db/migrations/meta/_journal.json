@@ -50,6 +50,13 @@
       "when": 1793285083200,
       "tag": "0006_plugin_icon",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793308608622,
+      "tag": "0007_review",
+      "breakpoints": true
     }
   ]
 }

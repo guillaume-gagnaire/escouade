@@ -225,6 +225,16 @@ export const versions = pgTable(
     tagMovedAt: at('tag_moved_at'),
     tagMovedTo: text('tag_moved_to'),
     yankedAt: at('yanked_at'),
+    /** The review's answer (STORE-8): `changes` asked, `refused`, or `verified` once a signature is taken in. */
+    reviewState: text('review_state'),
+    /** What the review said to the author (changes asked, refused), sent by e-mail too. */
+    reviewMessage: text('review_message'),
+    reviewedAt: at('reviewed_at'),
+    /** The report the review's script sent (markdown, for the administrator alone: it may quote the plugin's code). */
+    reviewReport: text('review_report'),
+    /** The verdict the report proposed: `Vérifier`, `Demander des changements`, `Refuser`, or null to decide. */
+    reviewVerdict: text('review_verdict'),
+    reviewReportAt: at('review_report_at'),
   },
   (t) => [
     index('versions_plugin').on(t.pluginId),
@@ -282,6 +292,52 @@ export const reports = pgTable(
     lang: text('lang').notNull().default('fr'),
     state: text('state').notNull().default('open'),
     createdAt: at('created_at').notNull().defaultNow(),
+    /** When the review closed it (`state`: `dismissed` or `upheld`), and what it answered its sender. */
+    closedAt: at('closed_at'),
+    answer: text('answer'),
   },
   (t) => [index('reports_plugin').on(t.pluginId), index('reports_state').on(t.state)],
+);
+
+/**
+ * The signatures of the review (docs/STORE.md, §4.5): made on the user's machine with the store's key, over a
+ * version's `version.json`, and checked with the public keys before they are taken in. Kept apart from `versions`
+ * (no foreign key): a plugin's purge does not take them, and an app that has the version keeps its seal's proof.
+ * `summary` is the public summary of the review, in both languages.
+ */
+export const signatures = pgTable(
+  'signatures',
+  {
+    pluginId: text('plugin_id').notNull(),
+    version: text('version').notNull(),
+    versionSha256: text('version_sha256').notNull(),
+    minisig: text('minisig').notNull(),
+    keyId: text('key_id').notNull(),
+    signedAt: at('signed_at').notNull(),
+    receivedAt: at('received_at').notNull().defaultNow(),
+    summary: jsonb('summary').$type<{ fr: string; en: string }>(),
+  },
+  (t) => [primaryKey({ columns: [t.pluginId, t.version] })],
+);
+
+/**
+ * The administration tokens (docs/STORE.md, §4.1): an administrator makes one in their account for the review's
+ * script; it reads the queue, sends a report, a signature or a revocation list, and nothing else. The base keeps its
+ * hash alone; it is shown once, when it is made. It acts only while its account is still in STORE_ADMINS.
+ */
+export const adminTokens = pgTable(
+  'admin_tokens',
+  {
+    id: text('id').primaryKey(),
+    accountId: integer('account_id')
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    label: text('label').notNull(),
+    /** Its first characters, to tell it apart in the list (never enough to use it). */
+    hint: text('hint').notNull(),
+    createdAt: at('created_at').notNull().defaultNow(),
+    usedAt: at('used_at'),
+    revokedAt: at('revoked_at'),
+  },
+  (t) => [index('admin_tokens_account').on(t.accountId)],
 );

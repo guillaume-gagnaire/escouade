@@ -100,10 +100,24 @@ Ce que l'app lit (`docs/STORE.md`, §1.2, §4.6, §5.4 ; STORE-9 la branche), sa
 | `GET` ou `HEAD plugins/<id>/<version>/binaries/<système>` | le programme de la release (`windows-x64`, `macos-arm64`…) | idem |
 | `GET revocations.json`, `revocations.json.minisig` | la dernière liste de révocation et sa signature, telles que signées (404 avant la première) | `ETag`, `no-cache` |
 | `POST installs` | `{ id, version, event: "install" | "update" }`, en JSON seulement : un au compteur du jour de la version (`installs_daily`), rien d'autre | — |
+| `GET plugins/<id>/<version>/version.json.minisig` | la signature de la revue (STORE-8), telle que minisign l'a écrite sur le poste de l'utilisateur ; 404 pour une version non vérifiée. Le catalogue en donne le chemin (`files.signature`) et le résumé public (`review.summary`) pour une version `verified` | `ETag`, `no-cache` |
+
+## La file de revue
+
+Pour les seuls comptes de `STORE_ADMINS` (`docs/STORE.md` §4.1, STORE-8) : la page `/review` (connecté), et pour le script de la revue (`npm run plugin-review -- report|sign|revoke|lift|revoke-key`), ces routes avec `Authorization: Bearer <jeton d'administration>`, sans cookie :
+
+| Route | Ce qu'elle fait |
+| --- | --- |
+| `GET /api/v1/review/queue` | la file : à relire, signalements, noms proches, faites |
+| `POST /api/v1/review/report` | `{ id, version, verdict, report }` : le rapport (256 Ko au plus), lu sur `/review` comme du texte |
+| `POST /api/v1/review/signature` | `{ id, version, minisig, summary: { fr, en } }` : vérifiée avec les clés de `store/keys/` contre `version.json` avant d'être prise ; 422 sinon, 503 sans clé |
+| `POST /api/v1/review/revocations` | `{ json, minisig, notify }` : la liste suivante, signée, `serial` au-dessus du dernier ; 422 sinon |
+
+Le jeton se crée dans le compte (« Jetons d'administration »), est montré une fois et gardé haché ; il n'agit que tant que son compte est dans `STORE_ADMINS`, ne publie ni ne supprime rien. Les décisions de la page (« Demander des changements », « Refuser », « Laisser passer » un nom proche, « Retenu » ou « Classer sans suite » un signalement) passent par la session et l'`Origin` du store (`/api/review/*`).
 
 **Les limites de débit** (`server/utils/limits.ts`), par adresse (la dernière de `X-Forwarded-For`, celle que le proxy de Coolify a vue), comptées en mémoire sous une empreinte HMAC à clé tirée au démarrage, jamais écrite : 300 requêtes de l'API par minute, 300 téléchargements par heure, 60 `POST /installs` par heure (et la même version comptée une fois par jour et par adresse), 60 soumissions, relances ou publications par heure (en plus des 20 soumissions par heure et par compte). Au-delà : 429 et `Retry-After`. Larges exprès : un proxy d'entreprise met beaucoup d'utilisateurs derrière une adresse.
 
-**La liste de révocation** est signée sur le poste de l'utilisateur (jamais sur le serveur) ; le store ne la prend que signée par une clé de `store/keys/`, avec le commentaire de confiance `escouade-revocations-v1 <serial> …` et un `serial` plus grand que le dernier (`acceptRevocations`, que le dépôt de STORE-8 appelle).
+**La liste de révocation** est signée sur le poste de l'utilisateur (jamais sur le serveur) ; le store ne la prend que signée par une clé de `store/keys/`, avec le commentaire de confiance `escouade-revocations-v1 <serial> …` et un `serial` plus grand que le dernier (`acceptRevocations`, appelée par `POST /api/v1/review/revocations`).
 
 **Sa copie sur escouade.dev** : le workflow `.github/workflows/revocations.yml`, toutes les 15 minutes, lance `store/scripts/copy-revocations.ts`, qui lit la liste du store, la vérifie de la même façon (signature, commentaire, `serial` au-dessus de la copie), et l'écrit avec sa signature dans `website/public/` ; le commit sur `main` fait redéployer le site par Coolify, qui la sert à `https://escouade.dev/revocations.json` (et `.minisig`, `no-cache`). Une heure de retard au plus. Une liste qui ne tient pas fait échouer le workflow (GitHub le dit par e-mail) et la copie ne bouge pas ; le store tombé la laisse telle quelle.
 

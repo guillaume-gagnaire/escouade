@@ -173,3 +173,67 @@ export function authorMail(
     text: `Bonjour,\n\n${fr}\n\nSi ce n'était pas toi, ton compte GitHub est peut-être entre d'autres mains : change son mot de passe, puis vérifie ton compte sur le store.\n\nTon compte : ${w.page}\n\n---\n\nHello,\n\n${en}\n\nIf it was not you, your GitHub account may be in other hands: change its password, then check your account on the store.\n\nYour account: ${w.page}\n\nEscouade Store — https://store.escouade.dev\n`,
   };
 }
+
+/** What the review tells an author (STORE-8): its answer on a version, the end of a manual review, a withdrawal. */
+export type ReviewEvent = 'verified' | 'changes' | 'refused' | 'released' | 'held-refused' | 'disabled' | 'unverified';
+
+/** The e-mail of the review's answer, in both languages, with what the review said (`message`) when it said something. */
+export function reviewMail(
+  to: string,
+  event: ReviewEvent,
+  w: { plugin: string; version: string; message?: { fr: string; en: string } | string; page: string },
+): Mail {
+  const v = `v${w.version}`;
+  const texts: Record<ReviewEvent, [string, string, string, string]> = {
+    verified: [
+      `${w.plugin} ${v} vérifiée par Escouade`,
+      `La ${v} de ${w.plugin} est relue et signée : elle porte le sceau « Vérifié par Escouade » sur le store et dans l'app. Une nouvelle version repassera en revue, sur son diff.`,
+      `${w.plugin} ${v} verified by Escouade`,
+      `${v} of ${w.plugin} is reviewed and signed: it bears the seal "Verified by Escouade" on the store and in the app. A new version goes through the review again, on its diff.`,
+    ],
+    changes: [
+      `${w.plugin} ${v} : changements demandés`,
+      `La revue de la ${v} de ${w.plugin} demande des changements avant de la vérifier. Elle reste publiée, non vérifiée. Une nouvelle version qui en tient compte repassera en revue.`,
+      `${w.plugin} ${v}: changes asked`,
+      `The review of ${v} of ${w.plugin} asks for changes before verifying it. It stays published, unverified. A new version that takes them into account goes through the review again.`,
+    ],
+    refused: [
+      `${w.plugin} ${v} : revue refusée`,
+      `La revue de la ${v} de ${w.plugin} ne la vérifie pas. Elle reste publiée, non vérifiée.`,
+      `${w.plugin} ${v}: review refused`,
+      `The review of ${v} of ${w.plugin} does not verify it. It stays published, unverified.`,
+    ],
+    released: [
+      `${w.plugin} ${v} peut paraître`,
+      `La revue manuelle de la ${v} de ${w.plugin} (un nom proche d'un autre plugin) est faite : elle attend ton clic pour paraître, non vérifiée.`,
+      `${w.plugin} ${v} may be published`,
+      `The manual review of ${v} of ${w.plugin} (a name close to another plugin's) is done: it waits for your click to appear, unverified.`,
+    ],
+    'held-refused': [
+      `${w.plugin} ${v} refusée`,
+      `La revue manuelle de la ${v} de ${w.plugin} (un nom proche d'un autre plugin) refuse sa publication.`,
+      `${w.plugin} ${v} refused`,
+      `The manual review of ${v} of ${w.plugin} (a name close to another plugin's) refuses its publication.`,
+    ],
+    disabled: [
+      `${w.plugin} ${v} retirée par Escouade`,
+      `La ${v} de ${w.plugin} est désactivée par la liste de révocation d'Escouade : elle quitte le catalogue, et l'app l'arrête chez ceux qui l'ont.`,
+      `${w.plugin} ${v} withdrawn by Escouade`,
+      `${v} of ${w.plugin} is disabled by Escouade's revocation list: it leaves the catalog, and the app stops it for those who have it.`,
+    ],
+    unverified: [
+      `${w.plugin} ${v} : sceau retiré`,
+      `Le sceau « Vérifié par Escouade » de la ${v} de ${w.plugin} est retiré par la liste de révocation. Elle reste publiée, non vérifiée.`,
+      `${w.plugin} ${v}: seal withdrawn`,
+      `The seal "Verified by Escouade" of ${v} of ${w.plugin} is withdrawn by the revocation list. It stays published, unverified.`,
+    ],
+  };
+  const [sFr, fr, sEn, en] = texts[event];
+  const said = typeof w.message === 'string' ? { fr: w.message, en: w.message } : w.message;
+  const quote = (s: string) => (s.trim() ? `\n\n${s.trim()}` : '');
+  return {
+    to,
+    subject: `Escouade Store : ${sFr} / ${sEn}`,
+    text: `Bonjour,\n\n${fr}${quote(said?.fr ?? '')}\n\nTon compte : ${w.page}\n\n---\n\nHello,\n\n${en}${quote(said?.en ?? '')}\n\nYour account: ${w.page}\n\nEscouade Store — https://store.escouade.dev\n`,
+  };
+}

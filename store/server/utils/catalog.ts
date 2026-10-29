@@ -4,6 +4,7 @@ import { accounts, installsDaily, plugins, versions } from '../db/schema';
 import type { Db } from './db';
 import { parseRevocations, revoked, type RevocationList } from './revocation-list';
 import { lastRevocations } from './revocations';
+import { signatureIndex, verifiedBy } from './signatures';
 import { compareVersions, sha256, type Binary } from './versions';
 import { iconSrc, type Icon } from '../../shared/tile';
 
@@ -18,7 +19,12 @@ import { iconSrc, type Icon } from '../../shared/tile';
 /** Where an app finds a version's files, from the store's address: the paths of server/api/v1/plugins/. */
 export const filePaths = (id: string, version: string) => {
   const base = `/api/v1/plugins/${encodeURIComponent(id)}/${encodeURIComponent(version)}`;
-  return { versionJson: `${base}/version.json`, archive: `${base}/archive.tar.gz`, binary: (p: string) => `${base}/binaries/${p}` };
+  return {
+    versionJson: `${base}/version.json`,
+    signature: `${base}/version.json.minisig`,
+    archive: `${base}/archive.tar.gz`,
+    binary: (p: string) => `${base}/binaries/${p}`,
+  };
 };
 
 export interface CatalogVersion {
@@ -31,8 +37,10 @@ export interface CatalogVersion {
   platforms: string[];
   /** The protocol it speaks and the Escouade versions it was tried on (`max` absent: no upper bound). */
   escouade: { api: string; min: string; max?: string };
-  /** Signed by the review (STORE-8 sets it from the signatures it takes in); false until then. */
+  /** Signed by the review (docs/STORE.md §4.5): its signature is at `files.signature`, to check with the keys the app embeds. */
   verified: boolean;
+  /** The public summary of the review, when verified. */
+  review?: { signed_at: string; summary: { fr: string; en: string } | null };
   /** Taken back by its author: no longer offered to install nor as an update; those who have it keep it. */
   yanked: boolean;
   /** Why its badge was withdrawn by the revocation list, if it was. */
@@ -43,7 +51,14 @@ export interface CatalogVersion {
   contributes: string[];
   /** Its icon (PLG-13): the SHA-256 of its PNG re-encoded at 256 and at 64 px, as in its `version.json`; absent without one. */
   icon?: Icon;
-  files: { version_json: string; archive: string; binaries: Record<string, string>; icon?: Record<'256' | '64', string> };
+  files: {
+    version_json: string;
+    archive: string;
+    binaries: Record<string, string>;
+    icon?: Record<'256' | '64', string>;
+    /** The `.minisig` of `version.json`, when verified. */
+    signature?: string;
+  };
 }
 
 export interface CatalogPlugin {
@@ -96,6 +111,7 @@ export async function buildCatalog(db: Db, now = new Date()): Promise<Catalog> {
   const stored = await lastRevocations(db);
   const parsed = stored ? parseRevocations(stored.json) : null;
   const list: RevocationList | null = parsed && !('error' in parsed) ? parsed : null;
+  const signed = await signatureIndex(db);
 
   let updated = stored?.receivedAt ?? new Date(0);
   const byPlugin = new Map<string, CatalogPlugin>();
@@ -108,6 +124,7 @@ export async function buildCatalog(db: Db, now = new Date()): Promise<Catalog> {
     const binaries = (v.binaries ?? {}) as Record<string, Binary>;
     const paths = filePaths(plugin.id, version);
     const unverify = revoked(list, plugin.id, version, 'unverify');
+    const sig = verifiedBy(signed, list, plugin.id, version, v.versionSha256);
     const entry: CatalogVersion = {
       version,
       published_at: v.publishedAt!.toISOString(),
@@ -115,7 +132,8 @@ export async function buildCatalog(db: Db, now = new Date()): Promise<Catalog> {
       archive: { sha256: v.archiveSha256!, size: v.archiveSize! },
       platforms: Object.keys(binaries).sort(),
       escouade: { api: escouade.api, min: escouade.min, ...(escouade.max ? { max: escouade.max } : {}) },
-      verified: false,
+      verified: !!sig,
+      ...(sig ? { review: { signed_at: sig.signedAt.toISOString(), summary: sig.summary } } : {}),
       yanked: !!v.yankedAt,
       ...(unverify ? { unverified: unverify.reason } : {}),
       permissions: (m.permissions ?? {}) as Record<string, unknown>,
@@ -131,10 +149,12 @@ export async function buildCatalog(db: Db, now = new Date()): Promise<Catalog> {
             .map((p) => [p, paths.binary(p)]),
         ),
         ...(v.icon ? { icon: { '256': iconSrc(v.icon, '256'), '64': iconSrc(v.icon, '64') } } : {}),
+        ...(sig ? { signature: paths.signature } : {}),
       },
     };
     if (v.publishedAt! > updated) updated = v.publishedAt!;
     if (v.yankedAt && v.yankedAt > updated) updated = v.yankedAt;
+    if (sig && sig.signedAt > updated) updated = sig.signedAt;
     if (plugin.transferredAt && plugin.transferredAt > updated) updated = plugin.transferredAt;
     let p = byPlugin.get(plugin.id);
     if (!p) {

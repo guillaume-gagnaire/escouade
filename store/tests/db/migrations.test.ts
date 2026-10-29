@@ -32,6 +32,7 @@ describe.skipIf(!url)('the database', () => {
     expect(rows.map((r) => r.table_name)).toEqual([
       'account_installations',
       'accounts',
+      'admin_tokens',
       'audit',
       'email_tokens',
       'installation_repos',
@@ -42,6 +43,7 @@ describe.skipIf(!url)('the database', () => {
       'revocation_lists',
       'service_state',
       'sessions',
+      'signatures',
       'versions',
       'webhook_deliveries',
     ]);

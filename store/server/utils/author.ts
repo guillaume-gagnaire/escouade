@@ -163,7 +163,10 @@ function stateOf(plugin: Plugin | null, mine: Version[]): PluginState {
   if (plugin?.unlistedAt) return 'unlisted';
   const published = mine.filter((v) => v.state === 'published');
   const offered = published.filter((v) => !v.yankedAt);
-  if (offered.length) return newest(offered)!.review ? 'review' : 'published';
+  if (offered.length) {
+    const v = newest(offered)!;
+    return v.reviewState === 'verified' ? 'verified' : v.review ? 'review' : 'published';
+  }
   if (published.length) return 'yanked';
   const last = mine[0];
   if (!last) return 'checking';
@@ -377,6 +380,9 @@ export async function pluginDetail(db: Db, account: Account, id: string, now = n
       commit: v.commit,
       state: v.state,
       review: v.review,
+      // The review's answer (STORE-8): verified, changes asked or refused, and what it said.
+      reviewState: v.reviewState,
+      reviewMessage: v.reviewMessage,
       createdAt: v.createdAt,
       publishedAt: v.publishedAt,
       yankedAt: v.yankedAt,

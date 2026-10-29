@@ -76,3 +76,23 @@ export function reportMail(lang: 'fr' | 'en', to: string, what: { id: number; pl
         text: `Hello,\n\nYour report of ${what.plugin} (${REASON_WORDS[what.reason].en}) is received as no. ${what.id}. It goes to Escouade's review queue: a person reads it, and answers you at this address once a decision is made. The plugin's author knows that a report is open, never who sent it.\n\nEscouade Store — https://store.escouade.dev\n`,
       };
 }
+
+/** The answer to a report once the review closed it (`upheld`: acted on; `dismissed`: nothing to do), with its words. */
+export function reportClosedMail(
+  lang: 'fr' | 'en',
+  to: string,
+  what: { id: number; plugin: string; upheld: boolean; answer: string },
+): Mail {
+  const answer = what.answer.trim() ? `\n\n${what.answer.trim()}` : '';
+  return lang === 'fr'
+    ? {
+        to,
+        subject: `Escouade Store : signalement n° ${what.id} traité`,
+        text: `Bonjour,\n\nTon signalement n° ${what.id} de ${what.plugin} est lu. ${what.upheld ? 'Il est retenu : Escouade agit sur le plugin.' : 'Il n’appelle pas d’action sur le plugin.'}${answer}\n\nMerci de l’avoir fait.\n\nEscouade Store — https://store.escouade.dev\n`,
+      }
+    : {
+        to,
+        subject: `Escouade Store: report no. ${what.id} handled`,
+        text: `Hello,\n\nYour report no. ${what.id} of ${what.plugin} was read. ${what.upheld ? 'It is upheld: Escouade acts on the plugin.' : 'It calls for no action on the plugin.'}${answer}\n\nThank you for sending it.\n\nEscouade Store — https://store.escouade.dev\n`,
+      };
+}

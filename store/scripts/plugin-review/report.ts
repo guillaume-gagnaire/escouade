@@ -239,3 +239,36 @@ export function renderPublic(d: ReviewData): string {
     '',
   ].join('\n');
 }
+
+const PERMISSION_WORDS_EN: Record<string, (v: unknown) => string> = {
+  events: (v) => `receives the facts ${list(v)}`,
+  network: (v) => `connects to ${list(v)}`,
+  secrets: (v) => `keeps the secrets ${list(v)}`,
+  commands: (v) => `runs the commands ${list(v)}`,
+  decide: () => 'decides the permissions of the agents',
+};
+
+/** The public summary in English, for the store's English pages (`<version>.public.en.md`). */
+export function renderPublicEn(d: ReviewData): string {
+  const network = ((d.manifest?.permissions ?? {}) as { network?: unknown }).network;
+  const hosts = Array.isArray(network) && network.length ? network.join(', ') : 'none';
+  const p = (d.manifest?.permissions ?? {}) as Record<string, unknown>;
+  const perms = Object.entries(p)
+    .filter(([, v]) => (Array.isArray(v) ? v.length > 0 : v === true))
+    .map(([k, v]) => (PERMISSION_WORDS_EN[k] ? PERMISSION_WORDS_EN[k]!(v) : `\`${k}\`: ${JSON.stringify(v)}`));
+  perms.push(d.manifest?.run ? 'runs a program' : 'declarative: no program');
+  const checked = ['fingerprints of the archive and of version.json', `commit ${d.commit?.slice(0, 12)} compared to the tag ${d.tag}`];
+  if (d.bench?.played) checked.push('conformance bench without network');
+  if (d.binaries?.some((b) => b.attested.state === 'verified')) checked.push('provenance of the binaries');
+  if (d.base) checked.push(`diff since v${d.base.version}`);
+  return [
+    `# ${d.id}@${d.version}`,
+    '',
+    `Reviewed on ${d.date.slice(0, 10)}.`,
+    '',
+    `- Permissions read: ${perms.join('; ')}`,
+    `- Network to: ${hosts}`,
+    `- Checked: ${checked.join('; ')}`,
+    '',
+  ].join('\n');
+}
