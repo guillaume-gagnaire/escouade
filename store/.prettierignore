@@ -1,0 +1,9 @@
+node_modules
+.nuxt
+.output
+.data
+test-results
+playwright-report
+package-lock.json
+server/db/migrations/meta
+*.md

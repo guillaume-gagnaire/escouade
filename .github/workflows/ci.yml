@@ -41,6 +41,100 @@ jobs:
       - name: Frontend tests (Vitest)
         run: npm test
 
+  # The store (store/, docs/STORE.md §1.5): a push on main that touches it redeploys it on Coolify, so what enters
+  # main has passed here. The filter skips it when only the app changes; a skipped job counts as passed.
+  store-changes:
+    name: Store (what changed)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      store: ${{ steps.filter.outputs.store }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            store:
+              - 'store/**'
+              - 'schemas/**'
+              - 'website/app/assets/main.css'
+              - 'design/store/**'
+              - '.github/workflows/ci.yml'
+
+  store:
+    name: Store (format, types, tests, e2e, image)
+    needs: store-changes
+    if: needs.store-changes.outputs.store == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # The migrations are played from an empty base, then the tests run against it: PostgreSQL 17, as Coolify's.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: store
+          POSTGRES_PASSWORD: store
+          POSTGRES_DB: store
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U store"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://store:store@localhost:5432/store
+    defaults:
+      run:
+        working-directory: store
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: store/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Format (Prettier)
+        run: npm run format:check
+
+      - name: Typecheck (nuxi typecheck)
+        run: npm run typecheck
+
+      # The unit tests, then the database's: the migrations from an empty base, the queue.
+      - name: Tests (Vitest)
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+
+      # The built server (node .output/server/index.mjs) on the same base: the pages in both languages and themes,
+      # compared to the preview (design/store/), and /api/health.
+      - name: End-to-end tests (Playwright)
+        run: npm run test:e2e
+
+      - name: Upload the Playwright report
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: store-playwright-report
+          path: store/playwright-report
+          retention-days: 7
+
+      # Coolify builds this image (its own tests run in the build): it must build here first. Not pushed.
+      - name: Docker image
+        working-directory: .
+        run: docker build -f store/Dockerfile -t escouade-store:ci .
+
   windows-lint:
     name: Windows (Rust format and Clippy)
     runs-on: windows-latest

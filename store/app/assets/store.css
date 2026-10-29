@@ -1,0 +1,112 @@
+/*
+ * The store's layer over the site's tokens (website/app/assets/main.css, loaded first): the roles the store adds,
+ * and its light theme, which follows the system as the app does (the site has none). The values are the preview's
+ * (design/store/index.html), validated with it (choices 160 to 181).
+ */
+:root {
+  --surface-2: #15161a;
+  --hover: rgba(255, 255, 255, 0.035);
+  --soft: #c9ccd1;
+  /* The teal where it is text: lighter on the dark page, darker on the light one. */
+  --brand-ink: #5ad3cf;
+  --seal-bg: rgba(53, 193, 189, 0.1);
+  --seal-line: rgba(53, 193, 189, 0.32);
+  --danger: oklch(0.72 0.15 25);
+  --danger-bg: oklch(0.72 0.15 25 / 0.1);
+  --warn: oklch(0.82 0.12 80);
+  --warn-bg: oklch(0.82 0.12 80 / 0.09);
+  --ok: oklch(0.78 0.12 155);
+  --shot: 0 30px 80px -20px rgba(0, 0, 0, 0.7);
+  --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  --gutter: clamp(16px, 4vw, 40px);
+}
+
+/* The light theme: the same roles read the other way, the teal darkened where it is text. */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #ffffff;
+    --surface: #f7f7f8;
+    --surface-2: #eff0f2;
+    --hover: rgba(15, 17, 22, 0.035);
+    --line: rgba(15, 17, 22, 0.09);
+    --line-strong: rgba(15, 17, 22, 0.16);
+    --text: #101216;
+    --soft: #343840;
+    --muted: #5a5f68;
+    --dim: #62676f;
+    --brand-hi: #2bb0ac;
+    --brand-ink: #0b6f6c;
+    --seal-bg: rgba(11, 111, 108, 0.07);
+    --seal-line: rgba(11, 111, 108, 0.3);
+    --danger: oklch(0.5 0.18 25);
+    --danger-bg: oklch(0.5 0.18 25 / 0.07);
+    --warn: oklch(0.5 0.11 70);
+    --warn-bg: oklch(0.6 0.12 75 / 0.1);
+    --ok: oklch(0.47 0.12 155);
+    --shot: 0 24px 60px -24px rgba(15, 17, 22, 0.25);
+    color-scheme: light;
+  }
+}
+
+html {
+  scroll-padding-top: 76px;
+}
+
+/* A denser page than the site's: lists and tables more than long reading. */
+body {
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+svg.i {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+code {
+  padding: 1px 5px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface-2);
+  font-family: var(--mono);
+  font-size: 0.86em;
+}
+
+/* The preview's buttons: smaller than the site's, the store being a tool more than a showcase. */
+.btn {
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 9px;
+  background: var(--hover);
+  font-size: 14.5px;
+  cursor: pointer;
+}
+.btn:hover {
+  border-color: color-mix(in srgb, var(--text) 26%, transparent);
+  background: var(--hover);
+}
+
+@media (max-width: 720px) {
+  body {
+    font-size: 14.5px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}

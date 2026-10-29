@@ -1,0 +1,12 @@
+# The build context is the whole repo: only what the store needs goes in.
+*
+!store
+!website/app/assets/main.css
+!schemas
+store/node_modules
+store/.nuxt
+store/.output
+store/.data
+store/.env
+store/test-results
+store/playwright-report
