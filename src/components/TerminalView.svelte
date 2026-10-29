@@ -200,7 +200,7 @@
     flex: 1;
     min-height: 0;
     padding: 16px 8px 8px 22px;
-    background: var(--term);
+    background: var(--well);
     overflow: hidden;
   }
   .box :global(.xterm) {

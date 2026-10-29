@@ -597,7 +597,7 @@
     color: var(--text);
   }
   .fold.target {
-    box-shadow: inset 0 0 0 1px var(--accent);
+    box-shadow: inset 0 0 0 1px var(--p-ink);
     background: var(--hover);
   }
   .label {
@@ -685,7 +685,7 @@
   }
   .read.s-read,
   .read.s-cited {
-    color: var(--ok);
+    color: var(--run);
   }
   .drop {
     flex: none;
@@ -701,7 +701,7 @@
   .drop:hover,
   .drop.dragging,
   .files.dragging .drop {
-    border-color: var(--accent);
+    border-color: var(--p-ink);
     color: var(--text);
   }
   .notices {
@@ -724,7 +724,7 @@
     font-size: 13px;
   }
   .notice :global(svg) {
-    color: var(--ok);
+    color: var(--run);
   }
   .notice.bad {
     border-color: var(--del);

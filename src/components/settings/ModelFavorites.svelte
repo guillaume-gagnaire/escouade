@@ -109,7 +109,7 @@
     color: var(--text);
   }
   .star.on {
-    color: var(--accent);
+    color: var(--p-ink);
   }
   .gtitle {
     padding-top: 6px;

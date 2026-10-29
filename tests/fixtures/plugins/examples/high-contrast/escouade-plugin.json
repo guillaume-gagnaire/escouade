@@ -13,8 +13,8 @@
       {
         "id": "high-contrast",
         "name": { "fr": "Contraste élevé", "en": "High contrast" },
-        "light": { "--bg": "#ffffff", "--text": "#000000", "--accent": "#0040c0" },
-        "dark": { "--bg": "#000000", "--text": "#ffffff", "--accent": "#ffd400" }
+        "light": { "--frame": "#ffffff", "--text": "#000000", "--p-ink": "#0040c0" },
+        "dark": { "--frame": "#000000", "--text": "#ffffff", "--p-ink": "#ffd400" }
       }
     ]
   }

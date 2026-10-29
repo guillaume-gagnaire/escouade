@@ -254,7 +254,7 @@ export function launchStatus(l: LaunchState | undefined): { label: string; color
     case 'running':
       return l.stopping
         ? { label: t('runs.status.stopping'), color: 'var(--wait)' }
-        : { label: t('runs.status.running'), color: 'var(--ok)' };
+        : { label: t('runs.status.running'), color: 'var(--run)' };
     case 'stopped':
       return { label: t('runs.status.stopped'), color: 'var(--muted)' };
     case 'done':

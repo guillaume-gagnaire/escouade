@@ -357,7 +357,7 @@
     z-index: 1;
     padding: 12px 10px 8px;
     border-bottom: 1px solid var(--line);
-    background: var(--bg);
+    background: var(--frame);
     color: var(--muted);
     font-weight: 500;
     text-align: left;

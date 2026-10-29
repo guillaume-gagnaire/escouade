@@ -169,6 +169,19 @@ Des gris neutres teintés par le projet, des filets d'encre à faible opacité, 
 
 **The Charts Carry Names Rule.** Les palettes des graphiques sont validées pour le daltonisme (tokens : Entrée `#4c88d3`, Cache `#008b7a`, Sortie `#9555b0` ; modèles par rang : `#ca723c`, `#4682cc`, `#339c6d`, `#9555b0`, puis un gris). Les couleurs de projet ne passent pas ce contrôle : chaque barre d'un projet porte son nom.
 
+### Les jetons
+La liste complète des jetons de `src/app.css` (`:root`, et `:root[data-theme='light']` pour le clair) ; ce sont les seuls noms qu'un composant lit et les seuls qu'un thème de plugin pourra donner, clair et sombre. Les noms de la 1.x (`--bg`, `--elev`, `--term`, `--line2`, `--accent`, `--ok`, `--wait-soft`, `--ui`…) n'existent plus (ESC-172).
+
+- **Projet** : `--p` (déclaré par `@property`), `--p-ink`, `--p-soft`, `--sel`, `--glow`, `--brand`.
+- **Surfaces** : `--frame`, `--panel`, `--raise`, `--raise-2`, `--well`, `--scrim`, `--shade`, `--drop-base`, `--vo-base`, `--orb-base`.
+- **Filets et survol** : `--fg-rgb`, `--line`, `--line-2`, `--line-3`, `--hover`, `--sep`, `--ring`.
+- **Textes** : `--text`, `--soft`, `--muted`, `--dim`, `--text-ai`, `--idle`.
+- **États** : `--run`, `--wait`, `--wait-bg`, `--wait-line`, `--done`, `--add`, `--del`, `--git-m`, `--warn-ink`, `--info`, `--teal-ink`, `--teal-ink-2` ; les discussions de l'onglet Docs : `--disc`, `--brain`.
+- **Bouton plein et encres posées sur une couleur** : `--primary`, `--primary-hover`, `--on-primary`, `--on-primary-line`, `--on-primary-kbd`, `--on-primary-dim`, `--on-wait`, `--on-hit`, `--on-tick`, `--on-tile`, `--win-close`, `--on-win-close`.
+- **Historique de git** : `--lane-main`, `--lane-1` à `--lane-8`.
+- **Code et terminal** : `--code-fg`, `--code-ln`, `--code-nb`, `--code-dim`, `--syn-k`, `--syn-f`, `--syn-s`, `--syn-t`, `--syn-n`, `--ansi-k`, `--ansi-w`, `--ansi-w-2`, `--ansi-y`, `--ansi-cy`, `--ansi-cy-2`, `--term-sel-bg`, `--term-sel-fg`.
+- **Hors thème** (la forme, pas la couleur ; un thème ne les donne pas) : `--font`, `--mono`, `--ease`, `--r`, `--r-sm`, `--rail`, `--side`, `--mac-corner`.
+
 ## Typography
 
 **Body Font:** Inter Variable (`@fontsource-variable/inter`, avec `cv11` et `ss03`), repli `system-ui`, `Segoe UI`.

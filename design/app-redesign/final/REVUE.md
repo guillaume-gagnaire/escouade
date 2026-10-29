@@ -24,7 +24,7 @@ Les captures sont dans ce dossier (voir « Les captures » en bas).
 
 ## Listé, pas commencé (et pourquoi)
 
-- **Les anciens noms de jetons** (`--ok`, `--accent`, `--term`, `--ui`, `--line2`, `--elev`, `--wait-soft`, `--accent-soft`, `--wait-ring`) sont encore lus par une trentaine d'endroits, dont des tests (`tab-strip.test.ts`) : ce sont des alias exacts des jetons 2.0, sans effet visible. Un renommage mécanique, à faire hors de la sortie.
+- **Les anciens noms de jetons** (`--ok`, `--accent`, `--term`, `--ui`, `--line2`, `--elev`, `--wait-soft`, `--accent-soft`, `--wait-ring`) sont encore lus par une trentaine d'endroits, dont des tests (`tab-strip.test.ts`) : ce sont des alias exacts des jetons 2.0, sans effet visible. Un renommage mécanique, à faire hors de la sortie. Fait par ESC-172 (liste dans `DESIGN.md` « Les jetons »).
 - **L'en-tête d'un lancement à 1028 px en anglais** coupe la commande (« Start-… ») avant le dossier : lisible dans « Voir le log », à revoir avec l'ordre des replis de `RunView`.
 - **Sur une carte d'agent étroite**, avec sous-agents et plan, le modèle se réduit à « Son… » : c'est l'ellipse prévue, mais le plan pourrait céder avant le modèle.
 - **Les vues plein cadre en clair à 1028 px** (Vue d'ensemble, Stats) sont fidèles à l'aperçu ; rien à corriger, noté pour la revue de l'utilisateur.

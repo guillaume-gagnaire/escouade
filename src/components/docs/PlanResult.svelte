@@ -188,8 +188,8 @@
     white-space: nowrap;
   }
   .badge.partial {
-    background: oklch(from var(--accent) l c h / 0.14);
-    color: var(--accent);
+    background: oklch(from var(--p-ink) l c h / 0.14);
+    color: var(--p-ink);
   }
   .badge.started {
     background: oklch(from var(--run) l c h / 0.12);
@@ -285,10 +285,10 @@
   }
   .col.doing,
   .col.review {
-    color: var(--accent);
+    color: var(--p-ink);
   }
   .col.done {
-    color: var(--ok);
+    color: var(--run);
   }
 
   .keys {
@@ -311,11 +311,11 @@
     background: var(--line-2);
   }
   .tkey.done {
-    color: var(--ok);
+    color: var(--run);
   }
   .tkey.doing,
   .tkey.review {
-    color: var(--accent);
+    color: var(--p-ink);
   }
 
   /* The note and « Annuler » on one line, the button at the end of what it speaks of. */

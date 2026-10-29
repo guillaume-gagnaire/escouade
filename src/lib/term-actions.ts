@@ -6,11 +6,11 @@ import { disposeTerminal, openTerminal, type TermPlace } from './terminals';
 export const SHELL_GLYPH: Record<string, { glyph: string; c: string }> = {
   pwsh: { glyph: 'PS', c: 'var(--info)' },
   powershell: { glyph: 'PS', c: 'var(--info)' },
-  bash: { glyph: '$_', c: 'var(--ok)' },
+  bash: { glyph: '$_', c: 'var(--run)' },
   wsl: { glyph: 'λ', c: 'oklch(0.78 0.13 60)' },
-  zsh: { glyph: '%_', c: 'var(--ok)' },
+  zsh: { glyph: '%_', c: 'var(--run)' },
   fish: { glyph: '>_', c: 'oklch(0.78 0.13 60)' },
-  sh: { glyph: '$_', c: 'var(--ok)' },
+  sh: { glyph: '$_', c: 'var(--run)' },
 };
 
 /** Shows a terminal just opened in place of whatever the project's main area shows. */

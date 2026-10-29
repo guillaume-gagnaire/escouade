@@ -110,7 +110,7 @@ export const ANSI_TOKENS = {
  * cursor of the text's ink (none in a log, which takes no input), the selection of the project's colour.
  */
 export function terminalTheme(readOnly = false): ITheme {
-  const background = resolveColor('var(--term)');
+  const background = resolveColor('var(--well)');
   const ansi = Object.fromEntries(Object.entries(ANSI_TOKENS).map(([k, v]) => [k, resolveColor(`var(${v})`)]));
   return {
     background,
@@ -377,7 +377,7 @@ function dropFiles(x: XTerm, take: (files: File[]) => void) {
   const veil = document.createElement('div');
   veil.className = 'drop-veil';
   veil.style.cssText =
-    'display:none;position:absolute;inset:0;z-index:2;pointer-events:none;border:2px dashed var(--accent);background:color-mix(in oklch, var(--accent) 10%, transparent);';
+    'display:none;position:absolute;inset:0;z-index:2;pointer-events:none;border:2px dashed var(--p-ink);background:color-mix(in oklch, var(--p-ink) 10%, transparent);';
   x.host.style.position = 'relative';
   x.host.appendChild(veil);
   // dragenter and dragleave come for every element the drag crosses, not for the host alone: the veil goes with the last.
