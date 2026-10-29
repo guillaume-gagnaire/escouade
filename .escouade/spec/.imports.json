@@ -1,0 +1,8 @@
+{
+  "imports": [
+    {
+      "path": "docs/SPEC.md",
+      "at": "2026-10-29"
+    }
+  ]
+}
