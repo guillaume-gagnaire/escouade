@@ -16,6 +16,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Les auteurs de plugins ont une commande livrée avec Escouade, `escouade-plugin` : `test` passe un plugin au banc de conformité et dit ce qui lui manque, `dev` lui envoie des faits et des demandes à la main, sans l’app.
 - Un plugin peut réagir à ce qui se passe dans Escouade : un agent qui attend, un tour fini, un ticket à tester ou mergé, un lancement prêt… Il reçoit ces événements dans son programme, ou les envoie à une adresse (un webhook vers Discord, Slack ou n8n) ou lance une commande sans une ligne de code ; un projet privé ne lui dit rien tant qu’il n’y est pas activé.
 - Un plugin s’écrit en TypeScript avec `@escouade-dev/plugin` : `npm create escouade-plugin` donne un premier plugin avec ses tests, le SDK apporte les types du protocole et des aides pour recevoir les faits et décider des autorisations, et `escouade-plugin pack` fait son archive. La documentation dit aussi comment le livrer en un seul exécutable, pour qui n’a pas Node.
+- Un plugin peut apporter un thème : d’autres couleurs pour la fenêtre, les terminaux et l’éditeur, en clair et en sombre, et sa palette de couleurs de projet. Il se choisit dans Réglages › Application › Couleurs et s’applique tout de suite ; ce qu’il ne donne pas garde la couleur d’Escouade, et ses valeurs sont filtrées pour qu’il ne charge rien ni ne masque rien.
 
 ### Corrections
 

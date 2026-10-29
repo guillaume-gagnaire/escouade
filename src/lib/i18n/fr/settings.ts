@@ -83,6 +83,18 @@ export default {
     themeSystem: 'Système',
     themeLight: 'Clair',
     themeDark: 'Sombre',
+    // « Couleurs » (PLG-7): Escouade's, or a plugin's theme.
+    colors: 'Couleurs',
+    colorsDesc:
+      'Celles d’Escouade, ou celles d’un thème apporté par un plugin, en clair comme en sombre. Ce qu’un thème ne donne pas garde la couleur d’Escouade.',
+    colorsEscouade: 'Escouade',
+    colorsNone: 'Aucun thème installé. Un plugin peut en apporter un : ses couleurs et sa palette de projets.',
+    colorsFind: 'Voir les thèmes',
+    colorsGone: 'Le thème choisi n’est plus là : son plugin ({plugin}) est désactivé ou désinstallé. Escouade a repris ses couleurs.',
+    colorsDropped: {
+      one: 'Une valeur de ce thème est écartée : ce n’est pas un jeton ou une couleur permise.',
+      other: '{count} valeurs de ce thème sont écartées : ce ne sont pas des jetons ou des couleurs permises.',
+    },
     zoom: 'Zoom de l’interface',
     zoomDesc:
       'Le texte, les espacements et les icônes de toute l’application grandissent ensemble, terminaux et éditeur compris. Appliqué et enregistré tout de suite.',

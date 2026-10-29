@@ -8,7 +8,7 @@ import type { MenuItem } from './menu.svelte';
 import { askCloseProject } from './project-actions';
 import { app } from './state.svelte';
 import { alertColor, mostPressing } from './tab-strip';
-import { PROJECT_COLORS } from './theme';
+import { projectPalette } from './plugin-theme.svelte';
 import type { Project } from './types';
 
 /**
@@ -152,7 +152,7 @@ export function projectMenu(p: Project): MenuItem[] {
         };
       },
     },
-    { label: t('common.color'), colors: { values: PROJECT_COLORS, selected: p.color, onPick: (color) => save({ ...p, color }) } },
+    { label: t('common.color'), colors: { values: projectPalette(p.color), selected: p.color, onPick: (color) => save({ ...p, color }) } },
     { label: '', separator: true },
     {
       label: p.worktreePerAgent ? t('nav.titleBar.menu.worktreeOff') : t('nav.titleBar.menu.worktreeOn'),

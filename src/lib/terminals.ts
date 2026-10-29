@@ -147,15 +147,15 @@ const GLIDE_MS = 750;
 let watched = false;
 let glide: ReturnType<typeof setTimeout> | undefined;
 
-/** Follows the theme of the window (`data-theme`) and its tint (`--p`, in the root's style), once. */
+/** Follows the theme of the window (`data-theme`), a plugin's colours (`data-plugin-theme`) and its tint (`--p`, in the root's style), once. */
 function watchTheme() {
   if (watched || typeof MutationObserver === 'undefined') return;
   watched = true;
   new MutationObserver((changes) => {
-    if (changes.some((c) => c.attributeName === 'data-theme')) retheme();
+    if (changes.some((c) => c.attributeName === 'data-theme' || c.attributeName === 'data-plugin-theme')) retheme();
     clearTimeout(glide);
     glide = setTimeout(retheme, GLIDE_MS);
-  }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'style'] });
+  }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-plugin-theme', 'style'] });
 }
 
 const SCROLL_KEYS = new Set(['PageUp', 'PageDown', 'Home', 'End']);

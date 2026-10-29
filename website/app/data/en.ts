@@ -442,6 +442,7 @@ export const en: Catalog = {
       'plugins/events': 'Events',
       'plugins/sdk': 'The SDK',
       'plugins/testing': 'Testing a plugin',
+      'plugins/themes': 'Themes',
       'plugins/publishing': 'Publishing on the store',
       shortcuts: 'Keyboard shortcuts',
       'escouade-yml': '.escouade.yml',

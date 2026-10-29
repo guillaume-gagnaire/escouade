@@ -65,7 +65,7 @@ export function zoomKey(e: KeyboardEvent, mac = IS_MAC): -1 | 0 | 1 | null {
 }
 
 /** The display settings, as the window has them. */
-type Display = Pick<Settings, 'theme' | 'uiZoom' | 'terminalFontSize' | 'editorFontSize'>;
+type Display = Pick<Settings, 'theme' | 'pluginTheme' | 'uiZoom' | 'terminalFontSize' | 'editorFontSize'>;
 
 /** What the window holds: the biggest step of the zoom (`fit`), and the zoom shown (`shown`, the one chosen or `fit`). */
 export const zoomState = $state({ fit: 200 as number, shown: 100 as number });
@@ -123,6 +123,8 @@ export function watchZoom(): () => void {
 export function setDisplay(change: Partial<Display>) {
   const s = app.settings;
   if (change.theme !== undefined) applyAppearance((s.theme = themeChoice(change.theme)));
+  // The window follows it (App.svelte), its plugin read.
+  if (change.pluginTheme !== undefined) s.pluginTheme = change.pluginTheme;
   if (change.uiZoom !== undefined) s.uiZoom = nearestZoom(change.uiZoom);
   if (change.terminalFontSize !== undefined) s.terminalFontSize = fontSize(change.terminalFontSize);
   if (change.editorFontSize !== undefined) s.editorFontSize = fontSize(change.editorFontSize);
