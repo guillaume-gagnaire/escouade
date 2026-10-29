@@ -15,7 +15,8 @@
     "site-shots": "playwright test -c playwright.site-shots.config.ts",
     "version:set": "node scripts/version.mjs",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "plugin-review": "npm --prefix store run plugin-review --"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",

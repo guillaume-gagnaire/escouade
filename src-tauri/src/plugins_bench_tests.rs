@@ -197,6 +197,23 @@ async fn a_secret_of_another_or_written_out_fails() {
         said(&leak, Scenario::Secret),
         "it wrote the value of a secret on its standard error or in a `log`"
     );
+    // What it wrote on its own goes to the report (`--json`): the review (STORE-7) reads it there.
+    let json = serde_json::to_value(&leak).unwrap();
+    assert!(json["seen"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|s| s["kind"] == "stderr"
+            && s["line"]
+                .as_str()
+                .unwrap()
+                .starts_with("fake-plugin: the secret is")));
+    let quiet = serde_json::to_value(bench(&fake("quiet", &[])).await).unwrap();
+    assert!(quiet.get("seen").is_none_or(|s| s
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|s| s["kind"] != "stderr")));
 }
 
 #[tokio::test(flavor = "multi_thread")]

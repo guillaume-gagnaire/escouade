@@ -169,7 +169,14 @@ pub struct Report {
     pub timings: Vec<Timing>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub measure: Option<Measure>,
+    /// What the plugin did on its own (its standard error, its logs…), the last `SEEN_KEPT`: the
+    /// local review (STORE-7) reads there the connections and writes a sandbox refused.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub seen: Vec<Seen>,
 }
+
+/// What a report keeps of what the plugin did on its own.
+const SEEN_KEPT: usize = 200;
 
 impl Report {
     /// No scenario failed.
@@ -563,11 +570,13 @@ pub async fn run(folder: &Path, o: &Options) -> Report {
                 .expect("every scenario has its outcome"),
         );
     }
+    let skip = b.seen.len().saturating_sub(SEEN_KEPT);
     Report {
         plugin,
         outcomes,
         timings: b.timings,
         measure,
+        seen: b.seen.split_off(skip),
     }
 }
 

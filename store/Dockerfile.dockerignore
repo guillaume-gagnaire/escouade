@@ -3,6 +3,7 @@
 !store
 !website/app/assets/main.css
 !schemas
+!tests/fixtures/plugins/examples
 store/node_modules
 store/.nuxt
 store/.output

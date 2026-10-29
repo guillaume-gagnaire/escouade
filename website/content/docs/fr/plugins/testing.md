@@ -51,7 +51,7 @@ Banc de conformité : dev.exemple.slow-rules 1.0.0
 
 Le code de sortie est `1` si un scénario échoue, `0` sinon : la commande sert telle quelle en CI.
 
-- `--json` donne le rapport en JSON : chaque scénario, son verdict (`pass`, `fail`, `skip`), ce qui s’est passé, ce qui manque, et la durée de chaque appel.
+- `--json` donne le rapport en JSON : chaque scénario, son verdict (`pass`, `fail`, `skip`), ce qui s’est passé, ce qui manque, la durée de chaque appel, et ce que le plugin a fait de lui-même (sa sortie d’erreur, ses journaux, les secrets demandés ; les 200 derniers). C’est ce que lit la revue « Vérifié par Escouade », qui passe le banc dans un conteneur sans réseau : une connexion ou une écriture refusée s’y voit.
 - `--measure [n]` mesure ensuite `n` allers-retours (1 000 par défaut) et donne leur médiane et leur 99e centile, en microsecondes.
 
 ### Les faits et les décisions du banc

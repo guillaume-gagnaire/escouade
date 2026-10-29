@@ -8,6 +8,8 @@
 # final stage runs no command, so that no variable lands in the image's history.
 
 FROM node:24-alpine AS build
+# git: the tests of the local review diff two versions with it (scripts/plugin-review/, docs/STORE.md §4.2).
+RUN apk add --no-cache git
 WORKDIR /repo
 COPY . .
 WORKDIR /repo/store
