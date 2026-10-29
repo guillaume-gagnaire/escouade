@@ -5,7 +5,7 @@
 //     With the AZURE_* secrets (an app registration that has the Certificate Profile Signer role on the profile),
 //     fetches Microsoft's dlib for signtool (its SHA-256 checked) into <dir>, writes its metadata.json and a Tauri
 //     configuration whose signCommand signs through it, and gives `args=--config <that file>` to the step's outputs
-//     (GITHUB_OUTPUT). Tauri then signs escouade-hook.exe, escouade.exe, the NSIS plugins, the uninstaller and the
+//     (GITHUB_OUTPUT). Tauri then signs escouade.exe, escouade-hook.exe, escouade-plugin.exe, the NSIS plugins, the uninstaller and the
 //     installer, before the updater's signature. The dlib authenticates with the AZURE_* variables of the build step
 //     (EnvironmentCredential). Without the secrets, a warning and no output: the build is not signed.
 //   node scripts/windows-signing.mjs verify <setup.exe> [<dir>]
@@ -56,7 +56,7 @@ const EXCLUDED_CREDENTIALS = [
 const TIMESTAMP_URL = 'http://timestamp.acs.microsoft.com';
 
 // The binaries of the app in the installer, beside it.
-const INSIDE = ['escouade.exe', 'escouade-hook.exe'];
+const INSIDE = ['escouade.exe', 'escouade-hook.exe', 'escouade-plugin.exe'];
 
 /** The AZURE_* secrets missing from `env`, or blank. */
 export function missingSecrets(env) {

@@ -242,7 +242,7 @@ async fn calls_and_batches_go_both_ways_as_raw_json() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn past_its_delay_a_call_takes_the_default_answer() {
-    let f = fake("silent", &[], quick());
+    let f = fake("silent", &["--silent-decisions"], quick());
     f.rt.call(ID, "echo", json!({})).await.unwrap();
 
     let started = Instant::now();

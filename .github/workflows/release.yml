@@ -174,7 +174,7 @@ jobs:
           done
 
       # Optional: with the Azure Artifact Signing account in the repository secrets (AZURE_*: an app registration that
-      # has the Certificate Profile Signer role), Tauri signs escouade.exe, escouade-hook.exe, the uninstaller and the
+      # has the Certificate Profile Signer role), Tauri signs escouade.exe, escouade-hook.exe, escouade-plugin.exe, the uninstaller and the
       # installer (Authenticode), before the updater's signature: SmartScreen then weighs the publisher's reputation
       # rather than each new file's. The script fetches Microsoft's dlib for signtool and gives the build a
       # configuration that signs through it; the dlib authenticates with the AZURE_* variables of the build step.

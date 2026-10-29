@@ -41,7 +41,7 @@ export const DOC_GROUPS = [
       'settings-about',
     ],
   },
-  { id: 'plugins', pages: ['plugins/manifest', 'plugins/api', 'plugins/publishing'] },
+  { id: 'plugins', pages: ['plugins/manifest', 'plugins/api', 'plugins/testing', 'plugins/publishing'] },
   { id: 'reference', pages: ['shortcuts', 'escouade-yml', 'data', 'updates', 'troubleshooting'] },
 ] as const;
 

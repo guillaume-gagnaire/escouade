@@ -1,0 +1,14 @@
+{
+  "id": "dev.exemple.team-rules",
+  "name": { "fr": "Règles de l'équipe", "en": "Team rules" },
+  "version": "1.0.0",
+  "description": {
+    "fr": "Autorise ou refuse les commandes des agents selon les règles de l'équipe.",
+    "en": "Allows or denies the agents' commands by the team's rules."
+  },
+  "license": "MIT",
+  "escouade": { "api": "1", "min": "2.1.0" },
+  "run": { "command": "team-rules", "windows": "team-rules.cmd" },
+  "activation": ["event:request.permission"],
+  "permissions": { "decide": true }
+}

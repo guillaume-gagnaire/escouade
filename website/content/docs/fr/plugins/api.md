@@ -105,3 +105,5 @@ Chaque plugin a son journal, dans `~/.escouade/plugin-logs/<id>.log` ; au-delà 
 - les appels restés sans réponse, ce qu’il a demandé et qu’on lui a refusé, les messages perdus d’une file pleine.
 
 Les 500 dernières lignes servent l’onglet Réglages › Plugins, qui arrive dans une prochaine version.
+
+Pour vérifier qu’un plugin tient ce protocole sans lancer l’app, joue [le banc de conformité](plugins/testing) : `escouade-plugin test <dossier>`.

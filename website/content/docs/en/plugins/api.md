@@ -105,3 +105,5 @@ Each plugin has its journal, in `~/.escouade/plugin-logs/<id>.log`; past 1 MB, i
 - the calls left without an answer, what it asked for and was refused, the messages lost from a full queue.
 
 The last 500 lines serve the Settings › Plugins tab, which comes in a later version.
+
+To check that a plugin keeps to this protocol without starting the app, play [the conformance bench](plugins/testing): `escouade-plugin test <folder>`.
