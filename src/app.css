@@ -700,6 +700,16 @@ kbd,
   flex: none;
 }
 
+/* ---------- WebKit ---------- */
+/* WebKitGTK 2.50 (the AppImage's) aborts its web process in `text-wrap: pretty`, on some paragraphs only
+   (InlineContentConstrainer::prettifyRange, an index out of range): the page died the moment a project showing one
+   was opened (ESC-290). WKWebView shares that code. Under WebKit, text wraps plainly; WebView2 keeps it pretty. */
+:root.webkit *,
+:root.webkit *::before,
+:root.webkit *::after {
+  text-wrap-style: auto !important;
+}
+
 /* ---------- markdown ---------- */
 /* The agent's answer (2.0 design): a softer white than the interface's, code and its blocks in a frame. */
 .md {

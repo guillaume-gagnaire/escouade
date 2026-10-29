@@ -4,6 +4,12 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
+## [2.1.1] — 2026-10-29
+
+### Fixes
+
+- On Linux, opening some projects crashed Escouade’s page, which looked frozen: a flaw of the AppImage’s web engine in laying out some paragraphs, which the app no longer uses on Linux or macOS.
+
 ## [2.1.0] — 2026-10-29
 
 ### New
