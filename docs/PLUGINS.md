@@ -333,9 +333,9 @@ Un fichier `escouade-plugin.json` à la racine du dossier du plugin (du JSON, co
   "escouade": { "api": "1", "min": "2.1.0" },
   "icon": "assets/icon.png",
   "run": { "command": "bin/escouade-slack", "windows": "bin/escouade-slack.exe" },
-  "activation": ["event:ticket.column", "event:agent.waiting"],
+  "activation": ["event:ticket.column", "event:agent.status"],
   "permissions": {
-    "events": ["ticket.*", "agent.waiting"],
+    "events": ["ticket.*", "agent.status"],
     "network": ["hooks.slack.com"],
     "secrets": ["webhook"]
   },

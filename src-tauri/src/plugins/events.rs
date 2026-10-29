@@ -1,6 +1,6 @@
 //! The facts handed to the plugins (PLG-5, ESC-177; docs/PLUGINS.md §1.6, §3.3): the sink of the
 //! facts' bus (`crate::facts`) that gives each plugin the facts it asked for
-//! (`permissions.events`), only of the projects it takes part in (`Plugins::active_for`: a
+//! (`permissions.events`), only of the projects it takes part in (`Plugins::reaches`, on the `Choices` of PLG-4: a
 //! private project's go only to a plugin turned on for it), through a bounded queue of its own,
 //! never waiting for it.
 //!
