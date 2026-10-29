@@ -32,7 +32,7 @@ plugin.onEvent('ticket.column', async (fact, p) => {
   if (fact.data.to !== 'review') return;
   const webhook = await p.secret('webhook'); // one of permissions.secrets, or null
   if (!webhook) return p.log.warn('no webhook kept: nothing sent');
-  await fetch(webhook, { method: 'POST', body: JSON.stringify({ text: `${fact.ticket.key} is ready to test` }) });
+  await fetch(webhook, { method: 'POST', body: JSON.stringify({ text: `${fact.ticket?.key ?? ''} is ready to test` }) });
 });
 
 // A permission an agent asks for (permissions.decide): within 500 ms.
