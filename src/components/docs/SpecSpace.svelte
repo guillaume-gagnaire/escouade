@@ -98,12 +98,12 @@
     await docsStore.load(project.id);
   }
 
-  /** « Planifier » (ESC-262): the changes without tickets, the planner running, and the latest plan of the last day. */
+  /** « Planifier » (ESC-262): the changes without tickets, the planner running, and the latest plan of the last day, unless closed. */
   const unplanned = $derived(unplannedCount(tree?.planning));
   const planRunning = $derived(!!docsStore.planning[project.id] || !!tree?.planning?.running);
   const lastPlan = $derived.by(() => {
     const last = tree?.planning?.last;
-    return last && app.now - last.at < 24 * 3600 * 1000 ? last : null;
+    return last && app.now - last.at < 24 * 3600 * 1000 && !docsStore.closedPlans.includes(last.id) ? last : null;
   });
 
   /** The spec the project has, whose cut is being looked at before an import. */
@@ -360,7 +360,6 @@
   }
   .last-plan {
     flex: none;
-    max-width: 680px;
     padding: 20px 20px 0;
   }
   .last-plan + .map {

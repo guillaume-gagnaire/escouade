@@ -1,6 +1,6 @@
 // « Planifier » (ESC-262, docs/FACTORY.md « « Planifier » : de la spec aux tickets »): the changes of the spec without
 // tickets, whether a discussion has some to plan, and the names of the pages a ticket implements.
-import type { Discussion, DocsPlanning, DocsTree } from './types';
+import type { Discussion, DocsPlan, DocsPlanMade, DocsPlanning, DocsTree, Ticket } from './types';
 
 /** How many changes of the spec have no tickets yet: the pages changed and the decisions proposed. */
 export function unplannedCount(p: DocsPlanning | null | undefined): number {
@@ -26,4 +26,35 @@ export function subjectTickets(pages: { tickets: string[] }[]): string[] {
   const out: string[] = [];
   for (const p of pages) for (const k of p.tickets) if (!out.includes(k)) out.push(k);
   return out;
+}
+
+/** Whether a ticket has started: as « Annuler » of a planning sees it, left in « À faire » with no agent and no start. */
+export function ticketStarted(t: Pick<Ticket, 'column' | 'startedAt' | 'agentId'>): boolean {
+  return t.column !== 'todo' || t.startedAt != null || t.agentId != null;
+}
+
+/**
+ * Where the tickets of a planning stand (ESC-291): `none` made nothing, `cancelled` undone, `gone` all removed from the
+ * board, `todo` none started, `partial` some, `started` all those left. `toCancel` are those « Annuler » still removes.
+ */
+export type PlanState = 'none' | 'cancelled' | 'gone' | 'todo' | 'partial' | 'started';
+export function planProgress(
+  plan: DocsPlan,
+  tickets: Record<string, Ticket>,
+): { state: PlanState; left: DocsPlanMade[]; started: DocsPlanMade[]; toCancel: DocsPlanMade[] } {
+  const left = plan.made.filter((m) => tickets[m.id]);
+  const started = left.filter((m) => ticketStarted(tickets[m.id]));
+  const toCancel = plan.cancelled ? [] : left.filter((m) => !ticketStarted(tickets[m.id]));
+  const state: PlanState = !plan.made.length
+    ? 'none'
+    : plan.cancelled
+      ? 'cancelled'
+      : !left.length
+        ? 'gone'
+        : !started.length
+          ? 'todo'
+          : toCancel.length
+            ? 'partial'
+            : 'started';
+  return { state, left, started, toCancel };
 }

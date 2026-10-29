@@ -80,12 +80,13 @@ test('« Planifier » makes the tickets of the changes poured, linked to their p
   await expect(plan).toBeVisible();
   await plan.click();
   const made = panel.getByRole('region', { name: 'Tickets' });
-  await expect(made).toContainText('2 tickets créés dans « À faire »', { timeout: 60_000 });
+  await expect(made).toContainText('2 tickets créés', { timeout: 60_000 });
   await expect(made.locator('[data-made="POR-2"]')).toContainText('Implémenter : Relances');
   await expect(made.locator('[data-made="POR-3"]')).toContainText('Implémenter : Notifications');
   await expect(made.locator('[data-made="POR-2"]')).toContainText('À faire');
   await expect(made.locator('[data-skipped]')).toContainText('Déjà au Kanban : POR-1');
-  await expect(made).toContainText('Pas lancés');
+  await expect(made.locator('[data-plan-state]')).toHaveText('À lancer');
+  await expect(made.locator('[data-plan-note]')).toContainText('Pas encore lancés');
   await expect(view.getByRole('button', { name: 'Planifier' })).toHaveCount(0);
   // Each page names its ticket; nothing committed.
   expect(fs.readFileSync(path.join(app.repo, '.escouade', 'spec', 'espace-adherent', 'relances.md'), 'utf8')).toContain('POR-2');

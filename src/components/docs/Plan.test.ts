@@ -123,9 +123,11 @@ describe('« Planifier »', () => {
     // The bar is gone; the plan is told on the map.
     await waitFor(() => expect(document.querySelector('[data-plan-bar]')).toBeNull());
     const plan = document.querySelector('[data-plan="pl1"]') as HTMLElement;
-    expect(plan).toHaveTextContent(/2 tickets créés dans « À faire »/);
+    expect(plan).toHaveTextContent(/2 tickets créés/);
     expect(plan).toHaveTextContent('Déjà au Kanban : DEM-2');
-    expect(plan).toHaveTextContent('Pas lancés');
+    // DEM-8 is done: one started, « Annuler » for DEM-7 only.
+    expect(plan.querySelector('[data-plan-state]')).toHaveTextContent('1 lancé sur 2');
+    expect(plan.querySelector('[data-plan-note]')).toHaveTextContent('DEM-7 encore à faire');
     expect(plan.querySelector('[data-made="DEM-7"]')).toHaveTextContent('À faire');
     await userEvent.click(within(plan).getByRole('button', { name: 'Ouvrir DEM-7 au Kanban' }));
     expect(app.board.p1).toBe(true);

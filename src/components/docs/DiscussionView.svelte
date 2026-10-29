@@ -90,7 +90,7 @@
       {/key}
     </div>
     <aside class="pour" aria-label={t('docs.discussion.pourPanel')}>
-      {#if d.planned}
+      {#if d.planned && !docsStore.closedPlans.includes(d.planned.id)}
         <h3 class="sh">{t('docs.plan.heading')}</h3>
         <PlanResult {project} plan={d.planned} />
       {/if}

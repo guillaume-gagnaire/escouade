@@ -17,6 +17,8 @@ class DocsStore {
   error = $state<Record<string, string>>({});
   /** The projects whose « Planifier » runs (ESC-262), from this window. */
   planning = $state<Record<string, boolean>>({});
+  /** The plannings whose card the user closed (ESC-291), kept from one start to the next. */
+  closedPlans = $state<string[]>(readClosed());
   /** The last load asked for each project: an older answer coming after a newer one is dropped. */
   #asked: Record<string, number> = {};
 
@@ -62,6 +64,17 @@ class DocsStore {
     return done;
   }
 
+  /** Closes the card of a planning; the 50 last closed are kept. */
+  closePlan(plan: string) {
+    if (this.closedPlans.includes(plan)) return;
+    this.closedPlans = [...this.closedPlans, plan].slice(-50);
+    try {
+      localStorage.setItem(CLOSED_KEY, JSON.stringify(this.closedPlans));
+    } catch {
+      // Closed for this start only.
+    }
+  }
+
   /** « Annuler » of a planning: its tickets not started yet removed. */
   async cancelPlan(projectId: string, plan: string) {
     const done = await app.run(api.docsPlanCancel(projectId, plan));
@@ -71,6 +84,17 @@ class DocsStore {
     }
     await this.load(projectId);
     return done;
+  }
+}
+
+const CLOSED_KEY = 'escouade.docs.closedPlans';
+
+function readClosed(): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(CLOSED_KEY) ?? '[]');
+    return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
+  } catch {
+    return [];
   }
 }
 
