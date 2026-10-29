@@ -76,6 +76,8 @@ export interface Manifest {
     max?: string;
     min: string;
   };
+  /** Its logo: a square PNG of its folder, 256 px a side at least (512 advised), 1 MB at most; no SVG. */
+  icon?: string;
   /** Unique, a reversed domain name (`dev.exemple.slack`); `dev.escouade.*` is kept for Escouade's own plugins. */
   id: string;
   /** An SPDX identifier (`MIT`). */
