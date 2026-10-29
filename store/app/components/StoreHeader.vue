@@ -1,9 +1,15 @@
 <script setup lang="ts">
+import { ACCOUNT_TEXTS } from '~/data/account';
 import { pathIn } from '~/data/language';
 
 // The header of the documentation of the site, as the preview draws it (design/store/): the brand and « Store »,
-// then the tools on the right. The search and the sign-in come with their pages (STORE-4, STORE-2).
+// then the tools on the right: the sign-in with GitHub for a visitor, « Mes plugins » and the author's initials once
+// signed in. The search comes with its page (STORE-4).
 const { lang, text, links } = useLang();
+const { data: me } = await useMe();
+const words = computed(() => ACCOUNT_TEXTS[lang.value]);
+const account = computed(() => pathIn(lang.value, '/account'));
+const signIn = computed(() => `/api/auth/github?to=${encodeURIComponent(account.value)}`);
 </script>
 
 <template>
@@ -15,7 +21,21 @@ const { lang, text, links } = useLang();
         <NuxtLink class="crumb" :to="pathIn(lang, '/')" :aria-label="text.header.home">Store</NuxtLink>
       </div>
       <div class="tools">
-        <a class="link" :href="links.docs">{{ text.header.docs }}</a>
+        <a class="link wide" :href="links.docs">{{ text.header.docs }}</a>
+        <template v-if="me.account">
+          <NuxtLink class="link" :to="account">{{ words.mine }}</NuxtLink>
+          <NuxtLink class="me" :to="account"
+            ><AuthorAvatar :login="me.account.login" :github-id="me.account.githubId" /><span>{{ me.account.login }}</span></NuxtLink
+          >
+        </template>
+        <a v-else class="btn sm" :href="signIn" :aria-label="words.signIn"
+          ><svg class="i" viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="4.5" cy="3.5" r="1.6" />
+            <circle cx="4.5" cy="12.5" r="1.6" />
+            <circle cx="11.5" cy="6" r="1.6" />
+            <path d="M4.5 5.1V10.9M11.5 7.6C11.5 9.6 8 9.4 4.5 10.9" /></svg
+          ><span class="gh-label">{{ words.signIn }}</span></a
+        >
       </div>
     </div>
   </header>
@@ -78,10 +98,39 @@ const { lang, text, links } = useLang();
 .link:hover {
   color: var(--text);
 }
+.me {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 550;
+}
+.btn.sm {
+  display: inline-flex;
+  gap: 8px;
+  height: 30px;
+  padding: 0 11px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+}
+@media (max-width: 1180px) {
+  .wide {
+    display: none;
+  }
+}
 @media (max-width: 720px) {
   .bar {
     gap: 12px;
     height: 56px;
+  }
+  .tools {
+    gap: 8px;
+  }
+  .tools .link,
+  .me span,
+  .gh-label {
+    display: none;
   }
 }
 </style>

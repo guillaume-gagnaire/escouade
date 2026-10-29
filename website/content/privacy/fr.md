@@ -177,6 +177,28 @@ Par défaut, les réponses de la conversation vocale sont lues par Piper, sur ta
 - **Ce qu’il en fait** : il renvoie le son, joué sur ta machine. Il traite le texte selon ses propres conditions, celles de ton compte chez lui.
 - **Si le service ne répond pas** : la conversation le dit, et Piper lit la suite si une de ses voix est téléchargée ; sinon elle se met en pause. Le journal d’Escouade ne contient jamais ta clé ni le texte lu.
 
+## Le store
+
+[store.escouade.dev](https://store.escouade.dev), la place de marché des plugins d’Escouade, a des comptes pour les **auteurs** de plugins, et pour eux seuls : les utilisateurs de l’app n’y ont pas de compte et ne lui donnent rien.
+
+- **La connexion** se fait avec GitHub, par la GitHub App « Escouade Store », en lecture seule, sur les seuls dépôts que l’auteur choisit. Le store reçoit de GitHub ton identifiant numérique, ton login, ton nom affiché et l’adresse de ton avatar, relus à chaque connexion. GitHub, Inc. est aux États-Unis : ces informations en viennent à ta demande, quand tu te connectes, sous le cadre de protection des données UE–États-Unis dont GitHub se prévaut ; le store ne lui envoie rien qu’il ne sache déjà.
+- **Ce qui est gardé, et combien de temps** :
+
+| Donnée | Pourquoi | Combien de temps |
+|---|---|---|
+| Identifiant GitHub, login, nom affiché, adresse de l’avatar | Le compte, la page de l’auteur | Jusqu’à la suppression du compte, puis 30 jours dans les sauvegardes |
+| E-mail, facultatif, saisi par toi et vérifié par un lien | Les avis (rejet, revue faite, signalement) | Idem ; effacé dès que tu le retires |
+| Session (l’empreinte d’un jeton aléatoire, sa date) | Rester connecté | 30 jours |
+| Jeton d’accès GitHub de la session, chiffré | Lire les installations de l’App pendant la session | 8 heures au plus ; effacé et révoqué chez GitHub à la déconnexion |
+| Plugins, versions, contrôles, résumés de revue | Le service | Tant que le plugin existe |
+| Journal des actions (connexion, adresse, export, suppression, installations de l’App) | La sécurité, les litiges | 1 an |
+| Signalements | La modération | 1 an après leur clôture |
+
+- **Les bases légales** : l’exécution des [conditions des auteurs](https://store.escouade.dev/terms) (article 6.1.b du RGPD) pour le compte ; l’intérêt légitime (article 6.1.f) pour le journal des actions et les signalements.
+- **Un seul cookie**, celui de la session (`__Host-store_session`, `HttpOnly`, `Secure`, `SameSite=Lax`), strictement nécessaire : pas de bandeau, aucune mesure d’audience. Les avatars sont dessinés par le store (tes initiales) : un visiteur ne charge rien chez GitHub.
+- **Où** : sur le serveur de Scaleway à Paris, comme ce site ; les sauvegardes dans le stockage objet de Scaleway à Paris. Le reverse proxy garde son journal d’accès comme pour le site (voir [les journaux du serveur](#les-journaux-du-serveur)).
+- **Tes droits** : la page de ton compte exporte tes données (un fichier JSON) et supprime ton compte ; ton nom et ton avatar se rectifient chez GitHub et sont relus à la connexion suivante. Pour le reste, et pour t’opposer au journal, écris à [guillaume@gagnaire.dev](mailto:guillaume@gagnaire.dev).
+
 ## Ce site
 
 Le code de ce site n’inclut ni cookie ni outil de mesure d’audience. Il garde seulement ton choix de langue dans le stockage local de ton navigateur (la clé `escouade-lang`), pour te laisser sur la bonne langue à ta prochaine visite. Cette valeur reste dans ton navigateur et n’est envoyée nulle part. Comme pour les statistiques, le reverse proxy du serveur garde un journal d’accès de tes visites : voir [les journaux du serveur](#les-journaux-du-serveur).

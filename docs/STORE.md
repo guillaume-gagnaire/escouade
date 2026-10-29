@@ -72,7 +72,8 @@ Sur le Coolify de l'utilisateur, dans le projet « Escouade », à côté du sit
 | `DATABASE_URL` | l'adresse interne de la base `store-db` (donnée par Coolify) | oui |
 | `NUXT_SESSION_SECRET` | 32 octets aléatoires | oui |
 | `GITHUB_APP_ID`, `GITHUB_APP_CLIENT_ID` | l'App « Escouade Store » | non |
-| `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY` | idem (la clé PEM sur une ligne, retours échappés) | oui |
+| `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY` | idem (la clé PEM telle quelle, sur plusieurs lignes, ou sur une ligne aux retours échappés `
+` : les deux se lisent) | oui |
 | `GITHUB_WEBHOOK_SECRET` | le secret des webhooks de l'App | oui |
 | `STORE_ADMINS` | l'identifiant numérique GitHub de l'utilisateur (la file de revue) | non |
 | `SMTP_URL`, `MAIL_FROM` | l'envoi des avis : Scaleway Transactional Email (Paris), `store@escouade.dev` | oui (`SMTP_URL`) |
@@ -155,6 +156,8 @@ Plusieurs mainteneurs : ceux qui administrent le dépôt sur GitHub (lu par l'Ap
 | Adresse IP, adresse demandée, navigateur | journaux du proxy Traefik (traitement 2 du registre) | 1 an au plus, déjà en place |
 
 Un seul cookie, celui de la session, strictement nécessaire : exempté de consentement, pas de bandeau. Aucune mesure d'audience.
+
+**Fait le 2026-10-29** (ESC-229, STORE-2) : la connexion par la GitHub App (l'autorisation demandée à l'installation ; un retour sans l'état que le navigateur a emporté relance la connexion au lieu de se fier au code), la session de 30 jours (`__Host-store_session`, la base ne garde que l'empreinte du jeton), le jeton GitHub chiffré, 8 h au plus, révoqué chez GitHub à la déconnexion et à la suppression, les installations et leurs dépôts suivis par les webhooks signés (rejoués une fois par livraison), l'e-mail vérifié par un lien de 24 h (5 liens par heure au plus ; sans `SMTP_URL`, la page dit que le lien ne part pas), l'export JSON, la suppression du compte, le journal des actions, la purge de chaque nuit ; `/account`, `/terms` (version 1), la section « Le store » de `/privacy/` et le traitement 3 du registre. Les en-têtes de sécurité de tout le site (HSTS, CSP à nonce, `nosniff`, `Referrer-Policy`, `Permissions-Policy` fermée, `X-Frame-Options`), demandés par le chef d'escouade le même jour. Les avatars sont les initiales de l'auteur, dessinées par le store, comme dans l'aperçu : aucune image chargée chez GitHub.
 
 ### 2.4 Le RGPD, la politique de confidentialité et les conditions des auteurs
 
@@ -321,6 +324,11 @@ Sur le design du site (les jetons de `website/app/assets/main.css` : fond presqu
 | **Voler le compte d'administration** (le jeton de la file) | il peut lire la file et déposer un rapport ; une signature déposée est vérifiée par les clés publiques : sans la clé privée, rien ne passe |
 | **Voler la clé de signature** | chiffrée par mot de passe, hors ligne en dehors des signatures ; si elle fuit : la révoquer par une version de l'app qui ne l'embarque plus (la clé de secours prend le relais tout de suite), resigner les versions vérifiées avec la clé de secours, et une liste de révocation de l'ancienne clé (`keys_revoked`) signée par la clé de secours |
 | **Perdre la clé de signature** | la clé de secours continue ; l'app suivante embarque une nouvelle clé de secours |
+| **Connecter un visiteur sous un autre compte** (un lien de retour de GitHub forgé) | l'état tiré au départ de la connexion, gardé dans un cookie de 10 minutes et comparé en temps constant au retour ; une installation commencée sur GitHub, qui revient sans lui, relance la connexion au lieu d'utiliser son code |
+| **Faire agir un auteur connecté depuis un autre site** | le cookie `SameSite=Lax`, et l'en-tête `Origin` de chaque formulaire comparé à l'adresse du store |
+| **Forger ou rejouer un webhook** | la signature `X-Hub-Signature-256` sur les octets reçus, comparée en temps constant ; une livraison n'est traitée qu'une fois |
+| **Injecter un script dans une page du store**, ou la mettre dans un cadre | une politique de sécurité du contenu stricte : aucun script en ligne hors du nonce de la réponse, `frame-ancestors 'none'` ; HSTS |
+| **Voler la base du store** | elle ne garde que l'empreinte des jetons de session et des liens, et le jeton GitHub chiffré par une clé qui n'est que dans les variables de Coolify |
 | **Typosquatter** un plugin connu | les noms trop proches passent en revue manuelle avant publication ; le badge et l'auteur sont sur chaque ligne |
 | **Mentir sur ses permissions** | l'app applique ce qu'elle peut (réseau des harness, secrets, événements, clôture) ; la revue lit le reste ; un mensonge découvert mène au retrait |
 | **Injecter des consignes** dans les agents par un plugin | une permission montrée (« Ajoute des consignes à vos agents ») ; la revue lit ces consignes |

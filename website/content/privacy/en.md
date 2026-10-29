@@ -177,6 +177,28 @@ By default, the voice conversation’s answers are read by Piper, on your machin
 - **What it does with it**: it sends the sound back, played on your machine. It handles the text under its own terms, those of your account with it.
 - **If the service does not answer**: the conversation says so, and Piper reads on if one of its voices is downloaded; else it pauses. Escouade’s log never holds your key nor the text read.
 
+## The store
+
+[store.escouade.dev](https://store.escouade.dev), Escouade’s plugin marketplace, has accounts for plugin **authors**, and for them only: the app’s users have no account there and give it nothing.
+
+- **Signing in** goes through GitHub, by the “Escouade Store” GitHub App, read-only, on the repositories the author chooses only. The store gets from GitHub your numeric id, your login, your display name and your avatar’s address, read again at each sign-in. GitHub, Inc. is in the United States: this information comes from it at your request, when you sign in, under the EU–US Data Privacy Framework GitHub relies on; the store sends it nothing it does not already know.
+- **What is kept, and how long**:
+
+| Data | Why | How long |
+|---|---|---|
+| GitHub id, login, display name, avatar address | The account, the author’s page | Until the account is deleted, then 30 days in the backups |
+| E-mail, optional, typed by you and checked by a link | The notices (rejection, review done, report) | Same; erased as soon as you remove it |
+| Session (the hash of a random token, its date) | Staying signed in | 30 days |
+| The session’s GitHub access token, encrypted | Reading the App’s installations during the session | 8 hours at most; erased and revoked at GitHub on sign-out |
+| Plugins, versions, checks, review summaries | The service | As long as the plugin exists |
+| Journal of actions (sign-in, address, export, deletion, the App’s installations) | Security, disputes | 1 year |
+| Reports | Moderation | 1 year after they are closed |
+
+- **The legal bases**: performing the [authors’ terms](https://store.escouade.dev/en/terms) (article 6.1.b of the GDPR) for the account; legitimate interest (article 6.1.f) for the journal of actions and the reports.
+- **One cookie only**, the session’s (`__Host-store_session`, `HttpOnly`, `Secure`, `SameSite=Lax`), strictly needed: no banner, no analytics. The avatars are drawn by the store (your initials): a visitor loads nothing from GitHub.
+- **Where**: on Scaleway’s server in Paris, as this site; the backups in Scaleway’s object storage in Paris. The reverse proxy keeps its access log as for the site (see [server logs](#server-logs)).
+- **Your rights**: your account’s page exports your data (a JSON file) and deletes your account; your name and avatar are corrected at GitHub and read again at your next sign-in. For the rest, and to object to the journal, write to [guillaume@gagnaire.dev](mailto:guillaume@gagnaire.dev).
+
 ## This site
 
 This site’s code includes no cookie and no analytics tool. It only keeps your language choice in your browser’s local storage (the `escouade-lang` key), to leave you on the right language at your next visit. That value stays in your browser and is sent nowhere. As with the statistics, the server’s reverse proxy keeps an access log of your visits: see [server logs](#server-logs).

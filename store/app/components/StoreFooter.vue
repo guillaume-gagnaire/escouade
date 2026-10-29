@@ -2,7 +2,7 @@
 import { otherLang, pathIn } from '~/data/language';
 
 // The footer of the preview: the store's name, then the legal pages (the site's), the documentation and the other
-// language. The authors' terms (/terms/) join them with the accounts (STORE-2).
+// language, with the authors' terms, the store's own (/terms).
 const { lang, text, links } = useLang();
 const route = useRoute();
 const other = computed(() => otherLang(lang.value));
@@ -15,6 +15,7 @@ const other = computed(() => otherLang(lang.value));
       <span class="grow"></span>
       <a :href="links.privacy">{{ text.footer.privacy }}</a>
       <a :href="links.legal">{{ text.footer.legal }}</a>
+      <NuxtLink :to="pathIn(lang, '/terms')">{{ text.footer.terms }}</NuxtLink>
       <a :href="links.docs">{{ text.footer.docs }}</a>
       <NuxtLink :to="pathIn(other, route.path)" :lang="other" :hreflang="other">{{ text.footer.other }}</NuxtLink>
     </div>

@@ -1,4 +1,4 @@
-import { archiveDir, missingLines } from '../utils/config';
+import { archiveDir, invalidLines, missingLines } from '../utils/config';
 import { migrateDb, migrationsDir, openDb } from '../utils/db';
 import { startQueue } from '../utils/queue';
 import { service } from '../utils/service';
@@ -8,7 +8,7 @@ import { service } from '../utils/service';
 // shown by /api/health; the pages are still served.
 export default defineNitroPlugin((nitro) => {
   const env = process.env;
-  for (const line of missingLines(env)) console.warn(line);
+  for (const line of [...missingLines(env), ...invalidLines(env)]) console.warn(line);
   service.archives = archiveDir(env);
 
   const url = (env.DATABASE_URL ?? '').trim();

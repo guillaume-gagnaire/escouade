@@ -35,9 +35,9 @@ GAGNAIRE DEVELOPPEMENT, SAS au capital de 1 000 €, 2 rue du Taillis, 33620 Cav
 | Durée de conservation | Un an au plus : le conteneur `coolify-proxy-logrotate` (configuration du proxy dans Coolify) fait tourner le journal chaque jour et au-delà de 20 Mo, et supprime les fichiers tournés après 364 jours (variable `TRAEFIK_ACCESS_LOG_MAX_DAYS`). Mis en place le 14 octobre 2026, les lignes de plus d'un an des journaux existants alors purgées. |
 | Sécurité | Fichiers sur le serveur, accessibles au seul administrateur. |
 
-## Traitement 3 : comptes des auteurs du store (en projet)
+## Traitement 3 : comptes des auteurs du store
 
-À mettre en œuvre avec store.escouade.dev (2.1) ; ce tableau devient définitif à sa mise en ligne.
+Mis en œuvre le 29 octobre 2026 avec les comptes de store.escouade.dev (ESC-229, STORE-2). Les plugins, les versions et les signalements y entrent avec la soumission et la revue (STORE-3 à STORE-8).
 
 | Rubrique | Contenu |
 |---|---|
@@ -49,8 +49,8 @@ GAGNAIRE DEVELOPPEMENT, SAS au capital de 1 000 €, 2 rue du Taillis, 33620 Cav
 | Sous-traitants | Scaleway SAS (hébergement, et stockage objet des sauvegardes à Paris). GitHub, Inc. est le fournisseur d'identité choisi par l'auteur (connexion par une GitHub App en lecture seule). |
 | Transferts hors UE | Aucun depuis le store. L'identité arrive de GitHub, Inc. (États-Unis, cadre de protection des données UE–États-Unis), à la demande de l'auteur qui se connecte. |
 | Durée de conservation | Compte, e-mail et plugins : jusqu'à la suppression du compte, puis 30 jours dans les sauvegardes. Sessions : 30 jours. Jeton GitHub : la durée de la session, 8 h au plus. Signalements : 1 an après leur clôture. Journal des actions : 1 an. Signatures et révocations publiées : sans limite (elles doivent rester vérifiables ; elles ne portent pas de donnée personnelle). |
-| Sécurité | HTTPS ; un seul cookie, de session, `HttpOnly`, `Secure`, `SameSite=Lax` ; base PostgreSQL non exposée, mot de passe généré par Coolify ; secrets de la GitHub App dans les variables de Coolify ; la clé de signature des plugins n'est jamais sur le serveur. |
-| Exercice des droits | Dans le compte : export des données (JSON), suppression du compte. Sinon par e-mail à guillaume@gagnaire.dev ; réponse sous un mois. Rectification du nom et de l'avatar chez GitHub (relus à chaque connexion). |
+| Sécurité | HTTPS et HSTS ; un seul cookie, de session, `__Host-store_session`, `HttpOnly`, `Secure`, `SameSite=Lax` ; la base ne garde que l'empreinte (SHA-256) des jetons de session et des liens de vérification d'e-mail, et le jeton GitHub chiffré (AES-256-GCM, clé tirée de `NUXT_SESSION_SECRET`), révoqué chez GitHub à la déconnexion et à la suppression ; formulaires refusés s'ils ne viennent pas du store (en-tête `Origin`) ; webhooks de GitHub refusés sans leur signature (HMAC-SHA256, comparée en temps constant) ; politique de sécurité du contenu stricte, sans script en ligne hors de son nonce ; aucune image chargée chez un tiers ; base PostgreSQL non exposée, mot de passe généré par Coolify ; secrets de la GitHub App dans les variables de Coolify ; la clé de signature des plugins n'est jamais sur le serveur. Purge chaque nuit de ce qui a passé sa durée. |
+| Exercice des droits | Dans le compte (`/account`) : export des données (JSON), suppression du compte (le journal garde la suppression un an, par identifiant GitHub). Sinon par e-mail à guillaume@gagnaire.dev ; réponse sous un mois. Rectification du nom et de l'avatar chez GitHub (relus à chaque connexion). |
 
 ## Traitement 4 : compteurs d'installations des plugins (en projet)
 
@@ -66,4 +66,4 @@ GAGNAIRE DEVELOPPEMENT, SAS au capital de 1 000 €, 2 rue du Taillis, 33620 Cav
 
 escouade.dev ne dépose aucun cookie et n'a aucun outil de mesure d'audience. Le choix de langue est gardé dans le stockage local du navigateur (clé `escouade-lang`), à la demande du visiteur : exempté de consentement.
 
-store.escouade.dev (en projet) dépose un seul cookie, celui de la session d'un auteur connecté, strictement nécessaire : exempté de consentement. Aucune mesure d'audience. Les images des README sont copiées sur le store à la soumission : un visiteur ne charge rien chez un tiers.
+store.escouade.dev dépose un seul cookie, celui de la session d'un auteur connecté, strictement nécessaire : exempté de consentement. Aucune mesure d'audience. Les avatars des auteurs sont leurs initiales, dessinées par le store, et les images des README seront copiées sur le store à la soumission : un visiteur ne charge rien chez un tiers. Le traitement est décrit aux visiteurs dans la section « Le store » de la politique de confidentialité d'escouade.dev, et les conditions des auteurs sont sur store.escouade.dev/terms.

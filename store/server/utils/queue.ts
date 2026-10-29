@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { PgBoss } from 'pg-boss';
 import { serviceState } from '../db/schema';
+import { purge } from './accounts';
 import type { Db } from './db';
 
 // The long tasks (reading a repository, fetching an archive, checking it) go through a queue kept in PostgreSQL
@@ -8,6 +9,8 @@ import type { Db } from './db';
 // same image with another command. The queue's own beat, every minute, tells /api/health that it moves.
 
 export const BEAT = 'store.beat';
+/** Once a night, what has outlived its time goes: sessions, tokens, links, deliveries, journal (docs/STORE.md, §2.3). */
+export const PURGE = 'store.purge';
 /** The key of `service_state` where the beat is noted. */
 export const BEAT_KEY = 'queue.beat';
 
@@ -22,7 +25,7 @@ export async function lastBeat(db: Db): Promise<Date | null> {
   return rows[0]?.at ?? null;
 }
 
-/** Starts the queue on `url`, works the beat and sends the first one at once. */
+/** Starts the queue on `url`, works the beat and sends the first one at once, and plans the nightly purge. */
 export async function startQueue(url: string, db: Db): Promise<PgBoss> {
   const boss = new PgBoss({ connectionString: url, schema: 'pgboss' });
   boss.on('error', (e) => console.error('[store] queue:', e instanceof Error ? e.message : e));
@@ -33,5 +36,10 @@ export async function startQueue(url: string, db: Db): Promise<PgBoss> {
   });
   await boss.schedule(BEAT, '* * * * *');
   await boss.send(BEAT);
+  await boss.createQueue(PURGE);
+  await boss.work(PURGE, async () => {
+    console.info('[store] purged:', JSON.stringify(await purge(db)));
+  });
+  await boss.schedule(PURGE, '40 4 * * *');
   return boss;
 }

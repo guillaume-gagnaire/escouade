@@ -1,11 +1,129 @@
-import { pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { bigint, bigserial, boolean, index, integer, jsonb, pgTable, primaryKey, serial, text, timestamp } from 'drizzle-orm/pg-core';
 
 // The store's tables. A migration only adds (tables, columns, indexes): a new container can fail after it and leave
-// the old one online, still reading the old names (docs/STORE.md, §1.3). The accounts, plugins and versions come
-// with STORE-2 and STORE-3.
+// the old one online, still reading the old names (docs/STORE.md, §1.3). The plugins and versions come with STORE-3.
+
+const at = (name: string) => timestamp(name, { withTimezone: true });
 
 /** What the service notes about itself: the last beat of the queue (`queue.beat`), read by /api/health. */
 export const serviceState = pgTable('service_state', {
   key: text('key').primaryKey(),
-  at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+  at: at('at').notNull().defaultNow(),
 });
+
+/**
+ * An author's account: their GitHub identity (the numeric id, which does not change; the login, name and avatar are
+ * read again at each sign-in), and the e-mail they gave for the notices, once its link is followed (docs/STORE.md, §2.3).
+ */
+export const accounts = pgTable('accounts', {
+  id: serial('id').primaryKey(),
+  provider: text('provider').notNull().default('github'),
+  githubId: bigint('github_id', { mode: 'number' }).notNull().unique(),
+  login: text('login').notNull(),
+  name: text('name'),
+  avatarUrl: text('avatar_url'),
+  email: text('email'),
+  emailVerifiedAt: at('email_verified_at'),
+  createdAt: at('created_at').notNull().defaultNow(),
+  seenAt: at('seen_at').notNull().defaultNow(),
+});
+
+/**
+ * A session: the hash of its random token (the cookie holds the token, the base never does), 30 days. The user's
+ * GitHub token, sealed (AES-256-GCM), reads their installations of the App; it goes at sign-out, and after 8 h at most.
+ */
+export const sessions = pgTable(
+  'sessions',
+  {
+    id: text('id').primaryKey(),
+    accountId: integer('account_id')
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    createdAt: at('created_at').notNull().defaultNow(),
+    expiresAt: at('expires_at').notNull(),
+    githubToken: text('github_token'),
+    githubTokenExpiresAt: at('github_token_expires_at'),
+  },
+  (t) => [index('sessions_account').on(t.accountId)],
+);
+
+/** The link sent to check an e-mail address: the hash of its token, the address it vouches for, 24 hours. */
+export const emailTokens = pgTable(
+  'email_tokens',
+  {
+    id: text('id').primaryKey(),
+    accountId: integer('account_id')
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    email: text('email').notNull(),
+    createdAt: at('created_at').notNull().defaultNow(),
+    expiresAt: at('expires_at').notNull(),
+  },
+  (t) => [index('email_tokens_account').on(t.accountId)],
+);
+
+/** An installation of the GitHub App: on a user or an organization, as its webhooks tell it. */
+export const installations = pgTable('installations', {
+  id: bigint('id', { mode: 'number' }).primaryKey(),
+  ownerId: bigint('owner_id', { mode: 'number' }).notNull(),
+  ownerLogin: text('owner_login').notNull(),
+  ownerType: text('owner_type').notNull(),
+  repositorySelection: text('repository_selection').notNull().default('selected'),
+  suspendedAt: at('suspended_at'),
+  createdAt: at('created_at').notNull().defaultNow(),
+  updatedAt: at('updated_at').notNull().defaultNow(),
+});
+
+/** The repositories an installation reaches (all of an owner's, or the chosen ones). */
+export const installationRepos = pgTable(
+  'installation_repos',
+  {
+    installationId: bigint('installation_id', { mode: 'number' })
+      .notNull()
+      .references(() => installations.id, { onDelete: 'cascade' }),
+    repoId: bigint('repo_id', { mode: 'number' }).notNull(),
+    fullName: text('full_name').notNull(),
+    private: boolean('private').notNull().default(false),
+  },
+  (t) => [primaryKey({ columns: [t.installationId, t.repoId] })],
+);
+
+/** Which installations an account may manage: those GitHub lists for them at sign-in (they administer them). */
+export const accountInstallations = pgTable(
+  'account_installations',
+  {
+    accountId: integer('account_id')
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    installationId: bigint('installation_id', { mode: 'number' })
+      .notNull()
+      .references(() => installations.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.accountId, t.installationId] })],
+);
+
+/** The webhooks received, by GitHub's delivery id: a delivery replayed is not handled twice. 30 days. */
+export const webhookDeliveries = pgTable('webhook_deliveries', {
+  id: text('id').primaryKey(),
+  event: text('event').notNull(),
+  action: text('action'),
+  receivedAt: at('received_at').notNull().defaultNow(),
+});
+
+/**
+ * The journal of actions (who signed in, gave an address, exported, deleted; what GitHub said of the App's
+ * installations), for security and disputes: one year (docs/STORE.md, §2.3). The account's row may go before its
+ * entries: they keep the GitHub id of whoever acted.
+ */
+export const audit = pgTable(
+  'audit',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    at: at('at').notNull().defaultNow(),
+    accountId: integer('account_id').references(() => accounts.id, { onDelete: 'set null' }),
+    githubId: bigint('github_id', { mode: 'number' }),
+    action: text('action').notNull(),
+    detail: jsonb('detail').$type<Record<string, unknown>>(),
+  },
+  (t) => [index('audit_account').on(t.accountId), index('audit_at').on(t.at)],
+);

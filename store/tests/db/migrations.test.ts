@@ -29,7 +29,17 @@ describe.skipIf(!url)('the database', () => {
     await migrateDb(db, './server/db/migrations');
     await migrateDb(db, './server/db/migrations');
     const { rows } = await pool.query("select table_name from information_schema.tables where table_schema = 'public' order by 1");
-    expect(rows.map((r) => r.table_name)).toEqual(['service_state']);
+    expect(rows.map((r) => r.table_name)).toEqual([
+      'account_installations',
+      'accounts',
+      'audit',
+      'email_tokens',
+      'installation_repos',
+      'installations',
+      'service_state',
+      'sessions',
+      'webhook_deliveries',
+    ]);
   });
 
   it('keeps the last beat of the queue', async () => {

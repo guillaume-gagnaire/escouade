@@ -1,6 +1,8 @@
 // What the store reads from its environment (Coolify's variables, store/README.md). Nothing secret is in the
 // repository: a variable that is missing turns its feature off and says so in the log, the server still starts.
 
+import { readPrivateKey } from './github';
+
 export type Env = Record<string, string | undefined>;
 
 /** A feature and the variables it needs, all of them. */
@@ -54,6 +56,18 @@ export function missingLines(env: Env): string[] {
   return missingFeatures(env).map(
     ({ feature, missing }) => `[store] ${feature.name} off (missing ${missing.join(', ')}): ${feature.without}`,
   );
+}
+
+/** What is set but does not hold: the App's key that does not read, a session secret too short. */
+export function invalidLines(env: Env): string[] {
+  const lines: string[] = [];
+  if (set(env, 'GITHUB_APP_PRIVATE_KEY') && !readPrivateKey(env.GITHUB_APP_PRIVATE_KEY))
+    lines.push(
+      '[store] github off (GITHUB_APP_PRIVATE_KEY does not read as a private key): signing in with GitHub, submissions and webhooks are off',
+    );
+  if (set(env, 'NUXT_SESSION_SECRET') && env.NUXT_SESSION_SECRET!.trim().length < 32)
+    lines.push('[store] sessions: NUXT_SESSION_SECRET is shorter than 32 characters; use `openssl rand -hex 32`');
+  return lines;
 }
 
 /** Where the archives live: the volume in production (/data/archives), a folder of the checkout in development. */

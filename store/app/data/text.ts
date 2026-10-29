@@ -1,7 +1,7 @@
 import type { Lang } from './language';
 
 // The store's texts, in its two languages. The legal pages are the site's: one privacy policy and one legal notice
-// for the site, the app and the store (docs/STORE.md, §2.4).
+// for the site, the app and the store (docs/STORE.md, §2.4); the authors' terms are the store's own (/terms).
 
 const SITE = 'https://escouade.dev';
 
@@ -24,7 +24,13 @@ const fr = {
   title: 'Escouade Store',
   description: 'Des plugins pour Escouade : harness, thèmes, notifications, règles d’autorisation. Relus, signés, installés depuis l’app.',
   header: { home: 'Accueil du store', docs: 'Documentation' },
-  footer: { privacy: 'Confidentialité', legal: 'Mentions légales', docs: 'Documentation', other: 'English' },
+  footer: {
+    privacy: 'Confidentialité',
+    legal: 'Mentions légales',
+    terms: 'Conditions des auteurs',
+    docs: 'Documentation',
+    other: 'English',
+  },
   seal: 'Vérifié par Escouade',
   home: {
     title: 'Des plugins pour Escouade.',
@@ -52,7 +58,7 @@ const en: Text = {
   title: 'Escouade Store',
   description: 'Plugins for Escouade: harnesses, themes, notifications, permission rules. Reviewed, signed, installed from the app.',
   header: { home: 'Store home', docs: 'Documentation' },
-  footer: { privacy: 'Privacy', legal: 'Legal notice', docs: 'Documentation', other: 'Français' },
+  footer: { privacy: 'Privacy', legal: 'Legal notice', terms: 'Authors’ terms', docs: 'Documentation', other: 'Français' },
   seal: 'Verified by Escouade',
   home: {
     title: 'Plugins for Escouade.',

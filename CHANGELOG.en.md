@@ -4,6 +4,12 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
+## [Unreleased]
+
+### New
+
+- store.escouade.dev, the plugin marketplace, opens its author accounts: you sign in with GitHub, install the read-only “Escouade Store” App on your repositories, and can leave an e-mail for the notices, export your data or delete your account; the privacy policy says what the store keeps, and its authors’ terms are online.
+
 ## [2.1.0] — 2026-10-29
 
 ### New

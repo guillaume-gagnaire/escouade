@@ -2,7 +2,7 @@
 
 La place de marché des plugins d'Escouade (`docs/STORE.md`, qui fait foi). Ce dossier en est le service : **Nuxt 4 rendu par le serveur** (les pages en Vue dans `app/`, l'API Nitro dans `server/api/`), **PostgreSQL** par **Drizzle**, la file des tâches longues par **pg-boss** (dans PostgreSQL, pas de Redis), les archives sur un volume. Coolify le redéploie à chaque push sur `main` qui le touche ; la CI (job `store` de `.github/workflows/ci.yml`) le vérifie avant.
 
-Ce qu'il fait aujourd'hui (STORE-1, ESC-228) : l'accueil en français (`/`) et en anglais (`/en`), dans les jetons du site (`website/app/assets/main.css`, lu par un chemin relatif) avec un thème clair qui suit le système ; `GET /api/health` ; les migrations jouées au démarrage ; la file et son battement ; la restauration des sauvegardes de Coolify, essayée. Les comptes (STORE-2), la soumission (STORE-3), les pages des plugins (STORE-4) et l'API de l'app (STORE-6) viennent ensuite.
+Ce qu'il fait aujourd'hui (STORE-1, ESC-228) : l'accueil en français (`/`) et en anglais (`/en`), dans les jetons du site (`website/app/assets/main.css`, lu par un chemin relatif) avec un thème clair qui suit le système ; `GET /api/health` ; les migrations jouées au démarrage ; la file et son battement ; la restauration des sauvegardes de Coolify, essayée. Les comptes des auteurs (STORE-2, ESC-229) : la connexion par la GitHub App « Escouade Store », la session, l'e-mail vérifié facultatif, l'export et la suppression du compte, le journal des actions, les webhooks signés de l'App ; `/account` et `/terms` dans les deux langues ; les en-têtes de sécurité sur tout le site. La soumission (STORE-3), les pages des plugins (STORE-4) et l'API de l'app (STORE-6) viennent ensuite.
 
 ## Lancer en local
 
@@ -15,7 +15,16 @@ cp .env.example .env      # puis DATABASE_URL vers ta base ; .env n'est jamais c
 npm run dev               # http://localhost:3000
 ```
 
-Un secret manquant (`GITHUB_APP_*`, `SMTP_URL`, `MAIL_FROM`, `NUXT_SESSION_SECRET`, `STORE_ADMINS`) éteint sa fonction et le dit au démarrage, une ligne par fonction, sans la valeur : `[store] mail off (missing SMTP_URL, MAIL_FROM): no e-mail is sent`.
+Un secret manquant (`GITHUB_APP_*`, `SMTP_URL`, `MAIL_FROM`, `NUXT_SESSION_SECRET`, `STORE_ADMINS`) éteint sa fonction et le dit au démarrage, une ligne par fonction, sans la valeur : `[store] mail off (missing SMTP_URL, MAIL_FROM): no e-mail is sent`. Une clé de l'App qui ne se lit pas, ou un `NUXT_SESSION_SECRET` de moins de 32 caractères, le disent aussi.
+
+Pour essayer la connexion en local, sans la vraie App : le faux GitHub des e2e (`tests/fake/github.mjs`) se lance seul, et le store le suit par `GITHUB_URL` et `GITHUB_API_URL` (ces deux variables ne servent qu'aux essais ; en production, elles n'existent pas et le store parle à GitHub). La « clé privée » se fabrique pour l'essai, jamais dans un fichier du dépôt :
+
+```sh
+FAKE_GITHUB_PORT=3010 FAKE_SMTP_PORT=3025 STORE_URL=http://localhost:3000 GITHUB_APP_CLIENT_ID=Iv23liFakeStore GITHUB_APP_CLIENT_SECRET=e2e-client-secret GITHUB_WEBHOOK_SECRET=e2e-webhook-secret node tests/fake/github.mjs
+# puis, dans .env : les mêmes GITHUB_APP_*, GITHUB_APP_ID=1, GITHUB_URL=GITHUB_API_URL=http://127.0.0.1:3010,
+# SMTP_URL=smtp://127.0.0.1:3025, MAIL_FROM=..., NUXT_SESSION_SECRET=$(openssl rand -hex 32),
+# GITHUB_APP_PRIVATE_KEY=$(openssl genrsa 2048) ; les mails reçus se lisent sur http://127.0.0.1:3010/_fake/state
+```
 
 ## Les tests
 
@@ -23,8 +32,8 @@ Un secret manquant (`GITHUB_APP_*`, `SMTP_URL`, `MAIL_FROM`, `NUXT_SESSION_SECRE
 | --- | --- |
 | `npm run format:check` | Prettier |
 | `npm run typecheck` | `nuxi typecheck` |
-| `npm test` | Vitest : les variables, `/api/health`, les deux langues, aucun secret dans `store/` ; avec `TEST_DATABASE_URL`, les migrations depuis une base vide et la file. **Cette base est vidée** : jamais une base qui compte. Elle n'est jamais lue de `DATABASE_URL`, que Coolify passe aussi au build |
-| `npm run build && npm run test:e2e` | Playwright sur le serveur construit (`STORE_PORT`, 3000 par défaut ; la base de `DATABASE_URL` s'il y en a une) : l'accueil comparé à l'aperçu `design/store/` dans les deux thèmes, les liens légaux, la 404, le téléphone, `/api/health` |
+| `npm test` | Vitest : les variables, `/api/health`, les deux langues, aucun secret dans `store/`, les jetons, le chiffrement du jeton GitHub, la signature des webhooks (l'exemple de GitHub), la clé de l'App et son JWT, les en-têtes de sécurité ; avec `TEST_DATABASE_URL`, les migrations depuis une base vide, la file, et les comptes (connexion, session, e-mail, export, suppression, webhooks rejoués, purge). **Cette base est vidée** : jamais une base qui compte. Elle n'est jamais lue de `DATABASE_URL`, que Coolify passe aussi au build |
+| `npm run build && npm run test:e2e` | Playwright sur le serveur construit (`STORE_PORT`, 3000 par défaut ; la base de `DATABASE_URL` s'il y en a une), avec le faux GitHub et le faux SMTP de `tests/fake/github.mjs` (`FAKE_GITHUB_PORT` 3010, `FAKE_SMTP_PORT` 3025) : l'accueil et le compte comparés à l'aperçu `design/store/` dans les deux thèmes, la connexion (état forgé, annulée, installation avec et sans état), le cookie, l'e-mail et son lien, l'export, la déconnexion et la suppression (jetons révoqués), l'`Origin` des formulaires, les webhooks signés, les en-têtes et la CSP sans violation, les conditions, la 404, le téléphone, `/api/health`. Sans `DATABASE_URL`, les tests des comptes sautent |
 
 Le `Dockerfile` rejoue `npm ci && npm run build && npm test`, sans `DATABASE_URL` ni `TEST_DATABASE_URL` : un test raté fait échouer le déploiement, la version en ligne reste la dernière qui passait.
 
@@ -62,11 +71,12 @@ Créées par le chef d'escouade le 2026-10-29 (Coolify 4.5.3) d'après `docs/STO
 | `ARCHIVE_DIR` | `/data/archives` (déjà la valeur de l'image) | non |
 | `NUXT_SESSION_SECRET` | 32 octets aléatoires (`openssl rand -hex 32`) ; STORE-2 | oui |
 | `GITHUB_APP_ID`, `GITHUB_APP_CLIENT_ID` | l'App « Escouade Store » ; STORE-2 | non |
-| `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET` | idem ; la clé PEM telle quelle, sur plusieurs lignes ; STORE-2 | oui |
+| `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET` | idem ; la clé PEM telle quelle, sur plusieurs lignes (ou sur une, aux `
+` échappés) ; STORE-2 | oui |
 | `STORE_ADMINS` | l'identifiant numérique GitHub de l'utilisateur ; STORE-8 | non |
 | `SMTP_URL`, `MAIL_FROM` | Scaleway Transactional Email, `store@escouade.dev` ; STORE-2 | oui (`SMTP_URL`) |
 
-Posées le 2026-10-29 : toutes sauf `GITHUB_APP_CLIENT_SECRET`, `SMTP_URL` et `MAIL_FROM`. Le serveur démarre sans elles : le journal dit ce qui est éteint, `/api/health` répond 200 dès que la base et la file vont.
+Posées le 2026-10-29 : toutes sauf `SMTP_URL` (l'utilisateur configure Scaleway Transactional Email ; `MAIL_FROM` est posé). Sans elle, l'e-mail reste proposé sur `/account`, le lien ne part pas et la page le dit. Le serveur démarre sans elles : le journal dit ce qui est éteint, `/api/health` répond 200 dès que la base et la file vont.
 
 **La clé de signature des plugins n'est jamais ni dans Coolify ni dans le dépôt** (`docs/STORE.md`, §4.5) : seules les clés publiques viendront dans `store/keys/*.pub` (STORE-8).
 
@@ -109,5 +119,9 @@ La réponse ne dit rien de secret : `{"status":"ok","checks":{"database":"ok","q
 
 - Aucun secret dans le dépôt : `.env` est ignoré, `.env.example` n'a que des valeurs locales ; un test (`tests/unit/no-secrets.test.ts`) refuse une clé privée, une clé minisign secrète, un jeton GitHub ou AWS, ou une adresse de base avec un mot de passe dans ce que git suit sous `store/`.
 - Les tests qui vident une base ne lisent que `TEST_DATABASE_URL` : jamais la base du store, même si le build la voit.
+- Les comptes : la session est un jeton aléatoire dans le cookie `__Host-store_session` (`HttpOnly`, `Secure`, `SameSite=Lax`, 30 jours), dont la base ne garde que l'empreinte ; de même pour les liens de vérification d'e-mail (24 h, 5 par heure). Le jeton GitHub de la session est chiffré en AES-256-GCM par une clé tirée de `NUXT_SESSION_SECRET`, gardé 8 h au plus, révoqué chez GitHub à la déconnexion et à la suppression ; le jeton de rafraîchissement n'est pas gardé. Changer `NUXT_SESSION_SECRET` rend illisibles les jetons GitHub en cours (les sessions restent).
+- La connexion compare l'état emporté dans un cookie de 10 minutes à celui que GitHub renvoie ; une installation commencée sur GitHub revient sans lui et relance la connexion. Les formulaires ne passent que si leur `Origin` est l'adresse du store (`NUXT_PUBLIC_SITE_URL`). Les webhooks ne passent qu'avec leur signature, comparée en temps constant, et une seule fois par livraison.
+- Les en-têtes de sécurité (`server/utils/headers.ts`) sont sur toutes les réponses ; les pages ont une CSP stricte dont le nonce, tiré à chaque réponse (`server/plugins/csp.ts`), marque les seuls scripts et styles en ligne de Nuxt. Aucun fichier inliné en `data:` (`assetsInlineLimit: 0`), aucune image d'un tiers : les avatars sont des initiales.
+- Chaque nuit à 4 h 40, la file purge les sessions, jetons, liens, livraisons et entrées du journal qui ont passé leur durée (`docs/STORE.md`, §2.3).
 - `/api/health` ne rend ni erreur de la base (elle peut nommer une adresse interne) ni variable : elles vont au journal du conteneur.
 - La clé de signature des plugins reste sur le poste de l'utilisateur ; le store ne vérifiera qu'avec les clés publiques (STORE-8). Les empreintes des versions (`version.json`) viennent avec la soumission (STORE-3).
