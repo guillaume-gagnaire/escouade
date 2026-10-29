@@ -1,10 +1,16 @@
 <script setup lang="ts">
+import { CATEGORY_ICONS, CATEGORY_ORDER } from '~/data/catalog';
 import { pathIn } from '~/data/language';
+import type { Entry } from '~~/server/utils/listing';
 
-// The home page, before the first plugin (STORE-1): the preview's hero and its « Publier un plugin » band
-// (design/store/, #home), which leads to the submission. The search, the categories and the lists of plugins come with
-// STORE-4.
+// The home page (design/store/, #home; docs/STORE.md §6): the search first, the categories, « Vérifiés par
+// Escouade » in a row, « Nouveaux » and « Les plus installés », and the « Publier un plugin » band that leads to the
+// documentation and the submission.
 const { lang, text, links } = useLang();
+const { words, to } = useCatalog();
+const { data } = await useFetch('/api/catalog/home', { key: 'catalog-home' });
+const cats = computed(() => CATEGORY_ORDER.filter((c) => data.value?.counts[c]));
+const by = (e: Entry) => (e.builtin ? 'Escouade' : (e.author?.login ?? words.value.deleted));
 </script>
 
 <template>
@@ -17,26 +23,72 @@ const { lang, text, links } = useLang();
         <p>{{ text.home.lead }}</p>
       </div>
       <div>
-        <div class="opening">
-          <b>{{ text.home.opening }}</b> {{ text.home.openingMore }}
-        </div>
+        <form class="bigfind" role="search" method="get" :action="pathIn(lang, '/search')">
+          <StoreIcon name="search" />
+          <input name="q" type="search" :placeholder="words.findBig" :aria-label="words.findLabel" autocomplete="off" />
+          <kbd>/</kbd>
+        </form>
         <div class="trust">
           <span><VerifiedSeal /></span>
-          <span
-            ><svg class="i" viewBox="0 0 16 16" aria-hidden="true">
-              <path d="M3 13C3 7 6.5 3 13 3C13 9.5 9 13 3 13Z" />
-              <path d="M3 13L8.5 7.5" /></svg
-            >{{ text.home.trust[0] }}</span
-          >
-          <span
-            ><svg class="i" viewBox="0 0 16 16" aria-hidden="true">
-              <path d="M2.5 5L8 2.2L13.5 5V11L8 13.8L2.5 11Z" />
-              <path d="M2.5 5L8 7.8L13.5 5M8 7.8V13.8" /></svg
-            >{{ text.home.trust[1] }}</span
-          >
+          <span><StoreIcon name="leaf" />{{ text.home.trust[0] }}</span>
+          <span><StoreIcon name="box" />{{ text.home.trust[1] }}</span>
         </div>
       </div>
     </section>
+
+    <nav class="cats" :aria-label="words.search.categories">
+      <NuxtLink v-for="c in cats" :key="c" class="chip" :to="to.search({ cat: c })"
+        ><StoreIcon :name="CATEGORY_ICONS[c]" />{{ words.categories[c] }}<span class="n">{{ data?.counts[c] }}</span></NuxtLink
+      >
+    </nav>
+
+    <template v-if="data?.verified.length">
+      <div class="section-head">
+        <h2 class="h2">{{ words.home.verified }}</h2>
+        <NuxtLink class="arrow" :to="to.search({ verified: '1' })">{{ words.home.allVerified }}</NuxtLink>
+      </div>
+      <div class="rows">
+        <PluginRow v-for="e in data.verified" :key="e.id" :entry="e" />
+      </div>
+    </template>
+
+    <div v-if="data?.fresh.length" class="cols">
+      <div>
+        <div class="section-head">
+          <h2 class="h2">{{ words.home.fresh }}</h2>
+          <NuxtLink class="arrow" :to="to.search({ sort: 'recent' })">{{ words.home.all }}</NuxtLink>
+        </div>
+        <div class="mini">
+          <NuxtLink v-for="e in data.fresh" :key="e.id" :to="to.plugin(e.id)"
+            ><PluginTile :mark="e.mark" :hue="e.hue" size="sm" />
+            <div class="t">
+              <b>{{ e.name[lang] }}</b>
+              <div>{{ by(e) }} · {{ e.categories[0] ? words.categories[e.categories[0]] : '' }}</div>
+            </div>
+            <div class="r"><TrustMark :trust="e.trust" :version="e.version" /></div
+          ></NuxtLink>
+        </div>
+      </div>
+      <div v-if="data.top.length">
+        <div class="section-head">
+          <h2 class="h2">{{ words.home.top }}</h2>
+          <NuxtLink class="arrow" :to="to.search({ sort: 'installs' })">{{ words.home.all }}</NuxtLink>
+        </div>
+        <div class="mini">
+          <NuxtLink v-for="e in data.top" :key="e.id" :to="to.plugin(e.id)"
+            ><PluginTile :mark="e.mark" :hue="e.hue" size="sm" />
+            <div class="t">
+              <b>{{ e.name[lang] }}</b>
+              <div>{{ by(e) }} · {{ e.categories[0] ? words.categories[e.categories[0]] : '' }}</div>
+            </div>
+            <div class="r num">{{ e.installs.toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-US') }}</div></NuxtLink
+          >
+        </div>
+      </div>
+    </div>
+    <p v-else class="opening">
+      <b>{{ text.home.opening }}</b> {{ words.home.empty }}
+    </p>
 
     <section class="publish">
       <div>
@@ -83,18 +135,47 @@ h1 {
   color: var(--muted);
   font-size: 16.5px;
 }
-/* Where the preview's large search stands: what the store will hold, until it holds it. */
-.opening {
-  padding: 14px 16px;
+.bigfind {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 52px;
+  padding: 0 16px;
   border: 1px solid var(--line-strong);
   border-radius: 12px;
   background: var(--surface);
-  color: var(--muted);
-  font-size: 15px;
+  color: var(--dim);
+  font-size: 16px;
 }
-.opening b {
+.bigfind:focus-within {
+  border-color: var(--brand);
+}
+.bigfind svg.i {
+  width: 18px;
+  height: 18px;
+}
+.bigfind input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
   color: var(--text);
-  font-weight: 600;
+  font-size: 16px;
+}
+.bigfind input::placeholder {
+  color: var(--dim);
+  opacity: 1;
+}
+.bigfind input::-webkit-search-cancel-button {
+  display: none;
+}
+kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--dim);
+  font: 11.5px var(--mono);
 }
 .trust {
   display: flex;
@@ -108,6 +189,63 @@ h1 {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+.cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 40px;
+}
+.cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+}
+.mini {
+  border-top: 1px solid var(--line);
+}
+.mini a {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 4px;
+  border-bottom: 1px solid var(--line);
+}
+.mini a:hover {
+  background: var(--hover);
+}
+.mini .t {
+  min-width: 0;
+}
+.mini .t b {
+  font-size: 14px;
+  font-weight: 600;
+}
+.mini .t div {
+  overflow: hidden;
+  color: var(--dim);
+  font-size: 12.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.mini .r {
+  color: var(--dim);
+  font-size: 12.5px;
+  text-align: right;
+}
+.opening {
+  margin-top: 56px;
+  padding: 14px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 15px;
+}
+.opening b {
+  color: var(--text);
+  font-weight: 600;
 }
 .publish {
   display: grid;
@@ -176,11 +314,21 @@ h1 {
     gap: 24px;
     padding-top: 36px;
   }
+  .cats {
+    flex-wrap: nowrap;
+    margin: 28px calc(-1 * var(--gutter)) 0;
+    padding: 0 var(--gutter);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .cols {
+    grid-template-columns: 1fr;
+  }
   .publish {
     grid-template-columns: 1fr;
     gap: 24px;
     margin-top: 48px;
-    padding: 22px;
+    padding: 24px;
   }
 }
 </style>

@@ -38,6 +38,7 @@ describe.skipIf(!url)('the database', () => {
       'installations',
       'installs_daily',
       'plugins',
+      'reports',
       'revocation_lists',
       'service_state',
       'sessions',

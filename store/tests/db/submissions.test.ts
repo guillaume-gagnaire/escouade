@@ -20,7 +20,10 @@ import {
   type Deps,
 } from '../../server/utils/submissions';
 import { sha256 } from '../../server/utils/versions';
-import { attestation, pluginFiles, tarball } from '../fake/plugins.mjs';
+import { authorPage, catalog, pluginPage, search } from '../../server/utils/listing';
+import { fileReport } from '../../server/utils/reports';
+import { TRAPPED } from '../fake/catalog.mjs';
+import { attestation, pluginFiles, png, tarball } from '../fake/plugins.mjs';
 
 // The submission against a real PostgreSQL (TEST_DATABASE_URL alone, emptied first; skipped without it), with a
 // fake GitHub in memory: a tag resolved once, the archive kept as it came and fingerprinted, the ten checks, the
@@ -146,7 +149,7 @@ describe.skipIf(!url)('the submission', () => {
   });
   beforeEach(async () => {
     await pool.query(
-      'truncate accounts, sessions, installations, installation_repos, account_installations, audit, plugins, versions cascade',
+      'truncate accounts, sessions, installations, installation_repos, account_installations, audit, plugins, versions, reports, installs_daily, revocation_lists cascade',
     );
     gh = fakeGithub();
     gh.add(REPO, 77);
@@ -398,5 +401,79 @@ describe.skipIf(!url)('the submission', () => {
     expect(tagOfWebhook('push', { ...p, ref: 'refs/heads/main' })).toBeNull();
     expect(tagOfWebhook('release', { ...p, action: 'published', release: { tag_name: 'v1.0.0' } })).toMatchObject({ tag: 'v1.0.0' });
     expect(tagOfWebhook('release', { ...p, action: 'edited', release: { tag_name: 'v1.0.0' } })).toBeNull();
+  });
+  it('renders the README at the check, and the public pages show the version once published (STORE-4)', async () => {
+    gh.push(REPO, 'v0.3.0', pluginFiles(REPO, { files: { 'README.md': TRAPPED, 'store/1.png': png(120, 60) } }));
+    const { id } = await submit(sam, REPO, 'v0.3.0');
+    const [v] = await q('select docs from versions where id = $1', [id]);
+    // Rendered once, cut down: nothing that runs, styles or tracks; the repository's image copied under its SHA-256.
+    expect(v.docs.readme.fr).toBe(v.docs.readme.en);
+    expect(v.docs.readme.fr).not.toMatch(/<script|<style|onerror|tracker\.example|href="javascript/i);
+    expect(v.docs.images).toHaveLength(1);
+    const [name] = v.docs.images;
+    expect(v.docs.readme.fr).toContain(`src="/files/${name}"`);
+    const copied = await readFile(join(dir, 'sha256', name.slice(0, 2), name));
+    expect(imageInfo(copied)).toEqual({ format: 'png', width: 120, height: 60 });
+
+    // Not published yet: not on the public pages.
+    expect(await pluginPage(db, dir, 'io.github.sroux.escouade-ntfy')).toBeNull();
+    await publishVersion(db, sam, id!, { categories: ['notifications'], keywords: 'phone', review: 'on' });
+    const page = await pluginPage(db, dir, 'io.github.sroux.escouade-ntfy');
+    expect(page!.entry).toMatchObject({ trust: 'review', version: '0.3.0', author: { login: 'sroux', githubId: 4242 } });
+    expect(page!.latest!.docs.readme.fr).toBe(v.docs.readme.fr);
+    expect(page!.latest!.screenshots[0]!.src).toMatch(/^\/files\/[0-9a-f]{64}\.png$/);
+    expect(page!.permissions.map((p) => p.text.en)).toEqual(['Gets these events', 'Connects to']);
+    expect(page!.versions.map((x) => x.version)).toEqual(['0.3.0']);
+    expect(search(await catalog(db), { q: 'telephone' }).results.map((e) => e.id)).toEqual(['io.github.sroux.escouade-ntfy']);
+    expect((await authorPage(db, 'SROUX'))!.plugins.map((e) => e.id)).toEqual(['io.github.sroux.escouade-ntfy']);
+    expect(await authorPage(db, 'nobody')).toBeNull();
+
+    // The installations counted until yesterday (STORE-6), as the app's catalogue says them.
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    const today = new Date().toISOString().slice(0, 10);
+    await q(
+      `insert into installs_daily (plugin_id, version, day, event, count) values ($1, '0.3.0', $2, 'install', 7), ($1, '0.3.0', $3, 'install', 5)`,
+      ['io.github.sroux.escouade-ntfy', yesterday, today],
+    );
+    expect((await pluginPage(db, dir, 'io.github.sroux.escouade-ntfy'))!.entry.installs).toBe(7);
+
+    // A version the revocation list disables leaves the pages; with it the plugin's only one, the plugin too.
+    const list = {
+      serial: 1,
+      issued_at: '2026-10-29T10:00:00Z',
+      entries: [
+        { id: 'io.github.sroux.escouade-ntfy', versions: ['0.3.0'], action: 'disable', reason: { fr: 'x', en: 'x' }, date: '2026-10-29' },
+      ],
+    };
+    await q(`insert into revocation_lists (serial, json, minisig, issued_at) values (1, $1, 'sig', now())`, [JSON.stringify(list)]);
+    expect(await pluginPage(db, dir, 'io.github.sroux.escouade-ntfy')).toBeNull();
+    expect((await catalog(db)).some((e) => e.id === 'io.github.sroux.escouade-ntfy')).toBe(false);
+    await q('delete from revocation_lists');
+
+    // A version published before STORE-4 has no docs: rendered from its kept archive the first time it is shown.
+    await q('update versions set docs = null where id = $1', [id]);
+    const again = await pluginPage(db, dir, 'io.github.sroux.escouade-ntfy');
+    expect(again!.latest!.docs.readme.fr).toBe(v.docs.readme.fr);
+    const [after] = await q('select docs from versions where id = $1', [id]);
+    expect(after.docs).not.toBeNull();
+  });
+
+  it('takes a report from anyone with an address, at most five an hour from one address', async () => {
+    const form = { reason: 'malicious', details: 'It reads ~/.ssh and sends it away.', email: ' Eve@Exemple.DEV ', faith: 'yes' };
+    const ctx = { pluginId: 'io.github.sroux.escouade-ntfy', version: '0.3.0', lang: 'en' as const };
+    expect(await fileReport(db, { ...form, reason: 'boring' }, ctx, T0)).toEqual({ error: 'reason' });
+    expect(await fileReport(db, { ...form, details: 'short' }, ctx, T0)).toEqual({ error: 'details' });
+    expect(await fileReport(db, { ...form, email: 'eve' }, ctx, T0)).toEqual({ error: 'email' });
+    expect(await fileReport(db, { ...form, faith: undefined }, ctx, T0)).toEqual({ error: 'faith' });
+    for (let i = 0; i < 5; i++) expect(await fileReport(db, form, ctx, T0)).toMatchObject({ email: 'Eve@exemple.dev' });
+    expect(await fileReport(db, form, ctx, T0)).toEqual({ error: 'too-many' });
+    expect(await fileReport(db, form, ctx, new Date(T0.getTime() + 3601_000))).toMatchObject({ email: 'Eve@exemple.dev' });
+    const rows = await q('select plugin_id, version, reason, state, lang from reports');
+    expect(rows).toHaveLength(6);
+    expect(rows[0]).toEqual({ plugin_id: ctx.pluginId, version: '0.3.0', reason: 'malicious', state: 'open', lang: 'en' });
+    // The journal keeps what was reported, not who reported it.
+    const journal = await q("select account_id, detail from audit where action = 'report.filed'");
+    expect(journal).toHaveLength(6);
+    expect(JSON.stringify(journal)).not.toContain('Eve');
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cleanEmail } from '../../server/utils/accounts';
-import { pagePolicy, STATIC_HEADERS, withNonce } from '../../server/utils/headers';
+import { nonceChunks, pagePolicy, STATIC_HEADERS, withNonce } from '../../server/utils/headers';
 
 describe('the security headers', () => {
   it('are the ones asked for on 2026-10-29', () => {
@@ -27,6 +27,19 @@ describe('the security headers', () => {
     expect(withNonce('<script>a</script><style>b</style><script type="application/json">c</script><scripts>', 'n')).toBe(
       '<script nonce="n">a</script><style nonce="n">b</style><script nonce="n" type="application/json">c</script><scripts>',
     );
+  });
+
+  it('put the nonce on Nuxt’s chunks only, never on the body where an author’s README is', () => {
+    const html = {
+      head: ['<style>h</style>'],
+      bodyPrepend: [],
+      body: ['<div id="__nuxt"><article class="readme"><script>alert(1)</script><style>*{}</style></article></div>'],
+      bodyAppend: ['<script type="application/json" data-nuxt-data="nuxt-app">[]</script>'],
+    };
+    nonceChunks(html, 'n');
+    expect(html.head).toEqual(['<style nonce="n">h</style>']);
+    expect(html.bodyAppend[0]).toContain('<script nonce="n" type="application/json"');
+    expect(html.body[0]).not.toContain('nonce');
   });
 });
 

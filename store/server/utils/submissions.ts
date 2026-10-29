@@ -1,5 +1,5 @@
 import { mkdir, rename, stat, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { and, desc, eq, gte, inArray, isNotNull, ne, sql } from 'drizzle-orm';
 import { accountInstallations, accounts, installationRepos, installations, plugins, versions } from '../db/schema';
 import { note, type Account } from './accounts';
@@ -25,6 +25,7 @@ import type { Db } from './db';
 import { GithubError } from './github';
 import { imageInfo, reencode } from './images';
 import { rejectionMail, sendMail, tagMovedMail } from './mail';
+import { renderDocs, type KeepImage } from './readme';
 import { TooBig, type Source } from './source';
 import { ARCHIVE_MAX, readArchive, type ArchiveRead } from './tar';
 import { forgetCatalog } from './catalog';
@@ -220,6 +221,12 @@ export async function keep(dir: string, bytes: Buffer, ext: string): Promise<{ s
 /** The extension a file is kept under, from its name in the release. */
 export const ext = (name: string) => /\.(tar\.gz|tgz|zip|tar\.xz|tar\.zst|exe)$/i.exec(name)?.[0].toLowerCase() ?? '.bin';
 
+/** Keeps a README's image as a screenshot is kept; gives the name it is served under (`<sha256>.png`). */
+export const keepImage =
+  (dir: string): KeepImage =>
+  async (bytes, format) =>
+    basename((await keep(dir, bytes, `.${format === 'jpeg' ? 'jpg' : format}`)).path);
+
 // ---- The checks ----
 
 const running = (results: CheckResult[], waiting: CheckKey[]): CheckResult[] =>
@@ -387,6 +394,8 @@ export async function checkVersion(db: Db, deps: Deps, id: number, now = () => n
       const kept = await keep(deps.archives, s.bytes, `.${s.format === 'jpeg' ? 'jpg' : s.format}`);
       screenshots.push({ path: s.path, sha256: kept.sha256, format: s.format, width: s.width, height: s.height });
     }
+    // The README and the documentation, rendered once and cut down, their images copied (server/utils/readme.ts).
+    const docs = await renderDocs(read, { repo: v.repoFullName, commit: v.commit, keep: keepImage(deps.archives) });
     const escouade = m!.escouade as { api: string; min: string; max?: string };
     const file = versionFile({
       id: pluginId!,
@@ -401,7 +410,7 @@ export async function checkVersion(db: Db, deps: Deps, id: number, now = () => n
     });
     await db
       .update(versions)
-      .set({ ...base, state, binaries, screenshots, versionJson: file.json, versionSha256: file.sha256 })
+      .set({ ...base, state, binaries, screenshots, docs, versionJson: file.json, versionSha256: file.sha256 })
       .where(eq(versions.id, id));
     await note(db, `version.${state}`, { accountId: v.accountId }, { version: id, plugin: pluginId, sha256: file.sha256 });
     if (state === 'ready' && v.origin === 'webhook' && existing?.autoPublish) {

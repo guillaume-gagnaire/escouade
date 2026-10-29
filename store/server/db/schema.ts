@@ -14,6 +14,7 @@ import {
   timestamp,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
+import type { Docs } from '../utils/readme';
 
 // The store's tables. A migration only adds (tables, columns, indexes): a new container can fail after it and leave
 // the old one online, still reading the old names (docs/STORE.md, §1.3).
@@ -167,7 +168,8 @@ export const plugins = pgTable(
 /**
  * A version as submitted (by its author, or by a new tag's webhook) and frozen (docs/STORE.md, §3.4): the tag resolved
  * once into its commit, the archive kept as GitHub sent it and its SHA-256, the release's binaries, the ten checks and
- * their verdict; once they pass, `version.json` and its SHA-256, the version's fingerprint. `state`: `checking`,
+ * their verdict; once they pass, `version.json` and its SHA-256, the version's fingerprint, and its README and docs
+ * rendered and cut down for its page (`docs`, server/utils/readme.ts). `state`: `checking`,
  * `error` (the store failed, the checks may run again), `rejected`, `held` (a person must look: a name too close),
  * `ready` (waits for the author's click), `published`. A published version never changes; its number is not used
  * again. A tag moved on the repository afterwards is noted, nothing else changes.
@@ -199,6 +201,7 @@ export const versions = pgTable(
     versionJson: text('version_json'),
     versionSha256: text('version_sha256'),
     review: boolean('review').notNull().default(true),
+    docs: jsonb('docs').$type<Docs>(),
     createdAt: at('created_at').notNull().defaultNow(),
     checkedAt: at('checked_at'),
     publishedAt: at('published_at'),
@@ -243,3 +246,24 @@ export const revocationLists = pgTable('revocation_lists', {
   issuedAt: at('issued_at').notNull(),
   receivedAt: at('received_at').notNull().defaultNow(),
 });
+
+/**
+ * A report of a plugin (« Signaler », docs/STORE.md §4.6): open to anyone, with an e-mail address to answer to and no
+ * GitHub account (the DSA's notice and action, decided on 2026-10-29). It goes to the review queue (STORE-8); the
+ * author sees that one is open, never who sent it. `state`: `open`, then what the review decides.
+ */
+export const reports = pgTable(
+  'reports',
+  {
+    id: serial('id').primaryKey(),
+    pluginId: text('plugin_id').notNull(),
+    version: text('version'),
+    reason: text('reason').notNull(),
+    details: text('details').notNull(),
+    email: text('email').notNull(),
+    lang: text('lang').notNull().default('fr'),
+    state: text('state').notNull().default('open'),
+    createdAt: at('created_at').notNull().defaultNow(),
+  },
+  (t) => [index('reports_plugin').on(t.pluginId), index('reports_state').on(t.state)],
+);

@@ -1,0 +1,76 @@
+/*
+ * What the public pages share (STORE-4), as the preview draws it (design/store/index.html): the chips of the
+ * categories, the heads of the sections, the lists of plugins in two columns, the titles.
+ */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: none;
+  color: var(--soft);
+  font-size: 13.5px;
+  font-weight: 520;
+  white-space: nowrap;
+}
+.chip:hover {
+  border-color: var(--line-strong);
+}
+.chip .n {
+  color: var(--dim);
+  font: 11.5px var(--mono);
+}
+.chip.on {
+  border-color: var(--line-strong);
+  background: var(--surface-2);
+  color: var(--text);
+}
+.chip svg.i {
+  width: 14px;
+  height: 14px;
+  color: var(--dim);
+}
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 56px 0 14px;
+}
+.section-head .arrow {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+}
+.h2 {
+  font-size: 17px;
+  font-weight: 620;
+  letter-spacing: -0.015em;
+}
+.rows {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 40px;
+  border-top: 1px solid var(--line);
+}
+.page-title {
+  font-size: clamp(26px, 2.6vw, 34px);
+  font-weight: 620;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+.page-title .more {
+  color: var(--muted);
+}
+.num {
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 720px) {
+  .rows {
+    grid-template-columns: 1fr;
+  }
+}

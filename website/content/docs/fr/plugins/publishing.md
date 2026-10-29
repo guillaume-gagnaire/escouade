@@ -26,6 +26,14 @@ Chaque version publiée a son fichier `version.json` : l’identifiant, le numé
 | Permissions | Cohérentes avec le plugin : sans programme ni webhook, il ne demande ni réseau, ni événements, ni secrets ; un secret demandé est déclaré dans `contributes.secrets` ; un hôte s’écrit seul (`hooks.slack.com`). |
 | Binaires | Le programme de `run` est dans le dépôt, ou dans la release de l’étiquette pour chaque système (voir plus bas). |
 
+## La page du plugin
+
+Une fois publiée, la version a sa page sur le store : son nom, son auteur, « Non vérifié » ou « En revue » jusqu’à sa signature, ce qu’elle pourra faire en mots (la permission la plus forte d’abord), son dépôt, son commit et son empreinte, ses versions, et « Ouvrir dans Escouade », qui ouvre sa page dans l’app.
+
+Le README y est rendu une fois, à la soumission, dans la langue du visiteur (`README.fr.md` ou `README.en.md`, sinon `README.md`) ; les pages markdown du dossier `store.docs` font l’onglet « Documentation ». Le store en garde le markdown et une courte liste de balises HTML (titres, listes, liens, code, tableaux, `details`) ; il retire les scripts, les styles, les attributs `style` et `class`, les cadres et les formulaires. Les images du dépôt (PNG, JPEG ou WebP, 5 Mo au plus, en chemin relatif ou par leur adresse sur GitHub) sont copiées sur le store et réencodées ; les images d’ailleurs, comme les badges, sont retirées : un visiteur ne charge rien chez un tiers. Un lien vers un fichier du dépôt mène à GitHub, au commit publié.
+
+Tout le monde peut signaler un plugin depuis sa page, sans compte, avec une adresse e-mail : une personne lit chaque signalement. Tu vois qu’un signalement est ouvert, jamais qui l’a fait.
+
 ## Les binaires
 
 Un plugin qui lance un programme compilé attache à la release de l’étiquette une archive par système, dont le nom dit le système et l’architecture : `…-windows-x64.zip`, `…-macos-arm64.tar.gz`, `…-linux-x64.tar.gz` (50 Mo au plus chacune). Chaque système qui lance un programme absent du dépôt doit avoir la sienne. Le store les télécharge une fois, les garde et en calcule l’empreinte.

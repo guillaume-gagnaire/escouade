@@ -26,6 +26,14 @@ Each published version has its `version.json` file: the id, the number, the repo
 | Permissions | Consistent with the plugin: with no program and no webhook, it asks for no network, no events, no secrets; a secret it asks for is declared in `contributes.secrets`; a host is written alone (`hooks.slack.com`). |
 | Binaries | The program of `run` is in the repository, or in the tag’s release for each system (see below). |
 
+## The plugin’s page
+
+Once published, the version has its page on the store: its name, its author, “Not verified” or “In review” until it is signed, what it will be able to do in words (the strongest permission first), its repository, commit and fingerprint, its versions, and “Open in Escouade”, which opens its page in the app.
+
+The README is rendered there once, at submission, in the visitor’s language (`README.en.md` or `README.fr.md`, else `README.md`); the markdown pages of the `store.docs` folder make the “Documentation” tab. The store keeps the markdown and a short list of HTML tags (headings, lists, links, code, tables, `details`); it removes scripts, styles, `style` and `class` attributes, frames and forms. The repository’s images (PNG, JPEG or WebP, 5 MB at most, by a relative path or by their address on GitHub) are copied to the store and re-encoded; images from elsewhere, such as badges, are removed: a visitor loads nothing from a third party. A link to a file of the repository leads to GitHub, at the published commit.
+
+Anyone can report a plugin from its page, without an account, with an e-mail address: a person reads every report. You see that a report is open, never who sent it.
+
 ## The binaries
 
 A plugin that runs a compiled program attaches to the tag’s release one archive per system, whose name says the system and the architecture: `…-windows-x64.zip`, `…-macos-arm64.tar.gz`, `…-linux-x64.tar.gz` (50 MB at most each). Each system that runs a program missing from the repository must have its own. The store downloads them once, keeps them and computes their fingerprint.

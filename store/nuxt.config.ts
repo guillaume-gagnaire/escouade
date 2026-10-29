@@ -9,7 +9,7 @@ const here = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 export default defineNuxtConfig({
   compatibilityDate: '2026-09-01',
   devtools: { enabled: false },
-  css: [here('../website/app/assets/main.css'), '~/assets/store.css'],
+  css: [here('../website/app/assets/main.css'), '~/assets/store.css', '~/assets/catalog.css'],
   app: {
     head: {
       htmlAttrs: { lang: 'fr' },

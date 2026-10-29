@@ -1,0 +1,3 @@
+<template>
+  <StoreReport />
+</template>

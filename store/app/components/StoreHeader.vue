@@ -4,12 +4,29 @@ import { pathIn } from '~/data/language';
 
 // The header of the documentation of the site, as the preview draws it (design/store/): the brand and « Store »,
 // then the tools on the right: the sign-in with GitHub for a visitor, « Mes plugins » and the author's initials once
-// signed in. The search comes with its page (STORE-4).
+// signed in; the search in the middle (« / » puts the cursor in it, or in the page's own), a button on a phone.
 const { lang, text, links } = useLang();
 const { data: me } = await useMe();
 const words = computed(() => ACCOUNT_TEXTS[lang.value]);
 const account = computed(() => pathIn(lang.value, '/account'));
 const signIn = computed(() => `/api/auth/github?to=${encodeURIComponent(account.value)}`);
+const { words: catalog } = useCatalog();
+const route = useRoute();
+const onSearch = computed(() => /^(\/en)?\/search\/?$/.test(route.path));
+
+// « / » goes to the search: the page's own field when it has one (the home page, the search), else the header's.
+function slash(e: KeyboardEvent) {
+  if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+  const t = e.target as HTMLElement | null;
+  if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+  const field =
+    document.querySelector<HTMLInputElement>('main input[name=q]') ?? document.querySelector<HTMLInputElement>('header input[name=q]');
+  if (!field || !field.offsetParent) return;
+  e.preventDefault();
+  field.focus();
+}
+onMounted(() => addEventListener('keydown', slash));
+onBeforeUnmount(() => removeEventListener('keydown', slash));
 </script>
 
 <template>
@@ -20,8 +37,20 @@ const signIn = computed(() => `/api/auth/github?to=${encodeURIComponent(account.
         <span class="slash" aria-hidden="true">/</span>
         <NuxtLink class="crumb" :to="pathIn(lang, '/')" :aria-label="text.header.home">Store</NuxtLink>
       </div>
+      <form class="find" role="search" method="get" :action="pathIn(lang, '/search')">
+        <StoreIcon name="search" /><input
+          name="q"
+          type="search"
+          :placeholder="catalog.find"
+          :aria-label="catalog.findLabel"
+          autocomplete="off"
+        /><kbd>/</kbd>
+      </form>
       <div class="tools">
         <a class="link wide" :href="links.docs">{{ text.header.docs }}</a>
+        <NuxtLink v-if="!onSearch" class="icon-btn only-narrow" :to="pathIn(lang, '/search')" :aria-label="catalog.find"
+          ><StoreIcon name="search"
+        /></NuxtLink>
         <template v-if="me.account">
           <NuxtLink class="link" :to="account">{{ words.mine }}</NuxtLink>
           <NuxtLink class="btn sm primary" :to="pathIn(lang, '/submit')">{{ text.header.submit }}</NuxtLink>
@@ -84,6 +113,57 @@ const signIn = computed(() => `/api/auth/github?to=${encodeURIComponent(account.
   font-weight: 560;
   letter-spacing: -0.01em;
 }
+.find {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  max-width: 420px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--dim);
+  font-size: 14px;
+}
+.find:focus-within {
+  border-color: var(--brand);
+}
+.find input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--text);
+}
+.find input::placeholder {
+  color: var(--dim);
+  opacity: 1;
+}
+.find input::-webkit-search-cancel-button {
+  display: none;
+}
+kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--dim);
+  font: 11.5px var(--mono);
+}
+.icon-btn {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+}
+.only-narrow {
+  display: none;
+}
 .tools {
   display: flex;
   align-items: center;
@@ -129,6 +209,10 @@ const signIn = computed(() => `/api/auth/github?to=${encodeURIComponent(account.
   .tools {
     gap: 8px;
   }
+  .only-narrow {
+    display: grid;
+  }
+  .find,
   .tools .link,
   .me span,
   .gh-label {

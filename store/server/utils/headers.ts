@@ -33,5 +33,16 @@ export function pagePolicy(nonce: string): string {
   ].join('; ');
 }
 
-/** Puts `nonce` on every <script> and <style> of a page's HTML chunk (Nuxt's payload, its config, its styles). */
+/** Puts `nonce` on every <script> and <style> of one of Nuxt's HTML chunks (its payload, its config, its styles). */
 export const withNonce = (html: string, nonce: string) => html.replace(/<(script|style)(?=[\s>])/g, `<$1 nonce="${nonce}"`);
+
+/** The chunks of a rendered page that are Nuxt's own, and get the nonce. */
+export const NUXT_CHUNKS = ['head', 'bodyPrepend', 'bodyAppend'] as const;
+
+/**
+ * Puts the nonce on Nuxt's chunks of a page, never on its body: the body is the page as the components render it, an
+ * author's README among them (STORE-4). Were a tag of theirs ever to pass the sanitizer, it would not run.
+ */
+export function nonceChunks(html: Record<(typeof NUXT_CHUNKS)[number], string[]>, nonce: string): void {
+  for (const part of NUXT_CHUNKS) html[part] = html[part].map((c) => withNonce(c, nonce));
+}
