@@ -1594,7 +1594,8 @@ pub(crate) fn blank_project(path: &str) -> Project {
         workflow_fixes: Vec::new(),
         workflows_auto_read: true,
         workflows_in_repo: true,
-        code_index: false,
+        code_index: None,
+        code_index_before: false,
     }
 }
 
@@ -2192,6 +2193,9 @@ impl<R: Runtime> Core<R> {
     pub fn save_settings(self: &Arc<Self>, mut s: Settings) -> Result<()> {
         // The MCP server's port is the backend's own (`sync_mcp`): the window's copy may be older.
         s.mcp_port = self.settings.read().mcp_port;
+        // « Index du code sur tous les projets » is `set_code_index_all`'s (ESC-293): the window's
+        // draft may be older.
+        s.code_index_all = self.settings.read().code_index_all;
         // The user's id is the backend's too (`ensure_identity`): a window's copy may be older.
         if s.user_id.is_empty() {
             s.user_id = self.settings.read().user_id.clone();
@@ -5727,7 +5731,7 @@ impl<R: Runtime> Core<R> {
                 self.lang().claude,
                 with_follow(
                     o.append_prompt.or_else(|| {
-                        (project.code_index && o.ticket_id.is_none())
+                        (self.code_index_on(&project) && o.ticket_id.is_none())
                             .then(|| crate::codeindex::hint::rule(self.lang().claude))
                     }),
                     follow.as_deref(),
@@ -7890,6 +7894,10 @@ impl<R: Runtime> Core<R> {
         let _ = self.refresh_repos(&project.id, true).await;
         let project = self.project(&project.id).unwrap_or(project);
         self.watch_project(&project);
+        // « Index du code sur tous les projets » on and followed: read like the others (ESC-293).
+        if self.code_index_on(&project) {
+            self.queue_code_index(vec![project.id.clone()]);
+        }
         if reopened {
             // Its tickets may start, its agents are counted, its Remote Control ones are
             // reachable again as they are when the app starts.

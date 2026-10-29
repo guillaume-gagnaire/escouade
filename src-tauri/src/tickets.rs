@@ -1990,8 +1990,8 @@ impl<R: Runtime> Core<R> {
         follow: Option<&str>,
     ) -> String {
         let engine = crate::engine::by_id(t.engine.unwrap_or(project.engine()));
-        let rule = project
-            .code_index
+        let rule = self
+            .code_index_on(project)
             .then(|| crate::codeindex::hint::rule(lang));
         let room = engine.instructions_room().map(|r| crate::engine::Room {
             max: r

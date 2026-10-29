@@ -610,6 +610,7 @@ pub fn run() {
                 commands::set_project_logo,
                 commands::get_code_index,
                 commands::set_code_index,
+                commands::set_code_index_all,
                 commands::get_index_savings,
                 commands::vectors_model,
                 commands::vectors_model_download,

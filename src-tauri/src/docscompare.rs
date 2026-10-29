@@ -420,7 +420,7 @@ impl<R: Runtime> Core<R> {
 
     /// The files the index links to a page (none when the project has it off).
     async fn docs_hints(self: &Arc<Self>, project: &Project, page: &Page) -> Vec<String> {
-        if !project.code_index {
+        if !self.code_index_on(project) {
             return Vec::new();
         }
         let Ok(reader) = self.code_index(&project.id, None).await else {
@@ -451,7 +451,7 @@ impl<R: Runtime> Core<R> {
         project: &Project,
         changed: &[String],
     ) -> Vec<String> {
-        if !project.code_index {
+        if !self.code_index_on(project) {
             return Vec::new();
         }
         let Ok(reader) = self.code_index(&project.id, None).await else {

@@ -8,6 +8,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Nouveautés
 
+- L’index du code s’allume d’un coup sur tous les projets, depuis Réglages › Projets : chaque projet le suit tant qu’il n’a pas fait son propre choix, et sa section dit d’où vient son état. Les projets sont lus un par un sans bloquer la fenêtre, et couper la case demande avant d’effacer leurs index.
 - Le programme d’un plugin tourne à part, démarré seulement quand il sert, et Escouade le tient : un plugin qui ne répond pas à temps n’est plus attendu, celui qui plante redémarre (trois fois, puis s’arrête), celui qui prend trop de mémoire est arrêté, et chacun n’obtient que ses propres secrets. Son journal garde ce qu’il a fait et dit, et le protocole est décrit dans la documentation des plugins.
 
 ### Corrections

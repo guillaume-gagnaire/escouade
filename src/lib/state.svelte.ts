@@ -340,6 +340,8 @@ class AppState {
   gitTick = $state(0);
   /** Each project's shared memory changed this many times (ESC-255): its settings' list reads it again. */
   memoryTicks = $state<Record<string, number>>({});
+  /** A project's « Index du code » changed (ESC-293): read, erased, waiting for its reading. */
+  codeIndexTicks = $state<Record<string, number>>({});
   /** The download of the vectors' model under way (ESC-254): bytes so far, of `total`; null when none is. */
   vectorsProgress = $state<{ done: number; total: number } | null>(null);
   update = $state<UpdateInfo | null>(null);
@@ -734,6 +736,9 @@ class AppState {
         break;
       case 'memory':
         this.memoryTicks[e.projectId] = (this.memoryTicks[e.projectId] ?? 0) + 1;
+        break;
+      case 'codeIndex':
+        this.codeIndexTicks[e.projectId] = (this.codeIndexTicks[e.projectId] ?? 0) + 1;
         break;
       case 'vectorsDownload':
         this.vectorsProgress = { done: e.done, total: e.total };

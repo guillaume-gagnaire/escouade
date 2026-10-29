@@ -72,7 +72,7 @@
   {/each}
 </dl>
 {#if !form.project}
-  <!-- « Indexer le code » (ESC-254): offered at the adding, off unless turned on. -->
+  <!-- « Indexer le code » (ESC-254): offered at the adding, as « Index du code sur tous les projets » says (ESC-293). -->
   <div class="agent index" data-wizard-code-index>
     <div class="tx">
       <span class="tt">{t('codeindex.wizard.title')}</span>

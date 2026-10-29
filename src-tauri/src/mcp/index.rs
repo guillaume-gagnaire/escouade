@@ -131,10 +131,10 @@ fn asked<R: Runtime>(
         Some((id, ..)) => (id, None),
         None => (String::new(), None),
     };
-    if !project.code_index {
+    if !core.code_index_on(&project) {
         return Err(ToolError::Failed(tr!(
-            "L’index du code est coupé pour le projet « {name} » : l’utilisateur l’allume dans les réglages du projet (« Index du code »). En attendant, cherche dans les fichiers.",
-            "The code index is off for the project “{name}”: the user turns it on in the project's settings (“Code index”). Meanwhile, search the files.",
+            "L’index du code est coupé pour le projet « {name} » : l’utilisateur l’allume dans les réglages du projet (« Index du code ») ou pour tous les projets (« Index du code sur tous les projets »). En attendant, cherche dans les fichiers.",
+            "The code index is off for the project “{name}”: the user turns it on in the project's settings (“Code index”) or for every project (“Code index on every project”). Meanwhile, search the files.",
             name = project.name
         )));
     }

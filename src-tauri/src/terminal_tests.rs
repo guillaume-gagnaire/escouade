@@ -225,7 +225,10 @@ async fn the_hook_points_a_search_for_a_symbol_to_the_index_and_lets_a_text_sear
         search("Grep", symbol.clone()),
         ("HTTP/1.1 200 OK".into(), "{}".into())
     );
-    h.core.set_code_index(&project_id, true).await.unwrap();
+    h.core
+        .set_code_index(&project_id, Some(true))
+        .await
+        .unwrap();
 
     // On: a search for a symbol, by the Grep tool or a shell, gets a pointer to the index, as
     // context only: no decision, so the search runs.

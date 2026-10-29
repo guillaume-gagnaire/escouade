@@ -24,6 +24,7 @@
     type Range,
   } from '../lib/stats';
   import type { Bucket, EngineId, StatsView } from '../lib/types';
+  import { codeIndexOn } from '../lib/codeindex';
   import { tip } from '../lib/tip';
 
   // The series of the tokens, from the bottom of a column, in the palette validated in both themes.
@@ -458,7 +459,7 @@
           </section>
         {/if}
 
-        {#if indexSavings.length || app.projects.some((p) => p.codeIndex)}
+        {#if indexSavings.length || app.projects.some((p) => codeIndexOn(p, app.settings))}
           <!-- What the code index saved, per project (ESC-254): of every account and harness, an answer of the index has neither. -->
           <section aria-labelledby="stats-index" data-stats-index>
             <div class="sec-h"><h2 id="stats-index">{t('codeindex.stats.title')}</h2></div>
