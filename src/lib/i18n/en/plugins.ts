@@ -256,7 +256,10 @@ export default defineZone('plugins', {
   },
 
   adds: {
-    themes: { one: 'A theme, in Settings › Application: {names}', other: '{count} themes, in Settings › Application: {names}' },
+    themes: {
+      one: 'A theme, in Settings › Application › Colors: {names}',
+      other: '{count} themes, in Settings › Application › Colors: {names}',
+    },
     harnesses: { one: 'A harness, in « New agent »: {names}', other: '{count} harnesses, in « New agent »: {names}' },
     ticketSources: { one: 'A Kanban source: {names}', other: '{count} Kanban sources: {names}' },
     forges: { one: 'A code host: {names}', other: '{count} code hosts: {names}' },

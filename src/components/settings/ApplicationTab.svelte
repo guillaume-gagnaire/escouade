@@ -8,6 +8,9 @@
   import { settingsForm } from '../../lib/settings.svelte';
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
+  import { pluginThemes } from '../../lib/plugin-theme.svelte';
+  import { themeLabel } from '../../lib/plugin-themes';
+  import { plugins } from '../../lib/plugins-view.svelte';
   import Chips from './Chips.svelte';
   import Group from './Group.svelte';
   import Row from './Row.svelte';
@@ -52,6 +55,17 @@
       label: { system: t('settings.app.themeSystem'), light: t('settings.app.themeLight'), dark: t('settings.app.themeDark') }[v],
     })),
   );
+  /** « Couleurs » (PLG-7): the themes of the plugins on, the one chosen while it is among them. */
+  const themes = $derived(pluginThemes());
+  const chosen = $derived(themes.find((th) => th.key === app.settings.pluginTheme) ?? null);
+  /** Chosen, but its plugin off or gone: the window shows Escouade's colours, and says why. */
+  const gone = $derived(plugins.loaded && !!app.settings.pluginTheme && !chosen ? app.settings.pluginTheme.split('/')[0] : null);
+  /** « Voir les thèmes »: the view Plugins, on its category of themes. */
+  function findThemes() {
+    app.modal = null;
+    plugins.page = { kind: 'category', category: 'themes' };
+    app.openPlugins();
+  }
   const SEGMENT_ZOOMS: number[] = [90, 100, 110, 125, 150];
   const percent = (n: number) => t('settings.app.percent', { n });
   /**
@@ -87,6 +101,28 @@
       bind:value={() => themeChoice(app.settings.theme), (v) => setDisplay({ theme: v })}
     />
   </Row>
+  <Row label={t('settings.app.colors')} desc={themes.length ? t('settings.app.colorsDesc') : t('settings.app.colorsNone')}>
+    {#if themes.length}
+      <select
+        class="field select"
+        aria-label={t('settings.app.colors')}
+        value={chosen?.key ?? ''}
+        onchange={(e) => setDisplay({ pluginTheme: e.currentTarget.value })}
+      >
+        <option value="">{t('settings.app.colorsEscouade')}</option>
+        {#each themes as th (th.key)}
+          <option value={th.key}>{themeLabel(th, app.lang.ui)}</option>
+        {/each}
+      </select>
+    {:else}
+      <button class="btn" onclick={findThemes}>{t('settings.app.colorsFind')}</button>
+    {/if}
+  </Row>
+  {#if gone}
+    <p class="held" role="status">{t('settings.app.colorsGone', { plugin: gone })}</p>
+  {:else if chosen?.dropped.length}
+    <p class="held" role="status">{t('settings.app.colorsDropped', { count: chosen.dropped.length })}</p>
+  {/if}
   <Row label={t('settings.app.zoom')} desc={`${t('settings.app.zoomDesc')} ${zoomKeys}`}>
     <Chips
       label={t('settings.app.zoom')}

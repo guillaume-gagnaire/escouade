@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
   import { applyAppearance, themeChoice } from './lib/appearance';
+  import { applyPluginTheme, chosenTheme } from './lib/plugin-theme.svelte';
+  import { plugins } from './lib/plugins-view.svelte';
   import { DEFAULT_FONT_SIZE, watchZoom } from './lib/display.svelte';
   import { t } from './lib/i18n';
   import { api } from './lib/ipc';
@@ -84,6 +86,15 @@
   // « Thème » as saved, once the settings are read (until then, the one the page kept: main.ts).
   $effect(() => {
     if (app.ready) applyAppearance(themeChoice(app.settings.theme));
+  });
+
+  // « Couleurs » (PLG-7): the plugins read once the settings are, then the theme chosen among those of the plugins on,
+  // at once and as either changes; none (or its plugin off or gone), Escouade's colours.
+  $effect(() => {
+    if (app.ready) untrack(() => void plugins.load());
+  });
+  $effect(() => {
+    if (plugins.loaded) applyPluginTheme(chosenTheme(app.settings.pluginTheme));
   });
 
   // « Zoom de l’interface » as saved, held to what the window holds, once the settings are read (the backend zoomed the

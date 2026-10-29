@@ -15,6 +15,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - A plugin’s program runs apart, started only when it is needed, and Escouade keeps it in check: a plugin that does not answer in time is no longer waited for, one that crashes restarts (three times, then stops), one that takes too much memory is stopped, and each gets only its own secrets. Its journal keeps what it did and said, and the protocol is described in the plugins’ documentation.
 - Plugin authors get a command that ships with Escouade, `escouade-plugin`: `test` puts a plugin through the conformance bench and says what it lacks, `dev` sends it facts and requests by hand, without the app.
 - A plugin can be written in TypeScript with `@escouade-dev/plugin`: `npm create escouade-plugin` gives a first plugin with its tests, the SDK brings the protocol’s types and helpers to receive facts and decide permissions, and `escouade-plugin pack` makes its archive. The documentation also tells how to ship it as one executable, for people without Node.
+- A plugin can bring a theme: other colors for the window, the terminals and the editor, light and dark, and its palette of project colors. It is picked in Settings › Application › Colors and applies at once; what it leaves out keeps Escouade’s color, and its values are filtered so it loads nothing and hides nothing.
 
 ### Fixes
 

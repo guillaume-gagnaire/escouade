@@ -13,8 +13,14 @@
       {
         "id": "high-contrast",
         "name": { "fr": "Contraste élevé", "en": "High contrast" },
+        "dark": {
+          "--frame": "#000000",
+          "--panel": "color-mix(in oklch, var(--p) 4%, #050505)",
+          "--text": "#ffffff",
+          "--p-ink": "#ffd400"
+        },
         "light": { "--frame": "#ffffff", "--text": "#000000", "--p-ink": "#0040c0" },
-        "dark": { "--frame": "#000000", "--text": "#ffffff", "--p-ink": "#ffd400" }
+        "projectColors": ["#ffd400", "#00e0ff", "#ff5cf0", "#7cff4f"]
       }
     ]
   }

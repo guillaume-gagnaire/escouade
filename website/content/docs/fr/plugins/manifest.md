@@ -81,7 +81,8 @@ La place de marché la réencode sans ses métadonnées en 256 et 64 px, et la m
 - `secrets` : les secrets qu’il garde, chacun avec une clé et un titre ;
 - `accounts` : un genre de compte, partagé par ses autres points ;
 - `ticketSources`, `forges` et `harnesses` : une source du Kanban, un hébergeur de code, un harness ; chacun avec un `id`, et le compte qu’il utilise (`account`) parmi ceux de `accounts` ;
-- `themes`, `webhooks`, `commands`, `menus`, `statusBar`, `badges`, `projectTemplates` et `escouadeYml` : décrits avec les versions qui les mettent en service.
+- `themes` : des thèmes, décrits dans [Les thèmes](plugins/themes) ;
+- `webhooks`, `commands`, `menus`, `statusBar`, `badges`, `projectTemplates` et `escouadeYml` : décrits avec les versions qui les mettent en service.
 
 Un même plugin peut tenir plusieurs points : un plugin GitHub donne ses issues au Kanban et suit ses PR sur un seul compte.
 

@@ -4,6 +4,10 @@ import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SAVE_DELAY_MS, zoomState } from '../../lib/display.svelte';
 import { setLang } from '../../lib/i18n';
+import { applyPluginTheme, chosenTheme, earlyPluginTheme, PLUGIN_THEME_KEY, projectPalette } from '../../lib/plugin-theme.svelte';
+import type { PluginView } from '../../lib/plugins';
+import { plugins } from '../../lib/plugins-view.svelte';
+import { PROJECT_COLORS } from '../../lib/theme';
 import { settingsForm } from '../../lib/settings.svelte';
 import { app } from '../../lib/state.svelte';
 import { BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, resetApp } from '../../test/ipc';
@@ -328,5 +332,105 @@ describe('the « Application » tab', () => {
       expect(field()).toHaveValue('Robert');
       expect(panel()).not.toHaveTextContent('Repris de git');
     });
+  });
+});
+
+describe('« Couleurs », the theme of a plugin (PLG-7)', () => {
+  const themed = (enabled = true) =>
+    ({
+      id: 'dev.exemple.hc',
+      name: 'Contraste',
+      choices: { enabled, projects: {}, revoked: [], settings: {} },
+      state: { kind: 'ready' },
+      manifest: {
+        contributes: {
+          themes: [
+            {
+              id: 'high-contrast',
+              name: { fr: 'Contraste élevé', en: 'High contrast' },
+              dark: { '--frame': '#000000', '--panel': 'url(x)' },
+              projectColors: ['#ff0000', '#00ff00'],
+            },
+          ],
+        },
+      },
+    }) as unknown as PluginView;
+
+  beforeEach(() => {
+    resetApp();
+    app.modal = { kind: 'settings', tab: 'app' };
+    plugins.list = [];
+    plugins.loaded = true;
+  });
+  afterEach(() => {
+    plugins.list = [];
+    applyPluginTheme(null);
+  });
+
+  it('offers the plugins’ way to themes when none is installed', async () => {
+    fakeBackend();
+    render(SettingsModal, { tab: 'app' });
+    expect(panel()).toHaveTextContent('Aucun thème installé. Un plugin peut en apporter un : ses couleurs et sa palette de projets.');
+    await userEvent.click(within(panel()).getByRole('button', { name: 'Voir les thèmes' }));
+    expect(app.modal).toBeNull();
+    expect(app.ui.view).toBe('plugins');
+    expect(plugins.page).toEqual({ kind: 'category', category: 'themes' });
+  });
+
+  it('chooses a plugin’s theme, saved a moment later, and says what it left out', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const backend = fakeBackend();
+    plugins.list = [themed()];
+    render(SettingsModal, { tab: 'app' });
+    const select = within(panel()).getByRole('combobox', { name: 'Couleurs' }) as HTMLSelectElement;
+    expect([...select.options].map((o) => o.textContent)).toEqual(['Escouade', 'Contraste élevé · Contraste']);
+    expect(select.value).toBe('');
+    await fireEvent.change(select, { target: { value: 'dev.exemple.hc/high-contrast' } });
+    expect(app.settings.pluginTheme).toBe('dev.exemple.hc/high-contrast');
+    expect(panel()).toHaveTextContent('Une valeur de ce thème est écartée');
+    vi.advanceTimersByTime(SAVE_DELAY_MS + 10);
+    expect(backend.called('save_settings').at(-1)?.args.settings).toMatchObject({ pluginTheme: 'dev.exemple.hc/high-contrast' });
+    vi.useRealTimers();
+  });
+
+  it('says the theme chosen is gone when its plugin is off', () => {
+    fakeBackend();
+    plugins.list = [themed(false)];
+    app.settings.pluginTheme = 'dev.exemple.hc/high-contrast';
+    render(SettingsModal, { tab: 'app' });
+    expect(within(panel()).queryByRole('combobox', { name: 'Couleurs' })).toBeNull();
+    expect(panel()).toHaveTextContent(
+      'Le thème choisi n’est plus là : son plugin (dev.exemple.hc) est désactivé ou désinstallé. Escouade a repris ses couleurs.',
+    );
+  });
+
+  it('is put on the window and its palette offered, then taken away', () => {
+    const theme = chosenTheme('dev.exemple.hc/high-contrast');
+    expect(theme).toBeNull();
+    plugins.list = [themed()];
+    applyPluginTheme(chosenTheme('dev.exemple.hc/high-contrast'));
+    const sheet = document.getElementById('escouade-plugin-theme');
+    expect(sheet?.textContent).toBe(":root:root:not([data-theme='light']) {\n  --frame: #000000;\n}\n");
+    expect(document.documentElement.dataset.pluginTheme).toBe('dev.exemple.hc/high-contrast');
+    expect(projectPalette()).toEqual(['#ff0000', '#00ff00']);
+    expect(projectPalette('#123456')).toEqual(['#ff0000', '#00ff00', '#123456']);
+    expect(JSON.parse(localStorage.getItem(PLUGIN_THEME_KEY)!).key).toBe('dev.exemple.hc/high-contrast');
+    applyPluginTheme(null);
+    expect(document.getElementById('escouade-plugin-theme')).toBeNull();
+    expect(document.documentElement.dataset.pluginTheme).toBeUndefined();
+    expect(projectPalette()).toEqual(PROJECT_COLORS);
+    expect(localStorage.getItem(PLUGIN_THEME_KEY)).toBeNull();
+  });
+
+  it('is shown before the first render from what the page kept, filtered again', () => {
+    localStorage.setItem(
+      PLUGIN_THEME_KEY,
+      JSON.stringify({ key: 'k', dark: { '--frame': '#111111', '--panel': 'url(x)' }, light: {}, projectColors: ['#abcdef', 'var(--x)'] }),
+    );
+    earlyPluginTheme();
+    expect(document.getElementById('escouade-plugin-theme')?.textContent).toBe(
+      ":root:root:not([data-theme='light']) {\n  --frame: #111111;\n}\n",
+    );
+    expect(projectPalette()).toEqual(['#abcdef']);
   });
 });

@@ -256,7 +256,10 @@ export default {
   },
 
   adds: {
-    themes: { one: 'Un thème, dans Réglages › Application : {names}', other: '{count} thèmes, dans Réglages › Application : {names}' },
+    themes: {
+      one: 'Un thème, dans Réglages › Application › Couleurs : {names}',
+      other: '{count} thèmes, dans Réglages › Application › Couleurs : {names}',
+    },
     harnesses: { one: 'Un harness, dans « Nouvel agent » : {names}', other: '{count} harness, dans « Nouvel agent » : {names}' },
     ticketSources: { one: 'Une source du Kanban : {names}', other: '{count} sources du Kanban : {names}' },
     forges: { one: 'Un hébergeur de code : {names}', other: '{count} hébergeurs de code : {names}' },

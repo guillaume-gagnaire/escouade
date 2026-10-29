@@ -146,6 +146,10 @@ pub struct Settings {
     pub code_index_all: bool,
     /// « Thème » (Réglages › Application › Affichage): the window's look, the system's by default.
     pub theme: ThemeChoice,
+    /// « Couleurs » (Réglages › Application › Affichage, PLG-7): the theme of a plugin the window takes,
+    /// `<plugin id>/<theme id>`; empty, Escouade's. Its values are filtered by the window
+    /// (src/lib/plugin-themes.ts); a plugin switched off or gone leaves Escouade's colours, the choice kept.
+    pub plugin_theme: String,
     /// « Zoom de l’interface », in percent (`ZOOM_LEVELS`): the whole window's, as the WebView's
     /// zoom (text, spacing and icons together); Ctrl+= / Ctrl+- / Ctrl+0 change it too.
     pub ui_zoom: u32,
@@ -620,6 +624,7 @@ impl Default for Settings {
             private_projects: false,
             code_index_all: false,
             theme: ThemeChoice::System,
+            plugin_theme: String::new(),
             ui_zoom: 100,
             terminal_font_size: DEFAULT_FONT_SIZE,
             editor_font_size: DEFAULT_FONT_SIZE,
@@ -3126,6 +3131,20 @@ mod tests {
         })
         .unwrap();
         assert_eq!(v["theme"], json!("light"));
+    }
+
+    #[test]
+    fn the_colours_are_escouade_s_until_a_plugin_s_theme_is_chosen() {
+        let s: Settings = serde_json::from_value(json!({})).unwrap();
+        assert_eq!(s.plugin_theme, "");
+        let s: Settings =
+            serde_json::from_value(json!({ "pluginTheme": "dev.exemple.hc/high-contrast" }))
+                .unwrap();
+        assert_eq!(s.plugin_theme, "dev.exemple.hc/high-contrast");
+        assert_eq!(
+            serde_json::to_value(&s).unwrap()["pluginTheme"],
+            json!("dev.exemple.hc/high-contrast")
+        );
     }
 
     #[test]

@@ -12,7 +12,7 @@
   import { revealHidden } from '../../lib/recipe';
   import { settingsForm, worktreesProblems } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
-  import { PROJECT_COLORS } from '../../lib/theme';
+  import { projectPalette } from '../../lib/plugin-theme.svelte';
   import { cleanLabel, cleanLetters, initials, tileText } from '../../lib/project-rail';
   import TileFace from '../TileFace.svelte';
   import type { Account, CommitMode, LeftoverReport, Project, WorktreeStep } from '../../lib/types';
@@ -274,7 +274,7 @@
   </Row>
   <Row label={t('common.color')} desc={t('settings.project.colorDesc')}>
     <div class="swatches" role="group" aria-label={t('common.color')}>
-      {#each PROJECT_COLORS as c, i (c)}
+      {#each projectPalette(draft.color) as c, i (c)}
         <button
           class="swatch"
           aria-label={t('settings.project.colorN', { n: i + 1 })}

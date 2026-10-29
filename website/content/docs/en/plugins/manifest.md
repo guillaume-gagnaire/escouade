@@ -81,7 +81,8 @@ The marketplace re-encodes it without its metadata at 256 and 64 px, and shows i
 - `secrets`: the secrets it keeps, each with a key and a title;
 - `accounts`: a kind of account, shared by its other points;
 - `ticketSources`, `forges` and `harnesses`: a source of the Kanban, a code host, a harness; each with an `id`, and the account it uses (`account`) among those of `accounts`;
-- `themes`, `webhooks`, `commands`, `menus`, `statusBar`, `badges`, `projectTemplates` and `escouadeYml`: described with the versions that bring them in.
+- `themes`: themes, described in [Themes](plugins/themes);
+- `webhooks`, `commands`, `menus`, `statusBar`, `badges`, `projectTemplates` and `escouadeYml`: described with the versions that bring them in.
 
 One plugin can hold several points: a GitHub plugin gives its issues to the Kanban and follows its PRs on a single account.
 
