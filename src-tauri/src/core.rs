@@ -5691,11 +5691,15 @@ impl<R: Runtime> Core<R> {
             cwd: project.path.clone(),
             created_at: now_ms(),
             last_activity: now_ms(),
+            // Never a discussion (ESC-289): it stays in its conversation, where Escouade refuses its
+            // writes; its first message is sent at its making.
             terminal: settings.terminal_view
                 && o.ticket_id.is_none()
+                && o.discussion.is_none()
                 && crate::engine::by_id(engine).terminal().is_some(),
             attached: settings.terminal_view
                 && o.ticket_id.is_none()
+                && o.discussion.is_none()
                 && crate::engine::by_id(engine).attaches(),
             remote_off: o.remote_off || o.copy_of.as_ref().is_some_and(|c| c.remote_off),
             ticket_id: o.ticket_id.clone(),

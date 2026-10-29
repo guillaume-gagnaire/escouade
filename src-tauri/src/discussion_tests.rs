@@ -187,3 +187,98 @@ fn a_discussion_reads_back_as_it_was_saved() {
     let meta: crate::model::AgentMeta = serde_json::from_str(r#"{"id":"a"}"#).unwrap();
     assert!(meta.discussion.is_none());
 }
+
+/// ESC-289: a discussion is never in the terminal view, even with « Vue Claude Code » on: its first
+/// message goes, and its writes stay refused by Escouade in its conversation.
+#[tokio::test]
+async fn a_discussion_never_goes_to_the_terminal_view() {
+    let h = crate::core_tests::harness("discussion-no-terminal");
+    let (p, _) = h.project(false).await;
+    h.core.settings.write().terminal_view = true;
+    let view = h
+        .core
+        .discussion_start(
+            &p.id,
+            Start {
+                kind: Kind::Discussion,
+                subject: "Première spec depuis le code".into(),
+                message: Some("Lis le code.".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let meta = h.agent(&view.meta.id);
+    assert!(meta.discussion.is_some());
+    assert!(!meta.terminal && !meta.attached, "{meta:?}");
+    // Its first message went to its harness, in the conversation.
+    h.wait("its first message sent", |h| {
+        h.items(&view.meta.id)
+            .iter()
+            .any(|i| i["text"].as_str() == Some("Lis le code."))
+    })
+    .await;
+    // An ordinary agent still goes to the terminal view.
+    let other = h.core.create_agent(&p.id, None).await.unwrap();
+    assert!(h.agent(&other.meta.id).terminal);
+    // On the docs branch too: in its worktree, its first message sent.
+    crate::docs_tests::set_docs_branch(&h, &p.id, "docs");
+    let on_branch = h
+        .core
+        .discussion_start(
+            &p.id,
+            Start {
+                kind: Kind::Discussion,
+                subject: "Première spec, branche des docs".into(),
+                message: Some("Lis le code, sur la branche des docs.".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let meta = h.agent(&on_branch.meta.id);
+    assert!(!meta.terminal && !meta.attached);
+    assert_ne!(meta.cwd, p.path);
+    h.wait("its first message sent on the docs branch", |h| {
+        h.items(&on_branch.meta.id)
+            .iter()
+            .any(|i| i["text"].as_str() == Some("Lis le code, sur la branche des docs."))
+    })
+    .await;
+}
+
+/// ESC-289: a first message refused once its agent is made (here, its harness cannot be started)
+/// leaves no agent behind: it is removed, and the refusal goes back to the window, which keeps what
+/// was chosen to start again.
+#[tokio::test]
+async fn a_discussion_whose_first_message_is_refused_leaves_no_agent() {
+    let h = crate::core_tests::harness("discussion-refused");
+    let (p, _) = h.project(false).await;
+    h.core.settings.write().claude_path = h
+        .dir
+        .join("nowhere")
+        .join("claude.exe")
+        .to_string_lossy()
+        .into_owned();
+    let refused = h
+        .core
+        .discussion_start(
+            &p.id,
+            Start {
+                kind: Kind::Discussion,
+                subject: "Première spec depuis le code".into(),
+                message: Some("Lis le code.".into()),
+                ..Default::default()
+            },
+        )
+        .await;
+    assert!(refused.is_err());
+    // Made, then removed.
+    let events = h.events.lock().clone();
+    let removed: Vec<_> = events
+        .iter()
+        .filter(|e| e["type"] == "agentRemoved")
+        .collect();
+    assert_eq!(removed.len(), 1, "{events:?}");
+    assert!(h.core.agent(removed[0]["id"].as_str().unwrap()).is_err());
+}

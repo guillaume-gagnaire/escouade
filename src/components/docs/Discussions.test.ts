@@ -240,4 +240,33 @@ describe('the discussions of the Docs tab', () => {
     await waitFor(() => expect(b.called('discussion_start')).toHaveLength(1));
     expect(b.called('discussion_start')[0].args.start).toMatchObject({ kind: 'discussion', message: 'Lis le code.', documents: [] });
   });
+
+  // ESC-289: refused after its agent was made, the backend removes it; the window says why and stays, with what was chosen.
+  it('says a refusal of « Commencer » in the window, which stays open to start again', async () => {
+    resetApp();
+    app.modal = { kind: 'newDiscussion', projectId: 'p1' };
+    app.docsDiscussion.p1 = null;
+    let refuse = true;
+    const b = backend({
+      discussion_start: () => {
+        if (refuse) throw 'Claude Code ne démarre pas';
+        return agent({ id: 'd7', discussion: disc({ kind: 'discussion' }) });
+      },
+    });
+    render(NewDiscussionModal, {
+      projectId: 'p1',
+      preset: { kind: 'discussion', subject: 'Première spec depuis le code', message: 'Lis le code.' },
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'Commencer' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Claude Code ne démarre pas');
+    expect(app.modal).not.toBeNull();
+    expect(app.docsDiscussion.p1).toBeNull();
+    expect(screen.getByRole('textbox')).toHaveValue('Première spec depuis le code');
+    // Started again: the refusal goes, the discussion opens.
+    refuse = false;
+    await userEvent.click(screen.getByRole('button', { name: 'Commencer' }));
+    await waitFor(() => expect(app.modal).toBeNull());
+    expect(b.called('discussion_start')).toHaveLength(2);
+    expect(app.docsDiscussion.p1).toBe('d7');
+  });
 });

@@ -32,6 +32,37 @@ async function shoot(page: Page, name: string) {
 
 test.use({ preStart: { run: () => ({ mcpEnabled: true }) } });
 
+// ESC-289: on a project without a spec, « Écrire une première spec depuis le code » opens « Nouvelle discussion » with its
+// subject and its message; « Commencer » closes the window and opens the discussion, its first message sent. With new
+// agents in the harness terminal too: a discussion never goes to the terminal view, where its first message was refused
+// (the window stayed open, its agent made).
+for (const terminalView of [false, true]) {
+  test.describe(`the first spec, new agents ${terminalView ? 'in the harness terminal' : 'in Escouade'}`, () => {
+    test.use({ preStart: { run: () => ({ mcpEnabled: true, terminalView }) } });
+
+    test('the first spec from the code closes its window and opens its discussion, its first message sent', async ({ app }) => {
+      test.setTimeout(120_000);
+      const { page } = app;
+      await page.setViewportSize({ width: 1004, height: 705 });
+      await addProject(page, app.repo, { firstAgent: false, name: 'Portail' });
+      expect(fs.existsSync(path.join(app.repo, '.escouade', 'spec'))).toBe(false);
+
+      await page.getByRole('group', { name: 'Vue du projet' }).getByRole('button', { name: 'Docs' }).click();
+      await page.getByRole('button', { name: 'Écrire une première spec depuis le code' }).click();
+      const dialog = page.getByRole('dialog', { name: 'Nouvelle discussion' });
+      await expect(dialog.getByRole('textbox').first()).toHaveValue('Première spec depuis le code');
+      await dialog.getByRole('button', { name: 'Commencer' }).click();
+      await expect(dialog).toBeHidden();
+
+      const view = page.locator('.discussion[data-kind="discussion"]');
+      await expect(view).toBeVisible();
+      await expect(page.locator('button.disc[data-kind="discussion"]')).toContainText('Première spec depuis le code');
+      // Its first message, the preset's, sent to the spec writer, in its conversation.
+      await expect(view.getByText(/n’a pas encore de spécification/).first()).toBeVisible({ timeout: 30_000 });
+    });
+  });
+}
+
 test('a brainstorm proposes pages and a decision, poured into the spec on the docs branch, and never changes the code', async ({ app }) => {
   test.setTimeout(240_000);
   const { page } = app;

@@ -384,9 +384,20 @@ impl<R: Runtime> Core<R> {
                 },
             )
             .await?;
-        self.send_message(&agent.meta.id, first_message(lang, &start), Vec::new())
-            .await?;
-        Ok(self.agent(&agent.meta.id)?.lock().view())
+        // Its first message refused (ESC-289): the agent made goes, the window says why and keeps
+        // what was chosen, to start again or change its account; no discussion without it is left.
+        let id = agent.meta.id.clone();
+        if let Err(e) = self
+            .send_message(&id, first_message(lang, &start), Vec::new())
+            .await
+        {
+            log::warn!("discussion {id}: first message refused, its agent removed: {e:#}");
+            if let Err(d) = self.delete_agent(&id, false).await {
+                log::warn!("discussion {id}: not removed: {d:#}");
+            }
+            return Err(e);
+        }
+        Ok(self.agent(&id)?.lock().view())
     }
 
     /// « Verser dans la spec »: the pages and decisions the discussion `id` proposes written where

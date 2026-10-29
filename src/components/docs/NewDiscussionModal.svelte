@@ -15,6 +15,7 @@
   import { app } from '../../lib/state.svelte';
   import { accountChoices, labelOf, modelChoices } from '../../lib/ticket-options';
   import { holds } from '../../lib/discussions';
+  import { errorText, missingAccountOf } from '../../lib/refusal';
   import type { DiscussionKind, DiscussionPreset, DocsCheck, EngineId } from '../../lib/types';
 
   // « Nouvelle discussion » of the Docs tab (ESC-261, design/factory/3-nouvelle-discussion.png): a discussion with the
@@ -31,6 +32,8 @@
   let account = $state('');
   let model = $state('');
   let starting = $state(false);
+  /** Why « Commencer » was refused (ESC-289): no discussion was left, the window keeps what was chosen. */
+  let refused = $state('');
   /** The files over 50 MB no LFS rule takes, asked about before they go in the repository (as the drive does). */
   let large = $state<{ files: DocsCheck[]; answer: (yes: boolean) => void } | null>(null);
   function answerLarge(yes: boolean) {
@@ -113,6 +116,7 @@
   async function start() {
     if (!subject.trim() || starting) return;
     starting = true;
+    refused = '';
     try {
       // The files first: filed by Escouade in the drive, then named to the agent.
       const dropped = await dropDocuments(projectId, files, null, {
@@ -121,8 +125,9 @@
           if (!d && error) app.toast(t('docs.discussion.notFiled', { name, error }), 'error');
         },
       });
-      const agent = await app.run(
-        api.discussionStart(projectId, {
+      let agent;
+      try {
+        agent = await api.discussionStart(projectId, {
           kind,
           subject: subject.trim(),
           documents: dropped.map((d) => d.file.path),
@@ -131,9 +136,13 @@
           engine: engine ?? baseEngine,
           account: account || null,
           model: model || null,
-        }),
-      );
-      if (!agent) return;
+        });
+      } catch (e) {
+        // Said here, where it can start again or on another account; for want of an account, the toast offers to add one.
+        refused = errorText(e);
+        if (missingAccountOf(e)) app.refused(e);
+        return;
+      }
       app.agents[agent.id] = agent;
       // Read before the window closes: its props come from it.
       const pid = projectId;
@@ -215,6 +224,10 @@
     {/if}
   </div>
 
+  {#if refused}
+    <p class="refused" role="alert">{refused}</p>
+  {/if}
+
   {#if large}
     <div class="large" role="alert">
       <p>{t('docs.documents.large.intro')}</p>
@@ -262,6 +275,12 @@
 </Modal>
 
 <style>
+  .refused {
+    margin: 0 0 14px;
+    font-size: 12.5px;
+    color: var(--del);
+    overflow-wrap: anywhere;
+  }
   .large {
     padding: 12px 14px;
     border: 1px solid color-mix(in oklch, var(--wait) 45%, transparent);
