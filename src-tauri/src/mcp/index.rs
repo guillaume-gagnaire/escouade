@@ -16,7 +16,7 @@ use super::read::json;
 use super::resolve;
 use super::tools::ToolError;
 use super::Caller;
-use crate::codeindex::{Answer, Reader};
+use crate::codeindex::{Answer, BuildContextOptions, Reader, Retrieval};
 use crate::core::Core;
 use crate::model::Project;
 use serde::Deserialize;
@@ -55,7 +55,13 @@ pub struct ContextArgs {
     pub project: Option<String>,
     #[schemars(description = "The task, told in words, as you would tell it to a colleague.")]
     pub task: String,
-    #[schemars(description = "The most entry points to give (10 by default, 50 at most).")]
+    #[schemars(
+        description = "Extra search keywords for synonym expansion. Use this when the task uses conceptual terms that may not match symbol names — e.g. for 'authentication', pass [\"login\", \"session\", \"credential\", \"token\", \"auth\"]. The index is searched for each keyword independently; a keyword of several words is also looked for verbatim in the code."
+    )]
+    pub keywords: Option<Vec<String>>,
+    #[schemars(
+        description = "The most symbols to give, entry points and the symbols linked to them (20 by default, 100 at most)."
+    )]
     pub limit: Option<u32>,
 }
 
@@ -221,12 +227,94 @@ pub(super) async fn context<R: Runtime>(
 ) -> Result<String, ToolError> {
     let a = asked(core, caller, args.project.as_deref())?;
     let r = reader(core, &a).await?;
-    let limit = limit_of(args.limit);
-    let found = tokio::task::spawn_blocking(move || r.task_context(&args.task, limit))
+    let options = BuildContextOptions::of_tool(
+        args.limit.map(|l| l as usize),
+        args.keywords.unwrap_or_default(),
+    );
+    let found = tokio::task::spawn_blocking(move || r.task_context_with(&args.task, &options))
         .await
         .map_err(joined)?
         .map_err(failed)?;
-    answered(core, &a, "index_context", found)
+    let retrieval = retrieval_text(
+        &found.result.retrieval,
+        found.result.entry_points.is_empty(),
+    );
+    let mut text = answered(core, &a, "index_context", found)?;
+    // The diagnostic in words, after the rest (tokensave's « ### Retrieval »).
+    if let Ok(mut v) = serde_json::from_str::<serde_json::Value>(&text) {
+        v["retrieval"] = json!(retrieval);
+        text = json(&v)?;
+    }
+    Ok(text)
+}
+
+/// Ported from tokensave `src/context/formatter.rs` (github.com/aovestdipaperino/tokensave, commit
+/// 580936b, MIT, © 2025 Enzo Lombardi; see THIRD-PARTY-NOTICES.md). The diagnostic of a context in
+/// words (`format_context_as_markdown`, its
+/// « Retrieval » section): the match and its best score, the terms that found something and how
+/// much, the terms that found nothing (six named at most).
+pub(crate) fn retrieval_text(r: &Retrieval, no_entry: bool) -> String {
+    const MAX_MISSES_SHOWN: usize = 6;
+    let mut lines: Vec<String> = Vec::new();
+    match (r.quality.as_deref(), r.best_score) {
+        (Some(quality), Some(score)) => {
+            let score = if score < 0.01 {
+                "<0.01".to_string()
+            } else {
+                format!("{score:.2}")
+            };
+            lines.push(tr!(
+                "correspondance : {quality} (meilleur score {score})",
+                "match: {quality} (best score {score})",
+                quality = quality,
+                score = score
+            ));
+        }
+        _ if r.terms.is_empty() => lines.push(tr!(
+            "correspondance : aucune (aucun terme à chercher n’a été tiré de la tâche — reformule avec des identifiants concrets ou ajoute des `keywords`)",
+            "match: none (no searchable terms extracted — rephrase with concrete identifiers or add `keywords`)"
+        )),
+        _ => lines.push(tr!(
+            "correspondance : aucune (aucun candidat)",
+            "match: none (no candidates)"
+        )),
+    }
+    let hits: Vec<String> = r
+        .terms
+        .iter()
+        .filter(|t| t.hits > 0)
+        .map(|t| format!("{}({})", t.term, t.hits))
+        .collect();
+    if !hits.is_empty() {
+        lines.push(tr!(
+            "termes : {list}",
+            "terms: {list}",
+            list = hits.join(", ")
+        ));
+    }
+    let misses: Vec<&str> = r
+        .terms
+        .iter()
+        .filter(|t| t.hits == 0)
+        .map(|t| t.term.as_str())
+        .collect();
+    if !misses.is_empty() {
+        let shown = misses.len().min(MAX_MISSES_SHOWN);
+        let mut listed = misses[..shown].join(", ");
+        if misses.len() > shown {
+            listed.push_str(&format!(", +{}", misses.len() - shown));
+        }
+        lines.push(tr!(
+            "⚠ sans résultat ({n}) : {listed} — ajoute des synonymes dans `keywords` ou essaie index_search",
+            "⚠ no hits ({n}): {listed} — add `keywords` synonyms or try index_search",
+            n = misses.len(),
+            listed = listed
+        ));
+    }
+    if r.terms.is_empty() && r.best_score.is_none() && !no_entry {
+        return String::new();
+    }
+    lines.join("\n")
 }
 
 pub(super) async fn callers<R: Runtime>(

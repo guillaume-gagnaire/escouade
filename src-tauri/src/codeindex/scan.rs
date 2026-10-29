@@ -160,7 +160,7 @@ pub fn refresh(
             }
             None => insert_file(&tx, scope, &rel, lang, size, mtime, &hash, state)?,
         };
-        store_parsed(&tx, scope, &rel, file_id, parsed)?;
+        store_parsed(&tx, scope, &rel, file_id, parsed, &src)?;
         out.parsed += 1;
     }
     // Files gone.
@@ -237,10 +237,14 @@ fn insert_file(
 
 /// The symbols and links of a file, not its row.
 fn clear_rows(tx: &Transaction, file_id: i64) -> Result<()> {
-    tx.execute(
-        "DELETE FROM sym_fts WHERE rowid IN (SELECT id FROM symbols WHERE file_id = ?1)",
-        [file_id],
-    )?;
+    for fts in ["sym_fts", "body_fts"] {
+        tx.execute(
+            &format!(
+                "DELETE FROM {fts} WHERE rowid IN (SELECT id FROM symbols WHERE file_id = ?1)"
+            ),
+            [file_id],
+        )?;
+    }
     tx.execute("DELETE FROM edges WHERE file_id = ?1", [file_id])?;
     tx.execute("DELETE FROM symbols WHERE file_id = ?1", [file_id])?;
     Ok(())
@@ -252,30 +256,44 @@ fn store_parsed(
     rel: &str,
     file_id: i64,
     parsed: lang::Parsed,
+    src: &str,
 ) -> Result<()> {
-    let path_words = super::api::words(rel).join(" ");
+    let lines: Vec<&str> = src.lines().collect();
     let mut ids: Vec<i64> = Vec::with_capacity(parsed.symbols.len());
     {
         let mut sym = tx.prepare_cached(
-            "INSERT INTO symbols (file_id, scope, path, name, kind, parent, line, end_line, sig, doc)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            "INSERT INTO symbols (file_id, scope, path, name, kind, parent, line, end_line, sig, doc, vis)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         )?;
         let mut fts = tx.prepare_cached(
-            "INSERT INTO sym_fts (rowid, name, parent, doc, path) VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO sym_fts (rowid, name, qualified, doc, sig, terms) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         )?;
+        let mut body =
+            tx.prepare_cached("INSERT INTO body_fts (rowid, path, body) VALUES (?1, ?2, ?3)")?;
         for s in &parsed.symbols {
             sym.execute(params![
-                file_id, scope, rel, s.name, s.kind, s.parent, s.line, s.end_line, s.sig, s.doc
+                file_id, scope, rel, s.name, s.kind, s.parent, s.line, s.end_line, s.sig, s.doc,
+                s.vis
             ])?;
             let id = tx.last_insert_rowid();
             ids.push(id);
+            let qualified = super::api::qualified(rel, &s.parent, &s.name);
             fts.execute(params![
                 id,
-                format!("{} {}", s.name, super::api::words(&s.name).join(" ")),
-                super::api::words(&s.parent).join(" "),
+                s.name,
+                qualified,
                 s.doc,
-                path_words
+                s.sig,
+                super::text::search_terms(&s.name, &qualified)
             ])?;
+            // tokensave `build_executable_body_documents`: the lines of each function and method.
+            if super::ranking::is_executable_kind(s.kind) {
+                let start = s.line.saturating_sub(1) as usize;
+                let end = (s.end_line as usize).min(lines.len());
+                if start < end {
+                    body.execute(params![id, rel, lines[start..end].join("\n")])?;
+                }
+            }
         }
     }
     let mut edge = tx.prepare_cached(

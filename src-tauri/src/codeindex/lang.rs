@@ -85,6 +85,8 @@ pub struct Sym {
     pub end_line: u32,
     pub sig: String,
     pub doc: String,
+    /// `pub`, `crate`, `super` or `private`, read as tokensave's extractors read it (ESC-296).
+    pub vis: &'static str,
 }
 
 /// A link: `import`, `call`, `extends` or `implements`, from the symbol that holds it (its index in
@@ -133,6 +135,7 @@ pub fn parse(lang: Lang, rel_path: &str, src: &str) -> Parsed {
             end_line: src.lines().count().max(1) as u32,
             sig: format!("<{stem}>"),
             doc: String::new(),
+            vis: "pub",
         });
         w.svelte(tree.root_node(), 0);
     } else {
@@ -207,6 +210,7 @@ impl<'a> Walker<'a> {
                     end_line: node.end_position().row as u32 + 1 + self.line_off,
                     sig: self.signature(node),
                     doc: self.doc(node),
+                    vis: self.visibility(node, &def.name),
                 });
                 self.heritage(node, idx);
                 owner = Some(idx);
@@ -735,6 +739,96 @@ impl<'a> Walker<'a> {
             if !name.is_empty() {
                 found.push((rel, name));
             }
+        }
+    }
+
+    // ---- visibility ----
+
+    /// The visibility of a definition, by the rules of tokensave's extractors (commit 580936b,
+    /// MIT, © 2025 Enzo Lombardi; see THIRD-PARTY-NOTICES.md): Rust `extract_visibility`, the
+    /// `in_export` and `extract_ts_accessibility` of TypeScript, `python_visibility`,
+    /// `go_visibility`, `extract_java_visibility`, `extract_csharp_visibility`, PHP's
+    /// `extract_visibility`; a Markdown heading is public.
+    fn visibility(&self, n: Node, name: &str) -> &'static str {
+        let child_text = |kinds: &[&str]| -> Option<&'a str> {
+            let mut cur = n.walk();
+            let found = n
+                .children(&mut cur)
+                .find(|c| kinds.contains(&c.kind()))
+                .map(|c| self.text(c));
+            found
+        };
+        match self.lang {
+            Lang::Rust => match child_text(&["visibility_modifier"]) {
+                Some("pub") => "pub",
+                Some(s) if s.contains("crate") => "crate",
+                Some(s) if s.contains("super") => "super",
+                Some(_) => "pub",
+                None => "private",
+            },
+            Lang::TypeScript | Lang::Tsx | Lang::JavaScript | Lang::Svelte => {
+                if matches!(
+                    n.kind(),
+                    "method_definition" | "public_field_definition" | "field_definition"
+                ) {
+                    return match child_text(&["accessibility_modifier"]) {
+                        Some("private") => "private",
+                        Some("protected") => "super",
+                        _ => "pub",
+                    };
+                }
+                let mut up = n.parent();
+                while let Some(p) = up {
+                    if p.kind() == "export_statement" {
+                        return "pub";
+                    }
+                    up = p.parent();
+                }
+                "private"
+            }
+            Lang::Python => {
+                if name.starts_with("__") && name.ends_with("__") && name.len() > 4 {
+                    "pub"
+                } else if name.starts_with('_') {
+                    "private"
+                } else {
+                    "pub"
+                }
+            }
+            Lang::Go => {
+                if name.chars().next().is_some_and(char::is_uppercase) {
+                    "pub"
+                } else {
+                    "private"
+                }
+            }
+            Lang::Java => match child_text(&["modifiers"]) {
+                Some(t) if t.contains("public") => "pub",
+                Some(t) if t.contains("protected") => "crate",
+                _ => "private",
+            },
+            Lang::CSharp => {
+                let mut cur = n.walk();
+                let mods: Vec<&str> = n
+                    .children(&mut cur)
+                    .filter(|c| c.kind() == "modifier")
+                    .map(|c| self.text(c))
+                    .collect();
+                mods.iter()
+                    .find_map(|m| match *m {
+                        "public" => Some("pub"),
+                        "private" => Some("private"),
+                        "internal" => Some("crate"),
+                        "protected" => Some("super"),
+                        _ => None,
+                    })
+                    .unwrap_or("private")
+            }
+            Lang::Php => match child_text(&["visibility_modifier"]).map(str::trim) {
+                Some("protected") | Some("private") => "private",
+                _ => "pub",
+            },
+            Lang::Markdown => "pub",
         }
     }
 

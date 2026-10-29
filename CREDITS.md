@@ -10,6 +10,8 @@ Escouade est sous licence GPL-3.0 ou ultérieure (voir [LICENSE](LICENSE)). Elle
 | [whisper.cpp](https://github.com/ggml-org/whisper.cpp), par [whisper-rs](https://codeberg.org/tazz4843/whisper-rs) | La transcription de la dictée et de la conversation | MIT (whisper-rs : Unlicense) |
 | [cpal](https://github.com/RustAudio/cpal) | Le micro et les haut-parleurs | Apache-2.0 |
 
+L’index du code reprend la méthode de [tokensave](https://github.com/aovestdipaperino/tokensave) (© 2025 Enzo Lombardi), portée en Rust dans Escouade au commit `580936b` : l’index plein texte, la lecture de la question, le contexte d’une tâche et son classement. Licence MIT ; le texte et la liste des fichiers portés sont dans [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
 ## Les voix
 
 Les voix de la conversation viennent du catalogue de [PiperHub](https://piperhub.org) (code du site sous MIT ; chaque voix garde la licence de son auteur). Escouade ne propose que celles qui passent sa règle : licence du modèle permissive (MIT, Apache-2.0, BSD, CC0, CC BY et CC BY-SA avec attribution, domaine public), licence du jeu de données aussi quand elle est connue (ni NC, ni ND, ni « recherche seulement »), et aucune voix de personnage, de personne connue ni de marque. La licence lue sur Hugging Face (fiche du modèle, fiche officielle `MODEL_CARD`, fiche du jeu de données) prime sur celle de PiperHub. Une voix de la communauté dont on ne sait pas qui parle n’est proposée qu’après vérification. Une seule voix est proposée par exception à cette règle (voir plus bas). La liste est livrée avec l’application et mise à jour à ses versions (`scripts/piper-voices.mjs`, puis le test `write_the_voice_catalog`).

@@ -7,7 +7,7 @@ use crate::fence::Fence;
 use anyhow::Result;
 use rusqlite::{named_params, Connection, Row};
 use serde::Serialize;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashSet};
 use std::path::PathBuf;
 
 /// What an answer saved, in estimated tokens (about four bytes each).
@@ -77,6 +77,83 @@ pub struct Context {
     pub entry_points: Vec<Hit>,
     pub related: Vec<Hit>,
     pub snippets: Vec<Snippet>,
+    /// Whether to trust the answer or ask again (tokensave's « Retrieval »).
+    pub retrieval: Retrieval,
+}
+
+/// The diagnostic of a context (tokensave `RetrievalDiagnostics`): the results of each term
+/// searched, the best score, and the match: `exact`, `strong` or `fts-only`.
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Retrieval {
+    pub terms: Vec<TermHits>,
+    pub best_score: Option<f64>,
+    #[serde(rename = "match")]
+    pub quality: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct TermHits {
+    pub term: String,
+    /// At most the bounded top-K of the term (10).
+    pub hits: usize,
+}
+
+/// A symbol of the index with what its ranking needs (tokensave's `Node`).
+#[derive(Debug, Clone)]
+pub struct Node {
+    pub id: i64,
+    pub name: String,
+    pub kind: String,
+    pub parent: String,
+    pub path: String,
+    pub line: u32,
+    pub end_line: u32,
+    pub sig: String,
+    pub doc: String,
+    pub vis: String,
+}
+
+/// The columns `Node::of` reads, of table alias `s`.
+pub const NODE_COLS: &str =
+    "s.id, s.name, s.kind, s.parent, s.path, s.line, s.end_line, s.sig, s.doc, s.vis";
+
+impl Node {
+    pub fn of(r: &Row) -> rusqlite::Result<Node> {
+        Ok(Node {
+            id: r.get(0)?,
+            name: r.get(1)?,
+            kind: r.get(2)?,
+            parent: r.get(3)?,
+            path: r.get(4)?,
+            line: r.get(5)?,
+            end_line: r.get(6)?,
+            sig: r.get(7)?,
+            doc: r.get(8)?,
+            vis: r.get(9)?,
+        })
+    }
+
+    pub fn qualified(&self) -> String {
+        qualified(&self.path, &self.parent, &self.name)
+    }
+}
+
+/// A node and its score (tokensave `SearchResult`).
+#[derive(Debug, Clone)]
+pub struct Scored {
+    pub node: Node,
+    pub score: f64,
+}
+
+/// The qualified name of a symbol, as tokensave writes it: its file, its holders, its name, joined
+/// by `::` (`src/shop.rs::Cart::total`).
+pub fn qualified(path: &str, parent: &str, name: &str) -> String {
+    if parent.is_empty() {
+        format!("{path}::{name}")
+    } else {
+        format!("{path}::{}::{name}", parent.replace('.', "::"))
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -95,8 +172,8 @@ pub struct Impact {
 
 /// A reader of the index, for the folder the agent works in.
 pub struct Reader {
-    conn: Connection,
-    scope: String,
+    pub(super) conn: Connection,
+    pub(super) scope: String,
     dir: PathBuf,
     fence: Fence,
 }
@@ -122,6 +199,14 @@ impl Reader {
         )
     }
 
+    /// `vis` with the scope as the positional parameter `?n`.
+    pub(super) fn vis_pos(a: &str, n: usize) -> String {
+        format!(
+            "({a}.scope = ?{n} OR ({a}.scope = '' AND NOT EXISTS (SELECT 1 FROM files fw \
+             WHERE fw.scope = ?{n} AND fw.path = {a}.path AND fw.state IN (1, 2))))"
+        )
+    }
+
     fn hit(r: &Row) -> rusqlite::Result<Hit> {
         Ok(Hit {
             name: r.get("name")?,
@@ -137,19 +222,21 @@ impl Reader {
 
     // ---- search ----
 
-    /// Symbols matching `query` (its words, by prefix, in the names, holders, docs and paths),
-    /// the best first; `kind` keeps one kind.
+    /// Symbols matching `query`, ranked as tokensave's search ranks them (`search::ranked_search`):
+    /// each word by prefix in the names, qualified names, docs, signatures and parts of the names,
+    /// definitions before references, the exact name and the exact phrase first; `kind` keeps one
+    /// kind.
     pub fn search(
         &self,
         query: &str,
         limit: usize,
         kind: Option<&str>,
     ) -> Result<Answer<Vec<Hit>>> {
-        let terms = words(query);
-        let mut hits = self.fts(&terms, false, limit, kind, query.trim())?;
-        if hits.is_empty() && terms.len() > 1 {
-            hits = self.fts(&terms, true, limit, kind, query.trim())?;
-        }
+        let hits: Vec<Hit> = self
+            .ranked_search(query, limit, kind)?
+            .iter()
+            .map(|s| s.node.to_hit())
+            .collect();
         let paths: Vec<String> = hits.iter().map(|h| h.path.clone()).collect();
         let saving = self.saving(&paths, &hits);
         Ok(Answer {
@@ -158,91 +245,46 @@ impl Reader {
         })
     }
 
-    fn fts(
-        &self,
-        terms: &[String],
-        any: bool,
-        limit: usize,
-        kind: Option<&str>,
-        exact: &str,
-    ) -> Result<Vec<Hit>> {
-        if terms.is_empty() {
-            return Ok(Vec::new());
-        }
-        let m = terms
-            .iter()
-            .map(|t| format!("\"{t}\"*"))
-            .collect::<Vec<_>>()
-            .join(if any { " OR " } else { " " });
-        let sql = format!(
-            "SELECT s.name, s.kind, s.parent, s.path, s.line, s.end_line, s.sig, s.doc
-             FROM sym_fts JOIN symbols s ON s.id = sym_fts.rowid
-             WHERE sym_fts MATCH :m AND {} AND (:k IS NULL OR s.kind = :k)
-             ORDER BY (s.name = :exact COLLATE NOCASE) DESC, bm25(sym_fts, 10.0, 3.0, 1.5, 2.0)
-             LIMIT :n",
-            Self::vis("s")
-        );
-        let mut stmt = self.conn.prepare(&sql)?;
-        let rows = stmt.query_map(
-            named_params! {":m": m, ":w": self.scope, ":k": kind, ":exact": exact, ":n": limit as i64},
-            Self::hit,
-        )?;
-        Ok(rows.flatten().collect())
-    }
-
     // ---- the context of a task ----
 
-    /// The context of a task told in words: the symbols to start from, what they are linked to,
-    /// and their code.
-    pub fn task_context(&self, task: &str, limit: usize) -> Result<Answer<Context>> {
-        let terms: Vec<String> = words(task)
-            .into_iter()
-            .filter(|t| t.chars().count() > 2 && !STOP.contains(&t.as_str()))
-            .take(24)
+    /// The context of a task told in words (`max_nodes`: the most symbols, 20 by default).
+    pub fn task_context(&self, task: &str, max_nodes: usize) -> Result<Answer<Context>> {
+        self.task_context_with(
+            task,
+            &super::context::BuildContextOptions::of_tool(Some(max_nodes), Vec::new()),
+        )
+    }
+
+    /// The context of a task as tokensave's `tokensave_context` builds it (`context`): the
+    /// entry points (three at most, but for the exact source hits), the symbols one link away from
+    /// them, the code of the entry points, and the diagnostic of the search.
+    pub fn task_context_with(
+        &self,
+        task: &str,
+        options: &super::context::BuildContextOptions,
+    ) -> Result<Answer<Context>> {
+        let empty = Context {
+            entry_points: Vec::new(),
+            related: Vec::new(),
+            snippets: Vec::new(),
+            retrieval: Retrieval::default(),
+        };
+        if task.trim().is_empty() {
+            let saving = self.saving(&[], &empty);
+            return Ok(Answer {
+                result: empty,
+                saving,
+            });
+        }
+        let built = self.build_context(task, options)?;
+        let entry_ids: HashSet<i64> = built.entry_points.iter().map(|n| n.id).collect();
+        let entry: Vec<Hit> = built.entry_points.iter().map(Node::to_hit).collect();
+        let related: Vec<Hit> = built
+            .subgraph
+            .iter()
+            .filter(|n| !entry_ids.contains(&n.id))
+            .map(Node::to_hit)
             .collect();
-        let pool = self.fts(&terms, true, limit * 6 + 20, None, "")?;
-        let mut per_file: HashMap<String, usize> = HashMap::new();
-        let mut entry: Vec<Hit> = Vec::new();
-        // Whole things first, then their parts; no more than three from one file.
-        for pass in 0..2 {
-            for h in &pool {
-                let part = matches!(h.kind.as_str(), "field" | "const" | "type");
-                if (pass == 0) == part || entry.contains(h) {
-                    continue;
-                }
-                let n = per_file.entry(h.path.clone()).or_default();
-                if *n >= 3 || entry.len() >= limit {
-                    continue;
-                }
-                *n += 1;
-                entry.push(h.clone());
-            }
-        }
-        let mut related: Vec<Hit> = Vec::new();
-        for h in entry.iter().take(4).filter(|h| is_callable(&h.kind)) {
-            for d in self.callees_of(h, 3)? {
-                if !entry.contains(&d) && !related.contains(&d) {
-                    related.push(d);
-                }
-            }
-            for r in self.caller_hits(&h.name, 3)? {
-                if !entry.contains(&r) && !related.contains(&r) {
-                    related.push(r);
-                }
-            }
-        }
-        let mut snippets = Vec::new();
-        for h in entry.iter().take(5) {
-            let end = h.end_line.min(h.line + 30);
-            if let Some(text) = self.lines(&h.path, h.line, end) {
-                snippets.push(Snippet {
-                    path: h.path.clone(),
-                    line: h.line,
-                    end_line: end,
-                    text,
-                });
-            }
-        }
         let paths: Vec<String> = entry
             .iter()
             .chain(&related)
@@ -251,19 +293,26 @@ impl Reader {
         let result = Context {
             entry_points: entry,
             related,
-            snippets,
+            snippets: built.code_blocks,
+            retrieval: built.diagnostics,
         };
         let saving = self.saving(&paths, &result);
         Ok(Answer { result, saving })
     }
 
-    /// Lines `from..=to` of a file of this folder, if the fence lets them be read.
-    fn lines(&self, rel: &str, from: u32, to: u32) -> Option<String> {
+    /// A file of this folder, if the fence lets it be read.
+    pub(super) fn read_file(&self, rel: &str) -> Option<String> {
         let full = self.dir.join(rel);
         if self.fence.covers(&full.to_string_lossy()) {
             return None;
         }
-        let text = std::fs::read_to_string(&full).ok()?;
+        let bytes = std::fs::read(&full).ok()?;
+        Some(String::from_utf8_lossy(&bytes).into_owned())
+    }
+
+    /// Lines `from..=to` of a file of this folder, if the fence lets them be read.
+    pub(super) fn lines(&self, rel: &str, from: u32, to: u32) -> Option<String> {
+        let text = self.read_file(rel)?;
         let out: Vec<&str> = text
             .lines()
             .skip(from.saturating_sub(1) as usize)
@@ -459,7 +508,11 @@ impl Reader {
             targets = self.defs(target, None)?.into_iter().map(|d| d.1).collect();
             // A type, a field…: the callable ones are not the only things to change.
             if targets.is_empty() {
-                targets = self.fts(&words(target), false, 5, None, target)?;
+                targets = self
+                    .search_nodes(target, 5, None)?
+                    .iter()
+                    .map(|s| s.node.to_hit())
+                    .collect();
             }
             seeds.push(target.to_string());
         }
@@ -626,48 +679,3 @@ fn is_callable(kind: &str) -> bool {
         "function" | "method" | "class" | "struct" | "component" | "macro"
     )
 }
-
-/// The words of a text, lower case, the identifiers cut where they change case or at `_`: `parseConfig`
-/// is `parse` and `config`. Each once.
-pub fn words(text: &str) -> Vec<String> {
-    let mut out: Vec<String> = Vec::new();
-    let mut cur = String::new();
-    let mut prev: Option<char> = None;
-    let flush = |cur: &mut String, out: &mut Vec<String>| {
-        if cur.chars().count() >= 2 && !out.contains(cur) {
-            out.push(cur.clone());
-        }
-        cur.clear();
-    };
-    let chars: Vec<char> = text.chars().collect();
-    for (i, &c) in chars.iter().enumerate() {
-        if !c.is_alphanumeric() {
-            flush(&mut cur, &mut out);
-            prev = None;
-            continue;
-        }
-        let next_lower = chars.get(i + 1).is_some_and(|n| n.is_lowercase());
-        let boundary = match prev {
-            Some(p) => {
-                (p.is_lowercase() && c.is_uppercase())
-                    || (p.is_uppercase() && c.is_uppercase() && next_lower)
-            }
-            None => false,
-        };
-        if boundary {
-            flush(&mut cur, &mut out);
-        }
-        cur.extend(c.to_lowercase());
-        prev = Some(c);
-    }
-    flush(&mut cur, &mut out);
-    out
-}
-
-/// Words that say nothing of the code, in French and English.
-const STOP: &[&str] = &[
-    "the", "and", "for", "with", "that", "this", "from", "into", "when", "what", "how", "all",
-    "are", "can", "not", "has", "have", "its", "pour", "dans", "les", "des", "une", "est", "que",
-    "qui", "avec", "sur", "pas", "par", "aux", "ses", "son", "sont", "plus", "mais", "comme",
-    "faut", "doit", "peut", "quand", "ajouter", "ajoute", "faire", "fait", "should", "add", "make",
-];
