@@ -125,7 +125,7 @@ impl ClaudeProcess {
                             if line.trim().is_empty() {
                                 continue;
                             }
-                            match serde_json::from_str::<Value>(&line) {
+                            match crate::text::json_line(&line) {
                                 Ok(frame) => {
                                     if frame["type"] == "control_response" {
                                         resolve(&pending, &frame["response"]);

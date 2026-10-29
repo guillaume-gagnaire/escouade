@@ -71,6 +71,12 @@ export default {
       none: 'Aucun dépôt git · un dépôt sera initialisé',
     },
   },
+  /** The page's process ended while it showed a project (ESC-290): loaded again without it. */
+  pageCrash: {
+    project: 'L’interface s’est arrêtée en affichant « {project} » : elle a été rechargée sans ce projet.',
+    other: 'L’interface s’est arrêtée : elle a été rechargée.',
+    reopen: 'Rouvrir',
+  },
   /** The update downloaded, its notes once installed, and the toasts about it. */
   update: {
     ready: 'Escouade {version} est prête',

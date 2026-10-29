@@ -37,6 +37,7 @@ export default defineZone('git', {
     tooLarge: 'This diff is too large to display.',
     large: 'Large diff ({n} lines)',
     showMore: { one: 'Show {count} more line', other: 'Show {count} more lines' },
+    lineCut: { one: '… {count} more character', other: '… {count} more characters' },
     ofFile: 'Diff of {path}',
   },
 

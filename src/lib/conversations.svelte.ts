@@ -1,6 +1,7 @@
 // Per-agent conversation items, kept in sync with the backend through append/patch/delta ops.
 
 import { api } from './ipc';
+import { cleanDeep, cleanText } from './cleantext';
 import type { ConvItem, ConvOp, UserItem, EngineId } from './types';
 
 /** Where the reader left a conversation, to put the view back there when the agent is opened again. */
@@ -88,7 +89,8 @@ export class Conversation {
     this.buffer = [];
     this.error = null;
     try {
-      const items = await api.getConversation(this.agentId);
+      // Cleaned as they come in (ESC-290), whatever the harness: `cleantext.ts`.
+      const items = cleanDeep(await api.getConversation(this.agentId));
       this.items = items;
       this.index = new Map(items.map((it, i) => [it.id, i]));
     } catch (e) {
@@ -141,6 +143,7 @@ export class Conversation {
     }
     switch (op.op) {
       case 'append': {
+        cleanDeep(op.item);
         const i = this.index.get(op.item.id);
         if (i !== undefined) this.items[i] = op.item;
         else {
@@ -151,14 +154,14 @@ export class Conversation {
       }
       case 'patch': {
         const i = this.index.get(op.id);
-        if (i !== undefined) Object.assign(this.items[i], op.patch);
+        if (i !== undefined) Object.assign(this.items[i], cleanDeep(op.patch));
         break;
       }
       case 'delta': {
         const i = this.index.get(op.id);
         if (i !== undefined) {
           const it = this.items[i] as { text?: string };
-          it.text = (it.text ?? '') + op.text;
+          it.text = (it.text ?? '') + cleanText(op.text);
         }
         break;
       }

@@ -1455,6 +1455,7 @@ dependencies = [
  "tree-sitter-typescript",
  "unicode-normalization",
  "uuid",
+ "webkit2gtk",
  "webpki-roots",
  "webview2-com",
  "whisper-rs",

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { splitRows, type DiffLine } from '../lib/diff';
+  import { clipLine, splitRows, type DiffLine } from '../lib/diff';
   import { t } from '../lib/i18n';
 
   // Diff lines, unified (merged, red and green lines) or side by side. Each line is a DOM node, so a
@@ -34,6 +34,11 @@
   }
 </script>
 
+<!-- A line drawn up to LINE_SHOWN characters, then how many it leaves out (ESC-290). -->
+{#snippet lineText(text: string)}{@const c = clipLine(text)}<span class="txt"
+    >{c.text}{#if c.cut}<span class="cut">{t('git.diff.lineCut', { count: c.cut })}</span>{/if}</span
+  >{/snippet}
+
 {#if tooLarge}
   <p class="note">{t('git.diff.tooLarge')}</p>
 {:else if long && drawn === 0}
@@ -49,7 +54,7 @@
         {#each [r.left, r.right] as l, side (side)}
           <div class="cell {l ? (l.kind === 'ctx' ? '' : l.kind) : 'void'}">
             <span class="no">{l && l.kind !== 'meta' ? (side === 0 ? (l.oldNo ?? '') : (l.newNo ?? '')) : ''}</span>
-            <span class="txt">{l?.text ?? ''}</span>
+            {@render lineText(l?.text ?? '')}
           </div>
         {/each}
       </div>
@@ -62,7 +67,7 @@
         <!-- One number, as the preview draws it: the old one of a line removed, the new one of the others. -->
         <span class="no">{(l.kind === 'del' ? l.oldNo : l.newNo) ?? ''}</span>
         <span class="sign">{l.kind === 'add' ? '+' : l.kind === 'del' ? '−' : ''}</span>
-        <span class="txt">{l.text}</span>
+        {@render lineText(l.text)}
       </div>
     {/each}
   </div>
@@ -147,6 +152,12 @@
     grid-template-columns: 34px minmax(0, 1fr);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
+  }
+  .cut {
+    padding-left: 6px;
+    color: var(--muted);
+    font-family: var(--font);
+    user-select: none;
   }
   .cell + .cell {
     box-shadow: inset 1px 0 0 var(--line);

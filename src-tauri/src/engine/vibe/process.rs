@@ -248,7 +248,7 @@ impl VibeProcess {
                             if text.is_empty() {
                                 continue;
                             }
-                            match serde_json::from_str::<Value>(text) {
+                            match crate::text::json_line(text) {
                                 Ok(msg) => match weak.upgrade() {
                                     Some(p) => p.read(msg),
                                     None => break,

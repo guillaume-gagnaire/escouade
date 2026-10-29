@@ -2498,6 +2498,8 @@ export interface InitialState {
   setupOutput?: Record<string, SetupOutput>;
   /** The languages of the interface, of the system and of the texts Claude writes. */
   lang?: LangInfo;
+  /** What the page showed when its process last ended (ESC-290): offered again, never reopened by itself. */
+  pageCrash?: { projectId: string | null; agentId: string | null } | null;
 }
 
 /** An update installed: its version and its release notes (markdown). */

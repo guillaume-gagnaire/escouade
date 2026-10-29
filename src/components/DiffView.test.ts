@@ -143,3 +143,25 @@ describe('DiffView in English', () => {
     expect(screen.getByRole('button', { name: 'Show 1 more line' })).toBeInTheDocument();
   });
 });
+
+describe('DiffView with a very long line', () => {
+  // A one-line JSON or a minified file of megabytes: the WebView lays such a line out in one go, the
+  // window waiting for it (ESC-290). Only its start is drawn, then how much it leaves out.
+  const long = (n: number): DiffLine[] => [{ kind: 'add', text: 'x'.repeat(n), oldNo: null, newNo: 1 }];
+
+  for (const split of [false, true]) {
+    it(`draws 2 000 characters of it and counts the rest (${split ? 'side by side' : 'unified'})`, () => {
+      const { container } = render(DiffView, { lines: long(5_000_000), split });
+      const txt = [...container.querySelectorAll('.txt')].find((e) => e.textContent?.includes('x'));
+      expect(txt?.firstChild?.textContent).toBe('x'.repeat(2000));
+      expect(container.textContent?.length).toBeLessThan(3000);
+      expect(screen.getByText('… 4998000 caractères de plus')).toBeInTheDocument();
+    });
+  }
+
+  it('draws a line of 2 000 characters whole', () => {
+    const { container } = render(DiffView, { lines: long(2000), split: false });
+    expect(container.querySelector('.cut')).toBeNull();
+    expect(container.querySelector('.txt')?.textContent).toBe('x'.repeat(2000));
+  });
+});

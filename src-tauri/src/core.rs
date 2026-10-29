@@ -906,6 +906,8 @@ pub struct Core<R: Runtime = Wry> {
     pub quitting: AtomicBool,
     /// Files left unsaved in the editor, as the window last said.
     pub unsaved: AtomicUsize,
+    /// What the page showed when its process ended abnormally, until the page told it (ESC-290).
+    pub page_crash: Mutex<Option<crate::pagecrash::PageCrash>>,
     /// Work under way outside of an agent's turn that a restart would cut (`Core::working`): a
     /// ticket being started, a validation and its cleanup, a message being delivered, a merge.
     pub(crate) works: AtomicUsize,
@@ -1862,6 +1864,7 @@ impl<R: Runtime> Core<R> {
             waiting: AtomicUsize::new(usize::MAX),
             quitting: AtomicBool::new(false),
             unsaved: AtomicUsize::new(0),
+            page_crash: Mutex::default(),
             works: AtomicUsize::new(0),
             board_lock: tokio::sync::Mutex::new(()),
             start_refusals: Mutex::new(HashMap::new()),
@@ -8337,14 +8340,16 @@ impl<R: Runtime> Core<R> {
 
     async fn git_loop(self: Arc<Self>, mut rx: mpsc::UnboundedReceiver<String>) {
         let mut due: HashMap<String, Instant> = HashMap::new();
+        // When each project may be read again (`git::Pace`).
         let mut last: HashMap<String, Instant> = HashMap::new();
+        let mut pace = crate::git::Pace::default();
         loop {
             let next = due.values().min().copied();
             tokio::select! {
                 msg = rx.recv() => {
                     let Some(pid) = msg else { break };
                     let now = Instant::now();
-                    let earliest = last.get(&pid).map(|t| *t + Duration::from_millis(700)).unwrap_or(now);
+                    let earliest = last.get(&pid).copied().unwrap_or(now);
                     due.entry(pid).or_insert_with(|| earliest.max(now + Duration::from_millis(150)));
                 }
                 _ = tokio::time::sleep_until(next.unwrap_or_else(Instant::now).into()), if next.is_some() => {
@@ -8358,7 +8363,11 @@ impl<R: Runtime> Core<R> {
                             continue;
                         }
                         due.remove(&pid);
-                        last.insert(pid.clone(), now);
+                        let (wait, busy) = pace.read(&pid, now);
+                        if let Some(line) = busy {
+                            log::warn!("{line}");
+                        }
+                        last.insert(pid.clone(), now + wait);
                         self.git.take_flag(&pid);
                         let c = self.clone();
                         tauri::async_runtime::spawn(async move {

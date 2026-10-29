@@ -105,6 +105,8 @@ pub struct InitialState {
     setup_output: HashMap<String, SetupOutput>,
     /// The languages of the interface, of the system and of the texts Claude writes.
     lang: crate::i18n::LangInfo,
+    /// What the page showed when its process last ended, for it to offer to open it again.
+    page_crash: Option<crate::pagecrash::PageCrash>,
 }
 
 // Off the main thread: finding a `claude` of WSL may start its distribution (seconds).
@@ -170,6 +172,7 @@ pub fn subscribe(
         project_pauses,
         accounts,
         setup_output,
+        page_crash: core.take_page_crash(),
     }
 }
 
@@ -3340,7 +3343,7 @@ mod tests {
         let lib = include_str!("lib.rs");
         let handler = lib
             .split_once("generate_handler![")
-            .and_then(|(_, rest)| rest.split_once("])"))
+            .and_then(|(_, rest)| rest.split_once(']'))
             .map(|(list, _)| list)
             .expect("the handler list");
         for name in ["stop_bg_task", "task_output"] {

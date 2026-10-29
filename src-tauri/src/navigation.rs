@@ -187,6 +187,12 @@ fn on_the_app<R: Runtime>(app: &AppHandle<R>) -> bool {
         .is_ok_and(|url| destination(&url, home.dev.as_ref()) == Destination::App)
 }
 
+/// `go_home`, at once: the page's process ended, nothing is left to ask it (`pagecrash`).
+#[cfg_attr(not(any(target_os = "linux", windows)), allow(dead_code))]
+pub fn load_home<R: Runtime>(app: &AppHandle<R>) {
+    go_home(app);
+}
+
 /// Takes the window to its home page and shows it, whatever state it was in (hidden in the tray,
 /// minimized).
 fn go_home<R: Runtime>(app: &AppHandle<R>) {

@@ -197,6 +197,7 @@ export default {
     openFile: 'Ouvrir {path} dans l’éditeur',
     running: 'en cours',
     subTools: { one: '{count} outil', other: '{count} outils' },
+    more: { one: 'Afficher la suite ({count} caractère)', other: 'Afficher la suite ({count} caractères)' },
   },
   tools: {
     tasks: { one: '{count} tâche', other: '{count} tâches' },

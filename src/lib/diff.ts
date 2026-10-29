@@ -23,6 +23,17 @@ export interface DiffFile {
   hunks: DiffHunk[];
 }
 
+/**
+ * The most characters of one line a diff draws: a line of several megabytes (a minified file, a
+ * one-line JSON) is laid out in one go by the WebView, which the window waits for (ESC-290).
+ */
+export const LINE_SHOWN = 2000;
+
+/** The part of `text` a diff draws, and how many characters it leaves out. */
+export function clipLine(text: string): { text: string; cut: number } {
+  return text.length > LINE_SHOWN ? { text: text.slice(0, LINE_SHOWN), cut: text.length - LINE_SHOWN } : { text, cut: 0 };
+}
+
 /** The line `git.rs` writes, after a file's header, instead of the diff it did not send (`TOO_LARGE` there). */
 const TOO_LARGE = 'Diff too large';
 

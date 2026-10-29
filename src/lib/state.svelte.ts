@@ -481,6 +481,28 @@ class AppState {
     return () => void this.ticketDoneHooks.delete(f);
   }
 
+  /**
+   * The page's process ended while it showed a project (ESC-290): the page came back without it, and offers it again.
+   * Never opened by itself, a page that crashes on it would crash again at each load.
+   */
+  tellPageCrash(crash: { projectId: string | null; agentId: string | null }) {
+    const project = crash.projectId ? this.projects.find((p) => p.id === crash.projectId) : undefined;
+    if (!project) {
+      this.toast(t('shell.pageCrash.other'), 'error');
+      return;
+    }
+    const reopen = () => {
+      if (crash.agentId && this.agents[crash.agentId]) this.selectAgent(crash.agentId);
+      else this.selectProject(project.id);
+    };
+    this.toast(
+      t('shell.pageCrash.project', { project: project.name }),
+      'error',
+      { label: t('shell.pageCrash.reopen'), onClick: reopen },
+      60_000,
+    );
+  }
+
   /** A version that did not install: the app restarts no more by itself for it, the user tries again or not. */
   tellFailedUpdate(version: string) {
     // The update's window, open, already says why its restart failed.
@@ -569,7 +591,8 @@ class AppState {
     this.ui = { ...s.ui, view: s.ui.view || 'project', selectedAgent: s.ui.selectedAgent ?? {} };
     this.overviewFrom = 'project';
     if (!this.ui.activeProject || !this.projects.some((p) => p.id === this.ui.activeProject)) {
-      this.ui.activeProject = this.projects[0]?.id ?? null;
+      // Never the one the page crashed on (ESC-290): it is offered again, not opened.
+      this.ui.activeProject = this.projects.find((p) => p.id !== s.pageCrash?.projectId)?.id ?? null;
     }
     this.settings = s.settings;
     this.usage = s.usage;
@@ -585,6 +608,7 @@ class AppState {
     this.enginesFound = s.enginesFound ?? (s.claudeFound ? ['claude'] : []);
     this.restartAt = s.restartAt ?? null;
     this.failedUpdate = s.failedUpdate ?? null;
+    if (s.pageCrash) this.tellPageCrash(s.pageCrash);
     // Not answered yet (closed without a choice: asked again at the next start).
     if (s.settings.telemetry === null) this.modal = { kind: 'telemetry' };
     // The user's name for the shared tickets (ESC-190), asked once, after the statistics' question.

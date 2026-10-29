@@ -6,6 +6,7 @@
   import type { ConvItem, ToolItem } from '../../lib/types';
   import Icon from '../Icon.svelte';
   import Markdown from './Markdown.svelte';
+  import LongText from './LongText.svelte';
   import PatchView from './PatchView.svelte';
   import Self from './ToolRow.svelte';
   import { tip } from '../../lib/tip';
@@ -133,12 +134,12 @@
         </div>
       {:else}
         {#if item.name === 'Bash' || item.name === 'PowerShell'}
-          <pre class="out cmd">$ {item.input.command}</pre>
+          <LongText class="out cmd" text={'$ ' + item.input.command} />
         {/if}
         {#if item.result?.text}
-          <pre class="out">{item.result.text}</pre>
+          <LongText class="out" text={item.result.text} />
         {:else if item.name !== 'Bash'}
-          <pre class="out">{JSON.stringify(item.input, null, 2)}</pre>
+          <LongText class="out" text={JSON.stringify(item.input, null, 2)} />
         {/if}
       {/if}
     </div>
@@ -325,7 +326,7 @@
     background: var(--well);
     box-shadow: inset 0 0 0 1px var(--line);
   }
-  .out {
+  .detail :global(.out) {
     margin: 0;
     padding: 10px 12px;
     max-height: 360px;
@@ -337,7 +338,7 @@
     overflow-wrap: anywhere;
     color: var(--code-fg);
   }
-  .out.cmd {
+  .detail :global(.out.cmd) {
     color: var(--text);
     border-bottom: 1px solid var(--line);
     max-height: 120px;

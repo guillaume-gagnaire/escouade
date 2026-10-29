@@ -161,6 +161,7 @@ export default defineZone('conv', {
     openFile: 'Open {path} in the editor',
     running: 'running',
     subTools: { one: '{count} tool', other: '{count} tools' },
+    more: { one: 'Show the rest ({count} character)', other: 'Show the rest ({count} characters)' },
   },
   tools: {
     tasks: { one: '{count} task', other: '{count} tasks' },

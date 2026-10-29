@@ -40,6 +40,8 @@ export interface App {
    * on, every start is on it. Its `settings.json` is the test's to write first.
    */
   restartAs: (data: string) => Promise<Page>;
+  /** Attaches Playwright again to the running app's window (after its page's process crashed): gives it, also in `app.page`. */
+  reconnect: () => Promise<Page>;
   /** A git repository with one commit, ready to be added as a project. */
   repo: string;
   data: string;
@@ -474,6 +476,11 @@ export const test = base.extend<{
             throw new Error(`something still listens on port ${port} 30 s after the app was killed: it cannot be started again`);
           }
           instance = startApp(env, stderr);
+          app.page = await attach(instance);
+          return app.page;
+        },
+        reconnect: async () => {
+          await instance.browser?.close().catch(() => {});
           app.page = await attach(instance);
           return app.page;
         },

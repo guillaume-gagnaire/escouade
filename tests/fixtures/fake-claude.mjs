@@ -1855,6 +1855,22 @@ function startSession() {
     });
   }
 
+  // ---------- "sorties piégées" (ESC-290) ----------
+
+  // A Bash call that read a binary file and a minified one: NUL and control characters, a terminal's escapes, a lone
+  // half of a UTF-16 pair, then a line of 5 MB. What the page must show without drawing it raw nor whole.
+  function trappedOutputs() {
+    const wav = Buffer.alloc(4096);
+    for (let i = 0; i < wav.length; i++) wav[i] = (i * 37 + 11) % 256;
+    Buffer.from('RIFF\0\0\0\0WAVEfmt ', 'latin1').copy(wav);
+    const binary = 'cat \x1b[31m' + wav.toString('latin1') + '\x1b[0m fin \ud83c';
+    const id = 'toolu_trap_' + process.pid;
+    assistant({ type: 'tool_use', id, name: 'Bash', input: { command: 'cat "bank 1.bnk" minified.json' } });
+    toolResult(id, binary + '\n' + 'x'.repeat(5_000_000));
+    streamText('Lu.');
+    result();
+  }
+
   // ---------- "faits-workflow" ----------
 
   // The facts of an agent in a workflow, one turn: see the head of this file.
@@ -2565,6 +2581,7 @@ function startSession() {
       return;
     }
     if (text.includes('envoie des fichiers')) return sendFiles(text);
+    if (text.includes('sorties piégées')) return trappedOutputs();
     if (sys) return ticketTurn(text);
     const facts = /faits-workflow(-erreur)?:\s*(\[[\s\S]*\])/.exec(text);
     if (facts) {

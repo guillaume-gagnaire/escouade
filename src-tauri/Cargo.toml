@@ -132,6 +132,8 @@ libc = "0.2"
 # The image of a paste, which WebKitGTK does not give the page: read from GTK's clipboard (the one
 # Tauri's windows already run on).
 gtk = "0.18"
+# The end of the page's process (`pagecrash`), on the WebView wry makes: its version.
+webkit2gtk = { version = "2.0", features = ["v2_20"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 tauri-plugin-notification = "2"

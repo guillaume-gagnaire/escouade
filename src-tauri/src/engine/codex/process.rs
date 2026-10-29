@@ -189,7 +189,7 @@ impl CodexProcess {
                             if line.trim().is_empty() {
                                 continue;
                             }
-                            match serde_json::from_str::<Value>(&line) {
+                            match crate::text::json_line(&line) {
                                 Ok(msg) => {
                                     let held = read(&msg, &pending, &fired, &state, &on_frame);
                                     // Messages held while the turn started go into it now.

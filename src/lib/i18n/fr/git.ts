@@ -42,6 +42,7 @@ export default {
     /** Always long (more than 1500 lines): `n` is the count as written. */
     large: 'Diff volumineux ({n} lignes)',
     showMore: { one: 'Afficher {count} ligne de plus', other: 'Afficher {count} lignes de plus' },
+    lineCut: { one: '… {count} caractère de plus', other: '… {count} caractères de plus' },
     ofFile: 'Diff de {path}',
   },
 
