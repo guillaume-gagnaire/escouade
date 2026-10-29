@@ -1,0 +1,48 @@
+name: Revocations
+
+# The copy of the store's revocation list on escouade.dev (docs/STORE.md §4.6 and §8.1): every 15 minutes, the list
+# store.escouade.dev serves is copied into website/public/ if one of the public keys of store/keys/ signed it and its
+# serial is above the copy's (store/scripts/copy-revocations.ts); the commit on main makes Coolify redeploy the site,
+# which serves it at https://escouade.dev/revocations.json and its .minisig. An hour late at most. A list that does
+# not hold fails the run, which GitHub tells by e-mail; the store down leaves the copy as it is.
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: revocations
+  cancel-in-progress: false
+
+jobs:
+  copy:
+    name: Copy the revocation list
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      # The script imports node's modules alone (and minisign.ts): tsx, pinned, is all it needs.
+      - name: Copy the list if it changed
+        id: copy
+        run: npx --yes tsx@4.23.15 store/scripts/copy-revocations.ts --out website/public --keys store/keys
+
+      - name: Commit the copy on main
+        if: steps.copy.outputs.changed == 'true'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add website/public/revocations.json website/public/revocations.json.minisig
+          git commit -m "chore(site): la liste de révocation du store copiée sur escouade.dev"
+          for i in 1 2 3; do git pull --rebase origin main && git push origin HEAD:main && exit 0; sleep 5; done
+          exit 1

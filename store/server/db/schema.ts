@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import {
   bigint,
   bigserial,
+  date,
   boolean,
   index,
   integer,
@@ -213,3 +214,32 @@ export const versions = pgTable(
       .where(sql`${t.state} = 'published'`),
   ],
 );
+
+/**
+ * The installations counted, by plugin, version, day and event (`install` or `update`): a counter and nothing else.
+ * The app sends one only if its user accepted the statistics, without any id; the store keeps no address, no time
+ * finer than the day (docs/STORE.md, §5.4).
+ */
+export const installsDaily = pgTable(
+  'installs_daily',
+  {
+    pluginId: text('plugin_id').notNull(),
+    version: text('version').notNull(),
+    day: date('day', { mode: 'string' }).notNull(),
+    event: text('event').notNull(),
+    count: integer('count').notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.pluginId, t.version, t.day, t.event] })],
+);
+
+/**
+ * The revocation lists, as the user signed them on their machine (docs/STORE.md, §4.6): the file's bytes and its
+ * `.minisig`, checked with the public keys before they are taken in; the serial only goes up. The last one is served.
+ */
+export const revocationLists = pgTable('revocation_lists', {
+  serial: integer('serial').primaryKey(),
+  json: text('json').notNull(),
+  minisig: text('minisig').notNull(),
+  issuedAt: at('issued_at').notNull(),
+  receivedAt: at('received_at').notNull().defaultNow(),
+});

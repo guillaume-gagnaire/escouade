@@ -52,13 +52,13 @@ Mis en œuvre le 29 octobre 2026 avec les comptes de store.escouade.dev (ESC-229
 | Sécurité | HTTPS et HSTS ; un seul cookie, de session, `__Host-store_session`, `HttpOnly`, `Secure`, `SameSite=Lax` ; la base ne garde que l'empreinte (SHA-256) des jetons de session et des liens de vérification d'e-mail, et le jeton GitHub chiffré (AES-256-GCM, clé tirée de `NUXT_SESSION_SECRET`), révoqué chez GitHub à la déconnexion et à la suppression ; formulaires refusés s'ils ne viennent pas du store (en-tête `Origin`) ; webhooks de GitHub refusés sans leur signature (HMAC-SHA256, comparée en temps constant) ; politique de sécurité du contenu stricte, sans script en ligne hors de son nonce ; aucune image chargée chez un tiers ; base PostgreSQL non exposée, mot de passe généré par Coolify ; secrets de la GitHub App dans les variables de Coolify ; la clé de signature des plugins n'est jamais sur le serveur. Purge chaque nuit de ce qui a passé sa durée. |
 | Exercice des droits | Dans le compte (`/account`) : export des données (JSON), suppression du compte (le journal garde la suppression un an, par identifiant GitHub). Sinon par e-mail à guillaume@gagnaire.dev ; réponse sous un mois. Rectification du nom et de l'avatar chez GitHub (relus à chaque connexion). |
 
-## Traitement 4 : compteurs d'installations des plugins (en projet)
+## Traitement 4 : compteurs d'installations des plugins
 
 | Rubrique | Contenu |
 |---|---|
 | Finalité | Montrer à l'auteur d'un plugin et dans le store combien de fois il est installé et mis à jour. |
 | Base légale | Aucune donnée personnelle n'est gardée. L'app n'envoie le compte que si l'utilisateur a accepté les statistiques d'usage (traitement 1), par cohérence avec son choix. |
-| Données | Identifiant du plugin, version, événement (installation ou mise à jour), jour, nombre. Aucun identifiant d'installation ni de session. L'adresse IP de la requête n'est vue que par le proxy (traitement 2). |
+| Données | Identifiant du plugin, version, événement (installation ou mise à jour), jour, nombre. Aucun identifiant d'installation ni de session. L'adresse IP de la requête est vue par le proxy (traitement 2) et, le temps de la requête, par le store : il n'en garde en mémoire, un jour au plus, qu'une empreinte HMAC-SHA256 à clé tirée au démarrage du processus (limites de débit, une même version comptée une fois par jour et par adresse), jamais écrite ni journalisée ; un redémarrage l'oublie (`store/server/utils/limits.ts`). Reçu par `POST /api/v1/installs` depuis le 2026-10-29 (ESC-233). |
 | Destinataires | Publics, agrégés par jour et par version. |
 | Durée de conservation | Sans limite (des compteurs). |
 

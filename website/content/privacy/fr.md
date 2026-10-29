@@ -179,7 +179,7 @@ Par défaut, les réponses de la conversation vocale sont lues par Piper, sur ta
 
 ## Le store
 
-[store.escouade.dev](https://store.escouade.dev), la place de marché des plugins d’Escouade, a des comptes pour les **auteurs** de plugins, et pour eux seuls : les utilisateurs de l’app n’y ont pas de compte et ne lui donnent rien.
+[store.escouade.dev](https://store.escouade.dev), la place de marché des plugins d’Escouade, a des comptes pour les **auteurs** de plugins, et pour eux seuls : les utilisateurs de l’app n’y ont pas de compte et ne lui donnent qu’un compteur d’installations, s’ils ont accepté les statistiques (plus bas).
 
 - **La connexion** se fait avec GitHub, par la GitHub App « Escouade Store », en lecture seule, sur les seuls dépôts que l’auteur choisit. Le store reçoit de GitHub ton identifiant numérique, ton login, ton nom affiché et l’adresse de ton avatar, relus à chaque connexion. GitHub, Inc. est aux États-Unis : ces informations en viennent à ta demande, quand tu te connectes, sous le cadre de protection des données UE–États-Unis dont GitHub se prévaut ; le store ne lui envoie rien qu’il ne sache déjà.
 - **Ce qui est gardé, et combien de temps** :
@@ -196,6 +196,7 @@ Par défaut, les réponses de la conversation vocale sont lues par Piper, sur ta
 
 - **Les bases légales** : l’exécution des [conditions des auteurs](https://store.escouade.dev/terms) (article 6.1.b du RGPD) pour le compte ; l’intérêt légitime (article 6.1.f) pour le journal des actions et les signalements.
 - **Un seul cookie**, celui de la session (`__Host-store_session`, `HttpOnly`, `Secure`, `SameSite=Lax`), strictement nécessaire : pas de bandeau, aucune mesure d’audience. Les avatars sont dessinés par le store (tes initiales) : un visiteur ne charge rien chez GitHub.
+- **Le compteur d’installations** : quand l’app installe ou met à jour un plugin du store et que tu as accepté les statistiques, elle envoie l’identifiant du plugin, sa version et « installation » ou « mise à jour », sans aucun identifiant ; le store ajoute un au compteur du jour de cette version et ne garde rien d’autre. Ton adresse IP sert le temps de la requête à limiter le débit et à ne compter qu’une fois par jour la même version : le store n’en garde en mémoire, un jour au plus, qu’une empreinte calculée avec une clé tirée à son démarrage, et ne l’écrit nulle part. Sans ton accord, rien ne part. Le catalogue, les archives et la liste de révocation se téléchargent sans cookie ni identifiant.
 - **Où** : sur le serveur de Scaleway à Paris, comme ce site ; les sauvegardes dans le stockage objet de Scaleway à Paris. Le reverse proxy garde son journal d’accès comme pour le site (voir [les journaux du serveur](#les-journaux-du-serveur)).
 - **Tes droits** : la page de ton compte exporte tes données (un fichier JSON) et supprime ton compte ; ton nom et ton avatar se rectifient chez GitHub et sont relus à la connexion suivante. Pour le reste, et pour t’opposer au journal, écris à [guillaume@gagnaire.dev](mailto:guillaume@gagnaire.dev).
 

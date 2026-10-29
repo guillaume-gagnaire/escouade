@@ -27,6 +27,7 @@ import { imageInfo, reencode } from './images';
 import { rejectionMail, sendMail, tagMovedMail } from './mail';
 import { TooBig, type Source } from './source';
 import { ARCHIVE_MAX, readArchive, type ArchiveRead } from './tar';
+import { forgetCatalog } from './catalog';
 import { compareVersions, sha256, tagVersion, versionFile, type Binary, type Platform } from './versions';
 
 // The submission of a version (docs/STORE.md, §3): an author picks a public repository the App reads and one of its
@@ -216,7 +217,8 @@ export async function keep(dir: string, bytes: Buffer, ext: string): Promise<{ s
   return { sha256: hash, path };
 }
 
-const ext = (name: string) => /\.(tar\.gz|tgz|zip|tar\.xz|tar\.zst|exe)$/i.exec(name)?.[0].toLowerCase() ?? '.bin';
+/** The extension a file is kept under, from its name in the release. */
+export const ext = (name: string) => /\.(tar\.gz|tgz|zip|tar\.xz|tar\.zst|exe)$/i.exec(name)?.[0].toLowerCase() ?? '.bin';
 
 // ---- The checks ----
 
@@ -453,6 +455,7 @@ export type Published = { ok: true } | { error: 'not-found' | 'not-ready' | 'hel
 
 async function markPublished(db: Db, id: number, now: Date) {
   await db.update(versions).set({ state: 'published', publishedAt: now }).where(eq(versions.id, id));
+  forgetCatalog();
 }
 
 /** The words of a form: a list, or a text cut by commas. */
@@ -518,6 +521,8 @@ export async function publishVersion(
     // The unique index of the published numbers: the same number published meanwhile.
     return { error: 'taken' };
   }
+  // The catalogue of the app shows it from the next request (server/utils/catalog.ts).
+  forgetCatalog();
   await note(
     db,
     'version.published',

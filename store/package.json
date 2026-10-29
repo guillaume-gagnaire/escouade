@@ -36,6 +36,7 @@
     "drizzle-kit": "^0.31.11",
     "prettier": "^3.9.10",
     "smtp-server": "^3.21.1",
+    "tsx": "^4.23.15",
     "typescript": "~6.0.3",
     "vitest": "^3.2.7",
     "vue-tsc": "^3.3.13"

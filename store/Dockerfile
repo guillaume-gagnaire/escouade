@@ -20,6 +20,8 @@ ENV NODE_ENV=production HOST=0.0.0.0 PORT=3000 ARCHIVE_DIR=/data/archives MIGRAT
 COPY --from=build /repo/store/.output ./.output
 # The migrations are played at start, before /api/health says ok (docs/STORE.md, §1.3).
 COPY --from=build /repo/store/server/db/migrations ./migrations
+# The public keys of the store's signatures (store/keys/*.pub), read at start; never a private one (docs/STORE.md, §4.5).
+COPY --from=build /repo/store/keys ./keys
 # The archives' volume (Coolify mounts it here and backs it up every night): the server writes in it.
 COPY --from=build --chown=node:node /out/archives /data/archives
 USER node

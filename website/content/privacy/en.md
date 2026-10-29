@@ -179,7 +179,7 @@ By default, the voice conversation’s answers are read by Piper, on your machin
 
 ## The store
 
-[store.escouade.dev](https://store.escouade.dev), Escouade’s plugin marketplace, has accounts for plugin **authors**, and for them only: the app’s users have no account there and give it nothing.
+[store.escouade.dev](https://store.escouade.dev), Escouade’s plugin marketplace, has accounts for plugin **authors**, and for them only: the app’s users have no account there and give it only a count of installations, if they accepted the statistics (below).
 
 - **Signing in** goes through GitHub, by the “Escouade Store” GitHub App, read-only, on the repositories the author chooses only. The store gets from GitHub your numeric id, your login, your display name and your avatar’s address, read again at each sign-in. GitHub, Inc. is in the United States: this information comes from it at your request, when you sign in, under the EU–US Data Privacy Framework GitHub relies on; the store sends it nothing it does not already know.
 - **What is kept, and how long**:
@@ -196,6 +196,7 @@ By default, the voice conversation’s answers are read by Piper, on your machin
 
 - **The legal bases**: performing the [authors’ terms](https://store.escouade.dev/en/terms) (article 6.1.b of the GDPR) for the account; legitimate interest (article 6.1.f) for the journal of actions and the reports.
 - **One cookie only**, the session’s (`__Host-store_session`, `HttpOnly`, `Secure`, `SameSite=Lax`), strictly needed: no banner, no analytics. The avatars are drawn by the store (your initials): a visitor loads nothing from GitHub.
+- **The count of installations**: when the app installs or updates a plugin of the store and you accepted the statistics, it sends the plugin’s id, its version and “install” or “update”, without any id; the store adds one to that version’s counter for the day and keeps nothing else. Your IP address serves for the time of the request to limit the rate and to count the same version once a day: the store keeps in memory, for a day at most, only a fingerprint computed with a key drawn when it starts, and writes it nowhere. Without your consent, nothing is sent. The catalogue, the archives and the revocation list are downloaded without cookie or id.
 - **Where**: on Scaleway’s server in Paris, as this site; the backups in Scaleway’s object storage in Paris. The reverse proxy keeps its access log as for the site (see [server logs](#server-logs)).
 - **Your rights**: your account’s page exports your data (a JSON file) and deletes your account; your name and avatar are corrected at GitHub and read again at your next sign-in. For the rest, and to object to the journal, write to [guillaume@gagnaire.dev](mailto:guillaume@gagnaire.dev).
 

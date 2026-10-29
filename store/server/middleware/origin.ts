@@ -8,7 +8,8 @@ const SAFE = new Set(['GET', 'HEAD', 'OPTIONS']);
 export default defineEventHandler((event) => {
   if (SAFE.has(event.method)) return;
   const path = getRequestURL(event).pathname;
-  if (path === '/api/github/webhook') return;
+  // GitHub's webhooks are signed; the app's counter of installations takes no cookie and acts for nobody.
+  if (path === '/api/github/webhook' || path === '/api/v1/installs') return;
   const origin = getHeader(event, 'origin');
   if (!origin || origin !== new URL(siteUrl()).origin) throw createError({ statusCode: 403, statusMessage: 'Cross-site request refused' });
 });

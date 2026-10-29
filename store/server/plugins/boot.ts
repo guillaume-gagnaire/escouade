@@ -1,7 +1,8 @@
-import { archiveDir, invalidLines, missingLines } from '../utils/config';
+import { archiveDir, invalidLines, keysDir, missingLines } from '../utils/config';
 import { migrateDb, migrationsDir, openDb } from '../utils/db';
 import { githubApp } from '../utils/github';
 import { startQueue } from '../utils/queue';
+import { loadKeys } from '../utils/revocations';
 import { service } from '../utils/service';
 import { githubSource } from '../utils/source';
 
@@ -12,6 +13,10 @@ export default defineNitroPlugin((nitro) => {
   const env = process.env;
   for (const line of [...missingLines(env), ...invalidLines(env)]) console.warn(line);
   service.archives = archiveDir(env);
+  void loadKeys(keysDir(env)).then((keys) => {
+    service.keys = keys;
+    if (!keys.length) console.warn(`[store] no public key in ${keysDir(env)}: no revocation list can be taken in`);
+  });
   const app = githubApp(env);
   service.deps = app
     ? {

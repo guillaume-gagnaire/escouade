@@ -94,6 +94,14 @@ describe('the server', () => {
   it('answers an unknown address with the generated 404 page', () => {
     expect(conf).toContain('error_page 404 /404.html;');
   });
+
+  it('serves the copy of the store’s revocation list as JSON and its signature as text, asked again each time', () => {
+    const block = (path: string) => conf.slice(conf.indexOf(`location = ${path} {`)).split(/\n {4}\}/)[0]!;
+    expect(block('/revocations.json')).toContain('default_type application/json;');
+    expect(block('/revocations.json.minisig')).toContain('default_type text/plain;');
+    for (const path of ['/revocations.json', '/revocations.json.minisig'])
+      expect(block(path)).toContain('add_header Cache-Control "public, no-cache";');
+  });
 });
 
 /** What the browser makes of the French root’s inline script, on a visit with these languages, kept choice and address. */

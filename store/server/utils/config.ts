@@ -81,3 +81,9 @@ export function admins(env: Env): number[] {
     .map(Number)
     .filter((n) => Number.isSafeInteger(n) && n > 0);
 }
+
+/**
+ * Where the public keys of the store's signatures are read (`*.pub`, the ones the app embeds): `store/keys/` of the
+ * checkout, `/app/keys` in the image. The private key is never here (docs/STORE.md, §4.5).
+ */
+export const keysDir = (env: Env) => (env.STORE_KEYS_DIR ?? '').trim() || './keys';
