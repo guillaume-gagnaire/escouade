@@ -9281,7 +9281,7 @@ fn five_hour_pct(h: &Harness, account: &str) -> Option<f64> {
 }
 
 /// Sends `text` and waits for the turn to be over, however it ends (the usage limit too).
-async fn turn_over(h: &Harness, id: &str, text: &str) {
+pub(crate) async fn turn_over(h: &Harness, id: &str, text: &str) {
     h.core
         .send_message(id, text.to_string(), vec![])
         .await
@@ -10490,7 +10490,7 @@ pub(crate) fn extra_account(h: &Harness, id: &str, name: &str) -> Account {
 }
 
 /// Pro out of quota for good (its folder holds a `fake-limit`), and Équipe, another account.
-fn pro_out_of_quota_and_team(h: &Harness) -> (Account, Account) {
+pub(crate) fn pro_out_of_quota_and_team(h: &Harness) -> (Account, Account) {
     let pro = second_account(h);
     let team = extra_account(h, "equipe", "Équipe");
     std::fs::create_dir_all(&pro.config_dir).unwrap();

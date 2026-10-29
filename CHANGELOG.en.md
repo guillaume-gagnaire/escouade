@@ -10,6 +10,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 - A plugin’s program runs apart, started only when it is needed, and Escouade keeps it in check: a plugin that does not answer in time is no longer waited for, one that crashes restarts (three times, then stops), one that takes too much memory is stopped, and each gets only its own secrets. Its journal keeps what it did and said, and the protocol is described in the plugins’ documentation.
 - Plugin authors get a command that ships with Escouade, `escouade-plugin`: `test` puts a plugin through the conformance bench and says what it lacks, `dev` sends it facts and requests by hand, without the app.
+- A plugin can react to what happens in Escouade: an agent waiting, a turn over, a ticket to test or merged, a launch ready… It receives these events in its program, or sends them to an address (a webhook to Discord, Slack or n8n) or runs a command without a line of code; a private project tells it nothing until it is turned on there.
 
 ### Fixes
 

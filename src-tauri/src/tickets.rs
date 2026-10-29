@@ -451,7 +451,7 @@ impl<R: Runtime> Core<R> {
         check: impl FnOnce(&[Ticket]) -> Result<C>,
         f: impl FnOnce(&mut Ticket, C) -> Result<T>,
     ) -> Result<T> {
-        let (out, ticket, change) = {
+        let (out, ticket, change, column) = {
             let mut tickets = self.tickets.write();
             let i = tickets
                 .iter()
@@ -460,10 +460,20 @@ impl<R: Runtime> Core<R> {
             let checked = check(&tickets)?;
             let t = &mut tickets[i];
             let before = t.external.is_some().then(|| t.clone());
+            let column = t.column;
             let out = f(t, checked)?;
             let change = before.and_then(|b| integrations::sync::change_of(&b, t));
-            (out, t.clone(), change)
+            (out, t.clone(), change, column)
         };
+        if ticket.column != column {
+            self.facts.emit(
+                crate::facts::Body::TicketColumn {
+                    from: crate::facts::column_word(column),
+                    to: crate::facts::column_word(ticket.column),
+                },
+                crate::facts::About::ticket(&ticket.id),
+            );
+        }
         if let Some(change) = change {
             self.sync_external(ticket.clone(), change);
         }
@@ -636,6 +646,12 @@ impl<R: Runtime> Core<R> {
         self.hub.emit(UiEvent::Ticket {
             ticket: ticket.clone(),
         });
+        self.facts.emit(
+            crate::facts::Body::TicketCreated {
+                column: crate::facts::column_word(ticket.column),
+            },
+            crate::facts::About::ticket(&ticket.id),
+        );
         self.request_save();
         self.schedule();
         if share {
@@ -2181,21 +2197,35 @@ impl<R: Runtime> Core<R> {
             end => end,
         };
         let lang = self.lang().claude;
+        let mut reported = None;
         let Ok(next) = self.edit_ticket(&ticket_id, |t| {
             // A ticket started again has another agent: the old one's turns never move it.
             if t.agent_id.as_deref() != Some(agent_id) {
                 return Ok(board::Next::default());
             }
+            let reports = t.column == Column::Doing
+                && matches!(end, TurnEnd::Finished(_))
+                && report.as_ref().is_some_and(|r| r.criteria.is_some());
             // Stopped by the usage limit, a blocked ticket stays as it is: its block already
             // tells why it does not move (its resume lost, cancelled or failed, whether that
             // came before this reading or after), and its agent's next finished turn is read.
             if limited && t.blocked.is_some() {
                 return Ok(board::Next::default());
             }
-            Ok(board::turn_end(lang, t, &end, report.as_ref(), now_ms()))
+            let next = board::turn_end(lang, t, &end, report.as_ref(), now_ms());
+            if reports {
+                reported = Some((t.criteria.iter().filter(|c| c.ok).count(), t.criteria.len()));
+            }
+            Ok(next)
         }) else {
             return;
         };
+        if let Some((met, total)) = reported {
+            self.facts.emit(
+                crate::facts::Body::TicketReport { met, total },
+                crate::facts::About::ticket(&ticket_id),
+            );
+        }
         if let Some(text) = next.send {
             let _ = self.send_or_block(&ticket_id, agent_id, text).await;
         }
@@ -2748,6 +2778,12 @@ impl<R: Runtime> Core<R> {
             t.step = Some(tr!("Validation…", "Approving…"));
             Ok(t.clone())
         })
+        .inspect(|t| {
+            self.facts.emit(
+                crate::facts::Body::TicketApproved {},
+                crate::facts::About::ticket(&t.id),
+            )
+        })
     }
 
     /// The approval `approve_begin` started: its validation, a failed step blocking the ticket,
@@ -2800,6 +2836,10 @@ impl<R: Runtime> Core<R> {
             let env = testlaunch::port_env(meta.port_base);
             let run =
                 testlaunch::run_tests(&shell, &wt.path, command, &env, TEST_LIMIT, lang).await?;
+            self.facts.emit(
+                crate::facts::Body::TestsResult { passed: run.passed },
+                crate::facts::About::ticket(&t.id),
+            );
             if !run.passed {
                 // Its agent archived or deleted during the tests: the ticket went back to do (and
                 // maybe on with another agent); the old agent is told nothing (it would start again).
@@ -2919,7 +2959,17 @@ impl<R: Runtime> Core<R> {
                 }
                 "pr" => {
                     self.set_step(&t.id, "Push…");
-                    self.open_pr(t, &s, &wt, &target, message).await?
+                    let o = self.open_pr(t, &s, &wt, &target, message).await?;
+                    if let Some(url) = &o.url {
+                        self.facts.emit(
+                            crate::facts::Body::PrOpened {
+                                url: url.clone(),
+                                target: target.clone(),
+                            },
+                            crate::facts::About::ticket(&t.id),
+                        );
+                    }
+                    o
                 }
                 "push" => {
                     self.set_step(&t.id, "Push…");
@@ -2942,6 +2992,11 @@ impl<R: Runtime> Core<R> {
             .agent(&agent_id)
             .ok()
             .and_then(|h| h.lock().proc.clone());
+        let merged = (s.action == "merge" && !nothing).then(|| crate::facts::Body::TicketMerged {
+            target: target.clone(),
+            commit: outcome.commit.clone(),
+            url: outcome.url.clone(),
+        });
         self.edit_ticket(&t.id, |x| {
             // Its agent archived or deleted meanwhile: it went back to do, and stays there.
             if !validating(x, &agent_id) {
@@ -2959,6 +3014,9 @@ impl<R: Runtime> Core<R> {
             x.cost = cost;
             Ok(())
         })?;
+        if let Some(merged) = merged {
+            self.facts.emit(merged, crate::facts::About::ticket(&t.id));
+        }
         // Validated: on a fixed branch of the docs, the spec and decisions its agent wrote are poured
         // there now, never before; then the pages it touches are compared to the code, once merged.
         let poured = match self.docs_pour_ticket(&project.id, &t.key).await {
@@ -2971,7 +3029,13 @@ impl<R: Runtime> Core<R> {
                 None
             }
         };
-        if poured.is_some() {
+        if let Some(p) = &poured {
+            self.facts.emit(
+                crate::facts::Body::DocsFiled {
+                    pages: p.pages.len(),
+                },
+                crate::facts::About::ticket(&t.id),
+            );
             self.docs_changed(&project.id).await;
         }
         if s.action == "merge" && !nothing {
@@ -3355,6 +3419,13 @@ impl<R: Runtime> Core<R> {
             return self.agent_resolves(&t.id).await;
         }
         let ask = s.conflict != "abort";
+        self.facts.emit(
+            crate::facts::Body::TicketConflict {
+                target: target.to_string(),
+                files: files.clone(),
+            },
+            crate::facts::About::ticket(&t.id),
+        );
         let reason = conflict_reason(i18n::ui(), target, &files, ask);
         let agent_id = t.agent_id.clone().unwrap_or_default();
         self.edit_ticket(&t.id, |x| {
@@ -3522,6 +3593,12 @@ impl<R: Runtime> Core<R> {
             board::back_to_work(t);
             Ok((t.key.clone(), agent_id))
         })?;
+        self.facts.emit(
+            crate::facts::Body::TicketRejected {
+                comment: comment.chars().take(2000).collect(),
+            },
+            crate::facts::About::ticket(id),
+        );
         self.send_or_block(
             id,
             &agent_id,
@@ -3763,7 +3840,7 @@ impl<R: Runtime> Core<R> {
     /// The terminal `term_id` is one of the agent's test launches, kept to be stopped with them.
     /// One started as the agent was archived or deleted, or as its ticket's validation began
     /// (after its launches were stopped), is stopped at once: the error tells why.
-    pub fn track_test_run(&self, agent_id: &str, term_id: &str) -> Result<()> {
+    pub fn track_test_run(&self, agent_id: &str, term_id: &str, name: &str) -> Result<()> {
         self.test_runs
             .lock()
             .entry(agent_id.to_string())
@@ -3782,7 +3859,49 @@ impl<R: Runtime> Core<R> {
             self.stop_test_runs(agent_id);
             return Err(e);
         }
+        self.facts.emit(
+            crate::facts::Body::LaunchStarted {
+                run: name.to_string(),
+            },
+            self.about_agent(agent_id),
+        );
         Ok(())
+    }
+
+    /// A test launch of the agent answers at `url` (the window's look at it, `http_ready`).
+    pub fn test_run_ready(&self, agent_id: &str, url: &str) {
+        if self.test_runs.lock().contains_key(agent_id) {
+            self.facts.emit(
+                crate::facts::Body::LaunchReady {
+                    url: url.to_string(),
+                },
+                self.about_agent(agent_id),
+            );
+        }
+    }
+
+    /// The terminal `term_id` ended: when it was an agent's test launch, it stopped.
+    pub fn test_run_ended(&self, term_id: &str) {
+        let agent = {
+            let mut runs = self.test_runs.lock();
+            let agent = runs
+                .iter()
+                .find(|(_, ids)| ids.iter().any(|i| i == term_id))
+                .map(|(a, _)| a.clone());
+            if let Some(a) = &agent {
+                if let Some(ids) = runs.get_mut(a) {
+                    ids.retain(|i| i != term_id);
+                    if ids.is_empty() {
+                        runs.remove(a);
+                    }
+                }
+            }
+            agent
+        };
+        if let Some(a) = agent {
+            self.facts
+                .emit(crate::facts::Body::LaunchStopped {}, self.about_agent(&a));
+        }
     }
 
     /// The agent's test launches stop (its validation, archive or deletion, its project closed),
@@ -3791,6 +3910,10 @@ impl<R: Runtime> Core<R> {
         let ids = self.test_runs.lock().remove(agent_id).unwrap_or_default();
         for id in ids {
             self.pty.kill(&id);
+            self.facts.emit(
+                crate::facts::Body::LaunchStopped {},
+                self.about_agent(agent_id),
+            );
         }
         let dir = self
             .agent(agent_id)

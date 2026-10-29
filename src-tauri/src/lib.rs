@@ -79,6 +79,9 @@ mod docsticket_tests;
 mod engine;
 #[cfg(test)]
 mod engines_tests;
+mod facts;
+#[cfg(test)]
+mod facts_tests;
 mod fence;
 #[cfg(test)]
 mod fence_tests;
@@ -548,6 +551,8 @@ pub fn run() {
                 commands::plugin_install_git,
                 commands::plugin_load_dev,
                 commands::plugin_remove,
+                commands::plugin_set_active,
+                commands::plugin_approve_commands,
                 commands::account_sign_in_ended,
                 commands::claude_found,
                 commands::engines,

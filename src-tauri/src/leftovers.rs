@@ -163,6 +163,15 @@ impl<R: Runtime> Core<R> {
             }
         };
         self.git.refresh(&project.id);
+        if done.is_ok() {
+            self.facts.emit(
+                crate::facts::Body::WorktreeRemoved {
+                    branch: wt.branch.clone(),
+                    path: wt.path.clone(),
+                },
+                crate::facts::About::project(&project.id),
+            );
+        }
         done
     }
 

@@ -9,7 +9,8 @@
 // `test/state` says what it holds; a decision (`permissions/decide`) is answered `ask`, or never with
 // `--silent-decisions`, so that its default applies. A fact (`events/fact`, PLG-3) asks for the secret
 // `token` (or the key of `--fact-secret <key>`), writes it on stderr with `--leak`, and says the fact
-// in a `log`. `--slow <ms>` holds every answer but `initialize`'s that long. `test/do` behaves as its
+// in a `log`; with `--keep-facts` it only keeps it, for `test/state` (PLG-5). `--deaf` stops reading its
+// input once initialized (its pipe fills: Escouade's queue of facts for it fills then). `--slow <ms>` holds every answer but `initialize`'s that long. `test/do` behaves as its
 // `behave` says:
 //   answer  → { ok: true, said: <say> }          silent → no answer, ever
 //   crash   → a line on stderr, then exit 3       loop   → a busy loop: nothing answered any more
@@ -26,6 +27,7 @@ const option = (name) => {
 };
 
 const attached = [];
+const facts = [];
 const held = [];
 const asked = new Map();
 let nextAsk = 1;
@@ -60,6 +62,7 @@ function handle(msg) {
   switch (method) {
     case 'initialize':
       if (flag('--ignore-initialize')) return null;
+      if (flag('--deaf')) setTimeout(() => process.stdin.pause(), 0);
       return ok(id, {
         protocolVersion: option('--protocol') === 'echo' ? params.protocolVersion : Number(option('--protocol') ?? 1),
         capabilities: { batch: true },
@@ -78,10 +81,14 @@ function handle(msg) {
       attached.push(params.key);
       return ok(id, { attached: attached.length });
     case 'test/state':
-      return ok(id, { attached, pid: process.pid });
+      return ok(id, { attached, facts, pid: process.pid });
     case 'permissions/decide':
       return flag('--silent-decisions') ? null : ok(id, { decision: 'ask' });
     case 'events/fact':
+      if (flag('--keep-facts')) {
+        facts.push(params);
+        return null;
+      }
       ask('secrets/get', { key: option('--fact-secret') ?? 'token' }).then((answer) => {
         if (flag('--leak')) process.stderr.write(`fake-plugin: the secret is ${answer.result}\n`);
         send({ jsonrpc: '2.0', method: 'log', params: { level: 'info', message: `fact ${params.name}` } });

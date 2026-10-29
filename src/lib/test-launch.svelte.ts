@@ -330,7 +330,7 @@ async function launchTest(agent: Agent, project: Project) {
         line.detail = t('runs.flow.waitingFor', { host: host(probe) });
         for (;;) {
           if (over()) return false;
-          const up = await api.httpReady(probe).catch(() => false);
+          const up = await api.httpReady(probe, agent.id).catch(() => false);
           if (over()) return false;
           if (up) {
             line.state = 'ready';
@@ -416,7 +416,7 @@ async function launchTest(agent: Agent, project: Project) {
           exited(line, cmd, run);
           return false;
         }
-        const up = await api.httpReady(url).catch(() => false);
+        const up = await api.httpReady(url, agent.id).catch(() => false);
         if (over()) return false;
         if (up) {
           line.state = 'ready';

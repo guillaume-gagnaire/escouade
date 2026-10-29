@@ -43,8 +43,12 @@ pub enum Kind {
     Timeout,
     /// Something it asked for and did not get: another's secret, a method Escouade does not serve.
     Refused,
-    /// A message dropped from the queue kept while it restarts.
+    /// A message dropped from the queue kept while it restarts, or a fact from its full queue.
     Dropped,
+    /// A webhook called on a fact, and its answer (PLG-5).
+    Webhook,
+    /// A command run on a fact, and how it ended (PLG-5).
+    Command,
 }
 
 /// An entry of the journal.

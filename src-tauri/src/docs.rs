@@ -677,6 +677,9 @@ pub struct Space {
     /// copy a ticket's agent writes its spec in, on a fixed branch, reads and adds documents on
     /// that branch); None: under `root`.
     pub documents_root: Option<PathBuf>,
+    /// Where its pages and decisions are told written (PLG-5), with its project's id; None for
+    /// a space the core did not hand out.
+    pub facts: Option<(crate::facts::Emitter, String)>,
 }
 
 fn is_link(p: &Path) -> bool {
@@ -747,6 +750,14 @@ impl Space {
             root: root.into(),
             text_dir,
             documents_root: None,
+            facts: None,
+        }
+    }
+
+    /// Tells `body` of this space's project, when the core handed it out.
+    fn fact(&self, body: crate::facts::Body) {
+        if let Some((e, project)) = &self.facts {
+            e.emit(body, crate::facts::About::project(project));
         }
     }
 
@@ -942,6 +953,9 @@ impl Space {
         let (page, added, removed) = self.spec_edit(rel, None, edit)?;
         let file = self.file(SPEC, &format!("{}.md", page.path))?;
         self.write(&file, page_write(&page).as_bytes())?;
+        self.fact(crate::facts::Body::DocsWritten {
+            page: page.path.clone(),
+        });
         Ok((page, added, removed))
     }
 
@@ -1119,6 +1133,10 @@ impl Space {
                 self.decision_save(&d, None)?;
             }
         }
+        self.fact(crate::facts::Body::DecisionProposed {
+            number: d.number,
+            title: d.title.clone(),
+        });
         Ok(d)
     }
 
@@ -1163,6 +1181,10 @@ impl Space {
                 self.decision_save(&now, Some(&was))?;
             }
         }
+        self.fact(crate::facts::Body::DecisionAccepted {
+            number: d.number,
+            title: d.title.clone(),
+        });
         Ok(d)
     }
 

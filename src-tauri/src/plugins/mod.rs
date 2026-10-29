@@ -15,6 +15,8 @@
 pub mod journal;
 // The conformance bench and the fake Escouade, for `escouade-plugin` and the tests (PLG-3).
 pub mod bench;
+// The facts handed to the plugins, their webhooks and their commands (PLG-5).
+pub mod events;
 pub mod manifest;
 #[cfg_attr(not(test), allow(dead_code))]
 pub mod runtime;
@@ -26,7 +28,7 @@ use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Weak};
@@ -61,6 +63,17 @@ pub struct Installed {
     #[serde(default)]
     pub digest: String,
     pub installed_at: String,
+    /// Turned off for the whole app (Réglages › Plugins).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub off: bool,
+    /// Its activation project by project, where the user set it: else on, but off for a private
+    /// project (docs/PLUGINS.md §3.3).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub projects: BTreeMap<String, bool>,
+    /// The fingerprint of the commands it runs on facts (`contributes.commands`) the user agreed
+    /// to (`events::commands_fingerprint`): another set of commands runs nothing until agreed again.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub commands_approved: String,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -159,6 +172,12 @@ pub struct PluginView {
     /// The fields of its manifest Escouade does not know, ignored.
     pub ignored: Vec<String>,
     pub manifest: Option<Manifest>,
+    /// Turned off for the whole app.
+    pub off: bool,
+    /// Its activation by project, where the user set it (`Installed::projects`).
+    pub projects: BTreeMap<String, bool>,
+    /// Whether the commands it runs on facts, as they are now, were agreed to.
+    pub commands_approved: bool,
 }
 
 /// A plugin as last read from its folder.
@@ -360,10 +379,80 @@ impl Plugins {
             fingerprint: i.fingerprint.clone(),
             folder: l.folder.display().to_string(),
             declarative: manifest.as_ref().is_some_and(Manifest::declarative),
+            commands_approved: manifest.as_ref().is_some_and(|m| {
+                let f = events::commands_fingerprint(m);
+                f.is_empty() || f == i.commands_approved
+            }),
             state,
             ignored,
             manifest,
+            off: i.off,
+            projects: i.projects.clone(),
         }
+    }
+
+    /// Whether the plugin `id` takes part in the project `project` (None: the app as a whole,
+    /// a fact of no project), `private` saying whether it is a private project: on unless turned
+    /// off for the app, or for that project; a private project only when turned on for it.
+    pub fn active_for(&self, id: &str, project: Option<&str>, private: bool) -> bool {
+        let loaded = self.loaded.read();
+        let Some(l) = loaded.iter().find(|l| l.installed.id == id) else {
+            return false;
+        };
+        if l.installed.off {
+            return false;
+        }
+        match project {
+            None => true,
+            Some(p) => l.installed.projects.get(p).copied().unwrap_or(!private),
+        }
+    }
+
+    /// Turns the plugin `id` on or off, for the app (`project` None) or for one project.
+    pub fn set_active(&self, id: &str, project: Option<&str>, on: bool) -> std::io::Result<bool> {
+        let _w = self.writing.lock();
+        {
+            let mut loaded = self.loaded.write();
+            let Some(l) = loaded.iter_mut().find(|l| l.installed.id == id) else {
+                return Ok(false);
+            };
+            match project {
+                None => l.installed.off = !on,
+                Some(p) => {
+                    l.installed.projects.insert(p.to_string(), on);
+                }
+            }
+        }
+        self.save()?;
+        Ok(true)
+    }
+
+    /// The user agrees to the commands the plugin `id` runs on facts, as they are now.
+    pub fn approve_commands(&self, id: &str) -> std::io::Result<bool> {
+        let _w = self.writing.lock();
+        {
+            let mut loaded = self.loaded.write();
+            let Some(l) = loaded.iter_mut().find(|l| l.installed.id == id) else {
+                return Ok(false);
+            };
+            let Ok(read) = &l.read else { return Ok(false) };
+            let Ok(m) = &read.manifest else {
+                return Ok(false);
+            };
+            l.installed.commands_approved = events::commands_fingerprint(m);
+        }
+        self.save()?;
+        Ok(true)
+    }
+
+    /// The fingerprint of the commands of `id` the user agreed to.
+    pub(crate) fn commands_approved(&self, id: &str) -> String {
+        self.loaded
+            .read()
+            .iter()
+            .find(|l| l.installed.id == id)
+            .map(|l| l.installed.commands_approved.clone())
+            .unwrap_or_default()
     }
 
     /// The manifest of the folder `dir`, when it holds.
@@ -398,6 +487,9 @@ impl Plugins {
                 fingerprint: format!("sha256:{digest}"),
                 digest,
                 installed_at: now(),
+                off: false,
+                projects: BTreeMap::new(),
+                commands_approved: String::new(),
             },
             lang,
         )
@@ -472,6 +564,9 @@ impl Plugins {
                     fingerprint: format!("git:{}", commit.trim()),
                     digest,
                     installed_at: now(),
+                    off: false,
+                    projects: BTreeMap::new(),
+                    commands_approved: String::new(),
                 },
                 lang,
             )
@@ -500,6 +595,9 @@ impl Plugins {
                 fingerprint: String::new(),
                 digest: String::new(),
                 installed_at: now(),
+                off: false,
+                projects: BTreeMap::new(),
+                commands_approved: String::new(),
             },
             lang,
         )?;
@@ -527,8 +625,15 @@ impl Plugins {
     }
 
     /// Puts `installed` in the list in place of its id's, read from its folder, the list saved.
-    fn put(&self, installed: Installed, lang: Lang) -> Result<PluginView, Refusal> {
+    fn put(&self, mut installed: Installed, lang: Lang) -> Result<PluginView, Refusal> {
         let id = installed.id.clone();
+        // A new version keeps where it was turned on or off, and the commands agreed to (which
+        // run only while they are the same).
+        if let Some(old) = self.loaded.read().iter().find(|l| l.installed.id == id) {
+            installed.off = old.installed.off;
+            installed.projects = old.installed.projects.clone();
+            installed.commands_approved = old.installed.commands_approved.clone();
+        }
         self.watchers.lock().remove(&id);
         let l = self.read(installed);
         {
