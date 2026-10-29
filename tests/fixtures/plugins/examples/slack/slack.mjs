@@ -18,8 +18,8 @@ function ask(method, params) {
 }
 
 const TEXT = {
-  'ticket.column': (f) => `${f.ticket?.key ?? ''} ${f.ticket?.title ?? ''} → ${f.ticket?.column ?? ''}`,
-  'agent.waiting': (f) => `${f.agent?.name ?? 'An agent'} waits for you (${f.project?.name ?? ''})`,
+  'ticket.column': (f) => `${f.ticket?.key ?? ''} ${f.ticket?.title ?? ''} → ${f.data?.to ?? ''}`,
+  'agent.status': (f) => (f.data?.status === 'waiting' ? `${f.agent?.name ?? 'An agent'} waits for you (${f.project?.name ?? ''})` : null),
 };
 
 async function fact(f) {

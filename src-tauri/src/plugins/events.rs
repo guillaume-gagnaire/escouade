@@ -533,7 +533,13 @@ impl Dispatch {
                 serde_json::to_string(fact).unwrap_or_default(),
             ),
             ("ESCOUADE_FACT_NAME".to_string(), fact.name()),
-            ("ESCOUADE_PROJECT".to_string(), named(&fact.project)),
+            (
+                "ESCOUADE_PROJECT".to_string(),
+                fact.project
+                    .as_ref()
+                    .map(|p| p.name.clone())
+                    .unwrap_or_default(),
+            ),
             (
                 "ESCOUADE_TICKET".to_string(),
                 fact.ticket

@@ -63,7 +63,8 @@ function handle(msg) {
   switch (method) {
     case 'initialize':
       if (flag('--ignore-initialize')) return null;
-      if (flag('--deaf')) setTimeout(() => process.stdin.pause(), 0);
+      // Its paused input no longer keeps node alive: a timer does, as a real plugin's work would.
+      if (flag('--deaf')) setTimeout(() => (process.stdin.pause(), setInterval(() => {}, 1 << 30)), 0);
       return ok(id, {
         protocolVersion: option('--protocol') === 'echo' ? params.protocolVersion : Number(option('--protocol') ?? 1),
         capabilities: { batch: true },

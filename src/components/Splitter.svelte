@@ -173,7 +173,7 @@
     bottom: 0;
     left: -1px;
     width: 3px;
-    background: var(--accent);
+    background: var(--p-ink);
     opacity: 0;
   }
   .splitter:hover::after {

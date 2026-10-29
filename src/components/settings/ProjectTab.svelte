@@ -988,7 +988,7 @@
     margin: 0;
     padding: 8px 12px;
     border-radius: 7px;
-    background: var(--wait-soft);
+    background: var(--wait-bg);
     color: var(--text);
     font-size: 12.5px;
     line-height: 1.5;

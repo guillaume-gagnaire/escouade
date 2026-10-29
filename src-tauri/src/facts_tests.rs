@@ -115,6 +115,10 @@ impl Listening {
             let got = names(&facts);
             let missing: Vec<&&str> = wanted.iter().filter(|n| !got.contains(**n)).collect();
             if missing.is_empty() {
+                // As the core makes them, they hold to the protocol's schema the SDK is generated from.
+                for f in &facts {
+                    crate::plugins_protocol_tests::holds(f, "events/fact", "params");
+                }
                 return facts;
             }
             assert!(
@@ -219,7 +223,10 @@ async fn an_agents_facts_reach_the_plugin_with_their_names_never_the_conversatio
     assert_eq!(renamed["agent"], json!({ "id": id, "name": agent.name }));
     let stopped = of(&facts, "agent.stopped")[0];
     assert_eq!(stopped["agent"], json!({ "id": id, "name": agent.name }));
-    assert_eq!(created["project"], json!({ "id": p.id, "name": "demo" }));
+    assert_eq!(
+        created["project"],
+        json!({ "id": p.id, "name": "demo", "private": false })
+    );
     assert_eq!(created["data"]["harness"], "claude");
     let statuses: Vec<&Value> = of(&facts, "agent.status")
         .iter()
@@ -397,7 +404,10 @@ async fn a_conflict_a_pull_request_and_a_projects_closing_are_facts() {
         .starts_with("https://github.com/acme/demo/compare/main...ticket/"));
     assert_eq!(pr["ticket"]["id"], u.id.as_str());
     let closed = of(&facts, "project.closed")[0];
-    assert_eq!(closed["project"], json!({ "id": q.id, "name": "prs" }));
+    assert_eq!(
+        closed["project"],
+        json!({ "id": q.id, "name": "prs", "private": false })
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -987,37 +997,42 @@ async fn a_full_queue_drops_its_oldest_facts_and_says_it_in_the_journal() {
     let dispatch = Dispatch::new(plugins, rt.clone(), store, 4);
     let bus = Bus::new();
     bus.subscribe(dispatch);
-    // Running before the facts come: they go to its input, which it no longer reads.
-    rt.notify(FAKE, "ping", json!({})).unwrap();
-    let started = Instant::now();
-    while rt.status(FAKE).phase != PhaseName::Running {
-        assert!(
-            started.elapsed() < Duration::from_secs(30),
-            "{:#?}",
-            rt.journal(FAKE)
-        );
-        tokio::time::sleep(Duration::from_millis(20)).await;
-    }
+    // Started by the first fact: while it starts, the facts wait in the queue of its start (PLG-2);
+    // once it runs, they go to its input, which it no longer reads, then fill its queue of facts.
     let comment = "x".repeat(4000);
+    let full = || {
+        rt.journal(FAKE)
+            .iter()
+            .any(|e| e.kind == Kind::Dropped && e.text.contains("queue of facts is full (4)"))
+    };
+    // One at a time, at the pace of its queue: it fills only once its input is full.
     let mut sent = 0;
-    while !rt
-        .journal(FAKE)
-        .iter()
-        .any(|e| e.kind == Kind::Dropped && e.text.contains("queue of facts is full (4)"))
-    {
+    while !full() {
         assert!(sent < 20_000, "never full: {:#?}", rt.journal(FAKE));
-        for _ in 0..50 {
-            bus.emit(
-                Body::TicketRejected {
-                    comment: comment.clone(),
-                },
-                About::default(),
-            );
-            sent += 1;
-        }
+        bus.emit(
+            Body::TicketRejected {
+                comment: comment.clone(),
+            },
+            About::default(),
+        );
+        sent += 1;
         bus.flush();
-        tokio::time::sleep(Duration::from_millis(10)).await;
+        tokio::time::sleep(Duration::from_millis(1)).await;
     }
+    // It ran, and stopped reading: what filled the queue is its input, not its start.
+    assert_eq!(
+        rt.status(FAKE).phase,
+        PhaseName::Running,
+        "{:#?}",
+        rt.journal(FAKE)
+    );
+    assert!(
+        !rt.journal(FAKE)
+            .iter()
+            .any(|e| e.kind == Kind::Dropped && e.text.contains("while it starts")),
+        "{:#?}",
+        rt.journal(FAKE)
+    );
     let dropped = rt
         .journal(FAKE)
         .into_iter()

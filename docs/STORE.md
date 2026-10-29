@@ -399,7 +399,7 @@ Le plan du store, revu avec celui des plugins (`docs/PLUGINS.md` §4.12), couvra
 - **le lien profond** `escouade://plugin/<id>` sur les trois systèmes et leurs installeurs, qui ouvre la page du plugin dans Réglages › Plugins et n'installe jamais rien (STORE-11, ESC-287) ;
 - **le réseau** : le catalogue et les archives par Réglages › Réseau (proxy, autorité de certification), comme l'updater qui reçoit un 403 derrière Zscaler (STORE-9) ;
 - **la télémétrie avec l'accord** de l'utilisateur (`POST /installs`, l'événement Aptabase), et **le passage d'une installation par git au store** pour le même id (STORE-9) ;
-- **les plugins proposés par un projet** (`plugins.recommended` de `.escouade.yml`, PLG-13, ESC-288).
+- **les plugins proposés par un projet** (`plugins.recommended` de `.escouade.yml`, PLG-14, ESC-288).
 
 Décidé par le chef d'escouade, à confirmer par l'utilisateur s'il le veut autrement :
 - les plugins de première main ont une page, avec la marque « Escouade », leurs ids `dev.escouade.*` réservés ;

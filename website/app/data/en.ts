@@ -440,6 +440,7 @@ export const en: Catalog = {
       'plugins/manifest': 'The manifest',
       'plugins/api': 'The protocol',
       'plugins/events': 'Events',
+      'plugins/sdk': 'The SDK',
       'plugins/testing': 'Testing a plugin',
       'plugins/publishing': 'Publishing on the store',
       shortcuts: 'Keyboard shortcuts',

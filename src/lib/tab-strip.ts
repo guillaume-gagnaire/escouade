@@ -5,7 +5,7 @@ import type { AgentStatus } from './types';
 
 /** The color a project blinks in for an agent to look at: red when it failed, amber when it asks, green when it finished. */
 export function alertColor(status: AgentStatus): string {
-  return status === 'error' ? 'var(--del)' : status === 'waiting' ? 'var(--wait)' : 'var(--ok)';
+  return status === 'error' ? 'var(--del)' : status === 'waiting' ? 'var(--wait)' : 'var(--run)';
 }
 
 /** The blinks, most pressing first: an error, then a question, then an end. */

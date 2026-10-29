@@ -147,8 +147,8 @@ pub enum Body {
     AccountSwitched { from: String, to: String },
 }
 
-/// Every fact's name, in the order of the docs.
-#[cfg_attr(not(test), allow(dead_code))]
+/// Every fact's name, in the order of the docs: the protocol's schema lists the same
+/// (`schemas/plugin-protocol-1.json`, `FactName`), and the bench plays them (`bench::FACTS`).
 pub const NAMES: &[&str] = &[
     "agent.created",
     "agent.renamed",
@@ -201,6 +201,15 @@ impl Body {
 pub struct Named {
     pub id: String,
     pub name: String,
+}
+
+/// The project a fact is about: its id, its name, and whether it is private (a plugin gets a
+/// private project's facts only when turned on for it).
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct ProjectRef {
+    pub id: String,
+    pub name: String,
+    pub private: bool,
 }
 
 /// The ticket a fact is about: its id, its key and its title.
@@ -265,7 +274,7 @@ pub struct Fact {
     #[serde(flatten)]
     pub body: Body,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub project: Option<Named>,
+    pub project: Option<ProjectRef>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ticket: Option<TicketRef>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -366,7 +375,11 @@ impl Bus {
                                 at: chrono::Utc::now()
                                     .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
                                 body,
-                                project: about.project,
+                                project: about.project.map(|p| ProjectRef {
+                                    id: p.id,
+                                    name: p.name,
+                                    private,
+                                }),
                                 ticket: about.ticket,
                                 agent: about.agent,
                                 private,

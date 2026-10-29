@@ -15,7 +15,7 @@ Chaque fait a la même forme, en JSON :
   "at": "2026-10-29T14:03:12.511Z",
   "name": "ticket.column",
   "data": { "from": "doing", "to": "review" },
-  "project": { "id": "8c1f…", "name": "Escouade" },
+  "project": { "id": "8c1f…", "name": "Escouade", "private": false },
   "ticket": { "id": "e02a…", "key": "ESC-177", "title": "Les événements" },
   "agent": { "id": "5b7d…", "name": "esc-177-les-evenements" }
 }
@@ -24,7 +24,7 @@ Chaque fait a la même forme, en JSON :
 - `version` : la version de la forme des faits. Un champ ajouté la garde ; un champ retiré ou qui change de sens passe à la suivante.
 - `seq` : son numéro depuis le démarrage d’Escouade. Deux faits arrivent dans l’ordre de leurs numéros.
 - `name` et `data` : ce qui s’est passé, et ce qu’il en dit (la table plus bas).
-- `project`, `ticket`, `agent` : ce dont il parle, par leurs ids et leurs noms, quand il en parle. Le fait d’un agent qui travaille sur un ticket dit aussi son ticket.
+- `project`, `ticket`, `agent` : ce dont il parle, par leurs ids et leurs noms, quand il en parle. Le fait d’un agent qui travaille sur un ticket dit aussi son ticket ; le projet dit s’il est privé (`private`).
 
 Un fait ne porte **jamais la conversation** : un plugin apprend qu’un tour est fini et comment, pas ce qui s’y est dit.
 

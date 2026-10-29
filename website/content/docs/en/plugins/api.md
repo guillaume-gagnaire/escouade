@@ -107,7 +107,7 @@ Each plugin has its journal, in `~/.escouade/plugin-logs/<id>.log`; past 1 MB, i
 
 The last 500 lines are read in the Journal tab of its page, in the view Plugins ([installing a plugin](plugins/installer#the-journal)).
 
-To check that a plugin keeps to this protocol without starting the app, play [the conformance bench](plugins/testing): `escouade-plugin test <folder>`.
+Its methods, their parameters, their answers and their delays are described by a schema, [`plugin-protocol-1.json`](/schemas/plugin-protocol-1.json), where the types of the [TypeScript SDK](plugins/sdk) come from. To check that a plugin keeps to this protocol without starting the app, play [the conformance bench](plugins/testing): `escouade-plugin test <folder>`.
 
 ## What the user changes
 

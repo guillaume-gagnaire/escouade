@@ -105,4 +105,4 @@ escouade-plugin validate .
 escouade-plugin test .
 ```
 
-Les tests d’Escouade jouent ce banc sur son faux plugin et sur ses plugins d’exemple. Le SDK en TypeScript (`@escouade/plugin`), qui viendra avec la suite de la 2.1, reprendra la même commande et ses scénarios.
+Les tests d’Escouade jouent ce banc sur son faux plugin et sur ses plugins d’exemple. Le [SDK en TypeScript](plugins/sdk) (`@escouade-dev/plugin`) installe la même commande dans les `node_modules` d’un plugin, et sa CI joue ce banc sur les deux gabarits de `npm create escouade-plugin`.

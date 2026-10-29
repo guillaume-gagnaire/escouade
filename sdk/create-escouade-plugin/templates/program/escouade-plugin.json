@@ -1,0 +1,18 @@
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "{{id}}",
+  "name": "{{name}}",
+  "version": "0.1.0",
+  "description": {
+    "en": "Says when a ticket is ready to test, and refuses force pushes.",
+    "fr": "Dit quand un ticket est prêt à tester, et refuse les push forcés."
+  },
+  "license": "MIT",
+  "escouade": { "api": "1", "min": "2.1.0" },
+  "run": { "command": "plugin", "windows": "plugin.cmd" },
+  "activation": ["event:ticket.column"],
+  "permissions": {
+    "events": ["ticket.column"],
+    "decide": true
+  }
+}

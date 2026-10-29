@@ -76,7 +76,7 @@
   .more {
     padding: 6px 14px 0;
     color: var(--muted);
-    font-family: var(--ui);
+    font-family: var(--font);
     font-size: 11.5px;
   }
 </style>

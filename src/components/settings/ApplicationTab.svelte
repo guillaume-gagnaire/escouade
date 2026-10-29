@@ -184,7 +184,7 @@
 
 <style>
   .git {
-    color: var(--accent);
+    color: var(--p-ink);
     font-size: 11.5px;
   }
   .chip {

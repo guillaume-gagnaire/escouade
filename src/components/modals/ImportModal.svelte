@@ -234,7 +234,7 @@
   /** The color of a ticket's type, by its code: its name changes with the language. */
   function kindColor(code: string) {
     if (code === 'bug') return 'var(--del)';
-    if (code === 'story') return 'var(--ok)';
+    if (code === 'story') return 'var(--run)';
     if (code === 'task') return 'oklch(0.74 0.12 235)';
     return 'var(--muted)';
   }

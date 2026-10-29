@@ -9,9 +9,9 @@
   "license": "MIT",
   "escouade": { "api": "1", "min": "2.1.0" },
   "run": { "command": "slack", "windows": "slack.cmd" },
-  "activation": ["event:ticket.column", "event:agent.waiting"],
+  "activation": ["event:ticket.column", "event:agent.status"],
   "permissions": {
-    "events": ["ticket.column", "agent.waiting"],
+    "events": ["ticket.column", "agent.status"],
     "network": ["hooks.slack.com"],
     "secrets": ["webhook"]
   },

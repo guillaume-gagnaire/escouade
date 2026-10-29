@@ -219,7 +219,7 @@
   }
   .own {
     font-size: 10.5px;
-    color: var(--accent);
+    color: var(--p-ink);
   }
   .small {
     height: 24px;

@@ -41,6 +41,10 @@ jobs:
       - name: Frontend tests (Vitest)
         run: npm test
 
+      # The plugins' SDK builds (its generated types are checked against the schemas by Vitest).
+      - name: Plugin SDK types (tsc)
+        run: npx tsc -p sdk/plugin/tsconfig.json --noEmit
+
   # The store (store/, docs/STORE.md §1.5): a push on main that touches it redeploys it on Coolify, so what enters
   # main has passed here. The filter skips it when only the app changes; a skipped job counts as passed.
   store-changes:
@@ -418,6 +422,13 @@ jobs:
             dpkg -c src-tauri/target/debug/bundle/deb/*.deb | grep -E "usr/bin/$bin$"
             (cd "$RUNNER_TEMP" && "$appimage" --appimage-extract "usr/bin/$bin" >/dev/null && test -x "squashfs-root/usr/bin/$bin")
           done
+
+      # npm create escouade-plugin, as an author gets it: both templates installed against this @escouade-dev/plugin, their
+      # tests and build, then validate and the conformance bench of the escouade-plugin just built.
+      - name: The plugin templates pass validate and the bench
+        env:
+          ESCOUADE_PLUGIN_BIN: src-tauri/target/debug/escouade-plugin
+        run: node sdk/scripts/template-ci.mjs
 
       - name: Upload the packages
         uses: actions/upload-artifact@v7

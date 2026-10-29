@@ -350,7 +350,7 @@
     gap: 10px;
     padding: 8px 22px;
     border-bottom: 1px solid var(--line);
-    background: color-mix(in oklch, var(--accent) 7%, transparent);
+    background: color-mix(in oklch, var(--p-ink) 7%, transparent);
     color: var(--muted);
     font-size: 13px;
   }
@@ -380,11 +380,11 @@
     line-height: 18px;
   }
   .tkey.done {
-    color: var(--ok);
+    color: var(--run);
   }
   .tkey.doing,
   .tkey.review {
-    color: var(--accent);
+    color: var(--p-ink);
   }
   .stat b {
     color: var(--text);

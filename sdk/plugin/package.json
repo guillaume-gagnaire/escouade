@@ -1,0 +1,51 @@
+{
+  "name": "@escouade-dev/plugin",
+  "version": "0.1.0",
+  "description": "Write a plugin of Escouade in TypeScript: the protocol's types, a stdio client, a fake Escouade for tests, and the escouade-plugin command.",
+  "license": "MIT",
+  "type": "module",
+  "homepage": "https://escouade.dev/en/docs/plugins/sdk",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/guillaume-gagnaire/escouade.git",
+    "directory": "sdk/plugin"
+  },
+  "keywords": [
+    "escouade",
+    "plugin",
+    "json-rpc"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "default": "./dist/testing.js"
+    },
+    "./manifest-check": {
+      "types": "./vendor/plugin-manifest.d.ts",
+      "default": "./vendor/plugin-manifest.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "escouade-plugin": "./bin/escouade-plugin.mjs"
+  },
+  "files": [
+    "dist",
+    "bin/*.mjs",
+    "vendor",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "generate": "node scripts/generate.mjs",
+    "build": "tsc -p tsconfig.json",
+    "prepack": "node scripts/generate.mjs --check && tsc -p tsconfig.json"
+  }
+}

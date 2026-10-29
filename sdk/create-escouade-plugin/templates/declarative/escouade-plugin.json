@@ -1,0 +1,22 @@
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "{{id}}",
+  "name": "{{name}}",
+  "version": "0.1.0",
+  "description": {
+    "en": "A theme, light and dark: nothing runs.",
+    "fr": "Un thème, clair et sombre : rien ne s'exécute."
+  },
+  "license": "MIT",
+  "escouade": { "api": "1", "min": "2.1.0" },
+  "contributes": {
+    "themes": [
+      {
+        "id": "theme",
+        "name": "{{name}}",
+        "light": { "--bg": "#fbfaf7", "--text": "#1d1b16", "--accent": "#9a4b16" },
+        "dark": { "--bg": "#16140f", "--text": "#eeeae0", "--accent": "#e8935a" }
+      }
+    ]
+  }
+}

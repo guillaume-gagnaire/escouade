@@ -107,7 +107,7 @@ Chaque plugin a son journal, dans `~/.escouade/plugin-logs/<id>.log` ; au-delà 
 
 Les 500 dernières lignes se lisent dans l’onglet Journal de sa page, dans la vue Plugins ([installer un plugin](plugins/installer#le-journal)).
 
-Pour vérifier qu’un plugin tient ce protocole sans lancer l’app, joue [le banc de conformité](plugins/testing) : `escouade-plugin test <dossier>`.
+Ses méthodes, leurs paramètres, leurs réponses et leurs délais sont décrits par un schéma, [`plugin-protocol-1.json`](/schemas/plugin-protocol-1.json), d’où viennent les types du [SDK en TypeScript](plugins/sdk). Pour vérifier qu’un plugin tient ce protocole sans lancer l’app, joue [le banc de conformité](plugins/testing) : `escouade-plugin test <dossier>`.
 
 ## Ce que l’utilisateur change
 

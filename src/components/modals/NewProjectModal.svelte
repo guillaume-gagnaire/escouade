@@ -136,13 +136,16 @@
         ? { text: t('shell.newProject.git.missing'), color: 'var(--del)' }
         : info.repos?.length
           ? // Of several repositories (ESC-169): « 4 dépôts git : front, api, infra, docs ».
-            { text: t('repos.wizard.found', { count: info.repos.length, repos: info.repos.map(repoLabel).join(', ') }), color: 'var(--ok)' }
+            {
+              text: t('repos.wizard.found', { count: info.repos.length, repos: info.repos.map(repoLabel).join(', ') }),
+              color: 'var(--run)',
+            }
           : info.isRepo
             ? {
                 text: info.dirty
                   ? t('shell.newProject.git.repoDirty', { branch: info.branch || '—', count: info.dirty })
                   : t('shell.newProject.git.repoClean', { branch: info.branch || '—' }),
-                color: 'var(--ok)',
+                color: 'var(--run)',
               }
             : { text: t('shell.newProject.git.none'), color: 'var(--muted)' },
   );

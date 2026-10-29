@@ -105,4 +105,4 @@ escouade-plugin validate .
 escouade-plugin test .
 ```
 
-Escouade’s tests play this bench on its fake plugin and on its example plugins. The TypeScript SDK (`@escouade/plugin`), coming with the rest of 2.1, will take up the same command and its scenarios.
+Escouade’s tests play this bench on its fake plugin and on its example plugins. The [TypeScript SDK](plugins/sdk) (`@escouade-dev/plugin`) installs the same command in a plugin’s `node_modules`, and its CI plays this bench on both templates of `npm create escouade-plugin`.

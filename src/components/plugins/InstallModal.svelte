@@ -204,7 +204,7 @@
     align-items: flex-start;
     padding: 9px 11px;
     border-radius: 9px;
-    background: var(--wait-soft);
+    background: var(--wait-bg);
     box-shadow: inset 0 0 0 1px var(--wait-line);
     color: var(--soft);
     font-size: 12px;

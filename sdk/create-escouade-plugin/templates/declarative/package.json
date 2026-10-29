@@ -1,0 +1,14 @@
+{
+  "name": "{{package}}",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "validate": "escouade-plugin validate .",
+    "bench": "escouade-plugin test .",
+    "archive": "escouade-plugin pack ."
+  },
+  "devDependencies": {
+    "@escouade-dev/plugin": "{{sdk}}"
+  }
+}

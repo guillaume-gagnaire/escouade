@@ -444,6 +444,7 @@ export const fr: Catalog = {
       'plugins/manifest': 'Le manifeste',
       'plugins/api': 'Le protocole',
       'plugins/events': 'Les événements',
+      'plugins/sdk': 'Le SDK',
       'plugins/testing': 'Tester un plugin',
       'plugins/publishing': 'Publier sur le store',
       shortcuts: 'Raccourcis clavier',

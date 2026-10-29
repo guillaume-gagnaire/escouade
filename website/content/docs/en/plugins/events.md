@@ -15,7 +15,7 @@ Every fact has the same shape, in JSON:
   "at": "2026-10-29T14:03:12.511Z",
   "name": "ticket.column",
   "data": { "from": "doing", "to": "review" },
-  "project": { "id": "8c1f…", "name": "Escouade" },
+  "project": { "id": "8c1f…", "name": "Escouade", "private": false },
   "ticket": { "id": "e02a…", "key": "ESC-177", "title": "Events" },
   "agent": { "id": "5b7d…", "name": "esc-177-events" }
 }
@@ -24,7 +24,7 @@ Every fact has the same shape, in JSON:
 - `version`: the version of the facts’ shape. A field added keeps it; a field removed or changed in meaning moves to the next one.
 - `seq`: its number since Escouade started. Two facts come in the order of their numbers.
 - `name` and `data`: what happened, and what it says of it (the table below).
-- `project`, `ticket`, `agent`: what it is about, by their ids and their names, when it is about them. The fact of an agent working on a ticket also says its ticket.
+- `project`, `ticket`, `agent`: what it is about, by their ids and their names, when it is about them. The fact of an agent working on a ticket also says its ticket; the project says whether it is private (`private`).
 
 A fact **never carries the conversation**: a plugin learns that a turn is over and how, not what was said in it.
 
