@@ -27,6 +27,9 @@ pub enum Body {
     /// An agent was made (by hand, for a ticket, by a client of the MCP server).
     #[serde(rename = "agent.created")]
     AgentCreated { harness: String, model: String },
+    /// It was named (after its first message, or by hand): the facts after it say the new name.
+    #[serde(rename = "agent.renamed")]
+    AgentRenamed { from: String, to: String },
     /// Its status changed: `idle`, `running`, `waiting` (a request waits for an answer), `done`,
     /// `error`.
     #[serde(rename = "agent.status")]
@@ -148,6 +151,7 @@ pub enum Body {
 #[cfg_attr(not(test), allow(dead_code))]
 pub const NAMES: &[&str] = &[
     "agent.created",
+    "agent.renamed",
     "agent.status",
     "agent.stopped",
     "agent.handover",

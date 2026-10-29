@@ -7113,8 +7113,14 @@ impl<R: Runtime> Core<R> {
             // (Named by the user meanwhile: their name stands.)
             let named_now = !rt.meta.named;
             if named_now {
-                rt.meta.name = name.clone();
+                let was = std::mem::replace(&mut rt.meta.name, name.clone());
                 rt.meta.named = true;
+                if was != name {
+                    rt.fact(crate::facts::Body::AgentRenamed {
+                        from: was,
+                        to: name.clone(),
+                    });
+                }
             }
             (named_now, rt.proc.clone(), self.session_title(&rt))
         };
@@ -7153,8 +7159,14 @@ impl<R: Runtime> Core<R> {
             if let (Some(branch), Some(w)) = (renamed, rt.meta.worktree.as_mut()) {
                 w.branch = branch;
             }
-            rt.meta.name = name.to_string();
+            let was = std::mem::replace(&mut rt.meta.name, name.to_string());
             rt.meta.named = true;
+            if was != name {
+                rt.fact(crate::facts::Body::AgentRenamed {
+                    from: was,
+                    to: name.to_string(),
+                });
+            }
             (rt.proc.clone(), self.session_title(&rt))
         };
         drop(naming_guard);

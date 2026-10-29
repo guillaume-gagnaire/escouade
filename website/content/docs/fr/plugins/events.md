@@ -33,6 +33,7 @@ Un fait ne porte **jamais la conversation** : un plugin apprend qu’un tour est
 | Fait | Quand | `data` |
 | --- | --- | --- |
 | `agent.created` | Un agent est créé (à la main, pour un ticket, par un client du serveur MCP). | `harness`, `model` |
+| `agent.renamed` | Il est nommé (après son premier message, ou à la main) ; les faits suivants disent son nouveau nom. | `from`, `to` |
 | `agent.status` | Son statut change. | `status` et `was` : `idle`, `running`, `waiting` (une demande attend une réponse), `done`, `error` |
 | `agent.stopped` | Il est archivé (`removed: false`) ou supprimé (`removed: true`). | `removed` |
 | `agent.handover` | Il continue sur un autre harness. | `from`, `to` |

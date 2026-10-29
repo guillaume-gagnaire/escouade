@@ -195,6 +195,7 @@ async fn an_agents_facts_reach_the_plugin_with_their_names_never_the_conversatio
             &[
                 "project.added",
                 "agent.created",
+                "agent.renamed",
                 "agent.status",
                 "turn.ended",
                 "request.permission",
@@ -207,7 +208,15 @@ async fn an_agents_facts_reach_the_plugin_with_their_names_never_the_conversatio
     let agent = h.agent(&id);
     let created = of(&facts, "agent.created")[0];
     assert_eq!(created["version"], 1);
-    assert_eq!(created["agent"], json!({ "id": id, "name": agent.name }));
+    // Said with the name it had then; its naming after its first message is a fact of its own, and
+    // the facts after it say the new name.
+    let renamed = of(&facts, "agent.renamed")[0];
+    assert_eq!(created["agent"]["id"], id.as_str());
+    assert_eq!(created["agent"]["name"], renamed["data"]["from"]);
+    assert_eq!(renamed["data"]["to"], agent.name.as_str());
+    assert_eq!(renamed["agent"], json!({ "id": id, "name": agent.name }));
+    let stopped = of(&facts, "agent.stopped")[0];
+    assert_eq!(stopped["agent"], json!({ "id": id, "name": agent.name }));
     assert_eq!(created["project"], json!({ "id": p.id, "name": "demo" }));
     assert_eq!(created["data"]["harness"], "claude");
     let statuses: Vec<&Value> = of(&facts, "agent.status")

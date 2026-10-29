@@ -33,6 +33,7 @@ A fact **never carries the conversation**: a plugin learns that a turn is over a
 | Fact | When | `data` |
 | --- | --- | --- |
 | `agent.created` | An agent is created (by hand, for a ticket, by a client of the MCP server). | `harness`, `model` |
+| `agent.renamed` | It is named (after its first message, or by hand); the facts after it say its new name. | `from`, `to` |
 | `agent.status` | Its status changes. | `status` and `was`: `idle`, `running`, `waiting` (a request waits for an answer), `done`, `error` |
 | `agent.stopped` | It is archived (`removed: false`) or deleted (`removed: true`). | `removed` |
 | `agent.handover` | It goes on with another harness. | `from`, `to` |
