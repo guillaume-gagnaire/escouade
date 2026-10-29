@@ -46,6 +46,7 @@ async function bounded(res: Response, max: number): Promise<Buffer> {
     await res.body?.cancel();
     throw new TooBig(declared);
   }
+  if (!res.body) return Buffer.alloc(0);
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of res.body as unknown as AsyncIterable<Uint8Array>) {
