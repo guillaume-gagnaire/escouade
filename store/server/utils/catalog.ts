@@ -5,6 +5,7 @@ import type { Db } from './db';
 import { parseRevocations, revoked, type RevocationList } from './revocation-list';
 import { lastRevocations } from './revocations';
 import { compareVersions, sha256, type Binary } from './versions';
+import { iconSrc, type Icon } from '../../shared/tile';
 
 // The catalogue the app downloads whole (docs/STORE.md, §1.2 and §5.1): every published plugin with its published
 // versions, what each asks for and the Escouade it is for (§8.1: the app picks the last compatible one); the search
@@ -40,7 +41,9 @@ export interface CatalogVersion {
   permissions: Record<string, unknown>;
   run: boolean;
   contributes: string[];
-  files: { version_json: string; archive: string; binaries: Record<string, string> };
+  /** Its icon (PLG-13): the SHA-256 of its PNG re-encoded at 256 and at 64 px, as in its `version.json`; absent without one. */
+  icon?: Icon;
+  files: { version_json: string; archive: string; binaries: Record<string, string>; icon?: Record<'256' | '64', string> };
 }
 
 export interface CatalogPlugin {
@@ -118,6 +121,7 @@ export async function buildCatalog(db: Db, now = new Date()): Promise<Catalog> {
       permissions: (m.permissions ?? {}) as Record<string, unknown>,
       run: !!m.run,
       contributes: Object.keys((m.contributes ?? {}) as object).sort(),
+      ...(v.icon ? { icon: v.icon } : {}),
       files: {
         version_json: paths.versionJson,
         archive: paths.archive,
@@ -126,6 +130,7 @@ export async function buildCatalog(db: Db, now = new Date()): Promise<Catalog> {
             .sort()
             .map((p) => [p, paths.binary(p)]),
         ),
+        ...(v.icon ? { icon: { '256': iconSrc(v.icon, '256'), '64': iconSrc(v.icon, '64') } } : {}),
       },
     };
     if (v.publishedAt! > updated) updated = v.publishedAt!;

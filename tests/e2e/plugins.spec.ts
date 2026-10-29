@@ -89,6 +89,21 @@ test('a declarative plugin is installed from a folder, and an invalid one says w
   const again = await invoke<View[]>('plugins_list');
   expect(again).toMatchObject({ ok: [{ id: 'dev.exemple.contraste', fingerprint: view.fingerprint, state: { kind: 'ready' } }] });
 
+  // PLG-13: its icon by its id alone, as an address the window shows; none without one; an unknown id refused.
+  expect(await invoke('plugin_icon', { id: 'dev.exemple.contraste' })).toEqual({ ok: null });
+  expect('err' in (await invoke('plugin_icon', { id: '../contrast-plugin' }))).toBe(true);
+  const logo = path.join(app.root, 'logo-plugin');
+  plugin(logo, { id: 'dev.exemple.logo', name: 'Logo', version: '1.0.0', escouade: { api: '1', min: '2.1.0' }, icon: 'icon.png' });
+  const png = Buffer.alloc(600);
+  Buffer.from('\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR', 'latin1').copy(png);
+  png.writeUInt32BE(256, 16);
+  png.writeUInt32BE(256, 20);
+  fs.writeFileSync(path.join(logo, 'icon.png'), png);
+  expect('ok' in (await invoke('plugin_install_folder', { path: logo }))).toBe(true);
+  const icon = (await invoke<string>('plugin_icon', { id: 'dev.exemple.logo' })) as { ok: string };
+  expect(icon.ok).toBe(`data:image/png;base64,${png.toString('base64')}`);
+  expect(await invoke('plugin_remove', { id: 'dev.exemple.logo' })).toEqual({ ok: true });
+
   // Uninstalled: its copy goes, the folder it came from stays.
   expect(await invoke('plugin_remove', { id: 'dev.exemple.contraste' })).toEqual({ ok: true });
   expect(fs.existsSync(copy)).toBe(false);

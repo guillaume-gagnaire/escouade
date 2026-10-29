@@ -10,3 +10,12 @@ export function hueOf(id: string): number {
 
 /** The two letters of a tile: the name's first two. */
 export const markOf = (name: string) => [...name.replace(/^[^\p{L}\p{N}]+/u, '')].slice(0, 2).join('') || '··';
+
+/** A plugin's icon as the store keeps it (PLG-13): the SHA-256 of its PNG re-encoded at 256 px and at 64 px. */
+export interface Icon {
+  '256': string;
+  '64': string;
+}
+
+/** Where the store serves an icon's PNG of `size` px (server/routes/files/). */
+export const iconSrc = (icon: Icon, size: '256' | '64') => `/files/${icon[size]}.png`;

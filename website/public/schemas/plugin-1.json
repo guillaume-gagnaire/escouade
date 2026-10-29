@@ -364,6 +364,12 @@
       "required": ["api", "min"],
       "type": "object"
     },
+    "icon": {
+      "description": "Its logo: a square PNG of its folder, 256 px a side at least (512 advised), 1 MB at most; no SVG.",
+      "minLength": 1,
+      "pattern": "^(?![/\\\\]|[A-Za-z]:)(?!(.*[/\\\\])?\\.\\.([/\\\\]|$))[^:]*\\.[Pp][Nn][Gg]$",
+      "type": "string"
+    },
     "id": {
       "description": "Unique, a reversed domain name (`dev.exemple.slack`); `dev.escouade.*` is kept for Escouade's own plugins.",
       "maxLength": 100,

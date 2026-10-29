@@ -1,0 +1,1 @@
+ALTER TABLE "versions" ADD COLUMN "icon" jsonb;

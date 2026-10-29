@@ -6,6 +6,9 @@
 //   import { validate, message } from '../schemas/plugin-manifest.mjs';
 //   const { ok, errors, ignored } = validate(JSON.parse(text));
 //   for (const e of errors) console.log(message(e, 'fr'));
+//
+// Its `icon` is a file of the plugin's folder: given `options.file` (a path of the folder → its bytes, or null), the
+// library reads its header (a PNG, square, 256 px a side at least, 1 MB at most); without it, only the field.
 
 /** The major version of the plugins' protocol Escouade serves (`escouade.api`). */
 export const API = 1;
@@ -13,6 +16,10 @@ export const API = 1;
 export const RESERVED_PREFIX = 'dev.escouade.';
 /** The folder of the app's programs, in the `run` of a plugin of Escouade's own. */
 export const ESCOUADE_DIR = '{escouade}';
+/** The side an icon has at least, in pixels (512 advised). */
+export const ICON_MIN = 256;
+/** The weight an icon has at most, in bytes. */
+export const ICON_BYTES = 1024 * 1024;
 
 const SETTING_TYPES = ['string', 'number', 'boolean', 'select'];
 const POINTS_WITH_ID = ['accounts', 'ticketSources', 'forges', 'harnesses'];
@@ -28,6 +35,28 @@ const isKey = (s) => /^[A-Za-z][A-Za-z0-9_.-]*$/.test(s);
 const isUrl = (s) => /^https?:\/\/./.test(s);
 const isInnerPath = (s) => s !== '' && !/^[/\\]/.test(s) && !/^[A-Za-z]:/.test(s) && !s.split(/[/\\]/).includes('..');
 
+const PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+/** An icon's path as the folder's files are named: `/` between its parts, without `./` in front. */
+export const iconPath = (s) => s.replace(/\\/g, '/').replace(/^(\.\/)+/, '');
+
+/**
+ * What is wrong with an icon's bytes, from its header alone (nothing decodes it): `png`, `heavy`, `square`, `small`.
+ * @param {Uint8Array} b
+ * @returns {string[]}
+ */
+export function iconProblems(b) {
+  const isPng = b.length >= 24 && PNG.every((x, i) => b[i] === x) && String.fromCharCode(...b.subarray(12, 16)) === 'IHDR';
+  if (!isPng) return ['png'];
+  const out = [];
+  if (b.length > ICON_BYTES) out.push('heavy');
+  const at = (i) => b[i] * 2 ** 24 + b[i + 1] * 2 ** 16 + b[i + 2] * 2 ** 8 + b[i + 3];
+  const [width, height] = [at(16), at(20)];
+  if (width !== height) out.push('square');
+  if (Math.min(width, height) < ICON_MIN) out.push('small');
+  return out;
+}
+
 /** A version of Escouade as numbers, `2` as much as `2.1.0`. */
 const numbers = (s) => s.split('.').map(Number);
 const compare = (a, b) => {
@@ -42,7 +71,8 @@ const beyond = (v, max) => compare(numbers(v).slice(0, max.split('.').length), n
 
 /**
  * Checks a manifest's value, field by field. `options.builtin`: a plugin the app itself gives, which may take the ids
- * and the programs of Escouade's own (never true for a submitted plugin).
+ * and the programs of Escouade's own (never true for a submitted plugin). `options.file`: the bytes of a file of the
+ * plugin's folder by its path (null when it is none), to read the icon's; without it, its file is not looked at.
  * @returns {{ ok: boolean, errors: { path: string, code: string, expected?: string }[], ignored: string[] }}
  */
 export function validate(manifest, options = {}) {
@@ -105,6 +135,7 @@ export function validate(manifest, options = {}) {
     'permissions',
     'contributes',
     'store',
+    'icon',
   ]);
   if ('$schema' in o) string(o.$schema, '$schema');
   required(o, 'id', 'id', (v, p) => {
@@ -239,6 +270,17 @@ export function validate(manifest, options = {}) {
       if ('escouadeYml' in c) object(c.escouadeYml, 'contributes.escouadeYml');
     }
   }
+  if ('icon' in o) {
+    // A file of the folder: no address, no drive, no `..`; a PNG, never an SVG (it may carry a script).
+    const s = string(o.icon, 'icon');
+    if (s !== null && (!isInnerPath(s) || s.includes(':'))) problem('icon', 'path');
+    else if (s !== null && !/\.png$/i.test(s)) problem('icon', 'png');
+    else if (s !== null && options.file) {
+      const bytes = options.file(iconPath(s));
+      if (!bytes) problem('icon', 'file');
+      else for (const code of iconProblems(bytes)) problem('icon', code);
+    }
+  }
   if ('store' in o) {
     const s = object(o.store, 'store');
     if (s) {
@@ -298,6 +340,11 @@ const WHAT = {
     enum: (e) => `vaut l'un de : ${e.expected}.`,
     duplicate: () => 'est déjà pris plus haut.',
     account: () => "n'est pas un compte de `contributes.accounts`.",
+    file: () => "n'est pas un fichier du dossier du plugin.",
+    png: () => "n'est pas un PNG (ni SVG, ni JPEG : un PNG carré de 256 px au moins).",
+    heavy: () => 'pèse plus de 1 Mo.',
+    square: () => "n'est pas carrée (un PNG carré de 256 px au moins, 512 conseillé).",
+    small: () => 'fait moins de 256 px de côté (512 conseillé).',
   },
   en: {
     required: () => 'is missing.',
@@ -314,6 +361,11 @@ const WHAT = {
     enum: (e) => `is one of: ${e.expected}.`,
     duplicate: () => 'is already taken above.',
     account: () => 'is no account of `contributes.accounts`.',
+    file: () => "is no file of the plugin's folder.",
+    png: () => 'is no PNG (no SVG nor JPEG: a square PNG of 256 px at least).',
+    heavy: () => 'weighs over 1 MB.',
+    square: () => 'is not square (a square PNG of 256 px at least, 512 advised).',
+    small: () => 'is under 256 px a side (512 advised).',
   },
 };
 

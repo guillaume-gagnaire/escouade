@@ -51,7 +51,7 @@ async function copyRepo() {
 <template>
   <div class="wrap">
     <section class="plug-head">
-      <PluginTile :mark="e.mark" :hue="e.hue" size="lg" />
+      <PluginTile :mark="e.mark" :hue="e.hue" :icon="e.icon" :logo="e.logo" size="lg" />
       <div class="who">
         <h1>{{ e.name[lang] }} <TrustMark :trust="e.trust" :version="e.version" large /></h1>
         <div class="line">

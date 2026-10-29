@@ -8,6 +8,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Nouveautés
 
+- Un plugin peut avoir son logo : un PNG carré de 256 px au moins, déclaré dans son manifeste, que le store montre à la place de ses deux lettres et qu’Escouade lit dans le plugin installé. Les plugins livrés avec Escouade ont le logo de leur marque quand elle le permet, sinon celui de leur catégorie.
 - Le programme d’un plugin tourne à part, démarré seulement quand il sert, et Escouade le tient : un plugin qui ne répond pas à temps n’est plus attendu, celui qui plante redémarre (trois fois, puis s’arrête), celui qui prend trop de mémoire est arrêté, et chacun n’obtient que ses propres secrets. Son journal garde ce qu’il a fait et dit, et le protocole est décrit dans la documentation des plugins.
 
 ### Corrections
