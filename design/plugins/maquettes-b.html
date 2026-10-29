@@ -93,6 +93,24 @@
   .chips { display: flex; gap: 4px; flex-wrap: wrap; } .chips span { width: 20px; height: 20px; border-radius: 5px; display: grid; place-items: center; font-size: 9px; font-weight: 700; color: #111; } .chips span.off { opacity: .25; } .chips span.lock { background: transparent !important; box-shadow: inset 0 0 0 1px var(--line2); color: var(--muted); }
   .group { margin: 14px 0 2px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); display: flex; gap: 8px; }
   .alert { border-radius: 9px; padding: 10px 12px; box-shadow: inset 0 0 0 1px oklch(from var(--red) l c h / .45); background: oklch(from var(--red) l c h / .06); color: var(--soft); font-size: 12px; }
+  /* les tuiles : le logo du plugin, sinon ses deux lettres sur une teinte tirée de son id (ESC-292) */
+  .ptile.logo { background: none; overflow: hidden; }
+  .ptile.logo img { width: 100%; height: 100%; display: block; }
+  .ptile.letters { background: oklch(0.36 0.07 var(--h)); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); color: oklch(0.93 0.05 var(--h)); font-weight: 680; letter-spacing: -.02em; }
+  /* la fenêtre d'installation */
+  .scrim { position: absolute; inset: 0; background: rgba(0,0,0,.55); display: grid; place-items: center; }
+  .modal { width: 560px; border-radius: 14px; background: var(--raise); box-shadow: 0 0 0 1px var(--line2), 0 24px 60px rgba(0,0,0,.5); display: grid; }
+  .m-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+  .m-head h3 { margin: 0; font-size: 14px; font-weight: 620; } .m-head .x { margin-left: auto; color: var(--muted); }
+  .m-body { padding: 16px 18px; display: grid; gap: 14px; }
+  .m-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--line); }
+  .who { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 12px; align-items: center; }
+  .who h4 { margin: 0; display: flex; gap: 8px; align-items: center; font-size: 15px; font-weight: 620; } .who .ln { margin-top: 3px; color: var(--muted); font-size: 12px; } .who code { font: 11px ui-monospace, Consolas, monospace; margin-left: 8px; }
+  .mnote { margin: 0; padding: 9px 11px; border-radius: 9px; background: oklch(from var(--wait) l c h / .08); box-shadow: inset 0 0 0 1px oklch(from var(--wait) l c h / .35); color: var(--soft); font-size: 12px; line-height: 1.5; } .mnote b { color: var(--text); }
+  .ifacts { display: grid; grid-template-columns: 110px minmax(0,1fr); gap: 6px 12px; padding: 10px 12px; border-radius: 9px; background: rgba(0,0,0,.25); box-shadow: inset 0 0 0 1px var(--line); font-size: 12px; }
+  .ifacts .k { color: var(--muted); } .ifacts .v { color: var(--soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .ifacts .mono { font: 11px ui-monospace, Consolas, monospace; } .ifacts .no { color: var(--wait); font-weight: 560; }
+  .sec2 { display: grid; gap: 8px; } .sec2 h6 { margin: 0; color: var(--muted); font-size: 11.5px; font-weight: 600; }
+  .sec2 .perm { grid-template-columns: 18px 1fr auto; } .new { font-style: normal; font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 5px; color: var(--wait); box-shadow: inset 0 0 0 1px oklch(from var(--wait) l c h / .45); align-self: center; }
   .label { color: #aaa; font: 600 12px Inter, sans-serif; margin: 0 0 -18px 4px; }
 </style>
 </head>
@@ -273,6 +291,90 @@
   </div>
   <div class="status"><span>● 4 actifs</span><span>● 1 en attente</span><span class="ml">Claude 5 h ▬ 22 %</span><span>Aujourd'hui 4,38 $</span></div>
 </div>
+
+<p class="label">B4 · La fenêtre d'une mise à jour : d'où elle vient, son empreinte, et ce qu'elle demande de plus, marqué ; l'accord redemandé</p>
+<div class="shot" id="b4">
+  <div class="top"><span class="logo">✳</span><b>demo-api</b><span>main</span><span class="search">Rechercher <span class="kbd">Ctrl K</span></span><span>Éditeur</span></div>
+  <div class="rail">
+    <div class="tile" style="background:oklch(0.78 0.13 55)">DA</div><div class="tile" style="background:oklch(0.72 0.12 300)">SW</div><div class="tile" style="background:oklch(0.72 0.12 160)">MA</div>
+    <div class="sp"></div>
+    <div class="ic">▥</div><div class="ic on">⧉</div><div class="ic">⚙</div>
+  </div>
+  <div class="side">
+    <h5>Plugins</h5>
+    <div class="it"><span class="g">✦</span>Store<span class="n">47</span></div>
+    <div class="it on"><span class="g">▤</span>Installés<span class="n">14</span></div>
+    <div class="it upd"><span class="g">↑</span>Mises à jour<span class="n" style="color:var(--wait)">1</span></div>
+    <div class="it"><span class="g">⌂</span>En développement<span class="n">1</span></div>
+  </div>
+  <div class="main" style="position:relative">
+    <div class="head"><div class="row"><h2>Slack</h2><span class="sub">lea-martin · Notifications</span></div></div>
+    <div class="scrim">
+      <div class="modal" role="dialog" aria-label="Mettre à jour Slack ?">
+        <div class="m-head"><span class="g">⧉</span><h3>Mettre à jour Slack ?</h3><span class="x">✕</span></div>
+        <div class="m-body">
+          <div class="who"><div class="ptile" data-name="Slack" data-id="dev.lmartin.slack" style="width:44px;height:44px">Sl</div>
+            <div><h4>Slack <span class="tag">Non vérifié</span></h4><div class="ln">lea-martin · v1.3.0 · MIT <code>dev.lmartin.slack</code></div></div></div>
+          <p class="mnote"><b>Personne n'a relu ce plugin.</b> Il vient d'un dossier ou d'un dépôt git, hors du store : rien ne dit ce que fait son programme. Installe-le si tu as confiance en son auteur.</p>
+          <div class="ifacts">
+            <span class="k">Vient de</span><span class="v">Dépôt git · github.com/lea-martin/escouade-slack · v1.3.0</span>
+            <span class="k">Version</span><span class="v mono">v1.2.0 → v1.3.0 → 9d41c07</span>
+            <span class="k">Empreinte</span><span class="v mono">git:9d41c07e2f…</span>
+            <span class="k">Signature</span><span class="v no">Aucune : hors du store, non vérifié</span>
+          </div>
+          <p class="mnote">↑ Cette version demande plus que la v1.2.0 installée : ton accord est redemandé.</p>
+          <div class="sec2"><h6>Ce qu'il ajoute</h6><div class="perm"><span>✧</span><span>Un webhook : Message Slack</span></div></div>
+          <div class="sec2"><h6>Ce qu'il pourra faire</h6>
+            <div class="perm"><span>▣</span><span><b>Lance un programme sur ton ordinateur, avec tes droits</b><small>bin/escouade-slack</small></span></div>
+            <div class="perm"><span>✧</span><span>Reçoit ces événements<small>ticket.column</small></span></div>
+            <div class="perm"><span>✧</span><span>Reçoit ces événements<small>agent.waiting</small></span></div>
+            <div class="perm"><span>✧</span><span>Reçoit ces événements<small>agent.created</small></span><em class="new">nouveau</em></div>
+            <div class="perm"><span>◍</span><span>Se connecte à<small>hooks.slack.com</small></span></div>
+            <div class="perm"><span>⚿</span><span>Garde un secret : Adresse du webhook</span></div>
+          </div>
+        </div>
+        <div class="m-foot"><span class="btn">Annuler</span><span class="btn pri">Mettre à jour</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="status"><span>● 4 actifs</span><span>● 1 en attente</span><span class="ml">Claude 5 h ▬ 22 %</span><span>Aujourd'hui 4,38 $</span></div>
+</div>
+
+<script>
+  // The plugins' tiles (ESC-292 decided the logo, 2026-10-29): a plugin's logo where it has one, else its two letters on a
+  // hue drawn from its id, as the store's tile (store/shared/tile.ts). The plugins shipped with Escouade are letters, until
+  // ESC-292 chooses their mark. The logos here are made up for the preview: an author's own image, square.
+  const LOGOS = {
+    Slack: '<rect width="40" height="40" rx="9" fill="#4a154b"/><path d="M15 9v22M25 9v22M9 15h22M9 25h22" stroke="#fff" stroke-width="3.4" stroke-linecap="round"/>',
+    'Mistral Vibe': '<rect width="40" height="40" rx="9" fill="#1b1410"/><path d="M8 10h6v6H8zM26 10h6v6h-6zM8 17h12v6H8zM20 17h12v6H20zM8 24h6v6H8zM14 24h6v6h-6zM20 24h6v6h-6zM26 24h6v6h-6z" fill="#ff8a1f"/><path d="M8 17h6v6H8z" fill="#ffd21f"/>',
+    'Gemini CLI': '<rect width="40" height="40" rx="9" fill="#0d1526"/><path d="M20 7c1.2 7 5.8 11.8 13 13-7.2 1.2-11.8 6-13 13-1.2-7-5.8-11.8-13-13 7.2-1.2 11.8-6 13-13z" fill="#7aa7ff"/>',
+  };
+  const IDS = {
+    'Mistral Vibe': 'dev.vibe.mistral', Jira: 'dev.escouade.jira', Slack: 'dev.lmartin.slack', 'Gemini CLI': 'dev.kpetit.gemini',
+    'Contraste élevé': 'dev.escouade.contrast', Nord: 'dev.amoreau.nord', GitLab: 'dev.escouade.gitlab', "Règles de l'équipe": 'dev.nordlys.rules',
+    Linear: 'dev.escouade.linear', ntfy: 'dev.bzh.ntfy', Teams: 'dev.hk.teams', 'Mes raccourcis': 'dev.exemple.raccourcis',
+    'Claude Code': 'dev.escouade.claude-code', GitHub: 'dev.escouade.github',
+  };
+  const hueOf = (id) => { let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0; return (h % 12) * 30; };
+  for (const tile of document.querySelectorAll('.ptile')) {
+    const row = tile.closest('.sug, .rowp, .tr, .phead, .who');
+    const name = tile.dataset.name ?? row?.querySelector('b, h2, h4')?.firstChild?.textContent.trim() ?? tile.textContent;
+    const first = (IDS[name] ?? '').startsWith('dev.escouade.');
+    if (LOGOS[name] && !first) {
+      tile.classList.add('logo');
+      tile.removeAttribute('style');
+      if (tile.closest('.who')) tile.style.cssText = 'width:44px;height:44px';
+      tile.innerHTML = `<img alt="" src="data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">${LOGOS[name]}</svg>`)}">`;
+    } else {
+      const keep = tile.style.width;
+      tile.removeAttribute('style');
+      if (keep) tile.style.cssText = `width:${keep};height:${keep}`;
+      tile.classList.add('letters');
+      tile.style.setProperty('--h', hueOf(IDS[name] ?? name));
+      tile.textContent = [...name.replace(/^[^\p{L}\p{N}]+/u, '')].slice(0, 2).join('');
+    }
+  }
+</script>
 
 </body>
 </html>

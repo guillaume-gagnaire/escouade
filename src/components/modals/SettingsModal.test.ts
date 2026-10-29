@@ -83,6 +83,7 @@ describe('SettingsModal', () => {
       'Projets',
       'Kanban',
       'Intégrations',
+      'Plugins',
       'Serveur MCP',
       'Terminaux',
       'Réseau',
@@ -93,7 +94,7 @@ describe('SettingsModal', () => {
       within(dialog)
         .getAllByRole('tab')
         .map((t) => t.querySelector('svg')?.dataset.icon),
-    ).toEqual(['lang', 'spark', 'user', 'mic', 'bell', 'folder', 'kanban', 'link', 'plug', 'term', 'globe', 'info']);
+    ).toEqual(['lang', 'spark', 'user', 'mic', 'bell', 'folder', 'kanban', 'link', 'puzzle', 'plug', 'term', 'globe', 'info']);
     expect([...dialog.querySelectorAll('.s-group')].map((g) => g.textContent)).toEqual(['Par projet', 'Système']);
     expect(tab('Harness')).toHaveAttribute('aria-selected', 'true');
     expect(within(dialog).getByText('Exécutables et versions de chaque harness, et ce qui vaut pour tous')).toBeInTheDocument();
@@ -1270,6 +1271,7 @@ describe('SettingsModal in English', () => {
       'Projects',
       'Kanban',
       'Integrations',
+      'Plugins',
       'MCP server',
       'Terminals',
       'Network',

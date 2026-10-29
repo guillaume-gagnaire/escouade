@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { expect, test } from './fixture';
 
-// ESC-173: a declarative plugin installed from a folder by the app's commands (Réglages › Plugins comes with PLG-4) is
+// ESC-173: a declarative plugin installed from a folder by the app's commands (read first, then installed: the view Plugins of PLG-4) is
 // copied into the app's data, pinned by its files, and found again once the app starts anew; a folder whose manifest
 // does not hold loads nothing, and says why, field by field.
 
@@ -27,20 +27,31 @@ interface View {
 }
 
 test('a declarative plugin is installed from a folder, and an invalid one says why, field by field', async ({ app }) => {
+  // Started anew, the page may be loaded a second time just after the window is attached: a call it cut short is made again.
   const invokeOn =
     (page: typeof app.page): Invoke =>
-    (cmd, args = {}) =>
-      page.evaluate(
-        async ([cmd, args]) => {
-          const t = (window as unknown as { __TAURI_INTERNALS__: { invoke(c: string, a: unknown): Promise<unknown> } }).__TAURI_INTERNALS__;
-          try {
-            return { ok: await t.invoke(cmd as string, args) };
-          } catch (err) {
-            return { err };
-          }
-        },
-        [cmd, args] as const,
-      ) as never;
+    async (cmd, args = {}) => {
+      for (let tries = 1; ; tries++) {
+        try {
+          return await call(page, cmd, args);
+        } catch (e) {
+          if (tries === 3 || !String(e).includes('Execution context was destroyed')) throw e;
+          await page.waitForLoadState('load');
+        }
+      }
+    };
+  const call = (page: typeof app.page, cmd: string, args: Record<string, unknown>) =>
+    page.evaluate(
+      async ([cmd, args]) => {
+        const t = (window as unknown as { __TAURI_INTERNALS__: { invoke(c: string, a: unknown): Promise<unknown> } }).__TAURI_INTERNALS__;
+        try {
+          return { ok: await t.invoke(cmd as string, args) };
+        } catch (err) {
+          return { err };
+        }
+      },
+      [cmd, args] as const,
+    ) as never;
   let invoke = invokeOn(app.page);
 
   const src = path.join(app.root, 'contrast-plugin');
@@ -55,7 +66,10 @@ test('a declarative plugin is installed from a folder, and an invalid one says w
   });
 
   expect(await invoke<View[]>('plugins_list')).toEqual({ ok: [] });
-  const installed = await invoke<View>('plugin_install_folder', { path: src });
+  // Read first (the install window's), then installed on the user's consent.
+  const read = await invoke<{ token: string }>('plugin_inspect_folder', { path: src });
+  expect('ok' in read, JSON.stringify(read)).toBe(true);
+  const installed = await invoke<View>('plugin_install', { token: (read as { ok: { token: string } }).ok.token });
   expect('ok' in installed, JSON.stringify(installed)).toBe(true);
   const view = (installed as { ok: View }).ok;
   expect(view).toMatchObject({
@@ -76,7 +90,7 @@ test('a declarative plugin is installed from a folder, and an invalid one says w
   // A folder whose manifest does not hold: nothing loaded, each field said.
   const bad = path.join(app.root, 'bad-plugin');
   plugin(bad, { id: 'Contraste', name: '', version: '1.0', escouade: { api: '1' } });
-  const refused = await invoke('plugin_install_folder', { path: bad });
+  const refused = await invoke('plugin_inspect_folder', { path: bad });
   expect('err' in refused).toBe(true);
   const err = (refused as { err: { message: string; problems: { path: string; code: string }[] } }).err;
   expect(err.problems.map((p) => `${p.path} ${p.code}`)).toEqual(['id id', 'name empty', 'version version', 'escouade.min required']);
@@ -99,13 +113,18 @@ test('a declarative plugin is installed from a folder, and an invalid one says w
   png.writeUInt32BE(256, 16);
   png.writeUInt32BE(256, 20);
   fs.writeFileSync(path.join(logo, 'icon.png'), png);
-  expect('ok' in (await invoke('plugin_install_folder', { path: logo }))).toBe(true);
+  // Its icon is shown by the install window before it is installed, then by plugin_icon.
+  const logoRead = (await invoke<{ token: string; icon: string }>('plugin_inspect_folder', { path: logo })) as {
+    ok: { token: string; icon: string };
+  };
+  expect(logoRead.ok.icon).toBe(`data:image/png;base64,${png.toString('base64')}`);
+  expect('ok' in (await invoke('plugin_install', { token: logoRead.ok.token }))).toBe(true);
   const icon = (await invoke<string>('plugin_icon', { id: 'dev.exemple.logo' })) as { ok: string };
   expect(icon.ok).toBe(`data:image/png;base64,${png.toString('base64')}`);
-  expect(await invoke('plugin_remove', { id: 'dev.exemple.logo' })).toEqual({ ok: true });
+  expect(await invoke('plugin_remove', { id: 'dev.exemple.logo', keep: false })).toEqual({ ok: true });
 
   // Uninstalled: its copy goes, the folder it came from stays.
-  expect(await invoke('plugin_remove', { id: 'dev.exemple.contraste' })).toEqual({ ok: true });
+  expect(await invoke('plugin_remove', { id: 'dev.exemple.contraste', keep: false })).toEqual({ ok: true });
   expect(fs.existsSync(copy)).toBe(false);
   expect(fs.existsSync(path.join(src, 'escouade-plugin.json'))).toBe(true);
   expect(await invoke<View[]>('plugins_list')).toEqual({ ok: [] });

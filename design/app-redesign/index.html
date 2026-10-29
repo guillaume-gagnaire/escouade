@@ -9705,6 +9705,7 @@
         <symbol id="i-pause" viewBox="0 0 16 16"><path d="M5.75 4v8M10.25 4v8" /></symbol>
         <symbol id="i-more" viewBox="0 0 16 16"><circle cx="3.75" cy="8" r=".9" fill="currentColor" /><circle cx="8" cy="8" r=".9" fill="currentColor" /><circle cx="12.25" cy="8" r=".9" fill="currentColor" /></symbol>
         <symbol id="i-lock" viewBox="0 0 16 16"><rect x="3.25" y="7" width="9.5" height="6.5" rx="1.5" /><path d="M5.5 7V5.25a2.5 2.5 0 0 1 5 0V7" /></symbol>
+        <symbol id="i-puzzle" viewBox="0 0 16 16"><path d="M6 2.75a1.5 1.5 0 0 1 3 0V4h2.25c.41 0 .75.34.75.75V7h1.25a1.5 1.5 0 0 1 0 3H12v2.25c0 .41-.34.75-.75.75H9v-1.25a1.5 1.5 0 0 0-3 0V13H3.75a.75.75 0 0 1-.75-.75V10h1.25a1.5 1.5 0 0 0 0-3H3V4.75c0-.41.34-.75.75-.75H6z" /></symbol>
         <symbol id="i-plug" viewBox="0 0 16 16"><path d="M6 2.75v3M10 2.75v3M4.25 5.75h7.5v2a3.75 3.75 0 0 1-7.5 0zM8 11.5v2" /></symbol>
         <symbol id="i-star" viewBox="0 0 16 16"><path d="M8 2.6l1.6 3.4 3.7.4-2.8 2.5.8 3.7L8 10.7l-3.3 1.9.8-3.7-2.8-2.5 3.7-.4z" /></symbol>
         <symbol id="i-gift" viewBox="0 0 16 16"><path d="M8 3.5v10M3 6.75h10v2.5H3zM4 9.25v4h8v-4M8 6.75C6.75 4.5 4.5 4 4.5 5.4 4.5 6.4 6.25 6.75 8 6.75 9.75 6.75 11.5 6.4 11.5 5.4 11.5 4 9.25 4.5 8 6.75z" /></symbol>
@@ -11589,6 +11590,7 @@ If your browser did not open, navigate to this URL to authenticate:
             <button class="s-tab" role="tab" data-tab="board" aria-selected="false"><svg class="i"><use href="#i-kanban" /></svg>Kanban<i class="chg" aria-label="Modifié, pas encore enregistré"></i></button>
             <button class="s-tab" role="tab" data-tab="integrations" aria-selected="false"><svg class="i"><use href="#i-link" /></svg>Intégrations<i class="chg" aria-label="Modifié, pas encore enregistré"></i></button>
             <div class="s-group">Système</div>
+            <button class="s-tab" role="tab" data-tab="plugins" aria-selected="false"><svg class="i"><use href="#i-puzzle" /></svg>Plugins<i class="chg" aria-label="Modifié, pas encore enregistré"></i></button>
             <button class="s-tab" role="tab" data-tab="mcp" aria-selected="false"><svg class="i"><use href="#i-plug" /></svg>Serveur MCP<i class="chg" aria-label="Modifié, pas encore enregistré"></i></button>
             <button class="s-tab" role="tab" data-tab="terminals" aria-selected="false"><svg class="i"><use href="#i-term" /></svg>Terminaux<i class="chg" aria-label="Modifié, pas encore enregistré"></i></button>
             <button class="s-tab" role="tab" data-tab="network" aria-selected="false"><svg class="i"><use href="#i-globe" /></svg>Réseau<i class="chg" aria-label="Modifié, pas encore enregistré"></i></button>
@@ -12463,6 +12465,7 @@ Chaque PR cite l’autre : à merger ensemble.</div>
         projects: ['Projects', 'Settings specific to each project'],
         board: ['Kanban', 'Autopilot and approved tickets'],
         integrations: ['Integrations', 'Code hosts, Jira, Trello, GitHub Issues, and Linear'],
+        plugins: ['Plugins', 'What they add to Escouade, where they come from and what they can do'],
         mcp: ['MCP server', 'What Claude and the agents can do in Escouade, and what they did'],
         terminals: ['Terminals', 'Shells available in the built-in terminals'],
         network: ['Network', 'HTTP(S) proxy and TLS certificates'],
@@ -13292,6 +13295,7 @@ Chaque PR cite l’autre : à merger ensemble.</div>
         claude: ['Harness', 'Exécutables et versions de chaque harness, et ce qui vaut pour tous'],
         accounts: ['Comptes', 'Les comptes de chaque harness, les réglages de leurs nouveaux agents, et ce qui se passe à la limite'],
         voice: ['Voix', 'Dictée et conversation vocale, sur ta machine ou en ligne'],
+        plugins: ['Plugins', 'Ce qu’ils ajoutent à Escouade, d’où ils viennent et ce qu’ils peuvent faire'],
         mcp: ['Serveur MCP', 'Ce que Claude et les agents peuvent faire dans Escouade, et ce qu’ils ont fait'],
         notifications: ['Notifications', 'Alertes visuelles et sonores'],
         projects: ['Projets', 'Réglages propres à chaque projet'],
@@ -14632,12 +14636,7 @@ Chaque PR cite l’autre : à merger ensemble.</div>
       // Réglages › Plugins › « Parcourir le store » (ESC-202, docs/STORE.md §5): the catalogue of store.escouade.dev, read on
       // the machine; a plugin's page in the tab itself; the install window of PLG-4 with the seal; the installed plugins.
       if (route.startsWith('store')) {
-        $('#i-plus').parentNode.insertAdjacentHTML(
-          'beforeend',
-          '<symbol id="i-puzzle" viewBox="0 0 16 16"><path d="M6 2.75a1.5 1.5 0 0 1 3 0V4h2.25c.41 0 .75.34.75.75V7h1.25a1.5 1.5 0 0 1 0 3H12v2.25c0 .41-.34.75-.75.75H9v-1.25a1.5 1.5 0 0 0-3 0V13H3.75a.75.75 0 0 1-.75-.75V10h1.25a1.5 1.5 0 0 0 0-3H3V4.75c0-.41.34-.75.75-.75H6z" /></symbol>',
-        );
-        $('.s-tab[data-tab="mcp"]').insertAdjacentHTML('beforebegin', '<button class="s-tab" role="tab" data-tab="plugins" aria-selected="false"><svg class="i"><use href="#i-puzzle" /></svg>Plugins<i class="chg"></i></button>');
-        TABS.plugins = ['Plugins', 'Ce qu’ils ajoutent à Escouade, d’où ils viennent et ce qu’ils peuvent faire'];
+        // The tab Plugins, its icon and its name are the window's own since PLG-4 (choice 213): a link to the view Plugins.
         const sv = (n) => `<svg class="i s14"><use href="#i-${n}" /></svg>`;
         const seal = (v) => `<span class="seal" title="Vérifié par Escouade : la v${v} a été relue et signée"><span class="sp"><svg class="i"><use href="#i-spark" /></svg></span>Vérifié par Escouade<span class="v">v${v}</span></span>`;
         const tile = (m, h, lg) => `<span class="ptile${lg ? ' lg' : ''}" style="--h:${h}" aria-hidden="true">${m}</span>`;

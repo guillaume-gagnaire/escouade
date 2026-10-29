@@ -906,6 +906,12 @@ class AppState {
     this.persistUi();
   }
 
+  /** Shows the view Plugins (PLG-4, choice 213) in place of the project or the statistics. */
+  openPlugins() {
+    this.ui.view = 'plugins';
+    this.persistUi();
+  }
+
   /** Shows « Vue d’ensemble » (every agent of every project) in place of the project or the statistics. */
   openOverview() {
     if (this.ui.view === 'overview') return;

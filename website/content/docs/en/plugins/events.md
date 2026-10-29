@@ -30,42 +30,42 @@ A fact **never carries the conversation**: a plugin learns that a turn is over a
 
 ## The facts
 
-| Fact | When | `data` |
-| --- | --- | --- |
-| `agent.created` | An agent is created (by hand, for a ticket, by a client of the MCP server). | `harness`, `model` |
-| `agent.renamed` | It is named (after its first message, or by hand); the facts after it say its new name. | `from`, `to` |
-| `agent.status` | Its status changes. | `status` and `was`: `idle`, `running`, `waiting` (a request waits for an answer), `done`, `error` |
-| `agent.stopped` | It is archived (`removed: false`) or deleted (`removed: true`). | `removed` |
-| `agent.handover` | It goes on with another harness. | `from`, `to` |
-| `turn.ended` | A turn ends. | `end`: `finished`, `interrupted`, `limited` (the usage limit), `signIn` (a sign-in to do again) or `error`, with `error` (its first line) |
-| `request.permission` | A permission waits. | `requestId`, `tool`, `arg` (what the tool acts on, summed up as on the card) |
-| `request.question` | A question waits. | `requestId`, `questions` |
-| `request.answered` | A request has its answer. | `requestId`, `kind` (`permission` or `question`), `decision` (`allow`, `always`, `deny`), `by` (the client of the MCP server that answered, else absent) |
-| `ticket.created` | A ticket is created. | `column` |
-| `ticket.column` | It moves to another column. | `from`, `to`: `todo`, `doing`, `review`, `done` |
-| `ticket.report` | Its agent reports on its criteria. | `met`, `total` |
-| `ticket.approved` | Its validation starts. | |
-| `ticket.rejected` | It is sent back to its agent. | `comment` |
-| `ticket.merged` | It is merged into its target branch. | `target`, `commit` |
-| `ticket.conflict` | Its merge meets a conflict. | `target`, `files` |
-| `pr.opened` | A pull request is opened for it. | `url`, `target` |
-| `tests.result` | The tests of its validation passed or not. | `passed` |
-| `project.added` | A project is opened. | `path` |
-| `project.closed` | It is closed. | |
-| `worktree.created` | A worktree is created for an agent. | `branch`, `path` |
-| `worktree.removed` | It is removed. | `branch`, `path` |
-| `launch.started` | A test launch of an agent starts. | `run` (its name) |
-| `launch.ready` | It answers. | `url` |
-| `launch.stopped` | It stops. | |
-| `docs.written` | A page of the docs is written. | `page` |
-| `docs.filed` | A ticket’s copy of the docs is poured on the docs’ branch, at its validation. | `pages` |
-| `docs.gaps` | A page is compared to the code. | `page`, `gaps` (how many gaps) |
-| `memory.written` | A memory of the project’s memory is written. | `memory`, `new` |
-| `memory.forgotten` | It is forgotten. | `memory` |
-| `decision.proposed` | A decision is proposed or revised. | `number`, `title` |
-| `decision.accepted` | A human accepts it. | `number`, `title` |
-| `account.switched` | An agent changes account. | `from`, `to` |
-| `app.started` | Escouade starts. | `version` |
+| Fact                 | When                                                                                    | `data`                                                                                                                                                   |
+| -------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `agent.created`      | An agent is created (by hand, for a ticket, by a client of the MCP server).             | `harness`, `model`                                                                                                                                       |
+| `agent.renamed`      | It is named (after its first message, or by hand); the facts after it say its new name. | `from`, `to`                                                                                                                                             |
+| `agent.status`       | Its status changes.                                                                     | `status` and `was`: `idle`, `running`, `waiting` (a request waits for an answer), `done`, `error`                                                        |
+| `agent.stopped`      | It is archived (`removed: false`) or deleted (`removed: true`).                         | `removed`                                                                                                                                                |
+| `agent.handover`     | It goes on with another harness.                                                        | `from`, `to`                                                                                                                                             |
+| `turn.ended`         | A turn ends.                                                                            | `end`: `finished`, `interrupted`, `limited` (the usage limit), `signIn` (a sign-in to do again) or `error`, with `error` (its first line)                |
+| `request.permission` | A permission waits.                                                                     | `requestId`, `tool`, `arg` (what the tool acts on, summed up as on the card)                                                                             |
+| `request.question`   | A question waits.                                                                       | `requestId`, `questions`                                                                                                                                 |
+| `request.answered`   | A request has its answer.                                                               | `requestId`, `kind` (`permission` or `question`), `decision` (`allow`, `always`, `deny`), `by` (the client of the MCP server that answered, else absent) |
+| `ticket.created`     | A ticket is created.                                                                    | `column`                                                                                                                                                 |
+| `ticket.column`      | It moves to another column.                                                             | `from`, `to`: `todo`, `doing`, `review`, `done`                                                                                                          |
+| `ticket.report`      | Its agent reports on its criteria.                                                      | `met`, `total`                                                                                                                                           |
+| `ticket.approved`    | Its validation starts.                                                                  |                                                                                                                                                          |
+| `ticket.rejected`    | It is sent back to its agent.                                                           | `comment`                                                                                                                                                |
+| `ticket.merged`      | It is merged into its target branch.                                                    | `target`, `commit`                                                                                                                                       |
+| `ticket.conflict`    | Its merge meets a conflict.                                                             | `target`, `files`                                                                                                                                        |
+| `pr.opened`          | A pull request is opened for it.                                                        | `url`, `target`                                                                                                                                          |
+| `tests.result`       | The tests of its validation passed or not.                                              | `passed`                                                                                                                                                 |
+| `project.added`      | A project is opened.                                                                    | `path`                                                                                                                                                   |
+| `project.closed`     | It is closed.                                                                           |                                                                                                                                                          |
+| `worktree.created`   | A worktree is created for an agent.                                                     | `branch`, `path`                                                                                                                                         |
+| `worktree.removed`   | It is removed.                                                                          | `branch`, `path`                                                                                                                                         |
+| `launch.started`     | A test launch of an agent starts.                                                       | `run` (its name)                                                                                                                                         |
+| `launch.ready`       | It answers.                                                                             | `url`                                                                                                                                                    |
+| `launch.stopped`     | It stops.                                                                               |                                                                                                                                                          |
+| `docs.written`       | A page of the docs is written.                                                          | `page`                                                                                                                                                   |
+| `docs.filed`         | A ticket’s copy of the docs is poured on the docs’ branch, at its validation.           | `pages`                                                                                                                                                  |
+| `docs.gaps`          | A page is compared to the code.                                                         | `page`, `gaps` (how many gaps)                                                                                                                           |
+| `memory.written`     | A memory of the project’s memory is written.                                            | `memory`, `new`                                                                                                                                          |
+| `memory.forgotten`   | It is forgotten.                                                                        | `memory`                                                                                                                                                 |
+| `decision.proposed`  | A decision is proposed or revised.                                                      | `number`, `title`                                                                                                                                        |
+| `decision.accepted`  | A human accepts it.                                                                     | `number`, `title`                                                                                                                                        |
+| `account.switched`   | An agent changes account.                                                               | `from`, `to`                                                                                                                                             |
+| `app.started`        | Escouade starts.                                                                        | `version`                                                                                                                                                |
 
 ## Subscribing
 
@@ -77,14 +77,24 @@ A plugin only receives the facts it asks for, in `permissions.events` of its man
 
 The install window shows them: “Receives these events: …”.
 
-And only those of the projects it is **turned on** for. A plugin is on for every project, except **private projects**: a private project’s fact only goes to a plugin turned on for it, one by one, in Settings › Plugins. A fact of no project (`app.started`) goes to every plugin on for the app.
+And only those of the projects it is **turned on** for. A plugin is on for every project, except **private projects**: a private project’s fact only goes to a plugin turned on for it, one by one, in Settings › Plugins. A fact of no project (`app.started`) goes to every plugin on for the app. An `events:…` permission taken back in the Permissions tab of its page cuts those facts, for its program as for its webhooks and its commands.
 
 ## In a program
 
 A plugin’s program (`run`) receives each fact by the `events/fact` notification, the whole fact as its parameters. It does not answer: Escouade never waits for a plugin.
 
 ```json
-{"jsonrpc":"2.0","method":"events/fact","params":{"version":1,"seq":42,"name":"ticket.column","data":{"from":"doing","to":"review"},"ticket":{"id":"e02a…","key":"ESC-177","title":"Events"}}}
+{
+  "jsonrpc": "2.0",
+  "method": "events/fact",
+  "params": {
+    "version": 1,
+    "seq": 42,
+    "name": "ticket.column",
+    "data": { "from": "doing", "to": "review" },
+    "ticket": { "id": "e02a…", "key": "ESC-177", "title": "Events" }
+  }
+}
 ```
 
 To start it at the first fact, put it in `activation`: `"activation": ["event:ticket.column"]`.
@@ -95,14 +105,14 @@ A plugin’s facts go through **a queue of its own**, of 256 facts. The next one
 
 A **declarative** plugin (without `run`) calls an address on a fact. Each webhook of `contributes.webhooks` says:
 
-| Field | Required | What it says |
-| --- | --- | --- |
-| `url` | yes | The address, `http://` or `https://`. It may come from a secret of the plugin: `{{secrets.webhook}}`. |
-| `events` | yes | The facts that call it (`ticket.*` takes them all). They must also be in `permissions.events`. |
-| `when` | no | What the fact must say, path by path: `{ "data.to": "review" }`, or a list of values: `{ "data.status": ["waiting", "error"] }`. |
-| `body` | no | The body’s template: a JSON object, or a text. Without it, the whole fact in JSON. |
-| `contentType` | no | The body’s type: `application/json` for an object or without a template, `text/plain` for a text. |
-| `headers` | no | Headers, which may take a secret: `{ "Authorization": "Bearer {{secrets.token}}" }`. |
+| Field         | Required | What it says                                                                                                                     |
+| ------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `url`         | yes      | The address, `http://` or `https://`. It may come from a secret of the plugin: `{{secrets.webhook}}`.                            |
+| `events`      | yes      | The facts that call it (`ticket.*` takes them all). They must also be in `permissions.events`.                                   |
+| `when`        | no       | What the fact must say, path by path: `{ "data.to": "review" }`, or a list of values: `{ "data.status": ["waiting", "error"] }`. |
+| `body`        | no       | The body’s template: a JSON object, or a text. Without it, the whole fact in JSON.                                               |
+| `contentType` | no       | The body’s type: `application/json` for an object or without a template, `text/plain` for a text.                                |
+| `headers`     | no       | Headers, which may take a secret: `{ "Authorization": "Bearer {{secrets.token}}" }`.                                             |
 
 A template replaces `{{path}}` with the fact’s value: `{{name}}`, `{{ticket.key}}`, `{{ticket.title}}`, `{{project.name}}`, `{{agent.name}}`, `{{data.to}}`… In an object, a text that is only a `{{path}}` takes the value as it is (a list stays a list); in a JSON text, the values are escaped. A secret never goes in the body.
 
@@ -147,7 +157,7 @@ An address taken from a secret only goes to a host of `permissions.network` (`di
 }
 ```
 
-- **Nothing runs before the user agrees**, as with the commands of `.escouade.yml`: Settings › Plugins shows the commands, and the agreement holds for them as they are. A command, a fact or a condition that changes, and it takes agreeing again. The journal tells each command refused for want of agreement.
+- **Nothing runs before the user agrees**, as with the commands of `.escouade.yml`: the Permissions tab of its page, in Settings › Plugins, shows them under “Runs these commands” with “Agree to these commands”, and the agreement holds for them as they are; “Take the agreement back” stops them. A command, a fact or a condition that changes, and it takes agreeing again. The journal tells each command refused for want of agreement.
 - The fact **never goes in the command line**: a ticket’s title runs nothing. The command finds it in its variables: `ESCOUADE_FACT` (the whole fact in JSON), `ESCOUADE_FACT_NAME`, `ESCOUADE_PROJECT`, `ESCOUADE_TICKET` (its key) and `ESCOUADE_AGENT`.
 - It has 60 s. Its journal notes its end (`exit 0`) and, when it fails, its last lines.
 

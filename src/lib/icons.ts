@@ -84,6 +84,9 @@ export const ICONS = {
   more: '<circle cx="3.75" cy="8" r=".9" fill="currentColor" /><circle cx="8" cy="8" r=".9" fill="currentColor" /><circle cx="12.25" cy="8" r=".9" fill="currentColor" />',
   lock: '<rect x="3.25" y="7" width="9.5" height="6.5" rx="1.5" /><path d="M5.5 7V5.25a2.5 2.5 0 0 1 5 0V7" />',
   plug: '<path d="M6 2.75v3M10 2.75v3M4.25 5.75h7.5v2a3.75 3.75 0 0 1-7.5 0zM8 11.5v2" />',
+  // A plugin (PLG-4), as the preview's: the view Plugins and Réglages › Plugins.
+  puzzle:
+    '<path d="M6 2.75a1.5 1.5 0 0 1 3 0V4h2.25c.41 0 .75.34.75.75V7h1.25a1.5 1.5 0 0 1 0 3H12v2.25c0 .41-.34.75-.75.75H9v-1.25a1.5 1.5 0 0 0-3 0V13H3.75a.75.75 0 0 1-.75-.75V10h1.25a1.5 1.5 0 0 0 0-3H3V4.75c0-.41.34-.75.75-.75H6z" />',
   star: '<path d="M8 2.6l1.6 3.4 3.7.4-2.8 2.5.8 3.7L8 10.7l-3.3 1.9.8-3.7-2.8-2.5 3.7-.4z" />',
   gift: '<path d="M8 3.5v10M3 6.75h10v2.5H3zM4 9.25v4h8v-4M8 6.75C6.75 4.5 4.5 4 4.5 5.4 4.5 6.4 6.25 6.75 8 6.75 9.75 6.75 11.5 6.4 11.5 5.4 11.5 4 9.25 4.5 8 6.75z" />',
   // A workflow (ESC-191): its steps in a cycle.

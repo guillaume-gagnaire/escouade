@@ -33,7 +33,7 @@ Escouade’s first message is `initialize`. It gives the version of the protocol
     "protocolVersion": 1,
     "escouade": { "version": "2.1.1" },
     "plugin": { "id": "dev.exemple.slack", "version": "1.2.0" },
-    "capabilities": { "batch": true, "secrets": true, "log": true, "attach": true }
+    "capabilities": { "batch": true, "secrets": true, "settings": true, "log": true, "attach": true }
   }
 }
 ```
@@ -67,6 +67,7 @@ Every delay that runs out is noted in the journal: “test/do: no answer within 
 | Method | Parameters | Answer |
 | --- | --- | --- |
 | `secrets/get` | `{ "key": "webhook" }` | The secret, or `null` if none is kept under that key. |
+| `settings/get` | `{}` | Its settings, as the user chose them in the Settings tab of its page: an object by key of `contributes.settings`, without those left to their default. |
 | `log` (notification) | `{ "level": "info", "message": "…" }` | None: the line goes to the plugin’s journal. |
 
 Any other method answers the error `-32601` and notes it in the journal. Escouade’s own errors: `-32001` for a secret that is not the plugin’s, `-32002` for a keychain out of reach, `-32602` for parameters that do not hold.
@@ -81,7 +82,7 @@ A plugin’s secrets are in the system’s keychain, under a name of its own: `p
 
 ## Crashes and restarts
 
-- **A crash restarts the plugin**, three times within five minutes. At the fourth, it is stopped: “stopped after 4 crashes within 5 minutes”. It no longer starts by itself; the “Restart” button of Settings › Plugins will start it again, its crashes forgotten.
+- **A crash restarts the plugin**, three times within five minutes. At the fourth, it is stopped: “stopped after 4 crashes within 5 minutes”. It no longer starts by itself; the “Restart” button of its journal, in the view Plugins, starts it again, its crashes forgotten.
 - **The calls under way** when it crashes fail: their default answer applies.
 - **While it restarts**, what Escouade sends it waits in a queue of 256 messages, then goes in order once `initialize` is answered. A full queue loses its oldest message, and the journal says so.
 - **What each agent had attached to it** (for a harness, `agent/attach`: its session, its mode, its model) is given again to the new process before any other message.
@@ -104,6 +105,10 @@ Each plugin has its journal, in `~/.escouade/plugin-logs/<id>.log`; past 1 MB, i
 - its messages: its `log`s, the secrets it asked for (never their value);
 - the calls left without an answer, what it asked for and was refused, the messages lost from a full queue.
 
-The last 500 lines serve the Settings › Plugins tab, which comes in a later version.
+The last 500 lines are read in the Journal tab of its page, in the view Plugins ([installing a plugin](plugins/installer#the-journal)).
 
 To check that a plugin keeps to this protocol without starting the app, play [the conformance bench](plugins/testing): `escouade-plugin test <folder>`.
+
+## What the user changes
+
+A plugin switched off, a permission taken back or given again, an update installed: its process is stopped, and the next one gets the manifest and the permissions of now. A secret’s permission taken back makes `secrets/get` answer `-32001` for that key, as for a secret that is not its own.

@@ -356,7 +356,7 @@ fn beyond(v: &Version, max: &str) -> bool {
 }
 
 /// A version of Escouade, `2` as much as `2.1.0`.
-fn version(s: &str) -> Version {
+pub(crate) fn version(s: &str) -> Version {
     if s.contains('.') {
         Version::parse(s)
     } else {

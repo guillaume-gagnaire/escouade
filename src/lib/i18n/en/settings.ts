@@ -6,6 +6,7 @@ export default defineZone('settings', {
     app: { label: 'Application', desc: 'Theme, zoom, languages and written texts' },
     claude: { label: 'Harness', desc: 'Each harness’s executables and versions, and what holds for them all' },
     accounts: { label: 'Accounts', desc: 'Each harness’s accounts, their new agents’ settings, and what happens at the limit' },
+    plugins: { label: 'Plugins', desc: 'What they add to Escouade, where they come from and what they can do' },
     mcp: { label: 'MCP server', desc: 'What Claude and the agents can do in Escouade, and what they did' },
     notifications: { label: 'Notifications', desc: 'Visual and sound alerts' },
     projects: { label: 'Projects', desc: 'Settings specific to each project' },

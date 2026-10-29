@@ -436,6 +436,7 @@ export const en: Catalog = {
       'settings-network': 'Network',
       'settings-voice': 'Voice',
       'settings-about': 'About',
+      'plugins/installer': 'Installing a plugin',
       'plugins/manifest': 'The manifest',
       'plugins/api': 'The protocol',
       'plugins/events': 'Events',

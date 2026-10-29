@@ -440,6 +440,7 @@ export const fr: Catalog = {
       'settings-network': 'Réseau',
       'settings-voice': 'Voix',
       'settings-about': 'À propos',
+      'plugins/installer': 'Installer un plugin',
       'plugins/manifest': 'Le manifeste',
       'plugins/api': 'Le protocole',
       'plugins/events': 'Les événements',

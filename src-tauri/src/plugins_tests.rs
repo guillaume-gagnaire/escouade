@@ -300,7 +300,7 @@ fn a_folder_is_copied_into_the_data_pinned_by_its_files_and_found_again() {
     );
 
     // Uninstalled: its copy goes, the source folder stays.
-    assert!(plugins.remove("dev.exemple.contraste").unwrap());
+    assert!(plugins.remove("dev.exemple.contraste", false).unwrap());
     assert!(!copy.exists());
     assert!(src.join(manifest::FILE).is_file());
     assert!(Plugins::load(data, "2.1.0").list(Lang::Fr).is_empty());
@@ -490,8 +490,215 @@ fn a_folder_in_development_is_loaded_in_place_and_read_again_when_it_changes() {
         again.revision() > rev && again.get("dev.exemple.dev", Lang::Fr).unwrap().version == "0.4.0"
     });
     // Uninstalled, the folder stays.
-    assert!(again.remove("dev.exemple.dev").unwrap());
+    assert!(again.remove("dev.exemple.dev", false).unwrap());
     assert!(src.join(manifest::FILE).is_file());
+}
+
+/// A plugin with a program, its permissions of every kind.
+fn programmed(id: &str, version: &str, network: &[&str]) -> Value {
+    json!({
+        "id": id,
+        "name": { "fr": "Slack", "en": "Slack" },
+        "version": version,
+        "escouade": { "api": "1", "min": "2.1.0" },
+        "run": { "command": "bin/slack" },
+        "activation": ["event:ticket.column"],
+        "permissions": {
+            "events": ["ticket.*"],
+            "network": network,
+            "secrets": ["webhook"],
+            "decide": true
+        },
+        "contributes": {
+            "settings": [{ "key": "channel", "type": "string", "title": "Channel" }],
+            "secrets": [{ "key": "webhook", "title": "Webhook" }]
+        }
+    })
+}
+
+#[test]
+fn an_inspection_says_what_it_may_do_the_strongest_first_and_installs_nothing() {
+    let base = temp_dir("inspect");
+    let data = DataDir::new(base.join("data"));
+    let src = base.join("src");
+    plugin_folder(
+        &src,
+        &programmed("dev.exemple.slack", "1.0.0", &["hooks.slack.com"]),
+    );
+    let plugins = Plugins::load(data.clone(), "2.1.0");
+
+    let p = plugins.inspect_folder(&src, Lang::Fr).unwrap();
+    assert_eq!(
+        p.asks,
+        [
+            "run",
+            "decide",
+            "events:ticket.*",
+            "network:hooks.slack.com",
+            "secrets:webhook"
+        ]
+    );
+    assert!(p.fingerprint.starts_with("sha256:"));
+    assert!(p.previous.is_none() && p.grown.is_empty());
+    assert!(!p.declarative);
+    assert!(plugins.list(Lang::Fr).is_empty(), "nothing installed yet");
+    // Discarded: nothing is left of its copy.
+    plugins.discard(&p.token);
+    let left = std::fs::read_dir(data.plugins_dir()).unwrap().count();
+    assert_eq!(left, 0);
+    // Its token is no longer current.
+    let refusal = plugins.install(&p.token, Lang::En).unwrap_err();
+    assert!(
+        refusal.message.contains("no longer current"),
+        "{}",
+        refusal.message
+    );
+
+    // Installed on the user's consent, the fingerprint the one shown.
+    let p = plugins.inspect_folder(&src, Lang::Fr).unwrap();
+    let view = plugins.install(&p.token, Lang::Fr).unwrap();
+    assert_eq!(view.fingerprint, p.fingerprint);
+    assert_eq!(view.secret_keys, ["webhook"]);
+    assert!(view.choices.enabled);
+}
+
+#[test]
+fn an_update_keeps_the_users_choices_and_says_what_it_asks_for_more() {
+    let base = temp_dir("update");
+    let data = DataDir::new(base.join("data"));
+    let src = base.join("src");
+    plugin_folder(
+        &src,
+        &programmed("dev.exemple.slack", "1.0.0", &["hooks.slack.com"]),
+    );
+    let plugins = Plugins::load(data.clone(), "2.1.0");
+    plugins.install_folder(&src, Lang::Fr).unwrap();
+    plugins
+        .choose("dev.exemple.slack", |c| {
+            c.projects.insert("p1".into(), false);
+            c.revoked.push("decide".into());
+            c.settings.insert("channel".into(), json!("#a"));
+        })
+        .unwrap();
+
+    plugin_folder(
+        &src,
+        &programmed(
+            "dev.exemple.slack",
+            "1.1.0",
+            &["hooks.slack.com", "api.slack.com"],
+        ),
+    );
+    let p = plugins.inspect_folder(&src, Lang::Fr).unwrap();
+    let prev = p.previous.as_ref().unwrap();
+    assert_eq!(prev.version, "1.0.0");
+    assert_eq!(p.grown, ["network:api.slack.com"]);
+    let view = plugins.install(&p.token, Lang::Fr).unwrap();
+    assert_eq!(view.version, "1.1.0");
+    assert_eq!(view.choices.projects.get("p1"), Some(&false));
+    assert_eq!(view.choices.revoked, ["decide"]);
+    assert_eq!(view.choices.settings["channel"], json!("#a"));
+    // Kept when the app starts again.
+    let again = Plugins::load(data, "2.1.0");
+    assert_eq!(
+        again.get("dev.exemple.slack", Lang::Fr).unwrap().choices,
+        view.choices
+    );
+}
+
+#[test]
+fn a_permission_taken_back_is_not_given_and_a_private_project_is_off_unless_chosen() {
+    let m = manifest::read(
+        &programmed("dev.exemple.slack", "1.0.0", &["hooks.slack.com"]).to_string(),
+        false,
+    )
+    .manifest
+    .unwrap();
+    let g = crate::plugins::granted(&m, &["decide".into(), "secrets:webhook".into()]);
+    assert!(!g.permissions.decide);
+    assert!(g.permissions.secrets.is_empty());
+    assert_eq!(g.permissions.network, ["hooks.slack.com"]);
+    assert!(!crate::plugins::revocable("run"));
+    assert!(crate::plugins::revocable("network:hooks.slack.com"));
+
+    let mut c = crate::plugins::Choices::default();
+    assert!(crate::plugins::active_in(&c, "p1", false));
+    assert!(!crate::plugins::active_in(&c, "secret", true));
+    c.projects.insert("secret".into(), true);
+    c.projects.insert("p1".into(), false);
+    assert!(crate::plugins::active_in(&c, "secret", true));
+    assert!(!crate::plugins::active_in(&c, "p1", false));
+    c.enabled = false;
+    assert!(!crate::plugins::active_in(&c, "secret", true));
+}
+
+#[test]
+fn an_uninstall_that_keeps_the_data_gives_it_back_to_the_next_install() {
+    let base = temp_dir("keep");
+    let data = DataDir::new(base.join("data"));
+    let src = base.join("src");
+    plugin_folder(&src, &programmed("dev.exemple.slack", "1.0.0", &[]));
+    let plugins = Plugins::load(data.clone(), "2.1.0");
+    plugins.install_folder(&src, Lang::Fr).unwrap();
+    plugins
+        .choose("dev.exemple.slack", |c| {
+            c.settings.insert("channel".into(), json!("#kept"));
+        })
+        .unwrap();
+    assert!(plugins.remove("dev.exemple.slack", true).unwrap());
+    let view = plugins.install_folder(&src, Lang::Fr).unwrap();
+    assert_eq!(view.choices.settings["channel"], json!("#kept"));
+
+    // Without keeping, the next install starts afresh.
+    assert!(plugins.remove("dev.exemple.slack", false).unwrap());
+    let view = plugins.install_folder(&src, Lang::Fr).unwrap();
+    assert!(view.choices.settings.is_empty());
+}
+
+#[tokio::test]
+async fn a_newer_version_is_offered_and_never_installed_by_itself() {
+    let base = temp_dir("updates");
+    let data = DataDir::new(base.join("data"));
+    let repo = base.join("repo");
+    fake_repo(&repo);
+    let url = repo.display().to_string();
+    let src = base.join("src");
+    plugin_folder(&src, &declarative("dev.exemple.contraste", "1.0.0"));
+    let plugins = Plugins::load(data.clone(), "2.1.0");
+    plugins.install_git(&url, "v1.0.0", Lang::Fr).await.unwrap();
+    plugins.install_folder(&src, Lang::Fr).unwrap();
+
+    plugins.check_updates().await;
+    let git = plugins.get("dev.exemple.git", Lang::Fr).unwrap();
+    assert_eq!(
+        git.update,
+        Some(crate::plugins::Update {
+            version: "1.1.0".into(),
+            tag: Some("v1.1.0".into())
+        })
+    );
+    assert_eq!(git.version, "1.0.0", "not installed by itself");
+    assert_eq!(
+        plugins
+            .get("dev.exemple.contraste", Lang::Fr)
+            .unwrap()
+            .update,
+        None
+    );
+
+    // A later version in the folder it was copied from.
+    plugin_folder(&src, &declarative("dev.exemple.contraste", "1.2.0"));
+    plugins.check_updates().await;
+    let folder = plugins.get("dev.exemple.contraste", Lang::Fr).unwrap();
+    assert_eq!(folder.update.map(|u| u.version).as_deref(), Some("1.2.0"));
+
+    // Installed by the user: offered no more.
+    let p = plugins.inspect_git(&url, "v1.1.0", Lang::Fr).await.unwrap();
+    plugins.install(&p.token, Lang::Fr).unwrap();
+    assert_eq!(
+        plugins.get("dev.exemple.git", Lang::Fr).unwrap().update,
+        None
+    );
 }
 
 /// PLG-13: the icon of an installed plugin, by its id alone, read in its folder and never out of
@@ -584,4 +791,32 @@ fn the_icon_of_a_plugin_is_given_by_its_id_and_never_read_out_of_its_folder() {
     assert!(plugins.icon("dev.exemple.devlogo").unwrap().is_some());
     std::fs::write(dev.join("icon.png"), png_header(512, 512, 2 << 20)).unwrap();
     assert_eq!(plugins.icon("dev.exemple.devlogo").unwrap(), None);
+}
+
+/// PLG-4 with PLG-13: the install window shows the plugin's icon before it is installed, read in
+/// what was set aside; none without one.
+#[test]
+fn an_inspection_gives_the_icon_read_in_what_was_set_aside() {
+    let base = temp_dir("inspect-icon");
+    let data = DataDir::new(base.join("data"));
+    let src = base.join("src");
+    let mut m = programmed("dev.exemple.slack", "1.0.0", &[]);
+    m["icon"] = json!("icon.png");
+    plugin_folder(&src, &m);
+    std::fs::write(src.join("icon.png"), png_header(256, 256, 4096)).unwrap();
+    let plugins = Plugins::load(data.clone(), "2.1.0");
+    let p = plugins.inspect_folder(&src, Lang::Fr).unwrap();
+    assert!(
+        p.icon
+            .as_deref()
+            .is_some_and(|i| i.starts_with("data:image/png;base64,")),
+        "{:?}",
+        p.icon.as_deref().map(|i| &i[..30.min(i.len())])
+    );
+    let view = plugins.install(&p.token, Lang::Fr).unwrap();
+    assert_eq!(plugins.icon(&view.id).unwrap(), p.icon);
+
+    let other = base.join("other");
+    plugin_folder(&other, &programmed("dev.exemple.sans", "1.0.0", &[]));
+    assert_eq!(plugins.inspect_folder(&other, Lang::Fr).unwrap().icon, None);
 }

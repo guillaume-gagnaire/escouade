@@ -575,7 +575,9 @@ async fn a_private_projects_facts_go_only_to_a_plugin_turned_on_for_it() {
     // Turned on for the private project by hand; the other one is not.
     h.core
         .plugins
-        .set_active("dev.test.vault", Some(&vault.id), true)
+        .choose("dev.test.vault", |c| {
+            c.projects.insert(vault.id.clone(), true);
+        })
         .unwrap();
     // And a webhook-only plugin, never turned on for it, whose server must see nothing of it.
     let (url, mut bodies) = fake_server().await;
@@ -799,6 +801,43 @@ async fn a_declared_webhook_posts_its_template_to_a_server_with_a_secret_address
         );
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
+    // `events:ticket.*` taken back (Réglages › Plugins): those facts no longer reach it.
+    h.core
+        .secrets
+        .set(&secret_name("dev.test.discord", "webhook"), &url)
+        .unwrap();
+    let take_back = |back: bool| {
+        h.core
+            .plugins
+            .choose("dev.test.discord", |c| {
+                c.revoked.retain(|w| w != "events:ticket.*");
+                if back {
+                    c.revoked.push("events:ticket.*".into());
+                }
+            })
+            .unwrap()
+    };
+    assert!(take_back(true));
+    h.core
+        .ticket_create(&p.id, draft("Sans permission", &[], 5))
+        .await
+        .unwrap();
+    // Handed out (or not) by the bus before the permission comes back.
+    h.core.facts.flush();
+    assert!(take_back(false));
+    h.core
+        .ticket_create(&p.id, draft("Rendue", &[], 5))
+        .await
+        .unwrap();
+    // Its queue keeps the order: the next call is the one given back, none came before it.
+    let got = tokio::time::timeout(Duration::from_secs(20), bodies.recv())
+        .await
+        .expect("the webhook in time")
+        .unwrap();
+    assert!(
+        got.contains("Rendue") && !got.contains("Sans permission"),
+        "{got}"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -846,7 +885,11 @@ async fn a_command_runs_on_a_fact_only_once_agreed_to_as_it_is() {
     }
     assert!(!out.exists());
     // Agreed to: it runs, the fact in its variables (a title runs nothing).
-    assert!(h.core.plugins.approve_commands("dev.test.say").unwrap());
+    assert!(h
+        .core
+        .plugins
+        .approve_commands("dev.test.say", true)
+        .unwrap());
     assert!(
         h.core
             .plugins
@@ -872,6 +915,38 @@ async fn a_command_runs_on_a_fact_only_once_agreed_to_as_it_is() {
         .find(|e| e.kind == Kind::Command)
         .unwrap();
     assert!(line.text.contains("exit 0"), "{}", line.text);
+    assert_eq!(
+        std::fs::read_to_string(&out).unwrap(),
+        "ticket.created DEM-2 Après $(echo non) & `x`\n"
+    );
+    // The agreement taken back (Réglages › Plugins): it runs no more, and says why.
+    assert!(h
+        .core
+        .plugins
+        .approve_commands("dev.test.say", false)
+        .unwrap());
+    assert!(
+        !h.core
+            .plugins
+            .get("dev.test.say", Lang::En)
+            .unwrap()
+            .commands_approved
+    );
+    let refused = || journal().iter().filter(|e| e.kind == Kind::Refused).count();
+    let before = refused();
+    h.core
+        .ticket_create(&p.id, draft("Repris", &[], 5))
+        .await
+        .unwrap();
+    let started = Instant::now();
+    while refused() == before {
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "{:#?}",
+            journal()
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
     assert_eq!(
         std::fs::read_to_string(&out).unwrap(),
         "ticket.created DEM-2 Après $(echo non) & `x`\n"

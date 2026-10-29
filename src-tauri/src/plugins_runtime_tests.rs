@@ -28,6 +28,7 @@ struct Fake {
     rt: Arc<Runtime>,
     store: Arc<MemoryStore>,
     data: DataDir,
+    plugins: Arc<Plugins>,
 }
 
 /// The fake plugin installed in development from a folder of the test's own, its program started
@@ -63,8 +64,13 @@ fn fake(name: &str, args: &[&str], limits: Limits) -> Fake {
     let plugins = Plugins::load(data.clone(), "2.1.1");
     plugins.load_dev(&src, Lang::En).unwrap();
     let store = Arc::new(MemoryStore::default());
-    let rt = Runtime::new(plugins, store.clone(), &data, "2.1.1", limits);
-    Fake { rt, store, data }
+    let rt = Runtime::new(plugins.clone(), store.clone(), &data, "2.1.1", limits);
+    Fake {
+        rt,
+        store,
+        data,
+        plugins,
+    }
 }
 
 /// Limits for a test: its memory read often, room for a slow machine to start node.
@@ -559,4 +565,111 @@ async fn round_trips_and_throughput_are_measured() {
     );
     assert!(p99 < Duration::from_millis(50), "p99 {p99:?}");
     assert!(rate > 1.0, "{rate:.1} MB/s");
+}
+
+/// Réglages › Plugins (PLG-4): a permission taken back, the app's switch, the settings and
+/// « Démarrer » reach the process once its host is forgotten; the journal outlives the host.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_users_choices_reach_its_process_once_its_host_is_forgotten() {
+    let f = fake("choices", &[], quick());
+    f.store.set(&secret_name(ID, "token"), "mine-1234").unwrap();
+    let secret = || {
+        f.rt.call(ID, "test/do", json!({ "behave": "secret", "key": "token" }))
+    };
+    assert_eq!(secret().await.unwrap(), json!({ "result": "mine-1234" }));
+
+    // Its settings, as the user set them.
+    f.plugins
+        .choose(ID, |c| {
+            c.settings.insert("channel".into(), json!("#escouade"));
+        })
+        .unwrap();
+    let got = f.rt.call(ID, "test/do", behave("settings")).await.unwrap();
+    assert_eq!(got, json!({ "result": { "channel": "#escouade" } }));
+
+    // The secret taken back: the next process is no longer given it.
+    f.plugins
+        .choose(ID, |c| c.revoked.push("secrets:token".into()))
+        .unwrap();
+    f.rt.forget(ID);
+    assert!(journal_has(&f.rt, Kind::Stop, "stopped"));
+    let got = secret().await.unwrap();
+    assert_eq!(got["error"]["code"], json!(NOT_YOURS), "{got}");
+
+    // Switched off: nothing of it runs.
+    f.plugins.choose(ID, |c| c.enabled = false).unwrap();
+    f.rt.forget(ID);
+    let err = f.rt.call(ID, "echo", json!({})).await.unwrap_err();
+    assert!(
+        matches!(&err, CallError::Unavailable(why) if why.contains("switched off")),
+        "{err:?}"
+    );
+    assert!(f.rt.start(ID).is_err());
+    // Its journal is read from its file meanwhile: the earlier runs are still there.
+    assert!(journal_has(&f.rt, Kind::Ready, ""));
+
+    // Switched on again, « Démarrer » starts it without a call.
+    f.plugins.choose(ID, |c| c.enabled = true).unwrap();
+    f.rt.start(ID).unwrap();
+    until("running", || f.rt.status(ID).phase == PhaseName::Running).await;
+    f.rt.shutdown();
+}
+
+/// A folder in development read again (PLG-4, the review of PLG-2): its process stops and its host
+/// is forgotten, so that the next process is given the manifest of now, not the one it started with.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_folder_in_development_read_again_stops_its_process_for_the_new_manifest() {
+    let f = fake("dev-reload", &[], quick());
+    f.store.set(&secret_name(ID, "token"), "mine-1234").unwrap();
+    f.store
+        .set(&secret_name(ID, "other"), "other-5678")
+        .unwrap();
+    let ask = |key: &'static str| {
+        f.rt.call(ID, "test/do", json!({ "behave": "secret", "key": key }))
+    };
+    assert_eq!(
+        ask("token").await.unwrap(),
+        json!({ "result": "mine-1234" })
+    );
+    let refused = ask("other").await.unwrap();
+    assert_eq!(refused["error"]["code"], json!(NOT_YOURS));
+
+    // The manifest of the folder now asks for `other` too.
+    let folder = PathBuf::from(f.plugins.get(ID, Lang::En).unwrap().folder);
+    let file = folder.join("escouade-plugin.json");
+    let mut manifest: Value =
+        serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    manifest["permissions"]["secrets"] = json!(["token", "other"]);
+    let rev = f.plugins.revision();
+    std::fs::write(&file, serde_json::to_string_pretty(&manifest).unwrap()).unwrap();
+    until("read again", || f.plugins.revision() > rev).await;
+    until("stopped", || f.rt.status(ID).phase == PhaseName::Idle).await;
+    assert_eq!(
+        ask("other").await.unwrap(),
+        json!({ "result": "other-5678" })
+    );
+    f.rt.shutdown();
+}
+
+/// An event of the watcher of a folder in development that changed nothing (FSEvents delivers late
+/// the writes made just before the watch began; a file rewritten as it was): nothing is read again,
+/// and its process goes on, the same one.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_event_that_changed_nothing_leaves_its_process_running() {
+    let f = fake("dev-same", &[], quick());
+    let pid = node_pid(&f.rt).await;
+
+    // Told directly, as a late event would.
+    f.plugins.reload(&[ID.to_string()]);
+    // The manifest written again, the same, byte for byte: a real event of the watcher.
+    let folder = PathBuf::from(f.plugins.get(ID, Lang::En).unwrap().folder);
+    let file = folder.join("escouade-plugin.json");
+    let rev = f.plugins.revision();
+    std::fs::write(&file, std::fs::read(&file).unwrap()).unwrap();
+    until("the event read", || f.plugins.revision() > rev).await;
+
+    assert_eq!(f.rt.status(ID).phase, PhaseName::Running);
+    assert_eq!(node_pid(&f.rt).await, pid, "the same process");
+    assert!(!journal_has(&f.rt, Kind::Stop, "stopped"));
+    f.rt.shutdown();
 }

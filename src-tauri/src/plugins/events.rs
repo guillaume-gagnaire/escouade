@@ -591,9 +591,12 @@ impl Sink for Dispatch {
         let mut value = None;
         for view in self.plugins.list(Lang::En) {
             let Some(m) = &view.manifest else { continue };
+            // One rule with Réglages › Plugins (PLG-4): its switches, and the events it may still
+            // receive (`events:<e>` taken back, nor its webhooks nor its commands get it).
+            let m = &super::granted(m, &view.choices.revoked);
             if view.state != State::Ready
                 || !m.permissions.events.iter().any(|p| matches(p, &name))
-                || !self.plugins.active_for(&view.id, project, fact.private)
+                || !self.plugins.reaches(&view.id, project, fact.private)
             {
                 continue;
             }

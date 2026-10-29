@@ -351,7 +351,7 @@ describe('ProjectRail', () => {
     render(ProjectRail);
     const rail = screen.getByRole('navigation', { name: 'Projets' });
     const icons = [...rail.querySelectorAll(':scope > button [data-icon]')].map((i) => i.getAttribute('data-icon'));
-    expect(icons).toEqual(['overview', 'plus', 'stats', 'sliders']);
+    expect(icons).toEqual(['overview', 'plus', 'stats', 'puzzle', 'sliders']);
   });
 });
 

@@ -401,8 +401,8 @@ impl Runtime {
             .ok()
             .and_then(|p| p.parent().map(Path::to_path_buf))
             .unwrap_or_default();
-        Arc::new_cyclic(|me| Self {
-            plugins,
+        let rt = Arc::new_cyclic(|me| Self {
+            plugins: plugins.clone(),
             secrets,
             logs: data.plugin_logs_dir(),
             app_version: app_version.to_string(),
@@ -412,7 +412,16 @@ impl Runtime {
             journals: Mutex::new(HashMap::new()),
             quitting: AtomicBool::new(false),
             me: me.clone(),
-        })
+        });
+        // A folder in development read again: its process stops, and the next one is given the
+        // manifest of now (its permissions of secrets included).
+        let weak = Arc::downgrade(&rt);
+        plugins.on_reload(move |id| {
+            if let Some(rt) = weak.upgrade() {
+                rt.forget(id);
+            }
+        });
+        rt
     }
 
     /// The plugin `id`'s host, made at its first use: only a plugin that loaded, with a program.
@@ -433,9 +442,14 @@ impl Runtime {
                 return Err(CallError::Unavailable(reason.clone()))
             }
         }
+        if !view.choices.enabled {
+            return Err(CallError::Unavailable(format!("{id} is switched off")));
+        }
+        // What it is given: its permissions but those the user took back.
         let manifest = view
             .manifest
             .filter(|m| m.run.is_some())
+            .map(|m| super::granted(&m, &view.choices.revoked))
             .ok_or_else(|| CallError::Unavailable(format!("{id} is declarative: nothing runs")))?;
         let host = Arc::new(Host {
             id: id.to_string(),
@@ -512,13 +526,46 @@ impl Runtime {
         }
     }
 
-    /// The plugin `id`'s journal, the oldest entry first.
+    /// The plugin `id`'s journal, the oldest entry first: what its process wrote since Escouade
+    /// started, or, before it ran, what its file kept of the earlier runs.
     pub fn journal(&self, id: &str) -> Vec<Entry> {
-        self.journals
-            .lock()
-            .get(id)
-            .map(|j| j.entries())
-            .unwrap_or_default()
+        let held = self.journals.lock().get(id).map(|j| j.entries());
+        match held {
+            Some(e) if !e.is_empty() => e,
+            _ => super::journal::read_file(&self.journal_file(id)),
+        }
+    }
+
+    /// The file of the plugin `id`'s journal.
+    pub fn journal_file(&self, id: &str) -> PathBuf {
+        self.logs.join(format!("{id}.log"))
+    }
+
+    /// Starts the plugin `id`'s process now, if it is idle (« Démarrer »).
+    pub fn start(&self, id: &str) -> Result<(), CallError> {
+        self.host(id)?.wake();
+        Ok(())
+    }
+
+    /// Stops the plugin `id`'s process and forgets its host and its manifest: switched off,
+    /// uninstalled, updated, a permission taken back or given again. The next use reads it anew.
+    pub fn forget(&self, id: &str) {
+        // Its journal too, closed once its stop is noted: the next one starts from its file.
+        let journal = self.journals.lock().remove(id);
+        let Some(h) = self.hosts.lock().remove(id) else {
+            if let Some(j) = journal {
+                j.close();
+            }
+            return;
+        };
+        let idle = {
+            let inner = h.inner.lock();
+            inner.conn.is_none() && matches!(inner.phase, Phase::Idle | Phase::Stopped(_))
+        };
+        if !idle {
+            h.stop_with(Stop::Asked);
+        }
+        h.journal.close();
     }
 
     /// The plugin `id`'s journal, made at its first use.
@@ -526,7 +573,7 @@ impl Runtime {
         self.journals
             .lock()
             .entry(id.to_string())
-            .or_insert_with(|| Arc::new(Journal::new(self.logs.join(format!("{id}.log")))))
+            .or_insert_with(|| Arc::new(Journal::new(self.journal_file(id))))
             .clone()
     }
 
@@ -921,7 +968,7 @@ impl Host {
             "protocolVersion": PROTOCOL,
             "escouade": { "version": rt.app_version },
             "plugin": { "id": self.id, "version": self.manifest.version },
-            "capabilities": { "batch": true, "secrets": true, "log": true, "attach": true },
+            "capabilities": { "batch": true, "secrets": true, "settings": true, "log": true, "attach": true },
         });
         let answer = match self
             .call_on(&conn, "initialize", &raw(&hello), rt.limits.initialize)
@@ -1227,6 +1274,13 @@ impl Host {
                 Some(key) => self.secret(key).map(|s| json!(s)),
                 None => Err((INVALID_PARAMS, "secrets/get takes a key".into())),
             },
+            // The values of its settings, as the user set them (Réglages of its page).
+            "settings/get" => Ok(self
+                .rt
+                .upgrade()
+                .and_then(|rt| rt.plugins.choices(&self.id))
+                .map(|c| Value::Object(c.settings))
+                .unwrap_or_else(|| json!({}))),
             _ => {
                 self.journal.push(
                     Kind::Refused,

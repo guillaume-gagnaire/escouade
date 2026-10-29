@@ -8,6 +8,8 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Nouveautés
 
+- Les plugins ont leur vue, ouverte par l’icône de la barre des projets : installer depuis un dossier ou un dépôt git après avoir vu d’où vient le plugin, son empreinte, ce qu’il ajoute et ce qu’il pourra faire, la permission la plus forte d’abord ; l’activer pour l’app ou projet par projet, un projet privé restant coupé d’office ; lui retirer une permission, régler ses secrets, lire son journal, le désinstaller.
+- Une nouvelle version d’un plugin est proposée, jamais installée seule, et redemande ton accord si elle demande plus que la version installée.
 - L’index du code s’allume d’un coup sur tous les projets, depuis Réglages › Projets : chaque projet le suit tant qu’il n’a pas fait son propre choix, et sa section dit d’où vient son état. Les projets sont lus un par un sans bloquer la fenêtre, et couper la case demande avant d’effacer leurs index.
 - Un plugin peut avoir son logo : un PNG carré de 256 px au moins, déclaré dans son manifeste, que le store montre à la place de ses deux lettres et qu’Escouade lit dans le plugin installé. Les plugins livrés avec Escouade ont le logo de leur marque quand elle le permet, sinon celui de leur catégorie.
 - Le programme d’un plugin tourne à part, démarré seulement quand il sert, et Escouade le tient : un plugin qui ne répond pas à temps n’est plus attendu, celui qui plante redémarre (trois fois, puis s’arrête), celui qui prend trop de mémoire est arrêté, et chacun n’obtient que ses propres secrets. Son journal garde ce qu’il a fait et dit, et le protocole est décrit dans la documentation des plugins.

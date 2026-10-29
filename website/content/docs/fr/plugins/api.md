@@ -33,7 +33,7 @@ Le premier message d’Escouade est `initialize`. Il donne la version du protoco
     "protocolVersion": 1,
     "escouade": { "version": "2.1.1" },
     "plugin": { "id": "dev.exemple.slack", "version": "1.2.0" },
-    "capabilities": { "batch": true, "secrets": true, "log": true, "attach": true }
+    "capabilities": { "batch": true, "secrets": true, "settings": true, "log": true, "attach": true }
   }
 }
 ```
@@ -67,6 +67,7 @@ Chaque délai dépassé est noté au journal : « test/do: no answer within 300
 | Méthode | Paramètres | Réponse |
 | --- | --- | --- |
 | `secrets/get` | `{ "key": "webhook" }` | Le secret, ou `null` si aucun n’est gardé sous cette clé. |
+| `settings/get` | `{}` | Ses réglages, tels que l’utilisateur les a choisis dans l’onglet Réglages de sa page : un objet par clé de `contributes.settings`, sans celles laissées à leur valeur par défaut. |
 | `log` (notification) | `{ "level": "info", "message": "…" }` | Aucune : la ligne va au journal du plugin. |
 
 Une autre méthode répond l’erreur `-32601` et le note au journal. Les erreurs propres à Escouade : `-32001` pour un secret qui n’est pas celui du plugin, `-32002` pour un trousseau injoignable, `-32602` pour des paramètres qui ne tiennent pas.
@@ -81,7 +82,7 @@ Les secrets d’un plugin sont dans le trousseau du système, sous un nom à lui
 
 ## Les plantages et les relances
 
-- **Un plantage relance le plugin**, trois fois en cinq minutes. Au quatrième, il est arrêté : « stopped after 4 crashes within 5 minutes ». Il ne redémarre plus seul ; le bouton « Relancer » de Réglages › Plugins le relancera, ses plantages oubliés.
+- **Un plantage relance le plugin**, trois fois en cinq minutes. Au quatrième, il est arrêté : « stopped after 4 crashes within 5 minutes ». Il ne redémarre plus seul ; le bouton « Relancer » de son journal, dans la vue Plugins, le relance, ses plantages oubliés.
 - **Les appels en cours** quand il plante échouent : leur réponse par défaut s’applique.
 - **Pendant la relance**, ce qu’Escouade lui envoie attend dans une file de 256 messages, puis part dans l’ordre une fois `initialize` répondu. Une file pleine perd son plus vieux message, et le journal le dit.
 - **Ce que chaque agent lui avait attaché** (pour un harness, `agent/attach` : sa session, son mode, son modèle) est redonné au nouveau process avant tout autre message.
@@ -104,6 +105,10 @@ Chaque plugin a son journal, dans `~/.escouade/plugin-logs/<id>.log` ; au-delà 
 - ses messages : ses `log`, les secrets qu’il a demandés (jamais leur valeur) ;
 - les appels restés sans réponse, ce qu’il a demandé et qu’on lui a refusé, les messages perdus d’une file pleine.
 
-Les 500 dernières lignes servent l’onglet Réglages › Plugins, qui arrive dans une prochaine version.
+Les 500 dernières lignes se lisent dans l’onglet Journal de sa page, dans la vue Plugins ([installer un plugin](plugins/installer#le-journal)).
 
 Pour vérifier qu’un plugin tient ce protocole sans lancer l’app, joue [le banc de conformité](plugins/testing) : `escouade-plugin test <dossier>`.
+
+## Ce que l’utilisateur change
+
+Un plugin désactivé, une permission retirée ou rendue, une mise à jour installée : son process est arrêté, et le suivant reçoit le manifeste et les permissions de maintenant. Une permission de secret retirée fait répondre `-32001` à `secrets/get` pour cette clé, comme pour un secret qui n’est pas le sien.
