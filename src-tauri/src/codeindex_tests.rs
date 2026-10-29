@@ -938,6 +938,9 @@ mod core {
 
     /// ESC-293: the projects are read one at a time, never all at once, without the caller waiting.
     #[tokio::test]
+    // Held on purpose across the awaits: the reading of the first project waits for it, on a
+    // blocking thread of its own, never on this task.
+    #[allow(clippy::await_holding_lock)]
     async fn turning_it_on_reads_the_followers_one_at_a_time() {
         let h = harness("ci-queue");
         let ids = projects(&h, &["qa", "qb", "qc"]).await;
