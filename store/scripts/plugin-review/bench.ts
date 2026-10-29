@@ -56,7 +56,9 @@ export type BenchResult =
       raw?: string;
     };
 
-export const DEFAULT_IMAGE = 'node:22-bookworm-slim';
+// Named in full (podman refuses a short name where no registry is set for it); Debian 13, whose glibc (2.41) runs the
+// `escouade-plugin` built on Ubuntu 24.04 (2.39), which bookworm's (2.36) does not.
+export const DEFAULT_IMAGE = 'docker.io/library/node:22-trixie-slim';
 export const DEFAULT_TIMEOUT = 5 * 60_000;
 
 /** A container engine that answers: `ESCOUADE_REVIEW_ENGINE` (`none` to play no bench), else docker, else podman. */
@@ -132,11 +134,14 @@ export function runArgs(folder: string, cli: string, image: string, name: string
   ];
 }
 
-/** The lines of what the plugin did that say the sandbox refused something: a connection, a write. */
+/**
+ * The lines of what the plugin did that say the sandbox refused something: a connection, a write. `raw` is text of
+ * several lines; a scenario's words hold the last lines of a program that ended, joined by ` | ` after a ` — `.
+ */
 export function refusals(seen: Seen[], raw = ''): string[] {
   const re =
     /ENETUNREACH|EAI_AGAIN|ENOTFOUND|ECONNREFUSED|getaddrinfo|Network is unreachable|network unreachable|EROFS|Read-only file system|EACCES|Permission denied|EPERM/i;
-  const lines = [...seen.map((s) => s.line ?? s.message ?? ''), ...raw.split('\n')];
+  const lines = [...seen.map((s) => s.line ?? s.message ?? ''), ...raw.split(/\n| \| | — /)];
   return [...new Set(lines.map((l) => l.trim()).filter((l) => l && re.test(l)))];
 }
 
@@ -201,7 +206,7 @@ export async function playBench(setup: BenchSetup, folder: string, why?: string)
     passed: report.outcomes.every((o) => o.verdict !== 'fail'),
     outcomes: report.outcomes,
     seen,
-    refused: refusals(seen, out.stderr),
+    refused: refusals(seen, [out.stderr, ...report.outcomes.map((o) => o.said)].join('\n')),
     command,
   };
 }

@@ -13,7 +13,7 @@ import { review } from './review';
 //   ESCOUADE_REVIEW_WORK         where the versions are unpacked (<temp>/escouade-review)
 //   ESCOUADE_REVIEW_ENGINE       docker, podman, or none (docker, else podman)
 //   ESCOUADE_PLUGIN_LINUX        the Linux x64 `escouade-plugin` mounted in the container
-//   ESCOUADE_REVIEW_IMAGE        the container's image (node:22-bookworm-slim)
+//   ESCOUADE_REVIEW_IMAGE        the container's image (docker.io/library/node:22-trixie-slim)
 //   ESCOUADE_REVIEW_GITHUB_API   GitHub's API, and GITHUB_TOKEN or GH_TOKEN for its limits
 
 const USAGE = `npm run plugin-review -- <id>@<version> [--since <version>]

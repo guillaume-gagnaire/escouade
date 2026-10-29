@@ -32,6 +32,25 @@ else if (mode === 'refused') {
     }),
   );
   process.exitCode = 1;
+} else if (mode === 'ended') {
+  // As the real bench answered for the trapped plugin under podman (2026-10-29): the program ended before it was
+  // kept, its last lines in the scenario's words, none in `seen`.
+  console.log(
+    JSON.stringify({
+      plugin: 'x 0.0.1',
+      outcomes: [
+        { scenario: 'manifest', verdict: 'pass', said: 'valide, avec un programme' },
+        {
+          scenario: 'initialize',
+          verdict: 'fail',
+          said: "le programme s'est terminé avant de répondre (code 0) — slak: fetch failed EAI_AGAIN | slak: EROFS: read-only file system, open '/plugin/cache.json' EROFS | slak: ENOENT: no such file or directory, open '/tmp/.ssh/id_ed25519' ENOENT",
+          missing: 'réponds à `initialize`',
+        },
+      ],
+      timings: [],
+    }),
+  );
+  process.exitCode = 1;
 } else if (mode === 'garbage') {
   console.log('Segmentation fault');
   process.exitCode = 139;

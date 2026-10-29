@@ -4,7 +4,16 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { verifyAttestation } from '../../scripts/plugin-review/attest';
-import { benchFolder, findCli, findEngine, playBench, refusals, runArgs, type BenchSetup } from '../../scripts/plugin-review/bench';
+import {
+  benchFolder,
+  DEFAULT_IMAGE,
+  findCli,
+  findEngine,
+  playBench,
+  refusals,
+  runArgs,
+  type BenchSetup,
+} from '../../scripts/plugin-review/bench';
 import { grownPermissions } from '../../scripts/plugin-review/diff';
 import { baseVersion, catalog, download, Integrity, parseTarget } from '../../scripts/plugin-review/download';
 import { extract, inside } from '../../scripts/plugin-review/extract';
@@ -208,7 +217,7 @@ describe('the bench in a container', () => {
     return {
       engine: { program: process.execPath, prefix: [ENGINE] },
       cli: '/opt/escouade-plugin',
-      image: 'node:22-bookworm-slim',
+      image: 'node:22-trixie-slim',
       timeout,
     };
   };
@@ -252,6 +261,12 @@ describe('the bench in a container', () => {
     expect(refused.played && refused.refused).toEqual([
       'Error: getaddrinfo EAI_AGAIN collect.q7x-telemetry.net',
       "Error: EROFS: read-only file system, open '/plugin/x'",
+    ]);
+    // A program that ended before it was kept: its last lines are in the scenario's words (as podman gave them).
+    const ended = await playBench(setup('ended'), root);
+    expect(ended.played && ended.refused).toEqual([
+      'slak: fetch failed EAI_AGAIN',
+      "slak: EROFS: read-only file system, open '/plugin/cache.json' EROFS",
     ]);
     const garbage = await playBench(setup('garbage'), root);
     expect(garbage.played && garbage.raw).toMatch(/^le banc n’a pas rendu son rapport \(code 139\)\nSegmentation fault/);
@@ -439,4 +454,33 @@ describe('the review', () => {
     expect(md).toContain('Verdict proposé : **Refuser**');
     expect(md).not.toContain('## Pistes');
   });
+});
+
+// The bench in a real container, asked for by ESCOUADE_REVIEW_REAL_BENCH=1 with an engine (docker or podman, on the PATH or
+// ESCOUADE_REVIEW_ENGINE) and a Linux escouade-plugin (ESCOUADE_PLUGIN_LINUX); skipped otherwise, so the CI never
+// depends on a container engine. Played on the poste on 2026-10-29 with podman 5.8.
+const real = process.env.ESCOUADE_REVIEW_REAL_BENCH === '1';
+describe.runIf(real)('the bench in a real container', () => {
+  const setup = (): BenchSetup => {
+    const { engine, why } = findEngine();
+    const cli = findCli();
+    if (!engine || !cli) throw new Error(`ESCOUADE_REVIEW_REAL_BENCH=1 wants an engine and ESCOUADE_PLUGIN_LINUX: ${why ?? 'no CLI'}`);
+    return { engine, cli, image: process.env.ESCOUADE_REVIEW_IMAGE ?? DEFAULT_IMAGE, timeout: 5 * 60_000 };
+  };
+
+  it('passes the examples of PLG-10', async () => {
+    for (const t of ['dev.exemple.slack@1.0.0', 'dev.exemple.team-rules@1.0.0', 'dev.exemple.high-contrast@1.0.0']) {
+      const done = await review(options(t, { bench: setup() }));
+      expect(done.data.bench, t).toMatchObject({ played: true, passed: true });
+    }
+  }, 900_000);
+
+  it('fails the trapped plugin, the network and the writes refused by the sandbox', async () => {
+    const done = await review(options('io.github.q7x.slak-notify@0.0.1', { bench: setup() }));
+    const b = done.data.bench!;
+    expect(b).toMatchObject({ played: true, passed: false });
+    const refused = b.played ? b.refused.join('\n') : '';
+    expect(refused).toMatch(/EAI_AGAIN|ENETUNREACH/);
+    expect(refused).toMatch(/EROFS/);
+  }, 300_000);
 });
