@@ -104,4 +104,4 @@ Chaque plugin a son journal, dans `~/.escouade/plugin-logs/<id>.log` ; au-delà 
 - ses messages : ses `log`, les secrets qu’il a demandés (jamais leur valeur) ;
 - les appels restés sans réponse, ce qu’il a demandé et qu’on lui a refusé, les messages perdus d’une file pleine.
 
-Les 500 dernières lignes servent l’onglet Réglages › Plugins, qui arrive avec la suite de la 2.1.
+Les 500 dernières lignes servent l’onglet Réglages › Plugins, qui arrive dans une prochaine version.

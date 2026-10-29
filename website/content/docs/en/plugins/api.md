@@ -104,4 +104,4 @@ Each plugin has its journal, in `~/.escouade/plugin-logs/<id>.log`; past 1 MB, i
 - its messages: its `log`s, the secrets it asked for (never their value);
 - the calls left without an answer, what it asked for and was refused, the messages lost from a full queue.
 
-The last 500 lines serve the Settings › Plugins tab, which comes with the rest of 2.1.
+The last 500 lines serve the Settings › Plugins tab, which comes in a later version.

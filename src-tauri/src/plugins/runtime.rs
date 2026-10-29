@@ -552,6 +552,10 @@ impl Runtime {
         calls: Vec<(String, Value)>,
         within: Duration,
     ) -> Vec<Result<Value, CallError>> {
+        // An empty batch is no JSON-RPC.
+        if calls.is_empty() {
+            return Vec::new();
+        }
         let host = match self.host(id) {
             Ok(h) => h,
             Err(e) => return calls.iter().map(|_| Err(e.clone())).collect(),
@@ -1063,7 +1067,11 @@ impl Host {
                     if conn.exited.load(Ordering::Acquire) {
                         break;
                     }
-                    let Some(u) = conn.usage() else { continue };
+                    // `ps` on macOS and Linux: off the runtime's threads.
+                    let c = conn.clone();
+                    let Ok(Some(u)) = tokio::task::spawn_blocking(move || c.usage()).await else {
+                        continue;
+                    };
                     if u.memory > limits.memory {
                         if host.is_current(&conn) {
                             host.stop_with(Stop::Memory {
