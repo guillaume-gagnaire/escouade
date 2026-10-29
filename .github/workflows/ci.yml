@@ -63,6 +63,7 @@ jobs:
             store:
               - 'store/**'
               - 'schemas/**'
+              - 'tests/fixtures/plugins/examples/**'
               - 'website/app/assets/main.css'
               - 'design/store/**'
               - '.github/workflows/ci.yml'

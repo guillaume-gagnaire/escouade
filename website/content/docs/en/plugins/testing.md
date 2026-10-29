@@ -51,7 +51,7 @@ Conformance bench: dev.exemple.slow-rules 1.0.0
 
 The exit code is `1` when a scenario fails, `0` otherwise: the command works as is in CI.
 
-- `--json` gives the report in JSON: each scenario, its verdict (`pass`, `fail`, `skip`), what happened, what is missing, and how long each call took.
+- `--json` gives the report in JSON: each scenario, its verdict (`pass`, `fail`, `skip`), what happened, what is missing, how long each call took, and what the plugin did on its own (its standard error, its logs, the secrets it asked for; the last 200). That is what the “Verified by Escouade” review reads, which plays the bench in a container without network: a connection or a write refused shows there.
 - `--measure [n]` then measures `n` round trips (1,000 by default) and gives their median and 99th percentile, in microseconds.
 
 ### The bench’s facts and decisions

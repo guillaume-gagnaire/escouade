@@ -15,6 +15,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "db:generate": "drizzle-kit generate",
+    "plugin-review": "tsx scripts/plugin-review/index.ts",
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
