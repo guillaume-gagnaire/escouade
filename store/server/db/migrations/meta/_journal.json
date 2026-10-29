@@ -57,6 +57,13 @@
       "when": 1793308608622,
       "tag": "0007_review",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793314953398,
+      "tag": "0008_discord",
+      "breakpoints": true
     }
   ]
 }

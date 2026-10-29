@@ -34,6 +34,7 @@ describe.skipIf(!url)('the database', () => {
       'accounts',
       'admin_tokens',
       'audit',
+      'discord_quota',
       'email_tokens',
       'installation_repos',
       'installations',

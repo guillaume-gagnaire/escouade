@@ -2,7 +2,7 @@
 title: "La revue « Vérifié par Escouade » : la file, la signature, la révocation"
 subject: "store"
 sources: ["docs/STORE.md","design/store/index.html","design/app-redesign/UX-NOTES.md"]
-tickets: ["ESC-235"]
+tickets: ["ESC-235","ESC-295"]
 decisions: []
 compared: null
 ---
@@ -29,3 +29,6 @@ Détail et procédure : `docs/STORE.md` §4.1, §4.5, §4.6 (il fait foi).
 ## La révocation et le retrait d'urgence
 - `npm run plugin-review -- revoke|lift|revoke-key` : liste signée sur le poste, `serial` + 1, vérifiée avant dépôt.
 - `disable` sort la version du catalogue (fichiers en 410) ; `unverify` retire le sceau ; l'auteur est prévenu sauf `--quiet`.
+
+## Les annonces
+- Chaque version à revoir, signalement, nom trop proche, étiquette déplacée, retrait et révocation part aussi dans le salon privé des admins sur Discord ; les badges et les retraits dans le salon public fr et en (voir « Les annonces du store sur Discord », `docs/STORE.md` §4.7).

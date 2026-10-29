@@ -6,6 +6,8 @@ import { purgeDeleted } from './author';
 import { service } from './service';
 import type { Db } from './db';
 import { checkVersion, onTag, rereadTags, type Deps } from './submissions';
+import type { Env } from './config';
+import { deliver, deliverSummary, setOutbox, type DiscordJob, type SummaryJob } from './discord';
 
 // The long tasks (reading a repository, fetching an archive, checking it) go through a queue kept in PostgreSQL
 // (pg-boss): no Redis to host. One process serves the pages and works the queue; a worker of its own, later, is the
@@ -23,6 +25,12 @@ export const CHECK = 'store.check';
 export const TAG = 'store.tag';
 /** Once a week, the tags of the published versions read again: a tag moved without a webhook is caught. */
 export const REREAD = 'store.reread';
+/** A message to a channel of Escouade's Discord (`{ channel, event }`, server/utils/discord.ts), one per job. */
+export const DISCORD = 'store.discord';
+/** The one message of an author's announcements past the day's limit (`{ channel, login, day }`). */
+export const DISCORD_SUMMARY = 'store.discord-summary';
+/** Discord's failures tried again, spaced: 30 s, then twice longer each time, ten minutes at most, six tries. */
+const DISCORD_RETRIES = { retryLimit: 6, retryDelay: 30, retryBackoff: true, retryDelayMax: 600 } as const;
 /** The key of `service_state` where the beat is noted. */
 export const BEAT_KEY = 'queue.beat';
 
@@ -41,7 +49,12 @@ export async function lastBeat(db: Db): Promise<Date | null> {
  * Starts the queue on `url`, works the beat and sends the first one at once, and plans the nightly purge. With
  * `deps` (the App is set up), it also works the submissions: the checks, the tags of the webhooks, the weekly read.
  */
-export async function startQueue(url: string, db: Db, deps: Deps | null): Promise<PgBoss> {
+export async function startQueue(
+  url: string,
+  db: Db,
+  deps: Deps | null,
+  discord: { env: Env; site: string } | null = null,
+): Promise<PgBoss> {
   const boss = new PgBoss({ connectionString: url, schema: 'pgboss' });
   boss.on('error', (e) => console.error('[store] queue:', e instanceof Error ? e.message : e));
   await boss.start();
@@ -56,6 +69,23 @@ export async function startQueue(url: string, db: Db, deps: Deps | null): Promis
     console.info('[store] purged:', JSON.stringify({ ...(await purge(db)), deleted: await purgeDeleted(db, service.archives) }));
   });
   await boss.schedule(PURGE, '40 4 * * *');
+  if (discord) {
+    // The announcements on Discord, never in the author's request: the request writes the job, this worker sends it.
+    await boss.createQueue(DISCORD, DISCORD_RETRIES);
+    await boss.createQueue(DISCORD_SUMMARY, DISCORD_RETRIES);
+    const how = {
+      ...discord,
+      later: (job: SummaryJob, at: Date) =>
+        boss.send(DISCORD_SUMMARY, job, { startAfter: at, singletonKey: `${job.channel}:${job.login}:${job.day}` }),
+    };
+    await boss.work<DiscordJob>(DISCORD, async ([job]) => {
+      if (job) await deliver(db, job.data, how);
+    });
+    await boss.work<SummaryJob>(DISCORD_SUMMARY, async ([job]) => {
+      if (job) await deliverSummary(db, job.data, how);
+    });
+    setOutbox({ send: (job) => boss.send(DISCORD, job), env: discord.env });
+  }
   if (!deps) return boss;
 
   await boss.createQueue(CHECK);

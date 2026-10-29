@@ -2,6 +2,7 @@ import { and, eq, gte, sql } from 'drizzle-orm';
 import { reports } from '../db/schema';
 import { cleanEmail, note } from './accounts';
 import type { Db } from './db';
+import { announce } from './discord';
 import type { Mail } from './mail';
 
 // « Signaler » (docs/STORE.md §4.6): open to anyone, with an e-mail address and without a GitHub account, as the
@@ -50,10 +51,11 @@ export async function fileReport(
     .values({ pluginId: ctx.pluginId, version: ctx.version, reason, details, email, lang: ctx.lang, createdAt: now })
     .returning({ id: reports.id });
   await note(db, 'report.filed', { accountId: null }, { report: row!.id, plugin: ctx.pluginId, version: ctx.version, reason });
+  void announce({ kind: 'report', report: row!.id });
   return { id: row!.id, email };
 }
 
-const REASON_WORDS: Record<Reason, { fr: string; en: string }> = {
+export const REASON_WORDS: Record<Reason, { fr: string; en: string }> = {
   malicious: { fr: 'Malveillant', en: 'Malicious' },
   misleading: { fr: 'Ne fait pas ce qu’il dit', en: 'Does not do what it says' },
   permissions: { fr: 'Permissions trompeuses', en: 'Misleading permissions' },

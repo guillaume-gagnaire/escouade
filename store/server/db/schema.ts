@@ -341,3 +341,20 @@ export const adminTokens = pgTable(
   },
   (t) => [index('admin_tokens_account').on(t.accountId)],
 );
+
+/**
+ * The public announcements on Discord of an author's new plugins and versions, by public channel and by UTC day
+ * (docs/STORE.md, §4.7): past the limit, the messages are not sent and their lines kept in `skipped`, for the one
+ * message that sums them up at the end of the day. Nothing else of the author: their login is public on the store.
+ */
+export const discordQuota = pgTable(
+  'discord_quota',
+  {
+    channel: text('channel').notNull(),
+    login: text('login').notNull(),
+    day: date('day', { mode: 'string' }).notNull(),
+    sent: integer('sent').notNull().default(0),
+    skipped: jsonb('skipped').$type<string[]>().notNull().default([]),
+  },
+  (t) => [primaryKey({ columns: [t.channel, t.login, t.day] })],
+);

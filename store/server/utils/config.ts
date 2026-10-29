@@ -39,6 +39,22 @@ export const FEATURES: readonly Feature[] = [
     vars: ['STORE_ADMINS'],
     without: 'the review queue has no administrator',
   },
+  // The channels of Escouade's Discord (server/utils/discord.ts): each its own webhook, each optional.
+  {
+    name: 'discord admin',
+    vars: ['STORE_DISCORD_ADMIN_WEBHOOK'],
+    without: 'the administrators’ channel gets nothing',
+  },
+  {
+    name: 'discord fr',
+    vars: ['STORE_DISCORD_PUBLIC_WEBHOOK_FR'],
+    without: 'the French public channel gets nothing',
+  },
+  {
+    name: 'discord en',
+    vars: ['STORE_DISCORD_PUBLIC_WEBHOOK_EN'],
+    without: 'the English public channel gets nothing',
+  },
 ];
 
 const set = (env: Env, name: string) => (env[name] ?? '').trim() !== '';

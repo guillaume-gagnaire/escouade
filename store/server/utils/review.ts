@@ -8,6 +8,7 @@ import { forgetCatalog } from './catalog';
 import type { CheckResult, Text } from './checks';
 import { admins, type Env } from './config';
 import type { Db } from './db';
+import { announce } from './discord';
 import { localized, permissionsOf, type Permission } from './listing';
 import { reviewMail, sendMail, type ReviewEvent } from './mail';
 import type { PublicKey } from './minisign';
@@ -621,6 +622,7 @@ export async function acceptSignature(
   );
   const [p] = await db.select({ accountId: plugins.accountId }).from(plugins).where(eq(plugins.id, id));
   await tellAuthor(db, p?.accountId ?? null, how, 'verified', { plugin: id, version: number });
+  void announce({ kind: 'verified', plugin: id, version: number });
   return { ok: true, keyId: checked.key.id, signedAt: row.signedAt.toISOString() };
 }
 
@@ -646,8 +648,14 @@ export async function depositRevocations(
   if ('error' in taken) return taken;
   forgetCatalog();
   await note(db, 'review.revocations', { accountId: admin.id, githubId: admin.githubId }, { serial: taken.serial }, now);
-  if (input.notify === false) return taken;
   const list = parseRevocations(input.json) as RevocationList;
+  // Discord: each new entry to the administrators; a new removal to the public too, unless the author is not told.
+  const known = new Set((was?.entries ?? []).map((e) => JSON.stringify(e)));
+  for (const entry of list.entries.filter((e) => !known.has(JSON.stringify(e)))) {
+    void announce({ kind: 'revoked', serial: taken.serial, entry, quiet: input.notify === false });
+    if (entry.action === 'disable' && input.notify !== false) void announce({ kind: 'removed', entry });
+  }
+  if (input.notify === false) return taken;
   const ids = [...new Set(list.entries.map((e) => e.id))];
   if (!ids.length) return taken;
   const rows = await db
