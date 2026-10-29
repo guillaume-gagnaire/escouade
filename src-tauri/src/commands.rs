@@ -309,6 +309,13 @@ pub fn plugin_load_dev(
         .load_dev(std::path::Path::new(path.trim()), crate::i18n::ui())
 }
 
+/// The icon of an installed plugin (PLG-13), by its id alone: a `data:image/png` address, or
+/// none (the window draws its letters). Réglages › Plugins and the store in the app show it.
+#[tauri::command(async)]
+pub fn plugin_icon(core: CoreState, id: String) -> Result<Option<String>, String> {
+    core.plugins.icon(&id)
+}
+
 /// Uninstalls a plugin: its copy removed (a folder in development is left where it is).
 #[tauri::command(async)]
 pub fn plugin_remove(core: CoreState, id: String) -> Result<bool, String> {

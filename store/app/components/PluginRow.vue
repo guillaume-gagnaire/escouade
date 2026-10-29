@@ -11,7 +11,7 @@ const e = computed(() => props.entry);
 
 <template>
   <NuxtLink class="row" :to="to.plugin(e.id)">
-    <PluginTile :mark="e.mark" :hue="e.hue" />
+    <PluginTile :mark="e.mark" :hue="e.hue" :icon="e.icon" :logo="e.logo" />
     <div class="body">
       <div class="name">
         <b v-if="marks"

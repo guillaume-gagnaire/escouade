@@ -21,6 +21,8 @@ import {
 } from '../../server/utils/submissions';
 import { sha256 } from '../../server/utils/versions';
 import { authorPage, catalog, pluginPage, search } from '../../server/utils/listing';
+import { buildCatalog } from '../../server/utils/catalog';
+import { authorPlugins } from '../../server/utils/author';
 import { fileReport } from '../../server/utils/reports';
 import { TRAPPED } from '../fake/catalog.mjs';
 import { attestation, pluginFiles, png, tarball } from '../fake/plugins.mjs';
@@ -212,6 +214,69 @@ describe.skipIf(!url)('the submission', () => {
     const again = await startSubmission(db, deps, sam, { repo: REPO, tag: 'v0.3.0' }, T0);
     expect(again).toEqual({ id, again: true });
     expect(gh.calls.filter((c) => c.startsWith('tarball'))).toHaveLength(1);
+  });
+
+  it('keeps the icon re-encoded at 256 and 64 px without its metadata, in version.json, the catalogue and the pages (PLG-13)', async () => {
+    const icon = png(512, 512, { text: 'Comment\0drawn at 48.85,2.35' });
+    gh.push(REPO, 'v0.3.0', pluginFiles(REPO, { manifest: { icon: 'store/icon.png' }, files: { 'store/icon.png': icon } }));
+    const { id, state } = await submit(sam, REPO, 'v0.3.0');
+    expect(state).toBe('ready');
+    const [v] = await q('select icon, version_json from versions where id = $1', [id]);
+    expect(Object.keys(v.icon).sort()).toEqual(['256', '64']);
+    for (const [side, hash] of Object.entries(v.icon as Record<string, string>)) {
+      const kept = await readFile(join(dir, 'sha256', hash.slice(0, 2), `${hash}.png`));
+      expect(sha256(kept)).toBe(hash);
+      expect(imageInfo(kept)).toEqual({ format: 'png', width: Number(side), height: Number(side) });
+      expect(kept.includes(Buffer.from('drawn at'))).toBe(false);
+    }
+    expect(JSON.parse(v.version_json).icon).toEqual(v.icon);
+
+    await publishVersion(db, sam, id!, { categories: ['notifications'], review: 'on' });
+    const c = await buildCatalog(db);
+    const entry = c.plugins[0]!.versions[0]!;
+    expect(entry.icon).toEqual(v.icon);
+    expect(entry.files.icon).toEqual({ '256': `/files/${v.icon['256']}.png`, '64': `/files/${v.icon['64']}.png` });
+    // The tiles of every page: home and search, the plugin's page, its author's.
+    expect((await catalog(db)).find((e) => e.id === 'io.github.sroux.escouade-ntfy')!.icon).toEqual(v.icon);
+    expect((await pluginPage(db, dir, 'io.github.sroux.escouade-ntfy'))!.entry.icon).toEqual(v.icon);
+    expect((await authorPage(db, 'sroux'))!.plugins[0]!.icon).toEqual(v.icon);
+    expect((await authorPlugins(db, sam))[0]!.icon).toEqual(v.icon);
+
+    // Without an icon: none anywhere, the letters stay; version.json says nothing of it.
+    gh.push(REPO, 'v0.4.0', pluginFiles(REPO, { manifest: { version: '0.4.0' } }));
+    const plain = await submit(sam, REPO, 'v0.4.0');
+    const [w] = await q('select icon, version_json from versions where id = $1', [plain.id]);
+    expect(w.icon).toBeNull();
+    expect('icon' in JSON.parse(w.version_json)).toBe(false);
+  });
+
+  it('refuses a version whose icon does not hold, with the reason, and keeps none of its files (PLG-13)', async () => {
+    const tries: [string, Record<string, unknown>, Record<string, unknown>, RegExp][] = [
+      ['not square', { icon: 'icon.png' }, { 'icon.png': png(300, 256) }, /n'est pas carrée/],
+      ['too small', { icon: 'icon.png' }, { 'icon.png': png(128, 128) }, /moins de 256 px/],
+      ['an SVG', { icon: 'icon.svg' }, { 'icon.svg': '<svg><script>alert(1)</script></svg>' }, /n'est pas un PNG/],
+      ['missing', { icon: 'icon.png' }, {}, /n'est pas un fichier du dossier/],
+    ];
+    // A PNG whose header holds but whose pixels do not decode: its data cut short.
+    const broken = png(512, 512);
+    tries.push(['undecodable', { icon: 'icon.png' }, { 'icon.png': broken.subarray(0, broken.length - 30) }, /ne se décode pas/]);
+    let n = 0;
+    for (const [what, manifest, files, why] of tries) {
+      const tag = `v0.${++n}.0`;
+      gh.push(REPO, tag, pluginFiles(REPO, { manifest: { version: `0.${n}.0`, ...manifest }, files }));
+      const { id, state } = await submit(sam, REPO, tag);
+      expect(state, what).toBe('rejected');
+      const view = (await versionView(db, sam, id!))!;
+      const failed = view.checks.filter((c) => c.status !== 'pass');
+      expect(
+        failed.map((c) => c.key),
+        what,
+      ).toEqual(['manifest']);
+      expect(failed[0]!.problems.map((p) => p.path)).toEqual(['icon']);
+      expect(failed[0]!.problems[0]!.why.fr, what).toMatch(why);
+      const [v] = await q('select icon, version_json from versions where id = $1', [id]);
+      expect(v).toEqual({ icon: null, version_json: null });
+    }
   });
 
   it('publishes on the author’s click: the plugin made with its categories, unverified, in the review queue', async () => {

@@ -71,6 +71,8 @@ export interface VersionFile {
   manifest_sha256: string;
   /** What the plugin speaks and where it was tried (docs/STORE.md §8.1): the app picks the last compatible version. */
   escouade: { api: string; min: string; max?: string };
+  /** Its icon re-encoded by the store (PLG-13), the SHA-256 of its PNG at 256 and at 64 px; absent without one. */
+  icon?: { '256': string; '64': string };
 }
 
 /** `version.json` as the store serves it, and its SHA-256: the version's fingerprint. */

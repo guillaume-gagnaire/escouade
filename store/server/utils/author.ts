@@ -10,6 +10,7 @@ import type { Db } from './db';
 import { authorMail, sendMail, type AuthorEvent } from './mail';
 import type { Plugin, Version } from './submissions';
 import { compareVersions } from './versions';
+import type { Icon } from '../../shared/tile';
 
 // The author's space (docs/STORE.md, §2.2; the preview's #account): their plugins with their state, a version found
 // on a new tag that waits for their click, the versions of a plugin and their installs, and what they may do of it —
@@ -115,10 +116,27 @@ const newest = (list: Version[]) =>
     return pa !== pb ? (pa ? 1 : -1) : compareVersions(b.version ?? '0.0.0', a.version ?? '0.0.0');
   })[0];
 
+/** The icons of `ids` (PLG-13), each its newest published version's: the tiles of the offers and claims. */
+async function iconsOf(db: Db, ids: string[]): Promise<Map<string, Icon>> {
+  if (!ids.length) return new Map();
+  const rows = await db
+    .select()
+    .from(versions)
+    .where(and(inArray(versions.pluginId, ids), eq(versions.state, 'published')));
+  const out = new Map<string, Icon>();
+  for (const id of ids) {
+    const icon = newest(rows.filter((v) => v.pluginId === id))?.icon;
+    if (icon) out.set(id, icon);
+  }
+  return out;
+}
+
 /** A row of the account's table. */
 export interface PluginRow {
   id: string;
   name: string;
+  /** Its icon, by the version its name is taken from; null draws its letters. */
+  icon: Icon | null;
   state: PluginState;
   /** The version the state speaks of: the latest published, else the last submitted. */
   version: string | null;
@@ -197,6 +215,7 @@ export async function authorPlugins(db: Db, account: Account, now = new Date()):
     return {
       id,
       name: textOf(named?.manifest?.name) || id,
+      icon: named?.icon ?? null,
       state,
       version: shown?.version ?? null,
       installs: c.total,
@@ -225,6 +244,8 @@ export interface Pending {
   id: number;
   plugin: string;
   name: string;
+  /** The icon of the version waiting. */
+  icon: Icon | null;
   version: string;
   tag: string;
   commit: string;
@@ -254,6 +275,7 @@ export async function pendingVersions(db: Db, account: Account, now = new Date()
       id: v.id,
       plugin: plugin.id,
       name: textOf(v.manifest?.name) || plugin.id,
+      icon: v.icon ?? null,
       version: v.version!,
       tag: v.tag,
       commit: v.commit,
@@ -273,7 +295,11 @@ export async function transferOffers(db: Db, account: Account) {
     .from(plugins)
     .leftJoin(accounts, eq(accounts.id, plugins.accountId))
     .where(and(eq(plugins.transferTo, account.id), isNull(plugins.deletedAt)));
-  return rows.map((r) => ({ id: r.id, from: r.from, at: r.at }));
+  const icons = await iconsOf(
+    db,
+    rows.map((r) => r.id),
+  );
+  return rows.map((r) => ({ id: r.id, from: r.from, at: r.at, icon: icons.get(r.id) ?? null }));
 }
 
 /**
@@ -294,7 +320,11 @@ export async function repoClaims(db: Db, account: Account) {
         sql`${plugins.accountId} is distinct from ${account.id}`,
       ),
     );
-  return rows;
+  const icons = await iconsOf(
+    db,
+    rows.map((r) => r.id),
+  );
+  return rows.map((r) => ({ ...r, icon: icons.get(r.id) ?? null }));
 }
 
 /** A plugin of the account, as its management shows it: its versions, their installs, the weeks' chart. */

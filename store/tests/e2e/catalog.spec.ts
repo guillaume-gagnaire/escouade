@@ -293,8 +293,9 @@ test('an author’s page lists their plugins; Escouade’s own have theirs, with
   await expect(page.locator('.page-title')).toContainText(seeded.login);
   await expect(page.locator('.rows .row')).toHaveCount(3);
   await expect(page.getByRole('link', { name: 'Son profil GitHub' })).toHaveAttribute('href', `https://github.com/${seeded.login}`);
-  // Initials, never an image from GitHub.
-  expect(await page.locator('img').count()).toBe(0);
+  // Initials, never an image from GitHub: the only images are the plugins' icons, from the store itself.
+  for (const src of await page.locator('img').evaluateAll((all) => all.map((i) => i.getAttribute('src'))))
+    expect(src).toMatch(/^\/files\/[0-9a-f]{64}\.png$/);
   await page.goto('/plugins/dev.escouade.github');
   await expect(page.locator('.plug-head')).toContainText('Livré avec Escouade');
   await expect(page.locator('.aside')).toContainText('Lance un programme d’Escouade');
@@ -305,3 +306,77 @@ test('an author’s page lists their plugins; Escouade’s own have theirs, with
   expect((await page.goto('/plugins/dev.nobody.nothing'))?.status()).toBe(404);
   expect((await page.goto('/en/authors/nobody-at-all-here'))?.status()).toBe(404);
 });
+
+for (const scheme of ['dark', 'light'] as const)
+  test(`a plugin’s icon takes its letters’ place on every page, from the store itself; without one, the letters (${scheme})`, async ({
+    page,
+  }) => {
+    const violations: string[] = [];
+    page.on('console', (m) => /Content Security Policy|Refused to/i.test(m.text()) && violations.push(m.text()));
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.goto(`${PREVIEW}${scheme === 'light' ? '?theme=light' : ''}#search`);
+    const preview = await measure(page, { tile: '.row .tile' });
+    const nord = `Nord ${seeded.run}`;
+    const ntfy = `ntfy ${seeded.run}`;
+    for (const path of [`/search?q=${seeded.run}`, `/authors/${seeded.login}`, `/en/search?q=${seeded.run}`]) {
+      await page.goto(path);
+      const row = page.locator('.row', { hasText: nord }).first();
+      const img = row.locator('.tile img');
+      await expect(img, path).toHaveAttribute('src', /^\/files\/[0-9a-f]{64}\.png$/);
+      await expect.poll(() => img.evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth), path).toBe(256);
+      expect(await row.locator('.tile').textContent()).toBe('');
+      // The same size and corners as a tile of letters, as the preview draws it.
+      const tile = await row.locator('.tile').evaluate((el) => ({
+        radius: getComputedStyle(el).borderTopLeftRadius,
+        height: Math.round(el.getBoundingClientRect().height),
+      }));
+      expect(tile).toEqual({ radius: preview.tile!.radius, height: preview.tile!.height });
+      // Without an icon, its two letters on its hue.
+      const plain = page.locator('.row', { hasText: ntfy }).first().locator('.tile');
+      await expect(plain).toHaveText('nt');
+      expect(await plain.locator('img').count()).toBe(0);
+    }
+    // The plugin's page, its large tile at 256 px; the home page's small tiles at 64 px.
+    await page.goto(`/plugins/${seeded.ids.nord}`);
+    await expect(page.locator('.plug-head .tile img')).toHaveAttribute('src', /^\/files\/[0-9a-f]{64}\.png$/);
+    await expect.poll(() => page.locator('.plug-head .tile img').evaluate((i: HTMLImageElement) => i.naturalWidth)).toBe(256);
+    await page.goto(`/plugins/${seeded.ids.slack}`);
+    expect(await page.locator('.plug-head .tile img').count()).toBe(0);
+    await page.goto('/');
+    const small = page.locator('a', { hasText: nord }).locator('.tile.sm img').first();
+    if (await small.count()) await expect.poll(() => small.evaluate((i: HTMLImageElement) => i.naturalWidth)).toBe(64);
+    expect(violations).toEqual([]);
+  });
+
+test('an icon is served by the store under its SHA-256, immutable, as an image and nothing else', async ({ page, request }) => {
+  await page.goto(`/plugins/${seeded.ids.nord}`);
+  const src = (await page.locator('.plug-head .tile img').getAttribute('src'))!;
+  const r = await request.get(src);
+  expect(r.status()).toBe(200);
+  expect(r.headers()['content-type']).toBe('image/png');
+  expect(r.headers()['cache-control']).toBe('public, max-age=31536000, immutable');
+  expect(r.headers()['content-security-policy']).toBe("default-src 'none'; sandbox");
+  const { createHash } = await import('node:crypto');
+  expect(
+    `/files/${createHash('sha256')
+      .update(await r.body())
+      .digest('hex')}.png`,
+  ).toBe(src);
+});
+
+for (const scheme of ['dark', 'light'] as const)
+  test(`Escouade’s own show their brand where its rules allow it, else their category’s glyph (${scheme})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.goto('/plugins/dev.escouade.github');
+    const github = page.locator('.plug-head .tile.brand.github');
+    await expect(github.locator('svg path')).toHaveCount(1);
+    // GitHub's mark in white or in black only, never recoloured.
+    expect(await github.evaluate((el) => getComputedStyle(el).color)).toBe(scheme === 'dark' ? 'rgb(255, 255, 255)' : 'rgb(0, 0, 0)');
+    await page.goto('/plugins/dev.escouade.jira');
+    await expect(page.locator('.plug-head .tile.glyph.source svg path')).toHaveCount(2);
+    await page.goto('/plugins/dev.escouade.claude-code');
+    await expect(page.locator('.plug-head .tile.glyph.harness')).toBeVisible();
+    await page.goto('/authors/escouade');
+    await expect(page.locator('.rows .row .tile.brand, .rows .row .tile.glyph')).toHaveCount(17);
+    expect(await page.locator('.rows .row img').count()).toBe(0);
+  });

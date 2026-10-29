@@ -271,3 +271,39 @@ fn the_command_tests_and_validates_a_folder() {
     assert_eq!(cli::main(args(&[])), 2);
     assert_eq!(cli::main(args(&["--help"])), 0);
 }
+
+/// A folder of the fake plugin whose icon is a PNG of `width` × 256 px.
+fn with_icon(name: &str, width: u32) -> PathBuf {
+    let dir = fake(name, &[]);
+    let text = std::fs::read_to_string(dir.join("escouade-plugin.json")).unwrap();
+    let mut m: serde_json::Value = serde_json::from_str(&text).unwrap();
+    m["icon"] = json!("icon.png");
+    std::fs::write(dir.join("escouade-plugin.json"), m.to_string()).unwrap();
+    let mut png = vec![0u8; 64];
+    png[..16].copy_from_slice(b"\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR");
+    png[16..20].copy_from_slice(&width.to_be_bytes());
+    png[20..24].copy_from_slice(&256u32.to_be_bytes());
+    std::fs::write(dir.join("icon.png"), &png).unwrap();
+    dir
+}
+
+/// PLG-13: the bench reads the icon's file of the folder, as the app does when it installs it.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_icon_that_does_not_hold_fails_the_manifest() {
+    let r = bench(&with_icon("icon", 300)).await;
+    assert_eq!(verdict(&r, Scenario::Manifest), Verdict::Fail);
+    let said = said(&r, Scenario::Manifest);
+    assert!(said.contains("`icon`"), "{said}");
+}
+
+/// And `escouade-plugin validate` too.
+#[test]
+fn validate_reads_the_icon_of_the_folder() {
+    #[cfg(windows)]
+    crate::paths::trim_test_path();
+    let path = |p: PathBuf| p.to_string_lossy().into_owned();
+    let bad = path(with_icon("icon-bad", 300));
+    assert_eq!(cli::main(vec!["validate".into(), bad]), 1);
+    let good = path(with_icon("icon-good", 256));
+    assert_eq!(cli::main(vec!["validate".into(), good]), 0);
+}

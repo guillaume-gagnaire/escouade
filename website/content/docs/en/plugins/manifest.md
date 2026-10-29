@@ -15,6 +15,7 @@ Every Escouade plugin describes itself in an escouade-plugin.json file at the ro
   "license": "MIT",
   "repository": "https://github.com/exemple/escouade-slack",
   "escouade": { "api": "1", "min": "2.1.0" },
+  "icon": "assets/icon.png",
   "run": { "command": "bin/escouade-slack", "windows": "bin/escouade-slack.exe" },
   "activation": ["event:ticket.column"],
   "permissions": {
@@ -43,6 +44,7 @@ The `$schema` line gives completion and checks in VS Code and the editors that r
 | `license` | no | Its license, as an SPDX identifier: `MIT`, `Apache-2.0`. |
 | `repository` | no | The address of its repository, in `https://`. |
 | `escouade` | yes | The Escouade it was written for: `api`, `min` and `max` (see below). |
+| `icon` | no | Its logo: a square PNG of its folder, 256 px a side at least, 1 MB at most (see below). |
 | `run` | no | Its program. Without one, the plugin is declarative: nothing runs. |
 | `activation` | no | What starts it, for example `event:ticket.column`. Without an activation, its program does not run. |
 | `permissions` | no | What it asks for: `events`, `network`, `secrets`, `commands` (lists) and `decide` (`true` or `false`). |
@@ -60,6 +62,12 @@ The `$schema` line gives completion and checks in VS Code and the editors that r
 - `max` (optional): the newest. `2.4` covers every 2.4.x.
 
 A plugin of another API, or for an Escouade out of its range, stays installed but disabled, and Escouade says why: for example “This plugin needs Escouade 2.3.0 or newer; you have 2.1.0. Update Escouade.”
+
+### The icon
+
+`icon` is the path, in the plugin’s folder, of its logo: a **square PNG of 256 px a side at least** (512 advised), of **1 MB at most**. No SVG (it may carry a script), no remote image, no path that leaves the folder (absolute, or climbing up with `..`). Escouade and the marketplace read its header, and refuse the plugin saying why: “`icon` is not square (a square PNG of 256 px at least, 512 advised).”, “`icon` weighs over 1 MB.”, “`icon` is no PNG (no SVG nor JPEG: a square PNG of 256 px at least).”, “`icon` is no file of the plugin’s folder.”
+
+The marketplace re-encodes it without its metadata at 256 and 64 px, and shows it in place of the two letters of the plugin’s tile. Without an icon, the tile keeps its letters.
 
 ### The program
 

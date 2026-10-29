@@ -41,7 +41,8 @@ async function keep(dir, bytes, ext) {
 
 /**
  * Seeds an author and three plugins: Slack (a program, two versions, review asked, a trapped README with an image),
- * ntfy (declarative, a webhook), Nord (a theme, asks for nothing). Gives their ids and the author's login.
+ * ntfy (declarative, a webhook), Nord (a theme, asks for nothing, with its icon: PLG-13). Gives their ids and the
+ * author's login.
  */
 export async function seedCatalog({ url = process.env.DATABASE_URL, archives = process.env.ARCHIVE_DIR ?? './.data/archives' } = {}) {
   const run = randomBytes(3).toString('hex');
@@ -111,7 +112,8 @@ export async function seedCatalog({ url = process.env.DATABASE_URL, archives = p
         description: { fr: 'La palette Nord, en clair et en sombre.', en: 'The Nord palette, light and dark.' },
         contributes: { themes: [{ id: 'nord', name: 'Nord', path: 'nord.json' }] },
       },
-      files: { 'README.md': '# Nord\n' },
+      files: { 'README.md': '# Nord\n', 'icon.png': png(512, 512) },
+      icon: 'icon.png',
     },
   ];
   const repoBase = 80_000_000 + Number.parseInt(run, 16);
@@ -138,18 +140,21 @@ export async function seedCatalog({ url = process.env.DATABASE_URL, archives = p
         escouade: { api: '1', min: '2.1.0' },
         ...p.manifest,
         ...(p.store ? { store: p.store } : {}),
+        ...(p.icon ? { icon: p.icon } : {}),
       };
       const files = { 'escouade-plugin.json': JSON.stringify(manifest), LICENSE: MIT, ...p.files };
       const gz = tarball(files, { commit, top: `${p.repo.replace('/', '-')}-${commit.slice(0, 7)}` });
       const archive = await keep(archives, gz, '.tar.gz');
       const shot = p.files['store/1.png'] ? await keep(archives, p.files['store/1.png'], '.png') : null;
+      // The icon as the checks keep it, at 256 and 64 px (its re-encoding is the Vitest's).
+      const icon = p.icon ? { 256: await keep(archives, png(256, 256), '.png'), 64: await keep(archives, png(64, 64), '.png') } : null;
       // Published now, one minute apart: the newest of the base, as « Nouveaux » shows them.
       const published = new Date(Date.now() - (p.versions.length - i) * 60_000 - n * 1000);
       await q(
         `insert into versions (plugin_id, account_id, installation_id, repo_id, repo_full_name, tag, "commit", version, state,
            manifest, manifest_sha256, archive_sha256, archive_size, binaries, screenshots, version_json, version_sha256, review,
-           checked_at, published_at)
-         values ($1, $2, 1, $3, $4, $5, $6, $7, 'published', $8, $9, $10, $11, '{}', $12, '{}', $13, $14, $15, $15)`,
+           checked_at, published_at, icon)
+         values ($1, $2, 1, $3, $4, $5, $6, $7, 'published', $8, $9, $10, $11, '{}', $12, '{}', $13, $14, $15, $15, $16)`,
         [
           p.id,
           accountId,
@@ -166,6 +171,7 @@ export async function seedCatalog({ url = process.env.DATABASE_URL, archives = p
           sha256(`${p.id}${version}${run}`),
           p.review,
           published,
+          icon ? JSON.stringify(icon) : null,
         ],
       );
     }

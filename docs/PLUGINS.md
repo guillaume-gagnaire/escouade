@@ -329,6 +329,7 @@ Un fichier `escouade-plugin.json` à la racine du dossier du plugin (du JSON, co
   "license": "MIT",
   "repository": "https://github.com/exemple/escouade-slack",
   "escouade": { "api": "1", "min": "2.1.0" },
+  "icon": "assets/icon.png",
   "run": { "command": "bin/escouade-slack", "windows": "bin/escouade-slack.exe" },
   "activation": ["event:ticket.column", "event:agent.waiting"],
   "permissions": {
@@ -345,6 +346,7 @@ Un fichier `escouade-plugin.json` à la racine du dossier du plugin (du JSON, co
 
 - `id` : unique, en nom de domaine inversé (pas de collision entre deux auteurs) ; `name` et `description` dans les deux langues, l'anglais par défaut ;
 - `escouade.api` : la version **majeure** du protocole qu'il parle ; `min` (et `max` facultatif) : les versions d'Escouade où il a été essayé. Un plugin d'une API que l'app ne sert plus est désactivé, et la raison montrée, comme une version trop ancienne d'un harness (`Tested`, `oldest_reason`) ;
+- `icon` : facultatif (PLG-13, ESC-292). Son logo, un chemin relatif dans le dossier du plugin vers un **PNG carré de 256 px de côté au moins** (512 conseillé), **1 Mo au plus**. Ni SVG (il peut porter du script), ni image distante, ni chemin hors du dossier (`..`, absolu, lecteur, adresse). Les deux lecteurs (`src-tauri/src/plugins/manifest.rs` et `schemas/plugin-manifest.mjs`) en lisent l'en-tête sans le décoder, sur le même corpus (`tests/fixtures/plugins/manifests.json` : absent, introuvable, pas carré, trop petit, trop lourd, pas un PNG, SVG, `..`, absolu, distant), et disent chaque refus en français et en anglais (`file`, `png`, `heavy`, `square`, `small`, `path`). Le store le décode (4096 px de côté au plus) et le réencode sans métadonnées en 256 et 64 px (docs/STORE.md §3.3) ; l'app le lit dans le dossier du plugin installé par la commande `plugin_icon`, qui ne prend que l'id du plugin et ne sort jamais de son dossier (un lien qui en sort est refusé). Sans icône, la tuile garde ses deux lettres ;
 - `run` : facultatif. Sans lui, le plugin est **déclaratif** : rien ne s'exécute ;
 - `activation` : ce qui le démarre (un fait, une commande, l'ouverture des réglages) ; sans activation, il ne tourne pas ;
 - `permissions` : ce qu'il demande, montré avant l'installation (§3.4) ;
@@ -423,6 +425,23 @@ Les §1 à §3 font des plugins des **ajouts** : ils viennent à côté des int�
 - **Son manifeste** est un `escouade-plugin.json` du même schéma, avec `"run": { "command": "{escouade}/escouade-plugins", "args": ["github"] }`. L'origine (`builtin`) est donnée par l'app, jamais par le manifeste. Les ids `dev.escouade.*` sont réservés : le store (ESC-202) les refuse à la soumission, l'app refuse un dossier qui les prend.
 - **Dans le dépôt de l'app, chacun lisible seul** (décidé par l'utilisateur le 2026-10-29) : pas de dépôt séparé, le protocole et la livraison signée restant ceux de l'app. Mais chaque dossier `plugins/<id>/` se lit comme le dépôt d'un plugin tiers : son `escouade-plugin.json`, un `README.md` (ce qu'il fait, ses permissions en mots, ses comptes, comment le lancer seul contre le faux Escouade de PLG-9) et ses tests. Il sert d'exemple aux auteurs, en plus de ceux de PLG-10. Sa page sur le store pointe vers ce dossier à l'étiquette de la dernière version d'Escouade (`github.com/guillaume-gagnaire/escouade/tree/v<version>/plugins/<id>`), comme le dépôt et le commit d'un plugin tiers. Un test de la CI vérifie que chaque dossier a son manifeste et son README, et que la liste du store (`store/server/utils/builtin.ts`) est celle des dossiers.
 - **Livrés et mis à jour avec l'app.** Leur version est celle d'Escouade ; ils n'ont pas de mise à jour à part. `escouade-plugins` est signé comme l'app (Authenticode sous Windows, la signature et la notarisation de chaque binaire sous macOS, la clé de l'updater de Tauri pour `latest.json`), et l'app vérifie avant de le lancer que c'est bien le sien (son chemin dans le dossier de l'app, et sa signature là où le système la vérifie). Ils ont le badge « Livré avec Escouade », qui vaut « Vérifié par Escouade » (ESC-202). Un correctif vient avec une release ; pas de liste de révocation pour eux.
+- **Leur logo** (décidé par l'utilisateur le 2026-10-29 sur l'aperçu `design/plugin-logos/`, ESC-292) : le logo de la marque quand ses règles publiées permettent de l'afficher pour dire qu'on s'intègre à elle, sans rien demander ; sinon le glyphe de sa catégorie sur la tuile du logo d'Escouade (l'invite pour un harness, la carte pour une source de tickets, la branche pour un hébergeur). Dans le doute, jamais la marque. Les tracés des marques viennent de Simple Icons 16.36 (CC0 pour le tracé) ; le store les dessine dans la page (`store/shared/marks.ts`). Pages relues le 2026-10-29 :
+
+  | Plugin | Page relue | Ce qu'elle dit | Retenu |
+  |---|---|---|---|
+  | GitHub | brand.github.com/foundations/logo | « Use a permitted GitHub logo to inform others that your project integrates with GitHub » ; l'Invertocat en blanc ou en noir, jamais recoloré, déformé ni accolé à autre chose ; pas de partenariat suggéré | Marque, blanche sur sombre, noire sur clair |
+  | OpenCode | github.com/anomalyco/opencode | Dépôt sous MIT, aucune règle de marque | Marque |
+  | Gitea et Forgejo | github.com/go-gitea/gitea (LICENSE MIT) ; codeberg.org/forgejo/meta, branding/README.md | Logo de Gitea dans un dépôt MIT ; celui de Forgejo en CC BY-SA 4.0 (à créditer) | Marque de Gitea, telle quelle |
+  | Copilot CLI | brand.github.com/foundations/logo | Rien sur l'icône de Copilot pour un tiers (« no longer has a standalone logo ») | Catégorie |
+  | GitLab | about.gitlab.com/press/press-kit → règles de marque du handbook | La page des règles ne se lit pas sans compte GitLab | Catégorie |
+  | Jira, Trello, Bitbucket | atlassian.design/foundations/logos | Rien sur l'usage par un tiers ; les logos d'intégration sont réservés aux employés d'Atlassian | Catégorie |
+  | ClickUp | clickup.com/brand | Un logo partenaire « may be approved » : un accord | Catégorie |
+  | Cursor | cursor.com/brand | Des logos à télécharger, aucune règle d'usage | Catégorie |
+  | Claude Code, Mistral Vibe, Linear | claude.ai, mistral.ai, linear.app | Pas de page de règles notée par Simple Icons | Catégorie |
+  | Codex, Azure DevOps | — | Retirés de Simple Icons à la demande d'OpenAI et de Microsoft | Catégorie |
+  | Antigravity CLI, Gemini CLI | about.google/brand-resource-center | Une marque Google demande en général une autorisation | Catégorie |
+
+  Une marque passe de la catégorie à son logo quand sa page le permet : on la relit, on note ici la date, et `shared/marks.ts` gagne son tracé.
 - **Activés partout par défaut**, projets privés compris : ils l'étaient avant d'être des plugins, et leur code est celui d'Escouade. C'est la seule exception au §3.3.
 - **Ce que l'utilisateur voit.** Réglages › Plugins les liste en tête, groupés sous « Livrés avec Escouade », avec la même fiche que les autres (contributions, permissions en mots, comptes, état du process, journal). Les écrans d'aujourd'hui gardent leur place : Réglages › Harness, l'onglet Intégrations et la section des hébergeurs deviennent des **vues par point d'extension** des plugins actifs, de première main ou tiers. On cherche « GitHub » dans les intégrations, pas dans une liste de plugins.
 - **Les désactiver.** Un interrupteur pour l'app, ou par projet, comme les autres. Ils ne se désinstallent pas. Un harness désactivé : ses agents restent, marqués « harness absent », leurs données gardées (comme un harness de plugin désinstallé, PLG-6) ; on ne peut plus en créer. Une source désactivée : les tickets importés restent, la synchro s'arrête et la carte dit pourquoi. Un hébergeur désactivé : les PR ne sont plus suivies, la carte le dit ; rien n'est perdu.

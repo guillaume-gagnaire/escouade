@@ -1,3 +1,4 @@
+import type { Logo } from '../../shared/marks';
 import type { Text } from './checks';
 
 // The plugins of Escouade's own hand (docs/PLUGINS.md §4.3): its harnesses, its Kanban sources and its code hosts,
@@ -16,6 +17,9 @@ export interface Builtin {
   secrets: boolean;
   /** Its page in Escouade's documentation. */
   docs: Text;
+  /** Its tile (PLG-13): its brand's mark where the brand's published rules allow it without asking, else its
+   * category's glyph (shared/marks.ts, docs/PLUGINS.md §3.1). */
+  logo: Logo;
 }
 
 const t = (fr: string, en: string): Text => ({ fr, en });
@@ -29,6 +33,7 @@ const harness = (id: string, name: string, fr: string, en: string): Builtin => (
   network: [],
   secrets: false,
   docs: doc('harness'),
+  logo: id === 'opencode' ? { brand: 'opencode' } : { category: 'harness' },
 });
 
 export const BUILTINS: Builtin[] = [
@@ -91,6 +96,7 @@ export const BUILTINS: Builtin[] = [
     network: ['api.github.com', '*.ghe.com'],
     secrets: true,
     docs: doc('integrations'),
+    logo: { brand: 'github' },
   },
   {
     id: 'dev.escouade.gitlab',
@@ -103,6 +109,7 @@ export const BUILTINS: Builtin[] = [
     network: ['gitlab.com'],
     secrets: true,
     docs: doc('integrations'),
+    logo: { category: 'forge' },
   },
   {
     id: 'dev.escouade.azure-devops',
@@ -115,6 +122,7 @@ export const BUILTINS: Builtin[] = [
     network: ['dev.azure.com'],
     secrets: true,
     docs: doc('integrations'),
+    logo: { category: 'forge' },
   },
   {
     id: 'dev.escouade.bitbucket',
@@ -127,6 +135,7 @@ export const BUILTINS: Builtin[] = [
     network: ['api.bitbucket.org'],
     secrets: true,
     docs: doc('integrations'),
+    logo: { category: 'forge' },
   },
   {
     id: 'dev.escouade.gitea',
@@ -139,6 +148,7 @@ export const BUILTINS: Builtin[] = [
     network: [],
     secrets: true,
     docs: doc('integrations'),
+    logo: { brand: 'gitea' },
   },
   ...(
     [
@@ -179,6 +189,7 @@ export const BUILTINS: Builtin[] = [
     network: [host],
     secrets: true,
     docs: doc('integrations'),
+    logo: { category: 'source' },
   })),
 ];
 

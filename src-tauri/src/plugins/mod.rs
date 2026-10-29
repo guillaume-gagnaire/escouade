@@ -251,7 +251,7 @@ impl Plugins {
     fn read(&self, installed: Installed) -> Loaded {
         let folder = self.folder_of(&installed);
         let read = std::fs::read_to_string(folder.join(manifest::FILE))
-            .map(|t| manifest::read(&t, false))
+            .map(|t| manifest::read_in(&t, false, &folder))
             .map_err(|_| Fault::Missing);
         let changed = read.is_ok()
             && !installed.digest.is_empty()
@@ -280,6 +280,37 @@ impl Plugins {
             .iter()
             .find(|l| l.installed.id == id)
             .map(|l| self.view(l, lang))
+    }
+
+    /// The icon of the installed plugin `id`, as a `data:image/png` address the window shows:
+    /// taken by its id alone, read in its folder and never out of it (`manifest::icon_file`), its
+    /// header checked again (a folder in development may have changed it). `Ok(None)` for a
+    /// plugin without one, or whose manifest does not hold (the window draws its letters); an
+    /// error for an id that is not installed.
+    pub fn icon(&self, id: &str) -> Result<Option<String>, String> {
+        use base64::Engine as _;
+        let (folder, rel) = {
+            let loaded = self.loaded.read();
+            let l = loaded
+                .iter()
+                .find(|l| l.installed.id == id)
+                .ok_or_else(|| format!("no plugin {id} is installed"))?;
+            let rel = match &l.read {
+                Ok(manifest::Read {
+                    manifest: Ok(m), ..
+                }) => m.icon.clone(),
+                _ => None,
+            };
+            (l.folder.clone(), rel)
+        };
+        let Some(bytes) = rel.and_then(|r| manifest::icon_file(&folder, &r)) else {
+            return Ok(None);
+        };
+        if !manifest::icon_problems(&bytes).is_empty() {
+            return Ok(None);
+        }
+        let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
+        Ok(Some(format!("data:image/png;base64,{b64}")))
     }
 
     fn view(&self, l: &Loaded, lang: Lang) -> PluginView {
@@ -377,7 +408,7 @@ impl Plugins {
                 dir.display()
             ))
         })?;
-        manifest::read(&text, false)
+        manifest::read_in(&text, false, dir)
             .manifest
             .map_err(|p| Refusal::invalid(lang, &p))
     }

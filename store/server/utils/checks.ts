@@ -1,5 +1,5 @@
-import { message, RESERVED_PREFIX, validateText } from '../../../schemas/plugin-manifest.mjs';
-import { imageInfo, SCREENSHOT_BYTES, SCREENSHOT_WIDTH, SCREENSHOTS_MAX } from './images';
+import { iconPath, message, RESERVED_PREFIX, validateText } from '../../../schemas/plugin-manifest.mjs';
+import { ICON_DECODE_MAX, imageInfo, SCREENSHOT_BYTES, SCREENSHOT_WIDTH, SCREENSHOTS_MAX } from './images';
 import { judgeLicense } from './licenses';
 import type { ArchiveProblem, ArchiveRead } from './tar';
 import { compareVersions, tagVersion, type Platform } from './versions';
@@ -91,6 +91,8 @@ export interface Snapshot {
   oversized?: string[];
   /** The screenshots whose header read but which do not decode. */
   undecodable?: string[];
+  /** The icon passed its header's checks but did not decode (PLG-13). */
+  iconUndecodable?: boolean;
   /** The plugin already on the store under the manifest's id, if any: whose it is, from which repository. */
   existing: { mine: boolean; repository: string } | null;
   /** The versions of this id already taken (published, waiting, or held): a number is never used twice. */
@@ -151,7 +153,12 @@ export function platformOf(name: string): Platform | null {
 
 // ---- 1. The manifest ----
 
-function checkManifest(read: ArchiveRead): CheckResult {
+/** The icon the manifest declares (`icon`), as a path of the archive; null without one. */
+export function iconOf(m: Manifest | null): string | null {
+  return typeof m?.icon === 'string' ? iconPath(m.icon) : null;
+}
+
+function checkManifest(read: ArchiveRead, iconUndecodable = false): CheckResult {
   const raw = read.files.get(MANIFEST_FILE);
   if (!raw)
     return fail('manifest', t(`${MANIFEST_FILE} manque`, `${MANIFEST_FILE} is missing`), [
@@ -167,7 +174,29 @@ function checkManifest(read: ArchiveRead): CheckResult {
         ),
       },
     ]);
-  const v = validateText(raw.toString('utf8'));
+  // The icon's header is the library's (a PNG, square, 256 px at least, 1 MB at most); its decoding is the store's.
+  const v = validateText(raw.toString('utf8'), { file: (p: string) => read.files.get(p) ?? null });
+  const icon = v.ok ? iconOf(JSON.parse(raw.toString('utf8'))) : null;
+  const info = icon ? imageInfo(read.files.get(icon)!) : null;
+  if (info && info.width > ICON_DECODE_MAX)
+    return fail('manifest', t('icône trop grande', 'icon too large'), [
+      {
+        path: 'icon',
+        why: t(
+          `${code(icon!)} fait ${info.width} px de côté ; le store en décode ${ICON_DECODE_MAX} au plus.`,
+          `${code(icon!)} is ${info.width} px a side; the store decodes ${ICON_DECODE_MAX} at most.`,
+        ),
+        fix: t('Exporte-la en 512 px, puis pousse une nouvelle étiquette.', 'Export it at 512 px, then push a new tag.'),
+      },
+    ]);
+  if (icon && iconUndecodable)
+    return fail('manifest', t('icône illisible', 'icon unreadable'), [
+      {
+        path: 'icon',
+        why: t(`${code(icon)} a l’en-tête d’un PNG, mais ne se décode pas.`, `${code(icon)} has a PNG’s header, but does not decode.`),
+        fix: t('Exporte-la de nouveau en PNG, puis pousse une nouvelle étiquette.', 'Export it again as a PNG, then push a new tag.'),
+      },
+    ]);
   if (v.ok)
     return pass(
       'manifest',
@@ -809,7 +838,7 @@ export function runChecks(s: Snapshot): CheckResult[] {
   const m = clean ? manifestOf(read) : null;
   const unread = t('L’archive ne se lit pas : ce contrôle attend.', 'The archive does not read: this check waits.');
   const results: Record<CheckKey, CheckResult> = {
-    manifest: clean ? checkManifest(read) : skip('manifest', unread),
+    manifest: clean ? checkManifest(read, s.iconUndecodable) : skip('manifest', unread),
     version: checkVersion(m, s),
     id: checkId(m, s),
     repository: checkRepository(m, s),

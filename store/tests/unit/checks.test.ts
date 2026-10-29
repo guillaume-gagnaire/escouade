@@ -55,6 +55,11 @@ describe('a valid plugin', () => {
     expect(by(results, 'binaries').detail.en).toBe('none: the plugin runs no program');
   });
 
+  it('with its icon, a square PNG of 512 px of its repository', () => {
+    const results = runChecks(snapshot(plugin({ manifest: { icon: './store/icon.png' }, files: { 'store/icon.png': png(512, 512) } })));
+    expect(results.filter((r) => r.status !== 'pass')).toEqual([]);
+  });
+
   it('with a program built for every system, attested from its commit', () => {
     const run = { command: 'bin/ntfy', windows: 'bin/ntfy.exe' };
     const bin = (platform: FetchedBinary['platform']): FetchedBinary => ({
@@ -128,6 +133,56 @@ describe('a booby-trapped plugin', () => {
     ['without a license file', 'license', () => snapshot(plugin({ files: { LICENSE: null } }), { license: null }), 'LICENSE'],
     ['without a README', 'readme', () => snapshot(plugin({ files: { 'README.md': null } })), 'README.md'],
     ['with an empty README', 'readme', () => snapshot(plugin({ files: { 'README.md': ' \n' } })), 'README.md'],
+    ['with an icon missing', 'manifest', () => snapshot(plugin({ manifest: { icon: 'icon.png' } })), 'icon'],
+    [
+      'with an icon not square',
+      'manifest',
+      () => snapshot(plugin({ manifest: { icon: 'icon.png' }, files: { 'icon.png': png(300, 256) } })),
+      'icon',
+    ],
+    [
+      'with an icon too small',
+      'manifest',
+      () => snapshot(plugin({ manifest: { icon: 'icon.png' }, files: { 'icon.png': png(128, 128) } })),
+      'icon',
+    ],
+    [
+      'with an icon too heavy',
+      'manifest',
+      () => snapshot(plugin({ manifest: { icon: 'icon.png' }, files: { 'icon.png': png(800, 800, { noise: true }) } })),
+      'icon',
+    ],
+    [
+      'with an icon that is a JPEG named .png',
+      'manifest',
+      () => snapshot(plugin({ manifest: { icon: 'icon.png' }, files: { 'icon.png': 'ÿØÿà JFIF' } })),
+      'icon',
+    ],
+    [
+      'with an SVG icon',
+      'manifest',
+      () => snapshot(plugin({ manifest: { icon: 'icon.svg' }, files: { 'icon.svg': '<svg><script>alert(1)</script></svg>' } })),
+      'icon',
+    ],
+    ['with an icon out of the repository', 'manifest', () => snapshot(plugin({ manifest: { icon: '../icon.png' } })), 'icon'],
+    ['with a remote icon', 'manifest', () => snapshot(plugin({ manifest: { icon: 'https://exemple.dev/icon.png' } })), 'icon'],
+    [
+      'with an icon too large to decode',
+      'manifest',
+      () => {
+        const big = png(1, 1);
+        big.writeUInt32BE(5000, 16);
+        big.writeUInt32BE(5000, 20);
+        return snapshot(plugin({ manifest: { icon: 'icon.png' }, files: { 'icon.png': big } }));
+      },
+      'icon',
+    ],
+    [
+      'with an icon whose header reads but which does not decode',
+      'manifest',
+      () => snapshot(plugin({ manifest: { icon: 'icon.png' }, files: { 'icon.png': png(512, 512) } }), { iconUndecodable: true }),
+      'icon',
+    ],
     ['with a screenshot missing', 'screenshots', () => snapshot(plugin({ files: { 'store/1.png': null } })), 'store.screenshots[0]'],
     [
       'with a GIF named .png',

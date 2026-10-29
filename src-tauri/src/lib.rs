@@ -550,6 +550,7 @@ pub fn run() {
                 commands::plugin_install_git,
                 commands::plugin_load_dev,
                 commands::plugin_remove,
+                commands::plugin_icon,
                 commands::account_sign_in_ended,
                 commands::claude_found,
                 commands::engines,

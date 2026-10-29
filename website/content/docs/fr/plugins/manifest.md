@@ -15,6 +15,7 @@ Chaque plugin d’Escouade se décrit dans un fichier escouade-plugin.json à la
   "license": "MIT",
   "repository": "https://github.com/exemple/escouade-slack",
   "escouade": { "api": "1", "min": "2.1.0" },
+  "icon": "assets/icon.png",
   "run": { "command": "bin/escouade-slack", "windows": "bin/escouade-slack.exe" },
   "activation": ["event:ticket.column"],
   "permissions": {
@@ -43,6 +44,7 @@ La ligne `$schema` donne l’autocomplétion et la vérification dans VS Code et
 | `license` | non | Sa licence, en identifiant SPDX : `MIT`, `Apache-2.0`. |
 | `repository` | non | L’adresse de son dépôt, en `https://`. |
 | `escouade` | oui | L’Escouade pour lequel il est écrit : `api`, `min` et `max` (voir plus bas). |
+| `icon` | non | Son logo : un PNG carré de son dossier, 256 px de côté au moins, 1 Mo au plus (voir plus bas). |
 | `run` | non | Son programme. Sans lui, le plugin est déclaratif : rien ne s’exécute. |
 | `activation` | non | Ce qui le démarre, par exemple `event:ticket.column`. Sans activation, son programme ne tourne pas. |
 | `permissions` | non | Ce qu’il demande : `events`, `network`, `secrets`, `commands` (des listes) et `decide` (`true` ou `false`). |
@@ -60,6 +62,12 @@ La ligne `$schema` donne l’autocomplétion et la vérification dans VS Code et
 - `max` (facultatif) : la plus récente. `2.4` comprend toutes les 2.4.x.
 
 Un plugin d’une autre API, ou pour un Escouade hors de sa plage, reste installé mais désactivé, et Escouade dit pourquoi : par exemple « Ce plugin demande Escouade 2.3.0 ou plus récent ; tu as la 2.1.0. Mets Escouade à jour. »
+
+### L’icône
+
+`icon` est le chemin, dans le dossier du plugin, de son logo : un **PNG carré de 256 px de côté au moins** (512 conseillé), de **1 Mo au plus**. Ni SVG (il peut porter du script), ni image distante, ni chemin qui sort du dossier (absolu, ou qui remonte avec `..`). Escouade et la place de marché en lisent l’en-tête, et refusent le plugin en disant pourquoi : « `icon` n’est pas carrée (un PNG carré de 256 px au moins, 512 conseillé). », « `icon` pèse plus de 1 Mo. », « `icon` n’est pas un PNG (ni SVG, ni JPEG : un PNG carré de 256 px au moins). », « `icon` n’est pas un fichier du dossier du plugin. »
+
+La place de marché la réencode sans ses métadonnées en 256 et 64 px, et la montre à la place des deux lettres de la tuile du plugin. Sans icône, la tuile garde ses lettres.
 
 ### Le programme
 

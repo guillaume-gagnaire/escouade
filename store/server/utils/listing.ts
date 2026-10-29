@@ -11,7 +11,8 @@ import { parseRevocations, revoked, type RevocationList } from './revocation-lis
 import { lastRevocations } from './revocations';
 import { readArchive } from './tar';
 import { fold, words } from '../../shared/search';
-import { hueOf, markOf } from '../../shared/tile';
+import { hueOf, markOf, type Icon } from '../../shared/tile';
+import type { Logo } from '../../shared/marks';
 import { compareVersions } from './versions';
 
 export { hueOf, markOf };
@@ -47,6 +48,10 @@ export interface Entry {
   /** The two letters of its tile, and their hue (a class `h<hue>`: the pages allow no style attribute). */
   mark: string;
   hue: number;
+  /** Its icon, by its last published version's (PLG-13); null draws its letters. */
+  icon: Icon | null;
+  /** The logo of one of Escouade's own, drawn inline (shared/marks.ts); null for the others. */
+  logo: Logo | null;
   author: { login: string; githubId: number } | null;
   builtin: boolean;
   categories: Category[];
@@ -163,6 +168,8 @@ function builtinEntry(b: Builtin): Entry {
     description: b.description,
     mark: markOf(b.name),
     hue: 180,
+    icon: null,
+    logo: b.logo,
     author: null,
     builtin: true,
     categories: b.categories as Category[],
@@ -239,6 +246,8 @@ function entriesOf(all: Row[], ctx: Context, taken = false): Entry[] {
       description: localized(m.description),
       mark: markOf(name.en),
       hue: hueOf(plugin.id),
+      icon: v.icon ?? null,
+      logo: null,
       author: login && githubId ? { login, githubId } : null,
       builtin: false,
       categories: plugin.categories.filter((c): c is Category => (CATEGORIES as readonly string[]).includes(c)),
