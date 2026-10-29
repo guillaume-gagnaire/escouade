@@ -24,6 +24,7 @@
 mod api;
 pub mod hint;
 mod lang;
+pub(crate) mod probes;
 mod scan;
 mod store;
 mod wiring;
