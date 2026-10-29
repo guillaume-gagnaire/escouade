@@ -71,7 +71,7 @@ Les tickets proposés s'appellent ici PLG-1, PLG-2… ; le chef d'escouade leur 
 - Tests : le faux plugin qui autorise, refuse, se tait, plante ; deux plugins en désaccord ; le texte « via » dans la conversation ; les quatre faux harness (Claude Code, Codex, Copilot CLI, OpenCode) et le faux Cursor.
 
 **PLG-9. Le SDK.** Dépend de PLG-2, PLG-3 ; suit chaque point d'extension de la 2.1.0.
-- Critères : `@escouade/plugin` en TypeScript (les types du protocole, générés depuis un schéma unique, comme `schemas/` ; un client stdio ; les aides de chaque point) ; un gabarit (`npm create escouade-plugin`) ; `escouade-plugin` en CLI (`validate`, `test` : le banc, `dev` : le faux Escouade, `pack`) ; la compilation en un exécutable unique documentée (pour un utilisateur sans Node). Une crate Rust des mêmes types plus tard.
+- Critères : `@escouade-dev/plugin` en TypeScript (les types du protocole, générés depuis un schéma unique, comme `schemas/` ; un client stdio ; les aides de chaque point) ; un gabarit (`npm create escouade-plugin`) ; `escouade-plugin` en CLI (`validate`, `test` : le banc, `dev` : le faux Escouade, `pack`) ; la compilation en un exécutable unique documentée (pour un utilisateur sans Node). Une crate Rust des mêmes types plus tard.
 - Tests : le gabarit généré passe `validate` et `test` en CI ; les types générés comparés au schéma (un test qui échoue si l'un change sans l'autre).
 
 **PLG-10. Les plugins d'exemple.** Dépend des points qu'ils montrent. Dans un dépôt à part (`escouade-plugins`), chacun avec ses tests au banc en CI :

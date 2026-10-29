@@ -9,6 +9,6 @@
     "archive": "escouade-plugin pack ."
   },
   "devDependencies": {
-    "@escouade/plugin": "{{sdk}}"
+    "@escouade-dev/plugin": "{{sdk}}"
   }
 }

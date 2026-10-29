@@ -4,7 +4,7 @@ import { manifestTs, protocolTs, stale, typeOf } from './generate.mjs';
 
 // The SDK's generated types and the schemas they come from (ESC-181, PLG-9): one changed without the other fails here.
 
-describe('the generated types of @escouade/plugin', () => {
+describe('the generated types of @escouade-dev/plugin', () => {
   it('are those the schemas give (run node sdk/plugin/scripts/generate.mjs)', async () => {
     expect(await stale()).toEqual([]);
   }, 30_000);

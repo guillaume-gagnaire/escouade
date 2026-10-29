@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The generated files of @escouade/plugin (ESC-181, PLG-9), from the one source of each:
+// The generated files of @escouade-dev/plugin (ESC-181, PLG-9), from the one source of each:
 // - src/protocol.ts, the protocol's types, from schemas/plugin-protocol-1.json;
 // - src/manifest.ts, the manifest's types, from schemas/plugin-1.json (itself written by the core, manifest::schema());
 // - vendor/plugin-manifest.mjs and its .d.ts, the checks of the manifest the store and the core share, copied.

@@ -17,7 +17,7 @@
     "archive": "npm run build && escouade-plugin pack ."
   },
   "devDependencies": {
-    "@escouade/plugin": "{{sdk}}",
+    "@escouade-dev/plugin": "{{sdk}}",
     "@types/node": "^22.0.0",
     "esbuild": "^0.25.0",
     "typescript": "^6.0.0"

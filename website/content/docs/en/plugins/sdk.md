@@ -1,6 +1,6 @@
 # The SDK
 
-`@escouade/plugin` writes a plugin of Escouade in TypeScript: the protocol’s types, a client that speaks it on the standard input and output, a fake Escouade for the plugin’s tests, and the `escouade-plugin` command. It is under the MIT license, like the protocol’s schema, and depends on nothing.
+`@escouade-dev/plugin` writes a plugin of Escouade in TypeScript: the protocol’s types, a client that speaks it on the standard input and output, a fake Escouade for the plugin’s tests, and the `escouade-plugin` command. It is under the MIT license, like the protocol’s schema, and depends on nothing.
 
 ## A first plugin
 
@@ -23,7 +23,7 @@ To try it in Escouade, load its folder in Settings › Plugins, in developer mod
 ## The client
 
 ```ts
-import { createPlugin } from '@escouade/plugin';
+import { createPlugin } from '@escouade-dev/plugin';
 
 const plugin = createPlugin();
 
@@ -71,16 +71,16 @@ The protocol’s types come from one schema, [`plugin-protocol-1.json`](/schemas
 | `TIMEOUTS_MS`, `DEFAULT_TIMEOUT_MS`, `ERRORS` | The delays of Escouade’s calls, and the error codes. |
 | `Manifest` | `escouade-plugin.json`. |
 
-`@escouade/plugin/manifest-check` gives the checks of the manifest that the store and Escouade make: `validate(manifest)` and `message(error, 'en')`.
+`@escouade-dev/plugin/manifest-check` gives the checks of the manifest that the store and Escouade make: `validate(manifest)` and `message(error, 'en')`.
 
 ## The tests
 
-`@escouade/plugin/testing` gives a fake Escouade, in memory: it sends the plugin the same messages as the app and the bench, without starting a process.
+`@escouade-dev/plugin/testing` gives a fake Escouade, in memory: it sends the plugin the same messages as the app and the bench, without starting a process.
 
 ```ts
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { connect } from '@escouade/plugin/testing';
+import { connect } from '@escouade-dev/plugin/testing';
 import { plugin } from '../src/plugin.ts';
 
 test('a ticket moved to test is said in the journal', async () => {

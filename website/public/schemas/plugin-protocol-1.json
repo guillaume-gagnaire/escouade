@@ -2,7 +2,7 @@
   "$id": "https://escouade.dev/schemas/plugin-protocol-1.json",
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "The protocol of Escouade's plugins, version 1",
-  "description": "JSON-RPC 2.0 over the standard input and output of a plugin's program, one message per line. The one source of the protocol's types: the TypeScript of @escouade/plugin is generated from it (sdk/plugin/scripts/generate.mjs), and the Rust tests of the core hold it to what the core sends (plugins_protocol_schema).",
+  "description": "JSON-RPC 2.0 over the standard input and output of a plugin's program, one message per line. The one source of the protocol's types: the TypeScript of @escouade-dev/plugin is generated from it (sdk/plugin/scripts/generate.mjs), and the Rust tests of the core hold it to what the core sends (plugins_protocol_schema).",
   "x-protocolVersion": 1,
   "x-methods": {
     "initialize": {

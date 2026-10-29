@@ -1,5 +1,5 @@
 // What the plugin does: its handlers, kept apart from main.ts so that the tests drive them without a process.
-import { createPlugin } from '@escouade/plugin';
+import { createPlugin } from '@escouade-dev/plugin';
 
 export const plugin = createPlugin();
 

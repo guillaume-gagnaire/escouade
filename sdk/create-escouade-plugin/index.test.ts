@@ -12,7 +12,7 @@ import { create, SDK_VERSION } from './index.mjs';
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'create-plugin-'));
 
 describe('create-escouade-plugin', () => {
-  it('depends on the version of @escouade/plugin the repository holds', () => {
+  it('depends on the version of @escouade-dev/plugin the repository holds', () => {
     const sdk = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'plugin', 'package.json'), 'utf8'));
     expect(SDK_VERSION).toBe(`^${sdk.version}`);
   });
@@ -39,7 +39,7 @@ describe('create-escouade-plugin', () => {
     expect(JSON.parse(manifest)).toMatchObject({ id: 'dev.test.rules', name: 'Règles "de" l’équipe', run: { command: 'plugin' } });
     const pkg = JSON.parse(fs.readFileSync(path.join(folder, 'package.json'), 'utf8'));
     expect(pkg.name).toBe('mes-regles');
-    expect(pkg.devDependencies['@escouade/plugin']).toBe('file:../sdk');
+    expect(pkg.devDependencies['@escouade-dev/plugin']).toBe('file:../sdk');
     if (process.platform !== 'win32') expect(fs.statSync(path.join(folder, 'plugin')).mode & 0o111).not.toBe(0);
     expect(fs.readFileSync(path.join(folder, 'LICENSE'), 'utf8')).toContain(`Copyright (c) ${new Date().getFullYear()}`);
   });

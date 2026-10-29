@@ -1,7 +1,7 @@
 // The plugin's handlers, driven by the SDK's fake Escouade, in memory. `npm run bench` plays the real program.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { connect } from '@escouade/plugin/testing';
+import { connect } from '@escouade-dev/plugin/testing';
 import { plugin } from '../src/plugin.ts';
 
 test('it speaks version 1 of the protocol', async () => {

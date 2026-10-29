@@ -19,7 +19,7 @@ function wired() {
   return { plugin, out, traces, ended: () => ended };
 }
 
-describe('@escouade/plugin', () => {
+describe('@escouade-dev/plugin', () => {
   it('answers initialize with its version whatever is offered, and keeps what Escouade said', async () => {
     const { plugin, out } = wired();
     await plugin.receive(

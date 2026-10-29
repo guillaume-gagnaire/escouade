@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// escouade-plugin, the command of @escouade/plugin (ESC-181, PLG-9).
+// escouade-plugin, the command of @escouade-dev/plugin (ESC-181, PLG-9).
 //
 // `validate` and `pack` run here, in Node: the manifest's checks are those of the store and the app
 // (vendor/plugin-manifest.mjs, copied from schemas/). `test` (the conformance bench) and `dev` (the fake Escouade)

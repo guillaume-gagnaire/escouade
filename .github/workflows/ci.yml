@@ -423,7 +423,7 @@ jobs:
             (cd "$RUNNER_TEMP" && "$appimage" --appimage-extract "usr/bin/$bin" >/dev/null && test -x "squashfs-root/usr/bin/$bin")
           done
 
-      # npm create escouade-plugin, as an author gets it: both templates installed against this @escouade/plugin, their
+      # npm create escouade-plugin, as an author gets it: both templates installed against this @escouade-dev/plugin, their
       # tests and build, then validate and the conformance bench of the escouade-plugin just built.
       - name: The plugin templates pass validate and the bench
         env:

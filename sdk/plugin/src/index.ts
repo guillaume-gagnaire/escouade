@@ -1,4 +1,4 @@
-// @escouade/plugin: write a plugin of Escouade in TypeScript (ESC-181, PLG-9).
+// @escouade-dev/plugin: write a plugin of Escouade in TypeScript (ESC-181, PLG-9).
 //
 // A plugin with a program speaks JSON-RPC 2.0 to Escouade on its standard input and output, one message per
 // line (https://escouade.dev/en/docs/plugins/api). `createPlugin()` gives a client that speaks it: it answers

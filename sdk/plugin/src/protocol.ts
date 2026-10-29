@@ -1,5 +1,5 @@
 // Generated from schemas/plugin-protocol-1.json by sdk/plugin/scripts/generate.mjs: do not edit, run it again.
-/** JSON-RPC 2.0 over the standard input and output of a plugin's program, one message per line. The one source of the protocol's types: the TypeScript of @escouade/plugin is generated from it (sdk/plugin/scripts/generate.mjs), and the Rust tests of the core hold it to what the core sends (plugins_protocol_schema). */
+/** JSON-RPC 2.0 over the standard input and output of a plugin's program, one message per line. The one source of the protocol's types: the TypeScript of @escouade-dev/plugin is generated from it (sdk/plugin/scripts/generate.mjs), and the Rust tests of the core hold it to what the core sends (plugins_protocol_schema). */
 export const PROTOCOL_VERSION = 1;
 
 /** The facts of Escouade. */

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // The templates of `npm create escouade-plugin`, as an author gets them (ESC-181, PLG-9): each one written to a
-// temporary folder against this repository's @escouade/plugin, installed, then its typecheck, its tests, its build,
+// temporary folder against this repository's @escouade-dev/plugin, installed, then its typecheck, its tests, its build,
 // `escouade-plugin validate`, `escouade-plugin test` (the conformance bench of the app, ESCOUADE_PLUGIN_BIN) and `pack`.
 // CI runs it after building the app's escouade-plugin; any step that fails fails it.
 //

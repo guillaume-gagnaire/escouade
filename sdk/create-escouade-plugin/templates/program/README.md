@@ -1,6 +1,6 @@
 # {{name}}
 
-A plugin of [Escouade](https://escouade.dev), in TypeScript with [`@escouade/plugin`](https://escouade.dev/en/docs/plugins/sdk).
+A plugin of [Escouade](https://escouade.dev), in TypeScript with [`@escouade-dev/plugin`](https://escouade.dev/en/docs/plugins/sdk).
 
 - `src/plugin.ts`: what it does (a fact received, a permission decided);
 - `src/main.ts`: the program Escouade starts, bundled into `dist/plugin.mjs` by `npm run build`;

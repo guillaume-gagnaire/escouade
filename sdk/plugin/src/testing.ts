@@ -1,4 +1,4 @@
-// @escouade/plugin/testing: a fake Escouade in memory, for a plugin's unit tests (ESC-181, PLG-9).
+// @escouade-dev/plugin/testing: a fake Escouade in memory, for a plugin's unit tests (ESC-181, PLG-9).
 //
 // It speaks the protocol to the plugin as the app does (the same lines, the same subjects as the conformance
 // bench), without a process: `initialize`, facts, decisions, calls, `shutdown`; it serves `secrets/get` and keeps
