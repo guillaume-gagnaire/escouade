@@ -4,8 +4,9 @@ import { migrateDb, openDb, type Db } from '../../server/utils/db';
 import { lastBeat, noteBeat, startQueue } from '../../server/utils/queue';
 
 // Against a real PostgreSQL (the CI's service, PostgreSQL 17): the migrations played from an empty base, then the
-// queue. Without DATABASE_URL, skipped. The base is emptied first: never point this at a database that matters.
-const url = process.env.DATABASE_URL;
+// queue. The base is emptied first: it is named by TEST_DATABASE_URL alone, never by DATABASE_URL, which Coolify also
+// hands to the image's build (where these tests run) and which names the store's own base. Without it, skipped.
+const url = process.env.TEST_DATABASE_URL;
 
 describe.skipIf(!url)('the database', () => {
   let pool: pg.Pool;

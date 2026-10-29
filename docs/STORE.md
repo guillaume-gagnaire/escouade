@@ -62,7 +62,7 @@ Sur le Coolify de l'utilisateur, dans le projet « Escouade », à côté du sit
 | Port exposé | 3000 (Nitro) |
 | Vérification de santé | `GET /api/health`, toutes les 30 s ; un nouveau conteneur qui ne répond pas n'est pas mis en ligne, l'ancien reste |
 | Stockage persistant | un volume monté sur `/data/archives` |
-| Tâche planifiée | `restic backup /data/archives` chaque nuit à 3 h 30 (§1.4) |
+| Sauvegarde du volume | le volume `/data/archives` chaque nuit à 3 h 30 vers le bucket des sauvegardes, par Coolify (§1.4 ; décidé par le chef d'escouade le 2026-10-29, à la place d'une tâche `restic`) |
 | Notifications | échec de déploiement, conteneur arrêté, sauvegarde ratée : le salon Discord d'Escouade |
 
 **Ses variables** (dans Coolify ; les secrets ne se relisent pas après saisie et ne servent pas au build) :
@@ -78,7 +78,6 @@ Sur le Coolify de l'utilisateur, dans le projet « Escouade », à côté du sit
 | `SMTP_URL`, `MAIL_FROM` | l'envoi des avis : Scaleway Transactional Email (Paris), `store@escouade.dev` | oui (`SMTP_URL`) |
 | `ARCHIVE_DIR` | `/data/archives` | non |
 | `NUXT_PUBLIC_SITE_URL` | `https://store.escouade.dev` | non |
-| `RESTIC_REPOSITORY`, `RESTIC_PASSWORD`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | le bucket des sauvegardes d'archives (la tâche planifiée seulement) | oui |
 
 Les **clés publiques** de signature des plugins sont publiques : elles sont dans le dépôt (`store/keys/*.pub`, les mêmes que celles que l'app embarque). **La clé privée de signature n'est jamais ni dans Coolify ni dans le dépôt** (§4.5).
 
@@ -91,8 +90,8 @@ Les **clés publiques** de signature des plugins sont publiques : elles sont dan
 ### 1.4 Ses sauvegardes, sa surveillance, son coût
 
 - **La base** : la sauvegarde planifiée de Coolify (`pg_dump` chaque nuit) vers un bucket du **stockage objet de Scaleway (fr-par)**, 30 jours gardés ; une restauration essayée à la mise en route, puis une fois par trimestre (notée dans `docs/STORE.md`).
-  - Restaurations essayées : **2026-10-29**, en local (ESC-228 : PostgreSQL 16 et restic 0.16 dans WSL, `store/scripts/restore-try.sh` sur une base vide, archives identiques à l'octet, le store reparti sur la base restaurée ; détail dans `store/README.md`) ; à refaire sur les vraies sauvegardes de Coolify à la mise en route.
-- **Les archives** : `restic` chaque nuit vers le même bucket (un conteneur planifié de Coolify) ; elles sont aussi reconstructibles depuis les dépôts tant qu'ils existent, mais pas à l'octet près : la sauvegarde fait foi (§3.4).
+  - Restaurations essayées : **2026-10-29**, en local (ESC-228 : PostgreSQL 16 dans WSL, `store/scripts/restore-try.sh` sur une base vide, le dump au format de Coolify et l'archive du volume, archives identiques à l'octet, le store reparti sur la base restaurée ; détail dans `store/README.md`) ; à refaire sur les vraies sauvegardes de Coolify à la mise en route.
+- **Les archives** : la sauvegarde du volume par Coolify chaque nuit à 3 h 30 vers le même bucket, 30 jours gardés ; elles sont aussi reconstructibles depuis les dépôts tant qu'ils existent, mais pas à l'octet près : la sauvegarde fait foi (§3.4).
 - **Ce qui ne se sauvegarde pas parce qu'il n'est pas là** : la clé de signature (sur le poste de l'utilisateur, §4.5).
 - **La surveillance** : une route `GET /api/health` (base joignable, file qui avance, disque sous 80 %) vérifiée par Coolify (redémarrage) et par une sonde **extérieure** au serveur (un serveur qui tombe ne se signale pas lui-même) : Uptime Kuma sur une autre machine de l'utilisateur, ou le palier gratuit d'un service de sondes, qui prévient sur le salon Discord d'Escouade. Les échecs de déploiement et les conteneurs arrêtés par les notifications de Coolify (même salon). Les erreurs du serveur dans le journal du conteneur ; pas de service d'erreurs tiers au départ.
 - **Le coût** : le serveur, le domaine et Coolify existent ; la GitHub App est gratuite. En plus : le stockage objet (quelques Go à environ 0,015 € le Go par mois, moins d'un euro), l'envoi d'e-mails (le palier gratuit de Scaleway suffit à quelques centaines d'avis par mois) et l'éventuelle sonde extérieure (gratuite). Le vrai coût est le temps de revue de l'utilisateur (§4.3).

@@ -12,6 +12,25 @@ describe('the variables the store reads', () => {
     expect(lines.some((l) => l.includes('database'))).toBe(false);
   });
 
+  it('starts with the variables Coolify has on 2026-10-29: GitHub and the mail off, the rest on', () => {
+    const pem = '-----BEGIN RSA ' + 'PRIVATE KEY-----\nMIIE…\n-----END RSA ' + 'PRIVATE KEY-----\n';
+    const lines = missingLines({
+      DATABASE_URL: 'x',
+      NUXT_SESSION_SECRET: 'x',
+      GITHUB_APP_ID: '1',
+      GITHUB_APP_CLIENT_ID: 'Iv1.x',
+      GITHUB_APP_PRIVATE_KEY: pem,
+      GITHUB_WEBHOOK_SECRET: 'x',
+      STORE_ADMINS: '1',
+      ARCHIVE_DIR: '/data/archives',
+      NUXT_PUBLIC_SITE_URL: 'https://store.escouade.dev',
+    });
+    expect(lines).toEqual([
+      '[store] github off (missing GITHUB_APP_CLIENT_SECRET): signing in with GitHub, submissions and webhooks are off',
+      '[store] mail off (missing SMTP_URL, MAIL_FROM): no e-mail is sent',
+    ]);
+  });
+
   it('counts a blank variable as missing', () => {
     expect(missingFeatures({ DATABASE_URL: '   ' }).map((m) => m.feature.name)).toContain('database');
   });

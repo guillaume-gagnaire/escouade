@@ -84,7 +84,9 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+    # The tests that empty a base read TEST_DATABASE_URL alone; the built server of the end-to-end tests, DATABASE_URL.
     env:
+      TEST_DATABASE_URL: postgres://store:store@localhost:5432/store
       DATABASE_URL: postgres://store:store@localhost:5432/store
     defaults:
       run:
