@@ -277,42 +277,266 @@ pub fn plugins_list(core: CoreState) -> Vec<crate::plugins::PluginView> {
     core.plugins.list(crate::i18n::ui())
 }
 
-/// Installs the plugin of a local folder: copied into the app's data, pinned by its files.
+/// What installing the plugin of a local folder would do (the install window, PLG-4): its copy
+/// set aside until `plugin_install` or `plugin_discard`.
 #[tauri::command(async)]
-pub fn plugin_install_folder(
+pub fn plugin_inspect_folder(
     core: CoreState,
     path: String,
-) -> Result<crate::plugins::PluginView, crate::plugins::Refusal> {
+) -> Result<crate::plugins::Preview, crate::plugins::Refusal> {
     core.plugins
-        .install_folder(std::path::Path::new(path.trim()), crate::i18n::ui())
+        .inspect_folder(std::path::Path::new(path.trim()), crate::i18n::ui())
 }
 
-/// Installs the plugin of a git repository at a tag, pinned by its commit.
+/// What installing the plugin of a git repository at a tag would do: cloned and set aside.
 #[tauri::command(async)]
-pub async fn plugin_install_git(
+pub async fn plugin_inspect_git(
     core: CoreState<'_>,
     url: String,
     tag: String,
-) -> Result<crate::plugins::PluginView, crate::plugins::Refusal> {
+) -> Result<crate::plugins::Preview, crate::plugins::Refusal> {
     core.plugins
-        .install_git(&url, &tag, crate::i18n::ui())
+        .inspect_git(&url, &tag, crate::i18n::ui())
         .await
 }
 
-/// Loads a plugin's folder in development in place, read again when it changes.
+/// What loading a plugin's folder in development in place would do.
 #[tauri::command(async)]
-pub fn plugin_load_dev(
+pub fn plugin_inspect_dev(
     core: CoreState,
     path: String,
-) -> Result<crate::plugins::PluginView, crate::plugins::Refusal> {
+) -> Result<crate::plugins::Preview, crate::plugins::Refusal> {
     core.plugins
-        .load_dev(std::path::Path::new(path.trim()), crate::i18n::ui())
+        .inspect_dev(std::path::Path::new(path.trim()), crate::i18n::ui())
 }
 
-/// Uninstalls a plugin: its copy removed (a folder in development is left where it is).
+/// Installs what an inspection set aside, once the user agreed: in place of the same id (an
+/// update), whose process stops and whose host is forgotten.
 #[tauri::command(async)]
-pub fn plugin_remove(core: CoreState, id: String) -> Result<bool, String> {
-    core.plugins.remove(&id).map_err(|e| e.to_string())
+pub fn plugin_install(
+    core: CoreState,
+    token: String,
+) -> Result<crate::plugins::PluginView, crate::plugins::Refusal> {
+    let view = core.plugins.install(&token, crate::i18n::ui())?;
+    core.plugin_runtime.forget(&view.id);
+    Ok(view)
+}
+
+/// Forgets what an inspection set aside: the user did not install it.
+#[tauri::command(async)]
+pub fn plugin_discard(core: CoreState, token: String) {
+    core.plugins.discard(&token);
+}
+
+/// Uninstalls a plugin: its process stopped, its copy, its settings, its secrets and its journal
+/// removed; `keep`: its settings and its secrets kept for a later install.
+#[tauri::command(async)]
+pub fn plugin_remove(core: CoreState, id: String, keep: Option<bool>) -> Result<bool, String> {
+    let keep = keep.unwrap_or(false);
+    let keys = core
+        .plugins
+        .get(&id, crate::i18n::ui())
+        .map(|v| v.secret_keys)
+        .unwrap_or_default();
+    core.plugin_runtime.forget(&id);
+    let gone = core.plugins.remove(&id, keep).map_err(|e| e.to_string())?;
+    if gone && !keep {
+        for k in keys {
+            if let Err(e) = core
+                .secrets
+                .delete(&crate::plugins::runtime::secret_name(&id, &k))
+            {
+                log::warn!("plugin {id}: its secret {k} stays in the keychain: {e}");
+            }
+        }
+        let log = core.plugin_runtime.journal_file(&id);
+        let _ = std::fs::remove_file(&log);
+        let mut old = log.into_os_string();
+        old.push(".1");
+        let _ = std::fs::remove_file(old);
+    }
+    Ok(gone)
+}
+
+/// A plugin installed: `None` when it is not.
+fn plugin_view(core: &CoreState, id: &str) -> Result<crate::plugins::PluginView, String> {
+    core.plugins.get(id, crate::i18n::ui()).ok_or_else(|| {
+        tr!(
+            "Ce plugin n'est plus installé.",
+            "This plugin is no longer installed."
+        )
+    })
+}
+
+/// The app's switch of a plugin: off, its process stops and nothing of it reaches a project.
+#[tauri::command(async)]
+pub fn plugin_set_enabled(
+    core: CoreState,
+    id: String,
+    on: bool,
+) -> Result<crate::plugins::PluginView, String> {
+    core.plugins
+        .choose(&id, |c| c.enabled = on)
+        .map_err(|e| e.to_string())?;
+    core.plugin_runtime.forget(&id);
+    plugin_view(&core, &id)
+}
+
+/// A plugin's switch in a project (a private one included: the user sets it there one by one).
+#[tauri::command(async)]
+pub fn plugin_set_project(
+    core: CoreState,
+    id: String,
+    project: String,
+    on: bool,
+) -> Result<crate::plugins::PluginView, String> {
+    core.plugins
+        .choose(&id, |c| {
+            c.projects.insert(project, on);
+        })
+        .map_err(|e| e.to_string())?;
+    plugin_view(&core, &id)
+}
+
+/// Takes back a permission of a plugin, or gives it again: its process stops, and the next one
+/// is given what is left (`plugins::granted`). Its program itself is not taken back: the plugin is
+/// switched off instead.
+#[tauri::command(async)]
+pub fn plugin_set_permission(
+    core: CoreState,
+    id: String,
+    word: String,
+    granted: bool,
+) -> Result<crate::plugins::PluginView, String> {
+    let view = plugin_view(&core, &id)?;
+    if !view.asks.contains(&word) || !crate::plugins::revocable(&word) {
+        return Err(tr!(
+            "Cette permission ne se retire pas : désactive le plugin à la place.",
+            "This permission cannot be taken back: switch the plugin off instead."
+        ));
+    }
+    core.plugins
+        .choose(&id, |c| {
+            c.revoked.retain(|w| w != &word);
+            if !granted {
+                c.revoked.push(word);
+            }
+        })
+        .map_err(|e| e.to_string())?;
+    core.plugin_runtime.forget(&id);
+    plugin_view(&core, &id)
+}
+
+/// The value of a plugin's setting (one of `contributes.settings`); `null` puts it back to its
+/// default.
+#[tauri::command(async)]
+pub fn plugin_set_setting(
+    core: CoreState,
+    id: String,
+    key: String,
+    value: serde_json::Value,
+) -> Result<crate::plugins::PluginView, String> {
+    let view = plugin_view(&core, &id)?;
+    let known = view
+        .manifest
+        .as_ref()
+        .and_then(|m| m.contributes.get("settings"))
+        .and_then(serde_json::Value::as_array)
+        .is_some_and(|s| {
+            s.iter()
+                .any(|s| s.get("key").and_then(|k| k.as_str()) == Some(&key))
+        });
+    if !known {
+        return Err(format!("{key}: not a setting of {id}"));
+    }
+    core.plugins
+        .choose(&id, |c| {
+            if value.is_null() {
+                c.settings.remove(&key);
+            } else {
+                c.settings.insert(key, value);
+            }
+        })
+        .map_err(|e| e.to_string())?;
+    plugin_view(&core, &id)
+}
+
+/// Which of a plugin's secrets are kept (their values never leave the keychain).
+#[tauri::command(async)]
+pub fn plugin_secrets(core: CoreState, id: String) -> Result<Vec<(String, bool)>, String> {
+    let view = plugin_view(&core, &id)?;
+    Ok(view
+        .secret_keys
+        .into_iter()
+        .map(|k| {
+            let set = core
+                .secrets
+                .get(&crate::plugins::runtime::secret_name(&id, &k))
+                .ok()
+                .flatten()
+                .is_some();
+            (k, set)
+        })
+        .collect())
+}
+
+/// Keeps a plugin's secret in the keychain, under its own name; empty forgets it.
+#[tauri::command(async)]
+pub fn plugin_set_secret(
+    core: CoreState,
+    id: String,
+    key: String,
+    value: String,
+) -> Result<(), String> {
+    let view = plugin_view(&core, &id)?;
+    if !view.secret_keys.contains(&key) {
+        return Err(format!("{key}: not a secret of {id}"));
+    }
+    let name = crate::plugins::runtime::secret_name(&id, &key);
+    let done = if value.is_empty() {
+        core.secrets.delete(&name)
+    } else {
+        core.secrets.set(&name, &value)
+    };
+    done.map_err(|e| e.to_string())
+}
+
+/// Where a plugin's process stands, and its journal (the oldest entry first).
+#[derive(serde::Serialize)]
+pub struct PluginRun {
+    status: crate::plugins::runtime::Status,
+    journal: Vec<crate::plugins::journal::Entry>,
+}
+
+#[tauri::command(async)]
+pub fn plugin_run(core: CoreState, id: String) -> PluginRun {
+    PluginRun {
+        status: core.plugin_runtime.status(&id),
+        journal: core.plugin_runtime.journal(&id),
+    }
+}
+
+/// Starts a plugin's process now (« Démarrer »), or again after it was stopped (« Relancer »).
+#[tauri::command(async)]
+pub fn plugin_start(core: CoreState, id: String) -> Result<PluginRun, String> {
+    let rt = &core.plugin_runtime;
+    let stopped = rt.status(&id).phase == crate::plugins::runtime::PhaseName::Stopped;
+    if stopped {
+        rt.restart(&id)
+    } else {
+        rt.start(&id)
+    }
+    .map_err(|e| e.to_string())?;
+    Ok(plugin_run(core, id))
+}
+
+/// Looks for newer versions of the installed plugins (offered, never installed).
+#[tauri::command(async)]
+pub async fn plugins_check_updates(
+    core: CoreState<'_>,
+) -> Result<Vec<crate::plugins::PluginView>, ()> {
+    core.plugins.check_updates().await;
+    Ok(core.plugins.list(crate::i18n::ui()))
 }
 
 /// Where the `claude` of a path of the settings is (empty: the one found by itself), the

@@ -31,6 +31,7 @@ export type SettingsTab =
   | 'projects'
   | 'board'
   | 'integrations'
+  | 'plugins'
   | 'mcp'
   | 'terminals'
   | 'network'
@@ -76,6 +77,8 @@ export const SETTINGS_TABS: TabInfo[] = [
   tabInfo('board', 'kanban', 'project'),
   tabInfo('integrations', 'link', 'project'),
   // The one switch is saved at once (it writes into each harness's config).
+  // A link to the view Plugins (choice 213): nothing of it is saved here.
+  tabInfo('plugins', 'puzzle', 'system'),
   tabInfo('mcp', 'plug', 'system'),
   tabInfo('terminals', 'term', 'system'),
   tabInfo('network', 'globe', 'system'),

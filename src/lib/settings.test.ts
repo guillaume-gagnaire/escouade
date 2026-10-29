@@ -520,6 +520,7 @@ describe('settingsForm', () => {
       'Projects / Settings specific to each project',
       'Kanban / Autopilot and approved tickets',
       'Integrations / Kanban sources (Jira, Trello, GitHub, Linear, ClickUp, GitLab, Azure Boards) and code hosts',
+      'Plugins / What they add to Escouade, where they come from and what they can do',
       'MCP server / What Claude and the agents can do in Escouade, and what they did',
       'Terminals / Shells available in the built-in terminals',
       'Network / HTTP(S) proxy and TLS certificates for Claude Code, integrations, and updates',
@@ -531,7 +532,7 @@ describe('settingsForm', () => {
     expect(SETTINGS_TABS.map((x) => x.group)).toEqual([
       ...Array(5).fill('general'),
       ...Array(3).fill('project'),
-      ...Array(4).fill('system'),
+      ...Array(5).fill('system'),
     ]);
   });
 

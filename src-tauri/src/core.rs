@@ -1975,6 +1975,12 @@ impl<R: Runtime> Core<R> {
                 c.sync_all_shared();
             });
         }
+        // The newer versions of the installed plugins, looked for once at the start (PLG-4): offered in
+        // the view Plugins, never installed by themselves.
+        if !cfg!(test) {
+            let plugins = self.plugins.clone();
+            tauri::async_runtime::spawn(async move { plugins.check_updates().await });
+        }
         let c = self.clone();
         tauri::async_runtime::spawn(async move { c.git_loop(git_rx).await });
         let c = self.clone();

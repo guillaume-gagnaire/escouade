@@ -7,7 +7,7 @@
 //! shows, its standard error included.
 
 use parking_lot::Mutex;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::io::Write;
 use std::path::PathBuf;
@@ -24,7 +24,7 @@ pub const MASK: &str = "••••";
 const MASK_MIN: usize = 4;
 
 /// What an entry says.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Kind {
     /// Its process started.
@@ -61,6 +61,8 @@ pub struct Journal {
     file: PathBuf,
     entries: Mutex<VecDeque<Entry>>,
     masked: Mutex<Vec<String>>,
+    /// Its host forgotten: what its last process still says no longer reaches the file.
+    closed: std::sync::atomic::AtomicBool,
 }
 
 impl Journal {
@@ -69,6 +71,7 @@ impl Journal {
             file,
             entries: Mutex::new(VecDeque::new()),
             masked: Mutex::new(Vec::new()),
+            closed: std::sync::atomic::AtomicBool::new(false),
         }
     }
 
@@ -114,7 +117,18 @@ impl Journal {
         self.entries.lock().iter().cloned().collect()
     }
 
+    /// From now on, nothing more is written to its file (its plugin uninstalled, or another host
+    /// of it writes there).
+    pub fn close(&self) {
+        self.closed
+            .store(true, std::sync::atomic::Ordering::Release);
+    }
+
     fn append(&self, e: &Entry) {
+        if self.closed.load(std::sync::atomic::Ordering::Acquire) {
+            return;
+        }
+        // Its file: `<at> <kind> <text>`, a line each (`read_file`).
         let write = || -> std::io::Result<()> {
             if let Some(dir) = self.file.parent() {
                 std::fs::create_dir_all(dir)?;
@@ -138,4 +152,36 @@ impl Journal {
             log::warn!("plugin journal {}: {err}", self.file.display());
         }
     }
+}
+
+/// The last `KEPT` entries of a journal's file (and of the one it was moved to, past its size), the
+/// oldest first; a line that does not read is left out.
+pub fn read_file(file: &std::path::Path) -> Vec<Entry> {
+    let mut old = file.to_path_buf().into_os_string();
+    old.push(".1");
+    let mut entries: VecDeque<Entry> = VecDeque::new();
+    for f in [PathBuf::from(old), file.to_path_buf()] {
+        let Ok(text) = std::fs::read_to_string(&f) else {
+            continue;
+        };
+        for line in text.lines() {
+            let mut parts = line.splitn(3, ' ');
+            let (Some(at), Some(kind)) = (parts.next(), parts.next()) else {
+                continue;
+            };
+            let Ok(kind) = serde_json::from_value::<Kind>(serde_json::Value::String(kind.into()))
+            else {
+                continue;
+            };
+            entries.push_back(Entry {
+                at: at.to_string(),
+                kind,
+                text: parts.next().unwrap_or("").to_string(),
+            });
+            if entries.len() > KEPT {
+                entries.pop_front();
+            }
+        }
+    }
+    entries.into()
 }

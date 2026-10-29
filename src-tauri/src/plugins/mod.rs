@@ -23,8 +23,9 @@ use manifest::{Manifest, Problem};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Weak};
@@ -59,6 +60,129 @@ pub struct Installed {
     #[serde(default)]
     pub digest: String,
     pub installed_at: String,
+    #[serde(flatten)]
+    pub choices: Choices,
+}
+
+/// What the user chose for an installed plugin (PLG-4): kept across its updates, and across an
+/// uninstall that keeps its data.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Choices {
+    /// The app's switch: off, nothing of it runs or reaches a project.
+    #[serde(default = "yes")]
+    pub enabled: bool,
+    /// Its switch in a project, by the project's id, where the user set it; elsewhere, on unless
+    /// the project is private (`active_in`).
+    #[serde(default)]
+    pub projects: BTreeMap<String, bool>,
+    /// The permissions taken back (`asks`' words): it goes on without them.
+    #[serde(default)]
+    pub revoked: Vec<String>,
+    /// The values of its settings (`contributes.settings`), by key.
+    #[serde(default)]
+    pub settings: Map<String, Value>,
+}
+
+impl Default for Choices {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            projects: BTreeMap::new(),
+            revoked: Vec::new(),
+            settings: Map::new(),
+        }
+    }
+}
+
+fn yes() -> bool {
+    true
+}
+
+/// Whether a plugin of `choices` reaches the project `project`: where the user set it, as set;
+/// elsewhere, unless the project is private (§3.3); never with the app's switch off.
+// The events reach a project by it (PLG-5); Réglages › Plugins applies the same rule in the window.
+#[cfg_attr(not(test), allow(dead_code))]
+pub fn active_in(choices: &Choices, project: &str, private: bool) -> bool {
+    choices.enabled && choices.projects.get(project).copied().unwrap_or(!private)
+}
+
+/// What a plugin may do, a word each, the strongest first (§3.4): `run` (it runs a program),
+/// `decide` (it decides the agents' permissions), then `commands:<c>`, `events:<e>`,
+/// `network:<host>` and `secrets:<key>`.
+pub fn asks(m: &Manifest) -> Vec<String> {
+    let p = &m.permissions;
+    let mut out = Vec::new();
+    if m.run.is_some() {
+        out.push("run".to_string());
+    }
+    if p.decide {
+        out.push("decide".to_string());
+    }
+    for (kind, words) in [
+        ("commands", &p.commands),
+        ("events", &p.events),
+        ("network", &p.network),
+        ("secrets", &p.secrets),
+    ] {
+        out.extend(words.iter().map(|w| format!("{kind}:{w}")));
+    }
+    out
+}
+
+/// Whether the permission `word` can be taken back: all but the program itself (switched off
+/// with the plugin).
+pub fn revocable(word: &str) -> bool {
+    word != "run"
+}
+
+/// `m` without the permissions of `revoked`: what its process is given.
+pub fn granted(m: &Manifest, revoked: &[String]) -> Manifest {
+    let mut m = m.clone();
+    if revoked.is_empty() {
+        return m;
+    }
+    let keep = |kind: &str, words: &mut Vec<String>| {
+        words.retain(|w| !revoked.contains(&format!("{kind}:{w}")));
+    };
+    let p = &mut m.permissions;
+    keep("commands", &mut p.commands);
+    keep("events", &mut p.events);
+    keep("network", &mut p.network);
+    keep("secrets", &mut p.secrets);
+    if revoked.iter().any(|w| w == "decide") {
+        p.decide = false;
+    }
+    m
+}
+
+/// The keys of a plugin's secrets: those it declares fields for (`contributes.secrets`) and those
+/// it may ask for by name (`permissions.secrets`, a pattern left out).
+pub fn secret_keys(m: &Manifest) -> Vec<String> {
+    let mut keys: Vec<String> = m
+        .contributes
+        .get("secrets")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|s| s.get("key").and_then(Value::as_str).map(str::to_string))
+        .collect();
+    for k in &m.permissions.secrets {
+        if !k.ends_with('*') && !keys.contains(k) {
+            keys.push(k.clone());
+        }
+    }
+    keys
+}
+
+/// A newer version found for an installed plugin: offered, never installed by itself (§3.2).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Update {
+    pub version: String,
+    /// The tag it is at, for a plugin of a git repository.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tag: Option<String>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -157,6 +281,15 @@ pub struct PluginView {
     /// The fields of its manifest Escouade does not know, ignored.
     pub ignored: Vec<String>,
     pub manifest: Option<Manifest>,
+    pub installed_at: String,
+    /// What the user chose: its switches, the permissions taken back, its settings.
+    pub choices: Choices,
+    /// What it may do (`asks`), the strongest first.
+    pub asks: Vec<String>,
+    /// The keys of its secrets (`secret_keys`).
+    pub secret_keys: Vec<String>,
+    /// A newer version found, offered.
+    pub update: Option<Update>,
 }
 
 /// A plugin as last read from its folder.
@@ -190,6 +323,53 @@ pub struct Plugins {
     changes: Mutex<Option<mpsc::Sender<String>>>,
     /// Counts the reloads of the folders in development (for the tests).
     revision: AtomicU64,
+    /// The newer versions found (`check_updates`), by id.
+    updates: RwLock<HashMap<String, Update>>,
+    /// What an inspection set aside, by its token, until it is installed or discarded.
+    staged: Mutex<HashMap<String, Staged>>,
+    /// Told the id of each folder in development read again (the runtime forgets its host).
+    reloaded: Mutex<Vec<ReloadHook>>,
+}
+
+type ReloadHook = Box<dyn Fn(&str) + Send + Sync>;
+
+/// A plugin read before it is installed (the install window, §3.4): who made it and where it
+/// comes from, what it adds and what it may do, and what grew since the version installed.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Preview {
+    /// What `install` and `discard` take.
+    pub token: String,
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub description: String,
+    pub origin: Origin,
+    pub fingerprint: String,
+    pub declarative: bool,
+    /// Why this Escouade would load it disabled (an API or a version out of its range).
+    pub refusal: Option<String>,
+    pub asks: Vec<String>,
+    /// The version of the same id installed now: this is an update.
+    pub previous: Option<Previous>,
+    /// What it may do that the version installed may not: the user's consent is asked again.
+    pub grown: Vec<String>,
+    pub manifest: Manifest,
+}
+
+/// The installed version an inspection would replace.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Previous {
+    pub version: String,
+    pub fingerprint: String,
+    pub asks: Vec<String>,
+}
+
+/// What an inspection set aside: its copy (none for a folder in development).
+struct Staged {
+    installed: Installed,
+    dir: Option<PathBuf>,
 }
 
 impl Plugins {
@@ -204,6 +384,9 @@ impl Plugins {
             watchers: Mutex::new(HashMap::new()),
             changes: Mutex::new(None),
             revision: AtomicU64::new(0),
+            updates: RwLock::new(HashMap::new()),
+            staged: Mutex::new(HashMap::new()),
+            reloaded: Mutex::new(Vec::new()),
         });
         let index = me.index();
         let loaded: Vec<Loaded> = index.plugins.into_iter().map(|i| me.read(i)).collect();
@@ -360,6 +543,11 @@ impl Plugins {
             declarative: manifest.as_ref().is_some_and(Manifest::declarative),
             state,
             ignored,
+            installed_at: i.installed_at.clone(),
+            choices: i.choices.clone(),
+            asks: manifest.as_ref().map(asks).unwrap_or_default(),
+            secret_keys: manifest.as_ref().map(secret_keys).unwrap_or_default(),
+            update: self.updates.read().get(&i.id).cloned(),
             manifest,
         }
     }
@@ -380,35 +568,59 @@ impl Plugins {
             .map_err(|p| Refusal::invalid(lang, &p))
     }
 
-    /// Installs the plugin of the local folder `src`: copied into the plugins' folder, pinned by
-    /// the SHA-256 of its files. In place of an installed plugin of the same id.
+    /// Installs the plugin of the local folder `src` at once (`inspect_folder`, then `install`).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn install_folder(&self, src: &Path, lang: Lang) -> Result<PluginView, Refusal> {
-        let m = Self::checked(src, lang)?;
-        let _w = self.writing.lock();
-        let digest = self.copy_in(src, &m.id, lang)?;
-        let path = std::path::absolute(src)
-            .map(|p| p.display().to_string())
-            .unwrap_or_else(|_| src.display().to_string());
-        self.put(
-            Installed {
-                id: m.id.clone(),
-                origin: Origin::Folder { path },
-                fingerprint: format!("sha256:{digest}"),
-                digest,
-                installed_at: now(),
-            },
-            lang,
-        )
+        let p = self.inspect_folder(src, lang)?;
+        self.install(&p.token, lang)
     }
 
-    /// Installs the plugin of the git repository `url` at the tag `tag`: cloned at that tag alone,
-    /// copied without its history, pinned by the tag's commit.
+    /// Installs the plugin of the git repository `url` at the tag `tag` at once.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub async fn install_git(
         &self,
         url: &str,
         tag: &str,
         lang: Lang,
     ) -> Result<PluginView, Refusal> {
+        let p = self.inspect_git(url, tag, lang).await?;
+        self.install(&p.token, lang)
+    }
+
+    /// Loads the folder in development `dir` in place at once.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn load_dev(&self, dir: &Path, lang: Lang) -> Result<PluginView, Refusal> {
+        let p = self.inspect_dev(dir, lang)?;
+        self.install(&p.token, lang)
+    }
+
+    /// What installing the plugin of the local folder `src` would do, before anything is
+    /// installed: its copy is set aside, pinned by the SHA-256 of its files, until `install` or
+    /// `discard`.
+    pub fn inspect_folder(&self, src: &Path, lang: Lang) -> Result<Preview, Refusal> {
+        let m = Self::checked(src, lang)?;
+        let (dir, digest) = self.set_aside(src, lang)?;
+        let path = std::path::absolute(src)
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|_| src.display().to_string());
+        Ok(self.stage(
+            Installed {
+                id: m.id.clone(),
+                origin: Origin::Folder { path },
+                fingerprint: format!("sha256:{digest}"),
+                digest,
+                installed_at: String::new(),
+                choices: Choices::default(),
+            },
+            Some(dir),
+            m,
+            lang,
+        ))
+    }
+
+    /// What installing the plugin of the git repository `url` at the tag `tag` would do: cloned at
+    /// that tag alone, set aside without its history, pinned by the tag's commit.
+    pub async fn inspect_git(&self, url: &str, tag: &str, lang: Lang) -> Result<Preview, Refusal> {
         let (url, tag) = (url.trim(), tag.trim());
         if url.is_empty() || url.starts_with('-') {
             return Err(Refusal::other(tr_in!(
@@ -458,9 +670,8 @@ impl Plugins {
                 .await
                 .map_err(|e| Refusal::other(e.to_string()))?;
             let m = Self::checked(&clone, lang)?;
-            let _w = self.writing.lock();
-            let digest = self.copy_in(&clone, &m.id, lang)?;
-            self.put(
+            let (dir, digest) = self.set_aside(&clone, lang)?;
+            Ok(self.stage(
                 Installed {
                     id: m.id.clone(),
                     origin: Origin::Git {
@@ -469,44 +680,227 @@ impl Plugins {
                     },
                     fingerprint: format!("git:{}", commit.trim()),
                     digest,
-                    installed_at: now(),
+                    installed_at: String::new(),
+                    choices: Choices::default(),
                 },
+                Some(dir),
+                m,
                 lang,
-            )
+            ))
         }
         .await;
         remove_dir(&clone);
         result
     }
 
-    /// Loads the folder in development `dir` in place: read again each time it changes.
-    pub fn load_dev(&self, dir: &Path, lang: Lang) -> Result<PluginView, Refusal> {
+    /// What loading the folder in development `dir` in place would do: nothing is copied.
+    pub fn inspect_dev(&self, dir: &Path, lang: Lang) -> Result<Preview, Refusal> {
         let m = Self::checked(dir, lang)?;
         let path = std::path::absolute(dir)
             .map(|p| p.display().to_string())
             .unwrap_or_else(|_| dir.display().to_string());
-        let _w = self.writing.lock();
-        // A copy of the same id goes: the folder takes its place (unless it is that copy).
-        let copy = self.data.plugins_dir().join(&m.id);
-        if std::fs::canonicalize(&copy).ok() != std::fs::canonicalize(dir).ok() {
-            remove_dir(&copy);
-        }
-        let view = self.put(
+        Ok(self.stage(
             Installed {
                 id: m.id.clone(),
-                origin: Origin::Dev { path: path.clone() },
+                origin: Origin::Dev { path },
                 fingerprint: String::new(),
                 digest: String::new(),
-                installed_at: now(),
+                installed_at: String::new(),
+                choices: Choices::default(),
             },
+            None,
+            m,
             lang,
-        )?;
-        self.watch(&m.id, Path::new(&path));
+        ))
+    }
+
+    /// Keeps what an inspection read until `install` or `discard`, and says it.
+    fn stage(
+        &self,
+        installed: Installed,
+        dir: Option<PathBuf>,
+        m: Manifest,
+        lang: Lang,
+    ) -> Preview {
+        let token = uuid::Uuid::new_v4().simple().to_string();
+        let wanted = asks(&m);
+        let previous = self.get(&m.id, lang).map(|v| Previous {
+            version: v.version.clone(),
+            fingerprint: v.fingerprint.clone(),
+            asks: v.asks.clone(),
+        });
+        let grown = previous
+            .as_ref()
+            .map(|p| {
+                wanted
+                    .iter()
+                    .filter(|w| !p.asks.contains(w))
+                    .cloned()
+                    .collect()
+            })
+            .unwrap_or_default();
+        let preview = Preview {
+            token: token.clone(),
+            id: m.id.clone(),
+            name: m.name.get(lang).to_string(),
+            version: m.version.clone(),
+            description: m
+                .description
+                .as_ref()
+                .map(|d| d.get(lang).to_string())
+                .unwrap_or_default(),
+            origin: installed.origin.clone(),
+            fingerprint: installed.fingerprint.clone(),
+            declarative: m.declarative(),
+            refusal: m.refusal(&self.app_version, lang),
+            asks: wanted,
+            previous,
+            grown,
+            manifest: m,
+        };
+        let mut staged = self.staged.lock();
+        // What was set aside and never answered goes: one inspection at a time is enough.
+        for (_, old) in staged.drain() {
+            if let Some(d) = old.dir {
+                remove_dir(&d);
+            }
+        }
+        staged.insert(token, Staged { installed, dir });
+        preview
+    }
+
+    /// Forgets what the inspection `token` set aside.
+    pub fn discard(&self, token: &str) {
+        if let Some(s) = self.staged.lock().remove(token) {
+            if let Some(d) = s.dir {
+                remove_dir(&d);
+            }
+        }
+    }
+
+    /// Installs what the inspection `token` set aside, in place of an installed plugin of the same
+    /// id (an update): the user's choices of that one kept (a permission taken back stays so), or
+    /// those an uninstall kept.
+    pub fn install(&self, token: &str, lang: Lang) -> Result<PluginView, Refusal> {
+        let staged = self.staged.lock().remove(token).ok_or_else(|| {
+            Refusal::other(tr_in!(
+                lang,
+                "Cette installation n'est plus d'actualité : choisis le plugin à nouveau.",
+                "This install is no longer current: choose the plugin again."
+            ))
+        })?;
+        let _w = self.writing.lock();
+        let mut installed = staged.installed;
+        installed.installed_at = now();
+        let id = installed.id.clone();
+        let before = self
+            .loaded
+            .read()
+            .iter()
+            .find(|l| l.installed.id == id)
+            .map(|l| l.installed.choices.clone());
+        installed.choices = before.or_else(|| self.kept(&id)).unwrap_or_default();
+        let copy = self.data.plugins_dir().join(&id);
+        match staged.dir {
+            Some(dir) => {
+                remove_dir(&copy);
+                if let Err(e) = std::fs::rename(&dir, &copy) {
+                    remove_dir(&dir);
+                    return Err(Refusal::other(tr_in!(
+                        lang,
+                        "Le plugin n'a pas pu être copié dans {} : {e}",
+                        "The plugin could not be copied to {}: {e}",
+                        copy.display()
+                    )));
+                }
+            }
+            None => {
+                // A copy of the same id goes: the folder takes its place (unless it is that copy).
+                if let Origin::Dev { path } = &installed.origin {
+                    if std::fs::canonicalize(&copy).ok() != std::fs::canonicalize(path).ok() {
+                        remove_dir(&copy);
+                    }
+                }
+            }
+        }
+        let _ = std::fs::remove_file(self.kept_file(&id));
+        self.updates.write().remove(&id);
+        let dev = match &installed.origin {
+            Origin::Dev { path } => Some(PathBuf::from(path)),
+            _ => None,
+        };
+        let view = self.put(installed, lang)?;
+        if let Some(path) = dev {
+            self.watch(&id, &path);
+        }
         Ok(view)
     }
 
-    /// Uninstalls a plugin: its copy removed; a folder in development is left where it is.
-    pub fn remove(&self, id: &str) -> std::io::Result<bool> {
+    /// Sets aside a copy of the folder `src`: its history (`.git`) and its links left out. Gives
+    /// the copy and the SHA-256 of its files.
+    fn set_aside(&self, src: &Path, lang: Lang) -> Result<(PathBuf, String), Refusal> {
+        let root = self.data.plugins_dir();
+        let fail = |e: std::io::Error| {
+            Refusal::other(tr_in!(
+                lang,
+                "Le plugin n'a pas pu être copié dans {} : {e}",
+                "The plugin could not be copied to {}: {e}",
+                root.display()
+            ))
+        };
+        std::fs::create_dir_all(&root).map_err(fail)?;
+        let incoming = root.join(format!(".incoming-{}", uuid::Uuid::new_v4().simple()));
+        match copy_tree(src, &incoming).and_then(|_| digest(&incoming)) {
+            Ok(d) => Ok((incoming, d)),
+            Err(e) => {
+                remove_dir(&incoming);
+                Err(fail(e))
+            }
+        }
+    }
+
+    /// Where an uninstall that keeps a plugin's data keeps its choices.
+    fn kept_file(&self, id: &str) -> PathBuf {
+        self.data
+            .plugins_dir()
+            .join(".kept")
+            .join(format!("{id}.json"))
+    }
+
+    fn kept(&self, id: &str) -> Option<Choices> {
+        std::fs::read(self.kept_file(id))
+            .ok()
+            .and_then(|b| serde_json::from_slice(&b).ok())
+    }
+
+    /// Changes the user's choices of the plugin `id` with `f`, the list saved; false when it is not
+    /// installed.
+    pub fn choose(&self, id: &str, f: impl FnOnce(&mut Choices)) -> std::io::Result<bool> {
+        let _w = self.writing.lock();
+        {
+            let mut loaded = self.loaded.write();
+            let Some(l) = loaded.iter_mut().find(|l| l.installed.id == id) else {
+                return Ok(false);
+            };
+            f(&mut l.installed.choices);
+        }
+        self.save()?;
+        Ok(true)
+    }
+
+    /// The choices of the plugin `id`, when it is installed.
+    pub fn choices(&self, id: &str) -> Option<Choices> {
+        self.loaded
+            .read()
+            .iter()
+            .find(|l| l.installed.id == id)
+            .map(|l| l.installed.choices.clone())
+    }
+
+    /// Uninstalls a plugin: its copy removed (a folder in development is left where it is), and
+    /// its settings with it; `keep`: its choices kept for a later install of the same id. Its
+    /// secrets are the caller's (`secret_keys`).
+    pub fn remove(&self, id: &str, keep: bool) -> std::io::Result<bool> {
         let _w = self.writing.lock();
         let gone = {
             let mut loaded = self.loaded.write();
@@ -517,11 +911,61 @@ impl Plugins {
             return Ok(false);
         };
         self.watchers.lock().remove(id);
+        self.updates.write().remove(id);
         if !matches!(gone.installed.origin, Origin::Dev { .. }) {
-            remove_dir(&gone.folder);
+            remove_dir_patiently(&gone.folder);
+        }
+        let kept = self.kept_file(id);
+        if keep {
+            if let Some(dir) = kept.parent() {
+                std::fs::create_dir_all(dir)?;
+            }
+            let bytes = serde_json::to_vec_pretty(&gone.installed.choices)
+                .map_err(std::io::Error::other)?;
+            crate::paths::write_atomic(&kept, &bytes)?;
+        } else {
+            let _ = std::fs::remove_file(&kept);
         }
         self.save()?;
         Ok(true)
+    }
+
+    /// Looks for a newer version of each installed plugin: a later tag of its repository, a later
+    /// version in the folder it was copied from. Offered (`PluginView::update`), never installed.
+    pub async fn check_updates(&self) {
+        let installed: Vec<(Installed, String)> = self
+            .loaded
+            .read()
+            .iter()
+            .filter_map(|l| {
+                let m = l.read.as_ref().ok()?.manifest.as_ref().ok()?;
+                Some((l.installed.clone(), m.version.clone()))
+            })
+            .collect();
+        for (i, version) in installed {
+            let found = match &i.origin {
+                Origin::Git { url, .. } => newer_tag(url, &version).await,
+                Origin::Folder { path } => {
+                    std::fs::read_to_string(Path::new(path).join(manifest::FILE))
+                        .ok()
+                        .and_then(|t| manifest::read(&t, false).manifest.ok())
+                        .filter(|m| {
+                            m.id == i.id
+                                && manifest::version(&m.version) > manifest::version(&version)
+                        })
+                        .map(|m| Update {
+                            version: m.version,
+                            tag: None,
+                        })
+                }
+                Origin::Dev { .. } => None,
+            };
+            let mut updates = self.updates.write();
+            match found {
+                Some(u) => updates.insert(i.id.clone(), u),
+                None => updates.remove(&i.id),
+            };
+        }
     }
 
     /// Puts `installed` in the list in place of its id's, read from its folder, the list saved.
@@ -536,37 +980,6 @@ impl Plugins {
         }
         self.save().map_err(|e| Refusal::other(e.to_string()))?;
         Ok(self.get(&id, lang).expect("just put"))
-    }
-
-    /// Copies the folder `src` to the plugin `id`'s, in place of its old copy: its history
-    /// (`.git`) and its links left out. Gives the SHA-256 of the copy's files.
-    fn copy_in(&self, src: &Path, id: &str, lang: Lang) -> Result<String, Refusal> {
-        let root = self.data.plugins_dir();
-        let fail = |e: std::io::Error| {
-            Refusal::other(tr_in!(
-                lang,
-                "Le plugin n'a pas pu être copié dans {} : {e}",
-                "The plugin could not be copied to {}: {e}",
-                root.display()
-            ))
-        };
-        std::fs::create_dir_all(&root).map_err(fail)?;
-        let incoming = root.join(format!(".incoming-{}", uuid::Uuid::new_v4().simple()));
-        let made = copy_tree(src, &incoming).and_then(|_| digest(&incoming));
-        let digest = match made {
-            Ok(d) => d,
-            Err(e) => {
-                remove_dir(&incoming);
-                return Err(fail(e));
-            }
-        };
-        let to = root.join(id);
-        remove_dir(&to);
-        if let Err(e) = std::fs::rename(&incoming, &to) {
-            remove_dir(&incoming);
-            return Err(fail(e));
-        }
-        Ok(digest)
     }
 
     /// Watches the folder in development of the plugin `id`.
@@ -620,15 +1033,29 @@ impl Plugins {
 
     /// Reads again the folders in development of `ids`.
     fn reload(&self, ids: &[String]) {
-        let _w = self.writing.lock();
-        let mut loaded = self.loaded.write();
-        for l in loaded.iter_mut() {
-            if ids.contains(&l.installed.id) && matches!(l.installed.origin, Origin::Dev { .. }) {
-                *l = self.read(l.installed.clone());
+        let mut read = Vec::new();
+        {
+            let _w = self.writing.lock();
+            let mut loaded = self.loaded.write();
+            for l in loaded.iter_mut() {
+                if ids.contains(&l.installed.id) && matches!(l.installed.origin, Origin::Dev { .. })
+                {
+                    *l = self.read(l.installed.clone());
+                    read.push(l.installed.id.clone());
+                }
             }
         }
-        drop(loaded);
+        for id in &read {
+            for hook in self.reloaded.lock().iter() {
+                hook(id);
+            }
+        }
         self.revision.fetch_add(1, Ordering::AcqRel);
+    }
+
+    /// Calls `f` with the id of each folder in development read again.
+    pub fn on_reload(&self, f: impl Fn(&str) + Send + Sync + 'static) {
+        self.reloaded.lock().push(Box::new(f));
     }
 
     /// How many times the folders in development were read again.
@@ -636,6 +1063,32 @@ impl Plugins {
     pub fn revision(&self) -> u64 {
         self.revision.load(Ordering::Acquire)
     }
+}
+
+/// The latest tag of the repository `url` whose version is past `version`.
+async fn newer_tag(url: &str, version: &str) -> Option<Update> {
+    if url.starts_with('-') {
+        return None;
+    }
+    let cwd = std::env::temp_dir().display().to_string();
+    let out = crate::git::text(&cwd, &["ls-remote", "--tags", "--refs", "--", url])
+        .await
+        .ok()?;
+    let mine = manifest::version(version);
+    out.lines()
+        .filter_map(|l| {
+            l.split_once("refs/tags/")
+                .map(|(_, t)| t.trim().to_string())
+        })
+        .filter_map(|t| {
+            let v = crate::engine::registry::Version::find(&t)?;
+            (v > mine).then_some((v, t))
+        })
+        .max_by(|a, b| a.0.cmp(&b.0))
+        .map(|(v, t)| Update {
+            version: v.to_string(),
+            tag: Some(t),
+        })
 }
 
 fn now() -> String {
@@ -649,6 +1102,18 @@ fn remove_dir(dir: &Path) {
             log::warn!("cannot remove {}: {e}", dir.display());
         }
     }
+}
+
+/// Removes a folder its plugin's process may still hold for a moment after it was stopped (Windows
+/// keeps the files and the working folder of a process until it is gone): tried again for 3 s.
+fn remove_dir_patiently(dir: &Path) {
+    for _ in 0..30 {
+        if !dir.exists() || std::fs::remove_dir_all(dir).is_ok() {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    remove_dir(dir);
 }
 
 /// Whether a file of a plugin's folder is left out of its copy and its fingerprint: its git

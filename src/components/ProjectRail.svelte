@@ -247,6 +247,14 @@
       onclick={() => (app.ui.view === 'stats' && app.ui.activeProject ? app.selectProject(app.ui.activeProject) : app.openStats())}
       ><Icon name="stats" /><span class="lbl" aria-hidden="true"><span class="tx">{t('nav.rail.stats')}</span></span></button
     >
+    <button
+      class="tile global"
+      aria-pressed={app.ui.view === 'plugins'}
+      aria-label={t('plugins.nav.tile')}
+      use:tip={{ title: t('plugins.nav.tile'), rows: [t('plugins.nav.tileTip')], side: 'right', aria: false }}
+      onclick={() => (app.ui.view === 'plugins' && app.ui.activeProject ? app.selectProject(app.ui.activeProject) : app.openPlugins())}
+      ><Icon name="puzzle" /><span class="lbl" aria-hidden="true"><span class="tx">{t('plugins.nav.tile')}</span></span></button
+    >
   {/if}
   <button
     class="tile global"

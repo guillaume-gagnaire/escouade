@@ -54,6 +54,8 @@
   import RunView from './components/RunView.svelte';
   import Sidebar from './components/Sidebar.svelte';
   import Stats from './components/Stats.svelte';
+  import PluginsSide from './components/plugins/PluginsSide.svelte';
+  import PluginsView from './components/plugins/PluginsView.svelte';
   import StatusBar from './components/StatusBar.svelte';
   import TerminalView from './components/TerminalView.svelte';
   import TitleBar from './components/TitleBar.svelte';
@@ -164,6 +166,9 @@
       <div class="work"><Overview /></div>
     {:else if app.ui.view === 'stats'}
       <div class="work"><Stats /></div>
+    {:else if app.ui.view === 'plugins'}
+      <PluginsSide />
+      <div class="work"><PluginsView /></div>
     {:else if app.project}
       {@const project = app.project}
       <Sidebar {project} />
