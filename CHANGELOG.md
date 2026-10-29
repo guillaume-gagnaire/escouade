@@ -9,6 +9,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 ### Nouveautés
 
 - Le programme d’un plugin tourne à part, démarré seulement quand il sert, et Escouade le tient : un plugin qui ne répond pas à temps n’est plus attendu, celui qui plante redémarre (trois fois, puis s’arrête), celui qui prend trop de mémoire est arrêté, et chacun n’obtient que ses propres secrets. Son journal garde ce qu’il a fait et dit, et le protocole est décrit dans la documentation des plugins.
+- Les auteurs de plugins ont une commande livrée avec Escouade, `escouade-plugin` : `test` passe un plugin au banc de conformité et dit ce qui lui manque, `dev` lui envoie des faits et des demandes à la main, sans l’app.
 
 ### Corrections
 

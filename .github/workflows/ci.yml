@@ -409,12 +409,15 @@ jobs:
           npx tauri build --debug --config src-tauri/tauri.ort-linux.conf.json --config '{"bundle":{"createUpdaterArtifacts":false}}'
           dpkg -c src-tauri/target/debug/bundle/deb/*.deb | grep -q usr/lib/escouade/libonnxruntime.so.1.23.2
 
-      # escouade-hook, the hook of the harnesses that run theirs as commands, ships beside the app.
-      - name: The packages hold escouade-hook
+      # escouade-hook, the hook of the harnesses that run theirs as commands, and escouade-plugin, the command of
+      # the plugins' authors (their conformance bench), ship beside the app.
+      - name: The packages hold escouade-hook and escouade-plugin
         run: |
-          dpkg -c src-tauri/target/debug/bundle/deb/*.deb | grep -E 'usr/bin/escouade-hook$'
           appimage=$(ls "$PWD"/src-tauri/target/debug/bundle/appimage/*.AppImage)
-          (cd "$RUNNER_TEMP" && "$appimage" --appimage-extract usr/bin/escouade-hook >/dev/null && test -x squashfs-root/usr/bin/escouade-hook)
+          for bin in escouade-hook escouade-plugin; do
+            dpkg -c src-tauri/target/debug/bundle/deb/*.deb | grep -E "usr/bin/$bin$"
+            (cd "$RUNNER_TEMP" && "$appimage" --appimage-extract "usr/bin/$bin" >/dev/null && test -x "squashfs-root/usr/bin/$bin")
+          done
 
       - name: Upload the packages
         uses: actions/upload-artifact@v7
@@ -517,9 +520,11 @@ jobs:
           npx tauri build --debug --bundles app,dmg --config src-tauri/tauri.ort-macos.conf.json --config '{"bundle":{"createUpdaterArtifacts":false}}'
           test -f src-tauri/target/debug/bundle/macos/Escouade.app/Contents/Frameworks/libonnxruntime.1.23.2.dylib
 
-      # escouade-hook, the hook of the harnesses that run theirs as commands, ships beside the app.
-      - name: The app holds escouade-hook
-        run: test -x src-tauri/target/debug/bundle/macos/Escouade.app/Contents/MacOS/escouade-hook
+      # escouade-hook and escouade-plugin ship beside the app.
+      - name: The app holds escouade-hook and escouade-plugin
+        run: |
+          test -x src-tauri/target/debug/bundle/macos/Escouade.app/Contents/MacOS/escouade-hook
+          test -x src-tauri/target/debug/bundle/macos/Escouade.app/Contents/MacOS/escouade-plugin
 
       - name: Upload the disk image
         uses: actions/upload-artifact@v7

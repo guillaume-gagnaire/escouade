@@ -9,6 +9,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 ### New
 
 - A plugin’s program runs apart, started only when it is needed, and Escouade keeps it in check: a plugin that does not answer in time is no longer waited for, one that crashes restarts (three times, then stops), one that takes too much memory is stopped, and each gets only its own secrets. Its journal keeps what it did and said, and the protocol is described in the plugins’ documentation.
+- Plugin authors get a command that ships with Escouade, `escouade-plugin`: `test` puts a plugin through the conformance bench and says what it lacks, `dev` sends it facts and requests by hand, without the app.
 
 ### Fixes
 

@@ -2,11 +2,15 @@
 // Test double of a plugin's program (PLG-2, ESC-174): JSON-RPC 2.0 on stdio, one message per line,
 // batches (a JSON array on one line) answered by a batch.
 //
-// `initialize` answers protocol version 1, or the one of `--protocol <n>`; `--ignore-initialize`
-// never answers it, `--ignore-shutdown` never answers `shutdown` (else it answers, then exits).
+// `initialize` answers protocol version 1, the one of `--protocol <n>`, or the one it is offered with
+// `--protocol echo`; `--ignore-initialize` never answers it, `--ignore-shutdown` never answers
+// `shutdown` (else it answers, then exits).
 // `echo` gives its params back, `frames` counts the frames it was given, `attach` keeps its `key`,
-// `test/state` says what it holds; a decision (`permissions/…`) is never answered, so that its default
-// applies. `test/do` behaves as its `behave` says:
+// `test/state` says what it holds; a decision (`permissions/decide`) is answered `ask`, or never with
+// `--silent-decisions`, so that its default applies. A fact (`events/fact`, PLG-3) asks for the secret
+// `token` (or the key of `--fact-secret <key>`), writes it on stderr with `--leak`, and says the fact
+// in a `log`. `--slow <ms>` holds every answer but `initialize`'s that long. `test/do` behaves as its
+// `behave` says:
 //   answer  → { ok: true, said: <say> }          silent → no answer, ever
 //   crash   → a line on stderr, then exit 3       loop   → a busy loop: nothing answered any more
 //   grow    → <mb> MB taken and held, then { grown } stderr → <lines> written on stderr, then { ok }
@@ -57,7 +61,7 @@ function handle(msg) {
     case 'initialize':
       if (flag('--ignore-initialize')) return null;
       return ok(id, {
-        protocolVersion: Number(option('--protocol') ?? 1),
+        protocolVersion: option('--protocol') === 'echo' ? params.protocolVersion : Number(option('--protocol') ?? 1),
         capabilities: { batch: true },
         info: { name: 'fake-plugin', pid: process.pid },
       });
@@ -76,6 +80,12 @@ function handle(msg) {
     case 'test/state':
       return ok(id, { attached, pid: process.pid });
     case 'permissions/decide':
+      return flag('--silent-decisions') ? null : ok(id, { decision: 'ask' });
+    case 'events/fact':
+      ask('secrets/get', { key: option('--fact-secret') ?? 'token' }).then((answer) => {
+        if (flag('--leak')) process.stderr.write(`fake-plugin: the secret is ${answer.result}\n`);
+        send({ jsonrpc: '2.0', method: 'log', params: { level: 'info', message: `fact ${params.name}` } });
+      });
       return null;
     case 'test/do':
       return behave(id, params);
@@ -146,5 +156,8 @@ async function take(line) {
     return;
   }
   const answer = await handle(msg);
-  if (answer) send(answer);
+  if (!answer) return;
+  const slow = Number(option('--slow') ?? 0);
+  if (slow > 0 && msg.method !== 'initialize') setTimeout(() => send(answer), slow);
+  else send(answer);
 }

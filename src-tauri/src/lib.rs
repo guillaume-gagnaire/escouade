@@ -125,6 +125,8 @@ mod planfiles;
 mod planfiles_tests;
 mod plugins;
 #[cfg(test)]
+mod plugins_bench_tests;
+#[cfg(test)]
 mod plugins_runtime_tests;
 #[cfg(test)]
 mod plugins_tests;
@@ -351,6 +353,12 @@ fn build_window(app: &tauri::App) -> tauri::Result<()> {
     // A page whose process ends is loaded again, without what it showed (ESC-290).
     pagecrash::install(&main);
     Ok(())
+}
+
+/// `escouade-plugin` (src/bin): the conformance bench, the manifest's check and the fake Escouade,
+/// for the plugins' authors (PLG-3). Gives the exit code.
+pub fn plugin_cli(args: Vec<String>) -> i32 {
+    plugins::bench::cli::main(args)
 }
 
 pub fn run() {

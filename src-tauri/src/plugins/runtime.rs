@@ -207,8 +207,25 @@ pub fn secret_name(plugin: &str, key: &str) -> String {
     format!("plugin:{plugin}:{key}")
 }
 
+/// The program of `run` for this system: in the plugin's `folder`, or in `escouade_dir` (the
+/// folder of the app's programs) for `{escouade}/…`.
+pub(crate) fn program_path(folder: &Path, run: &manifest::Run, escouade_dir: &Path) -> PathBuf {
+    let sys = if cfg!(windows) {
+        "windows"
+    } else if cfg!(target_os = "macos") {
+        "macos"
+    } else {
+        "linux"
+    };
+    let p = run.by_system.get(sys).unwrap_or(&run.command);
+    match p.strip_prefix(manifest::ESCOUADE_DIR) {
+        Some(rest) => escouade_dir.join(rest.trim_start_matches(['/', '\\'])),
+        None => folder.join(p),
+    }
+}
+
 /// Whether `word` is one of `patterns`: the same, or one a `prefix*` takes in.
-fn matches(pattern: &str, word: &str) -> bool {
+pub(crate) fn matches(pattern: &str, word: &str) -> bool {
     match pattern.strip_suffix('*') {
         Some(prefix) => word.starts_with(prefix),
         None => pattern == word,
@@ -217,13 +234,13 @@ fn matches(pattern: &str, word: &str) -> bool {
 
 /// A request on one line. `params` is raw JSON: a newline in it can only be whitespace (a string
 /// of JSON holds none), so it is made a space.
-fn request_line(id: u64, method: &str, params: &RawValue) -> String {
+pub(crate) fn request_line(id: u64, method: &str, params: &RawValue) -> String {
     let method = serde_json::to_string(method).unwrap_or_else(|_| "\"\"".into());
     let params = one_line(params.get());
     format!(r#"{{"jsonrpc":"2.0","id":{id},"method":{method},"params":{params}}}"#)
 }
 
-fn notification_line(method: &str, params: &RawValue) -> String {
+pub(crate) fn notification_line(method: &str, params: &RawValue) -> String {
     let method = serde_json::to_string(method).unwrap_or_else(|_| "\"\"".into());
     let params = one_line(params.get());
     format!(r#"{{"jsonrpc":"2.0","method":{method},"params":{params}}}"#)
@@ -692,18 +709,7 @@ impl Runtime {
 
     /// The program of `run` for this system, in the plugin's folder or the app's.
     fn program_of(&self, folder: &Path, run: &manifest::Run) -> PathBuf {
-        let sys = if cfg!(windows) {
-            "windows"
-        } else if cfg!(target_os = "macos") {
-            "macos"
-        } else {
-            "linux"
-        };
-        let p = run.by_system.get(sys).unwrap_or(&run.command);
-        match p.strip_prefix(manifest::ESCOUADE_DIR) {
-            Some(rest) => self.escouade_dir.join(rest.trim_start_matches(['/', '\\'])),
-            None => folder.join(p),
-        }
+        program_path(folder, run, &self.escouade_dir)
     }
 }
 
