@@ -358,6 +358,20 @@ describe.skipIf(!url)('the submission', () => {
     gh.push(REPO, '0.5.0', pluginFiles(REPO, { manifest: { version: '0.5.0' } }));
     const dup = await onTag(db, deps, { ...hook, tag: '0.5.0' }, T0);
     expect(await checkVersion(db, deps, dup.check!)).toBe('rejected');
+
+    // A transfer freezes the publications 7 days: a new tag then waits for a click, even with auto-publish on.
+    await q(`update plugins set frozen_until = now() + interval '7 days'`);
+    gh.push(REPO, 'v0.6.0', pluginFiles(REPO, { manifest: { version: '0.6.0' } }));
+    const frozen = await onTag(db, deps, { ...hook, tag: 'v0.6.0' }, T0);
+    expect(await checkVersion(db, deps, frozen.check!)).toBe('ready');
+    // A plugin deleted takes no new tag; once purged, the numbers it used stay taken.
+    await q(`update plugins set frozen_until = null, deleted_at = now()`);
+    gh.push(REPO, 'v0.7.0', pluginFiles(REPO, { manifest: { version: '0.7.0' } }));
+    expect(await onTag(db, deps, { ...hook, tag: 'v0.7.0' }, T0)).toEqual({});
+    await q(`update plugins set deleted_at = null, retired_versions = '["0.9.0"]'`);
+    gh.push(REPO, 'v0.8.0', pluginFiles(REPO, { manifest: { version: '0.8.0' } }));
+    const below = await onTag(db, deps, { ...hook, tag: 'v0.8.0' }, T0);
+    expect(await checkVersion(db, deps, below.check!)).toBe('rejected');
   });
 
   it('a tag moved after publication is noted and told; the published version does not change', async () => {

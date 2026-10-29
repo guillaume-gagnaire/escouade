@@ -1,5 +1,5 @@
 import { gzipSync } from 'node:zlib';
-import { eq, lt, sql } from 'drizzle-orm';
+import { and, eq, isNull, lt, sql } from 'drizzle-orm';
 import { accounts, installsDaily, plugins, versions } from '../db/schema';
 import type { Db } from './db';
 import { parseRevocations, revoked, type RevocationList } from './revocation-list';
@@ -10,7 +10,9 @@ import { compareVersions, sha256, type Binary } from './versions';
 // versions, what each asks for and the Escouade it is for (§8.1: the app picks the last compatible one); the search
 // runs on the user's machine. One JSON, compressed, with an ETag: an app that has it gets a 304. Its bytes change
 // only when something does (a version published, a revocation list, the day's installations): the installations
-// counted are those of the days before today, so the catalogue stays the same through a day.
+// counted are those of the days before today, so the catalogue stays the same through a day. A plugin its author
+// took off the list or deleted is not in it (docs/STORE.md, §2.2); a version they took back stays, marked `yanked`,
+// for those who have it, and is neither `latest` nor offered.
 
 /** Where an app finds a version's files, from the store's address: the paths of server/api/v1/plugins/. */
 export const filePaths = (id: string, version: string) => {
@@ -30,6 +32,8 @@ export interface CatalogVersion {
   escouade: { api: string; min: string; max?: string };
   /** Signed by the review (STORE-8 sets it from the signatures it takes in); false until then. */
   verified: boolean;
+  /** Taken back by its author: no longer offered to install nor as an update; those who have it keep it. */
+  yanked: boolean;
   /** Why its badge was withdrawn by the revocation list, if it was. */
   unverified?: { fr: string; en: string };
   /** What it asks for (the manifest's `permissions`), whether it runs a program, what it adds. */
@@ -50,8 +54,11 @@ export interface CatalogPlugin {
   keywords: string[];
   /** Installations and updates counted until `installs_until` (only those whose users accepted the statistics). */
   installs: number;
-  /** The highest version published (a release before a pre-release); the app picks among `versions` what it can run. */
-  latest: string;
+  /** The highest version published and not taken back (a release before a pre-release), null if all were taken back;
+   *  the app picks among `versions` what it can run. */
+  latest: string | null;
+  /** When it came to its author's account from another (its publications froze 7 days); absent if never. */
+  transferred_at?: string;
   versions: CatalogVersion[];
 }
 
@@ -76,7 +83,7 @@ export async function buildCatalog(db: Db, now = new Date()): Promise<Catalog> {
     .from(versions)
     .innerJoin(plugins, eq(plugins.id, versions.pluginId))
     .leftJoin(accounts, eq(accounts.id, plugins.accountId))
-    .where(eq(versions.state, 'published'));
+    .where(and(eq(versions.state, 'published'), isNull(plugins.unlistedAt), isNull(plugins.deletedAt)));
   const counts = await db
     .select({ id: installsDaily.pluginId, n: sql<number>`sum(${installsDaily.count})::int` })
     .from(installsDaily)
@@ -89,7 +96,7 @@ export async function buildCatalog(db: Db, now = new Date()): Promise<Catalog> {
 
   let updated = stored?.receivedAt ?? new Date(0);
   const byPlugin = new Map<string, CatalogPlugin>();
-  const manifests = new Map<string, { version: string; manifest: Record<string, unknown> }>();
+  const manifests = new Map<string, { version: string; manifest: Record<string, unknown>; yanked: boolean }>();
   for (const { v, plugin, login } of rows) {
     const version = v.version!;
     if (revoked(list, plugin.id, version, 'disable')) continue;
@@ -106,6 +113,7 @@ export async function buildCatalog(db: Db, now = new Date()): Promise<Catalog> {
       platforms: Object.keys(binaries).sort(),
       escouade: { api: escouade.api, min: escouade.min, ...(escouade.max ? { max: escouade.max } : {}) },
       verified: false,
+      yanked: !!v.yankedAt,
       ...(unverify ? { unverified: unverify.reason } : {}),
       permissions: (m.permissions ?? {}) as Record<string, unknown>,
       run: !!m.run,
@@ -121,6 +129,8 @@ export async function buildCatalog(db: Db, now = new Date()): Promise<Catalog> {
       },
     };
     if (v.publishedAt! > updated) updated = v.publishedAt!;
+    if (v.yankedAt && v.yankedAt > updated) updated = v.yankedAt;
+    if (plugin.transferredAt && plugin.transferredAt > updated) updated = plugin.transferredAt;
     let p = byPlugin.get(plugin.id);
     if (!p) {
       p = {
@@ -133,19 +143,22 @@ export async function buildCatalog(db: Db, now = new Date()): Promise<Catalog> {
         categories: plugin.categories,
         keywords: plugin.keywords,
         installs: installs.get(plugin.id) ?? 0,
-        latest: version,
+        latest: null,
+        ...(plugin.transferredAt ? { transferred_at: plugin.transferredAt.toISOString() } : {}),
         versions: [],
       };
       byPlugin.set(plugin.id, p);
     }
     p.versions.push(entry);
+    // The plugin's name and description are those of its latest version offered; of its latest at all, if all were taken back.
     const best = manifests.get(plugin.id);
-    if (!best || newer(version, best.version)) manifests.set(plugin.id, { version, manifest: m });
+    if (!best || (best.yanked && !v.yankedAt) || (best.yanked === !!v.yankedAt && newer(version, best.version)))
+      manifests.set(plugin.id, { version, manifest: m, yanked: !!v.yankedAt });
   }
   for (const p of byPlugin.values()) {
     p.versions.sort((a, b) => compareVersions(b.version, a.version));
     const m = manifests.get(p.id)!;
-    p.latest = m.version;
+    p.latest = m.yanked ? null : m.version;
     p.name = m.manifest.name ?? p.id;
     p.description = m.manifest.description ?? '';
     p.license = typeof m.manifest.license === 'string' ? m.manifest.license : null;

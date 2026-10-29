@@ -51,3 +51,14 @@ To fix it: commit, then push a **new tag**. The store sees it through the App an
 Once the plugin is published, each new tag of the repository becomes a version checked by itself, which waits for your click to appear. The “Publish new tags by themselves” box publishes it without waiting, if every check passes.
 
 A tag moved after publication changes nothing to the published version: the store keeps the commit and the archive it froze, marks it “tag moved on the repository” and tells you. To publish this new code, push a new tag.
+
+## Managing your plugins
+
+Your account, at [store.escouade.dev/en/account](https://store.escouade.dev/en/account), shows your plugins, their state, their latest version and their installs (those of the users who accepted Escouade’s statistics only). A version found on a new tag waits at the top, with the permissions it asks more: “Publish” or “Dismiss”. A plugin’s “…” menu opens its versions, its installs week by week and what you can do with it:
+
+- **Take a version back**: it is no longer offered to install nor as an update; those who have it keep it, marked “taken back by its author”. Its number does not come back.
+- **Take off the list**: the plugin leaves the search and the app’s catalog; its page stays readable, installations keep their versions, without updates. One click puts it back.
+- **Transfer**: to another account of the store, which accepts it from its own. If the repository changes owners on GitHub, the new owner, once the App is installed on their side, can take the plugin over. Either way, its publications freeze for 7 days, the time for a report, and its page tells the transfer.
+- **Delete**, by typing its id: it leaves the catalog at once; its page and archives go after 30 days, during which you can undo it. Its id stays your account’s, and its version numbers are not used again.
+
+Each action goes to the journal and, if you gave an address, out by e-mail: an action you did not do shows. An account that still has plugins cannot be deleted: transfer or delete them first.

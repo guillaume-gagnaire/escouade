@@ -51,3 +51,14 @@ Pour corriger : commite, puis pousse une **nouvelle étiquette**. Le store la vo
 Une fois le plugin publié, chaque nouvelle étiquette du dépôt devient une version contrôlée seule, qui attend ton clic pour paraître. La case « Publier seul les nouvelles étiquettes » la publie sans attendre, si tous les contrôles passent.
 
 Une étiquette déplacée après la publication ne change rien à la version publiée : le store garde le commit et l’archive qu’il a figés, la marque « étiquette déplacée sur le dépôt » et te prévient. Pour publier ce nouveau code, pousse une nouvelle étiquette.
+
+## Gérer ses plugins
+
+Ton compte, sur [store.escouade.dev/account](https://store.escouade.dev/account), montre tes plugins, leur état, leur dernière version et leurs installations (celles des seuls utilisateurs qui ont accepté les statistiques d’Escouade). Une version trouvée sur une nouvelle étiquette y attend en tête, avec les permissions qu’elle demande en plus : « Publier » ou « Ignorer ». Le menu « … » d’un plugin ouvre ses versions, ses installations semaine par semaine et ce que tu peux en faire :
+
+- **Retirer une version** : elle n’est plus proposée à l’installation ni comme mise à jour ; ceux qui l’ont la gardent, marquée « retirée par l’auteur ». Son numéro ne revient pas.
+- **Retirer de la liste** : le plugin quitte la recherche et le catalogue de l’app ; sa page reste lisible, les installations gardent leurs versions, sans mises à jour. Il se remet dans la liste d’un clic.
+- **Transférer** : à un autre compte du store, qui l’accepte depuis le sien. Si le dépôt change de propriétaire sur GitHub, le nouveau propriétaire, une fois l’App installée chez lui, peut reprendre le plugin. Dans les deux cas, ses publications sont gelées 7 jours, le temps d’un signalement, et sa page dit le transfert.
+- **Supprimer**, en tapant son identifiant : il quitte le catalogue tout de suite ; sa page et ses archives partent après 30 jours, pendant lesquels tu peux annuler. Son identifiant reste à ton compte, et ses numéros de version ne servent plus.
+
+Chaque action passe au journal et, si tu as donné une adresse, part par e-mail : une action que tu n’as pas faite se voit. Un compte qui a encore des plugins ne se supprime pas : transfère-les ou supprime-les d’abord.

@@ -24,7 +24,7 @@ import type { Env } from './config';
 import type { Db } from './db';
 import { GithubError } from './github';
 import { imageInfo, reencode } from './images';
-import { rejectionMail, sendMail, tagMovedMail } from './mail';
+import { authorMail, rejectionMail, sendMail, tagMovedMail, type AuthorEvent } from './mail';
 import { renderDocs, type KeepImage } from './readme';
 import { TooBig, type Source } from './source';
 import { ARCHIVE_MAX, readArchive, type ArchiveRead } from './tar';
@@ -277,6 +277,8 @@ export async function checkVersion(db: Db, deps: Deps, id: number, now = () => n
             ),
           )
       : [];
+    // The numbers of a plugin deleted and purged stay used: its id comes back with them.
+    for (const r of existing?.retiredVersions ?? []) taken.push({ version: r, state: 'published' });
     const published = taken.filter((x) => x.state === 'published').map((x) => x.version!);
     const latest = published.sort(compareVersions).at(-1) ?? null;
     const others = await otherPlugins(db, v.accountId);
@@ -413,10 +415,16 @@ export async function checkVersion(db: Db, deps: Deps, id: number, now = () => n
       .set({ ...base, state, binaries, screenshots, docs, versionJson: file.json, versionSha256: file.sha256 })
       .where(eq(versions.id, id));
     await note(db, `version.${state}`, { accountId: v.accountId }, { version: id, plugin: pluginId, sha256: file.sha256 });
-    if (state === 'ready' && v.origin === 'webhook' && existing?.autoPublish) {
-      await markPublished(db, id, now());
-      await note(db, 'version.published', { accountId: v.accountId }, { version: id, plugin: pluginId, by: 'auto' });
-      return 'published';
+    if (state === 'ready' && v.origin === 'webhook' && existing) {
+      // A transfer freezes the publications 7 days: the version waits for a click once the freeze is over.
+      const frozen = !!existing.frozenUntil && existing.frozenUntil > now();
+      if (existing.autoPublish && !frozen && !existing.deletedAt) {
+        await markPublished(db, id, now());
+        await note(db, 'version.published', { accountId: v.accountId }, { version: id, plugin: pluginId, by: 'auto' });
+        await tellAuthor(db, deps, v.accountId, 'auto-published', pluginId!, base.version!);
+        return 'published';
+      }
+      await tellAuthor(db, deps, v.accountId, 'ready', pluginId!, base.version!);
     }
     return state;
   } catch (e) {
@@ -442,6 +450,24 @@ async function otherPlugins(db: Db, accountId: number | null): Promise<Snapshot[
   return [...byId].map(([id, name]) => ({ id, name }));
 }
 
+/** Tells the author of an event of their plugin by e-mail, if they gave an address that was checked. */
+async function tellAuthor(
+  db: Db,
+  deps: Pick<Deps, 'env' | 'site'>,
+  accountId: number | null,
+  event: AuthorEvent,
+  plugin: string,
+  version: string,
+) {
+  if (!accountId) return;
+  const [a] = await db.select().from(accounts).where(eq(accounts.id, accountId));
+  if (a?.email && a.emailVerifiedAt)
+    await sendMail(
+      deps.env,
+      authorMail(a.email, event, { plugin, version, page: `${deps.site}/account?plugin=${encodeURIComponent(plugin)}` }),
+    );
+}
+
 async function tellRejection(db: Db, deps: Deps, v: Version, results: CheckResult[]): Promise<void> {
   if (!v.accountId) return;
   const [a] = await db.select().from(accounts).where(eq(accounts.id, v.accountId));
@@ -460,7 +486,7 @@ async function tellRejection(db: Db, deps: Deps, v: Version, results: CheckResul
 
 // ---- Publishing ----
 
-export type Published = { ok: true } | { error: 'not-found' | 'not-ready' | 'held' | 'categories' | 'taken' };
+export type Published = { ok: true } | { error: 'not-found' | 'not-ready' | 'held' | 'categories' | 'taken' | 'frozen' | 'deleted' };
 
 async function markPublished(db: Db, id: number, now: Date) {
   await db.update(versions).set({ state: 'published', publishedAt: now }).where(eq(versions.id, id));
@@ -485,12 +511,15 @@ export async function publishVersion(
   id: number,
   form: { categories?: unknown; keywords?: unknown; review?: unknown; autoPublish?: unknown },
   now = new Date(),
+  tell: Pick<Deps, 'env' | 'site'> | null = null,
 ): Promise<Published> {
   const [v] = await db.select().from(versions).where(eq(versions.id, id));
   if (!v || !v.pluginId) return { error: 'not-found' };
   const [plugin] = await db.select().from(plugins).where(eq(plugins.id, v.pluginId));
   if (plugin ? plugin.accountId !== account.id : v.accountId !== account.id) return { error: 'not-found' };
   if (v.state === 'held') return { error: 'held' };
+  if (plugin?.deletedAt) return { error: 'deleted' };
+  if (plugin?.frozenUntil && plugin.frozenUntil > now) return { error: 'frozen' };
   if (v.state !== 'ready') return { error: 'not-ready' };
   const on = (x: unknown) => x === true || x === 'on' || x === '1' || x === 'true';
   if (!plugin) {
@@ -539,6 +568,7 @@ export async function publishVersion(
     { version: id, plugin: v.pluginId, sha256: v.versionSha256 },
     now,
   );
+  if (tell) await tellAuthor(db, tell, account.id, 'published', v.pluginId, v.version!);
   return { ok: true };
 }
 
@@ -557,7 +587,8 @@ export async function onTag(
   now = new Date(),
 ): Promise<{ check?: number; moved?: number }> {
   const [plugin] = await db.select().from(plugins).where(eq(plugins.repoId, hook.repoId)).limit(1);
-  if (!plugin) return {};
+  // A plugin deleted takes no new tag: its author restores it first.
+  if (!plugin || plugin.deletedAt) return {};
   const installationId = hook.installationId ?? plugin.installationId;
   if (!installationId) return {};
   const { commit, date } = await deps.source(installationId).resolve(hook.fullName, hook.tag);

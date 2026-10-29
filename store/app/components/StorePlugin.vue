@@ -17,6 +17,8 @@ useHead(() => ({ title: e.value.name[lang.value] }));
 
 const tab = computed(() => (['docs', 'versions'].includes(String(route.query.tab)) ? String(route.query.tab) : 'readme'));
 const tabLink = (t: string) => ({ query: t === 'readme' ? {} : { tab: t } });
+/** The day a deleted plugin's page goes: 30 days after its deletion (server/utils/author.ts, DELETE_DAYS). */
+const purgeOn = (iso: string) => new Date(Date.parse(iso) + 30 * 86_400_000).toISOString();
 const docs = computed(() => page.value.latest?.docs ?? null);
 const other = computed(() => (lang.value === 'fr' ? 'en' : 'fr'));
 const readme = computed(() => docs.value?.readme[lang.value] ?? docs.value?.readme[other.value] ?? null);
@@ -74,6 +76,14 @@ async function copyRepo() {
         <span class="hint">{{ hint }}</span>
       </div>
     </section>
+
+    <p v-if="page.status?.deletedAt" class="band bad" role="status">
+      {{ words.plugin.removed(words.date(purgeOn(page.status.deletedAt))) }}
+    </p>
+    <p v-else-if="page.status?.unlisted" class="band" role="status">{{ words.plugin.unlisted }}</p>
+    <p v-if="page.status?.transferredAt && page.status.transferredFrom" class="band">
+      {{ words.plugin.transferred(page.status.transferredFrom, words.date(page.status.transferredAt)) }}
+    </p>
 
     <nav v-if="!page.builtin" class="tabs">
       <NuxtLink :class="{ on: tab === 'readme' }" :to="tabLink('readme')">{{ words.plugin.tabs.readme }}</NuxtLink>
@@ -133,6 +143,7 @@ async function copyRepo() {
               <td class="mono">v{{ v.version }}</td>
               <td>
                 <span v-if="v.disabled" class="gone" :title="words.plugin.disabledTitle">{{ words.plugin.disabled }}</span>
+                <span v-else-if="v.yanked" class="gone" :title="words.plugin.yankedTitle">{{ words.plugin.yanked }}</span>
                 <TrustMark v-else :trust="v.trust" :version="v.version" />
                 <small v-if="v.tagMoved" class="moved">{{ words.plugin.moved }}</small>
               </td>
@@ -486,6 +497,20 @@ table.t .r {
   color: var(--danger);
   font-size: 12px;
   font-weight: 550;
+}
+/* What its author did of it: off the list, removed, transferred (docs/STORE.md §2.2). */
+.band {
+  margin: 20px 0 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--soft);
+  font-size: 14px;
+}
+.band.bad {
+  border-color: color-mix(in oklch, var(--danger) 45%, transparent);
+  background: var(--danger-bg);
 }
 .moved {
   display: block;

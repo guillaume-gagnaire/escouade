@@ -13,7 +13,7 @@ const appTokens = new Map(); // installation token -> installation id
 let nextAsset = 1;
 
 /** Pushes `tag` on `fullName` at a new commit of its plugin (`extra` files added); gives the commit. */
-export function pushTag(fullName, tag, { extra = {} } = {}) {
+export function pushTag(fullName, tag, { extra = {}, manifest = {} } = {}) {
   const repo = code.get(fullName);
   const name = fullName.split('/')[1];
   const version = tag.replace(/^v/, '');
@@ -21,7 +21,12 @@ export function pushTag(fullName, tag, { extra = {} } = {}) {
   const trap = name.endsWith('-trap');
   const bin = name.endsWith('-bin');
   const files = pluginFiles(fullName, {
-    manifest: { version, name: { en: name, fr: name }, ...(bin ? { run: { command: 'bin/plugin', windows: 'bin/plugin.exe' } } : {}) },
+    manifest: {
+      version,
+      name: { en: name, fr: name },
+      ...(bin ? { run: { command: 'bin/plugin', windows: 'bin/plugin.exe' } } : {}),
+      ...manifest,
+    },
     files: { ...(trap ? { 'docs/key': { symlink: '/home/me/.ssh/id_ed25519' } } : {}), ...extra },
   });
   repo.commits[sha] = {

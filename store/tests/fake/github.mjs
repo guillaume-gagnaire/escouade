@@ -3,7 +3,7 @@
 // and their repositories, the token's revocation), installs the App as GitHub does (with or without the store's
 // state), and signs the installation's webhook as GitHub does. The SMTP server keeps the mails it receives.
 // The repositories it installs on hold test plugins, served as the App reads them (tests/fake/repos.mjs);
-// `POST /_fake/tag` pushes a tag (a new one, or one moved) and sends its `create` webhook. What it saw is read at
+// `POST /_fake/tag` pushes a tag (a new one, or one moved; `extra` files, `manifest` fields) and sends its `create` webhook. What it saw is read at
 // /_fake/state.
 //
 //   FAKE_GITHUB_PORT, FAKE_SMTP_PORT: its ports; STORE_URL: the store, for the webhooks;
@@ -189,7 +189,7 @@ const server = createServer(async (req, res) => {
     const repo = repoOf(b.repo);
     const inst = [...installations.values()].find((i) => i.repos.some((r) => r.full_name === b.repo));
     if (!repo || !inst) return json(res, 404, { message: 'Not Found' });
-    const sha = pushTag(b.repo, b.tag, { extra: b.extra ?? {} });
+    const sha = pushTag(b.repo, b.tag, { extra: b.extra ?? {}, manifest: b.manifest ?? {} });
     const { repos: _r, ...installation } = inst;
     await sendWebhook('create', {
       ref: b.tag,

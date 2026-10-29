@@ -144,7 +144,10 @@ test('the home page lists the categories, Escouade’s own among the verified, a
   await expect(page.locator('.cats')).toContainText('Sources du Kanban');
   await expect(page.locator('.cats')).toContainText('Hébergeurs de code');
   await expect(page.locator('.rows .row').first()).toContainText('Livré avec Escouade');
-  await expect(page.locator('.mini').first()).toContainText(`ntfy ${seeded.run}`);
+  // The new ones, newest first: the seeded plugins are dated a few minutes back, so a plugin another test publishes
+  // meanwhile comes before them; the page is compared with what the store says is the newest.
+  const fresh = ((await (await page.request.get('/api/catalog/home')).json()) as { fresh: { name: { fr: string } }[] }).fresh;
+  await expect(page.locator('.mini').first().locator('b').first()).toHaveText(fresh[0]!.name.fr);
   // The search of the hero leads to the page of the search.
   await page.locator('.bigfind input').fill('téléphone');
   await page.locator('.bigfind input').press('Enter');

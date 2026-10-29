@@ -6,6 +6,7 @@ import {
   emailTokens,
   installationRepos,
   installations,
+  plugins,
   sessions,
   webhookDeliveries,
 } from '../db/schema';
@@ -278,8 +279,8 @@ export async function exportAccount(db: Db, account: Account, now = new Date()) 
 /**
  * Deletes the account: its sessions, its address and its links go with it; the journal keeps its entries one year,
  * by GitHub id, as it does for every action. Gives back the GitHub tokens still valid, for GitHub to revoke them.
- * Its plugins stay, without an author, their ids reserved, until STORE-5 has them transferred or deleted first
- * (docs/STORE.md §2.2).
+ * Its plugins are transferred or deleted first (docs/STORE.md §2.2: the route refuses otherwise, pluginsInTheWay);
+ * the deleted ones stay, without an author, their ids reserved.
  */
 export async function deleteAccount(db: Db, account: Account, secret: string, now = new Date()): Promise<string[]> {
   const open = await db
@@ -405,8 +406,13 @@ export async function applyWebhook(db: Db, event: string, delivery: string, p: P
       // A repository gone, moved away or made private no longer reaches the store through this installation;
       // a transfer comes back by the new owner's installation (docs/STORE.md, §2.2).
       await db.delete(installationRepos).where(eq(installationRepos.repoId, r.id));
+      // A plugin published from a repository that changed owners: the new owner may take it over from their account,
+      // once they installed the App there (server/utils/author.ts, repoClaims). Its name follows GitHub's.
+      if (p.action === 'transferred')
+        await db.update(plugins).set({ repoMovedAt: now, repoFullName: r.full_name }).where(eq(plugins.repoId, r.id));
     } else if (p.action === 'renamed' || p.action === 'publicized') {
       await db.update(installationRepos).set({ fullName: r.full_name, private: r.private }).where(eq(installationRepos.repoId, r.id));
+      if (p.action === 'renamed') await db.update(plugins).set({ repoFullName: r.full_name }).where(eq(plugins.repoId, r.id));
     }
     await note(db, `repository.${p.action}`, who, { repository: r.full_name, id: r.id }, now);
     return 'handled';

@@ -104,6 +104,11 @@ const fr = {
     taken: ['bad', 'Cet identifiant ou ce numéro a été pris entre-temps : pousse une nouvelle étiquette.'],
     'not-ready': ['warn', 'Cette version ne peut pas (ou plus) être publiée.'],
     'not-found': ['bad', 'Cette version n’est pas à toi.'],
+    frozen: [
+      'warn',
+      'Ce plugin vient d’être transféré : ses publications sont gelées 7 jours, le temps d’un signalement. Ton compte dit jusqu’à quand.',
+    ],
+    deleted: ['bad', 'Ce plugin est supprimé : rétablis-le depuis ton compte pour publier de nouveau.'],
   } as Record<string, [string, string]>,
 };
 
@@ -209,6 +214,11 @@ const en: Text = {
     taken: ['bad', 'This id or this number was taken meanwhile: push a new tag.'],
     'not-ready': ['warn', 'This version cannot (or can no longer) be published.'],
     'not-found': ['bad', 'This version is not yours.'],
+    frozen: [
+      'warn',
+      'This plugin was just transferred: its publications are frozen 7 days, the time for a report. Your account says until when.',
+    ],
+    deleted: ['bad', 'This plugin is deleted: restore it from your account to publish again.'],
   },
 };
 

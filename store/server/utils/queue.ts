@@ -2,6 +2,8 @@ import { eq } from 'drizzle-orm';
 import { PgBoss } from 'pg-boss';
 import { serviceState } from '../db/schema';
 import { purge } from './accounts';
+import { purgeDeleted } from './author';
+import { service } from './service';
 import type { Db } from './db';
 import { checkVersion, onTag, rereadTags, type Deps } from './submissions';
 
@@ -10,7 +12,10 @@ import { checkVersion, onTag, rereadTags, type Deps } from './submissions';
 // same image with another command. The queue's own beat, every minute, tells /api/health that it moves.
 
 export const BEAT = 'store.beat';
-/** Once a night, what has outlived its time goes: sessions, tokens, links, deliveries, journal (docs/STORE.md, §2.3). */
+/**
+ * Once a night, what has outlived its time goes: sessions, tokens, links, deliveries, journal (docs/STORE.md, §2.3),
+ * and the plugins deleted 30 days ago, with their archives (§2.2).
+ */
 export const PURGE = 'store.purge';
 /** The checks of a version submitted (`{ id }`), one at a time per worker: each holds an archive in memory. */
 export const CHECK = 'store.check';
@@ -48,7 +53,7 @@ export async function startQueue(url: string, db: Db, deps: Deps | null): Promis
   await boss.send(BEAT);
   await boss.createQueue(PURGE);
   await boss.work(PURGE, async () => {
-    console.info('[store] purged:', JSON.stringify(await purge(db)));
+    console.info('[store] purged:', JSON.stringify({ ...(await purge(db)), deleted: await purgeDeleted(db, service.archives) }));
   });
   await boss.schedule(PURGE, '40 4 * * *');
   if (!deps) return boss;

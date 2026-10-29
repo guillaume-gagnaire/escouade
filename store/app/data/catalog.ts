@@ -112,6 +112,12 @@ const fr = {
     disabled: 'Retirée',
     disabledTitle: 'Retirée par la liste de révocation d’Escouade : elle ne s’installe plus',
     moved: 'Étiquette déplacée sur le dépôt après la publication : la version reste celle du commit figé',
+    yanked: 'Retirée par l’auteur',
+    yankedTitle: 'Son auteur l’a retirée : elle n’est plus proposée à l’installation ni comme mise à jour ; ceux qui l’ont la gardent',
+    unlisted:
+      'Retiré de la liste par son auteur : il n’apparaît plus dans la recherche ni dans l’app ; ceux qui l’ont gardent leurs versions, sans mises à jour.',
+    removed: (d: string) => `Retiré du store par son auteur : il ne s’installe plus, et cette page part le ${d}.`,
+    transferred: (from: string, d: string) => `Transféré par ${from} le ${d}.`,
     facts: {
       license: 'Licence',
       updated: 'Mis à jour',
@@ -251,6 +257,12 @@ const en: CatalogText = {
     disabled: 'Withdrawn',
     disabledTitle: 'Withdrawn by Escouade’s revocation list: it no longer installs',
     moved: 'Tag moved on the repository after publication: the version stays that of the frozen commit',
+    yanked: 'Taken back by its author',
+    yankedTitle: 'Its author took it back: it is no longer offered to install nor as an update; those who have it keep it',
+    unlisted:
+      'Taken off the list by its author: it no longer shows in the search nor in the app; those who have it keep their versions, without updates.',
+    removed: (d: string) => `Removed from the store by its author: it no longer installs, and this page goes on ${d}.`,
+    transferred: (from: string, d: string) => `Transferred by ${from} on ${d}.`,
     facts: { license: 'License', updated: 'Updated', escouade: 'Escouade', id: 'Identifier', systems: 'Systems', installs: 'Installs' },
     report: 'Report this plugin',
     reportsOpen: (n: number) => `${n} open report${n === 1 ? '' : 's'}`,

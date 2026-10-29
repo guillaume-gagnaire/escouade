@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { and, eq, lt, sql } from 'drizzle-orm';
+import { and, eq, isNull, lt, sql } from 'drizzle-orm';
 import { accounts, installsDaily, plugins, reports, versions } from '../db/schema';
 import { BUILTINS, isBuiltinId, type Builtin } from './builtin';
 import { textOf, type Lang, type Text } from './checks';
@@ -11,7 +11,10 @@ import { parseRevocations, revoked, type RevocationList } from './revocation-lis
 import { lastRevocations } from './revocations';
 import { readArchive } from './tar';
 import { fold, words } from '../../shared/search';
+import { hueOf, markOf } from '../../shared/tile';
 import { compareVersions } from './versions';
+
+export { hueOf, markOf };
 
 // What the public pages show (docs/STORE.md §6, STORE-4): the published plugins, each by its last published version,
 // and Escouade's own; the search, made on the server (decided on 2026-10-29: relevance, accents and case ignored);
@@ -78,16 +81,6 @@ export function localized(v: unknown): Text {
   const any = textOf(v);
   return { fr: typeof o.fr === 'string' && o.fr ? o.fr : any, en: typeof o.en === 'string' && o.en ? o.en : any };
 }
-
-/** The hue of a tile, drawn from the id: one of twelve, as the avatars. */
-export function hueOf(id: string): number {
-  let h = 0;
-  for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return (h % 12) * 30;
-}
-
-/** The two letters of a tile: the name's first two. */
-export const markOf = (name: string) => [...name.replace(/^[^\p{L}\p{N}]+/u, '')].slice(0, 2).join('') || '··';
 
 /** What a manifest asks for, in one line. */
 export function asksOf(m: Record<string, unknown>): Ask[] {
@@ -220,14 +213,20 @@ async function contextOf(db: Db, now = new Date()): Promise<Context> {
 
 const disabled = (ctx: Context, r: Row) => !!revoked(ctx.list, r.plugin.id, r.version.version!, 'disable');
 
-/** The entries of the rows: one per plugin, by its last published version that the revocation list does not disable. */
-function entriesOf(all: Row[], ctx: Context): Entry[] {
+/**
+ * The entries of the rows: one per plugin, by its last published version that the revocation list does not disable
+ * and its author did not take back (docs/STORE.md §2.2); a plugin whose versions were all taken back has none, unless
+ * `taken` (its own page, still readable).
+ */
+function entriesOf(all: Row[], ctx: Context, taken = false): Entry[] {
   const rows = all.filter((r) => !disabled(ctx, r));
   const by = new Map<string, Row[]>();
   for (const r of rows) by.set(r.plugin.id, [...(by.get(r.plugin.id) ?? []), r]);
-  return [...by.values()].map((rs) => {
+  return [...by.values()].flatMap((rs) => {
     rs.sort((a, b) => compareVersions(b.version.version!, a.version.version!));
-    const { plugin, version: v, login, githubId } = rs[0]!;
+    const offered = rs.find((r) => !r.version.yankedAt);
+    if (!offered && !taken) return [];
+    const { plugin, version: v, login, githubId } = offered ?? rs[0]!;
     const m = v.manifest ?? {};
     const name = localized(m.name);
     const dates = rs
@@ -255,11 +254,14 @@ function entriesOf(all: Row[], ctx: Context): Entry[] {
   });
 }
 
-/** The whole catalog: Escouade's own, then the published plugins; Escouade's own alone without a database. */
+/** The plugins its author keeps on the list: not taken off it, not deleted (docs/STORE.md §2.2). */
+const listed = sql`${isNull(plugins.unlistedAt)} and ${isNull(plugins.deletedAt)}`;
+
+/** The whole catalog: Escouade's own, then the published plugins on the list; Escouade's own alone without a database. */
 export async function catalog(db: Db | null): Promise<Entry[]> {
   const own = BUILTINS.map(builtinEntry);
   if (!db) return own;
-  return [...own, ...entriesOf(await publishedRows(db), await contextOf(db)).filter((e) => !isBuiltinId(e.id))];
+  return [...own, ...entriesOf(await publishedRows(db, listed), await contextOf(db)).filter((e) => !isBuiltinId(e.id))];
 }
 
 // ---- The search ----
@@ -374,6 +376,8 @@ export interface VersionLine {
   escouade: string | null;
   /** Taken off by the revocation list: no longer installable. */
   disabled: boolean;
+  /** Taken back by its author: no longer offered; those who have it keep it. */
+  yanked: boolean;
 }
 
 const range = (m: Record<string, unknown>) => {
@@ -400,14 +404,23 @@ export async function docsOf(db: Db, dir: string, v: typeof versions.$inferSelec
 /** A plugin's page: its entry, its last version's files and facts, its versions; null if it has none published. */
 export async function pluginPage(db: Db | null, dir: string, id: string) {
   const b = BUILTINS.find((x) => x.id === id);
-  if (b) return { entry: builtinEntry(b), builtin: { docs: b.docs }, permissions: builtinPermissions(b), versions: [], latest: null };
+  if (b)
+    return {
+      entry: builtinEntry(b),
+      builtin: { docs: b.docs },
+      permissions: builtinPermissions(b),
+      versions: [],
+      latest: null,
+      status: null,
+    };
   if (!db || id.length > 214) return null;
   const rows = await publishedRows(db, eq(plugins.id, id));
   const ctx = await contextOf(db);
-  const [entry] = entriesOf(rows, ctx);
+  const [entry] = entriesOf(rows, ctx, true);
   if (!entry) return null;
   rows.sort((a, b) => compareVersions(b.version.version!, a.version.version!));
-  const v = rows.find((r) => !disabled(ctx, r))!.version;
+  const v = (rows.find((r) => !disabled(ctx, r) && !r.version.yankedAt) ?? rows.find((r) => !disabled(ctx, r)))!.version;
+  const plugin = rows[0]!.plugin;
   const m = v.manifest ?? {};
   const docs = await docsOf(db, dir, v);
   const [open] = await db
@@ -428,7 +441,15 @@ export async function pluginPage(db: Db | null, dir: string, id: string) {
       tagMoved: r.version.tagMovedTo,
       escouade: range(r.version.manifest ?? {}),
       disabled: disabled(ctx, r),
+      yanked: !!r.version.yankedAt,
     })),
+    // What its author did of it (docs/STORE.md §2.2): its page stays readable, and says so.
+    status: {
+      unlisted: !!plugin.unlistedAt,
+      deletedAt: plugin.deletedAt?.toISOString() ?? null,
+      transferredAt: plugin.transferredAt?.toISOString() ?? null,
+      transferredFrom: plugin.transferredFrom,
+    },
     latest: {
       repository: v.repoFullName,
       tag: v.tag,
@@ -457,7 +478,7 @@ export async function authorPage(db: Db | null, login: string) {
     .from(accounts)
     .where(sql`lower(${accounts.login}) = lower(${login})`);
   if (!account) return null;
-  const entries = entriesOf(await publishedRows(db, eq(plugins.accountId, account.id)), await contextOf(db));
+  const entries = entriesOf(await publishedRows(db, and(eq(plugins.accountId, account.id), listed)), await contextOf(db));
   entries.sort((a, b) => b.installs - a.installs || fold(a.name.en).localeCompare(fold(b.name.en)));
   return {
     author: { login: account.login, githubId: account.githubId, name: account.name, since: account.createdAt.toISOString() },

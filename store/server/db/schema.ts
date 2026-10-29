@@ -148,6 +148,10 @@ export const audit = pgTable(
  * A plugin of the store: its id (the manifest's, reserved to its account even once removed), the repository it is
  * published from and the installation of the App that reads it, what the author chose at the first publication
  * (categories, keywords), and whether a new tag may be published without their click (docs/STORE.md, §3.5).
+ * What its author did of it since (docs/STORE.md, §2.2): taken off the list (`unlistedAt`); deleted (`deletedAt`,
+ * its page and archives go 30 days later, `purgedAt`, the numbers it used kept in `retiredVersions`); offered to
+ * another account (`transferTo`, until they accept); transferred (`transferredAt`, from `transferredFrom`, the
+ * publications frozen until `frozenUntil`); its repository moved to another owner on GitHub (`repoMovedAt`).
  */
 export const plugins = pgTable(
   'plugins',
@@ -161,6 +165,16 @@ export const plugins = pgTable(
     keywords: jsonb('keywords').$type<string[]>().notNull().default([]),
     autoPublish: boolean('auto_publish').notNull().default(false),
     createdAt: at('created_at').notNull().defaultNow(),
+    unlistedAt: at('unlisted_at'),
+    deletedAt: at('deleted_at'),
+    purgedAt: at('purged_at'),
+    retiredVersions: jsonb('retired_versions').$type<string[]>().notNull().default([]),
+    transferTo: integer('transfer_to').references(() => accounts.id, { onDelete: 'set null' }),
+    transferAskedAt: at('transfer_asked_at'),
+    transferredAt: at('transferred_at'),
+    transferredFrom: text('transferred_from'),
+    frozenUntil: at('frozen_until'),
+    repoMovedAt: at('repo_moved_at'),
   },
   (t) => [index('plugins_account').on(t.accountId), index('plugins_repo').on(t.repoId)],
 );
@@ -171,8 +185,9 @@ export const plugins = pgTable(
  * their verdict; once they pass, `version.json` and its SHA-256, the version's fingerprint, and its README and docs
  * rendered and cut down for its page (`docs`, server/utils/readme.ts). `state`: `checking`,
  * `error` (the store failed, the checks may run again), `rejected`, `held` (a person must look: a name too close),
- * `ready` (waits for the author's click), `published`. A published version never changes; its number is not used
- * again. A tag moved on the repository afterwards is noted, nothing else changes.
+ * `ready` (waits for the author's click), `published`, `dismissed` (a version waiting that its author set aside). A
+ * published version never changes; its number is not used again; its author may take it back (`yankedAt`): it is no
+ * longer offered, those who have it keep it. A tag moved on the repository afterwards is noted, nothing else changes.
  */
 export const versions = pgTable(
   'versions',
@@ -207,6 +222,7 @@ export const versions = pgTable(
     publishedAt: at('published_at'),
     tagMovedAt: at('tag_moved_at'),
     tagMovedTo: text('tag_moved_to'),
+    yankedAt: at('yanked_at'),
   },
   (t) => [
     index('versions_plugin').on(t.pluginId),

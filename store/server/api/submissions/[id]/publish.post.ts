@@ -1,5 +1,5 @@
 import { getRouterParam, readBody, sendRedirect } from 'h3';
-import { requireAccount } from '../../../utils/session';
+import { requireAccount, siteUrl } from '../../../utils/session';
 import { submitPage, versionId } from '../../../utils/submit-route';
 import { publishVersion } from '../../../utils/submissions';
 
@@ -9,12 +9,19 @@ export default defineEventHandler(async (event) => {
   const { db, account } = await requireAccount(event);
   const id = versionId(getRouterParam(event, 'id'));
   const body = (await readBody(event).catch(() => ({}))) ?? {};
-  const done = await publishVersion(db, account, id, {
-    categories: body.categories,
-    keywords: body.keywords,
-    review: body.review ?? 'off',
-    autoPublish: body.autoPublish ?? 'off',
-  });
+  const done = await publishVersion(
+    db,
+    account,
+    id,
+    {
+      categories: body.categories,
+      keywords: body.keywords,
+      review: body.review ?? 'off',
+      autoPublish: body.autoPublish ?? 'off',
+    },
+    new Date(),
+    { env: process.env, site: siteUrl() },
+  );
   const notice = 'error' in done ? done.error : 'published';
   return sendRedirect(event, `${submitPage(body.lang)}?version=${id}&notice=${notice}`, 303);
 });

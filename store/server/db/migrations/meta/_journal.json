@@ -36,6 +36,13 @@
       "when": 1793273651297,
       "tag": "0004_public_pages",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793278060632,
+      "tag": "0005_author_space",
+      "breakpoints": true
     }
   ]
 }
