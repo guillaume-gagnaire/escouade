@@ -1,7 +1,21 @@
-import { bigint, bigserial, boolean, index, integer, jsonb, pgTable, primaryKey, serial, text, timestamp } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import {
+  bigint,
+  bigserial,
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  primaryKey,
+  serial,
+  text,
+  timestamp,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
 
 // The store's tables. A migration only adds (tables, columns, indexes): a new container can fail after it and leave
-// the old one online, still reading the old names (docs/STORE.md, §1.3). The plugins and versions come with STORE-3.
+// the old one online, still reading the old names (docs/STORE.md, §1.3).
 
 const at = (name: string) => timestamp(name, { withTimezone: true });
 
@@ -126,4 +140,76 @@ export const audit = pgTable(
     detail: jsonb('detail').$type<Record<string, unknown>>(),
   },
   (t) => [index('audit_account').on(t.accountId), index('audit_at').on(t.at)],
+);
+
+/**
+ * A plugin of the store: its id (the manifest's, reserved to its account even once removed), the repository it is
+ * published from and the installation of the App that reads it, what the author chose at the first publication
+ * (categories, keywords), and whether a new tag may be published without their click (docs/STORE.md, §3.5).
+ */
+export const plugins = pgTable(
+  'plugins',
+  {
+    id: text('id').primaryKey(),
+    accountId: integer('account_id').references(() => accounts.id, { onDelete: 'set null' }),
+    repoId: bigint('repo_id', { mode: 'number' }).notNull(),
+    repoFullName: text('repo_full_name').notNull(),
+    installationId: bigint('installation_id', { mode: 'number' }),
+    categories: jsonb('categories').$type<string[]>().notNull().default([]),
+    keywords: jsonb('keywords').$type<string[]>().notNull().default([]),
+    autoPublish: boolean('auto_publish').notNull().default(false),
+    createdAt: at('created_at').notNull().defaultNow(),
+  },
+  (t) => [index('plugins_account').on(t.accountId), index('plugins_repo').on(t.repoId)],
+);
+
+/**
+ * A version as submitted (by its author, or by a new tag's webhook) and frozen (docs/STORE.md, §3.4): the tag resolved
+ * once into its commit, the archive kept as GitHub sent it and its SHA-256, the release's binaries, the ten checks and
+ * their verdict; once they pass, `version.json` and its SHA-256, the version's fingerprint. `state`: `checking`,
+ * `error` (the store failed, the checks may run again), `rejected`, `held` (a person must look: a name too close),
+ * `ready` (waits for the author's click), `published`. A published version never changes; its number is not used
+ * again. A tag moved on the repository afterwards is noted, nothing else changes.
+ */
+export const versions = pgTable(
+  'versions',
+  {
+    id: serial('id').primaryKey(),
+    pluginId: text('plugin_id'),
+    accountId: integer('account_id').references(() => accounts.id, { onDelete: 'set null' }),
+    origin: text('origin').notNull().default('author'),
+    installationId: bigint('installation_id', { mode: 'number' }).notNull(),
+    repoId: bigint('repo_id', { mode: 'number' }).notNull(),
+    repoFullName: text('repo_full_name').notNull(),
+    tag: text('tag').notNull(),
+    commit: text('commit').notNull(),
+    tagDate: at('tag_date'),
+    version: text('version'),
+    state: text('state').notNull().default('checking'),
+    step: text('step'),
+    error: text('error'),
+    checks: jsonb('checks').$type<unknown[]>().notNull().default([]),
+    manifest: jsonb('manifest').$type<Record<string, unknown>>(),
+    manifestSha256: text('manifest_sha256'),
+    archiveSha256: text('archive_sha256'),
+    archiveSize: integer('archive_size'),
+    binaries: jsonb('binaries').$type<Record<string, unknown>>(),
+    screenshots: jsonb('screenshots').$type<{ path: string; sha256: string; format: string; width: number; height: number }[]>(),
+    versionJson: text('version_json'),
+    versionSha256: text('version_sha256'),
+    review: boolean('review').notNull().default(true),
+    createdAt: at('created_at').notNull().defaultNow(),
+    checkedAt: at('checked_at'),
+    publishedAt: at('published_at'),
+    tagMovedAt: at('tag_moved_at'),
+    tagMovedTo: text('tag_moved_to'),
+  },
+  (t) => [
+    index('versions_plugin').on(t.pluginId),
+    index('versions_account').on(t.accountId),
+    index('versions_repo_tag').on(t.repoId, t.tag),
+    uniqueIndex('versions_published')
+      .on(t.pluginId, t.version)
+      .where(sql`${t.state} = 'published'`),
+  ],
 );

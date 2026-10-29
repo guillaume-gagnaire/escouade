@@ -1,7 +1,9 @@
 import { archiveDir, invalidLines, missingLines } from '../utils/config';
 import { migrateDb, migrationsDir, openDb } from '../utils/db';
+import { githubApp } from '../utils/github';
 import { startQueue } from '../utils/queue';
 import { service } from '../utils/service';
+import { githubSource } from '../utils/source';
 
 // At start: say what is off for want of a variable, play the migrations, then start the queue. Until then
 // /api/health answers 503 "starting", so that Coolify keeps the old container online. A failure is logged and
@@ -10,6 +12,15 @@ export default defineNitroPlugin((nitro) => {
   const env = process.env;
   for (const line of [...missingLines(env), ...invalidLines(env)]) console.warn(line);
   service.archives = archiveDir(env);
+  const app = githubApp(env);
+  service.deps = app
+    ? {
+        source: (installationId) => githubSource(app, installationId),
+        archives: service.archives,
+        env,
+        site: (env.NUXT_PUBLIC_SITE_URL ?? '').trim().replace(/\/+$/, '') || 'https://store.escouade.dev',
+      }
+    : null;
 
   const url = (env.DATABASE_URL ?? '').trim();
   if (!url) {
@@ -22,7 +33,7 @@ export default defineNitroPlugin((nitro) => {
   void (async () => {
     try {
       await migrateDb(db, migrationsDir(env));
-      service.boss = await startQueue(url, db);
+      service.boss = await startQueue(url, db, service.deps);
       console.info('[store] ready: migrations played, queue started');
     } catch (e) {
       service.error = e instanceof Error ? e.message : String(e);

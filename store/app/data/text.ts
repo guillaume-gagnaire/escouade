@@ -23,7 +23,7 @@ export const LINKS = {
 const fr = {
   title: 'Escouade Store',
   description: 'Des plugins pour Escouade : harness, thèmes, notifications, règles d’autorisation. Relus, signés, installés depuis l’app.',
-  header: { home: 'Accueil du store', docs: 'Documentation' },
+  header: { home: 'Accueil du store', docs: 'Documentation', publish: 'Publier un plugin', submit: 'Soumettre' },
   footer: {
     privacy: 'Confidentialité',
     legal: 'Mentions légales',
@@ -57,7 +57,7 @@ type Text = typeof fr;
 const en: Text = {
   title: 'Escouade Store',
   description: 'Plugins for Escouade: harnesses, themes, notifications, permission rules. Reviewed, signed, installed from the app.',
-  header: { home: 'Store home', docs: 'Documentation' },
+  header: { home: 'Store home', docs: 'Documentation', publish: 'Publish a plugin', submit: 'Submit' },
   footer: { privacy: 'Privacy', legal: 'Legal notice', terms: 'Authors’ terms', docs: 'Documentation', other: 'Français' },
   seal: 'Verified by Escouade',
   home: {

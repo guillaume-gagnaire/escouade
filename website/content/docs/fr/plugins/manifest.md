@@ -81,7 +81,7 @@ Un même plugin peut tenir plusieurs points : un plugin GitHub donne ses issues 
 
 - **Un manifeste invalide ne charge rien.** Escouade dit pourquoi, champ par champ, avec le chemin du champ : « `escouade.min` manque. », « `contributes.settings[0].type` vaut l’un de : string, number, boolean, select. »
 - **Un champ inconnu est ignoré.** Un manifeste écrit pour un Escouade plus récent se charge quand même ; les champs ignorés sont listés.
-- Le même contrôle tourne sur la place de marché quand un auteur y soumet son plugin : les deux disent les mêmes erreurs.
+- Le même contrôle tourne sur la place de marché quand un auteur y soumet son plugin : les deux disent les mêmes erreurs ([publier sur le store](plugins/publishing)).
 
 ## Installer un plugin
 

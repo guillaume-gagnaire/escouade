@@ -2,6 +2,7 @@ import { mkdir, statfs } from 'node:fs/promises';
 import type { PgBoss } from 'pg-boss';
 import type pg from 'pg';
 import type { Db } from './db';
+import type { Deps } from './submissions';
 
 // The service's state for this process: set up by server/plugins/boot.ts, read by /api/health.
 export const service: {
@@ -11,7 +12,9 @@ export const service: {
   boss: PgBoss | null;
   archives: string;
   error: string | null;
-} = { starting: true, pool: null, db: null, boss: null, archives: './.data/archives', error: null };
+  /** What the submissions need (the App's reading of repositories, the archives' folder), or null when the App is off. */
+  deps: Deps | null;
+} = { starting: true, pool: null, db: null, boss: null, archives: './.data/archives', error: null, deps: null };
 
 /** The share of the disk in use under `dir` (made if missing), or null if it cannot be read. */
 export async function diskUse(dir: string): Promise<number | null> {

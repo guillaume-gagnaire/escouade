@@ -1,0 +1,402 @@
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import pg from 'pg';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { applyWebhook, signIn, tagOfWebhook, type Account } from '../../server/utils/accounts';
+import { migrateDb, openDb, type Db } from '../../server/utils/db';
+import { GithubError, type GithubInstallation } from '../../server/utils/github';
+import { imageInfo } from '../../server/utils/images';
+import { TooBig, type Asset, type Source } from '../../server/utils/source';
+import {
+  checkVersion,
+  onTag,
+  publishVersion,
+  rereadTags,
+  retrySubmission,
+  startSubmission,
+  SUBMISSIONS_PER_HOUR,
+  versionView,
+  type Deps,
+} from '../../server/utils/submissions';
+import { sha256 } from '../../server/utils/versions';
+import { attestation, pluginFiles, tarball } from '../fake/plugins.mjs';
+
+// The submission against a real PostgreSQL (TEST_DATABASE_URL alone, emptied first; skipped without it), with a
+// fake GitHub in memory: a tag resolved once, the archive kept as it came and fingerprinted, the ten checks, the
+// rejections, publishing, the new tags of the webhooks and the tags moved (docs/STORE.md §3).
+const url = process.env.TEST_DATABASE_URL;
+const SECRET = 's'.repeat(64);
+const T0 = new Date('2026-10-29T10:00:00Z');
+
+interface FakeRepo {
+  id: number;
+  private: boolean;
+  tags: Record<string, string>;
+  archives: Record<string, Buffer>;
+  licenses: Record<string, string | null>;
+  releases: Record<string, (Asset & { bytes: Buffer })[]>;
+}
+
+/** A GitHub in memory: repositories, their tags, archives, licenses, releases and attestations. */
+function fakeGithub() {
+  const repos = new Map<string, FakeRepo>();
+  const attestations = new Map<string, unknown[]>();
+  const calls: string[] = [];
+  let failing = false;
+  const repo = (name: string) => {
+    const r = repos.get(name);
+    if (!r) throw new GithubError('404', 404);
+    return r;
+  };
+  const source: Source = {
+    async repo(name) {
+      return { id: repo(name).id, fullName: name, private: repo(name).private };
+    },
+    async tags(name) {
+      return Object.entries(repo(name).tags).map(([t, commit]) => ({ name: t, commit, release: !!repo(name).releases[t], date: null }));
+    },
+    async resolve(name, tag) {
+      const commit = repo(name).tags[tag];
+      if (!commit) throw new GithubError('404', 404);
+      return { commit, date: '2026-10-25T09:00:00Z' };
+    },
+    async tarball(name, commit, max) {
+      calls.push(`tarball ${name}@${commit}`);
+      if (failing) throw new GithubError('GitHub answered 502 to the archive', 502);
+      const b = repo(name).archives[commit]!;
+      if (b.length > max) throw new TooBig(b.length);
+      return b;
+    },
+    async license(name, commit) {
+      return repo(name).licenses[commit] ?? null;
+    },
+    async release(name, tag) {
+      return repo(name).releases[tag] ?? null;
+    },
+    async asset(asset, max) {
+      if (asset.size > max) throw new TooBig(asset.size);
+      for (const r of repos.values())
+        for (const list of Object.values(r.releases)) for (const a of list) if (a.url === asset.url) return a.bytes;
+      throw new GithubError('404', 404);
+    },
+    async attestations(_name, digest) {
+      return attestations.get(digest) ?? [];
+    },
+  };
+  /** Pushes `tag` on `name` at a new commit made of `files`. */
+  const push = (name: string, tag: string, files: Record<string, unknown>, license = 'MIT') => {
+    const r = repo(name);
+    const commit = sha256(`${name}${tag}${JSON.stringify(Object.keys(files))}${Math.random()}`).slice(0, 40);
+    r.tags[tag] = commit;
+    r.archives[commit] = tarball(files as Parameters<typeof tarball>[0], {
+      commit,
+      top: `${name.replace('/', '-')}-${commit.slice(0, 7)}`,
+    });
+    r.licenses[commit] = license;
+    return commit;
+  };
+  const add = (name: string, id: number, isPrivate = false) =>
+    repos.set(name, { id, private: isPrivate, tags: {}, archives: {}, licenses: {}, releases: {} });
+  return { source, repos, attestations, calls, push, add, fail: (on: boolean) => (failing = on) };
+}
+
+describe.skipIf(!url)('the submission', () => {
+  let pool: pg.Pool;
+  let db: Db;
+  let dir: string;
+  let gh: ReturnType<typeof fakeGithub>;
+  let deps: Deps;
+  let sam: Account;
+  const q = async (sql: string, params: unknown[] = []) => (await pool.query(sql, params)).rows;
+  const REPO = 'sroux/escouade-ntfy';
+
+  const signInAs = async (login: string, id: number, repos: { id: number; full_name: string; private: boolean }[]) => {
+    const installation: GithubInstallation = { id: id * 10, account: { id, login, type: 'User' }, repository_selection: 'selected' };
+    const { account } = await signIn(
+      db,
+      {
+        user: { id, login, name: login, avatar_url: null },
+        token: { token: `ghu_${login}`, expiresAt: null },
+        installations: [{ installation, repos }],
+      },
+      SECRET,
+      T0,
+    );
+    return account;
+  };
+
+  /** Submits `tag` of `repo` as `who`, then works its job; gives the version's id and where it stands. */
+  const submit = async (who: Account, repo: string, tag: string) => {
+    const started = await startSubmission(db, deps, who, { repo, tag }, T0);
+    if ('error' in started) return { error: started.error };
+    return { id: started.id, state: await checkVersion(db, deps, started.id) };
+  };
+
+  beforeAll(async () => {
+    const admin = new pg.Client({ connectionString: url });
+    await admin.connect();
+    await admin.query(
+      'drop schema if exists drizzle cascade; drop schema if exists pgboss cascade; drop schema public cascade; create schema public;',
+    );
+    await admin.end();
+    ({ pool, db } = openDb(url!));
+    await migrateDb(db, './server/db/migrations');
+    dir = await mkdtemp(join(tmpdir(), 'store-archives-'));
+  });
+  beforeEach(async () => {
+    await pool.query(
+      'truncate accounts, sessions, installations, installation_repos, account_installations, audit, plugins, versions cascade',
+    );
+    gh = fakeGithub();
+    gh.add(REPO, 77);
+    gh.add('sroux/secret', 78, true);
+    deps = { source: () => gh.source, archives: dir, env: {}, site: 'https://store.test' };
+    sam = await signInAs('sroux', 4242, [
+      { id: 77, full_name: REPO, private: false },
+      { id: 78, full_name: 'sroux/secret', private: true },
+    ]);
+  });
+  afterAll(async () => {
+    await pool?.end();
+    if (dir) await rm(dir, { recursive: true, force: true });
+  });
+
+  it('freezes a version: the tag resolved once, the archive kept as it came, its version.json and fingerprint', async () => {
+    const commit = gh.push(REPO, 'v0.3.0', pluginFiles(REPO));
+    const { id, state } = await submit(sam, REPO, 'v0.3.0');
+    expect(state).toBe('ready');
+    const [v] = await q('select * from versions where id = $1', [id]);
+    expect(v).toMatchObject({
+      commit,
+      tag: 'v0.3.0',
+      version: '0.3.0',
+      plugin_id: 'io.github.sroux.escouade-ntfy',
+      state: 'ready',
+      origin: 'author',
+    });
+    expect(v.checks.map((c: { status: string }) => c.status)).toEqual(Array(10).fill('pass'));
+
+    // The archive on disk is GitHub's, byte for byte, under its SHA-256.
+    const archive = gh.repos.get(REPO)!.archives[commit]!;
+    expect(v.archive_sha256).toBe(sha256(archive));
+    const kept = await readFile(join(dir, 'sha256', v.archive_sha256.slice(0, 2), `${v.archive_sha256}.tar.gz`));
+    expect(kept.equals(archive)).toBe(true);
+
+    // version.json: canonical, its keys sorted, its fingerprint its own SHA-256.
+    const file = JSON.parse(v.version_json);
+    expect(file).toEqual({
+      archive: { sha256: v.archive_sha256, size: archive.length },
+      binaries: {},
+      commit,
+      escouade: { api: '1', min: '2.1.0' },
+      format: 1,
+      id: 'io.github.sroux.escouade-ntfy',
+      manifest_sha256: v.manifest_sha256,
+      repository: `https://github.com/${REPO}`,
+      tag: 'v0.3.0',
+      version: '0.3.0',
+    });
+    expect(v.version_sha256).toBe(sha256(v.version_json));
+
+    // The screenshot, re-encoded without its metadata.
+    expect(v.screenshots).toHaveLength(1);
+    const shot = await readFile(join(dir, 'sha256', v.screenshots[0].sha256.slice(0, 2), `${v.screenshots[0].sha256}.png`));
+    expect(imageInfo(shot)).toEqual({ format: 'png', width: 320, height: 200 });
+    expect(shot.includes(Buffer.from('Somebody at'))).toBe(false);
+
+    // The same tag again gives the same version back, without downloading again.
+    const again = await startSubmission(db, deps, sam, { repo: REPO, tag: 'v0.3.0' }, T0);
+    expect(again).toEqual({ id, again: true });
+    expect(gh.calls.filter((c) => c.startsWith('tarball'))).toHaveLength(1);
+  });
+
+  it('publishes on the author’s click: the plugin made with its categories, unverified, in the review queue', async () => {
+    gh.push(REPO, 'v0.3.0', pluginFiles(REPO));
+    const { id } = await submit(sam, REPO, 'v0.3.0');
+    expect(await publishVersion(db, sam, id!, { categories: [], review: 'on' })).toEqual({ error: 'categories' });
+    expect(
+      await publishVersion(db, sam, id!, { categories: ['notifications', 'nope'], keywords: 'Phone, ntfy, , <b>', review: 'on' }),
+    ).toEqual({ ok: true });
+    const [p] = await q('select * from plugins');
+    expect(p).toMatchObject({
+      id: 'io.github.sroux.escouade-ntfy',
+      repo_full_name: REPO,
+      categories: ['notifications'],
+      keywords: ['phone', 'ntfy'],
+      auto_publish: false,
+    });
+    const [v] = await q('select state, review, published_at from versions where id = $1', [id]);
+    expect(v).toMatchObject({ state: 'published', review: true });
+    expect(await publishVersion(db, sam, id!, {})).toEqual({ error: 'not-ready' });
+    const journal = (await q('select action from audit order by id')).map((r) => r.action);
+    expect(journal).toEqual(['account.signed_in', 'version.submitted', 'version.ready', 'version.published']);
+  });
+
+  it('refuses a private repository, one it does not manage, a tag that is not there, and too many submissions', async () => {
+    expect(await startSubmission(db, deps, sam, { repo: 'sroux/secret', tag: 'v1' }, T0)).toEqual({ error: 'private' });
+    expect(await startSubmission(db, deps, sam, { repo: 'other/repo', tag: 'v1' }, T0)).toEqual({ error: 'not-yours' });
+    expect(await startSubmission(db, deps, sam, { repo: REPO, tag: 'v9.9.9' }, T0)).toEqual({ error: 'no-tag' });
+    // A repository made private since the last webhook: GitHub's word wins.
+    gh.repos.get(REPO)!.private = true;
+    gh.push(REPO, 'v0.3.0', pluginFiles(REPO));
+    expect(await startSubmission(db, deps, sam, { repo: REPO, tag: 'v0.3.0' }, T0)).toEqual({ error: 'private' });
+    gh.repos.get(REPO)!.private = false;
+    for (let i = 0; i < SUBMISSIONS_PER_HOUR; i++) {
+      gh.push(REPO, `v0.3.${i + 1}`, pluginFiles(REPO));
+      expect(await startSubmission(db, deps, sam, { repo: REPO, tag: `v0.3.${i + 1}` }, T0)).toMatchObject({ again: false });
+    }
+    gh.push(REPO, 'v0.4.0', pluginFiles(REPO));
+    expect(await startSubmission(db, deps, sam, { repo: REPO, tag: 'v0.4.0' }, T0)).toEqual({ error: 'too-many' });
+  });
+
+  it('rejects a booby-trapped version, says why, and keeps none of its files', async () => {
+    gh.push(REPO, 'v0.3.0', pluginFiles(REPO, { files: { 'docs/key': { symlink: '/home/sam/.ssh/id_ed25519' } } }), 'Apache-2.0');
+    const { id, state } = await submit(sam, REPO, 'v0.3.0');
+    expect(state).toBe('rejected');
+    const view = (await versionView(db, sam, id!))!;
+    // The link is refused, the rest of the archive is read: every failure is said at once.
+    expect(view.checks.filter((c) => c.status !== 'pass').map((c) => [c.key, c.status])).toEqual([
+      ['license', 'fail'],
+      ['archive', 'fail'],
+    ]);
+    const [v] = await q('select version_json, archive_sha256 from versions where id = $1', [id]);
+    expect(v.version_json).toBeNull();
+    await expect(readFile(join(dir, 'sha256', v.archive_sha256.slice(0, 2), `${v.archive_sha256}.tar.gz`))).rejects.toThrow();
+  });
+
+  it('a version with a program: the release’s binaries kept, their attestations read, in version.json', async () => {
+    const commit = gh.push(REPO, 'v0.3.0', pluginFiles(REPO, { manifest: { run: { command: 'bin/ntfy', windows: 'bin/ntfy.exe' } } }));
+    const asset = (platform: string, bytes: Buffer): Asset & { bytes: Buffer } => ({
+      name: `ntfy-0.3.0-${platform}.tar.gz`,
+      size: bytes.length,
+      url: `https://api.github.test/assets/${platform}`,
+      bytes,
+    });
+    const bins = { 'windows-x64': Buffer.from('win'), 'macos-arm64': Buffer.from('mac'), 'linux-x64': Buffer.from('linux') };
+    gh.repos.get(REPO)!.releases['v0.3.0'] = Object.entries(bins).map(([p, b]) => asset(p, b));
+    for (const [p, b] of Object.entries(bins))
+      if (p !== 'linux-x64') gh.attestations.set(sha256(b), [attestation(sha256(b), { repo: REPO, commit })]);
+    const { id, state } = await submit(sam, REPO, 'v0.3.0');
+    expect(state).toBe('ready');
+    const [v] = await q('select version_json from versions where id = $1', [id]);
+    const file = JSON.parse(v.version_json);
+    expect(file.binaries).toEqual({
+      'windows-x64': { name: 'ntfy-0.3.0-windows-x64.tar.gz', sha256: sha256(bins['windows-x64']), size: 3, attested: true },
+      'macos-arm64': { name: 'ntfy-0.3.0-macos-arm64.tar.gz', sha256: sha256(bins['macos-arm64']), size: 3, attested: true },
+      'linux-x64': { name: 'ntfy-0.3.0-linux-x64.tar.gz', sha256: sha256(bins['linux-x64']), size: 5, attested: false },
+    });
+    const kept = await readFile(join(dir, 'sha256', sha256(bins['linux-x64']).slice(0, 2), `${sha256(bins['linux-x64'])}.tar.gz`));
+    expect(kept.toString()).toBe('linux');
+    const view = (await versionView(db, sam, id!))!;
+    expect(view.checks.find((c) => c.key === 'binaries')!.detail.fr).toMatch(/sans attestation de provenance pour 1/);
+  });
+
+  it('an id of another author is refused; a name too close is held for a person', async () => {
+    gh.push(REPO, 'v0.3.0', pluginFiles(REPO));
+    const { id } = await submit(sam, REPO, 'v0.3.0');
+    await publishVersion(db, sam, id!, { categories: ['notifications'] });
+
+    gh.add('q7x/ntfy-clone', 90);
+    const q7x = await signInAs('q7x', 5151, [{ id: 90, full_name: 'q7x/ntfy-clone', private: false }]);
+    gh.push(
+      'q7x/ntfy-clone',
+      'v1.0.0',
+      pluginFiles('q7x/ntfy-clone', { manifest: { id: 'io.github.sroux.escouade-ntfy', version: '1.0.0' } }),
+    );
+    const stolen = await submit(q7x, 'q7x/ntfy-clone', 'v1.0.0');
+    expect(stolen.state).toBe('rejected');
+    expect((await versionView(db, q7x, stolen.id!))!.checks.find((c) => c.key === 'id')!.detail.en).toBe(
+      'io.github.sroux.escouade-ntfy belongs to another author',
+    );
+
+    gh.push(
+      'q7x/ntfy-clone',
+      'v1.0.1',
+      pluginFiles('q7x/ntfy-clone', { manifest: { id: 'io.github.q7x.escouade-ntfi', version: '1.0.1' } }),
+    );
+    const close = await submit(q7x, 'q7x/ntfy-clone', 'v1.0.1');
+    expect(close.state).toBe('held');
+    expect(await publishVersion(db, q7x, close.id!, { categories: ['notifications'] })).toEqual({ error: 'held' });
+    // Nobody else sees a version that is not theirs.
+    expect(await versionView(db, sam, close.id!)).toBeNull();
+    expect(await publishVersion(db, sam, close.id!, { categories: ['notifications'] })).toEqual({ error: 'not-found' });
+  });
+
+  it('a new tag by webhook becomes a version that waits for its author, or is published when they asked', async () => {
+    gh.push(REPO, 'v0.3.0', pluginFiles(REPO));
+    const first = await submit(sam, REPO, 'v0.3.0');
+    await publishVersion(db, sam, first.id!, { categories: ['notifications'] });
+
+    gh.push(REPO, 'v0.4.0', pluginFiles(REPO, { manifest: { version: '0.4.0' } }));
+    const hook = tagOfWebhook('create', {
+      ref: 'v0.4.0',
+      ref_type: 'tag',
+      repository: { id: 77, full_name: REPO, private: false },
+      installation: { id: 42420, account: { id: 4242, login: 'sroux', type: 'User' } },
+    })!;
+    expect(hook).toEqual({ repoId: 77, fullName: REPO, installationId: 42420, tag: 'v0.4.0' });
+    const { check } = await onTag(db, deps, hook, T0);
+    expect(await checkVersion(db, deps, check!)).toBe('ready');
+    const [v] = await q('select origin, account_id, plugin_id from versions where id = $1', [check]);
+    expect(v).toMatchObject({ origin: 'webhook', account_id: sam.id, plugin_id: 'io.github.sroux.escouade-ntfy' });
+    expect((await versionView(db, sam, check!))!).toMatchObject({ first: false, previous: '0.3.0' });
+    // The same tag told again (a release after the tag) adds nothing.
+    expect(await onTag(db, deps, hook, T0)).toEqual({});
+
+    await q('update plugins set auto_publish = true');
+    gh.push(REPO, 'v0.5.0', pluginFiles(REPO, { manifest: { version: '0.5.0' } }));
+    const next = await onTag(db, deps, { ...hook, tag: 'v0.5.0' }, T0);
+    expect(await checkVersion(db, deps, next.check!)).toBe('published');
+
+    // A tag of a repository that is no plugin's is only noted.
+    expect(await onTag(db, deps, { ...hook, repoId: 999, fullName: 'x/y' }, T0)).toEqual({});
+    // A tag whose number is taken goes through the checks, which say so.
+    gh.push(REPO, '0.5.0', pluginFiles(REPO, { manifest: { version: '0.5.0' } }));
+    const dup = await onTag(db, deps, { ...hook, tag: '0.5.0' }, T0);
+    expect(await checkVersion(db, deps, dup.check!)).toBe('rejected');
+  });
+
+  it('a tag moved after publication is noted and told; the published version does not change', async () => {
+    const commit = gh.push(REPO, 'v0.3.0', pluginFiles(REPO));
+    const { id } = await submit(sam, REPO, 'v0.3.0');
+    await publishVersion(db, sam, id!, { categories: ['notifications'] });
+    const before = (await q('select version_json, version_sha256, commit from versions where id = $1', [id]))[0];
+
+    const moved = gh.push(REPO, 'v0.3.0', pluginFiles(REPO, { files: { 'evil.js': 'steal()' } }));
+    expect(moved).not.toBe(commit);
+    expect(await onTag(db, deps, { repoId: 77, fullName: REPO, installationId: null, tag: 'v0.3.0' }, T0)).toEqual({ moved: id });
+    const after = (await q('select version_json, version_sha256, commit, state, tag_moved_to from versions where id = $1', [id]))[0];
+    expect(after).toMatchObject({ ...before, state: 'published', tag_moved_to: moved });
+    expect((await q("select detail from audit where action = 'version.tag_moved'"))[0].detail).toMatchObject({ was: commit, now: moved });
+    // Told once: the same move seen again by the weekly read adds nothing.
+    expect(await rereadTags(db, deps, T0)).toEqual({ read: 1, moved: 0, failed: 0 });
+
+    // A tag moved without a webhook is caught by the weekly read.
+    gh.push(REPO, 'v0.3.0', pluginFiles(REPO, { files: { 'other.js': 'x' } }));
+    expect(await rereadTags(db, deps, T0)).toEqual({ read: 1, moved: 1, failed: 0 });
+  });
+
+  it('the store’s own failure leaves the version in error, and the checks run again', async () => {
+    gh.push(REPO, 'v0.3.0', pluginFiles(REPO));
+    gh.fail(true);
+    const { id, state } = await submit(sam, REPO, 'v0.3.0');
+    expect(state).toBe('error');
+    expect((await versionView(db, sam, id!))!.error).toBe('GitHub answered 502 to the archive');
+    gh.fail(false);
+    expect(await retrySubmission(db, sam, id!)).toBe(true);
+    expect(await checkVersion(db, deps, id!)).toBe('ready');
+    expect(await retrySubmission(db, sam, id!)).toBe(false);
+  });
+
+  it('notes the tags of the webhooks, once per delivery', async () => {
+    const p = { ref: 'refs/tags/v0.3.0', repository: { id: 77, full_name: REPO, private: false } };
+    expect(await applyWebhook(db, 'push', 'd-1', p, T0)).toBe('handled');
+    expect(await applyWebhook(db, 'push', 'd-1', p, T0)).toBe('duplicate');
+    expect(tagOfWebhook('push', p)).toMatchObject({ tag: 'v0.3.0' });
+    expect(tagOfWebhook('push', { ...p, deleted: true })).toBeNull();
+    expect(tagOfWebhook('push', { ...p, ref: 'refs/heads/main' })).toBeNull();
+    expect(tagOfWebhook('release', { ...p, action: 'published', release: { tag_name: 'v1.0.0' } })).toMatchObject({ tag: 'v1.0.0' });
+    expect(tagOfWebhook('release', { ...p, action: 'edited', release: { tag_name: 'v1.0.0' } })).toBeNull();
+  });
+});

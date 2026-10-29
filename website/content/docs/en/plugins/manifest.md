@@ -81,7 +81,7 @@ One plugin can hold several points: a GitHub plugin gives its issues to the Kanb
 
 - **An invalid manifest loads nothing.** Escouade says why, field by field, with the field’s path: “`escouade.min` is missing.”, “`contributes.settings[0].type` is one of: string, number, boolean, select.”
 - **An unknown field is ignored.** A manifest written for a newer Escouade loads all the same; the ignored fields are listed.
-- The same check runs on the marketplace when an author submits a plugin: both report the same errors.
+- The same check runs on the marketplace when an author submits a plugin: both report the same errors ([publishing on the store](plugins/publishing)).
 
 ## Installing a plugin
 

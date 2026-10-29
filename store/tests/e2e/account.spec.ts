@@ -104,13 +104,16 @@ test('installing the App from the account lists its repositories', async ({ page
 });
 
 test('an installation started on GitHub comes back without state: the store asks GitHub again, with its own', async ({ page }) => {
-  const before = (await fake()).exchanged.length;
   await page.goto(`${FAKE_GITHUB}/apps/escouade-store/installations/new`);
   await page.getByLabel('Login').fill(who('noa-direct'));
+  const back = page.waitForRequest(/\/api\/auth\/github\/callback\?/);
   await page.getByRole('button', { name: 'Install & Authorize' }).click();
-  // The code GitHub sent without the state is not used: the authorization page comes back.
+  const sent = new URL((await back).url()).searchParams.get('code');
+  // The code GitHub sent without the state is not used: the authorization page comes back. (The other tests exchange
+  // their own codes meanwhile: this one alone is looked for.)
   await expect(page.getByRole('heading', { name: 'Authorize Escouade Store' })).toBeVisible();
-  expect((await fake()).exchanged.length).toBe(before);
+  expect(sent).toBeTruthy();
+  expect((await fake()).exchanged).not.toContain(sent);
   expect(await page.context().cookies('http://localhost')).toEqual([expect.objectContaining({ name: '__Host-store_state' })]);
   await page.getByLabel('Login').fill(who('noa-direct'));
   await page.getByRole('button', { name: 'Authorize Escouade Store' }).click();

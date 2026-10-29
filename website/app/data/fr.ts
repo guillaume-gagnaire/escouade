@@ -441,6 +441,7 @@ export const fr: Catalog = {
       'settings-voice': 'Voix',
       'settings-about': 'À propos',
       'plugins/manifest': 'Le manifeste',
+      'plugins/publishing': 'Publier sur le store',
       shortcuts: 'Raccourcis clavier',
       'escouade-yml': '.escouade.yml',
       data: 'Données locales',

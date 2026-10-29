@@ -36,8 +36,10 @@ describe.skipIf(!url)('the database', () => {
       'email_tokens',
       'installation_repos',
       'installations',
+      'plugins',
       'service_state',
       'sessions',
+      'versions',
       'webhook_deliveries',
     ]);
   });
@@ -52,7 +54,7 @@ describe.skipIf(!url)('the database', () => {
 
   it('starts the queue, whose first beat lands at once', async () => {
     const before = Date.now();
-    const boss = await startQueue(url!, db);
+    const boss = await startQueue(url!, db, null);
     try {
       await expect.poll(async () => (await lastBeat(db))?.getTime() ?? 0, { timeout: 15_000 }).toBeGreaterThanOrEqual(before - 1000);
     } finally {

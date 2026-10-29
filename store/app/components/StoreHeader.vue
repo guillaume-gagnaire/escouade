@@ -24,11 +24,13 @@ const signIn = computed(() => `/api/auth/github?to=${encodeURIComponent(account.
         <a class="link wide" :href="links.docs">{{ text.header.docs }}</a>
         <template v-if="me.account">
           <NuxtLink class="link" :to="account">{{ words.mine }}</NuxtLink>
+          <NuxtLink class="btn sm primary" :to="pathIn(lang, '/submit')">{{ text.header.submit }}</NuxtLink>
           <NuxtLink class="me" :to="account"
             ><AuthorAvatar :login="me.account.login" :github-id="me.account.githubId" /><span>{{ me.account.login }}</span></NuxtLink
           >
         </template>
-        <a v-else class="btn sm" :href="signIn" :aria-label="words.signIn"
+        <NuxtLink v-if="!me.account" class="link" :to="pathIn(lang, '/submit')">{{ text.header.publish }}</NuxtLink>
+        <a v-if="!me.account" class="btn sm" :href="signIn" :aria-label="words.signIn"
           ><svg class="i" viewBox="0 0 16 16" aria-hidden="true">
             <circle cx="4.5" cy="3.5" r="1.6" />
             <circle cx="4.5" cy="12.5" r="1.6" />

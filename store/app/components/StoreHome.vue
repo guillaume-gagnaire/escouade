@@ -1,7 +1,10 @@
 <script setup lang="ts">
+import { pathIn } from '~/data/language';
+
 // The home page, before the first plugin (STORE-1): the preview's hero and its « Publier un plugin » band
-// (design/store/, #home). The search, the categories and the lists of plugins come with STORE-4.
-const { text, links } = useLang();
+// (design/store/, #home), which leads to the submission. The search, the categories and the lists of plugins come with
+// STORE-4.
+const { lang, text, links } = useLang();
 </script>
 
 <template>
@@ -39,7 +42,10 @@ const { text, links } = useLang();
       <div>
         <h2>{{ text.home.publishTitle }}</h2>
         <p>{{ text.home.publishLead }}</p>
-        <a class="btn" :href="links.docs">{{ text.home.guide }}</a>
+        <div class="acts">
+          <NuxtLink class="btn primary" :to="pathIn(lang, '/submit')">{{ text.header.publish }}</NuxtLink>
+          <a class="btn ghost" :href="links.docs">{{ text.home.guide }}</a>
+        </div>
       </div>
       <ol class="steps">
         <li v-for="(step, i) in text.home.steps" :key="i">
@@ -112,6 +118,16 @@ h1 {
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--surface);
+}
+.publish .acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.btn.ghost {
+  border-color: transparent;
+  background: none;
+  color: var(--muted);
 }
 .publish h2 {
   font-size: 24px;

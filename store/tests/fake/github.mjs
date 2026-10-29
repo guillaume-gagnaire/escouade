@@ -2,13 +2,16 @@
 // It answers what the store asks of GitHub (the authorization page, the code's exchange, /user, the installations
 // and their repositories, the token's revocation), installs the App as GitHub does (with or without the store's
 // state), and signs the installation's webhook as GitHub does. The SMTP server keeps the mails it receives.
-// What it saw is read at /_fake/state.
+// The repositories it installs on hold test plugins, served as the App reads them (tests/fake/repos.mjs);
+// `POST /_fake/tag` pushes a tag (a new one, or one moved) and sends its `create` webhook. What it saw is read at
+// /_fake/state.
 //
 //   FAKE_GITHUB_PORT, FAKE_SMTP_PORT: its ports; STORE_URL: the store, for the webhooks;
 //   GITHUB_APP_CLIENT_ID, GITHUB_APP_CLIENT_SECRET, GITHUB_WEBHOOK_SECRET: the App's, as the store has them.
 import { createHash, createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { SMTPServer } from 'smtp-server';
+import { pushTag, repoOf, seedRepo, serveRepos } from './repos.mjs';
 
 const port = Number(process.env.FAKE_GITHUB_PORT ?? 3010);
 const smtpPort = Number(process.env.FAKE_SMTP_PORT ?? 3025);
@@ -125,7 +128,8 @@ const server = createServer(async (req, res) => {
       .split(',')
       .map((r) => r.trim())
       .filter(Boolean)
-      .map((r) => ({ id: nextRepo++, full_name: `${who.login}/${r}`, private: false }));
+      .map((r) => ({ id: nextRepo++, full_name: `${who.login}/${r}`, private: r.endsWith('-private') }));
+    for (const r of repos) seedRepo(r);
     const inst = { id: nextInstall++, account: { id: who.id, login: who.login, type: 'User' }, repository_selection: 'selected', repos };
     installations.set(inst.id, inst);
     const { repos: _r, ...installation } = inst;
@@ -178,6 +182,23 @@ const server = createServer(async (req, res) => {
     if (tokens.has(access_token)) revoked.push(tokens.get(access_token));
     tokens.delete(access_token);
     return json(res, 204);
+  }
+  if (serveRepos(req, res, { path, q, port, installations, json, redirect })) return;
+  if (path === '/_fake/tag' && req.method === 'POST') {
+    const b = JSON.parse((await body(req)) || '{}');
+    const repo = repoOf(b.repo);
+    const inst = [...installations.values()].find((i) => i.repos.some((r) => r.full_name === b.repo));
+    if (!repo || !inst) return json(res, 404, { message: 'Not Found' });
+    const sha = pushTag(b.repo, b.tag, { extra: b.extra ?? {} });
+    const { repos: _r, ...installation } = inst;
+    await sendWebhook('create', {
+      ref: b.tag,
+      ref_type: 'tag',
+      repository: { id: repo.id, full_name: b.repo, private: repo.private },
+      installation,
+      sender: { id: inst.account.id },
+    });
+    return json(res, 200, { sha });
   }
   if (path === '/_fake/state') return json(res, 200, { revoked, mails, exchanged });
   json(res, 404, { message: 'Not Found' });

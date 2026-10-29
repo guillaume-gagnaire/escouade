@@ -278,7 +278,8 @@ export async function exportAccount(db: Db, account: Account, now = new Date()) 
 /**
  * Deletes the account: its sessions, its address and its links go with it; the journal keeps its entries one year,
  * by GitHub id, as it does for every action. Gives back the GitHub tokens still valid, for GitHub to revoke them.
- * (STORE-3 adds the plugins, which an author transfers or deletes first, docs/STORE.md §2.2.)
+ * Its plugins stay, without an author, their ids reserved, until STORE-5 has them transferred or deleted first
+ * (docs/STORE.md §2.2).
  */
 export async function deleteAccount(db: Db, account: Account, secret: string, now = new Date()): Promise<string[]> {
   const open = await db
@@ -327,14 +328,32 @@ interface Payload {
   ref?: string;
   ref_type?: string;
   release?: { tag_name?: string };
+  deleted?: boolean;
+}
+
+/**
+ * The tag a webhook tells of, for the submissions (STORE-3): a tag created (`create`), a release published
+ * (`release`), a tag pushed again over itself (`push` of `refs/tags/…`, a moved tag). Null for anything else.
+ */
+export function tagOfWebhook(
+  event: string,
+  p: Payload,
+): { repoId: number; fullName: string; installationId: number | null; tag: string } | null {
+  const r = p.repository;
+  if (!r) return null;
+  let tag: string | undefined;
+  if (event === 'create' && p.ref_type === 'tag') tag = p.ref;
+  else if (event === 'release' && p.action === 'published') tag = p.release?.tag_name;
+  else if (event === 'push' && p.ref?.startsWith('refs/tags/') && !p.deleted) tag = p.ref.slice('refs/tags/'.length);
+  return tag ? { repoId: r.id, fullName: r.full_name, installationId: p.installation?.id ?? null, tag } : null;
 }
 
 export type Handled = 'handled' | 'duplicate' | 'ignored';
 
 /**
  * Applies a webhook the App received, once per delivery id: the installations and their repositories follow what
- * GitHub says, and the journal notes it. The tags (`create`, `release`) are noted for now: the submission reads them
- * (STORE-3).
+ * GitHub says, and the journal notes it. The tags (`create`, `release`, `push` of a tag) are noted here, and read by
+ * the submissions (`tagOfWebhook`, server/utils/submissions.ts).
  */
 export async function applyWebhook(db: Db, event: string, delivery: string, p: Payload, now = new Date()): Promise<Handled> {
   const fresh = await db
@@ -392,7 +411,7 @@ export async function applyWebhook(db: Db, event: string, delivery: string, p: P
     await note(db, `repository.${p.action}`, who, { repository: r.full_name, id: r.id }, now);
     return 'handled';
   }
-  if ((event === 'create' && p.ref_type === 'tag') || event === 'release') {
+  if ((event === 'create' && p.ref_type === 'tag') || event === 'release' || (event === 'push' && p.ref?.startsWith('refs/tags/'))) {
     await note(db, `${event}.${p.action ?? 'tag'}`, who, { repository: p.repository?.full_name, tag: p.release?.tag_name ?? p.ref }, now);
     return 'handled';
   }
