@@ -339,6 +339,11 @@ impl DataDir {
         self.0.join("plugins")
     }
 
+    /// The plugins' journals, one file per plugin, by its id (`plugins::runtime`).
+    pub fn plugin_logs_dir(&self) -> PathBuf {
+        self.0.join("plugin-logs")
+    }
+
     /// The list of the installed plugins: where each comes from and its fingerprint.
     pub fn plugins_file(&self) -> PathBuf {
         self.0.join("plugins.json")

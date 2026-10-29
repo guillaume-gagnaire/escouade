@@ -4,12 +4,18 @@
 //! folder's files); a folder in development is loaded in place, and read again when it changes.
 //!
 //! What is installed is listed in `DataDir::plugins_file`. Loading a plugin reads its manifest
-//! (`manifest`) and nothing else: no plugin runs here (the process comes with PLG-2). A manifest
+//! (`manifest`) and nothing else: no plugin runs here (its process is `runtime`'s, PLG-2). A manifest
 //! that does not hold loads nothing, and says why, field by field; a plugin of an API or for an
 //! Escouade out of its range is loaded disabled, with the reason; a copy whose files changed
 //! since it was installed is too.
 
+// The journal and the runtime serve Réglages › Plugins (PLG-4) and the extension points (PLG-5 and
+// after); until then, the app only starts and closes them.
+#[cfg_attr(not(test), allow(dead_code))]
+pub mod journal;
 pub mod manifest;
+#[cfg_attr(not(test), allow(dead_code))]
+pub mod runtime;
 
 use crate::i18n::Lang;
 use crate::paths::DataDir;

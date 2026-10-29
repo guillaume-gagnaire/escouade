@@ -93,4 +93,4 @@ Escouade installs a plugin in three ways:
 
 The list of installed plugins, their origin and their fingerprint are in `~/.escouade/plugins.json`. A copy whose files changed since it was installed is disabled, with the reason.
 
-The Settings › Plugins tab, which installs, enables and uninstalls plugins from the interface, comes with the rest of 2.1. No plugin runs a program yet: this version reads and checks the manifests.
+A plugin’s program starts at its first activation and speaks [the protocol](plugins/api). The Settings › Plugins tab, which installs, enables and uninstalls plugins from the interface, and the facts that start a plugin come with the rest of 2.1.

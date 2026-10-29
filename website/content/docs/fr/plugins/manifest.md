@@ -93,4 +93,4 @@ Escouade installe un plugin de trois façons :
 
 La liste des plugins installés, leur origine et leur empreinte sont dans `~/.escouade/plugins.json`. Une copie dont les fichiers ont changé depuis l’installation est désactivée, avec la raison.
 
-L’onglet Réglages › Plugins, qui installe, active et désinstalle les plugins depuis l’interface, arrive avec la suite de la 2.1. Aucun plugin ne lance encore de programme : cette version lit et vérifie les manifestes.
+Le programme d’un plugin démarre à sa première activation et parle [le protocole](plugins/api). L’onglet Réglages › Plugins, qui installe, active et désinstalle les plugins depuis l’interface, et les faits qui démarrent un plugin arrivent avec la suite de la 2.1.

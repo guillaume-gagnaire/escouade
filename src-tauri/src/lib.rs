@@ -125,6 +125,8 @@ mod planfiles;
 mod planfiles_tests;
 mod plugins;
 #[cfg(test)]
+mod plugins_runtime_tests;
+#[cfg(test)]
 mod plugins_tests;
 mod pricing;
 #[cfg(test)]

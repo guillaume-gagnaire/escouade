@@ -26,6 +26,7 @@ Escouade range ses données dans `~/.escouade/` (`C:\Users\<toi>\.escouade` sous
 | `voice/espeak-ng-data/` | Les données de prononciation d’eSpeak NG (français et anglais), écrites par l’app à la première lecture à voix haute et réécrites après une mise à jour. |
 | `plugins/<id>/` | La copie de chaque plugin installé depuis un dossier ou un dépôt git, sans son historique git (voir [le manifeste](plugins/manifest#installer-un-plugin)). Effacée quand le plugin est désinstallé. |
 | `plugins.json` | La liste des plugins installés : leur origine (dossier, dépôt et étiquette, dossier en développement) et leur empreinte. |
+| `plugin-logs/<id>.log` | Le journal de chaque plugin qui a un programme : ses démarrages, ses arrêts, ses plantages, sa sortie d’erreur et ses messages, sans ses secrets (voir [le protocole](plugins/api#le-journal)). Au-delà de 1 Mo, il devient `<id>.log.1`. |
 | `update.json` | La mise à jour en cours d’installation, notée pour le démarrage suivant puis effacée. |
 | `stats.db` | Les statistiques (une base SQLite, avec ses fichiers `stats.db-wal` et `stats.db-shm` tant qu’Escouade tourne). |
 | `telemetry-id` | L’identifiant tiré au hasard de cette installation, pour les statistiques d’usage. Créé quand tu les acceptes, supprimé quand tu les refuses ou les désactives. |

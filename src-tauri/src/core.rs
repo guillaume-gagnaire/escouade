@@ -858,6 +858,8 @@ pub struct Core<R: Runtime = Wry> {
     pub(crate) codeindex: crate::codeindex::Service,
     /// The installed plugins (`plugins`).
     pub plugins: Arc<crate::plugins::Plugins>,
+    /// Their processes (`plugins::runtime`): started at their first activation, closed with the app.
+    pub(crate) plugin_runtime: Arc<crate::plugins::runtime::Runtime>,
     /// The download of the vectors' model under way (ESC-254), by its flag to call it off.
     pub(crate) vectors_download: Mutex<Option<Arc<std::sync::atomic::AtomicBool>>>,
     pub git_cache: RwLock<HashMap<String, GitInfo>>,
@@ -1806,12 +1808,20 @@ impl<R: Runtime> Core<R> {
                 .map(|s| s.inner().clone())
                 .unwrap_or_default()
         };
+        let plugins = crate::plugins::Plugins::load(data.clone(), env!("CARGO_PKG_VERSION"));
         let core = Arc::new_cyclic(|me| Self {
             me: me.clone(),
             telemetry,
             stats: Stats::open(&data.stats_db()),
             codeindex: crate::codeindex::Service::new(data.clone()),
-            plugins: crate::plugins::Plugins::load(data.clone(), env!("CARGO_PKG_VERSION")),
+            plugin_runtime: crate::plugins::runtime::Runtime::new(
+                plugins.clone(),
+                secrets.clone(),
+                &data,
+                env!("CARGO_PKG_VERSION"),
+                crate::plugins::runtime::Limits::default(),
+            ),
+            plugins,
             app,
             data,
             hub: Hub::default(),
@@ -4461,6 +4471,8 @@ impl<R: Runtime> Core<R> {
         // Their tokens go with the app: their MCP configs too.
         self.mcp.clear_agent_configs();
         self.pty.kill_all();
+        // The plugins are asked to `shutdown`, then their jobs end (a second at most).
+        self.plugin_runtime.shutdown();
         self.save_now();
         // The usage statistics of the last minute, if they can leave in time.
         self.telemetry.flush_at_exit();

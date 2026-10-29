@@ -387,7 +387,10 @@ export const en: Catalog = {
       },
       usage: { title: 'Accounts and usage', text: 'Several accounts per harness, quotas, cost and statistics.' },
       settings: { title: 'Settings', text: 'Every tab of the settings window, option by option.' },
-      plugins: { title: 'Plugins', text: 'Add features to Escouade: a plugin’s manifest, how it is installed, its extension points.' },
+      plugins: {
+        title: 'Plugins',
+        text: 'Add features to Escouade: a plugin’s manifest, how it is installed, its protocol, its extension points.',
+      },
       reference: { title: 'Reference', text: 'Shortcuts, local data, updates and troubleshooting.' },
     },
     pages: {
@@ -434,6 +437,7 @@ export const en: Catalog = {
       'settings-voice': 'Voice',
       'settings-about': 'About',
       'plugins/manifest': 'The manifest',
+      'plugins/api': 'The protocol',
       'plugins/publishing': 'Publishing on the store',
       shortcuts: 'Keyboard shortcuts',
       'escouade-yml': '.escouade.yml',

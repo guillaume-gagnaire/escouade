@@ -393,7 +393,7 @@ export const fr: Catalog = {
       settings: { title: 'Réglages', text: 'Chaque onglet de la fenêtre des réglages, option par option.' },
       plugins: {
         title: 'Plugins',
-        text: 'Ajouter des fonctionnalités à Escouade : le manifeste d’un plugin, son installation, ses points d’extension.',
+        text: 'Ajouter des fonctionnalités à Escouade : le manifeste d’un plugin, son installation, son protocole, ses points d’extension.',
       },
       reference: { title: 'Référence', text: 'Les raccourcis, les données locales, les mises à jour et le dépannage.' },
     },
@@ -441,6 +441,7 @@ export const fr: Catalog = {
       'settings-voice': 'Voix',
       'settings-about': 'À propos',
       'plugins/manifest': 'Le manifeste',
+      'plugins/api': 'Le protocole',
       'plugins/publishing': 'Publier sur le store',
       shortcuts: 'Raccourcis clavier',
       'escouade-yml': '.escouade.yml',
