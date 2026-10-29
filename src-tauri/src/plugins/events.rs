@@ -417,7 +417,12 @@ impl Dispatch {
 
     async fn call_webhook(&self, id: &str, w: &Webhook, fact: &Fact) {
         let journal = self.runtime.journal_of(id);
-        let Some(m) = self.plugins.get(id, Lang::En).and_then(|v| v.manifest) else {
+        // What it may still do: a host of `permissions.network` taken back is no longer one.
+        let Some(m) = self
+            .plugins
+            .get(id, Lang::En)
+            .and_then(|v| v.manifest.map(|m| super::granted(&m, &v.choices.revoked)))
+        else {
             return;
         };
         let v = serde_json::to_value(fact).unwrap_or(Value::Null);
@@ -430,17 +435,18 @@ impl Dispatch {
             );
             return;
         };
+        // The host as the request will reach it (its user, its port and its case set apart),
+        // whatever made it: the manifest, a secret, or a fact's value in a template.
         let host = parsed.host_str().unwrap_or("").to_string();
-        // An address made of a secret goes only to a host the plugin declared.
-        let declared = !w.url.contains("{{")
-            || m.permissions
-                .network
-                .iter()
-                .any(|p| p == &host || p.strip_prefix("*.").is_some_and(|d| host.ends_with(d)));
-        if !matches!(parsed.scheme(), "http" | "https") || !declared {
+        if !matches!(parsed.scheme(), "http" | "https")
+            || !super::manifest::host_covered(&host, &m.permissions.network)
+        {
             journal.push(
                 Kind::Refused,
-                format!("a webhook to {host} is not sent: not an http(s) address of `permissions.network`"),
+                format!(
+                    "a webhook to {host} is not sent: not an http(s) address of a host of `permissions.network` ({})",
+                    fact.name()
+                ),
             );
             return;
         }

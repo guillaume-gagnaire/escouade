@@ -22,10 +22,16 @@ export interface ManifestError {
     | 'png'
     | 'heavy'
     | 'square'
-    | 'small';
+    | 'small'
+    | 'network';
   /** The type, or the values, the field takes, for `type` and `enum`. */
   expected?: string;
 }
+
+/** The host of an address written whole, in lower case; null for none, or one made by a template. */
+export function writtenHost(url: string): string | null;
+/** Whether `permissions.network` covers `host`: itself, or `*.domain` for its subdomains (not the domain itself). */
+export function hostCovered(host: string, network: string[]): boolean;
 
 export interface Validation {
   ok: boolean;

@@ -107,7 +107,7 @@ Un plugin **déclaratif** (sans `run`) appelle une adresse sur un fait. Chaque w
 
 | Champ         | Obligatoire | Ce qu’il dit                                                                                                                                  |
 | ------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `url`         | oui         | L’adresse, en `http://` ou `https://`. Elle peut venir d’un secret du plugin : `{{secrets.webhook}}`.                                         |
+| `url`         | oui         | L’adresse, en `http://` ou `https://`, vers un hôte de `permissions.network`. Elle peut venir d’un secret du plugin : `{{secrets.webhook}}`.                                         |
 | `events`      | oui         | Les faits qui l’appellent (`ticket.*` les prend tous). Ils doivent aussi être dans `permissions.events`.                                      |
 | `when`        | non         | Ce que le fait doit dire, chemin par chemin : `{ "data.to": "review" }`, ou une liste de valeurs : `{ "data.status": ["waiting", "error"] }`. |
 | `body`        | non         | Le gabarit du corps : un objet JSON, ou un texte. Sans lui, le fait entier en JSON.                                                           |
@@ -143,7 +143,7 @@ Le webhook Discord des tickets à tester :
 }
 ```
 
-Une adresse tirée d’un secret ne part que vers un hôte de `permissions.network` (`discord.com`, ou `*.exemple.dev` pour ses sous-domaines) ; une adresse écrite en clair dans le manifeste est déjà déclarée. Le webhook a 10 s pour répondre, sans redirection. Son journal note chaque appel par son hôte et sa réponse, jamais l’adresse entière (celle de Discord contient un jeton).
+**Un webhook ne part que vers un hôte de `permissions.network`**, celui que la fenêtre d’installation montre, que son adresse soit écrite en clair, tirée d’un secret ou faite d’une valeur du fait. Escouade refuse au chargement un manifeste dont un webhook écrit en clair va ailleurs, et ne fait pas un appel dont l’adresse, une fois faite, va ailleurs (le journal le dit) : un titre de ticket comme `evil.dev/x` n’envoie rien. Un hôte se compare sans tenir compte de la casse, sans l’utilisateur ni le port de l’adresse. `hooks.slack.com` ne couvre que lui-même ; `*.exemple.dev` couvre ses sous-domaines à toute profondeur (`hooks.exemple.dev`, `a.b.exemple.dev`), mais pas `exemple.dev` lui-même, à déclarer à part, ni `evilexemple.dev`. Le webhook a 10 s pour répondre, sans redirection. Son journal note chaque appel par son hôte et sa réponse, jamais l’adresse entière (celle de Discord contient un jeton).
 
 ## Une commande sur un fait
 

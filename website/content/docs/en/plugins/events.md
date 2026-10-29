@@ -107,7 +107,7 @@ A **declarative** plugin (without `run`) calls an address on a fact. Each webhoo
 
 | Field         | Required | What it says                                                                                                                     |
 | ------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `url`         | yes      | The address, `http://` or `https://`. It may come from a secret of the plugin: `{{secrets.webhook}}`.                            |
+| `url`         | yes      | The address, `http://` or `https://`, to a host of `permissions.network`. It may come from a secret of the plugin: `{{secrets.webhook}}`.                            |
 | `events`      | yes      | The facts that call it (`ticket.*` takes them all). They must also be in `permissions.events`.                                   |
 | `when`        | no       | What the fact must say, path by path: `{ "data.to": "review" }`, or a list of values: `{ "data.status": ["waiting", "error"] }`. |
 | `body`        | no       | The body’s template: a JSON object, or a text. Without it, the whole fact in JSON.                                               |
@@ -143,7 +143,7 @@ The Discord webhook of the tickets to test:
 }
 ```
 
-An address taken from a secret only goes to a host of `permissions.network` (`discord.com`, or `*.example.dev` for its subdomains); an address written in the manifest is declared already. The webhook has 10 s to answer, without redirects. Its journal notes each call by its host and its answer, never the whole address (Discord’s holds a token).
+**A webhook only goes to a host of `permissions.network`**, the one the install window shows, whether its address is written whole, taken from a secret or made of a value of the fact. Escouade refuses at load a manifest whose webhook written whole goes elsewhere, and makes no call whose address, once made, goes elsewhere (the journal says so): a ticket title like `evil.dev/x` sends nothing. A host is compared without regard to case, without the address’s user or port. `hooks.slack.com` covers itself alone; `*.example.dev` covers its subdomains at any depth (`hooks.example.dev`, `a.b.example.dev`), but not `example.dev` itself, to declare apart, nor `evilexample.dev`. The webhook has 10 s to answer, without redirects. Its journal notes each call by its host and its answer, never the whole address (Discord’s holds a token).
 
 ## A command on a fact
 

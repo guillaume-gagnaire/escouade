@@ -596,7 +596,7 @@ async fn a_private_projects_facts_go_only_to_a_plugin_turned_on_for_it() {
         "webhook",
         json!({
             "id": "dev.test.hook",
-            "permissions": { "events": ["ticket.created"] },
+            "permissions": { "events": ["ticket.created"], "network": ["127.0.0.1"] },
             "contributes": { "webhooks": [{ "url": url, "events": ["ticket.created"] }] },
         }),
     );
@@ -847,6 +847,63 @@ async fn a_declared_webhook_posts_its_template_to_a_server_with_a_secret_address
     assert!(
         got.contains("Rendue") && !got.contains("Sans permission"),
         "{got}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_webhook_whose_host_a_fact_makes_goes_only_to_a_host_of_permissions_network() {
+    let h = harness("facts-webhook-host");
+    let (url, mut bodies) = fake_server().await;
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    // Its address is the ticket's title: whoever writes a title would choose where the facts go.
+    let dir = plugin_dir(
+        &h.dir,
+        "titled",
+        json!({
+            "id": "dev.test.titled",
+            "permissions": { "events": ["ticket.created"], "network": ["127.0.0.1"] },
+            "contributes": { "webhooks": [{ "url": "http://{{ticket.title}}", "events": ["ticket.created"] }] },
+        }),
+    );
+    h.core.plugins.load_dev(&dir, Lang::En).unwrap();
+    for title in ["evil.dev/x", "a@evil.dev", "127.0.0.1.evil.dev/x"] {
+        h.core
+            .ticket_create(&p.id, draft(title, &[], 5))
+            .await
+            .unwrap();
+    }
+    // A title that names a host it declared goes there, after the others in its queue.
+    let good = url.trim_start_matches("http://").to_string();
+    h.core
+        .ticket_create(&p.id, draft(&good, &[], 5))
+        .await
+        .unwrap();
+    let got = tokio::time::timeout(Duration::from_secs(20), bodies.recv())
+        .await
+        .expect("the declared host in time")
+        .unwrap();
+    assert!(got.starts_with("POST /hook "), "{got}");
+    let refused: Vec<String> = h
+        .core
+        .plugin_runtime
+        .journal("dev.test.titled")
+        .into_iter()
+        .filter(|e| e.kind == Kind::Refused)
+        .map(|e| e.text)
+        .collect();
+    assert_eq!(refused.len(), 3, "{refused:#?}");
+    for host in ["evil.dev", "evil.dev", "127.0.0.1.evil.dev"] {
+        assert!(
+            refused
+                .iter()
+                .any(|t| t.contains(&format!("to {host} is not sent"))),
+            "{refused:#?}"
+        );
+    }
+    assert!(
+        bodies.try_recv().is_err(),
+        "a webhook went to an undeclared host"
     );
 }
 

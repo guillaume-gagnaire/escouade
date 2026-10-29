@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { message, validate, validateText } from './plugin-manifest.mjs';
+import { hostCovered, message, validate, validateText, writtenHost } from './plugin-manifest.mjs';
 
 // The store's library on the cases it shares with the app's reader (src-tauri/src/plugins_tests.rs): the same fields
 // wrong, for the same reasons, and the same fields ignored.
@@ -102,5 +102,22 @@ describe('plugin-1.json', () => {
     for (const p of ['icon.svg', '../icon.png', '/icon.png', 'C:\\icon.png', 'https://exemple.dev/icon.png', 'icon.png.svg']) {
       expect(icon.test(p), p).toBe(false);
     }
+  });
+});
+
+describe('the hosts of permissions.network', () => {
+  const corpus = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'tests', 'fixtures', 'plugins', 'manifests.json'), 'utf8'));
+
+  it('cover a host as the app says, case by case', () => {
+    for (const c of corpus.hosts.cases) expect(hostCovered(c.host, c.network), `${c.host} by ${c.network}`).toBe(c.covered);
+  });
+
+  it('are read from an address written whole, never from a template', () => {
+    expect(writtenHost('https://user@Hooks.Slack.com:443/x?y#z')).toBe('hooks.slack.com');
+    expect(writtenHost('https://hooks.slack.com@evil.dev/x')).toBe('evil.dev');
+    expect(writtenHost('http://[::1]:8080/x')).toBe('::1');
+    expect(writtenHost('{{secrets.webhook}}')).toBeNull();
+    expect(writtenHost('https://{{data.host}}/x')).toBeNull();
+    expect(writtenHost('ftp://hooks.slack.com')).toBeNull();
   });
 });
