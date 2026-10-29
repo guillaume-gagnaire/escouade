@@ -1,5 +1,5 @@
 {
-  "about": "The manifests of escouade-plugin.json and what their reader says of them (ESC-173). Both readers go through every case: the app's (src-tauri/src/plugins/manifest_tests.rs) and the store's library (schemas/plugin-manifest.test.ts). `errors` are `<path> <code>`, in any order; `ignored` the unknown fields, which load nothing and fail nothing.",
+  "about": "The manifests of escouade-plugin.json and what their reader says of them (ESC-173). Both readers go through every case: the app's (src-tauri/src/plugins/manifest_tests.rs) and the store's library (schemas/plugin-manifest.test.ts). `errors` are `<path> <code>`, in any order; `ignored` the unknown fields, which load nothing and fail nothing. `files` are the files of the plugin's folder a case reads (its `icon`): `png` a PNG's header of that width and height, padded to `size` bytes; `text` a file of that text.",
   "cases": [
     {
       "name": "the manifest of docs/PLUGINS.md §3.1",
@@ -194,6 +194,165 @@
         "author": "Moi"
       },
       "errors": ["name.fr type", "version type", "escouade.api type", "author type"],
+      "ignored": []
+    },
+    {
+      "name": "icon: a square PNG of 512 px",
+      "manifest": {
+        "id": "dev.exemple.icon",
+        "name": "Logo",
+        "version": "1.0.0",
+        "escouade": { "api": "1", "min": "2.2.0" },
+        "icon": "assets/icon.png"
+      },
+      "files": { "assets/icon.png": { "png": [512, 512], "size": 40000 } },
+      "errors": [],
+      "ignored": []
+    },
+    {
+      "name": "icon smallest: a square PNG of 256 px, of 1 MB",
+      "manifest": {
+        "id": "dev.exemple.icon-smallest",
+        "name": "Logo",
+        "version": "1.0.0",
+        "escouade": { "api": "1", "min": "2.2.0" },
+        "icon": "icon.png"
+      },
+      "files": { "icon.png": { "png": [256, 256], "size": 1048576 } },
+      "errors": [],
+      "ignored": []
+    },
+    {
+      "name": "icon absent: the letters stay",
+      "manifest": { "id": "dev.exemple.icon-absent", "name": "Logo", "version": "1.0.0", "escouade": { "api": "1", "min": "2.2.0" } },
+      "errors": [],
+      "ignored": []
+    },
+    {
+      "name": "icon missing: not in the folder",
+      "manifest": {
+        "id": "dev.exemple.icon-missing",
+        "name": "Logo",
+        "version": "1.0.0",
+        "escouade": { "api": "1", "min": "2.2.0" },
+        "icon": "icon.png"
+      },
+      "files": {},
+      "errors": ["icon file"],
+      "ignored": []
+    },
+    {
+      "name": "icon not square",
+      "manifest": {
+        "id": "dev.exemple.icon-not-square",
+        "name": "Logo",
+        "version": "1.0.0",
+        "escouade": { "api": "1", "min": "2.2.0" },
+        "icon": "icon.png"
+      },
+      "files": { "icon.png": { "png": [300, 256] } },
+      "errors": ["icon square"],
+      "ignored": []
+    },
+    {
+      "name": "icon too small",
+      "manifest": {
+        "id": "dev.exemple.icon-too-small",
+        "name": "Logo",
+        "version": "1.0.0",
+        "escouade": { "api": "1", "min": "2.2.0" },
+        "icon": "icon.png"
+      },
+      "files": { "icon.png": { "png": [128, 128] } },
+      "errors": ["icon small"],
+      "ignored": []
+    },
+    {
+      "name": "icon too heavy",
+      "manifest": {
+        "id": "dev.exemple.icon-too-heavy",
+        "name": "Logo",
+        "version": "1.0.0",
+        "escouade": { "api": "1", "min": "2.2.0" },
+        "icon": "icon.png"
+      },
+      "files": { "icon.png": { "png": [512, 512], "size": 1048577 } },
+      "errors": ["icon heavy"],
+      "ignored": []
+    },
+    {
+      "name": "icon not a PNG: a JPEG under a PNG name",
+      "manifest": {
+        "id": "dev.exemple.icon-not-a",
+        "name": "Logo",
+        "version": "1.0.0",
+        "escouade": { "api": "1", "min": "2.2.0" },
+        "icon": "icon.png"
+      },
+      "files": { "icon.png": { "text": "ÿØÿà JFIF" } },
+      "errors": ["icon png"],
+      "ignored": []
+    },
+    {
+      "name": "icon svg: it may carry a script",
+      "manifest": {
+        "id": "dev.exemple.icon-svg",
+        "name": "Logo",
+        "version": "1.0.0",
+        "escouade": { "api": "1", "min": "2.2.0" },
+        "icon": "icon.svg"
+      },
+      "files": { "icon.svg": { "text": "<svg xmlns=\"http://www.w3.org/2000/svg\"><script>alert(1)</script></svg>" } },
+      "errors": ["icon png"],
+      "ignored": []
+    },
+    {
+      "name": "icon out of the folder, by ..",
+      "manifest": {
+        "id": "dev.exemple.icon-out-of-the-folder-by",
+        "name": "Logo",
+        "version": "1.0.0",
+        "escouade": { "api": "1", "min": "2.2.0" },
+        "icon": "../icon.png"
+      },
+      "files": { "../icon.png": { "png": [512, 512] } },
+      "errors": ["icon path"],
+      "ignored": []
+    },
+    {
+      "name": "icon absolute",
+      "manifest": {
+        "id": "dev.exemple.icon-absolute",
+        "name": "Logo",
+        "version": "1.0.0",
+        "escouade": { "api": "1", "min": "2.2.0" },
+        "icon": "/usr/share/icon.png"
+      },
+      "errors": ["icon path"],
+      "ignored": []
+    },
+    {
+      "name": "icon remote",
+      "manifest": {
+        "id": "dev.exemple.icon-remote",
+        "name": "Logo",
+        "version": "1.0.0",
+        "escouade": { "api": "1", "min": "2.2.0" },
+        "icon": "https://exemple.dev/icon.png"
+      },
+      "errors": ["icon path"],
+      "ignored": []
+    },
+    {
+      "name": "icon not a text",
+      "manifest": {
+        "id": "dev.exemple.icon-not-a-text",
+        "name": "Logo",
+        "version": "1.0.0",
+        "escouade": { "api": "1", "min": "2.2.0" },
+        "icon": 512
+      },
+      "errors": ["icon type"],
       "ignored": []
     }
   ]

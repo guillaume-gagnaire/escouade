@@ -6,11 +6,16 @@
 //! (`tests/fixtures/plugins/manifests.json`). The schema published for the editors' completion
 //! (`schemas/plugin-1.json`) is made from the same rules (`schema`). A field Escouade does not
 //! know is ignored, and listed (`Read::ignored`): a manifest written for a later Escouade loads.
+//!
+//! Its `icon` is a file of the plugin's folder (PLG-13): `check_with` reads its header through a
+//! reader of the folder (a PNG, square, 256 px a side at least, 1 MB at most); `icon_file` never
+//! leaves the folder.
 
 use crate::engine::registry::Version;
 use crate::i18n::Lang;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
+use std::path::Path;
 
 /// The manifest's file in a plugin's folder.
 pub const FILE: &str = "escouade-plugin.json";
@@ -23,6 +28,10 @@ pub const API: u64 = 1;
 pub const RESERVED_PREFIX: &str = "dev.escouade.";
 /// The folder of the app's programs, in the `run` of a plugin of Escouade's own.
 pub const ESCOUADE_DIR: &str = "{escouade}";
+/// The side an icon has at least, in pixels (512 advised).
+pub const ICON_MIN: u32 = 256;
+/// The weight an icon has at most, in bytes.
+pub const ICON_BYTES: u64 = 1024 * 1024;
 
 /// The values `contributes.settings[].type` takes.
 const SETTING_TYPES: [&str; 4] = ["string", "number", "boolean", "select"];
@@ -72,6 +81,16 @@ pub enum Code {
     Duplicate,
     /// An account the plugin does not declare.
     Account,
+    /// An icon that is no file of the plugin's folder.
+    File,
+    /// An icon that is no PNG (an SVG, a JPEG…).
+    Png,
+    /// An icon over `ICON_BYTES`.
+    Heavy,
+    /// An icon that is not square.
+    Square,
+    /// An icon under `ICON_MIN` a side.
+    Small,
 }
 
 /// A field that is wrong, by its path (`contributes.settings[0].key`; empty for the whole file).
@@ -153,6 +172,27 @@ impl Problem {
                 lang,
                 "n'est pas un compte de `contributes.accounts`.",
                 "is no account of `contributes.accounts`."
+            ),
+            Code::File => tr_in!(
+                lang,
+                "n'est pas un fichier du dossier du plugin.",
+                "is no file of the plugin's folder."
+            ),
+            Code::Png => tr_in!(
+                lang,
+                "n'est pas un PNG (ni SVG, ni JPEG : un PNG carré de 256 px au moins).",
+                "is no PNG (no SVG nor JPEG: a square PNG of 256 px at least)."
+            ),
+            Code::Heavy => tr_in!(lang, "pèse plus de 1 Mo.", "weighs over 1 MB."),
+            Code::Square => tr_in!(
+                lang,
+                "n'est pas carrée (un PNG carré de 256 px au moins, 512 conseillé).",
+                "is not square (a square PNG of 256 px at least, 512 advised)."
+            ),
+            Code::Small => tr_in!(
+                lang,
+                "fait moins de 256 px de côté (512 conseillé).",
+                "is under 256 px a side (512 advised)."
             ),
         };
         format!("{field} {what}")
@@ -257,6 +297,9 @@ pub struct Manifest {
     pub run: Option<Run>,
     pub activation: Vec<String>,
     pub permissions: Permissions,
+    /// Its icon, a PNG of its folder (`icon_file` reads it).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
     /// Its extension points Escouade knows, as written: their declarative parts (hosts, `locate`,
     /// capabilities) are read from here, without a process.
     pub contributes: Map<String, Value>,
@@ -331,9 +374,19 @@ pub struct Read {
 
 /// Reads the text of a manifest. `builtin`: a plugin the app itself gives, which may take the ids
 /// and the programs of Escouade's own.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn read(text: &str, builtin: bool) -> Read {
+    read_with(text, builtin, None)
+}
+
+/// Reads the text of the manifest of the folder `dir`, and its icon's file there.
+pub fn read_in(text: &str, builtin: bool, dir: &Path) -> Read {
+    read_with(text, builtin, Some(&|p: &str| icon_file(dir, p)))
+}
+
+fn read_with(text: &str, builtin: bool, file: Option<FileOf>) -> Read {
     match serde_json::from_str::<Value>(text) {
-        Ok(v) => check(&v, builtin),
+        Ok(v) => check_with(&v, builtin, file),
         Err(_) => Read {
             manifest: Err(vec![Problem {
                 path: String::new(),
@@ -345,10 +398,19 @@ pub fn read(text: &str, builtin: bool) -> Read {
     }
 }
 
-/// Checks a manifest's value, field by field.
+/// Checks a manifest's value, field by field; its icon's field, not its file.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn check(v: &Value, builtin: bool) -> Read {
+    check_with(v, builtin, None)
+}
+
+/// The bytes of a file of a plugin's folder by its path (`icon_path`), None when it is none.
+pub type FileOf<'a> = &'a dyn Fn(&str) -> Option<Vec<u8>>;
+
+/// Checks a manifest's value, field by field, and its icon's file through `file`.
+pub fn check_with(v: &Value, builtin: bool, file: Option<FileOf>) -> Read {
     let mut c = Checker::default();
-    let manifest = c.manifest(v, builtin);
+    let manifest = c.manifest(v, builtin, file);
     Read {
         manifest: match manifest {
             Some(m) if c.problems.is_empty() => Ok(m),
@@ -420,6 +482,59 @@ fn is_key(s: &str) -> bool {
 
 fn is_url(s: &str) -> bool {
     (s.starts_with("https://") && s.len() > 8) || (s.starts_with("http://") && s.len() > 7)
+}
+
+const PNG: [u8; 8] = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+/// An icon's path as the folder's files are named: `/` between its parts, without `./` in front.
+pub fn icon_path(s: &str) -> String {
+    let mut p = s.replace('\\', "/");
+    while let Some(rest) = p.strip_prefix("./") {
+        p = rest.to_string();
+    }
+    p
+}
+
+/// What is wrong with an icon's bytes, from its header alone (nothing decodes it).
+pub fn icon_problems(b: &[u8]) -> Vec<Code> {
+    if b.len() < 24 || b[..8] != PNG || &b[12..16] != b"IHDR" {
+        return vec![Code::Png];
+    }
+    let mut out = Vec::new();
+    if b.len() as u64 > ICON_BYTES {
+        out.push(Code::Heavy);
+    }
+    let at = |i: usize| u32::from_be_bytes([b[i], b[i + 1], b[i + 2], b[i + 3]]);
+    let (width, height) = (at(16), at(20));
+    if width != height {
+        out.push(Code::Square);
+    }
+    if width.min(height) < ICON_MIN {
+        out.push(Code::Small);
+    }
+    out
+}
+
+/// The bytes of the file `rel` of the folder `dir`, never out of it: a relative path without `..`,
+/// which a link does not take elsewhere either; a file, read up to `ICON_BYTES` and one byte more
+/// (enough to say it is too heavy). None otherwise.
+pub fn icon_file(dir: &Path, rel: &str) -> Option<Vec<u8>> {
+    use std::io::Read as _;
+    if !is_inner_path(rel) || rel.contains(':') {
+        return None;
+    }
+    let root = std::fs::canonicalize(dir).ok()?;
+    let path = std::fs::canonicalize(root.join(icon_path(rel))).ok()?;
+    if !path.starts_with(&root) || !path.is_file() {
+        return None;
+    }
+    let mut bytes = Vec::new();
+    std::fs::File::open(&path)
+        .ok()?
+        .take(ICON_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .ok()?;
+    Some(bytes)
 }
 
 /// A path inside the plugin's folder: relative, without `..`.
@@ -565,7 +680,7 @@ impl Checker {
         self.inner_path(v, path)
     }
 
-    fn manifest(&mut self, v: &Value, builtin: bool) -> Option<Manifest> {
+    fn manifest(&mut self, v: &Value, builtin: bool, file: Option<FileOf>) -> Option<Manifest> {
         let o = self.object(v, "")?;
         self.ignore_others(
             o,
@@ -585,6 +700,7 @@ impl Checker {
                 "permissions",
                 "contributes",
                 "store",
+                "icon",
             ],
         );
         if let Some(s) = o.get("$schema") {
@@ -657,6 +773,7 @@ impl Checker {
         if let Some(v) = o.get("store") {
             self.store(v);
         }
+        let icon = o.get("icon").and_then(|v| self.icon(v, file));
         Some(Manifest {
             id: id?,
             name: name?,
@@ -669,8 +786,37 @@ impl Checker {
             run,
             activation,
             permissions,
+            icon,
             contributes,
         })
+    }
+
+    /// A file of the folder: no address, no drive, no `..`; a PNG, never an SVG (it may carry a
+    /// script); its header read through `file`, when there is one.
+    fn icon(&mut self, v: &Value, file: Option<FileOf>) -> Option<String> {
+        let s = self.string(v, "icon")?;
+        if !is_inner_path(s) || s.contains(':') {
+            self.problem("icon", Code::Path);
+            return None;
+        }
+        if !s.to_ascii_lowercase().ends_with(".png") {
+            self.problem("icon", Code::Png);
+            return None;
+        }
+        if let Some(file) = file {
+            let Some(bytes) = file(&icon_path(s)) else {
+                self.problem("icon", Code::File);
+                return None;
+            };
+            let problems = icon_problems(&bytes);
+            if !problems.is_empty() {
+                for code in problems {
+                    self.problem("icon", code);
+                }
+                return None;
+            }
+        }
+        Some(s.to_string())
     }
 
     fn author<'a>(&mut self, v: &'a Value) -> Option<&'a str> {
@@ -1099,6 +1245,12 @@ pub fn schema() -> Value {
                     "projectTemplates": open("Templates of the project wizard."),
                     "escouadeYml": { "type": "object", "description": "Its keys of .escouade.yml." },
                 },
+            },
+            "icon": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^(?![/\\\\]|[A-Za-z]:)(?!(.*[/\\\\])?\\.\\.([/\\\\]|$))[^:]*\\.[Pp][Nn][Gg]$",
+                "description": "Its logo: a square PNG of its folder, 256 px a side at least (512 advised), 1 MB at most; no SVG.",
             },
             "store": {
                 "type": "object",

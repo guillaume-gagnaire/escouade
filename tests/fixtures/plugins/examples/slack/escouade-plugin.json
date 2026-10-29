@@ -1,0 +1,21 @@
+{
+  "id": "dev.exemple.slack",
+  "name": "Slack",
+  "version": "1.0.0",
+  "description": {
+    "fr": "Les tickets à tester et les agents qui attendent, dans un salon Slack.",
+    "en": "Tickets to test and agents waiting, in a Slack channel."
+  },
+  "license": "MIT",
+  "escouade": { "api": "1", "min": "2.1.0" },
+  "run": { "command": "slack", "windows": "slack.cmd" },
+  "activation": ["event:ticket.column", "event:agent.waiting"],
+  "permissions": {
+    "events": ["ticket.column", "agent.waiting"],
+    "network": ["hooks.slack.com"],
+    "secrets": ["webhook"]
+  },
+  "contributes": {
+    "secrets": [{ "key": "webhook", "title": { "fr": "Adresse du webhook", "en": "Webhook URL" } }]
+  }
+}

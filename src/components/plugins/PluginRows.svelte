@@ -34,7 +34,7 @@
     </div>{/if}
   {#each rows as p (p.id)}
     <div class="tr" class:off={!p.choices.enabled || p.state.kind !== 'ready'} role="row">
-      <PluginTile id={p.id} name={p.name} />
+      <PluginTile id={p.id} name={p.name} installed />
       <span role="cell" class="cell">
         <button class="nm" onclick={() => plugins.openPlugin(p.id)}>
           <b>{p.name}</b><span class="by">{kindOf(p) || p.id}</span>

@@ -231,8 +231,9 @@
       if (!withSettings) return void show(await saveTile(p), null);
       // Made: shown even if its settings were refused (said by a toast), to be set in Réglages › Projets.
       const saved = await form.save(p);
-      // « Indexer le code »: the reading goes on in the background, the project shown at once.
-      if (form.codeIndex) void app.run(api.setCodeIndex(p.id, true));
+      // « Indexer le code » changed from the app's setting: the project's choice, the reading in the background, the project
+      // shown at once. Left as it was, the project follows the app's setting (read by the backend when it is on).
+      if (form.codeIndex !== !!app.settings?.codeIndexAll) void app.run(api.setCodeIndex(p.id, form.codeIndex));
       await show(await saveTile(saved ?? p), agent);
     } finally {
       busy = false;

@@ -11,6 +11,8 @@ const entry = (over: Partial<Entry>): Entry => ({
   description: { fr: '', en: '' },
   mark: 'Y',
   hue: 0,
+  icon: null,
+  logo: null,
   author: { login: 'sam', githubId: 1 },
   builtin: false,
   categories: ['notifications'],
@@ -148,5 +150,22 @@ describe('the home page and Escouade’s own', () => {
     expect(BUILTINS.every((b) => b.id.startsWith('dev.escouade.'))).toBe(true);
     expect(new Set(BUILTINS.map((b) => b.id)).size).toBe(BUILTINS.length);
     expect(new Set(BUILTINS.flatMap((b) => b.categories))).toEqual(new Set(['harness', 'ticket-sources', 'forges']));
+  });
+});
+
+describe('the logos of Escouade’s own (PLG-13)', () => {
+  it('a brand’s mark only where its rules allow it without asking (read on 2026-10-29), else its category’s glyph', async () => {
+    const logos = Object.fromEntries(BUILTINS.map((b) => [b.id.replace('dev.escouade.', ''), b.logo]));
+    const brands = Object.entries(logos)
+      .filter(([, l]) => 'brand' in l)
+      .map(([id]) => id);
+    expect(brands.sort()).toEqual(['gitea', 'github', 'opencode']);
+    for (const b of BUILTINS) {
+      if ('brand' in b.logo) continue;
+      const want = b.categories.includes('harness') ? 'harness' : b.categories.includes('forges') ? 'forge' : 'source';
+      expect(b.logo, b.id).toEqual({ category: want });
+    }
+    const own = (await catalog(null)).filter((e) => e.builtin);
+    expect(own.every((e) => e.logo && !e.icon)).toBe(true);
   });
 });

@@ -443,6 +443,7 @@ export const fr: Catalog = {
       'plugins/installer': 'Installer un plugin',
       'plugins/manifest': 'Le manifeste',
       'plugins/api': 'Le protocole',
+      'plugins/testing': 'Tester un plugin',
       'plugins/publishing': 'Publier sur le store',
       shortcuts: 'Raccourcis clavier',
       'escouade-yml': '.escouade.yml',

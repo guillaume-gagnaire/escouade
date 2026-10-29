@@ -6,6 +6,7 @@ import { note, type Account } from './accounts';
 import { judgeAttestations } from './attest';
 import {
   CHECK_KEYS,
+  iconOf,
   manifestOf,
   whole,
   platformOf,
@@ -23,7 +24,7 @@ import {
 import type { Env } from './config';
 import type { Db } from './db';
 import { GithubError } from './github';
-import { imageInfo, reencode } from './images';
+import { imageInfo, reencode, reencodeIcon } from './images';
 import { authorMail, rejectionMail, sendMail, tagMovedMail, type AuthorEvent } from './mail';
 import { renderDocs, type KeepImage } from './readme';
 import { TooBig, type Source } from './source';
@@ -355,8 +356,17 @@ export async function checkVersion(db: Db, deps: Deps, id: number, now = () => n
           undecodable.push(path);
         }
       }
-      if (undecodable.length) results = runChecks({ ...snapshot, undecodable });
+      if (undecodable.length) snapshot.undecodable = undecodable;
     }
+    // The icon, decoded within a bound of pixels and re-encoded without its metadata at 256 and 64 px, once the
+    // manifest's check read its header (PLG-13).
+    const iconAt = iconOf(m);
+    let icon: Record<'256' | '64', Buffer> | null = null;
+    if (iconAt && results.find((r) => r.key === 'manifest')?.status === 'pass') {
+      icon = await reencodeIcon(read.files.get(iconAt)!).catch(() => null);
+      if (!icon) snapshot.iconUndecodable = true;
+    }
+    if (snapshot.undecodable || snapshot.iconUndecodable) results = runChecks(snapshot);
 
     // 5. The verdict; for a version that may be published, its files kept and its version.json.
     const state = verdict(results);
@@ -396,6 +406,9 @@ export async function checkVersion(db: Db, deps: Deps, id: number, now = () => n
       const kept = await keep(deps.archives, s.bytes, `.${s.format === 'jpeg' ? 'jpg' : s.format}`);
       screenshots.push({ path: s.path, sha256: kept.sha256, format: s.format, width: s.width, height: s.height });
     }
+    const iconKept = icon
+      ? { '256': (await keep(deps.archives, icon['256'], '.png')).sha256, '64': (await keep(deps.archives, icon['64'], '.png')).sha256 }
+      : null;
     // The README and the documentation, rendered once and cut down, their images copied (server/utils/readme.ts).
     const docs = await renderDocs(read, { repo: v.repoFullName, commit: v.commit, keep: keepImage(deps.archives) });
     const escouade = m!.escouade as { api: string; min: string; max?: string };
@@ -409,10 +422,11 @@ export async function checkVersion(db: Db, deps: Deps, id: number, now = () => n
       binaries,
       manifest_sha256: base.manifestSha256!,
       escouade: { api: escouade.api, min: escouade.min, ...(escouade.max ? { max: escouade.max } : {}) },
+      ...(iconKept ? { icon: iconKept } : {}),
     });
     await db
       .update(versions)
-      .set({ ...base, state, binaries, screenshots, docs, versionJson: file.json, versionSha256: file.sha256 })
+      .set({ ...base, state, binaries, screenshots, icon: iconKept, docs, versionJson: file.json, versionSha256: file.sha256 })
       .where(eq(versions.id, id));
     await note(db, `version.${state}`, { accountId: v.accountId }, { version: id, plugin: pluginId, sha256: file.sha256 });
     if (state === 'ready' && v.origin === 'webhook' && existing) {

@@ -78,7 +78,7 @@
   {:else if p}
     <div class="body">
       <div class="who">
-        <PluginTile id={p.id} name={p.name} size={44} />
+        <PluginTile id={p.id} name={p.name} src={p.icon} size={44} />
         <div>
           <h3>{p.name} <span class="ptag">{dev ? t('plugins.tag.dev') : t('plugins.tag.unverified')}</span></h3>
           <div class="ln">

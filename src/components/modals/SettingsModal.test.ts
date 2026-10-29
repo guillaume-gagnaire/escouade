@@ -1028,7 +1028,7 @@ describe('SettingsModal', () => {
       const headings = within(panel())
         .getAllByRole('heading')
         .map((h) => h.textContent);
-      expect(headings.slice(-3)).toEqual(['Zone sensible', 'Nouveaux projets', 'Projets fermés']);
+      expect(headings.slice(-4)).toEqual(['Zone sensible', 'Tous les projets', 'Nouveaux projets', 'Projets fermés']);
       // Another tab of the project does not carry them.
       await userEvent.click(tab('Kanban'));
       expect(screen.queryByRole('heading', { name: 'Projets fermés' })).not.toBeInTheDocument();
@@ -1452,6 +1452,7 @@ describe('SettingsModal in English', () => {
       'Shared memory',
       'Shared Kanban',
       'Danger zone',
+      'Every project',
       'New projects',
     ]);
     // The assistant is a row of the identity (2.0 design).

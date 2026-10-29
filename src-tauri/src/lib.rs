@@ -125,6 +125,8 @@ mod planfiles;
 mod planfiles_tests;
 mod plugins;
 #[cfg(test)]
+mod plugins_bench_tests;
+#[cfg(test)]
 mod plugins_runtime_tests;
 #[cfg(test)]
 mod plugins_tests;
@@ -353,6 +355,12 @@ fn build_window(app: &tauri::App) -> tauri::Result<()> {
     Ok(())
 }
 
+/// `escouade-plugin` (src/bin): the conformance bench, the manifest's check and the fake Escouade,
+/// for the plugins' authors (PLG-3). Gives the exit code.
+pub fn plugin_cli(args: Vec<String>) -> i32 {
+    plugins::bench::cli::main(args)
+}
+
 pub fn run() {
     // Before GTK starts: the window's app_id and WM_CLASS, which find its icon (ESC-239).
     #[cfg(target_os = "linux")]
@@ -551,6 +559,7 @@ pub fn run() {
                 commands::plugin_run,
                 commands::plugin_start,
                 commands::plugins_check_updates,
+                commands::plugin_icon,
                 commands::account_sign_in_ended,
                 commands::claude_found,
                 commands::engines,
@@ -621,6 +630,7 @@ pub fn run() {
                 commands::set_project_logo,
                 commands::get_code_index,
                 commands::set_code_index,
+                commands::set_code_index_all,
                 commands::get_index_savings,
                 commands::vectors_model,
                 commands::vectors_model_download,

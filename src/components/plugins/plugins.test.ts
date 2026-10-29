@@ -42,6 +42,7 @@ const ASKS = ['run', 'decide', 'events:ticket.column', 'events:agent.waiting', '
 function preview(over: Partial<PluginPreview> = {}): PluginPreview {
   return {
     token: 'tok',
+    icon: null,
     id: MANIFEST.id,
     name: 'Slack',
     version: '1.2.0',
@@ -89,6 +90,36 @@ beforeEach(() => {
   plugins.install = null;
   plugins.error = null;
   plugins.page = { kind: 'installed' };
+  plugins.icons = {};
+});
+
+describe('the tile of a plugin', () => {
+  const LOGO = 'data:image/png;base64,iVBORw0KGgo=';
+
+  it('shows its logo once plugin_icon gives it, its letters for one without', async () => {
+    const backend = fakeBackend({
+      plugins_list: () => [view(), view({ id: 'dev.exemple.nord', name: 'Nord' })],
+      plugin_icon: (a: { id: string }) => (a.id === MANIFEST.id ? LOGO : null),
+    });
+    render(PluginsView);
+    const table = await screen.findByRole('table', { name: 'Ajoutés' });
+    await expect.poll(() => table.querySelector('.tile img')?.getAttribute('src')).toBe(LOGO);
+    const tiles = [...table.querySelectorAll('.tile')];
+    expect(tiles.map((t) => (t.querySelector('img') ? 'logo' : t.textContent?.trim()))).toEqual(['logo', 'No']);
+    // Read once by id, never again for the same plugin.
+    expect(
+      backend
+        .called('plugin_icon')
+        .map((c) => c.args.id)
+        .sort(),
+    ).toEqual([MANIFEST.id, 'dev.exemple.nord'].sort());
+  });
+
+  it('shows the logo of a plugin read before it is installed, in the install window', () => {
+    plugins.install = { kind: 'preview', preview: preview({ icon: LOGO }), busy: false, error: null };
+    render(InstallModal, { step: plugins.install });
+    expect(screen.getByRole('dialog').querySelector('.who .tile img')?.getAttribute('src')).toBe(LOGO);
+  });
 });
 
 describe('the install window', () => {

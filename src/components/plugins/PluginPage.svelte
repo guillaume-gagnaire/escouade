@@ -54,7 +54,7 @@
       ><Icon name="down" size={12} />{t('plugins.page.back')}{#if category}<span> · {t(`plugins.cat.${category}`)}</span>{/if}</button
     >
     <div class="top">
-      <PluginTile id={plugin.id} name={plugin.name} size={64} />
+      <PluginTile id={plugin.id} name={plugin.name} installed size={64} />
       <div class="who">
         <h2>
           {plugin.name}

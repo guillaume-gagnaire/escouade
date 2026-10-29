@@ -185,6 +185,12 @@ Closing the project acts right away, without waiting for “Save”, and takes y
 
 Closing is refused while an approval of one of the project’s tickets is running (“The ticket DEM-3 is being approved: wait for the end of its approval to close the project.”). Once it has finished, close the project.
 
+## Every project
+
+| Setting | Effect | Default |
+| --- | --- | --- |
+| “Code index on every project” | Turns on the [code index](code-index#on-every-project) of every project that has not made its own choice: they are read one by one, in the background. Turning it off erases their index, after a confirmation that says how many projects lose it. Saved at once, without **Save**. | Off |
+
 ## New projects
 
 This group applies to every project: it is there even with no project open.
@@ -224,7 +230,7 @@ The “Start from a blank project” switch (“The history stays in Settings �
 
 ## Code index
 
-The “Code index” group turns the project’s [code index](code-index) on (**Index this project**, off by default): it says what the index saves, that everything stays on the machine, and what it holds. For a private project, it says what stays out of the index. **Search by meaning** downloads the vectors’ model, with its progress and **Cancel**.
+The “Code index” group turns the project’s [code index](code-index) on (**Index this project**): it says what the index saves, that everything stays on the machine, and what it holds. Until the project makes its own choice, it follows **Code index on every project** (see below) and says so; a choice made here is kept, and **Follow the app’s setting** goes back to it. For a private project, it says what stays out of the index. **Search by meaning** downloads the vectors’ model, with its progress and **Cancel**.
 
 ## Shared memory
 

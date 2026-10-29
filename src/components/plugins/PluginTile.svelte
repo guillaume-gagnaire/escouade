@@ -1,16 +1,28 @@
 <script lang="ts">
   import { hueOf, markOf } from '../../lib/plugins';
+  import { plugins } from '../../lib/plugins-view.svelte';
 
-  // A plugin's tile: its logo when it has one (`src`, given by ESC-292's command), else its two letters on a hue drawn
-  // from its id, as the store's tile (store/app/components/PluginTile.vue). A plugin shipped with Escouade has letters
-  // too, until ESC-292 chooses its mark. Says nothing to a screen reader: its row has the name.
-  let { id, name, src, size = 40 }: { id: string; name: string; src?: string | null; size?: number } = $props();
+  // A plugin's tile (choice 219): its logo when it has one, else its two letters on a hue drawn from its id, as the
+  // store's tile (store/app/components/PluginTile.vue). `src`: the logo given (a plugin read before it is installed);
+  // `installed`: the logo of an installed plugin, read once by `plugin_icon` (PLG-13). Says nothing to a screen reader:
+  // its row has the name.
+  let {
+    id,
+    name,
+    src,
+    installed = false,
+    size = 40,
+  }: { id: string; name: string; src?: string | null; installed?: boolean; size?: number } = $props();
   let broken = $state(false);
+  $effect(() => {
+    if (installed && src === undefined) void plugins.loadIcon(id);
+  });
+  const logo = $derived(src !== undefined ? src : installed ? plugins.icons[id] : null);
 </script>
 
 <span class="tile" style:--s="{size}px" style:--h={hueOf(id)} aria-hidden="true">
-  {#if src && !broken}
-    <img {src} alt="" onerror={() => (broken = true)} />
+  {#if logo && !broken}
+    <img src={logo} alt="" draggable="false" onerror={() => (broken = true)} />
   {:else}
     {markOf(name)}
   {/if}

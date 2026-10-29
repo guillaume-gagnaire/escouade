@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ACCOUNT_TEXTS } from '~/data/account';
 import { pathIn } from '~/data/language';
-import { hueOf, markOf } from '~~/shared/tile';
+import { hueOf, markOf, type Icon } from '~~/shared/tile';
 
 // The author's account, as the preview draws it (design/store/, #account): « Mes plugins · login », the version
 // found on a new tag that waits for a click (the banner), their plugins with their state, latest version and installs
@@ -31,6 +31,7 @@ interface Rejection {
 interface PluginRow {
   id: string;
   name: string;
+  icon: Icon | null;
   state: string;
   version: string | null;
   installs: number;
@@ -51,6 +52,7 @@ interface Pending {
   id: number;
   plugin: string;
   name: string;
+  icon: Icon | null;
   version: string;
   tag: string;
   commit: string;
@@ -91,8 +93,8 @@ interface AccountData {
   mail: boolean;
   plugins: PluginRow[];
   pending: Pending[];
-  offers: { id: string; from: string | null; at: string | null }[];
-  claims: { id: string; repository: string; at: string | null }[];
+  offers: { id: string; from: string | null; at: string | null; icon: Icon | null }[];
+  claims: { id: string; repository: string; at: string | null; icon: Icon | null }[];
   selected: Selected | null;
   now: string;
 }
@@ -168,7 +170,7 @@ useHead(() => ({
       <p v-if="notice" class="notice" :class="notice[0]" role="status">{{ notice[1] }}</p>
 
       <div v-for="o in data.offers" :key="`o${o.id}`" class="banner">
-        <PluginTile :mark="markOf(o.id.split('.').pop() ?? o.id)" :hue="hueOf(o.id)" size="sm" />
+        <PluginTile :mark="markOf(o.id.split('.').pop() ?? o.id)" :hue="hueOf(o.id)" :icon="o.icon" size="sm" />
         <div>
           <b>{{ a.offer(o.from ?? '?', o.id) }}</b>
           <div class="sub">{{ a.offerSub }}</div>
@@ -185,7 +187,7 @@ useHead(() => ({
         </div>
       </div>
       <div v-for="c in data.claims" :key="`c${c.id}`" class="banner">
-        <PluginTile :mark="markOf(c.id.split('.').pop() ?? c.id)" :hue="hueOf(c.id)" size="sm" />
+        <PluginTile :mark="markOf(c.id.split('.').pop() ?? c.id)" :hue="hueOf(c.id)" :icon="c.icon" size="sm" />
         <div>
           <b>{{ a.claim(c.repository, c.id) }}</b>
           <div class="sub">{{ a.claimSub }}</div>
@@ -198,7 +200,7 @@ useHead(() => ({
         </div>
       </div>
       <div v-for="p in data.pending" :key="`p${p.id}`" class="banner">
-        <PluginTile :mark="markOf(p.name)" :hue="hueOf(p.plugin)" size="sm" />
+        <PluginTile :mark="markOf(p.name)" :hue="hueOf(p.plugin)" :icon="p.icon" size="sm" />
         <div>
           <b>{{ p.name }} v{{ p.version }}</b> {{ a.pending.passed }}
           <div class="sub">
@@ -247,7 +249,7 @@ useHead(() => ({
             <tr :class="{ sel: r.id === data.selected?.id }">
               <td>
                 <div class="pl">
-                  <PluginTile :mark="markOf(r.name)" :hue="hueOf(r.id)" size="sm" />
+                  <PluginTile :mark="markOf(r.name)" :hue="hueOf(r.id)" :icon="r.icon" size="sm" />
                   <span
                     ><b>{{ r.name }}</b
                     ><small class="mono">{{ r.id }}</small></span
@@ -312,7 +314,7 @@ useHead(() => ({
 
       <section v-if="data.selected && chosen" id="manage" class="manage" aria-labelledby="manage-title">
         <div class="manage-head">
-          <PluginTile :mark="markOf(chosen.name)" :hue="hueOf(chosen.id)" />
+          <PluginTile :mark="markOf(chosen.name)" :hue="hueOf(chosen.id)" :icon="chosen.icon" />
           <div>
             <h2 id="manage-title" class="h2">{{ chosen.name }}</h2>
             <small class="mono">{{ chosen.id }}</small>

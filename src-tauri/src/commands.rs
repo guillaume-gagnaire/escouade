@@ -310,6 +310,13 @@ pub fn plugin_inspect_dev(
         .inspect_dev(std::path::Path::new(path.trim()), crate::i18n::ui())
 }
 
+/// The icon of an installed plugin (PLG-13), by its id alone: a `data:image/png` address, or
+/// none (the window draws its letters). Réglages › Plugins and the store in the app show it.
+#[tauri::command(async)]
+pub fn plugin_icon(core: CoreState, id: String) -> Result<Option<String>, String> {
+    core.plugins.icon(&id)
+}
+
 /// Installs what an inspection set aside, once the user agreed: in place of the same id (an
 /// update), whose process stops and whose host is forgotten.
 #[tauri::command(async)]
@@ -1047,14 +1054,23 @@ pub fn vectors_model_delete(core: CoreState) -> Res<crate::vectors::wiring::Vect
     core.vectors_model_delete().map_err(err)
 }
 
-/// Turns « Index du code » on (the project is read at once) or off (its database is erased).
+/// Turns « Index du code » on (the project is read at once) or off (its database is erased) for
+/// the project; null follows « Index du code sur tous les projets » again (ESC-293).
 #[tauri::command]
 pub async fn set_code_index(
     core: CoreState<'_>,
     id: String,
-    enabled: bool,
+    enabled: Option<bool>,
 ) -> Res<crate::codeindex::CodeIndexInfo> {
     core.set_code_index(&id, enabled).await.map_err(err)
+}
+
+/// « Index du code sur tous les projets » turned on (the projects that follow it read one after
+/// the other, in the background) or off (their index erased), saved at once (ESC-293): how many
+/// projects follow it.
+#[tauri::command]
+pub async fn set_code_index_all(core: CoreState<'_>, enabled: bool) -> Res<usize> {
+    core.set_code_index_all(enabled).await.map_err(err)
 }
 
 /// The project's logo for its tile, as a `data:` URL; null when it has none.

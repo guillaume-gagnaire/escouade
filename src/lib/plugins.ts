@@ -72,6 +72,8 @@ export interface PluginView {
 /** A plugin read before it is installed: the install window's. */
 export interface PluginPreview {
   token: string;
+  /** Its icon (PLG-13), a `data:image/png` address read in what was set aside; null: its letters. */
+  icon: string | null;
   id: string;
   name: string;
   version: string;
@@ -129,6 +131,8 @@ export const pluginsApi = {
   run: (id: string) => invoke<PluginRun>('plugin_run', { id }),
   start: (id: string) => invoke<PluginRun>('plugin_start', { id }),
   checkUpdates: () => invoke<PluginView[]>('plugins_check_updates'),
+  /** The icon of an installed plugin (PLG-13), a `data:image/png` address; null: its letters. */
+  icon: (id: string) => invoke<string | null>('plugin_icon', { id }),
 };
 
 /** A text of a manifest in the interface's language: English by default (§3.1). */

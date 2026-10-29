@@ -106,7 +106,7 @@
             <div class="ups">
               {#each plugins.updates as p (p.id)}
                 <div class="up">
-                  <PluginTile id={p.id} name={p.name} />
+                  <PluginTile id={p.id} name={p.name} installed />
                   <div>
                     <b>{p.name}</b><span class="mono">{t('plugins.updates.row', { from: p.version, to: p.update?.version ?? '' })}</span>
                   </div>

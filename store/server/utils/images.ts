@@ -63,3 +63,23 @@ export async function reencode(b: Buffer, format: ImageFormat): Promise<Buffer> 
   if (format === 'jpeg') return image.jpeg({ quality: 86, mozjpeg: true }).toBuffer();
   return image.webp({ quality: 86 }).toBuffer();
 }
+
+// The icon of a plugin (its manifest's `icon`, PLG-13): a square PNG of 256 px a side at least and 1 MB at most, which
+// the manifest's library reads from its header (schemas/plugin-manifest.mjs). The store decodes it within a bound of
+// pixels (a small file may hold a huge image), and keeps it re-encoded without its metadata at 256 and 64 px.
+
+/** The side an icon may have at most to be decoded: 4096 px, 16 megapixels. */
+export const ICON_DECODE_MAX = 4096;
+export const ICON_SIZES = [256, 64] as const;
+
+/** The icon re-encoded at 256 and at 64 px, a PNG without metadata each; throws if it does not decode. */
+export async function reencodeIcon(b: Buffer): Promise<Record<'256' | '64', Buffer>> {
+  const out = {} as Record<'256' | '64', Buffer>;
+  for (const side of ICON_SIZES) {
+    out[`${side}`] = await sharp(b, { limitInputPixels: ICON_DECODE_MAX * ICON_DECODE_MAX, failOn: 'error' })
+      .resize(side, side, { fit: 'cover' })
+      .png({ compressionLevel: 9 })
+      .toBuffer();
+  }
+  return out;
+}

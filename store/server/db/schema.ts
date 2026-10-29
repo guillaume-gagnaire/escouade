@@ -213,6 +213,8 @@ export const versions = pgTable(
     archiveSize: integer('archive_size'),
     binaries: jsonb('binaries').$type<Record<string, unknown>>(),
     screenshots: jsonb('screenshots').$type<{ path: string; sha256: string; format: string; width: number; height: number }[]>(),
+    /** Its icon re-encoded at 256 and 64 px, by their SHA-256 (PLG-13); null without one. */
+    icon: jsonb('icon').$type<{ '256': string; '64': string }>(),
     versionJson: text('version_json'),
     versionSha256: text('version_sha256'),
     review: boolean('review').notNull().default(true),

@@ -16,8 +16,17 @@ export default {
     title: 'Code index',
     on: 'Index this project',
     onDesc:
-      'Off by default. On, the project is read once, then kept up to date on commits, branch changes and the ends of turns. Turning it off erases the index.',
+      'On, the project is read once, then kept up to date on commits, branch changes and the ends of turns. Turning it off erases the index.',
     reading: 'Reading the project…',
+    waiting: 'Waiting to be read, after the other projects…',
+    follows: {
+      on: 'Follows the app’s setting (on).',
+      off: 'Follows the app’s setting (off).',
+    },
+    chosen: 'Chosen for this project.',
+    follow: 'Follow the app’s setting',
+    followed: 'This project follows the app’s setting again.',
+    seeAll: 'See the setting',
     status: '{files} files · {symbols} symbols · {size} · read {when}',
     turnedOn: 'Code index on: {files} files read.',
     turnedOff: 'Code index off: its index is erased.',
@@ -35,6 +44,39 @@ export default {
   },
   wizard: {
     title: 'Index the code',
+  },
+  all: {
+    title: 'Every project',
+    on: 'Code index on every project',
+    onDesc:
+      'Every project that has not made its own choice follows this switch. On, they are read one by one, in the background; off, their index is erased. A project turned on or off in its settings keeps its choice.',
+    fence:
+      'Private projects keep their fence: a private project’s index serves its own agents alone. The model of the search by meaning is not downloaded for it.',
+    followersNone: 'No project follows it: each has made its own choice.',
+    followers: {
+      one: 'Followed by {count} project of {total}.',
+      other: 'Followed by {count} projects of {total}.',
+    },
+    turnedOnNone: 'Code index on every project turned on: no project follows it for now.',
+    turnedOn: {
+      one: 'Code index on every project turned on: {count} project will be read, in the background.',
+      other: 'Code index on every project turned on: {count} projects will be read, one by one, in the background.',
+    },
+    turnedOffNone: 'Code index on every project turned off.',
+    turnedOff: {
+      one: 'Code index on every project turned off: the index of {count} project is erased.',
+      other: 'Code index on every project turned off: the index of {count} projects is erased.',
+    },
+    confirmTitle: {
+      one: 'Turn off the code index of {count} project?',
+      other: 'Turn off the code index of {count} projects?',
+    },
+    confirmBody: {
+      one: 'The project that follows this setting loses its index, erased from this machine. Those that made their own choice keep theirs.',
+      other:
+        'The {count} projects that follow this setting lose their index, erased from this machine. Those that made their own choice keep theirs.',
+    },
+    confirm: 'Turn off and erase',
   },
   stats: {
     title: 'Code index savings',

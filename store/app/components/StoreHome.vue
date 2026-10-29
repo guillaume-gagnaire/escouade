@@ -60,7 +60,7 @@ const by = (e: Entry) => (e.builtin ? 'Escouade' : (e.author?.login ?? words.val
         </div>
         <div class="mini">
           <NuxtLink v-for="e in data.fresh" :key="e.id" :to="to.plugin(e.id)"
-            ><PluginTile :mark="e.mark" :hue="e.hue" size="sm" />
+            ><PluginTile :mark="e.mark" :hue="e.hue" :icon="e.icon" :logo="e.logo" size="sm" />
             <div class="t">
               <b>{{ e.name[lang] }}</b>
               <div>{{ by(e) }} · {{ e.categories[0] ? words.categories[e.categories[0]] : '' }}</div>
@@ -76,7 +76,7 @@ const by = (e: Entry) => (e.builtin ? 'Escouade' : (e.author?.login ?? words.val
         </div>
         <div class="mini">
           <NuxtLink v-for="e in data.top" :key="e.id" :to="to.plugin(e.id)"
-            ><PluginTile :mark="e.mark" :hue="e.hue" size="sm" />
+            ><PluginTile :mark="e.mark" :hue="e.hue" :icon="e.icon" :logo="e.logo" size="sm" />
             <div class="t">
               <b>{{ e.name[lang] }}</b>
               <div>{{ by(e) }} · {{ e.categories[0] ? words.categories[e.categories[0]] : '' }}</div>

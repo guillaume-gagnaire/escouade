@@ -43,6 +43,13 @@
       "when": 1793278060632,
       "tag": "0005_author_space",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793285083200,
+      "tag": "0006_plugin_icon",
+      "breakpoints": true
     }
   ]
 }

@@ -13,6 +13,8 @@
 // after); until then, the app only starts and closes them.
 #[cfg_attr(not(test), allow(dead_code))]
 pub mod journal;
+// The conformance bench and the fake Escouade, for `escouade-plugin` and the tests (PLG-3).
+pub mod bench;
 pub mod manifest;
 #[cfg_attr(not(test), allow(dead_code))]
 pub mod runtime;
@@ -300,6 +302,17 @@ struct Loaded {
     read: Result<manifest::Read, Fault>,
     /// The SHA-256 of the copy's files as found, when it is not the one installed.
     changed: bool,
+    /// A folder in development's files when it was read: an event of its watcher that changed
+    /// nothing (one delivered late, a file written again as it was) reads nothing again (`reload`).
+    seen: Option<Seen>,
+}
+
+/// A folder in development as last read: its stamp, cheap to take again at each event, and the
+/// SHA-256 of its files, taken again only when the stamp moved.
+#[derive(Debug, Clone, PartialEq)]
+struct Seen {
+    stamp: String,
+    digest: String,
 }
 
 /// What kept a plugin's manifest from being read.
@@ -340,6 +353,8 @@ type ReloadHook = Box<dyn Fn(&str) + Send + Sync>;
 pub struct Preview {
     /// What `install` and `discard` take.
     pub token: String,
+    /// Its icon, read in what was set aside (`Plugins::icon` once it is installed).
+    pub icon: Option<String>,
     pub id: String,
     pub name: String,
     pub version: String,
@@ -432,16 +447,25 @@ impl Plugins {
     fn read(&self, installed: Installed) -> Loaded {
         let folder = self.folder_of(&installed);
         let read = std::fs::read_to_string(folder.join(manifest::FILE))
-            .map(|t| manifest::read(&t, false))
+            .map(|t| manifest::read_in(&t, false, &folder))
             .map_err(|_| Fault::Missing);
         let changed = read.is_ok()
             && !installed.digest.is_empty()
             && digest(&folder).ok().as_deref() != Some(installed.digest.as_str());
+        let seen = matches!(installed.origin, Origin::Dev { .. })
+            .then(|| {
+                Some(Seen {
+                    stamp: stamp(&folder).ok()?,
+                    digest: digest(&folder).ok()?,
+                })
+            })
+            .flatten();
         Loaded {
             installed,
             folder,
             read,
             changed,
+            seen,
         }
     }
 
@@ -461,6 +485,29 @@ impl Plugins {
             .iter()
             .find(|l| l.installed.id == id)
             .map(|l| self.view(l, lang))
+    }
+
+    /// The icon of the installed plugin `id`, as a `data:image/png` address the window shows:
+    /// taken by its id alone, read in its folder and never out of it (`manifest::icon_file`), its
+    /// header checked again (a folder in development may have changed it). `Ok(None)` for a
+    /// plugin without one, or whose manifest does not hold (the window draws its letters); an
+    /// error for an id that is not installed.
+    pub fn icon(&self, id: &str) -> Result<Option<String>, String> {
+        let (folder, rel) = {
+            let loaded = self.loaded.read();
+            let l = loaded
+                .iter()
+                .find(|l| l.installed.id == id)
+                .ok_or_else(|| format!("no plugin {id} is installed"))?;
+            let rel = match &l.read {
+                Ok(manifest::Read {
+                    manifest: Ok(m), ..
+                }) => m.icon.clone(),
+                _ => None,
+            };
+            (l.folder.clone(), rel)
+        };
+        Ok(rel.and_then(|r| icon_data(&folder, &r)))
     }
 
     fn view(&self, l: &Loaded, lang: Lang) -> PluginView {
@@ -563,7 +610,7 @@ impl Plugins {
                 dir.display()
             ))
         })?;
-        manifest::read(&text, false)
+        manifest::read_in(&text, false, dir)
             .manifest
             .map_err(|p| Refusal::invalid(lang, &p))
     }
@@ -739,7 +786,9 @@ impl Plugins {
                     .collect()
             })
             .unwrap_or_default();
+        let read_from = dir.clone().unwrap_or_else(|| self.folder_of(&installed));
         let preview = Preview {
+            icon: m.icon.as_deref().and_then(|r| icon_data(&read_from, r)),
             token: token.clone(),
             id: m.id.clone(),
             name: m.name.get(lang).to_string(),
@@ -1032,17 +1081,32 @@ impl Plugins {
     }
 
     /// Reads again the folders in development of `ids`.
-    fn reload(&self, ids: &[String]) {
+    pub(crate) fn reload(&self, ids: &[String]) {
         let mut read = Vec::new();
         {
             let _w = self.writing.lock();
             let mut loaded = self.loaded.write();
             for l in loaded.iter_mut() {
-                if ids.contains(&l.installed.id) && matches!(l.installed.origin, Origin::Dev { .. })
+                if !ids.contains(&l.installed.id)
+                    || !matches!(l.installed.origin, Origin::Dev { .. })
                 {
-                    *l = self.read(l.installed.clone());
-                    read.push(l.installed.id.clone());
+                    continue;
                 }
+                // Its files as they were last read: nothing to read again, its process goes on.
+                if let Some(seen) = &mut l.seen {
+                    let Ok(now) = stamp(&l.folder) else {
+                        continue;
+                    };
+                    if now == seen.stamp {
+                        continue;
+                    }
+                    if digest(&l.folder).is_ok_and(|d| d == seen.digest) {
+                        seen.stamp = now;
+                        continue;
+                    }
+                }
+                *l = self.read(l.installed.clone());
+                read.push(l.installed.id.clone());
             }
         }
         for id in &read {
@@ -1089,6 +1153,18 @@ async fn newer_tag(url: &str, version: &str) -> Option<Update> {
             version: v.to_string(),
             tag: Some(t),
         })
+}
+
+/// The icon `rel` of the plugin's folder `folder` as a `data:image/png` address, when it holds:
+/// read in the folder and never out of it, its header checked again.
+fn icon_data(folder: &Path, rel: &str) -> Option<String> {
+    use base64::Engine as _;
+    let bytes = manifest::icon_file(folder, rel)?;
+    if !manifest::icon_problems(&bytes).is_empty() {
+        return None;
+    }
+    let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
+    Some(format!("data:image/png;base64,{b64}"))
 }
 
 fn now() -> String {
@@ -1159,6 +1235,27 @@ fn files_of(dir: &Path, at: &str, out: &mut Vec<(String, PathBuf)>) -> std::io::
         }
     }
     Ok(())
+}
+
+/// A stamp of a folder's files, without reading them: their paths, sizes and times of change.
+fn stamp(dir: &Path) -> std::io::Result<String> {
+    let mut files = Vec::new();
+    files_of(dir, "", &mut files)?;
+    files.sort();
+    let mut h = Sha256::new();
+    for (rel, path) in files {
+        let meta = std::fs::metadata(path)?;
+        let changed = meta
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map_or(0, |d| d.as_nanos());
+        h.update(rel.as_bytes());
+        h.update([0]);
+        h.update(meta.len().to_le_bytes());
+        h.update(changed.to_le_bytes());
+    }
+    Ok(format!("{:x}", h.finalize()))
 }
 
 /// The SHA-256 of a folder's files: their paths and their contents, in the order of their paths.

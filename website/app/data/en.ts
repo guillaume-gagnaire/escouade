@@ -439,6 +439,7 @@ export const en: Catalog = {
       'plugins/installer': 'Installing a plugin',
       'plugins/manifest': 'The manifest',
       'plugins/api': 'The protocol',
+      'plugins/testing': 'Testing a plugin',
       'plugins/publishing': 'Publishing on the store',
       shortcuts: 'Keyboard shortcuts',
       'escouade-yml': '.escouade.yml',

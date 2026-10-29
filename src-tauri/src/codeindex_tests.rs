@@ -756,7 +756,7 @@ mod core {
             )
             .await
             .unwrap();
-        assert!(!p.code_index);
+        assert_eq!(p.code_index, None);
         let info = h.core.code_index_info(&p.id).unwrap();
         assert!(!info.enabled);
         assert_eq!(info.status.files, 0);
@@ -764,11 +764,11 @@ mod core {
         assert!(h.core.code_index(&p.id, None).await.is_err());
         assert!(!h.core.data.code_index_db(&p.id).exists());
         // On: read at once.
-        let info = h.core.set_code_index(&p.id, true).await.unwrap();
+        let info = h.core.set_code_index(&p.id, Some(true)).await.unwrap();
         assert!(info.enabled);
         assert!(info.status.symbols >= 2, "{info:?}");
         assert!(info.status.bytes > 0);
-        assert!(h.core.project(&p.id).unwrap().code_index);
+        assert_eq!(h.core.project(&p.id).unwrap().code_index, Some(true));
         let reader = h.core.code_index(&p.id, None).await.unwrap();
         assert_eq!(
             reader.search("alpha", 3, None).unwrap().result[0].name,
@@ -784,7 +784,7 @@ mod core {
             .await
             .is_err());
         // Off again: erased.
-        let info = h.core.set_code_index(&p.id, false).await.unwrap();
+        let info = h.core.set_code_index(&p.id, Some(false)).await.unwrap();
         assert!(!info.enabled);
         assert_eq!(info.status.files, 0);
         assert!(!h.core.data.code_index_db(&p.id).exists());
@@ -806,16 +806,176 @@ mod core {
             )
             .await
             .unwrap();
-        h.core.set_code_index(&p.id, true).await.unwrap();
+        h.core.set_code_index(&p.id, Some(true)).await.unwrap();
         let json = serde_json::to_value(h.core.project(&p.id).unwrap()).unwrap();
-        assert_eq!(json["codeIndex"], true);
+        assert_eq!(json["codeIndexChoice"], true);
+        assert!(json.get("codeIndex").is_none());
         let back: crate::model::Project = serde_json::from_value(json).unwrap();
-        assert!(back.code_index);
-        // A project saved before the setting has it off.
+        assert_eq!(back.code_index, Some(true));
+        // A project saved before the setting follows the app's.
         let mut old = serde_json::to_value(h.core.project(&p.id).unwrap()).unwrap();
-        old.as_object_mut().unwrap().remove("codeIndex");
+        old.as_object_mut().unwrap().remove("codeIndexChoice");
         let old: crate::model::Project = serde_json::from_value(old).unwrap();
-        assert!(!old.code_index);
+        assert_eq!(old.code_index, None);
+        // Following, it is written without a choice.
+        h.core.set_code_index(&p.id, None).await.unwrap();
+        let json = serde_json::to_value(h.core.project(&p.id).unwrap()).unwrap();
+        assert!(json.get("codeIndexChoice").is_none(), "{json}");
+    }
+
+    /// ESC-293: the switch saved before (`codeIndex`): on stays a choice of the project's; off
+    /// (nothing told the off by default from the off wanted) follows the app's setting.
+    #[test]
+    fn the_projects_saved_before_keep_on_as_their_choice_and_follow_the_app_when_off() {
+        let blank = || serde_json::to_value(crate::core::blank_project("C:/x")).unwrap();
+        let read = |v: serde_json::Value| {
+            let mut json = blank();
+            json["codeIndex"] = v;
+            let mut p: crate::model::Project = serde_json::from_value(json).unwrap();
+            p.settle_legacy();
+            p
+        };
+        let on = read(serde_json::json!(true));
+        assert_eq!(on.code_index, Some(true));
+        assert!(on.code_index_on(false));
+        let off = read(serde_json::json!(false));
+        assert_eq!(off.code_index, None);
+        assert!(!off.code_index_on(false));
+        assert!(off.code_index_on(true));
+        // Written again, the old key is gone, the choice kept.
+        let json = serde_json::to_value(&on).unwrap();
+        assert!(json.get("codeIndex").is_none());
+        assert_eq!(json["codeIndexChoice"], true);
+        // A choice of the new kind is never read as an old one.
+        let mut json = blank();
+        json["codeIndexChoice"] = serde_json::json!(false);
+        let mut p: crate::model::Project = serde_json::from_value(json).unwrap();
+        p.settle_legacy();
+        assert_eq!(p.code_index, Some(false));
+        assert!(!p.code_index_on(true));
+    }
+
+    async fn projects(h: &crate::core_tests::Harness, names: &[&str]) -> Vec<String> {
+        let mut ids = Vec::new();
+        for name in names {
+            let r = repo(&h.dir.join(name));
+            let p = h
+                .core
+                .create_project(
+                    &r.to_string_lossy(),
+                    name,
+                    "oklch(0.7 0.1 200)",
+                    false,
+                    None,
+                    true,
+                )
+                .await
+                .unwrap();
+            ids.push(p.id);
+        }
+        ids
+    }
+
+    async fn wait_until(mut ok: impl FnMut() -> bool) -> bool {
+        for _ in 0..400 {
+            if ok() {
+                return true;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+        false
+    }
+
+    /// ESC-293: the effective state, the project's choice ahead of the app's setting.
+    #[tokio::test]
+    async fn a_project_follows_the_apps_setting_until_it_chooses() {
+        let h = harness("ci-follow");
+        let ids = projects(&h, &["fa", "fb", "fc"]).await;
+        let (a, b, c) = (&ids[0], &ids[1], &ids[2]);
+        // b chosen off, c chosen on, a follows.
+        h.core.set_code_index(b, Some(false)).await.unwrap();
+        h.core.set_code_index(c, Some(true)).await.unwrap();
+        let on = |id: &str| h.core.code_index_on(&h.core.project(id).unwrap());
+        assert!(!on(a) && !on(b) && on(c));
+        let info = h.core.code_index_info(a).unwrap();
+        assert!(!info.chosen && !info.enabled);
+        assert!(h.core.code_index_info(b).unwrap().chosen);
+
+        // Turned on: the followers alone are read.
+        let n = h.core.set_code_index_all(true).await.unwrap();
+        assert_eq!(n, 1);
+        assert!(h.core.settings.read().code_index_all);
+        assert!(on(a) && !on(b) && on(c));
+        let read = wait_until(|| h.core.code_index_info(a).unwrap().status.files > 0).await;
+        assert!(read, "the follower was not read");
+        assert!(wait_until(|| h.core.codeindex.queue.lock().is_empty()).await);
+        assert!(!h.core.data.code_index_db(b).exists());
+        assert!(h.core.code_index(a, None).await.is_ok());
+        // The settings modal's draft, older, does not turn it back off.
+        let mut draft = h.core.settings.read().clone();
+        draft.code_index_all = false;
+        h.core.save_settings(draft).unwrap();
+        assert!(h.core.settings.read().code_index_all);
+
+        // Back to the app's setting from a choice: b follows, and is read.
+        let info = h.core.set_code_index(b, None).await.unwrap();
+        assert!(info.enabled && !info.chosen);
+        assert!(h.core.data.code_index_db(b).exists());
+
+        // Turned off: the followers' index erased, the one chosen on kept.
+        let n = h.core.set_code_index_all(false).await.unwrap();
+        assert_eq!(n, 2);
+        assert!(!h.core.data.code_index_db(a).exists());
+        assert!(!h.core.data.code_index_db(b).exists());
+        assert!(h.core.data.code_index_db(c).exists());
+        assert!(on(c) && !on(a));
+        assert!(h.core.code_index(a, None).await.is_err());
+        // Saved: read back as it was left.
+        let saved: crate::model::Settings =
+            serde_json::from_slice(&std::fs::read(h.core.data.settings_file()).unwrap()).unwrap();
+        assert!(!saved.code_index_all);
+    }
+
+    /// ESC-293: the projects are read one at a time, never all at once, without the caller waiting.
+    #[tokio::test]
+    // Held on purpose across the awaits: the reading of the first project waits for it, on a
+    // blocking thread of its own, never on this task.
+    #[allow(clippy::await_holding_lock)]
+    async fn turning_it_on_reads_the_followers_one_at_a_time() {
+        let h = harness("ci-queue");
+        let ids = projects(&h, &["qa", "qb", "qc"]).await;
+        // The first project's reading held: the others wait their turn behind it.
+        let lock = h.core.codeindex.lock_for_tests(&ids[0]);
+        let guard = lock.lock();
+        assert_eq!(h.core.set_code_index_all(true).await.unwrap(), 3);
+        assert!(wait_until(|| h.core.code_index_info(&ids[0]).unwrap().reading).await);
+        for id in &ids[1..] {
+            let info = h.core.code_index_info(id).unwrap();
+            assert!(info.waiting && !info.reading, "{info:?}");
+            assert!(!h.core.data.code_index_db(id).exists());
+        }
+        drop(guard);
+        let all = wait_until(|| {
+            ids.iter()
+                .all(|id| h.core.code_index_info(id).unwrap().status.files > 0)
+        })
+        .await;
+        assert!(all, "not every follower was read");
+        assert!(ids.iter().all(|id| {
+            let i = h.core.code_index_info(id).unwrap();
+            !i.reading && !i.waiting
+        }));
+    }
+
+    /// A new project follows the app's setting: read when it is on.
+    #[tokio::test]
+    async fn a_project_added_with_the_apps_setting_on_is_read() {
+        let h = harness("ci-new");
+        h.core.set_code_index_all(true).await.unwrap();
+        let ids = projects(&h, &["na"]).await;
+        assert_eq!(h.core.project(&ids[0]).unwrap().code_index, None);
+        let read = wait_until(|| h.core.code_index_info(&ids[0]).unwrap().status.files > 0).await;
+        assert!(read);
     }
 
     #[tokio::test]
@@ -854,7 +1014,7 @@ mod core {
             let mut projects = h.core.projects.write();
             projects.iter_mut().find(|x| x.id == v.id).unwrap().private = true;
         }
-        let info = h.core.set_code_index(&p.id, true).await.unwrap();
+        let info = h.core.set_code_index(&p.id, Some(true)).await.unwrap();
         // The settings say which of its folders is left out (ESC-254); the private one leaves out nothing of its own.
         assert_eq!(info.excluded, ["vault"]);
         assert!(h.core.code_index_info(&v.id).unwrap().excluded.is_empty());
@@ -867,7 +1027,7 @@ mod core {
             .iter()
             .all(|h| h.name != "secret_fn"));
         // The private project indexes its own folder.
-        h.core.set_code_index(&v.id, true).await.unwrap();
+        h.core.set_code_index(&v.id, Some(true)).await.unwrap();
         let rv = h.core.code_index(&v.id, None).await.unwrap();
         assert_eq!(rv.search("secret_fn", 3, None).unwrap().result.len(), 1);
     }
@@ -959,7 +1119,7 @@ mod events {
         h.core.code_index_event(&p.id);
         tokio::time::sleep(std::time::Duration::from_millis(300)).await;
         assert_eq!(h.core.code_index_info(&p.id).unwrap().status.files, 0);
-        h.core.set_code_index(&p.id, true).await.unwrap();
+        h.core.set_code_index(&p.id, Some(true)).await.unwrap();
         let before = h.core.code_index_info(&p.id).unwrap().status.symbols;
         std::fs::write(r.join("b.rs"), "pub fn beta() {}\npub fn gamma() {}\n").unwrap();
         h.core.code_index_event(&p.id);
@@ -1005,7 +1165,7 @@ mod events {
         let told = plain.meta.append_prompt.clone().unwrap();
         assert!(!told.contains("index_search"), "{told}");
         assert!(told.contains("search_memory"), "{told}");
-        h.core.set_code_index(&p.id, true).await.unwrap();
+        h.core.set_code_index(&p.id, Some(true)).await.unwrap();
         let on = h
             .core
             .create_agent_with(&p.id, AgentOptions::default())
@@ -1054,7 +1214,7 @@ mod events {
             escaped_len(&whole)
         );
         let _ = crate::engine::CLAUDE.instructions_room();
-        h.core.set_code_index(&p.id, false).await.unwrap();
+        h.core.set_code_index(&p.id, Some(false)).await.unwrap();
         let project = h.core.project(&p.id).unwrap();
         let without =
             h.core

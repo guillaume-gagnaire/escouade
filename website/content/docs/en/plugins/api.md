@@ -107,6 +107,8 @@ Each plugin has its journal, in `~/.escouade/plugin-logs/<id>.log`; past 1 MB, i
 
 The last 500 lines are read in the Journal tab of its page, in the view Plugins ([installing a plugin](plugins/installer#the-journal)).
 
+To check that a plugin keeps to this protocol without starting the app, play [the conformance bench](plugins/testing): `escouade-plugin test <folder>`.
+
 ## What the user changes
 
 A plugin switched off, a permission taken back or given again, an update installed: its process is stopped, and the next one gets the manifest and the permissions of now. A secret’s permission taken back makes `secrets/get` answer `-32001` for that key, as for a secret that is not its own.

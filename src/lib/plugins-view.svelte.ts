@@ -34,6 +34,8 @@ class PluginsStore {
   /** A refusal of the last gesture, shown in the view's head until the next one. */
   error = $state<string | null>(null);
   checking = $state(false);
+  /** The installed plugins' icons, by id, once read (null: none, its letters). */
+  icons = $state<Record<string, string | null>>({});
   /** « Tout mettre à jour »: the updates still to show, one window each, the user's consent asked for every one. */
   queue: string[] = [];
 
@@ -56,6 +58,17 @@ class PluginsStore {
       this.error = errorText(e);
     }
     this.loaded = true;
+  }
+
+  /** Reads the icon of the installed plugin `id` once; read again after it is installed anew. */
+  async loadIcon(id: string) {
+    if (id in this.icons) return;
+    this.icons[id] = null;
+    try {
+      this.icons[id] = (await pluginsApi.icon(id)) ?? null;
+    } catch {
+      // Not installed (any more): its letters.
+    }
   }
 
   /** Puts a plugin's new view in the list, in place of the old one. */
@@ -94,6 +107,7 @@ class PluginsStore {
     try {
       await pluginsApi.remove(id, keep);
       this.list = this.list.filter((p) => p.id !== id);
+      delete this.icons[id];
       if (this.page.kind === 'plugin' && this.page.id === id) this.show({ kind: 'installed' });
     } catch (e) {
       this.error = errorText(e);
@@ -177,6 +191,8 @@ class PluginsStore {
     step.error = null;
     try {
       const view = await pluginsApi.install(step.preview.token);
+      // Installed anew (an update): its icon may have changed.
+      delete this.icons[view.id];
       this.put(view);
       this.install = null;
       if (this.queue.length) await this.next();

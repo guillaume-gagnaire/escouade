@@ -80,6 +80,8 @@ export interface Settings {
   remoteControlAll: boolean;
   /** « Nouveaux projets privés »: a project added is private (`Project.private`) from the start. */
   privateProjects: boolean;
+  /** « Index du code sur tous les projets » (ESC-293): the index of every project that made no choice of its own (`Project.codeIndexChoice`) is on. Changed by `set_code_index_all`, not by the settings modal's draft. Absent from the settings of the window's tests made before it. */
+  codeIndexAll?: boolean;
   /** « Thème »: Système (the system's, and its changes), Clair or Sombre; applied at once, the window with it (lib/appearance.ts). */
   theme: ThemeChoice;
   /** « Zoom de l’interface », in percent (`ZOOM_LEVELS`): the WebView's zoom, text, spacing and icons together. */
@@ -774,8 +776,8 @@ export interface Project {
   workflowsAutoRead?: boolean;
   /** « Où garder la configuration des workflows » (ESC-195): in the repository (`.escouade/workflows/`, by default) or on this machine. Absent from a project of the window’s tests made before it. */
   workflowsInRepo?: boolean;
-  /** « Index du code » (ESC-251): off unless turned on, by `get_code_index` / `set_code_index` (Réglages › Projets, ESC-254). */
-  codeIndex?: boolean;
+  /** « Index du code » (ESC-251), the project's own choice (ESC-293): absent, it follows « Index du code sur tous les projets » (`codeIndexOn`, lib/codeindex.ts). Set by `set_code_index` (Réglages › Projets, ESC-254). */
+  codeIndexChoice?: boolean;
 }
 
 /** What a project's code index holds (ESC-251). */
@@ -793,7 +795,13 @@ export interface CodeIndexStatus {
 
 /** « Index du code » of a project, as its settings read it (ESC-254). */
 export interface CodeIndexInfo {
+  /** On: its own choice, or the app's. */
   enabled: boolean;
+  /** It made its own choice (ESC-293); else it follows « Index du code sur tous les projets ». */
+  chosen: boolean;
+  /** Being read for « Index du code sur tous les projets », or waiting for its turn. */
+  reading: boolean;
+  waiting: boolean;
   status: CodeIndexStatus;
   /** Its own folders its fence leaves out (another project inside it), relative, with `/`. */
   excluded: string[];
@@ -2365,6 +2373,7 @@ export type UiEvent =
   | { type: 'agentRemoved'; id: string; projectId: string }
   | { type: 'conv'; agentId: string; ops: ConvOp[] }
   | { type: 'memory'; projectId: string }
+  | { type: 'codeIndex'; projectId: string }
   | { type: 'vectorsDownload'; done: number; total: number }
   | { type: 'git'; projectId: string; git: GitInfo }
   | { type: 'usage'; usage: Usage }

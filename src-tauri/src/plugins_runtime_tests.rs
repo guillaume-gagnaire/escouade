@@ -248,7 +248,7 @@ async fn calls_and_batches_go_both_ways_as_raw_json() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn past_its_delay_a_call_takes_the_default_answer() {
-    let f = fake("silent", &[], quick());
+    let f = fake("silent", &["--silent-decisions"], quick());
     f.rt.call(ID, "echo", json!({})).await.unwrap();
 
     let started = Instant::now();
@@ -648,5 +648,28 @@ async fn a_folder_in_development_read_again_stops_its_process_for_the_new_manife
         ask("other").await.unwrap(),
         json!({ "result": "other-5678" })
     );
+    f.rt.shutdown();
+}
+
+/// An event of the watcher of a folder in development that changed nothing (FSEvents delivers late
+/// the writes made just before the watch began; a file rewritten as it was): nothing is read again,
+/// and its process goes on, the same one.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_event_that_changed_nothing_leaves_its_process_running() {
+    let f = fake("dev-same", &[], quick());
+    let pid = node_pid(&f.rt).await;
+
+    // Told directly, as a late event would.
+    f.plugins.reload(&[ID.to_string()]);
+    // The manifest written again, the same, byte for byte: a real event of the watcher.
+    let folder = PathBuf::from(f.plugins.get(ID, Lang::En).unwrap().folder);
+    let file = folder.join("escouade-plugin.json");
+    let rev = f.plugins.revision();
+    std::fs::write(&file, std::fs::read(&file).unwrap()).unwrap();
+    until("the event read", || f.plugins.revision() > rev).await;
+
+    assert_eq!(f.rt.status(ID).phase, PhaseName::Running);
+    assert_eq!(node_pid(&f.rt).await, pid, "the same process");
+    assert!(!journal_has(&f.rt, Kind::Stop, "stopped"));
     f.rt.shutdown();
 }

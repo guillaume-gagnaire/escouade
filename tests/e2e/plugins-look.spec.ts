@@ -134,6 +134,8 @@ async function shoot(page: Page, name: string, preview?: Page, shot?: string) {
 
 test('the view Plugins looks as the preview: the installed ones, a plugin’s page, the window of an update', async ({ app }) => {
   test.setTimeout(240_000);
+  // As the other looks: without Playwright's Chromium (CI's Windows runner), the preview cannot be drawn.
+  test.skip(!fs.existsSync(chromium.executablePath()), 'the preview needs Playwright’s Chromium');
   const { page } = app;
   await addProject(page, app.repo);
   const invoke = invokeOn(page);

@@ -16,8 +16,17 @@ export default {
     title: 'Index du code',
     on: 'Indexer ce projet',
     onDesc:
-      'Coupé par défaut. Allumé, le projet est lu une fois, puis tenu à jour aux commits, aux changements de branche et aux fins de tour. Le couper efface l’index.',
+      'Allumé, le projet est lu une fois, puis tenu à jour aux commits, aux changements de branche et aux fins de tour. Le couper efface l’index.',
     reading: 'Lecture du projet…',
+    waiting: 'En attente de lecture, après les autres projets…',
+    follows: {
+      on: 'Suit le réglage de l’app (allumé).',
+      off: 'Suit le réglage de l’app (coupé).',
+    },
+    chosen: 'Choisi pour ce projet.',
+    follow: 'Suivre le réglage de l’app',
+    followed: 'Ce projet suit de nouveau le réglage de l’app.',
+    seeAll: 'Voir le réglage',
     status: '{files} fichiers · {symbols} symboles · {size} · lu {when}',
     turnedOn: 'Index du code allumé : {files} fichiers lus.',
     turnedOff: 'Index du code coupé : son index est effacé.',
@@ -35,6 +44,39 @@ export default {
   },
   wizard: {
     title: 'Indexer le code',
+  },
+  all: {
+    title: 'Tous les projets',
+    on: 'Index du code sur tous les projets',
+    onDesc:
+      'Chaque projet qui n’a pas fait son propre choix suit cette case. Allumée, ils sont lus un par un, en arrière-plan ; coupée, leur index est effacé. Un projet allumé ou coupé dans ses réglages garde son choix.',
+    fence:
+      'La clôture des projets privés est respectée : l’index d’un projet privé ne sert qu’à ses propres agents. Le modèle de la recherche par le sens ne se télécharge pas pour autant.',
+    followersNone: 'Aucun projet ne la suit : chacun a fait son propre choix.',
+    followers: {
+      one: 'Suivie par {count} projet sur {total}.',
+      other: 'Suivie par {count} projets sur {total}.',
+    },
+    turnedOnNone: 'Index du code sur tous les projets allumé : aucun projet ne le suit pour l’instant.',
+    turnedOn: {
+      one: 'Index du code sur tous les projets allumé : {count} projet sera lu, en arrière-plan.',
+      other: 'Index du code sur tous les projets allumé : {count} projets seront lus, un par un, en arrière-plan.',
+    },
+    turnedOffNone: 'Index du code sur tous les projets coupé.',
+    turnedOff: {
+      one: 'Index du code sur tous les projets coupé : l’index de {count} projet est effacé.',
+      other: 'Index du code sur tous les projets coupé : l’index de {count} projets est effacé.',
+    },
+    confirmTitle: {
+      one: 'Couper l’index du code de {count} projet ?',
+      other: 'Couper l’index du code de {count} projets ?',
+    },
+    confirmBody: {
+      one: 'Le projet qui suit ce réglage perd son index, effacé de cette machine. Ceux qui ont fait leur propre choix gardent le leur.',
+      other:
+        'Les {count} projets qui suivent ce réglage perdent leur index, effacé de cette machine. Ceux qui ont fait leur propre choix gardent le leur.',
+    },
+    confirm: 'Couper et effacer',
   },
   stats: {
     title: 'Économies de l’index du code',
