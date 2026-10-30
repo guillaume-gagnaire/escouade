@@ -815,13 +815,7 @@ fn call(r: &Reader, p: &Probe, limit: usize) -> Result<Played> {
             full_file_tokens: answer.saving.files_tokens,
             schema_tokens: 0,
         },
-        |m| format::metrics_line(LANG, m),
     );
-    let text = if metrics.before > 0 {
-        format!("{text}{}", format::metrics_line(LANG, &metrics))
-    } else {
-        text
-    };
     Ok(Played {
         answer,
         text,
@@ -1102,13 +1096,8 @@ fn face_of(
             full_file_tokens: files_tokens,
             schema_tokens: 0,
         },
-        |m| format::metrics_line(LANG, m),
     );
-    let sent = if metrics.before > 0 {
-        format!("{}{}", cold.text, format::metrics_line(LANG, &metrics))
-    } else {
-        cold.text.clone()
-    };
+    let sent = cold.text.clone();
     let wrong_tokens = hits10
         .iter()
         .zip(&flags)

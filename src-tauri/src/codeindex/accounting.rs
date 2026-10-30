@@ -6,16 +6,16 @@
 //! - `before`: the weight of every file the answer touched (its bytes divided by 4), capped at
 //!   4 times the answer (`REF_CAP_K`), at the answer itself for a literal search;
 //! - `after`: what the model paid for the call: the answer, the request (the tool's name, its
-//!   arguments and the JSON-RPC framing), once per session the schemas of the tools, and the
-//!   metrics line itself;
+//!   arguments and the JSON-RPC framing), once per session the schemas of the tools;
 //! - a call whose `after` exceeds its `before` credits nothing: the shortfall is a debt that the
 //!   next calls of the session pay down before anything more is credited.
 //!
 //! What differs, for our architecture: the session is the caller's (an agent, or the clients from
 //! outside), not an MCP connection, since Escouade's server makes one handler per request; the
 //! schemas charged are those of the index's tools (all of them are listed up front: none is
-//! deferred by `anthropic/alwaysLoad`); the metrics line is always sent (tokensave turns it off by
-//! default, #561), in the user's language.
+//! deferred by `anthropic/alwaysLoad`); no metrics line is sent to the agent (ESC-307: tokensave
+//! turns it off by default, #561, and the figure it gave was not what an agent really saves), the
+//! count stays for the statistics.
 
 use serde_json::Value;
 use std::collections::HashMap;
@@ -142,7 +142,7 @@ pub struct Ledger {
 pub struct Call<'a> {
     pub tool: &'a str,
     pub arguments: &'a Value,
-    /// The answer's text, as sent (without the metrics line).
+    /// The answer's text, as sent.
     pub response: &'a str,
     /// The touched files' raw weight (`file_tokens` of each).
     pub full_file_tokens: u64,
@@ -151,9 +151,9 @@ pub struct Call<'a> {
 }
 
 impl Ledger {
-    /// Accounts for `call` in the session `key`; `line` renders the metrics line for the numbers
-    /// (before, after, result, saved), so its own cost is counted (two passes, as tokensave).
-    pub fn account(&self, key: &str, call: &Call, line: impl Fn(&Metrics) -> String) -> Metrics {
+    /// Accounts for `call` in the session `key`. Only the statistics use the numbers: the agent is
+    /// sent no line about them (ESC-307).
+    pub fn account(&self, key: &str, call: &Call) -> Metrics {
         let mut sessions = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
         let session = sessions.entry(key.to_string()).or_default();
         let schema_overhead = if session.schema_charged {
@@ -164,23 +164,9 @@ impl Ledger {
         };
         let tool_response_tokens = response_tokens(call.response);
         let request_overhead = request_overhead_tokens(call.tool, call.arguments);
-        let after_pre_metrics = tool_response_tokens + request_overhead + schema_overhead;
+        let after = tool_response_tokens + request_overhead + schema_overhead;
         let policy = baseline_policy(call.tool, call.arguments);
         let before = cap_baseline(policy, call.full_file_tokens, tool_response_tokens);
-        let emit_metrics_line = before > 0;
-        let metrics_line_tokens = if emit_metrics_line {
-            let provisional = Metrics {
-                before,
-                after: after_pre_metrics,
-                result: tool_response_tokens,
-                saved: before.saturating_sub(after_pre_metrics),
-                credited: 0,
-            };
-            (line(&provisional).len() / 4) as u64
-        } else {
-            0
-        };
-        let after = after_pre_metrics + metrics_line_tokens;
         let raw_delta = before as i64 - after as i64;
         let (debt, credited) = settle_session_debt(session.debt, raw_delta);
         session.debt = debt;
@@ -325,13 +311,6 @@ mod tests {
 
     // Ours: the server's accounting (`server.rs`), session by session.
 
-    fn line(m: &Metrics) -> String {
-        format!(
-            "\nindex_metrics: before={} after={} result={} saved={}",
-            m.before, m.after, m.result, m.saved
-        )
-    }
-
     #[test]
     fn the_schemas_are_charged_once_per_session_and_the_shortfall_is_carried() {
         let ledger = Ledger::default();
@@ -344,34 +323,25 @@ mod tests {
             full_file_tokens: 10_000,
             schema_tokens: 1_000,
         };
-        let first = ledger.account("a", &call, line);
-        // before = min(10 000, 4 × 100); after = 100 + request + 1 000 + the line.
+        let first = ledger.account("a", &call);
+        // before = min(10 000, 4 × 100); after = 100 + request + 1 000.
         assert_eq!(first.before, 400);
         assert_eq!(first.result, 100);
         let request = request_overhead_tokens("index_search", &args);
-        let line_tokens = (line(&Metrics {
-            before: 400,
-            after: 100 + request + 1_000,
-            result: 100,
-            saved: 0,
-            credited: 0,
-        })
-        .len()
-            / 4) as u64;
-        assert_eq!(first.after, 100 + request + 1_000 + line_tokens);
+        assert_eq!(first.after, 100 + request + 1_000);
         assert_eq!((first.saved, first.credited), (0, 0));
         // The second call pays no schema, but first pays the debt down.
-        let second = ledger.account("a", &call, line);
-        assert_eq!(second.after, 100 + request + line_tokens);
+        let second = ledger.account("a", &call);
+        assert_eq!(second.after, 100 + request);
         assert_eq!(second.saved, 400 - second.after);
         let debt = first.after as i64 - 400;
         assert_eq!(second.credited as i64, (second.saved as i64 - debt).max(0));
         // Another session pays the schemas on its own first call.
-        assert_eq!(ledger.account("b", &call, line).after, first.after);
+        assert_eq!(ledger.account("b", &call).after, first.after);
     }
 
     #[test]
-    fn an_answer_that_touched_no_file_sends_no_line_and_charges_none() {
+    fn an_answer_that_touched_no_file_credits_nothing() {
         let ledger = Ledger::default();
         let args = json!({});
         let call = Call {
@@ -381,7 +351,7 @@ mod tests {
             full_file_tokens: 0,
             schema_tokens: 0,
         };
-        let m = ledger.account("a", &call, line);
+        let m = ledger.account("a", &call);
         assert_eq!(m.before, 0);
         assert_eq!(m.after, 2 + request_overhead_tokens("index_search", &args));
     }

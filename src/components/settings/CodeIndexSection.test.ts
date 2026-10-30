@@ -44,7 +44,7 @@ describe('the code index in the project’s settings (ESC-254)', () => {
     render(SettingsModal, { tab: 'projects', projectId: 'p1' });
     await screen.findByText('Index du code', { selector: 'h2' });
     const g = group();
-    expect(within(g).getByText(/trouvent le code plus vite et pour moins de tokens/)).toBeInTheDocument();
+    expect(within(g).getByText(/trouvent le code plus vite/)).toBeInTheDocument();
     expect(within(g).getByText(/Tout reste sur cette machine/)).toBeInTheDocument();
     const sw = within(g).getByRole('switch', { name: 'Indexer ce projet' });
     await waitFor(() => expect(sw).toHaveAttribute('aria-checked', 'false'));

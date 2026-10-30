@@ -186,13 +186,9 @@ impl<C: AsRequestContext, R: Runtime> FromContextPart<C> for ToolCtx<R> {
     }
 }
 
-/// The blocks of an answer of the index: its text, then its metrics line when there is one.
-fn index_blocks((text, line): index::Reply) -> Vec<ContentBlock> {
-    let mut blocks = vec![ContentBlock::text(text)];
-    if !line.is_empty() {
-        blocks.push(ContentBlock::text(line));
-    }
-    blocks
+/// The blocks of an answer of the index: its text alone (no line about what it saved, ESC-307).
+fn index_blocks(text: index::Reply) -> Vec<ContentBlock> {
+    vec![ContentBlock::text(text)]
 }
 
 /// What the activity log says a call was asked: its arguments given, « name: value · … ».

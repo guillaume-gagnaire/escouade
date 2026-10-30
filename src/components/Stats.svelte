@@ -460,7 +460,7 @@
         {/if}
 
         {#if indexSavings.length || app.projects.some((p) => codeIndexOn(p, app.settings))}
-          <!-- What the code index saved, per project (ESC-254): of every account and harness, an answer of the index has neither. -->
+          <!-- What the code index answered, per project (ESC-254, ESC-307): of every account and harness, an answer of the index has neither. -->
           <section aria-labelledby="stats-index" data-stats-index>
             <div class="sec-h"><h2 id="stats-index">{t('codeindex.stats.title')}</h2></div>
             <p class="none note">{t('codeindex.stats.note')}</p>
@@ -471,7 +471,7 @@
                     <th class="w-name">{t('codeindex.stats.project')}</th>
                     <th class="r">{t('codeindex.stats.calls')}</th>
                     <th class="r">{t('codeindex.stats.tokens')}</th>
-                    <th class="r w-cost">{t('codeindex.stats.cost')}</th>
+                    <th class="r w-cost" use:tip={t('codeindex.stats.avoidedTip')}>{t('codeindex.stats.avoided')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -480,8 +480,8 @@
                     <tr>
                       <td class="ttl cut"><span class="psw" style:background={p.color}></span>{p.name}</td>
                       <td class="r">{fInt(s.calls)}</td>
+                      <td class="r">{fTok(s.answerTokens)}</td>
                       <td class="r">{fTok(s.savedTokens)}</td>
-                      <td class="r">{fCost(s.savedCost, 'estimated')}</td>
                     </tr>
                   {/each}
                 </tbody>

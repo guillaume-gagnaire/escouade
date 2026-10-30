@@ -1,17 +1,20 @@
 # L’index du code
 
-Escouade range le code d’un projet en symboles et en liens, pour que ses agents trouvent ce qu’ils cherchent en un appel, plus vite et pour moins de tokens qu’en lisant des fichiers entiers.
+Escouade range le code d’un projet en symboles et en liens, pour que ses agents trouvent ce qu’ils cherchent en un appel, au lieu de chercher à coups de grep puis de lire des fichiers.
 
-## Ce qu’il fait gagner
+## Ce qu’il fait bien
 
-Sans index, un agent cherche à coups de grep, puis lit les fichiers qu’il a trouvés, souvent en entier. Avec l’index, il demande en un appel :
+Sans index, un agent cherche à coups de grep, puis lit les fichiers qu’il a trouvés. Avec l’index, il demande en un appel :
 
 - où est un symbole (fonction, méthode, classe, type, champ, titre Markdown), avec sa signature et sa doc ;
 - le contexte d’une tâche : les points d’entrée et les symboles liés, avec le code des points d’entrée (cinq blocs au plus, de 1 500 octets au plus chacun ; un bloc coupé nomme l’appel qui donne la suite) ;
 - le corps entier d’un symbole, par son nom ou son id ;
 - un texte dans le code (un message d’erreur, une chaîne), fichier par fichier et ligne par ligne ;
+- les appelants d’une fonction, **justes même quand son nom a des homonymes** (une réponse par définition), ses appelés, et ce qu’un changement toucherait (`index_impact`) ;
 
-Chaque réponse finit par ce qu’elle a fait économiser, compté comme le compte tokensave : les fichiers qu’elle a touchés, lus en entier, mais **plafonnés à quatre fois la réponse**, contre ce que l’agent a payé pour l’appel (la réponse, sa requête et, une fois par session, les descriptions des outils). Un appel qui coûte plus qu’il n’économise reporte son déficit sur les suivants. Les [statistiques](stats) font le total de ce qui reste, par projet.
+C’est là que l’index est bon : trouver un symbole, ses appelants et l’impact d’un changement. Il ne promet pas moins de tokens, parce que ce n’est pas ce qu’on mesure. Sur des sondes, un agent qui connaît son grep dépense moins que l’index ; avec de vrais agents (Haiku, sur des questions et de petits changements), l’index et le conseil donné aux agents font dépenser **environ 8 % de moins** que grep seul, dans le bruit de la mesure : un gain sur les questions (environ −13 %), une perte sur les petits changements (environ +14 %). Une mesure sur des changements à plusieurs endroits, où les appelants comptent le plus, est en cours (IDX-6) ; son résultat n’est pas promis ici.
+
+Les réponses ne disent rien d’une économie. Escouade tient seulement un compte pour les [statistiques](stats).
 
 Les langages lus : Rust, TypeScript, JavaScript, Svelte, Python, Go, Java, C#, PHP et Markdown.
 
@@ -70,8 +73,8 @@ Une fois le modèle téléchargé, rien ne sort plus de la machine.
 
 ## Ce que voient les agents
 
-Les agents passent par six outils du [serveur MCP](mcp), les mêmes pour [tous les harness](harness) : `index_search`, `index_context`, `index_body`, `index_callers`, `index_callees` et `index_impact`. Leurs réponses sont celles de tokensave : du Markdown pour le contexte, une ligne par symbole pour la recherche, le corps en texte. Dans les vues de Claude Code et de Codex, une recherche qui vise un symbole reçoit une ligne qui dit que l’index y répond en un appel ; ailleurs, c’est une règle de leur consigne. Une recherche n’est jamais bloquée : à la différence de tokensave, Escouade n’arrête ni un grep ni un agent Explore.
+Les agents passent par six outils du [serveur MCP](mcp), les mêmes pour [tous les harness](harness) : `index_search`, `index_context`, `index_body`, `index_callers`, `index_callees` et `index_impact`. Leurs réponses sont celles de tokensave : du Markdown pour le contexte, une ligne par symbole pour la recherche, le corps en texte. Dans les vues de Claude Code et de Codex, une recherche qui vise un symbole reçoit une ligne qui dit ce que l’index trouve en un appel (le symbole, ses appelants, l’impact d’un changement) ; ailleurs, c’est une règle de leur consigne. Une recherche n’est jamais bloquée : à la différence de tokensave, Escouade n’arrête ni un grep ni un agent Explore.
 
-## Ce qu’il a fait économiser
+## Ce que disent les statistiques
 
-Les [statistiques](stats) ont une partie **Économies de l’index du code**, sur la période choisie : par projet, le nombre de réponses de l’index, les tokens économisés (comptés comme plus haut, les déficits payés d’abord) et leur valeur en dollars. Les dollars sont une estimation : les tokens économisés au prix d’entrée du modèle sur lequel tournait chaque agent.
+Les [statistiques](stats) ont une partie **Index du code**, sur la période choisie : par projet, le nombre de réponses de l’index et les tokens de ces réponses. Une dernière colonne, **Lecture de fichiers évitée (estimation haute)**, compte les fichiers d’où viennent les réponses (plafonnés à quatre fois la réponse) comme si l’agent les avait lus entiers : c’est une estimation haute, pas une économie mesurée, et il n’y a plus de dollars.

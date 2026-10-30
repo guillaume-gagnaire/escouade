@@ -3,7 +3,7 @@ import type { Tree } from '../types';
 // « Index du code » (ESC-254): its setting in the project's settings and in « Nouveau projet », the model of the search by
 // meaning, and what it saved in the statistics.
 export default {
-  what: 'Agents find code faster and for fewer tokens: in one call they get the functions, their callers and what a change would touch, instead of reading whole files.',
+  what: 'Agents find code faster: in one call they get a symbol, its callers (right even when the name has namesakes), its callees and what a change would touch.',
   local:
     'Everything stays on this machine: the index is computed here and kept in Escouade’s folder, never in the repository; nothing is sent online.',
   privateNote:
@@ -79,12 +79,14 @@ export default {
     confirm: 'Turn off and erase',
   },
   stats: {
-    title: 'Code index savings',
-    note: 'What the agents did not have to read: the files the index’s answers come from, less those answers. In dollars, at the input price of each agent’s model: an estimate.',
+    title: 'Code index',
+    note: 'The answers the index gave the agents, and their weight in tokens. The file reading avoided is a high estimate, not a measured saving.',
     project: 'Project',
     calls: 'Answers',
-    tokens: 'Tokens saved',
-    cost: 'Dollars saved',
+    tokens: 'Answer tokens',
+    avoided: 'File reading avoided (high estimate)',
+    avoidedTip:
+      'The files the index’s answers come from, less those answers, counted as if the agent had read them whole. It is not a measured saving: with real agents, one searching with grep reads far less than that, and the total cost changes little.',
     none: 'No answer from the index over the period.',
   },
 } as const satisfies Tree;

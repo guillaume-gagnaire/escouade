@@ -228,8 +228,8 @@ struct Asked {
     agent: String,
 }
 
-/// An answer of the tools: its text, then the metrics line, in a block of their own.
-pub(super) type Reply = (String, String);
+/// An answer of the tools: its text, and nothing about what it saved (ESC-307).
+pub(super) type Reply = String;
 
 fn asked<R: Runtime>(
     core: &Core<R>,
@@ -293,7 +293,7 @@ fn filter_of(
 }
 
 /// The answer as sent and what it saved: counted in the caller's session (`accounting`), recorded
-/// for the agent and the project, then said in the metrics line.
+/// for the agent and the project (the statistics); the agent is told nothing of it.
 fn answered<R: Runtime>(
     core: &Core<R>,
     caller: &Caller,
@@ -303,7 +303,6 @@ fn answered<R: Runtime>(
     schema_tokens: u64,
     (text, files_tokens): Text,
 ) -> Reply {
-    let lang = crate::i18n::ui();
     let key = match caller {
         Caller::Agent(id) => id.clone(),
         Caller::External => String::new(),
@@ -317,7 +316,6 @@ fn answered<R: Runtime>(
             full_file_tokens: files_tokens,
             schema_tokens,
         },
-        |m| format::metrics_line(lang, m),
     );
     // Priced at the model the agent last ran on, else its setting (ESC-254).
     let model = core
@@ -326,12 +324,7 @@ fn answered<R: Runtime>(
         .unwrap_or_default();
     core.stats
         .record_index(&a.agent, &a.project.id, tool, &m, &model);
-    let line = if m.before > 0 {
-        format::metrics_line(lang, &m)
-    } else {
-        String::new()
-    };
-    (text, line)
+    text
 }
 
 /// The arguments as the client sent them (those it left out dropped), for the request's cost.

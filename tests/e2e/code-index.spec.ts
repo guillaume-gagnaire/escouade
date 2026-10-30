@@ -82,7 +82,7 @@ test('the index is offered off at the adding, turned on, shown in the settings, 
   await wizard.getByRole('radio', { name: /^Partir de zéro/ }).click();
   await wizard.getByRole('button', { name: /Récapitulatif/ }).click();
   const offer = wizard.locator('[data-wizard-code-index]');
-  await expect(offer.getByText(/trouvent le code plus vite et pour moins de tokens/)).toBeVisible();
+  await expect(offer.getByText(/trouvent le code plus vite/)).toBeVisible();
   await expect(offer.getByText(/Tout reste sur cette machine/)).toBeVisible();
   const sw = offer.getByRole('switch', { name: 'Indexer le code' });
   await expect(sw).toHaveAttribute('aria-checked', 'false');
@@ -138,8 +138,8 @@ test('the index is offered off at the adding, turned on, shown in the settings, 
   // The statistics: the index's part, nothing answered yet.
   await page.getByRole('button', { name: 'Stats' }).click();
   const st = page.locator('main.stats');
-  await expect(st.getByRole('heading', { name: 'Économies de l’index du code' })).toBeVisible();
+  await expect(st.getByRole('heading', { name: 'Index du code' })).toBeVisible();
   await expect(st.getByText('Aucune réponse de l’index sur la période.')).toBeVisible();
-  await st.getByRole('heading', { name: 'Économies de l’index du code' }).scrollIntoViewIfNeeded();
+  await st.getByRole('heading', { name: 'Index du code' }).scrollIntoViewIfNeeded();
   await shots(page, 'stats');
 });

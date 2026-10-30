@@ -1,14 +1,14 @@
 //! The index's tools for the real agents of the bench (ESC-299): a stdio MCP server of its own,
 //! over the index of a copy of the repository, never the app's. It serves the app's six tools as
 //! the app's server does (`crate::mcp::index`, the same schemas from `mcp::tools`), their answers
-//! and their metrics line counted in one session (`accounting`), and notes each call in a log of
+//! and counted in one session (`accounting`), with no line of savings sent, and notes each call in a log of
 //! JSON lines: the tool, its arguments, the answer's size and how long it took.
 //!
 //! The ESC-253 hook comes with it: `hook` reads Claude Code's `PreToolUse` on its input and writes
 //! what the app's server answers (`hint::reply`), never a refusal.
 
 use super::super::accounting::{Call, Ledger};
-use super::super::{format, hint, Service, Target};
+use super::super::{hint, Service, Target};
 use crate::i18n::Lang;
 use crate::mcp::index::{self, Text};
 use crate::mcp::tools::{ToolError, Tools};
@@ -110,7 +110,7 @@ impl Server {
         let ms = t.elapsed().as_millis() as u64;
         let (content, is_error, tokens) = match text {
             Ok((text, files_tokens)) => {
-                let m = self.ledger.account(
+                self.ledger.account(
                     "",
                     &Call {
                         tool,
@@ -119,12 +119,8 @@ impl Server {
                         full_file_tokens: files_tokens,
                         schema_tokens: self.schema_tokens,
                     },
-                    |m| format::metrics_line(LANG, m),
                 );
-                let mut blocks = vec![json!({ "type": "text", "text": text })];
-                if m.before > 0 {
-                    blocks.push(json!({ "type": "text", "text": format::metrics_line(LANG, &m) }));
-                }
+                let blocks = vec![json!({ "type": "text", "text": text })];
                 let tokens = super::super::tokens_of(
                     blocks
                         .iter()
@@ -265,7 +261,7 @@ mod tests {
             assert!(names.contains(&n), "{n} in {names:?}");
         }
         assert_eq!(names.len(), 6);
-        // The app's answers: the symbol's line, then the metrics line.
+        // The app's answers: the symbol's line, and no line of savings (ESC-307).
         let search = &answers[2]["result"];
         assert_eq!(search["isError"], false);
         let text = search["content"][0]["text"].as_str().unwrap();
@@ -273,10 +269,8 @@ mod tests {
             text.contains("src/shop.rs") && text.contains("add_to_cart"),
             "{text}"
         );
-        assert!(search["content"][1]["text"]
-            .as_str()
-            .unwrap()
-            .contains("index_metrics"));
+        assert_eq!(search["content"].as_array().unwrap().len(), 1);
+        assert!(!text.contains("index_metrics"), "{text}");
         let callers = answers[3]["result"]["content"][0]["text"].as_str().unwrap();
         assert!(callers.contains("add_to_cart"), "{callers}");
         // A call that names nothing says why, as an error.

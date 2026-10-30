@@ -234,7 +234,7 @@ L’interrupteur « Partir d’un projet vierge » (« L’historique reste d
 
 ## Index du code
 
-Le groupe « Index du code » allume l’[index du code](code-index) du projet (**Indexer ce projet**) : il dit ce que l’index fait gagner, que tout reste sur la machine, et ce qu’il contient. Tant que le projet n’a pas fait son propre choix, il suit **Index du code sur tous les projets** (voir plus bas) et le dit ; un choix fait ici est gardé, et **Suivre le réglage de l’app** y revient. Pour un projet privé, il dit ce qui reste hors de l’index. **Recherche par le sens** télécharge le modèle des vecteurs, avec sa progression et **Annuler**.
+Le groupe « Index du code » allume l’[index du code](code-index) du projet (**Indexer ce projet**) : il dit ce que l’index trouve, que tout reste sur la machine, et ce qu’il contient. Tant que le projet n’a pas fait son propre choix, il suit **Index du code sur tous les projets** (voir plus bas) et le dit ; un choix fait ici est gardé, et **Suivre le réglage de l’app** y revient. Pour un projet privé, il dit ce qui reste hors de l’index. **Recherche par le sens** télécharge le modèle des vecteurs, avec sa progression et **Annuler**.
 
 ## Mémoire partagée
 

@@ -27,6 +27,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Corrections
 
+- L’index du code n’annonce plus d’économie de tokens qu’on ne mesure pas : ses réponses, les consignes des agents, les statistiques (plus de dollars) et le site disent ce qu’il trouve bien, et l’effet mesuré avec de vrais agents (faible).
 - Deux tickets menés en même temps ne proposent plus une décision sous le même numéro : une décision proposée n’a pas de numéro et reçoit le suivant du registre quand elle est acceptée, et les pages et tickets qui la citent suivent.
 - Valider un ticket n’est plus refusé pour « des modifications non commitées » après la comparaison de la spec au code : ses écarts et sa date restent sur ce poste au lieu d’être écrits dans les pages, et l’onglet Docs les montre toujours.
 - « Écrire une première spec depuis le code », et toute nouvelle discussion, ferme sa fenêtre et ouvre la discussion avec son premier message même quand les nouveaux agents s’ouvrent dans le terminal du harness : une discussion reste toujours dans sa conversation, où Escouade refuse ses écritures.

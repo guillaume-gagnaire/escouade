@@ -1,17 +1,20 @@
 # The code index
 
-Escouade sorts a project’s code into symbols and links, so that its agents find what they look for in one call, faster and for fewer tokens than by reading whole files.
+Escouade sorts a project’s code into symbols and links, so that its agents find what they look for in one call, instead of searching with grep and then reading files.
 
-## What it saves
+## What it does well
 
-Without an index, an agent searches with grep, then reads the files it found, often whole. With the index, it asks in one call:
+Without an index, an agent searches with grep, then reads the files it found. With the index, it asks in one call:
 
 - where a symbol is (function, method, class, type, field, Markdown heading), with its signature and doc;
 - the context of a task: the entry points and the related symbols, with the code of the entry points (five blocks at most, of 1,500 bytes at most each; a block cut short names the call that gives the rest);
 - the whole body of a symbol, by its name or its id;
 - a text inside the code (an error message, a string), file by file and line by line;
+- the callers of a function, **right even when its name has namesakes** (one answer per definition), its callees, and what a change would touch (`index_impact`);
 
-Each answer ends with what it saved, counted as tokensave counts it: the files it touched, read whole, but **capped at four times the answer**, against what the agent paid for the call (the answer, its request and, once per session, the tools’ descriptions). A call that costs more than it saves carries its shortfall over to the next ones. The [statistics](stats) add up what is left per project.
+This is where the index is good: finding a symbol, its callers and the impact of a change. It does not promise fewer tokens, because that is not what is measured. On probes, an agent that knows its grep spends less than the index does; with real agents (Haiku, on questions and small changes), the index and the advice given to agents make them spend **about 8% less** than grep alone, within the noise of the measure: a gain on questions (about −13%), a loss on small changes (about +14%). A measure on changes at several places, where callers matter most, is under way (IDX-6); its result is not promised here.
+
+The answers say nothing of a saving. Escouade only keeps a count for the [statistics](stats).
 
 The languages read: Rust, TypeScript, JavaScript, Svelte, Python, Go, Java, C#, PHP and Markdown.
 
@@ -70,8 +73,8 @@ Once the model is downloaded, nothing leaves the machine any more.
 
 ## What the agents see
 
-The agents go through six tools of the [MCP server](mcp), the same for [every harness](harness): `index_search`, `index_context`, `index_body`, `index_callers`, `index_callees` and `index_impact`. Their answers are tokensave’s: Markdown for the context, one line per symbol for the search, the body as text. In the Claude Code and Codex views, a search aimed at a symbol gets a line saying the index answers it in one call; elsewhere, it is a rule of their instructions. A search is never blocked: unlike tokensave, Escouade stops neither a grep nor an Explore agent.
+The agents go through six tools of the [MCP server](mcp), the same for [every harness](harness): `index_search`, `index_context`, `index_body`, `index_callers`, `index_callees` and `index_impact`. Their answers are tokensave’s: Markdown for the context, one line per symbol for the search, the body as text. In the Claude Code and Codex views, a search aimed at a symbol gets a line saying what the index finds in one call (the symbol, its callers, the impact of a change); elsewhere, it is a rule of their instructions. A search is never blocked: unlike tokensave, Escouade stops neither a grep nor an Explore agent.
 
-## What it saved
+## What the statistics say
 
-The [statistics](stats) have a **Code index savings** part, over the period chosen: per project, the number of answers of the index, the tokens saved (as counted above, the shortfalls paid first) and their worth in dollars. The dollars are an estimate: the tokens saved at the input price of the model each agent ran on.
+The [statistics](stats) have a **Code index** part, over the period chosen: per project, the number of answers of the index and the tokens of those answers. A last column, **File reading avoided (high estimate)**, counts the files the answers come from (capped at four times the answer) as if the agent had read them whole: it is a high estimate, not a measured saving, and there are no dollars any more.

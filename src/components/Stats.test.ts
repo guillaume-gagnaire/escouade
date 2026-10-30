@@ -61,7 +61,7 @@ describe('Stats', () => {
     resetApp({ projects: [project()] });
   });
 
-  it('shows what the code index saved per project, in tokens and estimated dollars (ESC-254)', async () => {
+  it('shows the code index per project: answers, their tokens and the file reading avoided as a high estimate, no dollars (ESC-307)', async () => {
     resetApp({ projects: [project({ codeIndexChoice: true })] });
     fakeBackend({
       stats: (a: any) => ({
@@ -73,14 +73,17 @@ describe('Stats', () => {
     });
     render(Stats);
     await loaded();
-    const table = await screen.findByRole('table', { name: 'Économies de l’index du code' });
+    const table = await screen.findByRole('table', { name: 'Index du code' });
     const row = within(table).getAllByRole('row')[1];
     expect(row).toHaveTextContent(project().name);
     expect(row).toHaveTextContent('12');
     const cells = within(row)
       .getAllByRole('cell')
       .map((c) => c.textContent?.replace(/\s/g, ' '));
-    expect(cells.slice(1)).toEqual(['12', '860,0 k', '≈ 3,44 $']);
+    expect(cells.slice(1)).toEqual(['12', '40,0 k', '860,0 k']);
+    await userEvent.hover(within(table).getByText('Lecture de fichiers évitée (estimation haute)'));
+    expect(await screen.findByText(/pas une économie mesurée/)).toBeInTheDocument();
+    expect(screen.queryByText(/Dollars économisés/)).toBeNull();
   });
 
   it('says the index answered nothing over the period, and shows nothing of it when no project has turned it on', async () => {
@@ -93,7 +96,7 @@ describe('Stats', () => {
     resetApp({ projects: [project()] });
     render(Stats);
     await loaded();
-    expect(screen.queryByText('Économies de l’index du code')).toBeNull();
+    expect(screen.queryByText('Index du code')).toBeNull();
   });
 
   it('shows the KPIs of the period', async () => {

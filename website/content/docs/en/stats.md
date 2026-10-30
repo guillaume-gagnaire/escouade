@@ -75,9 +75,9 @@ The “By ticket” table adds up what each ticket’s agents cost: “Ticket”
 
 The agent and ticket lists show 20 rows. “Show all” unfolds the rest, “Show less” folds it back, and “20 of 57” tells you where you are.
 
-### Code index savings
+### Code index
 
-When a project has turned the [code index](code-index) on, the “Code index savings” table tells, per project and over the period, how many answers the index gave, the tokens it saved and their estimated worth in dollars (at the input price of each agent’s model). It holds for every account and every harness, whatever the filter.
+When a project has turned the [code index](code-index) on, the “Code index” table tells, per project and over the period, how many answers the index gave and what they weigh in tokens. Its last column, “File reading avoided (high estimate)”, counts the files the answers come from as if the agent had read them whole: it is not a measured saving, and the tooltip says so. It holds for every account and every harness, whatever the filter.
 
 ## Filter by harness and by account
 

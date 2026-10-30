@@ -75,9 +75,9 @@ Le tableau « Par ticket » additionne ce que les agents de chaque ticket ont 
 
 Les listes d’agents et de tickets montrent 20 lignes. « Tout voir » déplie le reste, « Réduire » le replie, et « 20 sur 57 » dit où tu en es.
 
-### Économies de l’index du code
+### Index du code
 
-Quand un projet a allumé l’[index du code](code-index), le tableau « Économies de l’index du code » dit, par projet et sur la période, combien de réponses l’index a données, les tokens qu’il a économisés et leur valeur estimée en dollars (au prix d’entrée du modèle de chaque agent). Il vaut pour tous les comptes et tous les harness, quel que soit le filtre.
+Quand un projet a allumé l’[index du code](code-index), le tableau « Index du code » dit, par projet et sur la période, combien de réponses l’index a données et ce qu’elles pèsent en tokens. Sa dernière colonne, « Lecture de fichiers évitée (estimation haute) », compte les fichiers d’où viennent les réponses comme si l’agent les avait lus entiers : ce n’est pas une économie mesurée, et l’infobulle le dit. Il vaut pour tous les comptes et tous les harness, quel que soit le filtre.
 
 ## Filtrer par harness et par compte
 

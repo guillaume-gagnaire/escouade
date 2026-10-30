@@ -9,7 +9,6 @@
 //! English), the headings and the keys stay tokensave's; the tools are named `index_*`; the ids
 //! are numbers; the metrics line is `index_metrics`.
 
-use super::accounting::Metrics;
 use super::answers::{member_example, Body, Found, Literal};
 use super::api::{Context, Hit};
 use super::ranking::is_test_path;
@@ -399,21 +398,6 @@ pub fn body_text(lang: Lang, b: &Body) -> String {
         }
     };
     truncate_response(&text)
-}
-
-/// The metrics line appended to an answer (tokensave `tokensave_metrics`), then what it means in
-/// words.
-pub fn metrics_line(lang: Lang, m: &Metrics) -> String {
-    let words = tr_in!(
-        lang,
-        "économie : environ {saved} tokens, contre la lecture des fichiers touchés (plafonnée à 4 fois la réponse).",
-        "saved: about {saved} tokens, against reading the files touched (capped at 4 times the answer).",
-        saved = m.saved
-    );
-    format!(
-        "\nindex_metrics: before={} after={} result={} saved={}\n{words}",
-        m.before, m.after, m.result, m.saved
-    )
 }
 
 /// tokensave `truncate_response` for a text: cut at `MAX_RESPONSE_CHARS`, on a character.

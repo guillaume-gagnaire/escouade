@@ -3,7 +3,7 @@ import type { Tree } from '../types';
 // « Index du code » (ESC-254): its setting in the project's settings and in « Nouveau projet », the model of the search by
 // meaning, and what it saved in the statistics.
 export default {
-  what: 'Les agents trouvent le code plus vite et pour moins de tokens : en un appel, ils ont les fonctions, leurs appelants et ce qu’un changement toucherait, au lieu de lire des fichiers entiers.',
+  what: 'Les agents trouvent le code plus vite : en un appel, ils ont un symbole, ses appelants (justes même quand le nom a des homonymes), ses appelés et ce qu’un changement toucherait.',
   local:
     'Tout reste sur cette machine : l’index est calculé ici et gardé dans le dossier d’Escouade, jamais dans le dépôt ; rien n’est envoyé en ligne.',
   privateNote:
@@ -79,12 +79,14 @@ export default {
     confirm: 'Couper et effacer',
   },
   stats: {
-    title: 'Économies de l’index du code',
-    note: 'Ce que les agents n’ont pas eu à lire : les fichiers d’où viennent les réponses de l’index, moins ces réponses. En dollars, au prix d’entrée du modèle de chaque agent : une estimation.',
+    title: 'Index du code',
+    note: 'Les réponses que l’index a données aux agents, et leur poids en tokens. La lecture de fichiers évitée est une estimation haute, pas une économie mesurée.',
     project: 'Projet',
     calls: 'Réponses',
-    tokens: 'Tokens économisés',
-    cost: 'Dollars économisés',
+    tokens: 'Tokens des réponses',
+    avoided: 'Lecture de fichiers évitée (estimation haute)',
+    avoidedTip:
+      'Les fichiers d’où viennent les réponses de l’index, moins ces réponses, comptés comme si l’agent les avait lus entiers. Ce n’est pas une économie mesurée : avec de vrais agents, un agent qui cherche avec grep lit bien moins que cela, et le coût total change peu.',
     none: 'Aucune réponse de l’index sur la période.',
   },
 } as const satisfies Tree;

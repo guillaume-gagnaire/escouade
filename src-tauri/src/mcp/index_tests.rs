@@ -1,7 +1,7 @@
 //! The code index through the tools (ESC-253, ESC-298), called by a real MCP client (rmcp's) on a
 //! test core: six tools answering as tokensave does (Markdown for the context, a line per symbol
-//! for the search, the body as text, JSON for the calls), each answer ending with what it saved,
-//! counted as tokensave counts it, the savings per agent and per project, an index that is off said
+//! for the search, the body as text, JSON for the calls), none of them telling the agent what it saved
+//! (ESC-307), the count kept for the statistics per agent and per project, an index that is off said
 //! clearly with how to turn it on, and nothing of a private project for the agents of the others.
 
 use super::private_tests::make_private;
@@ -26,7 +26,8 @@ async fn indexed(h: &Harness, p: &Project) {
     h.core.set_code_index(&p.id, Some(true)).await.unwrap();
 }
 
-/// The blocks of an answer that is no error: its text, then its metrics line (empty when none).
+/// The blocks of an answer that is no error: its text, then what follows it (nothing: no line of
+/// savings is sent, ESC-307). Every answer is checked for the words of one.
 async fn blocks(c: &Client, tool: &'static str, args: Value) -> (String, String) {
     let mut params = CallToolRequestParams::new(tool);
     if let Value::Object(args) = args {
@@ -40,36 +41,30 @@ async fn blocks(c: &Client, tool: &'static str, args: Value) -> (String, String)
             .unwrap_or("")
             .to_string()
     };
+    let blocks = answer["content"].as_array().map_or(0, Vec::len);
+    assert_eq!(blocks, 1, "{tool}: one block, no line of savings: {answer}");
+    for word in [
+        "index_metrics",
+        "Économie",
+        "économie",
+        "Saving",
+        "saved:",
+        "before=",
+    ] {
+        assert!(!text(0).contains(word), "{tool}: {word} in {}", text(0));
+    }
     (text(0), text(1))
 }
 
-/// The numbers of a metrics line: before, after, result, saved.
-fn metrics(line: &str) -> [u64; 4] {
-    let at = line.find("index_metrics:").expect(line);
-    let mut out = [0; 4];
-    for (i, key) in ["before=", "after=", "result=", "saved="]
-        .iter()
-        .enumerate()
-    {
-        let from = line[at..].find(key).unwrap() + at + key.len();
-        let digits: String = line[from..]
-            .chars()
-            .take_while(char::is_ascii_digit)
-            .collect();
-        out[i] = digits.parse().unwrap();
-    }
-    out
-}
-
 #[tokio::test(flavor = "multi_thread")]
-async fn the_six_tools_answer_as_tokensave_and_say_what_they_saved() {
+async fn the_six_tools_answer_as_tokensave_and_say_nothing_of_savings() {
     let h = harness("mcp-index-tools");
     let p = project(&h).await;
     indexed(&h, &p).await;
     let c = external(&h).await;
 
     // The search: a line per symbol, the ids when asked.
-    let (found, line) = blocks(
+    let (found, after_text) = blocks(
         &c,
         "index_search",
         json!({ "project": p.name, "query": "place order" }),
@@ -81,11 +76,7 @@ async fn the_six_tools_answer_as_tokensave_and_say_what_they_saved() {
         "{found}"
     );
     assert!(!found.contains("[id:"), "{found}");
-    let [before, after, result, saved] = metrics(&line);
-    // The first call of the session pays the schemas.
-    assert!(before > 0 && result > 0 && after > result, "{line}");
-    assert!(before <= 4 * result, "capped at 4 times the answer: {line}");
-    assert_eq!(saved, before.saturating_sub(after));
+    assert_eq!(after_text, "");
     let (with_ids, _) = blocks(
         &c,
         "index_search",
@@ -110,7 +101,7 @@ async fn the_six_tools_answer_as_tokensave_and_say_what_they_saved() {
     assert!(lit.contains(&format!("[in checkout, id: {id}]")), "{lit}");
 
     // The context, in Markdown, its code and its retrieval.
-    let (ctx, line) = blocks(
+    let (ctx, _) = blocks(
         &c,
         "index_context",
         json!({ "project": p.id, "task": "change how an order is placed" }),
@@ -128,7 +119,6 @@ async fn the_six_tools_answer_as_tokensave_and_say_what_they_saved() {
     assert!(ctx.contains("### Retrieval\n"), "{ctx}");
     assert!(ctx.contains("order("), "{ctx}");
     assert!(ctx.contains("seen_node_ids: ["), "{ctx}");
-    assert!(line.contains("index_metrics:"), "{line}");
     // Keywords: a notion the task does not name; what was seen is not given again.
     let (ctx, _) = blocks(
         &c,
@@ -209,7 +199,7 @@ async fn the_six_tools_answer_as_tokensave_and_say_what_they_saved() {
     let files = impact["matches"][0]["files"].to_string();
     assert!(files.contains("shop.rs"), "{impact}");
 
-    // Nothing found: no file touched, no metrics line.
+    // Nothing found: no file touched.
     let (none, line) = blocks(
         &c,
         "index_search",

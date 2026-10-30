@@ -324,7 +324,7 @@ describe('the new project’s assistant', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Suivant' })).toBeEnabled());
     await userEvent.click(screen.getByRole('button', { name: /Récapitulatif/ }));
     const offer = document.querySelector('[data-wizard-code-index]') as HTMLElement;
-    expect(within(offer).getByText(/trouvent le code plus vite et pour moins de tokens/)).toBeInTheDocument();
+    expect(within(offer).getByText(/trouvent le code plus vite/)).toBeInTheDocument();
     expect(within(offer).getByText(/Tout reste sur cette machine/)).toBeInTheDocument();
     // Not a private project: nothing said of one.
     expect(within(offer).queryByText(/Projet privé/)).toBeNull();
