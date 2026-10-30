@@ -673,3 +673,25 @@ async fn an_event_that_changed_nothing_leaves_its_process_running() {
     assert!(!journal_has(&f.rt, Kind::Stop, "stopped"));
     f.rt.shutdown();
 }
+
+/// A plugin given by a relative folder (`escouade-plugin test slack`, run beside it) starts the
+/// program of that folder: the path is absolute, never looked for again from the folder it starts
+/// in, where Unix would find `slack/slack/slack` (ESC-182).
+#[test]
+fn a_relative_folder_gives_an_absolute_program() {
+    let run = crate::plugins::manifest::Run {
+        command: "slack".into(),
+        args: vec![],
+        by_system: Default::default(),
+    };
+    let here = std::env::current_dir().unwrap();
+    let p = crate::plugins::runtime::program_path(Path::new("slack"), &run, Path::new("app"));
+    assert!(p.is_absolute(), "{}", p.display());
+    assert_eq!(p, here.join("slack").join("slack"));
+    let app = crate::plugins::manifest::Run {
+        command: "{escouade}/escouade-plugins".into(),
+        ..run
+    };
+    let p = crate::plugins::runtime::program_path(Path::new("slack"), &app, Path::new("app"));
+    assert_eq!(p, here.join("app").join("escouade-plugins"));
+}

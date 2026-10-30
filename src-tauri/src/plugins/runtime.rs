@@ -208,8 +208,13 @@ pub fn secret_name(plugin: &str, key: &str) -> String {
 }
 
 /// The program of `run` for this system: in the plugin's `folder`, or in `escouade_dir` (the
-/// folder of the app's programs) for `{escouade}/…`.
+/// folder of the app's programs) for `{escouade}/…`. Always absolute: the process starts in the
+/// plugin's folder, and a relative program would be looked for from there under Unix
+/// (`escouade-plugin test slack` would start `slack/slack/slack`).
 pub(crate) fn program_path(folder: &Path, run: &manifest::Run, escouade_dir: &Path) -> PathBuf {
+    let folder = std::path::absolute(folder).unwrap_or_else(|_| folder.to_path_buf());
+    let escouade_dir =
+        std::path::absolute(escouade_dir).unwrap_or_else(|_| escouade_dir.to_path_buf());
     let sys = if cfg!(windows) {
         "windows"
     } else if cfg!(target_os = "macos") {

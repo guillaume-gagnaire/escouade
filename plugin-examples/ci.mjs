@@ -29,10 +29,30 @@ function run(cwd, command, ...args) {
     shell: windows,
     env: { ...process.env, ESCOUADE_PLUGIN_BIN: bin },
   });
-  if (r.status !== 0) {
-    console.error(`✗ ${command} ${args.join(' ')}: exit ${r.status ?? r.signal}`);
-    process.exit(1);
+  if (r.status !== 0) console.error(`✗ ${command} ${args.join(' ')}: exit ${r.status ?? r.signal}`);
+  return r.status === 0;
+}
+
+/** Each step of an example, until one fails: whether all passed. */
+function check(name) {
+  const folder = join(HERE, name);
+  if (existsSync(join(folder, 'package.json'))) {
+    if (!run(folder, 'npm', 'install', '--no-audit', '--no-fund')) return false;
+    if (!run(folder, 'npm', 'run', 'typecheck') || !run(folder, 'npm', 'test')) return false;
+    const built = join(tmp, `${name}.mjs`);
+    if (
+      !run(folder, 'npx', 'esbuild', 'src/main.ts', '--bundle', '--platform=node', '--format=esm', '--target=node20', `--outfile=${built}`)
+    ) {
+      return false;
+    }
+    if (lf(readFileSync(built, 'utf8')) !== lf(readFileSync(join(folder, 'dist', 'plugin.mjs'), 'utf8'))) {
+      console.error(`✗ ${name}: dist/plugin.mjs is not the build of src/ (npm run build, then commit dist/)`);
+      return false;
+    }
+    console.log(`✓ ${name}: dist/plugin.mjs is the build of src/`);
   }
+  // By its relative folder, as an author runs it beside the plugin.
+  return run(HERE, bin, 'validate', name) && run(HERE, bin, 'test', name);
 }
 
 const lf = (s) => s.replace(/\r\n/g, '\n');
@@ -41,24 +61,14 @@ const examples = readdirSync(HERE, { withFileTypes: true })
   .map((d) => d.name);
 const tmp = mkdtempSync(join(tmpdir(), 'escouade-examples-'));
 try {
-  for (const name of examples) {
-    const folder = join(HERE, name);
-    if (existsSync(join(folder, 'package.json'))) {
-      run(folder, 'npm', 'install', '--no-audit', '--no-fund');
-      run(folder, 'npm', 'run', 'typecheck');
-      run(folder, 'npm', 'test');
-      const built = join(tmp, `${name}.mjs`);
-      run(folder, 'npx', 'esbuild', 'src/main.ts', '--bundle', '--platform=node', '--format=esm', '--target=node20', `--outfile=${built}`);
-      if (lf(readFileSync(built, 'utf8')) !== lf(readFileSync(join(folder, 'dist', 'plugin.mjs'), 'utf8'))) {
-        console.error(`✗ ${name}: dist/plugin.mjs is not the build of src/ (npm run build, then commit dist/)`);
-        process.exit(1);
-      }
-      console.log(`✓ ${name}: dist/plugin.mjs is the build of src/`);
-    }
-    run(HERE, bin, 'validate', name);
-    run(HERE, bin, 'test', name);
+  // Every example, even after one that fails: one failure must not hide another.
+  const failed = examples.filter((name) => !check(name));
+  if (failed.length > 0) {
+    console.error(`\n✗ ${failed.length} of ${examples.length} examples fail: ${failed.join(', ')}`);
+    process.exitCode = 1;
+  } else {
+    console.log(`\n✓ ${examples.length} examples pass validate and the conformance bench: ${examples.join(', ')}`);
   }
-  console.log(`\n✓ ${examples.length} examples pass validate and the conformance bench: ${examples.join(', ')}`);
 } finally {
   rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 });
 }
