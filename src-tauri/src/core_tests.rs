@@ -3644,6 +3644,8 @@ async fn searches_the_conversations_of_the_agents_archived_ones_included_when_as
     let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
     // Its log is being written by the agent, alive, as it is read.
     h.turn(&id, "Ajoute la pagination à l'événement").await;
+    // Named after that message (ESC-156): the hits say the name it keeps.
+    h.wait("its name", |h| h.agent(&id).named).await;
     let found = h.core.search_conversations("EVENEMENT", Some(&p.id), true);
     // Claude's answer (the fake one repeats the message: "Bonjour, tu as dit : …", cut short
     // before the match), then the message.
