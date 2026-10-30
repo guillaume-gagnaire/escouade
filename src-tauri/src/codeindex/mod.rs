@@ -23,18 +23,25 @@
 
 mod api;
 mod calls;
+mod context;
 pub mod hint;
 mod lang;
 mod links;
 pub(crate) mod probes;
+mod ranking;
 mod receivers;
 mod resolver;
 mod scan;
+mod search;
 mod store;
+mod text;
 mod wiring;
 
-pub use api::{Answer, Reader};
+#[cfg(test)]
+pub(crate) use api::Context;
+pub use api::{Answer, Reader, Retrieval};
 pub use calls::{Wanted, MAX_MATCHES_DEFAULT};
+pub use context::BuildContextOptions;
 #[cfg(test)]
 pub(crate) use lang::{Parsed, Sym};
 pub use scan::Refresh;
@@ -312,7 +319,7 @@ impl Service {
                     kind: r.get(3)?,
                     path: r.get(4)?,
                     line: r.get(5)?,
-                    vis: r.get::<_, i64>(6)? != 0,
+                    vis: r.get::<_, String>(6)? == "pub",
                     parent: r.get(7)?,
                     ty: r.get(8)?,
                 })

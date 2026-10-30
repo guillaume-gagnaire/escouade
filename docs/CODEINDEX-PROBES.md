@@ -205,6 +205,34 @@ Le banc a été joué en entier, et ses résultats relus à la main sur huit son
 - `tache-modeles-harness` : les titres de `website/content/docs/fr/harness.md` et des notes de design ; aucun code.
 - `svelte-context-banner-fr` : les pages du plan du site et des TODO, pas `PlanBanner.svelte`.
 
+## Ticket après ticket
+
+Une colonne par ticket, le même banc sur les mêmes 54 sondes (`--compare` à la colonne précédente). Le détail de chaque colonne : ce qui a été fait, les écarts et pourquoi, sonde par sonde.
+
+- **ESC-294** : la référence (ci-dessous, `docs/codeindex-probes-reference.json`).
+- **IDX-1 (ESC-296)** : la recherche et le contexte de tokensave portés à l'identique (`docs/CODEINDEX-IDX-1.md`, référence `docs/codeindex-probes-reference-idx1.json`).
+- **IDX-2 (ESC-297)** : la résolution des appels de tokensave, d'un symbole à un symbole (§ « IDX-2 » plus bas, référence `docs/codeindex-probes-reference-idx2.json`).
+
+| Mesure | ESC-294 | IDX-1 | IDX-2 |
+|---|---|---|---|
+| R@10 moyen, tout (54) | 39 | 38 | 47 |
+| P@10 moyen, tout | 23 | 22 | 33 |
+| R@50 moyen, tout | 49 | 40 | 46 |
+| R@10 `index_search` (9) | 67 | 78 | 78 |
+| R@10 `index_context` (28) | 16 | 11 | 11 |
+| R@10 `callers` / `callees` / `impact` | 59 / 49 / 85 | 59 / 49 / 85 | **87 / 95 / 95** |
+| R@10 sondes « tâche » (17), la question | 6 | 6 | 6 |
+| R@50 sondes « tâche » | 18 | 12 | 12 |
+| Sondes « tâche » trouvées | 1 / 17 | 1 / 17 | 1 / 17 |
+| R@10 sondes « tâche », mots du code | 24 | 18 | 24 |
+| R@10 questions en français (5) | 40 | 20 | 20 |
+| R@10 questions en anglais (7) | 36 | 29 | 29 |
+| R@10 autres questions fr/en (11), mots du code | 59 | 41 | 14 |
+| Tokens réels de l'index, tout | 350 005 | 252 722 | 244 487 |
+| Tokens réels, sondes « tâche » | 209 811 | 139 003 | 134 450 |
+| Économie réelle (totaux) | −151 % | −81 % | −75 % |
+| Sondes gagnées : index / grep / = | 5 / 48 / 1 | 4 / 48 / 2 | 8 / 43 / 3 |
+
 ## Les mesures
 
 Ce qui suit est le `results.md` du banc, recopié tel quel (ses trois premiers intertitres ajoutés). Le détail de chaque résultat est dans `results.json`, la référence dans `docs/codeindex-probes-reference.json`.
@@ -375,33 +403,33 @@ La résolution des appels de tokensave (github.com/aovestdipaperino/tokensave, c
 
 ### Le banc, avant et après
 
-Rejoué le 2026-10-30 sur les mêmes 54 sondes, sans en changer aucune : `cargo run --release --example codeindex_probes -- --compare ../docs/codeindex-probes-reference.json`. *Avant* : la référence d'ESC-294 (`docs/codeindex-probes-reference.json`). *IDX-2* : ce ticket seul, sur la branche d'ESC-294 (pas encore sur main), sans IDX-1. Sa référence est `docs/codeindex-probes-reference-idx2.json`. Seul l'adaptateur des réponses du banc a suivi la forme nouvelle (`matches`, `more` ; les égalités, dites à part, ne sont pas comptées comme résultats).
+Rejoué le 2026-10-30 sur les mêmes 54 sondes, sans en changer aucune, sur main avec IDX-1 : `cargo run --release --example codeindex_probes -- --compare ../docs/codeindex-probes-reference.json`, puis `--compare ../docs/codeindex-probes-reference-idx1.json`. Sa référence est `docs/codeindex-probes-reference-idx2.json`. Seul l'adaptateur des réponses du banc a suivi la forme nouvelle (`matches`, `more` ; les égalités, dites à part, ne sont pas comptées comme résultats).
 
-| Groupe | Sondes | R@10 avant | R@10 IDX-2 | P@10 avant | P@10 IDX-2 | Tok. index réels avant | Tok. index réels IDX-2 |
-|---|---|---|---|---|---|---|---|
-| search | 9 | 67 | 67 | 30 | 30 | 14 081 | 14 316 |
-| context | 28 | 16 | 16 | 2 | 2 | 287 689 | 300 407 |
-| **callers** | 10 | 59 | **87** | 50 | **92** | 20 925 | **14 042** |
-| **callees** | 3 | 49 | **95** | 38 | **96** | 11 913 | **8 743** |
-| **impact** | 4 | 85 | **95** | 70 | **80** | 15 397 | 17 895 |
-| « tâche » | 17 | 6 | 6 | 1 | 1 | 209 811 | 211 746 |
-| **Tout** | 54 | 39 | **48** | 23 | **34** | 350 005 | 355 403 |
+| Groupe | Sondes | R@10 ESC-294 | R@10 IDX-1 | R@10 IDX-2 | P@10 ESC-294 | P@10 IDX-1 | P@10 IDX-2 | Tok. réels IDX-1 | Tok. réels IDX-2 |
+|---|---|---|---|---|---|---|---|---|---|
+| search | 9 | 67 | 78 | 78 | 30 | 26 | 26 | 9 058 | 9 217 |
+| context | 28 | 16 | 11 | 11 | 2 | 1 | 1 | 195 429 | 194 590 |
+| **callers** | 10 | 59 | 59 | **87** | 50 | 50 | **92** | 20 925 | **14 042** |
+| **callees** | 3 | 49 | 49 | **95** | 38 | 38 | **96** | 11 913 | **8 743** |
+| **impact** | 4 | 85 | 85 | **95** | 70 | 70 | **80** | 15 397 | 17 895 |
+| « tâche » | 17 | 6 | 6 | 6 | 1 | 1 | 1 | 139 003 | 134 450 |
+| **Tout** | 54 | 39 | 38 | **47** | 23 | 22 | **33** | 252 722 | **244 487** |
 
-- **Sondes gagnées par l'index** : 5 → **9** (grep 48 → 43, égalités 1 → 2). Les appelants : 5 gagnées sur 10, et une économie réelle de +33 % face au grep (0 % avant).
-- **Rappel changé** : `cas-forget` 62 → **100** (précision 45 → 100 : les 7 appelants de `Runtime::forget`, rien d'autre), `rs-homonyme-load` 20 → 100, `ts-callers-tip-place` 17 → 100, `rs-callees-task_context` 25 → 100, `ts-callees-definitions` 50 → 100, `rs-homonyme-new` 25 → 75, `rs-homonyme-place` 33 → 67, `rs-callees-ensure_fresh` 71 → 86, `rs-impact-hint-file` 40 → 80. Aucune sonde n'a perdu de rappel.
-- **`index_search`, `index_context` et les « tâche » ne bougent pas** : c'est le terrain d'IDX-1. Leurs tokens montent un peu (les symboles portent leur `id`, `core.rs` est désormais lu).
-- **Temps à chaud** (moyennes ; le poste était chargé, `rg` y a pris 321 ms en moyenne contre 88 ms à la référence) : appelants 18 ms (4 ms avant), appelés 32 ms, impact 37 ms (49 ms avant).
+- **Sondes gagnées par l'index** : 4 (IDX-1) → **8** ; grep 48 → 43, égalités 2 → 3. Les appelants : 5 gagnées sur 10, et une économie réelle de +33 % face au grep (0 % avant).
+- **Rappel changé face à IDX-1**, en hausse seulement : `cas-forget` 62 → **100** (précision 45 → 100 : les 7 appelants de `Runtime::forget`, rien d'autre), `rs-homonyme-load` 20 → 100, `ts-callers-tip-place` 17 → 100, `rs-callees-task_context` 25 → 100, `ts-callees-definitions` 50 → 100, `rs-homonyme-new` 25 → 75, `rs-homonyme-place` 33 → 67, `rs-callees-ensure_fresh` 71 → 86, `rs-impact-hint-file` 40 → 80. Aucune sonde n'a perdu de rappel.
+- **`index_search`, `index_context` et les « tâche »** gardent leur rappel d'IDX-1, sur les questions telles qu'écrites. Le reclassement d'IDX-1 compte désormais les appelants par les liens résolus (et non plus tous les appels du même nom), et les voisins d'un point d'entrée sont ceux des liens. Sur la variante « mots du code » (hors des sondes comptées), trois questions perdent leur bon résultat (`rs-notion-gap-fr`, `rs-notion-gap-en`, `ts-context-tooltip-en`) et une le gagne (`tache-zoom-borne`) : 41 → 14 sur les 11 fr/en, 18 → 24 sur les tâches. La cause n'est pas isolée entre ces deux changements ; c'est à regarder avec IDX-3.
+- **Temps à chaud** (moyennes ; le poste était chargé, `rg` y a pris 327 ms en moyenne contre 88 ms à la référence) : appelants 20 ms (4 ms avant), appelés 19 ms, impact 31 ms (49 ms avant).
 
 **L'indexation** (même passe) :
 
-| Indexation | Avant | IDX-2 |
-|---|---|---|
-| Dépôt entier | 24,7 s, 1 575 fichiers, 34 797 symboles, 293 741 références, 46,8 Mo | 32,8 s, 1 578 fichiers, 35 799 symboles, 92 388 liens résolus (450 000 références), 101 Mo |
-| Après un commit (1 fichier) | 0,12 s | 1,1 s |
-| Delta d'un worktree (2 fichiers) | 11 à 16 s | 17 à 25 s |
-| Changement de branche (517 fichiers) | 4 à 7 s | 8 à 10 s |
+| Indexation | ESC-294 | IDX-1 | IDX-2 |
+|---|---|---|---|
+| Dépôt entier | 24,7 s, 46,8 Mo | 20,3 s, 68,6 Mo | 31,8 s, 1 578 fichiers (dont `core.rs`, 430 Ko), 35 799 symboles, 93 054 liens résolus, 123,5 Mo |
+| Après un commit (1 fichier) | 0,12 s | 0,10 s | 0,25 s |
+| Delta d'un worktree (2 fichiers) | 11 à 16 s | 12,6 s | 13,3 s |
+| Changement de branche (517 fichiers) | 4 à 7 s | 4,5 s | 7,4 s |
 
-Ce que coûte la résolution : la base double (les références brutes gardées pour la relecture partielle : 37 Mo, les liens et les égalités : 11 Mo, leurs index), et chaque relecture refait les caches du résolveur sur tous les symboles (≈ 0,1 s) puis résout de nouveau les références touchées, souvent des dizaines de milliers quand un fichier définit des noms courants (`new`, `get`). Sur le dépôt entier en build de debug, un fichier relu prend 1,6 s dont 0,9 s de résolution. Le delta d'un worktree reste dominé par le hachage de tous ses fichiers (piste « La première lecture d'un worktree », plus haut).
+Ce que coûte la résolution : la base grossit de 55 Mo (les ≈ 450 000 références brutes gardées pour la relecture partielle et leurs index, les liens, les égalités), et chaque relecture refait les caches du résolveur sur tous les symboles puis résout de nouveau les références touchées, souvent des dizaines de milliers quand un fichier définit des noms courants (`new`, `get`). Sur le dépôt entier en build de debug, un fichier relu prend 1,6 s dont 0,9 s de résolution.
 
 ### Les tests
 

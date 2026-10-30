@@ -145,6 +145,15 @@ impl Reader {
         )
     }
 
+    /// `lvis` with the scope as the positional parameter `?n`.
+    pub(super) fn lvis_pos(a: &str, n: usize) -> String {
+        format!(
+            "({a}.scope = ?{n} OR ({a}.scope = '' AND NOT EXISTS (SELECT 1 FROM files fw \
+             WHERE fw.scope = ?{n} AND fw.path = {a}.path AND fw.state IN (1, 2)) \
+             AND NOT EXISTS (SELECT 1 FROM overrides o WHERE o.scope = ?{n} AND o.ref_id = {a}.ref_id)))"
+        )
+    }
+
     fn row_hit(r: &Row) -> rusqlite::Result<(Hit, String)> {
         Ok((Self::hit(r)?, r.get("qname")?))
     }

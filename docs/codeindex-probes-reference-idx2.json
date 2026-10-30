@@ -1,20 +1,20 @@
 {
   "commit": "303fb5f2e447de6eb5bac91ecface391b5c97e75",
-  "date": "2026-10-30 02:32",
+  "date": "2026-10-30 03:36",
   "indexing": {
-    "backMs": 14134,
+    "backMs": 8996,
     "backParsed": 392,
     "branchFilesChanged": 517,
-    "branchMs": 10142,
+    "branchMs": 7350,
     "branchParsed": 169,
-    "bytes": 106356736,
-    "commitMs": 1143,
+    "bytes": 129544192,
+    "commitMs": 246,
     "commitParsed": 1,
     "files": 1578,
-    "fullMs": 32806,
-    "links": 92388,
+    "fullMs": 31783,
+    "links": 93054,
     "symbols": 35799,
-    "worktreeMs": 25438,
+    "worktreeMs": 13295,
     "worktreeParsed": 2
   },
   "probes": [
@@ -44,7 +44,7 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 17
+          "results": 12
         },
         "at50": {
           "expected": 1,
@@ -53,7 +53,7 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 57
+          "results": 50
         },
         "codeWords": {
           "expected": 1,
@@ -62,16 +62,16 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 16
+          "results": 12
         },
-        "coldMs": 246.3,
+        "coldMs": 1050.2,
         "realCalls": 14,
-        "realTokens": 8849,
-        "responseTokens": 2359,
-        "warmMs": 9.5,
-        "wrongTokens": 2268
+        "realTokens": 8056,
+        "responseTokens": 2401,
+        "warmMs": 76.2,
+        "wrongTokens": 2227
       },
-      "realPercent": -255,
+      "realPercent": -223,
       "tags": [
         "cas-2026-10-29",
         "en"
@@ -97,7 +97,7 @@
       },
       "id": "cas-memoire-fr",
       "index": {
-        "announcedPercent": 97,
+        "announcedPercent": 99,
         "at10": {
           "expected": 1,
           "firstGood": null,
@@ -105,7 +105,7 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 10
+          "results": 11
         },
         "at50": {
           "expected": 1,
@@ -114,7 +114,7 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 50
+          "results": 51
         },
         "codeWords": {
           "expected": 1,
@@ -123,16 +123,16 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 16
+          "results": 12
         },
-        "coldMs": 609.7,
-        "realCalls": 11,
-        "realTokens": 7376,
-        "responseTokens": 2238,
-        "warmMs": 7.1,
-        "wrongTokens": 2148
+        "coldMs": 538.7,
+        "realCalls": 13,
+        "realTokens": 6989,
+        "responseTokens": 1654,
+        "warmMs": 99.6,
+        "wrongTokens": 1502
       },
-      "realPercent": -196,
+      "realPercent": -180,
       "tags": [
         "cas-2026-10-29",
         "fr"
@@ -178,11 +178,11 @@
           "results": 8
         },
         "codeWords": null,
-        "coldMs": 514.9,
+        "coldMs": 2034.4,
         "realCalls": 6,
         "realTokens": 3202,
         "responseTokens": 738,
-        "warmMs": 16.6,
+        "warmMs": 16.8,
         "wrongTokens": 0
       },
       "realPercent": 24,
@@ -226,19 +226,19 @@
           "firstGood": 1,
           "found": 1,
           "good": 1,
-          "precision": 0.02,
+          "precision": 0.020833333333333332,
           "recall": 1.0,
-          "results": 50
+          "results": 48
         },
         "codeWords": null,
-        "coldMs": 697.2,
+        "coldMs": 420.3,
         "realCalls": 2,
-        "realTokens": 971,
-        "responseTokens": 732,
-        "warmMs": 4.5,
-        "wrongTokens": 593
+        "realTokens": 966,
+        "responseTokens": 727,
+        "warmMs": 38.0,
+        "wrongTokens": 589
       },
-      "realPercent": -266,
+      "realPercent": -264,
       "tags": [],
       "tool": "index_search",
       "winner": "grep"
@@ -281,11 +281,11 @@
           "results": 3
         },
         "codeWords": null,
-        "coldMs": 657.5,
+        "coldMs": 588.4,
         "realCalls": 3,
         "realTokens": 823,
         "responseTokens": 221,
-        "warmMs": 16.5,
+        "warmMs": 19.0,
         "wrongTokens": 0
       },
       "realPercent": -23,
@@ -317,28 +317,28 @@
           "firstGood": 1,
           "found": 1,
           "good": 1,
-          "precision": 0.5,
+          "precision": 0.1,
           "recall": 1.0,
-          "results": 2
+          "results": 10
         },
         "at50": {
           "expected": 1,
           "firstGood": 1,
           "found": 1,
           "good": 1,
-          "precision": 0.5,
+          "precision": 0.058823529411764705,
           "recall": 1.0,
-          "results": 2
+          "results": 17
         },
         "codeWords": null,
-        "coldMs": 389.9,
+        "coldMs": 1055.4,
         "realCalls": 2,
-        "realTokens": 487,
-        "responseTokens": 198,
-        "warmMs": 3.0,
-        "wrongTokens": 62
+        "realTokens": 1015,
+        "responseTokens": 726,
+        "warmMs": 19.1,
+        "wrongTokens": 589
       },
-      "realPercent": -56,
+      "realPercent": -226,
       "tags": [],
       "tool": "index_search",
       "winner": "grep"
@@ -381,11 +381,11 @@
           "results": 6
         },
         "codeWords": null,
-        "coldMs": 464.2,
+        "coldMs": 450.1,
         "realCalls": 4,
         "realTokens": 1907,
         "responseTokens": 591,
-        "warmMs": 38.9,
+        "warmMs": 17.5,
         "wrongTokens": 0
       },
       "realPercent": -3,
@@ -433,11 +433,11 @@
           "results": 9
         },
         "codeWords": null,
-        "coldMs": 1657.0,
+        "coldMs": 951.2,
         "realCalls": 7,
         "realTokens": 3640,
         "responseTokens": 917,
-        "warmMs": 32.7,
+        "warmMs": 22.0,
         "wrongTokens": 55
       },
       "realPercent": -37,
@@ -483,11 +483,11 @@
           "results": 7
         },
         "codeWords": null,
-        "coldMs": 415.9,
+        "coldMs": 217.7,
         "realCalls": 7,
         "realTokens": 2886,
         "responseTokens": 409,
-        "warmMs": 32.0,
+        "warmMs": 31.1,
         "wrongTokens": 76
       },
       "realPercent": -55,
@@ -535,11 +535,11 @@
           "results": 9
         },
         "codeWords": null,
-        "coldMs": 1144.0,
+        "coldMs": 438.9,
         "realCalls": 8,
         "realTokens": 3249,
         "responseTokens": 410,
-        "warmMs": 45.6,
+        "warmMs": 32.5,
         "wrongTokens": 8
       },
       "realPercent": -20,
@@ -585,11 +585,11 @@
           "results": 33
         },
         "codeWords": null,
-        "coldMs": 781.4,
+        "coldMs": 1874.5,
         "realCalls": 6,
         "realTokens": 4280,
         "responseTokens": 1978,
-        "warmMs": 17.8,
+        "warmMs": 28.7,
         "wrongTokens": 256
       },
       "realPercent": -121,
@@ -635,11 +635,11 @@
           "results": 4
         },
         "codeWords": null,
-        "coldMs": 1915.0,
+        "coldMs": 451.6,
         "realCalls": 4,
         "realTokens": 1773,
         "responseTokens": 515,
-        "warmMs": 33.7,
+        "warmMs": 23.2,
         "wrongTokens": 30
       },
       "realPercent": 38,
@@ -687,11 +687,11 @@
           "results": 5
         },
         "codeWords": null,
-        "coldMs": 225.4,
+        "coldMs": 766.2,
         "realCalls": 4,
         "realTokens": 1683,
         "responseTokens": 613,
-        "warmMs": 18.3,
+        "warmMs": 18.4,
         "wrongTokens": 0
       },
       "realPercent": 42,
@@ -739,11 +739,11 @@
           "results": 2
         },
         "codeWords": null,
-        "coldMs": 399.9,
+        "coldMs": 1475.5,
         "realCalls": 3,
         "realTokens": 1033,
         "responseTokens": 270,
-        "warmMs": 17.0,
+        "warmMs": 17.9,
         "wrongTokens": 0
       },
       "realPercent": 21,
@@ -771,7 +771,7 @@
       },
       "id": "rs-notion-timing-en",
       "index": {
-        "announcedPercent": 98,
+        "announcedPercent": 97,
         "at10": {
           "expected": 1,
           "firstGood": null,
@@ -779,7 +779,7 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 18
+          "results": 10
         },
         "at50": {
           "expected": 1,
@@ -788,25 +788,25 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 58
+          "results": 11
         },
         "codeWords": {
           "expected": 1,
-          "firstGood": 1,
-          "found": 1,
-          "good": 1,
-          "precision": 0.07142857142857142,
-          "recall": 1.0,
-          "results": 14
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
         },
-        "coldMs": 357.5,
-        "realCalls": 13,
-        "realTokens": 6358,
-        "responseTokens": 2019,
-        "warmMs": 10.6,
-        "wrongTokens": 1932
+        "coldMs": 427.9,
+        "realCalls": 9,
+        "realTokens": 4365,
+        "responseTokens": 1353,
+        "warmMs": 47.6,
+        "wrongTokens": 1149
       },
-      "realPercent": -765,
+      "realPercent": -493,
       "tags": [
         "notion",
         "en"
@@ -832,7 +832,7 @@
       },
       "id": "rs-notion-gap-fr",
       "index": {
-        "announcedPercent": 97,
+        "announcedPercent": 95,
         "at10": {
           "expected": 1,
           "firstGood": null,
@@ -840,7 +840,7 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 10
+          "results": 12
         },
         "at50": {
           "expected": 1,
@@ -849,7 +849,7 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 50
+          "results": 34
         },
         "codeWords": {
           "expected": 1,
@@ -858,16 +858,16 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 17
+          "results": 10
         },
-        "coldMs": 867.1,
+        "coldMs": 573.7,
         "realCalls": 9,
-        "realTokens": 22648,
-        "responseTokens": 9476,
-        "warmMs": 8.5,
-        "wrongTokens": 9387
+        "realTokens": 6582,
+        "responseTokens": 2351,
+        "warmMs": 104.7,
+        "wrongTokens": 2185
       },
-      "realPercent": -1313,
+      "realPercent": -310,
       "tags": [
         "notion",
         "fr"
@@ -893,24 +893,24 @@
       },
       "id": "rs-notion-gap-en",
       "index": {
-        "announcedPercent": 99,
+        "announcedPercent": 97,
         "at10": {
           "expected": 1,
-          "firstGood": null,
-          "found": 0,
-          "good": 0,
-          "precision": 0.0,
-          "recall": 0.0,
-          "results": 22
+          "firstGood": 9,
+          "found": 1,
+          "good": 1,
+          "precision": 0.1,
+          "recall": 1.0,
+          "results": 10
         },
         "at50": {
           "expected": 1,
-          "firstGood": null,
-          "found": 0,
-          "good": 0,
-          "precision": 0.0,
-          "recall": 0.0,
-          "results": 62
+          "firstGood": 9,
+          "found": 1,
+          "good": 1,
+          "precision": 0.02,
+          "recall": 1.0,
+          "results": 50
         },
         "codeWords": {
           "expected": 1,
@@ -919,16 +919,16 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 17
+          "results": 10
         },
-        "coldMs": 276.7,
-        "realCalls": 14,
-        "realTokens": 8405,
-        "responseTokens": 2859,
-        "warmMs": 10.2,
-        "wrongTokens": 2767
+        "coldMs": 1004.7,
+        "realCalls": 4,
+        "realTokens": 3090,
+        "responseTokens": 1403,
+        "warmMs": 99.8,
+        "wrongTokens": 1124
       },
-      "realPercent": -424,
+      "realPercent": -92,
       "tags": [
         "notion",
         "en"
@@ -954,42 +954,42 @@
       },
       "id": "rs-context-hint-en",
       "index": {
-        "announcedPercent": 99,
+        "announcedPercent": 98,
         "at10": {
           "expected": 2,
-          "firstGood": 1,
-          "found": 1,
-          "good": 2,
-          "precision": 0.10526315789473684,
-          "recall": 0.5,
-          "results": 19
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
         },
         "at50": {
           "expected": 2,
           "firstGood": 1,
           "found": 1,
           "good": 2,
-          "precision": 0.03389830508474576,
+          "precision": 0.0392156862745098,
           "recall": 0.5,
-          "results": 59
+          "results": 51
         },
         "codeWords": {
           "expected": 2,
-          "firstGood": 2,
-          "found": 2,
-          "good": 3,
-          "precision": 0.14285714285714285,
-          "recall": 1.0,
-          "results": 21
+          "firstGood": 3,
+          "found": 1,
+          "good": 1,
+          "precision": 0.09090909090909091,
+          "recall": 0.5,
+          "results": 11
         },
-        "coldMs": 596.1,
-        "realCalls": 11,
-        "realTokens": 9731,
-        "responseTokens": 2638,
-        "warmMs": 9.9,
-        "wrongTokens": 2266
+        "coldMs": 693.3,
+        "realCalls": 14,
+        "realTokens": 6905,
+        "responseTokens": 2114,
+        "warmMs": 89.2,
+        "wrongTokens": 1951
       },
-      "realPercent": -406,
+      "realPercent": -259,
       "tags": [
         "en"
       ],
@@ -1014,34 +1014,34 @@
       },
       "id": "ts-search-tip-place",
       "index": {
-        "announcedPercent": 92,
+        "announcedPercent": 99,
         "at10": {
           "expected": 1,
-          "firstGood": null,
-          "found": 0,
-          "good": 0,
-          "precision": 0.0,
-          "recall": 0.0,
+          "firstGood": 1,
+          "found": 1,
+          "good": 1,
+          "precision": 0.1,
+          "recall": 1.0,
           "results": 10
         },
         "at50": {
           "expected": 1,
-          "firstGood": 11,
+          "firstGood": 1,
           "found": 1,
           "good": 1,
-          "precision": 0.08333333333333333,
+          "precision": 0.02,
           "recall": 1.0,
-          "results": 12
+          "results": 50
         },
         "codeWords": null,
-        "coldMs": 272.7,
-        "realCalls": 5,
-        "realTokens": 1972,
-        "responseTokens": 405,
-        "warmMs": 2.4,
-        "wrongTokens": 326
+        "coldMs": 523.2,
+        "realCalls": 2,
+        "realTokens": 1064,
+        "responseTokens": 558,
+        "warmMs": 29.0,
+        "wrongTokens": 410
       },
-      "realPercent": -93,
+      "realPercent": -4,
       "tags": [
         "homonyme"
       ],
@@ -1086,11 +1086,11 @@
           "results": 6
         },
         "codeWords": null,
-        "coldMs": 169.9,
+        "coldMs": 564.9,
         "realCalls": 4,
         "realTokens": 1321,
         "responseTokens": 289,
-        "warmMs": 19.1,
+        "warmMs": 17.1,
         "wrongTokens": 0
       },
       "realPercent": 68,
@@ -1138,11 +1138,11 @@
           "results": 8
         },
         "codeWords": null,
-        "coldMs": 175.8,
+        "coldMs": 723.7,
         "realCalls": 4,
         "realTokens": 3196,
         "responseTokens": 708,
-        "warmMs": 23.9,
+        "warmMs": 16.6,
         "wrongTokens": 0
       },
       "realPercent": -2,
@@ -1190,11 +1190,11 @@
           "results": 118
         },
         "codeWords": null,
-        "coldMs": 180.4,
+        "coldMs": 3363.4,
         "realCalls": 9,
         "realTokens": 7480,
         "responseTokens": 4211,
-        "warmMs": 50.9,
+        "warmMs": 30.9,
         "wrongTokens": 270
       },
       "realPercent": -890,
@@ -1220,42 +1220,42 @@
       },
       "id": "ts-context-tooltip-en",
       "index": {
-        "announcedPercent": 98,
+        "announcedPercent": 99,
         "at10": {
           "expected": 1,
-          "firstGood": 4,
+          "firstGood": 3,
           "found": 1,
-          "good": 2,
-          "precision": 0.09523809523809523,
+          "good": 1,
+          "precision": 0.1,
           "recall": 1.0,
-          "results": 21
+          "results": 10
         },
         "at50": {
           "expected": 1,
-          "firstGood": 4,
-          "found": 1,
-          "good": 2,
-          "precision": 0.03333333333333333,
-          "recall": 1.0,
-          "results": 60
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
         },
         "codeWords": {
           "expected": 1,
-          "firstGood": 2,
-          "found": 1,
-          "good": 2,
-          "precision": 0.14285714285714285,
-          "recall": 1.0,
-          "results": 14
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
         },
-        "coldMs": 810.7,
+        "coldMs": 816.8,
         "realCalls": 1,
-        "realTokens": 2578,
-        "responseTokens": 2578,
-        "warmMs": 7.3,
-        "wrongTokens": 2265
+        "realTokens": 1102,
+        "responseTokens": 1102,
+        "warmMs": 84.5,
+        "wrongTokens": 781
       },
-      "realPercent": 61,
+      "realPercent": 83,
       "tags": [
         "en"
       ],
@@ -1295,19 +1295,19 @@
           "firstGood": 1,
           "found": 1,
           "good": 13,
-          "precision": 0.29545454545454547,
+          "precision": 0.34210526315789475,
           "recall": 1.0,
-          "results": 44
+          "results": 38
         },
         "codeWords": null,
-        "coldMs": 581.2,
+        "coldMs": 251.8,
         "realCalls": 2,
-        "realTokens": 773,
-        "responseTokens": 514,
-        "warmMs": 1.9,
-        "wrongTokens": 200
+        "realTokens": 727,
+        "responseTokens": 468,
+        "warmMs": 31.5,
+        "wrongTokens": 157
       },
-      "realPercent": -42,
+      "realPercent": -34,
       "tags": [],
       "tool": "index_search",
       "winner": "="
@@ -1350,11 +1350,11 @@
           "results": 2
         },
         "codeWords": null,
-        "coldMs": 215.9,
+        "coldMs": 648.0,
         "realCalls": 3,
         "realTokens": 825,
         "responseTokens": 172,
-        "warmMs": 19.6,
+        "warmMs": 27.8,
         "wrongTokens": 0
       },
       "realPercent": 13,
@@ -1388,7 +1388,7 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 10
+          "results": 11
         },
         "at50": {
           "expected": 1,
@@ -1397,25 +1397,25 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 50
+          "results": 19
         },
         "codeWords": {
           "expected": 1,
-          "firstGood": 2,
+          "firstGood": 1,
           "found": 1,
-          "good": 3,
-          "precision": 0.2,
+          "good": 5,
+          "precision": 0.4166666666666667,
           "recall": 1.0,
-          "results": 15
+          "results": 12
         },
-        "coldMs": 541.3,
-        "realCalls": 8,
-        "realTokens": 8868,
-        "responseTokens": 4847,
-        "warmMs": 8.0,
-        "wrongTokens": 4757
+        "coldMs": 599.1,
+        "realCalls": 11,
+        "realTokens": 5388,
+        "responseTokens": 1818,
+        "warmMs": 40.8,
+        "wrongTokens": 1675
       },
-      "realPercent": -1530,
+      "realPercent": -890,
       "tags": [
         "fr"
       ],
@@ -1440,7 +1440,7 @@
       },
       "id": "vue-search-plugintile",
       "index": {
-        "announcedPercent": 91,
+        "announcedPercent": 50,
         "at10": {
           "expected": 1,
           "firstGood": null,
@@ -1448,7 +1448,7 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 9
+          "results": 6
         },
         "at50": {
           "expected": 1,
@@ -1457,17 +1457,17 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 9
+          "results": 6
         },
         "codeWords": null,
-        "coldMs": 290.8,
-        "realCalls": 7,
-        "realTokens": 2276,
-        "responseTokens": 515,
-        "warmMs": 1.6,
-        "wrongTokens": 437
+        "coldMs": 1303.1,
+        "realCalls": 4,
+        "realTokens": 1140,
+        "responseTokens": 306,
+        "warmMs": 26.7,
+        "wrongTokens": 228
       },
-      "realPercent": -331,
+      "realPercent": -115,
       "tags": [],
       "tool": "index_search",
       "winner": "grep"
@@ -1493,7 +1493,7 @@
         "announcedPercent": 95,
         "at10": {
           "expected": 7,
-          "firstGood": 1,
+          "firstGood": 3,
           "found": 2,
           "good": 2,
           "precision": 0.4,
@@ -1502,7 +1502,7 @@
         },
         "at50": {
           "expected": 7,
-          "firstGood": 1,
+          "firstGood": 3,
           "found": 2,
           "good": 2,
           "precision": 0.4,
@@ -1510,11 +1510,11 @@
           "results": 5
         },
         "codeWords": null,
-        "coldMs": 408.7,
+        "coldMs": 450.7,
         "realCalls": 6,
         "realTokens": 2482,
         "responseTokens": 632,
-        "warmMs": 18.0,
+        "warmMs": 43.1,
         "wrongTokens": 158
       },
       "realPercent": 23,
@@ -1548,7 +1548,7 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 18
+          "results": 10
         },
         "at50": {
           "expected": 2,
@@ -1557,25 +1557,25 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 58
+          "results": 5
         },
         "codeWords": {
           "expected": 2,
-          "firstGood": 2,
-          "found": 1,
-          "good": 1,
-          "precision": 0.06666666666666667,
-          "recall": 0.5,
-          "results": 15
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
         },
-        "coldMs": 548.5,
-        "realCalls": 16,
-        "realTokens": 9240,
-        "responseTokens": 1584,
-        "warmMs": 7.9,
-        "wrongTokens": 1497
+        "coldMs": 855.8,
+        "realCalls": 13,
+        "realTokens": 5732,
+        "responseTokens": 1144,
+        "warmMs": 100.1,
+        "wrongTokens": 987
       },
-      "realPercent": -224,
+      "realPercent": -101,
       "tags": [
         "en"
       ],
@@ -1600,39 +1600,39 @@
       },
       "id": "md-search-socle",
       "index": {
-        "announcedPercent": 96,
+        "announcedPercent": 99,
         "at10": {
           "expected": 1,
-          "firstGood": 1,
+          "firstGood": 5,
           "found": 1,
           "good": 1,
-          "precision": 0.3333333333333333,
+          "precision": 0.1,
           "recall": 1.0,
-          "results": 3
+          "results": 10
         },
         "at50": {
           "expected": 1,
-          "firstGood": 1,
-          "found": 1,
-          "good": 1,
-          "precision": 0.3333333333333333,
-          "recall": 1.0,
-          "results": 3
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 50
         },
         "codeWords": null,
-        "coldMs": 767.7,
-        "realCalls": 2,
-        "realTokens": 1555,
-        "responseTokens": 289,
-        "warmMs": 1.5,
-        "wrongTokens": 153
+        "coldMs": 521.7,
+        "realCalls": 6,
+        "realTokens": 3187,
+        "responseTokens": 604,
+        "warmMs": 45.3,
+        "wrongTokens": 467
       },
-      "realPercent": 39,
+      "realPercent": -24,
       "tags": [
         "fr"
       ],
       "tool": "index_search",
-      "winner": "index"
+      "winner": "="
     },
     {
       "grep": {
@@ -1652,42 +1652,42 @@
       },
       "id": "md-context-allumer-fr",
       "index": {
-        "announcedPercent": 97,
+        "announcedPercent": 99,
         "at10": {
           "expected": 1,
-          "firstGood": 1,
-          "found": 1,
-          "good": 2,
-          "precision": 0.18181818181818182,
-          "recall": 1.0,
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
           "results": 11
         },
         "at50": {
           "expected": 1,
-          "firstGood": 1,
-          "found": 1,
-          "good": 2,
-          "precision": 0.0392156862745098,
-          "recall": 1.0,
-          "results": 51
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 50
         },
         "codeWords": {
           "expected": 1,
-          "firstGood": 1,
-          "found": 1,
-          "good": 1,
-          "precision": 0.09090909090909091,
-          "recall": 1.0,
-          "results": 11
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
         },
-        "coldMs": 397.0,
-        "realCalls": 1,
-        "realTokens": 2069,
-        "responseTokens": 2069,
-        "warmMs": 12.9,
-        "wrongTokens": 986
+        "coldMs": 967.4,
+        "realCalls": 11,
+        "realTokens": 6326,
+        "responseTokens": 1605,
+        "warmMs": 83.9,
+        "wrongTokens": 1402
       },
-      "realPercent": -23,
+      "realPercent": -278,
       "tags": [
         "fr"
       ],
@@ -1712,42 +1712,42 @@
       },
       "id": "md-context-turnon-en",
       "index": {
-        "announcedPercent": 98,
+        "announcedPercent": 97,
         "at10": {
           "expected": 1,
-          "firstGood": 1,
-          "found": 1,
-          "good": 2,
-          "precision": 0.11764705882352941,
-          "recall": 1.0,
-          "results": 17
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
         },
         "at50": {
           "expected": 1,
-          "firstGood": 1,
-          "found": 1,
-          "good": 2,
-          "precision": 0.03571428571428571,
-          "recall": 1.0,
-          "results": 56
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 52
         },
         "codeWords": {
           "expected": 1,
-          "firstGood": 1,
-          "found": 1,
-          "good": 1,
-          "precision": 0.09090909090909091,
-          "recall": 1.0,
-          "results": 11
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
         },
-        "coldMs": 254.3,
-        "realCalls": 1,
-        "realTokens": 2539,
-        "responseTokens": 2539,
-        "warmMs": 11.3,
-        "wrongTokens": 1511
+        "coldMs": 1408.7,
+        "realCalls": 9,
+        "realTokens": 5605,
+        "responseTokens": 1854,
+        "warmMs": 38.6,
+        "wrongTokens": 1720
       },
-      "realPercent": -66,
+      "realPercent": -267,
       "tags": [
         "en"
       ],
@@ -1772,7 +1772,7 @@
       },
       "id": "tache-modeles-harness",
       "index": {
-        "announcedPercent": 98,
+        "announcedPercent": 99,
         "at10": {
           "expected": 1,
           "firstGood": null,
@@ -1780,7 +1780,7 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 10
+          "results": 11
         },
         "at50": {
           "expected": 1,
@@ -1789,7 +1789,7 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 50
+          "results": 51
         },
         "codeWords": {
           "expected": 1,
@@ -1798,16 +1798,16 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 19
+          "results": 11
         },
-        "coldMs": 567.4,
-        "realCalls": 14,
-        "realTokens": 13664,
-        "responseTokens": 2901,
-        "warmMs": 5.3,
-        "wrongTokens": 2812
+        "coldMs": 484.4,
+        "realCalls": 17,
+        "realTokens": 8371,
+        "responseTokens": 1477,
+        "warmMs": 94.4,
+        "wrongTokens": 1296
       },
-      "realPercent": -231,
+      "realPercent": -103,
       "tags": [
         "tâche"
       ],
@@ -1832,7 +1832,7 @@
       },
       "id": "tache-compte-limite",
       "index": {
-        "announcedPercent": 95,
+        "announcedPercent": 99,
         "at10": {
           "expected": 1,
           "firstGood": null,
@@ -1840,7 +1840,7 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 10
+          "results": 12
         },
         "at50": {
           "expected": 1,
@@ -1849,25 +1849,25 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 50
+          "results": 51
         },
         "codeWords": {
           "expected": 1,
-          "firstGood": 1,
-          "found": 1,
-          "good": 1,
-          "precision": 0.047619047619047616,
-          "recall": 1.0,
-          "results": 21
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 7
         },
-        "coldMs": 433.6,
-        "realCalls": 12,
-        "realTokens": 11945,
-        "responseTokens": 3058,
-        "warmMs": 10.6,
-        "wrongTokens": 2969
+        "coldMs": 517.9,
+        "realCalls": 16,
+        "realTokens": 9265,
+        "responseTokens": 2248,
+        "warmMs": 103.8,
+        "wrongTokens": 2027
       },
-      "realPercent": -248,
+      "realPercent": -170,
       "tags": [
         "tâche",
         "réel"
@@ -1893,7 +1893,7 @@
       },
       "id": "tache-mcp-codex",
       "index": {
-        "announcedPercent": 98,
+        "announcedPercent": 99,
         "at10": {
           "expected": 2,
           "firstGood": null,
@@ -1901,7 +1901,7 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 10
+          "results": 3
         },
         "at50": {
           "expected": 2,
@@ -1910,7 +1910,7 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 50
+          "results": 3
         },
         "codeWords": {
           "expected": 2,
@@ -1919,16 +1919,16 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 21
+          "results": 12
         },
-        "coldMs": 287.4,
-        "realCalls": 10,
-        "realTokens": 19727,
-        "responseTokens": 5138,
-        "warmMs": 15.6,
-        "wrongTokens": 5047
+        "coldMs": 400.1,
+        "realCalls": 5,
+        "realTokens": 3694,
+        "responseTokens": 557,
+        "warmMs": 57.2,
+        "wrongTokens": 394
       },
-      "realPercent": -528,
+      "realPercent": -17,
       "tags": [
         "tâche"
       ],
@@ -1961,7 +1961,7 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 13
+          "results": 11
         },
         "at50": {
           "expected": 1,
@@ -1970,25 +1970,25 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 53
+          "results": 52
         },
         "codeWords": {
           "expected": 1,
-          "firstGood": 4,
-          "found": 1,
-          "good": 1,
-          "precision": 0.045454545454545456,
-          "recall": 1.0,
-          "results": 22
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
         },
-        "coldMs": 467.4,
-        "realCalls": 17,
-        "realTokens": 14822,
-        "responseTokens": 3344,
-        "warmMs": 11.9,
-        "wrongTokens": 3254
+        "coldMs": 483.0,
+        "realCalls": 16,
+        "realTokens": 13302,
+        "responseTokens": 2122,
+        "warmMs": 96.4,
+        "wrongTokens": 1929
       },
-      "realPercent": -92,
+      "realPercent": -72,
       "tags": [
         "tâche"
       ],
@@ -2013,7 +2013,7 @@
       },
       "id": "tache-reprise-limite",
       "index": {
-        "announcedPercent": 97,
+        "announcedPercent": 99,
         "at10": {
           "expected": 1,
           "firstGood": null,
@@ -2021,7 +2021,7 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 10
+          "results": 12
         },
         "at50": {
           "expected": 1,
@@ -2030,25 +2030,25 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 50
+          "results": 43
         },
         "codeWords": {
           "expected": 1,
-          "firstGood": 4,
-          "found": 1,
-          "good": 1,
-          "precision": 0.041666666666666664,
-          "recall": 1.0,
-          "results": 24
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
         },
-        "coldMs": 204.7,
-        "realCalls": 12,
-        "realTokens": 13664,
-        "responseTokens": 3191,
-        "warmMs": 3.8,
-        "wrongTokens": 3098
+        "coldMs": 523.3,
+        "realCalls": 16,
+        "realTokens": 11754,
+        "responseTokens": 1842,
+        "warmMs": 64.9,
+        "wrongTokens": 1670
       },
-      "realPercent": -101,
+      "realPercent": -73,
       "tags": [
         "tâche",
         "réel"
@@ -2077,39 +2077,39 @@
         "announcedPercent": 98,
         "at10": {
           "expected": 1,
-          "firstGood": 5,
+          "firstGood": 2,
           "found": 1,
           "good": 2,
-          "precision": 0.15384615384615385,
+          "precision": 0.2,
           "recall": 1.0,
-          "results": 13
+          "results": 10
         },
         "at50": {
           "expected": 1,
-          "firstGood": 5,
+          "firstGood": 2,
           "found": 1,
           "good": 2,
-          "precision": 0.03773584905660377,
+          "precision": 0.18181818181818182,
           "recall": 1.0,
-          "results": 53
+          "results": 11
         },
         "codeWords": {
           "expected": 1,
-          "firstGood": 11,
+          "firstGood": 2,
           "found": 1,
           "good": 1,
-          "precision": 0.05263157894736842,
+          "precision": 0.09090909090909091,
           "recall": 1.0,
-          "results": 19
+          "results": 11
         },
-        "coldMs": 832.7,
+        "coldMs": 493.6,
         "realCalls": 1,
-        "realTokens": 1379,
-        "responseTokens": 1379,
-        "warmMs": 4.7,
-        "wrongTokens": 1072
+        "realTokens": 1309,
+        "responseTokens": 1309,
+        "warmMs": 26.1,
+        "wrongTokens": 962
       },
-      "realPercent": 80,
+      "realPercent": 81,
       "tags": [
         "tâche",
         "réel"
@@ -2135,7 +2135,7 @@
       },
       "id": "tache-xterm-couleurs",
       "index": {
-        "announcedPercent": 97,
+        "announcedPercent": 98,
         "at10": {
           "expected": 1,
           "firstGood": null,
@@ -2143,7 +2143,7 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 10
+          "results": 6
         },
         "at50": {
           "expected": 1,
@@ -2152,25 +2152,25 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 25
+          "results": 6
         },
         "codeWords": {
           "expected": 1,
-          "firstGood": 5,
+          "firstGood": 1,
           "found": 1,
           "good": 1,
-          "precision": 0.06666666666666667,
+          "precision": 0.1,
           "recall": 1.0,
-          "results": 15
+          "results": 10
         },
-        "coldMs": 382.3,
-        "realCalls": 15,
-        "realTokens": 10307,
-        "responseTokens": 4053,
-        "warmMs": 4.0,
-        "wrongTokens": 3963
+        "coldMs": 745.3,
+        "realCalls": 14,
+        "realTokens": 6709,
+        "responseTokens": 752,
+        "warmMs": 90.1,
+        "wrongTokens": 579
       },
-      "realPercent": -136,
+      "realPercent": -53,
       "tags": [
         "tâche"
       ],
@@ -2195,7 +2195,7 @@
       },
       "id": "tache-lance-processus",
       "index": {
-        "announcedPercent": 98,
+        "announcedPercent": 99,
         "at10": {
           "expected": 1,
           "firstGood": null,
@@ -2216,21 +2216,21 @@
         },
         "codeWords": {
           "expected": 1,
-          "firstGood": null,
-          "found": 0,
-          "good": 0,
-          "precision": 0.0,
-          "recall": 0.0,
-          "results": 20
+          "firstGood": 9,
+          "found": 1,
+          "good": 1,
+          "precision": 0.09090909090909091,
+          "recall": 1.0,
+          "results": 11
         },
-        "coldMs": 836.4,
-        "realCalls": 11,
-        "realTokens": 10148,
-        "responseTokens": 3029,
-        "warmMs": 9.8,
-        "wrongTokens": 2936
+        "coldMs": 1516.7,
+        "realCalls": 13,
+        "realTokens": 5210,
+        "responseTokens": 1466,
+        "warmMs": 64.1,
+        "wrongTokens": 1322
       },
-      "realPercent": -727,
+      "realPercent": -324,
       "tags": [
         "tâche",
         "réel"
@@ -2256,7 +2256,7 @@
       },
       "id": "tache-taille-terminal",
       "index": {
-        "announcedPercent": 97,
+        "announcedPercent": 98,
         "at10": {
           "expected": 1,
           "firstGood": null,
@@ -2264,7 +2264,7 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 10
+          "results": 12
         },
         "at50": {
           "expected": 1,
@@ -2282,16 +2282,16 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 14
+          "results": 6
         },
-        "coldMs": 269.8,
-        "realCalls": 7,
-        "realTokens": 10242,
-        "responseTokens": 2189,
-        "warmMs": 4.5,
-        "wrongTokens": 2100
+        "coldMs": 814.5,
+        "realCalls": 11,
+        "realTokens": 6876,
+        "responseTokens": 2195,
+        "warmMs": 119.0,
+        "wrongTokens": 2009
       },
-      "realPercent": -534,
+      "realPercent": -326,
       "tags": [
         "tâche",
         "réel"
@@ -2317,7 +2317,7 @@
       },
       "id": "tache-ticket-termine",
       "index": {
-        "announcedPercent": 97,
+        "announcedPercent": 98,
         "at10": {
           "expected": 1,
           "firstGood": null,
@@ -2325,7 +2325,7 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 10
+          "results": 12
         },
         "at50": {
           "expected": 1,
@@ -2334,7 +2334,7 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 50
+          "results": 51
         },
         "codeWords": {
           "expected": 1,
@@ -2343,16 +2343,16 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 24
+          "results": 10
         },
-        "coldMs": 406.8,
-        "realCalls": 16,
-        "realTokens": 14799,
-        "responseTokens": 4750,
-        "warmMs": 10.9,
-        "wrongTokens": 4658
+        "coldMs": 1674.4,
+        "realCalls": 20,
+        "realTokens": 11438,
+        "responseTokens": 1967,
+        "warmMs": 132.9,
+        "wrongTokens": 1801
       },
-      "realPercent": -130,
+      "realPercent": -78,
       "tags": [
         "tâche",
         "réel"
@@ -2378,7 +2378,7 @@
       },
       "id": "tache-langue-defaut",
       "index": {
-        "announcedPercent": 98,
+        "announcedPercent": 93,
         "at10": {
           "expected": 1,
           "firstGood": null,
@@ -2386,7 +2386,7 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 10
+          "results": 8
         },
         "at50": {
           "expected": 1,
@@ -2395,7 +2395,7 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 50
+          "results": 10
         },
         "codeWords": {
           "expected": 1,
@@ -2404,16 +2404,16 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 12
+          "results": 10
         },
-        "coldMs": 448.9,
+        "coldMs": 2260.0,
         "realCalls": 15,
-        "realTokens": 15519,
-        "responseTokens": 2552,
-        "warmMs": 7.5,
-        "wrongTokens": 2459
+        "realTokens": 8907,
+        "responseTokens": 1007,
+        "warmMs": 110.1,
+        "wrongTokens": 825
       },
-      "realPercent": -162,
+      "realPercent": -50,
       "tags": [
         "tâche"
       ],
@@ -2438,7 +2438,7 @@
       },
       "id": "tache-permission-plugin",
       "index": {
-        "announcedPercent": 96,
+        "announcedPercent": 98,
         "at10": {
           "expected": 1,
           "firstGood": null,
@@ -2450,30 +2450,30 @@
         },
         "at50": {
           "expected": 1,
-          "firstGood": 16,
-          "found": 1,
-          "good": 1,
-          "precision": 0.02,
-          "recall": 1.0,
-          "results": 50
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 18
         },
         "codeWords": {
           "expected": 1,
-          "firstGood": 1,
-          "found": 1,
-          "good": 1,
-          "precision": 0.045454545454545456,
-          "recall": 1.0,
-          "results": 22
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 11
         },
-        "coldMs": 515.0,
-        "realCalls": 17,
-        "realTokens": 11894,
-        "responseTokens": 1682,
-        "warmMs": 5.1,
-        "wrongTokens": 1593
+        "coldMs": 717.0,
+        "realCalls": 20,
+        "realTokens": 9477,
+        "responseTokens": 1127,
+        "warmMs": 103.6,
+        "wrongTokens": 914
       },
-      "realPercent": -97,
+      "realPercent": -57,
       "tags": [
         "tâche"
       ],
@@ -2498,7 +2498,7 @@
       },
       "id": "tache-store-controles",
       "index": {
-        "announcedPercent": 95,
+        "announcedPercent": 99,
         "at10": {
           "expected": 1,
           "firstGood": null,
@@ -2506,34 +2506,34 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 10
+          "results": 12
         },
         "at50": {
           "expected": 1,
-          "firstGood": 35,
-          "found": 1,
-          "good": 1,
-          "precision": 0.02,
-          "recall": 1.0,
-          "results": 50
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 52
         },
         "codeWords": {
           "expected": 1,
-          "firstGood": 3,
+          "firstGood": 1,
           "found": 1,
-          "good": 2,
-          "precision": 0.125,
+          "good": 1,
+          "precision": 0.08333333333333333,
           "recall": 1.0,
-          "results": 16
+          "results": 12
         },
-        "coldMs": 309.0,
-        "realCalls": 18,
-        "realTokens": 11366,
-        "responseTokens": 3649,
-        "warmMs": 6.1,
-        "wrongTokens": 3561
+        "coldMs": 204.8,
+        "realCalls": 22,
+        "realTokens": 9844,
+        "responseTokens": 1562,
+        "warmMs": 80.7,
+        "wrongTokens": 1406
       },
-      "realPercent": -131,
+      "realPercent": -100,
       "tags": [
         "tâche"
       ],
@@ -2558,7 +2558,7 @@
       },
       "id": "tache-sauvegarde-etat",
       "index": {
-        "announcedPercent": 98,
+        "announcedPercent": 95,
         "at10": {
           "expected": 1,
           "firstGood": null,
@@ -2575,25 +2575,25 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 50
+          "results": 17
         },
         "codeWords": {
           "expected": 1,
-          "firstGood": 4,
-          "found": 1,
-          "good": 1,
-          "precision": 0.038461538461538464,
-          "recall": 1.0,
-          "results": 26
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 12
         },
-        "coldMs": 799.4,
-        "realCalls": 11,
-        "realTokens": 13773,
-        "responseTokens": 3271,
-        "warmMs": 7.6,
-        "wrongTokens": 3180
+        "coldMs": 314.0,
+        "realCalls": 12,
+        "realTokens": 7579,
+        "responseTokens": 1527,
+        "warmMs": 28.1,
+        "wrongTokens": 1387
       },
-      "realPercent": -300,
+      "realPercent": -120,
       "tags": [
         "tâche",
         "réel"
@@ -2619,7 +2619,7 @@
       },
       "id": "tache-worktree-cree",
       "index": {
-        "announcedPercent": 99,
+        "announcedPercent": 94,
         "at10": {
           "expected": 1,
           "firstGood": null,
@@ -2627,34 +2627,34 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 10
+          "results": 11
         },
         "at50": {
+          "expected": 1,
+          "firstGood": 33,
+          "found": 1,
+          "good": 1,
+          "precision": 0.019230769230769232,
+          "recall": 1.0,
+          "results": 52
+        },
+        "codeWords": {
           "expected": 1,
           "firstGood": null,
           "found": 0,
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 50
+          "results": 11
         },
-        "codeWords": {
-          "expected": 1,
-          "firstGood": 19,
-          "found": 1,
-          "good": 1,
-          "precision": 0.05263157894736842,
-          "recall": 1.0,
-          "results": 19
-        },
-        "coldMs": 324.6,
-        "realCalls": 9,
-        "realTokens": 10915,
-        "responseTokens": 2591,
-        "warmMs": 10.8,
-        "wrongTokens": 2500
+        "coldMs": 433.9,
+        "realCalls": 12,
+        "realTokens": 5603,
+        "responseTokens": 1963,
+        "warmMs": 77.0,
+        "wrongTokens": 1799
       },
-      "realPercent": -772,
+      "realPercent": -347,
       "tags": [
         "tâche"
       ],
@@ -2687,7 +2687,7 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 10
+          "results": 12
         },
         "at50": {
           "expected": 1,
@@ -2696,7 +2696,7 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 50
+          "results": 29
         },
         "codeWords": {
           "expected": 1,
@@ -2705,16 +2705,16 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 13
+          "results": 12
         },
-        "coldMs": 943.1,
-        "realCalls": 15,
-        "realTokens": 15034,
-        "responseTokens": 5157,
-        "warmMs": 4.3,
-        "wrongTokens": 5065
+        "coldMs": 340.6,
+        "realCalls": 14,
+        "realTokens": 8631,
+        "responseTokens": 1591,
+        "warmMs": 73.1,
+        "wrongTokens": 1435
       },
-      "realPercent": -228,
+      "realPercent": -88,
       "tags": [
         "tâche"
       ],
@@ -2747,7 +2747,7 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 10
+          "results": 11
         },
         "at50": {
           "expected": 1,
@@ -2756,25 +2756,25 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 50
+          "results": 15
         },
         "codeWords": {
           "expected": 1,
-          "firstGood": 1,
-          "found": 1,
-          "good": 2,
-          "precision": 0.09090909090909091,
-          "recall": 1.0,
-          "results": 22
+          "firstGood": null,
+          "found": 0,
+          "good": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "results": 6
         },
-        "coldMs": 485.7,
-        "realCalls": 10,
-        "realTokens": 12548,
-        "responseTokens": 2906,
-        "warmMs": 14.5,
-        "wrongTokens": 2815
+        "coldMs": 285.0,
+        "realCalls": 13,
+        "realTokens": 6481,
+        "responseTokens": 2004,
+        "warmMs": 71.3,
+        "wrongTokens": 1846
       },
-      "realPercent": -945,
+      "realPercent": -440,
       "tags": [
         "tâche",
         "réel"
@@ -2806,28 +2806,28 @@
           "firstGood": 1,
           "found": 1,
           "good": 1,
-          "precision": 0.125,
+          "precision": 0.3333333333333333,
           "recall": 1.0,
-          "results": 8
+          "results": 3
         },
         "at50": {
           "expected": 1,
           "firstGood": 1,
           "found": 1,
           "good": 1,
-          "precision": 0.125,
+          "precision": 0.3333333333333333,
           "recall": 1.0,
-          "results": 8
+          "results": 3
         },
         "codeWords": null,
-        "coldMs": 1207.0,
+        "coldMs": 509.5,
         "realCalls": 2,
-        "realTokens": 875,
-        "responseTokens": 634,
-        "warmMs": 2.2,
-        "wrongTokens": 493
+        "realTokens": 501,
+        "responseTokens": 260,
+        "warmMs": 37.1,
+        "wrongTokens": 118
       },
-      "realPercent": -222,
+      "realPercent": -84,
       "tags": [
         "worktree"
       ],
@@ -2872,11 +2872,11 @@
           "results": 3
         },
         "codeWords": null,
-        "coldMs": 1316.8,
+        "coldMs": 381.2,
         "realCalls": 3,
         "realTokens": 834,
         "responseTokens": 227,
-        "warmMs": 9.7,
+        "warmMs": 9.4,
         "wrongTokens": 0
       },
       "realPercent": -22,
@@ -2924,11 +2924,11 @@
           "results": 0
         },
         "codeWords": null,
-        "coldMs": 492.4,
+        "coldMs": 578.1,
         "realCalls": 1,
         "realTokens": 66,
         "responseTokens": 66,
-        "warmMs": 9.1,
+        "warmMs": 9.3,
         "wrongTokens": 0
       },
       "realPercent": -725,
@@ -2956,7 +2956,7 @@
       },
       "id": "fresh-now",
       "index": {
-        "announcedPercent": 99,
+        "announcedPercent": 0,
         "at10": {
           "expected": 1,
           "firstGood": null,
@@ -2964,7 +2964,7 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 10
+          "results": 0
         },
         "at50": {
           "expected": 1,
@@ -2973,17 +2973,17 @@
           "good": 0,
           "precision": 0.0,
           "recall": 0.0,
-          "results": 50
+          "results": 0
         },
         "codeWords": null,
-        "coldMs": 2.9,
-        "realCalls": 13,
-        "realTokens": 5071,
-        "responseTokens": 554,
-        "warmMs": 2.9,
-        "wrongTokens": 474
+        "coldMs": 83.6,
+        "realCalls": 3,
+        "realTokens": 281,
+        "responseTokens": 55,
+        "warmMs": 83.6,
+        "wrongTokens": 0
       },
-      "realPercent": -2143,
+      "realPercent": -24,
       "tags": [
         "fraîcheur"
       ],
@@ -3028,11 +3028,11 @@
           "results": 1
         },
         "codeWords": null,
-        "coldMs": 2206.0,
+        "coldMs": 649.1,
         "realCalls": 2,
         "realTokens": 336,
         "responseTokens": 139,
-        "warmMs": 2206.0,
+        "warmMs": 649.1,
         "wrongTokens": 0
       },
       "realPercent": -48,

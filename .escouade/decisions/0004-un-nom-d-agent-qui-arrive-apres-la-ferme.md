@@ -1,5 +1,5 @@
 ---
-number: 2
+number: 4
 title: "Un nom d'agent qui arrive après la fermeture de son projet est perdu"
 date: "2026-10-30"
 state: "proposed"

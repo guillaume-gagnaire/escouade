@@ -4,7 +4,7 @@ subject: "Projets"
 sources: ["docs/SPEC.md"]
 tickets: ["ESC-89","ESC-300"]
 decisions: []
-compared: null
+compared: "2026-10-30T02:50:30+01:00"
 ---
 
 ## Ce que c'est

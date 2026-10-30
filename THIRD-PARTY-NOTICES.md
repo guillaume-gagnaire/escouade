@@ -1,20 +1,28 @@
 # Third-party notices
 
-Escouade is licensed under GPL-3.0-or-later (see [LICENSE](LICENSE)). Parts of its code are ported
-from other projects, under their own licenses, reproduced here. The libraries it links are listed,
-with their licenses, in [CREDITS.md](CREDITS.md).
+Escouade carries code ported from the projects below. Each ported file says at its top which file it comes from. The licences of the libraries Escouade links are listed in [CREDITS.md](CREDITS.md).
 
 ## tokensave
 
-The code index (`src-tauri/src/codeindex/`) ports the method of tokensave: the resolution of calls to
-symbols (`resolver.rs`, `links.rs`), the typed receivers of method calls (`receivers.rs`), the names
-of the call sites and imports (`lang.rs`), the answer by definition of a name (`calls.rs`), and its
-tests (`codeindex_links_tests.rs`). Each of these files says in its header which file of tokensave
-it comes from.
-
-- Project: https://github.com/aovestdipaperino/tokensave
-- Commit: `580936b` (version 7.17.0)
-- License: MIT
+- Project: [github.com/aovestdipaperino/tokensave](https://github.com/aovestdipaperino/tokensave)
+- Commit ported: `580936b` (version 7.17.0)
+- What: the full-text index of the code index, the reading of a question, the context of a task and its ranking (ESC-296).
+- Ported into:
+  - `src-tauri/src/codeindex/text.rs` ← `src/text.rs`
+  - `src-tauri/src/codeindex/ranking.rs` ← `src/context/ranking.rs`, `src/tokensave/util.rs`
+  - `src-tauri/src/codeindex/search.rs` ← `src/db/queries/search.rs`, `src/tokensave/query.rs`
+  - `src-tauri/src/codeindex/context.rs` ← `src/context/builder.rs`, `src/types.rs`, `src/mcp/tools/handlers/graph.rs`, `src/graph/traversal.rs`
+  - `src-tauri/src/codeindex/store.rs` (the full-text tables) ← `src/db/migrations.rs`
+  - `src-tauri/src/codeindex/lang.rs` (`Walker::visibility`) ← the visibility rules of `src/extraction/*_extractor.rs`
+  - `src-tauri/src/mcp/index.rs` (`retrieval_text`) ← `src/context/formatter.rs`
+- What, too: the resolution of calls to symbols, the ties kept apart, the answer of a name definition by definition, and their tests (ESC-297).
+- Ported into:
+  - `src-tauri/src/codeindex/resolver.rs` ← `src/resolution/resolver.rs`, `src/resolution/js_specifier.rs`, `src/go_import.rs`
+  - `src-tauri/src/codeindex/links.rs` ← `src/resolution/touched.rs`
+  - `src-tauri/src/codeindex/receivers.rs` ← `src/extraction/rust_extractor.rs`, `typescript_extractor.rs`, `python_extractor.rs` (the typed receivers)
+  - `src-tauri/src/codeindex/lang.rs` (the names of the calls and imports) ← the call sites and `Use` nodes of `src/extraction/*_extractor.rs`
+  - `src-tauri/src/codeindex/calls.rs` ← `src/mcp/tools/handlers/symbol_target.rs`, `src/db/queries/edges.rs`
+  - `src-tauri/src/codeindex_links_tests.rs` ← `tests/resolution_test.rs`, `tests/ambiguous_calls_test.rs`, `tests/ts_phantom_call_edges_test.rs`, `tests/python_phantom_call_edges_test.rs`, `tests/resolution_order_independence_test.rs`, `tests/incremental_resolution_test.rs`
 
 ```
 MIT License

@@ -54,7 +54,7 @@ fn nodes(tx: &Transaction, scope: &str) -> Result<Vec<Node>> {
             kind: r.get(3)?,
             path: r.get(4)?,
             line: r.get(5)?,
-            vis: r.get::<_, i64>(6)? != 0,
+            vis: r.get::<_, String>(6)? == "pub",
             parent: parent.rsplit('.').next().unwrap_or("").to_string(),
             ty: r.get(8)?,
         })
