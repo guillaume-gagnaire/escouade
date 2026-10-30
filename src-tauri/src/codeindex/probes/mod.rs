@@ -19,14 +19,21 @@
 //!   line, counted as tokensave counts them (`codeindex::accounting`, a call within a session);
 //! - the « tâche » probes are measured for their sufficiency too (`suffice`, the ranges of
 //!   `docs/codeindex-probes-sufficiency.json`), with the answers of older versions dumped by their
-//!   own bench (`--old <label>=<dir>`, a `<id>.txt` per probe).
+//!   own bench (`--old <label>=<dir>`, a `<id>.txt` per probe);
+//! - with `--tokensave <exe> --tokensave-project <copy>` (ESC-304), each probe is asked of
+//!   tokensave too, by its command line, in a copy without `.git`, and scored by the same code
+//!   (`tokensave`); without them, nothing of the run changes.
 
 pub mod score;
 pub mod suffice;
+pub mod tokensave;
 
 use super::accounting::{Call, Ledger, Metrics};
 use super::filters::PathFilter;
-use super::{format, Answer, Reader, Service, Target, Wanted, MAX_MATCHES_DEFAULT, MIN_GAP};
+use super::{
+    format, Answer, BuildContextOptions, Reader, Service, Target, Wanted, MAX_MATCHES_DEFAULT,
+    MIN_GAP,
+};
 use crate::i18n::Lang;
 use crate::paths::DataDir;
 use anyhow::{anyhow, bail, Context as _, Result};
@@ -38,6 +45,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Instant;
 use suffice::{Costs, Needs, Range, Suffice};
+use tokensave::Tokensave;
 
 /// The lines of a search an agent sees: Claude Code's Grep tool gives 250 by default, and cuts a
 /// line longer than 500 characters (`--max-columns`).
@@ -197,6 +205,45 @@ struct Outcome {
     winner: String,
     /// For a « tâche »: does the answer hold the code the task needs (`suffice`)?
     suffice: Option<SufficeSide>,
+    /// The same probe asked of tokensave (`--tokensave`, ESC-304).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    face: Option<Face>,
+}
+
+/// A probe asked of tokensave, scored as the index's answer is; the context with the keywords,
+/// on both sides.
+#[derive(Debug, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct Face {
+    /// Why tokensave cannot play it (« sans objet »).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    not_played: Option<String>,
+    /// tokensave's answer, its `codeWords` being the task told with the code's words.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tokensave: Option<IndexSide>,
+    /// The tool answered an error.
+    failed: bool,
+    /// The question as asked, with the code's words as `keywords`: tokensave's, the index's.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    keywords: Option<Score>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    index_keywords: Option<Score>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    suffice: Option<Suffice>,
+    /// The better of the two, as `winner` tells it: `index`, `tokensave` or `=`.
+    duel: String,
+}
+
+/// tokensave as it was played: its version, its copy, its indexing.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TokensaveRun {
+    version: String,
+    project: String,
+    /// `tokensave init` in the copy, when the bench ran it (no index yet).
+    init_ms: Option<u128>,
+    init_summary: String,
+    index_bytes: u64,
 }
 
 /// The sufficiency of a probe: the index's answer of this run and of the older versions, against
@@ -243,6 +290,8 @@ struct Report {
     read_max: usize,
     indexing: Indexing,
     probes: Vec<Outcome>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tokensave: Option<TokensaveRun>,
 }
 
 struct Opts {
@@ -258,6 +307,9 @@ struct Opts {
     needs: Option<PathBuf>,
     /// The answers of older versions: a label, a folder of `<id>.txt`.
     old: Vec<(String, PathBuf)>,
+    /// tokensave's program, and the copy without `.git` it plays in (ESC-304).
+    tokensave: Option<PathBuf>,
+    tokensave_project: Option<PathBuf>,
 }
 
 /// The command (`examples/codeindex_probes.rs`). Gives the exit code.
@@ -284,6 +336,8 @@ fn parse(args: Vec<String>) -> Result<Opts> {
         keep: false,
         needs: None,
         old: Vec::new(),
+        tokensave: None,
+        tokensave_project: None,
     };
     let mut it = args.into_iter();
     while let Some(a) = it.next() {
@@ -304,9 +358,11 @@ fn parse(args: Vec<String>) -> Result<Opts> {
                     .ok_or_else(|| anyhow!("--old wants <label>=<dir>"))?;
                 o.old.push((label.to_string(), dir.into()));
             }
+            "--tokensave" => o.tokensave = Some(value()?.into()),
+            "--tokensave-project" => o.tokensave_project = Some(value()?.into()),
             "-h" | "--help" => {
                 println!(
-                    "codeindex_probes [--commit <rev>] [--probes <file>] [--out <dir>] [--only <id,…>] [--rg <program>] [--compare <reference.json>] [--keep] [--needs <file>] [--old <label>=<dir>]…"
+                    "codeindex_probes [--commit <rev>] [--probes <file>] [--out <dir>] [--only <id,…>] [--rg <program>] [--compare <reference.json>] [--keep] [--needs <file>] [--old <label>=<dir>]… [--tokensave <exe> --tokensave-project <copy without .git>]"
                 );
                 std::process::exit(0);
             }
@@ -393,6 +449,21 @@ fn run(o: Opts) -> Result<()> {
         .next()
         .unwrap_or_default()
         .to_string();
+    let (rival, mut rival_run) = match (&o.tokensave, &o.tokensave_project) {
+        (Some(exe), Some(project)) => {
+            let (rival, init_ms, init_summary) = Tokensave::open_or_index(exe, project)?;
+            let run = TokensaveRun {
+                version: rival.version(),
+                project: project.display().to_string(),
+                init_ms,
+                init_summary,
+                index_bytes: rival.index_bytes(),
+            };
+            (Some(rival), Some(run))
+        }
+        (None, None) => (None, None),
+        _ => bail!("--tokensave and --tokensave-project go together"),
+    };
 
     let tmp =
         std::env::temp_dir().join(format!("escouade-codeindex-probes-{}", std::process::id()));
@@ -560,6 +631,21 @@ fn run(o: Opts) -> Result<()> {
             .as_ref()
             .and_then(|n| n.needs.get(&p.id))
             .map(|v| v.iter().filter_map(|r| suffice::parse_range(r)).collect());
+        let face = match &rival {
+            Some(rival) => Some(face_of(
+                rival,
+                &bench,
+                p,
+                &expect,
+                dir,
+                &grep,
+                &index,
+                need.as_deref(),
+                &Service::new(data.clone()).reader(t)?,
+                &responses,
+            )?),
+            None => None,
+        };
         let suffice = need.map(|need| {
             let costs = |has_body| Costs {
                 dir,
@@ -617,6 +703,7 @@ fn run(o: Opts) -> Result<()> {
             real_percent,
             winner,
             suffice,
+            face,
         });
     }
     std::fs::write(&fresh_file, &fresh_before)?;
@@ -656,6 +743,7 @@ fn run(o: Opts) -> Result<()> {
         read_max: bench.read_max,
         indexing: ix,
         probes: outcomes,
+        tokensave: rival_run.take(),
     };
     std::fs::create_dir_all(&out_dir)?;
     std::fs::write(
@@ -951,6 +1039,198 @@ fn index_side(
     }
 }
 
+/// A probe asked of tokensave (ESC-304): the same question and limits, its answer scored by the
+/// same code as the index's (recall and precision at 10 and 50, tokens of the answer and of the
+/// readings, the grep when it found nothing, sufficiency); the context told with the code's words
+/// as the task, then as `keywords`, on both sides.
+#[allow(clippy::too_many_arguments)]
+fn face_of(
+    rival: &Tokensave,
+    bench: &Bench,
+    p: &Probe,
+    expect: &[Vec<Alt>],
+    dir: &Path,
+    grep: &GrepSide,
+    index: &IndexSide,
+    need: Option<&[Range]>,
+    reader: &Reader,
+    responses: &Path,
+) -> Result<Face> {
+    if let Some(why) = tokensave::not_played(p) {
+        return Ok(Face {
+            not_played: Some(why.into()),
+            duel: "—".into(),
+            ..Default::default()
+        });
+    }
+    let Some((tool, args10)) = tokensave::request(p, DEFAULT_LIMIT) else {
+        bail!("{}: no request of tokensave for {}", p.id, p.tool);
+    };
+    let (_, args50) = tokensave::request(p, MAX_LIMIT).unwrap_or((tool, args10.clone()));
+    let cold = rival.call(tool, &args10)?;
+    let warm = rival.call(tool, &args10)?;
+    let r50 = rival.call(tool, &args50)?;
+    std::fs::write(
+        responses.join(format!("{}.tokensave.txt", p.id)),
+        &cold.text,
+    )?;
+    let items_of =
+        |text: &str| -> Vec<Item> { tokensave::hits(text).into_iter().map(|h| h.item).collect() };
+    let hits10 = tokensave::hits(&cold.text);
+    let items10: Vec<Item> = hits10.iter().map(|h| h.item.clone()).collect();
+    let items50 = items_of(&r50.text);
+    let flags = good_flags(expect, &items10);
+    // The metrics line its MCP server adds, counted as the index counts its own: the baseline is
+    // the files the answer names.
+    let files: std::collections::BTreeSet<&str> = items10.iter().map(|i| i.path.as_str()).collect();
+    let files_tokens: u64 = files
+        .iter()
+        .map(|f| {
+            super::accounting::file_tokens(
+                std::fs::metadata(dir.join(f)).map(|m| m.len()).unwrap_or(0),
+            )
+        })
+        .sum();
+    let metrics = Ledger::default().account(
+        "probe",
+        &Call {
+            tool: &p.tool,
+            arguments: &args10,
+            response: &cold.text,
+            full_file_tokens: files_tokens,
+            schema_tokens: 0,
+        },
+        |m| format::metrics_line(LANG, m),
+    );
+    let sent = if metrics.before > 0 {
+        format!("{}{}", cold.text, format::metrics_line(LANG, &metrics))
+    } else {
+        cold.text.clone()
+    };
+    let wrong_tokens = hits10
+        .iter()
+        .zip(&flags)
+        .filter(|(_, g)| !**g)
+        .map(|(h, _)| tokens(&h.text))
+        .sum();
+    let to_read: Vec<Item> = hits10
+        .iter()
+        .take(read_count(expect.len(), &flags))
+        .filter(|h| !h.shown)
+        .map(|h| h.item.clone())
+        .collect();
+    let response_tokens = tokens(&sent);
+    let read_windows = windows(&to_read, bench.read_radius, bench.read_max);
+    let read = read_tokens(dir, &read_windows);
+    let at10 = score::score(expect, &items10);
+    let total_tokens = response_tokens + read;
+    let calls = 1 + read_windows.len();
+    let (real_tokens, real_calls) = if !expect.is_empty() && at10.found == 0 {
+        (total_tokens + grep.total_tokens, calls + grep.calls)
+    } else {
+        (total_tokens, calls)
+    };
+    let mut side = IndexSide {
+        at10,
+        at50: score::score(expect, &items50),
+        cold_ms: cold.ms,
+        warm_ms: warm.ms,
+        ms50: r50.ms,
+        response_tokens,
+        wrong_tokens,
+        read_tokens: read,
+        total_tokens,
+        real_tokens,
+        announced_percent: (metrics.saved * 100)
+            .checked_div(metrics.before)
+            .unwrap_or(0),
+        announced_files_tokens: metrics.before,
+        announced_saved: metrics.saved,
+        calls,
+        real_calls,
+        code_words: None,
+        results: marks(&items10, &flags),
+    };
+    let (mut keywords, mut index_keywords) = (None, None);
+    if let (Some(words), Some(task)) = (&p.args.code_words, &p.args.task) {
+        // The task told with the code's words.
+        let r = rival.call(
+            "tokensave_context",
+            &tokensave::context_request(words, &[], DEFAULT_LIMIT),
+        )?;
+        let items = items_of(&r.text);
+        std::fs::write(
+            responses.join(format!("{}.tokensave.code-words.txt", p.id)),
+            &r.text,
+        )?;
+        side.code_words = Some(score::score(expect, &items));
+        // The question as asked, the code's words as `keywords`.
+        let kw: Vec<String> = words.split_whitespace().map(str::to_string).collect();
+        let r = rival.call(
+            "tokensave_context",
+            &tokensave::context_request(task, &kw, DEFAULT_LIMIT),
+        )?;
+        std::fs::write(
+            responses.join(format!("{}.tokensave.keywords.txt", p.id)),
+            &r.text,
+        )?;
+        keywords = Some(score::score(expect, &items_of(&r.text)));
+        let c = reader
+            .task_context_with(task, &BuildContextOptions::of_tool(Some(DEFAULT_LIMIT), kw))?
+            .result;
+        let items: Vec<Item> = c
+            .entry_points
+            .iter()
+            .chain(&c.related)
+            .map(|h| Item::new(&h.path, h.line))
+            .collect();
+        std::fs::write(
+            responses.join(format!("{}.keywords.txt", p.id)),
+            marks(&items, &good_flags(expect, &items)).join("\n"),
+        )?;
+        index_keywords = Some(score::score(expect, &items));
+    }
+    let suffice = need.map(|need| {
+        suffice::measure(
+            &cold.text,
+            need,
+            &Costs {
+                dir,
+                has_body: true,
+                grep_calls: grep.searches.len(),
+                grep_tokens: grep.output_tokens,
+            },
+        )
+    });
+    let duel = duel(index, &side);
+    Ok(Face {
+        not_played: None,
+        tokensave: Some(side),
+        failed: cold.failed,
+        keywords,
+        index_keywords,
+        suffice,
+        duel,
+    })
+}
+
+/// The better of the index and tokensave, as `winner` tells the index from grep: more found, then
+/// as precise and cheaper.
+fn duel(i: &IndexSide, t: &IndexSide) -> String {
+    let (ri, rt) = (i.at10.recall, t.at10.recall);
+    if (ri - rt).abs() > 1e-9 {
+        return if ri > rt { "index" } else { "tokensave" }.into();
+    }
+    let (pi, pt) = (i.at10.precision, t.at10.precision);
+    if i.real_tokens < t.real_tokens && pi + 1e-9 >= pt {
+        "index".into()
+    } else if t.real_tokens < i.real_tokens && pt + 1e-9 >= pi {
+        "tokensave".into()
+    } else {
+        "=".into()
+    }
+}
+
 /// Which tool answered: the shape of the result says it.
 fn tool_of(a: &Answer<Value>) -> &'static str {
     let v = &a.result;
@@ -1193,6 +1473,212 @@ fn markdown(r: &Report) -> String {
     s.push_str(&tasks_table(r));
     s.push_str(&suffice_table(r));
     s.push_str(&code_words_table(r));
+    s.push_str(&face_table(r));
+    s
+}
+
+/// Escouade's index and tokensave side by side (ESC-304): per group, then per probe.
+fn face_table(r: &Report) -> String {
+    let Some(run) = &r.tokensave else {
+        return String::new();
+    };
+    let mut s = format!(
+        "\n## tokensave face à face\n\n{}, copie sans `.git` `{}`.\n\n| Indexation | Escouade | tokensave |\n|---|---|---|\n| Dépôt entier | {} ms | {} |\n| Taille de la base | {:.1} Mo | {:.1} Mo |\n",
+        run.version,
+        run.project,
+        r.indexing.full_ms,
+        run.init_ms
+            .map(|m| format!("{m} ms"))
+            .unwrap_or_else(|| "déjà indexée".into()),
+        r.indexing.bytes as f64 / 1_048_576.0,
+        run.index_bytes as f64 / 1_048_576.0
+    );
+    type Pick<'a> = &'a dyn Fn(&Outcome) -> bool;
+    let tache: Pick = &|p| p.tags.iter().any(|t| t == "tâche");
+    let groups: [(&str, Pick); 7] = [
+        ("search", &|p| p.tool == "index_search"),
+        ("context", &|p| p.tool == "index_context"),
+        ("callers", &|p| p.tool == "index_callers"),
+        ("callees", &|p| p.tool == "index_callees"),
+        ("impact", &|p| p.tool == "index_impact"),
+        ("« tâche »", tache),
+        ("**Tout**", &|_| true),
+    ];
+    s.push_str("\n| Groupe | Sondes (sans objet) | R@10 Escouade / tokensave | P@10 | R@50 | Tok. réponse | Tok. réels | Temps chaud moy. (ms) | Escouade / tokensave / = |\n|---|---|---|---|---|---|---|---|---|\n");
+    for (name, keep) in groups {
+        let all: Vec<&Outcome> = r.probes.iter().filter(|p| keep(p)).collect();
+        let both: Vec<(&IndexSide, &IndexSide)> = all
+            .iter()
+            .filter_map(|p| {
+                p.face
+                    .as_ref()
+                    .and_then(|f| f.tokensave.as_ref())
+                    .map(|t| (&p.index, t))
+            })
+            .collect();
+        if both.is_empty() {
+            continue;
+        }
+        let n = both.len() as f64;
+        let mean = |f: &dyn Fn(&IndexSide) -> f64| {
+            (
+                both.iter().map(|(i, _)| f(i)).sum::<f64>() / n,
+                both.iter().map(|(_, t)| f(t)).sum::<f64>() / n,
+            )
+        };
+        let sum = |f: &dyn Fn(&IndexSide) -> u64| {
+            (
+                both.iter().map(|(i, _)| f(i)).sum::<u64>(),
+                both.iter().map(|(_, t)| f(t)).sum::<u64>(),
+            )
+        };
+        let duels = |w: &str| {
+            all.iter()
+                .filter(|p| p.face.as_ref().is_some_and(|f| f.duel == w))
+                .count()
+        };
+        let (r0, r1) = mean(&|x| x.at10.recall);
+        let (p0, p1) = mean(&|x| x.at10.precision);
+        let (f0, f1) = mean(&|x| x.at50.recall);
+        let (t0, t1) = sum(&|x| x.response_tokens);
+        let (q0, q1) = sum(&|x| x.real_tokens);
+        let (w0, w1) = mean(&|x| x.warm_ms);
+        s.push_str(&format!(
+            "| {name} | {} ({}) | {} / {} | {} / {} | {} / {} | {t0} / {t1} | {q0} / {q1} | {w0:.1} / {w1:.1} | {} / {} / {} |\n",
+            both.len(),
+            all.len() - both.len(),
+            pct(r0),
+            pct(r1),
+            pct(p0),
+            pct(p1),
+            pct(f0),
+            pct(f1),
+            duels("index"),
+            duels("tokensave"),
+            duels("=")
+        ));
+    }
+    // The context in two passes, and with the keywords.
+    let ctx: Vec<(&Outcome, &Face)> = r
+        .probes
+        .iter()
+        .filter_map(|p| p.face.as_ref().map(|f| (p, f)))
+        .filter(|(p, f)| p.index.code_words.is_some() && f.tokensave.is_some())
+        .collect();
+    if !ctx.is_empty() {
+        s.push_str("\n### context : la question, puis les mots du code\n\nR@10 (rang du premier bon). « Mots du code » : la tâche dite avec eux ; « + keywords » : la question telle quelle, les mots du code en `keywords`.\n\n| Sonde | Question Escouade | Question tokensave | Mots du code Escouade | Mots du code tokensave | + keywords Escouade | + keywords tokensave |\n|---|---|---|---|---|---|---|\n");
+        let cell = |sc: Option<&Score>| {
+            sc.map(|sc| format!("{} ({})", pct(sc.recall), rank(sc.first_good)))
+                .unwrap_or_else(|| "—".into())
+        };
+        for (p, f) in &ctx {
+            let t = f.tokensave.as_ref();
+            s.push_str(&format!(
+                "| {} | {} | {} | {} | {} | {} | {} |\n",
+                p.id,
+                cell(Some(&p.index.at10)),
+                cell(t.map(|t| &t.at10)),
+                cell(p.index.code_words.as_ref()),
+                cell(t.and_then(|t| t.code_words.as_ref())),
+                cell(f.index_keywords.as_ref()),
+                cell(f.keywords.as_ref())
+            ));
+        }
+        for (name, task) in [("tâche", true), ("autres (fr/en)", false)] {
+            let v: Vec<&(&Outcome, &Face)> = ctx.iter().filter(|(p, _)| tache(p) == task).collect();
+            if v.is_empty() {
+                continue;
+            }
+            let n = v.len() as f64;
+            let m = |f: &dyn Fn(&Outcome, &Face) -> f64| {
+                pct(v.iter().map(|(p, x)| f(p, x)).sum::<f64>() / n)
+            };
+            let rec = |s: Option<&Score>| s.map_or(0.0, |s| s.recall);
+            s.push_str(&format!(
+                "| **{name} ({})** | {} | {} | {} | {} | {} | {} |\n",
+                v.len(),
+                m(&|p, _| p.index.at10.recall),
+                m(&|_, f| rec(f.tokensave.as_ref().map(|t| &t.at10))),
+                m(&|p, _| rec(p.index.code_words.as_ref())),
+                m(&|_, f| rec(f.tokensave.as_ref().and_then(|t| t.code_words.as_ref()))),
+                m(&|_, f| rec(f.index_keywords.as_ref())),
+                m(&|_, f| rec(f.keywords.as_ref()))
+            ));
+        }
+    }
+    // The sufficiency of the « tâche ».
+    let suf: Vec<(&Outcome, &Suffice, &Suffice)> = r
+        .probes
+        .iter()
+        .filter_map(|p| {
+            Some((
+                p,
+                &p.suffice.as_ref()?.index,
+                p.face.as_ref()?.suffice.as_ref()?,
+            ))
+        })
+        .collect();
+    if !suf.is_empty() {
+        let total = |tokensave: bool| {
+            let get = |x: &(&Outcome, &Suffice, &Suffice)| {
+                if tokensave {
+                    x.2.clone()
+                } else {
+                    x.1.clone()
+                }
+            };
+            let held: u32 = suf.iter().map(|x| get(x).held).sum();
+            let needed: u32 = suf.iter().map(|x| get(x).needed).sum();
+            let one = suf.iter().filter(|x| get(x).held == get(x).needed).count();
+            let calls: usize = suf.iter().map(|x| get(x).more_calls).sum();
+            let tok: u64 = suf.iter().map(|x| get(x).more_tokens).sum();
+            format!(
+                "{} % · +{calls} ({tok} tok.) · un appel suffit : {one}/{}",
+                (held * 100).checked_div(needed).unwrap_or(0),
+                suf.len()
+            )
+        };
+        s.push_str(&format!(
+            "\n### Suffisance des « tâche »\n\n| | Escouade | tokensave |\n|---|---|---|\n| Lignes nécessaires dans la réponse · appels (tokens) de plus | {} | {} |\n",
+            total(false),
+            total(true)
+        ));
+    }
+    // Per probe.
+    s.push_str("\n### Par sonde\n\n| Sonde | Outil | R@10 E / T | P@10 E / T | Rang E / T | Tok. réponse E / T | Tok. réels E / T | Chaud (ms) E / T | Meilleur |\n|---|---|---|---|---|---|---|---|---|\n");
+    for p in &r.probes {
+        let Some(f) = &p.face else { continue };
+        let i = &p.index;
+        match &f.tokensave {
+            None => s.push_str(&format!(
+                "| {} | {} | sans objet : {} | | | | | | — |\n",
+                p.id,
+                p.tool.trim_start_matches("index_"),
+                f.not_played.as_deref().unwrap_or("")
+            )),
+            Some(t) => {
+                s.push_str(&format!(
+                "| {} | {} | {} / {} | {} / {} | {} / {} | {} / {} | {} / {} | {} / {} | {}{} |\n",
+                p.id,
+                p.tool.trim_start_matches("index_"),
+                pct(i.at10.recall),
+                pct(t.at10.recall),
+                pct(i.at10.precision),
+                pct(t.at10.precision),
+                rank(i.at10.first_good),
+                rank(t.at10.first_good),
+                i.response_tokens,
+                t.response_tokens,
+                i.real_tokens,
+                t.real_tokens,
+                i.warm_ms,
+                t.warm_ms,
+                f.duel,
+                if f.failed { " (erreur de tokensave)" } else { "" }
+            ))
+            }
+        }
+    }
     s
 }
 
@@ -1387,7 +1873,7 @@ fn reference_of(r: &Report) -> Value {
         .probes
         .iter()
         .map(|p| {
-            json!({
+            let mut v = json!({
                 "id": p.id,
                 "tool": p.tool,
                 "tags": p.tags,
@@ -1414,17 +1900,43 @@ fn reference_of(r: &Report) -> Value {
                 },
                 "realPercent": p.real_percent,
                 "winner": p.winner,
-            })
+            });
+            if let Some(f) = &p.face {
+                v["tokensave"] = json!({
+                    "notPlayed": f.not_played,
+                    "failed": f.failed,
+                    "at10": f.tokensave.as_ref().map(|t| &t.at10),
+                    "at50": f.tokensave.as_ref().map(|t| &t.at50),
+                    "coldMs": f.tokensave.as_ref().map(|t| t.cold_ms),
+                    "warmMs": f.tokensave.as_ref().map(|t| t.warm_ms),
+                    "responseTokens": f.tokensave.as_ref().map(|t| t.response_tokens),
+                    "wrongTokens": f.tokensave.as_ref().map(|t| t.wrong_tokens),
+                    "realTokens": f.tokensave.as_ref().map(|t| t.real_tokens),
+                    "realCalls": f.tokensave.as_ref().map(|t| t.real_calls),
+                    "announcedPercent": f.tokensave.as_ref().map(|t| t.announced_percent),
+                    "codeWords": f.tokensave.as_ref().and_then(|t| t.code_words.as_ref()),
+                    "keywords": f.keywords,
+                    "indexKeywords": f.index_keywords,
+                    "suffice": f.suffice,
+                    "results": f.tokensave.as_ref().map(|t| &t.results),
+                    "duel": f.duel,
+                });
+            }
+            v
         })
         .collect();
-    json!({
+    let mut v = json!({
         "commit": r.commit,
         "date": r.date,
         "readRadius": r.read_radius,
         "readMax": r.read_max,
         "indexing": r.indexing,
         "probes": probes,
-    })
+    });
+    if let Some(t) = &r.tokensave {
+        v["tokensave"] = json!(t);
+    }
+    v
 }
 
 /// A group of probes of the comparison: its name, and which probes it holds.

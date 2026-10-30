@@ -23,13 +23,21 @@ pub struct Alt {
 pub struct Item {
     pub path: String,
     pub line: u32,
+    /// The last line it covers: `line` for a place, the end of a symbol given whole (tokensave's
+    /// `line`..`end_line`, ESC-304).
+    pub end: u32,
 }
 
 impl Item {
     pub fn new(path: &str, line: u32) -> Self {
+        Self::span(path, line, line)
+    }
+
+    pub fn span(path: &str, line: u32, end: u32) -> Self {
         Self {
             path: norm(path),
             line,
+            end: end.max(line),
         }
     }
 }
@@ -85,9 +93,9 @@ fn parse_alt(s: &str) -> Alt {
     }
 }
 
-/// Whether `item` is this alternative.
+/// Whether `item` is this alternative: a line of it falls in the range.
 pub fn hits(alt: &Alt, item: &Item) -> bool {
-    alt.path == item.path && (alt.from == 0 || (item.line >= alt.from && item.line <= alt.to))
+    alt.path == item.path && (alt.from == 0 || (item.line <= alt.to && item.end >= alt.from))
 }
 
 /// For each result, whether it hits an expected item.

@@ -13,7 +13,7 @@ cargo run --release --example codeindex_probes -- --compare ../docs/codeindex-pr
 - **Commit mesuré** : `303fb5f2e447de6eb5bac91ecface391b5c97e75`. Il est écrit dans `docs/codeindex-probes.json` ; `--commit <rev>` en prend un autre, mais les réponses attendues valent pour celui-là.
 - Le banc clone le dépôt à ce commit (`git clone --shared`) dans un dossier temporaire, et l'indexe là par un `Service` à lui. L'index de l'app, ses réglages et le profil de l'utilisateur ne sont jamais touchés. Il passe par la bibliothèque, pas par une app lancée : aucun port, aucun serveur MCP.
 - Il lui faut un vrai ripgrep : `rg` sur le PATH, ou `--rg <programme>` / `ESCOUADE_PROBES_RG`. Dans le Bash de Claude Code, `rg` est une fonction du shell, pas un programme.
-- Options : `--only id1,id2` (quelques sondes), `--out <dossier>`, `--keep` (garde le clone), `--compare <référence>`.
+- Options : `--only id1,id2` (quelques sondes), `--out <dossier>`, `--keep` (garde le clone), `--compare <référence>`, `--tokensave <exe> --tokensave-project <copie sans .git>` (les mêmes sondes posées à tokensave, voir « tokensave face à face »).
 - Sorties, dans `target/codeindex-probes/` :
   - `results.md` : les tableaux de la fin de ce document ;
   - `results.json` : tout, dont chaque résultat ✓/✗ ;
@@ -518,3 +518,172 @@ cargo run --release --example codeindex_probes -- --compare ../docs/codeindex-pr
 ```
 
 `--old` prend un dossier de réponses `<id>.txt` d'une version d'avant (sous Windows, un chemin `C:/…` : l'exécutable ne lit pas `/c/…`). Pour les refaire : un `git worktree` au commit de la version, son `probes/mod.rs` patché pour écrire `response(&a10)` dans `$ESCOUADE_PROBES_DUMP/<id>.txt` juste avant `index_side`, puis `cargo run --release --example codeindex_probes -- --probes <ces sondes> --only <les « tâche »>` (un `CARGO_TARGET_DIR` commun aux trois : ≈ 12 min la première fois, 8 ensuite). Chaque passe écrit aussi ses réponses dans `target/codeindex-probes/responses/` (`<id>.txt` tel qu'envoyé, `<id>.json`, `<id>.code-words.txt`).
+
+## tokensave face à face (IDX-5, ESC-304)
+
+La question de l'utilisateur (2026-10-30) : « les index, on est aussi performants que tokensave ? ». IDX-1 à IDX-3 ont porté sa méthode sans jamais le faire tourner. Cette fois, tokensave 7.17.0 (commit `580936b`, MIT, © 2025 Enzo Lombardi) répond aux mêmes sondes, notées par le même code.
+
+**En une phrase : Escouade est meilleur sur le graphe des appels et la recherche d'un symbole, et un peu moins bon sur `context` : tokensave y trouve un peu plus (15 % contre 11 % au rappel@10, à égalité sur les « tâche ») et se trompe pour moins cher ; sur les 45 sondes que les deux savent jouer, Escouade a 45 % de rappel@10 et tokensave 38 %.**
+
+### Comment il a été joué
+
+- **Compilé hors des dépôts** : `cargo build --release` dans `C:\tmp\ext\tokensave`, avec `CARGO_TARGET_DIR=C:\tmp\tokensave-target` (9 min 26 s). La source n'a pas été mise à jour, et rien n'en est copié ici.
+- **Première commande : `tokensave disable-upload-counter`**. Ensuite, `~/.tokensave/config.toml` dit `upload_enabled = false`. Chaque appel du banc passe aussi `TOKENSAVE_UPDATE_CHECK=off` (pas de requête à GitHub).
+- **Aucun `install`, aucun hook, aucun `serve`.** Les seules commandes lancées sont `init`, `tool`, `--version` et `--help`. `init` a tourné une seule fois par passe, avec `--no-git-hook`, et seulement dans `C:\tmp\tokensave-snapshot`. Ce dossier est fait par `git archive 303fb5f2 | tar -x`, au commit des sondes et de la référence d'IDX-3. Le banc refuse un dossier qui a un `.git`, en lui ou au-dessus. Les réglages des agents (`~/.claude/settings.json`, `~/.codex/config.toml`, `~/.gemini/settings.json`, `~/.cursor/mcp.json`, OpenCode, Copilot) ont la même empreinte avant et après.
+- **Le banc** (`--tokensave <exe> --tokensave-project <copie>`, module `codeindex/probes/tokensave.rs`) pose chaque sonde à `tokensave tool <outil> --project <copie> --args <json>`. C'est le gestionnaire qu'appelle son serveur MCP. La correspondance des outils :
+
+  | Escouade | tokensave |
+  |---|---|
+  | `index_search` | `tokensave_search` (`query`, `limit`) |
+  | `index_context` | `tokensave_context` (`task`, `max_nodes`) |
+  | `index_callers` | `tokensave_callers` (`symbol`, `limit`) |
+  | `index_callees` | `tokensave_callees` (`symbol`, `limit`) |
+  | `index_impact` | `tokensave_impact` (`symbol`, `max_depth`, `limit`) |
+
+  Les limites sont celles d'Escouade : 10, puis 50. Le banc lit la réponse et la note avec `score`, `windows` et `suffice`, comme celle d'Escouade.
+- **Les mêmes paramètres des deux côtés** :
+  - `include_code: true` pour `context`, chez les deux. C'est le défaut d'Escouade ; celui de tokensave est faux, un écart voulu et écrit dans IDX-3.
+  - Le reste suit les défauts de tokensave :
+    - pas de `path` pour les appelants (il n'en a pas) ;
+    - pas de `kind` pour la recherche (il n'en a pas) ;
+    - `max_depth` 3 pour les appelés.
+- **Les tokens** :
+  - La réponse est coupée à 15 000 caractères, comme la coupe son serveur MCP (la ligne de commande ne coupe pas).
+  - La ligne `tokensave_metrics:` que son serveur ajouterait est recomptée avec notre port de sa comptabilité, la base étant les fichiers que nomme la réponse.
+  - Les lectures, le repli sur grep quand rien n'est juste et la suffisance sont comptés par le même code que pour Escouade.
+- **La notation, à grain égal** :
+  - Un appelant compte pour chacune de ses lignes d'appel (`lines`), comme chez Escouade.
+  - Un symbole donné entier (impact, appelés, en-tête d'un groupe) compte pour toute son étendue (`line` à `end_line`). Escouade donne la ligne de l'appel, tokensave le symbole qui la contient : sans cela, `rs-impact-scope_of` aurait eu 20 % au lieu de 100 %.
+  - Une réponse JSON coupée est lue jusqu'à la coupe.
+- **Le temps** compte un processus par appel, qui ouvre une base de 230 Mo : 40 ms au moins, jusqu'à 400 ms sur ce poste partagé. Escouade, lui, est mesuré dans le processus. Les temps ne se comparent donc pas : `tokensave serve` garderait la base ouverte. On ne l'a pas lancé, par règle.
+
+### L'indexation de la même copie
+
+| | Escouade | tokensave |
+|---|---|---|
+| Dépôt entier | 21,0 s | 13,3 s (14,0 s la première fois, avec son banc du matériel) |
+| Base | 123,5 Mo | 229,7 Mo |
+| Contenu | 1 578 fichiers, 35 799 symboles, 93 054 liens | 1 588 fichiers, 52 361 nœuds, 147 408 arêtes (101 658 dans `status`) |
+| Non lus | — | 83 fichiers, dont les 71 `.vue` |
+
+tokensave indexe plus vite, avec une base presque deux fois plus grosse. Ses nœuds en plus ne sont pas tous des symboles :
+
+- 8 059 `use` ;
+- 5 023 annotations ;
+- un nœud par fichier ;
+- les blocs `describe`/`it` des tests, comptés comme des fonctions.
+
+### Côte à côte
+
+Rejouer : `cargo run --release --example codeindex_probes -- --tokensave 'C:\tmp\tokensave-target\release\tokensave.exe' --tokensave-project 'C:\tmp\tokensave-snapshot'`. La référence est `docs/codeindex-probes-reference-tokensave.json`. Rappel@10, précision@10 et rappel@50 sont des moyennes en % ; les tokens sont des totaux.
+
+| Groupe | Sondes jouées (sans objet) | R@10 Escouade / tokensave | P@10 | R@50 | Tok. réponse | Tok. réels | Meilleur : Escouade / tokensave / = |
+|---|---|---|---|---|---|---|---|
+| search | 5 (4) | 100 / 100 | 20 / 12 | 80 / 80 | 1 555 / 1 665 | 6 433 / 13 372 | 5 / 0 / 0 |
+| context | 27 (1) | 11 / **15** | 1 / 3 | 13 / 9 | 29 744 / **22 257** | 174 231 / **144 704** | 9 / **16** / 2 |
+| callers | 6 (4) | **90** / 35 | **96** / 19 | 90 / 27 | **2 420** / 13 056 | **9 609** / 25 826 | 6 / 0 / 0 |
+| callees | 3 (0) | 95 / 95 | **96** / 67 | 95 / 95 | **2 107** / 2 790 | **8 634** / 11 900 | 3 / 0 / 0 |
+| impact | 4 (0) | **95** / 80 | 80 / **90** | 100 / 80 | 6 483 / **1 771** | 17 370 / **8 268** | 3 / 1 / 0 |
+| « tâche » | 17 (0) | 6 / 6 | 1 / 1 | 12 / 6 | 18 150 / **13 755** | 125 884 / **110 020** | 6 / **10** / 1 |
+| **Tout** | **45 (9)** | **45** / 38 | **29** / 18 | **44** / 32 | 42 309 / 41 539 | 216 277 / **204 070** | **26** / 17 / 2 |
+
+« Meilleur » suit la règle d'Escouade face à grep : plus de rappel, sinon une précision au moins égale pour moins de tokens réels. La colonne « Tout » du côté Escouade ne compte que les 45 sondes jouées par les deux. Sur les 54, Escouade garde 47 % (IDX-3).
+
+**Sans objet** pour tokensave : 9 sondes.
+
+- `wt-search-renamed`, `wt-callers-renamed`, `wt-callers-old-name` : un index par dossier, pas de delta de worktree.
+- `fresh-now`, `fresh-after-gap` : la copie n'est jamais écrite.
+- `vue-search-plugintile`, `vue-callers-hueOf`, `vue-context-tile-en` : la réponse n'est que dans des `.vue`, qu'il ne lit pas.
+- `svelte-callers-planbanner` : un composant Svelte n'est pas un symbole chez lui. Il répond « No symbol named 'PlanBanner' » et ne voit pas `<PlanBanner>` dans un gabarit. Il lit pourtant les fonctions des `.svelte`.
+
+### context : la question, puis les mots du code
+
+Rappel@10, puis entre parenthèses le rang du premier bon résultat. Trois passes, chez les deux :
+
+- la question telle quelle ;
+- la tâche dite avec les mots du code (`codeWords`, le mode « mots du code » du banc) ;
+- la question telle quelle, avec les mots du code en `keywords`. C'est l'usage que tokensave recommande.
+
+Seules les sondes où l'un des deux trouve quelque chose sont listées ; les 17 autres sont à 0 partout.
+
+| Sonde | Question Escouade | Question tokensave | Mots du code Escouade | Mots du code tokensave | + keywords Escouade | + keywords tokensave |
+|---|---|---|---|---|---|---|
+| rs-notion-gap-fr | 0 | 0 | 0 | 100 (4) | 0 | 0 |
+| rs-notion-gap-en | 100 (9) | 100 (5) | 0 | 100 (4) | 100 (9) | 100 (5) |
+| rs-context-hint-en | 0 | 0 | 50 (3) | 0 | 0 | 0 |
+| ts-context-tooltip-en | 100 (3) | 100 (2) | 0 | 0 | 100 (3) | 100 (2) |
+| svelte-context-banner-fr | 0 | 0 | 100 (1) | 0 | 0 | 0 |
+| md-context-allumer-fr | 0 | 100 (1) | 0 | 0 | 0 | 0 |
+| tache-zoom-borne | 100 (2) | 100 (2) | 100 (2) | 100 (2) | 100 (2) | 100 (1) |
+| tache-xterm-couleurs | 0 | 0 | 100 (1) | 100 (1) | 0 | 0 |
+| tache-lance-processus | 0 | 0 | 100 (9) | 100 (7) | 100 (9) | 100 (5) |
+| tache-store-controles | 0 | 0 | 100 (1) | 100 (1) | 0 | 0 |
+| **« tâche » (17)** | **6** | **6** | **24** | **24** | **12** | **12** |
+| **autres fr/en (10)** | 20 | 30 | 15 | 20 | 20 | 20 |
+
+- **tokensave ne fait pas mieux avec les mots du code** : 24 % sur les « tâche », comme Escouade. Dire la tâche avec les mots du code quadruple le rappel chez les deux.
+- **`keywords` ajoutés à une question française aident deux fois moins** que les mêmes mots en guise de question (12 % contre 24 %, chez les deux) : les trois points d'entrée se remplissent encore des mots de la paraphrase.
+- Hors « tâche », tokensave gagne une question (`md-context-allumer-fr`, ci-dessous) et une passe « mots du code » (`rs-notion-gap-fr`). Escouade gagne deux passes « mots du code » (`svelte-context-banner-fr`, `rs-context-hint-en`).
+
+### Suffisance des « tâche »
+
+| | Escouade | tokensave |
+|---|---|---|
+| Lignes nécessaires déjà dans la réponse | 1 % | 1 % |
+| Un appel suffit | 0 / 17 | 0 / 17 |
+| Appels (tokens) de plus pour tout avoir | 66 (32 189) | 68 (36 153) |
+
+Égalité. Le mur des 17 « tâche » est le même chez tokensave : une paraphrase française ne touche pas les noms du code. Ce n'est donc pas un défaut de notre portage. La vraie mesure de `keywords` reste IDX-4 (de vrais agents).
+
+### Relu à la main
+
+1. **`cas-forget`** (appelants de `forget`, `path` = `plugins/runtime.rs`) : Escouade 100 %, tokensave 13 %, au rang 13.
+   - Sans `path`, tokensave répond les trois premiers `forget` de sa recherche (OpenCode, `sidechain`, `MemorySection.svelte`) et range `Runtime::forget` parmi les autres.
+   - Même qualifié (`--symbol Runtime::forget`, essayé à la main), il ne trouve qu'1 appelant sur 7 (`runtime.rs:410`, un `self.forget`). Il ne résout pas `core.plugin_runtime.forget(...)` (`commands.rs:328`…) : un receveur typé par le champ d'une structure.
+   - Escouade les résout depuis IDX-2 (`codeindex/receivers.rs`) : là, notre portage va plus loin que tokensave.
+2. **`rs-homonyme-load`** (`load` de `workflowfiles.rs`) : Escouade 100 %, tokensave 20 %, au rang 45. La même cause sans `path` : ses trois groupes sont d'autres `load`, et leurs appelants dans `planfiles_tests.rs` passent devant. Les 6 sondes d'appelants jouées vont toutes à Escouade.
+3. **`rs-impact-hint-file`** (impact du fichier `codeindex/hint.rs`) : Escouade 80 %, tokensave 20 %.
+   - `tokensave_impact` reçoit un chemin comme `symbol` et le résout en nœud `file`. Ce nœud n'a pas de dépendants : la réponse ne contient que le fichier.
+   - Escouade, pour un fichier, prend les appelants de tous ses symboles et les importeurs. Il trouve `wiring.rs:129`, `core.rs:5741` et `discussion.rs:373`.
+4. **`ts-impact-definitions-file`** (impact de `src/lib/editor/definitions.ts`) : les deux à 100 %, mais tokensave gagne en 3 résultats (le fichier, l'import d'`EditorView.svelte`, le test) et 1 349 tokens réels, contre 7 071.
+   - La réponse d'Escouade est pleine de faux appelants : `ConversationOverlay.svelte:32` (`text.slice(-max)`), `sdk/plugin/src/index.ts:68`, `board.ts:261`… La résolution par le nom relie ces `.slice()` de chaînes au `const slice` privé de `definitions.ts:141`. De même, `rule("bash", …)`, une fermeture locale d'`engine/opencode/mod.rs:104`, est relié à `hint.rs:243`.
+   - **tokensave fait les mêmes faux liens** : `tokensave_callers --symbol rule` rend `opencode/mod.rs:106`, et `slice` a 72 « appelants ». Ce n'est donc pas un point mal porté.
+   - C'est notre choix d'étendre l'impact d'un fichier aux appelants de chacun de ses symboles (`calls.rs`, `impact`) qui fait entrer ce bruit dans la réponse.
+5. **`md-context-allumer-fr`** (« comment allumer l'index du code sur tous les projets ») : tokensave 100 %, au rang 1, Escouade 0 %.
+   - Mêmes termes retenus (`comment`, `allumer`, `tous`, `projets`), mais tokensave met en tête le titre « Sur tous les projets » de `website/content/docs/fr/code-index.md` (meilleur score 24,2). Escouade y met `discussion.rs::instructions` (36,1), dont le corps contient les mêmes mots français.
+   - L'en-tête existe bien dans notre index (`index_search` le trouve). Le classement diverge.
+6. **`svelte-search-planbanner`** et **`rs-search-saving`** (recherche) : les deux trouvent, mais au rang 1 chez Escouade, au rang 8 et 9 chez tokensave. L'agent lit donc 5 à 7 fois plus de tokens : 3 883 contre 534, et 3 131 contre 571.
+   - tokensave n'a pas de symbole pour le composant `PlanBanner.svelte`, et les blocs `describe PlanBanner` de ses tests passent devant.
+   - Il n'a pas non plus de filtre `kind` : `Saving` la structure est noyée dans les `saving` des fonctions TS.
+7. **`rs-callees-ensure_fresh`** (appelés) : même rappel (86 %), mais une précision de 55 % contre 100 %. `tokensave_callees` descend par défaut à 3 niveaux, et ajoute `store.rs:115`, `scan.rs:239`, `scan.rs:291`, `sharing_tests.rs:60`. Les deux ratent `store.rs:65`.
+8. **`svelte-context-banner-fr`** et **`rs-notion-gap-fr`**, en mots du code : chacun gagne une passe.
+   - Escouade trouve le composant `PlanBanner` au rang 1, un symbole que tokensave n'a pas.
+   - tokensave trouve `Service::ensure_fresh` au rang 4 ; Escouade ne le trouve pas (voir IDX-2, le bonus d'IDX-1 retiré).
+9. **Les « tâche » que tokensave « gagne »** (10 sur 17, dont `tache-compte-limite` : 4 608 tokens réels contre 8 559) : les deux ont 0 % de rappel. tokensave ne les gagne qu'en se trompant pour moins cher : il choisit d'autres symboles, plus petits, et ses blocs de code sont plus courts. Pour la même raison, ses réponses `context` coûtent 25 % de moins.
+
+### Ce qui vient du portage, à suivre
+
+Aucun écart mesuré ne vient d'une règle de tokensave qu'on aurait mal recopiée. Les écarts viennent de ce que chacun indexe, et de nos ajouts : `path`, receveurs typés, composants Svelte, impact d'un fichier. Un point reste à éclaircir, pour un ticket de suite :
+
+- **Pour `context`, 26 sondes sur 27 ont d'autres points d'entrée que tokensave, avec les mêmes termes.**
+  - Côté tokensave, `src/context/builder.rs` et sa recherche ; côté Escouade, `src-tauri/src/codeindex/context.rs` et `ranking.rs`.
+  - La première cause est le contenu de l'index : 52 361 nœuds contre 35 799 symboles (blocs de test, `use`, nœuds de fichier, en-têtes classés en `module`).
+  - Mais `md-context-allumer-fr` montre un écart de classement sur des candidats que les deux index ont. Chez nous, une fonction dont le corps contient les mots passe en tête (36,1), devant l'en-tête Markdown. Chez lui, l'en-tête passe en tête (24,2).
+  - À comparer candidat par candidat, colonne par colonne, sans rien corriger ici.
+
+### Ce que tokensave a écrit hors de la copie
+
+- **`~/.tokensave/`**, qui n'existait pas avant :
+  - `config.toml` et `config.toml.lock` ;
+  - `state.toml` ;
+  - `benchmark.toml` et `benchmark.toml.lock` (son banc du matériel, au premier `init`) ;
+  - `global.db` (le registre de ses projets) ;
+  - `memory.mmap`.
+
+  Juste avant de le supprimer, `config.toml` disait toujours `upload_enabled = false`, et `state.toml` disait `pending_upload = 0`, `last_upload_at = 0`, `last_flush_attempt_at = 0` et `last_version_check_at = 0` : rien n'a été envoyé, ni au compteur mondial, ni à GitHub. Le dossier a été supprimé à la fin.
+- **Pour la compilation**, par cargo et non par tokensave :
+  - `C:\tmp\tokensave-target` ;
+  - les crates téléchargées dans `~/.cargo/registry` ;
+  - deux dépôts git de grammaires dans `~/.cargo/git` (`tokensave-large-treesitters`, `tree-sitter-fortran`), supprimés à la fin.
+- Rien dans `%LOCALAPPDATA%`, `%APPDATA%` ou `%TEMP%`. Aucun réglage d'agent touché, aucun hook git.
+- **Pour rejouer** : `~/.tokensave` est recréé au premier lancement avec le compteur **allumé**. Il faut relancer `tokensave disable-upload-counter` avant toute autre commande, puis supprimer `~/.tokensave` à la fin. Le banc lance `tokensave init` dans la copie seulement si elle n'a pas encore d'index : pour chronométrer une indexation neuve, effacer d'abord `C:\tmp\tokensave-snapshot\.tokensave`.

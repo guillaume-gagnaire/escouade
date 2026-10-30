@@ -164,3 +164,13 @@ fn a_run_is_compared_to_the_reference_by_tool_and_probe() {
     assert!(!s.contains("| search |"), "{s}");
     assert!(s.contains("Rappel changé : a 0 → 100."), "{s}");
 }
+
+#[test]
+fn a_symbol_given_whole_hits_a_line_inside_it() {
+    // tokensave gives a symbol from its first line to its last (ESC-304); the index a place.
+    let e = expect(&["src/mod.rs:71"]);
+    assert_eq!(score(&e, &[Item::span("src/mod.rs", 67, 73)]).found, 1);
+    assert_eq!(score(&e, &[Item::span("src/mod.rs", 72, 80)]).found, 0);
+    assert_eq!(score(&e, &[Item::new("src/mod.rs", 67)]).found, 0);
+    assert_eq!(Item::new("a.rs", 4), Item::span("a.rs", 4, 4));
+}
