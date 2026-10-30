@@ -91,7 +91,7 @@ describe('the leads', () => {
   });
 
   it('leave the examples quiet where they keep to their permissions', () => {
-    const slack = findLeads(files(exampleFiles('slack')), ['hooks.slack.com']);
+    const slack = findLeads(files(exampleFiles('slack')), ['slack.com']);
     expect(slack.filter((l) => ['host', 'exec', 'dynamic', 'dependencies', 'instructions'].includes(l.kind))).toEqual([]);
     expect(slack.some((l) => l.kind === 'network')).toBe(true);
     // Without the permission, the same calls are a lead.
@@ -374,7 +374,7 @@ describe('the review', () => {
     expect(md).toContain('## Depuis la v1.0.0');
     expect(md).toContain('- **`permissions.network`** : api.slack.com');
     expect(md).toContain('## Constats de la revue');
-    expect(readFileSync(done.summary, 'utf8')).toContain('- Réseau vers : hooks.slack.com, api.slack.com');
+    expect(readFileSync(done.summary, 'utf8')).toContain('- Réseau vers : slack.com, api.slack.com');
     expect(JSON.parse(readFileSync(done.json, 'utf8')).proposed).toEqual({
       verdict: null,
       why: 'à décider à la lecture du code : rien de mécanique ne s’y oppose',

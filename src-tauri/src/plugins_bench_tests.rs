@@ -1,6 +1,6 @@
 //! Tests of the conformance bench of the plugins (PLG-3, ESC-175): it passes on the fake plugin
-//! (tests/fixtures/fake-plugin.mjs) and on the stand-ins of PLG-10's examples
-//! (tests/fixtures/plugins/examples/), and fails, with the right reason, on a plugin that ignores
+//! (tests/fixtures/fake-plugin.mjs) and on PLG-10's examples (plugin-examples/, ESC-182, their
+//! programs as their folders hold them: `dist/` built and committed), and fails, with the right reason, on a plugin that ignores
 //! `initialize`, answers past its delay, takes a version it does not speak, asks for another's
 //! secret or writes its own out, or does not end at `shutdown`. `escouade-plugin` runs the same.
 
@@ -15,7 +15,7 @@ fn root() -> PathBuf {
 }
 
 fn example(name: &str) -> PathBuf {
-    root().join("tests/fixtures/plugins/examples").join(name)
+    root().join("plugin-examples").join(name)
 }
 
 /// The fake plugin in a folder of the test's own, its program started with `args`; it asks for
@@ -106,7 +106,7 @@ async fn the_examples_pass_and_what_does_not_concern_them_is_not_played() {
     let slack = bench(&example("slack")).await;
     assert!(slack.passed(), "{}", slack.render(Lang::En));
     assert_eq!(verdict(&slack, Scenario::Fact), Verdict::Pass);
-    assert!(said(&slack, Scenario::Secret).contains("webhook"));
+    assert!(said(&slack, Scenario::Secret).contains("token"));
     assert_eq!(verdict(&slack, Scenario::Decision), Verdict::Skip);
 
     let rules = bench(&example("team-rules")).await;
@@ -114,6 +114,10 @@ async fn the_examples_pass_and_what_does_not_concern_them_is_not_played() {
     assert!(said(&rules, Scenario::Decision).contains("\"allow\""));
     assert_eq!(verdict(&rules, Scenario::Fact), Verdict::Skip);
     assert_eq!(verdict(&rules, Scenario::Secret), Verdict::Skip);
+
+    let discord = bench(&example("discord-webhook")).await;
+    assert!(discord.passed(), "{}", discord.render(Lang::En));
+    assert_eq!(verdict(&discord, Scenario::Manifest), Verdict::Pass);
 
     let theme = bench(&example("high-contrast")).await;
     assert!(theme.passed(), "{}", theme.render(Lang::En));

@@ -18,6 +18,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Un plugin s’écrit en TypeScript avec `@escouade-dev/plugin` : `npm create escouade-plugin` donne un premier plugin avec ses tests, le SDK apporte les types du protocole et des aides pour recevoir les faits et décider des autorisations, et `escouade-plugin pack` fait son archive. La documentation dit aussi comment le livrer en un seul exécutable, pour qui n’a pas Node.
 - Un plugin peut apporter un thème : d’autres couleurs pour la fenêtre, les terminaux et l’éditeur, en clair et en sombre, et sa palette de couleurs de projet. Il se choisit dans Réglages › Application › Couleurs et s’applique tout de suite ; ce qu’il ne donne pas garde la couleur d’Escouade, et ses valeurs sont filtrées pour qu’il ne charge rien ni ne masque rien.
 - Un plugin peut décider des autorisations de tes agents avant qu’elles ne t’arrivent : autoriser une commande sûre, en refuser une dangereuse avec sa raison, et te laisser le reste. Un refus l’emporte, la carte dit quel plugin a répondu (« Autorisé par Règles de l’équipe via Escouade »), et sans réponse en une demi-seconde la demande vient à toi comme avant.
+- Quatre plugins d’exemple, complets et testés, à copier pour écrire le tien : un thème « Contraste élevé », un webhook Discord sans code, Slack dans le salon de chaque projet et les règles d’une équipe en TypeScript. La documentation montre leur code entier.
 
 ### Corrections
 

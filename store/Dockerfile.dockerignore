@@ -3,7 +3,10 @@
 !store
 !website/app/assets/main.css
 !schemas
-!tests/fixtures/plugins/examples
+!plugin-examples
+plugin-examples/*/node_modules
+plugin-examples/*/packs
+plugin-examples/*/package-lock.json
 store/node_modules
 store/.nuxt
 store/.output

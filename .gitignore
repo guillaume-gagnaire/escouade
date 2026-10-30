@@ -8,3 +8,6 @@ vite.config.ts.timestamp-*
 .DS_Store
 test-results/
 playwright-report/
+
+# The example plugins run as their folders hold them: their dist/ is built and committed (plugin-examples/ci.mjs checks it).
+!plugin-examples/*/dist/

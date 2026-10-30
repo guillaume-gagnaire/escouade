@@ -76,26 +76,7 @@ Read your rules **before** the first request (at start), not during one: 500 ms 
 }
 ```
 
-With the [SDK](plugins/sdk):
-
-```ts
-import { readFileSync } from 'node:fs';
-import { createPlugin } from '@escouade-dev/plugin';
-
-const rules = JSON.parse(readFileSync(new URL('./rules.json', import.meta.url), 'utf8'));
-const plugin = createPlugin();
-
-plugin.decidePermission(({ request }) => {
-  if (request.kind !== 'command') return { decision: 'ask' };
-  const command = String(request.input?.command ?? '').trim();
-  const denied = rules.deny.find((r) => command.startsWith(r));
-  if (denied) return { decision: 'deny', message: `The team's rules forbid \`${denied}\`.` };
-  if (rules.allow.some((r) => command === r || command.startsWith(r + ' '))) return { decision: 'allow' };
-  return { decision: 'ask' };
-});
-
-void plugin.start();
-```
+Its program, written with the [SDK](plugins/sdk), reads its rules from `rules.json` and judges each command of a line, even after a `&&`. Its whole code and its tests are in [Example plugins](plugins/examples#team-rules).
 
 The bench checks it: `escouade-plugin test` plays a decision and measures its delay, and `escouade-plugin dev` lets you play some by hand (`decide {"request": {...}}`). See [Testing a plugin](plugins/testing).
 

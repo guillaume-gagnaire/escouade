@@ -85,4 +85,4 @@ Never `url()`, another function (`image-set()`, `attr()`, `env()`…), quotes, b
 
 ## Testing a theme
 
-`escouade-plugin validate` checks the manifest. To see the theme, install the plugin’s folder in development (Plugins view › “In development”), pick it in Settings › Application and switch from Dark to Light. The “High contrast” example plugin, the manifest above (`tests/fixtures/plugins/examples/high-contrast` in Escouade’s repository), is a starting point.
+`escouade-plugin validate` checks the manifest. To see the theme, install the plugin’s folder in development (Plugins view › “In development”), pick it in Settings › Application and switch from Dark to Light. The “High contrast” example plugin, the manifest above (`plugin-examples/high-contrast` in Escouade’s repository), is a starting point: see [Example plugins](plugins/examples#high-contrast).

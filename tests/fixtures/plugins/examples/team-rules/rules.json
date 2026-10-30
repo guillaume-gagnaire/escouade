@@ -1,4 +1,0 @@
-{
-  "deny": ["rm -rf", "git push --force"],
-  "allow": ["npm test", "npm run lint", "cargo test"]
-}

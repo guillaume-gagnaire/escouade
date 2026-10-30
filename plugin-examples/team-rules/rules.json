@@ -1,0 +1,9 @@
+{
+  "deny": [
+    "rm -rf",
+    "git reset --hard",
+    { "command": "git push --force", "message": "No force push in this team: push a new commit instead." },
+    { "command": "git push -f", "message": "No force push in this team: push a new commit instead." }
+  ],
+  "allow": ["npm test", "npm run lint", "cargo test", "cargo nextest", "git status", "git diff", "git log"]
+}

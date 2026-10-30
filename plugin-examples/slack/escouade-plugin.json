@@ -1,0 +1,23 @@
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.exemple.slack",
+  "name": "Slack",
+  "version": "1.0.0",
+  "description": {
+    "fr": "Les tickets à tester et les agents qui attendent, dans le salon Slack de chaque projet.",
+    "en": "Tickets to test and agents waiting, in each project's Slack channel."
+  },
+  "author": { "name": "Escouade", "url": "https://escouade.dev" },
+  "license": "MIT",
+  "escouade": { "api": "1", "min": "2.1.0" },
+  "run": { "command": "slack", "windows": "slack.cmd" },
+  "activation": ["event:ticket.column", "event:agent.status"],
+  "permissions": {
+    "events": ["ticket.column", "agent.status"],
+    "network": ["slack.com"],
+    "secrets": ["token"]
+  },
+  "contributes": {
+    "secrets": [{ "key": "token", "title": { "fr": "Jeton du bot Slack (xoxb-…)", "en": "Slack bot token (xoxb-…)" } }]
+  }
+}

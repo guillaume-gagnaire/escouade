@@ -76,26 +76,7 @@ Lis tes règles **avant** la première demande (au démarrage), pas pendant : 50
 }
 ```
 
-Avec le [SDK](plugins/sdk) :
-
-```ts
-import { readFileSync } from 'node:fs';
-import { createPlugin } from '@escouade-dev/plugin';
-
-const rules = JSON.parse(readFileSync(new URL('./rules.json', import.meta.url), 'utf8'));
-const plugin = createPlugin();
-
-plugin.decidePermission(({ request }) => {
-  if (request.kind !== 'command') return { decision: 'ask' };
-  const command = String(request.input?.command ?? '').trim();
-  const denied = rules.deny.find((r) => command.startsWith(r));
-  if (denied) return { decision: 'deny', message: `Les règles de l'équipe interdisent \`${denied}\`.` };
-  if (rules.allow.some((r) => command === r || command.startsWith(r + ' '))) return { decision: 'allow' };
-  return { decision: 'ask' };
-});
-
-void plugin.start();
-```
+Son programme, écrit avec le [SDK](plugins/sdk), lit ses règles dans `rules.json` et juge chaque commande d’une ligne, même après un `&&`. Son code entier et ses tests sont dans [Les plugins d’exemple](plugins/examples#regles-de-l-equipe).
 
 Le banc le vérifie : `escouade-plugin test` joue une décision et mesure son délai, et `escouade-plugin dev` permet d’en jouer à la main (`decide {"request": {...}}`). Voir [Tester un plugin](plugins/testing).
 

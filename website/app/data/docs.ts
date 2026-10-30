@@ -53,6 +53,7 @@ export const DOC_GROUPS = [
       'plugins/sdk',
       'plugins/testing',
       'plugins/publishing',
+      'plugins/examples',
     ],
   },
   { id: 'reference', pages: ['shortcuts', 'escouade-yml', 'data', 'updates', 'troubleshooting'] },

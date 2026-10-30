@@ -85,4 +85,4 @@ Jamais de `url()`, d’autre fonction (`image-set()`, `attr()`, `env()`…), de 
 
 ## Tester un thème
 
-`escouade-plugin validate` vérifie le manifeste. Pour voir le thème, installez le dossier du plugin en développement (vue Plugins › « En développement »), choisissez-le dans Réglages › Application et passez de Sombre à Clair. Le plugin d’exemple « Contraste élevé », celui du manifeste plus haut (`tests/fixtures/plugins/examples/high-contrast` dans le dépôt d’Escouade), est un point de départ.
+`escouade-plugin validate` vérifie le manifeste. Pour voir le thème, installez le dossier du plugin en développement (vue Plugins › « En développement »), choisissez-le dans Réglages › Application et passez de Sombre à Clair. Le plugin d’exemple « Contraste élevé », celui du manifeste plus haut (`plugin-examples/high-contrast` dans le dépôt d’Escouade), est un point de départ : voir [Les plugins d’exemple](plugins/examples#contraste-eleve).

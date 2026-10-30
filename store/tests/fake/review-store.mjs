@@ -1,6 +1,6 @@
 // A fake store and a fake GitHub for the local review (scripts/plugin-review/, docs/STORE.md §4.2): the app's API of
 // the store (catalog.json, version.json, the archives and the binaries, as STORE-6 serves them) and the tags of
-// GitHub's API, on one port. It holds PLG-10's examples (tests/fixtures/plugins/examples/, a 1.0.0 verified and a
+// GitHub's API, on one port. It holds PLG-10's examples (plugin-examples/, a 1.0.0 verified and a
 // 1.1.0 of Slack that asks for more), a plugin booby-trapped on purpose, and a version whose archive was changed after
 // its fingerprint. Run alone (`node tests/fake/review-store.mjs`, FAKE_REVIEW_STORE_PORT), it serves them for a trial
 // of `npm run plugin-review` (ESCOUADE_STORE_URL, ESCOUADE_REVIEW_GITHUB_API). Nothing here is ever run: bytes.
@@ -23,15 +23,16 @@ const canonical = (v) =>
           .join(',')}}`
       : JSON.stringify(v);
 
-const EXAMPLES = fileURLToPath(new URL('../../../tests/fixtures/plugins/examples/', import.meta.url));
+const EXAMPLES = fileURLToPath(new URL('../../../plugin-examples/', import.meta.url));
 
-/** The files of an example of PLG-10, as its repository would hold them, with a README and a licence. */
+/** The files of an example of PLG-10, as its repository holds them (without what npm installs or packs). */
 export function exampleFiles(name) {
   const root = join(EXAMPLES, name);
   const out = { 'README.md': `# ${name}\n\nUn exemple de plugin.\n`, LICENSE: MIT };
   const walk = (dir) => {
     for (const f of readdirSync(dir)) {
       const p = join(dir, f);
+      if (f === 'node_modules' || f === 'packs' || f === 'package-lock.json') continue;
       if (statSync(p).isDirectory()) walk(p);
       else out[relative(root, p).replace(/\\/g, '/')] = readFileSync(p);
     }
@@ -108,8 +109,8 @@ export function buildStore() {
         m.permissions.network.push('api.slack.com');
         m.permissions.events.push('ticket.created');
         f['escouade-plugin.json'] = JSON.stringify(m, null, 2);
-        f['slack.mjs'] =
-          `${f['slack.mjs'].toString()}\n// 1.1.0: the channel's name from Slack's API.\nconst api = 'https://api.slack.com/api/conversations.info';\n`;
+        f['dist/plugin.mjs'] =
+          `${f['dist/plugin.mjs'].toString()}\n// 1.1.0: the channel's name from Slack's API.\nconst api = 'https://api.slack.com/api/conversations.info';\n`;
         return f;
       })(),
     },

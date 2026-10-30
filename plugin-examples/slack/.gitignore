@@ -1,0 +1,4 @@
+node_modules/
+packs/
+# Its devDependencies only build and test it: Escouade runs dist/, and esbuild is pinned in package.json.
+package-lock.json

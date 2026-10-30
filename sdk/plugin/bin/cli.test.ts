@@ -11,7 +11,8 @@ import { nativeBin } from './native.mjs';
 // The escouade-plugin of the SDK (ESC-181, PLG-9): validate and pack in Node, test and dev handed to the app's own.
 
 const CLI = path.join(__dirname, 'escouade-plugin.mjs');
-const EXAMPLES = path.join(__dirname, '..', '..', '..', 'tests', 'fixtures', 'plugins', 'examples');
+// PLG-10's examples (ESC-182).
+const EXAMPLES = path.join(__dirname, '..', '..', '..', 'plugin-examples');
 
 function cli(args: string[], env: Record<string, string> = {}) {
   const r = spawnSync(process.execPath, [CLI, ...args, '--lang', 'en'], { encoding: 'utf8', env: { ...process.env, ...env } });
@@ -67,7 +68,10 @@ describe('escouade-plugin of the SDK', () => {
 
   it('packs the same bytes twice, programs executable, without node_modules, .git or packs', () => {
     const dir = tmp();
-    fs.cpSync(path.join(EXAMPLES, 'slack'), dir, { recursive: true });
+    // What the Slack example runs, without its sources (and whatever npm left in it here).
+    for (const f of ['escouade-plugin.json', 'channels.json', 'slack', 'slack.cmd', 'dist/plugin.mjs']) {
+      fs.cpSync(path.join(EXAMPLES, 'slack', f), path.join(dir, f));
+    }
     fs.mkdirSync(path.join(dir, 'node_modules', 'x'), { recursive: true });
     fs.writeFileSync(path.join(dir, 'node_modules', 'x', 'i.js'), '');
     fs.mkdirSync(path.join(dir, '.git'));
@@ -85,11 +89,12 @@ describe('escouade-plugin of the SDK', () => {
     expect(fs.readFileSync(file).equals(bytes)).toBe(true);
     const list = entries(file);
     expect(list.map((e) => e.name)).toEqual([
+      'channels.json',
+      'dist/plugin.mjs',
       `docs/${'a'.repeat(60)}/${'b'.repeat(60)}/long.md`,
       'escouade-plugin.json',
       'slack',
       'slack.cmd',
-      'slack.mjs',
     ]);
     expect(list.find((e) => e.name === 'slack')?.mode).toBe(0o755);
     expect(list.find((e) => e.name === 'escouade-plugin.json')?.mode).toBe(0o644);

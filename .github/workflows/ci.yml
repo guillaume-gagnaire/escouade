@@ -63,7 +63,7 @@ jobs:
             store:
               - 'store/**'
               - 'schemas/**'
-              - 'tests/fixtures/plugins/examples/**'
+              - 'plugin-examples/**'
               - 'website/app/assets/main.css'
               - 'design/store/**'
               - '.github/workflows/ci.yml'
@@ -430,6 +430,13 @@ jobs:
         env:
           ESCOUADE_PLUGIN_BIN: src-tauri/target/debug/escouade-plugin
         run: node sdk/scripts/template-ci.mjs
+
+      # PLG-10's example plugins (plugin-examples/, ESC-182), as their author checks them before a tag: the TypeScript
+      # ones' tests, their dist/ rebuilt and compared, then validate and the bench for all (the SDK built by the step above).
+      - name: The example plugins pass their tests, validate and the bench
+        env:
+          ESCOUADE_PLUGIN_BIN: src-tauri/target/debug/escouade-plugin
+        run: node plugin-examples/ci.mjs
 
       - name: Upload the packages
         uses: actions/upload-artifact@v7

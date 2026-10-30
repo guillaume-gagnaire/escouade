@@ -333,12 +333,19 @@ async fn the_team_rules_example_refuses_rm_rf_with_its_reason() {
     #[cfg(windows)]
     crate::paths::trim_test_path();
     let h = harness("plg8-team-rules");
-    let src = fixtures().join("plugins/examples/team-rules");
+    // The example of PLG-10 (plugin-examples/, ESC-182) as its repository holds it: its program
+    // is dist/plugin.mjs, built and committed.
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../plugin-examples/team-rules");
     let dir = h.dir.join("team-rules");
-    std::fs::create_dir_all(&dir).unwrap();
-    for f in std::fs::read_dir(&src).unwrap() {
-        let f = f.unwrap();
-        std::fs::copy(f.path(), dir.join(f.file_name())).unwrap();
+    std::fs::create_dir_all(dir.join("dist")).unwrap();
+    for f in [
+        "escouade-plugin.json",
+        "rules.json",
+        "team-rules",
+        "team-rules.cmd",
+        "dist/plugin.mjs",
+    ] {
+        std::fs::copy(src.join(f), dir.join(f)).unwrap();
     }
     h.core.plugins.load_dev(&dir, Lang::En).unwrap();
     crate::plugins::decide::warm(&h.core.plugins, &h.core.plugin_runtime);

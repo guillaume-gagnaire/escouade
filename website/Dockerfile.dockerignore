@@ -3,6 +3,9 @@
 !website
 !src-tauri/tauri.conf.json
 !docs/TODO-*.md
+# The page of the example plugins shows their code, checked against these files by its tests.
+!plugin-examples
+plugin-examples/*/node_modules
 website/node_modules
 website/.nuxt
 website/.output

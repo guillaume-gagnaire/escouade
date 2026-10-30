@@ -850,6 +850,67 @@ async fn a_declared_webhook_posts_its_template_to_a_server_with_a_secret_address
     );
 }
 
+/// The `content` of the next body the fake server got.
+async fn content(bodies: &mut tokio::sync::mpsc::UnboundedReceiver<String>) -> String {
+    let got = tokio::time::timeout(Duration::from_secs(20), bodies.recv())
+        .await
+        .expect("the webhook in time")
+        .unwrap();
+    let (_, body) = got.split_once("\r\n\r\n").unwrap();
+    serde_json::from_str::<Value>(body).unwrap()["content"]
+        .as_str()
+        .unwrap()
+        .to_string()
+}
+
+/// The Discord example of PLG-10 (plugin-examples/discord-webhook, ESC-182), its manifest as the
+/// repository holds it but for its host: the fake server stands for discord.com.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_discord_example_posts_the_tickets_to_test_and_the_agents_waiting() {
+    let h = harness("facts-discord-example");
+    let (url, mut bodies) = fake_server().await;
+    let (p, _) = h.project(false).await;
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../plugin-examples/discord-webhook");
+    let mut manifest: Value =
+        serde_json::from_slice(&std::fs::read(src.join("escouade-plugin.json")).unwrap()).unwrap();
+    assert_eq!(manifest["permissions"]["network"], json!(["discord.com"]));
+    manifest["permissions"]["network"] = json!(["127.0.0.1"]);
+    let dir = h.dir.join("discord-webhook");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("escouade-plugin.json"), manifest.to_string()).unwrap();
+    h.core.plugins.load_dev(&dir, Lang::En).unwrap();
+    h.core
+        .secrets
+        .set(&secret_name("dev.exemple.discord", "webhook"), &url)
+        .unwrap();
+    // A ticket moved to review; its other moves and its agent at work say nothing.
+    let (t, _) = reviewed(&h, &p.id, "Le panier [ok]").await;
+    let key = h.ticket(&t.id).key;
+    assert_eq!(
+        content(&mut bodies).await,
+        format!("🧪 **{key}** to test: Le panier [ok] (demo)")
+    );
+
+    // An agent waiting for an answer.
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.core
+        .send_message(&id, "permission".into(), vec![])
+        .await
+        .unwrap();
+    h.wait("the permission", |h| {
+        h.agent(&id).status == AgentStatus::Waiting
+    })
+    .await;
+    let name = h.agent(&id).name;
+    assert_eq!(
+        content(&mut bodies).await,
+        format!("✋ **{name}** waits for you (demo)")
+    );
+    h.core.facts.flush();
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert!(bodies.try_recv().is_err(), "a webhook too many");
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn a_webhook_whose_host_a_fact_makes_goes_only_to_a_host_of_permissions_network() {
     let h = harness("facts-webhook-host");
