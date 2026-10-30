@@ -4,7 +4,7 @@ Demandé par l'utilisateur le 2026-10-26 : « Pour le système de plugins, fais 
 
 Ce document est l'analyse, l'architecture, la sécurité et le plan. Il ne change ni l'app ni le site. Il remplace la décision 3 du 2026-10-25 (« aucun registre en 2.1.0 ; un dépôt public avec revue par PR et signature en 2.2 ») : la place de marché arrive **avec les plugins de la 2.1**. Ce qui reste vrai : une licence libre exigée, pas de vente par Escouade, l'installation depuis un dépôt git toujours permise et marquée « non vérifié ».
 
-L'aperçu : `design/store/index.html` (le store, dans le style du site) et `#store*` de `design/app-redesign/index.html` (« Parcourir le store » dans l'app), leurs captures, et les choix 160 et suivants d'`design/app-redesign/UX-NOTES.md`.
+L'aperçu : `design/store/index.html` (le store, dans le style du site) et `#store*` de `design/app-redesign/index.html` (la page Store de la vue Plugins, direction B), leurs captures, et les choix 160 et suivants d'`design/app-redesign/UX-NOTES.md`.
 
 - §1 : le service (où il vit, sa pile, son hébergement et l'application Coolify, ses sauvegardes, sa surveillance, son coût, la CI) ;
 - §2 : les comptes et le RGPD ;
@@ -385,11 +385,12 @@ La raison d'un retrait est celle, publique, de la liste de révocation signée (
 
 ## 5. Dans l'app
 
-### 5.1 Réglages › Plugins › « Parcourir le store »
+### 5.1 La vue Plugins › Store
 
-Un bouton « Parcourir le store » dans l'en-tête de l'onglet Plugins (PLG-4, ESC-176), qui ouvre le store dans l'onglet même (pas une fenêtre de plus) :
+Le store est la page « Store » de la vue Plugins (PLG-4, ESC-176), direction B (choix 213 à 218 de `design/app-redesign/UX-NOTES.md`) : une vue à elle, ouverte par l'icône des plugins de la barre des projets, pas un onglet des Réglages (Réglages › Plugins n'est plus qu'un lien vers elle) ; il n'y a donc **pas de bouton « Parcourir le store »** dans l'en-tête. Sa barre latérale : Store, Installés, Mises à jour, En développement, puis les catégories avec leur nombre. Le store montre :
+- **« Pour <projet> »** en tête : trois suggestions tirées de ce que l'app voit sur le poste et dans le projet ouvert, chacune avec sa raison (choix 215) ;
 - **la recherche**, sur le catalogue téléchargé (nom, description, mots-clés, auteur, sans tenir compte de la casse ni des accents, comme la recherche des conversations) ;
-- **les catégories** : Harness, Thèmes, Notifications, Kanban, Autorisations, Outils, Langues (celles des points d'extension de la 2.1, puis les suivants) ;
+- **les catégories** (choix 214) : Harness, Sources du Kanban, Hébergeurs de code, Thèmes, Notifications, Autorisations, Outils, Langues ;
 - **le filtre** « Vérifiés seulement » ;
 - **la liste** : nom, auteur, description, badge, installations, ce que le plugin demande en une ligne (« Lance un programme », « Se connecte à hooks.slack.com »), « Installé » ou « Mise à jour » sur ceux qu'on a ;
 - **la page d'un plugin** : le README et la doc, les captures, les permissions en mots, les versions (chacune vérifiée ou non, retirée), l'auteur et son dépôt, le badge, le résumé public de la revue, « Installer » et « Signaler ».
@@ -470,7 +471,7 @@ Sur le design du site (les jetons de `website/app/assets/main.css` : fond presqu
 
 **Où vit la clé** : sur le poste de l'utilisateur, chiffrée, et en double hors ligne ; la clé de secours seulement hors ligne. Les clés publiques dans l'app (et sur escouade.dev, pour qui veut vérifier à la main).
 
-**Si le store tombe** : l'app garde le catalogue en cache (la dernière version lue, son âge dit dans « Parcourir le store ») ; les plugins installés tournent, leurs badges se vérifient hors ligne (la signature et la clé sont sur la machine) ; la liste de révocation en cache s'applique, et se lit aussi sur escouade.dev ; l'installation depuis un dossier ou un dépôt git marche toujours ; seules les installations du store attendent son retour.
+**Si le store tombe** : l'app garde le catalogue en cache (la dernière version lue, son âge dit dans la page Store) ; les plugins installés tournent, leurs badges se vérifient hors ligne (la signature et la clé sont sur la machine) ; la liste de révocation en cache s'applique, et se lit aussi sur escouade.dev ; l'installation depuis un dossier ou un dépôt git marche toujours ; seules les installations du store attendent son retour.
 
 ## 8. Les décisions
 
@@ -515,7 +516,7 @@ Les tickets s'appellent ici STORE-1, STORE-2… ; le chef d'escouade leur donne 
 | STORE-6. L'API de l'app | `catalog.json` (ETag), `version.json`, archives et binaires (cache long), compteur d'installations sans identifiant, `revocations.json` et sa copie sur escouade.dev | Sonnet medium | STORE-3 |
 | STORE-7. La revue locale | `npm run plugin-review` (télécharger, vérifier, extraire sans danger, pistes, banc dans un conteneur sans réseau, diff avec la dernière vérifiée, rapport hors du dépôt), `.claude/commands/review-plugin.md` ; essayé sur les plugins d'exemple et sur un plugin piégé exprès | Opus medium (prompt et sécurité) | STORE-6, ESC-175 (PLG-3), ESC-181 |
 | STORE-8. La signature et la file | Les deux paires de clés (procédure écrite, sauvegarde hors ligne), `plugin-review sign`, le dépôt vérifié par le store, la file `/review`, le jeton d'administration, les signalements, le retrait d'urgence et la liste de révocation signée (`serial`) | Opus medium (sécurité) | STORE-7, STORE-5 |
-| STORE-9. Le store dans l'app | « Parcourir le store » (catalogue en cache, recherche locale, catégories, filtre), la page d'un plugin, l'installation par la fenêtre de PLG-4 avec empreintes et signature vérifiées (clés embarquées), le badge, les mises à jour du store, « N'installer que des versions vérifiées », la liste de révocation (démarrage puis 6 h, `serial`), `escouade://plugin/<id>` ; faux store pour les e2e ; comparé à l'aperçu `#store*` | Opus medium (interface) | ESC-176 (PLG-4), STORE-6, STORE-8 |
+| STORE-9. Le store dans l'app | La page Store de la vue Plugins (catalogue en cache, recherche locale, catégories, filtre), la page d'un plugin, l'installation par la fenêtre de PLG-4 avec empreintes et signature vérifiées (clés embarquées), le badge, les mises à jour du store, « N'installer que des versions vérifiées », la liste de révocation (démarrage puis 6 h, `serial`), `escouade://plugin/<id>` ; faux store pour les e2e ; comparé à l'aperçu `#store*` | Opus medium (interface) | ESC-176 (PLG-4), STORE-6, STORE-8 |
 | STORE-10. Les docs et l'essai réel | `website/content/docs/*/plugins/publishing.md` réécrit pour le store, `security.md` (ce que la revue refuse), `docs/SPEC.md`, `docs/PROTOCOL.md` si besoin, CHANGELOG fr/en ; un essai réel : publier les plugins d'exemple (ESC-182), les revoir, les signer, les installer dans l'app sur Windows, macOS et Linux, révoquer l'un | Sonnet medium | STORE-1 à STORE-9, ESC-182 (PLG-10) |
 | STORE-12. Les annonces sur Discord | Le salon des admins (fr) et le salon public (fr et en) par trois webhooks facultatifs, une tâche pg-boss par message, `Retry-After`, limite par auteur et par jour, contenu d'auteur échappé, aucun lien hors du store (§4.7) | Opus medium (contenu tiers, secrets) | STORE-8 |
 
@@ -569,4 +570,4 @@ Ce qui se note à la fin : les commits et étiquettes publiés, les versions sig
 - GitHub Apps, permissions et installation : <https://docs.github.com/en/apps/creating-github-apps/about-creating-github-apps/about-creating-github-apps> ; l'archive d'un commit : <https://docs.github.com/en/rest/repos/contents#download-a-repository-archive-tar> ; la stabilité des archives (2023) : <https://github.blog/open-source/git/update-on-the-future-stability-of-source-code-archives-and-hashes/> ; l'attestation de provenance : <https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations>.
 - minisign : <https://jedisct1.github.io/minisign/> ; l'updater de Tauri : <https://v2.tauri.app/plugin/updater/>.
 - Ce que font les autres places de marché : `docs/PLUGINS.md`, §2.1 (Raycast et sa revue par PR, JetBrains et sa signature, VS Code et ses éditeurs vérifiés, Obsidian).
-- Escouade : `docs/PLUGINS.md` (manifeste §3.1, installation §3.2, permissions §3.4, télémétrie §3.6), `docs/TODO-2.1.md` (PLG-1 à PLG-12), `docs/registre-rgpd.md`, `website/Dockerfile`.
+- Escouade : `docs/PLUGINS.md` (manifeste §3.1, installation §3.2, permissions §3.4, télémétrie §3.6), `docs/TODO-2.2.md` (PLG-1 à PLG-12), `docs/registre-rgpd.md`, `website/Dockerfile`.
