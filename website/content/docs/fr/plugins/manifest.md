@@ -82,7 +82,8 @@ La place de marché la réencode sans ses métadonnées en 256 et 64 px, et la m
 - `accounts` : un genre de compte, partagé par ses autres points ;
 - `ticketSources`, `forges` et `harnesses` : une source du Kanban, un hébergeur de code, un harness ; chacun avec un `id`, et le compte qu’il utilise (`account`) parmi ceux de `accounts` ;
 - `themes` : des thèmes, décrits dans [Les thèmes](plugins/themes) ;
-- `webhooks`, `commands`, `menus`, `statusBar`, `badges`, `projectTemplates` et `escouadeYml` : décrits avec les versions qui les mettent en service.
+- `webhooks` et `commands` : un webhook ou une commande sur un fait, décrits dans [Les événements](plugins/events) ;
+- `menus`, `statusBar`, `badges`, `projectTemplates` et `escouadeYml` : décrits avec les versions qui les mettent en service.
 
 Un même plugin peut tenir plusieurs points : un plugin GitHub donne ses issues au Kanban et suit ses PR sur un seul compte.
 
@@ -102,4 +103,4 @@ Escouade installe un plugin de trois façons :
 
 La liste des plugins installés, leur origine et leur empreinte sont dans `~/.escouade/plugins.json`. Une copie dont les fichiers ont changé depuis l’installation est désactivée, avec la raison.
 
-Le programme d’un plugin démarre à sa première activation et parle [le protocole](plugins/api). L’onglet Réglages › Plugins, qui installe, active et désinstalle les plugins depuis l’interface, et les faits qui démarrent un plugin arrivent avec la suite de la 2.1.
+Le programme d’un plugin démarre à sa première activation et parle [le protocole](plugins/api). Les faits qui le démarrent et qu’il reçoit sont dans [Les événements](plugins/events). L’onglet Réglages › Plugins, qui installe, active et désinstalle les plugins depuis l’interface, arrive avec la suite de la 2.1.

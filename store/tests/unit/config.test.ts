@@ -4,7 +4,7 @@ import { admins, archiveDir, missingFeatures, missingLines } from '../../server/
 describe('the variables the store reads', () => {
   it('says each feature turned off and the variables it lacks, never a value', () => {
     const lines = missingLines({ DATABASE_URL: 'hunter2', GITHUB_APP_ID: '12', GITHUB_APP_CLIENT_SECRET: 's3cr3t' });
-    expect(lines).toHaveLength(4);
+    expect(lines).toHaveLength(7);
     expect(lines.find((l) => l.includes('github off'))).toContain(
       'missing GITHUB_APP_CLIENT_ID, GITHUB_APP_PRIVATE_KEY, GITHUB_WEBHOOK_SECRET',
     );
@@ -28,6 +28,9 @@ describe('the variables the store reads', () => {
     expect(lines).toEqual([
       '[store] github off (missing GITHUB_APP_CLIENT_SECRET): signing in with GitHub, submissions and webhooks are off',
       '[store] mail off (missing SMTP_URL, MAIL_FROM): no e-mail is sent',
+      '[store] discord admin off (missing STORE_DISCORD_ADMIN_WEBHOOK): the administrators’ channel gets nothing',
+      '[store] discord fr off (missing STORE_DISCORD_PUBLIC_WEBHOOK_FR): the French public channel gets nothing',
+      '[store] discord en off (missing STORE_DISCORD_PUBLIC_WEBHOOK_EN): the English public channel gets nothing',
     ]);
   });
 
@@ -48,6 +51,9 @@ describe('the variables the store reads', () => {
         'SMTP_URL',
         'MAIL_FROM',
         'STORE_ADMINS',
+        'STORE_DISCORD_ADMIN_WEBHOOK',
+        'STORE_DISCORD_PUBLIC_WEBHOOK_FR',
+        'STORE_DISCORD_PUBLIC_WEBHOOK_EN',
       ].map((k) => [k, 'x']),
     );
     expect(missingLines(all)).toEqual([]);

@@ -546,6 +546,20 @@ pub async fn plugins_check_updates(
     Ok(core.plugins.list(crate::i18n::ui()))
 }
 
+/// The user agrees to the commands a plugin runs on facts, as they are now, or takes the
+/// agreement back (`on`: false), which stops them (PLG-5). Gives the plugin as it is now.
+#[tauri::command]
+pub fn plugin_approve_commands(
+    core: CoreState,
+    id: String,
+    on: bool,
+) -> Result<crate::plugins::PluginView, String> {
+    core.plugins
+        .approve_commands(&id, on)
+        .map_err(|e| e.to_string())?;
+    plugin_view(&core, &id)
+}
+
 /// Where the `claude` of a path of the settings is (empty: the one found by itself), the
 /// distribution of the settings (`wsl_distro`) for one of WSL: the line under the field.
 #[tauri::command(async)]
@@ -2172,6 +2186,7 @@ pub async fn term_spawn(
             },
             move |code| {
                 if let Some(c) = hub_core.upgrade() {
+                    c.test_run_ended(&id);
                     c.hub.emit(UiEvent::TerminalExit { id, code });
                 }
             },
@@ -2251,7 +2266,7 @@ pub fn run_start(
         output,
     );
     if let (Some(a), Ok(info)) = (&agent_id, &r) {
-        core.track_test_run(a, &info.id).map_err(err)?;
+        core.track_test_run(a, &info.id, &info.name).map_err(err)?;
     }
     counted(&core, Event::LaunchStarted, r)
 }
@@ -2562,7 +2577,8 @@ pub fn test_run_start(
         cursor_row,
         output,
     )?;
-    core.track_test_run(&agent_id, &info.id).map_err(err)?;
+    core.track_test_run(&agent_id, &info.id, &info.name)
+        .map_err(err)?;
     core.telemetry.track(Event::TestRunStarted);
     Ok(info)
 }
@@ -2691,8 +2707,13 @@ pub fn update_close(updates: State<crate::updates::Updates>, id: u32) {
 /// One HTTP request to `url` (http or https only) without proxy, 2 s at most: true for any
 /// answer.
 #[tauri::command]
-pub async fn http_ready(url: String) -> bool {
-    crate::testlaunch::http_ready(&url).await
+pub async fn http_ready(core: CoreState<'_>, url: String, agent_id: Option<String>) -> Res<bool> {
+    let up = crate::testlaunch::http_ready(&url).await;
+    // An agent's test launch answers: said on the facts' bus (PLG-5).
+    if let (true, Some(a)) = (up, agent_id) {
+        core.test_run_ready(&a, &url);
+    }
+    Ok(up)
 }
 
 // ---------- code hosts ----------

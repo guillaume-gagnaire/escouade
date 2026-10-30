@@ -2436,6 +2436,11 @@ impl<R: Runtime> Core<R> {
         let resume_at = {
             let mut rt = h.lock();
             rt.meta.account = to.id.clone();
+            let lang = crate::i18n::ui();
+            rt.fact(crate::facts::Body::AccountSwitched {
+                from: name_in(lang, &from),
+                to: name_in(lang, to),
+            });
             // It goes on now: nothing left to wait for.
             rt.meta.resume_at.take()
         };

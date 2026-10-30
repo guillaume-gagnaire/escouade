@@ -993,14 +993,17 @@ impl AgentRt {
                 }
                 let view = pending_view(rid, &tool, req, &input, &self.meta.cwd).always_as(&item);
                 self.append(item, fx);
-                self.add_pending(PendingReq {
-                    item_id: rid.to_string(),
-                    tool_use_id,
-                    input,
-                    suggestions,
-                    view,
-                    since: now_ms(),
-                });
+                self.add_pending(
+                    PendingReq {
+                        item_id: rid.to_string(),
+                        tool_use_id,
+                        input,
+                        suggestions,
+                        view,
+                        since: now_ms(),
+                    },
+                    fx,
+                );
                 self.set_status(AgentStatus::Waiting, fx);
                 fx.notify = Some(AgentAlert::new(NotifyKind::Question, body));
                 fx.agent_changed = true;

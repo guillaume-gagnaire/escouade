@@ -30,6 +30,8 @@ Each published version has its `version.json` file: the id, the number, the repo
 
 Once published, the version has its page on the store: its name, its author, “Not verified” or “In review” until it is signed, what it will be able to do in words (the strongest permission first), its repository, commit and fingerprint, its versions, and “Open in Escouade”, which opens its page in the app.
 
+Once the review has read the version, you get its answer by e-mail and in your account. Verified, it bears the seal “Verified by Escouade” and the review’s summary (the permissions read, the hosts reached, what was checked), on its page and in the app, which checks the signature with its own keys. If the review asks for changes or refuses, the version stays published, unverified, and the message says why: a new version that takes it into account goes through the review again.
+
 The README is rendered there once, at submission, in the visitor’s language (`README.en.md` or `README.fr.md`, else `README.md`); the markdown pages of the `store.docs` folder make the “Documentation” tab. The store keeps the markdown and a short list of HTML tags (headings, lists, links, code, tables, `details`); it removes scripts, styles, `style` and `class` attributes, frames and forms. The repository’s images (PNG, JPEG or WebP, 5 MB at most, by a relative path or by their address on GitHub) are copied to the store and re-encoded; images from elsewhere, such as badges, are removed: a visitor loads nothing from a third party. A link to a file of the repository leads to GitHub, at the published commit.
 
 Anyone can report a plugin from its page, without an account, with an e-mail address: a person reads every report. You see that a report is open, never who sent it.

@@ -3,4 +3,10 @@ type Entry = string | Buffer | { symlink: string } | { hardlink: string } | { fi
 
 export function exampleFiles(name: string): Record<string, Entry>;
 export const TRAPPED: Record<string, Entry>;
-export function startReviewStore(port?: number): Promise<{ url: string; githubApi: string; close: () => Promise<void> }>;
+export const FAKE_ADMIN_TOKEN: string;
+export function startReviewStore(port?: number): Promise<{
+  url: string;
+  githubApi: string;
+  received: { route: 'report' | 'signature' | 'revocations'; body: Record<string, unknown> }[];
+  close: () => Promise<void>;
+}>;

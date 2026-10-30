@@ -81,6 +81,12 @@ impl<R: Runtime> Core<R> {
     /// The docs of `project` as `agent` (the id of an agent of Escouade, or None for the window and
     /// Claude outside Escouade) sees them. See the module's comment.
     pub async fn docs_space(&self, project_id: &str, agent: Option<&str>) -> Result<Space> {
+        let mut space = self.docs_space_of(project_id, agent).await?;
+        space.facts = Some((self.facts.emitter(), project_id.to_string()));
+        Ok(space)
+    }
+
+    async fn docs_space_of(&self, project_id: &str, agent: Option<&str>) -> Result<Space> {
         let project = self.project(project_id)?;
         let text = Some(self.docs_text_dir(&project.id));
         let branch = project.docs_branch.trim().to_string();

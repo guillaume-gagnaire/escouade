@@ -49,6 +49,9 @@ const fr = {
     vstates: {
       published: 'Publiée',
       review: 'Publiée · en revue',
+      verified: 'Vérifiée par Escouade',
+      changes: 'Publiée · changements demandés',
+      refused: 'Publiée · revue refusée',
       yanked: 'Retirée',
       ready: 'En attente',
       held: 'Revue manuelle',
@@ -247,6 +250,9 @@ const en: Text = {
     vstates: {
       published: 'Published',
       review: 'Published · in review',
+      verified: 'Verified by Escouade',
+      changes: 'Published · changes asked',
+      refused: 'Published · review refused',
       yanked: 'Taken back',
       ready: 'Waiting',
       held: 'Manual review',

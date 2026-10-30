@@ -52,11 +52,11 @@ Les pistes disent où regarder ; une piste n'est pas un constat, et l'absence de
 Remplis la section « Constats de la revue » du rapport (Edit), sans toucher au reste :
 - chaque constat avec son **fichier et sa ligne**, ce qu'il permet, sa gravité (bloquant, à corriger, remarque) ;
 - ce que tu n'as pas pu vérifier (un binaire sans source, un banc non lancé, une dépendance téléchargée à l'installation) ;
-- le **verdict proposé**, « Vérifier », « Demander des changements » ou « Refuser », et pourquoi. Jamais « Vérifier » quand le script donne une raison mécanique de ne pas le faire (étiquette déplacée, entrée refusée, binaire sans attestation vérifiée, banc qui échoue) ; « Refuser » et le retrait (§4.6) pour un comportement malveillant ;
+- le **verdict proposé**, sur une ligne à lui : `**Verdict final : Vérifier**` (ou « Demander des changements », « Refuser »), et pourquoi ; c'est cette ligne que la file du store affiche. Jamais « Vérifier » quand le script donne une raison mécanique de ne pas le faire (étiquette déplacée, entrée refusée, binaire sans attestation vérifiée, banc qui échoue) ; « Refuser » et le retrait (§4.6) pour un comportement malveillant ;
 - pour « Demander des changements » ou « Refuser », le message à l'auteur, court, sans citer plus de code qu'il ne faut.
 
-Puis relis le résumé public (`<version>.public.md`) et corrige-le s'il le faut : les permissions relues, les hôtes joints, ce qui a été vérifié. Pas une ligne de code du plugin ; il sera publié avec la signature.
+Puis relis le résumé public (`<version>.public.md`, et sa version anglaise `<version>.public.en.md`) et corrige-les s'il le faut : les permissions relues, les hôtes joints, ce qui a été vérifié. Pas une ligne de code du plugin ; il sera publié avec la signature (seules les lignes qui commencent par `- ` le sont).
 
 ## 4. Ta réponse
 
-Dis à l'utilisateur, en quelques lignes : le verdict proposé et sa raison, les constats bloquants, ce qui n'a pas été vérifié (le banc d'abord s'il n'a pas tourné), et les chemins du rapport et du résumé. Pour vérifier, c'est lui qui signe, avec sa clé, quand la signature sera là (STORE-8 : `npm run plugin-review -- sign <id>@<version>`).
+Dis à l'utilisateur, en quelques lignes : le verdict proposé et sa raison, les constats bloquants, ce qui n'a pas été vérifié (le banc d'abord s'il n'a pas tourné), et les chemins du rapport et du résumé. Puis les commandes qui sont à lui, jamais à toi : `npm run plugin-review -- report <id>@<version>` pour déposer le rapport dans la file du store ; pour vérifier, `npm run plugin-review -- sign <id>@<version>` (sa clé, son mot de passe) ; pour demander des changements ou refuser, les boutons de la file (`/review`), avec le message à l'auteur. Tu ne lances aucune de ces commandes, tu n'écris pas dans `~/.escouade-signing/`.

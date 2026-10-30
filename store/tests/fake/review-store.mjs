@@ -199,11 +199,42 @@ export function buildStore() {
   return { catalog, files, tags };
 }
 
-/** Starts the fake store and GitHub on `port` (0: any); gives its address and how to stop it. */
+/** The administration token the fake store takes on its review routes (STORE-8). */
+export const FAKE_ADMIN_TOKEN = 'esc_admin_fake-token-for-the-tests';
+
+/**
+ * Starts the fake store and GitHub on `port` (0: any); gives its address and how to stop it. Its review routes
+ * (/api/v1/review/*) want FAKE_ADMIN_TOKEN and keep what they get in `received`, unchecked (the tests check it); a
+ * revocation list received becomes the one /api/v1/revocations.json serves.
+ */
 export function startReviewStore(port = 0) {
   const { catalog, files, tags } = buildStore();
-  const server = createServer((req, res) => {
+  const received = [];
+  let list = null;
+  const server = createServer(async (req, res) => {
     const path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+    const review = /^\/api\/v1\/review\/(report|signature|revocations)$/.exec(path);
+    if (review && req.method === 'POST') {
+      const chunks = [];
+      for await (const c of req) chunks.push(c);
+      if (req.headers.authorization !== `Bearer ${FAKE_ADMIN_TOKEN}`) {
+        res.writeHead(401, { 'content-type': 'application/json' });
+        return res.end('{"statusMessage":"An administration token is needed"}');
+      }
+      const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      received.push({ route: review[1], body });
+      if (review[1] === 'revocations') list = { json: body.json, minisig: body.minisig };
+      res.writeHead(200, { 'content-type': 'application/json' });
+      return res.end(JSON.stringify(review[1] === 'revocations' ? { serial: JSON.parse(body.json).serial } : { ok: true }));
+    }
+    if (path === '/api/v1/revocations.json' || path === '/api/v1/revocations.json.minisig') {
+      if (!list) {
+        res.writeHead(404, { 'content-type': 'application/json' });
+        return res.end('{"statusMessage":"No revocation list yet"}');
+      }
+      res.writeHead(200, { 'content-type': 'text/plain' });
+      return res.end(path.endsWith('.minisig') ? list.minisig : list.json);
+    }
     if (path === '/api/v1/catalog.json') {
       res.writeHead(200, { 'content-type': 'application/json' });
       return res.end(JSON.stringify(catalog));
@@ -223,7 +254,7 @@ export function startReviewStore(port = 0) {
   return new Promise((done) =>
     server.listen(port, '127.0.0.1', () => {
       const url = `http://127.0.0.1:${server.address().port}`;
-      done({ url, githubApi: `${url}/github`, close: () => new Promise((r) => server.close(r)) });
+      done({ url, githubApi: `${url}/github`, received, close: () => new Promise((r) => server.close(r)) });
     }),
   );
 }

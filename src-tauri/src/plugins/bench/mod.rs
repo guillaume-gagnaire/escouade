@@ -26,33 +26,7 @@ pub const UNKNOWN: &str = "bench/unknown";
 pub const FUTURE: u64 = 999;
 /// The facts of the events (PLG-5): a pattern of `permissions.events` is played on the first of
 /// these it takes in.
-pub const FACTS: [&str; 25] = [
-    "agent.created",
-    "agent.status",
-    "agent.waiting",
-    "agent.stopped",
-    "agent.handover",
-    "turn.ended",
-    "request.permission",
-    "request.question",
-    "request.answered",
-    "ticket.created",
-    "ticket.column",
-    "ticket.report",
-    "ticket.approved",
-    "ticket.rejected",
-    "ticket.merged",
-    "ticket.conflict",
-    "project.added",
-    "project.closed",
-    "worktree.created",
-    "worktree.removed",
-    "launch.started",
-    "launch.ready",
-    "launch.stopped",
-    "tests.result",
-    "app.started",
-];
+pub const FACTS: &[&str] = crate::facts::NAMES;
 
 /// The scenarios, in the order of the report.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
@@ -291,11 +265,14 @@ pub fn fact(name: &str) -> Value {
     let mut f = subjects();
     f["name"] = json!(name);
     f["version"] = json!(1);
+    f["seq"] = json!(1);
     f["at"] = json!(chrono::Utc::now().to_rfc3339());
-    if name == "ticket.column" {
-        f["ticket"]["from"] = json!("doing");
-        f["ticket"]["column"] = json!("test");
-    }
+    // What it says, as the core says it (`facts::Body`); a sample for the fact the bench plays most.
+    f["data"] = if name == "ticket.column" {
+        json!({ "from": "doing", "to": "review" })
+    } else {
+        json!({})
+    };
     f
 }
 

@@ -82,7 +82,8 @@ The marketplace re-encodes it without its metadata at 256 and 64 px, and shows i
 - `accounts`: a kind of account, shared by its other points;
 - `ticketSources`, `forges` and `harnesses`: a source of the Kanban, a code host, a harness; each with an `id`, and the account it uses (`account`) among those of `accounts`;
 - `themes`: themes, described in [Themes](plugins/themes);
-- `webhooks`, `commands`, `menus`, `statusBar`, `badges`, `projectTemplates` and `escouadeYml`: described with the versions that bring them in.
+- `webhooks` and `commands`: a webhook or a command on a fact, described in [Events](plugins/events);
+- `menus`, `statusBar`, `badges`, `projectTemplates` and `escouadeYml`: described with the versions that bring them in.
 
 One plugin can hold several points: a GitHub plugin gives its issues to the Kanban and follows its PRs on a single account.
 
@@ -102,4 +103,4 @@ Escouade installs a plugin in three ways:
 
 The list of installed plugins, their origin and their fingerprint are in `~/.escouade/plugins.json`. A copy whose files changed since it was installed is disabled, with the reason.
 
-A plugin’s program starts at its first activation and speaks [the protocol](plugins/api). The Settings › Plugins tab, which installs, enables and uninstalls plugins from the interface, and the facts that start a plugin come with the rest of 2.1.
+A plugin’s program starts at its first activation and speaks [the protocol](plugins/api). The facts that start it and that it receives are in [Events](plugins/events). The Settings › Plugins tab, which installs, enables and uninstalls plugins from the interface, comes with the rest of 2.1.

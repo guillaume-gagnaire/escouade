@@ -64,8 +64,8 @@ describe('@escouade-dev/plugin', () => {
   it('routes facts by name and by pattern, and a failing handler only to its traces', async () => {
     const plugin = createPlugin();
     const seen: string[] = [];
-    plugin.onEvent('ticket.column', (f) => void seen.push(`column ${f.ticket?.column}`));
-    plugin.onEvent(['ticket.*', 'agent.waiting'], (f) => void seen.push(`any ${f.name}`));
+    plugin.onEvent('ticket.column', (f) => void seen.push(`column ${f.data.to}`));
+    plugin.onEvent(['ticket.*', 'agent.status'], (f) => void seen.push(`any ${f.name}`));
     plugin.onEvent('ticket.merged', () => {
       throw new Error('boom');
     });
@@ -73,9 +73,9 @@ describe('@escouade-dev/plugin', () => {
     await escouade.initialize();
     await escouade.fact('ticket.column');
     await escouade.fact('ticket.merged');
-    await escouade.fact('agent.waiting');
+    await escouade.fact('agent.status', { data: { status: 'waiting', was: 'running' } });
     await escouade.fact('app.started');
-    expect(seen).toEqual(['column test', 'any ticket.column', 'any ticket.merged', 'any agent.waiting']);
+    expect(seen).toEqual(['column review', 'any ticket.column', 'any ticket.merged', 'any agent.status']);
     expect(escouade.traces.join('\n')).toContain('events/fact ticket.merged: Error: boom');
     // A notification is never answered: everything it wrote answers the one call, initialize.
     expect(escouade.received).toHaveLength(1);
@@ -132,7 +132,9 @@ describe('@escouade-dev/plugin', () => {
       name: 'ticket.column',
       version: 1,
       project: { id: 'bench-project', name: 'Banc', private: true },
-      ticket: { id: 'bench-ticket', key: 'APP-1', from: 'doing', column: 'test' },
+      seq: 1,
+      ticket: { id: 'bench-ticket', key: 'APP-1', title: 'Un ticket du banc' },
+      data: { from: 'doing', to: 'review' },
     });
     expect(decisionRequest().request).toEqual({ id: 'bench-request', kind: 'command', tool: 'Bash', input: { command: 'npm test' } });
     expect(FACT_NAMES).toContain('turn.ended');

@@ -3,9 +3,10 @@ import { createPlugin } from '@escouade-dev/plugin';
 
 export const plugin = createPlugin();
 
-// A fact of permissions.events: a ticket changed columns.
+// A fact of permissions.events: a ticket changed columns (its data says from and to).
 plugin.onEvent('ticket.column', (fact, p) => {
-  if (fact.ticket?.column === 'test') p.log.info(`${fact.ticket.key} is ready to test (${fact.project?.name ?? ''})`);
+  // A ticket's fact says its ticket; the fact's type, one for every fact, leaves it optional.
+  if (fact.data.to === 'review') p.log.info(`${fact.ticket?.key ?? ''} is ready to test (${fact.project?.name ?? ''})`);
 });
 
 // A permission an agent asks for, before the user is asked (permissions.decide). Answer within 500 ms.

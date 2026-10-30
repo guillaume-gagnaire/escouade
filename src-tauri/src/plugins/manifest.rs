@@ -91,6 +91,8 @@ pub enum Code {
     Square,
     /// An icon under `ICON_MIN` a side.
     Small,
+    /// A webhook to a host `permissions.network` does not cover (`host_covered`).
+    Network,
 }
 
 /// A field that is wrong, by its path (`contributes.settings[0].key`; empty for the whole file).
@@ -184,6 +186,11 @@ impl Problem {
                 "is no PNG (no SVG nor JPEG: a square PNG of 256 px at least)."
             ),
             Code::Heavy => tr_in!(lang, "pèse plus de 1 Mo.", "weighs over 1 MB."),
+            Code::Network => tr_in!(
+                lang,
+                "va vers un hôte que `permissions.network` ne déclare pas : l'utilisateur ne le verrait pas.",
+                "goes to a host `permissions.network` does not declare: the user would not see it."
+            ),
             Code::Square => tr_in!(
                 lang,
                 "n'est pas carrée (un PNG carré de 256 px au moins, 512 conseillé).",
@@ -441,6 +448,43 @@ fn is_lower_word(w: &str) -> bool {
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'-')
         && b[0] != b'-'
         && b[b.len() - 1] != b'-'
+}
+
+/// The host of an address written whole (`https://hooks.slack.com/x` gives `hooks.slack.com`, in
+/// lower case): its user and its port left out. None for no http(s) address, or a host made by a
+/// template (`{{secrets.webhook}}`), which is checked once it is made.
+pub fn written_host(url: &str) -> Option<String> {
+    let rest = url
+        .trim()
+        .strip_prefix("https://")
+        .or_else(|| url.trim().strip_prefix("http://"))?;
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
+    if authority.contains("{{") || authority.contains("}}") {
+        return None;
+    }
+    let host = authority.rsplit('@').next().unwrap_or("");
+    let host = match host.strip_prefix('[') {
+        // An IPv6 address, in its brackets.
+        Some(v6) => v6.split(']').next().unwrap_or(""),
+        None => host.split(':').next().unwrap_or(""),
+    };
+    (!host.is_empty()).then(|| host.trim_end_matches('.').to_ascii_lowercase())
+}
+
+/// Whether `permissions.network` covers `host`, without regard to case: a host written alone
+/// covers itself; `*.exemple.dev` covers its subdomains, at any depth (`hooks.exemple.dev`,
+/// `a.b.exemple.dev`), but not `exemple.dev` itself (as a TLS certificate's), which is
+/// declared apart; nothing else covers anything.
+pub fn host_covered(host: &str, network: &[String]) -> bool {
+    let host = host.trim_end_matches('.').to_ascii_lowercase();
+    !host.is_empty()
+        && network.iter().any(|p| {
+            let p = p.trim().trim_end_matches('.').to_ascii_lowercase();
+            match p.strip_prefix("*.") {
+                Some(domain) => !domain.is_empty() && host.ends_with(&format!(".{domain}")),
+                None => !p.is_empty() && !p.contains('*') && host == p,
+            }
+        })
 }
 
 /// A reversed domain name in lower case, of two words at least.
@@ -768,7 +812,7 @@ impl Checker {
             .unwrap_or_default();
         let contributes = o
             .get("contributes")
-            .map(|v| self.contributes(v))
+            .map(|v| self.contributes(v, &permissions.network))
             .unwrap_or_default();
         if let Some(v) = o.get("store") {
             self.store(v);
@@ -1000,7 +1044,7 @@ impl Checker {
         }
     }
 
-    fn contributes(&mut self, v: &Value) -> Map<String, Value> {
+    fn contributes(&mut self, v: &Value, network: &[String]) -> Map<String, Value> {
         let mut kept = Map::new();
         let Some(o) = self.object(v, "contributes") else {
             return kept;
@@ -1060,7 +1104,19 @@ impl Checker {
         }
         for point in OPEN_POINTS {
             if let Some(v) = o.get(point) {
-                self.items(v, &path(point));
+                let items = self.items(v, &path(point));
+                if point == "webhooks" {
+                    // A webhook goes only to a host the install window shows (`permissions.network`);
+                    // one whose host is a template is checked when it is sent.
+                    for (at, item) in &items {
+                        let url = item.get("url").and_then(Value::as_str).unwrap_or("");
+                        if let Some(host) = written_host(url) {
+                            if !host_covered(&host, network) {
+                                self.problem(&join(at, "url"), Code::Network);
+                            }
+                        }
+                    }
+                }
             }
         }
         if let Some(v) = o.get("escouadeYml") {

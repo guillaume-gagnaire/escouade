@@ -101,6 +101,8 @@ Ce qui rend un point facile, c'est un **trait ou un registre déjà là**, derri
 
 **Valeur 3** (demandé de toutes les formes ; c'est le point d'entrée de la plupart des plugins). **Difficulté 2** : il faut un bus de faits, typé et versionné, appelé aux endroits du cœur qui changent l'état, et non dérivé des `UiEvent` (qui portent trop et changent avec l'interface). **Risque 2** : un fait dit le nom d'un ticket, d'un projet, d'une branche, parfois un extrait de conversation ; ceux d'un projet privé ne vont qu'aux plugins activés pour lui. Un plugin lent ne retarde rien : les faits partent dans une file, sans attendre de réponse.
 
+**Construit (ESC-177, PLG-5).** Le bus est `src-tauri/src/facts.rs` : un `Body` typé par fait (34 en version 1, de `agent.created` à `app.started`, avec ceux des docs, de la mémoire, des décisions, des PR et des comptes), émis là où l’état change (`AgentRt::set_status`, `add_pending`, `Core::apply`, `edit_ticket_with`, la validation, `remove_worktree`, `move_session`, `Space::spec_write`…), les noms remplis par un fil du bus (`Resolve`). `plugins/events.rs` les distribue : `permissions.events`, une seule règle avec Réglages › Plugins (PLG-4) : les `Choices` (`Plugins::reaches` sur `active_in`, un projet privé éteint d’office, un fait sans projet connu gardé comme privé) et les permissions retirées (`granted` : `events:<e>` retiré coupe le fait, ses webhooks et ses commandes), une file de 256 par plugin, `events/fact` au programme, `contributes.webhooks` (vers un hôte de `permissions.network` seulement, écrit en clair, tiré d’un secret ou fait d’une valeur du fait ; `*.d` couvre les sous-domaines de `d`, pas `d` ; la lecture du manifeste refuse un webhook écrit en clair vers un autre hôte, `manifest::host_covered`) et `contributes.commands` (après l’accord, une empreinte rangée dans `Choices.commands_approved`, donné ou retiré dans l’onglet Permissions). La page « Les événements » du site les décrit fait par fait.
+
 ### 1.7 Les autorisations et les questions
 
 **Où.** `EngineProcess::answer_permission` et `answer_question` (`engine/mod.rs`), la réponse dans le cœur (`core.rs`, `answer_permission`), dans l'agent (`agent.rs`, `answer_permission_by` : qui a répondu), dans la fenêtre (`conv/PermissionCard.svelte`, `QuestionCard.svelte`, `src/lib/answer-keys.svelte.ts`), par la voix (`voice/conversation.rs`), et par un autre agent (`mcp__escouade__answer_permission`). Le refus par défaut de Claude Code (`caps.default_refusal`) et les règles « Toujours » de chaque harness (`PermissionAnswer::Always { rules }`).
@@ -331,9 +333,9 @@ Un fichier `escouade-plugin.json` à la racine du dossier du plugin (du JSON, co
   "escouade": { "api": "1", "min": "2.1.0" },
   "icon": "assets/icon.png",
   "run": { "command": "bin/escouade-slack", "windows": "bin/escouade-slack.exe" },
-  "activation": ["event:ticket.column", "event:agent.waiting"],
+  "activation": ["event:ticket.column", "event:agent.status"],
   "permissions": {
-    "events": ["ticket.*", "agent.waiting"],
+    "events": ["ticket.*", "agent.status"],
     "network": ["hooks.slack.com"],
     "secrets": ["webhook"]
   },

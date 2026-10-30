@@ -30,6 +30,7 @@ import { renderDocs, type KeepImage } from './readme';
 import { TooBig, type Source } from './source';
 import { ARCHIVE_MAX, readArchive, type ArchiveRead } from './tar';
 import { forgetCatalog } from './catalog';
+import { announce } from './discord';
 import { compareVersions, sha256, tagVersion, versionFile, type Binary, type Platform } from './versions';
 
 // The submission of a version (docs/STORE.md, §3): an author picks a public repository the App reads and one of its
@@ -429,6 +430,7 @@ export async function checkVersion(db: Db, deps: Deps, id: number, now = () => n
       .set({ ...base, state, binaries, screenshots, icon: iconKept, docs, versionJson: file.json, versionSha256: file.sha256 })
       .where(eq(versions.id, id));
     await note(db, `version.${state}`, { accountId: v.accountId }, { version: id, plugin: pluginId, sha256: file.sha256 });
+    if (state === 'held') void announce({ kind: 'held', version: id });
     if (state === 'ready' && v.origin === 'webhook' && existing) {
       // A transfer freezes the publications 7 days: the version waits for a click once the freeze is over.
       const frozen = !!existing.frozenUntil && existing.frozenUntil > now();
@@ -436,6 +438,8 @@ export async function checkVersion(db: Db, deps: Deps, id: number, now = () => n
         await markPublished(db, id, now());
         await note(db, 'version.published', { accountId: v.accountId }, { version: id, plugin: pluginId, by: 'auto' });
         await tellAuthor(db, deps, v.accountId, 'auto-published', pluginId!, base.version!);
+        void announce({ kind: 'new-version', version: id });
+        void announce({ kind: 'review', version: id });
         return 'published';
       }
       await tellAuthor(db, deps, v.accountId, 'ready', pluginId!, base.version!);
@@ -453,7 +457,7 @@ export async function checkVersion(db: Db, deps: Deps, id: number, now = () => n
 }
 
 /** The plugins of the other accounts, by id and name, for the names too close. */
-async function otherPlugins(db: Db, accountId: number | null): Promise<Snapshot['others']> {
+export async function otherPlugins(db: Db, accountId: number | null): Promise<Snapshot['others']> {
   const rows = await db
     .select({ id: plugins.id, accountId: plugins.accountId, manifest: versions.manifest })
     .from(plugins)
@@ -583,6 +587,9 @@ export async function publishVersion(
     now,
   );
   if (tell) await tellAuthor(db, tell, account.id, 'published', v.pluginId, v.version!);
+  // Discord, by the queue: the author's click never waits for it.
+  void announce({ kind: plugin ? 'new-version' : 'new-plugin', version: id });
+  if (form.review === undefined || on(form.review)) void announce({ kind: 'review', version: id });
   return { ok: true };
 }
 
@@ -652,6 +659,7 @@ async function noteMoved(db: Db, deps: Deps, known: Version[], commit: string, n
       now,
     );
     first ??= v.id;
+    void announce({ kind: 'tag-moved', version: v.id });
     if (!v.accountId || v.state !== 'published') continue;
     const [a] = await db.select().from(accounts).where(eq(accounts.id, v.accountId));
     if (a?.email && a.emailVerifiedAt)

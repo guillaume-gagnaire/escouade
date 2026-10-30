@@ -86,7 +86,7 @@ pub(super) fn read<R: Runtime>(
 }
 
 /// `write_memory`: a memory written, made or replaced. Answers it, and for the log what changed.
-pub(super) fn write<R: Runtime>(
+pub(crate) fn write<R: Runtime>(
     core: &Core<R>,
     caller: &Caller,
     project: Option<&str>,
@@ -95,6 +95,13 @@ pub(super) fn write<R: Runtime>(
     let p = project_of(core, caller, project)?;
     super::act::may_act_on(core, caller, &p.id)?;
     let (m, new) = memory::write(&memory::dir_of(&p), draft).map_err(failed)?;
+    core.facts.emit(
+        crate::facts::Body::MemoryWritten {
+            memory: m.name.clone(),
+            new,
+        },
+        crate::facts::About::project(&p.id),
+    );
     let changed = if new {
         tr!("souvenir « {n} » noté", "memory “{n}” noted", n = m.name)
     } else {
@@ -112,7 +119,7 @@ pub(super) fn write<R: Runtime>(
 }
 
 /// `forget_memory`: a memory's file removed.
-pub(super) fn forget<R: Runtime>(
+pub(crate) fn forget<R: Runtime>(
     core: &Core<R>,
     caller: &Caller,
     project: Option<&str>,
@@ -127,6 +134,12 @@ pub(super) fn forget<R: Runtime>(
             "No memory “{name}” in the project's memory."
         )));
     }
+    core.facts.emit(
+        crate::facts::Body::MemoryForgotten {
+            memory: name.clone(),
+        },
+        crate::facts::About::project(&p.id),
+    );
     core.memory_changed(&p.id);
     Ok((
         json(&json!({ "project": p.name, "forgotten": name }))?,

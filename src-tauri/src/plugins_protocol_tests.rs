@@ -71,7 +71,7 @@ fn check(value: &Value, schema: &Value, defs: &Value, path: &str, out: &mut Vec<
     }
 }
 
-fn holds(value: &Value, method: &str, part: &str) {
+pub(crate) fn holds(value: &Value, method: &str, part: &str) {
     let s = schema();
     let mut problems = Vec::new();
     check(
@@ -156,7 +156,20 @@ fn the_check_finds_what_breaks_the_schema() {
         "fact",
         &mut problems,
     );
-    assert_eq!(problems.len(), 3, "{problems:#?}");
+    // A name it does not know, a version of another type, and `seq`, `at` and `data` missing.
+    assert_eq!(problems.len(), 5, "{problems:#?}");
+    for part in [
+        "fact.name",
+        "fact.version",
+        "fact.seq",
+        "fact.at",
+        "fact.data",
+    ] {
+        assert!(
+            problems.iter().any(|p| p.starts_with(part)),
+            "{part}: {problems:#?}"
+        );
+    }
 }
 
 /// The site serves the schema at its `$id` (escouade.dev/schemas/plugin-protocol-1.json).

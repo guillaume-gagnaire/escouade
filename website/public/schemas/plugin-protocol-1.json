@@ -8,60 +8,101 @@
     "initialize": {
       "description": "The first message: the version of the protocol Escouade speaks and what it can do. Answer with your own.",
       "direction": "toPlugin",
-      "params": { "$ref": "#/definitions/InitializeParams" },
-      "result": { "$ref": "#/definitions/InitializeResult" },
+      "params": {
+        "$ref": "#/definitions/InitializeParams"
+      },
+      "result": {
+        "$ref": "#/definitions/InitializeResult"
+      },
       "timeoutMs": 10000
     },
     "shutdown": {
       "description": "Escouade closes: answer, then end.",
       "direction": "toPlugin",
-      "params": { "type": "null" },
-      "result": { "type": "null" },
+      "params": {
+        "type": "null"
+      },
+      "result": {
+        "type": "null"
+      },
       "timeoutMs": 1000
     },
     "events/fact": {
       "description": "A fact of permissions.events, from a project where the plugin is on. A notification: no answer.",
       "direction": "toPlugin",
       "notification": true,
-      "params": { "$ref": "#/definitions/Fact" }
+      "params": {
+        "$ref": "#/definitions/Fact"
+      }
     },
     "permissions/decide": {
       "description": "A permission an agent asks for, before the user is asked (permissions.decide). Past the delay, the user is asked.",
       "direction": "toPlugin",
-      "params": { "$ref": "#/definitions/DecideParams" },
-      "result": { "$ref": "#/definitions/Decision" },
+      "params": {
+        "$ref": "#/definitions/DecideParams"
+      },
+      "result": {
+        "$ref": "#/definitions/Decision"
+      },
       "timeoutMs": 500
     },
     "secrets/get": {
       "description": "One of its secrets (a key of permissions.secrets), or null when none is kept.",
       "direction": "toEscouade",
-      "params": { "$ref": "#/definitions/SecretsGetParams" },
-      "result": { "type": ["string", "null"] }
+      "params": {
+        "$ref": "#/definitions/SecretsGetParams"
+      },
+      "result": {
+        "type": ["string", "null"]
+      }
     },
     "log": {
       "description": "A line of its journal.",
       "direction": "toEscouade",
       "notification": true,
-      "params": { "$ref": "#/definitions/LogParams" }
+      "params": {
+        "$ref": "#/definitions/LogParams"
+      }
     }
   },
   "x-defaultTimeoutMs": 5000,
   "x-errors": {
-    "parse": { "code": -32700, "description": "A line that is not JSON." },
-    "invalidRequest": { "code": -32600, "description": "A message that is not JSON-RPC 2.0." },
-    "methodNotFound": { "code": -32601, "description": "A method the other side does not serve." },
-    "invalidParams": { "code": -32602, "description": "Parameters that do not hold." },
-    "internal": { "code": -32603, "description": "The handler failed." },
-    "notYours": { "code": -32001, "description": "A secret that is not one of the plugin's own." },
-    "keychain": { "code": -32002, "description": "The system's keychain cannot be reached." }
+    "parse": {
+      "code": -32700,
+      "description": "A line that is not JSON."
+    },
+    "invalidRequest": {
+      "code": -32600,
+      "description": "A message that is not JSON-RPC 2.0."
+    },
+    "methodNotFound": {
+      "code": -32601,
+      "description": "A method the other side does not serve."
+    },
+    "invalidParams": {
+      "code": -32602,
+      "description": "Parameters that do not hold."
+    },
+    "internal": {
+      "code": -32603,
+      "description": "The handler failed."
+    },
+    "notYours": {
+      "code": -32001,
+      "description": "A secret that is not one of the plugin's own."
+    },
+    "keychain": {
+      "code": -32002,
+      "description": "The system's keychain cannot be reached."
+    }
   },
   "definitions": {
     "FactName": {
       "description": "The facts of Escouade.",
       "enum": [
         "agent.created",
+        "agent.renamed",
         "agent.status",
-        "agent.waiting",
         "agent.stopped",
         "agent.handover",
         "turn.ended",
@@ -83,16 +124,32 @@
         "launch.ready",
         "launch.stopped",
         "tests.result",
-        "app.started"
+        "app.started",
+        "docs.written",
+        "docs.filed",
+        "docs.gaps",
+        "memory.written",
+        "memory.forgotten",
+        "decision.proposed",
+        "decision.accepted",
+        "pr.opened",
+        "account.switched"
       ]
     },
     "Project": {
       "description": "A project, by its id and its name.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "name": { "type": "string" },
-        "private": { "description": "A private project: nothing of it goes to a plugin that is not on for it.", "type": "boolean" }
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "private": {
+          "description": "A private project: nothing of it goes to a plugin that is not on for it.",
+          "type": "boolean"
+        }
       },
       "required": ["id", "name", "private"]
     },
@@ -100,11 +157,16 @@
       "description": "A ticket, by its id, its key and its title.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "key": { "description": "Like ESC-12.", "type": "string" },
-        "title": { "type": "string" },
-        "from": { "description": "The column it left (ticket.column).", "type": "string" },
-        "column": { "description": "The column it is in (ticket.column).", "type": "string" }
+        "id": {
+          "type": "string"
+        },
+        "key": {
+          "description": "Like ESC-12.",
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
       },
       "required": ["id", "key", "title"]
     },
@@ -112,8 +174,12 @@
       "description": "An agent, by its id and its name.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "name": { "type": "string" }
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
       },
       "required": ["id", "name"]
     },
@@ -121,49 +187,103 @@
       "description": "A fact: what changed, and the project, the ticket and the agent it is about, never the conversation. Ignore the fields you do not know.",
       "type": "object",
       "properties": {
-        "name": { "$ref": "#/definitions/FactName" },
-        "version": { "description": "The version of this fact's fields.", "type": "integer" },
-        "at": { "description": "When, in RFC 3339.", "type": "string" },
-        "project": { "$ref": "#/definitions/Project" },
-        "ticket": { "$ref": "#/definitions/Ticket" },
-        "agent": { "$ref": "#/definitions/Agent" }
+        "name": {
+          "$ref": "#/definitions/FactName"
+        },
+        "version": {
+          "description": "The version of this fact's fields.",
+          "type": "integer"
+        },
+        "seq": {
+          "description": "Its number since Escouade started: two facts come in the order of their numbers.",
+          "type": "integer"
+        },
+        "at": {
+          "description": "When, in RFC 3339.",
+          "type": "string"
+        },
+        "project": {
+          "$ref": "#/definitions/Project"
+        },
+        "ticket": {
+          "$ref": "#/definitions/Ticket"
+        },
+        "agent": {
+          "$ref": "#/definitions/Agent"
+        },
+        "data": {
+          "description": "What it says, fact by fact (agent.status: status and was; ticket.column: from and to; turn.ended: end…): see the page Events of the plugins’ documentation.",
+          "type": "object",
+          "additionalProperties": true
+        }
       },
-      "required": ["name", "version", "at"],
+      "required": ["name", "version", "seq", "at", "data"],
       "additionalProperties": true
     },
     "EscouadeCapabilities": {
       "description": "What Escouade can do for the plugin.",
       "type": "object",
       "properties": {
-        "batch": { "description": "Batches, both ways.", "type": "boolean" },
-        "secrets": { "description": "secrets/get.", "type": "boolean" },
-        "log": { "description": "The log notification.", "type": "boolean" },
-        "attach": { "description": "What each agent attached is given again after a restart.", "type": "boolean" }
+        "batch": {
+          "description": "Batches, both ways.",
+          "type": "boolean"
+        },
+        "secrets": {
+          "description": "secrets/get.",
+          "type": "boolean"
+        },
+        "log": {
+          "description": "The log notification.",
+          "type": "boolean"
+        },
+        "attach": {
+          "description": "What each agent attached is given again after a restart.",
+          "type": "boolean"
+        }
       }
     },
     "InitializeParams": {
       "type": "object",
       "properties": {
-        "protocolVersion": { "description": "The version Escouade speaks.", "type": "integer" },
+        "protocolVersion": {
+          "description": "The version Escouade speaks.",
+          "type": "integer"
+        },
         "escouade": {
           "type": "object",
-          "properties": { "version": { "type": "string" } },
+          "properties": {
+            "version": {
+              "type": "string"
+            }
+          },
           "required": ["version"]
         },
         "plugin": {
           "description": "The plugin, as its manifest says.",
           "type": "object",
-          "properties": { "id": { "type": "string" }, "version": { "type": "string" } },
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "version": {
+              "type": "string"
+            }
+          },
           "required": ["id", "version"]
         },
-        "capabilities": { "$ref": "#/definitions/EscouadeCapabilities" }
+        "capabilities": {
+          "$ref": "#/definitions/EscouadeCapabilities"
+        }
       },
       "required": ["protocolVersion", "escouade", "plugin", "capabilities"]
     },
     "InitializeResult": {
       "type": "object",
       "properties": {
-        "protocolVersion": { "description": "The version the plugin speaks; another than Escouade's stops it.", "type": "integer" },
+        "protocolVersion": {
+          "description": "The version the plugin speaks; another than Escouade's stops it.",
+          "type": "integer"
+        },
         "capabilities": {
           "description": "What the plugin can do.",
           "type": "object",
@@ -176,20 +296,40 @@
       "description": "What the agent asks to do.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "kind": { "description": "Like command, edit, fetch.", "type": "string" },
-        "tool": { "description": "The harness's tool, like Bash.", "type": "string" },
-        "input": { "description": "What the tool was given, like { command: 'npm test' }.", "type": "object", "additionalProperties": true }
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "description": "Like command, edit, fetch.",
+          "type": "string"
+        },
+        "tool": {
+          "description": "The harness's tool, like Bash.",
+          "type": "string"
+        },
+        "input": {
+          "description": "What the tool was given, like { command: 'npm test' }.",
+          "type": "object",
+          "additionalProperties": true
+        }
       },
       "required": ["id", "kind"]
     },
     "DecideParams": {
       "type": "object",
       "properties": {
-        "request": { "$ref": "#/definitions/PermissionRequest" },
-        "project": { "$ref": "#/definitions/Project" },
-        "ticket": { "$ref": "#/definitions/Ticket" },
-        "agent": { "$ref": "#/definitions/Agent" }
+        "request": {
+          "$ref": "#/definitions/PermissionRequest"
+        },
+        "project": {
+          "$ref": "#/definitions/Project"
+        },
+        "ticket": {
+          "$ref": "#/definitions/Ticket"
+        },
+        "agent": {
+          "$ref": "#/definitions/Agent"
+        }
       },
       "required": ["request", "project"]
     },
@@ -197,21 +337,35 @@
       "description": "A refusal wins over an allowance; ask leaves it to the user.",
       "type": "object",
       "properties": {
-        "decision": { "enum": ["allow", "deny", "ask"] },
-        "message": { "description": "Why: told to the agent with a refusal.", "type": "string" }
+        "decision": {
+          "enum": ["allow", "deny", "ask"]
+        },
+        "message": {
+          "description": "Why: told to the agent with a refusal.",
+          "type": "string"
+        }
       },
       "required": ["decision"]
     },
     "SecretsGetParams": {
       "type": "object",
-      "properties": { "key": { "description": "A key of permissions.secrets.", "type": "string" } },
+      "properties": {
+        "key": {
+          "description": "A key of permissions.secrets.",
+          "type": "string"
+        }
+      },
       "required": ["key"]
     },
     "LogParams": {
       "type": "object",
       "properties": {
-        "level": { "enum": ["debug", "info", "warn", "error"] },
-        "message": { "type": "string" }
+        "level": {
+          "enum": ["debug", "info", "warn", "error"]
+        },
+        "message": {
+          "type": "string"
+        }
       },
       "required": ["level", "message"]
     }

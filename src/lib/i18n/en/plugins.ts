@@ -152,6 +152,15 @@ export default defineZone('plugins', {
     revoked: 'taken back',
   },
 
+  cmds: {
+    title: 'Runs these commands',
+    waiting:
+      'On the events it receives, in your shell and the project’s folder. Nothing runs before you agree, nor after a command changes.',
+    agree: 'Agree to these commands',
+    agreed: 'Agreed: they run on the events it receives, as written here.',
+    takeBack: 'Take the agreement back',
+  },
+
   projects: {
     intro:
       'A plugin is switched on project by project. A private project is off by default: nothing reaches it until you switch it on there.',
@@ -199,6 +208,9 @@ export default defineZone('plugins', {
       timeout: 'Out of time',
       refused: 'Refused',
       dropped: 'Dropped',
+      webhook: 'Webhook',
+      command: 'Command',
+      decision: 'Decision',
     },
   },
 

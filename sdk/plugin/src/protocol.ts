@@ -5,8 +5,8 @@ export const PROTOCOL_VERSION = 1;
 /** The facts of Escouade. */
 export type FactName =
   | 'agent.created'
+  | 'agent.renamed'
   | 'agent.status'
-  | 'agent.waiting'
   | 'agent.stopped'
   | 'agent.handover'
   | 'turn.ended'
@@ -28,7 +28,16 @@ export type FactName =
   | 'launch.ready'
   | 'launch.stopped'
   | 'tests.result'
-  | 'app.started';
+  | 'app.started'
+  | 'docs.written'
+  | 'docs.filed'
+  | 'docs.gaps'
+  | 'memory.written'
+  | 'memory.forgotten'
+  | 'decision.proposed'
+  | 'decision.accepted'
+  | 'pr.opened'
+  | 'account.switched';
 
 /** A project, by its id and its name. */
 export interface Project {
@@ -44,10 +53,6 @@ export interface Ticket {
   /** Like ESC-12. */
   key: string;
   title: string;
-  /** The column it left (ticket.column). */
-  from?: string;
-  /** The column it is in (ticket.column). */
-  column?: string;
 }
 
 /** An agent, by its id and its name. */
@@ -61,11 +66,15 @@ export interface Fact {
   name: FactName;
   /** The version of this fact's fields. */
   version: number;
+  /** Its number since Escouade started: two facts come in the order of their numbers. */
+  seq: number;
   /** When, in RFC 3339. */
   at: string;
   project?: Project;
   ticket?: Ticket;
   agent?: Agent;
+  /** What it says, fact by fact (agent.status: status and was; ticket.column: from and to; turn.ended: end…): see the page Events of the plugins’ documentation. */
+  data: Record<string, unknown>;
   [field: string]: unknown;
 }
 
@@ -140,8 +149,8 @@ export interface LogParams {
 /** Every fact, in the order of the schema. */
 export const FACT_NAMES: readonly FactName[] = [
   'agent.created',
+  'agent.renamed',
   'agent.status',
-  'agent.waiting',
   'agent.stopped',
   'agent.handover',
   'turn.ended',
@@ -164,6 +173,15 @@ export const FACT_NAMES: readonly FactName[] = [
   'launch.stopped',
   'tests.result',
   'app.started',
+  'docs.written',
+  'docs.filed',
+  'docs.gaps',
+  'memory.written',
+  'memory.forgotten',
+  'decision.proposed',
+  'decision.accepted',
+  'pr.opened',
+  'account.switched',
 ];
 
 /** What Escouade sends to the plugin: each method, its parameters and its answer (`void` for a notification). */

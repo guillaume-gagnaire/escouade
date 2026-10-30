@@ -15,9 +15,15 @@
 pub mod journal;
 // The conformance bench and the fake Escouade, for `escouade-plugin` and the tests (PLG-3).
 pub mod bench;
+// The permission rules: the plugins that decide before the user is asked (PLG-8).
+pub mod decide;
+// The facts handed to the plugins, their webhooks and their commands (PLG-5).
+pub mod events;
 pub mod manifest;
 #[cfg_attr(not(test), allow(dead_code))]
 pub mod runtime;
+// The seal of a version from the store, checked with the keys the app embeds (STORE-8; STORE-9 shows it).
+pub mod store_keys;
 
 use crate::i18n::Lang;
 use crate::paths::DataDir;
@@ -84,6 +90,11 @@ pub struct Choices {
     /// The values of its settings (`contributes.settings`), by key.
     #[serde(default)]
     pub settings: Map<String, Value>,
+    /// The fingerprint of the commands it runs on facts (`contributes.commands`) the user agreed
+    /// to (`events::commands_fingerprint`, PLG-5): other commands run nothing until agreed again;
+    /// empty, none runs.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub commands_approved: String,
 }
 
 impl Default for Choices {
@@ -93,6 +104,7 @@ impl Default for Choices {
             projects: BTreeMap::new(),
             revoked: Vec::new(),
             settings: Map::new(),
+            commands_approved: String::new(),
         }
     }
 }
@@ -103,8 +115,7 @@ fn yes() -> bool {
 
 /// Whether a plugin of `choices` reaches the project `project`: where the user set it, as set;
 /// elsewhere, unless the project is private (§3.3); never with the app's switch off.
-// The events reach a project by it (PLG-5); Réglages › Plugins applies the same rule in the window.
-#[cfg_attr(not(test), allow(dead_code))]
+// The events reach a project by it (PLG-5, `reaches`); Réglages › Plugins applies the same rule in the window.
 pub fn active_in(choices: &Choices, project: &str, private: bool) -> bool {
     choices.enabled && choices.projects.get(project).copied().unwrap_or(!private)
 }
@@ -286,6 +297,10 @@ pub struct PluginView {
     pub installed_at: String,
     /// What the user chose: its switches, the permissions taken back, its settings.
     pub choices: Choices,
+    /// The command lines it runs on facts (`contributes.commands`, PLG-5).
+    pub commands: Vec<String>,
+    /// Whether those commands, as they are now, were agreed to (true without any).
+    pub commands_approved: bool,
     /// What it may do (`asks`), the strongest first.
     pub asks: Vec<String>,
     /// The keys of its secrets (`secret_keys`).
@@ -588,6 +603,14 @@ impl Plugins {
             fingerprint: i.fingerprint.clone(),
             folder: l.folder.display().to_string(),
             declarative: manifest.as_ref().is_some_and(Manifest::declarative),
+            commands: manifest
+                .as_ref()
+                .map(|m| events::commands(m).into_iter().map(|c| c.run).collect())
+                .unwrap_or_default(),
+            commands_approved: manifest.as_ref().is_some_and(|m| {
+                let f = events::commands_fingerprint(m);
+                f.is_empty() || f == i.choices.commands_approved
+            }),
             state,
             ignored,
             installed_at: i.installed_at.clone(),
@@ -597,6 +620,37 @@ impl Plugins {
             update: self.updates.read().get(&i.id).cloned(),
             manifest,
         }
+    }
+
+    /// Whether a fact reaches the plugin `id` (PLG-5): by its choices (`active_in`) in the
+    /// fact's project; a fact of no project (`app.started`) with the app's switch alone, and one
+    /// kept private for want of its project (an agent gone) nowhere.
+    pub fn reaches(&self, id: &str, project: Option<&str>, private: bool) -> bool {
+        let Some(c) = self.choices(id) else {
+            return false;
+        };
+        match project {
+            None => c.enabled && !private,
+            Some(p) => active_in(&c, p, private),
+        }
+    }
+
+    /// The user agrees (`on`) to the commands the plugin `id` runs on facts, as they are now, or
+    /// takes the agreement back: none runs then.
+    pub fn approve_commands(&self, id: &str, on: bool) -> std::io::Result<bool> {
+        let fingerprint = match self.get(id, Lang::En).and_then(|v| v.manifest) {
+            Some(m) if on => events::commands_fingerprint(&m),
+            Some(_) => String::new(),
+            None => return Ok(false),
+        };
+        self.choose(id, |c| c.commands_approved = fingerprint)
+    }
+
+    /// The fingerprint of the commands of `id` the user agreed to.
+    pub(crate) fn commands_approved(&self, id: &str) -> String {
+        self.choices(id)
+            .map(|c| c.commands_approved)
+            .unwrap_or_default()
     }
 
     /// The manifest of the folder `dir`, when it holds.

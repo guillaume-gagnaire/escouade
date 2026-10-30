@@ -12,16 +12,46 @@
           "fr": "Les tickets à tester et les agents qui attendent, dans un salon Slack.",
           "en": "Tickets to test and agents waiting, in a Slack channel."
         },
-        "author": { "name": "Exemple", "url": "https://exemple.dev" },
+        "author": {
+          "name": "Exemple",
+          "url": "https://exemple.dev"
+        },
         "license": "MIT",
         "repository": "https://github.com/exemple/escouade-slack",
-        "escouade": { "api": "1", "min": "2.1.0" },
-        "run": { "command": "bin/escouade-slack", "windows": "bin/escouade-slack.exe" },
+        "escouade": {
+          "api": "1",
+          "min": "2.1.0"
+        },
+        "run": {
+          "command": "bin/escouade-slack",
+          "windows": "bin/escouade-slack.exe"
+        },
         "activation": ["event:ticket.column", "event:agent.waiting"],
-        "permissions": { "events": ["ticket.*", "agent.waiting"], "network": ["hooks.slack.com"], "secrets": ["webhook"] },
+        "permissions": {
+          "events": ["ticket.*", "agent.waiting"],
+          "network": ["hooks.slack.com"],
+          "secrets": ["webhook"]
+        },
         "contributes": {
-          "settings": [{ "key": "channel", "type": "string", "title": { "fr": "Salon", "en": "Channel" } }],
-          "secrets": [{ "key": "webhook", "title": { "fr": "Adresse du webhook", "en": "Webhook URL" } }]
+          "settings": [
+            {
+              "key": "channel",
+              "type": "string",
+              "title": {
+                "fr": "Salon",
+                "en": "Channel"
+              }
+            }
+          ],
+          "secrets": [
+            {
+              "key": "webhook",
+              "title": {
+                "fr": "Adresse du webhook",
+                "en": "Webhook URL"
+              }
+            }
+          ]
         }
       },
       "errors": [],
@@ -31,10 +61,23 @@
       "name": "a declarative plugin: nothing runs",
       "manifest": {
         "id": "dev.exemple.contraste",
-        "name": { "fr": "Contraste élevé", "en": "High contrast" },
+        "name": {
+          "fr": "Contraste élevé",
+          "en": "High contrast"
+        },
         "version": "0.1.0-beta.1",
-        "escouade": { "api": "1", "min": "2.1", "max": "2.4" },
-        "contributes": { "themes": [{ "id": "high-contrast" }] }
+        "escouade": {
+          "api": "1",
+          "min": "2.1",
+          "max": "2.4"
+        },
+        "contributes": {
+          "themes": [
+            {
+              "id": "high-contrast"
+            }
+          ]
+        }
       },
       "errors": [],
       "ignored": []
@@ -46,14 +89,46 @@
         "id": "dev.escouade.github",
         "name": "GitHub",
         "version": "2.1.0",
-        "escouade": { "api": "1", "min": "2.1.0" },
-        "run": { "command": "{escouade}/escouade-plugins", "args": ["github"] },
+        "escouade": {
+          "api": "1",
+          "min": "2.1.0"
+        },
+        "run": {
+          "command": "{escouade}/escouade-plugins",
+          "args": ["github"]
+        },
         "activation": ["account:github", "project:remote-github"],
-        "permissions": { "network": ["api.github.com"], "secrets": ["account:*"], "commands": ["gh auth token"] },
+        "permissions": {
+          "network": ["api.github.com"],
+          "secrets": ["account:*"],
+          "commands": ["gh auth token"]
+        },
         "contributes": {
-          "accounts": [{ "id": "github", "name": "GitHub", "hosts": { "default": "github.com" } }],
-          "ticketSources": [{ "id": "github-issues", "name": "GitHub Issues", "account": "github" }],
-          "forges": [{ "id": "github", "account": "github", "capabilities": { "pullRequests": true } }]
+          "accounts": [
+            {
+              "id": "github",
+              "name": "GitHub",
+              "hosts": {
+                "default": "github.com"
+              }
+            }
+          ],
+          "ticketSources": [
+            {
+              "id": "github-issues",
+              "name": "GitHub Issues",
+              "account": "github"
+            }
+          ],
+          "forges": [
+            {
+              "id": "github",
+              "account": "github",
+              "capabilities": {
+                "pullRequests": true
+              }
+            }
+          ]
         }
       },
       "errors": [],
@@ -65,8 +140,14 @@
         "id": "dev.escouade.github",
         "name": "GitHub",
         "version": "2.1.0",
-        "escouade": { "api": "1", "min": "2.1.0" },
-        "run": { "command": "{escouade}/escouade-plugins", "args": ["github"] }
+        "escouade": {
+          "api": "1",
+          "min": "2.1.0"
+        },
+        "run": {
+          "command": "{escouade}/escouade-plugins",
+          "args": ["github"]
+        }
       },
       "errors": ["id reserved", "run.command reserved"],
       "ignored": []
@@ -77,7 +158,10 @@
         "id": "dev.exemple.futur",
         "name": "Futur",
         "version": "3.0.0",
-        "escouade": { "api": "7", "min": "4.0.0" }
+        "escouade": {
+          "api": "7",
+          "min": "4.0.0"
+        }
       },
       "errors": [],
       "ignored": []
@@ -88,11 +172,34 @@
         "id": "dev.exemple.neuf",
         "name": "Neuf",
         "version": "1.0.0",
-        "escouade": { "api": "1", "min": "2.1.0", "channel": "beta" },
-        "author": { "name": "Moi", "pronouns": "they" },
-        "permissions": { "events": ["app.started"], "camera": true },
-        "contributes": { "hologram": [{}], "settings": [{ "key": "a", "type": "string", "title": "A", "extra": 1 }] },
-        "store": { "categories": ["themes"], "price": 3 },
+        "escouade": {
+          "api": "1",
+          "min": "2.1.0",
+          "channel": "beta"
+        },
+        "author": {
+          "name": "Moi",
+          "pronouns": "they"
+        },
+        "permissions": {
+          "events": ["app.started"],
+          "camera": true
+        },
+        "contributes": {
+          "hologram": [{}],
+          "settings": [
+            {
+              "key": "a",
+              "type": "string",
+              "title": "A",
+              "extra": 1
+            }
+          ]
+        },
+        "store": {
+          "categories": ["themes"],
+          "price": 3
+        },
         "sponsor": "https://exemple.dev/sponsor"
       },
       "errors": [],
@@ -117,26 +224,67 @@
         "id": "Slack",
         "name": "",
         "version": "1.2",
-        "description": { "de": "Nur Deutsch" },
-        "author": { "url": "ftp://exemple.dev" },
+        "description": {
+          "de": "Nur Deutsch"
+        },
+        "author": {
+          "url": "ftp://exemple.dev"
+        },
         "license": "",
         "repository": "github.com/exemple/x",
-        "escouade": { "api": "v1", "min": "deux", "max": "1.0" },
-        "run": { "command": "../bin/x", "args": "--fast", "linux": "/usr/bin/x" },
+        "escouade": {
+          "api": "v1",
+          "min": "deux",
+          "max": "1.0"
+        },
+        "run": {
+          "command": "../bin/x",
+          "args": "--fast",
+          "linux": "/usr/bin/x"
+        },
         "activation": ["", 3],
-        "permissions": { "events": "ticket.*", "decide": "yes", "network": [""] },
+        "permissions": {
+          "events": "ticket.*",
+          "decide": "yes",
+          "network": [""]
+        },
         "contributes": {
           "settings": [
-            { "key": "1x", "type": "colour" },
-            { "key": "1x", "type": "string", "title": "B" }
+            {
+              "key": "1x",
+              "type": "colour"
+            },
+            {
+              "key": "1x",
+              "type": "string",
+              "title": "B"
+            }
           ],
           "secrets": {},
-          "accounts": [{ "name": "A" }],
-          "ticketSources": [{ "id": "src", "account": "nowhere" }],
+          "accounts": [
+            {
+              "name": "A"
+            }
+          ],
+          "ticketSources": [
+            {
+              "id": "src",
+              "account": "nowhere"
+            }
+          ],
           "forges": ["github"],
-          "themes": [{}, { "id": "t" }, 3]
+          "themes": [
+            {},
+            {
+              "id": "t"
+            },
+            3
+          ]
         },
-        "store": { "screenshots": ["C:\\shot.png"], "docs": 3 }
+        "store": {
+          "screenshots": ["C:\\shot.png"],
+          "docs": 3
+        }
       },
       "errors": [
         "$schema type",
@@ -179,7 +327,11 @@
         "id": "dev.exemple.plage",
         "name": "Plage",
         "version": "1.0.0",
-        "escouade": { "api": "1", "min": "2.3.0", "max": "2.2" }
+        "escouade": {
+          "api": "1",
+          "min": "2.3.0",
+          "max": "2.2"
+        }
       },
       "errors": ["escouade.max range"],
       "ignored": []
@@ -188,9 +340,15 @@
       "name": "the types of the values: a text, a number for a string",
       "manifest": {
         "id": "dev.exemple.types",
-        "name": { "fr": 3, "en": "Types" },
+        "name": {
+          "fr": 3,
+          "en": "Types"
+        },
         "version": 1,
-        "escouade": { "api": 1, "min": "2.1.0" },
+        "escouade": {
+          "api": 1,
+          "min": "2.1.0"
+        },
         "author": "Moi"
       },
       "errors": ["name.fr type", "version type", "escouade.api type", "author type"],
@@ -202,10 +360,18 @@
         "id": "dev.exemple.icon",
         "name": "Logo",
         "version": "1.0.0",
-        "escouade": { "api": "1", "min": "2.2.0" },
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
         "icon": "assets/icon.png"
       },
-      "files": { "assets/icon.png": { "png": [512, 512], "size": 40000 } },
+      "files": {
+        "assets/icon.png": {
+          "png": [512, 512],
+          "size": 40000
+        }
+      },
       "errors": [],
       "ignored": []
     },
@@ -215,16 +381,32 @@
         "id": "dev.exemple.icon-smallest",
         "name": "Logo",
         "version": "1.0.0",
-        "escouade": { "api": "1", "min": "2.2.0" },
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
         "icon": "icon.png"
       },
-      "files": { "icon.png": { "png": [256, 256], "size": 1048576 } },
+      "files": {
+        "icon.png": {
+          "png": [256, 256],
+          "size": 1048576
+        }
+      },
       "errors": [],
       "ignored": []
     },
     {
       "name": "icon absent: the letters stay",
-      "manifest": { "id": "dev.exemple.icon-absent", "name": "Logo", "version": "1.0.0", "escouade": { "api": "1", "min": "2.2.0" } },
+      "manifest": {
+        "id": "dev.exemple.icon-absent",
+        "name": "Logo",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        }
+      },
       "errors": [],
       "ignored": []
     },
@@ -234,7 +416,10 @@
         "id": "dev.exemple.icon-missing",
         "name": "Logo",
         "version": "1.0.0",
-        "escouade": { "api": "1", "min": "2.2.0" },
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
         "icon": "icon.png"
       },
       "files": {},
@@ -247,10 +432,17 @@
         "id": "dev.exemple.icon-not-square",
         "name": "Logo",
         "version": "1.0.0",
-        "escouade": { "api": "1", "min": "2.2.0" },
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
         "icon": "icon.png"
       },
-      "files": { "icon.png": { "png": [300, 256] } },
+      "files": {
+        "icon.png": {
+          "png": [300, 256]
+        }
+      },
       "errors": ["icon square"],
       "ignored": []
     },
@@ -260,10 +452,17 @@
         "id": "dev.exemple.icon-too-small",
         "name": "Logo",
         "version": "1.0.0",
-        "escouade": { "api": "1", "min": "2.2.0" },
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
         "icon": "icon.png"
       },
-      "files": { "icon.png": { "png": [128, 128] } },
+      "files": {
+        "icon.png": {
+          "png": [128, 128]
+        }
+      },
       "errors": ["icon small"],
       "ignored": []
     },
@@ -273,10 +472,18 @@
         "id": "dev.exemple.icon-too-heavy",
         "name": "Logo",
         "version": "1.0.0",
-        "escouade": { "api": "1", "min": "2.2.0" },
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
         "icon": "icon.png"
       },
-      "files": { "icon.png": { "png": [512, 512], "size": 1048577 } },
+      "files": {
+        "icon.png": {
+          "png": [512, 512],
+          "size": 1048577
+        }
+      },
       "errors": ["icon heavy"],
       "ignored": []
     },
@@ -286,10 +493,17 @@
         "id": "dev.exemple.icon-not-a",
         "name": "Logo",
         "version": "1.0.0",
-        "escouade": { "api": "1", "min": "2.2.0" },
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
         "icon": "icon.png"
       },
-      "files": { "icon.png": { "text": "ÿØÿà JFIF" } },
+      "files": {
+        "icon.png": {
+          "text": "ÿØÿà JFIF"
+        }
+      },
       "errors": ["icon png"],
       "ignored": []
     },
@@ -299,10 +513,17 @@
         "id": "dev.exemple.icon-svg",
         "name": "Logo",
         "version": "1.0.0",
-        "escouade": { "api": "1", "min": "2.2.0" },
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
         "icon": "icon.svg"
       },
-      "files": { "icon.svg": { "text": "<svg xmlns=\"http://www.w3.org/2000/svg\"><script>alert(1)</script></svg>" } },
+      "files": {
+        "icon.svg": {
+          "text": "<svg xmlns=\"http://www.w3.org/2000/svg\"><script>alert(1)</script></svg>"
+        }
+      },
       "errors": ["icon png"],
       "ignored": []
     },
@@ -312,10 +533,17 @@
         "id": "dev.exemple.icon-out-of-the-folder-by",
         "name": "Logo",
         "version": "1.0.0",
-        "escouade": { "api": "1", "min": "2.2.0" },
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
         "icon": "../icon.png"
       },
-      "files": { "../icon.png": { "png": [512, 512] } },
+      "files": {
+        "../icon.png": {
+          "png": [512, 512]
+        }
+      },
       "errors": ["icon path"],
       "ignored": []
     },
@@ -325,7 +553,10 @@
         "id": "dev.exemple.icon-absolute",
         "name": "Logo",
         "version": "1.0.0",
-        "escouade": { "api": "1", "min": "2.2.0" },
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
         "icon": "/usr/share/icon.png"
       },
       "errors": ["icon path"],
@@ -337,7 +568,10 @@
         "id": "dev.exemple.icon-remote",
         "name": "Logo",
         "version": "1.0.0",
-        "escouade": { "api": "1", "min": "2.2.0" },
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
         "icon": "https://exemple.dev/icon.png"
       },
       "errors": ["icon path"],
@@ -349,11 +583,235 @@
         "id": "dev.exemple.icon-not-a-text",
         "name": "Logo",
         "version": "1.0.0",
-        "escouade": { "api": "1", "min": "2.2.0" },
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
         "icon": 512
       },
       "errors": ["icon type"],
       "ignored": []
+    },
+    {
+      "name": "a webhook goes only to a host of permissions.network, an address written whole as one from a template",
+      "manifest": {
+        "id": "dev.exemple.hook",
+        "name": "Hook",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.1.0"
+        },
+        "permissions": {
+          "events": ["ticket.*"],
+          "network": ["hooks.slack.com"]
+        },
+        "contributes": {
+          "webhooks": [
+            {
+              "url": "https://hooks.slack.com/services/x",
+              "events": ["ticket.created"]
+            },
+            {
+              "url": "https://discord.com/api/webhooks/1",
+              "events": ["ticket.created"]
+            },
+            {
+              "url": "{{secrets.webhook}}",
+              "events": ["ticket.created"]
+            },
+            {
+              "url": "https://{{data.host}}/x",
+              "events": ["ticket.created"]
+            }
+          ]
+        }
+      },
+      "errors": ["contributes.webhooks[1].url network"],
+      "ignored": []
+    },
+    {
+      "name": "a host is compared without regard to case, its user and its port left out",
+      "manifest": {
+        "id": "dev.exemple.hook",
+        "name": "Hook",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.1.0"
+        },
+        "permissions": {
+          "events": ["ticket.*"],
+          "network": ["Hooks.Slack.COM"]
+        },
+        "contributes": {
+          "webhooks": [
+            {
+              "url": "https://HOOKS.slack.com:443/x",
+              "events": ["ticket.created"]
+            },
+            {
+              "url": "https://hooks.slack.com@evil.dev/x",
+              "events": ["ticket.created"]
+            },
+            {
+              "url": "https://user@hooks.slack.com/x",
+              "events": ["ticket.created"]
+            }
+          ]
+        }
+      },
+      "errors": ["contributes.webhooks[1].url network"],
+      "ignored": []
+    },
+    {
+      "name": "*.domain covers its subdomains at any depth, never the domain itself nor a name that ends like it",
+      "manifest": {
+        "id": "dev.exemple.hook",
+        "name": "Hook",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.1.0"
+        },
+        "permissions": {
+          "events": ["ticket.*"],
+          "network": ["*.exemple.dev"]
+        },
+        "contributes": {
+          "webhooks": [
+            {
+              "url": "https://hooks.exemple.dev/x",
+              "events": ["ticket.created"]
+            },
+            {
+              "url": "https://a.b.exemple.dev/x",
+              "events": ["ticket.created"]
+            },
+            {
+              "url": "https://exemple.dev/x",
+              "events": ["ticket.created"]
+            },
+            {
+              "url": "https://evilexemple.dev/x",
+              "events": ["ticket.created"]
+            }
+          ]
+        }
+      },
+      "errors": ["contributes.webhooks[2].url network", "contributes.webhooks[3].url network"],
+      "ignored": []
+    },
+    {
+      "name": "a webhook without permissions.network goes nowhere",
+      "manifest": {
+        "id": "dev.exemple.hook",
+        "name": "Hook",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.1.0"
+        },
+        "permissions": {
+          "events": ["ticket.*"],
+          "network": []
+        },
+        "contributes": {
+          "webhooks": [
+            {
+              "url": "https://hooks.slack.com/x",
+              "events": ["ticket.created"]
+            }
+          ]
+        }
+      },
+      "errors": ["contributes.webhooks[0].url network"],
+      "ignored": []
     }
-  ]
+  ],
+  "hosts": {
+    "about": "Whether permissions.network covers a host (host_covered, hostCovered): both readers go through every case.",
+    "cases": [
+      {
+        "host": "hooks.slack.com",
+        "network": ["hooks.slack.com"],
+        "covered": true
+      },
+      {
+        "host": "HOOKS.Slack.com",
+        "network": ["hooks.slack.com"],
+        "covered": true
+      },
+      {
+        "host": "hooks.slack.com",
+        "network": ["Hooks.SLACK.com"],
+        "covered": true
+      },
+      {
+        "host": "hooks.slack.com.",
+        "network": ["hooks.slack.com"],
+        "covered": true
+      },
+      {
+        "host": "slack.com",
+        "network": ["hooks.slack.com"],
+        "covered": false
+      },
+      {
+        "host": "hooks.exemple.dev",
+        "network": ["*.exemple.dev"],
+        "covered": true
+      },
+      {
+        "host": "a.b.exemple.dev",
+        "network": ["*.exemple.dev"],
+        "covered": true
+      },
+      {
+        "host": "Hooks.Exemple.DEV",
+        "network": ["*.EXEMPLE.dev"],
+        "covered": true
+      },
+      {
+        "host": "exemple.dev",
+        "network": ["*.exemple.dev"],
+        "covered": false
+      },
+      {
+        "host": "evilexemple.dev",
+        "network": ["*.exemple.dev"],
+        "covered": false
+      },
+      {
+        "host": "exemple.dev.evil.dev",
+        "network": ["*.exemple.dev"],
+        "covered": false
+      },
+      {
+        "host": "exemple.dev",
+        "network": ["*.exemple.dev", "exemple.dev"],
+        "covered": true
+      },
+      {
+        "host": "evil.dev",
+        "network": ["*"],
+        "covered": false
+      },
+      {
+        "host": "evil.dev",
+        "network": ["*.dev*"],
+        "covered": false
+      },
+      {
+        "host": "evil.dev",
+        "network": [],
+        "covered": false
+      },
+      {
+        "host": "",
+        "network": ["hooks.slack.com"],
+        "covered": false
+      }
+    ]
+  }
 }

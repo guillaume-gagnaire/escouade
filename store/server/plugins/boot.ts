@@ -1,5 +1,6 @@
 import { archiveDir, invalidLines, keysDir, missingLines } from '../utils/config';
 import { migrateDb, migrationsDir, openDb } from '../utils/db';
+import { webhookProblems } from '../utils/discord';
 import { githubApp } from '../utils/github';
 import { startQueue } from '../utils/queue';
 import { loadKeys } from '../utils/revocations';
@@ -11,19 +12,20 @@ import { githubSource } from '../utils/source';
 // shown by /api/health; the pages are still served.
 export default defineNitroPlugin((nitro) => {
   const env = process.env;
-  for (const line of [...missingLines(env), ...invalidLines(env)]) console.warn(line);
+  for (const line of [...missingLines(env), ...invalidLines(env), ...webhookProblems(env)]) console.warn(line);
   service.archives = archiveDir(env);
   void loadKeys(keysDir(env)).then((keys) => {
     service.keys = keys;
     if (!keys.length) console.warn(`[store] no public key in ${keysDir(env)}: no revocation list can be taken in`);
   });
+  const site = (env.NUXT_PUBLIC_SITE_URL ?? '').trim().replace(/\/+$/, '') || 'https://store.escouade.dev';
   const app = githubApp(env);
   service.deps = app
     ? {
         source: (installationId) => githubSource(app, installationId),
         archives: service.archives,
         env,
-        site: (env.NUXT_PUBLIC_SITE_URL ?? '').trim().replace(/\/+$/, '') || 'https://store.escouade.dev',
+        site,
       }
     : null;
 
@@ -38,7 +40,7 @@ export default defineNitroPlugin((nitro) => {
   void (async () => {
     try {
       await migrateDb(db, migrationsDir(env));
-      service.boss = await startQueue(url, db, service.deps);
+      service.boss = await startQueue(url, db, service.deps, { env, site });
       console.info('[store] ready: migrations played, queue started');
     } catch (e) {
       service.error = e instanceof Error ? e.message : String(e);

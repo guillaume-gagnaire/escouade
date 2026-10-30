@@ -117,7 +117,10 @@ describe('the leads', () => {
   it('let a host through by its exact name or a *.domain entry', () => {
     expect(hostAllowed('hooks.slack.com', ['hooks.slack.com'])).toBe(true);
     expect(hostAllowed('a.b.ghe.com', ['*.ghe.com'])).toBe(true);
-    expect(hostAllowed('ghe.com', ['*.ghe.com'])).toBe(true);
+    // The app's rule: `*.domain` covers its subdomains, not the domain itself, declared apart.
+    expect(hostAllowed('ghe.com', ['*.ghe.com'])).toBe(false);
+    expect(hostAllowed('ghe.com', ['*.ghe.com', 'ghe.com'])).toBe(true);
+    expect(hostAllowed('Hooks.Slack.COM', ['hooks.slack.com'])).toBe(true);
     expect(hostAllowed('evilghe.com', ['*.ghe.com'])).toBe(false);
     expect(hostAllowed('slack.com.evil.net', ['slack.com'])).toBe(false);
   });

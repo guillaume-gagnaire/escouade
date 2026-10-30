@@ -29,10 +29,10 @@ const plugin = createPlugin();
 
 // Un fait de permissions.events.
 plugin.onEvent('ticket.column', async (fact, p) => {
-  if (fact.ticket?.column !== 'test') return;
+  if (fact.data.to !== 'review') return;
   const webhook = await p.secret('webhook'); // l'une de permissions.secrets, ou null
   if (!webhook) return p.log.warn('no webhook kept: nothing sent');
-  await fetch(webhook, { method: 'POST', body: JSON.stringify({ text: `${fact.ticket.key} is ready to test` }) });
+  await fetch(webhook, { method: 'POST', body: JSON.stringify({ text: `${fact.ticket?.key ?? ''} is ready to test` }) });
 });
 
 // Une autorisation qu'un agent demande (permissions.decide) : en moins de 500 ms.
@@ -86,7 +86,7 @@ import { plugin } from '../src/plugin.ts';
 test('a ticket moved to test is said in the journal', async () => {
   const escouade = connect(plugin, { secrets: { webhook: null } });
   await escouade.initialize();
-  await escouade.fact('ticket.column', { ticket: { key: 'APP-7', column: 'test' } });
+  await escouade.fact('ticket.column', { ticket: { key: 'APP-7' }, data: { from: 'doing', to: 'review' } });
   assert.deepEqual(escouade.logs, [{ level: 'warn', message: 'no webhook kept: nothing sent' }]);
 });
 ```

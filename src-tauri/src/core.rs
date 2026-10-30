@@ -860,6 +860,10 @@ pub struct Core<R: Runtime = Wry> {
     pub plugins: Arc<crate::plugins::Plugins>,
     /// Their processes (`plugins::runtime`): started at their first activation, closed with the app.
     pub(crate) plugin_runtime: Arc<crate::plugins::runtime::Runtime>,
+    /// The facts' bus (PLG-5): what happened, told where the state changes.
+    pub facts: crate::facts::Bus,
+    /// What hands the facts to the plugins (`plugins::events`).
+    pub(crate) plugin_events: Arc<crate::plugins::events::Dispatch>,
     /// The download of the vectors' model under way (ESC-254), by its flag to call it off.
     pub(crate) vectors_download: Mutex<Option<Arc<std::sync::atomic::AtomicBool>>>,
     pub git_cache: RwLock<HashMap<String, GitInfo>>,
@@ -1810,18 +1814,29 @@ impl<R: Runtime> Core<R> {
                 .unwrap_or_default()
         };
         let plugins = crate::plugins::Plugins::load(data.clone(), env!("CARGO_PKG_VERSION"));
+        let plugin_runtime = crate::plugins::runtime::Runtime::new(
+            plugins.clone(),
+            secrets.clone(),
+            &data,
+            env!("CARGO_PKG_VERSION"),
+            crate::plugins::runtime::Limits::default(),
+        );
+        let plugin_events = crate::plugins::events::Dispatch::new(
+            plugins.clone(),
+            plugin_runtime.clone(),
+            secrets.clone(),
+            crate::plugins::events::QUEUE,
+        );
+        let facts = crate::facts::Bus::new();
+        facts.subscribe(plugin_events.clone());
         let core = Arc::new_cyclic(|me| Self {
             me: me.clone(),
             telemetry,
             stats: Stats::open(&data.stats_db()),
             codeindex: crate::codeindex::Service::new(data.clone()),
-            plugin_runtime: crate::plugins::runtime::Runtime::new(
-                plugins.clone(),
-                secrets.clone(),
-                &data,
-                env!("CARGO_PKG_VERSION"),
-                crate::plugins::runtime::Limits::default(),
-            ),
+            plugin_runtime,
+            facts,
+            plugin_events,
             plugins,
             app,
             data,
@@ -1941,6 +1956,16 @@ impl<R: Runtime> Core<R> {
             clock_ahead: std::sync::atomic::AtomicI64::new(0),
         });
         core.usage.lock().set_today(&core.stats.today_by_account());
+        // The names in the facts are the core's; each agent tells its own.
+        let resolver: std::sync::Weak<dyn crate::facts::Resolve> =
+            Arc::downgrade(&(core.clone() as Arc<dyn crate::facts::Resolve>));
+        core.facts.resolve_with(resolver);
+        let place: std::sync::Weak<dyn crate::plugins::events::Place> =
+            Arc::downgrade(&(core.clone() as Arc<dyn crate::plugins::events::Place>));
+        core.plugin_events.place_with(place);
+        for h in core.agents.read().values() {
+            h.lock().facts = core.facts.emitter();
+        }
         // The API keys of the Cursor accounts, which their processes go by (ESC-43).
         core.load_account_keys();
         // The images pasted in the interfaces a week ago or more, also when nobody pastes any more.
@@ -1952,8 +1977,21 @@ impl<R: Runtime> Core<R> {
         (core, rx)
     }
 
+    /// `app.started` on the facts' bus (PLG-5).
+    pub(crate) fn tell_started(&self) {
+        self.facts.emit(
+            crate::facts::Body::AppStarted {
+                version: env!("CARGO_PKG_VERSION").to_string(),
+            },
+            crate::facts::About::default(),
+        );
+    }
+
     pub fn start(self: &Arc<Self>, git_rx: mpsc::UnboundedReceiver<String>) {
         let projects = self.projects.read().clone();
+        self.tell_started();
+        // The plugins that decide run before the first permission asked (PLG-8).
+        crate::plugins::decide::warm(&self.plugins, &self.plugin_runtime);
         self.telemetry.track(self.started_event());
         if !cfg!(test) {
             self.telemetry.spawn();
@@ -2423,6 +2461,25 @@ impl<R: Runtime> Core<R> {
         self.agents.read().contains_key(id)
     }
 
+    /// What a fact of the agent `id` is about: the agent and its project (`facts`).
+    pub(crate) fn about_agent(&self, id: &str) -> crate::facts::About {
+        match self.agent(id) {
+            Ok(h) => {
+                let rt = h.lock();
+                crate::facts::About::agent(id, &rt.meta.name, &rt.meta.project_id)
+            }
+            // Gone: its project unknown, the fact goes to no plugin that could not see it.
+            Err(_) => crate::facts::About {
+                agent: Some(crate::facts::Named {
+                    id: id.to_string(),
+                    name: String::new(),
+                }),
+                private: Some(true),
+                ..Default::default()
+            },
+        }
+    }
+
     pub(crate) fn emit_agent(&self, h: &AgentHandle) {
         let view = h.lock().view();
         if !self.is_registered(&view.meta.id) {
@@ -2581,16 +2638,110 @@ impl<R: Runtime> Core<R> {
         if changed {
             self.update_tray();
         }
-        if let Some(alert) = fx.notify {
-            // A ticket's agent at work: its board tells when the ticket is ready or blocked; its
-            // questions still call for the user.
-            if alert.kind == NotifyKind::Question || !self.ticket_doing(id) {
-                self.notify_agent(alert, project_id, id, name);
-            }
+        // The plugins that decide answer first (PLG-8): the user is told only if they leave it.
+        let notify = if fx.asked.is_empty() {
+            fx.notify
+        } else {
+            self.plugins_decide(id, project_id, name, fx.asked, fx.notify)
+        };
+        if let Some(alert) = notify {
+            self.notify_agent_now(alert, id, project_id, name);
         }
         if let Some(end) = fx.turn_end {
+            self.facts.emit(
+                crate::facts::turn_ended(&end),
+                crate::facts::About::agent(id, name, project_id),
+            );
             self.on_turn_end(id, end);
         }
+    }
+
+    fn notify_agent_now(
+        self: &Arc<Self>,
+        alert: AgentAlert,
+        id: &str,
+        project_id: &str,
+        name: &str,
+    ) {
+        // A ticket's agent at work: its board tells when the ticket is ready or blocked; its
+        // questions still call for the user.
+        if alert.kind == NotifyKind::Question || !self.ticket_doing(id) {
+            self.notify_agent(alert, project_id, id, name);
+        }
+    }
+
+    /// The permissions `asked` go first to the plugins that decide in the project (PLG-8,
+    /// `plugins::decide`): what they allow or refuse is answered by them, named on the card
+    /// (« Autorisé par <plugin> via Escouade »); what they leave goes to the user, told then by
+    /// `alert`. Gives `alert` back when no plugin decides there.
+    fn plugins_decide(
+        self: &Arc<Self>,
+        id: &str,
+        project_id: &str,
+        name: &str,
+        asked: Vec<crate::plugins::decide::Asked>,
+        alert: Option<AgentAlert>,
+    ) -> Option<AgentAlert> {
+        use crate::facts::Resolve;
+        use crate::plugins::decide;
+        let mut about = crate::facts::About::agent(id, name, project_id);
+        let private = self.resolve(&mut about).unwrap_or(true);
+        let deciders = decide::deciders(&self.plugins, project_id, private);
+        if deciders.is_empty() {
+            return alert;
+        }
+        let mut subjects = serde_json::json!({
+            "project": {
+                "id": project_id,
+                "name": about.project.map(|p| p.name).unwrap_or_default(),
+                "private": private,
+            },
+            "agent": { "id": id, "name": about.agent.map(|a| a.name).unwrap_or_default() },
+        });
+        if let Some(t) = about.ticket {
+            subjects["ticket"] = serde_json::json!({ "id": t.id, "key": t.key, "title": t.title });
+        }
+        let (me, id, project_id, name) = (
+            self.clone(),
+            id.to_string(),
+            project_id.to_string(),
+            name.to_string(),
+        );
+        tauri::async_runtime::spawn(async move {
+            let mut left = false;
+            for a in asked {
+                let arg: String = a.arg.chars().take(200).collect();
+                let what = format!("{} {arg}", a.tool);
+                let params = decide::params(&a, subjects.clone());
+                let verdict =
+                    decide::decide(&me.plugin_runtime, &deciders, &params, what.trim()).await;
+                let answered = match &verdict {
+                    decide::Verdict::Allow { by } => {
+                        me.answer_permission_by(&id, &a.request_id, "allow", None, Some(by))
+                    }
+                    decide::Verdict::Deny { by, message } => me.answer_permission_by(
+                        &id,
+                        &a.request_id,
+                        "deny",
+                        message.clone(),
+                        Some(by),
+                    ),
+                    decide::Verdict::Ask => {
+                        left = true;
+                        continue;
+                    }
+                };
+                match answered {
+                    Ok(()) => log::info!("agent {id}: {verdict:?} for {}", a.request_id),
+                    // Answered meanwhile (the user in the window, a client), or its process gone.
+                    Err(e) => log::info!("agent {id}: {verdict:?} not given: {e:#}"),
+                }
+            }
+            if let Some(alert) = alert.filter(|_| left) {
+                me.notify_agent_now(alert, &id, &project_id, &name);
+            }
+        });
+        None
     }
 
     pub(crate) fn on_frame(self: &Arc<Self>, h: &AgentHandle, gen: u64, frame: Value) {
@@ -5988,6 +6139,21 @@ impl<R: Runtime> Core<R> {
             h.lock().notice("warn", text, &mut fx);
         }
         self.agents.write().insert(id.clone(), h.clone());
+        {
+            let mut rt = h.lock();
+            rt.facts = self.facts.emitter();
+            let m = &rt.meta;
+            rt.fact(crate::facts::Body::AgentCreated {
+                harness: m.engine.to_string(),
+                model: m.model.clone(),
+            });
+            if let Some(wt) = &fresh {
+                rt.fact(crate::facts::Body::WorktreeCreated {
+                    branch: wt.branch.clone(),
+                    path: wt.path.clone(),
+                });
+            }
+        }
         // Its new worktree is set up (dependencies…) before it takes a message.
         let setting_up = fresh
             .as_ref()
@@ -6420,6 +6586,10 @@ impl<R: Runtime> Core<R> {
             if let Some((_, wt)) = &setup {
                 rt.meta.cwd = wt.path.clone();
                 rt.meta.worktree = Some(wt.clone());
+                rt.fact(crate::facts::Body::WorktreeCreated {
+                    branch: wt.branch.clone(),
+                    path: wt.path.clone(),
+                });
             }
             for text in warnings {
                 rt.notice("warn", text, fx);
@@ -7047,8 +7217,14 @@ impl<R: Runtime> Core<R> {
             // (Named by the user meanwhile: their name stands.)
             let named_now = !rt.meta.named;
             if named_now {
-                rt.meta.name = name.clone();
+                let was = std::mem::replace(&mut rt.meta.name, name.clone());
                 rt.meta.named = true;
+                if was != name {
+                    rt.fact(crate::facts::Body::AgentRenamed {
+                        from: was,
+                        to: name.clone(),
+                    });
+                }
             }
             (named_now, rt.proc.clone(), self.session_title(&rt))
         };
@@ -7087,8 +7263,14 @@ impl<R: Runtime> Core<R> {
             if let (Some(branch), Some(w)) = (renamed, rt.meta.worktree.as_mut()) {
                 w.branch = branch;
             }
-            rt.meta.name = name.to_string();
+            let was = std::mem::replace(&mut rt.meta.name, name.to_string());
             rt.meta.named = true;
+            if was != name {
+                rt.fact(crate::facts::Body::AgentRenamed {
+                    from: was,
+                    to: name.to_string(),
+                });
+            }
             (rt.proc.clone(), self.session_title(&rt))
         };
         drop(naming_guard);
@@ -7220,6 +7402,7 @@ impl<R: Runtime> Core<R> {
                 if rt.meta.status.is_active() {
                     rt.set_status(AgentStatus::Done, fx);
                 }
+                rt.fact(crate::facts::Body::AgentStopped { removed: false });
             }
             fx.save = true;
             Ok(())
@@ -7288,6 +7471,7 @@ impl<R: Runtime> Core<R> {
                 .take()
                 .map(|t| (t.term_id, crate::tui::quit_key(&rt.meta)));
             rt.conv.delete_file();
+            rt.fact(crate::facts::Body::AgentStopped { removed: true });
             (
                 rt.meta.project_id.clone(),
                 rt.meta.worktree.clone(),
@@ -7913,6 +8097,12 @@ impl<R: Runtime> Core<R> {
             // The syncs its tickets left waiting while it was closed go again.
             self.retry_syncs_of(&ticket_ids);
         }
+        self.facts.emit(
+            crate::facts::Body::ProjectAdded {
+                path: project.path.clone(),
+            },
+            crate::facts::About::project(&project.id),
+        );
         // The project is made whatever becomes of its first agent: told (no account serves a new
         // project, say), never an error that would have the window ask, and make it, again.
         if let Some(model) = first_agent {
@@ -8061,6 +8251,12 @@ impl<R: Runtime> Core<R> {
                 "No memory “{name}” in the project's memory."
             ));
         }
+        self.facts.emit(
+            crate::facts::Body::MemoryForgotten {
+                memory: name.to_string(),
+            },
+            crate::facts::About::project(id),
+        );
         self.memory_changed(id);
         Ok(())
     }
@@ -8215,6 +8411,20 @@ impl<R: Runtime> Core<R> {
             return Err(closed::approval_under_way(self.lang().ui, &key));
         }
         let project = self.project(id).ok();
+        if let Some(p) = &project {
+            // Said with its name and whether it is private: it is gone by the time the bus reads them.
+            self.facts.emit(
+                crate::facts::Body::ProjectClosed {},
+                crate::facts::About {
+                    project: Some(crate::facts::Named {
+                        id: p.id.clone(),
+                        name: p.name.clone(),
+                    }),
+                    private: Some(p.private),
+                    ..Default::default()
+                },
+            );
+        }
         let selected = self.ui.read().selected_agent.get(id).cloned();
         // Its history written before anything stops, as it is now, and again once all stopped
         // (below): an app stopped in between, its state saved without the project, still has it.
@@ -9973,6 +10183,87 @@ impl<R: Runtime> Core<R> {
                 None
             }
         }
+    }
+}
+
+/// Where the plugins' commands run (`plugins::events`): the user's shell, the project's folder.
+impl<R: Runtime> crate::plugins::events::Place for Core<R> {
+    fn shell(&self) -> Option<crate::pty::ShellInfo> {
+        let settings = self.settings.read().clone();
+        crate::pty::detect_shells(&settings).into_iter().next()
+    }
+
+    fn project_path(&self, id: &str) -> Option<String> {
+        self.project(id).ok().map(|p| p.path)
+    }
+}
+
+/// The names of what a fact is about, and whether its project is private (`facts`). Takes the
+/// agents, then the projects, then the tickets, one at a time: the bus holds no other lock.
+impl<R: Runtime> crate::facts::Resolve for Core<R> {
+    fn resolve(&self, about: &mut crate::facts::About) -> Option<bool> {
+        // The ticket an agent is made for, before the ticket links it.
+        let mut own_ticket = None;
+        if let Some(a) = about.agent.as_mut() {
+            if let Ok(h) = self.agent(&a.id) {
+                let rt = h.lock();
+                own_ticket = rt.meta.ticket_id.clone();
+                if a.name.is_empty() {
+                    a.name = rt.meta.name.clone();
+                }
+                if about.project.is_none() {
+                    about.project = Some(crate::facts::Named {
+                        id: rt.meta.project_id.clone(),
+                        name: String::new(),
+                    });
+                }
+            }
+        }
+        {
+            let tickets = self.tickets.read();
+            let found = match (&about.ticket, &about.agent) {
+                (Some(t), _) => tickets.iter().find(|x| x.id == t.id),
+                // An agent's fact says its ticket, the one it works on.
+                (None, Some(a)) => tickets.iter().find(|x| {
+                    x.agent_id.as_deref() == Some(a.id.as_str())
+                        || own_ticket.as_deref() == Some(x.id.as_str())
+                }),
+                (None, None) => None,
+            };
+            if let Some(t) = found {
+                about.ticket = Some(crate::facts::TicketRef {
+                    id: t.id.clone(),
+                    key: t.key.clone(),
+                    title: t.title.clone(),
+                });
+                if about.project.is_none() {
+                    about.project = Some(crate::facts::Named {
+                        id: t.project_id.clone(),
+                        name: String::new(),
+                    });
+                }
+                if about.agent.is_none() {
+                    if let Some(a) = &t.agent_id {
+                        about.agent = Some(crate::facts::Named {
+                            id: a.clone(),
+                            name: String::new(),
+                        });
+                    }
+                }
+            }
+        }
+        if let Some(a) = about.agent.as_mut().filter(|a| a.name.is_empty()) {
+            if let Ok(h) = self.agent(&a.id) {
+                a.name = h.lock().meta.name.clone();
+            }
+        }
+        let p = about.project.as_mut()?;
+        let projects = self.projects.read();
+        let found = projects.iter().find(|x| x.id == p.id)?;
+        if p.name.is_empty() {
+            p.name = found.name.clone();
+        }
+        Some(found.private)
     }
 }
 

@@ -820,3 +820,39 @@ fn an_inspection_gives_the_icon_read_in_what_was_set_aside() {
     plugin_folder(&other, &programmed("dev.exemple.sans", "1.0.0", &[]));
     assert_eq!(plugins.inspect_folder(&other, Lang::Fr).unwrap().icon, None);
 }
+
+/// The cases of `hosts` in tests/fixtures/plugins/manifests.json, as the store's library says them.
+#[test]
+fn permissions_network_covers_a_host_as_the_store_says() {
+    let text =
+        std::fs::read_to_string(root().join("tests/fixtures/plugins/manifests.json")).unwrap();
+    let corpus: Value = serde_json::from_str(&text).unwrap();
+    let cases = corpus["hosts"]["cases"].as_array().unwrap();
+    assert!(cases.len() >= 10);
+    for c in cases {
+        let host = c["host"].as_str().unwrap();
+        let network: Vec<String> = serde_json::from_value(c["network"].clone()).unwrap();
+        assert_eq!(
+            manifest::host_covered(host, &network),
+            c["covered"].as_bool().unwrap(),
+            "{host} by {network:?}"
+        );
+    }
+}
+
+#[test]
+fn a_host_is_read_from_an_address_written_whole_never_from_a_template() {
+    let host = |u: &str| manifest::written_host(u);
+    assert_eq!(
+        host("https://user@Hooks.Slack.com:443/x?y#z").as_deref(),
+        Some("hooks.slack.com")
+    );
+    assert_eq!(
+        host("https://hooks.slack.com@evil.dev/x").as_deref(),
+        Some("evil.dev")
+    );
+    assert_eq!(host("http://[::1]:8080/x").as_deref(), Some("::1"));
+    assert_eq!(host("{{secrets.webhook}}"), None);
+    assert_eq!(host("https://{{data.host}}/x"), None);
+    assert_eq!(host("ftp://hooks.slack.com"), None);
+}

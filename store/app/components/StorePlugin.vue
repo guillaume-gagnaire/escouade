@@ -27,6 +27,14 @@ const docPage = computed(() => {
   return pages.find((p) => p.path === route.query.page) ?? pages[0] ?? null;
 });
 const short = (sha: string) => sha.slice(0, 7);
+// The review's signature of the version shown (STORE-8) and its public summary, one line per point.
+const signature = computed(() => page.value.latest?.signature ?? null);
+const summary = computed(() =>
+  (signature.value?.summary?.[lang.value] ?? signature.value?.summary?.[other.value] ?? '')
+    .split('\n')
+    .map((l) => l.replace(/^\s*[-*]\s+/, '').trim())
+    .filter((l) => l && !l.startsWith('#')),
+);
 const fingerprint = (sha: string) => `sha256:${sha.slice(0, 4)}…${sha.slice(-4)}`;
 const deepLink = computed(() => `escouade://plugin/${encodeURIComponent(e.value.id)}`);
 const repoUrl = computed(() => (page.value.latest ? `https://github.com/${page.value.latest.repository}` : null));
@@ -170,7 +178,13 @@ async function copyRepo() {
             >
           </div>
         </div>
-        <div v-if="!page.builtin" class="review-note" :class="{ asked: e.trust === 'review' }">
+        <div v-if="!page.builtin && signature" class="review-note signed">
+          <b>{{ words.plugin.reviewedOn(words.date(signature.signedAt)) }}</b>
+          <ul v-if="summary.length">
+            <li v-for="(l, i) in summary" :key="i">{{ l }}</li>
+          </ul>
+        </div>
+        <div v-else-if="!page.builtin" class="review-note" :class="{ asked: e.trust === 'review' }">
           <b>{{ e.trust === 'review' ? words.trust.review : words.trust.unverified }}</b>
           <p>{{ e.trust === 'review' ? words.plugin.reviewAsked : words.plugin.reviewNot }}</p>
         </div>
@@ -200,11 +214,13 @@ async function copyRepo() {
                 ><span class="v" :title="`sha256:${page.latest.sha256}`">{{ fingerprint(page.latest.sha256) }}</span></span
               >
             </li>
-            <li>
-              <span class="dot"><StoreIcon name="flag" /></span
+            <li :class="{ signed: !!signature }">
+              <span class="dot"><StoreIcon :name="signature ? 'check' : 'flag'" /></span
               ><span
                 ><span class="k">{{ words.plugin.signature }}</span
-                ><span class="v">{{ words.plugin.unsigned }}</span></span
+                ><span class="v" :title="signature ? words.plugin.signedKey(signature.keyId) : undefined">{{
+                  signature ? words.plugin.signed : words.plugin.unsigned
+                }}</span></span
               >
             </li>
           </ol>
@@ -577,6 +593,14 @@ table.t .r {
 .review-note.asked {
   border-style: dashed;
 }
+.review-note.signed {
+  border-color: var(--seal-line);
+  background: var(--seal-bg);
+}
+.review-note ul {
+  margin: 8px 0 0;
+  padding-left: 16px;
+}
 .review-note b {
   color: var(--text);
   font-weight: 600;
@@ -623,6 +647,11 @@ table.t .r {
   height: 10px;
   stroke-width: 2;
 }
+.chain li.signed .dot {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: var(--ink);
+}
 .chain .k {
   color: var(--dim);
 }
@@ -632,6 +661,12 @@ table.t .r {
   font-family: var(--mono);
   font-size: 12px;
   word-break: break-all;
+}
+.chain li.signed .v {
+  color: var(--brand-ink);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 560;
 }
 .facts {
   display: grid;

@@ -264,6 +264,9 @@ fn null() -> Box<RawValue> {
 
 type Answer = Result<Box<RawValue>, CallError>;
 
+/// A line for a plugin's input, and who waits for it to be written.
+type Frame = (Vec<u8>, Option<oneshot::Sender<()>>);
+
 /// A message the plugin sent: an answer, a request or a notification.
 #[derive(Deserialize)]
 struct Incoming {
@@ -319,7 +322,7 @@ struct Inner {
 struct Conn {
     generation: u64,
     pid: Option<u32>,
-    tx: Mutex<Option<mpsc::UnboundedSender<Vec<u8>>>>,
+    tx: Mutex<Option<mpsc::UnboundedSender<Frame>>>,
     job: Option<Job>,
     kill_tx: Mutex<Option<oneshot::Sender<()>>>,
     exited: AtomicBool,
@@ -328,13 +331,18 @@ struct Conn {
 impl Conn {
     /// Writes `line` on its input; false when it is closed.
     fn write(&self, line: &str) -> bool {
+        self.write_then(line, None)
+    }
+
+    /// Writes `line` on its input; `written` is told once it was (dropped if it never is).
+    fn write_then(&self, line: &str, written: Option<oneshot::Sender<()>>) -> bool {
         let mut bytes = Vec::with_capacity(line.len() + 1);
         bytes.extend_from_slice(line.as_bytes());
         bytes.push(b'\n');
         self.tx
             .lock()
             .as_ref()
-            .is_some_and(|tx| tx.send(bytes).is_ok())
+            .is_some_and(|tx| tx.send((bytes, written)).is_ok())
     }
 
     /// Ends it and its whole tree.
@@ -362,7 +370,7 @@ struct Host {
     inner: Mutex<Inner>,
     pending: Mutex<HashMap<u64, oneshot::Sender<Answer>>>,
     next_id: AtomicU64,
-    journal: Journal,
+    journal: Arc<Journal>,
 }
 
 /// The plugins' processes of the app.
@@ -375,6 +383,8 @@ pub struct Runtime {
     escouade_dir: PathBuf,
     limits: Limits,
     hosts: Mutex<HashMap<String, Arc<Host>>>,
+    /// Every plugin's journal, a declarative one's too (its webhooks, its commands).
+    journals: Mutex<HashMap<String, Arc<Journal>>>,
     quitting: AtomicBool,
     me: Weak<Self>,
 }
@@ -399,6 +409,7 @@ impl Runtime {
             escouade_dir,
             limits,
             hosts: Mutex::new(HashMap::new()),
+            journals: Mutex::new(HashMap::new()),
             quitting: AtomicBool::new(false),
             me: me.clone(),
         });
@@ -456,7 +467,7 @@ impl Runtime {
             }),
             pending: Mutex::new(HashMap::new()),
             next_id: AtomicU64::new(1),
-            journal: Journal::new(self.journal_file(id)),
+            journal: self.journal_of(id),
         });
         Ok(self
             .hosts
@@ -518,7 +529,7 @@ impl Runtime {
     /// The plugin `id`'s journal, the oldest entry first: what its process wrote since Escouade
     /// started, or, before it ran, what its file kept of the earlier runs.
     pub fn journal(&self, id: &str) -> Vec<Entry> {
-        let held = self.hosts.lock().get(id).map(|h| h.journal.entries());
+        let held = self.journals.lock().get(id).map(|j| j.entries());
         match held {
             Some(e) if !e.is_empty() => e,
             _ => super::journal::read_file(&self.journal_file(id)),
@@ -539,7 +550,12 @@ impl Runtime {
     /// Stops the plugin `id`'s process and forgets its host and its manifest: switched off,
     /// uninstalled, updated, a permission taken back or given again. The next use reads it anew.
     pub fn forget(&self, id: &str) {
+        // Its journal too, closed once its stop is noted: the next one starts from its file.
+        let journal = self.journals.lock().remove(id);
         let Some(h) = self.hosts.lock().remove(id) else {
+            if let Some(j) = journal {
+                j.close();
+            }
             return;
         };
         let idle = {
@@ -550,6 +566,15 @@ impl Runtime {
             h.stop_with(Stop::Asked);
         }
         h.journal.close();
+    }
+
+    /// The plugin `id`'s journal, made at its first use.
+    pub fn journal_of(&self, id: &str) -> Arc<Journal> {
+        self.journals
+            .lock()
+            .entry(id.to_string())
+            .or_insert_with(|| Arc::new(Journal::new(self.journal_file(id))))
+            .clone()
     }
 
     /// Calls `method` of the plugin `id`, within its delay (`timeout_of`); starts it if it does
@@ -657,6 +682,27 @@ impl Runtime {
             ids: Vec::new(),
             line: notification_line(method, &raw(&params)),
         })
+    }
+
+    /// Tells the plugin `id` something, without waiting for an answer; the receiver is told once
+    /// the message is on its input (the pipe took it), dropped when it waits for a restart. What
+    /// sends many keeps its own queue, and sends the next once the last one was taken (`events`).
+    pub fn deliver(
+        &self,
+        id: &str,
+        method: &str,
+        params: &RawValue,
+    ) -> Result<oneshot::Receiver<()>, CallError> {
+        let host = self.host(id)?;
+        let (tx, rx) = oneshot::channel();
+        host.send_then(
+            Queued {
+                ids: Vec::new(),
+                line: notification_line(method, params),
+            },
+            Some(tx),
+        )?;
+        Ok(rx)
     }
 
     /// Calls `method` with `params` for `key` (an agent's id), and keeps it: the next process,
@@ -831,13 +877,26 @@ impl Host {
 
     /// Sends `q` now, or once it runs; starts it if it is idle.
     fn send(self: &Arc<Self>, q: Queued) -> Result<(), CallError> {
+        self.send_then(q, None)
+    }
+
+    /// `send`, `written` told once it is on its input; dropped when it waits in the queue.
+    fn send_then(
+        self: &Arc<Self>,
+        q: Queued,
+        written: Option<oneshot::Sender<()>>,
+    ) -> Result<(), CallError> {
         let mut start = false;
         {
             let mut inner = self.inner.lock();
             match &inner.phase {
                 Phase::Stopped(s) => return Err(CallError::Stopped(s.clone())),
                 Phase::Running => {
-                    if inner.conn.as_ref().is_some_and(|c| c.write(&q.line)) {
+                    if inner
+                        .conn
+                        .as_ref()
+                        .is_some_and(|c| c.write_then(&q.line, written))
+                    {
                         return Ok(());
                     }
                     // Its input closed: it is ending, and its end says what comes next.
@@ -1026,7 +1085,7 @@ impl Host {
         let mut stdin = child.stdin.take().expect("piped");
         let stdout = child.stdout.take().expect("piped");
         let stderr = child.stderr.take().expect("piped");
-        let (tx, mut rx) = mpsc::unbounded_channel::<Vec<u8>>();
+        let (tx, mut rx) = mpsc::unbounded_channel::<Frame>();
         let (kill_tx, mut kill_rx) = oneshot::channel::<()>();
         let conn = Arc::new(Conn {
             generation,
@@ -1049,9 +1108,12 @@ impl Host {
         }
 
         tauri::async_runtime::spawn(async move {
-            while let Some(bytes) = rx.recv().await {
+            while let Some((bytes, written)) = rx.recv().await {
                 if stdin.write_all(&bytes).await.is_err() || stdin.flush().await.is_err() {
                     break;
+                }
+                if let Some(w) = written {
+                    let _ = w.send(());
                 }
             }
         });

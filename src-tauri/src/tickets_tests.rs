@@ -4573,7 +4573,7 @@ async fn a_merge_conflict_in_the_project_folder_leaves_the_users_untracked_files
 
 /// The project's repository gets a remote that reads as GitHub's but is a local bare repository
 /// (a git `insteadOf` rule): pushes work, without network.
-fn github_remote(h: &Harness, r: &Path) -> PathBuf {
+pub(crate) fn github_remote(h: &Harness, r: &Path) -> PathBuf {
     let bare = h.dir.join("remote.git");
     git(
         &h.dir,
@@ -5914,7 +5914,7 @@ fn test_run(h: &Harness, agent: &AgentMeta, term_id: &str) -> bool {
     if !test_terminal(h, agent, term_id) {
         return false;
     }
-    h.core.track_test_run(&agent.id, term_id).unwrap();
+    h.core.track_test_run(&agent.id, term_id, "run").unwrap();
     true
 }
 
@@ -5967,7 +5967,7 @@ async fn no_test_launch_starts_while_its_ticket_is_being_validated() {
         if test_terminal(&h, &agent, "tk-run-during") {
             let e = h
                 .core
-                .track_test_run(&agent.id, "tk-run-during")
+                .track_test_run(&agent.id, "tk-run-during", "run")
                 .unwrap_err()
                 .to_string();
             assert_eq!(
@@ -6078,12 +6078,12 @@ async fn an_archived_or_deleted_agent_has_no_test_launch() {
     assert_eq!(h.agent(&a.id).port_base, None);
     assert!(h.core.test_run_spec(&a.id, "run", 0).is_err());
     // A launch started as it was archived is stopped as soon as it is tracked.
-    assert!(h.core.track_test_run(&a.id, "tk-late-1").is_err());
+    assert!(h.core.track_test_run(&a.id, "tk-late-1", "run").is_err());
     assert!(!tracks_runs_of(&h, &a.id));
     // Likewise once it is deleted.
     let b = h.core.create_agent(&p.id, None).await.unwrap().meta;
     h.core.delete_agent(&b.id, false).await.unwrap();
-    assert!(h.core.track_test_run(&b.id, "tk-late-2").is_err());
+    assert!(h.core.track_test_run(&b.id, "tk-late-2", "run").is_err());
     assert!(!tracks_runs_of(&h, &b.id));
 }
 

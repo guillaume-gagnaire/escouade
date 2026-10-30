@@ -439,6 +439,8 @@ export const en: Catalog = {
       'plugins/installer': 'Installing a plugin',
       'plugins/manifest': 'The manifest',
       'plugins/api': 'The protocol',
+      'plugins/events': 'Events',
+      'plugins/permission-rules': 'Permission rules',
       'plugins/sdk': 'The SDK',
       'plugins/testing': 'Testing a plugin',
       'plugins/themes': 'Themes',

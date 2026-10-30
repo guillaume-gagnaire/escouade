@@ -81,6 +81,9 @@ mod docsticket_tests;
 mod engine;
 #[cfg(test)]
 mod engines_tests;
+mod facts;
+#[cfg(test)]
+mod facts_tests;
 mod fence;
 #[cfg(test)]
 mod fence_tests;
@@ -128,6 +131,8 @@ mod planfiles_tests;
 mod plugins;
 #[cfg(test)]
 mod plugins_bench_tests;
+#[cfg(test)]
+mod plugins_decide_tests;
 #[cfg(test)]
 mod plugins_protocol_tests;
 #[cfg(test)]
@@ -560,6 +565,7 @@ pub fn run() {
                 commands::plugin_install,
                 commands::plugin_discard,
                 commands::plugin_remove,
+                commands::plugin_approve_commands,
                 commands::plugin_set_enabled,
                 commands::plugin_set_project,
                 commands::plugin_set_permission,

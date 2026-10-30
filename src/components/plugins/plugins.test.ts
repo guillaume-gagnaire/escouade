@@ -77,6 +77,8 @@ function view(over: Partial<PluginView> = {}): PluginView {
     asks: ASKS,
     secretKeys: ['webhook'],
     update: null,
+    commands: [],
+    commandsApproved: true,
     ...over,
   };
 }
@@ -287,5 +289,31 @@ describe('the view', () => {
     expect(dialog.textContent).toContain('Runs a program on your computer, with your rights');
     expect(dialog.textContent).toContain('Keeps a secret: Webhook URL');
     expect(within(dialog).getByRole('button', { name: 'Install anyway' })).toBeTruthy();
+  });
+});
+
+describe('the commands a plugin runs on facts (PLG-5)', () => {
+  it('are shown with its permissions and run nothing before « Accepter », which can be taken back', async () => {
+    const backend = fakeBackend({
+      plugin_approve_commands: (a: { on: boolean }) => view({ commands: ['say "Claude a fini"'], commandsApproved: a.on }),
+    });
+    plugins.list = [view({ commands: ['say "Claude a fini"'], commandsApproved: false })];
+    plugins.page = { kind: 'plugin', id: MANIFEST.id, tab: 'permissions' };
+    const { rerender } = render(PluginPage, { plugin: plugins.list[0], tab: 'permissions' });
+    const box = screen.getByRole('region', { name: 'Lance ces commandes' });
+    expect(box.textContent).toContain('say "Claude a fini"');
+    expect(box.textContent).toContain('Rien ne tourne avant ton accord');
+    await userEvent.click(within(box).getByRole('button', { name: 'Accepter ces commandes' }));
+    expect(backend.called('plugin_approve_commands')[0].args).toEqual({ id: MANIFEST.id, on: true });
+    await rerender({ plugin: plugins.list[0], tab: 'permissions' });
+    const agreed = screen.getByRole('region', { name: 'Lance ces commandes' });
+    await userEvent.click(within(agreed).getByRole('button', { name: 'Retirer l’accord' }));
+    expect(backend.called('plugin_approve_commands')[1].args).toEqual({ id: MANIFEST.id, on: false });
+  });
+
+  it('are not shown for a plugin that runs none', () => {
+    plugins.list = [view()];
+    render(PluginPage, { plugin: plugins.list[0], tab: 'permissions' });
+    expect(screen.queryByRole('region', { name: 'Lance ces commandes' })).toBeNull();
   });
 });

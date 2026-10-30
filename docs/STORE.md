@@ -241,6 +241,11 @@ Une page `/review`, visible du seul administrateur (son identifiant GitHub dans 
 
 L'API de la file (`/api/v1/review/*`) demande un **jeton d'administration** que l'utilisateur crée dans son compte et garde dans le trousseau du système ; il permet de lire la file, de poser un rapport et de déposer une signature ; il ne permet ni de publier ni de supprimer un plugin.
 
+**Fait le 2026-10-29** (ESC-235, STORE-8) : `/review` et `/en/review` (`app/components/StoreReview.vue`), pour les seuls comptes de `STORE_ADMINS` (une page « n'existe pas » pour les autres) ; le lien « File de revue » et son nombre dans l'en-tête ; comparée à l'aperçu `#review` dans les deux thèmes et à 1440, 1028 et 390 px (`tests/e2e/review.spec.ts`). Ce qui a été tranché en la construisant :
+- **les onglets** : « À relire » (les versions publiées dont l'auteur a demandé la revue, ni signées, ni déjà répondues, ni retirées ; les plus installées d'abord, puis les plus anciennes), « Signalements », « Noms proches » (les versions `held` de §3.3), « Faites » (les 50 dernières réponses) ; chaque ligne est un lien, chaque action un formulaire : la page marche sans script, sous la politique de sécurité stricte ;
+- **le détail** : la commande à copier (avec `--since` si la dernière vérifiée n'est pas la précédente), `/review-plugin`, ce que la version demande et ce qui est nouveau depuis la dernière vérifiée (en ambre), la taille du diff calculée sur les archives gardées (fichiers, lignes en plus et en moins), le rapport déposé par le script (lu comme du texte, jamais rendu en HTML : il cite le code d'un tiers), « Demander des changements » et « Refuser » avec un message à l'auteur (10 à 4 000 caractères, par e-mail et dans son compte : la version reste publiée, non vérifiée), et la commande `sign`. Pas de bouton « Vérifier » ;
+- **le jeton d'administration** : créé dans le compte (« Jetons d'administration », visible des seuls administrateurs), `esc_admin_` puis 32 octets aléatoires, montré une fois par la réponse de la requête qui le crée (jamais dans une adresse, un cookie ou un journal), gardé haché (SHA-256), cinq au plus, révocable ; il n'agit que tant que son compte est dans `STORE_ADMINS`. Il ouvre `/api/v1/review/queue`, `report`, `signature` et `revocations`, qui ne lisent aucun cookie (le contrôle de l'`Origin` ne s'y applique donc pas) ; il ne publie ni ne supprime rien. Le script le lit dans `ESCOUADE_STORE_TOKEN` ou le trousseau du système (`npm run plugin-review -- token`), jamais dans un argument.
+
 ### 4.2 Côté poste : un agent dans ce dépôt
 
 Deux portes, la même mécanique :
@@ -292,6 +297,32 @@ Le temps de revue est le vrai coût du store : la file trie par installations ; 
 - **Envoyer** : le script signe en local (le mot de passe demandé dans le terminal), puis dépose la signature au store par l'API de la file. Le store la vérifie avec les clés publiques avant de l'accepter (une erreur de manipulation ne se publie pas), puis la sert à côté de la version.
 - **Dans l'app** : la signature vérifiée avec les clés publiques embarquées, contre le `version.json` téléchargé, dont les empreintes sont comparées aux octets reçus. Tout concorde : « Vérifié par Escouade ». Le store ne peut pas fabriquer un badge : il n'a pas la clé.
 
+**Les deux paires de clés : la procédure pour l'utilisateur** (STORE-8). Personne d'autre ne les crée : ni le chef d'escouade, ni un agent, ni la CI. Une fois, sur ton poste, dans un terminal (PowerShell sous Windows, le terminal ailleurs) :
+
+1. **Installer minisign** (0.11 ou plus) : `winget install jedisct1.minisign` sous Windows, `brew install minisign` sous macOS, `sudo apt install minisign` sous Debian ou Ubuntu. `minisign -v` doit répondre.
+2. **Créer la paire de tous les jours**, chiffrée par un mot de passe que minisign demande deux fois (un mot de passe long, neuf, gardé dans ton gestionnaire de mots de passe) :
+   ```sh
+   mkdir ~/.escouade-signing
+   minisign -G -p ~/.escouade-signing/store.pub -s ~/.escouade-signing/store.key
+   ```
+   Sous Windows, `~` est `$HOME` (`C:\Users\<toi>`). minisign chiffre la clé secrète par ce mot de passe (scrypt) ; sans lui, le fichier ne signe rien.
+3. **Créer la paire de secours**, avec un autre mot de passe, directement sur une clé USB (`E:` sous Windows, `/Volumes/<nom>` sous macOS, `/media/<toi>/<nom>` sous Linux) : elle ne passe jamais par le disque du poste.
+   ```sh
+   minisign -G -p <clé USB>/escouade-backup.pub -s <clé USB>/escouade-backup.key
+   ```
+4. **Sauvegarder hors ligne** : copie `store.key` sur la même clé USB, puis range-la (un tiroir fermé, pas avec l'ordinateur) ; mets les deux mots de passe et les deux fichiers `.key` en pièce jointe d'une entrée de ton gestionnaire de mots de passe. La clé de secours ne revient sur un poste que le jour où la première est perdue ou volée (§7).
+5. **Donner les deux clés publiques** au chef d'escouade : le contenu de `store.pub` et de `escouade-backup.pub` (deux lignes chacun, publiques, rien de secret). Il les met dans `store/keys/store.pub` et `store/keys/backup.pub` (le store les lit, et la copie de la liste de révocation sur escouade.dev) et dans `STORE_PUBLIC_KEYS` de l'app (`src-tauri/src/plugins/store_keys.rs`, dans le même ordre ; un test vérifie qu'elles sont les mêmes que celles de `store/keys/`). **Tant qu'elles n'y sont pas, l'app embarque une place vide qui refuse tout badge**, le store ne prend ni signature ni liste de révocation (la page `/review` le dit en tête) et la copie sur escouade.dev ne copie rien.
+6. **Garder le jeton d'administration** : sur le store, connecté, ton compte › « Jetons d'administration » › « Créer un jeton » ; il est montré une fois. Puis `npm run plugin-review -- token` et colle-le : il va dans le trousseau du système (Gestionnaire d'identification de Windows par `PasswordVault`, Trousseau de macOS, Secret Service sous Linux), jamais dans un fichier du dépôt. À défaut, `ESCOUADE_STORE_TOKEN` dans l'environnement du terminal.
+
+Signer une version, une fois la revue lue et la décision « Vérifier » prise :
+```sh
+npm run plugin-review -- report <id>@<version>   # le rapport dans la file (facultatif)
+npm run plugin-review -- sign <id>@<version>     # minisign demande le mot de passe de store.key
+```
+`sign` refuse si la revue n'est pas faite, si elle a relevé un bloqueur (intégrité, étiquette, entrées refusées, binaire sans attestation, banc qui échoue) ou si le `version.json` servi n'est plus celui qu'elle a lu ; minisign signe avec le commentaire `escouade-verified-v1 <id>@<version> <date>` ; la signature est vérifiée sur le poste avec les clés de `store/keys/`, puis déposée avec le résumé public (`<version>.public.md` et `.public.en.md`). `ESCOUADE_SIGNING_KEY` nomme une autre clé (celle de secours), `ESCOUADE_MINISIGN` un autre minisign.
+
+**Fait le 2026-10-29** (ESC-235, STORE-8) : la table `signatures` (à part de `versions`, sans clé étrangère : la purge d'un plugin supprimé ne l'emporte pas) ; `POST /api/v1/review/signature` (`server/utils/review.ts`, `acceptSignature`) vérifie la signature contre les octets de `version.json` avec les clés de `store/keys/`, moins celles que la liste de révocation retire (`keys_revoked`), le commentaire de confiance nommant cet identifiant et ce numéro (`server/utils/signature.ts`, que le script reprend), et refuse une version dont un binaire n'a pas d'attestation, ou que la liste désactive ; acceptée, la version est `verified` au catalogue (avec `review.summary` et `files.signature`), sa signature servie à `plugins/<id>/<version>/version.json.minisig`, le sceau et « Relu par Escouade le … » sur sa page, « Vérifiée » dans le compte de l'auteur, qui est prévenu par e-mail. Une entrée `unverify` de la liste retire le sceau partout. Le vérificateur de l'app (`store_keys.rs`, `minisign-verify`) lit les mêmes signatures : un test le joue sur une signature faite comme le store les fait ; il servira à STORE-9.
+
 ### 4.6 La révocation, le retrait d'urgence et les signalements
 
 - **La liste de révocation** : `revocations.json`, signée par la même clé, servie par le store et copiée sur escouade.dev (un second chemin si le store tombe) : `{ serial, issued_at, entries: [{ id, versions: "*" | ["1.2.0"], action: "unverify" | "disable", reason: { fr, en }, date }] }`.
@@ -301,6 +332,55 @@ Le temps de revue est le vrai coût du store : la file trie par installations ; 
 - **Lue par l'app** au démarrage puis toutes les 6 heures ; gardée en cache ; un `serial` plus petit que le dernier vu est refusé (personne ne rejoue une vieille liste pour lever une révocation).
 - **Le store** retire de la liste, d'office, une version désactivée ; l'auteur est prévenu (sauf si le prévenir aiderait un attaquant).
 - **Les signalements** : « Signaler » sur la page d'un plugin, ouvert à tous par un formulaire avec une adresse e-mail, sans compte GitHub (le DSA ; décidé à la revue du 2026-10-29, §8.1, fait par STORE-4 : une déclaration de bonne foi, 5 par adresse et par heure, un accusé de réception par e-mail) et dans l'app (qui ouvre cette page) : malveillant, ne fait pas ce qu'il dit, permissions trompeuses, licence, autre. Ils vont dans la file de revue, avec le nombre par plugin ; l'auteur voit qu'un signalement est ouvert, pas qui l'a fait. Un plugin « malveillant » signalé par plusieurs comptes remonte en tête ; la décision reste humaine.
+
+**Fait le 2026-10-29** (ESC-235, STORE-8) :
+- **la liste signée sur le poste** : `npm run plugin-review -- revoke <id>[@<version>] --disable|--unverify --fr "…" --en "…" [--quiet]` lit la liste que sert le store, la vérifie avec les clés de `store/keys/` (une liste qui ne passe pas arrête tout), y ajoute l'entrée, prend le `serial` suivant (au-dessus du store et des listes gardées dans `~/.escouade-review/revocations/`), la fait signer par minisign (`escouade-revocations-v1 <serial> <date>`), la vérifie de nouveau, puis la dépose par `POST /api/v1/review/revocations` ; `lift` retire une entrée, `revoke-key <id de clé>` ajoute une clé à `keys_revoked` (à signer avec la clé de secours, §7). `--quiet` ne prévient pas l'auteur (quand le prévenir aiderait un attaquant) ;
+- **le retrait d'urgence** : une entrée `disable` fait sortir la version du catalogue dès son dépôt (le catalogue est refait), ses fichiers répondent 410, sa page dit « Retirée » ; l'auteur reçoit la raison par e-mail. `unverify` retire le sceau et le dit ;
+- **les signalements** dans la file : par plugin, ceux que plusieurs disent « malveillant » en tête, le nombre d'ouverts, la commande du retrait d'urgence à copier, jamais l'adresse de qui a signalé ; « Retenu » ou « Classer sans suite » avec une réponse facultative, envoyée à qui a signalé (le DSA : il est informé de la décision).
+
+### 4.7 Les annonces sur Discord (STORE-12, ESC-295)
+
+Demandé par l'utilisateur le 2026-10-29 : être prévenu d'une revue à faire, et que les nouveautés du store se voient. Sur le Discord d'Escouade (le serveur où part déjà le changelog de l'app, job `announce` de `release.yml`), trois salons, chacun son webhook :
+
+| Salon | Langue | Variable | Ce qu'il reçoit |
+| --- | --- | --- | --- |
+| privé, visible du rôle admin | français | `STORE_DISCORD_ADMIN_WEBHOOK` | une version à revoir, un signalement, un nom trop proche (§3.3), une étiquette déplacée (§3.4), un retrait d'urgence ou un badge retiré (§4.6) |
+| public | français | `STORE_DISCORD_PUBLIC_WEBHOOK_FR` | un nouveau plugin (« Non vérifié » tant qu'il ne l'est pas), une nouvelle version, « Vérifié par Escouade », un plugin retiré |
+| public | anglais | `STORE_DISCORD_PUBLIC_WEBHOOK_EN` | les mêmes, en anglais |
+
+Les deux salons publics peuvent être le même salon (les deux variables vers deux webhooks du même salon) : chaque nouveauté y paraît alors deux fois, une par langue, comme le changelog.
+
+- **L'envoi** (`store/server/utils/discord.ts`) : chaque message est une tâche pg-boss à lui (`store.discord`), écrite en arrière-plan ; la requête de l'auteur ne l'attend pas et ne peut pas échouer pour Discord (une file qui refuse est dite dans le journal). Le travailleur relit l'événement dans la base au moment d'envoyer (un plugin retiré de la liste par son auteur entre-temps n'est pas annoncé au public). Un `429` est attendu le temps de son `Retry-After` (l'en-tête, ou `retry_after` du corps) puis renvoyé, trois fois au plus dans la tâche ; une attente de plus d'une minute, un `5xx` ou un Discord injoignable font échouer la tâche, que pg-boss reprend plus tard (30 s, puis deux fois plus à chaque fois, dix minutes au plus, six reprises). Un autre `4xx` (webhook supprimé) jette le message et le dit.
+- **Un webhook absent** : son salon ne reçoit rien, aucune tâche n'est écrite pour lui, et le démarrage le dit une fois (`[store] discord fr off (missing STORE_DISCORD_PUBLIC_WEBHOOK_FR): the French public channel gets nothing`). Une variable qui n'est pas un webhook de Discord (`https://discord.com/api/webhooks/…`, ou `discordapp.com`) est éteinte de la même façon, sans écrire sa valeur.
+- **La limite par auteur** : 5 nouveaux plugins ou nouvelles versions par auteur, par jour (UTC) et par salon public ; au-delà, les messages ne partent pas et un seul les résume le lendemain à minuit (UTC), lié à la page de l'auteur. Les messages du store lui-même (badge, retrait) n'y comptent pas.
+- **Ce qui vient d'un auteur est hostile** (nom, description, login, version, étiquette) : `allowed_mentions: { parse: [] }` sur chaque message (ni `@everyone`, ni rôle, ni personne), aucun texte hors des embeds ; le Markdown de Discord échappé (gras, liens masqués, code, citations, spoilers, titres, mentions, émojis, horodatages) ; les caractères de contrôle, bidirectionnels et invisibles retirés ; les liens écrits cassés (`https:` puis un espace de largeur nulle puis `//`, aucun lien n'en est fait) ; chaque texte borné (nom 80, description 280, raison 400…) puis les limites de Discord tenues (titre 256, description 4096, champ 1024, 6000 en tout). **Les seuls liens sont des pages du store** (le plugin, l'auteur, `/review`). Rien du README ni du code ; jamais le texte d'un signalement ni l'adresse de qui l'a fait, seulement son motif et le nombre d'ouverts.
+- **Le retrait discret** (`plugin-review revoke … --quiet`) : le salon des admins le reçoit (« non prévenus »), le salon public rien, comme l'auteur.
+- **Une adresse de webhook est un secret** : seulement dans les variables de Coolify ; la tâche ne porte que le nom du salon (`admin`, `fr`, `en`), le journal et les erreurs que l'hôte (`discord admin (discord.com): HTTP 404, message dropped`), aucune réponse d'API ne la donne.
+- **La forme** : un embed par événement, sobre, aux couleurs du store (`#35c1bd` pour un nouveau plugin et le badge, `#8a8f98` pour une nouvelle version, ambre pour ce qui attend une revue, rouge pour un signalement ou un retrait), le titre lié à la page du plugin (ou à `/review`), l'auteur par son login GitHub lié à sa page du store.
+
+**Les messages**, tels que Discord les montre (le titre en gras, puis le texte, puis les champs) :
+
+*Salon des admins* (en français seulement ; la traduction anglaise est donnée pour la lecture) :
+
+| Événement | Message (fr) | Ce qu'il dit (en) |
+| --- | --- | --- |
+| Version à revoir (publiée avec la revue cochée, à la main ou d'office) | **Version à revoir** → `/review`<br>**Notifications ntfy** 1.3.0 · `io.github.sroux.ntfy`<br>Auteur : sroux · File : /review<br>Depuis la dernière vérifiée (1.2.0) : • Se connecte à : evil.example<br>Commande : `npm run plugin-review -- io.github.sroux.ntfy@1.3.0` | **Version to review** → `/review`; the author; what grew since the last verified version (“Nothing more in the permissions” when nothing did, “First version” for a first one); the command to copy, with `--since` when the last verified is not the previous one |
+| Signalement | **Signalement** → `/review`<br>**Notifications ntfy** 1.3.0 · `io.github.sroux.ntfy`<br>Motif : Malveillant · Ouverts sur ce plugin : 3 (dont 2 « malveillant ») · File : /review | **Report**: its reason and the open reports on the plugin; never its words nor its sender |
+| Nom trop proche | **Nom trop proche** → `/review`<br>**ntffy** 1.0.0 · `io.github.sroux.ntffy`<br>Auteur : sroux · Proche de : `io.github.other.ntfy` · File : /review | **Name too close**: the plugins it is close to |
+| Étiquette déplacée | **Étiquette déplacée** → la page du plugin<br>**Notifications ntfy** 1.2.0 · `io.github.sroux.ntfy`<br>Étiquette : v1.2.0 · Commit : `3f9c2e1` → `a41c9d2` · Version : publiée, inchangée sur le store · Auteur : sroux | **Tag moved**: the tag, the commit before and after, the version unchanged (or waiting) |
+| Retrait d'urgence | **Retrait d'urgence fait** → la page du plugin<br>**Notifications ntfy** · `io.github.sroux.ntfy` · 1.3.0<br>Raison publique : Envoie le contenu des sessions à un tiers.<br>Liste de révocation : n° 7 publiée · Auteur et salon public : prévenus (ou « non prévenus (--quiet) ») | **Emergency removal done** (or **Badge taken off** for `unverify`): the public reason, the list's serial, whether the author and the public were told |
+
+*Salon public*, un message par langue :
+
+| Événement | fr | en |
+| --- | --- | --- |
+| Nouveau plugin | **Nouveau plugin** → `/plugins/io.github.sroux.ntfy`<br>**Notifications ntfy** 1.2.0<br>Envoie une notification sur ton téléphone.<br>Auteur : sroux · Revue : Non vérifié : pas encore relu par Escouade | **New plugin** → `/en/plugins/io.github.sroux.ntfy`<br>**ntfy notifications** 1.2.0<br>Sends a notification to your phone.<br>Author: sroux · Review: Unverified: not reviewed by Escouade yet |
+| Nouvelle version | **Nouvelle version** → la page du plugin<br>**Notifications ntfy** 1.3.0<br>Auteur : sroux · Revue : Non vérifié : pas encore relu par Escouade | **New version** → the plugin's page<br>**ntfy notifications** 1.3.0<br>Author: sroux · Review: Unverified: not reviewed by Escouade yet |
+| Badge | **Vérifié par Escouade** → la page du plugin<br>**Notifications ntfy** 1.3.0<br>le résumé public de la revue, ligne à ligne<br>Auteur : sroux | **Verified by Escouade** → the plugin's page<br>**ntfy notifications** 1.3.0<br>the review's public summary, line by line<br>Author: sroux |
+| Plugin retiré (retrait d'urgence) | **Plugin retiré** → la page du plugin (« Retirée »)<br>**Notifications ntfy** · 1.3.0 (ou « toutes les versions »)<br>Raison : Envoie le contenu des sessions à un tiers. | **Plugin taken off** → the plugin's page<br>**ntfy notifications** · 1.3.0 (or “every version”)<br>Reason: Sends the sessions' content to a third party. |
+| Au-delà de la limite du jour | **Les autres nouveautés du jour** → `/authors/sroux`<br>sroux a publié 2 autres nouveautés aujourd'hui :<br>• Notifications ntfy 1.0.6<br>• Notifications ntfy 1.0.7 | **More from today** → `/en/authors/sroux`<br>sroux published 2 more releases today:<br>• ntfy notifications 1.0.6<br>• ntfy notifications 1.0.7 |
+
+La raison d'un retrait est celle, publique, de la liste de révocation signée (§4.6) ; le détail d'un signalement n'y paraît jamais. La mise en route (créer les salons et leurs webhooks, les poser dans Coolify) est dans `store/README.md`.
 
 ## 5. Dans l'app
 
@@ -434,6 +514,7 @@ Les tickets s'appellent ici STORE-1, STORE-2… ; le chef d'escouade leur donne 
 | STORE-8. La signature et la file | Les deux paires de clés (procédure écrite, sauvegarde hors ligne), `plugin-review sign`, le dépôt vérifié par le store, la file `/review`, le jeton d'administration, les signalements, le retrait d'urgence et la liste de révocation signée (`serial`) | Opus medium (sécurité) | STORE-7, STORE-5 |
 | STORE-9. Le store dans l'app | « Parcourir le store » (catalogue en cache, recherche locale, catégories, filtre), la page d'un plugin, l'installation par la fenêtre de PLG-4 avec empreintes et signature vérifiées (clés embarquées), le badge, les mises à jour du store, « N'installer que des versions vérifiées », la liste de révocation (démarrage puis 6 h, `serial`), `escouade://plugin/<id>` ; faux store pour les e2e ; comparé à l'aperçu `#store*` | Opus medium (interface) | ESC-176 (PLG-4), STORE-6, STORE-8 |
 | STORE-10. Les docs et l'essai réel | `website/content/docs/*/plugins/publishing.md` réécrit pour le store, `security.md` (ce que la revue refuse), `docs/SPEC.md`, `docs/PROTOCOL.md` si besoin, CHANGELOG fr/en ; un essai réel : publier les plugins d'exemple (ESC-182), les revoir, les signer, les installer dans l'app sur Windows, macOS et Linux, révoquer l'un | Sonnet medium | STORE-1 à STORE-9, ESC-182 (PLG-10) |
+| STORE-12. Les annonces sur Discord | Le salon des admins (fr) et le salon public (fr et en) par trois webhooks facultatifs, une tâche pg-boss par message, `Retry-After`, limite par auteur et par jour, contenu d'auteur échappé, aucun lien hors du store (§4.7) | Opus medium (contenu tiers, secrets) | STORE-8 |
 
 Ordre : STORE-1 → STORE-2 → STORE-3 → (STORE-4, STORE-5, STORE-6 en parallèle) → STORE-7 → STORE-8 → STORE-9 → STORE-10. Le service (STORE-1 à STORE-6) n'attend des plugins que le schéma et le validateur ; il peut avancer pendant que l'app construit PLG-2 à PLG-8. STORE-9 attend l'onglet Plugins (ESC-176).
 

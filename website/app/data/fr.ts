@@ -443,6 +443,8 @@ export const fr: Catalog = {
       'plugins/installer': 'Installer un plugin',
       'plugins/manifest': 'Le manifeste',
       'plugins/api': 'Le protocole',
+      'plugins/events': 'Les événements',
+      'plugins/permission-rules': 'Les règles d’autorisation',
       'plugins/sdk': 'Le SDK',
       'plugins/testing': 'Tester un plugin',
       'plugins/themes': 'Les thèmes',

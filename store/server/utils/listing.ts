@@ -9,6 +9,7 @@ import { renderDocs, type Docs } from './readme';
 import { CATEGORIES, keepImage } from './submissions';
 import { parseRevocations, revoked, type RevocationList } from './revocation-list';
 import { lastRevocations } from './revocations';
+import { signatureIndex, verifiedBy, type SignatureIndex } from './signatures';
 import { readArchive } from './tar';
 import { fold, words } from '../../shared/search';
 import { hueOf, markOf, type Icon } from '../../shared/tile';
@@ -204,6 +205,7 @@ type Row = Awaited<ReturnType<typeof publishedRows>>[number];
 interface Context {
   installs: Map<string, number>;
   list: RevocationList | null;
+  signed: SignatureIndex;
 }
 
 async function contextOf(db: Db, now = new Date()): Promise<Context> {
@@ -215,10 +217,21 @@ async function contextOf(db: Db, now = new Date()): Promise<Context> {
     .groupBy(installsDaily.pluginId);
   const stored = await lastRevocations(db);
   const parsed = stored ? parseRevocations(stored.json) : null;
-  return { installs: new Map(counts.map((c) => [c.id, Number(c.n)])), list: parsed && !('error' in parsed) ? parsed : null };
+  return {
+    installs: new Map(counts.map((c) => [c.id, Number(c.n)])),
+    list: parsed && !('error' in parsed) ? parsed : null,
+    signed: await signatureIndex(db),
+  };
 }
 
 const disabled = (ctx: Context, r: Row) => !!revoked(ctx.list, r.plugin.id, r.version.version!, 'disable');
+
+/** The signature that makes a row's version verified (STORE-8), or null. */
+const signedOf = (ctx: Context, r: { plugin: { id: string }; version: { version: string | null; versionSha256: string | null } }) =>
+  verifiedBy(ctx.signed, ctx.list, r.plugin.id, r.version.version!, r.version.versionSha256);
+
+/** Where a version stands: verified once signed, else asked for review, or not. */
+const trustOf = (ctx: Context, r: Row): Trust => (signedOf(ctx, r) ? 'verified' : r.version.review ? 'review' : 'unverified');
 
 /**
  * The entries of the rows: one per plugin, by its last published version that the revocation list does not disable
@@ -233,7 +246,8 @@ function entriesOf(all: Row[], ctx: Context, taken = false): Entry[] {
     rs.sort((a, b) => compareVersions(b.version.version!, a.version.version!));
     const offered = rs.find((r) => !r.version.yankedAt);
     if (!offered && !taken) return [];
-    const { plugin, version: v, login, githubId } = offered ?? rs[0]!;
+    const row = offered ?? rs[0]!;
+    const { plugin, version: v, login, githubId } = row;
     const m = v.manifest ?? {};
     const name = localized(m.name);
     const dates = rs
@@ -253,8 +267,7 @@ function entriesOf(all: Row[], ctx: Context, taken = false): Entry[] {
       categories: plugin.categories.filter((c): c is Category => (CATEGORIES as readonly string[]).includes(c)),
       keywords: plugin.keywords,
       version: v.version,
-      // The signatures come with STORE-8: until then a version is asked for review, or not.
-      trust: v.review ? 'review' : 'unverified',
+      trust: trustOf(ctx, row),
       installs: ctx.installs.get(plugin.id) ?? 0,
       updatedAt: v.publishedAt?.toISOString() ?? null,
       firstAt: dates[0] ?? null,
@@ -428,7 +441,9 @@ export async function pluginPage(db: Db | null, dir: string, id: string) {
   const [entry] = entriesOf(rows, ctx, true);
   if (!entry) return null;
   rows.sort((a, b) => compareVersions(b.version.version!, a.version.version!));
-  const v = (rows.find((r) => !disabled(ctx, r) && !r.version.yankedAt) ?? rows.find((r) => !disabled(ctx, r)))!.version;
+  const shown = (rows.find((r) => !disabled(ctx, r) && !r.version.yankedAt) ?? rows.find((r) => !disabled(ctx, r)))!;
+  const v = shown.version;
+  const sig = signedOf(ctx, shown);
   const plugin = rows[0]!.plugin;
   const m = v.manifest ?? {};
   const docs = await docsOf(db, dir, v);
@@ -446,7 +461,7 @@ export async function pluginPage(db: Db | null, dir: string, id: string) {
       tag: r.version.tag,
       commit: r.version.commit,
       sha256: r.version.versionSha256,
-      trust: r.version.review ? 'review' : 'unverified',
+      trust: trustOf(ctx, r),
       tagMoved: r.version.tagMovedTo,
       escouade: range(r.version.manifest ?? {}),
       disabled: disabled(ctx, r),
@@ -474,6 +489,8 @@ export async function pluginPage(db: Db | null, dir: string, id: string) {
       })),
       docs: docs ?? { readme: {}, pages: [], images: [] },
       reports: open?.n ?? 0,
+      // The review's signature of this version (STORE-8): when, by which key, and its public summary.
+      signature: sig ? { signedAt: sig.signedAt.toISOString(), keyId: sig.keyId, summary: sig.summary } : null,
     },
   };
 }

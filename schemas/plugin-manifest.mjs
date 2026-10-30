@@ -75,6 +75,35 @@ const beyond = (v, max) => compare(numbers(v).slice(0, max.split('.').length), n
  * plugin's folder by its path (null when it is none), to read the icon's; without it, its file is not looked at.
  * @returns {{ ok: boolean, errors: { path: string, code: string, expected?: string }[], ignored: string[] }}
  */
+/**
+ * The host of an address written whole (`https://hooks.slack.com/x` gives `hooks.slack.com`, in lower case): its user and
+ * its port left out. Null for no http(s) address, or a host made by a template (`{{secrets.webhook}}`), checked once made.
+ */
+export function writtenHost(url) {
+  const t = String(url).trim();
+  const rest = t.startsWith('https://') ? t.slice(8) : t.startsWith('http://') ? t.slice(7) : null;
+  if (rest === null) return null;
+  const authority = rest.split(/[/?#]/)[0];
+  if (authority.includes('{{') || authority.includes('}}')) return null;
+  const at = authority.split('@').pop();
+  const host = at.startsWith('[') ? at.slice(1).split(']')[0] : at.split(':')[0];
+  return host ? host.replace(/\.+$/, '').toLowerCase() : null;
+}
+
+/**
+ * Whether `permissions.network` covers `host`, without regard to case: a host written alone covers itself; `*.exemple.dev`
+ * covers its subdomains at any depth, not `exemple.dev` itself (as a TLS certificate's); nothing else covers anything.
+ */
+export function hostCovered(host, network) {
+  const h = String(host).replace(/\.+$/, '').toLowerCase();
+  if (!h) return false;
+  return network.some((w) => {
+    const p = String(w).trim().replace(/\.+$/, '').toLowerCase();
+    if (p.startsWith('*.')) return p.length > 2 && h.endsWith(`.${p.slice(2)}`);
+    return p !== '' && !p.includes('*') && h === p;
+  });
+}
+
 export function validate(manifest, options = {}) {
   const builtin = !!options.builtin;
   const errors = [];
@@ -191,11 +220,13 @@ export function validate(manifest, options = {}) {
     }
   }
   if ('activation' in o) words(o.activation, 'activation');
+  let network = [];
   if ('permissions' in o) {
     const p = object(o.permissions, 'permissions');
     if (p) {
       ignoreOthers(p, 'permissions', ['events', 'network', 'secrets', 'commands', 'decide']);
       for (const key of ['events', 'network', 'secrets', 'commands']) if (key in p) words(p[key], `permissions.${key}`);
+      if (Array.isArray(p.network)) network = p.network.filter((w) => typeof w === 'string');
       if ('decide' in p && typeof p.decide !== 'boolean') problem('permissions.decide', 'type', 'boolean');
     }
   }
@@ -266,7 +297,17 @@ export function validate(manifest, options = {}) {
           if (a !== null && !accounts.includes(a)) problem(p, 'account');
         }
       }
-      for (const point of OPEN_POINTS) if (point in c) items(c[point], `contributes.${point}`);
+      for (const point of OPEN_POINTS) {
+        if (!(point in c)) continue;
+        const list = items(c[point], `contributes.${point}`);
+        if (point !== 'webhooks') continue;
+        // A webhook goes only to a host the install window shows (`permissions.network`); one whose host is a template
+        // is checked when it is sent.
+        for (const [at, it] of list) {
+          const host = writtenHost(typeof it.url === 'string' ? it.url : '');
+          if (host !== null && !hostCovered(host, network)) problem(join(at, 'url'), 'network');
+        }
+      }
       if ('escouadeYml' in c) object(c.escouadeYml, 'contributes.escouadeYml');
     }
   }
@@ -343,6 +384,7 @@ const WHAT = {
     file: () => "n'est pas un fichier du dossier du plugin.",
     png: () => "n'est pas un PNG (ni SVG, ni JPEG : un PNG carré de 256 px au moins).",
     heavy: () => 'pèse plus de 1 Mo.',
+    network: () => "va vers un hôte que `permissions.network` ne déclare pas : l'utilisateur ne le verrait pas.",
     square: () => "n'est pas carrée (un PNG carré de 256 px au moins, 512 conseillé).",
     small: () => 'fait moins de 256 px de côté (512 conseillé).',
   },
@@ -364,6 +406,7 @@ const WHAT = {
     file: () => "is no file of the plugin's folder.",
     png: () => 'is no PNG (no SVG nor JPEG: a square PNG of 256 px at least).',
     heavy: () => 'weighs over 1 MB.',
+    network: () => 'goes to a host `permissions.network` does not declare: the user would not see it.',
     square: () => 'is not square (a square PNG of 256 px at least, 512 advised).',
     small: () => 'is under 256 px a side (512 advised).',
   },

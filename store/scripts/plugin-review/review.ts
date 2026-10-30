@@ -6,7 +6,7 @@ import { diffFolders, grownPermissions } from './diff';
 import { baseVersion, catalog, checkTag, download, Integrity, type Source } from './download';
 import { extract, problemText } from './extract';
 import { findLeads } from './leads';
-import { renderPublic, renderReport, proposed, type ReviewData } from './report';
+import { renderPublic, renderPublicEn, renderReport, proposed, type ReviewData } from './report';
 
 // The local review of a version (docs/STORE.md §4.2), the deterministic part, without AI: download and check, unpack
 // without danger in a new folder outside the repository, prepare the leads, play the bench in a container without
@@ -144,7 +144,10 @@ function write(o: ReviewOptions, data: ReviewData): ReviewDone {
   if (existsSync(report)) copyFileSync(report, join(folder, `${data.version}.${data.date.replace(/[:.]/g, '-')}.md`));
   writeFileSync(report, renderReport(data));
   const summary = join(folder, `${data.version}.public.md`);
-  if (!data.integrity) writeFileSync(summary, renderPublic(data));
+  if (!data.integrity) {
+    writeFileSync(summary, renderPublic(data));
+    writeFileSync(join(folder, `${data.version}.public.en.md`), renderPublicEn(data));
+  }
   const json = join(folder, `${data.version}.json`);
   writeFileSync(json, JSON.stringify({ ...data, proposed: proposed(data) }, null, 2));
   return { data, report, summary, json, code: data.integrity ? 1 : 0 };

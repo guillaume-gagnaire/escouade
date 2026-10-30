@@ -2,6 +2,8 @@
 // files do that its permissions may not cover. A lead is not a finding: it says where to look. Nothing here runs the
 // plugin; its files are read as text (or noted as binary), line by line.
 
+import { hostCovered } from '../../../schemas/plugin-manifest.mjs';
+
 export type LeadKind = 'network' | 'host' | 'files' | 'secrets' | 'exec' | 'dynamic' | 'obscure' | 'dependencies' | 'instructions';
 
 export interface Lead {
@@ -112,14 +114,12 @@ const cut = (s: string) => {
   return t.length > 160 ? `${t.slice(0, 157)}…` : t;
 };
 
-/** Whether `host` is one `permissions.network` lets the plugin reach: the same, or under a `*.domain` entry. */
+/**
+ * Whether `host` is one `permissions.network` lets the plugin reach: the app's own rule (`hostCovered`, the one its
+ * webhooks are sent by), so that the review flags what the app would refuse; `*.domain` covers its subdomains, not itself.
+ */
 export function hostAllowed(host: string, network: string[]): boolean {
-  const h = host.toLowerCase();
-  return network.some((n) => {
-    const p = n.toLowerCase();
-    if (p.startsWith('*.')) return h.endsWith(p.slice(1)) || h === p.slice(2);
-    return h === p;
-  });
+  return hostCovered(host, network);
 }
 
 /** Whether `bytes` look binary: a NUL in their first 8 KB. */

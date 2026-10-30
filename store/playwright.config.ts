@@ -1,6 +1,8 @@
 import { generateKeyPairSync, randomBytes } from 'node:crypto';
 import { defineConfig, devices } from '@playwright/test';
 import {
+  e2eKey,
+  E2E_ADMIN_ID,
   E2E_APP as app,
   FAKE_GITHUB as fakeGithub,
   FAKE_GITHUB_PORT as githubPort,
@@ -46,6 +48,9 @@ export default defineConfig({
         GITHUB_API_URL: fakeGithub,
         SMTP_URL: `smtp://127.0.0.1:${smtpPort}`,
         MAIL_FROM: 'Escouade Store <store@escouade.dev>',
+        // The review queue (STORE-8): its administrator, and the public key of a key made for the run.
+        STORE_ADMINS: String(E2E_ADMIN_ID),
+        STORE_KEYS_DIR: e2eKey().keys,
       },
       stdout: 'pipe',
     },

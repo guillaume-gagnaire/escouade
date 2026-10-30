@@ -35,8 +35,9 @@ type Extra<T> = { [K in keyof T]?: NonNullable<T[K]> extends object ? Partial<No
 
 /** The fact `name` as the bench sends it, `extra` merged over it field by field. */
 export function fact(name: FactName, extra: Extra<Fact> = {}): Fact {
-  const f: Fact = { ...structuredClone(SUBJECTS), name, version: 1, at: new Date().toISOString() };
-  if (name === 'ticket.column') Object.assign(f.ticket!, { from: 'doing', column: 'test' });
+  // What it says, as the core says it: a ticket of the bench moved to review for ticket.column.
+  const data = name === 'ticket.column' ? { from: 'doing', to: 'review' } : {};
+  const f: Fact = { ...structuredClone(SUBJECTS), name, version: 1, seq: 1, at: new Date().toISOString(), data };
   return merge(f, extra);
 }
 

@@ -692,7 +692,7 @@ export const api = {
   /** What an automatic restart waits for, as the window sees it. */
   updatePresence: (presence: { modal: boolean; testing: boolean; activeAt: number }) => invoke<void>('update_presence', { presence }),
   /** One HTTP request without proxy (2 s): true for any answer. */
-  httpReady: (url: string) => invoke<boolean>('http_ready', { url }),
+  httpReady: (url: string, agentId?: string) => invoke<boolean>('http_ready', { url, agentId }),
   /** The write's number, which the backend's log tells it by. */
   termWrite: (id: string, data: string) => invoke<number>('term_write', { id, data }),
   termReport: (id: string, report: TermReport) => invoke<void>('term_report', { id, report }),

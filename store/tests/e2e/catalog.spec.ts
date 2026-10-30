@@ -143,7 +143,8 @@ test('the home page lists the categories, Escouade’s own among the verified, a
   await expect(page.locator('.cats .chip').first()).toContainText('Harness');
   await expect(page.locator('.cats')).toContainText('Sources du Kanban');
   await expect(page.locator('.cats')).toContainText('Hébergeurs de code');
-  await expect(page.locator('.rows .row').first()).toContainText('Livré avec Escouade');
+  // The verified first (signed by the review, STORE-8: a base kept between runs has some), then Escouade's own.
+  await expect(page.locator('.rows .row').first()).toContainText(/Vérifié par Escouade|Livré avec Escouade/);
   // The new ones, newest first: the seeded plugins are dated a few minutes back, so a plugin another test publishes
   // meanwhile comes before them; the page is compared with what the store says is the newest.
   const fresh = ((await (await page.request.get('/api/catalog/home')).json()) as { fresh: { name: { fr: string } }[] }).fresh;

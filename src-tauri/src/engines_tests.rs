@@ -135,7 +135,7 @@ async fn a_state_saved_before_the_harnesses_loads_on_claude_code_and_loses_nothi
 
 /// An account for every harness beside Principal: an agent of a harness goes to its accounts
 /// alone (ESC-30). Each runs its fake.
-fn accounts_for_every_harness(h: &Harness) {
+pub(crate) fn accounts_for_every_harness(h: &Harness) {
     h.set_settings(|s| {
         for engine in [
             EngineId::Codex,

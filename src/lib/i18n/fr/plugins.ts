@@ -151,6 +151,15 @@ export default {
     revoked: 'retirée',
   },
 
+  cmds: {
+    title: 'Lance ces commandes',
+    waiting:
+      'Sur les événements qu’il reçoit, dans ton shell et le dossier du projet. Rien ne tourne avant ton accord, ni après une commande changée.',
+    agree: 'Accepter ces commandes',
+    agreed: 'Accord donné : elles tournent sur les événements qu’il reçoit, telles qu’elles sont écrites ici.',
+    takeBack: 'Retirer l’accord',
+  },
+
   projects: {
     intro:
       'Un plugin s’active projet par projet. Un projet privé est coupé d’office : rien ne lui parvient tant que tu ne l’y actives pas.',
@@ -198,6 +207,9 @@ export default {
       timeout: 'Délai dépassé',
       refused: 'Refusé',
       dropped: 'Perdu',
+      webhook: 'Webhook',
+      command: 'Commande',
+      decision: 'Décision',
     },
   },
 

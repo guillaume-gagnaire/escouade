@@ -411,10 +411,22 @@ impl<R: Runtime> Core<R> {
         let when = chrono::Local::now()
             .format("%Y-%m-%dT%H:%M:%S%:z")
             .to_string();
-        space.spec_write(path, |p| {
+        // What the comparison writes on the page is its gaps, not the page: `docs.gaps` says it.
+        let quiet = Space {
+            facts: None,
+            ..space.clone()
+        };
+        quiet.spec_write(path, |p| {
             p.gaps = gaps;
             p.compared = when;
         })?;
+        self.facts.emit(
+            crate::facts::Body::DocsGaps {
+                page: path.to_string(),
+                gaps: n as usize,
+            },
+            crate::facts::About::project(&project.id),
+        );
         Ok(n)
     }
 

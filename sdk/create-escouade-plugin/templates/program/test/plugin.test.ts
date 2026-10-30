@@ -10,10 +10,10 @@ test('it speaks version 1 of the protocol', async () => {
   assert.equal(hello.protocolVersion, 1);
 });
 
-test('a ticket moved to test is said in the journal', async () => {
+test('a ticket moved to review is said in the journal', async () => {
   const escouade = connect(plugin);
   await escouade.initialize();
-  await escouade.fact('ticket.column', { ticket: { key: 'APP-7', column: 'test' } });
+  await escouade.fact('ticket.column', { ticket: { key: 'APP-7' }, data: { from: 'doing', to: 'review' } });
   assert.deepEqual(escouade.logs, [{ level: 'info', message: 'APP-7 is ready to test (Banc)' }]);
 });
 

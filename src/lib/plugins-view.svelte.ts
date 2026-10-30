@@ -101,6 +101,7 @@ class PluginsStore {
   setProject = (id: string, project: string, on: boolean) => this.act(() => pluginsApi.setProject(id, project, on));
   setPermission = (id: string, word: string, granted: boolean) => this.act(() => pluginsApi.setPermission(id, word, granted));
   setSetting = (id: string, key: string, value: unknown) => this.act(() => pluginsApi.setSetting(id, key, value));
+  approveCommands = (id: string, on: boolean) => this.act(() => pluginsApi.approveCommands(id, on));
 
   async remove(id: string, keep: boolean) {
     this.error = null;

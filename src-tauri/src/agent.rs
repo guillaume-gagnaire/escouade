@@ -90,6 +90,9 @@ pub struct Effects {
     pub agent_changed: bool,
     pub save: bool,
     pub notify: Option<AgentAlert>,
+    /// Permissions just asked, which the plugins of `permissions.decide` answer first (PLG-8):
+    /// the core holds `notify` back while they decide (`plugins::decide`).
+    pub asked: Vec<crate::plugins::decide::Asked>,
     pub turns: Vec<TurnRow>,
     pub rate: Option<Vec<crate::model::QuotaMeter>>,
     /// Whether the agent's account answers as extra usage (`isUsingOverage` of a `rate_limit_event`).
@@ -151,6 +154,9 @@ struct Counters {
 
 pub struct AgentRt {
     pub meta: AgentMeta,
+    /// Where its facts go (PLG-5): its status, its requests and their answers, told where they
+    /// change; nowhere outside the core.
+    pub(crate) facts: crate::facts::Emitter,
     pub proc: Option<Process>,
     pub gen: u64,
     pub conv: Conv,
@@ -506,6 +512,7 @@ impl AgentRt {
         Self {
             conv: Conv::new(conv_dir, &meta.id),
             meta,
+            facts: crate::facts::Emitter::default(),
             proc: None,
             gen: 0,
             active_since: None,
@@ -990,7 +997,11 @@ impl AgentRt {
                 t.empty_at = Some(t.typed.load(std::sync::atomic::Ordering::Acquire));
             }
         }
-        self.meta.status = status;
+        let was = std::mem::replace(&mut self.meta.status, status);
+        self.fact(crate::facts::Body::AgentStatus {
+            status: crate::facts::status_word(status),
+            was: crate::facts::status_word(was),
+        });
         self.meta.last_activity = now;
         fx.agent_changed = true;
         fx.save = true;
@@ -1147,15 +1158,47 @@ impl AgentRt {
     }
 
     /// A request comes after those waiting already: the one asked first stays the one shown
-    /// first. Asked again, a request keeps its place, and the time it first came.
-    fn add_pending(&mut self, req: PendingReq) {
+    /// first. Asked again, a request keeps its place, and the time it first came. A new permission
+    /// (not a plan to approve) goes first to the plugins that decide (`Effects::asked`, PLG-8).
+    fn add_pending(&mut self, req: PendingReq, fx: &mut Effects) {
         match self.pending.iter_mut().find(|p| p.item_id == req.item_id) {
             Some(p) => {
                 let since = p.since;
                 *p = PendingReq { since, ..req };
             }
-            None => self.pending.push(req),
+            None => {
+                let v = &req.view;
+                self.fact(if v.kind == "question" {
+                    crate::facts::Body::RequestQuestion {
+                        request_id: v.id.clone(),
+                        questions: v.questions.iter().map(|q| q.question.clone()).collect(),
+                    }
+                } else {
+                    crate::facts::Body::RequestPermission {
+                        request_id: v.id.clone(),
+                        tool: v.tool.clone(),
+                        arg: v.arg.chars().take(300).collect(),
+                    }
+                });
+                if v.kind == "permission" && v.tool != "ExitPlanMode" {
+                    fx.asked.push(crate::plugins::decide::Asked {
+                        request_id: v.id.clone(),
+                        tool: v.tool.clone(),
+                        input: trim_strings(&req.input),
+                        arg: v.arg.clone(),
+                    });
+                }
+                self.pending.push(req)
+            }
         }
+    }
+
+    /// Tells `body` of this agent on the facts' bus (PLG-5).
+    pub(crate) fn fact(&self, body: crate::facts::Body) {
+        self.facts.emit(
+            body,
+            crate::facts::About::agent(&self.meta.id, &self.meta.name, &self.meta.project_id),
+        );
     }
 
     /// The request `request_id` has its answer already: the user's, in the window, or a client's.
@@ -1227,6 +1270,12 @@ impl AgentRt {
             None => answers.clone(),
         };
         proc.answer_question(request_id, &p.tool_use_id, input)?;
+        self.fact(crate::facts::Body::RequestAnswered {
+            request_id: request_id.to_string(),
+            kind: "question".into(),
+            decision: None,
+            by: by.map(str::to_string),
+        });
         let mut patch = json!({ "answers": answers });
         answered_by(&mut patch, by);
         self.patch(&p.item_id, patch, fx);
@@ -1318,6 +1367,15 @@ impl AgentRt {
             _ => None,
         };
         proc.answer_permission(request_id, answer)?;
+        self.fact(crate::facts::Body::RequestAnswered {
+            request_id: request_id.to_string(),
+            kind: "permission".into(),
+            decision: Some(match decision {
+                "allow" | "always" => decision.to_string(),
+                _ => "deny".to_string(),
+            }),
+            by: by.map(str::to_string),
+        });
         // Its mode now, without waiting for its harness to tell it (the Composer follows).
         if let Some(mode) = resumed {
             if self.meta.set_mode(&mode) {

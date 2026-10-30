@@ -67,6 +67,8 @@ interface VersionRow {
   tag: string;
   state: string;
   review: boolean;
+  reviewState: string | null;
+  reviewMessage: string | null;
   publishedAt: string | null;
   yankedAt: string | null;
   tagMovedAt: string | null;
@@ -100,6 +102,8 @@ interface AccountData {
 }
 
 const { lang, text: base, links } = useLang();
+// An administrator also holds the review's tokens here (docs/STORE.md §4.1).
+const { data: me } = await useMe();
 const route = useRoute();
 const text = computed(() => ACCOUNT_TEXTS[lang.value]);
 const a = computed(() => text.value.author);
@@ -136,7 +140,16 @@ const short = (sha: string | null) => (sha ?? '').slice(0, 7);
 const parts = (words: string | undefined) => (words ?? '').split('`').map((t, n) => ({ t, code: n % 2 === 1 }));
 /** A permission's words as the banner shows them: the value alone (`agent.created`, `hooks.slack.com`). */
 const permission = (w: string) => w.replace(/^[a-z]+:/, '');
-const versionState = (v: VersionRow) => (v.state === 'published' ? (v.yankedAt ? 'yanked' : v.review ? 'review' : 'published') : v.state);
+const versionState = (v: VersionRow) =>
+  v.state === 'published'
+    ? v.yankedAt
+      ? 'yanked'
+      : v.reviewState === 'verified' || v.reviewState === 'changes' || v.reviewState === 'refused'
+        ? v.reviewState
+        : v.review
+          ? 'review'
+          : 'published'
+    : v.state;
 /** The bars of the weeks' chart, in the SVG's units (no style attribute under the CSP). */
 const bars = computed(() => {
   const weeks = data.value?.selected?.weeks ?? [];
@@ -349,10 +362,14 @@ useHead(() => ({
                     bad: v.state === 'rejected' || v.state === 'error',
                     warn: v.state === 'ready' || v.state === 'held',
                     review: versionState(v) === 'review',
+                    ok: versionState(v) === 'verified',
                   }"
                   >{{ a.vstates[versionState(v)] ?? v.state }}</span
                 >
                 <span v-if="v.tagMovedAt" class="tag warn moved">{{ a.moved }}</span>
+                <small v-if="v.reviewMessage && (v.reviewState === 'changes' || v.reviewState === 'refused')" class="review-said">{{
+                  v.reviewMessage
+                }}</small>
               </td>
               <td class="hide-sm dim nowrap">{{ date(v.publishedAt) || '—' }}</td>
               <td class="r num">{{ num(v.installs) }}</td>
@@ -541,6 +558,7 @@ useHead(() => ({
           <a :href="links.privacy">{{ text.data.privacy }}</a> · <NuxtLink :to="terms">{{ text.data.terms }}</NuxtLink>
         </p>
       </div>
+      <AdminTokens v-if="me.account?.admin" />
     </aside>
   </div>
 
@@ -992,6 +1010,14 @@ table.t tr.empty td {
   border-color: color-mix(in oklch, var(--warn) 45%, transparent);
   background: var(--warn-bg);
   color: var(--warn);
+}
+.review-said {
+  display: block;
+  max-width: 46ch;
+  margin-top: 4px;
+  color: var(--dim);
+  font-size: 12.5px;
+  white-space: pre-line;
 }
 .tag.ok {
   border-color: color-mix(in oklch, var(--ok) 40%, transparent);

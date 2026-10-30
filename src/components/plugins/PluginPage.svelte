@@ -30,7 +30,7 @@
   const reason = $derived(plugin.state.kind === 'ready' ? null : plugin.state.reason);
 
   function counted(k: PluginTab): number | null {
-    if (k === 'permissions') return plugin.asks.length;
+    if (k === 'permissions') return plugin.asks.length + plugin.commands.length;
     if (k === 'settings') return settingsCount || null;
     return null;
   }
@@ -118,6 +118,22 @@
           </div>
         {:else}
           <p class="hint">{t('plugins.perms.none')}</p>
+        {/if}
+        {#if plugin.commands.length}
+          <!-- The commands it runs on facts (PLG-5): agreed to as they are, as the install window agrees to the plugin. -->
+          <section class="box cmds" aria-label={t('plugins.cmds.title')}>
+            <h5>{t('plugins.cmds.title')}</h5>
+            <ul>
+              {#each plugin.commands as line, i (i)}<li><Icon name="bash" size={14} /><code class="mono">{line}</code></li>{/each}
+            </ul>
+            {#if plugin.commandsApproved}
+              <p class="hint">{t('plugins.cmds.agreed')}</p>
+              <button class="btn" onclick={() => plugins.approveCommands(plugin.id, false)}>{t('plugins.cmds.takeBack')}</button>
+            {:else}
+              <p class="notice"><Icon name="info" size={14} /><span>{t('plugins.cmds.waiting')}</span></p>
+              <button class="btn primary" onclick={() => plugins.approveCommands(plugin.id, true)}>{t('plugins.cmds.agree')}</button>
+            {/if}
+          </section>
         {/if}
       {:else if tab === 'versions'}
         <div class="vers">
@@ -380,6 +396,48 @@
   .adds :global(.icon) {
     margin-top: 2px;
     color: var(--muted);
+  }
+  .cmds ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 6px;
+  }
+  .cmds li {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr);
+    gap: 8px;
+    align-items: start;
+  }
+  .cmds li :global(.icon) {
+    margin-top: 2px;
+    color: var(--muted);
+  }
+  .cmds code {
+    font-size: 11.5px;
+    color: var(--text);
+    overflow-wrap: anywhere;
+  }
+  .cmds .btn {
+    justify-self: start;
+  }
+  .cmds .notice {
+    margin: 0;
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    padding: 9px 11px;
+    border-radius: 9px;
+    background: var(--wait-bg);
+    box-shadow: inset 0 0 0 1px var(--wait-line);
+    color: var(--soft);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .cmds .notice :global(.icon) {
+    margin-top: 2px;
+    color: var(--warn-ink);
   }
   .chain {
     display: grid;
