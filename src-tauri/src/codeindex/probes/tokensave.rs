@@ -3,8 +3,8 @@
 //!
 //! - Nothing of tokensave is in this repository: the bench runs its program (`--tokensave <exe>`)
 //!   with `tool <name> --project <dir> --args <json>`, the same handler its MCP server calls.
-//! - The project is a copy without `.git` (`git archive`), indexed beforehand by `tokensave init`
-//!   in it: the bench refuses a folder inside a git repository, and never indexes.
+//! - The project is a copy without `.git` (`git archive`): the bench refuses a folder inside a git
+//!   repository, and runs `tokensave init --no-git-hook` in the copy only when it has no index yet.
 //! - Its update check is turned off for each call (`TOKENSAVE_UPDATE_CHECK=off`); its upload
 //!   counter is turned off before (`tokensave disable-upload-counter`, `docs/CODEINDEX-PROBES.md`).
 //! - The command line gives the whole answer and no metrics line: the answer is cut at 15,000
