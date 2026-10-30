@@ -174,28 +174,45 @@ async fn decisions_are_proposed_and_replaced_by_the_tools_and_accepted_by_none()
         }),
     )
     .await;
+    // No number until it is accepted (ESC-303): an id.
     assert_eq!(
-        (one["number"].clone(), one["state"].clone()),
-        (json!(1), json!("proposed"))
+        (
+            one["number"].clone(),
+            one["id"].clone(),
+            one["state"].clone()
+        ),
+        (
+            json!(null),
+            json!("trois-echeances-au-plus"),
+            json!("proposed")
+        )
     );
+    assert!(one["note"].as_str().unwrap().contains("id"));
+    let id = "trois-echeances-au-plus";
     let listed = read(&c, "list_decisions", json!({ "project": p.id })).await;
     assert_eq!(
         listed["decisions"][0]["changes"][0],
         json!({ "page": "paiement/echeances", "added": 12, "removed": 3 })
     );
-    let whole = read(&c, "read_decision", json!({ "project": p.id, "number": 1 })).await;
+    assert_eq!(listed["decisions"][0]["id"], id);
+    let whole = read(&c, "read_decision", json!({ "project": p.id, "id": id })).await;
     assert_eq!(whole["context"], "Les clients payent en plusieurs fois.");
+    refused(&c, "read_decision", json!({ "project": p.id })).await;
+    refused(&c, "read_decision", json!({ "project": p.id, "number": 1 })).await;
     assert_eq!(whole["originRef"], "Paiement");
     // A proposal still open is revised.
     let revised = read(
         &c,
         "propose_decision",
-        json!({ "project": p.id, "number": 1, "title": "Trois échéances au plus", "decision": "Trois, pas quatre." }),
+        json!({ "project": p.id, "id": id, "title": "Trois échéances au plus", "decision": "Trois, pas quatre." }),
     )
     .await;
-    assert_eq!(revised["number"], 1);
     assert_eq!(
-        read(&c, "read_decision", json!({ "project": p.id, "number": 1 })).await["decision"],
+        (revised["id"].clone(), revised["number"].clone()),
+        (json!(id), json!(null))
+    );
+    assert_eq!(
+        read(&c, "read_decision", json!({ "project": p.id, "id": id })).await["decision"],
         "Trois, pas quatre."
     );
     // Only a proposal; replacing it is refused while it is not accepted.
@@ -205,8 +222,12 @@ async fn decisions_are_proposed_and_replaced_by_the_tools_and_accepted_by_none()
         json!({ "project": p.id, "number": 1, "title": "Autre" }),
     )
     .await;
-    // A human accepts, from the window (the core's call).
-    h.core.docs_accept_decision(&p.id, 1).await.unwrap();
+    // A human accepts, from the window (the core's call): its number then.
+    let r = crate::docs::Ref::Id(id.into());
+    assert_eq!(
+        h.core.docs_accept_decision(&p.id, &r).await.unwrap().number,
+        Some(1)
+    );
     let accepted = read(
         &c,
         "list_decisions",
@@ -242,13 +263,21 @@ async fn decisions_are_proposed_and_replaced_by_the_tools_and_accepted_by_none()
     )
     .await;
     assert_eq!(
-        (new["number"].clone(), new["supersedes"].clone()),
-        (json!(2), json!([1]))
+        (
+            new["number"].clone(),
+            new["id"].clone(),
+            new["supersedes"].clone()
+        ),
+        (json!(null), json!("quatre-echeances"), json!([1]))
     );
     let before = read(&c, "list_decisions", json!({ "project": p.id })).await;
     assert_eq!(before["decisions"][0]["state"], "accepted");
-    assert_eq!(before["decisions"][0]["replacementProposed"], 2);
-    h.core.docs_accept_decision(&p.id, 2).await.unwrap();
+    assert_eq!(
+        before["decisions"][0]["replacementProposed"],
+        "quatre-echeances"
+    );
+    let r = crate::docs::Ref::Id("quatre-echeances".into());
+    h.core.docs_accept_decision(&p.id, &r).await.unwrap();
     let after = read(&c, "list_decisions", json!({ "project": p.id })).await;
     assert_eq!(after["decisions"][0]["state"], "superseded");
     assert_eq!(after["decisions"][0]["supersededBy"], 2);
@@ -636,7 +665,12 @@ async fn a_tickets_agent_proposes_its_decisions_as_its_tickets() {
         json!({ "project": p.id, "title": "Trois échéances", "origin": "brainstorm" }),
     )
     .await;
-    let d = read(&c, "read_decision", json!({ "project": p.id, "number": 1 })).await;
+    let d = read(
+        &c,
+        "read_decision",
+        json!({ "project": p.id, "id": "trois-echeances" }),
+    )
+    .await;
     assert_eq!(
         (d["origin"].clone(), d["originRef"].clone()),
         (json!("ticket"), json!("DEM-1"))
@@ -650,7 +684,12 @@ async fn a_tickets_agent_proposes_its_decisions_as_its_tickets() {
         json!({ "project": p.id, "title": "Tarif famille", "origin": "brainstorm", "originRef": "Tarif famille" }),
     )
     .await;
-    let d = read(&e, "read_decision", json!({ "project": p.id, "number": 2 })).await;
+    let d = read(
+        &e,
+        "read_decision",
+        json!({ "project": p.id, "id": "tarif-famille" }),
+    )
+    .await;
     assert_eq!(
         (d["origin"].clone(), d["originRef"].clone()),
         (json!("brainstorm"), json!("Tarif famille"))
@@ -746,7 +785,10 @@ async fn a_discussion_proposes_pages_and_decisions_that_pour_writes() {
     )
     .await;
     e.cancel().await.unwrap();
-    h.core.docs_accept_decision(&p.id, 1).await.unwrap();
+    h.core
+        .docs_accept_decision(&p.id, &crate::docs::Ref::Id("une-ancienne".into()))
+        .await
+        .unwrap();
     let before = std::fs::read_to_string(spec.join("notifications/general.md")).unwrap();
     let id = put_discussion(&h, &p, crate::discussion::Kind::Brainstorm);
     let c = as_agent(&h, &id).await;
@@ -852,7 +894,11 @@ async fn a_discussion_proposes_pages_and_decisions_that_pour_writes() {
         poured.pages,
         vec!["espace-adherent/relances", "notifications/general"]
     );
-    assert_eq!(poured.decisions, vec![2, 3]);
+    let (two, three) = (
+        crate::docs::Ref::Id("relances-par-e-mail-seulement".into()),
+        crate::docs::Ref::Id("la-nouvelle".into()),
+    );
+    assert_eq!(poured.decisions, vec![two.clone(), three.clone()]);
     let space = h.core.docs_space(&p.id, None).await.unwrap();
     assert!(space
         .spec_read("espace-adherent/relances")
@@ -863,7 +909,9 @@ async fn a_discussion_proposes_pages_and_decisions_that_pour_writes() {
         space.spec_read("notifications/general").unwrap().body,
         "Les relances d’adhésion sont planifiées chaque nuit."
     );
-    let two = space.decision(2).unwrap();
+    let two_ref = two;
+    let two = space.decision(&two_ref).unwrap();
+    assert_eq!(two.number, None);
     assert_eq!(two.state, crate::docs::State::Proposed);
     assert_eq!(
         (two.origin.as_str(), two.origin_ref.as_str()),
@@ -872,7 +920,7 @@ async fn a_discussion_proposes_pages_and_decisions_that_pour_writes() {
     // What it changed: its page's lines.
     assert_eq!(two.changes.len(), 1);
     assert_eq!(two.changes[0].page, "espace-adherent/relances");
-    assert_eq!(space.decision(3).unwrap().supersedes, vec![1]);
+    assert_eq!(space.decision(&three).unwrap().supersedes, vec![1]);
     let d = h
         .core
         .agent(&id)
@@ -894,7 +942,7 @@ async fn a_discussion_proposes_pages_and_decisions_that_pour_writes() {
         v.pages,
         vec!["espace-adherent/relances", "notifications/general"]
     );
-    assert_eq!(v.decisions, vec![2, 3]);
+    assert_eq!(v.decisions, vec![two_ref, three]);
     // « Planifier » on the discussion: its changes made into tickets, the plan kept on it.
     let mut board = h.core.project(&p.id).unwrap().board;
     board.autopilot = false;

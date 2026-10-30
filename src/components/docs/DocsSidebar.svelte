@@ -7,7 +7,7 @@
   import { keyLabel } from '../../lib/platform';
   import { tip } from '../../lib/tip';
   import { fAgo } from '../../lib/format';
-  import { decisionNo } from '../../lib/decisions';
+  import { refLabel } from '../../lib/decisions';
   import Icon from '../Icon.svelte';
   import StatusDot from '../StatusDot.svelte';
   import { app } from '../../lib/state.svelte';
@@ -79,7 +79,9 @@
               <span
                 >{fAgo(d.poured.at / 1000, app.now)} · {t('docs.discussion.pages', {
                   count: d.poured.pages.length,
-                })}{#each d.poured.decisions as n (n)}{' · '}{t('docs.discussion.decisionNo', { n: decisionNo(n) })}{/each}</span
+                })}{#each d.poured.decisions as n (n)}{' · '}{typeof n === 'number'
+                    ? t('docs.discussion.decisionNo', { n: refLabel(n) })
+                    : n}{/each}</span
               >
             {:else}
               <span

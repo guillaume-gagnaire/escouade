@@ -1185,8 +1185,8 @@ pub struct Ticket {
     /// The pages of the spec it implements (`subject/page`), as « Planifier » made it (ESC-262);
     /// each of them names it in its `tickets`. Empty for a ticket made otherwise.
     pub pages: Vec<String>,
-    /// The numbers of the decisions it implements, the same way.
-    pub decisions: Vec<u32>,
+    /// The decisions it implements, the same way: by number, or by id while they are proposals.
+    pub decisions: Vec<crate::docs::Ref>,
 }
 
 /// Someone of the team, as the files of the shared tickets name them (ESC-190): the name they

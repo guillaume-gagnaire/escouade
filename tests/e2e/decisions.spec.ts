@@ -190,7 +190,8 @@ test('the register of the decisions: numbered and dated, filtered, accepted in o
   // The register: numbered, dated, the latest first, each one's state, origin and what it changed.
   await expect(page.locator('[data-counts]')).toHaveText('5 décisions · 2 acceptées · 2 proposées · 1 remplacée');
   const table = page.getByRole('table', { name: 'Registre des décisions' });
-  const row = (n: number) => table.locator(`tr[data-decision="${n}"]`);
+  // By its number, or a proposal by its id (ESC-303: it has no number until accepted).
+  const row = (n: number | string) => table.locator(`tr[data-decision="${n}"]`);
   await expect(table.locator('tbody tr')).toHaveCount(5);
   expect(await table.locator('tbody tr').evaluateAll((rs) => rs.map((r) => r.getAttribute('data-decision')))).toEqual([
     '15',
@@ -248,9 +249,12 @@ test('the register of the decisions: numbered and dated, filtered, accepted in o
   await shoot(page, 'propose');
   await form.getByRole('button', { name: 'Proposer' }).click();
   await expect(form).toHaveCount(0);
-  await expect(row(16)).toContainText('Proposée');
-  await expect(page.getByRole('complementary', { name: 'Reçu fiscal par e-mail' })).toContainText('ADR-016 · proposée aujourd’hui');
-  await expect.poll(() => fs.existsSync(path.join(esc, 'decisions', '0016-recu-fiscal-par-e-mail.md'))).toBe(true);
+  // No number until it is accepted (ESC-303): its id, and a file without a number.
+  await expect(row('recu-fiscal-par-e-mail')).toContainText('Proposée');
+  await expect(page.getByRole('complementary', { name: 'Reçu fiscal par e-mail' })).toContainText(
+    'recu-fiscal-par-e-mail · proposée aujourd’hui, numérotée à son acceptation',
+  );
+  await expect.poll(() => fs.existsSync(path.join(esc, 'decisions', 'recu-fiscal-par-e-mail.md'))).toBe(true);
 
   // An accepted decision is not rewritten: « La remplacer » proposes a new one, which supersedes it once accepted.
   const file4 = path.join(esc, 'decisions', '0004-paiement-par-stripe.md');
@@ -267,16 +271,19 @@ test('the register of the decisions: numbered and dated, filtered, accepted in o
   // Until it is accepted, the old one stands.
   await expect(row(4)).toContainText('Acceptée');
   expect(fs.readFileSync(file4, 'utf8')).toBe(before);
+  // Accepted: the next number of the register, 16 (the one proposed by hand still has none).
   await mollie.getByRole('button', { name: 'Accepter' }).click();
   await expect(row(4)).toContainText('Remplacée');
-  await expect(row(4)).toContainText('par 017');
+  await expect(row(4)).toContainText('par 016');
+  await expect.poll(() => fs.existsSync(path.join(esc, 'decisions', '0016-paiement-par-mollie.md'))).toBe(true);
+  expect(fs.existsSync(path.join(esc, 'decisions', 'paiement-par-mollie.md'))).toBe(false);
   await row(4).getByRole('button', { name: 'Paiement par Stripe' }).click();
   const old = page.getByRole('complementary', { name: 'Paiement par Stripe' });
-  await expect(old).toContainText('ADR-004 · remplacée par 017');
+  await expect(old).toContainText('ADR-004 · remplacée par 016');
   await expect(old.getByRole('button', { name: 'La remplacer' })).toHaveCount(0);
   const after = fs.readFileSync(file4, 'utf8');
   expect(after).toContain('state: "superseded"');
-  expect(after).toContain('superseded_by: 17');
+  expect(after).toContain('superseded_by: 16');
   // Its text untouched.
   expect(after.split('---\n')[2]).toBe(before.split('---\n')[2]);
   await shoot(page, 'superseded');

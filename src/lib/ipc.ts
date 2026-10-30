@@ -83,6 +83,7 @@ import type {
   WorkflowTrack,
   DocsCandidate,
   DocsCompared,
+  DecisionRef,
   DocsDecision,
   DocsCheck,
   DiscussionPoured,
@@ -452,12 +453,13 @@ export const api = {
   docsCompare: (id: string, pages: string[] | null) => invoke<DocsCompared>('docs_compare', { id, pages }),
   docsSpecSearch: (id: string, query: string) => invoke<DocsHit[]>('docs_spec_search', { id, query }),
   docsDecisions: (id: string) => invoke<DocsDecision[]>('docs_decisions', { id }),
-  docsDecisionPropose: (id: string, number: number | null, decision: Partial<DocsDecision>) =>
-    invoke<DocsDecision>('docs_decision_propose', { id, number, decision }),
+  /** A new proposal (reference null), or a proposal still open revised (its id). */
+  docsDecisionPropose: (id: string, reference: DecisionRef | null, decision: Partial<DocsDecision>) =>
+    invoke<DocsDecision>('docs_decision_propose', { id, reference, decision }),
   docsDecisionReplace: (id: string, number: number, decision: Partial<DocsDecision>) =>
     invoke<DocsDecision>('docs_decision_replace', { id, number, decision }),
   /** « Accepter »: a human's act, the only way to accept a decision. */
-  docsDecisionAccept: (id: string, number: number) => invoke<DocsDecision>('docs_decision_accept', { id, number }),
+  docsDecisionAccept: (id: string, reference: DecisionRef) => invoke<DocsDecision>('docs_decision_accept', { id, reference }),
   docsDocuments: (id: string, folder: string | null = null) => invoke<DocsFile[]>('docs_documents', { id, folder }),
   docsDocumentText: (id: string, path: string, from: number | null = null) => invoke<DocsText>('docs_document_text', { id, path, from }),
   /**

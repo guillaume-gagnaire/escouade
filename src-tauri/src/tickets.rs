@@ -382,7 +382,7 @@ pub struct TicketDraft {
     pub shared: Option<bool>,
     /// The pages and decisions it implements (« Planifier », ESC-262); None: as they are.
     pub pages: Option<Vec<String>>,
-    pub decisions: Option<Vec<u32>>,
+    pub decisions: Option<Vec<crate::docs::Ref>>,
 }
 
 /// A field that is there, null or not: Some, its value (null: None); absent, it is None by its
@@ -2871,7 +2871,7 @@ impl<R: Runtime> Core<R> {
         // The decisions its agent left are accepted by this validation (docs/FACTORY.md), before
         // the commit, so they are merged with the ticket. One that cannot be written stops nothing.
         match self
-            .docs_accept_ticket_decisions(&project.id, &agent_id, &t.key)
+            .docs_accept_ticket_decisions(&project.id, &agent_id, &t.key, &target)
             .await
         {
             Ok(n) if !n.is_empty() => {

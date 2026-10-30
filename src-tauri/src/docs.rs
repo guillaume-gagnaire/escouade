@@ -6,7 +6,9 @@
 //!   subject, sources, linked tickets and decisions, when it was last compared to the code);
 //! - `decisions/<NNNN>-<slug>.md`: the register, a file per decision (number, date, state,
 //!   context / decision / consequences, what it changed in the spec, its links and what it
-//!   replaces). An accepted decision is never rewritten: a new one replaces it;
+//!   replaces). An accepted decision is never rewritten: a new one replaces it. A proposal has no
+//!   number yet (ESC-303): its file is `<id>.md`, cited by that id (the slug of its title) until
+//!   it is accepted, when it takes the number after the register of the branch it goes to;
 //! - `documents/<folders>/<file>`: the files the team dropped.
 //!
 //! What can be worked out again lives in Escouade's own folder, beside the histories: the text
@@ -195,6 +197,49 @@ fn nums_of(h: &HashMap<String, serde_json::Value>, k: &str) -> Vec<u32> {
         .collect()
 }
 
+fn refs_of(h: &HashMap<String, serde_json::Value>, k: &str) -> Vec<Ref> {
+    strs_of(h, k).iter().filter_map(|s| Ref::of(s)).collect()
+}
+
+/// How a decision is cited (ESC-303): an accepted one by its number, a proposal by its id (the
+/// slug of its title), as it has no number yet.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, rmcp::schemars::JsonSchema)]
+#[schemars(crate = "rmcp::schemars")]
+#[serde(untagged)]
+pub enum Ref {
+    Number(u32),
+    Id(String),
+}
+
+impl Ref {
+    /// From what a page, a tool or the window gives: digits (« 0004 », « #4 ») a number, else an id.
+    pub fn of(s: &str) -> Option<Ref> {
+        let s = s.trim();
+        let n = s.trim_start_matches('#');
+        if !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()) {
+            return n.parse().ok().map(Ref::Number);
+        }
+        Some(slug(s)).filter(|s| !s.is_empty()).map(Ref::Id)
+    }
+
+    /// Itself made plain: a number given as a string is a number, an id a slug.
+    pub fn plain(&self) -> Option<Ref> {
+        match self {
+            Ref::Number(n) => Some(Ref::Number(*n)),
+            Ref::Id(s) => Ref::of(s),
+        }
+    }
+}
+
+impl std::fmt::Display for Ref {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Ref::Number(n) => write!(f, "{n:04}"),
+            Ref::Id(s) => f.write_str(s),
+        }
+    }
+}
+
 // ---------- the specification ----------
 
 /// A page of the spec.
@@ -209,8 +254,8 @@ pub struct Page {
     pub sources: Vec<String>,
     /// The keys of the tickets that implement or changed it.
     pub tickets: Vec<String>,
-    /// The numbers of the decisions it follows.
-    pub decisions: Vec<u32>,
+    /// The decisions it follows: the numbers of those accepted, the ids of the proposals.
+    pub decisions: Vec<Ref>,
     /// When it was last compared to the code (ISO 8601); empty: never.
     pub compared: String,
     /// What the last comparison found the code does otherwise (ESC-258): written by the
@@ -294,7 +339,7 @@ pub fn page_read(path: &str, text: &str) -> Page {
                 subject,
                 sources: strs_of(&h, "sources"),
                 tickets: strs_of(&h, "tickets"),
-                decisions: nums_of(&h, "decisions"),
+                decisions: refs_of(&h, "decisions"),
                 compared: str_of(&h, "compared"),
                 gaps: h
                     .get("gaps")
@@ -355,7 +400,7 @@ pub struct PageInfo {
     pub title: String,
     pub compared: String,
     pub tickets: Vec<String>,
-    pub decisions: Vec<u32>,
+    pub decisions: Vec<Ref>,
     /// How many gaps with the code its last comparison found.
     pub gaps: u32,
     pub draft: bool,
@@ -425,7 +470,11 @@ pub struct Change {
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Decision {
-    pub number: u32,
+    /// Given when it is accepted (ESC-303): a proposal has none (but those written before).
+    pub number: Option<u32>,
+    /// How a proposal is cited, and the end of its file's name: the slug of its title, made
+    /// unique in the register when it is proposed; kept once accepted.
+    pub id: String,
     pub title: String,
     /// `YYYY-MM-DD`.
     pub date: String,
@@ -450,16 +499,91 @@ pub struct Decision {
 }
 
 impl Decision {
-    /// The name of its file.
+    /// The name of its file: `<id>.md` for a proposal, `NNNN-<id>.md` once it has a number.
     pub fn file_name(&self) -> String {
-        let s = slug(&self.title);
-        let s: String = s.chars().take(40).collect();
-        let s = s.trim_end_matches('-');
-        if s.is_empty() {
-            format!("{:04}.md", self.number)
-        } else {
-            format!("{:04}-{s}.md", self.number)
+        match (self.number, self.id.is_empty()) {
+            (Some(n), true) => format!("{n:04}.md"),
+            (Some(n), false) => format!("{n:04}-{}.md", self.id),
+            (None, _) => format!("{}.md", self.id),
         }
+    }
+
+    /// How it is cited: its number when it has one, else its id.
+    pub fn reference(&self) -> Ref {
+        match self.number {
+            Some(n) => Ref::Number(n),
+            None => Ref::Id(self.id.clone()),
+        }
+    }
+
+    /// Whether `r` cites it: its number, or its id.
+    pub fn is(&self, r: &Ref) -> bool {
+        match r {
+            Ref::Number(n) => self.number == Some(*n),
+            Ref::Id(s) => !self.id.is_empty() && self.id == *s,
+        }
+    }
+}
+
+/// The register of the branch a decision goes to, as its acceptance looks at it (ESC-303): the
+/// next number there, and the numbers it has, each with its id.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Register {
+    pub next: u32,
+    pub taken: Vec<(u32, String)>,
+}
+
+impl Register {
+    /// From the names of its files (`0004-un-titre.md`).
+    pub fn of_names<'a>(names: impl IntoIterator<Item = &'a str>) -> Register {
+        let taken: Vec<(u32, String)> = names
+            .into_iter()
+            .filter(|n| n.ends_with(".md"))
+            .filter_map(|n| {
+                let digits: String = n.chars().take_while(char::is_ascii_digit).collect();
+                Some((digits.parse().ok()?, id_of_file(Path::new(n))))
+            })
+            .collect();
+        Register {
+            next: taken.iter().map(|(n, _)| n + 1).max().unwrap_or(1),
+            taken,
+        }
+    }
+
+    /// Both: the next after each, every number each has.
+    pub fn and(mut self, other: Register) -> Register {
+        self.next = self.next.max(other.next);
+        self.taken.extend(other.taken);
+        self
+    }
+}
+
+/// The id a title gives: its slug, 40 characters at most.
+pub fn decision_id(title: &str) -> String {
+    let s: String = slug(title).chars().take(40).collect();
+    let s = s.trim_end_matches('-');
+    if s.is_empty() {
+        "decision".into()
+    } else if s.chars().all(|c| c.is_ascii_digit()) {
+        // Digits alone would read as a number.
+        format!("d-{s}")
+    } else {
+        s.into()
+    }
+}
+
+/// The id a file's name gives: its name without `.md` nor its number (`0004-un-titre.md` →
+/// `un-titre`).
+pub(crate) fn id_of_file(path: &Path) -> String {
+    let stem = path
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let rest = stem.trim_start_matches(|c: char| c.is_ascii_digit());
+    match rest.strip_prefix('-') {
+        Some(r) if rest.len() < stem.len() && !r.is_empty() => r.to_string(),
+        _ if rest.len() < stem.len() && rest.is_empty() => format!("d-{stem}"),
+        _ => stem,
     }
 }
 
@@ -487,7 +611,11 @@ pub fn decision_write(d: &Decision) -> String {
     };
     front_write(
         &[
-            ("number", d.number.to_string()),
+            (
+                "number",
+                d.number.map_or("null".to_string(), |n| n.to_string()),
+            ),
+            ("id", front_value(&d.id)),
             ("title", front_value(&d.title)),
             ("date", front_value(&d.date)),
             ("state", front_value(d.state.name())),
@@ -531,12 +659,16 @@ pub fn decision_read(text: &str) -> Result<Decision> {
             "the decision has no header (--- … ---)"
         ));
     };
-    let number: u32 = str_of(&h, "number").parse().map_err(|_| {
-        anyhow::anyhow!(tr!(
-            "la décision n’a pas de numéro",
-            "the decision has no number"
-        ))
-    })?;
+    // A proposal has no number (ESC-303); one that does not read is refused.
+    let number = match h.get("number") {
+        None | Some(serde_json::Value::Null) => None,
+        Some(_) => Some(str_of(&h, "number").parse::<u32>().map_err(|_| {
+            anyhow::anyhow!(tr!(
+                "le numéro de la décision ne se lit pas",
+                "the decision's number does not read"
+            ))
+        })?),
+    };
     let secs = sections(&body);
     let pick = |names: &[&str]| -> String {
         names
@@ -552,6 +684,7 @@ pub fn decision_read(text: &str) -> Result<Decision> {
     };
     Ok(Decision {
         number,
+        id: str_of(&h, "id"),
         title: str_of(&h, "title"),
         date: str_of(&h, "date"),
         state: State::parse(&str_of(&h, "state")).unwrap_or_default(),
@@ -1110,61 +1243,129 @@ impl Space {
 
     // ----- decisions -----
 
-    fn decision_files(&self) -> Vec<(u32, PathBuf)> {
+    /// The register's files, each with its decision (None when it does not read), by number,
+    /// the proposals after. An id its header leaves out comes from the file's name, its number
+    /// taken off (a decision written before ESC-303).
+    fn decision_files(&self) -> Vec<(PathBuf, Option<Decision>)> {
         let Ok(dir) = self.dir(DECISIONS) else {
             return Vec::new();
         };
         let Ok(entries) = std::fs::read_dir(&dir) else {
             return Vec::new();
         };
-        let mut out: Vec<(u32, PathBuf)> = entries
+        let mut out: Vec<(PathBuf, Option<Decision>)> = entries
             .flatten()
             .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
-            .filter_map(|e| {
-                let name = e.file_name().to_string_lossy().to_string();
-                let digits: String = name.chars().take_while(char::is_ascii_digit).collect();
-                if !name.ends_with(".md") {
-                    return None;
-                }
-                Some((digits.parse().ok()?, e.path()))
+            .filter(|e| e.file_name().to_string_lossy().ends_with(".md"))
+            .map(|e| {
+                let path = e.path();
+                let d = self
+                    .read_text(&path)
+                    .ok()
+                    .and_then(|t| decision_read(&t).ok())
+                    .map(|mut d| {
+                        if d.id.is_empty() {
+                            d.id = id_of_file(&path);
+                        }
+                        d
+                    });
+                (path, d)
             })
             .collect();
-        out.sort();
+        out.sort_by_key(|(p, d)| {
+            let n = d.as_ref().and_then(|d| d.number);
+            (n.is_none(), n, p.clone())
+        });
         out
     }
 
-    /// Every decision, by number. A file that cannot be read is left out.
+    /// Every decision: those numbered by number, then the proposals. A file that cannot be read
+    /// is left out.
     pub fn decisions(&self) -> Vec<Decision> {
         self.decision_files()
             .into_iter()
-            .filter_map(|(_, p)| decision_read(&self.read_text(&p).ok()?).ok())
+            .filter_map(|(_, d)| d)
             .collect()
     }
 
-    pub fn decision(&self, number: u32) -> Result<Decision> {
+    /// The decision `r` cites: by its number, or its id.
+    pub fn decision(&self, r: &Ref) -> Result<Decision> {
+        let r = r.plain().unwrap_or_else(|| r.clone());
         self.decisions()
             .into_iter()
-            .find(|d| d.number == number)
-            .ok_or_else(|| {
-                anyhow::anyhow!(tr!(
+            .find(|d| d.is(&r))
+            .ok_or_else(|| match &r {
+                Ref::Number(number) => anyhow::anyhow!(tr!(
                     "Aucune décision n° {number}.",
                     "No decision number {number}."
-                ))
+                )),
+                Ref::Id(id) => {
+                    anyhow::anyhow!(tr!("Aucune décision « {id} ».", "No decision “{id}”."))
+                }
             })
     }
 
-    /// The next number: after the highest one the folder holds.
+    /// The next number: after the highest one the register holds (a file's name counts too, for
+    /// one that does not read).
     pub fn next_number(&self) -> u32 {
-        self.decision_files().last().map_or(1, |(n, _)| n + 1)
+        self.decision_files()
+            .iter()
+            .filter_map(|(p, d)| match d {
+                Some(d) => d.number,
+                None => {
+                    let name = p.file_name()?.to_string_lossy().to_string();
+                    let digits: String = name.chars().take_while(char::is_ascii_digit).collect();
+                    digits.parse().ok()
+                }
+            })
+            .max()
+            .map_or(1, |n| n + 1)
+    }
+
+    /// This register as an acceptance on another branch looks at it.
+    pub fn register(&self) -> Register {
+        Register {
+            next: self.next_number(),
+            taken: self
+                .decisions()
+                .into_iter()
+                .filter_map(|d| Some((d.number?, d.id)))
+                .collect(),
+        }
+    }
+
+    /// An id for a new proposal titled `title`: its slug, made unique in the register.
+    fn free_id(&self, title: &str) -> String {
+        let base = decision_id(title);
+        let taken: std::collections::HashSet<String> =
+            self.decisions().into_iter().map(|d| d.id).collect();
+        let mut id = base.clone();
+        let mut i = 2;
+        while taken.contains(&id) {
+            id = format!("{base}-{i}");
+            i += 1;
+        }
+        id
+    }
+
+    /// The file of `d`: the one of the same number and id.
+    fn file_of(&self, d: &Decision) -> Option<PathBuf> {
+        self.decision_files()
+            .into_iter()
+            .find(|(_, x)| {
+                x.as_ref()
+                    .is_some_and(|x| x.number == d.number && x.id == d.id)
+            })
+            .map(|(p, _)| p)
     }
 
     fn decision_save(&self, d: &Decision, prior: Option<&Decision>) -> Result<()> {
         if let Some(old) = prior {
             if rewrites(old, d) {
                 bail!(tr!(
-                    "La décision n° {n} est {state} : elle ne se réécrit pas, une nouvelle la remplace.",
+                    "La décision {n} est {state} : elle ne se réécrit pas, une nouvelle la remplace.",
                     "Decision {n} is {state}: it is not rewritten, a new one replaces it.",
-                    n = old.number,
+                    n = old.reference(),
                     state = match old.state {
                         State::Accepted => tr!("acceptée", "accepted"),
                         _ => tr!("remplacée", "superseded"),
@@ -1172,20 +1373,26 @@ impl Space {
                 ));
             }
         }
-        // Its file keeps its name when it has one (the title of an accepted decision never changes).
-        let name = self
-            .decision_files()
-            .into_iter()
-            .find(|(n, _)| *n == d.number)
-            .and_then(|(_, p)| p.file_name().map(|f| f.to_string_lossy().to_string()))
-            .unwrap_or_else(|| d.file_name());
-        let file = self.file(DECISIONS, &name)?;
-        self.write(&file, decision_write(d).as_bytes())
+        // Its file keeps its name while its number stays (the title of an accepted decision never
+        // changes, and a name written before stays as it is); numbered, a proposal's file is
+        // renamed.
+        let was = prior.and_then(|old| self.file_of(old).map(|f| (old, f)));
+        let file = match &was {
+            Some((old, f)) if old.number == d.number => f.clone(),
+            _ => self.file(DECISIONS, &d.file_name())?,
+        };
+        self.write(&file, decision_write(d).as_bytes())?;
+        if let Some((_, f)) = was {
+            if f != file && f.is_file() {
+                std::fs::remove_file(&f)?;
+            }
+        }
+        Ok(())
     }
 
-    /// A new proposal, numbered after the others, or the revision of a proposal still open
-    /// (`number`). A decision that was decided is not touched.
-    pub fn decision_propose(&self, number: Option<u32>, mut d: Decision) -> Result<Decision> {
+    /// A new proposal, with an id and no number, or the revision of a proposal still open (`r`). A
+    /// decision that was decided is not touched.
+    pub fn decision_propose(&self, r: Option<&Ref>, mut d: Decision) -> Result<Decision> {
         d.state = State::Proposed;
         d.superseded_by = None;
         d.accepted_at.clear();
@@ -1194,15 +1401,17 @@ impl Space {
             bail!(tr!("Une décision a un titre.", "A decision needs a title."));
         }
         d.pages = d.pages.iter().filter_map(|p| page_path(p)).collect();
-        match number {
-            Some(n) => {
-                let old = self.decision(n)?;
-                d.number = n;
+        match r {
+            Some(r) => {
+                let old = self.decision(r)?;
+                d.number = old.number;
+                d.id = old.id.clone();
                 d.date = old.date.clone();
                 self.decision_save(&d, Some(&old))?;
             }
             None => {
-                d.number = self.next_number();
+                d.number = None;
+                d.id = self.free_id(&d.title);
                 if d.date.is_empty() {
                     d.date = chrono::Local::now().format("%Y-%m-%d").to_string();
                 }
@@ -1210,7 +1419,7 @@ impl Space {
             }
         }
         self.fact(crate::facts::Body::DecisionProposed {
-            number: d.number,
+            id: d.id.clone(),
             title: d.title.clone(),
         });
         Ok(d)
@@ -1218,7 +1427,7 @@ impl Space {
 
     /// A proposal that replaces the accepted decision `old`: it takes its place once accepted.
     pub fn decision_replace(&self, old: u32, mut d: Decision) -> Result<Decision> {
-        let was = self.decision(old)?;
+        let was = self.decision(&Ref::Number(old))?;
         if was.state != State::Accepted {
             bail!(tr!(
                 "Seule une décision acceptée se remplace (la n° {old} ne l’est pas) : une proposition se révise.",
@@ -1229,27 +1438,59 @@ impl Space {
         self.decision_propose(None, d)
     }
 
-    /// A human accepts a proposal: its state, its date and who; the decisions it replaces become
-    /// `superseded`, each naming it.
-    pub fn decision_accept(&self, number: u32, by: &str) -> Result<Decision> {
-        let old = self.decision(number)?;
+    /// A human accepts the proposal `r` (ESC-303): it takes its number, the next after this
+    /// register and `on` (the register of the branch it goes to), its file is renamed, its state,
+    /// date and who written, and `ticket` (the one validated) added to its tickets; the pages that
+    /// cite it by its id cite its number then, and the decisions it replaces become `superseded`,
+    /// each naming it. A proposal numbered before ESC-303 keeps its number while no other has it,
+    /// here or on that branch.
+    pub fn decision_accept(
+        &self,
+        r: &Ref,
+        by: &str,
+        on: &Register,
+        ticket: Option<&str>,
+    ) -> Result<Decision> {
+        let old = self.decision(r)?;
+        let shown = old.reference();
         match old.state {
             State::Accepted => return Ok(old),
             State::Superseded => bail!(tr!(
-                "La décision n° {number} est remplacée : elle ne s’accepte plus.",
-                "Decision {number} is superseded: it can no longer be accepted."
+                "La décision {shown} est remplacée : elle ne s’accepte plus.",
+                "Decision {shown} is superseded: it can no longer be accepted."
             )),
             State::Proposed => {}
         }
+        let number = match old.number {
+            Some(n)
+                if !self
+                    .decisions()
+                    .iter()
+                    .any(|x| x.number == Some(n) && x.id != old.id)
+                    && !on.taken.iter().any(|(m, id)| *m == n && *id != old.id) =>
+            {
+                n
+            }
+            _ => self.next_number().max(on.next),
+        };
         let mut d = old.clone();
+        d.number = Some(number);
         d.state = State::Accepted;
         d.accepted_at = chrono::Local::now()
             .format("%Y-%m-%dT%H:%M:%S%:z")
             .to_string();
         d.accepted_by = by.to_string();
+        if let Some(key) = ticket {
+            if !d.tickets.iter().any(|t| t.eq_ignore_ascii_case(key)) {
+                d.tickets.push(key.to_string());
+            }
+        }
         self.decision_save(&d, Some(&old))?;
+        self.cite_number(&old, number)?;
         for n in &d.supersedes {
-            let Ok(was) = self.decision(*n) else { continue };
+            let Ok(was) = self.decision(&Ref::Number(*n)) else {
+                continue;
+            };
             if was.state == State::Accepted {
                 let mut now = was.clone();
                 now.state = State::Superseded;
@@ -1258,10 +1499,41 @@ impl Space {
             }
         }
         self.fact(crate::facts::Body::DecisionAccepted {
-            number: d.number,
+            number,
+            id: d.id.clone(),
             title: d.title.clone(),
         });
         Ok(d)
+    }
+
+    /// The pages that cite the proposal `old` cite `number` then: those that cite its id, and
+    /// (numbered before ESC-303, and renumbered) those it names that cite its old number.
+    fn cite_number(&self, old: &Decision, number: u32) -> Result<()> {
+        let cites = |p: &Page, x: &Ref| match x {
+            Ref::Id(id) => *id == old.id,
+            Ref::Number(n) => old.number == Some(*n) && *n != number && old.pages.contains(&p.path),
+        };
+        for page in self.pages() {
+            if !page.decisions.iter().any(|x| cites(&page, x)) {
+                continue;
+            }
+            let rel = format!("{}.md", page.path);
+            let mut p = page_read(&page.path, &self.raw_read(SPEC, &rel)?);
+            let mut cited: Vec<Ref> = Vec::new();
+            for x in &p.decisions {
+                let x = if cites(&page, x) {
+                    Ref::Number(number)
+                } else {
+                    x.clone()
+                };
+                if !cited.contains(&x) {
+                    cited.push(x);
+                }
+            }
+            p.decisions = cited;
+            self.raw_write(SPEC, &rel, &page_write(&p))?;
+        }
+        Ok(())
     }
 
     // ----- documents -----

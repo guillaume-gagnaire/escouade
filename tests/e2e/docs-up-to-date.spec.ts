@@ -73,6 +73,8 @@ test('a ticket that changes the product keeps the spec, and once validated its p
   const decisions = fs.readdirSync(path.join(app.repo, '.escouade', 'decisions'));
   expect(decisions).toHaveLength(1);
   expect(fs.readFileSync(path.join(app.repo, '.escouade', 'decisions', decisions[0]), 'utf8')).toContain('state: "accepted"');
+  // Numbered by the validation (ESC-303), after main's register: the first.
+  expect(decisions[0]).toMatch(/^0001-/);
 
   // Compared to the code after the validation: a gap, on the map of the subjects.
   await tabs.getByRole('button', { name: 'Docs' }).click();

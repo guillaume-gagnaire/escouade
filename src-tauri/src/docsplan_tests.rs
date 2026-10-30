@@ -2,7 +2,7 @@
 //! twice, and a planning to its end with the fake claude, then cancelled.
 
 use crate::core_tests::harness;
-use crate::docs::{Decision, Page};
+use crate::docs::{Decision, Page, Ref};
 use crate::docsplan::*;
 use crate::i18n::Lang;
 use crate::model::{Column, Ticket};
@@ -28,13 +28,20 @@ fn proposed(title: &str, after: &[&str], pages: &[&str]) -> Proposed {
 
 #[test]
 fn the_tickets_are_read_from_the_answer_and_a_prose_is_none() {
-    let answer = "Voici.\n\n```json\n{\"tickets\": [{\"title\": \" Relances \", \"description\": \"Par e-mail.\", \"criteria\": [\"Trois relances\", \"\"], \"after\": [1, \"POR-2\"], \"pages\": [\"a/b\"], \"decisions\": [3, \"D-4\"]}, {\"title\": \"\"}]}\n```";
+    let answer = "Voici.\n\n```json\n{\"tickets\": [{\"title\": \" Relances \", \"description\": \"Par e-mail.\", \"criteria\": [\"Trois relances\", \"\"], \"after\": [1, \"POR-2\"], \"pages\": [\"a/b\"], \"decisions\": [3, \"D-4\", \"tarif-famille\"]}, {\"title\": \"\"}]}\n```";
     let got = proposed_from_answer(answer).unwrap();
     assert_eq!(got.len(), 1);
     assert_eq!(got[0].title, "Relances");
     assert_eq!(got[0].criteria, vec!["Trois relances"]);
     assert_eq!(got[0].after, vec!["1", "POR-2"]);
-    assert_eq!(got[0].decisions, vec![3, 4]);
+    assert_eq!(
+        got[0].decisions,
+        vec![
+            Ref::Number(3),
+            Ref::Number(4),
+            Ref::Id("tarif-famille".into())
+        ]
+    );
     assert!(proposed_from_answer("Je ne sais pas.").is_none());
     assert_eq!(proposed_from_answer("{\"tickets\": []}"), Some(vec![]));
 }
@@ -103,7 +110,7 @@ fn the_planner_is_given_the_changes_the_decisions_and_the_board() {
         ..Default::default()
     };
     let d = Decision {
-        number: 3,
+        number: Some(3),
         title: "E-mail seulement".into(),
         decision: "Pas de SMS.".into(),
         ..Default::default()
@@ -116,7 +123,7 @@ fn the_planner_is_given_the_changes_the_decisions_and_the_board() {
     assert!(p.contains(
         "<changed-page path=\"adherent/relances\" title=\"Relances 'e-mail'\">\nTrois relances.\n</changed-page>"
     ));
-    assert!(p.contains("<decision number=\"3\" title=\"E-mail seulement\">\nPas de SMS."));
+    assert!(p.contains("<decision ref=\"0003\" title=\"E-mail seulement\">\nPas de SMS."));
     assert!(p.contains("POR-1 [done] Reçu fiscal — Le reçu part par e-mail."));
     assert!(!p.contains("Détail"));
     assert!(p.contains("<code-hints>\nsrc/mail.rs\n</code-hints>"));
@@ -126,14 +133,15 @@ fn the_planner_is_given_the_changes_the_decisions_and_the_board() {
 #[test]
 fn the_changes_to_plan_are_kept_until_planned() {
     let mut p = Planning::default();
-    p.note(&["a/b".into(), "a/c".into()], &[2]);
-    p.note(&["a/b".into()], &[2, 3]);
+    let (two, three) = (Ref::Number(2), Ref::Id("trois".into()));
+    p.note(&["a/b".into(), "a/c".into()], std::slice::from_ref(&two));
+    p.note(&["a/b".into()], &[two.clone(), three.clone()]);
     assert_eq!(p.pages, vec!["a/b", "a/c"]);
-    assert_eq!(p.decisions, vec![2, 3]);
-    p.planned(&["a/b".into()], &[3]);
+    assert_eq!(p.decisions, vec![two.clone(), three.clone()]);
+    p.planned(&["a/b".into()], &[three]);
     assert_eq!(
         (p.pages.clone(), p.decisions.clone()),
-        (vec!["a/c".to_string()], vec![2])
+        (vec!["a/c".to_string()], vec![two])
     );
     for i in 0..25 {
         p.push(Plan {
@@ -152,7 +160,7 @@ fn the_changes_to_plan_are_kept_until_planned() {
             ..Default::default()
         }],
         &[Decision {
-            number: 2,
+            number: Some(2),
             state: crate::docs::State::Superseded,
             ..Default::default()
         }],
@@ -165,8 +173,12 @@ fn the_changes_to_plan_are_kept_until_planned() {
 #[test]
 fn a_ticket_says_the_pages_and_decisions_it_implements() {
     assert_eq!(
-        implements(Lang::Fr, &["a/b".into()], &[3, 4]),
-        "Implémente ce que dit la spec : pages `a/b` (read_spec_page) ; décisions n° 3, 4 (read_decision)."
+        implements(
+            Lang::Fr,
+            &["a/b".into()],
+            &[Ref::Number(3), Ref::Id("tarif-famille".into())]
+        ),
+        "Implémente ce que dit la spec : pages `a/b` (read_spec_page) ; décisions 0003, tarif-famille (read_decision)."
     );
     assert!(implements(Lang::En, &[], &[]).is_empty());
 }
@@ -218,7 +230,7 @@ async fn a_planning_makes_the_tickets_links_them_and_is_cancelled() {
     h.core.docs_to_plan(
         &p.id,
         &["adherent/relances".into(), "adherent/recu".into()],
-        &[d.number],
+        &[d.reference()],
     );
     assert_eq!(h.core.docs_planning(&p.id).await.unwrap().pages.len(), 2);
     let plan = h.core.docs_plan(&p.id, None).await.unwrap();
@@ -240,7 +252,7 @@ async fn a_planning_makes_the_tickets_links_them_and_is_cancelled() {
         let page = space.spec_read(&t.pages[0]).unwrap();
         assert!(page.tickets.contains(&t.key), "{page:?}");
     }
-    assert_eq!(made[0].decisions, vec![d.number]);
+    assert_eq!(made[0].decisions, vec![d.reference()]);
     assert_eq!(made[1].after, vec![made[0].id.clone()]);
     // Planned: nothing left to plan, and planning again makes nothing twice.
     let v = h.core.docs_planning(&p.id).await.unwrap();
@@ -281,7 +293,7 @@ async fn a_planning_makes_the_tickets_links_them_and_is_cancelled() {
         .is_empty());
     let v = h.core.docs_planning(&p.id).await.unwrap();
     assert_eq!(v.pages.len(), 2);
-    assert_eq!(v.decisions, vec![d.number]);
+    assert_eq!(v.decisions, vec![d.reference()]);
     // Nothing committed by a planning.
     assert!(crate::core_tests::git(&repo, &["status", "--porcelain"]).contains(".escouade/"));
 }

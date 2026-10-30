@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 use tauri::Runtime;
 
 use crate::core::Core;
-use crate::docs::{Decision, Page};
+use crate::docs::{Decision, Page, Ref};
 use crate::i18n::Lang;
 use crate::model::{Column, Ticket};
 use crate::tickets::TicketDraft;
@@ -83,7 +83,7 @@ pub struct Plan {
     pub discussion: Option<String>,
     /// The changes it planned.
     pub pages: Vec<String>,
-    pub decisions: Vec<u32>,
+    pub decisions: Vec<Ref>,
     pub made: Vec<Made>,
     pub skipped: Vec<Skipped>,
     /// « Annuler » was clicked.
@@ -96,15 +96,15 @@ pub struct Plan {
 pub struct Planning {
     /// The pages changed since they were last planned.
     pub pages: Vec<String>,
-    /// The decisions proposed since, by number.
-    pub decisions: Vec<u32>,
+    /// The decisions proposed since: by number, or by id while they are proposals.
+    pub decisions: Vec<Ref>,
     /// The latest plans, the latest last.
     pub plans: Vec<Plan>,
 }
 
 impl Planning {
     /// Notes changes to plan.
-    pub fn note(&mut self, pages: &[String], decisions: &[u32]) {
+    pub fn note(&mut self, pages: &[String], decisions: &[Ref]) {
         for p in pages {
             if !self.pages.contains(p) {
                 self.pages.push(p.clone());
@@ -112,13 +112,13 @@ impl Planning {
         }
         for d in decisions {
             if !self.decisions.contains(d) {
-                self.decisions.push(*d);
+                self.decisions.push(d.clone());
             }
         }
     }
 
     /// The changes planned: no longer to plan.
-    pub fn planned(&mut self, pages: &[String], decisions: &[u32]) {
+    pub fn planned(&mut self, pages: &[String], decisions: &[Ref]) {
         self.pages.retain(|p| !pages.contains(p));
         self.decisions.retain(|d| !decisions.contains(d));
     }
@@ -143,7 +143,7 @@ pub struct View {
     /// The changes without tickets: the pages still there, the decisions still proposed or
     /// accepted.
     pub pages: Vec<String>,
-    pub decisions: Vec<u32>,
+    pub decisions: Vec<Ref>,
     /// The latest plan, unless cancelled.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last: Option<Plan>,
@@ -165,9 +165,9 @@ pub fn view(planning: &Planning, pages: &[Page], decisions: &[Decision]) -> View
             .filter(|n| {
                 decisions
                     .iter()
-                    .any(|d| d.number == **n && d.state != crate::docs::State::Superseded)
+                    .any(|d| d.is(n) && d.state != crate::docs::State::Superseded)
             })
-            .copied()
+            .cloned()
             .collect(),
         last: planning.plans.last().filter(|p| !p.cancelled).cloned(),
         running: false,
@@ -181,13 +181,13 @@ pub fn system(lang: Lang) -> String {
         lang,
         "Tu es l'agent planificateur d'un projet. La spécification du produit a changé : tu découpes ces changements en tickets de Kanban pour les agents qui coderont, en lisant le code de ce dépôt sans rien modifier. \
          Un ticket par morceau de travail livrable seul, dans l'ordre où les faire ; pas de ticket pour ce que le code fait déjà, ni pour ce qu'un ticket du Kanban (<board>, même terminé) couvre déjà. \
-         Chaque ticket a un titre court, une description (ce qu'il faut faire, où dans le code), ses critères d'acceptation vérifiables, les tickets qu'il suit (\"after\" : le numéro d'un ticket de ta liste, à partir de 1, ou la clé d'un ticket du Kanban), et les pages et décisions qu'il implémente. \
+         Chaque ticket a un titre court, une description (ce qu'il faut faire, où dans le code), ses critères d'acceptation vérifiables, les tickets qu'il suit (\"after\" : le numéro d'un ticket de ta liste, à partir de 1, ou la clé d'un ticket du Kanban), et les pages et décisions qu'il implémente (une décision par son ref : son numéro, ou l'id d'une proposition). \
          Réponds par un bloc ```json qui contient \
          {{\"tickets\": [{{\"title\": \"…\", \"description\": \"…\", \"criteria\": [\"…\"], \"after\": [\"1\"], \"pages\": [\"sujet/page\"], \"decisions\": [3]}}]}}, \
          avec \"tickets\": [] quand il n'y a rien à faire. {max} tickets au plus.",
         "You are the planner of a project. The product's specification changed: you cut these changes into Kanban tickets for the agents who will code, reading the code of this repository without changing anything. \
          One ticket per piece of work that can be delivered alone, in the order to do them; no ticket for what the code does already, nor for what a ticket of the board (<board>, even done) covers already. \
-         Each ticket has a short title, a description (what to do, where in the code), its acceptance criteria that can be checked, the tickets it comes after (\"after\": the number of a ticket of your list, from 1, or the key of a ticket of the board), and the pages and decisions it implements. \
+         Each ticket has a short title, a description (what to do, where in the code), its acceptance criteria that can be checked, the tickets it comes after (\"after\": the number of a ticket of your list, from 1, or the key of a ticket of the board), and the pages and decisions it implements (a decision by its ref: its number, or a proposal's id). \
          Answer with a ```json block that holds \
          {{\"tickets\": [{{\"title\": \"…\", \"description\": \"…\", \"criteria\": [\"…\"], \"after\": [\"1\"], \"pages\": [\"subject/page\"], \"decisions\": [3]}}]}}, \
          with \"tickets\": [] when there is nothing to do. {max} tickets at most.",
@@ -231,8 +231,8 @@ pub fn prompt(
     }
     for d in decisions {
         p.push_str(&format!(
-            "<decision number=\"{}\" title=\"{}\">\n{}\n{}\n</decision>\n",
-            d.number,
+            "<decision ref=\"{}\" title=\"{}\">\n{}\n{}\n</decision>\n",
+            d.reference(),
             d.title.replace('"', "'"),
             d.decision.trim(),
             d.consequences.trim()
@@ -287,7 +287,7 @@ pub struct Proposed {
     /// The number of one of the list (from 1), or a key of the board.
     pub after: Vec<String>,
     pub pages: Vec<String>,
-    pub decisions: Vec<u32>,
+    pub decisions: Vec<Ref>,
 }
 
 /// The JSON of an answer: its ```json block, else the answer itself.
@@ -339,7 +339,15 @@ pub fn proposed_from_answer(answer: &str) -> Option<Vec<Proposed>> {
                     pages: strings(t.get("pages")),
                     decisions: strings(t.get("decisions"))
                         .iter()
-                        .filter_map(|n| n.trim_start_matches(['D', 'd', '-']).parse().ok())
+                        .filter_map(|n| {
+                            // « D3 », « D-3 »: a number; else a proposal's id.
+                            let digits = n.trim_start_matches(['D', 'd', '-']);
+                            if !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit()) {
+                                Ref::of(digits)
+                            } else {
+                                Ref::of(n)
+                            }
+                        })
                         .collect(),
                 })
             })
@@ -392,7 +400,7 @@ pub fn sift(
     proposed: Vec<Proposed>,
     board: &[Ticket],
     pages: &[String],
-    decisions: &[u32],
+    decisions: &[Ref],
 ) -> (Vec<ToMake>, Vec<Skipped>) {
     let mut make: Vec<ToMake> = Vec::new();
     let mut skipped: Vec<Skipped> = Vec::new();
@@ -458,7 +466,7 @@ pub fn sift(
 
 /// The paragraph a ticket's description ends with: the pages and decisions it implements, for its
 /// agent to read them.
-pub fn implements(lang: Lang, pages: &[String], decisions: &[u32]) -> String {
+pub fn implements(lang: Lang, pages: &[String], decisions: &[Ref]) -> String {
     let mut parts = Vec::new();
     if !pages.is_empty() {
         let list = pages
@@ -480,7 +488,7 @@ pub fn implements(lang: Lang, pages: &[String], decisions: &[u32]) -> String {
             .join(", ");
         parts.push(tr_in!(
             lang,
-            "décisions n° {list} (read_decision)",
+            "décisions {list} (read_decision)",
             "decisions {list} (read_decision)"
         ));
     }
@@ -534,7 +542,11 @@ impl<R: Runtime> Core<R> {
         read(&self.planning_file(project_id))
     }
 
-    fn planning_edit<T>(&self, project_id: &str, edit: impl FnOnce(&mut Planning) -> T) -> T {
+    pub(crate) fn planning_edit<T>(
+        &self,
+        project_id: &str,
+        edit: impl FnOnce(&mut Planning) -> T,
+    ) -> T {
         static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
         let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let file = self.planning_file(project_id);
@@ -556,7 +568,7 @@ impl<R: Runtime> Core<R> {
 
     /// The spec changed outside of a ticket (a pour, the window): `pages` and `decisions` are to
     /// plan.
-    pub fn docs_to_plan(&self, project_id: &str, pages: &[String], decisions: &[u32]) {
+    pub fn docs_to_plan(&self, project_id: &str, pages: &[String], decisions: &[Ref]) {
         if pages.is_empty() && decisions.is_empty() {
             return;
         }
@@ -637,7 +649,7 @@ impl<R: Runtime> Core<R> {
             .collect();
         let decided: Vec<Decision> = all_decisions
             .iter()
-            .filter(|d| v.decisions.contains(&d.number))
+            .filter(|d| v.decisions.iter().any(|r| d.is(r)))
             .cloned()
             .collect();
         let board: Vec<Ticket> = self

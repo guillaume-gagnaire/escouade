@@ -1053,7 +1053,7 @@ export interface Ticket {
   shared?: Shared | null;
   /** The pages of the spec and the decisions it implements, as « Planifier » made it (ESC-262). */
   pages?: string[];
-  decisions?: number[];
+  decisions?: DecisionRef[];
 }
 
 /** Someone of the team, as the shared tickets' files name them (ESC-190). */
@@ -1453,7 +1453,7 @@ export interface DocsPlan {
   /** The discussion it was asked from (its agent); absent: from the Specification. */
   discussion?: string;
   pages: string[];
-  decisions: number[];
+  decisions: DecisionRef[];
   made: DocsPlanMade[];
   /** Proposed again by the planner, left out: `key` is the ticket of the board it repeats. */
   skipped: { title: string; key: string }[];
@@ -1463,7 +1463,7 @@ export interface DocsPlan {
 /** What the Specification shows of the planning (ESC-262): the changes without tickets, the latest plan. */
 export interface DocsPlanning {
   pages: string[];
-  decisions: number[];
+  decisions: DecisionRef[];
   last?: DocsPlan;
   running: boolean;
 }
@@ -1488,8 +1488,8 @@ export interface DiscussionPoured {
   /** When it was last poured (ms). */
   at: number;
   pages: string[];
-  /** The numbers of the decisions proposed in the register. */
-  decisions: number[];
+  /** The decisions proposed in the register (their ids, ESC-303). */
+  decisions: DecisionRef[];
 }
 
 /** A gap of a page (its index) that a discussion settles: gone from the page once its change is poured. */
@@ -2768,7 +2768,7 @@ export interface DocsPage {
   subject: string;
   sources: string[];
   tickets: string[];
-  decisions: number[];
+  decisions: DecisionRef[];
   /** When it was last compared to the code (ISO 8601); empty: never. */
   compared: string;
   /** What the last comparison found the code does otherwise (ESC-258). */
@@ -2792,7 +2792,7 @@ export interface DocsPageInfo {
   title: string;
   compared: string;
   tickets: string[];
-  decisions: number[];
+  decisions: DecisionRef[];
   /** How many gaps with the code its last comparison found. */
   gaps: number;
   draft: boolean;
@@ -2874,9 +2874,15 @@ export interface DecisionChange {
   removed: number;
 }
 
+/** How a decision is cited (`docs::Ref`, ESC-303): an accepted one by its number, a proposal by its id (it has no number until accepted). */
+export type DecisionRef = number | string;
+
 /** A decision of the register (`docs::Decision`): an accepted one is never rewritten, a new one replaces it. */
 export interface DocsDecision {
-  number: number;
+  /** Given when it is accepted (ESC-303); null for a proposal (but those numbered before). */
+  number: number | null;
+  /** The slug of its title, unique in the register: how a proposal is cited; kept once accepted. */
+  id: string;
   title: string;
   date: string;
   state: DecisionState;

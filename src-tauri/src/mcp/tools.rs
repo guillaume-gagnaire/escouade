@@ -1427,7 +1427,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "List a project's decisions, the register of the product's choices, by number: title, date, state (proposed, accepted or superseded), origin, what it supersedes and what superseded it, replacementProposed (the number of a proposal that would replace an accepted one), and what it changed in the spec (changes: page, lines added and removed). A decision is accepted by a human, in the window: no tool does it. Open to every client, for the projects it sees.",
+        description = "List a project's decisions, the register of the product's choices, accepted ones by number then the proposals: number (none for a proposal: it gets one when accepted), id (how a proposal is cited), title, date, state (proposed, accepted or superseded), origin, what it supersedes and what superseded it, replacementProposed (the id of a proposal that would replace an accepted one), and what it changed in the spec (changes: page, lines added and removed). A decision is accepted by a human, in the window: no tool does it. Open to every client, for the projects it sees.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn list_decisions(
@@ -1444,7 +1444,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Read a decision whole: number, title, date, state, origin, links (pages, tickets, documents), what it supersedes, what superseded it, what it changed in the spec, when and by whom it was accepted, and its context, decision and consequences. Open to every client, for the projects it sees.",
+        description = "Read a decision whole, by its number or its id (a proposal has only an id): number, id, title, date, state, origin, links (pages, tickets, documents), what it supersedes, what superseded it, what it changed in the spec, when and by whom it was accepted, and its context, decision and consequences. Open to every client, for the projects it sees.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn read_decision(
@@ -1452,14 +1452,18 @@ impl<R: Runtime> Tools<R> {
         ctx: ToolCtx<R>,
         Parameters(args): Parameters<docs::ReadDecisionArgs>,
     ) -> CallToolResult {
-        let number = args.number.to_string();
-        let asked = summary(&[("project", Some(&args.project)), ("number", Some(&number))]);
+        let number = args.number.map(|n| n.to_string());
+        let asked = summary(&[
+            ("project", Some(&args.project)),
+            ("number", number.as_deref()),
+            ("id", args.id.as_deref()),
+        ]);
         let result = docs::decision(&ctx.core, &ctx.caller, args).await;
         ctx.reply("read_decision", &asked, result)
     }
 
     #[tool(
-        description = "Propose a decision about the product: a new proposal (state proposed, the next number), or the revision of a proposal still open (number). It is not decided until a human accepts it in the window (the agent of a ticket: when its ticket is validated; its decisions say they come from it), and an accepted decision is never rewritten: replace_decision replaces it. Give it a title, its context, what is decided and what follows, where it comes from and the spec pages it changed (changes, from write_spec_page). Nothing is committed nor pushed.",
+        description = "Propose a decision about the product: a new proposal (state proposed, with an id and no number: cite it by its id in the spec pages and tickets; it gets its number when it is accepted, after the register of the branch it goes to, and what cites it takes that number), or the revision of a proposal still open (id). It is not decided until a human accepts it in the window (the agent of a ticket: when its ticket is validated; its decisions say they come from it), and an accepted decision is never rewritten: replace_decision replaces it. Give it a title, its context, what is decided and what follows, where it comes from and the spec pages it changed (changes, from write_spec_page). Nothing is committed nor pushed.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,
@@ -1474,6 +1478,7 @@ impl<R: Runtime> Tools<R> {
         let number = args.number.map(|n| n.to_string());
         let asked = summary(&[
             ("project", Some(&args.project)),
+            ("id", args.id.as_deref()),
             ("number", number.as_deref()),
             ("title", Some(&args.fields.title)),
         ]);

@@ -135,10 +135,14 @@ pub enum Body {
     MemoryForgotten { memory: String },
     /// A decision was proposed (or revised).
     #[serde(rename = "decision.proposed")]
-    DecisionProposed { number: u32, title: String },
+    DecisionProposed { id: String, title: String },
     /// A human accepted it.
     #[serde(rename = "decision.accepted")]
-    DecisionAccepted { number: u32, title: String },
+    DecisionAccepted {
+        number: u32,
+        id: String,
+        title: String,
+    },
     /// A pull request was opened for a ticket.
     #[serde(rename = "pr.opened")]
     PrOpened { url: String, target: String },

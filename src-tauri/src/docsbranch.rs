@@ -19,7 +19,7 @@ use anyhow::{bail, Result};
 use tauri::Runtime;
 
 use crate::core::Core;
-use crate::docs::Space;
+use crate::docs::{Ref, Register, Space};
 use crate::i18n::Lang;
 use crate::model::Project;
 
@@ -168,37 +168,126 @@ impl<R: Runtime> Core<R> {
     pub async fn docs_accept_decision(
         &self,
         project_id: &str,
-        number: u32,
+        reference: &Ref,
     ) -> Result<crate::docs::Decision> {
         let project = self.project(project_id)?;
         let by = self.me_in(&project).name;
-        self.docs_space(project_id, None)
-            .await?
-            .decision_accept(number, &by)
+        let space = self.docs_space(project_id, None).await?;
+        let was = space.decision(reference)?;
+        let d = space.decision_accept(reference, &by, &Register::default(), None)?;
+        self.docs_numbered(project_id, &was, &d);
+        Ok(d)
     }
 
     /// The ticket `key` validated: the proposals its agent left (origin `ticket`, its key) are
     /// accepted, in the name of the one who validates, where that agent wrote them (its worktree,
-    /// committed and merged with the ticket, or the fixed branch's). The numbers accepted.
+    /// committed and merged with the ticket, or the fixed branch's). Each takes its number then
+    /// (ESC-303), after the register of where it goes: the branch `target` it is merged into, or
+    /// the fixed branch; so that two tickets that proposed one each at the same time get two.
+    /// The numbers accepted.
     pub async fn docs_accept_ticket_decisions(
         &self,
         project_id: &str,
         agent_id: &str,
         key: &str,
+        target: &str,
     ) -> Result<Vec<u32>> {
         let project = self.project(project_id)?;
         let space = self.docs_space(project_id, Some(agent_id)).await?;
+        let mine: Vec<crate::docs::Decision> = space
+            .decisions()
+            .into_iter()
+            .filter(|d| {
+                d.state == crate::docs::State::Proposed
+                    && d.origin == "ticket"
+                    && d.origin_ref.eq_ignore_ascii_case(key)
+            })
+            .collect();
+        if mine.is_empty() {
+            return Ok(Vec::new());
+        }
+        // Where it goes: the docs of the project as they are (the fixed branch, or the project's
+        // folder), and the branch it is merged into as git has it.
+        let mut on = self.docs_space(project_id, None).await?.register();
+        if project.docs_branch.trim().is_empty() && !target.is_empty() {
+            on = on.and(register_on_branch(&space.root, target).await);
+        }
         let by = self.me_in(&project).name;
         let mut done = Vec::new();
-        for d in space.decisions() {
-            if d.state == crate::docs::State::Proposed
-                && d.origin == "ticket"
-                && d.origin_ref.eq_ignore_ascii_case(key)
-            {
-                space.decision_accept(d.number, &by)?;
-                done.push(d.number);
+        for was in mine {
+            // By its own id, never by a number another decision may have too.
+            let own = Ref::Id(was.id.clone());
+            let d = space.decision_accept(&own, &by, &on, Some(key))?;
+            if let Some(n) = d.number {
+                on.next = on.next.max(n + 1);
+            }
+            self.docs_numbered(project_id, &was, &d);
+            if let Some(n) = d.number {
+                done.push(n);
             }
         }
         Ok(done)
     }
+
+    /// The proposal `was` accepted as `now`: the tickets of the board and what is to plan that
+    /// cite it by its id cite its number then (by its id alone: a number may be another's).
+    pub(crate) fn docs_numbered(
+        &self,
+        project_id: &str,
+        was: &crate::docs::Decision,
+        now: &crate::docs::Decision,
+    ) {
+        let (old, Some(n)) = (Ref::Id(was.id.clone()), now.number) else {
+            return;
+        };
+        let new = Ref::Number(n);
+        if old == new {
+            return;
+        }
+        let swap = |list: &mut Vec<Ref>| {
+            if !list.contains(&old) {
+                return false;
+            }
+            let mut out: Vec<Ref> = Vec::new();
+            for r in list.iter() {
+                let r = if *r == old { new.clone() } else { r.clone() };
+                if !out.contains(&r) {
+                    out.push(r);
+                }
+            }
+            *list = out;
+            true
+        };
+        let ids: Vec<String> = self
+            .tickets
+            .read()
+            .iter()
+            .filter(|t| t.project_id == project_id && t.decisions.contains(&old))
+            .map(|t| t.id.clone())
+            .collect();
+        for id in ids {
+            if let Err(e) = self.edit_ticket(&id, |t| {
+                swap(&mut t.decisions);
+                Ok(())
+            }) {
+                log::warn!("ticket {id}: decision {old} not renumbered: {e:#}");
+            }
+        }
+        self.planning_edit(project_id, |p| {
+            swap(&mut p.decisions);
+        });
+    }
+}
+
+/// The register on `branch`, as git has it in the repository of `dir`, from its files' names:
+/// empty when it has none (or there is no such branch).
+async fn register_on_branch(dir: &Path, branch: &str) -> Register {
+    let dir = dir.to_string_lossy().to_string();
+    let path = format!("{}/{}/", crate::docs::ROOT, crate::docs::DECISIONS);
+    let Ok(out) = crate::git::run(&dir, &["ls-tree", "--name-only", branch, "--", &path]).await
+    else {
+        return Register::default();
+    };
+    let out = String::from_utf8_lossy(&out);
+    Register::of_names(out.lines().filter_map(|l| l.rsplit('/').next()))
 }

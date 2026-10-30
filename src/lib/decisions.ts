@@ -2,7 +2,7 @@
 // rows and its detail say of each decision, worked out from what the backend reads in `.escouade/decisions/`.
 import { fDayMonth } from './format';
 import { t } from './i18n';
-import type { DecisionState, DocsDecision, DocsTree } from './types';
+import type { DecisionRef, DecisionState, DocsDecision, DocsTree } from './types';
 
 /** The filter of the register: every decision, or those of a state. */
 export type DecisionFilter = 'all' | DecisionState;
@@ -11,15 +11,36 @@ export const DECISION_FILTERS: DecisionFilter[] = ['all', 'proposed', 'accepted'
 /** A decision's number as the register writes it: « 014 ». */
 export const decisionNo = (n: number) => String(n).padStart(3, '0');
 
+/** How a decision is cited (ESC-303): its number once accepted, else its id (a proposal has no number). */
+export const decisionRef = (d: DocsDecision): DecisionRef => d.number ?? d.id;
+
+/** A citation as it is shown: « 014 » for a number, the id of a proposal as it is. */
+export const refLabel = (r: DecisionRef) => (typeof r === 'number' ? decisionNo(r) : r);
+
+/** A decision as it is shown: its number, else its id. */
+export const decisionLabel = (d: DocsDecision) => refLabel(decisionRef(d));
+
+/** A key that tells a decision apart in the register (a number and an id never meet: an id is never digits alone). */
+export const decisionKey = (d: DocsDecision) => String(decisionRef(d));
+
+/** Whether `r` cites `d`: its number, or its id. */
+export const cites = (r: DecisionRef, d: DocsDecision) => (typeof r === 'number' ? d.number === r : d.id === r);
+
 /** What the head of the register counts. */
 export function decisionCounts(list: DocsDecision[]) {
   const of = (s: DecisionState) => list.filter((d) => d.state === s).length;
   return { all: list.length, accepted: of('accepted'), proposed: of('proposed'), superseded: of('superseded') };
 }
 
-/** The rows the filter keeps, the latest first. */
+/** The rows the filter keeps, the latest first: the proposals without a number (the latest day first), then by number. */
 export function filterDecisions(list: DocsDecision[], filter: DecisionFilter): DocsDecision[] {
-  return list.filter((d) => filter === 'all' || d.state === filter).sort((a, b) => b.number - a.number);
+  return list
+    .filter((d) => filter === 'all' || d.state === filter)
+    .sort((a, b) =>
+      a.number == null || b.number == null
+        ? (a.number == null ? 0 : 1) - (b.number == null ? 0 : 1) || b.date.localeCompare(a.date) || a.id.localeCompare(b.id)
+        : b.number - a.number,
+    );
 }
 
 /** A day `YYYY-MM-DD` (or a time that starts with one) at midnight, local; null when it is none. */
@@ -95,5 +116,6 @@ export function decisionChangedLine(d: DocsDecision, tree: DocsTree | null | und
 
 /** The proposals in the register that would replace `d` once accepted. */
 export function replacementsOf(d: DocsDecision, list: DocsDecision[]): DocsDecision[] {
-  return list.filter((x) => x.state === 'proposed' && x.supersedes.includes(d.number));
+  const n = d.number;
+  return n == null ? [] : list.filter((x) => x.state === 'proposed' && x.supersedes.includes(n));
 }

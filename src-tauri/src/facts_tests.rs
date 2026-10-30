@@ -437,7 +437,14 @@ async fn a_test_launch_the_docs_the_memory_the_decisions_and_the_start_are_facts
             },
         )
         .unwrap();
-    space.decision_accept(d.number, "Guillaume").unwrap();
+    space
+        .decision_accept(
+            &d.reference(),
+            "Guillaume",
+            &crate::docs::Register::default(),
+            None,
+        )
+        .unwrap();
     h.core
         .docs_compare(&p.id, Some(vec!["paiement/echeances".into()]))
         .await
@@ -496,7 +503,7 @@ async fn a_test_launch_the_docs_the_memory_the_decisions_and_the_start_are_facts
     );
     assert_eq!(
         of(&facts, "decision.accepted")[0]["data"],
-        json!({ "number": d.number, "title": "Payer en trois fois" })
+        json!({ "number": 1, "id": d.id, "title": "Payer en trois fois" })
     );
     assert_eq!(
         of(&facts, "memory.written")[0]["data"],

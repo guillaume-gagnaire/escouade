@@ -113,8 +113,8 @@ pub struct Poured {
     pub at: i64,
     /// The pages written, each once.
     pub pages: Vec<String>,
-    /// The numbers of the decisions proposed in the register.
-    pub decisions: Vec<u32>,
+    /// The decisions proposed in the register (their ids, ESC-303).
+    pub decisions: Vec<crate::docs::Ref>,
 }
 
 /// What the window asks for a new discussion.
@@ -457,7 +457,7 @@ impl<R: Runtime> Core<R> {
                 Some(old) => space.decision_replace(old, dec)?,
                 None => space.decision_propose(None, dec)?,
             };
-            numbers.push(made.number);
+            numbers.push(made.reference());
         }
         let poured = self.discussion_edit(id, |disc| {
             if disc
@@ -476,7 +476,7 @@ impl<R: Runtime> Core<R> {
                     p.pages.push(page.clone());
                 }
             }
-            p.decisions.extend(&numbers);
+            p.decisions.extend(numbers.iter().cloned());
             disc.poured = Some(p.clone());
             p
         })?;

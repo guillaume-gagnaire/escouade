@@ -147,7 +147,8 @@ test('a brainstorm proposes pages and a decision, poured into the spec on the do
   await view.getByRole('button', { name: 'Verser dans la spec' }).click();
   await expect(panel.locator('[data-page]')).toHaveCount(0);
   await expect(card).toContainText('Versé');
-  await expect(card).toContainText('n° 001');
+  // Proposed, cited by its id: it has no number until accepted (ESC-303).
+  await expect(card).toContainText('relances-par-e-mail-seulement');
   expect(fs.readFileSync(relancesFile, 'utf8')).toContain('Trois relances par e-mail');
   expect(fs.readFileSync(notif, 'utf8')).toContain('Les relances d’adhésion sont planifiées chaque nuit.');
   const decisions = fs.readdirSync(path.join(app.repo, '.escouade', 'decisions'));

@@ -283,6 +283,7 @@ export default defineZone('docs', {
     },
     head: {
       proposed: 'ADR-{n} · proposed {when}',
+      proposedId: '{id} · proposed {when}, numbered when accepted',
       accepted: 'ADR-{n} · accepted {when} by {by}',
       acceptedAlone: 'ADR-{n} · accepted {when}',
       superseded: 'ADR-{n} · superseded by {by}',
@@ -301,6 +302,7 @@ export default defineZone('docs', {
     accept: 'Accept',
     acceptLabel: 'Accept decision {n}',
     acceptTip: 'An accepted decision is no longer rewritten: a new one replaces it.',
+    noNumberTip: 'No number yet: it gets the register’s next one when it is accepted.',
     acceptedToast: 'Decision {n} accepted.',
     fromTicket: 'Accepted as is when ticket {key} is approved.',
     replace: 'Replace it',

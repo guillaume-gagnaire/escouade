@@ -29,8 +29,8 @@ pub struct Poured {
     pub pages: Vec<String>,
     /// The pages it removed.
     pub removed: Vec<String>,
-    /// The decisions written, by their number on the branch.
-    pub decisions: Vec<u32>,
+    /// The decisions written: by their number on the branch, or their id for a proposal.
+    pub decisions: Vec<docs::Ref>,
 }
 
 /// The spec and the decisions of `from` copied into `to`, which holds `.escouade/` then, even when
@@ -53,40 +53,54 @@ pub fn pour(work: &Space, base: &Space, into: &Space) -> Result<Poured> {
     let changed =
         |sub: &str, rel: &str, text: &str| base.raw_read(sub, rel).ok().as_deref() != Some(text);
 
-    // The decisions first, for their numbers.
-    let base_numbers: HashSet<u32> = base.decisions().iter().map(|d| d.number).collect();
-    let mut taken: HashSet<u32> = into.decisions().iter().map(|d| d.number).collect();
+    // The decisions first, for their numbers. A proposal accepted by the validation took its number
+    // after the branch's register already (ESC-303); one the branch took meanwhile all the same
+    // gets the next free one.
+    let base_numbers: HashSet<u32> = base.decisions().iter().filter_map(|d| d.number).collect();
+    let mut taken: HashSet<u32> = into.decisions().iter().filter_map(|d| d.number).collect();
     let mut decisions: Vec<(String, docs::Decision)> = Vec::new();
+    let mut kept_decisions = HashSet::new();
     for rel in work.md_files(DECISIONS) {
+        kept_decisions.insert(rel.clone());
         let text = work.raw_read(DECISIONS, &rel)?;
         if !changed(DECISIONS, &rel, &text) {
             continue;
         }
-        let Ok(d) = docs::decision_read(&text) else {
+        let Ok(mut d) = docs::decision_read(&text) else {
             continue;
         };
+        if d.id.is_empty() {
+            d.id = docs::id_of_file(std::path::Path::new(&rel));
+        }
         decisions.push((rel, d));
     }
     let mut renumber: HashMap<u32, u32> = HashMap::new();
     let mut next = into.next_number().max(work.next_number());
     for (_, d) in &decisions {
-        if !base_numbers.contains(&d.number) && taken.contains(&d.number) {
+        let Some(n) = d.number else { continue };
+        if !base_numbers.contains(&n) && taken.contains(&n) {
             while taken.contains(&next) {
                 next += 1;
             }
-            renumber.insert(d.number, next);
+            renumber.insert(n, next);
             taken.insert(next);
         }
     }
     let map = |n: u32| renumber.get(&n).copied().unwrap_or(n);
     for (rel, mut d) in decisions {
-        let moved = renumber.contains_key(&d.number);
-        d.number = map(d.number);
+        let moved = d.number.is_some_and(|n| renumber.contains_key(&n));
+        d.number = d.number.map(map);
         d.supersedes = d.supersedes.iter().map(|n| map(*n)).collect();
         d.superseded_by = d.superseded_by.map(map);
         let name = if moved { d.file_name() } else { rel };
         into.raw_write(DECISIONS, &name, &docs::decision_write(&d))?;
-        out.decisions.push(d.number);
+        out.decisions.push(d.reference());
+    }
+    // A proposal numbered in the copy left its file `<id>.md`: gone from the branch too.
+    for rel in base.md_files(DECISIONS) {
+        if !kept_decisions.contains(&rel) {
+            into.raw_remove(DECISIONS, &rel)?;
+        }
     }
 
     // The pages.
@@ -102,7 +116,14 @@ pub fn pour(work: &Space, base: &Space, into: &Space) -> Result<Poured> {
             text
         } else {
             let mut p = docs::page_read(&path, &text);
-            p.decisions = p.decisions.iter().map(|n| map(*n)).collect();
+            p.decisions = p
+                .decisions
+                .iter()
+                .map(|r| match r {
+                    docs::Ref::Number(n) => docs::Ref::Number(map(*n)),
+                    r => r.clone(),
+                })
+                .collect();
             docs::page_write(&p)
         };
         into.raw_write(SPEC, &rel, &text)?;
