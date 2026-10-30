@@ -19,6 +19,9 @@ import type {
   PrFix,
   PrProposal,
   PullRequest,
+  PrDetail,
+  PrRead,
+  NoPr,
   Agent,
   AttachedFile,
   Attachment,
@@ -432,6 +435,19 @@ export const api = {
   /** `hostRepo`: the repository it was read in, when not the target's (`PullRequest.hostRepo`). */
   agentPrFix: (id: string, number: number, fix: PrFix, hostRepo?: string) =>
     invoke<void>('agent_pr_fix', { id, number, fix, ...(hostRepo ? { hostRepo } : {}) }),
+  /** The « PR et CI » tab (ESC-305): the checks, reviews, comments and deployments of the agent's pull request. */
+  agentPrDetail: (id: string, number: number, hostRepo?: string) =>
+    invoke<PrRead<PrDetail>>('agent_pr_detail', { id, number, ...(hostRepo ? { hostRepo } : {}) }),
+  /** The end of the log of a check's job. */
+  agentPrLog: (id: string, number: number, job: string, hostRepo?: string) =>
+    invoke<PrRead<string>>('agent_pr_log', { id, number, job, ...(hostRepo ? { hostRepo } : {}) }),
+  /** « Relancer les échecs », on a click only: how many runs started. */
+  agentPrRerun: (id: string, number: number, hostRepo?: string) =>
+    invoke<number>('agent_pr_rerun', { id, number, ...(hostRepo ? { hostRepo } : {}) }),
+  /** Why the agent has no « Ouvrir une PR… »; null when it can open one. */
+  agentNoPr: (id: string) => invoke<NoPr | null>('agent_no_pr', { id }),
+  /** The open pull requests of the project, on the remote of its target. */
+  projectPrs: (projectId: string) => invoke<PrRead<{ word: string; prs: PullRequest[] }>>('project_prs', { projectId }),
   getCommands: (id: string) => invoke<SlashCommand[]>('get_commands', { id }),
   fileSuggestions: (id: string, query: string) => invoke<string[]>('file_suggestions', { id, query }),
   gitFiles: (projectId: string, agentId: string | null) => invoke<FileChange[]>('git_files', { projectId, agentId }),

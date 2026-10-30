@@ -12,7 +12,7 @@ The window has six zones:
 - **the title bar**, at the top: the name of the project on screen, the search and the editor;
 - **the sidebar**, beside the projects rail: the agents of the project on screen, the project’s launch commands and its terminals;
 - **the main area**, in the middle: the conversation of the chosen agent, or another view of the project (Kanban, editor, terminal, log of a launch command);
-- **the side panel**, on the right, when it is open: the uncommitted files and the git history;
+- **the side panel**, on the right, when it is open: the uncommitted files, the git history, the project’s workflow, and the branch’s pull request with its CI;
 - **the status bar**, at the bottom: the active agents, the quotas, today’s cost and the branch.
 
 The window opens at 1440 × 900 and never goes below 1000 × 600. Escouade remembers its size and position from one launch to the next.
@@ -90,7 +90,7 @@ The agent waiting for your answer goes first in the list. Each agent is a card, 
 
 The card of an agent waiting for your answer shows its request and its answers, numbered: a click on an answer, or its key `1`, `2`… anywhere outside a text field, answers without leaving the conversation on screen. Several questions come one after the other (“Question 1 of 2”). A permission shows the command or the file, what the harness says, and “Allow”, “Always allow” (Claude Code, OpenCode, which tells the pattern it will keep) or “For this session” (Codex, Copilot CLI), and “Deny”. The keys answer the card that has the focus, else the first one of the list; they wait half a second after a request arrives. The agent goes on, its card flashes green a moment and goes back to its place. What does not fit on the card (an answer to write, a multiple choice, a plan, a request too long or that Claude Code would deny by default) shows its beginning and “Reply in the conversation”, which opens the agent.
 
-Under the card of the agent on screen, the list of its subagents and that of its background tasks (see [plan progress](plan)). Under an agent’s card, its pull requests (number and the icon of their state, and the button of the useful fix), and the agents it drives through the MCP server.
+Under the card of the agent on screen, the list of its subagents and that of its background tasks (see [plan progress](plan)). Under an agent’s card, its pull requests (“#41 → main”, the state of their CI, which opens the “PR and CI” tab, and the button of the useful fix), and the agents it drives through the MCP server.
 
 A click on a card shows the agent. `Ctrl+Tab` and `Ctrl+Shift+Tab` go to the project’s next or previous agent, skipping archived ones.
 
@@ -166,7 +166,7 @@ The message field floats at the bottom, as wide as the conversation: its “Mode
 
 ## The side panel
 
-The side panel has two tabs: “Uncommitted”, followed by the number of files, and “History”.
+The side panel has four tabs: “Uncommitted”, followed by the number of files, “History”, “Workflow” and “PR and CI” (“MR and CI” on GitLab). At 340 px wide the panel has no room for the last one: the state of the CI on the agent’s card opens it then.
 
 ### Uncommitted
 
@@ -179,6 +179,17 @@ The list only shows 500 files; the diff and the commit take all of them. See [Gi
 ### History
 
 The “History” tab shows the git graph of the whole repository, with the agent’s branch highlighted. A click on a commit opens its diff; a right click offers actions on branches. See [branches](branches).
+
+### PR and CI
+
+The “PR and CI” tab shows what the repository’s code host (GitHub, Azure DevOps) says of the open agent’s branch. A red dot on the tab says the CI of its pull request failed.
+
+- **Its pull request** at the top: number, title, state (open, draft, merged, closed), branch → target, a conflict with the target, its age and its author; the icon on the right opens it in the browser. “Agent fixes it” and “Agent addresses the feedback” hand it the failures or the feedback, on your click only. Its other pull requests are listed at the bottom.
+- **The CI**: a summary (“2 failures out of 14”) then each check, failures first, with its state (queued, running, passed, failed, cancelled) and its duration. A click on a failed check opens the end of its log. “Re-run failed jobs” re-runs the failed jobs of the last commit, on your click only. While a check runs and the tab is shown, the CI is read again every 20 s; never in the background.
+- **The reviews and comments**, read only: who approved or requested changes, the comments with their file and line. Escouade publishes nothing there in your name.
+- **The deployments** of the branch, when the host gives them (GitHub): the environment, its state and the preview address to open.
+
+Without a pull request on its branch, the tab offers “Open a PR…”, or says why it can’t: no branch of the agent’s own, no remote, a host Escouade doesn’t read yet (GitLab, Bitbucket, Gitea), or no account, with the link to Settings › Integrations. In a project without an agent, “Project PRs and CI” opens the list of the project’s open pull requests, each with the state of its CI; a click on an agent’s opens that agent. A refused token, the host’s API limit (until what time) or a host that can’t be reached are said in the tab, with “Try again”.
 
 ## The two layouts
 

@@ -4,7 +4,7 @@ This page explains how to see what your agents changed, read a diff, commit, bro
 
 ## The uncommitted files panel
 
-The panel opens to the right of an agent’s conversation. In the classic layout, the “Files” counter in the conversation’s header opens and closes it, as does `Ctrl+Shift+B` (`⇧⌘B` on macOS); the panel’s × closes it too. It has two tabs: “Uncommitted”, followed by the number of files, and “History”, described [below](#history-and-the-git-graph).
+The panel opens to the right of an agent’s conversation. In the classic layout, the “Files” counter in the conversation’s header opens and closes it, as does `Ctrl+Shift+B` (`⇧⌘B` on macOS); the panel’s × closes it too. Its tabs: “Uncommitted”, followed by the number of files, “History”, described [below](#history-and-the-git-graph), “Workflow”, and “PR and CI”: the branch’s pull request, its CI, its reviews and its deployments (see [the interface](interface#pr-and-ci)).
 
 Under the tabs, two buttons choose what the list shows:
 

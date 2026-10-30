@@ -302,7 +302,7 @@ fn the_reviews_requests_and_the_open_comments_go_to_the_agent() {
 
 /// A project on github.com/acme/demo whose pushes go to a local bare repository, github.com's
 /// account connected on the fake server, and an ordinary agent with a commit in its worktree.
-async fn github_agent(h: &Harness, server: &FakeServer) -> (String, PathBuf, String) {
+pub(crate) async fn github_agent(h: &Harness, server: &FakeServer) -> (String, PathBuf, String) {
     let (p, _, bare) = github_project(h, server, true).await;
     let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
     let wt = h.agent(&id).worktree.expect("a worktree");
@@ -315,7 +315,7 @@ async fn github_agent(h: &Harness, server: &FakeServer) -> (String, PathBuf, Str
 
 /// A project on github.com/acme/demo whose pushes go to a local bare repository, github.com's
 /// account connected on the fake server: the project, its folder and the bare repository.
-async fn github_project(
+pub(crate) async fn github_project(
     h: &Harness,
     server: &FakeServer,
     worktrees: bool,

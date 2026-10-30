@@ -54,9 +54,7 @@ describe('the Workflow tab', () => {
     backend(scanOf(gsd()), gsdTracks());
     render(SidePanel, { project: project(), agent: app.agents.a1, docked: true });
     const tabs = await screen.findAllByRole('tab');
-    await waitFor(() =>
-      expect(tabs.map((t) => t.textContent?.trim())).toEqual(['Non commités 0', 'Historique', 'Workflow 3', 'PR et CI dans la 2.1']),
-    );
+    await waitFor(() => expect(tabs.map((t) => t.textContent?.trim())).toEqual(['Non commités 0', 'Historique', 'Workflow 3', 'PR et CI']));
   });
 
   it('draws the rail: the steps, their doors, subagents, files and ways back, the agents on them', async () => {

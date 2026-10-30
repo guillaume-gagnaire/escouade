@@ -711,6 +711,8 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
       isCrossRepository: (x.headRepo ?? x.repo ?? 'acme/demo') !== (x.repo ?? 'acme/demo'),
       headRepository: { nameWithOwner: x.headRepo ?? x.repo ?? 'acme/demo' },
       autoMergeRequest: null,
+      author: { login: x.author ?? 'ada' },
+      createdAt: x.createdAt ?? new Date(Date.now() - 2 * 3600_000).toISOString(),
       latestOpinionatedReviews: { nodes: x.changesRequested ? [{ state: 'CHANGES_REQUESTED' }] : [] },
       reviewThreads: { nodes: x.changesRequested ? [{ isResolved: false }] : [] },
       commits: { nodes: [{ commit: { statusCheckRollup: { state: x.checks } } }] },
@@ -724,6 +726,20 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
               pullRequests: {
                 nodes: g.pulls
                   .filter((x) => x.head === q.variables.branch && (x.repo ?? 'acme/demo') === `${q.variables.owner}/${q.variables.name}`)
+                  .reverse()
+                  .map(node),
+              },
+            },
+          },
+        });
+      // The project's open pull requests (ESC-305), the most recent first.
+      if (q.operationName === 'OpenPulls')
+        return send(200, {
+          data: {
+            repository: {
+              pullRequests: {
+                nodes: g.pulls
+                  .filter((x) => x.state === 'OPEN' && (x.repo ?? 'acme/demo') === `${q.variables.owner}/${q.variables.name}`)
                   .reverse()
                   .map(node),
               },
@@ -784,14 +800,29 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
       const pull = g.pulls.find((x) => x.number === Number(m[1]));
       if (m[2] === 'status') return send(200, { statuses: [] });
       const failed = pull?.checks === 'FAILURE';
+      const running = pull?.checks === 'PENDING';
+      // When they ran (ESC-305): `test` 2 min 30 s, `lint` 12 s.
+      const at = (s) => new Date(Date.parse('2026-10-30T10:00:00Z') + s * 1000).toISOString();
       return send(200, {
         check_runs: [
           {
             id: 77,
             name: 'test',
-            status: 'completed',
-            conclusion: failed ? 'failure' : 'success',
+            status: running ? 'in_progress' : 'completed',
+            conclusion: running ? null : failed ? 'failure' : 'success',
+            started_at: at(0),
+            completed_at: running ? null : at(150),
             html_url: 'https://github.com/acme/demo/actions/runs/7/job/77',
+            app: { slug: 'github-actions' },
+          },
+          {
+            id: 78,
+            name: 'lint',
+            status: 'completed',
+            conclusion: 'success',
+            started_at: at(0),
+            completed_at: at(12),
+            html_url: 'https://github.com/acme/demo/actions/runs/7/job/78',
             app: { slug: 'github-actions' },
           },
         ],
@@ -799,6 +830,18 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
     }
     if (p === '/github/repos/acme/demo/actions/jobs/77/logs')
       return send.text(200, 'npm test\nFAIL src/app.test.ts\n  expected 2, got 1\n');
+    // « Relancer les échecs » (ESC-305): the run of the failed job, run again.
+    m = p.match(/^\/github\/repos\/acme\/demo\/actions\/jobs\/(\d+)$/);
+    if (m) return send(200, { id: Number(m[1]), run_id: 7 });
+    if (p === '/github/repos/acme/demo/actions/runs/7/rerun-failed-jobs' && method === 'POST') return send(201, {});
+    // The deployments of a branch (ESC-305): a preview of each pull request's.
+    if (p === '/github/repos/acme/demo/deployments') {
+      const ref = url.searchParams.get('ref');
+      const pull = g.pulls.find((x) => x.head === ref);
+      return send(200, pull ? [{ id: pull.number, environment: 'Preview' }] : []);
+    }
+    m = p.match(/^\/github\/repos\/acme\/demo\/deployments\/(\d+)\/statuses$/);
+    if (m) return send(200, [{ state: 'success', environment_url: `https://demo-pr-${m[1]}.vercel.app` }]);
     m = p.match(/^\/github\/repos\/acme\/demo\/issues\/(\d+)\/comments$/);
     if (m && method === 'GET' && g.pulls.some((x) => x.number === Number(m[1]))) return send(200, []);
 

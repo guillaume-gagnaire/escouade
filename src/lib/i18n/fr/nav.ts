@@ -214,15 +214,9 @@ export default {
   sidePanel: {
     uncommitted: 'Non commités',
     history: 'Historique',
-    // The place of the code hosts (ESC-53 to 70), kept and not drawn until after the 2.0.
-    hosts: 'PR et CI',
-    soon: 'dans la 2.1',
-    laterTitle: 'PR, CI et déploiements de la branche de l’agent',
-    laterBody: 'Ici, dans la 2.1 : l’hébergeur du dépôt (GitHub, GitLab, Bitbucket, Gitea, Azure DevOps) dit ce que devient la branche.',
-    laterPr: 'la pull request ouverte, ses revues et ses commentaires ;',
-    laterCi: 'les vérifications de la CI, leur log, relancer ;',
-    laterDeploy: 'les déploiements de prévisualisation et leur adresse.',
-    laterCard: 'Sur la carte du ticket, la ligne « PR #41 → main » d’aujourd’hui, avec l’état de la CI.',
+    // The code hosts' tab (ESC-305): their word (« PR », « MR » on GitLab), and its dot when the CI of the agent's PR failed.
+    hosts: '{word} et CI',
+    hostsFailed: 'La CI de la {word} #{number} a échoué',
     /** Its × (ESC-204), and how it comes back: by the header of the conversation, as it was opened. */
     close: 'Fermer le panneau',
     reopen: 'Pour le rouvrir : « Fichiers » dans l’en-tête de la conversation',

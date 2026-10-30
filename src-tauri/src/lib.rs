@@ -156,6 +156,9 @@ mod projectfile;
 #[cfg(test)]
 mod projectfile_tests;
 mod projectlogo;
+mod prview;
+#[cfg(test)]
+mod prview_tests;
 mod pty;
 mod repos;
 #[cfg(test)]
@@ -742,6 +745,11 @@ pub fn run() {
                 commands::agent_branch_switch,
                 commands::agent_git_sync,
                 commands::agent_pr_fix,
+                commands::agent_pr_detail,
+                commands::agent_pr_log,
+                commands::agent_pr_rerun,
+                commands::agent_no_pr,
+                commands::project_prs,
                 commands::set_remote_control,
                 commands::stats,
                 commands::refresh_usage,

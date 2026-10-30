@@ -48,6 +48,13 @@ pub enum MergeStrategy {
     SemiLinear,
 }
 
+/// The most open pull requests of a project its side panel lists (`Forge::open_pull_requests`).
+pub const OPEN_PRS: usize = 30;
+
+fn is_zero(n: &u64) -> bool {
+    *n == 0
+}
+
 /// What a host can do, declared by its provider: the window and the PR's cycle offer only these.
 #[derive(Debug, Clone, PartialEq, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -122,6 +129,12 @@ pub struct PullRequest {
     pub open_threads: u32,
     /// The host merges it by itself once the checks pass.
     pub auto_merge: bool,
+    /// Who opened it (a login, a name on Azure DevOps); empty when the host does not say.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub author: String,
+    /// When it was opened (seconds since 1970); 0 when the host does not say.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub created: u64,
     /// The checks of its last commit, in one word; none when it has none.
     pub checks: Option<CheckState>,
     /// Its branch is a fork's: another repository's branch that only bears the same name.
@@ -140,9 +153,10 @@ pub struct PullRequest {
     pub host_repo: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub enum CheckState {
+    #[default]
     Pending,
     Success,
     Failure,
@@ -150,7 +164,7 @@ pub enum CheckState {
 }
 
 /// A check or a status of a pull request's last commit (a CI job).
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Check {
     pub name: String,
@@ -158,6 +172,22 @@ pub struct Check {
     pub url: Option<String>,
     /// What `Forge::job_log` asks for, when the host keeps its log.
     pub job: Option<String>,
+    /// When it started (seconds since 1970), when the host says it: a pending one that started
+    /// is running, the others wait.
+    pub started: Option<u64>,
+    /// When it ended, when the host says it.
+    pub finished: Option<u64>,
+    /// Stopped before its end: a failure to the rest of Escouade, cancelled to the window.
+    pub cancelled: bool,
+}
+
+/// An instant of a host's answer (RFC 3339) in seconds since 1970; none when absent or unread.
+pub fn instant(v: &Value) -> Option<u64> {
+    let t = chrono::DateTime::parse_from_rfc3339(v.as_str()?)
+        .ok()?
+        .timestamp();
+    // Azure's « 0001-01-01T00:00:00 » of a build not started yet.
+    u64::try_from(t).ok().filter(|t| *t > 0)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -288,6 +318,15 @@ pub trait Forge: Send + Sync {
     /// The repository `repo` was forked from; none when it is no fork, or the host does not say.
     fn parent<'a>(&'a self, _repo: &'a RepoRef) -> BoxFuture<'a, Result<Option<RepoRef>>> {
         Box::pin(async { Ok(None) })
+    }
+
+    /// The open pull requests of a repository, the most recently updated first (`OPEN_PRS` at
+    /// most).
+    fn open_pull_requests<'a>(
+        &'a self,
+        _repo: &'a RepoRef,
+    ) -> BoxFuture<'a, Result<Vec<PullRequest>>> {
+        unsupported("open_pull_requests")
     }
 
     /// Several pull requests of a repository, in as few calls as the host allows.

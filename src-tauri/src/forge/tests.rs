@@ -515,6 +515,7 @@ impl Forge for FakeClient {
                 state: CheckState::Success,
                 url: None,
                 job: None,
+                ..Default::default()
             }])
         })
     }

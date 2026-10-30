@@ -229,7 +229,18 @@
           <div class="noagent">
             <span>{t('shell.app.noAgent')}</span>
             <button class="btn primary" onclick={() => app.newAgent()}><Icon name="plus" size={14} />{t('shell.app.newAgent')}</button>
+            <!-- The project's open pull requests (ESC-305), in the side panel's « PR et CI » tab without an agent. -->
+            <button
+              class="btn ghost"
+              onclick={() => {
+                app.panelTab = 'hosts';
+                app.filesOpen = true;
+              }}><Icon name="pr" size={14} />{t('shell.app.projectPrs')}</button
+            >
           </div>
+          {#if app.split || app.filesOpen}
+            <SidePanel {project} agent={null} />
+          {/if}
         {/if}
       </div>
     {:else}

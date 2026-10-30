@@ -62,15 +62,20 @@ describe('SidePanel', () => {
     expect(app.filesOpen).toBe(false);
   });
 
-  it('keeps the place of « PR et CI » for 2.1, without drawing it', async () => {
-    fakeBackend({ git_files: () => [], git_log: () => LOG });
+  it('opens « PR et CI » on the agent’s pull request, named by its host’s word (ESC-305)', async () => {
+    fakeBackend({
+      git_files: () => [],
+      git_log: () => LOG,
+      agent_no_pr: () => ({ reason: 'Cet agent n’a pas de branche à lui.', settings: false }),
+    });
+    app.agents.a1.prWord = 'MR';
     render(SidePanel, { project: project(), agent: app.agents.a1, docked: true });
-    const hosts = screen.getByRole('tab', { name: /PR et CI\s*dans la 2\.1/ });
+    const hosts = screen.getByRole('tab', { name: 'MR et CI' });
     await userEvent.click(hosts);
     expect(hosts).toHaveAttribute('aria-selected', 'true');
     expect(app.panelTab).toBe('hosts');
-    expect(screen.getByText('PR, CI et déploiements de la branche de l’agent')).toBeInTheDocument();
-    expect(screen.getByRole('tabpanel')).toHaveTextContent('GitHub, GitLab, Bitbucket, Gitea');
+    expect(screen.getByRole('tabpanel')).toHaveTextContent('Pas de MR sur cette branche');
+    expect(screen.queryByText(/dans la 2.1/)).toBeNull();
   });
 
   it('draws its close button with an icon, not a character', async () => {

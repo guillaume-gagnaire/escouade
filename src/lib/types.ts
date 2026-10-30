@@ -2711,6 +2711,78 @@ export interface PullRequest {
    * target: on the remote the agent's branch tracks, or the repository that one was forked from.
    */
   hostRepo?: string;
+  /** Who opened it, when the host says it. */
+  author?: string;
+  /** When it was opened (Unix seconds), when the host says it. */
+  created?: number;
+}
+
+/** A check or a status of a pull request's last commit (`forge::Check`). */
+export interface PrCheck {
+  name: string;
+  state: CheckState;
+  url: string | null;
+  /** What its log is asked by, when the host keeps it. */
+  job: string | null;
+  /** Unix seconds, when the host says them: a pending one that started is running. */
+  started: number | null;
+  finished: number | null;
+  /** Stopped before its end (a failure to the rest of the app). */
+  cancelled: boolean;
+}
+
+export interface PrReview {
+  author: string;
+  state: 'approved' | 'changesRequested' | 'commented';
+  body: string;
+}
+
+/** A comment of a pull request, on one of its lines or not. */
+export interface PrComment {
+  id: string;
+  author: string;
+  body: string;
+  path: string | null;
+  line: number | null;
+  resolved: boolean;
+}
+
+export interface PrDeployment {
+  environment: string;
+  state: string;
+  url: string | null;
+}
+
+/** The « PR et CI » tab's read of the agent's pull request (`prview::PrDetail`). */
+export interface PrDetail {
+  checks: PrCheck[];
+  reviews: PrReview[];
+  comments: PrComment[];
+  deployments: PrDeployment[];
+  can: { checks: boolean; jobLogs: boolean; rerun: boolean; reviews: boolean; deployments: boolean };
+  rateLimit?: { limit: number; remaining: number; reset: number };
+}
+
+/** Why the host's answer is missing (`prview::Failure`). */
+export interface PrFailure {
+  kind: 'refused' | 'rateLimit' | 'unreachable' | 'other' | 'unavailable';
+  message: string;
+  /** When the host's limit starts over (Unix seconds). */
+  reset?: number;
+  /** Réglages › Intégrations settles it. */
+  settings?: boolean;
+}
+
+/** What a read of the tab gave: the data, else why it is missing. */
+export interface PrRead<T> {
+  data?: T;
+  failure?: PrFailure;
+}
+
+/** Why an agent has no « Ouvrir une PR… » (`prview::NoPr`). */
+export interface NoPr {
+  reason: string;
+  settings: boolean;
 }
 
 /** « Ouvrir une PR »: what the model proposes, which the user reads and edits (`agentprs::PrProposal`). */

@@ -12,7 +12,7 @@ La fenêtre a six zones :
 - **la barre de titre**, en haut : le nom du projet affiché, la recherche et l’éditeur ;
 - **la barre latérale**, à côté de la barre des projets : les agents du projet affiché, le lancement du projet et ses terminaux ;
 - **la zone principale**, au centre : la conversation de l’agent choisi, ou une autre vue du projet (Kanban, éditeur, terminal, journal d’une commande de lancement) ;
-- **le panneau latéral**, à droite, quand il est ouvert : les fichiers non commités et l’historique git ;
+- **le panneau latéral**, à droite, quand il est ouvert : les fichiers non commités, l’historique git, le workflow du projet, et la PR de la branche avec sa CI ;
 - **la barre d’état**, en bas : les agents actifs, les quotas, le coût du jour et la branche.
 
 La fenêtre s’ouvre en 1440 × 900 et ne descend pas sous 1000 × 600. Escouade retient sa taille et sa position d’un lancement à l’autre.
@@ -90,7 +90,7 @@ L’agent qui attend ta réponse passe en tête de la liste. Chaque agent est un
 
 La carte d’un agent qui attend ta réponse montre sa demande et ses réponses, numérotées : un clic sur une réponse, ou sa touche `1`, `2`… n’importe où hors d’un champ de saisie, répond sans quitter la conversation affichée. Plusieurs questions viennent l’une après l’autre (« Question 1 sur 2 »). Une autorisation montre la commande ou le fichier, ce que dit le harness, et « Autoriser », « Toujours autoriser » (Claude Code, OpenCode, qui dit le motif qu’il gardera) ou « Pour cette session » (Codex, Copilot CLI), et « Refuser ». Les touches répondent à la carte qui a le focus, sinon à la première de la liste ; elles attendent une demi-seconde après l’arrivée d’une demande. L’agent repart, sa carte brille en vert un instant et reprend sa place. Ce qui ne tient pas sur la carte (une réponse à écrire, un choix multiple, un plan, une demande trop longue ou que Claude Code refuserait par défaut) en montre le début et « Répondre dans la conversation », qui ouvre l’agent.
 
-Sous la carte de l’agent affiché, la liste de ses sous-agents et celle de ses tâches de fond (voir [l’avancée d’un plan](plan)). Sous la carte d’un agent, ses PR (numéro et icône de leur état, et le bouton de la correction utile), et les agents qu’il pilote par le serveur MCP.
+Sous la carte de l’agent affiché, la liste de ses sous-agents et celle de ses tâches de fond (voir [l’avancée d’un plan](plan)). Sous la carte d’un agent, ses PR (« #41 → main », l’état de leur CI, qui ouvre l’onglet « PR et CI », et le bouton de la correction utile), et les agents qu’il pilote par le serveur MCP.
 
 Un clic sur une carte affiche l’agent. `Ctrl+Tab` et `Ctrl+Maj+Tab` passent à l’agent suivant ou précédent du projet, sans les agents archivés.
 
@@ -166,7 +166,7 @@ Le champ de message flotte en bas, de la largeur de la conversation : ses puces 
 
 ## Le panneau latéral
 
-Le panneau latéral a deux onglets : « Non commités », suivi du nombre de fichiers, et « Historique ».
+Le panneau latéral a quatre onglets : « Non commités », suivi du nombre de fichiers, « Historique », « Workflow » et « PR et CI » (« MR et CI » sur GitLab). Large de 340 px, le panneau n’a pas la place du dernier : l’état de la CI sur la carte de l’agent l’ouvre alors.
 
 ### Non commités
 
@@ -179,6 +179,17 @@ La liste n’affiche que 500 fichiers ; le diff et le commit les prennent tous. 
 ### Historique
 
 L’onglet « Historique » montre le graphe git de tout le dépôt, avec la branche de l’agent mise en avant. Un clic sur un commit ouvre son diff ; un clic droit propose des actions sur les branches. Voir [les branches](branches).
+
+### PR et CI
+
+L’onglet « PR et CI » montre ce que l’hébergeur du dépôt (GitHub, Azure DevOps) dit de la branche de l’agent ouvert. Une pastille rouge sur l’onglet dit que la CI de sa PR a échoué.
+
+- **Sa PR** en tête : numéro, titre, état (ouverte, brouillon, mergée, fermée), branche → cible, un conflit avec la cible, son âge et son auteur ; l’icône à droite l’ouvre dans le navigateur. « L’agent corrige » et « L’agent corrige les retours » lui donnent les échecs ou les retours, sur ton clic seulement. Ses autres PR sont listées en bas.
+- **La CI** : un résumé (« 2 échecs sur 14 ») puis chaque vérification, les échecs d’abord, avec son état (en attente, en cours, réussie, échouée, annulée) et sa durée. Un clic sur une vérification échouée ouvre la fin de son journal. « Relancer les échecs » relance les jobs en échec du dernier commit, sur ton clic seulement. Tant qu’une vérification tourne et que l’onglet est affiché, la CI se relit toutes les 20 s ; jamais en arrière-plan.
+- **Les revues et commentaires**, en lecture : qui a approuvé ou demandé des changements, les commentaires avec leur fichier et leur ligne. Escouade n’y publie rien en ton nom.
+- **Les déploiements** de la branche, quand l’hébergeur les donne (GitHub) : l’environnement, son état et l’adresse de prévisualisation à ouvrir.
+
+Sans PR sur sa branche, l’onglet propose « Ouvrir une PR… », ou dit pourquoi il ne peut pas : pas de branche à l’agent, pas de dépôt distant, un hébergeur qu’Escouade ne lit pas encore (GitLab, Bitbucket, Gitea), ou pas de compte, avec le lien vers Réglages › Intégrations. Dans un projet sans agent, « PR et CI du projet » ouvre la liste des PR ouvertes du projet, chacune avec l’état de sa CI ; un clic sur celle d’un agent ouvre cet agent. Un jeton refusé, la limite d’API de l’hébergeur (jusqu’à quelle heure) ou un hébergeur injoignable sont dits dans l’onglet, avec « Réessayer ».
 
 ## Les deux dispositions
 
