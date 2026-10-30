@@ -25,6 +25,7 @@ mod api;
 mod context;
 pub mod hint;
 mod lang;
+pub(crate) mod probes;
 mod ranking;
 mod scan;
 mod search;

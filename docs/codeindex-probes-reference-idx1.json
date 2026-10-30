@@ -1,20 +1,20 @@
 {
   "commit": "303fb5f2e447de6eb5bac91ecface391b5c97e75",
-  "date": "2026-10-30 00:39",
+  "date": "2026-10-30 01:23",
   "indexing": {
-    "backMs": 9421,
+    "backMs": 6323,
     "backParsed": 390,
     "branchFilesChanged": 517,
-    "branchMs": 8543,
+    "branchMs": 4471,
     "branchParsed": 167,
     "bytes": 71929856,
-    "commitMs": 595,
+    "commitMs": 100,
     "commitParsed": 1,
     "files": 1575,
-    "fullMs": 28941,
+    "fullMs": 20252,
     "links": 293741,
     "symbols": 34797,
-    "worktreeMs": 14916,
+    "worktreeMs": 12571,
     "worktreeParsed": 2
   },
   "probes": [
@@ -64,11 +64,11 @@
           "recall": 0.0,
           "results": 12
         },
-        "coldMs": 289.2,
+        "coldMs": 263.3,
         "realCalls": 14,
         "realTokens": 7701,
         "responseTokens": 1878,
-        "warmMs": 126.2,
+        "warmMs": 98.6,
         "wrongTokens": 1705
       },
       "realPercent": -209,
@@ -125,11 +125,11 @@
           "recall": 0.0,
           "results": 12
         },
-        "coldMs": 334.5,
+        "coldMs": 184.6,
         "realCalls": 12,
         "realTokens": 6807,
         "responseTokens": 1583,
-        "warmMs": 93.4,
+        "warmMs": 94.7,
         "wrongTokens": 1433
       },
       "realPercent": -173,
@@ -178,11 +178,11 @@
           "results": 30
         },
         "codeWords": null,
-        "coldMs": 250.5,
+        "coldMs": 98.6,
         "realCalls": 9,
         "realTokens": 4235,
         "responseTokens": 471,
-        "warmMs": 5.1,
+        "warmMs": 1.8,
         "wrongTokens": 185
       },
       "realPercent": 0,
@@ -231,11 +231,11 @@
           "results": 47
         },
         "codeWords": null,
-        "coldMs": 473.2,
+        "coldMs": 118.1,
         "realCalls": 2,
         "realTokens": 940,
         "responseTokens": 701,
-        "warmMs": 44.6,
+        "warmMs": 27.9,
         "wrongTokens": 565
       },
       "realPercent": -254,
@@ -281,11 +281,11 @@
           "results": 3
         },
         "codeWords": null,
-        "coldMs": 172.8,
+        "coldMs": 120.9,
         "realCalls": 3,
         "realTokens": 798,
         "responseTokens": 196,
-        "warmMs": 3.2,
+        "warmMs": 1.9,
         "wrongTokens": 0
       },
       "realPercent": -19,
@@ -331,11 +331,11 @@
           "results": 17
         },
         "codeWords": null,
-        "coldMs": 417.7,
+        "coldMs": 108.2,
         "realCalls": 2,
         "realTokens": 989,
         "responseTokens": 700,
-        "warmMs": 24.9,
+        "warmMs": 20.4,
         "wrongTokens": 567
       },
       "realPercent": -218,
@@ -381,11 +381,11 @@
           "results": 13
         },
         "codeWords": null,
-        "coldMs": 480.6,
+        "coldMs": 272.8,
         "realCalls": 9,
         "realTokens": 3726,
         "responseTokens": 655,
-        "warmMs": 55.2,
+        "warmMs": 32.9,
         "wrongTokens": 239
       },
       "realPercent": -102,
@@ -433,11 +433,11 @@
           "results": 21
         },
         "codeWords": null,
-        "coldMs": 275.6,
+        "coldMs": 443.3,
         "realCalls": 10,
         "realTokens": 4331,
         "responseTokens": 694,
-        "warmMs": 32.0,
+        "warmMs": 40.6,
         "wrongTokens": 476
       },
       "realPercent": -63,
@@ -483,11 +483,11 @@
           "results": 7
         },
         "codeWords": null,
-        "coldMs": 231.0,
+        "coldMs": 107.4,
         "realCalls": 7,
         "realTokens": 2853,
         "responseTokens": 376,
-        "warmMs": 20.7,
+        "warmMs": 19.9,
         "wrongTokens": 71
       },
       "realPercent": -53,
@@ -535,11 +535,11 @@
           "results": 9
         },
         "codeWords": null,
-        "coldMs": 395.5,
+        "coldMs": 107.7,
         "realCalls": 8,
         "realTokens": 3214,
         "responseTokens": 375,
-        "warmMs": 33.2,
+        "warmMs": 20.3,
         "wrongTokens": 8
       },
       "realPercent": -18,
@@ -585,11 +585,11 @@
           "results": 79
         },
         "codeWords": null,
-        "coldMs": 292.6,
+        "coldMs": 119.8,
         "realCalls": 3,
         "realTokens": 3651,
         "responseTokens": 1781,
-        "warmMs": 20.9,
+        "warmMs": 25.9,
         "wrongTokens": 415
       },
       "realPercent": -89,
@@ -635,11 +635,11 @@
           "results": 51
         },
         "codeWords": null,
-        "coldMs": 531.8,
+        "coldMs": 104.0,
         "realCalls": 8,
         "realTokens": 3465,
         "responseTokens": 394,
-        "warmMs": 6.8,
+        "warmMs": 8.2,
         "wrongTokens": 270
       },
       "realPercent": -20,
@@ -687,11 +687,11 @@
           "results": 51
         },
         "codeWords": null,
-        "coldMs": 907.0,
+        "coldMs": 85.7,
         "realCalls": 9,
         "realTokens": 3657,
         "responseTokens": 527,
-        "warmMs": 4.9,
+        "warmMs": 2.7,
         "wrongTokens": 386
       },
       "realPercent": -25,
@@ -739,11 +739,11 @@
           "results": 51
         },
         "codeWords": null,
-        "coldMs": 162.3,
+        "coldMs": 92.5,
         "realCalls": 4,
         "realTokens": 2322,
         "responseTokens": 611,
-        "warmMs": 1.8,
+        "warmMs": 2.2,
         "wrongTokens": 394
       },
       "realPercent": -76,
@@ -799,11 +799,11 @@
           "recall": 0.0,
           "results": 10
         },
-        "coldMs": 198.2,
+        "coldMs": 167.8,
         "realCalls": 4,
         "realTokens": 1837,
         "responseTokens": 629,
-        "warmMs": 77.4,
+        "warmMs": 72.4,
         "wrongTokens": 423
       },
       "realPercent": -149,
@@ -860,11 +860,11 @@
           "recall": 1.0,
           "results": 12
         },
-        "coldMs": 218.4,
+        "coldMs": 285.4,
         "realCalls": 12,
         "realTokens": 6918,
         "responseTokens": 2136,
-        "warmMs": 125.5,
+        "warmMs": 98.9,
         "wrongTokens": 1968
       },
       "realPercent": -331,
@@ -921,11 +921,11 @@
           "recall": 1.0,
           "results": 12
         },
-        "coldMs": 416.1,
+        "coldMs": 182.6,
         "realCalls": 9,
         "realTokens": 3975,
         "responseTokens": 1164,
-        "warmMs": 100.7,
+        "warmMs": 107.2,
         "wrongTokens": 887
       },
       "realPercent": -148,
@@ -982,11 +982,11 @@
           "recall": 0.5,
           "results": 11
         },
-        "coldMs": 1128.4,
+        "coldMs": 537.8,
         "realCalls": 12,
         "realTokens": 5964,
         "responseTokens": 1491,
-        "warmMs": 96.8,
+        "warmMs": 101.2,
         "wrongTokens": 1324
       },
       "realPercent": -210,
@@ -1034,11 +1034,11 @@
           "results": 50
         },
         "codeWords": null,
-        "coldMs": 413.2,
+        "coldMs": 265.7,
         "realCalls": 2,
         "realTokens": 1036,
         "responseTokens": 530,
-        "warmMs": 41.1,
+        "warmMs": 30.8,
         "wrongTokens": 386
       },
       "realPercent": -1,
@@ -1086,11 +1086,11 @@
           "results": 51
         },
         "codeWords": null,
-        "coldMs": 522.5,
+        "coldMs": 100.5,
         "realCalls": 4,
         "realTokens": 2378,
         "responseTokens": 544,
-        "warmMs": 1.7,
+        "warmMs": 1.9,
         "wrongTokens": 394
       },
       "realPercent": 43,
@@ -1138,11 +1138,11 @@
           "results": 8
         },
         "codeWords": null,
-        "coldMs": 2286.2,
+        "coldMs": 113.8,
         "realCalls": 8,
         "realTokens": 3856,
         "responseTokens": 644,
-        "warmMs": 52.8,
+        "warmMs": 31.7,
         "wrongTokens": 275
       },
       "realPercent": -23,
@@ -1190,11 +1190,11 @@
           "results": 131
         },
         "codeWords": null,
-        "coldMs": 1520.9,
+        "coldMs": 131.9,
         "realCalls": 2,
         "realTokens": 5679,
         "responseTokens": 4420,
-        "warmMs": 66.2,
+        "warmMs": 42.6,
         "wrongTokens": 752
       },
       "realPercent": -652,
@@ -1248,11 +1248,11 @@
           "recall": 1.0,
           "results": 12
         },
-        "coldMs": 540.6,
+        "coldMs": 201.3,
         "realCalls": 1,
         "realTokens": 1272,
         "responseTokens": 1272,
-        "warmMs": 102.0,
+        "warmMs": 97.4,
         "wrongTokens": 955
       },
       "realPercent": 80,
@@ -1300,11 +1300,11 @@
           "results": 38
         },
         "codeWords": null,
-        "coldMs": 1108.1,
+        "coldMs": 241.4,
         "realCalls": 2,
         "realTokens": 700,
         "responseTokens": 441,
-        "warmMs": 29.4,
+        "warmMs": 27.0,
         "wrongTokens": 145
       },
       "realPercent": -29,
@@ -1350,11 +1350,11 @@
           "results": 2
         },
         "codeWords": null,
-        "coldMs": 169.1,
+        "coldMs": 263.5,
         "realCalls": 3,
         "realTokens": 803,
         "responseTokens": 150,
-        "warmMs": 2.0,
+        "warmMs": 1.4,
         "wrongTokens": 0
       },
       "realPercent": 15,
@@ -1408,11 +1408,11 @@
           "recall": 1.0,
           "results": 12
         },
-        "coldMs": 258.9,
+        "coldMs": 485.8,
         "realCalls": 11,
         "realTokens": 5282,
         "responseTokens": 1694,
-        "warmMs": 117.2,
+        "warmMs": 79.4,
         "wrongTokens": 1551
       },
       "realPercent": -870,
@@ -1460,11 +1460,11 @@
           "results": 6
         },
         "codeWords": null,
-        "coldMs": 184.0,
+        "coldMs": 123.8,
         "realCalls": 4,
         "realTokens": 1124,
         "responseTokens": 290,
-        "warmMs": 30.7,
+        "warmMs": 27.7,
         "wrongTokens": 212
       },
       "realPercent": -112,
@@ -1510,11 +1510,11 @@
           "results": 11
         },
         "codeWords": null,
-        "coldMs": 365.6,
+        "coldMs": 89.1,
         "realCalls": 6,
         "realTokens": 2399,
         "responseTokens": 449,
-        "warmMs": 2.3,
+        "warmMs": 1.3,
         "wrongTokens": 281
       },
       "realPercent": 26,
@@ -1568,11 +1568,11 @@
           "recall": 0.0,
           "results": 11
         },
-        "coldMs": 856.1,
+        "coldMs": 177.2,
         "realCalls": 12,
         "realTokens": 5454,
         "responseTokens": 900,
-        "warmMs": 86.0,
+        "warmMs": 96.5,
         "wrongTokens": 744
       },
       "realPercent": -91,
@@ -1620,11 +1620,11 @@
           "results": 50
         },
         "codeWords": null,
-        "coldMs": 441.6,
+        "coldMs": 117.4,
         "realCalls": 6,
         "realTokens": 3162,
         "responseTokens": 579,
-        "warmMs": 53.6,
+        "warmMs": 28.8,
         "wrongTokens": 445
       },
       "realPercent": -23,
@@ -1680,11 +1680,11 @@
           "recall": 0.0,
           "results": 11
         },
-        "coldMs": 942.7,
+        "coldMs": 200.9,
         "realCalls": 12,
         "realTokens": 5933,
         "responseTokens": 1236,
-        "warmMs": 135.9,
+        "warmMs": 96.0,
         "wrongTokens": 1036
       },
       "realPercent": -255,
@@ -1740,11 +1740,11 @@
           "recall": 0.0,
           "results": 11
         },
-        "coldMs": 1069.6,
+        "coldMs": 241.1,
         "realCalls": 8,
         "realTokens": 5283,
         "responseTokens": 1006,
-        "warmMs": 96.6,
+        "warmMs": 70.5,
         "wrongTokens": 871
       },
       "realPercent": -246,
@@ -1800,11 +1800,11 @@
           "recall": 0.0,
           "results": 11
         },
-        "coldMs": 851.8,
+        "coldMs": 344.1,
         "realCalls": 18,
         "realTokens": 8487,
         "responseTokens": 1358,
-        "warmMs": 124.8,
+        "warmMs": 93.3,
         "wrongTokens": 1174
       },
       "realPercent": -105,
@@ -1860,11 +1860,11 @@
           "recall": 0.0,
           "results": 10
         },
-        "coldMs": 490.1,
+        "coldMs": 182.2,
         "realCalls": 16,
         "realTokens": 8703,
         "responseTokens": 1784,
-        "warmMs": 153.7,
+        "warmMs": 99.4,
         "wrongTokens": 1559
       },
       "realPercent": -153,
@@ -1921,11 +1921,11 @@
           "recall": 0.0,
           "results": 12
         },
-        "coldMs": 2077.3,
+        "coldMs": 454.0,
         "realCalls": 6,
         "realTokens": 4195,
         "responseTokens": 585,
-        "warmMs": 118.4,
+        "warmMs": 64.1,
         "wrongTokens": 423
       },
       "realPercent": -33,
@@ -1981,11 +1981,11 @@
           "recall": 0.0,
           "results": 12
         },
-        "coldMs": 444.1,
+        "coldMs": 618.1,
         "realCalls": 16,
         "realTokens": 13329,
         "responseTokens": 2032,
-        "warmMs": 112.7,
+        "warmMs": 90.2,
         "wrongTokens": 1841
       },
       "realPercent": -72,
@@ -2041,11 +2041,11 @@
           "recall": 0.0,
           "results": 12
         },
-        "coldMs": 1915.5,
+        "coldMs": 869.7,
         "realCalls": 16,
         "realTokens": 11788,
         "responseTokens": 1788,
-        "warmMs": 152.2,
+        "warmMs": 84.3,
         "wrongTokens": 1616
       },
       "realPercent": -73,
@@ -2102,11 +2102,11 @@
           "recall": 0.0,
           "results": 12
         },
-        "coldMs": 1429.1,
+        "coldMs": 337.9,
         "realCalls": 1,
         "realTokens": 1258,
         "responseTokens": 1258,
-        "warmMs": 63.6,
+        "warmMs": 49.6,
         "wrongTokens": 917
       },
       "realPercent": 82,
@@ -2163,11 +2163,11 @@
           "recall": 1.0,
           "results": 10
         },
-        "coldMs": 1354.9,
+        "coldMs": 604.4,
         "realCalls": 18,
         "realTokens": 8185,
         "responseTokens": 973,
-        "warmMs": 139.3,
+        "warmMs": 75.9,
         "wrongTokens": 800
       },
       "realPercent": -87,
@@ -2223,11 +2223,11 @@
           "recall": 1.0,
           "results": 12
         },
-        "coldMs": 1547.1,
+        "coldMs": 178.5,
         "realCalls": 14,
         "realTokens": 5729,
         "responseTokens": 1601,
-        "warmMs": 89.8,
+        "warmMs": 91.3,
         "wrongTokens": 1458
       },
       "realPercent": -366,
@@ -2284,11 +2284,11 @@
           "recall": 0.0,
           "results": 12
         },
-        "coldMs": 792.7,
+        "coldMs": 694.3,
         "realCalls": 12,
         "realTokens": 7210,
         "responseTokens": 2383,
-        "warmMs": 106.5,
+        "warmMs": 165.0,
         "wrongTokens": 2194
       },
       "realPercent": -346,
@@ -2345,11 +2345,11 @@
           "recall": 0.0,
           "results": 12
         },
-        "coldMs": 524.5,
+        "coldMs": 282.2,
         "realCalls": 20,
         "realTokens": 11205,
         "responseTokens": 1815,
-        "warmMs": 120.4,
+        "warmMs": 103.4,
         "wrongTokens": 1649
       },
       "realPercent": -74,
@@ -2406,11 +2406,11 @@
           "recall": 0.0,
           "results": 11
         },
-        "coldMs": 473.3,
+        "coldMs": 526.3,
         "realCalls": 17,
         "realTokens": 10090,
         "responseTokens": 1117,
-        "warmMs": 116.1,
+        "warmMs": 127.7,
         "wrongTokens": 935
       },
       "realPercent": -70,
@@ -2466,11 +2466,11 @@
           "recall": 0.0,
           "results": 11
         },
-        "coldMs": 478.4,
+        "coldMs": 227.0,
         "realCalls": 20,
         "realTokens": 9941,
         "responseTokens": 1561,
-        "warmMs": 121.1,
+        "warmMs": 85.5,
         "wrongTokens": 1349
       },
       "realPercent": -64,
@@ -2526,11 +2526,11 @@
           "recall": 1.0,
           "results": 12
         },
-        "coldMs": 1858.2,
+        "coldMs": 185.7,
         "realCalls": 20,
         "realTokens": 9689,
         "responseTokens": 1435,
-        "warmMs": 149.1,
+        "warmMs": 80.9,
         "wrongTokens": 1277
       },
       "realPercent": -97,
@@ -2586,11 +2586,11 @@
           "recall": 0.0,
           "results": 12
         },
-        "coldMs": 496.2,
+        "coldMs": 545.2,
         "realCalls": 13,
         "realTokens": 8048,
         "responseTokens": 1284,
-        "warmMs": 93.9,
+        "warmMs": 59.7,
         "wrongTokens": 1142
       },
       "realPercent": -133,
@@ -2647,11 +2647,11 @@
           "recall": 0.0,
           "results": 10
         },
-        "coldMs": 1421.8,
+        "coldMs": 188.5,
         "realCalls": 11,
         "realTokens": 5687,
         "responseTokens": 1835,
-        "warmMs": 199.8,
+        "warmMs": 96.2,
         "wrongTokens": 1670
       },
       "realPercent": -354,
@@ -2707,11 +2707,11 @@
           "recall": 0.0,
           "results": 12
         },
-        "coldMs": 651.8,
+        "coldMs": 216.4,
         "realCalls": 14,
         "realTokens": 8579,
         "responseTokens": 1575,
-        "warmMs": 134.0,
+        "warmMs": 84.6,
         "wrongTokens": 1417
       },
       "realPercent": -87,
@@ -2767,11 +2767,11 @@
           "recall": 0.0,
           "results": 12
         },
-        "coldMs": 666.9,
+        "coldMs": 246.5,
         "realCalls": 13,
         "realTokens": 6880,
         "responseTokens": 1708,
-        "warmMs": 114.7,
+        "warmMs": 111.9,
         "wrongTokens": 1551
       },
       "realPercent": -473,
@@ -2820,11 +2820,11 @@
           "results": 3
         },
         "codeWords": null,
-        "coldMs": 2284.8,
+        "coldMs": 401.3,
         "realCalls": 2,
         "realTokens": 493,
         "responseTokens": 252,
-        "warmMs": 31.6,
+        "warmMs": 31.3,
         "wrongTokens": 113
       },
       "realPercent": -81,
@@ -2872,11 +2872,11 @@
           "results": 3
         },
         "codeWords": null,
-        "coldMs": 1180.8,
+        "coldMs": 387.2,
         "realCalls": 3,
         "realTokens": 807,
         "responseTokens": 200,
-        "warmMs": 1.6,
+        "warmMs": 1.4,
         "wrongTokens": 0
       },
       "realPercent": -18,
@@ -2924,11 +2924,11 @@
           "results": 0
         },
         "codeWords": null,
-        "coldMs": 3295.4,
+        "coldMs": 413.2,
         "realCalls": 1,
         "realTokens": 61,
         "responseTokens": 61,
-        "warmMs": 1.8,
+        "warmMs": 2.0,
         "wrongTokens": 0
       },
       "realPercent": -662,
@@ -2976,11 +2976,11 @@
           "results": 0
         },
         "codeWords": null,
-        "coldMs": 64.9,
+        "coldMs": 73.1,
         "realCalls": 3,
         "realTokens": 281,
         "responseTokens": 55,
-        "warmMs": 64.9,
+        "warmMs": 73.1,
         "wrongTokens": 0
       },
       "realPercent": -24,
@@ -3028,11 +3028,11 @@
           "results": 1
         },
         "codeWords": null,
-        "coldMs": 419.4,
+        "coldMs": 253.8,
         "realCalls": 2,
         "realTokens": 333,
         "responseTokens": 136,
-        "warmMs": 419.4,
+        "warmMs": 253.8,
         "wrongTokens": 0
       },
       "realPercent": -47,

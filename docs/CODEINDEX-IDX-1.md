@@ -1,10 +1,10 @@
 # Index du code — IDX-1 (ESC-296) : la recherche et le contexte de tokensave
 
-Le 2026-10-30. Colonne d'IDX-1 du banc des sondes d'ESC-294 (`docs/CODEINDEX-PROBES.md`), en attendant que ce rapport soit sur `main` : elle y sera reportée à la fusion. Mêmes 54 sondes, aucune changée ; « avant » est la référence d'ESC-294 (son `reference.json`, commit mesuré `303fb5f2`), « après » ce ticket. La référence d'après est `docs/codeindex-probes-reference-idx1.json`, pour `--compare` d'IDX-2 et IDX-3.
+Le 2026-10-30. Le détail de la colonne IDX-1 du banc des sondes d’ESC-294 (`docs/CODEINDEX-PROBES.md`, « Ticket après ticket »). Mêmes 54 sondes, aucune changée ; « avant » est la référence d’ESC-294 (`docs/codeindex-probes-reference.json`, commit mesuré `303fb5f2`), « après » ce ticket. La référence d'après est `docs/codeindex-probes-reference-idx1.json`, pour `--compare` d'IDX-2 et IDX-3.
 
 ```sh
 cd src-tauri
-cargo run --release --example codeindex_probes -- --compare <reference d'ESC-294>
+cargo run --release --example codeindex_probes -- --compare ../docs/codeindex-probes-reference.json
 ```
 
 ## Ce qui a été porté
@@ -46,11 +46,11 @@ Commit mesuré `303fb5f2`, build release, Windows 11, poste partagé avec d'autr
 | Groupe | Sondes | R@10 avant → IDX-1 | P@10 avant → IDX-1 | R@50 avant → IDX-1 | Tok. index réels avant → IDX-1 |
 |---|---|---|---|---|---|
 | search | 9 | 67 → 78 | 30 → 26 | 78 → 67 | 14 081 → 9 058 |
-| context | 28 | 16 → 11 | 2 → 1 | 23 → 9 | 288 986 → 195 429 |
+| context | 28 | 16 → 11 | 2 → 1 | 23 → 9 | 287 689 → 195 429 |
 | callers | 10 | 59 → 59 | 50 → 50 | — | 20 925 → 20 925 |
 | callees | 3 | 49 → 49 | 38 → 38 | — | 11 913 → 11 913 |
 | impact | 4 | 85 → 85 | 70 → 70 | — | 15 397 → 15 397 |
-| **Tout** | 54 | 39 → 38 | 23 → 22 | 49 → 40 | 351 302 → 252 722 |
+| **Tout** | 54 | 39 → 38 | 23 → 22 | 49 → 40 | 350 005 → 252 722 |
 
 Gagnant par sonde (index / grep / égalité) : 5 / 48 / 1 → 4 / 48 / 2. Économie réelle (totaux) : −151 % → −81 % (l'index coûte 1,8 fois grep au lieu de 2,5).
 
