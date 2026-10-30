@@ -16,3 +16,5 @@ store/.nuxt
 store/.output
 store/.data
 store/server/db/migrations/meta
+# Written by the probes bench (ESC-294, `--compare` reads it): its own layout.
+docs/codeindex-probes-reference.json
