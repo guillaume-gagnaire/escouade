@@ -20,7 +20,15 @@
 //! the rule of the agents' instructions and the ESC-253 hook), `index-only` (the index, Glob
 //! and Read, no Grep) and `tokensave` (as `index-hook`, tokensave's server and the rules its
 //! `install` writes in place of Escouade's, no hook; `--tokensave <exe>`). The agent has Edit and
-//! Write for a change, never a terminal.
+//! Write for a change, and no terminal in IDX-4.
+//!
+//! IDX-6 (ESC-306) plays `--bench ../docs/codeindex-agents-multi.json`: changes at many places
+//! (`multi`), each checked by its places, its old names gone, its homonyms kept and the
+//! project's checks (`check` tries its patch of `docs/codeindex-agents-multi/`, then the same
+//! with a file left out). It is played by several models (`models`), each mode and model in a
+//! lane of its own (`grep-sonnet`: its copy, its cargo target, a copy of `node_modules`); the
+//! agent has a terminal for its checks alone (`terminal`), every other command refused by the
+//! hook `snap`, which also writes what the copy still missed before each check.
 //!
 //! tokensave is run by ESC-304's rules: its worldwide counter turned off first (and checked off),
 //! `TOKENSAVE_UPDATE_CHECK=off`, its copy without `.git` indexed by `init --no-git-hook` in that
@@ -33,6 +41,7 @@
 //! `--allowedTools` with `--permission-mode dontAsk`, `--no-session-persistence`.
 
 use super::agents_mcp::{self, LANG};
+use super::multi::{self, Multi};
 use super::{git, remove_all};
 use anyhow::{anyhow, bail, Context as _, Result};
 use serde::{Deserialize, Serialize};
@@ -50,17 +59,49 @@ pub struct Bench {
     /// The commit the copies are at, the one the checks were written for.
     pub commit: String,
     pub model: String,
+    /// The models each task is played by (IDX-6): `model` alone when empty.
+    #[serde(default)]
+    pub models: Vec<String>,
     pub effort: String,
     pub passes: u32,
     /// The most a run may take, in seconds.
     pub timeout_s: u64,
-    /// Added to the prompt of a question, then of a change.
+    /// Added to the prompt of a question, of a change, of a change at many places.
+    #[serde(default)]
     pub answer_rule: String,
+    #[serde(default)]
     pub change_rule: String,
+    #[serde(default)]
+    pub multi_rule: String,
+    /// The commands the agent's terminal may run (`Bash(<command>:*)`), only to check its work
+    /// (IDX-6); no terminal when empty.
+    #[serde(default)]
+    pub terminal: Vec<String>,
     /// The rules `tokensave install` would write for Claude Code, given to the agents of the
     /// mode `tokensave` as Escouade's rule is to those of its index.
     pub tokensave_rule: String,
     pub tasks: Vec<Task>,
+}
+
+impl Bench {
+    pub fn models(&self) -> Vec<String> {
+        if self.models.is_empty() {
+            vec![self.model.clone()]
+        } else {
+            self.models.clone()
+        }
+    }
+}
+
+/// A model's short name (`claude-sonnet-5-5` → `sonnet`), for the folders and the tables.
+pub fn model_short(model: &str) -> String {
+    model
+        .strip_prefix("claude-")
+        .unwrap_or(model)
+        .split('-')
+        .next()
+        .unwrap_or(model)
+        .to_string()
 }
 
 #[derive(Debug, Deserialize)]
@@ -76,6 +117,8 @@ pub struct Task {
     pub answer: Vec<Vec<String>>,
     /// A change: what it must leave in the code.
     pub change: Option<Change>,
+    /// A change at many places (IDX-6).
+    pub multi: Option<Multi>,
     /// The checks tried by hand: an answer that passes and one that does not (a question)…
     pub good: Option<String>,
     pub bad: Option<String>,
@@ -230,8 +273,12 @@ pub fn change_ok(c: &Change, text: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// The check of a task after its run in `copy`, given the agent's last words: right, or why not.
-fn checked(t: &Task, copy: &Path, result: &str) -> Result<(), String> {
+/// The check of a task after its run in `copy` (its cargo target in `target`), given the agent's
+/// last words: right, or why not.
+fn checked(t: &Task, copy: &Path, result: &str, target: &Path) -> Result<(), String> {
+    if let Some(m) = &t.multi {
+        return multi::verify(m, copy, target);
+    }
     match &t.change {
         Some(c) => {
             let text = std::fs::read_to_string(copy.join(&c.file)).map_err(|e| e.to_string())?;
@@ -265,6 +312,10 @@ pub struct Measure {
     pub reads_after: u32,
     /// Read of a file already read in the run.
     pub rereads: u32,
+    /// The terminal's commands (checks, IDX-6) that failed, and the cycles « check → fix »: a
+    /// check followed by an Edit or a Write before the next one.
+    pub checks_failed: u32,
+    pub cycles: u32,
     pub input: u64,
     pub cache_write: u64,
     pub cache_read: u64,
@@ -315,6 +366,8 @@ pub fn measure(stream: &str) -> Measure {
     let mut m = Measure::default();
     let mut read: BTreeSet<String> = BTreeSet::new();
     let mut after_index = false;
+    // A check of the terminal not followed by an edit yet.
+    let mut checked = false;
     // A call's id: its tool, and whether it is the index's.
     let mut ids: BTreeMap<String, (String, bool)> = BTreeMap::new();
     for line in stream.lines() {
@@ -357,6 +410,11 @@ pub fn measure(stream: &str) -> Measure {
                         continue;
                     }
                     match name.as_str() {
+                        "Bash" => checked = true,
+                        "Edit" | "Write" if checked => {
+                            m.cycles += 1;
+                            checked = false;
+                        }
                         "Grep" if after_index => m.regreps += 1,
                         "Glob" if after_index => m.globs_after += 1,
                         "Read" => {
@@ -385,6 +443,9 @@ pub fn measure(stream: &str) -> Measure {
                     };
                     let tokens = super::super::tokens_of(result_text(&b["content"]).len() as u64);
                     *m.result_tokens.entry(name.clone()).or_default() += tokens;
+                    if name == "Bash" && b["is_error"] == true {
+                        m.checks_failed += 1;
+                    }
                     if *index {
                         m.index_tokens += tokens;
                     }
@@ -430,9 +491,19 @@ pub fn measure(stream: &str) -> Measure {
 pub struct Run {
     pub task: String,
     pub mode: String,
+    /// The model, when the bench has several (IDX-6).
+    pub model: String,
     pub pass: u32,
     pub ok: bool,
     pub why: String,
+    /// A change at many places (IDX-6): its places, those still missed at the agent's first
+    /// check (none when it never checked) and at its end, and its checks.
+    pub places: u32,
+    pub missed_first: Option<u32>,
+    pub missed_end: u32,
+    pub checks: u32,
+    /// The commands of the terminal refused as no check (`ls`, `grep`…).
+    pub refused: u32,
     /// Wall clock, from the launch to the end of the process.
     pub wall_ms: u64,
     /// The searches the hook saw, and those it answered.
@@ -454,6 +525,7 @@ pub fn cli(args: Vec<String>) -> i32 {
     let done = match command {
         "serve" => serve_cli(&rest),
         "hook" => hook_cli(&rest),
+        "snap" => snap_cli(&rest),
         "run" => run_cli(&rest),
         "report" => report_cli(&rest),
         "check" => check_cli(&rest),
@@ -506,7 +578,34 @@ fn hook_cli(args: &[String]) -> Result<()> {
     Ok(())
 }
 
+/// The hook before each command of the agent's terminal (IDX-6): writes what its copy still
+/// misses of the change, says nothing to the agent.
+fn snap_cli(args: &[String]) -> Result<()> {
+    let o = options(args)?;
+    let get = |k: &str| o.get(k).ok_or_else(|| anyhow!("--{k}"));
+    let file = PathBuf::from(get("bench")?);
+    let bench: Bench = serde_json::from_str(&std::fs::read_to_string(&file)?)?;
+    let id = get("task")?;
+    let t = bench
+        .tasks
+        .iter()
+        .find(|t| &t.id == id)
+        .ok_or_else(|| anyhow!("no task {id}"))?;
+    let m = t
+        .multi
+        .as_ref()
+        .ok_or_else(|| anyhow!("{id} is no change at many places"))?;
+    let mut input = String::new();
+    std::io::stdin().read_to_string(&mut input)?;
+    let dir = Path::new(get("dir")?);
+    if let Some(reply) = multi::snap(m, dir, &input, Path::new(get("log")?), &bench.terminal)? {
+        println!("{reply}");
+    }
+    Ok(())
+}
+
 struct Paths {
+    file: PathBuf,
     repo: PathBuf,
     bench: Bench,
     out: PathBuf,
@@ -535,6 +634,7 @@ fn paths(o: &BTreeMap<String, String>) -> Result<Paths> {
         .unwrap_or_else(|| std::env::temp_dir().join("escouade-codeindex-agents"));
     // The runs' files are named to a Claude Code that works in the copy.
     Ok(Paths {
+        file: here.join(file),
         repo,
         bench,
         out: here.join(out),
@@ -552,8 +652,10 @@ struct Copy {
 }
 
 impl Copy {
-    fn of(p: &Paths, mode: Mode) -> Result<Copy> {
-        let root = p.root.join(mode.name());
+    /// The copy of the lane `lane` (a mode, or a mode and a model), in its folder of the root. Its
+    /// files keep the commit's line ends (`core.autocrlf` off), as the patches of the checks do.
+    fn of(p: &Paths, mode: Mode, lane: &str) -> Result<Copy> {
+        let root = p.root.join(lane);
         let dir = root.join("repo");
         let commit = p.bench.commit.clone();
         std::fs::create_dir_all(&root)?;
@@ -565,6 +667,8 @@ impl Copy {
                     &[
                         "clone",
                         "--quiet",
+                        "--config",
+                        "core.autocrlf=false",
                         "--shared",
                         "--no-checkout",
                         &p.repo.to_string_lossy(),
@@ -588,6 +692,8 @@ impl Copy {
             git(
                 &p.repo,
                 &[
+                    "-c",
+                    "core.autocrlf=false",
                     "archive",
                     "--format=tar",
                     "-o",
@@ -643,7 +749,7 @@ impl Copy {
                 &self.dir,
                 &["checkout", "--quiet", "--force", "--detach", &self.commit],
             )?;
-            git(&self.dir, &["clean", "-fdxq"])?;
+            git(&self.dir, &["clean", "-fdxq", "-e", "node_modules"])?;
             return Ok(());
         };
         std::fs::create_dir_all(&self.dir)?;
@@ -671,7 +777,8 @@ enum Plain {
     Removed,
 }
 
-/// The files of `dir` under it, by their path with `/` (`.tokensave`, the index, left out).
+/// The files of `dir` under it, by their path with `/` (`.tokensave`, the index, and the copied
+/// `node_modules` left out).
 fn files_under(dir: &Path) -> Result<BTreeSet<String>> {
     fn walk(root: &Path, dir: &Path, out: &mut BTreeSet<String>) -> std::io::Result<()> {
         let Ok(entries) = std::fs::read_dir(dir) else {
@@ -681,7 +788,7 @@ fn files_under(dir: &Path) -> Result<BTreeSet<String>> {
             let e = e?;
             let path = e.path();
             if e.file_type()?.is_dir() {
-                if e.file_name() != ".tokensave" {
+                if e.file_name() != ".tokensave" && e.file_name() != "node_modules" {
                     walk(root, &path, out)?;
                 }
             } else if let Ok(rel) = path.strip_prefix(root) {
@@ -757,25 +864,109 @@ fn tokensave_ready(exe: &Path, copy: &Copy) -> Result<()> {
     Ok(())
 }
 
+/// The folder of a lane under the root: the mode's, or with several models the mode's and the
+/// model's (`grep-sonnet`).
+fn lane_of(b: &Bench, mode: Mode, model: &str) -> String {
+    if b.models.is_empty() {
+        mode.name().to_string()
+    } else {
+        format!("{}-{}", mode.name(), model_short(model))
+    }
+}
+
+/// What the checks of a change at many places need beside the copy of a lane: its cargo target,
+/// kept from run to run out of the copy, and a copy of the repository's `node_modules` in it
+/// (vite serves no file out of the project, through a link neither), which `reset` keeps and
+/// tokensave does not index.
+fn lane_ready(p: &Paths, lane: &str, copy: &Copy) -> Result<PathBuf> {
+    let modules = copy.dir.join("node_modules");
+    let ours = p.repo.join("node_modules");
+    if !modules.exists() && ours.is_dir() {
+        let out = if cfg!(windows) {
+            Command::new("robocopy")
+                .arg(&ours)
+                .arg(&modules)
+                .args(["/E", "/MT:16", "/NFL", "/NDL", "/NJH", "/NJS", "/NP"])
+                .output()
+        } else {
+            Command::new("cp")
+                .arg("-r")
+                .arg(&ours)
+                .arg(&modules)
+                .output()
+        }
+        .context("copying node_modules")?;
+        // robocopy says it copied by 1 to 7.
+        let copied = match out.status.code() {
+            Some(c) if cfg!(windows) => c < 8,
+            _ => out.status.success(),
+        };
+        if !copied {
+            bail!(
+                "copying node_modules: {}",
+                String::from_utf8_lossy(&out.stdout).trim()
+            );
+        }
+    }
+    Ok(p.root.join(lane).join("target"))
+}
+
+/// The patch of a change at many places, beside the bench's file.
+fn patch_of(p: &Paths, m: &Multi) -> PathBuf {
+    p.file
+        .parent()
+        .unwrap_or(Path::new("."))
+        .join("codeindex-agents-multi")
+        .join(&m.patch)
+}
+
 fn check_cli(args: &[String]) -> Result<()> {
     let o = options(args)?;
     let p = paths(&o)?;
     // Any mode's copy: the tokensave one puts itself back without git.
     let mode = Mode::of(o.get("mode").map_or("grep", String::as_str))?;
-    let base = Copy::of(&p, mode)?;
+    let lane = format!("check-{}", mode.name());
+    let base = Copy::of(&p, mode, &lane)?;
+    let target = lane_ready(&p, &lane, &base)?;
     let copy = base.dir.clone();
+    let only: Vec<&str> = o
+        .get("only")
+        .map(|s| s.split(',').map(str::trim).collect())
+        .unwrap_or_default();
     let mut wrong = 0;
     for t in &p.bench.tasks {
-        let (good, bad) = match &t.change {
-            None => {
+        if !only.is_empty() && !only.contains(&t.id.as_str()) {
+            continue;
+        }
+        let (good, bad) = match (&t.multi, &t.change) {
+            (Some(m), _) => {
+                let patch = patch_of(&p, m);
+                let mut tried = Vec::new();
+                for skip in [None, Some(m.bad_skip.as_str())] {
+                    base.reset()?;
+                    multi::apply(&copy, &patch, skip)?;
+                    let started = Instant::now();
+                    tried.push(multi::verify(m, &copy, &target));
+                    eprintln!(
+                        "[check] {} {}: {:.0} s",
+                        t.id,
+                        if skip.is_none() { "good" } else { "bad" },
+                        started.elapsed().as_secs_f64()
+                    );
+                }
+                base.reset()?;
+                let bad = tried.pop().unwrap_or(Ok(()));
+                (tried.pop().unwrap_or(Ok(())), bad)
+            }
+            (None, None) => {
                 let good = t.good.as_deref().ok_or_else(|| anyhow!("{}: good", t.id))?;
                 let bad = t.bad.as_deref().ok_or_else(|| anyhow!("{}: bad", t.id))?;
                 (
-                    checked(t, &copy, good).map_err(|e| e.to_string()),
-                    checked(t, &copy, bad).map_err(|e| e.to_string()),
+                    checked(t, &copy, good, &target).map_err(|e| e.to_string()),
+                    checked(t, &copy, bad, &target).map_err(|e| e.to_string()),
                 )
             }
-            Some(c) => {
+            (None, Some(c)) => {
                 let mut tried = Vec::new();
                 for e in [&t.good_edit, &t.bad_edit] {
                     let e = e
@@ -787,7 +978,7 @@ fn check_cli(args: &[String]) -> Result<()> {
                         bail!("{}: « {} » not in {}", t.id, e.from, c.file);
                     }
                     std::fs::write(&f, text.replacen(&e.from, &e.to, 1))?;
-                    tried.push(checked(t, &copy, ""));
+                    tried.push(checked(t, &copy, "", &target));
                     if base.changed()? != [c.file.clone()] {
                         bail!("{}: the change is not seen as {} alone", t.id, c.file);
                     }
@@ -804,6 +995,9 @@ fn check_cli(args: &[String]) -> Result<()> {
         if !right {
             wrong += 1;
         }
+        if let Err(why) = &good {
+            println!("    the good answer fails: {why}");
+        }
         println!(
             "{} {:<28} good: {:<4} bad: {}",
             if right { "ok " } else { "KO " },
@@ -818,10 +1012,7 @@ fn check_cli(args: &[String]) -> Result<()> {
     if wrong > 0 {
         bail!("{wrong} check(s) wrong");
     }
-    println!(
-        "{} tasks, each check takes its good answer and refuses its bad one",
-        p.bench.tasks.len()
-    );
+    println!("each check takes its good answer and refuses its bad one");
     Ok(())
 }
 
@@ -859,9 +1050,9 @@ fn run_cli(args: &[String]) -> Result<()> {
     let exe = std::env::current_exe()?;
     std::fs::create_dir_all(&p.out)?;
     let runs_file = p.out.join("runs.jsonl");
-    let done: BTreeSet<(String, String, u32)> = read_runs(&runs_file)?
+    let done: BTreeSet<(String, String, String, u32)> = read_runs(&runs_file)?
         .into_iter()
-        .map(|r| (r.task, r.mode, r.pass))
+        .map(|r| (r.task, r.mode, r.model, r.pass))
         .collect();
     let tasks: Vec<&Task> = p
         .bench
@@ -869,82 +1060,116 @@ fn run_cli(args: &[String]) -> Result<()> {
         .iter()
         .filter(|t| only.is_empty() || only.contains(&t.id))
         .collect();
+    let models: Vec<String> = match o.get("models") {
+        Some(m) => m.split(',').map(|s| s.trim().to_string()).collect(),
+        None => p.bench.models(),
+    };
+    // A run's model as `runs.jsonl` keeps it: none for a bench of one model (IDX-4's).
+    let several = !p.bench.models.is_empty();
     let appended = Mutex::new(());
     std::thread::scope(|s| -> Result<()> {
         let mut handles = Vec::new();
         for &mode in &modes {
-            let (p, tasks, done, appended, runs_file, claude, exe, tokensave_exe) = (
-                &p,
-                &tasks,
-                &done,
-                &appended,
-                &runs_file,
-                &claude,
-                &exe,
-                &tokensave_exe,
-            );
-            handles.push(s.spawn(move || -> Result<()> {
-                let copy = Copy::of(p, mode)?;
-                let data = p.root.join(mode.name()).join("data");
-                let server = match (mode, tokensave_exe) {
-                    (Mode::Tokensave, Some(ts)) => {
-                        eprintln!("[tokensave] indexing the copy…");
+            for model in &models {
+                let (p, tasks, done, appended, runs_file, claude, exe, tokensave_exe) = (
+                    &p,
+                    &tasks,
+                    &done,
+                    &appended,
+                    &runs_file,
+                    &claude,
+                    &exe,
+                    &tokensave_exe,
+                );
+                handles.push(s.spawn(move || -> Result<()> {
+                    let lane = lane_of(&p.bench, mode, model);
+                    let copy = Copy::of(p, mode, &lane)?;
+                    let target = lane_ready(p, &lane, &copy)?;
+                    // The lane's cargo target built before its first run, which would else pay
+                    // for it.
+                    if !p.bench.terminal.is_empty() && !target.exists() {
+                        eprintln!("[{lane}] warming its cargo target…");
+                        for line in [
+                            "cargo check --manifest-path src-tauri/Cargo.toml --lib --tests",
+                            "cargo test --manifest-path src-tauri/Cargo.toml --lib --no-run",
+                        ] {
+                            multi::shell(line)
+                                .current_dir(&copy.dir)
+                                .env("CARGO_TARGET_DIR", &target)
+                                .stdin(Stdio::null())
+                                .stdout(Stdio::null())
+                                .stderr(Stdio::null())
+                                .status()
+                                .with_context(|| line.to_string())?;
+                        }
+                    }
+                    let data = p.root.join(&lane).join("data");
+                    let server = match (mode, tokensave_exe) {
+                        (Mode::Tokensave, Some(ts)) => {
+                            eprintln!("[{lane}] tokensave indexing the copy…");
+                            let t = Instant::now();
+                            tokensave_ready(ts, &copy)?;
+                            eprintln!("[{lane}] ready in {:.0} s", t.elapsed().as_secs_f64());
+                            ts.clone()
+                        }
+                        _ => exe.clone(),
+                    };
+                    if mode.escouade() {
+                        eprintln!("[{lane}] indexing the copy…");
                         let t = Instant::now();
-                        tokensave_ready(ts, &copy)?;
-                        eprintln!("[tokensave] ready in {:.0} s", t.elapsed().as_secs_f64());
-                        ts.clone()
+                        let svc =
+                            super::super::Service::new(crate::paths::DataDir::new(data.clone()));
+                        svc.ensure_fresh(&agents_mcp::target(&copy.dir), false)?;
+                        eprintln!("[{lane}] indexed in {:.0} s", t.elapsed().as_secs_f64());
                     }
-                    _ => exe.clone(),
-                };
-                if mode.escouade() {
-                    eprintln!("[{}] indexing the copy…", mode.name());
-                    let t = Instant::now();
-                    let svc = super::super::Service::new(crate::paths::DataDir::new(data.clone()));
-                    svc.ensure_fresh(&agents_mcp::target(&copy.dir), false)?;
-                    eprintln!(
-                        "[{}] indexed in {:.0} s",
-                        mode.name(),
-                        t.elapsed().as_secs_f64()
-                    );
-                }
-                for pass in 1..=passes {
-                    for t in tasks.iter() {
-                        if done.contains(&(t.id.clone(), mode.name().to_string(), pass)) {
-                            continue;
-                        }
-                        let run = play(p, t, mode, pass, &copy, &data, claude, &server)?;
-                        // tokensave's index followed the agent's change: back to the commit's.
-                        if let (Mode::Tokensave, Some(ts), false) =
-                            (mode, tokensave_exe, run.changed.is_empty())
-                        {
-                            copy.reset()?;
-                            tokensave(ts, &copy.dir, &["sync"])?;
-                        }
-                        eprintln!(
-                            "[{}] {} #{pass}: {} · {} calls · {} tokens · {:.3} $ · {:.0} s{}",
-                            mode.name(),
-                            t.id,
-                            if run.ok { "ok" } else { "KO" },
-                            run.m.tool_calls,
-                            run.m.tokens(),
-                            run.m.cost_usd,
-                            run.wall_ms as f64 / 1000.0,
-                            if run.ok {
-                                String::new()
-                            } else {
-                                format!(" ({})", run.why)
+                    let kept = if several { model.clone() } else { String::new() };
+                    for pass in 1..=passes {
+                        for t in tasks.iter() {
+                            let key = (t.id.clone(), mode.name().to_string(), kept.clone(), pass);
+                            if done.contains(&key) {
+                                continue;
                             }
-                        );
-                        let _guard = appended.lock().unwrap_or_else(|e| e.into_inner());
-                        let mut f = std::fs::OpenOptions::new()
-                            .create(true)
-                            .append(true)
-                            .open(runs_file)?;
-                        writeln!(f, "{}", serde_json::to_string(&run)?)?;
+                            let lane_ = Lane {
+                                copy: &copy,
+                                data: &data,
+                                target: &target,
+                                server: &server,
+                                model,
+                                kept: &kept,
+                            };
+                            let run = play(p, t, mode, pass, &lane_, claude)?;
+                            // tokensave's index followed the agent's change: back to the commit's.
+                            if let (Mode::Tokensave, Some(ts), false) =
+                                (mode, tokensave_exe, run.changed.is_empty())
+                            {
+                                copy.reset()?;
+                                tokensave(ts, &copy.dir, &["sync"])?;
+                            }
+                            eprintln!(
+                                "[{lane}] {} #{pass}: {} · {} calls · {} tokens · {:.3} $ · {:.0} s{}",
+                                t.id,
+                                if run.ok { "ok" } else { "KO" },
+                                run.m.tool_calls,
+                                run.m.tokens(),
+                                run.m.cost_usd,
+                                run.wall_ms as f64 / 1000.0,
+                                if run.ok {
+                                    String::new()
+                                } else {
+                                    format!(" ({})", run.why)
+                                }
+                            );
+                            let _guard = appended.lock().unwrap_or_else(|e| e.into_inner());
+                            let mut f = std::fs::OpenOptions::new()
+                                .create(true)
+                                .append(true)
+                                .open(runs_file)?;
+                            writeln!(f, "{}", serde_json::to_string(&run)?)?;
+                        }
                     }
-                }
-                copy.reset()
-            }));
+                    copy.reset()
+                }));
+            }
         }
         for h in handles {
             h.join()
@@ -957,7 +1182,9 @@ fn run_cli(args: &[String]) -> Result<()> {
 
 /// The prompt of a task, with what its kind asks of the answer.
 fn prompt_of(b: &Bench, t: &Task) -> String {
-    let rule = if t.change.is_some() {
+    let rule = if t.multi.is_some() {
+        &b.multi_rule
+    } else if t.change.is_some() {
         &b.change_rule
     } else {
         &b.answer_rule
@@ -965,36 +1192,58 @@ fn prompt_of(b: &Bench, t: &Task) -> String {
     format!("{}\n\n{rule}", t.prompt)
 }
 
-#[allow(clippy::too_many_arguments)]
-fn play(
-    p: &Paths,
-    t: &Task,
-    mode: Mode,
-    pass: u32,
-    c: &Copy,
-    data: &Path,
-    claude: &str,
-    server: &Path,
-) -> Result<Run> {
+/// Where a lane plays: its copy, its index's data, its cargo target, the index's server and the
+/// model (as `runs.jsonl` keeps it: `kept`).
+struct Lane<'a> {
+    copy: &'a Copy,
+    data: &'a Path,
+    target: &'a Path,
+    server: &'a Path,
+    model: &'a str,
+    kept: &'a str,
+}
+
+fn play(p: &Paths, t: &Task, mode: Mode, pass: u32, lane: &Lane, claude: &str) -> Result<Run> {
+    let (c, data, server) = (lane.copy, lane.data, lane.server);
     c.reset()?;
     let copy = c.dir.as_path();
-    let dir = p
-        .out
-        .join("runs")
-        .join(format!("{}.{}.{pass}", t.id, mode.name()));
+    let name = if lane.kept.is_empty() {
+        format!("{}.{}.{pass}", t.id, mode.name())
+    } else {
+        format!("{}.{}.{}.{pass}", t.id, mode.name(), model_short(lane.kept))
+    };
+    let dir = p.out.join("runs").join(name);
     let _ = remove_all(&dir);
     std::fs::create_dir_all(&dir)?;
     let calls_log = dir.join("calls.jsonl");
     let hook_log = dir.join("hook.jsonl");
+    let snap_log = dir.join("snap.jsonl");
     let exe_s = server.to_string_lossy().replace('\\', "/");
-    let mut settings = json!({ "autoMemoryEnabled": false });
+    let slash = |p: &Path| p.to_string_lossy().replace('\\', "/");
+    let mut pre = Vec::new();
     if mode == Mode::IndexHook {
-        let command = format!(
-            "\"{exe_s}\" hook --log \"{}\"",
-            hook_log.to_string_lossy().replace('\\', "/")
+        let command = format!("\"{exe_s}\" hook --log \"{}\"", slash(&hook_log));
+        pre.push(
+            json!({ "matcher": "Grep|Bash", "hooks": [{ "type": "command", "command": command }] }),
         );
-        settings["hooks"] = json!({ "PreToolUse": [{ "matcher": "Grep|Bash",
-            "hooks": [{ "type": "command", "command": command }] }] });
+    }
+    // Before each check of the terminal, what the copy still misses (said to no one).
+    if t.multi.is_some() {
+        let command = format!(
+            "\"{}\" snap --bench \"{}\" --task {} --dir \"{}\" --log \"{}\"",
+            slash(&std::env::current_exe()?),
+            slash(&p.file),
+            t.id,
+            slash(copy),
+            slash(&snap_log)
+        );
+        pre.push(
+            json!({ "matcher": "Bash", "hooks": [{ "type": "command", "command": command }] }),
+        );
+    }
+    let mut settings = json!({ "autoMemoryEnabled": false });
+    if !pre.is_empty() {
+        settings["hooks"] = json!({ "PreToolUse": pre });
     }
     let settings_file = dir.join("settings.json");
     std::fs::write(&settings_file, serde_json::to_string_pretty(&settings)?)?;
@@ -1013,8 +1262,19 @@ fn play(
     )?;
     let prompt = prompt_of(&p.bench, t);
     std::fs::write(dir.join("prompt.txt"), &prompt)?;
+    // The places of a change at many places: what the copy misses before the agent starts.
+    let places = t
+        .multi
+        .as_ref()
+        .map_or(0, |mu| multi::missed(mu, copy).total());
 
-    let mut allowed: Vec<String> = mode.tools().iter().map(|s| s.to_string()).collect();
+    let mut tools: Vec<String> = mode.tools().iter().map(|s| s.to_string()).collect();
+    let mut allowed = tools.clone();
+    // A terminal for the checks alone (IDX-6): any other command is refused.
+    if !p.bench.terminal.is_empty() {
+        tools.push("Bash".into());
+        allowed.extend(p.bench.terminal.iter().map(|c| format!("Bash({c}:*)")));
+    }
     if mode.escouade() {
         allowed.extend(INDEX_TOOLS.iter().map(|n| format!("{MCP_PREFIX}{n}")));
     }
@@ -1027,14 +1287,14 @@ fn play(
         .arg("-p")
         .arg(&prompt)
         .args(["--output-format", "stream-json", "--verbose"])
-        .args(["--model", &p.bench.model, "--effort", &p.bench.effort])
+        .args(["--model", lane.model, "--effort", &p.bench.effort])
         .args(["--setting-sources", "project"])
         .arg("--settings")
         .arg(&settings_file)
         .arg("--mcp-config")
         .arg(&mcp_file)
         .arg("--strict-mcp-config")
-        .args(["--tools", &mode.tools().join(",")])
+        .args(["--tools", &tools.join(",")])
         .args(["--allowedTools", &allowed.join(",")])
         .args(["--permission-mode", "dontAsk", "--no-session-persistence"]);
     match mode {
@@ -1056,7 +1316,9 @@ fn play(
             cmd.env_remove(&k);
         }
     }
+    // The checks' cargo target, the lane's, kept from run to run.
     cmd.env("DISABLE_AUTOUPDATER", "1")
+        .env("CARGO_TARGET_DIR", lane.target)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -1093,7 +1355,7 @@ fn play(
     let stderr = err_reader.join().unwrap_or_default();
     std::fs::write(dir.join("stream.jsonl"), &stream)?;
     std::fs::write(dir.join("stderr.txt"), &stderr)?;
-    let m = measure(&stream);
+    let mut m = measure(&stream);
     let verdict = if timed_out {
         Err(format!("timed out after {} s", p.bench.timeout_s))
     } else if m.stop.is_empty() {
@@ -1102,18 +1364,47 @@ fn play(
             stderr.trim().chars().take(200).collect::<String>()
         ))
     } else {
-        checked(t, copy, &m.result)
+        checked(t, copy, &m.result, lane.target)
+    };
+    // A change at many places: what was missed at the first check, and at the end.
+    let snaps = jsonl(&snap_log);
+    let refused = snaps.iter().filter(|v| v["refused"] == true).count() as u32;
+    // A refused command comes back as an error: no check that failed.
+    m.checks_failed = m.checks_failed.saturating_sub(refused);
+    let (places, missed_first, missed_end) = match &t.multi {
+        Some(mu) => (
+            places,
+            snaps.iter().find(|v| v["refused"] != true).map(|v| {
+                (v["places"].as_u64().unwrap_or_default() + v["left"].as_u64().unwrap_or_default())
+                    as u32
+            }),
+            multi::missed(mu, copy).total(),
+        ),
+        None => (0, None, 0),
     };
     let changed = c.changed()?;
+    // What the agent changed, to be read by hand (a git copy's).
+    if c.pristine.is_none() {
+        if let Ok(diff) = git(copy, &["diff", "HEAD"]) {
+            std::fs::write(dir.join("changes.diff"), diff)?;
+        }
+    }
     let hooked = jsonl(&hook_log);
     let hook_events = hooked.len() as u32;
     let hooks = hooked.iter().filter(|v| v["answered"] == true).count() as u32;
     let run = Run {
         task: t.id.clone(),
         mode: mode.name().into(),
+        model: lane.kept.to_string(),
         pass,
         ok: verdict.is_ok(),
         why: verdict.err().unwrap_or_default(),
+        places,
+        missed_first,
+        missed_end,
+        // The commands that ran: those the hook let through.
+        checks: m.calls.get("Bash").copied().unwrap_or_default() - refused,
+        refused,
         wall_ms,
         hook_events,
         hooks,
@@ -1189,6 +1480,16 @@ pub struct Totals {
     pub hooks: u32,
     /// Runs that called the index and then searched or read the files anyway.
     pub completed: u32,
+    /// Changes at many places (IDX-6): their places, those missed at the first check (of the
+    /// runs that checked) and at the end, the checks, the failed ones, the cycles, the refusals.
+    pub places: u32,
+    pub missed_first: u32,
+    pub checked: u32,
+    pub missed_end: u32,
+    pub checks: u32,
+    pub checks_failed: u32,
+    pub cycles: u32,
+    pub denials: u32,
 }
 
 impl Totals {
@@ -1221,6 +1522,16 @@ impl Totals {
             t.hook_events += r.hook_events;
             t.hooks += r.hooks;
             t.completed += u32::from(completed(r));
+            t.places += r.places;
+            if let Some(n) = r.missed_first {
+                t.missed_first += n;
+                t.checked += 1;
+            }
+            t.missed_end += r.missed_end;
+            t.checks += r.checks;
+            t.checks_failed += r.m.checks_failed;
+            t.cycles += r.m.cycles;
+            t.denials += r.m.denials + r.refused;
         }
         t
     }
@@ -1254,7 +1565,10 @@ pub fn markdown(b: &Bench, runs: &[Run]) -> String {
         "{} runs · {} tasks · model {} ({}) · commit {}\n\n",
         runs.len(),
         runs.iter().map(|r| &r.task).collect::<BTreeSet<_>>().len(),
-        b.model,
+        runs.first()
+            .map(|r| r.model.as_str())
+            .filter(|m| !m.is_empty())
+            .unwrap_or(&b.model),
         b.effort,
         b.commit
     ));
@@ -1289,6 +1603,19 @@ pub fn markdown(b: &Bench, runs: &[Run]) -> String {
         format!("{} / {}", t.globs_after, t.reads_after)
     }));
     s.push_str(&row("Rereads", &|t| t.rereads.to_string()));
+    if runs.iter().any(|r| r.places > 0) {
+        s.push_str(&row("Places to reach", &|t| t.places.to_string()));
+        s.push_str(&row(
+            "Missed at the first check (runs that checked)",
+            &|t| format!("{} ({})", t.missed_first, t.checked),
+        ));
+        s.push_str(&row("Missed at the end", &|t| t.missed_end.to_string()));
+        s.push_str(&row("Checks of the terminal (failed)", &|t| {
+            format!("{} ({})", t.checks, t.checks_failed)
+        }));
+        s.push_str(&row("Cycles check → fix", &|t| t.cycles.to_string()));
+        s.push_str(&row("Commands refused", &|t| t.denials.to_string()));
+    }
     s.push_str(&row("Runs completed after the index", &|t| {
         format!("{} / {}", t.completed, t.runs)
     }));
@@ -1387,6 +1714,30 @@ pub fn markdown(b: &Bench, runs: &[Run]) -> String {
         }
     }
 
+    if runs.iter().any(|r| r.places > 0) {
+        s.push_str("\n#### Changes at many places, run by run\n\nThe places still missed when the agent first ran a check (— when it never did) and at its end, its checks (failed), its cycles « check → fix » and the commands refused.\n\n| Task | Mode | # | Right | Places | Missed first | Missed end | Checks (failed) | Cycles | Refused |\n|---|---|---|---|---|---|---|---|---|---|\n");
+        for t in &b.tasks {
+            for m in &modes {
+                for r in runs.iter().filter(|r| r.task == t.id && r.mode == *m) {
+                    s.push_str(&format!(
+                        "| {} | {} | {} | {} | {} | {} | {} | {} ({}) | {} | {} |\n",
+                        r.task,
+                        r.mode,
+                        r.pass,
+                        if r.ok { "yes" } else { "no" },
+                        r.places,
+                        r.missed_first.map_or("—".to_string(), |n| n.to_string()),
+                        r.missed_end,
+                        r.checks,
+                        r.m.checks_failed,
+                        r.m.cycles,
+                        r.m.denials + r.refused
+                    ));
+                }
+            }
+        }
+    }
+
     s.push_str("\n#### Completed after the index\n\nThe runs that called the index, then searched or read the files anyway (Grep, Glob, Read after its first call).\n\n| Task | Mode | # | Index calls | Grep / Glob / Read after |\n|---|---|---|---|---|\n");
     for r in runs.iter().filter(|r| completed(r)) {
         s.push_str(&format!(
@@ -1427,7 +1778,19 @@ fn report(p: &Paths, runs_file: &Path) -> Result<()> {
     let mut runs = read_runs(runs_file)?;
     std::fs::create_dir_all(&p.out)?;
     let changed = rescored(&p.bench, &mut runs);
-    let mut md = markdown(&p.bench, &runs);
+    // A section by model when the bench has several (IDX-6).
+    let mut md = if p.bench.models.is_empty() {
+        markdown(&p.bench, &runs)
+    } else {
+        let mut md = String::new();
+        for model in p.bench.models() {
+            let of: Vec<Run> = runs.iter().filter(|r| r.model == model).cloned().collect();
+            if !of.is_empty() {
+                md.push_str(&format!("### {model}\n\n{}\n", markdown(&p.bench, &of)));
+            }
+        }
+        md
+    };
     if !changed.is_empty() {
         md.push_str("\n#### Checked again\n\nThe runs whose verdict changed with a check widened after their answers were read.\n\n| Task | Mode | # | At the run | Now | Why |\n|---|---|---|---|---|---|\n");
         for r in &changed {
@@ -1509,6 +1872,51 @@ mod tests {
                     assert!(t.good_edit.is_some() && t.bad_edit.is_some(), "{}", t.id);
                 }
             }
+        }
+    }
+
+    #[test]
+    fn the_bench_of_idx6_has_ten_changes_of_five_places_or_more_in_two_files_or_more() {
+        let docs = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("docs");
+        let b: Bench = serde_json::from_str(
+            &std::fs::read_to_string(docs.join("codeindex-agents-multi.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(b.tasks.len(), 10);
+        assert_eq!(b.models(), ["claude-sonnet-5-5", "claude-haiku-5-5"]);
+        assert!(b.terminal.iter().all(|c| c.starts_with("cargo ")
+            || c.starts_with("npm run check")
+            || c.starts_with("npx vitest")
+            || c.starts_with("node sdk/")));
+        for t in &b.tasks {
+            let m = t.multi.as_ref().unwrap();
+            assert!(!m.commands.is_empty(), "{}", t.id);
+            // The good answer touches the files of the places and of the old names, two or more,
+            // and the bad one leaves one of them out.
+            let patch = std::fs::read_to_string(docs.join("codeindex-agents-multi").join(&m.patch))
+                .unwrap();
+            let touched: BTreeSet<&str> = patch
+                .lines()
+                .filter_map(|l| l.strip_prefix("+++ b/"))
+                .collect();
+            assert!(touched.len() >= 2, "{}", t.id);
+            assert!(touched.contains(m.bad_skip.as_str()), "{}", t.id);
+            for f in m
+                .places
+                .iter()
+                .map(|p| &p.file)
+                .chain(m.gone.iter().flat_map(|g| &g.files))
+            {
+                assert!(touched.contains(f.as_str()), "{}: {f}", t.id);
+            }
+            // Five places or more: the hunks' lines changed.
+            let lines = patch
+                .lines()
+                .filter(|l| l.starts_with('+') && !l.starts_with("+++"))
+                .count();
+            assert!(lines >= 5, "{}", t.id);
         }
     }
 

@@ -1,0 +1,131 @@
+diff --git a/schemas/plugin-protocol-1.json b/schemas/plugin-protocol-1.json
+index 0db48fbe..03995e3d 100644
+--- a/schemas/plugin-protocol-1.json
++++ b/schemas/plugin-protocol-1.json
+@@ -140,7 +140,7 @@
+         "app.started",
+         "docs.written",
+         "docs.filed",
+-        "docs.gaps",
++        "docs.compared",
+         "memory.written",
+         "memory.forgotten",
+         "decision.proposed",
+diff --git a/sdk/plugin/src/protocol.ts b/sdk/plugin/src/protocol.ts
+index ed9d0974..16796671 100644
+--- a/sdk/plugin/src/protocol.ts
++++ b/sdk/plugin/src/protocol.ts
+@@ -31,7 +31,7 @@ export type FactName =
+   | 'app.started'
+   | 'docs.written'
+   | 'docs.filed'
+-  | 'docs.gaps'
++  | 'docs.compared'
+   | 'memory.written'
+   | 'memory.forgotten'
+   | 'decision.proposed'
+@@ -180,7 +180,7 @@ export const FACT_NAMES: readonly FactName[] = [
+   'app.started',
+   'docs.written',
+   'docs.filed',
+-  'docs.gaps',
++  'docs.compared',
+   'memory.written',
+   'memory.forgotten',
+   'decision.proposed',
+diff --git a/src-tauri/src/docscompare.rs b/src-tauri/src/docscompare.rs
+index 10b99889..16c5f53f 100644
+--- a/src-tauri/src/docscompare.rs
++++ b/src-tauri/src/docscompare.rs
+@@ -413,7 +413,7 @@ impl<R: Runtime> Core<R> {
+         let when = chrono::Local::now()
+             .format("%Y-%m-%dT%H:%M:%S%:z")
+             .to_string();
+-        // What the comparison finds is its gaps, not the page: `docs.gaps` says it. Kept in
++        // What the comparison finds is its gaps, not the page: `docs.compared` says it. Kept in
+         // Escouade's folder, the page left as it is (ESC-301).
+         let quiet = Space {
+             facts: None,
+diff --git a/src-tauri/src/facts.rs b/src-tauri/src/facts.rs
+index 5c8745f0..4baa7deb 100644
+--- a/src-tauri/src/facts.rs
++++ b/src-tauri/src/facts.rs
+@@ -126,7 +126,7 @@ pub enum Body {
+     #[serde(rename = "docs.filed")]
+     DocsFiled { pages: usize },
+     /// A page of the docs was compared to the code: how many gaps were found.
+-    #[serde(rename = "docs.gaps")]
++    #[serde(rename = "docs.compared")]
+     DocsGaps { page: String, gaps: usize },
+     /// A memory of the project was written (`new`: it was not there).
+     #[serde(rename = "memory.written")]
+@@ -181,7 +181,7 @@ pub const NAMES: &[&str] = &[
+     "app.started",
+     "docs.written",
+     "docs.filed",
+-    "docs.gaps",
++    "docs.compared",
+     "memory.written",
+     "memory.forgotten",
+     "decision.proposed",
+diff --git a/src-tauri/src/facts_tests.rs b/src-tauri/src/facts_tests.rs
+index 071dc623..8dee1057 100644
+--- a/src-tauri/src/facts_tests.rs
++++ b/src-tauri/src/facts_tests.rs
+@@ -477,7 +477,7 @@ async fn a_test_launch_the_docs_the_memory_the_decisions_and_the_start_are_facts
+                 "docs.written",
+                 "decision.proposed",
+                 "decision.accepted",
+-                "docs.gaps",
++                "docs.compared",
+                 "memory.written",
+                 "memory.forgotten",
+                 "app.started",
+@@ -498,7 +498,7 @@ async fn a_test_launch_the_docs_the_memory_the_decisions_and_the_start_are_facts
+         .collect();
+     assert_eq!(written, [&json!({ "page": "paiement/echeances" })]);
+     assert_eq!(
+-        of(&facts, "docs.gaps")[0]["data"],
++        of(&facts, "docs.compared")[0]["data"],
+         json!({ "page": "paiement/echeances", "gaps": 1 })
+     );
+     assert_eq!(
+diff --git a/website/content/docs/en/plugins/events.md b/website/content/docs/en/plugins/events.md
+index e07f5167..e007c1ee 100644
+--- a/website/content/docs/en/plugins/events.md
++++ b/website/content/docs/en/plugins/events.md
+@@ -59,7 +59,7 @@ A fact **never carries the conversation**: a plugin learns that a turn is over a
+ | `launch.stopped`     | It stops.                                                                               |                                                                                                                                                          |
+ | `docs.written`       | A page of the docs is written.                                                          | `page`                                                                                                                                                   |
+ | `docs.filed`         | A ticket’s copy of the docs is poured on the docs’ branch, at its validation.           | `pages`                                                                                                                                                  |
+-| `docs.gaps`          | A page is compared to the code.                                                         | `page`, `gaps` (how many gaps)                                                                                                                           |
++| `docs.compared`          | A page is compared to the code.                                                         | `page`, `gaps` (how many gaps)                                                                                                                           |
+ | `memory.written`     | A memory of the project’s memory is written.                                            | `memory`, `new`                                                                                                                                          |
+ | `memory.forgotten`   | It is forgotten.                                                                        | `memory`                                                                                                                                                 |
+ | `decision.proposed`  | A decision is proposed or revised.                                                      | `id` (no number yet), `title`                                                                                                                                |
+diff --git a/website/content/docs/fr/plugins/events.md b/website/content/docs/fr/plugins/events.md
+index 3f970ee2..c5fc796d 100644
+--- a/website/content/docs/fr/plugins/events.md
++++ b/website/content/docs/fr/plugins/events.md
+@@ -59,7 +59,7 @@ Un fait ne porte **jamais la conversation** : un plugin apprend qu’un tour est
+ | `launch.stopped`     | Il s’arrête.                                                                                        |                                                                                                                                                       |
+ | `docs.written`       | Une page des docs est écrite.                                                                       | `page`                                                                                                                                                |
+ | `docs.filed`         | La copie des docs d’un ticket est versée sur la branche des docs, à sa validation.                  | `pages`                                                                                                                                               |
+-| `docs.gaps`          | Une page est comparée au code.                                                                      | `page`, `gaps` (le nombre d’écarts)                                                                                                                   |
++| `docs.compared`          | Une page est comparée au code.                                                                      | `page`, `gaps` (le nombre d’écarts)                                                                                                                   |
+ | `memory.written`     | Un souvenir de la mémoire du projet est écrit.                                                      | `memory`, `new`                                                                                                                                       |
+ | `memory.forgotten`   | Il est oublié.                                                                                      | `memory`                                                                                                                                              |
+ | `decision.proposed`  | Une décision est proposée ou révisée.                                                               | `id` (pas encore de numéro), `title`                                                                                                                             |
+diff --git a/website/public/schemas/plugin-protocol-1.json b/website/public/schemas/plugin-protocol-1.json
+index 0db48fbe..03995e3d 100644
+--- a/website/public/schemas/plugin-protocol-1.json
++++ b/website/public/schemas/plugin-protocol-1.json
+@@ -140,7 +140,7 @@
+         "app.started",
+         "docs.written",
+         "docs.filed",
+-        "docs.gaps",
++        "docs.compared",
+         "memory.written",
+         "memory.forgotten",
+         "decision.proposed",

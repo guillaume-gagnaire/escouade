@@ -26,6 +26,7 @@
 
 pub mod agents;
 pub mod agents_mcp;
+pub mod multi;
 pub mod score;
 pub mod suffice;
 pub mod tokensave;

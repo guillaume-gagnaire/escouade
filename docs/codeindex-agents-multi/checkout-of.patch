@@ -1,0 +1,119 @@
+diff --git a/src-tauri/src/agentbranch.rs b/src-tauri/src/agentbranch.rs
+index 0ce2a04f..e16d34d9 100644
+--- a/src-tauri/src/agentbranch.rs
++++ b/src-tauri/src/agentbranch.rs
+@@ -227,7 +227,7 @@ impl<R: Runtime> Core<R> {
+             bail!(crate::core::target_branch_refusal(i18n::ui()));
+         }
+         if let Some(local) = git::local_of(&root, name).await? {
+-            if let Some(path) = git::checkout_of(&root, &local).await? {
++            if let Some(path) = git::branch_checkout(&root, &local).await? {
+                 if crate::tickets::same_dir(&path, &project.path) {
+                     bail!(tr!(
+                         "La branche « {local} » est celle du dossier du projet : change d’abord la sienne.",
+diff --git a/src-tauri/src/core.rs b/src-tauri/src/core.rs
+index 27f58d83..a542cab3 100644
+--- a/src-tauri/src/core.rs
++++ b/src-tauri/src/core.rs
+@@ -6799,7 +6799,7 @@ impl<R: Runtime> Core<R> {
+         let mut moved = None;
+         if Path::new(&wt.path).exists() {
+             // Its own, still there: nothing to do.
+-            let ours = git::checkout_of(&project.path, &wt.branch)
++            let ours = git::branch_checkout(&project.path, &wt.branch)
+                 .await
+                 .ok()
+                 .flatten()
+@@ -9646,7 +9646,7 @@ impl<R: Runtime> Core<R> {
+     /// True when the folder `root` itself has `branch` checked out; refused when another worktree
+     /// has it: an agent's (`IN_WORKTREE`), or one of no agent (said in words).
+     pub(crate) async fn checked_out_here(&self, root: &str, branch: &str) -> Result<bool> {
+-        let Some(path) = git::checkout_of(root, branch).await? else {
++        let Some(path) = git::branch_checkout(root, branch).await? else {
+             return Ok(false);
+         };
+         if crate::tickets::same_dir(&path, root) {
+diff --git a/src-tauri/src/docsbranch.rs b/src-tauri/src/docsbranch.rs
+index 9384b268..6cb83d46 100644
+--- a/src-tauri/src/docsbranch.rs
++++ b/src-tauri/src/docsbranch.rs
+@@ -136,7 +136,7 @@ impl<R: Runtime> Core<R> {
+         let _one = MAKING.lock().await;
+         let repo = base_of(project).to_string_lossy().to_string();
+         crate::git::check_ref_format(branch).await?;
+-        if let Some(at) = crate::git::checkout_of(&repo, branch).await? {
++        if let Some(at) = crate::git::branch_checkout(&repo, branch).await? {
+             if Path::new(&at).is_dir() {
+                 return Ok(PathBuf::from(at));
+             }
+diff --git a/src-tauri/src/git.rs b/src-tauri/src/git.rs
+index 4337cc8d..1237a5ff 100644
+--- a/src-tauri/src/git.rs
++++ b/src-tauri/src/git.rs
+@@ -1453,7 +1453,7 @@ pub async fn fast_forward_branch(repo: &str, branch: &str, to: &str) -> Result<(
+             to = short_ref(to)
+         ));
+     }
+-    if let Some(path) = checkout_of(repo, branch).await? {
++    if let Some(path) = branch_checkout(repo, branch).await? {
+         bail!(tr!(
+             "« {branch} » est extraite dans {path}",
+             "“{branch}” is checked out in {path}"
+@@ -1479,7 +1479,7 @@ pub async fn worktree_paths(repo: &str) -> Result<Vec<String>> {
+ }
+ 
+ /// Where `branch` is checked out: the folder of the worktree that has it (the main one included).
+-pub async fn checkout_of(repo: &str, branch: &str) -> Result<Option<String>> {
++pub async fn branch_checkout(repo: &str, branch: &str) -> Result<Option<String>> {
+     let out = text(repo, &["worktree", "list", "--porcelain"]).await?;
+     let want = format!("branch refs/heads/{branch}");
+     let mut path = None;
+@@ -3943,9 +3943,9 @@ mod repo_tests {
+         let same = |a: &str, b: &str| {
+             Path::new(a).canonicalize().unwrap() == Path::new(b).canonicalize().unwrap()
+         };
+-        assert!(same(&checkout_of(&r, "main").await.unwrap().unwrap(), &r));
+-        assert!(same(&checkout_of(&r, "side").await.unwrap().unwrap(), &wt));
+-        assert_eq!(checkout_of(&r, "free").await.unwrap(), None);
++        assert!(same(&branch_checkout(&r, "main").await.unwrap().unwrap(), &r));
++        assert!(same(&branch_checkout(&r, "side").await.unwrap().unwrap(), &wt));
++        assert_eq!(branch_checkout(&r, "free").await.unwrap(), None);
+         assert_eq!(ahead_of(&r, "main", "side").await.unwrap(), 0);
+         git(&r, &["commit", "-q", "--allow-empty", "-m", "one more"]);
+         assert_eq!(ahead_of(&r, "side", "main").await.unwrap(), 1);
+@@ -6147,7 +6147,7 @@ sleep {seconds}
+             "login\n"
+         );
+         // That very branch is checked out there, and no other was made.
+-        let held = checkout_of(&l, "feat/login").await.unwrap().unwrap();
++        let held = branch_checkout(&l, "feat/login").await.unwrap().unwrap();
+         assert!(crate::tickets::same_dir(&held, &path), "{held} {path}");
+         assert_eq!(branches(&l).await.unwrap(), ["main", "feat/login"]);
+         // The folder is kept out of the repository's own status.
+@@ -6259,7 +6259,7 @@ sleep {seconds}
+         assert!(branch_exists(&l, "kept").await);
+         assert_eq!(worktree_paths(&l).await.unwrap().len(), before);
+         assert!(!Path::new(&l).join(".claude/worktrees/kept").exists());
+-        assert_eq!(checkout_of(&l, "kept").await.unwrap(), None);
++        assert_eq!(branch_checkout(&l, "kept").await.unwrap(), None);
+         // Once git can do it again, both are taken up.
+         std::fs::remove_file(&hook).unwrap();
+         assert_eq!(
+diff --git a/src-tauri/src/tickets.rs b/src-tauri/src/tickets.rs
+index 2eca172e..855b5aa0 100644
+--- a/src-tauri/src/tickets.rs
++++ b/src-tauri/src/tickets.rs
+@@ -3171,11 +3171,11 @@ impl<R: Runtime> Core<R> {
+         // One left by a validation the app's stop cut: registered, it would still hold the target
+         // and every merge into it would be refused.
+         drop_worktree(&repo, &tmp).await;
+-        let mut checkout = git::checkout_of(&repo, target).await?;
++        let mut checkout = git::branch_checkout(&repo, target).await?;
+         // Another ticket's, left the same way (no other merge into this repository runs now).
+         if let Some(p) = checkout.clone().filter(|p| merge_leftover(p)) {
+             drop_worktree(&repo, Path::new(&p)).await;
+-            checkout = git::checkout_of(&repo, target).await?;
++            checkout = git::branch_checkout(&repo, target).await?;
+         }
+         let (dir, temporary) = match checkout {
+             Some(p) if same_dir(&p, &repo) => {
