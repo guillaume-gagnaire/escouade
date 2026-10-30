@@ -55,6 +55,8 @@ function preview(over: Partial<PluginPreview> = {}): PluginPreview {
     previous: null,
     grown: [],
     manifest: MANIFEST,
+    verified: false,
+    unverified: null,
     ...over,
   };
 }
@@ -73,6 +75,9 @@ function view(over: Partial<PluginView> = {}): PluginView {
     ignored: [],
     manifest: MANIFEST,
     installedAt: '2026-10-29T10:00:00Z',
+    verified: false,
+    withdrawn: null,
+    inStore: null,
     choices: { enabled: true, projects: {}, revoked: [], settings: {} },
     asks: ASKS,
     secretKeys: ['webhook'],

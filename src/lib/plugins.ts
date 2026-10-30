@@ -4,7 +4,12 @@ import { invoke } from '@tauri-apps/api/core';
 import { t } from './i18n';
 import type { Project } from './types';
 
-export type Origin = { kind: 'folder'; path: string } | { kind: 'git'; url: string; tag: string } | { kind: 'dev'; path: string };
+export type Origin =
+  | { kind: 'folder'; path: string }
+  | { kind: 'git'; url: string; tag: string }
+  | { kind: 'dev'; path: string }
+  /** A version of store.escouade.dev (STORE-9), pinned by its version.json's SHA-256. */
+  | { kind: 'store'; version: string; sha256: string; verified: boolean; repository: string; tag: string; commit: string };
 
 export type PluginState =
   | { kind: 'ready' }
@@ -50,6 +55,16 @@ export interface Choices {
 export interface PluginUpdate {
   version: string;
   tag?: string;
+  /** For a plugin of the store: whether that version is verified. */
+  verified?: boolean;
+}
+
+/** What the revocation list says of the version a plugin runs (docs/STORE.md §4.6). */
+export interface Withdrawn {
+  action: 'disable' | 'unverify';
+  version: string;
+  reason: string;
+  date: string;
 }
 
 export interface PluginView {
@@ -73,6 +88,11 @@ export interface PluginView {
   commands: string[];
   /** Whether they were agreed to as they are now (true without any): none runs before. */
   commandsApproved: boolean;
+  /** « Vérifié par Escouade »: a version of the store whose signature holds here, now. */
+  verified: boolean;
+  withdrawn: Withdrawn | null;
+  /** Not from the store, but the store has its id: the version it would install in its place. */
+  inStore: { version: string; verified: boolean } | null;
 }
 
 /** A plugin read before it is installed: the install window's. */
@@ -92,6 +112,10 @@ export interface PluginPreview {
   previous: { version: string; fingerprint: string; asks: string[] } | null;
   grown: string[];
   manifest: Manifest;
+  /** A version of the store whose signature holds with the app's keys. */
+  verified: boolean;
+  /** Why the revocation list took its seal off. */
+  unverified: string | null;
 }
 
 /** Why a plugin was not installed. */
@@ -126,6 +150,8 @@ export const pluginsApi = {
   inspectFolder: (path: string) => invoke<PluginPreview>('plugin_inspect_folder', { path }),
   inspectGit: (url: string, tag: string) => invoke<PluginPreview>('plugin_inspect_git', { url, tag }),
   inspectDev: (path: string) => invoke<PluginPreview>('plugin_inspect_dev', { path }),
+  /** Downloads a version of the store and checks it (the last one this Escouade runs when none is named). */
+  inspectStore: (id: string, version: string | null = null) => invoke<PluginPreview>('plugin_inspect_store', { id, version }),
   install: (token: string) => invoke<PluginView>('plugin_install', { token }),
   discard: (token: string) => invoke<void>('plugin_discard', { token }),
   remove: (id: string, keep: boolean) => invoke<boolean>('plugin_remove', { id, keep }),
@@ -276,6 +302,8 @@ export function originOf(o: Origin): string {
   switch (o.kind) {
     case 'git':
       return `${o.url.replace(/^https?:\/\//, '').replace(/\.git$/, '')} · ${o.tag}`;
+    case 'store':
+      return 'store.escouade.dev';
     default:
       return o.path;
   }

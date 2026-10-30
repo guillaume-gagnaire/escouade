@@ -4,6 +4,7 @@
   import { plugins } from '../../lib/plugins-view.svelte';
   import { app } from '../../lib/state.svelte';
   import PluginTile from './PluginTile.svelte';
+  import Seal from './Seal.svelte';
   import ProjectChip from './ProjectChip.svelte';
   import { stateText } from './phase';
   import { tip } from '../../lib/tip';
@@ -41,11 +42,20 @@
         </button>
       </span>
       <span class="tags" role="cell">
-        {#if p.version}<span class="tag mono">{t('plugins.version', { version: p.version })}</span>{/if}
-        {#if p.origin.kind === 'dev'}<span class="tag">{t('plugins.tag.dev')}</span>{:else}<span class="tag"
-            >{t('plugins.tag.unverified')}</span
+        {#if p.verified}
+          <Seal version={p.version} bare />
+        {:else}
+          {#if p.version}<span class="tag mono">{t('plugins.version', { version: p.version })}</span>{/if}
+          {#if p.origin.kind === 'dev'}<span class="tag">{t('plugins.tag.dev')}</span>{:else}<span class="tag"
+              >{t('plugins.tag.unverified')}</span
+            >{/if}
+        {/if}
+        {#if p.withdrawn?.action === 'disable'}<span class="tag r">{t('plugins.state.disabled')}</span>{/if}
+        {#if p.update}<span class="tag y"
+            >{p.update.verified === false
+              ? t('plugins.tag.updateUnverified', { version: p.update.version })
+              : t('plugins.tag.update', { version: p.update.version })}</span
           >{/if}
-        {#if p.update}<span class="tag y">{t('plugins.tag.update', { version: p.update.version })}</span>{/if}
       </span>
       <span class="from mono" role="cell" use:tip={{ text: originOf(p.origin), aria: false }}
         >{p.origin.kind === 'dev' ? t('plugins.origin.devNote', { path: originOf(p.origin) }) : originOf(p.origin)}</span
@@ -171,6 +181,10 @@
   }
   .tag.mono {
     color: var(--soft);
+  }
+  .tag.r {
+    color: var(--del);
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--del) 45%, transparent);
   }
   .tag.y {
     color: var(--warn-ink);

@@ -858,6 +858,8 @@ pub struct Core<R: Runtime = Wry> {
     pub(crate) codeindex: crate::codeindex::Service,
     /// The installed plugins (`plugins`).
     pub plugins: Arc<crate::plugins::Plugins>,
+    /// The store in the app (STORE-9): its catalogue and its revocation list, cached.
+    pub store: Arc<crate::plugins::store::Store>,
     /// Their processes (`plugins::runtime`): started at their first activation, closed with the app.
     pub(crate) plugin_runtime: Arc<crate::plugins::runtime::Runtime>,
     /// The facts' bus (PLG-5): what happened, told where the state changes.
@@ -1713,6 +1715,18 @@ fn below_root(root: &str, path: &str) -> Option<String> {
 }
 
 impl<R: Runtime> Core<R> {
+    /// Reads the store's catalogue and revocation list again (through Réglages › Réseau), and
+    /// hands them to the plugins: a version withdrawn stops, the updates of the store are offered.
+    pub async fn refresh_store(&self) {
+        let settings = self.settings.read().clone();
+        match crate::plugins::store::client(&settings) {
+            Ok(http) => self.store.refresh(&http, crate::i18n::ui()).await,
+            Err(e) => log::warn!("the store's client: {e}"),
+        }
+        self.plugins
+            .apply_store(self.store.revocations(), self.store.offers());
+    }
+
     pub fn load(app: AppHandle<R>, data: DataDir) -> (Arc<Self>, mpsc::UnboundedReceiver<String>) {
         if let Err(e) = data.ensure() {
             log::error!("cannot create data dir: {e}");
@@ -1814,6 +1828,14 @@ impl<R: Runtime> Core<R> {
                 .unwrap_or_default()
         };
         let plugins = crate::plugins::Plugins::load(data.clone(), env!("CARGO_PKG_VERSION"));
+        let store = Arc::new(crate::plugins::store::Store::load(
+            &data,
+            crate::plugins::store::store_url(),
+            crate::plugins::store::mirror_url(),
+            env!("CARGO_PKG_VERSION"),
+        ));
+        // What was cached applies from the start: a version withdrawn stays stopped offline.
+        plugins.apply_store(store.revocations(), store.offers());
         let plugin_runtime = crate::plugins::runtime::Runtime::new(
             plugins.clone(),
             secrets.clone(),
@@ -1838,6 +1860,7 @@ impl<R: Runtime> Core<R> {
             facts,
             plugin_events,
             plugins,
+            store,
             app,
             data,
             hub: Hub::default(),
@@ -2019,6 +2042,14 @@ impl<R: Runtime> Core<R> {
         if !cfg!(test) {
             let plugins = self.plugins.clone();
             tauri::async_runtime::spawn(async move { plugins.check_updates().await });
+            // The store's catalogue and revocation list (STORE-9): at the start, then every 6 hours.
+            let c = self.clone();
+            tauri::async_runtime::spawn(async move {
+                loop {
+                    c.refresh_store().await;
+                    tokio::time::sleep(crate::plugins::store::EVERY).await;
+                }
+            });
         }
         let c = self.clone();
         tauri::async_runtime::spawn(async move { c.git_loop(git_rx).await });

@@ -55,6 +55,9 @@ os_info = { version = "3", default-features = false }
 sha2 = "0.10"
 # The store's signatures of the verified plugins (docs/STORE.md §4.5), as the updater checks its own.
 minisign-verify = "0.2"
+# A version's archive from the store (STORE-9): read in memory, its links and climbing paths refused.
+flate2 = "1"
+tar = { version = "0.4", default-features = false }
 unicode-normalization = "0.1"
 # The MCP server (« Claude et les agents peuvent piloter Escouade »): the official SDK, its Streamable HTTP
 # transport served by hyper on the loopback, the bearer tokens compared in constant time.

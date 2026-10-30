@@ -30,8 +30,26 @@ pub enum Refused {
     OtherVersion,
 }
 
+/// The keys a seal or a revocation list is checked with: the embedded ones; in a debug build, also
+/// the key of `ESCOUADE_STORE_TEST_KEY` (the fake store of the end-to-end tests). A release build
+/// never reads it: no variable of the environment can make a seal there.
+pub fn keys() -> Vec<String> {
+    let mut keys: Vec<String> = STORE_PUBLIC_KEYS.iter().map(|k| k.to_string()).collect();
+    if cfg!(debug_assertions) {
+        if let Some(k) = std::env::var("ESCOUADE_STORE_TEST_KEY")
+            .ok()
+            .map(|k| k.trim().to_string())
+            .filter(|k| !k.is_empty())
+        {
+            keys.push(k);
+        }
+    }
+    keys
+}
+
 /// Whether `minisig` makes version `version` of plugin `id` verified: the bytes of its
-/// `version.json` signed by one of the embedded keys, the comment naming this id and this number.
+/// `version.json` signed by one of the app's keys (`keys`), the comment naming this id and this
+/// number.
 #[cfg_attr(not(test), allow(dead_code))]
 pub fn verified(
     version_json: &[u8],
@@ -39,7 +57,52 @@ pub fn verified(
     id: &str,
     version: &str,
 ) -> Result<(), Refused> {
-    verified_with(STORE_PUBLIC_KEYS, version_json, minisig, id, version)
+    let keys = keys();
+    let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
+    verified_with(&keys, version_json, minisig, id, version)
+}
+
+/// What the trusted comment of a revocation list starts with, followed by its serial.
+pub const REVOCATIONS_COMMENT: &str = "escouade-revocations-v1";
+
+/// Whether `minisig` signs the revocation list `json` of serial `serial`, with `keys`: the bytes
+/// signed by one of them, the comment `escouade-revocations-v1 <serial> …`. Gives the id of the
+/// key that signed (a list that revokes its own signer is refused by the caller).
+pub fn revocations_signed(
+    keys: &[&str],
+    json: &[u8],
+    minisig: &str,
+    serial: u64,
+) -> Result<String, Refused> {
+    if keys.is_empty() {
+        return Err(Refused::NoKey);
+    }
+    let sig = Signature::decode(minisig).map_err(|_| Refused::Unreadable)?;
+    let signer = keys.iter().find_map(|k| {
+        let pk = PublicKey::from_base64(k).ok()?;
+        pk.verify(json, &sig, false).ok()?;
+        Some(key_id(k))
+    });
+    let Some(signer) = signer else {
+        return Err(Refused::NotSigned);
+    };
+    let mut words = sig.trusted_comment().split_whitespace();
+    match (words.next(), words.next()) {
+        (Some(REVOCATIONS_COMMENT), Some(s)) if s == serial.to_string() => Ok(signer),
+        _ => Err(Refused::OtherVersion),
+    }
+}
+
+/// The id of a minisign public key (its bytes 2 to 10, as minisign writes it: hex, upper case,
+/// the bytes reversed), the one `keys_revoked` names.
+pub fn key_id(key: &str) -> String {
+    use base64::Engine as _;
+    base64::engine::general_purpose::STANDARD
+        .decode(key.trim())
+        .ok()
+        .filter(|b| b.len() >= 10)
+        .map(|b| b[2..10].iter().rev().map(|x| format!("{x:02X}")).collect())
+        .unwrap_or_default()
 }
 
 /// `verified` with the keys given (the tests' own).

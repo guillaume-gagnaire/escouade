@@ -1,8 +1,12 @@
 // The view Plugins (PLG-4, ESC-176; choices 213 to 218): the installed plugins as the core last gave them, the page shown,
 // and the install window — a plugin is read and set aside first (`inspect*`), installed only on the user's consent.
 import { open } from '@tauri-apps/plugin-dialog';
+import { untrack } from 'svelte';
 import { t } from './i18n';
 import { pluginsApi, type Category, type PluginPreview, type PluginRefusal, type PluginView } from './plugins';
+import { storeApi, type CatalogPlugin, type StoreView, type Suggestion } from './store';
+import { app } from './state.svelte';
+import { api } from './ipc';
 
 export type PluginTab = 'overview' | 'permissions' | 'versions' | 'projects' | 'settings' | 'journal';
 
@@ -12,7 +16,15 @@ export type PluginsPage =
   | { kind: 'updates' }
   | { kind: 'dev' }
   | { kind: 'category'; category: Category }
-  | { kind: 'plugin'; id: string; tab: PluginTab };
+  | { kind: 'plugin'; id: string; tab: PluginTab }
+  /** A plugin of the store's catalogue, not installed (STORE-9). */
+  | { kind: 'storePlugin'; id: string; tab: StoreTab };
+
+export type StoreTab = 'overview' | 'permissions' | 'versions';
+
+/** « Pas maintenant » keeps a suggestion away for a week (docs/FEATURES.md §2); « Ne plus proposer », for good. */
+const SUGGESTIONS_KEY = 'escouade.store.suggestions';
+const WEEK = 7 * 24 * 3600 * 1000;
 
 /** What the install window shows: a plugin read, or the fields of a git repository before it is read. */
 export type InstallStep =
@@ -38,6 +50,17 @@ class PluginsStore {
   icons = $state<Record<string, string | null>>({});
   /** « Tout mettre à jour »: the updates still to show, one window each, the user's consent asked for every one. */
   queue: string[] = [];
+  /** The store as the core keeps it (STORE-9): its catalogue cached, when it was read. */
+  store = $state<StoreView | null>(null);
+  storeBusy = $state(false);
+  /** The search in the catalogue: on this machine, nothing sent. */
+  query = $state('');
+  /** « Vérifiés seulement »: the store's lines with a seal alone. */
+  verifiedFilter = $state(false);
+  /** « Pour <projet> »: what Escouade saw, for the project it was read for. */
+  suggestions = $state<Suggestion[]>([]);
+  suggestionsFor = $state<string | null>(null);
+  dismissed = $state<Record<string, number>>(readDismissed());
 
   get updates() {
     return this.list.filter((p) => p.update);
@@ -49,6 +72,88 @@ class PluginsStore {
 
   byId(id: string) {
     return this.list.find((p) => p.id === id) ?? null;
+  }
+
+  get catalog(): CatalogPlugin[] {
+    return this.store?.catalog?.plugins ?? [];
+  }
+
+  catalogPlugin(id: string) {
+    return this.catalog.find((p) => p.id === id) ?? null;
+  }
+
+  /** The store as kept, then read again when it never was (the core reads it at the start and every 6 hours). */
+  async loadStore() {
+    try {
+      const view = await storeApi.view();
+      this.store = view ?? null;
+      if (view && !view.readAt && !this.storeBusy) await this.refreshStore();
+    } catch (e) {
+      this.error = errorText(e);
+    }
+  }
+
+  /** Reads the catalogue and the revocation list again, now; the plugins follow (a version withdrawn, an update). */
+  async refreshStore() {
+    this.storeBusy = true;
+    try {
+      this.store = (await storeApi.refresh()) ?? this.store;
+      this.list = (await pluginsApi.list()) ?? this.list;
+    } catch (e) {
+      this.error = errorText(e);
+    }
+    this.storeBusy = false;
+  }
+
+  /** « Pour <projet> »: read for the project open, once per project. */
+  async loadSuggestions(project: string | null) {
+    // Read without being tracked: the effect that calls it runs again for another project alone.
+    if (untrack(() => this.suggestionsFor) === (project ?? '')) return;
+    this.suggestionsFor = project ?? '';
+    try {
+      this.suggestions = (await storeApi.suggestions(project)) ?? [];
+    } catch {
+      this.suggestions = [];
+    }
+  }
+
+  /** The suggestions to show: not dismissed, not installed meanwhile, three at most. */
+  get shownSuggestions() {
+    const now = Date.now();
+    return this.suggestions
+      .filter((s) => !this.byId(s.id) && this.catalogPlugin(s.id))
+      .filter((s) => {
+        const until = this.dismissed[s.id];
+        return until === undefined || (until !== 0 && until < now);
+      })
+      .slice(0, 3);
+  }
+
+  /** « Pas maintenant » (a week), or « Ne plus proposer » (`forever`). */
+  dismiss(id: string, forever: boolean) {
+    this.dismissed = { ...this.dismissed, [id]: forever ? 0 : Date.now() + WEEK };
+    try {
+      localStorage.setItem(SUGGESTIONS_KEY, JSON.stringify(this.dismissed));
+    } catch {
+      // Not kept: shown again at the next start.
+    }
+  }
+
+  /** « N'installer que des versions vérifiées »: saved with the app's settings. */
+  setVerifiedOnly(on: boolean) {
+    app.settings.pluginsVerifiedOnly = on;
+    app.run(api.saveSettings($state.snapshot(app.settings)));
+  }
+
+  /** A plugin of the store: its page in the view, the installed one's when it is installed. */
+  openStorePlugin(id: string, tab: StoreTab = 'overview') {
+    if (this.byId(id)) this.openPlugin(id);
+    else this.show({ kind: 'storePlugin', id, tab });
+  }
+
+  /** « Installer » from the store: downloaded and checked, then shown before anything is installed. */
+  fromStore(id: string, version: string | null = null) {
+    return this.inspect(() => pluginsApi.inspectStore(id, version));
   }
 
   async load() {
@@ -158,7 +263,8 @@ class PluginsStore {
   async update(p: PluginView) {
     if (!p.update) return;
     const o = p.origin;
-    if (o.kind === 'git' && p.update.tag) await this.inspect(() => pluginsApi.inspectGit(o.url, p.update!.tag!));
+    if (o.kind === 'store') await this.fromStore(p.id, p.update.version);
+    else if (o.kind === 'git' && p.update.tag) await this.inspect(() => pluginsApi.inspectGit(o.url, p.update!.tag!));
     else if (o.kind === 'folder') await this.inspect(() => pluginsApi.inspectFolder(o.path));
   }
 
@@ -212,6 +318,15 @@ class PluginsStore {
     this.install = null;
     this.queue = [];
     if (step?.kind === 'preview') void pluginsApi.discard(step.preview.token).catch(() => {});
+  }
+}
+
+function readDismissed(): Record<string, number> {
+  try {
+    const v = JSON.parse(localStorage.getItem(SUGGESTIONS_KEY) ?? '{}');
+    return v && typeof v === 'object' ? v : {};
+  } catch {
+    return {};
   }
 }
 

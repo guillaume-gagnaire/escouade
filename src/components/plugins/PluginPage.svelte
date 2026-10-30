@@ -10,6 +10,8 @@
   import PluginProjects from './PluginProjects.svelte';
   import PluginSettings from './PluginSettings.svelte';
   import PluginTile from './PluginTile.svelte';
+  import Seal from './Seal.svelte';
+  import { openUrl } from '@tauri-apps/plugin-opener';
   import { stateText } from './phase';
   import { tip } from '../../lib/tip';
 
@@ -28,6 +30,14 @@
   const settingsCount = $derived(((m?.contributes.settings as unknown[] | undefined)?.length ?? 0) + plugin.secretKeys.length);
   const state = $derived(stateText(plugin));
   const reason = $derived(plugin.state.kind === 'ready' ? null : plugin.state.reason);
+  // A plugin of the store (STORE-9): its chain checked at the install, the review's summary from the catalogue.
+  const store = $derived(plugin.origin.kind === 'store' ? plugin.origin : null);
+  const listed = $derived(plugins.catalogPlugin(plugin.id)?.versions.find((v) => v.version === plugin.version) ?? null);
+  const summary = $derived(listed?.review?.summary ? (lang === 'fr' ? listed.review.summary.fr : listed.review.summary.en) : null);
+  const unverified = $derived(plugin.withdrawn?.action === 'unverify' ? plugin.withdrawn : null);
+  const storePage = $derived(
+    `${plugins.store?.url ?? 'https://store.escouade.dev'}${lang === 'fr' ? '' : '/en'}/plugins/${encodeURIComponent(plugin.id)}`,
+  );
 
   function counted(k: PluginTab): number | null {
     if (k === 'permissions') return plugin.asks.length + plugin.commands.length;
@@ -58,8 +68,12 @@
       <div class="who">
         <h2>
           {plugin.name}
-          <span class="ptag">{dev ? t('plugins.tag.dev') : t('plugins.tag.unverified')}</span>
-          {#if plugin.version}<span class="ptag mono">{t('plugins.version', { version: plugin.version })}</span>{/if}
+          {#if plugin.verified}
+            <Seal version={plugin.version} long />
+          {:else}
+            <span class="ptag">{dev ? t('plugins.tag.dev') : t('plugins.tag.unverified')}</span>
+            {#if plugin.version}<span class="ptag mono">{t('plugins.version', { version: plugin.version })}</span>{/if}
+          {/if}
           {#if state}<span class="ptag" class:bad={plugin.state.kind !== 'ready'}>{state}</span>{/if}
         </h2>
         <div class="meta">
@@ -76,13 +90,31 @@
             >{t('plugins.page.updateTo', { version: plugin.update.version })}</button
           >
           <small class="upd"
-            >{t('plugins.page.installedNote', { version: plugin.version })}
-            {t('plugins.page.updateNote', { version: plugin.update.version })}</small
+            >{plugin.verified
+              ? t('plugins.page.installedVerified', { version: plugin.version })
+              : t('plugins.page.installedNote', { version: plugin.version })}
+            {plugin.update.verified === false
+              ? t('plugins.page.updateUnverified', { version: plugin.update.version })
+              : plugin.update.verified
+                ? t('plugins.page.updateVerified', { version: plugin.update.version })
+                : t('plugins.page.updateNote', { version: plugin.update.version })}</small
+          >
+        {:else if plugin.inStore}
+          <button class="btn primary" onclick={() => plugins.fromStore(plugin.id)}
+            >{t('plugins.page.toStore', { version: plugin.inStore.version })}</button
+          >
+          <small class="note"
+            >{plugin.inStore.verified
+              ? t('plugins.page.inStoreVerified', { version: plugin.inStore.version })
+              : t('plugins.page.inStore', { version: plugin.inStore.version })}</small
           >
         {/if}
       </div>
     </div>
     {#if reason}<p class="reason" role="status">{reason}</p>{/if}
+    {#if unverified}<p class="reason amber" role="status">
+        {t('plugins.withdrawn.unverified', { version: unverified.version, date: unverified.date, reason: unverified.reason })}
+      </p>{/if}
   </div>
   <div class="tabs" role="tablist" aria-label={t('plugins.page.tabs.label')}>
     {#each TABS as k (k)}
@@ -171,20 +203,45 @@
         <h5>{t('plugins.page.canDo')}</h5>
         {#if asks.length}<AskList {asks} revoked={plugin.choices.revoked} />{:else}<p class="hint">{t('plugins.perms.none')}</p>{/if}
       </section>
+      {#if plugin.verified}
+        <section class="box review">
+          <p>
+            <b>{t('plugins.store.reviewed', { date: fDate(Date.parse(listed?.review?.signed_at ?? plugin.installedAt)) })}</b>
+            {summary ?? ''}
+          </p>
+        </section>
+      {/if}
       <section class="box">
         <h5>{t('plugins.page.from')}</h5>
-        <div class="chain">
-          <span class="k">{t(`plugins.origin.${plugin.origin.kind}`)}</span><span
-            class="v mono"
-            use:tip={{ text: originOf(plugin.origin), aria: false }}>{originOf(plugin.origin)}</span
-          >
-          <span class="k">{t('plugins.origin.fingerprint')}</span><span
-            class="v mono"
-            use:tip={{ text: plugin.fingerprint || t('plugins.origin.devPrint'), aria: false }}
-            >{plugin.fingerprint ? shortPrint(plugin.fingerprint) : t('plugins.origin.devPrint')}</span
-          >
-          <span class="k">{t('plugins.origin.signature')}</span><span class="v no">{t('plugins.origin.unsigned')}</span>
-        </div>
+        {#if store}
+          <div class="chain">
+            <span class="k">{t('plugins.origin.repo')}</span><span class="v mono" use:tip={{ text: store.repository, aria: false }}
+              >{store.repository.replace(/^https:\/\/github\.com\//, '')}</span
+            >
+            <span class="k">{t('plugins.origin.tagLabel')}</span><span class="v mono"
+              >{store.tag} → {store.commit.slice(0, 7)} · {t('plugins.origin.archiveSame')}</span
+            >
+            <span class="k">{t('plugins.origin.fingerprint')}</span><span class="v mono" use:tip={{ text: plugin.fingerprint, aria: false }}
+              >{shortPrint(plugin.fingerprint)}</span
+            >
+            <span class="k">{t('plugins.origin.signature')}</span>{#if plugin.verified}<span class="v ok"
+                >{t('plugins.origin.signedHere')}</span
+              >{:else}<span class="v no">{t('plugins.origin.storeUnsigned')}</span>{/if}
+          </div>
+        {:else}
+          <div class="chain">
+            <span class="k">{t(`plugins.origin.${plugin.origin.kind}`)}</span><span
+              class="v mono"
+              use:tip={{ text: originOf(plugin.origin), aria: false }}>{originOf(plugin.origin)}</span
+            >
+            <span class="k">{t('plugins.origin.fingerprint')}</span><span
+              class="v mono"
+              use:tip={{ text: plugin.fingerprint || t('plugins.origin.devPrint'), aria: false }}
+              >{plugin.fingerprint ? shortPrint(plugin.fingerprint) : t('plugins.origin.devPrint')}</span
+            >
+            <span class="k">{t('plugins.origin.signature')}</span><span class="v no">{t('plugins.origin.unsigned')}</span>
+          </div>
+        {/if}
       </section>
       {#if !plugin.choices.enabled}<p class="hint">{t('plugins.page.offNote')}</p>{/if}
       <div class="btns">
@@ -192,6 +249,7 @@
           >{plugin.choices.enabled ? t('plugins.page.disable') : t('plugins.page.enable')}</button
         >
         <button class="btn" onclick={uninstall}>{t('plugins.page.uninstall')}</button>
+        {#if store || plugin.inStore}<button class="btn report" onclick={() => openUrl(storePage)}>{t('plugins.store.report')}</button>{/if}
       </div>
     </aside>
   </div>
@@ -300,6 +358,33 @@
     color: var(--soft);
     font-size: 12px;
     white-space: pre-wrap;
+  }
+  .reason.amber {
+    background: var(--wait-bg);
+    box-shadow: inset 0 0 0 1px var(--wait-line);
+  }
+  .note {
+    max-width: 300px;
+    text-align: right;
+    color: var(--muted);
+    font-size: 11.5px;
+  }
+  .box.review {
+    background: color-mix(in oklch, var(--brand) 7%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--brand) 35%, transparent);
+  }
+  .box.review p {
+    margin: 0;
+    color: var(--soft);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .chain .v.ok {
+    color: var(--teal-ink);
+    font-size: 12px;
+  }
+  .btn.report {
+    margin-left: auto;
   }
   .ptag {
     font-size: 11px;

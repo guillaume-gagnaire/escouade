@@ -4,6 +4,7 @@
   import { plugins, type PluginsPage } from '../../lib/plugins-view.svelte';
   import type { IconName } from '../../lib/icons';
   import Icon from '../Icon.svelte';
+  import { categoriesOfCatalog } from '../../lib/store';
 
   // The sidebar of the view Plugins (choice 214): Store, Installés, Mises à jour (their count in amber), En développement,
   // then the categories with their count.
@@ -18,19 +19,26 @@
     languages: 'lang',
   };
   const page = $derived(plugins.page);
+  // A category counts the store's plugins once the catalogue is read (STORE-9), else the installed ones.
   const counts = $derived(
-    Object.fromEntries(CATEGORIES.map((c) => [c, plugins.list.filter((p) => categoriesOf(p).includes(c)).length])) as Record<
-      Category,
-      number
-    >,
+    Object.fromEntries(
+      CATEGORIES.map((c) => [
+        c,
+        plugins.store?.catalog
+          ? plugins.catalog.filter((p) => categoriesOfCatalog(p).includes(c)).length
+          : plugins.list.filter((p) => categoriesOf(p).includes(c)).length,
+      ]),
+    ) as Record<Category, number>,
   );
   /** A plugin's page is one of the installed ones'. */
-  const on = (p: PluginsPage) => JSON.stringify(p) === JSON.stringify(page.kind === 'plugin' ? { kind: 'installed' } : page);
+  const on = (p: PluginsPage) =>
+    JSON.stringify(p) ===
+    JSON.stringify(page.kind === 'plugin' ? { kind: 'installed' } : page.kind === 'storePlugin' ? { kind: 'store' } : page);
 </script>
 
 <aside class="side plugins-side" aria-label={t('plugins.nav.label')}>
   <h5>{t('plugins.nav.label')}</h5>
-  {#each [{ kind: 'store', icon: 'sparkle', n: null }, { kind: 'installed', icon: 'agents', n: plugins.list.length }, { kind: 'updates', icon: 'up', n: plugins.updates.length }, { kind: 'dev', icon: 'code', n: plugins.dev.length }] as const as item (item.kind)}
+  {#each [{ kind: 'store', icon: 'sparkle', n: plugins.store?.catalog ? plugins.catalog.length : null }, { kind: 'installed', icon: 'agents', n: plugins.list.length }, { kind: 'updates', icon: 'up', n: plugins.updates.length }, { kind: 'dev', icon: 'code', n: plugins.dev.length }] as const as item (item.kind)}
     <button
       class="it"
       class:on={on({ kind: item.kind })}

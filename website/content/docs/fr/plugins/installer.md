@@ -8,7 +8,7 @@ L’icône en forme de pièce de puzzle de la barre des projets, sous les statis
 
 Sa barre latérale :
 
-- **Store** : le catalogue de store.escouade.dev, qui n’est pas encore lu dans l’app ; en attendant, on installe depuis un dossier ou un dépôt git.
+- **Store** : le catalogue de store.escouade.dev, gardé sur ta machine et cherché sur elle (voir plus bas).
 - **Installés** : tous les plugins, en deux groupes, « Ajoutés » et « Livrés avec Escouade ». Une ligne par plugin : sa version, « Non vérifié » ou « En développement », la mise à jour trouvée, d’où il vient, les projets où il est actif (une pastille par projet, un cadenas pour un projet privé) et son interrupteur pour toute l’app.
 - **Mises à jour** : les versions plus récentes trouvées, leur nombre en ambre.
 - **En développement** : les dossiers chargés en place.
@@ -22,6 +22,28 @@ Deux boutons en tête de la vue :
 - **Depuis un dépôt git…** : l’adresse du dépôt et une étiquette (`v1.2.0`). Escouade le clone à cette étiquette seule et le fixe par son commit.
 
 Rien n’est installé tout de suite : le plugin est lu, mis de côté, et la fenêtre d’installation s’ouvre.
+
+## Depuis le store
+
+**Store**, dans la barre latérale, montre le catalogue de [store.escouade.dev](https://store.escouade.dev). Escouade le lit au démarrage puis toutes les 6 heures et le garde sur ta machine : l’en-tête dit quand (« catalogue lu à 10:42 ») et, si le store ne répond pas, montre le catalogue gardé en le disant.
+
+- **La recherche** se fait sur ta machine, sans rien envoyer : le nom, la description, les mots-clés, l’auteur et l’id, sans tenir compte de la casse ni des accents. **Vérifiés seulement** ne garde que les plugins au sceau « Vérifié par Escouade » ; les puces et la barre latérale filtrent par catégorie.
+- **Pour <projet>**, en tête : jusqu’à trois plugins qu’Escouade propose d’après ce qu’il voit sur ce poste et dans le projet ouvert, chacun avec sa raison (« vibe est installé sur ce poste », « des clés DEM-… dans les commits de ce dépôt »). Rien n’en est envoyé. « Pas maintenant » écarte une proposition une semaine, « Ne plus proposer » pour de bon.
+- **Chaque ligne** dit le sceau de la version proposée ou « Non vérifié », l’auteur, les installations et ce que le plugin demande en une ligne (« Lance un programme », les hôtes, « Un secret », ou « Sans programme »).
+- **La page d’un plugin** du store : sa description, ses permissions, ses versions (chacune vérifiée ou non, retirée par son auteur), le résumé de la revue, d’où il vient, et « Signaler sur le store ».
+
+Escouade propose **la dernière version qu’il peut faire tourner** : une version écrite pour une Escouade plus récente est sautée, une version retirée par son auteur aussi.
+
+**Installer** télécharge la version, puis vérifie tout avant d’ouvrir la fenêtre d’installation : `version.json` contre l’empreinte du catalogue, la signature contre les clés publiques qu’Escouade embarque (le store ne peut pas fabriquer un sceau : il n’a pas la clé), l’archive et le programme de ton système contre `version.json`, le manifeste contre son empreinte. Un écart arrête tout et le dit (« L’archive reçue ne correspond pas à celle que le store a publiée ») : rien n’est installé. Le catalogue, les archives et la liste de révocation passent par **Réglages › Réseau** (proxy, certificats du système).
+
+La fenêtre d’installation dit alors « Vérifié par Escouade » et « Signature : vérifiée ici, par l’app » ; pour une version non vérifiée, une bande : « Personne n’a relu cette version. Elle vient du store, son archive est bien celle que l’auteur a publiée, mais rien ne dit ce que fait son programme », et le bouton « Installer quand même ».
+
+**N’installer que des versions vérifiées**, en tête des installés (éteint d’office), refuse toute version du store sans sceau, à l’installation comme à la mise à jour.
+
+Un plugin installé depuis un dossier ou un dépôt git dont l’id est au store le dit sur sa page, avec « Passer à la v… du store » : la même fenêtre, tes choix gardés.
+
+> [!NOTE]
+> Si tu as accepté les statistiques d’usage, une installation depuis le store est comptée sur le store (`POST /api/v1/installs` : l’id, la version, « install » ou « update », rien d’autre) et dans les statistiques d’Escouade (« plugin installé depuis le store », sans son nom). Sans ton accord, rien ne part.
 
 ## La fenêtre d’installation
 
@@ -70,9 +92,18 @@ Le fichier du journal est `~/.escouade/plugin-logs/<id>.log` ([le protocole](plu
 
 ## Les mises à jour
 
-Au démarrage, Escouade cherche une version plus récente de chaque plugin : une étiquette plus haute de son dépôt git, une version plus haute dans le dossier d’où il a été copié. Ce qu’il trouve est **proposé, jamais installé seul** : « v1.3.0 disponible » sur sa ligne, « Mettre à jour vers la v1.3.0 » sur sa page, la liste dans Mises à jour, et « Tout mettre à jour » en tête des installés.
+Au démarrage, Escouade cherche une version plus récente de chaque plugin : une étiquette plus haute de son dépôt git, une version plus haute dans le dossier d’où il a été copié, la dernière version compatible du catalogue pour un plugin du store (« v1.3.0 · non vérifiée » quand elle n’a pas de sceau). Ce qu’il trouve est **proposé, jamais installé seul** : « v1.3.0 disponible » sur sa ligne, « Mettre à jour vers la v1.3.0 » sur sa page, la liste dans Mises à jour, et « Tout mettre à jour » en tête des installés.
 
 Une mise à jour passe par la fenêtre d’installation, de la version installée à la nouvelle. **Si elle demande plus**, la fenêtre le dit (« ton accord est redemandé ») et marque « nouveau » chaque permission en plus. Tes choix restent : ses projets, les permissions retirées, ses réglages et ses secrets. « Tout mettre à jour » ouvre la fenêtre de chacune, l’une après l’autre.
+
+## Le retrait par Escouade
+
+Escouade lit la **liste de révocation** du store au démarrage puis toutes les 6 heures (ou « Relire maintenant », en bas des installés), la vérifie avec ses clés et refuse une liste plus ancienne que la dernière lue ; si le store ne répond pas, il lit sa copie sur escouade.dev. La dernière liste lue s’applique même hors ligne.
+
+- Une version **retirée** est arrêtée et désactivée ; une bande rouge en tête des installés dit laquelle, quand et pourquoi. Escouade ne supprime rien : ses réglages et ses secrets restent là, et « Désinstaller » est sur sa page.
+- Une version **dont le sceau est retiré** continue de tourner ; sa page dit pourquoi elle n’est plus vérifiée.
+
+Le sceau d’un plugin installé est revérifié sur ta machine, avec le `version.json` et la signature gardés à l’installation : il tient sans le store.
 
 ## Désinstaller
 

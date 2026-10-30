@@ -288,6 +288,96 @@ pub fn plugin_inspect_folder(
         .inspect_folder(std::path::Path::new(path.trim()), crate::i18n::ui())
 }
 
+/// The store as last read (STORE-9): its catalogue kept on this machine, when it was read, the
+/// version this Escouade would install of each plugin, the revocation list's serial.
+#[tauri::command(async)]
+pub fn store_view(core: CoreState) -> crate::plugins::store::StoreView {
+    core.store.view()
+}
+
+/// « Pour <projet> » (choice 215): up to 6 plugins of the catalogue that what Escouade sees on this
+/// machine (a harness's program on the PATH) and in the project (ticket keys in its last 200
+/// commits) calls for, none installed, each with its reason. Read here, nothing sent.
+#[tauri::command(async)]
+pub async fn store_suggestions(
+    core: CoreState<'_>,
+    project: Option<String>,
+) -> Result<Vec<crate::plugins::store::Suggestion>, ()> {
+    use crate::plugins::store;
+    let Some(catalog) = core.store.view().catalog else {
+        return Ok(Vec::new());
+    };
+    let names: Vec<String> = catalog
+        .plugins
+        .iter()
+        .filter(|p| p.categories.iter().any(|c| c == "harness"))
+        .flat_map(|p| p.keywords.clone())
+        .collect();
+    let programs = tauri::async_runtime::spawn_blocking(move || {
+        names.into_iter().filter(|n| store::on_path(n)).collect()
+    })
+    .await
+    .unwrap_or_default();
+    let mut seen = store::Seen {
+        programs,
+        ticket_prefix: None,
+    };
+    if let Some(p) = project.and_then(|id| core.project(&id).ok()) {
+        if let Ok(log) = crate::git::text(&p.path, &["log", "-200", "--format=%s%n%b"]).await {
+            seen.ticket_prefix = store::ticket_prefix(&log);
+        }
+    }
+    let installed: Vec<String> = core
+        .plugins
+        .list(crate::i18n::ui())
+        .into_iter()
+        .map(|p| p.id)
+        .collect();
+    Ok(store::suggest(
+        &catalog,
+        env!("CARGO_PKG_VERSION"),
+        &seen,
+        &installed,
+        crate::i18n::ui(),
+        6,
+    ))
+}
+
+/// Reads the store's catalogue and revocation list again, now.
+#[tauri::command(async)]
+pub async fn store_refresh(core: CoreState<'_>) -> Result<crate::plugins::store::StoreView, ()> {
+    core.refresh_store().await;
+    Ok(core.store.view())
+}
+
+/// What installing version `version` of the store's plugin `id` would do (the last one this
+/// Escouade can run when None): downloaded, every fingerprint and the signature checked, set aside
+/// until `plugin_install` or `plugin_discard`. « N'installer que des versions vérifiées » refuses a
+/// version without the seal.
+#[tauri::command(async)]
+pub async fn plugin_inspect_store(
+    core: CoreState<'_>,
+    id: String,
+    version: Option<String>,
+) -> Result<crate::plugins::Preview, crate::plugins::Refusal> {
+    let lang = crate::i18n::ui();
+    let settings = core.settings.read().clone();
+    let http = crate::plugins::store::client(&settings)
+        .map_err(|e| crate::plugins::Refusal::other(e.to_string()))?;
+    let fetched = core
+        .store
+        .fetch(
+            &http,
+            &id,
+            version.as_deref(),
+            settings.plugins_verified_only,
+            lang,
+        )
+        .await
+        .map_err(crate::plugins::Refusal::other)?;
+    core.plugins.inspect_store(fetched, lang)
+}
+
 /// What installing the plugin of a git repository at a tag would do: cloned and set aside.
 #[tauri::command(async)]
 pub async fn plugin_inspect_git(
@@ -324,8 +414,23 @@ pub fn plugin_install(
     core: CoreState,
     token: String,
 ) -> Result<crate::plugins::PluginView, crate::plugins::Refusal> {
+    let staged = core.plugins.staged(&token);
     let view = core.plugins.install(&token, crate::i18n::ui())?;
     core.plugin_runtime.forget(&view.id);
+    let from_store = matches!(view.origin, crate::plugins::Origin::Store { .. });
+    core.telemetry
+        .track(crate::telemetry::Event::PluginInstalled { from_store });
+    // The store's count, only with the user's consent to the statistics (docs/STORE.md §5.4).
+    if from_store && core.settings.read().telemetry == Some(true) {
+        let settings = core.settings.read().clone();
+        let (store, id, version) = (core.store.clone(), view.id.clone(), view.version.clone());
+        let update = staged.is_some_and(|(_, update)| update);
+        tauri::async_runtime::spawn(async move {
+            if let Ok(http) = crate::plugins::store::client(&settings) {
+                store.count(&http, &id, &version, update).await;
+            }
+        });
+    }
     Ok(view)
 }
 

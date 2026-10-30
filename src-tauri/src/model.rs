@@ -150,6 +150,10 @@ pub struct Settings {
     /// `<plugin id>/<theme id>`; empty, Escouade's. Its values are filtered by the window
     /// (src/lib/plugin-themes.ts); a plugin switched off or gone leaves Escouade's colours, the choice kept.
     pub plugin_theme: String,
+    /// « N'installer que des versions vérifiées » (la vue Plugins, STORE-9): a version from the store
+    /// without the seal « Vérifié par Escouade » is refused, at an install as at an update. Off by
+    /// default (docs/STORE.md §4.4).
+    pub plugins_verified_only: bool,
     /// « Zoom de l’interface », in percent (`ZOOM_LEVELS`): the whole window's, as the WebView's
     /// zoom (text, spacing and icons together); Ctrl+= / Ctrl+- / Ctrl+0 change it too.
     pub ui_zoom: u32,
@@ -625,6 +629,7 @@ impl Default for Settings {
             code_index_all: false,
             theme: ThemeChoice::System,
             plugin_theme: String::new(),
+            plugins_verified_only: false,
             ui_zoom: 100,
             terminal_font_size: DEFAULT_FONT_SIZE,
             editor_font_size: DEFAULT_FONT_SIZE,

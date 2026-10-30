@@ -97,6 +97,11 @@ pub enum Event {
         engine: &'static str,
         model: String,
     },
+    /// A plugin installed or updated: whether from the store (STORE-9, docs/STORE.md §5.4); never
+    /// which plugin.
+    PluginInstalled {
+        from_store: bool,
+    },
 }
 
 impl Event {
@@ -127,6 +132,7 @@ impl Event {
             Event::RemoteControlEnabled { .. } => "remote_control_enabled",
             Event::DictationUsed { .. } => "dictation_used",
             Event::VoiceConversation { .. } => "voice_conversation",
+            Event::PluginInstalled { .. } => "plugin_installed",
         }
     }
 
@@ -168,6 +174,7 @@ impl Event {
                 engine,
                 model,
             } => json!({ "lang": lang, "voice": voice, "engine": engine, "model": model }),
+            Event::PluginInstalled { from_store } => json!({ "from_store": yes(*from_store) }),
             Event::IntegrationConnected { service } | Event::TicketsImported { service } => {
                 json!({ "service": service })
             }

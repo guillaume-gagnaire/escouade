@@ -250,6 +250,8 @@ const LABELS = {
 
 /** The usage endpoint the app asks: a closed port, unless a test gives its own (`appEnv`). */
 const NO_USAGE_API = 'http://127.0.0.1:9/api/oauth/usage';
+/** The store the app reads: a closed port, unless a test starts the fake one (tests/fixtures/store/fake-store.mjs). */
+const NO_STORE = 'http://127.0.0.1:9';
 
 /**
  * The app's window is kept out of sight (off every screen, never focused, no taskbar button): the tests run while the user
@@ -387,6 +389,10 @@ export const test = base.extend<{
       DISABLE_UPDATES: undefined,
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: undefined,
       ESCOUADE_USAGE_API: NO_USAGE_API,
+      // Nor store.escouade.dev (STORE-9): a closed port, unless a test starts the fake store and names it.
+      ESCOUADE_STORE_URL: process.env.ESCOUADE_STORE_URL ?? NO_STORE,
+      ESCOUADE_STORE_MIRROR_URL: process.env.ESCOUADE_STORE_MIRROR_URL ?? NO_STORE,
+      ESCOUADE_STORE_TEST_KEY: process.env.ESCOUADE_STORE_TEST_KEY,
       // No Codex but the fake one a test asks for (`appEnv: { ESCOUADE_CODEX: FAKE_CODEX }`), never the machine's.
       ESCOUADE_CODEX: 'none',
       // Codex's Principal is a folder of the test's (its `config.toml`, « Les agents peuvent piloter Escouade »), never the user's ~/.codex.

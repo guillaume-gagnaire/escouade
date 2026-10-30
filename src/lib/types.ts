@@ -86,6 +86,8 @@ export interface Settings {
   theme: ThemeChoice;
   /** « Couleurs » (PLG-7): the theme of a plugin the window takes, `<plugin id>/<theme id>`; empty or absent, Escouade's (lib/plugin-theme.svelte.ts). */
   pluginTheme?: string;
+  /** « N'installer que des versions vérifiées » (STORE-9): a version of the store without the seal is refused. */
+  pluginsVerifiedOnly?: boolean;
   /** « Zoom de l’interface », in percent (`ZOOM_LEVELS`): the WebView's zoom, text, spacing and icons together. */
   uiZoom: number;
   /** « Taille du texte des terminaux », in CSS pixels before the zoom. */

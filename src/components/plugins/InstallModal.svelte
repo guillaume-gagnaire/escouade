@@ -1,11 +1,12 @@
 <script lang="ts">
   import { locale, t } from '../../lib/i18n';
-  import { asksOf, contributionsOf, originOf, textOf } from '../../lib/plugins';
+  import { asksOf, contributionsOf, originOf, shortPrint, textOf } from '../../lib/plugins';
   import { plugins, type InstallStep } from '../../lib/plugins-view.svelte';
   import Icon from '../Icon.svelte';
   import Modal from '../modals/Modal.svelte';
   import PluginTile from './PluginTile.svelte';
   import AskList from './AskList.svelte';
+  import Seal from './Seal.svelte';
   import { tip } from '../../lib/tip';
 
   // The install window (PLG-4; §3.4 of docs/PLUGINS.md, choices 177 and 178): who made the plugin and where it comes from
@@ -19,6 +20,8 @@
   const m = $derived(p?.manifest ?? null);
   const dev = $derived(p?.origin.kind === 'dev');
   const update = $derived(!!p?.previous);
+  // From the store (STORE-9, choices 177 and 178): its fingerprints checked, its seal checked here with the app's keys.
+  const store = $derived(p?.origin.kind === 'store' ? p.origin : null);
   const title = $derived(
     !p
       ? t('plugins.install.gitTitle')
@@ -31,7 +34,13 @@
   const adds = $derived(contributionsOf(m, lang));
   const asks = $derived(p ? asksOf(p.asks, m, lang) : []);
   const confirmLabel = $derived(
-    dev ? t('plugins.install.load') : update ? t('plugins.install.update') : t('plugins.install.installAnyway'),
+    dev
+      ? t('plugins.install.load')
+      : update
+        ? t('plugins.install.update')
+        : p?.verified
+          ? t('plugins.install.install')
+          : t('plugins.install.installAnyway'),
   );
   /** « v1.2.0 → v1.3.0 → 3f9c2e1 »: the version installed (an update), the one read, its commit. */
   const versionLine = $derived.by(() => {
@@ -39,6 +48,7 @@
     let line = t('plugins.version', { version: p.version });
     if (p.previous) line = t('plugins.versionTo', { from: t('plugins.version', { version: p.previous.version }), to: line });
     if (p.origin.kind === 'git') line = t('plugins.versionTo', { from: line, to: p.fingerprint.slice(4, 11) });
+    if (p.origin.kind === 'store' && p.origin.commit) line = t('plugins.versionTo', { from: line, to: p.origin.commit.slice(0, 7) });
     return line;
   });
   const originLabel = $derived(p ? t(`plugins.origin.${p.origin.kind}`) : '');
@@ -49,7 +59,9 @@
         ? t('plugins.origin.devPrint')
         : p.origin.kind === 'folder'
           ? t('plugins.origin.folderPrint', { print: p.fingerprint })
-          : p.fingerprint,
+          : p.origin.kind === 'store'
+            ? t('plugins.origin.storePrint', { print: shortPrint(p.fingerprint) })
+            : p.fingerprint,
   );
 </script>
 
@@ -80,7 +92,12 @@
       <div class="who">
         <PluginTile id={p.id} name={p.name} src={p.icon} size={44} />
         <div>
-          <h3>{p.name} <span class="ptag">{dev ? t('plugins.tag.dev') : t('plugins.tag.unverified')}</span></h3>
+          <h3>
+            {p.name}
+            {#if p.verified}<Seal version={p.version} long />{:else}<span class="ptag"
+                >{dev ? t('plugins.tag.dev') : t('plugins.tag.unverified')}</span
+              >{/if}
+          </h3>
           <div class="ln">
             {[m?.author, t('plugins.version', { version: p.version }), m?.license].filter(Boolean).join(' · ')}<span class="mono id"
               >{p.id}</span
@@ -91,7 +108,14 @@
       {#if p.description || m?.description}
         <p class="desc">{p.description || textOf(m?.description, lang)}</p>
       {/if}
-      {#if !dev}
+      {#if store && !p.verified}
+        <p class="notice">
+          <Icon name="info" size={14} /><span
+            ><b>{t('plugins.install.storeUnverified')}</b>
+            {p.unverified ? t('plugins.install.sealWithdrawn', { reason: p.unverified }) : t('plugins.install.storeUnverifiedBody')}</span
+          >
+        </p>
+      {:else if !dev && !store}
         <p class="notice">
           <Icon name="info" size={14} /><span><b>{t('plugins.install.unverified')}</b> {t('plugins.install.unverifiedBody')}</span>
         </p>
@@ -104,7 +128,10 @@
         <span class="k">{t('plugins.origin.fingerprint')}</span><span class="v mono" use:tip={{ text: p.fingerprint, aria: false }}
           >{print}</span
         >
-        <span class="k">{t('plugins.origin.signature')}</span><span class="v no">{t('plugins.origin.unsigned')}</span>
+        <span class="k">{t('plugins.origin.signature')}</span>{#if p.verified}<span class="v ok">{t('plugins.origin.signedHere')}</span
+          >{:else if store}<span class="v no">{t('plugins.origin.storeUnsigned')}</span>{:else}<span class="v no"
+            >{t('plugins.origin.unsigned')}</span
+          >{/if}
       </div>
       {#if p.previous}
         {#if p.grown.length}
@@ -246,6 +273,10 @@
   }
   .facts .v.mono {
     font-size: 11px;
+  }
+  .facts .v.ok {
+    color: var(--teal-ink);
+    font-weight: 560;
   }
   .facts .v.no {
     color: var(--warn-ink);

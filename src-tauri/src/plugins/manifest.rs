@@ -321,7 +321,15 @@ impl Manifest {
     /// Why this Escouade (`app`) does not load it, in `lang`: an API it does not serve, a version
     /// out of its range (as a harness's `oldest_reason`). None when it loads.
     pub fn refusal(&self, app: &str, lang: Lang) -> Option<String> {
-        let (api, min) = (self.escouade.api, &self.escouade.min);
+        self.escouade.refusal(app, lang)
+    }
+}
+
+impl Range {
+    /// Why this Escouade (`app`) does not run a plugin of this range, in `lang`; None when it does.
+    /// The store's catalogue picks with it the last version this Escouade can run (STORE-9).
+    pub fn refusal(&self, app: &str, lang: Lang) -> Option<String> {
+        let (api, min) = (self.api, &self.min);
         if api != API {
             return Some(tr_in!(
                 lang,
@@ -337,7 +345,7 @@ impl Manifest {
                 "This plugin needs Escouade {min} or newer; you have {app}. Update Escouade."
             ));
         }
-        if let Some(max) = &self.escouade.max {
+        if let Some(max) = &self.max {
             if beyond(&mine, max) {
                 return Some(tr_in!(
                     lang,

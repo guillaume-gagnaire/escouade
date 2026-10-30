@@ -22,7 +22,9 @@ pub mod events;
 pub mod manifest;
 #[cfg_attr(not(test), allow(dead_code))]
 pub mod runtime;
-// The seal of a version from the store, checked with the keys the app embeds (STORE-8; STORE-9 shows it).
+// The store in the app: its catalogue, its revocation list, a version downloaded and checked (STORE-9).
+pub mod store;
+// The seal of a version from the store, checked with the keys the app embeds (STORE-8).
 pub mod store_keys;
 
 use crate::i18n::Lang;
@@ -54,6 +56,21 @@ pub enum Origin {
     Git { url: String, tag: String },
     /// A folder in development, loaded in place.
     Dev { path: String },
+    /// A version of store.escouade.dev (STORE-9), pinned by the SHA-256 of its `version.json`;
+    /// `verified`: its seal held when it was installed (it is checked again at each reading).
+    Store {
+        version: String,
+        sha256: String,
+        #[serde(default)]
+        verified: bool,
+        /// The repository, the tag and the commit `version.json` names (« D'où il vient »).
+        #[serde(default)]
+        repository: String,
+        #[serde(default)]
+        tag: String,
+        #[serde(default)]
+        commit: String,
+    },
 }
 
 /// A plugin of the list (`plugins.json`).
@@ -196,6 +213,20 @@ pub struct Update {
     /// The tag it is at, for a plugin of a git repository.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tag: Option<String>,
+    /// For a plugin of the store: whether that version is verified (« v1.3.0 · non vérifiée »).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub verified: Option<bool>,
+}
+
+/// A version withdrawn or unverified by the revocation list (docs/STORE.md §4.6).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Withdrawn {
+    /// `disable` (stopped, switched off) or `unverify` (the seal goes).
+    pub action: String,
+    pub version: String,
+    pub reason: String,
+    pub date: String,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -223,7 +254,7 @@ pub struct ProblemView {
 }
 
 impl Refusal {
-    fn other(message: String) -> Self {
+    pub(crate) fn other(message: String) -> Self {
         Self {
             message,
             problems: Vec::new(),
@@ -307,6 +338,14 @@ pub struct PluginView {
     pub secret_keys: Vec<String>,
     /// A newer version found, offered.
     pub update: Option<Update>,
+    /// « Vérifié par Escouade »: a version of the store whose signature holds here, now, with the
+    /// app's keys against the `version.json` kept (offline too).
+    pub verified: bool,
+    /// What the revocation list says of this version, if anything.
+    pub withdrawn: Option<Withdrawn>,
+    /// A plugin not installed from the store whose id the store has (from a git repository, a
+    /// folder): the version it would install in its place (docs/STORE.md §5.2).
+    pub in_store: Option<store::Offer>,
 }
 
 /// A plugin as last read from its folder.
@@ -320,6 +359,16 @@ struct Loaded {
     /// A folder in development's files when it was read: an event of its watcher that changed
     /// nothing (one delivered late, a file written again as it was) reads nothing again (`reload`).
     seen: Option<Seen>,
+    /// A version of the store: its `version.json` and its signature as kept, which the seal is
+    /// checked against.
+    proof: Option<Proof>,
+}
+
+/// What proves a version of the store: its `version.json` and, when verified, its `.minisig`.
+#[derive(Debug, Clone)]
+struct Proof {
+    json: Vec<u8>,
+    minisig: Option<String>,
 }
 
 /// A folder in development as last read: its stamp, cheap to take again at each event, and the
@@ -357,6 +406,10 @@ pub struct Plugins {
     staged: Mutex<HashMap<String, Staged>>,
     /// Told the id of each folder in development read again (the runtime forgets its host).
     reloaded: Mutex<Vec<ReloadHook>>,
+    /// The store's revocation list, as last taken (STORE-9).
+    revocations: RwLock<Option<store::RevocationList>>,
+    /// What the store offers, by id (`Store::offers`).
+    offers: RwLock<HashMap<String, store::Offer>>,
 }
 
 type ReloadHook = Box<dyn Fn(&str) + Send + Sync>;
@@ -385,6 +438,10 @@ pub struct Preview {
     /// What it may do that the version installed may not: the user's consent is asked again.
     pub grown: Vec<String>,
     pub manifest: Manifest,
+    /// A version of the store whose signature holds with the app's keys: « Vérifié par Escouade ».
+    pub verified: bool,
+    /// Why the revocation list took its seal off, if it did.
+    pub unverified: Option<String>,
 }
 
 /// The installed version an inspection would replace.
@@ -400,6 +457,7 @@ pub struct Previous {
 struct Staged {
     installed: Installed,
     dir: Option<PathBuf>,
+    proof: Option<Proof>,
 }
 
 impl Plugins {
@@ -417,6 +475,8 @@ impl Plugins {
             updates: RwLock::new(HashMap::new()),
             staged: Mutex::new(HashMap::new()),
             reloaded: Mutex::new(Vec::new()),
+            revocations: RwLock::new(None),
+            offers: RwLock::new(HashMap::new()),
         });
         let index = me.index();
         let loaded: Vec<Loaded> = index.plugins.into_iter().map(|i| me.read(i)).collect();
@@ -475,12 +535,22 @@ impl Plugins {
                 })
             })
             .flatten();
+        let proof = matches!(installed.origin, Origin::Store { .. })
+            .then(|| {
+                let dir = self.proof_dir(&installed.id);
+                Some(Proof {
+                    json: std::fs::read(dir.join("version.json")).ok()?,
+                    minisig: std::fs::read_to_string(dir.join("version.json.minisig")).ok(),
+                })
+            })
+            .flatten();
         Loaded {
             installed,
             folder,
             read,
             changed,
             seen,
+            proof,
         }
     }
 
@@ -565,6 +635,18 @@ impl Plugins {
                                 m.id
                             ),
                         }
+                    } else if let Some(w) =
+                        self.withdrawn_in(l, lang).filter(|w| w.action == "disable")
+                    {
+                        State::Disabled {
+                            reason: tr_in!(
+                                lang,
+                                "Retiré par Escouade le {} : {}",
+                                "Withdrawn by Escouade on {}: {}",
+                                w.date,
+                                w.reason
+                            ),
+                        }
                     } else if l.changed {
                         State::Disabled {
                             reason: tr_in!(
@@ -618,6 +700,11 @@ impl Plugins {
             asks: manifest.as_ref().map(asks).unwrap_or_default(),
             secret_keys: manifest.as_ref().map(secret_keys).unwrap_or_default(),
             update: self.updates.read().get(&i.id).cloned(),
+            verified: self.sealed(l),
+            withdrawn: self.withdrawn_in(l, lang),
+            in_store: (!matches!(i.origin, Origin::Store { .. } | Origin::Dev { .. }))
+                .then(|| self.offers.read().get(&i.id).cloned())
+                .flatten(),
             manifest,
         }
     }
@@ -715,6 +802,7 @@ impl Plugins {
             },
             Some(dir),
             m,
+            None,
             lang,
         ))
     }
@@ -786,6 +874,7 @@ impl Plugins {
                 },
                 Some(dir),
                 m,
+                None,
                 lang,
             ))
         }
@@ -811,6 +900,7 @@ impl Plugins {
             },
             None,
             m,
+            None,
             lang,
         ))
     }
@@ -821,8 +911,14 @@ impl Plugins {
         installed: Installed,
         dir: Option<PathBuf>,
         m: Manifest,
+        store: Option<(Proof, Option<String>)>,
         lang: Lang,
     ) -> Preview {
+        let verified = store.as_ref().is_some_and(|(p, _)| p.minisig.is_some());
+        let (proof, unverified) = match store {
+            Some((p, u)) => (Some(p), u),
+            None => (None, None),
+        };
         let token = uuid::Uuid::new_v4().simple().to_string();
         let wanted = asks(&m);
         let previous = self.get(&m.id, lang).map(|v| Previous {
@@ -860,6 +956,8 @@ impl Plugins {
             previous,
             grown,
             manifest: m,
+            verified,
+            unverified,
         };
         let mut staged = self.staged.lock();
         // What was set aside and never answered goes: one inspection at a time is enough.
@@ -868,7 +966,14 @@ impl Plugins {
                 remove_dir(&d);
             }
         }
-        staged.insert(token, Staged { installed, dir });
+        staged.insert(
+            token,
+            Staged {
+                installed,
+                dir,
+                proof,
+            },
+        );
         preview
     }
 
@@ -924,6 +1029,24 @@ impl Plugins {
                         remove_dir(&copy);
                     }
                 }
+            }
+        }
+        let proofs = self.proof_dir(&id);
+        remove_dir(&proofs);
+        if let Some(p) = &staged.proof {
+            let kept = std::fs::create_dir_all(&proofs)
+                .and_then(|_| crate::paths::write_atomic(&proofs.join("version.json"), &p.json))
+                .and_then(|_| match &p.minisig {
+                    Some(sig) => crate::paths::write_atomic(
+                        &proofs.join("version.json.minisig"),
+                        sig.as_bytes(),
+                    ),
+                    None => Ok(()),
+                });
+            if let Err(e) = kept {
+                log::warn!(
+                    "plugin {id}: its version.json is not kept, its seal will not show: {e}"
+                );
             }
         }
         let _ = std::fs::remove_file(self.kept_file(&id));
@@ -1018,6 +1141,7 @@ impl Plugins {
         if !matches!(gone.installed.origin, Origin::Dev { .. }) {
             remove_dir_patiently(&gone.folder);
         }
+        remove_dir(&self.proof_dir(id));
         let kept = self.kept_file(id);
         if keep {
             if let Some(dir) = kept.parent() {
@@ -1059,9 +1183,20 @@ impl Plugins {
                         .map(|m| Update {
                             version: m.version,
                             tag: None,
+                            verified: None,
                         })
                 }
                 Origin::Dev { .. } => None,
+                Origin::Store { .. } => self
+                    .offers
+                    .read()
+                    .get(&i.id)
+                    .filter(|o| manifest::version(&o.version) > manifest::version(&version))
+                    .map(|o| Update {
+                        version: o.version.clone(),
+                        tag: None,
+                        verified: Some(o.verified),
+                    }),
             };
             let mut updates = self.updates.write();
             match found {
@@ -1069,6 +1204,232 @@ impl Plugins {
                 None => updates.remove(&i.id),
             };
         }
+    }
+
+    /// Where the `version.json` and the signature of a plugin of the store are kept: beside its
+    /// copy, out of the files its fingerprint covers.
+    fn proof_dir(&self, id: &str) -> PathBuf {
+        self.data.plugins_dir().join(".store").join(id)
+    }
+
+    /// Whether the seal of a plugin of the store holds, here and now: its `version.json` kept is
+    /// the one it was installed by, its signature holds with the app's keys (less those the list
+    /// revokes) for this id and this version, and the list does not take it off.
+    fn sealed(&self, l: &Loaded) -> bool {
+        let Origin::Store {
+            version, sha256, ..
+        } = &l.installed.origin
+        else {
+            return false;
+        };
+        let Some(Proof {
+            json,
+            minisig: Some(sig),
+        }) = &l.proof
+        else {
+            return false;
+        };
+        if store::sha256(json) != *sha256 {
+            return false;
+        }
+        let list = self.revocations.read();
+        if list
+            .as_ref()
+            .is_some_and(|li| li.find(&l.installed.id, version, "unverify").is_some())
+        {
+            return false;
+        }
+        let keys = store::trusted_keys(list.as_ref());
+        let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
+        store_keys::verified_with(&keys, json, sig, &l.installed.id, version).is_ok()
+    }
+
+    /// The version a plugin runs, as the revocation list names it.
+    fn running_version(l: &Loaded) -> Option<String> {
+        match &l.installed.origin {
+            Origin::Store { version, .. } => Some(version.clone()),
+            Origin::Dev { .. } => None,
+            _ => l
+                .read
+                .as_ref()
+                .ok()?
+                .manifest
+                .as_ref()
+                .ok()
+                .map(|m| m.version.clone()),
+        }
+    }
+
+    /// What the revocation list says of the version a plugin runs (a folder in development is its
+    /// author's: never withdrawn); `disable` first.
+    fn withdrawn(&self, l: &Loaded) -> Option<Withdrawn> {
+        self.withdrawn_in(l, Lang::En)
+    }
+
+    fn withdrawn_in(&self, l: &Loaded, lang: Lang) -> Option<Withdrawn> {
+        let version = Self::running_version(l)?;
+        let list = self.revocations.read();
+        let list = list.as_ref()?;
+        let e = list
+            .find(&l.installed.id, &version, "disable")
+            .or_else(|| list.find(&l.installed.id, &version, "unverify"))?;
+        Some(Withdrawn {
+            action: e.action.clone(),
+            version,
+            reason: e.reason.get(lang).to_string(),
+            date: e.date.chars().take(10).collect(),
+        })
+    }
+
+    /// Takes the store's revocation list and offers (at the start, then every 6 hours): a version
+    /// the list withdraws is disabled, its process stopped by the hooks of `on_reload` (the runtime
+    /// forgets it); the updates of the plugins of the store are looked for again.
+    pub fn apply_store(
+        &self,
+        list: Option<store::RevocationList>,
+        offers: HashMap<String, store::Offer>,
+    ) {
+        let disabled = |me: &Self| -> Vec<String> {
+            me.loaded
+                .read()
+                .iter()
+                .filter(|l| me.withdrawn(l).is_some_and(|w| w.action == "disable"))
+                .map(|l| l.installed.id.clone())
+                .collect()
+        };
+        let before = disabled(self);
+        *self.revocations.write() = list;
+        *self.offers.write() = offers;
+        let after = disabled(self);
+        for id in after.iter().filter(|id| !before.contains(id)) {
+            log::warn!("plugin {id}: withdrawn by Escouade's revocation list, stopped");
+            for hook in self.reloaded.lock().iter() {
+                hook(id);
+            }
+        }
+        let offers = self.offers.read().clone();
+        let mut updates = self.updates.write();
+        for l in self.loaded.read().iter() {
+            let Origin::Store { version, .. } = &l.installed.origin else {
+                continue;
+            };
+            match offers
+                .get(&l.installed.id)
+                .filter(|o| manifest::version(&o.version) > manifest::version(version))
+            {
+                Some(o) => updates.insert(
+                    l.installed.id.clone(),
+                    Update {
+                        version: o.version.clone(),
+                        tag: None,
+                        verified: Some(o.verified),
+                    },
+                ),
+                None => updates.remove(&l.installed.id),
+            };
+        }
+    }
+
+    /// What installing a version downloaded and checked from the store would do (`Store::fetch`):
+    /// its files written in a folder set aside, this system's program where its manifest names it,
+    /// pinned by the SHA-256 of its `version.json`.
+    pub fn inspect_store(&self, f: store::Fetched, lang: Lang) -> Result<Preview, Refusal> {
+        let root = self.data.plugins_dir();
+        let fail = |e: std::io::Error| {
+            Refusal::other(tr_in!(
+                lang,
+                "Le plugin n'a pas pu être écrit dans {} : {e}",
+                "The plugin could not be written to {}: {e}",
+                root.display()
+            ))
+        };
+        std::fs::create_dir_all(&root).map_err(fail)?;
+        let incoming = root.join(format!(".incoming-{}", uuid::Uuid::new_v4().simple()));
+        let written = (|| -> Result<Manifest, Refusal> {
+            std::fs::create_dir_all(&incoming).map_err(fail)?;
+            for (rel, bytes) in &f.files {
+                let to = inside(&incoming, rel).ok_or_else(|| {
+                    Refusal::other(format!("{rel}: a path out of the plugin's folder"))
+                })?;
+                if let Some(dir) = to.parent() {
+                    std::fs::create_dir_all(dir).map_err(fail)?;
+                }
+                std::fs::write(&to, bytes).map_err(fail)?;
+            }
+            let m = Self::checked(&incoming, lang)?;
+            if m.id != f.id || m.version != f.version {
+                return Err(Refusal::other(tr_in!(
+                    lang,
+                    "Le manifeste de l'archive est celui de {}@{}, pas de {}@{} : rien n'est installé.",
+                    "The archive's manifest is {}@{}'s, not {}@{}'s: nothing is installed.",
+                    m.id,
+                    m.version,
+                    f.id,
+                    f.version
+                )));
+            }
+            if let (Some(bytes), Some(program)) = (&f.program, m.run.as_ref().map(program_here)) {
+                let to = inside(&incoming, &program).ok_or_else(|| {
+                    Refusal::other(format!("{program}: a path out of the plugin's folder"))
+                })?;
+                if let Some(dir) = to.parent() {
+                    std::fs::create_dir_all(dir).map_err(fail)?;
+                }
+                std::fs::write(&to, bytes).map_err(fail)?;
+                make_executable(&to).map_err(fail)?;
+            }
+            Ok(m)
+        })();
+        let m = match written {
+            Ok(m) => m,
+            Err(e) => {
+                remove_dir(&incoming);
+                return Err(e);
+            }
+        };
+        let digest = match digest(&incoming) {
+            Ok(d) => d,
+            Err(e) => {
+                remove_dir(&incoming);
+                return Err(fail(e));
+            }
+        };
+        let verified = f.minisig.is_some();
+        Ok(self.stage(
+            Installed {
+                id: m.id.clone(),
+                origin: Origin::Store {
+                    version: f.version.clone(),
+                    sha256: f.sha256.clone(),
+                    verified,
+                    repository: f.repository.clone(),
+                    tag: f.tag.clone(),
+                    commit: f.commit.clone(),
+                },
+                fingerprint: format!("store:{}", f.sha256),
+                digest,
+                installed_at: String::new(),
+                choices: Choices::default(),
+            },
+            Some(incoming),
+            m,
+            Some((
+                Proof {
+                    json: f.version_json,
+                    minisig: f.minisig,
+                },
+                f.unverified,
+            )),
+            lang,
+        ))
+    }
+
+    /// The id of what the inspection `token` set aside, and whether a plugin of that id is
+    /// installed (an update).
+    pub fn staged(&self, token: &str) -> Option<(String, bool)> {
+        let id = self.staged.lock().get(token)?.installed.id.clone();
+        let update = self.loaded.read().iter().any(|l| l.installed.id == id);
+        Some((id, update))
     }
 
     /// Puts `installed` in the list in place of its id's, read from its folder, the list saved.
@@ -1206,6 +1567,7 @@ async fn newer_tag(url: &str, version: &str) -> Option<Update> {
         .map(|(v, t)| Update {
             version: v.to_string(),
             tag: Some(t),
+            verified: None,
         })
 }
 
@@ -1223,6 +1585,43 @@ fn icon_data(folder: &Path, rel: &str) -> Option<String> {
 
 fn now() -> String {
     chrono::Utc::now().to_rfc3339()
+}
+
+/// The program of `run` on this system: its own (`windows`, `macos`, `linux`), else `command`.
+fn program_here(run: &manifest::Run) -> String {
+    let system = match std::env::consts::OS {
+        "windows" => "windows",
+        "macos" => "macos",
+        _ => "linux",
+    };
+    run.by_system
+        .get(system)
+        .cloned()
+        .unwrap_or_else(|| run.command.clone())
+}
+
+/// `rel` (a path of an archive, `/` between folders) joined to `root`, when it stays inside.
+fn inside(root: &Path, rel: &str) -> Option<PathBuf> {
+    let rel = rel.trim_start_matches("./");
+    let mut out = root.to_path_buf();
+    for part in rel.split('/') {
+        if part.is_empty() || part == "." || part == ".." || part.contains(['\\', ':', '\0']) {
+            return None;
+        }
+        out.push(part);
+    }
+    (out != root).then_some(out)
+}
+
+#[cfg(unix)]
+fn make_executable(path: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755))
+}
+
+#[cfg(not(unix))]
+fn make_executable(_: &Path) -> std::io::Result<()> {
+    Ok(())
 }
 
 /// Removes a folder, read-only files included; what cannot be removed stays.
