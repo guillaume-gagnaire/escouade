@@ -2,7 +2,7 @@
 title: "Spécification"
 subject: "Docs"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-256","ESC-258","ESC-261","ESC-262","ESC-263"]
+tickets: ["ESC-256","ESC-258","ESC-261","ESC-262","ESC-263","ESC-301"]
 decisions: []
 compared: null
 ---
@@ -20,7 +20,8 @@ Troisième onglet de la barre latérale : « Agents · Kanban · Docs ». Il ne 
 ### Les pages
 
 - Une page est un fichier `.escouade/spec/<sujet>/<page>.md` : un en-tête, puis le texte en Markdown. Les pages sont rangées en dossiers par sujet, sur 4 niveaux au plus. Un chemin est un *slug* par segment (accents ôtés, minuscules, tirets).
-- L'en-tête a une ligne `clé: valeur` par clé, la valeur en JSON : `title` ; `subject`, le nom affiché de son sujet ; `sources`, d'où elle vient (documents, fichiers, liens) ; `tickets` ; `decisions` ; `compared`, sa dernière comparaison au code (`null` si jamais). Trois champs ne sont écrits que quand ils servent : `gaps`, les écarts avec le code que la comparaison laisse (un texte et les fichiers en cause) ; `draft`, un brouillon ; `order`, sa place dans son sujet.
+- L'en-tête a une ligne `clé: valeur` par clé, la valeur en JSON : `title` ; `subject`, le nom affiché de son sujet ; `sources`, d'où elle vient (documents, fichiers, liens) ; `tickets` ; `decisions` ; `compared` (`null` si jamais). Trois champs ne sont écrits que quand ils servent : `gaps`, des écarts avec le code (un texte et les fichiers en cause) ; `draft`, un brouillon ; `order`, sa place dans son sujet.
+- La comparaison au code n'écrit plus `compared` ni `gaps` dans la page : elle les garde dans le dossier de données d'Escouade, et ce qu'elle a gardé se lit par-dessus l'en-tête (voir *Spec tenue à jour*). Ceux qu'un en-tête a encore se lisent tant que la page n'a pas été comparée de nouveau.
 - Un fichier écrit à la main, sans en-tête, est une page quand même. Les fichiers sont lus et réécrits à l'octet près.
 - L'ordre : les pages par `order`, puis par nom ; 0 range par nom, après les autres. Un sujet prend le plus petit `order` de ses pages. Son titre est le `subject` de ses pages, sinon le nom de son dossier.
 
@@ -52,7 +53,7 @@ C'est l'accueil de l'espace Spécification. En tête : les pages à jour, les é
 
 Tout ce que les agents écrivent dans la spec passe par ces outils. Ils écrivent dans la branche des docs, sans rien commiter ; ceux d'une discussion n'écrivent que des propositions (voir *Discussions*). Les formats sont dans `docs/PROTOCOL.md`.
 
-- `get_spec_tree` (l'arbre ; tant que la spec est vide, les candidats à l'import, sans rien importer), `read_spec_page`, `search_spec`, `write_spec_page`. Ce dernier crée ou modifie une page : un chemin sans dossier va sous `subject`, sinon sous `general`. Sa réponse donne les lignes ajoutées et retirées.
+- `get_spec_tree` (l'arbre ; tant que la spec est vide, les candidats à l'import, sans rien importer), `read_spec_page` (avec les écarts et la dernière comparaison gardés par Escouade), `search_spec`, `write_spec_page`. Ce dernier crée ou modifie une page : un chemin sans dossier va sous `subject`, sinon sous `general`. Sa réponse donne les lignes ajoutées et retirées.
 - Les décisions ont leurs outils (voir *Décisions*).
 
 ## Limites

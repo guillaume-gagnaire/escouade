@@ -83,7 +83,14 @@ impl<R: Runtime> Core<R> {
     pub async fn docs_space(&self, project_id: &str, agent: Option<&str>) -> Result<Space> {
         let mut space = self.docs_space_of(project_id, agent).await?;
         space.facts = Some((self.facts.emitter(), project_id.to_string()));
+        space.checks = Some(self.docs_checks_file(project_id));
         Ok(space)
+    }
+
+    /// Where what the comparison to the code found of the project's pages is kept (ESC-301): in
+    /// Escouade's folder, whatever the branch, so that git never sees it.
+    pub(crate) fn docs_checks_file(&self, project_id: &str) -> PathBuf {
+        self.data.project_files(project_id).join("docs-checks.json")
     }
 
     async fn docs_space_of(&self, project_id: &str, agent: Option<&str>) -> Result<Space> {
