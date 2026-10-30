@@ -20,6 +20,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - A plugin can decide your agents’ permissions before they reach you: allow a safe command, deny a dangerous one with its reason, and leave you the rest. A denial wins, the card says which plugin answered (“Allowed by Team rules via Escouade”), and without an answer within half a second the request comes to you as before.
 - The store is in the app: the Plugins view reads the catalog of store.escouade.dev, searches it on your machine, suggests plugins for the open project from what it sees there, and installs the last compatible version after checking its archive and its “Verified by Escouade” seal with the app’s keys. A version withdrawn by Escouade is stopped and says so, and “Install verified versions only” refuses the others.
 - Four example plugins, complete and tested, to copy when you write yours: a “High contrast” theme, a Discord webhook with no code, Slack in each project’s channel and a team’s rules in TypeScript. The documentation shows their whole code.
+- The documentation says how to publish a plugin on the store and prepare its review, and a new page, “Plugin security”, says what the app checks, what the “Verified by Escouade” seal covers and what the review refuses.
 
 ### Fixes
 

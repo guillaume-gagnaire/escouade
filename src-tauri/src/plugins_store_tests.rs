@@ -344,7 +344,7 @@ async fn the_updates_of_a_store_plugin_come_from_the_catalogue_and_say_if_verifi
 async fn a_plugin_from_a_folder_is_offered_the_store_version_of_its_id() {
     let fake = Fake::start().trusted();
     let (_, store, plugins) = ready(&fake, "fromgit").await;
-    let src = root().join("tests/fixtures/plugins/examples/high-contrast");
+    let src = root().join("plugin-examples/high-contrast");
     let view = plugins.install_folder(&src, Lang::Fr).unwrap();
     assert_eq!(view.id, "dev.exemple.high-contrast");
     let offer = view.in_store.expect("the store has this id");

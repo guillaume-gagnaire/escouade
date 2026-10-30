@@ -2,6 +2,10 @@
 
 A plugin is published on store.escouade.dev from its public GitHub repository and a git tag. This page says how to submit a version, what the store checks, and how to fix a rejection.
 
+## One plugin per repository
+
+The store reads **one plugin at the root of a repository**: `escouade-plugin.json`, `README.md` and `LICENSE` (or `COPYING`) at the top level, and the manifest’s `repository` naming that repository. A repository that keeps several plugins in subfolders, like `plugin-examples/` in Escouade’s repository, cannot be submitted as it is: give each plugin its own repository. A plugin’s folder is copied as it is to the root of the new repository; it then needs its README, its license and its `repository`.
+
 ## Submitting a version
 
 1. Sign in on [store.escouade.dev](https://store.escouade.dev/en/submit) with GitHub, and install the “Escouade Store” App on the plugin’s repository. It reads the code and the tags, never writing. A private repository is refused: the code of a plugin of the store is read by all.
@@ -41,6 +45,18 @@ Anyone can report a plugin from its page, without an account, with an e-mail add
 A plugin that runs a compiled program attaches to the tag’s release one archive per system, whose name says the system and the architecture: `…-windows-x64.zip`, `…-macos-arm64.tar.gz`, `…-linux-x64.tar.gz` (50 MB at most each). Each system that runs a program missing from the repository must have its own. The store downloads them once, keeps them and computes their fingerprint.
 
 Build them in a public GitHub Actions workflow with `actions/attest-build-provenance`: the provenance attestation ties each file to the tag’s commit. A binary without an attestation is published unverified and cannot be verified; a binary attested from another commit is refused.
+
+## Preparing for the review
+
+The “Verified by Escouade” review is done by hand, version by version, on the Escouade team’s machine: it downloads the archive the store keeps, checks its fingerprints, reads the code against the declared permissions and runs the [conformance bench](plugins/testing) in a container without network. It then signs `version.json` with a key that never leaves that machine: neither the store nor the CI has it. What makes it quick:
+
+- **exact permissions**: every host reached in `permissions.network`, every secret in `contributes.secrets`, nothing more;
+- **readable code**: a compiled file (`dist/`) has its source in the repository and rebuilds from it; no minified code without its source, no text encoded in base64;
+- **few dependencies**, at fixed versions, without a `postinstall` script or a dependency pulled from a git repository;
+- **attested binaries** (see above): without an attestation, a version cannot be verified;
+- **short updates**: a new version is read on its diff with the last verified one, the permissions that grow first.
+
+What the review refuses, and what the seal covers: [plugin security](plugins/security).
 
 ## Fixing a rejection
 

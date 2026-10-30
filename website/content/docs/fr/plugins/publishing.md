@@ -2,6 +2,10 @@
 
 Un plugin se publie sur store.escouade.dev depuis son dépôt GitHub public et une étiquette git. Cette page dit comment soumettre une version, ce que le store contrôle, et comment corriger un refus.
 
+## Un plugin par dépôt
+
+Le store lit **un plugin à la racine d’un dépôt** : `escouade-plugin.json`, `README.md` et `LICENSE` (ou `COPYING`) au premier niveau, et `repository` du manifeste qui nomme ce dépôt. Un dépôt qui range plusieurs plugins dans des sous-dossiers, comme `plugin-examples/` du dépôt d’Escouade, ne se soumet pas tel quel : donne à chaque plugin son dépôt. Le dossier d’un plugin se copie tel quel à la racine du nouveau dépôt ; il lui faut alors son README, sa licence et son `repository`.
+
 ## Soumettre une version
 
 1. Connecte-toi sur [store.escouade.dev](https://store.escouade.dev/submit) avec GitHub, et installe l’App « Escouade Store » sur le dépôt du plugin. Elle lit le code et les étiquettes, sans jamais écrire. Un dépôt privé est refusé : le code d’un plugin du store se lit par tous.
@@ -41,6 +45,18 @@ Tout le monde peut signaler un plugin depuis sa page, sans compte, avec une adre
 Un plugin qui lance un programme compilé attache à la release de l’étiquette une archive par système, dont le nom dit le système et l’architecture : `…-windows-x64.zip`, `…-macos-arm64.tar.gz`, `…-linux-x64.tar.gz` (50 Mo au plus chacune). Chaque système qui lance un programme absent du dépôt doit avoir la sienne. Le store les télécharge une fois, les garde et en calcule l’empreinte.
 
 Construis-les dans un workflow GitHub Actions public avec `actions/attest-build-provenance` : l’attestation de provenance lie chaque fichier au commit de l’étiquette. Un binaire sans attestation est publié non vérifié et ne pourra pas être vérifié ; un binaire attesté depuis un autre commit est refusé.
+
+## Préparer la revue
+
+La revue « Vérifié par Escouade » est faite à la main, version par version, sur le poste de l’équipe d’Escouade : elle télécharge l’archive gardée par le store, en vérifie les empreintes, lit le code au regard des permissions déclarées et fait passer le [banc de conformité](plugins/testing) dans un conteneur sans réseau. Elle signe ensuite `version.json` avec une clé qui ne quitte jamais ce poste : ni le store, ni la CI ne l’ont. Ce qui la rend rapide :
+
+- **des permissions exactes** : chaque hôte joint dans `permissions.network`, chaque secret dans `contributes.secrets`, rien de plus ;
+- **du code lisible** : un fichier compilé (`dist/`) a sa source dans le dépôt et s’en reconstruit ; pas de code minifié sans source, pas de texte encodé en base64 ;
+- **peu de dépendances**, à des versions fixes, sans script `postinstall` ni dépendance tirée d’un dépôt git ;
+- **des binaires attestés** (voir plus haut) : sans attestation, une version ne peut pas être vérifiée ;
+- **des mises à jour courtes** : une nouvelle version se relit sur son diff avec la dernière vérifiée, les permissions qui grandissent en tête.
+
+Ce que la revue refuse, et ce que le sceau couvre : [la sécurité des plugins](plugins/security).
 
 ## Corriger un refus
 

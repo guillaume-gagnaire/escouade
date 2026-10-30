@@ -449,6 +449,7 @@ export const fr: Catalog = {
       'plugins/testing': 'Tester un plugin',
       'plugins/themes': 'Les thèmes',
       'plugins/publishing': 'Publier sur le store',
+      'plugins/security': 'La sécurité des plugins',
       'plugins/examples': 'Les plugins d’exemple',
       shortcuts: 'Raccourcis clavier',
       'escouade-yml': '.escouade.yml',

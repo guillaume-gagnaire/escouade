@@ -521,6 +521,47 @@ Les tickets s'appellent ici STORE-1, STORE-2… ; le chef d'escouade leur donne 
 
 Ordre : STORE-1 → STORE-2 → STORE-3 → (STORE-4, STORE-5, STORE-6 en parallèle) → STORE-7 → STORE-8 → STORE-9 → STORE-10. Le service (STORE-1 à STORE-6) n'attend des plugins que le schéma et le validateur ; il peut avancer pendant que l'app construit PLG-2 à PLG-8. STORE-9 attend l'onglet Plugins (ESC-176).
 
+**Fait le 2026-10-30** (ESC-237, STORE-10, sans l'utilisateur : ni clé, ni soumission au store en ligne) :
+- **les docs** : `website/content/docs/{fr,en}/plugins/publishing.md` gagne « Un plugin par dépôt » et « Préparer la revue » ; `plugins/security.md`, nouvelle page en fr et en (« La sécurité des plugins ») : ce que l'app vérifie, ce que le sceau couvre et ne promet pas, **ce que la revue refuse** (refusé d'office, pas de sceau tant que ce n'est pas corrigé, retiré), le retrait et la liste de révocation, les signalements ; CHANGELOG fr/en. `docs/PROTOCOL.md` n'a pas bougé : le store ne change pas le protocole des plugins ;
+- **l'essai, contre les faux stores et avec des clés de test** : la soumission des quatre exemples aux dix contrôles et la signature de leur `version.json` (`store/tests/unit/trial.test.ts`), la revue (`npm run plugin-review -- dev.exemple.slack@1.1.0` contre `store/tests/fake/review-store.mjs` : le diff depuis la 1.0.0 et les permissions qui grandissent en tête ; `plugin-review.test.ts`, `review-admin.test.ts` pour la signature et la liste), l'installation dans l'app sous Windows avec le sceau vérifié, une version non vérifiée et une version retirée par la liste (`plugins_store_tests.rs`, `tests/e2e/store.spec.ts` sur un build debug). macOS et Linux attendent l'essai réel ;
+- **ce que l'essai a trouvé** : le faux store de l'app lisait encore `tests/fixtures/plugins/examples/`, que PLG-10 avait retiré (le faux store ne démarrait plus) ; il lit maintenant `plugin-examples/` par `exampleFiles` du faux store de la revue. Et **le store ne lit qu'un plugin à la racine d'un dépôt** : `plugin-examples/` soumis tel quel est refusé (pas de manifeste à la racine), et le dossier d'un exemple seul manque de `repository`, d'un README et d'une licence (trois contrôles) ; copié à la racine d'un dépôt à lui avec les trois, chacun passe les dix contrôles. Rien n'est construit pour les sous-dossiers ; ce qui est proposé :
+  - **maintenant** : un dépôt public par exemple (`escouade-dev/plugin-high-contrast`, `plugin-discord-webhook`, `plugin-slack`, `plugin-team-rules`), son contenu copié de `plugin-examples/<dossier>/` (par `git subtree split --prefix plugin-examples/<dossier>` pour garder l'histoire), avec `README.md`, `LICENSE` et `repository` ; `plugin-examples/` reste la source, et un workflow pourra plus tard pousser chaque dossier dans son dépôt ;
+  - **plus tard, si des auteurs le demandent** : un sous-dossier choisi à la soumission (`path`), l'archive lue sous lui, le `path` gardé dans `version.json` et vérifié par l'app ; cela change le format de `version.json` (donc l'app et la revue) et la règle `repository` : un ticket à part.
+
+### 9.1 L'essai réel, pas à pas (avec l'utilisateur)
+
+À faire ensemble, dans cet ordre ; chaque étape dit ce qu'on doit voir. Rien ici ne se fait sans l'utilisateur : la signature demande ses clés, la soumission agit en son nom sur un service public.
+
+1. **Les clés** : la procédure de §4.5 (deux paires minisign, sauvegarde hors ligne, jeton d'administration au trousseau). Le chef d'escouade met les deux clés publiques dans `store/keys/store.pub`, `store/keys/backup.pub` et `src-tauri/src/plugins/store_keys.rs` ; le push sur `main` redéploie le store. **À voir** : la page `/review` ne dit plus « aucune clé » en tête ; `cargo nextest run the_embedded_keys_are_those_of_the_store` passe (les clés de l'app sont celles du store).
+2. **Une app qui embarque les clés**, pour les trois systèmes : la release suivante, ou les artefacts de la CI d'un commit de `main` qui les a (Windows : l'installeur NSIS ; macOS : le `.dmg` universel ; Linux : le `.deb` ou l'AppImage). Un build debug ne convient pas : il lit `ESCOUADE_STORE_TEST_KEY`.
+3. **Les dépôts** : quatre dépôts publics, sous le compte de l'utilisateur ou l'organisation `escouade-dev` (à décider avec lui), un par exemple. Pour chacun, depuis la racine de ce dépôt :
+   ```sh
+   git subtree split --prefix plugin-examples/high-contrast -b plugin-high-contrast
+   git push git@github.com:escouade-dev/plugin-high-contrast.git plugin-high-contrast:main
+   ```
+   puis, dans le nouveau dépôt : `LICENSE` (copie de `plugin-examples/LICENSE`), `README.md` (fr ou en, ce que fait le plugin), `"repository": "https://github.com/escouade-dev/plugin-high-contrast"` dans `escouade-plugin.json`, commit, et l'étiquette : `git tag v1.0.0 && git push origin v1.0.0`. Même chose pour `discord-webhook`, `slack`, `team-rules`. Slack et Règles de l'équipe lancent leur `dist/` par Node (le programme est dans le dépôt) : pas de binaire ni d'attestation à fournir. **À voir** : `escouade-plugin validate .` passe dans chaque dépôt.
+4. **La soumission** : sur <https://store.escouade.dev/submit>, connecté avec GitHub, « Installer l'App sur un dépôt » pour les quatre ; puis, dépôt par dépôt, l'étiquette `v1.0.0`. **À voir** : « v1.0.0 → <7 premiers caractères du commit> », les dix contrôles verts ; « Publier » avec la catégorie (Thèmes ; Notifications ; Notifications ; Autorisations), des mots-clés, « Demander la revue » cochée. La page du plugin dit « En revue », le salon des admins sur Discord annonce la version (§4.7), la file `/review` la montre dans « À relire ».
+5. **La revue**, sur le poste, à la racine de ce dépôt (podman ou docker lancé, et sous Windows `ESCOUADE_PLUGIN_LINUX` vers un `escouade-plugin` construit dans WSL, §4.2) :
+   ```sh
+   npm run plugin-review -- dev.exemple.high-contrast@1.0.0
+   ```
+   ou `/review-plugin dev.exemple.high-contrast@1.0.0` dans Claude Code. **À voir** : le rapport dans `~/.escouade-review/dev.exemple.high-contrast/1.0.0.md`, aucun bloqueur, le banc passé, le verdict « à décider » ; pour Slack et Discord, les seuls hôtes `slack.com` et `discord.com`. Lire le rapport et décider.
+6. **La signature**, pour chaque version jugée bonne :
+   ```sh
+   npm run plugin-review -- report dev.exemple.high-contrast@1.0.0
+   npm run plugin-review -- sign dev.exemple.high-contrast@1.0.0
+   ```
+   minisign demande le mot de passe de `store.key`. **À voir** : la page du plugin montre le sceau, « Relu par Escouade le … » et le résumé public ; l'auteur reçoit l'e-mail ; le salon public sur Discord annonce la version vérifiée ; le catalogue (`/api/v1/catalog.json`) la dit `verified`.
+7. **L'installation**, sur Windows, puis macOS, puis Linux, avec l'app de l'étape 2 : vue Plugins › Store, chercher « Contraste ». **À voir** : la ligne porte « Vérifié par Escouade » ; « Installer » ouvre la fenêtre des permissions avec « Signature : vérifiée ici, par l'app » ; installé, le thème se choisit dans Réglages › Application › Couleurs. Puis Slack (son secret `token` demandé), Discord (ses deux webhooks), Règles de l'équipe (un refus d'une commande de `rules.json` sur la carte d'un agent). Couper le réseau, relancer l'app : les sceaux tiennent. Sur chaque système, `POST /api/v1/installs` ne part qu'avec les statistiques acceptées.
+8. **La révocation**, sur un seul plugin (Discord, par exemple) :
+   ```sh
+   npm run plugin-review -- revoke dev.exemple.discord@1.0.0 --unverify --fr "Essai de révocation du store." --en "Store revocation trial."
+   ```
+   **À voir** : dans chaque app, « Relire maintenant » (en bas des installés) puis sur la page du plugin « Le sceau de la v1.0.0 a été retiré le … : Essai de révocation du store. », le plugin qui continue ; le sceau parti de sa page sur le store ; au plus une heure après, la même liste à <https://escouade.dev/revocations.json> (workflow `revocations.yml`). Puis `npm run plugin-review -- lift dev.exemple.discord@1.0.0` et, après une nouvelle signature (étape 6, la même version), le sceau revient. Le retrait d'urgence (`--disable`) ne s'essaie que sur une version de test, pas sur un exemple qu'on garde.
+9. **Une mise à jour** (facultatif) : une étiquette `v1.0.1` sur un dépôt. **À voir** : la version en attente dans `/account`, « Publier », puis dans l'app « v1.0.1 · non vérifiée » proposée, jamais installée seule.
+
+Ce qui se note à la fin : les commits et étiquettes publiés, les versions signées, ce qui n'a pas marché, dans la mémoire du projet et ici.
+
 ## 10. Sources
 
 - GitHub Apps, permissions et installation : <https://docs.github.com/en/apps/creating-github-apps/about-creating-github-apps/about-creating-github-apps> ; l'archive d'un commit : <https://docs.github.com/en/rest/repos/contents#download-a-repository-archive-tar> ; la stabilité des archives (2023) : <https://github.blog/open-source/git/update-on-the-future-stability-of-source-code-archives-and-hashes/> ; l'attestation de provenance : <https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations>.
