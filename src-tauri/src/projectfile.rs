@@ -849,7 +849,7 @@ pub fn set(p: &mut Project, key: &str, v: &Value) {
         "agents.engine" => {
             p.engine = serde_json::from_value::<EngineId>(v.clone())
                 .ok()
-                .filter(|e| *e != EngineId::Claude)
+                .filter(|e| *e != EngineId::CLAUDE)
         }
         PRIVATE => p.private = flag,
         "worktrees.per_agent" => p.worktree_per_agent = flag,

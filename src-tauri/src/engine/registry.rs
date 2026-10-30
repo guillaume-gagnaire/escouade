@@ -8,28 +8,57 @@
 
 use super::{Engine, Located, Program};
 use crate::i18n::{self, Lang};
-use parking_lot::Mutex;
+use crate::model::EngineId;
+use parking_lot::{Mutex, RwLock};
 use serde::Serialize;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 
-/// Every harness written, in the order the interface lists them. A harness gets its line with its
-/// adapter (docs/TODO-1.8.md, chapter 1).
+/// The harnesses written into the app, in the order the interface lists them: what the registry
+/// starts from (INT-3). A harness gets its line with its adapter (docs/TODO-1.8.md, chapter 1).
+pub const BUILT_IN: [&dyn Engine; 8] = [
+    &super::CLAUDE,
+    &super::CODEX,
+    &super::COPILOT,
+    &super::OPENCODE,
+    &super::CURSOR,
+    &super::VIBE,
+    &super::AGY,
+    &super::GEMINI,
+];
+
+/// The harnesses there are past the built-in ones, added by `register` (the plugins of a
+/// harness, INT-9).
+static ADDED: RwLock<Vec<&'static dyn Engine>> = RwLock::new(Vec::new());
+
+/// Every harness there is, in the order the interface lists them: the built-in ones, then the
+/// ones added.
 pub fn all() -> Vec<&'static dyn Engine> {
-    vec![
-        &super::CLAUDE,
-        &super::CODEX,
-        &super::COPILOT,
-        &super::OPENCODE,
-        &super::CURSOR,
-        &super::VIBE,
-        &super::AGY,
-        &super::GEMINI,
-    ]
+    let mut out = BUILT_IN.to_vec();
+    out.extend(ADDED.read().iter().copied());
+    out
 }
 
-/// A mode of Escouade a harness takes (`auto`, `default`, `plan`, `acceptEdits`,
+/// Adds `engine` to the registry, after the others; one added before under the same id gives it
+/// its place. A built-in one keeps its own.
+#[allow(dead_code)] // The plugins of a harness come with INT-9; the tests add one.
+pub fn register(engine: &'static dyn Engine) {
+    let mut added = ADDED.write();
+    added.retain(|e| e.id() != engine.id());
+    added.push(engine);
+}
+
+/// The harness of the registry that bears `id`, if any.
+pub fn find(id: EngineId) -> Option<&'static dyn Engine> {
+    BUILT_IN
+        .iter()
+        .copied()
+        .find(|e| e.id() == id)
+        .or_else(|| ADDED.read().iter().copied().find(|e| e.id() == id))
+}
+
+// A mode of Escouade a harness takes (`auto`, `default`, `plan`, `acceptEdits`,
 /// `bypassPermissions`), and what it means there.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]

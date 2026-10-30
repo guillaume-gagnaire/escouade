@@ -1038,8 +1038,96 @@ async fn read_models(
 const NO_SELF_UPDATE: [(&str, &str); 1] = [("AGY_CLI_DISABLE_AUTO_UPDATE", "1")];
 
 impl Engine for Agy {
+    /// Its sign-in is the machine's (the system's keychain, not moved by its home), made by its
+    /// interface itself (`agy`, no argument) in a terminal; each agent has a home of its own
+    /// (`agent_home_var`), another account goes by its Gemini API key (ESC-271).
+    fn store(&self) -> crate::accounts::Store {
+        crate::accounts::Store {
+            home: ".gemini",
+            var: HOME_VAR,
+            files: &[],
+            dirs: &[],
+            login: &[],
+            xdg: None,
+        }
+    }
+
+    fn keys(&self) -> crate::accounts::KeyUse {
+        crate::accounts::KeyUse::Added
+    }
+
+    /// An account added by its key goes by `GEMINI_API_KEY` (its process then writes
+    /// `modelProvider: gemini` in the agent's settings); its Principal by the machine's Google
+    /// sign-in, never by a key of the app's (this machine has one, ESC-273).
+    fn account_env(
+        &self,
+        account: &crate::model::Account,
+        inherited: &dyn Fn(&str) -> bool,
+    ) -> Vec<(String, String)> {
+        use crate::accounts::{account_key, by_key, AGY_KEY_VAR};
+        let key = account_key(account).filter(|_| by_key(account));
+        let mut env: Vec<(String, String)> = KEY_VARS
+            .into_iter()
+            .filter(|v| inherited(v) && (*v != AGY_KEY_VAR || key.is_none()))
+            .map(|v| (v.to_string(), String::new()))
+            .collect();
+        if let Some(key) = key {
+            env.push((AGY_KEY_VAR.to_string(), key));
+        }
+        env
+    }
+
+    fn key_missing(&self, name: &str) -> String {
+        tr!(
+            "Le compte Antigravity « {name} » n’a pas de clé d’API Gemini : donne-la dans Réglages › Comptes, « Changer la clé… ».",
+            "The Antigravity account “{name}” has no Gemini API key: give it in Settings › Accounts, “Change the key…”."
+        )
+    }
+
+    fn key_malformed(&self) -> String {
+        crate::engine::gemini::key_malformed()
+    }
+
+    /// Its Principal signed in by its Google account, in the keychain: its entry is looked for,
+    /// never read (`agy_signed_in`); another account by its key, shown by its end.
+    fn account_status<'a>(
+        &'a self,
+        account: &'a crate::model::Account,
+        settings: &'a crate::model::Settings,
+    ) -> BoxFuture<'a, crate::accounts::AccountStatus> {
+        Box::pin(async move {
+            let machine = if crate::accounts::by_key(account) {
+                (false, None)
+            } else {
+                let signed = tokio::task::spawn_blocking(crate::accounts::agy_signed_in)
+                    .await
+                    .ok()
+                    .flatten();
+                // Signed in by the terminal of « Se connecter… » once its entry is there.
+                (
+                    signed.unwrap_or(true),
+                    signed.filter(|s| *s).map(|_| "keychain".to_string()),
+                )
+            };
+            crate::accounts::key_status(account, settings, machine)
+        })
+    }
+
+    fn signs_in_later(&self) -> bool {
+        true
+    }
+
+    /// In the agent's own home, whatever its account (ESC-271).
+    fn sessions_in_agent_home(&self) -> bool {
+        true
+    }
+
+    fn login_shell(&self) -> String {
+        "agy".into()
+    }
+
     fn id(&self) -> EngineId {
-        EngineId::Agy
+        EngineId::AGY
     }
 
     fn name(&self) -> &'static str {

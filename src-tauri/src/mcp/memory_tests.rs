@@ -18,7 +18,7 @@ async fn the_agents_of_every_harness_share_one_memory_in_the_projects_folder() {
     let claude = put_agent(&h, &p, "Claude", 1);
     h.core.agent(&claude.id).unwrap().lock().meta.cwd = worktree.to_string_lossy().into();
     let codex = put_agent(&h, &p, "Codex", 2);
-    h.core.agent(&codex.id).unwrap().lock().meta.engine = EngineId::Codex;
+    h.core.agent(&codex.id).unwrap().lock().meta.engine = EngineId::CODEX;
 
     let c = as_agent(&h, &claude.id).await;
     let written = read(

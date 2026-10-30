@@ -15,7 +15,7 @@ fn opencode_account(h: &Harness) {
         s.accounts.push(Account {
             id: "principal-opencode".into(),
             name: "Principal".into(),
-            engine: EngineId::Opencode,
+            engine: EngineId::OPENCODE,
             config_dir: String::new(),
             claude_path: crate::engine::fake_opencode(),
             active: true,
@@ -50,7 +50,7 @@ async fn new_agent(h: &Harness, project: &str) -> String {
         .create_agent_with(
             project,
             AgentOptions {
-                engine: Some(EngineId::Opencode),
+                engine: Some(EngineId::OPENCODE),
                 ..Default::default()
             },
         )
@@ -63,7 +63,7 @@ async fn new_agent(h: &Harness, project: &str) -> String {
             && h.core
                 .engine_models
                 .read()
-                .get(&EngineId::Opencode)
+                .get(&EngineId::OPENCODE)
                 .is_some_and(|m| !m.is_empty())
     })
     .await;
@@ -78,7 +78,7 @@ async fn an_agent_of_opencode_converses_asks_its_permissions_and_its_questions()
     let id = new_agent(&h, &p.id).await;
     // A model of the connected providers, never one OpenCode would pick itself.
     assert_eq!(h.agent(&id).model, "ollama/qwen3-coder:30b-32k");
-    assert_eq!(h.agent(&id).engine, EngineId::Opencode);
+    assert_eq!(h.agent(&id).engine, EngineId::OPENCODE);
     h.turn(&id, "bonjour").await;
     assert!(texts(&h, &id).contains(&"Bonjour, tu as dit : bonjour".to_string()));
     let turn = h
@@ -217,12 +217,12 @@ async fn the_models_of_the_connected_providers_come_with_their_variants_and_favo
     // Listed first by `opencode models` (the providers by their ids), then by its server (their
     // names), which may come after the agent is there.
     h.wait("the models of its server", |h| {
-        h.core.engine_models.read()[&EngineId::Opencode]
+        h.core.engine_models.read()[&EngineId::OPENCODE]
             .first()
             .is_some_and(|m| m.provider.as_deref() == Some("Ollama (local)"))
     })
     .await;
-    let models = h.core.engine_models.read()[&EngineId::Opencode].clone();
+    let models = h.core.engine_models.read()[&EngineId::OPENCODE].clone();
     let ids: Vec<&str> = models.iter().map(|m| m.id.as_str()).collect();
     assert_eq!(
         ids,
@@ -257,19 +257,19 @@ async fn the_models_of_the_connected_providers_come_with_their_variants_and_favo
     // Favorites, kept at once.
     let favs = h
         .core
-        .set_favorite_model(EngineId::Opencode, "lmstudio/devstral-small", true)
+        .set_favorite_model(EngineId::OPENCODE, "lmstudio/devstral-small", true)
         .unwrap();
-    assert_eq!(favs[&EngineId::Opencode], ["lmstudio/devstral-small"]);
+    assert_eq!(favs[&EngineId::OPENCODE], ["lmstudio/devstral-small"]);
     h.core
-        .set_favorite_model(EngineId::Opencode, "ollama/gpt-oss:20b-32k", true)
+        .set_favorite_model(EngineId::OPENCODE, "ollama/gpt-oss:20b-32k", true)
         .unwrap();
     let favs = h
         .core
-        .set_favorite_model(EngineId::Opencode, "lmstudio/devstral-small", false)
+        .set_favorite_model(EngineId::OPENCODE, "lmstudio/devstral-small", false)
         .unwrap();
-    assert_eq!(favs[&EngineId::Opencode], ["ollama/gpt-oss:20b-32k"]);
+    assert_eq!(favs[&EngineId::OPENCODE], ["ollama/gpt-oss:20b-32k"]);
     assert_eq!(
-        h.core.settings.read().favorite_models[&EngineId::Opencode],
+        h.core.settings.read().favorite_models[&EngineId::OPENCODE],
         ["ollama/gpt-oss:20b-32k"]
     );
     h.core.stop_for_good();
@@ -356,7 +356,7 @@ async fn real_opencode() {
         s.accounts.push(Account {
             id: "principal-opencode".into(),
             name: "Principal".into(),
-            engine: EngineId::Opencode,
+            engine: EngineId::OPENCODE,
             config_dir: String::new(),
             claude_path: real.clone(),
             active: true,
@@ -370,7 +370,7 @@ async fn real_opencode() {
         .create_agent_with(
             &p.id,
             AgentOptions {
-                engine: Some(EngineId::Opencode),
+                engine: Some(EngineId::OPENCODE),
                 model: Some("ollama/qwen3-coder:30b-32k".into()),
                 mode: Some("default".into()),
                 ..Default::default()
@@ -507,7 +507,7 @@ async fn no_server_starts_without_a_model_of_its_providers_and_a_server_always_h
         s.accounts.push(Account {
             id: "oc-work".into(),
             name: "Travail".into(),
-            engine: EngineId::Opencode,
+            engine: EngineId::OPENCODE,
             config_dir: dir.to_string_lossy().into_owned(),
             claude_path: crate::engine::fake_opencode(),
             active: true,
@@ -522,7 +522,7 @@ async fn no_server_starts_without_a_model_of_its_providers_and_a_server_always_h
         .create_agent_with(
             &p.id,
             AgentOptions {
-                engine: Some(EngineId::Opencode),
+                engine: Some(EngineId::OPENCODE),
                 model: Some("sonnet".into()),
                 account: Some("oc-work".into()),
                 ..Default::default()
@@ -632,7 +632,7 @@ async fn the_opencode_view_joins_the_agents_session_beside_escouade() {
         s.accounts.push(Account {
             id: "oc-view".into(),
             name: "Vue".into(),
-            engine: EngineId::Opencode,
+            engine: EngineId::OPENCODE,
             config_dir: dir.to_string_lossy().into_owned(),
             claude_path: crate::engine::fake_opencode(),
             active: true,
@@ -646,7 +646,7 @@ async fn the_opencode_view_joins_the_agents_session_beside_escouade() {
         .create_agent_with(
             &p.id,
             AgentOptions {
-                engine: Some(EngineId::Opencode),
+                engine: Some(EngineId::OPENCODE),
                 account: Some("oc-view".into()),
                 ..Default::default()
             },
@@ -838,7 +838,7 @@ async fn a_new_agent_of_opencode_starts_in_its_view_when_the_settings_say_so() {
         .create_agent_with(
             &p.id,
             AgentOptions {
-                engine: Some(EngineId::Opencode),
+                engine: Some(EngineId::OPENCODE),
                 ticket_id: Some("k1".into()),
                 ..Default::default()
             },
@@ -875,7 +875,7 @@ async fn real_opencode_view() {
         s.accounts.push(Account {
             id: "principal-opencode".into(),
             name: "Principal".into(),
-            engine: EngineId::Opencode,
+            engine: EngineId::OPENCODE,
             config_dir: String::new(),
             claude_path: real.clone(),
             active: true,
@@ -889,7 +889,7 @@ async fn real_opencode_view() {
         .create_agent_with(
             &p.id,
             AgentOptions {
-                engine: Some(EngineId::Opencode),
+                engine: Some(EngineId::OPENCODE),
                 model: Some("ollama/qwen3-coder:30b-32k".into()),
                 mode: Some("default".into()),
                 ..Default::default()
@@ -1030,7 +1030,7 @@ fn account_with(
         s.accounts.push(Account {
             id: id.into(),
             name: id.into(),
-            engine: EngineId::Opencode,
+            engine: EngineId::OPENCODE,
             config_dir: dir.to_string_lossy().into_owned(),
             claude_path: crate::engine::fake_opencode(),
             active: true,
@@ -1061,7 +1061,7 @@ async fn agent_on(h: &Harness, project: &str, account: &str) -> String {
         .create_agent_with(
             project,
             AgentOptions {
-                engine: Some(EngineId::Opencode),
+                engine: Some(EngineId::OPENCODE),
                 account: Some(account.into()),
                 ..Default::default()
             },
@@ -1090,7 +1090,7 @@ async fn an_opencode_turn_costs_its_steps_and_the_days_budget_pauses_its_tickets
         }
     });
     // Under the budget: nothing holds its tickets back.
-    assert!(h.core.project_hold(&p.id, EngineId::Opencode).is_none());
+    assert!(h.core.project_hold(&p.id, EngineId::OPENCODE).is_none());
     // Two calls to the model: (1000 in, 50 out) then (100 in, 10 out, 20 read from the cache).
     h.turn(&id, "deux appels").await;
     let cost = (1000.0 * 3.0 + 50.0 * 15.0 + 100.0 * 3.0 + 10.0 * 15.0 + 20.0 * 0.3) / 1e6;
@@ -1135,11 +1135,11 @@ async fn an_opencode_turn_costs_its_steps_and_the_days_budget_pauses_its_tickets
     // Over the day's budget: its tickets wait for midnight, as at a quota used up; Claude Code's do not.
     let held = h
         .core
-        .project_hold(&p.id, EngineId::Opencode)
+        .project_hold(&p.id, EngineId::OPENCODE)
         .expect("held");
     assert_eq!(held.pause.reason, PauseReason::Budget);
     assert_eq!(held.pause.until, crate::stats::day_bounds(now_ms()).1);
-    assert!(h.core.project_hold(&p.id, EngineId::Claude).is_none());
+    assert!(h.core.project_hold(&p.id, EngineId::CLAUDE).is_none());
     // The budget raised in the account's settings: free again.
     let mut acct = h
         .core
@@ -1152,7 +1152,7 @@ async fn an_opencode_turn_costs_its_steps_and_the_days_budget_pauses_its_tickets
         .unwrap();
     acct.daily_budget = Some(5.0);
     h.core.update_claude_account(acct.clone()).unwrap();
-    assert!(h.core.project_hold(&p.id, EngineId::Opencode).is_none());
+    assert!(h.core.project_hold(&p.id, EngineId::OPENCODE).is_none());
     // Nor a negative one, and 0 is none.
     acct.daily_budget = Some(-1.0);
     assert!(h.core.update_claude_account(acct.clone()).is_err());
@@ -1180,7 +1180,7 @@ async fn a_local_model_costs_nothing_and_never_reaches_the_budget() {
         s.accounts.push(Account {
             id: "oc-local".into(),
             name: "Local".into(),
-            engine: EngineId::Opencode,
+            engine: EngineId::OPENCODE,
             config_dir: dir.to_string_lossy().into_owned(),
             claude_path: crate::engine::fake_opencode(),
             active: true,
@@ -1203,7 +1203,7 @@ async fn a_local_model_costs_nothing_and_never_reaches_the_budget() {
         h.core.agent(&id).unwrap().lock().view().context_window,
         32768
     );
-    assert!(h.core.project_hold(&p.id, EngineId::Opencode).is_none());
+    assert!(h.core.project_hold(&p.id, EngineId::OPENCODE).is_none());
     h.core.stop_for_good();
 }
 
@@ -1294,9 +1294,9 @@ async fn the_texts_written_by_opencode_go_through_opencode_run_on_a_model_always
     });
     let dir = account_with(&h, "oc-writer", providers, None);
     h.set_settings(|s| {
-        s.writer_engine = Some(EngineId::Opencode);
+        s.writer_engine = Some(EngineId::OPENCODE);
         for a in &mut s.accounts {
-            if a.engine == EngineId::Opencode && a.id != "oc-writer" {
+            if a.engine == EngineId::OPENCODE && a.id != "oc-writer" {
                 a.active = false;
             }
         }
@@ -1393,7 +1393,7 @@ async fn the_texts_written_by_opencode_go_through_opencode_run_on_a_model_always
         r#"{ "providers": [], "default": {} }"#,
     )
     .unwrap();
-    h.core.engine_models.write().remove(&EngineId::Opencode);
+    h.core.engine_models.write().remove(&EngineId::OPENCODE);
     let before = runs().len();
     let e = h
         .core
@@ -1424,7 +1424,7 @@ async fn real_opencode_writes_and_drives_escouade() {
         s.accounts.push(Account {
             id: "principal-opencode".into(),
             name: "Principal".into(),
-            engine: EngineId::Opencode,
+            engine: EngineId::OPENCODE,
             config_dir: String::new(),
             claude_path: real.clone(),
             active: true,
@@ -1432,7 +1432,7 @@ async fn real_opencode_writes_and_drives_escouade() {
             daily_budget: None,
             ..Default::default()
         });
-        s.writer_engine = Some(EngineId::Opencode);
+        s.writer_engine = Some(EngineId::OPENCODE);
         s.writer_model = "ollama/qwen3-coder:30b-32k".into();
     });
     let sessions = || {
@@ -1463,7 +1463,7 @@ async fn real_opencode_writes_and_drives_escouade() {
         .create_agent_with(
             &p.id,
             AgentOptions {
-                engine: Some(EngineId::Opencode),
+                engine: Some(EngineId::OPENCODE),
                 model: Some("ollama/qwen3-coder:30b-32k".into()),
                 ..Default::default()
             },
@@ -1512,7 +1512,7 @@ async fn the_principal_of_opencode_takes_a_budget_though_claude_codes_is_named_p
     // Made at its first agent, its usage with it: the status bar shows its cost of the day.
     let usage = h.core.usage.lock().clone();
     let of = usage.account("principal-opencode").expect("its usage");
-    assert_eq!(of.engine, EngineId::Opencode);
+    assert_eq!(of.engine, EngineId::OPENCODE);
     principal.daily_budget = Some(3.0);
     let saved = h.core.update_claude_account(principal.clone()).unwrap();
     let got = saved.iter().find(|a| a.id == "principal-opencode").unwrap();
@@ -1556,9 +1556,9 @@ async fn an_opencode_agent_gets_its_worktree_at_its_first_message_under_the_name
     let (p, _) = h.project_as_new(true).await;
     let dir = account_with(&h, "oc", paid(), None);
     h.set_settings(|s| {
-        s.writer_engine = Some(EngineId::Opencode);
+        s.writer_engine = Some(EngineId::OPENCODE);
         for a in &mut s.accounts {
-            if a.engine == EngineId::Opencode && a.id != "oc" {
+            if a.engine == EngineId::OPENCODE && a.id != "oc" {
                 a.active = false;
             }
         }
@@ -1568,7 +1568,7 @@ async fn an_opencode_agent_gets_its_worktree_at_its_first_message_under_the_name
         .create_agent_with(
             &p.id,
             AgentOptions {
-                engine: Some(EngineId::Opencode),
+                engine: Some(EngineId::OPENCODE),
                 account: Some("oc".into()),
                 ..Default::default()
             },

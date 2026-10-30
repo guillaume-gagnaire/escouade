@@ -809,7 +809,7 @@ impl AgentRt {
         // Cursor's refusals are its texts: none for Mistral Vibe nor Antigravity CLI, whose errors
         // are told apart.
         let refused = crate::engine::cursor::refusal(&self.turn_text)
-            .filter(|_| !interrupted && self.meta.engine == crate::model::EngineId::Cursor);
+            .filter(|_| !interrupted && self.meta.engine == crate::model::EngineId::CURSOR);
         let mut error = std::mem::take(&mut self.cursor.error).filter(|_| !interrupted);
         let mut limited = false;
         // Mistral Vibe's rate limit: « limité », its resume planned.
@@ -819,7 +819,7 @@ impl AgentRt {
         }
         if let (Some(refusal), None) = (refused, &error) {
             let by_key =
-                self.meta.account != crate::accounts::principal_id(crate::model::EngineId::Cursor);
+                self.meta.account != crate::accounts::principal_id(crate::model::EngineId::CURSOR);
             limited = crate::engine::cursor::at_limit(refusal);
             error = Some(crate::engine::cursor::refusal_error(
                 i18n::ui(),

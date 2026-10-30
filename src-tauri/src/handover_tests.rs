@@ -143,7 +143,7 @@ fn the_mode_after_a_handover_is_the_same_else_the_closest_that_never_allows_more
 
 #[test]
 fn the_modes_of_a_harness_hold_auto_only_where_its_model_takes_it() {
-    let claude = crate::engine::by_id(EngineId::Claude);
+    let claude = crate::engine::by_id(EngineId::CLAUDE);
     assert!(modes_of(claude, true).contains(&"auto"));
     let without = modes_of(claude, false);
     assert!(!without.contains(&"auto") && without.contains(&"default"));
@@ -151,15 +151,15 @@ fn the_modes_of_a_harness_hold_auto_only_where_its_model_takes_it() {
 
 #[test]
 fn the_handover_model_is_the_one_set_for_the_harness_else_its_best() {
-    let claude = engine::by_id(EngineId::Claude);
+    let claude = engine::by_id(EngineId::CLAUDE);
     let mut s = Settings::default();
     assert_eq!(model_for(&s, claude), "fable");
-    s.handover_models.insert(EngineId::Claude, "sonnet".into());
+    s.handover_models.insert(EngineId::CLAUDE, "sonnet".into());
     assert_eq!(model_for(&s, claude), "sonnet");
     // One it does not list: its best.
-    s.handover_models.insert(EngineId::Claude, "gpt-9".into());
+    s.handover_models.insert(EngineId::CLAUDE, "gpt-9".into());
     assert_eq!(model_for(&s, claude), "fable");
-    assert_eq!(model_for(&s, engine::by_id(EngineId::Bench)), "grand");
+    assert_eq!(model_for(&s, engine::by_id(EngineId::BENCH)), "grand");
 }
 
 // ---------- the file ----------
@@ -336,7 +336,7 @@ async fn two_projects(h: &Harness) -> (Project, Project) {
     s.accounts.push(Account {
         id: "relais".into(),
         name: "Relais".into(),
-        engine: EngineId::Bench,
+        engine: EngineId::BENCH,
         config_dir: h.dir.join("relais").to_string_lossy().into(),
         projects: vec![p.id.clone()],
         ..Default::default()
@@ -389,10 +389,10 @@ async fn an_agent_stopped_by_the_limit_goes_on_on_the_other_fake_harness_with_it
     turn_over(&h, &id, "Ajoute la passation entre harness").await;
     assert_eq!(h.turns(&id).last().unwrap()["limited"], true);
     // Claude Code is spent for P (Principal does not serve it): Minimal is its fallback harness.
-    assert_eq!(h.core.handover_targets(&id).unwrap(), [EngineId::Bench]);
+    assert_eq!(h.core.handover_targets(&id).unwrap(), [EngineId::BENCH]);
     // Off by default: nothing goes by itself.
     assert!(!h.core.settings.read().handover_on_limit);
-    assert_eq!(h.agent(&id).engine, EngineId::Claude);
+    assert_eq!(h.agent(&id).engine, EngineId::CLAUDE);
 
     // Named after its first message (its branch with it) before it goes on.
     h.wait("its name", |h| h.agent(&id).named).await;
@@ -401,22 +401,22 @@ async fn an_agent_stopped_by_the_limit_goes_on_on_the_other_fake_harness_with_it
     h.core.agent(&id).unwrap().lock().meta.status = AgentStatus::Running;
     let refused = h
         .core
-        .continue_on_engine(&id, EngineId::Bench)
+        .continue_on_engine(&id, EngineId::BENCH)
         .await
         .unwrap_err()
         .to_string();
     assert!(refused.starts_with("L’agent travaille encore"), "{refused}");
     h.core.agent(&id).unwrap().lock().meta.status = a.status;
-    assert_eq!(h.agent(&id).engine, EngineId::Claude);
+    assert_eq!(h.agent(&id).engine, EngineId::CLAUDE);
 
     h.core
-        .continue_on_engine(&id, EngineId::Bench)
+        .continue_on_engine(&id, EngineId::BENCH)
         .await
         .unwrap();
 
     // The same agent, its folder and branch, on Minimal's account, a new session.
     let m = h.agent(&id);
-    assert_eq!((m.engine, m.account.as_str()), (EngineId::Bench, "relais"));
+    assert_eq!((m.engine, m.account.as_str()), (EngineId::BENCH, "relais"));
     let branch = |m: &AgentMeta| {
         m.worktree
             .as_ref()
@@ -430,7 +430,7 @@ async fn an_agent_stopped_by_the_limit_goes_on_on_the_other_fake_harness_with_it
     let left = m.handed_from.clone().unwrap();
     assert_eq!(
         (left.engine, left.account.as_str()),
-        (EngineId::Claude, "pro")
+        (EngineId::CLAUDE, "pro")
     );
     let until = left.until.expect("the reset it waits for");
     h.wait("Minimal's reply to the file", |h| {
@@ -472,7 +472,7 @@ async fn an_agent_stopped_by_the_limit_goes_on_on_the_other_fake_harness_with_it
     assert!(h.core.handover_targets(&id).unwrap().is_empty());
     let refused = h
         .core
-        .continue_on_engine(&id, EngineId::Claude)
+        .continue_on_engine(&id, EngineId::CLAUDE)
         .await
         .unwrap_err()
         .to_string();
@@ -485,9 +485,9 @@ async fn an_agent_stopped_by_the_limit_goes_on_on_the_other_fake_harness_with_it
     h.core
         .clock_ahead
         .store(until - crate::model::now_ms() + 60_000, Ordering::SeqCst);
-    assert_eq!(h.core.handover_targets(&id).unwrap(), [EngineId::Claude]);
+    assert_eq!(h.core.handover_targets(&id).unwrap(), [EngineId::CLAUDE]);
     tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-    assert_eq!(h.agent(&id).engine, EngineId::Bench);
+    assert_eq!(h.agent(&id).engine, EngineId::BENCH);
 
     // « Revenir sur Claude Code »: a handover the other way, what Minimal did in its file. On haiku,
     // which the `claude` of Pro told runs Haiku 4.5, without the mode `auto` (ESC-121): an agent
@@ -496,7 +496,7 @@ async fn an_agent_stopped_by_the_limit_goes_on_on_the_other_fake_harness_with_it
         .settings
         .write()
         .handover_models
-        .insert(EngineId::Claude, "haiku".into());
+        .insert(EngineId::CLAUDE, "haiku".into());
     h.core.account_models.write().insert(
         "pro".into(),
         crate::model::AccountModels::new(
@@ -509,11 +509,11 @@ async fn an_agent_stopped_by_the_limit_goes_on_on_the_other_fake_harness_with_it
     );
     h.core.agent(&id).unwrap().lock().meta.mode = "auto".into();
     h.core
-        .continue_on_engine(&id, EngineId::Claude)
+        .continue_on_engine(&id, EngineId::CLAUDE)
         .await
         .unwrap();
     let m = h.agent(&id);
-    assert_eq!((m.engine, m.account.as_str()), (EngineId::Claude, "pro"));
+    assert_eq!((m.engine, m.account.as_str()), (EngineId::CLAUDE, "pro"));
     assert_eq!(m.handed_from, None);
     assert_eq!(
         (m.model.as_str(), m.mode.as_str()),
@@ -555,7 +555,7 @@ async fn an_agent_stopped_by_the_limit_goes_on_on_the_other_fake_harness_with_it
     assert!(h.core.handover_targets(&other).unwrap().is_empty());
     let refused = h
         .core
-        .continue_on_engine(&other, EngineId::Bench)
+        .continue_on_engine(&other, EngineId::BENCH)
         .await
         .unwrap_err()
         .to_string();
@@ -563,7 +563,7 @@ async fn an_agent_stopped_by_the_limit_goes_on_on_the_other_fake_harness_with_it
         refused,
         "Aucun compte Minimal actif ne sert le projet de cet agent."
     );
-    assert_eq!(h.agent(&other).engine, EngineId::Claude);
+    assert_eq!(h.agent(&other).engine, EngineId::CLAUDE);
 }
 
 /// A meta of the agent `id`, once `pred` holds of it.
@@ -592,10 +592,10 @@ async fn with_the_option_an_agent_whose_harness_is_spent_goes_on_by_itself_and_i
     // An agent of P, stopped by the limit: on Minimal by itself, its file sent.
     let id = agent_on(&h, &p, "pro").await.id;
     turn_over(&h, &id, "Bonjour").await;
-    let m = agent_when(&h, &id, "the handover", |m| m.engine == EngineId::Bench).await;
+    let m = agent_when(&h, &id, "the handover", |m| m.engine == EngineId::BENCH).await;
     assert_eq!(
         m.handed_from.as_ref().map(|l| l.engine),
-        Some(EngineId::Claude)
+        Some(EngineId::CLAUDE)
     );
     h.wait("Minimal's reply", |h| {
         h.turns(&id).last().is_some_and(|t| t["engine"] == "bench")
@@ -606,7 +606,7 @@ async fn with_the_option_an_agent_whose_harness_is_spent_goes_on_by_itself_and_i
     turn_over(&h, &other, "Bonjour").await;
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     let o = h.agent(&other);
-    assert_eq!((o.engine, o.handed_from), (EngineId::Claude, None));
+    assert_eq!((o.engine, o.handed_from), (EngineId::CLAUDE, None));
     assert!(o.resume_at.is_some());
     assert!(!h.items(&other).iter().any(|i| i["kind"] == "handover"));
 }
@@ -636,10 +636,10 @@ async fn a_private_projects_agent_is_handed_over_by_the_option_only_to_an_accoun
     turn_over(&h, &id, "Bonjour").await;
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     let a = h.agent(&id);
-    assert_eq!((a.engine, a.handed_from), (EngineId::Claude, None));
+    assert_eq!((a.engine, a.handed_from), (EngineId::CLAUDE, None));
     assert!(a.resume_at.is_some());
     // By hand, the user still may (« Continuer sur Minimal »).
-    assert_eq!(h.core.handover_targets(&id).unwrap(), [EngineId::Bench]);
+    assert_eq!(h.core.handover_targets(&id).unwrap(), [EngineId::BENCH]);
     // Relais P's own again: the next one goes on on it by itself.
     h.core
         .save_settings({
@@ -654,7 +654,7 @@ async fn a_private_projects_agent_is_handed_over_by_the_option_only_to_an_accoun
         .unwrap();
     let next = agent_on(&h, &p, "pro").await.id;
     turn_over(&h, &next, "Bonjour").await;
-    agent_when(&h, &next, "the handover", |m| m.engine == EngineId::Bench).await;
+    agent_when(&h, &next, "the handover", |m| m.engine == EngineId::BENCH).await;
 }
 
 #[tokio::test]
@@ -685,7 +685,7 @@ async fn a_ticket_agent_handed_over_by_the_option_keeps_its_ticket_going() {
     .await;
     let t = h.core.ticket(&ticket.id).unwrap();
     let id = t.agent_id.clone().unwrap();
-    let m = agent_when(&h, &id, "the handover", |m| m.engine == EngineId::Bench).await;
+    let m = agent_when(&h, &id, "the handover", |m| m.engine == EngineId::BENCH).await;
     assert_eq!(m.ticket_id.as_deref(), Some(ticket.id.as_str()));
     h.wait("Minimal's reply", |h| {
         h.turns(&id).last().is_some_and(|t| t["engine"] == "bench")

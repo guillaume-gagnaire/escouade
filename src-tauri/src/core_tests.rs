@@ -8909,7 +8909,7 @@ async fn the_update_drops_a_principal_never_signed_in_nor_used_and_keeps_the_oth
     core.migrate_accounts().await;
     assert_eq!(core_account_ids(&core), ["pro"]);
     // Brought once: a Principal added later stays, whatever it served.
-    core.add_machine_account(EngineId::Codex).unwrap();
+    core.add_machine_account(EngineId::CODEX).unwrap();
     core.migrate_accounts().await;
     assert_eq!(core_account_ids(&core), ["pro", "principal-codex"]);
 }
@@ -8976,27 +8976,27 @@ async fn the_machines_account_or_a_new_one_is_added_and_the_machines_once() {
     let h = harness("esc128-add");
     h.core.remove_claude_account("principal").unwrap();
     assert!(h.core.settings.read().accounts.is_empty());
-    let machine = h.core.machine_account(EngineId::Codex).await;
+    let machine = h.core.machine_account(EngineId::CODEX).await;
     assert!(machine.connected && !machine.added && machine.signs_in);
     assert_eq!(PathBuf::from(&machine.dir), dir.join(".codex"));
-    let added = h.core.add_machine_account(EngineId::Codex).unwrap();
+    let added = h.core.add_machine_account(EngineId::CODEX).unwrap();
     assert_eq!(
         (added.id.as_str(), added.engine, added.config_dir.as_str()),
-        ("principal-codex", EngineId::Codex, "")
+        ("principal-codex", EngineId::CODEX, "")
     );
-    assert!(h.core.machine_account(EngineId::Codex).await.added);
+    assert!(h.core.machine_account(EngineId::CODEX).await.added);
     assert!(h
         .core
-        .add_machine_account(EngineId::Codex)
+        .add_machine_account(EngineId::CODEX)
         .unwrap_err()
         .to_string()
         .contains("déjà ajouté"));
     // Copilot CLI not signed in here: not offered (the window says so), a new account is.
-    assert!(!h.core.machine_account(EngineId::Copilot).await.connected);
+    assert!(!h.core.machine_account(EngineId::COPILOT).await.connected);
     let made = h
         .core
         .create_account(
-            EngineId::Copilot,
+            EngineId::COPILOT,
             "Travail",
             &[],
             crate::accounts::ShareMode::Copy,
@@ -9018,7 +9018,7 @@ async fn without_an_account_of_its_harness_nothing_starts_and_the_window_is_told
     let no = refused
         .downcast_ref::<crate::accounts::NoAccount>()
         .expect("for want of an account");
-    assert_eq!(no.engine, EngineId::Claude);
+    assert_eq!(no.engine, EngineId::CLAUDE);
     assert_eq!(
         refused.to_string(),
         "Aucun compte Claude Code : ajoute-en un dans Réglages › Comptes."
@@ -9029,7 +9029,7 @@ async fn without_an_account_of_its_harness_nothing_starts_and_the_window_is_told
         .create_agent_with(
             &p.id,
             AgentOptions {
-                engine: Some(EngineId::Codex),
+                engine: Some(EngineId::CODEX),
                 ..Default::default()
             },
         )
@@ -9039,7 +9039,7 @@ async fn without_an_account_of_its_harness_nothing_starts_and_the_window_is_told
         codex
             .downcast_ref::<crate::accounts::NoAccount>()
             .map(|n| n.engine),
-        Some(EngineId::Codex)
+        Some(EngineId::CODEX)
     );
 }
 
@@ -9059,7 +9059,7 @@ async fn an_agent_whose_account_is_gone_takes_another_of_its_harness_never_princ
     let _ = pro;
     let mut s = h.core.settings.read().clone();
     s.accounts.retain(|a| a.id == "pro");
-    s.accounts[0].engine = EngineId::Codex;
+    s.accounts[0].engine = EngineId::CODEX;
     h.core.save_settings(s).unwrap();
     h.core.agent(&b.id).unwrap().lock().meta.account = "parti".into();
     let handle = h.core.agent(&b.id).unwrap();
@@ -9310,20 +9310,20 @@ async fn what_the_claude_of_an_account_tells_of_its_models_decides_their_mode_au
     let haiku = Path::new(&pro.config_dir).join("fake-haiku");
     std::fs::write(&haiku, "4-5").unwrap();
     // Nothing told yet: the rule, where the alias takes it and Haiku 4.5 does not.
-    assert!(h.core.takes_auto(EngineId::Claude, "pro", "haiku"));
+    assert!(h.core.takes_auto(EngineId::CLAUDE, "pro", "haiku"));
     assert!(!h
         .core
-        .takes_auto(EngineId::Claude, "pro", "claude-haiku-4-5"));
+        .takes_auto(EngineId::CLAUDE, "pro", "claude-haiku-4-5"));
     let id = agent_on(&h, &p, "pro").await.id;
     turn_over(&h, &id, "Bonjour").await;
     // Kept with the version that told it, for this account alone, and saved.
     let told = h.core.account_models.read().get("pro").cloned().unwrap();
     assert_eq!(told.version, "2.1.301");
-    assert!(!h.core.takes_auto(EngineId::Claude, "pro", "haiku"));
-    assert!(h.core.takes_auto(EngineId::Claude, "pro", "sonnet"));
-    assert!(h.core.takes_auto(EngineId::Claude, "principal", "haiku"));
+    assert!(!h.core.takes_auto(EngineId::CLAUDE, "pro", "haiku"));
+    assert!(h.core.takes_auto(EngineId::CLAUDE, "pro", "sonnet"));
+    assert!(h.core.takes_auto(EngineId::CLAUDE, "principal", "haiku"));
     // Another harness keeps its own rule, whatever a Claude account told.
-    assert!(!h.core.takes_auto(EngineId::Opencode, "pro", "sonnet"));
+    assert!(!h.core.takes_auto(EngineId::OPENCODE, "pro", "sonnet"));
     h.core.save_now();
     let saved: Value =
         serde_json::from_slice(&std::fs::read(h.core.data.state_file()).unwrap()).unwrap();
@@ -9332,7 +9332,7 @@ async fn what_the_claude_of_an_account_tells_of_its_models_decides_their_mode_au
     std::fs::write(&haiku, "5-5").unwrap();
     let again = agent_on(&h, &p, "pro").await.id;
     turn_over(&h, &again, "Encore").await;
-    assert!(h.core.takes_auto(EngineId::Claude, "pro", "haiku"));
+    assert!(h.core.takes_auto(EngineId::CLAUDE, "pro", "haiku"));
 }
 
 #[tokio::test]
@@ -9364,7 +9364,7 @@ async fn the_current_account_moving_on_never_moves_the_account_of_a_running_agen
         )
     });
     assert_eq!(h.core.usage.lock().claude_current(), "pro");
-    assert_eq!(h.core.current_account(EngineId::Claude).id, pro.id);
+    assert_eq!(h.core.current_account(EngineId::CLAUDE).id, pro.id);
     // The agent already started is still on Principal, as its process is.
     assert_eq!(h.core.account_of(&main), "principal");
     // An agent started now goes to Pro.
@@ -9761,7 +9761,7 @@ async fn an_account_made_in_its_tab_gets_a_folder_of_its_own_and_comes_last() {
     assert_eq!(
         made,
         Account {
-            engine: EngineId::Claude,
+            engine: EngineId::CLAUDE,
             id: "pro".into(),
             name: "Pro".into(),
             config_dir: dir.to_string_lossy().into(),
@@ -10923,17 +10923,17 @@ async fn the_order_of_the_harnesses_is_the_backends_and_lists_each_one_once() {
     let h = harness("esc30-engine-order");
     let order = h
         .core
-        .set_engine_order(&[EngineId::Codex, EngineId::Codex])
+        .set_engine_order(&[EngineId::CODEX, EngineId::CODEX])
         .unwrap();
-    assert_eq!(order, [EngineId::Codex, EngineId::Claude]);
+    assert_eq!(order, [EngineId::CODEX, EngineId::CLAUDE]);
     // The window's settings, saved with the order it had before, do not change it: the tab of
     // the accounts sets it on its own, as it does the accounts.
     let mut s = h.core.settings.read().clone();
-    s.engine_order = vec![EngineId::Claude];
+    s.engine_order = vec![EngineId::CLAUDE];
     h.core.save_window_settings(s).unwrap();
     assert_eq!(
         h.core.settings.read().engine_order,
-        [EngineId::Codex, EngineId::Claude]
+        [EngineId::CODEX, EngineId::CLAUDE]
     );
 }
 
@@ -10949,7 +10949,7 @@ async fn the_written_texts_go_to_claude_code_while_it_is_the_only_harness_found_
     let argv = asked(&h);
     assert!(argv.contains(&"-p".to_string()), "{argv:?}");
     // A harness chosen but not found here: Claude Code still writes them, as before.
-    change_settings(&h, |s| s.writer_engine = Some(EngineId::Codex));
+    change_settings(&h, |s| s.writer_engine = Some(EngineId::CODEX));
     let before = h.launch_log(&r).len();
     h.core.suggest_worktree_steps(&p.id).await.unwrap();
     assert_eq!(h.launch_log(&r).len(), before + 1);
@@ -10957,7 +10957,7 @@ async fn the_written_texts_go_to_claude_code_while_it_is_the_only_harness_found_
     // The choice is kept as saved.
     let saved: Settings =
         serde_json::from_slice(&std::fs::read(h.core.data.settings_file()).unwrap()).unwrap();
-    assert_eq!(saved.writer_engine, Some(EngineId::Codex));
+    assert_eq!(saved.writer_engine, Some(EngineId::CODEX));
     let raw: Value =
         serde_json::from_slice(&std::fs::read(h.core.data.settings_file()).unwrap()).unwrap();
     assert_eq!(raw["writerEngine"], "codex");
@@ -11024,11 +11024,11 @@ async fn the_models_of_each_claude_account_are_read_without_a_turn_and_its_agent
         ("Mythos", vec!["high".to_string(), "max".to_string()])
     );
     // What it takes, as told: an effort and the mode auto; Haiku 4.5 neither.
-    assert!(h.core.takes_effort(EngineId::Claude, "pro", "mythos"));
-    assert!(h.core.takes_auto(EngineId::Claude, "pro", "mythos"));
+    assert!(h.core.takes_effort(EngineId::CLAUDE, "pro", "mythos"));
+    assert!(h.core.takes_auto(EngineId::CLAUDE, "pro", "mythos"));
     assert!(!h
         .core
-        .takes_effort(EngineId::Claude, "pro", "claude-haiku-4-5"));
+        .takes_effort(EngineId::CLAUDE, "pro", "claude-haiku-4-5"));
     // The window is told, account by account.
     let told_ui = h
         .events
@@ -11104,4 +11104,39 @@ async fn an_agent_moved_to_an_account_without_its_model_takes_the_default_one_an
             .any(|n| n.contains("mythos") && n.contains("Sonnet 5.5") && n.contains("Équipe")),
         "{said:?}"
     );
+}
+
+/// INT-3: an agent saved on a harness this version lacks (a later version's, a plugin's gone)
+/// stays, its harness kept; it does not start, and none is made on it.
+#[tokio::test]
+async fn an_agent_whose_harness_is_absent_is_kept_and_starts_nothing() {
+    let h = harness("absent-harness");
+    let (p, _) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    let hermes = EngineId::new("hermes");
+    h.core.agent(&id).unwrap().lock().meta.engine = hermes;
+    let handle = h.core.agent(&id).unwrap();
+    let started = h.core.start_process_of(&handle, &id).await;
+    let why = started.err().expect("refused").to_string();
+    assert!(why.starts_with("Harness absent : « hermes »"), "{why}");
+    assert!(handle.lock().proc.is_none());
+    let sent = h.core.send_message(&id, "Bonjour".into(), Vec::new()).await;
+    assert!(sent.is_err(), "a message to it is refused");
+    // Kept, with its harness, in the list and in what is saved.
+    assert_eq!(h.agent(&id).engine, hermes);
+    let saved = serde_json::to_value(h.core.agent(&id).unwrap().lock().meta.clone()).unwrap();
+    assert_eq!(saved["engine"], json!("hermes"));
+    // None is made on it.
+    h.core
+        .projects
+        .write()
+        .iter_mut()
+        .find(|q| q.id == p.id)
+        .unwrap()
+        .engine = Some(hermes);
+    let made = h.core.create_agent(&p.id, None).await;
+    let Err(why) = made else {
+        panic!("an agent made on a harness absent")
+    };
+    assert!(why.to_string().contains("hermes"), "{why}");
 }

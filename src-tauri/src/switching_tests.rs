@@ -347,13 +347,13 @@ async fn new_agents_go_to_another_account_past_the_threshold() {
     pro_and_team(&h);
     read_as(&h, "pro", 96.0);
     assert_eq!(
-        h.core.account_for_new(&p.id, EngineId::Claude).unwrap(),
+        h.core.account_for_new(&p.id, EngineId::CLAUDE).unwrap(),
         "equipe"
     );
     // At the limit, as before: Pro takes them until « Pause au-delà du quota ».
     h.set_settings(|s| s.switch_at = 100);
     assert_eq!(
-        h.core.account_for_new(&p.id, EngineId::Claude).unwrap(),
+        h.core.account_for_new(&p.id, EngineId::CLAUDE).unwrap(),
         "pro"
     );
 }

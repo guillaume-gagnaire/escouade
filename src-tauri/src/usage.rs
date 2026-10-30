@@ -594,7 +594,7 @@ mod tests {
     /// Settings with Principal alone, and its usage in extra usage with its 5-hour window at `pct`.
     fn in_overage(pct: f64, resets_at: i64) -> (Settings, UsageSnapshot) {
         let settings = Settings {
-            accounts: vec![accounts::principal_of(crate::model::EngineId::Claude)],
+            accounts: vec![accounts::principal_of(crate::model::EngineId::CLAUDE)],
             ..Default::default()
         };
         let mut u = UsageSnapshot::default();

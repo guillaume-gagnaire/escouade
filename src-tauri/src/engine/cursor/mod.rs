@@ -697,8 +697,89 @@ pub(crate) fn listed_of(options: &Value) -> Value {
 }
 
 impl Engine for Cursor {
+    /// Its sign-in is the machine's (`agent login`, not moved by its folder), and each agent has a
+    /// folder of its own (`agent_home_var`); its other accounts go by their key (ESC-43).
+    fn store(&self) -> crate::accounts::Store {
+        crate::accounts::Store {
+            home: ".cursor",
+            var: CONFIG_VAR,
+            files: &[],
+            dirs: &[],
+            login: &["login"],
+            xdg: None,
+        }
+    }
+
+    fn keys(&self) -> crate::accounts::KeyUse {
+        crate::accounts::KeyUse::Added
+    }
+
+    /// An account added by its key goes by it, never by a token of the app's; its Principal by the
+    /// machine's sign-in, never by a key or token of the app's (ESC-43).
+    fn account_env(
+        &self,
+        account: &crate::model::Account,
+        inherited: &dyn Fn(&str) -> bool,
+    ) -> Vec<(String, String)> {
+        use crate::accounts::{account_key, by_key, CURSOR_KEY_VAR, CURSOR_TOKEN_VAR};
+        let key = account_key(account).filter(|_| by_key(account));
+        let mut env: Vec<(String, String)> = [CURSOR_TOKEN_VAR, CURSOR_KEY_VAR]
+            .into_iter()
+            .filter(|v| inherited(v) && (*v == CURSOR_TOKEN_VAR || key.is_none()))
+            .map(|v| (v.to_string(), String::new()))
+            .collect();
+        if let Some(key) = key {
+            env.push((CURSOR_KEY_VAR.to_string(), key));
+        }
+        env
+    }
+
+    fn key_missing(&self, name: &str) -> String {
+        tr!(
+            "Le compte Cursor « {name} » n’a pas de clé d’API : donne-la dans Réglages › Comptes, « Changer la clé… ».",
+            "The Cursor account “{name}” has no API key: give it in Settings › Accounts, “Change the key…”."
+        )
+    }
+
+    fn key_malformed(&self) -> String {
+        tr!(
+            "Ce n’est pas une clé d’API de Cursor : copie-la entière depuis cursor.com, Settings › API Keys.",
+            "That isn’t a Cursor API key: copy it whole from cursor.com, Settings › API Keys."
+        )
+    }
+
+    /// Its Principal signed in by `agent login`, the same for all its folders, never read; another
+    /// account by its key, kept in the keychain (ESC-43), shown by its end.
+    fn account_status<'a>(
+        &'a self,
+        account: &'a crate::model::Account,
+        settings: &'a crate::model::Settings,
+    ) -> BoxFuture<'a, crate::accounts::AccountStatus> {
+        Box::pin(async move {
+            let machine = if crate::accounts::by_key(account) {
+                (false, None)
+            } else {
+                (crate::accounts::cursor_signed_in(), None)
+            };
+            crate::accounts::key_status(account, settings, machine)
+        })
+    }
+
+    fn workflow_folders(&self) -> crate::workflow::Folders {
+        &[(".cursor/commands", crate::workflow::DocKind::Command)]
+    }
+
+    /// No cost told; in its own interface, neither its subagents nor the time of its steps.
+    fn track_missing(&self, view: bool) -> &'static [&'static str] {
+        if view {
+            &["subagents", "cost", "timing"]
+        } else {
+            &["cost"]
+        }
+    }
+
     fn id(&self) -> EngineId {
-        EngineId::Cursor
+        EngineId::CURSOR
     }
 
     /// `cursor/list_available_models` of an `agent acp` of its own (`read_models`, ESC-186).

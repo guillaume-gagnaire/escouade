@@ -108,7 +108,9 @@ L'extraction s'est arrêtée là où d'autres lots reprennent :
 
 ## Les données (ESC-27)
 
-Le moteur est gardé partout où il compte, par son id (`EngineId` de `model.rs` : `claude`, `codex`, `copilot`, `cursor`, `opencode`). Ce qui a été enregistré avant la 1.8 vaut Claude Code.
+Le moteur est gardé partout où il compte, par son id (`EngineId` de `model.rs` : `claude`, `codex`, `copilot`, `cursor`, `opencode`, `vibe`, `agy`, `gemini`). Ce qui a été enregistré avant la 1.8 vaut Claude Code.
+
+Depuis INT-3 (ESC-209), `EngineId` est un **id ouvert** : une chaîne gardée telle quelle (`#[serde(transparent)]`, internée pour rester `Copy`), sérialisée à l'identique de l'énumération d'avant, sans rien à migrer. Les harness écrits ont leur constante (`EngineId::CLAUDE`, `EngineId::CODEX`…) ; un id que le registre n'a pas (celui d'une version plus récente, d'un plugin désinstallé ou désactivé) est lu et réécrit tel quel. Ses agents sont gardés, « harness absent » : `engine::by_id` rend pour lui le moteur `engine/absent.rs`, qui ne sait rien faire (aucune capacité, aucun modèle, programme introuvable), ne démarre pas (`Core::start_process_in` refuse avec `engine::absent_line`) et sur lequel aucun agent n'est créé ; la fenêtre le nomme « <id> (harness absent) » (`engineName`) et n'en montre aucune fonction.
 
 | Où | Champ | Avant la 1.8 | Ce qu'il dit |
 |---|---|---|---|
@@ -121,7 +123,9 @@ Le moteur d'un nouvel agent : celui demandé (`AgentOptions.engine`), sinon celu
 
 ## Le registre (ESC-28)
 
-`engine/registry.rs` tient ce que chaque moteur déclare et ce qu'on trouve de lui sur la machine. `registry::all()` liste les moteurs écrits (Claude Code, Codex, Copilot CLI et OpenCode aujourd'hui), le moteur par défaut en premier. Une ligne d'un moteur qu'Escouade ne pilote pas (OpenCode 2) est refusée quelle que soit la plage testée (`Engine::unsupported_line`, état `unsupported`).
+`engine/registry.rs` tient ce que chaque moteur déclare et ce qu'on trouve de lui sur la machine. `registry::all()` liste les moteurs du registre, le moteur par défaut en premier : ceux écrits dans l'app (`registry::BUILT_IN`, les huit), puis ceux ajoutés par `registry::register` (les plugins de harness d'INT-9) ; `registry::find(id)` en cherche un par son id.
+
+Hors de `engine/` et `agent/`, le cœur ne demande jamais quel harness tourne : il demande au moteur ce qu'il fait (INT-3). Ce que la fenêtre lit est dans `EngineCaps` ; ce que seul le cœur lit est une méthode d'`Engine`, avec sa valeur par défaut, que le moteur concerné remplace : ses modèles (`models_by_alias`, `told_effort`, `told_auto`, `read_told_models`, `listed_models_only`, `account_models`, `default_model`), ses comptes (`store`, `config_dir`, `settings_path`, `keys`, `account_env`, `sign_in_ready`, `key_missing`, `key_malformed`, `account_status`, `machine_key`, `signs_in`, `signs_in_later`, `signed_in_by_files`, `oauth_sign_in`, `sessions_in_agent_home`, `login_shell`, `before_login`), ses dossiers (`session_home` et `principal_sessions` pour la clôture, `memory_dir`, `session_cwd`, `workflow_folders` et `workflow_user` pour l'onglet Workflow), ses textes (`command`, `writer_priced`, `missing_repair`, `interrupted_line`) et le reste (`declares_by_program`, `hook_context`, `track_missing`). Seul Claude Code reste nommé ailleurs, comme harness par défaut (ce qui a été enregistré avant la 1.8, ce qui n'a pas encore choisi) et pour sa mise à jour automatique (`selfupdate.rs`). Une ligne d'un moteur qu'Escouade ne pilote pas (OpenCode 2) est refusée quelle que soit la plage testée (`Engine::unsupported_line`, état `unsupported`).
 
 ### Ce que chaque moteur déclare (`Engine`)
 
@@ -413,7 +417,7 @@ Un écart dit le cas, l'élément, le chemin de la clé, l'attendu et l'obtenu. 
 
 ## Ajouter un moteur
 
-À cocher dans l'ordre, dans le ticket du moteur. `<moteur>` est son id dans les données (`codex`), déjà dans `EngineId`.
+À cocher dans l'ordre, dans le ticket du moteur. `<moteur>` est son id dans les données (`codex`), une constante d'`EngineId`.
 
 ### L'adaptateur
 
@@ -424,7 +428,8 @@ Un écart dit le cas, l'élément, le chemin de la clé, l'attendu et l'obtenu. 
 - [ ] `message` : la forme de son message, pièces jointes comprises, et le refus d'un fichier qu'il ne lit pas (`caps.images`, `caps.pdf`).
 - [ ] `start_lost` : la session ou le point de copie perdus, lus dans son stderr.
 - [ ] `one_shot` : `Weight::Light` (son modèle le plus rapide, sans outil) et `Weight::Reading` (outils de lecture seule), sans session, sans réglages de l'utilisateur ni serveur MCP.
-- [ ] Sa ligne dans `engine::by_id`, et dans `registry::all()`.
+- [ ] Sa ligne dans `registry::BUILT_IN` (`engine::by_id` le trouve là), et sa constante dans `EngineId`.
+- [ ] Les méthodes d'`Engine` qu'il remplace parmi celles que le cœur lit (« Le registre » ci-dessus) : ses comptes, ses dossiers, ses modèles.
 
 ### Les capacités et le registre
 

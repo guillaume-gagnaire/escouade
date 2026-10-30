@@ -483,7 +483,7 @@ pub(crate) async fn quit_interface(pty: &PtyManager, term: &str, key: &'static [
 /// Escouade's server kept out of it when its tools are refused (`access`).
 #[cfg(test)]
 pub fn tui_settings(port: u16, engine: &dyn Engine, access: &Escouade) -> Value {
-    debug_assert_eq!(engine.id(), EngineId::Claude);
+    debug_assert_eq!(engine.id(), EngineId::CLAUDE);
     claude_terminal::settings(&hook_url(port), TOKEN_VAR, access)
 }
 
@@ -1410,7 +1410,7 @@ impl<R: Runtime> Core<R> {
         self.copy_first(view, h, id, &program, &settings, &account)
             .await;
         // A model its Claude account does not list: the default one, said (ESC-124).
-        if harness.id() == crate::model::EngineId::Claude {
+        if harness.models_by_alias() {
             self.fit_claude_model(h);
         }
         let started = now_ms();

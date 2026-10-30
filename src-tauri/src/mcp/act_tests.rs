@@ -811,9 +811,9 @@ async fn pause_past_the_quota_holds_back_the_autopilot_alone_never_a_ticket_star
         )),
     );
     assert!(h.core.autopilot_pause().is_some());
-    assert!(h.core.project_hold(&p.id, EngineId::Claude).is_some());
+    assert!(h.core.project_hold(&p.id, EngineId::CLAUDE).is_some());
     // Started by hand, it goes (the user, 2026-10-28): the scheduler gives it an agent.
-    assert!(h.core.project_limit(&p.id, EngineId::Claude).is_none());
+    assert!(h.core.project_limit(&p.id, EngineId::CLAUDE).is_none());
     let c = external(&h).await;
     let v = read(&c, "start_ticket", json!({ "ticket": a.key })).await;
     assert_eq!(v["key"], a.key.as_str());
@@ -2228,7 +2228,7 @@ async fn a_ticket_is_started_while_an_account_is_free_for_its_project_and_refuse
     assert_eq!(entry(&h).outcome, "refused");
     // The one that prefers Pro does not wait.
     prefer(&h, &p, "pro");
-    assert!(h.core.project_hold(&p.id, EngineId::Claude).is_none());
+    assert!(h.core.project_hold(&p.id, EngineId::CLAUDE).is_none());
     prefer(&h, &p, "");
 
     // Pro past the threshold too, sooner: no account left, and the answer says when the first is
@@ -3013,7 +3013,7 @@ async fn a_ticket_is_not_sent_back_while_its_agents_account_is_held_back_and_onl
 
 /// Claude Code nowhere to be found, as the app says it (with its repair, ESC-133).
 fn no_claude() -> String {
-    crate::engine::missing_line(crate::model::EngineId::Claude, crate::i18n::Lang::Fr)
+    crate::engine::missing_line(crate::model::EngineId::CLAUDE, crate::i18n::Lang::Fr)
 }
 
 /// The block of a ticket whose agent got no message: Claude Code is nowhere to be found.
@@ -4903,7 +4903,7 @@ async fn on_codex(h: &Harness, p: &Project) {
         s.accounts.push(Account {
             id: "codex-work".into(),
             name: "Codex".into(),
-            engine: EngineId::Codex,
+            engine: EngineId::CODEX,
             config_dir: home.to_string_lossy().into(),
             claude_path: crate::engine::fake_codex(),
             active: true,
@@ -4917,7 +4917,7 @@ async fn on_codex(h: &Harness, p: &Project) {
         .iter_mut()
         .find(|x| x.id == p.id)
         .unwrap()
-        .engine = Some(EngineId::Codex);
+        .engine = Some(EngineId::CODEX);
 }
 
 #[tokio::test]
@@ -4964,7 +4964,7 @@ async fn the_model_and_the_effort_are_checked_against_the_harness_of_the_project
     let agent = h.agent(id);
     assert_eq!(
         (agent.engine, agent.model.as_str()),
-        (EngineId::Codex, "gpt-5.6-terra")
+        (EngineId::CODEX, "gpt-5.6-terra")
     );
     turn_over(&h, id).await;
 
@@ -5126,7 +5126,7 @@ async fn a_ticket_set_on_codex_in_a_claude_project_takes_the_models_of_codex_and
         .unwrap()
         .engine = None;
     let mut t = ticket(&p, "DEM-9", "Codex [ok]", Column::Todo, 5);
-    t.engine = Some(EngineId::Codex);
+    t.engine = Some(EngineId::CODEX);
     let t = put(&h, t);
     let c = external(&h).await;
 

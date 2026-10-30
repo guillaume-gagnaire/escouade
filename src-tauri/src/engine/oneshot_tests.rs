@@ -40,7 +40,7 @@ impl Drop for OnDrop {
 
 impl Engine for Fake {
     fn id(&self) -> EngineId {
-        EngineId::Codex
+        EngineId::CODEX
     }
     fn name(&self) -> &'static str {
         "Faux"
@@ -167,19 +167,39 @@ fn question(limit: Duration) -> OneShot<'static> {
 
 #[test]
 fn the_texts_go_to_the_harness_chosen_while_it_is_found_else_to_claude_haiku_else_to_one_found() {
-    use EngineId::*;
     // Nothing chosen: Claude Code when it is found, wherever it is listed.
-    assert_eq!(writer(None, &[Claude, Codex]), Some(Claude));
-    assert_eq!(writer(None, &[Codex, Claude]), Some(Claude));
+    assert_eq!(
+        writer(None, &[EngineId::CLAUDE, EngineId::CODEX]),
+        Some(EngineId::CLAUDE)
+    );
+    assert_eq!(
+        writer(None, &[EngineId::CODEX, EngineId::CLAUDE]),
+        Some(EngineId::CLAUDE)
+    );
     // Chosen and found.
-    assert_eq!(writer(Some(Codex), &[Claude, Codex]), Some(Codex));
+    assert_eq!(
+        writer(Some(EngineId::CODEX), &[EngineId::CLAUDE, EngineId::CODEX]),
+        Some(EngineId::CODEX)
+    );
     // Chosen but gone: as if nothing was.
-    assert_eq!(writer(Some(Codex), &[Claude]), Some(Claude));
+    assert_eq!(
+        writer(Some(EngineId::CODEX), &[EngineId::CLAUDE]),
+        Some(EngineId::CLAUDE)
+    );
     // No Claude Code: the first harness found.
-    assert_eq!(writer(None, &[Codex, Opencode]), Some(Codex));
-    assert_eq!(writer(Some(Cursor), &[Codex, Opencode]), Some(Codex));
+    assert_eq!(
+        writer(None, &[EngineId::CODEX, EngineId::OPENCODE]),
+        Some(EngineId::CODEX)
+    );
+    assert_eq!(
+        writer(
+            Some(EngineId::CURSOR),
+            &[EngineId::CODEX, EngineId::OPENCODE]
+        ),
+        Some(EngineId::CODEX)
+    );
     // None found.
-    assert_eq!(writer(Some(Claude), &[]), None);
+    assert_eq!(writer(Some(EngineId::CLAUDE), &[]), None);
 }
 
 #[tokio::test]

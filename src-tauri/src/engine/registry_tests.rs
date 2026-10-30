@@ -169,7 +169,7 @@ fn every_harness_declares_its_installer_and_its_composers_models_and_efforts() {
         assert!(!decl.install.windows.is_empty() && !decl.install.unix.is_empty());
         // OpenCode's are those of the providers connected to it, listed by its server only.
         assert!(
-            !decl.models.is_empty() || e.id() == crate::model::EngineId::Opencode,
+            !decl.models.is_empty() || e.id() == crate::model::EngineId::OPENCODE,
             "{} has no model",
             e.name()
         );
@@ -401,20 +401,20 @@ fn compact_is_read_with_its_instruction_and_listed_where_a_request_does_it() {
             .collect()
     };
     let compact = |hint: bool| vec![("compact".to_string(), hint)];
-    assert_eq!(listed(EngineId::Claude), []);
-    assert_eq!(listed(EngineId::Codex), compact(false));
-    assert_eq!(listed(EngineId::Copilot), compact(true));
-    assert_eq!(listed(EngineId::Opencode), compact(false));
-    assert_eq!(listed(EngineId::Cursor), []);
+    assert_eq!(listed(EngineId::CLAUDE), []);
+    assert_eq!(listed(EngineId::CODEX), compact(false));
+    assert_eq!(listed(EngineId::COPILOT), compact(true));
+    assert_eq!(listed(EngineId::OPENCODE), compact(false));
+    assert_eq!(listed(EngineId::CURSOR), []);
     assert_eq!(
-        by_id(EngineId::Cursor).compaction(),
+        by_id(EngineId::CURSOR).compaction(),
         Compaction::InItsInterface("/summarize")
     );
     for id in [
-        EngineId::Codex,
-        EngineId::Copilot,
-        EngineId::Opencode,
-        EngineId::Cursor,
+        EngineId::CODEX,
+        EngineId::COPILOT,
+        EngineId::OPENCODE,
+        EngineId::CURSOR,
     ] {
         assert_eq!(
             by_id(id).caps().slash_commands,
@@ -422,4 +422,174 @@ fn compact_is_read_with_its_instruction_and_listed_where_a_request_does_it() {
             "{id:?}"
         );
     }
+}
+
+// ----- INT-3: the registry built from a list, an id it lacks « harness absent » -----
+
+#[test]
+fn the_registry_starts_from_the_built_in_harnesses_in_the_order_of_the_interface() {
+    let ids: Vec<&str> = all().iter().map(|e| e.id().as_str()).collect();
+    assert_eq!(
+        ids,
+        ["claude", "codex", "copilot", "opencode", "cursor", "vibe", "agy", "gemini"]
+    );
+    for e in BUILT_IN {
+        assert_eq!(find(e.id()).map(|f| f.name()), Some(e.name()));
+        assert!(crate::engine::written(e.id()));
+        assert_eq!(crate::engine::by_id(e.id()).name(), e.name());
+    }
+    // Every one of them declared to the window, in the same order.
+    let declared: Vec<_> = declared().into_iter().map(|d| d.id).collect();
+    assert_eq!(declared, all().iter().map(|e| e.id()).collect::<Vec<_>>());
+}
+
+/// A harness added to the registry, as a plugin's will be (INT-9): Claude Code's adapter under
+/// another id.
+struct Added;
+
+impl Engine for Added {
+    fn id(&self) -> crate::model::EngineId {
+        crate::model::EngineId::new("added")
+    }
+    fn name(&self) -> &'static str {
+        "Added"
+    }
+    fn speaker(&self) -> &'static str {
+        "Added"
+    }
+    fn instructions_room(&self) -> Option<crate::engine::Room> {
+        CLAUDE.instructions_room()
+    }
+    fn subagent_relay(&self, l: Lang, a: &str, b: &str, c: &str) -> Option<String> {
+        CLAUDE.subagent_relay(l, a, b, c)
+    }
+    fn locate(&self, configured: &str, wsl: &str) -> Option<crate::engine::Program> {
+        CLAUDE.locate(configured, wsl)
+    }
+    fn tested(&self) -> Tested {
+        CLAUDE.tested()
+    }
+    fn oldest_reason(&self, lang: Lang) -> String {
+        CLAUDE.oldest_reason(lang)
+    }
+    fn update_command(&self) -> &'static str {
+        CLAUDE.update_command()
+    }
+    fn version_args(&self) -> &'static [&'static str] {
+        CLAUDE.version_args()
+    }
+    fn caps(&self) -> EngineCaps {
+        CLAUDE.caps()
+    }
+    fn accounts(&self) -> AccountStore {
+        CLAUDE.accounts()
+    }
+    fn terminal(&self) -> Option<&'static dyn crate::engine::TerminalView> {
+        None
+    }
+    fn install(&self) -> Install {
+        CLAUDE.install()
+    }
+    fn models(&self) -> Vec<ModelDecl> {
+        CLAUDE.models()
+    }
+    fn efforts(&self) -> &'static [&'static str] {
+        CLAUDE.efforts()
+    }
+    fn supports_effort(&self, model: &str) -> bool {
+        CLAUDE.supports_effort(model)
+    }
+    fn supports_auto(&self, model: &str) -> bool {
+        CLAUDE.supports_auto(model)
+    }
+    fn spawn(
+        &self,
+        spawn: crate::engine::Spawn,
+        on_frame: crate::engine::OnFrame,
+        on_exit: crate::engine::OnExit,
+    ) -> anyhow::Result<crate::engine::Process> {
+        CLAUDE.spawn(spawn, on_frame, on_exit)
+    }
+    fn message(
+        &self,
+        text: &str,
+        attachments: &[crate::core::Attachment],
+    ) -> anyhow::Result<crate::engine::Message> {
+        CLAUDE.message(text, attachments)
+    }
+    fn translate(
+        &self,
+        rt: &mut crate::agent::AgentRt,
+        frame: &serde_json::Value,
+        fx: &mut crate::agent::Effects,
+    ) {
+        CLAUDE.translate(rt, frame, fx)
+    }
+    fn start_lost(&self, stderr: &str) -> Option<crate::engine::StartLost> {
+        CLAUDE.start_lost(stderr)
+    }
+    fn one_shot<'a>(
+        &'a self,
+        ask: crate::engine::OneShot<'a>,
+    ) -> crate::engine::BoxFuture<'a, anyhow::Result<String>> {
+        CLAUDE.one_shot(ask)
+    }
+    fn writer(&self, weight: crate::engine::Weight) -> &'static str {
+        CLAUDE.writer(weight)
+    }
+    fn grant_file(&self, url: &str, token: &str) -> Option<Vec<u8>> {
+        CLAUDE.grant_file(url, token)
+    }
+    fn refusal(&self) -> Option<serde_json::Value> {
+        CLAUDE.refusal()
+    }
+    fn escouade_launch(&self, escouade: &crate::engine::Escouade) -> crate::engine::mcp::Launch {
+        CLAUDE.escouade_launch(escouade)
+    }
+}
+
+static ADDED_ONE: Added = Added;
+
+#[test]
+fn a_harness_added_to_the_registry_comes_after_the_built_in_ones_and_is_written() {
+    let id = crate::model::EngineId::new("added");
+    assert!(!crate::engine::written(id));
+    register(&ADDED_ONE);
+    register(&ADDED_ONE);
+    let ids: Vec<&str> = all().iter().map(|e| e.id().as_str()).collect();
+    assert_eq!(ids.len(), BUILT_IN.len() + 1, "added once: {ids:?}");
+    assert_eq!(ids.last(), Some(&"added"));
+    assert!(crate::engine::written(id));
+    assert_eq!(crate::engine::by_name(id), "Added");
+    assert_eq!(declared().last().map(|d| d.name), Some("Added"));
+}
+
+#[test]
+fn an_id_the_registry_lacks_is_harness_absent_and_starts_nothing() {
+    let id = crate::model::EngineId::new("hermes");
+    assert!(find(id).is_none());
+    assert!(!crate::engine::written(id));
+    let harness = crate::engine::by_id(id);
+    assert_eq!(harness.id(), id);
+    // Its name is its id: none other is known of it.
+    assert_eq!(crate::engine::by_name(id), "hermes");
+    // It can do nothing: none of its functions is shown.
+    let caps = harness.caps();
+    assert!(caps.modes.is_empty() && !caps.images && !caps.terminal_view && !caps.read_only);
+    assert!(harness.models().is_empty());
+    assert!(harness.locate("", "").is_none());
+    assert!(harness.session_home().is_none());
+    // Its reason, said where it does not start.
+    let line = crate::engine::absent::line(id, Fr);
+    assert!(line.starts_with("Harness absent : « hermes »"), "{line}");
+    assert!(crate::engine::absent::line(id, En).starts_with("Harness missing: “hermes”"));
+    let Err(err) = harness.message("salut", &[]) else {
+        panic!("a message for a harness absent")
+    };
+    assert!(err.to_string().contains("hermes"), "{err}");
+    // Made once, kept.
+    assert!(std::ptr::eq(
+        crate::engine::by_id(id) as *const dyn Engine as *const u8,
+        harness as *const dyn Engine as *const u8
+    ));
 }

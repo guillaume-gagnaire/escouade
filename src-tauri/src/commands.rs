@@ -706,7 +706,7 @@ pub fn claude_found(core: CoreState) -> ClaudeFound {
 /// of it may share (those it has).
 #[tauri::command(async)]
 pub fn account_shareable(core: CoreState, engine: Option<EngineId>) -> Vec<String> {
-    core.shareable(engine.unwrap_or(EngineId::Claude))
+    core.shareable(engine.unwrap_or(EngineId::CLAUDE))
 }
 
 /// « Créer et se connecter »: a new account of `engine` (Claude Code by default), its folder made
@@ -720,7 +720,7 @@ pub fn account_create(
     mode: ShareMode,
     engine: Option<EngineId>,
 ) -> Res<ClaudeAccount> {
-    let engine = engine.unwrap_or(EngineId::Claude);
+    let engine = engine.unwrap_or(EngineId::CLAUDE);
     let r = core
         .create_account(engine, &name, &share, mode)
         .map_err(err);

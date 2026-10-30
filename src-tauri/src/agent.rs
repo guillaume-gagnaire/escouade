@@ -1451,8 +1451,8 @@ impl AgentRt {
             let mut reason = stopped(i18n::ui(), harness.name(), &code);
             // A `claude` that stopped before it started: its installation may have been cut
             // half-way (ESC-133), which is said with its repair.
-            if !self.saw_init && harness.id() == EngineId::Claude {
-                if let Some(line) = crate::engine::claude_interrupted_line(i18n::ui()) {
+            if !self.saw_init {
+                if let Some(line) = harness.interrupted_line(i18n::ui()) {
                     reason = format!("{reason}. {line}");
                 }
             }

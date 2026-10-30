@@ -8,7 +8,7 @@ fn agent(cwd: &str, mode: &str) -> AgentRt {
     let meta = AgentMeta {
         id: new_id(),
         cwd: cwd.into(),
-        engine: EngineId::Copilot,
+        engine: EngineId::COPILOT,
         model: "gpt-6-luna".into(),
         mode: mode.into(),
         ..Default::default()
@@ -517,7 +517,7 @@ fn each_call_tells_the_months_credits_and_its_cost_comes_from_its_nano_aiu() {
         .sum();
     let cost: f64 = rows.iter().map(|r| r.cost).sum();
     assert!((cost - nano as f64 / 1e11).abs() < 1e-9, "{cost} {nano}");
-    assert!(rows.iter().all(|r| r.engine == EngineId::Copilot));
+    assert!(rows.iter().all(|r| r.engine == EngineId::COPILOT));
     assert!((rt.meta.cost - cost).abs() < 1e-9);
 }
 

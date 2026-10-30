@@ -12,11 +12,11 @@ use std::process::{Command, Stdio};
 #[test]
 fn a_harness_has_a_terminal_view_exactly_when_its_caps_say_so() {
     for id in [
-        EngineId::Claude,
-        EngineId::Codex,
-        EngineId::Copilot,
-        EngineId::Cursor,
-        EngineId::Opencode,
+        EngineId::CLAUDE,
+        EngineId::CODEX,
+        EngineId::COPILOT,
+        EngineId::CURSOR,
+        EngineId::OPENCODE,
     ] {
         let e = engine::by_id(id);
         // In the process's place, or joined to it (OpenCode), never both.
@@ -27,14 +27,14 @@ fn a_harness_has_a_terminal_view_exactly_when_its_caps_say_so() {
         );
         assert!(!(e.terminal().is_some() && e.attaches()), "{id:?}");
     }
-    assert!(engine::by_id(EngineId::Opencode).attaches());
+    assert!(engine::by_id(EngineId::OPENCODE).attaches());
     let minimal = &crate::engine::minimal::MINIMAL;
     assert!(minimal.terminal().is_none() && !minimal.attaches() && !minimal.caps().terminal_view);
 }
 
 #[test]
 fn claude_codes_view_pastes_sends_and_interrupts_as_before() {
-    let view = engine::by_id(EngineId::Claude).terminal().unwrap();
+    let view = engine::by_id(EngineId::CLAUDE).terminal().unwrap();
     assert_eq!(view.shell(), "claude");
     // Line breaks pasted as a terminal pastes them (xterm.js too): \r. Claude Code drops a \n
     // pasted in its interface under Windows (ESC-12, its real one).
@@ -58,7 +58,7 @@ fn claude_codes_view_pastes_sends_and_interrupts_as_before() {
 
 #[test]
 fn claude_codes_launch_is_its_arguments_and_its_settings_file() {
-    let view = engine::by_id(EngineId::Claude).terminal().unwrap();
+    let view = engine::by_id(EngineId::CLAUDE).terminal().unwrap();
     let meta = AgentMeta {
         model: "sonnet".into(),
         effort: "high".into(),
@@ -90,7 +90,7 @@ fn claude_codes_launch_is_its_arguments_and_its_settings_file() {
     let settings: serde_json::Value = serde_json::from_slice(&launch.file.unwrap()).unwrap();
     assert_eq!(
         settings,
-        crate::tui::tui_settings(4120, engine::by_id(EngineId::Claude), &access)
+        crate::tui::tui_settings(4120, engine::by_id(EngineId::CLAUDE), &access)
     );
     // Its hooks are HTTP calls: nothing in its environment for a command.
     assert!(launch.env.is_empty());

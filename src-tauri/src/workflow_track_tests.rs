@@ -44,7 +44,7 @@ struct Fake {
 
 impl Fake {
     fn new(scan: Scan) -> Self {
-        Fake::on(scan, "a1", EngineId::Claude, false)
+        Fake::on(scan, "a1", EngineId::CLAUDE, false)
     }
 
     fn on(scan: Scan, id: &str, engine: EngineId, view: bool) -> Self {
@@ -366,9 +366,9 @@ fn the_ticket_loop_is_kept_beside_the_step() {
 #[test]
 fn several_agents_in_the_same_workflow_each_have_their_step_and_their_history() {
     let scan = gsd();
-    let mut a = Fake::on(scan.clone(), "a1", EngineId::Claude, false);
-    let mut b = Fake::on(scan.clone(), "a2", EngineId::Claude, false);
-    let mut c = Fake::on(scan, "a3", EngineId::Opencode, false);
+    let mut a = Fake::on(scan.clone(), "a1", EngineId::CLAUDE, false);
+    let mut b = Fake::on(scan.clone(), "a2", EngineId::CLAUDE, false);
+    let mut c = Fake::on(scan, "a3", EngineId::OPENCODE, false);
     a.says("/gsd:plan-phase");
     b.says("/gsd:plan-phase");
     c.says("/gsd:execute-phase");
@@ -495,19 +495,19 @@ fn a_step_that_is_gone_from_the_workflow_is_left_by_the_next_fact() {
 #[test]
 fn the_tracking_is_partial_for_the_harnesses_that_do_not_tell_everything() {
     let full = |e, v| support_of(e, v);
-    assert!(!full(EngineId::Claude, false).partial);
-    assert!(!full(EngineId::Claude, true).partial);
-    assert!(!full(EngineId::Opencode, false).partial);
-    assert!(!full(EngineId::Copilot, false).partial);
-    let codex = full(EngineId::Codex, false);
+    assert!(!full(EngineId::CLAUDE, false).partial);
+    assert!(!full(EngineId::CLAUDE, true).partial);
+    assert!(!full(EngineId::OPENCODE, false).partial);
+    assert!(!full(EngineId::COPILOT, false).partial);
+    let codex = full(EngineId::CODEX, false);
     assert!(codex.partial);
     assert_eq!(codex.missing, ["subagents"]);
-    let cursor = full(EngineId::Cursor, false);
+    let cursor = full(EngineId::CURSOR, false);
     assert!(cursor.partial);
     assert_eq!(cursor.missing, ["cost"]);
-    let view = full(EngineId::Cursor, true);
+    let view = full(EngineId::CURSOR, true);
     assert_eq!(view.missing, ["subagents", "cost", "timing"]);
-    let a = Fake::on(gsd(), "x", EngineId::Codex, false);
+    let a = Fake::on(gsd(), "x", EngineId::CODEX, false);
     assert!(a.track.support.partial);
 }
 

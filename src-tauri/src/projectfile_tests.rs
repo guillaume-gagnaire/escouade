@@ -409,7 +409,7 @@ fn applied_settings_change_the_project_commands_wait_for_trust() {
     let a = pf::apply(&mut p, &r);
     // Every setting without effect on the machine applies.
     assert!(p.worktree_per_agent);
-    assert_eq!(p.engine, Some(EngineId::Codex));
+    assert_eq!(p.engine, Some(EngineId::CODEX));
     assert_eq!(p.worktree_dir, "../app-worktrees");
     assert_eq!(p.worktree_copy, [".env*", "config/local.json"]);
     assert_eq!(p.agent_branch_prefix, "agent/");

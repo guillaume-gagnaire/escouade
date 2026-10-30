@@ -526,8 +526,114 @@ fn json_answer(stdout: &[u8]) -> Result<Value> {
 }
 
 impl Engine for Claude {
+    fn store(&self) -> crate::accounts::Store {
+        use crate::accounts::{Store, CONFIG_DIR_VAR, SHARED_DIRS, SHARED_FILES};
+        Store {
+            home: ".claude",
+            var: CONFIG_DIR_VAR,
+            files: &SHARED_FILES,
+            dirs: &SHARED_DIRS,
+            login: &[],
+            xdg: None,
+        }
+    }
+
+    fn config_dir(
+        &self,
+        account: &crate::model::Account,
+        settings: &crate::model::Settings,
+    ) -> Option<std::path::PathBuf> {
+        Some(crate::accounts::claude_config_dir(account, settings))
+    }
+
+    /// The only harness with a path in the settings (« Chemin de claude »).
+    fn settings_path<'a>(&self, settings: &'a crate::model::Settings) -> &'a str {
+        &settings.claude_path
+    }
+
+    fn default_model(&self) -> &'static str {
+        crate::accounts::CLAUDE_DEFAULT_MODEL
+    }
+
+    /// For an account with a folder of its own, those of `IDENTITY_VARS` that are set given empty
+    /// (read as not set), and `CLAUDE_SECURESTORAGE_CONFIG_DIR`, when set, its folder: its own
+    /// sign-in is the one it uses. Principal, which signs in as the machine's user does, keeps them.
+    fn account_env(
+        &self,
+        account: &crate::model::Account,
+        inherited: &dyn Fn(&str) -> bool,
+    ) -> Vec<(String, String)> {
+        use crate::accounts::{own_dir, IDENTITY_VARS, SECURE_STORAGE_VAR};
+        let mut env = Vec::new();
+        if let Some(dir) = own_dir(account) {
+            env.extend(
+                IDENTITY_VARS
+                    .iter()
+                    .filter(|v| inherited(v))
+                    .map(|v| (v.to_string(), String::new())),
+            );
+            if inherited(SECURE_STORAGE_VAR) {
+                env.push((SECURE_STORAGE_VAR.to_string(), dir.to_string()));
+            }
+        }
+        env
+    }
+
+    /// The sign-in it keeps for the account (its folder, or the macOS keychain), and the email of
+    /// its `.claude.json`.
+    fn account_status<'a>(
+        &'a self,
+        account: &'a crate::model::Account,
+        settings: &'a crate::model::Settings,
+    ) -> BoxFuture<'a, crate::accounts::AccountStatus> {
+        use crate::accounts::{claude_json, config_dir, email_in, AccountStatus};
+        Box::pin(async move {
+            let sign_in = crate::usage::sign_in(account, settings);
+            let stored = match crate::usage::read_stored(&sign_in.dir, &sign_in.service).await {
+                Ok(stored) => Some(stored),
+                // A file being written, the keychain refused: not signed in as far as can be told.
+                Err(e) => {
+                    log::debug!("sign-in of account {}: {e:#}", account.id);
+                    None
+                }
+            };
+            let connected = stored
+                .as_ref()
+                .is_some_and(|s| s.credentials != crate::usage::Credentials::Missing);
+            AccountStatus {
+                connected,
+                stamp: stored.and_then(|s| s.stamp),
+                email: connected
+                    .then(|| email_in(&claude_json(account, settings)))
+                    .flatten(),
+                dir: config_dir(account, settings).to_string_lossy().into_owned(),
+            }
+        })
+    }
+
+    fn login_shell(&self) -> String {
+        "claude".into()
+    }
+
+    fn workflow_folders(&self) -> crate::workflow::Folders {
+        use crate::workflow::DocKind;
+        &[
+            (".claude/commands", DocKind::Command),
+            (".claude/skills", DocKind::Skill),
+            (".claude/agents", DocKind::Agent),
+        ]
+    }
+
+    fn workflow_user(&self) -> Option<crate::workflow::UserRoot> {
+        Some(crate::workflow::UserRoot::Claude)
+    }
+
+    fn hook_context(&self) -> bool {
+        true
+    }
+
     fn id(&self) -> crate::model::EngineId {
-        crate::model::EngineId::Claude
+        crate::model::EngineId::CLAUDE
     }
 
     fn name(&self) -> &'static str {
@@ -689,6 +795,76 @@ impl Engine for Claude {
 
     fn writer(&self, weight: Weight) -> &'static str {
         writer(weight)
+    }
+
+    fn models_by_alias(&self) -> bool {
+        true
+    }
+
+    fn told_effort(&self, models: &[crate::model::ModelInfo], model: &str) -> Option<bool> {
+        told_effort(models, model)
+    }
+
+    fn told_auto(&self, models: &[crate::model::ModelInfo], model: &str) -> Option<bool> {
+        told_auto(models, model)
+    }
+
+    fn read_told_models<'a>(
+        &'a self,
+        program: Program,
+        env: Vec<(String, String)>,
+        dir: &'a std::path::Path,
+    ) -> BoxFuture<'a, Result<Value>> {
+        Box::pin(read_models(program, env, dir))
+    }
+
+    fn missing_repair(&self, lang: Lang) -> Option<String> {
+        Some(missing_line(lang))
+    }
+
+    fn interrupted_line(&self, lang: Lang) -> Option<String> {
+        interrupted_line(lang)
+    }
+
+    fn command(&self) -> &'static str {
+        "claude"
+    }
+
+    fn oauth_sign_in(&self) -> bool {
+        true
+    }
+
+    fn declares_by_program(&self) -> bool {
+        true
+    }
+
+    fn principal_sessions(&self) -> bool {
+        true
+    }
+
+    fn session_cwd(&self, config_dir: &std::path::Path, session_id: &str) -> Option<String> {
+        crate::agentprs::last_cwd(config_dir, session_id)
+    }
+
+    fn memory_dir(
+        &self,
+        config_dir: &std::path::Path,
+        project_path: &str,
+    ) -> Option<std::path::PathBuf> {
+        Some(crate::memory::claude_dir(config_dir, project_path))
+    }
+
+    fn signed_in_by_files(
+        &self,
+        account: &crate::model::Account,
+        settings: &crate::model::Settings,
+    ) -> bool {
+        crate::accounts::email_in(&crate::accounts::claude_json(account, settings)).is_some()
+    }
+
+    /// Its texts' model by its alias, as its prices know it.
+    fn writer_priced(&self, _weight: Weight) -> String {
+        "haiku".to_string()
     }
 
     fn grant_file(&self, url: &str, token: &str) -> Option<Vec<u8>> {

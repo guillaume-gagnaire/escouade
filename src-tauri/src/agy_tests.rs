@@ -31,7 +31,7 @@ fn machine_account(h: &Harness) {
         s.accounts.push(Account {
             id: "principal-agy".into(),
             name: "Principal".into(),
-            engine: EngineId::Agy,
+            engine: EngineId::AGY,
             claude_path: program,
             active: true,
             ..Default::default()
@@ -43,7 +43,7 @@ fn machine_account(h: &Harness) {
 async fn key_account(h: &Harness, name: &str, key: Option<&str>) -> String {
     let made = h
         .core
-        .create_account(EngineId::Agy, name, &[], crate::accounts::ShareMode::Link)
+        .create_account(EngineId::AGY, name, &[], crate::accounts::ShareMode::Link)
         .unwrap();
     let program = crate::engine::fake_agy();
     h.set_settings(|s| {
@@ -62,7 +62,7 @@ async fn agent_on(h: &Harness, project: &str, account: &str) -> String {
         .create_agent_with(
             project,
             AgentOptions {
-                engine: Some(EngineId::Agy),
+                engine: Some(EngineId::AGY),
                 mode: Some("default".into()),
                 account: Some(account.into()),
                 ..Default::default()
@@ -159,16 +159,16 @@ async fn the_machines_antigravity_account_is_added_by_hand_and_its_defaults_hold
     let (p, _) = h.project(false).await;
     assert!(!crate::accounts::has_any(
         &h.core.settings.read(),
-        EngineId::Agy
+        EngineId::AGY
     ));
     let program = crate::engine::fake_agy();
-    let machine = h.core.machine_account(EngineId::Agy).await;
+    let machine = h.core.machine_account(EngineId::AGY).await;
     assert!(!machine.added && machine.signs_in && machine.signs_in_later);
-    let made = h.core.add_machine_account(EngineId::Agy).unwrap();
+    let made = h.core.add_machine_account(EngineId::AGY).unwrap();
     assert_eq!(made.id, "principal-agy");
-    assert!(h.core.machine_account(EngineId::Agy).await.added);
+    assert!(h.core.machine_account(EngineId::AGY).await.added);
     // Its sign-in: `agy` itself, its interface (no argument), never a key of the app's.
-    assert!(crate::accounts::store(EngineId::Agy).login.is_empty());
+    assert!(crate::accounts::store(EngineId::AGY).login.is_empty());
     let env = crate::accounts::launch_env_with(&made, &|v| v == "GEMINI_API_KEY");
     assert!(
         env.contains(&("GEMINI_API_KEY".into(), String::new())),
@@ -186,7 +186,7 @@ async fn the_machines_antigravity_account_is_added_by_hand_and_its_defaults_hold
         .create_agent_with(
             &p.id,
             AgentOptions {
-                engine: Some(EngineId::Agy),
+                engine: Some(EngineId::AGY),
                 ..Default::default()
             },
         )
@@ -207,7 +207,7 @@ async fn the_machines_antigravity_account_is_added_by_hand_and_its_defaults_hold
     h.core.remove_claude_account("principal-agy").unwrap();
     assert!(!crate::accounts::has_any(
         &h.core.settings.read(),
-        EngineId::Agy
+        EngineId::AGY
     ));
     h.core.stop_for_good();
 }

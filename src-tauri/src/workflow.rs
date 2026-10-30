@@ -47,37 +47,36 @@ const TRANSCRIPTS: &[&str] = &["projects", "sessions"];
 /// of `outside`, `extension`, `secret`, `config`, `transcript`. Never its content.
 pub const IGNORED: &str = "ignored:";
 
-/// The folders of each harness, from a repository (`user` ones from the harness' folder), and what
-/// each holds. What a reading tells it has looked in (« l'onglet dit ce qui a été cherché »).
-pub const FOLDERS: &[(EngineId, &str, DocKind)] = &[
-    (EngineId::Claude, ".claude/commands", DocKind::Command),
-    (EngineId::Claude, ".claude/skills", DocKind::Skill),
-    (EngineId::Claude, ".claude/agents", DocKind::Agent),
-    // `.agents/`, read whole whatever the harness (ESC-195): skills, agents, commands, prompts.
-    (EngineId::Codex, ".agents/skills", DocKind::Skill),
-    (EngineId::Codex, ".agents/agents", DocKind::Agent),
-    (EngineId::Codex, ".agents/commands", DocKind::Command),
-    (EngineId::Codex, ".agents/prompts", DocKind::Command),
-    (EngineId::Opencode, ".opencode/command", DocKind::Command),
-    (EngineId::Opencode, ".opencode/commands", DocKind::Command),
-    (EngineId::Opencode, ".opencode/skill", DocKind::Skill),
-    (EngineId::Opencode, ".opencode/skills", DocKind::Skill),
-    (EngineId::Opencode, ".opencode/agent", DocKind::Agent),
-    (EngineId::Opencode, ".opencode/agents", DocKind::Agent),
-    (EngineId::Copilot, ".github/prompts", DocKind::Command),
-    (EngineId::Copilot, ".github/skills", DocKind::Skill),
-    (EngineId::Copilot, ".github/agents", DocKind::Agent),
-    (EngineId::Cursor, ".cursor/commands", DocKind::Command),
-];
+/// The folders of a harness, from a repository, and what each holds (`Engine::workflow_folders`):
+/// what a reading tells it has looked in (« l'onglet dit ce qui a été cherché »).
+pub type Folders = &'static [(&'static str, DocKind)];
+
+/// The user's own folder of a harness its workflows are read from too (`Engine::workflow_user`),
+/// as the roots of a scan have them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UserRoot {
+    /// Claude Code's (`~/.claude`, or an account's): `CLAUDE_USER`.
+    Claude,
+    /// Codex's (`CODEX_HOME`, shared between its accounts): `CODEX_USER`.
+    Codex,
+}
 
 /// The prompts and skills of Codex's folder (`CODEX_HOME`, shared between its accounts).
-const CODEX_USER: &[(&str, DocKind)] = &[("prompts", DocKind::Command), ("skills", DocKind::Skill)];
+const CODEX_USER: Folders = &[("prompts", DocKind::Command), ("skills", DocKind::Skill)];
 /// The folders of Claude Code's own folder (`~/.claude`, or an account's).
-const CLAUDE_USER: &[(&str, DocKind)] = &[
+const CLAUDE_USER: Folders = &[
     ("commands", DocKind::Command),
     ("skills", DocKind::Skill),
     ("agents", DocKind::Agent),
 ];
+
+/// The harnesses whose folders a repository is read for, in the registry's order.
+fn read_harnesses() -> Vec<&'static dyn crate::engine::Engine> {
+    crate::engine::registry::all()
+        .into_iter()
+        .filter(|e| !e.workflow_folders().is_empty())
+        .collect()
+}
 
 /// The instructions read to understand, never drawn (choice 136).
 const INSTRUCTIONS: &[&str] = &["CLAUDE.md", "AGENTS.md", ".github/copilot-instructions.md"];
@@ -1161,15 +1160,14 @@ fn load_docs(
 fn docs_of(ctx: &mut Ctx, harness: EngineId) -> Vec<Doc> {
     let mut docs = Vec::new();
     let repo_dir = ctx.repo_dir.clone();
-    for (h, rel, kind) in FOLDERS {
-        if *h == harness {
-            load_docs(ctx, &repo_dir, rel, *kind, Scope::Project, &mut docs);
-        }
+    let harness = crate::engine::by_id(harness);
+    for (rel, kind) in harness.workflow_folders() {
+        load_docs(ctx, &repo_dir, rel, *kind, Scope::Project, &mut docs);
     }
-    let user: Option<(PathBuf, &[(&str, DocKind)])> = match harness {
-        EngineId::Claude => ctx.roots.claude.clone().map(|d| (d, CLAUDE_USER)),
-        EngineId::Codex => ctx.roots.codex.clone().map(|d| (d, CODEX_USER)),
-        _ => None,
+    let user: Option<(PathBuf, Folders)> = match harness.workflow_user() {
+        Some(UserRoot::Claude) => ctx.roots.claude.clone().map(|d| (d, CLAUDE_USER)),
+        Some(UserRoot::Codex) => ctx.roots.codex.clone().map(|d| (d, CODEX_USER)),
+        None => None,
     };
     if let Some((dir, folders)) = user {
         let mut theirs = Vec::new();
@@ -1754,18 +1752,7 @@ fn read_harness(ctx: &mut Ctx, repo: &str, harness: EngineId, launched: &[String
 }
 
 fn engine_slug(e: EngineId) -> &'static str {
-    match e {
-        EngineId::Claude => "claude",
-        EngineId::Codex => "codex",
-        EngineId::Copilot => "copilot",
-        EngineId::Cursor => "cursor",
-        EngineId::Opencode => "opencode",
-        EngineId::Vibe => "vibe",
-        EngineId::Agy => "agy",
-        EngineId::Gemini => "gemini",
-        #[cfg(test)]
-        EngineId::Bench => "bench",
-    }
+    e.as_str()
 }
 
 fn slug(name: &str) -> String {
@@ -1951,14 +1938,8 @@ fn read_repo(roots: &Roots, repo_dir: &Path, repo: &str, launched: &[String], ou
         sources: Vec::new(),
         ignored: BTreeSet::new(),
     };
-    for harness in [
-        EngineId::Claude,
-        EngineId::Codex,
-        EngineId::Opencode,
-        EngineId::Copilot,
-        EngineId::Cursor,
-    ] {
-        read_harness(&mut ctx, repo, harness, launched, out);
+    for harness in read_harnesses() {
+        read_harness(&mut ctx, repo, harness.id(), launched, out);
     }
     // A prompt run over and over: `PROMPT.md`.
     for p in PROMPTS {
@@ -1993,7 +1974,10 @@ fn read_repo(roots: &Roots, repo_dir: &Path, repo: &str, launched: &[String], ou
 
 /// Where each harness looks, said from a repository (what an empty tab says it searched).
 pub fn searched() -> Vec<String> {
-    let mut v: Vec<String> = FOLDERS.iter().map(|(_, rel, _)| rel.to_string()).collect();
+    let mut v: Vec<String> = read_harnesses()
+        .iter()
+        .flat_map(|e| e.workflow_folders().iter().map(|(rel, _)| rel.to_string()))
+        .collect();
     v.extend(PROMPTS.iter().map(|p| p.to_string()));
     v.sort();
     v.dedup();

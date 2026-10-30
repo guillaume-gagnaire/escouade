@@ -559,8 +559,78 @@ static USER_CONFIG: UserConfig = UserConfig {
 };
 
 impl Engine for Codex {
+    fn store(&self) -> crate::accounts::Store {
+        use crate::accounts::{Store, CODEX_SHARED_DIRS, CODEX_SHARED_FILES};
+        Store {
+            home: ".codex",
+            var: "CODEX_HOME",
+            files: &CODEX_SHARED_FILES,
+            dirs: &CODEX_SHARED_DIRS,
+            login: &["login"],
+            xdg: None,
+        }
+    }
+
+    /// The sign-in of its folder (`auth.json`), and the email it names.
+    fn account_status<'a>(
+        &'a self,
+        account: &'a crate::model::Account,
+        settings: &'a crate::model::Settings,
+    ) -> BoxFuture<'a, crate::accounts::AccountStatus> {
+        let dir = crate::accounts::config_dir(account, settings);
+        let signed = crate::accounts::codex_sign_in(&dir);
+        Box::pin(async move {
+            crate::accounts::AccountStatus {
+                connected: signed.is_some(),
+                stamp: signed.as_ref().and_then(|s| s.stamp.clone()),
+                email: signed.and_then(|s| s.email),
+                dir: dir.to_string_lossy().into_owned(),
+            }
+        })
+    }
+
+    /// `.agents/`, read whole whatever the harness (ESC-195): skills, agents, commands, prompts.
+    fn workflow_folders(&self) -> crate::workflow::Folders {
+        use crate::workflow::DocKind;
+        &[
+            (".agents/skills", DocKind::Skill),
+            (".agents/agents", DocKind::Agent),
+            (".agents/commands", DocKind::Command),
+            (".agents/prompts", DocKind::Command),
+        ]
+    }
+
+    fn workflow_user(&self) -> Option<crate::workflow::UserRoot> {
+        Some(crate::workflow::UserRoot::Codex)
+    }
+
+    fn hook_context(&self) -> bool {
+        true
+    }
+
+    /// Its subagents are not told (ESC-196).
+    fn track_missing(&self, _view: bool) -> &'static [&'static str] {
+        &["subagents"]
+    }
+
     fn id(&self) -> EngineId {
-        EngineId::Codex
+        EngineId::CODEX
+    }
+
+    fn listed_models_only(&self) -> bool {
+        true
+    }
+
+    fn session_home(&self) -> Option<crate::fence::HomeKind> {
+        Some(crate::fence::HomeKind::Codex)
+    }
+
+    fn principal_sessions(&self) -> bool {
+        true
+    }
+
+    fn account_models(&self, listed: Vec<ToldModel>, config_dir: &Path) -> Vec<ToldModel> {
+        with_config_model(listed, config_dir)
     }
 
     fn name(&self) -> &'static str {

@@ -144,6 +144,8 @@ export default {
     /** A harness not found on this machine. */
     states: {
       absent: 'Introuvable',
+      /** A harness an agent or an account names that this version does not have (a later version's, a plugin's gone, INT-3). */
+      missing: '{id} (harness absent)',
       /** Beside its name, before its version (2.0 design): « Prêt · 2.1.301 ». */
       ready: 'Prêt',
       notConnected: 'Aucun compte',

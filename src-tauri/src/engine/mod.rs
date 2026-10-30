@@ -7,6 +7,8 @@
 //! agent's conversation (`Engine::translate`). The rest of the backend speaks to an engine through
 //! these two traits only.
 
+mod absent;
+pub use absent::line as absent_line;
 pub(crate) mod agy;
 mod claude;
 pub(crate) mod codex;
@@ -34,12 +36,11 @@ mod userconfig_tests;
 pub(crate) use agy::bench::fake_agy;
 pub use agy::AGY;
 pub(crate) use claude::terminal as claude_terminal;
+#[cfg(test)]
+pub use claude::told_auto as claude_told_auto;
 pub use claude::{
-    catalog as claude_catalog, read_models as claude_read_models, told_auto as claude_told_auto,
-    told_effort as claude_told_effort, told_model as claude_told_model, CLAUDE,
-};
-pub use claude::{
-    interrupted_line as claude_interrupted_line, missing_line as claude_missing_line,
+    catalog as claude_catalog, missing_line as claude_missing_line,
+    told_model as claude_told_model, CLAUDE,
 };
 pub(crate) use codex::git as codex_git;
 pub use codex::CODEX;
@@ -109,53 +110,34 @@ pub fn of(meta: &AgentMeta) -> &'static dyn Engine {
     by_id(meta.engine)
 }
 
-/// The engine `id` names: the eight harnesses are written.
+/// The engine `id` names, from the registry: one it does not have is « harness absent »
+/// (`absent`), which starts nothing.
 pub fn by_id(id: EngineId) -> &'static dyn Engine {
-    match id {
-        EngineId::Codex => &CODEX,
-        EngineId::Opencode => &OPENCODE,
-        EngineId::Copilot => &COPILOT,
-        EngineId::Cursor => &CURSOR,
-        EngineId::Vibe => &VIBE,
-        EngineId::Agy => &AGY,
-        EngineId::Gemini => &GEMINI,
-        EngineId::Claude => &CLAUDE,
-        #[cfg(test)]
-        EngineId::Bench => &minimal::MINIMAL,
+    #[cfg(test)]
+    if id == EngineId::BENCH {
+        return &minimal::MINIMAL;
     }
+    registry::find(id).unwrap_or_else(|| absent::of(id))
 }
 
-/// Whether the harness `id` names is written (its adapter is there): only those take an agent
-/// handed over (the others resolve to Claude Code's, `by_id`).
+/// Whether the harness `id` names is written (the registry has it): only those take an agent,
+/// made or handed over; the others are « harness absent ».
 pub fn written(id: EngineId) -> bool {
     #[cfg(test)]
-    if id == EngineId::Bench {
+    if id == EngineId::BENCH {
         return true;
     }
-    registry::all().iter().any(|e| e.id() == id)
+    registry::find(id).is_some()
 }
 
-/// The name of the harness `id` names, as the interface says it: its own once it is written, else
-/// its usual name (the data of a later version may name one this version does not write).
+/// The name of the harness `id` names, as the interface says it: its own when the registry has
+/// it, else its id (the data of a later version, or of a plugin gone, may name one this version
+/// does not have).
 pub fn by_name(id: EngineId) -> &'static str {
-    if registry::all().iter().any(|e| e.id() == id) {
-        return by_id(id).name();
-    }
-    match id {
-        EngineId::Claude => "Claude Code",
-        EngineId::Codex => "Codex",
-        EngineId::Copilot => "Copilot CLI",
-        EngineId::Cursor => "Cursor CLI",
-        EngineId::Opencode => "OpenCode",
-        EngineId::Vibe => "Mistral Vibe",
-        EngineId::Agy => "Antigravity CLI",
-        EngineId::Gemini => "Gemini CLI",
-        #[cfg(test)]
-        EngineId::Bench => "Minimal",
-    }
+    by_id(id).name()
 }
 
-/// The engine of what has no agent yet (a question about a project, the settings).
+// The engine of what has no agent yet (a question about a project, the settings).
 pub fn default() -> &'static dyn Engine {
     &CLAUDE
 }
@@ -373,10 +355,11 @@ pub enum StartLost {
 /// Why a harness cannot be started, its program not found, in `lang`: for Claude Code, its
 /// installation cut half-way or not found, with the command that puts it back (ESC-133).
 pub fn missing_line(id: crate::model::EngineId, lang: crate::i18n::Lang) -> String {
-    if id == crate::model::EngineId::Claude {
-        return claude::missing_line(lang);
+    let harness = by_id(id);
+    if let Some(line) = harness.missing_repair(lang) {
+        return line;
     }
-    let name = by_id(id).name();
+    let name = harness.name();
     tr_in!(
         lang,
         "{name} introuvable. Installe-le ou indique son chemin dans les réglages.",
@@ -631,6 +614,237 @@ pub trait Engine: Send + Sync {
         self.user_config()
             .map(|user| user.snippet(entry))
             .unwrap_or_default()
+    }
+
+    // ----- what the core asks of a harness, rather than which one it is (INT-3) -----
+
+    // ----- its accounts, as `accounts.rs` asks of them (INT-3) -----
+
+    /// How its accounts keep their folder: where its Principal's is, the variable that moves it,
+    /// what a new account may share of it, the arguments that sign in. Nothing by default.
+    fn store(&self) -> crate::accounts::Store {
+        crate::accounts::Store::NONE
+    }
+    /// The configuration folder of `account` when it is not found as its `store` says (Claude
+    /// Code: the app's `CLAUDE_CONFIG_DIR`, the Linux home folder of a `claude` of WSL).
+    fn config_dir(
+        &self,
+        _account: &crate::model::Account,
+        _settings: &crate::model::Settings,
+    ) -> Option<PathBuf> {
+        None
+    }
+    /// The path of its program the settings give, its accounts' own aside (« Chemin de claude »).
+    fn settings_path<'a>(&self, _settings: &'a crate::model::Settings) -> &'a str {
+        ""
+    }
+    /// The model of its new agents until an account says another (Claude Code's Sonnet); empty:
+    /// its own default, `Core::model_for`.
+    fn default_model(&self) -> &'static str {
+        ""
+    }
+    /// Which of its accounts go by an API key of their own, in the keychain.
+    fn keys(&self) -> crate::accounts::KeyUse {
+        crate::accounts::KeyUse::None
+    }
+    /// What the processes of `account` get besides its folder's variable (`launch_env`): its key,
+    /// and the variables of the app's (`inherited` says which are set) that would make it another
+    /// account, given empty. Never its command line.
+    fn account_env(
+        &self,
+        _account: &crate::model::Account,
+        _inherited: &dyn Fn(&str) -> bool,
+    ) -> Vec<(String, String)> {
+        Vec::new()
+    }
+    /// Whether `account`, signed in by its interface rather than by a key, can start a process
+    /// (Gemini CLI's signed in to Google in its folder): None for one that goes by its key, or
+    /// a harness whose accounts sign in otherwise.
+    fn sign_in_ready(&self, _account: &crate::model::Account) -> Option<Result<()>> {
+        None
+    }
+    /// Refused: its account `name`, which goes by its key, has none.
+    fn key_missing(&self, name: &str) -> String {
+        let harness = self.name();
+        tr!(
+            "Le compte {harness} « {name} » n’a pas de clé d’API : donne-la dans Réglages › Comptes, « Changer la clé… ».",
+            "The {harness} account “{name}” has no API key: give it in Settings › Accounts, “Change the key…”."
+        )
+    }
+    /// Refused: a key given that is no key of its.
+    fn key_malformed(&self) -> String {
+        let harness = self.name();
+        tr!(
+            "Ce n’est pas une clé d’API de {harness} : copie-la entière.",
+            "That isn’t a {harness} API key: copy it whole."
+        )
+    }
+    /// Whether `account` is signed in, as whom, and its folder. Not signed in by default.
+    fn account_status<'a>(
+        &'a self,
+        account: &'a crate::model::Account,
+        settings: &'a crate::model::Settings,
+    ) -> BoxFuture<'a, crate::accounts::AccountStatus> {
+        let dir = crate::accounts::config_dir(account, settings);
+        Box::pin(async move {
+            crate::accounts::AccountStatus {
+                connected: false,
+                email: None,
+                dir: dir.to_string_lossy().into_owned(),
+                stamp: None,
+            }
+        })
+    }
+    /// Its machine's account goes by a key or Vertex AI of the app's alone (Gemini CLI, ESC-275):
+    /// whether the app has one. None for a harness whose machine's account signs in.
+    fn machine_key(&self) -> Option<bool> {
+        None
+    }
+    /// Its accounts are signed in by its own interface, after they are added (Antigravity CLI).
+    fn signs_in_later(&self) -> bool {
+        false
+    }
+    /// Its sessions are in its agents' own folder whatever their account (Mistral Vibe,
+    /// Antigravity CLI): none is copied when an agent changes account.
+    fn sessions_in_agent_home(&self) -> bool {
+        false
+    }
+    /// The name of the terminal of « Se connecter… ».
+    fn login_shell(&self) -> String {
+        self.name().to_lowercase()
+    }
+    /// What « Se connecter… » sets before its terminal starts, in the folder of `account` and in
+    /// `env` (Gemini CLI: its interface straight to the Google sign-in, the home folder trusted).
+    fn before_login(&self, _account: &crate::model::Account, _env: &mut Vec<(String, String)>) {}
+
+    /// Its models go by aliases it resolves itself (Claude Code: `opus`, `sonnet[1m]`): any name
+    /// is taken as it is, the versions they run told per account by its start (`Ready::models`),
+    /// and whether one takes an effort or the mode `auto` told by them (`told_effort`).
+    fn models_by_alias(&self) -> bool {
+        false
+    }
+    /// Whether `model` takes an effort, as `models` (what its start told for an account) say:
+    /// None when they say nothing of it, the harness's rule then (`supports_effort`).
+    fn told_effort(&self, _models: &[crate::model::ModelInfo], _model: &str) -> Option<bool> {
+        None
+    }
+    /// `told_effort` for the mode `auto` (`supports_auto`).
+    fn told_auto(&self, _models: &[crate::model::ModelInfo], _model: &str) -> Option<bool> {
+        None
+    }
+    /// What a harness whose `models_by_alias` tells of its models at its start, asked of a process
+    /// of its own (`program` with `env`, in `dir`) without a turn (Claude Code's `initialize`,
+    /// ESC-124): Null when it tells none.
+    fn read_told_models<'a>(
+        &'a self,
+        _program: Program,
+        _env: Vec<(String, String)>,
+        _dir: &'a Path,
+    ) -> BoxFuture<'a, Result<Value>> {
+        Box::pin(async { Ok(Value::Null) })
+    }
+    /// Its declared models stand in only while its account listed none (Codex's GPT-6-Luna,
+    /// ESC-186); the others' declare aliases their lists lack (Copilot's `auto`, Cursor's
+    /// `default`), which always go.
+    fn listed_models_only(&self) -> bool {
+        false
+    }
+    /// The models an account of its lists (`list_models`), with what its folder `config_dir` adds
+    /// (Codex: the model its `config.toml` names, ESC-186).
+    fn account_models(
+        &self,
+        listed: Vec<registry::ToldModel>,
+        _config_dir: &Path,
+    ) -> Vec<registry::ToldModel> {
+        listed
+    }
+    /// What it says when its program is not found, in place of « introuvable » (Claude Code: its
+    /// installation cut half-way, or the command that installs it, ESC-133). Reads the disk.
+    fn missing_repair(&self, _lang: crate::i18n::Lang) -> Option<String> {
+        None
+    }
+    /// What is added to the reason it stopped when it stopped before it started (Claude Code: its
+    /// installation cut half-way, with its repair, ESC-133).
+    fn interrupted_line(&self, _lang: crate::i18n::Lang) -> Option<String> {
+        None
+    }
+    /// Its accounts sign in to claude.ai by OAuth, whose sign-in Escouade reads and watches
+    /// (`usage.rs`, `signin.rs`): their quota read at its usage endpoint, the refresh of an
+    /// out-of-date token taken in turn before a process starts (Claude Code).
+    fn oauth_sign_in(&self) -> bool {
+        false
+    }
+    /// The folder where it keeps what it remembers of the project at `project_path`, for an
+    /// account of folder `config_dir`, offered once to the shared memory (Claude Code's
+    /// `projects/<path>/memory`, `memory::claude_offer`): None when it keeps none so.
+    fn memory_dir(&self, _config_dir: &Path, _project_path: &str) -> Option<PathBuf> {
+        None
+    }
+    /// The folder it was in at the latest entry of its session `session_id`, kept in the account's
+    /// folder `config_dir` (Claude Code: each entry's `cwd`, which follows `EnterWorktree` and the
+    /// `cd` of its commands, `agentprs::last_cwd`): the worktree an agent went into by itself
+    /// (ESC-161). None when its session does not say it.
+    fn session_cwd(&self, _config_dir: &Path, _session_id: &str) -> Option<String> {
+        None
+    }
+    /// It declares Escouade's MCP server by its own program (Claude Code: `claude mcp add`,
+    /// `add_declaration`), without a user config Escouade writes (`user_config`).
+    fn declares_by_program(&self) -> bool {
+        false
+    }
+    /// How its accounts' configuration folders keep their sessions, which the closing of private
+    /// projects refuses (`fence::homes`): as Claude Code's unless it says otherwise; None when they
+    /// are kept elsewhere (OpenCode's data folder).
+    fn session_home(&self) -> Option<crate::fence::HomeKind> {
+        Some(crate::fence::HomeKind::Claude)
+    }
+    /// The user's own folder of it keeps sessions of every project, refused too (`~/.claude`,
+    /// `~/.codex`, `~/.copilot`).
+    fn principal_sessions(&self) -> bool {
+        false
+    }
+    /// The folders of a repository its commands, skills and agents are read from for the
+    /// Workflow tab (ESC-191), and what each holds: none for a harness that has none.
+    fn workflow_folders(&self) -> crate::workflow::Folders {
+        &[]
+    }
+    /// Its user's own folder the Workflow tab reads too, a project's of the same name hiding it.
+    fn workflow_user(&self) -> Option<crate::workflow::UserRoot> {
+        None
+    }
+    /// What an agent's track in a workflow cannot say on it (`workflow_track::support_of`), in its
+    /// conversation or in its own interface (`view`): `subagents`, `cost`, `timing`.
+    fn track_missing(&self, _view: bool) -> &'static [&'static str] {
+        &[]
+    }
+    /// The answer of its hooks goes into its agent's context (`additionalContext` of a
+    /// `PreToolUse`: Claude Code's HTTP hooks, Codex's commands): the index's hint (ESC-294).
+    fn hook_context(&self) -> bool {
+        false
+    }
+    /// It signs in to an account of its service (OpenCode signs in to none: its providers are its
+    /// own, ESC-45).
+    fn signs_in(&self) -> bool {
+        true
+    }
+    /// The account is signed in, as its files tell it without asking its program (Claude Code:
+    /// its `.claude.json` names the claude.ai account it signed in with).
+    fn signed_in_by_files(
+        &self,
+        _account: &crate::model::Account,
+        _settings: &crate::model::Settings,
+    ) -> bool {
+        false
+    }
+    /// Its program as the user types it, which a short error names (`claude introuvable`): its
+    /// name for most.
+    fn command(&self) -> &'static str {
+        self.name()
+    }
+    /// The model its texts are priced by (`pricing`), for `weight`: its writer's (Claude Code: its
+    /// alias, `haiku`).
+    fn writer_priced(&self, weight: Weight) -> String {
+        self.writer(weight).to_string()
     }
 }
 

@@ -30,7 +30,7 @@ fn machine_account(h: &Harness) {
         s.accounts.push(Account {
             id: "principal-vibe".into(),
             name: "Principal".into(),
-            engine: EngineId::Vibe,
+            engine: EngineId::VIBE,
             claude_path: program,
             active: true,
             ..Default::default()
@@ -42,7 +42,7 @@ fn machine_account(h: &Harness) {
 async fn key_account(h: &Harness, name: &str, key: Option<&str>) -> String {
     let made = h
         .core
-        .create_account(EngineId::Vibe, name, &[], crate::accounts::ShareMode::Link)
+        .create_account(EngineId::VIBE, name, &[], crate::accounts::ShareMode::Link)
         .unwrap();
     let program = crate::engine::fake_vibe();
     h.set_settings(|s| {
@@ -61,7 +61,7 @@ async fn agent_on(h: &Harness, project: &str, account: &str) -> String {
         .create_agent_with(
             project,
             AgentOptions {
-                engine: Some(EngineId::Vibe),
+                engine: Some(EngineId::VIBE),
                 mode: Some("default".into()),
                 account: Some(account.into()),
                 ..Default::default()

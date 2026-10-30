@@ -592,8 +592,14 @@ export interface IssuePage {
   total: number | null;
 }
 
-/** A harness that runs agents (« Harness » in the interface): Claude Code, Codex, Copilot CLI, Cursor CLI, OpenCode, Mistral Vibe, Antigravity CLI, Gemini CLI. */
-export type EngineId = 'claude' | 'codex' | 'copilot' | 'cursor' | 'opencode' | 'vibe' | 'agy' | 'gemini';
+/** The harnesses written into the app: Claude Code, Codex, Copilot CLI, Cursor CLI, OpenCode, Mistral Vibe, Antigravity CLI, Gemini CLI. */
+export type KnownEngineId = 'claude' | 'codex' | 'copilot' | 'cursor' | 'opencode' | 'vibe' | 'agy' | 'gemini';
+
+/**
+ * A harness that runs agents (« Harness » in the interface): an open id (INT-3), one of the app's or another the data names
+ * (a later version's, a plugin's), which the backend's registry declares or not (`engineOf`).
+ */
+export type EngineId = KnownEngineId | (string & {});
 
 /** A mode of Escouade a harness takes, and what it means there (null: what Escouade's menu says of it, Claude Code's meaning). */
 export interface ModeCap {

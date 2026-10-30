@@ -24,8 +24,8 @@ pub fn writer(chosen: Option<EngineId>, found: &[EngineId]) -> Option<EngineId> 
         .filter(|id| found.contains(id))
         .or_else(|| {
             found
-                .contains(&EngineId::Claude)
-                .then_some(EngineId::Claude)
+                .contains(&EngineId::CLAUDE)
+                .then_some(EngineId::CLAUDE)
         })
         .or_else(|| found.first().copied())
 }

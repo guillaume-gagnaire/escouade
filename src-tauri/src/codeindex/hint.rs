@@ -210,9 +210,10 @@ fn has_identifier_mark(s: &str) -> bool {
 }
 
 /// What an agent of `engine` is told about a search for a symbol, as the hook's answer: only
-/// harnesses that read it (Claude Code: an HTTP hook's answer; Codex: its command's output).
+/// harnesses that read it (`Engine::hook_context`: Claude Code's HTTP hook's answer, Codex's
+/// command's output).
 pub fn reply(engine: EngineId, lang: Lang, hook: &Value) -> Option<Value> {
-    if !matches!(engine, EngineId::Claude | EngineId::Codex) {
+    if !crate::engine::by_id(engine).hook_context() {
         return None;
     }
     let event = hook["hook_event_name"].as_str().unwrap_or("");
@@ -321,7 +322,7 @@ mod tests {
     fn only_claude_and_codex_are_answered_and_only_for_a_symbol_search() {
         let grep = json!({ "hook_event_name": "PreToolUse", "tool_name": "Grep",
             "tool_input": { "pattern": "parse_config" } });
-        for e in [EngineId::Claude, EngineId::Codex] {
+        for e in [EngineId::CLAUDE, EngineId::CODEX] {
             let r = reply(e, Lang::En, &grep).unwrap();
             assert_eq!(r["hookSpecificOutput"]["hookEventName"], "PreToolUse");
             assert!(r["hookSpecificOutput"]["additionalContext"]
@@ -332,19 +333,19 @@ mod tests {
             assert!(r["hookSpecificOutput"].get("permissionDecision").is_none());
             assert!(r.get("decision").is_none());
         }
-        assert!(reply(EngineId::Copilot, Lang::En, &grep).is_none());
-        assert!(reply(EngineId::Cursor, Lang::En, &grep).is_none());
-        assert!(reply(EngineId::Claude, Lang::En, &bash("rg parse_config src")).is_some());
+        assert!(reply(EngineId::COPILOT, Lang::En, &grep).is_none());
+        assert!(reply(EngineId::CURSOR, Lang::En, &grep).is_none());
+        assert!(reply(EngineId::CLAUDE, Lang::En, &bash("rg parse_config src")).is_some());
         // A text search, another event, another tool: no word.
         assert!(reply(
-            EngineId::Claude,
+            EngineId::CLAUDE,
             Lang::En,
             &bash("rg 'failed to connect' src")
         )
         .is_none());
-        assert!(reply(EngineId::Claude, Lang::En, &bash("npm test")).is_none());
+        assert!(reply(EngineId::CLAUDE, Lang::En, &bash("npm test")).is_none());
         let mut post = grep.clone();
         post["hook_event_name"] = json!("PostToolUse");
-        assert!(reply(EngineId::Claude, Lang::En, &post).is_none());
+        assert!(reply(EngineId::CLAUDE, Lang::En, &post).is_none());
     }
 }

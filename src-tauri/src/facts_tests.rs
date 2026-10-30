@@ -541,13 +541,13 @@ async fn a_change_of_account_and_of_harness_are_facts() {
     s.accounts.push(Account {
         id: "relais".into(),
         name: "Relais".into(),
-        engine: EngineId::Bench,
+        engine: EngineId::BENCH,
         config_dir: h.dir.join("relais").to_string_lossy().into(),
         ..Default::default()
     });
     h.core.save_settings(s).unwrap();
     h.core
-        .continue_on_engine(&id, EngineId::Bench)
+        .continue_on_engine(&id, EngineId::BENCH)
         .await
         .unwrap();
     let facts = l.heard(&h, &["agent.handover"]).await;

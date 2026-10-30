@@ -411,7 +411,7 @@ impl Default for Account {
         Self {
             id: String::new(),
             name: String::new(),
-            engine: EngineId::Claude,
+            engine: EngineId::CLAUDE,
             config_dir: String::new(),
             claude_path: String::new(),
             active: true,
@@ -1524,44 +1524,67 @@ pub struct FoundWorktree {
 /// (`AgentMeta::engine`), a ticket's (`Ticket::engine`), a project's default (`Project::engine`),
 /// a turn's (`TurnRow::engine`, the `engine` column of the statistics). Claude Code for what was
 /// saved before 1.8, when it was the only one.
-#[derive(
-    Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, Default,
-)]
-#[serde(rename_all = "lowercase")]
-pub enum EngineId {
-    #[default]
-    Claude,
-    Codex,
-    Copilot,
-    Cursor,
-    Opencode,
+///
+/// An open id (INT-3, docs/PLUGINS.md §4.7): the harnesses written are in the registry
+/// (`engine::registry::all()`), and the data may name one this version does not have (a later
+/// version's, a plugin's gone), which it keeps as it is: its agents are « harness absent »
+/// (`engine::by_id`). Kept as the string it is (`claude`, `codex`…), as when it was an enumeration:
+/// nothing to migrate. Its text is interned, so that it stays `Copy`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[serde(transparent)]
+pub struct EngineId(&'static str);
+
+impl EngineId {
+    pub const CLAUDE: EngineId = EngineId("claude");
+    pub const CODEX: EngineId = EngineId("codex");
+    pub const COPILOT: EngineId = EngineId("copilot");
+    pub const CURSOR: EngineId = EngineId("cursor");
+    pub const OPENCODE: EngineId = EngineId("opencode");
     /// Mistral Vibe (ESC-266).
-    Vibe,
+    pub const VIBE: EngineId = EngineId("vibe");
     /// Antigravity CLI (ESC-270).
-    Agy,
+    pub const AGY: EngineId = EngineId("agy");
     /// Gemini CLI (ESC-274).
-    Gemini,
+    pub const GEMINI: EngineId = EngineId("gemini");
     /// The minimal fake engine of the conformance bench, run by the core in the tests of the
     /// handover (`engine/minimal/`): a second harness beside Claude Code's fake.
     #[cfg(test)]
-    Bench,
-}
+    pub const BENCH: EngineId = EngineId("bench");
 
-impl EngineId {
+    /// The id `text` names, whether a harness of this version bears it or not.
+    pub fn new(text: &str) -> EngineId {
+        use parking_lot::Mutex;
+        use std::collections::HashSet;
+        static SEEN: Mutex<Option<HashSet<&'static str>>> = Mutex::new(None);
+        let mut seen = SEEN.lock();
+        let seen = seen.get_or_insert_with(HashSet::new);
+        if let Some(s) = seen.get(text) {
+            return EngineId(s);
+        }
+        let s: &'static str = Box::leak(text.to_owned().into_boxed_str());
+        seen.insert(s);
+        EngineId(s)
+    }
+
     /// As the data says it (`claude`, `opencode`…).
     pub fn as_str(self) -> &'static str {
-        match self {
-            EngineId::Claude => "claude",
-            EngineId::Codex => "codex",
-            EngineId::Copilot => "copilot",
-            EngineId::Cursor => "cursor",
-            EngineId::Opencode => "opencode",
-            EngineId::Vibe => "vibe",
-            EngineId::Agy => "agy",
-            EngineId::Gemini => "gemini",
-            #[cfg(test)]
-            EngineId::Bench => "bench",
+        self.0
+    }
+}
+
+impl Default for EngineId {
+    fn default() -> Self {
+        EngineId::CLAUDE
+    }
+}
+
+impl<'de> Deserialize<'de> for EngineId {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let text = std::borrow::Cow::<'de, str>::deserialize(d)?;
+        if text.is_empty() {
+            return Err(serde::de::Error::custom("an empty harness id"));
         }
+        Ok(EngineId::new(&text))
     }
 }
 
@@ -2483,7 +2506,7 @@ impl UsageSnapshot {
     /// The account new agents of Claude Code go to.
     pub fn claude_current(&self) -> &str {
         self.current
-            .get(&EngineId::Claude)
+            .get(&EngineId::CLAUDE)
             .map_or("", String::as_str)
     }
 
@@ -3288,7 +3311,7 @@ mod tests {
                 problem: Some(SignInProblem::NotSignedIn),
                 ..Default::default()
             }],
-            current: BTreeMap::from([(EngineId::Claude, "pro".to_string())]),
+            current: BTreeMap::from([(EngineId::CLAUDE, "pro".to_string())]),
         };
         assert_eq!(
             serde_json::to_value(&usage).unwrap(),
@@ -3491,24 +3514,24 @@ mod tests {
     fn what_was_saved_before_the_harnesses_runs_on_claude_code() {
         let a: AgentMeta =
             serde_json::from_value(json!({ "id": "a1", "sessionId": "s1" })).unwrap();
-        assert_eq!(a.engine, EngineId::Claude);
+        assert_eq!(a.engine, EngineId::CLAUDE);
         let t: Ticket = serde_json::from_value(json!({ "id": "t1", "key": "DEM-1" })).unwrap();
         assert_eq!(t.engine, None);
         let p: Project = serde_json::from_value(
             json!({ "id": "p1", "name": "demo", "path": "C:/demo", "color": "red" }),
         )
         .unwrap();
-        assert_eq!((p.engine, p.engine()), (None, EngineId::Claude));
+        assert_eq!((p.engine, p.engine()), (None, EngineId::CLAUDE));
         // Each harness is kept by its id, and read back.
         for (engine, id) in [
-            (EngineId::Claude, "claude"),
-            (EngineId::Codex, "codex"),
-            (EngineId::Copilot, "copilot"),
-            (EngineId::Cursor, "cursor"),
-            (EngineId::Opencode, "opencode"),
-            (EngineId::Vibe, "vibe"),
-            (EngineId::Agy, "agy"),
-            (EngineId::Gemini, "gemini"),
+            (EngineId::CLAUDE, "claude"),
+            (EngineId::CODEX, "codex"),
+            (EngineId::COPILOT, "copilot"),
+            (EngineId::CURSOR, "cursor"),
+            (EngineId::OPENCODE, "opencode"),
+            (EngineId::VIBE, "vibe"),
+            (EngineId::AGY, "agy"),
+            (EngineId::GEMINI, "gemini"),
         ] {
             assert_eq!(engine.as_str(), id);
             let v = serde_json::to_value(AgentMeta {
@@ -4145,6 +4168,81 @@ mod run_command_tests {
         assert_eq!(
             serde_json::to_value(&p).unwrap()["runCommands"],
             with["runCommands"]
+        );
+    }
+
+    // ----- INT-3: an open harness id, kept as it was -----
+
+    #[test]
+    fn a_harness_id_is_kept_as_the_string_it_was_as_an_enumeration() {
+        let ids = [
+            (EngineId::CLAUDE, "claude"),
+            (EngineId::CODEX, "codex"),
+            (EngineId::COPILOT, "copilot"),
+            (EngineId::CURSOR, "cursor"),
+            (EngineId::OPENCODE, "opencode"),
+            (EngineId::VIBE, "vibe"),
+            (EngineId::AGY, "agy"),
+            (EngineId::GEMINI, "gemini"),
+        ];
+        for (id, text) in ids {
+            assert_eq!(serde_json::to_value(id).unwrap(), json!(text));
+            assert_eq!(serde_json::from_value::<EngineId>(json!(text)).unwrap(), id);
+            assert_eq!(id.as_str(), text);
+            assert_eq!(EngineId::new(text), id);
+        }
+        assert_eq!(EngineId::default(), EngineId::CLAUDE);
+    }
+
+    #[test]
+    fn a_harness_id_this_version_does_not_have_is_read_and_written_back_as_it_was() {
+        let later: EngineId = serde_json::from_value(json!("hermes")).unwrap();
+        assert_eq!(later.as_str(), "hermes");
+        assert_eq!(later.to_string(), "hermes");
+        assert_eq!(later, EngineId::new("hermes"));
+        assert_ne!(later, EngineId::CLAUDE);
+        assert_eq!(serde_json::to_value(later).unwrap(), json!("hermes"));
+        // No id: refused, as the enumeration refused it.
+        assert!(serde_json::from_value::<EngineId>(json!("")).is_err());
+        assert!(serde_json::from_value::<EngineId>(json!(3)).is_err());
+    }
+
+    #[test]
+    fn an_agent_a_ticket_or_a_project_on_a_harness_this_version_lacks_is_read_and_kept() {
+        // An agent of 1.7 (no harness: Claude Code), of 2.1 (Codex), of a later version (one this
+        // version does not have, kept as it is).
+        let old: AgentMeta =
+            serde_json::from_value(json!({"id": "a1", "projectId": "p1"})).unwrap();
+        assert_eq!(old.engine, EngineId::CLAUDE);
+        let codex: AgentMeta =
+            serde_json::from_value(json!({"id": "a2", "projectId": "p1", "engine": "codex"}))
+                .unwrap();
+        assert_eq!(codex.engine, EngineId::CODEX);
+        let later: AgentMeta =
+            serde_json::from_value(json!({"id": "a3", "projectId": "p1", "engine": "hermes"}))
+                .unwrap();
+        assert_eq!(later.engine.as_str(), "hermes");
+        assert_eq!(
+            serde_json::to_value(&later).unwrap()["engine"],
+            json!("hermes")
+        );
+        let ticket: Ticket = serde_json::from_value(json!({
+            "id": "t1", "projectId": "p1", "key": "ATL-1", "engine": "hermes"
+        }))
+        .unwrap();
+        assert_eq!(ticket.engine.map(EngineId::as_str), Some("hermes"));
+        assert_eq!(
+            serde_json::to_value(&ticket).unwrap()["engine"],
+            json!("hermes")
+        );
+        let project: Project = serde_json::from_value(json!({
+            "id": "p1", "name": "P", "path": "/p", "color": "red", "engine": "hermes"
+        }))
+        .unwrap();
+        assert_eq!(project.engine.map(EngineId::as_str), Some("hermes"));
+        assert_eq!(
+            serde_json::to_value(&project).unwrap()["engine"],
+            json!("hermes")
         );
     }
 }

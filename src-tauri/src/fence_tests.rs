@@ -254,8 +254,8 @@ async fn agent_of(h: &Harness, project: &str, engine: EngineId) -> String {
 async fn codex_runs_in_escouades_profile_with_the_private_projects_folder_refused() {
     let h = harness("esc140-codex");
     let ((open, open_dir), (_, vault_dir)) = two_projects(&h).await;
-    let work = work_account(&h, EngineId::Codex, crate::engine::fake_codex());
-    let id = agent_of(&h, &open.id, EngineId::Codex).await;
+    let work = work_account(&h, EngineId::CODEX, crate::engine::fake_codex());
+    let id = agent_of(&h, &open.id, EngineId::CODEX).await;
     h.turn(&id, "bonjour").await;
     let sent: Vec<Value> = lines(&work.join("requests.jsonl"))
         .into_iter()
@@ -300,8 +300,8 @@ async fn codex_runs_in_escouades_profile_with_the_private_projects_folder_refuse
 async fn opencode_sessions_refuse_the_private_projects_folder() {
     let h = harness("esc140-opencode");
     let ((open, _), (_, vault_dir)) = two_projects(&h).await;
-    let work = work_account(&h, EngineId::Opencode, crate::engine::fake_opencode());
-    let id = agent_of(&h, &open.id, EngineId::Opencode).await;
+    let work = work_account(&h, EngineId::OPENCODE, crate::engine::fake_opencode());
+    let id = agent_of(&h, &open.id, EngineId::OPENCODE).await;
     h.core.ensure_process(&id).await.unwrap();
     let vault = vault_dir.to_string_lossy().into_owned();
     let created = lines(&work.join("requests.jsonl"))
@@ -328,9 +328,9 @@ async fn opencode_sessions_refuse_the_private_projects_folder() {
 async fn copilot_is_refused_a_read_of_the_private_project_by_escouade_never_asking_the_user() {
     let h = harness("esc140-copilot");
     let ((open, _), (_, vault_dir)) = two_projects(&h).await;
-    let work = work_account(&h, EngineId::Copilot, crate::engine::fake_copilot());
+    let work = work_account(&h, EngineId::COPILOT, crate::engine::fake_copilot());
     std::fs::write(work.join("fake.json"), "{}").unwrap();
-    let id = agent_of(&h, &open.id, EngineId::Copilot).await;
+    let id = agent_of(&h, &open.id, EngineId::COPILOT).await;
     let secret = vault_dir.join("src").join("app.ts");
     h.turn(&id, &format!("lecture de {}", secret.display()))
         .await;
@@ -376,10 +376,10 @@ fn waiting(h: &Harness, id: &str) -> Option<Value> {
 #[ignore]
 async fn real_fence() {
     let engine = match std::env::var("ESCOUADE_REAL_FENCE").as_deref() {
-        Ok("claude") => EngineId::Claude,
-        Ok("codex") => EngineId::Codex,
-        Ok("opencode") => EngineId::Opencode,
-        Ok("copilot") => EngineId::Copilot,
+        Ok("claude") => EngineId::CLAUDE,
+        Ok("codex") => EngineId::CODEX,
+        Ok("opencode") => EngineId::OPENCODE,
+        Ok("copilot") => EngineId::COPILOT,
         other => panic!("ESCOUADE_REAL_FENCE: claude, codex, opencode or copilot ({other:?})"),
     };
     let program = std::env::var("ESCOUADE_REAL_PROGRAM").expect("ESCOUADE_REAL_PROGRAM");
@@ -397,7 +397,7 @@ async fn real_fence() {
     std::fs::write(&secret, format!("{SECRET}\n")).unwrap();
     h.set_settings(|s| {
         s.mcp_enabled = false;
-        if engine == EngineId::Claude {
+        if engine == EngineId::CLAUDE {
             s.claude_path = program.clone();
         } else {
             s.accounts.push(Account {

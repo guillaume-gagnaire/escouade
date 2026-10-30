@@ -14,7 +14,7 @@ fn agent(session: Option<&str>) -> AgentRt {
     let dir = std::env::temp_dir().join(format!("escouade-agy-tui-{}", new_id()));
     let meta = AgentMeta {
         id: "a1".into(),
-        engine: EngineId::Agy,
+        engine: EngineId::AGY,
         cwd: "C:\\tmp\\esc272\\w1".into(),
         session_id: session.map(str::to_string),
         ..Default::default()

@@ -522,8 +522,59 @@ static USER_CONFIG: UserConfig = UserConfig {
 };
 
 impl Engine for Opencode {
+    /// One account in 1.8: its own config (ESC-45), its providers connected by it.
+    fn store(&self) -> crate::accounts::Store {
+        crate::accounts::Store {
+            home: ".config/opencode",
+            var: "OPENCODE_CONFIG_DIR",
+            files: &[],
+            dirs: &[],
+            login: &["auth", "login"],
+            xdg: Some("opencode"),
+        }
+    }
+
+    /// It signs in to no account of its own: its providers are its config's.
+    fn account_status<'a>(
+        &'a self,
+        account: &'a crate::model::Account,
+        settings: &'a crate::model::Settings,
+    ) -> BoxFuture<'a, crate::accounts::AccountStatus> {
+        let dir = crate::accounts::config_dir(account, settings);
+        Box::pin(async move {
+            crate::accounts::AccountStatus {
+                connected: true,
+                stamp: None,
+                email: None,
+                dir: dir.to_string_lossy().into_owned(),
+            }
+        })
+    }
+
+    fn workflow_folders(&self) -> crate::workflow::Folders {
+        use crate::workflow::DocKind;
+        &[
+            (".opencode/command", DocKind::Command),
+            (".opencode/commands", DocKind::Command),
+            (".opencode/skill", DocKind::Skill),
+            (".opencode/skills", DocKind::Skill),
+            (".opencode/agent", DocKind::Agent),
+            (".opencode/agents", DocKind::Agent),
+        ]
+    }
+
     fn id(&self) -> EngineId {
-        EngineId::Opencode
+        EngineId::OPENCODE
+    }
+
+    /// In its data folder, not its configuration's (`fence::homes`).
+    fn session_home(&self) -> Option<crate::fence::HomeKind> {
+        None
+    }
+
+    /// Its providers are its own: no account to sign in to (ESC-45).
+    fn signs_in(&self) -> bool {
+        false
     }
 
     fn name(&self) -> &'static str {
@@ -1050,7 +1101,7 @@ mod tests {
                 model: model.into(),
                 ..Default::default()
             };
-            meta.engine = EngineId::Opencode;
+            meta.engine = EngineId::OPENCODE;
             let program = OPENCODE.locate(&bench::fake_opencode(), "").unwrap();
             let env = vec![("FAKE_OPENCODE_LOG".into(), log.to_string_lossy().into())];
             let spawn = Spawn::of(&meta, program, env);

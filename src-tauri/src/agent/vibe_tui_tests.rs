@@ -14,7 +14,7 @@ fn agent() -> AgentRt {
     let dir = std::env::temp_dir().join(format!("escouade-vibe-tui-{}", new_id()));
     let meta = AgentMeta {
         id: "a1".into(),
-        engine: EngineId::Vibe,
+        engine: EngineId::VIBE,
         cwd: "C:\\x\\repo".into(),
         session_id: Some(SESSION.into()),
         ..Default::default()

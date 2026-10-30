@@ -44,7 +44,7 @@ fn cursor_account(h: &Harness, program: &str) {
         s.accounts.push(Account {
             id: "principal-cursor".into(),
             name: "Principal".into(),
-            engine: EngineId::Cursor,
+            engine: EngineId::CURSOR,
             config_dir: String::new(),
             claude_path: program,
             active: true,
@@ -58,7 +58,7 @@ async fn cursor_agent(h: &Harness, project: &str, model: &str) -> String {
         .create_agent_with(
             project,
             AgentOptions {
-                engine: Some(EngineId::Cursor),
+                engine: Some(EngineId::CURSOR),
                 model: Some(model.into()),
                 mode: Some("default".into()),
                 ..Default::default()
@@ -111,7 +111,7 @@ async fn key_account(h: &Harness, name: &str, key: Option<&str>) -> String {
     let made = h
         .core
         .create_account(
-            EngineId::Cursor,
+            EngineId::CURSOR,
             name,
             &[],
             crate::accounts::ShareMode::Link,
@@ -134,7 +134,7 @@ async fn agent_on(h: &Harness, project: &str, account: &str) -> String {
         .create_agent_with(
             project,
             AgentOptions {
-                engine: Some(EngineId::Cursor),
+                engine: Some(EngineId::CURSOR),
                 model: Some("default".into()),
                 mode: Some("default".into()),
                 account: Some(account.into()),

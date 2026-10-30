@@ -182,14 +182,9 @@ pub struct TrackView {
 }
 
 pub fn support_of(engine: EngineId, view: bool) -> Support {
-    let (partial, missing): (bool, &[&str]) = match (engine, view) {
-        (EngineId::Codex, _) => (true, &["subagents"]),
-        (EngineId::Cursor, false) => (true, &["cost"]),
-        (EngineId::Cursor, true) => (true, &["subagents", "cost", "timing"]),
-        _ => (false, &[]),
-    };
+    let missing = crate::engine::by_id(engine).track_missing(view);
     Support {
-        partial,
+        partial: !missing.is_empty(),
         missing: missing.iter().map(|m| m.to_string()).collect(),
     }
 }

@@ -15,7 +15,7 @@ use crate::forge::{
 };
 use crate::git;
 use crate::i18n::Lang;
-use crate::model::{AgentMeta, EngineId, FoundWorktree, Project};
+use crate::model::{AgentMeta, FoundWorktree, Project};
 use crate::text::truncate;
 use anyhow::{anyhow, bail, Result};
 use serde::{Deserialize, Serialize};
@@ -469,21 +469,19 @@ impl<R: Runtime> Core<R> {
     /// The worktree of the project's repository the agent went into by itself, by the folder its
     /// session was last in (ESC-161): an ordinary agent of Claude Code without a worktree of its
     /// own. None in the project's folder, in a folder of no worktree of the repository, in another
-    /// agent's worktree, or on a detached HEAD.
+    /// agent's worktree, on a detached HEAD, or for a harness whose session does not say where it
+    /// is (`Engine::session_cwd`).
     async fn found_worktree(&self, meta: &AgentMeta) -> Option<FoundWorktree> {
-        if meta.worktree.is_some()
-            || meta.ticket_id.is_some()
-            || meta.archived
-            || meta.engine != EngineId::Claude
-        {
+        if meta.worktree.is_some() || meta.ticket_id.is_some() || meta.archived {
             return None;
         }
+        let harness = crate::engine::by_id(meta.engine);
         let session = meta.session_id.clone()?;
         let config = {
             let settings = self.settings.read();
             crate::accounts::config_dir(&crate::accounts::get(&settings, &meta.account), &settings)
         };
-        let cwd = tokio::task::spawn_blocking(move || last_cwd(&config, &session))
+        let cwd = tokio::task::spawn_blocking(move || harness.session_cwd(&config, &session))
             .await
             .ok()
             .flatten()?;

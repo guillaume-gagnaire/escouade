@@ -200,7 +200,7 @@ impl<R: Runtime> Core<R> {
     /// Before a process of Claude Code starts on `account`: its turn, when its token is out of
     /// date (`GATE`). Returns its sign-in then (`Stored::stamp`), None for another harness.
     pub(crate) async fn before_claude(&self, account: &Account) -> Option<String> {
-        if account.engine != EngineId::Claude {
+        if !crate::engine::by_id(account.engine).oauth_sign_in() {
             return None;
         }
         let settings = self.settings.read().clone();

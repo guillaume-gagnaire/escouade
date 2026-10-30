@@ -268,17 +268,17 @@ async fn the_plugins_decide_for_every_harness() {
             let cursor = s
                 .accounts
                 .iter_mut()
-                .find(|a| a.engine == EngineId::Cursor)
+                .find(|a| a.engine == EngineId::CURSOR)
                 .unwrap();
             cursor.id = "principal-cursor".into();
             cursor.name = "Principal".into();
             cursor.config_dir.clear();
             // Vibe, Antigravity and Gemini on their Principal, as their tests have them.
             for (engine, program) in [
-                (EngineId::Vibe, crate::engine::vibe::bench::fake_vibe()),
-                (EngineId::Agy, crate::engine::agy::bench::fake_agy()),
+                (EngineId::VIBE, crate::engine::vibe::bench::fake_vibe()),
+                (EngineId::AGY, crate::engine::agy::bench::fake_agy()),
                 (
-                    EngineId::Gemini,
+                    EngineId::GEMINI,
                     crate::engine::gemini::bench::fake_gemini(),
                 ),
             ] {
@@ -295,14 +295,14 @@ async fn the_plugins_decide_for_every_harness() {
         decider(&h, "dev.test.rules", "Règles", &args);
         let (p, _) = h.project(false).await;
         for (engine, message) in [
-            (EngineId::Claude, "permission"),
-            (EngineId::Codex, "commande"),
-            (EngineId::Copilot, "commande"),
-            (EngineId::Opencode, "commande"),
-            (EngineId::Cursor, "commande"),
-            (EngineId::Vibe, "commande"),
-            (EngineId::Agy, "commande"),
-            (EngineId::Gemini, "commande"),
+            (EngineId::CLAUDE, "permission"),
+            (EngineId::CODEX, "commande"),
+            (EngineId::COPILOT, "commande"),
+            (EngineId::OPENCODE, "commande"),
+            (EngineId::CURSOR, "commande"),
+            (EngineId::VIBE, "commande"),
+            (EngineId::AGY, "commande"),
+            (EngineId::GEMINI, "commande"),
         ] {
             let id = agent_of(&h, &p.id, engine).await;
             assert_eq!(h.agent(&id).engine, engine);

@@ -880,9 +880,158 @@ async fn one_shot(ask: OneShot<'_>) -> Result<String> {
     response_of(&out?)
 }
 
+/// Refused: a key given that is no Gemini API key (Gemini CLI's, Antigravity CLI's).
+pub(crate) fn key_malformed() -> String {
+    tr!(
+        "Ce n’est pas une clé d’API Gemini : copie-la entière depuis aistudio.google.com, Get API key.",
+        "That isn’t a Gemini API key: copy it whole from aistudio.google.com, Get API key."
+    )
+}
+
 impl Engine for Gemini {
+    /// An account is signed in to Google by its interface itself (`gemini`, no argument) in a
+    /// terminal with its folder as its `GEMINI_CLI_HOME`, where `gemini` keeps the sign-in; or goes
+    /// by its API key, in the keychain. Each agent has a home of its own (`agent_home_var`), its
+    /// account's sign-in given by `GOOGLE_APPLICATION_CREDENTIALS` (ESC-275).
+    fn store(&self) -> crate::accounts::Store {
+        crate::accounts::Store {
+            home: ".gemini",
+            var: HOME_VAR,
+            files: &[],
+            dirs: &[],
+            login: &[],
+            xdg: None,
+        }
+    }
+
+    /// The one it was added with, its key or its Google sign-in (ESC-275).
+    fn keys(&self) -> crate::accounts::KeyUse {
+        crate::accounts::KeyUse::Chosen
+    }
+
+    /// An account goes by its key (`GEMINI_API_KEY`) or by the Google sign-in `gemini` made in its
+    /// folder (`GOOGLE_APPLICATION_CREDENTIALS`, read by `gemini` alone), never by a key or Vertex
+    /// AI of the app's; the machine's account by what the app has (ESC-275).
+    fn account_env(
+        &self,
+        account: &crate::model::Account,
+        inherited: &dyn Fn(&str) -> bool,
+    ) -> Vec<(String, String)> {
+        use crate::accounts::{account_key, by_key, is_principal, own_dir};
+        if is_principal(account) {
+            return Vec::new();
+        }
+        let key = account_key(account).filter(|_| by_key(account));
+        let own_var = match (&key, by_key(account)) {
+            (Some(_), _) => Some(KEY_VAR),
+            (None, false) => Some(CREDENTIALS_VAR),
+            (None, true) => None,
+        };
+        let mut env: Vec<(String, String)> = KEY_VARS
+            .into_iter()
+            .filter(|v| inherited(v) && Some(*v) != own_var)
+            .map(|v| (v.to_string(), String::new()))
+            .collect();
+        if let Some(key) = key {
+            env.push((KEY_VAR.to_string(), key));
+        } else if let (false, Some(dir)) = (by_key(account), own_dir(account)) {
+            env.push((
+                CREDENTIALS_VAR.to_string(),
+                sign_in_file(Path::new(dir)).to_string_lossy().into_owned(),
+            ));
+        }
+        env
+    }
+
+    /// Its account signed in to Google by `gemini` in its folder: without it, its agent would ask
+    /// its sign-in where nobody sees it.
+    fn sign_in_ready(&self, account: &crate::model::Account) -> Option<Result<()>> {
+        use crate::accounts::{by_key, is_principal, own_dir};
+        if is_principal(account) || by_key(account) {
+            return None;
+        }
+        let signed = own_dir(account).is_some_and(|d| sign_in_file(Path::new(d)).is_file());
+        if !signed {
+            return Some(Err(anyhow::anyhow!(tr!(
+                "Le compte Gemini « {name} » n’est pas connecté à Google : connecte-le dans Réglages › Comptes, « Se connecter… ».",
+                "The Gemini account “{name}” isn’t signed in to Google: sign it in in Settings › Accounts, “Sign in…”.",
+                name = account.name
+            ))));
+        }
+        Some(Ok(()))
+    }
+
+    fn key_missing(&self, name: &str) -> String {
+        tr!(
+            "Le compte Gemini « {name} » n’a pas de clé d’API : donne-la dans Réglages › Comptes, « Changer la clé… ».",
+            "The Gemini account “{name}” has no API key: give it in Settings › Accounts, “Change the key…”."
+        )
+    }
+
+    fn key_malformed(&self) -> String {
+        key_malformed()
+    }
+
+    /// Its key, shown by its end; or the Google sign-in `gemini` wrote in its folder, looked for and
+    /// never read (its address beside it); the machine's account by the key or Vertex AI of the
+    /// app's.
+    fn account_status<'a>(
+        &'a self,
+        account: &'a crate::model::Account,
+        settings: &'a crate::model::Settings,
+    ) -> BoxFuture<'a, crate::accounts::AccountStatus> {
+        use crate::accounts::{account_key, by_key, config_dir, is_principal, key_hint};
+        let dir = config_dir(account, settings);
+        let key = account_key(account).filter(|_| by_key(account));
+        let (connected, stamp, email) = if is_principal(account) {
+            // As far as can be told (its key may come from the user's terminal alone).
+            (true, None, None)
+        } else if by_key(account) {
+            (key.is_some(), None, key.as_deref().map(key_hint))
+        } else {
+            let file = sign_in_file(&dir);
+            let stamp = std::fs::metadata(&file)
+                .and_then(|m| m.modified())
+                .ok()
+                .map(|t| format!("{t:?}"));
+            (stamp.is_some(), stamp, signed_in_email(&dir))
+        };
+        Box::pin(async move {
+            crate::accounts::AccountStatus {
+                connected,
+                stamp,
+                email,
+                dir: dir.to_string_lossy().into_owned(),
+            }
+        })
+    }
+
+    /// Its machine's account is a key or Vertex AI of the app's alone: its Google sign-in is in
+    /// `~/.gemini`, never given (ESC-275).
+    fn machine_key(&self) -> Option<bool> {
+        Some(machine_has_key())
+    }
+
+    fn login_shell(&self) -> String {
+        "gemini".into()
+    }
+
+    /// Its interface straight to the Google sign-in (its settings in the account's folder), the
+    /// home folder trusted.
+    fn before_login(&self, account: &crate::model::Account, env: &mut Vec<(String, String)>) {
+        if let Some(dir) = crate::accounts::own_dir(account) {
+            if let Err(e) = write_settings(Path::new(dir), "oauth-personal") {
+                log::warn!(
+                    "sign-in of account {}: its settings not written: {e:#}",
+                    account.id
+                );
+            }
+        }
+        env.push((TRUST.0.into(), TRUST.1.into()));
+    }
+
     fn id(&self) -> EngineId {
-        EngineId::Gemini
+        EngineId::GEMINI
     }
 
     fn list_models<'a>(

@@ -21,7 +21,7 @@ async fn gemini_agent(h: &Harness) -> (String, std::path::PathBuf) {
         s.accounts.push(Account {
             id: "principal-gemini".into(),
             name: "Principal".into(),
-            engine: EngineId::Gemini,
+            engine: EngineId::GEMINI,
             claude_path: fake_gemini(),
             active: true,
             ..Default::default()
@@ -32,7 +32,7 @@ async fn gemini_agent(h: &Harness) -> (String, std::path::PathBuf) {
         .create_agent_with(
             &p.id,
             AgentOptions {
-                engine: Some(EngineId::Gemini),
+                engine: Some(EngineId::GEMINI),
                 model: Some("gemini-3.8-flash".into()),
                 mode: Some("default".into()),
                 ..Default::default()

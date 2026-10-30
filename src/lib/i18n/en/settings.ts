@@ -117,6 +117,7 @@ export default defineZone('settings', {
     },
     states: {
       absent: 'Not found',
+      missing: '{id} (harness missing)',
       ready: 'Ready',
       notConnected: 'No account',
       tooOld: 'Too old',

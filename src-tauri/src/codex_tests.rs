@@ -20,7 +20,7 @@ fn codex_accounts(h: &Harness) {
             s.accounts.push(Account {
                 id: id.into(),
                 name: id.into(),
-                engine: EngineId::Codex,
+                engine: EngineId::CODEX,
                 config_dir: dir,
                 claude_path: crate::engine::fake_codex(),
                 active: true,
@@ -46,13 +46,13 @@ async fn the_texts_written_by_codex_go_through_codex_exec_on_the_account_of_the_
     let h = harness("esc38-writer");
     let (p, _) = h.project(false).await;
     codex_accounts(&h);
-    h.set_settings(|s| s.writer_engine = Some(EngineId::Codex));
+    h.set_settings(|s| s.writer_engine = Some(EngineId::CODEX));
     let id = h
         .core
         .create_agent_with(
             &p.id,
             AgentOptions {
-                engine: Some(EngineId::Codex),
+                engine: Some(EngineId::CODEX),
                 ..Default::default()
             },
         )
@@ -129,15 +129,15 @@ fn a_new_codex_account_shares_its_settings_skills_and_instructions_and_never_its
     std::fs::create_dir_all(principal.join("sessions")).unwrap();
     // Offered: its settings, instructions and skills; never its sign-in nor its sessions.
     assert_eq!(
-        shareable_of(EngineId::Codex, &principal),
+        shareable_of(EngineId::CODEX, &principal),
         ["config.toml", "AGENTS.md", "skills"]
     );
     let mut s = Settings::default();
-    s.accounts.push(principal_of(EngineId::Codex));
+    s.accounts.push(principal_of(EngineId::CODEX));
     let root = dir.join("data").join("codex");
     for refused in ["auth.json", "sessions", "../x"] {
         let e = create_of(
-            EngineId::Codex,
+            EngineId::CODEX,
             &s,
             &root,
             &principal,
@@ -151,9 +151,9 @@ fn a_new_codex_account_shares_its_settings_skills_and_instructions_and_never_its
             "{refused}: {e}"
         );
     }
-    let share: Vec<String> = shareable_of(EngineId::Codex, &principal);
+    let share: Vec<String> = shareable_of(EngineId::CODEX, &principal);
     let made = create_of(
-        EngineId::Codex,
+        EngineId::CODEX,
         &s,
         &root,
         &principal,
@@ -164,7 +164,7 @@ fn a_new_codex_account_shares_its_settings_skills_and_instructions_and_never_its
     .unwrap();
     assert_eq!(
         (made.id.as_str(), made.engine),
-        ("travail", EngineId::Codex)
+        ("travail", EngineId::CODEX)
     );
     let own = std::path::PathBuf::from(&made.config_dir);
     assert_eq!(own, std::path::absolute(root.join("travail")).unwrap());
@@ -181,7 +181,7 @@ fn a_new_codex_account_shares_its_settings_skills_and_instructions_and_never_its
         launch_env(&made),
         [("CODEX_HOME".to_string(), made.config_dir.clone())]
     );
-    assert!(launch_env(&principal_of(EngineId::Codex)).is_empty());
+    assert!(launch_env(&principal_of(EngineId::CODEX)).is_empty());
 }
 
 #[test]
@@ -228,12 +228,12 @@ async fn a_codex_account_is_added_then_signed_in_by_codex_login_in_a_terminal_of
     // A new account alone: the first of Codex brings no Principal (ESC-128).
     let work = h
         .core
-        .create_account(EngineId::Codex, "Travail", &[], ShareMode::Link)
+        .create_account(EngineId::CODEX, "Travail", &[], ShareMode::Link)
         .unwrap();
     let dir = std::path::PathBuf::from(&work.config_dir);
     assert_eq!(
         dir,
-        std::path::absolute(h.core.data.accounts_of(EngineId::Codex).join("travail")).unwrap()
+        std::path::absolute(h.core.data.accounts_of(EngineId::CODEX).join("travail")).unwrap()
     );
     let ids: Vec<String> = h
         .core
@@ -369,7 +369,7 @@ async fn a_codex_turn_stopped_by_the_limit_waits_for_the_reset_then_goes_on_by_i
         .create_agent_with(
             &p.id,
             AgentOptions {
-                engine: Some(EngineId::Codex),
+                engine: Some(EngineId::CODEX),
                 account: Some("work".into()),
                 ..Default::default()
             },
@@ -418,7 +418,7 @@ async fn new_codex_agents_go_to_the_next_codex_account_once_one_is_over_the_thre
             core.create_agent_with(
                 &p,
                 AgentOptions {
-                    engine: Some(EngineId::Codex),
+                    engine: Some(EngineId::CODEX),
                     ..Default::default()
                 },
             )
@@ -439,8 +439,8 @@ async fn new_codex_agents_go_to_the_next_codex_account_once_one_is_over_the_thre
         )])
     };
     h.core.record_usage("principal-codex", full(100.0));
-    assert_eq!(h.core.usage.lock().current[&EngineId::Codex], "work");
-    assert_eq!(h.core.usage.lock().current[&EngineId::Claude], "principal");
+    assert_eq!(h.core.usage.lock().current[&EngineId::CODEX], "work");
+    assert_eq!(h.core.usage.lock().current[&EngineId::CLAUDE], "principal");
     assert!(h.events.lock().iter().any(|e| e["type"] == "toast"));
     let a = new_codex(&h).await;
     assert_eq!(a.account, "work");
@@ -466,13 +466,13 @@ async fn a_codex_agent_gets_its_worktree_at_its_first_message_under_the_name_cod
     let h = harness("esc156-codex");
     let (p, _) = h.project_as_new(true).await;
     codex_accounts(&h);
-    h.set_settings(|s| s.writer_engine = Some(EngineId::Codex));
+    h.set_settings(|s| s.writer_engine = Some(EngineId::CODEX));
     let id = h
         .core
         .create_agent_with(
             &p.id,
             AgentOptions {
-                engine: Some(EngineId::Codex),
+                engine: Some(EngineId::CODEX),
                 account: Some("work".into()),
                 ..Default::default()
             },
@@ -550,7 +550,7 @@ async fn the_models_of_a_codex_account_are_read_on_every_page_without_an_agent_a
         .lock()
         .iter()
         .any(|e| e["type"] == "accountModels" && e["account"] == "work"));
-    assert_eq!(h.core.engine_models.read()[&EngineId::Codex].len(), 2);
+    assert_eq!(h.core.engine_models.read()[&EngineId::CODEX].len(), 2);
     // Opening the menu within a day reads nothing again; a day after, it reads again.
     h.core.refresh_account_models("work").await;
     assert_eq!(launches(&h).len(), 1);
@@ -582,7 +582,7 @@ async fn a_codex_agent_lists_every_page_of_model_list_for_its_account() {
         .create_agent_with(
             &p.id,
             AgentOptions {
-                engine: Some(EngineId::Codex),
+                engine: Some(EngineId::CODEX),
                 account: Some("work".into()),
                 ..Default::default()
             },
@@ -593,7 +593,7 @@ async fn a_codex_agent_lists_every_page_of_model_list_for_its_account() {
         .id;
     h.turn(&id, "Bonjour").await;
     assert_eq!(menu_of(&h.core, "work"), ["gpt-6-luna", "gpt-5.6-terra"]);
-    let listed: Vec<String> = h.core.engine_models.read()[&EngineId::Codex]
+    let listed: Vec<String> = h.core.engine_models.read()[&EngineId::CODEX]
         .iter()
         .map(|m| m.id.clone())
         .collect();
@@ -611,7 +611,7 @@ async fn real_codex_models() {
     let program = std::env::var("ESCOUADE_TEST_REAL_CODEX").expect("ESCOUADE_TEST_REAL_CODEX");
     let program = crate::engine::Program::Native(program.into());
     let started = std::time::Instant::now();
-    let listed = crate::engine::by_id(EngineId::Codex)
+    let listed = crate::engine::by_id(EngineId::CODEX)
         .list_models(program, Vec::new(), &std::env::temp_dir())
         .await
         .unwrap()
@@ -631,7 +631,7 @@ fn codexs_stand_in_model_serves_only_until_its_account_listed_its_own() {
     let h = harness("esc186-stand-in");
     // Nothing listed yet: GPT-6-Luna, the one it declares.
     assert_eq!(
-        h.core.model_for(EngineId::Codex, "gpt-6-luna".into()),
+        h.core.model_for(EngineId::CODEX, "gpt-6-luna".into()),
         "gpt-6-luna"
     );
     // Its account lists others (the real one of ESC-186: GPT-5.6-Terra by default, GPT-5.6-Luna).
@@ -648,15 +648,15 @@ fn codexs_stand_in_model_serves_only_until_its_account_listed_its_own() {
         price: None,
     };
     h.core.engine_models.write().insert(
-        EngineId::Codex,
+        EngineId::CODEX,
         vec![told("gpt-5.6-terra", true), told("gpt-5.6-luna", false)],
     );
     assert_eq!(
-        h.core.model_for(EngineId::Codex, "gpt-6-luna".into()),
+        h.core.model_for(EngineId::CODEX, "gpt-6-luna".into()),
         "gpt-5.6-terra"
     );
     assert_eq!(
-        h.core.model_for(EngineId::Codex, "gpt-5.6-luna".into()),
+        h.core.model_for(EngineId::CODEX, "gpt-5.6-luna".into()),
         "gpt-5.6-luna"
     );
 }
@@ -727,7 +727,7 @@ async fn the_menu_of_a_codex_account_has_the_model_its_config_toml_names() {
         ["gpt-6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]
     );
     // The harness-wide list keeps those listed alone: the config is the account's.
-    assert_eq!(h.core.engine_models.read()[&EngineId::Codex].len(), 2);
+    assert_eq!(h.core.engine_models.read()[&EngineId::CODEX].len(), 2);
     h.core.stop_for_good();
 }
 
@@ -750,7 +750,7 @@ async fn compact_typed_to_a_codex_agent_compacts_its_thread_and_not_through_its_
         .create_agent_with(
             &p.id,
             AgentOptions {
-                engine: Some(EngineId::Codex),
+                engine: Some(EngineId::CODEX),
                 account: Some("work".into()),
                 ..Default::default()
             },
@@ -860,7 +860,7 @@ async fn real_codex_compact() {
     s.accounts.push(Account {
         id: "cx".into(),
         name: "Codex".into(),
-        engine: EngineId::Codex,
+        engine: EngineId::CODEX,
         config_dir: home.to_string_lossy().into(),
         claude_path: program,
         ..Default::default()
@@ -871,7 +871,7 @@ async fn real_codex_compact() {
         .create_agent_with(
             &p.id,
             AgentOptions {
-                engine: Some(EngineId::Codex),
+                engine: Some(EngineId::CODEX),
                 account: Some("cx".into()),
                 mode: Some("default".into()),
                 ..Default::default()

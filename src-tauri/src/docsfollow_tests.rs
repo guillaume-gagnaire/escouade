@@ -87,7 +87,7 @@ fn codex_account(h: &crate::core_tests::Harness) {
         s.accounts.push(Account {
             id: "principal-codex".into(),
             name: "principal-codex".into(),
-            engine: EngineId::Codex,
+            engine: EngineId::CODEX,
             claude_path: crate::engine::fake_codex(),
             active: true,
             ..Default::default()
@@ -133,7 +133,7 @@ async fn every_agent_of_a_project_with_its_spec_in_escouade_is_told_to_follow_it
     codex_account(&h);
     let (p, repo) = h.project(false).await;
     // No spec in Escouade yet: nothing is added, whatever the agent.
-    for (engine, ticket) in [(None, false), (None, true), (Some(EngineId::Codex), false)] {
+    for (engine, ticket) in [(None, false), (None, true), (Some(EngineId::CODEX), false)] {
         let said = told(&h, &p.id, engine, ticket).await;
         assert!(!said.contains("get_spec_tree"), "{said}");
     }
@@ -158,7 +158,7 @@ async fn every_agent_of_a_project_with_its_spec_in_escouade_is_told_to_follow_it
         "{ticket}"
     );
     assert!(ticket.contains(&crate::board::spec_rule(crate::i18n::Lang::Fr)));
-    for engine in [None, Some(EngineId::Codex)] {
+    for engine in [None, Some(EngineId::CODEX)] {
         let free = told(&h, &p.id, engine, false).await;
         assert!(free.contains(&rule) && free.contains("SPEC.md"), "{free}");
     }

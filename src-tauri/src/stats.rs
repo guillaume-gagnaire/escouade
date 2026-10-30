@@ -1511,7 +1511,7 @@ mod tests {
         assert_eq!(engine_shares(&v), [("claude", 320, 1.5)]);
         // A turn written from now on keeps the harness that ran it.
         let codex = TurnRow {
-            engine: crate::model::EngineId::Codex,
+            engine: crate::model::EngineId::CODEX,
             ..row("gpt-5.5", 50, 2.0)
         };
         s.record_turns_at(noon, "principal", "a3", "p1", &[codex]);
@@ -1536,12 +1536,35 @@ mod tests {
             engine,
             ..row("model", 50, 1.0)
         };
-        use crate::model::EngineId::{Claude, Codex};
         // Claude Code on Principal (a1) and Pro (a2), Codex on Work (a3, two turns).
-        s.record_turns_at(noon, "principal", "a1", "p1", &[on(Claude)]);
-        s.record_turns_at(noon, "pro", "a2", "p1", &[on(Claude)]);
-        s.record_turns_at(noon, "work", "a3", "p1", &[on(Codex)]);
-        s.record_turns_at(noon + 1, "work", "a3", "p1", &[on(Codex)]);
+        s.record_turns_at(
+            noon,
+            "principal",
+            "a1",
+            "p1",
+            &[on(crate::model::EngineId::CLAUDE)],
+        );
+        s.record_turns_at(
+            noon,
+            "pro",
+            "a2",
+            "p1",
+            &[on(crate::model::EngineId::CLAUDE)],
+        );
+        s.record_turns_at(
+            noon,
+            "work",
+            "a3",
+            "p1",
+            &[on(crate::model::EngineId::CODEX)],
+        );
+        s.record_turns_at(
+            noon + 1,
+            "work",
+            "a3",
+            "p1",
+            &[on(crate::model::EngineId::CODEX)],
+        );
         s.record_prompt_with(noon, "work", "codex", "a3", "p1");
         s.record_prompt_with(noon, "pro", "claude", "a2", "p1");
         let by = |account, engine| {

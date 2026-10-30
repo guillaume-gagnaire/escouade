@@ -162,7 +162,7 @@ fn gsd_is_one_workflow_of_four_steps_from_the_commands_of_the_users_folder() {
     let w = &scan.workflows[0];
     assert_eq!(w.name, "GSD");
     assert_eq!(w.kind, Kind::Cycle);
-    assert_eq!(w.harness, Some(EngineId::Claude));
+    assert_eq!(w.harness, Some(EngineId::CLAUDE));
     assert_eq!(
         names(w),
         [
@@ -428,7 +428,7 @@ fn a_command_that_is_a_loop_is_a_loop_of_one_prompt() {
     assert_eq!(scan.workflows.len(), 1, "{scan:#?}");
     let w = &scan.workflows[0];
     assert_eq!(w.kind, Kind::Prompt);
-    assert_eq!(w.harness, Some(EngineId::Claude));
+    assert_eq!(w.harness, Some(EngineId::CLAUDE));
     assert_eq!(w.prompt_loop.as_ref().unwrap().via, "loop");
     assert_eq!(w.doors[0].command, "/babysit");
     assert!(scan.alone.is_empty());
@@ -445,7 +445,7 @@ fn a_project_with_no_workflow_has_none_and_says_where_it_looked() {
     assert_eq!(scan.alone.len(), 1);
     assert_eq!(scan.alone[0].name, "commit");
     assert_eq!(scan.alone[0].command, "/commit");
-    assert_eq!(scan.alone[0].harness, EngineId::Claude);
+    assert_eq!(scan.alone[0].harness, EngineId::CLAUDE);
     assert_eq!(scan.alone[0].path, ".claude/commands/commit.md");
     assert!(scan.searched.contains(&".claude/commands".to_string()));
     assert!(scan.searched.contains(&"PROMPT.md".to_string()));
@@ -622,7 +622,7 @@ fn codex_prompts_and_skills_are_read_from_its_folder() {
     let scan = read(&project, &[], &roots, &[]);
     assert_eq!(scan.workflows.len(), 1, "{scan:#?}");
     let w = &scan.workflows[0];
-    assert_eq!(w.harness, Some(EngineId::Codex));
+    assert_eq!(w.harness, Some(EngineId::CODEX));
     assert_eq!(names(w), ["spec", "build"]);
 }
 
@@ -646,12 +646,12 @@ fn other_harnesses_are_read_from_their_folders() {
     let scan = read(&dir, &[], &roots("none"), &[]);
     let by = |h: EngineId| scan.workflows.iter().find(|w| w.harness == Some(h));
     assert_eq!(
-        names(by(EngineId::Opencode).unwrap()),
+        names(by(EngineId::OPENCODE).unwrap()),
         ["plan", "build", "ship"]
     );
-    assert_eq!(names(by(EngineId::Copilot).unwrap()), ["a", "b"]);
-    assert_eq!(names(by(EngineId::Cursor).unwrap()), ["x", "y"]);
-    assert!(by(EngineId::Claude).is_none());
+    assert_eq!(names(by(EngineId::COPILOT).unwrap()), ["a", "b"]);
+    assert_eq!(names(by(EngineId::CURSOR).unwrap()), ["x", "y"]);
+    assert!(by(EngineId::CLAUDE).is_none());
 }
 
 // ---------- kept in the data folder ----------

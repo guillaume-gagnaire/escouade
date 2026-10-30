@@ -489,7 +489,7 @@ impl DataDir {
     /// `codex/<name>` (each its `CODEX_HOME`).
     pub fn accounts_of(&self, engine: crate::model::EngineId) -> PathBuf {
         match engine {
-            crate::model::EngineId::Claude => self.claude_accounts(),
+            crate::model::EngineId::CLAUDE => self.claude_accounts(),
             e => self.0.join(e.as_str()),
         }
     }

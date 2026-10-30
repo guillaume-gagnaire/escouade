@@ -376,7 +376,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("escouade-codex-tui-{}", new_id()));
         let meta = AgentMeta {
             id: "a1".into(),
-            engine: EngineId::Codex,
+            engine: EngineId::CODEX,
             cwd: "/work/demo".into(),
             session_id: session.map(str::to_string),
             ..Default::default()
