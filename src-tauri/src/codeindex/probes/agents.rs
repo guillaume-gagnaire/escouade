@@ -504,6 +504,8 @@ pub struct Run {
     pub checks: u32,
     /// The commands of the terminal refused as no check (`ls`, `grep`…).
     pub refused: u32,
+    /// Why the run was refused at first, when `recheck` checked it again (a check widened).
+    pub rechecked: String,
     /// Wall clock, from the launch to the end of the process.
     pub wall_ms: u64,
     /// The searches the hook saw, and those it answered.
@@ -529,6 +531,7 @@ pub fn cli(args: Vec<String>) -> i32 {
         "run" => run_cli(&rest),
         "report" => report_cli(&rest),
         "check" => check_cli(&rest),
+        "recheck" => recheck_cli(&rest),
         _ => {
             eprintln!(
                 "codeindex_agents run [--only <id,…>] [--modes grep,index-hook,index-only] [--passes <n>] [--out <dir>] [--root <dir>] [--claude <program>]\n                 report [--out <dir>] [--runs <runs.jsonl>] | check [--root <dir>] [--mode <m>]\n                 serve --dir <copy> --data <dir> [--log <file>] | hook [--log <file>]"
@@ -1405,6 +1408,7 @@ fn play(p: &Paths, t: &Task, mode: Mode, pass: u32, lane: &Lane, claude: &str) -
         // The commands that ran: those the hook let through.
         checks: m.calls.get("Bash").copied().unwrap_or_default() - refused,
         refused,
+        rechecked: String::new(),
         wall_ms,
         hook_events,
         hooks,
@@ -1438,6 +1442,117 @@ fn read_runs(file: &Path) -> Result<Vec<Run>> {
         }
     }
     Ok(runs)
+}
+
+/// Plays again on `copy` what a run's agent wrote: each Edit and Write of its stream that
+/// succeeded, in their order, their paths taken from the copy's root (`…/repo/`).
+pub fn replay(stream: &str, copy: &Path) -> Result<()> {
+    let mut uses: Vec<(String, Value)> = Vec::new();
+    let mut failed: BTreeSet<String> = BTreeSet::new();
+    for line in stream.lines() {
+        let Ok(v) = serde_json::from_str::<Value>(line) else {
+            continue;
+        };
+        for b in v["message"]["content"].as_array().into_iter().flatten() {
+            let id = b["id"].as_str().or(b["tool_use_id"].as_str());
+            match (b["type"].as_str(), id) {
+                (Some("tool_use"), Some(id))
+                    if matches!(b["name"].as_str(), Some("Edit" | "Write")) =>
+                {
+                    uses.push((id.to_string(), b.clone()))
+                }
+                (Some("tool_result"), Some(id)) if b["is_error"] == true => {
+                    failed.insert(id.to_string());
+                }
+                _ => {}
+            }
+        }
+    }
+    for (id, b) in uses.iter().filter(|(id, _)| !failed.contains(id)) {
+        let raw = b["input"]["file_path"]
+            .as_str()
+            .unwrap_or_default()
+            .replace('\\', "/");
+        let rel = raw
+            .split_once("/repo/")
+            .map(|(_, r)| r.to_string())
+            .ok_or_else(|| anyhow!("{id}: {raw} is not in the copy"))?;
+        let file = copy.join(&rel);
+        let i = &b["input"];
+        let text = if b["name"] == "Write" {
+            i["content"].as_str().unwrap_or_default().to_string()
+        } else {
+            let (from, to) = (
+                i["old_string"].as_str().unwrap_or_default(),
+                i["new_string"].as_str().unwrap_or_default(),
+            );
+            let now = std::fs::read_to_string(&file).with_context(|| rel.clone())?;
+            if !now.contains(from) {
+                bail!("{id}: its old text is not in {rel}");
+            }
+            if i["replace_all"] == true {
+                now.replace(from, to)
+            } else {
+                now.replacen(from, to, 1)
+            }
+        };
+        if let Some(parent) = file.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(&file, text)?;
+    }
+    Ok(())
+}
+
+/// `recheck`: the changes at many places refused (`--why <text>` in their why, all when left
+/// out) checked again by the checks as they are now, from what their agent wrote (`replay`) on
+/// a fresh copy. Their verdict is replaced in `runs.jsonl`, the one at the run kept in
+/// `rechecked`.
+fn recheck_cli(args: &[String]) -> Result<()> {
+    let o = options(args)?;
+    let p = paths(&o)?;
+    let file = p.out.join("runs.jsonl");
+    let mut runs = read_runs(&file)?;
+    let lane = "check-grep";
+    let base = Copy::of(&p, Mode::Grep, lane)?;
+    let target = lane_ready(&p, lane, &base)?;
+    let why = o.get("why").cloned().unwrap_or_default();
+    for r in runs.iter_mut().filter(|r| !r.ok && r.why.contains(&why)) {
+        let Some(m) = p
+            .bench
+            .tasks
+            .iter()
+            .find(|t| t.id == r.task)
+            .and_then(|t| t.multi.as_ref())
+        else {
+            continue;
+        };
+        let name = format!("{}.{}.{}.{}", r.task, r.mode, model_short(&r.model), r.pass);
+        let stream = std::fs::read_to_string(p.out.join("runs").join(&name).join("stream.jsonl"))
+            .with_context(|| name.clone())?;
+        base.reset()?;
+        replay(&stream, &base.dir)?;
+        let now = multi::verify(m, &base.dir, &target);
+        eprintln!(
+            "[recheck] {name}: {}",
+            match &now {
+                Ok(()) => "right".to_string(),
+                Err(e) => e.chars().take(200).collect(),
+            }
+        );
+        r.rechecked = r.why.clone();
+        r.ok = now.is_ok();
+        r.why = now.err().unwrap_or_default();
+        r.missed_end = multi::missed(m, &base.dir).total();
+    }
+    base.reset()?;
+    let mut text = String::new();
+    for r in &runs {
+        text.push_str(&serde_json::to_string(r)?);
+        text.push('\n');
+    }
+    std::fs::write(&file, text)?;
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1783,7 +1898,14 @@ fn report(p: &Paths, runs_file: &Path) -> Result<()> {
         markdown(&p.bench, &runs)
     } else {
         let mut md = String::new();
-        for model in p.bench.models() {
+        // The bench's models, then those played besides (`--models`: Opus, IDX-6).
+        let mut models = p.bench.models();
+        for r in &runs {
+            if !models.contains(&r.model) {
+                models.push(r.model.clone());
+            }
+        }
+        for model in models {
             let of: Vec<Run> = runs.iter().filter(|r| r.model == model).cloned().collect();
             if !of.is_empty() {
                 md.push_str(&format!("### {model}\n\n{}\n", markdown(&p.bench, &of)));
@@ -1808,6 +1930,28 @@ fn report(p: &Paths, runs_file: &Path) -> Result<()> {
                 r.pass,
                 if r.ok { "right" } else { "wrong" },
                 if r.ok { "wrong" } else { "right" },
+            ));
+        }
+    }
+    let again: Vec<&Run> = runs.iter().filter(|r| !r.rechecked.is_empty()).collect();
+    if !again.is_empty() {
+        md.push_str("\n#### Changes checked again\n\nThe changes refused at their run, checked again (`recheck`) by a check widened after reading them.\n\n| Task | Mode | Model | # | Now | At the run | Why widened |\n|---|---|---|---|---|---|---|\n");
+        for r in again {
+            let widened = p
+                .bench
+                .tasks
+                .iter()
+                .find(|t| t.id == r.task)
+                .and_then(|t| t.widened.clone())
+                .unwrap_or_default();
+            md.push_str(&format!(
+                "| {} | {} | {} | {} | {} | {} | {widened} |\n",
+                r.task,
+                r.mode,
+                model_short(&r.model),
+                r.pass,
+                if r.ok { "right" } else { "wrong" },
+                r.rechecked.chars().take(160).collect::<String>()
             ));
         }
     }

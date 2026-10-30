@@ -12,6 +12,7 @@
     {
       "id": "plugins-forget",
       "from": "renommer une méthode au nom commun (homonymes)",
+      "widened": "Le 8e « plugin_runtime.forget( » de codeindex_links_tests.rs n’est pas une fixture : il est dans le test ignoré qui compte sur le dépôt les appelants de Runtime::forget. Le renommer avec la méthode est juste ; 7 fixtures gardées au lieu de 8.",
       "prompt": "Dans le runtime des plugins (`src-tauri/src/plugins/runtime.rs`), la méthode `Runtime::forget` porte un nom trop vague : renomme-la `unload`, partout où elle sert.",
       "multi": {
         "places": [
@@ -54,7 +55,7 @@
           {
             "file": "src-tauri/src/codeindex_links_tests.rs",
             "text": "plugin_runtime.forget(",
-            "count": 8
+            "count": 7
           },
           {
             "file": "src-tauri/src/commands.rs",
