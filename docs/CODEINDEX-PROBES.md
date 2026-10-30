@@ -856,3 +856,176 @@ Le coût par tâche (deux passages), face à grep :
   - Le champ `widened` de la tâche le dit. `report` refait le compte des questions avec les vérifications du fichier, et liste ces deux runs à part (« Checked again »).
 - Avant cet élargissement, grep et tokensave avaient chacun une réponse juste de moins (38 et 36).
 - **Le bruit** : deux passages d'une même tâche dans un même mode diffèrent de 28 % en médiane. Sur 40 runs, un écart de quelques pour cent entre deux modes n'est pas sûr ; le −8 % d'Escouade est au bord, le +18 % de tokensave et le +14 à +71 % des changements le dépassent.
+
+## Changements à plusieurs endroits (IDX-6, ESC-306)
+
+Mesures du 30 au 31 octobre 2026. IDX-4 n'avait mesuré que des questions et des changements à un seul endroit, avec Haiku. Ici, de vrais Claude Code font **10 changements qui touchent chacun 5 endroits ou plus dans 2 fichiers ou plus**, avec Sonnet 5.5, Haiku 5.5 et, en complément, Opus 5.5. C'est le cas où `index_callers` et `index_impact` devraient le plus servir.
+
+**En deux phrases** : sur ces changements, l'index ne fait pas faire moins d'oublis. Les 130 runs finissent tous sans endroit oublié, parce que la compilation et les tests les montrent quel que soit le mode. Côté coût, l'index + hook fait économiser **23 % à Haiku**, ne change rien à **Sonnet (+1 %, sous le bruit de 16 %)** et coûte **12 % de plus à Opus** (un seul passage sur 5 tâches, indicatif). Plus le modèle est fort, moins l'index l'aide : avec les modèles que l'utilisateur fait tourner, il ne vaut pas la peine pour le coût.
+
+### Le banc
+
+```sh
+cd src-tauri
+cargo build --release --example codeindex_agents
+X=./target/release/examples/codeindex_agents.exe
+B="--bench ../docs/codeindex-agents-multi.json --root C:/tmp/esc306/root"
+$X check $B                                  # chaque patch, puis le même privé d'un fichier
+$X run $B --out C:/tmp/esc306/out --modes grep,index-hook,tokensave --tokensave C:/tmp/tokensave-target/release/tokensave.exe
+$X recheck $B --out C:/tmp/esc306/out --why homonym   # revérifie un run depuis ce que l'agent a écrit
+$X report --bench ../docs/codeindex-agents-multi.json --out C:/tmp/esc306/out
+```
+
+- **Les tâches** (`docs/codeindex-agents-multi.json`, commit `9632cde9`), dites comme un ticket, sans la liste des endroits :
+
+  | Tâche | Genre | Endroits | Fichiers |
+  | --- | --- | --- | --- |
+  | `plugins-forget` | renommer `Runtime::forget` en `unload` (15 autres `forget` dans le code) | 16 | 3 |
+  | `drafts-files` | renommer `DataDir::drafts_files`, un nom rare | 19 | 7 |
+  | `checkout-of` | renommer `git::checkout_of` (homonyme : `Core::checkout_of` de `repos.rs`) | 19 | 5 |
+  | `account-skip` | ajouter un paramètre `skip` à `account_for_new` et suivre ses 13 appels | 13 | 6 |
+  | `commit-root` | ajouter un champ sérialisé à `CommitScope` : Rust, `types.ts`, la fenêtre, fr/en, tests | 9 | 8 |
+  | `i18n-unverified` | renommer une clé i18n de 5 composants Svelte (deux autres clés `unverified`) | 8 | 7 |
+  | `fact-docs-gaps` | renommer un fait du protocole : cœur, deux schémas, SDK, doc fr/en | 21 | 9 |
+  | `app-env-struct` | remplacer un tuple par une structure dans une signature et suivre les erreurs | 8 | 6 |
+  | `slugify-gone` | supprimer `core::slugify` et appeler `slug_within(…, 40)` à sa place | 21 | 4 |
+  | `missing-account-ts` | renommer une fonction TypeScript de 7 fichiers | 18 | 7 |
+
+  « Endroits » : ce qu'une copie neuve n'a pas encore (chaque texte attendu, chaque ancien nom à faire partir).
+
+- **La vérification** est mécanique, dans `probes/multi.rs` :
+  - chaque endroit attendu (un texte, tant de fois dans un fichier) ;
+  - aucun ancien nom dans ses fichiers (le CHANGELOG n'en fait jamais partie) ;
+  - les homonymes intacts (`kept` : `Core::checkout_of`, les autres `forget`, les chaînes `slugify` des tests) ;
+  - les commandes du projet : `cargo check --lib --tests`, les tests ciblés (`cargo test --lib <filtre>`), `npm run check`, `npx vitest run <fichier>`, `node sdk/plugin/scripts/generate.mjs --check`.
+  - **Essayée à la main** : `check` applique la bonne réponse (`docs/codeindex-agents-multi/<tâche>.patch`, écrite à la main), puis la même privée d'un fichier. Les 10 prennent la bonne et refusent la mauvaise. Le premier essai a refusé deux de mes bonnes réponses : un `root` déplacé avant son `clone` dans `commit-root` (la compilation l'a vu), et un compte faux dans `slugify-gone`.
+- **Les modes**, comme IDX-4, plus un terminal :
+  - (a) `grep` : Grep, Glob, Read, Edit, Write ;
+  - (b) `index-hook` : en plus, les outils de l'index, la règle des consignes et le hook d'ESC-253 ;
+  - (c) `tokensave` : son serveur MCP et ses règles à la place de ceux d'Escouade.
+  - **Le terminal ne sert qu'aux vérifications** : Bash est permis pour `cargo check`, `cargo test`, `npm run check`, `npx vitest run` et le générateur du SDK, une commande seule. Claude Code laisse passer de lui-même les commandes en lecture (`ls`, `grep`), quelles que soient ses règles. Un hook (`snap`) refuse donc toute autre commande, et note avant chaque vérification ce qui manque encore à la copie. Les commandes refusées sont comptées à part.
+- **Les agents** :
+  - `claude -p` sur `claude-sonnet-5-5` et `claude-haiku-5-5` en effort `medium`, deux passages par tâche, mode et modèle : 120 runs ;
+  - plus `claude-opus-5-5`, ajouté à la demande de l'utilisateur, sur 5 tâches, en `grep` et `index-hook`, un passage : 10 runs ;
+  - le compte par défaut du poste, avec les mêmes options qu'IDX-4 : aucun fichier de connexion touché, aucun réglage global changé.
+- **Les couloirs** : un par mode et par modèle (`grep-sonnet`…). Chacun a sa copie au commit, sa cible cargo préchauffée hors de la copie, et une copie de `node_modules` (vite ne sert aucun fichier hors du projet, pas même à travers une jonction). Les six couloirs tournent en parallèle ; les vérifications finales passent une à une.
+- **tokensave**, avec les règles d'ESC-304 et d'IDX-4 :
+  - `disable-upload-counter` d'abord, et `upload_enabled = false` vérifié ;
+  - `TOKENSAVE_UPDATE_CHECK=off` ;
+  - une copie sans `.git` ;
+  - jamais `install`, jamais de hook.
+  - À la fin, `~/.tokensave` (absent au départ) contenait `config.toml`, `state.toml`, `benchmark.toml`, `global.db`, deux `.mmap` et `servers/` (vide). `state.toml` disait `last_upload_at = 0`, `last_flush_attempt_at = 0`, `last_version_check_at = 0`, `installed_agents = []`, et 73 852 tokens en attente. Il a été supprimé. Aucun réglage d'agent ne cite tokensave (`~/.claude/settings.json`, `.claude.json`, `.codex/config.toml`, `.gemini/settings.json`, `.copilot/config.json`).
+- **L'index d'avant ESC-307** : la passe a commencé avant qu'ESC-307 arrive sur main. Le mode index + hook a donc encore la ligne « Économie… » dans chaque réponse de l'index (quelques dizaines de tokens par appel, au détriment de l'index), et les consignes qui promettaient « moins de tokens que grep ». Opus a été joué sur le même banc, pour que ses chiffres se comparent.
+- **Ce qui est compté**, run par run (`docs/codeindex-agents-multi-results.md`, et les 130 runs bruts dans `docs/codeindex-agents-multi-runs.jsonl`) :
+  - la réussite ;
+  - les endroits manquants à la **première vérification**, et à la fin ;
+  - les vérifications (et celles qui ont échoué), les cycles « vérifier → corriger » (une vérification suivie d'un Edit ou d'un Write) et les commandes refusées ;
+  - comme IDX-4 : les appels par outil, les re-greps, les relectures, les tokens, le coût (`total_cost_usd`), le temps et les tours.
+
+### Le coût, mesuré d'abord
+
+- **Pilote** : `plugins-forget` et `commit-root`, 3 modes × 2 modèles, un passage, soit 12 runs. Il a coûté 1,59 $ (Sonnet 1,31 $, Haiku 0,28 $) et 9,8 M tokens. Le quota de la semaine est passé de 43 à 44 % (cette session comprise), celui de 5 h de 11 à 15 %.
+- **Estimé** pour les 120 runs : ≈ 16 $, soit ≈ 2 % du quota de la semaine. C'est sous les 8 % de l'accord du 2026-10-30, et le quota était sous 70 % : la passe a été lancée sans attendre. Le coût a été écrit sur la carte du ticket.
+- **Opus** : mesuré sur son premier run de chaque mode (0,31 $ en grep, 0,40 $ en index + hook), puis estimé à ≈ 6 $ pour 10 runs, sous les 3 % demandés. Réel : 4,47 $.
+- **Réel** : 12,31 $ et 40,1 M tokens pour les 130 runs gardés, plus 0,30 $ pour les trois runs écartés (voir plus bas). Le quota de la semaine est à 45 % à la fin (43 % au départ, cette session comprise).
+- **La passe a été arrêtée à la main** à 119 runs sur 120, à la demande de l'utilisateur, pour lancer Opus. Deux runs ont été rejoués seuls :
+  - `missing-account-ts` (index + hook, Haiku, passage 2), coupé par l'arrêt ;
+  - `slugify-gone` (index + hook, Haiku, passage 2), interrompu à la main par l'utilisateur pendant la passe. Son « timed out after 1800 s » n'était pas un échec de l'agent.
+
+### Sonnet et Haiku, par mode (20 runs chacun)
+
+| | Sonnet grep | Sonnet index + hook | Sonnet tokensave | Haiku grep | Haiku index + hook | Haiku tokensave |
+| --- | --- | --- | --- | --- | --- | --- |
+| Justes | 20 | 20 | 20 | 20 | 20 | 20 |
+| Coût | 2,23 $ | 2,25 $ | 2,46 $ | 0,33 $ | 0,26 $ | 0,32 $ |
+| · face à grep | — | **+1 %** | +10 % | — | **−23 %** | −4 % |
+| Tokens (cache lu compris) | 2,9 M | 3,7 M | 4,6 M | 8,4 M | 7,4 M | 8,7 M |
+| Appels d'outils | 457 | 456 | 382 | 619 | 588 | 529 |
+| · Grep / Read | 73 / 82 | 61 / 80 | 50 / 51 | 83 / 205 | 76 / 171 | 93 / 101 |
+| · outils de l'index | — | 23 | 97 | — | 32 | 123 |
+| Re-greps après l'index | — | 53 | 42 | — | 44 | 58 |
+| Relectures | 27 | 23 | 7 | 70 | 50 | 37 |
+| Endroits manquants à la 1re vérification | 6 | 4 | 19 (\*) | 0 | 8 | 6 |
+| Endroits manquants à la fin | 0 | 0 | 0 | 0 | 0 | 0 |
+| Vérifications (échouées) | 41 (5) | 36 (2) | 39 (3) | 78 (8) | 65 (9) | 55 (5) |
+| Cycles vérifier → corriger | 10 | 9 | 10 | 5 | 4 | 2 |
+| Commandes refusées | 9 | 7 | 13 | 4 | 2 | 1 |
+| Hook : recherches vues / conseillées | — | 104 / 20 | — | — | 143 / 16 | — |
+| Temps cumulé | 57 min | 53 min | 57 min | 121 min | 97 min | 92 min |
+| Tours | 477 | 476 | 402 | 639 | 608 | 549 |
+
+(\*) Les 19 viennent d'un seul run : un `sed -i` refusé, que Sonnet a cru passé avant de lancer `cargo check` (relu plus bas). Ce n'est pas un oubli.
+
+- **Le bruit** : deux passages d'une même tâche diffèrent de 16 % en médiane, chez Sonnet comme chez Haiku. Le +1 % de Sonnet n'est donc pas un écart. Le −23 % de Haiku le dépasse ; le +10 % de tokensave sur Sonnet est au bord.
+- **Les oublis** : peu d'endroits manquent à la première vérification, avec ou sans index (Sonnet 6 contre 4, Haiku 0 contre 8, sur 374 endroits par mode). Ce qui manque, c'est d'abord ce qu'aucun outil de code ne relie : les fixtures d'un test TypeScript, un schéma JSON, la copie du schéma sur le site. La compilation, `npm run check` ou le générateur du SDK le montrent, et l'agent corrige. Aucun run ne finit avec un endroit oublié.
+- **Sonnet se sert peu de l'index** : 23 appels en 20 runs (`index_callers` 10, `index_search` 7, `index_body` 6), presque toujours suivis d'un Grep (53 re-greps). Il passe par Grep pour avoir les lignes à éditer.
+
+### Où l'index aide, où il ne sert à rien
+
+Le coût face à grep, tâche par tâche (deux passages chacune) :
+
+| Tâche | Sonnet index + hook | Sonnet tokensave | Haiku index + hook | Haiku tokensave |
+| --- | --- | --- | --- | --- |
+| `plugins-forget` | −10 % | +90 % | −8 % | +11 % |
+| `drafts-files` | −6 % | +6 % | −35 % | −44 % |
+| `checkout-of` | +29 % | −10 % | +18 % | +3 % |
+| `account-skip` | −9 % | +32 % | −37 % | −27 % |
+| `commit-root` | −3 % | +6 % | −44 % | 0 % |
+| `i18n-unverified` | −14 % | +5 % | +6 % | +6 % |
+| `fact-docs-gaps` | +59 % | +22 % | −14 % | −25 % |
+| `app-env-struct` | −5 % | +16 % | −5 % | +4 % |
+| `slugify-gone` | −7 % | −17 % | +32 % | +3 % |
+| `missing-account-ts` | +4 % | −36 % | +5 % | +31 % |
+
+- **Il aide Haiku** sur les changements Rust aux appels nombreux (`account-skip` −37 %, `drafts-files` −35 %) et sur `commit-root` (−44 %). Haiku y relit moins (50 relectures contre 70).
+- **Il ne sert à rien** quand ce qui change est un texte et pas un symbole. `index_search docs.gaps` ne trouve pas un nom de fait dans un JSON : `fact-docs-gaps` coûte 59 % de plus à Sonnet avec l'index. Une clé i18n ou une fonction TypeScript se trouvent aussi bien par Grep.
+- **Les homonymes** n'ont trompé personne, dans aucun mode : aucun run n'a touché `Core::checkout_of`, les autres `forget` ni les autres clés `unverified`. Sur ces tâches, grep ne mêle pas les homonymes, parce que l'agent lit la ligne avant de l'éditer.
+- **tokensave** fait éditer par ses propres outils (`tokensave_str_replace`, `tokensave_multi_str_replace`), sans Read avant. Les agents y relisent donc peu (7 relectures pour Sonnet), mais il coûte 10 % de plus à Sonnet, et 4 % de moins à Haiku.
+
+### Opus (indicatif : un passage, 5 tâches, 10 runs)
+
+Les 5 tâches sont variées :
+
+- `plugins-forget` : un nom à homonymes ;
+- `account-skip` : un paramètre et ses appels ;
+- `commit-root` : un champ propagé de Rust jusqu'aux textes ;
+- `fact-docs-gaps` : un renommage hors du code (JSON, SDK, doc) ;
+- `missing-account-ts` : le front seul.
+
+| Sur ces 5 tâches | Opus grep | Opus index + hook | Sonnet grep | Sonnet index + hook | Haiku grep | Haiku index + hook |
+| --- | --- | --- | --- | --- | --- | --- |
+| Runs (justes) | 5 (5) | 5 (5) | 10 (10) | 10 (10) | 10 (10) | 10 (10) |
+| Coût | 2,11 $ | 2,36 $ | 1,34 $ | 1,39 $ | 0,24 $ | 0,16 $ |
+| · face à grep | — | **+12 %** | — | +3 % | — | −33 % |
+| Endroits manquants à la 1re vérification | 4 | 4 | 6 | 4 | 0 | 8 |
+| Cycles vérifier → corriger | 1 | 2 | 8 | 8 | 5 | 3 |
+| Outils de l'index / re-greps | — | 9 / 10 | — | 11 / 30 | — | 16 / 28 |
+
+- Opus fait tout juste, avec moins de cycles que Sonnet.
+- Il appelle l'index 9 fois en 5 runs, et refait un Grep après.
+- La tendance se confirme : l'index aide Haiku (−33 %), il est neutre pour Sonnet (+3 %) et il coûte à Opus (+12 %).
+- Avec un seul passage, l'écart d'Opus reste sous le bruit d'une tâche : c'est une tendance, pas une mesure.
+
+### Ce qui a été relu à la main
+
+- `plugins-forget`, index + hook, Haiku, passage 2, refusé pour « homonyme touché ». La 8ᵉ chaîne `plugin_runtime.forget(` de `codeindex_links_tests.rs` n'est pas une fixture : elle est dans le test ignoré `on_this_repository_runtime_forget_has_its_seven_callers`, qui compte sur le dépôt les appelants réels de `Runtime::forget`. La renommer avec la méthode est juste : ma vérification était trop stricte.
+  - Elle a été élargie : 7 fixtures gardées au lieu de 8 (champ `widened`).
+  - Les 6 runs refusés pour cela ont été revérifiés en entier par `recheck`. Il rejoue sur une copie neuve les Edit, les Write et les éditions de tokensave du run, puis lance toutes les commandes. Les 6 sont justes, et `report` les liste à part.
+- `plugins-forget`, grep, Sonnet, pilote. Sa réponse est exactement le bon patch, mais `cargo test` avait échoué : 10 tests de `plugins_runtime_tests`, qui lancent des processus, flanchent quand six couloirs compilent à la fois.
+  - Depuis, le banc vérifie un run à la fois, avec une seconde chance.
+  - Les deux runs du pilote touchés ont été rejoués.
+- `drafts-files`, tokensave, Sonnet, passage 2 : un `sed -i` sur 7 fichiers, refusé par le hook. Sonnet lance alors `cargo check` sans avoir rien changé, d'où les « 19 endroits manquants ». Puis viennent 10 `tokensave_str_replace` et un Grep de contrôle, et le changement est juste.
+- `fact-docs-gaps`, index + hook, Sonnet, passage 1 :
+  - `index_search docs.gaps` d'abord (inutile : c'est une chaîne), puis Grep ;
+  - il édite à la main `protocol.ts`, que le générateur du SDK réécrit depuis le schéma ;
+  - les deux schémas JSON lui manquent jusqu'à ce que le générateur le dise. Il lui faut 2 cycles.
+- `commit-root`, grep, Sonnet, pilote : le Rust, le type, la fenêtre et les textes sont faits, mais les fixtures du test manquent, et `npm run check` les montre. Un `vitest … | grep` est refusé : il relance sans le tube.
+- `checkout-of`, index + hook, Sonnet, passage 1 : `index_callers checkout_of`, puis un Grep (que le hook lui conseillait), et 11 Edit sans erreur. Il écrit qu'il n'a pas touché `Core::checkout_of` de `repos.rs`, « une autre fonction ».
+- `slugify-gone`, index + hook, Haiku, passage 2 (rejoué) : la vérification finale a échoué sur `link.exe` (LNK1104, un fichier encore ouvert dans la cible du couloir), pas sur le code. `recheck` le trouve juste.
+
+### Pour décider
+
+- **Économie** : sur un ticket qui touche beaucoup d'endroits, l'index d'Escouade fait économiser 23 % à un vrai agent Haiku, et rien à Sonnet (+1 %). Il coûte 12 % de plus à Opus (indicatif). Sur les changements à un endroit d'IDX-4, Haiku perdait 14 %.
+- **Oublis** : il n'en fait pas faire moins. Les oublis viennent des fichiers qu'aucun outil de code ne relie (schémas, fixtures, copies), et la compilation les rattrape de toute façon.
+- **tokensave** ne fait pas mieux : +10 % avec Sonnet, −4 % avec Haiku.
+- **La conclusion** : tant que l'utilisateur travaille surtout avec Sonnet et Opus, l'index ne vaut pas la peine pour le coût. Il ne vaut la peine qu'avec Haiku. Il pourrait gagner là où il perd le plus, s'il savait chercher les chaînes (noms de faits, clés).

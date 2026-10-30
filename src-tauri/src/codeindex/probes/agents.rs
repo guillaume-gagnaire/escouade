@@ -1457,7 +1457,15 @@ pub fn replay(stream: &str, copy: &Path) -> Result<()> {
             let id = b["id"].as_str().or(b["tool_use_id"].as_str());
             match (b["type"].as_str(), id) {
                 (Some("tool_use"), Some(id))
-                    if matches!(b["name"].as_str(), Some("Edit" | "Write")) =>
+                    if matches!(
+                        b["name"].as_str(),
+                        Some(
+                            "Edit"
+                                | "Write"
+                                | "mcp__tokensave__tokensave_str_replace"
+                                | "mcp__tokensave__tokensave_multi_str_replace"
+                        )
+                    ) =>
                 {
                     uses.push((id.to_string(), b.clone()))
                 }
@@ -1469,8 +1477,11 @@ pub fn replay(stream: &str, copy: &Path) -> Result<()> {
         }
     }
     for (id, b) in uses.iter().filter(|(id, _)| !failed.contains(id)) {
-        let raw = b["input"]["file_path"]
+        let i = &b["input"];
+        // Claude Code's tools say `file_path`, tokensave's `path`.
+        let raw = i["file_path"]
             .as_str()
+            .or(i["path"].as_str())
             .unwrap_or_default()
             .replace('\\', "/");
         let rel = raw
@@ -1478,23 +1489,44 @@ pub fn replay(stream: &str, copy: &Path) -> Result<()> {
             .map(|(_, r)| r.to_string())
             .ok_or_else(|| anyhow!("{id}: {raw} is not in the copy"))?;
         let file = copy.join(&rel);
-        let i = &b["input"];
         let text = if b["name"] == "Write" {
             i["content"].as_str().unwrap_or_default().to_string()
         } else {
-            let (from, to) = (
-                i["old_string"].as_str().unwrap_or_default(),
-                i["new_string"].as_str().unwrap_or_default(),
-            );
-            let now = std::fs::read_to_string(&file).with_context(|| rel.clone())?;
-            if !now.contains(from) {
-                bail!("{id}: its old text is not in {rel}");
+            // Each replacement: its old text, its new one, all of them or the first.
+            let pairs: Vec<(String, String, bool)> = match i["replacements"].as_array() {
+                Some(list) => list
+                    .iter()
+                    .map(|r| {
+                        let s = |k: usize| r[k].as_str().unwrap_or_default().to_string();
+                        (s(0), s(1), false)
+                    })
+                    .collect(),
+                None => vec![(
+                    i["old_string"]
+                        .as_str()
+                        .or(i["old_str"].as_str())
+                        .unwrap_or_default()
+                        .to_string(),
+                    i["new_string"]
+                        .as_str()
+                        .or(i["new_str"].as_str())
+                        .unwrap_or_default()
+                        .to_string(),
+                    i["replace_all"] == true,
+                )],
+            };
+            let mut now = std::fs::read_to_string(&file).with_context(|| rel.clone())?;
+            for (from, to, all) in pairs {
+                if !now.contains(&from) {
+                    bail!("{id}: its old text is not in {rel}");
+                }
+                now = if all {
+                    now.replace(&from, &to)
+                } else {
+                    now.replacen(&from, &to, 1)
+                };
             }
-            if i["replace_all"] == true {
-                now.replace(from, to)
-            } else {
-                now.replacen(from, to, 1)
-            }
+            now
         };
         if let Some(parent) = file.parent() {
             std::fs::create_dir_all(parent)?;
@@ -1872,7 +1904,7 @@ pub fn rescored(b: &Bench, runs: &mut [Run]) -> Vec<Run> {
             continue;
         };
         // A change is checked on its copy, gone since; a run without an answer stays as it was.
-        if t.change.is_some() || r.m.stop.is_empty() {
+        if t.change.is_some() || t.multi.is_some() || r.m.stop.is_empty() {
             continue;
         }
         let ok = answer_ok(&t.answer, &r.m.result);
@@ -2030,6 +2062,17 @@ mod tests {
         .unwrap();
         assert_eq!(b.tasks.len(), 10);
         assert_eq!(b.models(), ["claude-sonnet-5-5", "claude-haiku-5-5"]);
+        // A change at many places is no question: the report never checks it again by an answer.
+        let mut runs = vec![Run {
+            task: b.tasks[0].id.clone(),
+            ok: true,
+            m: Measure {
+                stop: "success".into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        }];
+        assert!(rescored(&b, &mut runs).is_empty() && runs[0].ok);
         assert!(b.terminal.iter().all(|c| c.starts_with("cargo ")
             || c.starts_with("npm run check")
             || c.starts_with("npx vitest")
@@ -2062,6 +2105,46 @@ mod tests {
                 .count();
             assert!(lines >= 5, "{}", t.id);
         }
+    }
+
+    #[test]
+    fn what_an_agent_wrote_is_played_again_from_its_stream_but_what_failed() {
+        let dir = crate::paths::test_dir("agents-replay");
+        let copy = dir.join("repo");
+        std::fs::create_dir_all(copy.join("src")).unwrap();
+        std::fs::write(
+            copy.join("src/a.rs"),
+            "fn forget() {}\nforget();\nforget();\n",
+        )
+        .unwrap();
+        let at = |f: &str| format!("C:\\lane\\repo\\{f}");
+        let stream = [
+            json!({ "type": "assistant", "message": { "content": [
+                { "type": "tool_use", "id": "e1", "name": "Edit", "input": { "file_path": at("src\\a.rs"),
+                    "old_string": "fn forget()", "new_string": "fn unload()" } },
+                { "type": "tool_use", "id": "e2", "name": "Edit", "input": { "file_path": at("src\\a.rs"),
+                    "old_string": "nothing", "new_string": "x" } },
+            ] } }),
+            json!({ "type": "user", "message": { "content": [
+                { "type": "tool_result", "tool_use_id": "e2", "is_error": true, "content": "not found" },
+            ] } }),
+            json!({ "type": "assistant", "message": { "content": [
+                { "type": "tool_use", "id": "t1", "name": "mcp__tokensave__tokensave_multi_str_replace",
+                    "input": { "path": at("src\\a.rs"), "replacements": [["forget();\nforget();", "unload();\nunload();"]] } },
+                { "type": "tool_use", "id": "w1", "name": "Write", "input": { "file_path": at("src\\b.rs"), "content": "new" } },
+            ] } }),
+        ]
+        .map(|v| v.to_string())
+        .join("\n");
+        replay(&stream, &copy).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(copy.join("src/a.rs")).unwrap(),
+            "fn unload() {}\nunload();\nunload();\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(copy.join("src/b.rs")).unwrap(),
+            "new"
+        );
     }
 
     #[test]
