@@ -27,6 +27,7 @@ use crate::codeindex::{
     MAX_MATCHES_DEFAULT,
 };
 use crate::core::Core;
+use crate::i18n::Lang;
 use crate::model::Project;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -293,16 +294,14 @@ fn filter_of(
 
 /// The answer as sent and what it saved: counted in the caller's session (`accounting`), recorded
 /// for the agent and the project, then said in the metrics line.
-#[allow(clippy::too_many_arguments)]
-fn answered<R: Runtime, T>(
+fn answered<R: Runtime>(
     core: &Core<R>,
     caller: &Caller,
     a: &Asked,
     tool: &str,
     arguments: Value,
     schema_tokens: u64,
-    answer: &Answer<T>,
-    text: String,
+    (text, files_tokens): Text,
 ) -> Reply {
     let lang = crate::i18n::ui();
     let key = match caller {
@@ -315,7 +314,7 @@ fn answered<R: Runtime, T>(
             tool,
             arguments: &arguments,
             response: &text,
-            full_file_tokens: answer.saving.files_tokens,
+            full_file_tokens: files_tokens,
             schema_tokens,
         },
         |m| format::metrics_line(lang, m),
@@ -344,25 +343,33 @@ pub(super) fn sent<T: serde::Serialize>(args: &T) -> Value {
     v
 }
 
-pub(super) async fn search<R: Runtime>(
-    core: &Arc<Core<R>>,
-    caller: &Caller,
-    schema_tokens: u64,
-    args: SearchArgs,
-    arguments: Value,
-) -> Result<Reply, ToolError> {
-    let a = asked(core, caller, args.project.as_deref())?;
-    let r = reader(core, &a).await?;
+/// An answer of a tool before it is accounted for: its text, and the raw weight of the files it
+/// touched (`Saving::files_tokens`). The `*_on` functions compute it on a reader, for the app's
+/// server and for the bench of the real agents (`codeindex::probes::agents`) alike.
+pub(crate) type Text = (String, u64);
+
+fn text_of<T>(answer: &Answer<T>, text: String) -> Text {
+    (text, answer.saving.files_tokens)
+}
+
+/// Runs a tool's computation off the async threads.
+async fn blocking(
+    f: impl FnOnce() -> Result<Text, ToolError> + Send + 'static,
+) -> Result<Text, ToolError> {
+    tokio::task::spawn_blocking(f).await.map_err(joined)?
+}
+
+pub(crate) fn search_on(r: Reader, args: SearchArgs, lang: Lang) -> Result<Text, ToolError> {
     let limit = args
         .limit
         .unwrap_or(DEFAULT_LIMIT)
         .clamp(1, SEARCH_MAX_LIMIT) as usize;
     let filter = filter_of(&r, None, args.path_include, args.path_exclude);
     let ids = args.ids.unwrap_or(false);
-    let lang = crate::i18n::ui();
     if args.literal.unwrap_or(false) {
         if args.query.is_empty() {
-            return Err(ToolError::Failed(tr!(
+            return Err(ToolError::Failed(tr_in!(
+                lang,
                 "La recherche littérale demande un texte (query) non vide.",
                 "literal search requires a non-empty query"
             )));
@@ -370,55 +377,21 @@ pub(super) async fn search<R: Runtime>(
         let exact_total = args.exact_total.unwrap_or(true);
         let timeout_ms = args.timeout_ms.unwrap_or(LITERAL_SCAN_DEFAULT_TIMEOUT_MS);
         let timeout = (timeout_ms > 0).then(|| std::time::Duration::from_millis(timeout_ms));
-        let query = args.query.clone();
-        let found = tokio::task::spawn_blocking(move || {
-            r.literal_search(&query, limit, &filter, exact_total, timeout)
-        })
-        .await
-        .map_err(joined)?
-        .map_err(failed)?;
+        let found = r
+            .literal_search(&args.query, limit, &filter, exact_total, timeout)
+            .map_err(failed)?;
         let text = format::literal_text(lang, &found.result, ids);
-        return Ok(answered(
-            core,
-            caller,
-            &a,
-            "index_search",
-            arguments,
-            schema_tokens,
-            &found,
-            text,
-        ));
+        return Ok(text_of(&found, text));
     }
     let kind = args.kind.filter(|k| !k.trim().is_empty());
-    let query = args.query.clone();
-    let found = tokio::task::spawn_blocking(move || {
-        r.search_filtered(&query, limit, kind.as_deref(), &filter)
-    })
-    .await
-    .map_err(joined)?
-    .map_err(failed)?;
+    let found = r
+        .search_filtered(&args.query, limit, kind.as_deref(), &filter)
+        .map_err(failed)?;
     let text = format::search_text(lang, &found.result, ids);
-    Ok(answered(
-        core,
-        caller,
-        &a,
-        "index_search",
-        arguments,
-        schema_tokens,
-        &found,
-        text,
-    ))
+    Ok(text_of(&found, text))
 }
 
-pub(super) async fn context<R: Runtime>(
-    core: &Arc<Core<R>>,
-    caller: &Caller,
-    schema_tokens: u64,
-    args: ContextArgs,
-    arguments: Value,
-) -> Result<Reply, ToolError> {
-    let a = asked(core, caller, args.project.as_deref())?;
-    let r = reader(core, &a).await?;
+pub(crate) fn context_on(r: Reader, args: ContextArgs, lang: Lang) -> Result<Text, ToolError> {
     let filter = filter_of(
         &r,
         args.path.as_deref(),
@@ -435,12 +408,97 @@ pub(super) async fn context<R: Runtime>(
         max_per_file: args.max_per_file.map(|v| v as usize),
         filter,
     });
-    let task = args.task.clone();
-    let found = tokio::task::spawn_blocking(move || r.task_context_with(&task, &options))
-        .await
-        .map_err(joined)?
+    let found = r.task_context_with(&args.task, &options).map_err(failed)?;
+    let text = format::context_markdown(lang, &args.task, &found.result);
+    Ok(text_of(&found, text))
+}
+
+/// Refuses a call to `index_body` that names no symbol.
+fn body_wanted(args: &BodyArgs, lang: Lang) -> Result<(), ToolError> {
+    if args.node_id.is_none() && args.symbol.as_deref().is_none_or(|s| s.trim().is_empty()) {
+        return Err(ToolError::Failed(tr_in!(
+            lang,
+            "Il faut le symbole : son nom (symbol) ou son id (node_id).",
+            "missing required parameter: symbol (or node_id)"
+        )));
+    }
+    Ok(())
+}
+
+pub(crate) fn body_on(r: Reader, args: BodyArgs, lang: Lang) -> Result<Text, ToolError> {
+    body_wanted(&args, lang)?;
+    let limit = args
+        .limit
+        .map_or(crate::codeindex::BODY_CANDIDATES_DEFAULT, |l| l as usize);
+    let found = r
+        .body(args.node_id, args.symbol.as_deref(), limit)
         .map_err(failed)?;
-    let text = format::context_markdown(crate::i18n::ui(), &args.task, &found.result);
+    let text = format::body_text(lang, &found.result);
+    Ok(text_of(&found, text))
+}
+
+pub(crate) fn callers_on(r: Reader, args: CallArgs) -> Result<Text, ToolError> {
+    let w = wanted(
+        args.id,
+        args.name.as_deref(),
+        args.path.as_deref(),
+        args.max_matches,
+    )?;
+    let found = r.callers(w, limit_of(args.limit)).map_err(failed)?;
+    Ok(text_of(&found, json_text(&found)?))
+}
+
+pub(crate) fn callees_on(r: Reader, args: CallArgs) -> Result<Text, ToolError> {
+    let w = wanted(
+        args.id,
+        args.name.as_deref(),
+        args.path.as_deref(),
+        args.max_matches,
+    )?;
+    let found = r.callees(w, limit_of(args.limit)).map_err(failed)?;
+    Ok(text_of(&found, json_text(&found)?))
+}
+
+pub(crate) fn impact_on(r: Reader, args: ImpactArgs) -> Result<Text, ToolError> {
+    let w = wanted(args.id, args.target.as_deref(), None, args.max_matches)?;
+    let depth = args.depth.unwrap_or(2).clamp(1, 4);
+    let found = r.impact(w, depth, limit_of(args.limit)).map_err(failed)?;
+    Ok(text_of(&found, json_text(&found)?))
+}
+
+pub(super) async fn search<R: Runtime>(
+    core: &Arc<Core<R>>,
+    caller: &Caller,
+    schema_tokens: u64,
+    args: SearchArgs,
+    arguments: Value,
+) -> Result<Reply, ToolError> {
+    let a = asked(core, caller, args.project.as_deref())?;
+    let r = reader(core, &a).await?;
+    let lang = crate::i18n::ui();
+    let text = blocking(move || search_on(r, args, lang)).await?;
+    Ok(answered(
+        core,
+        caller,
+        &a,
+        "index_search",
+        arguments,
+        schema_tokens,
+        text,
+    ))
+}
+
+pub(super) async fn context<R: Runtime>(
+    core: &Arc<Core<R>>,
+    caller: &Caller,
+    schema_tokens: u64,
+    args: ContextArgs,
+    arguments: Value,
+) -> Result<Reply, ToolError> {
+    let a = asked(core, caller, args.project.as_deref())?;
+    let r = reader(core, &a).await?;
+    let lang = crate::i18n::ui();
+    let text = blocking(move || context_on(r, args, lang)).await?;
     Ok(answered(
         core,
         caller,
@@ -448,7 +506,6 @@ pub(super) async fn context<R: Runtime>(
         "index_context",
         arguments,
         schema_tokens,
-        &found,
         text,
     ))
 }
@@ -461,22 +518,10 @@ pub(super) async fn body<R: Runtime>(
     arguments: Value,
 ) -> Result<Reply, ToolError> {
     let a = asked(core, caller, args.project.as_deref())?;
-    if args.node_id.is_none() && args.symbol.as_deref().is_none_or(|s| s.trim().is_empty()) {
-        return Err(ToolError::Failed(tr!(
-            "Il faut le symbole : son nom (symbol) ou son id (node_id).",
-            "missing required parameter: symbol (or node_id)"
-        )));
-    }
+    let lang = crate::i18n::ui();
+    body_wanted(&args, lang)?;
     let r = reader(core, &a).await?;
-    let limit = args
-        .limit
-        .map_or(crate::codeindex::BODY_CANDIDATES_DEFAULT, |l| l as usize);
-    let (id, symbol) = (args.node_id, args.symbol.clone());
-    let found = tokio::task::spawn_blocking(move || r.body(id, symbol.as_deref(), limit))
-        .await
-        .map_err(joined)?
-        .map_err(failed)?;
-    let text = format::body_text(crate::i18n::ui(), &found.result);
+    let text = blocking(move || body_on(r, args, lang)).await?;
     Ok(answered(
         core,
         caller,
@@ -484,7 +529,6 @@ pub(super) async fn body<R: Runtime>(
         "index_body",
         arguments,
         schema_tokens,
-        &found,
         text,
     ))
 }
@@ -532,20 +576,7 @@ pub(super) async fn callers<R: Runtime>(
     let a = asked(core, caller, args.project.as_deref())?;
     wanted(args.id, args.name.as_deref(), None, None)?;
     let r = reader(core, &a).await?;
-    let limit = limit_of(args.limit);
-    let found = tokio::task::spawn_blocking(move || {
-        let w = wanted(
-            args.id,
-            args.name.as_deref(),
-            args.path.as_deref(),
-            args.max_matches,
-        );
-        r.callers(w.map_err(|_| anyhow::anyhow!("no symbol"))?, limit)
-    })
-    .await
-    .map_err(joined)?
-    .map_err(failed)?;
-    let text = json_text(&found)?;
+    let text = blocking(move || callers_on(r, args)).await?;
     Ok(answered(
         core,
         caller,
@@ -553,7 +584,6 @@ pub(super) async fn callers<R: Runtime>(
         "index_callers",
         arguments,
         schema_tokens,
-        &found,
         text,
     ))
 }
@@ -568,20 +598,7 @@ pub(super) async fn callees<R: Runtime>(
     let a = asked(core, caller, args.project.as_deref())?;
     wanted(args.id, args.name.as_deref(), None, None)?;
     let r = reader(core, &a).await?;
-    let limit = limit_of(args.limit);
-    let found = tokio::task::spawn_blocking(move || {
-        let w = wanted(
-            args.id,
-            args.name.as_deref(),
-            args.path.as_deref(),
-            args.max_matches,
-        );
-        r.callees(w.map_err(|_| anyhow::anyhow!("no symbol"))?, limit)
-    })
-    .await
-    .map_err(joined)?
-    .map_err(failed)?;
-    let text = json_text(&found)?;
+    let text = blocking(move || callees_on(r, args)).await?;
     Ok(answered(
         core,
         caller,
@@ -589,7 +606,6 @@ pub(super) async fn callees<R: Runtime>(
         "index_callees",
         arguments,
         schema_tokens,
-        &found,
         text,
     ))
 }
@@ -604,16 +620,7 @@ pub(super) async fn impact<R: Runtime>(
     let a = asked(core, caller, args.project.as_deref())?;
     wanted(args.id, args.target.as_deref(), None, None)?;
     let r = reader(core, &a).await?;
-    let limit = limit_of(args.limit);
-    let depth = args.depth.unwrap_or(2).clamp(1, 4);
-    let found = tokio::task::spawn_blocking(move || {
-        let w = wanted(args.id, args.target.as_deref(), None, args.max_matches);
-        r.impact(w.map_err(|_| anyhow::anyhow!("no symbol"))?, depth, limit)
-    })
-    .await
-    .map_err(joined)?
-    .map_err(failed)?;
-    let text = json_text(&found)?;
+    let text = blocking(move || impact_on(r, args)).await?;
     Ok(answered(
         core,
         caller,
@@ -621,7 +628,6 @@ pub(super) async fn impact<R: Runtime>(
         "index_impact",
         arguments,
         schema_tokens,
-        &found,
         text,
     ))
 }

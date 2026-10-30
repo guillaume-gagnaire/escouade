@@ -78,6 +78,7 @@ Chaque recherche est vue comme la montre le Grep de Claude Code : 250 lignes au 
 
 ## Ce qu'il faut retenir
 
+- **Avec de vrais agents (IDX-4, 2026-10-30)** : face à grep seul, l'index d'Escouade et son hook font dépenser 8 % de moins à Haiku, à justesse égale (−13 % sur les questions, +14 % sur les changements), et tokensave 18 % de plus. Détail en fin de document.
 - **L'« Économie » annoncée ne dit rien de la justesse.** Elle va de 92 à 99 % sur les 54 sondes, y compris quand rien de juste ne sort (26 sondes à rappel nul). Comptée face à ce qu'un agent lit vraiment, avec le grep refait quand l'index ne trouve rien, l'index coûte **2,5 fois** le grep informé : 350 005 tokens contre 139 237 (économie réelle −151 %).
 - **`index_context`, l'outil d'un début de ticket, ne trouve presque rien.**
   - Rappel@10 moyen de 16 %, précision de 2 %, et 6 % sur les 17 sondes « tâche » : une sur dix-sept, celle du zoom.
@@ -213,6 +214,7 @@ Une colonne par ticket, le même banc sur les mêmes 54 sondes (`--compare` à l
 - **IDX-1 (ESC-296)** : la recherche et le contexte de tokensave portés à l'identique (`docs/CODEINDEX-IDX-1.md`, référence `docs/codeindex-probes-reference-idx1.json`).
 - **IDX-2 (ESC-297)** : la résolution des appels de tokensave, d'un symbole à un symbole (§ « IDX-2 » plus bas, référence `docs/codeindex-probes-reference-idx2.json`).
 - **IDX-3 (ESC-298)** : les réponses, le compte de l'économie et les consignes de tokensave, et la suffisance des réponses « tâche » (§ « IDX-3 » plus bas, référence `docs/codeindex-probes-reference-idx3.json`).
+- **IDX-4 (ESC-299)** : pas de changement de l'index, donc pas de colonne ; de vrais agents jouent 20 tâches avec et sans l'index, et avec tokensave (§ « Avec de vrais agents » en fin de document).
 
 | Mesure | ESC-294 | IDX-1 | IDX-2 | IDX-3 |
 |---|---|---|---|---|
@@ -384,7 +386,6 @@ Grep informé : les motifs écrits en sachant la réponse (huit repris de vrais 
 | tache-cree-agent | 0 (—) | 0 (—) |
 | **tâche (17)** | 6 | 24 |
 | **autres (fr/en) (11)** | 32 | 59 |
-
 
 ## IDX-2 (ESC-297) : les appels résolus comme tokensave
 
@@ -687,3 +688,171 @@ Aucun écart mesuré ne vient d'une règle de tokensave qu'on aurait mal recopi�
   - deux dépôts git de grammaires dans `~/.cargo/git` (`tokensave-large-treesitters`, `tree-sitter-fortran`), supprimés à la fin.
 - Rien dans `%LOCALAPPDATA%`, `%APPDATA%` ou `%TEMP%`. Aucun réglage d'agent touché, aucun hook git.
 - **Pour rejouer** : `~/.tokensave` est recréé au premier lancement avec le compteur **allumé**. Il faut relancer `tokensave disable-upload-counter` avant toute autre commande, puis supprimer `~/.tokensave` à la fin. Le banc lance `tokensave init` dans la copie seulement si elle n'a pas encore d'index : pour chronométrer une indexation neuve, effacer d'abord `C:\tmp\tokensave-snapshot\.tokensave`.
+
+## Avec de vrais agents (ESC-299, IDX-4)
+
+Mesures du 2026-10-30. La question de l'utilisateur : l'index donne-t-il à un vrai agent le code dont il a besoin, pour qu'il n'ait pas à le chercher, à voir qu'il en manque, puis à re-grep ? Les sondes mesurent les outils seuls. Ici, de vrais Claude Code sans fenêtre font 20 tâches courtes dans quatre modes, et on compte ce qu'ils dépensent vraiment.
+
+**En une phrase** : face à grep seul, l'index d'Escouade avec son hook fait dépenser **8 % de moins** à un vrai agent Haiku, à justesse égale (39 sur 40). Le gain est de 13 % sur les questions, et c'est une perte de 14 % sur les petits changements. tokensave fait dépenser **18 % de plus**, avec 37 justes sur 40. Escouade fait donc mieux que tokensave, mais son gain reste de l'ordre du bruit : deux passages d'une même tâche diffèrent de 28 % en médiane.
+
+### Le banc
+
+```sh
+cd src-tauri
+cargo build --release --example codeindex_agents
+./target/release/examples/codeindex_agents.exe check                      # chaque vérification, sur sa bonne et sa mauvaise réponse
+./target/release/examples/codeindex_agents.exe check --mode tokensave     # idem, sur la copie sans .git
+./target/release/examples/codeindex_agents.exe run --tokensave C:/tmp/tokensave-target/release/tokensave.exe
+./target/release/examples/codeindex_agents.exe report --runs ../docs/codeindex-agents-runs.jsonl   # les tableaux de ce ticket, relus
+```
+
+- **Les tâches** (`docs/codeindex-agents.json`, commit `303fb5f2`, celui des sondes) :
+  - 15 questions, prises des 17 sondes « tâche » (`tache-xterm-couleurs` et `tache-taille-terminal` mises de côté) ;
+  - 5 petits changements : le pas de zoom 225 %, la boucle de sauvegarde à 250 ms, la marge de reprise à une minute, la locale « fra », le noir ANSI des terminaux (ESC-80).
+- **Les vérifications** sont mécaniques :
+  - une question est juste quand sa réponse cite le symbole attendu (l'une des variantes écrites, sans compter la casse ni les `\` d'un chemin) ;
+  - un changement est juste quand le texte voulu est **dans le symbole attendu** (de sa première ligne à l'accolade qui le ferme) et que l'ancien n'y est plus.
+  - Chaque tâche a une bonne et une mauvaise réponse. `check` les essaie sur la copie : 20 sur 20 prennent la bonne et refusent la mauvaise, sur la copie git comme sur celle de tokensave.
+  - Les tests de `probes/agents.rs` refont celles des questions.
+- **Les modes** :
+  - (a) `grep` : Grep, Glob et Read seuls ;
+  - (b) `index-hook` : en plus, les six outils de l'index, la règle des consignes de l'agent et le hook d'ESC-253 ;
+  - (c) `index-only` : l'index, Glob et Read, sans Grep ;
+  - (d) `tokensave` : comme (b), mais avec le serveur MCP de tokensave et les règles qu'écrit son `install` (`CANONICAL_RULES_MARKDOWN` de 580936b, sans le paragraphe sur les agents Explore), sans hook.
+  - Dans tous les modes, Edit et Write servent aux changements, et l'agent n'a jamais de terminal.
+- **Les agents** :
+  - `claude -p --output-format stream-json`, sur `claude-haiku-5-5` en effort `medium`, deux passages par tâche et par mode : 160 runs ;
+  - le compte par défaut du poste, tel quel ;
+  - chaque lancement a ses propres options, écrites dans le dossier du run : `--settings`, `--mcp-config --strict-mcp-config`, `--setting-sources project` (sans les plugins ni les hooks de l'utilisateur), `--tools`, `--allowedTools`, `--permission-mode dontAsk`, `--no-session-persistence`.
+  - Aucun fichier de connexion n'est touché ni lu, aucun réglage global n'est changé. Les variables de la session parente (`CLAUDE*`, `ESCOUADE_*`) sont retirées par leur nom, sans en lire la valeur.
+- **Les copies** :
+  - chaque mode a la sienne, dans `%TEMP%\escouade-codeindex-agents\<mode>`, hors de tout worktree, remise au commit après chaque run ;
+  - pour tokensave, une copie sans `.git` (`git archive`), remise en état contre une copie intacte, puis `tokensave sync` après un changement.
+- **L'index d'Escouade** est servi par un serveur MCP stdio du banc (`probes/agents_mcp.rs`, testé). Il lit la copie et jamais l'app. Il sert les mêmes schémas et les mêmes réponses que le serveur de l'app : les calculs sont sortis de `mcp/index.rs` (`search_on`, `context_on`…) et partagés, sans changer leur comportement. Il compte aussi la ligne des métriques.
+- **tokensave**, avec les règles d'ESC-304, plus son `serve` que ce mode demande :
+  - `disable-upload-counter` d'abord, puis le banc vérifie `upload_enabled = false` ;
+  - `TOKENSAVE_UPDATE_CHECK=off` ;
+  - `init --no-git-hook` dans sa copie seulement ;
+  - jamais `install`, jamais de hook.
+  - À la fin, `~/.tokensave` (qui n'existait pas) a été supprimé. Il contenait `config.toml`, `state.toml`, `benchmark.toml`, `global.db`, deux `.mmap` et `servers/` (vide). `state.toml` montre qu'aucun envoi n'a eu lieu : `last_upload_at = 0`, `last_flush_attempt_at = 0`, `last_version_check_at = 0`, `installed_agents = []`, et 293 896 tokens restés en attente (`pending_upload`). Aucun réglage d'agent ne cite tokensave (`~/.claude/settings.json`, `.claude.json`, `.codex/config.toml`, `.gemini/settings.json`, `.copilot/config.json`).
+- **Ce qui est compté**, run par run (`docs/codeindex-agents-results.md`, et les 160 runs bruts dans `docs/codeindex-agents-runs.jsonl`) :
+  - la réussite ;
+  - les appels par outil ;
+  - les re-greps (Grep après le premier appel à l'index), les Glob et Read après lui, les relectures (un Read d'un fichier déjà lu) ;
+  - les tokens (entrée, cache écrit, cache lu, sortie), ceux des réponses de chaque outil, le coût selon Claude Code (`total_cost_usd`), le temps (`duration_ms`) et les tours.
+
+### Le coût, mesuré d'abord
+
+- **Mesuré** sur 3 tâches (`q-reprise-limite`, `q-ticket-termine`, `c-sauvegarde-250`), dans les 4 modes : 12 runs, 0,065 $, 1,48 M tokens (presque tous lus en cache), 90 s. Le quota de la semaine est resté à 41 %, la fenêtre de 5 h est passée de 19 à 20 % (cette session comprise).
+- **Estimé** pour le tout (20 × 4 × 2 = 160 runs) : ≈ 0,9 $ et 20 M tokens, soit moins de 3 % du quota de la semaine. C'est sous les 8 % de l'accord de l'utilisateur (2026-10-30) et le quota était sous 70 % : le reste a été joué sans attendre. Le coût a été écrit sur la carte du ticket (`report_progress`).
+- **Réel** : 0,675 $ et 18,2 M tokens pour les 160 runs, en ≈ 20 min (les quatre modes en parallèle). Le quota de la semaine est à 40 % après (la fenêtre glisse) : le banc ne s'y voit pas au point près.
+
+### Les totaux, par mode (40 runs chacun)
+
+| | grep | index + hook | index seul | tokensave |
+|---|---|---|---|---|
+| Justes | 39 | 39 | 39 | 37 |
+| · questions (30) / changements (10) | 29 / 10 | 29 / 10 | 29 / 10 | 27 / 10 |
+| Appels d'outils | 260 | 255 | 324 | 301 |
+| · Grep | 147 | 71 | 18 (essayés : l'outil n'existe pas) | 77 |
+| · Read / Glob / Edit | 97 / 2 / 14 | 47 / 0 / 15 | 25 / 3 / 12 | 20 / 1 / 14 |
+| · outils de l'index | — | 122 (search 47, body 28, context 23, callers 17, callees 7) | 266 (search 128, body 64, callers 37, context 27, callees 10) | 189 (read 52, search 49, context 36, body 26, callers 23, callees 2) |
+| Runs qui ont appelé l'index | — | 37 | 40 | 39 |
+| · puis ont cherché ou lu quand même | — | 29 | 23 | 31 |
+| Re-greps après l'index | — | 59 | 13 | 76 |
+| Glob / Read après l'index | — | 0 / 43 | 3 / 25 | 1 / 19 |
+| Relectures (Read d'un fichier déjà lu) | 32 | 14 | 9 | 4 |
+| Hook : recherches vues / conseillées | — | 71 / 1 | — | — |
+| Tokens des réponses des outils | 206 k | 168 k | 192 k | 237 k |
+| · dont l'index | — | 86 k | 174 k | 145 k |
+| Tokens : cache écrit | 495 k | 410 k | 461 k | 533 k |
+| · cache lu | 2 941 k | 3 704 k | 4 206 k | 5 162 k |
+| · sortie | 70,8 k | 64,5 k | 62,6 k | 71,3 k |
+| · total | 3 508 k | 4 179 k (+19 %) | 4 729 k (+35 %) | 5 767 k (+64 %) |
+| **Coût** (Claude Code, $) | **0,164** | **0,151 (−8 %)** | **0,166 (+1 %)** | **0,194 (+18 %)** |
+| · questions | 0,131 | 0,113 (−13 %) | 0,127 (−3 %) | 0,137 (+5 %) |
+| · changements | 0,033 | 0,038 (+14 %) | 0,039 (+16 %) | 0,057 (+71 %) |
+| Temps (somme, s) | 604 | 599 | 561 | 630 |
+| Tours | 300 | 295 | 364 | 341 |
+
+- **Ce que l'agent dépense vraiment, c'est le coût, plus que le total des tokens.** Le total est fait aux neuf dixièmes de cache lu (0,1 fois le prix de l'entrée), relu à chaque tour. Les réponses de l'index restent dans le contexte, et chaque tour de plus les relit : le total monte de 19 % avec le hook. Le coût, lui, baisse de 8 % : moins de cache écrit (410 k contre 495 k, car les Grep rendent de gros blocs) et moins de sortie.
+- **L'index remplace la moitié des recherches, pas toutes** : avec le hook, 71 Grep et 47 Read au lieu de 147 et 97, et des réponses d'outils plus légères (168 k contre 206 k). Mais 29 des 37 runs qui l'appellent cherchent ou lisent encore après, avec 59 re-greps.
+- **Sans Grep, l'agent fait plus d'appels** (324, dont 128 `index_search`) pour le même résultat et le même coût que grep (+1 %). L'index ne remplace pas grep pour Haiku : il le contourne à coups de recherches.
+- **Le hook ne sert presque à rien avec Haiku** : il a vu 71 recherches et n'en a conseillé qu'une. Haiku écrit des regex à alternatives (`usage_limit|rate_limit|resume_at`), et le hook se tait sur une regex, comme voulu (« dans le doute, c'est un texte »). Le gain d'`index-hook` vient de la règle des consignes et des outils, pas du hook.
+- **Les changements coûtent plus avec l'index, dans les trois modes.** Edit de Claude Code exige un Read du fichier avant : l'agent doit lire, quoi que l'index lui ait rendu. L'appel à l'index s'ajoute donc au chemin de grep au lieu de le remplacer.
+
+### Où l'index fait gagner ou perdre
+
+Le coût par tâche (deux passages), face à grep :
+
+| Tâche | grep | index + hook | index seul | tokensave |
+|---|---|---|---|---|
+| q-modeles-harness | 2/2 · 13 appels · 0,006 $ | 2/2 · 8 · −25 % | 2/2 · 7 · −49 % | 2/2 · 9 · −21 % |
+| q-compte-limite | 1/2 · 28 · 0,017 $ | 2/2 · 12 · −46 % | 1/2 · 16 · −48 % | 2/2 · 11 · −47 % |
+| q-mcp-codex | 2/2 · 17 · 0,011 $ | 2/2 · 17 · −15 % | 2/2 · 24 · +19 % | 1/2 · 17 · −22 % |
+| q-branche-premier-message | 2/2 · 20 · 0,013 $ | 2/2 · 9 · −30 % | 2/2 · 17 · −20 % | 2/2 · 18 · +0 % |
+| q-reprise-limite | 2/2 · 11 · 0,009 $ | 2/2 · 13 · −24 % | 2/2 · 13 · +24 % | 2/2 · 13 · +63 % |
+| q-zoom-borne | 2/2 · 11 · 0,006 $ | 2/2 · 9 · −14 % | 2/2 · 10 · −35 % | 2/2 · 9 · −18 % |
+| q-lance-processus | 2/2 · 14 · 0,010 $ | 2/2 · 23 · +47 % | 2/2 · 27 · +54 % | 2/2 · 12 · −26 % |
+| q-ticket-termine | 2/2 · 16 · 0,011 $ | 2/2 · 14 · −12 % | 2/2 · 18 · +22 % | 2/2 · 12 · −20 % |
+| q-langue-defaut | 2/2 · 9 · 0,006 $ | 1/2 · 10 · −22 % | 2/2 · 21 · +50 % | 0/2 · 7 · −36 % |
+| q-permission-plugin | 2/2 · 12 · 0,007 $ | 2/2 · 9 · −46 % | 2/2 · 15 · −23 % | 2/2 · 34 · +136 % |
+| q-store-controles | 2/2 · 15 · 0,009 $ | 2/2 · 10 · −7 % | 2/2 · 13 · −16 % | 2/2 · 15 · +40 % |
+| q-sauvegarde-etat | 2/2 · 8 · 0,005 $ | 2/2 · 18 · +86 % | 2/2 · 36 · +147 % | 2/2 · 20 · +67 % |
+| q-worktree-cree | 2/2 · 14 · 0,010 $ | 2/2 · 20 · +3 % | 2/2 · 16 · −37 % | 2/2 · 17 · +10 % |
+| q-quota-compte | 2/2 · 7 · 0,007 $ | 2/2 · 9 · −3 % | 2/2 · 10 · −15 % | 2/2 · 17 · +46 % |
+| q-cree-agent | 2/2 · 8 · 0,005 $ | 2/2 · 3 · −46 % | 2/2 · 3 · −49 % | 2/2 · 8 · −9 % |
+| c-zoom-225 | 2/2 · 13 · 0,006 $ | 2/2 · 18 · +23 % | 2/2 · 15 · +26 % | 2/2 · 16 · +38 % |
+| c-sauvegarde-250 | 2/2 · 15 · 0,008 $ | 2/2 · 12 · +5 % | 2/2 · 24 · +53 % | 2/2 · 30 · +192 % |
+| c-marge-reprise | 2/2 · 11 · 0,009 $ | 2/2 · 18 · +25 % | 2/2 · 17 · −29 % | 2/2 · 13 · +19 % |
+| c-locale-fra | 2/2 · 11 · 0,007 $ | 2/2 · 14 · −6 % | 2/2 · 10 · +2 % | 2/2 · 16 · +53 % |
+| c-ansi-noir | 2/2 · 7 · 0,003 $ | 2/2 · 9 · +30 % | 2/2 · 12 · +66 % | 2/2 · 7 · +30 % |
+
+- **L'index gagne quand un nom du code tombe tout de suite** :
+  - `create_agent`, en 3 appels au lieu de 8 ;
+  - `plugin_set_permission` et `list_models`, −25 à −46 % ;
+  - quand grep s'égare : `q-compte-limite`, où grep fait 28 appels et se trompe une fois sur deux, alors que l'index + hook trouve `switch_on_limit` deux fois sur deux pour moitié prix ;
+  - quand le nom à trouver est loin des mots de la question : `q-branche-premier-message`, −30 %.
+- **Il perd quand la réponse est un détail dans une longue fonction** :
+  - `q-sauvegarde-etat` : la boucle de `Core::start` qui regarde `dirty`. Grep trouve `dirty` en 8 appels, l'index fait chercher l'agent de symbole en symbole, +86 à +147 % ;
+  - `q-lance-processus` : beaucoup de candidats nommés `spawn` ou `start_process*`, +47 % ;
+  - les changements, toujours lus avant d'être édités (voir plus haut).
+- **tokensave** gagne sur `q-lance-processus` (−26 %, il lit moins) et perd sur :
+  - `q-permission-plugin` (+136 %, 34 appels : l'agent a enchaîné `tokensave_read` et appelé un outil fantôme, `tokensave_grep_placeholder_never`) ;
+  - les changements (+71 %) : `tokensave_read`, puis Read quand même pour pouvoir éditer.
+
+### Les tâches où l'agent a dû compléter l'index
+
+| Tâche | index + hook | index seul | tokensave |
+|---|---|---|---|
+| Changements : c-zoom-225, c-marge-reprise, c-locale-fra | 2/2 chacune | 2/2 chacune | 2/2 chacune |
+| c-sauvegarde-250 | 1/2 | 2/2 | 2/2 |
+| c-ansi-noir | 0/2 | 2/2 | 0/2 |
+| q-worktree-cree, q-sauvegarde-etat | 2/2 | 2/2 | 2/2 |
+| q-compte-limite, q-mcp-codex, q-lance-processus | 2/2 | 1/2 | 2/2, 2/2, 1/2 |
+| q-modeles-harness, q-zoom-borne, q-store-controles | 2/2 | 1/2 | 1/2, 2/2, 2/2 |
+| q-reprise-limite | 2/2 | 0/2 | 2/2 |
+| q-ticket-termine | 1/2 | 2/2 | 1/2 |
+| q-branche-premier-message, q-quota-compte | 1/2 | 0/2 | 2/2, 1/2 |
+| q-langue-defaut | 1/2 | 1/2 | 2/2 |
+| q-permission-plugin | 0/2 | 0/2 | 1/2 |
+| q-cree-agent | 0/2 | 0/2 | 0/2 |
+| **Runs complétés / runs qui ont appelé l'index** | **29 / 37** | **23 / 40** | **31 / 39** |
+
+« Compléter », c'est un Grep, un Glob ou un Read après le premier appel à l'index.
+
+- Avec l'index d'Escouade, l'agent répond **sur l'index seul** dans 8 runs sur 37 avec le hook, et 17 sur 40 sans Grep. Ailleurs, il vérifie ou complète.
+- C'est ce que disaient les sondes de suffisance d'IDX-3 : un appel ne rend pas tout le code nécessaire (1 % des lignes), et l'agent va le chercher. La seule tâche que l'index règle partout sans complément est `q-cree-agent`, un nom du code qui est presque la question.
+
+### Ce qui a été relu à la main
+
+- Les 8 réponses refusées ont été relues. 6 sont fausses :
+  - `switch_if_over` deux fois, pour `q-compte-limite` : c'est le passage au seuil, pas celui à la limite ;
+  - `escouade_launch`, pour `q-mcp-codex` : il passe des `-c` à Codex, sans écrire sa config ;
+  - pour `q-langue-defaut`, trois fois (index + hook une fois, tokensave deux fois), la valeur de départ du front (`langOfTag(navigator.language)`), que les réglages remplacent ensuite. La langue du système par défaut est `i18n::system` côté Rust.
+- 2 étaient justes, et leur vérification a été élargie après lecture :
+  - `checks.ts — checkArchive` (grep, passage 1), que `runChecks` appelle ;
+  - `refresh_usage` (tokensave, passage 2), qui relit le quota de chaque compte.
+  - Le champ `widened` de la tâche le dit. `report` refait le compte des questions avec les vérifications du fichier, et liste ces deux runs à part (« Checked again »).
+- Avant cet élargissement, grep et tokensave avaient chacun une réponse juste de moins (38 et 36).
+- **Le bruit** : deux passages d'une même tâche dans un même mode diffèrent de 28 % en médiane. Sur 40 runs, un écart de quelques pour cent entre deux modes n'est pas sûr ; le −8 % d'Escouade est au bord, le +18 % de tokensave et le +14 à +71 % des changements le dépassent.

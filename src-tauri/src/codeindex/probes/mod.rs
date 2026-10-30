@@ -24,6 +24,8 @@
 //!   tokensave too, by its command line, in a copy without `.git`, and scored by the same code
 //!   (`tokensave`); without them, nothing of the run changes.
 
+pub mod agents;
+pub mod agents_mcp;
 pub mod score;
 pub mod suffice;
 pub mod tokensave;

@@ -383,6 +383,12 @@ pub fn codeindex_probes_cli(args: Vec<String>) -> i32 {
     codeindex::probes::cli(args)
 }
 
+/// `codeindex_agents` (examples): the bench of the real agents, with and without the index (ESC-299,
+/// `docs/CODEINDEX-PROBES.md`). Gives the exit code.
+pub fn codeindex_agents_cli(args: Vec<String>) -> i32 {
+    codeindex::probes::agents::cli(args)
+}
+
 pub fn run() {
     // Before GTK starts: the window's app_id and WM_CLASS, which find its icon (ESC-239).
     #[cfg(target_os = "linux")]

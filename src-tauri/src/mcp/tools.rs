@@ -222,15 +222,7 @@ impl<R: Runtime> Tools<R> {
     fn index_schemas(&self) -> u64 {
         static TOKENS: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
         *TOKENS.get_or_init(|| {
-            let tools: Vec<_> = self
-                .router
-                .list_all()
-                .into_iter()
-                .filter(|t| t.name.starts_with("index_"))
-                .collect();
-            crate::codeindex::accounting::schema_overhead_tokens(
-                &serde_json::to_value(tools).unwrap_or_default(),
-            )
+            crate::codeindex::accounting::schema_overhead_tokens(&index_tools(&self.router))
         })
     }
 
@@ -241,6 +233,17 @@ impl<R: Runtime> Tools<R> {
         let router = router + Self::test_router();
         router
     }
+}
+
+/// The index's tools of `router`, as a client lists them (also served by the bench of the real
+/// agents, `codeindex::probes::agents`).
+pub(crate) fn index_tools<R: Runtime>(router: &ToolRouter<Tools<R>>) -> serde_json::Value {
+    let tools: Vec<_> = router
+        .list_all()
+        .into_iter()
+        .filter(|t| t.name.starts_with("index_"))
+        .collect();
+    serde_json::to_value(tools).unwrap_or_default()
 }
 
 // The arguments' descriptions are the model's (English, one line each: a doc comment's line
