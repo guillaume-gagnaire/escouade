@@ -1,6 +1,8 @@
 //! Reading the files again: what changed since the last time, and only that.
 
 use super::lang::{self, Lang};
+use super::links;
+use super::resolver::Touched;
 use super::store;
 use crate::fence::Fence;
 use anyhow::Result;
@@ -10,8 +12,9 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::{Instant, UNIX_EPOCH};
 
-/// A bigger file is generated or data, not code worth cutting.
-const MAX_FILE: u64 = 400 * 1024;
+/// A bigger file is generated or data, not code worth cutting: tokensave's `max_file_size` (1 MiB,
+/// `src/config.rs` at its commit 580936b), which `core.rs` (430 KB) stays under (ESC-297).
+const MAX_FILE: u64 = 1_048_576;
 
 /// What one reading did.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -82,6 +85,7 @@ pub fn refresh(
     };
     let tx = conn.transaction()?;
     let mut out = Refresh::default();
+    let mut touched = Touched::default();
     let mut present: HashSet<String> = HashSet::new();
     for (rel, lang) in listed {
         let full = dir.join(&rel);
@@ -126,8 +130,12 @@ pub fn refresh(
         if !needs_parse {
             if let Some(k) = prev {
                 if !own && had_symbols {
+                    touch_file(&tx, &mut touched, k.id, &rel)?;
                     clear_rows(&tx, k.id)?;
                     out.dropped += 1;
+                }
+                if k.state != state {
+                    touched.files.insert(rel.clone());
                 }
                 if k.hash != hash || k.size != size || k.mtime != mtime || k.state != state {
                     tx.execute(
@@ -151,6 +159,7 @@ pub fn refresh(
         let parsed = lang::parse(lang, &rel, &src);
         let file_id = match prev {
             Some(k) => {
+                touch_file(&tx, &mut touched, k.id, &rel)?;
                 clear_rows(&tx, k.id)?;
                 tx.execute(
                     "UPDATE files SET size = ?2, mtime = ?3, hash = ?4, state = ?5, lang = ?6 WHERE id = ?1",
@@ -160,12 +169,18 @@ pub fn refresh(
             }
             None => insert_file(&tx, scope, &rel, lang, size, mtime, &hash, state)?,
         };
+        touched.files.insert(rel.clone());
+        touched.names.insert(rel.clone());
+        for s in &parsed.symbols {
+            touched.touch_symbol(&s.name, &links::qname(&rel, &s.parent, &s.name));
+        }
         store_parsed(&tx, scope, &rel, file_id, parsed)?;
         out.parsed += 1;
     }
     // Files gone.
     for (rel, k) in &known {
         if !present.contains(rel) && k.state != 2 {
+            touch_file(&tx, &mut touched, k.id, rel)?;
             clear_rows(&tx, k.id)?;
             tx.execute("DELETE FROM files WHERE id = ?1", [k.id])?;
             out.dropped += 1;
@@ -177,6 +192,7 @@ pub fn refresh(
             let gone = !present.contains(rel);
             match (gone, known.get(rel)) {
                 (true, None) => {
+                    touched.files.insert(rel.clone());
                     insert_file(
                         &tx,
                         scope,
@@ -189,6 +205,7 @@ pub fn refresh(
                     )?;
                 }
                 (true, Some(k)) if k.state != 2 => {
+                    touched.files.insert(rel.clone());
                     // Already dropped above: the marker takes its place.
                     insert_file(
                         &tx,
@@ -206,12 +223,20 @@ pub fn refresh(
         }
         for (rel, k) in &known {
             if k.state == 2 && !base.contains_key(rel) {
+                touched.files.insert(rel.clone());
                 tx.execute("DELETE FROM files WHERE id = ?1", [k.id])?;
             }
         }
     }
     let now = chrono::Utc::now().timestamp_millis();
     store::touch_scope(&tx, scope, dir, now)?;
+    // The links: those the reading could have changed (ESC-297).
+    if scope.is_empty() {
+        links::resolve_project(&tx, &touched, false)?;
+    } else {
+        let changed = out.parsed > 0 || out.dropped > 0 || !touched.is_empty();
+        links::resolve_worktree(&tx, scope, changed)?;
+    }
     tx.commit()?;
     out.millis = started.elapsed().as_millis();
     Ok(out)
@@ -235,8 +260,34 @@ fn insert_file(
     Ok(tx.last_insert_rowid())
 }
 
-/// The symbols and links of a file, not its row.
+/// What a file held, for the links to resolve again: the file, and the keys of its symbols.
+fn touch_file(tx: &Transaction, touched: &mut Touched, file_id: i64, rel: &str) -> Result<()> {
+    touched.files.insert(rel.to_string());
+    touched.names.insert(rel.to_string());
+    let mut stmt = tx.prepare_cached("SELECT name, qname FROM symbols WHERE file_id = ?1")?;
+    let rows = stmt.query_map([file_id], |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+    })?;
+    for (name, q) in rows.flatten() {
+        touched.touch_symbol(&name, &q);
+    }
+    Ok(())
+}
+
+/// The symbols and references of a file, the links from them and to them; not its row.
 fn clear_rows(tx: &Transaction, file_id: i64) -> Result<()> {
+    for table in ["links", "ambiguous"] {
+        tx.execute(
+            &format!(
+                "DELETE FROM {table} WHERE ref_id IN (SELECT id FROM edges WHERE file_id = ?1)"
+            ),
+            [file_id],
+        )?;
+    }
+    tx.execute(
+        "DELETE FROM links WHERE to_id IN (SELECT id FROM symbols WHERE file_id = ?1)",
+        [file_id],
+    )?;
     tx.execute(
         "DELETE FROM sym_fts WHERE rowid IN (SELECT id FROM symbols WHERE file_id = ?1)",
         [file_id],
@@ -257,15 +308,27 @@ fn store_parsed(
     let mut ids: Vec<i64> = Vec::with_capacity(parsed.symbols.len());
     {
         let mut sym = tx.prepare_cached(
-            "INSERT INTO symbols (file_id, scope, path, name, kind, parent, line, end_line, sig, doc)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            "INSERT INTO symbols (file_id, scope, path, name, kind, parent, line, end_line, sig, doc, qname, vis, ty)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         )?;
         let mut fts = tx.prepare_cached(
             "INSERT INTO sym_fts (rowid, name, parent, doc, path) VALUES (?1, ?2, ?3, ?4, ?5)",
         )?;
         for s in &parsed.symbols {
             sym.execute(params![
-                file_id, scope, rel, s.name, s.kind, s.parent, s.line, s.end_line, s.sig, s.doc
+                file_id,
+                scope,
+                rel,
+                s.name,
+                s.kind,
+                s.parent,
+                s.line,
+                s.end_line,
+                s.sig,
+                s.doc,
+                super::links::qname(rel, &s.parent, &s.name),
+                s.vis,
+                s.ty
             ])?;
             let id = tx.last_insert_rowid();
             ids.push(id);
@@ -279,11 +342,20 @@ fn store_parsed(
         }
     }
     let mut edge = tx.prepare_cached(
-        "INSERT INTO edges (file_id, scope, path, from_id, kind, target, line) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        "INSERT INTO edges (file_id, scope, path, from_id, kind, target, line, col, via, simple, recv)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
     )?;
     for e in &parsed.edges {
         let from = e.from.and_then(|i| ids.get(i)).copied();
-        edge.execute(params![file_id, scope, rel, from, e.kind, e.target, e.line])?;
+        let simple = super::resolver::simple_ref_name(&e.target);
+        let recv = if e.via == 2 {
+            e.target.split("::").next().unwrap_or("")
+        } else {
+            ""
+        };
+        edge.execute(params![
+            file_id, scope, rel, from, e.kind, e.target, e.line, e.col, e.via, simple, recv
+        ])?;
     }
     Ok(())
 }

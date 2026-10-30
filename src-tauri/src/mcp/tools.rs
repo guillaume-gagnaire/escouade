@@ -1224,7 +1224,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Who calls a function, method or class, from the code index: its definitions and its callers (file, line, the symbol that calls). Every answer says what it saved (saving: the tokens of the files it draws on, read whole, against its own; summary says it in words). Prefer it to grep or to reading files when you look for a symbol, a notion or a link between symbols; keep grep for a text or a string. The project is the agent's own when left out; the code index is off until the user turns it on in the project's settings (the tool then says so). Open to every client, for the projects it sees (a private project is seen by its own agents alone, and its index holds only what its privacy allows).",
+        description = "Who calls a function or method, from the code index: by its id, or by a name answered definition by definition (matches: each definition, its callers resolved to it (file, line, the symbol that calls, its id), and apart the calls that may mean it among others, ambiguous; more: the other definitions of the name, to ask again by id). The calls are resolved to symbols when the files are read, as tokensave does; a tie is never guessed. Every answer says what it saved (saving: the tokens of the files it draws on, read whole, against its own; summary says it in words). Prefer it to grep or to reading files when you look for a symbol, a notion or a link between symbols; keep grep for a text or a string. The project is the agent's own when left out; the code index is off until the user turns it on in the project's settings (the tool then says so). Open to every client, for the projects it sees (a private project is seen by its own agents alone, and its index holds only what its privacy allows).",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn index_callers(
@@ -1232,16 +1232,18 @@ impl<R: Runtime> Tools<R> {
         ctx: ToolCtx<R>,
         Parameters(args): Parameters<index::CallArgs>,
     ) -> CallToolResult {
+        let id = args.id.map(|i| i.to_string());
         let asked = summary(&[
             ("project", args.project.as_deref()),
-            ("name", Some(&args.name)),
+            ("id", id.as_deref()),
+            ("name", args.name.as_deref()),
         ]);
         let result = index::callers(&ctx.core, &ctx.caller, args).await;
         ctx.reply("index_callers", &asked, result)
     }
 
     #[tool(
-        description = "What a function, method or class calls, from the code index: the definitions of what it calls in the project, and the names left (the language's, libraries'). Every answer says what it saved (saving: the tokens of the files it draws on, read whole, against its own; summary says it in words). Prefer it to grep or to reading files when you look for a symbol, a notion or a link between symbols; keep grep for a text or a string. The project is the agent's own when left out; the code index is off until the user turns it on in the project's settings (the tool then says so). Open to every client, for the projects it sees (a private project is seen by its own agents alone, and its index holds only what its privacy allows).",
+        description = "What a function or method calls, from the code index: by its id, or by a name answered definition by definition (matches: the definitions it calls, resolved; apart the calls left to a tie, ambiguous; the names left, the language's and libraries', external; more: the other definitions of the name). Every answer says what it saved (saving: the tokens of the files it draws on, read whole, against its own; summary says it in words). Prefer it to grep or to reading files when you look for a symbol, a notion or a link between symbols; keep grep for a text or a string. The project is the agent's own when left out; the code index is off until the user turns it on in the project's settings (the tool then says so). Open to every client, for the projects it sees (a private project is seen by its own agents alone, and its index holds only what its privacy allows).",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn index_callees(
@@ -1249,16 +1251,18 @@ impl<R: Runtime> Tools<R> {
         ctx: ToolCtx<R>,
         Parameters(args): Parameters<index::CallArgs>,
     ) -> CallToolResult {
+        let id = args.id.map(|i| i.to_string());
         let asked = summary(&[
             ("project", args.project.as_deref()),
-            ("name", Some(&args.name)),
+            ("id", id.as_deref()),
+            ("name", args.name.as_deref()),
         ]);
         let result = index::callees(&ctx.core, &ctx.caller, args).await;
         ctx.reply("index_callees", &asked, result)
     }
 
     #[tool(
-        description = "What a change would touch, from the code index: the symbols of a name or of a file, their callers followed up to depth levels, the types that extend or implement them, the files that import them, and every file touched. Every answer says what it saved (saving: the tokens of the files it draws on, read whole, against its own; summary says it in words). Prefer it to grep or to reading files when you look for a symbol, a notion or a link between symbols; keep grep for a text or a string. The project is the agent's own when left out; the code index is off until the user turns it on in the project's settings (the tool then says so). Open to every client, for the projects it sees (a private project is seen by its own agents alone, and its index holds only what its privacy allows).",
+        description = "What a change would touch, from the code index: a symbol by its id, a name answered definition by definition, or a file by its path; for each, its callers followed by the resolved links up to depth levels, the types that extend or implement it, the files that import it, every file touched, and apart the calls that may mean it among others (ambiguous). Every answer says what it saved (saving: the tokens of the files it draws on, read whole, against its own; summary says it in words). Prefer it to grep or to reading files when you look for a symbol, a notion or a link between symbols; keep grep for a text or a string. The project is the agent's own when left out; the code index is off until the user turns it on in the project's settings (the tool then says so). Open to every client, for the projects it sees (a private project is seen by its own agents alone, and its index holds only what its privacy allows).",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn index_impact(
@@ -1266,9 +1270,11 @@ impl<R: Runtime> Tools<R> {
         ctx: ToolCtx<R>,
         Parameters(args): Parameters<index::ImpactArgs>,
     ) -> CallToolResult {
+        let id = args.id.map(|i| i.to_string());
         let asked = summary(&[
             ("project", args.project.as_deref()),
-            ("target", Some(&args.target)),
+            ("id", id.as_deref()),
+            ("target", args.target.as_deref()),
         ]);
         let result = index::impact(&ctx.core, &ctx.caller, args).await;
         ctx.reply("index_impact", &asked, result)

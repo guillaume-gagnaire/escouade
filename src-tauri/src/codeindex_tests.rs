@@ -2,7 +2,7 @@
 //! freshness, the delta of a worktree, the files a private project keeps out, a renamed symbol,
 //! the answers' savings, and the setting through the core.
 
-use crate::codeindex::{Service, Target};
+use crate::codeindex::{Service, Target, Wanted};
 use crate::fence::Fence;
 use crate::paths::{test_dir, DataDir};
 use std::path::{Path, PathBuf};
@@ -23,7 +23,7 @@ mod langs {
         let idx = p.symbols.iter().position(|s| s.name == from).unwrap();
         p.edges
             .iter()
-            .filter(|e| e.kind == "call" && e.from == Some(idx))
+            .filter(|e| e.kind == "call" && e.from == Some(idx) && e.via == 0)
             .map(|e| e.target.clone())
             .collect()
     }
@@ -120,7 +120,7 @@ function compute(n: number) { return n; }
         assert!(links(&p, "import")[0].contains("./base"));
         assert_eq!(links(&p, "extends"), vec!["Base"]);
         assert_eq!(links(&p, "implements"), vec!["Runnable"]);
-        assert_eq!(calls(&p, "start"), vec!["boot", "run"]);
+        assert_eq!(calls(&p, "start"), vec!["this.boot", "run"]);
         assert_eq!(calls(&p, "run"), vec!["compute"]);
     }
 
@@ -136,7 +136,7 @@ function compute(n: number) { return n; }
         assert_eq!(find(&p, "save").kind, "function");
         assert_eq!(links(&p, "extends"), vec!["Map"]);
         assert_eq!(calls(&p, "save"), vec!["load"]);
-        assert!(calls(&p, "load").contains(&"readFileSync".to_string()));
+        assert!(calls(&p, "load").contains(&"fs.readFileSync".to_string()));
     }
 
     #[test]
@@ -166,7 +166,7 @@ function compute(n: number) { return n; }
         assert_eq!(find(&p, "helper").kind, "function");
         assert_eq!(links(&p, "import").len(), 2);
         assert_eq!(links(&p, "extends"), vec!["Base"]);
-        assert_eq!(calls(&p, "save"), vec!["helper", "remove"]);
+        assert_eq!(calls(&p, "save"), vec!["helper", "os.remove"]);
     }
 
     #[test]
@@ -184,7 +184,7 @@ function compute(n: number) { return n; }
         assert_eq!(find(&p, "Port").kind, "field");
         assert_eq!(find(&p, "helper").kind, "function");
         assert!(links(&p, "import")[0].contains("fmt"));
-        assert_eq!(calls(&p, "Start"), vec!["Println", "helper"]);
+        assert_eq!(calls(&p, "Start"), vec!["Println", "fmt.Println", "helper"]);
     }
 
     #[test]
@@ -200,7 +200,7 @@ function compute(n: number) { return n; }
         assert!(links(&p, "import")[0].contains("java.util.List"));
         assert_eq!(links(&p, "extends"), vec!["Place"]);
         assert_eq!(links(&p, "implements"), vec!["Open", "Close"]);
-        assert_eq!(calls(&p, "sell"), vec!["restock", "Item"]);
+        assert_eq!(calls(&p, "sell"), vec!["restock", "new Item"]);
     }
 
     #[test]
@@ -216,7 +216,7 @@ function compute(n: number) { return n; }
         assert_eq!(find(&p, "Sell").kind, "method");
         assert!(links(&p, "import")[0].contains("System"));
         assert_eq!(links(&p, "extends"), vec!["Place", "IOpen"]);
-        assert_eq!(calls(&p, "Sell"), vec!["Restock", "Item"]);
+        assert_eq!(calls(&p, "Sell"), vec!["Restock", "new Item"]);
     }
 
     #[test]
@@ -233,7 +233,7 @@ function compute(n: number) { return n; }
         assert!(links(&p, "import")[0].contains("Place"));
         assert_eq!(links(&p, "extends"), vec!["Place"]);
         assert_eq!(links(&p, "implements"), vec!["Open"]);
-        assert_eq!(calls(&p, "sell"), vec!["restock", "helper", "Item"]);
+        assert_eq!(calls(&p, "sell"), vec!["restock", "helper"]);
     }
 
     #[test]
@@ -281,6 +281,15 @@ fn git(root: &Path, args: &[&str]) {
 
 const SHOP: &str = "pub fn checkout(cart: &Cart) -> u32 {\n    let total = price(cart);\n    charge(total)\n}\n\nfn price(cart: &Cart) -> u32 { cart.items.len() as u32 }\n\nfn charge(n: u32) -> u32 { n }\n\npub struct Cart { pub items: Vec<u32> }\n";
 const ORDERS: &str = "use crate::shop::checkout;\n\n/// Places an order from a cart.\npub fn place_order(cart: &Cart) {\n    checkout(cart);\n}\n";
+
+/// A symbol asked about by its name.
+fn named(name: &str) -> Wanted<'_> {
+    Wanted::Name {
+        name,
+        path: None,
+        max_matches: 3,
+    }
+}
 
 fn fixture(name: &str) -> Fixture {
     let base = test_dir(name);
@@ -381,22 +390,29 @@ fn search_finds_a_symbol_by_its_name_a_word_of_it_or_a_notion_of_its_doc() {
 fn callers_callees_and_the_impact_of_a_function() {
     let f = fixture("ci-links");
     let r = f.svc.reader(&f.target()).unwrap();
-    let callers = r.callers("checkout", None, 20).unwrap().result;
-    assert_eq!(callers.defs[0].path, "src/shop.rs");
+    let all = r.callers(named("checkout"), 20).unwrap().result;
+    let callers = &all.matches[0];
+    assert_eq!(callers.def.path, "src/shop.rs");
     assert_eq!(callers.callers.len(), 1);
     assert_eq!(callers.callers[0].name, "place_order");
     assert_eq!(callers.callers[0].path, "src/orders.rs");
     assert_eq!(callers.callers[0].line, 5);
-    let callees = r.callees("checkout", None, 20).unwrap().result;
-    let names: Vec<&str> = callees.calls.iter().map(|h| h.name.as_str()).collect();
+    let all = r.callees(named("checkout"), 20).unwrap().result;
+    let names: Vec<&str> = all.matches[0]
+        .calls
+        .iter()
+        .map(|h| h.name.as_str())
+        .collect();
     assert_eq!(names, vec!["price", "charge"]);
-    let impact = r.impact("charge", 3, 50).unwrap().result;
+    let all = r.impact(named("charge"), 3, 50).unwrap().result;
+    let impact = &all.matches[0];
     let who: Vec<&str> = impact.callers.iter().map(|c| c.name.as_str()).collect();
     assert_eq!(who, vec!["checkout", "place_order"]);
     assert_eq!(impact.callers[1].depth, 2);
     assert_eq!(impact.files, vec!["src/orders.rs", "src/shop.rs"]);
     // A file: what calls into it, and who imports it.
-    let by_file = r.impact("src/shop.rs", 2, 50).unwrap().result;
+    let all = r.impact(named("src/shop.rs"), 2, 50).unwrap().result;
+    let by_file = &all.matches[0];
     assert!(by_file.callers.iter().any(|c| c.name == "place_order"));
     assert_eq!(by_file.importers, vec!["src/orders.rs"]);
 }
@@ -452,9 +468,9 @@ fn every_answer_tells_what_it_saved() {
     let json = serde_json::to_value(&a).unwrap();
     assert!(json["saving"]["savedTokens"].as_u64().unwrap() > 0);
     for s in [
-        r.callers("checkout", None, 5).unwrap().saving,
-        r.callees("checkout", None, 5).unwrap().saving,
-        r.impact("checkout", 2, 5).unwrap().saving,
+        r.callers(named("checkout"), 5).unwrap().saving,
+        r.callees(named("checkout"), 5).unwrap().saving,
+        r.impact(named("checkout"), 2, 5).unwrap().saving,
         r.task_context("checkout", 4).unwrap().saving,
     ] {
         assert!(s.files > 0 && s.files_tokens > 0, "{s:?}");
@@ -528,13 +544,13 @@ fn a_renamed_symbol_is_found_by_its_new_name_with_its_callers_and_no_longer_by_t
         r.search("pay_cart", 5, None).unwrap().result[0].name,
         "pay_cart"
     );
-    let c = r.callers("pay_cart", None, 5).unwrap().result;
-    assert_eq!(c.callers[0].name, "place_order");
+    let c = r.callers(named("pay_cart"), 5).unwrap().result;
+    assert_eq!(c.matches[0].callers[0].name, "place_order");
     assert!(r
-        .callers("checkout", None, 5)
+        .callers(named("checkout"), 5)
         .unwrap()
         .result
-        .callers
+        .matches
         .is_empty());
 }
 
@@ -723,7 +739,7 @@ fn big_binary_and_generated_files_are_left_out() {
         "declare function declared(): void;\n",
     );
     std::fs::write(f.root.join("bin.rs"), b"fn a() {}\0\0\0").unwrap();
-    std::fs::write(f.root.join("huge.rs"), "fn h() {}\n".repeat(80_000)).unwrap();
+    std::fs::write(f.root.join("huge.rs"), "fn h() {}\n".repeat(120_000)).unwrap();
     let t = f.target();
     let done = f.svc.ensure_fresh(&t, true).unwrap().unwrap();
     assert_eq!(done.seen, 3);

@@ -1,6 +1,14 @@
 //! The languages of the code index and what tree-sitter cuts each into: symbols (functions,
-//! classes, methods, fields, Markdown headings…) and links (imports, calls, inheritance).
+//! classes, methods, fields, Markdown headings…) and references (imports, calls, inheritance).
+//!
+//! The references are named as tokensave's extractors name them (github.com/aovestdipaperino/tokensave,
+//! commit 580936b, MIT, © 2025 Enzo Lombardi): the call sites of `src/extraction/rust_extractor.rs`
+//! (`extract_call_sites`, `extract_calls_in_token_tree`), `typescript_extractor.rs`,
+//! `python_extractor.rs`, `go_extractor.rs`, `java_extractor.rs`, `csharp_extractor.rs`
+//! (`extract_invocation_name`) and `php_extractor.rs`, and the names of their `Use` nodes; the
+//! typed receivers are in `receivers`.
 
+use super::receivers;
 use tree_sitter::{Node, Parser};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -85,16 +93,25 @@ pub struct Sym {
     pub end_line: u32,
     pub sig: String,
     pub doc: String,
+    /// Seen out of its module: tokensave's `Visibility::Pub` (`pub`, `export`, `public`…).
+    pub vis: bool,
+    /// The type a field calls the methods of (Rust), for `a.field.method()`; empty else.
+    pub ty: String,
 }
 
-/// A link: `import`, `call`, `extends` or `implements`, from the symbol that holds it (its index in
-/// `Parsed::symbols`; none at the file's top) to a name, unresolved.
+/// A reference: `import`, `call`, `extends` or `implements`, from the symbol that holds it (its index
+/// in `Parsed::symbols`; none at the file's top) to a name, as tokensave's extractors write it
+/// (`obj.method`, `a::b`, `Type::method`…), resolved later to a symbol (`resolve`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Edge {
     pub from: Option<usize>,
     pub kind: &'static str,
     pub target: String,
     pub line: u32,
+    pub col: u32,
+    /// 0: as written; 1: `Type::method`, the receiver's type known; 2: `field::method`, the type of
+    /// the field to find (`receivers`).
+    pub via: u8,
 }
 
 #[derive(Debug, Default)]
@@ -133,6 +150,8 @@ pub fn parse(lang: Lang, rel_path: &str, src: &str) -> Parsed {
             end_line: src.lines().count().max(1) as u32,
             sig: format!("<{stem}>"),
             doc: String::new(),
+            vis: true,
+            ty: String::new(),
         });
         w.svelte(tree.root_node(), 0);
     } else {
@@ -144,6 +163,7 @@ pub fn parse(lang: Lang, rel_path: &str, src: &str) -> Parsed {
 /// What holds the symbols found under it.
 struct Frame {
     name: String,
+    kind: &'static str,
     /// A type (class, struct, trait, impl…): a function in it is a method.
     typed: bool,
 }
@@ -199,6 +219,13 @@ impl<'a> Walker<'a> {
             if !def.name.is_empty() {
                 let parent = def.parent.clone().unwrap_or_else(|| self.parent_path());
                 let idx = self.out.symbols.len();
+                let ty = if def.kind == "field" && self.lang == Lang::Rust {
+                    node.child_by_field_name("type")
+                        .and_then(|t| receivers::rust_field_type(self.text(t)))
+                        .unwrap_or_default()
+                } else {
+                    String::new()
+                };
                 self.out.symbols.push(Sym {
                     name: def.name.clone(),
                     kind: def.kind,
@@ -207,29 +234,48 @@ impl<'a> Walker<'a> {
                     end_line: node.end_position().row as u32 + 1 + self.line_off,
                     sig: self.signature(node),
                     doc: self.doc(node),
+                    vis: self.visible(node, &def.name),
+                    ty,
                 });
                 self.heritage(node, idx);
+                self.typed_calls(node, def.kind, idx);
                 owner = Some(idx);
                 self.stack.push(Frame {
                     name: def.name,
+                    kind: def.kind,
                     typed: def.typed,
                 });
                 pushed = true;
             }
-        } else if let Some(target) = self.call(node) {
-            self.out.edges.push(Edge {
-                from: owner,
-                kind: "call",
-                target,
-                line: self.line(node),
-            });
-        } else if let Some(target) = self.import(node) {
-            self.out.edges.push(Edge {
-                from: owner,
-                kind: "import",
-                target,
-                line: self.line(node),
-            });
+        } else if self.lang == Lang::Rust && node.kind() == "token_tree" {
+            self.token_tree(node, owner);
+            return;
+        } else if let Some(names) = self.call(node) {
+            let line = self.line(node);
+            let col = node.start_position().column as u32;
+            for target in names {
+                self.out.edges.push(Edge {
+                    from: owner,
+                    kind: "call",
+                    target,
+                    line,
+                    col,
+                    via: 0,
+                });
+            }
+        } else if let Some(names) = self.import(node) {
+            let line = self.line(node);
+            let col = node.start_position().column as u32;
+            for target in names {
+                self.out.edges.push(Edge {
+                    from: owner,
+                    kind: "import",
+                    target,
+                    line,
+                    col,
+                    via: 0,
+                });
+            }
             return;
         }
         let mut cur = node.walk();
@@ -251,6 +297,136 @@ impl<'a> Walker<'a> {
 
     fn in_type(&self) -> bool {
         self.stack.last().is_some_and(|f| f.typed)
+    }
+
+    /// The name of the nearest holder of this kind (the `impl` or class `self` is).
+    fn enclosing(&self, kind: &str) -> Option<String> {
+        self.stack
+            .iter()
+            .rev()
+            .find(|f| f.kind == kind)
+            .map(|f| f.name.clone())
+    }
+
+    /// The calls of a function whose receiver's type is known, as `Type::method` (`receivers`).
+    fn typed_calls(&mut self, node: Node, kind: &str, idx: usize) {
+        if !matches!(kind, "function" | "method") {
+            return;
+        }
+        let mut found = Vec::new();
+        match self.lang {
+            Lang::Rust if node.kind() == "function_item" => {
+                let own = self.enclosing("impl");
+                receivers::rust(self.src, node, own.as_deref(), &mut found);
+            }
+            Lang::TypeScript | Lang::Tsx | Lang::JavaScript => {
+                let func = if node.kind() == "variable_declarator" {
+                    match node.child_by_field_name("value") {
+                        Some(v) => v,
+                        None => return,
+                    }
+                } else {
+                    node
+                };
+                let own = self.enclosing("class");
+                receivers::ts(self.src, func, own.as_deref(), &mut found);
+            }
+            Lang::Python => {
+                let own = self.enclosing("class");
+                receivers::python(self.src, node, own.as_deref(), &mut found);
+            }
+            _ => {}
+        }
+        for t in found {
+            self.out.edges.push(Edge {
+                from: Some(idx),
+                kind: "call",
+                target: t.name,
+                line: t.line + self.line_off,
+                col: t.col,
+                via: t.via,
+            });
+        }
+    }
+
+    /// `rust_extractor.rs::extract_calls_in_token_tree`: in a macro's arguments, an identifier
+    /// followed by a token tree is a call.
+    fn token_tree(&mut self, node: Node, owner: Option<usize>) {
+        let mut cur = node.walk();
+        let kids: Vec<Node> = node.children(&mut cur).collect();
+        let mut i = 0;
+        while i < kids.len() {
+            let c = kids[i];
+            if c.kind() == "identifier" && kids.get(i + 1).is_some_and(|n| n.kind() == "token_tree")
+            {
+                self.out.edges.push(Edge {
+                    from: owner,
+                    kind: "call",
+                    target: self.text(c).to_string(),
+                    line: self.line(c),
+                    col: c.start_position().column as u32,
+                    via: 0,
+                });
+                self.token_tree(kids[i + 1], owner);
+                i += 2;
+                continue;
+            }
+            if c.kind() == "token_tree" {
+                self.token_tree(c, owner);
+            } else if c.kind() == "macro_invocation" {
+                self.walk(c, owner, 0);
+            }
+            i += 1;
+        }
+    }
+
+    /// tokensave's `Visibility::Pub`, by language.
+    fn visible(&self, n: Node, name: &str) -> bool {
+        let modifier = |kinds: &[&str]| -> Option<String> {
+            let mut cur = n.walk();
+            let found = n
+                .children(&mut cur)
+                .find(|c| kinds.contains(&c.kind()))
+                .map(|c| self.text(c).to_string());
+            found
+        };
+        match self.lang {
+            // `pub` and `pub(in …)`; not `pub(crate)` nor `pub(super)`.
+            Lang::Rust => modifier(&["visibility_modifier"])
+                .is_some_and(|t| t == "pub" || !(t.contains("crate") || t.contains("super"))),
+            Lang::TypeScript | Lang::Tsx | Lang::JavaScript => {
+                if n.parent().is_some_and(|p| p.kind() == "export_statement")
+                    || n.parent()
+                        .and_then(|p| p.parent())
+                        .is_some_and(|p| p.kind() == "export_statement")
+                {
+                    return true;
+                }
+                match modifier(&["accessibility_modifier"]) {
+                    Some(t) => !matches!(t.trim(), "private" | "protected"),
+                    None => {
+                        n.parent().is_some_and(|p| p.kind() == "class_body")
+                            || n.kind().contains("signature")
+                    }
+                }
+            }
+            Lang::Python => !name.starts_with('_'),
+            Lang::Go => name.chars().next().is_some_and(char::is_uppercase),
+            Lang::Java | Lang::CSharp => {
+                let mut cur = n.walk();
+                let found = n.children(&mut cur).any(|c| {
+                    c.kind() == "modifiers"
+                        && self.text(c).split_whitespace().any(|w| w == "public")
+                        || c.kind() == "modifier" && self.text(c) == "public"
+                });
+                found
+            }
+            Lang::Php => !matches!(
+                modifier(&["visibility_modifier"]).as_deref().map(str::trim),
+                Some("protected" | "private")
+            ),
+            Lang::Svelte | Lang::Markdown => true,
+        }
     }
 
     /// The scripts of a Svelte component are read as TypeScript, the tags of other components used
@@ -301,6 +477,8 @@ impl<'a> Walker<'a> {
                         kind: "call",
                         target: name.to_string(),
                         line: self.line(node),
+                        col: node.start_position().column as u32,
+                        via: 0,
                     });
                 }
             }
@@ -576,59 +754,202 @@ impl<'a> Walker<'a> {
 
     // ---- links ----
 
-    fn call(&self, n: Node) -> Option<String> {
-        let callee = match (self.lang, n.kind()) {
-            (Lang::Rust, "call_expression") => n.child_by_field_name("function"),
-            (Lang::Rust, "macro_invocation") => n.child_by_field_name("macro"),
-            (Lang::TypeScript | Lang::Tsx | Lang::JavaScript, "call_expression") => {
-                n.child_by_field_name("function")
+    /// The names a call site is referenced by, as tokensave's extractor of the language writes them.
+    fn call(&self, n: Node) -> Option<Vec<String>> {
+        let t = |c: Node| clip(self.text(c));
+        let ts = matches!(self.lang, Lang::TypeScript | Lang::Tsx | Lang::JavaScript);
+        let out = match (self.lang, n.kind()) {
+            // The full callee, and for `recv.method()` the method alone too.
+            (Lang::Rust, "call_expression") | (Lang::Go, "call_expression") => {
+                let callee = if self.lang == Lang::Go {
+                    n.named_child(0)
+                } else {
+                    n.child_by_field_name("function")
+                }?;
+                let full = t(callee);
+                let mut v = Vec::new();
+                if let Some(bare) = full.rsplit('.').next().filter(|b| *b != full) {
+                    v.push(bare.to_string());
+                }
+                v.push(full);
+                v
             }
-            (Lang::TypeScript | Lang::Tsx | Lang::JavaScript, "new_expression") => {
-                n.child_by_field_name("constructor")
+            (Lang::Rust, "macro_invocation") => {
+                let name = match n.child_by_field_name("macro") {
+                    Some(m) => t(m),
+                    None => t(n).split('!').next().unwrap_or("").trim().to_string(),
+                };
+                vec![name]
             }
-            (Lang::Python, "call") => n.child_by_field_name("function"),
-            (Lang::Go, "call_expression") => n.child_by_field_name("function"),
-            (Lang::Java, "method_invocation") => n.child_by_field_name("name"),
-            (Lang::Java | Lang::CSharp, "object_creation_expression") => {
-                n.child_by_field_name("type")
+            (_, "call_expression") if ts => vec![t(n.named_child(0)?)],
+            // A JSX render is a dependency on the component, its name capitalized.
+            (_, "jsx_opening_element" | "jsx_self_closing_element") if ts => {
+                let raw = t(n.child_by_field_name("name")?);
+                let name = raw.rsplit('.').next().unwrap_or(&raw).trim().to_string();
+                if !name.chars().next().is_some_and(char::is_uppercase) {
+                    return None;
+                }
+                vec![name]
             }
-            (Lang::CSharp, "invocation_expression") => n
+            (Lang::Python, "call") => vec![t(n
                 .child_by_field_name("function")
-                .or_else(|| n.named_child(0)),
-            (Lang::Php, "function_call_expression") => n.child_by_field_name("function"),
-            (Lang::Php, "member_call_expression" | "scoped_call_expression") => {
-                n.child_by_field_name("name")
+                .or_else(|| n.named_child(0))?)],
+            (Lang::Java, "method_invocation") => {
+                let name = t(n.child_by_field_name("name")?);
+                match n.child_by_field_name("object") {
+                    Some(o) => vec![format!("{}.{name}", t(o))],
+                    None => vec![name],
+                }
             }
-            (Lang::Php, "object_creation_expression") => n.named_child(0),
-            _ => None,
-        }?;
-        let name = self.last_ident(callee);
-        (!name.is_empty()).then_some(name)
+            (Lang::Java | Lang::CSharp, "object_creation_expression") => {
+                vec![format!("new {}", t(n.child_by_field_name("type")?))]
+            }
+            (Lang::CSharp, "invocation_expression") => {
+                let f = n.child_by_field_name("function")?;
+                let simple = |m: Node| -> String {
+                    if m.kind() == "generic_name" {
+                        m.named_child(0).map(t).unwrap_or_else(|| t(m))
+                    } else {
+                        t(m)
+                    }
+                };
+                let name = match f.kind() {
+                    "member_access_expression" => match (
+                        f.child_by_field_name("expression"),
+                        f.child_by_field_name("name"),
+                    ) {
+                        (Some(recv), Some(name)) => format!("{}.{}", t(recv), simple(name)),
+                        _ => t(f),
+                    },
+                    "generic_name" => simple(f),
+                    _ => t(f),
+                };
+                vec![name
+                    .strip_prefix("global::")
+                    .map(str::to_string)
+                    .unwrap_or(name)]
+            }
+            (Lang::Php, "function_call_expression") => vec![t(n.named_child(0)?)],
+            (
+                Lang::Php,
+                "member_call_expression"
+                | "nullsafe_member_call_expression"
+                | "scoped_call_expression",
+            ) => vec![t(n.child_by_field_name("name")?)],
+            _ => return None,
+        };
+        let out: Vec<String> = out.into_iter().filter(|s| !s.is_empty()).collect();
+        (!out.is_empty()).then_some(out)
     }
 
-    fn import(&self, n: Node) -> Option<String> {
-        let ok = matches!(
-            (self.lang, n.kind()),
-            (Lang::Rust, "use_declaration")
-                | (
-                    Lang::TypeScript | Lang::Tsx | Lang::JavaScript,
-                    "import_statement"
-                )
-                | (Lang::Python, "import_statement" | "import_from_statement")
-                | (Lang::Go, "import_spec")
-                | (Lang::Java, "import_declaration")
-                | (Lang::CSharp, "using_directive")
-                | (Lang::Php, "namespace_use_declaration")
-        );
-        if !ok {
-            return None;
-        }
-        let one: String = self
-            .text(n)
-            .split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" ");
-        Some(one.chars().take(240).collect())
+    /// The names of what an import brings, as tokensave's `Use` nodes are named.
+    fn import(&self, n: Node) -> Option<Vec<String>> {
+        let one = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ");
+        let strip = |s: &str, kw: &[&str]| -> String {
+            let mut x = one(s);
+            for k in kw {
+                if let Some(r) = x.strip_prefix(k) {
+                    x = r.trim().to_string();
+                }
+            }
+            x.trim_end_matches(';').trim().to_string()
+        };
+        let out = match (self.lang, n.kind()) {
+            (Lang::Rust, "use_declaration") => vec![strip(self.text(n), &["use "])],
+            (Lang::TypeScript | Lang::Tsx | Lang::JavaScript, "import_statement") => {
+                let mut cur = n.walk();
+                let path = n
+                    .children(&mut cur)
+                    .find(|c| c.kind() == "string")
+                    .map(|s| {
+                        self.text(s)
+                            .trim()
+                            .trim_matches('\'')
+                            .trim_matches('"')
+                            .to_string()
+                    })
+                    .filter(|p| !p.is_empty());
+                vec![path.unwrap_or_else(|| one(self.text(n)))]
+            }
+            (Lang::Python, "import_statement") => {
+                let mut cur = n.walk();
+                let kids: Vec<Node> = n.children(&mut cur).collect();
+                kids.into_iter()
+                    .filter_map(|c| match c.kind() {
+                        "dotted_name" => Some(self.text(c).to_string()),
+                        "aliased_import" => {
+                            let mut c2 = c.walk();
+                            let d = c.children(&mut c2).find(|x| x.kind() == "dotted_name");
+                            Some(self.text(d.unwrap_or(c)).to_string())
+                        }
+                        _ => None,
+                    })
+                    .collect()
+            }
+            (Lang::Python, "import_from_statement") => {
+                let module = n
+                    .child_by_field_name("module_name")
+                    .map(|m| self.text(m).to_string())
+                    .unwrap_or_default();
+                let join = |name: &str| {
+                    if module.is_empty() {
+                        name.to_string()
+                    } else {
+                        format!("{module}.{name}")
+                    }
+                };
+                let mut cur = n.walk();
+                let kids: Vec<Node> = n.children(&mut cur).collect();
+                if kids.iter().any(|c| c.kind() == "wildcard_import") {
+                    vec![format!("{module}.*")]
+                } else {
+                    let mut past = false;
+                    let mut v = Vec::new();
+                    for c in kids {
+                        if c.kind() == "import" {
+                            past = true;
+                        } else if past {
+                            match c.kind() {
+                                "dotted_name" => v.push(join(self.text(c))),
+                                "aliased_import" => {
+                                    let mut c2 = c.walk();
+                                    let d = c.children(&mut c2).find(|x| x.kind() == "dotted_name");
+                                    v.push(join(self.text(d.unwrap_or(c))));
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    if v.is_empty() {
+                        v.push(module.clone());
+                    }
+                    v
+                }
+            }
+            (Lang::Go, "import_spec") => {
+                let path = n
+                    .child_by_field_name("path")
+                    .map(|p| self.text(p).trim_matches('"').trim_matches('`').to_string())?;
+                match n.child_by_field_name("name") {
+                    Some(a) => vec![format!("{path} as {}", self.text(a))],
+                    None => vec![path],
+                }
+            }
+            (Lang::Java, "import_declaration") => {
+                vec![strip(self.text(n), &["import ", "static "])]
+            }
+            (Lang::CSharp, "using_directive") => {
+                vec![strip(self.text(n), &["global ", "using ", "static "])]
+            }
+            (Lang::Php, "namespace_use_declaration") => vec![strip(self.text(n), &["use "])],
+            _ => return None,
+        };
+        let out: Vec<String> = out
+            .into_iter()
+            .map(|s| s.chars().take(240).collect::<String>())
+            .filter(|s| !s.is_empty())
+            .collect();
+        (!out.is_empty()).then_some(out)
     }
 
     /// `extends` and `implements` of a type.
@@ -703,12 +1024,15 @@ impl<'a> Walker<'a> {
                 }
             }
         }
+        let col = n.start_position().column as u32;
         for (kind, target) in found {
             self.out.edges.push(Edge {
                 from: Some(idx),
                 kind,
                 target,
                 line,
+                col,
+                via: 0,
             });
         }
     }
@@ -797,6 +1121,18 @@ impl<'a> Walker<'a> {
         }
         doc
     }
+}
+
+/// The longest reference name kept: a callee's text can hold a whole chain of calls, whose end (the
+/// method called) is what resolves it.
+const MAX_REF: usize = 300;
+
+fn clip(text: &str) -> String {
+    let n = text.chars().count();
+    if n <= MAX_REF {
+        return text.to_string();
+    }
+    text.chars().skip(n - MAX_REF).collect()
 }
 
 /// What a clause of a type's heritage says, by its kind: `extends` or `implements`.

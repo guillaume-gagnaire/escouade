@@ -475,10 +475,16 @@ impl<R: Runtime> Core<R> {
             .filter(|f| !f.starts_with(".escouade/"))
             .take(30)
         {
-            let Ok(a) = reader.impact(f, 1, 40) else {
+            let wanted = crate::codeindex::Wanted::Name {
+                name: f,
+                path: None,
+                max_matches: crate::codeindex::MAX_MATCHES_DEFAULT,
+            };
+            let Ok(a) = reader.impact(wanted, 1, 40) else {
                 continue;
             };
-            for t in a.result.targets.iter().filter(|t| t.kind != "heading") {
+            let targets = a.result.matches.iter().flat_map(|m| m.targets.iter());
+            for t in targets.filter(|t| t.kind != "heading") {
                 if !out.contains(&t.name) {
                     out.push(t.name.clone());
                 }

@@ -8,7 +8,7 @@ Without an index, an agent searches with grep, then reads the files it found, of
 
 - where a symbol is (function, method, class, type, field, Markdown heading), with its signature and doc;
 - the context of a task: the entry points and the related symbols, with their excerpts;
-- the callers and the callees of a function;
+- the callers and the callees of a function, resolved from one symbol to another when the code is read, as [tokensave](https://github.com/aovestdipaperino/tokensave) does: a name several functions bear is answered definition by definition, and a call that may mean several of them is told apart, never guessed;
 - what a change would touch.
 
 Each answer says what it saved: the tokens of the files it draws on, read whole, against its own. The [statistics](stats) add them up per project.

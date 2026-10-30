@@ -7,7 +7,7 @@ use crate::fence::Fence;
 use anyhow::Result;
 use rusqlite::{named_params, Connection, Row};
 use serde::Serialize;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
 
 /// What an answer saved, in estimated tokens (about four bytes each).
@@ -36,6 +36,8 @@ pub struct Answer<T> {
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Hit {
+    /// Its id in the index, for `index_callers`, `index_callees` and `index_impact` (ESC-297).
+    pub id: i64,
     pub name: String,
     pub kind: String,
     pub parent: String,
@@ -45,21 +47,6 @@ pub struct Hit {
     pub sig: String,
     #[serde(skip_serializing_if = "String::is_empty")]
     pub doc: String,
-}
-
-/// Where a symbol is used.
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct Ref {
-    /// The symbol that holds the link; empty at the top of a file.
-    pub name: String,
-    pub kind: String,
-    pub parent: String,
-    pub path: String,
-    /// The line of the call.
-    pub line: u32,
-    /// 1 for a direct caller, more for those that call them.
-    pub depth: u32,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -79,29 +66,13 @@ pub struct Context {
     pub snippets: Vec<Snippet>,
 }
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Impact {
-    /// What the change is about: the symbols found by the name, or those of the file.
-    pub targets: Vec<Hit>,
-    pub callers: Vec<Ref>,
-    /// Types that extend or implement it.
-    pub subtypes: Vec<Ref>,
-    /// Files that import it, by name.
-    pub importers: Vec<String>,
-    /// Every file touched.
-    pub files: Vec<String>,
-}
-
 /// A reader of the index, for the folder the agent works in.
 pub struct Reader {
-    conn: Connection,
-    scope: String,
+    pub(super) conn: Connection,
+    pub(super) scope: String,
     dir: PathBuf,
     fence: Fence,
 }
-
-const CALLABLE: &str = "('function','method','class','struct','component','macro')";
 
 impl Reader {
     pub(super) fn new(conn: Connection, scope: String, dir: PathBuf, fence: Fence) -> Self {
@@ -115,15 +86,16 @@ impl Reader {
 
     /// The rows of table alias `a` this folder sees: the project's folder's, but for the files the
     /// worktree changed or removed, and the worktree's own.
-    fn vis(a: &str) -> String {
+    pub(super) fn vis(a: &str) -> String {
         format!(
             "({a}.scope = :w OR ({a}.scope = '' AND NOT EXISTS (SELECT 1 FROM files fw \
              WHERE fw.scope = :w AND fw.path = {a}.path AND fw.state IN (1, 2))))"
         )
     }
 
-    fn hit(r: &Row) -> rusqlite::Result<Hit> {
+    pub(super) fn hit(r: &Row) -> rusqlite::Result<Hit> {
         Ok(Hit {
+            id: r.get("id")?,
             name: r.get("name")?,
             kind: r.get("kind")?,
             parent: r.get("parent")?,
@@ -175,7 +147,7 @@ impl Reader {
             .collect::<Vec<_>>()
             .join(if any { " OR " } else { " " });
         let sql = format!(
-            "SELECT s.name, s.kind, s.parent, s.path, s.line, s.end_line, s.sig, s.doc
+            "SELECT s.id, s.name, s.kind, s.parent, s.path, s.line, s.end_line, s.sig, s.doc
              FROM sym_fts JOIN symbols s ON s.id = sym_fts.rowid
              WHERE sym_fts MATCH :m AND {} AND (:k IS NULL OR s.kind = :k)
              ORDER BY (s.name = :exact COLLATE NOCASE) DESC, bm25(sym_fts, 10.0, 3.0, 1.5, 2.0)
@@ -220,12 +192,12 @@ impl Reader {
         }
         let mut related: Vec<Hit> = Vec::new();
         for h in entry.iter().take(4).filter(|h| is_callable(&h.kind)) {
-            for d in self.callees_of(h, 3)? {
+            for d in self.callees_of_id(h.id, 3)? {
                 if !entry.contains(&d) && !related.contains(&d) {
                     related.push(d);
                 }
             }
-            for r in self.caller_hits(&h.name, 3)? {
+            for r in self.caller_hits(h.id, 3)? {
                 if !entry.contains(&r) && !related.contains(&r) {
                     related.push(r);
                 }
@@ -272,290 +244,8 @@ impl Reader {
         Some(out.join("\n"))
     }
 
-    // ---- links ----
-
-    fn defs(&self, name: &str, path: Option<&str>) -> Result<Vec<(i64, Hit)>> {
-        let sql = format!(
-            "SELECT s.id, s.name, s.kind, s.parent, s.path, s.line, s.end_line, s.sig, s.doc
-             FROM symbols s
-             WHERE s.name = :name COLLATE NOCASE AND s.kind IN {CALLABLE} AND {}
-               AND (:p IS NULL OR s.path = :p)
-             ORDER BY s.path, s.line LIMIT 50",
-            Self::vis("s")
-        );
-        let mut stmt = self.conn.prepare(&sql)?;
-        let rows = stmt.query_map(
-            named_params! {":name": name, ":w": self.scope, ":p": path},
-            |r| Ok((r.get::<_, i64>("id")?, Self::hit(r)?)),
-        )?;
-        Ok(rows.flatten().collect())
-    }
-
-    fn callers_of(&self, name: &str, limit: usize) -> Result<Vec<Ref>> {
-        let sql = format!(
-            "SELECT e.line AS eline, e.path AS epath, f.name, f.kind, f.parent
-             FROM edges e LEFT JOIN symbols f ON f.id = e.from_id
-             WHERE e.kind = 'call' AND e.target = :name COLLATE NOCASE AND {}
-             ORDER BY e.path, e.line LIMIT :n",
-            Self::vis("e")
-        );
-        let mut stmt = self.conn.prepare(&sql)?;
-        let rows = stmt.query_map(
-            named_params! {":name": name, ":w": self.scope, ":n": limit as i64},
-            |r| {
-                Ok(Ref {
-                    name: r.get::<_, Option<String>>("name")?.unwrap_or_default(),
-                    kind: r.get::<_, Option<String>>("kind")?.unwrap_or_default(),
-                    parent: r.get::<_, Option<String>>("parent")?.unwrap_or_default(),
-                    path: r.get("epath")?,
-                    line: r.get("eline")?,
-                    depth: 1,
-                })
-            },
-        )?;
-        Ok(rows.flatten().collect())
-    }
-
-    /// The definitions of the callers of `name`.
-    fn caller_hits(&self, name: &str, limit: usize) -> Result<Vec<Hit>> {
-        let mut out = Vec::new();
-        for r in self.callers_of(name, limit * 3)? {
-            if r.name.is_empty() {
-                continue;
-            }
-            if let Some((_, h)) = self.defs(&r.name, Some(&r.path))?.into_iter().next() {
-                if !out.contains(&h) {
-                    out.push(h);
-                }
-            }
-            if out.len() >= limit {
-                break;
-            }
-        }
-        Ok(out)
-    }
-
-    /// The definitions of what `h` calls (names of this project's code only).
-    fn callees_of(&self, h: &Hit, limit: usize) -> Result<Vec<Hit>> {
-        let sql = format!(
-            "SELECT DISTINCT e.target FROM edges e JOIN symbols s ON s.id = e.from_id
-             WHERE e.kind = 'call' AND s.name = :name AND s.path = :path AND s.line = :line AND {}
-             LIMIT 60",
-            Self::vis("e")
-        );
-        let mut stmt = self.conn.prepare(&sql)?;
-        let targets: Vec<String> = stmt
-            .query_map(
-                named_params! {":name": h.name, ":path": h.path, ":line": h.line, ":w": self.scope},
-                |r| r.get(0),
-            )?
-            .flatten()
-            .collect();
-        let mut out: Vec<Hit> = Vec::new();
-        for t in targets {
-            if t.eq_ignore_ascii_case(&h.name) {
-                continue;
-            }
-            let defs = self.defs(&t, None)?;
-            // A name defined in several places is ambiguous: the first is given.
-            if let Some((_, d)) = defs.into_iter().next() {
-                if !out.contains(&d) {
-                    out.push(d);
-                }
-            }
-            if out.len() >= limit {
-                break;
-            }
-        }
-        Ok(out)
-    }
-
-    /// Who calls the function `name` (`path` tells which when several are named so).
-    pub fn callers(&self, name: &str, path: Option<&str>, limit: usize) -> Result<Answer<Callers>> {
-        let defs: Vec<Hit> = self.defs(name, path)?.into_iter().map(|d| d.1).collect();
-        let callers = self.callers_of(name, limit)?;
-        let paths: Vec<String> = defs
-            .iter()
-            .map(|d| d.path.clone())
-            .chain(callers.iter().map(|c| c.path.clone()))
-            .collect();
-        let result = Callers { defs, callers };
-        let saving = self.saving(&paths, &result);
-        Ok(Answer { result, saving })
-    }
-
-    /// What the function `name` calls: the definitions found, and the names left (the language's,
-    /// libraries').
-    pub fn callees(&self, name: &str, path: Option<&str>, limit: usize) -> Result<Answer<Callees>> {
-        let defs: Vec<Hit> = self.defs(name, path)?.into_iter().map(|d| d.1).collect();
-        let mut calls: Vec<Hit> = Vec::new();
-        let mut external: BTreeSet<String> = BTreeSet::new();
-        for d in &defs {
-            let sql = format!(
-                "SELECT DISTINCT e.target FROM edges e JOIN symbols s ON s.id = e.from_id
-                 WHERE e.kind = 'call' AND s.name = :name AND s.path = :path AND s.line = :line AND {}
-                 ORDER BY e.line LIMIT 200",
-                Self::vis("e")
-            );
-            let mut stmt = self.conn.prepare(&sql)?;
-            let targets: Vec<String> = stmt
-                .query_map(
-                    named_params! {":name": d.name, ":path": d.path, ":line": d.line, ":w": self.scope},
-                    |r| r.get(0),
-                )?
-                .flatten()
-                .collect();
-            for t in targets {
-                match self.defs(&t, None)?.into_iter().next() {
-                    Some((_, h)) => {
-                        if !calls.contains(&h) && calls.len() < limit {
-                            calls.push(h);
-                        }
-                    }
-                    None => {
-                        if external.len() < limit {
-                            external.insert(t);
-                        }
-                    }
-                }
-            }
-        }
-        let paths: Vec<String> = defs.iter().chain(&calls).map(|d| d.path.clone()).collect();
-        let result = Callees {
-            defs,
-            calls,
-            external: external.into_iter().collect(),
-        };
-        let saving = self.saving(&paths, &result);
-        Ok(Answer { result, saving })
-    }
-
-    // ---- impact ----
-
-    /// What a change to a symbol (by its name) or to a file (by its path) would touch: those that
-    /// call it, up to `depth` calls away, the types built on it, the files that import it.
-    pub fn impact(&self, target: &str, depth: u32, limit: usize) -> Result<Answer<Impact>> {
-        let mut targets: Vec<Hit>;
-        let file_path = self.file_like(target)?;
-        let mut seeds: Vec<String> = Vec::new();
-        if let Some(path) = &file_path {
-            let sql = format!(
-                "SELECT s.name, s.kind, s.parent, s.path, s.line, s.end_line, s.sig, s.doc
-                 FROM symbols s WHERE s.path = :p AND {} ORDER BY s.line",
-                Self::vis("s")
-            );
-            let mut stmt = self.conn.prepare(&sql)?;
-            targets = stmt
-                .query_map(named_params! {":p": path, ":w": self.scope}, Self::hit)?
-                .flatten()
-                .collect();
-            seeds.extend(
-                targets
-                    .iter()
-                    .filter(|t| t.kind != "heading")
-                    .map(|t| t.name.clone()),
-            );
-        } else {
-            targets = self.defs(target, None)?.into_iter().map(|d| d.1).collect();
-            // A type, a field…: the callable ones are not the only things to change.
-            if targets.is_empty() {
-                targets = self.fts(&words(target), false, 5, None, target)?;
-            }
-            seeds.push(target.to_string());
-        }
-        let own_files: HashSet<String> = targets.iter().map(|t| t.path.clone()).collect();
-        let mut callers: Vec<Ref> = Vec::new();
-        let mut seen: HashSet<String> = seeds.iter().map(|s| s.to_lowercase()).collect();
-        let mut frontier = seeds.clone();
-        for d in 1..=depth.max(1) {
-            let mut next = Vec::new();
-            for name in &frontier {
-                for mut r in self.callers_of(name, 60)? {
-                    // A call from the file being changed is part of the change.
-                    if file_path.is_some() && own_files.contains(&r.path) {
-                        continue;
-                    }
-                    r.depth = d;
-                    if !r.name.is_empty() && seen.insert(r.name.to_lowercase()) {
-                        next.push(r.name.clone());
-                    }
-                    if callers.len() < limit
-                        && !callers
-                            .iter()
-                            .any(|c| c.name == r.name && c.path == r.path && c.line == r.line)
-                    {
-                        callers.push(r);
-                    }
-                }
-            }
-            if next.is_empty() {
-                break;
-            }
-            frontier = next;
-        }
-        let mut subtypes: Vec<Ref> = Vec::new();
-        for name in &seeds {
-            let sql = format!(
-                "SELECT e.line AS eline, e.path AS epath, f.name, f.kind, f.parent
-                 FROM edges e LEFT JOIN symbols f ON f.id = e.from_id
-                 WHERE e.kind IN ('extends', 'implements') AND e.target = :name COLLATE NOCASE AND {}
-                 LIMIT 50",
-                Self::vis("e")
-            );
-            let mut stmt = self.conn.prepare(&sql)?;
-            let rows = stmt.query_map(named_params! {":name": name, ":w": self.scope}, |r| {
-                Ok(Ref {
-                    name: r.get::<_, Option<String>>("name")?.unwrap_or_default(),
-                    kind: r.get::<_, Option<String>>("kind")?.unwrap_or_default(),
-                    parent: r.get::<_, Option<String>>("parent")?.unwrap_or_default(),
-                    path: r.get("epath")?,
-                    line: r.get("eline")?,
-                    depth: 1,
-                })
-            })?;
-            subtypes.extend(rows.flatten());
-        }
-        // Who imports it: by the name of the symbol, or of the file's module.
-        let mut importers: BTreeSet<String> = BTreeSet::new();
-        let needles: Vec<String> = match &file_path {
-            Some(p) => {
-                let stem = p.rsplit('/').next().unwrap_or(p);
-                let stem = stem.rsplit_once('.').map(|s| s.0).unwrap_or(stem);
-                vec![stem.to_string()]
-            }
-            None => vec![target.to_string()],
-        };
-        for needle in needles.iter().filter(|n| n.chars().count() > 2) {
-            let sql = format!(
-                "SELECT DISTINCT e.path FROM edges e
-                 WHERE e.kind = 'import' AND instr(lower(e.target), lower(:n)) > 0 AND {} LIMIT 60",
-                Self::vis("e")
-            );
-            let mut stmt = self.conn.prepare(&sql)?;
-            let rows = stmt.query_map(named_params! {":n": needle, ":w": self.scope}, |r| {
-                r.get::<_, String>(0)
-            })?;
-            importers.extend(rows.flatten().filter(|p| !own_files.contains(p)));
-        }
-        let mut files: BTreeSet<String> = BTreeSet::new();
-        files.extend(own_files.iter().cloned());
-        files.extend(callers.iter().map(|c| c.path.clone()));
-        files.extend(subtypes.iter().map(|c| c.path.clone()));
-        files.extend(importers.iter().cloned());
-        let paths: Vec<String> = files.iter().cloned().collect();
-        let result = Impact {
-            targets,
-            callers,
-            subtypes,
-            importers: importers.into_iter().collect(),
-            files: files.into_iter().collect(),
-        };
-        let saving = self.saving(&paths, &result);
-        Ok(Answer { result, saving })
-    }
-
     /// `target` as a path of a file of this folder: whole, or its end.
-    fn file_like(&self, target: &str) -> Result<Option<String>> {
+    pub(super) fn file_like(&self, target: &str) -> Result<Option<String>> {
         let t = target.replace('\\', "/");
         if !t.contains('/') && !t.contains('.') {
             return Ok(None);
@@ -573,7 +263,7 @@ impl Reader {
     // ---- savings ----
 
     /// The tokens of the files `paths` against those of `result`.
-    fn saving<T: Serialize>(&self, paths: &[String], result: &T) -> Saving {
+    pub(super) fn saving<T: Serialize>(&self, paths: &[String], result: &T) -> Saving {
         let distinct: BTreeSet<&String> = paths.iter().filter(|p| !p.is_empty()).collect();
         let mut bytes = 0u64;
         for p in &distinct {
@@ -602,22 +292,6 @@ impl Reader {
             files: distinct.len(),
         }
     }
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Callers {
-    pub defs: Vec<Hit>,
-    pub callers: Vec<Ref>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Callees {
-    pub defs: Vec<Hit>,
-    pub calls: Vec<Hit>,
-    /// Called but defined out of the project.
-    pub external: Vec<String>,
 }
 
 fn is_callable(kind: &str) -> bool {

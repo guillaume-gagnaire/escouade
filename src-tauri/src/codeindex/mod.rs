@@ -22,14 +22,19 @@
 #![allow(dead_code)]
 
 mod api;
+mod calls;
 pub mod hint;
 mod lang;
+mod links;
 pub(crate) mod probes;
+mod receivers;
+mod resolver;
 mod scan;
 mod store;
 mod wiring;
 
 pub use api::{Answer, Reader};
+pub use calls::{Wanted, MAX_MATCHES_DEFAULT};
 #[cfg(test)]
 pub(crate) use lang::{Parsed, Sym};
 pub use scan::Refresh;
@@ -205,8 +210,154 @@ pub fn tokens_of(bytes: u64) -> u64 {
     bytes.div_ceil(4)
 }
 
+#[cfg(test)]
+impl Service {
+    /// The links and the ties a target sees, by qualified names (`from|to|kind|line`,
+    /// `from|name|path|line|candidates`), sorted: what a resolution made, comparable by value.
+    pub(crate) fn links_for_tests(&self, t: &Target) -> (Vec<String>, Vec<String>) {
+        let conn = store::open(&self.db(&t.project_id)).unwrap();
+        let scope = t.scope();
+        let q = |id: Option<i64>| -> String {
+            id.and_then(|id| {
+                conn.query_row("SELECT qname FROM symbols WHERE id = ?1", [id], |r| {
+                    r.get::<_, String>(0)
+                })
+                .ok()
+            })
+            .unwrap_or_else(|| "<top>".into())
+        };
+        let vis = |a: &str| {
+            format!(
+                "({a}.scope = ?1 OR ({a}.scope = '' AND NOT EXISTS (SELECT 1 FROM files fw \
+                 WHERE fw.scope = ?1 AND fw.path = {a}.path AND fw.state IN (1, 2)) \
+                 AND NOT EXISTS (SELECT 1 FROM overrides o WHERE o.scope = ?1 AND o.ref_id = {a}.ref_id)))"
+            )
+        };
+        let mut stmt = conn
+            .prepare(&format!(
+                "SELECT l.from_id, l.to_id, l.kind, l.line FROM links l WHERE {}",
+                vis("l")
+            ))
+            .unwrap();
+        let rows: Vec<(Option<i64>, i64, String, u32)> = stmt
+            .query_map([&scope], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+            })
+            .unwrap()
+            .flatten()
+            .collect();
+        let mut links: Vec<String> = rows
+            .into_iter()
+            .map(|(f, to, k, l)| format!("{}|{}|{k}|{l}", q(f), q(Some(to))))
+            .collect();
+        links.sort();
+        links.dedup();
+        let mut stmt = conn
+            .prepare(&format!(
+                "SELECT a.from_id, a.name, a.path, a.line, a.candidates FROM ambiguous a WHERE {}",
+                vis("a")
+            ))
+            .unwrap();
+        let rows: Vec<(Option<i64>, String, String, u32, String)> = stmt
+            .query_map([&scope], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
+            })
+            .unwrap()
+            .flatten()
+            .collect();
+        let mut ties: Vec<String> = rows
+            .into_iter()
+            .map(|(f, n, p, l, c)| {
+                let mut cands: Vec<String> = c
+                    .split(',')
+                    .filter_map(|s| s.parse().ok())
+                    .map(|id| q(Some(id)))
+                    .collect();
+                cands.sort();
+                format!("{}|{n}|{p}|{l}|{}", q(f), cands.join(","))
+            })
+            .collect();
+        ties.sort();
+        (links, ties)
+    }
+
+    /// Every link of the target made again from nothing (tokensave's `TOKENSAVE_FULL_RESOLVE`).
+    pub(crate) fn resolve_again_for_tests(&self, t: &Target) {
+        let mut conn = store::open(&self.db(&t.project_id)).unwrap();
+        links::resolve_all_again(&mut conn, "").unwrap();
+        let scope = t.scope();
+        if !scope.is_empty() {
+            links::resolve_all_again(&mut conn, &scope).unwrap();
+        }
+    }
+
+    /// The symbols the resolver is built from, and those keys the touched set derives of them.
+    pub(crate) fn known_names_for_tests(
+        &self,
+        project_id: &str,
+    ) -> (
+        std::collections::HashSet<String>,
+        std::collections::HashSet<String>,
+    ) {
+        let conn = store::open(&self.db(project_id)).unwrap();
+        let mut stmt = conn
+            .prepare("SELECT id, name, qname, kind, path, line, vis, parent, ty FROM symbols WHERE scope = '' AND kind <> 'heading'")
+            .unwrap();
+        let nodes: Vec<resolver::Node> = stmt
+            .query_map([], |r| {
+                Ok(resolver::Node {
+                    id: r.get(0)?,
+                    name: r.get(1)?,
+                    qname: r.get(2)?,
+                    kind: r.get(3)?,
+                    path: r.get(4)?,
+                    line: r.get(5)?,
+                    vis: r.get::<_, i64>(6)? != 0,
+                    parent: r.get(7)?,
+                    ty: r.get(8)?,
+                })
+            })
+            .unwrap()
+            .flatten()
+            .collect();
+        let r = resolver::Resolver::new(&nodes, &Default::default(), &[]);
+        let known = r.known_names().iter().map(|s| s.to_string()).collect();
+        let mut derived = std::collections::HashSet::new();
+        for n in &nodes {
+            resolver::index_keys(&n.name, &n.qname, &mut derived);
+        }
+        (known, derived)
+    }
+}
+
 /// A file cut, for the tests of each language.
 #[cfg(test)]
 pub(crate) fn lang_for_tests(path: &str, src: &str) -> Parsed {
     lang::parse(lang::Lang::of(path).expect("a known extension"), path, src)
+}
+
+#[cfg(test)]
+impl Service {
+    /// The pages of each table and index (SQLite's `dbstat`), for a measure by hand.
+    pub(crate) fn sizes_for_tests(&self, project_id: &str) -> Vec<(String, i64)> {
+        let conn = store::open(&self.db(project_id)).unwrap();
+        let mut stmt = match conn
+            .prepare("SELECT name, SUM(pgsize) FROM dbstat GROUP BY name ORDER BY 2 DESC")
+        {
+            Ok(s) => s,
+            Err(e) => return vec![(e.to_string(), 0)],
+        };
+        let rows = stmt
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap()
+            .flatten()
+            .collect();
+        rows
+    }
+}
+
+/// The resolver and its types, for the tests ported from tokensave.
+#[cfg(test)]
+pub(crate) mod resolution {
+    pub use super::resolver::*;
 }

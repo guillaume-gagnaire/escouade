@@ -8,7 +8,7 @@ Sans index, un agent cherche à coups de grep, puis lit les fichiers qu’il a t
 
 - où est un symbole (fonction, méthode, classe, type, champ, titre Markdown), avec sa signature et sa doc ;
 - le contexte d’une tâche : les points d’entrée et les symboles liés, avec leurs extraits ;
-- les appelants et les appelés d’une fonction ;
+- les appelants et les appelés d’une fonction, résolus d’un symbole à l’autre à la lecture du code, comme le fait [tokensave](https://github.com/aovestdipaperino/tokensave) : un nom porté par plusieurs fonctions est répondu définition par définition, et un appel qui peut en viser plusieurs est dit à part, jamais deviné ;
 - ce qu’un changement toucherait.
 
 Chaque réponse dit ce qu’elle a fait économiser : les tokens des fichiers dont elle tire, lus en entier, contre les siens. Les [statistiques](stats) en font le total par projet.

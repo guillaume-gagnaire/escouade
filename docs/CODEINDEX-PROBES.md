@@ -351,3 +351,59 @@ Grep informé : les motifs écrits en sachant la réponse (huit repris de vrais 
 | **tâche (17)** | 6 | 24 |
 | **autres (fr/en) (11)** | 32 | 59 |
 
+
+## IDX-2 (ESC-297) : les appels résolus comme tokensave
+
+La résolution des appels de tokensave (github.com/aovestdipaperino/tokensave, commit `580936b`, MIT, © 2025 Enzo Lombardi) est portée dans `src-tauri/src/codeindex/` : `resolver.rs` (les stratégies dans l'ordre de `resolve_one`, `score_candidate`, `find_best_matches`, `explain_ambiguity`, `CROSS_FILE_BLOCKLIST`, le seuil de 0,6, `bare_name_needs_evidence` et `is_plausibly_reachable`, `js_specifier.rs`, `go_import.rs`), `links.rs` (`touched.rs` : la relecture partielle), `receivers.rs` (les receveurs typés des extracteurs Rust, TypeScript et Python), `lang.rs` (les noms des appels et des imports, extracteur par extracteur), `calls.rs` (`symbol_target.rs` : un id, ou un nom répondu définition par définition). Les liens vont d'un id de symbole à un id (`links`), les égalités vont à part (`ambiguous`). Les tests de tokensave pour la résolution sont portés dans `codeindex_links_tests.rs`, avec les nôtres.
+
+### Les écarts, et pourquoi
+
+| Écart | Raison |
+|---|---|
+| **Le delta des worktrees** : un worktree résout ses références et celles du projet que sa différence peut changer (le même ensemble touché, des symboles qu'il cache et des siens), contre ce qu'il voit ; ses liens masquent ceux du projet pour ces références (`overrides`), refaits quand le worktree ou le projet change | tokensave n'a qu'un dossier ; chez nous la base sert à tous les worktrees, qui n'en gardent que la différence |
+| **La clôture des projets privés** : rien de ce qu'elle refuse n'est lu, donc rien n'est candidat | inchangée, elle est meilleure chez nous |
+| **Les noms des outils** `index_*`, l'argument `name` (et non `symbol`), `max_matches` ; la forme des réponses (`matches`, `more`, `ambiguous`) ; un appelant par site d'appel (avec sa ligne), et non une fois avec `lines` | nos outils gardent leurs noms ; un site par ligne se lit et se compte comme grep |
+| **En Rust, `a.champ.m()` et `self.champ.m()` passent par le type du champ** (`via` 2) : celui des champs de ce nom du fichier de l'appel s'ils sont d'accord, sinon de tous ceux du projet s'ils le sont ; `Arc<T>`, `Box<T>`, `Mutex<T>`… comptent pour `T` | tokensave ne type en Rust que `self`, les paramètres et les `let`. Sans ce pas, les 4 appels de `Runtime::forget` par `core.plugin_runtime` restent ambigus (le critère du ticket : ses 7 appelants) |
+| **Les frères d'un appel typé** (`recv.m`, `m`) et leur égalité tombent quand `Type::m` s'est résolu par son type, dans tous les langages | tokensave le fait pour GDScript et C# (`suppress_gdscript_typed_siblings`, `finalize_ambiguous`) ; en Rust il garde le lien du nom nu, qui peut viser une autre méthode du même nom |
+| **Un composant Svelte est une cible d'appel**, ses balises l'appellent | notre extracteur Svelte les lit déjà ; celui de tokensave ne lit que le script |
+| **Non portés** : les stratégies de Ruby, GDScript, Terraform, VHDL, des en-têtes C/C++, la propagation des variantes de build, et les receveurs typés de C# (`try_csharp_typed_match`) | langages qu'Escouade ne lit pas ; C# passe par le chemin commun (nom qualifié, appel pointé, nom nu), sans ses tables de types |
+| **Les imports ne deviennent pas des liens** : ils restent du texte, servent de preuve (`import_index`) et à `index_impact` (les fichiers qui importent) | aucune réponse ne lit un lien d'import ; c'est autant de résolution en moins |
+| **Une ambiguïté par site d'appel**, même quand plusieurs références du site (Rust : `recv.m` et `m`) font la même égalité | la réponse dit l'appel une fois |
+| **Les appels hors fonction** (le haut d'un fichier, l'initialiseur d'une constante) sont gardés, rattachés à ce qui les contient | notre extracteur les lisait déjà ; tokensave ne lit les appels que dans les corps |
+| **La sélection de la relecture partielle se fait en SQL** (`links::select` : le fichier, le nom simple, le champ de `via` 2) ; les références d'un même site sont toujours jugées ensemble | sur ce dépôt, 450 000 références à charger et filtrer coûtaient 2 s par relecture |
+| **La limite des fichiers passe de 400 Kio à 1 Mio** (`max_file_size` de tokensave) | `core.rs` (430 Ko) n'était pas indexé du tout |
+
+### Le banc, avant et après
+
+Rejoué le 2026-10-30 sur les mêmes 54 sondes, sans en changer aucune : `cargo run --release --example codeindex_probes -- --compare ../docs/codeindex-probes-reference.json`. *Avant* : la référence d'ESC-294 (`docs/codeindex-probes-reference.json`). *IDX-2* : ce ticket seul, sur la branche d'ESC-294 (pas encore sur main), sans IDX-1. Sa référence est `docs/codeindex-probes-reference-idx2.json`. Seul l'adaptateur des réponses du banc a suivi la forme nouvelle (`matches`, `more` ; les égalités, dites à part, ne sont pas comptées comme résultats).
+
+| Groupe | Sondes | R@10 avant | R@10 IDX-2 | P@10 avant | P@10 IDX-2 | Tok. index réels avant | Tok. index réels IDX-2 |
+|---|---|---|---|---|---|---|---|
+| search | 9 | 67 | 67 | 30 | 30 | 14 081 | 14 316 |
+| context | 28 | 16 | 16 | 2 | 2 | 287 689 | 300 407 |
+| **callers** | 10 | 59 | **87** | 50 | **92** | 20 925 | **14 042** |
+| **callees** | 3 | 49 | **95** | 38 | **96** | 11 913 | **8 743** |
+| **impact** | 4 | 85 | **95** | 70 | **80** | 15 397 | 17 895 |
+| « tâche » | 17 | 6 | 6 | 1 | 1 | 209 811 | 211 746 |
+| **Tout** | 54 | 39 | **48** | 23 | **34** | 350 005 | 355 403 |
+
+- **Sondes gagnées par l'index** : 5 → **9** (grep 48 → 43, égalités 1 → 2). Les appelants : 5 gagnées sur 10, et une économie réelle de +33 % face au grep (0 % avant).
+- **Rappel changé** : `cas-forget` 62 → **100** (précision 45 → 100 : les 7 appelants de `Runtime::forget`, rien d'autre), `rs-homonyme-load` 20 → 100, `ts-callers-tip-place` 17 → 100, `rs-callees-task_context` 25 → 100, `ts-callees-definitions` 50 → 100, `rs-homonyme-new` 25 → 75, `rs-homonyme-place` 33 → 67, `rs-callees-ensure_fresh` 71 → 86, `rs-impact-hint-file` 40 → 80. Aucune sonde n'a perdu de rappel.
+- **`index_search`, `index_context` et les « tâche » ne bougent pas** : c'est le terrain d'IDX-1. Leurs tokens montent un peu (les symboles portent leur `id`, `core.rs` est désormais lu).
+- **Temps à chaud** (moyennes ; le poste était chargé, `rg` y a pris 321 ms en moyenne contre 88 ms à la référence) : appelants 18 ms (4 ms avant), appelés 32 ms, impact 37 ms (49 ms avant).
+
+**L'indexation** (même passe) :
+
+| Indexation | Avant | IDX-2 |
+|---|---|---|
+| Dépôt entier | 24,7 s, 1 575 fichiers, 34 797 symboles, 293 741 références, 46,8 Mo | 32,8 s, 1 578 fichiers, 35 799 symboles, 92 388 liens résolus (450 000 références), 101 Mo |
+| Après un commit (1 fichier) | 0,12 s | 1,1 s |
+| Delta d'un worktree (2 fichiers) | 11 à 16 s | 17 à 25 s |
+| Changement de branche (517 fichiers) | 4 à 7 s | 8 à 10 s |
+
+Ce que coûte la résolution : la base double (les références brutes gardées pour la relecture partielle : 37 Mo, les liens et les égalités : 11 Mo, leurs index), et chaque relecture refait les caches du résolveur sur tous les symboles (≈ 0,1 s) puis résout de nouveau les références touchées, souvent des dizaines de milliers quand un fichier définit des noms courants (`new`, `get`). Sur le dépôt entier en build de debug, un fichier relu prend 1,6 s dont 0,9 s de résolution. Le delta d'un worktree reste dominé par le hachage de tous ses fichiers (piste « La première lecture d'un worktree », plus haut).
+
+### Les tests
+
+- **Portés de tokensave** (`codeindex_links_tests.rs`) : `resolution_test.rs` (nom exact, nom qualifié, `resolve_all`, introuvable, plusieurs candidats, `Self::helper`, appel pointé, autre langage sous le seuil), `ambiguous_calls_test.rs`, `ts_phantom_call_edges_test.rs`, `python_phantom_call_edges_test.rs`, `resolution_order_independence_test.rs`, `incremental_resolution_test.rs` (la série de sept changements, relecture partielle égale à une résolution complète ; les clés de l'ensemble touché égales à celles du résolveur), et les tests de `js_specifier.rs` et `go_import.rs`. Plus les poids de `score_candidate`, la liste des noms courants et le seuil.
+- **Les nôtres** : les 15 `forget` du dépôt reproduits (`Runtime::forget` a ses 7 appelants, par le nom qualifié, `Type.méthode`, `path` et l'id ; chaque autre `forget` les siens ; aucun appelant compté deux fois), un appel ambigu dit à part et jamais comme appelant, un fichier changé relu seul (1 fichier relu, liens égaux à une résolution complète, une définition retirée emporte ses liens), un worktree (un appel retiré, un ajouté dans un fichier nouveau, une définition déplacée suivie depuis un fichier inchangé, le projet intact, puis le projet qui change), les receveurs typés de Rust, TypeScript et Python. Et, à la main sur le dépôt entier : `cargo nextest run --lib on_this_repository_runtime_forget --run-ignored ignored-only --no-capture` (7 appelants, lus par grep dans les fichiers).

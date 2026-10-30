@@ -17,7 +17,7 @@
 
 pub mod score;
 
-use super::{Answer, Reader, Service, Target, MIN_GAP};
+use super::{Answer, Reader, Service, Target, Wanted, MAX_MATCHES_DEFAULT, MIN_GAP};
 use crate::paths::DataDir;
 use anyhow::{anyhow, bail, Context as _, Result};
 use score::{economy, good_flags, parse_expect, read_count, tokens, windows, Alt, Item, Score};
@@ -575,10 +575,26 @@ fn call(r: &Reader, p: &Probe, limit: usize) -> Result<Answer<Value>> {
     match p.tool.as_str() {
         "index_search" => to(r.search(&need(&a.query, "query")?, limit, a.kind.as_deref())?),
         "index_context" => to(r.task_context(&need(&a.task, "task")?, limit)?),
-        "index_callers" => to(r.callers(&need(&a.name, "name")?, a.path.as_deref(), limit)?),
-        "index_callees" => to(r.callees(&need(&a.name, "name")?, a.path.as_deref(), limit)?),
+        // By the name, each definition in its own group (ESC-297): the tools' default.
+        "index_callers" | "index_callees" => {
+            let name = need(&a.name, "name")?;
+            let w = Wanted::Name {
+                name: &name,
+                path: a.path.as_deref(),
+                max_matches: MAX_MATCHES_DEFAULT,
+            };
+            if p.tool == "index_callers" {
+                to(r.callers(w, limit)?)
+            } else {
+                to(r.callees(w, limit)?)
+            }
+        }
         "index_impact" => to(r.impact(
-            &need(&a.target, "target")?,
+            Wanted::Name {
+                name: &need(&a.target, "target")?,
+                path: None,
+                max_matches: MAX_MATCHES_DEFAULT,
+            },
             a.depth.unwrap_or(2).clamp(1, 4),
             limit,
         )?),
@@ -622,24 +638,24 @@ fn found(tool: &str, v: &Value) -> Vec<Found> {
             out.extend(list("related").iter().map(of));
             out
         }
-        "index_callers" => list("defs")
-            .iter()
-            .chain(&list("callers"))
-            .map(of)
-            .collect(),
-        "index_callees" => list("defs").iter().chain(&list("calls")).map(of).collect(),
-        "index_impact" => {
-            let mut out: Vec<Found> = list("targets")
-                .iter()
-                .chain(&list("callers"))
-                .chain(&list("subtypes"))
-                .map(of)
-                .collect();
-            out.extend(list("importers").iter().map(|p| Found {
-                item: Item::new(p.as_str().unwrap_or_default(), 0),
-                json: p.to_string(),
-                shown: None,
-            }));
+        // An answer by definition (ESC-297): each match's definition and results, then the other
+        // definitions of the name; the ties, told apart, are not results.
+        "index_callers" | "index_callees" | "index_impact" => {
+            let mut out: Vec<Found> = Vec::new();
+            for m in list("matches") {
+                let at = |key: &str| m[key].as_array().cloned().unwrap_or_default();
+                let mut items: Vec<Value> = m.get("def").cloned().into_iter().collect();
+                for key in ["callers", "calls", "targets", "subtypes"] {
+                    items.extend(at(key));
+                }
+                out.extend(items.iter().map(of));
+                out.extend(at("importers").iter().map(|p| Found {
+                    item: Item::new(p.as_str().unwrap_or_default(), 0),
+                    json: p.to_string(),
+                    shown: None,
+                }));
+            }
+            out.extend(list("more").iter().map(of));
             out
         }
         _ => Vec::new(),
@@ -752,9 +768,9 @@ fn tool_of(a: &Answer<Value>) -> &'static str {
         "index_search"
     } else if v.get("entryPoints").is_some() {
         "index_context"
-    } else if v.get("external").is_some() {
+    } else if v["matches"][0].get("external").is_some() {
         "index_callees"
-    } else if v.get("importers").is_some() {
+    } else if v["matches"][0].get("importers").is_some() {
         "index_impact"
     } else {
         "index_callers"

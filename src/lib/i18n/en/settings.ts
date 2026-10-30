@@ -259,7 +259,7 @@ export default defineZone('settings', {
     seeNotes: 'See what’s new',
     hideNotes: 'Hide what’s new',
     credits: 'Credits and licenses',
-    creditsDesc: 'Piper, eSpeak NG, ONNX Runtime, whisper.cpp, and the license and credit of each voice',
+    creditsDesc: 'Piper, eSpeak NG, ONNX Runtime, whisper.cpp, tokensave, and the license and credit of each voice',
     creditsOpen: 'Open',
     enginesFound: 'Harnesses detected: {list}',
     noEngine: 'No harness found',

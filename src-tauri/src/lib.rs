@@ -26,6 +26,8 @@ mod closed;
 mod closed_tests;
 mod codeindex;
 #[cfg(test)]
+mod codeindex_links_tests;
+#[cfg(test)]
 mod codeindex_probes_tests;
 #[cfg(test)]
 mod codeindex_tests;

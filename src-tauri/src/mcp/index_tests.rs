@@ -61,7 +61,10 @@ async fn the_five_tools_answer_from_the_index_and_say_what_they_saved() {
         json!({ "project": p.id, "name": "checkout" }),
     )
     .await;
-    assert_eq!(callers["result"]["callers"][0]["name"], "place_order");
+    assert_eq!(
+        callers["result"]["matches"][0]["callers"][0]["name"],
+        "place_order"
+    );
 
     let callees = read(
         &c,
@@ -69,7 +72,10 @@ async fn the_five_tools_answer_from_the_index_and_say_what_they_saved() {
         json!({ "project": p.id, "name": "place_order" }),
     )
     .await;
-    assert_eq!(callees["result"]["calls"][0]["name"], "checkout");
+    assert_eq!(
+        callees["result"]["matches"][0]["calls"][0]["name"],
+        "checkout"
+    );
 
     let impact = read(
         &c,
@@ -77,7 +83,7 @@ async fn the_five_tools_answer_from_the_index_and_say_what_they_saved() {
         json!({ "project": p.id, "target": "checkout" }),
     )
     .await;
-    let files = impact["result"]["files"].to_string();
+    let files = impact["result"]["matches"][0]["files"].to_string();
     assert!(files.contains("shop.rs"), "{impact}");
 
     // Nothing found says so, and counts nothing read.

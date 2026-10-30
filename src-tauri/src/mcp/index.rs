@@ -16,7 +16,7 @@ use super::read::json;
 use super::resolve;
 use super::tools::ToolError;
 use super::Caller;
-use crate::codeindex::{Answer, Reader};
+use crate::codeindex::{Answer, Reader, Wanted, MAX_MATCHES_DEFAULT};
 use crate::core::Core;
 use crate::model::Project;
 use serde::Deserialize;
@@ -65,12 +65,26 @@ pub struct CallArgs {
         description = "The project: its id, or its name in any case. An agent of Escouade may leave it out: its own."
     )]
     pub project: Option<String>,
-    #[schemars(description = "The function, method or class, by its name.")]
-    pub name: String,
-    #[schemars(description = "The file it is in, when several symbols bear the name.")]
+    #[schemars(
+        description = "The symbol, by its id (the id index_search gives, or that of a match of an earlier answer). Takes precedence over name; one of the two is needed."
+    )]
+    pub id: Option<i64>,
+    #[schemars(
+        description = "The function, method or class, by its name: forget, Runtime::forget or Runtime.forget (its last segments). Each definition it names is answered in its own group (matches), up to max_matches; the others are listed in more, to ask again by their id."
+    )]
+    pub name: Option<String>,
+    #[schemars(
+        description = "The file it is in (its path, or the end of it): only the definitions of this file are answered."
+    )]
     pub path: Option<String>,
-    #[schemars(description = "The most results to give (10 by default, 50 at most).")]
+    #[schemars(
+        description = "The most results to give for each definition (10 by default, 50 at most)."
+    )]
     pub limit: Option<u32>,
+    #[schemars(
+        description = "When the name names several definitions, how many to answer (3 by default, 20 at most)."
+    )]
+    pub max_matches: Option<u32>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -79,8 +93,18 @@ pub struct ImpactArgs {
         description = "The project: its id, or its name in any case. An agent of Escouade may leave it out: its own."
     )]
     pub project: Option<String>,
-    #[schemars(description = "What changes: a symbol's name, or a file's path.")]
-    pub target: String,
+    #[schemars(
+        description = "What changes, by its id (the id index_search gives). Takes precedence over target; one of the two is needed."
+    )]
+    pub id: Option<i64>,
+    #[schemars(
+        description = "What changes: a symbol's name (each definition it names in its own group), or a file's path."
+    )]
+    pub target: Option<String>,
+    #[schemars(
+        description = "When the name names several definitions, how many to answer (3 by default, 20 at most)."
+    )]
+    pub max_matches: Option<u32>,
     #[schemars(
         description = "How far to follow the callers (2 by default, 4 at most): the callers of the callers..."
     )]
@@ -229,19 +253,53 @@ pub(super) async fn context<R: Runtime>(
     answered(core, &a, "index_context", found)
 }
 
+/// What a tool is asked about: an id, else a name (and a file); neither is said.
+fn wanted<'a>(
+    id: Option<i64>,
+    name: Option<&'a str>,
+    path: Option<&'a str>,
+    max_matches: Option<u32>,
+) -> Result<Wanted<'a>, ToolError> {
+    if let Some(id) = id {
+        return Ok(Wanted::Id(id));
+    }
+    let name = name
+        .map(str::trim)
+        .filter(|n| !n.is_empty())
+        .ok_or_else(|| {
+            ToolError::Failed(tr!(
+                "Il faut le symbole : son id (celui que donne index_search) ou son nom.",
+                "The symbol is needed: its id (the one index_search gives) or its name."
+            ))
+        })?;
+    Ok(Wanted::Name {
+        name,
+        path: path.map(str::trim).filter(|p| !p.is_empty()),
+        max_matches: max_matches.map_or(MAX_MATCHES_DEFAULT, |m| m as usize),
+    })
+}
+
 pub(super) async fn callers<R: Runtime>(
     core: &Arc<Core<R>>,
     caller: &Caller,
     args: CallArgs,
 ) -> Result<String, ToolError> {
     let a = asked(core, caller, args.project.as_deref())?;
+    wanted(args.id, args.name.as_deref(), None, None)?;
     let r = reader(core, &a).await?;
     let limit = limit_of(args.limit);
-    let found =
-        tokio::task::spawn_blocking(move || r.callers(&args.name, args.path.as_deref(), limit))
-            .await
-            .map_err(joined)?
-            .map_err(failed)?;
+    let found = tokio::task::spawn_blocking(move || {
+        let w = wanted(
+            args.id,
+            args.name.as_deref(),
+            args.path.as_deref(),
+            args.max_matches,
+        );
+        r.callers(w.map_err(|_| anyhow::anyhow!("no symbol"))?, limit)
+    })
+    .await
+    .map_err(joined)?
+    .map_err(failed)?;
     answered(core, &a, "index_callers", found)
 }
 
@@ -251,13 +309,21 @@ pub(super) async fn callees<R: Runtime>(
     args: CallArgs,
 ) -> Result<String, ToolError> {
     let a = asked(core, caller, args.project.as_deref())?;
+    wanted(args.id, args.name.as_deref(), None, None)?;
     let r = reader(core, &a).await?;
     let limit = limit_of(args.limit);
-    let found =
-        tokio::task::spawn_blocking(move || r.callees(&args.name, args.path.as_deref(), limit))
-            .await
-            .map_err(joined)?
-            .map_err(failed)?;
+    let found = tokio::task::spawn_blocking(move || {
+        let w = wanted(
+            args.id,
+            args.name.as_deref(),
+            args.path.as_deref(),
+            args.max_matches,
+        );
+        r.callees(w.map_err(|_| anyhow::anyhow!("no symbol"))?, limit)
+    })
+    .await
+    .map_err(joined)?
+    .map_err(failed)?;
     answered(core, &a, "index_callees", found)
 }
 
@@ -267,12 +333,16 @@ pub(super) async fn impact<R: Runtime>(
     args: ImpactArgs,
 ) -> Result<String, ToolError> {
     let a = asked(core, caller, args.project.as_deref())?;
+    wanted(args.id, args.target.as_deref(), None, None)?;
     let r = reader(core, &a).await?;
     let limit = limit_of(args.limit);
     let depth = args.depth.unwrap_or(2).clamp(1, 4);
-    let found = tokio::task::spawn_blocking(move || r.impact(&args.target, depth, limit))
-        .await
-        .map_err(joined)?
-        .map_err(failed)?;
+    let found = tokio::task::spawn_blocking(move || {
+        let w = wanted(args.id, args.target.as_deref(), None, args.max_matches);
+        r.impact(w.map_err(|_| anyhow::anyhow!("no symbol"))?, depth, limit)
+    })
+    .await
+    .map_err(joined)?
+    .map_err(failed)?;
     answered(core, &a, "index_impact", found)
 }

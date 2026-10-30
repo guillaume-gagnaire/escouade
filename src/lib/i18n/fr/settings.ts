@@ -304,7 +304,7 @@ export default {
     seeNotes: 'Voir les nouveautés',
     hideNotes: 'Masquer les nouveautés',
     credits: 'Crédits et licences',
-    creditsDesc: 'Piper, eSpeak NG, ONNX Runtime, whisper.cpp, et la licence et le crédit de chaque voix',
+    creditsDesc: 'Piper, eSpeak NG, ONNX Runtime, whisper.cpp, tokensave, et la licence et le crédit de chaque voix',
     creditsOpen: 'Ouvrir',
     /** `{list}`: the harnesses found, by name. */
     enginesFound: 'Harness détectés : {list}',
