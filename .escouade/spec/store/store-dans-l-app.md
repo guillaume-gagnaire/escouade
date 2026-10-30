@@ -1,8 +1,8 @@
 ---
 title: "Le store dans l'app"
 subject: "store"
-sources: ["docs/STORE.md","design/plugins/maquettes-b.html","design/app-redesign/UX-NOTES.md","website/content/docs/fr/plugins/installer.md"]
-tickets: ["ESC-236"]
+sources: ["docs/STORE.md","docs/PLUGINS.md","design/plugins/maquettes-b.html","design/app-redesign/UX-NOTES.md","website/content/docs/fr/plugins/installer.md"]
+tickets: ["ESC-236","ESC-287"]
 decisions: []
 compared: null
 ---
@@ -18,6 +18,7 @@ Référence : `docs/STORE.md` §5 et §7 (il fait foi) ; aperçu `#b1` à `#b4` 
 - **Une ligne** : tuile (les lettres : la fenêtre ne charge aucune image du store), nom, sceau de la version proposée ou « Non vérifié », auteur · installations, description sur une ligne, ce qu'il demande en une ligne ; à droite « Installer », « ✓ Installé » ou « Mettre à jour ».
 - Sans recherche ni filtre : « Vérifiés par Escouade » (les plus installés) et « Nouveaux » côte à côte, quatre chacun, « Tout voir ».
 - **La version proposée** est la dernière que cette Escouade peut faire tourner (`escouade.api`, `min`, `max`), jamais une version retirée par son auteur ; une version stable avant une préversion.
+- La page d'un plugin que le catalogue n'a pas dit « « <id> » n'est pas au catalogue du store. » ; tant que le catalogue n'est pas lu, « Lecture du catalogue… » (ou qu'il n'a pas encore été lu), sans rien dire du plugin.
 
 ## « Pour <projet> »
 - Jusqu'à trois plugins du catalogue, non installés, tirés de ce qu'Escouade voit, chacun avec sa raison : un programme d'un plugin de harness sur le PATH (« vibe est installé sur ce poste »), des clés de tickets dans les 200 derniers commits du projet pour une source du Kanban de type Jira, Linear ou YouTrack (« des clés DEM-… dans les commits de ce dépôt »). Rien n'est envoyé ; les vérifiés d'abord.
@@ -31,6 +32,12 @@ Référence : `docs/STORE.md` §5 et §7 (il fait foi) ; aperçu `#b1` à `#b4` 
 - **« N'installer que des versions vérifiées »** (en tête des installés, éteint d'office, gardé dans les réglages) refuse une version sans sceau, à l'installation comme à la mise à jour.
 - Installé, le plugin est fixé par `store:<SHA-256 de version.json>` ; son `version.json` et sa signature sont gardés à part (`plugins/.store/<id>/`) : le sceau se revérifie à chaque lecture, hors ligne aussi, et part si le fichier change.
 
+## Le lien `escouade://plugin/<id>`
+- Le bouton « Ouvrir dans Escouade » des pages du store (STORE-4) est ce lien. Le schéma `escouade` est enregistré par les installeurs : NSIS et MSI sous Windows (registre de l'utilisateur, retiré à la désinstallation), le `.app` sous macOS (`CFBundleURLTypes`), le `.deb` et le `.rpm` sous Linux (`MimeType=x-scheme-handler/escouade`, `Exec=escouade %u`) ; une AppImage s'enregistre elle-même au démarrage (`~/.local/share/applications`), aucun installeur ne le faisant.
+- Escouade fermée, le lien la lance ; ouverte, la seconde instance lui passe le lien (`single-instance` sous Windows et Linux, un événement Apple sous macOS) et la fenêtre revient au premier plan. Un lien arrivé avant que la fenêtre écoute attend qu'elle le prenne.
+- **Il ouvre la page du plugin dans la vue Plugins, jamais une installation** : la page du store s'il n'est pas installé (« Installer la v… » reste le geste de l'utilisateur, la fenêtre d'installation montre ses permissions), sa page d'installé s'il l'est. Rien n'est téléchargé que le catalogue.
+- Lu : `escouade://plugin/<id>` (schéma et mot sans casse, `/` final permis, `%` décodé), l'id une suite de mots en minuscules séparés de points (comme au manifeste), 300 caractères au plus. Tout autre lien du schéma (autre chemin, `?`, `#`, id invalide) est dit dans une alerte « Lien Escouade illisible, rien n'a été fait : <lien> » (coupé à 120 caractères, sans caractères de contrôle), et rien d'autre ne se passe. Un id valide que le catalogue n'a pas est dit sur la page (voir *Le catalogue*).
+
 ## Les mises à jour et le passage au store
 - Un plugin du store est mis à jour depuis le catalogue (la dernière version compatible) : proposé, jamais installé seul, « v1.3.0 · non vérifiée » quand elle n'a pas de sceau ; l'accord redemandé si elle demande plus.
 - Un plugin installé depuis un dossier ou un dépôt git dont l'id est au store le dit sur sa page, avec « Passer à la v… du store » ; ses choix (projets, permissions retirées, réglages) restent.
@@ -42,6 +49,3 @@ Référence : `docs/STORE.md` §5 et §7 (il fait foi) ; aperçu `#b1` à `#b4` 
 
 ## Ce qui part
 - Des GET sans identifiant. Avec l'accord aux statistiques seulement : `POST /api/v1/installs { id, version, event }` et l'événement Aptabase `plugin_installed` (`from_store` oui ou non, sans le nom du plugin).
-
-## Pas dans ce ticket
-- L'enregistrement de `escouade://plugin/<id>` auprès des systèmes (STORE-11, ESC-287) : la vue sait déjà ouvrir la page d'un plugin du store par son id (`openStorePlugin`).

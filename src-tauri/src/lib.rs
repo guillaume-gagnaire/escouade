@@ -47,6 +47,9 @@ mod core_tests;
 mod cursor_tests;
 #[cfg(test)]
 mod cursor_tui_tests;
+mod deeplink;
+#[cfg(test)]
+mod deeplink_tests;
 mod desktop;
 mod discussion;
 #[cfg(test)]
@@ -407,8 +410,10 @@ pub fn run() {
     // big as the screen allows, whatever window the user last had.
     if paths::sandbox_dir().is_none() {
         builder = builder
-            .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-                notify::show_main(app)
+            // A second launch hands its link over to this one (`escouade://plugin/<id>`, STORE-11).
+            .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+                notify::show_main(app);
+                deeplink::deliver(app, deeplink::links_in(args));
             }))
             .plugin(
                 tauri_plugin_window_state::Builder::default()
@@ -417,6 +422,9 @@ pub fn run() {
             );
     }
     let builder = builder
+        // `escouade://`, registered by the installers (STORE-11); macOS hands a link over by an
+        // Apple event, which this plugin receives.
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
@@ -439,6 +447,7 @@ pub fn run() {
             if let Some(updates::AfterUpdate::Failed(version)) = &after_update {
                 log::warn!("Escouade {version} did not install: the app still runs this version");
             }
+            app.manage(deeplink::Inbox::default());
             let (core, git_rx) = Core::load(
                 app.handle().clone(),
                 paths::DataDir::new(paths::default_data_dir()),
@@ -524,6 +533,7 @@ pub fn run() {
                     updates::Window::Hidden => {}
                 }
             }
+            deeplink::at_start(app.handle());
             Ok(())
         })
         .on_window_event(move |window, event| {
@@ -567,6 +577,7 @@ pub fn run() {
                 commands::plugin_install,
                 commands::plugin_inspect_store,
                 commands::store_view,
+                commands::deep_links_take,
                 commands::store_refresh,
                 commands::store_suggestions,
                 commands::plugin_discard,

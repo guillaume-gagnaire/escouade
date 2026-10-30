@@ -42,6 +42,8 @@ La fenêtre d’installation dit alors « Vérifié par Escouade » et « Sig
 
 Un plugin installé depuis un dossier ou un dépôt git dont l’id est au store le dit sur sa page, avec « Passer à la v… du store » : la même fenêtre, tes choix gardés.
 
+**Ouvrir dans Escouade**, sur la page d’un plugin de store.escouade.dev, est un lien `escouade://plugin/<id>` : il lance Escouade, ou la ramène au premier plan si elle est ouverte, sur la page du plugin dans la vue Plugins (sa page d’installé s’il l’est déjà). **Un lien n’installe jamais rien** : l’installation reste ton geste, depuis la page, dans la fenêtre qui montre ses permissions. Un lien qu’Escouade ne sait pas lire est dit (« Lien Escouade illisible, rien n’a été fait »), un plugin que le catalogue n’a pas aussi, et rien d’autre ne se passe. L’installeur enregistre le lien auprès du système (Windows, macOS, le `.deb` sous Linux) ; une AppImage l’enregistre elle-même à son démarrage.
+
 > [!NOTE]
 > Si tu as accepté les statistiques d’usage, une installation depuis le store est comptée sur le store (`POST /api/v1/installs` : l’id, la version, « install » ou « update », rien d’autre) et dans les statistiques d’Escouade (« plugin installé depuis le store », sans son nom). Sans ton accord, rien ne part.
 

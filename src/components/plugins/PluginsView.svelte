@@ -52,8 +52,11 @@
   {:else if page.kind === 'storePlugin'}
     {#if listing && plugins.store}
       <StorePluginPage p={listing} tab={page.tab} />
+    {:else if plugins.store?.catalog}
+      <div class="empty"><p>{t('plugins.store.gone', { id: page.id })}</p></div>
     {:else}
-      <div class="empty"><p>{t('plugins.store.gone')}</p></div>
+      <!-- Not read yet (a link opened at the start, STORE-11): nothing said of the plugin before the catalogue is. -->
+      <div class="empty"><p>{t(plugins.storeBusy ? 'plugins.store.reading' : 'plugins.store.unread')}</p></div>
     {/if}
   {:else}
     <div class="pane">

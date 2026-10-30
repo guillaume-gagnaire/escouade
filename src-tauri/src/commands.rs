@@ -3906,3 +3906,9 @@ pub fn discussion_drop(
     core.discussion_drop(&agent, page.as_deref(), decision)
         .map_err(err)
 }
+
+/// The links `escouade://` not yet taken (STORE-11): what they ask, for the window, once.
+#[tauri::command]
+pub fn deep_links_take(inbox: State<'_, crate::deeplink::Inbox>) -> Vec<crate::deeplink::DeepLink> {
+    inbox.take()
+}

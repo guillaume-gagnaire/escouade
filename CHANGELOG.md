@@ -19,6 +19,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Un plugin peut apporter un thème : d’autres couleurs pour la fenêtre, les terminaux et l’éditeur, en clair et en sombre, et sa palette de couleurs de projet. Il se choisit dans Réglages › Application › Couleurs et s’applique tout de suite ; ce qu’il ne donne pas garde la couleur d’Escouade, et ses valeurs sont filtrées pour qu’il ne charge rien ni ne masque rien.
 - Un plugin peut décider des autorisations de tes agents avant qu’elles ne t’arrivent : autoriser une commande sûre, en refuser une dangereuse avec sa raison, et te laisser le reste. Un refus l’emporte, la carte dit quel plugin a répondu (« Autorisé par Règles de l’équipe via Escouade »), et sans réponse en une demi-seconde la demande vient à toi comme avant.
 - Le store est dans l’app : la vue Plugins lit le catalogue de store.escouade.dev, le cherche sur ta machine, propose des plugins pour le projet ouvert d’après ce qu’elle y voit, et installe la dernière version compatible après avoir vérifié son archive et son sceau « Vérifié par Escouade » avec les clés de l’app. Une version retirée par Escouade est arrêtée et le dit, et « N’installer que des versions vérifiées » refuse les autres.
+- « Ouvrir dans Escouade » sur une page du store ouvre la page du plugin dans l’app, qu’elle soit lancée ou non : un lien ne fait que montrer le plugin, l’installer reste ton geste.
 
 ### Corrections
 

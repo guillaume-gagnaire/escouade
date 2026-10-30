@@ -2714,6 +2714,8 @@ pub enum UiEvent {
     Voice {
         voice: crate::voice::VoiceEvent,
     },
+    /// A link `escouade://` came (STORE-11): the window takes it (`deep_links_take`).
+    DeepLink {},
     /// The download of the vectors' model (ESC-254): bytes so far, of `total`.
     VectorsDownload {
         done: u64,

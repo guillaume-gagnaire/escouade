@@ -38,7 +38,7 @@ export default defineZone('plugins', {
     unread: 'The catalog of store.escouade.dev has not been read yet.',
     reading: 'Reading the catalog…',
     refresh: 'Read the catalog',
-    gone: 'This plugin is no longer in the store’s catalog.',
+    gone: '“{id}” is not in the store’s catalog.',
     search: { one: 'Search {count} plugin', other: 'Search {count} plugins' },
     searchLabel: 'Search the store',
     searchKey: 'Ctrl F',
@@ -367,6 +367,11 @@ export default defineZone('plugins', {
     projectTemplates: { one: 'A project template: {names}', other: '{count} project templates: {names}' },
     settings: { one: 'A setting, in its Settings tab', other: '{count} settings, in its Settings tab' },
     secrets: { one: 'A secret to enter, in its Settings tab', other: '{count} secrets to enter, in its Settings tab' },
+  },
+
+  // A link `escouade://` the app cannot read (STORE-11): said, nothing done.
+  deepLink: {
+    bad: 'Escouade can’t read this link, nothing was done: {url}',
   },
 
   link: {

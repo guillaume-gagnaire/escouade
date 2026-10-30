@@ -38,7 +38,7 @@ export default {
     unread: 'Le catalogue de store.escouade.dev n’a pas encore été lu.',
     reading: 'Lecture du catalogue…',
     refresh: 'Lire le catalogue',
-    gone: 'Ce plugin n’est plus au catalogue du store.',
+    gone: '« {id} » n’est pas au catalogue du store.',
     search: { one: 'Chercher dans {count} plugin', other: 'Chercher dans {count} plugins' },
     searchLabel: 'Chercher dans le store',
     searchKey: 'Ctrl F',
@@ -368,6 +368,11 @@ export default {
     projectTemplates: { one: 'Un modèle de projet : {names}', other: '{count} modèles de projet : {names}' },
     settings: { one: 'Un réglage, dans son onglet Réglages', other: '{count} réglages, dans son onglet Réglages' },
     secrets: { one: 'Un secret à saisir, dans son onglet Réglages', other: '{count} secrets à saisir, dans son onglet Réglages' },
+  },
+
+  // A link `escouade://` the app cannot read (STORE-11): said, nothing done.
+  deepLink: {
+    bad: 'Lien Escouade illisible, rien n’a été fait : {url}',
   },
 
   link: {

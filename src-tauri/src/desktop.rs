@@ -49,7 +49,8 @@ mod tests {
         // `{{name}}` is productName, as the file's name.
         assert!(lines.contains(&"StartupWMClass={{name}}"), "{desktop}");
         assert!(lines.contains(&"Icon={{icon}}"), "{desktop}");
-        assert!(lines.contains(&"Exec={{exec}}"), "{desktop}");
+        // `%u`: the link `escouade://` the desktop hands over (STORE-11).
+        assert!(lines.contains(&"Exec={{exec}} %u"), "{desktop}");
         assert!(lines.contains(&"Type=Application"), "{desktop}");
         // WSLg leaves out of its list, and so without an icon, the entries it cannot show.
         assert!(!desktop.contains("NoDisplay"), "{desktop}");

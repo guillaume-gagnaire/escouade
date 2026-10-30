@@ -19,6 +19,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - A plugin can bring a theme: other colors for the window, the terminals and the editor, light and dark, and its palette of project colors. It is picked in Settings › Application › Colors and applies at once; what it leaves out keeps Escouade’s color, and its values are filtered so it loads nothing and hides nothing.
 - A plugin can decide your agents’ permissions before they reach you: allow a safe command, deny a dangerous one with its reason, and leave you the rest. A denial wins, the card says which plugin answered (“Allowed by Team rules via Escouade”), and without an answer within half a second the request comes to you as before.
 - The store is in the app: the Plugins view reads the catalog of store.escouade.dev, searches it on your machine, suggests plugins for the open project from what it sees there, and installs the last compatible version after checking its archive and its “Verified by Escouade” seal with the app’s keys. A version withdrawn by Escouade is stopped and says so, and “Install verified versions only” refuses the others.
+- “Open in Escouade” on a store page opens the plugin’s page in the app, running or not: a link only shows the plugin, installing it stays your gesture.
 
 ### Fixes
 

@@ -6,6 +6,9 @@
     "linux": {
       "deb": {
         "desktopTemplate": "linux/escouade.desktop"
+      },
+      "rpm": {
+        "desktopTemplate": "linux/escouade.desktop"
       }
     }
   }

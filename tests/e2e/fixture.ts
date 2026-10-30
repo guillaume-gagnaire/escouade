@@ -122,7 +122,6 @@ interface Instance {
   browser: Browser | null;
 }
 
-/** Starts the app with `env`; its stderr is appended to `stderr` (a restart keeps what the launch before wrote). */
 /** The sign-in of Cursor CLI the app finds (`ESCOUADE_CURSOR_AUTH`): a file of the test's, with nothing in it. */
 /** The file that stands for Antigravity's Google sign-in on the machine, made unless `signedOut`. */
 function agySignIn(root: string, signedOut: boolean): string {
@@ -137,9 +136,13 @@ function cursorAuth(root: string): string {
   return file;
 }
 
-function startApp(env: NodeJS.ProcessEnv, stderr: string): Instance {
+/**
+ * Starts the app with `env` and `args` (a link `escouade://`, as the system gives it); its stderr is appended to `stderr` (a
+ * restart keeps what the launch before wrote).
+ */
+function startApp(env: NodeJS.ProcessEnv, stderr: string, args: string[] = []): Instance {
   const errFd = fs.openSync(stderr, 'a');
-  const child = spawn(EXE, [], { env, stdio: ['ignore', 'ignore', errFd] });
+  const child = spawn(EXE, args, { env, stdio: ['ignore', 'ignore', errFd] });
   fs.closeSync(errFd);
   const instance: Instance = { child, stopped: null, browser: null };
   child.on('exit', (code, signal) => {
@@ -308,19 +311,22 @@ function accountsFor(given: Record<string, unknown>, appEnv: Record<string, stri
 export const test = base.extend<{
   app: App;
   appEnv: Record<string, string>;
+  appArgs: string[];
   language: Language;
   preStart: { run: (root: string) => Record<string, unknown> | void };
 }>({
   // Variables for the app on top of the fixture's, which they replace (`test.use({ appEnv: … })`):
   // a fake usage endpoint, Principal's folder with a fake-limit in it.
   appEnv: [{}, { option: true }],
+  // The arguments of the first launch (`test.use({ appArgs: ['escouade://plugin/<id>'] })`, STORE-11): a restart has none.
+  appArgs: [[], { option: true }],
   // The language of the interface the app starts in (`test.use({ language: 'en' })`): French, whatever the machine's.
   language: ['fr', { option: true }],
   // `run` is called before the app starts, with the test's folder (`test.use({ preStart: { run: (root) => … } })`): files it
   // may put there (a second Claude account's folder and sign-in), and the settings to start with, merged into settings.json.
   // (An object: Playwright reads a function given as an option for a fixture.)
   preStart: [{ run: () => ({}) }, { option: true }],
-  app: async ({ appEnv, language, preStart }, use, testInfo) => {
+  app: async ({ appEnv, appArgs, language, preStart }, use, testInfo) => {
     if (!fs.existsSync(EXE)) throw new Error(`build the app first: npx tauri build --debug --no-bundle (missing ${EXE})`);
     // CI runs elevated, where WebView2 ignores WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: the workflow
     // opens a fixed port through the machine policy instead (tests run one at a time).
@@ -436,7 +442,7 @@ export const test = base.extend<{
       ...appEnv,
     };
     // The launch the test is on (the last one, after a restart): the one the end of the test must kill.
-    let instance = startApp(env, stderr);
+    let instance = startApp(env, stderr, appArgs);
     // Attaches Playwright to the WebView2 of a launch.
     const attach = async (launch: Instance): Promise<Page> => {
       try {

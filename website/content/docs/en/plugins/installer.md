@@ -42,6 +42,8 @@ The install window then says “Verified by Escouade” and “Signature: checke
 
 A plugin installed from a folder or a git repository whose id is on the store says so on its page, with “Move to the store’s v…”: the same window, your choices kept.
 
+**Open in Escouade**, on a plugin’s page of store.escouade.dev, is a link `escouade://plugin/<id>`: it starts Escouade, or brings it to the front if it is open, on the plugin’s page in the view Plugins (its installed page if it already is). **A link never installs anything**: installing stays your gesture, from the page, in the window that shows its permissions. A link Escouade cannot read is said (“Escouade can’t read this link, nothing was done”), and so is a plugin the catalog does not have, and nothing else happens. The installer registers the link with the system (Windows, macOS, the `.deb` on Linux); an AppImage registers it itself when it starts.
+
 > [!NOTE]
 > If you accepted the usage statistics, an install from the store is counted on the store (`POST /api/v1/installs`: the id, the version, “install” or “update”, nothing else) and in Escouade’s statistics (“plugin installed from the store”, without its name). Without your consent, nothing is sent.
 

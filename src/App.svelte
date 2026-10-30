@@ -96,6 +96,11 @@
   $effect(() => {
     if (plugins.loaded) applyPluginTheme(chosenTheme(app.settings.pluginTheme));
   });
+  // The links `escouade://plugin/<id>` (STORE-11): the one the app was started with, then each one handed over.
+  $effect(() => {
+    void app.deepLinks;
+    if (app.ready) untrack(() => void plugins.takeLinks());
+  });
 
   // « Zoom de l’interface » as saved, held to what the window holds, once the settings are read (the backend zoomed the
   // window before showing it: this is for a page loaded again, and for a window resized), then the sizes of the

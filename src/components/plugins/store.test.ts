@@ -355,3 +355,48 @@ describe('the installed ones, from the store', () => {
     expect(backend.called('plugin_inspect_store')[0].args).toEqual({ id: MANIFEST.id, version: null });
   });
 });
+
+describe('the link escouade://plugin/<id> (STORE-11)', () => {
+  it('opens the page of the plugin in the view Plugins, and installs nothing', async () => {
+    const backend = fakeBackend({
+      store_view: () => store(),
+      plugins_list: () => [],
+      deep_links_take: () => [{ kind: 'plugin', id: 'dev.exemple.high-contrast' }],
+    });
+    app.ui.view = 'project';
+    await plugins.takeLinks();
+    expect(app.ui.view).toBe('plugins');
+    expect(plugins.page).toEqual({ kind: 'storePlugin', id: 'dev.exemple.high-contrast', tab: 'overview' });
+    render(PluginsView);
+    expect(await screen.findByRole('button', { name: 'Installer la v1.0.0' })).toBeTruthy();
+    expect(plugins.install).toBeNull();
+    expect(backend.called('plugin_inspect_store')).toEqual([]);
+    expect(backend.called('plugin_install')).toEqual([]);
+  });
+
+  it('opens the page of an installed plugin as installed', async () => {
+    fakeBackend({ deep_links_take: () => [{ kind: 'plugin', id: MANIFEST.id }] });
+    plugins.list = [installed()];
+    await plugins.takeLinks();
+    expect(plugins.page).toEqual({ kind: 'plugin', id: MANIFEST.id, tab: 'overview' });
+  });
+
+  it('says an id the store does not have, and a link it cannot read, nothing else done', async () => {
+    fakeBackend({
+      store_view: () => store(),
+      plugins_list: () => [],
+      deep_links_take: () => [
+        { kind: 'plugin', id: 'dev.exemple.nowhere' },
+        { kind: 'bad', url: 'escouade://plugin/nope' },
+      ],
+    });
+    await plugins.takeLinks();
+    render(PluginsView);
+    expect(await screen.findByText('« dev.exemple.nowhere » n’est pas au catalogue du store.')).toBeTruthy();
+    expect(app.toasts.map((t) => [t.kind, t.text])).toContainEqual([
+      'error',
+      'Lien Escouade illisible, rien n’a été fait : escouade://plugin/nope',
+    ]);
+    expect(plugins.install).toBeNull();
+  });
+});

@@ -258,6 +258,8 @@ export interface EditorState {
 
 class AppState {
   ready = $state(false);
+  /** Counts the `escouade://` links told (STORE-11): the view Plugins takes them (App.svelte). */
+  deepLinks = $state(0);
   projects = $state<Project[]>([]);
   agents = $state<Record<string, Agent>>({});
   ui = $state<UiState>({ activeProject: null, view: 'project', selectedAgent: {} });
@@ -709,6 +711,9 @@ class AppState {
       case 'mcpDeclared':
       case 'mcpActivity':
         mcp.take(e);
+        break;
+      case 'deepLink':
+        this.deepLinks++;
         break;
       case 'voice':
         dictation.take(e.voice);
