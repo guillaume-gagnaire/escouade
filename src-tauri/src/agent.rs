@@ -90,6 +90,9 @@ pub struct Effects {
     pub agent_changed: bool,
     pub save: bool,
     pub notify: Option<AgentAlert>,
+    /// Permissions just asked, which the plugins of `permissions.decide` answer first (PLG-8):
+    /// the core holds `notify` back while they decide (`plugins::decide`).
+    pub asked: Vec<crate::plugins::decide::Asked>,
     pub turns: Vec<TurnRow>,
     pub rate: Option<Vec<crate::model::QuotaMeter>>,
     /// Whether the agent's account answers as extra usage (`isUsingOverage` of a `rate_limit_event`).
@@ -1155,8 +1158,9 @@ impl AgentRt {
     }
 
     /// A request comes after those waiting already: the one asked first stays the one shown
-    /// first. Asked again, a request keeps its place, and the time it first came.
-    fn add_pending(&mut self, req: PendingReq) {
+    /// first. Asked again, a request keeps its place, and the time it first came. A new permission
+    /// (not a plan to approve) goes first to the plugins that decide (`Effects::asked`, PLG-8).
+    fn add_pending(&mut self, req: PendingReq, fx: &mut Effects) {
         match self.pending.iter_mut().find(|p| p.item_id == req.item_id) {
             Some(p) => {
                 let since = p.since;
@@ -1176,6 +1180,14 @@ impl AgentRt {
                         arg: v.arg.chars().take(300).collect(),
                     }
                 });
+                if v.kind == "permission" && v.tool != "ExitPlanMode" {
+                    fx.asked.push(crate::plugins::decide::Asked {
+                        request_id: v.id.clone(),
+                        tool: v.tool.clone(),
+                        input: trim_strings(&req.input),
+                        arg: v.arg.clone(),
+                    });
+                }
                 self.pending.push(req)
             }
         }

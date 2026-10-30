@@ -15,6 +15,8 @@
 pub mod journal;
 // The conformance bench and the fake Escouade, for `escouade-plugin` and the tests (PLG-3).
 pub mod bench;
+// The permission rules: the plugins that decide before the user is asked (PLG-8).
+pub mod decide;
 // The facts handed to the plugins, their webhooks and their commands (PLG-5).
 pub mod events;
 pub mod manifest;

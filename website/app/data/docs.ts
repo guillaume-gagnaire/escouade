@@ -48,6 +48,7 @@ export const DOC_GROUPS = [
       'plugins/manifest',
       'plugins/api',
       'plugins/events',
+      'plugins/permission-rules',
       'plugins/themes',
       'plugins/sdk',
       'plugins/testing',

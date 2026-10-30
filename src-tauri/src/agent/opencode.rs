@@ -774,14 +774,17 @@ impl AgentRt {
         let req = json!({ "description": description });
         let view = pending_view(&rid, &tool, &req, &input, &self.meta.cwd).always_as(&item);
         self.append(item, fx);
-        self.add_pending(PendingReq {
-            item_id: rid.clone(),
-            tool_use_id: call,
-            input: input.clone(),
-            suggestions: json!(always),
-            view,
-            since: now_ms(),
-        });
+        self.add_pending(
+            PendingReq {
+                item_id: rid.clone(),
+                tool_use_id: call,
+                input: input.clone(),
+                suggestions: json!(always),
+                view,
+                since: now_ms(),
+            },
+            fx,
+        );
         self.set_status(AgentStatus::Waiting, fx);
         fx.notify = Some(AgentAlert::new(
             NotifyKind::Question,
@@ -833,14 +836,17 @@ impl AgentRt {
             &input,
             &self.meta.cwd,
         );
-        self.add_pending(PendingReq {
-            item_id: rid,
-            tool_use_id: call,
-            input: input.clone(),
-            suggestions: Value::Null,
-            view,
-            since: now_ms(),
-        });
+        self.add_pending(
+            PendingReq {
+                item_id: rid,
+                tool_use_id: call,
+                input: input.clone(),
+                suggestions: Value::Null,
+                view,
+                since: now_ms(),
+            },
+            fx,
+        );
         self.set_status(AgentStatus::Waiting, fx);
         fx.notify = Some(AgentAlert::new(
             NotifyKind::Question,
@@ -873,14 +879,17 @@ impl AgentRt {
                     self.append(item, fx);
                     let view =
                         pending_view(&rid, "ExitPlanMode", &Value::Null, &input, &self.meta.cwd);
-                    self.add_pending(PendingReq {
-                        item_id: rid.clone(),
-                        tool_use_id: rid,
-                        input: input.clone(),
-                        suggestions: Value::Null,
-                        view,
-                        since: now_ms(),
-                    });
+                    self.add_pending(
+                        PendingReq {
+                            item_id: rid.clone(),
+                            tool_use_id: rid,
+                            input: input.clone(),
+                            suggestions: Value::Null,
+                            view,
+                            since: now_ms(),
+                        },
+                        fx,
+                    );
                     self.close_open_items(fx);
                     self.set_status(AgentStatus::Waiting, fx);
                     fx.notify = Some(AgentAlert::new(

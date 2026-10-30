@@ -112,7 +112,8 @@ export interface PluginRun {
   journal: JournalEntry[];
 }
 
-export type JournalKind = 'start' | 'ready' | 'stop' | 'crash' | 'stderr' | 'message' | 'timeout' | 'refused' | 'dropped';
+export type JournalKind =
+  'start' | 'ready' | 'stop' | 'crash' | 'stderr' | 'message' | 'timeout' | 'refused' | 'dropped' | 'webhook' | 'command' | 'decision';
 
 export interface JournalEntry {
   at: string;

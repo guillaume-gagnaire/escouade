@@ -6,8 +6,9 @@
 // `--protocol echo`; `--ignore-initialize` never answers it, `--ignore-shutdown` never answers
 // `shutdown` (else it answers, then exits).
 // `echo` gives its params back, `frames` counts the frames it was given, `attach` keeps its `key`,
-// `test/state` says what it holds; a decision (`permissions/decide`) is answered `ask`, or never with
-// `--silent-decisions`, so that its default applies. A fact (`events/fact`, PLG-3) asks for the secret
+// `test/state` says what it holds; a decision (`permissions/decide`) is answered `ask`, or as
+// `--decide allow|deny|ask|silent|crash` says (a refusal with `--decide-message <m>`; `silent` never answers, as
+// `--silent-decisions` does, so that its default applies; `crash` exits 3), each request kept for `test/state` (PLG-8). A fact (`events/fact`, PLG-3) asks for the secret
 // `token` (or the key of `--fact-secret <key>`), writes it on stderr with `--leak`, and says the fact
 // in a `log`; with `--keep-facts` it only keeps it, for `test/state` (PLG-5). `--deaf` stops reading its
 // input once initialized (its pipe fills: Escouade's queue of facts for it fills then). `--slow <ms>` holds every answer but `initialize`'s that long. `test/do` behaves as its
@@ -29,6 +30,7 @@ const option = (name) => {
 
 const attached = [];
 const facts = [];
+const decisions = [];
 const held = [];
 const asked = new Map();
 let nextAsk = 1;
@@ -83,9 +85,18 @@ function handle(msg) {
       attached.push(params.key);
       return ok(id, { attached: attached.length });
     case 'test/state':
-      return ok(id, { attached, facts, pid: process.pid });
-    case 'permissions/decide':
-      return flag('--silent-decisions') ? null : ok(id, { decision: 'ask' });
+      return ok(id, { attached, facts, decisions, pid: process.pid });
+    case 'permissions/decide': {
+      decisions.push(params);
+      const mode = option('--decide') ?? (flag('--silent-decisions') ? 'silent' : 'ask');
+      if (mode === 'silent') return null;
+      if (mode === 'crash') {
+        process.stderr.write('fake-plugin: crashing on a decision\n');
+        process.exit(3);
+      }
+      const message = option('--decide-message');
+      return ok(id, mode === 'deny' && message ? { decision: 'deny', message } : { decision: mode });
+    }
     case 'events/fact':
       if (flag('--keep-facts')) {
         facts.push(params);

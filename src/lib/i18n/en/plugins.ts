@@ -208,6 +208,9 @@ export default defineZone('plugins', {
       timeout: 'Out of time',
       refused: 'Refused',
       dropped: 'Dropped',
+      webhook: 'Webhook',
+      command: 'Command',
+      decision: 'Decision',
     },
   },
 

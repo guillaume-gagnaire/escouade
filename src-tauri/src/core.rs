@@ -1990,6 +1990,8 @@ impl<R: Runtime> Core<R> {
     pub fn start(self: &Arc<Self>, git_rx: mpsc::UnboundedReceiver<String>) {
         let projects = self.projects.read().clone();
         self.tell_started();
+        // The plugins that decide run before the first permission asked (PLG-8).
+        crate::plugins::decide::warm(&self.plugins, &self.plugin_runtime);
         self.telemetry.track(self.started_event());
         if !cfg!(test) {
             self.telemetry.spawn();
@@ -2636,12 +2638,14 @@ impl<R: Runtime> Core<R> {
         if changed {
             self.update_tray();
         }
-        if let Some(alert) = fx.notify {
-            // A ticket's agent at work: its board tells when the ticket is ready or blocked; its
-            // questions still call for the user.
-            if alert.kind == NotifyKind::Question || !self.ticket_doing(id) {
-                self.notify_agent(alert, project_id, id, name);
-            }
+        // The plugins that decide answer first (PLG-8): the user is told only if they leave it.
+        let notify = if fx.asked.is_empty() {
+            fx.notify
+        } else {
+            self.plugins_decide(id, project_id, name, fx.asked, fx.notify)
+        };
+        if let Some(alert) = notify {
+            self.notify_agent_now(alert, id, project_id, name);
         }
         if let Some(end) = fx.turn_end {
             self.facts.emit(
@@ -2650,6 +2654,94 @@ impl<R: Runtime> Core<R> {
             );
             self.on_turn_end(id, end);
         }
+    }
+
+    fn notify_agent_now(
+        self: &Arc<Self>,
+        alert: AgentAlert,
+        id: &str,
+        project_id: &str,
+        name: &str,
+    ) {
+        // A ticket's agent at work: its board tells when the ticket is ready or blocked; its
+        // questions still call for the user.
+        if alert.kind == NotifyKind::Question || !self.ticket_doing(id) {
+            self.notify_agent(alert, project_id, id, name);
+        }
+    }
+
+    /// The permissions `asked` go first to the plugins that decide in the project (PLG-8,
+    /// `plugins::decide`): what they allow or refuse is answered by them, named on the card
+    /// (« Autorisé par <plugin> via Escouade »); what they leave goes to the user, told then by
+    /// `alert`. Gives `alert` back when no plugin decides there.
+    fn plugins_decide(
+        self: &Arc<Self>,
+        id: &str,
+        project_id: &str,
+        name: &str,
+        asked: Vec<crate::plugins::decide::Asked>,
+        alert: Option<AgentAlert>,
+    ) -> Option<AgentAlert> {
+        use crate::facts::Resolve;
+        use crate::plugins::decide;
+        let mut about = crate::facts::About::agent(id, name, project_id);
+        let private = self.resolve(&mut about).unwrap_or(true);
+        let deciders = decide::deciders(&self.plugins, project_id, private);
+        if deciders.is_empty() {
+            return alert;
+        }
+        let mut subjects = serde_json::json!({
+            "project": {
+                "id": project_id,
+                "name": about.project.map(|p| p.name).unwrap_or_default(),
+                "private": private,
+            },
+            "agent": { "id": id, "name": about.agent.map(|a| a.name).unwrap_or_default() },
+        });
+        if let Some(t) = about.ticket {
+            subjects["ticket"] = serde_json::json!({ "id": t.id, "key": t.key, "title": t.title });
+        }
+        let (me, id, project_id, name) = (
+            self.clone(),
+            id.to_string(),
+            project_id.to_string(),
+            name.to_string(),
+        );
+        tauri::async_runtime::spawn(async move {
+            let mut left = false;
+            for a in asked {
+                let arg: String = a.arg.chars().take(200).collect();
+                let what = format!("{} {arg}", a.tool);
+                let params = decide::params(&a, subjects.clone());
+                let verdict =
+                    decide::decide(&me.plugin_runtime, &deciders, &params, what.trim()).await;
+                let answered = match &verdict {
+                    decide::Verdict::Allow { by } => {
+                        me.answer_permission_by(&id, &a.request_id, "allow", None, Some(by))
+                    }
+                    decide::Verdict::Deny { by, message } => me.answer_permission_by(
+                        &id,
+                        &a.request_id,
+                        "deny",
+                        message.clone(),
+                        Some(by),
+                    ),
+                    decide::Verdict::Ask => {
+                        left = true;
+                        continue;
+                    }
+                };
+                match answered {
+                    Ok(()) => log::info!("agent {id}: {verdict:?} for {}", a.request_id),
+                    // Answered meanwhile (the user in the window, a client), or its process gone.
+                    Err(e) => log::info!("agent {id}: {verdict:?} not given: {e:#}"),
+                }
+            }
+            if let Some(alert) = alert.filter(|_| left) {
+                me.notify_agent_now(alert, &id, &project_id, &name);
+            }
+        });
+        None
     }
 
     pub(crate) fn on_frame(self: &Arc<Self>, h: &AgentHandle, gen: u64, frame: Value) {

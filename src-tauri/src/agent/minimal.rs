@@ -138,14 +138,17 @@ impl AgentRt {
                 };
                 self.append(item, fx);
                 let view = pending_view(rid, &tool, &Value::Null, &input, &self.meta.cwd);
-                self.add_pending(PendingReq {
-                    item_id: rid.to_string(),
-                    tool_use_id: call.to_string(),
-                    input,
-                    suggestions: Value::Null,
-                    view,
-                    since: now_ms(),
-                });
+                self.add_pending(
+                    PendingReq {
+                        item_id: rid.to_string(),
+                        tool_use_id: call.to_string(),
+                        input,
+                        suggestions: Value::Null,
+                        view,
+                        since: now_ms(),
+                    },
+                    fx,
+                );
                 self.set_status(AgentStatus::Waiting, fx);
                 fx.agent_changed = true;
             }

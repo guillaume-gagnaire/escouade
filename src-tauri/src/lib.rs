@@ -130,6 +130,8 @@ mod plugins;
 #[cfg(test)]
 mod plugins_bench_tests;
 #[cfg(test)]
+mod plugins_decide_tests;
+#[cfg(test)]
 mod plugins_protocol_tests;
 #[cfg(test)]
 mod plugins_runtime_tests;

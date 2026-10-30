@@ -207,6 +207,9 @@ export default {
       timeout: 'Délai dépassé',
       refused: 'Refusé',
       dropped: 'Perdu',
+      webhook: 'Webhook',
+      command: 'Commande',
+      decision: 'Décision',
     },
   },
 

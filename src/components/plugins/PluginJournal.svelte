@@ -11,7 +11,20 @@
   // where its process stands, with « Démarrer » (not started yet) or « Relancer » (stopped).
   let { plugin }: { plugin: PluginView } = $props();
 
-  const KINDS: JournalKind[] = ['start', 'ready', 'stop', 'crash', 'stderr', 'message', 'timeout', 'refused', 'dropped'];
+  const KINDS: JournalKind[] = [
+    'start',
+    'ready',
+    'stop',
+    'crash',
+    'stderr',
+    'message',
+    'timeout',
+    'refused',
+    'dropped',
+    'webhook',
+    'command',
+    'decision',
+  ];
   let run = $state<PluginRun | null>(null);
   let kind = $state<'' | JournalKind>('');
   let error = $state<string | null>(null);

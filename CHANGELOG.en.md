@@ -17,6 +17,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - A plugin can react to what happens in Escouade: an agent waiting, a turn over, a ticket to test or merged, a launch ready… It receives these events in its program, or sends them to an address (a webhook to Discord, Slack or n8n) or runs a command without a line of code; a private project tells it nothing until it is turned on there.
 - A plugin can be written in TypeScript with `@escouade-dev/plugin`: `npm create escouade-plugin` gives a first plugin with its tests, the SDK brings the protocol’s types and helpers to receive facts and decide permissions, and `escouade-plugin pack` makes its archive. The documentation also tells how to ship it as one executable, for people without Node.
 - A plugin can bring a theme: other colors for the window, the terminals and the editor, light and dark, and its palette of project colors. It is picked in Settings › Application › Colors and applies at once; what it leaves out keeps Escouade’s color, and its values are filtered so it loads nothing and hides nothing.
+- A plugin can decide your agents’ permissions before they reach you: allow a safe command, deny a dangerous one with its reason, and leave you the rest. A denial wins, the card says which plugin answered (“Allowed by Team rules via Escouade”), and without an answer within half a second the request comes to you as before.
 
 ### Fixes
 

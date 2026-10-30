@@ -49,6 +49,8 @@ pub enum Kind {
     Webhook,
     /// A command run on a fact, and how it ended (PLG-5).
     Command,
+    /// A permission it was asked to decide, and what it answered (PLG-8).
+    Decision,
 }
 
 /// An entry of the journal.
