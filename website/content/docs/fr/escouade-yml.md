@@ -199,6 +199,28 @@ Les commandes de « Lancement » du projet (serveurs de développement, watche
 - `remove_worktree` : « Supprimer le worktree d’un ticket terminé ou supprimé ».
 - `model`, `effort`, `mode` : le modèle, l’effort et le mode des agents des tickets (Réglages › Kanban, groupe « Agents »). Une valeur vide (`model: ''`) laisse ceux du compte. `bypassPermissions` n’est jamais dans le fichier : un dépôt ne lève pas les autorisations de qui l’ouvre. Lu, il est refusé (« bypassPermissions ne se partage pas : il se règle sur chaque machine ») ; réglé dans la fenêtre, il reste un réglage local, que l’export n’écrit pas.
 
+### plugins
+
+| Clé | Type | Valeurs | Absente | Exemple |
+|---|---|---|---|---|
+| `plugins.recommended` | Liste d’identifiants de plugins | les identifiants du [store](plugins/installer) (`dev.exemple.slack`) | aucun plugin proposé | `recommended: [dev.exemple.slack]` |
+| `plugins.<id>` | Réglages du plugin `<id>` | une clé par réglage qu’il déclare : un texte, un nombre, `true` ou `false` | ses réglages de chaque machine | voir ci-dessous |
+
+```yaml
+plugins:
+  recommended:
+    - dev.exemple.slack
+    - dev.exemple.team-rules
+  dev.exemple.slack:
+    channel: '#equipe-api'
+```
+
+Les plugins que le projet **propose**, comme les extensions recommandées de VS Code. À l’ouverture du projet, Escouade dit combien il en manque sur ta machine ; en tête de Réglages › Projets, une bande les nomme, chacun avec ce qu’il demande et « Voir dans le store », qui ouvre sa page dans la vue Plugins. Rien n’est installé ni activé seul : un dépôt cloné ne doit pas pouvoir lancer un programme. L’installation reste ton geste, plugin par plugin, après la fenêtre qui montre ses permissions. Un plugin installé quitte la bande ; « Pas pour ce projet » la fait taire sur cette machine, et elle ne revient que pour un plugin que le fichier proposerait plus tard. Un identifiant qui n’en est pas un (`Slack`) est signalé et ignoré.
+
+Sous `plugins.<id>`, les réglages que le projet donne au plugin : ceux qu’il déclare (`contributes.settings`), avec une valeur de leur type, passent devant ceux de sa page quand il les demande pour ce projet (`settings/get` avec le projet, voir [l’API des plugins](plugins/api)). Une clé qu’il ne déclare pas, ou l’un de ses secrets, ne lui est jamais donnée : **jamais de secret dans ce fichier**, ils vont au trousseau du système, par sa page. Un projet privé ne donne rien à un plugin qui n’y est pas activé.
+
+Ces clés restent celles du fichier : elles ne sont pas des réglages du projet, ne sont pas marquées dans la fenêtre, et « Exporter vers .escouade.yml » les garde telles qu’elles sont écrites.
+
 ## Les étapes de worktree
 
 Chaque élément de `worktrees.setup` et de `worktrees.teardown` est une étape, de l’une de ces deux formes :

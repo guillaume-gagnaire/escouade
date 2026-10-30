@@ -50,6 +50,7 @@ void plugin.start();
 | `onEvent(name, handler)` | Runs `handler` on each fact of `name`, or of a pattern ending in `*` (`ticket.*`), or of a list. The facts must be in `permissions.events`. A handler that fails goes to the plugin’s journal; the others still run. |
 | `decidePermission(handler)` | Answers `permissions/decide`: `allow`, `deny` with a `message`, or `ask`, which leaves it to the user. Without a handler, the answer is `ask`. |
 | `secret(key)` | Asks Escouade for one of its secrets (`secrets/get`); `null` when none is kept. Another key rejects with the error `-32001`. |
+| `settings(project?)` | Asks for its settings (`settings/get`); with a project’s id, those its `.escouade.yml` gives it (`plugins.<id>`) go first. |
 | `log.debug/info/warn/error(message)` | A line of its journal (`log`). |
 | `handle(method, handler)` | Serves another method (a later extension point). Throw `new RpcError(code, message)` to answer an error. |
 | `onInitialize(handler)`, `onShutdown(handler)` | Runs at `initialize`, or before the answer to `shutdown` (800 ms at most: Escouade waits a second). |

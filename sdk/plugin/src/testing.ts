@@ -22,6 +22,10 @@ export interface FakeOptions {
   allowed?: string[];
   /** The version of Escouade it says it is. */
   version?: string;
+  /** Its settings as the user set them (`settings/get`). */
+  settings?: Record<string, string | number | boolean>;
+  /** By project id, the settings its `.escouade.yml` gives the plugin: over the user's for `settings/get` of that project. */
+  projectSettings?: Record<string, Record<string, string | number | boolean>>;
 }
 
 /** The project, the ticket and the agent of the bench's facts and decisions. */
@@ -141,6 +145,11 @@ export class FakeEscouade {
   }
 
   private serve(id: unknown, method: string, params: any) {
+    if (method === 'settings/get') {
+      const project = typeof params?.project === 'string' ? params.project : null;
+      const own = project ? (this.options.projectSettings?.[project] ?? {}) : {};
+      return { jsonrpc: '2.0', id, result: { ...(this.options.settings ?? {}), ...own } };
+    }
     if (method !== 'secrets/get') {
       return { jsonrpc: '2.0', id, error: { code: ERRORS.methodNotFound, message: `unknown method ${method}` } };
     }

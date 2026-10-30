@@ -81,7 +81,7 @@ L’onglet Permissions de sa page liste ce qu’il peut faire, avec un interrupt
 
 ## Ses réglages et ses secrets
 
-L’onglet Réglages montre les champs qu’il déclare (`contributes.settings`, `contributes.secrets`). Un réglage est gardé avec la liste des plugins installés et lui est donné par `settings/get`. Un secret va au trousseau du système, sous un nom à lui (`plugin:<id>:<clé>`) : l’onglet dit seulement s’il est gardé, et « Oublier » l’efface.
+L’onglet Réglages montre les champs qu’il déclare (`contributes.settings`, `contributes.secrets`). Un réglage est gardé avec la liste des plugins installés et lui est donné par `settings/get` ; dans un projet dont le [`.escouade.yml`](escouade-yml) règle le plugin (`plugins.<id>`), la valeur du projet passe devant. Un secret va au trousseau du système, sous un nom à lui (`plugin:<id>:<clé>`) : l’onglet dit seulement s’il est gardé, et « Oublier » l’efface.
 
 ## Le journal
 

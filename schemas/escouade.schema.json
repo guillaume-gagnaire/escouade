@@ -150,6 +150,38 @@
         }
       ]
     },
+    "plugins": {
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$": {
+          "additionalProperties": {
+            "type": ["string", "number", "boolean"]
+          },
+          "description": "The settings of the plugin of this id, by the keys of its contributes.settings: applied to it in this project once it is installed and on. Never a secret: those go to the system's keychain.",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "recommended": {
+          "description": "The plugins the project proposes, by their id in the store (store.escouade.dev). Escouade names those not installed in Settings › Project, each with its page in the store: it never installs nor turns on anything by itself. A plugin's own settings go under plugins.<id>, never a secret.",
+          "oneOf": [
+            {
+              "items": {
+                "pattern": "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$",
+                "type": "string"
+              },
+              "type": "array",
+              "uniqueItems": true
+            },
+            {
+              "pattern": "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
     "private": {
       "description": "« Projet privé »: the agents of the other projects do not know it, nor read its files. The accounts reserved to it stay each machine's. A project private on a machine stays so when the file says false.",
       "type": "boolean"

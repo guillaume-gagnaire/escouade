@@ -67,7 +67,7 @@ Chaque délai dépassé est noté au journal : « test/do: no answer within 300
 | Méthode | Paramètres | Réponse |
 | --- | --- | --- |
 | `secrets/get` | `{ "key": "webhook" }` | Le secret, ou `null` si aucun n’est gardé sous cette clé. |
-| `settings/get` | `{}` | Ses réglages, tels que l’utilisateur les a choisis dans l’onglet Réglages de sa page : un objet par clé de `contributes.settings`, sans celles laissées à leur valeur par défaut. |
+| `settings/get` | `{}`, ou `{ "project": "<id>" }` | Ses réglages, tels que l’utilisateur les a choisis dans l’onglet Réglages de sa page : un objet par clé de `contributes.settings`, sans celles laissées à leur valeur par défaut. Avec un projet (le `project.id` d’un fait), ceux que son [`.escouade.yml`](escouade-yml) lui donne sous `plugins.<id>` passent devant, s’il est activé dans ce projet : seulement les clés qu’il déclare, d’une valeur de leur type, jamais un secret. |
 | `log` (notification) | `{ "level": "info", "message": "…" }` | Aucune : la ligne va au journal du plugin. |
 
 Une autre méthode répond l’erreur `-32601` et le note au journal. Les erreurs propres à Escouade : `-32001` pour un secret qui n’est pas celui du plugin, `-32002` pour un trousseau injoignable, `-32602` pour des paramètres qui ne tiennent pas.

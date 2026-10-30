@@ -379,4 +379,14 @@ export default defineZone('plugins', {
     body: 'Install, switch on project by project, take a permission back, read a journal: it all happens in the view Plugins, opened by the icon of the projects’ rail.',
     open: 'Open the view Plugins',
   },
+
+  proposed: {
+    label: 'Plugins this project proposes',
+    title: { one: 'This project proposes a plugin', other: 'This project proposes {count} plugins' },
+    body: 'Read in its .escouade.yml. Nothing is installed without you: its page in the store says what it asks for, and the install tells you again first.',
+    private: 'Private project: an installed plugin is on in it only once switched on for it, in its page.',
+    notHere: 'Not for this project',
+    see: 'See in the store',
+    notInStore: 'Not in the store’s catalogue.',
+  },
 });

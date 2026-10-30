@@ -42,6 +42,9 @@ const SAID: usize = 300;
 pub trait Place: Send + Sync {
     fn shell(&self) -> Option<ShellInfo>;
     fn project_path(&self, id: &str) -> Option<String>;
+    /// Whether the project `id` is private, and the settings its `.escouade.yml` gives the plugin
+    /// `plugin` (`plugins.<plugin>`, PLG-14; empty when none); None for a project that is not.
+    fn project_plugin(&self, id: &str, plugin: &str) -> Option<(bool, Map<String, Value>)>;
 }
 
 /// A webhook of a plugin (`contributes.webhooks[]`).

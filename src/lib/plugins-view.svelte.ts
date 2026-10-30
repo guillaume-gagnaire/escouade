@@ -5,6 +5,7 @@ import { untrack } from 'svelte';
 import { t } from './i18n';
 import { pluginsApi, type Category, type PluginPreview, type PluginRefusal, type PluginView } from './plugins';
 import { storeApi, type CatalogPlugin, type DeepLink, type StoreView, type Suggestion } from './store';
+import { readSetAside, setAside } from './proposed-plugins';
 import { app } from './state.svelte';
 import { api } from './ipc';
 
@@ -61,6 +62,20 @@ class PluginsStore {
   suggestions = $state<Suggestion[]>([]);
   suggestionsFor = $state<string | null>(null);
   dismissed = $state<Record<string, number>>(readDismissed());
+  /** « Pas pour ce projet » (PLG-14): by project, the plugins its `.escouade.yml` proposes that the band no longer names. */
+  notForProject = $state<Record<string, string[]>>(readSetAside());
+
+  /** « Pas pour ce projet »: the band says nothing more of `ids` in this project. */
+  setAside(project: string, ids: string[]) {
+    this.notForProject = setAside(this.notForProject, project, ids);
+  }
+
+  /** « Voir dans le store », from Settings: the window closed, the plugin's page of the store shown (never an install). */
+  showFromSettings(id: string) {
+    app.modal = null;
+    app.openPlugins();
+    this.openStorePlugin(id);
+  }
 
   get updates() {
     return this.list.filter((p) => p.update);

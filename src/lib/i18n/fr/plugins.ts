@@ -380,4 +380,14 @@ export default {
     body: 'Installer, activer projet par projet, retirer une permission, lire un journal : tout se fait dans la vue Plugins, ouverte par l’icône de la barre des projets.',
     open: 'Ouvrir la vue Plugins',
   },
+
+  proposed: {
+    label: 'Plugins proposés par ce projet',
+    title: { one: 'Ce projet propose un plugin', other: 'Ce projet propose {count} plugins' },
+    body: 'Lus dans son .escouade.yml. Rien n’est installé sans toi : sa page du store dit ce qu’il demande, et l’installation te le redit avant tout.',
+    private: 'Projet privé : un plugin installé n’y est actif qu’une fois activé pour lui, dans sa page.',
+    notHere: 'Pas pour ce projet',
+    see: 'Voir dans le store',
+    notInStore: 'Absent du catalogue du store.',
+  },
 } as const satisfies Tree;

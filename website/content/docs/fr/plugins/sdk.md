@@ -50,6 +50,7 @@ void plugin.start();
 | `onEvent(nom, fonction)` | Appelle `fonction` à chaque fait `nom`, ou d’un motif qui finit par `*` (`ticket.*`), ou d’une liste. Les faits doivent être dans `permissions.events`. Une fonction qui échoue va au journal du plugin ; les autres sont appelées quand même. |
 | `decidePermission(fonction)` | Répond à `permissions/decide` : `allow`, `deny` avec un `message`, ou `ask`, qui laisse la main à l’utilisateur. Sans fonction, la réponse est `ask`. |
 | `secret(clé)` | Demande à Escouade l’un de ses secrets (`secrets/get`) ; `null` si aucun n’est gardé. Une autre clé échoue par l’erreur `-32001`. |
+| `settings(projet?)` | Demande ses réglages (`settings/get`) ; avec l’id d’un projet, ceux que son `.escouade.yml` lui donne (`plugins.<id>`) passent devant. |
 | `log.debug/info/warn/error(message)` | Une ligne de son journal (`log`). |
 | `handle(méthode, fonction)` | Sert une autre méthode (un point d’extension à venir). Lance `new RpcError(code, message)` pour répondre une erreur. |
 | `onInitialize(fonction)`, `onShutdown(fonction)` | Appelée à `initialize`, ou avant la réponse à `shutdown` (800 ms au plus : Escouade attend une seconde). |

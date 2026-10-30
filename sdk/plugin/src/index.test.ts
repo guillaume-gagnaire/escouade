@@ -108,6 +108,25 @@ describe('@escouade-dev/plugin', () => {
     expect(escouade.secretsAsked).toEqual(['webhook', 'empty', 'other']);
   });
 
+  it('asks for its settings, those of the fact’s project over the user’s', async () => {
+    const plugin = createPlugin();
+    const got: unknown[] = [];
+    plugin.onEvent('ticket.column', async (f, p) => {
+      got.push(await p.settings());
+      got.push(await p.settings(f.project?.id));
+    });
+    const escouade = connect(plugin, {
+      settings: { channel: '#escouade', mentions: false },
+      projectSettings: { 'bench-project': { channel: '#equipe' } },
+    });
+    await escouade.initialize();
+    await escouade.fact('ticket.column');
+    expect(got).toEqual([
+      { channel: '#escouade', mentions: false },
+      { channel: '#equipe', mentions: false },
+    ]);
+  });
+
   it('logs to the journal, serves its own methods, and ends after shutdown once its handlers ran', async () => {
     const { plugin, out, ended } = wired();
     let closed = false;

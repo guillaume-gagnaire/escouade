@@ -17,7 +17,7 @@
 //   crash   → a line on stderr, then exit 3       loop   → a busy loop: nothing answered any more
 //   grow    → <mb> MB taken and held, then { grown } stderr → <lines> written on stderr, then { ok }
 //   secret / steal → asks Escouade `secrets/get` for <key>, and gives back what came: { result } or { error }
-//   settings → asks Escouade `settings/get`, and gives back what came: { result }
+//   settings → asks Escouade `settings/get` (of <project>, if given), and gives back what came: { result }
 //   log     → a `log` notification of <message>, then { ok }
 import process from 'node:process';
 
@@ -142,7 +142,7 @@ function behave(id, p) {
         ok(id, answer.error ? { error: answer.error } : { result: answer.result }),
       );
     case 'settings':
-      return ask('settings/get', {}).then((answer) => ok(id, { result: answer.result ?? null }));
+      return ask('settings/get', p.project ? { project: p.project } : {}).then((answer) => ok(id, { result: answer.result ?? null }));
     case 'log':
       send({ jsonrpc: '2.0', method: 'log', params: { level: 'info', message: p.message } });
       return ok(id, { ok: true });

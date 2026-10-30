@@ -56,6 +56,8 @@ board:
   model: opus
   effort: high
   mode: plan
+plugins:
+  recommended: [dev.exemple.slack]
 ";
 
 fn read(text: &str) -> pf::Read {
@@ -114,6 +116,106 @@ fn every_key_of_version_1_is_read() {
     assert_eq!(v("board.model"), json!("opus"));
     assert_eq!(v("board.effort"), json!("high"));
     assert_eq!(v("board.mode"), json!("plan"));
+    assert_eq!(v("plugins.recommended"), json!(["dev.exemple.slack"]));
+}
+
+/// The plugins a project proposes and their settings (PLG-14): read and kept in the file's values,
+/// never applied to the project nor exported from it; what cannot be read told with its line.
+#[test]
+fn the_plugins_a_project_proposes_and_their_settings_are_read() {
+    let text = "\
+version: 1
+plugins:
+  recommended:
+    - dev.exemple.slack
+    - Slack
+    - dev.exemple.team-rules
+    - dev.exemple.slack
+  dev.exemple.slack:
+    channel: '#equipe'
+    max: 3
+    ratio: 0.5
+    mentions: true
+    quoted: 'true'
+    nested: [a, b]
+    empty: ~
+  dev.exemple.team-rules: oui
+  notanid:
+    x: 1
+";
+    let r = read(text);
+    assert_eq!(
+        r.values["plugins.recommended"],
+        json!(["dev.exemple.slack", "dev.exemple.team-rules"])
+    );
+    assert_eq!(
+        r.values["plugins.dev.exemple.slack"],
+        json!({ "channel": "#equipe", "max": 3, "ratio": 0.5, "mentions": true, "quoted": "true" })
+    );
+    assert_eq!(
+        pf::plugin_settings(&r.values, "dev.exemple.slack").unwrap()["max"],
+        json!(3)
+    );
+    assert!(pf::plugin_settings(&r.values, "dev.exemple.team-rules").is_none());
+    // « Slack », the list in a setting, the group that is no group, the key that is no id.
+    assert_eq!(
+        lines(&r.warnings),
+        vec![Some(5), Some(14), Some(16), Some(17)],
+        "{:?}",
+        r.warnings
+    );
+    assert!(r.warnings[0].text.contains("Slack"));
+    assert!(r.warnings[3].text.contains("plugins.notanid"));
+    // A single id is a list of one.
+    assert_eq!(
+        read("plugins:\n  recommended: dev.exemple.slack\n").values["plugins.recommended"],
+        json!(["dev.exemple.slack"])
+    );
+
+    // Applied: the project has no field of them; the file keeps them for the window and the plugins.
+    let mut p = project();
+    let before = serde_json::to_value(&p).unwrap();
+    let applied = pf::apply(&mut p, &r);
+    assert!(applied.changed.is_empty());
+    let file = p.shared.file.clone().unwrap();
+    assert!(file.keys.contains(&"plugins.recommended".to_string()));
+    assert_eq!(
+        file.values["plugins.recommended"],
+        r.values["plugins.recommended"]
+    );
+    let mut after = serde_json::to_value(&p).unwrap();
+    after["shared"] = before["shared"].clone();
+    assert_eq!(after, before);
+    assert!(pf::keep_local(&p.clone(), &mut p).is_empty());
+
+    // Never exported from the project; kept as they are when the file is written over.
+    let k = pf::key_of("plugins.recommended").unwrap();
+    assert!(k.file_only && !k.command);
+    assert!(!pf::export_values(&p)
+        .iter()
+        .any(|(k, _)| k.starts_with("plugins")));
+    let written = pf::write(Some(text), &[("board.draft_pr", json!(true))]).unwrap();
+    assert!(written.contains("  dev.exemple.slack:\n    channel: '#equipe'\n"));
+    assert_eq!(
+        read(&written).values["plugins.recommended"],
+        r.values["plugins.recommended"]
+    );
+
+    // The schema says both.
+    let s = pf::schema();
+    let plugins = &s["properties"]["plugins"];
+    assert!(plugins["properties"]["recommended"].is_object());
+    let by_id = plugins["patternProperties"].as_object().unwrap();
+    assert_eq!(by_id.len(), 1);
+    let (pattern, settings) = by_id.iter().next().unwrap();
+    assert!(pattern.starts_with('^') && pattern.ends_with('$'));
+    assert_eq!(
+        settings["additionalProperties"]["type"],
+        json!(["string", "number", "boolean"])
+    );
+    for no in ["recommended", "Dev.x", "dev.", "-a.b", "a.b-", "dev..x"] {
+        assert!(!crate::plugins::manifest::is_id(no), "{no}");
+    }
 }
 
 /// « Branche de départ des nouveaux worktrees » (ESC-160): `head`, `target` or a branch's name, read
@@ -573,7 +675,8 @@ fn exported_then_read_again_the_settings_are_the_same() {
     assert!(r.warnings.is_empty(), "{:?}\n{text}", r.warnings);
     let mut back = project();
     pf::apply(&mut back, &r);
-    for k in pf::KEYS {
+    // The file's own keys (`plugins.*`) are no project's: not exported.
+    for k in pf::KEYS.iter().filter(|k| !k.file_only) {
         // Applied as they were, the commands apart (they wait for trust).
         assert!(
             k.command || pf::get(&back, k.path) == pf::get(&p, k.path),
@@ -1221,7 +1324,13 @@ async fn exported_the_project_s_settings_make_its_file_its_commands_trusted() {
     // Its own commands: nothing to approve, nothing kept apart.
     let file = p.shared.file.unwrap();
     assert!(file.pending.is_none());
-    assert_eq!(file.keys.len(), pf::KEYS.len() - 1, "no target branch yet");
+    // No target branch yet, and none of the file's own keys (`plugins.*`).
+    let own = pf::KEYS.iter().filter(|k| k.file_only).count();
+    assert_eq!(
+        file.keys.len(),
+        pf::KEYS.len() - 1 - own,
+        "no target branch yet"
+    );
     assert!(p.shared.local.is_empty());
     assert_eq!(p.run_commands[0].id, "r");
 }
@@ -1283,4 +1392,33 @@ fn the_forms_the_documentation_gives_are_read_as_it_says() {
         read("launch:\n  name: web\n  command: npm run dev\n").values["launch"],
         json!([{ "name": "web", "command": "npm run dev", "shell": "", "cwd": "" }])
     );
+}
+
+/// A project added with a file that proposes plugins (PLG-14): said at its opening, nothing
+/// installed; the settings it gives a plugin are the core's answer to the plugins' runtime.
+#[tokio::test]
+async fn a_project_that_proposes_plugins_says_so_at_its_opening_and_installs_nothing() {
+    use crate::plugins::events::Place;
+    let h = harness("pf-plugins");
+    let (p, _r) = shared_project(
+        &h,
+        "version: 1\nplugins:\n  recommended: [dev.exemple.slack, dev.exemple.team-rules]\n  dev.exemple.slack:\n    channel: '#equipe'\n",
+    )
+    .await;
+    let said = toasts(&h);
+    assert!(
+        said.iter()
+            .any(|t| t.contains("demo") && t.contains("2 plugins")),
+        "{said:?}"
+    );
+    assert!(h.core.plugins.list(crate::i18n::Lang::En).is_empty());
+    let (private, settings) = h.core.project_plugin(&p.id, "dev.exemple.slack").unwrap();
+    assert!(!private);
+    assert_eq!(Value::Object(settings), json!({ "channel": "#equipe" }));
+    let (_, none) = h
+        .core
+        .project_plugin(&p.id, "dev.exemple.team-rules")
+        .unwrap();
+    assert!(none.is_empty());
+    assert!(h.core.project_plugin("gone", "dev.exemple.slack").is_none());
 }

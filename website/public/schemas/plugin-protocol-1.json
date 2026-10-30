@@ -56,6 +56,19 @@
         "type": ["string", "null"]
       }
     },
+    "settings/get": {
+      "description": "The values of its settings (contributes.settings), as the user set them; with a project, those its .escouade.yml gives the plugin (plugins.<id>) over them, where the plugin is on.",
+      "direction": "toEscouade",
+      "params": {
+        "$ref": "#/definitions/SettingsGetParams"
+      },
+      "result": {
+        "type": "object",
+        "additionalProperties": {
+          "type": ["string", "number", "boolean"]
+        }
+      }
+    },
     "log": {
       "description": "A line of its journal.",
       "direction": "toEscouade",
@@ -356,6 +369,15 @@
         }
       },
       "required": ["key"]
+    },
+    "SettingsGetParams": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "description": "The id of a project (project.id of a fact): its .escouade.yml's settings for the plugin go over the user's. None: the user's alone.",
+          "type": "string"
+        }
+      }
     },
     "LogParams": {
       "type": "object",

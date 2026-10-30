@@ -857,3 +857,56 @@ fn a_host_is_read_from_an_address_written_whole_never_from_a_template() {
     assert_eq!(host("https://{{data.host}}/x"), None);
     assert_eq!(host("ftp://hooks.slack.com"), None);
 }
+
+/// The settings of a plugin in a project (PLG-14): the project's `.escouade.yml` over the user's,
+/// only the keys the plugin declares with a value of their type, never one of its secrets.
+#[test]
+fn a_project_s_settings_go_over_the_user_s_only_as_the_plugin_declares_them() {
+    let m = manifest::read(
+        &json!({
+            "id": "dev.exemple.slack",
+            "name": "Slack",
+            "version": "1.0.0",
+            "escouade": { "api": "1", "min": "2.1.0" },
+            "contributes": {
+                "settings": [
+                    { "key": "channel", "title": "Salon", "type": "string" },
+                    { "key": "max", "title": "Au plus", "type": "number" },
+                    { "key": "mentions", "title": "Mentions", "type": "boolean" },
+                    { "key": "tone", "title": "Ton", "type": "select", "options": ["sec", { "value": "chaleureux", "title": "Chaleureux" }] },
+                    { "key": "free", "title": "Libre", "type": "select" }
+                ],
+                "secrets": [{ "key": "webhook", "title": "Adresse du webhook" }]
+            }
+        })
+        .to_string(),
+        false,
+    )
+    .manifest
+    .unwrap();
+    let mine = json!({ "channel": "#escouade", "max": 3 });
+    let file = json!({
+        "channel": "#equipe",
+        "max": "beaucoup",
+        "mentions": true,
+        "tone": "chaleureux",
+        "free": "n'importe",
+        "webhook": "https://hooks.slack.com/services/x",
+        "unknown": 1
+    });
+    let got =
+        crate::plugins::project_settings(&m, mine.as_object().unwrap(), file.as_object().unwrap());
+    assert_eq!(
+        Value::Object(got),
+        json!({ "channel": "#equipe", "max": 3, "mentions": true, "tone": "chaleureux", "free": "n'importe" })
+    );
+    // A select outside its options keeps the user's.
+    let got = crate::plugins::project_settings(
+        &m,
+        mine.as_object().unwrap(),
+        json!({ "tone": "froid", "mentions": "oui" })
+            .as_object()
+            .unwrap(),
+    );
+    assert_eq!(Value::Object(got), mine);
+}

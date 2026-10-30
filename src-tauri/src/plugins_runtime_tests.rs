@@ -53,7 +53,14 @@ fn fake(name: &str, args: &[&str], limits: Limits) -> Fake {
         "escouade": { "api": "1", "min": "2.1.0" },
         "run": { "command": "fake-plugin", "windows": "fake-plugin.cmd", "args": args },
         "activation": ["event:ticket.column"],
-        "permissions": { "secrets": ["token", "account:*"] }
+        "permissions": { "secrets": ["token", "account:*"] },
+        "contributes": {
+            "settings": [
+                { "key": "channel", "title": "Salon", "type": "string" },
+                { "key": "mentions", "title": "Mentions", "type": "boolean" }
+            ],
+            "secrets": [{ "key": "token", "title": "Jeton" }]
+        }
     });
     std::fs::write(
         src.join("escouade-plugin.json"),
@@ -694,4 +701,74 @@ fn a_relative_folder_gives_an_absolute_program() {
     };
     let p = crate::plugins::runtime::program_path(Path::new("slack"), &app, Path::new("app"));
     assert_eq!(p, here.join("app").join("escouade-plugins"));
+}
+
+/// The projects of a test: one open to every plugin, one private; each with the settings its
+/// `.escouade.yml` gives the fake plugin.
+struct Projects;
+
+impl crate::plugins::events::Place for Projects {
+    fn shell(&self) -> Option<crate::pty::ShellInfo> {
+        None
+    }
+
+    fn project_path(&self, _: &str) -> Option<String> {
+        None
+    }
+
+    fn project_plugin(&self, id: &str, _: &str) -> Option<(bool, serde_json::Map<String, Value>)> {
+        let (private, file) = match id {
+            "open" => (
+                false,
+                json!({ "channel": "#equipe", "mentions": true, "token": "fuite", "other": 1 }),
+            ),
+            "hidden" => (true, json!({ "channel": "#prive" })),
+            _ => return None,
+        };
+        Some((private, file.as_object().unwrap().clone()))
+    }
+}
+
+/// `settings/get` of a project (PLG-14): the settings its `.escouade.yml` gives the plugin over the
+/// user's, those it declares alone (never a secret); a private project's only once the plugin is
+/// on for it, and none of a project it is off in.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_project_s_file_gives_its_settings_to_the_plugin_on_in_it() {
+    let f = fake("project-settings", &[], quick());
+    let projects: Arc<dyn crate::plugins::events::Place> = Arc::new(Projects);
+    f.rt.place_with(Arc::downgrade(&projects));
+    f.plugins
+        .choose(ID, |c| {
+            c.settings.insert("channel".into(), json!("#escouade"));
+        })
+        .unwrap();
+    let of = |project: &str| {
+        let params = if project.is_empty() {
+            behave("settings")
+        } else {
+            json!({ "behave": "settings", "project": project })
+        };
+        f.rt.call(ID, "test/do", params)
+    };
+    let mine = json!({ "result": { "channel": "#escouade" } });
+    assert_eq!(of("").await.unwrap(), mine);
+    assert_eq!(
+        of("open").await.unwrap(),
+        json!({ "result": { "channel": "#equipe", "mentions": true } })
+    );
+    // Private: nothing of it reaches a plugin not turned on for it.
+    assert_eq!(of("hidden").await.unwrap(), mine);
+    assert_eq!(of("gone").await.unwrap(), mine);
+    f.plugins
+        .choose(ID, |c| {
+            c.projects.insert("hidden".into(), true);
+            c.projects.insert("open".into(), false);
+        })
+        .unwrap();
+    assert_eq!(
+        of("hidden").await.unwrap(),
+        json!({ "result": { "channel": "#prive" } })
+    );
+    assert_eq!(of("open").await.unwrap(), mine);
+    f.rt.shutdown();
 }

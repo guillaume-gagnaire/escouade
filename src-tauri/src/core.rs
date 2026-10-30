@@ -1990,7 +1990,8 @@ impl<R: Runtime> Core<R> {
         core.facts.resolve_with(resolver);
         let place: std::sync::Weak<dyn crate::plugins::events::Place> =
             Arc::downgrade(&(core.clone() as Arc<dyn crate::plugins::events::Place>));
-        core.plugin_events.place_with(place);
+        core.plugin_events.place_with(place.clone());
+        core.plugin_runtime.place_with(place);
         for h in core.agents.read().values() {
             h.lock().facts = core.facts.emitter();
         }
@@ -10270,6 +10271,22 @@ impl<R: Runtime> crate::plugins::events::Place for Core<R> {
 
     fn project_path(&self, id: &str) -> Option<String> {
         self.project(id).ok().map(|p| p.path)
+    }
+
+    fn project_plugin(
+        &self,
+        id: &str,
+        plugin: &str,
+    ) -> Option<(bool, serde_json::Map<String, serde_json::Value>)> {
+        let p = self.project(id).ok()?;
+        let settings = p
+            .shared
+            .file
+            .as_ref()
+            .and_then(|f| crate::projectfile::plugin_settings(&f.values, plugin))
+            .cloned()
+            .unwrap_or_default();
+        Some((p.private, settings))
     }
 }
 

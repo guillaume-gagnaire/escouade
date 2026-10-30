@@ -67,7 +67,7 @@ Every delay that runs out is noted in the journal: “test/do: no answer within 
 | Method | Parameters | Answer |
 | --- | --- | --- |
 | `secrets/get` | `{ "key": "webhook" }` | The secret, or `null` if none is kept under that key. |
-| `settings/get` | `{}` | Its settings, as the user chose them in the Settings tab of its page: an object by key of `contributes.settings`, without those left to their default. |
+| `settings/get` | `{}`, or `{ "project": "<id>" }` | Its settings, as the user chose them in the Settings tab of its page: an object by key of `contributes.settings`, without those left to their default. With a project (the `project.id` of a fact), those its [`.escouade.yml`](escouade-yml) gives it under `plugins.<id>` go first, if it is on in that project: only the keys it declares, with a value of their type, never a secret. |
 | `log` (notification) | `{ "level": "info", "message": "…" }` | None: the line goes to the plugin’s journal. |
 
 Any other method answers the error `-32601` and notes it in the journal. Escouade’s own errors: `-32001` for a secret that is not the plugin’s, `-32002` for a keychain out of reach, `-32602` for parameters that do not hold.

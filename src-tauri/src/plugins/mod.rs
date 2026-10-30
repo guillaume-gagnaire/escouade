@@ -137,6 +137,57 @@ pub fn active_in(choices: &Choices, project: &str, private: bool) -> bool {
     choices.enabled && choices.projects.get(project).copied().unwrap_or(!private)
 }
 
+/// The settings a plugin works with in a project (PLG-14): the user's (`choices`), then over them
+/// those of the project's `.escouade.yml` (`plugins.<id>`), but only the keys it declares
+/// (`contributes.settings`, never one of its secrets) with a value of their type (a `select`
+/// among its options, when it lists them). The rest of the file's is left out.
+pub fn project_settings(
+    manifest: &Manifest,
+    mine: &Map<String, Value>,
+    file: &Map<String, Value>,
+) -> Map<String, Value> {
+    let mut out = mine.clone();
+    let declared = manifest
+        .contributes
+        .get("settings")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let secrets = secret_keys(manifest);
+    for (key, value) in file {
+        if secrets.contains(key) {
+            continue;
+        }
+        let Some(decl) = declared
+            .iter()
+            .find(|d| d.get("key").and_then(Value::as_str) == Some(key.as_str()))
+        else {
+            continue;
+        };
+        let fits = match decl.get("type").and_then(Value::as_str) {
+            Some("string") => value.is_string(),
+            Some("number") => value.is_number(),
+            Some("boolean") => value.is_boolean(),
+            Some("select") => value.as_str().is_some_and(|v| {
+                decl.get("options")
+                    .and_then(Value::as_array)
+                    .is_none_or(|options| {
+                        options.iter().any(|o| {
+                            o.as_str()
+                                .or_else(|| o.get("value").and_then(Value::as_str))
+                                == Some(v)
+                        })
+                    })
+            }),
+            _ => false,
+        };
+        if fits {
+            out.insert(key.clone(), value.clone());
+        }
+    }
+    out
+}
+
 /// What a plugin may do, a word each, the strongest first (§3.4): `run` (it runs a program),
 /// `decide` (it decides the agents' permissions), then `commands:<c>`, `events:<e>`,
 /// `network:<host>` and `secrets:<key>`.

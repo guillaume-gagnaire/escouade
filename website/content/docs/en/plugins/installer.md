@@ -81,7 +81,7 @@ The Permissions tab of its page lists what it can do, with a switch per permissi
 
 ## Its settings and secrets
 
-The Settings tab shows the fields it declares (`contributes.settings`, `contributes.secrets`). A setting is kept with the list of the installed plugins and given to it by `settings/get`. A secret goes to the system’s keychain, under a name of its own (`plugin:<id>:<key>`): the tab only says whether it is kept, and “Forget” erases it.
+The Settings tab shows the fields it declares (`contributes.settings`, `contributes.secrets`). A setting is kept with the list of the installed plugins and given to it by `settings/get`; in a project whose [`.escouade.yml`](escouade-yml) sets the plugin (`plugins.<id>`), the project’s value goes first. A secret goes to the system’s keychain, under a name of its own (`plugin:<id>:<key>`): the tab only says whether it is kept, and “Forget” erases it.
 
 ## The journal
 

@@ -391,10 +391,38 @@ pub struct Runtime {
     /// Every plugin's journal, a declarative one's too (its webhooks, its commands).
     journals: Mutex<HashMap<String, Arc<Journal>>>,
     quitting: AtomicBool,
+    /// Where the projects are (the core): what `settings/get` reads of a project's file.
+    place: parking_lot::RwLock<Option<Weak<dyn super::events::Place>>>,
     me: Weak<Self>,
 }
 
 impl Runtime {
+    /// The core, once made: the projects whose settings a plugin may ask for.
+    pub fn place_with(&self, p: Weak<dyn super::events::Place>) {
+        *self.place.write() = Some(p);
+    }
+
+    /// The settings of the plugin `id` (`settings/get`): the user's, and in the project `project`
+    /// those its `.escouade.yml` gives it (PLG-14), only where the plugin is on (a private project
+    /// gives nothing to a plugin not turned on for it).
+    pub fn settings_of(&self, id: &str, project: Option<&str>) -> Value {
+        let Some(choices) = self.plugins.choices(id) else {
+            return json!({});
+        };
+        let from_file = project.and_then(|p| {
+            let place = self.place.read().as_ref().and_then(Weak::upgrade)?;
+            let (private, file) = place.project_plugin(p, id)?;
+            super::active_in(&choices, p, private).then_some(file)
+        });
+        let manifest = self.plugins.get(id, Lang::En).and_then(|v| v.manifest);
+        match (from_file, manifest) {
+            (Some(file), Some(m)) => {
+                Value::Object(super::project_settings(&m, &choices.settings, &file))
+            }
+            _ => Value::Object(choices.settings),
+        }
+    }
+
     pub fn new(
         plugins: Arc<Plugins>,
         secrets: Arc<dyn SecretStore>,
@@ -416,6 +444,7 @@ impl Runtime {
             hosts: Mutex::new(HashMap::new()),
             journals: Mutex::new(HashMap::new()),
             quitting: AtomicBool::new(false),
+            place: parking_lot::RwLock::new(None),
             me: me.clone(),
         });
         // A folder in development read again: its process stops, and the next one is given the
@@ -1279,13 +1308,21 @@ impl Host {
                 Some(key) => self.secret(key).map(|s| json!(s)),
                 None => Err((INVALID_PARAMS, "secrets/get takes a key".into())),
             },
-            // The values of its settings, as the user set them (Réglages of its page).
-            "settings/get" => Ok(self
-                .rt
-                .upgrade()
-                .and_then(|rt| rt.plugins.choices(&self.id))
-                .map(|c| Value::Object(c.settings))
-                .unwrap_or_else(|| json!({}))),
+            // The values of its settings, as the user set them (Réglages of its page), with those
+            // of the project's .escouade.yml when it names a project (PLG-14).
+            "settings/get" => match params.get("project") {
+                None | Some(Value::Null) | Some(Value::String(_)) => Ok(self
+                    .rt
+                    .upgrade()
+                    .map(|rt| {
+                        rt.settings_of(&self.id, params.get("project").and_then(Value::as_str))
+                    })
+                    .unwrap_or_else(|| json!({}))),
+                Some(_) => Err((
+                    INVALID_PARAMS,
+                    "settings/get takes a project's id, or none".into(),
+                )),
+            },
             _ => {
                 self.journal.push(
                     Kind::Refused,

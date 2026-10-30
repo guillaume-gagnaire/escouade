@@ -141,6 +141,11 @@ export interface SecretsGetParams {
   key: string;
 }
 
+export interface SettingsGetParams {
+  /** The id of a project (project.id of a fact): its .escouade.yml's settings for the plugin go over the user's. None: the user's alone. */
+  project?: string;
+}
+
 export interface LogParams {
   level: 'debug' | 'info' | 'warn' | 'error';
   message: string;
@@ -200,6 +205,8 @@ export interface ToPlugin {
 export interface ToEscouade {
   /** One of its secrets (a key of permissions.secrets), or null when none is kept. */
   'secrets/get': { params: SecretsGetParams; result: string | null };
+  /** The values of its settings (contributes.settings), as the user set them; with a project, those its .escouade.yml gives the plugin (plugins.<id>) over them, where the plugin is on. */
+  'settings/get': { params: SettingsGetParams; result: Record<string, string | number | boolean> };
   /** A line of its journal. */
   log: { params: LogParams; result: void };
 }

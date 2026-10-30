@@ -6,6 +6,10 @@ L’onglet « Projets » règle un projet à la fois : son nom, sa couleur et 
 
 L’onglet agit sur le projet choisi dans la rangée « Projet », sous l’en-tête de la [fenêtre des réglages](settings-application) : un bouton par projet ouvert. Ce que tu changes sur un projet reste dans le brouillon quand tu passes à un autre, et tout s’enregistre ensemble avec « Enregistrer ».
 
+## Plugins proposés
+
+Quand le `.escouade.yml` du projet propose des plugins (`plugins.recommended`) qui ne sont pas installés sur ta machine, une bande en tête de l’onglet les nomme, chacun avec ce qu’il demande. « Voir dans le store » ouvre sa page dans la vue Plugins, d’où tu l’installes après avoir lu ses permissions : la bande n’installe ni n’active rien. « Pas pour ce projet » la fait taire sur cette machine. Dans un projet privé, elle rappelle qu’un plugin installé n’y est actif qu’une fois activé pour lui. Voir [.escouade.yml](escouade-yml#plugins).
+
 ## Identité
 
 | Réglage | Effet | Par défaut |

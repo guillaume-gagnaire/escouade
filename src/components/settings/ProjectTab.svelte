@@ -21,6 +21,7 @@
   import Row from './Row.svelte';
   import SharedMark from './SharedMark.svelte';
   import SharedSection from './SharedSection.svelte';
+  import ProposedPlugins from './ProposedPlugins.svelte';
   import CodeIndexSection from './CodeIndexSection.svelte';
   import MemorySection from './MemorySection.svelte';
   import StepList from './StepList.svelte';
@@ -240,6 +241,9 @@
     {/each}
   </ul>
 {/snippet}
+
+<!-- The plugins its .escouade.yml proposes and this machine lacks (PLG-14): read from the project as the backend has it. -->
+<ProposedPlugins project={live} />
 
 <Group title={t('settings.project.identity')}>
   <Row label={t('settings.project.nameLabel')}>

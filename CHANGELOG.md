@@ -23,6 +23,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Quatre plugins d’exemple, complets et testés, à copier pour écrire le tien : un thème « Contraste élevé », un webhook Discord sans code, Slack dans le salon de chaque projet et les règles d’une équipe en TypeScript. La documentation montre leur code entier.
 - « Ouvrir dans Escouade » sur une page du store ouvre la page du plugin dans l’app, qu’elle soit lancée ou non : un lien ne fait que montrer le plugin, l’installer reste ton geste.
 - La documentation dit comment publier un plugin sur le store et préparer sa revue, et une nouvelle page, « La sécurité des plugins », dit ce que l’app vérifie, ce que le sceau « Vérifié par Escouade » couvre et ce que la revue refuse.
+- Un projet peut proposer des plugins dans son `.escouade.yml` : à son ouverture, une bande de Réglages › Projets nomme ceux qui manquent, avec leur page du store, sans rien installer seule ; « Pas pour ce projet » la fait taire. Le fichier peut aussi régler un plugin pour ce projet, jamais avec un secret.
 
 ### Corrections
 

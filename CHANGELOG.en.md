@@ -23,6 +23,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - Four example plugins, complete and tested, to copy when you write yours: a “High contrast” theme, a Discord webhook with no code, Slack in each project’s channel and a team’s rules in TypeScript. The documentation shows their whole code.
 - “Open in Escouade” on a store page opens the plugin’s page in the app, running or not: a link only shows the plugin, installing it stays your gesture.
 - The documentation says how to publish a plugin on the store and prepare its review, and a new page, “Plugin security”, says what the app checks, what the “Verified by Escouade” seal covers and what the review refuses.
+- A project can propose plugins in its `.escouade.yml`: when it opens, a band of Settings › Projects names those missing, with their store page, installing nothing by itself; “Not for this project” silences it. The file can also set a plugin up for that project, never with a secret.
 
 ### Fixes
 

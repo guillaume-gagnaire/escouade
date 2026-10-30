@@ -120,6 +120,14 @@ export class Plugin {
     return this.call('secrets/get', { key });
   }
 
+  /**
+   * Its settings (`contributes.settings`) as the user set them; with `project` (the `project.id` of a fact), those the
+   * project's `.escouade.yml` gives it (`plugins.<id>`) over them, where it is on.
+   */
+  settings(project?: string): Promise<Record<string, string | number | boolean>> {
+    return this.call('settings/get', project ? { project } : {});
+  }
+
   /** A line of its journal, in Réglages › Plugins. */
   readonly log = {
     debug: (message: string) => this.notify('log', { level: 'debug', message }),
