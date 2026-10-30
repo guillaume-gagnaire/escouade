@@ -8,6 +8,8 @@ vite.config.ts.timestamp-*
 .DS_Store
 test-results/
 playwright-report/
+# The results of the reference measures (INT-0, npm run bench:int0): Playwright empties test-results/ at each run.
+bench-results/
 
 # The example plugins run as their folders hold them: their dist/ is built and committed (plugin-examples/ci.mjs checks it).
 !plugin-examples/*/dist/

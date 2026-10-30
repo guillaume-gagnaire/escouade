@@ -97,6 +97,8 @@ mod fileorigin;
 mod fileorigin_tests;
 #[cfg(test)]
 mod first_message_tests;
+#[cfg(test)]
+mod fluxbench;
 mod forge;
 mod fsedit;
 #[cfg(test)]

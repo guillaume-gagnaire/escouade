@@ -40,6 +40,8 @@ export interface App {
    * on, every start is on it. Its `settings.json` is the test's to write first.
    */
   restartAs: (data: string) => Promise<Page>;
+  /** When the launch the test is on was started (ms since the epoch, just before its process): the startup bench's origin (INT-0). */
+  launchedAt: () => number;
   /** Attaches Playwright again to the running app's window (after its page's process crashed): gives it, also in `app.page`. */
   reconnect: () => Promise<Page>;
   /** A git repository with one commit, ready to be added as a project. */
@@ -118,6 +120,8 @@ function tail(file: string, lines = 40): string {
 /** A launch of the app: its process, why it ended (null while it runs) and, once attached, its WebView2. */
 interface Instance {
   child: ChildProcess;
+  /** When it was started (ms since the epoch). */
+  at: number;
   stopped: string | null;
   browser: Browser | null;
 }
@@ -142,9 +146,10 @@ function cursorAuth(root: string): string {
  */
 function startApp(env: NodeJS.ProcessEnv, stderr: string, args: string[] = []): Instance {
   const errFd = fs.openSync(stderr, 'a');
+  const at = Date.now();
   const child = spawn(EXE, args, { env, stdio: ['ignore', 'ignore', errFd] });
   fs.closeSync(errFd);
-  const instance: Instance = { child, stopped: null, browser: null };
+  const instance: Instance = { child, at, stopped: null, browser: null };
   child.on('exit', (code, signal) => {
     instance.stopped = signal ? `killed by ${signal}` : `exit code ${code} (0x${((code ?? 0) >>> 0).toString(16)})`;
   });
@@ -480,6 +485,7 @@ export const test = base.extend<{
         opencodeJson: path.join(root, 'xdg', 'opencode', 'opencode.json'),
         copilotJson: path.join(root, 'copilot', 'mcp-config.json'),
         launches,
+        launchedAt: () => instance.at,
         restart: async () => {
           // The app saves what it shows a moment after a change: not killed in the middle of it.
           await new Promise((r) => setTimeout(r, SAVE_MS));
