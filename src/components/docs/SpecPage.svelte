@@ -6,6 +6,7 @@
   import { fAgo } from '../../lib/format';
   import { docsStore } from '../../lib/docs.svelte';
   import { comparedLine } from '../../lib/docs';
+  import { refLabel } from '../../lib/decisions';
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
   import { tip } from '../../lib/tip';
@@ -217,7 +218,7 @@
         {#if page.decisions.length}
           <h4>{t('docs.page.decisions')}</h4>
           <ul class="chips">
-            {#each page.decisions as n (n)}<li class="mono">{String(n).padStart(3, '0')}</li>{/each}
+            {#each page.decisions as n (n)}<li class="mono">{refLabel(n)}</li>{/each}
           </ul>
         {/if}
       </aside>

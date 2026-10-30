@@ -5,9 +5,14 @@ import {
   decisionCounts,
   decisionDay,
   decisionDayWords,
+  decisionKey,
+  decisionLabel,
   decisionNo,
+  decisionRef,
   decisionOrigin,
   filterDecisions,
+  cites,
+  refLabel,
   replacementsOf,
 } from './decisions';
 import { decision } from '../test/decisions';
@@ -45,6 +50,21 @@ describe('the register of the decisions', () => {
     expect(filterDecisions(list, 'superseded').map((d) => d.number)).toEqual([9]);
     // The list itself is left in its order.
     expect(list.map((d) => d.number)).toEqual([4, 9, 13, 15]);
+  });
+
+  it('cites a proposal by its id, as it has no number until accepted, and lists the proposals first', () => {
+    const tarif = decision(null, { id: 'tarif-famille', state: 'proposed', date: '2026-10-29' });
+    const older = decision(null, { id: 'relances', state: 'proposed', date: '2026-10-20' });
+    const list = [decision(4), tarif, decision(13), older];
+    expect(decisionRef(tarif)).toBe('tarif-famille');
+    expect(decisionRef(list[2])).toBe(13);
+    expect([decisionLabel(tarif), decisionLabel(list[0])]).toEqual(['tarif-famille', '004']);
+    expect([refLabel(7), refLabel('relances')]).toEqual(['007', 'relances']);
+    expect(decisionKey(list[0])).toBe('4');
+    expect(cites('tarif-famille', tarif) && cites(13, list[2]) && !cites(4, tarif)).toBe(true);
+    expect(filterDecisions(list, 'all').map(decisionRef)).toEqual(['tarif-famille', 'relances', 13, 4]);
+    // A proposal is replaced by nothing.
+    expect(replacementsOf(tarif, list)).toEqual([]);
   });
 
   it('says a day as the register does: today, yesterday, else its day and month', () => {

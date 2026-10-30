@@ -72,8 +72,10 @@ pub struct WriteSpecArgs {
         description = "The keys of the tickets that implement or changed it; replaces the list."
     )]
     pub tickets: Option<Vec<String>>,
-    #[schemars(description = "The numbers of the decisions it follows; replaces the list.")]
-    pub decisions: Option<Vec<u32>>,
+    #[schemars(
+        description = "The decisions it follows, as list_decisions gives them: an accepted one by its number, a proposal by its id (it has no number until accepted); replaces the list."
+    )]
+    pub decisions: Option<Vec<docs::Ref>>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -100,8 +102,14 @@ pub struct ListDecisionsArgs {
 pub struct ReadDecisionArgs {
     #[schemars(description = "The project: its id, or its name in any case.")]
     pub project: String,
-    #[schemars(description = "The decision's number, as list_decisions gives it.")]
-    pub number: u32,
+    #[schemars(
+        description = "The decision's number, as list_decisions gives it (an accepted one); or id."
+    )]
+    pub number: Option<u32>,
+    #[schemars(
+        description = "The decision's id, as list_decisions gives it: how a proposal is cited, as it has no number until accepted (an accepted one keeps it too)."
+    )]
+    pub id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -148,7 +156,11 @@ pub struct ProposeDecisionArgs {
     #[schemars(description = "The project: its id, or its name in any case.")]
     pub project: String,
     #[schemars(
-        description = "The number of a proposal still open to revise it; a new proposal when left out. A decision that was accepted is not revised: replace_decision replaces it."
+        description = "The id of a proposal still open to revise it (as propose_decision or list_decisions gives it); a new proposal when left out. A decision that was accepted is not revised: replace_decision replaces it."
+    )]
+    pub id: Option<String>,
+    #[schemars(
+        description = "The number of a proposal still open that was given one before (a proposal now has none until accepted), to revise it."
     )]
     pub number: Option<u32>,
     #[serde(flatten)]
@@ -362,7 +374,7 @@ pub(super) async fn write<R: Runtime>(
             p.tickets = v.clone();
         }
         if let Some(v) = &args.decisions {
-            p.decisions = v.clone();
+            p.decisions = v.iter().filter_map(docs::Ref::plain).collect();
         }
         if let Some(k) = &own {
             if !p.tickets.iter().any(|x| x.eq_ignore_ascii_case(k)) {
@@ -441,10 +453,14 @@ pub(super) async fn decisions<R: Runtime>(
             // An accepted decision that a proposal in the register would replace.
             let replaced_by_proposal = all
                 .iter()
-                .find(|o| o.state == State::Proposed && o.supersedes.contains(&d.number))
-                .map(|o| o.number);
+                .find(|o| {
+                    o.state == State::Proposed
+                        && d.number.is_some_and(|n| o.supersedes.contains(&n))
+                })
+                .map(|o| o.reference());
             json!({
                 "number": d.number,
+                "id": d.id,
                 "title": d.title,
                 "date": d.date,
                 "state": d.state,
@@ -466,7 +482,18 @@ pub(super) async fn decision<R: Runtime>(
     args: ReadDecisionArgs,
 ) -> Result<String, ToolError> {
     let (_, space) = open(core, caller, &args.project).await?;
-    json(&space.decision(args.number).map_err(failed)?)
+    let r = which(args.number, args.id.as_deref()).ok_or_else(|| {
+        failed(anyhow::anyhow!(tr!(
+            "Donne le numéro de la décision (number) ou son id.",
+            "Give the decision's number or its id."
+        )))
+    })?;
+    json(&space.decision(&r).map_err(failed)?)
+}
+
+/// The decision a tool names: by its id, else its number.
+fn which(number: Option<u32>, id: Option<&str>) -> Option<docs::Ref> {
+    id.and_then(docs::Ref::of).or(number.map(docs::Ref::Number))
 }
 
 fn decision_of(f: DecisionFields) -> Decision {
@@ -516,9 +543,25 @@ pub(super) async fn propose<R: Runtime>(
         return keep_proposal(core, &id, d);
     }
     from_ticket(core, caller, &project, &mut d);
-    let d = space.decision_propose(args.number, d).map_err(failed)?;
+    let r = which(args.number, args.id.as_deref());
+    let d = space.decision_propose(r.as_ref(), d).map_err(failed)?;
     core.docs_changed(&project.id).await;
-    json(&json!({ "number": d.number, "title": d.title, "state": d.state, "date": d.date }))
+    json(&json!({
+        "id": d.id,
+        "number": d.number,
+        "title": d.title,
+        "state": d.state,
+        "date": d.date,
+        "note": numbered_note(),
+    }))
+}
+
+/// What an agent is told of a proposal's number (ESC-303).
+fn numbered_note() -> String {
+    tr!(
+        "Une proposition n’a pas de numéro : cite-la par son id (pages de spec, tickets) ; elle reçoit son numéro quand elle est acceptée, et ses citations le prennent.",
+        "A proposal has no number: cite it by its id (spec pages, tickets); it gets its number when it is accepted, and what cites it takes that number."
+    )
 }
 
 /// A discussion's decision, kept on it until poured.
@@ -551,7 +594,9 @@ pub(super) async fn replace<R: Runtime>(
     let mut d = decision_of(args.fields);
     if let Some((id, _)) = discussion_of(core, caller, &project) {
         // Checked now (an accepted decision only), replaced when poured.
-        let was = space.decision(args.number).map_err(failed)?;
+        let was = space
+            .decision(&docs::Ref::Number(args.number))
+            .map_err(failed)?;
         if was.state != State::Accepted {
             return Err(failed(anyhow::anyhow!(tr!(
                 "Seule une décision acceptée se remplace (la n° {} ne l’est pas) : une proposition se révise.",
@@ -566,11 +611,13 @@ pub(super) async fn replace<R: Runtime>(
     let d = space.decision_replace(args.number, d).map_err(failed)?;
     core.docs_changed(&project.id).await;
     json(&json!({
+        "id": d.id,
         "number": d.number,
         "title": d.title,
         "state": d.state,
         "date": d.date,
         "supersedes": d.supersedes,
+        "note": numbered_note(),
     }))
 }
 

@@ -1,7 +1,7 @@
 <script lang="ts">
   import Modal from '../modals/Modal.svelte';
   import { t } from '../../lib/i18n';
-  import { decisionNo } from '../../lib/decisions';
+  import { decisionLabel, decisionNo } from '../../lib/decisions';
   import { docsStore } from '../../lib/docs.svelte';
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
@@ -23,7 +23,9 @@
   } = $props();
 
   const accepted = $derived(
-    (docsStore.decisions[project.id] ?? []).filter((d) => d.state === 'accepted').sort((a, b) => b.number - a.number),
+    (docsStore.decisions[project.id] ?? [])
+      .filter((d): d is DocsDecision & { number: number } => d.state === 'accepted' && d.number != null)
+      .sort((a, b) => b.number - a.number),
   );
 
   let title = $state('');
@@ -44,7 +46,7 @@
     );
     busy = false;
     if (!made) return;
-    app.toast(t('docs.decisions.form.done', { n: decisionNo(made.number) }));
+    app.toast(t('docs.decisions.form.done', { n: decisionLabel(made) }));
     await docsStore.load(project.id);
     ondone(made);
   }

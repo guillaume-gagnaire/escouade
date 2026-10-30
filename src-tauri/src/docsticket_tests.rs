@@ -19,6 +19,16 @@ fn spaces(name: &str) -> (Space, Space, Space) {
         .unwrap();
     into.decision_propose(None, proposal("Trois échéances"))
         .unwrap();
+    into.decision_accept(
+        &Ref::Id("trois-echeances".into()),
+        "Léa",
+        &Register::default(),
+        None,
+    )
+    .unwrap();
+    // A proposal of the team, still open.
+    into.decision_propose(None, proposal("Tarif famille"))
+        .unwrap();
     let base = Space::new(test_dir(&format!("{name}-base")), None);
     let work = Space::new(test_dir(&format!("{name}-work")), None);
     seed(&into, &base).unwrap();
@@ -50,7 +60,7 @@ fn only_what_the_ticket_changed_is_poured_and_the_teams_writes_stay() {
         Poured {
             pages: vec!["paiement/acompte".into(), "paiement/echeances".into()],
             removed: vec!["compte/connexion".into()],
-            decisions: vec![2],
+            decisions: vec![Ref::Id("quatre-echeances".into())],
         }
     );
     assert_eq!(
@@ -67,7 +77,11 @@ fn only_what_the_ticket_changed_is_poured_and_the_teams_writes_stay() {
         into.spec_read("paiement/recu").unwrap().body,
         "Par e-mail, en PDF."
     );
-    assert_eq!(into.decision(2).unwrap().title, "Quatre échéances");
+    let mine = into.decision(&Ref::Id("quatre-echeances".into())).unwrap();
+    assert_eq!(
+        (mine.title.as_str(), mine.number),
+        ("Quatre échéances", None)
+    );
 }
 
 #[test]
@@ -76,18 +90,30 @@ fn a_new_decision_whose_number_the_branch_took_gets_the_next_one() {
     let mine = work
         .decision_propose(None, proposal("Quatre échéances"))
         .unwrap();
-    assert_eq!(mine.number, 2);
+    assert_eq!(mine.number, None);
     work.spec_write("paiement/echeances", |p| {
         p.body = "Quatre échéances.".into();
-        p.decisions = vec![1, 2];
+        p.decisions = vec![Ref::Number(1), mine.reference()];
     })
     .unwrap();
-    // The team proposed its own number 2 meanwhile.
+    // Accepted in the copy without looking at the branch, where the team accepted its own 2
+    // meanwhile.
+    let mine = work
+        .decision_accept(&mine.reference(), "Léa", &Register::default(), None)
+        .unwrap();
+    assert_eq!(mine.number, Some(2));
     into.decision_propose(None, proposal("Relances par e-mail"))
         .unwrap();
+    into.decision_accept(
+        &Ref::Id("relances-par-e-mail".into()),
+        "Léa",
+        &Register::default(),
+        None,
+    )
+    .unwrap();
     let poured = pour(&work, &base, &into).unwrap();
-    assert_eq!(poured.decisions, vec![3]);
-    let titles: Vec<(u32, String)> = into
+    assert_eq!(poured.decisions, vec![Ref::Number(3)]);
+    let titles: Vec<(Option<u32>, String)> = into
         .decisions()
         .into_iter()
         .map(|d| (d.number, d.title))
@@ -95,16 +121,39 @@ fn a_new_decision_whose_number_the_branch_took_gets_the_next_one() {
     assert_eq!(
         titles,
         vec![
-            (1, "Trois échéances".to_string()),
-            (2, "Relances par e-mail".to_string()),
-            (3, "Quatre échéances".to_string()),
+            (Some(1), "Trois échéances".to_string()),
+            (Some(2), "Relances par e-mail".to_string()),
+            (Some(3), "Quatre échéances".to_string()),
+            (None, "Tarif famille".to_string()),
         ]
     );
     // The page names the number the decision has on the branch.
     assert_eq!(
         into.spec_read("paiement/echeances").unwrap().decisions,
-        vec![1, 3]
+        vec![Ref::Number(1), Ref::Number(3)]
     );
+}
+
+#[test]
+fn a_proposal_accepted_in_the_copy_leaves_no_file_without_a_number_on_the_branch() {
+    let (into, base, work) = spaces("dt-numbered");
+    let id = Ref::Id("tarif-famille".into());
+    let on = into.register();
+    let d = work
+        .decision_accept(&id, "Léa", &on, Some("DEM-7"))
+        .unwrap();
+    assert_eq!(d.number, Some(2));
+    let poured = pour(&work, &base, &into).unwrap();
+    assert_eq!(poured.decisions, vec![Ref::Number(2)]);
+    let dir = into.root.join(".escouade/decisions");
+    assert!(dir.join("0002-tarif-famille.md").is_file());
+    assert!(!dir.join("tarif-famille.md").exists());
+    let on_branch = into.decision(&id).unwrap();
+    assert_eq!(
+        (on_branch.number, on_branch.state, on_branch.tickets),
+        (Some(2), State::Accepted, vec!["DEM-7".to_string()])
+    );
+    assert_eq!(into.decisions().len(), 2);
 }
 
 #[test]

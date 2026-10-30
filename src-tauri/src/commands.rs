@@ -3096,21 +3096,21 @@ pub async fn docs_decisions(core: CoreState<'_>, id: String) -> Res<Vec<crate::d
     Ok(core.docs_space(&id, None).await.map_err(err)?.decisions())
 }
 
-/// A decision proposed from the window, or a proposal still open revised (`number`).
+/// A decision proposed from the window, or a proposal still open revised (`reference`: its id).
 #[tauri::command]
 pub async fn docs_decision_propose(
     core: CoreState<'_>,
     id: String,
-    number: Option<u32>,
+    reference: Option<crate::docs::Ref>,
     decision: crate::docs::Decision,
 ) -> Res<crate::docs::Decision> {
     let out = core
         .docs_space(&id, None)
         .await
-        .and_then(|s| s.decision_propose(number, decision))
+        .and_then(|s| s.decision_propose(reference.as_ref(), decision))
         .map_err(err);
     if let Ok(d) = &out {
-        core.docs_to_plan(&id, &[], &[d.number]);
+        core.docs_to_plan(&id, &[], &[d.reference()]);
     }
     core.docs_changed(&id).await;
     out
@@ -3130,20 +3130,24 @@ pub async fn docs_decision_replace(
         .and_then(|s| s.decision_replace(number, decision))
         .map_err(err);
     if let Ok(d) = &out {
-        core.docs_to_plan(&id, &[], &[d.number]);
+        core.docs_to_plan(&id, &[], &[d.reference()]);
     }
     core.docs_changed(&id).await;
     out
 }
 
-/// « Accepter »: a human accepts a proposed decision. The only way to: no MCP tool does.
+/// « Accepter »: a human accepts a proposed decision (`reference`: its id). The only way to: no
+/// MCP tool does.
 #[tauri::command]
 pub async fn docs_decision_accept(
     core: CoreState<'_>,
     id: String,
-    number: u32,
+    reference: crate::docs::Ref,
 ) -> Res<crate::docs::Decision> {
-    let out = core.docs_accept_decision(&id, number).await.map_err(err);
+    let out = core
+        .docs_accept_decision(&id, &reference)
+        .await
+        .map_err(err);
     core.docs_changed(&id).await;
     out
 }

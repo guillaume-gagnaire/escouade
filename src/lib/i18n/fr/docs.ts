@@ -292,6 +292,7 @@ export default {
     },
     head: {
       proposed: 'ADR-{n} · proposée {when}',
+      proposedId: '{id} · proposée {when}, numérotée à son acceptation',
       accepted: 'ADR-{n} · acceptée {when} par {by}',
       acceptedAlone: 'ADR-{n} · acceptée {when}',
       superseded: 'ADR-{n} · remplacée par {by}',
@@ -310,6 +311,7 @@ export default {
     accept: 'Accepter',
     acceptLabel: 'Accepter la décision {n}',
     acceptTip: 'Une décision acceptée ne se réécrit plus : une nouvelle la remplace.',
+    noNumberTip: 'Pas encore de numéro : elle reçoit le suivant du registre quand elle est acceptée.',
     acceptedToast: 'Décision {n} acceptée.',
     fromTicket: 'Acceptée d’office quand le ticket {key} sera validé.',
     replace: 'La remplacer',

@@ -47,7 +47,9 @@ function register(): DocsDecision[] {
       changes: [{ page: 'paiement/echeances', added: 2, removed: 1 }],
       tickets: ['DEM-38'],
     }),
-    decision(15, {
+    // A proposal: no number until it is accepted (ESC-303), cited by its id.
+    decision(null, {
+      id: 'relances-par-e-mail-seulement',
       title: 'Relances par e-mail seulement',
       state: 'proposed',
       origin: 'ticket',
@@ -64,25 +66,28 @@ function backend(list: DocsDecision[]) {
     docs_recent: () => [],
     docs_pending: () => ({ files: [], count: 0, codeCommits: 0, conflict: null }),
     docs_decision_accept: (a) => {
-      const d = list.find((x) => x.number === a.number)!;
+      // Numbered when accepted: the next of the register.
+      const d = list.find((x) => x.id === a.reference || x.number === a.reference)!;
+      d.number = Math.max(...list.map((x) => x.number ?? 0)) + 1;
       d.state = 'accepted';
       d.acceptedBy = 'Léa';
       return d;
     },
     docs_decision_propose: (a) => {
-      const d = decision(list.length + 12, { ...a.decision, state: 'proposed' });
+      const d = decision(null, { ...a.decision, id: `proposee-${list.length}`, state: 'proposed' });
       list.push(d);
       return d;
     },
     docs_decision_replace: (a) => {
-      const d = decision(list.length + 12, { ...a.decision, state: 'proposed', supersedes: [a.number] });
+      const d = decision(null, { ...a.decision, id: `proposee-${list.length}`, state: 'proposed', supersedes: [a.number] });
       list.push(d);
       return d;
     },
   });
 }
 
-const rowOf = (n: number) => document.querySelector(`tr[data-decision="${n}"]`) as HTMLElement;
+const rowOf = (n: number | string) => document.querySelector(`tr[data-decision="${n}"]`) as HTMLElement;
+const RELANCES = 'relances-par-e-mail-seulement';
 
 describe('the register of the decisions', () => {
   beforeEach(() => {
@@ -99,7 +104,7 @@ describe('the register of the decisions', () => {
     expect(document.querySelector('[data-counts]')).toHaveTextContent('4 décisions · 2 acceptées · 1 proposée · 1 remplacée');
     const table = screen.getByRole('table', { name: 'Registre des décisions' });
     const numbers = [...table.querySelectorAll('tbody tr')].map((r) => r.getAttribute('data-decision'));
-    expect(numbers).toEqual(['15', '13', '9', '4']);
+    expect(numbers).toEqual([RELANCES, '13', '9', '4']);
     expect(rowOf(13)).toHaveTextContent('013');
     expect(rowOf(13)).toHaveTextContent('Ticket DEM-31');
     expect(rowOf(13)).toHaveTextContent('Acceptée');
@@ -109,8 +114,10 @@ describe('the register of the decisions', () => {
     expect(rowOf(9)).toHaveTextContent('Paiement · par 013');
     expect(rowOf(9)).toHaveTextContent('Cahier des charges v3');
     expect(rowOf(4)).toHaveTextContent('Discussion « Prestataire de paiement »');
+    // A proposal has no number yet.
+    expect(rowOf(RELANCES).querySelector('.c-num')).toHaveTextContent('—');
     // Only a proposal is accepted.
-    expect(within(rowOf(15)).getByRole('button', { name: 'Accepter la décision 015' })).toBeInTheDocument();
+    expect(within(rowOf(RELANCES)).getByRole('button', { name: `Accepter la décision ${RELANCES}` })).toBeInTheDocument();
     expect(within(rowOf(13)).queryByRole('button', { name: /Accepter/ })).toBeNull();
   });
 
@@ -157,11 +164,16 @@ describe('the register of the decisions', () => {
     // The latest, chosen by default: a proposal of ticket DEM-40.
     const detail = screen.getByRole('complementary', { name: 'Relances par e-mail seulement' });
     expect(detail).toHaveTextContent('Acceptée d’office quand le ticket DEM-40 sera validé.');
-    await userEvent.click(within(rowOf(15)).getByRole('button', { name: 'Accepter la décision 015' }));
+    expect(detail).toHaveTextContent(`${RELANCES} · proposée aujourd’hui, numérotée à son acceptation`);
+    await userEvent.click(within(rowOf(RELANCES)).getByRole('button', { name: `Accepter la décision ${RELANCES}` }));
     await waitFor(() => expect(b.called('docs_decision_accept')).toHaveLength(1));
-    expect(b.called('docs_decision_accept')[0].args).toEqual({ id: 'p1', number: 15 });
-    await waitFor(() => expect(rowOf(15)).toHaveTextContent('Acceptée'));
-    expect(within(rowOf(15)).queryByRole('button', { name: /Accepter/ })).toBeNull();
+    // By its id, never a number.
+    expect(b.called('docs_decision_accept')[0].args).toEqual({ id: 'p1', reference: RELANCES });
+    // It takes the next number: 14, still the one shown.
+    await waitFor(() => expect(rowOf(14)).toHaveTextContent('Acceptée'));
+    expect(rowOf(14)).toHaveTextContent('014');
+    expect(within(rowOf(14)).queryByRole('button', { name: /Accepter/ })).toBeNull();
+    expect(screen.getByRole('complementary', { name: 'Relances par e-mail seulement' })).toHaveTextContent('ADR-014 · acceptée');
   });
 
   it('proposes a decision by hand, and replaces an accepted one with a new one', async () => {
@@ -176,7 +188,7 @@ describe('the register of the decisions', () => {
     await waitFor(() => expect(b.called('docs_decision_propose')).toHaveLength(1));
     expect(b.called('docs_decision_propose')[0].args).toMatchObject({
       id: 'p1',
-      number: null,
+      reference: null,
       decision: { title: 'Tarif famille', decision: '−20 % dès le troisième membre.' },
     });
     await waitFor(() => expect(screen.getByRole('complementary', { name: 'Tarif famille' })).toBeInTheDocument());

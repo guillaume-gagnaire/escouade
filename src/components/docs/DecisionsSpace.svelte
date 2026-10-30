@@ -8,6 +8,8 @@
     decisionCounts,
     decisionDay,
     decisionDayWords,
+    decisionKey,
+    decisionLabel,
     decisionNo,
     decisionOrigin,
     filterDecisions,
@@ -37,17 +39,20 @@
   const rows = $derived(filterDecisions(all, filter));
 
   /** The decision read on the right: the one chosen while the filter keeps it, else the first row. */
-  let chosen = $state<number | null>(null);
-  const shown = $derived(rows.find((d) => d.number === chosen) ?? rows[0] ?? null);
+  // By its key: its number, else its id (a proposal has no number until accepted, ESC-303).
+  let chosen = $state<string | null>(null);
+  const shown = $derived(rows.find((d) => decisionKey(d) === chosen) ?? rows[0] ?? null);
 
-  let accepting = $state<number | null>(null);
+  let accepting = $state<string | null>(null);
   async function accept(d: DocsDecision) {
-    accepting = d.number;
-    const done = await app.run(api.docsDecisionAccept(project.id, d.number));
+    accepting = decisionKey(d);
+    // By its id: its own, never a number another may have too.
+    const done = await app.run(api.docsDecisionAccept(project.id, d.id));
     accepting = null;
     if (!done) return;
-    app.toast(t('docs.decisions.acceptedToast', { n: decisionNo(d.number) }));
+    app.toast(t('docs.decisions.acceptedToast', { n: decisionLabel(done) }));
     await docsStore.load(project.id);
+    chosen = decisionKey(done);
   }
 
   /** « Proposer une décision » open, by hand (null) or to replace an accepted one (its number). */
@@ -60,9 +65,10 @@
   /** Shows a decision named from another one (« Remplace », « Remplacée par »), the filter let go if it hides it. */
   function show(n: number) {
     if (!rows.some((d) => d.number === n)) filter = 'all';
-    chosen = n;
+    chosen = String(n);
   }
   function headOf(d: DocsDecision): string {
+    if (d.number == null) return t('docs.decisions.head.proposedId', { id: d.id, when: decisionDayWords(d.date, app.now) });
     const n = decisionNo(d.number);
     if (d.state === 'superseded')
       return t('docs.decisions.head.superseded', { n, by: d.supersededBy != null ? decisionNo(d.supersededBy) : '?' });
@@ -138,13 +144,23 @@
             </tr>
           </thead>
           <tbody>
-            {#each rows as d (d.number)}
+            {#each rows as d (decisionKey(d))}
               {@const origin = decisionOrigin(d)}
-              <tr class:on={shown?.number === d.number} data-decision={d.number} data-state={d.state} onclick={() => (chosen = d.number)}>
-                <td class="c-num">{decisionNo(d.number)}</td>
+              {@const key = decisionKey(d)}
+              <tr
+                class:on={shown != null && decisionKey(shown) === key}
+                data-decision={key}
+                data-state={d.state}
+                onclick={() => (chosen = key)}
+              >
+                <td class="c-num" class:unnumbered={d.number == null}
+                  >{#if d.number != null}{decisionNo(d.number)}{:else}<span use:tip={t('docs.decisions.noNumberTip')}>—</span>{/if}</td
+                >
                 <td class="c-title">
-                  <button class="pick" aria-current={shown?.number === d.number ? 'true' : undefined} onclick={() => (chosen = d.number)}
-                    >{d.title}</button
+                  <button
+                    class="pick"
+                    aria-current={shown != null && decisionKey(shown) === key ? 'true' : undefined}
+                    onclick={() => (chosen = key)}>{d.title}</button
                   >
                   {#if origin}<span class="origin">{origin}</span>{/if}
                 </td>
@@ -153,8 +169,8 @@
                   {#if d.state === 'proposed'}
                     <button
                       class="btn accept"
-                      aria-label={t('docs.decisions.acceptLabel', { n: decisionNo(d.number) })}
-                      disabled={accepting === d.number}
+                      aria-label={t('docs.decisions.acceptLabel', { n: decisionLabel(d) })}
+                      disabled={accepting === key}
                       use:tip={t('docs.decisions.acceptTip')}
                       onclick={(e) => {
                         e.stopPropagation();
@@ -184,14 +200,14 @@
         <h2>{d.title}</h2>
         {#if d.state === 'proposed'}
           <div class="acts">
-            <button class="btn primary" disabled={accepting === d.number} onclick={() => accept(d)}
+            <button class="btn primary" disabled={accepting === decisionKey(d)} onclick={() => accept(d)}
               ><Icon name="check" size={14} />{t('docs.decisions.accept')}</button
             >
             {#if d.origin === 'ticket' && d.originRef}<span class="hint">{t('docs.decisions.fromTicket', { key: d.originRef })}</span>{/if}
           </div>
         {:else if d.state === 'accepted'}
           <div class="acts">
-            <button class="btn" use:tip={t('docs.decisions.replaceTip')} onclick={() => (proposing = { replaces: d.number })}
+            <button class="btn" use:tip={t('docs.decisions.replaceTip')} onclick={() => (proposing = { replaces: d.number ?? null })}
               >{t('docs.decisions.replace')}</button
             >
           </div>
@@ -209,11 +225,14 @@
                 >{t('docs.decisions.replacedBy')} {decisionNo(by)}</button
               >
             {/if}
-            {#each replacing as r (r.number)}
+            {#each replacing as r (decisionKey(r))}
               <button
                 class="chip wait"
-                aria-label={t('docs.decisions.openDecision', { n: decisionNo(r.number) })}
-                onclick={() => show(r.number)}>{t('docs.decisions.replacementProposed')} · {decisionNo(r.number)}</button
+                aria-label={t('docs.decisions.openDecision', { n: decisionLabel(r) })}
+                onclick={() => {
+                  filter = 'all';
+                  chosen = decisionKey(r);
+                }}>{t('docs.decisions.replacementProposed')} · {decisionLabel(r)}</button
               >
             {/each}
           </div>
@@ -266,7 +285,7 @@
     ondone={(d) => {
       proposing = null;
       filter = 'all';
-      chosen = d.number;
+      chosen = decisionKey(d);
     }}
   />
 {/if}

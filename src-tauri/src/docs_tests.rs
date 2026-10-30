@@ -49,7 +49,11 @@ fn a_page_reads_back_as_it_was_written() {
             "https://exemple.fr/a?b=1".into(),
         ],
         tickets: vec!["ESC-12".into()],
-        decisions: vec![3, 7],
+        decisions: vec![
+            Ref::Number(3),
+            Ref::Id("tarif-famille".into()),
+            Ref::Number(7),
+        ],
         compared: "2026-10-28T10:00:00+02:00".into(),
         body: "# Reçu\n\nLe reçu part par e-mail.\n\n---\n\n- un : deux\n- trois".into(),
         ..Default::default()
@@ -179,7 +183,8 @@ fn the_spec_is_written_by_subject_and_read_searched_and_listed() {
 #[test]
 fn a_decision_reads_back_as_it_was_written() {
     let d = Decision {
-        number: 12,
+        number: Some(12),
+        id: "trois-echeances-au-plus".into(),
         title: "Trois échéances au plus".into(),
         date: "2026-10-28".into(),
         state: State::Accepted,
@@ -211,11 +216,45 @@ fn a_decision_reads_back_as_it_was_written() {
         .replace("## Conséquences", "## Consequences");
     assert_eq!(decision_read(&en).unwrap(), d);
     assert!(decision_read("pas d’en-tête").is_err());
-    assert!(decision_read("---\ntitle: \"x\"\n---\n").is_err());
+    assert!(decision_read("---\ntitle: \"x\"\nnumber: \"x\"\n---\n").is_err());
+    // A proposal has no number (ESC-303), and its file none either.
+    let p = Decision {
+        number: None,
+        state: State::Proposed,
+        ..d.clone()
+    };
+    let text = decision_write(&p);
+    assert!(text.contains("number: null\n"), "{text}");
+    assert_eq!(decision_read(&text).unwrap(), p);
+    assert_eq!(p.file_name(), "trois-echeances-au-plus.md");
+    assert_eq!(p.reference(), Ref::Id("trois-echeances-au-plus".into()));
 }
 
 #[test]
-fn decisions_are_numbered_proposed_revised_and_accepted_by_a_human() {
+fn a_decision_is_cited_by_its_number_or_its_id() {
+    assert_eq!(Ref::of("0004"), Some(Ref::Number(4)));
+    assert_eq!(Ref::of("#4"), Some(Ref::Number(4)));
+    assert_eq!(
+        Ref::of("Tarif famille"),
+        Some(Ref::Id("tarif-famille".into()))
+    );
+    assert_eq!(Ref::of("  "), None);
+    assert_eq!(Ref::Id("12".into()).plain(), Some(Ref::Number(12)));
+    assert_eq!(Ref::Number(4).to_string(), "0004");
+    // As JSON: a number, or a string.
+    let refs: Vec<Ref> = serde_json::from_str("[3, \"tarif-famille\"]").unwrap();
+    assert_eq!(refs, vec![Ref::Number(3), Ref::Id("tarif-famille".into())]);
+    assert_eq!(
+        serde_json::to_string(&refs).unwrap(),
+        "[3,\"tarif-famille\"]"
+    );
+    // An id of digits alone would read as a number.
+    assert_eq!(decision_id("2026"), "d-2026");
+    assert_eq!(decision_id("2 tickets"), "2-tickets");
+}
+
+#[test]
+fn decisions_are_proposed_without_a_number_and_numbered_when_a_human_accepts_them() {
     let (s, root) = space("docs-decisions");
     assert_eq!(s.next_number(), 1);
     let one = s
@@ -224,28 +263,172 @@ fn decisions_are_numbered_proposed_revised_and_accepted_by_a_human() {
     let two = s
         .decision_propose(None, proposal("Reçu par e-mail"))
         .unwrap();
-    assert_eq!((one.number, two.number), (1, 2));
+    // No number yet (ESC-303): an id, and a file without a number.
+    assert_eq!((one.number, two.number), (None, None));
+    assert_eq!(
+        (one.id.as_str(), two.id.as_str()),
+        ("trois-echeances", "recu-par-e-mail")
+    );
     assert_eq!(one.state, State::Proposed);
-    assert!(root
-        .join(".escouade/decisions/0001-trois-echeances.md")
-        .is_file());
-    // A proposal still open is revised, under its number, its date and its file.
+    let dir = root.join(".escouade/decisions");
+    assert!(dir.join("trois-echeances.md").is_file());
+    assert_eq!(s.next_number(), 1, "a proposal takes no number");
+    // The same title again: another id.
+    let twin = s
+        .decision_propose(None, proposal("Trois échéances"))
+        .unwrap();
+    assert_eq!(twin.id, "trois-echeances-2");
+    // A proposal still open is revised, under its id, its date and its file.
     let mut again = proposal("Trois échéances au plus");
     again.accepted_by = "faux".into();
-    let revised = s.decision_propose(Some(1), again).unwrap();
-    assert_eq!((revised.number, revised.date), (1, one.date));
-    assert_eq!(s.decisions().len(), 2);
-    assert_eq!(s.decision(1).unwrap().title, "Trois échéances au plus");
-    assert!(s.decision(1).unwrap().accepted_by.is_empty());
-    assert!(s.decision(9).is_err());
-    // A human accepts.
-    let accepted = s.decision_accept(1, "Léa").unwrap();
+    let first = Ref::Id("trois-echeances".into());
+    let revised = s.decision_propose(Some(&first), again).unwrap();
+    assert_eq!(
+        (revised.id.as_str(), revised.number, revised.date),
+        ("trois-echeances", None, one.date)
+    );
+    assert_eq!(s.decisions().len(), 3);
+    assert_eq!(s.decision(&first).unwrap().title, "Trois échéances au plus");
+    assert!(s.decision(&first).unwrap().accepted_by.is_empty());
+    assert!(s.decision(&Ref::Number(9)).is_err());
+    assert!(s.decision(&Ref::Id("rien".into())).is_err());
+    // A page cites it by its id.
+    s.spec_write("paiement/echeances", |p| {
+        p.body = "# Échéances".into();
+        p.decisions = vec![first.clone(), Ref::Id("recu-par-e-mail".into())];
+    })
+    .unwrap();
+    // A human accepts: it takes the next number, its file is renamed, the page cites its number.
+    let accepted = s
+        .decision_accept(&first, "Léa", &Register::default(), None)
+        .unwrap();
+    assert_eq!(accepted.number, Some(1));
     assert_eq!(accepted.state, State::Accepted);
     assert_eq!(accepted.accepted_by, "Léa");
     assert!(!accepted.accepted_at.is_empty());
-    assert_eq!(s.decision(1).unwrap(), accepted);
+    assert!(dir.join("0001-trois-echeances.md").is_file());
+    assert!(!dir.join("trois-echeances.md").exists());
+    assert_eq!(s.decision(&Ref::Number(1)).unwrap(), accepted);
+    // Its id still finds it.
+    assert_eq!(s.decision(&first).unwrap(), accepted);
+    assert_eq!(
+        s.spec_read("paiement/echeances").unwrap().decisions,
+        vec![Ref::Number(1), Ref::Id("recu-par-e-mail".into())]
+    );
     // Accepting again changes nothing.
-    assert_eq!(s.decision_accept(1, "Autre").unwrap(), accepted);
+    assert_eq!(
+        s.decision_accept(&Ref::Number(1), "Autre", &Register::default(), None)
+            .unwrap(),
+        accepted
+    );
+    // Against a register further on (the branch it goes to): after it, and the ticket noted.
+    let r = Ref::Id("recu-par-e-mail".into());
+    let next = s
+        .decision_accept(
+            &r,
+            "Léa",
+            &Register {
+                next: 7,
+                taken: vec![],
+            },
+            Some("ESC-9"),
+        )
+        .unwrap();
+    assert_eq!(next.number, Some(7));
+    assert_eq!(next.tickets, vec!["ESC-9".to_string()]);
+    assert!(dir.join("0007-recu-par-e-mail.md").is_file());
+    assert_eq!(
+        s.spec_read("paiement/echeances").unwrap().decisions,
+        vec![Ref::Number(1), Ref::Number(7)]
+    );
+    assert_eq!(s.next_number(), 8);
+}
+
+#[test]
+fn a_proposal_numbered_before_keeps_its_number_unless_another_has_it() {
+    let (s, root) = space("docs-decisions-before");
+    let dir = root.join(".escouade/decisions");
+    std::fs::create_dir_all(&dir).unwrap();
+    let old = |n: u32, title: &str, state: State| Decision {
+        number: Some(n),
+        title: title.into(),
+        state,
+        date: "2026-10-29".into(),
+        ..Default::default()
+    };
+    // Written before ESC-303: no id in the header, a number in the name; two of them 4.
+    let write = |name: &str, d: &Decision| {
+        let text = decision_write(d).replace("id: \"\"\n", "");
+        std::fs::write(dir.join(name), text).unwrap();
+    };
+    write(
+        "0004-un-nom-d-agent.md",
+        &old(4, "Un nom d'agent", State::Accepted),
+    );
+    write(
+        "0004-un-badge-retire.md",
+        &old(4, "Un badge retiré", State::Proposed),
+    );
+    write("0005-l-index.md", &old(5, "L'index", State::Proposed));
+    let before: Vec<String> = ["0004-un-nom-d-agent.md", "0004-un-badge-retire.md"]
+        .iter()
+        .map(|f| std::fs::read_to_string(dir.join(f)).unwrap())
+        .collect();
+    // Read as they are, their id from their name.
+    let ids: Vec<(Option<u32>, String)> = s
+        .decisions()
+        .into_iter()
+        .map(|d| (d.number, d.id))
+        .collect();
+    assert_eq!(
+        ids,
+        vec![
+            (Some(4), "un-badge-retire".to_string()),
+            (Some(4), "un-nom-d-agent".to_string()),
+            (Some(5), "l-index".to_string()),
+        ]
+    );
+    // The 5 is its own: kept.
+    let five = s
+        .decision_accept(
+            &Ref::Id("l-index".into()),
+            "Léa",
+            &Register::default(),
+            None,
+        )
+        .unwrap();
+    assert_eq!(five.number, Some(5));
+    assert!(dir.join("0005-l-index.md").is_file());
+    // The 4 another has: the next one, and the page it names follows.
+    s.spec_write("store/badges", |p| {
+        p.body = "# Badges".into();
+        p.decisions = vec![Ref::Number(4)];
+    })
+    .unwrap();
+    let mut badge = s.decision(&Ref::Id("un-badge-retire".into())).unwrap();
+    badge.pages = vec!["store/badges".into()];
+    s.decision_propose(Some(&Ref::Id(badge.id.clone())), badge)
+        .unwrap();
+    let six = s
+        .decision_accept(
+            &Ref::Id("un-badge-retire".into()),
+            "Léa",
+            &Register::default(),
+            None,
+        )
+        .unwrap();
+    assert_eq!(six.number, Some(6));
+    assert!(dir.join("0006-un-badge-retire.md").is_file());
+    assert!(!dir.join("0004-un-badge-retire.md").exists());
+    assert_eq!(
+        s.spec_read("store/badges").unwrap().decisions,
+        vec![Ref::Number(6)]
+    );
+    // The accepted one is untouched.
+    assert_eq!(
+        std::fs::read_to_string(dir.join("0004-un-nom-d-agent.md")).unwrap(),
+        before[0]
+    );
 }
 
 #[test]
@@ -253,17 +436,25 @@ fn an_accepted_decision_cannot_be_rewritten_a_new_one_replaces_it() {
     let (s, _) = space("docs-immutable");
     s.decision_propose(None, proposal("Trois échéances"))
         .unwrap();
-    let accepted = s.decision_accept(1, "Léa").unwrap();
+    let accepted = s
+        .decision_accept(
+            &Ref::Id("trois-echeances".into()),
+            "Léa",
+            &Register::default(),
+            None,
+        )
+        .unwrap();
+    let one = Ref::Number(1);
     // Neither a revision, nor a new proposal under its number.
     let refused = s
-        .decision_propose(Some(1), proposal("Quatre échéances"))
+        .decision_propose(Some(&one), proposal("Quatre échéances"))
         .unwrap_err()
         .to_string();
     assert!(
-        refused.contains("n° 1") || refused.contains("Decision 1"),
+        refused.contains("décision 0001") || refused.contains("Decision 0001"),
         "{refused}"
     );
-    assert_eq!(s.decision(1).unwrap(), accepted);
+    assert_eq!(s.decision(&one).unwrap(), accepted);
     // The rule itself: any change of what was decided is a rewrite.
     let mut tampered = accepted.clone();
     tampered.decision = "Autre chose".into();
@@ -282,26 +473,39 @@ fn an_accepted_decision_cannot_be_rewritten_a_new_one_replaces_it() {
     // A proposal is replaced by nothing: it is revised.
     s.decision_propose(None, proposal("Reçu par e-mail"))
         .unwrap();
+    s.decision_accept(
+        &Ref::Id("recu-par-e-mail".into()),
+        "Léa",
+        &Register::default(),
+        None,
+    )
+    .unwrap();
+    s.decision_propose(None, proposal("Relances")).unwrap();
     assert!(s
-        .decision_replace(2, proposal("Reçu par courrier"))
+        .decision_replace(9, proposal("Reçu par courrier"))
         .is_err());
-    // The replacement: proposed, the old one stands until a human accepts it.
+    // The replacement: proposed without a number, the old one stands until a human accepts it.
     let new = s
         .decision_replace(1, proposal("Quatre échéances au plus"))
         .unwrap();
     assert_eq!(
         (new.number, new.state, new.supersedes.clone()),
-        (3, State::Proposed, vec![1])
+        (None, State::Proposed, vec![1])
     );
-    assert_eq!(s.decision(1).unwrap().state, State::Accepted);
-    s.decision_accept(3, "Léa").unwrap();
-    let old = s.decision(1).unwrap();
+    assert_eq!(s.decision(&one).unwrap().state, State::Accepted);
+    let taken = s
+        .decision_accept(&new.reference(), "Léa", &Register::default(), None)
+        .unwrap();
+    assert_eq!(taken.number, Some(3));
+    let old = s.decision(&one).unwrap();
     assert_eq!((old.state, old.superseded_by), (State::Superseded, Some(3)));
     assert_eq!(old.decision, accepted.decision, "what it said is untouched");
     // Superseded: neither revised, replaced nor accepted again.
-    assert!(s.decision_propose(Some(1), proposal("x")).is_err());
+    assert!(s.decision_propose(Some(&one), proposal("x")).is_err());
     assert!(s.decision_replace(1, proposal("x")).is_err());
-    assert!(s.decision_accept(1, "Léa").is_err());
+    assert!(s
+        .decision_accept(&one, "Léa", &Register::default(), None)
+        .is_err());
 }
 
 #[test]
@@ -648,9 +852,15 @@ async fn a_human_accepts_a_decision_by_the_core_with_their_name() {
     let s = h.core.docs_space(&p.id, None).await.unwrap();
     s.decision_propose(None, proposal("Trois échéances"))
         .unwrap();
-    let d = h.core.docs_accept_decision(&p.id, 1).await.unwrap();
+    let r = Ref::Id("trois-echeances".into());
+    let d = h.core.docs_accept_decision(&p.id, &r).await.unwrap();
     assert_eq!((d.state, d.accepted_by.as_str()), (State::Accepted, "Léa"));
-    assert!(h.core.docs_accept_decision(&p.id, 9).await.is_err());
+    assert_eq!(d.number, Some(1));
+    assert!(h
+        .core
+        .docs_accept_decision(&p.id, &Ref::Number(9))
+        .await
+        .is_err());
 }
 
 #[tokio::test]
@@ -721,23 +931,355 @@ async fn the_decision_a_tickets_agent_left_is_accepted_when_the_ticket_is_valida
     // Merged with the ticket, accepted by the one who validated it.
     let merged = h.core.docs_space(&p.id, None).await.unwrap();
     assert!(same(&merged.root, &repo));
-    let states: Vec<(u32, State, String)> = merged
+    let states: Vec<(Option<u32>, String, State, String)> = merged
         .decisions()
         .into_iter()
-        .map(|d| (d.number, d.state, d.accepted_by))
+        .map(|d| (d.number, d.id, d.state, d.accepted_by))
         .collect();
     assert_eq!(
         states,
         vec![
-            (1, State::Accepted, "Léa".to_string()),
-            (2, State::Proposed, String::new()),
-            (3, State::Proposed, String::new()),
+            (
+                Some(1),
+                "trois-echeances".to_string(),
+                State::Accepted,
+                "Léa".to_string()
+            ),
+            (
+                None,
+                "relances-par-e-mail".to_string(),
+                State::Proposed,
+                String::new()
+            ),
+            (
+                None,
+                "tarif-famille".to_string(),
+                State::Proposed,
+                String::new()
+            ),
         ]
     );
     // In the commit of the ticket, not left to share.
     assert_eq!(git(&repo, &["status", "--porcelain"]), "");
 }
 
+/// ESC-303: two tickets in two worktrees propose a decision each, at the same time; validated one
+/// after the other, they get two numbers, after main's register, and what cites them follows: the
+/// pages, the decision one of them replaces, the ticket that implements the other.
+#[tokio::test]
+async fn two_tickets_in_parallel_get_two_numbers_for_their_decisions_when_validated() {
+    let h = harness("docs-two-tickets");
+    let (p, repo) = h.project(false).await;
+    {
+        let mut projects = h.core.projects.write();
+        projects
+            .iter_mut()
+            .find(|x| x.id == p.id)
+            .unwrap()
+            .user_name = "Léa".into();
+    }
+    // On main, committed: decision 1 accepted, and the page that follows it.
+    let main = h.core.docs_space(&p.id, None).await.unwrap();
+    main.decision_propose(None, proposal("Trois échéances"))
+        .unwrap();
+    main.decision_accept(
+        &Ref::Id("trois-echeances".into()),
+        "Léa",
+        &Register::default(),
+        None,
+    )
+    .unwrap();
+    main.spec_write("paiement/echeances", |x| {
+        x.body = "Trois échéances.".into();
+        x.decisions = vec![Ref::Number(1)];
+    })
+    .unwrap();
+    let one =
+        std::fs::read_to_string(repo.join(".escouade/decisions/0001-trois-echeances.md")).unwrap();
+    git(&repo, &["add", "-A"]);
+    git(&repo, &["commit", "-qm", "docs"]);
+    // Two tickets at work at once, each in its worktree.
+    let (a, wa) = crate::tickets_tests::reviewed(&h, &p.id, "Un [ok]").await;
+    let (b, wb) = crate::tickets_tests::reviewed(&h, &p.id, "Deux [ok]").await;
+    let sa = h
+        .core
+        .docs_space(&p.id, a.agent_id.as_deref())
+        .await
+        .unwrap();
+    let sb = h
+        .core
+        .docs_space(&p.id, b.agent_id.as_deref())
+        .await
+        .unwrap();
+    assert!(same(&sa.root, &wa) && same(&sb.root, &wb));
+    // A replaces decision 1, B proposes a new one: neither has a number, each cites its id.
+    let mut ra = proposal("Quatre échéances");
+    ra.origin = "ticket".into();
+    ra.origin_ref = a.key.clone();
+    let ra = sa.decision_replace(1, ra).unwrap();
+    sa.spec_write("paiement/echeances", |x| {
+        x.body = "Quatre échéances.".into();
+        x.decisions = vec![Ref::Number(1), ra.reference()];
+    })
+    .unwrap();
+    let mut rb = proposal("Tarif famille");
+    rb.origin = "ticket".into();
+    rb.origin_ref = b.key.clone();
+    let rb = sb.decision_propose(None, rb).unwrap();
+    sb.spec_write("adherent/tarif", |x| {
+        x.body = "-20 % dès le troisième membre.".into();
+        x.decisions = vec![rb.reference()];
+    })
+    .unwrap();
+    assert_eq!((ra.number, rb.number), (None, None));
+    assert!(wa.join(".escouade/decisions/quatre-echeances.md").is_file());
+    assert!(wb.join(".escouade/decisions/tarif-famille.md").is_file());
+    // A ticket to come implements B's proposal, by its id.
+    let mut board = h.core.project(&p.id).unwrap().board;
+    board.autopilot = false;
+    h.core.board_set(&p.id, board).unwrap();
+    let c = h
+        .core
+        .ticket_create(
+            &p.id,
+            crate::tickets::TicketDraft {
+                title: "Appliquer le tarif".into(),
+                decisions: Some(vec![rb.reference()]),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    // Validated one after the other.
+    h.core.ticket_approve(&a.id).await.unwrap();
+    assert_eq!(
+        h.ticket(&a.id).column,
+        crate::model::Column::Done,
+        "{:?}",
+        h.ticket(&a.id).blocked
+    );
+    h.core.ticket_approve(&b.id).await.unwrap();
+    assert_eq!(
+        h.ticket(&b.id).column,
+        crate::model::Column::Done,
+        "{:?}",
+        h.ticket(&b.id).blocked
+    );
+    // On main: 1, 2 and 3, no two alike, no file without a number.
+    let mut files: Vec<String> = git(
+        &repo,
+        &[
+            "ls-tree",
+            "--name-only",
+            "main",
+            "--",
+            ".escouade/decisions/",
+        ],
+    )
+    .lines()
+    .map(|l| l.rsplit('/').next().unwrap().to_string())
+    .collect();
+    files.sort();
+    assert_eq!(
+        files,
+        vec![
+            "0001-trois-echeances.md",
+            "0002-quatre-echeances.md",
+            "0003-tarif-famille.md",
+        ]
+    );
+    let merged = h.core.docs_space(&p.id, None).await.unwrap();
+    type Row = (Option<u32>, String, State, Option<u32>, Vec<String>);
+    let all: Vec<Row> = merged
+        .decisions()
+        .into_iter()
+        .map(|d| (d.number, d.id, d.state, d.superseded_by, d.tickets))
+        .collect();
+    assert_eq!(
+        all,
+        vec![
+            (
+                Some(1),
+                "trois-echeances".to_string(),
+                State::Superseded,
+                Some(2),
+                vec![]
+            ),
+            (
+                Some(2),
+                "quatre-echeances".to_string(),
+                State::Accepted,
+                None,
+                vec![a.key.clone()]
+            ),
+            (
+                Some(3),
+                "tarif-famille".to_string(),
+                State::Accepted,
+                None,
+                vec![b.key.clone()]
+            ),
+        ]
+    );
+    assert_eq!(
+        merged.decision(&Ref::Number(2)).unwrap().supersedes,
+        vec![1]
+    );
+    // What 1 decided is untouched, but for who replaced it.
+    let now =
+        std::fs::read_to_string(repo.join(".escouade/decisions/0001-trois-echeances.md")).unwrap();
+    assert_eq!(
+        now.replace("state: \"superseded\"", "state: \"accepted\"")
+            .replace("superseded_by: 2", "superseded_by: null"),
+        one
+    );
+    // The pages cite their numbers.
+    assert_eq!(
+        merged.spec_read("paiement/echeances").unwrap().decisions,
+        vec![Ref::Number(1), Ref::Number(2)]
+    );
+    assert_eq!(
+        merged.spec_read("adherent/tarif").unwrap().decisions,
+        vec![Ref::Number(3)]
+    );
+    // The ticket that implements B's.
+    assert_eq!(h.ticket(&c.id).decisions, vec![Ref::Number(3)]);
+    // In the commits of the tickets, not left to share.
+    assert_eq!(
+        git(&repo, &["status", "--porcelain", "--untracked-files=no"]),
+        ""
+    );
+}
+
+/// What happened to ESC-302 (32c0a0f1): two tickets had each proposed a decision 4, as Escouade
+/// numbered them before ESC-303; the second validation accepted the other's 4 and committed its own
+/// as a second `0004-…`, still proposed. A validation now finds its decisions by their own id, and
+/// one whose number main has under another takes the next.
+#[tokio::test]
+async fn a_validation_accepts_its_own_decision_never_another_of_the_same_number() {
+    let h = harness("docs-same-number");
+    let (p, repo) = h.project(false).await;
+    {
+        let mut projects = h.core.projects.write();
+        projects
+            .iter_mut()
+            .find(|x| x.id == p.id)
+            .unwrap()
+            .user_name = "Léa".into();
+    }
+    // On main: 1 to 3, accepted and committed.
+    let main = h.core.docs_space(&p.id, None).await.unwrap();
+    for title in ["Un", "Deux", "Trois"] {
+        let d = main.decision_propose(None, proposal(title)).unwrap();
+        main.decision_accept(&d.reference(), "Léa", &Register::default(), None)
+            .unwrap();
+    }
+    git(&repo, &["add", "-A"]);
+    git(&repo, &["commit", "-qm", "docs"]);
+    let dir = |root: &Path| root.join(".escouade/decisions");
+    let before: Vec<(String, String)> = ["0001-un.md", "0002-deux.md", "0003-trois.md"]
+        .iter()
+        .map(|f| {
+            (
+                f.to_string(),
+                std::fs::read_to_string(dir(&repo).join(f)).unwrap(),
+            )
+        })
+        .collect();
+    let (a, wa) = crate::tickets_tests::reviewed(&h, &p.id, "Un [ok]").await;
+    let (b, wb) = crate::tickets_tests::reviewed(&h, &p.id, "Deux [ok]").await;
+    // Each proposes a 4, as before ESC-303 (a number in its header and its name, no id).
+    let legacy = |root: &Path, key: &str, title: &str, page: &str| {
+        let d = Decision {
+            number: Some(4),
+            title: title.into(),
+            date: "2026-10-30".into(),
+            state: State::Proposed,
+            origin: "ticket".into(),
+            origin_ref: key.into(),
+            pages: vec![page.into()],
+            ..Default::default()
+        };
+        let name = format!("0004-{}.md", decision_id(title));
+        let text = decision_write(&d).replace("id: \"\"\n", "");
+        std::fs::write(dir(root).join(name), text).unwrap();
+    };
+    legacy(&wa, &a.key, "Un nom d'agent", "agents/noms");
+    legacy(&wb, &b.key, "Un badge retiré", "store/badges");
+    let sb = h
+        .core
+        .docs_space(&p.id, b.agent_id.as_deref())
+        .await
+        .unwrap();
+    sb.spec_write("store/badges", |x| {
+        x.body = "Un badge retiré s'annonce.".into();
+        x.decisions = vec![Ref::Number(4)];
+    })
+    .unwrap();
+    // A validated first: its 4 is its own.
+    h.core.ticket_approve(&a.id).await.unwrap();
+    assert_eq!(h.ticket(&a.id).column, crate::model::Column::Done);
+    let a_file = std::fs::read_to_string(dir(&repo).join("0004-un-nom-d-agent.md")).unwrap();
+    assert!(a_file.contains("state: \"accepted\""), "{a_file}");
+    // B takes main in (as the chef did): its worktree has A's 4 and its own.
+    git(&wb, &["add", "-A"]);
+    git(&wb, &["commit", "-qm", "wip"]);
+    git(&wb, &["merge", "-q", "--no-edit", "main"]);
+    assert!(dir(&wb).join("0004-un-nom-d-agent.md").is_file());
+    h.core.ticket_approve(&b.id).await.unwrap();
+    assert_eq!(
+        h.ticket(&b.id).column,
+        crate::model::Column::Done,
+        "{:?}",
+        h.ticket(&b.id).blocked
+    );
+    // Only its own accepted, as 5; A's untouched; 1 to 3 untouched; no two 4s.
+    let mut files: Vec<String> = git(
+        &repo,
+        &[
+            "ls-tree",
+            "--name-only",
+            "main",
+            "--",
+            ".escouade/decisions/",
+        ],
+    )
+    .lines()
+    .map(|l| l.rsplit('/').next().unwrap().to_string())
+    .collect();
+    files.sort();
+    assert_eq!(
+        files,
+        vec![
+            "0001-un.md",
+            "0002-deux.md",
+            "0003-trois.md",
+            "0004-un-nom-d-agent.md",
+            "0005-un-badge-retire.md",
+        ]
+    );
+    for (f, text) in &before {
+        assert_eq!(
+            &std::fs::read_to_string(dir(&repo).join(f)).unwrap(),
+            text,
+            "{f}"
+        );
+    }
+    assert_eq!(
+        std::fs::read_to_string(dir(&repo).join("0004-un-nom-d-agent.md")).unwrap(),
+        a_file
+    );
+    let merged = h.core.docs_space(&p.id, None).await.unwrap();
+    let five = merged.decision(&Ref::Number(5)).unwrap();
+    assert_eq!(
+        (five.id.as_str(), five.state, five.origin_ref.as_str()),
+        ("un-badge-retire", State::Accepted, b.key.as_str())
+    );
+    assert_eq!(
+        merged.spec_read("store/badges").unwrap().decisions,
+        vec![Ref::Number(5)]
+    );
+}
 #[test]
 fn a_decision_from_the_window_needs_only_its_fields() {
     // « Proposer une décision » sends a title and its parts, nothing of its number, state or links.
@@ -750,6 +1292,6 @@ fn a_decision_from_the_window_needs_only_its_fields() {
     .unwrap();
     assert_eq!(
         (d.title.as_str(), d.state, d.number, d.supersedes.len()),
-        ("Tarif famille", State::Proposed, 0, 0)
+        ("Tarif famille", State::Proposed, None, 0)
     );
 }

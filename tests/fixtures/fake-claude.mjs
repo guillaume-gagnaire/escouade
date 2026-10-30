@@ -406,7 +406,8 @@ if (argv[0] === 'mcp') {
         process.stderr.write('model unavailable\n');
         process.exit(1);
       }
-      const decisions = [...input.matchAll(/<decision number="(\d+)"/g)].map((m) => Number(m[1]));
+      // A decision by its ref: its number (« 0003 »), or a proposal's id.
+      const decisions = [...input.matchAll(/<decision ref="([^"]+)"/g)].map((m) => (/^\d+$/.test(m[1]) ? Number(m[1]) : m[1]));
       const tickets = changed.map((c, i) => ({
         title: `Implémenter : ${c[2]}`,
         description: `D’après la page ${c[1]} de la spec.`,
