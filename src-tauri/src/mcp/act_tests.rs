@@ -960,11 +960,13 @@ async fn an_agent_is_created_in_a_project_with_its_first_message_and_the_user_s_
     let id = v["id"].as_str().unwrap().to_string();
     assert_eq!(v["name"], "agent-1");
     assert_eq!(v.as_object().unwrap().len(), 2);
-    // Made as the window makes one, but the sidebar's selection is the user's.
+    // Made as the window makes one, but the sidebar's selection is the user's. Its first message
+    // names it, in the background: its name is waited for, then read as it is.
+    h.wait("its name", |h| h.agent(&id).named).await;
     let meta = h.agent(&id);
     assert_eq!(
         (meta.project_id.as_str(), meta.name.as_str()),
-        (p.id.as_str(), "agent-1")
+        (p.id.as_str(), "bonjour-l-fake")
     );
     assert!(meta.worktree.is_none());
     assert!(!h.core.ui.read().selected_agent.contains_key(&p.id));

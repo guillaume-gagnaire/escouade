@@ -789,7 +789,8 @@ async fn the_output_of_a_command_that_runs_is_asked_to_its_process() {
     })
     .await;
     let c = external(&h).await;
-    // Named after its first message, by the fake claude.
+    // Named after its first message, by the fake claude: waited for, the name is the one it keeps.
+    h.wait("its name", |h| h.agent(&a.id).named).await;
     let name = h.agent(&a.id).name;
     let v = output_of(&c, &name, &row.id, None).await;
     assert_eq!(

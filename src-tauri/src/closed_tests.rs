@@ -11,6 +11,7 @@ use crate::model::*;
 use crate::tickets::TicketDraft;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::test::{mock_app, MockRuntime};
@@ -57,10 +58,12 @@ fn quiet_board(h: &Harness, project_id: &str) {
 }
 
 /// A plain agent of the project that took a message and ended its turn: its conversation has
-/// content.
+/// content. Its name, given after its first message (ESC-156), is waited for: what the project
+/// keeps when it closes is then the same on every run.
 async fn agent_that_talked(h: &Harness, project_id: &str) -> String {
     let id = h.core.create_agent(project_id, None).await.unwrap().meta.id;
     h.turn(&id, "Bonjour").await;
+    h.wait("its name", |h| h.agent(&id).named).await;
     id
 }
 
@@ -261,6 +264,43 @@ async fn a_project_closed_comes_back_with_everything_it_had_when_its_folder_is_a
         .any(|x| x["id"] == a1.as_str()));
     assert!(h.core.closed_projects().is_empty());
     assert!(closed_files(&h).is_empty());
+}
+
+#[tokio::test]
+async fn a_name_that_comes_once_its_project_is_closed_renames_nothing_not_even_the_agent_back() {
+    let h = harness("closed-late-name");
+    let (p, r) = h.project(true).await;
+    quiet_board(&h, &p.id);
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    // The fake Haiku names it 3 s after its first message: the project is closed before, and its
+    // folder added again, the agent back with the same id.
+    h.turn(&a, "Bonjour [lent]").await;
+    let before = h.agent(&a);
+    assert!(!before.named);
+    let branch = before.worktree.as_ref().unwrap().branch.clone();
+    close(&h, &p.id).await;
+    add_again(&h, &r).await;
+
+    h.wait("the name dropped", |h| {
+        h.core.names_dropped.load(Ordering::Acquire) == 1
+    })
+    .await;
+    // The agent back is as its history kept it: its name, its branch, in git as well.
+    let back = h.agent(&a);
+    assert_eq!(
+        (back.name.as_str(), back.named),
+        (before.name.as_str(), false)
+    );
+    assert_eq!(back.worktree.unwrap().branch, branch);
+    let branches = std::process::Command::new("git")
+        .args(["branch", "--list", "--format=%(refname:short)"])
+        .current_dir(&r)
+        .output()
+        .unwrap();
+    let branches = String::from_utf8_lossy(&branches.stdout);
+    assert!(branches.lines().any(|b| b == branch), "{branches}");
+    assert!(!branches.contains("bonjour"), "{branches}");
+    h.core.stop_for_good();
 }
 
 #[tokio::test]
