@@ -623,6 +623,42 @@ describe('the assistant’s private project and Kanban (ESC-163)', () => {
     }
   });
 
+  it('makes a project without workflows when « Pas de workflow pour ce projet » is chosen, and says so (ESC-309)', async () => {
+    const be = backend();
+    render(NewProjectModal);
+    await typePath();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Suivant' })).toBeEnabled());
+    await userEvent.click(screen.getByRole('button', { name: /Kanban/ }));
+    const choice = screen.getByRole('radiogroup', { name: 'Workflows du projet' });
+    expect(within(choice).getByRole('radio', { name: 'Lire les workflows' })).toBeChecked();
+    await userEvent.click(within(choice).getByRole('radio', { name: 'Pas de workflow pour ce projet' }));
+    await userEvent.click(screen.getByRole('button', { name: /Récapitulatif/ }));
+    expect(screen.getByText('Workflows', { selector: 'dt' }).nextElementSibling?.textContent).toBe('Pas de workflow pour ce projet');
+    await userEvent.click(screen.getByRole('button', { name: 'Créer le projet' }));
+    await waitFor(() => expect(app.modal).toBeNull());
+    expect(be.called('update_project')[0].args.project).toMatchObject({ id: 'new', workflowsEnabled: false });
+  });
+
+  it('takes « Pas de workflow pour ce projet » from the folder’s .escouade.yml (ESC-309)', async () => {
+    const preview = project({
+      id: '',
+      path: 'C:\code\atlas',
+      workflowsEnabled: false,
+      shared: {
+        local: [],
+        trusted: '',
+        file: { keys: ['workflows.enabled'], values: {}, warnings: [], error: null, version: 1, pending: null },
+      },
+    });
+    fakeBackend({ inspect_folder: () => folder(), inspect_setup: () => setup(), shared_preview: () => preview });
+    render(NewProjectModal);
+    await typePath();
+    await waitFor(() => expect(screen.getByRole('radio', { name: /^Réglages de .escouade.yml/ })).toHaveAttribute('aria-checked', 'true'));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Suivant' })).toBeEnabled());
+    await userEvent.click(screen.getByRole('button', { name: /Kanban/ }));
+    expect(screen.getByRole('radio', { name: 'Pas de workflow pour ce projet' })).toBeChecked();
+  });
+
   it('takes « Projet privé » and the Kanban from the folder’s .escouade.yml, never public when new projects are private', async () => {
     const preview = (priv: boolean) =>
       project({

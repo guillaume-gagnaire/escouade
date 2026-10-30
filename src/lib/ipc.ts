@@ -414,6 +414,9 @@ export const api = {
   refineWorkflows: (id: string) => invoke<WorkflowRefineOutcome>('refine_workflows', { id }),
   /** « Retirer du dépôt »: the file of a workflow this machine does not read (ESC-195). */
   removeWorkflowFile: (id: string, workflow: string) => invoke<WorkflowScan>('remove_workflow_file', { id, workflow }),
+  /** « Supprimer » a workflow (its file goes, no reading writes it again), « Laisser supprimé » or « Rétablir » it (ESC-309). */
+  setWorkflowRemoved: (id: string, workflow: string, removed: boolean) =>
+    invoke<WorkflowScan>('set_workflow_removed', { id, workflow, removed }),
   /** « Oublier » a repository gone from the project's folder. */
   forgetRepo: (id: string, repo: string) => invoke<Project>('forget_repo', { id, repo }),
   integrateBase: (id: string) => invoke<Integration>('integrate_base', { id }),

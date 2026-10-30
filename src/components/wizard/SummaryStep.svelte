@@ -46,6 +46,7 @@
         .join(' · '),
     ],
     [t('wizard.summary.rows.harness'), engineName(c.engine ?? 'claude')],
+    [t('wizard.summary.rows.workflows'), t(c.workflowsEnabled ? 'workflowSettings.on' : 'workflowSettings.off')],
     [
       t('wizard.summary.rows.private'),
       c.private

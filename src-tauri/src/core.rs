@@ -1602,6 +1602,7 @@ pub(crate) fn blank_project(path: &str) -> Project {
         claude_memory_asked: false,
         workflow_fixes: Vec::new(),
         workflows_auto_read: true,
+        workflows_enabled: true,
         workflows_in_repo: true,
         code_index: None,
         code_index_before: false,
@@ -8247,6 +8248,7 @@ impl<R: Runtime> Core<R> {
         // Its workflows' corrections and when they are read again (ESC-195).
         cur.workflow_fixes = crate::workflowfix::cleaned(p.workflow_fixes);
         cur.workflows_auto_read = p.workflows_auto_read;
+        cur.workflows_enabled = p.workflows_enabled;
         let moved_from = (cur.workflows_in_repo != p.workflows_in_repo)
             .then(|| crate::workflowfiles::places(cur, &self.data).repo);
         cur.workflows_in_repo = p.workflows_in_repo;
@@ -8280,6 +8282,7 @@ impl<R: Runtime> Core<R> {
         }
         if before.workflow_fixes != updated.workflow_fixes
             || before.workflows_in_repo != updated.workflows_in_repo
+            || before.workflows_enabled != updated.workflows_enabled
         {
             self.write_workflow_fixes(&updated);
             self.workflow_fixes_changed(&updated.id);

@@ -425,6 +425,7 @@ fn only_the_workflows_of_the_repository_go_in_it_those_of_the_user_s_folders_sta
         &wf::load_all(&places),
         &[home.clone(), dev.clone()],
         true,
+        &mut wf::Removals::default(),
     );
     assert_eq!(written.len(), 2);
     let repo = wf::load(&places.repo);
@@ -445,7 +446,13 @@ fn only_the_workflows_of_the_repository_go_in_it_those_of_the_user_s_folders_sta
         repo: root.join("none/.escouade/workflows"),
         local: root.join("data2/workflows"),
     };
-    wf::merge_reading_all(&empty, &wf::Folder::default(), &[dev], false);
+    wf::merge_reading_all(
+        &empty,
+        &wf::Folder::default(),
+        &[dev],
+        false,
+        &mut wf::Removals::default(),
+    );
     assert!(!empty.repo.exists());
 }
 
@@ -610,4 +617,198 @@ fn a_plain_folder_is_not_in_the_way() {
     assert!(wf::unsafe_dir(&dir).is_none(), "not there yet");
     assert!(!wf::merge_reading(&dir, &wf::load(&dir), &[gsd()]).is_empty());
     assert!(wf::unsafe_dir(&dir).is_none());
+}
+
+/// ESC-309: a workflow removed (its file deleted by hand, or « Supprimer » in the window) never
+/// comes back by itself, neither at a reading nor at a restart; it is proposed again when what
+/// found it changes, without being written.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_workflow_removed_is_never_written_again_by_a_reading() {
+    let h = crate::core_tests::harness("wf-files-removed");
+    let (p, dir) = two_steps(&h).await;
+    let file = dir.join(".escouade/workflows/claude-one.yml");
+    h.core.refresh_workflows(&p.id, true).await.unwrap();
+    assert!(file.is_file());
+
+    // Deleted by hand: out of Escouade, and not written again by the readings that follow.
+    std::fs::remove_file(&file).unwrap();
+    let scan = h.core.refresh_workflows(&p.id, true).await.unwrap();
+    assert!(!file.exists(), "the reading wrote the file again");
+    assert!(scan.workflows.is_empty());
+    assert_eq!(scan.removed.len(), 1);
+    assert_eq!(scan.removed[0].id, "|claude|one");
+    assert!(!scan.removed[0].changed);
+    h.core.refresh_workflows(&p.id, false).await.unwrap();
+    assert!(!file.exists());
+    // Never read (the reading of this machine forgotten, as after a restart): not written either.
+    std::fs::remove_file(h.core.data.workflows_file(&p.id)).unwrap();
+    let scan = h.core.refresh_workflows(&p.id, false).await.unwrap();
+    assert!(!file.exists() && scan.workflows.is_empty());
+
+    // What found it changed: proposed, not written.
+    std::fs::write(
+        dir.join(".claude/commands/two.md"),
+        "Do two, then /three. Back to /one when red.\n",
+    )
+    .unwrap();
+    std::fs::write(dir.join(".claude/commands/three.md"), "Do three.\n").unwrap();
+    let scan = h.core.refresh_workflows(&p.id, true).await.unwrap();
+    assert!(!file.exists());
+    assert!(scan.removed[0].changed, "{:?}", scan.removed);
+    // « Laisser supprimé »: no longer proposed.
+    let scan = h
+        .core
+        .set_workflow_removed(&p.id, "|claude|one", true)
+        .await
+        .unwrap();
+    assert!(!scan.removed[0].changed);
+    assert!(!file.exists());
+
+    // « Rétablir »: written again, followed again.
+    let scan = h
+        .core
+        .set_workflow_removed(&p.id, "|claude|one", false)
+        .await
+        .unwrap();
+    assert!(file.is_file());
+    assert_eq!(scan.workflows.len(), 1);
+    assert!(scan.removed.is_empty());
+
+    // « Supprimer » in the window: its file goes, and stays gone.
+    let scan = h
+        .core
+        .set_workflow_removed(&p.id, "|claude|one", true)
+        .await
+        .unwrap();
+    assert!(!file.exists() && scan.workflows.is_empty());
+    assert_eq!(scan.removed.len(), 1);
+    h.core.refresh_workflows(&p.id, true).await.unwrap();
+    assert!(!file.exists());
+
+    // Its file back (a pull, another branch): it is the project's again.
+    let w = wf::Doc {
+        workflow: h.core.cached_reading(&p.id).workflows[0].clone(),
+        fixes: Default::default(),
+    };
+    std::fs::write(&file, wf::write(&w)).unwrap();
+    let scan = h.core.refresh_workflows(&p.id, true).await.unwrap();
+    assert_eq!(scan.workflows.len(), 1);
+    assert!(scan.removed.is_empty());
+}
+
+/// ESC-309: « Pas de workflow pour ce projet »: nothing read, nothing written, nothing shown nor
+/// followed, the files there left as they are.
+#[tokio::test(flavor = "multi_thread")]
+async fn no_workflow_for_a_project_reads_and_writes_none() {
+    let h = crate::core_tests::harness("wf-files-off");
+    let (p, dir) = two_steps(&h).await;
+    h.core
+        .update_project(crate::model::Project {
+            workflows_enabled: false,
+            ..h.core.project(&p.id).unwrap()
+        })
+        .unwrap();
+    let scan = h.core.refresh_workflows(&p.id, true).await.unwrap();
+    assert!(scan.workflows.is_empty() && scan.sources.is_empty());
+    assert!(scan.off);
+    assert!(!dir.join(".escouade/workflows").exists());
+    assert!(!h.core.data.workflows_file(&p.id).exists(), "read anyway");
+    assert!(h.core.workflows_of(&p.id).workflows.is_empty());
+    // Undone: read and written again.
+    h.core
+        .update_project(crate::model::Project {
+            workflows_enabled: true,
+            ..h.core.project(&p.id).unwrap()
+        })
+        .unwrap();
+    let scan = h.core.refresh_workflows(&p.id, false).await.unwrap();
+    assert_eq!(scan.workflows.len(), 1);
+    assert!(dir.join(".escouade/workflows/claude-one.yml").is_file());
+    // Set again: the files stay, but nothing is shown nor followed.
+    h.core
+        .update_project(crate::model::Project {
+            workflows_enabled: false,
+            ..h.core.project(&p.id).unwrap()
+        })
+        .unwrap();
+    let scan = h.core.refresh_workflows(&p.id, true).await.unwrap();
+    assert!(scan.workflows.is_empty());
+    assert!(h.core.workflows_of(&p.id).workflows.is_empty());
+    assert!(dir.join(".escouade/workflows/claude-one.yml").is_file());
+}
+
+/// ESC-309: `merge_reading_all` with a workflow removed writes nothing of it; a file deleted by
+/// hand is seen as a removal, one that cannot be read is not.
+#[test]
+fn a_reading_writes_nothing_of_a_workflow_removed_and_a_file_deleted_is_one() {
+    let root = test_dir("wf-files-removals");
+    let places = wf::Places {
+        repo: root.join("repo/.escouade/workflows"),
+        local: root.join("data/workflows"),
+    };
+    let (home, dev) = (gsd(), dev());
+    let mut removals = wf::Removals::default();
+    let read = [home.clone(), dev.clone()];
+    wf::merge_reading_all(&places, &wf::load_all(&places), &read, true, &mut removals);
+    assert_eq!(removals.known.len(), 2);
+    assert!(removals.removed.is_empty());
+    // Both deleted by hand: neither written again.
+    for (path, _) in wf::load_all(&places).docs {
+        std::fs::remove_file(path).unwrap();
+    }
+    let written =
+        wf::merge_reading_all(&places, &wf::load_all(&places), &read, true, &mut removals);
+    assert!(written.is_empty(), "{written:?}");
+    assert!(wf::load_all(&places).docs.is_empty());
+    assert_eq!(removals.removed.len(), 2);
+    assert!(removals.known.is_empty());
+    let listed = removals.listed(&read);
+    assert!(listed.iter().all(|r| !r.changed), "{listed:?}");
+    assert!(listed.iter().any(|r| r.id == dev.id && r.name == dev.name));
+    // What found one changed: proposed, still not written.
+    let mut more = dev.clone();
+    more.steps.pop();
+    let read = [home.clone(), more];
+    assert!(
+        wf::merge_reading_all(&places, &wf::load_all(&places), &read, true, &mut removals)
+            .is_empty()
+    );
+    let listed = removals.listed(&read);
+    assert!(listed.iter().find(|r| r.id == dev.id).unwrap().changed);
+    assert!(!listed.iter().find(|r| r.id == home.id).unwrap().changed);
+
+    // A file that cannot be read is not a removal.
+    let mut removals = wf::Removals::default();
+    let other = test_dir("wf-files-removals-2");
+    let places = wf::Places {
+        repo: other.join("repo/.escouade/workflows"),
+        local: other.join("data/workflows"),
+    };
+    wf::merge_reading_all(
+        &places,
+        &wf::Folder::default(),
+        std::slice::from_ref(&dev),
+        true,
+        &mut removals,
+    );
+    let file = places.repo.join(format!("{}.yml", wf::safe_name(&dev.id)));
+    std::fs::write(
+        &file,
+        "version: [
+",
+    )
+    .unwrap();
+    wf::merge_reading_all(
+        &places,
+        &wf::load_all(&places),
+        std::slice::from_ref(&dev),
+        true,
+        &mut removals,
+    );
+    assert!(removals.removed.is_empty());
+    assert_eq!(
+        std::fs::read_to_string(&file).unwrap(),
+        "version: [
+"
+    );
 }

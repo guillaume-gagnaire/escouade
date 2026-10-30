@@ -131,6 +131,8 @@ const BYPASS: &str = "bypassPermissions";
 /// « Projet privé »: the file may turn it on, never off.
 pub const PRIVATE: &str = "private";
 const MODE: &str = "board.mode";
+/// « Pas de workflow pour ce projet » (ESC-309) when false.
+pub const WORKFLOWS: &str = "workflows.enabled";
 
 /// Every setting of version 1, in the order the file is written.
 pub const KEYS: &[Key] = &[
@@ -254,6 +256,11 @@ pub const KEYS: &[Key] = &[
         MODE,
         Kind::Enum(MODES),
         "The permission mode of the tickets' agents (empty: the account's). Never bypassPermissions: that one is set on each machine.",
+    ),
+    key(
+        WORKFLOWS,
+        Kind::Bool,
+        "The project has workflows (true when absent). false: « Pas de workflow pour ce projet », Escouade neither reads nor writes its workflows (.escouade/workflows/ left as it is) and follows its agents in none.",
     ),
     file_key(
         RECOMMENDED,
@@ -928,6 +935,7 @@ pub fn get(p: &Project, key: &str) -> Value {
         "board.model" => json!(b.model),
         "board.effort" => json!(b.effort),
         MODE => json!(b.mode),
+        WORKFLOWS => json!(p.workflows_enabled),
         _ => Value::Null,
     }
 }
@@ -1020,6 +1028,7 @@ pub fn set(p: &mut Project, key: &str, v: &Value) {
         "board.model" => b.model = str_of(v),
         "board.effort" => b.effort = str_of(v),
         MODE => b.mode = str_of(v),
+        WORKFLOWS => p.workflows_enabled = flag,
         _ => {}
     }
 }
@@ -1636,6 +1645,10 @@ impl<R: Runtime> Core<R> {
         }
         if !applied.changed.is_empty() {
             self.schedule();
+        }
+        // « Pas de workflow pour ce projet » set or undone by the file (ESC-309): followed at once.
+        if before.workflows_enabled != after.workflows_enabled {
+            self.workflow_fixes_changed(&after.id);
         }
         Some(after)
     }

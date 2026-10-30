@@ -56,6 +56,8 @@ board:
   model: opus
   effort: high
   mode: plan
+workflows:
+  enabled: false
 plugins:
   recommended: [dev.exemple.slack]
 ";
@@ -117,6 +119,24 @@ fn every_key_of_version_1_is_read() {
     assert_eq!(v("board.effort"), json!("high"));
     assert_eq!(v("board.mode"), json!("plan"));
     assert_eq!(v("plugins.recommended"), json!(["dev.exemple.slack"]));
+    assert_eq!(v("workflows.enabled"), json!(false));
+}
+
+/// « Pas de workflow pour ce projet » (ESC-309): a key of the file, true when absent.
+#[test]
+fn no_workflow_for_the_project_is_a_key_of_the_file() {
+    let k = pf::key_of("workflows.enabled").unwrap();
+    assert_eq!(k.kind, pf::Kind::Bool);
+    assert!(!k.command && !k.file_only);
+    let mut p = project();
+    assert!(p.workflows_enabled);
+    assert_eq!(pf::get(&p, "workflows.enabled"), json!(true));
+    pf::set(&mut p, "workflows.enabled", &json!(false));
+    assert!(!p.workflows_enabled);
+    assert_eq!(pf::get(&p, "workflows.enabled"), json!(false));
+    let schema = pf::schema();
+    let key = &schema["properties"]["workflows"]["properties"]["enabled"];
+    assert_eq!(key["type"], "boolean");
 }
 
 /// The plugins a project proposes and their settings (PLG-14): read and kept in the file's values,
@@ -1193,6 +1213,59 @@ async fn the_file_changed_is_read_again_its_new_commands_asked_again() {
     let p = h.core.read_shared(&p.id, false).unwrap();
     assert!(p.shared.file.is_none());
     assert_eq!(p.board.strategy, "squash");
+}
+
+/// ESC-309: `workflows.enabled: false` in the file of a project shared, read as it opens or pulled:
+/// nothing read nor written of its workflows.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_shared_file_without_workflows_stops_their_reading_and_writing() {
+    let h = harness("pf-no-workflows");
+    let (p, r) = shared_project(
+        &h,
+        "version: 1
+workflows:
+  enabled: false
+",
+    )
+    .await;
+    let cmds = r.join(".claude/commands");
+    std::fs::create_dir_all(&cmds).unwrap();
+    std::fs::write(
+        cmds.join("one.md"),
+        "Do one, then /two.
+",
+    )
+    .unwrap();
+    std::fs::write(
+        cmds.join("two.md"),
+        "Do two.
+",
+    )
+    .unwrap();
+    assert!(!h.core.project(&p.id).unwrap().workflows_enabled);
+    let scan = h.core.refresh_workflows(&p.id, true).await.unwrap();
+    assert!(scan.off && scan.workflows.is_empty());
+    assert!(!r.join(".escouade/workflows").exists());
+    // A pull takes it out: read and written again.
+    std::fs::write(
+        r.join(pf::FILE),
+        "version: 1
+",
+    )
+    .unwrap();
+    std::fs::write(
+        r.join(pf::FILE),
+        "version: 1
+workflows:
+  enabled: true
+",
+    )
+    .unwrap();
+    h.core.read_shared(&p.id, false).unwrap();
+    let scan = h.core.refresh_workflows(&p.id, false).await.unwrap();
+    assert!(!scan.off);
+    assert_eq!(scan.workflows.len(), 1);
+    assert!(r.join(".escouade/workflows").is_dir());
 }
 
 #[tokio::test]

@@ -28,6 +28,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### Fixes
 
+- A workflow you delete, in Settings › Projects › Workflow or by erasing its file, no longer comes back at every reading or restart: the “Deleted” list keeps it, with “Restore”. And “No workflow for this project”, in the assistant or the settings (and in `.escouade.yml`), stops their reading and writing.
 - Two tickets worked on at once no longer propose a decision under the same number: a proposed decision has no number and gets the register’s next one when it is accepted, and the pages and tickets that cite it follow.
 - Approving a ticket is no longer refused for “uncommitted changes” after the spec was compared to the code: its gaps and date stay on this computer instead of being written in the pages, and the Docs tab still shows them.
 - “Write a first spec from the code”, and every new discussion, closes its window and opens the discussion with its first message even when new agents open in the harness terminal: a discussion always stays in its conversation, where Escouade refuses its writes.

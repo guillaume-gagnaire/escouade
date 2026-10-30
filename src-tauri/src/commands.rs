@@ -1123,6 +1123,20 @@ pub async fn remove_workflow_file(
     core.remove_workflow_file(&id, &workflow).await.map_err(err)
 }
 
+/// « Supprimer » a workflow (`removed`: its file goes, never written again), « Laisser supprimé »
+/// one proposed again, or « Rétablir » it (ESC-309).
+#[tauri::command]
+pub async fn set_workflow_removed(
+    core: CoreState<'_>,
+    id: String,
+    workflow: String,
+    removed: bool,
+) -> Res<crate::workflow::Scan> {
+    core.set_workflow_removed(&id, &workflow, removed)
+        .await
+        .map_err(err)
+}
+
 /// « Oublier » a repository gone from the project's folder (ESC-169).
 #[tauri::command(async)]
 pub fn forget_repo(core: CoreState, id: String, repo: String) -> Res<Project> {

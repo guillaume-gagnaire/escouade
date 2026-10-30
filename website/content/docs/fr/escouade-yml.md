@@ -199,6 +199,14 @@ Les commandes de « Lancement » du projet (serveurs de développement, watche
 - `remove_worktree` : « Supprimer le worktree d’un ticket terminé ou supprimé ».
 - `model`, `effort`, `mode` : le modèle, l’effort et le mode des agents des tickets (Réglages › Kanban, groupe « Agents »). Une valeur vide (`model: ''`) laisse ceux du compte. `bypassPermissions` n’est jamais dans le fichier : un dépôt ne lève pas les autorisations de qui l’ouvre. Lu, il est refusé (« bypassPermissions ne se partage pas : il se règle sur chaque machine ») ; réglé dans la fenêtre, il reste un réglage local, que l’export n’écrit pas.
 
+### workflows
+
+| Clé | Type | Valeurs | Absente | Exemple |
+|---|---|---|---|---|
+| `workflows.enabled` | Booléen | `true`, `false` | `true` | `enabled: false` |
+
+- `enabled` : `false` vaut « Pas de workflow pour ce projet » (Réglages › Projets › Workflow) : Escouade ne lit ni n’écrit les [workflows](workflows) du projet et n’y suit aucun agent, sur chaque machine qui lit le fichier ; `.escouade/workflows/` reste tel quel.
+
 ### plugins
 
 | Clé | Type | Valeurs | Absente | Exemple |

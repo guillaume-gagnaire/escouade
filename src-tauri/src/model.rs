@@ -778,6 +778,11 @@ pub struct Project {
     /// comes back to the front and a file read changed. Off: by « Relire » alone.
     #[serde(default = "crate::model::yes")]
     pub workflows_auto_read: bool,
+    /// « Pas de workflow pour ce projet » (ESC-309) when off: its workflows are neither read nor
+    /// written, their files left as they are, nothing followed. In its `.escouade.yml` when shared
+    /// (`workflows.enabled`).
+    #[serde(default = "crate::model::yes")]
+    pub workflows_enabled: bool,
     /// « Index du code » (ESC-251): the project's code cut into symbols and links, in a database
     /// of this machine (`codeindex`), for the agents to find code with for less; off, nothing is
     /// read and the database is erased. The project's own choice (ESC-293), on or off; None

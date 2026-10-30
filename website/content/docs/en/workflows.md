@@ -24,11 +24,21 @@ A project of several repositories has the workflow of each repository. The readi
 What Escouade understands of a workflow of the repository’s configuration (its entries, its steps, their sub-agents, its ways back, its state files) and your corrections are kept in the repository, a file per workflow in `.escouade/workflows/`, beside the [shared tickets](shared-board). Escouade writes these files and keeps them up to date, but never commits them: commit them with your work, and the whole team that uses Escouade sees the same workflows and the same corrections. A workflow is the repository’s when its entry is, even when a step calls a skill of your own folders (it is named as it is).
 
 - The files keep nothing of one machine: no date, no absolute path, no state of the work (“phase 3 of 6” is read again on the spot). A reading that changes nothing does not touch them.
-- The folder is what counts: a teammate whose machine does not read a workflow still sees and follows it. A reading adds a new workflow and updates one that changed, never deleting a file; a workflow is set apart by “This is not a workflow” (its file keeps it marked), or its file deleted by “Remove from the repository”.
+- The folder is what counts: a teammate whose machine does not read a workflow still sees and follows it. A reading adds a new workflow and updates one that changed, never deleting a file nor making again one you deleted (see [deleting a workflow](#deleting-a-workflow-or-having-none)).
 - The files are read again when they change (a `git pull`, another branch); a file that can’t be read is said with its path and why.
 - The workflows of your own folders (`~/.claude`, `~/.codex`, GSD or Superpowers installed there) are read, shown and followed the same way, but their file stays on your machine, in `~/.escouade/projects/<id>/workflows/`, never in the repository. “On this machine”, in Settings › Projects › Workflow, keeps the repository’s there too.
 - The agents’ history in the workflows stays on your machine, in Escouade’s data folder.
 - The format is described by a JSON schema: `https://escouade.dev/schemas/escouade-workflow.schema.json`.
+
+## Deleting a workflow, or having none
+
+- **Delete this workflow**, under its steps in Settings › Projects › Workflow, deletes its file at once. Erasing its file by hand does the same: at the next reading, Escouade sees it is missing. Either way the workflow leaves Escouade, and reading again no longer makes it again, not even after a restart.
+- Your machine remembers it for this project, in `~/.escouade/projects/<id>/`. The “Deleted” list shows them, each with “Restore”, which reads it again and writes its file back.
+- If what found it changes (a command or a skill edited), it is proposed again, without being written: “Take back” restores it, “Keep deleted” keeps it out as it is now.
+- A file that comes back (a `git pull`, another branch) gives the workflow back to the project.
+- “This is not a workflow” remains the other way to set it apart: its file is kept, marked, so the whole team sets it apart too.
+
+“No workflow for this project”, in the “New project” assistant (Kanban step) or at the top of Settings › Projects › Workflow, turns everything off. Escouade no longer reads the project’s workflows, writes no file and follows no agent in them. What is already in `.escouade/workflows/` is left as it is. The Workflow tab says so, with where to undo it: “Read the workflows”, then “Save”. In a shared project, it is the `workflows.enabled: false` key of its [`.escouade.yml`](escouade-yml).
 
 ## Where each agent is
 
