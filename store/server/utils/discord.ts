@@ -13,8 +13,9 @@ import { compareVersions } from './versions';
 // The announcements on Escouade's Discord (docs/STORE.md, §4.7, STORE-12): a private channel for the administrators,
 // in French (a version to review, a report, a name too close, a tag moved, a revocation), and the public channel in
 // French and in English, one webhook per language, as the changelog of the app (a new plugin, a new version, the
-// « Vérifié par Escouade » badge, a plugin taken off). Each message is a pg-boss job of its own (store.discord): a
-// submission never waits for Discord nor fails for it. Whatever comes from an author (name, description, login,
+// « Vérifié par Escouade » badge, a plugin taken off or its badge withdrawn, --quiet or not: --quiet only spares the
+// author's e-mail). Each message is a pg-boss job of its own (store.discord): a submission never waits for Discord
+// nor fails for it. Whatever comes from an author (name, description, login,
 // version) is hostile: no mention can be made (`allowed_mentions` empty), Discord's Markdown is escaped, the links
 // written in it are broken, every length is bounded, and the only links are to the store's own pages. A webhook's
 // address is a secret: the job holds the channel's name only, the logs and the errors say its host alone.
@@ -249,6 +250,7 @@ const W = {
     newVersion: 'Nouvelle version',
     verified: 'Vérifié par Escouade',
     removed: 'Plugin retiré',
+    unverifiedNow: 'Badge retiré',
     author: 'Auteur',
     review: 'Revue',
     unverified: 'Non vérifié : pas encore relu par Escouade',
@@ -265,6 +267,7 @@ const W = {
     newVersion: 'New version',
     verified: 'Verified by Escouade',
     removed: 'Plugin taken off',
+    unverifiedNow: 'Badge withdrawn',
     author: 'Author',
     review: 'Review',
     unverified: 'Unverified: not reviewed by Escouade yet',
@@ -317,7 +320,7 @@ export function render(f: Facts, channel: Channel, site: string): WebhookBody {
       });
     case 'removed':
       return body({
-        title: w.removed,
+        title: f.entry.action === 'disable' ? w.removed : w.unverifiedNow,
         url: pluginPage(site, lang, f.id),
         description: `${headline(f.name[lang], null)} · ${w.versions(f.entry.versions)}`,
         color: COLORS.danger,
@@ -401,7 +404,7 @@ function renderAdmin(f: Facts, site: string): WebhookBody {
         fields: [
           { name: 'Raison publique', value: md(f.entry.reason.fr, MAX.reason) || '—' },
           { name: 'Liste de révocation', value: `n° ${f.serial} publiée`, inline: true },
-          { name: 'Auteur et salon public', value: f.quiet ? 'non prévenus (--quiet)' : 'prévenus', inline: true },
+          { name: 'Auteur', value: f.quiet ? 'non prévenu (--quiet)' : 'prévenu', inline: true },
         ],
       });
     default:

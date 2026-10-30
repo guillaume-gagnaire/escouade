@@ -128,7 +128,7 @@ describe('the messages', () => {
       SITE,
     ).embeds[0]!;
     expect(out.title).toBe('Retrait d’urgence fait');
-    expect(out.fields!.map((f) => f.value)).toEqual(['Envoie des secrets à un tiers\\.', 'n° 4 publiée', 'non prévenus (--quiet)']);
+    expect(out.fields!.map((f) => f.value)).toEqual(['Envoie des secrets à un tiers\\.', 'n° 4 publiée', 'non prévenu (--quiet)']);
     const unverify = render(
       { kind: 'revoked', id: 'a.b', name: { fr: 'AB', en: 'AB' }, entry: entry('unverify'), serial: 5, quiet: false },
       'admin',
@@ -162,6 +162,14 @@ describe('the messages', () => {
     expect(render({ kind: 'removed', id: 'x', name: v().name, entry: entry('disable') }, 'en', SITE).embeds[0]!.fields![0]!.value).toBe(
       'Sends secrets to a third party\\.',
     );
+    // A badge withdrawn, with its public reason, in each language.
+    const unverified = render({ kind: 'removed', id: 'io.github.sroux.ntfy', name: v().name, entry: entry('unverify') }, 'fr', SITE)
+      .embeds[0]!;
+    expect(unverified).toMatchObject({ title: 'Badge retiré', fields: [{ name: 'Raison', value: 'Envoie des secrets à un tiers\\.' }] });
+    expect(render({ kind: 'removed', id: 'x', name: v().name, entry: entry('unverify') }, 'en', SITE).embeds[0]).toMatchObject({
+      title: 'Badge withdrawn',
+      fields: [{ name: 'Reason', value: 'Sends secrets to a third party\\.' }],
+    });
   });
 
   it('never mention anyone, escape the Markdown, break the links, and bound every length, whatever the author wrote', () => {
