@@ -515,16 +515,11 @@ fn every_answer_tells_what_it_saved() {
     let r = f.svc.reader(&f.target()).unwrap();
     let on_size = std::fs::metadata(f.root.join("src/shop.rs")).unwrap().len();
     let a = r.search("checkout", 3, None).unwrap();
+    // tokensave's weight of a file: its size divided by 4.
     assert!(a.saving.files_tokens >= on_size / 4, "{:?}", a.saving);
-    assert!(a.saving.answer_tokens > 0);
-    assert!(a.saving.answer_tokens < a.saving.files_tokens);
-    assert_eq!(
-        a.saving.saved_tokens,
-        a.saving.files_tokens - a.saving.answer_tokens
-    );
-    assert!(a.saving.saved_percent > 50);
+    assert!(a.saving.files > 0);
     let json = serde_json::to_value(&a).unwrap();
-    assert!(json["saving"]["savedTokens"].as_u64().unwrap() > 0);
+    assert!(json["saving"]["filesTokens"].as_u64().unwrap() > 0);
     for s in [
         r.callers(named("checkout"), 5).unwrap().saving,
         r.callees(named("checkout"), 5).unwrap().saving,
@@ -1394,12 +1389,10 @@ fn on_this_repository_full_then_incremental_indexing_and_size() {
     ] {
         let a = r.task_context(q, 8).unwrap();
         println!(
-            "context \"{q}\": {} entry points, {} files = {} tokens against {} (saved {} %)",
+            "context \"{q}\": {} entry points, {} files = {} tokens",
             a.result.entry_points.len(),
             a.saving.files,
-            a.saving.files_tokens,
-            a.saving.answer_tokens,
-            a.saving.saved_percent
+            a.saving.files_tokens
         );
     }
 }

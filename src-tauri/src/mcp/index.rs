@@ -1,10 +1,15 @@
-//! The code index through the tools (ESC-253, `docs/FACTORY.md` § 1): search a symbol or a notion,
-//! the context of a task, who calls a function and what it calls, what a change would touch. Five
-//! tools, so that an agent of any harness asks the index instead of reading twenty files.
+//! The code index through the tools (ESC-253, `docs/FACTORY.md` § 1): search a symbol, a notion or
+//! a text, the context of a task, the body of a symbol, who calls a function and what it calls,
+//! what a change would touch. Six tools, so that an agent of any harness asks the index instead of
+//! reading twenty files.
 //!
-//! Each answer says what it saved: the tokens of the files it draws on, read whole, against its own
-//! (`saving`, and a line that says it in words). The saving is counted per agent and per project
-//! (`Stats::record_index`), for the statistics.
+//! The answers are tokensave's (ESC-298, commit 580936b; see THIRD-PARTY-NOTICES.md): Markdown for
+//! the context (5 code blocks at most, 1,500 bytes each, a cut one pointing at `index_body`), one
+//! line per symbol or per match for the search, the body as text, JSON for the callers, callees
+//! and impact. Each ends with what it saved, counted as tokensave counts it (`codeindex::accounting`):
+//! the files touched read whole, capped at 4 times the answer, against the answer, the request and,
+//! once per session, the tools' schemas; a shortfall is carried to the next calls. The saving is
+//! counted per agent and per project (`Stats::record_index`), for the statistics.
 //!
 //! The project is named through `resolve::project`, so a private project says nothing of its code
 //! to the agents of the others (`Sight`); a private project's index holds only what its fence
@@ -12,17 +17,19 @@
 //! worktree), the files checked first. A project that has not turned the index on is told so, with
 //! how to turn it on.
 
-use super::read::json;
 use super::resolve;
 use super::tools::ToolError;
 use super::Caller;
+use crate::codeindex::accounting::Call;
+use crate::codeindex::filters::PathFilter;
 use crate::codeindex::{
-    Answer, BuildContextOptions, Reader, Retrieval, Wanted, MAX_MATCHES_DEFAULT,
+    format, Answer, BuildContextOptions, Reader, ToolArgs, Wanted, LITERAL_SCAN_DEFAULT_TIMEOUT_MS,
+    MAX_MATCHES_DEFAULT,
 };
 use crate::core::Core;
 use crate::model::Project;
-use serde::Deserialize;
-use serde_json::json;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::sync::Arc;
 use tauri::Runtime;
 
@@ -30,51 +37,131 @@ use rmcp::schemars;
 
 const DEFAULT_LIMIT: u32 = 10;
 const MAX_LIMIT: u32 = 50;
+/// tokensave `handle_search`: 10 by default, 500 at most.
+const SEARCH_MAX_LIMIT: u32 = 500;
 
-#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
 pub struct SearchArgs {
     #[schemars(
         description = "The project: its id, or its name in any case. An agent of Escouade may leave it out: its own."
     )]
     pub project: Option<String>,
     #[schemars(
-        description = "What to find: the words of a symbol's name (parseConfig is parse and config), of its doc or of its path, by prefix."
+        description = "Search query string to match against symbol names: the words of the code (parseConfig is parse and config), by prefix. With literal, the exact text to find."
     )]
     pub query: String,
     #[schemars(
         description = "Only this kind of symbol: function, method, class, struct, type, const, field, component, macro, heading..."
     )]
     pub kind: Option<String>,
-    #[schemars(description = "The most symbols to give (10 by default, 50 at most).")]
+    #[schemars(description = "Maximum number of results to return (default: 10, 500 at most).")]
     pub limit: Option<u32>,
+    #[schemars(
+        description = "Only include results whose file path contains one of these substrings (e.g. \"src\", \"app\"). Empty/absent means no path constraint."
+    )]
+    pub path_include: Option<Vec<String>>,
+    #[schemars(
+        description = "Exclude results whose file path contains any of these substrings (e.g. \"node_modules\", \"dist\", \"venv\"). Takes precedence over path_include."
+    )]
+    pub path_exclude: Option<Vec<String>>,
+    #[schemars(
+        description = "Exact-substring search over source text (for runtime error strings); returns file/line locations instead of ranked symbols, plus `total` matches and `truncated` when `limit` cut the list. Case-sensitive. Default false."
+    )]
+    pub literal: Option<bool>,
+    #[schemars(
+        description = "Include node IDs / enclosing IDs in results. Default false; pass true when you plan a follow-up call (index_body, index_callers, index_callees, index_impact)."
+    )]
+    pub ids: Option<bool>,
+    #[schemars(
+        description = "Literal mode only. Count every match in the project, not just the ones shown, so `total` is exact. Default true. Pass false to stop the scan as soon as `limit` matches are found: `total` then becomes a lower bound."
+    )]
+    pub exact_total: Option<bool>,
+    #[schemars(
+        description = "Literal mode only. Give up on the scan after this many milliseconds and answer with the matches found so far. Default 30000; 0 disables the limit."
+    )]
+    pub timeout_ms: Option<u64>,
 }
 
-#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
 pub struct ContextArgs {
     #[schemars(
         description = "The project: its id, or its name in any case. An agent of Escouade may leave it out: its own."
     )]
     pub project: Option<String>,
-    #[schemars(description = "The task, told in words, as you would tell it to a colleague.")]
+    #[schemars(
+        description = "Natural language description of the task or question, with the words of the code (its identifiers, in English here) where you know them."
+    )]
     pub task: String,
     #[schemars(
         description = "Extra search keywords for synonym expansion. Use this when the task uses conceptual terms that may not match symbol names — e.g. for 'authentication', pass [\"login\", \"session\", \"credential\", \"token\", \"auth\"]. The index is searched for each keyword independently; a keyword of several words is also looked for verbatim in the code."
     )]
     pub keywords: Option<Vec<String>>,
+    #[schemars(description = "Maximum number of symbols to include (default: 20, 100 at most).")]
+    #[serde(alias = "limit")]
+    pub max_nodes: Option<u32>,
     #[schemars(
-        description = "The most symbols to give, entry points and the symbols linked to them (20 by default, 100 at most)."
+        description = "If true (the default), include source code snippets for the entry points."
+    )]
+    pub include_code: Option<bool>,
+    #[schemars(
+        description = "Maximum number of code snippets when include_code is true (default: 5, 20 at most)."
+    )]
+    pub max_code_blocks: Option<u32>,
+    #[schemars(
+        description = "Maximum lines per code snippet (default: unlimited, max 1000). Use it to see the signature plus the first lines of several symbols instead of one whole large body. A separate size limit of ~1500 bytes per snippet always applies. Truncated snippets name the index_body call that returns the rest."
+    )]
+    pub max_code_lines: Option<u32>,
+    #[schemars(
+        description = "Node IDs to exclude from results (pass seen_node_ids from previous call for session deduplication)."
+    )]
+    pub exclude_node_ids: Option<Vec<i64>>,
+    #[schemars(
+        description = "Maximum symbols from a single file in results. Prevents one large file from dominating (default: max_nodes/3, minimum 3)."
+    )]
+    pub max_per_file: Option<u32>,
+    #[schemars(
+        description = "Only entry points in this folder or file (its path from the project's root)."
+    )]
+    pub path: Option<String>,
+    #[schemars(
+        description = "Only include results whose file path contains one of these substrings (e.g. \"src\", \"app\"). Empty/absent means no path constraint."
+    )]
+    pub path_include: Option<Vec<String>>,
+    #[schemars(
+        description = "Exclude results whose file path contains any of these substrings (e.g. \"node_modules\", \"dist\", \"venv\"). Takes precedence over path_include."
+    )]
+    pub path_exclude: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
+pub struct BodyArgs {
+    #[schemars(
+        description = "The project: its id, or its name in any case. An agent of Escouade may leave it out: its own."
+    )]
+    pub project: Option<String>,
+    #[schemars(
+        description = "Symbol name to look up (e.g. 'resolve_provider_api_key', 'GraphStats'). Qualify it to disambiguate: 'Coordinator::RefreshAsync', 'Coordinator.RefreshAsync' and 'App.Coordinator.RefreshAsync' all work (trailing segments are matched)."
+    )]
+    pub symbol: Option<String>,
+    #[schemars(
+        description = "Node id of the symbol (from a candidate list, index_search with ids, index_context's seen_node_ids or a truncated snippet). Takes precedence over `symbol`."
+    )]
+    #[serde(alias = "id")]
+    pub node_id: Option<i64>,
+    #[schemars(
+        description = "Maximum number of candidates listed when the name is ambiguous (default: 20, max: 50)."
     )]
     pub limit: Option<u32>,
 }
 
-#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
 pub struct CallArgs {
     #[schemars(
         description = "The project: its id, or its name in any case. An agent of Escouade may leave it out: its own."
     )]
     pub project: Option<String>,
     #[schemars(
-        description = "The symbol, by its id (the id index_search gives, or that of a match of an earlier answer). Takes precedence over name; one of the two is needed."
+        description = "The symbol, by its id (the id index_search gives with ids, or that of a match of an earlier answer). Takes precedence over name; one of the two is needed."
     )]
     pub id: Option<i64>,
     #[schemars(
@@ -95,14 +182,14 @@ pub struct CallArgs {
     pub max_matches: Option<u32>,
 }
 
-#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
 pub struct ImpactArgs {
     #[schemars(
         description = "The project: its id, or its name in any case. An agent of Escouade may leave it out: its own."
     )]
     pub project: Option<String>,
     #[schemars(
-        description = "What changes, by its id (the id index_search gives). Takes precedence over target; one of the two is needed."
+        description = "What changes, by its id (the id index_search gives with ids). Takes precedence over target; one of the two is needed."
     )]
     pub id: Option<i64>,
     #[schemars(
@@ -139,6 +226,9 @@ struct Asked {
     dir: Option<String>,
     agent: String,
 }
+
+/// An answer of the tools: its text, then the metrics line, in a block of their own.
+pub(super) type Reply = (String, String);
 
 fn asked<R: Runtime>(
     core: &Core<R>,
@@ -184,163 +274,219 @@ async fn reader<R: Runtime>(core: &Arc<Core<R>>, a: &Asked) -> Result<Reader, To
         .map_err(failed)
 }
 
-/// The answer: the result, what it saved (counted for the agent and the project), and that in words.
-fn answered<R: Runtime, T: serde::Serialize>(
+/// The path filters of a call: its lists, its folder, and the project's `.escouade/queryignore`
+/// (the folder's, unless the fence refuses it).
+fn filter_of(
+    r: &Reader,
+    prefix: Option<&str>,
+    include: Option<Vec<String>>,
+    exclude: Option<Vec<String>>,
+) -> PathFilter {
+    let ignore = r.query_ignore();
+    PathFilter::new(
+        prefix,
+        include.unwrap_or_default(),
+        exclude.unwrap_or_default(),
+        ignore,
+    )
+}
+
+/// The answer as sent and what it saved: counted in the caller's session (`accounting`), recorded
+/// for the agent and the project, then said in the metrics line.
+#[allow(clippy::too_many_arguments)]
+fn answered<R: Runtime, T>(
     core: &Core<R>,
+    caller: &Caller,
     a: &Asked,
     tool: &str,
-    answer: Answer<T>,
-) -> Result<String, ToolError> {
-    let s = &answer.saving;
+    arguments: Value,
+    schema_tokens: u64,
+    answer: &Answer<T>,
+    text: String,
+) -> Reply {
+    let lang = crate::i18n::ui();
+    let key = match caller {
+        Caller::Agent(id) => id.clone(),
+        Caller::External => String::new(),
+    };
+    let m = core.codeindex.ledger.account(
+        &key,
+        &Call {
+            tool,
+            arguments: &arguments,
+            response: &text,
+            full_file_tokens: answer.saving.files_tokens,
+            schema_tokens,
+        },
+        |m| format::metrics_line(lang, m),
+    );
     // Priced at the model the agent last ran on, else its setting (ESC-254).
     let model = core
         .agent(&a.agent)
         .map(|h| h.lock().meta.model.clone())
         .unwrap_or_default();
-    core.stats.record_index(
-        &a.agent,
-        &a.project.id,
-        tool,
-        s.files_tokens,
-        s.answer_tokens,
-        &model,
-    );
-    let summary = if s.files == 0 {
-        tr!(
-            "Rien de trouvé : aucun fichier n’a été lu pour cette réponse.",
-            "Nothing found: no file was read for this answer."
-        )
+    core.stats
+        .record_index(&a.agent, &a.project.id, tool, &m, &model);
+    let line = if m.before > 0 {
+        format::metrics_line(lang, &m)
     } else {
-        tr!(
-            "Économie : environ {saved} tokens ({percent} %). Lire les {files} fichiers concernés en entier aurait coûté environ {before} tokens ; cette réponse en coûte environ {after}.",
-            "Saved: about {saved} tokens ({percent} %). Reading the {files} files concerned whole would have cost about {before} tokens; this answer costs about {after}.",
-            saved = s.saved_tokens,
-            percent = s.saved_percent,
-            files = s.files,
-            before = s.files_tokens,
-            after = s.answer_tokens
-        )
+        String::new()
     };
-    json(&json!({
-        "project": a.project.name,
-        "projectId": a.project.id,
-        "result": answer.result,
-        "saving": answer.saving,
-        "summary": summary,
-    }))
+    (text, line)
+}
+
+/// The arguments as the client sent them (those it left out dropped), for the request's cost.
+pub(super) fn sent<T: serde::Serialize>(args: &T) -> Value {
+    let mut v = serde_json::to_value(args).unwrap_or_default();
+    if let Some(o) = v.as_object_mut() {
+        o.retain(|_, x| !x.is_null());
+    }
+    v
 }
 
 pub(super) async fn search<R: Runtime>(
     core: &Arc<Core<R>>,
     caller: &Caller,
+    schema_tokens: u64,
     args: SearchArgs,
-) -> Result<String, ToolError> {
+    arguments: Value,
+) -> Result<Reply, ToolError> {
     let a = asked(core, caller, args.project.as_deref())?;
     let r = reader(core, &a).await?;
-    let limit = limit_of(args.limit);
-    let kind = args.kind.filter(|k| !k.trim().is_empty());
-    let found = tokio::task::spawn_blocking(move || r.search(&args.query, limit, kind.as_deref()))
+    let limit = args
+        .limit
+        .unwrap_or(DEFAULT_LIMIT)
+        .clamp(1, SEARCH_MAX_LIMIT) as usize;
+    let filter = filter_of(&r, None, args.path_include, args.path_exclude);
+    let ids = args.ids.unwrap_or(false);
+    let lang = crate::i18n::ui();
+    if args.literal.unwrap_or(false) {
+        if args.query.is_empty() {
+            return Err(ToolError::Failed(tr!(
+                "La recherche littérale demande un texte (query) non vide.",
+                "literal search requires a non-empty query"
+            )));
+        }
+        let exact_total = args.exact_total.unwrap_or(true);
+        let timeout_ms = args.timeout_ms.unwrap_or(LITERAL_SCAN_DEFAULT_TIMEOUT_MS);
+        let timeout = (timeout_ms > 0).then(|| std::time::Duration::from_millis(timeout_ms));
+        let query = args.query.clone();
+        let found = tokio::task::spawn_blocking(move || {
+            r.literal_search(&query, limit, &filter, exact_total, timeout)
+        })
         .await
         .map_err(joined)?
         .map_err(failed)?;
-    answered(core, &a, "index_search", found)
+        let text = format::literal_text(lang, &found.result, ids);
+        return Ok(answered(
+            core,
+            caller,
+            &a,
+            "index_search",
+            arguments,
+            schema_tokens,
+            &found,
+            text,
+        ));
+    }
+    let kind = args.kind.filter(|k| !k.trim().is_empty());
+    let query = args.query.clone();
+    let found = tokio::task::spawn_blocking(move || {
+        r.search_filtered(&query, limit, kind.as_deref(), &filter)
+    })
+    .await
+    .map_err(joined)?
+    .map_err(failed)?;
+    let text = format::search_text(lang, &found.result, ids);
+    Ok(answered(
+        core,
+        caller,
+        &a,
+        "index_search",
+        arguments,
+        schema_tokens,
+        &found,
+        text,
+    ))
 }
 
 pub(super) async fn context<R: Runtime>(
     core: &Arc<Core<R>>,
     caller: &Caller,
+    schema_tokens: u64,
     args: ContextArgs,
-) -> Result<String, ToolError> {
+    arguments: Value,
+) -> Result<Reply, ToolError> {
     let a = asked(core, caller, args.project.as_deref())?;
     let r = reader(core, &a).await?;
-    let options = BuildContextOptions::of_tool(
-        args.limit.map(|l| l as usize),
-        args.keywords.unwrap_or_default(),
+    let filter = filter_of(
+        &r,
+        args.path.as_deref(),
+        args.path_include,
+        args.path_exclude,
     );
-    let found = tokio::task::spawn_blocking(move || r.task_context_with(&args.task, &options))
+    let options = BuildContextOptions::of_args(ToolArgs {
+        max_nodes: args.max_nodes.map(|v| v as usize),
+        include_code: args.include_code,
+        max_code_blocks: args.max_code_blocks.map(|v| v as usize),
+        max_code_lines: args.max_code_lines.map(|v| v as usize),
+        keywords: args.keywords.unwrap_or_default(),
+        exclude_node_ids: args.exclude_node_ids.unwrap_or_default(),
+        max_per_file: args.max_per_file.map(|v| v as usize),
+        filter,
+    });
+    let task = args.task.clone();
+    let found = tokio::task::spawn_blocking(move || r.task_context_with(&task, &options))
         .await
         .map_err(joined)?
         .map_err(failed)?;
-    let retrieval = retrieval_text(
-        &found.result.retrieval,
-        found.result.entry_points.is_empty(),
-    );
-    let mut text = answered(core, &a, "index_context", found)?;
-    // The diagnostic in words, after the rest (tokensave's « ### Retrieval »).
-    if let Ok(mut v) = serde_json::from_str::<serde_json::Value>(&text) {
-        v["retrieval"] = json!(retrieval);
-        text = json(&v)?;
-    }
-    Ok(text)
+    let text = format::context_markdown(crate::i18n::ui(), &args.task, &found.result);
+    Ok(answered(
+        core,
+        caller,
+        &a,
+        "index_context",
+        arguments,
+        schema_tokens,
+        &found,
+        text,
+    ))
 }
 
-/// Ported from tokensave `src/context/formatter.rs` (github.com/aovestdipaperino/tokensave, commit
-/// 580936b, MIT, © 2025 Enzo Lombardi; see THIRD-PARTY-NOTICES.md). The diagnostic of a context in
-/// words (`format_context_as_markdown`, its
-/// « Retrieval » section): the match and its best score, the terms that found something and how
-/// much, the terms that found nothing (six named at most).
-pub(crate) fn retrieval_text(r: &Retrieval, no_entry: bool) -> String {
-    const MAX_MISSES_SHOWN: usize = 6;
-    let mut lines: Vec<String> = Vec::new();
-    match (r.quality.as_deref(), r.best_score) {
-        (Some(quality), Some(score)) => {
-            let score = if score < 0.01 {
-                "<0.01".to_string()
-            } else {
-                format!("{score:.2}")
-            };
-            lines.push(tr!(
-                "correspondance : {quality} (meilleur score {score})",
-                "match: {quality} (best score {score})",
-                quality = quality,
-                score = score
-            ));
-        }
-        _ if r.terms.is_empty() => lines.push(tr!(
-            "correspondance : aucune (aucun terme à chercher n’a été tiré de la tâche — reformule avec des identifiants concrets ou ajoute des `keywords`)",
-            "match: none (no searchable terms extracted — rephrase with concrete identifiers or add `keywords`)"
-        )),
-        _ => lines.push(tr!(
-            "correspondance : aucune (aucun candidat)",
-            "match: none (no candidates)"
-        )),
+pub(super) async fn body<R: Runtime>(
+    core: &Arc<Core<R>>,
+    caller: &Caller,
+    schema_tokens: u64,
+    args: BodyArgs,
+    arguments: Value,
+) -> Result<Reply, ToolError> {
+    let a = asked(core, caller, args.project.as_deref())?;
+    if args.node_id.is_none() && args.symbol.as_deref().is_none_or(|s| s.trim().is_empty()) {
+        return Err(ToolError::Failed(tr!(
+            "Il faut le symbole : son nom (symbol) ou son id (node_id).",
+            "missing required parameter: symbol (or node_id)"
+        )));
     }
-    let hits: Vec<String> = r
-        .terms
-        .iter()
-        .filter(|t| t.hits > 0)
-        .map(|t| format!("{}({})", t.term, t.hits))
-        .collect();
-    if !hits.is_empty() {
-        lines.push(tr!(
-            "termes : {list}",
-            "terms: {list}",
-            list = hits.join(", ")
-        ));
-    }
-    let misses: Vec<&str> = r
-        .terms
-        .iter()
-        .filter(|t| t.hits == 0)
-        .map(|t| t.term.as_str())
-        .collect();
-    if !misses.is_empty() {
-        let shown = misses.len().min(MAX_MISSES_SHOWN);
-        let mut listed = misses[..shown].join(", ");
-        if misses.len() > shown {
-            listed.push_str(&format!(", +{}", misses.len() - shown));
-        }
-        lines.push(tr!(
-            "⚠ sans résultat ({n}) : {listed} — ajoute des synonymes dans `keywords` ou essaie index_search",
-            "⚠ no hits ({n}): {listed} — add `keywords` synonyms or try index_search",
-            n = misses.len(),
-            listed = listed
-        ));
-    }
-    if r.terms.is_empty() && r.best_score.is_none() && !no_entry {
-        return String::new();
-    }
-    lines.join("\n")
+    let r = reader(core, &a).await?;
+    let limit = args
+        .limit
+        .map_or(crate::codeindex::BODY_CANDIDATES_DEFAULT, |l| l as usize);
+    let (id, symbol) = (args.node_id, args.symbol.clone());
+    let found = tokio::task::spawn_blocking(move || r.body(id, symbol.as_deref(), limit))
+        .await
+        .map_err(joined)?
+        .map_err(failed)?;
+    let text = format::body_text(crate::i18n::ui(), &found.result);
+    Ok(answered(
+        core,
+        caller,
+        &a,
+        "index_body",
+        arguments,
+        schema_tokens,
+        &found,
+        text,
+    ))
 }
 
 /// What a tool is asked about: an id, else a name (and a file); neither is said.
@@ -358,8 +504,8 @@ fn wanted<'a>(
         .filter(|n| !n.is_empty())
         .ok_or_else(|| {
             ToolError::Failed(tr!(
-                "Il faut le symbole : son id (celui que donne index_search) ou son nom.",
-                "The symbol is needed: its id (the one index_search gives) or its name."
+                "Il faut le symbole : son id (celui que donne index_search avec ids) ou son nom.",
+                "The symbol is needed: its id (the one index_search gives with ids) or its name."
             ))
         })?;
     Ok(Wanted::Name {
@@ -369,11 +515,20 @@ fn wanted<'a>(
     })
 }
 
+/// The JSON of a result, as tokensave answers its callers, callees and impact.
+fn json_text<T: serde::Serialize>(answer: &Answer<T>) -> Result<String, ToolError> {
+    serde_json::to_string(&answer.result)
+        .map(|t| format::truncate_response(&t))
+        .map_err(|e| ToolError::Failed(e.to_string()))
+}
+
 pub(super) async fn callers<R: Runtime>(
     core: &Arc<Core<R>>,
     caller: &Caller,
+    schema_tokens: u64,
     args: CallArgs,
-) -> Result<String, ToolError> {
+    arguments: Value,
+) -> Result<Reply, ToolError> {
     let a = asked(core, caller, args.project.as_deref())?;
     wanted(args.id, args.name.as_deref(), None, None)?;
     let r = reader(core, &a).await?;
@@ -390,14 +545,26 @@ pub(super) async fn callers<R: Runtime>(
     .await
     .map_err(joined)?
     .map_err(failed)?;
-    answered(core, &a, "index_callers", found)
+    let text = json_text(&found)?;
+    Ok(answered(
+        core,
+        caller,
+        &a,
+        "index_callers",
+        arguments,
+        schema_tokens,
+        &found,
+        text,
+    ))
 }
 
 pub(super) async fn callees<R: Runtime>(
     core: &Arc<Core<R>>,
     caller: &Caller,
+    schema_tokens: u64,
     args: CallArgs,
-) -> Result<String, ToolError> {
+    arguments: Value,
+) -> Result<Reply, ToolError> {
     let a = asked(core, caller, args.project.as_deref())?;
     wanted(args.id, args.name.as_deref(), None, None)?;
     let r = reader(core, &a).await?;
@@ -414,14 +581,26 @@ pub(super) async fn callees<R: Runtime>(
     .await
     .map_err(joined)?
     .map_err(failed)?;
-    answered(core, &a, "index_callees", found)
+    let text = json_text(&found)?;
+    Ok(answered(
+        core,
+        caller,
+        &a,
+        "index_callees",
+        arguments,
+        schema_tokens,
+        &found,
+        text,
+    ))
 }
 
 pub(super) async fn impact<R: Runtime>(
     core: &Arc<Core<R>>,
     caller: &Caller,
+    schema_tokens: u64,
     args: ImpactArgs,
-) -> Result<String, ToolError> {
+    arguments: Value,
+) -> Result<Reply, ToolError> {
     let a = asked(core, caller, args.project.as_deref())?;
     wanted(args.id, args.target.as_deref(), None, None)?;
     let r = reader(core, &a).await?;
@@ -434,5 +613,15 @@ pub(super) async fn impact<R: Runtime>(
     .await
     .map_err(joined)?
     .map_err(failed)?;
-    answered(core, &a, "index_impact", found)
+    let text = json_text(&found)?;
+    Ok(answered(
+        core,
+        caller,
+        &a,
+        "index_impact",
+        arguments,
+        schema_tokens,
+        &found,
+        text,
+    ))
 }

@@ -1,15 +1,17 @@
-//! The code index through the tools (ESC-253), called by a real MCP client (rmcp's) on a test core:
-//! five tools, each answer saying what it saved, the savings counted per agent and per project, an
-//! index that is off said clearly with how to turn it on, and nothing of a private project for the
-//! agents of the others.
+//! The code index through the tools (ESC-253, ESC-298), called by a real MCP client (rmcp's) on a
+//! test core: six tools answering as tokensave does (Markdown for the context, a line per symbol
+//! for the search, the body as text, JSON for the calls), each answer ending with what it saved,
+//! counted as tokensave counts it, the savings per agent and per project, an index that is off said
+//! clearly with how to turn it on, and nothing of a private project for the agents of the others.
 
 use super::private_tests::make_private;
 use super::tools_tests::{
-    as_agent, call, external, other_project, project, put_agent, read, refused,
+    as_agent, call, external, other_project, project, put_agent, read, refused, Client,
 };
 use crate::core_tests::{harness, Harness};
 use crate::model::Project;
-use serde_json::json;
+use rmcp::model::CallToolRequestParams;
+use serde_json::{json, Value};
 
 const SHOP: &str = "/// Places an order.\npub fn place_order(cart: u32) {\n    checkout(cart);\n}\n\npub fn checkout(cart: u32) {\n    let _ = cart;\n}\n\npub fn unrelated_helper() {}\n";
 
@@ -24,53 +26,163 @@ async fn indexed(h: &Harness, p: &Project) {
     h.core.set_code_index(&p.id, Some(true)).await.unwrap();
 }
 
+/// The blocks of an answer that is no error: its text, then its metrics line (empty when none).
+async fn blocks(c: &Client, tool: &'static str, args: Value) -> (String, String) {
+    let mut params = CallToolRequestParams::new(tool);
+    if let Value::Object(args) = args {
+        params = params.with_arguments(args);
+    }
+    let answer = serde_json::to_value(c.call_tool(params).await.unwrap()).unwrap();
+    assert!(answer["isError"] != true, "{tool}: {answer}");
+    let text = |i: usize| {
+        answer["content"][i]["text"]
+            .as_str()
+            .unwrap_or("")
+            .to_string()
+    };
+    (text(0), text(1))
+}
+
+/// The numbers of a metrics line: before, after, result, saved.
+fn metrics(line: &str) -> [u64; 4] {
+    let at = line.find("index_metrics:").expect(line);
+    let mut out = [0; 4];
+    for (i, key) in ["before=", "after=", "result=", "saved="]
+        .iter()
+        .enumerate()
+    {
+        let from = line[at..].find(key).unwrap() + at + key.len();
+        let digits: String = line[from..]
+            .chars()
+            .take_while(char::is_ascii_digit)
+            .collect();
+        out[i] = digits.parse().unwrap();
+    }
+    out
+}
+
 #[tokio::test(flavor = "multi_thread")]
-async fn the_five_tools_answer_from_the_index_and_say_what_they_saved() {
+async fn the_six_tools_answer_as_tokensave_and_say_what_they_saved() {
     let h = harness("mcp-index-tools");
     let p = project(&h).await;
     indexed(&h, &p).await;
     let c = external(&h).await;
 
-    let found = read(
+    // The search: a line per symbol, the ids when asked.
+    let (found, line) = blocks(
         &c,
         "index_search",
         json!({ "project": p.name, "query": "place order" }),
     )
     .await;
-    assert_eq!(found["result"][0]["name"], "place_order");
-    assert_eq!(found["result"][0]["path"], "shop.rs");
-    // Before / after, in numbers and in words.
-    let s = &found["saving"];
-    assert!(s["filesTokens"].as_u64().unwrap() > 0, "{found}");
-    assert!(s["answerTokens"].as_u64().unwrap() > 0);
-    // shop.rs, and main.rs: the signature of `main` (its first line) names place_order.
-    assert_eq!(s["files"], 2);
-    assert!(found["summary"].as_str().unwrap().contains("tokens"));
+    assert!(found.starts_with("count: "), "{found}");
+    assert!(
+        found.contains("shop.rs:2-4: place_order (function)"),
+        "{found}"
+    );
+    assert!(!found.contains("[id:"), "{found}");
+    let [before, after, result, saved] = metrics(&line);
+    // The first call of the session pays the schemas.
+    assert!(before > 0 && result > 0 && after > result, "{line}");
+    assert!(before <= 4 * result, "capped at 4 times the answer: {line}");
+    assert_eq!(saved, before.saturating_sub(after));
+    let (with_ids, _) = blocks(
+        &c,
+        "index_search",
+        json!({ "project": p.name, "query": "checkout", "ids": true }),
+    )
+    .await;
+    let id: i64 = with_ids
+        .split("[id: ")
+        .nth(1)
+        .and_then(|s| s.split(']').next())
+        .and_then(|s| s.parse().ok())
+        .unwrap_or_else(|| panic!("{with_ids}"));
 
-    let ctx = read(
+    // A literal search: a text inside a body, file:line.
+    let (lit, _) = blocks(
+        &c,
+        "index_search",
+        json!({ "project": p.id, "query": "let _ = cart", "literal": true, "ids": true }),
+    )
+    .await;
+    assert!(lit.contains("shop.rs:7: let _ = cart;"), "{lit}");
+    assert!(lit.contains(&format!("[in checkout, id: {id}]")), "{lit}");
+
+    // The context, in Markdown, its code and its retrieval.
+    let (ctx, line) = blocks(
         &c,
         "index_context",
         json!({ "project": p.id, "task": "change how an order is placed" }),
     )
     .await;
-    assert_eq!(ctx["result"]["entryPoints"][0]["name"], "place_order");
-    assert!(ctx["saving"].is_object());
-    // How the search went, in data and in words (ESC-296).
-    assert!(ctx["result"]["retrieval"]["match"].is_string(), "{ctx}");
-    let words = ctx["retrieval"].as_str().unwrap();
-    assert!(words.contains("order("), "{words}");
-    // Keywords: a notion the task does not name.
-    let ctx = read(
+    assert!(ctx.starts_with("## Code Context\n"), "{ctx}");
+    assert!(
+        ctx.contains("- **place_order** (function) - shop.rs:2"),
+        "{ctx}"
+    );
+    assert!(
+        ctx.contains("#### place_order (shop.rs:2)\n```rust\n"),
+        "{ctx}"
+    );
+    assert!(ctx.contains("### Retrieval\n"), "{ctx}");
+    assert!(ctx.contains("order("), "{ctx}");
+    assert!(ctx.contains("seen_node_ids: ["), "{ctx}");
+    assert!(line.contains("index_metrics:"), "{line}");
+    // Keywords: a notion the task does not name; what was seen is not given again.
+    let (ctx, _) = blocks(
         &c,
         "index_context",
         json!({ "project": p.id, "task": "tidy things up", "keywords": ["unrelated"] }),
     )
     .await;
-    let entry = ctx["result"]["entryPoints"].to_string();
-    assert!(entry.contains("unrelated_helper"), "{ctx}");
-    let words = ctx["retrieval"].as_str().unwrap();
-    assert!(words.contains("unrelated("), "{words}");
-    assert!(words.contains("⚠"), "{words}");
+    assert!(ctx.contains("**unrelated_helper**"), "{ctx}");
+    assert!(ctx.contains("unrelated("), "{ctx}");
+    assert!(ctx.contains("⚠"), "{ctx}");
+    let seen: Vec<i64> =
+        serde_json::from_str(ctx.rsplit("seen_node_ids: ").next().unwrap().trim()).unwrap();
+    let (again, _) = blocks(
+        &c,
+        "index_context",
+        json!({
+            "project": p.id,
+            "task": "tidy things up",
+            "keywords": ["unrelated"],
+            "exclude_node_ids": seen
+        }),
+    )
+    .await;
+    assert!(!again.contains("**unrelated_helper**"), "{again}");
+    // The path filters, and no code when it is not wanted.
+    let (none, _) = blocks(
+        &c,
+        "index_context",
+        json!({
+            "project": p.id,
+            "task": "place order",
+            "path_exclude": ["shop"],
+            "include_code": false
+        }),
+    )
+    .await;
+    assert!(!none.contains("**place_order**"), "{none}");
+    assert!(!none.contains("```"), "{none}");
+
+    // The body, by name or by id.
+    let (body, _) = blocks(
+        &c,
+        "index_body",
+        json!({ "project": p.id, "symbol": "checkout" }),
+    )
+    .await;
+    assert!(
+        body.starts_with(
+            "match_count: 1\n\nfile: shop.rs:6-8: checkout (function)\npub fn checkout"
+        ),
+        "{body}"
+    );
+    let (by_id, _) = blocks(&c, "index_body", json!({ "project": p.id, "node_id": id })).await;
+    assert_eq!(by_id, body);
 
     let callers = read(
         &c,
@@ -78,10 +190,7 @@ async fn the_five_tools_answer_from_the_index_and_say_what_they_saved() {
         json!({ "project": p.id, "name": "checkout" }),
     )
     .await;
-    assert_eq!(
-        callers["result"]["matches"][0]["callers"][0]["name"],
-        "place_order"
-    );
+    assert_eq!(callers["matches"][0]["callers"][0]["name"], "place_order");
 
     let callees = read(
         &c,
@@ -89,10 +198,7 @@ async fn the_five_tools_answer_from_the_index_and_say_what_they_saved() {
         json!({ "project": p.id, "name": "place_order" }),
     )
     .await;
-    assert_eq!(
-        callees["result"]["matches"][0]["calls"][0]["name"],
-        "checkout"
-    );
+    assert_eq!(callees["matches"][0]["calls"][0]["name"], "checkout");
 
     let impact = read(
         &c,
@@ -100,18 +206,43 @@ async fn the_five_tools_answer_from_the_index_and_say_what_they_saved() {
         json!({ "project": p.id, "target": "checkout" }),
     )
     .await;
-    let files = impact["result"]["matches"][0]["files"].to_string();
+    let files = impact["matches"][0]["files"].to_string();
     assert!(files.contains("shop.rs"), "{impact}");
 
-    // Nothing found says so, and counts nothing read.
-    let none = read(
+    // Nothing found: no file touched, no metrics line.
+    let (none, line) = blocks(
         &c,
         "index_search",
         json!({ "project": p.id, "query": "zzzqqq" }),
     )
     .await;
-    assert_eq!(none["result"], json!([]));
-    assert_eq!(none["saving"]["files"], 0);
+    assert_eq!(none, "count: 0\n\n");
+    assert_eq!(line, "");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_paths_of_queryignore_are_left_out_of_the_search_and_the_context() {
+    let h = harness("mcp-index-queryignore");
+    let p = project(&h).await;
+    indexed(&h, &p).await;
+    let dir = std::path::Path::new(&p.path).join(".escouade");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("queryignore"), "# the shop is noise\nshop.rs\n").unwrap();
+    let c = external(&h).await;
+    let (found, _) = blocks(
+        &c,
+        "index_search",
+        json!({ "project": p.id, "query": "place order" }),
+    )
+    .await;
+    assert!(!found.contains("shop.rs"), "{found}");
+    let (ctx, _) = blocks(
+        &c,
+        "index_context",
+        json!({ "project": p.id, "task": "place order" }),
+    )
+    .await;
+    assert!(!ctx.contains("**place_order**"), "{ctx}");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -124,16 +255,18 @@ async fn an_agent_may_leave_the_project_out_and_the_savings_are_counted_per_agen
     let ca = as_agent(&h, &a.id).await;
     let cb = as_agent(&h, &b.id).await;
     // The agent's own project, by default.
-    let found = read(&ca, "index_search", json!({ "query": "checkout" })).await;
-    assert_eq!(found["projectId"], json!(p.id));
+    let (found, _) = blocks(&ca, "index_search", json!({ "query": "checkout" })).await;
+    assert!(found.contains("shop.rs"), "{found}");
     read(&ca, "index_callers", json!({ "name": "checkout" })).await;
-    read(&cb, "index_search", json!({ "query": "place_order" })).await;
+    blocks(&cb, "index_search", json!({ "query": "place_order" })).await;
 
     let by_agent = h.core.stats.index_savings(true, Some(&p.id));
     let of = |id: &str| by_agent.iter().find(|s| s.agent_id == id).cloned().unwrap();
     assert_eq!(of(&a.id).calls, 2);
     assert_eq!(of(&b.id).calls, 1);
     assert!(of(&a.id).files_tokens > 0);
+    // A small answer on small files, the schemas paid by its session: a debt, nothing credited.
+    assert_eq!(of(&b.id).saved_tokens, 0);
     let by_project = h.core.stats.index_savings(false, None);
     assert_eq!(by_project.len(), 1);
     assert_eq!(by_project[0].project_id, p.id);
@@ -142,6 +275,43 @@ async fn an_agent_may_leave_the_project_out_and_the_savings_are_counted_per_agen
         by_project[0].saved_tokens,
         by_agent.iter().map(|s| s.saved_tokens).sum::<u64>()
     );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_descriptions_stay_the_same_and_ask_for_the_words_of_the_code() {
+    let h = harness("mcp-index-descriptions");
+    let c = external(&h).await;
+    let list = |tools: Vec<rmcp::model::Tool>| -> Vec<(String, String)> {
+        tools
+            .into_iter()
+            .filter(|t| t.name.starts_with("index_"))
+            .map(|t| {
+                (
+                    t.name.to_string(),
+                    t.description.unwrap_or_default().to_string(),
+                )
+            })
+            .collect()
+    };
+    let first = list(c.list_all_tools().await.unwrap());
+    let p = project(&h).await;
+    indexed(&h, &p).await;
+    blocks(
+        &c,
+        "index_search",
+        json!({ "project": p.id, "query": "checkout" }),
+    )
+    .await;
+    let second = list(c.list_all_tools().await.unwrap());
+    assert_eq!(first, second, "a description changed between two listings");
+    assert_eq!(first.len(), 6);
+    let of = |name: &str| first.iter().find(|(n, _)| n == name).unwrap().1.clone();
+    assert!(of("index_search").contains("words of the code"));
+    assert!(of("index_search").contains("literal"));
+    assert!(of("index_context").contains("words of the code"));
+    assert!(of("index_context").contains("`keywords`"));
+    assert!(of("index_context").contains("index_body"));
+    assert!(of("index_context").contains("exclude_node_ids"));
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -201,8 +371,8 @@ async fn an_agent_is_answered_for_its_worktree_and_a_private_project_stays_hidde
     }
     // An agent of the private project sees its own, and no other.
     let cv = as_agent(&h, &v.id).await;
-    let own = read(&cv, "index_search", json!({ "query": "secret vault" })).await;
-    assert_eq!(own["result"][0]["name"], "secret_vault_fn");
+    let (own, _) = blocks(&cv, "index_search", json!({ "query": "secret vault" })).await;
+    assert!(own.contains("secret_vault_fn"), "{own}");
     refused(
         &cv,
         "index_search",
@@ -211,7 +381,7 @@ async fn an_agent_is_answered_for_its_worktree_and_a_private_project_stays_hidde
     .await;
     // The user's own client sees both.
     let c = external(&h).await;
-    read(
+    blocks(
         &c,
         "index_search",
         json!({ "project": vault.name, "query": "secret" }),
@@ -225,4 +395,5 @@ async fn an_agent_is_answered_for_its_worktree_and_a_private_project_stays_hidde
     h.core.agent(&a.id).unwrap().lock().meta.cwd = wt.to_string_lossy().into_owned();
     let seen = call(&ca, "index_search", json!({ "query": "only in worktree" })).await;
     assert!(!seen.1, "{}", seen.0);
+    assert!(seen.0.contains("only_in_worktree"), "{}", seen.0);
 }

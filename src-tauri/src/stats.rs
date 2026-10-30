@@ -29,7 +29,7 @@ CREATE INDEX IF NOT EXISTS prompts_ts ON prompts(ts);
 CREATE TABLE IF NOT EXISTS index_savings (
   id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, agent_id TEXT NOT NULL, project_id TEXT NOT NULL,
   tool TEXT NOT NULL, files_tokens INTEGER NOT NULL, answer_tokens INTEGER NOT NULL,
-  saved_cost REAL NOT NULL DEFAULT 0
+  saved_cost REAL NOT NULL DEFAULT 0, saved_tokens INTEGER
 );
 CREATE INDEX IF NOT EXISTS index_savings_ts ON index_savings(ts);
 CREATE INDEX IF NOT EXISTS index_savings_agent ON index_savings(agent_id);
@@ -73,6 +73,16 @@ fn migrate(c: &Connection) -> rusqlite::Result<()> {
             "ALTER TABLE index_savings ADD COLUMN saved_cost REAL NOT NULL DEFAULT 0;
              CREATE INDEX IF NOT EXISTS index_savings_ts ON index_savings(ts);",
         )?;
+    }
+    // What an answer credited, its session's debt paid first, came with tokensave's count
+    // (ESC-298): an answer counted before it saved its files less itself, as it was told.
+    let has: i64 = c.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('index_savings') WHERE name = 'saved_tokens'",
+        [],
+        |r| r.get(0),
+    )?;
+    if has == 0 {
+        c.execute_batch("ALTER TABLE index_savings ADD COLUMN saved_tokens INTEGER")?;
     }
     Ok(())
 }
@@ -241,8 +251,10 @@ fn last_model(c: &Connection, agent_id: &str) -> Option<String> {
 }
 
 /// What the index saved between `since` and `until` (ms), per agent (`by_agent`) or per project,
-/// `project_id` narrowing it to one project. Each answer counts for what it saved, never below
-/// nothing.
+/// `project_id` narrowing it to one project. Each answer counts for what it credited (tokensave's
+/// count: the files capped at 4 times the answer, against the answer, the request and the schemas,
+/// a shortfall paid by the next answers of the session); one counted before saved its files less
+/// itself, never below nothing.
 fn savings(
     c: &Connection,
     by_agent: bool,
@@ -253,7 +265,7 @@ fn savings(
     let key = if by_agent { "agent_id" } else { "''" };
     let sql = format!(
         "SELECT {key}, project_id, COUNT(*), SUM(files_tokens), SUM(answer_tokens),
-                SUM(MAX(files_tokens - answer_tokens, 0)), SUM(saved_cost)
+                SUM(COALESCE(saved_tokens, MAX(files_tokens - answer_tokens, 0))), SUM(saved_cost)
          FROM index_savings WHERE (?1 IS NULL OR project_id = ?1) AND ts >= ?2 AND ts < ?3
          GROUP BY {key}, project_id ORDER BY 6 DESC"
     );
@@ -330,17 +342,17 @@ impl Stats {
         }
     }
 
-    /// An answer of the code index to `agent_id` (empty for a client outside Escouade): what the
-    /// files it draws on would have cost, against its own size. What it saved is priced at the
-    /// input price of the model the agent last ran a turn on, else of `model` (the agent's
+    /// An answer of the code index to `agent_id` (empty for a client outside Escouade), counted as
+    /// tokensave counts it (`codeindex::accounting`): `before` (the files it draws on, capped),
+    /// `after` (what the model paid for the call) and what it credited. What it credited is priced
+    /// at the input price of the model the agent last ran a turn on, else of `model` (the agent's
     /// setting): those tokens would have come in as input.
     pub fn record_index(
         &self,
         agent_id: &str,
         project_id: &str,
         tool: &str,
-        files_tokens: u64,
-        answer_tokens: u64,
+        m: &crate::codeindex::accounting::Metrics,
         model: &str,
     ) {
         self.record_index_at(
@@ -348,7 +360,7 @@ impl Stats {
             agent_id,
             project_id,
             tool,
-            (files_tokens, answer_tokens),
+            (m.before, m.after, m.credited),
             model,
         );
     }
@@ -359,7 +371,7 @@ impl Stats {
         agent_id: &str,
         project_id: &str,
         tool: &str,
-        (files_tokens, answer_tokens): (u64, u64),
+        (files_tokens, answer_tokens, credited): (u64, u64, u64),
         model: &str,
     ) {
         let guard = self.conn.lock();
@@ -367,12 +379,12 @@ impl Stats {
             let ran = (!agent_id.is_empty())
                 .then(|| last_model(c, agent_id))
                 .flatten();
-            let saved = files_tokens.saturating_sub(answer_tokens) as f64;
+            let saved = credited as f64;
             let cost = crate::pricing::price(ran.as_deref().unwrap_or(model))
                 .map_or(0.0, |p| saved * p.input / 1_000_000.0);
             let _ = c.execute(
-                "INSERT INTO index_savings (ts, agent_id, project_id, tool, files_tokens, answer_tokens, saved_cost) VALUES (?1,?2,?3,?4,?5,?6,?7)",
-                params![ts, agent_id, project_id, tool, files_tokens as i64, answer_tokens as i64, cost],
+                "INSERT INTO index_savings (ts, agent_id, project_id, tool, files_tokens, answer_tokens, saved_cost, saved_tokens) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",
+                params![ts, agent_id, project_id, tool, files_tokens as i64, answer_tokens as i64, cost, credited as i64],
             );
         }
     }
@@ -1604,7 +1616,7 @@ mod tests {
             "a1",
             "p1",
             "index_search",
-            (1_000_000, 0),
+            (1_000_000, 0, 1_000_000),
             "sonnet",
         );
         // a2 never ran a turn: its setting prices it (Haiku, $1). A client outside Escouade, unknown model: nothing.
@@ -1613,14 +1625,21 @@ mod tests {
             "a2",
             "p1",
             "index_context",
-            (600_000, 100_000),
+            (600_000, 100_000, 500_000),
             "haiku",
         );
-        s.record_index_at(noon(1), "", "p2", "index_search", (5_000, 1_000), "");
-        // An answer longer than the files saves nothing, and costs nothing back.
-        s.record_index_at(noon(1), "a2", "p2", "index_search", (100, 900), "haiku");
+        s.record_index_at(noon(1), "", "p2", "index_search", (5_000, 1_000, 4_000), "");
+        // An answer longer than the files credits nothing (its shortfall is the session's debt).
+        s.record_index_at(noon(1), "a2", "p2", "index_search", (100, 900, 0), "haiku");
         // Before the period of 14 days.
-        s.record_index_at(noon(30), "a1", "p1", "index_search", (2_000_000, 0), "");
+        s.record_index_at(
+            noon(30),
+            "a1",
+            "p1",
+            "index_search",
+            (2_000_000, 0, 2_000_000),
+            "",
+        );
 
         let v = s.query_at("day", today, None, &Labels::default());
         let of = |p: &str| {

@@ -2,7 +2,6 @@
 //! function and what it calls, what a change would touch. Each answer tells what it saved: the
 //! tokens reading the files it draws on would have cost, against its own.
 
-use super::tokens_of;
 use crate::fence::Fence;
 use anyhow::Result;
 use rusqlite::{named_params, Connection, Row};
@@ -10,17 +9,13 @@ use serde::Serialize;
 use std::collections::{BTreeSet, HashSet};
 use std::path::PathBuf;
 
-/// What an answer saved, in estimated tokens (about four bytes each).
+/// The files an answer touched: their weight, read whole (tokensave `touched_file_tokens`: each
+/// file's size divided by 4), the baseline that `accounting` caps against the answer as sent.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Saving {
     /// The files the answer draws on, read whole.
     pub files_tokens: u64,
-    /// The answer itself.
-    pub answer_tokens: u64,
-    pub saved_tokens: u64,
-    /// 0 to 100.
-    pub saved_percent: u64,
     /// How many files the answer draws on.
     pub files: usize,
 }
@@ -52,6 +47,8 @@ pub struct Hit {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Snippet {
+    /// The id of the symbol whose code it is (`index_body node_id=`).
+    pub id: i64,
     pub path: String,
     pub line: u32,
     pub end_line: u32,
@@ -210,7 +207,7 @@ impl Reader {
             .map(|s| s.node.to_hit())
             .collect();
         let paths: Vec<String> = hits.iter().map(|h| h.path.clone()).collect();
-        let saving = self.saving(&paths, &hits);
+        let saving = self.saving(&paths);
         Ok(Answer {
             result: hits,
             saving,
@@ -242,7 +239,7 @@ impl Reader {
             retrieval: Retrieval::default(),
         };
         if task.trim().is_empty() {
-            let saving = self.saving(&[], &empty);
+            let saving = self.saving(&[]);
             return Ok(Answer {
                 result: empty,
                 saving,
@@ -268,8 +265,25 @@ impl Reader {
             snippets: built.code_blocks,
             retrieval: built.diagnostics,
         };
-        let saving = self.saving(&paths, &result);
+        let saving = self.saving(&paths);
         Ok(Answer { result, saving })
+    }
+
+    /// The folder the reader answers for.
+    pub(super) fn dir_path(&self) -> &std::path::Path {
+        &self.dir
+    }
+
+    /// The patterns of this folder's `.escouade/queryignore`, unless the fence refuses the file.
+    pub fn query_ignore(&self) -> super::filters::QueryIgnore {
+        let file = self
+            .dir
+            .join(crate::docs::ROOT)
+            .join(super::filters::QUERYIGNORE_FILENAME);
+        if self.fence.covers(&file.to_string_lossy()) {
+            return Default::default();
+        }
+        super::filters::load_query_ignore(&self.dir)
     }
 
     /// A file of this folder, if the fence lets it be read.
@@ -311,10 +325,10 @@ impl Reader {
 
     // ---- savings ----
 
-    /// The tokens of the files `paths` against those of `result`.
-    pub(super) fn saving<T: Serialize>(&self, paths: &[String], result: &T) -> Saving {
+    /// The weight of the files `paths`.
+    pub(super) fn saving(&self, paths: &[String]) -> Saving {
         let distinct: BTreeSet<&String> = paths.iter().filter(|p| !p.is_empty()).collect();
-        let mut bytes = 0u64;
+        let mut files_tokens = 0u64;
         for p in &distinct {
             let size: i64 = self
                 .conn
@@ -325,19 +339,10 @@ impl Reader {
                     |r| r.get(0),
                 )
                 .unwrap_or(0);
-            bytes += size.max(0) as u64;
+            files_tokens += super::accounting::file_tokens(size.max(0) as u64);
         }
-        let answer = serde_json::to_vec(result)
-            .map(|v| v.len() as u64)
-            .unwrap_or(0);
-        let files_tokens = tokens_of(bytes);
-        let answer_tokens = tokens_of(answer);
-        let saved = files_tokens.saturating_sub(answer_tokens);
         Saving {
             files_tokens,
-            answer_tokens,
-            saved_tokens: saved,
-            saved_percent: (saved * 100).checked_div(files_tokens).unwrap_or(0),
             files: distinct.len(),
         }
     }

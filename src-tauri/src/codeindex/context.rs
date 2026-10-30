@@ -10,13 +10,14 @@
 //! methods of the types found at 0.5×, the multiplicative re-ranking, the callers, the
 //! co-occurrence, the cap per file, three roots of graph at depth 1, 20 nodes at most.
 //!
-//! What differs, for our architecture: the links are by name until IDX-2 resolves them (the
-//! callers counted, the neighbours of a root: the first definition of a name); the counts of
-//! branches and loops of a body are read from its words (our index keeps no complexity); a
-//! truncated snippet names the lines that follow, not `tokensave_body`; every query sees only what
-//! the folder asking sees (the worktree's delta) and reads no file the fence refuses.
+//! What differs, for our architecture: the counts of branches and loops of a body are read from its
+//! words (our index keeps no complexity); a truncated snippet points at `index_body`, not
+//! `tokensave_body`; the ids are numbers; every query sees only what the folder asking sees (the
+//! worktree's delta) and reads no file the fence refuses. Not ported: `merge_adjacent` and the
+//! `plan` mode of the handler.
 
 use super::api::{Hit, Node, Reader, Retrieval, Scored, Snippet, TermHits, NODE_COLS};
+use super::filters::PathFilter;
 use super::ranking::{
     apply_connectivity_boost, apply_executable_intent_boost, is_api_owner_kind, is_executable_kind,
     rerank_candidates,
@@ -31,6 +32,7 @@ pub struct BuildContextOptions {
     pub max_nodes: usize,
     pub max_code_blocks: usize,
     pub max_code_block_size: usize,
+    pub include_code: bool,
     pub search_limit: usize,
     pub traversal_depth: usize,
     pub min_score: f64,
@@ -39,6 +41,11 @@ pub struct BuildContextOptions {
     /// Maximum symbols from a single file. `None`: `max_nodes`.
     pub max_per_file: Option<usize>,
     pub max_code_lines: Option<usize>,
+    /// Node ids to exclude from results (for session deduplication across calls).
+    pub exclude_node_ids: HashSet<i64>,
+    /// `path_prefix`, `path_include`, `path_exclude` and the project's `queryignore`: the entry
+    /// points kept (graph expansion may still traverse outside them).
+    pub filter: PathFilter,
 }
 
 impl Default for BuildContextOptions {
@@ -47,12 +54,15 @@ impl Default for BuildContextOptions {
             max_nodes: 20,
             max_code_blocks: 5,
             max_code_block_size: 1500,
+            include_code: true,
             search_limit: 3,
             traversal_depth: 1,
             min_score: 0.0,
             extra_keywords: Vec::new(),
             max_per_file: None,
             max_code_lines: None,
+            exclude_node_ids: HashSet::new(),
+            filter: PathFilter::default(),
         }
     }
 }
@@ -61,14 +71,43 @@ impl BuildContextOptions {
     /// The options the `tokensave_context` handler builds: `max_nodes` (20 by default, 100 at
     /// most), the cap per file at a third of it (3 at least), the keywords.
     pub fn of_tool(max_nodes: Option<usize>, keywords: Vec<String>) -> Self {
-        let max_nodes = max_nodes.map_or(20, |v| v.min(100)).max(1);
+        Self::of_args(ToolArgs {
+            max_nodes,
+            keywords,
+            ..Default::default()
+        })
+    }
+
+    /// The options of the handler from all its arguments (tokensave `handle_context`):
+    /// `max_code_blocks` 5 by default, 20 at most; `max_code_lines` between 1 and 1000;
+    /// `max_per_file` a third of `max_nodes`, 3 at least.
+    pub fn of_args(a: ToolArgs) -> Self {
+        let max_nodes = a.max_nodes.map_or(20, |v| v.min(100)).max(1);
         BuildContextOptions {
             max_nodes,
-            extra_keywords: keywords,
-            max_per_file: Some((max_nodes / 3).max(3)),
+            include_code: a.include_code.unwrap_or(true),
+            max_code_blocks: a.max_code_blocks.map_or(5, |v| v.min(20)).max(1),
+            max_code_lines: a.max_code_lines.map(|v| v.clamp(1, 1000)),
+            extra_keywords: a.keywords,
+            exclude_node_ids: a.exclude_node_ids.into_iter().collect(),
+            max_per_file: Some(a.max_per_file.unwrap_or((max_nodes / 3).max(3))),
+            filter: a.filter,
             ..Default::default()
         }
     }
+}
+
+/// The arguments of `index_context` that make its options.
+#[derive(Debug, Clone, Default)]
+pub struct ToolArgs {
+    pub max_nodes: Option<usize>,
+    pub include_code: Option<bool>,
+    pub max_code_blocks: Option<usize>,
+    pub max_code_lines: Option<usize>,
+    pub keywords: Vec<String>,
+    pub exclude_node_ids: Vec<i64>,
+    pub max_per_file: Option<usize>,
+    pub filter: PathFilter,
 }
 
 /// What `build_context` gives.
@@ -89,7 +128,11 @@ impl Reader {
         let symbols = extract_symbols_from_query(query);
         let (entry_points, diagnostics) = self.find_entry_points(query, &symbols, options)?;
         let subgraph = self.expand_subgraph(&entry_points, options)?;
-        let code_blocks = self.extract_code_blocks(&entry_points, options);
+        let code_blocks = if options.include_code {
+            self.extract_code_blocks(&entry_points, options)
+        } else {
+            Vec::new()
+        };
         Ok(Built {
             entry_points,
             subgraph,
@@ -112,7 +155,8 @@ impl Reader {
         let mut candidates: Vec<Scored> = Vec::new();
         let mut literal_terms = exact_source_terms(query, &options.extra_keywords);
         literal_terms.extend(exact_phrase_terms(query, &options.extra_keywords));
-        let exact_source_candidates = self.find_exact_source_candidates(&literal_terms)?;
+        let excluded = &options.exclude_node_ids;
+        let exact_source_candidates = self.find_exact_source_candidates(&literal_terms, options)?;
         let exact_source_ids: HashSet<i64> = exact_source_candidates
             .iter()
             .map(|candidate| candidate.node.id)
@@ -165,7 +209,7 @@ impl Reader {
                     continue;
                 };
                 advanced = true;
-                if !score_passes(sr.score, options.min_score) {
+                if !score_passes(sr.score, options.min_score) || excluded.contains(&sr.node.id) {
                     continue;
                 }
                 if let Some(&idx) = index_of.get(&sr.node.id) {
@@ -198,6 +242,9 @@ impl Reader {
         let mut exact_ids: HashSet<i64> = exact_source_ids.clone();
         if !exact_names.is_empty() {
             for node in self.search_nodes_by_exact_name(&exact_names, options.search_limit, None)? {
+                if excluded.contains(&node.id) {
+                    continue;
+                }
                 exact_ids.insert(node.id);
                 if let Some(&idx) = index_of.get(&node.id) {
                     candidates[idx].score = candidates[idx].score.max(EXACT_MATCH_SCORE);
@@ -214,6 +261,9 @@ impl Reader {
         // --- Executable-body supplement ---
         if body_terms.len() >= 2 {
             for sr in self.find_executable_body_candidates(&body_terms, options)? {
+                if excluded.contains(&sr.node.id) {
+                    continue;
+                }
                 if let Some(&idx) = index_of.get(&sr.node.id) {
                     candidates[idx].score = candidates[idx].score.max(sr.score);
                 } else {
@@ -235,7 +285,7 @@ impl Reader {
             .map(|c| c.node.clone())
             .collect();
         for (owner, child) in self.get_children_of_many(&owners)? {
-            if !is_executable_kind(&child.kind) {
+            if !is_executable_kind(&child.kind) || excluded.contains(&child.id) {
                 continue;
             }
             let score = owner_scores.get(&owner).copied().unwrap_or_default() * 0.5;
@@ -245,6 +295,11 @@ impl Reader {
                 index_of.insert(child.id, candidates.len());
                 candidates.push(Scored { node: child, score });
             }
+        }
+
+        // --- path_prefix, path_include / path_exclude and queryignore filters ---
+        if !options.filter.is_empty() {
+            candidates.retain(|sr| options.filter.keeps(&sr.node.path));
         }
 
         // --- Re-rank with structural signals ---
@@ -320,7 +375,7 @@ impl Reader {
     }
 
     /// The files this folder sees, the removed ones left out.
-    fn visible_files(&self) -> Result<Vec<String>> {
+    pub(super) fn visible_files(&self) -> Result<Vec<String>> {
         let sql = "SELECT DISTINCT f.path FROM files f WHERE f.state <> 2
                AND (f.scope = ?1 OR (f.scope = '' AND NOT EXISTS (SELECT 1 FROM files fw
                    WHERE fw.scope = ?1 AND fw.path = f.path AND fw.state IN (1, 2))))
@@ -330,7 +385,7 @@ impl Reader {
         Ok(rows.flatten().collect())
     }
 
-    fn nodes_of_file(&self, path: &str) -> Result<Vec<Node>> {
+    pub(super) fn nodes_of_file(&self, path: &str) -> Result<Vec<Node>> {
         let sql = format!(
             "SELECT {NODE_COLS} FROM symbols s WHERE s.path = ?1 AND {}",
             Self::vis_pos("s", 2)
@@ -342,13 +397,20 @@ impl Reader {
 
     /// The innermost symbol enclosing each exact source expression (tokensave
     /// `find_exact_source_candidates`).
-    fn find_exact_source_candidates(&self, terms: &[String]) -> Result<Vec<Scored>> {
+    fn find_exact_source_candidates(
+        &self,
+        terms: &[String],
+        options: &BuildContextOptions,
+    ) -> Result<Vec<Scored>> {
         const EXACT_SOURCE_SCORE: f64 = 1_000.0;
         if terms.is_empty() {
             return Ok(Vec::new());
         }
         let mut candidates: HashMap<i64, Scored> = HashMap::new();
         for path in self.visible_files()? {
+            if !options.filter.keeps(&path) {
+                continue;
+            }
             let Some(source) = self.read_file(&path) else {
                 continue;
             };
@@ -364,7 +426,11 @@ impl Reader {
                 let line1 = line_index as u32 + 1;
                 let enclosing = nodes
                     .iter()
-                    .filter(|node| node.line <= line1 && line1 <= node.end_line)
+                    .filter(|node| {
+                        node.line <= line1
+                            && line1 <= node.end_line
+                            && !options.exclude_node_ids.contains(&node.id)
+                    })
                     .min_by_key(|node| node.end_line.saturating_sub(node.line));
                 let Some(node) = enclosing else {
                     continue;
@@ -399,6 +465,7 @@ impl Reader {
         let mut results = self
             .search_executable_bodies(terms, options.max_nodes.saturating_mul(4))?
             .into_iter()
+            .filter(|(node, _, _)| options.filter.keeps(&node.path))
             .map(|(node, hits, branches_loops)| {
                 let control_flow_boost = f64::from(branches_loops).min(4.0) * 0.25;
                 Scored {
@@ -539,6 +606,7 @@ impl Reader {
                     continue;
                 }
                 blocks.push(Snippet {
+                    id: node.id,
                     path: node.path.clone(),
                     line: node.line,
                     end_line: node.end_line,
@@ -981,16 +1049,13 @@ fn line_prefix(code: &str, max_lines: usize) -> &str {
     }
 }
 
-/// Appends where the rest of the body is.
+/// Appends the follow-up handle that points at the full body.
 fn with_body_handle(body: &str, node: &Node) -> String {
-    let shown = body.lines().count() as u32;
     tr!(
-        "{body}\n... [tronqué — la suite : {path}:{from}-{to}]",
-        "{body}\n... [truncated — the rest: {path}:{from}-{to}]",
+        "{body}\n... [tronqué — le corps entier : index_body node_id={id}]",
+        "{body}\n... [truncated — full body: index_body node_id={id}]",
         body = body,
-        path = node.path,
-        from = node.line + shown,
-        to = node.end_line
+        id = node.id
     )
 }
 
@@ -1245,37 +1310,65 @@ mod tests {
         n
     }
 
+    // Ported from tokensave `src/context/builder.rs`'s tests: the handle names `index_body`.
+
     #[test]
-    fn test_truncated_code_block_names_the_rest() {
-        let code = "fn wide() {\n".to_string() + &"    line();\n".repeat(200);
-        let out = truncate_code_block(&code, 1500, None, &node_at(1, 201));
+    fn test_truncated_code_block_points_at_index_body() {
+        let code = "fn wide() {\n".to_string() + &"    line();\n".repeat(50);
+        let out = truncate_code_block(&code, 60, None, &node_at(1, 51));
+        let handle = format!("index_body node_id={}", node_at(1, 51).id);
+        assert!(
+            out.contains(&handle),
+            "truncated block must carry a follow-up handle: {out}"
+        );
         assert!(out.starts_with("fn wide() {"), "{out}");
-        assert!(out.len() < code.len());
-        assert!(out.contains("src/wide.rs:"), "{out}");
-        assert!(out.trim_end().ends_with("-201]"), "{out}");
+        let body = out.split("\n... [").next().unwrap();
+        assert!(!body.ends_with("    line"), "cut mid-line: {body:?}");
     }
 
     #[test]
     fn test_short_code_block_is_returned_verbatim() {
         let code = "fn small() {}\n";
         assert_eq!(truncate_code_block(code, 1500, None, &node_at(1, 1)), code);
+        assert_eq!(
+            truncate_code_block(code, code.len(), None, &node_at(1, 1)),
+            code
+        );
     }
 
     #[test]
     fn test_truncate_code_block_does_not_split_multibyte_char() {
         let code = "fn f() {\n    // ✅✅✅✅✅✅✅✅✅✅\n    body();\n}\n";
         let out = truncate_code_block(code, 20, None, &node_at(1, 4));
-        assert!(out.starts_with("fn f() {"), "{out}");
+        assert!(out.contains("index_body node_id="), "{out}");
     }
 
     #[test]
     fn test_max_code_lines_caps_the_snippet() {
         let code = "fn wide() {\n".to_string() + &"    line();\n".repeat(50);
-        let out = truncate_code_block(&code, 100_000, Some(3), &node_at(1, 51));
-        assert!(
-            out.starts_with("fn wide() {\n    line();\n    line();\n..."),
-            "{out}"
+        let out = truncate_code_block(&code, usize::MAX, Some(3), &node_at(1, 51));
+        let body = out.split("\n... [").next().unwrap();
+        assert_eq!(body.lines().count(), 3, "{out}");
+        assert!(out.contains("index_body node_id="), "{out}");
+    }
+
+    #[test]
+    fn test_max_code_lines_leaves_shorter_snippets_verbatim() {
+        let code = "fn small() {\n    body();\n}\n";
+        assert_eq!(
+            truncate_code_block(code, usize::MAX, Some(20), &node_at(1, 3)),
+            code,
+            "a snippet under the cap must come back untouched"
         );
+    }
+
+    #[test]
+    fn test_byte_limit_still_applies_under_a_line_cap() {
+        let code = "fn wide() {\n".to_string() + &"    line();\n".repeat(50);
+        let out = truncate_code_block(&code, 30, Some(10), &node_at(1, 51));
+        let body = out.split("\n... [").next().unwrap();
+        assert!(body.len() <= 30, "byte cap ignored: {body:?}");
+        assert!(!body.ends_with("    line"), "cut mid-line: {body:?}");
     }
 
     #[test]

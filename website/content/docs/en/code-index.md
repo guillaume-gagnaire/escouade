@@ -7,13 +7,25 @@ Escouade sorts a project’s code into symbols and links, so that its agents fin
 Without an index, an agent searches with grep, then reads the files it found, often whole. With the index, it asks in one call:
 
 - where a symbol is (function, method, class, type, field, Markdown heading), with its signature and doc;
-- the context of a task: the entry points and the related symbols, with their excerpts;
-- the callers and the callees of a function, resolved from one symbol to another when the code is read, as [tokensave](https://github.com/aovestdipaperino/tokensave) does: a name several functions bear is answered definition by definition, and a call that may mean several of them is told apart, never guessed;
-- what a change would touch.
+- the context of a task: the entry points and the related symbols, with the code of the entry points (five blocks at most, of 1,500 bytes at most each; a block cut short names the call that gives the rest);
+- the whole body of a symbol, by its name or its id;
+- a text inside the code (an error message, a string), file by file and line by line;
 
-Each answer says what it saved: the tokens of the files it draws on, read whole, against its own. The [statistics](stats) add them up per project.
+Each answer ends with what it saved, counted as tokensave counts it: the files it touched, read whole, but **capped at four times the answer**, against what the agent paid for the call (the answer, its request and, once per session, the tools’ descriptions). A call that costs more than it saves carries its shortfall over to the next ones. The [statistics](stats) add up what is left per project.
 
 The languages read: Rust, TypeScript, JavaScript, Svelte, Python, Go, Java, C#, PHP and Markdown.
+
+## How it searches
+
+The index searches by the **words of the code**, as [tokensave](https://github.com/aovestdipaperino/tokensave) does at its commit `580936b`, whose method Escouade carries over: a full-text index of the names, qualified names, docs, signatures and bodies of the functions, weighted by column, then a ranking by kind, visibility and callers. There are **no vectors for the code**: they were measured on 54 probes of Escouade’s own code, then dropped.
+
+What follows from it:
+
+- a question told with the identifiers of the code (in English here) finds better than a paraphrase; the tools’ descriptions ask the agents to write it so;
+- when a term finds nothing, the answer says so (`### Retrieval`), and the agent asks again with synonyms in `keywords`;
+- a text that is no symbol (a message, a string) is found by the literal search, not the ranked one;
+- the paths of `.escouade/queryignore` (one pattern per line, `*` for a glob, `#` for a comment) are left out of the searches, never of the index; the file is read in the agent’s folder, never through a link that leads out of it;
+- grep still wins where a regex is needed, or where the words of a task are none of the code’s.
 
 ## Turning it on
 
@@ -58,8 +70,8 @@ Once the model is downloaded, nothing leaves the machine any more.
 
 ## What the agents see
 
-The agents go through five tools of the [MCP server](mcp), the same for [every harness](harness): `index_search`, `index_context`, `index_callers`, `index_callees` and `index_impact`. In the Claude Code and Codex views, a search aimed at a symbol gets a line saying the index answers it in one call; elsewhere, it is a rule of their instructions. A text search is never blocked.
+The agents go through six tools of the [MCP server](mcp), the same for [every harness](harness): `index_search`, `index_context`, `index_body`, `index_callers`, `index_callees` and `index_impact`. Their answers are tokensave’s: Markdown for the context, one line per symbol for the search, the body as text. In the Claude Code and Codex views, a search aimed at a symbol gets a line saying the index answers it in one call; elsewhere, it is a rule of their instructions. A search is never blocked: unlike tokensave, Escouade stops neither a grep nor an Explore agent.
 
 ## What it saved
 
-The [statistics](stats) have a **Code index savings** part, over the period chosen: per project, the number of answers of the index, the tokens saved and their worth in dollars. The dollars are an estimate: the tokens saved at the input price of the model each agent ran on.
+The [statistics](stats) have a **Code index savings** part, over the period chosen: per project, the number of answers of the index, the tokens saved (as counted above, the shortfalls paid first) and their worth in dollars. The dollars are an estimate: the tokens saved at the input price of the model each agent ran on.

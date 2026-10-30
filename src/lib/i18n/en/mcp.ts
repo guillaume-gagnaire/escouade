@@ -48,6 +48,7 @@ export default defineZone('mcp', {
     indexContext: 'Read a task’s context in the index',
     indexCallers: 'Find callers in the index',
     indexCallees: 'Find callees in the index',
+    indexBody: 'Read a symbol’s body from the index',
     indexImpact: 'Measure a change’s impact',
     getSpecTree: 'Read the spec tree',
     readSpecPage: 'Read a spec page',

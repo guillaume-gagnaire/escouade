@@ -27,6 +27,7 @@ const ESCOUADE_TOOLS: Record<string, Key> = {
   get_workflow: 'mcp.tools.getWorkflow',
   index_search: 'mcp.tools.indexSearch',
   index_context: 'mcp.tools.indexContext',
+  index_body: 'mcp.tools.indexBody',
   index_callers: 'mcp.tools.indexCallers',
   index_callees: 'mcp.tools.indexCallees',
   index_impact: 'mcp.tools.indexImpact',

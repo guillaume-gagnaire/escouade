@@ -233,8 +233,8 @@ pub fn reply(engine: EngineId, lang: Lang, hook: &Value) -> Option<Value> {
 fn advice(lang: Lang) -> String {
     tr_in!(
         lang,
-        "Escouade a un index du code de ce projet : pour trouver un symbole, ses appelants ou ce qu’un changement touche, l’outil MCP index_search (ou index_callers, index_context, index_impact) répond en un appel, pour bien moins de tokens que grep. Garde grep pour chercher un texte.",
-        "Escouade has a code index of this project: to find a symbol, its callers or what a change touches, the MCP tool index_search (or index_callers, index_context, index_impact) answers in one call, for far fewer tokens than grep. Keep grep for searching text."
+        "Escouade a un index du code de ce projet : pour trouver un symbole, ses appelants ou ce qu’un changement touche, l’outil MCP index_search (ou index_callers, index_context, index_body, index_impact) répond en un appel, pour bien moins de tokens que grep ; un texte exact se cherche avec index_search et literal. Garde grep pour une regex.",
+        "Escouade has a code index of this project: to find a symbol, its callers or what a change touches, the MCP tool index_search (or index_callers, index_context, index_body, index_impact) answers in one call, for far fewer tokens than grep; an exact text is found by index_search with literal. Keep grep for a regex."
     )
 }
 
@@ -243,8 +243,8 @@ fn advice(lang: Lang) -> String {
 pub fn rule(lang: Lang) -> String {
     tr_in!(
         lang,
-        "Index du code : pour trouver un symbole, ses appelants/appelés, le contexte d’une tâche ou l’impact d’un changement, utilise d’abord les outils MCP d’Escouade index_search, index_context, index_callers, index_callees et index_impact (une réponse pour bien moins de tokens que grep ou la lecture de fichiers) ; garde grep pour chercher un texte. Si l’index est coupé, l’outil le dit.",
-        "Code index: to find a symbol, its callers/callees, the context of a task or the impact of a change, first use Escouade's MCP tools index_search, index_context, index_callers, index_callees and index_impact (one answer for far fewer tokens than grep or reading files); keep grep for searching text. If the index is off, the tool says so."
+        "Index du code : pour trouver un symbole, ses appelants/appelés, le contexte d’une tâche, le corps d’une fonction ou l’impact d’un changement, utilise d’abord les outils MCP d’Escouade index_search, index_context, index_body, index_callers, index_callees et index_impact (une réponse pour bien moins de tokens que grep ou la lecture de fichiers), avec les mots du code ; garde grep pour une regex. Si l’index est coupé, l’outil le dit.",
+        "Code index: to find a symbol, its callers/callees, the context of a task, the body of a function or the impact of a change, first use Escouade's MCP tools index_search, index_context, index_body, index_callers, index_callees and index_impact (one answer for far fewer tokens than grep or reading files), with the words of the code; keep grep for a regex. If the index is off, the tool says so."
     )
 }
 

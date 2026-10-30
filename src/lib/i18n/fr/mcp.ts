@@ -58,6 +58,7 @@ export default {
     indexContext: 'Lire le contexte d’une tâche dans l’index',
     indexCallers: 'Chercher les appelants dans l’index',
     indexCallees: 'Chercher les appelés dans l’index',
+    indexBody: 'Lire le corps d’un symbole dans l’index',
     indexImpact: 'Mesurer l’impact d’un changement',
     getSpecTree: 'Lire l’arbre de la spec',
     readSpecPage: 'Lire une page de la spec',

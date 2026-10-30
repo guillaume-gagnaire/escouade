@@ -13,23 +13,38 @@
 //!   (`score`); a worktree with changes and a file changed just before the call are probed too;
 //! - the indexing of the whole repository, of a commit and of a change of branch is timed;
 //! - `results.json`, `results.md` and `reference.json` (the figures a later run compares to, with
-//!   `--compare`) go to `--out` (`target/codeindex-probes` by default).
+//!   `--compare`) go to `--out` (`target/codeindex-probes` by default), each answer as sent in
+//!   `responses/`;
+//! - the answers are the MCP server's (ESC-298): the text of `codeindex::format` and its metrics
+//!   line, counted as tokensave counts them (`codeindex::accounting`, a call within a session);
+//! - the « tâche » probes are measured for their sufficiency too (`suffice`, the ranges of
+//!   `docs/codeindex-probes-sufficiency.json`), with the answers of older versions dumped by their
+//!   own bench (`--old <label>=<dir>`, a `<id>.txt` per probe).
 
 pub mod score;
+pub mod suffice;
 
-use super::{Answer, Reader, Service, Target, Wanted, MAX_MATCHES_DEFAULT, MIN_GAP};
+use super::accounting::{Call, Ledger, Metrics};
+use super::filters::PathFilter;
+use super::{format, Answer, Reader, Service, Target, Wanted, MAX_MATCHES_DEFAULT, MIN_GAP};
+use crate::i18n::Lang;
 use crate::paths::DataDir;
 use anyhow::{anyhow, bail, Context as _, Result};
 use score::{economy, good_flags, parse_expect, read_count, tokens, windows, Alt, Item, Score};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Instant;
+use suffice::{Costs, Needs, Range, Suffice};
 
 /// The lines of a search an agent sees: Claude Code's Grep tool gives 250 by default, and cuts a
 /// line longer than 500 characters (`--max-columns`).
 const GREP_LINES: usize = 250;
+
+/// The language of the answers: the one of the runs before ESC-298 (their summary was French).
+const LANG: Lang = Lang::Fr;
 
 /// The tools' limit when the agent gives none (`mcp/index.rs`), and the most it may ask.
 const DEFAULT_LIMIT: usize = 10;
@@ -133,7 +148,9 @@ struct IndexSide {
     /// The cost when the index found nothing right and the agent searched again with grep.
     real_tokens: u64,
     announced_percent: u64,
+    /// The baseline the answer announced (tokensave's `before`), and what it said it saved.
     announced_files_tokens: u64,
+    announced_saved: u64,
     /// The calls of the path to the answer: the tool, then each reading (and grep's when it fell
     /// back).
     calls: usize,
@@ -178,6 +195,22 @@ struct Outcome {
     /// What the index saves against grep, its reading and its fallback counted.
     real_percent: i64,
     winner: String,
+    /// For a « tâche »: does the answer hold the code the task needs (`suffice`)?
+    suffice: Option<SufficeSide>,
+}
+
+/// The sufficiency of a probe: the index's answer of this run and of the older versions, against
+/// grep's paths to the same lines.
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct SufficeSide {
+    ranges: usize,
+    index: Suffice,
+    old: BTreeMap<String, Suffice>,
+    grep_calls: usize,
+    grep_tokens: u64,
+    blind_calls: usize,
+    blind_tokens: u64,
 }
 
 #[derive(Debug, Serialize, Default)]
@@ -221,6 +254,10 @@ struct Opts {
     /// A reference to compare to (`docs/codeindex-probes-reference.json`).
     compare: Option<PathBuf>,
     keep: bool,
+    /// The ranges each « tâche » needs (`docs/codeindex-probes-sufficiency.json`).
+    needs: Option<PathBuf>,
+    /// The answers of older versions: a label, a folder of `<id>.txt`.
+    old: Vec<(String, PathBuf)>,
 }
 
 /// The command (`examples/codeindex_probes.rs`). Gives the exit code.
@@ -245,6 +282,8 @@ fn parse(args: Vec<String>) -> Result<Opts> {
             .unwrap_or_else(|| "rg".into()),
         compare: None,
         keep: false,
+        needs: None,
+        old: Vec::new(),
     };
     let mut it = args.into_iter();
     while let Some(a) = it.next() {
@@ -257,9 +296,17 @@ fn parse(args: Vec<String>) -> Result<Opts> {
             "--rg" => o.rg = value()?.into(),
             "--compare" => o.compare = Some(value()?.into()),
             "--keep" => o.keep = true,
+            "--needs" => o.needs = Some(value()?.into()),
+            "--old" => {
+                let v = value()?;
+                let (label, dir) = v
+                    .split_once('=')
+                    .ok_or_else(|| anyhow!("--old wants <label>=<dir>"))?;
+                o.old.push((label.to_string(), dir.into()));
+            }
             "-h" | "--help" => {
                 println!(
-                    "codeindex_probes [--commit <rev>] [--probes <file>] [--out <dir>] [--only <id,…>] [--rg <program>] [--compare <reference.json>] [--keep]"
+                    "codeindex_probes [--commit <rev>] [--probes <file>] [--out <dir>] [--only <id,…>] [--rg <program>] [--compare <reference.json>] [--keep] [--needs <file>] [--old <label>=<dir>]…"
                 );
                 std::process::exit(0);
             }
@@ -314,6 +361,29 @@ fn run(o: Opts) -> Result<()> {
             .join("codeindex-probes")
     });
     let commit = o.commit.clone().unwrap_or_else(|| bench.commit.clone());
+    let needs_file = o
+        .needs
+        .clone()
+        .unwrap_or_else(|| repo.join("docs").join("codeindex-probes-sufficiency.json"));
+    let needs: Option<Needs> = match std::fs::read_to_string(&needs_file) {
+        Ok(t) => Some(
+            serde_json::from_str(&t)
+                .with_context(|| format!("reading {}", needs_file.display()))?,
+        ),
+        Err(_) => None,
+    };
+    if let Some(n) = &needs {
+        if n.commit != bench.commit {
+            bail!(
+                "the ranges were written for {}, the probes for {}",
+                n.commit,
+                bench.commit
+            );
+        }
+    }
+    let responses = out_dir.join("responses");
+    let _ = remove_all(&responses);
+    std::fs::create_dir_all(&responses)?;
     let rg_version = Command::new(&o.rg)
         .arg("--version")
         .output()
@@ -442,6 +512,11 @@ fn run(o: Opts) -> Result<()> {
             }
             other => bail!("{}: unknown stage {other}", p.id),
         };
+        std::fs::write(responses.join(format!("{}.txt", p.id)), &a10.text)?;
+        std::fs::write(
+            responses.join(format!("{}.json", p.id)),
+            json!({ "result": a10.answer.result }).to_string(),
+        )?;
         let index = index_side(&bench, &expect, dir, &a10, &a50, cold_ms, warm_ms, ms50);
         let grep = grep_side(&bench, &expect, dir, &p.grep, &o.rg)?;
         let mut index = index;
@@ -462,6 +537,11 @@ fn run(o: Opts) -> Result<()> {
                 .chain(&c.related)
                 .map(|h| Item::new(&h.path, h.line))
                 .collect();
+            let flags = good_flags(&expect, &items);
+            std::fs::write(
+                responses.join(format!("{}.code-words.txt", p.id)),
+                marks(&items, &flags).join("\n"),
+            )?;
             index.code_words = Some(score::score(&expect, &items));
         }
         let blind = if p.blind.is_empty() {
@@ -476,6 +556,52 @@ fn run(o: Opts) -> Result<()> {
         };
         let real_percent = economy(index.real_tokens, grep.total_tokens);
         let winner = winner(&index, &grep);
+        let need: Option<Vec<Range>> = needs
+            .as_ref()
+            .and_then(|n| n.needs.get(&p.id))
+            .map(|v| v.iter().filter_map(|r| suffice::parse_range(r)).collect());
+        let suffice = need.map(|need| {
+            let costs = |has_body| Costs {
+                dir,
+                has_body,
+                grep_calls: grep.searches.len(),
+                grep_tokens: grep.output_tokens,
+            };
+            // The answer as its JSON (the same snippets as the Markdown, their last lines known).
+            let mine = json!({ "result": a10.answer.result }).to_string();
+            let index = suffice::measure(&mine, &need, &costs(true));
+            let old = o
+                .old
+                .iter()
+                .filter_map(|(label, d)| {
+                    let text = std::fs::read_to_string(d.join(format!("{}.txt", p.id))).ok()?;
+                    Some((label.clone(), suffice::measure(&text, &need, &costs(false))))
+                })
+                .collect();
+            let (grep_calls, grep_tokens) =
+                suffice::grep_path(dir, &need, grep.searches.len(), grep.output_tokens);
+            let (blind_calls, blind_tokens) = match &blind {
+                Some(b) if b.score.found > 0 => {
+                    suffice::grep_path(dir, &need, b.searches.len(), b.output_tokens)
+                }
+                Some(b) => suffice::grep_path(
+                    dir,
+                    &need,
+                    b.searches.len() + grep.searches.len(),
+                    b.output_tokens + grep.output_tokens,
+                ),
+                None => (grep_calls, grep_tokens),
+            };
+            SufficeSide {
+                ranges: need.len(),
+                index,
+                old,
+                grep_calls,
+                grep_tokens,
+                blind_calls,
+                blind_tokens,
+            }
+        });
         outcomes.push(Outcome {
             id: p.id.clone(),
             tool: p.tool.clone(),
@@ -490,6 +616,7 @@ fn run(o: Opts) -> Result<()> {
             blind_calls,
             real_percent,
             winner,
+            suffice,
         });
     }
     std::fs::write(&fresh_file, &fresh_before)?;
@@ -559,22 +686,103 @@ fn run(o: Opts) -> Result<()> {
     Ok(())
 }
 
-/// The index's answer to a probe, as JSON, and what it said it saved.
-fn call(r: &Reader, p: &Probe, limit: usize) -> Result<Answer<Value>> {
+/// An answer of the index: its result as JSON, its text as the MCP server sends it (the metrics
+/// line included), and what that line says.
+struct Played {
+    answer: Answer<Value>,
+    text: String,
+    metrics: Metrics,
+}
+
+/// The index's answer to a probe, as the MCP server sends it (`mcp/index.rs`).
+fn call(r: &Reader, p: &Probe, limit: usize) -> Result<Played> {
+    let (answer, text) = answer_of(r, p, limit)?;
+    let a = &p.args;
+    let mut arguments = serde_json::Map::new();
+    for (k, v) in [
+        ("query", &a.query),
+        ("task", &a.task),
+        ("name", &a.name),
+        ("path", &a.path),
+        ("target", &a.target),
+        ("kind", &a.kind),
+    ] {
+        if let Some(v) = v {
+            arguments.insert(k.into(), json!(v));
+        }
+    }
+    if limit != DEFAULT_LIMIT {
+        arguments.insert("limit".into(), json!(limit));
+    }
+    let arguments = Value::Object(arguments);
+    // A call within a session: the schemas were paid by its first call.
+    let metrics = Ledger::default().account(
+        "probe",
+        &Call {
+            tool: &p.tool,
+            arguments: &arguments,
+            response: &text,
+            full_file_tokens: answer.saving.files_tokens,
+            schema_tokens: 0,
+        },
+        |m| format::metrics_line(LANG, m),
+    );
+    let text = if metrics.before > 0 {
+        format!("{text}{}", format::metrics_line(LANG, &metrics))
+    } else {
+        text
+    };
+    Ok(Played {
+        answer,
+        text,
+        metrics,
+    })
+}
+
+/// The result of a probe as JSON, and the text of the tool.
+fn answer_of(r: &Reader, p: &Probe, limit: usize) -> Result<(Answer<Value>, String)> {
     let a = &p.args;
     let need = |v: &Option<String>, what: &str| {
         v.clone()
             .ok_or_else(|| anyhow!("{}: {} wants `{what}`", p.id, p.tool))
     };
-    fn to<T: Serialize>(a: Answer<T>) -> Result<Answer<Value>> {
-        Ok(Answer {
-            result: serde_json::to_value(&a.result)?,
-            saving: a.saving,
-        })
+    fn to<T: Serialize>(a: Answer<T>) -> Result<(Answer<Value>, String)> {
+        let result = serde_json::to_value(&a.result)?;
+        let text = format::truncate_response(&result.to_string());
+        Ok((
+            Answer {
+                result,
+                saving: a.saving,
+            },
+            text,
+        ))
+    }
+    fn with<T: Serialize>(a: Answer<T>, text: String) -> Result<(Answer<Value>, String)> {
+        Ok((
+            Answer {
+                result: serde_json::to_value(&a.result)?,
+                saving: a.saving,
+            },
+            text,
+        ))
     }
     match p.tool.as_str() {
-        "index_search" => to(r.search(&need(&a.query, "query")?, limit, a.kind.as_deref())?),
-        "index_context" => to(r.task_context(&need(&a.task, "task")?, limit)?),
+        "index_search" => {
+            let found = r.search_filtered(
+                &need(&a.query, "query")?,
+                limit,
+                a.kind.as_deref(),
+                &PathFilter::default(),
+            )?;
+            let text = format::search_text(LANG, &found.result, false);
+            with(found, text)
+        }
+        "index_context" => {
+            let task = need(&a.task, "task")?;
+            let found = r.task_context(&task, limit)?;
+            let text = format::context_markdown(LANG, &task, &found.result);
+            with(found, text)
+        }
         // By the name, each definition in its own group (ESC-297): the tools' default.
         "index_callers" | "index_callees" => {
             let name = need(&a.name, "name")?;
@@ -621,7 +829,7 @@ fn found(tool: &str, v: &Value) -> Vec<Found> {
     };
     let list = |key: &str| -> Vec<Value> { v[key].as_array().cloned().unwrap_or_default() };
     match tool {
-        "index_search" => v.as_array().into_iter().flatten().map(of).collect(),
+        "index_search" => v["hits"].as_array().into_iter().flatten().map(of).collect(),
         "index_context" => {
             let snippets = list("snippets");
             let mut out: Vec<Found> = list("entryPoints")
@@ -662,27 +870,6 @@ fn found(tool: &str, v: &Value) -> Vec<Found> {
     }
 }
 
-/// The MCP server's answer (`mcp/index.rs`): the result, the saving and its sentence.
-fn response(a: &Answer<Value>) -> String {
-    let s = &a.saving;
-    let summary = if s.files == 0 {
-        "Rien de trouvé : aucun fichier n’a été lu pour cette réponse.".to_string()
-    } else {
-        format!(
-            "Économie : environ {} tokens ({} %). Lire les {} fichiers concernés en entier aurait coûté environ {} tokens ; cette réponse en coûte environ {}.",
-            s.saved_tokens, s.saved_percent, s.files, s.files_tokens, s.answer_tokens
-        )
-    };
-    json!({
-        "project": PROJECT,
-        "projectId": PROJECT,
-        "result": a.result,
-        "saving": a.saving,
-        "summary": summary,
-    })
-    .to_string()
-}
-
 /// The tokens of the lines `windows` of the files of `dir`, each cut at 2000 characters as Claude
 /// Code's Read tool cuts them.
 fn read_tokens(dir: &Path, w: &[(String, u32, u32)]) -> u64 {
@@ -713,13 +900,13 @@ fn index_side(
     bench: &Bench,
     expect: &[Vec<Alt>],
     dir: &Path,
-    a10: &Answer<Value>,
-    a50: &Answer<Value>,
+    a10: &Played,
+    a50: &Played,
     cold_ms: f64,
     warm_ms: f64,
     ms50: f64,
 ) -> IndexSide {
-    let tool = |a: &Answer<Value>| found(tool_of(a), &a.result);
+    let tool = |a: &Played| found(tool_of(&a.answer), &a.answer.result);
     let f10 = tool(a10);
     let f50 = tool(a50);
     let items10: Vec<Item> = f10.iter().map(|f| f.item.clone()).collect();
@@ -738,7 +925,7 @@ fn index_side(
         .filter(|f| f.shown.is_none())
         .map(|f| f.item.clone())
         .collect();
-    let response_tokens = tokens(&response(a10));
+    let response_tokens = tokens(&a10.text);
     let read_windows = windows(&to_read, bench.read_radius, bench.read_max);
     let read = read_tokens(dir, &read_windows);
     IndexSide {
@@ -752,8 +939,11 @@ fn index_side(
         read_tokens: read,
         total_tokens: response_tokens + read,
         real_tokens: 0,
-        announced_percent: a10.saving.saved_percent,
-        announced_files_tokens: a10.saving.files_tokens,
+        announced_percent: (a10.metrics.saved * 100)
+            .checked_div(a10.metrics.before)
+            .unwrap_or(0),
+        announced_files_tokens: a10.metrics.before,
+        announced_saved: a10.metrics.saved,
         calls: 1 + read_windows.len(),
         real_calls: 0,
         code_words: None,
@@ -764,7 +954,7 @@ fn index_side(
 /// Which tool answered: the shape of the result says it.
 fn tool_of(a: &Answer<Value>) -> &'static str {
     let v = &a.result;
-    if v.is_array() {
+    if v.get("hits").is_some() {
         "index_search"
     } else if v.get("entryPoints").is_some() {
         "index_context"
@@ -1001,7 +1191,91 @@ fn markdown(r: &Report) -> String {
         ));
     }
     s.push_str(&tasks_table(r));
+    s.push_str(&suffice_table(r));
     s.push_str(&code_words_table(r));
+    s
+}
+
+/// The sufficiency of the « tâche » answers: the share of the lines needed they hold, the calls
+/// and tokens more to have them all, against grep's paths.
+fn suffice_table(r: &Report) -> String {
+    let ps: Vec<(&Outcome, &SufficeSide)> = r
+        .probes
+        .iter()
+        .filter_map(|p| p.suffice.as_ref().map(|s| (p, s)))
+        .collect();
+    if ps.is_empty() {
+        return String::new();
+    }
+    let labels: Vec<String> = ps
+        .iter()
+        .flat_map(|(_, s)| s.old.keys().cloned())
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    let cell = |x: &Suffice| {
+        format!(
+            "{} % · +{} ({} tok.)",
+            (x.held * 100).checked_div(x.needed).unwrap_or(0),
+            x.more_calls,
+            x.more_tokens
+        )
+    };
+    let mut s = String::from("\n### Suffisance des réponses « tâche »\n\nPart des lignes nécessaires (plages écrites à la main) que la réponse contient déjà, puis appels et tokens de plus pour les avoir toutes (index_body, Read, grep), face au chemin de grep (recherches puis lecture de chaque plage).\n\n| Sonde | Plages | ");
+    for l in &labels {
+        s.push_str(&format!("{l} | "));
+    }
+    s.push_str("Cette version | grep informé (appels, tok.) | grep à l'aveugle (appels, tok.) |\n|---|---|");
+    for _ in 0..labels.len() + 3 {
+        s.push_str("---|");
+    }
+    s.push('\n');
+    for (p, x) in &ps {
+        s.push_str(&format!("| {} | {} | ", p.id, x.ranges));
+        for l in &labels {
+            s.push_str(&format!(
+                "{} | ",
+                x.old.get(l).map(cell).unwrap_or_else(|| "—".into())
+            ));
+        }
+        s.push_str(&format!(
+            "{} | {} ({}) | {} ({}) |\n",
+            cell(&x.index),
+            x.grep_calls,
+            x.grep_tokens,
+            x.blind_calls,
+            x.blind_tokens
+        ));
+    }
+    let total = |get: &dyn Fn(&SufficeSide) -> Option<Suffice>| {
+        let v: Vec<Suffice> = ps.iter().filter_map(|(_, x)| get(x)).collect();
+        let held: u32 = v.iter().map(|x| x.held).sum();
+        let needed: u32 = v.iter().map(|x| x.needed).sum();
+        let one = v.iter().filter(|x| x.held == x.needed).count();
+        let calls: usize = v.iter().map(|x| x.more_calls).sum();
+        let tok: u64 = v.iter().map(|x| x.more_tokens).sum();
+        format!(
+            "{} % · +{} ({} tok.) · un appel suffit : {}/{}",
+            (held * 100).checked_div(needed).unwrap_or(0),
+            calls,
+            tok,
+            one,
+            v.len()
+        )
+    };
+    s.push_str(&format!("| **Total ({})** | | ", ps.len()));
+    for l in &labels {
+        let l = l.clone();
+        s.push_str(&format!("{} | ", total(&|x| x.old.get(&l).cloned())));
+    }
+    s.push_str(&format!(
+        "{} | {} ({}) | {} ({}) |\n",
+        total(&|x| Some(x.index.clone())),
+        ps.iter().map(|(_, x)| x.grep_calls).sum::<usize>(),
+        ps.iter().map(|(_, x)| x.grep_tokens).sum::<u64>(),
+        ps.iter().map(|(_, x)| x.blind_calls).sum::<usize>(),
+        ps.iter().map(|(_, x)| x.blind_tokens).sum::<u64>()
+    ));
     s
 }
 
@@ -1127,8 +1401,10 @@ fn reference_of(r: &Report) -> Value {
                     "realTokens": p.index.real_tokens,
                     "realCalls": p.index.real_calls,
                     "announcedPercent": p.index.announced_percent,
+                    "announcedFilesTokens": p.index.announced_files_tokens,
                     "codeWords": p.index.code_words,
                 },
+                "suffice": p.suffice,
                 "grep": {
                     "score": p.grep.score,
                     "totalTokens": p.grep.total_tokens,

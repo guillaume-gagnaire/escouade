@@ -124,7 +124,7 @@ fn rank(kind: &str) -> u8 {
 }
 
 /// `member_path_segments`: `A.b`, `A::b` are `[A, b]`.
-fn segments(name: &str) -> Vec<&str> {
+pub(super) fn segments(name: &str) -> Vec<&str> {
     name.split("::")
         .flat_map(|p| p.split('.'))
         .filter(|s| !s.is_empty())
@@ -185,7 +185,7 @@ impl Reader {
 
     /// `resolve_symbol_nodes`: the qualified name; else its tail (`Type::method`) or the name; else
     /// the members whose path ends with it (`Type.method`).
-    fn symbol_nodes(&self, symbol: &str) -> Result<Vec<(Hit, String)>> {
+    pub(super) fn symbol_nodes(&self, symbol: &str) -> Result<Vec<(Hit, String)>> {
         let literal = self.by_sql("s.qname = :a", symbol)?;
         if !literal.is_empty() {
             return Ok(literal);
@@ -454,7 +454,7 @@ impl Reader {
             matches,
             more,
         };
-        let saving = self.saving(&paths, &result);
+        let saving = self.saving(&paths);
         Ok(Answer { result, saving })
     }
 
@@ -484,7 +484,7 @@ impl Reader {
             matches,
             more,
         };
-        let saving = self.saving(&paths, &result);
+        let saving = self.saving(&paths);
         Ok(Answer { result, saving })
     }
 
@@ -568,7 +568,7 @@ impl Reader {
             matches,
             more,
         };
-        let saving = self.saving(&paths, &result);
+        let saving = self.saving(&paths);
         Ok(Answer { result, saving })
     }
 

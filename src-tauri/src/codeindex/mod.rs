@@ -21,9 +21,13 @@
 // A few parts of the API (the statuses, some counts) are read by the tests only.
 #![allow(dead_code)]
 
+pub mod accounting;
+mod answers;
 mod api;
 mod calls;
 mod context;
+pub mod filters;
+pub mod format;
 pub mod hint;
 mod lang;
 mod links;
@@ -37,11 +41,12 @@ mod store;
 mod text;
 mod wiring;
 
+pub use answers::{BODY_CANDIDATES_DEFAULT, LITERAL_SCAN_DEFAULT_TIMEOUT_MS};
 #[cfg(test)]
 pub(crate) use api::Context;
-pub use api::{Answer, Reader, Retrieval};
+pub use api::{Answer, Reader};
 pub use calls::{Wanted, MAX_MATCHES_DEFAULT};
-pub use context::BuildContextOptions;
+pub use context::{BuildContextOptions, ToolArgs};
 #[cfg(test)]
 pub(crate) use lang::{Parsed, Sym};
 pub use scan::Refresh;
@@ -111,6 +116,8 @@ pub struct Service {
     pub(crate) queue: Mutex<Vec<String>>,
     /// A task reads the list.
     pub(crate) draining: std::sync::atomic::AtomicBool,
+    /// What the answers saved, session by session (`accounting`).
+    pub ledger: accounting::Ledger,
 }
 
 impl Service {

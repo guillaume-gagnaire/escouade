@@ -1,0 +1,70 @@
+{
+  "commit": "303fb5f2",
+  "about": "ESC-298: for each « tâche » probe of codeindex-probes.json, the code an agent needs to do the task, written by hand at the probes' commit: the function's body, and what it takes to change it without a mistake (the type or the helper it takes, a caller, the test that covers it).",
+  "needs": {
+    "tache-modeles-harness": [
+      "src-tauri/src/engine/mod.rs:470-471",
+      "src-tauri/src/engine/mod.rs:489-499",
+      "src-tauri/src/core.rs:3408-3437",
+      "src-tauri/src/accounts.rs:2017-2030",
+      "src-tauri/src/codex_tests.rs:527-573"
+    ],
+    "tache-compte-limite": [
+      "src-tauri/src/tickets.rs:2211-2250",
+      "src-tauri/src/tickets.rs:2252-2266",
+      "src-tauri/src/tickets.rs:2176-2209",
+      "src-tauri/src/core_tests.rs:10876-10894"
+    ],
+    "tache-mcp-codex": [
+      "src-tauri/src/engine/userconfig.rs:121-138",
+      "src-tauri/src/engine/userconfig.rs:194-202",
+      "src-tauri/src/engine/mod.rs:595-605",
+      "src-tauri/src/engine/codex/mod.rs:548-556",
+      "src-tauri/src/engine/userconfig_tests.rs:52-65"
+    ],
+    "tache-branche-premier-message": [
+      "src-tauri/src/core.rs:6299-6449",
+      "src-tauri/src/core.rs:4684-4700",
+      "src-tauri/src/core.rs:6776-6788"
+    ],
+    "tache-reprise-limite": ["src-tauri/src/core.rs:4280-4303", "src-tauri/src/core.rs:4315-4326", "src-tauri/src/core.rs:4339-4350"],
+    "tache-zoom-borne": [
+      "src-tauri/src/model.rs:220-221",
+      "src-tauri/src/model.rs:244-255",
+      "src-tauri/src/model.rs:503-530",
+      "src/lib/display.svelte.ts:16-46"
+    ],
+    "tache-xterm-couleurs": ["src/lib/terminals.ts:70-83", "src/lib/terminals.ts:108-131"],
+    "tache-lance-processus": [
+      "src-tauri/src/core.rs:2934-2960",
+      "src-tauri/src/core.rs:2900-2920",
+      "src-tauri/src/engine/claude/mod.rs:642-666",
+      "src-tauri/src/engine/claude/process.rs:38-80"
+    ],
+    "tache-taille-terminal": [
+      "src/components/AgentTerminal.svelte:122-165",
+      "src/components/TerminalView.svelte:19-39",
+      "src/lib/terminals.ts:640-660"
+    ],
+    "tache-ticket-termine": [
+      "src-tauri/src/tickets.rs:2940-2963",
+      "src-tauri/src/tickets.rs:2753-2774",
+      "src-tauri/src/tickets.rs:2776-2790"
+    ],
+    "tache-langue-defaut": ["src-tauri/src/i18n.rs:84-95", "src-tauri/src/i18n.rs:60-76"],
+    "tache-permission-plugin": [
+      "src-tauri/src/commands.rs:408-435",
+      "src/lib/plugins.ts:127-127",
+      "src/components/plugins/plugins.test.ts:225-245"
+    ],
+    "tache-store-controles": [
+      "store/server/utils/checks.ts:834-853",
+      "store/server/utils/submissions.ts:236-310",
+      "store/tests/unit/checks.test.ts:40-55"
+    ],
+    "tache-sauvegarde-etat": ["src-tauri/src/core.rs:1990-2010", "src-tauri/src/core.rs:2093-2140"],
+    "tache-worktree-cree": ["src-tauri/src/git.rs:1080-1132", "src-tauri/src/git.rs:1133-1215"],
+    "tache-quota-compte": ["src-tauri/src/core.rs:9889-9976"],
+    "tache-cree-agent": ["src-tauri/src/core.rs:5604-5665", "src-tauri/src/core.rs:5667-5720"]
+  }
+}

@@ -212,26 +212,32 @@ Une colonne par ticket, le même banc sur les mêmes 54 sondes (`--compare` à l
 - **ESC-294** : la référence (ci-dessous, `docs/codeindex-probes-reference.json`).
 - **IDX-1 (ESC-296)** : la recherche et le contexte de tokensave portés à l'identique (`docs/CODEINDEX-IDX-1.md`, référence `docs/codeindex-probes-reference-idx1.json`).
 - **IDX-2 (ESC-297)** : la résolution des appels de tokensave, d'un symbole à un symbole (§ « IDX-2 » plus bas, référence `docs/codeindex-probes-reference-idx2.json`).
+- **IDX-3 (ESC-298)** : les réponses, le compte de l'économie et les consignes de tokensave, et la suffisance des réponses « tâche » (§ « IDX-3 » plus bas, référence `docs/codeindex-probes-reference-idx3.json`).
 
-| Mesure | ESC-294 | IDX-1 | IDX-2 |
-|---|---|---|---|
-| R@10 moyen, tout (54) | 39 | 38 | 47 |
-| P@10 moyen, tout | 23 | 22 | 33 |
-| R@50 moyen, tout | 49 | 40 | 46 |
-| R@10 `index_search` (9) | 67 | 78 | 78 |
-| R@10 `index_context` (28) | 16 | 11 | 11 |
-| R@10 `callers` / `callees` / `impact` | 59 / 49 / 85 | 59 / 49 / 85 | **87 / 95 / 95** |
-| R@10 sondes « tâche » (17), la question | 6 | 6 | 6 |
-| R@50 sondes « tâche » | 18 | 12 | 12 |
-| Sondes « tâche » trouvées | 1 / 17 | 1 / 17 | 1 / 17 |
-| R@10 sondes « tâche », mots du code | 24 | 18 | 24 |
-| R@10 questions en français (5) | 40 | 20 | 20 |
-| R@10 questions en anglais (7) | 36 | 29 | 29 |
-| R@10 autres questions fr/en (11), mots du code | 59 | 41 | 14 |
-| Tokens réels de l'index, tout | 350 005 | 252 722 | 244 487 |
-| Tokens réels, sondes « tâche » | 209 811 | 139 003 | 134 450 |
-| Économie réelle (totaux) | −151 % | −81 % | −75 % |
-| Sondes gagnées : index / grep / = | 5 / 48 / 1 | 4 / 48 / 2 | 8 / 43 / 3 |
+| Mesure | ESC-294 | IDX-1 | IDX-2 | IDX-3 |
+|---|---|---|---|---|
+| R@10 moyen, tout (54) | 39 | 38 | 47 | 47 |
+| P@10 moyen, tout | 23 | 22 | 33 | 33 |
+| R@50 moyen, tout | 49 | 40 | 46 | 46 |
+| R@10 `index_search` (9) | 67 | 78 | 78 | 78 |
+| R@10 `index_context` (28) | 16 | 11 | 11 | 11 |
+| R@10 `callers` / `callees` / `impact` | 59 / 49 / 85 | 59 / 49 / 85 | **87 / 95 / 95** | 87 / 95 / 95 |
+| R@10 sondes « tâche » (17), la question | 6 | 6 | 6 | 6 |
+| R@50 sondes « tâche » | 18 | 12 | 12 | 12 |
+| Sondes « tâche » trouvées | 1 / 17 | 1 / 17 | 1 / 17 | 1 / 17 |
+| R@10 sondes « tâche », mots du code | 24 | 18 | 24 | 24 |
+| R@10 questions en français (5) | 40 | 20 | 20 | 20 |
+| R@10 questions en anglais (7) | 36 | 29 | 29 | 29 |
+| R@10 autres questions fr/en (11), mots du code | 59 | 41 | 14 | 14 |
+| Tokens des réponses, tout | 99 558 | 57 313 | 62 325 | **44 360** |
+| Tokens réels de l'index, tout | 350 005 | 252 722 | 244 487 | **227 524** |
+| Tokens réels, sondes « tâche » | 209 811 | 139 003 | 134 450 | 125 884 |
+| Économie annoncée (moyenne) | 96 % | 93 % | 92 % | **67 %** |
+| Économie réelle (totaux) | −151 % | −81 % | −75 % | −63 % |
+| Sondes gagnées : index / grep / = | 5 / 48 / 1 | 4 / 48 / 2 | 8 / 43 / 3 | 9 / 42 / 3 |
+| Suffisance « tâche » : lignes nécessaires dans la réponse | 1 % | 1 % | 1 % | 1 % |
+| Suffisance « tâche » : un appel à l'index suffit | 0 / 17 | 0 / 17 | 0 / 17 | 0 / 17 |
+| Suffisance « tâche » : appels (tokens) de plus | 67 (35 718) | 68 (36 153) | 66 (32 189) | 66 (32 189) |
 
 ## Les mesures
 
@@ -435,3 +441,80 @@ Ce que coûte la résolution : la base grossit de 55 Mo (les ≈ 450 000 référ
 
 - **Portés de tokensave** (`codeindex_links_tests.rs`) : `resolution_test.rs` (nom exact, nom qualifié, `resolve_all`, introuvable, plusieurs candidats, `Self::helper`, appel pointé, autre langage sous le seuil), `ambiguous_calls_test.rs`, `ts_phantom_call_edges_test.rs`, `python_phantom_call_edges_test.rs`, `resolution_order_independence_test.rs`, `incremental_resolution_test.rs` (la série de sept changements, relecture partielle égale à une résolution complète ; les clés de l'ensemble touché égales à celles du résolveur), et les tests de `js_specifier.rs` et `go_import.rs`. Plus les poids de `score_candidate`, la liste des noms courants et le seuil.
 - **Les nôtres** : les 15 `forget` du dépôt reproduits (`Runtime::forget` a ses 7 appelants, par le nom qualifié, `Type.méthode`, `path` et l'id ; chaque autre `forget` les siens ; aucun appelant compté deux fois), un appel ambigu dit à part et jamais comme appelant, un fichier changé relu seul (1 fichier relu, liens égaux à une résolution complète, une définition retirée emporte ses liens), un worktree (un appel retiré, un ajouté dans un fichier nouveau, une définition déplacée suivie depuis un fichier inchangé, le projet intact, puis le projet qui change), les receveurs typés de Rust, TypeScript et Python. Et, à la main sur le dépôt entier : `cargo nextest run --lib on_this_repository_runtime_forget --run-ignored ignored-only --no-capture` (7 appelants, lus par grep dans les fichiers).
+
+## IDX-3 (ESC-298) : les réponses, l'économie et les consignes, comme tokensave
+
+Portés de tokensave (commit `580936b`, MIT, © 2025 Enzo Lombardi ; fichiers listés dans `THIRD-PARTY-NOTICES.md`) :
+
+- **Les réponses** (`codeindex/format.rs`, `codeindex/answers.rs`) : `index_context` en Markdown (`format_context_as_markdown` : points d'entrée, symboles liés par fichier, 5 blocs de code de 1 500 octets au plus, `### Retrieval`, `seen_node_ids`), un bloc coupé finissant par `... [truncated — full body: index_body node_id=N]` (`truncate_code_block`) ; `index_search` une ligne par symbole (`count: N`, `chemin:ligne-fin: nom (genre) — signature`, l'id avec `ids`), et en mode `literal` un texte exact `chemin:ligne: texte` (`handle_literal_search`, `exact_total`, `timeout_ms`) ; le nouvel outil `index_body` (`handle_body` : par id ou par nom, la meilleure sorte, la liste des candidats quand le nom est ambigu) ; `exclude_node_ids`, `path`, `path_include`, `path_exclude`, `max_code_blocks`, `max_code_lines`, `max_per_file`, `include_code` ; `.escouade/queryignore` (`QueryIgnore`) ; la coupe des réponses à 15 000 caractères (`truncate_response`, `truncate_response_keep_tail`).
+- **L'économie** (`codeindex/accounting.rs`, compte de `src/mcp/server.rs`) : before = fichiers touchés ÷ 4, plafonnés à 4 fois la réponse (à la réponse pour `literal`) ; after = réponse + requête (nom, arguments, 8 d'enveloppe) + schémas des outils une fois par session + la ligne de mesure ; un déficit reporté sur les appels suivants (`settle_session_debt`). Les Stats suivent ce qui est crédité (colonne `saved_tokens`).
+- **Les descriptions** des outils (`definitions.rs`, `CONTEXT_DESCRIPTION`) : fixes (aucun chiffre de l'index n'y entre), elles demandent les mots du code (en anglais ici), `keywords` quand un terme ne trouve rien, `seen_node_ids` → `exclude_node_ids`.
+- **Les tests portés** : ceux de `accounting.rs` (le plafond, le littéral, la requête, le déficit sur une session), de `formatter.rs` (en-tête, points d'entrée, blocs et langage, Retrieval, tests repliés, docstring, `compact_signature`), de `builder.rs` (la coupe et sa poignée, multioctet, `max_code_lines`), de `config.rs` (`QueryIgnore`). Les nôtres : les six outils par un vrai client MCP (`mcp/index_tests.rs` : texte, ids, littéral, Markdown, `exclude_node_ids`, filtres, `include_code: false`, `index_body` par nom et par id, ligne de mesure, `queryignore`, descriptions identiques d'une liste à l'autre), un `queryignore` lié hors du dossier refusé, la session et ses schémas.
+
+### Les écarts, et pourquoi
+
+| Écart | Raison |
+|---|---|
+| **`include_code` vaut vrai par défaut** (tokensave : faux dans l'outil, vrai dans `BuildContextOptions`) | le ticket veut que l'agent ait le code sans relire : la réponse sans code laisserait la suffisance à 0 |
+| **La ligne de mesure toujours envoyée** (tokensave la coupe par défaut, `report_savings`, #561), avec une phrase en français ou en anglais | chaque réponse d'Escouade dit ce qu'elle a fait économiser depuis ESC-253 ; son coût est compté dans `after` |
+| **La session est celle de l'appelant** (un agent, ou les clients hors Escouade), pas une connexion MCP ; les schémas comptés sont ceux des six outils `index_*`, chargés d'emblée (pas d'`anthropic/alwaysLoad`) | le serveur d'Escouade fait un handler par requête et sert tous les outils d'Escouade, dont l'index n'est qu'une part |
+| **Le hook ne refuse rien** : tokensave refuse certains grep et les agents Explore ; Escouade conseille l'index et laisse faire | règle d'ESC-253 ; le blocage ne serait repris que sur une décision de l'utilisateur |
+| **La recherche littérale** lit les fichiers que voit le dossier, l'un après l'autre, à travers la clôture ; pas de rapport `unscanned` | le delta des worktrees et la clôture des projets privés ; notre index liste les fichiers de git, il n'en ignore pas qu'il saurait lire |
+| **`.escouade/queryignore`** (tokensave : `.tokensave/queryignore`), lu dans le dossier de l'agent, jamais par un lien qui en sort ni quand la clôture le refuse | le dossier d'Escouade dans le dépôt ; un lien ne doit pas faire lire un fichier hors du projet |
+| **Les noms `index_*`, des ids en nombres, les phrases fr/en** ; non portés : `merge_adjacent`, le mode `plan`, le format `json` de la recherche et du corps | nos outils gardent leurs noms ; ces options ne sont pas demandées par le ticket |
+| `index_callers`, `index_callees`, `index_impact` gardent leur JSON (celui d'IDX-2) | tokensave répond aussi ces trois-là en JSON |
+
+### Le banc, avant et après
+
+Rejoué le 2026-10-30 sur les mêmes 54 sondes, sans en changer aucune (`--compare ../docs/codeindex-probes-reference-idx2.json`) ; référence `docs/codeindex-probes-reference-idx3.json`. Le banc compte désormais **la réponse telle que le serveur MCP l'envoie** (le texte de `format.rs` et sa ligne de mesure, en français, un appel dans une session déjà ouverte), et non plus un JSON de bibliothèque ; l'économie annoncée est celle de la ligne `index_metrics`.
+
+| Groupe | Sondes | R@10 IDX-2 → IDX-3 | P@10 | Tok. des réponses IDX-2 → IDX-3 | Tok. réels IDX-2 → IDX-3 | Éco. annoncée IDX-3 | Éco. réelle IDX-3 | Index / grep / = |
+|---|---|---|---|---|---|---|---|---|
+| search | 9 | 78 → 78 | 26 | — | 9 217 → 8 284 | 54 % | −39 % | 1 / 6 / 2 |
+| context | 28 | 11 → 11 | 1 | — | 194 590 → 179 588 | 72 % | −84 % | 2 / 26 / 0 |
+| callers | 10 | 87 → 87 | 92 | — | 14 042 → 13 648 | 60 % | +35 % | 5 / 5 / 0 |
+| callees | 3 | 95 → 95 | 96 | — | 8 743 → 8 634 | 72 % | −13 % | 0 / 2 / 1 |
+| impact | 4 | 95 → 95 | 80 | — | 17 895 → 17 370 | 72 % | −139 % | 1 / 3 / 0 |
+| « tâche » | 17 | 6 → 6 | 1 | — | 134 450 → 125 884 | 72 % | −71 % | 1 / 16 / 0 |
+| **Tout** | 54 | 47 → 47 | 33 | 62 325 → **44 360** | 244 487 → **227 524** | **67 %** (92 % avant) | **−63 %** (−75 % avant) | **9 / 42 / 3** |
+
+- **La justesse ne bouge pas, et ne devait pas bouger** : IDX-3 change ce que rendent les outils et comment l'économie est comptée, pas le classement. Aucune sonde n'a changé de rappel.
+- **Les réponses coûtent 29 % de tokens de moins** (62 325 → 44 360) : le Markdown et une ligne par symbole au lieu du JSON. Le coût réel baisse de 7 % (les lectures et le repli sur grep restent).
+- **L'économie annoncée passe de 92 % à 67 %** grâce au plafond à 4 fois la réponse et aux coûts de l'appel. Elle reste très loin de l'économie réelle (−63 %) : elle compare la réponse à la lecture des fichiers touchés, alors que l'agent, lui, aurait lu des morceaux trouvés par grep, et elle ne sait pas si la réponse était juste. C'est la définition de tokensave, portée telle quelle.
+- **Les sondes gagnées** : 9 (8 avant), par la seule taille des réponses : `svelte-search-planbanner` passe de l'égalité à l'index, `ts-search-tip-place` de grep à l'égalité.
+- **L'indexation** (même passe, poste chargé par trois builds) : dépôt entier 33,5 s, 123,5 Mo, 93 054 liens ; delta d'un worktree 15,1 s ; commit 0,21 s ; changement de branche 7,5 s. **À noter, sans le corriger ici** : la base est passée de 47 à 123 Mo avec IDX-2, et le delta d'un worktree prend toujours 13 à 15 s.
+
+### La suffisance des réponses « tâche »
+
+La question de l'utilisateur (2026-10-30) : la réponse donne-t-elle à l'agent le code dont il a besoin, pour qu'il n'ait pas à lire, voir qu'il en manque, et re-grep ? Pour chacune des 17 sondes « tâche », l'ensemble du code nécessaire est écrit à la main dans `docs/codeindex-probes-sufficiency.json` (2 à 5 plages : le corps de la fonction, le type ou l'aide qu'elle prend, un appelant, le test qui la couvre). Le banc mesure la part de ces lignes que la réponse (ses blocs de code) contient déjà, puis les appels de plus pour les avoir toutes : `index_body` pour un bloc coupé d'un symbole qui les tient (IDX-3 seulement), un Read des lignes manquantes d'un fichier que la réponse nomme, sinon le grep informé puis un Read. Face à lui, le chemin de grep : ses recherches, puis un Read par plage. Les versions d'avant sont rejouées à leur commit (`8e7d2be2`, `4ea19200`, `5a2e825a`), leur banc patché pour écrire chaque réponse (`--old <label>=<dossier>`).
+
+| Version | Lignes nécessaires dans la réponse | Un appel à l'index suffit | Appels de plus (tokens) | Grep informé (appels, tokens) | Grep à l'aveugle |
+|---|---|---|---|---|---|
+| ESC-294 | 1 % | 0 / 17 | 67 (35 718) | 71 (41 908) | 80 (116 038) |
+| IDX-1 | 1 % | 0 / 17 | 68 (36 153) | | |
+| IDX-2 | 1 % | 0 / 17 | 66 (32 189) | | |
+| **IDX-3** | **1 %** | **0 / 17** | **66 (32 189)** | 71 (41 908) | 80 (116 038) |
+
+- **Aucune réponse ne suffit, dans aucune version.** Deux sondes seulement tiennent une part du code : `tache-zoom-borne` (23 %, la seule « tâche » trouvée) et `tache-reprise-limite` (25 %, depuis IDX-2). Les 15 autres ne contiennent aucune des lignes nécessaires : l'agent doit tout chercher ailleurs. Avec l'index, cela fait en plus de son appel 66 appels et 32 189 tokens ; le grep informé y arrive en 71 appels et 41 908 tokens au total, sans l'appel à l'index.
+- **La cause est la justesse, pas le format** : les blocs de code sont ceux des points d'entrée, et 16 « tâche » sur 17 ont de mauvais points d'entrée. IDX-3 rend le bloc et sa suite (`index_body`) ; il ne peut pas rendre un code qu'il n'a pas trouvé.
+
+### Où grep gagne encore, et pourquoi
+
+grep gagne 42 sondes sur 54 (43 avant).
+
+- **Les tâches dites en mots (`index_context`, 26 sur 28 pour grep)** : la cause principale des 16 « tâche » ratées sur 17 et du rappel de 11 %. Les questions sont des paraphrases françaises (« où la langue de l'interface est choisie par défaut d'après le système ») ; l'index plein texte cherche des mots du code, en anglais, réduits par le stemmer Porter (anglais). Une paraphrase ne touche presque aucun nom, et les trois points d'entrée (`search_limit` 3 de tokensave) se remplissent de symboles qui partagent un mot courant. Dite avec les mots du code, la même tâche passe de 6 à 24 % (4 sur 17) : c'est ce que les descriptions demandent désormais aux agents, et que seul un vrai agent dira (IDX-4). Le grep informé, lui, part d'un identifiant qu'il connaît déjà.
+- **La recherche d'un symbole (`index_search`, 6 sur 9)** : à justesse égale, grep coûte moins quand le nom est rare et le fichier court ; l'index gagne sur les homonymes et les noms communs.
+- **Les appelés et l'impact** (2 et 3 sur 3 et 4) : justes à 95 %, mais l'impact rend tout ce qu'il touche (fichiers, types, importeurs) et coûte plus que le grep d'un nom.
+- **Les appelants** sont partagés (5 / 5) : l'index gagne sur les homonymes (`forget`, `load`, `new`, `place`), grep sur un nom unique.
+
+**Pourquoi « mots du code » est tombé de 41 à 14 avec IDX-2** (sur les 11 questions fr/en ; rejoué sur IDX-1 et IDX-2 avec leur banc, les résultats écrits) : IDX-1 comptait les appelants d'un symbole **par son nom** (`batch_incoming_call_counts` sur `edges`, `lower(target)`). `scan.rs:29` (`refresh`) recevait ainsi tous les appels nommés `refresh` du dépôt, montait en tête, et son voisin par le nom, `Service::ensure_fresh` (`mod.rs:135`, la bonne réponse de `rs-notion-gap-fr` et `-en`), entrait dans les symboles liés. IDX-2 compte les appelants résolus, comme tokensave : `refresh` n'a plus que ses vrais appelants, ne remonte plus, et `ensure_fresh` disparaît des dix premiers. Même chose pour `ts-context-tooltip-en` (`tip.ts:180`, troisième point d'entrée sous IDX-1 par le même bonus). Les bons résultats d'IDX-1 venaient d'un bonus faux ; IDX-3 rend exactement les résultats d'IDX-2 sur ces questions.
+
+### Rejouer
+
+```sh
+cd src-tauri
+cargo run --release --example codeindex_probes -- --compare ../docs/codeindex-probes-reference-idx2.json \
+  --old "ESC-294=<dossier>" --old "IDX-1=<dossier>" --old "IDX-2=<dossier>"
+```
+
+`--old` prend un dossier de réponses `<id>.txt` d'une version d'avant (sous Windows, un chemin `C:/…` : l'exécutable ne lit pas `/c/…`). Pour les refaire : un `git worktree` au commit de la version, son `probes/mod.rs` patché pour écrire `response(&a10)` dans `$ESCOUADE_PROBES_DUMP/<id>.txt` juste avant `index_side`, puis `cargo run --release --example codeindex_probes -- --probes <ces sondes> --only <les « tâche »>` (un `CARGO_TARGET_DIR` commun aux trois : ≈ 12 min la première fois, 8 ensuite). Chaque passe écrit aussi ses réponses dans `target/codeindex-probes/responses/` (`<id>.txt` tel qu'envoyé, `<id>.json`, `<id>.code-words.txt`).

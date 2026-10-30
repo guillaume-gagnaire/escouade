@@ -7,13 +7,25 @@ Escouade range le code d’un projet en symboles et en liens, pour que ses agent
 Sans index, un agent cherche à coups de grep, puis lit les fichiers qu’il a trouvés, souvent en entier. Avec l’index, il demande en un appel :
 
 - où est un symbole (fonction, méthode, classe, type, champ, titre Markdown), avec sa signature et sa doc ;
-- le contexte d’une tâche : les points d’entrée et les symboles liés, avec leurs extraits ;
-- les appelants et les appelés d’une fonction, résolus d’un symbole à l’autre à la lecture du code, comme le fait [tokensave](https://github.com/aovestdipaperino/tokensave) : un nom porté par plusieurs fonctions est répondu définition par définition, et un appel qui peut en viser plusieurs est dit à part, jamais deviné ;
-- ce qu’un changement toucherait.
+- le contexte d’une tâche : les points d’entrée et les symboles liés, avec le code des points d’entrée (cinq blocs au plus, de 1 500 octets au plus chacun ; un bloc coupé nomme l’appel qui donne la suite) ;
+- le corps entier d’un symbole, par son nom ou son id ;
+- un texte dans le code (un message d’erreur, une chaîne), fichier par fichier et ligne par ligne ;
 
-Chaque réponse dit ce qu’elle a fait économiser : les tokens des fichiers dont elle tire, lus en entier, contre les siens. Les [statistiques](stats) en font le total par projet.
+Chaque réponse finit par ce qu’elle a fait économiser, compté comme le compte tokensave : les fichiers qu’elle a touchés, lus en entier, mais **plafonnés à quatre fois la réponse**, contre ce que l’agent a payé pour l’appel (la réponse, sa requête et, une fois par session, les descriptions des outils). Un appel qui coûte plus qu’il n’économise reporte son déficit sur les suivants. Les [statistiques](stats) font le total de ce qui reste, par projet.
 
 Les langages lus : Rust, TypeScript, JavaScript, Svelte, Python, Go, Java, C#, PHP et Markdown.
+
+## Comment il cherche
+
+L’index cherche par les **mots du code**, comme [tokensave](https://github.com/aovestdipaperino/tokensave) à son commit `580936b`, dont Escouade reprend la méthode : un index plein texte des noms, noms qualifiés, docs, signatures et corps des fonctions, pondéré par colonne, puis un classement par genre, visibilité et appelants. Il n’y a **pas de vecteurs pour le code** : ils ont été mesurés sur 54 sondes du code d’Escouade, puis abandonnés.
+
+Ce qui en découle :
+
+- une question dite avec les identifiants du code (en anglais ici) trouve mieux qu’une paraphrase ; les descriptions des outils demandent aux agents de l’écrire ainsi ;
+- quand un terme ne trouve rien, la réponse le dit (`### Retrieval`), et l’agent redemande avec des synonymes dans `keywords` ;
+- un texte qui n’est pas un symbole (un message, une chaîne) se trouve par la recherche littérale, pas par la recherche classée ;
+- les chemins de `.escouade/queryignore` (un motif par ligne, `*` pour un glob, `#` pour un commentaire) sont laissés hors des recherches, jamais de l’index ; le fichier est lu dans le dossier de l’agent, jamais par un lien qui en sort ;
+- grep gagne encore là où il faut une regex, ou quand les mots d’une tâche ne sont pas ceux du code.
 
 ## L’allumer
 
@@ -58,8 +70,8 @@ Une fois le modèle téléchargé, rien ne sort plus de la machine.
 
 ## Ce que voient les agents
 
-Les agents passent par cinq outils du [serveur MCP](mcp), les mêmes pour [tous les harness](harness) : `index_search`, `index_context`, `index_callers`, `index_callees` et `index_impact`. Dans les vues de Claude Code et de Codex, une recherche qui vise un symbole reçoit une ligne qui dit que l’index y répond en un appel ; ailleurs, c’est une règle de leur consigne. Une recherche de texte n’est jamais bloquée.
+Les agents passent par six outils du [serveur MCP](mcp), les mêmes pour [tous les harness](harness) : `index_search`, `index_context`, `index_body`, `index_callers`, `index_callees` et `index_impact`. Leurs réponses sont celles de tokensave : du Markdown pour le contexte, une ligne par symbole pour la recherche, le corps en texte. Dans les vues de Claude Code et de Codex, une recherche qui vise un symbole reçoit une ligne qui dit que l’index y répond en un appel ; ailleurs, c’est une règle de leur consigne. Une recherche n’est jamais bloquée : à la différence de tokensave, Escouade n’arrête ni un grep ni un agent Explore.
 
 ## Ce qu’il a fait économiser
 
-Les [statistiques](stats) ont une partie **Économies de l’index du code**, sur la période choisie : par projet, le nombre de réponses de l’index, les tokens économisés et leur valeur en dollars. Les dollars sont une estimation : les tokens économisés au prix d’entrée du modèle sur lequel tournait chaque agent.
+Les [statistiques](stats) ont une partie **Économies de l’index du code**, sur la période choisie : par projet, le nombre de réponses de l’index, les tokens économisés (comptés comme plus haut, les déficits payés d’abord) et leur valeur en dollars. Les dollars sont une estimation : les tokens économisés au prix d’entrée du modèle sur lequel tournait chaque agent.
