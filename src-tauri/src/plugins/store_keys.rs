@@ -4,15 +4,18 @@
 //! embeds, the store's key and its backup, the same as `store/keys/*.pub`. The store cannot make a
 //! seal: it has neither key.
 //!
-//! Until the user gives the two public keys (the procedure of docs/STORE.md §4.5), the list is
-//! empty and every seal is refused. Installing from the store and showing the seal come with
-//! STORE-9.
+//! The two keys were made by the user on their machine on 2026-10-30 (the procedure of
+//! docs/STORE.md §4.5); their secret halves never left it.
 
 use minisign_verify::{PublicKey, Signature};
 
 /// The public keys of the store's signatures, as the second line of their `.pub` files: the key
-/// of every day, then the backup key. Empty until the user makes them: no version is verified.
-pub const STORE_PUBLIC_KEYS: &[&str] = &[];
+/// of every day (`store.pub`, id E0516468FFDCBDD5), then the backup key (`backup.pub`, id
+/// 177096D57E2EC0C8).
+pub const STORE_PUBLIC_KEYS: &[&str] = &[
+    "RWTVvdz/aGRR4MBGtNPfgdhYoq0ihwxZLK1lkK+ymqmoITBDaYuddpCW",
+    "RWTIwC5+1ZZwFzhOKuS2/h00baOvCuqL7L15MIfpP2QIcaOl3JCDe75S",
+];
 
 /// What the trusted comment of a version's signature starts with.
 pub const VERIFIED_COMMENT: &str = "escouade-verified-v1";
