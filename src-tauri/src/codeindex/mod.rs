@@ -22,13 +22,21 @@
 #![allow(dead_code)]
 
 mod api;
+mod context;
 pub mod hint;
 mod lang;
+pub(crate) mod probes;
+mod ranking;
 mod scan;
+mod search;
 mod store;
+mod text;
 mod wiring;
 
-pub use api::{Answer, Reader};
+#[cfg(test)]
+pub(crate) use api::Context;
+pub use api::{Answer, Reader, Retrieval};
+pub use context::BuildContextOptions;
 #[cfg(test)]
 pub(crate) use lang::{Parsed, Sym};
 pub use scan::Refresh;

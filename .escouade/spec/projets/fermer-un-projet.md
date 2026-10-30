@@ -2,9 +2,9 @@
 title: "Fermer un projet"
 subject: "Projets"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-89"]
+tickets: ["ESC-89","ESC-300"]
 decisions: []
-compared: null
+compared: "2026-10-30T02:50:30+01:00"
 ---
 
 ## Ce que c'est
@@ -20,6 +20,7 @@ Fermer un projet le retire de l'app sans rien perdre : son historique (réglages
 - Refusé tant que la validation d'un ticket du projet tourne : « La validation du ticket {key} est en cours : attends sa fin pour fermer le projet. » ; et une validation ne démarre pas sur un projet en cours de fermeture.
 - Un ticket « En cours » à ce moment est gardé bloqué avec « Projet fermé pendant le ticket » (« Project closed during the ticket », dans la langue de l'interface) ; un ticket dont la validation tournait repasse sans étape, bloqué comme après un redémarrage (« Validation interrompue »), sans conflit.
 - Deux fermetures du même projet en même temps n'en font qu'une. L'historique gardé est le projet tel qu'il sort de la liste : un ticket créé ou un réglage changé pendant la fermeture y est.
+- Le nom qu'un agent reçoit après son premier message (voir *Barre latérale*) et qui n'est pas encore arrivé : un nommage déjà commencé (sa branche en cours de renommage) finit avant que l'agent sorte, et l'historique garde le nom et la branche ; un nom qui arrive après est perdu, sans rien renommer, ni dans l'historique ni dans l'agent rouvert depuis (il garde le nom et la branche qu'il avait). Jamais l'un sans l'autre. De même pour un renommage à la main.
 
 ### Ce qui est gardé
 

@@ -26,6 +26,8 @@ mod closed;
 mod closed_tests;
 mod codeindex;
 #[cfg(test)]
+mod codeindex_probes_tests;
+#[cfg(test)]
 mod codeindex_tests;
 #[cfg(test)]
 mod codex_tests;
@@ -366,6 +368,12 @@ fn build_window(app: &tauri::App) -> tauri::Result<()> {
 /// for the plugins' authors (PLG-3). Gives the exit code.
 pub fn plugin_cli(args: Vec<String>) -> i32 {
     plugins::bench::cli::main(args)
+}
+
+/// `codeindex_probes` (examples): the probes bench of the code index against grep (ESC-294,
+/// `docs/CODEINDEX-PROBES.md`). Gives the exit code.
+pub fn codeindex_probes_cli(args: Vec<String>) -> i32 {
+    codeindex::probes::cli(args)
 }
 
 pub fn run() {

@@ -10,7 +10,9 @@
 //! - `documents/<folders>/<file>`: the files the team dropped.
 //!
 //! What can be worked out again lives in Escouade's own folder, beside the histories: the text
-//! extracted from the documents (`Space::text_dir`).
+//! extracted from the documents (`Space::text_dir`), and what the comparison to the code found of
+//! each page, its time and its gaps (`Space::checks`, ESC-301): kept there, never in the page, so
+//! that a comparison leaves git nothing to commit and the next validation is not refused.
 //!
 //! `Space` is the files of one branch of the docs, without the core: every path it reads or
 //! writes goes through `Space::dir` / `Space::file`, which refuse a link on the way and anything
@@ -220,6 +222,14 @@ pub struct Page {
     /// keeps the order of the spec it came from); 0: by name, after those placed.
     pub order: u32,
     pub body: String,
+}
+
+/// What the comparison to the code found of a page (ESC-301), kept out of the page.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Check {
+    pub compared: String,
+    pub gaps: Vec<Gap>,
 }
 
 /// A gap between a page and the code (ESC-258): what the code does otherwise, and where.
@@ -680,6 +690,10 @@ pub struct Space {
     /// Where its pages and decisions are told written (PLG-5), with its project's id; None for
     /// a space the core did not hand out.
     pub facts: Option<(crate::facts::Emitter, String)>,
+    /// The file of Escouade's folder that keeps what the comparison found of each page, by path
+    /// (ESC-301): read over the page's own header, and where its time and gaps are written. None:
+    /// in the page's header, as before (a space the core did not hand out).
+    pub checks: Option<PathBuf>,
 }
 
 fn is_link(p: &Path) -> bool {
@@ -751,7 +765,48 @@ impl Space {
             text_dir,
             documents_root: None,
             facts: None,
+            checks: None,
         }
+    }
+
+    /// What `checks` keeps, by page; empty when there is none or it does not read.
+    pub(crate) fn checks(&self) -> HashMap<String, Check> {
+        self.checks
+            .as_ref()
+            .and_then(|f| std::fs::read(f).ok())
+            .and_then(|b| serde_json::from_slice(&b).ok())
+            .unwrap_or_default()
+    }
+
+    /// `page` with what the comparison found of it kept in `checks`, over its header.
+    fn checked(&self, mut page: Page, checks: &HashMap<String, Check>) -> Page {
+        if let Some(c) = checks.get(&page.path) {
+            page.compared = c.compared.clone();
+            page.gaps = c.gaps.clone();
+        }
+        page
+    }
+
+    /// Keeps what the comparison found of the page `rel` (its time and gaps): in `checks` when
+    /// the space has it, the page left as it is; else in the page's header.
+    pub fn spec_check(&self, rel: &str, compared: String, gaps: Vec<Gap>) -> Result<()> {
+        let Some(file) = &self.checks else {
+            self.spec_write(rel, |p| {
+                p.gaps = gaps;
+                p.compared = compared;
+            })?;
+            return Ok(());
+        };
+        let path = page_path(rel).ok_or_else(|| bad_page(rel))?;
+        let mut all = self.checks();
+        all.insert(path, Check { compared, gaps });
+        if let Some(dir) = file.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        let tmp = file.with_extension("json.tmp");
+        std::fs::write(&tmp, serde_json::to_vec_pretty(&all)?)?;
+        std::fs::rename(&tmp, file)?;
+        Ok(())
     }
 
     /// Tells `body` of this space's project, when the core handed it out.
@@ -867,12 +922,13 @@ impl Space {
         let Ok(dir) = self.dir(SPEC) else {
             return Vec::new();
         };
+        let checks = self.checks();
         walk(&dir, md_name, MAX_FILES)
             .into_iter()
             .filter_map(|(rel, _)| {
                 let path = rel.strip_suffix(".md")?.to_string();
                 let text = self.read_text(&dir.join(&rel)).ok()?;
-                Some(page_read(&path, &text))
+                Some(self.checked(page_read(&path, &text), &checks))
             })
             .collect()
     }
@@ -944,15 +1000,33 @@ impl Space {
                 "No page “{path}” in the specification."
             ));
         }
-        Ok(page_read(&path, &self.read_text(&file)?))
+        Ok(self.checked(page_read(&path, &self.read_text(&file)?), &self.checks()))
     }
 
     /// Creates or changes a page: what `edit` leaves of the page as it was (an empty one for a new
     /// page) is written. Returns the page and the lines it added and removed.
+    /// With `checks`, the time and gaps `edit` changes go there (a discussion settles a gap) and
+    /// the page's header keeps its own.
     pub fn spec_write(&self, rel: &str, edit: impl FnOnce(&mut Page)) -> Result<(Page, u32, u32)> {
         let (page, added, removed) = self.spec_edit(rel, None, edit)?;
         let file = self.file(SPEC, &format!("{}.md", page.path))?;
-        self.write(&file, page_write(&page).as_bytes())?;
+        let mut kept = page.clone();
+        if self.checks.is_some() {
+            let own = match file.is_file() {
+                true => page_read(&page.path, &self.read_text(&file)?),
+                false => Page {
+                    path: page.path.clone(),
+                    ..Default::default()
+                },
+            };
+            let before = self.checked(own.clone(), &self.checks());
+            if (&before.compared, &before.gaps) != (&page.compared, &page.gaps) {
+                self.spec_check(&page.path, page.compared.clone(), page.gaps.clone())?;
+            }
+            kept.compared = own.compared;
+            kept.gaps = own.gaps;
+        }
+        self.write(&file, page_write(&kept).as_bytes())?;
         self.fact(crate::facts::Body::DocsWritten {
             page: page.path.clone(),
         });
@@ -972,7 +1046,9 @@ impl Space {
         let file = self.file(SPEC, &format!("{path}.md"))?;
         let before = match current {
             Some(p) => Some(p),
-            None if file.is_file() => Some(page_read(&path, &self.read_text(&file)?)),
+            None if file.is_file() => {
+                Some(self.checked(page_read(&path, &self.read_text(&file)?), &self.checks()))
+            }
             None => None,
         };
         let mut page = before.clone().unwrap_or_else(|| Page {

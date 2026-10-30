@@ -43,7 +43,8 @@ async fn the_five_tools_answer_from_the_index_and_say_what_they_saved() {
     let s = &found["saving"];
     assert!(s["filesTokens"].as_u64().unwrap() > 0, "{found}");
     assert!(s["answerTokens"].as_u64().unwrap() > 0);
-    assert_eq!(s["files"], 1);
+    // shop.rs, and main.rs: the signature of `main` (its first line) names place_order.
+    assert_eq!(s["files"], 2);
     assert!(found["summary"].as_str().unwrap().contains("tokens"));
 
     let ctx = read(
@@ -54,6 +55,22 @@ async fn the_five_tools_answer_from_the_index_and_say_what_they_saved() {
     .await;
     assert_eq!(ctx["result"]["entryPoints"][0]["name"], "place_order");
     assert!(ctx["saving"].is_object());
+    // How the search went, in data and in words (ESC-296).
+    assert!(ctx["result"]["retrieval"]["match"].is_string(), "{ctx}");
+    let words = ctx["retrieval"].as_str().unwrap();
+    assert!(words.contains("order("), "{words}");
+    // Keywords: a notion the task does not name.
+    let ctx = read(
+        &c,
+        "index_context",
+        json!({ "project": p.id, "task": "tidy things up", "keywords": ["unrelated"] }),
+    )
+    .await;
+    let entry = ctx["result"]["entryPoints"].to_string();
+    assert!(entry.contains("unrelated_helper"), "{ctx}");
+    let words = ctx["retrieval"].as_str().unwrap();
+    assert!(words.contains("unrelated("), "{words}");
+    assert!(words.contains("⚠"), "{words}");
 
     let callers = read(
         &c,

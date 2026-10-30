@@ -628,8 +628,9 @@ export async function acceptSignature(
 
 /**
  * Takes in a revocation list signed on the user's machine (§4.6): checked by revocations.ts, then the catalogue is
- * built again. The authors of the versions it newly disables or unverifies are told, unless `notify` is false (when
- * telling them would help an attacker).
+ * built again. Each new entry is announced on Discord, to the administrators and to the public (§4.7). The authors of
+ * the versions it newly disables or unverifies are told by e-mail, unless `notify` is false (when telling them would
+ * help an attacker): that e-mail is all `notify` changes.
  */
 export async function depositRevocations(
   db: Db,
@@ -649,11 +650,12 @@ export async function depositRevocations(
   forgetCatalog();
   await note(db, 'review.revocations', { accountId: admin.id, githubId: admin.githubId }, { serial: taken.serial }, now);
   const list = parseRevocations(input.json) as RevocationList;
-  // Discord: each new entry to the administrators; a new removal to the public too, unless the author is not told.
+  // Discord: each new entry to the administrators and to the public (a removal or a badge withdrawn, with its public
+  // reason), --quiet or not: --quiet only spares the author's e-mail, below.
   const known = new Set((was?.entries ?? []).map((e) => JSON.stringify(e)));
   for (const entry of list.entries.filter((e) => !known.has(JSON.stringify(e)))) {
     void announce({ kind: 'revoked', serial: taken.serial, entry, quiet: input.notify === false });
-    if (entry.action === 'disable' && input.notify !== false) void announce({ kind: 'removed', entry });
+    void announce({ kind: 'removed', entry });
   }
   if (input.notify === false) return taken;
   const ids = [...new Set(list.entries.map((e) => e.id))];

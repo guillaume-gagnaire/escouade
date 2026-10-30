@@ -1024,6 +1024,9 @@ pub struct Core<R: Runtime = Wry> {
     /// (tests only: the wait is `NAMING_LIMIT`).
     #[cfg(test)]
     pub(crate) naming_ms: AtomicU64,
+    /// The names that came for an agent gone meanwhile and were dropped (tests only).
+    #[cfg(test)]
+    pub(crate) names_dropped: AtomicU64,
     /// Notifications sent, as "<title> | <text>" (tests only).
     #[cfg(test)]
     pub alerts: Mutex<Vec<String>>,
@@ -1940,6 +1943,8 @@ impl<R: Runtime> Core<R> {
             agent_gone_ms: AtomicU64::new(AGENT_GONE.as_millis() as u64),
             #[cfg(test)]
             naming_ms: AtomicU64::new(NAMING_LIMIT.as_millis() as u64),
+            #[cfg(test)]
+            names_dropped: AtomicU64::new(0),
             #[cfg(test)]
             alerts: Mutex::default(),
             #[cfg(test)]
@@ -6498,7 +6503,7 @@ impl<R: Runtime> Core<R> {
         // As at an agent's making: the folders taken are read, and one taken, in turn.
         let creating = self.create_lock.lock().await;
         let project_id = h.lock().meta.project_id.clone();
-        // A name come meanwhile waits for the branch, then renames it (`apply_generated_name`).
+        // A name come meanwhile waits for the branch, then renames it (`apply_name_to`).
         let naming_lock = self.spawn_lock(&format!("naming-{project_id}"));
         let naming_guard = naming_lock.lock().await;
         let made = match self.project(&project_id) {
@@ -6943,10 +6948,14 @@ impl<R: Runtime> Core<R> {
         .await
     }
 
+    /// The agent `id` named after `prompt` by the writer model. The name is the agent's that asked
+    /// for it: one closed meanwhile (its project closed, the agent deleted) takes none, nor does
+    /// the agent its project's history gives back, though it has the same id (ESC-300).
     pub(crate) async fn auto_name(self: &Arc<Self>, id: &str, prompt: &str) {
+        let Ok(h) = self.agent(id) else { return };
         match self.generate_name(id, prompt).await {
             Ok(Some(slug)) => {
-                if let Err(e) = self.apply_generated_name(id, &slug).await {
+                if let Err(e) = self.apply_name_to(&h, id, &slug).await {
                     log::warn!("auto-naming failed: {e:#}");
                 }
             }
@@ -7178,14 +7187,40 @@ impl<R: Runtime> Core<R> {
         Ok(name_from_answer(&answer))
     }
 
+    /// The name `slug` given to the agent `id` as it is now, as Haiku's would (tests only).
+    #[cfg(test)]
     pub(crate) async fn apply_generated_name(self: &Arc<Self>, id: &str, slug: &str) -> Result<()> {
         let h = self.agent(id)?;
+        self.apply_name_to(&h, id, slug).await
+    }
+
+    /// Whether `h` is still the agent `id` of the app: neither closed with its project nor
+    /// deleted, nor an older handle of an agent its project's history gave back.
+    fn is_live(&self, h: &AgentHandle, id: &str) -> bool {
+        self.agents
+            .read()
+            .get(id)
+            .is_some_and(|live| Arc::ptr_eq(live, h))
+    }
+
+    /// The name `slug` given by Haiku to `h`, the agent `id` as it was when its name was asked:
+    /// suffixed when another agent of the project has it, its branch renamed first.
+    async fn apply_name_to(self: &Arc<Self>, h: &AgentHandle, id: &str, slug: &str) -> Result<()> {
         let project_id = h.lock().meta.project_id.clone();
         // One agent named at a time in a project, from the names taken to the name set: two named
         // at once with the same name (the branch renames are awaited in between) would both find
         // it free.
         let naming = self.spawn_lock(&format!("naming-{project_id}"));
         let naming_guard = naming.lock().await;
+        // Gone meanwhile: nothing is renamed, branch or name. The closing of its project takes
+        // this lock to put each agent out (`remove_project`): one still there now stays until its
+        // branch and its name are both set, and its history keeps them.
+        if !self.is_live(h, id) {
+            log::info!("agent {id}: gone before its name came, the name is dropped");
+            #[cfg(test)]
+            self.names_dropped.fetch_add(1, Ordering::AcqRel);
+            return Ok(());
+        }
         let taken: Vec<String> = self
             .project_agents(&project_id)
             .iter()
@@ -7205,7 +7240,7 @@ impl<R: Runtime> Core<R> {
         // is on its last branch (renamed or not), so that whoever sees it named (a commit
         // proposed meanwhile) does not find git in the middle of the rename.
         let renamed = self
-            .rename_agent_branch(&h, &project_id, &name)
+            .rename_agent_branch(h, &project_id, &name)
             .await
             .ok()
             .flatten();
@@ -7230,7 +7265,7 @@ impl<R: Runtime> Core<R> {
         };
         // The name is set: the next one in the project need not wait for the session rename.
         drop(naming_guard);
-        self.emit_agent(&h);
+        self.emit_agent(h);
         self.request_save();
         if !named_now {
             return Ok(());
@@ -7248,9 +7283,13 @@ impl<R: Runtime> Core<R> {
         }
         let h = self.agent(id)?;
         let project_id = h.lock().meta.project_id.clone();
-        // Never across Haiku naming it (`apply_generated_name`): the branch first, as it does.
+        // Never across Haiku naming it (`apply_name_to`): the branch first, as it does.
         let naming = self.spawn_lock(&format!("naming-{project_id}"));
         let naming_guard = naming.lock().await;
+        // Closed while it waited: its history keeps the name it had.
+        if !self.is_live(&h, id) {
+            return Err(agent_not_found());
+        }
         let (renamed, kept) = match self
             .rename_agent_branch(&h, &project_id, &slugify(name))
             .await
@@ -8460,6 +8499,11 @@ impl<R: Runtime> Core<R> {
             // otherwise start a process, with a token, for an agent that is gone.
             let lock = self.spawn_lock(&aid);
             let _guard = lock.lock().await;
+            // Nor out in the middle of its naming (`apply_name_to`): the name and the branch it is
+            // giving it are both set first, and kept; a name that comes later finds it gone and
+            // sets nothing. Taken after its start's lock, as a start that makes its worktree does.
+            let naming = self.spawn_lock(&format!("naming-{id}"));
+            let _naming = naming.lock().await;
             // Bound first: the map guard must not live across the agent lock and the I/O below.
             let removed = self.agents.write().remove(&aid);
             let mut worktree = None;

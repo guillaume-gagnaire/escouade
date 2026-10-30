@@ -5,8 +5,9 @@ use rusqlite::{params, Connection};
 use sha2::{Digest, Sha256};
 use std::path::Path;
 
-/// Raised when the tables change: an older database is made again from the files.
-const SCHEMA: i64 = 1;
+/// Raised when the tables change: an older database is made again from the files, once, without
+/// asking (2: the full-text index of tokensave, ESC-296).
+const SCHEMA: i64 = 2;
 
 const TABLES: &str = "
 CREATE TABLE files (
@@ -32,7 +33,9 @@ CREATE TABLE symbols (
   line INTEGER NOT NULL,
   end_line INTEGER NOT NULL,
   sig TEXT NOT NULL,
-  doc TEXT NOT NULL
+  doc TEXT NOT NULL,
+  -- pub, crate, super or private, as tokensave reads it
+  vis TEXT NOT NULL DEFAULT 'private'
 );
 CREATE INDEX symbols_name ON symbols (name COLLATE NOCASE);
 CREATE INDEX symbols_file ON symbols (file_id);
@@ -55,9 +58,16 @@ CREATE TABLE scopes (
   dir TEXT NOT NULL,
   refreshed INTEGER NOT NULL
 );
+-- tokensave's nodes_fts (src/db/migrations.rs): the same columns, weighted 10, 5, 1, 2, 3 by the
+-- queries, the same tokenizer; the rowid is the symbol's id.
 CREATE VIRTUAL TABLE sym_fts USING fts5(
-  name, parent, doc, path,
-  tokenize = 'unicode61 remove_diacritics 2'
+  name, qualified, doc, sig, terms,
+  tokenize = 'porter unicode61'
+);
+-- tokensave's executable_body_fts: the body of each function and method, the rowid its id.
+CREATE VIRTUAL TABLE body_fts USING fts5(
+  path UNINDEXED, body,
+  tokenize = 'unicode61'
 );
 ";
 
@@ -73,7 +83,7 @@ pub fn open(path: &Path) -> Result<Connection> {
     let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
     if version != SCHEMA {
         conn.execute_batch(
-            "DROP TABLE IF EXISTS sym_fts; DROP TABLE IF EXISTS edges; DROP TABLE IF EXISTS symbols;
+            "DROP TABLE IF EXISTS sym_fts; DROP TABLE IF EXISTS body_fts; DROP TABLE IF EXISTS edges; DROP TABLE IF EXISTS symbols;
              DROP TABLE IF EXISTS files; DROP TABLE IF EXISTS scopes;",
         )?;
         conn.execute_batch(TABLES)?;
@@ -92,10 +102,12 @@ pub fn scope_of(dir: &Path) -> String {
 
 /// Everything a scope holds.
 pub fn drop_scope(conn: &Connection, scope: &str) -> Result<()> {
-    conn.execute(
-        "DELETE FROM sym_fts WHERE rowid IN (SELECT id FROM symbols WHERE scope = ?1)",
-        [scope],
-    )?;
+    for fts in ["sym_fts", "body_fts"] {
+        conn.execute(
+            &format!("DELETE FROM {fts} WHERE rowid IN (SELECT id FROM symbols WHERE scope = ?1)"),
+            [scope],
+        )?;
+    }
     conn.execute("DELETE FROM edges WHERE scope = ?1", [scope])?;
     conn.execute("DELETE FROM symbols WHERE scope = ?1", [scope])?;
     conn.execute("DELETE FROM files WHERE scope = ?1", [scope])?;
@@ -106,7 +118,7 @@ pub fn drop_scope(conn: &Connection, scope: &str) -> Result<()> {
 /// Everything in the database.
 pub fn wipe(conn: &Connection) -> Result<()> {
     conn.execute_batch(
-        "DELETE FROM sym_fts; DELETE FROM edges; DELETE FROM symbols; DELETE FROM files; DELETE FROM scopes;",
+        "DELETE FROM sym_fts; DELETE FROM body_fts; DELETE FROM edges; DELETE FROM symbols; DELETE FROM files; DELETE FROM scopes;",
     )?;
     Ok(())
 }

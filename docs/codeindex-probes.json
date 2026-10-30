@@ -1,0 +1,1240 @@
+{
+  "commit": "303fb5f2",
+  "readRadius": 20,
+  "readMax": 10,
+  "worktree": [
+    {
+      "file": "src-tauri/src/codeindex/mod.rs",
+      "from": "pub fn tokens_of(",
+      "to": "pub fn estimated_tokens("
+    },
+    {
+      "file": "src-tauri/src/codeindex/api.rs",
+      "from": "tokens_of",
+      "to": "estimated_tokens"
+    }
+  ],
+  "fresh": {
+    "file": "src-tauri/src/codeindex/store.rs",
+    "append": "\n/// Added by the probes bench just before the call.\npub fn probe_fresh_marker() -> u32 {\n    42\n}\n"
+  },
+  "probes": [
+    {
+      "id": "cas-memoire-en",
+      "tool": "index_context",
+      "lang": "rust",
+      "tags": ["cas-2026-10-29", "en"],
+      "question": "Where the memory limit of a plugin is checked",
+      "args": {
+        "task": "where is the memory limit of a plugin checked",
+        "codeWords": "plugin memory limit check stop"
+      },
+      "expect": ["src-tauri/src/plugins/runtime.rs:1108-1133|src-tauri/src/plugins/runtime.rs:996"],
+      "grep": [
+        {
+          "pattern": "memory",
+          "paths": ["src-tauri/src/plugins"],
+          "args": ["-i"]
+        }
+      ]
+    },
+    {
+      "id": "cas-memoire-fr",
+      "tool": "index_context",
+      "lang": "rust",
+      "tags": ["cas-2026-10-29", "fr"],
+      "question": "Où la limite de mémoire d'un plugin est vérifiée",
+      "args": {
+        "task": "où la limite de mémoire d'un plugin est vérifiée",
+        "codeWords": "plugin memory limit check stop"
+      },
+      "expect": ["src-tauri/src/plugins/runtime.rs:1108-1133|src-tauri/src/plugins/runtime.rs:996"],
+      "grep": [
+        {
+          "pattern": "memory",
+          "paths": ["src-tauri/src/plugins"],
+          "args": ["-i"]
+        }
+      ]
+    },
+    {
+      "id": "cas-forget",
+      "tool": "index_callers",
+      "lang": "rust",
+      "tags": ["cas-2026-10-29", "homonyme"],
+      "question": "Qui appelle Runtime::forget",
+      "args": {
+        "name": "forget",
+        "path": "src-tauri/src/plugins/runtime.rs"
+      },
+      "expect": [
+        "src-tauri/src/plugins/runtime.rs:541",
+        "src-tauri/src/commands.rs:328",
+        "src-tauri/src/commands.rs:348",
+        "src-tauri/src/commands.rs:388",
+        "src-tauri/src/commands.rs:433",
+        "src-tauri/src/plugins/runtime.rs:410",
+        "src-tauri/src/plugins_runtime_tests.rs:594",
+        "src-tauri/src/plugins_runtime_tests.rs:601"
+      ],
+      "grep": [
+        {
+          "pattern": "\\.forget\\(|fn forget\\(",
+          "paths": ["src-tauri/src"]
+        }
+      ]
+    },
+    {
+      "id": "rs-search-tokens_of",
+      "tool": "index_search",
+      "lang": "rust",
+      "question": "La définition de tokens_of",
+      "args": {
+        "query": "tokens_of"
+      },
+      "expect": ["src-tauri/src/codeindex/mod.rs:202-205"],
+      "grep": [
+        {
+          "pattern": "fn tokens_of",
+          "paths": ["src-tauri/src"]
+        }
+      ]
+    },
+    {
+      "id": "rs-callers-tokens_of",
+      "tool": "index_callers",
+      "lang": "rust",
+      "question": "Qui appelle tokens_of",
+      "args": {
+        "name": "tokens_of"
+      },
+      "expect": ["src-tauri/src/codeindex/mod.rs:202-205", "src-tauri/src/codeindex/api.rs:594", "src-tauri/src/codeindex/api.rs:595"],
+      "grep": [
+        {
+          "pattern": "tokens_of\\(",
+          "paths": ["src-tauri/src"]
+        }
+      ]
+    },
+    {
+      "id": "rs-search-saving",
+      "tool": "index_search",
+      "lang": "rust",
+      "question": "La structure Saving",
+      "args": {
+        "query": "Saving",
+        "kind": "struct"
+      },
+      "expect": ["src-tauri/src/codeindex/api.rs:13-26"],
+      "grep": [
+        {
+          "pattern": "struct Saving",
+          "paths": ["src-tauri/src"]
+        }
+      ]
+    },
+    {
+      "id": "rs-callees-ensure_fresh",
+      "tool": "index_callees",
+      "lang": "rust",
+      "tags": ["homonyme"],
+      "question": "Ce qu'appelle Service::ensure_fresh",
+      "args": {
+        "name": "ensure_fresh",
+        "path": "src-tauri/src/codeindex/mod.rs"
+      },
+      "expect": [
+        "src-tauri/src/codeindex/mod.rs:135",
+        "src-tauri/src/codeindex/mod.rs:67",
+        "src-tauri/src/codeindex/mod.rs:118",
+        "src-tauri/src/codeindex/mod.rs:111",
+        "src-tauri/src/codeindex/store.rs:65",
+        "src-tauri/src/codeindex/scan.rs:46",
+        "src-tauri/src/codeindex/scan.rs:29"
+      ],
+      "grep": [
+        {
+          "pattern": "fn ensure_fresh",
+          "paths": ["src-tauri/src"]
+        },
+        {
+          "pattern": "fn (scope|lock|db|open|refresh|merge)\\b",
+          "paths": ["src-tauri/src/codeindex"]
+        }
+      ]
+    },
+    {
+      "id": "rs-callees-task_context",
+      "tool": "index_callees",
+      "lang": "rust",
+      "question": "Ce qu'appelle Reader::task_context",
+      "args": {
+        "name": "task_context",
+        "path": "src-tauri/src/codeindex/api.rs"
+      },
+      "expect": [
+        "src-tauri/src/codeindex/api.rs:197",
+        "src-tauri/src/codeindex/api.rs:632",
+        "src-tauri/src/codeindex/api.rs:161",
+        "src-tauri/src/codeindex/api.rs:623",
+        "src-tauri/src/codeindex/api.rs:339",
+        "src-tauri/src/codeindex/api.rs:320",
+        "src-tauri/src/codeindex/api.rs:261",
+        "src-tauri/src/codeindex/api.rs:576"
+      ],
+      "grep": [
+        {
+          "pattern": "fn task_context",
+          "paths": ["src-tauri/src"]
+        },
+        {
+          "pattern": "fn (words|fts|is_callable|callees_of|caller_hits|lines|saving)\\b",
+          "paths": ["src-tauri/src/codeindex/api.rs"]
+        }
+      ]
+    },
+    {
+      "id": "rs-impact-scope_of",
+      "tool": "index_impact",
+      "lang": "rust",
+      "tags": ["homonyme"],
+      "question": "Ce que toucherait un changement de store::scope_of",
+      "args": {
+        "target": "scope_of",
+        "depth": 2
+      },
+      "expect": [
+        "src-tauri/src/codeindex/store.rs:86",
+        "src-tauri/src/codeindex/mod.rs:71",
+        "src-tauri/src/codeindex/mod.rs:136",
+        "src-tauri/src/codeindex/mod.rs:165",
+        "src-tauri/src/codeindex_tests.rs:613"
+      ],
+      "grep": [
+        {
+          "pattern": "scope_of\\(",
+          "paths": ["src-tauri/src"]
+        },
+        {
+          "pattern": "\\.scope\\(\\)",
+          "paths": ["src-tauri/src"]
+        }
+      ]
+    },
+    {
+      "id": "rs-impact-tokens_of",
+      "tool": "index_impact",
+      "lang": "rust",
+      "question": "Ce que toucherait un changement de tokens_of",
+      "args": {
+        "target": "tokens_of",
+        "depth": 2
+      },
+      "expect": [
+        "src-tauri/src/codeindex/mod.rs:202-205",
+        "src-tauri/src/codeindex/api.rs:594-595",
+        "src-tauri/src/codeindex/api.rs:154",
+        "src-tauri/src/codeindex/api.rs:256",
+        "src-tauri/src/codeindex/api.rs:383",
+        "src-tauri/src/codeindex/api.rs:429",
+        "src-tauri/src/codeindex/api.rs:553"
+      ],
+      "grep": [
+        {
+          "pattern": "tokens_of\\(",
+          "paths": ["src-tauri/src"]
+        },
+        {
+          "pattern": "\\.saving\\(",
+          "paths": ["src-tauri/src"]
+        }
+      ]
+    },
+    {
+      "id": "rs-impact-hint-file",
+      "tool": "index_impact",
+      "lang": "rust",
+      "question": "Ce que toucherait un changement de codeindex/hint.rs",
+      "args": {
+        "target": "src-tauri/src/codeindex/hint.rs",
+        "depth": 1
+      },
+      "expect": [
+        "src-tauri/src/codeindex/hint.rs",
+        "src-tauri/src/codeindex/wiring.rs:129|src-tauri/src/codeindex/wiring.rs",
+        "src-tauri/src/core.rs:5741|src-tauri/src/core.rs",
+        "src-tauri/src/discussion.rs:373|src-tauri/src/discussion.rs",
+        "src-tauri/src/tickets.rs:1995|src-tauri/src/tickets.rs"
+      ],
+      "grep": [
+        {
+          "pattern": "hint::",
+          "paths": ["src-tauri/src"]
+        }
+      ]
+    },
+    {
+      "id": "rs-homonyme-new",
+      "tool": "index_callers",
+      "lang": "rust",
+      "tags": ["homonyme"],
+      "question": "Qui appelle codeindex::Service::new",
+      "args": {
+        "name": "new",
+        "path": "src-tauri/src/codeindex/mod.rs"
+      },
+      "expect": [
+        "src-tauri/src/codeindex/mod.rs:104",
+        "src-tauri/src/core.rs:1817",
+        "src-tauri/src/codeindex_tests.rs:299",
+        "src-tauri/src/codeindex_tests.rs:1047"
+      ],
+      "grep": [
+        {
+          "pattern": "Service::new\\(",
+          "paths": ["src-tauri/src"]
+        }
+      ]
+    },
+    {
+      "id": "rs-homonyme-load",
+      "tool": "index_callers",
+      "lang": "rust",
+      "tags": ["homonyme"],
+      "question": "Qui appelle workflowfiles::load",
+      "args": {
+        "name": "load",
+        "path": "src-tauri/src/workflowfiles.rs"
+      },
+      "expect": [
+        "src-tauri/src/workflowfiles.rs:507",
+        "src-tauri/src/workflowfiles.rs:425",
+        "src-tauri/src/workflowfiles.rs:427",
+        "src-tauri/src/workflowfiles.rs:736",
+        "src-tauri/src/workflowfiles.rs:737"
+      ],
+      "grep": [
+        {
+          "pattern": "workflowfiles::load\\(|[^_.:a-zA-Z]load\\(",
+          "paths": ["src-tauri/src"]
+        }
+      ]
+    },
+    {
+      "id": "rs-homonyme-place",
+      "tool": "index_callers",
+      "lang": "rust",
+      "tags": ["homonyme"],
+      "question": "Qui appelle integrations::secrets::place",
+      "args": {
+        "name": "place",
+        "path": "src-tauri/src/integrations/secrets.rs"
+      },
+      "expect": [
+        "src-tauri/src/integrations/secrets.rs:211",
+        "src-tauri/src/integrations/secrets.rs:330",
+        "src-tauri/src/integrations/sync.rs:662"
+      ],
+      "grep": [
+        {
+          "pattern": "secrets::place\\(|[^_.:a-zA-Z]place\\(",
+          "paths": ["src-tauri/src/integrations"]
+        }
+      ]
+    },
+    {
+      "id": "rs-notion-timing-en",
+      "tool": "index_context",
+      "lang": "rust",
+      "tags": ["notion", "en"],
+      "question": "How the MCP server protects its secrets against timing attacks",
+      "args": {
+        "task": "protect the MCP server's secrets against timing attacks",
+        "codeWords": "mcp token compare constant time"
+      },
+      "expect": ["src-tauri/src/mcp/mod.rs:122-148"],
+      "grep": [
+        {
+          "pattern": "timing|constant.time|ct_eq",
+          "paths": ["src-tauri/src"],
+          "args": ["-i"]
+        }
+      ]
+    },
+    {
+      "id": "rs-notion-gap-fr",
+      "tool": "index_context",
+      "lang": "rust",
+      "tags": ["notion", "fr"],
+      "question": "À quelle fréquence au plus l'index revérifie les fichiers",
+      "args": {
+        "task": "à quelle fréquence au plus l'index revérifie-t-il les fichiers",
+        "codeWords": "index refresh files check minimum gap"
+      },
+      "expect": ["src-tauri/src/codeindex/mod.rs:50-51|src-tauri/src/codeindex/mod.rs:132-158"],
+      "grep": [
+        {
+          "pattern": "gap|interval|debounce",
+          "paths": ["src-tauri/src/codeindex"],
+          "args": ["-i"]
+        }
+      ]
+    },
+    {
+      "id": "rs-notion-gap-en",
+      "tool": "index_context",
+      "lang": "rust",
+      "tags": ["notion", "en"],
+      "question": "How often at most the index checks the files again",
+      "args": {
+        "task": "how often at most does the index check the files again",
+        "codeWords": "index refresh files check minimum gap"
+      },
+      "expect": ["src-tauri/src/codeindex/mod.rs:50-51|src-tauri/src/codeindex/mod.rs:132-158"],
+      "grep": [
+        {
+          "pattern": "gap|interval|debounce",
+          "paths": ["src-tauri/src/codeindex"],
+          "args": ["-i"]
+        }
+      ]
+    },
+    {
+      "id": "rs-context-hint-en",
+      "tool": "index_context",
+      "lang": "rust",
+      "tags": ["en"],
+      "question": "Which grep searches the hooks send to the code index",
+      "args": {
+        "task": "which grep searches are sent to the code index by the hooks",
+        "codeWords": "hook grep pattern symbol index hint"
+      },
+      "expect": ["src-tauri/src/codeindex/hint.rs:171", "src-tauri/src/codeindex/hint.rs:214|src-tauri/src/codeindex/hint.rs:77"],
+      "grep": [
+        {
+          "pattern": "grep",
+          "paths": ["src-tauri/src/codeindex"],
+          "args": ["-i", "-l"]
+        },
+        {
+          "pattern": "pub fn ",
+          "paths": ["src-tauri/src/codeindex/hint.rs"]
+        }
+      ]
+    },
+    {
+      "id": "ts-search-tip-place",
+      "tool": "index_search",
+      "lang": "ts",
+      "tags": ["homonyme"],
+      "question": "La fonction place des infobulles",
+      "args": {
+        "query": "tip place"
+      },
+      "expect": ["src/lib/tip.ts:292"],
+      "grep": [
+        {
+          "pattern": "function place\\b",
+          "paths": ["src"]
+        }
+      ]
+    },
+    {
+      "id": "ts-callers-tip-place",
+      "tool": "index_callers",
+      "lang": "ts",
+      "tags": ["homonyme"],
+      "question": "Qui appelle place de src/lib/tip.ts",
+      "args": {
+        "name": "place",
+        "path": "src/lib/tip.ts"
+      },
+      "expect": [
+        "src/lib/tip.ts:292",
+        "src/lib/tip.ts:187",
+        "src/lib/tip.test.ts:463",
+        "src/lib/tip.test.ts:467",
+        "src/lib/tip.test.ts:471",
+        "src/lib/tip.test.ts:472"
+      ],
+      "grep": [
+        {
+          "pattern": "\\bplace\\(",
+          "paths": ["src"]
+        }
+      ]
+    },
+    {
+      "id": "ts-callees-definitions",
+      "tool": "index_callees",
+      "lang": "ts",
+      "tags": ["homonyme"],
+      "question": "Ce qu'appelle definitions de l'éditeur",
+      "args": {
+        "name": "definitions",
+        "path": "src/lib/editor/definitions.ts"
+      },
+      "expect": [
+        "src/lib/editor/definitions.ts:414",
+        "src/lib/editor/definitions.ts:40",
+        "src/lib/editor/definitions.ts:283",
+        "src/lib/editor/definitions.ts:297",
+        "src/lib/editor/definitions.ts:310",
+        "src/lib/editor/definitions.ts:315",
+        "src/lib/editor/definitions.ts:365",
+        "src/lib/editor/definitions.ts:387"
+      ],
+      "grep": [
+        {
+          "pattern": "function definitions\\b",
+          "paths": ["src/lib"]
+        },
+        {
+          "pattern": "(function|const) (familyOf|nearest|definitionsIn|treeOf|searched|importedFrom|place)\\b",
+          "paths": ["src/lib/editor"]
+        }
+      ]
+    },
+    {
+      "id": "ts-impact-definitions-file",
+      "tool": "index_impact",
+      "lang": "ts",
+      "question": "Ce que toucherait un changement de src/lib/editor/definitions.ts",
+      "args": {
+        "target": "src/lib/editor/definitions.ts",
+        "depth": 1
+      },
+      "expect": ["src/lib/editor/definitions.ts", "src/components/editor/EditorView.svelte", "src/lib/editor/definitions.test.ts"],
+      "grep": [
+        {
+          "pattern": "editor/definitions'|\\./definitions'",
+          "paths": ["src"]
+        }
+      ]
+    },
+    {
+      "id": "ts-context-tooltip-en",
+      "tool": "index_context",
+      "lang": "ts",
+      "tags": ["en"],
+      "question": "How a tooltip is positioned so it stays inside the window",
+      "args": {
+        "task": "position a tooltip so that it stays inside the window",
+        "codeWords": "tooltip position viewport"
+      },
+      "expect": ["src/lib/tip.ts:292-312|src/lib/tip.ts:180-190|src/lib/tip.ts:279-290"],
+      "grep": [
+        {
+          "pattern": "tooltip|innerWidth",
+          "paths": ["src/lib"],
+          "args": ["-i"]
+        }
+      ]
+    },
+    {
+      "id": "svelte-search-planbanner",
+      "tool": "index_search",
+      "lang": "svelte",
+      "question": "Le composant PlanBanner",
+      "args": {
+        "query": "PlanBanner"
+      },
+      "expect": ["src/components/PlanBanner.svelte"],
+      "grep": [
+        {
+          "pattern": "",
+          "paths": ["src"],
+          "args": ["--files", "-g", "*PlanBanner*"]
+        }
+      ]
+    },
+    {
+      "id": "svelte-callers-planbanner",
+      "tool": "index_callers",
+      "lang": "svelte",
+      "question": "Où le composant PlanBanner est utilisé",
+      "args": {
+        "name": "PlanBanner"
+      },
+      "expect": ["src/components/PlanBanner.svelte", "src/components/Conversation.svelte:778"],
+      "grep": [
+        {
+          "pattern": "<PlanBanner",
+          "paths": ["src"]
+        },
+        {
+          "pattern": "",
+          "paths": ["src"],
+          "args": ["--files", "-g", "PlanBanner.svelte"]
+        }
+      ]
+    },
+    {
+      "id": "svelte-context-banner-fr",
+      "tool": "index_context",
+      "lang": "svelte",
+      "tags": ["fr"],
+      "question": "Le bandeau du plan au-dessus de la conversation",
+      "args": {
+        "task": "le bandeau du plan affiché dans la conversation",
+        "codeWords": "plan banner conversation"
+      },
+      "expect": ["src/components/PlanBanner.svelte"],
+      "grep": [
+        {
+          "pattern": "",
+          "paths": ["src/components"],
+          "args": ["--files", "-g", "*Banner*"]
+        }
+      ]
+    },
+    {
+      "id": "vue-search-plugintile",
+      "tool": "index_search",
+      "lang": "vue",
+      "question": "Le composant PluginTile du store",
+      "args": {
+        "query": "PluginTile"
+      },
+      "expect": ["store/app/components/PluginTile.vue"],
+      "grep": [
+        {
+          "pattern": "",
+          "paths": ["store/app"],
+          "args": ["--files", "-g", "*PluginTile*"]
+        }
+      ]
+    },
+    {
+      "id": "vue-callers-hueOf",
+      "tool": "index_callers",
+      "lang": "vue",
+      "question": "Qui appelle hueOf (store)",
+      "args": {
+        "name": "hueOf"
+      },
+      "expect": [
+        "store/shared/tile.ts:5",
+        "store/app/components/StoreAccount.vue:173",
+        "store/app/components/StoreAccount.vue:190",
+        "store/app/components/StoreAccount.vue:203",
+        "store/app/components/StoreAccount.vue:252",
+        "store/app/components/StoreAccount.vue:317",
+        "store/server/utils/listing.ts:248"
+      ],
+      "grep": [
+        {
+          "pattern": "hueOf\\(",
+          "paths": ["store"]
+        }
+      ]
+    },
+    {
+      "id": "vue-context-tile-en",
+      "tool": "index_context",
+      "lang": "vue",
+      "tags": ["en"],
+      "question": "Where the store tints a plugin's tile from its id",
+      "args": {
+        "task": "where the store tints the tile of a plugin from its id",
+        "codeWords": "store plugin tile hue id"
+      },
+      "expect": ["store/shared/tile.ts:4-10", "store/app/components/PluginTile.vue"],
+      "grep": [
+        {
+          "pattern": "hue",
+          "paths": ["store/app", "store/shared"],
+          "args": ["-i"]
+        }
+      ]
+    },
+    {
+      "id": "md-search-socle",
+      "tool": "index_search",
+      "lang": "md",
+      "tags": ["fr"],
+      "question": "La section « Le socle d'index local » de FACTORY.md",
+      "args": {
+        "query": "socle index local"
+      },
+      "expect": ["docs/FACTORY.md:56"],
+      "grep": [
+        {
+          "pattern": "socle",
+          "paths": ["docs"],
+          "args": ["-i"]
+        }
+      ]
+    },
+    {
+      "id": "md-context-allumer-fr",
+      "tool": "index_context",
+      "lang": "md",
+      "tags": ["fr"],
+      "question": "Comment allumer l'index du code sur tous les projets",
+      "args": {
+        "task": "comment allumer l'index du code sur tous les projets",
+        "codeWords": "code index setting every project"
+      },
+      "expect": ["website/content/docs/fr/code-index.md:18-39|website/content/docs/en/code-index.md:18-39"],
+      "grep": [
+        {
+          "pattern": "index du code",
+          "paths": ["website/content/docs/fr"],
+          "args": ["-i"]
+        }
+      ]
+    },
+    {
+      "id": "md-context-turnon-en",
+      "tool": "index_context",
+      "lang": "md",
+      "tags": ["en"],
+      "question": "How to turn the code index on for every project",
+      "args": {
+        "task": "how to turn on the code index on every project",
+        "codeWords": "code index setting every project"
+      },
+      "expect": ["website/content/docs/en/code-index.md:18-39|website/content/docs/fr/code-index.md:18-39"],
+      "grep": [
+        {
+          "pattern": "code index",
+          "paths": ["website/content/docs/en"],
+          "args": ["-i"]
+        }
+      ]
+    },
+    {
+      "id": "tache-modeles-harness",
+      "tool": "index_context",
+      "lang": "rust",
+      "tags": ["tâche"],
+      "question": "où est la fonction qui liste les modèles d'un harness",
+      "args": {
+        "task": "où est la fonction qui liste les modèles d'un harness",
+        "codeWords": "list the models of an engine"
+      },
+      "expect": ["src-tauri/src/engine/mod.rs:471|src-tauri/src/engine/mod.rs:492|src-tauri/src/core.rs:3414"],
+      "grep": [
+        {
+          "pattern": "fn .*models",
+          "paths": ["src-tauri/src/engine"]
+        }
+      ],
+      "blind": [
+        {
+          "pattern": "list.*models",
+          "paths": ["."],
+          "args": ["-i"]
+        }
+      ]
+    },
+    {
+      "id": "tache-compte-limite",
+      "tool": "index_context",
+      "lang": "rust",
+      "tags": ["tâche", "réel"],
+      "question": "où un agent de ticket passe sur un autre compte quand il atteint la limite",
+      "args": {
+        "task": "où un agent de ticket passe sur un autre compte quand il atteint la limite",
+        "codeWords": "switch account when ticket agent hits usage limit"
+      },
+      "expect": ["src-tauri/src/tickets.rs:2211-2216|src-tauri/src/switching.rs:140-145"],
+      "grep": [
+        {
+          "pattern": "switch_on_limit|switchOnLimit",
+          "paths": ["src-tauri/src/"]
+        }
+      ],
+      "blind": [
+        {
+          "pattern": "switch.*account|account.*limit",
+          "paths": ["."],
+          "args": ["-i"]
+        }
+      ]
+    },
+    {
+      "id": "tache-mcp-codex",
+      "tool": "index_context",
+      "lang": "rust",
+      "tags": ["tâche"],
+      "question": "où la déclaration du serveur MCP d'Escouade est écrite dans la config de Codex",
+      "args": {
+        "task": "où la déclaration du serveur MCP d'Escouade est écrite dans la config de Codex",
+        "codeWords": "write escouade mcp server entry into codex config toml"
+      },
+      "expect": ["src-tauri/src/engine/userconfig.rs:125|src-tauri/src/engine/userconfig.rs:195", "src-tauri/src/engine/codex/mod.rs:552"],
+      "grep": [
+        {
+          "pattern": "mcp_servers",
+          "paths": ["src-tauri/src/engine"]
+        }
+      ],
+      "blind": [
+        {
+          "pattern": "codex.*mcp|mcp.*codex",
+          "paths": ["."],
+          "args": ["-i"]
+        }
+      ]
+    },
+    {
+      "id": "tache-branche-premier-message",
+      "tool": "index_context",
+      "lang": "rust",
+      "tags": ["tâche"],
+      "question": "où le nom de branche d'un worktree est choisi au premier message",
+      "args": {
+        "task": "où le nom de branche d'un worktree est choisi au premier message",
+        "codeWords": "name worktree branch from first message pending worktree"
+      },
+      "expect": ["src-tauri/src/core.rs:6299-6310|src-tauri/src/core.rs:4684-4688|src-tauri/src/core.rs:6776"],
+      "grep": [
+        {
+          "pattern": "premier message|first message",
+          "paths": ["src-tauri/src/"],
+          "args": ["-i"]
+        }
+      ],
+      "blind": [
+        {
+          "pattern": "branch name|first message",
+          "paths": ["."],
+          "args": ["-i"]
+        }
+      ]
+    },
+    {
+      "id": "tache-reprise-limite",
+      "tool": "index_context",
+      "lang": "rust",
+      "tags": ["tâche", "réel"],
+      "question": "où la reprise automatique après la limite d'usage est planifiée",
+      "args": {
+        "task": "où la reprise automatique après la limite d'usage est planifiée",
+        "codeWords": "plan automatic resume after usage limit reset"
+      },
+      "expect": ["src-tauri/src/core.rs:4280-4300"],
+      "grep": [
+        {
+          "pattern": "plan_resume\\(|rateLimits/updated|limited",
+          "paths": ["src-tauri/src/"]
+        }
+      ],
+      "blind": [
+        {
+          "pattern": "auto.?resume|resume.*limit",
+          "paths": ["."],
+          "args": ["-i"]
+        }
+      ]
+    },
+    {
+      "id": "tache-zoom-borne",
+      "tool": "index_context",
+      "lang": "rust",
+      "tags": ["tâche", "réel"],
+      "question": "où le zoom de l'interface est borné",
+      "args": {
+        "task": "où le zoom de l'interface est borné",
+        "codeWords": "clamp interface zoom levels"
+      },
+      "expect": [
+        "src-tauri/src/model.rs:221|src-tauri/src/model.rs:244-255|src-tauri/src/model.rs:515-522|src/lib/display.svelte.ts:16-30"
+      ],
+      "grep": [
+        {
+          "pattern": "fontSize|font_size|zoom|--font-size|uiScale",
+          "paths": ["src", "src-tauri/src/"]
+        }
+      ],
+      "blind": [
+        {
+          "pattern": "zoom",
+          "paths": ["."],
+          "args": ["-i"]
+        }
+      ]
+    },
+    {
+      "id": "tache-xterm-couleurs",
+      "tool": "index_context",
+      "lang": "rust",
+      "tags": ["tâche"],
+      "question": "où xterm prend ses couleurs",
+      "args": {
+        "task": "où xterm prend ses couleurs",
+        "codeWords": "xterm terminal theme colors"
+      },
+      "expect": ["src/lib/terminals.ts:84-124"],
+      "grep": [
+        {
+          "pattern": "ITheme|theme:",
+          "paths": ["src"]
+        }
+      ],
+      "blind": [
+        {
+          "pattern": "xterm.*colou?r",
+          "paths": ["."],
+          "args": ["-i"]
+        }
+      ]
+    },
+    {
+      "id": "tache-lance-processus",
+      "tool": "index_context",
+      "lang": "rust",
+      "tags": ["tâche", "réel"],
+      "question": "qui lance le processus d'un agent",
+      "args": {
+        "task": "qui lance le processus d'un agent",
+        "codeWords": "spawn agent process start"
+      },
+      "expect": ["src-tauri/src/core.rs:2934-2960|src-tauri/src/engine/claude/mod.rs:642|src-tauri/src/engine/claude/process.rs:40"],
+      "grep": [
+        {
+          "pattern": "fn (build_args|spawn_args|claude_args|args_for)",
+          "paths": ["src-tauri/src/"]
+        },
+        {
+          "pattern": "fn spawn",
+          "paths": ["src-tauri/src/engine/claude"]
+        }
+      ],
+      "blind": [
+        {
+          "pattern": "spawn.*agent|agent.*process",
+          "paths": ["."],
+          "args": ["-i"]
+        }
+      ]
+    },
+    {
+      "id": "tache-taille-terminal",
+      "tool": "index_context",
+      "lang": "rust",
+      "tags": ["tâche", "réel"],
+      "question": "où la taille d'un terminal suit celle de son panneau",
+      "args": {
+        "task": "où la taille d'un terminal suit celle de son panneau",
+        "codeWords": "resize terminal fit container ResizeObserver"
+      },
+      "expect": ["src/components/AgentTerminal.svelte:145-160|src/components/TerminalView.svelte:22-35|src/lib/terminals.ts:641-660"],
+      "grep": [
+        {
+          "pattern": "fit\\(\\)|fitAddon|ResizeObserver|proposeDimensions",
+          "paths": ["src"]
+        }
+      ],
+      "blind": [
+        {
+          "pattern": "terminal.*(resize|size)",
+          "paths": ["."],
+          "args": ["-i"]
+        }
+      ]
+    },
+    {
+      "id": "tache-ticket-termine",
+      "tool": "index_context",
+      "lang": "rust",
+      "tags": ["tâche", "réel"],
+      "question": "où un ticket validé passe dans la colonne Terminé",
+      "args": {
+        "task": "où un ticket validé passe dans la colonne Terminé",
+        "codeWords": "move approved ticket to done column"
+      },
+      "expect": ["src-tauri/src/tickets.rs:2940-2952|src-tauri/src/tickets.rs:2755"],
+      "grep": [
+        {
+          "pattern": "Column::Done",
+          "paths": ["src-tauri/src/"]
+        }
+      ],
+      "blind": [
+        {
+          "pattern": "done column|move.*done",
+          "paths": ["."],
+          "args": ["-i"]
+        }
+      ]
+    },
+    {
+      "id": "tache-langue-defaut",
+      "tool": "index_context",
+      "lang": "rust",
+      "tags": ["tâche"],
+      "question": "où la langue de l'interface est choisie par défaut d'après le système",
+      "args": {
+        "task": "où la langue de l'interface est choisie par défaut d'après le système",
+        "codeWords": "default interface language from system locale"
+      },
+      "expect": ["src-tauri/src/i18n.rs:85-94"],
+      "grep": [
+        {
+          "pattern": "sys_locale|locale",
+          "paths": ["src-tauri/src/"]
+        }
+      ],
+      "blind": [
+        {
+          "pattern": "default language|system language",
+          "paths": ["."],
+          "args": ["-i"]
+        }
+      ]
+    },
+    {
+      "id": "tache-permission-plugin",
+      "tool": "index_context",
+      "lang": "rust",
+      "tags": ["tâche"],
+      "question": "où retirer une permission à un plugin le relance sans elle",
+      "args": {
+        "task": "où retirer une permission à un plugin le relance sans elle",
+        "codeWords": "plugin set permission restart without it"
+      },
+      "expect": ["src-tauri/src/commands.rs:412-435"],
+      "grep": [
+        {
+          "pattern": "permission",
+          "paths": ["src-tauri/src/plugins"],
+          "args": ["-i", "-l"]
+        },
+        {
+          "pattern": "fn .*permission",
+          "paths": ["src-tauri/src/"]
+        }
+      ],
+      "blind": [
+        {
+          "pattern": "plugin.*permission",
+          "paths": ["."],
+          "args": ["-i"]
+        }
+      ]
+    },
+    {
+      "id": "tache-store-controles",
+      "tool": "index_context",
+      "lang": "rust",
+      "tags": ["tâche"],
+      "question": "où le store vérifie l'archive d'un plugin soumis",
+      "args": {
+        "task": "où le store vérifie l'archive d'un plugin soumis",
+        "codeWords": "store run checks on submitted plugin archive"
+      },
+      "expect": ["store/server/utils/checks.ts:835|store/server/utils/submissions.ts:240"],
+      "grep": [
+        {
+          "pattern": "checks|archive",
+          "paths": ["store/server/utils"],
+          "args": ["-i", "-l"]
+        },
+        {
+          "pattern": "export (async )?function (run|check)",
+          "paths": ["store/server/utils"]
+        }
+      ],
+      "blind": [
+        {
+          "pattern": "submi.*check|check.*archive",
+          "paths": ["."],
+          "args": ["-i"]
+        }
+      ]
+    },
+    {
+      "id": "tache-sauvegarde-etat",
+      "tool": "index_context",
+      "lang": "rust",
+      "tags": ["tâche", "réel"],
+      "question": "où l'état de l'app est écrit sur le disque en différé",
+      "args": {
+        "task": "où l'état de l'app est écrit sur le disque en différé",
+        "codeWords": "save app state to disk when dirty"
+      },
+      "expect": ["src-tauri/src/core.rs:1995-2005|src-tauri/src/core.rs:2125-2140"],
+      "grep": [
+        {
+          "pattern": "dirty\b|fn spawn_saver|fn start_saver|save_now",
+          "paths": ["src-tauri/src/"]
+        }
+      ],
+      "blind": [
+        {
+          "pattern": "save.*state|write.*disk",
+          "paths": ["."],
+          "args": ["-i"]
+        }
+      ]
+    },
+    {
+      "id": "tache-worktree-cree",
+      "tool": "index_context",
+      "lang": "rust",
+      "tags": ["tâche"],
+      "question": "où le worktree d'un agent est créé avec git",
+      "args": {
+        "task": "où le worktree d'un agent est créé avec git",
+        "codeWords": "git worktree add for agent"
+      },
+      "expect": ["src-tauri/src/git.rs:1080-1215"],
+      "grep": [
+        {
+          "pattern": "\"worktree\", \"add\"|worktree add",
+          "paths": ["src-tauri/src/"]
+        }
+      ],
+      "blind": [
+        {
+          "pattern": "create.*worktree",
+          "paths": ["."],
+          "args": ["-i"]
+        }
+      ]
+    },
+    {
+      "id": "tache-quota-compte",
+      "tool": "index_context",
+      "lang": "rust",
+      "tags": ["tâche"],
+      "question": "où le quota d'un compte est relu",
+      "args": {
+        "task": "où le quota d'un compte est relu",
+        "codeWords": "read account quota usage"
+      },
+      "expect": ["src-tauri/src/core.rs:9927-9935|src-tauri/src/core.rs:9892"],
+      "grep": [
+        {
+          "pattern": "fn .*quota",
+          "paths": ["src-tauri/src/"]
+        }
+      ],
+      "blind": [
+        {
+          "pattern": "account.*quota|quota.*account",
+          "paths": ["."],
+          "args": ["-i"]
+        }
+      ]
+    },
+    {
+      "id": "tache-cree-agent",
+      "tool": "index_context",
+      "lang": "rust",
+      "tags": ["tâche", "réel"],
+      "question": "où un nouvel agent est créé",
+      "args": {
+        "task": "où un nouvel agent est créé",
+        "codeWords": "create new agent"
+      },
+      "expect": ["src-tauri/src/core.rs:5607|src-tauri/src/core.rs:5628|src-tauri/src/core.rs:5648"],
+      "grep": [
+        {
+          "pattern": "fn create_agent_on_branch|fn create_agent\\(|pub async fn create_agent",
+          "paths": ["src-tauri/src/"]
+        }
+      ],
+      "blind": [
+        {
+          "pattern": "new agent|create.*agent",
+          "paths": ["."],
+          "args": ["-i"]
+        }
+      ]
+    },
+    {
+      "id": "wt-search-renamed",
+      "tool": "index_search",
+      "lang": "rust",
+      "tags": ["worktree"],
+      "stage": "worktree",
+      "question": "Dans un worktree où tokens_of devient estimated_tokens : sa définition",
+      "args": {
+        "query": "estimated_tokens"
+      },
+      "expect": ["src-tauri/src/codeindex/mod.rs:202-205"],
+      "grep": [
+        {
+          "pattern": "fn estimated_tokens",
+          "paths": ["src-tauri/src"]
+        }
+      ]
+    },
+    {
+      "id": "wt-callers-renamed",
+      "tool": "index_callers",
+      "lang": "rust",
+      "tags": ["worktree"],
+      "stage": "worktree",
+      "question": "Dans le worktree : qui appelle estimated_tokens",
+      "args": {
+        "name": "estimated_tokens"
+      },
+      "expect": ["src-tauri/src/codeindex/mod.rs:202-205", "src-tauri/src/codeindex/api.rs:594", "src-tauri/src/codeindex/api.rs:595"],
+      "grep": [
+        {
+          "pattern": "estimated_tokens\\(",
+          "paths": ["src-tauri/src"]
+        }
+      ]
+    },
+    {
+      "id": "wt-callers-old-name",
+      "tool": "index_callers",
+      "lang": "rust",
+      "tags": ["worktree"],
+      "stage": "worktree",
+      "question": "Dans le worktree : l'ancien nom tokens_of n'a plus ni définition ni appelant",
+      "args": {
+        "name": "tokens_of"
+      },
+      "expect": [],
+      "grep": [
+        {
+          "pattern": "tokens_of\\(",
+          "paths": ["src-tauri/src"]
+        }
+      ]
+    },
+    {
+      "id": "fresh-now",
+      "tool": "index_search",
+      "lang": "rust",
+      "tags": ["fraîcheur"],
+      "stage": "fresh",
+      "question": "Une fonction ajoutée à store.rs juste avant l'appel (dernier contrôle il y a moins de 3 s)",
+      "args": {
+        "query": "probe_fresh_marker"
+      },
+      "expect": ["src-tauri/src/codeindex/store.rs:160-165"],
+      "grep": [
+        {
+          "pattern": "fn probe_fresh_marker",
+          "paths": ["src-tauri/src"]
+        }
+      ]
+    },
+    {
+      "id": "fresh-after-gap",
+      "tool": "index_search",
+      "lang": "rust",
+      "tags": ["fraîcheur"],
+      "stage": "fresh-gap",
+      "question": "La même fonction, 3 s plus tard",
+      "args": {
+        "query": "probe_fresh_marker"
+      },
+      "expect": ["src-tauri/src/codeindex/store.rs:160-165"],
+      "grep": [
+        {
+          "pattern": "fn probe_fresh_marker",
+          "paths": ["src-tauri/src"]
+        }
+      ]
+    }
+  ]
+}

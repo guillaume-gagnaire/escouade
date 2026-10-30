@@ -17,6 +17,13 @@ import { versionFile } from '../../server/utils/versions';
 import { fakeDiscord, type FakeDiscord } from '../fake/discord.mjs';
 import { testKey } from '../fake/minisign.mjs';
 
+/** The e-mails the store sends, kept instead of sent. */
+const mails = vi.hoisted(() => [] as { to: string; subject: string }[]);
+vi.mock('../../server/utils/mail', async (actual) => ({
+  ...(await actual<typeof import('../../server/utils/mail')>()),
+  sendMail: async (_env: unknown, mail: { to: string; subject: string }) => (mails.push(mail), true),
+}));
+
 // The announcements on Discord through the real queue (docs/STORE.md §4.7, STORE-12), against a real PostgreSQL
 // (TEST_DATABASE_URL alone, emptied first; skipped without it) and a fake Discord: each event from where it happens
 // (a publication, a report, a tag moved, a signature, a revocation list) to the right channel in the right language,
@@ -255,40 +262,49 @@ describe.skipIf(!url)('the announcements on Discord', () => {
     expect(close.fields.find((f: { name: string }) => f.name === 'Proche de').value).toContain('io.github.other.ntfy');
   });
 
-  it('tells a removal to the administrators, and to the public with its public reason; a quiet one to the administrators alone', async () => {
-    await plugin('io.github.sroux.ntfy');
-    await version('io.github.sroux.ntfy', '1.0.0');
-    const list = (serial: number, entries: unknown[]) => {
-      const json = JSON.stringify({ serial, issued_at: T0.toISOString(), entries });
-      return { json, minisig: key.sign(json, `${REVOCATIONS_COMMENT} ${serial} ${T0.toISOString()}`) };
-    };
-    const disable = {
-      id: 'io.github.sroux.ntfy',
-      versions: ['1.0.0'],
-      action: 'disable',
-      reason: { fr: 'Envoie des secrets.', en: 'Sends secrets.' },
-      date: '2026-10-29',
-    };
-    expect(await depositRevocations(db, admin, keys, list(1, [disable]), null, T0)).toEqual({ serial: 1 });
-    await until(() => discord.received.length === 3);
-    expect(titles('admin')).toEqual(['Retrait d’urgence fait']);
-    expect(discord.of('fr')[0].embeds[0]).toMatchObject({
-      title: 'Plugin retiré',
-      fields: [{ name: 'Raison', value: 'Envoie des secrets\\.' }],
-    });
-    expect(discord.of('en')[0].embeds[0]).toMatchObject({
-      title: 'Plugin taken off',
-      fields: [{ name: 'Reason', value: 'Sends secrets\\.' }],
-    });
-    discord.reset();
-    // The next list keeps the entry (not told again) and adds a quiet one.
-    const quiet = { ...disable, versions: '*', reason: { fr: 'Clé volée.', en: 'Stolen key.' } };
-    expect(await depositRevocations(db, admin, keys, { ...list(2, [disable, quiet]), notify: false }, null, T0)).toEqual({ serial: 2 });
-    await until(() => discord.received.length === 1);
-    await new Promise((r) => setTimeout(r, 2500));
-    expect(discord.received).toHaveLength(1);
-    expect(JSON.stringify(discord.of('admin')[0])).toContain('non prévenus (--quiet)');
+  /** A revocation list of `entries`, signed with the test key. */
+  const list = (serial: number, entries: unknown[]) => {
+    const json = JSON.stringify({ serial, issued_at: T0.toISOString(), entries });
+    return { json, minisig: key.sign(json, `${REVOCATIONS_COMMENT} ${serial} ${T0.toISOString()}`) };
+  };
+  const entry = (action: 'disable' | 'unverify') => ({
+    id: 'io.github.sroux.ntfy',
+    versions: ['1.0.0'],
+    action,
+    reason: { fr: 'Envoie des secrets.', en: 'Sends secrets.' },
+    date: '2026-10-29',
   });
+
+  // A removal and a badge withdrawn go to the administrators and to the public, in each language with its public
+  // reason, --quiet or not: --quiet only spares the author's e-mail (docs/STORE.md §4.6, §4.7, ESC-302).
+  for (const [action, toAdmins, fr, en] of [
+    ['disable', 'Retrait d’urgence fait', 'Plugin retiré', 'Plugin taken off'],
+    ['unverify', 'Badge retiré', 'Badge retiré', 'Badge withdrawn'],
+  ] as const)
+    for (const quiet of [false, true])
+      it(`tells ${action}${quiet ? ' --quiet' : ''} to the administrators and to the public, the author ${quiet ? 'not' : 'by e-mail'}`, async () => {
+        await db.update(accounts).set({ email: 'sroux@example.com', emailVerifiedAt: T0 }).where(eq(accounts.id, author.id));
+        await plugin('io.github.sroux.ntfy');
+        await version('io.github.sroux.ntfy', '1.0.0');
+        mails.length = 0;
+        const how = { env, site: SITE };
+        expect(await depositRevocations(db, admin, keys, { ...list(1, [entry(action)]), notify: !quiet }, how, T0)).toEqual({ serial: 1 });
+        await until(() => discord.received.length === 3);
+        expect(titles('admin')).toEqual([toAdmins]);
+        const fields: { name: string; value: string }[] = discord.of('admin')[0].embeds[0].fields;
+        expect(fields.find((f) => f.name === 'Raison publique')!.value).toBe('Envoie des secrets\\.');
+        expect(fields.find((f) => f.name === 'Auteur')!.value).toBe(quiet ? 'non prévenu (--quiet)' : 'prévenu');
+        expect(discord.of('fr')[0].embeds[0]).toMatchObject({ title: fr, fields: [{ name: 'Raison', value: 'Envoie des secrets\\.' }] });
+        expect(discord.of('en')[0].embeds[0]).toMatchObject({ title: en, fields: [{ name: 'Reason', value: 'Sends secrets\\.' }] });
+        expect(mails.map((m) => m.to)).toEqual(quiet ? [] : ['sroux@example.com']);
+        // The next list keeps the entry: it is not told again, on Discord nor by e-mail.
+        discord.reset();
+        mails.length = 0;
+        expect(await depositRevocations(db, admin, keys, list(2, [entry(action)]), how, T0)).toEqual({ serial: 2 });
+        await new Promise((r) => setTimeout(r, 2500));
+        expect(discord.received).toHaveLength(0);
+        expect(mails).toEqual([]);
+      });
 
   it('waits for the Retry-After of a 429, in the queue', async () => {
     await plugin('io.github.sroux.ntfy');

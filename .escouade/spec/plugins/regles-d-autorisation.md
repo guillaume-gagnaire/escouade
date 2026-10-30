@@ -4,7 +4,7 @@ subject: "plugins"
 sources: ["docs/PLUGINS.md §1.7","docs/TODO-2.1.md (PLG-8)","schemas/plugin-protocol-1.json (permissions/decide)","website/content/docs/fr/plugins/permission-rules.md"]
 tickets: ["ESC-180"]
 decisions: []
-compared: null
+compared: "2026-10-30T01:50:33+01:00"
 ---
 
 # Règles d'autorisation des plugins

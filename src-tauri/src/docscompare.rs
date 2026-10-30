@@ -1,7 +1,9 @@
 //! The spec compared to the code (ESC-263, `docs/FACTORY.md` « La spec toujours à jour »): a short
 //! agent, which reads the code without changing anything (`Weight::Reading`), says where a page
-//! and the code disagree; what it found is written on the page (`gaps`, `compared`), which the map
-//! of the subjects and the top of the page show.
+//! and the code disagree; what it found (`gaps`, `compared`) is kept in Escouade's folder, not in
+//! the page (`Space::spec_check`, ESC-301: the page under git stays as it was, and the next
+//! validation is not refused for it), and read over the page: the map of the subjects, the top of
+//! the page and the agents' `read_spec_page` show it.
 //!
 //! - **After each ticket validated** (and merged): the pages it touches, those it wrote and those
 //!   linked to the code it changed: by the index (the symbols of its files) when the project has
@@ -411,15 +413,13 @@ impl<R: Runtime> Core<R> {
         let when = chrono::Local::now()
             .format("%Y-%m-%dT%H:%M:%S%:z")
             .to_string();
-        // What the comparison writes on the page is its gaps, not the page: `docs.gaps` says it.
+        // What the comparison finds is its gaps, not the page: `docs.gaps` says it. Kept in
+        // Escouade's folder, the page left as it is (ESC-301).
         let quiet = Space {
             facts: None,
             ..space.clone()
         };
-        quiet.spec_write(path, |p| {
-            p.gaps = gaps;
-            p.compared = when;
-        })?;
+        quiet.spec_check(path, when, gaps)?;
         self.facts.emit(
             crate::facts::Body::DocsGaps {
                 page: path.to_string(),

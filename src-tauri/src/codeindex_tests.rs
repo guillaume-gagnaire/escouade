@@ -124,6 +124,64 @@ function compute(n: number) { return n; }
         assert_eq!(calls(&p, "run"), vec!["compute"]);
     }
 
+    /// The visibility each language gives, read as tokensave's extractors read it (ESC-296).
+    #[test]
+    fn each_language_gives_the_visibility_tokensave_reads() {
+        let rs = parse(
+            "src/a.rs",
+            "pub fn open() {}\npub(crate) fn inner() {}\npub(super) fn up() {}\nfn hidden() {}\npub struct S { pub a: u32, b: u32 }\n",
+        );
+        let vis = |p: &Parsed, n: &str| find(p, n).vis;
+        assert_eq!(vis(&rs, "open"), "pub");
+        assert_eq!(vis(&rs, "inner"), "crate");
+        assert_eq!(vis(&rs, "up"), "super");
+        assert_eq!(vis(&rs, "hidden"), "private");
+        assert_eq!(vis(&rs, "a"), "pub");
+        assert_eq!(vis(&rs, "b"), "private");
+        let ts = parse(
+            "src/a.ts",
+            "export function shown() {}\nfunction kept() {}\nexport const arrow = () => 1;\nexport class C {\n  private secret(): void {}\n  protected half(): void {}\n  open(): void {}\n}\n",
+        );
+        assert_eq!(vis(&ts, "shown"), "pub");
+        assert_eq!(vis(&ts, "kept"), "private");
+        assert_eq!(vis(&ts, "arrow"), "pub");
+        assert_eq!(vis(&ts, "secret"), "private");
+        assert_eq!(vis(&ts, "half"), "super");
+        assert_eq!(vis(&ts, "open"), "pub");
+        let py = parse(
+            "a.py",
+            "def shown(): pass\ndef _kept(): pass\nclass K:\n    def __init__(self): pass\n",
+        );
+        assert_eq!(vis(&py, "shown"), "pub");
+        assert_eq!(vis(&py, "_kept"), "private");
+        assert_eq!(vis(&py, "__init__"), "pub");
+        let go = parse("a.go", "package a\nfunc Shown() {}\nfunc kept() {}\n");
+        assert_eq!(vis(&go, "Shown"), "pub");
+        assert_eq!(vis(&go, "kept"), "private");
+        let java = parse(
+            "A.java",
+            "public class A {\n  public void shown() {}\n  protected void half() {}\n  void kept() {}\n}\n",
+        );
+        assert_eq!(vis(&java, "shown"), "pub");
+        assert_eq!(vis(&java, "half"), "crate");
+        assert_eq!(vis(&java, "kept"), "private");
+        let cs = parse(
+            "A.cs",
+            "public class A {\n  internal void Inner() {}\n  void Kept() {}\n}\n",
+        );
+        assert_eq!(vis(&cs, "A"), "pub");
+        assert_eq!(vis(&cs, "Inner"), "crate");
+        assert_eq!(vis(&cs, "Kept"), "private");
+        let php = parse(
+            "a.php",
+            "<?php\nclass A {\n  private function kept() {}\n  function shown() {}\n}\n",
+        );
+        assert_eq!(vis(&php, "kept"), "private");
+        assert_eq!(vis(&php, "shown"), "pub");
+        let md = parse("a.md", "# Title\n");
+        assert_eq!(vis(&md, "Title"), "pub");
+    }
+
     #[test]
     fn javascript_gives_functions_classes_and_calls() {
         let p = parse(
@@ -459,6 +517,241 @@ fn every_answer_tells_what_it_saved() {
     ] {
         assert!(s.files > 0 && s.files_tokens > 0, "{s:?}");
     }
+}
+
+// ---- the search and the context of tokensave (ESC-296) ----
+
+const RETRY: &str = r#"pub enum Mode { Fast, Slow }
+
+/// Sends a request.
+pub fn send_request(url: &str) -> u32 {
+    let mut attempts = 0;
+    loop {
+        attempts += 1;
+        if attempts > 3 { break; }
+        backoff_delay(attempts);
+    }
+    attempts
+}
+
+fn backoff_delay(n: u32) { let _ = n; }
+
+pub fn pick(m: Mode) -> &'static str {
+    match m { Mode::Slow => "Waiting for status", Mode::Fast => "go" }
+}
+
+pub struct Cache { size: u32 }
+
+impl Cache {
+    pub fn evict_oldest(&mut self) {}
+    pub fn grow(&mut self) {}
+}
+
+pub(crate) fn inner_helper() {}
+"#;
+
+fn tk_fixture(name: &str) -> Fixture {
+    let f = fixture(name);
+    write(&f.root, "src/retry.rs", RETRY);
+    f
+}
+
+fn entry_and_related(c: &crate::codeindex::Answer<crate::codeindex::Context>) -> Vec<String> {
+    c.result
+        .entry_points
+        .iter()
+        .chain(&c.result.related)
+        .map(|h| h.name.clone())
+        .collect()
+}
+
+#[test]
+fn an_index_of_an_older_schema_is_made_again_once_without_asking() {
+    let f = tk_fixture("ci-tk-schema");
+    let db = DataDir::new(f.data.clone()).code_index_db("p1");
+    std::fs::create_dir_all(db.parent().unwrap()).unwrap();
+    {
+        let c = rusqlite::Connection::open(&db).unwrap();
+        c.execute_batch(
+            "CREATE TABLE files (id INTEGER PRIMARY KEY, scope TEXT, path TEXT);
+             CREATE VIRTUAL TABLE sym_fts USING fts5(name, parent, doc, path);
+             PRAGMA user_version = 1;",
+        )
+        .unwrap();
+    }
+    let r = f.svc.reader(&f.target()).unwrap();
+    assert_eq!(
+        r.search("send_request", 3, None).unwrap().result[0].name,
+        "send_request"
+    );
+    let c = rusqlite::Connection::open(&db).unwrap();
+    let v: i64 = c
+        .pragma_query_value(None, "user_version", |r| r.get(0))
+        .unwrap();
+    assert_eq!(v, 2);
+    // Porter's tokenizer and the five columns of tokensave, the bodies of the functions.
+    let sql: String = c
+        .query_row(
+            "SELECT sql FROM sqlite_master WHERE name = 'sym_fts'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert!(sql.contains("qualified") && sql.contains("porter"), "{sql}");
+    let bodies: i64 = c
+        .query_row("SELECT COUNT(*) FROM body_fts", [], |r| r.get(0))
+        .unwrap();
+    assert!(bodies >= 5, "{bodies}");
+    let vis: String = c
+        .query_row(
+            "SELECT vis FROM symbols WHERE name = 'inner_helper'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(vis, "crate");
+}
+
+#[test]
+fn search_stems_its_words_and_ranks_definitions_and_the_exact_name_first() {
+    let f = tk_fixture("ci-tk-search");
+    let r = f.svc.reader(&f.target()).unwrap();
+    // Porter: « sending requests » is send_request.
+    let hits = r.search("sending requests", 5, None).unwrap().result;
+    assert_eq!(hits[0].name, "send_request", "{hits:?}");
+    // The struct before its impl (kind tier), both before nothing else.
+    let hits = r.search("Cache", 5, None).unwrap().result;
+    assert_eq!(hits[0].name, "Cache");
+    assert_eq!(hits[0].kind, "struct");
+    let impl_at = hits.iter().position(|h| h.kind == "impl").unwrap();
+    assert!(impl_at > 0, "{hits:?}");
+    // A qualified name: its last part, exactly.
+    let hits = r.search("retry::backoff_delay", 5, None).unwrap().result;
+    assert_eq!(hits[0].name, "backoff_delay", "{hits:?}");
+    // The LIKE fallback: a part of a word no prefix finds.
+    let hits = r.search("ckoff_del", 5, None).unwrap().result;
+    assert_eq!(hits[0].name, "backoff_delay", "{hits:?}");
+    // `kind` still keeps one kind.
+    let only = r.search("Cache", 5, Some("impl")).unwrap().result;
+    assert!(only.iter().all(|h| h.kind == "impl") && !only.is_empty());
+}
+
+#[test]
+fn the_context_finds_a_behaviour_in_the_body_of_a_function() {
+    let f = tk_fixture("ci-tk-body");
+    let r = f.svc.reader(&f.target()).unwrap();
+    let a = r
+        .task_context("how many attempts until the backoff gives up", 20)
+        .unwrap();
+    let names = entry_and_related(&a);
+    assert!(
+        a.result
+            .entry_points
+            .iter()
+            .any(|h| h.name == "send_request"),
+        "{names:?}"
+    );
+    // Its code, the entry point's.
+    assert!(a
+        .result
+        .snippets
+        .iter()
+        .any(|s| s.text.contains("backoff_delay(attempts)")));
+}
+
+#[test]
+fn the_context_takes_a_qualified_variant_or_a_quoted_phrase_as_they_are() {
+    let f = tk_fixture("ci-tk-exact");
+    let r = f.svc.reader(&f.target()).unwrap();
+    let a = r.task_context("where is Mode::Slow handled", 20).unwrap();
+    assert_eq!(a.result.entry_points[0].name, "pick");
+    assert_eq!(a.result.retrieval.quality.as_deref(), Some("exact"));
+    let a = r
+        .task_context(r#"why does it say "Waiting for status" there"#, 20)
+        .unwrap();
+    assert_eq!(a.result.entry_points[0].name, "pick");
+}
+
+#[test]
+fn the_context_gives_the_methods_of_a_type_found_and_follows_its_links() {
+    let f = tk_fixture("ci-tk-owner");
+    let r = f.svc.reader(&f.target()).unwrap();
+    let a = r.task_context("the cache size", 20).unwrap();
+    let entry: Vec<&str> = a
+        .result
+        .entry_points
+        .iter()
+        .map(|h| h.name.as_str())
+        .collect();
+    assert!(entry.len() <= 3, "three roots at most: {entry:?}");
+    assert!(
+        entry.contains(&"evict_oldest") || entry.contains(&"grow"),
+        "{entry:?}"
+    );
+    // The neighbours of a root, at one step: send_request's callee.
+    let a = r.task_context("send_request", 20).unwrap();
+    assert_eq!(a.result.entry_points[0].name, "send_request");
+    assert_eq!(a.result.retrieval.quality.as_deref(), Some("exact"));
+    assert!(a.result.related.iter().any(|h| h.name == "backoff_delay"));
+}
+
+#[test]
+fn keywords_widen_the_search_and_the_retrieval_says_what_each_term_found() {
+    let f = tk_fixture("ci-tk-keywords");
+    let r = f.svc.reader(&f.target()).unwrap();
+    let plain = r.task_context("make room quickly", 20).unwrap();
+    assert!(!entry_and_related(&plain).contains(&"evict_oldest".to_string()));
+    let options = crate::codeindex::BuildContextOptions::of_tool(None, vec!["evict".into()]);
+    let a = r.task_context_with("make room quickly", &options).unwrap();
+    assert!(
+        a.result
+            .entry_points
+            .iter()
+            .any(|h| h.name == "evict_oldest"),
+        "{:?}",
+        entry_and_related(&a)
+    );
+    let terms = &a.result.retrieval.terms;
+    assert!(
+        terms.iter().any(|t| t.term == "evict" && t.hits > 0),
+        "{terms:?}"
+    );
+    assert!(
+        terms.iter().any(|t| t.term == "quickly" && t.hits == 0),
+        "{terms:?}"
+    );
+    assert!(a.result.retrieval.best_score.is_some());
+    // In the JSON of the answer.
+    let json = serde_json::to_value(&a.result).unwrap();
+    assert!(json["retrieval"]["match"].is_string(), "{json}");
+    assert!(json["retrieval"]["terms"].is_array());
+}
+
+#[test]
+fn a_worktree_s_own_body_and_source_are_the_ones_searched() {
+    let f = tk_fixture("ci-tk-wt");
+    git(&f.root, &["add", "-A"]);
+    let base = f.target();
+    f.svc.ensure_fresh(&base, true).unwrap();
+    let wt = worktree_of(&f);
+    write(
+        &wt,
+        "src/retry.rs",
+        &RETRY
+            .replace("Mode::Slow =>", "Mode::Turbo =>")
+            .replace("enum Mode { Fast, Slow }", "enum Mode { Fast, Turbo }"),
+    );
+    let t = Target {
+        dir: wt.clone(),
+        ..f.target()
+    };
+    let r = f.svc.reader(&t).unwrap();
+    let a = r.task_context("where is Mode::Turbo handled", 20).unwrap();
+    assert_eq!(a.result.entry_points[0].name, "pick");
+    assert_eq!(a.result.retrieval.quality.as_deref(), Some("exact"));
+    let rb = f.svc.reader(&base).unwrap();
+    let b = rb.task_context("where is Mode::Turbo handled", 20).unwrap();
+    assert_ne!(b.result.retrieval.quality.as_deref(), Some("exact"));
 }
 
 // ---- freshness ----
