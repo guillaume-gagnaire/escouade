@@ -6,13 +6,16 @@
   import FilesPanel from './FilesPanel.svelte';
   import GitGraph from './GitGraph.svelte';
   import WorkflowPanel from './WorkflowPanel.svelte';
+  import PrPanel from './PrPanel.svelte';
+  import { prWord } from '../lib/prs';
+  import { ciFailed } from '../lib/prview';
   import { workflows } from '../lib/workflows.svelte';
   import { followers, ticketTracks } from '../lib/workflow-view';
   import Icon from './Icon.svelte';
   import { tip } from '../lib/tip';
 
   // The agent's side panel: its uncommitted files, the repository history, the project's workflow (ESC-194), and the
-  // place of the code hosts' pull requests, CI and deployments, kept for after the 2.0 (ESC-53 to 70) without drawing them.
+  // pull request of its branch with its CI, reviews and deployments (ESC-305); without an agent, the project's open ones.
   // `docked`: beside the conversation in the split layout (always shown), else an optional panel.
   let { project, agent, docked = false }: { project: Project; agent: Agent | null; docked?: boolean } = $props();
 
@@ -26,6 +29,10 @@
     ]),
   );
   $effect(() => void workflows.loadTracks(project.id));
+  /** The host's word (« MR » on GitLab), the agent's once its project's host is known. */
+  const word = $derived(agent ? prWord(agent) : 'PR');
+  /** The CI of the agent's pull request failed: the tab's dot. */
+  const failed = $derived(ciFailed(agent));
 </script>
 
 <aside class="git-side" class:docked aria-label={t('common.files')}>
@@ -40,7 +47,11 @@
       {t('workflow.tab')}{#if following}{' '}<span class="n">{following}</span>{/if}
     </button>
     <button role="tab" id="side-tab-hosts" aria-selected={tab === 'hosts'} onclick={() => (app.panelTab = 'hosts')}>
-      {t('nav.sidePanel.hosts')} <span class="soon">{t('nav.sidePanel.soon')}</span>
+      {t('nav.sidePanel.hosts', { word })}{#if failed && agent}<span
+          class="dot"
+          role="img"
+          aria-label={t('nav.sidePanel.hostsFailed', { word, number: agent.prs[0].number })}
+        ></span>{/if}
     </button>
     <!-- Closed as it was opened (ESC-204): « Fichiers » of the header (Ctrl+Shift+B), or the layout side by side (Ctrl+Shift+L). -->
     <button
@@ -67,16 +78,7 @@
     {:else if tab === 'workflow'}
       <WorkflowPanel {project} {agent} />
     {:else}
-      <div class="later">
-        <b>{t('nav.sidePanel.laterTitle')}</b>
-        <span>{t('nav.sidePanel.laterBody')}</span>
-        <ul>
-          <li>{t('nav.sidePanel.laterPr')}</li>
-          <li>{t('nav.sidePanel.laterCi')}</li>
-          <li>{t('nav.sidePanel.laterDeploy')}</li>
-        </ul>
-        <span>{t('nav.sidePanel.laterCard')}</span>
-      </div>
+      <PrPanel {project} {agent} />
     {/if}
   </div>
 </aside>
@@ -133,19 +135,15 @@
     color: var(--dim);
     font-weight: 500;
   }
-  .utabs .soon {
-    color: var(--dim);
-    font-size: 11px;
-    font-weight: 500;
-  }
-  /* Narrow, « dans la 2.1 » goes: the tabs hold on one line. */
-  @container git-side (max-width: 400px) {
-    .utabs .soon {
-      display: none;
-    }
+  /* The CI of the agent's pull request failed. */
+  .utabs .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--del);
   }
   /* Narrower still (340 px beside the classic layout, the window of 1028 px), the tabs draw closer, the Workflow tab's
-     count goes (choice 132) and « PR et CI », empty until the 2.1, leaves the strip for the × (choice 189). */
+     count goes (choice 132) and « PR et CI » leaves the strip for the × (choice 189): its tab comes back with the width. */
   @container git-side (max-width: 420px) {
     .utabs {
       gap: 12px;
@@ -165,24 +163,5 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
-  }
-  /* What comes after the 2.0 (code hosts): its place, not its detail. */
-  .later {
-    display: grid;
-    gap: 10px;
-    margin: 16px;
-    padding: 18px;
-    border-radius: 11px;
-    border: 1px dashed var(--line-3);
-    color: var(--muted);
-    font-size: 12.5px;
-  }
-  .later b {
-    color: var(--soft);
-    font-weight: 600;
-  }
-  .later ul {
-    margin: 0;
-    padding-left: 18px;
   }
 </style>

@@ -433,6 +433,9 @@ impl Github {
                 job: (run["app"]["slug"] == "github-actions")
                     .then(|| run["id"].as_u64().map(|i| i.to_string()))
                     .flatten(),
+                started: instant(&run["started_at"]),
+                finished: instant(&run["completed_at"]),
+                cancelled: run["conclusion"] == "cancelled",
             });
         }
         for s in statuses["statuses"].as_array().into_iter().flatten() {
@@ -444,7 +447,8 @@ impl Github {
                     _ => CheckState::Pending,
                 },
                 url: s["target_url"].as_str().map(str::to_string),
-                job: None,
+                // A status says when it was set, not when its job began.
+                ..Default::default()
             });
         }
         Ok(out)
@@ -478,6 +482,7 @@ fn run_state(run: &Value) -> CheckState {
 /// What a pull request's GraphQL fragment asks: its state, its reviews' last say, its open threads
 /// and the checks of its last commit, all in one.
 const PR_FIELDS: &str = "number url title state isDraft headRefName baseRefName mergeable \
+    author { login } createdAt \
     isCrossRepository headRepository { nameWithOwner } \
     autoMergeRequest { enabledAt } \
     latestOpinionatedReviews(first: 50) { nodes { state } } \
@@ -519,6 +524,8 @@ fn pr_of_graphql(p: &Value) -> Option<PullRequest> {
             .filter(|t| t["isResolved"] == false)
             .count() as u32,
         auto_merge: !p["autoMergeRequest"].is_null(),
+        author: p["author"]["login"].as_str().unwrap_or("").to_string(),
+        created: instant(&p["createdAt"]).unwrap_or(0),
         fork: p["isCrossRepository"].as_bool().unwrap_or(false),
         head_repo: p["headRepository"]["nameWithOwner"]
             .as_str()
@@ -560,6 +567,8 @@ fn pr_of_rest(p: &Value) -> Result<PullRequest> {
             .as_str()
             .unwrap_or("")
             .to_string(),
+        author: p["user"]["login"].as_str().unwrap_or("").to_string(),
+        created: instant(&p["created_at"]).unwrap_or(0),
         ..Default::default()
     })
 }
@@ -691,6 +700,33 @@ impl Forge for Github {
                     "PullsOfBranch",
                     &query,
                     json!({ "owner": repo.namespace, "name": repo.name, "branch": branch }),
+                )
+                .await?;
+            Ok(data["repository"]["pullRequests"]["nodes"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(pr_of_graphql)
+                .collect())
+        })
+    }
+
+    fn open_pull_requests<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+    ) -> BoxFuture<'a, Result<Vec<PullRequest>>> {
+        Box::pin(async move {
+            let query = format!(
+                "query OpenPulls($owner: String!, $name: String!) {{ \
+                 repository(owner: $owner, name: $name) {{ \
+                 pullRequests(states: OPEN, first: {OPEN_PRS}, \
+                 orderBy: {{field: UPDATED_AT, direction: DESC}}) {{ nodes {{ {PR_FIELDS} }} }} }} }}"
+            );
+            let data = self
+                .graphql(
+                    "OpenPulls",
+                    &query,
+                    json!({ "owner": repo.namespace, "name": repo.name }),
                 )
                 .await?;
             Ok(data["repository"]["pullRequests"]["nodes"]

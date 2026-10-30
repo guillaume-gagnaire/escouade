@@ -2757,6 +2757,14 @@ describe('Sidebar — an agent’s pull requests (ESC-64)', () => {
       'PR #12 · Connexion par jeton\nouverte · CI en échec · changements demandés · 2 fils ouverts',
     );
     expect(tipped).toBe(group.getByRole('button', { name: /PR #12/ }));
+    // « #12 → main » with its CI in words (ESC-305); a closed one's CI no more.
+    const rows = screen.getByRole('group', { name: 'Pull requests de refacto-auth' }).querySelectorAll('.pr');
+    expect(rows[0]).toHaveTextContent('#12 → main CI en échec');
+    expect(rows[2]).toHaveTextContent('#5 → main');
+    expect(rows[2]).not.toHaveTextContent('CI');
+    // Its CI opens the side panel's « PR et CI » on it.
+    await userEvent.click(group.getByRole('button', { name: 'CI en échec' }));
+    expect([app.panelTab, app.filesOpen]).toEqual(['hosts', true]);
     // Only the open one has something to correct; nothing was sent by itself.
     expect(group.getAllByRole('button', { name: 'L’agent corrige' })).toHaveLength(1);
     expect(group.getAllByRole('button', { name: 'L’agent corrige les retours' })).toHaveLength(1);

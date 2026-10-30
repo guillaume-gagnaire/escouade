@@ -159,6 +159,11 @@ fn pr_of(p: &Value) -> Option<PullRequest> {
         changes_requested: votes.iter().any(|v| *v < 0),
         auto_merge: !p["autoCompleteSetBy"].is_null(),
         fork: !p["forkSource"].is_null(),
+        author: p["createdBy"]["displayName"]
+            .as_str()
+            .unwrap_or("")
+            .to_string(),
+        created: instant(&p["creationDate"]).unwrap_or(0),
         ..Default::default()
     })
 }
@@ -595,6 +600,7 @@ impl Azure {
                 },
                 url: build.map(build_url),
                 job: build.map(|b| b.to_string()),
+                ..Default::default()
             });
         }
         // The last status of each context.
@@ -618,7 +624,7 @@ impl Azure {
                     _ => CheckState::Pending,
                 },
                 url: s["targetUrl"].as_str().map(str::to_string),
-                job: None,
+                ..Default::default()
             };
             statuses.retain(|(n, _)| *n != name);
             statuses.push((name, check));
@@ -660,6 +666,9 @@ impl Azure {
                     .map(str::to_string)
                     .or_else(|| Some(build_url(id))),
                 job: Some(id.to_string()),
+                started: instant(&b["startTime"]),
+                finished: instant(&b["finishTime"]),
+                cancelled: b["result"] == "canceled",
             });
         }
         Ok(out)
@@ -889,6 +898,26 @@ impl Forge for Azure {
                 out.push(self.full(repo, p).await?);
             }
             Ok(out)
+        })
+    }
+
+    fn open_pull_requests<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+    ) -> BoxFuture<'a, Result<Vec<PullRequest>>> {
+        Box::pin(async move {
+            let found = self
+                .list(
+                    format!(
+                        "{}/pullrequests?searchCriteria.status=active&$top={OPEN_PRS}",
+                        self.repo_api(repo)
+                    ),
+                    VERSION,
+                )
+                .await?;
+            let reads =
+                futures_util::future::join_all(found.iter().map(|p| self.full(repo, p))).await;
+            reads.into_iter().collect()
         })
     }
 
