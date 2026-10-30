@@ -217,3 +217,148 @@ async fn after_a_ticket_is_validated_the_pages_it_touches_are_compared() {
     tokio::time::sleep(Duration::from_millis(500)).await;
     assert!(space.spec_read("autre/page").unwrap().compared.is_empty());
 }
+
+#[tokio::test]
+async fn a_comparison_leaves_the_page_as_it_is_and_the_next_validation_goes() {
+    let h = harness("docs-compare-twice");
+    let (p, repo) = h.project(false).await;
+    let space = h.core.docs_space(&p.id, None).await.unwrap();
+    let file = |key: &str| format!("{}.txt", key.to_lowercase());
+    space
+        .spec_write("export/fichier", |p| {
+            p.body = format!(
+                "Les fichiers `{}` et `{}` disent la boucle. [écart]",
+                file("DEM-1"),
+                file("DEM-2")
+            )
+        })
+        .unwrap();
+    crate::core_tests::git(&repo, &["add", "-A"]);
+    crate::core_tests::git(&repo, &["commit", "-qm", "spec"]);
+    let on_disk = std::fs::read_to_string(repo.join(".escouade/spec/export/fichier.md")).unwrap();
+
+    // The first ticket validated: its page compared, its gaps seen, and git sees no change.
+    let (t1, _) = crate::tickets_tests::reviewed(&h, &p.id, "Fichier [ok]").await;
+    h.core.ticket_approve(&t1.id).await.unwrap();
+    assert_eq!(h.ticket(&t1.id).column, crate::model::Column::Done);
+    let page = wait_compared(&space, "export/fichier").await;
+    assert_eq!(page.gaps.len(), 1, "{page:?}");
+    assert_eq!(
+        std::fs::read_to_string(repo.join(".escouade/spec/export/fichier.md")).unwrap(),
+        on_disk
+    );
+    assert_eq!(
+        crate::core_tests::git(&repo, &["status", "--porcelain", "--untracked-files=no"]),
+        ""
+    );
+    // As the window's tree and the agents' tools read it.
+    let tree = space.spec_tree();
+    assert_eq!(tree[0].pages[0].gaps, 1);
+    assert!(!tree[0].pages[0].compared.is_empty());
+    let agent_space = h.core.docs_space(&p.id, Some("autre")).await.unwrap();
+    assert_eq!(
+        agent_space.spec_read("export/fichier").unwrap().gaps,
+        page.gaps
+    );
+
+    // The second one is not refused, and nothing was committed in its place.
+    let commits = crate::core_tests::git(&repo, &["rev-list", "--count", "main"]);
+    let (t2, _) = crate::tickets_tests::reviewed(&h, &p.id, "Fichier [ok]").await;
+    h.core.ticket_approve(&t2.id).await.unwrap();
+    let t2 = h.ticket(&t2.id);
+    assert_eq!(
+        (t2.column, t2.blocked.as_deref()),
+        (crate::model::Column::Done, None)
+    );
+    let after: u32 = crate::core_tests::git(&repo, &["rev-list", "--count", "main"])
+        .parse()
+        .unwrap();
+    assert_eq!(after, commits.parse::<u32>().unwrap() + 1);
+    assert!(
+        crate::core_tests::git(&repo, &["log", "-1", "--name-only", "main"])
+            .lines()
+            .all(|l| !l.starts_with(".escouade/spec/"))
+    );
+
+    // A change of the user, to a page of the spec as to the code, still stops the next one.
+    for (path, text) in [
+        (".escouade/spec/export/fichier.md", "Changé à la main.\n"),
+        ("src/app.ts", "const a = 99; // en cours\n"),
+    ] {
+        let before = std::fs::read_to_string(repo.join(path)).unwrap();
+        std::fs::write(repo.join(path), text).unwrap();
+        let (t, _) = crate::tickets_tests::reviewed(&h, &p.id, "Fichier [ok]").await;
+        h.core.ticket_approve(&t.id).await.unwrap();
+        let t = h.ticket(&t.id);
+        assert_eq!(
+            t.blocked.as_deref(),
+            Some("Le dossier du projet a des modifications non commitées sur main"),
+            "{path}"
+        );
+        std::fs::write(repo.join(path), before).unwrap();
+        h.core.ticket_approve(&t.id).await.unwrap();
+        assert_eq!(h.ticket(&t.id).column, crate::model::Column::Done);
+    }
+}
+
+#[test]
+fn a_space_with_checks_keeps_the_gaps_out_of_the_page() {
+    let dir = crate::paths::test_dir("docs-checks");
+    let mut space = crate::docs::Space::new(dir.join("repo"), None);
+    space.checks = Some(dir.join("data").join("docs-checks.json"));
+    space
+        .spec_write("a/b", |p| p.body = "Le texte.".into())
+        .unwrap();
+    let file = dir.join("repo/.escouade/spec/a/b.md");
+    let before = std::fs::read_to_string(&file).unwrap();
+    let gap = crate::docs::Gap {
+        text: "La spec dit 3, le code 4.".into(),
+        code: vec!["src/x.rs".into()],
+    };
+    space
+        .spec_check(
+            "a/b",
+            "2026-10-30T10:00:00+01:00".into(),
+            vec![gap.clone(), gap.clone()],
+        )
+        .unwrap();
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), before);
+    let page = space.spec_read("a/b").unwrap();
+    assert_eq!(
+        (page.compared.as_str(), page.gaps.len()),
+        ("2026-10-30T10:00:00+01:00", 2)
+    );
+    assert_eq!(space.pages()[0].gaps.len(), 2);
+    // A write of the page keeps them out of it; one that settles a gap takes it from the kept ones.
+    space
+        .spec_write("a/b", |p| {
+            p.body = "Le texte changé.".into();
+            p.gaps.truncate(1);
+        })
+        .unwrap();
+    let text = std::fs::read_to_string(&file).unwrap();
+    assert!(
+        !text.contains("gaps") && !text.contains("2026-10-30"),
+        "{text}"
+    );
+    assert_eq!(space.spec_read("a/b").unwrap().gaps.len(), 1);
+    // A page compared before, in its header: read as it is until compared again here.
+    let mut old = crate::docs::Page {
+        path: "a/c".into(),
+        body: "Ancienne.".into(),
+        compared: "2026-10-29T10:00:00+01:00".into(),
+        gaps: vec![gap.clone()],
+        ..Default::default()
+    };
+    old.title = "c".into();
+    std::fs::write(
+        dir.join("repo/.escouade/spec/a/c.md"),
+        crate::docs::page_write(&old),
+    )
+    .unwrap();
+    assert_eq!(space.spec_read("a/c").unwrap().gaps.len(), 1);
+    space
+        .spec_check("a/c", "2026-10-30T11:00:00+01:00".into(), Vec::new())
+        .unwrap();
+    assert!(space.spec_read("a/c").unwrap().gaps.is_empty());
+}
