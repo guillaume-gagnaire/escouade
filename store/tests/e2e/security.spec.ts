@@ -4,7 +4,7 @@ import { expect, test } from '@playwright/test';
 // inline), and the authors' terms linked from every page.
 
 test('every answer carries the security headers', async ({ request }) => {
-  for (const path of ['/', '/en/account', '/terms', '/api/health', '/api/me', '/nowhere']) {
+  for (const path of ['/', '/en/account', '/terms', '/agents', '/en/agents', '/oauth/consent', '/api/health', '/api/me', '/nowhere']) {
     const h = (await request.get(path)).headers();
     expect(h['strict-transport-security'], path).toBe('max-age=31536000; includeSubDomains');
     expect(h['x-content-type-options'], path).toBe('nosniff');
@@ -50,4 +50,33 @@ test('the authors’ terms are linked from the footer, versioned, in both langua
   await expect(page).toHaveURL(/\/en\/terms$/);
   await expect(page.locator('h1')).toHaveText('The authors’ terms');
   await expect(page.locator('footer').getByRole('link', { name: 'Authors’ terms' })).toHaveAttribute('href', '/en/terms');
+});
+
+test('the page « Gérer ses plugins depuis un agent » says the address, the command and what it never does, in both languages', async ({
+  page,
+}) => {
+  const violations: string[] = [];
+  page.on('console', (m) => {
+    if (/Content Security Policy|Refused to/i.test(m.text())) violations.push(m.text());
+  });
+  await page.goto('/');
+  await page.locator('footer').getByRole('link', { name: 'Depuis un agent (MCP)' }).click();
+  await expect(page).toHaveURL(/\/agents$/);
+  await expect(page.locator('h1')).toHaveText('Gérer ses plugins depuis un agent');
+  await expect(page.locator('pre').first()).toHaveText('https://store.escouade.dev/mcp');
+  await expect(page.locator('pre').nth(1)).toHaveText('claude mcp add --transport http escouade-store https://store.escouade.dev/mcp');
+  await expect(page.locator('article')).toContainText('Signer, révoquer, ou toucher à une clé');
+  await expect(page.getByRole('link', { name: 'Ouvrir mon compte' })).toHaveAttribute('href', '/account#apps');
+  await expect(page.locator('footer').getByRole('link', { name: 'Depuis un agent (MCP)' })).toHaveAttribute('href', '/agents');
+  await page.locator('footer').getByRole('link', { name: 'English' }).click();
+  await expect(page).toHaveURL(/\/en\/agents$/);
+  await expect(page.locator('h1')).toHaveText('Manage your plugins from an agent');
+  await expect(page.locator('article')).toContainText('Sign, revoke, or touch a key');
+  await expect(page.getByRole('link', { name: 'Open my account' })).toHaveAttribute('href', '/en/account#apps');
+  await expect(page.locator('footer').getByRole('link', { name: 'From an agent (MCP)' })).toHaveAttribute('href', '/en/agents');
+  // The consent page without a request: it says so, and a visitor is asked to sign in.
+  await page.goto('/oauth/consent');
+  await expect(page.locator('h1')).toHaveText('Autoriser un client MCP');
+  await expect(page.locator('article').getByRole('link', { name: 'Se connecter avec GitHub' })).toBeVisible();
+  expect(violations).toEqual([]);
 });

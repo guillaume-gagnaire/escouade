@@ -28,6 +28,7 @@ const fr = {
     privacy: 'Confidentialité',
     legal: 'Mentions légales',
     terms: 'Conditions des auteurs',
+    agents: 'Depuis un agent (MCP)',
     docs: 'Documentation',
     other: 'English',
   },
@@ -58,7 +59,14 @@ const en: Text = {
   title: 'Escouade Store',
   description: 'Plugins for Escouade: harnesses, themes, notifications, permission rules. Reviewed, signed, installed from the app.',
   header: { home: 'Store home', docs: 'Documentation', publish: 'Publish a plugin', submit: 'Submit' },
-  footer: { privacy: 'Privacy', legal: 'Legal notice', terms: 'Authors’ terms', docs: 'Documentation', other: 'Français' },
+  footer: {
+    privacy: 'Privacy',
+    legal: 'Legal notice',
+    terms: 'Authors’ terms',
+    agents: 'From an agent (MCP)',
+    docs: 'Documentation',
+    other: 'Français',
+  },
   seal: 'Verified by Escouade',
   home: {
     title: 'Plugins for Escouade.',

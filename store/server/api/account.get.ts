@@ -2,6 +2,7 @@ import { getQuery, setResponseHeader } from 'h3';
 import { accountView } from '../utils/accounts';
 import { authorPlugins, pendingVersions, pluginDetail, repoClaims, transferOffers } from '../utils/author';
 import { mailOn } from '../utils/mail';
+import { connectedApps } from '../utils/oauth';
 import { requireAccount } from '../utils/session';
 
 // What the account's page shows: the author, their address, the App's installations they manage, whether the store
@@ -21,6 +22,7 @@ export default defineEventHandler(async (event) => {
     pending: await pendingVersions(db, account, now),
     offers: await transferOffers(db, account),
     claims: await repoClaims(db, account),
+    apps: await connectedApps(db, process.env, account, now),
     selected: chosen ? await pluginDetail(db, account, chosen.id, now) : null,
     // The page's clock, for « il y a 12 min » written the same on the server and in the browser.
     now: now.toISOString(),
