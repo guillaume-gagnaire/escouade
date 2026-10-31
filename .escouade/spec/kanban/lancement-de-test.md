@@ -4,7 +4,7 @@ subject: "Kanban"
 sources: ["docs/SPEC.md"]
 tickets: ["ESC-311"]
 decisions: [26]
-compared: null
+compared: "2026-10-31T19:01:50+01:00"
 ---
 
 ## Ce que c'est

@@ -4,7 +4,8 @@ subject: "kanban"
 sources: ["design/browser/INVENTAIRE.md","design/browser/a-onglet.png","design/browser/a-tablette.png","design/browser/a-mobile.png","design/browser/a-retreci.png","design/browser/etats.png","website/content/docs/fr/browser.md"]
 tickets: ["ESC-311"]
 decisions: [26]
-compared: null
+compared: "2026-10-31T19:02:21+01:00"
+gaps: [{"text":"La spec dit que la fenêtre « Pages » a « la même barre » que la vue de l'agent, avec ses états (chargement avec point ambre et filet, « Le lancement démarre… », « <hôte> ne répond pas » avec Recharger et Voir les logs, « Le lancement s'est arrêté » avec Relancer et Voir les logs). Le code de PagesWindow.svelte ne gère aucun de ces états. Il n'y a ni phase de chargement, ni délai de 20 s, ni message d'arrêt, ni bouton Relancer ou Voir les logs. Ces états n'existent que dans DevPage.svelte.","code":["src/components/PagesWindow.svelte","src/components/DevPage.svelte"]},{"text":"La spec dit qu'en vue étroite Avancer, le propriétaire, les largeurs, la fenêtre à part et le navigateur du système passent dans « … ». Seule la barre de DevPage.svelte a ce repli (container query et menu « … »). La barre de la fenêtre « Pages » n'a ni menu « … » ni repli : elle garde tous ses boutons en ligne.","code":["src/components/PagesWindow.svelte"]}]
 ---
 
 # La page du lancement
