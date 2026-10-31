@@ -8,7 +8,8 @@ On install and on every update, Escouade downloads `version.json`, the archive a
 
 - **the fingerprints**: `version.json` against the catalog, the archive, the program and the manifest against `version.json` (SHA-256). One byte changed, on the store, on the way or in a cache, stops the install;
 - **the signature**, for a verified version: `version.json` signed with minisign by Escouade’s key, the signature’s comment naming this id and this number. The public keys are in the app; the secret key lives on one machine, encrypted, never on the store’s server, never in the CI or in a repository. So the store cannot make a seal;
-- **the archive**, read in memory, without a symbolic link or a path that leaves the plugin’s folder.
+- **the archive**, read in memory, without a symbolic link or a path that leaves the plugin’s folder;
+- **the folder** `version.json` names for a plugin kept in a subfolder of its repository: a plain relative path, without `..`, an absolute path or a backslash; otherwise nothing is installed. The store, for its part, refuses at submission a folder that goes through a symbolic link.
 
 An installed plugin’s seal is checked again on your machine, without the store. Then the install window shows its permissions in words, before anything runs ([installing a plugin](plugins/installer)).
 

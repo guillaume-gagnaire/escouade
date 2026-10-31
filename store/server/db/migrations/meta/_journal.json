@@ -64,6 +64,13 @@
       "when": 1793314953398,
       "tag": "0008_discord",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793440275195,
+      "tag": "0009_plugin_path",
+      "breakpoints": true
     }
   ]
 }

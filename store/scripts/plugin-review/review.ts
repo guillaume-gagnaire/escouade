@@ -6,6 +6,7 @@ import { diffFolders, grownPermissions } from './diff';
 import { baseVersion, catalog, checkTag, download, Integrity, type Source } from './download';
 import { extract, problemText } from './extract';
 import { findLeads } from './leads';
+import { normalizePath } from '../../shared/folder';
 import { renderPublic, renderPublicEn, renderReport, proposed, type ReviewData } from './report';
 
 // The local review of a version (docs/STORE.md §4.2), the deterministic part, without AI: download and check, unpack
@@ -62,7 +63,12 @@ export async function review(o: ReviewOptions): Promise<ReviewDone> {
     const cat = await catalog(o.source);
     const got = await download(o.source, cat, o.id, o.version);
     const f = got.file;
+    // The plugin's folder in its repository (ESC-313); an old version.json without one is the root's. A folder that
+    // is not a plain relative path stops the review, as a fingerprint that does not hold.
+    const folder = normalizePath(f.path ?? '');
+    if ('problem' in folder || folder.path !== (f.path ?? '')) throw new Integrity(`version.json nomme un dossier mal formé : ${f.path}`);
     Object.assign(data, {
+      path: folder.path,
       repository: f.repository,
       tag: f.tag,
       commit: f.commit,
@@ -72,9 +78,9 @@ export async function review(o: ReviewOptions): Promise<ReviewDone> {
     writeFileSync(join(dir, 'version.json'), got.json);
     data.tagCheck = await checkTag(o.source, f);
 
-    const folder = join(dir, 'plugin');
-    const unpacked = extract(got.archive, folder);
-    data.folder = folder;
+    const unpackedAt = join(dir, 'plugin');
+    const unpacked = extract(got.archive, unpackedAt);
+    data.folder = unpackedAt;
     data.files = unpacked.files.size;
     data.refusedEntries = unpacked.problems.map(problemText);
     if (unpacked.comment && unpacked.comment !== f.commit)
@@ -127,7 +133,7 @@ export async function review(o: ReviewOptions): Promise<ReviewDone> {
     } else data.base = null;
 
     const linux = got.binaries['linux-x64'] ?? null;
-    const benchDir = data.manifest?.run ? benchFolder(folder, join(dir, 'bench'), data.manifest, linux) : folder;
+    const benchDir = data.manifest?.run ? benchFolder(unpackedAt, join(dir, 'bench'), data.manifest, linux) : unpackedAt;
     data.bench = await playBench(o.bench, benchDir, o.benchWhy);
   } catch (e) {
     if (!(e instanceof Integrity)) throw e;

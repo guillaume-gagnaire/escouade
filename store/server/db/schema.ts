@@ -160,6 +160,8 @@ export const plugins = pgTable(
     accountId: integer('account_id').references(() => accounts.id, { onDelete: 'set null' }),
     repoId: bigint('repo_id', { mode: 'number' }).notNull(),
     repoFullName: text('repo_full_name').notNull(),
+    /** Its folder in the repository, '' at the root (ESC-313): a plugin is (repository, folder), set at its first publication. */
+    path: text('path').notNull().default(''),
     installationId: bigint('installation_id', { mode: 'number' }),
     categories: jsonb('categories').$type<string[]>().notNull().default([]),
     keywords: jsonb('keywords').$type<string[]>().notNull().default([]),
@@ -175,6 +177,12 @@ export const plugins = pgTable(
     transferredFrom: text('transferred_from'),
     frozenUntil: at('frozen_until'),
     repoMovedAt: at('repo_moved_at'),
+    /**
+     * Its source changed by its author (ESC-313): another repository or folder of theirs, from its next version on
+     * (which goes to the review); `sourceFrom` names the one before (`owner/name` or `owner/name/folder`).
+     */
+    sourceChangedAt: at('source_changed_at'),
+    sourceFrom: text('source_from'),
   },
   (t) => [index('plugins_account').on(t.accountId), index('plugins_repo').on(t.repoId)],
 );
@@ -199,6 +207,8 @@ export const versions = pgTable(
     installationId: bigint('installation_id', { mode: 'number' }).notNull(),
     repoId: bigint('repo_id', { mode: 'number' }).notNull(),
     repoFullName: text('repo_full_name').notNull(),
+    /** The folder of the repository it was read from, '' at the root (ESC-313). */
+    path: text('path').notNull().default(''),
     tag: text('tag').notNull(),
     commit: text('commit').notNull(),
     tagDate: at('tag_date'),

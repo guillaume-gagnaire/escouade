@@ -116,6 +116,16 @@ export function buildStore() {
     },
     { id: 'dev.exemple.team-rules', repo: 'escouade-dev/plugin-team-rules', version: '1.0.0', files: exampleFiles('team-rules') },
     { id: 'dev.exemple.high-contrast', repo: 'escouade-dev/plugin-high-contrast', version: '1.0.0', files: exampleFiles('high-contrast') },
+    // A plugin in a folder of a repository with several (ESC-313): its archive holds that folder alone.
+    {
+      id: 'dev.exemple.discord-webhook',
+      repo: 'escouade-dev/plugins',
+      path: 'plugins/discord-webhook',
+      version: '1.0.0',
+      files: exampleFiles('discord-webhook'),
+    },
+    // A version.json whose folder climbs out of the repository: the review stops before reading it.
+    { id: 'io.github.q7x.climb', repo: 'q7x/climb', path: '../escape', version: '0.0.1', files: exampleFiles('high-contrast') },
     { id: 'io.github.q7x.slak-notify', repo: 'q7x/slak-notify', version: '0.0.1', files: TRAPPED, raw: TRAPPED_RAW, moved: true },
     {
       id: 'io.github.q7x.slak-notify',
@@ -141,12 +151,13 @@ export function buildStore() {
       binaryPaths[platform] = `${base}/binaries/${platform}`;
       files.set(binaryPaths[platform], bytes);
     }
-    const tag = `v${s.version}`;
+    const tag = s.path ? `${s.path}/v${s.version}` : `v${s.version}`;
     const json = canonical({
       format: 1,
       id: s.id,
       version: s.version,
       repository: `https://github.com/${s.repo}`,
+      ...(s.path ? { path: s.path } : {}),
       tag,
       commit,
       archive: { sha256: sha256(archive), size: archive.length },

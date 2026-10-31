@@ -66,6 +66,9 @@ pub enum Origin {
         /// The repository, the tag and the commit `version.json` names (« D'où il vient »).
         #[serde(default)]
         repository: String,
+        /// Its folder in the repository (ESC-313), empty at its root.
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        path: String,
         #[serde(default)]
         tag: String,
         #[serde(default)]
@@ -1454,6 +1457,7 @@ impl Plugins {
                     sha256: f.sha256.clone(),
                     verified,
                     repository: f.repository.clone(),
+                    path: f.path.clone(),
                     tag: f.tag.clone(),
                     commit: f.commit.clone(),
                 },

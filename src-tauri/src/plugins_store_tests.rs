@@ -269,6 +269,40 @@ async fn an_unverified_version_installs_with_its_program_unless_only_verified_on
 }
 
 #[tokio::test]
+async fn a_plugin_in_a_folder_keeps_its_folder_and_a_folder_that_climbs_is_refused() {
+    let fake = Fake::start().trusted();
+    let (_data, store, plugins) = ready(&fake, "in-folder").await;
+    let view = install(&store, &plugins, "dev.exemple.in-folder", None, false)
+        .await
+        .unwrap();
+    match &view.origin {
+        Origin::Store {
+            repository,
+            path,
+            tag,
+            ..
+        } => {
+            assert_eq!(path, "plugins/discord-webhook");
+            assert_eq!(repository, "https://github.com/escouade-dev/plugins");
+            assert_eq!(tag, "plugins/discord-webhook/v1.0.0");
+        }
+        other => panic!("{other:?}"),
+    }
+    let e = install(&store, &plugins, "dev.exemple.climbs", None, false)
+        .await
+        .unwrap_err();
+    assert!(
+        e.contains("Le version.json reçu nomme un dossier mal formé (../escape)"),
+        "{e}"
+    );
+    // A plugin at the root, from a version.json of before (no folder), reads as the root.
+    let root = install(&store, &plugins, "dev.exemple.team-rules", None, false)
+        .await
+        .unwrap();
+    assert!(matches!(&root.origin, Origin::Store { path, .. } if path.is_empty()));
+}
+
+#[tokio::test]
 async fn a_changed_archive_or_a_forged_seal_stops_everything() {
     let fake = Fake::start().trusted();
     let (data, store, plugins) = ready(&fake, "tampered").await;

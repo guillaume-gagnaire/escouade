@@ -415,6 +415,30 @@ describe('the review', () => {
     expect(md).toContain('**l’étiquette `v0.0.1` a été déplacée**');
   });
 
+  it('reviews a plugin in a folder: its archive that folder alone, the folder named in the report and the summaries (ESC-313)', async () => {
+    const done = await review(options('dev.exemple.discord-webhook@1.0.0'));
+    expect(done.code).toBe(0);
+    expect(done.data.path).toBe('plugins/discord-webhook');
+    expect(done.data.tagCheck).toEqual({ state: 'same', commit: done.data.commit });
+    expect(readdirSync(done.data.folder!)).toContain('escouade-plugin.json');
+    expect(readFileSync(done.report, 'utf8')).toContain('- Dossier : `plugins/discord-webhook` (l’archive ne tient que lui)');
+    expect(readFileSync(done.summary, 'utf8')).toContain(
+      '- Dossier relu : plugins/discord-webhook, dans https://github.com/escouade-dev/plugins',
+    );
+    expect(renderPublicEn(done.data)).toContain('- Folder reviewed: plugins/discord-webhook, in https://github.com/escouade-dev/plugins');
+    // A plugin at the root says so, an old version.json without a folder reads as the root.
+    const root = await review(options('dev.exemple.team-rules@1.0.0'));
+    expect(root.data.path).toBe('');
+    expect(readFileSync(root.report, 'utf8')).toContain('- Dossier : la racine du dépôt');
+  });
+
+  it('refuses a version.json whose folder is not a plain relative path, before reading anything (ESC-313)', async () => {
+    const done = await review(options('io.github.q7x.climb@0.0.1'));
+    expect(done.code).toBe(1);
+    expect(done.data.integrity).toBe('version.json nomme un dossier mal formé : ../escape');
+    expect(done.data.folder).toBeUndefined();
+  });
+
   it('refuses a version whose archive is not the one fingerprinted, before reading anything', async () => {
     const done = await review(options('io.github.q7x.slak-notify@0.0.2'));
     expect(done.code).toBe(1);

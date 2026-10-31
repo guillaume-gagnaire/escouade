@@ -9,7 +9,22 @@ export type Origin =
   | { kind: 'git'; url: string; tag: string }
   | { kind: 'dev'; path: string }
   /** A version of store.escouade.dev (STORE-9), pinned by its version.json's SHA-256. */
-  | { kind: 'store'; version: string; sha256: string; verified: boolean; repository: string; tag: string; commit: string };
+  | {
+      kind: 'store';
+      version: string;
+      sha256: string;
+      verified: boolean;
+      repository: string;
+      /** Its folder in the repository (ESC-313), absent at its root. */
+      path?: string;
+      tag: string;
+      commit: string;
+    };
+
+/** The page of a plugin's source on GitHub: its repository, or its folder at its tag (`<repository>/tree/<tag>/<folder>`). */
+export function sourceUrl(o: { repository: string; tag: string; path?: string }): string {
+  return o.path && o.tag ? `${o.repository.replace(/\/$/, '')}/tree/${o.tag}/${o.path}` : o.repository;
+}
 
 export type PluginState =
   | { kind: 'ready' }
