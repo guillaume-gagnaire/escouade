@@ -277,6 +277,11 @@ export default {
     credits: { label: 'crédits', name: 'Crédits du mois' },
     /** A week's window, as its bar is labelled. */
     week: { label: '7 j' },
+    /**
+     * The quota of one model alone (ESC-312), labelled by the model's name as the server gives it (`{model}`: « Fable »):
+     * its week, a window of another length (`{window}`: « 5 h »), and its name for screen readers (`{name}`: « Quota sur 7 jours »).
+     */
+    scoped: { week: '{model} · semaine', window: '{model} · {window}', name: '{name} de {model}' },
     /** `{countdown}`: the time left, as `fCountdown` writes it. */
     reset: 'reset {countdown}',
     /** The same, when it is also the account new agents go to (no other one takes them). */

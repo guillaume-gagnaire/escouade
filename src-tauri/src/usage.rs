@@ -17,27 +17,86 @@ use std::time::Duration;
 use unicode_normalization::UnicodeNormalization;
 
 /// An account's quota meters as a reading finds them (`QuotaMeter`): Claude Code's 5-hour and
-/// weekly windows, those it told.
+/// weekly windows and its models' own, those it told.
 pub type Windows = Vec<QuotaMeter>;
 
+/// An ISO date of the usage endpoint, in epoch milliseconds.
+fn iso_ms(v: &Value) -> Option<i64> {
+    v.as_str()
+        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+        .map(|d| d.timestamp_millis())
+}
+
 /// Parses `rate_limits` from a `get_usage` control response, or the body of the OAuth usage
-/// endpoint (same shape: `{five_hour: {utilization 0-100, resets_at ISO}, seven_day: …}`).
+/// endpoint (same shape). Its rows `limits[]` when it has them (ESC-312), in their order and with
+/// the server's names (`limit_meters`); without them (`null`, a server before them) its windows
+/// `five_hour`, `seven_day` (`{utilization 0-100, resets_at ISO}`) and `model_scoped[]`.
 pub fn parse_windows(v: &Value) -> Windows {
     // A harness that reads its windows itself gives them as meters (Codex, `EngineProcess::read_usage`).
     if let Some(meters) = v.get("meters").filter(|m| m.is_array()) {
         return serde_json::from_value(meters.clone()).unwrap_or_default();
     }
-    let parse = |k: &str| {
-        let w = v.get(k).filter(|w| w.is_object())?;
-        Some(RateWindow {
+    if let Some(rows) = v.get("limits").and_then(Value::as_array) {
+        return limit_meters(rows);
+    }
+    let parse = |w: &Value| {
+        w.is_object().then(|| RateWindow {
             pct: w["utilization"].as_f64().unwrap_or(0.0),
-            resets_at: w["resets_at"]
-                .as_str()
-                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-                .map(|d| d.timestamp_millis()),
+            resets_at: iso_ms(&w["resets_at"]),
         })
     };
-    claude_meters(parse("five_hour"), parse("seven_day"))
+    let mut meters = claude_meters(parse(&v["five_hour"]), parse(&v["seven_day"]));
+    for m in v["model_scoped"].as_array().into_iter().flatten() {
+        let name = m["display_name"].as_str().unwrap_or_default().trim();
+        if let (false, Some(w)) = (name.is_empty(), parse(m)) {
+            meters.push(QuotaMeter::of_model(crate::model::WEEK, w, name));
+        }
+    }
+    meters
+}
+
+/// The meters of the server's rows (`limits[]`: `kind`, `group`, `percent`, `resets_at`,
+/// `scope`), as it orders and names them: a row of the group `session` is the 5-hour window, of the
+/// group `weekly` a week's (`weekly_all`, `weekly_scoped`: a kind to come of these groups needs
+/// no new version). A row of one model (`scope.model.display_name`) is that model's own. A row
+/// of a surface (`scope.surface`: Cowork, the chats) is left out: it is not Claude Code's.
+fn limit_meters(rows: &[Value]) -> Windows {
+    rows.iter()
+        .filter_map(|r| {
+            let minutes = match r["group"].as_str().or(r["kind"].as_str())? {
+                "session" => crate::model::FIVE_HOURS,
+                "weekly" => crate::model::WEEK,
+                _ => return None,
+            };
+            let scope = &r["scope"];
+            if !scope["surface"].is_null() {
+                return None;
+            }
+            let w = RateWindow {
+                pct: r["percent"].as_f64().unwrap_or(0.0),
+                resets_at: iso_ms(&r["resets_at"]),
+            };
+            let model = scope["model"]["display_name"].as_str().map(str::trim);
+            Some(match model.filter(|m| !m.is_empty()) {
+                Some(model) => QuotaMeter::of_model(minutes, w, model),
+                // A model's row without a name: not one to tell any agent of.
+                None if !scope["model"].is_null() => return None,
+                None => QuotaMeter::window(minutes, w),
+            })
+        })
+        .collect()
+}
+
+/// What a process's `get_usage` (`EngineProcess::read_usage`) found: Claude Code's `rate_limits`,
+/// every meter of its account (`Reading::Full`); another harness's meters (`{meters}`), those it
+/// read (`Reading::Windows`).
+pub fn reading_of(v: &Value) -> Reading {
+    let meters = parse_windows(v);
+    if v.get("meters").is_some_and(Value::is_array) {
+        Reading::Windows(meters)
+    } else {
+        Reading::Full(meters)
+    }
 }
 
 /// The app's own requests (quotas, ticket systems): through the proxy, trusting the certificates
@@ -344,8 +403,13 @@ pub fn keychain_service(config_dir_env: Option<&str>) -> String {
 /// What a reading of an account's quota found.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Reading {
-    /// Its windows (one not told keeps its last reading).
+    /// Some of its windows (one not told keeps its last reading): a `rate_limit_event`, another
+    /// harness's reading.
     Windows(Windows),
+    /// Every meter of the account (Claude Code's `get_usage`, the usage endpoint): they replace
+    /// those read before, one the server no longer tells is gone (a plan without a 5-hour window,
+    /// ESC-312).
+    Full(Windows),
     /// No sign-in to ask the endpoint with.
     NotSignedIn,
     /// Its sign-in is out of date.
@@ -367,9 +431,7 @@ pub async fn read_oauth(settings: &Settings, api: &str, sign_in: &SignIn) -> Res
         match read_credentials(&sign_in.dir, &sign_in.service).await? {
             Credentials::Missing => Reading::NotSignedIn,
             Credentials::Expired => Reading::Expired,
-            Credentials::Token(token) => {
-                Reading::Windows(fetch_oauth(settings, api, &token).await?)
-            }
+            Credentials::Token(token) => Reading::Full(fetch_oauth(settings, api, &token).await?),
         },
     )
 }
@@ -457,6 +519,11 @@ impl UsageSnapshot {
                 // Read: signed in.
                 a.problem = None;
             }
+            Reading::Full(meters) => {
+                a.meters = meters;
+                a.updated_at = now;
+                a.problem = None;
+            }
             // Its windows stay as last read: they still say what it used until their end.
             Reading::NotSignedIn => a.problem = Some(SignInProblem::NotSignedIn),
             Reading::Expired => a.problem = Some(SignInProblem::Expired),
@@ -484,11 +551,14 @@ impl UsageSnapshot {
                 u
             })
             .collect();
+        // A model's own quota (ESC-312) holds that model's agents alone: neither the extra usage
+        // of the account, nor the account new agents go to, go by it.
+        let seen = accounts::seen_by(&self.accounts, None);
         // Extra usage lasts while a window is full: under 100 % (a reading says so) or reset, it is over.
         let over: Vec<String> = self
             .accounts
             .iter()
-            .filter(|a| a.overage && !accounts::over_threshold(&self.accounts, &a.id, 100, now))
+            .filter(|a| a.overage && !accounts::over_threshold(&seen, &a.id, 100, now))
             .map(|a| a.id.clone())
             .collect();
         for a in self.accounts.iter_mut().filter(|a| over.contains(&a.id)) {
@@ -515,7 +585,7 @@ impl UsageSnapshot {
                 } else {
                     accounts::of_engine(settings, engine)
                 };
-                let id = accounts::pick(&settings, &self.accounts, threshold, None, now)?;
+                let id = accounts::pick(&settings, &seen, threshold, None, now)?;
                 Some((engine, id))
             })
             .collect();
@@ -665,6 +735,222 @@ mod tests {
         u.set_today(&HashMap::new());
         assert_eq!(today(&u), [0.0, 0.0, 0.0]);
         assert_eq!(u.today_cost, 0.0);
+    }
+
+    /// A body of `rate_limits` of `tests/fixtures/claude-usage` (ESC-312): `real-2.1.314` is the
+    /// one Claude Code 2.1.314 gave on a Max account, the others are made from it.
+    fn usage_fixture(name: &str) -> Value {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../tests/fixtures/claude-usage")
+            .join(format!("{name}.json"));
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+    }
+
+    /// Each meter as (length, model, percent), in the order read.
+    fn shape(meters: &[QuotaMeter]) -> Vec<(Option<u32>, Option<&str>, f64)> {
+        meters
+            .iter()
+            .map(|m| (m.minutes, m.model.as_deref(), m.pct))
+            .collect()
+    }
+
+    #[test]
+    fn the_rows_of_the_real_answer_give_the_5_hour_the_week_and_fables_week() {
+        let meters = parse_windows(&usage_fixture("real-2.1.314"));
+        assert_eq!(
+            shape(&meters),
+            [
+                (Some(300), None, 2.0),
+                (Some(10_080), None, 47.0),
+                (Some(10_080), Some("Fable"), 0.0),
+            ]
+        );
+        // Fable's week has its own reset (2026-11-04T22:00:00+00:00).
+        assert_eq!(meters[2].resets_at, Some(1_793_829_600_000));
+        assert_eq!(meters[2].key(), "10080:Fable");
+    }
+
+    #[test]
+    fn without_rows_the_windows_and_model_scoped_are_read() {
+        let v = usage_fixture("no-limits");
+        assert!(v.get("limits").is_none());
+        assert_eq!(
+            shape(&parse_windows(&v)),
+            [
+                (Some(300), None, 2.0),
+                (Some(10_080), None, 47.0),
+                (Some(10_080), Some("Fable"), 0.0),
+            ]
+        );
+        // `limits: null` (a server before the rows) is read the same way.
+        let mut null = v.clone();
+        null["limits"] = Value::Null;
+        assert_eq!(parse_windows(&null), parse_windows(&v));
+    }
+
+    #[test]
+    fn rows_are_taken_in_the_servers_order_with_its_names_a_surfaces_left_out() {
+        let v = json!({
+            "five_hour": {"utilization": 9, "resets_at": null},
+            "limits": [
+                {"kind": "weekly_scoped", "group": "weekly", "percent": 12, "resets_at": null,
+                 "scope": {"model": {"display_name": "Opus", "id": null}, "surface": null}},
+                {"kind": "weekly_all", "group": "weekly", "percent": 30, "resets_at": null, "scope": null},
+                {"kind": "weekly_scoped", "group": "weekly", "percent": 70, "resets_at": null,
+                 "scope": {"model": null, "surface": {"display_name": "Cowork"}}},
+                {"kind": "monthly_new", "group": "monthly", "percent": 1, "resets_at": null, "scope": null}
+            ]
+        });
+        // The rows say it all: `five_hour` is not read beside them, nor a surface's row.
+        assert_eq!(
+            shape(&parse_windows(&v)),
+            [
+                (Some(10_080), Some("Opus"), 12.0),
+                (Some(10_080), None, 30.0)
+            ]
+        );
+        // Rows, none of them: the server reports no meter.
+        assert!(parse_windows(&json!({"five_hour": null, "limits": []})).is_empty());
+    }
+
+    #[test]
+    fn a_max_plan_without_a_5_hour_window_keeps_no_5_hour_bar_after_a_complete_reading() {
+        let mut u = UsageSnapshot::default();
+        u.record(
+            "principal",
+            reading_of(&usage_fixture("real-2.1.314")),
+            1_000,
+        );
+        let at = |u: &UsageSnapshot| shape(&u.account("principal").unwrap().meters).len();
+        assert_eq!(at(&u), 3);
+        // The plan changed: no `five_hour`, no row `session`.
+        let v = usage_fixture("max-no-five-hour");
+        assert!(v["five_hour"].is_null());
+        u.record("principal", reading_of(&v), 2_000);
+        assert_eq!(
+            shape(&u.account("principal").unwrap().meters),
+            [
+                (Some(10_080), None, 47.0),
+                (Some(10_080), Some("Fable"), 0.0)
+            ]
+        );
+        // The usage endpoint reads it the same way: a complete reading.
+        assert_eq!(at(&u), 2);
+    }
+
+    #[test]
+    fn a_rate_limit_event_still_merges_into_the_last_complete_reading() {
+        let mut u = UsageSnapshot::default();
+        u.record(
+            "principal",
+            reading_of(&usage_fixture("real-2.1.314")),
+            1_000,
+        );
+        // A `rate_limit_event` tells the week alone: the 5 hours and Fable's stay, in their place.
+        let week = QuotaMeter::window(
+            crate::model::WEEK,
+            RateWindow {
+                pct: 51.0,
+                resets_at: None,
+            },
+        );
+        u.record("principal", Reading::Windows(vec![week]), 2_000);
+        assert_eq!(
+            shape(&u.account("principal").unwrap().meters),
+            [
+                (Some(300), None, 2.0),
+                (Some(10_080), None, 51.0),
+                (Some(10_080), Some("Fable"), 0.0),
+            ]
+        );
+        // A model's window told without its name is the account's only model week (Fable's).
+        let unnamed = QuotaMeter {
+            model: Some(crate::model::MODEL_UNNAMED.into()),
+            ..QuotaMeter::window(
+                crate::model::WEEK,
+                RateWindow {
+                    pct: 96.0,
+                    resets_at: None,
+                },
+            )
+        };
+        u.record("principal", Reading::Windows(vec![unnamed.clone()]), 3_000);
+        assert_eq!(
+            shape(&u.account("principal").unwrap().meters)[2],
+            (Some(10_080), Some("Fable"), 96.0)
+        );
+        // On an account with no model week known, it is left out.
+        u.record("pro", Reading::Windows(vec![unnamed]), 3_000);
+        assert!(u.account("pro").unwrap().meters.is_empty());
+    }
+
+    #[test]
+    fn fable_over_the_threshold_holds_fable_alone() {
+        let mut u = UsageSnapshot::default();
+        u.record("principal", reading_of(&usage_fixture("fable-over")), 1_000);
+        let fable = u.account("principal").unwrap().meters[2].clone();
+        assert_eq!(fable.model.as_deref(), Some("Fable"));
+        assert_eq!(fable.pct, 97.0);
+        let now = 1_000;
+        let over = |family: Option<&str>| {
+            let seen = accounts::seen_by(&u.accounts, family);
+            accounts::over_threshold(&seen, "principal", 95, now)
+        };
+        // By its family, whatever name the agent's model goes by: no list of models.
+        for model in ["fable", "claude-fable-5-1", "Fable 5.1", "FABLE[1m]"] {
+            let family = crate::model::model_family(model);
+            assert!(over(family.as_deref()), "{model}");
+        }
+        for model in ["opus", "claude-opus-5-5", "sonnet", "haiku"] {
+            let family = crate::model::model_family(model);
+            assert!(!over(family.as_deref()), "{model}");
+        }
+        // A model unknown waits for no model's own quota.
+        assert!(!over(None));
+    }
+
+    #[test]
+    fn a_state_saved_before_the_scopes_is_read_again_and_a_scoped_meter_kept() {
+        // Saved by 2.1: no `model` anywhere.
+        let old: SavedPause = serde_json::from_value(json!({
+            "fiveHour": {"pct": 40.0, "resetsAt": 5_000},
+            "sevenDay": {"pct": 10.0, "resetsAt": 9_000},
+            "other": [{"minutes": 43_200, "pct": 3.0, "resetsAt": null}],
+            "hold": {}, "accounts": {}
+        }))
+        .unwrap();
+        assert_eq!(old.other[0].model, None);
+        let mut u = UsageSnapshot::default();
+        u.record(
+            accounts::PRINCIPAL,
+            reading_of(&usage_fixture("real-2.1.314")),
+            1_000,
+        );
+        let saved = u.saved(Hold::default());
+        // The two windows of every model where 2.1 reads them, Fable's among the others.
+        assert_eq!(saved.seven_day.unwrap().pct, 47.0);
+        assert_eq!(saved.other.len(), 1);
+        let text = serde_json::to_value(&saved).unwrap();
+        assert_eq!(text["other"][0]["model"], "Fable");
+        // A meter of every model is written as before, without `model`.
+        let plain = serde_json::to_value(QuotaMeter::window(300, RateWindow::default())).unwrap();
+        assert!(plain.get("model").is_none());
+        let back: SavedPause = serde_json::from_value(text).unwrap();
+        assert_eq!(
+            shape(
+                &SavedWindows {
+                    five_hour: back.five_hour,
+                    seven_day: back.seven_day,
+                    other: back.other,
+                }
+                .meters()
+            ),
+            [
+                (Some(300), None, 2.0),
+                (Some(10_080), None, 47.0),
+                (Some(10_080), Some("Fable"), 0.0),
+            ]
+        );
     }
 
     #[test]
@@ -986,10 +1272,7 @@ mod tests {
         let got = read_oauth(&settings, &api, &sign_in(&dir.join("pro")))
             .await
             .unwrap();
-        assert!(
-            matches!(&got, Reading::Windows(m) if m.len() == 2),
-            "{got:?}"
-        );
+        assert!(matches!(&got, Reading::Full(m) if m.len() == 2), "{got:?}");
         assert_eq!(
             server.requests()[1]
                 .headers

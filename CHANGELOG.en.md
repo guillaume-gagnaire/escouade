@@ -35,6 +35,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 ### Fixes
 
 - Starting branch `origin/x`: a new agent starts from the local `x`, moved forward if needed, no longer from another agent’s branch that tracked `origin/x`; agents’ branches no longer track their base. Thanks to @Metalzoid.
+- Fable’s own quota has its bar, “Fable · week”, and now holds back Fable’s tickets and agents alone: at the threshold they change accounts or wait, the other models go on. A Max plan without a 5-hour window no longer shows a 5-hour bar stuck on an old value.
 - Uncommitted files no longer blink at each refresh: “No file changed by this agent” and the list stay shown as long as nothing changes.
 - A workflow you delete, in Settings › Projects › Workflow or by erasing its file, no longer comes back at every reading or restart: the “Deleted” list keeps it, with “Restore”. And “No workflow for this project”, in the assistant or the settings (and in `.escouade.yml`), stops their reading and writing.
 - An agent saved on a harness this version doesn’t have (a later version’s, or a removed plugin’s) is read and kept with its conversation, marked “harness missing”; it doesn’t start, and no agent is created on that harness.

@@ -33,7 +33,17 @@ pub(crate) fn meter_phrase(lang: Lang, meter: &QuotaMeter) -> String {
     match meter.minutes {
         Some(m) => {
             let window = window_name(lang, m);
-            tr_in!(lang, "sa fenêtre {window}", "its {window} window")
+            match meter.model.as_deref() {
+                // A model's own (ESC-312): « sa fenêtre hebdomadaire Fable ».
+                Some(model) if !model.is_empty() => {
+                    tr_in!(
+                        lang,
+                        "sa fenêtre {window} {model}",
+                        "its {model} {window} window"
+                    )
+                }
+                _ => tr_in!(lang, "sa fenêtre {window}", "its {window} window"),
+            }
         }
         None => tr_in!(lang, "ses crédits du mois", "its month’s credits"),
     }
@@ -187,7 +197,16 @@ impl<R: Runtime> Core<R> {
             accounts::get(&settings, &rt.meta.account)
         };
         let usage = self.usage.lock().accounts.clone();
-        let leaving = accounts::verdict(&usage, &account.id, threshold, self.pause_now()).leaving;
+        // A model's own quota (ESC-312) counts for the agent's model alone.
+        let family = self.agent_family(id);
+        let leaving = accounts::verdict(
+            &usage,
+            &account.id,
+            threshold,
+            self.pause_now(),
+            family.as_deref(),
+        )
+        .leaving;
         let Some(meter) = leaving else {
             self.switch_told.lock().remove(id);
             return false;
@@ -263,6 +282,7 @@ mod tests {
             minutes,
             pct,
             resets_at: Some(2_000_000),
+            model: None,
         }
     }
 
@@ -320,7 +340,7 @@ mod tests {
             ],
             ..Default::default()
         }];
-        let leaving = |id, threshold| accounts::verdict(&usage, id, threshold, 0).leaving;
+        let leaving = |id, threshold| accounts::verdict(&usage, id, threshold, 0, None).leaving;
         assert_eq!(leaving("a", 90).map(|m| m.meter.pct), Some(97.0));
         assert_eq!(leaving("a", 98), None);
         assert_eq!(leaving("b", 10), None);

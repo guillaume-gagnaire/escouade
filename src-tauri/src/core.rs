@@ -4486,10 +4486,12 @@ impl<R: Runtime> Core<R> {
         let now = now_ms();
         let when = resets_at.filter(|t| *t > now).or_else(|| {
             let account = self.account_of(id);
+            let family = self.agent_family(id);
             let u = self.usage.lock();
             let a = u.account(&account)?;
             a.meters
                 .iter()
+                .filter(|w| w.counts_for(family.as_deref()))
                 .filter(|w| w.pct >= 100.0)
                 .filter_map(|w| w.resets_at)
                 .filter(|t| *t > now)
@@ -10121,7 +10123,8 @@ impl<R: Runtime> Core<R> {
             let told = accounts::switch_notice(
                 i18n::ui(),
                 &settings,
-                &u.accounts,
+                // As `settle` chose it: a model's own quota (ESC-312) left out.
+                &accounts::seen_by(&u.accounts, None),
                 threshold,
                 now,
                 from,
@@ -10156,7 +10159,7 @@ impl<R: Runtime> Core<R> {
         }
         let read = readings
             .iter()
-            .any(|(_, r)| matches!(r, usage::Reading::Windows(_)));
+            .any(|(_, r)| matches!(r, usage::Reading::Windows(_) | usage::Reading::Full(_)));
         self.update_usage(|u| {
             for (account, reading) in readings {
                 u.record(&account, reading, now_ms());
@@ -10217,7 +10220,7 @@ impl<R: Runtime> Core<R> {
     ) -> Option<usage::Reading> {
         if let Some(p) = proc {
             if let Ok(Some(v)) = p.read_usage().await {
-                return Some(usage::Reading::Windows(usage::parse_windows(&v)));
+                return Some(usage::reading_of(&v));
             }
         }
         if !account.active {

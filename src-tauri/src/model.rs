@@ -1670,6 +1670,11 @@ pub struct AgentMeta {
     pub remote_url: Option<String>,
     /// Stopped by the usage limit: when the agent is sent "continue" by itself (quota reset).
     pub resume_at: Option<i64>,
+    /// The model whose own quota stopped it last (a `rate_limit_event` refused on a model's window,
+    /// `seven_day_*`: Fable's, ESC-312), as it ran it: while it waits, it holds that model's
+    /// tickets alone, not its account. None after a limit of every model.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit_model: Option<String>,
     /// The board's ticket this agent works on.
     pub ticket_id: Option<String>,
     /// What the agent last said it does (`report_progress`, a tool of Escouade's MCP server), on
@@ -2221,8 +2226,10 @@ pub const WEEK: u32 = 10_080;
 /// One meter of an account's quota (docs/ENGINES.md, « Le quota »): a window of a length
 /// (`minutes`: 300 for 5 hours, 10 080 for a week), used in percent until it starts again, or the
 /// month's credits (`minutes`: none), used in percent until they are given again. What a harness
-/// has of them is in its capabilities (`EngineCaps::quota`: windows, credits or none).
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq)]
+/// has of them is in its capabilities (`EngineCaps::quota`: windows, credits or none). A meter of
+/// one model (`model`: Claude Code's weekly « Fable », ESC-312) counts for that model's agents and
+/// tickets alone (`counts_for`).
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct QuotaMeter {
     /// The window's length; none for the month's credits.
@@ -2231,7 +2238,17 @@ pub struct QuotaMeter {
     pub pct: f64,
     /// Epoch milliseconds.
     pub resets_at: Option<i64>,
+    /// The model it is the quota of alone, as the server names it (« Fable »): its scope. None
+    /// for a meter of every model (a state saved before ESC-312 has none). Empty for a model's
+    /// window a `rate_limit_event` tells without naming the model (`MODEL_UNNAMED`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
 }
+
+/// The scope of a model's window that a `rate_limit_event` tells without its name
+/// (`seven_day_overage_included`): `merge_meters` gives it the name of the account's only meter of
+/// a model of that length.
+pub const MODEL_UNNAMED: &str = "";
 
 impl QuotaMeter {
     /// The window of `minutes` as `w` reads it.
@@ -2240,6 +2257,15 @@ impl QuotaMeter {
             minutes: Some(minutes),
             pct: w.pct,
             resets_at: w.resets_at,
+            model: None,
+        }
+    }
+
+    /// The window of `minutes` of the model `model` alone, as `w` reads it.
+    pub fn of_model(minutes: u32, w: RateWindow, model: &str) -> Self {
+        Self {
+            model: Some(model.to_string()),
+            ..Self::window(minutes, w)
         }
     }
 
@@ -2249,6 +2275,7 @@ impl QuotaMeter {
             minutes: None,
             pct: w.pct,
             resets_at: w.resets_at,
+            model: None,
         }
     }
 
@@ -2260,23 +2287,78 @@ impl QuotaMeter {
         }
     }
 
-    /// What tells it from the account's other meters: its length, `credits` for the credits.
+    /// What tells it from the account's other meters: its length, `credits` for the credits, and
+    /// the model of a model's own (`10080:Fable`).
     pub fn key(&self) -> String {
-        self.minutes
-            .map_or_else(|| "credits".to_string(), |m| m.to_string())
+        let length = self
+            .minutes
+            .map_or_else(|| "credits".to_string(), |m| m.to_string());
+        match &self.model {
+            Some(model) => format!("{length}:{model}"),
+            None => length,
+        }
+    }
+
+    /// Of the same kind as `other`: the same length and the same scope.
+    fn same_kind(&self, other: &QuotaMeter) -> bool {
+        self.minutes == other.minutes && self.model == other.model
+    }
+
+    /// Whether it counts for an agent or a ticket whose model is of the family `family`
+    /// (`model_family`): a meter of every model always; a model's own only for that model's
+    /// family, never for an unknown model (None).
+    pub fn counts_for(&self, family: Option<&str>) -> bool {
+        match &self.model {
+            None => true,
+            Some(model) => family.is_some_and(|f| model_family(model).as_deref() == Some(f)),
+        }
     }
 }
 
-/// `old` with what a reading found (`new`): each meter read takes the place of the one of the
-/// same kind, the others stay as last read (they still say what was used until their end). The
-/// shortest window first, the credits last.
+/// The family of a model as a name of it says it, lower case: `fable` for « Fable »,
+/// `claude-fable-5-1`, `fable` or `Fable 5.1`; `opus` for `opus[1m]`. The first word that is
+/// neither `claude` nor a number: no list of models, a new one is found by its name. None for a
+/// name without one.
+pub fn model_family(name: &str) -> Option<String> {
+    name.to_lowercase()
+        .split(|c: char| !c.is_alphanumeric())
+        .find(|w| !w.is_empty() && *w != "claude" && !w.chars().all(|c| c.is_ascii_digit()))
+        .map(str::to_string)
+}
+
+/// `old` with what a partial reading found (`new`, a `rate_limit_event`): each meter read takes the
+/// place of the one of the same kind (length and scope), the others stay as last read (they still
+/// say what was used until their end). A model's window told without its name (`MODEL_UNNAMED`)
+/// is the account's only meter of a model of that length; with none or several, it is left out.
+/// The shortest window first (in the order read among those of a length), the credits last. A
+/// complete reading replaces them all instead (`usage::Reading::Full`).
 pub fn merge_meters(old: &[QuotaMeter], new: &[QuotaMeter]) -> Vec<QuotaMeter> {
-    let mut all: Vec<QuotaMeter> = old
+    let named: Vec<QuotaMeter> = new
         .iter()
-        .filter(|m| !new.iter().any(|n| n.minutes == m.minutes))
-        .chain(new)
-        .copied()
+        .filter_map(|n| {
+            if n.model.as_deref() != Some(MODEL_UNNAMED) {
+                return Some(n.clone());
+            }
+            let mut scoped = old.iter().filter(|m| {
+                m.minutes == n.minutes && m.model.as_deref().is_some_and(|s| s != MODEL_UNNAMED)
+            });
+            match (scoped.next(), scoped.next()) {
+                (Some(only), None) => Some(QuotaMeter {
+                    model: only.model.clone(),
+                    ..n.clone()
+                }),
+                _ => None,
+            }
+        })
         .collect();
+    // In its place: the order of a complete reading (the server's) stays.
+    let mut all = old.to_vec();
+    for n in named {
+        match all.iter().position(|m| m.same_kind(&n)) {
+            Some(at) => all[at] = n,
+            None => all.push(n),
+        }
+    }
     all.sort_by_key(|m| m.minutes.unwrap_or(u32::MAX));
     all
 }
@@ -2325,18 +2407,18 @@ pub struct AccountHold {
 impl AccountHold {
     /// Until when "Reprendre maintenant" lifted the meter `m`.
     pub fn lifted_until(&self, m: &QuotaMeter) -> Option<i64> {
-        match m.minutes {
-            Some(FIVE_HOURS) => self.lifted[0],
-            Some(WEEK) => self.lifted[1],
+        match (m.minutes, &m.model) {
+            (Some(FIVE_HOURS), None) => self.lifted[0],
+            (Some(WEEK), None) => self.lifted[1],
             _ => self.lifted_other.get(&m.key()).copied(),
         }
     }
 
     /// "Reprendre maintenant" lifted the meter `m` until `end`.
     pub fn lift(&mut self, m: &QuotaMeter, end: i64) {
-        match m.minutes {
-            Some(FIVE_HOURS) => self.lifted[0] = Some(end),
-            Some(WEEK) => self.lifted[1] = Some(end),
+        match (m.minutes, &m.model) {
+            (Some(FIVE_HOURS), None) => self.lifted[0] = Some(end),
+            (Some(WEEK), None) => self.lifted[1] = Some(end),
             _ => {
                 self.lifted_other.insert(m.key(), end);
             }
@@ -2387,7 +2469,7 @@ pub struct SavedPause {
 pub struct SavedWindows {
     pub five_hour: Option<RateWindow>,
     pub seven_day: Option<RateWindow>,
-    /// Its other meters: windows of another length, the month's credits.
+    /// Its other meters: windows of another length or of one model (ESC-312), the month's credits.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub other: Vec<QuotaMeter>,
 }
@@ -2395,20 +2477,21 @@ pub struct SavedWindows {
 impl SavedWindows {
     /// The meters to keep, as saved.
     pub fn of(meters: &[QuotaMeter]) -> Self {
+        // Claude Code's two windows of every model where the versions before 1.8 read them; a
+        // model's own (ESC-312) among the others.
+        let fixed = |x: &QuotaMeter| {
+            x.model.is_none() && (x.minutes == Some(FIVE_HOURS) || x.minutes == Some(WEEK))
+        };
         let at = |m: u32| {
             meters
                 .iter()
-                .find(|x| x.minutes == Some(m))
+                .find(|x| fixed(x) && x.minutes == Some(m))
                 .map(QuotaMeter::rate)
         };
         Self {
             five_hour: at(FIVE_HOURS),
             seven_day: at(WEEK),
-            other: meters
-                .iter()
-                .filter(|x| x.minutes != Some(FIVE_HOURS) && x.minutes != Some(WEEK))
-                .copied()
-                .collect(),
+            other: meters.iter().filter(|x| !fixed(x)).cloned().collect(),
         }
     }
 
@@ -2530,11 +2613,11 @@ impl AccountUsage {
 }
 
 impl AccountUsage {
-    /// Its window of `minutes`, as last read.
+    /// Its window of `minutes` of every model (not a model's own, ESC-312), as last read.
     pub fn window(&self, minutes: u32) -> Option<RateWindow> {
         self.meters
             .iter()
-            .find(|m| m.minutes == Some(minutes))
+            .find(|m| m.minutes == Some(minutes) && m.model.is_none())
             .map(QuotaMeter::rate)
     }
 }

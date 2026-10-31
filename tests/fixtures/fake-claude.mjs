@@ -21,7 +21,7 @@
 // message and assistant entry on a line), and a --resume of a session absent from every
 // <dir>/projects/* folder fails as an unknown one does; while a <dir>/fake-limit file is there, every
 // turn is stopped by the usage limit (as "limite") and its quota windows say 100 % (rate_limit_event,
-// get_usage). While a <dir>/fake-error file is there, every turn fails with an error of the API
+// get_usage); while a <dir>/fake-usage.json file is there, get_usage tells its body as its rate_limits. While a <dir>/fake-error file is there, every turn fails with an error of the API
 // ("Invalid API key", as an account the user is not signed in to gets), which is no usage limit.
 // While a <dir>/fake-oauth-lost file is there, a turn fails as a sign-in Claude Code could not refresh does
 // (« OAuth session expired and could not be refreshed », ESC-162), and the process that failed so fails every turn after
@@ -1065,7 +1065,15 @@ function startSession() {
         pctOf('fake-week-pct') !== null
           ? { utilization: pctOf('fake-week-pct'), resetsAt: now + (numberOf('fake-week-reset-min') ?? 24 * 60) * 60 }
           : { utilization: 0.34, resetsAt: isPaced() ? now + 84 * 3600 : 1790805600 },
+      // A model's own week of <dir>/fake-usage.json (ESC-312), as Claude Code tells it: without the model's name.
+      ...scopedWeek(now),
     };
+  };
+  const scopedWeek = (now) => {
+    const file = configDir === null ? null : path.join(configDir, 'fake-usage.json');
+    if (!file || !fs.existsSync(file)) return {};
+    const row = (JSON.parse(fs.readFileSync(file, 'utf8')).limits ?? []).find((l) => l.kind === 'weekly_scoped');
+    return row ? { seven_day_overage_included: { utilization: row.percent / 100, resetsAt: now + 24 * 3600 } } : {};
   };
 
   // `parent`: the call of the subagent that makes this message (null: the main thread).
@@ -3015,6 +3023,9 @@ function startSession() {
             }),
           );
         case 'get_usage':
+          // While a <dir>/fake-usage.json file is there, its body is the rate_limits told (ESC-312: the rows limits[]).
+          if (configDir !== null && fs.existsSync(path.join(configDir, 'fake-usage.json')))
+            return ok(m.request_id, { rate_limits: JSON.parse(fs.readFileSync(path.join(configDir, 'fake-usage.json'), 'utf8')) });
           // Once [quota-rythme] was asked, the windows it tells, read again as the endpoint writes them.
           if (isPaced()) {
             const w = windows();

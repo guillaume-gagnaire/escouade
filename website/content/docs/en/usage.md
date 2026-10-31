@@ -35,6 +35,14 @@ Escouade follows the two quota windows of your Claude subscription: the 5-hour w
 - With a single account, `Tab` focuses each bar, which screen readers announce as “5-hour quota” or “7-day quota” with the same value.
 - As long as Escouade has read nothing, the bar is empty, a “—” replaces the countdown and the tooltip says “Quota unavailable”.
 
+### A model’s own quota
+
+On some plans, Claude counts one model apart: Fable’s week, for instance, has its own cap and its own reset. Escouade gives it one more bar, beside the others and under the name Anthropic gives it: “Fable · week”. It reads like the others (tooltip, screen readers: “Fable 7-day quota”), in the status bar, the quota panel and Settings › Accounts.
+
+That quota holds back that model’s agents and tickets alone. When Fable’s week passes the threshold, a Fable ticket goes to another account or waits, and the Opus or Sonnet tickets go on on the same account. The autopilot is not paused for it. A Fable agent stopped by its limit waits for the reset without holding the other models back. Escouade knows the model by its name (“fable”, “claude-fable-5-1”…), whichever name it goes by.
+
+The bars follow what the server tells: a plan without a 5-hour window (some Max plans) has no “5h” bar, and a window that leaves the plan leaves the bar at the next reading.
+
 ### With several accounts
 
 As soon as there is more than one account in [the list of accounts](accounts), the bar writes the current account’s name in front of the two quotas: it is the account a new agent would start on right now, leaving out the accounts reserved to projects.
