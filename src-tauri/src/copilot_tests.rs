@@ -434,9 +434,13 @@ async fn a_copilot_account_is_added_then_signed_in_by_copilot_login_in_a_termina
         );
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
-    // `copilot login`, in the account's folder: its user, never a token.
-    let launch = noted(&dir, "launches.jsonl").pop().unwrap();
-    assert_eq!(argv(&launch), ["login"]);
+    // `copilot login`, in the account's folder: its user, never a token. Once it is signed in, the
+    // app reads the account's models (`--server`), which may be noted after it: not the last one.
+    let launches = noted(&dir, "launches.jsonl");
+    assert!(
+        launches.iter().any(|l| argv(l) == ["login"]),
+        "no `copilot login` among {launches:?}"
+    );
     let status = h.core.claude_account_status("travail").await.unwrap();
     assert!(status.connected);
     assert_eq!(status.email.as_deref(), Some("@copilot-user"));
