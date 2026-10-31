@@ -18,22 +18,22 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-const ID: &str = "dev.test.fake";
+pub(crate) const ID: &str = "dev.test.fake";
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("..")
 }
 
-struct Fake {
-    rt: Arc<Runtime>,
-    store: Arc<MemoryStore>,
+pub(crate) struct Fake {
+    pub(crate) rt: Arc<Runtime>,
+    pub(crate) store: Arc<MemoryStore>,
     data: DataDir,
     plugins: Arc<Plugins>,
 }
 
 /// The fake plugin installed in development from a folder of the test's own, its program started
 /// with `args`.
-fn fake(name: &str, args: &[&str], limits: Limits) -> Fake {
+pub(crate) fn fake(name: &str, args: &[&str], limits: Limits) -> Fake {
     // Else cmd.exe may no longer find node (see `trim_test_path`).
     #[cfg(windows)]
     crate::paths::trim_test_path();
@@ -81,7 +81,7 @@ fn fake(name: &str, args: &[&str], limits: Limits) -> Fake {
 }
 
 /// Limits for a test: its memory read often, room for a slow machine to start node.
-fn quick() -> Limits {
+pub(crate) fn quick() -> Limits {
     Limits {
         sample: Duration::from_millis(100),
         initialize: Duration::from_secs(20),
@@ -90,7 +90,7 @@ fn quick() -> Limits {
     }
 }
 
-async fn until(what: &str, f: impl Fn() -> bool) {
+pub(crate) async fn until(what: &str, f: impl Fn() -> bool) {
     let started = Instant::now();
     while !f() {
         assert!(

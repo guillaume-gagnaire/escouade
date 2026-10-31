@@ -14,6 +14,7 @@
 #[cfg_attr(not(test), allow(dead_code))]
 pub mod journal;
 // The conformance bench and the fake Escouade, for `escouade-plugin` and the tests (PLG-3).
+pub mod adapters;
 pub mod bench;
 // The permission rules: the plugins that decide before the user is asked (PLG-8).
 pub mod decide;

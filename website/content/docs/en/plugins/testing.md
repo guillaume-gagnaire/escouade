@@ -16,7 +16,7 @@ escouade-plugin dev my-plugin        # the fake Escouade
 
 ## The conformance bench
 
-`escouade-plugin test <folder>` reads the manifest, starts the program of `run` the way Escouade starts it (in its folder, with its three variables, with everything it starts), and plays nine scenarios. Each says what happened; a scenario that fails also says **what is missing**.
+`escouade-plugin test <folder>` reads the manifest, starts the program of `run` the way Escouade starts it (in its folder, with its three variables, with everything it starts), and plays up to eleven scenarios. Each says what happened; a scenario that fails also says **what is missing**.
 
 | Scenario | What the bench does | What it expects |
 | --- | --- | --- |
@@ -29,8 +29,10 @@ escouade-plugin dev my-plugin        # the fake Escouade
 | A secret | Serves `secrets/get` throughout the bench, with a test value. | Only the keys of `permissions.secrets`, and never their value written on standard error or in a `log`. |
 | Crash | Kills the plugin and everything it started in the middle of a call, then starts it again. | A new process that initializes like the first. |
 | Shutdown | Sends `shutdown`. | An answer within a second, then the end of the process. |
+| Ticket source | Only if `contributes.ticketSources` is declared: `account/me` and `tickets/containers`. | An answer within the delay, or an error the contract names: `-(32000 + HTTP status)` (`-32401`: token refused), `-32010` (a lasting refusal), `-32601` (a call it does not serve). |
+| Code host | Only if `contributes.forges` is declared: `account/me` and `forge/pullRequestsOfBranch`. | The same. |
 
-A scenario that does not concern the plugin is not played, and says so: no fact without `permissions.events`, no decision without `permissions.decide`, and nothing of a program for a declarative plugin, of which only the manifest is read.
+A scenario that does not concern the plugin is not played, and says so: no fact without `permissions.events`, no decision without `permissions.decide`, no source or host without `contributes.ticketSources` or `contributes.forges`, and nothing of a program for a declarative plugin, of which only the manifest is read.
 
 ```text
 Conformance bench: dev.exemple.slow-rules 1.0.0
