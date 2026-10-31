@@ -41,6 +41,7 @@ import type {
   ToldModel,
   EngineDecl,
   EngineId,
+  PageEvent,
   Project,
   Resources,
   Settings,
@@ -464,6 +465,8 @@ class AppState {
   private recipeHooks = new Set<(agentId: string) => void>();
   /** What is over when an agent's ticket goes "Terminé": its test launches. */
   private ticketDoneHooks = new Set<(agentId: string) => void>();
+  /** What follows a launch's page (ESC-311): its loads, its links opened outside. */
+  private devPageHooks = new Set<(e: PageEvent) => void>();
   /** What must be written before the app restarts by itself for an update (the composers' drafts). */
   private restartHooks = new Set<() => void>();
 
@@ -477,6 +480,12 @@ class AppState {
   onRecipeChanged(f: (agentId: string) => void) {
     this.recipeHooks.add(f);
     return () => void this.recipeHooks.delete(f);
+  }
+
+  /** `f` runs at each event of a launch's page (ESC-311). Returns what unregisters it. */
+  onDevPage(f: (e: PageEvent) => void) {
+    this.devPageHooks.add(f);
+    return () => void this.devPageHooks.delete(f);
   }
 
   /** `f` runs, with its agent, when a ticket goes "Terminé". Returns what unregisters it. */
@@ -690,6 +699,9 @@ class AppState {
         break;
       case 'project':
         this.replaceProject(e.project);
+        break;
+      case 'devPage':
+        for (const f of this.devPageHooks) f(e.page);
         break;
       case 'openUrl':
         // The page a pull request needs (a compare page to finish it): a failure is told, not lost.

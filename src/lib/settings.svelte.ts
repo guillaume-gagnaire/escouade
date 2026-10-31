@@ -10,6 +10,7 @@ import { app } from './state.svelte';
 import type {
   BoardSettings,
   CommitMode,
+  PagesOpen,
   EngineId,
   Project,
   ProjectIntegrations,
@@ -132,6 +133,7 @@ type ProjectFields = Pick<
   | 'worktreeSetup'
   | 'worktreeTeardown'
   | 'commitMode'
+  | 'pagesOpen'
   | 'account'
   | 'worktreeDir'
   | 'agentBranchPrefix'
@@ -176,6 +178,8 @@ export interface ProjectDraft {
   worktreeTeardown: WorktreeStep[];
   /** « Commit »: the agent writes the commits, or the app commits with the message the user read. */
   commitMode: CommitMode;
+  /** « Ouvrir les pages des lancements » (ESC-311). */
+  pagesOpen: PagesOpen;
   /** « Compte préféré »: the Claude account its agents and tickets go to; empty is « Automatique ». */
   account: string;
   /** « Dossier des worktrees », as typed: empty is `.claude/worktrees`. */
@@ -223,6 +227,7 @@ function draftOf(p: Project): ProjectDraft {
     worktreeSetup,
     worktreeTeardown,
     commitMode,
+    pagesOpen,
     account,
     worktreeDir,
     agentBranchPrefix,
@@ -259,6 +264,8 @@ function draftOf(p: Project): ProjectDraft {
     worktreeSetup,
     worktreeTeardown,
     commitMode,
+    // Absent from a project saved before ESC-311: in the agent.
+    pagesOpen: pagesOpen ?? 'agent',
     account,
     worktreeDir,
     agentBranchPrefix,
@@ -328,6 +335,7 @@ function fieldsOf(d: ProjectDraft): ProjectFields {
     worktreeSetup: stepsOf(d.worktreeSetup),
     worktreeTeardown: stepsOf(d.worktreeTeardown),
     commitMode: d.commitMode,
+    pagesOpen: d.pagesOpen,
     account: d.account,
     worktreeDir: d.worktreeDir.trim(),
     agentBranchPrefix: d.agentBranchPrefix.trim(),

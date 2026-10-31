@@ -106,6 +106,8 @@ export default defineZone('runs', {
     reopen: 'Reopen',
     /** `{address}`: the address opened, in code style. */
     opened: 'Opened in the browser: {address}',
+    openedHere: 'Opened in Escouade, in the agent’s “Page” view: {address}',
+    openedWindow: 'Opened in the project’s “Pages” window: {address}',
     reading: 'Reading .isola.toml…',
     changed: 'The recipe just changed: read it again before running.',
     /** `{name}`: the agent. */

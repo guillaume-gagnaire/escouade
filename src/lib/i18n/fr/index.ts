@@ -23,6 +23,7 @@ import plan from './plan';
 import prs from './prs';
 import repos from './repos';
 import runs from './runs';
+import devpage from './devpage';
 import settings from './settings';
 import share from './share';
 import shell from './shell';
@@ -49,6 +50,7 @@ export const fr = {
   conv,
   composer,
   runs,
+  devpage,
   shell,
   errors,
   accounts,

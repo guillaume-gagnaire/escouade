@@ -644,6 +644,18 @@ describe('SettingsModal', () => {
     expect(app.projects[0].commitMode).toBe('direct');
   });
 
+  it('chooses where the launches’ pages open, in the agent by default (ESC-311)', async () => {
+    const backend = backendSaving();
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    const choice = screen.getByRole('group', { name: 'Ouvrir les pages des lancements' });
+    expect(within(choice).getByRole('button', { name: 'Dans l’agent' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(choice).getByRole('button', { name: 'Dans une fenêtre à part' })).toHaveAttribute('aria-pressed', 'false');
+    await userEvent.click(within(choice).getByRole('button', { name: 'Dans le navigateur du système' }));
+    await save();
+    expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p1', pagesOpen: 'system' });
+    expect(app.projects[0].pagesOpen).toBe('system');
+  });
+
   it('offers no preferred account with a single account', () => {
     backendSaving();
     render(SettingsModal, { tab: 'projects', projectId: 'p1' });

@@ -1,5 +1,7 @@
 import { Channel, invoke } from '@tauri-apps/api/core';
 import type {
+  PageBounds,
+  PageView,
   CodeIndexInfo,
   Memory,
   VectorsModelInfo,
@@ -711,6 +713,19 @@ export const api = {
   updatePresence: (presence: { modal: boolean; testing: boolean; activeAt: number }) => invoke<void>('update_presence', { presence }),
   /** One HTTP request without proxy (2 s): true for any answer. */
   httpReady: (url: string, agentId?: string) => invoke<boolean>('http_ready', { url, agentId }),
+  // The launches' pages (ESC-311).
+  devpageOpen: (agentId: string, title: string, url: string, detached: boolean, bounds: PageBounds | null) =>
+    invoke<PageView>('devpage_open', { agentId, title, url, detached, bounds }),
+  devpagePlace: (agentId: string, bounds: PageBounds | null) => invoke<void>('devpage_place', { agentId, bounds }),
+  devpageGo: (agentId: string, action: 'back' | 'forward' | 'reload' | 'to', to?: string) =>
+    invoke<void>('devpage_go', { agentId, action, to: to ?? null }),
+  devpageDevtools: (agentId: string) => invoke<void>('devpage_devtools', { agentId }),
+  devpageDetach: (agentId: string, detached: boolean) => invoke<PageView>('devpage_detach', { agentId, detached }),
+  devpageMode: (agentId: string, mode: 'full' | 'tablet' | 'mobile') => invoke<void>('devpage_mode', { agentId, mode }),
+  devpageShow: (agentId: string) => invoke<void>('devpage_show', { agentId }),
+  devpageClose: (agentId: string) => invoke<void>('devpage_close', { agentId }),
+  devpageList: (projectId?: string) =>
+    invoke<{ pages: PageView[]; shown: string | null }>('devpage_list', { projectId: projectId ?? null }),
   /** The write's number, which the backend's log tells it by. */
   termWrite: (id: string, data: string) => invoke<number>('term_write', { id, data }),
   termReport: (id: string, report: TermReport) => invoke<void>('term_report', { id, report }),

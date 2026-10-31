@@ -391,11 +391,14 @@ fn builder<R: Runtime>(
     }
     // Its loads, for its bar.
     {
-        let (pages, tell) = (pages.clone(), tell.clone());
-        let agent = agent_id.to_string();
+        let (app, pages, tell) = (app.clone(), pages.clone(), tell.clone());
+        let (agent, project) = (agent_id.to_string(), project_id.to_string());
         b = b.on_page_load(move |_, load| {
             let url = load.url().to_string();
             pages.set_url(&agent, &url);
+            if pages.get(&agent).is_some_and(|p| p.detached) {
+                tell_bar(&app, &project, &pages);
+            }
             tell(PageEvent {
                 agent_id: agent.clone(),
                 phase: match load.event() {
@@ -435,7 +438,7 @@ fn with_store<R: Runtime>(
     }
 }
 
-/// What a refused address of a page does: outside, its devtools, or nothing; told either way.
+/// What a refused address of a page does: told to the window, which opens it outside; its devtools; or nothing.
 fn act<R: Runtime>(
     app: &AppHandle<R>,
     label: &str,
@@ -445,12 +448,8 @@ fn act<R: Runtime>(
     tell: &Tell,
 ) {
     let phase = match verdict {
-        Verdict::Outside => {
-            if let Err(e) = crate::outside::open(crate::outside::What::Url(to.as_str())) {
-                log::warn!("a page's link to open outside failed: {e}");
-            }
-            "outside"
-        }
+        // The window opens it, as its own links (`open_url`).
+        Verdict::Outside => "outside",
         Verdict::Devtools => {
             if let Some(w) = app.get_webview(label) {
                 w.open_devtools();

@@ -109,6 +109,8 @@ export default {
     reopen: 'Rouvrir',
     /** `{address}`: the address opened, in code style. */
     opened: 'Ouvert dans le navigateur : {address}',
+    openedHere: 'Ouvert dans Escouade, vue « Page » de l’agent : {address}',
+    openedWindow: 'Ouvert dans la fenêtre « Pages » du projet : {address}',
     reading: 'Lecture du .isola.toml…',
     changed: 'La recette vient de changer : relis-la avant de lancer.',
     /** `{name}`: the agent. */
