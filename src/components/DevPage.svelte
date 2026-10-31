@@ -3,8 +3,21 @@
   // own drawn over the window, is placed. The page is hidden whenever something of the window passes over it (a menu,
   // a list, a dialog, the palette), whenever its launch is not up, and when the view goes.
   import { onDestroy, onMount } from 'svelte';
-  import { boundsOf, coveredAt, detach, devpages, devtools, devtoolsKey, go, hostOf, place } from '../lib/devpage.svelte';
-  import { typedAddress } from '../lib/devpage-key';
+  import {
+    boundsOf,
+    coveredAt,
+    cycleMode,
+    detach,
+    devpages,
+    devtools,
+    devtoolsKey,
+    go,
+    hostOf,
+    modeOf,
+    place,
+    setMode,
+  } from '../lib/devpage.svelte';
+  import { DEVICE_WIDTH, deviceFit, modeKey, PAGE_MODES, typedAddress, type PageMode } from '../lib/devpage-key';
   import { zoomState } from '../lib/display.svelte';
   import { t } from '../lib/i18n';
   import { api } from '../lib/ipc';
@@ -26,6 +39,14 @@
   /** Its launch is no longer up (stopped, crashed, failed). */
   const stopped = $derived(!waiting && !anyRunning(agent.id));
   const shortcut = IS_MAC ? '⌥⌘I' : 'F12';
+  const modeShortcut = IS_MAC ? '⇧⌘M' : t('devpage.modeKey');
+  const MODE_ICON = { full: 'monitor', tablet: 'tablet', mobile: 'phone' } as const;
+  /** The width it is shown at, as chosen for this page (« worktree · processus »). */
+  const mode = $derived<PageMode>(page ? modeOf(agent.id) : 'full');
+  /** The width of its room, in CSS pixels: a device narrower than it is centred, a wider one narrowed to it. */
+  let roomWidth = $state(0);
+  const fit = $derived(deviceFit(mode, roomWidth));
+  let more = $state(false);
 
   let room: HTMLDivElement | undefined = $state();
   let covered = $state(false);
@@ -40,15 +61,19 @@
     frame = requestAnimationFrame(() => {
       if (!room) return;
       const rect = room.getBoundingClientRect();
+      roomWidth = Math.round(rect.width);
       covered = coveredAt(rect);
       const show = visible && rect.width > 0 && rect.height > 0;
-      void place(agent.id, show ? boundsOf(rect, zoomState.shown) : null);
+      // A tablet or a phone: its width, centred in the room, the height of the room.
+      const f = deviceFit(mode, rect.width);
+      const shown = { left: rect.left + f.left, top: rect.top, width: f.width, height: rect.height } as DOMRect;
+      void place(agent.id, show ? boundsOf(shown, zoomState.shown) : null);
     });
   }
 
   $effect(() => {
     // Again whenever what it hangs on changes.
-    void [visible, zoomState.shown, page?.phase, page?.detached];
+    void [visible, zoomState.shown, page?.phase, page?.detached, mode];
     sync();
   });
 
@@ -71,10 +96,14 @@
   });
 
   function onKey(e: KeyboardEvent) {
-    if (page && !page.detached && devtoolsKey(e, IS_MAC)) {
+    if (!page || page.detached) return;
+    if (devtoolsKey(e, IS_MAC)) {
       e.preventDefault();
       void devtools(agent.id);
-    }
+    } else if (modeKey(e, IS_MAC)) {
+      e.preventDefault();
+      cycleMode(agent.id);
+    } else if (e.key === 'Escape' && more) more = false;
   }
 
   function submit(e: SubmitEvent) {
@@ -121,6 +150,29 @@
       </form>
       <span class="owner" use:tip={t('devpage.apart')}><Icon name="branch" size={12} />{page.title}</span>
       <span class="sep" aria-hidden="true"></span>
+      <div class="modes wide-only" role="radiogroup" aria-label={t('devpage.modesLabel')}>
+        {#each PAGE_MODES as m (m)}
+          <button
+            role="radio"
+            aria-checked={mode === m}
+            aria-label={t(`devpage.modes.${m}`)}
+            use:tip={t('devpage.modeHint', {
+              mode: t(`devpage.modes.${m}`),
+              width: m === 'full' ? '' : ` · ${DEVICE_WIDTH[m]} px`,
+              key: modeShortcut,
+            })}
+            onclick={() => setMode(agent.id, m)}><Icon name={MODE_ICON[m]} size={14} /></button
+          >
+        {/each}
+      </div>
+      {#if mode !== 'full'}
+        <span
+          class="width"
+          class:shrunk={fit.shrunk}
+          use:tip={fit.shrunk ? t('devpage.shrunk', { width: fit.width, device: DEVICE_WIDTH[mode] }) : undefined}
+          >{fit.shrunk ? t('devpage.shrunkShort', { width: fit.width }) : t('devpage.width', { width: DEVICE_WIDTH[mode] })}</span
+        >
+      {/if}
       <button
         class="dt"
         aria-label={t('devpage.devtoolsHint', { key: shortcut })}
@@ -129,19 +181,50 @@
         ><Icon name="code" size={14} /><span class="lbl">{t('devpage.devtools')}</span><kbd>{shortcut}</kbd></button
       >
       <button
-        class="ib"
+        class="ib wide-only"
         aria-label={page.detached ? t('devpage.attach') : t('devpage.detach')}
         use:tip={page.detached ? t('devpage.attach') : t('devpage.detach')}
         onclick={() => detach(agent.id, !page.detached)}><Icon name="expand" size={16} /></button
       >
-      <button class="ib" aria-label={t('devpage.system')} use:tip={t('devpage.system')} onclick={() => app.run(openUrl(page.url))}
+      <button class="ib wide-only" aria-label={t('devpage.system')} use:tip={t('devpage.system')} onclick={() => app.run(openUrl(page.url))}
         ><Icon name="ext" size={16} /></button
       >
+      <!-- Narrow: the secondary buttons in « … ». -->
+      <div class="more-wrap narrow-only">
+        <button class="ib" aria-label={t('devpage.more')} aria-haspopup="menu" aria-expanded={more} onclick={() => (more = !more)}
+          ><Icon name="more" size={16} /></button
+        >
+        {#if more}
+          <div class="menu" role="menu" aria-label={t('devpage.more')}>
+            <button role="menuitem" onclick={() => ((more = false), go(agent.id, 'forward'))}
+              ><Icon name="right" size={14} />{t('devpage.forward')}</button
+            >
+            <div class="menu-sep" role="separator"></div>
+            {#each PAGE_MODES as m (m)}
+              <button role="menuitemradio" aria-checked={mode === m} onclick={() => ((more = false), setMode(agent.id, m))}
+                ><Icon name={MODE_ICON[m]} size={14} />{t(`devpage.modes.${m}`)}{#if m !== 'full'}<span class="mw"
+                    >{DEVICE_WIDTH[m]} px</span
+                  >{/if}</button
+              >
+            {/each}
+            <div class="menu-sep" role="separator"></div>
+            <button role="menuitem" onclick={() => ((more = false), detach(agent.id, !page.detached))}
+              ><Icon name="expand" size={14} />{page.detached ? t('devpage.attach') : t('devpage.detach')}</button
+            >
+            <button role="menuitem" onclick={() => ((more = false), app.run(openUrl(page.url)))}
+              ><Icon name="ext" size={14} />{t('devpage.system')}</button
+            >
+          </div>
+        {/if}
+      </div>
     </div>
     {#if page.phase === 'loading' && !waiting && !stopped}<div class="load" aria-hidden="true"></div>{/if}
   {/if}
 
-  <div class="room" bind:this={room} class:on={visible}>
+  <div class="room" bind:this={room} class:on={visible} class:device={mode !== 'full' && visible}>
+    {#if mode !== 'full' && visible}
+      <div class="frame" aria-hidden="true" style:left="{fit.left - 1}px" style:width="{fit.width + 2}px"></div>
+    {/if}
     {#if !page}
       <div class="msg"><p>{t('devpage.waitingText')}</p></div>
     {:else if page.detached}
@@ -355,13 +438,106 @@
     justify-content: center;
     gap: 8px;
   }
-  /* Narrow: forward and the owner go, the address keeps its room. */
-  @container conv (max-width: 640px) {
+  .modes {
+    display: inline-flex;
+    flex: none;
+    gap: 2px;
+    padding: 2px;
+    border-radius: 8px;
+    background: rgba(var(--fg-rgb), 0.035);
+  }
+  .modes button {
+    display: inline-grid;
+    place-items: center;
+    width: 26px;
+    height: 24px;
+    border-radius: 6px;
+    color: var(--muted);
+  }
+  .modes button:hover {
+    color: var(--text);
+  }
+  .modes button[aria-checked='true'] {
+    background: var(--sel);
+    color: var(--text);
+  }
+  .width {
+    flex: none;
+    margin: 0 4px;
+    color: var(--muted);
+    font-size: 11.5px;
+    font-feature-settings: 'tnum';
+    white-space: nowrap;
+  }
+  .width.shrunk {
+    color: var(--wait);
+  }
+  .room.device {
+    background: var(--well);
+  }
+  .frame {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    border-inline: 1px solid var(--line-2);
+    pointer-events: none;
+  }
+  .narrow-only {
+    display: none;
+  }
+  .more-wrap {
+    position: relative;
+  }
+  .menu {
+    position: absolute;
+    top: 34px;
+    right: 0;
+    z-index: 20;
+    min-width: 240px;
+    padding: 5px;
+    border-radius: 10px;
+    background: var(--raise);
+    box-shadow:
+      0 0 0 1px var(--line-2),
+      0 14px 34px -8px rgba(0, 0, 0, 0.6);
+  }
+  .menu button {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    height: 30px;
+    padding: 0 9px;
+    border-radius: 7px;
+    color: var(--soft);
+    text-align: left;
+  }
+  .menu button:hover,
+  .menu button[aria-checked='true'] {
+    background: var(--hover);
+    color: var(--text);
+  }
+  .menu .mw {
+    margin-left: auto;
+    color: var(--muted);
+    font-size: 11.5px;
+  }
+  .menu-sep {
+    height: 1px;
+    margin: 4px 6px;
+    background: var(--line);
+  }
+  /* Narrow: forward, the owner, the widths, the window and the browser go into « … »; the address keeps its room. */
+  @container conv (max-width: 760px) {
     .fwd,
     .owner,
+    .wide-only,
     .dt .lbl,
     .dt kbd {
       display: none;
+    }
+    .narrow-only {
+      display: block;
     }
   }
 </style>

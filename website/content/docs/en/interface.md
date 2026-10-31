@@ -185,7 +185,7 @@ The “History” tab shows the git graph of the whole repository, with the agen
 The “PR and CI” tab shows what the repository’s code host (GitHub, Azure DevOps) says of the open agent’s branch. A red dot on the tab says the CI of its pull request failed.
 
 - **Its pull request** at the top: number, title, state (open, draft, merged, closed), branch → target, a conflict with the target, its age and its author; the icon on the right opens it in the browser. “Agent fixes it” and “Agent addresses the feedback” hand it the failures or the feedback, on your click only. Its other pull requests are listed at the bottom.
-- **The CI**: a summary (“2 failures out of 14”) then each check, failures first, with its state (queued, running, passed, failed, cancelled) and its duration. A click on a failed check opens the end of its log. “Re-run failed jobs” re-runs the failed jobs of the last commit, on your click only. While a check runs and the tab is shown, the CI is read again every 20 s; never in the background.
+- **The CI**: a summary (“2 failures out of 14”) then each check, failures first, with its state (queued, running, passed, failed, canceled) and its duration. A click on a failed check opens the end of its log. “Re-run failed jobs” re-runs the failed jobs of the last commit, on your click only. While a check runs and the tab is shown, the CI is read again every 20 s; never in the background.
 - **The reviews and comments**, read only: who approved or requested changes, the comments with their file and line. Escouade publishes nothing there in your name.
 - **The deployments** of the branch, when the host gives them (GitHub): the environment, its state and the preview address to open.
 

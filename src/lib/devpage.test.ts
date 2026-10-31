@@ -16,6 +16,8 @@ import {
   showPage,
   STALLED_MS,
 } from './devpage.svelte';
+import { deviceFit, loadModes, MODES_KEY, modeKey, nextMode } from './devpage-key';
+import { cycleMode, modeOf, setMode } from './devpage.svelte';
 import { setLang } from './i18n';
 import { app } from './state.svelte';
 import type { Agent, TestRecipe } from './types';
@@ -188,5 +190,57 @@ describe('the devtools’ shortcut', () => {
     expect(devtoolsKey(key({ key: 'i', ctrlKey: true }), false)).toBe(false);
     expect(devtoolsKey(key({ key: 'i', ctrlKey: true, shiftKey: true }), true)).toBe(false);
     expect(devtoolsKey(key({ key: 'F11' }), false)).toBe(false);
+  });
+});
+
+describe('the widths of a page: full, tablet, mobile', () => {
+  beforeEach(() => {
+    localStorage.removeItem(MODES_KEY);
+    devpages.modes = {};
+  });
+
+  it('centres a tablet (768) or a phone (390) in the room, narrowed to a narrower room', () => {
+    expect(deviceFit('full', 1100)).toEqual({ width: 1100, left: 0, shrunk: false });
+    expect(deviceFit('tablet', 1100)).toEqual({ width: 768, left: 166, shrunk: false });
+    expect(deviceFit('mobile', 1100)).toEqual({ width: 390, left: 355, shrunk: false });
+    expect(deviceFit('tablet', 600)).toEqual({ width: 600, left: 0, shrunk: true });
+  });
+
+  it('goes round them by Ctrl+Shift+M (Cmd+Shift+M on macOS)', () => {
+    expect(nextMode('full')).toBe('tablet');
+    expect(nextMode('tablet')).toBe('mobile');
+    expect(nextMode('mobile')).toBe('full');
+    const key = (init: KeyboardEventInit) => new KeyboardEvent('keydown', init);
+    expect(modeKey(key({ key: 'M', code: 'KeyM', ctrlKey: true, shiftKey: true }), false)).toBe(true);
+    expect(modeKey(key({ key: 'M', code: 'KeyM', metaKey: true, shiftKey: true }), true)).toBe(true);
+    expect(modeKey(key({ key: 'm', ctrlKey: true }), false)).toBe(false);
+    expect(modeKey(key({ key: 'M', ctrlKey: true, shiftKey: true }), true)).toBe(false);
+  });
+
+  it('keeps the width chosen for the page (worktree · process), from one launch to the next', async () => {
+    let b = fakeBackend();
+    await openLaunchPage(A, RECIPE.open);
+    expect(modeOf('a7')).toBe('full');
+    setMode('a7', 'mobile');
+    expect(b.called('devpage_mode').map((c) => c.args)).toEqual([{ agentId: 'a7', mode: 'mobile' }]);
+    expect(loadModes()).toEqual({ 'pagination-users · web': 'mobile' });
+    cycleMode('a7');
+    expect(modeOf('a7')).toBe('full');
+    expect(loadModes()).toEqual({});
+    setMode('a7', 'tablet');
+    // Launched again (its page closed, the window started anew): the same width, laid out by it.
+    closePage('a7');
+    devpages.modes = loadModes();
+    b = fakeBackend();
+    await openLaunchPage(A, RECIPE.open);
+    expect(modeOf('a7')).toBe('tablet');
+    expect(b.called('devpage_mode').map((c) => c.args)).toEqual([{ agentId: 'a7', mode: 'tablet' }]);
+  });
+
+  it('goes to the next width by the shortcut pressed in the page', async () => {
+    fakeBackend();
+    await openLaunchPage(A, RECIPE.open);
+    onPageEvent({ agentId: 'a7', phase: 'responsive', url: '' });
+    expect(modeOf('a7')).toBe('tablet');
   });
 });

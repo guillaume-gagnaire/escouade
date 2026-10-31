@@ -52,6 +52,7 @@ test('a ready launch opens its page in the agent, apart from Escouade, and its d
   const { page } = app;
   const report = path.join(app.data, 'rapport.json');
   const pwned = path.join(app.data, 'pwned');
+  const widths = path.join(app.data, 'largeurs.txt');
   // The developed app: its page tries every way into Escouade, keeps something in its storage, says what it got, then
   // leaves for another origin (127.0.0.1 is not localhost).
   fs.writeFileSync(
@@ -59,6 +60,8 @@ test('a ready launch opens its page in the agent, apart from Escouade, and its d
     `const fs = require('node:fs');
 const port = Number(process.env.ESCOUADE_PORT_BASE) + 1;
 const PAGE = \`<!doctype html><title>demo</title><h1>Utilisateurs</h1><script>
+// Its width, as the page sees it, at each change (what its media queries see).
+addEventListener('resize', () => fetch('/width?w=' + innerWidth));
 (async () => {
   const r = { tauri: typeof window.__TAURI__, ipc: typeof window.ipc };
   const tryCall = async (cmd, args) => {
@@ -79,6 +82,7 @@ const PAGE = \`<!doctype html><title>demo</title><h1>Utilisateurs</h1><script>
 </script>\`;
 require('node:http').createServer((req, res) => {
   if (req.url === '/pwned') fs.writeFileSync(${JSON.stringify(pwned)}, 'x');
+  if (req.url.startsWith('/width?w=')) fs.appendFileSync(${JSON.stringify(widths)}, req.url.slice(9) + '\\n');
   if (req.method === 'POST' && req.url === '/report') {
     let body = '';
     req.on('data', (c) => (body += c));
@@ -137,16 +141,18 @@ require('node:http').createServer((req, res) => {
     .poll(() => windowTitles().filter((t) => t.startsWith('DevTools')), { timeout: 15_000 })
     .toEqual([expect.stringContaining(`localhost:${port}`)]);
 
+  // A phone's width: the page itself is 390 px wide, centred; a tablet's, 768; back to the whole room.
+  const seen = () => (fs.existsSync(widths) ? fs.readFileSync(widths, 'utf8').trim().split('\n').at(-1) : null);
+  await page.getByRole('radio', { name: 'Mobile' }).click();
+  await expect.poll(seen, { timeout: 15_000 }).toBe('390');
+  await expect(page.getByText('390 px', { exact: true })).toBeVisible();
+  await page.getByRole('radio', { name: 'Tablette' }).click();
+  await expect.poll(seen, { timeout: 15_000 }).toBe('768');
+  await page.getByRole('radio', { name: 'Pleine largeur' }).click();
+  await expect.poll(() => Number(seen()), { timeout: 15_000 }).toBeGreaterThan(768);
+
   // Back to the conversation and to the page again: the same page, not loaded anew.
-  await page
-    .getByRole('button', { name: 'Vue Escouade' })
-    .click()
-    .catch(() =>
-      page
-        .getByRole('button', { name: /Escouade/ })
-        .first()
-        .click(),
-    );
+  await page.getByRole('button', { name: 'Vue Escouade' }).click();
   await page.getByRole('button', { name: 'La page de son lancement, dans Escouade' }).click();
   await expect(address).toHaveValue(`http://localhost:${port}/fonction`);
 });

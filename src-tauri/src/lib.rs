@@ -591,6 +591,7 @@ pub fn run() {
                 commands::devpage_go,
                 commands::devpage_devtools,
                 commands::devpage_detach,
+                commands::devpage_mode,
                 commands::devpage_show,
                 commands::devpage_close,
                 commands::devpage_list,

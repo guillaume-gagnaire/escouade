@@ -419,6 +419,7 @@ export const fr: Catalog = {
       board: 'Le Kanban',
       autopilot: 'Le pilote auto',
       testing: 'Tester et valider',
+      browser: 'La page du lancement',
       integrations: 'Tickets externes',
       'shared-board': 'Partager le Kanban',
       'docs-space': 'L’espace Docs',

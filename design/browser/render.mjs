@@ -1,6 +1,8 @@
 // The three directions of ESC-311 (a browser inside Escouade), drawn over the app's own preview
 // (design/app-redesign/index.html) so each one sits in the real window: `node design/browser/render.mjs`.
 // a-onglet.png: the page as a view of the agent, beside the conversation and its terminal.
+// a-tablette(-en).png, a-mobile(-en).png, a-retreci(-en).png: its widths (the user's addition): a tablet's and a
+// phone's, centred on a neutral ground, and a tablet's narrowed to a room narrower than it (the CI window, 1028 px).
 // b-panneau.png: the page as a tab of the right panel, beside « Non commités » and « PR et CI ».
 // c-fenetre.png: the page in a window of its own, tied to the project.
 // etats.png: the states every direction shares (loading, waiting for the launch, not answering, stopped…).
@@ -19,6 +21,10 @@ const ICONS = `<svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="b-reload" viewBox="0 0 16 16"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.8v2.7h-2.7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
 <symbol id="b-tools" viewBox="0 0 16 16"><path d="M5.5 4.5 2 8l3.5 3.5M10.5 4.5 14 8l-3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
 <symbol id="b-ext" viewBox="0 0 16 16"><path d="M9 2.5h4.5V7M13.5 2.5 7.5 8.5M12 9.5v3a1 1 0 0 1-1 1H3.5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="b-monitor" viewBox="0 0 16 16"><rect x="2" y="2.75" width="12" height="8.5" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M6 13.25h4M8 11.25v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+<symbol id="b-tablet" viewBox="0 0 16 16"><rect x="3.5" y="2" width="9" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7.25 11.75h1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+<symbol id="b-phone" viewBox="0 0 16 16"><rect x="5" y="2" width="6" height="12" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7.4 11.75h1.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+<symbol id="b-expand" viewBox="0 0 16 16"><path d="M9.5 2.75h3.75V6.5M6.5 13.25H2.75V9.5M13.25 2.75 9 7M2.75 13.25 7 9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
 <symbol id="b-page" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M2 6h12" stroke="currentColor" stroke-width="1.4"/><circle cx="4.2" cy="4.6" r=".55" fill="currentColor"/><circle cx="5.9" cy="4.6" r=".55" fill="currentColor"/></symbol>
 </defs></svg>`;
 
@@ -271,4 +277,106 @@ await shot('c-fenetre');
 await page.setViewportSize({ width: 1440, height: 900 });
 await states(page);
 await page.screenshot({ path: join(dir, 'etats.png'), fullPage: true });
+// Its widths, in French and in English.
+const T = {
+  fr: {
+    back: 'Retour', fwd: 'Avancer', reload: 'Recharger', widths: 'Largeur de la page', full: 'Pleine largeur', tablet: 'Tablette', mobile: 'Mobile',
+    shrunk: (w) => `Rétréci à ${w} px`, detach: 'Ouvrir dans une fenêtre à part', system: 'Ouvrir dans le navigateur du système',
+    foot: 'Lancement <b>web</b> prêt en 2,7 s', apart: 'Page à part : ni Escouade, ni tes cookies',
+    tip: (w) => `La zone est plus étroite que 768 px : la page y est rétrécie à ${w} px.`, page: 'Page',
+  },
+  en: {
+    back: 'Back', fwd: 'Forward', reload: 'Reload', widths: 'Page width', full: 'Full width', tablet: 'Tablet', mobile: 'Mobile',
+    shrunk: (w) => `Narrowed to ${w} px`, detach: 'Open in a separate window', system: 'Open in the system browser',
+    foot: 'Launch <b>web</b> ready in 2.7 s', apart: 'A page apart: neither Escouade nor your cookies',
+    tip: (w) => `The area is narrower than 768 px: the page is narrowed to ${w} px.`, page: 'Page',
+  },
+};
+const RCSS = `
+.bw-modes { display:inline-flex; gap:2px; padding:2px; border-radius:8px; background:rgba(var(--fg-rgb), .035); flex:none; }
+.bw-modes button { display:inline-grid; place-items:center; width:26px; height:24px; border-radius:6px; color:var(--muted); }
+.bw-modes button svg { width:14px; height:14px; }
+.bw-modes button[aria-checked=true] { background:var(--sel); color:var(--text); }
+.bw-width { flex:none; margin:0 4px; color:var(--muted); font-size:11.5px; white-space:nowrap; font-feature-settings:'tnum'; }
+.bw-width.shrunk { color:var(--wait); }
+.bw-view.device { background:var(--well); display:flex; justify-content:center; }
+.bw-view.device > .dev { height:100%; overflow:hidden; border-inline:1px solid var(--line-2); background:#fff; }
+.bw-tip { position:absolute; z-index:5; padding:7px 10px; border-radius:8px; background:var(--raise); color:var(--soft); font-size:12px; max-width:280px; box-shadow:0 0 0 1px var(--line-2), 0 10px 26px -8px rgba(0,0,0,.6); }
+.site.phone header { gap:14px; padding:0 14px; } .site.phone main { padding:16px 14px; } .site.phone .search input { max-width:none; }
+.site.phone td.m { display:none; } .site.phone th:nth-child(2) { display:none; }
+`;
+const rbar = (L, mode, label, small) => small ? `<div class="bw-bar">
+  <button class="ib" aria-label="${L.back}"><svg><use href="#b-back"/></svg></button>
+  <button class="ib" aria-label="${L.reload}"><svg><use href="#b-reload"/></svg></button>
+  <div class="bw-addr"><i class="dot"></i><span class="o">localhost:41731</span><span class="pth">/users?search=marie@</span></div>
+  ${label}
+  <button class="bw-dt"><svg><use href="#b-tools"/></svg></button>
+  <button class="ib" aria-label="…"><svg><use href="#i-more"/></svg></button>
+</div>` : `<div class="bw-bar">
+  <button class="ib" aria-label="${L.back}"><svg><use href="#b-back"/></svg></button>
+  <button class="ib" aria-label="${L.fwd}" disabled><svg><use href="#b-fwd"/></svg></button>
+  <button class="ib" aria-label="${L.reload}"><svg><use href="#b-reload"/></svg></button>
+  <div class="bw-addr"><i class="dot"></i><span class="o">localhost:41731</span><span class="pth">/users?search=marie@</span></div>
+  <span class="bw-owner"><svg class="i"><use href="#i-branch"/></svg>pagination-users <span class="k">· web</span></span>
+  <span class="bw-sep"></span>
+  <div class="bw-modes" role="radiogroup" aria-label="${L.widths}">
+    <button role="radio" aria-checked="${mode === 'full'}" aria-label="${L.full}"><svg><use href="#b-monitor"/></svg></button>
+    <button role="radio" aria-checked="${mode === 'tablet'}" aria-label="${L.tablet}"><svg><use href="#b-tablet"/></svg></button>
+    <button role="radio" aria-checked="${mode === 'mobile'}" aria-label="${L.mobile}"><svg><use href="#b-phone"/></svg></button>
+  </div>
+  ${label}
+  <button class="bw-dt"><svg><use href="#b-tools"/></svg>Devtools <kbd>F12</kbd></button>
+  <button class="ib" aria-label="${L.detach}"><svg><use href="#b-expand"/></svg></button>
+  <button class="ib" aria-label="${L.system}"><svg><use href="#b-ext"/></svg></button>
+</div>`;
+
+async function widths(page, mode, lang, small) {
+  const L = T[lang];
+  await page.setViewportSize(small ? { width: 1028, height: 779 } : SIZE);
+  await page.goto('about:blank');
+  await page.goto(`${app}${lang === 'en' ? '?lang=en' : ''}#agents`);
+  await page.waitForTimeout(400);
+  await page.evaluate(([css, icons]) => {
+    const st = document.createElement('style');
+    st.textContent = css;
+    document.head.append(st);
+    document.body.insertAdjacentHTML('afterbegin', icons);
+  }, [CSS + RCSS, ICONS]);
+  // The room first, measured; the bar after, by its width.
+  await page.evaluate(`(() => {
+    ${launches};
+    const v = document.querySelector('#view-agents'); v.classList.add('bw-a');
+    const seg = document.querySelector('#vseg');
+    seg.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', 'false'));
+    seg.insertAdjacentHTML('beforeend', '<button aria-pressed="true"><svg class="i s14"><use href="#b-page"/></svg><span class="lbl">${L.page}</span></button>');
+    document.querySelector('#h-launch').hidden = true;
+    const side = document.querySelector('#side'); if (side) side.hidden = true;
+    document.querySelector('.conv').insertAdjacentHTML('beforeend', '<div class="bw"><div class="bw-bar"></div><div class="bw-view device"><div class="dev"></div></div><div class="bw-foot"><i class="d"></i><span>${L.foot}</span><span class="sp"></span><span>${L.apart}</span></div></div>');
+  })()`);
+  const room = await page.evaluate(() => Math.round(document.querySelector('.bw-view').getBoundingClientRect().width));
+  const device = mode === 'tablet' ? 768 : 390;
+  const w = Math.min(device, room);
+  const shrunk = w < device;
+  const label = `<span class="bw-width${shrunk ? ' shrunk' : ''}">${shrunk ? L.shrunk(w) : `${device} px`}</span>`;
+  await page.evaluate(([html, site, w, tip]) => {
+    document.querySelector('.bw .bw-bar').outerHTML = html;
+    const dev = document.querySelector('.bw .dev');
+    dev.style.width = w + 'px';
+    dev.innerHTML = site;
+    if (tip) {
+      const label = document.querySelector('.bw-width').getBoundingClientRect();
+      document.body.insertAdjacentHTML('beforeend', `<div class="bw-tip" style="left:${label.left - 120}px;top:${label.bottom + 8}px">${tip}</div>`);
+    }
+  }, [rbar(L, mode, label, small), SITE(mode === 'mobile').replace('<div class="site">', `<div class="site${mode === 'mobile' ? ' phone' : ''}">`), w, shrunk ? L.tip(w) : '']);
+}
+
+for (const lang of ['fr', 'en']) {
+  const end = lang === 'en' ? '-en' : '';
+  await widths(page, 'tablet', lang, false);
+  await shot(`a-tablette${end}`);
+  await widths(page, 'mobile', lang, false);
+  await shot(`a-mobile${end}`);
+  await widths(page, 'tablet', lang, true);
+  await shot(`a-retreci${end}`);
+}
 await browserApp.close();

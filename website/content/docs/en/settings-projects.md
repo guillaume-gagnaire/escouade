@@ -160,6 +160,8 @@ Nothing is saved before “Save”. A message says how many commands are suggest
 
 Launch commands start the project’s servers, watchers, and services. Each one runs in its own terminal, read-only, started from the Launch section of the sidebar. That section’s gear (“Launch commands…”) opens this tab on this group. When the section is empty, its “Configure” and “✦ Suggest commands” links open it too, the second one also starting the fill-in. See [launch](launch) and [terminals](terminals).
 
+“Open the launches’ pages” says where the page of a ready test opens (see [The launch page](browser)): “In the agent” (default), “In a separate window” or “In the system browser”. This choice stays on your machine.
+
 With no command, the group says “No commands yet.”. Each command has four fields.
 
 | Field | Effect |

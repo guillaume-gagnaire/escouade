@@ -8,6 +8,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Nouveautés
 
+- La page de l’app que l’agent vient de développer s’ouvre toute seule dans Escouade quand « ▶ Tester » est prêt, dans la vue « Page » de l’agent ou dans une fenêtre « Pages » à part, avec ses outils de développement (F12) et trois largeurs : pleine, tablette et mobile. Elle tourne à part, sans accès à Escouade ni à tes cookies ; Réglages › Projets garde le navigateur du système si tu préfères.
 - L’onglet « PR et CI » du panneau de droite montre la PR de la branche de l’agent : sa CI vérification par vérification, le journal d’un échec, « Relancer les échecs » d’un clic, ses revues et ses déploiements. Sans agent, il liste les PR ouvertes du projet, et la carte d’un agent dit l’état de sa CI à côté de « #41 → main ».
 - Les plugins ont leur vue, ouverte par l’icône de la barre des projets : installer depuis un dossier ou un dépôt git après avoir vu d’où vient le plugin, son empreinte, ce qu’il ajoute et ce qu’il pourra faire, la permission la plus forte d’abord ; l’activer pour l’app ou projet par projet, un projet privé restant coupé d’office ; lui retirer une permission, régler ses secrets, lire son journal, le désinstaller.
 - Une nouvelle version d’un plugin est proposée, jamais installée seule, et redemande ton accord si elle demande plus que la version installée.

@@ -4,7 +4,17 @@
   // Escouade's own interface, the only part of the window that may call its commands.
   import { listen } from '@tauri-apps/api/event';
   import { onDestroy, onMount } from 'svelte';
-  import { devtoolsKey, typedAddress } from '../lib/devpage-key';
+  import {
+    DEVICE_WIDTH,
+    deviceFit,
+    devtoolsKey,
+    modeKey,
+    nextMode,
+    PAGE_MODES,
+    saveMode,
+    typedAddress,
+    type PageMode,
+  } from '../lib/devpage-key';
   import { t } from '../lib/i18n';
   import { api } from '../lib/ipc';
   import { openUrl } from '../lib/opener';
@@ -19,6 +29,18 @@
   let typed = $state<string | null>(null);
   const page = $derived(pages.find((p) => p.agentId === shown) ?? null);
   const shortcut = IS_MAC ? '⌥⌘I' : 'F12';
+  const MODE_ICON = { full: 'monitor', tablet: 'tablet', mobile: 'phone' } as const;
+  const mode = $derived<PageMode>(page?.mode ?? 'full');
+  /** The window's width: its page is laid out in it, centred and narrowed as in the agent's view. */
+  let width = $state(window.innerWidth);
+  const fit = $derived(deviceFit(mode, width));
+
+  /** Shows the page at `m`, kept for its next launches as in the agent's view. */
+  function setMode(m: PageMode) {
+    if (!page) return;
+    saveMode(page.title, m);
+    void act(api.devpageMode(page.agentId, m));
+  }
 
   const take = (of: { pages: PageView[]; shown: string | null }) => {
     pages = of.pages.filter((p) => p.detached);
@@ -45,10 +67,14 @@
 </script>
 
 <svelte:window
+  bind:innerWidth={width}
   onkeydown={(e) => {
     if (page && devtoolsKey(e, IS_MAC)) {
       e.preventDefault();
       void act(api.devpageDevtools(page.agentId));
+    } else if (page && modeKey(e, IS_MAC)) {
+      e.preventDefault();
+      setMode(nextMode(mode));
     }
   }}
 />
@@ -85,6 +111,25 @@
           onblur={() => (typed = null)}
         />
       </form>
+      <div class="modes" role="radiogroup" aria-label={t('devpage.modesLabel')}>
+        {#each PAGE_MODES as m (m)}
+          <button
+            role="radio"
+            aria-checked={mode === m}
+            aria-label={t(`devpage.modes.${m}`)}
+            title={t(`devpage.modes.${m}`)}
+            onclick={() => setMode(m)}><Icon name={MODE_ICON[m]} size={14} /></button
+          >
+        {/each}
+      </div>
+      {#if mode !== 'full'}
+        <span
+          class="width"
+          class:shrunk={fit.shrunk}
+          title={fit.shrunk ? t('devpage.shrunk', { width: fit.width, device: DEVICE_WIDTH[mode] }) : undefined}
+          >{fit.shrunk ? t('devpage.shrunkShort', { width: fit.width }) : t('devpage.width', { width: DEVICE_WIDTH[mode] })}</span
+        >
+      {/if}
       <button class="dt" aria-label={t('devpage.devtoolsHint', { key: shortcut })} onclick={() => act(api.devpageDevtools(page.agentId))}
         ><Icon name="code" size={14} />{t('devpage.devtools')}<kbd>{shortcut}</kbd></button
       >
@@ -202,6 +247,34 @@
     font-size: 12px;
     font-weight: 550;
     box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .modes {
+    display: inline-flex;
+    gap: 2px;
+    padding: 2px;
+    border-radius: 8px;
+    background: rgba(var(--fg-rgb), 0.035);
+  }
+  .modes button {
+    display: inline-grid;
+    place-items: center;
+    width: 26px;
+    height: 24px;
+    border-radius: 6px;
+    color: var(--muted);
+  }
+  .modes button[aria-checked='true'] {
+    background: var(--sel);
+    color: var(--text);
+  }
+  .width {
+    margin: 0 4px;
+    color: var(--muted);
+    font-size: 11.5px;
+    white-space: nowrap;
+  }
+  .width.shrunk {
+    color: var(--wait);
   }
   .dt kbd {
     padding: 1px 4px;

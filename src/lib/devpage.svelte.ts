@@ -135,6 +135,11 @@ export async function detach(agentId: string, detached: boolean) {
   const view = await app.run(api.devpageDetach(agentId, detached));
   const page = devpages.pages[agentId];
   if (view && page) page.detached = view.detached;
+  // Back from its window: the width it was given there.
+  if (view && page && view.mode) {
+    if (view.mode === 'full') delete devpages.modes[page.title];
+    else devpages.modes[page.title] = view.mode;
+  }
   if (view) devpages.shown[agentId] = !view.detached;
 }
 

@@ -33,6 +33,42 @@ pub const BAR_HEIGHT: f64 = 84.0;
 /// The address a page goes to, by its shortcut (F12, Cmd+Opt+I, Ctrl+Shift+I), to ask for its
 /// devtools: refused, and the devtools open (`judge` → `Verdict::Devtools`).
 pub const DEVTOOLS_URL: &str = "escouade-devtools://open/";
+/// The address a page goes to, by its shortcut (Ctrl+Shift+M, Cmd+Shift+M), to be shown at the
+/// next width (`Verdict::Responsive`).
+pub const RESPONSIVE_URL: &str = "escouade-devtools://responsive/";
+
+/// The width a page is shown at: the whole room, a tablet's, a phone's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PageMode {
+    #[default]
+    Full,
+    Tablet,
+    Mobile,
+}
+
+impl PageMode {
+    /// Its width in logical pixels: an iPad in portrait, a recent iPhone; none for the whole room.
+    pub fn device_width(self) -> Option<f64> {
+        match self {
+            PageMode::Full => None,
+            PageMode::Tablet => Some(768.0),
+            PageMode::Mobile => Some(390.0),
+        }
+    }
+}
+
+/// Where a page shown at `mode` goes in a room `width` wide: its width and its left, centred;
+/// narrowed to the room when the room is narrower than the device.
+pub fn device_fit(mode: PageMode, width: f64) -> (f64, f64) {
+    match mode.device_width() {
+        None => (width, 0.0),
+        Some(device) => {
+            let w = device.min(width).max(1.0);
+            (w, ((width - w) / 2.0).round().max(0.0))
+        }
+    }
+}
 
 /// Keeps a label to what Tauri allows (letters, digits, `-`, `_`), every other character an `_`.
 fn clean(id: &str) -> String {
@@ -76,6 +112,8 @@ pub enum Verdict {
     Outside,
     /// Its shortcut for its devtools: refused, and they open.
     Devtools,
+    /// Its shortcut for the next width: refused, and the window shows it so.
+    Responsive,
     /// Escouade's own pages, a file, a script, another scheme: refused, opened nowhere.
     Nowhere,
 }
@@ -86,6 +124,9 @@ pub enum Verdict {
 pub fn judge(url: &Url, home: &Url, own: impl Fn(&Url) -> bool) -> Verdict {
     if url.as_str() == DEVTOOLS_URL {
         return Verdict::Devtools;
+    }
+    if url.as_str() == RESPONSIVE_URL {
+        return Verdict::Responsive;
     }
     if own(url) {
         return Verdict::Nowhere;
@@ -129,14 +170,18 @@ pub fn store_id(project_id: &str) -> [u8; 16] {
     id
 }
 
-/// What the page's shortcut runs in it: F12, Cmd+Opt+I (macOS) and Ctrl+Shift+I ask for its
-/// devtools by `DEVTOOLS_URL`. Nothing else is added to the page.
+/// What the page's shortcuts run in it: F12, Cmd+Opt+I (macOS) and Ctrl+Shift+I ask for its
+/// devtools by `DEVTOOLS_URL`; Ctrl+Shift+M (Cmd+Shift+M) for the next width by `RESPONSIVE_URL`.
+/// Nothing else is added to the page.
 pub fn shortcut_script() -> String {
     format!(
         "window.addEventListener('keydown', function (e) {{\
            var k = (e.key || '').toLowerCase();\
-           if (e.key === 'F12' || (k === 'i' && ((e.metaKey && e.altKey) || (e.ctrlKey && e.shiftKey)))) {{\
+           var i = k === 'i' || e.code === 'KeyI', m = k === 'm' || e.code === 'KeyM';\
+           if (e.key === 'F12' || (i && ((e.metaKey && e.altKey) || (e.ctrlKey && e.shiftKey)))) {{\
              e.preventDefault(); e.stopPropagation(); window.location.href = '{DEVTOOLS_URL}';\
+           }} else if (m && e.shiftKey && !e.altKey && (e.ctrlKey || e.metaKey)) {{\
+             e.preventDefault(); e.stopPropagation(); window.location.href = '{RESPONSIVE_URL}';\
            }}\
          }}, true);"
     )
@@ -163,6 +208,8 @@ pub struct PageView {
     pub url: String,
     /// In the project's « Pages » window, not in the agent's view.
     pub detached: bool,
+    /// The width it is shown at.
+    pub mode: PageMode,
 }
 
 /// What happened to a page, for the window (`UiEvent::DevPage`) and the « Pages » windows.
@@ -224,6 +271,17 @@ impl Pages {
         let p = pages.get_mut(agent_id)?;
         p.detached = detached;
         Some(p.clone())
+    }
+
+    /// Shows the page of `agent_id` at `mode`. False when it is not open.
+    pub fn set_mode(&self, agent_id: &str, mode: PageMode) -> bool {
+        match self.pages.lock().get_mut(agent_id) {
+            Some(p) => {
+                p.mode = mode;
+                true
+            }
+            None => false,
+        }
     }
 
     fn remove(&self, agent_id: &str) -> Option<PageView> {
@@ -305,6 +363,7 @@ pub fn open<R: Runtime>(
         title: o.title.to_string(),
         url: url.to_string(),
         detached: o.detached,
+        mode: PageMode::Full,
     };
     if o.detached {
         let window = pages_window(app, pages, o.project_id)?;
@@ -456,6 +515,8 @@ fn act<R: Runtime>(
             }
             "devtools"
         }
+        // The window knows the widths and keeps the one chosen (and lays out the page by it).
+        Verdict::Responsive => "responsive",
         _ => {
             log::info!(
                 "a page was refused {}://{}",
@@ -468,7 +529,7 @@ fn act<R: Runtime>(
     tell(PageEvent {
         agent_id: agent.to_string(),
         phase,
-        url: if verdict == Verdict::Devtools {
+        url: if matches!(verdict, Verdict::Devtools | Verdict::Responsive) {
             String::new()
         } else {
             to.to_string()
@@ -559,8 +620,9 @@ fn lay_out<R: Runtime>(app: &AppHandle<R>, pages: &Pages, project_id: &str) {
             continue;
         };
         if shown.as_deref() == Some(p.agent_id.as_str()) {
-            let _ = page.set_position(LogicalPosition::new(0.0, BAR_HEIGHT));
-            let _ = page.set_size(LogicalSize::new(w, (h - BAR_HEIGHT).max(1.0)));
+            let (pw, left) = device_fit(p.mode, w);
+            let _ = page.set_position(LogicalPosition::new(left, BAR_HEIGHT));
+            let _ = page.set_size(LogicalSize::new(pw, (h - BAR_HEIGHT).max(1.0)));
             let _ = page.show();
         } else {
             let _ = page.hide();
@@ -658,6 +720,26 @@ pub fn go<R: Runtime>(
         }
         other => Err(format!("unknown action {other}")),
     }
+}
+
+/// Shows the page of agent `agent_id` at `mode`: in the « Pages » window, laid out again at once
+/// (in the agent's view, the window places it by its mode).
+pub fn set_mode<R: Runtime>(
+    app: &AppHandle<R>,
+    pages: &Pages,
+    agent_id: &str,
+    mode: PageMode,
+) -> Result<(), String> {
+    if !pages.set_mode(agent_id, mode) {
+        return Err("no page for this agent".into());
+    }
+    if let Some(p) = pages.get(agent_id) {
+        if p.detached {
+            lay_out(app, pages, &p.project_id);
+            tell_bar(app, &p.project_id, pages);
+        }
+    }
+    Ok(())
 }
 
 /// Opens the devtools of the page of agent `agent_id`, never the window's.

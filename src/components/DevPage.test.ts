@@ -1,9 +1,10 @@
 // The agent's view « Page » (ESC-311): its bar, what its buttons and its shortcut ask the backend, its states said in
 // French and in English, and the page hidden when it cannot show.
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { devpages } from '../lib/devpage.svelte';
+import { MODES_KEY } from '../lib/devpage-key';
 import { setLang } from '../lib/i18n';
 import { app } from '../lib/state.svelte';
 import { flows } from '../lib/test-launch.svelte';
@@ -143,5 +144,82 @@ describe('its states', () => {
     expect(screen.getByRole('button', { name: 'Launch again' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Open in the system browser' })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Developer tools of this page/ })).toBeTruthy();
+  });
+});
+
+describe('its widths', () => {
+  /** The room of the page measures `width` × 700 at (330, 112). */
+  function room(width: number) {
+    const el = document.querySelector('.room') as HTMLElement;
+    el.getBoundingClientRect = () => ({ left: 330, top: 112, width, height: 700, right: 330 + width, bottom: 812 }) as DOMRect;
+  }
+  const frame = () => new Promise((r) => requestAnimationFrame(r));
+
+  beforeEach(() => {
+    localStorage.removeItem(MODES_KEY);
+    devpages.modes = {};
+  });
+
+  it('has a selector of three, full width at first, that places the page at a tablet’s width, centred', async () => {
+    launch(true);
+    const b = fakeBackend();
+    render(DevPage, { agent: A });
+    room(1100);
+    const widths = screen.getByRole('radiogroup', { name: 'Largeur de la page' });
+    expect(screen.getByRole('radio', { name: 'Pleine largeur' })).toHaveAttribute('aria-checked', 'true');
+    expect(widths.querySelectorAll('[role="radio"]')).toHaveLength(3);
+    await fireEvent.click(screen.getByRole('radio', { name: 'Tablette' }));
+    await tick();
+    await frame();
+    expect(screen.getByRole('radio', { name: 'Tablette' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByText('768 px')).toBeTruthy();
+    expect(b.called('devpage_mode').at(-1)?.args).toEqual({ agentId: 'a7', mode: 'tablet' });
+    expect(b.called('devpage_place').at(-1)?.args.bounds).toEqual({ x: 496, y: 112, width: 768, height: 700 });
+  });
+
+  it('narrows a phone to a narrower room, and says so', async () => {
+    launch(true);
+    devpages.modes['pagination-users · web'] = 'mobile';
+    const b = fakeBackend();
+    render(DevPage, { agent: A });
+    room(320);
+    window.dispatchEvent(new Event('resize'));
+    await frame();
+    await tick();
+    expect(screen.getByText('Rétréci à 320 px')).toBeTruthy();
+    expect(b.called('devpage_place').at(-1)?.args.bounds).toEqual({ x: 330, y: 112, width: 320, height: 700 });
+  });
+
+  it('goes round the widths by Ctrl+Shift+M', async () => {
+    launch(true);
+    fakeBackend();
+    render(DevPage, { agent: A });
+    await fireEvent.keyDown(window, { key: 'M', code: 'KeyM', ctrlKey: true, shiftKey: true });
+    expect(screen.getByRole('radio', { name: 'Tablette' })).toHaveAttribute('aria-checked', 'true');
+    await fireEvent.keyDown(window, { key: 'M', code: 'KeyM', ctrlKey: true, shiftKey: true });
+    expect(screen.getByRole('radio', { name: 'Mobile' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('in « … » when narrow, with the other secondary buttons', async () => {
+    launch(true);
+    const b = fakeBackend();
+    render(DevPage, { agent: A });
+    await fireEvent.click(screen.getByRole('button', { name: 'Plus d’actions sur la page' }));
+    const menu = screen.getByRole('menu', { name: 'Plus d’actions sur la page' });
+    for (const name of ['Avancer', 'Ouvrir dans une fenêtre à part', 'Ouvrir dans le navigateur du système'])
+      expect(within(menu).getByRole('menuitem', { name })).toBeTruthy();
+    await fireEvent.click(screen.getByRole('menuitemradio', { name: /Mobile/ }));
+    expect(b.called('devpage_mode').at(-1)?.args).toEqual({ agentId: 'a7', mode: 'mobile' });
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('in English too', () => {
+    setLang('en');
+    launch(true);
+    devpages.modes['pagination-users · web'] = 'tablet';
+    fakeBackend();
+    render(DevPage, { agent: A });
+    expect(screen.getByRole('radiogroup', { name: 'Page width' })).toBeTruthy();
+    for (const name of ['Full width', 'Tablet', 'Mobile']) expect(screen.getByRole('radio', { name })).toBeTruthy();
   });
 });

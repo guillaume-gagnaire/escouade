@@ -4076,6 +4076,17 @@ pub fn devpage_detach(
     crate::devpage::detach(&app, &pages, &agent_id, detached)
 }
 
+/// Shows the page of agent `agent_id` at a width: `full`, `tablet` or `mobile`.
+#[tauri::command]
+pub fn devpage_mode(
+    app: tauri::AppHandle,
+    pages: State<Arc<crate::devpage::Pages>>,
+    agent_id: String,
+    mode: crate::devpage::PageMode,
+) -> Res<()> {
+    crate::devpage::set_mode(&app, &pages, &agent_id, mode)
+}
+
 /// The « Pages » window shows the page of agent `agent_id` (its tab clicked).
 #[tauri::command]
 pub fn devpage_show(

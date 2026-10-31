@@ -238,3 +238,39 @@ fn launching_again_keeps_one_page_per_agent() {
     assert!(pages.get("a1").is_none());
     assert_eq!(pages.of_project("p1").len(), 1);
 }
+
+#[test]
+fn a_tablet_or_a_phone_is_centred_and_narrowed_to_the_room() {
+    // The whole room.
+    assert_eq!(device_fit(PageMode::Full, 1100.0), (1100.0, 0.0));
+    // A tablet (768) and a phone (390), centred.
+    assert_eq!(device_fit(PageMode::Tablet, 1100.0), (768.0, 166.0));
+    assert_eq!(device_fit(PageMode::Mobile, 1100.0), (390.0, 355.0));
+    // A room narrower than the device: the page takes the room.
+    assert_eq!(device_fit(PageMode::Tablet, 600.0), (600.0, 0.0));
+    assert_eq!(device_fit(PageMode::Mobile, 300.0), (300.0, 0.0));
+    // Said to the window as it says them.
+    assert_eq!(
+        serde_json::to_string(&PageMode::Mobile).unwrap(),
+        "\"mobile\""
+    );
+    assert_eq!(
+        serde_json::from_str::<PageMode>("\"tablet\"").unwrap(),
+        PageMode::Tablet
+    );
+}
+
+#[test]
+fn the_width_shortcut_asks_the_window_for_the_next_width() {
+    let home = url("http://localhost:41731/");
+    assert_eq!(judge(&url(RESPONSIVE_URL), &home, own), Verdict::Responsive);
+    let script = shortcut_script();
+    assert!(script.contains(RESPONSIVE_URL));
+    assert!(script.contains("e.code === 'KeyM'"));
+}
+
+#[test]
+fn the_width_chosen_is_kept_on_the_page() {
+    let pages = Pages::default();
+    assert!(!pages.set_mode("a1", PageMode::Mobile), "no page yet");
+}
