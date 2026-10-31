@@ -597,6 +597,82 @@ fn window_title<R: Runtime>(app: &AppHandle<R>, project_id: &str) -> String {
     format!("{name} · Pages")
 }
 
+/// Places `webview` at `b`, in its window's logical pixels.
+fn set_bounds<R: Runtime>(webview: &tauri::Webview<R>, b: Bounds) -> Result<(), String> {
+    webview
+        .set_position(LogicalPosition::new(b.x, b.y))
+        .map_err(|e| e.to_string())?;
+    webview
+        .set_size(LogicalSize::new(b.width, b.height))
+        .map_err(|e| e.to_string())?;
+    // WebKitGTK: Tauri 2.12 packs a window's child webviews in a `GtkBox`, one after the other, and
+    // only allocates a size once: a page there can neither be placed nor narrowed, and a size
+    // requested of it grows the window (seen by `devpage_probe`). It goes into a `gtk::Layout`
+    // that takes the place of the window's own webview in the box, and is placed there.
+    #[cfg(target_os = "linux")]
+    {
+        let (x, y) = (b.x.round() as i32, b.y.round() as i32);
+        let (w, h) = (
+            b.width.round().max(1.0) as i32,
+            b.height.round().max(1.0) as i32,
+        );
+        webview
+            .with_webview(move |platform| {
+                use gtk::prelude::*;
+                let view = platform.inner();
+                if let Some(layout) = gtk_layout_of(view.upcast_ref()) {
+                    view.set_size_request(w, h);
+                    layout.move_(&view, x, y);
+                }
+            })
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// The `gtk::Layout` `view` is placed in: made the first time, in the place of the window's own
+/// webview in its `GtkBox` (which then follows the size the layout is given), `view` moved in.
+/// A layout asks the window for no size: the window still shrinks as the user wants.
+#[cfg(target_os = "linux")]
+fn gtk_layout_of(view: &gtk::Widget) -> Option<gtk::Layout> {
+    use gtk::prelude::*;
+    let parent = view.parent()?;
+    if let Ok(layout) = parent.clone().downcast::<gtk::Layout>() {
+        return Some(layout);
+    }
+    let boxed = parent.downcast::<gtk::Box>().ok()?;
+    let children = boxed.children();
+    let layout = match children
+        .iter()
+        .find_map(|c| c.clone().downcast::<gtk::Layout>().ok())
+    {
+        Some(layout) => layout,
+        None => {
+            // The window's own webview: the first child that is not this page.
+            let own = children.iter().find(|c| *c != view)?.clone();
+            let layout = gtk::Layout::new(None::<&gtk::Adjustment>, None::<&gtk::Adjustment>);
+            boxed.remove(&own);
+            boxed.pack_start(&layout, true, true, 0);
+            boxed.reorder_child(&layout, 0);
+            layout.put(&own, 0, 0);
+            let follow = own.clone();
+            layout.connect_size_allocate(move |_, room| {
+                if follow.allocated_width() != room.width()
+                    || follow.allocated_height() != room.height()
+                {
+                    follow.set_size_request(room.width(), room.height());
+                }
+            });
+            layout.show_all();
+            layout
+        }
+    };
+    boxed.remove(view);
+    layout.put(view, 0, 0);
+    view.show();
+    Some(layout)
+}
+
 /// The bar and the page shown of the « Pages » window of project `project_id`, at its size.
 fn lay_out<R: Runtime>(app: &AppHandle<R>, pages: &Pages, project_id: &str) {
     let Some(window) = app.get_window(&window_label(project_id)) else {
@@ -607,8 +683,15 @@ fn lay_out<R: Runtime>(app: &AppHandle<R>, pages: &Pages, project_id: &str) {
     };
     let (w, h) = (size.width as f64 / scale, size.height as f64 / scale);
     if let Some(bar) = app.get_webview(&bar_label(project_id)) {
-        let _ = bar.set_position(LogicalPosition::new(0.0, 0.0));
-        let _ = bar.set_size(LogicalSize::new(w, BAR_HEIGHT));
+        let _ = set_bounds(
+            &bar,
+            Bounds {
+                x: 0.0,
+                y: 0.0,
+                width: w,
+                height: BAR_HEIGHT,
+            },
+        );
     }
     let shown = pages.shown_in_window(project_id);
     for p in pages
@@ -621,8 +704,15 @@ fn lay_out<R: Runtime>(app: &AppHandle<R>, pages: &Pages, project_id: &str) {
         };
         if shown.as_deref() == Some(p.agent_id.as_str()) {
             let (pw, left) = device_fit(p.mode, w);
-            let _ = page.set_position(LogicalPosition::new(left, BAR_HEIGHT));
-            let _ = page.set_size(LogicalSize::new(pw, (h - BAR_HEIGHT).max(1.0)));
+            let _ = set_bounds(
+                &page,
+                Bounds {
+                    x: left,
+                    y: BAR_HEIGHT,
+                    width: pw,
+                    height: (h - BAR_HEIGHT).max(1.0),
+                },
+            );
             let _ = page.show();
         } else {
             let _ = page.hide();
@@ -687,12 +777,7 @@ pub fn place<R: Runtime>(
     };
     match bounds {
         Some(b) if b.width >= 1.0 && b.height >= 1.0 => {
-            webview
-                .set_position(LogicalPosition::new(b.x, b.y))
-                .map_err(|e| e.to_string())?;
-            webview
-                .set_size(LogicalSize::new(b.width, b.height))
-                .map_err(|e| e.to_string())?;
+            set_bounds(&webview, b)?;
             webview.show().map_err(|e| e.to_string())
         }
         _ => webview.hide().map_err(|e| e.to_string()),

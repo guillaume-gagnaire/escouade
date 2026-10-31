@@ -33,8 +33,22 @@ describe('TestLaunchModal', () => {
     };
   });
 
+  it('says the page opened in the agent, and reopens it there (ESC-311)', async () => {
+    const backend = fakeBackend();
+    flows.all.a7.where = 'agent';
+    render(TestLaunchModal, { agentId: 'a7' });
+    expect(screen.getByText(/Ouvert dans Escouade/)).toHaveTextContent(
+      'Ouvert dans Escouade, vue « Page » de l’agent : http://localhost:4111/connexion',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Rouvrir' }));
+    expect(backend.called('devpage_open')[0].args).toMatchObject({ agentId: 'a7', url: 'http://localhost:4111/connexion' });
+    expect(backend.called('open_url')).toHaveLength(0);
+  });
+
   it('shows each line, where the browser went, and reopens it', async () => {
     const backend = fakeBackend();
+    // The project keeps the system's browser.
+    app.projects[0].pagesOpen = 'system';
     render(TestLaunchModal, { agentId: 'a7' });
     expect(screen.getByRole('dialog', { name: 'Tester DEM-1' })).toBeInTheDocument();
     expect(screen.getByText('prêt · 1,8 s')).toBeInTheDocument();

@@ -54,6 +54,7 @@ mod deeplink;
 mod deeplink_tests;
 mod desktop;
 mod devpage;
+mod devpage_probe;
 #[cfg(test)]
 mod devpage_tests;
 mod discussion;
@@ -386,6 +387,17 @@ fn build_window(app: &tauri::App) -> tauri::Result<()> {
 /// for the plugins' authors (PLG-3). Gives the exit code.
 pub fn plugin_cli(args: Vec<String>) -> i32 {
     plugins::bench::cli::main(args)
+}
+
+/// The app's context (its config and its pages), made once: the window's and the probes'.
+fn context() -> tauri::Context {
+    tauri::generate_context!()
+}
+
+/// `devpage_probe` (examples): a launch's page in a real webview of this system (ESC-311), what it
+/// could reach of Escouade, its storage, its devtools and its widths. Gives the exit code.
+pub fn devpage_probe_cli(args: Vec<String>) -> i32 {
+    devpage_probe::cli(args, context())
 }
 
 /// `codeindex_probes` (examples): the probes bench of the code index against grep (ESC-294,
@@ -888,7 +900,7 @@ pub fn run() {
                 commands::speech_preview_online,
             ],
         ))
-        .build(tauri::generate_context!())
+        .build(context())
         .expect("error while building the application")
         .run(|app, event| match event {
             tauri::RunEvent::Exit => {

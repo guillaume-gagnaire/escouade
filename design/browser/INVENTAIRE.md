@@ -50,3 +50,53 @@ déplaçable sur un second écran) ; « Ouvrir dans le navigateur du système »
 s'ouvrent les pages des lancements : dans l'agent, dans une fenêtre à part, ou dans le navigateur du système. La webview
 enfant (fonctionnalité `unstable` de Tauri) est acceptée pour A : elle se masque quand un menu, la palette ou une fenêtre
 d'Escouade passe dessus, testé sur les trois systèmes (WebKitGTK sous Linux compris).
+
+## Ajout : pleine largeur, tablette, mobile (2026-10-31)
+
+Aperçus : `a-tablette.png`, `a-mobile.png`, `a-retreci.png` (fenêtre de 1028 px) et leurs versions `-en`.
+Trois boutons à côté de Devtools (dans « … » en vue étroite) : pleine largeur, tablette 768 px, mobile 390 px,
+centrée sur fond neutre avec un filet, la hauteur de la zone ; la largeur s'affiche à côté, « Rétréci à 692 px »
+quand la zone est plus étroite. Gardée par page (« worktree · processus »), dans l'agent comme dans la fenêtre à part.
+Raccourci : `Ctrl+Maj+M` (`⇧⌘M`), celui du mode appareil des devtools de Chromium, qui fait le tour des trois.
+
+Ce que voit le site en plus de la largeur (non fait, la largeur suffit aux media queries) :
+
+| | Windows (WebView2) | macOS (WKWebView) | Linux (WebKitGTK) |
+| --- | --- | --- | --- |
+| User agent mobile | `ICoreWebView2Settings::put_UserAgent`, à chaud | `customUserAgent`, à chaud | `webkit_settings_set_user_agent`, à chaud |
+| `devicePixelRatio` | `CallDevToolsProtocolMethod("Emulation.setDeviceMetricsOverride")` | aucune API | aucune API |
+| Tactile | `Emulation.setTouchEmulationEnabled` par le même protocole | aucune API | aucune API |
+
+## Ce que Tauri demande (rapport)
+
+- Fonctionnalité `devtools` de `tauri` : sans elle, `Webview::open_devtools` n'existe qu'en debug. Effet : toute webview a
+  ses devtools par défaut (`unwrap_or(true)` dans tauri-runtime-wry) ; la fenêtre principale les coupe donc hors debug
+  (`window.devtools = Some(cfg!(debug_assertions))`), la barre de « Pages » aussi. Sous macOS, elle passe par des API
+  privées de WebKit : refusée par le Mac App Store, sans effet pour Escouade (Developer ID, notarisée). WebView2 ouvre
+  toujours ses devtools dans une fenêtre à part, et `is_devtools_open` y répond toujours faux.
+- Fonctionnalité `unstable` : `Window::add_child` (webview enfant dans la fenêtre), `Webview::reparent` (passer dans la
+  fenêtre « Pages » sans recharger), `WindowBuilder` sans webview.
+- Capacités : par `webviews` (`main`, `pagesbar-*`) et non par `windows`, qui couvrirait aussi les webviews enfants de
+  la fenêtre principale. Les commandes de l'app ne passent l'ACL que pour une origine distante ; l'origine du serveur
+  de dev est « locale » pour Tauri, d'où le refus explicite de toute commande venant d'une webview `devpage-*`
+  (`windowthread::off_the_window`).
+- Stockage : `data_directory` (Windows, Linux), `data_store_identifier` (macOS 14+), `incognito` avant.
+
+## L'accès des agents à la page (MCP), à faire
+
+Pour qu'un agent vérifie son travail lui-même, des outils MCP d'Escouade sur la page de **son** worktree :
+
+- `page_open(url?)`, `page_reload` : ouvrir ou recharger sa page (sous les garde-fous du pilote auto, sur l'origine du
+  lancement seule) ;
+- `page_screenshot(width?)` : une capture PNG de la page (WebView2 `CapturePreview`, WKWebView `takeSnapshot`,
+  WebKitGTK `webkit_web_view_get_snapshot`), à la largeur choisie ;
+- `page_console(since?)` et `page_network(since?)` : les messages de la console et les requêtes ; sous Windows par
+  le protocole des devtools (`Runtime.consoleAPICalled`, `Network.*`), ailleurs par un script injecté qui les note
+  et les rend par une adresse refusée (comme le raccourci des devtools), WebKit n'ayant pas d'accès au protocole ;
+- `page_click(selector)`, `page_type(selector, text)`, `page_text(selector?)` : par `eval` d'un script dans la page,
+  le résultat rendu de même.
+
+Ce que ça demande : un canal de retour de la page vers le cœur qui ne soit pas l'IPC de Tauri (adresse refusée ou
+serveur local à jeton) ; ne jamais exécuter dans la page un texte de l'agent tel quel (sélecteurs échappés, actions
+d'une liste fermée) ; limiter les captures et journaux en taille ; journaliser chaque appel comme les autres outils ;
+un projet privé n'expose sa page qu'à ses agents ; l'utilisateur voit quand un agent clique dans la page.

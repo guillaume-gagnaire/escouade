@@ -203,7 +203,7 @@
             {#each PAGE_MODES as m (m)}
               <button role="menuitemradio" aria-checked={mode === m} onclick={() => ((more = false), setMode(agent.id, m))}
                 ><Icon name={MODE_ICON[m]} size={14} />{t(`devpage.modes.${m}`)}{#if m !== 'full'}<span class="mw"
-                    >{DEVICE_WIDTH[m]} px</span
+                    >{t('devpage.width', { width: DEVICE_WIDTH[m] })}</span
                   >{/if}</button
               >
             {/each}

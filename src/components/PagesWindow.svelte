@@ -20,6 +20,7 @@
   import { openUrl } from '../lib/opener';
   import { IS_MAC } from '../lib/platform';
   import type { PageView } from '../lib/types';
+  import { tip } from '../lib/tip';
   import Icon from './Icon.svelte';
 
   let { projectId }: { projectId: string } = $props();
@@ -117,7 +118,7 @@
             role="radio"
             aria-checked={mode === m}
             aria-label={t(`devpage.modes.${m}`)}
-            title={t(`devpage.modes.${m}`)}
+            use:tip={t(`devpage.modes.${m}`)}
             onclick={() => setMode(m)}><Icon name={MODE_ICON[m]} size={14} /></button
           >
         {/each}
@@ -126,7 +127,7 @@
         <span
           class="width"
           class:shrunk={fit.shrunk}
-          title={fit.shrunk ? t('devpage.shrunk', { width: fit.width, device: DEVICE_WIDTH[mode] }) : undefined}
+          use:tip={fit.shrunk ? t('devpage.shrunk', { width: fit.width, device: DEVICE_WIDTH[mode] }) : undefined}
           >{fit.shrunk ? t('devpage.shrunkShort', { width: fit.width }) : t('devpage.width', { width: DEVICE_WIDTH[mode] })}</span
         >
       {/if}
@@ -136,10 +137,10 @@
       <button
         class="ib"
         aria-label={t('devpage.attach')}
-        title={t('devpage.attach')}
+        use:tip={t('devpage.attach')}
         onclick={() => act(api.devpageDetach(page.agentId, false))}><Icon name="collapse" size={16} /></button
       >
-      <button class="ib" aria-label={t('devpage.system')} title={t('devpage.system')} onclick={() => act(openUrl(page.url))}
+      <button class="ib" aria-label={t('devpage.system')} use:tip={t('devpage.system')} onclick={() => act(openUrl(page.url))}
         ><Icon name="ext" size={16} /></button
       >
     </div>
