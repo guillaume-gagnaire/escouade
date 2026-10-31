@@ -28,6 +28,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Corrections
 
+- « Branche de départ » `origin/x` : le nouvel agent part de la locale `x`, avancée au besoin, et plus de la branche d’un autre agent qui suivait `origin/x` ; les branches des agents ne suivent plus leur base. Merci à @Metalzoid.
 - Les fichiers non commités ne clignotent plus à chaque rafraîchissement : « Aucun fichier modifié par cet agent » et la liste restent affichés tant que rien ne change.
 - L’index du code n’annonce plus d’économie de tokens qu’on ne mesure pas : ses réponses, les consignes des agents, les statistiques (plus de dollars) et le site disent ce qu’il trouve bien, et l’effet mesuré avec de vrais agents (faible).
 - Un workflow que tu supprimes, dans Réglages › Projets › Workflow ou en effaçant son fichier, ne revient plus à chaque relecture ni au redémarrage : la liste « Supprimés » le garde, avec « Rétablir ». Et « Pas de workflow pour ce projet », dans l’assistant ou les réglages (et dans `.escouade.yml`), coupe leur lecture et leur écriture.

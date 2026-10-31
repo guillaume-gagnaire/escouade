@@ -2,7 +2,7 @@
 title: "Git & fichiers"
 subject: "Git & fichiers"
 sources: ["docs/SPEC.md","src/lib/i18n/fr/git.ts","src-tauri/src/core.rs"]
-tickets: ["ESC-204","ESC-160","ESC-305"]
+tickets: ["ESC-204","ESC-160","ESC-305","ESC-315"]
 decisions: []
 compared: "2026-10-30T18:19:03+01:00"
 order: 22
@@ -61,7 +61,8 @@ Le panneau Git montre ce que les agents ont changé : les fichiers non commités
 
 - Chaque nouvel agent qui reçoit un worktree part de la « Branche de départ des nouveaux worktrees » du projet, qu'il soit créé tout de suite ou au premier message : « Nouvel agent » dans un projet à un worktree par agent, « Nouvel agent dans un worktree », la branche nouvelle de « Nouvel agent sur une branche… », l'outil MCP `create_agent` avec un worktree. Cette branche est aussi sa base : « Merger… », « Intégrer <base> », le diff et sa PR, ouverte vers elle.
 - Aucun fetch à la création : l'état distant est celui du dernier fetch. Si la branche suivie (`origin/<branche>`) est en avance et que la locale n'est qu'en retard, la locale avance d'abord en fast-forward, sans toucher à aucun dossier. Sinon l'agent part de la locale telle qu'elle est, et sa conversation l'avertit : la branche est extraite dans un dossier (« origin/main a 2 commits que « main » n’a pas, mais elle n’a pas pu avancer (« main » est extraite dans <dossier>) : l’agent part de la « main » locale, sans eux. ») ou a des commits non poussés (« « main » a des commits non poussés et origin/main 2 commits qu’elle n’a pas : … »).
-- Une branche distante seule (`origin/x`, sans locale qui la suive) : la locale `x` qui la suit est créée, sans fetch, et l'agent part d'elle, qui devient sa base (« Merger… », « Intégrer » et la PR ont besoin d'une base locale).
+- Une branche distante (`origin/x`) se prend par la locale qui la suit : d'abord celle du même nom (`x`) quand elle suit `origin/x`, avancée comme ci-dessus ; sinon une autre locale qui la suit et n'est la branche d'aucun agent ni d'aucun worktree lié (ni `escouade/…`, ni une branche tenue par un worktree : git donne l'amont `origin/x` à une branche créée depuis une base distante) ; sinon la locale `x` est créée, qui la suit, sans fetch. L'agent part d'elle, qui devient sa base (« Merger… », « Intégrer » et la PR ont besoin d'une base locale). Même règle pour « Nouvel agent sur une branche… », « Lancer un agent sur cette branche », le changement de branche d'un agent et la colonne « suivie par » du sélecteur.
+- Une branche d'agent ou de ticket créée depuis une base distante ne suit rien (`--no-track`) : son amont est celui que lui donne son push. Les branches d'agents existantes qui suivent déjà leur base gardent leur amont (Escouade ne touche à aucune branche) : elles ne sont simplement plus choisies à la place de la locale du même nom.
 - Une branche cible absente en local : l'agent part de la branche du dossier (« La branche cible « x » n’existe pas : l’agent part de la branche du dossier du projet. »). De même pour une branche nommée disparue, ni locale ni distante (« La branche de départ « x » n’existe plus : l’agent part de la branche du dossier du projet. »).
 - Jamais un agent parti du distant avec une base locale en retard : un agent sans commit n'aurait rien à merger.
 - Sans effet sur les agents sans worktree, les copies, les agents sur une branche existante et les tickets, qui partent de la branche cible (voir *Agent d'un ticket*).

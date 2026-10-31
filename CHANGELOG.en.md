@@ -28,6 +28,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### Fixes
 
+- Starting branch `origin/x`: a new agent starts from the local `x`, moved forward if needed, no longer from another agent’s branch that tracked `origin/x`; agents’ branches no longer track their base. Thanks to @Metalzoid.
 - Uncommitted files no longer blink at each refresh: “No file changed by this agent” and the list stay shown as long as nothing changes.
 - The code index no longer claims a token saving that isn’t measured: its answers, the agents’ instructions, the statistics (no more dollars) and the website say what it finds well, and the effect measured with real agents (small).
 - A workflow you delete, in Settings › Projects › Workflow or by erasing its file, no longer comes back at every reading or restart: the “Deleted” list keeps it, with “Restore”. And “No workflow for this project”, in the assistant or the settings (and in `.escouade.yml`), stops their reading and writing.
