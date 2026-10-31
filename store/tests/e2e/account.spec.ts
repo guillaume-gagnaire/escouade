@@ -245,6 +245,23 @@ test('the webhooks are taken only signed by the App, once per delivery', async (
   expect(await again.json()).toEqual({ ok: true, handled: 'duplicate' });
 });
 
+test('on a phone the account is one column, and a ?plugin= that names none of its plugins opens no modal', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signIn(page, who('pia-narrow'), '/account');
+  await expect(page).toHaveURL(/\/account$/);
+  await page.goto('/account?plugin=io.github.someone-else.thing&notice=plugin-not-found');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  // The notice of an action on a plugin that is not theirs stays on the page.
+  await expect(page.locator('main .notice.bad')).toHaveText('Ce plugin n’est pas (ou plus) à toi.');
+  await expect(page.getByText('Tu n’as encore publié aucun plugin.')).toBeVisible();
+  // The account's cards go below the list, nothing wider than the screen.
+  const section = (await page.locator('.acct-layout > section').boundingBox())!;
+  const aside = (await page.locator('.acct-layout > aside').boundingBox())!;
+  expect(aside.y).toBeGreaterThan(section.y + section.height - 1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await expect(page.getByRole('button', { name: 'Envoyer le lien' })).toBeVisible();
+});
+
 // The account's page measured against the validated preview (design/store/index.html, #account), in both themes.
 const PREVIEW = new URL('../../../design/store/index.html', import.meta.url).href;
 

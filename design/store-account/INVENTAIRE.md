@@ -35,3 +35,15 @@ Téléphone (≤ 720 px) : une colonne, la colonne de droite passe sous la liste
 - L'adresse garde l'état : `?plugin=<id>` ouvre la modale ; un formulaire (POST puis redirection avec `notice`)
   y revient, la notice dans la modale.
 - La colonne de droite ne garde que le compte : e-mail, Applications connectées (ESC-317), Mes données.
+
+## Choix et réalisation (2026-10-31)
+
+Direction **A, la fiche**, choisie par l'utilisateur sur aperçu (`a-list.png`, `a-modal.png`, `a-mobile.png`) ;
+B (onglets) et C (tiroir) écartées. Réalisée dans `store/app/components/StoreDialog.vue` (la coque : `<dialog>` rendu
+ouvert par le serveur, rendu modal par le script, focus sur le titre et gardé dedans, Échap, voile, focus rendu au
+« ⋯ ») et `StoreAccount.vue` (le contenu). Écarts au rendu de l'aperçu, voulus :
+
+- la colonne « Mises à jour » des versions quitte la modale (le total est sur la ligne des chiffres) ;
+- la version qui attend ton clic garde aussi son bandeau en haut de la liste ; « Publier » sur sa ligne de versions ;
+- « Transférer… » et « Supprimer le plugin » ouvrent leur formulaire sur place (`<details>`, sans script), le champ
+  prend le focus pour paraître au-dessus du clavier sur un téléphone.

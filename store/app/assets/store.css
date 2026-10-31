@@ -51,6 +51,10 @@
 html {
   scroll-padding-top: 76px;
 }
+/* A modal open (StoreDialog): the page under it does not scroll. */
+html:has(dialog[open][aria-modal='true']) {
+  overflow: hidden;
+}
 
 /* A denser page than the site's: lists and tables more than long reading. */
 body {

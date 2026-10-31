@@ -3,8 +3,9 @@ import { FAKE_GITHUB } from '../fake/env';
 
 // The author's space through the fake GitHub (tests/fake/github.mjs and repos.mjs), on /account (docs/STORE.md §2.2):
 // a version found on a new tag waits in the banner with what it asks more, and is published from there; a refused
-// first version says why below its row; a published version is taken back, the plugin taken off the list and put
-// back, deleted and restored, and the app's catalogue follows each step; a plugin is offered to another account, who
+// first version says why below its row; from the plugin's modal (its « ⋯ », or ?plugin=<id>; ESC-318) a published
+// version is taken back, the plugin taken off the list and put back, deleted and restored, and the app's catalogue
+// follows each step; the modal works with the keyboard alone, on a phone and without script; a plugin is offered to another account, who
 // accepts it and finds its publications frozen; the account cannot be deleted while it has plugins; each action is
 // told by e-mail. The page is measured against the preview (design/store/index.html, #account). They need a database
 // (DATABASE_URL), as the accounts do.
@@ -122,17 +123,26 @@ test('an author publishes a new tag from the banner, takes a version back, takes
     .poll(async () => (await mails()).filter((m) => m.to.includes(email) && mailText(m.raw).includes('la v0.4.0 attend ton clic')).length)
     .toBe(1);
   await banner.getByRole('button', { name: 'Publier la v0.4.0' }).click();
+  // The redirect opens the plugin's modal, with the notice inside it.
   await expect(page).toHaveURL(/notice=version-publish$/);
+  const modal = page.getByRole('dialog', { name: ntfy });
+  await expect(modal).toBeVisible();
+  await expect(modal.locator('.notice')).toContainText('Publiée.');
   await expect(page.locator('.banner')).toHaveCount(0);
   await expect.poll(async () => (await inCatalog(page, id)())?.latest).toBe('0.4.0');
+  await page.keyboard.press('Escape');
+  await expect(modal).toHaveCount(0);
+  await expect(page).toHaveURL(/\/account$/);
 
-  // The plugin's management: its versions, and taking one back.
+  // The plugin's modal from its « ⋯ », without leaving the list: its installs, its versions, and taking one back.
   await row.getByRole('link', { name: `Gérer ${ntfy}` }).click();
-  await expect(page).toHaveURL(new RegExp(`plugin=${id.replace(/\./g, '\\.')}#manage$`));
-  const versions = page.locator('table.versions tbody tr');
+  await expect(page).toHaveURL(new RegExp(`\\?plugin=${id.replace(/\./g, '\\.')}$`));
+  await expect(modal).toBeVisible();
+  await expect(page.locator('table.mine')).toBeVisible();
+  const versions = modal.locator('table.versions tbody tr');
   await expect(versions).toHaveCount(2);
-  await expect(page.locator('.stats h3')).toHaveText(`${ntfy} · installations`);
-  await expect(page.locator('.stats .bars rect')).toHaveCount(12);
+  await expect(modal.locator('.stats .sub')).toContainText('installations, dont');
+  await expect(modal.locator('.stats .bars rect')).toHaveCount(12);
   await versions.filter({ hasText: 'v0.4.0' }).getByText('Retirer', { exact: true }).click();
   await versions.filter({ hasText: 'v0.4.0' }).getByRole('button', { name: 'Retirer la v0.4.0' }).click();
   await expect(page).toHaveURL(/notice=version-yank$/);
@@ -149,7 +159,7 @@ test('an author publishes a new tag from the banner, takes a version back, takes
     .toBe(1);
 
   // Off the list, out of the catalogue; back on it.
-  await page.getByRole('button', { name: 'Retirer de la liste' }).click();
+  await modal.getByRole('button', { name: 'Retirer de la liste' }).click();
   await expect(page).toHaveURL(/notice=plugin-unlist$/);
   await expect(row.locator('.tag')).toHaveText('Retiré de la liste');
   await expect.poll(inCatalog(page, id)).toBeNull();
@@ -159,7 +169,7 @@ test('an author publishes a new tag from the banner, takes a version back, takes
   await page.goto(`/search?q=${ntfy}`);
   await expect(page.locator('.results .row')).toHaveCount(0);
   await page.goto(`/account?plugin=${id}`);
-  await page.getByRole('button', { name: 'Remettre dans la liste' }).click();
+  await modal.getByRole('button', { name: 'Remettre dans la liste' }).click();
   await expect(page).toHaveURL(/notice=plugin-relist$/);
   await expect.poll(async () => (await inCatalog(page, id)())?.latest).toBe('0.3.0');
 
@@ -172,24 +182,26 @@ test('an author publishes a new tag from the banner, takes a version back, takes
   });
   expect(refusedDelete.headers().location).toBe('/account?notice=delete-plugins');
 
-  // Deleted once its id is typed; restored within its 30 days.
-  await page.locator('.row .delete summary').click();
-  await page.locator('#confirm-plugin').fill('io.github.nope');
-  await page.getByRole('button', { name: 'Supprimer', exact: true }).click();
+  // Deleted from the modal once its id is typed; restored within its 30 days.
+  await modal.getByText('Supprimer le plugin', { exact: true }).click();
+  await modal.locator('#confirm-plugin').fill('io.github.nope');
+  await modal.getByRole('button', { name: 'Supprimer', exact: true }).click();
   await expect(page).toHaveURL(/notice=plugin-unconfirmed$/);
-  await page.locator('.row .delete summary').click();
-  await page.locator('#confirm-plugin').fill(id);
-  await page.getByRole('button', { name: 'Supprimer', exact: true }).click();
+  await expect(modal.locator('.notice.bad')).toContainText('rien n’a été supprimé');
+  await modal.getByText('Supprimer le plugin', { exact: true }).click();
+  await modal.locator('#confirm-plugin').fill(id);
+  await modal.getByRole('button', { name: 'Supprimer', exact: true }).click();
   await expect(page).toHaveURL(/notice=plugin-delete$/);
   await expect(row.locator('.tag')).toHaveText('Supprimé');
-  await expect(page.locator('.notice.deleted')).toContainText('sa page et ses archives partent le');
+  await expect(modal.locator('.notice.deleted')).toContainText('sa page et ses archives partent le');
   await expect.poll(inCatalog(page, id)).toBeNull();
   await page.goto(`/plugins/${id}?tab=versions`);
   await expect(page.locator('.band.bad')).toContainText('Retiré du store par son auteur');
   await expect(page.locator('.versions tr', { hasText: 'v0.4.0' })).toContainText('Retirée par l’auteur');
   await page.goto(`/account?plugin=${id}`);
-  await page.getByRole('button', { name: 'Annuler la suppression' }).click();
+  await modal.getByRole('button', { name: 'Annuler la suppression' }).click();
   await expect(page).toHaveURL(/notice=plugin-restore$/);
+  await expect(modal.locator('.notice.ok')).toHaveText('Suppression annulée.');
   await expect.poll(async () => (await inCatalog(page, id)())?.latest).toBe('0.3.0');
 });
 
@@ -203,13 +215,17 @@ test('a plugin offered to another account is theirs once they accept, its public
   await author(page, lea, repo);
   await submit(page, `${lea}/${repo}`);
   await page.goto(`/account?plugin=${id}`);
-  await page.locator('#transfer-login').fill('nobody-at-all');
-  await page.getByRole('button', { name: 'Proposer le transfert' }).click();
+  const modal = page.getByRole('dialog', { name: repo });
+  await modal.getByText('Transférer…', { exact: true }).click();
+  await modal.getByLabel('Login GitHub du compte').fill('nobody-at-all');
+  await modal.getByRole('button', { name: 'Proposer le transfert' }).click();
   await expect(page).toHaveURL(/notice=plugin-no-account$/);
-  await page.locator('#transfer-login').fill(sam);
-  await page.getByRole('button', { name: 'Proposer le transfert' }).click();
+  await expect(modal.locator('.notice.bad')).toContainText('Aucun compte du store n’a ce login');
+  await modal.getByText('Transférer…', { exact: true }).click();
+  await modal.getByLabel('Login GitHub du compte').fill(sam);
+  await modal.getByRole('button', { name: 'Proposer le transfert' }).click();
   await expect(page).toHaveURL(/notice=plugin-transfer$/);
-  await expect(page.locator('.row', { hasText: 'Transférer' })).toContainText(`Proposé à ${sam}, en attente de sa réponse.`);
+  await expect(modal.locator('.row', { hasText: 'Transférer' })).toContainText(`Proposé à ${sam}, en attente de sa réponse.`);
 
   await other.goto('/account');
   const offer = other.locator('.banner', { hasText: `${lea} te transfère ${id}` });
@@ -217,8 +233,10 @@ test('a plugin offered to another account is theirs once they accept, its public
   await offer.getByRole('button', { name: 'Accepter' }).click();
   await expect(other).toHaveURL(/notice=plugin-accept$/);
   await expect(other.locator('table.mine tbody tr', { hasText: id })).toBeVisible();
-  await expect(other.locator('.manage')).toContainText(`Transféré par ${lea} le`);
-  await expect(other.locator('.manage .notice.warn')).toContainText('Publications gelées jusqu’au');
+  // Accepted, the plugin's modal opens on the new account's page.
+  const theirs = other.getByRole('dialog', { name: repo });
+  await expect(theirs).toContainText(`Transféré par ${lea} le`);
+  await expect(theirs.locator('.notice.warn')).toContainText('Publications gelées jusqu’au');
   await expect.poll(async () => (await inCatalog(page, id)())?.author).toBe(sam);
   expect((await inCatalog(page, id)())!.transferred_at).toMatch(/^\d{4}-/);
 
@@ -247,7 +265,121 @@ test('another account cannot act on a plugin, and a form from another site is re
   await other.close();
 });
 
-/** What the eye compares between the account and the preview: the banner, the rows, the refusal, the stats. */
+/** Whether the focus is inside the open modal. */
+const focusInModal = (page: Page) => page.evaluate(() => !!document.activeElement?.closest('dialog[open]'));
+
+test('the plugin’s modal works with the keyboard alone: opened, trapped, acted in, closed with the focus back on its « ⋯ »', async ({
+  page,
+}) => {
+  const login = who('kim-keys');
+  const repo = `keys-${RUN}`;
+  const id = `io.github.${login}.${repo}`.toLowerCase();
+  await author(page, login, repo);
+  await submit(page, `${login}/${repo}`);
+  await page.goto('/account');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  // Opened from its « ⋯ » with Enter: modal, named by its title, which takes the focus.
+  const dots = page.getByRole('link', { name: `Gérer ${repo}` });
+  await expect(dots).toHaveAttribute('aria-haspopup', 'dialog');
+  await dots.focus();
+  await page.keyboard.press('Enter');
+  const modal = page.getByRole('dialog', { name: repo });
+  await expect(modal).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`\\?plugin=${id.replace(/\./g, '\\.')}$`));
+  await expect(modal).toHaveAttribute('aria-modal', 'true');
+  await expect(modal).toHaveAttribute('aria-labelledby', 'manage-title');
+  await expect(page.locator('#manage-title')).toBeFocused();
+
+  // Tab and Shift+Tab go round inside it.
+  for (let n = 0; n < 25; n++) {
+    await page.keyboard.press('Tab');
+    expect(await focusInModal(page)).toBe(true);
+  }
+  for (let n = 0; n < 25; n++) {
+    await page.keyboard.press('Shift+Tab');
+    expect(await focusInModal(page)).toBe(true);
+  }
+
+  // New tags published alone, then back to waiting for a click, with Enter.
+  await modal.getByRole('button', { name: 'Les publier seules' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/notice=plugin-auto-on$/);
+  await expect(modal.locator('.notice.ok')).toContainText('publiées seules');
+  await modal.getByRole('button', { name: 'Attendre mon clic' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/notice=plugin-auto-off$/);
+
+  // Deleted with the keyboard (the summary opened with Enter, the id typed, Enter), then the deletion undone.
+  await modal.getByText('Supprimer le plugin', { exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(modal.locator('#confirm-plugin')).toBeVisible();
+  await modal.locator('#confirm-plugin').focus();
+  await page.keyboard.type(id);
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/notice=plugin-delete$/);
+  await modal.getByRole('button', { name: 'Annuler la suppression' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/notice=plugin-restore$/);
+  await expect(modal.locator('.notice.ok')).toHaveText('Suppression annulée.');
+
+  // Escape closes it: the list stays, the address forgets the plugin, the focus is back on its « ⋯ ».
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page).toHaveURL(/\/account$/);
+  await expect(dots).toBeFocused();
+  // And the close button does the same.
+  await dots.focus();
+  await page.keyboard.press('Enter');
+  await expect(modal).toBeVisible();
+  await modal.getByRole('link', { name: 'Fermer' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(dots).toBeFocused();
+});
+
+test('on a phone the modal is a sheet that fits the width, and its forms work without script', async ({ page, browser }) => {
+  const login = who('pia-phone');
+  const repo = `phone-${RUN}`;
+  const id = `io.github.${login}.${repo}`.toLowerCase();
+  await author(page, login, repo);
+  await submit(page, `${login}/${repo}`);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/account');
+  await page.getByRole('link', { name: `Gérer ${repo}` }).click();
+  const modal = page.getByRole('dialog', { name: repo });
+  await expect(modal).toBeVisible();
+  // A sheet along the bottom, the whole width, nothing wider than it.
+  const box = (await modal.boundingBox())!;
+  expect(Math.round(box.x)).toBe(0);
+  expect(Math.round(box.width)).toBe(390);
+  expect(Math.round(box.y + box.height)).toBe(844);
+  expect(await modal.evaluate((d) => [...d.querySelectorAll('*')].every((el) => el.getBoundingClientRect().right <= 391))).toBe(true);
+  // Its body scrolls to the deletion, at hand.
+  await modal.getByText('Supprimer le plugin', { exact: true }).click();
+  await expect(modal.locator('#confirm-plugin')).toBeInViewport();
+  await modal.getByRole('link', { name: 'Fermer' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  // Without script: the address opens it, a form comes back to it, its close link leaves it.
+  const bare = await browser.newContext({ javaScriptEnabled: false, storageState: await page.context().storageState() });
+  const plain = await bare.newPage();
+  await plain.goto(`/account?plugin=${id}`);
+  const still = plain.getByRole('dialog', { name: repo });
+  await expect(still).toBeVisible();
+  await still.getByRole('button', { name: 'Retirer de la liste' }).click();
+  await expect(plain).toHaveURL(/notice=plugin-unlist$/);
+  await expect(still.locator('.notice.ok')).toContainText('Retiré de la liste');
+  await still.getByRole('button', { name: 'Remettre dans la liste' }).click();
+  await expect(plain).toHaveURL(/notice=plugin-relist$/);
+  await still.getByRole('link', { name: 'Fermer' }).click();
+  await expect(plain).toHaveURL(/\/account$/);
+  await expect(plain.getByRole('dialog')).toHaveCount(0);
+  await bare.close();
+});
+
+/** What the eye compares between the account and the preview: the banner, the rows, the refusal. */
 async function measure(page: Page) {
   return page.evaluate(() => {
     const css = (sel: string, ...props: string[]) => {
@@ -268,8 +400,6 @@ async function measure(page: Page) {
       why: css('.why', 'padding-top', 'border-top-color', 'background-color', 'font-size', 'border-top-left-radius'),
       whyBold: css('.why b', 'color', 'font-weight'),
       fix: css('.why .fix', 'color', 'margin-top'),
-      statN: css('.stat-n', 'font-size', 'font-weight', 'letter-spacing'),
-      axis: css('.axis', 'font-size', 'color'),
     };
   });
 }
