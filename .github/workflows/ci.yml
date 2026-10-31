@@ -501,10 +501,16 @@ jobs:
           node ../scripts/nextest-annotations.mjs nextest.log target/nextest/ci/junit.xml $status
           exit $status
 
-      # A launch's page in a real WKWebView (ESC-311), in the runner's own session.
+      # A launch's page in a real WKWebView (ESC-311), in the runner's own session: its devtools last,
+      # then first, as a user opens them.
       - name: A launch's page in a real webview
         working-directory: src-tauri
-        run: cargo run --example devpage_probe
+        shell: bash
+        run: |
+          set +e
+          cargo run --example devpage_probe -- --devtools-last; last=$?
+          cargo run --example devpage_probe; first=$?
+          exit $((last || first))
 
   macos-bundle:
     name: macOS (app bundle)
