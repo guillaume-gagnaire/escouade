@@ -3,7 +3,7 @@ title: "Les plugins d'exemple"
 subject: "plugins"
 sources: ["docs/TODO-2.1.md (PLG-10)","docs/PLUGINS.md","plugins/README.md","docs/STORE.md (§3.6, §9.2)","docs/TODO-2.2.md (décision 8)"]
 tickets: ["ESC-182","ESC-314"]
-decisions: [4,21]
+decisions: [4,21,25]
 compared: "2026-10-30T05:11:05+01:00"
 ---
 

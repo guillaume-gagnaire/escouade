@@ -3,7 +3,7 @@ title: "Le store dans l'app"
 subject: "store"
 sources: ["docs/STORE.md","docs/PLUGINS.md","design/plugins/maquettes-b.html","design/app-redesign/UX-NOTES.md","website/content/docs/fr/plugins/installer.md"]
 tickets: ["ESC-236","ESC-287","ESC-313","ESC-314"]
-decisions: [21]
+decisions: [21,25]
 compared: "2026-10-31T15:59:04+01:00"
 gaps: [{"text":"La page dit que le schéma `escouade` est enregistré par les installeurs NSIS et MSI sous Windows, et par le `.deb` et le `.rpm` sous Linux. La config de build ne produit que du NSIS sous Windows (`targets: [\"nsis\"]`) et que l'AppImage et le `.deb` sous Linux. Aucun MSI ni `.rpm` n'est généré, et la CI ne les construit pas non plus. Seul un `desktopTemplate` rpm reste déclaré.","code":["src-tauri/tauri.conf.json","src-tauri/tauri.linux.conf.json"]}]
 ---

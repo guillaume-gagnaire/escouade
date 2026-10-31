@@ -1,5 +1,5 @@
 ---
-number: 22
+number: 25
 title: "Les plugins d'exemple passent en dev.escouade.* dans plugins/<id>/, et le préfixe réservé est accordé au seul dépôt de l'app"
 date: "2026-10-31"
 state: "proposed"

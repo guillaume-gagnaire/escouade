@@ -3,7 +3,7 @@ title: "Publier sur le store, la sécurité des plugins et l'essai réel"
 subject: "store"
 sources: ["docs/STORE.md","website/content/docs/fr/plugins/publishing.md","website/content/docs/fr/plugins/security.md","store/server/utils/checks.ts","store/server/utils/folder.ts","store/shared/folder.ts","store/server/utils/submissions.ts","store/server/utils/builtin.ts","store/tests/unit/trial.test.ts"]
 tickets: ["ESC-237","ESC-313","ESC-314"]
-decisions: [21]
+decisions: [21,25]
 compared: "2026-10-31T15:57:56+01:00"
 ---
 
