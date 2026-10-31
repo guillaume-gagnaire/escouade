@@ -4583,7 +4583,7 @@ mod tests {
     #[test]
     fn codex_has_a_short_5_hour_window_and_a_week_and_thirty_days_judged_by_their_pace() {
         let s = with_codex();
-        let codex = for_project(&s, EngineId::CODEX, None);
+        let codex = for_project(&s, EngineId::Codex, None);
         let thirty = Some(43_200);
         let day = 24 * 60;
         let usage = [
@@ -4628,7 +4628,7 @@ mod tests {
         // Never an account of another harness.
         assert_eq!(
             pick(
-                &for_project(&s, EngineId::CLAUDE, None),
+                &for_project(&s, EngineId::Claude, None),
                 &usage,
                 90,
                 None,
@@ -4644,7 +4644,7 @@ mod tests {
         let mut s = Settings::default();
         for id in ["first", "second"] {
             s.accounts.push(Account {
-                engine: EngineId::COPILOT,
+                engine: EngineId::Copilot,
                 ..account(id, "")
             });
         }
@@ -4707,7 +4707,7 @@ mod tests {
         let mut s = Settings::default();
         for id in ["one", "two"] {
             s.accounts.push(Account {
-                engine: EngineId::OPENCODE,
+                engine: EngineId::Opencode,
                 ..account(id, "")
             });
         }
