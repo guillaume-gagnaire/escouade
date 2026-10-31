@@ -140,6 +140,8 @@ mod signature {
     /// session by the file (path, size, modification date): each start of a plugin the app gives would else run
     /// PowerShell again, for the app and for the program.
     #[cfg(windows)]
+    // Read by the release's rule and by the tests; a build of development has no use of it.
+    #[cfg_attr(debug_assertions, allow(dead_code))]
     pub fn authenticode_status(path: &Path) -> Result<String, String> {
         use std::collections::HashMap;
         use std::os::windows::process::CommandExt;
