@@ -8,7 +8,8 @@ Un plugin du store passe par trois gardes : les dix contrôles du store à la so
 
 - **les empreintes** : `version.json` contre le catalogue, l’archive, le programme et le manifeste contre `version.json` (SHA-256). Un octet changé, sur le store, en route ou dans un cache, arrête l’installation ;
 - **la signature**, pour une version vérifiée : `version.json` signé par minisign avec la clé d’Escouade, et le commentaire de la signature qui nomme cet identifiant et ce numéro. Les clés publiques sont dans l’app ; la clé secrète vit sur un poste, chiffrée, jamais sur le serveur du store, jamais dans la CI ni dans un dépôt. Le store ne peut donc pas fabriquer un sceau ;
-- **l’archive** lue en mémoire, sans lien symbolique ni chemin qui sorte du dossier du plugin.
+- **l’archive** lue en mémoire, sans lien symbolique ni chemin qui sorte du dossier du plugin ;
+- **le dossier** que `version.json` nomme pour un plugin rangé dans un sous-dossier de son dépôt : un chemin relatif simple, sans `..`, ni chemin absolu, ni antislash ; sinon rien n’est installé. Le store, lui, refuse à la soumission un dossier qui passe par un lien symbolique.
 
 Le sceau d’un plugin installé est revérifié sur ta machine, sans le store. Puis la fenêtre d’installation montre ses permissions en mots, avant que rien ne tourne ([installer un plugin](plugins/installer)).
 

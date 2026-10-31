@@ -2,14 +2,23 @@
 
 Un plugin se publie sur store.escouade.dev depuis son dépôt GitHub public et une étiquette git. Cette page dit comment soumettre une version, ce que le store contrôle, et comment corriger un refus.
 
-## Un plugin par dépôt
+## Un ou plusieurs plugins par dépôt
 
-Le store lit **un plugin à la racine d’un dépôt** : `escouade-plugin.json`, `README.md` et `LICENSE` (ou `COPYING`) au premier niveau, et `repository` du manifeste qui nomme ce dépôt. Un dépôt qui range plusieurs plugins dans des sous-dossiers, comme `plugin-examples/` du dépôt d’Escouade, ne se soumet pas tel quel : donne à chaque plugin son dépôt. Le dossier d’un plugin se copie tel quel à la racine du nouveau dépôt ; il lui faut alors son README, sa licence et son `repository`.
+Un plugin est **un dossier d’un dépôt** : la racine, ou un sous-dossier qui porte son `escouade-plugin.json`. Un dépôt peut en ranger plusieurs, un par dossier (`plugins/slack/`, `plugins/ntfy/`) ; chacun est un plugin à part, avec son identifiant.
+
+- **Le dossier** se choisit à la soumission, avant la version : le store liste les dossiers du dépôt qui portent un manifeste, et accepte un chemin tapé, relatif à la racine. Par défaut, la racine. Un chemin absolu, avec `..`, qui passe par un lien symbolique ou sans manifeste est refusé.
+- **Les étiquettes** d’un plugin en dossier nomment ce dossier : `plugins/slack/v1.2.3` (conseillé), ou `slack@1.2.3` et `slack-v1.2.3`, le nom étant le dernier segment du dossier. Une étiquette nue `v1.2.3` n’est celle que d’un plugin à la racine : dans un dépôt dont les releases partent sur `v*`, elle reste la sienne. Une étiquette qui pourrait être celle de deux dossiers (même dernier segment) n’est vérifiée pour aucun, et le store te dit laquelle pousser.
+- **Le README et la licence** du dossier comptent d’abord ; sans eux, ceux de la racine du dépôt. Le store ne reconnaît une `LICENSE` de dossier que si c’est le texte de celle de la racine, ou par sa ligne `SPDX-License-Identifier: MIT`.
+- **`repository`** du manifeste nomme le dépôt (`https://github.com/toi/plugins`), ou le dossier (`https://github.com/toi/plugins/tree/main/plugins/slack`).
+- **L’archive** que le store garde et que l’app installe est celle du dossier seul ; `version.json` dit le dossier (`path`), et la page du plugin y mène.
+- **Changer de source** : un plugin peut passer d’un dépôt à toi à un autre (ou d’un dossier à l’autre), en soumettant sa version suivante depuis la nouvelle source. Le contrôle « Identifiant » le dit ; à la publication, le changement est noté sur la page du plugin et la version part à la revue. Les versions d’avant gardent leur source.
+
+`npm create escouade-plugin` lancé dans un dossier d’un dépôt git déjà là y écrit le plugin, `repository` rempli, et son README dit l’étiquette à pousser (`plugins/<dossier>/v0.1.0`).
 
 ## Soumettre une version
 
 1. Connecte-toi sur [store.escouade.dev](https://store.escouade.dev/submit) avec GitHub, et installe l’App « Escouade Store » sur le dépôt du plugin. Elle lit le code et les étiquettes, sans jamais écrire. Un dépôt privé est refusé : le code d’un plugin du store se lit par tous.
-2. Choisis le dépôt, puis l’étiquette de la version (`v1.2.0` ou `1.2.0`). Le store la résout en commit une fois, à la soumission, et ne la relit plus pour cette version.
+2. Choisis le dépôt, le dossier du plugin (la racine par défaut), puis l’étiquette de la version (`v1.2.0` ou `1.2.0` à la racine, `plugins/slack/v1.2.0` dans un dossier). Le store la résout en commit une fois, à la soumission, et ne la relit plus pour cette version.
 3. Les dix contrôles tournent sur la page, une ligne chacun. Le store télécharge l’archive du commit une fois, la garde telle quelle et en calcule l’empreinte SHA-256 ; rien du plugin ne s’exécute sur le serveur.
 4. Si tout passe, publie : une première version demande une à trois catégories et des mots-clés. La version paraît **non vérifiée** ; la case « Demander la revue » (cochée) la met dans la file de la revue « Vérifié par Escouade », qui vaut pour cette version seulement.
 
@@ -19,12 +28,12 @@ Chaque version publiée a son fichier `version.json` : l’identifiant, le numé
 
 | Contrôle | Ce qu’il demande |
 | --- | --- |
-| Manifeste | `escouade-plugin.json` à la racine, valide au schéma : les mêmes règles que dans l’app ([le manifeste](plugins/manifest)). |
-| Version | `version` égale à l’étiquette (le `v` est facultatif), plus grande que la dernière publiée. |
-| Identifiant | Libre ou déjà à toi, publié depuis ce dépôt ; `dev.escouade.*` est réservé. Un nom trop proche de celui d’un autre plugin passe d’abord par une revue manuelle. |
-| Dépôt | `repository` égal au dépôt soumis, `https://github.com/<propriétaire>/<dépôt>`. |
+| Manifeste | `escouade-plugin.json` à la racine du plugin (celle du dépôt, ou son dossier), valide au schéma : les mêmes règles que dans l’app ([le manifeste](plugins/manifest)). |
+| Version | `version` égale à l’étiquette (le `v` est facultatif ; dans un dossier, `<dossier>/v1.2.3`), plus grande que la dernière publiée. |
+| Identifiant | Libre ou déjà à toi, publié depuis ce dépôt et ce dossier, ou depuis une nouvelle source à toi (notée, la version revue) ; `dev.escouade.*` est réservé. Un nom trop proche de celui d’un autre plugin passe d’abord par une revue manuelle. |
+| Dépôt | `repository` égal au dépôt soumis, `https://github.com/<propriétaire>/<dépôt>`, ou à son dossier, `…/tree/<ref>/<dossier>`. |
 | Licence | Une licence libre (reconnue par l’OSI ou la FSF) en identifiant SPDX, la même que celle que GitHub reconnaît dans le fichier `LICENSE` ou `COPYING`. |
-| README | `README.md` (ou `README.fr.md` et `README.en.md`) à la racine, non vide : c’est la page du plugin. |
+| README | `README.md` (ou `README.fr.md` et `README.en.md`) à la racine, non vide : c’est la page du plugin. Dans un dossier, celui de la racine du dépôt le remplace s’il n’en a pas ; de même pour la licence. |
 | Captures | Celles de `store.screenshots` : 6 au plus, en PNG, JPEG ou WebP, 1600 px de large et 1 Mo chacune au plus. Le store les réencode, sans leurs métadonnées. |
 | Archive | 50 Mo au plus, sans lien symbolique, sans chemin absolu ni `..`, sans sous-module ni fichier Git LFS non résolu. |
 | Permissions | Cohérentes avec le plugin : sans programme ni webhook, il ne demande ni réseau, ni événements, ni secrets ; un secret demandé est déclaré dans `contributes.secrets` ; un hôte s’écrit seul (`hooks.slack.com`). |

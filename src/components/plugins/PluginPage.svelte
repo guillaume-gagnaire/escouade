@@ -1,7 +1,7 @@
 <script lang="ts">
   import { fDate } from '../../lib/format';
   import { locale, t } from '../../lib/i18n';
-  import { activeIn, asksOf, categoriesOf, contributionsOf, originOf, shortPrint, type PluginView } from '../../lib/plugins';
+  import { activeIn, asksOf, categoriesOf, contributionsOf, originOf, shortPrint, sourceUrl, type PluginView } from '../../lib/plugins';
   import { plugins, type PluginTab } from '../../lib/plugins-view.svelte';
   import { app } from '../../lib/state.svelte';
   import Icon from '../Icon.svelte';
@@ -218,6 +218,15 @@
             <span class="k">{t('plugins.origin.repo')}</span><span class="v mono" use:tip={{ text: store.repository, aria: false }}
               >{store.repository.replace(/^https:\/\/github\.com\//, '')}</span
             >
+            {#if store.path}
+              <span class="k">{t('plugins.origin.folderLabel')}</span><span class="v mono"
+                ><button
+                  class="lnk"
+                  onclick={() => store && openUrl(sourceUrl(store))}
+                  use:tip={{ text: t('plugins.origin.folderTip'), aria: false }}>{store.path}</button
+                ></span
+              >
+            {/if}
             <span class="k">{t('plugins.origin.tagLabel')}</span><span class="v mono"
               >{store.tag} → {store.commit.slice(0, 7)} · {t('plugins.origin.archiveSame')}</span
             >
@@ -539,6 +548,15 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 11px;
+  }
+  .chain .lnk {
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
   }
   .chain .v.no {
     color: var(--warn-ink);

@@ -3,10 +3,13 @@
 //
 //   npm create escouade-plugin@latest [folder] -- [--kind program|declarative] [--id dev.you.name] [--name "Name"]
 //
+// In a folder of a git repository already there (several plugins in one repository), the manifest names the repository
+// and the plugin's tags name its folder: `<folder>/v0.1.0`, never a bare `v…` (docs/STORE.md §3.6).
+//
 // `program` is a TypeScript program with its tests (a fact received, a permission decided); `declarative` is a
 // theme, nothing that runs. Without --kind, it asks when it runs in a terminal, and takes `program` otherwise.
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { userInfo } from 'node:os';
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
@@ -26,6 +29,41 @@ const slug = (s) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '') || 'plugin';
 const title = (s) => s.replace(/[-_.]+/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+
+/** The git repository `folder` would be in (the first parent with a `.git`), or null. */
+export function repositoryOf(folder) {
+  for (let dir = resolve(folder, '..'); ; dir = dirname(dir)) {
+    if (existsSync(join(dir, '.git'))) return dir;
+    if (dirname(dir) === dir) return null;
+  }
+}
+
+/** The GitHub address of a repository's `origin`, from its .git/config; null if it is none. */
+function githubOf(root) {
+  try {
+    const config = readFileSync(join(root, '.git', 'config'), 'utf8');
+    const url = /\[remote "origin"\][^[]*?url\s*=\s*(\S+)/.exec(config)?.[1] ?? '';
+    const m = /github\.com[:/]([\w.-]+)\/([\w.-]+?)(?:\.git)?$/.exec(url);
+    return m ? `https://github.com/${m[1]}/${m[2]}` : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The tag of version `version` of a plugin in the folder `path` of its repository (docs/STORE.md §3.6, ESC-313): at
+ * its root `v1.2.3`; in a folder of a repository with several, `<folder>/v1.2.3` (never a bare `v…`, which may be the
+ * repository's own releases).
+ */
+export function tagOf(path, version) {
+  return path ? `${path}/v${version}` : `v${version}`;
+}
+
+/** The folder of `folder` in its git repository, '' outside one. */
+const folderIn = (folder) => {
+  const root = repositoryOf(folder);
+  return root ? relative(root, resolve(folder)).split(sep).join('/') : '';
+};
 
 /** Writes the template `kind` into `folder`; gives the files written. */
 export function create({ folder, kind = 'program', id, name, sdk = SDK_VERSION, author = '' }) {
@@ -56,6 +94,25 @@ export function create({ folder, kind = 'program', id, name, sdk = SDK_VERSION, 
   copy(join(TEMPLATES, kind), folder);
   // The program of run on macOS and Linux.
   if (kind === 'program') chmodSync(join(folder, 'plugin'), 0o755);
+  // In a folder of a repository already there (several plugins in one repository, ESC-313): the manifest names the
+  // repository, and its tags name the folder.
+  const root = repositoryOf(folder);
+  const path = folderIn(folder);
+  const github = root ? githubOf(root) : null;
+  if (github) {
+    const at = join(folder, 'escouade-plugin.json');
+    const m = JSON.parse(readFileSync(at, 'utf8'));
+    writeFileSync(at, `${JSON.stringify({ ...m, repository: github }, null, 2)}\n`);
+  }
+  const tag = tagOf(path, '0.1.0');
+  const how = path
+    ? `This plugin is the folder \`${path}\` of its repository. Its versions are tags that name the folder, never a bare \`v…\`: \`${tag}\` (or \`${basename(path)}@0.1.0\`). Submit it on https://store.escouade.dev/submit, folder \`${path}\`.`
+    : 'Its versions are the repository’s tags, `v0.1.0` for the `version` of its manifest. Submit it on https://store.escouade.dev/submit.';
+  const readme = join(folder, 'README.md');
+  writeFileSync(
+    readme,
+    `${readFileSync(readme, 'utf8').trimEnd()}\n\n## Publish\n\n${how}\n\n\`\`\`sh\ngit tag ${tag} && git push origin ${tag}\n\`\`\`\n`,
+  );
   return written;
 }
 
@@ -97,6 +154,8 @@ export async function main(argv) {
   if ((kind ?? 'program') === 'program') console.log('  npm test          the handlers, against the fake Escouade');
   console.log('  npm run validate  the manifest');
   console.log('  npm run bench     the conformance bench (with Escouade installed)');
+  const path = folderIn(folder);
+  console.log(`\n  Publish: git tag ${tagOf(path, '0.1.0')}, then https://store.escouade.dev/submit${path ? ` (folder ${path})` : ''}`);
   console.log('\n  https://escouade.dev/en/docs/plugins/sdk');
   return 0;
 }

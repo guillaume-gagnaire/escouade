@@ -13,7 +13,9 @@
 // - dev.exemple.slack: 1.0.0 not verified, a program and its binary for each system;
 // - dev.exemple.later: 2.0.0 for an Escouade to come (min 99.0.0), 1.0.0 for this one (the last compatible is chosen);
 // - dev.exemple.tampered: its archive changed after its version.json (refused);
-// - dev.exemple.forged: said verified, its signature made for another version (refused).
+// - dev.exemple.forged: said verified, its signature made for another version (refused);
+// - dev.exemple.in-folder: from the folder plugins/discord-webhook of a repository with several (ESC-313);
+// - dev.exemple.climbs: its version.json names a folder that climbs out (refused).
 // Its controls: POST /_fake/revocations { entries, serial? } signs and serves the next list (the mirror too);
 // POST /_fake/down { down } makes /api/v1 answer 503; GET /_fake/state says the installs counted and the requests.
 import { createHash } from 'node:crypto';
@@ -80,6 +82,17 @@ const SPEC = [
   { id: 'dev.exemple.later', v: '2.0.0', from: 'high-contrast', cat: ['themes'], kw: [], name: 'Plus tard', min: '99.0.0' },
   { id: 'dev.exemple.tampered', v: '1.0.0', from: 'high-contrast', cat: ['themes'], kw: [], name: 'Piégé', tampered: true },
   { id: 'dev.exemple.forged', v: '1.0.0', from: 'high-contrast', cat: ['themes'], kw: [], name: 'Faux sceau', forged: true },
+  // ESC-313: a plugin in a folder of a repository with several, and a version.json whose folder climbs out.
+  {
+    id: 'dev.exemple.in-folder',
+    v: '1.0.0',
+    from: 'discord-webhook',
+    cat: ['notifications'],
+    kw: [],
+    name: 'En dossier',
+    path: 'plugins/discord-webhook',
+  },
+  { id: 'dev.exemple.climbs', v: '1.0.0', from: 'high-contrast', cat: ['themes'], kw: [], name: 'Dossier qui remonte', path: '../escape' },
 ];
 
 /** The store's content: the catalogue, the files by path, signed with `key`. */
@@ -113,8 +126,9 @@ export function build(key) {
       format: 1,
       id: s.id,
       version: s.v,
-      repository: `https://github.com/escouade-dev/plugin-${s.from}`,
-      tag: `v${s.v}`,
+      repository: s.path ? 'https://github.com/escouade-dev/plugins' : `https://github.com/escouade-dev/plugin-${s.from}`,
+      ...(s.path ? { path: s.path } : {}),
+      tag: s.path ? `${s.path}/v${s.v}` : `v${s.v}`,
       commit,
       archive: { sha256: sha256(archive), size: archive.length },
       binaries,
