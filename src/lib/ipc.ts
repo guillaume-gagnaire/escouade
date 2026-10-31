@@ -602,6 +602,7 @@ export const api = {
   codeSearch: (projectId: string, agentId: string | null, query: SearchQuery) =>
     invoke<SearchResult>('code_search', { projectId, agentId, query }),
   setUnsaved: (count: number) => invoke<void>('set_unsaved', { count }),
+  setHeld: (agents: string[]) => invoke<void>('set_held', { agents }),
   cancelResume: (id: string) => invoke<void>('cancel_resume', { id }),
   ticketCreate: (projectId: string, draft: TicketDraft) => invoke<Ticket>('ticket_create', { projectId, draft }),
   ticketUpdate: (id: string, draft: TicketDraft) => invoke<Ticket>('ticket_update', { id, draft }),

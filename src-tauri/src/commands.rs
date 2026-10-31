@@ -121,6 +121,7 @@ pub fn subscribe(
     // A page that loads again has no dictation under way: the one of the page before stops.
     voice.cancel();
     core.reset_unsaved();
+    core.held.lock().clear();
     // One lock at a time, each guard ending with its statement: in a struct literal the guards
     // would live together (the lock order is projects before tickets, see `Core`).
     let settings = core.settings.read().clone();
@@ -2147,6 +2148,12 @@ pub fn quit_app(app: tauri::AppHandle) {
 pub fn set_unsaved(core: CoreState, count: usize) {
     core.unsaved
         .store(count, std::sync::atomic::Ordering::Release);
+}
+
+/// The agents the window holds a message for (`outbox.svelte.ts`).
+#[tauri::command]
+pub fn set_held(core: CoreState, agents: Vec<String>) {
+    *core.held.lock() = agents.into_iter().collect();
 }
 
 /// Turns Remote Control on or off for the agent. True when, in the Claude Code view, the change

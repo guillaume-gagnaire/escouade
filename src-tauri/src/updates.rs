@@ -927,6 +927,7 @@ pub async fn check<R: Runtime>(
 /// What the app is doing now that a restart would cut.
 pub fn snapshot<R: Runtime>(core: &Core<R>, updates: &Updates, now: i64) -> Snapshot {
     let mut s = Snapshot::default();
+    let held = core.held.lock().clone();
     for h in core.agents.read().values() {
         let rt = h.lock();
         if rt.meta.archived {
@@ -935,6 +936,7 @@ pub fn snapshot<R: Runtime>(core: &Core<R>, updates: &Updates, now: i64) -> Snap
         match rt.meta.status {
             AgentStatus::Running => s.turns += 1,
             AgentStatus::Waiting => s.questions += 1,
+            _ if held.contains(&rt.meta.id) => s.turns += 1,
             _ => {}
         }
         if rt.setup.is_some() {
@@ -2785,6 +2787,7 @@ mod tests {
             ..Default::default()
         });
         h.core.unsaved.store(3, Ordering::Release);
+        *h.core.held.lock() = [ids[3].clone(), ids[4].clone()].into();
         let u = Updates::default();
         let working = h.core.working();
         u.set_presence(Presence {
@@ -2795,7 +2798,7 @@ mod tests {
         assert_eq!(
             snapshot(&h.core, &u, 61_000),
             Snapshot {
-                turns: 1,
+                turns: 2,
                 questions: 1,
                 setups: 1,
                 validations: 1,

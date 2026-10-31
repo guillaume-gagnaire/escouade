@@ -79,7 +79,7 @@ Le process lit son flux et le passe en `Value` à `on_frame`, sauf les réponses
 - les changements du bandeau « Plan » (`plan_apply`) ;
 - l'usage du tour, la fin de tour (`Effects.turn_end`), la limite (`Effects.limited`), le quota (`Effects.rate`).
 
-Le passage à lire à voix haute d'une conversation vocale (`<spoken>…</spoken>`, ESC-97) est mis à part par la partie commune, pour tout moteur : `AgentRt::push` le sort d'un texte de l'agent lui-même (pas d'un sous-agent) dès qu'il est écrit en entier (`streaming: false`), à l'ajout comme au patch. Un message envoyé pendant un tour n'est mis en file que chez un moteur qui le fait attendre (`caps.mid_turn` `queued`) ; chez Codex (`immediate`, `turn/steer`) et Copilot CLI (`immediate`, `session.send` en mode `immediate`), il entre dans le tour en cours ; OpenCode (`queued`) le garde comme Claude Code.
+Le passage à lire à voix haute d'une conversation vocale (`<spoken>…</spoken>`, ESC-97) est mis à part par la partie commune, pour tout moteur : `AgentRt::push` le sort d'un texte de l'agent lui-même (pas d'un sous-agent) dès qu'il est écrit en entier (`streaming: false`), à l'ajout comme au patch. Un message envoyé pendant un tour n'est mis en file que chez un moteur qui le fait attendre : Claude Code (`caps.mid_turn` `queued`) le lit à l'étape suivante du tour ; Cursor et OpenCode (`turnEnd`) le gardent dans le process d'Escouade jusqu'à la fin du tour, puis il en lance un ; chez Codex (`immediate`, `turn/steer`) et Copilot CLI (`immediate`, `session.send` en mode `immediate`), il entre dans le tour en cours. La fenêtre garde elle-même un message tapé dans le composer pendant un tour, le temps d'un délai ou jusqu'à la fin du tour selon cette valeur (`outbox.svelte.ts`).
 
 Le nom des outils reste celui de Claude Code pour tous les moteurs (`Bash`, `Edit`, `Write`, `Task`, `mcp__<serveur>__<outil>`…, table dans docs/TODO-1.8.md, « Un moteur par agent ») : `tools.ts`, la ligne d'activité, `convsearch.rs` et les cartes ne changent pas.
 
@@ -142,7 +142,7 @@ Le moteur d'un nouvel agent : celui demandé (`AgentOptions.engine`), sinon celu
 | `images`, `pdf` | Images et PDF joints à un message. | `Engine::message` refuse ce qu'il ne lit pas. | oui |
 | `fork` | La copie d'une conversation et jusqu'où : `none`, `entry`, `turn`, `event`, `message`. | « Dupliquer la conversation » masqué pour `none`. | `entry` |
 | `resumeOtherAccount` | Une conversation reprise sur un autre compte du même moteur. | « Reprendre sur <compte> » ; la bascule ne quitte jamais le moteur. | oui |
-| `midTurn` | Un message envoyé pendant un tour : `queued`, `immediate` ou `refused`. | (composer, lot 4) | `queued` |
+| `midTurn` | Un message envoyé pendant un tour : `queued` (lu à l'étape suivante), `immediate`, `turnEnd` (gardé par Escouade jusqu'à la fin du tour) ou `refused`. | Le composer le garde le temps du « Délai avant l'envoi pendant un tour » (`queued`, `immediate`) ou jusqu'à la fin du tour (`turnEnd`). | `queued` |
 | `slashCommands` | Ses commandes `/` pour un client. | Le composer n'en propose pas sinon. | oui |
 | `quota` | Le quota de ses comptes : `windows`, `credits` ou `none`. | Les barres de la barre d'état et du panneau des quotas ; sans quota, aucune barre (« Pas de quota ») et jamais de pause du pilote auto. | `windows` |
 | `quotaWindows` | Les durées de ses fenêtres, en minutes. | Les barres montrées avant la première lecture (une lecture peut en donner moins : l'offre gratuite de Codex n'en a qu'une). | `[300, 10080]` |

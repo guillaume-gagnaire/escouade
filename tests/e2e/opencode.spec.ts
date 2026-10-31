@@ -102,7 +102,8 @@ test.describe('an agent on OpenCode', () => {
     await expect(page.getByText('Les trois étapes sont faites.')).toBeVisible();
     await expect(page.getByText('Bonjour, tu as dit : et ensuite')).toBeVisible();
     await expect.poll(() => requests(app, 'POST', /prompt_async$/).length).toBe(before + 2);
-    await expect(plan).toContainText('3/3');
+    // Its turn began after the plan was over: the plan starts again, empty.
+    await expect(plan).toHaveCount(0);
     // The subagent, while it runs: its row, and its tool under its Task.
     await send(page, 'sous-agent');
     await expect(plan).toContainText('1 sous-agent actif');

@@ -353,6 +353,8 @@ export const test = base.extend<{
         // No automatic restart for an update of Escouade: the hidden window of the tests reads as nobody there, and a
         // version published during a run would restart the app under test (a message typed then stays in its field).
         autoUpdate: false,
+        // A message sent during a turn goes at once, as the tests expect.
+        midTurnDelaySecs: 0,
         ...given,
         accounts: accountsFor(given, appEnv),
       }),

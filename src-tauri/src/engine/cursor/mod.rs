@@ -142,7 +142,7 @@ pub fn caps() -> EngineCaps {
         fork: ForkPoint::None,
         resume_other_account: false,
         // A second prompt would cancel the running turn: the process holds it until its end.
-        mid_turn: MidTurn::Queued,
+        mid_turn: MidTurn::TurnEnd,
         slash_commands: false,
         // Its usage of the month is told by its interface alone (`/usage`, from the API of its
         // dashboard with the token of the sign-in, which Escouade never reads): its dashboard is
@@ -906,7 +906,7 @@ mod tests {
         let c = caps();
         assert!(!c.modes.iter().any(|m| m.id == "ask" || m.id == "auto"));
         assert_eq!(c.fork, ForkPoint::None);
-        assert_eq!(c.mid_turn, MidTurn::Queued);
+        assert_eq!(c.mid_turn, MidTurn::TurnEnd);
     }
 
     #[test]

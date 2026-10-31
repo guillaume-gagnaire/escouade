@@ -527,6 +527,7 @@ pub fn run() {
             lanes,
             tauri::generate_handler![
                 commands::subscribe,
+                commands::set_held,
                 commands::set_ui,
                 commands::open_url,
                 commands::open_path,

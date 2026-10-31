@@ -64,10 +64,13 @@ pub enum ForkPoint {
 #[allow(dead_code)]
 #[serde(rename_all = "camelCase")]
 pub enum MidTurn {
-    /// It waits for the end of the turn (Claude Code).
+    /// Its harness queues it and reads it at the running turn's next step (Claude Code).
     Queued,
     /// The running turn reads it at once (Codex: `turn/steer`).
     Immediate,
+    /// It waits in Escouade's process for the end of the turn, then starts the next one (Cursor,
+    /// OpenCode).
+    TurnEnd,
     /// It cannot be sent until the turn ends.
     Refused,
 }

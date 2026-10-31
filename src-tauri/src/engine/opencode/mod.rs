@@ -396,7 +396,7 @@ pub fn caps() -> EngineCaps {
         resume_other_account: false,
         // A message during a turn would be taken into it, the first one's request lost: held by
         // Escouade until the turn ends.
-        mid_turn: MidTurn::Queued,
+        mid_turn: MidTurn::TurnEnd,
         // `/compact` alone, by its request (`compaction`, ESC-205).
         slash_commands: true,
         // It goes through the providers' APIs: no quota of its own.
