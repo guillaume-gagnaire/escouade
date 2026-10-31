@@ -1,9 +1,9 @@
 ---
-number: null
+number: 28
 id: "les-details-d-un-plugin-du-store-dans-un"
 title: "Les détails d'un plugin du store dans une modale ouverte par « ⋯ »"
 date: "2026-10-31"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-318"
 pages: ["store/espace-de-l-auteur"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"store/espace-de-l-auteur","added":16,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-01T00:33:00+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

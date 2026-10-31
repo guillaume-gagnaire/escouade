@@ -3,7 +3,7 @@ title: "L'espace de l'auteur du store (/account)"
 subject: "store"
 sources: ["docs/STORE.md §2.2","design/store-account/INVENTAIRE.md","design/store-account/a-modal.png","store/app/components/StoreAccount.vue","store/app/components/StoreDialog.vue"]
 tickets: ["ESC-229","ESC-232","ESC-318"]
-decisions: ["les-details-d-un-plugin-du-store-dans-un"]
+decisions: [28]
 compared: null
 ---
 
